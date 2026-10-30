@@ -276,6 +276,9 @@ export function numeric(input: HTMLInputElement, unit?: string): HTMLInputElemen
   input.addEventListener('keydown', (e) => {
     // Esc puts back what was there and hands the keyboard back to the canvas
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); input.value = prev; input.blur(); return }
+    // Enter commits and hands the keyboard back to the canvas, as Figma does,
+    // so ⌘D or ⌘Z right after acts on the document; Tab still walks the fields
+    if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); e.stopPropagation(); input.blur(); return }
     // ⌘Z is the document's undo, not the field's text undo: drop what was
     // typed and let the editor's keys have it (editor.ts lets .ed-num through)
     if ((e.metaKey || e.ctrlKey) && /^[zy]$/i.test(e.key)) { e.preventDefault(); input.value = prev; input.blur(); return }

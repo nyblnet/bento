@@ -33,7 +33,7 @@ import type { Peer } from '../sync/session'
 import { isMacOS } from '../screens'
 import { aabb, fmt, measureBoxes, union, type Box } from './measure-geom'
 import { drawFrameOverlay } from './frameoverlay'
-import { isFrame, layoutSlide, withDescendants } from '../layout'
+import { frameChildren, isFrame, layoutSlide, moveInFrame, withDescendants } from '../layout'
 import { drawGradientOverlay } from './gradientoverlay'
 import { TransformHud, hudNum, mountModHint } from './hud'
 import { applyMorphPreview, morphGhost } from './morph'
@@ -646,6 +646,77 @@ export class SlideCanvas {
     // put the same slide point back under the fingers
     this.scroller.scrollLeft += (before.x - after.x) * this.scale
     this.scroller.scrollTop += (before.y - after.y) * this.scale
+  }
+
+  /** While a frame's child is dragged: the slot it will drop into, or `out`
+   *  when the pointer has left its frame (the drop takes it out, Figma's rule). */
+  private slotDrag: { id: string; slot: number; out: boolean } | null = null
+
+  /** Track a frame child's drag: work out its slot among the siblings (the
+   *  pointer past a sibling's middle is after it; a grid reads row by row)
+   *  and draw the insertion bar in the gap it will take. */
+  private trackSlot(clientX: number, clientY: number) {
+    this.scaleHost.querySelector(':scope > .ed-slot-bar')?.remove()
+    const sel = this.store.selectedElements
+    const one = sel.length === 1 && !this.pendingCopy ? sel[0] : null
+    const f = one?.parentId ? this.store.element(one.parentId) : undefined
+    if (!one || !isFrame(f)) { this.slotDrag = null; return }
+    const pt = this.slidePointAt(clientX, clientY)
+    const out = pt.x < f.x || pt.x > f.x + f.w || pt.y < f.y || pt.y > f.y + f.h
+    const sibs = frameChildren(this.store.slide, f).filter((e) => e.id !== one.id)
+    const L = f.layout
+    const across = L.dir === 'col'
+    let slot = 0
+    for (const sb of sibs) {
+      const before = L.dir === 'grid'
+        ? pt.y > sb.y + sb.h || (pt.y >= sb.y && pt.x > sb.x + sb.w / 2)
+        : across ? pt.y > sb.y + sb.h / 2 : pt.x > sb.x + sb.w / 2
+      if (before) slot++
+    }
+    this.slotDrag = { id: one.id, slot, out }
+    if (out) return
+    // in the gap before the sibling it lands ahead of (after the last one at the end)
+    const next = sibs[slot], prev = sibs[slot - 1]
+    const ref = next ?? prev
+    const half = L.gap / 2
+    const [pt0, , , pl] = L.pad
+    const k = 1 / (this.scale || 1)
+    const bar = document.createElement('div')
+    bar.className = 'ed-slot-bar'
+    bar.dataset.slot = String(slot)
+    const box = !ref
+      ? (across ? { x: f.x + pl, y: f.y + pt0, w: f.w - 2 * pl, h: 3 * k } : { x: f.x + pl, y: f.y + pt0, w: 3 * k, h: f.h - 2 * pt0 })
+      : across
+        ? { x: ref.x, y: (next ? next.y - half : prev.y + prev.h + half) - 1.5 * k, w: ref.w, h: 3 * k }
+        : { x: (next ? next.x - half : prev.x + prev.w + half) - 1.5 * k, y: ref.y, w: 3 * k, h: ref.h }
+    Object.assign(bar.style, { left: `${box.x}px`, top: `${box.y}px`, width: `${box.w}px`, height: `${box.h}px` })
+    bar.style.setProperty('--k', String(k))
+    this.scaleHost.appendChild(bar)
+  }
+
+  /** Finish a frame child's drag at its slot — or out of the frame. Reports
+   *  whether it handled the drop (one undo step either way). */
+  private dropInSlot(): boolean {
+    const d = this.slotDrag
+    this.slotDrag = null
+    this.scaleHost.querySelector(':scope > .ed-slot-bar')?.remove()
+    if (!d) return false
+    const node = this.surface?.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(d.id)}"]`)
+    const slide = this.store.slide
+    if (d.out) {
+      // taken out: it stays where it was dropped, a free element again
+      const x = Math.round((parseFloat(node?.style.left ?? '') || 0) * 10) / 10
+      const y = Math.round((parseFloat(node?.style.top ?? '') || 0) * 10) / 10
+      this.store.commit(() => { const el = this.store.element(d.id); if (el) { delete el.parentId; delete el.sizing; el.x = x; el.y = y } })
+      return true
+    }
+    const el = this.store.element(d.id)
+    const f = el?.parentId ? this.store.element(el.parentId) : undefined
+    const at = isFrame(f) ? frameChildren(slide, f).filter((e) => e.id !== d.id).length : 0
+    const from = isFrame(f) ? frameChildren(slide, f).findIndex((e) => e.id === d.id) : -1
+    if (from < 0 || d.slot === from) { this.render(); return true } // dropped where it was: snap back, no step
+    this.store.commit(() => { moveInFrame(slide, d.id, Math.min(d.slot, at)) })
+    return true
   }
 
   /** Slide-local coordinates for a viewport point (the inverse of the stage
@@ -1510,6 +1581,7 @@ export class SlideCanvas {
       e.target.style.top = `${p.top}px`
       this.hud.show(`X ${hudNum(p.left)}  Y ${hudNum(p.top)}`, e.clientX, e.clientY)
       this.followFrames()
+      this.trackSlot(e.clientX, e.clientY)
     })
     mv.on('dragGroup', (e) => {
       e.events.forEach((ev) => {
@@ -1652,6 +1724,9 @@ export class SlideCanvas {
         return
       }
       if (!e.isDrag) this.pendingCopy = null
+      if (e.isDrag && this.slotDrag) { this.hud.hide(); this.altPress = null; this.dropInSlot(); return }
+      this.slotDrag = null
+      this.scaleHost.querySelector(':scope > .ed-slot-bar')?.remove()
       end(e)
     }
     mv.on('dragEnd', endDrag)

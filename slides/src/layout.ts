@@ -303,3 +303,37 @@ export function morphClip(f: { x: number; y: number; w: number; h: number }, x: 
   }
   return `polygon(${pt(f.x, f.y)}, ${pt(f.x + f.w, f.y)}, ${pt(f.x + f.w, f.y + f.h)}, ${pt(f.x, f.y + f.h)})`
 }
+
+/**
+ * Lay a frame's children out in their ARRAY order. The solver reads order from
+ * position (ties by array order), so the children are stacked at the frame's
+ * origin and laid out again: the order becomes exactly the array's. This is
+ * how an explicit reorder — a drop slot, an arrow key, a Layers drag — tells
+ * the solver what it means without a format field for order.
+ */
+export function reflowByArray(slide: Slide, frameId: string): void {
+  const f = slide.elements.find((e) => e.id === frameId)
+  if (!f) return
+  for (const e of slide.elements) if (e.parentId === frameId) { e.x = f.x; e.y = f.y }
+  layoutSlide(slide)
+}
+
+/** Move a frame's child to slot `to` of its siblings (layout order). Reports
+ *  whether the order changed. Paint order among the siblings follows the
+ *  flow order; nothing outside the frame moves in the array. */
+export function moveInFrame(slide: Slide, id: string, to: number): boolean {
+  const child = slide.elements.find((e) => e.id === id)
+  const f = child?.parentId ? slide.elements.find((e) => e.id === child.parentId) : undefined
+  if (!child || !isFrame(f)) return false
+  const order = frameChildren(slide, f)
+  const from = order.indexOf(child)
+  const at = Math.max(0, Math.min(order.length - 1, to))
+  if (from < 0 || from === at) return false
+  order.splice(from, 1)
+  order.splice(at, 0, child)
+  // the siblings' array slots, refilled in the new flow order
+  const slots = slide.elements.map((e, i) => (e.parentId === f.id ? i : -1)).filter((i) => i >= 0)
+  slots.forEach((slot, k) => { slide.elements[slot] = order[k] })
+  reflowByArray(slide, f.id)
+  return true
+}

@@ -68,7 +68,7 @@ import { PresenceToasts } from './presencetoasts'
 import { BOOL_OPS, boolBlocked, boolOperands, boolUi, combine, flatten, release } from './booleans'
 import { align, distribute, flip } from './inspector/arrange'
 import type { NodeKind } from './beziereditor'
-import { withDescendants } from '../layout'
+import { withDescendants, frameChildren, isFrame, moveInFrame } from '../layout'
 
 const i18nT = t
 
@@ -2377,6 +2377,9 @@ export class Editor {
 
   private offerMorph() {
     const slide = this.store.slide
+    // Morph set from anywhere (the inspector, the transition picker, the
+    // toast's own button) answers the question: the offer goes
+    if (slide.transition === 'morph') document.querySelector('.ed-toast[data-kind="morph"]')?.remove()
     if (!this.morphOffer || slide.id !== this.morphOffer) return
     if (slide.transition === 'morph') { this.morphOffer = null; return }
     const pairs = wouldPair(this.store.doc, slide)
@@ -2389,7 +2392,7 @@ export class Editor {
     this.toast(t('Things moved — morph them from the slide before?'), {
       label: t('Use Morph'),
       run: () => this.store.commit(() => { slide.transition = 'morph' }),
-    })
+    }, 'morph')
   }
 
   /** Delete several units at once — the sidebar's multi-selection — with
@@ -2638,6 +2641,7 @@ export class Editor {
     lsSet('bento-slideshow-started', '1')
     document.querySelector('.ed-hint-pulse')?.classList.remove('ed-hint-pulse')
     this.canvas.commitTextEdit()
+    document.querySelector('.ed-toast')?.remove() // never drawn over the show
     this.presenting = true
     return startPresentation(this.store.doc, at, (last) => {
       this.presenting = false
@@ -2839,13 +2843,15 @@ export class Editor {
     const els = this.store.selectedElements
     if (!els.length || els.some((e) => e.component)) return
     const id = uid('comp')
+    // named at birth, so the toast, the inspector header and the Tokens list
+    // all say the same thing ("Component 3"), and the name is the user's to change
+    const name = els[0].groupName || t('Component {n}', { n: components(this.store.doc).length + 1 })
     this.store.commit(() => {
       const live = els.map((e) => this.store.element(e.id)!).filter(Boolean)
       makeComponent(live, id, live[0].groupId && live.every((e) => e.groupId === live[0].groupId) ? live[0].groupId! : uid('g'))
+      for (const e of live) e.groupName = name
     })
-    // say it happened, and let it be named at once: the Tokens view, its name field focused
-    const n = components(this.store.doc).findIndex((c) => c.id === id) + 1
-    this.toast(t('Made Component {n} — name it in Tokens; insert copies from there', { n }))
+    this.toast(t('Made {name} — rename it in its header; insert copies from Tokens', { name }))
     this.showSideView('tokens')
     this.tokensPane.showComponent(id)
   }
@@ -3630,6 +3636,15 @@ export class Editor {
       { id: 'copy', label: 'Copy', keys: `${MOD}C`, scope: 'canvas', when: () => sel().length > 0, run: () => this.copySelection() },
       { id: 'delete', label: 'Delete', keys: '⌫', scope: 'canvas', when: () => writable() && sel().length > 0, run: () => this.deleteSelection() },
       { id: 'slideshow', label: 'Slideshow', scope: 'always', run: () => this.present(false, true) },
+      { id: 'use-morph', label: 'Use Morph', scope: 'always', when: () => writable() && this.store.slide.transition !== 'morph' && !!walkSource(this.store.doc, this.store.slide), run: () => { const sl = this.store.slide; this.store.commit(() => { sl.transition = 'morph' }) } },
+      // ⌘A: every top-level element on the slide (a frame's children come with
+      // it) — or, with focus in the slide list, every slide
+      { id: 'select-all', label: 'Select all', keys: `${MOD}A`, scope: 'canvas', when: canvasFree, match: (ev, mod) => mod && !ev.shiftKey && !ev.altKey && key(ev) === 'a', run: () => {
+        if (this.thumbs.contains(document.activeElement)) { this.setThumbSel(this.store.doc.slides.map((sl, i) => (sl.stateOf ? -1 : i)).filter((i) => i >= 0)); return }
+        const ids = new Set(this.store.slide.elements.map((e) => e.id))
+        this.store.select(this.store.slide.elements.filter((e) => !e.locked && !e.hidden && !(e.parentId && ids.has(e.parentId))).map((e) => e.id))
+      } },
+      { id: 'select-parent', label: 'Select parent', keys: 'Esc', scope: 'canvas', when: () => canvasFree() && sel().length > 0 && sel().every((e) => !!e.parentId && !!this.store.element(e.parentId)), run: () => this.store.select([...new Set(sel().map((e) => e.parentId!))]) },
       { id: 'play-transition', label: 'Play transition', scope: 'always', when: () => !!walkSource(this.store.doc, this.store.slide), run: () => this.playTransition() },
       { id: 'export-pdf', label: 'Export PDF (print)', scope: 'always', run: () => this.exportPdf() },
       { id: 'speaker', label: 'Speaker view', scope: 'always', run: () => this.openSpeakerView() },
@@ -3713,6 +3728,25 @@ export class Editor {
       }
       if (ev.key.startsWith('Arrow') && this.store.selection.length) {
         ev.preventDefault()
+        // inside an auto-layout frame an arrow moves the child one slot along
+        // the flow (a grid's ↑/↓ a whole row), as Figma does — the layout would
+        // undo a nudge anyway
+        const one = this.store.selectedElements.length === 1 ? this.store.selectedElements[0] : null
+        const frame = one?.parentId ? this.store.element(one.parentId) : undefined
+        if (one && isFrame(frame) && !one.locked) {
+          const L = frame.layout
+          const along = L.dir === 'col' ? ['ArrowUp', 'ArrowDown'] : ['ArrowLeft', 'ArrowRight']
+          const across = L.dir === 'grid' ? ['ArrowUp', 'ArrowDown'] : []
+          const by = along.includes(ev.key) ? (ev.key === along[0] ? -1 : 1) : across.includes(ev.key) ? (ev.key === 'ArrowUp' ? -1 : 1) * (L.cols ?? 2) : 0
+          if (by) {
+            const sibs = frameChildren(this.store.slide, frame)
+            const to = sibs.findIndex((e) => e.id === one.id) + by
+            const slide = this.store.slide
+            // at either end there is nowhere to go, and no undo step to record
+            if (to >= 0 && to < sibs.length) this.store.commit(() => { moveInFrame(slide, one.id, to) })
+          }
+          return
+        }
         const step = ev.shiftKey ? 10 : 1
         const dx = ev.key === 'ArrowLeft' ? -step : ev.key === 'ArrowRight' ? step : 0
         const dy = ev.key === 'ArrowUp' ? -step : ev.key === 'ArrowDown' ? step : 0
@@ -3768,7 +3802,7 @@ export class Editor {
    *  whatever is later given it as a child lines up inside. */
   private newFrame(): SlideElement {
     return defaultShape('rect', {
-      name: t('Frame'), fill: '#FFFFFF', stroke: '#D0D5DD', strokeWidth: 1, radius: 8,
+      fill: '#FFFFFF', stroke: '#D0D5DD', strokeWidth: 1, radius: 8,
       layout: { dir: 'row', gap: 16, pad: [16, 16, 16, 16] },
     })
   }
@@ -4547,9 +4581,10 @@ export class Editor {
     dlg.open()
   }
 
-  toast(message: string, action?: { label: string; run: () => void }) {
+  toast(message: string, action?: { label: string; run: () => void }, kind?: string) {
     document.querySelector('.ed-toast')?.remove()
     const t = div('ed-toast')
+    if (kind) t.dataset.kind = kind
     t.textContent = message
     if (action) {
       const b = document.createElement('button')
@@ -4560,10 +4595,14 @@ export class Editor {
       t.append(' ', b)
       t.classList.add('has-act')
     }
-    // sit on the canvas's bottom edge, above the speaker-notes pane — a fixed
-    // 26px from the window's foot covered the notes the author was reading
+    // dock at the top of the canvas, centred on it: the window's foot covered
+    // the speaker notes, and the canvas's foot the zoom and Slideshow controls
     const canvas = document.querySelector('.ed-scroll')?.getBoundingClientRect()
-    if (canvas?.height) t.style.bottom = `${Math.max(16, window.innerHeight - canvas.bottom + 16)}px`
+    if (canvas?.height) {
+      t.style.top = `${canvas.top + 12}px`
+      t.style.bottom = 'auto'
+      t.style.left = `${canvas.left + canvas.width / 2}px`
+    }
     document.body.appendChild(t)
     setTimeout(() => t.classList.add('show'))
     setTimeout(() => {

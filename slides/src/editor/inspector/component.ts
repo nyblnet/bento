@@ -36,7 +36,44 @@ export function componentHeader(p: PropsPanel, els: SlideElement[]) {
   box.className = 'ed-comp-head'
   const title = document.createElement('div')
   title.className = 'ed-comp-title'
-  title.textContent = c.main ? t('◆ {name} · main', { name }) : t('◇ Copy of {name}', { name })
+  // the name is text that turns into a field on click (Enter or leaving
+  // commits, Esc cancels) — a field always showing truncated to "Com…"
+  const label = document.createElement('button')
+  label.type = 'button'
+  label.className = 'ed-comp-name'
+  label.textContent = name
+  label.title = t('Rename')
+  label.addEventListener('click', () => {
+    const f = document.createElement('input')
+    f.className = 'ed-comp-name-field'
+    f.value = c.info.name
+    f.setAttribute('aria-label', t('Component name'))
+    let done = false
+    const end = (commit: boolean) => {
+      if (done) return
+      done = true
+      const to = f.value.trim()
+      if (commit && to && to !== c.info.name) {
+        f.blur() // a focused field holds the panel's rebuild back; the name must read as text again
+        p.store.commit(() => { for (const m of c.info.main) { const live = p.store.element(m.id); if (live) live.groupName = to } })
+      } else f.replaceWith(label)
+    }
+    f.addEventListener('keydown', (e) => {
+      e.stopPropagation()
+      if (e.isComposing || e.keyCode === 229) return
+      if (e.key === 'Enter') { e.preventDefault(); end(true) }
+      if (e.key === 'Escape') { e.preventDefault(); end(false) }
+    })
+    f.addEventListener('blur', () => end(true))
+    label.replaceWith(f)
+    f.focus(); f.select()
+  })
+  const mark = document.createElement('span')
+  mark.textContent = c.main ? '◆' : '◇'
+  const role = document.createElement('span')
+  role.className = 'ed-comp-role'
+  role.textContent = c.main ? t('Main component') : t('Component copy')
+  title.append(mark, label, role)
   box.appendChild(title)
   const acts = document.createElement('div')
   acts.className = 'ed-comp-acts'

@@ -15,7 +15,7 @@
 // changes nothing (the solver is a fixed point, so the editor's doc hook
 // cannot loop); and the layer list shows children under their frame.
 
-import { layoutSlide, frameClip, frameChildren } from '../slides/src/layout.ts'
+import { layoutSlide, frameClip, frameChildren, moveInFrame, reflowByArray } from '../slides/src/layout.ts'
 import { layerRows } from '../slides/src/editor/layerrows.ts'
 
 let failures = 0
@@ -229,6 +229,33 @@ console.log('\nlayer tree\n')
   ok(rows.map((r) => r.id).join() === 'top,f,a', 'children list under their frame, the rest stays top-first')
   ok(rows[1].frame === 'col' && rows[2].depth === 1, 'the frame row carries its direction, the child its depth')
   ok(layerRows(slide(box('p', 0, 0, 1, 1), box('q', 0, 0, 1, 1))).every((r) => r.depth === undefined), 'no frames: rows are unchanged')
+}
+
+console.log('\nreorder inside a frame (drop slot, arrow key, Layers)\n')
+{
+  const kids = (s: any) => frameChildren(s, at(s, 'f')).map((e: any) => e.id).join('')
+  const row = () => slide(frame({ dir: 'row', gap: 10, pad: [0, 0, 0, 0] }), box('a', 0, 0, 50, 40, { parentId: 'f' }), box('b', 0, 0, 60, 40, { parentId: 'f' }), box('c', 0, 0, 70, 40, { parentId: 'f' }))
+  let s = row(); layoutSlide(s)
+  ok(kids(s) === 'abc', 'a row starts a b c')
+  ok(moveInFrame(s, 'a', 2) && kids(s) === 'bca', `a to the last slot: b c a (${kids(s)})`)
+  ok(at(s, 'b').x === 100 && at(s, 'c').x === 170 && at(s, 'a').x === 250, 'and the boxes are laid out in that order, gap kept')
+  ok(!moveInFrame(s, 'a', 2), 'moving to the slot it holds changes nothing')
+  ok(moveInFrame(s, 'a', -5) && kids(s) === 'abc', 'a slot past the start is the first slot')
+  const before = JSON.stringify(s); layoutSlide(s)
+  ok(JSON.stringify(s) === before, 'the result is a fixed point: a second layout pass changes nothing')
+  const col = slide(frame({ dir: 'col', gap: 5, pad: [0, 0, 0, 0] }, 0, 0, 100, 400), box('a', 0, 0, 50, 40, { parentId: 'f' }), box('b', 0, 0, 50, 40, { parentId: 'f' }))
+  layoutSlide(col)
+  ok(moveInFrame(col, 'b', 0) && kids(col) === 'ba' && at(col, 'b').y === 0 && at(col, 'a').y === 45, 'a column reorders top to bottom')
+  const grid = slide(frame({ dir: 'grid', cols: 2, gap: 0, pad: [0, 0, 0, 0] }, 0, 0, 200, 200), ...['a', 'b', 'c', 'd'].map((id) => box(id, 0, 0, 100, 100, { parentId: 'f' })))
+  reflowByArray(grid, 'f')
+  ok(kids(grid) === 'abcd', 'a grid reflowed by array order reads a b c d')
+  ok(moveInFrame(grid, 'd', 0) && kids(grid) === 'dabc' && at(grid, 'd').x === 0 && at(grid, 'd').y === 0, 'a grid child moves to the first cell')
+  const s2 = row(); layoutSlide(s2)
+  // Layers: the array order is the new flow order
+  s2.elements = [s2.elements[0], at(s2, 'c'), at(s2, 'a'), at(s2, 'b')]
+  reflowByArray(s2, 'f')
+  ok(kids(s2) === 'cab', `a Layers reorder reflows the frame by array order (${kids(s2)})`)
+  ok(!moveInFrame(slide(box('x', 0, 0, 1, 1)), 'x', 1), 'an element outside a frame does not move')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

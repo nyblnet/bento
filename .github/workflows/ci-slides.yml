@@ -357,6 +357,11 @@ jobs:
       - name: Chrome that holds still in Chromium
         # Layer rows never move under the pointer; panel handles are centred SVG chevrons.
         run: node scripts/test-slides-steady-chrome-browser.mjs
+      - name: Polish pass 3 in Chromium
+        # Reorder inside a frame (bar, slot, arrows, out), ⇧A's gap floor,
+        # frame-placed note, toast placement, ⌘A, Enter hands keys back, no cut
+        # segments or wrapped captions (en/de/pt), names that tell levels apart.
+        run: node scripts/test-slides-polish3-browser.mjs
       - name: UX audit canvas fixes in Chromium
         # A press on an unselected element drags it; a key typed at a selected
         # text box is text; a frame copies, duplicates and deletes with its

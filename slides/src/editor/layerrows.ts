@@ -87,11 +87,11 @@ export function excerpt(html: string, max = LABEL_MAX): string {
 
 /** What a row says about its element. Kind names go through t() at build
  *  time (never at module level). */
-export function labelFor(el: SlideElement, tr: (s: string) => string = (s) => s): string {
+export function labelFor(el: SlideElement, tr: (s: string) => string = (s) => s, slide?: Pick<Slide, 'elements'>): string {
   if (el.name) return el.name
   switch (el.type) {
     case 'text': return excerpt(el.html) || tr('Text')
-    case 'shape': return el.layout ? tr('Frame') : tr({ rect: 'Rectangle', ellipse: 'Ellipse', triangle: 'Triangle', arrow: 'Arrow', line: 'Line', path: 'Curve' }[el.shape] ?? 'Shape')
+    case 'shape': return el.layout ? frameLabel(el, tr, slide) : tr({ rect: 'Rectangle', ellipse: 'Ellipse', triangle: 'Triangle', arrow: 'Arrow', line: 'Line', path: 'Curve' }[el.shape] ?? 'Shape')
     case 'image': return tr('Image')
     case 'svg': return tr('Diagram')
     case 'chart': return tr('Chart')
@@ -103,20 +103,32 @@ export function labelFor(el: SlideElement, tr: (s: string) => string = (s) => s)
   }
 }
 
+/** A frame says what it holds, so nesting levels read apart in Layers and the
+ *  header: a card is named after its first text ("Card · Revenue"), a frame of
+ *  frames by its direction ("Row", "Column", "Grid"), an empty one "Frame". */
+function frameLabel(el: SlideElement & { layout?: { dir: string } }, tr: (s: string) => string, slide?: Pick<Slide, 'elements'>): string {
+  const kids = slide?.elements.filter((c) => c.parentId === el.id) ?? []
+  if (!kids.length) return tr('Frame')
+  const text = kids.find((c) => c.type === 'text')
+  const words = text?.type === 'text' ? excerpt(text.html, 24) : ''
+  if (words) return `${tr('Card')} · ${words}`
+  return tr({ row: 'Row', col: 'Column', grid: 'Grid' }[el.layout?.dir ?? 'row'] ?? 'Frame')
+}
+
 /** labelFor, told apart: unnamed elements that would read alike on one slide
  *  are numbered in paint order — "Rectangle 2" — as Figma names new layers.
  *  Twenty rows all reading "Rectangle" left Layers no way to tell them apart. */
 export function labelIn(slide: Pick<Slide, 'elements'>, el: SlideElement, tr: (s: string) => string = (s) => s): string {
-  const base = labelFor(el, tr)
+  const base = labelFor(el, tr, slide)
   if (el.name) return base
-  const same = slide.elements.filter((e) => !e.name && labelFor(e, tr) === base)
+  const same = slide.elements.filter((e) => !e.name && labelFor(e, tr, slide) === base)
   return same.length > 1 ? `${base} ${same.indexOf(el) + 1}` : base
 }
 
 /** Rows top-first. */
 export function layerRows(slide: Pick<Slide, 'elements'>, tr?: (s: string) => string, paired?: ReadonlySet<string>): LayerRow[] {
   // labelIn's numbering, counted once for the whole list
-  const labels = slide.elements.map((el) => labelFor(el, tr))
+  const labels = slide.elements.map((el) => labelFor(el, tr, slide))
   const count = new Map<string, number>()
   for (const [i, el] of slide.elements.entries()) if (!el.name) count.set(labels[i], (count.get(labels[i]) ?? 0) + 1)
   const seen = new Map<string, number>()

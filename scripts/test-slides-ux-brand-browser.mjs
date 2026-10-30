@@ -215,7 +215,7 @@ try {
   const over = copy.some((c) => d6.slides[1].elements.filter((e) => !e.component).some((o) => c.x < o.x + o.w && o.x < c.x + c.w && c.y < o.y + o.h && o.y < c.y + c.h))
   ok(copy.length === 2 && sel6 === copy.map((c) => c.id).sort().join() && !over, `Insert puts the copy on free space and selects it (overlap ${over})`)
   const head = await p.evaluate(() => document.querySelector('.ed-props .ed-comp-title')?.textContent ?? '')
-  ok(/Copy of/.test(head), `a copy's inspector says what it is ("${head}")`)
+  ok(/◇/.test(head) && /copy/i.test(head), `a copy's inspector says what it is ("${head}")`)
   const goMain = p.locator('.ed-props .ed-comp-acts .ed-btn', { hasText: 'Go to main' })
   if (await goMain.count()) { await goMain.click({ timeout: 1500 }).catch(() => {}); await p.waitForTimeout(250) }
   ok((await current()) === 0 && (await selection()) === 'a,t1', 'Go to main selects the main on its slide')

@@ -12176,3 +12176,32 @@ From docs/audit/ux-pyramid-2026-10-30.md. Amends the 2026-10-29 entries where no
   Penpot's treatment. A 3.3:1 edge on every resting control (the WCAG 1.4.11
   reading) turned the dark inspector into a grid of outlines; the trade-off
   at rest is deliberate, and the accent-contrast rig holds both values.
+
+## 2026-10-30 — slides: reordering inside a frame; Enter hands the keys back; frames named for what they hold
+
+- **A frame's flow order is set by placing, not by a field.** The solver reads
+  order from position (ties by array order), so an explicit reorder — a drop
+  slot, an arrow key, a Layers drag — reorders the siblings in the array,
+  stacks them at the frame's origin and lays the frame out again
+  (`layout.ts moveInFrame` / `reflowByArray`). No format change; the result is
+  a fixed point. A drag shows an insertion bar in the gap it will take; a drop
+  past the frame's edge takes the child out (Figma's rule). Inside a frame the
+  arrows move the child a slot (a grid's ↑/↓ a row) instead of nudging it,
+  since the layout would undo a nudge. Paint order among siblings follows the
+  flow order.
+- **Enter in a number field commits and returns focus to the canvas** (Figma),
+  so ⌘D/⌘Z right after act on the document; Tab still walks the fields; Esc
+  still restores and leaves.
+- **Frames are labelled from their contents**, not a stored "Frame" name: a
+  frame holding text is "Card · <its first words>", a frame of frames is named
+  by its direction ("Row", "Column", "Grid"), an empty one "Frame" — so nesting
+  levels read apart in Layers and the header. ⇧A gives a gap of 16 when the
+  selection's spacing is ≤ 0 (overlapping ⌘D copies).
+- **A component is named at birth** ("Component 3"), so the toast, the
+  inspector header and the Tokens list say the same thing; the header's name
+  is click-to-edit text.
+- **Toasts dock at the top of the canvas** (the canvas's foot holds Slideshow
+  and zoom); presenting clears any toast, and the morph offer goes the moment
+  the slide uses Morph, wherever that was set.
+- **No caption wraps beside its control**: one that would wrap goes above it
+  (the measure pass now stacks at more than one line, not two).
