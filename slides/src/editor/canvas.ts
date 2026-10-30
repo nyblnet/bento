@@ -613,6 +613,7 @@ export class SlideCanvas {
     this.scaleHost.style.transform = `scale(${this.scale})`
     this.moveable.zoom = 1 / this.scale
     this.moveable.updateRect()
+    this.fitHandles()
     if (this.zoomLabel) this.zoomLabel.textContent = `${Math.round(this.scale * 100)}%`
     this.comments?.refresh()
     this.stepBadges?.refresh()
@@ -621,6 +622,26 @@ export class SlideCanvas {
   }
 
   // --- zoom ------------------------------------------------------------------
+
+  /** The handles a selection gets, by its size ON SCREEN (Figma's rule): all
+   *  eight when there is room, the four corners when the side handles would
+   *  crowd it, none when even corners would cover it — the box still drags,
+   *  and zooming in brings them back. Re-picked on every zoom and selection. */
+  private fitHandles(targets = (this.moveable.target ?? []) as HTMLElement[]) {
+    // (the new targets are passed in: moveable.target still reads the old
+    // selection until its next render)
+    let side = Infinity
+    if (targets.length) {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+      for (const n of targets) { const b = n.getBoundingClientRect(); x0 = Math.min(x0, b.left); y0 = Math.min(y0, b.top); x1 = Math.max(x1, b.right); y1 = Math.max(y1, b.bottom) }
+      side = Math.min(x1 - x0, y1 - y0)
+    }
+    const dirs = side < 24 ? [] : side < 64 ? ['nw', 'ne', 'sw', 'se'] : ['nw', 'n', 'ne', 'w', 'e', 'sw', 's', 'se']
+    const now = (this.moveable.renderDirections ?? []) as string[]
+    if (now.join() !== dirs.join()) this.moveable.renderDirections = dirs
+    const turn = side >= 24
+    if (this.moveable.rotatable !== turn) this.moveable.rotatable = turn
+  }
 
   setZoom(zoom: number) {
     this.zoom = Math.min(Math.max(zoom, 0.5), 8)
@@ -1470,6 +1491,7 @@ export class SlideCanvas {
     const same = current.length === targets.length && targets.every((t, i) => current[i] === t)
     if (!same) this.moveable.target = targets
     this.moveable.updateRect()
+    this.fitHandles(targets)
     // Keep Selecto's continue-select memory in lockstep with the store —
     // otherwise shift-click resurrects targets from a previously shown slide.
     this.selecto.setSelectedTargets(targets)

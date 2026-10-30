@@ -1760,6 +1760,17 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 .moveable-control-box {
   --moveable-color: var(--blue);
 }
+/* Figma-sized handles: 8px squares-in-circles at any zoom (moveable.zoom keeps
+   them screen-sized), a short rotation stem — the defaults (14px, a 40px
+   stem) swallowed a small element whole when zoomed out */
+.moveable-control-box .moveable-control {
+  width: 8px !important; height: 8px !important; margin-top: -4px !important; margin-left: -4px !important;
+  border-width: 1px !important; box-sizing: border-box;
+}
+.moveable-control-box .moveable-rotation .moveable-rotation-control {
+  width: 10px !important; height: 10px !important; margin-top: -5px !important; margin-left: -5px !important;
+}
+.moveable-control-box .moveable-rotation { height: 18px !important; }
 
 /* ————— speaker view popup ————— */
 .bento-speaker {

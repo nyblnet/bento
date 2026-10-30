@@ -6,11 +6,10 @@
 //
 // WHAT THIS PROVES:
 //   1. Alt-click digs through the painted stack, one element per click, and
-//      wraps — even when the element on top is a small label whose resize
-//      handles cover its middle (below ~100% zoom, that is every label). The
-//      press lands on a handle there; a still Alt-press must dig, and must not
-//      resize anything;
-//   2. Alt-DRAG on that handle still resizes;
+//      wraps — even when the element on top is a small label (whose handles,
+//      fitted to its size on screen, no longer cover it); a still Alt-press
+//      must dig, and must not resize anything;
+//   2. Alt-DRAG on a handle still resizes;
 //   3. ⌘-click (Ctrl elsewhere) selects exactly the element under the pointer,
 //      even a member of a group, whether or not the group is already
 //      selected; a plain click still takes the whole group, and ⌘-DRAG still
@@ -82,21 +81,28 @@ try {
   await clickAt(pt)
   ok(await selected() === 'tiny', 'a plain click takes the top element')
   const onHandle = await p.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('.moveable-control-box'), pt)
-  ok(onHandle, 'the precondition holds: with the label selected, its middle is covered by a handle')
+  // handles fit what they select (canvas.ts fitHandles): a small label is no
+  // longer buried under them, so its middle is the label itself
+  ok(!onHandle, 'with the small label selected, no handle covers its middle')
   const tinyFrame = await frame('tiny')
   const dug = []
   for (let i = 0; i < 3; i++) { await clickAt(pt, ['Alt']); dug.push(await selected()) }
   ok(dug.join(' > ') === 'mid > back > tiny', `Alt-click digs one deeper per click and wraps (${dug.join(' > ')})`)
   ok(await frame('tiny') === tinyFrame, 'a still Alt-press on a handle resizes nothing')
 
-  // 2. Alt-drag on the handle is still centre-resize.
-  await clickAt(pt)
+  // 2. Alt-drag on a handle is still centre-resize (on 'mid', big enough on
+  //    screen to carry its corner handles).
+  await clickAt(pt, ['Alt']) // tiny → mid
+  ok(await selected() === 'mid', 'Alt-click reaches mid')
+  const midFrame = await frame('mid')
+  const hp = await p.evaluate(() => { const c = document.querySelector('.moveable-control-box .moveable-direction.moveable-se'); const b = c?.getBoundingClientRect(); return b && b.width ? { x: b.left + b.width / 2, y: b.top + b.height / 2 } : null })
+  ok(!!hp, 'mid carries its corner handle')
   await p.keyboard.down('Alt')
-  await p.mouse.move(pt.x, pt.y); await p.mouse.down(); await p.mouse.move(pt.x, pt.y + 30, { steps: 6 }); await p.mouse.up()
+  await p.mouse.move(hp.x, hp.y); await p.mouse.down(); await p.mouse.move(hp.x + 30, hp.y + 30, { steps: 6 }); await p.mouse.up()
   await p.keyboard.up('Alt')
   await p.waitForTimeout(250)
-  ok(await frame('tiny') !== tinyFrame, 'Alt-drag on the handle still resizes')
-  ok(await selected() === 'tiny', '...and keeps the selection')
+  ok(await frame('mid') !== midFrame, 'Alt-drag on the handle still resizes')
+  ok(await selected() === 'mid', '...and keeps the selection')
   await p.keyboard.press(`${MOD}+z`); await p.waitForTimeout(250)
   ok(await frame('tiny') === tinyFrame, 'one undo puts it back')
 
