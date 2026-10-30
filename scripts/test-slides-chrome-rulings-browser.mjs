@@ -46,7 +46,11 @@ try {
     document.querySelectorAll('.ed-dropdown.open').forEach((d) => d.classList.remove('open'))
     document.querySelectorAll('.ed-about-overlay').forEach((o) => o.remove())
   })
-  const openSave = () => p.evaluate(() => document.querySelector('.ed-split-caret').click())
+  // a menu arrives with a short scale-in (styles.css --ed-pop-in): measure it once it has landed
+  const openSave = () => p.evaluate(async () => {
+    document.querySelector('.ed-split-caret').click()
+    await Promise.all([...document.querySelectorAll('.ed-menu')].flatMap((m) => m.getAnimations().map((a) => a.finished)))
+  })
 
   // --- 1. D2 descriptions ------------------------------------------------------
   console.log('D2 (revised): Save-as rows are one line, the description a tooltip and an ARIA description\n')

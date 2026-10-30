@@ -24,9 +24,9 @@
 // Deliberately DOM-free, so the rig runs it in node.
 
 import { MODEL_KEYS } from './modelkeys.generated'
-import { FORMAT, parseDoc, type BentoDoc, type Slide } from './model'
+import { FORMAT, parseDoc, type BentoDoc, type Slide, type TokenType, type TokenValue } from './model'
 import { LIMITS, SLIDE_CHECKS, checkElementProp, sanitizeAssets, sanitizeFonts, sanitizeSlide, withDropReport, withPathSegment, type Dropped } from './untrusted'
-import { tokenName } from './tokens'
+import { TOKEN_TYPES, tokenName } from './tokens'
 import { FROM_LIVE } from '../../kernel/src/docfields.ts'
 
 const DOC_KEYS = new Set<string>(MODEL_KEYS.doc)
@@ -79,17 +79,25 @@ function tokens(v: unknown, dropped: Dropped[]): BentoDoc['theme']['tokens'] {
   if (Array.isArray(v.modes) && v.modes.length <= 16 && v.modes.every(str)) out.modes = v.modes as string[]
   if (str(v.mode)) out.mode = v.mode as string
   for (const [name, tok] of Object.entries(v.set).slice(0, 500)) {
-    if (name === '__proto__' || !tokenName(`$${name}`) || !isObj(tok) || (tok.type !== 'color' && tok.type !== 'number') || !isObj(tok.values)) {
+    if (name === '__proto__' || !tokenName(`$${name}`) || !isObj(tok) || !TOKEN_TYPES.includes(tok.type as TokenType) || !isObj(tok.values)) {
       dropped.push({ path: `/theme/tokens/set/${name}`, reason: 'malformed token — dropped' }); continue
     }
-    const values: Record<string, string | number> = {}
+    const type = tok.type as TokenType
+    const values: Record<string, TokenValue> = {}
     for (const [m, x] of Object.entries(tok.values)) {
       if (m === '__proto__' || m.length > 64) continue
-      const ok = tok.type === 'number' ? typeof x === 'number' && Number.isFinite(x) && Math.abs(x) <= 1e6 : checkElementProp('shape', 'fill', x).ok
-      if (ok) values[m] = x as string | number
+      const num = typeof x === 'number' && Number.isFinite(x) && Math.abs(x) <= 1e6
+      // each type held to the element rule for the property it is written into
+      const ok = type === 'number' || type === 'fontSize' ? num
+        : type === 'opacity' ? num && (x as number) >= 0 && (x as number) <= 1
+        : type === 'fontFamily' ? checkElementProp('text', 'fontFamily', x)
+        : type === 'shadow' ? (isObj(x) ? checkElementProp('shape', 'shadow', x) : { ok: false })
+        : checkElementProp('shape', 'fill', x)
+      const good = typeof ok === 'boolean' ? ok : ok.ok
+      if (good) values[m] = (typeof ok === 'object' && ok.value !== undefined ? ok.value : x) as TokenValue
       else dropped.push({ path: `/theme/tokens/set/${name}/values/${m}`, reason: 'invalid value — dropped' })
     }
-    out.set[name] = { type: tok.type, values }
+    out.set[name] = { type, values }
   }
   return out
 }

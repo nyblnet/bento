@@ -79,7 +79,7 @@ the string `</script>` can never appear and terminate the block.
 | `fontFamily` | `string` | Default font stack. |
 | `chartPalette?` | `string[]` | Ordered series colors for new charts. Absent = derived from `accent`. |
 | `table?` | `Partial<TableStyle>` | Defaults for newly inserted tables. Omitted properties use the standard table style; existing tables retain their own `style`. |
-| `tokens?` | `DesignTokens` | Design tokens: `{ modes?: string[], mode?: string, set: { [name]: { type: 'color' \| 'number', values: { [mode]: value } } } }`. Values are keyed by mode (`'default'` when `modes` is absent); `mode` is the active one. An element binds a property to a token with `themeRefs[path] = '$name'` — the literal stays on the element, exactly as with palette slots, and editing a token or switching `mode` rewrites every bound literal. A literal changed by hand (in any shell) loses its binding and keeps its value. Names match `[A-Za-z][\w.-]*`. |
+| `tokens?` | `DesignTokens` | Design tokens: `{ modes?: string[], mode?: string, set: { [name]: { type, values: { [mode]: value } } } }`, `type` one of `color`, `number` (any dimension), `fontSize`, `opacity` (0..1, shown as %), `fontFamily` (a CSS font stack), `shadow` (`{ x?, y?, blur, color }`). Values are keyed by mode (`'default'` when `modes` is absent); `mode` is the active one. An element binds a property to a token with `themeRefs[path] = '$name'` — the literal stays on the element, exactly as with palette slots, and editing a token or switching `mode` rewrites every bound literal. A literal changed by hand (in any shell) loses its binding and keeps its value. Names match `[A-Za-z][\w.-]*`. |
 
 ---
 
@@ -131,6 +131,8 @@ Every element carries the common `ElementBase` fields, plus type-specific ones.
 | `parentId?` | `string` | The auto-layout frame this element sits in (see [Frames](#frames-auto-layout)). Its `x/y/w/h` are still written in full. |
 | `sizing?` | `{w?, h?: 'fixed'\|'fill'}` | Inside a frame: `fill` takes the frame's free space on that axis. Absent = fixed. |
 | `name?` | `string` | The author's name for the element in the editor's layer list. Display only — never a key; unset, the list names it by kind or by its text. |
+| `keepAspectRatio?` | `boolean` | The padlock between W and H: a resize keeps the proportions, and typing W or H carries the other side. Any element: `true` = locked, absent = free. An image reads absent as locked (its long-standing default). Shift inverts it for one drag. An older shell ignores it on non-images (Shift still keeps the ratio there). |
+| `alt?` | `string` | What a screen reader says for a non-text element: rendered as `role="img"` with this `aria-label`. Absent = decorative, as before. Text is read as its text. |
 | `locked?` | `true` | *Editor only.* The canvas will not pick, drag or nudge it — a click passes through to what lies beneath, a marquee leaves it out. Still listed, and selectable, in Layers. Absent = unlocked. |
 | `hidden?` | `true` | Not drawn anywhere: canvas, thumbnails, the show, print, the file preview. Listed (dimmed) in Layers so it can be shown again. **A shell that predates this key draws a hidden element** — it ignores the key; that is the price of keeping the format additive. |
 | `flipX?` / `flipY?` | `true` | The content is drawn mirrored across the box's vertical (`flipX`) or horizontal (`flipY`) centre line; the box itself is unchanged. **A shell that predates these keys draws the element unmirrored.** |

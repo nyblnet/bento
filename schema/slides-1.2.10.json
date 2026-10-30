@@ -301,6 +301,10 @@
             "right"
           ]
         },
+        "alt": {
+          "type": "string",
+          "maxLength": 4000
+        },
         "backdropFilter": {
           "type": "number",
           "minimum": 0,
@@ -409,6 +413,9 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "keepAspectRatio": {
+          "type": "boolean"
         },
         "letterSpacing": {
           "type": "number",
@@ -638,6 +645,10 @@
     "shape": {
       "type": "object",
       "properties": {
+        "alt": {
+          "type": "string",
+          "maxLength": 4000
+        },
         "backdropFilter": {
           "type": "number",
           "minimum": 0,
@@ -848,6 +859,9 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "keepAspectRatio": {
+          "type": "boolean"
         },
         "layout": {
           "type": "object",
@@ -1185,6 +1199,10 @@
     "image": {
       "type": "object",
       "properties": {
+        "alt": {
+          "type": "string",
+          "maxLength": 4000
+        },
         "backdropFilter": {
           "type": "number",
           "minimum": 0,
@@ -1388,6 +1406,10 @@
     "svg": {
       "type": "object",
       "properties": {
+        "alt": {
+          "type": "string",
+          "maxLength": 4000
+        },
         "asset": {
           "type": "string",
           "maxLength": 200,
@@ -1479,6 +1501,9 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "keepAspectRatio": {
+          "type": "boolean"
         },
         "link": {
           "$ref": "#/$defs/prop-link"
@@ -1597,6 +1622,10 @@
     "chart": {
       "type": "object",
       "properties": {
+        "alt": {
+          "type": "string",
+          "maxLength": 4000
+        },
         "backdropFilter": {
           "type": "number",
           "minimum": 0,
@@ -1679,6 +1708,9 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "keepAspectRatio": {
+          "type": "boolean"
         },
         "link": {
           "$ref": "#/$defs/prop-link"
@@ -1913,6 +1945,10 @@
     "table": {
       "type": "object",
       "properties": {
+        "alt": {
+          "type": "string",
+          "maxLength": 4000
+        },
         "backdropFilter": {
           "type": "number",
           "minimum": 0,
@@ -2001,6 +2037,9 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "keepAspectRatio": {
+          "type": "boolean"
         },
         "link": {
           "$ref": "#/$defs/prop-link"
@@ -2105,6 +2144,10 @@
     "media": {
       "type": "object",
       "properties": {
+        "alt": {
+          "type": "string",
+          "maxLength": 4000
+        },
         "autoplay": {
           "type": "boolean"
         },
@@ -2201,6 +2244,9 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "keepAspectRatio": {
+          "type": "boolean"
         },
         "kind": {
           "type": "string",
@@ -2338,6 +2384,10 @@
     "embed": {
       "type": "object",
       "properties": {
+        "alt": {
+          "type": "string",
+          "maxLength": 4000
+        },
         "app": {
           "type": "string",
           "maxLength": 200,
@@ -2428,6 +2478,9 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "keepAspectRatio": {
+          "type": "boolean"
         },
         "link": {
           "$ref": "#/$defs/prop-link"
@@ -2544,6 +2597,10 @@
             "right"
           ]
         },
+        "alt": {
+          "type": "string",
+          "maxLength": 4000
+        },
         "backdropFilter": {
           "type": "number",
           "minimum": 0,
@@ -2654,6 +2711,9 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "keepAspectRatio": {
+          "type": "boolean"
         },
         "lineHeight": {
           "type": "number",
@@ -3191,7 +3251,11 @@
                   "type": {
                     "enum": [
                       "color",
-                      "number"
+                      "number",
+                      "fontFamily",
+                      "fontSize",
+                      "shadow",
+                      "opacity"
                     ]
                   },
                   "values": {
@@ -3199,8 +3263,10 @@
                     "additionalProperties": {
                       "type": [
                         "string",
-                        "number"
-                      ]
+                        "number",
+                        "object"
+                      ],
+                      "description": "a shadow token holds {x, y, blur, color}"
                     }
                   }
                 }

@@ -7,7 +7,8 @@
 import { section, field } from './fields'
 import { t } from '../../i18n'
 import type { PropsPanel } from '../panels'
-import type { SlideElement } from '../../model'
+import type { Slide, SlideElement } from '../../model'
+import { parseColor } from './controls'
 import { rasterizeSlide, slideSvg, downloadBlob, type Box } from '../exportimages'
 import { exportBase } from '../../exportimages'
 import { serializeElements, serializeSlides } from '../clipboard'
@@ -61,4 +62,80 @@ export function buildExport(p: PropsPanel, els: SlideElement[]) {
   })
   const row = field(p, png(1), png(2), svg, json)
   row.classList.add('ed-export')
+  if (els.length === 1) accessibility(p, els[0], slide)
+}
+
+/** WCAG 2 relative luminance of a #rrggbb. */
+function luminance(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+export function contrastRatio(a: string, b: string): number {
+  const [x, y] = [luminance(a), luminance(b)].sort((m, n) => n - m)
+  return (x + 0.05) / (y + 0.05)
+}
+/** The first solid colour in a paint (a gradient is judged by its first stop). */
+const solid = (paint: string | undefined): string | null => {
+  if (!paint || paint === 'transparent' || paint === 'none') return null
+  const hex = /#[0-9a-f]{6}\b/i.exec(paint)?.[0]
+  return hex ?? (parseColor(paint).a > 0 ? parseColor(paint).hex : null)
+}
+
+/**
+ * What sits behind `el`: the topmost filled shape below it in paint order whose
+ * box holds its centre (a card, a frame), else the slide background.
+ * ponytail: one sample at the centre, opacity ignored — a deck-wide audit is test-slides-accent-contrast
+ */
+export function backdropOf(el: SlideElement, slide: Slide): string | null {
+  const cx = el.x + el.w / 2, cy = el.y + el.h / 2
+  const below = slide.elements.slice(0, slide.elements.findIndex((e) => e.id === el.id)).reverse()
+  for (const e of below) {
+    if (e.hidden || e.type !== 'shape' || cx < e.x || cx > e.x + e.w || cy < e.y || cy > e.y + e.h) continue
+    const c = solid(e.fillGradient?.stops[0]?.color ?? e.fill)
+    if (c) return c
+  }
+  return solid(slide.background)
+}
+
+/** The selection's contrast against what is behind it, graded, and its alt text. */
+function accessibility(p: PropsPanel, el: SlideElement, slide: Slide) {
+  const fg = el.type === 'text' ? solid(el.colorGradient?.stops[0]?.color ?? el.color)
+    : el.type === 'shape' ? solid(el.fillGradient?.stops[0]?.color ?? (el.fill === 'none' ? el.stroke : el.fill))
+    : null
+  const bg = backdropOf(el, slide)
+  if (fg && bg) {
+    const ratio = contrastRatio(fg, bg)
+    // WCAG 2.2: text 4.5 (AA) / 7 (AAA), large text (≥24px, or ≥18.66px bold) 3 / 4.5; graphics 3 (AA)
+    const large = el.type === 'text' && (el.fontSize >= 24 || (el.fontSize >= 18.66 && el.fontWeight >= 700))
+    const [aa, aaa] = el.type !== 'text' ? [3, Infinity] : large ? [3, 4.5] : [4.5, 7]
+    const grade = ratio >= aaa ? 'AAA' : ratio >= aa ? 'AA' : t('Fails')
+    const out = document.createElement('div')
+    out.className = 'ed-a11y'
+    const value = document.createElement('span')
+    value.textContent = t('Contrast {ratio}:1', { ratio: ratio.toFixed(2) })
+    const badge = document.createElement('span')
+    badge.className = `ed-a11y-badge ${ratio >= aa ? 'is-pass' : 'is-fail'}`
+    badge.textContent = grade
+    out.title = el.type === 'text'
+      ? t('Against what is behind it. Text needs {aa}:1 for AA and {aaa}:1 for AAA.', { aa, aaa })
+      : t('Against what is behind it. Shapes and icons need 3:1.')
+    out.append(value, badge)
+    p.host.appendChild(out)
+  }
+  if (el.type === 'text') return
+  const alt = document.createElement('input')
+  alt.type = 'text'
+  alt.className = 'ed-a11y-alt'
+  alt.value = el.alt ?? ''
+  alt.placeholder = t('Describe it for screen readers')
+  alt.setAttribute('aria-label', t('Alternative text'))
+  alt.addEventListener('change', () => p.mutate(el.id, (e) => {
+    const v = alt.value.trim()
+    if (v) e.alt = v
+    else delete e.alt
+  }, true))
+  field(p, alt)
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 // Text: font, size, weight, fill, stroke, fields.
-import { tokenBind } from './tokenbind'
+import { tokenBind, tokenWrap } from './tokenbind'
 import type { PropsPanel } from '../panels'
 import type { TextElement } from '../../model'
 import { ICONS } from '../../icons'
@@ -97,7 +97,7 @@ export function buildTextProps(p: PropsPanel, el: TextElement) {
   const font = fontSelect(p, el)
   font.setAttribute('aria-label', t('Font'))
   font.title = t('Font')
-  field(p, font)
+  field(p, tokenWrap(p, font, el, 'fontFamily', ['fontFamily']))
 
   const sizes = document.createElement('div')
   sizes.className = 'ed-grid2'
@@ -112,7 +112,7 @@ export function buildTextProps(p: PropsPanel, el: TextElement) {
   const weight = weightSelect(p, el)
   weight.title = t('Weight')
   weight.setAttribute('aria-label', t('Weight'))
-  sizes.append(tokenBind(p, size, el, 'fontSize'), weight,
+  sizes.append(tokenBind(p, size, el, 'fontSize', ['fontSize', 'number']), weight,
     mini(t('Line height'), el.lineHeight, (v, fin) =>
       p.mutate(el.id, (e) => { (e as TextElement).lineHeight = Math.max(Math.round(v * 100) / 100, 0.5) }, fin), ICONS.lineHeight, { min: 0.5 }),
     mini(t('Letter spacing'), el.letterSpacing ?? 0, (v, fin) =>

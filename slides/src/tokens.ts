@@ -17,8 +17,10 @@
 //     literal they chose stays. One rule covers every edit path, where a
 //     clear-on-write would have to be taught to each of them.
 
-import type { BentoDoc, DesignTokens, Slide, SlideElement } from './model.ts'
+import type { BentoDoc, DesignTokens, Slide, SlideElement, TokenType, TokenValue } from './model.ts'
 import { _readPath, keepAlpha } from './palette.ts'
+
+export const TOKEN_TYPES: readonly TokenType[] = ['color', 'number', 'fontSize', 'opacity', 'fontFamily', 'shadow']
 
 /** `$name` → `name`; null when the ref is a palette slot or malformed. */
 export function tokenName(ref: string | undefined): string | null {
@@ -33,7 +35,7 @@ export const activeMode = (t: DesignTokens | undefined): string => {
 }
 
 /** A token's value in the active mode, falling back to the first mode that has one. */
-export function tokenValue(doc: BentoDoc, name: string): string | number | undefined {
+export function tokenValue(doc: BentoDoc, name: string): TokenValue | undefined {
   const tk = doc.theme.tokens
   const tok = tk?.set[name]
   if (!tok) return undefined
@@ -57,18 +59,26 @@ function writeAt(obj: unknown, path: string, value: unknown): boolean {
     cur = cur[s]
   }
   const last = segs[segs.length - 1]
-  if (cur == null || typeof cur !== 'object' || cur[last] === value) return false
-  cur[last] = value
+  if (cur == null || typeof cur !== 'object') return false
+  if (same(cur[last], value)) return false
+  cur[last] = typeof value === 'object' && value ? structuredClone(value) : value // a shadow token is never aliased into elements
   return true
 }
 
-function want(doc: BentoDoc, holder: Holder, path: string, name: string): string | number | undefined {
+function want(doc: BentoDoc, holder: Holder, path: string, name: string): TokenValue | undefined {
   const v = tokenValue(doc, name)
-  return typeof v === 'string' ? keepAlpha(_readPath(holder, path), v) : v
+  // only a colour keeps the property's own opacity; a font stack is a string too
+  return typeof v === 'string' && (doc.theme.tokens?.set[name]?.type ?? 'color') === 'color' ? keepAlpha(_readPath(holder, path), v) : v
 }
 
-const same = (a: unknown, b: unknown) =>
-  typeof a === 'string' && typeof b === 'string' ? a.toLowerCase() === b.toLowerCase() : a === b
+function same(a: unknown, b: unknown): boolean {
+  if (typeof a === 'string' && typeof b === 'string') return a.toLowerCase() === b.toLowerCase()
+  if (a && b && typeof a === 'object' && typeof b === 'object') {
+    const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].sort() // key order is not a hand edit
+    return JSON.stringify(a, keys) === JSON.stringify(b, keys)
+  }
+  return a === b
+}
 
 function dropRef(holder: Holder, path: string) {
   delete holder.themeRefs![path]

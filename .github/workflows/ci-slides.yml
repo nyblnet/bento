@@ -373,3 +373,9 @@ jobs:
         # stroke layer; eye, move and remove are one undo step each; one layer
         # left folds back into the plain keys.
         run: node scripts/test-slides-stacks-browser.mjs
+      - name: Inspector finish in Chromium
+        # OKLCH in the colour popover (in-gamut exact, out-of-gamut flagged);
+        # font / shadow / opacity tokens bound and followed; the W·H padlock
+        # carries the other side, one undo; Export's contrast grade and alt
+        # text; the morph link toggle; popovers still under reduced motion.
+        run: node scripts/test-slides-finish-browser.mjs

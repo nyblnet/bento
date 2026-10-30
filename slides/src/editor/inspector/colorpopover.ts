@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 // The colour popover, Penpot's: a saturation/brightness square, hue and
-// opacity sliders, the value as HEX, RGB or HSL, the eyedropper, and swatches.
+// opacity sliders, the value as HEX, RGB, HSL or OKLCH, the eyedropper, and swatches.
 // It edits nothing itself: the caller previews, commits or cancels.
 import { t } from '../../i18n'
 import { ICONS } from '../../icons'
@@ -27,7 +27,7 @@ export interface ColorPopoverOpts {
   done?: () => void
 }
 
-type Model = 'hex' | 'rgb' | 'hsl'
+type Model = 'hex' | 'rgb' | 'hsl' | 'oklch'
 let model: Model = 'hex' // the viewer's choice, kept for the session
 let open: (() => void) | null = null // closes the popover that is open, committing
 
@@ -61,7 +61,44 @@ export function readColor(text: string): { hex: string; a: number } | null {
   return m ? { hex: '#' + [m[1], m[2], m[3]].map((c) => hex2(+c)).join(''), a: m[4] === undefined ? 1 : +m[4] } : null
 }
 
+/** sRGB ⇄ OKLCH (Björn Ottosson's OKLab, CSS Color 4 matrices). */
+const lin = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
+const gam = (c: number) => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055)
+export function hexToOklch(hex: string): [number, number, number] {
+  const [r, g, b] = [1, 3, 5].map((i) => lin(parseInt(hex.slice(i, i + 2), 16) / 255))
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+  const q = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+  const L = 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * q
+  const A = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * q
+  const B = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * q
+  const C = Math.hypot(A, B)
+  return [L, C, C < 1e-4 ? 0 : (Math.atan2(B, A) * 180 / Math.PI + 360) % 360]
+}
+/** OKLCH (L 0..1, C, H°) as #rrggbb; `clamped` when the colour lies outside sRGB. */
+export function oklchToHex(L: number, C: number, H: number): { hex: string; clamped: boolean } {
+  const A = C * Math.cos(H * Math.PI / 180), B = C * Math.sin(H * Math.PI / 180)
+  const l = (L + 0.3963377774 * A + 0.2158037573 * B) ** 3
+  const m = (L - 0.1055613458 * A - 0.0638541728 * B) ** 3
+  const q = (L - 0.0894841775 * A - 1.291485548 * B) ** 3
+  const rgb = [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * q,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * q,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * q,
+  ]
+  // out of gamut = some channel off by more than 8-bit rounding hides (typed
+  // values carry a few digits, so exact-gamut colours land a hair outside)
+  // ponytail: per-channel clip, not a chroma-reducing gamut map; enough for a picker that says so
+  const enc = rgb.map((c) => Math.sign(c) * gam(Math.abs(c)))
+  const clamped = enc.some((c) => c < -0.5 / 255 || c > 1 + 0.5 / 255)
+  return { hex: '#' + enc.map((c) => hex2(Math.min(Math.max(c, 0), 1) * 255)).join(''), clamped }
+}
+
 function show(hex: string, m: Model): string {
+  if (m === 'oklch') {
+    const [L, C, H] = hexToOklch(hex)
+    return `${+(L * 100).toFixed(1)}%, ${+C.toFixed(3)}, ${+H.toFixed(1)}`
+  }
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
   if (m === 'rgb') return `${r}, ${g}, ${b}`
   if (m === 'hex') return hex.slice(1)
@@ -69,8 +106,14 @@ function show(hex: string, m: Model): string {
   const s = max === min ? 0 : (max - min) / (1 - Math.abs(2 * l - 1))
   return `${Math.round(hexToHsv(hex)[0])}, ${Math.round(s * 100)}%, ${Math.round(l * 100)}%`
 }
-function parse(text: string, m: Model) {
+function parse(text: string, m: Model): { hex: string; a: number; clamped?: boolean } | null {
   const s = text.trim()
+  const ok = m === 'oklch' && /^([\d.]+)(%?)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:\s*\/\s*([\d.]+)(%?))?$/.exec(s)
+  if (ok) {
+    const L = ok[2] || +ok[1] > 1 ? +ok[1] / 100 : +ok[1]
+    const a = ok[5] === undefined ? 1 : ok[6] ? +ok[5] / 100 : +ok[5]
+    return { ...oklchToHex(Math.min(Math.max(L, 0), 1), +ok[3], +ok[4]), a: Math.min(Math.max(a, 0), 1) }
+  }
   if (m === 'rgb' && /^[\d.\s,]+$/.test(s)) return readColor(`rgb(${s})`)
   if (m === 'hsl' && /^[\d.\s,%]+$/.test(s)) return readColor(`hsl(${s.replace(/,\s*([\d.]+)(?!%)/g, ', $1%')})`)
   if (/^[0-9a-f]{3}([0-9a-f]{3}([0-9a-f]{2})?)?$/i.test(s)) return readColor('#' + s)
@@ -123,7 +166,7 @@ export function openColorPopover(anchor: HTMLElement, o: ColorPopoverOpts) {
   line.className = 'ed-cpop-line'
   const models = document.createElement('select')
   models.setAttribute('aria-label', t('Color model'))
-  for (const m of ['hex', 'rgb', 'hsl'] as const) models.add(new Option(m.toUpperCase(), m, false, m === model))
+  for (const m of ['hex', 'rgb', 'hsl', 'oklch'] as const) models.add(new Option(m.toUpperCase(), m, false, m === model))
   const text = document.createElement('input')
   text.type = 'text'
   text.className = 'ed-cpop-text'
@@ -222,7 +265,7 @@ export function openColorPopover(anchor: HTMLElement, o: ColorPopoverOpts) {
     hue.value = String(Math.round(h))
     alpha.value = String(Math.round(a * 100))
     alpha.style.setProperty('--c', c)
-    if (!keepText) text.value = show(c, model)
+    if (!keepText) { text.value = show(c, model); text.classList.remove('is-clamped'); text.title = '' }
   }
   const emit = (keepText = false) => {
     touched = true
@@ -312,6 +355,9 @@ export function openColorPopover(anchor: HTMLElement, o: ColorPopoverOpts) {
     ;[h, s, v] = hexToHsv(c.hex)
     if (o.alpha !== undefined && c.a < 1) a = c.a
     emit()
+    // out of sRGB: the nearest colour it can show, and the field says so
+    text.classList.toggle('is-clamped', !!c.clamped)
+    text.title = c.clamped ? t('Outside sRGB — shown as the nearest colour it can display') : ''
   })
 
   let done = false
