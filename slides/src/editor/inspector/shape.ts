@@ -3,14 +3,15 @@
 // Shapes: fill and stroke.
 import { tokenBind } from './tokenbind'
 import type { PropsPanel } from '../panels'
-import type { ShapeElement, LineEnding, PaintLayer, StrokeLayer } from '../../model'
+import type { ShapeElement, LineEnding, PaintLayer, StrokeLayer, SlideElement, TextElement } from '../../model'
 import { TIPS } from '../../tips'
-import { optLabel, parseColor } from './controls'
+import { optLabel, parseColor, SHADOW_PRESETS, roving, relOf } from './controls'
+import { applyRel } from './numexpr'
 import { row, labeledSelect, toggle, section, field, mini, opBtn } from './fields'
 import { ICONS } from '../../icons'
 import { fillLayers, setFillLayers, setStrokeLayers, strokeLayers } from '../../stacks'
 import { t } from '../../i18n'
-import { fillKind, colorAlpha, gradientRows, gradientChip, gradientFor, paintHost, type PaintKind } from './color'
+import { colorAlpha, gradientRows, gradientChip, paintHost } from './color'
 import { segmented } from './fields'
 import { BOOL_OPS, boolUi, flatten, release, setOp } from '../booleans'
 import { openCtxMenu } from '../ctxmenu'
@@ -72,8 +73,6 @@ export function buildShapeFill(p: PropsPanel, el: ShapeElement) {
   }
   const grad = el.fillGradient
   const host = paintHost(p, el.id, 'fill', 'fillGradient')
-  field(p, fillKind(host.kind, (v) =>
-    host.write(v as PaintKind, v === 'solid' ? undefined : gradientFor(v as 'linear' | 'radial', grad, el.fill), undefined, true)))
   if (host.kind === 'solid' || !grad) {
     field(p, colorAlpha(p, el.fill, (v, fin) =>
       p.mutate(el.id, (e) => { (e as ShapeElement).fill = v }, fin),
@@ -152,12 +151,18 @@ function blendSelect(value: string | undefined, set: (v: string | undefined) => 
   return sel
 }
 
+/** Which layer rows have their ⋯ open, by element and layer — kept across
+ *  the rebuild every edit inside them causes. */
+const openExtras = new Set<string>()
+
 /**
- * A layer row: grip, eye, the layer's own controls, then up / down / remove.
- * The grip drags the row onto another of the same stack (`stack` names it, so
- * a fill never lands among strokes); up and down are the keyboard's way.
+ * A layer row, Figma's: grip · eye · the paint · ⋯. What a layer needs less
+ * often — its blend, a stroke's dashes, moving it, removing it — sits behind
+ * ⋯, so the paint keeps the row's width at every panel size. The grip drags
+ * the row onto another of the same stack (`stack` names it, so a fill never
+ * lands among strokes); Move up / Move down are the keyboard's way.
  */
-function layerRow(p: PropsPanel, stack: 'fill' | 'stroke', i: number, hidden: boolean, act: ReturnType<typeof layerActions>, ...body: HTMLElement[]) {
+function layerRow(p: PropsPanel, el: { id: string }, stack: 'fill' | 'stroke', i: number, hidden: boolean, act: ReturnType<typeof layerActions>, paint: HTMLElement, extras: HTMLElement[], under: HTMLElement[] = []) {
   const row = document.createElement('div')
   row.className = 'ed-paintlayer' + (hidden ? ' off' : '')
   row.dataset.layer = `${stack}${i}`
@@ -196,11 +201,30 @@ function layerRow(p: PropsPanel, stack: 'fill' | 'stroke', i: number, hidden: bo
   eye.setAttribute('aria-pressed', String(hidden))
   const main = document.createElement('div')
   main.className = 'ed-paintlayer-body'
-  main.append(...body)
-  row.append(grip, eye, main,
+  main.append(paint)
+  const key = `${el.id}:${stack}${i}`
+  const more = btn(ICONS.more, t('More layer options'), () => {
+    if (openExtras.has(key)) openExtras.delete(key)
+    else openExtras.add(key)
+    const open = openExtras.has(key)
+    box.hidden = !open
+    more.setAttribute('aria-expanded', String(open))
+  })
+  more.classList.add('ed-paintlayer-more')
+  const box = document.createElement('div')
+  box.className = 'ed-paintlayer-extras'
+  box.id = `ed-extras-${key.replace(/\W/g, '-')}`
+  more.setAttribute('aria-controls', box.id)
+  more.setAttribute('aria-expanded', String(openExtras.has(key)))
+  box.hidden = !openExtras.has(key)
+  const moves = document.createElement('div')
+  moves.className = 'ed-paintlayer-moves'
+  moves.append(
     btn(ICONS.forward, t('Move layer up'), act.up),
     btn(ICONS.backward, t('Move layer down'), act.down),
     btn(ICONS.minus, t('Remove layer'), act.remove))
+  box.append(...extras, moves)
+  row.append(grip, eye, main, more, ...under, box)
   p.host.appendChild(row)
 }
 
@@ -232,7 +256,7 @@ function buildFillStack(p: PropsPanel, el: ShapeElement) {
       const f = (e as ShapeElement).fills?.[i]
       if (f) { if (v) f.blend = v; else delete f.blend }
     }, true))
-    layerRow(p, 'fill', i, !!l.hidden, layerActions(i, layers.length, (fn) => restackFills(p, el, fn)), paint, blend)
+    layerRow(p, el, 'fill', i, !!l.hidden, layerActions(i, layers.length, (fn) => restackFills(p, el, fn)), paint, [blend])
     if (l.gradient && host.kind !== 'solid') {
       gradientRows(p, l.gradient, (fn, fin) => p.mutate(el.id, (e) => {
         const g = (e as ShapeElement).fills?.[i]?.gradient
@@ -267,14 +291,15 @@ function buildStrokeStack(p: PropsPanel, el: ShapeElement, open: boolean) {
       align.setAttribute('aria-label', t('Stroke position'))
       grid.append(width, align)
     }
-    layerRow(p, 'stroke', i, !!l.hidden, layerActions(i, layers.length, (fn) => restackStrokes(p, el, fn)), paint, grid,
+    // width and position are the stroke itself: under the paint; dashes and blend behind ⋯
+    layerRow(p, el, 'stroke', i, !!l.hidden, layerActions(i, layers.length, (fn) => restackStrokes(p, el, fn)), paint, [
       dashFields(l.dashes, (k, v, fin) => edit((s) => {
         const d: [number, number] = s.dashes ? [...s.dashes] : [0, 0]
         d[k] = Math.max(v, 0)
         if (d[0] > 0) s.dashes = d
         else delete s.dashes // no dash length: a solid stroke
       }, fin)),
-      blendSelect(l.blend, (v) => edit((s) => { if (v) s.blend = v; else delete s.blend }, true)))
+      blendSelect(l.blend, (v) => edit((s) => { if (v) s.blend = v; else delete s.blend }, true))], [grid])
     if (l.gradient && host.kind !== 'solid') {
       gradientRows(p, l.gradient, (fn, fin) => edit((s) => { if (s.gradient) fn(s.gradient) }, fin), host.target)
     }
@@ -414,4 +439,94 @@ function tipPicker(name: string, kind: string | undefined, atStart: boolean, pic
     })))
   })
   return b
+}
+
+/**
+ * Fill, Stroke and Shadow for several elements at once — shown when they all
+ * have that property in the same form (every one a closed shape with a single
+ * fill, every one a text box…), so recolouring three cards is one edit, not
+ * three. A value they disagree on reads Mixed; a pick sets them all, one undo
+ * step. A paint stack or a gradient is the element's own: such a selection
+ * shows no shared Fill rather than one that would flatten it.
+ */
+export function buildSharedPaint(p: PropsPanel, els: SlideElement[]) {
+  const shapes = els.every((e) => e.type === 'shape') ? els as ShapeElement[] : null
+  const closed = shapes?.every((s) => s.shape !== 'line' && !(s.shape === 'path' && !/z\s*$/i.test(s.d ?? '')))
+  const each = (fn: (e: SlideElement) => void, final: boolean) => p.edit(() => {
+    for (const e of els) { const el = p.store.element(e.id); if (el) fn(el) }
+  }, final)
+  // a colour field for a key every element has: Mixed when they differ
+  const shared = (key: string, values: string[], set: (e: SlideElement, v: string) => void) => {
+    const mixed = values.some((v) => v !== values[0])
+    const f = colorAlpha(p, values[0], (v, fin) => each((e) => set(e, v), fin))
+    if (mixed) {
+      f.classList.add('ed-color-mixed')
+      const hex = f.querySelector<HTMLInputElement>('.ed-color-hex')
+      if (hex) { hex.value = ''; hex.placeholder = t('Mixed') }
+    }
+    f.dataset.shared = key
+    field(p, f)
+  }
+  const texts = els.every((e) => e.type === 'text') ? els as TextElement[] : null
+  if (shapes && closed && shapes.every((s) => !s.fills && !s.fillGradient)) {
+    section(p, t('Fill'))
+    shared('fill', shapes.map((s) => s.fill), (e, v) => { (e as ShapeElement).fill = v; delete e.themeRefs?.fill })
+  } else if (texts && texts.every((x) => !x.colorGradient)) {
+    section(p, t('Fill'))
+    shared('color', texts.map((x) => x.color), (e, v) => { (e as TextElement).color = v; delete e.themeRefs?.color })
+  }
+  if (shapes && closed && shapes.every((s) => !s.strokes && !s.strokeGradient)) {
+    const on = shapes.filter((s) => s.strokeWidth > 0 && parseColor(s.stroke).a > 0)
+    section(p, t('Stroke'), on.length
+      ? { add: false, hint: t('Remove stroke'), run: () => each((e) => { (e as ShapeElement).strokeWidth = 0 }, true) }
+      : { add: true, hint: t('Add stroke'), run: () => each((e) => {
+        const s = e as ShapeElement
+        s.strokeWidth = 2
+        if (parseColor(s.stroke).a === 0) s.stroke = '#1E2A3A'
+      }, true) })
+    if (on.length) {
+      shared('stroke', shapes.map((s) => s.stroke), (e, v) => { (e as ShapeElement).stroke = v; delete e.themeRefs?.stroke })
+      const widths = shapes.map((s) => s.strokeWidth)
+      const mixed = widths.some((w) => w !== widths[0])
+      // Mixed widths: a relative entry (+1, *2, a scrub) works on each one's own width
+      const w = mini(t('Width'), mixed ? NaN : widths[0], (v, fin) => {
+        const rel = !mixed ? null : fin ? relOf(input) : { op: '+' as const, x: v }
+        each((e) => {
+          const s = e as ShapeElement
+          s.strokeWidth = Math.max(rel ? applyRel(rel, widths[shapes.findIndex((x) => x.id === e.id)]) : v, 0)
+        }, fin)
+      }, undefined, { min: 0 })
+      const input = w.querySelector('input')!
+      field(p, w)
+    }
+  }
+  // Shadow: added to every element, removed from every one, a preset for all
+  const shadowed = els.filter((e) => e.shadow)
+  section(p, t('Shadow'), shadowed.length
+    ? { add: false, hint: t('Remove shadow'), run: () => each((e) => { delete e.shadow }, true) }
+    : { add: true, hint: t('Add shadow'), run: () => each((e) => { e.shadow = { ...Object.values(SHADOW_PRESETS)[0] } }, true) })
+  if (!shadowed.length) return
+  const same = els.every((e) => JSON.stringify(e.shadow) === JSON.stringify(els[0].shadow))
+  const current = same ? Object.entries(SHADOW_PRESETS).find(([, s]) => JSON.stringify(s) === JSON.stringify(els[0].shadow))?.[0] : undefined
+  const tiles = document.createElement('div')
+  tiles.className = 'ed-shadow-tiles'
+  tiles.setAttribute('role', 'radiogroup')
+  tiles.setAttribute('aria-label', t('Shadow'))
+  for (const [key, sh] of Object.entries(SHADOW_PRESETS)) {
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.className = 'ed-shadow-tile'
+    b.setAttribute('role', 'radio')
+    b.setAttribute('aria-checked', String(key === current))
+    const swatch = document.createElement('span')
+    swatch.className = 'ed-shadow-swatch'
+    swatch.style.boxShadow = `${(sh.x ?? 0) / 4}px ${(sh.y ?? 0) / 4}px ${sh.blur / 4}px ${sh.color}`
+    const name = document.createElement('span')
+    name.textContent = optLabel(key)
+    b.append(swatch, name)
+    b.addEventListener('click', () => each((e) => { e.shadow = { ...SHADOW_PRESETS[key] } }, true))
+    tiles.appendChild(b)
+  }
+  roving(tiles, 'radio')
+  p.host.appendChild(tiles)
 }

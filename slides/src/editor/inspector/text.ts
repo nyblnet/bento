@@ -10,7 +10,7 @@ import { measureElement } from '../../measure'
 import { formatDate, DATE_PRESETS, TIME_PRESETS, OTHER_FIELDS } from '../../datefmt'
 import { openCtxMenu } from '../ctxmenu'
 import { field, mini, segmented, section } from './fields'
-import { fillKind, colorAlpha, gradientRows, gradientChip, gradientFor, paintHost, type PaintKind } from './color'
+import { colorAlpha, gradientRows, gradientChip, paintHost } from './color'
 import { firstFamily, FONT_CHOICES, injectFonts } from '../../fonts'
 import { fontFaceDescriptors } from '../../fontmeta'
 
@@ -158,8 +158,6 @@ export function buildTextFill(p: PropsPanel, el: TextElement) {
   section(p, t('Fill'))
   const tgrad = el.colorGradient
   const host = paintHost(p, el.id, 'color', 'colorGradient', 90)
-  field(p, fillKind(host.kind, (v) =>
-    host.write(v as PaintKind, v === 'solid' ? undefined : gradientFor(v as 'linear' | 'radial', tgrad, el.color, 90), undefined, true)))
   if (host.kind === 'solid' || !tgrad) {
     field(p, colorAlpha(p, el.color, (v, fin) =>
       p.mutate(el.id, (e) => { (e as TextElement).color = v }, fin),

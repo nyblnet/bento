@@ -78,18 +78,25 @@ try {
   await select('stk')
   // rows list the top layer first: fill row 0 = layer 2
   const fillRow = (n) => `.ed-props .ed-paintlayer >> nth=${n}`
+  // move and remove sit behind the row's ⋯ (opened once; it stays open across rebuilds)
+  const extras = async (n) => {
+    if (!(await p.locator(`${fillRow(n)} >> .ed-paintlayer-extras`).isVisible())) await click(`${fillRow(n)} >> .ed-paintlayer-more`)
+  }
   await click(`${fillRow(0)} >> .ed-paintlayer-eye`)
   let stk = await el('stk')
   ok(stk.fills[2].hidden === true && stk.fill === '#ff0000', 'the eye hides the top layer; the fallback falls to the next visible one')
   await undo()
   stk = await el('stk')
   ok(!stk.fills[2].hidden && stk.fill === '#0000ff', 'one undo shows it again')
+  await extras(0)
   await click(`${fillRow(0)} >> button[aria-label="Move layer down"]`)
   stk = await el('stk')
   ok(stk.fills.map((f) => f.color).join() === '#ff0000,#0000ff,#00ff00', 'move down swaps the layer with the one beneath')
   await undo()
+  await extras(0)
   await click(`${fillRow(0)} >> button[aria-label="Remove layer"]`)
   await p.waitForTimeout(100)
+  await extras(0)
   await click(`${fillRow(0)} >> button[aria-label="Remove layer"]`)
   stk = await el('stk')
   ok(!stk.fills && stk.fill === '#ff0000', 'removing down to one layer folds the stack back into `fill`')

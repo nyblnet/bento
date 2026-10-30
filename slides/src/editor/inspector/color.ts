@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 // Colour fields: the swatch + hex + opacity row, palette links, gradients.
-import { segmented, mini, field } from './fields'
-import { fillStyles, parseColor, unitHandle, slotLabel, combineColor, alphaOf, SCRUB, numeric } from './controls'
+import { mini, field } from './fields'
+import { parseColor, unitHandle, slotLabel, combineColor, alphaOf, SCRUB, numeric } from './controls'
 import { t } from '../../i18n'
 import type { PropsPanel } from '../panels'
 import { ICONS } from '../../icons'
@@ -72,10 +72,19 @@ export function paintHost(p: PropsPanel, id: string, solidKey: string, gradKey: 
         if (!h) return
         const [holder, key] = slot(h, gradKey)
         if (holder) delete holder[key]
+        opaque(h, solidKey)
         bindToken(p.store.doc, h as never, solidKey, name)
       }, true),
     })),
   }
+}
+
+/** A colour token keeps the property's own opacity — so a 0% colour (an
+ *  empty fill) is made opaque first, or the pick would change nothing visible. */
+function opaque(holder: unknown, path: string) {
+  const [h, key] = slot(holder, path)
+  const v = h?.[key]
+  if (typeof v === 'string' && parseColor(v).a === 0) h![key] = combineColor(parseColor(v).hex, 1)
 }
 
 /** The value at a dotted path, or undefined. */
@@ -122,13 +131,6 @@ function settle(p: PropsPanel) {
   const a = document.activeElement as HTMLElement | null
   if (a && p.host.contains(a)) a.blur()
   if (p.stale) p.rebuild()
-}
-
-/** Solid | Linear | Radial, one click. */
-export function fillKind(value: PaintKind, onChange: (v: string) => void): HTMLElement {
-  const seg = segmented(['solid', 'linear', 'radial'], value, onChange, Object.fromEntries(fillStyles()))
-  seg.setAttribute('aria-label', t('Fill style'))
-  return seg
 }
 
 /** A gradient's angle and stops, shared by text and shapes. `edit` hands
@@ -226,9 +228,17 @@ export function colorField(col: HTMLInputElement, alpha?: HTMLInputElement): HTM
   hex.spellcheck = false
   hex.maxLength = 7
   hex.setAttribute('aria-label', `${t('Color')} (hex)`)
-  const show = () => { hex.value = col.value.slice(1) }
+  // a fully transparent colour reads None, not a hex nobody can see
+  const show = () => {
+    const none = !!alpha && alphaOf(alpha) === 0
+    hex.value = none ? '' : col.value.slice(1)
+    hex.placeholder = none ? t('None') : ''
+  }
   show()
   col.addEventListener('input', show)
+  alpha?.addEventListener('change', show)
+  alpha?.addEventListener(SCRUB, show)
+  col.setAttribute('aria-label', t('Color'))
   hex.addEventListener('change', () => {
     const v = hex.value.trim().replace(/^#/, '')
     const full = /^[0-9a-f]{3}$/i.test(v) ? [...v].map((c) => c + c).join('') : v
@@ -302,7 +312,8 @@ export function themeLink(p: PropsPanel, ref: { id: string | null; path: string;
       input.value = /^#[0-9a-fA-F]{6}$/.test(base) ? base : parseColor(base).hex
       // a theme colour names the hue; the field keeps its own opacity
       const a = field.querySelector<HTMLInputElement>('.ed-color-alpha input')
-      setRef(p, ref, a ? combineColor(input.value, alphaOf(a)) : base, slot)
+      // the field keeps its opacity — unless it had none: a pick must show
+      setRef(p, ref, a ? combineColor(input.value, alphaOf(a) || 1) : base, slot)
     })
     list.appendChild(b)
   }
@@ -328,7 +339,7 @@ export function themeLink(p: PropsPanel, ref: { id: string | null; path: string;
     if (name === tok) b.classList.add('is-on')
     b.addEventListener('click', () => p.edit(() => {
       const h = ref.id ? p.store.element(ref.id) : (ref.slide ?? p.store.slide)
-      if (h) bindToken(p.store.doc, h as never, ref.path, name)
+      if (h) { opaque(h, ref.path); bindToken(p.store.doc, h as never, ref.path, name) }
     }, true))
     list.appendChild(b)
   }

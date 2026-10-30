@@ -16,10 +16,17 @@ export const applyRel = (r: RelOp, v: number) => r.op === '+' ? v + r.x : r.op =
  *  negative number, as in every design tool. A unit the field shows (px, °,
  *  deg, %) may be typed. A comma is a decimal point ("1,5") only when it
  *  cannot be a thousands separator: "1,000" and "1.000,5" are refused, not
- *  guessed, because either reading may be the one meant. */
-export function evalNumber(text: string, prev: number): { v: number; rel?: number; op?: RelOp } | null {
+ *  guessed, because either reading may be the one meant — unless `dec`, the
+ *  interface language's decimal mark, says which reading is meant. */
+export function evalNumber(text: string, prev: number, dec?: '.' | ','): { v: number; rel?: number; op?: RelOp } | null {
   if (/[\d.]\s+[\d.]/.test(text)) return null // "3 4" is two numbers, not 34
-  if (/\d,\d{3}(?!\d)/.test(text) || (/,/.test(text) && /\d\.\d/.test(text))) return null
+  // Knowing the interface language's decimal mark settles what a guess
+  // cannot: in English "1,000" is a thousand, in German "1.000" is. The
+  // grouping mark is dropped only before exactly three digits; any other use
+  // of it is still a decimal point ("2.5" in German, "1,5" in English).
+  if (dec === '.') text = text.replace(/(\d),(?=\d{3}(?!\d))/g, '$1')
+  if (dec === ',') text = text.replace(/(\d)\.(?=\d{3}(?!\d))/g, '$1')
+  if (dec !== ',' && (/\d,\d{3}(?!\d)/.test(text) || (/,/.test(text) && /\d\.\d/.test(text)))) return null
   let s = text.trim().replace(/\s+/g, '').replace(/,/g, '.').replace(/(px|°|deg|%)$/i, '')
   if (!s) return null
   let rel: '+' | '*' | '/' | null = null

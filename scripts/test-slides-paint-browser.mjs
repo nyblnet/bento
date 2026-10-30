@@ -92,12 +92,18 @@ try {
   ok(r.mask, 'an outside stroke on a triangle is a doubled stroke, masked off the fill')
   ok(r.flip.includes('scale(-1, 1)'), `a flipped element draws its content mirrored (${r.flip})`)
 
-  console.log('\nfill kind and the stop bar\n')
+  console.log('\nfill kind (in the popover: one Solid | Linear | Radial) and the stop bar\n')
   await select('rad')
-  await p.locator('.ed-props .ed-seg[aria-label="Fill style"] button', { hasText: 'Linear' }).click(); await p.waitForTimeout(250)
+  ok(await p.locator('.ed-props .ed-seg[aria-label="Fill style"]').count() === 0, 'the fill row has no second Solid | Linear | Radial — the popover holds it')
+  const kindVia = async (k) => {
+    await p.click('.ed-props .ed-section[data-key="Fill"] + .ed-section-body .ed-gradchip'); await p.waitForTimeout(200)
+    await p.click(`.ed-cpop .ed-cpop-kinds [data-kind="${k}"]`); await p.waitForTimeout(150)
+    await p.keyboard.press('Enter'); await p.waitForTimeout(250)
+  }
+  await kindVia('linear')
   let e = await el('rad')
   ok(e.fillGradient && !e.fillGradient.kind && e.fillGradient.stops.length === 2, 'Linear: the same stops, no kind')
-  await p.locator('.ed-props .ed-seg[aria-label="Fill style"] button', { hasText: 'Radial' }).click(); await p.waitForTimeout(250)
+  await kindVia('radial')
   e = await el('rad')
   ok(e.fillGradient?.kind === 'radial', 'Radial: kind radial')
   const bar = await p.locator('.ed-props .ed-gradbar').boundingBox()
@@ -122,8 +128,9 @@ try {
   await p.click('.ed-cpop .ed-cpop-kinds [data-kind="linear"]'); await p.waitForTimeout(250)
   ok(!(await el('rad')).fillGradient.kind, 'Linear previews at once')
   await p.keyboard.press('Escape'); await p.waitForTimeout(300)
-  ok((await el('rad')).fillGradient.kind === 'radial', 'Esc puts the radial back')
-  ok(await p.locator('.ed-cpop').count() === 0, 'and closes the popover')
+  ok(!(await el('rad')).fillGradient.kind && await p.locator('.ed-cpop').count() === 0, 'Esc closes the popover and keeps Linear')
+  await undo()
+  ok((await el('rad')).fillGradient.kind === 'radial', 'one undo puts the radial back')
 
   console.log('\nthe canvas handle\n')
   await select('rad')

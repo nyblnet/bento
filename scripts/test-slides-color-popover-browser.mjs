@@ -13,7 +13,8 @@
 //      `r, g, b`; a CSS name is understood;
 //   4. a theme swatch in the popover LINKS the palette slot, keeping the
 //      field's opacity, exactly as the palette list does;
-//   5. Esc after a preview restores the colour and leaves no undo step;
+//   5. Esc closes the popover and KEEPS what it previewed (focus back on the
+//      swatch); one undo takes the whole pick back;
 //   6. a translucent colour's swatch is marked see-through.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
@@ -113,17 +114,20 @@ try {
   ok(linked.themeRefs?.fill === 'accent1' && linked.fill === 'rgba(247, 166, 0, 0.5)', `Accent 1 is linked with the 50% kept (${linked.fill}, ${JSON.stringify(linked.themeRefs)})`)
   ok(await p.locator('.ed-cpop').count() === 0, 'and the popover closed')
 
-  console.log('\n5. Esc cancels\n')
+  console.log('\n5. Esc closes and keeps what it shows; one undo takes it back\n')
   await select('q')
   const stack0 = await p.evaluate(() => JSON.stringify(window.bento.doc))
   pp = await openPop()
   await pp.locator('.ed-cpop-hue').fill('200'); await p.waitForTimeout(100)
   ok((await el('q')).fill !== '#123456', `the hue slider previews (${(await el('q')).fill})`)
   await p.keyboard.press('Escape'); await p.waitForTimeout(250)
-  ok((await el('q')).fill === '#123456', `Esc restores the colour (${(await el('q')).fill})`)
-  ok(await p.evaluate(() => JSON.stringify(window.bento.doc)) === stack0, 'and the document is exactly as before')
+  const kept = (await el('q')).fill
+  ok(kept !== '#123456' && await p.locator('.ed-cpop').count() === 0, `Esc closes the popover and keeps the previewed colour (${kept})`)
+  ok(await p.evaluate(() => document.activeElement?.matches('.ed-props .ed-section[data-key="Fill"] + .ed-section-body input[type=color]')), 'focus is back on the swatch')
   await undo()
-  ok((await el('r')).themeRefs?.fill === undefined, 'the next undo is the edit before it — the cancelled preview left no step')
+  ok((await el('q')).fill === '#123456' && await p.evaluate(() => JSON.stringify(window.bento.doc)) === stack0, 'ONE undo restores the colour and the document exactly')
+  await undo()
+  ok((await el('r')).themeRefs?.fill === undefined, 'the undo after it is the edit before — the pick was one step')
 
   console.log('\n6. the see-through swatch\n')
   await p.evaluate(() => window.bento.redo()); await p.waitForTimeout(200)

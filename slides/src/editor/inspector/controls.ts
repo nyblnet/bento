@@ -2,7 +2,7 @@
 // Copyright (c) 2026 The Bento authors
 // Inspector primitives with no panel state: scrubbing, roving focus, limits, colour parsing.
 import { type BentoDoc, uid } from '../../model'
-import { t } from '../../i18n'
+import { t, locale } from '../../i18n'
 import { ICONS } from '../../icons'
 import { evalNumber, type RelOp } from './numexpr'
 
@@ -99,19 +99,6 @@ export function internView(doc: BentoDoc, markup: string): string {
   assets[key] = markup
   return `asset:${key}`
 }
-
-/**
- * Fill-style options: the stored model words are 'solid'/'gradient', only the
- * LABEL is localised. 'solid' here is a solid COLOUR, which in many languages
- * is a different word from the 'solid' LINE style further down (Swedish:
- * enfärgad vs heldragen) — so it gets its own catalog key rather than sharing
- * one that must be wrong in one of the two places.
- *
- * A function, not a const: t() in a module-level const freezes the English at
- * import time.
- */
-export const fillStyles = (): Array<[string, string]> =>
-  [['solid', t('Solid')], ['linear', t('Linear')], ['radial', t('Radial')]]
 
 /**
  * Stored model words → the sentence-case English key that labels them, for
@@ -276,8 +263,9 @@ export function numeric(input: HTMLInputElement, unit?: string): HTMLInputElemen
     delete input.dataset.rel
     if (endedScrub(e)) { input.dataset.rel = `+${(parseFloat(input.value) || 0) - (parseFloat(prev) || 0)}`; prev = input.value; aria(); return }
     if (input.value.trim() === '') { prev = ''; aria(); return } // cleared: the field's own meaning (auto, unset)
-    const r = evalNumber(input.value, parseFloat(prev) || 0)
-    if (!r) { input.value = prev; e.stopImmediatePropagation(); return }
+    const typed = input.value
+    const r = evalNumber(typed, parseFloat(prev) || 0, decimalMark())
+    if (!r) { input.value = prev; e.stopImmediatePropagation(); refuse(input, typed); return }
     const v = bound(input, r.v)
     input.value = String(Math.round(v * 1000) / 1000)
     if (r.op) input.dataset.rel = `${r.op.op}${r.op.x}`
@@ -286,6 +274,11 @@ export function numeric(input: HTMLInputElement, unit?: string): HTMLInputElemen
   }, true)
   input.addEventListener(SCRUB, aria)
   input.addEventListener('keydown', (e) => {
+    // Esc puts back what was there and hands the keyboard back to the canvas
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); input.value = prev; input.blur(); return }
+    // ⌘Z is the document's undo, not the field's text undo: drop what was
+    // typed and let the editor's keys have it (editor.ts lets .ed-num through)
+    if ((e.metaKey || e.ctrlKey) && /^[zy]$/i.test(e.key)) { e.preventDefault(); input.value = prev; input.blur(); return }
     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
     e.preventDefault()
     e.stopPropagation() // the editor's arrows nudge the selection
@@ -301,12 +294,50 @@ export function numeric(input: HTMLInputElement, unit?: string): HTMLInputElemen
   return input
 }
 
+/** The interface language's decimal mark ('.' or ','), for reading typed numbers. */
+export function decimalMark(): '.' | ',' {
+  try { return new Intl.NumberFormat(locale()).formatToParts(1.5).find((x) => x.type === 'decimal')?.value === ',' ? ',' : '.' } catch { return '.' }
+}
+
+let whyIds = 0
+/** A typed value the field cannot read: the old value comes back, the field
+ *  flashes, and a note under it says why — a silent revert reads as the app
+ *  ignoring the user. The note is the field's description for a screen
+ *  reader, and goes with the next keystroke or after a few seconds. */
+function refuse(input: HTMLInputElement, typed: string) {
+  document.querySelector('.ed-num-why')?.remove()
+  input.classList.remove('ed-num-refused')
+  void input.offsetWidth // restart the flash
+  input.classList.add('ed-num-refused')
+  input.setAttribute('aria-invalid', 'true')
+  const why = document.createElement('div')
+  why.className = 'ed-num-why'
+  why.id = `ed-num-why-${++whyIds}`
+  why.setAttribute('role', 'status')
+  why.textContent = /\d[.,]\d{3}/.test(typed)
+    ? t('“{v}” could be read two ways — type it without the separator', { v: typed })
+    : t('“{v}” isn’t a number — type a value like 24, +8 or 360/2', { v: typed })
+  const r = input.getBoundingClientRect()
+  why.style.left = `${Math.max(8, Math.min(r.left, innerWidth - 248))}px`
+  why.style.top = `${r.bottom + 4}px`
+  document.body.appendChild(why)
+  input.setAttribute('aria-describedby', why.id)
+  const clear = () => {
+    why.remove()
+    input.classList.remove('ed-num-refused')
+    input.removeAttribute('aria-invalid')
+    if (input.getAttribute('aria-describedby') === why.id) input.removeAttribute('aria-describedby')
+  }
+  input.addEventListener('input', clear, { once: true })
+  setTimeout(clear, 4000)
+}
+
 /**
  * One tab stop for a group of radios or tabs (roving tabindex): Tab lands on
  * the chosen one, the arrows (Home/End) move to and choose a neighbour, as the
  * WAI-ARIA radio-group and tabs patterns ask. Mirrored in RTL.
  */
-export function roving(group: HTMLElement, role: 'radio' | 'tab') {
+export function roving(group: HTMLElement, role: 'radio' | 'tab', cols = 0) {
   const items = () => [...group.querySelectorAll<HTMLElement>(`:scope > [role=${role}]`)]
   const on = (b: HTMLElement) => b.getAttribute(role === 'radio' ? 'aria-checked' : 'aria-selected') === 'true'
   const stop = (to: HTMLElement) => { for (const b of items()) b.tabIndex = b === to ? 0 : -1 }
@@ -322,7 +353,9 @@ export function roving(group: HTMLElement, role: 'radio' | 'tab') {
     if (i < 0) return
     const back = getComputedStyle(group).direction === 'rtl' ? 'ArrowRight' : 'ArrowLeft'
     const k = e.key
-    const j = k === 'Home' ? 0 : k === 'End' ? list.length - 1
+    // a grid (cols > 0): up and down move a whole row
+    const j = cols && (k === 'ArrowUp' || k === 'ArrowDown') ? Math.min(list.length - 1, Math.max(0, i + (k === 'ArrowUp' ? -cols : cols)))
+      : k === 'Home' ? 0 : k === 'End' ? list.length - 1
       : k === back || k === 'ArrowUp' ? (i - 1 + list.length) % list.length
       : k === 'ArrowLeft' || k === 'ArrowRight' || k === 'ArrowDown' ? (i + 1) % list.length : -1
     if (j < 0) return

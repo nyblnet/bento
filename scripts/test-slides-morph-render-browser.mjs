@@ -172,6 +172,9 @@ try {
   await p.locator('.ed-side-layers .ed-layer[data-id="O"]').click(); await p.waitForTimeout(250)
   await p.locator('.ed-props .ed-tabs [role="tab"]', { hasText: /^Format$/i }).click(); await p.waitForTimeout(200)
   const row = (k) => p.locator(`.ed-props .ed-paintlayer[data-layer="${k}"]`)
+  // a layer's blend and dashes sit behind its ⋯
+  await row('stroke1').locator('.ed-paintlayer-more').click(); await p.waitForTimeout(150)
+  await row('fill1').locator('.ed-paintlayer-more').click(); await p.waitForTimeout(150)
   ok(await row('stroke1').locator('.ed-layer-blend').count() === 1 && await row('fill1').locator('.ed-layer-blend').count() === 1, 'every layer row offers a blend mode')
   ok(await row('stroke1').locator('input[aria-label="Dash"], .ed-mini:has-text("Dash")').count() >= 1, 'a stroke layer row offers dash and gap')
   await row('fill1').locator('.ed-layer-blend').selectOption('screen'); await p.waitForTimeout(200)
