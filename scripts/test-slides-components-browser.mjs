@@ -123,6 +123,28 @@ try {
   await setRadius(40)
   ok((await el(ca.id)).radius === 5, 'a detached element stops following')
 
+  console.log('\na member moved alone keeps its place\n')
+  {
+    await p.locator('.ed-side-tabs [data-view="tokens"]').click(); await p.waitForTimeout(150)
+    await p.locator('.ed-side-tokens .ed-component-row .ed-btn', { hasText: /^Insert/ }).first().click(); await p.waitForTimeout(300)
+    await p.locator('.ed-side-tabs [data-view="layers"]').click(); await p.waitForTimeout(150)
+    const fresh = await p.evaluate(() => window.bento.selection.slice()) // Insert selects the new copy
+    const copy = (await els()).filter((e) => fresh.includes(e.id))
+    const A = await el('a'), B = await el('b')
+    const cA = copy.find((e) => e.component.key === A.component.key), cB = copy.find((e) => e.component.key === B.component.key)
+    const nudge = async (id) => {
+      await p.locator(`.ed-side-layers .ed-layer[data-id="${id}"]`).click(); await p.waitForTimeout(150)
+      await p.locator('.ed-stage-scale').focus().catch(() => {})
+      await p.keyboard.press('Shift+ArrowRight'); await p.waitForTimeout(300) // ⇧→ nudges 10px (the layer list keeps ↑↓ for its rows)
+    }
+    await nudge(cA.id)
+    let nA = await el(cA.id), nB = await el(cB.id)
+    ok(nA.x === cA.x + 10 && nA.component.over?.includes('x') && nB.x === cB.x && !nB.component.over, `one member nudged alone overrides its position; its sibling stays (${nA.x - cA.x})`)
+    await nudge('a'); await nudge('b')
+    nA = await el(cA.id); nB = await el(cB.id)
+    ok(nA.x === cA.x + 10 && nB.x === cB.x + 10, `the main moves: the free member follows its counterpart, the moved one keeps its place (${nA.x - cA.x}, ${nB.x - cB.x})`)
+  }
+
   console.log('\ntokens\n')
   await p.locator('.ed-side-layers .ed-layer[data-id="a"]').click(); await p.waitForTimeout(200)
   await radiusField().hover()
@@ -139,12 +161,29 @@ try {
   ok(await p.locator('.ed-side-tokens .ed-token-row[data-token="radius.card"] .ed-token-uses').textContent() !== '0', 'the token counts what follows it')
 
   // a mode: added from the switch, then a value set in it, then switched back
-  p.once('dialog', (d) => d.accept('Dark'))
-  await p.locator('.ed-side-tokens .ed-tokens-mode').selectOption('+'); await p.waitForTimeout(300)
+  await p.locator('.ed-side-tokens .ed-tokens-mode').selectOption('+'); await p.waitForTimeout(200)
+  const modeName = p.locator('.ed-side-tokens .ed-tokens-head .ed-token-new')
+  ok(await modeName.evaluate((n) => n === document.activeElement), 'Add mode opens a name field in place, focused (no dialog)')
+  await modeName.fill('default'); await modeName.press('Enter'); await p.waitForTimeout(150)
+  ok(await modeName.getAttribute('aria-invalid') === 'true', 'a mode name already taken is refused in place')
+  await modeName.fill('Dark'); await modeName.press('Enter'); await p.waitForTimeout(300)
   await value.fill('2'); await value.press('Enter'); await p.waitForTimeout(300)
   ok((await el('a')).radius === 2, 'in the new mode, the bound property takes that mode\'s value')
   await p.locator('.ed-side-tokens .ed-tokens-mode').selectOption('default'); await p.waitForTimeout(300)
   ok((await el('a')).radius === 18, 'switching the mode back rewrites it')
+
+  // a new token: + opens a name row; Esc cancels, Enter creates
+  const addNum = p.locator('.ed-side-tokens .ed-tokens-add').nth(1)
+  await addNum.click(); await p.waitForTimeout(150)
+  await p.keyboard.press('Escape'); await p.waitForTimeout(150)
+  ok(await p.locator('.ed-side-tokens .ed-token-new').count() === 0, 'Esc closes the new-token row without a token')
+  await addNum.click(); await p.waitForTimeout(150)
+  await p.keyboard.type('space.md'); await p.keyboard.press('Enter'); await p.waitForTimeout(300)
+  ok(await p.evaluate(() => window.bento.doc.theme.tokens.set['space.md']?.type) === 'number', 'typing a name and Enter creates the number token')
+  // a component is renamed in place
+  const compName = p.locator('.ed-side-tokens .ed-component-row input.ed-token-name').first()
+  await compName.fill('Card'); await compName.press('Enter'); await p.waitForTimeout(300)
+  ok((await el('a')).groupName === 'Card', 'the component is renamed in place (its main\'s group name)')
 
   await p.locator('.ed-side-tabs [data-view="layers"]').click(); await p.waitForTimeout(150)
   await p.locator('.ed-side-layers .ed-layer[data-id="a"]').click(); await p.waitForTimeout(200)

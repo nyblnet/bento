@@ -33,7 +33,24 @@ export function frameChildren(slide: Slide, frame: Frame): SlideElement[] {
     const key = (k: SlideElement) => Math.round((k.y - frame.y - L.pad[0]) / band) * 1e7 + k.x
     return stableSort(kids, key)
   }
+  if (L.wrap) return wrapOrder(kids, L.dir === 'row')
   return stableSort(kids, (k) => (L.dir === 'row' ? k.x : k.y))
+}
+
+/** A wrapping run reads line by line: children whose cross-axis spans overlap
+ *  share a line, and a line reads along the main axis. So a child dragged
+ *  onto another line moves there, and a settled layout reads back the same. */
+function wrapOrder(kids: SlideElement[], row: boolean): SlideElement[] {
+  const [P, Q, C] = row ? (['x', 'y', 'h'] as const) : (['y', 'x', 'w'] as const)
+  const byCross = stableSort(kids, (k) => k[Q] + k[C] / 2)
+  const out: SlideElement[][] = []
+  let end = -Infinity
+  for (const k of byCross) {
+    const mid = k[Q] + k[C] / 2
+    if (!out.length || mid > end) { out.push([k]); end = k[Q] + k[C] }
+    else { out[out.length - 1].push(k); end = Math.max(end, k[Q] + k[C]) }
+  }
+  return out.flatMap((line) => stableSort(line, (k) => k[P]))
 }
 
 function stableSort<T>(xs: T[], key: (x: T) => number): T[] {
@@ -87,6 +104,13 @@ function hug(slide: Slide, f: Frame, set: Put) {
     const rows = Math.ceil(kids.length / cols)
     set(f, 'w', pad[1] + pad[3] + cols * max(kids, 'w') + gap * (cols - 1))
     set(f, 'h', pad[0] + pad[2] + rows * max(kids, 'h') + gap * (rows - 1))
+  } else if (f.layout.wrap) {
+    // a wrapping frame keeps its main size (the lines break against it) and hugs across
+    const row = dir === 'row'
+    const ls = lines(kids, row ? 'w' : 'h', (row ? f.w - pad[1] - pad[3] : f.h - pad[0] - pad[2]), gap)
+    const across = ls.reduce((a, l) => a + max(l, row ? 'h' : 'w'), 0) + gap * (ls.length - 1)
+    if (row) set(f, 'h', pad[0] + pad[2] + across)
+    else set(f, 'w', pad[1] + pad[3] + across)
   } else if (dir === 'row') {
     set(f, 'w', pad[1] + pad[3] + sum(kids, 'w') + gap * (kids.length - 1))
     set(f, 'h', pad[0] + pad[2] + max(kids, 'h'))
@@ -123,6 +147,26 @@ function place(slide: Slide, f: Frame, set: Put) {
   const row = dir === 'row'
   const M = row ? 'w' : 'h', C = row ? 'h' : 'w', P = row ? 'x' : 'y', Q = row ? 'y' : 'x'
   const room = row ? iw : ih, cross = row ? ih : iw
+  if (f.layout.wrap) {
+    // ponytail: in a wrapping run, fill children keep their size (Figma wraps fixed items only)
+    let q = row ? y0 : x0
+    for (const line of lines(kids, M, room, gap)) {
+      const thick = Math.max(...line.map((k) => k[C]))
+      const used = line.reduce((a, k) => a + k[M], 0) + gap * (line.length - 1)
+      let step = gap
+      let pos = (row ? x0 : y0)
+      if (justify === 'space-between' && line.length > 1) step = (room - used + gap * (line.length - 1)) / (line.length - 1)
+      else pos += at(justify, room, used)
+      for (const k of line) {
+        if (align === 'stretch' || k.sizing?.[C] === 'fill') set(k, C, thick)
+        set(k, P, pos)
+        set(k, Q, q + at(align, thick, k[C]))
+        pos += k[M] + step
+      }
+      q += thick + gap
+    }
+    return
+  }
   const fills = kids.filter((k) => k.sizing?.[M] === 'fill')
   const fixed = kids.filter((k) => k.sizing?.[M] !== 'fill').reduce((a, k) => a + k[M], 0)
   const free = room - fixed - gap * (kids.length - 1)
@@ -142,10 +186,33 @@ function place(slide: Slide, f: Frame, set: Put) {
   }
 }
 
+/** Greedy line breaking for a wrapping run: a child starts a new line when it would pass `room`. */
+function lines(kids: SlideElement[], M: 'w' | 'h', room: number, gap: number): SlideElement[][] {
+  const out: SlideElement[][] = []
+  let cur: SlideElement[] = [], used = 0
+  for (const k of kids) {
+    if (cur.length && used + gap + k[M] > room + 0.01) { out.push(cur); cur = [], used = 0 }
+    used += (cur.length ? gap : 0) + k[M]
+    cur.push(k)
+  }
+  if (cur.length) out.push(cur)
+  return out
+}
+
 /** Clip a frame child to its frame, as an inset in the child's own box. '' when not clipped. */
 export function frameClip(el: SlideElement, byId: Map<string, SlideElement>): string {
   const f = el.parentId ? byId.get(el.parentId) : undefined
   if (!isFrame(f) || !f.layout.clip) return ''
+  if (el.rotation) {
+    // clip-path is in the element's untransformed box; the element turns about its centre
+    const a = (-el.rotation * Math.PI) / 180, cos = Math.cos(a), sin = Math.sin(a)
+    const cx = el.x + el.w / 2, cy = el.y + el.h / 2
+    const pt = (x: number, y: number) => {
+      const dx = x - cx, dy = y - cy
+      return `${r2(dx * cos - dy * sin + el.w / 2)}px ${r2(dx * sin + dy * cos + el.h / 2)}px`
+    }
+    return `polygon(${pt(f.x, f.y)}, ${pt(f.x + f.w, f.y)}, ${pt(f.x + f.w, f.y + f.h)}, ${pt(f.x, f.y + f.h)})`
+  }
   const top = Math.max(0, f.y - el.y), left = Math.max(0, f.x - el.x)
   const bottom = Math.max(0, el.y + el.h - (f.y + f.h)), right = Math.max(0, el.x + el.w - (f.x + f.w))
   if (!top && !left && !bottom && !right) return ''

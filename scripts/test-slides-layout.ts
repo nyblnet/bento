@@ -100,6 +100,34 @@ console.log('\nhug, nesting, clip\n')
   ok(frameClip(at(s, 'a'), byId as any) === '', 'no clip once clipping is off')
 }
 
+console.log('\nwrap and rotated clip\n')
+{
+  // inner width 600-40 = 560: 200+10+200 fits, the third 200 wraps
+  const s = slide(frame({ dir: 'row', wrap: true }),
+    box('a', 0, 0, 200, 50, { parentId: 'f' }), box('b', 10, 0, 200, 80, { parentId: 'f' }), box('c', 20, 0, 200, 30, { parentId: 'f' }))
+  layoutSlide(s)
+  ok(xywh(at(s, 'a')) === '120,120,200,50' && xywh(at(s, 'b')) === '330,120,200,80', 'a wrapping row fills the first line')
+  ok(xywh(at(s, 'c')) === '120,210,200,30', 'the child that would pass the edge starts the next line, below the tallest of the first plus the gap')
+  ok(!layoutSlide(s), 'wrapping is a fixed point too')
+  at(s, 'c').x = 300; at(s, 'c').y = 130 // dragged up onto the first line, between a and b
+  layoutSlide(s)
+  ok(frameChildren(s, at(s, 'f')).map((e: any) => e.id).join() === 'a,c,b' && at(s, 'b').y === 180, 'a child dragged onto another line joins it there, and the overflow wraps')
+}
+{
+  const s = slide(frame({ dir: 'row', wrap: true, hug: true }),
+    box('a', 0, 0, 300, 50, { parentId: 'f' }), box('b', 10, 0, 300, 40, { parentId: 'f' }))
+  layoutSlide(s)
+  ok(at(s, 'f').w === 600 && at(s, 'f').h === 20 + 50 + 10 + 40 + 20, 'a hugging wrapping frame keeps its width and hugs its lines')
+}
+{
+  const f = box('f', 0, 0, 100, 100, { layout: { dir: 'row', gap: 0, pad: [0, 0, 0, 0], clip: true } })
+  const c = box('c', 50, 0, 100, 100, { parentId: 'f', rotation: 90 })
+  const byId = new Map([[f.id, f], [c.id, c]])
+  const clip = frameClip(c, byId as any)
+  // turned 90° about its centre (100,50), the child's own box sees the frame as local y 50..150: its upper half overlaps
+  ok(clip === 'polygon(0px 150px, 0px 50px, 100px 50px, 100px 150px)', `a rotated child is clipped by the frame mapped into its own turned box (${clip})`)
+}
+
 console.log('\nold files and dangling links\n')
 {
   const s = slide(box('a', 1, 2, 3, 4), box('b', 5, 6, 7, 8, { groupId: 'g' }))

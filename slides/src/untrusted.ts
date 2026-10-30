@@ -497,7 +497,7 @@ export const ELEMENT_CHECKS: Record<string, Check> = {
     dir: oneOf('row', 'col', 'grid'), gap: num(0, 1e5),
     pad: tag((v) => (Array.isArray(v) && v.length === 4 ? list(4, num(0, 1e5))(v) : DROP), { type: 'array', minItems: 4, maxItems: 4, items: { type: 'number' } }),
     justify: oneOf('start', 'center', 'end', 'space-between'), align: oneOf('start', 'center', 'end', 'stretch'),
-    cols: num(1, 64), clip: bool, hug: bool,
+    cols: num(1, 64), clip: bool, hug: bool, wrap: bool,
   }, ['dir', 'gap', 'pad']),
   parentId: cssValue(),
   sizing: shape(MODEL_KEYS.sizing, { w: oneOf('fixed', 'fill'), h: oneOf('fixed', 'fill') }),

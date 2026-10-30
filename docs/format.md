@@ -302,7 +302,8 @@ flex/grid.
 | `align?` | `'start'\|'center'\|'end'\|'stretch'` | Cross axis. Default `start`. |
 | `cols?` | `number` | Grid columns. Default 2. |
 | `clip?` | `boolean` | Children are clipped to the frame. |
-| `hug?` | `boolean` | The frame sizes itself to its children. |
+| `hug?` | `boolean` | The frame sizes itself to its children. With `wrap`, it keeps its main-axis size and hugs across its lines. |
+| `wrap?` | `boolean` | Row/column only: a child that would pass the frame's edge starts a new line, `gap` apart. Order reads line by line. |
 
 **The layout is derived and written back.** `slides/src/layout.ts` computes
 each child's `x/y/w/h` (and the frame's size when it hugs) and writes them into
@@ -312,7 +313,8 @@ predates frames reads plain positioned elements and draws the same picture —
 it only misses `clip`, and keeps the frame's last laid-out geometry when a
 child is moved. Order along the main axis is the children's current position,
 so dragging a child past a sibling reorders it. A `parentId` that names no frame
-is dropped.
+is dropped. `gap`, `cols` and each `pad` side can follow a number token
+(`themeRefs['layout.gap'] = '$space.md'`, `layout.pad.0` …).
 
 ---
 

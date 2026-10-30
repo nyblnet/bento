@@ -31,6 +31,7 @@ import type { Peer } from '../sync/session'
 import { isMacOS } from '../screens'
 import { aabb, fmt, measureBoxes, union, type Box } from './measure-geom'
 import { drawFrameOverlay } from './frameoverlay'
+import { isFrame, layoutSlide } from '../layout'
 import { TransformHud, hudNum, mountModHint } from './hud'
 import { applyMorphPreview, morphGhost } from './morph'
 
@@ -283,6 +284,7 @@ export class SlideCanvas {
         node.style.left = `${el.x}px`
         node.style.top = `${el.y}px`
       }
+      this.unfollow()
     }
     this.scroller.addEventListener('touchstart', (ev) => {
       if (ev.touches.length < 2) { pinch = null; return }
@@ -1072,6 +1074,7 @@ export class SlideCanvas {
   }
 
   render() {
+    this.followed.clear() // a render rebuilds every node from the model
     // A slide switch is a hard boundary for an inline edit. Commit against
     // the slide where editing began (or discard if that slide was remotely
     // deleted) before replacing the canvas DOM.
@@ -1203,6 +1206,49 @@ export class SlideCanvas {
       bar.appendChild(chip)
     }
     this.wrap.appendChild(bar)
+  }
+
+  /** Frame children moved by followFrames — put back by unfollow on an abandoned gesture. */
+  private followed = new Set<string>()
+
+  /**
+   * Children follow a frame WHILE it is dragged or resized, not only on
+   * release: lay out a throwaway copy of the slide with the frames at their
+   * live boxes and move the children's nodes there. The model is untouched —
+   * the release commits the frame and layout.ts derives the same boxes.
+   */
+  private followFrames() {
+    const live = new Map<string, Pick<SlideElement, 'x' | 'y' | 'w' | 'h'>>()
+    for (const n of this.selectedNodes()) {
+      if (!isFrame(this.store.element(n.dataset.elId ?? ''))) continue
+      live.set(n.dataset.elId!, {
+        x: parseFloat(n.style.left) || 0, y: parseFloat(n.style.top) || 0,
+        w: parseFloat(n.style.width) || 0, h: parseFloat(n.style.height) || 0,
+      })
+    }
+    if (!live.size) return
+    // shallow copies are enough: layout.ts writes only x/y/w/h
+    const clone = { ...this.store.slide, elements: this.store.slide.elements.map((e) => ({ ...e, ...live.get(e.id) }) as SlideElement) }
+    layoutSlide(clone)
+    for (const e of clone.elements) {
+      if (!e.parentId || live.has(e.id)) continue
+      const node = this.surface?.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(e.id)}"]`)
+      if (!node) continue
+      node.style.left = `${e.x}px`; node.style.top = `${e.y}px`
+      node.style.width = `${e.w}px`; node.style.height = `${e.h}px`
+      this.followed.add(e.id)
+    }
+  }
+
+  private unfollow() {
+    for (const id of this.followed) {
+      const el = this.store.element(id)
+      const node = this.surface?.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(id)}"]`)
+      if (!el || !node) continue
+      node.style.left = `${el.x}px`; node.style.top = `${el.y}px`
+      node.style.width = `${el.w}px`; node.style.height = `${el.h}px`
+    }
+    this.followed.clear()
   }
 
   private selectedNodes(): HTMLElement[] {
@@ -1403,6 +1449,7 @@ export class SlideCanvas {
       e.target.style.left = `${p.left}px`
       e.target.style.top = `${p.top}px`
       this.hud.show(`X ${hudNum(p.left)}  Y ${hudNum(p.top)}`, e.clientX, e.clientY)
+      this.followFrames()
     })
     mv.on('dragGroup', (e) => {
       e.events.forEach((ev) => {
@@ -1412,6 +1459,7 @@ export class SlideCanvas {
       })
       const [dx, dy] = e.events[0]?.dist ?? [0, 0]
       this.hud.show(`Δ ${hudNum(dx)}, ${hudNum(dy)}`, e.clientX, e.clientY)
+      this.followFrames()
     })
     // Shift while resizing keeps the aspect ratio; Alt/Option scales from
     // the center (both live per move, combinable)
@@ -1458,11 +1506,13 @@ export class SlideCanvas {
       syncKeepRatio(e.inputEvent as MouseEvent, e.target as HTMLElement)
       applyResize(e.target as HTMLElement, e.width, e.height, e.drag.left, e.drag.top, e.inputEvent as MouseEvent)
       this.hud.show(`${hudNum(e.width)} × ${hudNum(e.height)}`, e.clientX, e.clientY)
+      this.followFrames()
     })
     mv.on('resizeGroupStart', (e) => e.events.forEach((ev) => noteResizeStart(ev.target as HTMLElement)))
-    mv.on('resizeGroup', (e) => e.events.forEach((ev) => {
-      applyResize(ev.target as HTMLElement, ev.width, ev.height, ev.drag.left, ev.drag.top, e.inputEvent as MouseEvent)
-    }))
+    mv.on('resizeGroup', (e) => {
+      e.events.forEach((ev) => applyResize(ev.target as HTMLElement, ev.width, ev.height, ev.drag.left, ev.drag.top, e.inputEvent as MouseEvent))
+      this.followFrames()
+    })
     // Shift-click over the selection. Selecto never sees it: once two or more
     // elements are selected, Moveable's group area covers their whole bounding
     // box, and Selecto backs off for anything Moveable owns — so an element

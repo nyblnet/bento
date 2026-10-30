@@ -16,7 +16,9 @@
 // its main while the MAIN has not moved since the last pass was changed by
 // hand (any edit path — the inspector, a scrub, a paste, an older shell), so
 // it becomes an override. When the main moves, copies follow on every key
-// they do not override.
+// they do not override. Position is the same rule per member: a member moved
+// alone inside its copy overrides x/y; the copy moved whole just has a new
+// offset, remembered per instance in the editor's map.
 
 import type { BentoDoc, SlideElement } from './model.ts'
 
@@ -24,7 +26,7 @@ type Comp = NonNullable<SlideElement['component']>
 type El = SlideElement & Record<string, unknown> & { component?: Comp }
 
 /** Keys a copy never takes from its main. x/y follow the main as an offset. */
-const OWN = new Set(['id', 'groupId', 'groupName', 'name', 'component', 'x', 'y', 'morphId'])
+const OWN = new Set(['id', 'groupId', 'groupName', 'name', 'component', 'x', 'y', 'morphId'])  // x/y: see the per-instance offset
 
 export interface ComponentInfo { id: string; name: string; slideId: string; main: El[] }
 
@@ -67,13 +69,28 @@ export function syncComponents(doc: BentoDoc, lastMain: Map<string, string>): bo
         const g = el.groupId ?? el.id
         inst.set(g, [...(inst.get(g) ?? []), el])
       }
-      for (const els of inst.values()) {
-        // the offset comes from the instance's first element that still has a counterpart
-        const a = els[0], am = byKey.get(a.component!.key)!
-        const dx = (a.x as number) - (am.x as number), dy = (a.y as number) - (am.y as number)
+      for (const [gid, els] of inst) {
+        // The instance's offset from its main, remembered per instance across
+        // passes. A member whose offset alone differs was moved by hand: its
+        // position becomes an override ('x'/'y' in `over`) and the rest of the
+        // copy stays put. All members moved together = the copy was moved.
+        const memo = `off:${comp.id}|${gid}`
+        const free = els.filter((el) => !el.component!.over?.includes('x'))
+        const delta = (el: El) => { const m = byKey.get(el.component!.key)!; return [(el.x as number) - (m.x as number), (el.y as number) - (m.y as number)] }
+        const prev = lastMain.get(memo)?.split(',').map(Number)
+        let off = prev
+        const moved = new Set<El>()
+        if (!mainMoved && free.length) {
+          const ds = free.map(delta)
+          const same = (a: number[], b: number[] | undefined) => !!b && Math.abs(a[0] - b[0]) < 0.01 && Math.abs(a[1] - b[1]) < 0.01
+          if (!prev || ds.every((d) => same(d, ds[0]))) off = ds.every((d) => same(d, ds[0])) ? ds[0] : majority(ds)
+          for (let i = 0; i < free.length; i++) if (!same(ds[i], off)) moved.add(free[i])
+        }
+        if (off) lastMain.set(memo, off.join(','))
         for (const el of els) {
           const m = byKey.get(el.component!.key)!
           const over = new Set(el.component!.over ?? [])
+          if (moved.has(el)) { over.add('x'); over.add('y'); changed = true }
           const keys = new Set([...Object.keys(m), ...Object.keys(el)].filter((k) => !OWN.has(k)))
           for (const k of keys) {
             if (over.has(k) || eq(el[k], m[k])) continue
@@ -83,10 +100,9 @@ export function syncComponents(doc: BentoDoc, lastMain: Map<string, string>): bo
             } else over.add(k) // the copy was edited by hand: keep its value
             changed = true
           }
-          // ponytail: a member nudged on its own inside a copy keeps its spot only
-          // until the main next moves, then re-joins the instance's offset
-          if (mainMoved && el !== a) {
-            const x = (m.x as number) + dx, y = (m.y as number) + dy
+          // the main moved: members that do not override their position keep the instance's offset
+          if (mainMoved && off && !over.has('x')) {
+            const x = (m.x as number) + off[0], y = (m.y as number) + off[1]
             if (el.x !== x || el.y !== y) { el.x = x; el.y = y; changed = true }
           }
           const ov = [...over].sort()
@@ -100,6 +116,16 @@ export function syncComponents(doc: BentoDoc, lastMain: Map<string, string>): bo
     }
   }
   return changed
+}
+
+/** The offset most members share (first wins a tie): at boot, with no memory, the odd one out is the one moved. */
+function majority(ds: number[][]): number[] {
+  let best = ds[0], n = 0
+  for (const d of ds) {
+    const c = ds.filter((e) => Math.abs(e[0] - d[0]) < 0.01 && Math.abs(e[1] - d[1]) < 0.01).length
+    if (c > n) { best = d; n = c }
+  }
+  return best
 }
 
 /** Mark `els` (one slide's selection) as the main of a new component. */
