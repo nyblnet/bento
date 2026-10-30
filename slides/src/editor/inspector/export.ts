@@ -8,7 +8,7 @@ import { section, field } from './fields'
 import { t } from '../../i18n'
 import type { PropsPanel } from '../panels'
 import type { Slide, SlideElement } from '../../model'
-import { parseColor } from './controls'
+import { measureContrast, type Area } from './contrast'
 import { rasterizeSlide, slideSvg, downloadBlob, type Box } from '../exportimages'
 import { exportBase } from '../../exportimages'
 import { serializeElements, serializeSlides } from '../clipboard'
@@ -65,49 +65,52 @@ export function buildExport(p: PropsPanel, els: SlideElement[]) {
   if (els.length === 1) accessibility(p, els[0], slide)
 }
 
-/** WCAG 2 relative luminance of a #rrggbb. */
-function luminance(hex: string): number {
-  const [r, g, b] = [1, 3, 5].map((i) => {
-    const c = parseInt(hex.slice(i, i + 2), 16) / 255
-    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
-  })
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b
-}
-export function contrastRatio(a: string, b: string): number {
-  const [x, y] = [luminance(a), luminance(b)].sort((m, n) => n - m)
-  return (x + 0.05) / (y + 0.05)
-}
-/** The first solid colour in a paint (a gradient is judged by its first stop). */
-const solid = (paint: string | undefined): string | null => {
-  if (!paint || paint === 'transparent' || paint === 'none') return null
-  const hex = /#[0-9a-f]{6}\b/i.exec(paint)?.[0]
-  return hex ?? (parseColor(paint).a > 0 ? parseColor(paint).hex : null)
+/**
+ * The boxes a text's glyphs fill, one per rendered line, in slide px of the
+ * element's own frame — read off the canvas render. A turned text's line
+ * boxes come back as screen-axis bounds, so it is measured unturned: the
+ * canvas node is un-rotated for the read and restored at once (no paint).
+ */
+function glyphAreas(el: SlideElement, slideW: number): Area[] | undefined {
+  const node = document.querySelector<HTMLElement>(`.ed-stage-scale [data-el-id="${CSS.escape(el.id)}"]`)
+  const stage = document.querySelector<HTMLElement>('.ed-stage-scale')
+  if (!node || !stage) return undefined
+  const prev = node.style.transform
+  node.style.transform = 'none'
+  try {
+    const box = node.getBoundingClientRect()
+    const k = box.width / (el.w || 1) || stage.getBoundingClientRect().width / slideW
+    // text nodes only: a range over the whole node also returns its block
+    // wrappers' full-width boxes, which are exactly the empty corners
+    const rects: DOMRect[] = []
+    const walk = document.createTreeWalker(node, NodeFilter.SHOW_TEXT)
+    const range = document.createRange()
+    for (let t = walk.nextNode(); t; t = walk.nextNode()) {
+      if (!t.textContent?.trim()) continue
+      range.selectNodeContents(t)
+      rects.push(...range.getClientRects())
+    }
+    const areas = rects
+      .filter((r) => r.width > 0.5 && r.height > 0.5)
+      .map((r) => ({ x: el.x + (r.left - box.left) / k, y: el.y + (r.top - box.top) / k, w: r.width / k, h: r.height / k }))
+    return areas.length ? areas : undefined
+  } finally {
+    node.style.transform = prev
+  }
 }
 
-/**
- * What sits behind `el`: the topmost filled shape below it in paint order whose
- * box holds its centre (a card, a frame), else the slide background.
- * ponytail: one sample at the centre, opacity ignored — a deck-wide audit is test-slides-accent-contrast
- */
-export function backdropOf(el: SlideElement, slide: Slide): string | null {
-  const cx = el.x + el.w / 2, cy = el.y + el.h / 2
-  const below = slide.elements.slice(0, slide.elements.findIndex((e) => e.id === el.id)).reverse()
-  for (const e of below) {
-    if (e.hidden || e.type !== 'shape' || cx < e.x || cx > e.x + e.w || cy < e.y || cy > e.y + e.h) continue
-    const c = solid(e.fillGradient?.stops[0]?.color ?? e.fill)
-    if (c) return c
-  }
-  return solid(slide.background)
-}
+/** Where the weakest point sits: rows top → bottom, columns left → right. Translated at render. */
+const WHERE = [
+  ['top left', 'top', 'top right'],
+  ['left', 'centre', 'right'],
+  ['bottom left', 'bottom', 'bottom right'],
+]
 
 /** The selection's contrast against what is behind it, graded, and its alt text. */
 function accessibility(p: PropsPanel, el: SlideElement, slide: Slide) {
-  const fg = el.type === 'text' ? solid(el.colorGradient?.stops[0]?.color ?? el.color)
-    : el.type === 'shape' ? solid(el.fillGradient?.stops[0]?.color ?? (el.fill === 'none' ? el.stroke : el.fill))
-    : null
-  const bg = backdropOf(el, slide)
-  if (fg && bg) {
-    const ratio = contrastRatio(fg, bg)
+  const reading = measureContrast(el, slide, 5, el.type === 'text' ? glyphAreas(el, p.store.doc.size.width) : undefined)
+  if (reading) {
+    const ratio = reading.ratio
     // WCAG 2.2: text 4.5 (AA) / 7 (AAA), large text (≥24px, or ≥18.66px bold) 3 / 4.5; graphics 3 (AA)
     const large = el.type === 'text' && (el.fontSize >= 24 || (el.fontSize >= 18.66 && el.fontWeight >= 700))
     const [aa, aaa] = el.type !== 'text' ? [3, Infinity] : large ? [3, 4.5] : [4.5, 7]
@@ -115,13 +118,16 @@ function accessibility(p: PropsPanel, el: SlideElement, slide: Slide) {
     const out = document.createElement('div')
     out.className = 'ed-a11y'
     const value = document.createElement('span')
+    // the weakest of a 5×5 grid of points, and where it is when the element is not uniform
     value.textContent = t('Contrast {ratio}:1', { ratio: ratio.toFixed(2) })
+    const spread = Math.max(...reading.samples) - ratio > 0.05
+    if (spread) value.textContent += ` · ${t(WHERE[reading.at[1]][reading.at[0]])}`
     const badge = document.createElement('span')
     badge.className = `ed-a11y-badge ${ratio >= aa ? 'is-pass' : 'is-fail'}`
     badge.textContent = grade
     out.title = el.type === 'text'
-      ? t('Against what is behind it. Text needs {aa}:1 for AA and {aaa}:1 for AAA.', { aa, aaa })
-      : t('Against what is behind it. Shapes and icons need 3:1.')
+      ? t('The weakest point against what is behind it, opacity and gradients included. Text needs {aa}:1 for AA and {aaa}:1 for AAA.', { aa, aaa })
+      : t('The weakest point against what is behind it, opacity and gradients included. Shapes and icons need 3:1.')
     out.append(value, badge)
     p.host.appendChild(out)
   }
