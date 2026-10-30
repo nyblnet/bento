@@ -305,6 +305,7 @@ const gradient = shape(MODEL_KEYS.gradient, {
   stops: list(LIMITS.stops, shape(
     ['at', 'color'], { at: num(0, 1), color: color() }, ['at', 'color'],
   )),
+  kind: oneOf('radial'), cx: num(-10, 10), cy: num(-10, 10), r: num(0, 100),
 }, ['stops'])
 
 const shadowSpec = shape(MODEL_KEYS.shadow, {
@@ -465,6 +466,7 @@ export const ELEMENT_CHECKS: Record<string, Check> = {
   name: str(LIMITS.prose), groupName: str(LIMITS.prose),
   // Layers' lock and eye: true or absent
   locked: bool, hidden: bool,
+  flipX: bool, flipY: bool,
   // a slide id, or an http(s) URL — the same test the renderer and the show apply
   link: tag((v) => (isWebUrl(v) ? v : cssValue()(v)), { type: 'string', maxLength: LIMITS.prose, description: 'slide id or http(s) URL' }),
   x: num(-1e6, 1e6), y: num(-1e6, 1e6), w: num(0, 1e6), h: num(0, 1e6),
@@ -487,6 +489,9 @@ export const ELEMENT_CHECKS: Record<string, Check> = {
   fill: paint, fillGradient: gradient, stroke: paint,
   strokeWidth: num(0, 1e4), strokeDash: num(0, 1e4),
   strokeStyle: oneOf('solid', 'dashed', 'dotted'),
+  strokeDashes: tag((v) => (Array.isArray(v) && v.length === 2 ? list(2, num(0, 1e4))(v) : DROP), { type: 'array', minItems: 2, maxItems: 2, items: { type: 'number' } }),
+  strokeAlign: oneOf('inside', 'center', 'outside'),
+  radii: tag((v) => (Array.isArray(v) && v.length === 4 ? list(4, num(0, 1e5))(v) : DROP), { type: 'array', minItems: 4, maxItems: 4, items: { type: 'number' } }),
   // the tip list is tips.ts's — one catalogue for the gate, the panel and the renderer
   lineStart: oneOf(...TIP_KINDS), lineEnd: oneOf(...TIP_KINDS),
   radius: num(0, 1e5), d: pathData,

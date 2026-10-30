@@ -133,6 +133,7 @@ Every element carries the common `ElementBase` fields, plus type-specific ones.
 | `name?` | `string` | The author's name for the element in the editor's layer list. Display only — never a key; unset, the list names it by kind or by its text. |
 | `locked?` | `true` | *Editor only.* The canvas will not pick, drag or nudge it — a click passes through to what lies beneath, a marquee leaves it out. Still listed, and selectable, in Layers. Absent = unlocked. |
 | `hidden?` | `true` | Not drawn anywhere: canvas, thumbnails, the show, print, the file preview. Listed (dimmed) in Layers so it can be shown again. **A shell that predates this key draws a hidden element** — it ignores the key; that is the price of keeping the format additive. |
+| `flipX?` / `flipY?` | `true` | The content is drawn mirrored across the box's vertical (`flipX`) or horizontal (`flipY`) centre line; the box itself is unchanged. **A shell that predates these keys draws the element unmirrored.** |
 | `showOnHover?` | `string` | In-slide hover reveal: visible only while an element whose `group` equals this value is hovered (with `slide.hover.type='reveal'`). |
 | `role?` | `string` | Layout role (`title`/`subtitle`/`body`/`kicker` by convention) — drives cross-layout content moves. Free-form. |
 | `themeRefs?` | `Record<string, string>` | Where a literal came from, by property path (`fill`, `shadow.color`, `radius`): a palette slot (`accent1`, `accent1 -20%`) or a design token (`$name`, see `theme.tokens`). The literal always stays in place; the ref only lets the source re-derive it. |
@@ -162,8 +163,21 @@ only the rendered output is resolved, so numbering re-flows when slides move.
 plus `fill`, `stroke`, `strokeWidth`, `radius` (rect corner). Options:
 
 - `fillGradient?`: `{ angle, stops: [{ at: 0..1, color }] }` — linear gradient;
-  when set it wins over `fill` (kept as the solid fallback).
+  when set it wins over `fill` (kept as the solid fallback). With
+  `kind: 'radial'` (and optional `cx`, `cy`, `r`, fractions of the box,
+  default 0.5) the stops run from the centre outward — an ellipse in a
+  non-square box. A shell that predates `kind` draws the same stops linearly
+  along `angle`. Text's `colorGradient` takes the same keys.
 - `strokeStyle?`: `solid | dashed | dotted` (wins over legacy `strokeDash?`).
+- `strokeDashes?`: `[dash, gap]` px — a custom pattern; wins over `strokeStyle`
+  (which an older shell draws instead).
+- `strokeAlign?`: `inside | center | outside` — where the stroke sits on the
+  outline. Absent = as always: inside on `rect`, `ellipse` and `triangle`,
+  centred on `arrow` and `path`. Open paths (lines) are always centred. An
+  older shell draws the absent way.
+- `radii?`: `[topLeft, topRight, bottomRight, bottomLeft]` — rect only, a radius
+  per corner; wins over `radius`, which the editor keeps at the largest corner
+  for older shells.
 - **line** shapes take their color from `fill`, draw horizontally across the
   box (rotate for vertical), and accept tips `lineStart?`/`lineEnd?` =
   `none | arrow | dot | bar`.

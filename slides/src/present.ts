@@ -10,7 +10,7 @@ import { anim, resetXform } from './anim'
 import { chartSnapshotSvg, mountChart } from './charts'
 import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
 import { morphKey, paginates, inLinearFlow, isWebUrl } from './model'
-import { applyElementFrame, cssColor, fetchFreeOption, gradientLineCoords, paintSafeShape, renderSlide } from './render'
+import { applyElementFrame, cssColor, fetchFreeOption, gradientLineCoords, paintSafeShape, radialGeom, renderSlide } from './render'
 import { cropImgStyle, isIdentityCrop, lerpCrop } from './crop'
 import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
 import { speakerWindowTitle } from './wintitle'
@@ -2503,7 +2503,7 @@ function morphShapeFill(target: SVGElement, a: ShapeElement, b: ShapeElement) {
   const svg = target.ownerSVGElement
   if (!svg) return
 
-  let lin = svg.querySelector('linearGradient')
+  let lin = svg.querySelector<SVGElement>('linearGradient, radialGradient')
   if (!lin) {
     // destination is solid — fabricate a gradient shaped like the source so
     // there is something to tween through, then collapse it to b.fill
@@ -2547,7 +2547,12 @@ function morphShapeFill(target: SVGElement, a: ShapeElement, b: ShapeElement) {
     )
   })
 
-  const fromLine = gradientLineCoords((ag ?? bg)!.angle)
-  const toLine = gradientLineCoords((bg ?? ag)!.angle)
-  anim.fromTo(lin, { attr: fromLine }, { attr: toLine, duration: MORPH_DURATION, ease: MORPH_EASE })
+  // the geometry tweens only between two of a kind (linear: the line sweeps;
+  // radial: the centre and radius move); across kinds only the colours do
+  const ga = (ag ?? bg)!, gb = (bg ?? ag)!
+  if (lin.tagName === 'linearGradient' && ga.kind !== 'radial' && gb.kind !== 'radial') {
+    anim.fromTo(lin, { attr: gradientLineCoords(ga.angle) }, { attr: gradientLineCoords(gb.angle), duration: MORPH_DURATION, ease: MORPH_EASE })
+  } else if (lin.tagName === 'radialGradient' && ga.kind === 'radial' && gb.kind === 'radial') {
+    anim.fromTo(lin, { attr: radialGeom(ga) }, { attr: radialGeom(gb), duration: MORPH_DURATION, ease: MORPH_EASE })
+  }
 }
