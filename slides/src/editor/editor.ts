@@ -28,6 +28,7 @@ import { mountNotesPane } from './notespane'
 import { mountHints } from './hints'
 import { labelFor } from './layerrows'
 import { startPresentation } from '../present'
+import { walkSource, wouldPair } from './morph'
 // serializeFile (plain output) is deliberately NOT imported here: every path
 // in this file writes a real file for a person, so all of them must inherit an
 // active password. serializeAuto is the only encryption-aware serializer.
@@ -223,6 +224,7 @@ export class Editor {
     derive(store.doc, this.derived)
     store.on('replace', () => { this.derived = deriveMemory(store.doc); derive(store.doc, this.derived) })
     store.on('doc', () => this.syncDerived())
+    store.on('doc', () => this.offerMorph())
     this.tokensPane = new TokensPane(store)
     this.tokensPane.mount(this.sideTokens)
     store.on('doc', () => this.tokensPane.refresh())
@@ -560,8 +562,8 @@ export class Editor {
     // presenting lives in ONE split pill beside the zoom control: the main
     // half starts the fullscreen show; its menu holds tab-fill and speaker view.
     const pill = div('ed-dropdown ed-present-pill')
-    const showB = btn(ICONS.slideshow, t('Slideshow'), () => this.present(false, true),
-      t('Start the slideshow fullscreen — F toggles fullscreen, S opens speaker view, Esc ends'))
+    const showB = btn(ICONS.slideshow, t('Slideshow'), (ev) => ev.shiftKey ? this.playTransition() : this.present(false, true),
+      t('Start the slideshow fullscreen — F toggles fullscreen, S opens speaker view, Esc ends; ⇧-click plays the transition into this slide'))
     showB.classList.add('ed-pill-main')
     // Nudge: newcomers don't always spot how to start a show — run the neon
     // runner around the Slideshow pill on EVERY editor load until they've
@@ -683,6 +685,7 @@ export class Editor {
     this.buildScope.signal.addEventListener('abort', () => offs.forEach((off) => off()), { once: true })
     this.panel.onListIndent = (dir) => { this.canvas.indentList(dir) }
     this.panel.onMorphPreview = (t) => this.canvas.previewMorph(t)
+    this.panel.onPlayTransition = () => this.playTransition()
 
     if (!canWriteDeck(this.store.doc.collab)) this.enterReaderMode()
   }
@@ -2037,9 +2040,9 @@ export class Editor {
       this.thumbs.appendChild(item)
     })
     this.thumbs.appendChild(this.insertGap(slides.length))
-    const add = btn(ICONS.plus, t('New slide'), () => this.openLayoutPicker(add))
+    const add = btn(ICONS.plus, t('New slide'), () => this.openLayoutPicker(add, { kind: 'insert', at: this.store.doc.slides.length }))
     add.classList.add('ed-add-slide')
-    add.title = t('New slide from a layout')
+    add.title = t('New slide at the end, from a layout')
     this.thumbs.appendChild(add)
     this.sidebar.scrollTop = scroll
     this.highlightSidebar()
@@ -2274,6 +2277,29 @@ export class Editor {
       this.store.doc.slides.splice(i + 1, 0, clone)
     }, 'slides')
     this.store.goTo(i + 1)
+    if (clone.transition !== 'morph') this.morphOffer = clone.id
+  }
+
+  /** A duplicated slide, until the first time something on it moves or
+   *  resizes — then Morph is offered, once (the duplicate-and-move idiom is
+   *  how a morph is built, and the duplicate keeps the original's transition). */
+  private morphOffer: string | null = null
+
+  private offerMorph() {
+    const slide = this.store.slide
+    if (!this.morphOffer || slide.id !== this.morphOffer) return
+    if (slide.transition === 'morph') { this.morphOffer = null; return }
+    const pairs = wouldPair(this.store.doc, slide)
+    const moved = slide.elements.some((e) => {
+      const f = pairs.get(e.id)
+      return f && (f.x !== e.x || f.y !== e.y || f.w !== e.w || f.h !== e.h)
+    })
+    if (!moved) return
+    this.morphOffer = null
+    this.toast(t('Things moved — morph them from the slide before?'), {
+      label: t('Use Morph'),
+      run: () => this.store.commit(() => { slide.transition = 'morph' }),
+    })
   }
 
   /** Delete several units at once — the sidebar's multi-selection — with
@@ -2516,18 +2542,29 @@ export class Editor {
     if (!w) this.toast(t('Couldn’t open the speaker view — allow pop-ups for this site.'))
   }
 
-  present(fromStart = false, fullscreen = true) {
-    if (this.presenting) return
+  present(fromStart = false, fullscreen = true, at = fromStart ? 0 : this.store.currentIndex) {
+    if (this.presenting) return null
     // They've started a slideshow — retire the first-run nudge for good.
     lsSet('bento-slideshow-started', '1')
     document.querySelector('.ed-hint-pulse')?.classList.remove('ed-hint-pulse')
     this.canvas.commitTextEdit()
     this.presenting = true
-    startPresentation(this.store.doc, fromStart ? 0 : this.store.currentIndex, (last) => {
+    return startPresentation(this.store.doc, at, (last) => {
       this.presenting = false
       this.store.goTo(last)
       this.canvas.render()
     }, { fullscreen, broadcast: this.presenterBroadcast() })
+  }
+
+  /** Check a transition without presenting the deck: start on the slide the
+   *  show arrives from and step once into this one. */
+  playTransition() {
+    const here = this.store.currentIndex
+    const src = walkSource(this.store.doc, this.store.slide)
+    if (!src) return this.toast(t('Nothing comes before this slide.'))
+    const show = this.present(false, false, this.store.doc.slides.indexOf(src))
+    // ponytail: a fixed beat for the show to settle before stepping; a ready event if it ever jumps
+    if (show) setTimeout(() => show.goTo(here), 700)
   }
 
   /**
@@ -3467,6 +3504,7 @@ export class Editor {
       { id: 'copy', label: 'Copy', keys: `${MOD}C`, scope: 'canvas', when: () => sel().length > 0, run: () => this.copySelection() },
       { id: 'delete', label: 'Delete', keys: '⌫', scope: 'canvas', when: () => writable() && sel().length > 0, run: () => this.deleteSelection() },
       { id: 'slideshow', label: 'Slideshow', scope: 'always', run: () => this.present(false, true) },
+      { id: 'play-transition', label: 'Play transition', scope: 'always', when: () => !!walkSource(this.store.doc, this.store.slide), run: () => this.playTransition() },
       { id: 'export-pdf', label: 'Export PDF (print)', scope: 'always', run: () => this.exportPdf() },
       { id: 'speaker', label: 'Speaker view', scope: 'always', run: () => this.openSpeakerView() },
       { id: 'about', label: 'About bento/slides', scope: 'always', run: () => this.openAbout() },
@@ -4289,16 +4327,25 @@ export class Editor {
     dlg.open()
   }
 
-  toast(message: string) {
+  toast(message: string, action?: { label: string; run: () => void }) {
     document.querySelector('.ed-toast')?.remove()
     const t = div('ed-toast')
     t.textContent = message
+    if (action) {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'ed-toast-act'
+      b.textContent = action.label
+      b.addEventListener('click', () => { action.run(); t.remove() })
+      t.append(' ', b)
+      t.classList.add('has-act')
+    }
     document.body.appendChild(t)
     setTimeout(() => t.classList.add('show'))
     setTimeout(() => {
       t.classList.remove('show')
       setTimeout(() => t.remove(), 300)
-    }, 2200)
+    }, action ? 8000 : 2200)
   }
 }
 

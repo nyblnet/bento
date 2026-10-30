@@ -404,6 +404,12 @@ jobs:
         # the same clip and gradient mix; layer rows blend, dash, drag-reorder
         # and turn a stroke into a gradient.
         run: node scripts/test-slides-morph-render-browser.mjs
+      - name: Building a morph in Chromium
+        # One truth for "will this morph" (checkbox, badge, ghost, status agree;
+        # a Fade slide says so and offers Use Morph), renames carry to partners,
+        # the pairing picker names elements, the Preview shows the whole slide,
+        # a moved duplicate is offered Morph, Play transition, New slide at the end.
+        run: node scripts/test-slides-ux-morph-browser.mjs
       - name: Render review fixes in Chromium
         # Morph paint lands on the drawn node (an outside stroke's mask stays
         # white; marching ants march the stroke), fill layers and radial

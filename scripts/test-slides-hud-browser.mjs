@@ -119,8 +119,11 @@ try {
   await range.evaluate((r) => { r.value = '40'; r.dispatchEvent(new Event('input')) })
   await range.evaluate((r) => r.dispatchEvent(new Event('pointerup')))
   await p.waitForTimeout(150)
+  ok(Math.abs((await centre('a')).x - at100.x) > 1, 'letting go keeps the preview where it was released')
+  await range.evaluate((r) => r.dispatchEvent(new Event('blur')))
+  await p.waitForTimeout(150)
   const back = await centre('a')
-  ok(Math.abs(back.x - at100.x) < 1, 'releasing the scrubber puts the canvas back')
+  ok(Math.abs(back.x - at100.x) < 1, 'moving on from the scrubber puts the canvas back')
   ok(JSON.stringify(await p.evaluate(() => window.bento.doc)) === before && at1Model === 700, 'the document never changed')
 
   console.log('\nthe padlock\n')

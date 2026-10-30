@@ -2,92 +2,101 @@
 // Copyright (c) 2026 The Bento authors
 // Animate and Interact: entrances, steps, morph pairing, links, states.
 import type { PropsPanel } from '../panels'
-import { type Slide, type SlideElement, morphKey, type TextElement, isWebUrl, uid, paginates } from '../../model'
+import { type Slide, type SlideElement, morphKey, isWebUrl, uid, paginates } from '../../model'
 import { section, row, labeledSelect, number, select, toggle } from './fields'
 import { t } from '../../i18n'
 import { UNPAIR, roving } from './controls'
 import { endPreview, previewEnter } from '../fxpreview'
 import type { StepPatch } from '../reveal'
 import { stepOf } from '../../steps'
-import { morphSource } from '../morph'
+import { morphPartners, morphSource, walkSource, wouldPair } from '../morph'
+import { labelFor } from '../layerrows'
 
 /**
  * Morph section. The morph key is `morphId ?? id`: by default an element
  * morphs with same-id elements on adjacent slides (the duplicate-a-slide
  * idiom), but setting a `morphId` re-targets the pairing WITHOUT mutating
  * `id` (which stays the stable identity used by selection, connectors,
- * comments and the CRDT). The text field edits the key directly; the picker
- * adopts another slide element's key. Writing the element's own id clears
- * the override.
+ * comments and the CRDT).
+ *
+ * One truth for "will this morph": the status line, the checkbox, the layer
+ * badge and the canvas ghost all read morph.ts morphPartners — a partner on
+ * the slide the show arrives from, AND this slide's transition is Morph. A
+ * pair that would exist under Morph but not under this slide's transition is
+ * said so, with the one click that fixes it. Machine ids are never shown.
  */
 export function buildMorphProps(p: PropsPanel, el: SlideElement) {
   section(p, t('Morph'))
-  const effective = morphKey(el)
+  const doc = p.store.doc
+  const slide = p.store.slide
+  const from = morphPartners(doc, slide).get(el.id)
+  const would = from ? undefined : wouldPair(doc, slide).get(el.id)
+  const src = walkSource(doc, slide)
 
   const warn = document.createElement('p')
   warn.className = 'ed-hint ed-morph-warn'
+  warn.setAttribute('role', 'alert')
   warn.style.display = 'none'
+  const say = (err: string | null) => { warn.textContent = err ?? ''; warn.style.display = err ? '' : 'none' }
 
-  const input = document.createElement('input')
-  input.type = 'text'
-  input.value = effective
-  input.spellcheck = false
-  input.addEventListener('change', () => {
-    const err = setMorphId(p, el, input.value)
-    if (err) { warn.textContent = err; warn.style.display = ''; input.value = effective }
-  })
-  row(p, 'Morph name', input)
+  // the state, first: what this element does when the slide arrives
+  const status = document.createElement('p')
+  status.className = 'ed-hint ed-status ed-morph-status'
+  if (from && src) status.textContent = t('Pairs with: {what}', { what: pairLabel(p, src, from) })
+  else if (would && src) {
+    status.textContent = t('Pairs with {what}, but this slide uses {transition} — it will not morph.', {
+      what: pairLabel(p, src, would), transition: transitionName(slide.transition) })
+    const use = document.createElement('button')
+    use.type = 'button'
+    use.className = 'ed-btn ed-morph-use'
+    use.textContent = t('Use Morph')
+    use.addEventListener('click', () => p.store.commit(() => { slide.transition = 'morph' }))
+    status.append(' ', use)
+  } else if (src) status.textContent = t('Not paired — it enters with its own entrance.')
+  else status.textContent = t('Nothing comes before this slide, so nothing morphs into it.')
+  p.host.appendChild(status)
 
-  // The link toggle: pair with the most similar element on the slide before,
-  // or stop pairing — the picker below says which one it chose.
-  const prev = morphSource(p.store.doc, p.store.slide) ?? p.store.doc.slides[p.store.doc.slides.indexOf(p.store.slide) - 1]
-  if (prev) {
-    const linked = prev.elements.some((e) => morphKey(e) === effective)
-    row(p, 'Morph from the slide before', toggle(linked, (on) => {
-      const err = on ? linkPrevious(p, el, prev) : unlinkPrevious(p, el, prev)
-      if (err) { warn.textContent = err; warn.style.display = '' }
+  // a text pair moves and resizes, but its words swap at once (present.ts)
+  if (from?.type === 'text' && el.type === 'text' && from.html !== el.html) {
+    const note = document.createElement('p')
+    note.className = 'ed-hint ed-status'
+    note.textContent = t('Text changes at once; position and size morph.')
+    p.host.appendChild(note)
+  }
+
+  if (src) {
+    row(p, 'Morph from the slide before', toggle(!!from, (on) => {
+      say(on ? linkPrevious(p, el, src) : unlinkPrevious(p, el, src))
     }))
   }
 
-  const targets = morphTargets(p, el)
-  // `|| el.morphId`: a paired element with no OTHER slide to pair with still
-  // needs the picker — otherwise there is nowhere to unpair from.
-  if (targets.length || el.morphId) {
-    const sel = document.createElement('select')
-    const none = document.createElement('option')
-    none.value = ''
-    none.textContent = t('(pick an element)')
-    sel.appendChild(none)
-    // Clearing an override had no affordance: the documented way is to retype
-    // the element's own id into the field above, which means knowing what it
-    // was (issue #54). Offer it as a choice instead.
-    if (el.morphId) {
-      const un = document.createElement('option')
-      un.value = UNPAIR
-      un.textContent = t('Don’t pair — use its own name')
-      sel.appendChild(un)
-    }
-    for (const tgt of targets) {
-      const o = document.createElement('option')
-      o.value = tgt.key
-      o.textContent = tgt.label
-      if (tgt.key === effective) o.selected = true
-      sel.appendChild(o)
-    }
-    sel.addEventListener('change', () => {
-      if (!sel.value) return
-      // writing the element's OWN id is what clears the override
-      const err = setMorphId(p, el, sel.value === UNPAIR ? el.id : sel.value)
-      if (err) { warn.textContent = err; warn.style.display = '' }
-    })
-    row(p, 'Morph with', sel)
-  }
+  // the name: an override the author typed, never a machine id
+  const input = document.createElement('input')
+  input.type = 'text'
+  input.spellcheck = false
+  input.value = el.morphId && !/-solo\d*$/.test(el.morphId) ? el.morphId : ''
+  input.placeholder = t('Automatic')
+  input.addEventListener('change', () => {
+    const err = renameMorph(p, el, input.value)
+    say(err)
+    if (err) input.value = el.morphId ?? ''
+    else input.value = cleanKey(input.value)
+  })
+  row(p, 'Morph name', input)
+
+  const pick = document.createElement('button')
+  pick.type = 'button'
+  pick.className = 'ed-btn ed-morph-pick-btn'
+  pick.setAttribute('aria-haspopup', 'listbox')
+  pick.textContent = from && src ? pairLabel(p, src, from) : t('Choose an element…')
+  pick.addEventListener('click', () => openMorphPicker(p, el, pick, say))
+  row(p, 'Morph with', pick)
 
   p.host.appendChild(warn)
 
   // Scrub through the morph on the canvas — from the slide before (0%) to this
-  // one (100%). Nothing is written; letting go puts the slide back.
-  if (morphSource(p.store.doc, p.store.slide)) {
+  // one (100%), the whole slide. Nothing is written; leaving puts it back.
+  if (morphSource(doc, slide)) {
     const range = document.createElement('input')
     range.type = 'range'
     range.min = '0'
@@ -96,33 +105,160 @@ export function buildMorphProps(p: PropsPanel, el: SlideElement) {
     range.className = 'ed-morph-preview'
     range.setAttribute('aria-label', t('Morph preview'))
     range.addEventListener('input', () => p.onMorphPreview?.(Number(range.value) / 100))
-    const restore = () => { range.value = '100'; p.onMorphPreview?.(null) }
-    range.addEventListener('pointerup', restore)
-    range.addEventListener('blur', restore)
+    range.addEventListener('blur', () => { range.value = '100'; p.onMorphPreview?.(null) })
     row(p, 'Preview', range)
   }
+  if (src) {
+    const play = document.createElement('button')
+    play.type = 'button'
+    play.className = 'ed-btn ed-morph-play'
+    play.textContent = t('▶ Play transition')
+    play.title = t('Present from the slide before and step into this one')
+    play.addEventListener('click', () => p.onPlayTransition?.())
+    p.host.appendChild(play)
+  }
+}
 
-  const hint = document.createElement('p')
-  // an override in force is STATE, and stays in view; otherwise it is help
-  hint.className = el.morphId ? 'ed-hint ed-status' : 'ed-hint'
-  hint.innerHTML = el.morphId
-    ? t('Morphs as <code>{id}</code> instead of its own name, <code>{own}</code>. Choose “Don’t pair” below to undo.', { id: effective, own: el.id })
-    : t('Elements with the same morph name morph into each other between slides. Rename it, or pick below, to pair it with an element on another slide.')
-  p.host.appendChild(hint)
+/** "Slide 2 · Revenue card" — the page, then the element as Layers names it. */
+function pairLabel(p: PropsPanel, s: Slide, e: SlideElement): string {
+  return `${slideLabel(p, s, p.store.doc.slides.indexOf(s))} · ${labelFor(e, t)}`
+}
+
+function transitionName(tr: string): string {
+  return t(({ none: 'None', fade: 'Fade', push: 'Push', zoom: 'Zoom', morph: 'Morph' } as Record<string, string>)[tr] ?? tr)
+}
+
+/** What a typed morph name is stored as: letters, digits and . _ - only. */
+const cleanKey = (raw: string) => raw.trim().replace(/\s+/g, '-').replace(/[^A-Za-z0-9._-]/g, '')
+
+/**
+ * The pairing picker: the slide before's elements first (those nothing on
+ * this slide already pairs with), each by its Layers name with a colour or
+ * text hint, then every other slide behind a fold; type to filter, arrows to
+ * move, Enter to choose, Esc to go back. Replaces a native select that grew
+ * to every element of the deck under labels like "Slide 1 · Shape".
+ */
+function openMorphPicker(p: PropsPanel, el: SlideElement, anchor: HTMLElement, say: (err: string | null) => void) {
+  document.querySelector('.ed-morph-pick')?.remove()
+  const doc = p.store.doc
+  const slide = p.store.slide
+  const src = walkSource(doc, slide)
+  const here = new Set(slide.elements.filter((e) => e.id !== el.id).map(morphKey))
+  const box = document.createElement('div')
+  box.className = 'ed-morph-pick ed-pop'
+  box.setAttribute('role', 'dialog')
+  box.setAttribute('aria-label', t('Morph with'))
+  const filter = document.createElement('input')
+  filter.type = 'search'
+  filter.placeholder = t('Find an element')
+  filter.setAttribute('aria-label', t('Find an element'))
+  const list = document.createElement('div')
+  list.setAttribute('role', 'listbox')
+  box.append(filter, list)
+
+  const close = (refocus = true) => {
+    box.remove()
+    document.removeEventListener('pointerdown', outside, true)
+    if (refocus) anchor.focus()
+  }
+  const outside = (ev: PointerEvent) => { if (!box.contains(ev.target as Node) && ev.target !== anchor) close(false) }
+  const choose = (key: string) => {
+    close()
+    say(setMorphId(p, el, key))
+    // the commit rebuilt the panel: focus the picker that replaced this one
+    requestAnimationFrame(() => document.querySelector<HTMLElement>('.ed-props .ed-morph-pick-btn')?.focus())
+  }
+  const option = (label: string, key: string, hint?: SlideElement) => {
+    const o = document.createElement('div')
+    o.setAttribute('role', 'option')
+    o.tabIndex = -1
+    o.className = 'ed-morph-opt'
+    o.dataset.key = key
+    if (hint) o.append(hintOf(hint))
+    o.append(label)
+    o.addEventListener('click', () => choose(key))
+    return o
+  }
+  if (el.morphId) list.append(option(t('Don’t pair — use its own name'), UNPAIR))
+  const pairable = (e: SlideElement) => !here.has(morphKey(e)) && morphKey(e) !== morphKey(el)
+  if (src) {
+    const h = document.createElement('div')
+    h.className = 'ed-morph-pick-h'
+    h.textContent = slideLabel(p, src, doc.slides.indexOf(src))
+    list.append(h)
+    const mine = src.elements.filter(pairable)
+    for (const e of mine) list.append(option(labelFor(e, t), morphKey(e), e))
+    if (!mine.length) { const n = document.createElement('div'); n.className = 'ed-hint'; n.textContent = t('Everything there is already paired.'); list.append(n) }
+  }
+  const more = document.createElement('details')
+  more.className = 'ed-morph-pick-more'
+  const sum = document.createElement('summary')
+  sum.textContent = t('Other slides')
+  more.append(sum)
+  const seen = new Set<string>()
+  doc.slides.forEach((s, i) => {
+    if (s === slide || s === src) return
+    for (const e of s.elements) {
+      const key = morphKey(e)
+      if (!pairable(e) || seen.has(key) || key === el.id) continue
+      seen.add(key)
+      more.append(option(`${slideLabel(p, s, i)} · ${labelFor(e, t)}`, key, e))
+    }
+  })
+  if (seen.size) list.append(more)
+
+  const options = () => [...list.querySelectorAll<HTMLElement>('[role=option]')].filter((o) => !o.hidden && (o.closest('details')?.open ?? true))
+  filter.addEventListener('input', () => {
+    const q = filter.value.trim().toLowerCase()
+    if (q) more.open = true
+    for (const o of list.querySelectorAll<HTMLElement>('[role=option]')) o.hidden = !!q && !o.textContent!.toLowerCase().includes(q)
+  })
+  box.addEventListener('keydown', (ev) => {
+    const all = options()
+    const i = all.indexOf(document.activeElement as HTMLElement)
+    if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); close() }
+    else if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault(); ev.stopPropagation()
+      const n = ev.key === 'ArrowDown' ? Math.min(i + 1, all.length - 1) : i - 1
+      if (n < 0) filter.focus(); else all[n]?.focus()
+    } else if ((ev.key === 'Enter' || ev.key === ' ') && i >= 0) { ev.preventDefault(); ev.stopPropagation(); all[i].click() }
+    else if (ev.key === 'Enter' && document.activeElement === filter) { ev.preventDefault(); ev.stopPropagation(); all[0]?.click() }
+    else ev.stopPropagation() // typing in the filter is not a tool key
+  })
+
+  document.body.appendChild(box)
+  const r = anchor.getBoundingClientRect()
+  box.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - box.offsetWidth - 8))}px`
+  box.style.top = `${Math.max(8, Math.min(r.bottom + 4, window.innerHeight - box.offsetHeight - 8))}px`
+  setTimeout(() => document.addEventListener('pointerdown', outside, true))
+  filter.focus()
+}
+
+/** A fill swatch for a shape, the first words for text, nothing otherwise. */
+function hintOf(e: SlideElement): HTMLElement {
+  const h = document.createElement('span')
+  h.className = 'ed-morph-hint'
+  h.setAttribute('aria-hidden', 'true')
+  const fill = e.type === 'shape' ? e.fill : e.type === 'text' ? e.color : ''
+  if (fill) h.style.background = fill
+  return h
 }
 
 /**
  * Pair `el` with its best match on `prev`: the same name, else the same type
  * nearest in place and size. Keys already used on this slide are skipped.
+ * Ticking "Morph from the slide before" means morph: a slide that did not
+ * morph is switched to Morph in the same step.
  */
 export function linkPrevious(p: PropsPanel, el: SlideElement, prev: Slide): string | null {
   const here = new Set(p.store.slide.elements.filter((e) => e.id !== el.id).map(morphKey))
   const free = prev.elements.filter((e) => !here.has(morphKey(e)))
   const cost = (e: SlideElement) => (e.type === el.type ? 0 : 1e6)
     + Math.hypot(e.x + e.w / 2 - el.x - el.w / 2, e.y + e.h / 2 - el.y - el.h / 2) + Math.abs(e.w - el.w) + Math.abs(e.h - el.h)
-  const best = (el.name && free.find((e) => e.name === el.name && e.type === el.type))
+  const already = prev.elements.find((e) => morphKey(e) === morphKey(el))
+  const best = already ?? (el.name && free.find((e) => e.name === el.name && e.type === el.type))
     ?? [...free].sort((a, b) => cost(a) - cost(b))[0]
-  return best ? setMorphId(p, el, morphKey(best)) : t('Nothing on the slide before to pair with.')
+  return best ? setMorphId(p, el, morphKey(best), true) : t('Nothing on the slide before to pair with.')
 }
 
 /** Stop `el` morphing from `prev`: clear an override, or — when its own id is what pairs it — give it a name of its own. */
@@ -134,49 +270,64 @@ export function unlinkPrevious(p: PropsPanel, el: SlideElement, prev: Slide): st
   return setMorphId(p, el, name)
 }
 
-/** Set or clear an element's morph-key override. Writing the element's own
- *  id clears it. Returns an inline error message, or null on success. */
-export function setMorphId(p: PropsPanel, el: SlideElement, raw: string): string | null {
-  const clean = raw.trim().replace(/[^A-Za-z0-9._-]/g, '')
+/** The element on `s` (other than `skip`) already using `key`, by its Layers name. */
+function holder(s: Slide, key: string, skip: Set<string>): SlideElement | undefined {
+  return s.elements.find((e) => !skip.has(e.id) && morphKey(e) === key)
+}
+
+/** Set or clear an element's morph-key override (writing its own id clears
+ *  it). `andMorph` also switches the slide to the Morph transition, in the
+ *  same undo step. Returns an inline error, or null on success. */
+export function setMorphId(p: PropsPanel, el: SlideElement, raw: string, andMorph = false): string | null {
+  const clean = raw === UNPAIR ? el.id : cleanKey(raw)
   if (!clean) return t('Morph name can’t be empty.')
-  const next = clean === el.id ? undefined : clean
-  const effective = next ?? el.id
-  const clash = p.store.slide.elements.some(
-    (e) => e.id !== el.id && morphKey(e) === effective)
-  if (clash) return t('Another element on this slide already uses that morph name.')
-  p.mutate(el.id, (e) => {
-    if (next === undefined) delete e.morphId
-    else e.morphId = next
-  }, true)
+  const clash = holder(p.store.slide, clean, new Set([el.id]))
+  if (clash) return t('“{name}” on this slide already uses that morph name.', { name: labelFor(clash, t) })
+  const slide = p.store.slide
+  p.store.commit(() => {
+    const e = slide.elements.find((x) => x.id === el.id)
+    if (!e) return
+    if (clean === e.id) delete e.morphId
+    else e.morphId = clean
+    if (andMorph) slide.transition = 'morph'
+  })
   return null
 }
 
-/** Distinct morph keys present on OTHER slides, each with a readable label,
- *  for the "Pair with" picker. Skips keys that already sit on this slide
- *  (they'd collide) and our own default key. */
-export function morphTargets(p: PropsPanel, el: SlideElement): Array<{ key: string; label: string }> {
-  const here = new Set(
-    p.store.slide.elements.filter((e) => e.id !== el.id).map(morphKey))
-  const seen = new Map<string, string>()
-  p.store.doc.slides.forEach((s, i) => {
-    if (s.id === p.store.slide.id) return
-    for (const e of s.elements) {
-      const key = morphKey(e)
-      if (key === el.id || here.has(key) || seen.has(key)) continue
-      seen.set(key, `${t('Slide')} ${i + 1} · ${morphElDesc(e)}`)
+/**
+ * Rename a morph name the way an author means it: the element and whatever
+ * it pairs with on the neighbouring slides (the slide it arrives from, and the
+ * slides that arrive from it) take the new name together, in one undo step —
+ * renaming one side alone silently ended the pair. A name another element on
+ * any of those slides already uses is refused, naming that element.
+ */
+export function renameMorph(p: PropsPanel, el: SlideElement, raw: string): string | null {
+  const doc = p.store.doc
+  const slide = p.store.slide
+  const next = raw.trim() ? cleanKey(raw) : el.id
+  if (!next) return t('Morph name can’t be empty.')
+  const old = morphKey(el)
+  if (next === old) return null
+  const prev = walkSource(doc, slide)
+  const neighbours = [prev, ...doc.slides.filter((s) => s !== slide && walkSource(doc, s) === slide)].filter((s): s is Slide => !!s)
+  const moving = [{ s: slide, e: el }]
+  for (const s of neighbours) for (const e of s.elements) if (morphKey(e) === old) moving.push({ s, e })
+  const ids = new Set(moving.map((m) => m.e.id))
+  for (const s of [slide, ...neighbours]) {
+    const c = holder(s, next, ids)
+    if (c) return s === slide
+      ? t('“{name}” on this slide already uses that morph name.', { name: labelFor(c, t) })
+      : t('“{name}” on {slide} already uses that morph name — it would pair with that instead.', { name: labelFor(c, t), slide: slideLabel(p, s, doc.slides.indexOf(s)) })
+  }
+  p.store.commit(() => {
+    for (const { s, e } of moving) {
+      const live = s.elements.find((x) => x.id === e.id)
+      if (!live) continue
+      if (next === live.id) delete live.morphId
+      else live.morphId = next
     }
   })
-  return [...seen].map(([key, label]) => ({ key, label }))
-}
-
-/** Short human label for an element in the morph picker. */
-export function morphElDesc(e: SlideElement): string {
-  if (e.type === 'text') {
-    const txt = (e as TextElement).html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
-    if (txt) return `"${txt.slice(0, 24)}"`
-  }
-  // Capitalize to hit the existing insert-menu catalog keys (Text/Image/…).
-  return t(e.type.charAt(0).toUpperCase() + e.type.slice(1))
+  return null
 }
 
 /** fx + link — how the element behaves while presenting. */

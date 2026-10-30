@@ -12,21 +12,26 @@
 import { inLinearFlow, morphKey, type BentoDoc, type Slide, type SlideElement } from '../model'
 import { mixColor, shapePaintSteps } from '../present'
 import { isFrame, morphClip } from '../layout'
+import { fieldContext, renderElement } from '../render'
 
 /** The slide the show morphs from into `slide`, or null when it does not
  *  morph: a state morphs from its parent, any other slide from the slide the
  *  linear walk shows before it (states and hidden slides are not on it). */
 export function morphSource(doc: BentoDoc, slide: Slide): Slide | null {
-  if (slide.transition !== 'morph') return null
+  return slide.transition === 'morph' ? walkSource(doc, slide) : null
+}
+
+/** The slide the show arrives at `slide` from, whatever its transition: a
+ *  state's parent, else the slide before it in the linear walk. */
+export function walkSource(doc: BentoDoc, slide: Slide): Slide | null {
   if (slide.stateOf) return doc.slides.find((s) => s.id === slide.stateOf) ?? null
   const i = doc.slides.indexOf(slide)
   for (let j = i - 1; j >= 0; j--) if (inLinearFlow(doc.slides[j])) return doc.slides[j]
   return null
 }
 
-/** Each element of `slide` that morphs from an element of the source, by id. */
-export function morphPartners(doc: BentoDoc, slide: Slide): Map<string, SlideElement> {
-  const src = morphSource(doc, slide)
+/** Pairs between `src` and `slide` by morph key, keyed by `slide`'s element id. */
+function partnersFrom(src: Slide | null, slide: Slide): Map<string, SlideElement> {
   const out = new Map<string, SlideElement>()
   if (!src) return out
   const byKey = new Map(src.elements.map((e) => [morphKey(e), e]))
@@ -35,6 +40,17 @@ export function morphPartners(doc: BentoDoc, slide: Slide): Map<string, SlideEle
     if (from) out.set(el.id, from)
   }
   return out
+}
+
+/** Each element of `slide` that morphs from an element of the source, by id —
+ *  the one answer the checkbox, the layer badge and the ghost all read. */
+export function morphPartners(doc: BentoDoc, slide: Slide): Map<string, SlideElement> {
+  return partnersFrom(morphSource(doc, slide), slide)
+}
+
+/** The pairs `slide` WOULD morph if its transition were Morph. */
+export function wouldPair(doc: BentoDoc, slide: Slide): Map<string, SlideElement> {
+  return partnersFrom(walkSource(doc, slide), slide)
 }
 
 /** Ids on `slide` that morph from the slide before — the layer badges. */
@@ -68,6 +84,22 @@ function previewColours(node: HTMLElement, from: SlideElement, el: SlideElement,
 export function applyMorphPreview(surface: HTMLElement, doc: BentoDoc, slide: Slide, t: number) {
   const pairs = morphPartners(doc, slide)
   const byId = new Map(slide.elements.map((e) => [e.id, e]))
+  // what leaves: source elements nothing here pairs with fade out, drawn over
+  // the slide the way the show cross-fades them (removed by the re-render)
+  const src = morphSource(doc, slide)
+  const kept = new Set([...pairs.values()].map((e) => e.id))
+  for (const gone of src?.elements ?? []) {
+    if (kept.has(gone.id) || gone.hidden) continue
+    let node = surface.querySelector<HTMLElement>(`[data-morph-leaving="${CSS.escape(gone.id)}"]`)
+    if (!node) {
+      node = renderElement(gone, doc, { fields: fieldContext(doc, src!) })
+      node.removeAttribute('data-el-id')
+      node.dataset.morphLeaving = gone.id
+      node.style.pointerEvents = 'none'
+      surface.appendChild(node)
+    }
+    node.style.opacity = String(gone.opacity * (1 - t))
+  }
   for (const el of slide.elements) {
     const node = surface.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
     if (!node) continue
