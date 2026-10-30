@@ -1334,9 +1334,7 @@ export const zhHans: Catalog = {
   "Add a token:": "添加令牌：",
   "Number": "数字",
   "Font size": "字号",
-  "Add export setting": "添加导出设置",
   "Scale": "缩放",
   "More export options": "更多导出选项",
-  "Remove export setting": "移除导出设置",
   "Export {what}": "导出 {what}",
 }

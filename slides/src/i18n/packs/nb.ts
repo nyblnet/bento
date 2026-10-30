@@ -1348,9 +1348,7 @@ export const strings: Catalog = {
   "Add a token:": "Legg til et token:",
   "Number": "Tall",
   "Font size": "Skriftstørrelse",
-  "Add export setting": "Legg til eksportinnstilling",
   "Scale": "Skala",
   "More export options": "Flere eksportvalg",
-  "Remove export setting": "Fjern eksportinnstilling",
   "Export {what}": "Eksporter {what}",
 }

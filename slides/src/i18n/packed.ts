@@ -1340,9 +1340,7 @@ export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
   "Add a token:": ["トークンを追加:","添加令牌：","加入權杖：","Añadir un token:","Ajouter un jeton :","Token hinzufügen:","Aggiungi un token:","Adicionar um token:"],
   "Number": ["数値","数字","數字","Número","Nombre","Zahl","Numero","Número"],
   "Font size": ["フォントサイズ","字号","字級","Tamaño de fuente","Taille de police","Schriftgröße","Dimensione font","Tamanho da fonte"],
-  "Add export setting": ["書き出し設定を追加","添加导出设置","新增匯出設定","Añadir ajuste de exportación","Ajouter un réglage d’export","Exporteinstellung hinzufügen","Aggiungi impostazione di esportazione","Adicionar configuração de exportação"],
   "Scale": ["倍率","缩放","縮放","Escala","Échelle","Skalierung","Scala","Escala"],
   "More export options": ["その他の書き出しオプション","更多导出选项","更多匯出選項","Más opciones de exportación","Plus d’options d’export","Weitere Exportoptionen","Altre opzioni di esportazione","Mais opções de exportação"],
-  "Remove export setting": ["書き出し設定を削除","移除导出设置","移除匯出設定","Quitar ajuste de exportación","Retirer le réglage d’export","Exporteinstellung entfernen","Rimuovi impostazione di esportazione","Remover configuração de exportação"],
   "Export {what}": ["{what} を書き出す","导出 {what}","匯出 {what}","Exportar {what}","Exporter {what}","{what} exportieren","Esporta {what}","Exportar {what}"],
 }

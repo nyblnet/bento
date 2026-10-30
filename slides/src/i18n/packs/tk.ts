@@ -1371,9 +1371,7 @@ export const strings: Catalog = {
   "Add a token:": "Token goş:",
   "Number": "San",
   "Font size": "Şrift ölçegi",
-  "Add export setting": "Eksport sazlamasyny goş",
   "Scale": "Masştab",
   "More export options": "Eksportyň goşmaça saýlawlary",
-  "Remove export setting": "Eksport sazlamasyny aýyr",
   "Export {what}": "Eksport et: {what}",
 }

@@ -34,7 +34,7 @@ try {
   const p = await ctx.newPage()
   const errors = []
   p.on('pageerror', (e) => errors.push(e.message))
-  await p.goto(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url).href)
+  await p.goto(process.env.SHELL_HTML ? 'file://' + process.env.SHELL_HTML : new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url).href)
   await p.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-stage-scale [data-el-id]'))
   const rect = (id, x, y, w, h, extra = {}) => ({ id, type: 'shape', shape: 'rect', x, y, w, h, rotation: 0, opacity: 1, fill: '#ff0000', stroke: 'transparent', strokeWidth: 0, radius: 0, ...extra })
   await p.evaluate((els) => {
@@ -98,27 +98,26 @@ try {
   await p.click('.ed-ctxmenu-item:has-text("Copy as JSON")'); await p.waitForTimeout(250)
   const clip = JSON.parse(await p.evaluate(() => navigator.clipboard.readText()))
   ok(clip.__bento === 'clip' && clip.kind === 'elements' && clip.elements?.length === 1 && clip.elements[0].id === 'a', `the clipboard holds ⌘C's payload for the selection (${clip.kind}, ${clip.elements?.length})`)
-  console.log('\nFigma\'s settings rows\n')
-  const rowsN = () => p.$$eval('.ed-props .ed-export-row', (r) => r.length)
-  const n0 = await rowsN()
-  await p.click('.ed-props .ed-section[data-key="Export"] .ed-sec-act'); await p.waitForTimeout(250)
-  ok((await rowsN()) === n0 + 1, `the header's + adds a setting row (${n0} → ${await rowsN()})`)
-  await p.selectOption('.ed-props .ed-export-row >> nth=0 >> select[aria-label="Format"]', 'png'); await p.waitForTimeout(150)
-  await p.selectOption('.ed-props .ed-export-row >> nth=0 >> select[aria-label="Scale"]', '1'); await p.waitForTimeout(150)
-  await p.selectOption('.ed-props .ed-export-row >> nth=1 >> select[aria-label="Format"]', 'svg'); await p.waitForTimeout(150)
-  ok(await p.$eval('.ed-props .ed-export-row >> nth=1 >> select[aria-label="Scale"]', (s) => s.disabled), 'an SVG row has no scale to pick')
-  const files = []
-  p.on('download', (d) => files.push(d.suggestedFilename()))
-  ok(/Export/.test(await p.$eval('.ed-props .ed-export-rows .ed-export-btn', (b) => b.textContent)), 'one full-width button exports, named for what is selected')
-  await p.click('.ed-props .ed-export-rows .ed-export-btn'); await p.waitForTimeout(1500)
-  ok(files.length === 2 && files.some((n) => n.endsWith('.png')) && files.some((n) => n.endsWith('.svg')), `it exports every row at once (${files.join(', ')})`)
-  await p.click('.ed-props .ed-export-row >> nth=1 >> button[title*="Remove"]'); await p.waitForTimeout(250)
-  ok((await rowsN()) === n0, 'a row\'s − removes it')
-  const geo = await p.evaluate(() => {
-    const r = document.querySelector('.ed-props .ed-export-row'); const go = document.querySelector('.ed-props .ed-export-rows .ed-export-btn')
-    const [s1, s2] = r.querySelectorAll('select'); return { eq: Math.abs(s1.getBoundingClientRect().width - s2.getBoundingClientRect().width) < 1, full: Math.abs(go.getBoundingClientRect().width - r.getBoundingClientRect().width) < 1 }
+  console.log('\nFigma\'s Export, fixed\n')
+  const fixed = await p.evaluate(() => {
+    const head = document.querySelector('.ed-props .ed-section[data-key="Export"]')
+    const rows = [...document.querySelectorAll('.ed-props .ed-export-row')]
+    const r = rows[0]; const go = document.querySelector('.ed-props .ed-export-rows .ed-export-btn')
+    const [s1, s2] = r?.querySelectorAll('select') ?? []
+    return {
+      act: !!head?.querySelector('.ed-sec-act'), rows: rows.length, kids: r?.children.length,
+      minus: !!r?.querySelector('button[title*="Remove"], button[aria-label*="Remove"]'),
+      eq: !!s1 && !!s2 && Math.abs(s1.getBoundingClientRect().width - s2.getBoundingClientRect().width) < 1,
+      full: !!go && !!r && Math.abs(go.getBoundingClientRect().width - r.getBoundingClientRect().width) < 1,
+      named: /Export/.test(go?.textContent ?? ''),
+    }
   })
-  ok(geo.eq && geo.full, 'scale and format share the row equally, and the button spans it')
+  ok(!fixed.act, 'the Export header has no + — only its fold')
+  ok(fixed.rows === 1 && fixed.kids === 3 && !fixed.minus, `one fixed row: scale · format · ⋯, no − (${fixed.rows} row, ${fixed.kids} controls)`)
+  ok(fixed.eq && fixed.full && fixed.named, 'scale and format share the row; one full-width button, named for the selection, exports it')
+  await p.selectOption('.ed-props .ed-export-row select[aria-label="Format"]', 'svg'); await p.waitForTimeout(150)
+  ok(await p.$eval('.ed-props .ed-export-row select[aria-label="Scale"]', (x) => x.disabled), 'an SVG has no scale to pick')
+  await p.selectOption('.ed-props .ed-export-row select[aria-label="Format"]', 'png'); await p.waitForTimeout(150)
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
   await browser.close()

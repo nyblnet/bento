@@ -58,25 +58,20 @@ export function coverBox(els: SlideElement[]): Box {
   return { x: Math.floor(x0), y: Math.floor(y0), w: Math.max(1, Math.ceil(x1) - Math.floor(x0)), h: Math.max(1, Math.ceil(y1) - Math.floor(y0)) }
 }
 
-/** One export setting: Figma's row — a scale and a format. */
+/** The export setting: Figma's row — a scale and a format. */
 interface ExportSetting { scale: ImageScale; format: 'png' | 'jpeg' | 'svg' }
 const SCALES: ImageScale[] = [0.5, 1, 1.5, 2, 3, 4]
-/** The settings per subject (the selection's ids, or the slide), for the
- *  session — editor state, never written into the file. */
-const settings = new Map<string, ExportSetting[]>()
+/** The last setting used, for the session — editor state, never written into
+ *  the file. One setting, not a list: rows that could be added and removed
+ *  only made a way to end up with no export at all. */
+const setting: ExportSetting = { scale: 1, format: 'png' }
 
 export function buildExport(p: PropsPanel, els: SlideElement[]) {
   const doc = p.store.doc
   const slide = p.store.slide
-  const key = els.length ? els.map((e) => e.id).sort().join(' ') : `slide:${slide.id}`
-  const list = settings.get(key) ?? [{ scale: 1, format: 'png' }]
-  settings.set(key, list)
-  // Figma's Export section: a + on the header adds a setting row (scale ·
-  // format · ⋯ · −), and one full-width button exports every row at once.
-  section(p, t('Export'), {
-    add: true, hint: t('Add export setting'),
-    run: () => { list.push({ scale: list.some((x) => x.scale === 2) ? 3 : 2, format: list.at(-1)?.format ?? 'png' }); p.rebuild(true) },
-  })
+  // Figma's Export, fixed: one setting row (scale · format · ⋯) and one
+  // full-width button that exports it
+  section(p, t('Export'))
   // the selection alone, on no background, cropped to what it covers
   // A child of a clipping frame exports clipped: its frame rides along hidden
   // (renderSlide resolves clips through every element, draws only visible ones).
@@ -99,7 +94,8 @@ export function buildExport(p: PropsPanel, els: SlideElement[]) {
 
   const rows = document.createElement('div')
   rows.className = 'ed-export-rows'
-  list.forEach((s, i) => {
+  {
+    const s = setting
     const row = document.createElement('div')
     row.className = 'ed-export-row'
     const scale = labeledSelect(SCALES.map((k) => [String(k), `${k}x`]), String(s.scale), (v) => { s.scale = Number(v) as ImageScale; p.rebuild(true) })
@@ -114,31 +110,22 @@ export function buildExport(p: PropsPanel, els: SlideElement[]) {
       ])
     })
     more.setAttribute('aria-haspopup', 'menu')
-    const remove = opBtn(ICONS.minus, t('Remove export setting'), () => { list.splice(i, 1); p.rebuild(true) })
-    row.append(scale, format, more, remove)
+    row.append(scale, format, more)
     rows.appendChild(row)
-  })
+  }
   const copyJson = async () => {
     await navigator.clipboard.writeText(els.length ? serializeElements(els, doc) : serializeSlides([slide], doc))
     p.toast(t('Copied — ⌘V pastes it into any Bento deck'))
   }
-  if (list.length) {
+  {
     const go = document.createElement('button')
     go.type = 'button'
     go.className = 'ed-btn ed-export-btn'
     go.textContent = t('Export {what}', { what })
-    go.addEventListener('click', () => { void (async () => { for (const s of [...list]) await one(s) })().catch(failed) })
+    go.addEventListener('click', () => { void one(setting).catch(failed) })
     // nothing visible to draw: say so instead of handing over an empty picture
     if (els.length && els.every((e) => e.hidden)) { go.disabled = true; go.title = t('Hidden elements are not drawn — show one in Layers to export it') }
     rows.appendChild(go)
-  } else {
-    // no setting left: the JSON copy is still one click away
-    const json = document.createElement('button')
-    json.type = 'button'
-    json.className = 'ed-btn ed-link-btn ed-export-json'
-    json.textContent = t('Copy as JSON')
-    json.addEventListener('click', () => { void copyJson() })
-    rows.appendChild(json)
   }
   p.host.appendChild(rows)
   if (els.length === 1) accessibility(p, els[0], slide)
