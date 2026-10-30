@@ -363,6 +363,10 @@ jobs:
       - name: Drag into a frame in Chromium
         # Layers and canvas drops put elements inside auto-layout frames, at a slot.
         run: node scripts/test-slides-frame-drop-browser.mjs
+      - name: The top bar's map in Chromium
+        # Save ▾ saves; the wordmark's File menu acts on the document; the app
+        # cluster (shortcuts, help, preferences) is the app; About is about.
+        run: node scripts/test-slides-menus-ia-browser.mjs
       - name: One pressed tool, and Select only in Chromium
         # V is pressed at rest; an armed tool presses itself; S selects by
         # dragging from anywhere and never moves anything.

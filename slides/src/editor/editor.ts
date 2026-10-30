@@ -373,7 +373,7 @@ export class Editor {
     const logo = document.createElement('button')
     logo.type = 'button'
     logo.className = 'ed-logo'
-    logo.setAttribute('aria-label', t('About bento/slides — version, updates, licenses'))
+    logo.setAttribute('aria-label', t('File — new, import, export, history, properties'))
     logo.innerHTML =
       `<svg class="ed-logo-mark" viewBox="0 0 32 32" width="20" height="20" aria-hidden="true">` +
       `<rect width="32" height="32" rx="7" fill="#16273E"/>` +
@@ -381,8 +381,8 @@ export class Editor {
       `<rect x="14" y="5" width="13" height="10" rx="2.5" fill="#FF9E8A"/>` +
       `<rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/>` +
       `</svg> <b>bento<span style="color:#FF9E8A">/</span>slides</b>`
-    logo.title = t('About bento/slides — version, updates, licenses')
-    logo.addEventListener('click', () => this.openAbout())
+    logo.title = t('File — new, import, export, history, properties')
+    const fileD = this.fileDropdown(logo)
     const title = document.createElement('input')
     title.className = 'ed-title'
     title.title = t('Deck title — shown in the tab, on {{title}} fields, and as the suggested file name')
@@ -493,9 +493,16 @@ export class Editor {
       : t('Save — download an updated copy (⌘S). This browser can’t rewrite the open file.'))
     saveB.dataset.cmd = 'save'
     saveB.appendChild(this.dirtyDot) // the amber unsaved-changes dot lives ON Save
-    const pdfB = this.cmdButton('export-pdf', ICONS.pdf, '')
-    const helpB = this.cmdButton('help', '<b class="ed-help-q">?</b>', '')
-    helpB.classList.add('ed-btn-help')
+    // the APP's own buttons, one cluster at the corner: how to drive it, where
+    // to learn it, and how it is set up for you — never the document's
+    const keysB = this.cmdButton('help', ICONS.keyboard, '')
+    keysB.classList.add('ed-btn-help') // the shortcut sheet's button, as the old ? was
+    const helpD = this.helpDropdown()
+    const prefsB = this.cmdButton('preferences', ICONS.settings, '')
+    const appGroup = div('ed-group ed-app')
+    appGroup.setAttribute('role', 'group')
+    appGroup.setAttribute('aria-label', t('App'))
+    appGroup.append(keysB, helpD, prefsB)
     this.avatarsBox = div('ed-avatars')
     // Intuitive grouping: LEFT = the document (identity · title · save-state ·
     // undo/redo history) · CENTRE = insert tools · RIGHT = output & sharing
@@ -505,8 +512,9 @@ export class Editor {
     const saveGroup = div('ed-split')
     saveGroup.append(saveB, this.saveDropdown())
     const shareD = this.shareDropdown()
-    const langD = this.languageDropdown()
-    actions.append(pdfB, this.avatarsBox, shareD, saveGroup, langD, helpB)
+    // Print stays in sight (⌘P): output, beside Share; also in File ▸ Export
+    const pdfB = this.cmdButton('export-pdf', ICONS.pdf, '')
+    actions.append(pdfB, this.avatarsBox, shareD, saveGroup, appGroup)
 
     // Phone chrome: two menus that stay EMPTY on a wide screen. Nothing is
     // duplicated — applyPhoneChrome moves the real buttons in and out, so every
@@ -545,7 +553,7 @@ export class Editor {
     this.phoneChrome = {
       insertD, insertMenu, moreD, moreMenu, slidesB, formatB, insert, actions, history,
       // order matters: this is the order they appear in the ⋯ menu
-      demote: [redoB, commentB, pdfB, shareD, langD, helpB],
+      demote: [redoB, commentB, shareD, keysB, helpD, prefsB, pdfB],
       // filled in once the bar is fully assembled (formatB lands last)
       authored: new Map(), homeOf: new Map(),
     }
@@ -554,7 +562,7 @@ export class Editor {
     // output group share the spare width equally (styles.css), which is what
     // keeps the insert tools centred whatever the deck is called.
     const docZone = div('ed-zone-doc')
-    docZone.append(logo, this.updatesB, title, this.fileChip, phoneTools)
+    docZone.append(fileD, this.updatesB, title, this.fileChip, phoneTools)
     bar.append(docZone, insert, actions, moreD)
 
     // main area
@@ -1064,7 +1072,7 @@ export class Editor {
     const trigger = btn('<span class="ed-caret" aria-hidden="true">▾</span>', '', () => {
       wrap.classList.toggle('open')
       if (wrap.classList.contains('open')) rebuild()
-    }, t('Save as… — copy, new deck, password'))
+    }, t('Save options — a copy, a new deck, a password'))
     trigger.classList.add('ed-split-caret')
     const rebuild = () => {
       menu.textContent = ''
@@ -1105,60 +1113,115 @@ export class Editor {
       })
       into.appendChild(tag(b))
     }
-    {
-      // FILE operations only — everything that goes to OTHER PEOPLE lives in
-      // the Share panel (one mental model: Save = for me, Share = for others).
-      item(ICONS.copy, t('Save a copy…'),
-        t('A backup of this deck for yourself — same deck, same live session.'),
-        () => void this.save(true))
-      item(ICONS.plus, t('Duplicate as new deck…'),
-        t('A separate deck for you — same content, new identity; it never syncs with this one.'),
-        () => this.saveAsNewDeck())
-      // the dialog explains itself; a tooltip here would say the same twice
-      item(ICONS.image, t('Export slides as images…'), '', () => this.exportImages())
-      if (isEncryptionActive()) {
-        item(ICONS.lock, t('Change password…'),
-          t('Pick a new password for this file — takes effect on the next save.'),
-          () => void this.setFilePassword())
-        item(ICONS.lock, t('Remove password'),
-          t('Stop encrypting this file — the next save writes it as plain, readable JSON again.'),
-          () => {
-            setEncryptionPassword(null)
-            this.syncWindowTitle() // the deck title may return to the tab
-            this.toast(t('Password removed — the next save writes an unencrypted file'))
-            void this.save(false)
-          })
-      } else {
-        item(ICONS.lock, t('Encrypt with password…'),
-          t('Protect this file with a password: the document (collaboration keys included) is encrypted at rest with AES-256. The password cannot be recovered.'),
-          () => void this.setFilePassword())
-      }
-      // the document AS DATA — history and the AI/JSON round-trip live with
-      // the other file operations now (they were buried in the About dialog)
-      into.appendChild(tag(div('ed-menu-sep')))
-      item(ICONS.history, t('Version history…'),
-        t('Restore an earlier auto-saved version of this deck (kept locally in this browser).'),
-        () => void this.openVersionHistory())
-      item(ICONS.code, t('Copy document JSON'),
-        t('Copies this deck as plain JSON — content only, no live-session keys. Edit it in another tool, then bring it back with Replace from JSON.'),
-        () => void this.copyDocJson())
-      item(ICONS.code, t('Copy compact JSON (for agents)'),
-        t('The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.'),
-        () => void this.copyDocJson(true))
-      item(ICONS.code, t('Replace from JSON…'),
-        t('Paste edited document JSON to replace this deck’s content — ⌘Z undoes.'),
-        () => this.openReplaceJson())
-      // with the other import, where spaces has Import Markdown…
-      item(ICONS.importDoc, t('Import PowerPoint…'),
-        t('Opens the PowerPoint importer on bento.page in a new tab — it turns a .pptx into a Bento deck. Needs an internet connection.'),
-        () => { window.open(IMPORT_PPTX_URL, '_blank', 'noopener,noreferrer') })
-      item(ICONS.exportDoc, t('Export for PowerPoint…'),
-        t('Opens the converter on bento.page in a new tab — drop this deck’s saved file there to get a .pptx. The deck is not uploaded. Needs an internet connection.'),
-        () => { window.open(EXPORT_PPTX_URL, '_blank', 'noopener,noreferrer') })
-      item(ICONS.template, t('Start from scratch…'),
-        t('Replace every slide with one blank slide. Keeps the deck’s theme, name and live session — ⌘Z undoes.'),
-        () => this.startFromScratch())
+    // SAVING only — the ways to write this deck to a file. What acts on the
+    // document (export, import, history, data) is the File menu's (buildFileItems);
+    // what goes to OTHER PEOPLE is the Share panel's.
+    item(ICONS.copy, t('Save a copy…'),
+      t('A backup of this deck for yourself — same deck, same live session.'),
+      () => void this.save(true))
+    item(ICONS.plus, t('Duplicate as new deck…'),
+      t('A separate deck for you — same content, new identity; it never syncs with this one.'),
+      () => this.saveAsNewDeck())
+    if (isEncryptionActive()) {
+      item(ICONS.lock, t('Change password…'),
+        t('Pick a new password for this file — takes effect on the next save.'),
+        () => void this.setFilePassword())
+      item(ICONS.unlock, t('Save without password'),
+        t('Stop encrypting this file — the next save writes it as plain, readable JSON again.'),
+        () => {
+          setEncryptionPassword(null)
+          this.syncWindowTitle() // the deck title may return to the tab
+          this.toast(t('Password removed — the next save writes an unencrypted file'))
+          void this.save(false)
+        })
+    } else {
+      item(ICONS.lock, t('Save with password…'),
+        t('Protect this file with a password: the document (collaboration keys included) is encrypted at rest with AES-256. The password cannot be recovered.'),
+        () => void this.setFilePassword())
     }
+  }
+
+  /**
+   * The File menu, on the wordmark: what acts on the DOCUMENT — make, bring
+   * in, send out, look back, describe, and the document as data. Grouped
+   * under captions in one list rather than flyouts: one click deep, no hover
+   * timing, and the same list fits the phone's ⋯.
+   */
+  private buildFileItems(into: HTMLElement, close: () => void, mark = false) {
+    const tag = <T extends HTMLElement>(el: T): T => {
+      if (mark) el.dataset.phoneSaveas = '1'
+      return el
+    }
+    const item = (icon: string, label: string, title: string, onClick: () => void, cmd?: string) => {
+      const b = document.createElement('button')
+      b.className = 'ed-btn'
+      if (icon) b.innerHTML = icon
+      b.appendChild(menuLabel(label, title, b))
+      const keys = cmd ? this.commands.find((c) => c.id === cmd)?.keys : undefined
+      if (cmd) b.dataset.cmd = cmd
+      if (keys) { const k = document.createElement('kbd'); k.className = 'ed-menu-keys'; k.textContent = keys; b.appendChild(k) }
+      b.addEventListener('click', () => { close(); onClick() })
+      into.appendChild(tag(b))
+    }
+    const cap = (text: string) => {
+      const c = div('ed-menu-cap')
+      c.textContent = text
+      into.appendChild(tag(c))
+    }
+    const sep = () => into.appendChild(tag(div('ed-menu-sep')))
+    item(ICONS.template, t('Start from scratch…'),
+      t('Replace every slide with one blank slide. Keeps the deck’s theme, name and live session — ⌘Z undoes.'),
+      () => this.startFromScratch(), 'start-scratch')
+    item(ICONS.importDoc, t('Import PowerPoint…'),
+      t('Opens the PowerPoint importer on bento.page in a new tab — it turns a .pptx into a Bento deck. Needs an internet connection.'),
+      () => { window.open(IMPORT_PPTX_URL, '_blank', 'noopener,noreferrer') }, 'import-pptx')
+    sep()
+    cap(t('Export'))
+    item(ICONS.pdf, t('Print or save as PDF…'), t('Every slide on its own page — your browser’s print dialog saves a PDF.'), () => this.exportPdf(), 'export-pdf')
+    // the dialog explains itself; a tooltip here would say the same twice
+    item(ICONS.image, t('Export slides as images…'), '', () => this.exportImages(), 'export-images')
+    item(ICONS.exportDoc, t('Export for PowerPoint…'),
+      t('Opens the converter on bento.page in a new tab — drop this deck’s saved file there to get a .pptx. The deck is not uploaded. Needs an internet connection.'),
+      () => { window.open(EXPORT_PPTX_URL, '_blank', 'noopener,noreferrer') }, 'export-pptx')
+    sep()
+    item(ICONS.history, t('Version history…'),
+      t('Restore an earlier auto-saved version of this deck (kept locally in this browser).'),
+      () => void this.openVersionHistory(), 'version-history')
+    item(ICONS.docInfo, t('Document properties…'),
+      t('Title, author, company, subject, event and keywords — {{author}} and friends fill in from here.'),
+      () => this.openDocProps(), 'doc-props')
+    item(ICONS.image, t('Compress pictures in this deck…'),
+      t('Re-encodes every photo already in the deck at up to 2560 px; screenshots and logos stay sharp. Undo restores them until you save.'),
+      () => void this.compressDeckPictures(), 'compress-images')
+    sep()
+    cap(t('Advanced'))
+    item(ICONS.code, t('Copy document JSON'),
+      t('Copies this deck as plain JSON — content only, no live-session keys. Edit it in another tool, then bring it back with Replace from JSON.'),
+      () => void this.copyDocJson(), 'copy-json')
+    item(ICONS.code, t('Copy compact JSON (for agents)'),
+      t('The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.'),
+      () => void this.copyDocJson(true), 'copy-compact-json')
+    item(ICONS.code, t('Replace from JSON…'),
+      t('Paste edited document JSON to replace this deck’s content — ⌘Z undoes.'),
+      () => this.openReplaceJson(), 'replace-json')
+    sep()
+    item(ICONS.info, t('About bento/slides'), t('Version, updates and licenses'), () => this.openAbout(), 'about')
+  }
+
+  /** The File menu's dropdown, opened from the wordmark. */
+  private fileDropdown(trigger: HTMLElement): HTMLElement {
+    const wrap = div('ed-dropdown ed-file')
+    const menu = div('ed-menu ed-file-menu')
+    trigger.addEventListener('click', () => {
+      wrap.classList.toggle('open')
+      if (wrap.classList.contains('open')) { menu.textContent = ''; this.buildFileItems(menu, () => wrap.classList.remove('open')) }
+    })
+    trigger.setAttribute('aria-haspopup', 'menu')
+    wrap.append(trigger, menu)
+    document.addEventListener('pointerdown', (ev) => {
+      if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
+    }, { signal: this.buildScope.signal })
+    return wrap
   }
 
   /**
@@ -1187,6 +1250,10 @@ export class Editor {
     sep.dataset.phoneSaveas = '1'
     menu.appendChild(sep)
     this.buildSaveAsItems(menu, () => wrap.classList.remove('open'), true)
+    const sep2 = div('ed-menu-sep')
+    sep2.dataset.phoneSaveas = '1'
+    menu.appendChild(sep2)
+    this.buildFileItems(menu, () => wrap.classList.remove('open'), true)
   }
 
   /**
@@ -1925,32 +1992,24 @@ export class Editor {
   }
 
   /** Globe → locale picker. UI language follows the VIEWER, never the file. */
-  private languageDropdown(): HTMLElement {
+  /** Help: where to learn the app — the guide, what changed, where to ask.
+   *  The shortcut sheet is its own button beside it (⌨, ?). */
+  private helpDropdown(): HTMLElement {
     const wrap = div('ed-dropdown')
-    const trigger = btn(ICONS.globe, '', () => wrap.classList.toggle('open'), t('Language'))
-    const menu = div('ed-menu ed-lang-menu')
-    // localeChoices(), NOT the frozen LOCALE_CHOICES const: installing a pack
-    // appends a language at runtime, and a static list could never show it.
-    for (const c of localeChoices()) {
-      const b = btn('', c.label, () => {
-        wrap.classList.remove('open')
-        setLocale(c.code)
-        // switching to (or away from) Arabic/Hebrew/… turns the chrome around
-        applyDirection()
-        this.build()
-        this.rebuildSidebar()
-      })
-      if (c.code === locale()) b.classList.add('ed-lang-on')
+    const trigger = btn(ICONS.helpCircle, '', () => wrap.classList.toggle('open'), t('Help'))
+    trigger.setAttribute('aria-haspopup', 'menu')
+    const menu = div('ed-menu ed-help-menu')
+    const link = (icon: string, label: string, href: string) => {
+      const b = btn(icon, label, () => { wrap.classList.remove('open'); window.open(href, '_blank', 'noopener,noreferrer') })
       menu.appendChild(b)
     }
+    link(ICONS.helpCircle, t('Guide on bento.page'), 'https://bento.page/help')
+    link(ICONS.history, t('What’s new →'), `https://github.com/nyblnet/bento/releases/tag/v${APP_VERSION}`)
+    link(ICONS.comment, t('Ask or report a problem'), 'https://github.com/nyblnet/bento/issues')
     menu.appendChild(div('ed-menu-sep'))
-    menu.appendChild(btn('', t('Manage languages…'), () => {
-      wrap.classList.remove('open')
-      void this.openLanguages()
-    }))
-    // end-anchored so the menu never overflows the window edge — as a class,
-    // not inline left/right, so it follows the chrome's direction (.ed-lang-menu
-    // in styles.css, alongside the Save menu's identical rule)
+    const keys = btn(ICONS.keyboard, t('Keyboard shortcuts'), () => { wrap.classList.remove('open'); this.openHelp() })
+    keys.dataset.cmd = 'help'
+    menu.appendChild(keys)
     wrap.append(trigger, menu)
     document.addEventListener('pointerdown', (ev) => {
       if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
@@ -3585,7 +3644,7 @@ export class Editor {
       { id: 'zoom-fit', label: 'Fit the slide', keys: `${MOD}0`, scope: 'canvas', inField: true, match: (ev, mod) => mod && ev.key === '0', run: () => this.canvas.zoomReset() },
       { id: 'present', label: 'Present', keys: 'F5', scope: 'always', inField: true, match: (ev) => ev.key === 'F5', run: (ev) => this.present(!ev?.shiftKey) },
       { id: 'palette', label: 'Command palette', keys: `${MOD}K`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && !ev.altKey && key(ev) === 'k', run: () => openPalette(this.commands) },
-      { id: 'help', label: 'Shortcuts & tips', keys: '?', scope: 'always', when: canvasFree, match: (ev, mod) => !mod && (ev.key === '?' || (ev.key === '/' && ev.shiftKey)), run: () => this.openHelp() },
+      { id: 'help', label: 'Keyboard shortcuts', keys: '?', scope: 'always', when: canvasFree, match: (ev, mod) => !mod && (ev.key === '?' || (ev.key === '/' && ev.shiftKey)), run: () => this.openHelp() },
       // The tools, one letter each as in Figma and Penpot (C stays Comment)
       { id: 'tool-select', label: 'Move', keys: 'V', scope: 'canvas', when: canvasFree, match: tool('v'), run: () => this.useTool(false) },
       // S: Select only — a drag selects and never moves (the Move tool moves).
@@ -3657,7 +3716,20 @@ export class Editor {
       } },
       { id: 'select-parent', label: 'Select parent', keys: 'Esc', scope: 'canvas', when: () => canvasFree() && sel().length > 0 && sel().every((e) => !!e.parentId && !!this.store.element(e.parentId)), run: () => this.store.select([...new Set(sel().map((e) => e.parentId!))]) },
       { id: 'play-transition', label: 'Play transition', scope: 'always', when: () => !!walkSource(this.store.doc, this.store.slide), run: () => this.playTransition() },
-      { id: 'export-pdf', label: 'Export PDF (print)', scope: 'always', run: () => this.exportPdf() },
+      { id: 'export-pdf', label: 'Print or save as PDF…', keys: `${MOD}P`, scope: 'always', inField: true, match: (ev, mod) => mod && !ev.shiftKey && !ev.altKey && key(ev) === 'p', run: () => this.exportPdf() },
+      { id: 'preferences', label: 'Preferences', keys: `${MOD},`, scope: 'always', inField: true, match: (ev, mod) => mod && ev.key === ',', run: () => this.openPreferences() },
+      { id: 'doc-props', label: 'Document properties…', scope: 'always', run: () => this.openDocProps() },
+      { id: 'version-history', label: 'Version history…', scope: 'always', run: () => void this.openVersionHistory() },
+      { id: 'export-images', label: 'Export slides as images…', scope: 'always', run: () => this.exportImages() },
+      { id: 'import-pptx', label: 'Import PowerPoint…', scope: 'always', run: () => { window.open(IMPORT_PPTX_URL, '_blank', 'noopener,noreferrer') } },
+      { id: 'export-pptx', label: 'Export for PowerPoint…', scope: 'always', run: () => { window.open(EXPORT_PPTX_URL, '_blank', 'noopener,noreferrer') } },
+      { id: 'compress-images', label: 'Compress pictures in this deck…', scope: 'always', when: writable, run: () => void this.compressDeckPictures() },
+      { id: 'copy-json', label: 'Copy document JSON', scope: 'always', run: () => void this.copyDocJson() },
+      { id: 'copy-compact-json', label: 'Copy compact JSON (for agents)', scope: 'always', run: () => void this.copyDocJson(true) },
+      { id: 'replace-json', label: 'Replace from JSON…', scope: 'always', when: writable, run: () => this.openReplaceJson() },
+      { id: 'start-scratch', label: 'Start from scratch…', scope: 'always', when: writable, run: () => this.startFromScratch() },
+      { id: 'save-copy', label: 'Save a copy…', scope: 'always', run: () => void this.save(true) },
+      { id: 'language', label: 'Language', scope: 'always', run: () => this.openPreferences() },
       { id: 'speaker', label: 'Speaker view', scope: 'always', run: () => this.openSpeakerView() },
       { id: 'about', label: 'About bento/slides', scope: 'always', run: () => this.openAbout() },
     ]
@@ -4275,9 +4347,7 @@ export class Editor {
 
   /** About dialog: version, user-initiated update check, licenses. */
   private openAbout(runCheck = false) {
-    document.querySelector('.ed-about-overlay')?.remove()
-    const overlay = div('ed-about-overlay')
-    const box = div('ed-about')
+    const { box, show } = this.dialogShell()
 
     const head = div('ed-about-head')
     // The logo/wordmark links home (new tab) — a gentle route back to the site.
@@ -4452,6 +4522,52 @@ export class Editor {
     row.appendChild(checkB)
     box.append(row, status)
 
+    const fine = div('ed-about-fine')
+    fine.innerHTML =
+      `${t('Checks contact the release server and send nothing about you or this document — no ids, no telemetry.')}<br>` +
+      t('Includes reveal.js, Moveable, Selecto (MIT) · Fraunces + Instrument Sans typefaces (OFL-1.1) — full notices travel in this file’s source.')
+    box.appendChild(fine)
+
+    show()
+    if (runCheck || this.updateFound) checkB.click()
+  }
+
+  /**
+   * One dialog's frame — the About styling, a scrim that closes on click,
+   * Escape — shared by About, Preferences and Document properties. Returns the
+   * box to fill and `show` to put it on screen.
+   */
+  private dialogShell(extra = ''): { box: HTMLElement; overlay: HTMLElement; show: () => void } {
+    // a dialog already open closes properly — overlay AND its Escape listener
+    ;(document.querySelector('.ed-about-overlay') as (HTMLElement & { close?: () => void }) | null)?.close?.()
+    document.querySelector('.ed-about-overlay')?.remove()
+    const overlay: HTMLElement & { close?: () => void } = div('ed-about-overlay')
+    const box = div(`ed-about${extra ? ' ' + extra : ''}`)
+    overlay.appendChild(box)
+    const close = () => {
+      overlay.remove()
+      document.removeEventListener('keydown', onKey, true)
+    }
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') {
+        ev.stopPropagation()
+        close()
+      }
+    }
+    overlay.addEventListener('click', (ev) => {
+      if (ev.target === overlay) close()
+    })
+    overlay.close = close
+    return { box, overlay, show: () => { document.addEventListener('keydown', onKey, true); document.body.appendChild(overlay) } }
+  }
+
+  /** Preferences: how the APP is set up for you, in this browser — never the
+   *  document. Appearance, language, updates, pictures on insert, network. */
+  openPreferences() {
+    const { box, show } = this.dialogShell('ed-prefs')
+    const h = document.createElement('h2')
+    h.textContent = t('Preferences')
+    box.appendChild(h)
     // Appearance — a VIEWER preference, so it sits with the others (language,
     // auto-update) rather than anywhere near the document's own settings.
     // "Auto" is first and is the default: most people want their machine's
@@ -4488,20 +4604,36 @@ export class Editor {
     shrinkRow.title = t('A pasted phone photo is stored at slide resolution instead of full size. Off: pictures are stored exactly as they come.')
     box.appendChild(shrinkRow)
 
-    // the explicit pass over pictures already in the deck (editor/compressdeck.ts):
-    // dry run → the real numbers in a confirmation → one undo step
-    const compressRow = document.createElement('div')
-    compressRow.className = 'ed-about-auto'
-    const compressBtn = document.createElement('button')
-    compressBtn.className = 'ed-btn'
-    compressBtn.textContent = t('Compress pictures in this deck…')
-    compressBtn.title = t('Re-encodes every photo already in the deck at up to 2560 px; screenshots and logos stay sharp. Undo restores them until you save.')
-    const compressNote = document.createElement('span')
-    compressNote.className = 'ed-hint'
-    compressBtn.addEventListener('click', () => { void this.compressDeckPictures(compressBtn, compressNote, overlay) })
-    compressRow.append(compressBtn, compressNote)
-    box.appendChild(compressRow)
-
+    // the interface language — the list the globe menu held
+    const langRow = div('ed-about-auto')
+    const langCap = document.createElement('span')
+    langCap.textContent = t('Language')
+    langCap.id = 'ed-prefs-lang'
+    const langSel = document.createElement('select')
+    langSel.setAttribute('aria-labelledby', langCap.id)
+    // localeChoices(), NOT a frozen list: an installed pack appends a language
+    for (const c of localeChoices()) {
+      const o = document.createElement('option')
+      o.value = c.code
+      o.textContent = c.label
+      if (c.code === locale()) o.selected = true
+      langSel.appendChild(o)
+    }
+    langSel.addEventListener('change', () => {
+      setLocale(langSel.value)
+      // switching to (or away from) Arabic/Hebrew/… turns the chrome around
+      applyDirection()
+      this.build()
+      this.rebuildSidebar()
+      this.openPreferences()
+    })
+    const manage = document.createElement('button')
+    manage.type = 'button'
+    manage.className = 'ed-btn'
+    manage.textContent = t('Manage languages…')
+    manage.addEventListener('click', () => void this.openLanguages())
+    langRow.append(langCap, langSel, manage)
+    themeRow.after(langRow)
     // the hard no-network switch: blocks update checks AND online
     // collaboration for this browser. Same-machine tab sync is not
     // networking and stays on.
@@ -4533,12 +4665,17 @@ export class Editor {
     offRow.append(offCb, document.createTextNode(' ' + t('Offline mode — block all network features (updates, online collaboration)')))
     box.appendChild(offRow)
 
+    show()
+  }
+
+  /** Document properties: what THIS deck says about itself — its fields. */
+  openDocProps() {
+    const { box, show } = this.dialogShell('ed-docprops')
+    const h = document.createElement('h2')
+    h.textContent = t('Document properties')
+    box.appendChild(h)
     // Document properties → fillable {{author}} {{company}} {{subject}} {{event}} fields
     const metaWrap = div('ed-about-row ed-about-meta-wrap')
-    const metaTitle = document.createElement('div')
-    metaTitle.className = 'ed-about-h'
-    metaTitle.textContent = t('Document properties')
-    metaWrap.appendChild(metaTitle)
     const metaHint = document.createElement('p')
     metaHint.className = 'ed-hint'
     metaHint.innerHTML = t('Type <b>{{author}}</b>, <b>{{company}}</b>, <b>{{subject}}</b> or <b>{{event}}</b> in any text box and it fills in from here — everywhere at once. Handy for title slides and footers.')
@@ -4563,45 +4700,18 @@ export class Editor {
     metaField(t('Keywords'), () => this.store.doc.meta?.keywords ?? '', (v) => { ensureMeta().keywords = v })
     box.appendChild(metaWrap)
 
-    const fine = div('ed-about-fine')
-    fine.innerHTML =
-      `${t('Checks contact the release server and send nothing about you or this document — no ids, no telemetry.')}<br>` +
-      t('Includes reveal.js, Moveable, Selecto (MIT) · Fraunces + Instrument Sans typefaces (OFL-1.1) — full notices travel in this file’s source.')
-    box.appendChild(fine)
-
-    overlay.appendChild(box)
-    const close = () => {
-      overlay.remove()
-      document.removeEventListener('keydown', onKey, true)
-    }
-    const onKey = (ev: KeyboardEvent) => {
-      if (ev.key === 'Escape') {
-        ev.stopPropagation()
-        close()
-      }
-    }
-    overlay.addEventListener('click', (ev) => {
-      if (ev.target === overlay) close()
-    })
-    document.addEventListener('keydown', onKey, true)
-    document.body.appendChild(overlay)
-    if (runCheck || this.updateFound) checkB.click()
+    show()
   }
 
-  /** About ▸ Compress pictures in this deck…: every picture runs through the
+  /** File ▸ Compress pictures in this deck…: every picture runs through the
    *  insert-time shrink rules; the confirmation states the measured total; one
    *  store commit applies it. Nothing is written until Compress is clicked. */
-  private async compressDeckPictures(btn: HTMLButtonElement, note: HTMLElement, aboutOverlay: HTMLElement) {
+  private async compressDeckPictures() {
     if (this.store.readOnly) return
-    btn.disabled = true
     const doc = this.store.doc
-    let run: DryRun
-    try {
-      run = await dryRun(doc, (done, total) => { note.textContent = t('{done} of {total}…', { done: String(done), total: String(total) }) })
-    } finally {
-      btn.disabled = false
-      note.textContent = ''
-    }
+    // a long deck takes a moment: say so where the author is looking
+    this.toast(t('Looking at the pictures in this deck…'))
+    const run: DryRun = await dryRun(doc, () => {})
     if (!run.shrunk.length) {
       this.toast(run.examined ? t('Every picture is already as small as it gets') : t('This deck has no pictures to compress'))
       return
@@ -4627,7 +4737,6 @@ export class Editor {
       dlg.close()
       let applied = 0
       this.store.commit(() => { applied = applyCompress(this.store.doc, run) })
-      aboutOverlay.remove()
       this.toast(t('{n} pictures compressed — {before} → {after}', { n: String(applied), before: fmtBytes(run.before), after: fmtBytes(run.after) }))
     })
     dlg.open()

@@ -2594,22 +2594,22 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 /* menus that hang off a topbar control at the END of the bar open toward the
    bar's start, so they can never overflow the window edge — in either
    direction (the language menu sets the same anchoring from JS). */
-.ed-save-menu, .ed-lang-menu {
+.ed-save-menu, .ed-lang-menu, .ed-help-menu {
   inset-inline-end: 0;
   inset-inline-start: auto;
 }
 .ed-save-menu { min-width: 190px; }
-.ed-save-menu .ed-btn { font-size: 12.5px; }
+.ed-save-menu .ed-btn, .ed-file-menu .ed-btn, .ed-help-menu .ed-btn { font-size: 12.5px; }
 /* D2 (revised 2026-09-26): Save as and Share keep one-line rows and put each
    description in the tooltip, with the same text in a visually-hidden node for
    aria-describedby (editor.ts menuLabel). The Save list keeps spaces' width
    for the same list (240–264). */
-.ed-save-menu { width: min(264px, calc(100vw - 16px)); }
+.ed-save-menu, .ed-file-menu { width: min(264px, calc(100vw - 16px)); }
 /* A long list on a short window (phone landscape, a split screen) must not
    run off the bottom with its last commands unreachable: it scrolls within
    the space under the bar. Safe to make a scroll box (hard-won #10): nothing in
    it floats. --ed-bar-bottom is published by editor.ts. */
-.ed-save-menu { max-height: calc(100dvh - var(--ed-bar-bottom, 56px) - 12px); overflow-y: auto; }
+.ed-save-menu, .ed-file-menu { max-height: calc(100dvh - var(--ed-bar-bottom, 56px) - 12px); overflow-y: auto; }
 /* present for assistive tech, absent for the eye */
 .ed-sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -3767,5 +3767,23 @@ body.ed-morph-previewing .ed-morph-ghost { visibility: hidden !important; }
 .ed-props .ed-color-open:hover { border-color: var(--field-line-hot); color: var(--ink); }
 .ed-props .ed-color-open svg { width: 15px; height: 15px; }
 
+/* ————— FILE · SAVE · APP — the bar's three menus of different kinds —————————
+   File (on the wordmark): what acts on the document. Save ▾: the ways to
+   write it to a file. The app cluster at the corner: shortcuts · help ·
+   preferences — the app itself, never the document. */
+.ed-file { position: relative; }
+.ed-file-menu { inset-inline-start: 0; inset-inline-end: auto; }
+.ed-menu-cap { padding: 6px 9px 2px; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.ed-menu .ed-btn > .ed-menu-keys { margin-inline-start: auto; padding-inline-start: 12px; font: 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); background: none; border: 0; }
+/* the app cluster: one group, same-size icon buttons, a hairline before it */
+.ed-app { display: flex; align-items: center; gap: 2px; padding-inline-start: 8px; margin-inline-start: 4px; border-inline-start: 1px solid var(--line); }
+.ed-app .ed-btn, .ed-app .ed-dropdown > .ed-btn { width: 30px; min-width: 30px; height: 30px; padding: 0; display: grid; place-items: center; }
+.ed-app svg { width: 17px; height: 17px; }
+.ed-prefs .ed-about-auto select { min-width: 0; flex: 1 1 auto; }
+.ed-prefs h2, .ed-docprops h2 { margin: 0 0 12px; font-size: 17px; font-weight: 650; }
 /* the Select-only tool: nothing on the slide offers to move */
 .ed-marquee-tool .bento-el, .ed-marquee-tool .moveable-area { cursor: default !important; }
+/* Folded, the document zone keeps its content's width: squeezed to its flex
+   share it let undo/redo slide UNDER the right group (390px, measured). Past
+   the fold's floor the bar scrolls instead (CLAUDE.md, the topbar note). */
+.ed-topbar.ed-bar-fold .ed-zone-doc { min-width: max-content; }

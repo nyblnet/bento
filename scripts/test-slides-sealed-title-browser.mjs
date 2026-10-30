@@ -67,7 +67,7 @@ async function openSpeaker(p) {
 }
 const encryptDialog = async (p) => {
   await p.locator('.ed-split-caret').click()
-  await p.locator('.ed-save-menu').getByText('Encrypt with password…', { exact: true }).click()
+  await p.locator('.ed-save-menu').getByText('Save with password…', { exact: true }).click()
   await p.locator('dialog.ed-pwdialog .pw1').fill(PASS)
   await p.locator('dialog.ed-pwdialog .pw2').fill(PASS)
 }
@@ -114,7 +114,7 @@ try {
   ok(/bento\/enc/.test(readFileSync(enc, 'utf8')), 'the saved file is encrypted')
 
   await a.p.locator('.ed-split-caret').click()
-  await a.p.locator('.ed-save-menu').getByText('Remove password', { exact: true }).click()
+  await a.p.locator('.ed-save-menu').getByText('Save without password', { exact: true }).click()
   await a.p.waitForFunction((m) => document.title.includes(m), MARK, { timeout: 3000 }).catch(() => {})
   ok((await a.p.title()).includes(MARK), `removing the password brings the title back ("${await a.p.title()}")`)
   ok((await sp.title()).includes(MARK), `…to the speaker window too ("${await sp.title()}")`)
