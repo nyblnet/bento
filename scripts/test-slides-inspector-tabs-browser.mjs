@@ -93,7 +93,7 @@ try {
     })
     ok(block.before && ['W', 'H', 'X', 'Y'].every((x) => block.minis.includes(L === EN ? x : { W: 'L', H: 'A', X: 'X', Y: 'Y' }[x])), `${tag} the measures head the panel, above every section (${block.minis.join(' ')})`)
     ok(block.opacity && block.blend, `${tag} blend mode and opacity share the line above them`)
-    ok(block.tools >= 10, `${tag} align and order are one toolbar on top (${block.tools} tools)`)
+    ok(block.tools >= 9, `${tag} align, flip and the order menu are one toolbar on top (${block.tools} tools)`)
     v = await on(L.animate)
     ok(JSON.stringify(v) === JSON.stringify([L.anim, L.morph]), `${tag} Animate: motion only (${v.join(', ')})`)
     v = await on(L.interact)

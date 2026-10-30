@@ -354,6 +354,9 @@ jobs:
         # Where dragged slides land, tabs in narrow sidebars, hints in the
         # speaker view, and one home for the deck's colours.
         run: node scripts/test-slides-chrome-polish-browser.mjs
+      - name: Chrome that holds still in Chromium
+        # Layer rows never move under the pointer; panel handles are centred SVG chevrons.
+        run: node scripts/test-slides-steady-chrome-browser.mjs
       - name: UX audit canvas fixes in Chromium
         # A press on an unselected element drags it; a key typed at a selected
         # text box is text; a frame copies, duplicates and deletes with its

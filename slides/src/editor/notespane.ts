@@ -9,6 +9,7 @@
 // Editing matches the field it replaced: typing is one undo burst, closed by
 // `change`; the slide is the one that was current when typing began, so a
 // slide switch mid-edit cannot write the text onto the next slide.
+import { ICONS } from '../icons'
 import type { Store } from '../store'
 import { t } from '../i18n'
 import { lsGet, lsSet } from '../../../kernel/src/storage.ts'
@@ -70,7 +71,8 @@ export function mountNotesPane(store: Store, into: HTMLElement, signal: AbortSig
     pane.classList.toggle('closed', !open)
     head.classList.toggle('closed', !open)
     head.setAttribute('aria-expanded', String(open))
-    toggle.textContent = open ? '›' : '‹' // turned a quarter by CSS: down folds, up opens
+    if (!toggle.firstElementChild) toggle.innerHTML = ICONS.chevron
+    toggle.dataset.dir = open ? 'down' : 'up' // down folds, up opens
     toggle.title = open ? t('Hide speaker notes') : t('Show speaker notes')
   }
   // Open by default where there is room; on a phone or a short window the

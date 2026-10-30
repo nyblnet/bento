@@ -470,7 +470,9 @@ export class PropsPanel {
     glyph.className = 'ed-context-glyph'
     const name = document.createElement('span')
     name.className = 'ed-context-name'
-    const how = document.createElement('p')
+    // the how-to rides the same line, quieter, after the name: a whole second
+    // line for one sentence pushed every control down
+    const how = document.createElement('span')
     how.className = 'ed-context-how'
     const one = els.length === 1 ? els[0] : null
     if (!els.length) {
@@ -484,14 +486,15 @@ export class PropsPanel {
       how.textContent = one ? t('Click an empty part of the slide for the slide’s options.') : t('Shift-click to add an element or take one out.')
     }
     name.title = name.textContent ?? ''
-    bar.append(glyph, name)
+    how.title = how.textContent ?? ''
+    bar.append(glyph, name, how)
     if (els.length) {
       bar.append(
         opBtn(ICONS.copy, this.titleOf('duplicate', t('Duplicate')), () => this.duplicate(els)),
         opBtn(ICONS.trash, this.titleOf('delete', t('Delete')), () => this.remove(els)),
       )
     }
-    this.host.querySelector(':scope > .ed-tabs-band')!.after(bar, how)
+    this.host.querySelector(':scope > .ed-tabs-band')!.after(bar)
   }
 
   /** ⇧A — wrap the selection in an auto-layout frame (inspector/layout.ts). */

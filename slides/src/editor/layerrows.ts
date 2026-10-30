@@ -67,7 +67,10 @@ export type LayerRow = {
   paired?: boolean
 }
 
-const LABEL_MAX = 24
+// Long enough that a wide sidebar shows a real sentence: the row cuts what
+// does not fit with a CSS ellipsis at whatever width the column has. 24 was a
+// fixed cut that left a wide Layers list showing three words.
+const LABEL_MAX = 96
 
 /** Text with the markup taken out, entities decoded enough to read, collapsed. */
 export function excerpt(html: string, max = LABEL_MAX): string {
