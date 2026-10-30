@@ -9,11 +9,34 @@ import { t } from '../../i18n'
 import type { PropsPanel } from '../panels'
 import type { Slide, SlideElement } from '../../model'
 import { measureContrast, type Area } from './contrast'
-import { rasterizeSlide, slideSvg, downloadBlob, type Box } from '../exportimages'
+import { rasterizeSlide, downloadBlob, type Box } from '../exportimages'
+import { nativeSlideSvg } from '../svgexport'
 import { exportBase } from '../../exportimages'
 import { serializeElements, serializeSlides } from '../clipboard'
 
-/** The box the elements cover on the slide, rotation included. */
+/**
+ * How far an element's paint spills past its box, per side [left, top, right,
+ * bottom]: a shadow (filter: drop-shadow() — its blur IS the Gaussian's σ,
+ * and 3σ is where it fades out, shifted by the offset),
+ * a layer blur (σ = blur, 3σ), and a stroke drawn centred or outside.
+ */
+export function overflowOf(e: SlideElement): [number, number, number, number] {
+  let [l, t, r, b] = [0, 0, 0, 0]
+  const grow = (dl: number, dt: number, dr: number, db: number) => { l = Math.max(l, dl); t = Math.max(t, dt); r = Math.max(r, dr); b = Math.max(b, db) }
+  for (const s of Array.isArray(e.shadow) ? e.shadow : e.shadow ? [e.shadow] : []) {
+    const k = 3 * (s.blur || 0), dx = s.x ?? 0, dy = s.y ?? 0
+    grow(k - dx, k - dy, k + dx, k + dy)
+  }
+  const sw = e.type === 'shape' ? Math.max(e.strokeWidth || 0, ...(e.strokes ?? []).filter((x) => !x.hidden).map((x) => x.width || 0)) : 0
+  if (sw && e.type === 'shape') {
+    const pad = e.shape === 'line' ? sw * 2 : e.strokeAlign === 'outside' ? sw : e.strokeAlign === 'inside' ? 0 : sw / 2 // a line's tips reach ~2 widths
+    l += pad; t += pad; r += pad; b += pad
+  }
+  if (e.blur) { const k = 3 * e.blur; l += k; t += k; r += k; b += k }
+  return [l, t, r, b].map((v) => Math.max(0, v)) as [number, number, number, number]
+}
+
+/** The box the elements cover on the slide — rotation included, and their shadows, blur and strokes. */
 export function coverBox(els: SlideElement[]): Box {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
   for (const e of els) {
@@ -21,10 +44,12 @@ export function coverBox(els: SlideElement[]): Box {
     const cx = e.x + e.w / 2, cy = e.y + e.h / 2
     const hw = (Math.abs(Math.cos(a)) * e.w + Math.abs(Math.sin(a)) * e.h) / 2
     const hh = (Math.abs(Math.sin(a)) * e.w + Math.abs(Math.cos(a)) * e.h) / 2
-    x0 = Math.min(x0, cx - hw); y0 = Math.min(y0, cy - hh)
-    x1 = Math.max(x1, cx + hw); y1 = Math.max(y1, cy + hh)
+    // ponytail: the spill is added in slide axes after turning, so a turned element's shadow pad is generous, never short
+    const [l, t, r, b] = overflowOf(e)
+    const m = a ? Math.max(l, t, r, b) : 0
+    x0 = Math.min(x0, cx - hw - (m || l)); y0 = Math.min(y0, cy - hh - (m || t))
+    x1 = Math.max(x1, cx + hw + (m || r)); y1 = Math.max(y1, cy + hh + (m || b))
   }
-  // ponytail: shadows and blur that spill past the box are cut; pad here if that matters
   return { x: Math.floor(x0), y: Math.floor(y0), w: Math.max(1, Math.ceil(x1) - Math.floor(x0)), h: Math.max(1, Math.ceil(y1) - Math.floor(y0)) }
 }
 
@@ -50,12 +75,9 @@ export function buildExport(p: PropsPanel, els: SlideElement[]) {
   }
   const png = (scale: 1 | 2) => button(`PNG ${scale}×`, async () =>
     downloadBlob(await rasterizeSlide(doc, subject, 'png', scale, box), name(scale === 2 ? '2x.png' : 'png')))
-  // ponytail: the SVG wraps the render in a foreignObject (browsers draw it;
-  // vector editors may not) — emit native shapes if someone needs to edit it
-  const svg = button('SVG', () => {
-    const v = box ?? { x: 0, y: 0, w: doc.size.width, h: doc.size.height }
-    downloadBlob(new Blob([slideSvg(doc, subject, v.w, v.h, box)], { type: 'image/svg+xml' }), name('svg'))
-  })
+  // native vectors (svgexport.ts): opens as editable shapes and text in Figma, Illustrator, Inkscape
+  const svg = button('SVG', async () =>
+    downloadBlob(new Blob([await nativeSlideSvg(doc, subject, box)], { type: 'image/svg+xml' }), name('svg')))
   const json = button(t('Copy as JSON'), async () => {
     await navigator.clipboard.writeText(els.length ? serializeElements(els, doc) : serializeSlides([slide], doc))
     p.toast(t('Copied — ⌘V pastes it into any Bento deck'))

@@ -383,3 +383,10 @@ jobs:
         # Colours keep their opacity through theme links, one undo per colour,
         # a scrub held at a limit is no undo step, pointercancel ends a scrub.
         run: node scripts/test-slides-inspector-fixes-browser.mjs
+      - name: Native SVG export in Chromium
+        # The Export section's SVG is vectors a design tool opens — no
+        # foreignObject, no HTML: shapes, gradients, <text> runs per rendered
+        # line, list bullets, an <image>, a shadow filter, turns and mirrors as
+        # transforms — and drawn as an <img> it matches the slide's own render
+        # to within glyph edges. An element's export frames its shadow.
+        run: node scripts/test-slides-svg-export-browser.mjs
