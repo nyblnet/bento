@@ -116,6 +116,8 @@ const tables = {
   tableRow: uniq(keysOf('TableRow')),
   tableCell: uniq(keysOf('TableCell')),
   gradient: uniq(keysOf('GradientFill')),
+  paintLayer: uniq(keysOf('PaintLayer')),
+  strokeLayer: uniq(keysOf('StrokeLayer')),
   imageCrop: uniq(keysOf('ImageCrop')),
   frameLayout: uniq(keysOf('FrameLayout')),
   sizing: uniq(keysOf('ElementSizing')),

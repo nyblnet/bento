@@ -178,6 +178,15 @@ plus `fill`, `stroke`, `strokeWidth`, `radius` (rect corner). Options:
 - `radii?`: `[topLeft, topRight, bottomRight, bottomLeft]` — rect only, a radius
   per corner; wins over `radius`, which the editor keeps at the largest corner
   for older shells.
+- `fills?`: `[{ color, gradient?, hidden? }, …]` and `strokes?`:
+  `[{ color, width, align?, dashes?, hidden? }, …]` — fill and stroke STACKS,
+  bottom first (closed shapes). When set, the layers are what is drawn; fills
+  paint under strokes. `fill`/`fillGradient` and `stroke`/`strokeWidth`/
+  `strokeAlign`/`strokeDashes` stay in the element and MIRROR the top visible
+  layer (`stacks.ts` derives them on every change), so an older shell draws the
+  paint that matters most. A stack exists only with two or more layers; one
+  layer folds back into the plain keys. Colour refs live per layer
+  (`fills.1.color`, `fills.0.gradient.stops.2.color`, `strokes.0.color`).
 - **line** shapes take their color from `fill`, draw horizontally across the
   box (rotate for vertical), and accept tips `lineStart?`/`lineEnd?` =
   `none | arrow | dot | bar`.

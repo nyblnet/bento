@@ -43,6 +43,7 @@ import { openSpeakerWindow, speakerIdleBody, speakerWindow } from '../screens'
 import { neutralWindowTitle, speakerWindowTitle, titleSealed } from '../wintitle'
 import { routeAllConnectors } from '../connectors'
 import { layoutAll } from '../layout'
+import { mirrorAllStacks } from '../stacks'
 import { ICONS } from '../icons'
 import { t, setLocale, locale, localeChoices, LOCALE_CHOICES, applyDirection, isRtl } from '../i18n'
 import { MOD, dispatch, openPalette, titleFor, type Command } from './commands'
@@ -218,6 +219,8 @@ export class Editor {
     syncComponents(store.doc, this.componentMains)
     store.on('doc', () => this.syncTokens())
     store.on('doc', () => this.syncComponents())
+    // after palette, tokens and components rewrite layer colours: an older shell's fallback follows (stacks.ts)
+    store.on('doc', () => { mirrorAllStacks(store.doc) })
     this.tokensPane = new TokensPane(store)
     this.tokensPane.mount(this.sideTokens)
     store.on('doc', () => this.tokensPane.refresh())

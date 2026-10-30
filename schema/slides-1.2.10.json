@@ -725,6 +725,86 @@
         "fillGradient": {
           "$ref": "#/$defs/prop-fillGradient"
         },
+        "fills": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "properties": {
+              "color": {
+                "type": "string",
+                "maxLength": 64,
+                "description": "CSS colour or url(#local-id)"
+              },
+              "gradient": {
+                "type": "object",
+                "properties": {
+                  "angle": {
+                    "type": "number",
+                    "minimum": -3600,
+                    "maximum": 3600
+                  },
+                  "cx": {
+                    "type": "number",
+                    "minimum": -10,
+                    "maximum": 10
+                  },
+                  "cy": {
+                    "type": "number",
+                    "minimum": -10,
+                    "maximum": 10
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "radial"
+                    ]
+                  },
+                  "r": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "stops": {
+                    "type": "array",
+                    "maxItems": 64,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "at": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "color": {
+                          "type": "string",
+                          "maxLength": 64,
+                          "description": "CSS colour; no url()"
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "at",
+                        "color"
+                      ]
+                    }
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "stops"
+                ]
+              },
+              "hidden": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "color"
+            ]
+          }
+        },
         "flipX": {
           "type": "boolean"
         },
@@ -998,6 +1078,49 @@
           "type": "number",
           "minimum": 0,
           "maximum": 10000
+        },
+        "strokes": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "properties": {
+              "align": {
+                "type": "string",
+                "enum": [
+                  "inside",
+                  "center",
+                  "outside"
+                ]
+              },
+              "color": {
+                "type": "string",
+                "maxLength": 64,
+                "description": "CSS colour or url(#local-id)"
+              },
+              "dashes": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "hidden": {
+                "type": "boolean"
+              },
+              "width": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 10000
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "color",
+              "width"
+            ]
+          }
         },
         "themeRefs": {
           "$ref": "#/$defs/prop-themeRefs"

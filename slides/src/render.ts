@@ -553,13 +553,21 @@ export function svgPaint(v: unknown, fallback: string): string {
  * which tweens fill/stroke/stop-color straight into attributes) receive
  * instead of the model's own strings. A copy; the model is untouched.
  */
-export function paintSafeShape<T extends { fill?: unknown; stroke?: unknown; fillGradient?: { stops?: Array<{ color?: unknown }> } }>(el: T): T {
+type Gradientish = { stops?: Array<{ color?: unknown }> }
+const safeGradient = <G extends Gradientish>(g: G): G =>
+  ({ ...g, stops: g.stops!.map((s) => ({ ...s, color: cssColor(s.color, 'transparent') })) })
+
+export function paintSafeShape<T extends {
+  fill?: unknown; stroke?: unknown; fillGradient?: Gradientish
+  fills?: Array<{ color: unknown; gradient?: Gradientish }>; strokes?: Array<{ color: unknown }>
+}>(el: T): T {
   const out = { ...el }
   if ('fill' in el) out.fill = svgPaint(el.fill, 'transparent')
   if ('stroke' in el) out.stroke = svgPaint(el.stroke, 'transparent')
-  if (el.fillGradient?.stops) {
-    out.fillGradient = { ...el.fillGradient, stops: el.fillGradient.stops.map((s) => ({ ...s, color: cssColor(s.color, 'transparent') })) }
-  }
+  if (el.fillGradient?.stops) out.fillGradient = safeGradient(el.fillGradient)
+  // the layers' paint reaches the same svg attributes, so it passes the same gate
+  if (el.fills) out.fills = el.fills.map((l) => ({ ...l, color: svgPaint(l.color, 'transparent'), ...(l.gradient?.stops ? { gradient: safeGradient(l.gradient) } : {}) }))
+  if (el.strokes) out.strokes = el.strokes.map((l) => ({ ...l, color: svgPaint(l.color, 'transparent') }))
   return out
 }
 

@@ -279,6 +279,23 @@ export interface CodeElement extends ElementBase {
 export type ShapeKind = 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'line' | 'path'
 
 /** Linear gradient fill. Colors are any CSS color, including rgba(). */
+/** One layer of a fill stack: a colour, or a gradient (the colour then is its solid fallback). */
+export interface PaintLayer {
+  color: string
+  gradient?: GradientFill
+  /** the layer's eye in the panel: kept but not drawn */
+  hidden?: true
+}
+
+/** One layer of a stroke stack. */
+export interface StrokeLayer {
+  color: string
+  width: number
+  align?: 'inside' | 'center' | 'outside'
+  dashes?: [number, number]
+  hidden?: true
+}
+
 export interface GradientFill {
   /** degrees, CSS convention: 0 = bottom→top, 90 = left→right */
   angle: number
@@ -332,6 +349,16 @@ export interface ShapeElement extends ElementBase {
   strokeAlign?: 'inside' | 'center' | 'outside'
   /** rect only: per-corner radius [top-left, top-right, bottom-right, bottom-left]; wins over `radius` */
   radii?: [number, number, number, number]
+  /**
+   * Fill layers, bottom first (Figma's and Penpot's fill stack). When set they
+   * are what is drawn, and `fill`/`fillGradient` mirror the TOP visible layer
+   * (stacks.ts) — what an older shell, which knows one fill, draws. Absent =
+   * the single `fill`, as before. Only ever set with two or more layers.
+   */
+  fills?: PaintLayer[]
+  /** Stroke layers, bottom first; `stroke`/`strokeWidth`/`strokeAlign`/
+   *  `strokeDashes` mirror the top visible one, as `fills` does for `fill`. */
+  strokes?: StrokeLayer[]
   /** line and (v1.1.1, #302) open path shapes: tip decorations. On a path
    *  the tip points along the curve's end tangent. */
   lineStart?: LineEnding
