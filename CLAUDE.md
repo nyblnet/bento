@@ -95,11 +95,14 @@ names provisional.
   `morphId`), but an optional `morphId` re-targets the pairing WITHOUT mutating
   `id` — so two independently-created elements on different slides can morph. This
   one line is the whole engine change; everything downstream reads `data-flip-id`.
-  Edited in the panel's Morph section (`inspector/animate.ts buildMorphProps`): a "Morph id"
-  field (writing the element's own id clears the override) + a "Pair with" picker
-  that adopts another slide element's key; both reject a key that would collide
-  with another element's effective key on the SAME slide (present.ts maps by flip
-  id, so same-slide dupes would break pairing).
+  Edited in the panel's Morph section (`inspector/animate.ts buildMorphProps`): a
+  status line ("Pairs with: Slide 2 · Revenue card", or "this slide uses Fade" +
+  Use Morph), the "Morph from the slide before" switch, a "Morph name" field
+  (blank = automatic; a rename carries to the partners on the neighbouring
+  slides) and a "Morph with" picker (slide before first, by Layers names,
+  type-to-filter). Status, switch, layer badge and canvas ghost all read
+  `editor/morph.ts morphPartners` — one truth. Keys never collide on one slide
+  (present.ts maps by flip id, so same-slide dupes would break pairing).
   **Dynamic fields (v0.9.12, doc-props v1.0.2)**: text resolves `{{page}}`,
   `{{pages}}`, `{{title}}`, `{{date}}`, `{{time}}` plus the document-property
   tokens `{{author}}`, `{{company}}`, `{{subject}}`, `{{event}}` at render time

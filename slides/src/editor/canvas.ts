@@ -1328,6 +1328,7 @@ export class SlideCanvas {
   /** Show the slide `t` of the way through its morph in (0..1); null puts
    *  every node back by re-rendering. The Animate tab's Preview drives it. */
   previewMorph(t: number | null) {
+    document.body.classList.toggle('ed-morph-previewing', t !== null)
     if (t === null || !this.surface) { this.render(); return }
     applyMorphPreview(this.surface, this.store.doc, this.store.slide, t)
   }

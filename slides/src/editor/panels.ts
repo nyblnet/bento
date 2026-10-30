@@ -49,6 +49,8 @@ export class PropsPanel {
   /** Morph preview on the canvas: 0..1 of the way in, null restores — set
    *  by the editor to the canvas, which owns the rendered nodes. */
   onMorphPreview: ((t: number | null) => void) | null = null
+  /** Present from the slide before and step into this one (editor.ts). */
+  onPlayTransition: (() => void) | null = null
 
   constructor(
     readonly host: HTMLElement,

@@ -3514,3 +3514,30 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-a11y-badge.is-pass { color: var(--accent-ink); }
 .ed-a11y-badge.is-fail { color: var(--danger); }
 .ed-a11y-alt { width: 100%; }
+
+/* --- morph: one truth, a usable picker, a toast that can act --- */
+.ed-morph-status { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ed-morph-use, .ed-morph-play { height: 26px; padding: 0 10px; }
+.ed-morph-play { margin-top: 6px; }
+.ed-morph-pick-btn { width: 100%; height: 26px; justify-content: flex-start; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ed-morph-pick {
+  position: fixed; z-index: 60; box-sizing: border-box; width: 260px; max-height: min(420px, calc(100vh - 16px));
+  display: flex; flex-direction: column; gap: 6px; padding: 8px; overflow: hidden;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 10px 30px rgb(0 0 0 / .28); animation: var(--ed-pop-in);
+}
+.ed-morph-pick input[type=search] { height: 26px; }
+.ed-morph-pick [role=listbox] { overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
+.ed-morph-pick-h, .ed-morph-pick-more > summary { font-size: 11px; color: var(--muted); padding: 6px 6px 2px; cursor: default; }
+.ed-morph-pick-more > summary { cursor: pointer; }
+.ed-morph-opt { display: flex; align-items: center; gap: 6px; min-height: 26px; padding: 0 6px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+.ed-morph-opt[hidden] { display: none; }
+.ed-morph-opt:hover, .ed-morph-opt:focus-visible { background: var(--chip); outline: none; }
+.ed-morph-opt:focus-visible { box-shadow: inset 0 0 0 2px var(--accent-ink); }
+.ed-morph-hint { flex: none; width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--line); }
+@media (prefers-reduced-motion: reduce) { .ed-morph-pick { animation: none; } }
+/* while the Preview scrubs, the slide shows the morph, not the editing chrome */
+body.ed-morph-previewing .moveable-control-box,
+body.ed-morph-previewing .ed-morph-ghost { visibility: hidden !important; }
+.ed-toast.has-act { pointer-events: auto; display: flex; align-items: center; gap: 10px; }
+.ed-toast-act { font: inherit; font-weight: 600; color: inherit; background: none; border: 1px solid currentColor; border-radius: 999px; padding: 2px 10px; cursor: pointer; }
