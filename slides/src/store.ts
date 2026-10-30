@@ -10,6 +10,7 @@ export type StoreEvent =
   | 'current'    // current slide switched
   | 'selection'  // selected element ids changed
   | 'dirty'      // dirty flag changed
+  | 'replace'    // another document took this one's place (replaceDoc) — not undo/redo
 
 type Listener = () => void
 
@@ -92,6 +93,7 @@ export class Store {
     this.currentIndex = 0
     this.selection = []
     this.setDirty(true)
+    this.emit('replace')
     this.emit('slides')
     this.emit('current')
     this.emit('selection')

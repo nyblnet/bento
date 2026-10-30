@@ -229,6 +229,26 @@ try {
     ok(!!pm && pm.component.main === true, 'a main pasted into a deck without one stays a main there')
   }
 
+  {
+    // a deck REPLACED in the running editor reads like a cold boot: the editor's
+    // memory of the old deck's main must not turn an older shell's copy edit into "the main moved"
+    const comp = { id: 'cx', key: 'k0' }
+    const deckJson = (mainFill) => p.evaluate(([mainFill, comp, a, b]) => {
+      const d = JSON.parse(JSON.stringify(window.bento.doc))
+      d.slides = [{ id: 'r1', background: '#ffffff', transition: 'none', notes: '', elements: [
+        { ...a, id: 'm', fill: mainFill, groupId: 'gm', component: { ...comp, main: true } },
+        { ...b, id: 'c', fill: '#00ff00', groupId: 'gc', component: { ...comp, off: [200, 0] } }, // the copy, edited by an older shell
+      ] }]
+      return JSON.stringify(d)
+    }, [mainFill, comp, box('m', 100, 100), box('c', 300, 100)])
+    const first = await deckJson('#111111')
+    await p.evaluate((j) => window.bento.loadDoc(j), first); await p.waitForTimeout(300)
+    const second = await deckJson('#222222') // same deck, its main edited elsewhere since
+    await p.evaluate((j) => window.bento.loadDoc(j), second); await p.waitForTimeout(300)
+    const c = await el('c')
+    ok(c.fill === '#00ff00' && c.component.over?.includes('fill'), `a replaced deck keeps a copy edited in an older shell (fill ${c.fill}, over ${JSON.stringify(c.component.over)})`)
+  }
+
   ok(errors.length === 0, `no page error${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
   await browser.close()

@@ -598,6 +598,16 @@ runs:
       # layer tree lists children under their frame.
       shell: bento-step {0}
       run: node scripts/test-slides-layout.ts
+    - name: Derive pass rig
+      # slides/src/derive.ts, DOM-free: palette, tokens, components, layout,
+      # connectors and stack fallbacks run as ONE pass in dependency order, so
+      # a token bound to a frame's gap or a main frame's edit settles in the
+      # same pass and a second pass changes nothing; a document that just
+      # opened keeps a stack fallback an older shell edited.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-slides-derive.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-derive.mjs"
+        node "$RUNNER_TEMP/test-slides-derive.mjs"
     - name: Design tokens and components rig
       # slides/src/tokens.ts + components.ts, DOM-free: binding writes value and
       # ref; token edits and mode switches rewrite bound literals; a hand edit

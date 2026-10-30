@@ -320,11 +320,13 @@ console.log('\n#493: every slide routes, from the model alone\n')
   const one: any = { id: 'x', elements: [box('A', 100), box('B', 800), conn('c2')] }
   ok(routeConnectors(one) === true, 'routeConnectors routes a single slide')
   // the two entry points
+  // both go through the one derive pass (derive.ts), which routes the whole deck
+  ok(/routeAllConnectors\(doc\)/.test(read('slides/src/derive.ts')), 'the derive pass routes every connector in the deck')
   const main = read('slides/src/main.ts')
-  const boot = main.slice(main.indexOf('function bootWith('), main.indexOf('function bootWith(') + 1200)
-  ok(/routeAllConnectors\(doc\)[\s\S]*audienceMode\(doc\)[\s\S]*playerMode\(doc\)[\s\S]*editorMode\(doc/.test(boot), 'boot routes the whole deck before editor, player or audience render anything')
-  const sync = editor.slice(editor.indexOf('  private syncConnectors() {'), editor.indexOf('  private syncConnectors() {') + 300)
-  ok(/routeAllConnectors\(this\.store\.doc\)/.test(sync) && !/this\.store\.slide/.test(sync), 'the editor re-routes the whole deck on a doc event, not only the slide on screen')
+  const boot = main.slice(main.indexOf('function bootWith('), main.indexOf('function bootWith(') + 1600)
+  ok(/derive\(doc, deriveMemory\(doc\)\)[\s\S]*audienceMode\(doc\)[\s\S]*playerMode\(doc\)[\s\S]*editorMode\(doc/.test(boot), 'boot derives the whole deck before editor, player or audience render anything')
+  const sync = editor.slice(editor.indexOf('  private syncDerived() {'), editor.indexOf('  private syncDerived() {') + 300)
+  ok(/derive\(this\.store\.doc, this\.derived\)/.test(sync) && !/this\.store\.slide/.test(sync), 'the editor re-derives the whole deck on a doc event, not only the slide on screen')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
