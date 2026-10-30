@@ -138,8 +138,8 @@ try {
   }
   const banner = (page) => page.waitForSelector('.ed-recover', { timeout: 2500 }).then(() => true, () => false)
   async function versionRows(page) {
-    await page.locator('.ed-split-caret').click()
-    await page.locator('.ed-save-menu').getByText('Version history…', { exact: true }).click()
+    await page.locator('.ed-logo').click() // Version history is the document's: File
+    await page.locator('.ed-file-menu [data-cmd="version-history"]').click()
     await page.waitForSelector('.ed-version-box', { timeout: 3000 })
     const n = await page.locator('.ed-version-box .ed-version-row').count()
     await page.evaluate(() => document.querySelector('.ed-about-overlay')?.remove())
