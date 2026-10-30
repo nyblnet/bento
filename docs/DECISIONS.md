@@ -12280,3 +12280,16 @@ open on right-click (or the menu key); Alt+↑/↓ moves a layer, the grip shows
 on hover. Stroke's line style and dashes sit behind its sliders button, under
 a Position | Weight row. Shadow and Blur are one row each — a chip opens the
 settings — so a second shadow is still not offered.
+
+## 2026-10-30 — slides: hover shows what a click picks; a copy-drag leaves its original drawn
+
+Hovering the canvas outlines what a click would select, before the click
+(Figma's hover): with no key the outermost frame or the whole group, with ⌘
+(Ctrl) the exact element under the pointer, with Alt the next one down the
+dig — and it follows the key being pressed or released with the pointer
+still. Nothing is outlined over the selection itself. A ⌘-drag copy moves the
+originals and commits the stationary copies on release, as before; for the
+drag, a still, inert clone of each original (its subtree included) stands
+where it was, so the spot copied from is never empty — the copy used to seem
+to vanish and reappear. Esc during a move or copy-drag cancels it: nothing is
+committed and the originals are drawn back where the model has them.
