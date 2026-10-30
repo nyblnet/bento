@@ -1227,4 +1227,13 @@ export const ja: Catalog = {
   "Alternative text": "代替テキスト",
   "Morph from the slide before": "前のスライドからモーフ",
   "Nothing on the slide before to pair with.": "前のスライドにペアにできるものがありません。",
+  "Layer blend mode": "レイヤーの描画モード",
+  "Drag to reorder": "ドラッグして並べ替え",
+  "Gradient stop": "グラデーションの分岐点",
+  "Color dodge": "覆い焼きカラー",
+  "Color burn": "焼き込みカラー",
+  "Hard light": "ハードライト",
+  "Soft light": "ソフトライト",
+  "Saturation": "彩度",
+  "Luminosity": "輝度",
 }

@@ -1227,4 +1227,13 @@ export const es: Catalog = {
   "Alternative text": "Texto alternativo",
   "Morph from the slide before": "Transformar desde la diapositiva anterior",
   "Nothing on the slide before to pair with.": "No hay nada en la diapositiva anterior con qué emparejar.",
+  "Layer blend mode": "Modo de fusión de la capa",
+  "Drag to reorder": "Arrastra para reordenar",
+  "Gradient stop": "Parada del degradado",
+  "Color dodge": "Sobreexponer color",
+  "Color burn": "Subexponer color",
+  "Hard light": "Luz fuerte",
+  "Soft light": "Luz suave",
+  "Saturation": "Saturación",
+  "Luminosity": "Luminosidad",
 }

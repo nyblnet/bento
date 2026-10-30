@@ -3485,6 +3485,11 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-paintlayer > .ed-btn-icon { flex: none; width: 22px; height: 26px; padding: 0; }
 .ed-paintlayer > .ed-btn-icon:disabled { opacity: .3; cursor: default; }
 .ed-paintlayer-eye[aria-pressed="true"] { color: var(--muted); }
+.ed-paintlayer-grip { flex: none; width: 12px; height: 26px; display: grid; place-items: center; color: var(--muted); font-size: 11px; cursor: grab; user-select: none; }
+.ed-paintlayer.is-dragging { opacity: .5; }
+.ed-paintlayer.is-over { box-shadow: inset 0 2px 0 var(--blue); }
+.ed-layer-blend { width: 100%; }
+.ed-grad-knob.ed-grad-stop { border-radius: 3px; cursor: ew-resize; }
 .ed-addlayer { display: inline-flex; align-items: center; gap: 6px; }
 /* the padlock between W and H (arrange.ts ratioLock): in the gap of the first row */
 .ed-grid2:has(> .ed-ratio-lock) { position: relative; column-gap: 22px; }

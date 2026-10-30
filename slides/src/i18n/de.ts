@@ -1227,4 +1227,13 @@ export const de: Catalog = {
   "Alternative text": "Alternativtext",
   "Morph from the slide before": "Von der vorigen Folie morphen",
   "Nothing on the slide before to pair with.": "Auf der vorigen Folie gibt es nichts zum Koppeln.",
+  "Layer blend mode": "Füllmethode der Ebene",
+  "Drag to reorder": "Zum Umordnen ziehen",
+  "Gradient stop": "Verlaufspunkt",
+  "Color dodge": "Farbig abwedeln",
+  "Color burn": "Farbig nachbelichten",
+  "Hard light": "Hartes Licht",
+  "Soft light": "Weiches Licht",
+  "Saturation": "Sättigung",
+  "Luminosity": "Luminanz",
 }

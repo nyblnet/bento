@@ -1233,4 +1233,13 @@ export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
   "Alternative text": ["代替テキスト","替代文本","替代文字","Texto alternativo","Texte alternatif","Alternativtext","Testo alternativo","Texto alternativo"],
   "Morph from the slide before": ["前のスライドからモーフ","从上一张幻灯片变形","從上一張投影片變形","Transformar desde la diapositiva anterior","Transformer depuis la diapositive précédente","Von der vorigen Folie morphen","Trasforma dalla diapositiva precedente","Transformar a partir do slide anterior"],
   "Nothing on the slide before to pair with.": ["前のスライドにペアにできるものがありません。","上一张幻灯片上没有可配对的元素。","上一張投影片上沒有可配對的元素。","No hay nada en la diapositiva anterior con qué emparejar.","Rien sur la diapositive précédente à associer.","Auf der vorigen Folie gibt es nichts zum Koppeln.","Nella diapositiva precedente non c’è nulla da abbinare.","Nada no slide anterior para parear."],
+  "Layer blend mode": ["レイヤーの描画モード","图层混合模式","圖層混合模式","Modo de fusión de la capa","Mode de fusion du calque","Füllmethode der Ebene","Metodo di fusione del livello","Modo de mesclagem da camada"],
+  "Drag to reorder": ["ドラッグして並べ替え","拖动以重新排序","拖曳以重新排序","Arrastra para reordenar","Faites glisser pour réordonner","Zum Umordnen ziehen","Trascina per riordinare","Arraste para reordenar"],
+  "Gradient stop": ["グラデーションの分岐点","渐变色标","漸層色標","Parada del degradado","Arrêt du dégradé","Verlaufspunkt","Punto del gradiente","Parada do gradiente"],
+  "Color dodge": ["覆い焼きカラー","颜色减淡","加亮顏色","Sobreexponer color","Densité couleur -","Farbig abwedeln","Colore scherma","Subexposição de cor"],
+  "Color burn": ["焼き込みカラー","颜色加深","加深顏色","Subexponer color","Densité couleur +","Farbig nachbelichten","Colore brucia","Superexposição de cor"],
+  "Hard light": ["ハードライト","强光","實光","Luz fuerte","Lumière crue","Hartes Licht","Luce intensa","Luz forte"],
+  "Soft light": ["ソフトライト","柔光","柔光","Luz suave","Lumière tamisée","Weiches Licht","Luce soffusa","Luz suave"],
+  "Saturation": ["彩度","饱和度","飽和度","Saturación","Saturation","Sättigung","Saturazione","Saturação"],
+  "Luminosity": ["輝度","明度","明度","Luminosidad","Luminosité","Luminanz","Luminosità","Luminosidade"],
 }

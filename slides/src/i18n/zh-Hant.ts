@@ -1227,4 +1227,13 @@ export const zhHant: Catalog = {
   "Alternative text": "替代文字",
   "Morph from the slide before": "從上一張投影片變形",
   "Nothing on the slide before to pair with.": "上一張投影片上沒有可配對的元素。",
+  "Layer blend mode": "圖層混合模式",
+  "Drag to reorder": "拖曳以重新排序",
+  "Gradient stop": "漸層色標",
+  "Color dodge": "加亮顏色",
+  "Color burn": "加深顏色",
+  "Hard light": "實光",
+  "Soft light": "柔光",
+  "Saturation": "飽和度",
+  "Luminosity": "明度",
 }

@@ -73,7 +73,7 @@ export function buildShapeFill(p: PropsPanel, el: ShapeElement) {
     gradientRows(p, grad, (fn, fin) => p.mutate(el.id, (e) => {
       const g = (e as ShapeElement).fillGradient
       if (g) fn(g)
-    }, fin))
+    }, fin), host.target)
   }
   addLayerButton(p, t('Add fill layer'), () => restackFills(p, el, (ls, order) => { ls.push({ color: NEW_LAYER }); order.push(-1) }))
 }
@@ -112,13 +112,65 @@ function layerActions<L extends { hidden?: true }>(i: number, count: number, res
     up: i < count - 1 ? () => restack((ls, o) => { swap(ls, i, i + 1); swap(o, i, i + 1) }) : undefined,
     down: i > 0 ? () => restack((ls, o) => { swap(ls, i, i - 1); swap(o, i, i - 1) }) : undefined,
     remove: () => restack((ls, o) => { ls.splice(i, 1); o.splice(i, 1) }),
+    /** dragged here from layer `from` (drag-to-reorder; up/down stay the keyboard path) */
+    moveFrom: (from: number) => restack((ls, o) => {
+      if (from === i || !ls[from]) return
+      ls.splice(i, 0, ls.splice(from, 1)[0])
+      o.splice(i, 0, o.splice(from, 1)[0])
+    }),
   }
 }
 
-/** A layer row: eye, the layer's own controls, then up / down / remove. */
-function layerRow(p: PropsPanel, hidden: boolean, act: ReturnType<typeof layerActions>, ...body: HTMLElement[]) {
+/** CSS mix-blend-mode words a layer offers ('normal' = none). */
+const BLENDS = ['normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten', 'color-dodge', 'color-burn',
+  'hard-light', 'soft-light', 'difference', 'exclusion', 'hue', 'saturation', 'color', 'luminosity'] as const
+const BLEND_LABEL: Record<string, string> = {
+  normal: 'Normal', multiply: 'Multiply', screen: 'Screen', overlay: 'Overlay', darken: 'Darken', lighten: 'Lighten',
+  'color-dodge': 'Color dodge', 'color-burn': 'Color burn', 'hard-light': 'Hard light', 'soft-light': 'Soft light',
+  difference: 'Difference', exclusion: 'Exclusion', hue: 'Hue', saturation: 'Saturation', color: 'Color', luminosity: 'Luminosity',
+}
+
+/** A layer's blend mode — absent is normal. */
+function blendSelect(value: string | undefined, set: (v: string | undefined) => void): HTMLElement {
+  const sel = labeledSelect(BLENDS.map((b) => [b, t(BLEND_LABEL[b])]), value ?? 'normal', (v) => set(v === 'normal' ? undefined : v))
+  sel.title = t('Layer blend mode')
+  sel.setAttribute('aria-label', sel.title)
+  sel.classList.add('ed-layer-blend')
+  return sel
+}
+
+/**
+ * A layer row: grip, eye, the layer's own controls, then up / down / remove.
+ * The grip drags the row onto another of the same stack (`stack` names it, so
+ * a fill never lands among strokes); up and down are the keyboard's way.
+ */
+function layerRow(p: PropsPanel, stack: 'fill' | 'stroke', i: number, hidden: boolean, act: ReturnType<typeof layerActions>, ...body: HTMLElement[]) {
   const row = document.createElement('div')
   row.className = 'ed-paintlayer' + (hidden ? ' off' : '')
+  row.dataset.layer = `${stack}${i}`
+  const grip = document.createElement('span')
+  grip.className = 'ed-paintlayer-grip'
+  grip.textContent = '⠿'
+  grip.title = t('Drag to reorder')
+  grip.setAttribute('aria-hidden', 'true')
+  // only the grip starts a drag: a draggable row would steal its fields' text selection
+  grip.addEventListener('pointerdown', () => { row.draggable = true })
+  row.addEventListener('dragend', () => { row.draggable = false; row.classList.remove('is-dragging') })
+  row.addEventListener('dragstart', (e) => {
+    e.dataTransfer?.setData('application/x-bento-layer', `${stack}:${i}`)
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+    row.classList.add('is-dragging')
+  })
+  const ours = (e: DragEvent) => e.dataTransfer?.types.includes('application/x-bento-layer')
+  row.addEventListener('dragover', (e) => { if (ours(e)) { e.preventDefault(); row.classList.add('is-over') } })
+  row.addEventListener('dragleave', () => row.classList.remove('is-over'))
+  row.addEventListener('drop', (e) => {
+    row.classList.remove('is-over')
+    const [kind, from] = (e.dataTransfer?.getData('application/x-bento-layer') ?? '').split(':')
+    if (kind !== stack || from === undefined) return
+    e.preventDefault()
+    act.moveFrom(+from)
+  })
   const btn = (icon: string, label: string, run?: () => void) => {
     const b = opBtn(icon, label, () => run?.()) as HTMLButtonElement
     b.type = 'button'
@@ -132,7 +184,7 @@ function layerRow(p: PropsPanel, hidden: boolean, act: ReturnType<typeof layerAc
   const main = document.createElement('div')
   main.className = 'ed-paintlayer-body'
   main.append(...body)
-  row.append(eye, main,
+  row.append(grip, eye, main,
     btn(ICONS.forward, t('Move layer up'), act.up),
     btn(ICONS.backward, t('Move layer down'), act.down),
     btn(ICONS.minus, t('Remove layer'), act.remove))
@@ -163,18 +215,23 @@ function buildFillStack(p: PropsPanel, el: ShapeElement) {
         if (f) f.color = v
       }, fin), { id: el.id, path: `fills.${i}.color` }, host)
       : gradientChip(p, host)
-    layerRow(p, !!l.hidden, layerActions(i, layers.length, (fn) => restackFills(p, el, fn)), paint)
+    const blend = blendSelect(l.blend, (v) => p.mutate(el.id, (e) => {
+      const f = (e as ShapeElement).fills?.[i]
+      if (f) { if (v) f.blend = v; else delete f.blend }
+    }, true))
+    layerRow(p, 'fill', i, !!l.hidden, layerActions(i, layers.length, (fn) => restackFills(p, el, fn)), paint, blend)
     if (l.gradient && host.kind !== 'solid') {
       gradientRows(p, l.gradient, (fn, fin) => p.mutate(el.id, (e) => {
         const g = (e as ShapeElement).fills?.[i]?.gradient
         if (g) fn(g)
-      }, fin))
+      }, fin), host.target)
     }
   }
 }
 
-/** The stroke stack, top layer first: colour, width and position per layer. */
-function buildStrokeStack(p: PropsPanel, el: ShapeElement) {
+/** The stroke stack, top layer first: paint (solid or gradient), width,
+ *  position (closed outlines only), dash and gap, blend — per layer. */
+function buildStrokeStack(p: PropsPanel, el: ShapeElement, open: boolean) {
   const layers = el.strokes!
   const def = el.shape === 'rect' || el.shape === 'ellipse' || el.shape === 'triangle' ? 'inside' : 'center'
   for (let i = layers.length - 1; i >= 0; i--) {
@@ -183,15 +240,42 @@ function buildStrokeStack(p: PropsPanel, el: ShapeElement) {
       const s = (e as ShapeElement).strokes?.[i]
       if (s) fn(s)
     }, fin)
-    const paint = colorAlpha(p, l.color, (v, fin) => edit((s) => { s.color = v }, fin), { id: el.id, path: `strokes.${i}.color` })
+    const host = paintHost(p, el.id, `strokes.${i}.color`, `strokes.${i}.gradient`)
+    const paint = host.kind === 'solid' || !l.gradient
+      ? colorAlpha(p, l.color, (v, fin) => edit((s) => { s.color = v }, fin), { id: el.id, path: `strokes.${i}.color` }, host)
+      : gradientChip(p, host)
     const grid = document.createElement('div')
     grid.className = 'ed-grid2'
-    const align = labeledSelect([['inside', t('Inside')], ['center', t('Center')], ['outside', t('Outside')]], l.align ?? def, (v) =>
-      edit((s) => { if (v === def) delete s.align; else s.align = v as StrokeLayer['align'] }, true))
-    align.setAttribute('aria-label', t('Stroke position'))
-    grid.append(mini(t('Width'), l.width, (v, fin) => edit((s) => { s.width = Math.max(v, 0) }, fin), undefined, { min: 0 }), align)
-    layerRow(p, !!l.hidden, layerActions(i, layers.length, (fn) => restackStrokes(p, el, fn)), paint, grid)
+    const width = mini(t('Width'), l.width, (v, fin) => edit((s) => { s.width = Math.max(v, 0) }, fin), undefined, { min: 0 })
+    if (open) grid.append(width)
+    else {
+      const align = labeledSelect([['inside', t('Inside')], ['center', t('Center')], ['outside', t('Outside')]], l.align ?? def, (v) =>
+        edit((s) => { if (v === def) delete s.align; else s.align = v as StrokeLayer['align'] }, true))
+      align.setAttribute('aria-label', t('Stroke position'))
+      grid.append(width, align)
+    }
+    layerRow(p, 'stroke', i, !!l.hidden, layerActions(i, layers.length, (fn) => restackStrokes(p, el, fn)), paint, grid,
+      dashFields(l.dashes, (k, v, fin) => edit((s) => {
+        const d: [number, number] = s.dashes ? [...s.dashes] : [0, 0]
+        d[k] = Math.max(v, 0)
+        if (d[0] > 0) s.dashes = d
+        else delete s.dashes // no dash length: a solid stroke
+      }, fin)),
+      blendSelect(l.blend, (v) => edit((s) => { if (v) s.blend = v; else delete s.blend }, true)))
+    if (l.gradient && host.kind !== 'solid') {
+      gradientRows(p, l.gradient, (fn, fin) => edit((s) => { if (s.gradient) fn(s.gradient) }, fin), host.target)
+    }
   }
+}
+
+/** A stroke layer's dash and gap; a dash of 0 is a solid stroke. */
+function dashFields(dashes: [number, number] | undefined, set: (k: 0 | 1, v: number, final: boolean) => void): HTMLElement {
+  const grid = document.createElement('div')
+  grid.className = 'ed-grid2'
+  grid.append(
+    mini(t('Dash'), dashes?.[0] ?? 0, (v, fin) => set(0, v, fin), undefined, { min: 0 }),
+    mini(t('Gap'), dashes?.[1] ?? 0, (v, fin) => set(1, v, fin), undefined, { min: 0 }))
+  return grid
 }
 
 /** Stroke — an optional layer for a closed shape; a line IS its stroke, so
@@ -215,17 +299,26 @@ export function buildShapeStroke(p: PropsPanel, el: ShapeElement) {
     order.push(-1)
   }))
   if (el.strokes) {
-    buildStrokeStack(p, el)
+    buildStrokeStack(p, el, isLine)
     addStroke()
     return
   }
-  if (el.shape === 'line') {
+  // solid, or a gradient along the stroke (strokeGradient; the colour stays its fallback)
+  const solidKey = el.shape === 'line' ? 'fill' : 'stroke'
+  const host = paintHost(p, el.id, solidKey, 'strokeGradient')
+  if (host.kind !== 'solid' && el.strokeGradient) {
+    field(p, gradientChip(p, host))
+    gradientRows(p, el.strokeGradient, (fn, fin) => p.mutate(el.id, (e) => {
+      const g = (e as ShapeElement).strokeGradient
+      if (g) fn(g)
+    }, fin), host.target)
+  } else if (el.shape === 'line') {
     field(p, colorAlpha(p, el.fill, (v, fin) =>
       p.mutate(el.id, (e) => { (e as ShapeElement).fill = v }, fin),
-      { id: el.id, path: 'fill' }))
+      { id: el.id, path: 'fill' }, host))
   } else {
     field(p, colorAlpha(p, el.stroke === 'transparent' ? 'rgba(30, 42, 58, 0)' : el.stroke, (v, fin) =>
-      p.mutate(el.id, (e) => { (e as ShapeElement).stroke = v }, fin)))
+      p.mutate(el.id, (e) => { (e as ShapeElement).stroke = v }, fin), undefined, host))
   }
   // 'custom' is a dash and gap of the author's own (strokeDashes); the
   // nearest named style stays under it for a shell that predates it
@@ -270,6 +363,6 @@ export function buildShapeStroke(p: PropsPanel, el: ShapeElement) {
     }, true), { inside: t('Inside'), center: t('Center'), outside: t('Outside') })
     align.setAttribute('aria-label', t('Stroke position'))
     row(p, 'Stroke position', align)
-    addStroke()
   }
+  addStroke()
 }

@@ -1227,4 +1227,13 @@ export const zhHans: Catalog = {
   "Alternative text": "替代文本",
   "Morph from the slide before": "从上一张幻灯片变形",
   "Nothing on the slide before to pair with.": "上一张幻灯片上没有可配对的元素。",
+  "Layer blend mode": "图层混合模式",
+  "Drag to reorder": "拖动以重新排序",
+  "Gradient stop": "渐变色标",
+  "Color dodge": "颜色减淡",
+  "Color burn": "颜色加深",
+  "Hard light": "强光",
+  "Soft light": "柔光",
+  "Saturation": "饱和度",
+  "Luminosity": "明度",
 }

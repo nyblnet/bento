@@ -1225,4 +1225,13 @@ export const pt: Catalog = {
   "Alternative text": "Texto alternativo",
   "Morph from the slide before": "Transformar a partir do slide anterior",
   "Nothing on the slide before to pair with.": "Nada no slide anterior para parear.",
+  "Layer blend mode": "Modo de mesclagem da camada",
+  "Drag to reorder": "Arraste para reordenar",
+  "Gradient stop": "Parada do gradiente",
+  "Color dodge": "Subexposição de cor",
+  "Color burn": "Superexposição de cor",
+  "Hard light": "Luz forte",
+  "Soft light": "Luz suave",
+  "Saturation": "Saturação",
+  "Luminosity": "Luminosidade",
 }
