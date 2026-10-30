@@ -104,7 +104,9 @@ try {
     ok(cells.length === 9 && new Set(cells).size === 1, `the alignment box's nine cells are one height (${[...new Set(cells)].join('/')})`)
 
     await select(p, 'box')
-    ok(isPicker(await pickerIn(p, 'Stroke position')), 'Stroke position is glyphs (inside · center · outside)')
+    // Stroke position sits in Figma's Position | Weight line, named by its own aria-label
+    const pos = await p.evaluate(() => { const ctl = document.querySelector('.ed-props .ed-seg[aria-label="Stroke position"]'); return ctl && { tag: ctl.tagName, seg: true, glyphs: ctl.querySelectorAll(':scope > button > svg').length, buttons: ctl.querySelectorAll(':scope > button').length, named: [...ctl.querySelectorAll(':scope > button')].every((b) => b.getAttribute('aria-label')) } })
+    ok(isPicker(pos), 'Stroke position is glyphs (inside · center · outside)')
     const style = await p.evaluate(() => { const s = document.querySelector('.ed-props [aria-label="Line style"]'); return s && { seg: s.classList.contains('ed-seg'), glyphs: s.querySelectorAll('button > svg').length } })
     ok(style?.seg && style.glyphs === 4, `Line style is four glyphs, not a dropdown (${JSON.stringify(style)})`)
     // the grid: W · H split equal, the padlock inside W

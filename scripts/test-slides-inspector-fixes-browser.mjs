@@ -129,7 +129,7 @@ try {
   await select('r')
   await p.locator('.ed-props .ed-section[data-key="Shadow"]').click(); await p.waitForTimeout(100)
   ok(await p.locator('.ed-props .ed-section[data-key="Shadow"]').evaluate((h) => !h.classList.contains('closed') && h.classList.contains('ed-sec-flat')), 'the empty Shadow section stays open when clicked')
-  await p.locator('.ed-props .ed-section[data-key="Shadow"] .ed-sec-act').click(); await p.waitForTimeout(250)
+  await p.locator('.ed-props .ed-section[data-key="Shadow"] .ed-sec-act:not(.ed-sec-cat)').click(); await p.waitForTimeout(250)
   ok(!!(await el('r')).shadow, 'the + added a shadow')
   ok(await p.locator(`${body('Shadow')} .ed-shadow-tiles`).isVisible(), 'and its section opened to show it')
 
@@ -161,18 +161,18 @@ try {
 
   // 4. arrows, lines, open paths
   await select('ar')
-  ok(await p.locator('.ed-props .ed-section[data-key="Stroke"] .ed-sec-act').count() === 1, "an arrow's stroke has its − (it is a closed polygon)")
+  ok(await p.locator('.ed-props .ed-section[data-key="Stroke"] + .ed-section-body .ed-paint-remove').count() === 1, "an arrow's stroke row has its − (it is a closed polygon)")
   ok(await p.locator('.ed-props .ed-section[data-key="Fill"]').count() === 1, 'an arrow keeps its Fill')
   await select('ln')
   ok(await p.locator('.ed-props .ed-section[data-key="Fill"]').count() === 0, 'a line shows no Fill section')
-  ok(await p.locator('.ed-props .ed-section[data-key="Stroke"] .ed-sec-act').count() === 0, "a line's stroke cannot be removed")
+  ok(await p.locator('.ed-props .ed-section[data-key="Stroke"] + .ed-section-body .ed-paint-remove').count() === 0, "a line's stroke cannot be removed (no − on its row)")
   await typeHex(body('Stroke'), 'ff00ff')
   const ln = await el('ln')
   ok(ln.fill === '#ff00ff' && ln.stroke === 'transparent', `a line's Stroke colour is the fill it is drawn with (fill ${ln.fill}, stroke ${ln.stroke})`)
   const drawn = await p.evaluate(() => document.querySelector('.ed-stage-scale [data-el-id="ln"] line')?.getAttribute('stroke'))
   ok(drawn === '#ff00ff', `and the canvas draws the line in it (${drawn})`)
   await select('pa')
-  ok(await p.locator('.ed-props .ed-section[data-key="Stroke"] .ed-sec-act').count() === 0, "an open path's stroke cannot be removed")
+  ok(await p.locator('.ed-props .ed-section[data-key="Stroke"] + .ed-section-body .ed-paint-remove').count() === 0, "an open path's stroke cannot be removed (no − on its row)")
   await typeHex(body('Stroke'), '00ffff')
   ok((await el('pa')).stroke === '#00ffff', "an open path's Stroke colour is its stroke")
 
@@ -215,7 +215,7 @@ try {
   // in-field label and the value's padding agree in RTL; the tooltip has an
   // edge in dark; measure labels read at 4.5:1 in light.
   await select('r')
-  if (!(await el('r')).shadow) await p.locator('.ed-props .ed-section[data-key="Shadow"] .ed-sec-act').click()
+  if (!(await el('r')).shadow) await p.locator('.ed-props .ed-section[data-key="Shadow"] .ed-sec-act:not(.ed-sec-cat)').click()
   await p.waitForTimeout(200)
   const tile = p.locator('.ed-props .ed-shadow-tile').nth(1)
   await tile.hover(); await p.waitForTimeout(100)

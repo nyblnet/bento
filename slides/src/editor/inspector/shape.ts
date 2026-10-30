@@ -68,7 +68,8 @@ export function buildShapeFill(p: PropsPanel, el: ShapeElement) {
   if (el.shape === 'line') return // its one colour is `fill`, shown under Stroke (buildShapeStroke)
   // Figma's Fill: ⠿ and + on the header, each fill a row with 👁 and −.
   // + adds a fill when there is none, another layer when there is one.
-  const has = !!el.fills || !!el.fillGradient || parseColor(el.fill).a > 0
+  // no fill is what − writes ('transparent'); a fill at 0% opacity is still a fill to edit
+  const has = !!el.fills || !!el.fillGradient || !(el.fill === 'transparent' || el.fill === 'none')
   const addFill = () => has
     ? restackFills(p, el, (ls, order) => { ls.push({ color: NEW_LAYER }); order.push(-1) })
     : p.mutate(el.id, (e) => { const s = e as ShapeElement; s.fill = '#D9D9D9'; delete s.fillHidden; delete s.themeRefs?.fill }, true)

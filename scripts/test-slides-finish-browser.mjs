@@ -130,9 +130,10 @@ try {
   await p.press('.ed-tokens-group[data-type="fontFamily"] input.ed-edit-field', 'Enter'); await p.waitForTimeout(250)
   ok((await el('t')).fontFamily === 'Arial, sans-serif', 'editing the token moves the text with it')
   await select('card')
-  if (!(await el('card')).shadow) { await p.locator('.ed-props .ed-section[data-key="Shadow"] button').first().click(); await p.waitForTimeout(250) }
+  if (!(await el('card')).shadow) { await p.locator('.ed-props .ed-section[data-key="Shadow"] .ed-sec-act:not(.ed-sec-cat)').click(); await p.waitForTimeout(250) }
   ok(!!(await el('card')).shadow, 'the card has a shadow to bind')
-  await p.locator('.ed-props .ed-token-wrap:has(.ed-shadow-tiles) .ed-token-dot').click({ force: true }); await p.waitForTimeout(150)
+  // the Shadow header's ⠿ (Figma's catalog) binds a shadow token
+  await p.locator('.ed-props .ed-section[data-key="Shadow"] .ed-sec-cat').click(); await p.waitForTimeout(150)
   await p.locator('.ed-tokpick-opt[data-key="shadow.card"]').click(); await p.waitForTimeout(200)
   const sh = (await el('card')).shadow
   ok(sh?.blur === 18 && (await el('card')).themeRefs?.shadow === '$shadow.card', `the Shadow section binds a shadow token (${JSON.stringify(sh)})`)
