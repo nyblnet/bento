@@ -3228,6 +3228,8 @@ export class Editor {
       [`${mod}D`, t('Duplicate selection')],
       [`${mod}G · ${mod}⇧G`, t('Group · ungroup')],
       [`${mod}⌥K`, t('Create component — copies inserted from the Tokens view follow it')],
+      ['⇧A', t('Add auto layout — wrap the selection in a frame that lines it up')],
+      [`${t('Alt')}⇧U · S · I · E`, t('Union · subtract · intersect · exclude the selected shapes')],
       [`${mod}B · ${mod}I · ${mod}U`, t('Bold · italic · underline while editing text')],
       [t('Text ▸ Field'), t('Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}')],
       ['[ · ]', t('Collapse · expand the side panels')],
@@ -3248,6 +3250,12 @@ export class Editor {
       [`${mod}+ · ${mod}− · ${mod}0`, t('Zoom in · out · fit the slide')],
       ['← · →', t('Walk the slides when nothing is selected; nudge the selection otherwise')],
       [`${mod}-${t('click')} · ⇧-${t('click')}`, t('Select several slides in the sidebar; drag any of them to move them all, Delete removes them')],
+    ])
+    section(colR, t('Inspector'), [
+      [t('Drag a label'), t('Scrub the number — ⇧ ×10, Alt ×0.1; the drag never stops at the screen edge')],
+      ['360/2 · +24 · *2', t('Type arithmetic into a number; a leading + * / starts from its current value')],
+      ['↑ · ↓', t('Step a number; ⇧ steps by 10')],
+      [t('Mixed'), t('Several elements differ: an edit moves each by the same amount')],
     ])
     section(colR, t('Lines & curves'), [
       [t('Shape ▾'), t('Draw a line, curved line or connector — then drag on the canvas')],

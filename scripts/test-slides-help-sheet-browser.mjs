@@ -48,9 +48,12 @@ try {
           const rights = [...sec.querySelectorAll('kbd')].map((k) => Math.round(rect(k).right))
           return rights.length > 1 && Math.max(...rights) - Math.min(...rights) > 1
         }).map((s) => s.querySelector('h3').textContent)
-        return { w: box.width, vw: innerWidth, overlaps, outside, ragged, keys: keys.length }
+        const said = keys.map((k) => k.textContent)
+        const newRows = ['⇧A', 'U · S · I · E', 'K', '360/2'].filter((k) => !said.some((x) => x.includes(k)))
+        return { w: box.width, vw: innerWidth, overlaps, outside, ragged, keys: keys.length, newRows }
       })
       ok(r.keys > 20, `${tag} the sheet opened (${r.keys} keys)`)
+      ok(r.newRows.length === 0, `${tag} the sheet names auto layout, booleans, the palette and arithmetic${r.newRows.length ? ' — missing ' + r.newRows.join(', ') : ''}`)
       ok(r.overlaps.length === 0, `${tag} no key overlaps a description${r.overlaps.length ? ': ' + r.overlaps.slice(0, 4).join(' | ') : ''}`)
       ok(r.outside.length === 0, `${tag} everything stays in its column${r.outside.length ? ': ' + r.outside.slice(0, 4).join(' | ') : ''}`)
       ok(r.w <= r.vw, `${tag} the sheet fits the window (${Math.round(r.w)} of ${r.vw}px)`)
