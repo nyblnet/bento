@@ -350,6 +350,9 @@ jobs:
       - name: Empty inspector sections fold nothing in Chromium
         # A section that is only its header reads as open and is no button.
         run: node scripts/test-slides-empty-fold-browser.mjs
+      - name: Chrome that holds still in Chromium
+        # Layer rows never move under the pointer; panel handles are centred SVG chevrons.
+        run: node scripts/test-slides-steady-chrome-browser.mjs
       - name: UX audit canvas fixes in Chromium
         # A press on an unselected element drags it; a key typed at a selected
         # text box is text; a frame copies, duplicates and deletes with its

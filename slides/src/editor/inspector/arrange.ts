@@ -12,6 +12,7 @@ import { optLabel, relOf } from './controls'
 import { applyRel } from './numexpr'
 import { isMacOS } from '../../screens'
 import { ICONS } from '../../icons'
+import { openCtxMenu } from '../ctxmenu'
 
 export function buildLayoutRole(p: PropsPanel, el: SlideElement) {
   // What the box IS to the slide's layout — its own section, said in
@@ -69,10 +70,11 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
       ? iconBtn(ICONS.ungroup, `${t('Ungroup')} (⇧${mod}G)`, () => p.ungroup(els))
       : iconBtn(ICONS.group, `${t('Group')} (${mod}G)`, () => p.group(els)))
     : null
-  // Two toolbars, as Penpot heads its Design tab: where the selection sits
-  // (align, spacing, size) and what it is to the rest (order, group, flip,
-  // boolean). A kind never splits; a toolbar wraps at a kind's edge, so no
-  // tool is ever covered or pushed out of the panel (styles.css).
+  // One toolbar, as Figma and Penpot head their design panels: align, then
+  // spacing and size, flip, stacking order (one menu: four buttons cost a
+  // line), group and boolean, each kind set off by a hairline. A kind never
+  // splits; the bar wraps at a kind's edge only when the panel is too narrow,
+  // so no tool is ever covered or pushed out of it (styles.css).
   const kind = (...buttons: HTMLElement[]) => {
     const k = document.createElement('div')
     k.className = 'ed-toolbar-kind'
@@ -82,6 +84,7 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
   }
   // A frame's child is placed by its frame: aligning it would write X/Y the
   // layout overwrites at once, so the frame's own alignment is offered instead.
+  const tools: HTMLElement[] = []
   const inFrame = els.length === 1 && !!els[0].parentId && !!p.store.element(els[0].parentId)
   const tip = (id: string, label: string) => p.titleOf(id, label)
   if (inFrame) {
@@ -97,7 +100,7 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
     hint.append(' ', go)
     block.appendChild(hint)
   } else {
-    bar(t('Align'),
+    tools.push(
       kind(
         iconBtn(ICONS.arrLeft, tip('align-left', t('Align left')), () => align(p, els, 'left')),
         iconBtn(ICONS.arrCenterX, tip('align-center', t('Align centers')), () => align(p, els, 'centerX')),
@@ -116,18 +119,24 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
       )] : []),
     )
   }
+  const order = iconBtn(ICONS.viewLayers, t('Stacking order'), () => {
+    const r = order.getBoundingClientRect()
+    openCtxMenu(r.left, r.bottom + 4, [
+      { label: t('Bring to front'), icon: ICONS.toFront, run: () => p.reorder(els, 'front') },
+      { label: t('Bring forward'), icon: ICONS.forward, run: () => step(p, els, +1) },
+      { label: t('Send backward'), icon: ICONS.backward, run: () => step(p, els, -1) },
+      { label: t('Send to back'), icon: ICONS.toBack, run: () => p.reorder(els, 'back') },
+    ])
+  })
+  order.setAttribute('aria-haspopup', 'menu')
   bar(t('Arrange'),
-    kind(
-      iconBtn(ICONS.toFront, t('Bring to front'), () => p.reorder(els, 'front')),
-      iconBtn(ICONS.forward, t('Bring forward'), () => step(p, els, +1)),
-      iconBtn(ICONS.backward, t('Send backward'), () => step(p, els, -1)),
-      iconBtn(ICONS.toBack, t('Send to back'), () => p.reorder(els, 'back')),
-    ),
-    ...(groupBtn ? [kind(groupBtn)] : []),
+    ...tools,
     kind(
       iconBtn(ICONS.flipH, tip('flip-h', t('Flip horizontal')), () => flip(p, els, 'flipX')),
       iconBtn(ICONS.flipV, tip('flip-v', t('Flip vertical')), () => flip(p, els, 'flipY')),
     ),
+    kind(order),
+    ...(groupBtn ? [kind(groupBtn)] : []),
     ...(boolOperands(p.store, els)
       ? [kind(...BOOL_OPS.map((op) => {
         const ui = boolUi(op)

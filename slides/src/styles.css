@@ -29,6 +29,7 @@
   --blue: #5b8def;
   --field: #ffffff;          /* form-control surface — CHROME, not the slide */
   --field-line: var(--line); /* a form control's edge */
+  --field-line-hot: var(--muted); /* …under the pointer */
   --surface: #ffffff;        /* panels, dialogs, menus */
   --tab-track: var(--chrome-2); /* a tab strip's track */
   --tab-on: var(--surface);  /* the selected tab's pill, lifted off its track */
@@ -66,7 +67,14 @@
   --accent-on: #3a2a00;
   --blue: #7aa5f5;           /* lifted: #5b8def is unreadable on dark chrome */
   --field: #12151a;
-  --field-line: #6b7585;     /* 3.3:1 on the panel, 3.9:1 on a field: a control's edge must read (WCAG 1.4.11) */
+  /* A field at rest is a sunk well with a quiet edge, as Figma and Penpot draw
+     theirs: a bright edge on every control turned the dark inspector into a
+     grid of outlines. The edge lights up under the pointer (3.3:1 on the
+     panel) and focus draws the accent ring, so the control still reads the
+     moment it is used — the trade-off against WCAG 1.4.11 at rest is
+     deliberate (docs/DECISIONS.md, 2026-10-30). */
+  --field-line: #3a414d;
+  --field-line-hot: #6b7585;
   --surface: #21262e;
   --tab-track: #12151a;      /* sunk below the panel, as Penpot does */
   --tab-on: #363d49;
@@ -171,6 +179,7 @@ option { background: var(--field); color: var(--ink); }
   border-radius: 6px;
 }
 :where(input, select, textarea):focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -1px; }
+:where(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file']), select, textarea):hover:not(:disabled, :focus) { border-color: var(--field-line-hot); }
 
 /* ————— THE DOCUMENT NEVER MIRRORS —————————————————————————————————————————
    An Arabic/Hebrew viewer gets an RTL *chrome* (i18n.ts applyDirection sets
@@ -701,7 +710,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 }
 .ed-layers:focus-visible:not(:has(.ed-layer.sel)) { box-shadow: 0 0 0 2px var(--accent); border-radius: 6px; }
 .ed-layer {
-  display: flex; align-items: center; gap: 7px;
+  display: flex; align-items: center; gap: 7px; box-sizing: border-box; height: 26px; /* hover never changes a row's box */
   padding: 3px 6px; border-radius: 6px; font-size: 12px; line-height: 18px;
   cursor: default; user-select: none; border: 1px solid transparent;
 }
@@ -2535,17 +2544,21 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
      grey-blue that read at 5.41:1 on white sat at 2.81:1 on the dark surface,
      under the 4.5 floor. With the token it is 5.98:1 light, 5.02:1 dark. */
   color: var(--muted);
-  font-size: 11px;
-  line-height: 1;
   padding: 0;
   cursor: pointer;
   z-index: 15;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 1px 4px rgba(20, 30, 45, 0.12);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 1px 3px rgb(20 30 45 / 0.14);
+  transition: color .12s, background-color .12s, border-color .12s;
 }
-.ed-panel-toggle:hover { color: var(--ink); border-color: #b9c3d2; }
+.ed-panel-toggle:hover { color: var(--ink); background: var(--chrome-2); border-color: var(--field-line-hot, var(--line)); }
+/* one chevron for every handle, turned to point where a click moves the edge */
+.ed-panel-toggle svg { width: 12px; height: 12px; stroke-width: 2.25; transition: transform .14s ease; }
+.ed-panel-toggle[data-dir='left'] svg { transform: rotate(180deg); }
+.ed-panel-toggle[data-dir='down'] svg { transform: rotate(90deg); }
+.ed-panel-toggle[data-dir='up'] svg { transform: rotate(-90deg); }
+@media (prefers-reduced-motion: reduce) { .ed-panel-toggle svg { transition: none; } }
 /* menus that hang off a topbar control at the END of the bar open toward the
    bar's start, so they can never overflow the window edge — in either
    direction (the language menu sets the same anchoring from JS). */
@@ -3182,17 +3195,20 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-props .ed-tool:disabled { opacity: .35; cursor: default; }
 .ed-props .ed-tool svg { width: 15px; height: 15px; }
 .ed-props .ed-tool[aria-expanded='true'] { color: var(--ink); background: var(--chrome-2); }
-/* the one toolbar uses the panel's width: kinds side by side, a hairline
-   between, sharing it by how many tools each holds, and the tools share their
-   kind's — bigger targets, the same line */
-.ed-props .ed-toolbar { display: flex; align-items: center; flex-wrap: nowrap; gap: 0; margin-bottom: 6px; }
-.ed-toolbar-kind { flex: var(--n, 1) 1 0; min-width: 0; display: flex; align-items: center; gap: 0; }
-.ed-toolbar-kind + .ed-toolbar-kind { border-inline-start: 1px solid var(--line); padding-inline-start: 3px; margin-inline-start: 3px; }
-.ed-props .ed-toolbar .ed-tool { flex: 1 1 0; width: auto; min-width: 20px; max-width: 40px; height: 26px; }
-.ed-props .ed-toolbar { display: flex; align-items: center; flex-wrap: wrap; column-gap: 7px; row-gap: 4px; margin-bottom: 6px; }
-/* a kind never splits and never shrinks: a toolbar wraps at a kind's edge instead of overlapping tools */
-.ed-toolbar-kind { flex: none; display: flex; align-items: center; gap: 0; }
-.ed-props .ed-toolbar .ed-tool { flex: none; width: 24px; min-width: 24px; height: 26px; padding: 0; }
+/* ONE toolbar line: kinds side by side, a hairline between, the tools growing
+   to fill the line when the panel is wide. A kind never splits and never
+   overlaps: when the line is too short the bar wraps at a kind's edge. Each
+   kind's hairline sits in its own start padding; the bar is pulled 6px out and
+   clipped back, so the hairline of a kind that starts a line is cut away and
+   no line begins with a stray separator. */
+.ed-props .ed-toolbar {
+  display: flex; align-items: center; flex-wrap: wrap; column-gap: 0; row-gap: 4px;
+  margin: 0 0 6px; margin-inline-start: -6px; clip-path: inset(0 0 0 6px);
+}
+[dir='rtl'] .ed-props .ed-toolbar { clip-path: inset(0 6px 0 0); }
+.ed-toolbar-kind { box-sizing: border-box; min-width: 0; flex: var(--n, 1) 0 calc(var(--n, 1) * 23px + 6px); flex-grow: var(--n, 1); position: relative; display: flex; align-items: center; gap: 0; padding-inline-start: 6px; }
+.ed-toolbar-kind::before { content: ''; position: absolute; inset-inline-start: 2.5px; top: 5px; bottom: 5px; width: 1px; background: var(--line); }
+.ed-props .ed-toolbar .ed-tool { box-sizing: border-box; flex: 1 1 23px; min-width: 23px; max-width: 32px; height: 26px; padding: 0; }
 .ed-frame-placed { margin: 0 0 6px; }
 .ed-link-btn { border: 0; background: none; padding: 0; color: var(--accent-ink); text-decoration: underline; cursor: pointer; font: inherit; }
 .ed-mini.ed-readonly input { color: var(--muted); }
@@ -3337,8 +3353,7 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-layer-rename { flex: 1; min-width: 0; height: 20px; padding: 0 4px; font: inherit; font-size: 12px; }
 
 /* the notes pane's fold is a resizer chevron laid on its side (after .ed-panel-toggle, which it reshapes) */
-.ed-notes-toggle { width: 44px; height: 16px; font-size: 13px; }
-.ed-notespane .ed-notes-toggle { writing-mode: vertical-lr; }
+.ed-notes-toggle { width: 44px; height: 16px; }
 
 /* ————— TOPBAR ZONES — document | insert | output ————————————————————————————
    Three zones, each intentional: the DOCUMENT on the left (mark, name, undo),
@@ -3435,12 +3450,15 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-morph-ghost rect, .ed-morph-ghost path { fill: none; stroke: var(--morph); }
 .ed-layer-morph { color: var(--morph); font-weight: 700; font-size: 11px; margin-inline-start: auto; }
 .ed-layer-act {
-  display: none; flex: none; width: 20px; height: 20px; padding: 3px; border: 0; border-radius: 4px;
+  display: inline-flex; flex: none; width: 20px; height: 20px; padding: 3px; border: 0; border-radius: 4px;
   background: none; color: var(--muted); cursor: pointer;
+  /* always laid out, only shown on hover: appearing would push the label and
+     the row's other marks, and the list flickered under the pointer */
+  opacity: 0; pointer-events: none; transition: opacity .1s;
 }
 .ed-layer-morph + .ed-layer-act, .ed-layer-label + .ed-layer-act { margin-inline-start: auto; }
 .ed-layer-act svg { width: 14px; height: 14px; }
-.ed-layer:hover .ed-layer-act, .ed-layer:focus-within .ed-layer-act, .ed-layer-act.on { display: inline-flex; }
+.ed-layer:hover .ed-layer-act, .ed-layer:focus-within .ed-layer-act, .ed-layer-act.on, .ed-layer-act:focus-visible { opacity: 1; pointer-events: auto; }
 .ed-layer-act:hover { background: var(--chrome-2); color: var(--ink); }
 .ed-layer.is-hidden .ed-layer-label, .ed-layer.is-hidden .ed-layer-glyph { opacity: 0.45; }
 .ed-morph-preview { width: 100%; accent-color: var(--morph); }
