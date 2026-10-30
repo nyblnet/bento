@@ -12129,3 +12129,17 @@ From docs/audit/ux-pyramid-2026-10-30.md. Amends the 2026-10-29 entries where no
 - **A multi-selection shows Fill, Stroke and Shadow** when every element has
   them in the same plain form; a paint stack or gradient stays the element's
   own and hides the shared section rather than flattening it.
+
+## 2026-10-30 — slides: one arrange toolbar; quiet field edges in dark
+
+- **One toolbar line.** Align, then spacing and size (several selected), flip,
+  one "Stacking order" menu (four buttons cost a line; Figma and Penpot keep
+  order out of the design panel too), group, boolean — each kind set off by a
+  hairline. Kinds never split; the bar wraps at a kind's edge only when the
+  panel is too narrow. A single element's nine tools fit the default 264px
+  panel on one line; tools grow to fill a wider one.
+- **Dark-mode fields are sunk wells with a quiet edge** (1.5:1 at rest), lit to
+  3.3:1 under the pointer, with the accent ring on focus — Figma's and
+  Penpot's treatment. A 3.3:1 edge on every resting control (the WCAG 1.4.11
+  reading) turned the dark inspector into a grid of outlines; the trade-off
+  at rest is deliberate, and the accent-contrast rig holds both values.

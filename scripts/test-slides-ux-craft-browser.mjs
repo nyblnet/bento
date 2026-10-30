@@ -216,9 +216,11 @@ try {
       const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05) }
       const field = document.querySelector('.ed-props input.ed-num')
       const panel = rgb(getComputedStyle(document.querySelector('.ed-props')).backgroundColor)
-      return { theme: document.documentElement.dataset.theme, ratio: Math.round(ratio(rgb(getComputedStyle(field).borderTopColor), panel) * 100) / 100 }
+      const hot = rgb(getComputedStyle(document.documentElement).getPropertyValue('--field-line-hot').trim().replace(/^#(..)(..)(..)$/, (_, r, g, b) => `rgb(${parseInt(r, 16)},${parseInt(g, 16)},${parseInt(b, 16)})`))
+      return { theme: document.documentElement.dataset.theme, rest: Math.round(ratio(rgb(getComputedStyle(field).borderTopColor), panel) * 100) / 100, hot: Math.round(ratio(hot, panel) * 100) / 100 }
     })
-    ok(c.theme === 'dark' && c.ratio >= 3, `a field's edge is ≥3:1 against the dark panel (${c.ratio}:1)`)
+    // a sunk well with a quiet edge at rest (Figma's), lit under the pointer (DECISIONS 2026-10-30)
+    ok(c.theme === 'dark' && c.rest >= 1.3 && c.hot >= 3, `a field's edge is quiet but present at rest (${c.rest}:1) and ≥3:1 under the pointer (${c.hot}:1) on the dark panel`)
     await ctx.close()
   }
 } finally {
