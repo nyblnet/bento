@@ -11994,3 +11994,30 @@ existing element, and an older shell sees an ordinary deck.
   draws a hidden element — accepted over a non-additive encoding.
 - **The brief's size budget did not hold**: the shell was 737KB compressed
   before this work (not 560KB) and is 770KB after it.
+
+## 2026-10-29 — slides: the revamp's second pass — tools, paint, polish
+
+- **Tools are commands.** The one-letter tools (V F R O L P T; C stays
+  Comment) live in the command list; the topbar's insert buttons are built
+  from it, so `data-cmd`, the letter badge and the tooltip key cannot drift
+  from the key that runs it. The ? sheet's one-command rows read the same
+  list. The path bar (Corner / Smooth / Symmetric, Close path) is contextual
+  like the boolean group and acts on the last-pressed anchor, or all of them.
+- **Paint grows by optional keys.** Radial is the linear `GradientFill` plus
+  `kind: 'radial'` and `cx/cy/r`; an older shell draws the same stops
+  linearly. `strokeDashes` (wins over `strokeStyle`), `strokeAlign` (absent =
+  the old placement, so every existing deck is pixel-identical) and per-corner
+  `radii` (with `radius` kept at the largest corner) each fall back to what an
+  older shell already draws. `flipX/flipY` mirror the content node, never the
+  frame; an older shell draws unmirrored. The shape renderer change is in
+  `kernel/src/shape.ts` (kernel zone): additive optional `ShapeSpec` fields,
+  spaces and type typecheck against it.
+- **Frames follow live**: during a drag the canvas lays out a shallow copy of
+  the slide and moves nodes, never the model; release commits and layout.ts
+  derives the same boxes. Wrap breaks greedily; children whose cross-axis
+  spans overlap share a line, so a settled layout is a fixed point.
+- **A component copy's position is an offset per instance**; a member moved
+  alone overrides `x`/`y` like any other hand edit.
+- **Names are typed where they appear**, never in `prompt()`.
+- **Canvas affordances never write the model**: gradient knobs commit one
+  checkpoint per drag; hover previews restyle the live node and restore it.

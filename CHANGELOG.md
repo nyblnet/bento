@@ -38,6 +38,22 @@ pre-1.0.
 - **The canvas talks back.** Holding ⌥, ⌘ or ⇧ says what it does; moving,
   resizing and rotating show the numbers beside the pointer; an element that
   morphs shows where it comes from, and the Animate tab previews the morph.
+- **One-letter tools.** V select, F frame, R rectangle, O ellipse, L line,
+  P pen, T text — shown on the topbar's insert buttons and in the ? sheet.
+  While a path is selected, the topbar offers Corner, Smooth and Symmetric
+  points and Close path.
+- **Radial gradients, gradient stops and a handle on the canvas.** Fills are
+  Solid, Linear or Radial; add, drag and remove stops on the stop bar, and aim
+  the gradient by dragging its handle on the slide.
+- **Strokes inside, centred or outside**, with custom dash and gap.
+- **Each corner its own radius**, and **Flip horizontal / vertical**.
+- **Previews on hover**: point at a shadow preset or an entrance effect to see
+  it on the slide before choosing.
+- **Frames follow while you drag**, rows and columns can **wrap**, and a
+  rotated child of a clipping frame is clipped correctly. Gap, padding and
+  columns can be bound to number tokens.
+- **Export from the inspector**: PNG at 1× or 2×, SVG, or Copy as JSON, for
+  the selection or the slide.
 - **Lock and hide from Layers.** A locked element can't be clicked or dragged
   on the canvas; a hidden one isn't drawn. Files opened in an older version
   still show hidden elements.
