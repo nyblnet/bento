@@ -75,23 +75,58 @@ export function hexToOklch(hex: string): [number, number, number] {
   const C = Math.hypot(A, B)
   return [L, C, C < 1e-4 ? 0 : (Math.atan2(B, A) * 180 / Math.PI + 360) % 360]
 }
-/** OKLCH (L 0..1, C, H°) as #rrggbb; `clamped` when the colour lies outside sRGB. */
-export function oklchToHex(L: number, C: number, H: number): { hex: string; clamped: boolean } {
+/** OKLCH → gamma-encoded sRGB channels (0..1, unclipped). */
+function oklchToRgb(L: number, C: number, H: number): number[] {
   const A = C * Math.cos(H * Math.PI / 180), B = C * Math.sin(H * Math.PI / 180)
   const l = (L + 0.3963377774 * A + 0.2158037573 * B) ** 3
   const m = (L - 0.1055613458 * A - 0.0638541728 * B) ** 3
   const q = (L - 0.0894841775 * A - 1.291485548 * B) ** 3
-  const rgb = [
+  return [
     4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * q,
     -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * q,
     -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * q,
-  ]
-  // out of gamut = some channel off by more than 8-bit rounding hides (typed
-  // values carry a few digits, so exact-gamut colours land a hair outside)
-  // ponytail: per-channel clip, not a chroma-reducing gamut map; enough for a picker that says so
-  const enc = rgb.map((c) => Math.sign(c) * gam(Math.abs(c)))
-  const clamped = enc.some((c) => c < -0.5 / 255 || c > 1 + 0.5 / 255)
-  return { hex: '#' + enc.map((c) => hex2(Math.min(Math.max(c, 0), 1) * 255)).join(''), clamped }
+  ].map((c) => Math.sign(c) * gam(Math.abs(c)))
+}
+const toHex = (rgb: number[]) => '#' + rgb.map((c) => hex2(Math.min(Math.max(c, 0), 1) * 255)).join('')
+// in gamut = every channel within what 8-bit rounding hides (typed values carry
+// a few digits, so exact-gamut colours land a hair outside)
+const inGamut = (rgb: number[]) => rgb.every((c) => c >= -0.5 / 255 && c <= 1 + 0.5 / 255)
+/** ΔEOK: distance in OKLab between an OKLCH colour and a (clipped) sRGB one. */
+function deltaEOK([L, C, H]: number[], rgb: number[]): number {
+  const [L2, C2, H2] = hexToOklch(toHex(rgb))
+  const a = C * Math.cos(H * Math.PI / 180), b = C * Math.sin(H * Math.PI / 180)
+  return Math.hypot(L - L2, a - C2 * Math.cos(H2 * Math.PI / 180), b - C2 * Math.sin(H2 * Math.PI / 180))
+}
+
+/**
+ * OKLCH (L 0..1, C, H°) as #rrggbb; `clamped` when the colour lies outside
+ * sRGB. Out of gamut it is MAPPED, not clipped, by CSS Color 4's algorithm:
+ * keep L and H, binary-search the chroma down until clipping the result moves
+ * it less than a just-noticeable difference (ΔEOK 0.02) — so a too-vivid red
+ * stays that red's hue and lightness instead of skewing per channel.
+ */
+export function oklchToHex(L: number, C: number, H: number): { hex: string; clamped: boolean } {
+  const rgb = oklchToRgb(L, C, H)
+  if (inGamut(rgb)) return { hex: toHex(rgb), clamped: false }
+  if (L >= 1) return { hex: '#ffffff', clamped: true }
+  if (L <= 0) return { hex: '#000000', clamped: true }
+  const JND = 0.02, EPS = 0.0001
+  let lo = 0, hi = C, loIn = true
+  let clipped = oklchToRgb(L, C, H).map((c) => Math.min(Math.max(c, 0), 1))
+  if (deltaEOK([L, C, H], clipped) < JND) return { hex: toHex(clipped), clamped: true }
+  while (hi - lo > EPS) {
+    const mid = (lo + hi) / 2
+    const cur = oklchToRgb(L, mid, H)
+    if (loIn && inGamut(cur)) { lo = mid; continue }
+    clipped = cur.map((c) => Math.min(Math.max(c, 0), 1))
+    const E = deltaEOK([L, mid, H], clipped)
+    if (E < JND) {
+      if (JND - E < EPS) break
+      loIn = false
+      lo = mid
+    } else hi = mid
+  }
+  return { hex: toHex(clipped), clamped: true }
 }
 
 function show(hex: string, m: Model): string {
