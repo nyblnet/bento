@@ -1356,4 +1356,5 @@ export const strings: Catalog = {
   "Looking at the pictures in this deck…": "이 프레젠테이션의 이미지를 확인하는 중…",
   "New": "새로 만들기",
   "Document": "문서",
+  "Updates": "업데이트",
 }

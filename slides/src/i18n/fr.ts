@@ -1352,4 +1352,5 @@ export const fr: Catalog = {
   "Looking at the pictures in this deck…": "Examen des images de cette présentation…",
   "New": "Nouveau",
   "Document": "Document",
+  "Updates": "Mises à jour",
 }

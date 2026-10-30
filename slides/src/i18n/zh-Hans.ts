@@ -1352,4 +1352,5 @@ export const zhHans: Catalog = {
   "Looking at the pictures in this deck…": "正在检查此演示文稿中的图片…",
   "New": "新建",
   "Document": "文档",
+  "Updates": "更新",
 }

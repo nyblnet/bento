@@ -1365,4 +1365,5 @@ export const strings: Catalog = {
   "Looking at the pictures in this deck…": "Menyemak gambar dalam persembahan ini…",
   "New": "Baharu",
   "Document": "Dokumen",
+  "Updates": "Kemas kini",
 }

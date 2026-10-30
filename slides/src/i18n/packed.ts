@@ -1358,4 +1358,5 @@ export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
   "Looking at the pictures in this deck…": ["このデッキの画像を確認しています…","正在检查此演示文稿中的图片…","正在檢查此簡報中的圖片…","Revisando las imágenes de esta presentación…","Examen des images de cette présentation…","Bilder in dieser Präsentation werden geprüft…","Esame delle immagini di questa presentazione…","Verificando as imagens desta apresentação…"],
   "New": ["新規","新建","新增","Nuevo","Nouveau","Neu","Nuovo","Novo"],
   "Document": ["ドキュメント","文档","文件","Documento","Document","Dokument","Documento","Documento"],
+  "Updates": ["アップデート","更新","更新","Actualizaciones","Mises à jour","Updates","Aggiornamenti","Atualizações"],
 }

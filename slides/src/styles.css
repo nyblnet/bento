@@ -3800,3 +3800,18 @@ body.ed-morph-previewing .ed-morph-ghost { visibility: hidden !important; }
 /* Preferences: room for a label and its control on one line */
 .ed-about.ed-prefs { width: min(560px, calc(100vw - 32px)); }
 .ed-prefs .ed-about-auto { flex-wrap: nowrap; }
+
+/* About, laid out like Preferences: as wide, the head then the promo line, an
+   Updates block with its status beside the button, the fine print last */
+.ed-about.ed-about-main { width: min(560px, calc(100vw - 32px)); }
+.ed-about-main .ed-about-promo { margin: 12px 0 0; }
+.ed-about-updates {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 4px; align-items: center;
+  margin-top: 16px; padding: 12px; border: 1px solid var(--line); border-radius: 8px;
+}
+.ed-about-updates > h3 { grid-column: 1 / -1; margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.ed-about-updates > .ed-about-status { grid-column: 1; margin: 0; }
+.ed-about-updates > .ed-about-row { grid-column: 2; grid-row: 2; margin: 0; }
+/* an update card (notes, actions) takes the whole block width under the line */
+.ed-about-updates > .ed-about-status:has(.ed-about-update) { grid-column: 1 / -1; grid-row: 3; }
+.ed-about-main .ed-about-fine { margin-top: 16px; }
