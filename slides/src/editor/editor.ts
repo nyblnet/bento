@@ -99,6 +99,8 @@ const LONG_PRESS_SLOP = 10
 
 /** Shape-menu rows that are also one-letter tools (commands.ts), by label. */
 const SHAPE_TOOL: Record<string, string> = { Rectangle: 'tool-rect', Ellipse: 'tool-ellipse', Line: 'tool-line', Pen: 'tool-pen' }
+/** The topbar's tools: one of them is pressed at any time (refreshTools). */
+const TOOL_CMDS = ['tool-select', 'tool-marquee', 'tool-frame', 'tool-rect', 'tool-ellipse', 'tool-line', 'tool-pen', 'insert-text', 'comment']
 
 const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; heads?: 2; draw?: 'line' | 'path' | 'connector' | 'curve-connector' | 'free' | 'poly' | 'pen'; tip: string }> = [
   { kind: 'rect', label: 'Rectangle', icon: ICONS.rect, tip: 'A rectangle — rounded corners, fills, gradients and shadows in the panel' },
@@ -420,7 +422,8 @@ export class Editor {
     // and letter badge come from it, and data-cmd names it.
     const tool = (id: string, icon: string, label: string, tip?: string) => this.cmdButton(id, icon, label, tip)
     insert.append(
-      tool('tool-select', ICONS.cursor, '', t('Select — back to the pointer')),
+      tool('tool-select', ICONS.cursor, '', t('Move — select and move; back to the pointer')),
+      tool('tool-marquee', ICONS.marquee, '', t('Select only — a drag selects, from on top of things too, and never moves anything')),
       tool('tool-frame', ICONS.frameRow, t('Frame'), t('Add a frame — what you put in it lines up in a row, a column or a grid')),
       tool('insert-text', ICONS.text, t('Text'), t('Add a text box — double-click it to edit; **bold**, *italic*, `code` and “- ” bullets format as you type')),
       this.shapeDropdown(),
@@ -686,7 +689,9 @@ export class Editor {
     this.wireDrawerDismiss()
     this.restorePanelWidths()
     this.canvas = new SlideCanvas(canvasWrap, this.store, this.buildScope.signal)
-    this.canvas.onCommentModeChange = (on) => commentB.classList.toggle('ed-btn-armed', on)
+    this.canvas.onCommentModeChange = () => this.refreshTools()
+    this.canvas.onToolEnd = () => { this.armed = null; this.refreshTools() }
+    queueMicrotask(() => this.refreshTools())
     this.canvas.onSlideNav = (dir) => this.store.goToLinear(dir)
     this.panel = new PropsPanel(this.props, this.store)
     this.panel.titleOf = (id, label) => titleFor(this.commands, id, label)
@@ -1956,6 +1961,7 @@ export class Editor {
   private shapeDropdown(): HTMLElement {
     const wrap = div('ed-dropdown')
     const trigger = btn(ICONS.shapes, t('Shape'), () => wrap.classList.toggle('open'))
+    trigger.classList.add('ed-shape-trigger')
     const menu = div('ed-menu')
     for (const item of SHAPE_MENU) {
       const id = SHAPE_TOOL[item.label]
@@ -3381,7 +3387,7 @@ export class Editor {
     ])
     // the one-letter tools, straight from the command list
     section(colR, t('Tools'), [
-      ...['tool-select', 'tool-frame', 'tool-rect', 'tool-ellipse', 'tool-line', 'tool-pen', 'insert-text'].map((id) => cmd(id)),
+      ...['tool-select', 'tool-marquee', 'tool-frame', 'tool-rect', 'tool-ellipse', 'tool-line', 'tool-pen', 'insert-text'].map((id) => cmd(id)),
       cmd('auto-layout', t('Wrap the selection in an auto-layout frame')),
       [BOOL_OPS.map((op) => boolUi(op).key).join(' · '), BOOL_OPS.map((op) => boolUi(op).label).join(' · ')],
     ])
@@ -3580,13 +3586,17 @@ export class Editor {
       { id: 'palette', label: 'Command palette', keys: `${MOD}K`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && !ev.altKey && key(ev) === 'k', run: () => openPalette(this.commands) },
       { id: 'help', label: 'Shortcuts & tips', keys: '?', scope: 'always', when: canvasFree, match: (ev, mod) => !mod && (ev.key === '?' || (ev.key === '/' && ev.shiftKey)), run: () => this.openHelp() },
       // The tools, one letter each as in Figma and Penpot (C stays Comment)
-      { id: 'tool-select', label: 'Select', keys: 'V', scope: 'canvas', when: canvasFree, match: tool('v'), run: () => this.selectTool() },
-      { id: 'tool-frame', label: 'Frame', keys: 'F', scope: 'canvas', when: toolFree, match: tool('f'), run: () => this.placeTool(() => this.newFrame()) },
-      { id: 'tool-rect', label: 'Rectangle', keys: 'R', scope: 'canvas', when: toolFree, match: tool('r'), run: () => this.placeTool(() => defaultShape('rect')) },
-      { id: 'tool-ellipse', label: 'Ellipse', keys: 'O', scope: 'canvas', when: toolFree, match: tool('o'), run: () => this.placeTool(() => defaultShape('ellipse')) },
-      { id: 'tool-line', label: 'Line', keys: 'L', scope: 'canvas', when: toolFree, match: tool('l'), run: () => this.canvas.armDraw('line') },
-      { id: 'tool-pen', label: 'Pen', keys: 'P', scope: 'canvas', when: toolFree, match: tool('p'), run: () => this.canvas.armDraw('pen') },
-      { id: 'insert-text', label: 'Add a text box', keys: 'T', scope: 'canvas', when: toolFree, match: tool('t'), run: () => this.placeTool(() => defaultText({ color: readableInk(this.store.slide.background) }), true) },
+      { id: 'tool-select', label: 'Move', keys: 'V', scope: 'canvas', when: canvasFree, match: tool('v'), run: () => this.useTool(false) },
+      // S: Select only — a drag selects and never moves (the Move tool moves).
+      // S is free while editing; in the show it opens the speaker view, a
+      // different scope.
+      { id: 'tool-marquee', label: 'Select only', keys: 'S', scope: 'canvas', when: canvasFree, match: tool('s'), run: () => this.useTool(true) },
+      { id: 'tool-frame', label: 'Frame', keys: 'F', scope: 'canvas', when: toolFree, match: tool('f'), run: () => this.arm('tool-frame', () => this.placeTool(() => this.newFrame())) },
+      { id: 'tool-rect', label: 'Rectangle', keys: 'R', scope: 'canvas', when: toolFree, match: tool('r'), run: () => this.arm('tool-rect', () => this.placeTool(() => defaultShape('rect'))) },
+      { id: 'tool-ellipse', label: 'Ellipse', keys: 'O', scope: 'canvas', when: toolFree, match: tool('o'), run: () => this.arm('tool-ellipse', () => this.placeTool(() => defaultShape('ellipse'))) },
+      { id: 'tool-line', label: 'Line', keys: 'L', scope: 'canvas', when: toolFree, match: tool('l'), run: () => this.arm('tool-line', () => this.canvas.armDraw('line')) },
+      { id: 'tool-pen', label: 'Pen', keys: 'P', scope: 'canvas', when: toolFree, match: tool('p'), run: () => this.arm('tool-pen', () => this.canvas.armDraw('pen')) },
+      { id: 'insert-text', label: 'Add a text box', keys: 'T', scope: 'canvas', when: toolFree, match: tool('t'), run: () => this.arm('insert-text', () => this.placeTool(() => defaultText({ color: readableInk(this.store.slide.background) }), true)) },
       { id: 'comment', label: 'Comment mode', keys: 'C', scope: 'canvas', when: canvasFree, match: (ev, mod) => !mod && key(ev) === 'c', run: () => this.canvas.toggleCommentMode() },
       { id: 'ungroup', label: 'Ungroup', keys: `⇧${MOD}G`, scope: 'canvas', when: () => writable() && sel().some((e) => e.groupId), match: (ev, mod) => mod && ev.shiftKey && key(ev) === 'g', run: () => this.panel.ungroup(sel()) },
       { id: 'group', label: 'Group', keys: `${MOD}G`, scope: 'canvas', when: () => writable() && sel().length > 1, match: (ev, mod) => mod && !ev.shiftKey && key(ev) === 'g', run: () => this.panel.group(sel()) },
@@ -3764,6 +3774,7 @@ export class Editor {
         if (this.thumbSel.length) this.setThumbSel([])
         if (this.canvas.isDrawing) this.canvas.cancelDraw()
         else if (this.canvas.isPathEditing) this.canvas.stopPathEdit(true)
+        else if (!this.store.selection.length && this.marquee) this.useTool(false) // nothing left to let go of: back to Move
         else {
           // out one level first, as in Figma: a frame's children → the frame
           const sel = this.store.selectedElements
@@ -3796,6 +3807,46 @@ export class Editor {
     if (this.canvas.isDrawing) this.canvas.cancelDraw()
     if (this.canvas.isCommenting) this.canvas.toggleCommentMode()
     if (this.canvas.isPathEditing) this.canvas.stopPathEdit(true)
+  }
+
+  /** The pointer the canvas returns to: Move (V) or Select only (S, marquee). */
+  private marquee = false
+  /** The draw or place tool armed right now, by command id. */
+  private armed: string | null = null
+
+  /** V or S: stand any armed tool down and make that pointer the resting one. */
+  private useTool(marquee: boolean) {
+    this.selectTool()
+    this.marquee = marquee
+    this.canvas.setMarqueeOnly(marquee)
+    this.refreshTools()
+  }
+
+  /** Arm a draw/place tool by command id, so the topbar can show it pressed. */
+  private arm(id: string, go: () => void) {
+    go()
+    this.armed = this.canvas.isDrawing ? id : null
+    this.refreshTools()
+  }
+
+  /** Exactly one tool reads as pressed in the topbar, as in Figma: the armed
+   *  one, else Comment while commenting, else the resting pointer. */
+  private refreshTools() {
+    const active = this.canvas.isDrawing && this.armed ? this.armed
+      : this.canvas.isCommenting ? 'comment'
+      : this.marquee ? 'tool-marquee' : 'tool-select'
+    for (const b of document.querySelectorAll<HTMLElement>(TOOL_CMDS.map((id) => `.ed-topbar [data-cmd="${id}"]`).join(', '))) {
+      const on = b.dataset.cmd === active
+      b.classList.toggle('ed-btn-armed', on)
+      b.setAttribute('aria-pressed', String(on))
+    }
+    // a tool picked from the Shape menu presses the menu's button
+    const shape = document.querySelector<HTMLElement>('.ed-topbar .ed-shape-trigger')
+    if (shape) {
+      const on = Object.values(SHAPE_TOOL).includes(active)
+      shape.classList.toggle('ed-btn-armed', on)
+      shape.setAttribute('aria-pressed', String(on))
+    }
   }
 
   /** F: an empty auto-layout frame (a rect carrying `layout`, layout.ts) —

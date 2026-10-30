@@ -11,6 +11,8 @@ export const ICONS = {
   image: svg('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.5-3.5L6 23"/>'),
   media: svg('<rect x="2" y="4" width="20" height="16" rx="2"/><polygon points="10 9 15 12 10 15" fill="currentColor" stroke="none"/>'),
   cursor: svg('<path d="M4 3l7 17 2.5-7.5L21 10z"/>'),
+  /** the Select-only tool: a dashed box with a pointer at its corner */
+  marquee: svg('<path d="M3 7V4.5A1.5 1.5 0 0 1 4.5 3H7M11 3h3M3 11v3M18 3.5V7"/><path d="M3 18v1.5A1.5 1.5 0 0 0 4.5 21H7"/><path d="M12 12l3.2 8.4 1.4-3.8 3.8-1.4z"/>'),
   pen: svg('<path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.6 7.6"/><circle cx="11" cy="11" r="2"/>'),
   comment: svg('<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>'),
   chart: svg('<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>'),

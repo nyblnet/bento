@@ -1812,10 +1812,11 @@ export class SlideCanvas {
       }
       const selected = this.selectedNodes()
       this.shiftPressOnSelection = false
-      if (
+      // the Select-only tool: a press anywhere starts the marquee, never a move
+      if (!this.marqueeOnly && (
         this.moveable.isMoveableElement(target) ||
         selected.some((n) => n === target || n.contains(target))
-      ) {
+      )) {
         // let Moveable take the drag; a Shift press that never moves is a
         // toggle, resolved in Moveable's click handler
         this.shiftPressOnSelection = (e.inputEvent as MouseEvent).shiftKey
@@ -1829,7 +1830,7 @@ export class SlideCanvas {
         .filter((id): id is string => !!id && !this.isGhost(id)) // a marquee never picks up a ghost
         .map((id) => this.liftToFrame(id)))] // a click or a marquee picks frames, not what is inside them
       this.store.select(this.expandGroups(ids))
-      if (e.isDragStartEnd) {
+      if (e.isDragStartEnd && !this.marqueeOnly) {
         e.inputEvent.preventDefault()
         // Hand this same press to Moveable, so pressing an unselected element and
         // dragging moves it without needing a second press. Moveable cannot accept
@@ -2597,11 +2598,27 @@ export class SlideCanvas {
     })
   }
 
+  /** The Select-only tool (S): drags only ever select — from on top of an
+   *  element too — and nothing moves; the selection's handles still resize and
+   *  rotate. Moving is the Move tool's (V). */
+  marqueeOnly = false
+  setMarqueeOnly(on: boolean) {
+    this.marqueeOnly = on
+    this.moveable.draggable = !on
+    this.selecto.selectFromInside = on
+    this.wrap.classList.toggle('ed-marquee-tool', on)
+  }
+
+  /** Called when an armed draw or place tool stands down (placed, Esc, V). */
+  onToolEnd: (() => void) | null = null
+
   cancelDraw() {
+    const was = !!this.drawOverlay
     this.drawOverlay?.remove()
     this.drawOverlay = null
     if (this.drawKeys) window.removeEventListener('keydown', this.drawKeys, true)
     this.drawKeys = null
+    if (was) this.onToolEnd?.()
   }
 
   /** Arm a box tool (R, O, F, T): a drag draws the element at the dragged

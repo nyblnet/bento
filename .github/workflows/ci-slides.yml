@@ -357,6 +357,10 @@ jobs:
       - name: Chrome that holds still in Chromium
         # Layer rows never move under the pointer; panel handles are centred SVG chevrons.
         run: node scripts/test-slides-steady-chrome-browser.mjs
+      - name: One pressed tool, and Select only in Chromium
+        # V is pressed at rest; an armed tool presses itself; S selects by
+        # dragging from anywhere and never moves anything.
+        run: node scripts/test-slides-select-tool-browser.mjs
       - name: Polish pass 3 in Chromium
         # Reorder inside a frame (bar, slot, arrows, out), ⇧A's gap floor,
         # frame-placed note, toast placement, ⌘A, Enter hands keys back, no cut
