@@ -368,3 +368,8 @@ jobs:
         # the stop bar, the popover's kinds, the canvas gradient knob, stroke
         # position, dashes, corners, flip; hover previews write nothing.
         run: node scripts/test-slides-paint-browser.mjs
+      - name: Fill and stroke stacks in Chromium
+        # Visible layers drawn bottom first, fills under strokes; add a fill or
+        # stroke layer; eye, move and remove are one undo step each; one layer
+        # left folds back into the plain keys.
+        run: node scripts/test-slides-stacks-browser.mjs

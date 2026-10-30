@@ -39,35 +39,51 @@ export interface PaintHost {
 }
 
 /** A fill's paint host: `solidKey` holds the colour (and the fallback under a
- *  gradient), `gradKey` the gradient. A hand-picked solid drops any palette or
- *  token reference on the colour, as every hand-picked colour does. */
-export function paintHost(p: PropsPanel, id: string, solidKey: 'fill' | 'color', gradKey: 'fillGradient' | 'colorGradient', angle = 180): PaintHost {
-  const el = p.store.element(id) as unknown as Record<string, unknown> & { themeRefs?: Record<string, string> }
-  const grad = el[gradKey] as GradientFill | undefined
+ *  gradient), `gradKey` the gradient — element keys, or dotted paths into a
+ *  fill stack's layer (`fills.1.color`, `fills.1.gradient`). A hand-picked
+ *  solid drops any palette or token reference on the colour, as every
+ *  hand-picked colour does. */
+export function paintHost(p: PropsPanel, id: string, solidKey: string, gradKey: string, angle = 180): PaintHost {
+  const el = p.store.element(id)
+  const grad = readAt(el, gradKey) as GradientFill | undefined
   return {
     kind: paintKind(grad),
     grad,
-    solid: String(el[solidKey] ?? '#808080'),
+    solid: String(readAt(el, solidKey) ?? '#808080'),
     write: (kind, g, solid, final) => p.mutate(id, (e) => {
-      const r = e as unknown as Record<string, unknown>
+      const [holder, key] = slot(e, gradKey)
+      if (!holder) return
       if (kind === 'solid') {
-        delete r[gradKey]
-        if (solid !== undefined) setColor(r as never, solidKey, solid, null)
+        delete holder[key]
+        if (solid !== undefined) setColor(e as never, solidKey, solid, null)
       } else {
-        r[gradKey] = g ?? gradientFor(kind, r[gradKey] as GradientFill | undefined, String(r[solidKey]), angle)
+        holder[key] = g ?? gradientFor(kind, holder[key] as GradientFill | undefined, String(readAt(e, solidKey)), angle)
       }
     }, final),
     tokens: Object.entries(p.store.doc.theme.tokens?.set ?? {}).filter(([, v]) => v.type === 'color').map(([name]) => ({
       name,
       color: String(tokenValue(p.store.doc, name) ?? ''),
       pick: () => p.edit(() => {
-        const h = p.store.element(id) as unknown as Record<string, unknown> | undefined
+        const h = p.store.element(id)
         if (!h) return
-        delete h[gradKey]
+        const [holder, key] = slot(h, gradKey)
+        if (holder) delete holder[key]
         bindToken(p.store.doc, h as never, solidKey, name)
       }, true),
     })),
   }
+}
+
+/** The value at a dotted path, or undefined. */
+function readAt(obj: unknown, path: string): unknown {
+  return path.split('.').reduce<any>((cur, k) => (cur == null ? undefined : cur[k]), obj)
+}
+
+/** The object holding a dotted path's last key, and that key. */
+function slot(obj: unknown, path: string): [Record<string, unknown> | undefined, string] {
+  const segs = path.split('.')
+  const key = segs.pop()!
+  return [readAt(obj, segs.join('.')) as Record<string, unknown> | undefined ?? (segs.length ? undefined : obj as Record<string, unknown>), key]
 }
 
 /** A gradient fill's swatch: the gradient itself; a click opens the popover on it. */

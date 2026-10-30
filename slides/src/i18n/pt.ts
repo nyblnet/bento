@@ -1199,4 +1199,11 @@ export const pt: Catalog = {
   "Gradient radius": "Raio do gradiente",
   "Gradient start": "Início do gradiente",
   "Gradient end": "Fim do gradiente",
+  "Add fill layer": "Adicionar camada de preenchimento",
+  "Add stroke layer": "Adicionar camada de contorno",
+  "Show layer": "Mostrar camada",
+  "Hide layer": "Ocultar camada",
+  "Move layer up": "Subir camada",
+  "Move layer down": "Descer camada",
+  "Remove layer": "Remover camada",
 }

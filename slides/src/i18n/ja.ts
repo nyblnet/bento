@@ -1201,4 +1201,11 @@ export const ja: Catalog = {
   "Gradient radius": "グラデーションの半径",
   "Gradient start": "グラデーションの始点",
   "Gradient end": "グラデーションの終点",
+  "Add fill layer": "塗りレイヤーを追加",
+  "Add stroke layer": "線レイヤーを追加",
+  "Show layer": "レイヤーを表示",
+  "Hide layer": "レイヤーを非表示",
+  "Move layer up": "レイヤーを上へ",
+  "Move layer down": "レイヤーを下へ",
+  "Remove layer": "レイヤーを削除",
 }

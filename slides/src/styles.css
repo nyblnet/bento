@@ -3465,3 +3465,13 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-fx-pills button:hover { color: var(--ink); background: var(--chrome-2); }
 .ed-fx-pills button[aria-checked='true'] { color: var(--ink); border-color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }
 .ed-fx-pills button:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 1px; }
+
+/* Fill and stroke stacks (inspector/shape.ts): one row per layer, top first —
+   eye · the layer's own controls · up · down · remove */
+.ed-paintlayer { display: flex; align-items: flex-start; gap: 2px; margin: 0 0 4px; }
+.ed-paintlayer-body { flex: 1 1 auto; min-width: 0; display: grid; gap: 4px; }
+.ed-paintlayer.off .ed-paintlayer-body { opacity: .45; }
+.ed-paintlayer > .ed-btn-icon { flex: none; width: 22px; height: 26px; padding: 0; }
+.ed-paintlayer > .ed-btn-icon:disabled { opacity: .3; cursor: default; }
+.ed-paintlayer-eye[aria-pressed="true"] { color: var(--muted); }
+.ed-addlayer { display: inline-flex; align-items: center; gap: 6px; }

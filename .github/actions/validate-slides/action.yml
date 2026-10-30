@@ -625,3 +625,11 @@ runs:
       run: |
         slides/node_modules/.bin/esbuild scripts/test-slides-paint.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-paint.mjs"
         node "$RUNNER_TEMP/test-slides-paint.mjs"
+    - name: Fill and stroke stacks rig
+      # The top visible layer is mirrored into the plain paint keys an older
+      # shell draws; colour refs move with their layer; the gate keeps a good
+      # stack and drops a bad one whole; every layer's paint is gated.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-slides-stacks.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-stacks.mjs"
+        node "$RUNNER_TEMP/test-slides-stacks.mjs"

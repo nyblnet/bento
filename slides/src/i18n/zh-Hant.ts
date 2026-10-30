@@ -1201,4 +1201,11 @@ export const zhHant: Catalog = {
   "Gradient radius": "漸層半徑",
   "Gradient start": "漸層起點",
   "Gradient end": "漸層終點",
+  "Add fill layer": "新增填色圖層",
+  "Add stroke layer": "新增描邊圖層",
+  "Show layer": "顯示圖層",
+  "Hide layer": "隱藏圖層",
+  "Move layer up": "上移圖層",
+  "Move layer down": "下移圖層",
+  "Remove layer": "移除圖層",
 }
