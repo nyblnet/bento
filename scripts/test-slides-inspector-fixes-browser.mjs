@@ -70,7 +70,12 @@ try {
     await p.evaluate(() => document.activeElement?.blur()); await p.waitForTimeout(200)
   }
   const pickTheme = async (scope, name) => {
-    await p.locator(`${scope} button[aria-label="Colors & tokens"]`).first().click()
+    // the section's ⠿ (Figma's catalog) where the field sits in a paint row; the field's own button elsewhere
+    await p.locator(scope).first().evaluate((b) => {
+      const head = b.previousElementSibling
+      const cat = head?.classList.contains('ed-section') ? head.querySelector('.ed-sec-cat') : null
+      ;(cat ?? b.querySelector('button[aria-label="Colors & tokens"]'))?.click()
+    })
     await p.locator('.ed-tokpick-opt', { hasText: name }).first().click()
     await p.waitForTimeout(200)
   }

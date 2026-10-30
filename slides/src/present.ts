@@ -9,7 +9,7 @@ import 'reveal.js/dist/reveal.css'
 import { anim, resetXform } from './anim'
 import { chartSnapshotSvg, mountChart } from './charts'
 import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
-import { morphKey, paginates, inLinearFlow, isWebUrl } from './model'
+import { morphKey, paginates, inLinearFlow, isWebUrl, visiblePaint } from './model'
 import { fillLayers, strokeLayers } from './stacks'
 import { isFrame, morphClip } from './layout'
 import { applyElementFrame, cssColor, fetchFreeOption, flipContent, flipOf, gradientLineCoords, paintSafeShape, radialGeom, renderSlide } from './render'
@@ -2008,7 +2008,8 @@ function elementsById(root: HTMLElement): Map<string, HTMLElement> {
  */
 function modelByMorphKey(doc: BentoDoc, index: number): Map<string, SlideElement> {
   const map = new Map<string, SlideElement>()
-  for (const el of doc.slides[index]?.elements ?? []) map.set(morphKey(el), el)
+  // the morph tweens what is drawn: a paint switched off is off at both ends
+  for (const el of doc.slides[index]?.elements ?? []) map.set(morphKey(el), visiblePaint(el))
   return map
 }
 

@@ -3626,28 +3626,48 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-fx-pills button[aria-checked='true'] { color: var(--ink); border-color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }
 .ed-fx-pills button:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 1px; }
 
-/* Fill and stroke stacks (inspector/shape.ts): one row per layer, top first —
-   eye · the layer's own controls · up · down · remove */
-/* grip · eye · paint · ⋯ on the first line; a stroke's width/position, then
-   the ⋯ extras, on full-width lines under it */
-.ed-paintlayer { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 2px; margin: 0 0 4px; }
-.ed-paintlayer > .ed-grid2, .ed-paintlayer-extras { flex: 1 0 100%; padding-inline-start: 38px; box-sizing: border-box; }
-.ed-paintlayer-extras { display: grid; gap: 4px; padding-top: 4px; }
-.ed-paintlayer-extras[hidden] { display: none; }
-.ed-paintlayer-moves { display: flex; gap: 2px; }
-.ed-paintlayer-moves .ed-btn-icon { width: 24px; height: 26px; padding: 0; }
-.ed-paintlayer-moves .ed-btn-icon:disabled { opacity: .3; cursor: default; }
-.ed-paintlayer-body { flex: 1 1 auto; min-width: 0; display: grid; gap: 4px; }
-.ed-paintlayer.off .ed-paintlayer-body { opacity: .45; }
-.ed-paintlayer > .ed-btn-icon { flex: none; width: 22px; height: 26px; padding: 0; }
-.ed-paintlayer > .ed-btn-icon:disabled { opacity: .3; cursor: default; }
-.ed-paintlayer-eye[aria-pressed="true"] { color: var(--muted); }
-.ed-paintlayer-grip { flex: none; width: 12px; height: 26px; display: grid; place-items: center; color: var(--muted); font-size: 11px; cursor: grab; user-select: none; }
+/* Figma's paint row (inspector/paintrow.ts): [field] · 👁 · − — the eye and
+   the − in a trailing column of 26px squares, the same right edge in Fill,
+   Stroke, Shadow and Blur, under the header's ⠿ and + */
+.ed-paintrow { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 26px 26px; gap: 4px; align-items: center; margin: 0 0 4px; }
+.ed-paintrow > .ed-btn-icon { width: 26px; height: 26px; padding: 0; display: grid; place-items: center; color: var(--muted); }
+.ed-paintrow > .ed-btn-icon:hover { color: var(--ink); background: var(--chrome-2); }
+.ed-paintrow > .ed-btn-icon svg { width: 16px; height: 16px; }
+.ed-paintrow.off > :first-child, .ed-paintrow.off > .ed-paintlayer-grip + * { opacity: .45; }
+/* the field's own palette button gives way to the section's ⠿ */
+.ed-props .ed-paintrow .ed-color-open { display: none; }
+.ed-paint-cell { width: 26px; height: 26px; }
+/* a stack's grip: at the row's left edge, only under the pointer */
+.ed-paintlayer > .ed-paintlayer-grip {
+  position: absolute; inset-inline-start: -11px; top: 0; width: 10px; height: 26px; display: grid; place-items: center;
+  color: var(--muted); font-size: 10px; cursor: grab; user-select: none; opacity: 0; transition: opacity .1s;
+}
+.ed-paintlayer:hover > .ed-paintlayer-grip { opacity: 1; }
 .ed-paintlayer.is-dragging { opacity: .5; }
 .ed-paintlayer.is-over { box-shadow: inset 0 2px 0 var(--blue); }
+.ed-paintlayer-extras { display: grid; gap: 4px; margin: 0 0 6px; }
+.ed-paintlayer-extras[hidden] { display: none; }
+/* Stroke's Position | Weight line, then the sliders button in the eye column */
+.ed-stroke-line { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4px; align-items: center; }
+.ed-stroke-line:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
+.ed-stroke-more { display: grid; gap: 4px; margin: 0 0 6px; }
+.ed-stroke-more[hidden] { display: none; }
+/* Shadow / Blur: an effect chip — preview and name — opening its settings */
+.ed-effect-chip { display: flex; align-items: center; gap: 8px; width: 100%; height: 26px; padding: 0 8px; box-sizing: border-box; border: 1px solid var(--field-line); border-radius: 6px; background: var(--field); color: var(--ink); font-size: 12px; text-align: start; }
+.ed-effect-chip:hover { border-color: var(--field-line-hot, var(--line)); }
+.ed-effect-chip[aria-expanded="true"] { border-color: var(--blue); }
+.ed-effect-swatch { flex: none; width: 14px; height: 14px; border-radius: 3px; background: var(--surface); border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted); }
+.ed-effect-swatch svg { width: 12px; height: 12px; }
+.ed-effect-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-effect-editor { display: grid; gap: 4px; margin: 0 0 6px; }
+/* the header's ⠿ and +: 26px squares over the row's 👁 and − */
+.ed-props .ed-section > .ed-sec-cat + .ed-sec-act { margin-inline-start: -2px; } /* the header's 6px gap less 2: the rows' 4px */
+/* a ⠿ with no + beside it still sits over the 👁 column, not the − one */
+.ed-props .ed-section > .ed-sec-cat:last-child { margin-inline-end: 30px; }
+.ed-props .ed-section > .ed-sec-act { width: 26px; height: 26px; }
+.ed-props .ed-section > .ed-sec-act svg { width: 16px; height: 16px; }
 .ed-layer-blend { width: 100%; }
 .ed-grad-knob.ed-grad-stop { border-radius: 3px; cursor: ew-resize; }
-.ed-addlayer { display: inline-flex; align-items: center; gap: 6px; height: 26px; }
 /* the padlock (arrange.ts ratioLock): at the end of W's own field */
 .ed-has-lock { position: relative; }
 .ed-has-lock input { padding-inline-end: 24px; }

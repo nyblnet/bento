@@ -15,6 +15,7 @@ import { colorAlpha, gradientRows, gradientChip, paintHost, sharedLink } from '.
 import { segmented } from './fields'
 import { BOOL_OPS, boolUi, flatten, release, setOp } from '../booleans'
 import { openCtxMenu } from '../ctxmenu'
+import { paintRow, colorCatalog } from './paintrow'
 
 /** What only some shapes have: line tips, a second arrow head, a boolean's operation. */
 export function buildShapeProps(p: PropsPanel, el: ShapeElement) {
@@ -65,26 +66,29 @@ export function buildShapeProps(p: PropsPanel, el: ShapeElement) {
 
 export function buildShapeFill(p: PropsPanel, el: ShapeElement) {
   if (el.shape === 'line') return // its one colour is `fill`, shown under Stroke (buildShapeStroke)
-  section(p, t('Fill'))
-  if (el.fills) {
-    buildFillStack(p, el)
-    addLayerButton(p, t('Add fill layer'), () => restackFills(p, el, (ls, order) => { ls.push({ color: NEW_LAYER }); order.push(-1) }))
-    return
-  }
+  // Figma's Fill: ⠿ and + on the header, each fill a row with 👁 and −.
+  // + adds a fill when there is none, another layer when there is one.
+  const has = !!el.fills || !!el.fillGradient || parseColor(el.fill).a > 0
+  const addFill = () => has
+    ? restackFills(p, el, (ls, order) => { ls.push({ color: NEW_LAYER }); order.push(-1) })
+    : p.mutate(el.id, (e) => { const s = e as ShapeElement; s.fill = '#D9D9D9'; delete s.fillHidden; delete s.themeRefs?.fill }, true)
+  section(p, t('Fill'), { add: true, empty: !has, hint: has ? t('Add fill layer') : t('Add fill'), run: addFill }, colorCatalog(p, has ? undefined : addFill))
+  if (el.fills) { buildFillStack(p, el); return }
+  if (!has) return
   const grad = el.fillGradient
   const host = paintHost(p, el.id, 'fill', 'fillGradient')
-  if (host.kind === 'solid' || !grad) {
-    field(p, colorAlpha(p, el.fill, (v, fin) =>
-      p.mutate(el.id, (e) => { (e as ShapeElement).fill = v }, fin),
-      { id: el.id, path: 'fill' }, host))
-  } else {
-    field(p, gradientChip(p, host))
+  const content = host.kind === 'solid' || !grad
+    ? colorAlpha(p, el.fill, (v, fin) => p.mutate(el.id, (e) => { (e as ShapeElement).fill = v }, fin), { id: el.id, path: 'fill' }, host)
+    : gradientChip(p, host)
+  paintRow(p, content,
+    { hidden: !!el.fillHidden, toggle: () => p.mutate(el.id, (e) => { if (e.fillHidden) delete e.fillHidden; else e.fillHidden = true }, true) },
+    () => p.mutate(el.id, (e) => { const s = e as ShapeElement; s.fill = 'transparent'; delete s.fillGradient; delete s.fillHidden; delete s.themeRefs?.fill }, true))
+  if (grad && host.kind !== 'solid') {
     gradientRows(p, grad, (fn, fin) => p.mutate(el.id, (e) => {
       const g = (e as ShapeElement).fillGradient
       if (g) fn(g)
     }, fin), host.target)
   }
-  addLayerButton(p, t('Add fill layer'), () => restackFills(p, el, (ls, order) => { ls.push({ color: NEW_LAYER }); order.push(-1) }))
 }
 
 /** A new layer: half-transparent, so the one beneath still shows it is there. */
@@ -151,26 +155,39 @@ function blendSelect(value: string | undefined, set: (v: string | undefined) => 
   return sel
 }
 
-/** Which layer rows have their ⋯ open, by element and layer — kept across
- *  the rebuild every edit inside them causes. */
+/** Which layer rows have their options open, by element and layer — kept
+ *  across the rebuild every edit inside them causes. */
 const openExtras = new Set<string>()
 
 /**
- * A layer row, Figma's: grip · eye · the paint · ⋯. What a layer needs less
- * often — its blend, a stroke's dashes, moving it, removing it — sits behind
- * ⋯, so the paint keeps the row's width at every panel size. The grip drags
- * the row onto another of the same stack (`stack` names it, so a fill never
- * lands among strokes); Move up / Move down are the keyboard's way.
+ * A layer row, Figma's: the paint · 👁 · −. The grip shows at the row's left
+ * edge on hover and drags the row onto another of the same stack (`stack`
+ * names it, so a fill never lands among strokes). What a layer needs less
+ * often — its blend, a stroke's dashes — opens from the row's context menu
+ * (right-click, or the menu key / ⇧F10 on a focused field); Alt+↑ / Alt+↓
+ * move the layer, the keyboard's way of dragging.
  */
 function layerRow(p: PropsPanel, el: { id: string }, stack: 'fill' | 'stroke', i: number, hidden: boolean, act: ReturnType<typeof layerActions>, paint: HTMLElement, extras: HTMLElement[], under: HTMLElement[] = []) {
-  const row = document.createElement('div')
-  row.className = 'ed-paintlayer' + (hidden ? ' off' : '')
+  const key = `${el.id}:${stack}${i}`
+  const box = document.createElement('div')
+  box.className = 'ed-paintlayer-extras'
+  box.hidden = !openExtras.has(key)
+  box.append(...extras)
+  const toggleExtras = () => {
+    if (openExtras.has(key)) openExtras.delete(key)
+    else openExtras.add(key)
+    box.hidden = !openExtras.has(key)
+  }
+  const row = paintRow(p, paint, { hidden, toggle: act.eye }, act.remove)
+  row.classList.add('ed-paintlayer')
   row.dataset.layer = `${stack}${i}`
+  row.title = t('Right-click for blend and more · Alt+↑/↓ moves the layer')
   const grip = document.createElement('span')
   grip.className = 'ed-paintlayer-grip'
   grip.textContent = '⠿'
   grip.title = t('Drag to reorder')
   grip.setAttribute('aria-hidden', 'true')
+  row.prepend(grip)
   // only the grip starts a drag: a draggable row would steal its fields' text selection
   grip.addEventListener('pointerdown', () => { row.draggable = true })
   row.addEventListener('dragend', () => { row.draggable = false; row.classList.remove('is-dragging') })
@@ -189,56 +206,16 @@ function layerRow(p: PropsPanel, el: { id: string }, stack: 'fill' | 'stroke', i
     e.preventDefault()
     act.moveFrom(+from)
   })
-  const btn = (icon: string, label: string, run?: () => void) => {
-    const b = opBtn(icon, label, () => run?.()) as HTMLButtonElement
-    b.type = 'button'
-    b.setAttribute('aria-label', label)
-    b.disabled = !run
-    return b
-  }
-  const eye = btn(ICONS.eye, hidden ? t('Show layer') : t('Hide layer'), act.eye)
-  eye.classList.add('ed-paintlayer-eye')
-  eye.setAttribute('aria-pressed', String(hidden))
-  const main = document.createElement('div')
-  main.className = 'ed-paintlayer-body'
-  main.append(paint)
-  const key = `${el.id}:${stack}${i}`
-  const more = btn(ICONS.more, t('More layer options'), () => {
-    if (openExtras.has(key)) openExtras.delete(key)
-    else openExtras.add(key)
-    const open = openExtras.has(key)
-    box.hidden = !open
-    more.setAttribute('aria-expanded', String(open))
+  row.addEventListener('contextmenu', (e) => { if (extras.length) { e.preventDefault(); toggleExtras() } })
+  row.addEventListener('keydown', (e) => {
+    if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return
+    e.preventDefault()
+    e.stopPropagation()
+    ;(e.key === 'ArrowUp' ? act.up : act.down)?.()
   })
-  more.classList.add('ed-paintlayer-more')
-  const box = document.createElement('div')
-  box.className = 'ed-paintlayer-extras'
-  box.id = `ed-extras-${key.replace(/\W/g, '-')}`
-  more.setAttribute('aria-controls', box.id)
-  more.setAttribute('aria-expanded', String(openExtras.has(key)))
-  box.hidden = !openExtras.has(key)
-  const moves = document.createElement('div')
-  moves.className = 'ed-paintlayer-moves'
-  moves.append(
-    btn(ICONS.forward, t('Move layer up'), act.up),
-    btn(ICONS.backward, t('Move layer down'), act.down),
-    btn(ICONS.minus, t('Remove layer'), act.remove))
-  box.append(...extras, moves)
-  row.append(grip, eye, main, more, ...under, box)
-  p.host.appendChild(row)
+  p.host.append(...under, box)
 }
 
-function addLayerButton(p: PropsPanel, label: string, run: () => void) {
-  const b = document.createElement('button')
-  b.type = 'button'
-  b.className = 'ed-btn ed-addlayer'
-  b.innerHTML = ICONS.plus
-  const span = document.createElement('span')
-  span.textContent = label
-  b.append(span)
-  b.addEventListener('click', run)
-  field(p, b)
-}
 
 /** The fill stack, top layer first — the order Figma and Penpot list it in. */
 function buildFillStack(p: PropsPanel, el: ShapeElement) {
@@ -324,40 +301,70 @@ function dashFields(dashes: [number, number] | undefined, set: (k: 0 | 1, v: num
 export function buildShapeStroke(p: PropsPanel, el: ShapeElement) {
   const isLine = el.shape === 'line' || (el.shape === 'path' && !/z\s*$/i.test(el.d ?? ''))
   const on = !!el.strokes || (el.strokeWidth > 0 && parseColor(el.stroke).a > 0)
-  section(p, t('Stroke'), isLine ? undefined : on
-    ? { add: false, hint: t('Remove stroke'), run: () => p.mutate(el.id, (e) => { setStrokeLayers(e as ShapeElement, [], []) }, true) }
-    : { add: true, hint: t('Add stroke'), run: () => p.mutate(el.id, (e) => {
+  // Figma's Stroke: ⠿ and + on the header; + adds the stroke, then layers.
+  // A line IS its stroke, so it has no − and no + for a first stroke.
+  const addStroke = () => on || isLine
+    ? restackStrokes(p, el, (ls, order) => { ls.push({ color: '#1E2A3A', width: 2 }); order.push(-1) })
+    : p.mutate(el.id, (e) => {
       const s = e as ShapeElement
       s.strokeWidth = 2
+      delete s.strokeHidden
       if (parseColor(s.stroke).a === 0) s.stroke = '#1E2A3A'
-    }, true) })
+    }, true)
+  section(p, t('Stroke'), { add: true, empty: !on && !isLine, hint: on || isLine ? t('Add stroke layer') : t('Add stroke'), run: addStroke }, colorCatalog(p, on || isLine ? undefined : addStroke))
   if (!on && !isLine) return
-  const addStroke = () => addLayerButton(p, t('Add stroke layer'), () => restackStrokes(p, el, (ls, order) => {
-    ls.push({ color: '#1E2A3A', width: 2 })
-    order.push(-1)
-  }))
-  if (el.strokes) {
-    buildStrokeStack(p, el, isLine)
-    addStroke()
-    return
-  }
+  if (el.strokes) { buildStrokeStack(p, el, isLine); return }
   // solid, or a gradient along the stroke (strokeGradient; the colour stays its fallback)
   const solidKey = el.shape === 'line' ? 'fill' : 'stroke'
   const host = paintHost(p, el.id, solidKey, 'strokeGradient')
+  const content = host.kind !== 'solid' && el.strokeGradient
+    ? gradientChip(p, host)
+    : el.shape === 'line'
+      ? colorAlpha(p, el.fill, (v, fin) => p.mutate(el.id, (e) => { (e as ShapeElement).fill = v }, fin), { id: el.id, path: 'fill' }, host)
+      : colorAlpha(p, el.stroke === 'transparent' ? 'rgba(30, 42, 58, 0)' : el.stroke, (v, fin) =>
+        p.mutate(el.id, (e) => { (e as ShapeElement).stroke = v }, fin), { id: el.id, path: 'stroke' }, host)
+  paintRow(p, content,
+    { hidden: !!el.strokeHidden, toggle: () => p.mutate(el.id, (e) => { if (e.strokeHidden) delete e.strokeHidden; else e.strokeHidden = true }, true) },
+    isLine ? undefined : () => p.mutate(el.id, (e) => { setStrokeLayers(e as ShapeElement, [], []); delete e.strokeHidden }, true))
   if (host.kind !== 'solid' && el.strokeGradient) {
-    field(p, gradientChip(p, host))
     gradientRows(p, el.strokeGradient, (fn, fin) => p.mutate(el.id, (e) => {
       const g = (e as ShapeElement).strokeGradient
       if (g) fn(g)
     }, fin), host.target)
-  } else if (el.shape === 'line') {
-    field(p, colorAlpha(p, el.fill, (v, fin) =>
-      p.mutate(el.id, (e) => { (e as ShapeElement).fill = v }, fin),
-      { id: el.id, path: 'fill' }, host))
-  } else {
-    field(p, colorAlpha(p, el.stroke === 'transparent' ? 'rgba(30, 42, 58, 0)' : el.stroke, (v, fin) =>
-      p.mutate(el.id, (e) => { (e as ShapeElement).stroke = v }, fin), undefined, host))
   }
+  // Position | Weight, then ⚙ for the rest (Figma's stroke settings): the line
+  // style and a custom dash pattern live behind the sliders button
+  const weight = tokenBind(p, mini(t('Weight'), el.strokeWidth, (v, fin) =>
+    p.mutate(el.id, (e) => { (e as ShapeElement).strokeWidth = Math.max(v, 0) }, fin), ICONS.strokeWeight, { min: 0 }), el, 'strokeWidth')
+  const line = document.createElement('div')
+  line.className = 'ed-stroke-line'
+  if (!isLine) {
+    const def = el.shape === 'rect' || el.shape === 'ellipse' || el.shape === 'triangle' ? 'inside' : 'center'
+    const align = segmented(['inside', 'center', 'outside'], el.strokeAlign ?? def, (v) => p.mutate(el.id, (e) => {
+      const s = e as ShapeElement
+      if (v === def) delete s.strokeAlign
+      else s.strokeAlign = v as 'inside' | 'center' | 'outside'
+    }, true), alignWords(), ALIGN_GLYPHS)
+    align.setAttribute('aria-label', t('Stroke position'))
+    line.append(align)
+  }
+  line.append(weight)
+  const key = `${el.id}:stroke`
+  const more = document.createElement('div')
+  more.className = 'ed-stroke-more'
+  more.hidden = !openStroke.has(key)
+  const sliders = opBtn(ICONS.sliders, t('Stroke settings'), () => {
+    if (openStroke.has(key)) openStroke.delete(key)
+    else openStroke.add(key)
+    more.hidden = !openStroke.has(key)
+    sliders.setAttribute('aria-expanded', String(!more.hidden))
+  })
+  sliders.classList.add('ed-stroke-sliders')
+  sliders.setAttribute('aria-expanded', String(!more.hidden))
+  const lineRow = document.createElement('div')
+  lineRow.className = 'ed-paintrow ed-stroke-settings'
+  lineRow.append(line, sliders, Object.assign(document.createElement('span'), { className: 'ed-paint-cell' }))
+  p.host.appendChild(lineRow)
   // 'custom' is a dash and gap of the author's own (strokeDashes); the
   // nearest named style stays under it for a shell that predates it
   const style = segmented(['solid', 'dashed', 'dotted', 'custom'],
@@ -375,11 +382,7 @@ export function buildShapeStroke(p: PropsPanel, el: ShapeElement) {
     }, true), { solid: t('Solid'), dashed: t('Dashed'), dotted: t('Dotted'), custom: t('Custom dashes') },
     { solid: ICONS.lineSolid, dashed: ICONS.lineDashed, dotted: ICONS.lineDotted, custom: ICONS.lineCustom })
   style.setAttribute('aria-label', t('Line style'))
-  const grid = document.createElement('div')
-  grid.className = 'ed-grid2'
-  grid.append(tokenBind(p, mini(t('Width'), el.strokeWidth, (v, fin) =>
-    p.mutate(el.id, (e) => { (e as ShapeElement).strokeWidth = Math.max(v, 0) }, fin), undefined, { min: 0 }), el, 'strokeWidth'), style)
-  p.host.appendChild(grid)
+  more.append(style)
   if (el.strokeDashes) {
     const dashes = document.createElement('div')
     dashes.className = 'ed-grid2'
@@ -388,21 +391,13 @@ export function buildShapeStroke(p: PropsPanel, el: ShapeElement) {
       if (s.strokeDashes) s.strokeDashes[i] = Math.max(v, 0)
     }, fin), undefined, { min: 0 })
     dashes.append(part(0, t('Dash')), part(1, t('Gap')))
-    p.host.appendChild(dashes)
+    more.append(dashes)
   }
-  // Inside | Center | Outside — closed outlines only; a line has no inside
-  if (!isLine) {
-    const def = el.shape === 'rect' || el.shape === 'ellipse' || el.shape === 'triangle' ? 'inside' : 'center'
-    const align = segmented(['inside', 'center', 'outside'], el.strokeAlign ?? def, (v) => p.mutate(el.id, (e) => {
-      const s = e as ShapeElement
-      if (v === def) delete s.strokeAlign
-      else s.strokeAlign = v as 'inside' | 'center' | 'outside'
-    }, true), alignWords(), ALIGN_GLYPHS)
-    align.setAttribute('aria-label', t('Stroke position'))
-    row(p, 'Stroke position', align)
-  }
-  addStroke()
+  p.host.appendChild(more)
 }
+
+/** Which strokes have their settings (style, dashes) open — kept across rebuilds. */
+const openStroke = new Set<string>()
 
 const ALIGN_GLYPHS = { inside: ICONS.strokeInside, center: ICONS.strokeCenter, outside: ICONS.strokeOutside }
 const alignWords = () => ({ inside: t('Inside'), center: t('Center'), outside: t('Outside') })

@@ -439,7 +439,8 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
       else stats.editable++
     }
 
-    for (const el of slide.elements) {
+    for (const raw of slide.elements) {
+      const el = visiblePaint(raw)
       const first = children.length
       if (hasStaticFx(el)) {
         // once per slide via the Report's (code, where) folding — #88's rule
@@ -639,4 +640,26 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
   if (problems.length) throw new Error(`the PowerPoint package failed its self-check (a bug in the writer): ${problems.join('; ')}`)
   const bytes = await writeZip(entries, opts.at ? { at: opts.at } : {})
   return { bytes, report: report.build(), stats }
+}
+
+/**
+ * Paint switched off with the inspector's eye (`fillHidden`, `strokeHidden`,
+ * `shadowHidden`, `blurHidden`) is not exported — it is kept in the deck,
+ * not drawn. The writer never imports an app, so this mirrors
+ * slides/src/model.ts visiblePaint.
+ */
+function visiblePaint<E extends object>(el: E): E {
+  const f = el as Record<string, unknown>
+  if (!f.fillHidden && !f.strokeHidden && !f.shadowHidden && !f.blurHidden) return el
+  const e: Record<string, unknown> = { ...f }
+  if (e.type === 'shape') {
+    if (f.fillHidden || (f.strokeHidden && e.shape === 'line')) { e.fill = 'transparent'; delete e.fillGradient; delete e.fills }
+    if (f.strokeHidden) { e.strokeWidth = 0; delete e.strokes; delete e.strokeGradient }
+  } else if (e.type === 'text') {
+    if (f.fillHidden) { e.color = 'transparent'; delete e.colorGradient }
+    if (f.strokeHidden) delete e.textStroke
+  }
+  if (f.shadowHidden) delete e.shadow
+  if (f.blurHidden) { delete e.blur; delete e.backdropFilter }
+  return e as unknown as E
 }

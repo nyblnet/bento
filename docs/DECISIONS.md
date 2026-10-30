@@ -12216,3 +12216,20 @@ selections, and Esc lets go of the selection before returning to Move.
 Moving stays Move's job, as in Figma. The tool bar presses exactly one tool
 at a time (Move at rest), so which mode a drag will act in is always on
 screen.
+
+## 2026-10-30 — slides: Fill, Stroke, Shadow and Blur read as Figma's
+
+Each paint section heads with Figma's ⠿ catalog (the deck's theme colours
+and tokens for that property, with Manage tokens) and +; each paint is a row
+of the field, 👁 and −, the eye and − in one 26px column under the header's
+⠿ and +. The field's own palette button gave way to the ⠿: one entry point
+per section. Hiding a single paint keeps it: additive `fillHidden`,
+`strokeHidden`, `shadowHidden`, `blurHidden` (true or absent), read through
+model.ts `visiblePaint` by the renderer and the morph, and stripped by the
+PowerPoint writer — so the canvas, thumbnails, the show and export all agree.
+An older shell draws the paint (it ignores the key); the value is never
+lost. Stacks keep their per-layer `hidden`. A stack row's blend and dashes
+open on right-click (or the menu key); Alt+↑/↓ moves a layer, the grip shows
+on hover. Stroke's line style and dashes sit behind its sliders button, under
+a Position | Weight row. Shadow and Blur are one row each — a chip opens the
+settings — so a second shadow is still not offered.
