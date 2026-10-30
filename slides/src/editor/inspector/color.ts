@@ -6,23 +6,131 @@ import { fillStyles, parseColor, unitHandle, slotLabel, combineColor, alphaOf, S
 import { t } from '../../i18n'
 import type { PropsPanel } from '../panels'
 import { ICONS } from '../../icons'
-import type { Slide } from '../../model'
+import type { GradientFill, Slide } from '../../model'
 import { setColor, paletteOf, refAt, PALETTE_SLOTS, slotIsSet } from '../../palette'
-import { cssColor } from '../../render'
+import { cssColor, cssGradient, radialGeom } from '../../render'
 import { bindToken, tokenName, tokenValue } from '../../tokens'
 import { openColorPopover } from './colorpopover'
+import { gradientBar } from './gradientbar'
 
-/** Solid | Gradient, one click. */
-export function fillKind(value: 'solid' | 'gradient', onChange: (v: string) => void): HTMLElement {
-  const seg = segmented(['solid', 'gradient'], value, onChange, Object.fromEntries(fillStyles()))
+export type PaintKind = 'solid' | 'linear' | 'radial'
+export const paintKind = (g?: GradientFill): PaintKind => (!g?.stops?.length ? 'solid' : g.kind === 'radial' ? 'radial' : 'linear')
+
+/** The gradient a fill becomes when switched to `kind`, starting from what it
+ *  has: an existing gradient keeps its stops; a solid colour fades out. */
+export function gradientFor(kind: 'linear' | 'radial', from: GradientFill | undefined, solid: string, angle = 180): GradientFill {
+  const base = parseColor(solid)
+  const g: GradientFill = from?.stops?.length
+    ? { angle: from.angle ?? angle, stops: from.stops.map((st) => ({ ...st })) }
+    : { angle, stops: [{ at: 0, color: combineColor(base.hex, Math.max(base.a, 0.85)) }, { at: 1, color: combineColor(base.hex, 0) }] }
+  if (kind === 'radial') Object.assign(g, { kind: 'radial', cx: from?.cx ?? 0.5, cy: from?.cy ?? 0.5, r: from?.r ?? 0.5 })
+  return g
+}
+
+/** What the colour popover needs to switch a fill between solid, linear,
+ *  radial and a token, and to write it. One write per edit, as p.mutate does:
+ *  non-final while previewing, final on commit — one undo step. */
+export interface PaintHost {
+  kind: PaintKind
+  grad?: GradientFill
+  solid: string
+  write: (kind: PaintKind, grad: GradientFill | undefined, solid: string | undefined, final: boolean) => void
+  tokens: Array<{ name: string; color: string; pick: () => void }>
+}
+
+/** A fill's paint host: `solidKey` holds the colour (and the fallback under a
+ *  gradient), `gradKey` the gradient. A hand-picked solid drops any palette or
+ *  token reference on the colour, as every hand-picked colour does. */
+export function paintHost(p: PropsPanel, id: string, solidKey: 'fill' | 'color', gradKey: 'fillGradient' | 'colorGradient', angle = 180): PaintHost {
+  const el = p.store.element(id) as unknown as Record<string, unknown> & { themeRefs?: Record<string, string> }
+  const grad = el[gradKey] as GradientFill | undefined
+  return {
+    kind: paintKind(grad),
+    grad,
+    solid: String(el[solidKey] ?? '#808080'),
+    write: (kind, g, solid, final) => p.mutate(id, (e) => {
+      const r = e as unknown as Record<string, unknown>
+      if (kind === 'solid') {
+        delete r[gradKey]
+        if (solid !== undefined) setColor(r as never, solidKey, solid, null)
+      } else {
+        r[gradKey] = g ?? gradientFor(kind, r[gradKey] as GradientFill | undefined, String(r[solidKey]), angle)
+      }
+    }, final),
+    tokens: Object.entries(p.store.doc.theme.tokens?.set ?? {}).filter(([, v]) => v.type === 'color').map(([name]) => ({
+      name,
+      color: String(tokenValue(p.store.doc, name) ?? ''),
+      pick: () => p.edit(() => {
+        const h = p.store.element(id) as unknown as Record<string, unknown> | undefined
+        if (!h) return
+        delete h[gradKey]
+        bindToken(p.store.doc, h as never, solidKey, name)
+      }, true),
+    })),
+  }
+}
+
+/** A gradient fill's swatch: the gradient itself; a click opens the popover on it. */
+export function gradientChip(p: PropsPanel, host: PaintHost): HTMLElement {
+  const b = document.createElement('button')
+  b.type = 'button'
+  b.className = 'ed-gradchip'
+  b.style.setProperty('--grad', host.grad ? cssGradient(host.grad) : 'none')
+  b.textContent = host.kind === 'radial' ? t('Radial') : t('Linear')
+  b.title = t('Edit the gradient')
+  b.addEventListener('click', () => {
+    const first = parseColor(host.grad?.stops[0]?.color ?? host.solid)
+    openColorPopover(b, {
+      hex: first.hex,
+      alpha: first.a,
+      groups: [],
+      preview: (hex, a) => host.write('solid', undefined, combineColor(hex, a), false),
+      commit: (hex, a) => host.write('solid', undefined, combineColor(hex, a), true),
+      cancel: () => { if (p.burst) { p.burst = false; p.store.undo() } },
+      paint: host,
+      done: () => settle(p),
+    })
+  })
+  return b
+}
+
+/** After the popover changed the fill's kind, the section must be rebuilt:
+ *  let go of the field the popover handed focus back to, so the panel's
+ *  deferred rebuild runs. */
+function settle(p: PropsPanel) {
+  const a = document.activeElement as HTMLElement | null
+  if (a && p.host.contains(a)) a.blur()
+  if (p.stale) p.rebuild()
+}
+
+/** Solid | Linear | Radial, one click. */
+export function fillKind(value: PaintKind, onChange: (v: string) => void): HTMLElement {
+  const seg = segmented(['solid', 'linear', 'radial'], value, onChange, Object.fromEntries(fillStyles()))
   seg.setAttribute('aria-label', t('Fill style'))
   return seg
 }
 
 /** A gradient's angle and stops, shared by text and shapes. `edit` hands
  *  the live gradient to change. */
-export function gradientRows(p: PropsPanel, grad: { angle: number; stops: Array<{ at: number; color: string }> }, edit: (fn: (g: typeof grad) => void, final: boolean) => void) {
+export function gradientRows(p: PropsPanel, grad: GradientFill, edit: (fn: (g: GradientFill) => void, final: boolean) => void) {
+  p.host.appendChild(gradientBar(grad, edit))
+  if (grad.kind === 'radial') {
+    // the centre and radius, in % of the box (the canvas handle drags them too)
+    const { cx, cy, r } = radialGeom(grad)
+    const pct = (label: string, v: number, set: (g: GradientFill, v: number) => void) =>
+      mini(label, Math.round(v * 100), (n, fin) => edit((g) => set(g, n / 100), fin), undefined, { unit: '%' })
+    const grid = document.createElement('div')
+    grid.className = 'ed-grid3'
+    grid.append(
+      pct(t('X'), cx, (g, v) => { g.cx = v }),
+      pct(t('Y'), cy, (g, v) => { g.cy = v }),
+      pct(t('Radius'), r, (g, v) => { g.r = Math.max(v, 0.01) }),
+    )
+    grid.title = t('Centre and radius, in % of the box')
+    p.host.appendChild(grid)
+  }
   const angle = mini(t('Gradient angle'), grad.angle, (v, fin) => edit((g) => { g.angle = v }, fin), ICONS.rotate, { unit: '°' })
+  if (grad.kind === 'radial') angle.hidden = true // kept in the model (an older shell draws it), not a radial's control
   const add = document.createElement('button')
   add.type = 'button'
   add.className = 'ed-btn ed-tool'
@@ -239,7 +347,7 @@ export function themeLink(p: PropsPanel, ref: { id: string | null; path: string;
 
 /** Color swatch + opacity %. Native color inputs have no alpha channel, so
  *  the pair round-trips rgba()/#rrggbbaa strings losslessly. */
-export function colorAlpha(p: PropsPanel, value: string, onEdit: (v: string, final: boolean) => void, ref?: { id: string | null; path: string; slide?: Slide }): HTMLElement {
+export function colorAlpha(p: PropsPanel, value: string, onEdit: (v: string, final: boolean) => void, ref?: { id: string | null; path: string; slide?: Slide }, paint?: PaintHost): HTMLElement {
   const parsed = parseColor(value)
   const col = document.createElement('input')
   col.type = 'color'
@@ -264,7 +372,7 @@ export function colorAlpha(p: PropsPanel, value: string, onEdit: (v: string, fin
   alpha.addEventListener('change', () => emit(true))
   alpha.addEventListener(SCRUB, () => emit(false))
   const wrap = colorField(col, alpha)
-  popoverOn(p, col, alpha)
+  popoverOn(p, col, alpha, paint)
   return ref ? themeLink(p, ref, col, wrap) : wrap
 }
 
@@ -275,7 +383,7 @@ export function colorAlpha(p: PropsPanel, value: string, onEdit: (v: string, fin
  * reference cleared by a hand-picked colour, one undo step. Esc undoes the
  * preview burst, so a cancelled pick leaves no step and no change.
  */
-function popoverOn(p: PropsPanel, col: HTMLInputElement, alpha?: HTMLInputElement) {
+function popoverOn(p: PropsPanel, col: HTMLInputElement, alpha?: HTMLInputElement, paint?: PaintHost) {
   const swatch = () => {
     const a = alpha ? alphaOf(alpha) : 1
     col.classList.toggle('ed-see-through', a < 1)
@@ -303,6 +411,8 @@ function popoverOn(p: PropsPanel, col: HTMLInputElement, alpha?: HTMLInputElemen
       preview: set,
       commit: () => col.dispatchEvent(new Event('change')),
       cancel: () => { if (p.burst) { p.burst = false; p.store.undo() } },
+      paint,
+      done: paint ? () => settle(p) : undefined,
     })
   })
 }

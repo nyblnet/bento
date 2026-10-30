@@ -97,6 +97,10 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
       iconBtn(ICONS.matchH, t('Same height as the first selected (2 or more)'), () => matchSize(p, els, 'h')),
     )] : []),
     ...(groupBtn ? [kind(groupBtn)] : []),
+    kind(
+      iconBtn(ICONS.flipH, `${t('Flip horizontal')} (⇧H)`, () => flip(p, els, 'flipX')),
+      iconBtn(ICONS.flipV, `${t('Flip vertical')} (⇧V)`, () => flip(p, els, 'flipY')),
+    ),
     ...(boolOperands(p.store, els)
       ? [kind(...BOOL_OPS.map((op) => {
         const ui = boolUi(op)
@@ -137,12 +141,57 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
     measure(p, els, 'y', t('Y')),
     measure(p, els, 'rotation', t('Angle'), { icon: ICONS.rotate, unit: '°' }),
   )
+  let corners: HTMLElement | null = null
   if (single?.type === 'shape' && single.shape === 'rect') {
     const el = single
-    geo.append(tokenBind(p, mini(t('Corner radius'), el.radius ?? 0, (v, fin) =>
-      p.mutate(el.id, (e) => { (e as ShapeElement).radius = Math.max(v, 0) }, fin), ICONS.radius, { min: 0 }), el, 'radius'))
+    // One radius for every corner, or (the corners button) one each. The
+    // single field sets them all; `radius` stays the largest corner, which
+    // is what a shell without `radii` draws.
+    const one = tokenBind(p, mini(t('Corner radius'), el.radius ?? 0, (v, fin) =>
+      p.mutate(el.id, (e) => { const s = e as ShapeElement; s.radius = Math.max(v, 0); delete s.radii }, fin), ICONS.radius, { min: 0 }), el, 'radius')
+    const split = iconBtn(ICONS.corners, t('Independent corners'), () => p.mutate(el.id, (e) => {
+      const s = e as ShapeElement
+      if (s.radii) delete s.radii
+      else s.radii = [s.radius ?? 0, s.radius ?? 0, s.radius ?? 0, s.radius ?? 0]
+    }, true))
+    split.setAttribute('aria-pressed', String(!!el.radii))
+    split.classList.add('ed-corners-btn')
+    one.appendChild(split)
+    geo.append(one)
+    if (el.radii) {
+      corners = document.createElement('div')
+      corners.className = 'ed-grid4 ed-corners'
+      const names = ['Top left', 'Top right', 'Bottom right', 'Bottom left']
+      el.radii.forEach((r, i) => {
+        const f = mini(['↖', '↗', '↘', '↙'][i], r, (v, fin) => p.mutate(el.id, (e) => {
+          const s = e as ShapeElement
+          if (!s.radii) return
+          s.radii[i] = Math.max(v, 0)
+          s.radius = Math.max(...s.radii)
+        }, fin), undefined, { min: 0 })
+        f.title = t(names[i])
+        f.querySelector('input')!.setAttribute('aria-label', `${t('Corner radius')} · ${t(names[i])}`)
+        corners!.appendChild(f)
+      })
+    }
   }
   block.appendChild(geo)
+  if (corners) block.appendChild(corners)
+}
+
+/** Mirror each element's content in its own box — one undo step. All flip
+ *  together: if any is unflipped they all flip, else they all unflip. */
+export function flip(p: PropsPanel, els: SlideElement[], key: 'flipX' | 'flipY') {
+  if (!els.length) return
+  const on = els.some((e) => !e[key])
+  p.edit(() => {
+    for (const e of els) {
+      const el = p.store.element(e.id)
+      if (!el) continue
+      if (on) el[key] = true
+      else delete el[key]
+    }
+  }, true)
 }
 
 type Measure = 'x' | 'y' | 'w' | 'h' | 'rotation' | 'opacity'

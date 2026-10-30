@@ -5,6 +5,11 @@
 // It edits nothing itself: the caller previews, commits or cancels.
 import { t } from '../../i18n'
 import { ICONS } from '../../icons'
+import type { GradientFill } from '../../model'
+import type { PaintHost, PaintKind } from './color'
+import { gradientBar } from './gradientbar'
+import { gradientFor } from './color'
+import { combineColor, parseColor } from './controls'
 
 export interface Swatch { label: string; color: string; pick: () => void }
 export interface ColorPopoverOpts {
@@ -15,6 +20,11 @@ export interface ColorPopoverOpts {
   preview: (hex: string, alpha: number) => void
   commit: (hex: string, alpha: number) => void
   cancel: () => void
+  /** a fill that can also be a gradient or a token: the popover opens with
+   *  Solid | Linear | Radial | Tokens on top, and writes through the host */
+  paint?: PaintHost
+  /** after the popover closed having changed the fill's kind */
+  done?: () => void
 }
 
 type Model = 'hex' | 'rgb' | 'hsl'
@@ -76,6 +86,14 @@ export function openColorPopover(anchor: HTMLElement, o: ColorPopoverOpts) {
   let a = o.alpha ?? 1
   let touched = false
   const hex = () => hsvToHex(h, s, v)
+  // the paint being edited: solid (the swatch's own path), or a gradient whose
+  // selected stop the colour controls edit; 'tokens' lists the colour tokens
+  const host = o.paint
+  let kind: PaintKind = host?.kind ?? 'solid'
+  let tab: PaintKind | 'tokens' = kind
+  let grad: GradientFill | undefined = host?.grad ? { ...host.grad, stops: host.grad.stops.map((st) => ({ ...st })) } : undefined
+  let sel = 0
+  let kindChanged = false
 
   const pop = document.createElement('div')
   pop.className = 'ed-cpop'
@@ -128,9 +146,52 @@ export function openColorPopover(anchor: HTMLElement, o: ColorPopoverOpts) {
     })
     line.appendChild(drop)
   }
-  pop.append(sv, hue)
-  if (o.alpha !== undefined) pop.append(alpha)
-  pop.append(line)
+  const kinds = document.createElement('div')
+  const barHost = document.createElement('div')
+  barHost.className = 'ed-cpop-bar'
+  const tokenList = document.createElement('div')
+  tokenList.className = 'ed-cpop-tokens'
+  const colorPart = document.createElement('div')
+  colorPart.className = 'ed-cpop-color'
+  if (host) {
+    kinds.className = 'ed-cpop-kinds'
+    kinds.setAttribute('role', 'radiogroup')
+    kinds.setAttribute('aria-label', t('Fill style'))
+    const labels: Array<[PaintKind | 'tokens', string]> = [['solid', t('Solid')], ['linear', t('Linear')], ['radial', t('Radial')], ['tokens', t('Tokens')]]
+    for (const [k, label] of labels) {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.dataset.kind = k
+      b.setAttribute('role', 'radio')
+      b.textContent = label
+      b.addEventListener('click', () => choose(k))
+      kinds.appendChild(b)
+    }
+    for (const tk of host.tokens) {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'ed-palette-item'
+      const chip = document.createElement('span')
+      chip.className = 'ed-swatch'
+      chip.style.background = tk.color
+      const name = document.createElement('span')
+      name.textContent = tk.name
+      b.append(chip, name)
+      b.addEventListener('click', () => { done = true; teardown(); tk.pick(); o.done?.() })
+      tokenList.appendChild(b)
+    }
+    if (!host.tokens.length) {
+      const none = document.createElement('p')
+      none.className = 'ed-hint'
+      none.textContent = t('This deck has no colour tokens yet — add them in the Tokens view.')
+      tokenList.appendChild(none)
+    }
+    pop.append(kinds, barHost, tokenList)
+  }
+  colorPart.append(sv, hue)
+  if (o.alpha !== undefined || host) colorPart.append(alpha)
+  colorPart.append(line)
+  pop.append(colorPart)
   for (const g of o.groups) {
     if (!g.swatches.length) continue
     const cap = document.createElement('div')
@@ -148,7 +209,7 @@ export function openColorPopover(anchor: HTMLElement, o: ColorPopoverOpts) {
       b.addEventListener('click', () => { done = true; teardown(); sw.pick() })
       row.appendChild(b)
     }
-    pop.append(cap, row)
+    colorPart.append(cap, row)
   }
 
   const paint = (keepText = false) => {
@@ -163,8 +224,63 @@ export function openColorPopover(anchor: HTMLElement, o: ColorPopoverOpts) {
     alpha.style.setProperty('--c', c)
     if (!keepText) text.value = show(c, model)
   }
-  const emit = (keepText = false) => { touched = true; paint(keepText); o.preview(hex(), a) }
-  paint()
+  const emit = (keepText = false) => {
+    touched = true
+    paint(keepText)
+    if (kind === 'solid' || !grad) { o.preview(hex(), a); return }
+    grad.stops[sel].color = combineColor(hex(), a)
+    host!.write(kind, grad, undefined, false)
+    drawBar()
+  }
+  // the gradient's stops; a press on one makes it the colour being edited
+  const drawBar = () => {
+    barHost.replaceChildren()
+    if (!grad || kind === 'solid') return
+    barHost.appendChild(gradientBar(grad, (fn) => {
+      fn(grad!)
+      sel = Math.min(sel, grad!.stops.length - 1)
+      touched = true
+      host!.write(kind, grad, undefined, false)
+      drawBar()
+    }, sel, (i) => { sel = i; fromStop(); drawBar() }))
+  }
+  const fromStop = () => {
+    const c = parseColor(grad!.stops[sel].color)
+    ;[h, s, v] = hexToHsv(c.hex)
+    a = c.a
+    paint()
+  }
+  const show_ = () => {
+    for (const b of kinds.querySelectorAll<HTMLElement>('[data-kind]')) b.setAttribute('aria-checked', String(b.dataset.kind === tab))
+    tokenList.hidden = tab !== 'tokens'
+    colorPart.hidden = tab === 'tokens'
+    barHost.hidden = tab === 'tokens' || kind === 'solid'
+    alpha.hidden = kind === 'solid' && o.alpha === undefined
+  }
+  const choose = (k: PaintKind | 'tokens') => {
+    tab = k
+    if (k !== 'tokens' && k !== kind) {
+      kindChanged = true
+      touched = true
+      if (k === 'solid') {
+        kind = 'solid'
+        host!.write('solid', undefined, undefined, false)
+        o.preview(hex(), a)
+      } else {
+        grad = gradientFor(k, grad, host!.solid)
+        kind = k
+        sel = Math.min(sel, grad.stops.length - 1)
+        host!.write(kind, grad, undefined, false)
+        fromStop()
+      }
+    }
+    drawBar()
+    show_()
+  }
+  if (host && kind !== 'solid' && grad) fromStop()
+  else paint()
+  drawBar()
+  if (host) show_()
 
   const pickAt = (e: PointerEvent) => {
     const r = sv.getBoundingClientRect()
@@ -209,9 +325,12 @@ export function openColorPopover(anchor: HTMLElement, o: ColorPopoverOpts) {
     if (done) return
     done = true
     teardown()
-    if (commit && touched) o.commit(hex(), a)
-    else if (touched) o.cancel()
+    if (commit && touched) {
+      if (kind === 'solid' || !grad) o.commit(hex(), a)
+      else host!.write(kind, grad, undefined, true)
+    } else if (touched) o.cancel()
     anchor.focus({ preventScroll: true })
+    if (kindChanged || !commit) o.done?.()
   }
   const outside = (e: Event) => { if (!pop.contains(e.target as Node) && e.target !== anchor) finish(true) }
   const key = (e: KeyboardEvent) => {

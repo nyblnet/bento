@@ -1653,7 +1653,7 @@ type EnterKind = NonNullable<NonNullable<SlideElement['fx']>['enter']>
  * fade-* nudge 16px; slide-* sweep 120px in from an edge (slide-left starts to
  * the RIGHT and travels leftward). x needs the x transform channel in anim.ts.
  */
-function enterSpec(kind: EnterKind, enterDur?: number) {
+export function enterSpec(kind: EnterKind, enterDur?: number) {
   const D = 120
   const from = { opacity: 0, x: 0, y: 0 }
   if (kind === 'fade-up') from.y = 16

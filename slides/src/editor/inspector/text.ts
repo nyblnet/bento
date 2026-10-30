@@ -10,8 +10,7 @@ import { measureElement } from '../../measure'
 import { formatDate, DATE_PRESETS, TIME_PRESETS, OTHER_FIELDS } from '../../datefmt'
 import { openCtxMenu } from '../ctxmenu'
 import { field, mini, segmented, section } from './fields'
-import { fillKind, colorAlpha, gradientRows } from './color'
-import { parseColor, combineColor } from './controls'
+import { fillKind, colorAlpha, gradientRows, gradientChip, gradientFor, paintHost, type PaintKind } from './color'
 import { firstFamily, FONT_CHOICES, injectFonts } from '../../fonts'
 import { fontFaceDescriptors } from '../../fontmeta'
 
@@ -158,27 +157,15 @@ export function buildTextProps(p: PropsPanel, el: TextElement) {
 export function buildTextFill(p: PropsPanel, el: TextElement) {
   section(p, t('Fill'))
   const tgrad = el.colorGradient
-  field(p, fillKind(tgrad ? 'gradient' : 'solid', (v) =>
-    p.mutate(el.id, (e) => {
-      const tx = e as TextElement
-      if (v === 'gradient') {
-        const base = parseColor(tx.color)
-        tx.colorGradient ??= {
-          angle: 90,
-          stops: [
-            { at: 0, color: combineColor(base.hex, Math.max(base.a, 1)) },
-            { at: 1, color: '#5B8DEF' },
-          ],
-        }
-      } else {
-        delete tx.colorGradient
-      }
-    }, true)))
-  if (!tgrad) {
+  const host = paintHost(p, el.id, 'color', 'colorGradient', 90)
+  field(p, fillKind(host.kind, (v) =>
+    host.write(v as PaintKind, v === 'solid' ? undefined : gradientFor(v as 'linear' | 'radial', tgrad, el.color, 90), undefined, true)))
+  if (host.kind === 'solid' || !tgrad) {
     field(p, colorAlpha(p, el.color, (v, fin) =>
       p.mutate(el.id, (e) => { (e as TextElement).color = v }, fin),
-      { id: el.id, path: 'color' }))
+      { id: el.id, path: 'color' }, host))
   } else {
+    field(p, gradientChip(p, host))
     gradientRows(p, tgrad, (fn, fin) => p.mutate(el.id, (e) => {
       const g = (e as TextElement).colorGradient
       if (g) fn(g)
