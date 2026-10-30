@@ -86,9 +86,12 @@ export function oklchToHex(L: number, C: number, H: number): { hex: string; clam
     -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * q,
     -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * q,
   ]
+  // out of gamut = some channel off by more than 8-bit rounding hides (typed
+  // values carry a few digits, so exact-gamut colours land a hair outside)
   // ponytail: per-channel clip, not a chroma-reducing gamut map; enough for a picker that says so
-  const clamped = rgb.some((c) => c < -1e-4 || c > 1 + 1e-4)
-  return { hex: '#' + rgb.map((c) => hex2(Math.min(Math.max(gam(Math.min(Math.max(c, 0), 1)), 0), 1) * 255)).join(''), clamped }
+  const enc = rgb.map((c) => Math.sign(c) * gam(Math.abs(c)))
+  const clamped = enc.some((c) => c < -0.5 / 255 || c > 1 + 0.5 / 255)
+  return { hex: '#' + enc.map((c) => hex2(Math.min(Math.max(c, 0), 1) * 255)).join(''), clamped }
 }
 
 function show(hex: string, m: Model): string {

@@ -368,3 +368,9 @@ jobs:
         # the stop bar, the popover's kinds, the canvas gradient knob, stroke
         # position, dashes, corners, flip; hover previews write nothing.
         run: node scripts/test-slides-paint-browser.mjs
+      - name: Inspector finish in Chromium
+        # OKLCH in the colour popover (in-gamut exact, out-of-gamut flagged);
+        # font / shadow / opacity tokens bound and followed; the W·H padlock
+        # carries the other side, one undo; Export's contrast grade and alt
+        # text; the morph link toggle; popovers still under reduced motion.
+        run: node scripts/test-slides-finish-browser.mjs

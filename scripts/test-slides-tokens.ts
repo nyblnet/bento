@@ -108,5 +108,46 @@ console.log('\ncomponents\n')
   ok(ca.fill === '#0000ff' && !ca.component, 'a detached element stops following')
 }
 
+console.log('\ntoken types beyond colour and number\n')
+{
+  const d = deck()
+  d.theme.tokens!.set['font.body'] = { type: 'fontFamily', values: { light: 'Courier New, monospace', dark: 'Courier New, monospace' } }
+  d.theme.tokens!.set['shadow.card'] = { type: 'shadow', values: { light: { x: 0, y: 4, blur: 12, color: 'rgba(0, 0, 0, 0.2)' }, dark: { x: 0, y: 8, blur: 24, color: '#000000' } } }
+  d.theme.tokens!.set['opacity.muted'] = { type: 'opacity', values: { light: 0.5, dark: 0.7 } }
+  d.slides[0].elements.push({ type: 'text', id: 't', x: 0, y: 0, w: 100, h: 40, rotation: 0, opacity: 1, html: 'x', fontSize: 20, fontFamily: '#abc, serif', fontWeight: 400, color: '#000', align: 'left', valign: 'top', lineHeight: 1.2 } as never)
+  bindToken(d, el(d, 't'), 'fontFamily', 'font.body')
+  ok(el(d, 't').fontFamily === 'Courier New, monospace', 'a font token writes the stack as-is (never treated as a colour)')
+  bindToken(d, el(d, 'a'), 'shadow', 'shadow.card')
+  ok(el(d, 'a').shadow.blur === 12 && el(d, 'a').shadow !== d.theme.tokens!.set['shadow.card'].values.light, 'a shadow token writes a copy, never the token object itself')
+  bindToken(d, el(d, 'a'), 'opacity', 'opacity.muted')
+  ok(el(d, 'a').opacity === 0.5, 'an opacity token writes 0..1')
+  ok(!syncTokenRefs(d, false), 'a bound shadow is not mistaken for a hand edit')
+  el(d, 'a').shadow = { color: 'rgba(0, 0, 0, 0.2)', blur: 12, y: 4, x: 0 }
+  ok(!syncTokenRefs(d, false) && el(d, 'a').themeRefs.shadow === '$shadow.card', 'nor is the same shadow with its keys in another order')
+  d.theme.tokens!.mode = 'dark'
+  syncTokenRefs(d, true)
+  ok(el(d, 'a').shadow.blur === 24 && el(d, 'a').opacity === 0.7, 'switching mode moves the shadow and the opacity')
+  el(d, 'a').shadow = { ...el(d, 'a').shadow, blur: 3 }
+  syncTokenRefs(d, false)
+  ok(!el(d, 'a').themeRefs.shadow && el(d, 'a').shadow.blur === 3, 'a shadow edited by hand drops its binding and keeps the edit')
+}
+{
+  // restoregate.ts imports app source extensionless: the hooks resolve it as vite does
+  const { register } = await import('node:module')
+  register('./lib/ts-resolve-hooks.mjs', import.meta.url)
+  const { sanitizeDoc } = await import('../slides/src/restoregate.ts')
+  const d = deck() as any
+  d.theme.tokens.set = {
+    'font.ok': { type: 'fontFamily', values: { light: 'Inter, sans-serif' } },
+    'shadow.ok': { type: 'shadow', values: { light: { x: 1, y: 2, blur: 3, color: '#000000' } } },
+    'shadow.bad': { type: 'shadow', values: { light: 'url(javascript:alert(1))' } },
+    'opacity.bad': { type: 'opacity', values: { light: 3 } },
+    'type.bad': { type: 'gradient', values: { light: 1 } },
+  }
+  const out = sanitizeDoc(JSON.parse(JSON.stringify(d)))!.doc.theme.tokens!.set
+  ok(!!out['font.ok']?.values.light && !!out['shadow.ok']?.values.light, 'the file gate keeps a font and a shadow token')
+  ok(!out['shadow.bad']?.values.light && !out['opacity.bad']?.values.light && !out['type.bad'], 'and drops a non-shadow shadow, an opacity past 1 and an unknown type')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

@@ -39,11 +39,16 @@ ok(/keepAspectRatio/.test(read('slides/src/modelkeys.generated.ts')), 'the gener
 console.log('\nthe canvas\n')
 const canvas = read('slides/src/editor/canvas.ts')
 const sync = canvas.slice(canvas.indexOf('const syncKeepRatio ='), canvas.indexOf("mv.on('resizeStart'"))
-ok(/el\?\.type === 'image' && el\.keepAspectRatio !== false/.test(sync), 'locked = an image whose field is absent or true')
+ok(/const locked = !!el && ratioLocked\(el\)/.test(sync), 'locked = the element\'s own padlock (ratioLocked)')
+ok(/el\.type === 'image' \? el\.keepAspectRatio !== false : el\.keepAspectRatio === true/.test(model), 'ratioLocked: an image is locked unless false; anything else only when true')
 ok(/inputEvent\?\.shiftKey \? !locked : locked/.test(sync), 'Shift inverts the element\'s own setting — frees a locked image, holds an unlocked one')
 ok(/syncKeepRatio\(e\.inputEvent as MouseEvent, e\.target as HTMLElement\)/.test(canvas.slice(canvas.indexOf("mv.on('resizeStart'"), canvas.indexOf("mv.on('resizeGroupStart'"))), 'resizeStart and resize both pass the target so the element is looked up')
-// non-image elements: locked is false, so want = shiftKey — exactly the old rule
-ok(/const locked = el\?\.type === 'image'/.test(sync), 'a shape or text box is never "locked": Shift keeps the ratio, as before')
+// a non-image with no key is free, so want = shiftKey — exactly the old rule
+{
+  const { ratioLocked } = await import('../slides/src/model.ts')
+  ok(!ratioLocked({ type: 'shape' } as never) && ratioLocked({ type: 'shape', keepAspectRatio: true } as never), 'a shape is free until its padlock is on — every existing deck resizes as before')
+  ok(ratioLocked({ type: 'image' } as never) && !ratioLocked({ type: 'image', keepAspectRatio: false } as never), 'an image is locked until unlocked, as before')
+}
 
 console.log('\nthe panel\n')
 const panels = read('slides/src/editor/panels.ts')
