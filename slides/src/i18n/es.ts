@@ -1334,4 +1334,9 @@ export const es: Catalog = {
   "Add a token:": "Añadir un token:",
   "Number": "Número",
   "Font size": "Tamaño de fuente",
+  "Add export setting": "Añadir ajuste de exportación",
+  "Scale": "Escala",
+  "More export options": "Más opciones de exportación",
+  "Remove export setting": "Quitar ajuste de exportación",
+  "Export {what}": "Exportar {what}",
 }

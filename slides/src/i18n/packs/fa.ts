@@ -1350,4 +1350,9 @@ export const strings: Catalog = {
   "Add a token:": "افزودن توکن:",
   "Number": "عدد",
   "Font size": "اندازه‌ی قلم",
+  "Add export setting": "افزودن تنظیم برون‌بری",
+  "Scale": "مقیاس",
+  "More export options": "گزینه‌های بیشتر برون‌بری",
+  "Remove export setting": "حذف تنظیم برون‌بری",
+  "Export {what}": "برون‌بری {what}",
 }

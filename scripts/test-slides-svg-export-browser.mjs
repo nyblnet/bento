@@ -66,7 +66,11 @@ try {
   })
   await p.waitForTimeout(500)
   const download = async (label) => {
-    const [dl] = await Promise.all([p.waitForEvent('download'), p.click(`.ed-props .ed-export button:text-is("${label}")`)])
+    // the first setting row set to this label's scale and format, then Export (Figma's section)
+    const [fmt, scale] = label === 'SVG' ? ['svg', '1'] : label === 'JPG' ? ['jpeg', '1'] : ['png', label === 'PNG 2×' ? '2' : '1']
+    await p.selectOption('.ed-props .ed-export-row >> nth=0 >> select[aria-label="Format"]', fmt); await p.waitForTimeout(150)
+    if (fmt !== 'svg') { await p.selectOption('.ed-props .ed-export-row >> nth=0 >> select[aria-label="Scale"]', scale); await p.waitForTimeout(150) }
+    const [dl] = await Promise.all([p.waitForEvent('download'), p.click('.ed-props .ed-export-rows .ed-export-btn')])
     return { name: dl.suggestedFilename(), buf: readFileSync(await dl.path()) }
   }
 

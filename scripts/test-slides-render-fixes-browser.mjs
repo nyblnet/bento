@@ -162,16 +162,21 @@ try {
   await p.waitForTimeout(500)
   const row = (id) => p.locator(`.ed-side-layers .ed-layer[data-id="${id}"]`)
   const download = async (label) => {
-    const [dl] = await Promise.all([p.waitForEvent('download'), p.click(`.ed-props .ed-export button:text-is("${label}")`)])
+    // the first setting row set to this label's scale and format, then Export (Figma's section)
+    const [fmt, scale] = label === 'SVG' ? ['svg', '1'] : label === 'JPG' ? ['jpeg', '1'] : ['png', label === 'PNG 2×' ? '2' : '1']
+    await p.selectOption('.ed-props .ed-export-row >> nth=0 >> select[aria-label="Format"]', fmt); await p.waitForTimeout(150)
+    if (fmt !== 'svg') { await p.selectOption('.ed-props .ed-export-row >> nth=0 >> select[aria-label="Scale"]', scale); await p.waitForTimeout(150) }
+    const [dl] = await Promise.all([p.waitForEvent('download'), p.click('.ed-props .ed-export-rows .ed-export-btn')])
     return readFileSync(await dl.path(), 'utf8')
   }
   await row('kid').click(); await p.waitForTimeout(300)
   const svg = await download('SVG')
   ok(/clip-path="url\(#/.test(svg), 'a clipped frame child exports clipped')
   await row('gone').click(); await p.waitForTimeout(300)
-  const dis = await p.$$eval('.ed-props .ed-export button', (bs) => bs.map((b) => [b.textContent, b.disabled, b.title]))
-  ok(dis.filter(([l]) => /PNG|SVG/.test(l)).every(([, d, t]) => d && t), `a hidden selection cannot be drawn to an image, and says why (${JSON.stringify(dis.map(([l, d]) => `${l}:${d}`))})`)
-  ok(dis.some(([l, d]) => /JSON/.test(l) && !d), '…while Copy as JSON still works')
+  const go = await p.$eval('.ed-props .ed-export-rows .ed-export-btn', (b) => [b.textContent, b.disabled, b.title])
+  ok(go[1] && !!go[2], `a hidden selection cannot be drawn to an image, and says why (${go[0]}: ${go[1]})`)
+  const more = await p.$eval('.ed-props .ed-export-row button[aria-haspopup="menu"]', (b) => !b.disabled)
+  ok(more, '…while Copy as JSON (in ⋯) still works')
   const roles = await p.evaluate(() => ['pic', 'tb'].map((id) => { const n = document.querySelector(`.ed-stage-scale [data-el-id="${id}"]`); return n ? n.getAttribute('role') ?? 'none' : 'missing' }))
   ok(roles[0] === 'img' && roles[1] === 'none', `alt makes a shape an image to screen readers, never a table (${roles})`)
   await row('tb').click(); await p.waitForTimeout(300)
