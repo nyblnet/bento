@@ -12205,3 +12205,14 @@ From docs/audit/ux-pyramid-2026-10-30.md. Amends the 2026-10-29 entries where no
   the slide uses Morph, wherever that was set.
 - **No caption wraps beside its control**: one that would wrap goes above it
   (the measure pass now stacks at more than one line, not two).
+
+## 2026-10-30 — slides: Move (V) and Select (S) are two tools; one is always pressed
+
+In Move, a press-drag moves what it starts on — and a full-bleed background
+image or shape is something, so a slide built on one could not be
+box-selected at all. Select (S) only selects: a drag anywhere draws the box
+and moves nothing, a click selects, Shift adds; it stays on across
+selections, and Esc lets go of the selection before returning to Move.
+Moving stays Move's job, as in Figma. The tool bar presses exactly one tool
+at a time (Move at rest), so which mode a drag will act in is always on
+screen.
