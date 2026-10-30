@@ -379,3 +379,7 @@ jobs:
         # carries the other side, one undo; Export's contrast grade and alt
         # text; the morph link toggle; popovers still under reduced motion.
         run: node scripts/test-slides-finish-browser.mjs
+      - name: Inspector fixes in Chromium
+        # Colours keep their opacity through theme links, one undo per colour,
+        # a scrub held at a limit is no undo step, pointercancel ends a scrub.
+        run: node scripts/test-slides-inspector-fixes-browser.mjs

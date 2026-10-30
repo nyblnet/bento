@@ -61,7 +61,6 @@ export const ROW_TIPS: Record<string, string> = {
   'Line start': 'Decoration at the line’s start — arrow, dot or bar',
   'Line end': 'Decoration at the line’s end — arrow, dot or bar',
   'Corner radius': 'How rounded the corners are, in pixels',
-  'Keep aspect ratio': 'On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches',
   'Type': 'Chart type — switching bar⇄pie animates the data across',
   'Legend': 'Show the series legend above the chart',
   'Second axis': 'Adds a right-hand value axis — assign series to it in the list below',

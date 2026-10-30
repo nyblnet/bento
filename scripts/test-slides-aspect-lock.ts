@@ -53,14 +53,15 @@ ok(/syncKeepRatio\(e\.inputEvent as MouseEvent, e\.target as HTMLElement\)/.test
 console.log('\nthe panel\n')
 const panels = read('slides/src/editor/panels.ts')
 // the whole method, however long the Picture section grows: up to the next method
+// one home: the padlock between W and H (arrange.ts) serves images too; the Picture section has no second toggle
 const media = read('slides/src/editor/inspector/media.ts')
-const imgStart = media.indexOf('export function buildImageProps')
-const img = media.slice(imgStart, media.indexOf('\nexport function ', imgStart + 1))
-ok(/row\(p, 'Keep aspect ratio', toggle\(\(el as ImageElement\)\.keepAspectRatio !== false/.test(img), 'the toggle reads absent as on')
-ok(/if \(on\) delete e\.keepAspectRatio/.test(img), 're-locking DELETES the field — never writes true, so a re-locked file equals an untouched one')
-ok(/else \{ e\.keepAspectRatio = false; e\.fit = 'fill' \}/.test(img), 'unlocking writes false and fit:\'fill\' so the stretch shows')
-ok(!/e\.w =|e\.h =/.test(img.slice(img.indexOf("'Keep aspect ratio'"))), 'the toggle never moves or resizes the frame — re-locking keeps the current shape')
-ok(/'Keep aspect ratio': '/.test(read('slides/src/editor/inspector/controls.ts')), 'the row has a tooltip')
+const arrange = read('slides/src/editor/inspector/arrange.ts')
+const lock = arrange.slice(arrange.indexOf('function ratioLock('), arrange.indexOf('\n}\n', arrange.indexOf('function ratioLock(')))
+ok(!/'Keep aspect ratio'/.test(media), 'the Picture section carries no second aspect toggle')
+ok(/const on = ratioLocked\(el\)/.test(lock), 'the padlock reads absent as on for an image (ratioLocked)')
+ok(/if \(on\) \{ e\.keepAspectRatio = false; \(e as ImageElement\)\.fit = 'fill' \} else delete e\.keepAspectRatio/.test(lock), 'on an image: unlocking writes false and fit:\'fill\'; re-locking DELETES the field, so a re-locked file equals an untouched one')
+ok(!/e\.w =|e\.h =/.test(lock), 'the padlock never moves or resizes the frame — re-locking keeps the current shape')
+ok(/b\.title = on \?/.test(lock), 'the padlock says what it does')
 
 console.log('\nthe panel keeps its scroll\n')
 const rebuild = panels.slice(panels.indexOf('rebuild(force = false)'), panels.indexOf('CLOSED_BY_DEFAULT'))
