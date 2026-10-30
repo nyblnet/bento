@@ -435,6 +435,23 @@ console.log('negative controls')
     'NEGATIVE: unsupported image mime + unknown element type each report, nothing else fires')
   ok([...miniParts.keys()].every((n) => !n.startsWith('ppt/media/')), 'NEGATIVE: refused bmp writes no media part')
 
+  // hidden, alt and flip ride on every element: cNvPr hidden/descr, a:xfrm flips
+  const deco = await exportPptx({
+    ...buildDoc(),
+    slides: [{
+      id: 'd1', background: '#FFFFFF', elements: [
+        el({ type: 'shape', id: 'hid', ...frame(0, 0, 50, 50), shape: 'rect', fill: '#ff0000', stroke: 'transparent', strokeWidth: 0, radius: 0, hidden: true }),
+        el({ type: 'shape', id: 'flp', ...frame(60, 0, 50, 50), shape: 'triangle', fill: '#00ff00', stroke: 'transparent', strokeWidth: 0, radius: 0, flipX: true, flipY: true, alt: 'A green warning sign' }),
+        el({ type: 'text', id: 'ftx', ...frame(120, 0, 200, 50), html: 'Hi', fontSize: 20, fontFamily: 'Inter', fontWeight: 400, color: '#000', align: 'left', valign: 'top', lineHeight: 1.2, flipX: true }),
+      ],
+    }],
+  })
+  const dx = partText(await readZip(deco.bytes), 'ppt/slides/slide1.xml')
+  ok(/<p:cNvPr id="\d+" name="bento:hid" hidden="1"/.test(dx), 'a hidden element is exported hidden (cNvPr hidden="1"), not shown')
+  ok(/name="bento:flp" descr="A green warning sign"/.test(dx), 'alt text becomes cNvPr descr')
+  ok(/<a:xfrm flipH="1" flipV="1">/.test(dx), 'a mirrored shape keeps flipH/flipV')
+  ok(codesOf(deco.report).has('flip-dropped'), 'a mirrored text box, which OOXML cannot mirror, is reported')
+
   // --- the boilerplate PowerPoint actually requires ---------------------------
   // presProps, viewProps, tableStyles and a presentation->theme rel are all
   // schema-OPTIONAL, and the first cut of this writer shipped without them:

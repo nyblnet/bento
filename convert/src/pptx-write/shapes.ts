@@ -32,7 +32,7 @@ import { EMU_PER_PX } from '../types.ts'
 // ShapeElement; unknown extra fields simply never get read.
 
 export interface ShadowIn { x?: number; y?: number; blur: number; color: string }
-export interface GradientIn { angle: number; stops: Array<{ at: number; color: string }> }
+export interface GradientIn { angle: number; stops: Array<{ at: number; color: string }>; kind?: 'linear' | 'radial'; cx?: number; cy?: number; r?: number }
 
 export interface ShapeIn {
   id: string
@@ -54,6 +54,14 @@ export interface ShapeIn {
   strokeStyle?: 'solid' | 'dashed' | 'dotted'
   lineStart?: 'none' | 'arrow' | 'dot' | 'bar'
   lineEnd?: 'none' | 'arrow' | 'dot' | 'bar'
+  /** per-corner radii (tl, tr, br, bl); `radius` stays the largest */
+  radii?: [number, number, number, number]
+  strokeAlign?: 'inside' | 'center' | 'outside'
+  /** [dash, gap] in px; wins over strokeStyle */
+  strokeDashes?: [number, number]
+  /** paint stacks; `fill`/`stroke` already mirror the top visible layer */
+  fills?: unknown[]
+  strokes?: unknown[]
   d?: string
   pathBox?: [number, number, number, number]
   from?: unknown
@@ -183,6 +191,17 @@ function gradFillNode(g: GradientIn, opacity: number, report: Report, where: str
   const stops = g.stops.map((s) =>
     x('a:gs', { pos: Math.round(clamp(s.at, 0, 1) * 100000) }, [srgbNode(colorOf(s.color, report, where), opacity)]),
   )
+  if (g.kind === 'radial') {
+    // a:path circle grows from the fillToRect focus to the shape's bounds; the
+    // centre maps exactly, bento's own radius has no OOXML twin
+    const cx = clamp(g.cx ?? 0.5, 0, 1), cy = clamp(g.cy ?? 0.5, 0, 1)
+    report.add('approximated', 'radial-gradient-extent', where, 'radial gradient keeps its centre and stops; PowerPoint sizes the circle to the shape')
+    const pc = (v: number) => Math.round(v * 100000)
+    return x('a:gradFill', { rotWithShape: 1 }, [
+      x('a:gsLst', undefined, stops),
+      x('a:path', { path: 'circle' }, [x('a:fillToRect', { l: pc(cx), t: pc(cy), r: pc(1 - cx), b: pc(1 - cy) })]),
+    ])
+  }
   return x('a:gradFill', { rotWithShape: 1 }, [
     x('a:gsLst', undefined, stops),
     x('a:lin', { ang: cssAngleToOoxml(g.angle), scaled: 0 }),
@@ -248,7 +267,12 @@ function lnOf(el: ShapeIn, report: Report, where: string): XNode {
         return c.alpha * el.opacity <= 0 ? x('a:noFill') : x('a:solidFill', undefined, [srgbNode(c, el.opacity)])
       })()
   const kids: XChild[] = [paint]
-  if (dotted) kids.push(x('a:prstDash', { val: 'sysDot' }))
+  const dashes = el.strokeDashes
+  if (dashes && dashes[0] > 0 && wPx > 0) {
+    // custom dash: lengths in 1000ths of a percent of the line width
+    const pc = (v: number) => Math.max(1, Math.round((v / wPx) * 100000))
+    kids.push(x('a:custDash', undefined, [x('a:ds', { d: pc(dashes[0]), sp: pc(dashes[1]) })]))
+  } else if (dotted) kids.push(x('a:prstDash', { val: 'sysDot' }))
   else if (dashed) kids.push(x('a:prstDash', { val: 'dash' }))
   if (isLine) {
     const head = tipType(el.lineStart, report, where)
@@ -258,8 +282,11 @@ function lnOf(el: ShapeIn, report: Report, where: string): XNode {
   }
   // Round caps match the renderer (round unless dashed); dotted NEEDS them or
   // sysDot renders as square specks.
-  const cap = dotted || (isLine && !dashed) ? 'rnd' : undefined
-  return x('a:ln', { w: emu(wPx), ...(cap ? { cap } : {}) }, kids)
+  const cap = dotted || (isLine && !dashed && !dashes) ? 'rnd' : undefined
+  // a:ln algn has 'ctr' and 'in'; there is no outside line in OOXML
+  if (el.strokeAlign === 'outside') report.add('approximated', 'stroke-outside-centred', where, 'outside stroke exported centred on the outline (OOXML lines are centred or inside)')
+  const algn = el.strokeAlign === 'inside' ? 'in' : el.strokeAlign === 'center' ? 'ctr' : undefined
+  return x('a:ln', { w: emu(wPx), ...(cap ? { cap } : {}), ...(algn ? { algn } : {}) }, kids)
 }
 
 // --- shadow ------------------------------------------------------------------
@@ -560,6 +587,9 @@ function custGeomNode(el: ShapeIn, report: Report, where: string): XNode {
  *  (PowerPoint's own maximum) — #88's formula, kept verbatim. */
 function geomOf(el: ShapeIn, report: Report, where: string): XNode {
   if (el.shape === 'path') return custGeomNode(el, report, where)
+  if (el.radii && new Set(el.radii).size > 1) {
+    report.add('approximated', 'corner-radii-uniform', where, 'per-corner radii exported as one radius (the largest)')
+  }
   if (el.shape === 'rect' && el.radius > 0) {
     const adj = Math.round(Math.min(el.radius / Math.max(Math.min(el.w, el.h), 1), 0.5) * 100000)
     return x('a:prstGeom', { prst: 'roundRect' }, [
@@ -602,6 +632,9 @@ export function shapeNode(el: ShapeIn, shapeId: number, report: Report, where: s
   if (el.blur) report.add('dropped', 'shape-blur-dropped', where, 'element gaussian blur has no shape-level OOXML equivalent')
   if (el.blend) report.add('dropped', 'blend-mode-dropped', where, 'mix-blend-mode has no OOXML equivalent')
   if (el.backdropFilter) report.add('dropped', 'backdrop-filter-dropped', where, 'frosted-glass backdrop blur has no OOXML equivalent')
+  if ((el.fills?.length ?? 0) > 1 || (el.strokes?.length ?? 0) > 1) {
+    report.add('approximated', 'paint-layers-top-only', where, 'stacked fills/strokes exported as the top visible layer')
+  }
 
   const cNvPr = x(
     'p:cNvPr',
