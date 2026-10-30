@@ -186,6 +186,43 @@ try {
   const row = (await els()).find((e) => e.layout)
   ok(row?.layout.dir === 'row' && row?.layout.gap === 60, `⇧A keeps the spacing the elements had (${row?.layout.dir} gap ${row?.layout.gap}, expected row 60)`)
 
+  console.log('\n5. the tools draw\n')
+  // slide px → client px
+  const toClient = async (x, y) => p.evaluate(([x, y]) => { const r = document.querySelector('.ed-stage-scale').getBoundingClientRect(); const k = r.width / window.bento.doc.size.width; return [r.left + x * k, r.top + y * k] }, [x, y])
+  await load([]); await deselect()
+  await p.keyboard.press('r'); await p.waitForTimeout(150)
+  ok((await els()).length === 0, 'R arms the rectangle tool; nothing lands until the slide is pressed')
+  await drag(await toClient(200, 150), await toClient(500, 350))
+  let drawn = (await els())[0]
+  ok(drawn?.type === 'shape' && Math.abs(drawn.w - 300) < 6 && Math.abs(drawn.h - 200) < 6 && Math.abs(drawn.x - 200) < 6, `a drag draws it at the dragged size (${drawn && [drawn.x, drawn.y, drawn.w, drawn.h].join(',')})`)
+  await deselect()
+  await p.keyboard.press('o'); await p.waitForTimeout(150)
+  await p.mouse.click(...(await toClient(800, 300))); await p.waitForTimeout(300)
+  drawn = (await els()).find((e) => e.shape === 'ellipse')
+  ok(!!drawn && Math.abs(drawn.x + drawn.w / 2 - 800) < 6 && Math.abs(drawn.y + drawn.h / 2 - 300) < 6, `a click drops the default centred on the click (${drawn && [drawn.x + drawn.w / 2, drawn.y + drawn.h / 2].join(',')})`)
+  await deselect()
+  await p.keyboard.press('r'); await p.waitForTimeout(100); await p.keyboard.press('Escape'); await p.waitForTimeout(100)
+  await p.mouse.click(...(await toClient(600, 600))); await p.waitForTimeout(200)
+  ok((await els()).length === 2, 'Esc stands an armed tool down')
+  await load(card()); await deselect(); await pick('f')
+  await p.keyboard.press('t'); await p.waitForTimeout(300)
+  await p.keyboard.press('Escape'); await p.waitForTimeout(150)
+  all = await els()
+  ok(all.length === 4 && all.at(-1).type === 'text' && all.at(-1).parentId === 'f', 'T with an auto-layout frame selected puts the text inside it')
+  await load([]); await deselect()
+  await p.keyboard.press('f'); await p.waitForTimeout(100)
+  await p.mouse.click(...(await toClient(400, 300))); await p.waitForTimeout(300)
+  const fr = (await els())[0]
+  ok(!!fr?.layout, 'F then a click puts down a frame')
+  ok((await p.textContent('.ed-props .ed-context-name'))?.trim() === 'Frame', `the inspector calls it a Frame (${(await p.textContent('.ed-props .ed-context-name'))?.trim()})`)
+  ok((await p.$$eval('.ed-layer .ed-layer-label', (n) => n.map((x) => x.textContent))).includes('Frame'), 'so does Layers')
+
+  console.log('\n6. Layers rows can be told apart\n')
+  await load([rect('k1', 100, 100, 100, 100), rect('k2', 300, 100, 100, 100, { fill: '#00ff00' }), rect('k3', 500, 100, 100, 100, { fill: '#0000ff' }), text('k4', 100, 400, 600, 80, 'Quarterly revenue')])
+  const labels = await p.$$eval('.ed-layer .ed-layer-label', (n) => n.map((x) => x.textContent))
+  ok(new Set(labels).size === labels.length, `every row reads differently (${labels.join(' · ')})`)
+  ok(labels.some((l) => /Quarterly revenue/.test(l)), 'a text row shows its words')
+
   console.log(`\n${checks - failures}/${checks} checks passed`)
 } finally {
   await browser.close()

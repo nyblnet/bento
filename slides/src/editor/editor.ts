@@ -26,7 +26,7 @@ import { slidingPill } from './inspector/controls'
 import { openCtxMenu, type CtxItem } from './ctxmenu'
 import { mountNotesPane } from './notespane'
 import { mountHints } from './hints'
-import { labelFor } from './layerrows'
+import { labelIn } from './layerrows'
 import { startPresentation } from '../present'
 // serializeFile (plain output) is deliberately NOT imported here: every path
 // in this file writes a real file for a person, so all of them must inherit an
@@ -3430,12 +3430,12 @@ export class Editor {
       { id: 'help', label: 'Shortcuts & tips', keys: '?', scope: 'always', when: canvasFree, match: (ev, mod) => !mod && (ev.key === '?' || (ev.key === '/' && ev.shiftKey)), run: () => this.openHelp() },
       // The tools, one letter each as in Figma and Penpot (C stays Comment)
       { id: 'tool-select', label: 'Select', keys: 'V', scope: 'canvas', when: canvasFree, match: tool('v'), run: () => this.selectTool() },
-      { id: 'tool-frame', label: 'Frame', keys: 'F', scope: 'canvas', when: toolFree, match: tool('f'), run: () => this.insertFrame() },
-      { id: 'tool-rect', label: 'Rectangle', keys: 'R', scope: 'canvas', when: toolFree, match: tool('r'), run: () => this.canvas.insert(defaultShape('rect')) },
-      { id: 'tool-ellipse', label: 'Ellipse', keys: 'O', scope: 'canvas', when: toolFree, match: tool('o'), run: () => this.canvas.insert(defaultShape('ellipse')) },
+      { id: 'tool-frame', label: 'Frame', keys: 'F', scope: 'canvas', when: toolFree, match: tool('f'), run: () => this.placeTool(() => this.newFrame()) },
+      { id: 'tool-rect', label: 'Rectangle', keys: 'R', scope: 'canvas', when: toolFree, match: tool('r'), run: () => this.placeTool(() => defaultShape('rect')) },
+      { id: 'tool-ellipse', label: 'Ellipse', keys: 'O', scope: 'canvas', when: toolFree, match: tool('o'), run: () => this.placeTool(() => defaultShape('ellipse')) },
       { id: 'tool-line', label: 'Line', keys: 'L', scope: 'canvas', when: toolFree, match: tool('l'), run: () => this.canvas.armDraw('line') },
       { id: 'tool-pen', label: 'Pen', keys: 'P', scope: 'canvas', when: toolFree, match: tool('p'), run: () => this.canvas.armDraw('pen') },
-      { id: 'insert-text', label: 'Add a text box', keys: 'T', scope: 'canvas', when: toolFree, match: tool('t'), run: () => this.canvas.insert(defaultText({ color: readableInk(this.store.slide.background), y: 120 + Math.random() * 200 }), true) },
+      { id: 'insert-text', label: 'Add a text box', keys: 'T', scope: 'canvas', when: toolFree, match: tool('t'), run: () => this.placeTool(() => defaultText({ color: readableInk(this.store.slide.background) }), true) },
       { id: 'comment', label: 'Comment mode', keys: 'C', scope: 'canvas', when: canvasFree, match: (ev, mod) => !mod && key(ev) === 'c', run: () => this.canvas.toggleCommentMode() },
       { id: 'ungroup', label: 'Ungroup', keys: `⇧${MOD}G`, scope: 'canvas', when: () => writable() && sel().some((e) => e.groupId), match: (ev, mod) => mod && ev.shiftKey && key(ev) === 'g', run: () => this.panel.ungroup(sel()) },
       { id: 'group', label: 'Group', keys: `${MOD}G`, scope: 'canvas', when: () => writable() && sel().length > 1, match: (ev, mod) => mod && !ev.shiftKey && key(ev) === 'g', run: () => this.panel.group(sel()) },
@@ -3589,11 +3589,26 @@ export class Editor {
 
   /** F: an empty auto-layout frame (a rect carrying `layout`, layout.ts) —
    *  whatever is later given it as a child lines up inside. */
-  private insertFrame() {
-    this.canvas.insert(defaultShape('rect', {
-      fill: '#FFFFFF', stroke: '#D0D5DD', strokeWidth: 1, radius: 8,
+  private newFrame(): SlideElement {
+    return defaultShape('rect', {
+      name: t('Frame'), fill: '#FFFFFF', stroke: '#D0D5DD', strokeWidth: 1, radius: 8,
       layout: { dir: 'row', gap: 16, pad: [16, 16, 16, 16] },
-    }))
+    })
+  }
+
+  /** R, O, F, T: with an auto-layout frame selected the new element goes
+   *  straight into it (the frame places it); otherwise the tool arms, and a
+   *  click or a drag on the slide puts it down. */
+  private placeTool(make: () => SlideElement, edit = false) {
+    const sel = this.store.selectedElements
+    const f = sel.length === 1 && sel[0].type === 'shape' && sel[0].layout ? sel[0] : null
+    if (f) {
+      const el = make()
+      el.parentId = f.id
+      this.canvas.insert(el, edit)
+      return
+    }
+    this.canvas.armPlace(make, edit)
   }
 
   private duplicateSelection() {
@@ -3730,7 +3745,7 @@ export class Editor {
       const el = this.store.element(id)
       if (!el) continue
       const on = this.store.selection.length === 1 && this.store.selection[0] === id
-      rows.push({ label: t('Select {name}', { name: labelFor(el, t) }), hint: on ? '✓' : undefined, run: () => this.store.select([id]) })
+      rows.push({ label: t('Select {name}', { name: labelIn(this.store.slide, el, t) }), hint: on ? '✓' : undefined, run: () => this.store.select([id]) })
     }
     return [...rows, 'sep']
   }

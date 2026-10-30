@@ -12,7 +12,7 @@ import { morphPairs } from './morph'
 import { revealInOrder, revealTogether, removeReveal } from './reveal'
 
 import { ICONS } from '../icons'
-import { LayersUI, labelFor, GLYPH as LAYER_GLYPH } from './layers'
+import { LayersUI, labelIn, GLYPH as LAYER_GLYPH } from './layers'
 
 import { t } from '../i18n'
 import { lsJson, lsSet } from '../../../kernel/src/storage.ts'
@@ -405,7 +405,7 @@ export class PropsPanel {
       how.textContent = t('Select something on the slide to see its options.')
     } else {
       glyph.innerHTML = one ? (LAYER_GLYPH[one.type] ?? ICONS.shapes) : ICONS.shapes
-      name.textContent = one ? labelFor(one, t) : t('{n} elements', { n: els.length })
+      name.textContent = one ? labelIn(this.store.slide, one, t) : t('{n} elements', { n: els.length })
       how.textContent = one ? t('Click an empty part of the slide for the slide’s options.') : t('Shift-click to add an element or take one out.')
     }
     name.title = name.textContent ?? ''

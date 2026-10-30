@@ -2528,6 +2528,54 @@ export class SlideCanvas {
     this.drawKeys = null
   }
 
+  /** Arm a box tool (R, O, F, T): a drag draws the element at the dragged
+   *  size, a click drops the default one centred on the click. Esc or V
+   *  stands it down. */
+  armPlace(make: () => SlideElement, edit = false) {
+    this.cancelDraw()
+    const { width, height } = this.store.doc.size
+    const ov = document.createElement('div')
+    ov.className = 'ed-place'
+    ov.style.cssText = `position:absolute;left:0;top:0;width:${width}px;height:${height}px;z-index:60;cursor:crosshair`
+    const box = document.createElement('div')
+    box.style.cssText = 'position:absolute;border:1px dashed #2f6df6;display:none;pointer-events:none'
+    ov.appendChild(box)
+    this.scaleHost.appendChild(ov)
+    this.drawOverlay = ov
+    const toSlide = (ev: MouseEvent) => {
+      const r = this.scaleHost.getBoundingClientRect()
+      return { x: (ev.clientX - r.left) / this.scale, y: (ev.clientY - r.top) / this.scale }
+    }
+    ov.addEventListener('mousedown', (down: MouseEvent) => {
+      if (down.button !== 0) return
+      down.preventDefault()
+      down.stopPropagation()
+      const a = toSlide(down)
+      let b = a
+      const move = (ev: MouseEvent) => {
+        b = toSlide(ev)
+        Object.assign(box.style, { display: 'block', left: `${Math.min(a.x, b.x)}px`, top: `${Math.min(a.y, b.y)}px`, width: `${Math.abs(b.x - a.x)}px`, height: `${Math.abs(b.y - a.y)}px` })
+      }
+      const up = () => {
+        window.removeEventListener('mousemove', move, true)
+        window.removeEventListener('mouseup', up, true)
+        const el = make()
+        // a drag shorter than a few screen px was a click
+        if (Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y)) * this.scale > 4) {
+          el.x = Math.round(Math.min(a.x, b.x)); el.y = Math.round(Math.min(a.y, b.y))
+          el.w = Math.max(1, Math.round(Math.abs(b.x - a.x)))
+          if (el.type !== 'text') el.h = Math.max(1, Math.round(Math.abs(b.y - a.y))) // a text box sizes its own height
+        } else {
+          el.x = Math.round(a.x - el.w / 2); el.y = Math.round(a.y - el.h / 2)
+        }
+        this.cancelDraw()
+        this.insert(el, edit)
+      }
+      window.addEventListener('mousemove', move, true)
+      window.addEventListener('mouseup', up, true)
+    })
+  }
+
   /** SVG path 'd' for a gentle bow between two points (curve preview + default). */
   private curveBowD(a: { x: number; y: number }, b: { x: number; y: number }): string {
     const mx = (a.x + b.x) / 2

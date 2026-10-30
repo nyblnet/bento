@@ -88,7 +88,7 @@ export function labelFor(el: SlideElement, tr: (s: string) => string = (s) => s)
   if (el.name) return el.name
   switch (el.type) {
     case 'text': return excerpt(el.html) || tr('Text')
-    case 'shape': return tr({ rect: 'Rectangle', ellipse: 'Ellipse', triangle: 'Triangle', arrow: 'Arrow', line: 'Line', path: 'Curve' }[el.shape] ?? 'Shape')
+    case 'shape': return el.layout ? tr('Frame') : tr({ rect: 'Rectangle', ellipse: 'Ellipse', triangle: 'Triangle', arrow: 'Arrow', line: 'Line', path: 'Curve' }[el.shape] ?? 'Shape')
     case 'image': return tr('Image')
     case 'svg': return tr('Diagram')
     case 'chart': return tr('Chart')
@@ -100,10 +100,31 @@ export function labelFor(el: SlideElement, tr: (s: string) => string = (s) => s)
   }
 }
 
+/** labelFor, told apart: unnamed elements that would read alike on one slide
+ *  are numbered in paint order — "Rectangle 2" — as Figma names new layers.
+ *  Twenty rows all reading "Rectangle" left Layers no way to tell them apart. */
+export function labelIn(slide: Pick<Slide, 'elements'>, el: SlideElement, tr: (s: string) => string = (s) => s): string {
+  const base = labelFor(el, tr)
+  if (el.name) return base
+  const same = slide.elements.filter((e) => !e.name && labelFor(e, tr) === base)
+  return same.length > 1 ? `${base} ${same.indexOf(el) + 1}` : base
+}
+
 /** Rows top-first. */
 export function layerRows(slide: Pick<Slide, 'elements'>, tr?: (s: string) => string, paired?: ReadonlySet<string>): LayerRow[] {
+  // labelIn's numbering, counted once for the whole list
+  const labels = slide.elements.map((el) => labelFor(el, tr))
+  const count = new Map<string, number>()
+  for (const [i, el] of slide.elements.entries()) if (!el.name) count.set(labels[i], (count.get(labels[i]) ?? 0) + 1)
+  const seen = new Map<string, number>()
+  const label = (el: SlideElement, i: number) => {
+    if (el.name || (count.get(labels[i]) ?? 0) < 2) return labels[i]
+    const n = (seen.get(labels[i]) ?? 0) + 1
+    seen.set(labels[i], n)
+    return `${labels[i]} ${n}`
+  }
   const rows: LayerRow[] = slide.elements.map((el, index) => ({
-    id: el.id, index, type: el.type, label: labelFor(el, tr), grouped: !!el.groupId, groupId: el.groupId, groupName: el.groupName,
+    id: el.id, index, type: el.type, label: label(el, index), grouped: !!el.groupId, groupId: el.groupId, groupName: el.groupName,
     ...(el.type === 'shape' && el.layout ? { frame: el.layout.dir } : {}),
     ...(el.component ? { comp: el.component.main ? 'main' as const : 'copy' as const } : {}),
     locked: !!el.locked, hidden: !!el.hidden, paired: !!paired?.has(el.id),
