@@ -1247,4 +1247,5 @@ export const zhHant: Catalog = {
   "Soft light": "柔光",
   "Saturation": "飽和度",
   "Luminosity": "明度",
+  "Hidden elements are not drawn — show one in Layers to export it": "隱藏的元素不會被繪製——在「圖層」中顯示後即可匯出",
 }

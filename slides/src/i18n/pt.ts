@@ -1245,4 +1245,5 @@ export const pt: Catalog = {
   "Soft light": "Luz suave",
   "Saturation": "Saturação",
   "Luminosity": "Luminosidade",
+  "Hidden elements are not drawn — show one in Layers to export it": "Elementos ocultos não são desenhados — mostre um em Camadas para exportá-lo",
 }

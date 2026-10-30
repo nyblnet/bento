@@ -1253,4 +1253,5 @@ export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
   "Soft light": ["ソフトライト","柔光","柔光","Luz suave","Lumière tamisée","Weiches Licht","Luce soffusa","Luz suave"],
   "Saturation": ["彩度","饱和度","飽和度","Saturación","Saturation","Sättigung","Saturazione","Saturação"],
   "Luminosity": ["輝度","明度","明度","Luminosidad","Luminosité","Luminanz","Luminosità","Luminosidade"],
+  "Hidden elements are not drawn — show one in Layers to export it": ["非表示の要素は描画されません。書き出すにはレイヤーで表示してください","隐藏的元素不会被绘制——在“图层”中显示后即可导出","隱藏的元素不會被繪製——在「圖層」中顯示後即可匯出","Los elementos ocultos no se dibujan: muestra uno en Capas para exportarlo","Les éléments masqués ne sont pas dessinés — affichez-en un dans Calques pour l’exporter","Ausgeblendete Elemente werden nicht gezeichnet – blende eines in Ebenen ein, um es zu exportieren","Gli elementi nascosti non vengono disegnati: mostrane uno in Livelli per esportarlo","Elementos ocultos não são desenhados — mostre um em Camadas para exportá-lo"],
 }
