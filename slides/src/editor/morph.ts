@@ -10,7 +10,8 @@
 // Preview scrubber in the Animate tab. Nothing here writes the model.
 
 import { inLinearFlow, morphKey, type BentoDoc, type Slide, type SlideElement } from '../model'
-import { colorParts, rgbaStr } from '../present'
+import { mixColor, shapePaintSteps } from '../present'
+import { isFrame, morphClip } from '../layout'
 
 /** The slide the show morphs from into `slide`, or null when it does not
  *  morph: a state morphs from its parent, any other slide from the slide the
@@ -43,27 +44,16 @@ export function morphPairs(doc: BentoDoc, slide: Slide): Set<string> {
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 
-/** Two solid colours mixed at `t`, as the show's colour tween mixes them (present.ts). */
-export function lerpColor(a: string, b: string, t: number): string {
-  const ca = colorParts(a), cb = colorParts(b)
-  return rgbaStr([0, 1, 2, 3].map((k) => lerp(ca[k], cb[k], t)) as [number, number, number, number])
-}
-
-/** The colours the show tweens on a pair — a solid shape's fill (a line's
- *  stroke carries it) and stroke, a text's colour — painted at `t`. */
+/** The paint the show tweens on a pair — a shape's fill and stroke layers,
+ *  gradients included (the show's own steppers), a text's colour — at `t`. */
 function previewColours(node: HTMLElement, from: SlideElement, el: SlideElement, t: number) {
   if (from.type === 'shape' && el.type === 'shape') {
-    const target = node.querySelector<SVGElement>('rect,ellipse,polygon,line,path')
-    if (!target) return
-    // ponytail: gradients snap; the show tweens their stops (present.ts morphShapeFill)
-    if (!from.fillGradient && !el.fillGradient && from.fill !== el.fill) {
-      target.setAttribute(el.shape === 'line' ? 'stroke' : 'fill', lerpColor(from.fill, el.fill, t))
-    }
-    if (el.shape !== 'line' && from.stroke !== el.stroke) target.setAttribute('stroke', lerpColor(from.stroke, el.stroke, t))
+    const svg = node.querySelector(':scope > svg')
+    if (svg) for (const step of shapePaintSteps(svg, from, el)) step(t)
   }
   if (from.type === 'text' && el.type === 'text' && from.color !== el.color) {
     const inner = node.querySelector<HTMLElement>('.bento-text-inner')
-    if (inner) inner.style.color = lerpColor(from.color, el.color, t)
+    if (inner) inner.style.color = mixColor(from.color, el.color, t)
   }
 }
 
@@ -77,6 +67,7 @@ function previewColours(node: HTMLElement, from: SlideElement, el: SlideElement,
  */
 export function applyMorphPreview(surface: HTMLElement, doc: BentoDoc, slide: Slide, t: number) {
   const pairs = morphPartners(doc, slide)
+  const byId = new Map(slide.elements.map((e) => [e.id, e]))
   for (const el of slide.elements) {
     const node = surface.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
     if (!node) continue
@@ -85,9 +76,21 @@ export function applyMorphPreview(surface: HTMLElement, doc: BentoDoc, slide: Sl
     const x = lerp(from.x, el.x, t), y = lerp(from.y, el.y, t)
     const sx = el.w ? lerp(from.w, el.w, t) / el.w : 1
     const sy = el.h ? lerp(from.h, el.h, t) / el.h : 1
+    const r = lerp(from.rotation ?? 0, el.rotation ?? 0, t)
+    // the show's own transform (present.ts runMorph): top-left scale, rotation about the resting centre
+    const cx = el.w / 2, cy = el.h / 2
     node.style.transformOrigin = '0 0'
-    node.style.transform = `translate(${x - el.x}px, ${y - el.y}px) scale(${sx}, ${sy}) rotate(${lerp(from.rotation, el.rotation, t)}deg)`
+    node.style.transform = `translate(${x - el.x}px, ${y - el.y}px) scale(${sx}, ${sy})` +
+      (r ? ` translate(${cx}px, ${cy}px) rotate(${r}deg) translate(${-cx}px, ${-cy}px)` : '')
     node.style.opacity = String(lerp(from.opacity, el.opacity, t))
+    // a child of a clipping frame stays clipped by the frame as both travel
+    const f = el.parentId ? byId.get(el.parentId) : undefined
+    if (isFrame(f) && f.layout.clip) {
+      const ff = pairs.get(f.id) ?? f
+      node.style.clipPath = morphClip(
+        { x: lerp(ff.x, f.x, t), y: lerp(ff.y, f.y, t), w: lerp(ff.w, f.w, t), h: lerp(ff.h, f.h, t) },
+        x, y, sx, sy, r, el.w, el.h)
+    }
     previewColours(node, from, el, t)
   }
 }

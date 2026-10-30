@@ -15,10 +15,13 @@
 //      on `fill` becomes `fills.0.color`, follows a reorder, dies with its
 //      layer, and goes back to `fill` when one layer is left;
 //   3. the file gate keeps fills/strokes and drops a stack with one bad layer
-//      (the element survives); paintSafeShape gates each layer's colour.
+//      (the element survives); paintSafeShape gates each layer's colour;
+//   4. a stroke layer's gradient mirrors to `strokeGradient` (and folds back),
+//      a line's stroke layers mirror to `fill` (its colour), and the gate keeps
+//      a layer's blend only from CSS's closed list and gates stroke gradients.
 import { sanitizeElement } from '../slides/src/untrusted.ts'
 import { paintSafeShape } from '../slides/src/render.ts'
-import { mirrorStacks, setFillLayers, setStrokeLayers } from '../slides/src/stacks.ts'
+import { mirrorStacks, setFillLayers, setStrokeLayers, strokeLayers } from '../slides/src/stacks.ts'
 import type { ShapeElement } from '../slides/src/model.ts'
 
 let checks = 0
@@ -88,6 +91,39 @@ console.log('\nthe gates\n')
   const safe = paintSafeShape({ ...rect(), fills: [{ color: 'url(https://x.test/a)' }, { color: '#fff', gradient: { angle: 0, stops: [{ at: 0, color: 'url(https://x.test/b)' }] } }], strokes: [{ color: 'url(https://x.test/c)', width: 1 }] })
   ok(safe.fills![0].color === 'transparent' && safe.fills![1].gradient!.stops[0].color === 'transparent' && safe.strokes![0].color === 'transparent',
     'paintSafeShape gates every layer colour, gradient stops included')
+}
+
+console.log('\nstroke gradients, lines, blend\n')
+{
+  const G = { angle: 90, stops: [{ at: 0, color: '#ff0000' }, { at: 1, color: '#0000ff' }] }
+  const el = rect()
+  setStrokeLayers(el, [{ color: '#000000', width: 2 }, { color: '#ff0000', width: 4, gradient: G }], [0, -1])
+  ok(el.strokeGradient?.stops[1].color === '#0000ff' && el.stroke === '#ff0000', 'a gradient top stroke layer mirrors to strokeGradient, its colour the fallback')
+  setStrokeLayers(el, [{ color: '#000000', width: 2 }], [0])
+  ok(!el.strokes && !el.strokeGradient && el.stroke === '#000000', 'folding to a solid layer drops strokeGradient')
+  el.themeRefs = { 'strokeGradient.stops.0.color': 'accent1' }
+  el.strokeGradient = JSON.parse(JSON.stringify(G))
+  setStrokeLayers(el, [...strokeLayers(el), { color: '#00ff00', width: 1 }], [0, -1])
+  ok(el.themeRefs?.['strokes.0.gradient.stops.0.color'] === 'accent1', "a single stroke gradient's stop ref moves into its layer")
+
+  const line = { ...rect(), shape: 'line', fill: '#123456', strokeWidth: 0 } as ShapeElement
+  ok(strokeLayers(line).length === 1 && strokeLayers(line)[0].color === '#123456' && strokeLayers(line)[0].width === 2, "a line's one stroke is its fill, at least 2px")
+  setStrokeLayers(line, [...strokeLayers(line), { color: '#abcdef', width: 6 }], [0, -1])
+  ok(line.strokes?.length === 2 && line.fill === '#abcdef' && line.strokeWidth === 6, "a line's stroke stack mirrors its top layer into fill (its colour) and strokeWidth")
+  setStrokeLayers(line, [{ color: '#654321', width: 3 }], [1])
+  ok(!line.strokes && line.fill === '#654321', 'one layer left folds back into the line colour')
+
+  const kept = sanitizeElement({
+    ...rect(),
+    fills: [{ color: '#111111', blend: 'multiply' }, { color: '#222222', blend: 'url(x)' }],
+    strokes: [{ color: '#333333', width: 2, blend: 'screen', gradient: G }, { color: '#444444', width: 4 }],
+    strokeGradient: G,
+  }) as Record<string, any>
+  ok(kept?.fills?.[0]?.blend === 'multiply' && kept.strokes?.[0]?.blend === 'screen', 'the gate keeps a layer blend from the list')
+  ok(kept?.fills?.length === 2 && !('blend' in kept.fills[1]), 'a blend outside the list is dropped; its layer stays')
+  ok(kept?.strokes?.[0]?.gradient?.stops.length === 2 && kept.strokeGradient?.stops.length === 2, 'the gate keeps stroke-layer gradients and strokeGradient')
+  const safe = paintSafeShape({ ...rect(), strokeGradient: { angle: 0, stops: [{ at: 0, color: 'url(https://x.test/d)' }] }, strokes: [{ color: '#000', width: 1, gradient: { angle: 0, stops: [{ at: 0, color: 'url(https://x.test/e)' }] } }] })
+  ok(safe.strokeGradient!.stops[0].color === 'transparent' && safe.strokes![0].gradient!.stops[0].color === 'transparent', 'paintSafeShape gates stroke gradients too')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

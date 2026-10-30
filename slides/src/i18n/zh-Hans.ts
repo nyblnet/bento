@@ -1238,4 +1238,13 @@ export const zhHans: Catalog = {
   "Nothing on the slide before to pair with.": "上一张幻灯片上没有可配对的元素。",
   "Min": "最小",
   "Click to place corners, drag to pull out curves (Alt breaks a handle); click the first point to close, Enter or Esc to finish": "点击放置角点，拖动拉出曲线（Alt 断开手柄）；点击第一个点闭合，按 Enter 或 Esc 完成",
+  "Layer blend mode": "图层混合模式",
+  "Drag to reorder": "拖动以重新排序",
+  "Gradient stop": "渐变色标",
+  "Color dodge": "颜色减淡",
+  "Color burn": "颜色加深",
+  "Hard light": "强光",
+  "Soft light": "柔光",
+  "Saturation": "饱和度",
+  "Luminosity": "明度",
 }

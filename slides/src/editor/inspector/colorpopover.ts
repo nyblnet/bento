@@ -10,6 +10,7 @@ import type { PaintHost, PaintKind } from './color'
 import { gradientBar } from './gradientbar'
 import { gradientFor } from './color'
 import { combineColor, parseColor } from './controls'
+import { editGradient } from '../gradientoverlay'
 
 export interface Swatch { label: string; color: string; pick: () => void }
 export interface ColorPopoverOpts {
@@ -334,6 +335,10 @@ export function openColorPopover(anchor: HTMLElement, o: ColorPopoverOpts) {
     colorPart.hidden = tab === 'tokens'
     barHost.hidden = tab === 'tokens' || kind === 'solid'
     alpha.hidden = kind === 'solid' && o.alpha === undefined
+    // a gradient in hand: the canvas shows its handle while the popover is open
+    if (kind !== 'solid' && host) pop.dataset.gradEdit = host.target
+    else delete pop.dataset.gradEdit
+    if (pop.contains(document.activeElement)) editGradient(pop.dataset.gradEdit ?? null)
   }
   const choose = (k: PaintKind | 'tokens') => {
     tab = k

@@ -15,8 +15,10 @@
 //      and Backspace removes the focused one; each is one undo step.
 //   3. The colour popover on a gradient offers Solid | Linear | Radial | Tokens;
 //      switching previews at once, Esc puts the fill back.
-//   4. A selected radial gradient has a centre knob on the canvas; dragging it
-//      moves the centre, one undo step.
+//   4. A radial gradient being edited (its chip focused — selection alone shows
+//      nothing) has a centre knob and a dot per stop on the canvas; dragging
+//      moves the centre or the stop, one undo step each; focus elsewhere puts
+//      the handle away.
 //   5. Stroke position, Custom dashes, the corners button and Flip write the
 //      model.
 //   6. Pointing at a Shadow preset or an entrance previews it on the canvas
@@ -120,8 +122,11 @@ try {
 
   console.log('\nthe canvas handle\n')
   await select('rad')
-  const knobs = p.locator('.ed-grad-layer .ed-grad-knob')
-  ok(await knobs.count() === 2, 'a radial gradient shows a centre and a radius knob')
+  ok(await p.locator('.ed-grad-layer').count() === 0, 'selecting a gradient-filled shape alone shows no handle')
+  await p.locator('.ed-props .ed-gradchip').focus(); await p.waitForTimeout(150)
+  const knobs = p.locator('.ed-grad-layer .ed-grad-knob:not(.ed-grad-stop)')
+  ok(await knobs.count() === 2, 'editing it (its chip focused) shows a centre and a radius knob')
+  ok(await p.locator('.ed-grad-layer .ed-grad-stop').count() === 2, '…and a dot for each stop')
   const k = await knobs.first().boundingBox()
   const before = (await el('rad')).fillGradient
   await p.mouse.move(k.x + k.width / 2, k.y + k.height / 2)
@@ -130,6 +135,21 @@ try {
   ok(moved.cx > before.cx && moved.cy > before.cy, `dragging the centre knob moves the centre (${before.cx},${before.cy} → ${moved.cx},${moved.cy})`)
   await undo()
   ok((await el('rad')).fillGradient.cx === before.cx, 'one undo puts the centre back')
+  // a stop dot slides its stop along the radius
+  const dot = await p.locator('.ed-grad-layer .ed-grad-stop').nth(1).boundingBox()
+  const at0 = (await el('rad')).fillGradient.stops[1].at
+  await p.mouse.move(dot.x + dot.width / 2, dot.y + dot.height / 2)
+  // toward the centre knob: along the rail, so the projection shrinks
+  const ctr = await p.locator('.ed-grad-layer .ed-grad-knob:not(.ed-grad-stop)').first().boundingBox()
+  const mx = (dot.x + ctr.x) / 2 + dot.width / 2, my = (dot.y + ctr.y) / 2 + dot.height / 2
+  await p.mouse.down(); await p.mouse.move(mx, my, { steps: 5 }); await p.mouse.up(); await p.waitForTimeout(250)
+  const at1 = (await el('rad')).fillGradient.stops[1].at
+  ok(at1 < at0, `dragging a stop dot toward the centre moves the stop in (${at0} → ${at1})`)
+  await undo()
+  ok((await el('rad')).fillGradient.stops[1].at === at0, 'one undo puts the stop back')
+  ok(await p.locator('.ed-grad-layer').count() === 1, 'the handle stays up through the edits')
+  await p.locator('.ed-props .ed-num').first().focus(); await p.waitForTimeout(150)
+  ok(await p.locator('.ed-grad-layer').count() === 0, 'focus on another field puts the handle away')
 
   console.log('\nstroke, corners, flip\n')
   await select('tri')

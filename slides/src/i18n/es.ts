@@ -1238,4 +1238,13 @@ export const es: Catalog = {
   "Nothing on the slide before to pair with.": "No hay nada en la diapositiva anterior con qué emparejar.",
   "Min": "Mín.",
   "Click to place corners, drag to pull out curves (Alt breaks a handle); click the first point to close, Enter or Esc to finish": "Haz clic para poner esquinas, arrastra para sacar curvas (Alt rompe un tirador); clic en el primer punto para cerrar, Intro o Esc para terminar",
+  "Layer blend mode": "Modo de fusión de la capa",
+  "Drag to reorder": "Arrastra para reordenar",
+  "Gradient stop": "Parada del degradado",
+  "Color dodge": "Sobreexponer color",
+  "Color burn": "Subexponer color",
+  "Hard light": "Luz fuerte",
+  "Soft light": "Luz suave",
+  "Saturation": "Saturación",
+  "Luminosity": "Luminosidad",
 }

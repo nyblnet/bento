@@ -169,7 +169,7 @@ export function buildTextFill(p: PropsPanel, el: TextElement) {
     gradientRows(p, tgrad, (fn, fin) => p.mutate(el.id, (e) => {
       const g = (e as TextElement).colorGradient
       if (g) fn(g)
-    }, fin))
+    }, fin), host.target)
   }
 }
 

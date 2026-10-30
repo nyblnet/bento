@@ -1238,4 +1238,13 @@ export const ja: Catalog = {
   "Nothing on the slide before to pair with.": "前のスライドにペアにできるものがありません。",
   "Min": "最小",
   "Click to place corners, drag to pull out curves (Alt breaks a handle); click the first point to close, Enter or Esc to finish": "クリックで角を置き、ドラッグで曲線を引き出します（Alt でハンドルを分割）。最初の点をクリックで閉じ、Enter か Esc で終了",
+  "Layer blend mode": "レイヤーの描画モード",
+  "Drag to reorder": "ドラッグして並べ替え",
+  "Gradient stop": "グラデーションの分岐点",
+  "Color dodge": "覆い焼きカラー",
+  "Color burn": "焼き込みカラー",
+  "Hard light": "ハードライト",
+  "Soft light": "ソフトライト",
+  "Saturation": "彩度",
+  "Luminosity": "輝度",
 }

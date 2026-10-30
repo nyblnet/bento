@@ -1238,4 +1238,13 @@ export const zhHant: Catalog = {
   "Nothing on the slide before to pair with.": "上一張投影片上沒有可配對的元素。",
   "Min": "最小",
   "Click to place corners, drag to pull out curves (Alt breaks a handle); click the first point to close, Enter or Esc to finish": "點按放置角點，拖曳拉出曲線（Alt 斷開控制點）；點按第一個點閉合，按 Enter 或 Esc 完成",
+  "Layer blend mode": "圖層混合模式",
+  "Drag to reorder": "拖曳以重新排序",
+  "Gradient stop": "漸層色標",
+  "Color dodge": "加亮顏色",
+  "Color burn": "加深顏色",
+  "Hard light": "實光",
+  "Soft light": "柔光",
+  "Saturation": "飽和度",
+  "Luminosity": "明度",
 }

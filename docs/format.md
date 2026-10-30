@@ -180,15 +180,27 @@ plus `fill`, `stroke`, `strokeWidth`, `radius` (rect corner). Options:
 - `radii?`: `[topLeft, topRight, bottomRight, bottomLeft]` — rect only, a radius
   per corner; wins over `radius`, which the editor keeps at the largest corner
   for older shells.
-- `fills?`: `[{ color, gradient?, hidden? }, …]` and `strokes?`:
-  `[{ color, width, align?, dashes?, hidden? }, …]` — fill and stroke STACKS,
-  bottom first (closed shapes). When set, the layers are what is drawn; fills
-  paint under strokes. `fill`/`fillGradient` and `stroke`/`strokeWidth`/
-  `strokeAlign`/`strokeDashes` stay in the element and MIRROR the top visible
-  layer (`stacks.ts` derives them on every change), so an older shell draws the
-  paint that matters most. A stack exists only with two or more layers; one
+- `strokeGradient?`: a gradient along the stroke (same keys as `fillGradient`;
+  on a **line**, along its one colour). Wins over `stroke` (a line's `fill`),
+  which stays the solid an older shell draws. Painted across the shape's box,
+  so a flat line shows it too.
+- `fills?`: `[{ color, gradient?, hidden?, blend? }, …]` and `strokes?`:
+  `[{ color, width, align?, dashes?, hidden?, gradient?, blend? }, …]` — fill
+  and stroke STACKS, bottom first. Closed shapes and open paths take both; a
+  **line** takes strokes only (its layers' colours mirror into `fill`, its
+  colour). When set, the layers are what is drawn; fills paint under strokes,
+  and a fill covers the shape's own outline whatever the strokes' positions
+  (Figma's rule). An open path's or a line's tips ride the top visible stroke.
+  `blend` is a CSS mix-blend-mode word (`multiply`, `screen`, `overlay`, …;
+  absent = normal); the gate keeps only words from that closed list.
+  `fill`/`fillGradient` and `stroke`/`strokeWidth`/`strokeAlign`/
+  `strokeDashes`/`strokeGradient` stay in the element and MIRROR the top
+  visible layer (`stacks.ts` derives them on every change), so an older shell
+  draws the paint that matters most (an older shell knows no `blend` on a
+  layer and draws one paint). A stack exists only with two or more layers; one
   layer folds back into the plain keys. Colour refs live per layer
-  (`fills.1.color`, `fills.0.gradient.stops.2.color`, `strokes.0.color`).
+  (`fills.1.color`, `fills.0.gradient.stops.2.color`, `strokes.0.color`,
+  `strokes.1.gradient.stops.0.color`).
 - **line** shapes take their color from `fill`, draw horizontally across the
   box (rotate for vertical), and accept tips `lineStart?`/`lineEnd?` =
   `none | arrow | dot | bar`.

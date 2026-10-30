@@ -390,3 +390,11 @@ jobs:
         # transforms — and drawn as an <img> it matches the slide's own render
         # to within glyph edges. An element's export frames its shadow.
         run: node scripts/test-slides-svg-export-browser.mjs
+      - name: Paint layers and the morph in Chromium
+        # Stroke gradients (a flat line too), line stroke stacks with tips on
+        # the top layer, fills at the box under an outside stroke, layer
+        # blend; mid-morph a frame child stays clipped by the travelling frame
+        # and stroke layers tween colour and width; the editor Preview shows
+        # the same clip and gradient mix; layer rows blend, dash, drag-reorder
+        # and turn a stroke into a gradient.
+        run: node scripts/test-slides-morph-render-browser.mjs

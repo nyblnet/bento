@@ -768,6 +768,26 @@
           "items": {
             "type": "object",
             "properties": {
+              "blend": {
+                "type": "string",
+                "enum": [
+                  "multiply",
+                  "screen",
+                  "overlay",
+                  "darken",
+                  "lighten",
+                  "color-dodge",
+                  "color-burn",
+                  "hard-light",
+                  "soft-light",
+                  "difference",
+                  "exclusion",
+                  "hue",
+                  "saturation",
+                  "color",
+                  "luminosity"
+                ]
+              },
               "color": {
                 "type": "string",
                 "maxLength": 64,
@@ -1116,6 +1136,65 @@
             "type": "number"
           }
         },
+        "strokeGradient": {
+          "type": "object",
+          "properties": {
+            "angle": {
+              "type": "number",
+              "minimum": -3600,
+              "maximum": 3600
+            },
+            "cx": {
+              "type": "number",
+              "minimum": -10,
+              "maximum": 10
+            },
+            "cy": {
+              "type": "number",
+              "minimum": -10,
+              "maximum": 10
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "radial"
+              ]
+            },
+            "r": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "stops": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "at": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "color": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "description": "CSS colour; no url()"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "at",
+                  "color"
+                ]
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "stops"
+          ]
+        },
         "strokeStyle": {
           "type": "string",
           "enum": [
@@ -1143,6 +1222,26 @@
                   "outside"
                 ]
               },
+              "blend": {
+                "type": "string",
+                "enum": [
+                  "multiply",
+                  "screen",
+                  "overlay",
+                  "darken",
+                  "lighten",
+                  "color-dodge",
+                  "color-burn",
+                  "hard-light",
+                  "soft-light",
+                  "difference",
+                  "exclusion",
+                  "hue",
+                  "saturation",
+                  "color",
+                  "luminosity"
+                ]
+              },
               "color": {
                 "type": "string",
                 "maxLength": 64,
@@ -1155,6 +1254,65 @@
                 "items": {
                   "type": "number"
                 }
+              },
+              "gradient": {
+                "type": "object",
+                "properties": {
+                  "angle": {
+                    "type": "number",
+                    "minimum": -3600,
+                    "maximum": 3600
+                  },
+                  "cx": {
+                    "type": "number",
+                    "minimum": -10,
+                    "maximum": 10
+                  },
+                  "cy": {
+                    "type": "number",
+                    "minimum": -10,
+                    "maximum": 10
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "radial"
+                    ]
+                  },
+                  "r": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "stops": {
+                    "type": "array",
+                    "maxItems": 64,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "at": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "color": {
+                          "type": "string",
+                          "maxLength": 64,
+                          "description": "CSS colour; no url()"
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "at",
+                        "color"
+                      ]
+                    }
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "stops"
+                ]
               },
               "hidden": {
                 "type": "boolean"

@@ -1238,4 +1238,13 @@ export const de: Catalog = {
   "Nothing on the slide before to pair with.": "Auf der vorigen Folie gibt es nichts zum Koppeln.",
   "Min": "Min.",
   "Click to place corners, drag to pull out curves (Alt breaks a handle); click the first point to close, Enter or Esc to finish": "Klicken setzt Ecken, Ziehen zieht Kurven heraus (Alt bricht einen Griff); Klick auf den ersten Punkt schließt, Enter oder Esc beendet",
+  "Layer blend mode": "Füllmethode der Ebene",
+  "Drag to reorder": "Zum Umordnen ziehen",
+  "Gradient stop": "Verlaufspunkt",
+  "Color dodge": "Farbig abwedeln",
+  "Color burn": "Farbig nachbelichten",
+  "Hard light": "Hartes Licht",
+  "Soft light": "Weiches Licht",
+  "Saturation": "Sättigung",
+  "Luminosity": "Luminanz",
 }

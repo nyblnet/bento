@@ -12,6 +12,7 @@ import { cssColor, cssGradient, radialGeom } from '../../render'
 import { bindToken, tokenName, tokenValue } from '../../tokens'
 import { openColorPopover } from './colorpopover'
 import { gradientBar } from './gradientbar'
+import { gradTarget } from '../gradientoverlay'
 
 export type PaintKind = 'solid' | 'linear' | 'radial'
 export const paintKind = (g?: GradientFill): PaintKind => (!g?.stops?.length ? 'solid' : g.kind === 'radial' ? 'radial' : 'linear')
@@ -36,6 +37,8 @@ export interface PaintHost {
   solid: string
   write: (kind: PaintKind, grad: GradientFill | undefined, solid: string | undefined, final: boolean) => void
   tokens: Array<{ name: string; color: string; pick: () => void }>
+  /** marks the controls editing this gradient, so the canvas shows its handle (gradientoverlay.ts) */
+  target: string
 }
 
 /** A fill's paint host: `solidKey` holds the colour (and the fallback under a
@@ -49,6 +52,7 @@ export function paintHost(p: PropsPanel, id: string, solidKey: string, gradKey: 
   return {
     kind: paintKind(grad),
     grad,
+    target: gradTarget(id, gradKey),
     solid: String(readAt(el, solidKey) ?? '#808080'),
     write: (kind, g, solid, final) => p.mutate(id, (e) => {
       const [holder, key] = slot(e, gradKey)
@@ -91,6 +95,7 @@ export function gradientChip(p: PropsPanel, host: PaintHost): HTMLElement {
   const b = document.createElement('button')
   b.type = 'button'
   b.className = 'ed-gradchip'
+  b.dataset.gradEdit = host.target
   b.style.setProperty('--grad', host.grad ? cssGradient(host.grad) : 'none')
   b.textContent = host.kind === 'radial' ? t('Radial') : t('Linear')
   b.title = t('Edit the gradient')
@@ -128,7 +133,8 @@ export function fillKind(value: PaintKind, onChange: (v: string) => void): HTMLE
 
 /** A gradient's angle and stops, shared by text and shapes. `edit` hands
  *  the live gradient to change. */
-export function gradientRows(p: PropsPanel, grad: GradientFill, edit: (fn: (g: GradientFill) => void, final: boolean) => void) {
+export function gradientRows(p: PropsPanel, grad: GradientFill, edit: (fn: (g: GradientFill) => void, final: boolean) => void, target?: string) {
+  const before = p.host.children.length
   p.host.appendChild(gradientBar(grad, edit))
   if (grad.kind === 'radial') {
     // the centre and radius, in % of the box (the canvas handle drags them too)
@@ -181,6 +187,8 @@ export function gradientRows(p: PropsPanel, grad: GradientFill, edit: (fn: (g: G
     }
     p.host.appendChild(wrap)
   })
+  // these rows edit that gradient: focus in any of them shows its canvas handle
+  if (target) for (const n of [...p.host.children].slice(before)) (n as HTMLElement).dataset.gradEdit = target
 }
 
 export function color(p: PropsPanel, value: string, onEdit: (v: string, final: boolean) => void, ref?: { id: string | null; path: string; slide?: Slide }): HTMLElement {
