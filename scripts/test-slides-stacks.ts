@@ -52,6 +52,9 @@ console.log('\nthe fallback mirror\n')
   mirrorStacks(el)
   ok(el.stroke === '#bbbbbb' && el.strokeWidth === 3 && !el.strokeAlign && JSON.stringify(el.strokeDashes) === '[6,2]', 'stroke keys mirror the top stroke layer, its absent align included')
   ok(!mirrorStacks(el), 'a second mirror changes nothing (the doc hook cannot loop)')
+  el.strokes.forEach((l) => { l.hidden = true })
+  mirrorStacks(el)
+  ok(el.strokeWidth === 0, 'every stroke layer hidden: an older shell strokes nothing (width 0)')
 }
 
 console.log('\nlayers and references\n')

@@ -17,9 +17,8 @@ import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpda
 import { CHART_PRESETS } from '../charts'
 import { cssColor, renderSlide, renderThumbnail } from '../render'
 import { openExportImagesDialog } from './exportimages'
-import { paletteSignature, resolveThemeRefs } from '../palette'
-import { syncTokenRefs, tokenSignature } from '../tokens'
-import { adoptComponents, detach, makeComponent, syncComponents } from '../components'
+import { adoptComponents, detach, makeComponent } from '../components'
+import { derive, deriveMemory, type DeriveMemory } from '../derive'
 import { TokensPane } from './tokenspane'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
@@ -41,9 +40,6 @@ import { freshGroups, insertElements, insertSlides, parseClip, serializeElements
 import { estimatedFrames, fencedElements, splitFences } from './codefence'
 import { openSpeakerWindow, speakerIdleBody, speakerWindow } from '../screens'
 import { neutralWindowTitle, speakerWindowTitle, titleSealed } from '../wintitle'
-import { routeAllConnectors } from '../connectors'
-import { layoutAll } from '../layout'
-import { mirrorAllStacks } from '../stacks'
 import { ICONS } from '../icons'
 import { t, setLocale, locale, localeChoices, LOCALE_CHOICES, applyDirection, isRtl } from '../i18n'
 import { MOD, dispatch, openPalette, titleFor, type Command } from './commands'
@@ -218,16 +214,15 @@ export class Editor {
     this.wirePaste()
     this.wireContextMenu()
     store.on('doc', () => this.syncLinkedCharts())
-    store.on('doc', () => this.syncConnectors())
-    store.on('doc', () => this.syncThemeRefs())
-    // seeded with the document as it opened: at boot nothing has "moved", so a
-    // literal edited in an older shell keeps its value (and loses its binding)
-    this.tokenSig = tokenSignature(store.doc)
-    syncComponents(store.doc, this.componentMains)
-    store.on('doc', () => this.syncTokens())
-    store.on('doc', () => this.syncComponents())
-    // after palette, tokens and components rewrite layer colours: an older shell's fallback follows (stacks.ts)
-    store.on('doc', () => { mirrorAllStacks(store.doc) })
+    // every derived value — palette, tokens, components, layout, connectors,
+    // stack fallbacks — in one pass, in dependency order (derive.ts). Seeded
+    // with the document as it opened, and re-seeded when another document
+    // replaces it: nothing has "moved" yet, so a value edited in an older
+    // shell reads as a hand edit and is kept. Undo/redo keep the memory.
+    this.derived = deriveMemory(store.doc)
+    derive(store.doc, this.derived)
+    store.on('replace', () => { this.derived = deriveMemory(store.doc); derive(store.doc, this.derived) })
+    store.on('doc', () => this.syncDerived())
     this.tokensPane = new TokensPane(store)
     this.tokensPane.mount(this.sideTokens)
     store.on('doc', () => this.tokensPane.refresh())
@@ -2274,6 +2269,7 @@ export class Editor {
     // get PowerPoint-Morph behaviour for free.
     const clone = JSON.parse(JSON.stringify(this.store.doc.slides[i]))
     clone.id = uid('slide')
+    adoptComponents(clone.elements, this.store.doc) // one main per component: the duplicate's main becomes a copy
     this.store.commit(() => {
       this.store.doc.slides.splice(i + 1, 0, clone)
     }, 'slides')
@@ -2691,47 +2687,17 @@ export class Editor {
     })
   }
 
-  // --- brand palette → referenced literals ---------------------------------
+  // --- derived values ----------------------------------------------------------
 
-  private paletteSig = ''
-  /**
-   * Re-derive every colour that points at a palette slot, whenever the palette
-   * moves. Same shape as the table→chart binding below: guarded by a signature
-   * so it cannot loop, and DERIVE-NOT-COMMIT — the literals are a pure function
-   * of `doc.theme`, so each collaborating replica computes the same values
-   * without an operation crossing the wire.
-   *
-   * Runs across the whole document, not just the current slide: a palette edit
-   * changes slide 40 as much as slide 1, and nothing else will visit it.
-   */
-  private syncThemeRefs() {
-    const sig = paletteSignature(this.store.doc)
-    if (sig === this.paletteSig) return
-    this.paletteSig = sig
-    if (resolveThemeRefs(this.store.doc)) {
-      this.canvas.render()
-      this.scheduleThumbs()
-    }
-  }
-
-  private tokenSig = ''
-  /** Bound literals follow their tokens; a literal edited by hand drops its
-   *  binding (tokens.ts). Derive-not-commit, like syncThemeRefs. */
-  private syncTokens() {
-    const sig = tokenSignature(this.store.doc)
-    const moved = sig !== this.tokenSig
-    this.tokenSig = sig
-    if (syncTokenRefs(this.store.doc, moved)) {
-      this.canvas.render()
-      this.scheduleThumbs()
-    }
-  }
-
-  /** Each main's last-seen signature, so a copy's disagreement reads as a
-   *  hand edit unless its main moved (components.ts). */
-  private componentMains = new Map<string, string>()
-  private syncComponents() {
-    if (syncComponents(this.store.doc, this.componentMains)) {
+  private derived!: DeriveMemory
+  /** Palette and token literals, component copies, frame layout, connector
+   *  endpoints and stack fallbacks, re-derived on EVERY slide after any change
+   *  — a palette edit changes slide 40 as much as slide 1, and a remote op or
+   *  an undo can touch any slide. Derive-not-commit: every replica computes
+   *  the same values from the same document, so no operation crosses the wire
+   *  and nothing is an undo step (derive.ts). */
+  private syncDerived() {
+    if (derive(this.store.doc, this.derived)) {
       this.canvas.render()
       this.scheduleThumbs()
     }
@@ -2782,20 +2748,6 @@ export class Editor {
     // the triggering table edit already dirtied the doc + drives collab/autosave;
     // each replica derives identically from the synced table, so just re-render.
     if (changed) this.canvas.render()
-  }
-
-  /** Re-route connectors (line and open-path shapes anchored to elements via
-   *  from/to) when anything moves — on EVERY slide, not just the one on screen:
-   *  a deck replaced by JSON, a remote op on another slide, or an undo can
-   *  leave any slide's connectors stale, and the thumbnails, the show and print
-   *  all read the model. Derived, not committed — every replica computes the
-   *  same endpoints from the element boxes (mirrors syncLinkedCharts); see
-   *  connectors.ts routeConnectors. Boot routes the whole deck once (main.ts). */
-  private syncConnectors() {
-    // auto layout first (layout.ts): a connector anchored to a frame child
-    // must route to where the frame put it. Both derive, neither commits.
-    const laid = layoutAll(this.store.doc)
-    if (routeAllConnectors(this.store.doc) || laid) this.canvas.render()
   }
 
   // --- auto-save + crash recovery -----------------------------------------------
@@ -3621,7 +3573,7 @@ export class Editor {
   private duplicateSelection() {
     const els = this.store.selectedElements
     if (!els.length) return
-    const clones = freshGroups(els.map((el) => cloneElement(el)))
+    const clones = freshGroups(els.map((el) => cloneElement(el)), els)
     adoptComponents(clones, this.store.doc)
     this.store.commit(() => this.store.slide.elements.push(...clones))
     this.store.select(clones.map((c) => c.id))

@@ -19,16 +19,26 @@
 
 import type { BentoDoc, DesignTokens, Slide, SlideElement, TokenType, TokenValue } from './model.ts'
 import { _readPath, keepAlpha } from './palette.ts'
+import { SLIDE_CHECKS, SLIDE_TOKEN_KEYS, TOKEN_KEYS, checkElementProp } from './untrusted.ts'
 
 export const TOKEN_TYPES: readonly TokenType[] = ['color', 'number', 'fontSize', 'opacity', 'fontFamily', 'shadow']
+
+/** A name that would reach into Object.prototype (`toString`, `__proto__`,
+ *  `constructor`…) where a plain lookup expects data. Never a token or mode name. */
+export const protoName = (k: string): boolean => k in Object.prototype
 
 /** `$name` → `name`; null when the ref is a palette slot or malformed. */
 export function tokenName(ref: string | undefined): string | null {
   const m = /^\$([A-Za-z][\w.-]{0,63})$/.exec(ref ?? '')
-  return m ? m[1] : null
+  return m && !protoName(m[1]) ? m[1] : null
 }
 
-export const modesOf = (t: DesignTokens | undefined): string[] => t?.modes?.length ? t.modes : ['default']
+const own = (o: unknown, k: string): boolean => !!o && typeof o === 'object' && Object.hasOwn(o, k)
+
+export const modesOf = (t: DesignTokens | undefined): string[] => {
+  const modes = (Array.isArray(t?.modes) ? t.modes : []).filter((m) => typeof m === 'string' && !protoName(m))
+  return modes.length ? modes : ['default']
+}
 export const activeMode = (t: DesignTokens | undefined): string => {
   const modes = modesOf(t)
   return t?.mode && modes.includes(t.mode) ? t.mode : modes[0]
@@ -37,11 +47,9 @@ export const activeMode = (t: DesignTokens | undefined): string => {
 /** A token's value in the active mode, falling back to the first mode that has one. */
 export function tokenValue(doc: BentoDoc, name: string): TokenValue | undefined {
   const tk = doc.theme.tokens
-  const tok = tk?.set[name]
-  if (!tok) return undefined
-  const v = tok.values[activeMode(tk)]
-  if (v !== undefined) return v
-  for (const m of modesOf(tk)) if (tok.values[m] !== undefined) return tok.values[m]
+  const tok = own(tk?.set, name) ? tk!.set[name] : undefined
+  if (!tok || !own(tok, 'values')) return undefined
+  for (const m of [activeMode(tk), ...modesOf(tk)]) if (own(tok.values, m) && tok.values[m] !== undefined) return tok.values[m]
   return undefined
 }
 
@@ -50,25 +58,50 @@ export const tokenSignature = (doc: BentoDoc): string => JSON.stringify(doc.them
 
 type Holder = Record<string, unknown> & { themeRefs?: Record<string, string> }
 
-/** Write a dotted path, creating only the last key on an existing parent. */
-function writeAt(obj: unknown, path: string, value: unknown): boolean {
+/**
+ * The property `path` on `holder` would hold after `value` is written there —
+ * its top-level value, ready to store — or null when the write is refused.
+ * A token is a value at the trust level of the file it came from, so every
+ * write is held to the rule the property itself is held to on intake
+ * (untrusted.ts): only a bindable key (TOKEN_KEYS), only own, non-prototype
+ * path segments, only a finite number, and only a result the element (or
+ * slide) gate accepts. Creates only the last key, on an existing parent.
+ */
+function candidate(holder: Holder, path: string, value: unknown): { top: string; next: unknown } | null {
   const segs = path.split('.')
-  let cur: any = obj
-  for (const s of segs.slice(0, -1)) {
-    if (cur == null || typeof cur !== 'object') return false
-    cur = cur[s]
+  const top = segs[0]
+  const slide = Array.isArray((holder as { elements?: unknown }).elements)
+  if (!(slide ? SLIDE_TOKEN_KEYS : TOKEN_KEYS).has(top) || segs.some(protoName)) return null
+  if (typeof value === 'number' && !Number.isFinite(value)) return null
+  const fresh = typeof value === 'object' && value ? structuredClone(value) : value // a shadow token is never aliased into elements
+  let next: unknown = fresh
+  if (segs.length > 1) {
+    if (!own(holder, top)) return null
+    next = structuredClone(holder[top])
+    let cur: any = next
+    for (const sg of segs.slice(1, -1)) { if (!own(cur, sg)) return null; cur = cur[sg] }
+    if (cur == null || typeof cur !== 'object') return null
+    cur[segs[segs.length - 1]] = fresh
   }
-  const last = segs[segs.length - 1]
-  if (cur == null || typeof cur !== 'object') return false
-  if (same(cur[last], value)) return false
-  cur[last] = typeof value === 'object' && value ? structuredClone(value) : value // a shadow token is never aliased into elements
+  // the gate must take the value AS IS: one it would clamp or trim (0 grid
+  // columns, an unknown key) is not a value this property holds
+  const gated = slide ? SLIDE_CHECKS[top](next) : (({ ok, value }) => (ok ? value : undefined))(checkElementProp(String(holder.type), top, next))
+  return gated !== undefined && same(gated, next) ? { top, next } : null
+}
+
+/** Write `value` at `path` if the property accepts it; true when something changed. */
+function writeAt(holder: Holder, path: string, value: unknown): boolean {
+  if (same(_readPath(holder, path), value)) return false
+  const c = candidate(holder, path, value)
+  if (!c) return false
+  holder[c.top] = c.next
   return true
 }
 
 function want(doc: BentoDoc, holder: Holder, path: string, name: string): TokenValue | undefined {
   const v = tokenValue(doc, name)
   // only a colour keeps the property's own opacity; a font stack is a string too
-  return typeof v === 'string' && (doc.theme.tokens?.set[name]?.type ?? 'color') === 'color' ? keepAlpha(_readPath(holder, path), v) : v
+  return typeof v === 'string' && (doc.theme.tokens!.set[name].type ?? 'color') === 'color' ? keepAlpha(_readPath(holder, path), v) : v
 }
 
 function same(a: unknown, b: unknown): boolean {
@@ -114,11 +147,12 @@ export function syncTokenRefs(doc: BentoDoc, tokensMoved: boolean): boolean {
 }
 
 /** Bind `path` on `holder` to token `name`: writes its value and the ref, one edit. */
-export function bindToken(doc: BentoDoc, holder: Holder, path: string, name: string): void {
+export function bindToken(doc: BentoDoc, holder: Holder, path: string, name: string): boolean {
   const v = want(doc, holder, path, name)
-  if (v === undefined) return
+  if (v === undefined || !candidate(holder, path, v)) return false // not a property this token can drive
   writeAt(holder, path, v)
   ;(holder.themeRefs ??= {})[path] = `$${name}`
+  return true
 }
 
 /** Drop a binding; the literal stays. */
@@ -129,8 +163,8 @@ export function unbindToken(holder: Holder, path: string): void {
 /** Rename a token and every ref to it. */
 export function renameToken(doc: BentoDoc, from: string, to: string): void {
   const tk = doc.theme.tokens
-  if (!tk?.set[from] || tk.set[to] || !tokenName(`$${to}`)) return
-  tk.set = Object.fromEntries(Object.entries(tk.set).map(([k, v]) => [k === from ? to : k, v]))
+  if (!own(tk?.set, from) || own(tk?.set, to) || !tokenName(`$${to}`)) return
+  tk!.set = Object.fromEntries(Object.entries(tk!.set).map(([k, v]) => [k === from ? to : k, v]))
   eachHolder(doc, (h) => {
     for (const [p, r] of Object.entries(h.themeRefs ?? {})) if (r === `$${from}`) h.themeRefs![p] = `$${to}`
   })
@@ -139,12 +173,12 @@ export function renameToken(doc: BentoDoc, from: string, to: string): void {
 /** Delete a token; bound literals keep their current values. */
 export function deleteToken(doc: BentoDoc, name: string): void {
   const tk = doc.theme.tokens
-  if (!tk?.set[name]) return
-  delete tk.set[name]
+  if (!own(tk?.set, name)) return
+  delete tk!.set[name]
   eachHolder(doc, (h) => {
     for (const [p, r] of Object.entries(h.themeRefs ?? {})) if (r === `$${name}`) dropRef(h, p)
   })
-  if (!Object.keys(tk.set).length && !tk.modes?.length) delete doc.theme.tokens
+  if (!Object.keys(tk!.set).length && !tk!.modes?.length) delete doc.theme.tokens
 }
 
 /** How many properties are bound to each token (the Tokens view shows it). */

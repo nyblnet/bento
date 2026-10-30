@@ -26,7 +26,7 @@
 import { MODEL_KEYS } from './modelkeys.generated'
 import { FORMAT, parseDoc, type BentoDoc, type Slide, type TokenType, type TokenValue } from './model'
 import { LIMITS, SLIDE_CHECKS, checkElementProp, sanitizeAssets, sanitizeFonts, sanitizeSlide, withDropReport, withPathSegment, type Dropped } from './untrusted'
-import { TOKEN_TYPES, tokenName } from './tokens'
+import { TOKEN_TYPES, protoName, tokenName } from './tokens'
 import { FROM_LIVE } from '../../kernel/src/docfields.ts'
 
 const DOC_KEYS = new Set<string>(MODEL_KEYS.doc)
@@ -76,8 +76,10 @@ function tokens(v: unknown, dropped: Dropped[]): BentoDoc['theme']['tokens'] {
   if (!isObj(v) || !isObj(v.set)) { dropped.push({ path: '/theme/tokens', reason: 'not a token set — dropped' }); return undefined }
   const str = (x: unknown) => typeof x === 'string' && x.length <= 64
   const out: NonNullable<BentoDoc['theme']['tokens']> = { set: {} }
-  if (Array.isArray(v.modes) && v.modes.length <= 16 && v.modes.every(str)) out.modes = v.modes as string[]
-  if (str(v.mode)) out.mode = v.mode as string
+  // a mode name is a key of every token's values: never one that reaches into Object.prototype
+  const modeName = (x: unknown) => str(x) && !protoName(x as string)
+  if (Array.isArray(v.modes) && v.modes.length <= 16 && v.modes.every(modeName)) out.modes = v.modes as string[]
+  if (modeName(v.mode)) out.mode = v.mode as string
   for (const [name, tok] of Object.entries(v.set).slice(0, 500)) {
     if (name === '__proto__' || !tokenName(`$${name}`) || !isObj(tok) || !TOKEN_TYPES.includes(tok.type as TokenType) || !isObj(tok.values)) {
       dropped.push({ path: `/theme/tokens/set/${name}`, reason: 'malformed token — dropped' }); continue
@@ -85,7 +87,7 @@ function tokens(v: unknown, dropped: Dropped[]): BentoDoc['theme']['tokens'] {
     const type = tok.type as TokenType
     const values: Record<string, TokenValue> = {}
     for (const [m, x] of Object.entries(tok.values)) {
-      if (m === '__proto__' || m.length > 64) continue
+      if (protoName(m) || m.length > 64) continue
       const num = typeof x === 'number' && Number.isFinite(x) && Math.abs(x) <= 1e6
       // each type held to the element rule for the property it is written into
       const ok = type === 'number' || type === 'fontSize' ? num
@@ -241,6 +243,16 @@ export function guardOpenedDoc(doc: BentoDoc): Dropped[] {
   if (isObj(theme) && 'background' in theme && !okBackground(theme.background)) {
     theme.background = ''
     out.push({ path: '/theme/background', reason: 'not a colour — cleared' })
+  }
+  // theme.tokens under the same rule a restored snapshot gets: values are
+  // written straight into elements, and a set that is missing or malformed
+  // (an older shell's gate, a hand edit) is normalised rather than crashed on
+  if (isObj(theme) && theme.tokens !== undefined) {
+    const before = JSON.stringify(theme.tokens)
+    const g = tokens(theme.tokens, out)
+    if (g && (Object.keys(g.set).length || g.modes?.length)) theme.tokens = g
+    else delete theme.tokens
+    if (JSON.stringify(theme.tokens) !== before && !out.some((d) => d.path.startsWith('/theme/tokens'))) out.push({ path: '/theme/tokens', reason: 'normalised' })
   }
   if (doc.fonts !== undefined) {
     const after = sanitizeFonts(doc.fonts)

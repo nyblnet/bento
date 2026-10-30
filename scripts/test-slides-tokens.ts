@@ -14,9 +14,13 @@
 // Components: a copy follows its main's edits, keeps its own offset, keeps a
 // property edited by hand as an override, and detach stops the following.
 
-import { bindToken, deleteToken, renameToken, syncTokenRefs, tokenName, tokenUses, unbindToken } from '../slides/src/tokens.ts'
-import { resolveThemeRefs } from '../slides/src/palette.ts'
-import { components, detach, instanceOf, makeComponent, syncComponents } from '../slides/src/components.ts'
+// tokens.ts reaches the file gate (untrusted.ts), which imports app modules
+// without extensions: the resolve hooks go in before any app module loads
+const { register } = await import('node:module')
+register('./lib/ts-resolve-hooks.mjs', import.meta.url)
+const { bindToken, deleteToken, renameToken, syncTokenRefs, tokenName, tokenUses, unbindToken } = await import('../slides/src/tokens.ts')
+const { resolveThemeRefs } = await import('../slides/src/palette.ts')
+const { components, detach, instanceOf, makeComponent, syncComponents } = await import('../slides/src/components.ts')
 import type { BentoDoc } from '../slides/src/model.ts'
 
 let failures = 0, checks = 0
@@ -80,32 +84,150 @@ console.log('\ntokens\n')
 console.log('\ncomponents\n')
 {
   const d = deck()
-  const last = new Map<string, string>()
   makeComponent([el(d, 'a'), el(d, 'b')], 'c1', 'g1')
   let n = 0
   const copy = instanceOf(components(d)[0], () => `n${++n}`, 300, 0)
   d.slides[0].elements.push(...copy)
   ok(copy.length === 2 && copy.every((e) => e.component?.id === 'c1' && !e.component.main && e.groupId === copy[0].groupId), 'an instance is a fresh group of copies')
-  syncComponents(d, last)
-  ok(!syncComponents(d, last), 'a fresh copy agrees with its main')
+  syncComponents(d)
+  ok(!syncComponents(d), 'a fresh copy agrees with its main')
 
   el(d, 'a').fill = '#0000ff'; el(d, 'b').x = 10
-  ok(syncComponents(d, last), 'the main moved')
+  ok(syncComponents(d), 'the main moved')
   const [ca, cb] = copy as any[]
   ok(ca.fill === '#0000ff', 'a copy follows its main\'s edit')
   ok(cb.x === 310 && ca.x === 300, 'and keeps its own offset')
 
   cb.fill = '#123456' // a hand edit on the copy
-  syncComponents(d, last)
+  syncComponents(d)
   ok(cb.component.over?.includes('fill') && cb.fill === '#123456', 'a copy edited by hand records an override')
   el(d, 'b').fill = '#abcdef'; el(d, 'b').radius = 9
-  syncComponents(d, last)
+  syncComponents(d)
   ok(cb.fill === '#123456' && cb.radius === 9, 'an override survives the next main edit; other keys still follow')
 
   detach([ca])
   el(d, 'a').fill = '#000000'
-  syncComponents(d, last)
+  syncComponents(d)
   ok(ca.fill === '#0000ff' && !ca.component, 'a detached element stops following')
+}
+
+console.log('\nno token reaches past its own data\n')
+{
+  // '$toString' passes the name regex; Object.prototype must never answer for a token or a mode
+  const d = deck()
+  el(d, 'a').themeRefs = { fill: '$toString' }
+  let threw = ''
+  try { syncTokenRefs(d, true); syncTokenRefs(d, false) } catch (e) { threw = (e as Error).message }
+  ok(!threw && el(d, 'a').fill === '#ff000080', `a ref to "$toString" is no token: nothing throws, nothing is written (${threw || 'ok'})`)
+  ok(tokenName('$toString') === null && tokenName('$__proto__') === null && tokenName('$constructor') === null, 'tokenName refuses names Object.prototype owns')
+  for (const mode of ['toString', '__proto__', 'constructor']) {
+    const m = deck()
+    ;(m.theme as any).tokens = JSON.parse(`{"modes":["${mode}"],"mode":"${mode}","set":{"c":{"type":"color","values":{"default":"#123456"}}}}`)
+    el(m, 'a').themeRefs = { fill: '$c' }
+    syncTokenRefs(m, true)
+    ok(typeof el(m, 'a').fill === 'string' && el(m, 'a').fill.startsWith('#123456'), `a mode named "${mode}" is ignored: the fill stays a colour (${typeof el(m, 'a').fill})`)
+  }
+}
+{
+  // theme.tokens with no set (an older shell's gate, a hand edit) must not crash the doc hook
+  const d = deck()
+  ;(d.theme as any).tokens = {}
+  el(d, 'a').themeRefs = { fill: '$x' }
+  let threw = ''
+  try { syncTokenRefs(d, true); tokenUses(d); renameToken(d, 'x', 'y'); deleteToken(d, 'x') } catch (e) { threw = (e as Error).message }
+  ok(!threw, `a token set that is missing reads as empty (${threw || 'ok'})`)
+}
+{
+  // a token value is held to the rule of the property it is written into
+  const d = deck()
+  ;(d.theme as any).tokens.set.evil = { type: 'fontFamily', values: { light: 'red) url(https://evil.example/f.svg#f', dark: 'x' } }
+  ;(d.theme as any).tokens.set.n = { type: 'number', values: { light: 7, dark: 7 } }
+  ;(d.theme as any).tokens.set.inf = { type: 'number', values: { light: Infinity, dark: Infinity } }
+  const a = el(d, 'a')
+  a.shadow = { x: 0, y: 2, blur: 4, color: '#000000' }
+  ok(!bindToken(d, a, 'shadow.color', 'evil') && a.shadow.color === '#000000', 'a font string is not bound into a shadow colour (no CSS reaches style.filter)')
+  ok(!bindToken(d, a, 'id', 'n') && a.id === 'a', 'nothing binds to id')
+  a.link = 's9'; a.component = { id: 'c', key: 'k' }
+  for (const path of ['type', 'link', 'parentId', 'component.main', 'html']) {
+    const before = JSON.stringify(a)
+    ok(!bindToken(d, a, path, 'n') && JSON.stringify(a) === before, `nothing binds to ${path}, and nothing is written there`)
+  }
+  delete a.link; delete a.component
+  ok(!bindToken(d, a, 'radius', 'inf') && a.radius === 0, 'a non-finite number is not written')
+  a.themeRefs = { 'shadow.color': '$evil', radius: '$inf' } // as a hostile file would carry them
+  syncTokenRefs(d, true)
+  ok(a.shadow.color === '#000000' && a.radius === 0, 'refs a file carries are refused the same way at sync')
+  const f = el(d, 'b')
+  f.layout = { dir: 'grid', gap: 10, pad: [0, 0, 0, 0], cols: 2 }
+  ;(d.theme as any).tokens.set.zero = { type: 'number', values: { light: 0, dark: 0 } }
+  ok(!bindToken(d, f, 'layout.cols', 'zero') && f.layout.cols === 2, 'a grid is not given 0 columns by a token')
+  ok(bindToken(d, f, 'layout.gap', 'n') && f.layout.gap === 7, 'an allowed path still binds (layout.gap)')
+}
+
+console.log('\ncomponents and frames\n')
+{
+  // C2: a component whose main is a frame with a child; the copy's child belongs to the COPY's frame
+  const d = deck()
+  const [a, b] = [el(d, 'a'), el(d, 'b')]
+  a.layout = { dir: 'row', gap: 10, pad: [10, 10, 10, 10] }
+  b.parentId = 'a'
+  makeComponent([a, b], 'cf', 'g1')
+  let n = 0
+  const copy = instanceOf(components(d)[0], () => `n${++n}`, 0, 300) as any[]
+  d.slides[0].elements.push(...copy)
+  syncComponents(d)
+  const [cf, cc] = [copy.find((e) => e.layout), copy.find((e) => !e.layout)]
+  ok(cc.parentId === cf.id, `a copy's child sits in the copy's frame (${cc.parentId}), not the main's`)
+  a.layout.gap = 40 // the main frame moves on
+  syncComponents(d)
+  ok(cc.parentId === cf.id && !cc.component.over?.includes('parentId'), 'and stays there when the main changes, with no override recorded')
+}
+{
+  // C3: a component made of one frame child; an instance placed elsewhere does not join the main's frame
+  const d = deck()
+  const [f, a] = [el(d, 'a'), el(d, 'b')]
+  f.layout = { dir: 'row', gap: 10, pad: [10, 10, 10, 10] }
+  a.parentId = 'a'; a.sizing = { w: 'fill' }
+  makeComponent([a], 'c1', 'g1')
+  const copy = instanceOf(components(d)[0], () => 'i', 500, 300) as any[]
+  d.slides[0].elements.push(...copy)
+  syncComponents(d)
+  ok(copy[0].parentId === undefined && copy[0].sizing === undefined, 'an instance of a frame child is placed free, not pulled into the main frame')
+  ok(!copy[0].component.over, 'and records no override for the frame link it does not share')
+}
+{
+  // M4: two main sets for one component (an old duplicate) — the first in deck order is THE main, deterministically
+  const d = deck()
+  makeComponent([el(d, 'a')], 'c1', 'g1')
+  const dup = JSON.parse(JSON.stringify(d.slides[0])); dup.id = 's2'
+  d.slides.push(dup)
+  const copy = instanceOf(components(d)[0], () => 'k', 0, 300) as any[]
+  d.slides[0].elements.push(...copy)
+  syncComponents(d)
+  ok(components(d).length === 1 && components(d)[0].main.length === 1 && components(d)[0].main[0] === el(d, 'a'), 'two main sets: the first in deck order is the main')
+  el(d, 'a').fill = '#ff0000'
+  syncComponents(d)
+  ok(copy[0].fill === '#ff0000', 'an edit to that main reaches its copies')
+}
+
+{
+  // item 7: "has the main moved?" is read from the file, not from one replica's memory
+  const mk = () => {
+    const d = deck()
+    makeComponent([el(d, 'a')], 'c1', 'g1')
+    d.slides[0].elements.push(...instanceOf(components(d)[0], () => 'cp', 0, 300))
+    syncComponents(d)
+    return d
+  }
+  const copyOf = (d: any) => d.slides[0].elements.find((e: any) => e.id === 'cp')
+  const joined = JSON.parse(JSON.stringify(mk())) // a replica that just joined, or a session opening the file
+  joined.slides[0].elements.find((e: any) => e.id === 'a').fill = '#00ffff' // the main, edited by an older shell
+  syncComponents(joined)
+  ok(copyOf(joined).fill === '#00ffff' && !copyOf(joined).component.over, 'a main edited before this session opened still reaches its copies')
+  const other = JSON.parse(JSON.stringify(mk()))
+  copyOf(other).fill = '#ff00ff' // the copy, edited by an older shell
+  syncComponents(other)
+  ok(copyOf(other).fill === '#ff00ff' && copyOf(other).component.over?.includes('fill'), 'a copy edited before this session opened keeps its edit as an override')
 }
 
 console.log('\ntoken types beyond colour and number\n')

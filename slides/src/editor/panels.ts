@@ -29,6 +29,7 @@ import { buildChartProps } from './inspector/chart'
 import { buildTableProps } from './inspector/table'
 import { buildAutoLayout, wrapInFrame } from './inspector/layout'
 import { buildShadow, buildBlur } from './inspector/effects'
+import { freshGroups } from './clipboard'
 
 export class PropsPanel {
   private burst = false
@@ -461,18 +462,13 @@ export class PropsPanel {
   }
 
   private duplicate(els: SlideElement[]) {
-    // clones of grouped elements get fresh group ids (kept consistent within
-    // the batch) so a duplicated group is its own group, not the original's
-    const gidMap = new Map<string, string>()
-    const clones = els.map((el) => ({
+    // the batch keeps its groups and frames among its copies (clipboard.freshGroups)
+    const clones = freshGroups(els.map((el) => ({
       ...JSON.parse(JSON.stringify(el)),
       id: `${el.id.replace(/-copy\d*$/, '')}-copy${Math.floor(Math.random() * 1000)}`,
       x: el.x + 24,
       y: el.y + 24,
-      ...(el.groupId
-        ? { groupId: gidMap.get(el.groupId) ?? gidMap.set(el.groupId, `grp-${uid()}`).get(el.groupId)! }
-        : {}),
-    }))
+    })), els)
     adoptComponents(clones, this.store.doc)
     this.store.commit(() => this.store.slide.elements.push(...clones))
     this.store.select(clones.map((c) => c.id))

@@ -200,13 +200,19 @@ function pasteOffset(els: SlideElement[], slide: Slide): number {
   return d
 }
 
-/** Copies of grouped elements form groups of their own: one fresh group id per
- *  original group in the batch, so a duplicated group does not join the one it
- *  came from. The group's name travels with the copy, as panels.duplicate does. */
-export function freshGroups<T extends SlideElement>(els: T[]): T[] {
+/** Copies made together keep their structure among themselves. Grouped
+ *  elements form groups of their own: one fresh group id per original group in
+ *  the batch, so a duplicated group does not join the one it came from (the
+ *  group's name travels with the copy). A frame child whose frame was copied
+ *  with it moves into the copy; one copied without its frame keeps the link —
+ *  a sibling in the same frame on the same slide, and a dangling link layout.ts
+ *  drops anywhere else. `from[i]` is the element `els[i]` was copied from. */
+export function freshGroups<T extends SlideElement>(els: T[], from: readonly SlideElement[]): T[] {
   const ids = new Map<string, string>()
+  const copyOf = new Map(from.map((o, i) => [o.id, els[i].id]))
   for (const el of els) {
     if (el.groupId) el.groupId = ids.get(el.groupId) ?? ids.set(el.groupId, `grp-${uid()}`).get(el.groupId)!
+    if (el.parentId && copyOf.has(el.parentId)) el.parentId = copyOf.get(el.parentId)
   }
   return els
 }
@@ -217,11 +223,12 @@ export function insertElements(payload: ClipPayload, doc: BentoDoc, slide: Slide
   const remap = mergeAssets(payload, doc)
   mergeFonts(payload, doc, remap)
   const d = pasteOffset(payload.elements ?? [], slide)
-  const els: SlideElement[] = freshGroups((payload.elements ?? []).map((e) => ({
+  const src = payload.elements ?? []
+  const els: SlideElement[] = freshGroups(src.map((e) => ({
     ...(JSON.parse(JSON.stringify(e)) as SlideElement),
     id: uid(e.type[0]),
     x: (e.x ?? 0) + d, y: (e.y ?? 0) + d,
-  })))
+  })), src)
   rewriteRefs(els, remap)
   adoptComponents(els, doc)
   slide.elements.push(...els)

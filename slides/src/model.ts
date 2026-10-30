@@ -161,6 +161,11 @@ export interface ElementBase {
     id: string; key: string; main?: true; over?: string[]
     /** a copy's offset from its main, kept so a reload places it as the live session did */
     off?: [number, number]
+    /** a copy's record of the main state it last followed (a hash): a main
+     *  that no longer matches it has moved, and the copy follows; a copy that
+     *  differs from an unmoved main was edited by hand. In the file, so every
+     *  replica — and the next session — reads the same answer. */
+    sig?: string
   }
   /**
    * Resize keeps the proportions (the padlock between W and H). Any element:

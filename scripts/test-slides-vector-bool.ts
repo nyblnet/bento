@@ -164,5 +164,41 @@ console.log('\noperands where the result stands\n')
   ok(near(now(turned), outline(turned), 0.005), 'a turned and stretched boolean releases into the same outline')
 }
 
+console.log('\nwhat the renderer fills, and nothing left\n')
+{
+  // a pentagram drawn as ONE self-crossing contour: the renderer's nonzero rule fills its centre
+  const star = S({ shape: 'path', x: 0, y: 0, w: 100, h: 100, pathBox: [0, 0, 100, 100],
+    d: 'M 50 0 L 79.39 90.45 L 2.45 34.55 L 97.55 34.55 L 20.61 90.45 Z' })
+  const centre = S({ x: 45, y: 45, w: 10, h: 10 })
+  const r = computeBool([star, centre], 'intersect')
+  ok(!!r && near(r.w * r.h, 100, 0.05), `a square at a self-crossing star's filled centre intersects to that square (${r ? `${r.w}×${r.h}` : 'nothing'})`)
+  // what the renderer fills: nonzero winding of the star as drawn, by grid sampling
+  const poly = flattenPath((star as any).d)
+  const wind = (q: { x: number; y: number }) => {
+    let w = 0
+    for (const c of poly) for (let i = 0; i < c.length; i++) {
+      const a = c[i], b = c[(i + 1) % c.length]
+      const side = (b.x - a.x) * (q.y - a.y) - (q.x - a.x) * (b.y - a.y)
+      if (a.y <= q.y && b.y > q.y && side > 0) w++
+      else if (a.y > q.y && b.y <= q.y && side < 0) w--
+    }
+    return w
+  }
+  let hit = 0
+  const N = 300
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) if (wind({ x: ((i + 0.5) / N) * 100, y: ((j + 0.5) / N) * 100 })) hit++
+  const filled = (hit / (N * N)) * 10000
+  const u = computeBool([star, centre], 'union')
+  ok(!!u && near(polyArea(flattenPath(u.d)), filled, 0.02), `the union is the star as the renderer fills it, centre included (${u ? polyArea(flattenPath(u.d)).toFixed(0) : 'none'} ≈ ${filled.toFixed(0)} px²)`)
+}
+{
+  const a = S({}), b = S({})
+  ok(computeBool([a, b], 'subtract') === null, 'a shape minus itself leaves nothing')
+  ok(computeBool([a, b], 'exclude') === null, 'a shape excluded with itself leaves nothing')
+  const r = computeBool([S({}), S({ x: 50 })], 'union')!
+  const pts = r.d.split(/[MLZ]/).map((x) => x.trim()).filter(Boolean)
+  ok(pts.every((p, i) => i === 0 || p !== pts[i - 1]), `no point repeats in a row in the emitted path (${r.d})`)
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

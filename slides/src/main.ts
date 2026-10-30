@@ -4,6 +4,7 @@
 // mutation — the captured copy is what gets re-serialized on save.
 
 import './styles.css'
+import { derive, deriveMemory } from './derive'
 import { anim } from './anim'
 import { configureApp } from '../../kernel/src/app.ts'
 import { deckWindowTitle } from './wintitle'
@@ -30,10 +31,6 @@ function reportGuard(dropped: Dropped[]) {
 }
 import { validateDoc, type ValidateOpts } from './validate'
 import { buildSchema } from './schema'
-import { resolveThemeRefs } from './palette'
-import { routeAllConnectors } from './connectors'
-import { layoutAll } from './layout'
-import { mirrorAllStacks } from './stacks'
 import { measureText, measureElement, type TextMeasureSpec } from './measure'
 import { starterDoc } from './starterdeck'
 import { injectFonts } from './fonts'
@@ -151,21 +148,15 @@ async function passwordGate() {
 }
 
 function bootWith(doc: BentoDoc, docIsFresh = false) {
-  // Derive palette-referenced colours once before anything renders. A file
-  // saved by this app already carries correct literals, so this is normally a
-  // no-op — it matters for a document whose JSON was written by hand or by an
-  // agent, where the refs may be right and the literals stale. Editing later
-  // re-derives through the editor's `doc` hook; nothing else would visit a
-  // player file at all.
-  resolveThemeRefs(doc)
-  mirrorAllStacks(doc) // a hand-written stack's fallback paint, for older shells
-  // Same reason, connectors (#493): a hand- or agent-written deck can name a
-  // connector's from/to elements with endpoints that are stale or placeholder.
-  // The editor re-routes on edits, but nothing routed a slide nobody touched,
-  // and a player or audience file never meets the editor at all. Derived, not
-  // an edit: it does not dirty the deck or make an undo step.
-  layoutAll(doc) // frames first: connectors anchor to the laid-out boxes
-  routeAllConnectors(doc)
+  // Every derived value once, before anything renders (derive.ts): palette
+  // and token literals, component copies, frame layout, connector endpoints,
+  // stack fallbacks. A file saved by this app already carries them, so this
+  // is normally a no-op — it matters for a deck written by hand or by an
+  // agent (refs right, literals stale; connectors with placeholder endpoints,
+  // #493), for a file an older shell edited, and for a player or audience
+  // file, which never meets the editor at all. Derived, not an edit: it does
+  // not dirty the deck or make an undo step.
+  derive(doc, deriveMemory(doc))
   if (doc.collab?.role === 'audience') audienceMode(doc)
   else if (doc.readonly) playerMode(doc)
   else editorMode(doc, docIsFresh)

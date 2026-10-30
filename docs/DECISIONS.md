@@ -12049,3 +12049,43 @@ existing element, and an older shell sees an ordinary deck.
   decorative. Contrast is graded against what lies behind the element's centre.
 - **Unpairing a morph never mutates `id`**: a self-paired element gets a unique
   `-solo` morph key.
+
+## 2026-10-29 — slides: one derive pass; stack layers win on opening
+
+- **Every derived value runs as one pass, in dependency order**
+  (`slides/src/derive.ts`): palette → tokens → components → layout →
+  connectors → stack fallbacks. Boot, every `doc` event and a document
+  replaced in a running editor all call it. Layout used to run first, before
+  tokens and components — both of which write layout inputs (a number token on
+  `layout.gap`, a main frame's gap reaching its copies) — so such an edit
+  settled only on the next, unrelated event. One pass is now a fixed point.
+- **A replaced document is read like a cold boot.** `store.replaceDoc` emits
+  `replace`, and the editor re-seeds the derive memory (the token signature)
+  from the arriving document. Without it, the memory of the PREVIOUS deck's
+  tokens read as "the tokens moved" and overwrote a bound literal an older
+  shell had edited. Undo/redo keep the memory: they restore this deck's own past.
+- **"Has the main moved?" is in the file, not in a replica's memory.** Each
+  copy keeps `component.sig`, a short hash of the main it last followed. A
+  main that no longer matches has moved (the copy follows); a copy that
+  differs from an unmoved main was edited by hand (an override). A replica
+  that just joined, or a session opening a file an older shell edited, reads
+  the same answer as the one that wrote it. Ceiling: a main AND its copy both
+  edited before the next pass (two older-shell edits, or one collab merge)
+  read as "the main moved", and the copy's edit is overwritten.
+- **Tokens drive only what they can drive.** A `$token` ref sits only on paint,
+  size and spacing properties (`TOKEN_KEYS`, in untrusted.ts beside the rule
+  that enforces it at intake), every token write must pass the property's own
+  gate rule unchanged, and token and mode names never resolve through
+  Object.prototype. Opened files get the token rule a restored snapshot gets.
+- **Stack layers are the truth, also on opening — accepted cost.** A file
+  whose single-paint fallback disagrees with its top visible layer has it
+  rewritten from the layer. That is what a hand- or agent-written deck needs
+  (placeholder fallback keys); the cost is that a colour changed in a shell
+  that predates stacks (which can only change the fallback) is lost when a
+  current shell opens the file. The two cases are indistinguishable in the
+  file, and the agent round-trip is the documented workflow.
+- **A copy's frame is its own.** `parentId` and `sizing` are not re-derived
+  from the main: `instanceOf` translates them once through the copy's ids,
+  and drops them when the frame lies outside the component. A batch of copies
+  (paste, ⌘D, Duplicate, Alt-drag) keeps its frames among its copies through
+  `freshGroups`; a child copied without its frame stays a sibling in it.

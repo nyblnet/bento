@@ -215,7 +215,7 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
       const at = { slide: slide.id, ...(element ? { element: element.id } : {}) }
       const name = tokenName(token)
       if (name) {
-        if (!doc.theme.tokens?.set[name]) add({ ...at, code: 'token-unknown', severity: 'warning', path: `themeRefs.${path}`,
+        if (!(doc.theme.tokens?.set && Object.hasOwn(doc.theme.tokens.set, name))) add({ ...at, code: 'token-unknown', severity: 'warning', path: `themeRefs.${path}`,
           message: `There is no token "${name}" in theme.tokens, so this value will not follow it. Add the token, or drop the reference.` })
         return
       }
