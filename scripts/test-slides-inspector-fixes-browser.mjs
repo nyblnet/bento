@@ -70,7 +70,7 @@ try {
     await p.evaluate(() => document.activeElement?.blur()); await p.waitForTimeout(200)
   }
   const pickTheme = async (scope, name) => {
-    await p.locator(`${scope} button[aria-label="Theme colors"]`).first().click()
+    await p.locator(`${scope} button[aria-label="Colors & tokens"]`).first().click()
     await p.locator(`${scope} .ed-palette-item`, { hasText: name }).first().click()
     await p.waitForTimeout(200)
   }

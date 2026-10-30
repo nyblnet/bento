@@ -347,6 +347,13 @@ jobs:
         # out of open sheets and read-only, the palette respects IME and
         # returns focus, and the HUD is built once per language switch.
         run: node scripts/test-slides-ui-fixes-browser.mjs
+      - name: Keeping a deck on-brand in Chromium
+        # The UX audit's tokens and components findings: token names stay
+        # readable, tokens and components are findable from ⌘K and ?, uses walk,
+        # a mode switch says what it changed, theme colours are built-in tokens,
+        # a literal colour can become a token for every use, and a component
+        # copy reaches its main.
+        run: node scripts/test-slides-ux-brand-browser.mjs
       - name: Vector booleans in Chromium
         # The contextual bar for 2+ closed shapes; Subtract makes one path in the
         # bottom slot with a real hole; one undo; the op switch; Release after a
