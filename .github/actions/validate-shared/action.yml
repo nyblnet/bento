@@ -125,3 +125,13 @@ runs:
       # and every rig step in every CI file runs through the wrapper.
       shell: bento-step {0}
       run: node scripts/test-ci-skips.mjs
+
+    - name: bento/connect directory (two-proof bind, exact lookups, limits, tombstones)
+      # The real worker and Durable Objects against an in-memory namespace,
+      # verifying with the kernel's signed statements and running its
+      # conformance vectors end to end: a binding needs the mailed code AND
+      # the key's signature over it; email alone never changes a live
+      # binding; bind/start answers 202 whatever happens; per-address mail
+      # limits and per-IP limits hold; no raw address or IP at rest.
+      shell: bento-step {0}
+      run: node scripts/test-directory.ts
