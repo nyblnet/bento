@@ -3160,10 +3160,13 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 /* the one toolbar uses the panel's width: kinds side by side, a hairline
    between, sharing it by how many tools each holds, and the tools share their
    kind's — bigger targets, the same line */
-.ed-props .ed-toolbar { display: flex; align-items: center; flex-wrap: nowrap; gap: 0; margin-bottom: 6px; }
-.ed-toolbar-kind { flex: var(--n, 1) 1 0; min-width: 0; display: flex; align-items: center; gap: 0; }
-.ed-toolbar-kind + .ed-toolbar-kind { border-inline-start: 1px solid var(--line); padding-inline-start: 3px; margin-inline-start: 3px; }
-.ed-props .ed-toolbar .ed-tool { flex: 1 1 0; width: auto; min-width: 20px; max-width: 40px; height: 30px; }
+.ed-props .ed-toolbar { display: flex; align-items: center; flex-wrap: wrap; column-gap: 7px; row-gap: 4px; margin-bottom: 6px; }
+/* a kind never splits and never shrinks: a toolbar wraps at a kind's edge instead of overlapping tools */
+.ed-toolbar-kind { flex: none; display: flex; align-items: center; gap: 0; }
+.ed-props .ed-toolbar .ed-tool { flex: none; width: 24px; min-width: 24px; height: 26px; padding: 0; }
+.ed-frame-placed { margin: 0 0 6px; }
+.ed-link-btn { border: 0; background: none; padding: 0; color: var(--accent-ink); text-decoration: underline; cursor: pointer; font: inherit; }
+.ed-mini.ed-readonly input { color: var(--muted); }
 .ed-props .ed-toolbar .ed-tool svg { width: 16px; height: 16px; }
 
 /* the colour field (panels.ts colorField), Penpot's: swatch · hex · % opacity.
@@ -3348,7 +3351,7 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-align-matrix button { padding: 0; border: 0; border-radius: 3px; background: none; cursor: pointer; display: grid; place-items: center; }
 .ed-align-matrix button::after { content: ''; width: 4px; height: 4px; border-radius: 50%; background: var(--muted); }
 .ed-align-matrix button:hover { background: var(--chrome); }
-.ed-align-matrix button[aria-pressed='true']::after { width: 10px; height: 10px; border-radius: 2px; background: var(--accent, #3b82f6); }
+.ed-align-matrix button[aria-checked='true']::after { width: 10px; height: 10px; border-radius: 2px; background: var(--accent, #3b82f6); }
 /* the frame's padding and gaps on canvas (canvas.ts frameOverlay), Figma's pink */
 .ed-frame-band { position: absolute; background: rgba(236, 72, 153, 0.16); pointer-events: auto; z-index: 5; }
 .ed-frame-band:hover { background: rgba(236, 72, 153, 0.32); }
@@ -3479,7 +3482,15 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 
 /* Fill and stroke stacks (inspector/shape.ts): one row per layer, top first —
    eye · the layer's own controls · up · down · remove */
-.ed-paintlayer { display: flex; align-items: flex-start; gap: 2px; margin: 0 0 4px; }
+/* grip · eye · paint · ⋯ on the first line; a stroke's width/position, then
+   the ⋯ extras, on full-width lines under it */
+.ed-paintlayer { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 2px; margin: 0 0 4px; }
+.ed-paintlayer > .ed-grid2, .ed-paintlayer-extras { flex: 1 0 100%; padding-inline-start: 38px; box-sizing: border-box; }
+.ed-paintlayer-extras { display: grid; gap: 4px; padding-top: 4px; }
+.ed-paintlayer-extras[hidden] { display: none; }
+.ed-paintlayer-moves { display: flex; gap: 2px; }
+.ed-paintlayer-moves .ed-btn-icon { width: 24px; height: 26px; padding: 0; }
+.ed-paintlayer-moves .ed-btn-icon:disabled { opacity: .3; cursor: default; }
 .ed-paintlayer-body { flex: 1 1 auto; min-width: 0; display: grid; gap: 4px; }
 .ed-paintlayer.off .ed-paintlayer-body { opacity: .45; }
 .ed-paintlayer > .ed-btn-icon { flex: none; width: 22px; height: 26px; padding: 0; }
@@ -3514,3 +3525,10 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-a11y-badge.is-pass { color: var(--accent-ink); }
 .ed-a11y-badge.is-fail { color: var(--danger); }
 .ed-a11y-alt { width: 100%; }
+
+/* a typed value the field could not read: a short flash and the reason under it (controls.ts refuse) */
+@keyframes ed-num-refused { 0%, 100% { box-shadow: none } 30% { box-shadow: 0 0 0 2px var(--danger) } }
+.ed-num.ed-num-refused { animation: ed-num-refused 600ms ease-out; }
+.ed-num[aria-invalid='true'] { outline: 1px solid var(--danger); outline-offset: -1px; }
+.ed-num-why { position: fixed; z-index: 60; max-width: 240px; padding: 6px 8px; border-radius: 6px; font-size: 11.5px; line-height: 1.35; background: var(--surface); color: var(--ink); border: 1px solid var(--danger); box-shadow: 0 4px 14px rgb(0 0 0 / .18); pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .ed-num.ed-num-refused { animation: none; } }

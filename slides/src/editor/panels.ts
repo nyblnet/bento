@@ -23,7 +23,7 @@ import { layerBlock, buildLayoutRole } from './inspector/arrange'
 import { section, opBtn } from './inspector/fields'
 import { revealRow, buildPresentingProps, buildMorphProps, applySteps } from './inspector/animate'
 import { buildTextProps, buildTextFill, buildTextStroke } from './inspector/text'
-import { buildShapeProps, buildShapeFill, buildShapeStroke } from './inspector/shape'
+import { buildShapeProps, buildShapeFill, buildShapeStroke, buildSharedPaint } from './inspector/shape'
 import { buildImageProps, buildMediaProps, buildCodeProps, buildEmbedProps } from './inspector/media'
 import { buildChartProps } from './inspector/chart'
 import { buildTableProps } from './inspector/table'
@@ -123,9 +123,8 @@ export class PropsPanel {
     // every change. A selection or slide switch (force) starts the new
     // inspector at the top, which is where a different subject belongs.
     const scrollTop = force ? 0 : this.host.scrollTop
-    // a radio chosen from the keyboard rebuilds the panel: keep focus on it
-    const radios = () => [...this.host.querySelectorAll<HTMLElement>('[role=radio]')]
-    const radioAt = force ? -1 : radios().indexOf(document.activeElement as HTMLElement)
+    // an action inside the panel rebuilds it: remember where focus was
+    const spot = force ? null : this.focusSpot()
     this.host.innerHTML = ''
     const els = this.store.selectedElements
     if (els.length === 0) buildSlidePanel(this)
@@ -137,8 +136,43 @@ export class PropsPanel {
     this.mountContext(els)
     this.stackCrampedRows()
     // focus first, without scrolling: the restored scroll is the last word
-    if (radioAt >= 0) radios()[radioAt]?.focus({ preventScroll: true })
+    if (spot) this.restoreFocus(spot)
     this.host.scrollTop = scrollTop
+  }
+
+  /**
+   * Where focus sits in the panel, said so it survives a rebuild: the
+   * control's name (its aria-label, title or text) and which of the controls
+   * so named it is, plus the section it is in. Every action inside the panel
+   * — a + that adds a shadow, a toolbar button, a radio, the colour popover
+   * handing focus back to its swatch — rebuilds it, and without this focus
+   * fell to <body>, stranding a keyboard user at the top of the page.
+   */
+  private focusSpot(): { name: string; nth: number; section: string } | null {
+    const a = document.activeElement as HTMLElement | null
+    if (!a || a === this.host || !this.host.contains(a)) return null
+    const name = PropsPanel.nameOf(a)
+    const same = [...this.host.querySelectorAll<HTMLElement>(PropsPanel.FOCUSABLE)].filter((x) => PropsPanel.nameOf(x) === name)
+    const head = a.classList.contains('ed-section') ? a : a.closest('.ed-section') ?? a.closest('.ed-section-body')?.previousElementSibling
+    return { name, nth: Math.max(0, same.indexOf(a)), section: (head as HTMLElement | null)?.dataset.key ?? '' }
+  }
+
+  /** The same control again; or, when the action replaced it (a + became a
+   *  −, a row was added), the first control of the same section. */
+  private restoreFocus(spot: { name: string; nth: number; section: string }) {
+    const same = [...this.host.querySelectorAll<HTMLElement>(PropsPanel.FOCUSABLE)].filter((x) => PropsPanel.nameOf(x) === spot.name && x.offsetParent !== null)
+    let to: HTMLElement | undefined = same[Math.min(spot.nth, same.length - 1)]
+    if (!to && spot.section) {
+      const head = [...this.host.querySelectorAll<HTMLElement>('.ed-section')].find((h) => h.dataset.key === spot.section)
+      const body = head?.nextElementSibling
+      to = (body?.classList.contains('ed-section-body') ? body.querySelector<HTMLElement>(PropsPanel.FOCUSABLE) : null) ?? head ?? undefined
+    }
+    to?.focus({ preventScroll: true })
+  }
+
+  private static FOCUSABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea, [tabindex="0"], .ed-section'
+  private static nameOf(x: HTMLElement): string {
+    return `${x.tagName}|${x.getAttribute('aria-label') ?? x.title ?? ''}|${x.getAttribute('aria-label') || x.title ? '' : (x.textContent ?? '').trim().slice(0, 40)}`
   }
 
   /** Collapsed by default until the user opens them (persisted per title).
@@ -279,6 +313,10 @@ export class PropsPanel {
       const isOpen = openState[key] ?? !closed.has(key)
       h.classList.add('ed-sec-toggle')
       h.classList.toggle('closed', !isOpen)
+      // the header IS the fold's button: reachable by Tab, Enter/Space folds
+      h.tabIndex = 0
+      h.setAttribute('role', 'button')
+      h.setAttribute('aria-expanded', String(isOpen))
       if (!isOpen) body.style.display = 'none'
       // A header can outlive a rebuild (the Layers h3 is one node for the
       // panel's life), so the click handler is attached once and reads its
@@ -286,8 +324,14 @@ export class PropsPanel {
       // rebuild threw away.
       if (h.dataset.acc) continue
       h.dataset.acc = '1'
+      h.addEventListener('keydown', (e) => {
+        if (e.target !== h || (e.key !== 'Enter' && e.key !== ' ')) return
+        e.preventDefault()
+        h.click()
+      })
       h.addEventListener('click', () => {
         const nowClosed = h.classList.toggle('closed')
+        h.setAttribute('aria-expanded', String(!nowClosed))
         const live = h.nextElementSibling as HTMLElement | null
         if (live?.classList.contains('ed-section-body')) foldSection(live, nowClosed)
         if (!nowClosed) this.stackCrampedRows()
@@ -300,6 +344,7 @@ export class PropsPanel {
 
   private buildMultiPanel(els: SlideElement[]) {
     layerBlock(this, els)
+    buildSharedPaint(this, els)
     section(this, t('Animation'))
     revealRow(this, els)
   }

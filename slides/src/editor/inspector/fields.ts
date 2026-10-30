@@ -174,6 +174,7 @@ export function segmented(options: string[], value: string, onChange: (v: string
     b.type = 'button'
     b.setAttribute('role', 'radio')
     b.setAttribute('aria-checked', String(opt === value))
+    b.dataset.value = opt
     if (icons) {
       b.innerHTML = SEG_ICONS[opt]
       b.title = say(opt)

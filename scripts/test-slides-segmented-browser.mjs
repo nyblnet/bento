@@ -47,7 +47,8 @@ try {
     const tag = `[${locale}]`
 
     if (locale === 'en-US') {
-      ok(await segs.count() === 4, `${tag} Align, V-align, fill kind and Interior are segmented (${await segs.count()})`)
+      // the fill's Solid | Linear | Radial lives in the colour popover, once
+      ok(await segs.count() === 3, `${tag} Align, V-align and Interior are segmented (${await segs.count()})`)
       const seg = (name) => p.locator(`.ed-props .ed-seg[aria-label="${name}"]`)
       const align = seg('Align')
       ok(await align.locator('button').count() === 3, `${tag} all three alignments are visible at rest`)

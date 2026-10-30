@@ -48,9 +48,11 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
     b.addEventListener('click', onClick)
     return b
   }
-  const bar = (...buttons: HTMLElement[]) => {
+  const bar = (label: string, ...buttons: HTMLElement[]) => {
     const row = document.createElement('div')
     row.className = 'ed-toolbar'
+    row.setAttribute('role', 'toolbar')
+    row.setAttribute('aria-label', label)
     row.append(...buttons)
     block.appendChild(row)
     return row
@@ -65,8 +67,10 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
       ? iconBtn(ICONS.ungroup, `${t('Ungroup')} (⇧${mod}G)`, () => p.ungroup(els))
       : iconBtn(ICONS.group, `${t('Group')} (${mod}G)`, () => p.group(els)))
     : null
-  // One toolbar, Penpot's: align | order | spacing | group, a hairline
-  // between the kinds; it wraps at a kind's edge when the panel is narrow.
+  // Two toolbars, as Penpot heads its Design tab: where the selection sits
+  // (align, spacing, size) and what it is to the rest (order, group, flip,
+  // boolean). A kind never splits; a toolbar wraps at a kind's edge, so no
+  // tool is ever covered or pushed out of the panel (styles.css).
   const kind = (...buttons: HTMLElement[]) => {
     const k = document.createElement('div')
     k.className = 'ed-toolbar-kind'
@@ -74,33 +78,53 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
     k.append(...buttons)
     return k
   }
-  bar(
-    kind(
-      iconBtn(ICONS.arrLeft, t('Align left'), () => align(p, els, 'left')),
-      iconBtn(ICONS.arrCenterX, t('Align centers'), () => align(p, els, 'centerX')),
-      iconBtn(ICONS.arrRight, t('Align right'), () => align(p, els, 'right')),
-      iconBtn(ICONS.arrTop, t('Align top'), () => align(p, els, 'top')),
-      iconBtn(ICONS.arrMiddleY, t('Align middles'), () => align(p, els, 'middleY')),
-      iconBtn(ICONS.arrBottom, t('Align bottom'), () => align(p, els, 'bottom')),
-    ),
+  // A frame's child is placed by its frame: aligning it would write X/Y the
+  // layout overwrites at once, so the frame's own alignment is offered instead.
+  const inFrame = els.length === 1 && !!els[0].parentId && !!p.store.element(els[0].parentId)
+  const tip = (id: string, label: string) => p.titleOf(id, label)
+  if (inFrame) {
+    const frame = p.store.element(els[0].parentId!)!
+    const hint = document.createElement('p')
+    hint.className = 'ed-hint ed-keep ed-frame-placed'
+    hint.textContent = t('Placed by its frame’s auto layout — align and space it on the frame.')
+    const go = document.createElement('button')
+    go.type = 'button'
+    go.className = 'ed-btn ed-link-btn'
+    go.textContent = t('Select the frame')
+    go.addEventListener('click', () => p.store.select([frame.id]))
+    hint.append(' ', go)
+    block.appendChild(hint)
+  } else {
+    bar(t('Align'),
+      kind(
+        iconBtn(ICONS.arrLeft, tip('align-left', t('Align left')), () => align(p, els, 'left')),
+        iconBtn(ICONS.arrCenterX, tip('align-center', t('Align centers')), () => align(p, els, 'centerX')),
+        iconBtn(ICONS.arrRight, tip('align-right', t('Align right')), () => align(p, els, 'right')),
+        iconBtn(ICONS.arrTop, tip('align-top', t('Align top')), () => align(p, els, 'top')),
+        iconBtn(ICONS.arrMiddleY, tip('align-middle', t('Align middles')), () => align(p, els, 'middleY')),
+        iconBtn(ICONS.arrBottom, tip('align-bottom', t('Align bottom')), () => align(p, els, 'bottom')),
+      ),
+      ...(els.length >= 2 ? [kind(
+        ...(els.length >= 3 ? [
+          iconBtn(ICONS.distX, tip('distribute-x', t('Space evenly across (3 or more)')), () => distribute(p, els, 'x')),
+          iconBtn(ICONS.distY, tip('distribute-y', t('Space evenly down (3 or more)')), () => distribute(p, els, 'y')),
+        ] : []),
+        iconBtn(ICONS.matchW, t('Same width as the first selected (2 or more)'), () => matchSize(p, els, 'w')),
+        iconBtn(ICONS.matchH, t('Same height as the first selected (2 or more)'), () => matchSize(p, els, 'h')),
+      )] : []),
+    )
+  }
+  bar(t('Arrange'),
     kind(
       iconBtn(ICONS.toFront, t('Bring to front'), () => p.reorder(els, 'front')),
       iconBtn(ICONS.forward, t('Bring forward'), () => step(p, els, +1)),
       iconBtn(ICONS.backward, t('Send backward'), () => step(p, els, -1)),
       iconBtn(ICONS.toBack, t('Send to back'), () => p.reorder(els, 'back')),
     ),
-    ...(els.length >= 2 ? [kind(
-      ...(els.length >= 3 ? [
-        iconBtn(ICONS.distX, t('Space evenly across (3 or more)'), () => distribute(p, els, 'x')),
-        iconBtn(ICONS.distY, t('Space evenly down (3 or more)'), () => distribute(p, els, 'y')),
-      ] : []),
-      iconBtn(ICONS.matchW, t('Same width as the first selected (2 or more)'), () => matchSize(p, els, 'w')),
-      iconBtn(ICONS.matchH, t('Same height as the first selected (2 or more)'), () => matchSize(p, els, 'h')),
-    )] : []),
     ...(groupBtn ? [kind(groupBtn)] : []),
     kind(
-      iconBtn(ICONS.flipH, `${t('Flip horizontal')} (⇧H)`, () => flip(p, els, 'flipX')),
-      iconBtn(ICONS.flipV, `${t('Flip vertical')} (⇧V)`, () => flip(p, els, 'flipY')),
+      iconBtn(ICONS.flipH, tip('flip-h', t('Flip horizontal')), () => flip(p, els, 'flipX')),
+      iconBtn(ICONS.flipV, tip('flip-v', t('Flip vertical')), () => flip(p, els, 'flipY')),
     ),
     ...(boolOperands(p.store, els)
       ? [kind(...BOOL_OPS.map((op) => {
@@ -147,8 +171,8 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
     size('w', t('W')),
     size('h', t('H')),
     ...(single && !derived ? [ratioLock(p, single)] : []),
-    measure(p, els, 'x', t('X')),
-    measure(p, els, 'y', t('Y')),
+    readOnlyIf(inFrame, measure(p, els, 'x', t('X'))),
+    readOnlyIf(inFrame, measure(p, els, 'y', t('Y'))),
     measure(p, els, 'rotation', t('Angle'), { icon: ICONS.rotate, unit: '°' }),
   )
   let corners: HTMLElement | null = null
@@ -268,6 +292,17 @@ function measure(p: PropsPanel, els: SlideElement[], key: Measure, label: string
   return wrap
 }
 
+/** X and Y of a frame's child: shown, not editable — the frame places it. */
+function readOnlyIf(on: boolean, f: HTMLElement): HTMLElement {
+  if (!on) return f
+  const input = f.querySelector('input')!
+  input.readOnly = true
+  input.setAttribute('aria-readonly', 'true')
+  f.classList.add('ed-readonly')
+  f.title = t('Set by the frame’s auto layout')
+  return f
+}
+
 /** Same width/height for the whole selection — first selected is the reference. */
 export function matchSize(p: PropsPanel, els: SlideElement[], dim: 'w' | 'h') {
   if (els.length < 2) return
@@ -275,44 +310,58 @@ export function matchSize(p: PropsPanel, els: SlideElement[], dim: 'w' | 'h') {
   p.edit(() => { for (const el of els) el[dim] = ref }, true)
 }
 
-/** Single element aligns to the slide; a multi-selection aligns to its own bounds. */
+/** The box an element covers on the slide — its turned corners' bounds. */
+export function turnedBox(e: SlideElement): { x0: number; y0: number; x1: number; y1: number } {
+  const a = ((e.rotation || 0) * Math.PI) / 180
+  const c = Math.abs(Math.cos(a)), s = Math.abs(Math.sin(a))
+  const hw = (e.w * c + e.h * s) / 2, hh = (e.w * s + e.h * c) / 2
+  const cx = e.x + e.w / 2, cy = e.y + e.h / 2
+  return { x0: cx - hw, y0: cy - hh, x1: cx + hw, y1: cy + hh }
+}
+
+/** Single element aligns to the slide; a multi-selection aligns to its own
+ *  bounds. What lines up is what you see: a turned element by its turned box. */
 export function align(p: PropsPanel, els: SlideElement[], edge: 'left' | 'centerX' | 'right' | 'top' | 'middleY' | 'bottom') {
   const { width, height } = p.store.doc.size
+  const boxes = els.map(turnedBox)
   const box = els.length === 1
     ? { x0: 0, y0: 0, x1: width, y1: height }
     : {
-        x0: Math.min(...els.map((e) => e.x)),
-        y0: Math.min(...els.map((e) => e.y)),
-        x1: Math.max(...els.map((e) => e.x + e.w)),
-        y1: Math.max(...els.map((e) => e.y + e.h)),
+        x0: Math.min(...boxes.map((b) => b.x0)),
+        y0: Math.min(...boxes.map((b) => b.y0)),
+        x1: Math.max(...boxes.map((b) => b.x1)),
+        y1: Math.max(...boxes.map((b) => b.y1)),
       }
   p.edit(() => {
-    for (const el of els) {
-      if (edge === 'left') el.x = box.x0
-      if (edge === 'right') el.x = box.x1 - el.w
-      if (edge === 'centerX') el.x = (box.x0 + box.x1) / 2 - el.w / 2
-      if (edge === 'top') el.y = box.y0
-      if (edge === 'bottom') el.y = box.y1 - el.h
-      if (edge === 'middleY') el.y = (box.y0 + box.y1) / 2 - el.h / 2
-    }
+    els.forEach((e, i) => {
+      const el = p.store.element(e.id)
+      if (!el) return
+      const b = boxes[i]
+      if (edge === 'left') el.x += box.x0 - b.x0
+      if (edge === 'right') el.x += box.x1 - b.x1
+      if (edge === 'centerX') el.x += (box.x0 + box.x1) / 2 - (b.x0 + b.x1) / 2
+      if (edge === 'top') el.y += box.y0 - b.y0
+      if (edge === 'bottom') el.y += box.y1 - b.y1
+      if (edge === 'middleY') el.y += (box.y0 + box.y1) / 2 - (b.y0 + b.y1) / 2
+    })
   }, true)
 }
 
 /** Even gaps between elements, first and last stay put. */
 export function distribute(p: PropsPanel, els: SlideElement[], axis: 'x' | 'y') {
   if (els.length < 3) return
-  const size = axis === 'x' ? 'w' : 'h'
-  const sorted = [...els].sort((a, b) => a[axis] - b[axis])
-  const first = sorted[0]
-  const last = sorted[sorted.length - 1]
-  const span = last[axis] + last[size] - first[axis]
-  const total = sorted.reduce((s, e) => s + e[size], 0)
+  // by the turned boxes, as align: the gaps you see are the gaps made equal
+  const [lo, hi] = axis === 'x' ? ['x0', 'x1'] as const : ['y0', 'y1'] as const
+  const sorted = els.map((e) => ({ e, b: turnedBox(e) })).sort((a, b) => a.b[lo] - b.b[lo])
+  const span = sorted[sorted.length - 1].b[hi] - sorted[0].b[lo]
+  const total = sorted.reduce((s, { b }) => s + b[hi] - b[lo], 0)
   const gap = (span - total) / (sorted.length - 1)
   p.edit(() => {
-    let cursor = first[axis] + first[size] + gap
-    for (const el of sorted.slice(1, -1)) {
-      el[axis] = cursor
-      cursor += el[size] + gap
+    let cursor = sorted[0].b[hi] + gap
+    for (const { e, b } of sorted.slice(1, -1)) {
+      const el = p.store.element(e.id)
+      if (el) el[axis] += cursor - b[lo]
+      cursor += b[hi] - b[lo] + gap
     }
   }, true)
 }

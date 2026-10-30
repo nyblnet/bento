@@ -62,6 +62,7 @@ import { createDialog } from '../../../kernel/src/ui/dialog.ts'
 import '../../../kernel/src/ui/dialog.css'
 import { PresenceToasts } from './presencetoasts'
 import { BOOL_OPS, boolBlocked, boolOperands, boolUi, combine, flatten, release } from './booleans'
+import { align, distribute, flip } from './inspector/arrange'
 import type { NodeKind } from './beziereditor'
 
 const i18nT = t
@@ -2700,6 +2701,9 @@ export class Editor {
     if (derive(this.store.doc, this.derived)) {
       this.canvas.render()
       this.scheduleThumbs()
+      // the panel rebuilt on this same doc event BEFORE the derive pass ran
+      // (it subscribed first), so its W/H/X/Y show the boxes before layout
+      this.panel.rebuild()
     }
   }
 
@@ -3416,6 +3420,8 @@ export class Editor {
     // A letter as the keyboard's layout writes it (Dvorak's K is K); only when
     // Option turned it into a symbol (macOS: ⌥K is ˚) does the physical key
     // decide — the one case a layout cannot answer.
+    // a selection the editor may align: not a frame's child (its frame places it)
+    const free = () => sel().length > 0 && !sel().some((e) => e.parentId && this.store.element(e.parentId))
     const letter = (ev: KeyboardEvent, code: string) => /^[a-z]$/i.test(ev.key) ? `Key${ev.key.toUpperCase()}` === code : ev.code === code
     // a bare letter: no modifier, so ⌘R, ⇧A and ⌥⇧O stay theirs
     const tool = (k: string) => (ev: KeyboardEvent, mod: boolean) => !mod && !ev.altKey && !ev.shiftKey && key(ev) === k
@@ -3440,6 +3446,15 @@ export class Editor {
       { id: 'group', label: 'Group', keys: `${MOD}G`, scope: 'canvas', when: () => writable() && sel().length > 1, match: (ev, mod) => mod && !ev.shiftKey && key(ev) === 'g', run: () => this.panel.group(sel()) },
       // ⌥⇧U/S/I/E (letter(): on a Mac, Option turns the key into a symbol)
       ...BOOL_OPS.map((op): Command => ({ id: `bool-${op}`, label: boolUi(op).label, keys: boolUi(op).key, scope: 'canvas', when: () => toolFree() && !!boolOperands(this.store, sel()), match: (ev, mod) => !mod && ev.altKey && ev.shiftKey && letter(ev, boolUi(op).code), run: () => { combine(this.store, sel(), op) } })),
+      // Align and space, Figma's keys: ⌥A ⌥H ⌥D across, ⌥W ⌥V ⌥S down, ⌃⌥H ⌃⌥V even gaps.
+      // A frame's child is the frame's to place, so these wait for a free selection.
+      ...([['align-left', 'Align left', 'A', 'left'], ['align-center', 'Align centers', 'H', 'centerX'], ['align-right', 'Align right', 'D', 'right'],
+        ['align-top', 'Align top', 'W', 'top'], ['align-middle', 'Align middles', 'V', 'middleY'], ['align-bottom', 'Align bottom', 'S', 'bottom']] as const)
+        .map(([id, label, k, edge]): Command => ({ id, label, keys: `⌥${k}`, scope: 'canvas', when: () => toolFree() && free(), match: (ev, mod) => !mod && ev.altKey && !ev.shiftKey && letter(ev, `Key${k}`), run: () => align(this.panel, sel(), edge) })),
+      { id: 'distribute-x', label: 'Space evenly across', keys: '⌃⌥H', scope: 'canvas', when: () => toolFree() && free() && sel().length >= 3, match: (ev) => ev.ctrlKey && ev.altKey && !ev.metaKey && !ev.shiftKey && letter(ev, 'KeyH'), run: () => distribute(this.panel, sel(), 'x') },
+      { id: 'distribute-y', label: 'Space evenly down', keys: '⌃⌥V', scope: 'canvas', when: () => toolFree() && free() && sel().length >= 3, match: (ev) => ev.ctrlKey && ev.altKey && !ev.metaKey && !ev.shiftKey && letter(ev, 'KeyV'), run: () => distribute(this.panel, sel(), 'y') },
+      { id: 'flip-h', label: 'Flip horizontal', keys: '⇧H', scope: 'canvas', when: () => toolFree() && sel().length > 0, match: (ev, mod) => !mod && ev.shiftKey && !ev.altKey && key(ev) === 'h', run: () => flip(this.panel, sel(), 'flipX') },
+      { id: 'flip-v', label: 'Flip vertical', keys: '⇧V', scope: 'canvas', when: () => toolFree() && sel().length > 0, match: (ev, mod) => !mod && ev.shiftKey && !ev.altKey && key(ev) === 'v', run: () => flip(this.panel, sel(), 'flipY') },
       { id: 'auto-layout', label: 'Add auto layout', keys: '⇧A', scope: 'canvas', when: () => toolFree() && sel().length > 0, match: (ev, mod) => !mod && ev.shiftKey && !ev.altKey && key(ev) === 'a', run: () => this.panel.addAutoLayout(sel()) },
       { id: 'component', label: 'Create component', keys: `⌥${MOD}K`, scope: 'canvas', when: () => toolFree() && sel().length > 0, match: (ev, mod) => mod && ev.altKey && letter(ev, 'KeyK'), run: () => this.createComponent() },
       { id: 'redo', label: 'Redo', keys: `⇧${MOD}Z`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && ((ev.shiftKey && key(ev) === 'z') || key(ev) === 'y'), run: () => this.store.redo() },
@@ -3479,9 +3494,12 @@ export class Editor {
     document.addEventListener('keydown', (ev) => {
       if (this.presenting) return
       const mod = ev.metaKey || ev.ctrlKey
+      // a number field hands ⌘Z/⇧⌘Z back to the document (controls.ts numeric)
+      const numUndo = mod && /^[zy]$/i.test(ev.key) && ev.target instanceof Element && !!ev.target.closest('.ed-num')
       const inField =
-        ev.target instanceof Element &&
-        ev.target.closest('input, textarea, select, [contenteditable="true"]') != null
+        ev.target instanceof Element && !numUndo &&
+        // a colour swatch opens the popover — a button, not a field for typing
+        ev.target.closest('input:not([type=color]), textarea, select, [contenteditable="true"]') != null
 
       if (dispatch(this.commands, ev, inField)) return
       if (inField) return

@@ -7,36 +7,14 @@ import type { PropsPanel } from '../panels'
 import { uid, type FrameLayout, type ShapeElement, type SlideElement } from '../../model'
 import { isFrame } from '../../layout'
 import { tokenBind } from './tokenbind'
+import { roving } from './controls'
 
 const DIRS: Record<string, string> = { row: 'Row', col: 'Column', grid: 'Grid' }
 
 /** The Auto layout section: on a rect, the frame's own rules; on a frame's child, its sizing. */
 export function buildAutoLayout(p: PropsPanel, el: SlideElement) {
   const parent = el.parentId ? p.store.element(el.parentId) : undefined
-  if (isFrame(parent)) {
-    section(p, t('Auto layout'))
-    const axis = (k: 'w' | 'h') => segmented(['fixed', 'fill'], el.sizing?.[k] ?? 'fixed', (v) =>
-      p.mutate(el.id, (e) => {
-        const s = { ...e.sizing, [k]: v as 'fixed' | 'fill' }
-        if (s[k] === 'fixed') delete s[k]
-        if (Object.keys(s).length) e.sizing = s; else delete e.sizing
-      }, true), { fixed: t('Fixed'), fill: t('Fill') })
-    // in a wrapping frame a fill child needs a least size, or every fill shares one line
-    const least = (k: 'w' | 'h') => {
-      const key = k === 'w' ? 'minW' : 'minH'
-      return mini(t('Min'), el.sizing?.[key] ?? 0, (v, fin) => p.mutate(el.id, (e) => {
-        const s = { ...e.sizing }
-        if (v > 0) s[key] = v; else delete s[key]
-        if (Object.keys(s).length) e.sizing = s; else delete e.sizing
-      }, fin), undefined, { min: 0 })
-    }
-    const wraps = !!parent.layout.wrap && parent.layout.dir !== 'grid'
-    for (const [k, label] of [['w', 'Width'], ['h', 'Height']] as const) {
-      row(p, label, axis(k))
-      if (wraps && el.sizing?.[k] === 'fill') field(p, least(k))
-    }
-    return
-  }
+  if (isFrame(parent)) resizing(p, el, parent)
   if (el.type !== 'shape' || el.shape !== 'rect') return
   const L = el.layout
   const set = (fn: (l: FrameLayout) => void, final = true) => p.mutate(el.id, (e) => fn((e as ShapeElement).layout!), final)
@@ -67,13 +45,59 @@ export function buildAutoLayout(p: PropsPanel, el: SlideElement) {
   row(p, 'Clip content', toggle(!!L.clip, (on) => set((l) => { if (on) l.clip = true; else delete l.clip })))
 }
 
+/**
+ * How a frame's child takes its size, Figma's three words per axis: Hug (a
+ * frame child sizes to its own content), Fixed, Fill container. Fill is
+ * refused where the parent hugs — a frame sized by its children has no free
+ * space to hand out — and says so. A nested frame shows this AND its own
+ * Auto layout section below.
+ */
+function resizing(p: PropsPanel, el: SlideElement, parent: ShapeElement & { layout: FrameLayout }) {
+  section(p, t('Resizing'))
+  const own = isFrame(el)
+  const modeOf = (k: 'w' | 'h') => el.sizing?.[k] === 'fill' ? 'fill' : own && el.layout.hug ? 'hug' : 'fixed'
+  const axis = (k: 'w' | 'h') => {
+    const seg = segmented(own ? ['hug', 'fixed', 'fill'] : ['fixed', 'fill'], modeOf(k), (v) =>
+      p.mutate(el.id, (e) => {
+        const s = { ...e.sizing }
+        if (v === 'fill') s[k] = 'fill'
+        else delete s[k]
+        if (Object.keys(s).length) e.sizing = s; else delete e.sizing
+        // ponytail: hug is one switch for both axes (layout.ts); per-axis hug when a deck needs it
+        const L = (e as ShapeElement).layout
+        if (L) { if (v === 'hug') L.hug = true; else if (v === 'fixed') delete L.hug }
+      }, true), { hug: t('Hug'), fixed: t('Fixed'), fill: t('Fill container') })
+    if (parent.layout.hug && modeOf(k) !== 'fill') {
+      const fill = seg.querySelector<HTMLButtonElement>('[data-value="fill"]')
+      if (fill) { fill.disabled = true; fill.title = t('The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first') }
+    }
+    return seg
+  }
+  // in a wrapping frame a fill child needs a least size, or every fill shares one line
+  const least = (k: 'w' | 'h') => {
+    const key = k === 'w' ? 'minW' : 'minH'
+    return mini(t('Min'), el.sizing?.[key] ?? 0, (v, fin) => p.mutate(el.id, (e) => {
+      const s = { ...e.sizing }
+      if (v > 0) s[key] = v; else delete s[key]
+      if (Object.keys(s).length) e.sizing = s; else delete e.sizing
+    }, fin), undefined, { min: 0 })
+  }
+  const wraps = !!parent.layout.wrap && parent.layout.dir !== 'grid'
+  for (const [k, label] of [['w', 'Width'], ['h', 'Height']] as const) {
+    row(p, label, axis(k))
+    if (wraps && el.sizing?.[k] === 'fill') field(p, least(k))
+  }
+}
+
 /** Penpot's 3×3 alignment box: the cell is where the children sit. Columns are
  *  horizontal, rows vertical, whatever the direction: the solver's main/cross
  *  axes are mapped here, so a column frame's matrix still reads left→right. */
 function alignMatrix(L: FrameLayout, pick: (justify: FrameLayout['justify'], align: FrameLayout['align']) => void): HTMLElement {
   const box = document.createElement('div')
   box.className = 'ed-align-matrix'
-  box.setAttribute('role', 'group')
+  // one tab stop: the arrows walk the 3×3 (roving), as a radio group
+  box.setAttribute('role', 'radiogroup')
+  box.setAttribute('aria-label', t('Alignment'))
   const ends = ['start', 'center', 'end'] as const
   const names = [['Top left', 'Top', 'Top right'], ['Left', 'Center', 'Right'], ['Bottom left', 'Bottom', 'Bottom right']]
   const main = L.dir === 'col' ? 'v' : 'h'
@@ -82,12 +106,14 @@ function alignMatrix(L: FrameLayout, pick: (justify: FrameLayout['justify'], ali
     b.type = 'button'
     const [justify, align] = main === 'h' ? [ends[c], ends[r]] : [ends[r], ends[c]]
     const on = (L.justify ?? 'start') === justify && (L.align ?? 'start') === align
-    b.setAttribute('aria-pressed', String(on))
+    b.setAttribute('role', 'radio')
+    b.setAttribute('aria-checked', String(on))
     b.title = t(names[r][c])
     b.setAttribute('aria-label', b.title)
     b.addEventListener('click', () => pick(justify, align))
     box.appendChild(b)
   }
+  roving(box, 'radio', 3)
   return box
 }
 

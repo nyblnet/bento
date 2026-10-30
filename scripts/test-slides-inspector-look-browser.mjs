@@ -97,18 +97,25 @@ try {
       const kit = () => p.$$eval('.ed-props .ed-layer-block .ed-toolbar .ed-tool', (bs) => ({
         n: bs.length, icons: bs.every((b) => b.querySelector('svg') && !b.textContent.trim() && b.title && b.getAttribute('aria-label')),
         rows: new Set(bs.map((b) => Math.round(b.getBoundingClientRect().top))).size,
+        // every tool reachable: inside the panel's content box and clear of every other
+        clear: (() => {
+          const host = document.querySelector('.ed-props').getBoundingClientRect()
+          const rs = bs.map((b) => b.getBoundingClientRect())
+          return rs.every((r, i) => r.left >= host.left && r.right <= host.right &&
+            rs.every((o, j) => j === i || r.right <= o.left + 0.5 || o.right <= r.left + 0.5 || r.bottom <= o.top + 0.5 || o.bottom <= r.top + 0.5))
+        })(),
       }))
       await pick(['a']); await p.waitForTimeout(200)
       let k = await kit()
       ok(k.icons, 'every toolbar button is an icon with a hint and a name')
-      ok(k.n === 12 && k.rows === 1, `one element: align, order and flip, on one line (${k.n} tools, ${k.rows} line)`)
+      ok(k.n === 12 && k.rows === 2 && k.clear, `one element: align on one line, order and flip on the next, none covered (${k.n} tools, ${k.rows} lines)`)
       await pick(['a', 'b']); await p.waitForTimeout(200)
       k = await kit()
       // a, b and c are shapes, so the four vector booleans join too (vector-bool.ts)
-      ok(k.n === 19, `two: match width/height, Group and the four booleans join (${k.n})`)
+      ok(k.n === 19 && k.clear, `two: match width/height, Group and the four booleans join, none covered (${k.n})`)
       await pick(['a', 'b', 'c']); await p.waitForTimeout(200)
       k = await kit()
-      ok(k.n === 21, `three: even gaps join them (${k.n})`)
+      ok(k.n === 21 && k.clear, `three: even gaps join them, none covered or out of the panel (${k.n})`)
       await pick(['a']); await p.waitForTimeout(200)
       const inside = await p.evaluate(() => {
         const m = [...document.querySelectorAll('.ed-props .ed-mini')].find((x) => x.querySelector('span')?.textContent === 'X')

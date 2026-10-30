@@ -12089,3 +12089,33 @@ existing element, and an older shell sees an ordinary deck.
   and drops them when the frame lies outside the component. A batch of copies
   (paste, ⌘D, Duplicate, Alt-drag) keeps its frames among its copies through
   `freshGroups`; a child copied without its frame stays a sibling in it.
+
+## 2026-10-30 — slides: the inspector after the UX audit — Esc keeps, focus survives, toolbars wrap
+
+From docs/audit/ux-pyramid-2026-10-30.md. Amends the 2026-10-29 entries where noted.
+
+- **Esc in the colour popover closes and KEEPS the colour** (amending "Esc
+  undoes the preview burst"). The popover previews live, so what the canvas
+  shows is already applied; an Esc that silently reverted it lost work the
+  user thought was done. ⌘Z takes the whole pick back in one step. Focus
+  returns to the swatch.
+- **Focus survives a rebuild.** Every action inside the panel rebuilds it;
+  PropsPanel.rebuild now remembers the focused control by its name and
+  position and puts focus back, or — when the action replaced it (a + became
+  a −) — on the first control of the same section. One place, not one per
+  call site. Section headers are the fold's buttons (Tab, Enter/Space).
+- **The arrange toolbars wrap at a kind's edge** (align · spacing · size,
+  then order · group · flip · boolean), fixed 24×26 tools: a kind never
+  splits and no tool can be covered or pushed out of the panel. Align and
+  distribute have Figma's keys (⌥A ⌥H ⌥D ⌥W ⌥V ⌥S, ⌃⌥H ⌃⌥V) and line up the
+  boxes elements cover on the slide (rotated bounds). A frame's child offers
+  no align and read-only X/Y — the frame places it.
+- **One Solid | Linear | Radial**, in the popover; the fill row no longer
+  carries a second copy.
+- **A refused number says why** instead of reverting silently; Esc in a
+  number field puts the value back and leaves the field; ⌘Z there is the
+  document's undo. "1,000" and "1.000" are read by the interface language's
+  decimal mark; anything still ambiguous is refused, never guessed.
+- **A multi-selection shows Fill, Stroke and Shadow** when every element has
+  them in the same plain form; a paint stack or gradient stays the element's
+  own and hides the shared section rather than flattening it.

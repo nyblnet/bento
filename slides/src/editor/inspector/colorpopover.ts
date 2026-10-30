@@ -411,16 +411,20 @@ export function openColorPopover(anchor: HTMLElement, o: ColorPopoverOpts) {
     if (done) return
     done = true
     teardown()
+    // focus first: the commit rebuilds the panel, which puts focus back on
+    // the control that held it (panels.ts) — the swatch, not <body>
+    anchor.focus({ preventScroll: true })
     if (commit && touched) {
       if (kind === 'solid' || !grad) o.commit(hex(), a)
       else host!.write(kind, grad, undefined, true)
     } else if (touched) o.cancel()
-    anchor.focus({ preventScroll: true })
     if (kindChanged || !commit) o.done?.()
   }
   const outside = (e: Event) => { if (!pop.contains(e.target as Node) && e.target !== anchor) finish(true) }
   const key = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false) }
+    // Esc closes and KEEPS what the canvas already shows — a popover that
+    // previews live has applied it, and ⌘Z is the way back (Figma, Penpot)
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(true) }
     else if (e.key === 'Enter' && e.target !== text) { e.preventDefault(); finish(true) }
     else if (e.key === 'Enter') { text.dispatchEvent(new Event('change')); e.preventDefault(); finish(true) }
   }

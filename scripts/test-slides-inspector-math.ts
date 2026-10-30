@@ -59,6 +59,14 @@ is('12,34', 0, 12.34)
 is('1,0001', 0, 1.0001)
 for (const ambiguous of ['1,000', '10,000', '1.000,5', '1,000.5', '+1,000']) is(ambiguous, 7, null)
 
+console.log('\nthe interface language decides what a grouping mark is\n')
+const loc = (text: string, dec: '.' | ',', v: number | null) => {
+  const r = evalNumber(text, 7, dec)
+  ok(v === null ? r === null : !!r && Math.abs(r.v - v) < 1e-9, `"${text}" with decimal "${dec}" → ${v === null ? 'refused' : v} (${JSON.stringify(r)})`)
+}
+loc('1,000', '.', 1000); loc('12,345,678', '.', 12345678); loc('1,000.5', '.', 1000.5); loc('1,5', '.', 1.5); loc('1.000,5', '.', null)
+loc('1.000', ',', 1000); loc('1.000,5', ',', 1000.5); loc('1,000', ',', 1); loc('2.5', ',', 2.5); loc('1.0001', ',', 1.0001)
+
 console.log('\nrefused\n')
 for (const junk of ['', '   ', 'abc', 'alert(1)', 'Math.PI', '2+', '(2', '2)', '1/0', '/0', '2**3', '3 4', 'constructor', '0x10', '1;2']) is(junk, 7, null)
 

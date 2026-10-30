@@ -347,6 +347,13 @@ jobs:
         # out of open sheets and read-only, the palette respects IME and
         # returns focus, and the HUD is built once per language switch.
         run: node scripts/test-slides-ui-fixes-browser.mjs
+      - name: UX audit inspector behaviour in Chromium
+        # The arrange toolbars never cover or drop a tool (1/2/3 selected, en/de/pt),
+        # align/distribute keys, shared Fill/Stroke/Shadow on a multi-selection,
+        # a frame child's placement, number fields that explain a refusal and
+        # hand ⌘Z/Esc back, one Solid|Linear|Radial, layer rows that fit, and
+        # focus that survives the panel's rebuilds.
+        run: node scripts/test-slides-ux-inspector-browser.mjs
       - name: Vector booleans in Chromium
         # The contextual bar for 2+ closed shapes; Subtract makes one path in the
         # bottom slot with a real hole; one undo; the op switch; Release after a
