@@ -274,6 +274,15 @@ export function buildThemeProps(p: PropsPanel) {
   hint.className = 'ed-hint'
   hint.textContent = t('Deck-wide brand colours. Anything using a theme colour follows when you change it here.')
   p.host.appendChild(hint)
+  // the theme colours are the built-in tokens: the Tokens view shows them with
+  // the deck's own tokens, their uses, and modes — one place for a brand
+  const link = document.createElement('button')
+  link.type = 'button'
+  link.className = 'ed-btn ed-theme-tokens'
+  link.textContent = t('Open in Tokens')
+  link.title = t('Theme colors are the deck’s built-in tokens: see them beside your own tokens, with where each is used')
+  link.addEventListener('click', () => document.querySelector<HTMLElement>('.ed-side-tabs [data-view="tokens"]')?.click())
+  p.host.appendChild(link)
   const theme = p.store.doc.theme
   const slot = (label: string, get: () => string, set: (v: string) => void) =>
     row(p, label, color(p, get(), (v, fin) => p.edit(() => set(v), fin)))

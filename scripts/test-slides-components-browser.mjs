@@ -8,7 +8,7 @@
 //   1. ⌥⌘K makes the selection a component's main, in one undo step; its
 //      layer rows show ◆, and the Tokens view lists it;
 //   2. Insert (Tokens view) drops a copy on the current slide — fresh ids, one
-//      new group, rows marked ◇ — selected;
+//      new group, rows marked ◇ — on free space clear of the main, selected;
 //   3. an edit to the main (the inspector's own corner-radius field) reaches the
 //      copy, which keeps its own position;
 //   4. a property changed on the copy by hand is kept as an override when the
@@ -83,7 +83,11 @@ try {
   const sel = await p.evaluate(() => window.bento.selection.slice().sort().join(','))
   ok(sel === copies.map((e) => e.id).sort().join(','), 'the copy is selected')
   const ca = copies.find((e) => e.component.key === a.component.key)
-  ok(ca.x === a.x + 24 && ca.y === a.y + 24, 'a copy on the main\'s slide is offset so it can be seen')
+  // the copy lands on free space on the slide (the UX audit: never on top of what is there)
+  const bbox = (es) => ({ x: Math.min(...es.map((e) => e.x)), y: Math.min(...es.map((e) => e.y)), r: Math.max(...es.map((e) => e.x + e.w)), b: Math.max(...es.map((e) => e.y + e.h)) })
+  const cb = bbox(copies), mb = bbox([a, b])
+  const size = await p.evaluate(() => window.bento.doc.size)
+  ok(!(cb.x < mb.r && mb.x < cb.r && cb.y < mb.b && mb.y < cb.b) && cb.r <= size.width && cb.b <= size.height, 'a copy on the main\'s slide lands clear of it, on the slide')
 
   console.log('\nthe main moves, the copy follows\n')
   await p.locator('.ed-side-tabs [data-view="layers"]').click(); await p.waitForTimeout(150)

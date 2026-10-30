@@ -9,7 +9,7 @@ import { ICONS } from '../../icons'
 import type { GradientFill, Slide } from '../../model'
 import { setColor, paletteOf, refAt, PALETTE_SLOTS, slotIsSet } from '../../palette'
 import { cssColor, cssGradient, radialGeom } from '../../render'
-import { bindToken, tokenName, tokenValue } from '../../tokens'
+import { adoptColor, bindToken, colorUses, freeTokenName, tokenName, tokenValue } from '../../tokens'
 import { openColorPopover } from './colorpopover'
 import { gradientBar } from './gradientbar'
 import { gradTarget } from '../gradientoverlay'
@@ -332,12 +332,45 @@ export function themeLink(p: PropsPanel, ref: { id: string | null; path: string;
     }, true))
     list.appendChild(b)
   }
+  // adopting a literal: the deck's brand colour is usually typed in many
+  // places before anyone thinks of a token — make the token from it, and every
+  // use follows; or just find every use on this slide
+  if (!tok) {
+    const acts = document.createElement('div')
+    acts.className = 'ed-palette-acts'
+    const act = (label: string, run: () => void) => {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'ed-palette-item ed-palette-act'
+      b.textContent = label
+      b.addEventListener('click', run)
+      acts.appendChild(b)
+    }
+    const hex = () => input.value.toLowerCase()
+    act(t('Make a token from this color'), () => {
+      const doc = p.store.doc
+      const name = freeTokenName(doc, 'color.brand')
+      let n = 0
+      p.store.commit(() => { n = adoptColor(p.store.doc, hex(), name) })
+      p.toast(t('Made {name} — {n} uses follow it', { name, n }))
+      // the new token, ready to be named, in the Tokens view
+      document.querySelector<HTMLElement>('.ed-side-tabs [data-view="tokens"]')?.click()
+      const field = document.querySelector<HTMLInputElement>(`.ed-tokens [data-token="${CSS.escape(name)}"] .ed-token-name`)
+      field?.focus(); field?.select()
+    })
+    act(t('Select all with this color'), () => {
+      const ids = colorUses(p.store.doc, hex()).filter((u) => u.slide === p.store.slide && u.element).map((u) => u.element!.id)
+      p.store.select([...new Set(ids)])
+      p.toast(t('{n} elements on this slide use this color', { n: new Set(ids).size }))
+    })
+    list.appendChild(acts)
+  }
   const open = document.createElement('button')
   open.type = 'button'
   open.className = 'ed-btn ed-tool'
   open.innerHTML = ICONS.palette
-  open.title = t('Theme colors')
-  open.setAttribute('aria-label', t('Theme colors'))
+  open.title = t('Colors & tokens')
+  open.setAttribute('aria-label', t('Colors & tokens'))
   open.setAttribute('aria-expanded', 'false')
   open.addEventListener('click', () => {
     list.hidden = !list.hidden
@@ -355,8 +388,8 @@ export function themeLink(p: PropsPanel, ref: { id: string | null; path: string;
     detach.type = 'button'
     detach.className = 'ed-color-detach'
     detach.innerHTML = ICONS.unlink
-    detach.title = t('Detach from the theme')
-    detach.setAttribute('aria-label', t('Detach from the theme'))
+    detach.title = tok ? t('Detach from token') : t('Detach from theme color')
+    detach.setAttribute('aria-label', detach.title)
     detach.addEventListener('click', () => {
       const a = field.querySelector<HTMLInputElement>('.ed-color-alpha input')
       setRef(p, ref, a ? combineColor(input.value, alphaOf(a)) : input.value, null)
