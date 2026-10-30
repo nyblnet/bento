@@ -360,6 +360,9 @@ jobs:
       - name: Selection handles fit what they select in Chromium
         # 8px handles at any zoom; corners only, or none, when the selection is small on screen.
         run: node scripts/test-slides-handles-browser.mjs
+      - name: Hover picks and copy-drags in Chromium
+        # What a click would pick is outlined first (no key / ⌘ / Alt); a ⌘-drag copy never empties the spot it copies from; Esc cancels.
+        run: node scripts/test-slides-drag-copy-browser.mjs
       - name: Drag into a frame in Chromium
         # Layers and canvas drops put elements inside auto-layout frames, at a slot.
         run: node scripts/test-slides-frame-drop-browser.mjs

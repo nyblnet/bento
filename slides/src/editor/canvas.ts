@@ -1129,7 +1129,10 @@ export class SlideCanvas {
   // lives in the scaled host like the presence layer, so pan and zoom carry it.
 
   private measureLayer: HTMLElement | null = null
+  private hoverLayer: HTMLElement | null = null
   private altHeld = false
+  /** ⌘ (Ctrl elsewhere) held: a click would select exactly what is under it */
+  private modHeld = false
   /** the pointer over the canvas, or null once it has left */
   private hoverAt: { x: number; y: number } | null = null
   /** a button is down: a click, drag, resize or marquee owns the canvas */
@@ -1146,9 +1149,14 @@ export class SlideCanvas {
       if (this.hoverAt) ev.preventDefault()
       setAlt(false)
     })
-    window.addEventListener('blur', () => setAlt(false))
+    window.addEventListener('blur', () => { setAlt(false); this.modHeld = false; this.scheduleMeasure() })
+    const modKey = isMacOS() ? 'Meta' : 'Control'
+    window.addEventListener('keydown', (ev) => { if (ev.key === modKey && !this.modHeld) { this.modHeld = true; this.scheduleMeasure() } })
+    window.addEventListener('keyup', (ev) => { if (ev.key === modKey) { this.modHeld = false; this.scheduleMeasure() } })
+    this.store.on('selection', () => this.scheduleMeasure())
     this.scroller.addEventListener('mousemove', (ev) => {
       this.hoverAt = { x: ev.clientX, y: ev.clientY }
+      this.modHeld = isMacOS() ? ev.metaKey : ev.ctrlKey
       // the event's own flags catch an Alt pressed while the window was
       // unfocused, and a release the window never heard: a native drag-and-drop
       // (a layer row, a file) ends without a mouseup, which left `pressing`
@@ -1165,7 +1173,7 @@ export class SlideCanvas {
   }
 
   private scheduleMeasure() {
-    if (!this.measureRaf) this.measureRaf = requestAnimationFrame(() => { this.measureRaf = 0; this.drawMeasure() })
+    if (!this.measureRaf) this.measureRaf = requestAnimationFrame(() => { this.measureRaf = 0; this.drawMeasure(); this.drawHover() })
   }
 
   /** What Alt-hover measures to: the element Alt-click would select first, the
@@ -1179,6 +1187,44 @@ export class SlideCanvas {
     if (this.store.selection.includes(id)) return null
     const el = slide.elements.find((e) => e.id === id)
     return el ? { box: aabb(el), isSlide: false } : null
+  }
+
+  /** What a click here would select, outlined before the click (Figma's
+   *  hover): ⌘ the exact element under the pointer, Alt the next one down the
+   *  dig, no key the outermost frame or the whole group. Nothing over what is
+   *  already selected, and nothing while a press or an editor owns the canvas. */
+  private hoverTarget(): string[] {
+    const p = this.hoverAt
+    const busy = this.pressing || this.dragging || !!this.editing || !!this.editingCell || this.pathEditor.active
+      || this.cropEditor.active || this.bezierEditor.active || this.store.readOnly
+    if (!p || busy) return []
+    const stack = this.elementsAt(p.x, p.y).filter((i) => !this.isGhost(i))
+    if (!stack.length) return []
+    const sel = this.store.selection
+    let ids: string[]
+    if (this.modHeld) ids = [stack[0]]
+    else if (this.altHeld) {
+      const i = sel.length === 1 ? stack.indexOf(sel[0]) : -1
+      ids = [i >= 0 ? stack[(i + 1) % stack.length] : stack[0]]
+    } else ids = this.expandGroups([this.liftToFrame(stack[0])])
+    return ids.every((id) => sel.includes(id)) ? [] : ids
+  }
+
+  private drawHover() {
+    const layer = this.hoverLayer ?? (this.hoverLayer = document.createElement('div'))
+    layer.className = 'ed-hover-layer'
+    const ids = this.hoverTarget()
+    const els = ids.map((id) => this.store.element(id)).filter((e): e is SlideElement => !!e)
+    if (!els.length) { layer.remove(); return }
+    const b = union(els.map(aabb))
+    if (!b) { layer.remove(); return }
+    const inv = 1 / (this.scale || 1)
+    let box = layer.firstElementChild as HTMLElement | null
+    if (!box) { box = document.createElement('div'); layer.appendChild(box) }
+    box.className = 'ed-hover-box'
+    box.dataset.ids = ids.join(' ')
+    Object.assign(box.style, { left: `${b.x}px`, top: `${b.y}px`, width: `${b.w}px`, height: `${b.h}px`, borderWidth: `${1.5 * inv}px` })
+    if (layer.parentNode !== this.scaleHost || layer.nextSibling) this.scaleHost.appendChild(layer)
   }
 
   private drawMeasure() {
@@ -1600,6 +1646,33 @@ export class SlideCanvas {
 
   /** ⌘/Ctrl-drag duplicate: originals move, copies stay behind (committed at drag end) */
   private pendingCopy: SlideElement[] | null = null
+  /** a Moveable drag is in progress, and whether Esc called it off */
+  private dragging = false
+  private dragCancelled = false
+
+  /** A copy-drag moves the originals and commits the stationary copies on
+   *  release. Until then the spot copied FROM would stand empty — the copy
+   *  seemed to vanish and reappear — so a still clone of each original (its
+   *  subtree included) is left where it was, inert, for the drag. */
+  private leaveGhosts(ids: string[]) {
+    this.clearGhosts()
+    for (const id of ids) {
+      const node = this.scaleHost.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(id)}"]`)
+      if (!node) continue
+      const clone = node.cloneNode(true) as HTMLElement
+      for (const n of [clone, ...clone.querySelectorAll<HTMLElement>('[data-el-id],[data-flip-id]')]) {
+        delete n.dataset.elId
+        delete n.dataset.flipId
+      }
+      clone.classList.add('ed-copy-ghost')
+      clone.removeAttribute('id')
+      node.before(clone)
+    }
+  }
+
+  private clearGhosts() {
+    for (const g of this.scaleHost.querySelectorAll('.ed-copy-ghost')) g.remove()
+  }
 
   /** A Shift press that Selecto handed to Moveable because it landed on the
    *  selection (or inside a group's box) — see the click handlers below. */
@@ -1636,6 +1709,7 @@ export class SlideCanvas {
         this.pendingCopy = withDescendants(this.store.slide, this.store.selectedElements).map(
           (el) => JSON.parse(JSON.stringify(el)) as SlideElement,
         )
+        this.leaveGhosts(this.pendingCopy.map((el) => el.id))
       }
     }
     const axisLock = (target: HTMLElement, left: number, top: number, ev: { inputEvent?: MouseEvent; dist?: number[] }) => {
@@ -1647,10 +1721,12 @@ export class SlideCanvas {
     }
 
     mv.on('dragStart', (e) => {
+      this.dragging = true
       pressAt = { x: e.clientX, y: e.clientY }
       noteDragStart(e.target as HTMLElement, e.inputEvent as MouseEvent)
     })
     mv.on('dragGroupStart', (e) => {
+      this.dragging = true
       pressAt = { x: e.clientX, y: e.clientY }
       e.events.forEach((ev) => noteDragStart(ev.target as HTMLElement, e.inputEvent as MouseEvent))
     })
@@ -1798,6 +1874,8 @@ export class SlideCanvas {
     // the nudged originals put back, and the click selects exactly.
     const endDrag = (e: { isDrag: boolean; clientX: number; clientY: number }) => {
       this.hud.hide()
+      this.clearGhosts()
+      if (this.dragCancelled) { cancelDrag(); return }
       if (this.pendingCopy && Math.hypot(e.clientX - pressAt.x, e.clientY - pressAt.y) <= CLICK_SLOP) {
         this.pendingCopy = null
         this.altPress = null
@@ -1812,8 +1890,32 @@ export class SlideCanvas {
       this.scaleHost.querySelector(':scope > .ed-drop-frame')?.remove()
       end(e)
     }
-    mv.on('dragEnd', endDrag)
-    mv.on('dragGroupEnd', endDrag)
+    // Esc mid-drag: nothing is committed, the originals go back where the model has them
+    const cancelDrag = () => {
+      this.dragCancelled = false
+      this.dragging = false
+      this.pendingCopy = null
+      this.altPress = null
+      this.slotDrag = null
+      this.hud.hide()
+      this.clearGhosts()
+      this.scaleHost.querySelector(':scope > .ed-slot-bar')?.remove()
+      this.scaleHost.querySelector(':scope > .ed-drop-frame')?.remove()
+      this.render()
+    }
+    const finish = (e: { isDrag: boolean; clientX: number; clientY: number }) => { this.dragging = false; endDrag(e) }
+    mv.on('dragEnd', finish)
+    mv.on('dragGroupEnd', finish)
+    // Esc during a move or copy-drag cancels it: no copy left, originals back
+    window.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Escape' || !this.dragging) return
+      ev.preventDefault()
+      ev.stopPropagation()
+      this.dragCancelled = true
+      mv.stopDrag()
+      // stopDrag ends Moveable's gesture without its dragEnd: finish here
+      if (this.dragCancelled) cancelDrag()
+    }, true)
     mv.on('resizeEnd', (e) => { mv.keepRatio = false; end(e) })
     mv.on('resizeGroupEnd', end)
     mv.on('rotateEnd', (e) => { mv.throttleRotate = 1; end(e) })
