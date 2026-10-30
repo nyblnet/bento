@@ -633,3 +633,13 @@ runs:
       run: |
         slides/node_modules/.bin/esbuild scripts/test-slides-stacks.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-stacks.mjs"
         node "$RUNNER_TEMP/test-slides-stacks.mjs"
+
+    - name: Contrast reading rig
+      # editor/inspector/contrast.ts, DOM-free: the Export section's WCAG
+      # reading is the WORST of a grid of points, each against what lies
+      # behind it there — opacity, a fill's alpha, gradients evaluated at the
+      # point, rotated cards — and it says where the weak point is.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-slides-contrast.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-contrast.mjs"
+        node "$RUNNER_TEMP/test-slides-contrast.mjs"

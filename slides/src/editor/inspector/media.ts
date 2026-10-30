@@ -62,12 +62,7 @@ export function buildImageProps(p: PropsPanel, el: SlideElement) {
   // letterbox the distortion away. Re-locking deletes the field (absent =
   // locked, the format's default) and keeps the CURRENT shape: the next
   // resize starts from whatever ratio the frame has now.
-  row(p, 'Keep aspect ratio', toggle((el as ImageElement).keepAspectRatio !== false, (on) =>
-    p.mutate(el.id, (e) => {
-      if (e.type !== 'image') return
-      if (on) delete e.keepAspectRatio
-      else { e.keepAspectRatio = false; e.fit = 'fill' }
-    }, true)))
+  // proportions: the padlock between W and H (arrange.ts ratioLock) — one home for every element
   buildCropProps(p, el as ImageElement)
 }
 

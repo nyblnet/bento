@@ -864,7 +864,10 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       if (opts.svgAsImage) {
         // thumbnails: one <img> instead of thousands of svg nodes
         const img = document.createElement('img')
-        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(markup)
+        // markup written for inline use may omit the namespace, which an svg
+        // LOADED AS AN IMAGE cannot do without: it would draw as a broken picture
+        const standalone = markup.replace(/^(\s*<svg\b)(?![^>]*\sxmlns=)/, '$1 xmlns="http://www.w3.org/2000/svg"')
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(standalone)
         img.draggable = false
         img.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block'
         node.appendChild(img)

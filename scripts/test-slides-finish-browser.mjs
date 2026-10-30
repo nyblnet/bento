@@ -7,7 +7,7 @@
 // WHAT THIS PROVES.
 //   1. The colour popover reads and writes OKLCH: a colour shows as L%, C, H,
 //      a typed in-gamut OKLCH lands on that colour, and an out-of-gamut one is
-//      clamped AND flagged.
+//      gamut-MAPPED (CSS Color 4: chroma reduced, L and H kept) AND flagged.
 //   2. Tokens of every type: the Tokens view groups them by type with a
 //      preview; a font token binds the text's font (and moving the token moves
 //      the text), a shadow token binds the Shadow section, an opacity token the
@@ -26,6 +26,17 @@ let failures = 0
 function ok(cond, msg) {
   checks++
   if (!cond) { failures++; console.log(`  FAIL  ${msg}`) } else console.log(`  ok    ${msg}`)
+}
+// sRGB hex → OKLCH (Ottosson), to judge the popover's output independently
+function oklchOf(hex) {
+  const lin = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
+  const [r, g, b] = [1, 3, 5].map((i) => lin(parseInt(hex.slice(i, i + 2), 16) / 255))
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+  const q = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+  const A = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * q
+  const B = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * q
+  return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * q, Math.hypot(A, B), (Math.atan2(B, A) * 180 / Math.PI + 360) % 360]
 }
 
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true })
@@ -83,6 +94,14 @@ try {
   ok(await p.evaluate(() => document.querySelector('.ed-cpop-text').classList.contains('is-clamped')) === false, 'an in-gamut OKLCH is not flagged')
   await typeValue('70%, 0.4, 150')
   ok(await p.evaluate(() => document.querySelector('.ed-cpop-text').classList.contains('is-clamped')), 'an out-of-gamut OKLCH is clamped and flagged')
+  // CSS Color 4 gamut mapping keeps lightness and hue and gives up chroma
+  {
+    const mapped = await p.$eval(`${body('Fill')} input[type=color]`, (i) => i.value)
+    const [L, , H] = oklchOf(mapped)
+    // the map stops once clipping moves the colour less than a JND (ΔEOK 0.02), so a little drift is allowed
+    ok(Math.abs(L - 0.7) < 0.02 && Math.abs(H - 150) < 4 && mapped !== '#00d600', // #00d600 = per-channel clip: L 77%, H 142°
+       `oklch(70% 0.4 150) maps to the same lightness and hue in sRGB (${mapped}: L ${(L * 100).toFixed(1)}%, H ${H.toFixed(1)}°)`)
+  }
   await p.keyboard.press('Escape'); await p.waitForTimeout(150)
   // in-gamut value checked against the conversion directly (the popover's own functions)
   await p.click(`${body('Fill')} input[type=color]`); await p.waitForTimeout(150)

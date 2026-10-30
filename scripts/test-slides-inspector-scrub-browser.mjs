@@ -11,6 +11,9 @@
 //   2. a scrub asks for the pointer lock once past its dead zone (Figma's
 //      unbounded drag) and still works when the lock is refused — the rig
 //      reports which path this browser took — and releases the lock;
+//   2b. with the lock GRANTED (stubbed, as headless refuses it) the value keeps
+//      changing on movementX while clientX sits at the screen's edge, the
+//      drag is one undo step, and release and pointercancel both exit the lock;
 //   3. two elements with different X show "Mixed"; a scrub moves EACH by the
 //      same delta from its own value, typed `+10` too, and a plain typed
 //      value sets them all — one undo step each; equal values show the value.
@@ -100,6 +103,47 @@ try {
   const scrubbedX = (await el('a')).x
   ok(mid.held || scrubbedX > 100, `the drag moved X (${scrubbedX})`)
   if (scrubbedX !== 100) { await undo(); ok((await el('a')).x === 100, 'the whole drag is one undo step') }
+
+  console.log('\n2b. the locked path, with the lock granted (stubbed: headless refuses it)\n')
+  // Chrome freezes clientX while locked and reports only movementX; the stub
+  // grants the lock and the events below do exactly that, so the drag runs on
+  // movement the visible pointer could never make (past the screen edge).
+  await p.evaluate(() => {
+    window.__stub = { locked: null, exits: 0 }
+    Element.prototype.requestPointerLock = function () { window.__stub.locked = this; return Promise.resolve() }
+    Object.defineProperty(document, 'pointerLockElement', { configurable: true, get: () => window.__stub.locked })
+    document.exitPointerLock = () => { window.__stub.locked = null; window.__stub.exits++ }
+  })
+  const lockedDrag = (end) => p.evaluate(([end]) => {
+    const handle = [...document.querySelectorAll('.ed-props .ed-layer-block .ed-mini')]
+      .find((m) => m.querySelector(':scope > span')?.textContent === 'X').querySelector(':scope > span')
+    const r = handle.getBoundingClientRect()
+    const x0 = r.left + 3, y = r.top + 5
+    const ev = (type, init) => new PointerEvent(type, { bubbles: true, button: 0, pointerId: 1, isPrimary: true, clientY: y, ...init })
+    handle.dispatchEvent(ev('pointerdown', { clientX: x0 }))
+    window.dispatchEvent(ev('pointermove', { clientX: x0 + 7, movementX: 7 })) // past the dead zone: the lock is asked for
+    const heldAfterAsk = document.pointerLockElement === handle
+    const edge = innerWidth - 1
+    // pinned at the screen's edge: clientX no longer changes, movementX still does
+    for (let i = 0; i < 40; i++) window.dispatchEvent(ev('pointermove', { clientX: i ? edge : x0 + 7, movementX: 10 }))
+    const during = handle.parentElement.querySelector('input').value
+    window.dispatchEvent(ev(end, { clientX: edge }))
+    return { heldAfterAsk, during, after: document.pointerLockElement, exits: window.__stub.exits }
+  }, [end])
+  await select('a')
+  const r1 = await lockedDrag('pointerup'); await p.waitForTimeout(250)
+  ok(r1.heldAfterAsk, 'past the dead zone the scrub holds the lock')
+  // 7px unlocked + 40 × 10px of movement = 407px, 2px a step: 203 steps from 100
+  ok((await el('a')).x === 303, `the value kept changing past the screen edge, on movementX alone (${(await el('a')).x}; ${r1.during} mid-drag)`)
+  ok(r1.after === null && r1.exits === 1, 'the release gives the lock back')
+  await undo()
+  ok((await el('a')).x === 100, `the locked drag is one undo step (${(await el('a')).x})`)
+  await select('a')
+  const r2 = await lockedDrag('pointercancel'); await p.waitForTimeout(250)
+  ok(r2.after === null && r2.exits === 2, 'a pointercancel gives the lock back too')
+  ok(await p.evaluate(() => !document.body.classList.contains('ed-scrubbing')), 'and takes the scrub cursor off')
+  await undo()
+  ok((await el('a')).x === 100, 'the cancelled locked drag was one undo step as well')
 
   console.log('\n3. Mixed on a multi-selection\n')
   await select('a'); await select('b', true)

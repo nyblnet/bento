@@ -8,12 +8,35 @@ import { section, field } from './fields'
 import { t } from '../../i18n'
 import type { PropsPanel } from '../panels'
 import type { Slide, SlideElement } from '../../model'
-import { parseColor } from './controls'
-import { rasterizeSlide, slideSvg, downloadBlob, type Box } from '../exportimages'
+import { measureContrast, type Area } from './contrast'
+import { rasterizeSlide, downloadBlob, type Box } from '../exportimages'
+import { nativeSlideSvg } from '../svgexport'
 import { exportBase } from '../../exportimages'
 import { serializeElements, serializeSlides } from '../clipboard'
 
-/** The box the elements cover on the slide, rotation included. */
+/**
+ * How far an element's paint spills past its box, per side [left, top, right,
+ * bottom]: a shadow (filter: drop-shadow() — its blur IS the Gaussian's σ,
+ * and 3σ is where it fades out, shifted by the offset),
+ * a layer blur (σ = blur, 3σ), and a stroke drawn centred or outside.
+ */
+export function overflowOf(e: SlideElement): [number, number, number, number] {
+  let [l, t, r, b] = [0, 0, 0, 0]
+  const grow = (dl: number, dt: number, dr: number, db: number) => { l = Math.max(l, dl); t = Math.max(t, dt); r = Math.max(r, dr); b = Math.max(b, db) }
+  for (const s of Array.isArray(e.shadow) ? e.shadow : e.shadow ? [e.shadow] : []) {
+    const k = 3 * (s.blur || 0), dx = s.x ?? 0, dy = s.y ?? 0
+    grow(k - dx, k - dy, k + dx, k + dy)
+  }
+  const sw = e.type === 'shape' ? Math.max(e.strokeWidth || 0, ...(e.strokes ?? []).filter((x) => !x.hidden).map((x) => x.width || 0)) : 0
+  if (sw && e.type === 'shape') {
+    const pad = e.shape === 'line' ? sw * 2 : e.strokeAlign === 'outside' ? sw : e.strokeAlign === 'inside' ? 0 : sw / 2 // a line's tips reach ~2 widths
+    l += pad; t += pad; r += pad; b += pad
+  }
+  if (e.blur) { const k = 3 * e.blur; l += k; t += k; r += k; b += k }
+  return [l, t, r, b].map((v) => Math.max(0, v)) as [number, number, number, number]
+}
+
+/** The box the elements cover on the slide — rotation included, and their shadows, blur and strokes. */
 export function coverBox(els: SlideElement[]): Box {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
   for (const e of els) {
@@ -21,10 +44,12 @@ export function coverBox(els: SlideElement[]): Box {
     const cx = e.x + e.w / 2, cy = e.y + e.h / 2
     const hw = (Math.abs(Math.cos(a)) * e.w + Math.abs(Math.sin(a)) * e.h) / 2
     const hh = (Math.abs(Math.sin(a)) * e.w + Math.abs(Math.cos(a)) * e.h) / 2
-    x0 = Math.min(x0, cx - hw); y0 = Math.min(y0, cy - hh)
-    x1 = Math.max(x1, cx + hw); y1 = Math.max(y1, cy + hh)
+    // ponytail: the spill is added in slide axes after turning, so a turned element's shadow pad is generous, never short
+    const [l, t, r, b] = overflowOf(e)
+    const m = a ? Math.max(l, t, r, b) : 0
+    x0 = Math.min(x0, cx - hw - (m || l)); y0 = Math.min(y0, cy - hh - (m || t))
+    x1 = Math.max(x1, cx + hw + (m || r)); y1 = Math.max(y1, cy + hh + (m || b))
   }
-  // ponytail: shadows and blur that spill past the box are cut; pad here if that matters
   return { x: Math.floor(x0), y: Math.floor(y0), w: Math.max(1, Math.ceil(x1) - Math.floor(x0)), h: Math.max(1, Math.ceil(y1) - Math.floor(y0)) }
 }
 
@@ -50,12 +75,9 @@ export function buildExport(p: PropsPanel, els: SlideElement[]) {
   }
   const png = (scale: 1 | 2) => button(`PNG ${scale}×`, async () =>
     downloadBlob(await rasterizeSlide(doc, subject, 'png', scale, box), name(scale === 2 ? '2x.png' : 'png')))
-  // ponytail: the SVG wraps the render in a foreignObject (browsers draw it;
-  // vector editors may not) — emit native shapes if someone needs to edit it
-  const svg = button('SVG', () => {
-    const v = box ?? { x: 0, y: 0, w: doc.size.width, h: doc.size.height }
-    downloadBlob(new Blob([slideSvg(doc, subject, v.w, v.h, box)], { type: 'image/svg+xml' }), name('svg'))
-  })
+  // native vectors (svgexport.ts): opens as editable shapes and text in Figma, Illustrator, Inkscape
+  const svg = button('SVG', async () =>
+    downloadBlob(new Blob([await nativeSlideSvg(doc, subject, box)], { type: 'image/svg+xml' }), name('svg')))
   const json = button(t('Copy as JSON'), async () => {
     await navigator.clipboard.writeText(els.length ? serializeElements(els, doc) : serializeSlides([slide], doc))
     p.toast(t('Copied — ⌘V pastes it into any Bento deck'))
@@ -65,49 +87,52 @@ export function buildExport(p: PropsPanel, els: SlideElement[]) {
   if (els.length === 1) accessibility(p, els[0], slide)
 }
 
-/** WCAG 2 relative luminance of a #rrggbb. */
-function luminance(hex: string): number {
-  const [r, g, b] = [1, 3, 5].map((i) => {
-    const c = parseInt(hex.slice(i, i + 2), 16) / 255
-    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
-  })
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b
-}
-export function contrastRatio(a: string, b: string): number {
-  const [x, y] = [luminance(a), luminance(b)].sort((m, n) => n - m)
-  return (x + 0.05) / (y + 0.05)
-}
-/** The first solid colour in a paint (a gradient is judged by its first stop). */
-const solid = (paint: string | undefined): string | null => {
-  if (!paint || paint === 'transparent' || paint === 'none') return null
-  const hex = /#[0-9a-f]{6}\b/i.exec(paint)?.[0]
-  return hex ?? (parseColor(paint).a > 0 ? parseColor(paint).hex : null)
+/**
+ * The boxes a text's glyphs fill, one per rendered line, in slide px of the
+ * element's own frame — read off the canvas render. A turned text's line
+ * boxes come back as screen-axis bounds, so it is measured unturned: the
+ * canvas node is un-rotated for the read and restored at once (no paint).
+ */
+function glyphAreas(el: SlideElement, slideW: number): Area[] | undefined {
+  const node = document.querySelector<HTMLElement>(`.ed-stage-scale [data-el-id="${CSS.escape(el.id)}"]`)
+  const stage = document.querySelector<HTMLElement>('.ed-stage-scale')
+  if (!node || !stage) return undefined
+  const prev = node.style.transform
+  node.style.transform = 'none'
+  try {
+    const box = node.getBoundingClientRect()
+    const k = box.width / (el.w || 1) || stage.getBoundingClientRect().width / slideW
+    // text nodes only: a range over the whole node also returns its block
+    // wrappers' full-width boxes, which are exactly the empty corners
+    const rects: DOMRect[] = []
+    const walk = document.createTreeWalker(node, NodeFilter.SHOW_TEXT)
+    const range = document.createRange()
+    for (let t = walk.nextNode(); t; t = walk.nextNode()) {
+      if (!t.textContent?.trim()) continue
+      range.selectNodeContents(t)
+      rects.push(...range.getClientRects())
+    }
+    const areas = rects
+      .filter((r) => r.width > 0.5 && r.height > 0.5)
+      .map((r) => ({ x: el.x + (r.left - box.left) / k, y: el.y + (r.top - box.top) / k, w: r.width / k, h: r.height / k }))
+    return areas.length ? areas : undefined
+  } finally {
+    node.style.transform = prev
+  }
 }
 
-/**
- * What sits behind `el`: the topmost filled shape below it in paint order whose
- * box holds its centre (a card, a frame), else the slide background.
- * ponytail: one sample at the centre, opacity ignored — a deck-wide audit is test-slides-accent-contrast
- */
-export function backdropOf(el: SlideElement, slide: Slide): string | null {
-  const cx = el.x + el.w / 2, cy = el.y + el.h / 2
-  const below = slide.elements.slice(0, slide.elements.findIndex((e) => e.id === el.id)).reverse()
-  for (const e of below) {
-    if (e.hidden || e.type !== 'shape' || cx < e.x || cx > e.x + e.w || cy < e.y || cy > e.y + e.h) continue
-    const c = solid(e.fillGradient?.stops[0]?.color ?? e.fill)
-    if (c) return c
-  }
-  return solid(slide.background)
-}
+/** Where the weakest point sits: rows top → bottom, columns left → right. Translated at render. */
+const WHERE = [
+  ['top left', 'top', 'top right'],
+  ['left', 'centre', 'right'],
+  ['bottom left', 'bottom', 'bottom right'],
+]
 
 /** The selection's contrast against what is behind it, graded, and its alt text. */
 function accessibility(p: PropsPanel, el: SlideElement, slide: Slide) {
-  const fg = el.type === 'text' ? solid(el.colorGradient?.stops[0]?.color ?? el.color)
-    : el.type === 'shape' ? solid(el.fillGradient?.stops[0]?.color ?? (el.fill === 'none' ? el.stroke : el.fill))
-    : null
-  const bg = backdropOf(el, slide)
-  if (fg && bg) {
-    const ratio = contrastRatio(fg, bg)
+  const reading = measureContrast(el, slide, 5, el.type === 'text' ? glyphAreas(el, p.store.doc.size.width) : undefined)
+  if (reading) {
+    const ratio = reading.ratio
     // WCAG 2.2: text 4.5 (AA) / 7 (AAA), large text (≥24px, or ≥18.66px bold) 3 / 4.5; graphics 3 (AA)
     const large = el.type === 'text' && (el.fontSize >= 24 || (el.fontSize >= 18.66 && el.fontWeight >= 700))
     const [aa, aaa] = el.type !== 'text' ? [3, Infinity] : large ? [3, 4.5] : [4.5, 7]
@@ -115,13 +140,16 @@ function accessibility(p: PropsPanel, el: SlideElement, slide: Slide) {
     const out = document.createElement('div')
     out.className = 'ed-a11y'
     const value = document.createElement('span')
+    // the weakest of a 5×5 grid of points, and where it is when the element is not uniform
     value.textContent = t('Contrast {ratio}:1', { ratio: ratio.toFixed(2) })
+    const spread = Math.max(...reading.samples) - ratio > 0.05
+    if (spread) value.textContent += ` · ${t(WHERE[reading.at[1]][reading.at[0]])}`
     const badge = document.createElement('span')
     badge.className = `ed-a11y-badge ${ratio >= aa ? 'is-pass' : 'is-fail'}`
     badge.textContent = grade
     out.title = el.type === 'text'
-      ? t('Against what is behind it. Text needs {aa}:1 for AA and {aaa}:1 for AAA.', { aa, aaa })
-      : t('Against what is behind it. Shapes and icons need 3:1.')
+      ? t('The weakest point against what is behind it, opacity and gradients included. Text needs {aa}:1 for AA and {aaa}:1 for AAA.', { aa, aaa })
+      : t('The weakest point against what is behind it, opacity and gradients included. Shapes and icons need 3:1.')
     out.append(value, badge)
     p.host.appendChild(out)
   }
