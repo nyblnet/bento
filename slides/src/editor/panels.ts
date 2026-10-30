@@ -16,6 +16,7 @@ import { isMacOS } from '../screens'
 
 import { t } from '../i18n'
 import { lsJson, lsSet } from '../../../kernel/src/storage.ts'
+import { buildExport } from './inspector/export'
 import { buildSlidePanel } from './inspector/slide'
 import { roving, slidingPill } from './inspector/controls'
 import { layerBlock, buildLayoutRole } from './inspector/arrange'
@@ -119,6 +120,7 @@ export class PropsPanel {
     if (els.length === 0) buildSlidePanel(this)
     else if (els.length === 1) this.buildElementPanel(els[0])
     else this.buildMultiPanel(els)
+    buildExport(this, els)
     this.applyAccordion()
     this.mountTabs()
     this.mountContext(els)
@@ -130,7 +132,7 @@ export class PropsPanel {
 
   /** Collapsed by default until the user opens them (persisted per title).
    *  English keys, matched against the TRANSLATED header like SHOW_SECTIONS. */
-  static CLOSED_BY_DEFAULT = ['Layout', 'Advanced (JSON)']
+  static CLOSED_BY_DEFAULT = ['Layout', 'Advanced (JSON)', 'Export']
 
   /** Which tab a section lives on, by its English title — matched against
    *  the TRANSLATED header, like CLOSED_BY_DEFAULT. Format is the rest: how

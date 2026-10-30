@@ -32,12 +32,12 @@ function ok(cond, msg) {
 }
 const EN = {
   format: 'Format', animate: 'Animate', interact: 'Interact', text: 'Text', fill: 'Fill', stroke: 'Stroke', shadow: 'Shadow', blur: 'Blur',
-  anim: 'Animation', morph: 'Morph', inter: 'Interactivity', slide: 'Slide', layout: 'Layout', theme: 'Theme', deck: 'Deck', trans: 'Transition',
+  anim: 'Animation', morph: 'Morph', inter: 'Interactivity', slide: 'Slide', layout: 'Layout', theme: 'Theme', deck: 'Deck', trans: 'Transition', exp: 'Export',
   role: 'Layout role', opacity: 'Opacity', pageSize: 'Page size', link: 'Link to', empty: 'Nothing to set here for this selection.',
 }
 const PT = {
   format: 'Formato', animate: 'Animar', interact: 'Interação', text: 'Texto', fill: 'Preenchimento', stroke: 'Contorno', shadow: 'Sombra', blur: 'Desfoque',
-  anim: 'Animação', morph: 'Morph', inter: 'Interatividade', slide: 'Slide', layout: 'Layout', theme: 'Tema', deck: 'Documento', trans: 'Transição',
+  anim: 'Animação', morph: 'Morph', inter: 'Interatividade', slide: 'Slide', layout: 'Layout', theme: 'Tema', deck: 'Documento', trans: 'Transição', exp: 'Exportar',
   role: 'Função no layout', opacity: 'Opacidade', pageSize: 'Tamanho da página', link: 'Vincular a', empty: 'Nada a ajustar aqui para esta seleção.',
 }
 
@@ -82,7 +82,7 @@ try {
     const field = await p.locator('.ed-props input.ed-num').first().elementHandle()
 
     let v = await on(L.format)
-    ok(JSON.stringify(v) === JSON.stringify([L.text, L.fill, L.stroke, L.shadow, L.blur, L.layout]), `${tag} Format: the look, in order (${v.join(', ')})`)
+    ok(JSON.stringify(v) === JSON.stringify([L.text, L.fill, L.stroke, L.shadow, L.blur, L.layout, L.exp]), `${tag} Format: the look, in order, Export last (${v.join(', ')})`)
     ok((await rowsIn(L.layout)).includes(L.role), `${tag} Role sits in Layout, which says what it does`)
     const block = await p.evaluate(() => {
       const b = document.querySelector('.ed-props > .ed-layer-block')
@@ -110,7 +110,7 @@ try {
 
     await p.keyboard.press('Escape'); await p.waitForTimeout(250)
     v = await on(L.format)
-    ok(JSON.stringify(v) === JSON.stringify([L.slide, L.layout, L.theme, L.deck]), `${tag} the slide's Format: slide, then deck (${v.join(', ')})`)
+    ok(JSON.stringify(v) === JSON.stringify([L.slide, L.layout, L.theme, L.deck, L.exp]), `${tag} the slide's Format: slide, then deck, Export last (${v.join(', ')})`)
     const sizeHome = await p.evaluate(() => document.querySelector('.ed-props .ed-page-tiles')?.closest('.ed-section-body')?.previousElementSibling?.dataset.key)
     ok(sizeHome === L.deck, `${tag} page size is the deck's, not the slide's (${sizeHome})`)
     ok(!(await rowsIn(L.slide)).includes(L.trans), `${tag} Transition left the look side`)

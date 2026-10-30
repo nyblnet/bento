@@ -725,6 +725,12 @@ export class SlideCanvas {
     return { x, y, el: hit }
   }
 
+  /** The curve editor, for the topbar's path pills (node types, close path). */
+  get curves() { return this.bezierEditor }
+
+  /** The comment tool is armed (C). */
+  get isCommenting() { return !!this.commentCleanup }
+
   toggleCommentMode() {
     if (this.commentCleanup) {
       this.commentCleanup()
@@ -1457,8 +1463,11 @@ export class SlideCanvas {
         ev.target.style.left = `${p.left}px`
         ev.target.style.top = `${p.top}px`
       })
+      // the selection box's corner, as one element's X Y reads; the offset second
+      const left = Math.min(...e.events.map((ev) => parseFloat(ev.target.style.left) || 0))
+      const top = Math.min(...e.events.map((ev) => parseFloat(ev.target.style.top) || 0))
       const [dx, dy] = e.events[0]?.dist ?? [0, 0]
-      this.hud.show(`Δ ${hudNum(dx)}, ${hudNum(dy)}`, e.clientX, e.clientY)
+      this.hud.show(`X ${hudNum(left)}  Y ${hudNum(top)} · Δ ${hudNum(dx)}, ${hudNum(dy)}`, e.clientX, e.clientY)
       this.followFrames()
     })
     // Shift while resizing keeps the aspect ratio; Alt/Option scales from
