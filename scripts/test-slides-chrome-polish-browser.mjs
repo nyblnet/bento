@@ -166,6 +166,51 @@ await run(async () => {
   await ctx.close()
 })
 
+// the sliding pill sits exactly on the chosen tab, on both bars
+const pillOff = (p) => p.evaluate(() => [...document.querySelectorAll('.ed-sidebar .ed-icon-tabs, .ed-props .ed-icon-tabs')].map((bar) => {
+  const on = bar.querySelector(':scope > [aria-selected="true"]')
+  const ps = getComputedStyle(bar, '::before')
+  const m = /matrix\(([^)]+)\)/.exec(ps.transform)
+  const x = m ? parseFloat(m[1].split(',')[4]) : 0
+  const b = bar.getBoundingClientRect(), r = on.getBoundingClientRect()
+  return { side: bar.closest('.ed-sidebar') ? 'side' : 'inspector', dx: Math.abs(b.left + bar.clientLeft + x - r.left), dw: Math.abs(parseFloat(ps.width) - r.width) }
+}))
+for (const locale of ['en-US', 'pt-BR', 'de-DE']) {
+  for (const [w, panels] of [['narrow', { left: 110, right: 190 }], ['default', { left: 188, right: 264 }], ['wide', { left: 330, right: 440 }]]) {
+    await run(async () => {
+      const { p, ctx } = await open({ locale, width: 1440, storage: { 'bento-ed-panels': JSON.stringify(panels) } })
+      await p.evaluate(() => document.querySelector('.ed-stage-scale [data-el-id]')?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+      await p.waitForTimeout(500)
+      const where = `${locale} ${w}`
+      const fine = (rs) => rs.length === 2 && rs.every((r) => r.dx <= 0.5 && r.dw <= 0.5)
+      const say = (rs) => rs.map((r) => `${r.side} ±${r.dx.toFixed(1)}/${r.dw.toFixed(1)}`).join(', ')
+      let rs = await pillOff(p)
+      ok(fine(rs), `${where}: after load the pill sits on the chosen tab (${say(rs)})`)
+      // a web font arriving late reflows the tabs while the bar keeps its width
+      await p.addStyleTag({ content: '.ed-icon-tabs button { font-family: Georgia, serif; font-size: 13px; letter-spacing: .04em; }' })
+      await p.waitForTimeout(400)
+      rs = await pillOff(p)
+      ok(fine(rs), `${where}: after the tabs' font changes under it (${say(rs)})`)
+      // across the name-fit threshold: drag both panels to their narrowest
+      for (const [i, dx] of [[0, -600], [1, 600]]) {
+        const h = await p.locator('.ed-resizer').nth(i).boundingBox()
+        await p.mouse.move(h.x + h.width / 2, h.y + 200); await p.mouse.down()
+        await p.mouse.move(h.x + h.width / 2 + dx, h.y + 200, { steps: 6 }); await p.mouse.up()
+      }
+      await p.waitForTimeout(400)
+      rs = await pillOff(p)
+      ok(fine(rs), `${where}: after resizing past the names' threshold (${say(rs)})`)
+      // and after choosing another tab on each bar
+      await p.locator('.ed-sidebar .ed-icon-tabs > button').nth(1).click()
+      await p.locator('.ed-props .ed-icon-tabs > button').nth(1).click()
+      await p.waitForTimeout(400)
+      rs = await pillOff(p)
+      ok(fine(rs), `${where}: after switching tabs (${say(rs)})`)
+      await ctx.close()
+    })
+  }
+}
+
 // ---------------------------------------------------------------- 3
 console.log('\n3. the speaker view explains itself with the app hint\n')
 await run(async () => {
