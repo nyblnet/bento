@@ -1342,9 +1342,7 @@ export const strings: Catalog = {
   "Add a token:": "Token toevoegen:",
   "Number": "Getal",
   "Font size": "Lettergrootte",
-  "Add export setting": "Exportinstelling toevoegen",
   "Scale": "Schaal",
   "More export options": "Meer exportopties",
-  "Remove export setting": "Exportinstelling verwijderen",
   "Export {what}": "{what} exporteren",
 }

@@ -1334,9 +1334,7 @@ export const ja: Catalog = {
   "Add a token:": "トークンを追加:",
   "Number": "数値",
   "Font size": "フォントサイズ",
-  "Add export setting": "書き出し設定を追加",
   "Scale": "倍率",
   "More export options": "その他の書き出しオプション",
-  "Remove export setting": "書き出し設定を削除",
   "Export {what}": "{what} を書き出す",
 }

@@ -1332,9 +1332,7 @@ export const pt: Catalog = {
   "Add a token:": "Adicionar um token:",
   "Number": "Número",
   "Font size": "Tamanho da fonte",
-  "Add export setting": "Adicionar configuração de exportação",
   "Scale": "Escala",
   "More export options": "Mais opções de exportação",
-  "Remove export setting": "Remover configuração de exportação",
   "Export {what}": "Exportar {what}",
 }

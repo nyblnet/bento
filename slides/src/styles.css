@@ -3563,16 +3563,15 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-pathbar .ed-btn[aria-pressed="true"] { background: var(--tab-on); box-shadow: inset 0 0 0 1px var(--tab-on-line); color: var(--accent-ink); }
 
 /* Export, at the foot of the Format tab */
-/* Figma's Export: setting rows (scale · format · ⋯ · −) and one full-width
-   Export button below them */
+/* Figma's Export, fixed: one setting row (scale · format · ⋯) and one
+   full-width Export button below it */
 .ed-export-rows { display: flex; flex-direction: column; gap: 4px; margin-bottom: 4px; }
-.ed-export-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 26px 26px; gap: 4px; align-items: center; }
+.ed-export-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 26px; gap: 4px; align-items: center; }
 .ed-export-row > select { width: 100%; min-width: 0; }
 .ed-export-row > .ed-btn-icon { width: 26px; height: 26px; padding: 0; display: grid; place-items: center; color: var(--muted); }
 .ed-export-row > .ed-btn-icon:hover { color: var(--ink); }
 .ed-export-row > .ed-btn-icon svg { width: 16px; height: 16px; }
 .ed-export-rows > .ed-export-btn { width: 100%; height: 28px; margin-top: 2px; font-weight: 600; }
-.ed-export-rows > .ed-export-json { align-self: flex-start; }
 /* --- paint: gradient stops, kinds, the canvas gradient handle, corners, entrance pills --- */
 .ed-gradbar {
   position: relative; height: 16px; margin: 4px 7px 10px; border: 1px solid var(--line); border-radius: 4px; cursor: copy;

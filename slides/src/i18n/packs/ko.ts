@@ -1338,9 +1338,7 @@ export const strings: Catalog = {
   "Add a token:": "토큰 추가:",
   "Number": "숫자",
   "Font size": "글꼴 크기",
-  "Add export setting": "내보내기 설정 추가",
   "Scale": "배율",
   "More export options": "내보내기 옵션 더 보기",
-  "Remove export setting": "내보내기 설정 삭제",
   "Export {what}": "{what} 내보내기",
 }
