@@ -1337,4 +1337,8 @@ export const strings: Catalog = {
   "Code colors": "Warna kode",
   "Bind {n} uses to {name}": "Kaitkan {n} penggunaan ke {name}",
   "{n} uses now follow {name}": "{n} penggunaan kini mengikuti {name}",
+  "Yours": "Milik Anda",
+  "Add a token:": "Tambah token:",
+  "Number": "Angka",
+  "Font size": "Ukuran font",
 }

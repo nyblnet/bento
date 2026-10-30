@@ -113,7 +113,9 @@ try {
   console.log('\ntokens of every type\n')
   await p.locator('.ed-side-tabs [data-view="tokens"]').click(); await p.waitForTimeout(200)
   const groups = await p.$$eval('.ed-tokens-group', (gs) => gs.map((g) => g.dataset.type))
-  ok(['color', 'number', 'fontSize', 'opacity', 'fontFamily', 'shadow'].every((t) => groups.includes(t)), `the view groups by every type (${groups.join(', ')})`)
+  const offered = await p.$$eval('.ed-tokens-addrow .ed-tokens-addkind', (bs) => bs.length)
+  // a type with tokens has its group; the ones without share one "Add a token" row
+  ok(['color', 'opacity', 'fontFamily', 'shadow'].every((t) => groups.includes(t)) && groups.length + offered === 6, `the view groups every type it has, and offers the rest in one row (${groups.join(', ')} + ${offered})`)
   ok(await p.$eval('.ed-tokens-group[data-type="fontFamily"] .ed-token-preview', (e) => e.style.fontFamily.includes('Courier')), 'a font token previews in its face')
   ok(await p.$eval('.ed-tokens-group[data-type="shadow"] .ed-token-preview', (e) => e.style.boxShadow.includes('18px')), 'a shadow token previews its shadow')
   ok(await p.$eval('.ed-tokens-group[data-type="opacity"] .ed-token-value', (e) => e.textContent) === '50%', 'an opacity token shows as a percentage')

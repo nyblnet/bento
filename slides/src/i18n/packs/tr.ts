@@ -1338,4 +1338,8 @@ export const strings: Catalog = {
   "Code colors": "Kod renkleri",
   "Bind {n} uses to {name}": "{n} kullanımı {name} ile bağla",
   "{n} uses now follow {name}": "{n} kullanım artık {name} değerini izliyor",
+  "Yours": "Sizinkiler",
+  "Add a token:": "Token ekle:",
+  "Number": "Sayı",
+  "Font size": "Yazı tipi boyutu",
 }

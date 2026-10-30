@@ -170,7 +170,7 @@ try {
   ok(await p.locator('.ed-side-tokens .ed-token-row[data-token="radius.card"] .ed-token-uses').textContent() !== '0', 'the token counts what follows it')
 
   // a mode: added from the switch, then a value set in it, then switched back
-  await p.locator('.ed-side-tokens .ed-tokens-modes .ed-tokens-add').click(); await p.waitForTimeout(200)
+  await p.locator('.ed-side-tokens .ed-tokens-modes .ed-tokens-addmode').click(); await p.waitForTimeout(200)
   const modeName = p.locator('.ed-side-tokens .ed-tokens-modes .ed-token-new')
   ok(await modeName.evaluate((n) => n === document.activeElement), 'Add mode opens a name field in place, focused (no dialog)')
   await modeName.fill('default'); await modeName.press('Enter'); await p.waitForTimeout(150)
@@ -182,7 +182,7 @@ try {
   ok((await el('a')).radius === 18, 'switching the mode back rewrites it')
 
   // a new token: + opens a name row; Esc cancels, Enter creates
-  const addNum = p.locator('.ed-side-tokens .ed-tokens-group[data-type="number"] .ed-tokens-add')
+  const addNum = p.locator('.ed-side-tokens .ed-tokens-group[data-type="number"] .ed-sec-act')
   await addNum.click(); await p.waitForTimeout(150)
   await p.keyboard.press('Escape'); await p.waitForTimeout(150)
   ok(await p.locator('.ed-side-tokens .ed-token-new').count() === 0, 'Esc closes the new-token row without a token')

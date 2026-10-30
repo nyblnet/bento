@@ -1327,4 +1327,8 @@ export const ja: Catalog = {
   "Code colors": "コードの色",
   "Bind {n} uses to {name}": "{n} 件の使用箇所を {name} に紐付け",
   "{n} uses now follow {name}": "{n} 件の使用箇所が {name} に従うようになりました",
+  "Yours": "自分の",
+  "Add a token:": "トークンを追加:",
+  "Number": "数値",
+  "Font size": "フォントサイズ",
 }

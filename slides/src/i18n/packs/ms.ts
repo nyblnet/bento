@@ -1340,4 +1340,8 @@ export const strings: Catalog = {
   "Code colors": "Warna kod",
   "Bind {n} uses to {name}": "Ikat {n} penggunaan pada {name}",
   "{n} uses now follow {name}": "{n} penggunaan kini mengikut {name}",
+  "Yours": "Milik anda",
+  "Add a token:": "Tambah token:",
+  "Number": "Nombor",
+  "Font size": "Saiz fon",
 }

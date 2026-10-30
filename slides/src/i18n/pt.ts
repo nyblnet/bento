@@ -1325,4 +1325,8 @@ export const pt: Catalog = {
   "Code colors": "Cores do código",
   "Bind {n} uses to {name}": "Vincular {n} usos a {name}",
   "{n} uses now follow {name}": "{n} usos agora seguem {name}",
+  "Yours": "Seus",
+  "Add a token:": "Adicionar um token:",
+  "Number": "Número",
+  "Font size": "Tamanho da fonte",
 }

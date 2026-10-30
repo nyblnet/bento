@@ -1364,4 +1364,8 @@ export const strings: Catalog = {
   "Code colors": "Kod reňkleri",
   "Bind {n} uses to {name}": "{n} ulanylyşy {name} bilen bagla",
   "{n} uses now follow {name}": "{n} ulanylyş indi {name} bilen gidýär",
+  "Yours": "Siziňki",
+  "Add a token:": "Token goş:",
+  "Number": "San",
+  "Font size": "Şrift ölçegi",
 }

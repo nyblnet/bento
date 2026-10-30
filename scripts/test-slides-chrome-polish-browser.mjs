@@ -211,6 +211,31 @@ for (const locale of ['en-US', 'pt-BR', 'de-DE']) {
   }
 }
 
+// the inspector rebuilds its tab bar on every selection change: the pill must
+// land on the new bar's chosen tab without anyone touching a resizer
+for (const locale of ['en-US', 'pt-BR']) {
+  await run(async () => {
+    const { p, ctx } = await open({ locale, slides: [slide('s1', [rect('r', 100), { id: 't', type: 'text', x: 500, y: 100, w: 300, h: 80, rotation: 0, opacity: 1, html: 'Hello', fontSize: 32, fontFamily: 'system-ui', fontWeight: 400, color: '#111111', align: 'left', valign: 'top', lineHeight: 1.2 }])] })
+    const fine = (rs) => rs.length === 2 && rs.every((r) => r.dx <= 0.5 && r.dw <= 0.5)
+    const say = (rs) => rs.map((r) => `${r.side} ±${r.dx.toFixed(1)}/${r.dw.toFixed(1)}`).join(', ')
+    const pick = async (id) => { await p.evaluate((id) => document.querySelector(`.ed-layer[data-id="${id}"]`)?.dispatchEvent(new MouseEvent('click', { bubbles: true })), id); await p.waitForTimeout(350) }
+    const steps = [
+      ['selecting a shape', () => pick('r')],
+      ['deselecting', async () => { await p.mouse.click(5, 450); await p.waitForTimeout(350) }],
+      ['selecting a text box', () => pick('t')],
+      ['switching the inspector tab', async () => { await p.locator('.ed-props .ed-icon-tabs > button').nth(1).click(); await p.waitForTimeout(350) }],
+      ['selecting the shape again', () => pick('r')],
+    ]
+    await p.click('.ed-side-tabs [data-view="layers"]'); await p.waitForTimeout(250)
+    for (const [what, act] of steps) {
+      await act()
+      const rs = await pillOff(p)
+      ok(fine(rs), `${locale}: after ${what}, with no resizing, the pill sits on the chosen tab (${say(rs)})`)
+    }
+    await ctx.close()
+  })
+}
+
 // ---------------------------------------------------------------- 3
 console.log('\n3. the speaker view explains itself with the app hint\n')
 await run(async () => {
@@ -267,7 +292,7 @@ await run(async () => {
   const builtins = await p.evaluate(() => [...document.querySelectorAll('.ed-tokens-group[data-type="color"] .ed-token-builtin')].map((r) => r.dataset.slot))
   ok(JSON.stringify(builtins) === JSON.stringify(['bg1', 'tx1', 'accent1']), `Theme lists Background, Text, Accent 1 (${builtins.join(',')})`)
   ok(!(await p.locator('.ed-token-badge').count()), 'no per-row Theme badge — the group says it')
-  await p.locator('.ed-tokens-sub .ed-tokens-add').click()
+  await p.locator('.ed-tokens-sub .ed-tokens-subadd').click()
   await p.waitForTimeout(150)
   await p.locator('.ed-ctxmenu button, .ed-ctxmenu [role=menuitem]').filter({ hasText: /Accent 3/ }).first().click()
   await p.waitForTimeout(300)
@@ -340,6 +365,45 @@ await run(async () => {
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
   await ctx.close()
 })
+
+// the Tokens view in the inspector's grammar: one column grid, real section headers
+for (const [w, left] of [['default', 188], ['wide', 330]]) {
+  await run(async () => {
+    const { p, ctx, errors } = await open({ storage: { 'bento-ed-panels': JSON.stringify({ left, right: 264 }) } })
+    await p.evaluate(() => { const d = JSON.parse(JSON.stringify(window.bento.doc)); d.theme.tokens = { set: { 'space.md': { type: 'number', values: { default: 16 } }, 'color.brand.primary': { type: 'color', values: { default: '#e0457b' } }, 'font.body': { type: 'fontFamily', values: { default: 'Georgia, serif' } } } }; window.bento.loadDoc(JSON.stringify(d)) })
+    await p.waitForTimeout(400)
+    await p.click('.ed-side-tabs [data-view="tokens"]'); await p.waitForTimeout(300)
+    const g = await p.evaluate(() => {
+      const rows = [...document.querySelectorAll('.ed-side-tokens .ed-tokens-group .ed-token-row:not(.ed-token-adding)')]
+      const edge = (r, sel, side) => { const e = r.querySelector(sel); if (!e) return null; const b = e.getBoundingClientRect(); return Math.round((side === 'r' ? b.right : b.left) * 2) / 2 }
+      const col = (sel, side) => [...new Set(rows.map((r) => edge(r, sel, side)).filter((x) => x !== null))]
+      const insp = document.querySelector('.ed-props .ed-section'), tok = document.querySelector('.ed-side-tokens .ed-tokens-group > .ed-section')
+      const st = (e) => { if (!e) return 'none'; const c = getComputedStyle(e); return [c.fontSize, c.fontWeight, c.letterSpacing, c.textTransform].join(' ') }
+      const sub = document.querySelector('.ed-side-tokens .ed-tokens-sub')
+      const side = document.querySelector('.ed-sidebar').getBoundingClientRect()
+      return {
+        rows: rows.length,
+        valueRight: col('.ed-token-value', 'r'), lead: col(':scope > :first-child', 'l'), name: col('.ed-token-name', 'l'), uses: col('.ed-token-uses', 'l'), more: col('.ed-token-more, .ed-token-more-none', 'l'),
+        header: [st(tok), st(insp)], sub: sub && tok ? [parseFloat(getComputedStyle(sub).fontSize), parseFloat(getComputedStyle(tok).fontSize), getComputedStyle(sub).color, getComputedStyle(tok).color] : [0, 0, '', ''],
+        emptyHeads: [...document.querySelectorAll('.ed-side-tokens .ed-tokens-group')].filter((gr) => !gr.querySelector('.ed-token-row') && gr.dataset.type !== 'color').length,
+        addRow: !!document.querySelector('.ed-side-tokens .ed-tokens-addrow'),
+        fill: rows.every((r) => { const b = r.getBoundingClientRect(); return b.width >= side.width - 24 - 16 }),
+        modesInTitle: !!document.querySelector('.ed-side-tokens .ed-tokens-head .ed-tokens-modes'),
+      }
+    })
+    const where = `Tokens view, ${w}`
+    ok(g.rows >= 5, `${where}: rows to measure (${g.rows})`)
+    ok(g.valueRight.length === 1, `${where}: every value ends on the same right edge (${g.valueRight.join(', ')})`)
+    ok(g.lead.length === 1 && g.name.length === 1 && g.uses.length === 1 && g.more.length === 1, `${where}: preview, name, uses and ⋯ start at the same x on every row (${[g.lead, g.name, g.uses, g.more].map((c) => c.join('/')).join(' · ')})`)
+    ok(g.header[0] === g.header[1], `${where}: a type group's header is the inspector's section header (${g.header[0]} vs ${g.header[1]})`)
+    ok(g.sub[0] < g.sub[1] && g.sub[2] !== g.sub[3], `${where}: the Theme subheading is smaller and quieter (${g.sub[0]}px vs ${g.sub[1]}px)`)
+    ok(g.emptyHeads === 0 && g.addRow, `${where}: no empty type heading — the kinds without tokens share one add row`)
+    ok(g.fill, `${where}: rows use the column's full width`)
+    ok(g.modesInTitle, `${where}: the modes sit on the title line`)
+    ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
+    await ctx.close()
+  })
+}
 
 await run(async () => {
   // (b) a literal that already IS a theme colour binds to it, not to a twin token;

@@ -24,6 +24,8 @@ import { preview, shownValue } from './inspector/tokenpicker'
 import { openCtxMenu } from './ctxmenu'
 import { cssColor } from '../render'
 import { t } from '../i18n'
+import { ICONS } from '../icons'
+import { lsJson, lsSet } from '../../../kernel/src/storage.ts'
 
 const div = (cls: string) => Object.assign(document.createElement('div'), { className: cls })
 const button = (cls: string, text: string, title = text) => {
@@ -173,7 +175,9 @@ export class TokensPane {
 
   /** Open the "new token" row of a type (⌘K's New color token / New number token). */
   newToken(type: TokenType) {
-    this.host?.querySelector<HTMLButtonElement>(`.ed-tokens-group[data-type="${type}"] .ed-tokens-add`)?.click()
+    const plus = this.host?.querySelector<HTMLButtonElement>(`.ed-tokens-group[data-type="${type}"] .ed-sec-act`)
+    if (plus) plus.click()
+    else { this.adding = type; this.refresh() }
   }
 
   /** Switch the active mode (⌘K's Switch mode → X): one undo step, and a toast saying what it changed. */
@@ -234,53 +238,119 @@ export class TokensPane {
     const doc = this.store.doc
     const tk = doc.theme.tokens
     const sec = div('ed-tokens')
+    // the panel's title once, the modes beside it
     const head = div('ed-tokens-head')
     const h = document.createElement('h3')
     h.textContent = t('Tokens')
-    head.appendChild(h)
-    sec.append(head, this.modeChips())
+    head.append(h, this.modeChips())
+    sec.appendChild(head)
 
     const uses = tokenUses(doc)
+    const empty: TokenType[] = []
     for (const type of TOKEN_TYPES) {
       const names = Object.keys(tk?.set ?? {}).filter((n) => tk!.set[n].type === type).sort()
+      // colours always (the theme's are there); another type once it has a
+      // token or one is being named — the rest share one quiet "add" row
+      if (type !== 'color' && !names.length && this.adding !== type) { empty.push(type); continue }
       const group = div('ed-tokens-group')
       group.dataset.type = type
-      const cap = div('ed-tokens-cap')
-      cap.textContent = t(TYPE_LABEL[type][0])
-      const add = button('ed-btn ed-tool ed-tokens-add', '+', t(TYPE_LABEL[type][1]))
-      add.addEventListener('click', () => {
-        // a new row under the caption takes the name; Enter creates the token
-        if (group.querySelector('.ed-token-new')) return (group.querySelector('.ed-token-new') as HTMLInputElement).focus()
-        const row = div('ed-token-row ed-token-adding')
-        const field = inlineName(TYPE_LABEL[type][2], t('Token name (e.g. color.brand or space.md)'), (name) => {
-          const why = tokenNameError(this.store.doc, name)
-          if (why) return why
-          this.edit((x) => {
-            const v = type === 'color' ? doc.theme.accent : type === 'fontFamily' ? doc.theme.fontFamily
-              : type === 'shadow' ? { x: 0, y: 4, blur: 12, color: 'rgba(0, 0, 0, 0.25)' } : DEFAULT_NUM[type]
-            x.set[name] = { type, values: Object.fromEntries(modesOf(x).map((m) => [m, v])) }
-          })
-          this.focusRow(name)
-          return null
-        }, () => { row.remove(); this.refresh() })
-        row.appendChild(field)
-        ;(type === 'color' ? group.querySelector('.ed-tokens-sub-own') ?? cap : cap).after(row)
-        field.focus()
-      })
-      cap.appendChild(add)
-      group.appendChild(cap)
+      const count = type === 'color' ? names.length + PALETTE_SLOTS.filter((s) => slotIsSet(doc, s)).length : names.length
+      const body = div('ed-tokens-body')
+      const head = this.groupHead(t(TYPE_LABEL[type][0]), count, t(TYPE_LABEL[type][1]), () => this.startNew(type, body, type === 'color' ? body.querySelector('.ed-tokens-sub-own') : null), body)
+      group.append(head, body)
       // colours: the deck's theme colours first — the built-in tokens every
       // deck has — then the deck's own; one home for every colour
       if (type === 'color') {
-        group.append(this.themeCap(), ...this.themeRows())
-        const own = div('ed-tokens-sub ed-tokens-sub-own')
-        own.textContent = t('Your tokens')
-        group.appendChild(own)
+        body.append(this.themeCap(), ...this.themeRows())
+        if (names.length) {
+          const own = div('ed-tokens-sub ed-tokens-sub-own')
+          own.textContent = t('Yours')
+          body.appendChild(own)
+        }
       }
-      for (const name of names) group.appendChild(this.tokenRow(name, uses.get(name) ?? 0))
+      for (const name of names) body.appendChild(this.tokenRow(name, uses.get(name) ?? 0))
       sec.appendChild(group)
+      if (this.adding === type) queueMicrotask(() => this.startNew(type, body, null))
+    }
+    if (empty.length) {
+      // five empty headings said nothing; one row offers every kind left
+      const row = div('ed-tokens-addrow')
+      const cap = document.createElement('span')
+      cap.textContent = t('Add a token:')
+      row.appendChild(cap)
+      empty.forEach((type, i) => {
+        const b = button('ed-tokens-addkind', t(TYPE_KIND[type]), t(TYPE_LABEL[type][1]))
+        b.addEventListener('click', () => { this.adding = type; this.refresh() })
+        row.append(...(i ? [document.createTextNode(' · ')] : []), b)
+      })
+      sec.appendChild(row)
     }
     return sec
+  }
+
+  /** The type that was just asked for from the "Add a token" row: its group
+   *  shows, already naming the new token. */
+  private adding: TokenType | null = null
+
+  /** A group's header, the inspector's section header: chevron fold, title,
+   *  a count, and + on the right. Folded state is remembered per title. */
+  private groupHead(title: string, count: number, addLabel: string, add: () => void, body: HTMLElement): HTMLElement {
+    const h = document.createElement('h3')
+    h.className = 'ed-section ed-sec-toggle'
+    h.dataset.key = title
+    h.tabIndex = 0
+    h.setAttribute('role', 'button')
+    const label = document.createElement('span')
+    label.textContent = title
+    const n = document.createElement('span')
+    n.className = 'ed-sec-count'
+    n.textContent = String(count)
+    const plus = document.createElement('button')
+    plus.type = 'button'
+    plus.className = 'ed-sec-act'
+    plus.innerHTML = ICONS.plus
+    plus.title = addLabel
+    plus.setAttribute('aria-label', addLabel)
+    plus.addEventListener('click', (e) => { e.stopPropagation(); setOpen(true); add() })
+    h.append(label, n, plus)
+    const open = lsJson<Record<string, boolean>>('bento-tokens-open', {})[title] ?? true
+    const setOpen = (o: boolean) => {
+      h.classList.toggle('closed', !o)
+      h.setAttribute('aria-expanded', String(o))
+      body.hidden = !o
+      const st = lsJson<Record<string, boolean>>('bento-tokens-open', {})
+      st[title] = o
+      lsSet('bento-tokens-open', JSON.stringify(st))
+    }
+    h.classList.toggle('closed', !open)
+    h.setAttribute('aria-expanded', String(open))
+    body.hidden = !open
+    h.addEventListener('click', () => setOpen(h.classList.contains('closed')))
+    h.addEventListener('keydown', (e) => { if (e.target === h && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); h.click() } })
+    return h
+  }
+
+  /** A new token of `type`: a row that takes its name; Enter creates it. */
+  private startNew(type: TokenType, body: HTMLElement, after: Element | null) {
+    this.adding = null
+    if (body.querySelector('.ed-token-new')) return (body.querySelector('.ed-token-new') as HTMLInputElement).focus()
+    const doc = this.store.doc
+    const row = div('ed-token-row ed-token-adding')
+    const field = inlineName(TYPE_LABEL[type][2], t('Token name (e.g. color.brand or space.md)'), (name) => {
+      const why = tokenNameError(this.store.doc, name)
+      if (why) return why
+      this.edit((x) => {
+        const v = type === 'color' ? doc.theme.accent : type === 'fontFamily' ? doc.theme.fontFamily
+          : type === 'shadow' ? { x: 0, y: 4, blur: 12, color: 'rgba(0, 0, 0, 0.25)' } : DEFAULT_NUM[type]
+        x.set[name] = { type, values: Object.fromEntries(modesOf(x).map((m) => [m, v])) }
+      })
+      this.focusRow(name)
+      return null
+    }, () => { row.remove(); this.refresh() })
+    row.appendChild(field)
+    if (after) after.after(row)
+    else body.prepend(row)
+    field.focus()
   }
 
   /** The modes as chips: a click shows that mode, a double-click (or F2 /
@@ -311,7 +381,7 @@ export class TokensPane {
       chip.addEventListener('keydown', (e) => { if (e.key === 'F2' || (e.key === 'Enter' && m === on)) { e.preventDefault(); rename(m, chip) } })
       bar.appendChild(chip)
     }
-    const add = button('ed-btn ed-tool ed-tokens-add', '+', t('＋ Add mode…').replace(/^＋\s*/, ''))
+    const add = button('ed-tokens-subadd ed-tokens-addmode', '+', t('＋ Add mode…').replace(/^＋\s*/, ''))
     add.addEventListener('click', () => {
       const field = inlineName(t('Mode name, e.g. Dark'), t('Name of the new mode (e.g. Dark)'), (name) => {
         if (name === '+' || protoName(name)) return t('Pick another name')
@@ -335,11 +405,13 @@ export class TokensPane {
   /** "Theme", with a + that adds one of the palette slots the deck lacks. */
   private themeCap(): HTMLElement {
     const sub = div('ed-tokens-sub')
-    sub.textContent = t('Theme')
+    const cap = document.createElement('span')
+    cap.textContent = t('Theme')
+    sub.appendChild(cap)
     sub.title = t('The deck’s theme colors: every deck has them; anything that follows one changes when you edit it here')
     const missing = PALETTE_SLOTS.filter((s) => !slotIsSet(this.store.doc, s))
     if (missing.length) {
-      const add = button('ed-btn ed-tool ed-tokens-add', '+', t('Add a theme color'))
+      const add = button('ed-tokens-subadd', '+', t('Add a theme color'))
       add.addEventListener('click', () => {
         const r = add.getBoundingClientRect()
         const palette = paletteOf(this.store.doc)
@@ -489,14 +561,20 @@ export class TokensPane {
 
   private componentsSection(): HTMLElement {
     const sec = div('ed-tokens ed-components')
-    const head = div('ed-tokens-head')
-    const h = document.createElement('h3')
-    h.textContent = t('Components')
-    head.appendChild(h)
-    sec.appendChild(head)
     const list = components(this.store.doc)
+    const h = document.createElement('h3')
+    h.className = 'ed-section'
+    h.dataset.key = 'Components'
+    const label = document.createElement('span')
+    label.textContent = t('Components')
+    const n = document.createElement('span')
+    n.className = 'ed-sec-count'
+    n.textContent = String(list.length)
+    h.append(label, n)
+    sec.appendChild(h)
     if (!list.length) {
-      const empty = div('ed-tokens-empty')
+      const empty = document.createElement('p')
+      empty.className = 'ed-hint'
       empty.textContent = t('Select elements and choose Create component (⌘⌥K) to reuse them.')
       sec.appendChild(empty)
     }
@@ -558,6 +636,9 @@ const bounds = (els: Box[]): Box => {
   return { x, y, w: Math.max(...els.map((e) => e.x + e.w)) - x, h: Math.max(...els.map((e) => e.y + e.h)) - y }
 }
 const hits = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+
+/** Per type: the word in the "Add a token" row. */
+const TYPE_KIND: Record<TokenType, string> = { color: 'Color', number: 'Number', fontSize: 'Font size', opacity: 'Opacity', fontFamily: 'Font', shadow: 'Shadow' }
 
 /** Per type: caption, the + button's label, a placeholder name. */
 const TYPE_LABEL: Record<TokenType, [string, string, string]> = {

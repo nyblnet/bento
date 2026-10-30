@@ -1331,4 +1331,8 @@ export const strings: Catalog = {
   "Code colors": "코드 색",
   "Bind {n} uses to {name}": "사용 {n}곳을 {name}에 연결",
   "{n} uses now follow {name}": "이제 사용 {n}곳이 {name}을(를) 따릅니다",
+  "Yours": "내 것",
+  "Add a token:": "토큰 추가:",
+  "Number": "숫자",
+  "Font size": "글꼴 크기",
 }

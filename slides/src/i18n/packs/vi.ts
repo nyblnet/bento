@@ -1337,4 +1337,8 @@ export const strings: Catalog = {
   "Code colors": "Màu mã",
   "Bind {n} uses to {name}": "Liên kết {n} chỗ dùng với {name}",
   "{n} uses now follow {name}": "{n} chỗ dùng giờ theo {name}",
+  "Yours": "Của bạn",
+  "Add a token:": "Thêm token:",
+  "Number": "Số",
+  "Font size": "Cỡ chữ",
 }

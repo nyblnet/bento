@@ -1341,4 +1341,8 @@ export const strings: Catalog = {
   "Code colors": "สีของโค้ด",
   "Bind {n} uses to {name}": "ผูกการใช้งาน {n} แห่งกับ {name}",
   "{n} uses now follow {name}": "การใช้งาน {n} แห่งตาม {name} แล้ว",
+  "Yours": "ของคุณ",
+  "Add a token:": "เพิ่มโทเค็น:",
+  "Number": "ตัวเลข",
+  "Font size": "ขนาดฟอนต์",
 }

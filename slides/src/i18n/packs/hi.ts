@@ -1347,4 +1347,8 @@ export const strings: Catalog = {
   "Code colors": "कोड के रंग",
   "Bind {n} uses to {name}": "{n} उपयोगों को {name} से जोड़ें",
   "{n} uses now follow {name}": "{n} उपयोग अब {name} का अनुसरण करते हैं",
+  "Yours": "आपके",
+  "Add a token:": "टोकन जोड़ें:",
+  "Number": "संख्या",
+  "Font size": "फ़ॉन्ट आकार",
 }

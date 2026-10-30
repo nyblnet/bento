@@ -1356,4 +1356,8 @@ export const strings: Catalog = {
   "Code colors": "Mga kulay ng code",
   "Bind {n} uses to {name}": "Ikabit ang {n} gamit sa {name}",
   "{n} uses now follow {name}": "Sumusunod na ngayon sa {name} ang {n} gamit",
+  "Yours": "Sa iyo",
+  "Add a token:": "Magdagdag ng token:",
+  "Number": "Numero",
+  "Font size": "Laki ng font",
 }

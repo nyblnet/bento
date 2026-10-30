@@ -1357,4 +1357,8 @@ export const strings: Catalog = {
   "Code colors": "کوڈ کے رنگ",
   "Bind {n} uses to {name}": "{n} استعمالات کو {name} سے جوڑیں",
   "{n} uses now follow {name}": "{n} استعمالات اب {name} کی پیروی کرتے ہیں",
+  "Yours": "آپ کے",
+  "Add a token:": "ٹوکن شامل کریں:",
+  "Number": "عدد",
+  "Font size": "فونٹ کا سائز",
 }

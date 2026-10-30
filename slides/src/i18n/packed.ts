@@ -1333,4 +1333,8 @@ export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
   "Code colors": ["コードの色","代码颜色","程式碼顏色","Colores de código","Couleurs du code","Codefarben","Colori del codice","Cores do código"],
   "Bind {n} uses to {name}": ["{n} 件の使用箇所を {name} に紐付け","将 {n} 处使用绑定到 {name}","將 {n} 處使用繫結到 {name}","Vincular {n} usos a {name}","Lier {n} utilisations à {name}","{n} Verwendungen an {name} binden","Collega {n} usi a {name}","Vincular {n} usos a {name}"],
   "{n} uses now follow {name}": ["{n} 件の使用箇所が {name} に従うようになりました","{n} 处使用现在跟随 {name}","{n} 處使用現在跟隨 {name}","{n} usos siguen ahora a {name}","{n} utilisations suivent désormais {name}","{n} Verwendungen folgen jetzt {name}","{n} usi ora seguono {name}","{n} usos agora seguem {name}"],
+  "Yours": ["自分の","你的","你的","Tuyos","Les vôtres","Eigene","I tuoi","Seus"],
+  "Add a token:": ["トークンを追加:","添加令牌：","加入權杖：","Añadir un token:","Ajouter un jeton :","Token hinzufügen:","Aggiungi un token:","Adicionar um token:"],
+  "Number": ["数値","数字","數字","Número","Nombre","Zahl","Numero","Número"],
+  "Font size": ["フォントサイズ","字号","字級","Tamaño de fuente","Taille de police","Schriftgröße","Dimensione font","Tamanho da fonte"],
 }

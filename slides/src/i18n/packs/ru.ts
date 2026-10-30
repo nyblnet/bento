@@ -1339,4 +1339,8 @@ export const strings: Catalog = {
   "Code colors": "Цвета кода",
   "Bind {n} uses to {name}": "Связать использования ({n}) с {name}",
   "{n} uses now follow {name}": "Использования ({n}) теперь следуют за {name}",
+  "Yours": "Ваши",
+  "Add a token:": "Добавить токен:",
+  "Number": "Число",
+  "Font size": "Размер шрифта",
 }

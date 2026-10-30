@@ -1336,4 +1336,8 @@ export const strings: Catalog = {
   "Code colors": "Kodfärger",
   "Bind {n} uses to {name}": "Koppla {n} användningar till {name}",
   "{n} uses now follow {name}": "{n} användningar följer nu {name}",
+  "Yours": "Dina",
+  "Add a token:": "Lägg till en token:",
+  "Number": "Tal",
+  "Font size": "Teckenstorlek",
 }

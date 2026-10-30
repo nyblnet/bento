@@ -1327,4 +1327,8 @@ export const de: Catalog = {
   "Code colors": "Codefarben",
   "Bind {n} uses to {name}": "{n} Verwendungen an {name} binden",
   "{n} uses now follow {name}": "{n} Verwendungen folgen jetzt {name}",
+  "Yours": "Eigene",
+  "Add a token:": "Token hinzufügen:",
+  "Number": "Zahl",
+  "Font size": "Schriftgröße",
 }

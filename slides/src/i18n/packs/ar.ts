@@ -1347,4 +1347,8 @@ export const strings: Catalog = {
   "Code colors": "ألوان الشيفرة",
   "Bind {n} uses to {name}": "ربط {n} من الاستخدامات بـ {name}",
   "{n} uses now follow {name}": "{n} من الاستخدامات تتبع الآن {name}",
+  "Yours": "الخاصة بك",
+  "Add a token:": "إضافة رمز:",
+  "Number": "رقم",
+  "Font size": "حجم الخط",
 }

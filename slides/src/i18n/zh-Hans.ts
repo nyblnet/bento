@@ -1327,4 +1327,8 @@ export const zhHans: Catalog = {
   "Code colors": "代码颜色",
   "Bind {n} uses to {name}": "将 {n} 处使用绑定到 {name}",
   "{n} uses now follow {name}": "{n} 处使用现在跟随 {name}",
+  "Yours": "你的",
+  "Add a token:": "添加令牌：",
+  "Number": "数字",
+  "Font size": "字号",
 }
