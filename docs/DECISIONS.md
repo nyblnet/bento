@@ -12089,3 +12089,14 @@ existing element, and an older shell sees an ordinary deck.
   and drops them when the frame lies outside the component. A batch of copies
   (paste, ⌘D, Duplicate, Alt-drag) keeps its frames among its copies through
   `freshGroups`; a child copied without its frame stays a sibling in it.
+
+## 2026-10-30 — slides: one truth for "will this morph"
+
+The Morph section, the layer badge and the canvas ghost all read
+`morphPartners`: a partner on the slide the show arrives from, under a Morph
+transition. A pair that would only exist under Morph is stated, with Use
+Morph. A morph name is renamed together with its partners on the neighbouring
+slides, because renaming one side alone silently ended the pair. The pairing
+picker names elements by their Layers names and never shows ids. The Preview
+plays the whole slide, including what leaves. Play transition waits a fixed
+700ms before stepping, because the show has no ready signal — a known ceiling.
