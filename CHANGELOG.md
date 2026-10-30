@@ -54,6 +54,19 @@ pre-1.0.
   columns can be bound to number tokens.
 - **Export from the inspector**: PNG at 1× or 2×, SVG, or Copy as JSON, for
   the selection or the slide.
+- **Layers of paint.** A shape can carry several fills and several strokes,
+  each with its own visibility, order and colour; older versions draw the top
+  one.
+- **More kinds of token**: font family, font size, opacity and shadow, each
+  with its own preview in the Tokens view and a token dot where it applies.
+- **OKLCH** in the colour picker, beside HEX, RGB and HSL.
+- **A padlock between W and H** keeps any element's proportions.
+- **Accessibility at a glance**: the Export section grades the element's
+  contrast (AA / AAA) and takes alt text for pictures and shapes.
+- **Morph from the slide before** — one switch pairs an element with its
+  look-alike on the previous slide.
+- Popovers and menus open with a short scale-in, and sections fold smoothly;
+  both stop under reduced motion.
 - **Lock and hide from Layers.** A locked element can't be clicked or dragged
   on the canvas; a hidden one isn't drawn. Files opened in an older version
   still show hidden elements.

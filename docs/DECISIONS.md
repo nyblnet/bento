@@ -12021,3 +12021,28 @@ existing element, and an older shell sees an ordinary deck.
 - **Names are typed where they appear**, never in `prompt()`.
 - **Canvas affordances never write the model**: gradient knobs commit one
   checkpoint per drag; hover previews restyle the live node and restore it.
+
+## 2026-10-29 — slides: the revamp's last pass — stacks and the last mile
+
+- **Fill and stroke stacks; the top layer is what an older shell draws.**
+  `fills`/`strokes` (bottom first) are drawn when set; the single-paint keys
+  mirror the top visible layer, derived on boot and every doc change like
+  connector routing. A stack exists only with two or more layers, so
+  single-paint decks are byte-identical. The kernel draws each layer as the
+  one-paint shape it would be alone and merges the nodes rather than growing
+  a second renderer. Refs live per layer (`fills.N.color`) and follow
+  reorders. A stack morphs layer by layer only when both sides have the same
+  layers.
+- **Token types widen** to fontSize, opacity, fontFamily and shadow on the same
+  contract (literal stays; only colours keep the property's own alpha; a
+  shadow compares ignoring key order).
+- **`keepAspectRatio` is an every-element padlock** read through
+  `ratioLocked()`: images keep absent = locked, everything else needs `true`.
+- **OKLCH** flags out-of-gamut only past what 8-bit rounding hides; clipping is
+  per channel.
+- **One entrance for floating surfaces** (`--ed-pop-in`, 120ms) and one fold
+  (`--ed-fold-ms`); reduced motion turns both off.
+- **`alt`** is additive, rendered as `role="img"` + `aria-label`; absent means
+  decorative. Contrast is graded against what lies behind the element's centre.
+- **Unpairing a morph never mutates `id`**: a self-paired element gets a unique
+  `-solo` morph key.
