@@ -7,13 +7,17 @@
 // slide px; only the bands take the pointer.
 
 import type { Store } from '../store'
+import type { Slide } from '../model'
 import { frameChildren, isFrame } from '../layout'
 import { t } from '../i18n'
 
-export function drawFrameOverlay(host: HTMLElement, store: Store, scale: () => number, busy: boolean) {
+/** `view` draws from a laid-out copy of the slide instead of the model: the
+ *  canvas passes its live copy while a frame is dragged, so the bands follow. */
+export function drawFrameOverlay(host: HTMLElement, store: Store, scale: () => number, busy: boolean, view?: Slide) {
   host.querySelector(':scope > .ed-frame-layer')?.remove()
-  const sel = store.selectedElements
-  const f = sel.length === 1 ? sel[0] : undefined
+  const slide = view ?? store.slide
+  const sel = store.selection.length === 1 ? slide.elements.filter((e) => e.id === store.selection[0]) : []
+  const f = sel[0]
   if (busy || !isFrame(f)) return
   const layer = document.createElement('div')
   layer.className = 'ed-frame-layer'
@@ -54,7 +58,7 @@ export function drawFrameOverlay(host: HTMLElement, store: Store, scale: () => n
   band(f.x, f.y + f.h - pb, f.w, pb, 'y', 'Bottom padding', ...pad(2), -1)
   band(f.x, f.y, pl, f.h, 'x', 'Left padding', ...pad(3))
   if (L.dir !== 'grid' && L.gap > 0) {
-    const kids = frameChildren(store.slide, f)
+    const kids = frameChildren(slide, f)
     const gap = [() => live()?.layout.gap ?? 0, (v: number) => { const e = live(); if (e) e.layout.gap = v }] as const
     for (let i = 0; i + 1 < kids.length; i++) {
       const a = kids[i], b = kids[i + 1]

@@ -199,6 +199,11 @@ export interface ElementBase {
 export interface ElementSizing {
   w?: 'fixed' | 'fill'
   h?: 'fixed' | 'fill'
+  /** In a wrapping frame, the least a 'fill' child takes on that axis — what
+   *  the line breaking counts it as before the line's free space is shared.
+   *  Absent = 0: fills never push a line over, they share what is left. */
+  minW?: number
+  minH?: number
 }
 
 /**

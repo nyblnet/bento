@@ -1245,6 +1245,8 @@ export class SlideCanvas {
       node.style.width = `${e.w}px`; node.style.height = `${e.h}px`
       this.followed.add(e.id)
     }
+    // the padding and gap bands follow too
+    drawFrameOverlay(this.scaleHost, this.store, () => this.scale, false, clone)
   }
 
   private unfollow() {

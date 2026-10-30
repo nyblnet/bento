@@ -516,7 +516,7 @@ export const ELEMENT_CHECKS: Record<string, Check> = {
     cols: num(1, 64), clip: bool, hug: bool, wrap: bool,
   }, ['dir', 'gap', 'pad']),
   parentId: cssValue(),
-  sizing: shape(MODEL_KEYS.sizing, { w: oneOf('fixed', 'fill'), h: oneOf('fixed', 'fill') }),
+  sizing: shape(MODEL_KEYS.sizing, { w: oneOf('fixed', 'fill'), h: oneOf('fixed', 'fill'), minW: num(0, 1e5), minH: num(0, 1e5) }),
   // a boolean's operands are whole shapes, sanitized as any pasted element is;
   // one bad operand drops the operand list (and with it only re-editing — the
   // computed d above still draws)

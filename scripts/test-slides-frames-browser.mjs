@@ -98,7 +98,7 @@ try {
       const d = JSON.parse(JSON.stringify(window.bento.doc))
       d.slides = [{ id: 's1', background: '#ffffff', transition: 'none', notes: '', elements: els }]
       window.bento.loadDoc(JSON.stringify(d))
-    }, [box('g', 100, 100, { w: 900, h: 300, layout: { dir: 'row', gap: 0, pad: [0, 0, 0, 0] } }), box('k', 100, 100, { parentId: 'g' })])
+    }, [box('g', 100, 100, { w: 900, h: 300, layout: { dir: 'row', gap: 0, pad: [20, 0, 0, 0] } }), box('k', 100, 120, { parentId: 'g' })])
     await p.waitForTimeout(400)
     const gb = await p.locator('.ed-stage-scale [data-el-id="g"]').boundingBox()
     // an empty stretch of the frame, away from its child
@@ -108,9 +108,12 @@ try {
     for (let i = 1; i <= 8; i++) await p.mouse.move(x0 + i * 10, y0 + i * 5)
     const mid = await p.evaluate(() => {
       const q = (id) => document.querySelector(`.ed-stage-scale [data-el-id="${id}"]`)
-      return { gx: parseFloat(q('g').style.left), gy: parseFloat(q('g').style.top), kx: parseFloat(q('k').style.left), ky: parseFloat(q('k').style.top) }
+      const band = document.querySelector('.ed-stage-scale .ed-frame-band[data-axis="y"]')
+      return { gx: parseFloat(q('g').style.left), gy: parseFloat(q('g').style.top), kx: parseFloat(q('k').style.left), ky: parseFloat(q('k').style.top),
+        bx: band ? parseFloat(band.style.left) : NaN, by: band ? parseFloat(band.style.top) : NaN }
     })
-    ok(mid.gx !== 100 && Math.abs(mid.kx - mid.gx) < 0.01 && Math.abs(mid.ky - mid.gy) < 0.01, `mid-drag, the child is already where the frame will put it (frame ${mid.gx},${mid.gy}; child ${mid.kx},${mid.ky})`)
+    ok(Math.abs(mid.bx - mid.gx) < 0.01 && Math.abs(mid.by - mid.gy) < 0.01, `mid-drag, the padding band moves with the frame (band ${mid.bx},${mid.by})`)
+    ok(mid.gx !== 100 && Math.abs(mid.kx - mid.gx) < 0.01 && Math.abs(mid.ky - mid.gy - 20) < 0.01, `mid-drag, the child is already where the frame will put it (frame ${mid.gx},${mid.gy}; child ${mid.kx},${mid.ky})`)
     await p.mouse.up(); await p.waitForTimeout(200)
     const after = await els()
     ok(at(after, 'k').x === at(after, 'g').x && at(after, 'g').x !== 100, 'on release the layout lands it there in the model')

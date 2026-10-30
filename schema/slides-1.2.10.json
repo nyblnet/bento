@@ -484,6 +484,16 @@
                 "fill"
               ]
             },
+            "minH": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            "minW": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
             "w": {
               "type": "string",
               "enum": [
@@ -1044,6 +1054,16 @@
                 "fill"
               ]
             },
+            "minH": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            "minW": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
             "w": {
               "type": "string",
               "enum": [
@@ -1358,6 +1378,16 @@
                 "fill"
               ]
             },
+            "minH": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            "minW": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
             "w": {
               "type": "string",
               "enum": [
@@ -1561,6 +1591,16 @@
                 "fixed",
                 "fill"
               ]
+            },
+            "minH": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            "minW": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
             },
             "w": {
               "type": "string",
@@ -1772,6 +1812,16 @@
                 "fixed",
                 "fill"
               ]
+            },
+            "minH": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            "minW": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
             },
             "w": {
               "type": "string",
@@ -2097,6 +2147,16 @@
                 "fill"
               ]
             },
+            "minH": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            "minW": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
             "w": {
               "type": "string",
               "enum": [
@@ -2324,6 +2384,16 @@
                 "fill"
               ]
             },
+            "minH": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            "minW": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
             "w": {
               "type": "string",
               "enum": [
@@ -2537,6 +2607,16 @@
                 "fixed",
                 "fill"
               ]
+            },
+            "minH": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            "minW": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
             },
             "w": {
               "type": "string",
@@ -2772,6 +2852,16 @@
                 "fixed",
                 "fill"
               ]
+            },
+            "minH": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            "minW": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
             },
             "w": {
               "type": "string",

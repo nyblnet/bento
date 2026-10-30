@@ -37,7 +37,7 @@ export const MODEL_KEYS = {
     "strokeLayer": ["align", "color", "dashes", "hidden", "width"],
     "imageCrop": ["scale", "x", "y"],
     "frameLayout": ["align", "clip", "cols", "dir", "gap", "hug", "justify", "pad", "wrap"],
-    "sizing": ["h", "w"],
+    "sizing": ["h", "minH", "minW", "w"],
     "size": ["height", "width"],
     "meta": ["author", "company", "event", "keywords", "subject"],
     "theme": ["accent", "background", "chartPalette", "codePalette", "color", "fontFamily", "headingFamily", "palette", "table", "tokens"],
