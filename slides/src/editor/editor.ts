@@ -65,6 +65,7 @@ import { createDialog } from '../../../kernel/src/ui/dialog.ts'
 import '../../../kernel/src/ui/dialog.css'
 import { PresenceToasts } from './presencetoasts'
 import { BOOL_OPS, boolOperands, boolUi, combine, flatten, release } from './booleans'
+import type { NodeKind } from './beziereditor'
 
 const i18nT = t
 
@@ -86,6 +87,9 @@ const SEARCH_FROM = 8
 const LONG_PRESS_MS = 500
 /** …and how far it may wander first. Past this it was a drag or a pan. */
 const LONG_PRESS_SLOP = 10
+
+/** Shape-menu rows that are also one-letter tools (commands.ts), by label. */
+const SHAPE_TOOL: Record<string, string> = { Rectangle: 'tool-rect', Ellipse: 'tool-ellipse', Line: 'tool-line', Polygon: 'tool-pen' }
 
 const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; heads?: 2; draw?: 'line' | 'path' | 'connector' | 'curve-connector' | 'free' | 'poly'; tip: string }> = [
   { kind: 'rect', label: 'Rectangle', icon: ICONS.rect, tip: 'A rectangle — rounded corners, fills, gradients and shadows in the panel' },
@@ -400,22 +404,21 @@ export class Editor {
       : t('Unsaved changes — ⌘S downloads an updated copy (this browser can’t rewrite the file)')
 
     const insert = div('ed-group ed-insert')
+    // Each tool is a command (commands.ts): the button runs it, its tooltip
+    // and letter badge come from it, and data-cmd names it.
+    const tool = (id: string, icon: string, label: string, tip?: string) => this.cmdButton(id, icon, label, tip)
     insert.append(
-      btn(ICONS.text, t('Text'), () => this.canvas.insert(defaultText({ color: readableInk(this.store.slide.background), y: 120 + Math.random() * 200 }), true),
-        t('Add a text box — double-click it to edit; **bold**, *italic*, `code` and “- ” bullets format as you type')),
+      tool('tool-select', ICONS.cursor, '', t('Select — back to the pointer')),
+      tool('tool-frame', ICONS.frameRow, t('Frame'), t('Add a frame — what you put in it lines up in a row, a column or a grid')),
+      tool('insert-text', ICONS.text, t('Text'), t('Add a text box — double-click it to edit; **bold**, *italic*, `code` and “- ” bullets format as you type')),
       this.shapeDropdown(),
-      btn(ICONS.image, t('Image'), () => this.pickImage(),
-        t('Add an image — or just paste one (⌘V) straight onto the slide')),
+      tool('insert-image', ICONS.image, t('Image'), t('Add an image — or just paste one (⌘V) straight onto the slide')),
       this.mediaDropdown(),
-      btn(ICONS.table, t('Table'), () => this.canvas.insert(this.newTable()),
-        t('Add a table — edit cells inline; turn it into a live chart from the panel')),
-      btn(ICONS.chart, t('Chart'), () => this.canvas.insert(defaultChart(applyChartPalette(CHART_PRESETS.bar(), this.store.doc.theme))),
-        t('Add a chart — edit it visually or link it to a table so it updates live')),
-      btn(ICONS.code, t('Code'), () => this.canvas.insert(defaultCode({ color: readableInk(this.store.slide.background) }), true),
-        t('Add a code snippet')),
+      tool('insert-table', ICONS.table, t('Table'), t('Add a table — edit cells inline; turn it into a live chart from the panel')),
+      tool('insert-chart', ICONS.chart, t('Chart'), t('Add a chart — edit it visually or link it to a table so it updates live')),
+      tool('insert-code', ICONS.code, t('Code'), t('Add a code snippet')),
     )
-    const commentB = btn(ICONS.comment, t('Comment'), () => this.canvas.toggleCommentMode(),
-      t('Comment (C) — click an element or a spot on the slide'))
+    const commentB = tool('comment', ICONS.comment, t('Comment'), t('Comment — click an element or a spot on the slide'))
     insert.appendChild(commentB)
     // Vector booleans, Penpot's contextual bar: present only while two or more
     // closed shapes are selected — never greyed out, simply not there.
@@ -436,6 +439,7 @@ export class Editor {
       this.buildScope.signal.addEventListener('abort', off)
     }
     insert.appendChild(boolBar)
+    insert.appendChild(this.pathBar())
 
     const actions = div('ed-group ed-group-right')
     // the update chip sits beside the wordmark and exists ONLY when an
@@ -459,14 +463,15 @@ export class Editor {
         this.toast(t('Up to date — v{v}', { v: APP_VERSION }))
       }
     }, 1500)
-    const undoB = btn(ICONS.undo, '', () => this.store.undo(), titleFor(this.commands, 'undo'))
-    const redoB = btn(ICONS.redo, '', () => this.store.redo(), titleFor(this.commands, 'redo'))
+    const undoB = this.cmdButton('undo', ICONS.undo, '')
+    const redoB = this.cmdButton('redo', ICONS.redo, '')
     const saveB = btn(ICONS.save, t('Save'), () => this.save(false), canWriteInPlace()
       ? t('Save — rewrite this file in place (⌘S)')
       : t('Save — download an updated copy (⌘S). This browser can’t rewrite the open file.'))
+    saveB.dataset.cmd = 'save'
     saveB.appendChild(this.dirtyDot) // the amber unsaved-changes dot lives ON Save
-    const pdfB = btn(ICONS.pdf, '', () => this.exportPdf(), t('Export PDF (print)'))
-    const helpB = btn('<b class="ed-help-q">?</b>', '', () => this.openHelp(), titleFor(this.commands, 'help'))
+    const pdfB = this.cmdButton('export-pdf', ICONS.pdf, '')
+    const helpB = this.cmdButton('help', '<b class="ed-help-q">?</b>', '')
     helpB.classList.add('ed-btn-help')
     this.avatarsBox = div('ed-avatars')
     // Intuitive grouping: LEFT = the document (identity · title · save-state ·
@@ -1888,6 +1893,13 @@ export class Editor {
     const trigger = btn(ICONS.shapes, t('Shape'), () => wrap.classList.toggle('open'))
     const menu = div('ed-menu')
     for (const item of SHAPE_MENU) {
+      const id = SHAPE_TOOL[item.label]
+      if (id) {
+        const b = this.cmdButton(id, item.icon, t(item.label), t(item.tip))
+        b.addEventListener('click', () => wrap.classList.remove('open'))
+        menu.appendChild(b)
+        continue
+      }
       const b = btn(item.icon, t(item.label), () => {
         wrap.classList.remove('open')
         // line / curve / connector arm a draw tool — drag on the canvas to draw
@@ -3213,20 +3225,26 @@ export class Editor {
       }
       col.appendChild(sec)
     }
+    // A row that IS one command reads its keys from the command list
+    // (commands.ts), so the sheet cannot drift from what the keys do.
+    const cmd = (id: string, desc?: string): [string, string] => {
+      const c = this.commands.find((x) => x.id === id)!
+      return [c.keys ?? '', desc ?? t(c.label)]
+    }
     section(colL, t('Editing'), [
-      [`${mod}S`, t('Save')],
+      cmd('save'),
       [`${mod}Z · ${mod}⇧Z`, t('Undo · redo')],
       [`${mod}C · ${mod}V`, t('Copy · paste — elements, or the whole slide when nothing is selected')],
       [`${mod}⇧X`, t('Cut to move — the selection fades until you paste it in its new place; Esc cancels')],
-      [`${mod}D`, t('Duplicate selection')],
+      cmd('duplicate', t('Duplicate selection')),
       [`${mod}G · ${mod}⇧G`, t('Group · ungroup')],
-      [`${mod}⌥K`, t('Create component — copies inserted from the Tokens view follow it')],
+      cmd('component', t('Create component — copies inserted from the Tokens view follow it')),
       [`${mod}B · ${mod}I · ${mod}U`, t('Bold · italic · underline while editing text')],
       [t('Text ▸ Field'), t('Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}')],
       ['[ · ]', t('Collapse · expand the side panels')],
-      ['C', t('Comment mode')],
-      ['?', t('This help')],
-      [`${mod}K`, t('Command palette — search every action by name')],
+      cmd('comment'),
+      cmd('help', t('This help')),
+      cmd('palette', t('Command palette — search every action by name')),
     ])
     section(colL, t('Canvas'), [
       [`⇧-${t('click')}`, t('Add an element to the selection, or take it out')],
@@ -3242,11 +3260,18 @@ export class Editor {
       ['← · →', t('Walk the slides when nothing is selected; nudge the selection otherwise')],
       [`${mod}-${t('click')} · ⇧-${t('click')}`, t('Select several slides in the sidebar; drag any of them to move them all, Delete removes them')],
     ])
+    // the one-letter tools, straight from the command list
+    section(colR, t('Tools'), [
+      ...['tool-select', 'tool-frame', 'tool-rect', 'tool-ellipse', 'tool-line', 'tool-pen', 'insert-text'].map((id) => cmd(id)),
+      cmd('auto-layout', t('Wrap the selection in an auto-layout frame')),
+      [BOOL_OPS.map((op) => boolUi(op).key).join(' · '), BOOL_OPS.map((op) => boolUi(op).label).join(' · ')],
+    ])
     section(colR, t('Lines & curves'), [
       [t('Shape ▾'), t('Draw a line, curved line or connector — then drag on the canvas')],
       [t('Drag a point'), t('Move an endpoint or anchor; drag the body to move the whole line')],
       [t('Click a point'), t('Reveal its bézier handles for a precise curve')],
       [`${t('Alt')}-${t('drag')}`, t('Break a smooth point into a sharp corner')],
+      [t('Path bar'), t('Corner, Smooth or Symmetric for the clicked point (or every point); Close path joins the ends')],
       [t('Double-click'), t('Add a point on the line; double-click a point to remove it')],
     ])
     section(colR, t('Motion paths'), [
@@ -3406,6 +3431,9 @@ export class Editor {
     const sel = () => this.store.selectedElements
     const key = (ev: KeyboardEvent) => ev.key.toLowerCase()
     const canvasFree = () => !this.canvas.isCropEditing
+    const writable = () => canvasFree() && !this.store.readOnly
+    // a bare letter: no modifier, so ⌘R, ⇧A and ⌥⇧O stay theirs
+    const tool = (k: string) => (ev: KeyboardEvent, mod: boolean) => !mod && !ev.altKey && !ev.shiftKey && key(ev) === k
     const list: Command[] = [
       { id: 'save', label: 'Save', keys: `${MOD}S`, scope: 'always', inField: true, match: (ev, mod) => mod && key(ev) === 's', run: () => this.save(false) },
       { id: 'zoom-in', label: 'Zoom in', keys: `${MOD}+`, scope: 'canvas', inField: true, match: (ev, mod) => mod && (ev.key === '=' || ev.key === '+'), run: () => this.canvas.zoomIn() },
@@ -3414,6 +3442,14 @@ export class Editor {
       { id: 'present', label: 'Present', keys: 'F5', scope: 'always', inField: true, match: (ev) => ev.key === 'F5', run: (ev) => this.present(!ev?.shiftKey) },
       { id: 'palette', label: 'Command palette', keys: `${MOD}K`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && !ev.altKey && key(ev) === 'k', run: () => openPalette(this.commands) },
       { id: 'help', label: 'Shortcuts & tips', keys: '?', scope: 'always', when: canvasFree, match: (ev, mod) => !mod && (ev.key === '?' || (ev.key === '/' && ev.shiftKey)), run: () => this.openHelp() },
+      // The tools, one letter each as in Figma and Penpot (C stays Comment)
+      { id: 'tool-select', label: 'Select', keys: 'V', scope: 'canvas', when: canvasFree, match: tool('v'), run: () => this.selectTool() },
+      { id: 'tool-frame', label: 'Frame', keys: 'F', scope: 'canvas', when: writable, match: tool('f'), run: () => this.insertFrame() },
+      { id: 'tool-rect', label: 'Rectangle', keys: 'R', scope: 'canvas', when: writable, match: tool('r'), run: () => this.canvas.insert(defaultShape('rect')) },
+      { id: 'tool-ellipse', label: 'Ellipse', keys: 'O', scope: 'canvas', when: writable, match: tool('o'), run: () => this.canvas.insert(defaultShape('ellipse')) },
+      { id: 'tool-line', label: 'Line', keys: 'L', scope: 'canvas', when: writable, match: tool('l'), run: () => this.canvas.armDraw('line') },
+      { id: 'tool-pen', label: 'Pen', keys: 'P', scope: 'canvas', when: writable, match: tool('p'), run: () => this.canvas.armDraw('poly') },
+      { id: 'insert-text', label: 'Add a text box', keys: 'T', scope: 'canvas', when: writable, match: tool('t'), run: () => this.canvas.insert(defaultText({ color: readableInk(this.store.slide.background), y: 120 + Math.random() * 200 }), true) },
       { id: 'comment', label: 'Comment mode', keys: 'C', scope: 'canvas', when: canvasFree, match: (ev, mod) => !mod && key(ev) === 'c', run: () => this.canvas.toggleCommentMode() },
       { id: 'ungroup', label: 'Ungroup', keys: `⇧${MOD}G`, scope: 'canvas', when: () => canvasFree() && sel().some((e) => e.groupId), match: (ev, mod) => mod && ev.shiftKey && key(ev) === 'g', run: () => this.panel.ungroup(sel()) },
       { id: 'group', label: 'Group', keys: `${MOD}G`, scope: 'canvas', when: () => canvasFree() && sel().length > 1, match: (ev, mod) => mod && !ev.shiftKey && key(ev) === 'g', run: () => this.panel.group(sel()) },
@@ -3440,7 +3476,6 @@ export class Editor {
       { id: 'next-slide', label: 'Next slide', keys: 'PageDown', scope: 'canvas', when: canvasFree, match: (ev) => ev.key === 'PageDown', run: () => this.store.goToLinear(1) },
       { id: 'prev-slide', label: 'Previous slide', keys: 'PageUp', scope: 'canvas', when: canvasFree, match: (ev) => ev.key === 'PageUp', run: () => this.store.goToLinear(-1) },
       // palette only: what the topbar inserts, and its other one-click actions
-      { id: 'insert-text', label: 'Add a text box', scope: 'canvas', run: () => this.canvas.insert(defaultText({ color: readableInk(this.store.slide.background), y: 120 + Math.random() * 200 }), true) },
       { id: 'insert-image', label: 'Add an image', scope: 'canvas', run: () => this.pickImage() },
       { id: 'insert-table', label: 'Add a table', scope: 'canvas', run: () => this.canvas.insert(this.newTable()) },
       { id: 'insert-chart', label: 'Add a chart', scope: 'canvas', run: () => this.canvas.insert(defaultChart(applyChartPalette(CHART_PRESETS.bar(), this.store.doc.theme))) },
@@ -3532,6 +3567,23 @@ export class Editor {
         return
       }
     })
+  }
+
+  /** V: back to the plain pointer — an armed draw tool, the comment tool
+   *  and a motion-path edit all stand down. */
+  private selectTool() {
+    if (this.canvas.isDrawing) this.canvas.cancelDraw()
+    if (this.canvas.isCommenting) this.canvas.toggleCommentMode()
+    if (this.canvas.isPathEditing) this.canvas.stopPathEdit(true)
+  }
+
+  /** F: an empty auto-layout frame (a rect carrying `layout`, layout.ts) —
+   *  whatever is later given it as a child lines up inside. */
+  private insertFrame() {
+    this.canvas.insert(defaultShape('rect', {
+      fill: '#FFFFFF', stroke: '#D0D5DD', strokeWidth: 1, radius: 8,
+      layout: { dir: 'row', gap: 16, pad: [16, 16, 16, 16] },
+    }))
   }
 
   private duplicateSelection() {
@@ -3729,6 +3781,74 @@ export class Editor {
     this.root.addEventListener('touchcancel', cancel, true)
   }
 
+  /** A topbar button that runs a command: its tooltip and its letter badge
+   *  are the command's (commands.ts), and data-cmd names it. */
+  private cmdButton(id: string, icon: string, label: string, tip?: string): HTMLElement {
+    const c = this.commands.find((x) => x.id === id)!
+    const b = btn(icon, label, () => c.run(), titleFor(this.commands, id, tip))
+    b.dataset.cmd = id
+    if (c.keys && /^[A-Z]$/.test(c.keys)) {
+      const k = document.createElement('kbd')
+      k.className = 'ed-tool-key'
+      k.textContent = c.keys
+      k.setAttribute('aria-hidden', 'true') // the tooltip and aria name carry it
+      b.appendChild(k)
+    }
+    if (!label) b.setAttribute('aria-label', tip ?? t(c.label))
+    return b
+  }
+
+  /** Penpot's path bar: while one path shape is selected, its node type
+   *  (on the selected anchor, or every anchor) and whether it is closed. */
+  private pathBar(): HTMLElement {
+    const bar = div('ed-pathbar')
+    bar.setAttribute('role', 'group')
+    bar.setAttribute('aria-label', t('Path'))
+    const one = () => {
+      const els = this.store.selectedElements
+      return els.length === 1 && els[0].type === 'shape' && els[0].shape === 'path' ? els[0] : null
+    }
+    const kinds: Array<[NodeKind, string, string]> = [
+      ['corner', ICONS.nodeCorner, t('Corner — sharp, no handles')],
+      ['smooth', ICONS.nodeSmooth, t('Smooth — handles in line')],
+      ['symmetric', ICONS.nodeSymmetric, t('Symmetric — handles in line and the same length')],
+    ]
+    const pills = kinds.map(([kind, icon, tip]) => {
+      const b = btn(icon, '', () => { const el = one(); if (el) this.canvas.curves.setKind(el.id, kind) }, `${tip} — ${t('the selected point, or every point')}`)
+      b.dataset.node = kind
+      b.setAttribute('aria-label', tip)
+      return b
+    })
+    const close = btn(ICONS.closePath, t('Close path'), () => { const el = one(); if (el) this.canvas.curves.toggleClosed(el.id) },
+      t('Close the path — join its last point to the first; again to open it'))
+    close.dataset.node = 'close'
+    bar.append(...pills, close)
+    const sync = () => {
+      // build() runs before the canvas exists: until then there is no path to edit
+      const curves = this.canvas?.curves
+      const el = this.store.readOnly || !curves ? null : one()
+      bar.hidden = !el
+      if (!el || !curves) return
+      curves.onSelect = sync
+      const st = curves.pathState(el.id)
+      for (const b of pills) b.setAttribute('aria-pressed', String(st?.kind === b.dataset.node))
+      close.setAttribute('aria-pressed', String(!!st?.closed))
+    }
+    sync()
+    // after the canvas has re-attached its editor for the new selection
+    const later = () => requestAnimationFrame(sync)
+    for (const e of ['selection', 'doc', 'current'] as const) {
+      const off = this.store.on(e, later)
+      this.buildScope.signal.addEventListener('abort', off)
+    }
+    return bar
+  }
+
+  /** A command's keys as the chrome prints them (commands.ts is the one source). */
+  private keysOf(id: string): string | undefined {
+    return this.commands.find((c) => c.id === id)?.keys
+  }
+
   private elementMenuItems(): CtxItem[] {
     const els = this.store.selectedElements
     const one = els.length === 1 ? els[0] : null
@@ -3748,23 +3868,23 @@ export class Editor {
       } },
       'sep',
       { label: t('Cut'), hint: '⌘X', run: () => { this.copySelection(); this.deleteSelection() } },
-      { label: t('Copy'), hint: '⌘C', run: () => this.copySelection() },
-      { label: t('Duplicate'), hint: '⌘D', run: () => this.duplicateSelection() },
+      { label: t('Copy'), hint: this.keysOf('copy'), cmd: 'copy', run: () => this.copySelection() },
+      { label: t('Duplicate'), hint: this.keysOf('duplicate'), cmd: 'duplicate', run: () => this.duplicateSelection() },
       'sep',
       { label: t('Bring to front'), run: () => this.panel.reorder(els, 'front') },
       { label: t('Send to back'), run: () => this.panel.reorder(els, 'back') },
       'sep',
       grouped
-        ? { label: t('Ungroup'), hint: '⇧⌘G', run: () => this.panel.ungroup(els) }
-        : { label: t('Group'), hint: '⌘G', disabled: els.length < 2, run: () => this.panel.group(els) },
-      { label: t('Add auto layout'), hint: '⇧A', disabled: !els.length, run: () => this.panel.addAutoLayout(els) },
+        ? { label: t('Ungroup'), hint: this.keysOf('ungroup'), cmd: 'ungroup', run: () => this.panel.ungroup(els) }
+        : { label: t('Group'), hint: this.keysOf('group'), cmd: 'group', disabled: els.length < 2, run: () => this.panel.group(els) },
+      { label: t('Add auto layout'), hint: this.keysOf('auto-layout'), cmd: 'auto-layout', disabled: !els.length, run: () => this.panel.addAutoLayout(els) },
       els.some((e) => e.component)
         ? { label: t('Detach component'), run: () => this.detachComponent() }
-        : { label: t('Create component'), hint: '⌥⌘K', disabled: !els.length, run: () => this.createComponent() },
+        : { label: t('Create component'), hint: this.keysOf('component'), cmd: 'component', disabled: !els.length, run: () => this.createComponent() },
       ...(boolOperands(this.store, els)
         ? ['sep' as const, ...BOOL_OPS.map((op) => {
           const ui = boolUi(op)
-          return { label: ui.label, hint: ui.key, run: () => { combine(this.store, els, op) } }
+          return { label: ui.label, hint: ui.key, cmd: `bool-${op}`, run: () => { combine(this.store, els, op) } }
         })]
         : []),
       ...(one?.type === 'shape' && one.bool
@@ -3779,7 +3899,7 @@ export class Editor {
       { label: t('Reveal together'), run: () => this.panel.revealTogether(els) },
       { label: t('Remove reveal'), disabled: !els.some((e) => stepOf(e) > 0), run: () => this.panel.removeReveal(els) },
       'sep',
-      { label: t('Delete'), hint: '⌫', danger: true, run: () => this.deleteSelection() },
+      { label: t('Delete'), hint: this.keysOf('delete'), cmd: 'delete', danger: true, run: () => this.deleteSelection() },
     ]
   }
 

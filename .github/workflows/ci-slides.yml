@@ -354,3 +354,12 @@ jobs:
         # Opens from the swatch instead of the native picker; live preview,
         # one undo step, typed hex/RGB/names, theme swatch links, Esc cancels.
         run: node scripts/test-slides-color-popover-browser.mjs
+      - name: Insert tools and path bar in Chromium
+        # V F R O L P T on the canvas, their badges and tooltips from the command
+        # list; the path bar's Corner / Smooth / Symmetric and Close path; data-cmd
+        # on the chrome and the element menu; the ? sheet's Tools section.
+        run: node scripts/test-slides-insert-tools-browser.mjs
+      - name: Inspector Export section in Chromium
+        # PNG 1×/2× and SVG of the slide or the selection's box (rotation
+        # included), and Copy as JSON = ⌘C's payload.
+        run: node scripts/test-slides-export-section-browser.mjs

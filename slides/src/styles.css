@@ -3405,3 +3405,19 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-bool { display: flex; align-items: center; gap: 2px; padding-inline-start: 6px; margin-inline-start: 4px; border-inline-start: 1px solid var(--line); }
 .ed-topbar.ed-bar-fold .ed-bool { border: 0; padding: 0; margin: 0; }
 .ed-bool[hidden] { display: none; }
+
+/* Tool letters (commands.ts): a small key chip after the tool's name; the
+   tightest tiers drop it with the labels, the tooltip still says it. */
+.ed-tool-key { font: 600 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 1px 3px; margin-inline-start: 2px; }
+.ed-topbar.ed-bar-compact .ed-tool-key, .ed-topbar.ed-bar-fold .ed-tool-key { display: none; }
+.ed-menu .ed-tool-key { margin-inline-start: auto; }
+
+/* Penpot's path bar: node type + close, only while one path shape is selected */
+.ed-pathbar { display: flex; align-items: center; gap: 2px; padding-inline-start: 6px; margin-inline-start: 4px; border-inline-start: 1px solid var(--line); }
+.ed-topbar.ed-bar-fold .ed-pathbar { border: 0; padding: 0; margin: 0; }
+.ed-pathbar[hidden] { display: none; }
+.ed-pathbar .ed-btn[aria-pressed="true"] { background: var(--tab-on); box-shadow: inset 0 0 0 1px var(--tab-on-line); color: var(--accent-ink); }
+
+/* Export, at the foot of the Format tab */
+.ed-export { flex-wrap: wrap; gap: 4px; }
+.ed-export .ed-export-btn { flex: 1 1 auto; min-width: 0; }

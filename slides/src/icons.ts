@@ -10,6 +10,8 @@ export const ICONS = {
   shapes: svg('<rect x="3" y="3" width="10" height="10" rx="1.5"/><circle cx="16.5" cy="16.5" r="4.5"/>'),
   image: svg('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.5-3.5L6 23"/>'),
   media: svg('<rect x="2" y="4" width="20" height="16" rx="2"/><polygon points="10 9 15 12 10 15" fill="currentColor" stroke="none"/>'),
+  cursor: svg('<path d="M4 3l7 17 2.5-7.5L21 10z"/>'),
+  pen: svg('<path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.6 7.6"/><circle cx="11" cy="11" r="2"/>'),
   comment: svg('<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>'),
   chart: svg('<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>'),
   undo: svg('<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>'),
@@ -73,6 +75,10 @@ export const ICONS = {
   // the Arrange kit (panels.ts arrangeRows): an edge or axis, and the blocks against it
   ungroup: svg('<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect width="5" height="5" x="6" y="6" rx="1"/><rect width="5" height="5" x="13" y="13" rx="1"/>'),
   // vector booleans: two overlapping squares, what each operation keeps filled
+  nodeCorner: svg('<path d="M4 20L12 6l8 14"/><rect x="10" y="4" width="4" height="4" fill="currentColor"/>'),
+  nodeSmooth: svg('<path d="M3 18c4-12 14-12 18 0"/><circle cx="12" cy="9" r="2" fill="currentColor"/><path d="M5 9h14"/>'),
+  nodeSymmetric: svg('<path d="M3 18c4-12 14-12 18 0"/><circle cx="12" cy="9" r="2" fill="currentColor"/><path d="M6 9h12"/><circle cx="6" cy="9" r="1.2"/><circle cx="18" cy="9" r="1.2"/>'),
+  closePath: svg('<path d="M5 18L5 6l14 0"/><path d="M19 6L5 18" stroke-dasharray="2 3"/>'),
   boolUnion: svg('<path d="M3 3h12v6h6v12H9v-6H3z" fill="currentColor" stroke-width="1.5"/>'),
   boolSubtract: svg('<path d="M3 3h12v6H9v6H3z" fill="currentColor" stroke-width="1.5"/><rect x="9" y="9" width="12" height="12" stroke-width="1.5" stroke-dasharray="2 2"/>'),
   boolIntersect: svg('<rect x="3" y="3" width="12" height="12" stroke-width="1.5"/><rect x="9" y="9" width="12" height="12" stroke-width="1.5"/><rect x="9" y="9" width="6" height="6" fill="currentColor" stroke="none"/>'),

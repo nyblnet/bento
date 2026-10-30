@@ -16,6 +16,8 @@ export type CtxItem =
       label: string
       run: () => void
       hint?: string
+      /** the command (editor/commands.ts) this row runs — its id lands on data-cmd */
+      cmd?: string
       disabled?: boolean
       /** destructive — rendered in red, and always placed last by convention */
       danger?: boolean
@@ -61,6 +63,7 @@ export function openCtxMenu(x: number, y: number, items: CtxItem[]) {
     b.setAttribute('role', 'menuitem')
     if (item.danger) b.classList.add('ed-ctxmenu-danger')
     b.disabled = !!item.disabled
+    if (item.cmd) b.dataset.cmd = item.cmd
     const label = document.createElement('span')
     label.textContent = item.label
     b.appendChild(label)
