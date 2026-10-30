@@ -453,6 +453,14 @@ export function slidingPill(bar: HTMLElement) {
   sizes.observe(bar)
   for (const tab of bar.children) sizes.observe(tab)
   document.fonts?.ready.then(place)
+  // The inspector builds a new bar on every selection change, before it is in
+  // the page; whatever the observers' order, measure once more when the bar is
+  // attached and laid out — two frames, so the names (fitTabNames) have shown.
+  const settle = (tries = 20) => requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (bar.isConnected) place()
+    else if (tries) settle(tries - 1)
+  }))
+  settle()
 }
 
 /** An opacity % field as 0..1; empty or junk reads as opaque, 0 stays 0. */
