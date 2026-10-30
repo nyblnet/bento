@@ -378,6 +378,42 @@ function two(A: Poly, B: Poly, op: Exclude<BoolOp, 'exclude'>): Poly {
   return orient(chain(keep))
 }
 
+/** Winding number of `poly` around `q` (crossings counted with their direction). */
+function winding(q: Pt, poly: Poly): number {
+  let w = 0
+  for (const c of poly) for (let i = 0; i < c.length; i++) {
+    const a = c[i], b = c[(i + 1) % c.length]
+    const side = (b.x - a.x) * (q.y - a.y) - (q.x - a.x) * (b.y - a.y)
+    if (a.y <= q.y && b.y > q.y && side > 0) w++
+    else if (a.y > q.y && b.y <= q.y && side < 0) w--
+  }
+  return w
+}
+
+/**
+ * The region a path FILLS, as simple contours. A path is drawn with the
+ * nonzero rule (render.ts, the kernel), so a contour that crosses itself (a
+ * pentagram) or subpaths that overlap fill more than evenodd containment would
+ * say. Split the outline against itself and keep each piece with filled area
+ * on exactly one side of it: that is the boundary of what is drawn, and from
+ * there evenodd and nonzero agree.
+ */
+function filledRegion(poly: Poly): Poly {
+  const es = edgesOf(poly)
+  splitAll(es, es)
+  const keep: Array<[Pt, Pt]> = []
+  for (const s of es.flatMap(pieces)) {
+    const dx = s[1].x - s[0].x, dy = s[1].y - s[0].y, len = Math.hypot(dx, dy)
+    if (len < EPS) continue
+    const m = { x: (s[0].x + s[1].x) / 2, y: (s[0].y + s[1].y) / 2 }
+    const nx = (-dy / len) * 1e-4, ny = (dx / len) * 1e-4
+    const l = winding({ x: m.x + nx, y: m.y + ny }, poly) !== 0, r = winding({ x: m.x - nx, y: m.y - ny }, poly) !== 0
+    if (l === r) continue // filled on both sides (inside) or neither (a cancelled overlap)
+    keep.push(r ? s : [s[1], s[0]]) // walk with the filled side on the right, as orient expects of an outer edge
+  }
+  return orient(chain(keep))
+}
+
 /**
  * Combine outlines bottom to top, as Figma does: union and intersect fold over
  * all of them, subtract takes every upper shape away from the bottom one, and
@@ -413,7 +449,8 @@ export function polyArea(poly: Poly): number {
 
 /** Operands → the computed outline, in slide coordinates. */
 export function computeBool(shapes: ShapeElement[], op: BoolOp) {
-  return polyToPath(boolPolys(shapes.map(shapeToPoly), op))
+  // a rect or an ellipse is one simple contour already; a path may cross itself
+  return polyToPath(boolPolys(shapes.map((s) => (s.shape === 'path' ? filledRegion(shapeToPoly(s)) : shapeToPoly(s))), op))
 }
 
 // ————————————————————————— operands back where the result stands —————————————————————————

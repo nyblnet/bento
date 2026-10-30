@@ -12,7 +12,8 @@
 //   tokens     → literals bound to a design token (tokens.ts)
 //   components → copies follow their main (components.ts)
 //   layout     → frame children's boxes (layout.ts) — after tokens and
-//                components, which can write gap, padding or a copy's frame
+//                components, which can write gap, padding or a copy's frame;
+//                components and layout settle together
 //   connectors → endpoints on the laid-out boxes (connectors.ts)
 //   stacks     → the single-paint fallback an older shell draws (stacks.ts)
 //
@@ -31,14 +32,12 @@ import { mirrorAllStacks } from './stacks'
 export interface DeriveMemory {
   palette: string
   tokens: string
-  /** each component main's signature */
-  mains: Map<string, string>
 }
 
 /** The memory of a document as it opened: nothing has moved yet, so a value
  *  edited in an older shell reads as a hand edit and is kept. */
 export function deriveMemory(doc: BentoDoc): DeriveMemory {
-  return { palette: '', tokens: tokenSignature(doc), mains: new Map() }
+  return { palette: '', tokens: tokenSignature(doc) }
 }
 
 /** One derive pass; returns whether anything was written. */
@@ -50,8 +49,16 @@ export function derive(doc: BentoDoc, mem: DeriveMemory): boolean {
   const moved = ts !== mem.tokens
   mem.tokens = ts
   if (syncTokenRefs(doc, moved)) changed = true
-  if (syncComponents(doc, mem.mains)) changed = true
-  if (layoutAll(doc)) changed = true
+  // components and layout feed each other: a copy takes its main's layout
+  // inputs, and layout then moves the main's frame children, which is part of
+  // the main a copy follows. Settle the pair; two rounds is the most real
+  // input needs. ponytail: capped at 4, a deeper cycle would show as a second
+  // pass reporting a change (the rig asserts it does not)
+  for (let i = 0; i < 4; i++) {
+    const c = syncComponents(doc), l = layoutAll(doc)
+    if (!c && !l) break
+    changed = true
+  }
   if (routeAllConnectors(doc)) changed = true
   if (mirrorAllStacks(doc)) changed = true
   return changed

@@ -445,9 +445,30 @@ const connectorEnd = shape(MODEL_KEYS.connectorEnd, {
  * create anything that is not already a string, which blocks it, but a paste
  * boundary should not be relying on a downstream guard. And a token that does
  * not parse is dead weight the validator will report forever, so it is dropped
- * here rather than carried.
+ * here rather than carried. A `$token` ref may only sit on a property a token
+ * can drive (tokens.ts TOKEN_KEYS): a token value is written straight into the
+ * element, so a ref on `id`, `html`, `link` or `component` is refused here as
+ * the writer refuses it.
  */
-const themeRefs: Check = tag((v) => {
+/** The element properties a token may be bound to: paint, size and spacing —
+ *  never identity, content, links, structure or another feature's data. */
+export const TOKEN_KEYS: ReadonlySet<string> = new Set([
+  'fill', 'fillGradient', 'fills', 'stroke', 'strokeWidth', 'strokeGradient', 'strokes', 'strokeDashes',
+  'radius', 'radii', 'opacity', 'color', 'colorGradient', 'textStroke', 'fontSize', 'fontFamily', 'fontWeight',
+  'letterSpacing', 'lineHeight', 'shadow', 'blur', 'backdropFilter', 'layout', 'w', 'h', 'style',
+])
+/** …and on a slide, its background. */
+export const SLIDE_TOKEN_KEYS: ReadonlySet<string> = new Set(['background'])
+
+/** How deep booleans of booleans may nest in a file. */
+const BOOL_DEPTH = 8
+let boolDepth = 0
+/** What a boolean's operand never carries: it is no member of a component or a
+ *  frame, and it is not lockable while it is inside — so Release cannot give
+ *  back a second main, or pull a shape into a frame it never sat in. */
+export const OPERAND_DROPS = ['component', 'parentId', 'sizing', 'layout', 'locked'] as const
+
+const themeRefsFor = (tokenKeys: ReadonlySet<string>): Check => tag((v) => {
   if (!isPlainObject(v)) return DROP
   const out: Record<string, string> = {}
   let n = 0
@@ -460,19 +481,21 @@ const themeRefs: Check = tag((v) => {
     const segs = key.split('.')
     if (!segs.length || !segs.every((sg) => /^[A-Za-z_$][A-Za-z0-9_$]*$|^\d+$/.test(sg))) continue
     if (segs.some((sg) => sg === PROTO || sg === 'constructor' || sg === 'prototype')) continue
-    if (!parseThemeRef(token) && !tokenName(token)) continue
+    if (tokenName(token) ? !tokenKeys.has(segs[0]) : !parseThemeRef(token)) continue
     out[key] = token
   }
   return Object.keys(out).length ? out : DROP
 }, { type: 'object', additionalProperties: { type: 'string' }, maxProperties: LIMITS.themeRefs, description: 'property path → palette slot, or $token name' })
+const themeRefs = themeRefsFor(TOKEN_KEYS)
 
 export const ELEMENT_CHECKS: Record<string, Check> = {
   themeRefs,
   // component membership: ids and keys are lookups, `over` names this element's own keys
-  component: shape(['id', 'key', 'main', 'over', 'off'], {
+  component: shape(['id', 'key', 'main', 'over', 'off', 'sig'], {
     id: cssValue(), key: cssValue(), main: tag((v) => (v === true ? v : DROP), { const: true }),
     over: list(LIMITS.themeRefs, cssValue(64)),
     off: tag((v) => (Array.isArray(v) && v.length === 2 ? list(2, num(-1e6, 1e6))(v) : DROP), { type: 'array', minItems: 2, maxItems: 2, items: { type: 'number' } }),
+    sig: tag((v) => (typeof v === 'string' && /^[0-9a-z]{1,16}$/.test(v) ? v : DROP), { type: 'string', pattern: '^[0-9a-z]{1,16}$' }),
   }, ['id', 'key']),
   // identity + geometry
   id: cssValue(), morphId: cssValue(), role: cssValue(), group: cssValue(),
@@ -529,8 +552,15 @@ export const ELEMENT_CHECKS: Record<string, Check> = {
     op: oneOf('union', 'subtract', 'intersect', 'exclude'),
     shapes: tag((v) => {
       if (!Array.isArray(v) || v.length < 2 || v.length > LIMITS.elements) return DROP
-      const out = v.map((el, i) => within(String(i), () => sanitizeElement(el)))
-      return out.every((el) => el?.type === 'shape') ? out : DROP
+      // a boolean of a boolean is real; one nested past BOOL_DEPTH is a stack-overflow attempt
+      if (boolDepth >= BOOL_DEPTH) return DROP
+      boolDepth++
+      try {
+        const out = v.map((el, i) => within(String(i), () => sanitizeElement(el)))
+        if (!out.every((el) => el?.type === 'shape')) return DROP
+        for (const el of out) for (const k of OPERAND_DROPS) delete (el as unknown as Record<string, unknown>)[k]
+        return out
+      } finally { boolDepth-- }
     }, { type: 'array', minItems: 2, maxItems: LIMITS.elements, items: { $ref: '#/$defs/element' } }),
   }, ['op', 'shapes']),
   // image / svg / media
@@ -636,7 +666,7 @@ export function sanitizeElement(value: unknown): SlideElement | null {
 
 
 export const SLIDE_CHECKS: Record<string, Check> = {
-  id: cssValue(), name: str(LIMITS.prose), stateOf: cssValue(), themeRefs,
+  id: cssValue(), name: str(LIMITS.prose), stateOf: cssValue(), themeRefs: themeRefsFor(SLIDE_TOKEN_KEYS),
   // background is a CSS `background` shorthand, so it gets the colour rule at
   // the shorthand's length — wide enough for a multi-stop linear-gradient(),
   // still no url() reaching for the network from a pasted slide

@@ -13,8 +13,11 @@
 // Derive-not-commit, like syncConnectors: a pure function of the document,
 // run on every `doc` event, so collaborating replicas agree without ops.
 // Overrides are detected, not declared: a copy property that disagrees with
-// its main while the MAIN has not moved since the last pass was changed by
-// hand (any edit path — the inspector, a scrub, a paste, an older shell), so
+// its main while the MAIN has not moved since the copy last followed it was
+// changed by hand. "Moved" is read from the document itself — each copy keeps
+// a hash of the main it last followed (`component.sig`) — so a replica that
+// just joined, or a session opening a file an older shell edited, reads the
+// same answer as the one that wrote it (any edit path — the inspector, a scrub, a paste, an older shell), so
 // it becomes an override. When the main moves, copies follow on every key
 // they do not override. Position is the same rule per member: a member moved
 // alone inside its copy overrides x/y; the copy moved whole just has a new
@@ -56,19 +59,24 @@ export function components(doc: BentoDoc): ComponentInfo[] {
 const clone = <T>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v)))
 const eq = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
+/** A main's state as a short hash (FNV-1a), for a copy to remember. */
+export function mainSig(main: El[]): string {
+  const str = JSON.stringify(main.map((m) => Object.entries(m).filter(([k]) => k !== 'component')))
+  let h = 0x811c9dc5
+  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 0x01000193)
+  return (h >>> 0).toString(36)
+}
+
 /**
- * Bring every copy in step with its main. `lastMain` carries each main's
- * signature from the previous pass (the editor owns it; a fresh Map treats
- * every disagreement as an override, which is the safe reading at boot).
- * Returns whether anything was written.
+ * Bring every copy in step with its main. A copy with no `sig` (written before
+ * copies remembered one) reads the main as unmoved, the safe reading: its
+ * differences are kept as overrides. Returns whether anything was written.
  */
-export function syncComponents(doc: BentoDoc, lastMain: Map<string, string>): boolean {
+export function syncComponents(doc: BentoDoc): boolean {
   let changed = false
   for (const comp of components(doc)) {
     const byKey = new Map(comp.main.map((m) => [m.component!.key, m]))
-    const sig = JSON.stringify(comp.main.map((m) => Object.entries(m).filter(([k]) => k !== 'component')))
-    const mainMoved = lastMain.has(comp.id) && lastMain.get(comp.id) !== sig
-    lastMain.set(comp.id, sig)
+    const sig = mainSig(comp.main)
     for (const s of doc.slides) {
       // copies of this component on this slide, one instance per groupId
       const inst = new Map<string, El[]>()
@@ -79,6 +87,8 @@ export function syncComponents(doc: BentoDoc, lastMain: Map<string, string>): bo
         inst.set(g, [...(inst.get(g) ?? []), el])
       }
       for (const els of inst.values()) {
+        const seen = els.find((el) => el.component!.sig)?.component!.sig
+        const mainMoved = seen !== undefined && seen !== sig
         // The instance's offset from its main, kept on its members
         // (`component.off`). A member whose offset alone differs was moved by
         // hand: its position becomes an override ('x'/'y' in `over`) and the
@@ -114,6 +124,7 @@ export function syncComponents(doc: BentoDoc, lastMain: Map<string, string>): bo
             const x = (m.x as number) + off[0], y = (m.y as number) + off[1]
             if (el.x !== x || el.y !== y) { el.x = x; el.y = y; changed = true }
           }
+          if (el.component!.sig !== sig) { el.component!.sig = sig; changed = true }
           const ov = [...over].sort()
           if (!eq(ov, el.component!.over ?? [])) {
             if (ov.length) el.component!.over = ov
@@ -159,7 +170,7 @@ export function instanceOf(comp: ComponentInfo, uid: () => string, dx = 0, dy = 
     el.x = (m.x as number) + dx
     el.y = (m.y as number) + dy
     delete el.morphId
-    el.component = { id: comp.id, key: m.component!.key, off: [dx, dy] }
+    el.component = { id: comp.id, key: m.component!.key, off: [dx, dy], sig: mainSig(comp.main) }
     return el
   })
 }

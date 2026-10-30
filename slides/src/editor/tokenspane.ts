@@ -11,7 +11,7 @@
 import type { Store } from '../store'
 import type { DesignTokens, ShadowSpec, TokenType } from '../model'
 import { uid } from '../model'
-import { TOKEN_TYPES, activeMode, deleteToken, modesOf, renameToken, tokenUses, tokenName } from '../tokens'
+import { TOKEN_TYPES, activeMode, deleteToken, modesOf, renameToken, tokenUses, tokenName, protoName } from '../tokens'
 import { components, instanceOf } from '../components'
 import { parseColor } from './inspector/controls'
 import { t } from '../i18n'
@@ -101,7 +101,7 @@ export class TokensPane {
       if (mode.value !== '+') return this.edit((x) => { x.mode = mode.value })
       // the new mode's name is typed where the switch was
       const field = inlineName(t('Mode name, e.g. Dark'), t('Name of the new mode (e.g. Dark)'), (name) => {
-        if (name === '+' || modes.includes(name)) return false
+        if (name === '+' || modes.includes(name) || protoName(name)) return false
         this.edit((x) => {
           const from = activeMode(x)
           x.modes = [...modesOf(x), name]
