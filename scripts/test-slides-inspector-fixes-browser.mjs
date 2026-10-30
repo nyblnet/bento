@@ -115,10 +115,11 @@ try {
   await undo()
   ok((await el('z')).fill === 'rgba(255, 0, 0, 0)', `and one undo puts it back (${(await el('z')).fill})`)
 
-  // 3. + on a collapsed optional section opens it
+  // 3. an optional section with nothing in it reads as open and cannot be
+  //    folded (a fold would open onto nothing), so its + always shows the result
   await select('r')
   await p.locator('.ed-props .ed-section[data-key="Shadow"]').click(); await p.waitForTimeout(100)
-  ok(await p.locator('.ed-props .ed-section[data-key="Shadow"]').evaluate((h) => h.classList.contains('closed')), 'the Shadow section is collapsed')
+  ok(await p.locator('.ed-props .ed-section[data-key="Shadow"]').evaluate((h) => !h.classList.contains('closed') && h.classList.contains('ed-sec-flat')), 'the empty Shadow section stays open when clicked')
   await p.locator('.ed-props .ed-section[data-key="Shadow"] .ed-sec-act').click(); await p.waitForTimeout(250)
   ok(!!(await el('r')).shadow, 'the + added a shadow')
   ok(await p.locator(`${body('Shadow')} .ed-shadow-tiles`).isVisible(), 'and its section opened to show it')
