@@ -196,6 +196,17 @@ export interface ElementBase {
    */
   hidden?: true
   /**
+   * The inspector's eye on a single paint (Figma's): the fill, stroke,
+   * shadow or blur is switched off but KEPT, so a click brings it back.
+   * Paint stacks hide per layer (`fills[i].hidden`); these are for the plain
+   * keys. A shell that predates them draws the paint (it ignores the key) —
+   * nothing is lost, only shown. Absent = shown. Read through visiblePaint.
+   */
+  fillHidden?: true
+  strokeHidden?: true
+  shadowHidden?: true
+  blurHidden?: true
+  /**
    * Mirrored across the vertical (flipX) or horizontal (flipY) axis through
    * the box centre — the content is drawn mirrored, the box is unchanged.
    * Absent = as authored. A shell that predates these keys draws the element
@@ -1652,4 +1663,26 @@ export function parseDoc(json: string): BentoDoc | null {
     /* fall through */
   }
   return null
+}
+
+/**
+ * The element as it is drawn: paint switched off with the inspector's eye
+ * (`fillHidden` …) taken out, the literals left untouched in the model.
+ * Every renderer and the morph read elements through this, so a hidden
+ * paint is hidden everywhere — canvas, thumbnails, the show, export.
+ */
+export function visiblePaint<E extends SlideElement>(el: E): E {
+  if (!el.fillHidden && !el.strokeHidden && !el.shadowHidden && !el.blurHidden) return el
+  const e = { ...el } as SlideElement & Record<string, unknown>
+  if (e.type === 'shape') {
+    // a line's one colour is its fill, edited under Stroke: its stroke eye hides it
+    if (el.fillHidden || (el.strokeHidden && e.shape === 'line')) { e.fill = 'transparent'; delete e.fillGradient; delete e.fills }
+    if (el.strokeHidden) { e.strokeWidth = 0; delete e.strokes; delete e.strokeGradient }
+  } else if (e.type === 'text') {
+    if (el.fillHidden) { e.color = 'transparent'; delete e.colorGradient }
+    if (el.strokeHidden) delete e.textStroke
+  }
+  if (el.shadowHidden) delete e.shadow
+  if (el.blurHidden) { delete e.blur; delete e.backdropFilter }
+  return e as E
 }

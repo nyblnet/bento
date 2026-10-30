@@ -179,7 +179,7 @@ try {
     const body = p.locator('.ed-props .ed-section[data-key="Fill"] + .ed-section-body')
     ok(await body.locator('.ed-color-hex').getAttribute('placeholder') === 'None' && (await body.locator('.ed-color-hex').inputValue()) === '', 'a transparent fill reads None')
     ok(!!(await body.locator('input[type=color]').getAttribute('aria-label')), 'the swatch has an accessible name')
-    await body.locator('button[aria-label="Colors & tokens"]').click()
+    await p.locator('.ed-props .ed-section[data-key="Fill"] .ed-sec-cat').click()
     await p.locator('.ed-tokpick-opt').first().click(); await p.waitForTimeout(250)
     const f = (await el('a')).fill
     ok(!/,\s*0\)$/.test(f) && (await el('a')).themeRefs?.fill, `a theme colour picked onto a 0% fill is opaque (${f})`)
@@ -198,9 +198,9 @@ try {
       return [...r.querySelectorAll('*')].every((n) => { const b = n.getBoundingClientRect(); return !b.width || (b.left >= host.left - 0.5 && b.right <= host.right + 0.5) }) && (hex?.width ?? 0) >= 40
     })
     ok(fit, 'at 1024 wide the row stays in the panel and the hex has room')
-    ok(await row.locator('.ed-paintlayer-more').count() === 1 && !(await row.locator('.ed-layer-blend').isVisible()), "the row is grip · eye · paint · ⋯, its blend behind ⋯")
-    await row.locator('.ed-paintlayer-more').click(); await p.waitForTimeout(100)
-    ok(await row.locator('.ed-layer-blend').isVisible(), '⋯ shows the blend')
+    ok(await row.locator('.ed-paint-eye').count() === 1 && await row.locator('.ed-paint-remove').count() === 1 && !(await p.locator('.ed-props .ed-layer-blend').first().isVisible()), "the row is Figma's paint · 👁 · −, its blend kept out of the way")
+    await row.click({ button: 'right', position: { x: 4, y: 13 } }); await p.waitForTimeout(150)
+    ok(await p.locator('.ed-props .ed-layer-blend').first().isVisible(), 'a right-click on the row shows the blend')
     await ctx.close()
   })
 

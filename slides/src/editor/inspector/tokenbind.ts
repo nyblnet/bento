@@ -16,14 +16,16 @@ import { t } from '../../i18n'
 const STEM: Record<TokenType, string> = { color: 'color.brand', number: 'space', fontSize: 'type.size', opacity: 'opacity', fontFamily: 'font', shadow: 'shadow' }
 
 /** Give a field a token binding for `path` on `el`, offering tokens of `types`. Returns the field. */
-export function tokenBind(p: PropsPanel, field: HTMLElement, el: SlideElement, path: string, types: TokenType[] = ['number']): HTMLElement {
+/** The token picker for one property — the field's dot, a pill, or the
+ *  section's ⠿ opens it. */
+export function tokenPicker(p: PropsPanel, el: SlideElement, path: string, types: TokenType[]): (anchor: HTMLElement) => void {
   const bound = tokenName(el.themeRefs?.[path])
-  const pick = (anchor: HTMLElement) => openTokenPicker(anchor, {
+  return (anchor: HTMLElement) => openTokenPicker(anchor, {
     title: t('Bind to a token'),
     choices: choices(p.store.doc, types),
     bound: bound ?? undefined,
     pick: (c) => p.mutate(el.id, (e) => bindToken(p.store.doc, e as never, path, c.key), true),
-    actions: bound
+    actions: (bound
       ? [{ label: t('Detach from token'), run: () => p.mutate(el.id, (e) => unbindToken(e as never, path), true) }]
       : [{ label: t('Make a token from this value'), run: () => {
         const value = readAt(p.store.element(el.id), path)
@@ -36,8 +38,13 @@ export function tokenBind(p: PropsPanel, field: HTMLElement, el: SlideElement, p
           if (e) bindToken(p.store.doc, e as never, path, name)
         }, true)
         p.toast(t('Made {name} — {n} uses follow it', { name, n: 1 }))
-      } }],
+      } }]).concat([{ label: t('Manage tokens'), run: () => document.querySelector<HTMLElement>('.ed-side-tabs [data-view="tokens"]')?.click() }]),
   })
+}
+
+export function tokenBind(p: PropsPanel, field: HTMLElement, el: SlideElement, path: string, types: TokenType[] = ['number']): HTMLElement {
+  const bound = tokenName(el.themeRefs?.[path])
+  const pick = tokenPicker(p, el, path, types)
   if (bound) {
     const pill = document.createElement('span')
     pill.className = 'ed-token-pill'

@@ -10,6 +10,7 @@ import { measureElement } from '../../measure'
 import { formatDate, DATE_PRESETS, TIME_PRESETS, OTHER_FIELDS } from '../../datefmt'
 import { openCtxMenu } from '../ctxmenu'
 import { field, mini, segmented, section } from './fields'
+import { paintRow, colorCatalog } from './paintrow'
 import { colorAlpha, gradientRows, gradientChip, paintHost } from './color'
 import { firstFamily, FONT_CHOICES, injectFonts } from '../../fonts'
 import { fontFaceDescriptors } from '../../fontmeta'
@@ -155,15 +156,17 @@ export function buildTextProps(p: PropsPanel, el: TextElement) {
 
 /** Text fill: a solid colour, or a multi-stop gradient painted into the glyphs. */
 export function buildTextFill(p: PropsPanel, el: TextElement) {
-  section(p, t('Fill'))
+  // text always has its fill: ⠿ on the header, 👁 on the row, no −
+  section(p, t('Fill'), undefined, colorCatalog(p))
   const tgrad = el.colorGradient
   const host = paintHost(p, el.id, 'color', 'colorGradient', 90)
+  const eye = { hidden: !!el.fillHidden, toggle: () => p.mutate(el.id, (e) => { if (e.fillHidden) delete e.fillHidden; else e.fillHidden = true }, true) }
   if (host.kind === 'solid' || !tgrad) {
-    field(p, colorAlpha(p, el.color, (v, fin) =>
+    paintRow(p, colorAlpha(p, el.color, (v, fin) =>
       p.mutate(el.id, (e) => { (e as TextElement).color = v }, fin),
-      { id: el.id, path: 'color' }, host))
+      { id: el.id, path: 'color' }, host), eye)
   } else {
-    field(p, gradientChip(p, host))
+    paintRow(p, gradientChip(p, host), eye)
     gradientRows(p, tgrad, (fn, fin) => p.mutate(el.id, (e) => {
       const g = (e as TextElement).colorGradient
       if (g) fn(g)
@@ -174,18 +177,21 @@ export function buildTextFill(p: PropsPanel, el: TextElement) {
 /** Text outline — hollow or outlined glyphs, an optional layer like a shape's stroke. */
 export function buildTextStroke(p: PropsPanel, el: TextElement) {
   const ts = el.textStroke
-  section(p, t('Stroke'), ts?.width
-    ? { add: false, hint: t('Remove stroke'), run: () => p.mutate(el.id, (e) => { delete (e as TextElement).textStroke }, true) }
-    : { add: true, hint: t('Add stroke'), run: () => p.mutate(el.id, (e) => {
-      const tx = e as TextElement
-      tx.textStroke = { color: '#1E2A3A', ...(tx.textStroke ?? {}), width: 1 }
-    }, true) })
+  const add = () => p.mutate(el.id, (e) => {
+    const tx = e as TextElement
+    tx.textStroke = { color: '#1E2A3A', ...(tx.textStroke ?? {}), width: 1 }
+    delete tx.strokeHidden
+  }, true)
+  // one outline per text: + adds it, the row's − removes it, 👁 hides it
+  section(p, t('Stroke'), ts?.width ? undefined : { add: true, hint: t('Add stroke'), run: add }, colorCatalog(p, ts?.width ? undefined : add))
   if (!ts?.width) return
-  field(p, colorAlpha(p, ts.color, (v, fin) =>
+  paintRow(p, colorAlpha(p, ts.color, (v, fin) =>
     p.mutate(el.id, (e) => {
       const g = (e as TextElement).textStroke
       if (g) g.color = v
-    }, fin)))
+    }, fin), { id: el.id, path: 'textStroke.color' }),
+  { hidden: !!el.strokeHidden, toggle: () => p.mutate(el.id, (e) => { if (e.strokeHidden) delete e.strokeHidden; else e.strokeHidden = true }, true) },
+  () => p.mutate(el.id, (e) => { delete (e as TextElement).textStroke; delete e.strokeHidden }, true))
   const w = mini(t('Width'), ts.width, (v, fin) =>
     p.mutate(el.id, (e) => {
       const tx = e as TextElement

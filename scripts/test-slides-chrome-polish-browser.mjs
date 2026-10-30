@@ -303,11 +303,11 @@ await run(async () => {
   await p.evaluate(() => { const r = document.querySelector('.ed-stage-scale [data-el-id="r"]'); r?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: 0, clientY: 0 })) })
   await p.evaluate(() => window.bento.select?.(['r']) ?? null)
   await p.waitForTimeout(300)
-  if (!(await p.locator('.ed-props button[aria-label="Colors & tokens"]').count())) {
+  if (!(await p.locator('.ed-props .ed-section[data-key="Fill"] .ed-sec-cat').count())) {
     const box = await p.locator('.ed-stage-scale [data-el-id="r"]').boundingBox()
     await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2); await p.waitForTimeout(300)
   }
-  await p.locator('.ed-props button[aria-label="Colors & tokens"]').first().click()
+  await p.locator('.ed-props .ed-section[data-key="Fill"] .ed-sec-cat').first().click()
   await p.waitForTimeout(250)
   const groups = await p.evaluate(() => [...document.querySelectorAll('.ed-tokpick .ed-morph-pick-h')].map((h) => h.textContent))
   ok(groups[0] === 'Theme', `the colour picker opens on the Theme group (${groups.join(' · ')})`)
@@ -413,7 +413,7 @@ await run(async () => {
   const els = () => p.evaluate(() => JSON.parse(JSON.stringify(window.bento.doc.slides[0].elements)))
   const pickLayers = async (...ids) => { await p.evaluate((ids) => ids.forEach((id, i) => document.querySelector(`.ed-layer[data-id="${id}"]`)?.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: i > 0 }))), ids); await p.waitForTimeout(300) }
   await pickLayers('a')
-  await p.locator('.ed-props button[aria-label="Colors & tokens"]').first().click(); await p.waitForTimeout(250)
+  await p.locator('.ed-props .ed-section[data-key="Fill"] .ed-sec-cat').first().click(); await p.waitForTimeout(250)
   const acts = await p.locator('.ed-tokpick-act').allTextContents()
   ok(acts.some((a) => /Bind 2 uses to Accent 1/.test(a)) && !acts.some((a) => /Make a token/.test(a)), `a colour equal to Accent 1 offers to bind its uses to Accent 1 (${acts.join(' / ')})`)
   await p.locator('.ed-tokpick-act').filter({ hasText: /Bind 2 uses/ }).click(); await p.waitForTimeout(300)

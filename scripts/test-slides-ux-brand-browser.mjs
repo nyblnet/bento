@@ -172,13 +172,13 @@ try {
   if (link) { await link.click({ timeout: 1500 }).catch(() => {}); await p.waitForTimeout(150) }
   ok(!!link && (await p.evaluate(() => document.querySelector('.ed-side-tabs [aria-selected="true"]')?.dataset.view)) === 'tokens', 'the Theme section opens Tokens')
   await select('a')
-  const words = await p.evaluate(() => ({ open: document.querySelector('.ed-props .ed-colorref button[aria-label="Colors & tokens"]')?.title, detach: document.querySelector('.ed-props .ed-color-detach')?.title }))
+  const words = await p.evaluate(() => ({ open: document.querySelector('.ed-props .ed-section[data-key="Fill"] .ed-sec-cat')?.title, detach: document.querySelector('.ed-props .ed-color-detach')?.title }))
   ok(words.open === 'Colors & tokens' && words.detach === 'Detach from token', `one vocabulary (${words.open} · ${words.detach})`)
 
   console.log('\n5. adoption\n')
   await load({ set: {} }); await p.waitForTimeout(300)
   await select('a')
-  await tap('.ed-props .ed-colorref button[aria-label="Colors & tokens"]'); await p.waitForTimeout(100)
+  await tap('.ed-props .ed-section[data-key="Fill"] .ed-sec-cat'); await p.waitForTimeout(100)
   const make = p.locator('.ed-tokpick-act', { hasText: 'Make a token from this color' })
   if (await make.count()) { await make.click({ timeout: 1500 }).catch(() => {}); await p.waitForTimeout(250) }
   const d5 = await doc()
@@ -192,7 +192,7 @@ try {
   await goSlide(0); await p.waitForTimeout(150)
   await p.evaluate(() => window.bento.loadDoc(JSON.stringify((() => { const d = window.bento.doc; d.slides[0].elements.push({ ...d.slides[0].elements[0], id: 'a2', x: 900 }); return d })())))
   await p.waitForTimeout(300); await select('a')
-  await tap('.ed-props .ed-colorref button[aria-label="Colors & tokens"]'); await p.waitForTimeout(100)
+  await tap('.ed-props .ed-section[data-key="Fill"] .ed-sec-cat'); await p.waitForTimeout(100)
   const pick = p.locator('.ed-tokpick-act', { hasText: 'Select all with this color' })
   if (await pick.count()) { await pick.click({ timeout: 1500 }).catch(() => {}); await p.waitForTimeout(200) }
   ok((await selection()) === 'a,a2', 'Select all with this color selects every use on the slide')

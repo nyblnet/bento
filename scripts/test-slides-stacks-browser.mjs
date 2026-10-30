@@ -7,12 +7,12 @@
 // WHAT THIS PROVES.
 //   1. The renderer draws every visible layer, fills under strokes, bottom
 //      first, and a hidden layer not at all.
-//   2. "Add fill layer" turns one fill into a stack of two, the new layer on
+//   2. The Fill header's + turns one fill into a stack of two, the new layer on
 //      top and mirrored into `fill`; one undo puts the single fill back.
 //   3. Each layer row's eye, move-down and remove is ONE undo step, and
 //      removing down to one layer folds the stack back into `fill`.
-//   4. "Add stroke layer" stacks strokes the same way, and the Stroke header's
-//      − removes every stroke layer at once.
+//   4. The Stroke header's + stacks strokes the same way, and each row's −
+//      removes its layer, down to no stroke.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -66,7 +66,8 @@ try {
 
   console.log('\nadding a fill layer\n')
   await select('one')
-  await click('.ed-props .ed-addlayer:has-text("Add fill layer")')
+  // the header's + (Figma's): a second fill layer
+  await click('.ed-props .ed-section[data-key="Fill"] .ed-sec-act:not(.ed-sec-cat)')
   let one = await el('one')
   ok(one.fills?.length === 2 && one.fills[0].color === '#5E7699' && one.fill === one.fills[1].color, 'one fill became a stack of two, the new one on top and mirrored')
   ok(await p.locator('.ed-props .ed-paintlayer').count() === 2, 'the Fill section lists two layer rows')
@@ -78,26 +79,21 @@ try {
   await select('stk')
   // rows list the top layer first: fill row 0 = layer 2
   const fillRow = (n) => `.ed-props .ed-paintlayer >> nth=${n}`
-  // move and remove sit behind the row's ⋯ (opened once; it stays open across rebuilds)
-  const extras = async (n) => {
-    if (!(await p.locator(`${fillRow(n)} >> .ed-paintlayer-extras`).isVisible())) await click(`${fillRow(n)} >> .ed-paintlayer-more`)
-  }
-  await click(`${fillRow(0)} >> .ed-paintlayer-eye`)
+  // Figma's row: paint · 👁 · −; Alt+↓ on a focused row moves the layer down
+  await click(`${fillRow(0)} >> .ed-paint-eye`)
   let stk = await el('stk')
   ok(stk.fills[2].hidden === true && stk.fill === '#ff0000', 'the eye hides the top layer; the fallback falls to the next visible one')
   await undo()
   stk = await el('stk')
   ok(!stk.fills[2].hidden && stk.fill === '#0000ff', 'one undo shows it again')
-  await extras(0)
-  await click(`${fillRow(0)} >> button[aria-label="Move layer down"]`)
+  await p.locator(`${fillRow(0)} >> .ed-paint-eye`).focus()
+  await p.keyboard.press('Alt+ArrowDown'); await p.waitForTimeout(250)
   stk = await el('stk')
   ok(stk.fills.map((f) => f.color).join() === '#ff0000,#0000ff,#00ff00', 'move down swaps the layer with the one beneath')
   await undo()
-  await extras(0)
-  await click(`${fillRow(0)} >> button[aria-label="Remove layer"]`)
+  await click(`${fillRow(0)} >> .ed-paint-remove`)
   await p.waitForTimeout(100)
-  await extras(0)
-  await click(`${fillRow(0)} >> button[aria-label="Remove layer"]`)
+  await click(`${fillRow(0)} >> .ed-paint-remove`)
   stk = await el('stk')
   ok(!stk.fills && stk.fill === '#ff0000', 'removing down to one layer folds the stack back into `fill`')
   await undo()
@@ -107,14 +103,16 @@ try {
 
   console.log('\nstrokes\n')
   await select('one')
-  await click('.ed-props .ed-section[data-key="Stroke"] .ed-sec-act')
-  await click('.ed-props .ed-addlayer:has-text("Add stroke layer")')
+  await click('.ed-props .ed-section[data-key="Stroke"] .ed-sec-act:not(.ed-sec-cat)')
+  await click('.ed-props .ed-section[data-key="Stroke"] .ed-sec-act:not(.ed-sec-cat)')
   one = await el('one')
   ok(one.strokes?.length === 2 && one.strokeWidth === one.strokes[1].width, '"Add stroke layer" stacks a second stroke, mirrored')
   ok(await p.evaluate((sel) => document.querySelectorAll(`${sel} [data-layer^="stroke"]`).length, node('one')) >= 2, 'both stroke layers are drawn')
-  await click('.ed-props .ed-section[data-key="Stroke"] .ed-sec-act')
+  // each layer's − removes it: two clicks fold the stack, then end the stroke
+  await click('.ed-props .ed-section[data-key="Stroke"] + .ed-section-body .ed-paint-remove')
+  await click('.ed-props .ed-section[data-key="Stroke"] + .ed-section-body .ed-paint-remove')
   one = await el('one')
-  ok(!one.strokes && one.strokeWidth === 0, "the Stroke header's − removes every stroke layer")
+  ok(!one.strokes && one.strokeWidth === 0, "each stroke row's − removes it, down to no stroke")
 
   ok(errors.length === 0, `no page errors${errors.length ? `: ${errors.join(' | ')}` : ''}`)
 } finally {

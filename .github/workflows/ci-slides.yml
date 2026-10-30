@@ -367,6 +367,9 @@ jobs:
         # Save ▾ saves; the wordmark's File menu acts on the document; the app
         # cluster (shortcuts, help, preferences) is the app; About is about.
         run: node scripts/test-slides-menus-ia-browser.mjs
+      - name: Figma's paint sections in Chromium
+        # ⠿ and + on Fill/Stroke/Shadow/Blur headers; 👁 hides a paint (kept), − removes it.
+        run: node scripts/test-slides-figma-paint-browser.mjs
       - name: One pressed tool, and Select only in Chromium
         # V is pressed at rest; an armed tool presses itself; S selects by
         # dragging from anywhere and never moves anything.

@@ -320,6 +320,9 @@
           "minimum": 0,
           "maximum": 1000
         },
+        "blurHidden": {
+          "type": "boolean"
+        },
         "color": {
           "type": "string",
           "maxLength": 64,
@@ -371,6 +374,9 @@
             "id",
             "key"
           ]
+        },
+        "fillHidden": {
+          "type": "boolean"
         },
         "flipX": {
           "type": "boolean"
@@ -481,6 +487,9 @@
         "shadow": {
           "$ref": "#/$defs/prop-shadow"
         },
+        "shadowHidden": {
+          "type": "boolean"
+        },
         "showOnHover": {
           "type": "string",
           "maxLength": 200,
@@ -515,6 +524,9 @@
             }
           },
           "additionalProperties": false
+        },
+        "strokeHidden": {
+          "type": "boolean"
         },
         "textStroke": {
           "$ref": "#/$defs/prop-textStroke"
@@ -686,6 +698,9 @@
           "minimum": 0,
           "maximum": 1000
         },
+        "blurHidden": {
+          "type": "boolean"
+        },
         "bool": {
           "type": "object",
           "properties": {
@@ -769,6 +784,9 @@
         },
         "fillGradient": {
           "$ref": "#/$defs/prop-fillGradient"
+        },
+        "fillHidden": {
+          "type": "boolean"
         },
         "fills": {
           "type": "array",
@@ -1072,6 +1090,9 @@
         "shadow": {
           "$ref": "#/$defs/prop-shadow"
         },
+        "shadowHidden": {
+          "type": "boolean"
+        },
         "shape": {
           "type": "string",
           "enum": [
@@ -1202,6 +1223,9 @@
           "required": [
             "stops"
           ]
+        },
+        "strokeHidden": {
+          "type": "boolean"
         },
         "strokeStyle": {
           "type": "string",
@@ -1420,6 +1444,9 @@
           "minimum": 0,
           "maximum": 1000
         },
+        "blurHidden": {
+          "type": "boolean"
+        },
         "component": {
           "type": "object",
           "properties": {
@@ -1466,6 +1493,9 @@
         },
         "crop": {
           "$ref": "#/$defs/prop-crop"
+        },
+        "fillHidden": {
+          "type": "boolean"
         },
         "fit": {
           "type": "string",
@@ -1557,6 +1587,9 @@
         "shadow": {
           "$ref": "#/$defs/prop-shadow"
         },
+        "shadowHidden": {
+          "type": "boolean"
+        },
         "showOnHover": {
           "type": "string",
           "maxLength": 200,
@@ -1596,6 +1629,9 @@
           "type": "string",
           "maxLength": 33554432,
           "description": "data: URI, asset:<key> or URL"
+        },
+        "strokeHidden": {
+          "type": "boolean"
         },
         "themeRefs": {
           "$ref": "#/$defs/prop-themeRefs"
@@ -1654,6 +1690,9 @@
           "minimum": 0,
           "maximum": 1000
         },
+        "blurHidden": {
+          "type": "boolean"
+        },
         "component": {
           "type": "object",
           "properties": {
@@ -1701,6 +1740,9 @@
         "css": {
           "type": "string",
           "maxLength": 131072
+        },
+        "fillHidden": {
+          "type": "boolean"
         },
         "flipX": {
           "type": "boolean"
@@ -1783,6 +1825,9 @@
         "shadow": {
           "$ref": "#/$defs/prop-shadow"
         },
+        "shadowHidden": {
+          "type": "boolean"
+        },
         "showOnHover": {
           "type": "string",
           "maxLength": 200,
@@ -1817,6 +1862,9 @@
             }
           },
           "additionalProperties": false
+        },
+        "strokeHidden": {
+          "type": "boolean"
         },
         "themeRefs": {
           "$ref": "#/$defs/prop-themeRefs"
@@ -1887,6 +1935,9 @@
           "minimum": 0,
           "maximum": 1000
         },
+        "blurHidden": {
+          "type": "boolean"
+        },
         "component": {
           "type": "object",
           "properties": {
@@ -1930,6 +1981,9 @@
             "id",
             "key"
           ]
+        },
+        "fillHidden": {
+          "type": "boolean"
         },
         "flipX": {
           "type": "boolean"
@@ -2016,6 +2070,9 @@
         "shadow": {
           "$ref": "#/$defs/prop-shadow"
         },
+        "shadowHidden": {
+          "type": "boolean"
+        },
         "showOnHover": {
           "type": "string",
           "maxLength": 200,
@@ -2053,6 +2110,9 @@
         },
         "source": {
           "$ref": "#/$defs/prop-source"
+        },
+        "strokeHidden": {
+          "type": "boolean"
         },
         "themeRefs": {
           "$ref": "#/$defs/prop-themeRefs"
@@ -2232,6 +2292,9 @@
           "minimum": 0,
           "maximum": 1000
         },
+        "blurHidden": {
+          "type": "boolean"
+        },
         "columns": {
           "$ref": "#/$defs/prop-columns"
         },
@@ -2278,6 +2341,9 @@
             "id",
             "key"
           ]
+        },
+        "fillHidden": {
+          "type": "boolean"
         },
         "flipX": {
           "type": "boolean"
@@ -2362,6 +2428,9 @@
         "shadow": {
           "$ref": "#/$defs/prop-shadow"
         },
+        "shadowHidden": {
+          "type": "boolean"
+        },
         "showOnHover": {
           "type": "string",
           "maxLength": 200,
@@ -2396,6 +2465,9 @@
             }
           },
           "additionalProperties": false
+        },
+        "strokeHidden": {
+          "type": "boolean"
         },
         "style": {
           "$ref": "#/$defs/prop-style"
@@ -2456,6 +2528,9 @@
           "minimum": 0,
           "maximum": 1000
         },
+        "blurHidden": {
+          "type": "boolean"
+        },
         "component": {
           "type": "object",
           "properties": {
@@ -2501,6 +2576,9 @@
           ]
         },
         "controls": {
+          "type": "boolean"
+        },
+        "fillHidden": {
           "type": "boolean"
         },
         "fit": {
@@ -2611,6 +2689,9 @@
         "shadow": {
           "$ref": "#/$defs/prop-shadow"
         },
+        "shadowHidden": {
+          "type": "boolean"
+        },
         "showOnHover": {
           "type": "string",
           "maxLength": 200,
@@ -2650,6 +2731,9 @@
           "type": "string",
           "maxLength": 33554432,
           "description": "data: URI, asset:<key> or URL"
+        },
+        "strokeHidden": {
+          "type": "boolean"
         },
         "themeRefs": {
           "$ref": "#/$defs/prop-themeRefs"
@@ -2720,6 +2804,9 @@
           "minimum": 0,
           "maximum": 1000
         },
+        "blurHidden": {
+          "type": "boolean"
+        },
         "component": {
           "type": "object",
           "properties": {
@@ -2766,6 +2853,9 @@
         },
         "doc": {
           "$ref": "#/$defs/prop-doc"
+        },
+        "fillHidden": {
+          "type": "boolean"
         },
         "flipX": {
           "type": "boolean"
@@ -2847,6 +2937,9 @@
         "shadow": {
           "$ref": "#/$defs/prop-shadow"
         },
+        "shadowHidden": {
+          "type": "boolean"
+        },
         "showOnHover": {
           "type": "string",
           "maxLength": 200,
@@ -2881,6 +2974,9 @@
             }
           },
           "additionalProperties": false
+        },
+        "strokeHidden": {
+          "type": "boolean"
         },
         "themeRefs": {
           "$ref": "#/$defs/prop-themeRefs"
@@ -2950,6 +3046,9 @@
           "minimum": 0,
           "maximum": 1000
         },
+        "blurHidden": {
+          "type": "boolean"
+        },
         "color": {
           "type": "string",
           "maxLength": 64,
@@ -3002,6 +3101,9 @@
         "content": {
           "type": "string",
           "maxLength": 65536
+        },
+        "fillHidden": {
+          "type": "boolean"
         },
         "flipX": {
           "type": "boolean"
@@ -3104,6 +3206,9 @@
         "shadow": {
           "$ref": "#/$defs/prop-shadow"
         },
+        "shadowHidden": {
+          "type": "boolean"
+        },
         "showOnHover": {
           "type": "string",
           "maxLength": 200,
@@ -3138,6 +3243,9 @@
             }
           },
           "additionalProperties": false
+        },
+        "strokeHidden": {
+          "type": "boolean"
         },
         "themeAssetId": {
           "type": "string",

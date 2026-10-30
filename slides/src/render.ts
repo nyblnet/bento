@@ -6,7 +6,7 @@
 import { frameClip } from './layout'
 import { offlineEnabled, isRemoteUrl, remoteSrcBlocked } from '../../kernel/src/net.ts'
 import type { BentoDoc, EmbedElement, Slide, SlideElement, SvgElement, TableElement } from './model'
-import { morphKey, paginates, isWebUrl } from './model'
+import { morphKey, paginates, isWebUrl, visiblePaint } from './model'
 import { chartSnapshotSvg } from './charts'
 import { renderMath as mathsLite, mathError } from './maths/index.ts'
 import { resolveMathHtml } from './maths/delimiters.ts'
@@ -682,6 +682,7 @@ export function renderTableHtml(el: TableElement, doc: BentoDoc): string {
  * re-targeted without disturbing the stable identity used everywhere else.
  */
 export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts = {}): HTMLElement {
+  el = visiblePaint(el) // the inspector's eye: paint switched off but kept
   const node = document.createElement('div')
   node.className = `bento-el bento-el-${el.type}`
   node.dataset.elId = el.id

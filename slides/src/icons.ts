@@ -192,6 +192,12 @@ export const ICONS = {
   tabFormat: svg('<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>'),
   tabAnimate: svg('<path d="M3 18c4 0 6-12 11-12"/><circle cx="17.5" cy="6" r="3"/><path d="M3 13h2M3 8h4" opacity=".55"/>'),
   tabInteract: svg('<path d="M9 9l4.5 11 1.6-4.4L20 14z"/><path d="M6.2 6.2a4 4 0 0 1 5.6 0M4.1 4.1a7 7 0 0 1 9.8 0" opacity=".55"/>'),
+  eyeOff: svg('<path d="M3 3l18 18"/><path d="M10.6 5.1A9.7 9.7 0 0 1 12 4.5c3 0 7 2 10 7.5a17 17 0 0 1-3 3.9"/><path d="M6.6 6.6C4.8 7.8 3.2 9.6 2 12c3 5.5 7 7.5 10 7.5 1.6 0 3.3-.5 4.9-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>'),
+  /** Figma's catalog: four dots — the deck's tokens and theme colours for this property */
+  catalog: svg('<circle cx="7.5" cy="7.5" r="2.5"/><circle cx="16.5" cy="7.5" r="2.5"/><circle cx="7.5" cy="16.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/>'),
+  sliders: svg('<path d="M6 4v16M12 4v16M18 4v16"/><circle cx="6" cy="15" r="2" fill="var(--surface, #fff)"/><circle cx="12" cy="8" r="2" fill="var(--surface, #fff)"/><circle cx="18" cy="13" r="2" fill="var(--surface, #fff)"/>'),
+  /** a stroke's weight: three lines growing thicker */
+  strokeWeight: svg('<path d="M4 6h16" stroke-width="1"/><path d="M4 12h16" stroke-width="2"/><path d="M4 18h16" stroke-width="3"/>'),
   viewTokens: svg('<circle cx="7.5" cy="7.5" r="3.5"/><circle cx="16.5" cy="16.5" r="3.5"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/>'),
   swap: svg('<path d="M7 7h13m-3-3 3 3-3 3"/><path d="M17 17H4m3-3-3 3 3 3"/>'),
 } as const

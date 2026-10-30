@@ -167,6 +167,8 @@ try {
   await select('tri')
   await p.locator('.ed-props .ed-seg[aria-label="Stroke position"] button[aria-label="Center"]').click(); await p.waitForTimeout(250)
   ok((await el('tri')).strokeAlign === 'center', 'Stroke position writes strokeAlign')
+  // the line style sits behind the stroke's settings (Figma's sliders button)
+  if (!(await p.locator('.ed-props .ed-seg[aria-label="Line style"]').isVisible())) { await p.locator('.ed-props .ed-stroke-sliders').click(); await p.waitForTimeout(150) }
   await p.locator('.ed-props .ed-seg[aria-label="Line style"] button[aria-label="Custom dashes"]').click(); await p.waitForTimeout(250)
   e = await el('tri')
   ok(Array.isArray(e.strokeDashes) && e.strokeDashes.length === 2 && e.strokeStyle === 'dashed', `Custom dashes writes a pair, with dashed underneath for an older shell (${JSON.stringify(e.strokeDashes)})`)

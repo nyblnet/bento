@@ -23,11 +23,24 @@ export function labeledSelect(pairs: Array<[string, string]>, value: string, onC
 /** A section header. `action` puts Penpot's + or − on the header line: an
  *  optional property (stroke, shadow, blur) is added from its header and
  *  removed from it, instead of a 'none' in a dropdown. */
-export function section(p: PropsPanel, title: string, action?: { add: boolean; hint: string; run: () => void }) {
+export function section(p: PropsPanel, title: string, action?: { add: boolean; hint: string; run: () => void; empty?: boolean }, catalog?: (anchor: HTMLElement, head: HTMLElement) => void) {
   const h = document.createElement('h3')
   h.className = 'ed-section'
   h.dataset.key = title
   h.textContent = title
+  // Figma's ⠿: the deck's theme colours and tokens for this property, one
+  // entry point per section (the fields carry no picker button of their own)
+  if (catalog) {
+    const c = document.createElement('button')
+    c.type = 'button'
+    c.className = 'ed-sec-act ed-sec-cat'
+    c.innerHTML = ICONS.catalog
+    c.title = t('Colors & tokens')
+    c.setAttribute('aria-label', t('{what}: colors & tokens', { what: title }))
+    c.setAttribute('aria-haspopup', 'dialog')
+    c.addEventListener('click', (ev) => { ev.stopPropagation(); catalog(c, h) })
+    h.appendChild(c)
+  }
   if (action) {
     const b = document.createElement('button')
     b.type = 'button'
@@ -46,7 +59,7 @@ export function section(p: PropsPanel, title: string, action?: { add: boolean; h
       action.run()
     })
     h.appendChild(b)
-    if (action.add) h.classList.add('ed-sec-empty')
+    if (action.empty ?? action.add) h.classList.add('ed-sec-empty')
   }
   p.host.appendChild(h)
 }

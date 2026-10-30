@@ -12264,3 +12264,19 @@ others are related to the file."
 Every moved command is in the command list (⌘K finds it) with its key.
 Spaces still follows the 2026-09-26 map; porting it is a follow-up, not part
 of this change.
+## 2026-10-30 — slides: Fill, Stroke, Shadow and Blur read as Figma's
+
+Each paint section heads with Figma's ⠿ catalog (the deck's theme colours
+and tokens for that property, with Manage tokens) and +; each paint is a row
+of the field, 👁 and −, the eye and − in one 26px column under the header's
+⠿ and +. The field's own palette button gave way to the ⠿: one entry point
+per section. Hiding a single paint keeps it: additive `fillHidden`,
+`strokeHidden`, `shadowHidden`, `blurHidden` (true or absent), read through
+model.ts `visiblePaint` by the renderer and the morph, and stripped by the
+PowerPoint writer — so the canvas, thumbnails, the show and export all agree.
+An older shell draws the paint (it ignores the key); the value is never
+lost. Stacks keep their per-layer `hidden`. A stack row's blend and dashes
+open on right-click (or the menu key); Alt+↑/↓ moves a layer, the grip shows
+on hover. Stroke's line style and dashes sit behind its sliders button, under
+a Position | Weight row. Shadow and Blur are one row each — a chip opens the
+settings — so a second shadow is still not offered.

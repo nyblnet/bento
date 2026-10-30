@@ -309,6 +309,7 @@ export function themeLink(p: PropsPanel, ref: { id: string | null; path: string;
   }
   const pick = (anchor: HTMLElement) => {
     const hex = () => input.value.toLowerCase()
+    const manage = { label: t('Manage tokens'), run: () => document.querySelector<HTMLElement>('.ed-side-tabs [data-view="tokens"]')?.click() }
     openTokenPicker(anchor, {
       title: t('Colors & tokens'),
       choices: choices(p.store.doc, ['color']),
@@ -318,7 +319,7 @@ export function themeLink(p: PropsPanel, ref: { id: string | null; path: string;
       // places before anyone thinks of a token — make the token from it, and
       // every use follows; or find every use on this slide
       actions: linkedLabel
-        ? [{ label: tok ? t('Detach from token') : t('Detach from theme color'), run: detach }]
+        ? [{ label: tok ? t('Detach from token') : t('Detach from theme color'), run: detach }, manage]
         : [
           // the colour is already a theme colour or a token: bind its uses to
           // that one rather than make a second token with the same value
@@ -338,6 +339,7 @@ export function themeLink(p: PropsPanel, ref: { id: string | null; path: string;
             p.store.select([...new Set(ids)])
             p.toast(t('{n} elements on this slide use this color', { n: new Set(ids).size }))
           } },
+          manage,
         ],
     })
   }
@@ -353,8 +355,14 @@ export function themeLink(p: PropsPanel, ref: { id: string | null; path: string;
   if (linkedLabel) field.querySelector<HTMLElement>('.ed-color-hex')?.replaceWith(boundPill(linkedLabel, !!tok, () => pick(open), detach))
   field.appendChild(open)
   outer.append(field)
+  colorPickers.set(outer, pick)
   return outer
 }
+
+/** Each colour field's Colors & tokens picker, so a section's ⠿ (Figma's
+ *  catalog) opens the one for its row — the field's own button stays out of
+ *  sight in a paint row. */
+export const colorPickers = new WeakMap<HTMLElement, (anchor: HTMLElement) => void>()
 
 /** Make every (holder, path) follow a theme colour or a colour token; each
  *  keeps its own opacity. The caller wraps it in one commit (one undo step). */

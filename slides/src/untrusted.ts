@@ -508,6 +508,8 @@ export const ELEMENT_CHECKS: Record<string, Check> = {
   name: str(LIMITS.prose), groupName: str(LIMITS.prose), alt: str(LIMITS.prose),
   // Layers' lock and eye: true or absent
   locked: bool, hidden: bool,
+  // the inspector's eye on a single paint: switched off, the literal kept
+  fillHidden: bool, strokeHidden: bool, shadowHidden: bool, blurHidden: bool,
   flipX: bool, flipY: bool,
   // a slide id, or an http(s) URL — the same test the renderer and the show apply
   link: tag((v) => (isWebUrl(v) ? v : cssValue()(v)), { type: 'string', maxLength: LIMITS.prose, description: 'slide id or http(s) URL' }),
