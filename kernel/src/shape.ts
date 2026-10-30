@@ -266,7 +266,18 @@ function paintSvg(el: ShapeSpec): SVGSVGElement {
   const boxed = el.shape === 'rect' || el.shape === 'ellipse'
   const align = el.strokeAlign
   const inset = !boxed || !align || align === 'inside' ? sw / 2 : align === 'center' ? 0 : -sw / 2
-  const aligned = !boxed && sw > 0 && !!align && (el.shape !== 'path' || /z\s*$/i.test(el.d ?? '')) && align !== (el.shape === 'triangle' ? 'inside' : 'center')
+  // A triangle's legacy outline is inset (= inside) and 'center' puts it on
+  // the box; arrows and closed paths sit on the box (= center). Only the
+  // remaining alignments need the doubled, clipped/masked stroke.
+  const aligned = !boxed && sw > 0 && !!align && align !== 'center' && (el.shape !== 'path' || /z\s*$/i.test(el.d ?? '')) && !(el.shape === 'triangle' && align === 'inside')
+  // An outside stroke on a rect/ellipse moves its outline OUT, so the fill
+  // must not ride it: the fill stays on the box and the stroke is its own node
+  // (a dashed or translucent stroke would otherwise show fill beyond the box).
+  if (boxed && align === 'outside' && sw > 0 && el.stroke && el.stroke !== 'transparent' && (el.fill !== 'none' || el.fillGradient)) {
+    const fill = paintSvg({ ...el, stroke: 'transparent', strokeWidth: 0, strokeGradient: undefined, strokeAlign: undefined })
+    fill.append(...paintSvg({ ...el, fill: 'none', fillGradient: undefined }).childNodes)
+    return fill
+  }
   svg.setAttribute('viewBox', `0 0 ${Math.max(w, 1)} ${Math.max(h, 1)}`)
   svg.setAttribute('preserveAspectRatio', 'none')
   svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;overflow:visible'
@@ -325,7 +336,7 @@ function paintSvg(el: ShapeSpec): SVGSVGElement {
     }
     case 'triangle': {
       node = document.createElementNS(SVG_NS, 'polygon')
-      const ti = aligned ? 0 : inset // aligned: the outline is the box, the stroke is clipped/masked
+      const ti = aligned || align === 'center' ? 0 : inset // aligned: the outline is the box, the stroke is clipped/masked
       node.setAttribute('points', `${w / 2},${ti} ${w - ti},${h - ti} ${ti},${h - ti}`)
       break
     }
