@@ -25,8 +25,42 @@ final class DocumentBrowserViewController: UIDocumentBrowserViewController,
         // this one searches what the documents say. See SearchViewController.
         additionalTrailingNavigationBarButtonItems = [
             UIBarButtonItem(image: UIImage(systemName: "text.magnifyingglass"),
-                            style: .plain, target: self, action: #selector(openSearch))
+                            style: .plain, target: self, action: #selector(openSearch)),
+            // The release history gate 1 checks documents against is refreshed only
+            // when the person asks: here, or on New. Never on open or launch.
+            UIBarButtonItem(image: UIImage(systemName: "ellipsis.circle"), menu: UIMenu(children: [
+                UIAction(title: "Check for updates", image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
+                    self?.checkForUpdates()
+                },
+            ])),
         ]
+    }
+
+    /// Refresh every app's signed release history. What's kept is only ever a
+    /// valid successor of what's held (ReleaseHistory, anti-rollback).
+    private func checkForUpdates() {
+        let waiting = UIAlertController(title: nil, message: "Checking for updates…", preferredStyle: .alert)
+        present(waiting, animated: true)
+        Task { @MainActor in
+            var results: [ReleaseHistory.Refresh] = []
+            for app in Releases.apps { results.append(await ReleaseHistory.refresh(app.id)) }
+            await withCheckedContinuation { done in waiting.dismiss(animated: true) { done.resume() } }
+            let message = Self.updateMessage(results)
+            let alert = UIAlertController(title: "Check for updates", message: message, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            self.present(alert, animated: true)
+        }
+    }
+
+    /// "Up to date" once any app's history came back verified; otherwise why not.
+    /// A history that doesn't verify is reported as a failed check, never kept.
+    static func updateMessage(_ results: [ReleaseHistory.Refresh]) -> String {
+        if results.contains(where: { $0 == .updated || $0 == .unchanged }) { return "Up to date." }
+        for r in results {
+            if case .refused = r { return "Couldn't check for updates: the release server sent something that didn't verify." }
+        }
+        for r in results { if case .failed(let why) = r { return "Couldn't check for updates: \(why)" } }
+        return "Couldn't check for updates."
     }
 
     @objc private func openSearch() {
@@ -122,6 +156,9 @@ final class DocumentBrowserViewController: UIDocumentBrowserViewController,
             var bytes: Data?
             do {
                 bytes = try await Releases.seed(for: app)
+                // the person asked for the network: the one time the release
+                // history is refreshed too (never on open or launch)
+                _ = await ReleaseHistory.refresh(app.id)
             } catch {
                 failure = error.localizedDescription
                 // Offline, or the server is down. A shell cached by an earlier

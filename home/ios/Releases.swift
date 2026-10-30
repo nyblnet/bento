@@ -55,11 +55,7 @@ enum Releases {
         App(id: "dash", label: "Dash", blurb: "Data and sheets"),
     ]
 
-    /// Release signing PUBLIC key, copied from `kernel/src/update.ts`. The
-    /// private half lives offline with the maintainer. Rotating it orphans every
-    /// previously shipped file, so the key is guarded rather than rotated.
-    private static let keyX = "GMHSKwWcAoJVq-Dz1ZxWZM6TXATWIKbaQBpjoTystH8"
-    private static let keyY = "flFNzbdXCmJN8RQYCeG71rBZnnbN-MCEnp1EbCLFrj0"
+    // The release signing public key lives in ReleaseKeys, the one place it's pinned.
 
     private static let timeout: TimeInterval = 20
 
@@ -271,13 +267,10 @@ enum Releases {
               let sig = sigField, !sig.isEmpty
         else { throw Failed(message: "the release manifest is malformed") }
 
-        guard let x = b64url(keyX), let y = b64url(keyY),
-              let key = try? P256.Signing.PublicKey(rawRepresentation: x + y)
-        else { throw Failed(message: "the embedded release key is unusable") }
+        guard !ReleaseKeys.keys.isEmpty else { throw Failed(message: "the embedded release key is unusable") }
 
         guard let sigBytes = Data(base64Encoded: sig) ?? b64url(sig),
-              let signature = try? P256.Signing.ECDSASignature(rawRepresentation: sigBytes),
-              key.isValidSignature(signature, for: Data(payload.utf8))
+              ReleaseKeys.verify(sigBytes, Data(payload.utf8))
         else { throw Failed(message: "the release manifest signature is INVALID — refusing it") }
 
         guard let parsed = try? JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any]
@@ -293,7 +286,8 @@ enum Releases {
 
     // MARK: - Net
 
-    private static func fetch(_ url: String, timeout limit: TimeInterval = timeout) async throws -> Data {
+    /// Internal so ReleaseHistory fetches through the same hardened request.
+    static func fetch(_ url: String, timeout limit: TimeInterval = timeout) async throws -> Data {
         guard url.hasPrefix("https://"), let u = URL(string: url) else {
             throw Failed(message: "the release server offered a non-HTTPS build")
         }

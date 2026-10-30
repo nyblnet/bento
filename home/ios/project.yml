@@ -12,7 +12,12 @@ targets:
     platform: iOS
     sources:
       - path: .
-        excludes: [project.yml]
+        excludes: [project.yml, "release-history/**"]
+      # Each app's signed release history, as a FOLDER in the bundle
+      # (release-history/<app>.json), which ReleaseHistory reads as its floor.
+      - path: release-history
+        type: folder
+        buildPhase: resources
       # The File System Access polyfill is SHARED with home/android — one copy
       # of the semantics that once wrote documents out as zero bytes. It lands
       # flat in the bundle, so `Bundle.main.url(forResource: "bridge",
@@ -26,6 +31,21 @@ targets:
     # everyone else has rather than whatever was current on build day. There are
     # three apps now and more coming; bundling meant picking one or shipping
     # several copies of Bento inside the app.
+    # A release build must carry every published app's CURRENT release history,
+    # or it fails: an app without one would leave every document unknown to
+    # gate 1. Debug builds only warn.
+    preBuildScripts:
+      - name: Check the bundled release histories
+        basedOnDependencyAnalysis: false
+        script: |
+          export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
+          MODE=--warn
+          if [ "$CONFIGURATION" = "Release" ]; then MODE=; fi
+          if ! command -v node >/dev/null 2>&1; then
+            if [ -z "$MODE" ]; then echo "error: node is needed to check the bundled release histories"; exit 1; fi
+            echo "warning: node not found, so the bundled release histories were not checked"; exit 0
+          fi
+          node "$SRCROOT/../../scripts/check-ios-release-history.mjs" $MODE
     settings:
       base:
         INFOPLIST_FILE: Info.plist
