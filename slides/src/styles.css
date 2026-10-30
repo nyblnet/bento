@@ -3097,6 +3097,9 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-props .ed-section.ed-sec-empty { color: var(--muted); }
 /* Penpot's chevron: inside the header's own padding, before the title */
 .ed-props .ed-section.ed-sec-toggle { padding-inline-start: 26px; }
+/* an empty section shows the open chevron but folds nothing: no hand, no hover */
+.ed-props .ed-section.ed-sec-flat { cursor: default; }
+.ed-props .ed-section.ed-sec-flat:hover { color: inherit; }
 .ed-props .ed-section.ed-sec-toggle::before { inset-inline-start: 12px; top: calc(50% + 3px); }
 .ed-props .ed-sec-act {
   margin-inline-start: auto; flex: none; width: 22px; height: 22px; padding: 0; display: grid; place-items: center;

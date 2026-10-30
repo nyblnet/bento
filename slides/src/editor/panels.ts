@@ -317,6 +317,20 @@ export class PropsPanel {
         body.prepend(q)
       }
       h.dataset.tab = body.dataset.tab = tabOf.get(key) ?? 'format'
+      // Nothing to fold: a section that is only its header (Shadow and Blur
+      // before their + is pressed, a section whose controls this selection
+      // lacks) reads as open — the same chevron as every open section, so the
+      // column looks alike — but is no button: it would open onto nothing.
+      // Folded-away help alone does not count as content.
+      const empty = ![...body.children].some((c) => !c.matches('.ed-help-btn, p.ed-hint:not(.ed-status, .ed-morph-warn, .ed-tab-empty, .ed-keep)'))
+      h.classList.toggle('ed-sec-flat', empty)
+      if (empty) {
+        h.classList.add('ed-sec-toggle')
+        h.classList.remove('closed')
+        body.style.display = ''
+        h.removeAttribute('role'); h.removeAttribute('aria-expanded'); h.removeAttribute('tabindex')
+        continue
+      }
       const isOpen = openState[key] ?? !closed.has(key)
       h.classList.add('ed-sec-toggle')
       h.classList.toggle('closed', !isOpen)
@@ -332,11 +346,12 @@ export class PropsPanel {
       if (h.dataset.acc) continue
       h.dataset.acc = '1'
       h.addEventListener('keydown', (e) => {
-        if (e.target !== h || (e.key !== 'Enter' && e.key !== ' ')) return
+        if (e.target !== h || (e.key !== 'Enter' && e.key !== ' ') || h.classList.contains('ed-sec-flat')) return
         e.preventDefault()
         h.click()
       })
       h.addEventListener('click', () => {
+        if (h.classList.contains('ed-sec-flat')) return // nothing to fold (emptied by a later rebuild)
         const nowClosed = h.classList.toggle('closed')
         h.setAttribute('aria-expanded', String(!nowClosed))
         const live = h.nextElementSibling as HTMLElement | null
