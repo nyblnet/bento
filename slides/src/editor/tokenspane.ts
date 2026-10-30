@@ -51,6 +51,7 @@ function inlineName(placeholder: string, label: string, submit: (v: string) => b
   }
   i.addEventListener('input', () => i.removeAttribute('aria-invalid'))
   i.addEventListener('keydown', (e) => {
+    if (e.isComposing || e.keyCode === 229) { e.stopPropagation(); return } // an IME's Enter ends its composition
     if (e.key === 'Enter') { e.preventDefault(); finish(true) }
     else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false) }
     e.stopPropagation() // the editor's own keys (Delete, arrows, letters) stay out of a name
@@ -251,7 +252,7 @@ export class TokensPane {
       name.value = c.name
       name.placeholder = t('Component {n}', { n: i + 1 })
       name.setAttribute('aria-label', t('Component name'))
-      name.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') name.blur() })
+      name.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) name.blur() })
       name.addEventListener('change', () => {
         const to = name.value.trim()
         this.store.commit(() => {

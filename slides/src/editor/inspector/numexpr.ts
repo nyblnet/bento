@@ -4,12 +4,22 @@
 // relative forms `+24`, `*2`, `/2` that start from the field's current value.
 // A hand-written parser, never eval: what a field accepts is exactly this.
 
+/** A relative entry: what to do to each value it applies to. */
+export interface RelOp { op: '+' | '*' | '/'; x: number }
+
+/** A relative entry applied to one value (a multi-selection applies it to each). */
+export const applyRel = (r: RelOp, v: number) => r.op === '+' ? v + r.x : r.op === '*' ? v * r.x : v / r.x
+
 /** The value an entry means, given the field's `prev` value, or null when it
- *  is not arithmetic. `rel` is the change from `prev` when the entry was
- *  relative (it began with + * or /); a leading − is a negative number, as in
- *  every design tool. A unit the field shows (px, °, deg, %) may be typed. */
-export function evalNumber(text: string, prev: number): { v: number; rel?: number } | null {
+ *  is not arithmetic. `rel` is the change from `prev` and `op` the operation
+ *  when the entry was relative (it began with + * or /); a leading − is a
+ *  negative number, as in every design tool. A unit the field shows (px, °,
+ *  deg, %) may be typed. A comma is a decimal point ("1,5") only when it
+ *  cannot be a thousands separator: "1,000" and "1.000,5" are refused, not
+ *  guessed, because either reading may be the one meant. */
+export function evalNumber(text: string, prev: number): { v: number; rel?: number; op?: RelOp } | null {
   if (/[\d.]\s+[\d.]/.test(text)) return null // "3 4" is two numbers, not 34
+  if (/\d,\d{3}(?!\d)/.test(text) || (/,/.test(text) && /\d\.\d/.test(text))) return null
   let s = text.trim().replace(/\s+/g, '').replace(/,/g, '.').replace(/(px|°|deg|%)$/i, '')
   if (!s) return null
   let rel: '+' | '*' | '/' | null = null
@@ -45,6 +55,7 @@ export function evalNumber(text: string, prev: number): { v: number; rel?: numbe
   try { x = expr() } catch { return null }
   if (i !== s.length || !Number.isFinite(x)) return null
   if (!rel) return { v: x }
-  const v = rel === '+' ? prev + x : rel === '*' ? prev * x : prev / x
-  return Number.isFinite(v) ? { v, rel: v - prev } : null
+  const op: RelOp = { op: rel, x }
+  const v = applyRel(op, prev)
+  return Number.isFinite(v) ? { v, rel: v - prev, op } : null
 }

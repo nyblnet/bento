@@ -31,10 +31,17 @@ import { buildAutoLayout, wrapInFrame } from './inspector/layout'
 import { buildShadow, buildBlur } from './inspector/effects'
 
 export class PropsPanel {
-  burst = false
+  private burst = false
   /** Indent (+1) / outdent (−1) bullets — set by the editor to the canvas,
    *  which knows whether a text box is open and where its caret is. */
   onListIndent: ((dir: 1 | -1) => void) | null = null
+  /** End the open edit burst by undoing it — a popover cancelled after its
+   *  live previews leaves no trace and no undo step. */
+  cancelBurst() {
+    if (!this.burst) return
+    this.burst = false
+    this.store.undo()
+  }
   /** A command's tooltip with its keys (commands.ts titleFor) — set by the
    *  editor, which owns the command list, so a hint cannot drift from the key. */
   titleOf: (id: string, label: string) => string = (_id, label) => label
@@ -69,7 +76,7 @@ export class PropsPanel {
    * the panel rebuilds the moment they change — structural rows (shadow
    * color, fx options) appear immediately instead of after focus leaves.
    */
-  isActiveEditFocus(): boolean {
+  private isActiveEditFocus(): boolean {
     // the colour popover lives on <body>; while it is open a field is mid-edit
     if (document.querySelector('.ed-cpop')) return true
     const a = document.activeElement as HTMLElement | null
@@ -135,18 +142,18 @@ export class PropsPanel {
 
   /** Collapsed by default until the user opens them (persisted per title).
    *  English keys, matched against the TRANSLATED header like SHOW_SECTIONS. */
-  static CLOSED_BY_DEFAULT = ['Layout', 'Advanced (JSON)', 'Export']
+  private static CLOSED_BY_DEFAULT = ['Layout', 'Advanced (JSON)', 'Export']
 
   /** Which tab a section lives on, by its English title — matched against
    *  the TRANSLATED header, like CLOSED_BY_DEFAULT. Format is the rest: how
    *  things look. Animate is how they move; Interact is what they do when the
    *  audience points at them. */
-  static TAB_SECTIONS: Record<'animate' | 'interact', string[]> = {
+  private static TAB_SECTIONS: Record<'animate' | 'interact', string[]> = {
     animate: ['Animation', 'Morph', 'Transition'],
     interact: ['Interactivity'],
   }
 
-  tab: PanelTab = (() => {
+  private tab: PanelTab = (() => {
     const saved = lsJson<string>('bento-panel-tab', 'format')
     return saved === 'animate' || saved === 'interact' ? saved : saved === 'show' ? 'animate' : 'format'
   })()
@@ -156,7 +163,7 @@ export class PropsPanel {
    *  A tab hides the others' sections with CSS (data-tab), so switching never
    *  rebuilds the panel or loses a field's state. A tab with nothing for this
    *  selection says so, rather than showing a blank. */
-  mountTabs() {
+  private mountTabs() {
     const bar = document.createElement('div')
     bar.className = 'ed-tabs'
     bar.setAttribute('role', 'tablist')
@@ -233,7 +240,7 @@ export class PropsPanel {
    * remembered per section title — everything stays discoverable (headers
    * always visible) while rarely-used sections stop costing space.
    */
-  applyAccordion() {
+  private applyAccordion() {
     let openState: Record<string, boolean> = {}
     openState = lsJson<Record<string, boolean>>('bento-panel-open', {})
     const headers = [...this.host.querySelectorAll<HTMLElement>('.ed-section')]
@@ -290,13 +297,13 @@ export class PropsPanel {
     }
   }
 
-  buildMultiPanel(els: SlideElement[]) {
+  private buildMultiPanel(els: SlideElement[]) {
     layerBlock(this, els)
     section(this, t('Animation'))
     revealRow(this, els)
   }
 
-  buildElementPanel(el: SlideElement) {
+  private buildElementPanel(el: SlideElement) {
     // Penpot's order: how it sits (align, order, blend, opacity, measures) with
     // no header, then what it IS (its type's own controls), then the optional
     // layers of paint — fill, stroke, shadow, blur — each added from its header.
@@ -349,7 +356,7 @@ export class PropsPanel {
    * is not rendered (closed section, other tab) is skipped: opening a section,
    * switching tab and resizing the panel each measure again.
    */
-  stackCrampedRows() {
+  private stackCrampedRows() {
     const host = this.host
     const ctx = (PropsPanel.measure ??= document.createElement('canvas').getContext('2d')!)
     // measured in the caption | control grid: a value wider than the control
@@ -370,7 +377,7 @@ export class PropsPanel {
   }
   static measure: CanvasRenderingContext2D | undefined
   static rowIds = 0
-  watchingWidth = false
+  private watchingWidth = false
 
   /**
    * What the panel is about, under the tabs, on every tab: the selection's
@@ -379,7 +386,7 @@ export class PropsPanel {
    * options appear, click empty space and the slide's come back — and this
    * says so, so a different set of options never arrives as a surprise.
    */
-  mountContext(els: SlideElement[]) {
+  private mountContext(els: SlideElement[]) {
     const bar = document.createElement('div')
     bar.className = 'ed-context'
     const glyph = document.createElement('span')
@@ -453,7 +460,7 @@ export class PropsPanel {
     }, true)
   }
 
-  duplicate(els: SlideElement[]) {
+  private duplicate(els: SlideElement[]) {
     // clones of grouped elements get fresh group ids (kept consistent within
     // the batch) so a duplicated group is its own group, not the original's
     const gidMap = new Map<string, string>()
@@ -471,7 +478,7 @@ export class PropsPanel {
     this.store.select(clones.map((c) => c.id))
   }
 
-  deleteEls(els: SlideElement[]) {
+  private deleteEls(els: SlideElement[]) {
     const ids = new Set(els.map((e) => e.id))
     this.store.commit(() => {
       this.store.slide.elements = this.store.slide.elements.filter((e) => !ids.has(e.id))
@@ -495,11 +502,6 @@ export class PropsPanel {
   mutate(id: string, fn: (el: SlideElement) => void, final: boolean) {
     const el = this.store.element(id)
     if (el) this.edit(() => fn(el), final)
-  }
-
-  setNum(id: string, key: 'x' | 'y' | 'w' | 'h' | 'rotation' | 'opacity', v: number, final = true) {
-    if (Number.isNaN(v)) return
-    this.mutate(id, (el) => { (el as any)[key] = v }, final)
   }
 }
 

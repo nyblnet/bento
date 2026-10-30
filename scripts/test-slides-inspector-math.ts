@@ -8,10 +8,12 @@
 // arithmetic a numeric field accepts — precedence, parentheses, the relative
 // forms that start from the current value (+24, *2, /2), a typed unit — and
 // REFUSES everything else (names, calls, a trailing operator, division by
-// zero), so a field never runs or keeps junk. It is a hand-written parser,
+// zero, a comma that could be a thousands separator), so a field never runs
+// or keeps junk; and a relative entry reports its operation, so a
+// multi-selection applies `*2` to each value rather than one shared delta. It is a hand-written parser,
 // never eval; the last check holds the source to that.
 import { readFileSync } from 'node:fs'
-import { evalNumber } from '../slides/src/editor/inspector/numexpr.ts'
+import { applyRel, evalNumber } from '../slides/src/editor/inspector/numexpr.ts'
 
 let checks = 0
 let failures = 0
@@ -45,6 +47,17 @@ is('+24', 100, 124, 24)
 is('*2', 100, 200, 100)
 is('/4', 100, 25, -75)
 is('+10/2', 100, 105, 5)
+
+console.log('\na relative entry carries its operation (Mixed applies it per element)\n')
+const op = (text: string) => evalNumber(text, 0)?.op
+ok(JSON.stringify(op('*2')) === '{"op":"*","x":2}' && JSON.stringify(op('+12')) === '{"op":"+","x":12}' && JSON.stringify(op('/4')) === '{"op":"/","x":4}', '*2, +12 and /4 report their operation and operand')
+ok(op('+-3')?.x === -3 && op('50') === undefined, '+-3 is a step down; a plain value has no operation')
+ok(applyRel({ op: '*', x: 2 }, 200) === 400 && applyRel({ op: '*', x: 2 }, 300) === 600 && applyRel({ op: '+', x: 10 }, 300) === 310, '*2 doubles 200 and 300 each; +10 adds to each')
+
+console.log('\nthe decimal comma, only where it cannot be a thousands separator\n')
+is('12,34', 0, 12.34)
+is('1,0001', 0, 1.0001)
+for (const ambiguous of ['1,000', '10,000', '1.000,5', '1,000.5', '+1,000']) is(ambiguous, 7, null)
 
 console.log('\nrefused\n')
 for (const junk of ['', '   ', 'abc', 'alert(1)', 'Math.PI', '2+', '(2', '2)', '1/0', '/0', '2**3', '3 4', 'constructor', '0x10', '1;2']) is(junk, 7, null)
