@@ -49,7 +49,7 @@ try {
           return rights.length > 1 && Math.max(...rights) - Math.min(...rights) > 1
         }).map((s) => s.querySelector('h3').textContent)
         const said = keys.map((k) => k.textContent)
-        const newRows = ['⇧A', 'U · S · I · E', 'K', '360/2'].filter((k) => !said.some((x) => x.includes(k)))
+        const newRows = ['⇧A', '⇧U', 'K', '360/2'].filter((k) => !said.some((x) => x.includes(k)))
         return { w: box.width, vw: innerWidth, overlaps, outside, ragged, keys: keys.length, newRows }
       })
       ok(r.keys > 20, `${tag} the sheet opened (${r.keys} keys)`)
