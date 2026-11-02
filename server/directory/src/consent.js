@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// Consent the directory verifies itself: audience `dir` (threat model §24,
-// §27; identity-directory §9.6c). Two forms, one rule: the directory
-// RECOMPUTES the transcript from ITS audience, the challenge IT issued (already
-// marked spent by the caller) and the payload it is about to apply. It never
-// trusts a transcript carried in the request.
+// Consent the directory verifies itself: audience `dir`. Two forms, one rule:
+// the directory RECOMPUTES the transcript from ITS audience, the challenge IT
+// issued (already marked spent by the caller) and the payload it is about to
+// apply. It never trusts a transcript carried in the request.
 //
 //  · native hosts: a `cns.` signed by a hardware consent key, certified by a
 //    `dev.` that the binding's CURRENT account key signed;

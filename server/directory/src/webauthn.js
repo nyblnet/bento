@@ -2,7 +2,7 @@
 // Copyright (c) 2026 The Bento authors
 //
 // WebAuthn assertion checks the directory runs against a credential it stores
-// (identity-directory §9.3 step 2, §9.6c step 5). The credential's public key
+// (registration-time checks arrive with the key-blob store). The public key
 // is kept as a raw uncompressed P-256 point (ES256 only), converted from COSE
 // once, at registration.
 

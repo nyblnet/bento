@@ -2,7 +2,7 @@
 // Copyright (c) 2026 The Bento authors
 //
 // Single-use challenges for consent the directory verifies itself (audience
-// `dir`, identity-directory §9.3/§9.6c, threat model §24).
+// `dir`).
 //
 // A challenge is STATELESS and sealed: issuedAt ‖ nonce ‖ HMAC(secret,
 // audience, scope, issuedAt, nonce), 40 bytes, base64url. Nothing is stored
