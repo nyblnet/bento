@@ -61,6 +61,11 @@ pre-1.0.
   an object that isn't selected and dragging in one motion selected it but
   didn't move it, so it took a second press. It now moves with the first.
 
+- **Pasted text keeps its spaces.** Pasting plain text, or text copied from a
+  terminal or a code block, no longer squeezes runs of spaces into one: a
+  monospace table keeps its columns, indentation stays, and a tab becomes four
+  spaces. Thanks to Hermholtz.
+
 ## [1.2.10] — 2026-10-24
 
 - **Code can type itself out.** Give a code block the new Typewriter effect
