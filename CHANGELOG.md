@@ -15,6 +15,11 @@ pre-1.0.
   nothing, silently, on a text box that had no font of its own (the usual case for
   decks written as JSON), so the next paste brought back the old clipboard. Such
   text now copies, and its embedded theme font travels with it. Thanks to b-per.
+- **Formulas morph with a little spring.** When a formula morphs from one
+  slide to the next, each symbol now travels to its new place with a gentle
+  overshoot and settle instead of a plain glide, and stays lined up with its
+  formula all the way even when the formula changes size between slides.
+  Thanks to tikurahul.
 
 ## [1.2.10] — 2026-10-24
 
