@@ -78,6 +78,20 @@ bytes end to end. Reference: `kernel/src/recovery.ts`. Rig:
   and signers must emit only the low-S form.
 - `purposes`: which payload each routine `SignPurpose` may sign.
 - `addresses`: the one normal form for an email address.
+- `dreq`: account-signed requests to the directory (`dreq.`). The verifier
+  brings `bindText` (the binding it serves as authoritative; the signer is its
+  account key), its `state`, the `challenge` it issued, and the `subject` of the
+  endpoint (bytes base64url): `pendingBindText` for contest,
+  `attestationObject` + `clientDataJSON` for cred-add (the arg is
+  sha256(attestationObject ‖ sha256(clientDataJSON))), `credentialId` for cred-del, `body` for rc-enrol. Every row
+  carries `spendCalled`; every refusal before the spend is `grammar`.
+- `rot`: `verifyRotation(prevBindText, nextBindText, nextSig, rotText, rotSig)`
+  at the file's `now`. `prevBindText` is the binding the client pinned.
+- `dreqConsent`: `cns` rows for the three op-specific purposes (`cred-add`,
+  `cred-del`, `rc-enrol`), verified exactly like the `cns` rows in `statements`.
+
+These three sections are separate from `statements` so a host runner that
+refuses an unknown row type keeps passing until it adopts them.
 
 ## Notes for native implementers
 

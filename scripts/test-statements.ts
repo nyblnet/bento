@@ -14,7 +14,9 @@
 // every builder must reproduce the exact text it was parsed from.
 // It also pins that the attack rows security's §22/§24 check runs (replay,
 // relay, payload swap, docId swap, expiry) and the grammar refusals exist, so
-// deleting a row cannot quietly shrink the contract.
+// deleting a row cannot quietly shrink the contract. The directory requests
+// (dreq.), rotation vouches (rot.) and their consents run the same way, from
+// their own fixture sections.
 
 import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -25,6 +27,8 @@ import {
   consentTranscript, webauthnChallengeFor, lowS, verifyStatementSig, payloadMatchesPurpose,
   b64uDec, b64uEnc, KX_MODE, RESERVED_PREFIXES, DISPLAY_FORBIDDEN_RANGES, DISPLAY_FORBIDDEN_UNICODE,
   displayForbidden, type Verdict, type KxMode,
+  verifyDreq, buildDreq, dreqArg, dreqNeedsConsent, verifyRotation, buildRot, sha256b64u,
+  type AttState, type DreqOp, type DreqSubject,
 } from '../kernel/src/statements.ts'
 import { normalizeAddress } from '../kernel/src/address.ts'
 import type { SignPurpose } from '../kernel/src/identity.ts'
@@ -114,6 +118,95 @@ console.log('\nthe contract cannot quietly shrink: required rows are present')
       (F.statements as Row[]).some((r) => r.type === t && r.expect === 'reject'), `${t}: at least one accept and one reject row`)
   ok(F.kxModeDefault === 'unruled' && KX_MODE === 'unruled', 'kx placement is unruled: both slots must be empty until §6b is decided')
 }
+
+console.log(`\ndreq.: the reference passes every directory-request row (${F.dreq.length})`)
+type DreqRow = Row & { bindText: string; state: AttState; challenge: string; subject: Record<string, string>; challengeSpent?: boolean }
+const bytesOf = (s: string) => b64uDec(s)!
+function subjectOf(j: Record<string, string>): DreqSubject {
+  switch (j.op) {
+    case 'contest': return { op: 'contest', pendingBindText: j.pendingBindText }
+    case 'freeze': return { op: 'freeze' }
+    case 'status': return { op: 'status' }
+    case 'cred-add': return { op: 'cred-add', attestationObject: bytesOf(j.attestationObject), clientDataJSON: bytesOf(j.clientDataJSON) }
+    case 'cred-del': return { op: 'cred-del', credentialId: bytesOf(j.credentialId) }
+    case 'rc-enrol': return { op: 'rc-enrol', body: bytesOf(j.body) }
+    default: throw new Error(`unknown subject op ${j.op}`)
+  }
+}
+async function checkDreq(r: DreqRow, text = r.text, sig = r.sig, spent = !!r.challengeSpent) {
+  return verifyDreq(text, sig, {
+    bindText: r.bindText, state: r.state, challenge: r.challenge, subject: subjectOf(r.subject),
+    spend: () => { spendCalls++; return !spent },
+  })
+}
+for (const r of F.dreq as DreqRow[]) {
+  spendCalls = 0
+  const v = await checkDreq(r)
+  const got = v.ok ? 'accept' : `reject:${v.reason}`
+  const want = r.expect === 'accept' ? 'accept' : `reject:${r.reason}`
+  ok(got === want, `${r.name} → ${want}${got === want ? '' : ` (got ${got})`}`)
+  ok(spendCalls === (r.spendCalled ? 1 : 0), `${r.name}: the challenge was ${r.spendCalled ? 'consumed once' : 'NOT consumed'} (spend called ${spendCalls}×)`)
+}
+for (const r of (F.dreq as DreqRow[]).filter((r) => r.expect === 'accept')) {
+  const v = await checkDreq(r)
+  if (!v.ok) continue
+  ok(buildDreq(v.value) === r.text, `dreq: the builder reproduces the exact text (${r.name})`)
+  ok(v.value.arg === (await dreqArg(subjectOf(r.subject))), `dreq: arg = dreqArg(subject) (${r.subject.op})`)
+  const sig = b64uDec(r.sig)!; sig[10] ^= 0x01
+  ok(!(await checkDreq(r, r.text, b64uEnc(sig))).ok, `dreq: a flipped signature bit is refused (${r.subject.op}, ${r.state})`)
+  ok(!(await checkDreq(r, r.text + '.x')).ok, `dreq: an extra field is refused (${r.subject.op}, ${r.state})`)
+  ok(!(await checkDreq(r, r.text, r.sig, true)).ok, `dreq: the same request against a spent challenge is refused (${r.subject.op}, ${r.state})`)
+}
+{
+  const rows = F.dreq as DreqRow[]
+  const ops: DreqOp[] = ['contest', 'freeze', 'status', 'cred-add', 'cred-del', 'rc-enrol']
+  for (const op of ops) ok(rows.some((r) => r.subject.op === op && r.expect === 'accept'), `dreq: an accept row for ${op}`)
+  for (const op of ['freeze', 'contest', 'cred-add'] as const) ok(rows.some((r) => r.subject.op === op && r.state === 'frozen' && r.reason === 'state'), `dreq: ${op} refused while frozen`)
+  for (const op of ['cred-add', 'cred-del', 'rc-enrol'] as const) ok(rows.some((r) => r.subject.op === op && r.state === 'pending' && r.reason === 'state'), `dreq: ${op} refused while pending`)
+  for (const needle of ['REPLAY', 'OP SWAP', 'PENDING key', 'credentialId alone', 'changed in transit', 'high-S', 'DER', 'raw (unencoded) email'])
+    ok(rows.some((r) => r.name.includes(needle)), `dreq: required row present: ${needle}`)
+  ok(ops.every((op) => dreqNeedsConsent(op) === (op === 'cred-add' || op === 'cred-del' || op === 'rc-enrol')),
+    'dreq: exactly cred-add, cred-del and rc-enrol also need a cns.')
+}
+
+console.log(`\nrot.: verifyRotation passes every rotation row (${F.rot.length})`)
+type RotRow = { name: string; prevBindText: string; nextBindText: string; nextSig: string; rotText: string; rotSig: string; expect: string; reason?: string }
+const checkRot = (r: RotRow, o: Partial<RotRow> = {}) => {
+  const x = { ...r, ...o }
+  return verifyRotation(x.prevBindText, x.nextBindText, x.nextSig, x.rotText, x.rotSig, { now: F.now, kxMode: F.kxModeDefault })
+}
+for (const r of F.rot as RotRow[]) {
+  const v = await checkRot(r)
+  const got = v.ok ? 'accept' : `reject:${v.reason}`
+  const want = r.expect === 'accept' ? 'accept' : `reject:${r.reason}`
+  ok(got === want, `${r.name} → ${want}${got === want ? '' : ` (got ${got})`}`)
+}
+for (const r of (F.rot as RotRow[]).filter((r) => r.expect === 'accept')) {
+  const v = await checkRot(r)
+  if (!v.ok) continue
+  ok(buildRot(await sha256b64u(r.nextBindText), await sha256b64u(r.prevBindText)) === r.rotText, `rot: the builder reproduces the exact text (${r.name})`)
+  const sig = b64uDec(r.rotSig)!; sig[10] ^= 0x01
+  ok(!(await checkRot(r, { rotSig: b64uEnc(sig) })).ok, 'rot: a flipped rot. signature bit is refused')
+  const nsig = b64uDec(r.nextSig)!; nsig[10] ^= 0x01
+  ok(!(await checkRot(r, { nextSig: b64uEnc(nsig) })).ok, 'rot: a flipped next-binding signature bit is refused')
+  ok(!(await checkRot(r, { prevBindText: r.nextBindText, nextBindText: r.prevBindText })).ok, 'rot: prev and next swapped is refused')
+}
+for (const needle of ['SWAPPED HASHES', 'SEQ SKIP', 'ADDRESS CHANGE', 'SIGNED BY THE NEW KEY', 'OVER A DIFFERENT NEXT', 'bare next bind.'])
+  ok((F.rot as RotRow[]).some((r) => r.name.includes(needle) && r.expect === 'reject'), `rot: required negative row present: ${needle}`)
+
+console.log(`\ncns. over dreq.: the three op-specific consent purposes (${F.dreqConsent.length})`)
+for (const r of F.dreqConsent as Row[]) {
+  spendCalls = 0
+  const v = await check(r)
+  const got = v.ok ? 'accept' : `reject:${v.reason}`
+  const want = r.expect === 'accept' ? 'accept' : `reject:${r.reason}`
+  ok(got === want, `${r.name} → ${want}${got === want ? '' : ` (got ${got})`}`)
+  ok((spendCalls > 0) === r.spendCalled, `${r.name}: the challenge was ${r.spendCalled ? '' : 'NOT '}consumed`)
+  if (v.ok) ok(buildConsent(v.value as never) === r.text, `cns: the builder reproduces the exact text (${r.name})`)
+}
+for (const p of ['cred-add', 'cred-del', 'rc-enrol'])
+  ok((F.dreqConsent as Row[]).some((r) => r.expect === 'accept' && r.text.split('.')[2] === p), `cns: an accept row for purpose ${p}`)
+ok((F.dreqConsent as Row[]).filter((r) => r.reason === 'payload-family').length >= 3, 'cns: a consent for one dreq. op never authorises another (payload-family rows)')
 
 console.log('\nderivations: the consent transcript and the WebAuthn challenge')
 for (const t of F.transcripts) {
