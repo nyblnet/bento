@@ -2389,11 +2389,15 @@ export class PropsPanel {
   }
 
   deleteEls(els: SlideElement[]) {
-    const ids = new Set(els.map((e) => e.id))
+    // locked elements stay (#838); the rest go, and the locked ones stay selected
+    const doomed = els.filter((e) => !e.locked)
+    if (!doomed.length) return
+    const ids = new Set(doomed.map((e) => e.id))
+    const kept = els.filter((e) => e.locked).map((e) => e.id)
     this.store.commit(() => {
       this.store.slide.elements = this.store.slide.elements.filter((e) => !ids.has(e.id))
     })
-    this.store.select([])
+    this.store.select(kept)
   }
 
   /** Also driven by the canvas context menu (editor.ts). */

@@ -3338,7 +3338,9 @@ export class Editor {
         ev.preventDefault()
         if (!this.store.selection.length || this.store.readOnly) return
         this.copySelection()
-        const ids = [...this.store.selection]
+        // a locked element is not moved off the slide either (#838)
+        const ids = this.store.selectedElements.filter((e) => !e.locked).map((e) => e.id)
+        if (!ids.length) return
         this.store.select([])
         this.canvas.setGhost({ slideId: this.store.slide.id, ids })
         return
@@ -3434,12 +3436,9 @@ export class Editor {
 
   /** Remove the selected elements. Shared by ⌫ and the context menu. */
   private deleteSelection() {
-    if (!this.store.selection.length) return
-    const ids = new Set(this.store.selection)
-    this.store.commit(() => {
-      this.store.slide.elements = this.store.slide.elements.filter((e) => !ids.has(e.id))
-    })
-    this.store.select([])
+    // a locked element is never deleted from the canvas (#838): unlock it
+    // first. Like arrow nudges, a mixed selection acts on the unlocked part.
+    this.panel.deleteEls(this.store.selectedElements)
   }
 
   /** Selected slides + parents in deck order. */

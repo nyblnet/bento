@@ -176,6 +176,40 @@ try {
     ok(await p.evaluate(() => window.bento.doc.slides[0].elements.find((e) => e.id === 'a').locked === true), '...and locks it')
   }
 
+  console.log('\nDelete and Cut leave locked elements alone\n')
+  {
+    const ids = () => p.evaluate(() => window.bento.doc.slides[0].elements.map((e) => e.id).join(','))
+    // a: locked (from above), bg: locked. Select only locked ones -> nothing happens
+    await load(true)
+    await p.evaluate(() => document.querySelector('.ed-layer[data-id="bg"]')?.click())
+    await p.waitForTimeout(250)
+    await p.keyboard.press('Delete')
+    await p.waitForTimeout(250)
+    ok((await ids()) === 'bg,a,b', 'Delete on a locked-only selection deletes nothing')
+    await p.keyboard.press('Backspace')
+    await p.waitForTimeout(250)
+    ok((await ids()) === 'bg,a,b', 'Backspace on a locked-only selection deletes nothing')
+    // mixed selection: bg (locked) + a -> Delete removes a only, bg stays selected
+    await p.evaluate(() => document.querySelector('.ed-layer[data-id="bg"]')?.click())
+    await p.evaluate(() => document.querySelector('.ed-layer[data-id="a"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true })))
+    await p.waitForTimeout(250)
+    ok(JSON.stringify(await selected()) === '["a","bg"]', 'a mixed selection of a locked and an unlocked element')
+    await p.keyboard.press('Delete')
+    await p.waitForTimeout(250)
+    ok((await ids()) === 'bg,b', `Delete on a mixed selection removes only the unlocked one (got ${await ids()})`)
+    ok(JSON.stringify(await selected()) === '["bg"]', 'the locked element stays selected')
+    // the panel Delete button follows the same rule
+    await p.evaluate(() => [...document.querySelectorAll('.ed-ops button')].find((b) => b.title === 'Delete')?.click())
+    await p.waitForTimeout(250)
+    ok((await ids()) === 'bg,b', 'the panel Delete button leaves a locked element too')
+    // once unlocked it can go
+    await p.keyboard.press(`${MOD}+l`)
+    await p.waitForTimeout(250)
+    await p.keyboard.press('Delete')
+    await p.waitForTimeout(250)
+    ok((await ids()) === 'b', 'after unlocking, Delete removes it')
+  }
+
   ok(errors.length === controlErrors, `no page errors once the backdrop is locked${errors.length > controlErrors ? ': ' + errors.slice(controlErrors).join(' | ') : ''}`)
 } finally {
   await browser.close()
