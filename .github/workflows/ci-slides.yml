@@ -121,6 +121,11 @@ jobs:
         # it brings the title back (an unencrypted deck is the control); a deck
         # sealed by identity, on the build:sealtest shell above, too.
         run: node scripts/test-slides-sealed-title-browser.mjs
+      - name: Presenting never opens an unsandboxed frame in Chromium
+        # A deck through file boot, loadDoc and paste, presented and clicked,
+        # runs no script and opens no frame or overlay, including with the
+        # trigger attributes planted before the show binds its listeners.
+        run: node scripts/test-slides-reveal-preview-browser.mjs
       - name: Exercise the packaged documents in Chromium
         # Real UI and serialization, offline; delayed mock writes expose save races.
         run: |
