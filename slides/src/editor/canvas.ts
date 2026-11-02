@@ -211,7 +211,7 @@ export class SlideCanvas {
     this.selecto = new Selecto({
       container: this.scroller,
       dragContainer: this.scroller,
-      selectableTargets: ['.bento-el'],
+      selectableTargets: ['.bento-el:not([data-locked])'],
       selectByClick: true,
       selectFromInside: false,
       toggleContinueSelect: 'shift',
@@ -892,8 +892,10 @@ export class SlideCanvas {
         if (node.dataset.showOnHover !== active) node.style.display = 'none'
       }
     }
+    const lockedIds = new Set(slide.elements.filter((e) => e.locked).map((e) => e.id))
     for (const node of next.querySelectorAll<HTMLElement>('[data-el-id]')) {
       if (this.isGhost(node.dataset.elId!)) node.classList.add('bento-el-ghost-cut')
+      if (node.classList.contains('bento-el') && lockedIds.has(node.dataset.elId!)) node.dataset.locked = '1'
     }
     this.renderSetBar(sets)
     if (this.surface) this.surface.replaceWith(next)
@@ -1007,7 +1009,12 @@ export class SlideCanvas {
   private syncTargets() {
     // A single selected line/curve/connector is edited with endpoint handles
     // (LineEditor), not Moveable's box — grab an end and drag it.
-    const sel = this.store.selectedElements
+    const sel = this.store.selectedElements.filter((e) => !e.locked)
+    // a locked element that IS selected (via Layers / Alt-click) gets the lock
+    // marker instead of Moveable handles
+    this.surface?.querySelectorAll('.bento-lock-sel').forEach((n) => n.classList.remove('bento-lock-sel'))
+    for (const n of this.selectedNodes()) if (n.dataset.locked) n.classList.add('bento-lock-sel')
+    this.scaleHost.style.setProperty('--lock-s', String(1 / (this.scale || 1)))
     const one = sel.length === 1 && !this.editing && !this.pathEditor.active && !this.cropEditor?.active ? sel[0] : null
     // Curves get true bezier handles (BezierEditor); lines and straight polygons
     // keep endpoint/anchor handles (LineEditor).
@@ -1017,7 +1024,7 @@ export class SlideCanvas {
     else if (lineLike) { this.lineEditor.attach(one!.id); this.bezierEditor.detach() }
     else { this.lineEditor.detach(); this.bezierEditor.detach() }
     const handled = curve || lineLike
-    const targets = this.editing || this.pathEditor?.active || this.cropEditor?.active || handled ? [] : this.selectedNodes()
+    const targets = this.editing || this.pathEditor?.active || this.cropEditor?.active || handled ? [] : this.selectedNodes().filter((n) => !n.dataset.locked)
     // snap against slide bounds/center and every non-selected element
     const others = this.surface
       ? [this.surface, ...Array.from(this.surface.querySelectorAll<HTMLElement>('.bento-el'))].filter(
@@ -1336,6 +1343,7 @@ export class SlideCanvas {
       const ids = (e.selected as HTMLElement[])
         .map((n) => n.dataset.elId)
         .filter((id): id is string => !!id && !this.isGhost(id)) // a marquee never picks up a ghost
+        .filter((id) => !this.store.element(id)?.locked) // ...nor a locked element (#838)
       this.store.select(this.expandGroups(ids))
       if (e.isDragStartEnd) {
         e.inputEvent.preventDefault()

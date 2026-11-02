@@ -12,10 +12,11 @@
 // not after whichever run came first — and the report says so once per
 // element ('run-formatting-flattened'), which is the honest half of the deal.
 //
-// Bullets flatten the same way: no UL/LI survives the sanitizer, so buChar
-// becomes a literal glyph + NBSP baked into the line, buAutoNum is numbered
-// HERE, at convert time, and frozen ('auto-number-frozen' — renumbering will
-// not follow edits). buNone stays a silence, not an absence: the bullet unit
+// Bullets: the ones bento's lists draw themselves (• and ◦, decimal numbers
+// from 1) become real UL/OL items, nested by lvl. Every other glyph or scheme
+// flattens: buChar becomes a literal glyph + NBSP baked into the line,
+// buAutoNum is numbered HERE, at convert time, and frozen
+// ('auto-number-frozen' — renumbering will not follow edits). buNone stays a silence, not an absence: the bullet unit
 // resolved by inherit.textDefaults is overlaid by the paragraph's own pPr AS A
 // UNIT, never property-merged, or the master's bullet would resurrect under a
 // paragraph that turned bullets off (the trap inherit.ts documents).
@@ -144,6 +145,52 @@ interface Para {
   lineHeight: number
   /** already-escaped bullet/number prefix, '' when none */
   prefix: string
+  /** a real list item (no prefix then): its kind and pPr lvl */
+  list?: { ordered: boolean; level: number }
+}
+
+/** buChar glyphs that ARE bento's list markers: styles.css draws `ul` as a
+ *  disc and `ul ul` as a circle, and the exporter writes exactly these. */
+const LIST_GLYPHS = new Set(['•', '◦'])
+
+/**
+ * Paragraphs → html. Without list items this is the original join on <br>,
+ * byte for byte. With them, each item is an LI at its level: a deeper item
+ * nests inside the open LI above it (`<li>One<ul><li>Two</li></ul></li>`), a
+ * shallower one closes lists back down, and plain paragraphs close every list.
+ * PowerPoint lets a paragraph jump levels (lvl 0 straight to 2); html can only
+ * nest one list inside an item, so an item lands at most one level deeper than
+ * the list it follows. A list is a block, so no <br> is needed on either side.
+ */
+function assembleParagraphs(paras: Para[], render: (p: Para) => string): string {
+  if (!paras.some((p) => p.list)) return paras.map(render).join('<br>')
+  let out = ''
+  // open lists, outermost first, each holding an open LI; `lvl` is the SOURCE
+  // level, so siblings of an item that jumped levels stay its siblings
+  const open: Array<{ ordered: boolean; lvl: number }> = []
+  let needBr = false
+  const closeOne = () => { out += open.pop()!.ordered ? '</li></ol>' : '</li></ul>' }
+  for (const p of paras) {
+    if (!p.list) {
+      while (open.length) closeOne()
+      if (needBr) out += '<br>'
+      out += render(p)
+      needBr = true
+      continue
+    }
+    const { ordered, level } = p.list
+    while (open.length && open[open.length - 1].lvl > level) closeOne()
+    const top = open[open.length - 1]
+    // the same level but the other kind of list: that list ends, a new begins
+    if (top && top.lvl === level && top.ordered !== ordered) closeOne()
+    const cur = open[open.length - 1]
+    if (cur && cur.lvl === level) out += '</li><li>'
+    else { out += ordered ? '<ol><li>' : '<ul><li>'; open.push({ ordered, lvl: level }) }
+    out += render(p)
+    needBr = false
+  }
+  while (open.length) closeOne()
+  return out
 }
 
 /**
@@ -335,7 +382,21 @@ export function textFrom(sp: XElem, ctx: InheritCtx, deps: TextDeps): OutText | 
     // a plain space would collapse against the glyph in html, and the char
     // does not survive retyping (edit these lines with line-targeted tools).
     let prefix = ''
-    if (chars > 0 && bullet.kind === 'char') {
+    let list: Para['list']
+    // The bullets bento's own lists draw — a disc or circle, plain decimal
+    // numbers from 1 — become real list items (render.ts has kept UL/OL/LI
+    // since 1.2.0, below the shell floor), so the hanging indent, the nesting
+    // and live renumbering survive. Any other glyph or numbering scheme has no
+    // list style to land on and is flattened as before; so is a numbered
+    // sequence that starts elsewhere than 1 (the sanitizer keeps no `start`),
+    // and once a level has frozen numbers it keeps freezing, so one sequence
+    // never mixes live and literal numbers.
+    if (chars > 0 && bullet.kind === 'char' && LIST_GLYPHS.has(bullet.char ?? '•')) {
+      list = { ordered: false, level: lvl }
+    } else if (chars > 0 && bullet.kind === 'autoNum' && (bullet.scheme ?? 'arabicPeriod') === 'arabicPeriod'
+      && (bullet.startAt ?? 1) === 1 && !counters.has(lvl)) {
+      list = { ordered: true, level: lvl }
+    } else if (chars > 0 && bullet.kind === 'char') {
       prefix = `${esc(bullet.char ?? '•')} `
       note('approximated', 'bullet-flattened', 'bullet glyphs are baked into the text — no list structure, so bullet colour/size and hanging indent are lost')
     } else if (chars > 0 && bullet.kind === 'autoNum') {
@@ -345,7 +406,7 @@ export function textFrom(sp: XElem, ctx: InheritCtx, deps: TextDeps): OutText | 
       note('approximated', 'auto-number-frozen', 'auto-numbered list frozen to literal numbers at convert time; renumbering will not follow edits')
     }
 
-    paras.push({ pieces, chars, align, lineHeight, prefix })
+    paras.push(list ? { pieces, chars, align, lineHeight, prefix, list } : { pieces, chars, align, lineHeight, prefix })
   }
 
   // Trailing empty paragraphs are producer noise (a bare endParaRPr closes
@@ -392,7 +453,7 @@ export function textFrom(sp: XElem, ctx: InheritCtx, deps: TextDeps): OutText | 
 
   // ------------------------------------------------------------- assembly
   const elementBold = dom.bold
-  const html = paras.map((p) => {
+  const paraHtml = (p: Para): string => {
     let out = p.prefix
     for (const piece of p.pieces) {
       let h = piece.html
@@ -403,7 +464,8 @@ export function textFrom(sp: XElem, ctx: InheritCtx, deps: TextDeps): OutText | 
       out += h
     }
     return out
-  }).join('<br>')
+  }
+  const html = assembleParagraphs(paras, paraHtml)
 
   // A typeface name is source-file text headed for CSS (types.ts safeFace).
   const face = safeFace(dom.family)
