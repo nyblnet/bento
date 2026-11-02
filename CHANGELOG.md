@@ -24,6 +24,9 @@ pre-1.0.
   overshoot and settle instead of a plain glide, and stays lined up with its
   formula all the way even when the formula changes size between slides.
   Thanks to tikurahul.
+- **Pressing an unselected object and dragging moves it again.** Pressing on
+  an object that isn't selected and dragging in one motion selected it but
+  didn't move it, so it took a second press. It now moves with the first.
 
 ## [1.2.10] — 2026-10-24
 
