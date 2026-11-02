@@ -803,6 +803,7 @@ export function startPresentation(
     frame.className = 'sv-frame'
     frame.style.setProperty('--sv-doc-w', `${doc.size.width}px`)
     frame.style.aspectRatio = `${doc.size.width} / ${doc.size.height}`
+    frame.style.setProperty('--sv-ar', String(doc.size.width / doc.size.height))
     if (w) frame.style.width = `${w}px`
     if (idx >= 0) {
       const inner = document.createElement('div')

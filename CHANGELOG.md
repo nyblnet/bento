@@ -10,6 +10,7 @@ This project's versions roughly follow semantic-ish `0.MINOR.PATCH` while it is
 pre-1.0.
 
 ## [Unreleased]
+- **Speaker view scales to its window.** The current and next-slide previews now resize with the presenter window instead of a fixed width, and notes are larger (24px) so they read at a glance.
 
 ## [1.2.10] — 2026-10-24
 
