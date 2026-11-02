@@ -11,6 +11,11 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Backslashes you type stay.** `a\-b` no longer loses its backslash when you
+  click away, and `a\\-b` no longer loses one more on every edit. A backslash
+  is dropped only where it escapes something (`\*not bold\*`, `\- not a bullet`);
+  everywhere else, typed or pasted, it is text. Thanks to Hermholtz.
+
 ## [1.2.10] — 2026-10-24
 
 - **Code can type itself out.** Give a code block the new Typewriter effect

@@ -251,6 +251,10 @@ jobs:
         # Outdent do the same; committed, one undo step; Tab outside a list —
         # a plain box, a table cell — is unchanged.
         run: node scripts/test-slides-bullet-indent-browser.mjs
+      - name: Typed backslashes in Chromium
+        # #697: `a\-b` typed and committed keeps its backslash, `a\\-b` keeps
+        # both after the first blur and after reopening; `\*x\*` still collapses.
+        run: node scripts/test-slides-backslash-browser.mjs
       - name: Leaving an inline code run in Chromium
         # A text box that already ends a line in `code` (reopened, pasted):
         # typing at the end of that line is plain text, at the box's end or
