@@ -399,6 +399,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 
 .bento-thumb-surface { overflow: hidden; pointer-events: none; }
 
+.ed-add-slide.drop { border-color: var(--blue); color: var(--blue); }
 .ed-add-slide { border: 1.5px dashed var(--line); justify-content: center; color: var(--muted); align-self: stretch; }
 
 /* interactive-state thumbs: slightly smaller, centred under their parent.
@@ -1533,7 +1534,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   opacity: 0;
   transition: opacity 0.12s ease;
 }
-.ed-insertgap:hover { opacity: 1; }
+.ed-insertgap:hover, .ed-insertgap.drop { opacity: 1; }
 .ed-insertgap::before {
   content: '';
   position: absolute;
