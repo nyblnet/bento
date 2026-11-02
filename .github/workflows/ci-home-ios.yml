@@ -47,6 +47,7 @@ jobs:
             test-home-id-statements.mjs
             test-home-id-agent.mjs
             test-home-id-recovery.mjs
+            test-home-id-recovery-flow.mjs
             test-home-spotlight.mjs
           )
           for rig in "${rigs[@]}"; do

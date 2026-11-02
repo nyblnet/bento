@@ -96,6 +96,12 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-home-id-recovery.mjs
 
+    - name: home/ios bento/connect recovery flow rig
+      # The recovery screen's decisions: a device without Argon2id's memory answers
+      # "unavailable" and a memory refusal never counts as a wrong code. Apple only.
+      shell: bento-step {0}
+      run: node scripts/test-home-id-recovery-flow.mjs
+
     - name: home/ios Spotlight rig
       # What the system search index holds for a document and keeping it current
       # after a save: replaced at once, delete-before-add when sealed, and
