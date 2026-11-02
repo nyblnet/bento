@@ -16,6 +16,13 @@ pre-1.0.
   overshoot and settle instead of a plain glide, and stays lined up with its
   formula all the way even when the formula changes size between slides.
   Thanks to tikurahul.
+- **Links in text survive the trip to PowerPoint and back.** A web address
+  linked inside a text box used to arrive in PowerPoint as plain words. It is
+  now a working hyperlink there, and links to email addresses are kept too.
+  Importing a PowerPoint deck brings its web links back as links. Bento's text
+  keeps web links only, so email links come in as plain text, and the import
+  report says so. Anything that is not an ordinary web or email address never
+  becomes a link either way.
 
 ## [1.2.10] — 2026-10-24
 

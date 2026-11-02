@@ -14,8 +14,8 @@
 // spots (strike-through, hollow glyphs, real letter-spacing).
 //
 // No DOM anywhere: the input html is the sanitizer's inline subset
-// (render.ts ALLOWED_TAGS: B I U BR SPAN DIV P STRONG EM S CODE — attributes
-// already stripped), which a ~40-line tokenizer covers completely. The writer
+// (render.ts ALLOWED_TAGS: B I U BR SPAN DIV P STRONG EM S CODE, and A whose
+// web href is the one attribute kept — every other attribute already stripped), which a ~40-line tokenizer covers completely. The writer
 // must run under node, and pulling in a DOM shim for eleven known tags would
 // be the dependency this rework exists to delete.
 
@@ -88,6 +88,10 @@ export interface TextSpOpts {
   /** element `link` mapped upstream: the integrator allocates the rel (slide
    *  jump or external URL) and hands the id down */
   link?: { rId: string; slideJump?: boolean }
+  /** an inline `<a href>` → the r:id of an external hyperlink rel the
+   *  integrator allocated for that address (one per address per slide).
+   *  Omitted: inline links export as plain text. */
+  linkFor?: (url: string) => string
   report?: Report
   /** source location for report entries, e.g. 'slide 4' */
   where?: string
@@ -144,6 +148,31 @@ export interface RunStyle {
   strike?: boolean
   /** CODE → Courier New, #88's mapping (OOXML has no semantic code run) */
   code?: boolean
+  /** an inline `<a href>`: the web address, already checked by safeHref */
+  href?: string
+}
+
+/**
+ * The one attribute the tokenizer reads: an anchor's href, and only when it
+ * is an address a slide reader can follow — http, https or mailto, bounded,
+ * with no whitespace, quote, angle bracket or control character. Anything
+ * else (javascript:, data:, a relative path, a broken-out attribute) is not
+ * a link: its text exports, unlinked. The renderer's own rule (isWebUrl) is
+ * stricter still — http and https only — so this never widens what a deck
+ * can carry; mailto is accepted because it is an ordinary hyperlink in
+ * PowerPoint.
+ */
+export function safeHref(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined
+  const v = decodeEntities(raw).trim()
+  return v.length <= 2048 && /^(?:https?:\/\/|mailto:)[^\s\x00-\x1f\x7f"'<>]+$/i.test(v) ? v : undefined
+}
+
+const HREF_RE = /\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/i
+
+const hrefOfTag = (tag: string): string | undefined => {
+  const m = HREF_RE.exec(tag)
+  return m ? safeHref(m[1] ?? m[2] ?? m[3]) : undefined
 }
 
 export interface InlineRun {
@@ -177,7 +206,7 @@ function decodeEntities(s: string): string {
 
 const sameStyle = (a: RunStyle, b: RunStyle): boolean =>
   !a.bold === !b.bold && !a.italic === !b.italic && !a.underline === !b.underline &&
-  !a.strike === !b.strike && !a.code === !b.code
+  !a.strike === !b.strike && !a.code === !b.code && a.href === b.href
 
 /**
  * Parse the sanitized inline subset into flat styled runs — #88's richRuns
@@ -185,7 +214,8 @@ const sameStyle = (a: RunStyle, b: RunStyle): boolean =>
  * br marks a break; span is transparent; any other tag (the sanitizer should
  * have unwrapped it, but paste boundaries have leaked before) contributes only
  * its children's text. Attributes are skipped unparsed — the sanitizer strips
- * them, and nothing here should trust one that survived.
+ * them, and nothing here should trust one that survived — except an anchor's
+ * href, which is read and held to safeHref's rule before it becomes a link.
  *
  * ONE deliberate divergence from #88: div/p mark a break on OPEN as well as on
  * close. contentEditable's most common shape is `line1<div>line2</div>` — the
@@ -242,6 +272,9 @@ export function parseInlineHtml(html: string, trimTrailingBreak = true): InlineR
       case 'U': next.underline = true; break
       case 'S': case 'STRIKE': next.strike = true; break
       case 'CODE': next.code = true; break
+      // a link whose href is unsafe or missing still pushes, so its close
+      // pops its own frame; its text simply carries no address
+      case 'A': next.href = closing ? undefined : hrefOfTag(m[0]); break
       default: continue // span + unknown: transparent, children pass through
     }
     if (closing) { if (stack.length > 1) stack.pop() }
@@ -383,7 +416,11 @@ export function textSp(el: TextElIn, opts: TextSpOpts): XNode | null {
     // expressible in raw OOXML, another thing PptxGenJS could not say
     kids.push(hollow ? x('a:noFill') : solidFill(ink.hex, alpha))
     kids.push(x('a:latin', { typeface: style.code ? 'Courier New' : face }))
-    if (opts.link) {
+    if (style.href && opts.linkFor) {
+      // an inline link is the run's own, and wins over the element's link
+      // for the words it covers — as a click on them does in Bento
+      kids.push(x('a:hlinkClick', { 'r:id': opts.linkFor(style.href) }))
+    } else if (opts.link) {
       // per-RUN hyperlinks, #88's hard-won fix: shape-level links on rich
       // text produced dangling rel ids; rPr-level is also where PowerPoint
       // itself puts them
