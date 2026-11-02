@@ -1697,6 +1697,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   transform: scale(tan(atan2(100cqw, var(--sv-doc-w, 1600px))));
   transform-origin: 0 0;
 }
+.sv-nextbox .sv-frame { width: min(100%, calc(30vh * var(--sv-ar, 1.7778))); }
 .sv-frame.end {
   display: flex;
   align-items: center;
