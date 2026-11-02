@@ -247,29 +247,21 @@ function lifetime(created: number, expires: number, now: number): string | null 
   return null
 }
 
-// --- kx placement (pending the maintainer, identity-design §6b) ----------------
+// --- kx placement: mode C (ruled 2026-11-02, identity-design §6b) -------------
 
 /**
- * Where the key-agreement key lives is a maintainer decision (§6b): A shared kx
- * in bind.; B per-device kx in dev.; C per-device kx in dev. AND a recovery kx in
- * bind. Both certificates carry a kx SLOT now, so the ruling changes which slot
- * is required, never the format. Until it is ruled, the strictest reading holds:
- * BOTH slots must be empty, so nothing accepts a placement nobody chose. Phase 1
- * shares nothing, so it needs no kx.
+ * Where the key-agreement key lives was the maintainer's decision (§6b), ruled C:
+ * a PER-DEVICE kx in every dev. AND a RECOVERY kx in every bind. Both slots are
+ * REQUIRED. There is no other mode and no lenient path: an empty slot is refused,
+ * and so is a kx that is not a valid ECDH P-256 point or that repeats a signing
+ * key of the same certificate. The recovery kx's private scalar travels in the
+ * account blob (recovery.ts, 64 bytes); a device's own kx never leaves it.
  */
-export type KxMode = 'unruled' | 'A' | 'B' | 'C'
-export const KX_MODE: KxMode = 'unruled'
-const KX_SLOT: Record<KxMode, { bind: 'empty' | 'required'; dev: 'empty' | 'required' }> = {
-  unruled: { bind: 'empty', dev: 'empty' },
-  A: { bind: 'required', dev: 'empty' },
-  B: { bind: 'empty', dev: 'required' },
-  C: { bind: 'required', dev: 'required' },
-}
+export const KX_MODE = 'C' as const
 
-/** Check a kx slot: present only when the mode requires it, a valid ECDH point,
- *  and never equal to any signing key in the same certificate. */
-async function kxSlot(f: string, rule: 'empty' | 'required', others: string[]): Promise<string | null | false> {
-  if (rule === 'empty') return f === '' ? null : false
+/** A kx slot: required, a valid ECDH point, never equal to any signing key in
+ *  the same certificate. */
+async function kxSlot(f: string, others: string[]): Promise<string | false> {
   if (f === '' || !(await isKxKey(f)) || others.includes(f)) return false
   return f
 }
@@ -277,7 +269,7 @@ async function kxSlot(f: string, rule: 'empty' | 'required', others: string[]): 
 // --- dev. — the device certificate (signed by the account key) ---------------
 
 /**
- * `dev.<devicePub>.<consentPub|empty>.<accountPub>.<kx|empty>.<b64u(label)|empty>.<created>.<expires>`
+ * `dev.<devicePub>.<consentPub|empty>.<accountPub>.<kx>.<b64u(label)|empty>.<created>.<expires>`
  *
  * Binds this device's ROUTINE key and its hardware CONSENT key to the account.
  * The consent key is a separate, non-exportable key (Secure Enclave
@@ -290,18 +282,19 @@ export interface DeviceCert {
   devicePub: string
   consentPub: string | null
   accountPub: string
-  kx: string | null
+  /** this device's key-agreement key (ECDH P-256); required (§6b mode C) */
+  kx: string
   label: string | null
   created: number
   expires: number
 }
 
 export function buildDev(c: DeviceCert): string {
-  return ['dev', c.devicePub, c.consentPub ?? '', c.accountPub, c.kx ?? '',
+  return ['dev', c.devicePub, c.consentPub ?? '', c.accountPub, c.kx,
     c.label ? b64uEnc(utf8(c.label)) : '', c.created, c.expires].join('.')
 }
 
-export async function verifyDev(text: string, sig: string, opts: { now: number; kxMode?: KxMode }):
+export async function verifyDev(text: string, sig: string, opts: { now: number }):
   Promise<Verdict<DeviceCert>> {
   const p = fields(text, 'dev', 8)
   if (!p) return no('grammar')
@@ -313,7 +306,7 @@ export async function verifyDev(text: string, sig: string, opts: { now: number; 
     if (!(await isSigningKey(consentF)) || consentF === devicePub || consentF === accountPub) return no('consent-key')
     consentPub = consentF
   }
-  const kx = await kxSlot(kxF, KX_SLOT[opts.kxMode ?? KX_MODE].dev, [devicePub, accountPub, consentF])
+  const kx = await kxSlot(kxF, [devicePub, accountPub, consentF])
   if (kx === false) return no('kx')
   let label: string | null = null
   if (labelF !== '') { label = displayText(labelF); if (label === null) return no('label') }
@@ -328,7 +321,7 @@ export async function verifyDev(text: string, sig: string, opts: { now: number; 
 // --- bind. — the person certificate (signed by the account key) --------------
 
 /**
- * `bind.<b64u(address)>.<accountPub>.<kx|empty>.<b64u(name)|empty>.<seq>.<prev|empty>.<created>.<expires>`
+ * `bind.<b64u(address)>.<accountPub>.<kx>.<b64u(name)|empty>.<seq>.<prev|empty>.<created>.<expires>`
  *
  * "This account key is this address", signed by the holder; the directory then
  * attests it (att.). `address` must already be in normal form (address.ts).
@@ -339,7 +332,9 @@ export async function verifyDev(text: string, sig: string, opts: { now: number; 
 export interface BindCert {
   address: string
   accountPub: string
-  kx: string | null
+  /** the account's RECOVERY key-agreement key (ECDH P-256); required (§6b mode C).
+   *  Its private scalar rides in the account blob (recovery.ts). */
+  kx: string
   name: string | null
   seq: number
   prev: string | null
@@ -348,21 +343,21 @@ export interface BindCert {
 }
 
 export function buildBind(c: BindCert): string {
-  return ['bind', b64uEnc(utf8(c.address)), c.accountPub, c.kx ?? '',
+  return ['bind', b64uEnc(utf8(c.address)), c.accountPub, c.kx,
     c.name ? b64uEnc(utf8(c.name)) : '', c.seq, c.prev ?? '', c.created, c.expires].join('.')
 }
 
 /** The grammar of a bind. text, without its lifetime or signature: shared by
  *  verifyBind and verifyRotation (which must read the PINNED binding even after
  *  it has expired). */
-async function parseBind(text: string, kxMode: KxMode): Promise<Verdict<BindCert>> {
+async function parseBind(text: string): Promise<Verdict<BindCert>> {
   const p = fields(text, 'bind', 9)
   if (!p) return no('grammar')
   const [, addressF, accountPub, kxF, nameF, seqF, prevF, createdF, expiresF] = p
   const address = freeText(addressF)
   if (address === null || !isNormalAddress(address)) return no('address')
   if (!(await isSigningKey(accountPub))) return no('key')
-  const kx = await kxSlot(kxF, KX_SLOT[kxMode].bind, [accountPub])
+  const kx = await kxSlot(kxF, [accountPub])
   if (kx === false) return no('kx')
   let name: string | null = null
   if (nameF !== '') { name = displayText(nameF); if (name === null) return no('name') }
@@ -375,9 +370,9 @@ async function parseBind(text: string, kxMode: KxMode): Promise<Verdict<BindCert
   return { ok: true, value: { address, accountPub, kx, name, seq, prev: prevF || null, created, expires } }
 }
 
-export async function verifyBind(text: string, sig: string, opts: { now: number; kxMode?: KxMode }):
+export async function verifyBind(text: string, sig: string, opts: { now: number }):
   Promise<Verdict<BindCert>> {
-  const v = await parseBind(text, opts.kxMode ?? KX_MODE)
+  const v = await parseBind(text)
   if (!v.ok) return v
   const life = lifetime(v.value.created, v.value.expires, opts.now)
   if (life) return no(life)
@@ -419,11 +414,10 @@ export interface Rotation { prev: BindCert; next: BindCert }
  * outlive its expiry.
  */
 export async function verifyRotation(prevBindText: string, nextBindText: string, nextSig: string,
-  rotText: string, rotSig: string, opts: { now: number; kxMode?: KxMode }): Promise<Verdict<Rotation>> {
-  const kxMode = opts.kxMode ?? KX_MODE
-  const prev = await parseBind(prevBindText, kxMode)
+  rotText: string, rotSig: string, opts: { now: number }): Promise<Verdict<Rotation>> {
+  const prev = await parseBind(prevBindText)
   if (!prev.ok) return no('prev')
-  const next = await verifyBind(nextBindText, nextSig, { now: opts.now, kxMode })
+  const next = await verifyBind(nextBindText, nextSig, { now: opts.now })
   if (!next.ok) return no(`next-${next.reason}`)
   if (next.value.address !== prev.value.address) return no('address')
   if (next.value.seq !== prev.value.seq + 1) return no('seq')

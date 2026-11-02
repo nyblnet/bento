@@ -39,10 +39,15 @@ bytes end to end. Reference: `kernel/src/recovery.ts`. Rig:
   string.
 - **HKDF salt "empty" means zero-length** (equivalent to 32 zero bytes). AES-GCM
   ciphertexts are `ciphertext ‖ 16-byte tag` with a 12-byte IV.
-- **Blob plaintext** is raw 32-byte big-endian private scalars: the account
-  scalar alone while kx is unruled, or with kx appended under modes A and C. On
-  import, each scalar must be in 1..n−1 AND its public point d·G must equal the
-  public key in the directory-signed binding. A swapped blob fails closed.
+- **Blob plaintext is exactly 64 bytes**: the account scalar ‖ the RECOVERY kx
+  scalar, each 32 bytes big-endian (kx placement mode C). On import, the length
+  must be 64, each scalar must be in 1..n−1, AND each one's public point d·G
+  must equal its public key in the directory-signed binding: the account key,
+  and the binding's kx slot. A swapped blob fails closed. A 32-byte
+  account-only plaintext (what every pre-C enrolment sealed) is REFUSED with
+  `length`; never read it as a partial key set. `blobs.*.wrongLength` carries
+  blobs of 32, 63, 65 and 96 bytes sealed under the right key and aad: each
+  must decrypt and then be refused on length.
 - **The PRF input is the UTF-8 bytes of `bento/id/prf/v1`.** A host that
   speaks CTAP `hmac-secret` directly, with no WebAuthn PRF API (libfido2 on
   desktop), must send `prf.hmacSecretSalt`: SHA-256("WebAuthn PRF" ‖ 0x00 ‖
@@ -68,7 +73,7 @@ bytes end to end. Reference: `kernel/src/recovery.ts`. Rig:
 
 - `statements`: one row per case. `type` names the verifier. `text` and `sig`
   are what arrives. The other fields are what the VERIFIER brings: its `now`,
-  `kxMode`, the `bindText` it holds, and for `cns` its own `rp`, `audience`,
+  the `bindText` it holds, and for `cns` its own `rp`, `audience`,
   `challenge`, `payloadText` and `docId`. `challengeSpent: true` means its
   challenge book has already seen that challenge.
 - `transcripts`: the consent channel binding (security §24), including the
@@ -146,9 +151,14 @@ refuses an unknown row type keeps passing until it adopts them.
   `spendCalled`: assert your spend callback was (or was not) invoked. A port
   that spends late passes every verdict and fails these. (home-desktop found the
   gap.)
-- **kx placement is unruled** (identity-design §6b). Both the `bind.` and the
-  `dev.` kx slots must be EMPTY in the default mode. Rows with `kxMode` A, B or C
-  show the format the ruling will select.
+- **kx placement is mode C** (identity-design §6b, ruled 2026-11-02; the
+  fixture's top-level `kxMode`). Every `dev.` carries that device's own kx and
+  every `bind.` carries the account's recovery kx: both slots are REQUIRED. An
+  empty slot, a value that is not an uncompressed P-256 point, or one equal to a
+  signing key of the same certificate is refused with `kx`. There is no other
+  mode: no row carries `kxMode`, and a host must not keep a switch that accepts
+  an empty slot or a 32-byte blob. Enrolments made before the ruling (no kx,
+  32-byte blobs) are test enrolments: DISCARD them, never migrate.
 - **The consent key is per use on Android** (measured by home-android on the
   emulator): one BiometricPrompt authorises exactly one signature, and the
   Keystore, not the UI, refuses a second. Residency in the TEE or StrongBox still

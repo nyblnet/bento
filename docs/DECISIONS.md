@@ -11964,3 +11964,58 @@ key rotation, freezing and passkey management can be switched on.
   `dreqConsent`), not in `statements`, because host runners dispatch
   `statements` rows by type and refuse an unknown one. Each host adopts them in
   its own change.
+
+## 2026-11-02 — bento/connect: kx placement is mode C (a per-device kx and a recovery kx, both required)
+
+The maintainer ruled identity-design §6b: **mode C.** Every `dev.` carries
+that device's own key-agreement key (ECDH P-256) and every `bind.` carries the
+account's RECOVERY kx. This replaces the 2026-10-18 holding rule, under which
+both slots had to stay empty until the ruling.
+
+- **Both slots are REQUIRED, and there is no other mode.** An empty slot is
+  refused with `kx`, as is a value that is not an uncompressed P-256 point or
+  that repeats a signing key of the same certificate. The kernel's mode table
+  (`unruled`/A/B/C) and every host's copy of it are gone, not set to C: a
+  switch that still accepted an empty slot or a 32-byte blob would be a
+  lenient path one call away. `KX_MODE` stays as a constant, `'C'`, for the
+  rigs to assert.
+- **The account blob is exactly 64 bytes**: the account scalar ‖ the recovery
+  kx scalar. Both blobs (PRF and recovery code) carry the same plaintext, and
+  each scalar must be in 1..n−1 and match its directory-signed public half: the
+  account key and the binding's kx slot. A 32-byte account-only plaintext is
+  refused with `length` after it decrypts, never read as a partial key set.
+  `blobs.*.wrongLength` in recovery-v1.json carries 32-, 63-, 65- and 96-byte
+  blobs sealed under the right key and aad, so every host proves it refuses on
+  length rather than failing to decrypt.
+- **A device's own kx never leaves it**; only the recovery kx's scalar travels,
+  in the blobs. The light tier (the extension) generates its device kx
+  non-extractable and re-imports the recovery kx non-extractable after sealing
+  the blobs, as it already did for the account key.
+- **Enrolments made before this ruling are discarded, never migrated.** They
+  have no kx and 32-byte blobs, and nothing under mode C accepts either. The
+  extension's stored identity record moves to v2; a v1 record (or one with no
+  version) reads as none and is deleted, and setup starts again. No upgrade
+  path exists by design: every such enrolment is a test enrolment.
+- **identity-v1.json and recovery-v1.json are regenerated.** identity-v1 drops
+  `kxModeDefault` and every per-row `kxMode` for a top-level `kxMode: "C"`, and
+  every accepted `dev.` and `bind.` fills its slot. recovery-v1's `scalars`
+  rows are now 64-byte plaintexts checked against both public halves. The
+  Swift, Kotlin, Rust and extension ports and their rigs change in the same
+  PR, so no host runs against vectors it cannot pass.
+- **Security's conditions for C (§26c) bind the sharing work that uses the
+  recovery kx, not this format change:** "unwrap once and drop" bounds only a
+  device compromised after the drop; the recovery kx is exactly as safe as the
+  blobs, so blob compromise exposes all history until the next rotation;
+  removing a device as lost or stolen always rotates the recovery kx; history
+  for a new device comes from an existing device re-wrapping to its kx
+  whenever one is reachable, and from the recovery kx only when none is; and
+  the organisation option is pure B (no recovery kx), with escrow elsewhere.
+  Senders wrap to every device kx AND the recovery kx, never the recovery kx
+  alone.
+- **Guarded by mutants.** `scripts/test-kx-mode-mutants.ts` reintroduces ten
+  lenient paths into a copy of kernel/src (an empty slot read as no kx, no
+  point check, a kx equal to a signing key, either certificate ignoring its
+  slot, a 32-byte blob beside a 64-byte one, any length of at least 64, the kx
+  scalar never matched, a missing kx public half skipping the match, a seal
+  without a kx) and requires test-statements or test-recovery to fail on each,
+  after the unmutated copy passes both.
