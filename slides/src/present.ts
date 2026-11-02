@@ -1106,6 +1106,12 @@ export function startPresentation(
       b.addEventListener('click', () => doNav(b.dataset.nav!))
     })
 
+    // the previews (current, next, rail, grid) render real anchors: a click on
+    // one must never navigate this window, which holds the presenter's notes
+    d.addEventListener('click', (ev) => {
+      if ((ev.target as HTMLElement).closest?.('a[href]')) ev.preventDefault()
+    }, true)
+
     // drive the show FROM the speaker window (its keys fire in its own document)
     d.addEventListener('keydown', (ev: KeyboardEvent) => {
       const k = ev.key

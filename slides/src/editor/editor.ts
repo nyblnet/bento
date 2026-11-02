@@ -483,6 +483,11 @@ export class Editor {
     // main area
     const main = div('ed-main')
     this.sidebar = div('ed-sidebar')
+    // a link in a thumbnail's text is a picture of a link, not a control: a
+    // click selects the slide and never navigates the editor away
+    this.sidebar.addEventListener('click', (ev) => {
+      if ((ev.target as HTMLElement).closest('a[href]')) ev.preventDefault()
+    }, true)
     const canvasWrap = div('ed-canvas-wrap')
     // presenting lives in ONE split pill beside the zoom control: the main
     // half starts the fullscreen show; its menu holds tab-fill and speaker view.

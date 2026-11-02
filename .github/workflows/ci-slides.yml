@@ -269,6 +269,16 @@ jobs:
         # Outdent do the same; committed, one undo step; Tab outside a list —
         # a plain box, a table cell — is unchanged.
         run: node scripts/test-slides-bullet-indent-browser.mjs
+      - name: URLs become links in Chromium
+        # #723: typing a URL then a space or Enter links it (a trailing full
+        # stop stays outside, what follows is plain, ⌘Z reverts), javascript:
+        # never links, the link commits with its href and is painted in the
+        # thumbnail, and pasted text with a URL is linked.
+        run: node scripts/test-slides-autolink-browser.mjs
+      - name: Links in the speaker view in Chromium
+        # A click on a link in the popup's current, next, rail or grid previews
+        # never navigates the popup that holds the presenter's notes.
+        run: node scripts/test-slides-speaker-links-browser.mjs
       - name: Typed backslashes in Chromium
         # #697: `a\-b` typed and committed keeps its backslash, `a\\-b` keeps
         # both after the first blur and after reopening; `\*x\*` still collapses.
