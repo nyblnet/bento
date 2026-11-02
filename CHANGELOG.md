@@ -30,6 +30,12 @@ pre-1.0.
   overshoot and settle instead of a plain glide, and stays lined up with its
   formula all the way even when the formula changes size between slides.
   Thanks to tikurahul.
+- **Lists survive the trip to PowerPoint and back.** A bulleted or numbered
+  list used to arrive in PowerPoint as one run-together line. Each item is now
+  its own bulleted paragraph, nested lists keep their levels, and numbers stay
+  live, so PowerPoint renumbers them as you edit. Importing a PowerPoint deck
+  brings plain bullets and numbered lists back as real lists, nesting
+  included.
 - **Lock an element so clicks and drags skip it.** A full-slide image or fill
   no longer gets in the way of drag-selecting the items above it. Select the
   element and press ⌘L (Ctrl+L), or use Lock in the Arrange section or the
