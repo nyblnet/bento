@@ -11,6 +11,12 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Formulas morph with a little spring.** When a formula morphs from one
+  slide to the next, each symbol now travels to its new place with a gentle
+  overshoot and settle instead of a plain glide, and stays lined up with its
+  formula all the way even when the formula changes size between slides.
+  Thanks to tikurahul.
+
 ## [1.2.10] — 2026-10-24
 
 - **Code can type itself out.** Give a code block the new Typewriter effect
