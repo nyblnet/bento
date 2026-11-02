@@ -167,7 +167,7 @@ const byId = (r: ConvertResult, slide: number, id: string) =>
   const r = await convertPptx(await fxBullets())
   const bullets = byId(r, 0, 's1-2') as OutText
   // glyph + LITERAL NBSP prefixes; the buNone paragraph gets none
-  ok(bullets.html === '• One<br>Two<br>• Three',
+  ok(bullets.html === '♦ One<br>Two<br>♦ Three',
     'bullets: lstStyle buChar baked per line, buNone paragraph silenced')
   const nums = byId(r, 0, 's1-3') as OutText
   ok(nums.html === '3. Alpha<br>4. Beta',

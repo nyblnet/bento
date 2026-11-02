@@ -585,6 +585,13 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-slides-sync-allowlist.ts
 
+    - name: Autolink rig
+      # Where a typed or pasted URL ends (trailing punctuation, balanced
+      # brackets), http(s) only, and pasted text turning bare URLs into links
+      # without reading _ or * inside one as emphasis (#723).
+      shell: bento-step {0}
+      run: node scripts/test-slides-autolink.ts
+
     - name: Paste keeps spaces rig
       # Pasted plain text keeps runs of spaces, leading indentation and tabs
       # (a text box paints with white-space: normal), and the PowerPoint export

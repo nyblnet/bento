@@ -622,6 +622,18 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 /* Ghost Cut (⇧⌘X): faded where it stands until ⌘V moves it. !important
    because applyElementFrame writes shadows and blur as an inline `filter`,
    which would otherwise win and leave a shadowed element unfaded. */
+/* Locked elements (#838): never a click or marquee target. The selected one
+   (reached from Layers / Alt-click) shows a dashed outline and a padlock chip,
+   counter-scaled by --lock-s so it stays readable at any zoom. */
+.ed-stage .bento-el[data-locked] { pointer-events: none; }
+.ed-stage .bento-lock-sel { outline: 2px dashed var(--accent, #4a7bd0); outline-offset: calc(2px * var(--lock-s, 1)); }
+.ed-stage .bento-lock-sel::after {
+  content: '🔒'; position: absolute; left: 0; top: 0; z-index: 9;
+  transform: scale(var(--lock-s, 1)); transform-origin: 0 0;
+  font: 13px/1 system-ui, sans-serif; padding: 3px 5px; border-radius: 0 0 6px 0;
+  background: var(--accent, #4a7bd0); color: #fff;
+}
+.ed-layer-lock { margin-left: auto; opacity: .7; font-size: 11px; }
 .ed-stage .bento-el-ghost-cut { filter: opacity(.35) !important; pointer-events: none; }
 .ed-stage .bento-editing { cursor: text; }
 /* The caret at the start of a line sits on the text box's left edge — text
