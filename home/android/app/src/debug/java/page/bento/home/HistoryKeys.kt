@@ -12,6 +12,6 @@ package page.bento.home
 internal object HistoryKeys {
     val trusted: List<Pair<String, String>> = listOf(
         Releases.KEY_X to Releases.KEY_Y,
-        "UDNWDLyLVcxJZZ6Kyi0y-eTUEDMB5zB6jVX8NOSjNlk" to "YqKJ4y20DcNjMhnPQQj8NuFiI-suqB4eFCs-9n_G3eI",
+        "aYuPHs32Dwt9rC7JTPmvaL4nDFI51l-EL0ifT2tOSb0" to "ackNJ5lepI3bPLwgduRKtQCJmvnzFxdtKPvQcvNGQfg",
     )
 }
