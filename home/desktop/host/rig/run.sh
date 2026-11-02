@@ -23,29 +23,45 @@ cp "$OUT/real/history.json" "$OUT/hist/slides/history.json"
 # origin or site (rig 1/2 and the control prove that); the fixture is nonetheless a true
 # different origin (scheme, host and port all differ from the document's bento:// origin).
 # HTTPS because the pinned CSP and the navigation policy admit only https frames. The
-# certificate is added to the system trust store for the run (needs root or passwordless
-# sudo; removed on exit); if the webview does not trust it the embeds report nothing and
-# the rig FAILS, loudly, below.
+# certificate is trusted IN-PROCESS, for the rig webview only: the rig build calls
+# webkit_web_context_allow_tls_certificate_for_host(<this exact cert>, "127.0.0.1")
+# (src/rig.rs, compiled only with the "rig" feature). Nothing is installed in any
+# trust store, no root or sudo is used, and no TLS-errors policy is relaxed. A SECOND
+# server on another port presents a DIFFERENT self-signed certificate for 127.0.0.1;
+# the webview must refuse it (the control: trusting is per certificate, not per host).
+# If the webview does not trust the fixture the embeds report nothing and the rig FAILS.
 mkdir -p "$OUT/embedsrv"; cp rig/embed.html "$OUT/embedsrv/embed.html"
-openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 1 -subj /CN=127.0.0.1 \
-  -addext "subjectAltName=IP:127.0.0.1,DNS:localhost" -addext "basicConstraints=critical,CA:TRUE" \
-  -keyout "$OUT/embed.key" -out "$OUT/embed.crt" 2>/dev/null || { echo "FAIL: openssl cannot make the fixture certificate" >&2; exit 1; }
-PORT=$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1])')
+mkcert() { # prefix
+  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 1 -subj /CN=127.0.0.1 \
+    -addext "subjectAltName=IP:127.0.0.1,DNS:localhost" -keyout "$OUT/$1.key" -out "$OUT/$1.crt" 2>/dev/null \
+    || { echo "FAIL: openssl cannot make the $1 certificate" >&2; exit 1; }
+}
+freeport() { python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1])'; }
+mkcert embed; mkcert rogue
+PORT=$(freeport); RPORT=$(freeport)
 python3 rig/embedsrv.py "$OUT/embedsrv" "$OUT/embed.crt" "$OUT/embed.key" "$PORT" >/dev/null 2>"$OUT/embed-server.log" &
 EMBED_PID=$!
-SUDO=""; [ "$(id -u)" = 0 ] || SUDO="sudo -n"
-CAF=/usr/local/share/ca-certificates/bento-rig-embed.crt
-$SUDO mkdir -p /usr/local/share/ca-certificates && $SUDO cp "$OUT/embed.crt" "$CAF" && $SUDO update-ca-certificates >/dev/null 2>&1 \
-  || { echo "FAIL: cannot trust the fixture certificate (needs root or passwordless sudo)" >&2; exit 1; }
-trap 'kill $EMBED_PID 2>/dev/null; $SUDO rm -f "$CAF"; $SUDO update-ca-certificates --fresh >/dev/null 2>&1' EXIT
+python3 rig/embedsrv.py "$OUT/embedsrv" "$OUT/rogue.crt" "$OUT/rogue.key" "$RPORT" >/dev/null 2>"$OUT/rogue-server.log" &
+ROGUE_PID=$!
+trap 'kill $EMBED_PID $ROGUE_PID 2>/dev/null' EXIT
 export BENTO_RIG_EMBED_URL="https://127.0.0.1:$PORT/embed.html"
+export BENTO_RIG_ROGUE_URL="https://127.0.0.1:$RPORT/embed.html"
+export BENTO_RIG_EMBED_CERT="$OUT/embed.crt"
 for i in $(seq 1 50); do curl -fsS --cacert "$OUT/embed.crt" -o "$OUT/embed-preflight.html" -D "$OUT/embed-preflight.hdr" "$BENTO_RIG_EMBED_URL" 2>/dev/null && break; sleep 0.2; done
 if ! grep -q "rig-embed-fixture" "$OUT/embed-preflight.html" 2>/dev/null || ! grep -qi '^content-type: text/html' "$OUT/embed-preflight.hdr" 2>/dev/null; then
   echo "FAIL: the embed fixture is not being served as text/html at $BENTO_RIG_EMBED_URL" >&2; exit 1
 fi
-echo "embed fixture served at $BENTO_RIG_EMBED_URL"
+# the rogue server must be ALIVE (its own certificate verifies with its own cert), or "refused" below proves nothing
+for i in $(seq 1 50); do curl -fsS --cacert "$OUT/rogue.crt" -o "$OUT/rogue-preflight.html" "$BENTO_RIG_ROGUE_URL?preflight" 2>/dev/null && break; sleep 0.2; done
+grep -q "rig-embed-fixture" "$OUT/rogue-preflight.html" 2>/dev/null || { echo "FAIL: the rogue-certificate server is not serving at $BENTO_RIG_ROGUE_URL" >&2; exit 1; }
+# the two certificates really differ
+[ "$(openssl x509 -in "$OUT/embed.crt" -noout -fingerprint -sha256)" != "$(openssl x509 -in "$OUT/rogue.crt" -noout -fingerprint -sha256)" ] || { echo "FAIL: the rogue certificate is the trusted one" >&2; exit 1; }
+echo "embed fixture served at $BENTO_RIG_EMBED_URL (rogue-certificate twin at $BENTO_RIG_ROGUE_URL)"
 BENTO_HISTORIES_DIR="$OUT/hist" cargo build -q --features rig || exit 1
 BIN=target/debug/bento-home-desktop
+# POSITIVE CONTROL for the release gate: the binary just built has the test-only TLS trust
+# in it, so the same check release-check.sh runs on a shipped build MUST fail here.
+if ./gate-binary.sh "$BIN" >"$OUT/gate-control.txt" 2>&1; then echo "gate-control PASSED a rig build" >>"$OUT/gate-control.txt"; echo 1 >"$OUT/gate-control.exit"; else echo 0 >"$OUT/gate-control.exit"; fi
 python3 - "$OUT/fix" <<'PY'
 import sys, pathlib
 out = pathlib.Path(sys.argv[1]); src = pathlib.Path('../../fixtures/gate1/served')

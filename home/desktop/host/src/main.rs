@@ -274,7 +274,8 @@ fn open_window(app: &tauri::AppHandle, i: usize) -> tauri::Result<()> {
     let mut init = format!("{SHIM};\n{BRIDGE};\n");
     #[cfg(feature = "rig")]
     { init = rig::init_script(app, &label, init); }
-    WebviewWindowBuilder::new(app, &label, WebviewUrl::CustomProtocol(own.parse().unwrap()))
+    #[allow(unused_variables)]
+    let window = WebviewWindowBuilder::new(app, &label, WebviewUrl::CustomProtocol(own.parse().unwrap()))
         .data_directory(data)
         .title(title)
         .inner_size(1280.0, 800.0)
@@ -323,6 +324,8 @@ fn open_window(app: &tauri::AppHandle, i: usize) -> tauri::Result<()> {
             }
         })
         .build()?;
+    #[cfg(all(feature = "rig", target_os = "linux"))]
+    rig::trust_embed_cert(&window);
     Ok(())
 }
 

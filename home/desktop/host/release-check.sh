@@ -28,9 +28,6 @@ for a in ${BENTO_APPS:-slides}; do
 done
 env -u BENTO_HISTORIES_DIR cargo build -q $FLAG
 BIN="target/$PROFILE/bento-home-desktop"
-for needle in rig_stash rig_done rig_recreate "$(python3 -c "import json;print(json.load(open('../../fixtures/gate1/test-public-key.json'))['x'])")"; do
-  if grep -a -q -- "$needle" "$BIN"; then echo "FAIL the shipped binary contains ${needle:0:20}…"; exit 1; fi
-done
-echo "ok   the $PROFILE binary has no rig commands and no corpus test key"
+./gate-binary.sh "$BIN" || exit 1
 n=$(find releases -name 'history.json' | wc -l | tr -d ' ')
 echo "release check passed: $n app history(ies) bundled into $BIN"

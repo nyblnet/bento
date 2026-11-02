@@ -160,6 +160,17 @@
       })
       let xf
       R.origin_ctl.cross = await frameReport(() => { xf = document.createElement('iframe'); xf.src = EMBED_URL + '#' + encodeURIComponent(['', '', LABEL + ':xo'].join('|')); return xf }, LABEL + ':xo')
+      // CONTROL (trust is per certificate, not per host): the same fixture served from a second
+      // loopback port with a DIFFERENT self-signed certificate for 127.0.0.1 must NOT load. The
+      // trusted certificate above is the positive control that frames do load.
+      R.rogue = 'not tried'
+      if (window.__RIG_ROGUE_URL) {
+        R.rogue = await new Promise((res) => {
+          const h = (e) => { if (e.data && e.data.embed && e.data.embed.tag === LABEL + ':rogue') { removeEventListener('message', h); res(e.data.embed) } }
+          addEventListener('message', h); setTimeout(() => res('no report'), 8000)
+          const rf = document.createElement('iframe'); rf.src = window.__RIG_ROGUE_URL + '#' + encodeURIComponent(['', '', LABEL + ':rogue'].join('|')); document.body.appendChild(rf)
+        })
+      }
       try { R.origin_ctl.cross_reads = String(xf.contentDocument.body) } catch (e) { R.origin_ctl.cross_reads = 'THREW' }
       // save in place through the bridge. A real Bento app saves with its own
       // serializer (what ⌘S writes); a corpus file gets a marker in its doc

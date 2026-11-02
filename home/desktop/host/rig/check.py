@@ -65,6 +65,8 @@ def window(name, genuine, expect_heard, peer_cap_expected=True):
     # fixture that never loaded reports 'no report' and fails above), from the loopback origin
     for tag, e in emb.items():
         if isinstance(e, dict): ok(e.get("page") == "rig-embed-fixture", f"{name}: embed {tag} is the locally served fixture")
+    # a DIFFERENT self-signed certificate for the same host is still refused (trust is per certificate)
+    ok(p.get("rogue") == "no report", f"{name}: control: an embed from a DIFFERENT self-signed 127.0.0.1 certificate never loads ({p.get('rogue')})")
     oc = p.get("origin_ctl") or {}
     xo = oc.get("cross")
     ok(isinstance(xo, dict) and re.fullmatch(r"https://127\.0\.0\.1:\d+", xo.get("origin", "") or "") is not None and xo.get("origin") != p.get("origin"), f"{name}: origin control: the unsandboxed fixture is a DIFFERENT origin from the document ({xo.get('origin') if isinstance(xo, dict) else xo} vs {p.get('origin')})")
@@ -98,6 +100,10 @@ def embeds_in_log(scn, label):
 # so the per-embed proof is the fixture's own marker in every report, asserted per window)
 srv = (out / "embed-server.log").read_text(errors="replace") if (out / "embed-server.log").exists() else ""
 gets = len(re.findall(r'"GET /embed.html', srv))
+rsrv = (out / "rogue-server.log").read_text(errors="replace") if (out / "rogue-server.log").exists() else ""
+ok(len(re.findall(r'"GET /embed\.html HTTP', rsrv)) == 0, "the rogue-certificate server was never asked for the page (the TLS handshake was refused, not merely unreported)")
+ok((out / "gate-control.exit").exists() and (out / "gate-control.exit").read_text().strip() == "0" and "FAIL the binary contains" in (out / "gate-control.txt").read_text(errors="replace"),
+   "release gate positive control: gate-binary.sh REFUSES this rig build (a gate that never fires proves nothing)")
 ok(gets >= 2, f"the local fixture server answered the embeds ({gets} GETs)")
 
 for scn, wins in [

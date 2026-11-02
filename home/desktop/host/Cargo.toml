@@ -11,10 +11,17 @@ publish = false
 rig-test-key = ["bento-hostcore/rig-test-key"]
 # Rigs only: the §19d–§19h probe, a dead drop standing in for an attacker's
 # network, and a report sink. Never in a shipped build.
-rig = ["rig-test-key"]
+rig = ["rig-test-key", "dep:webkit2gtk", "dep:gio"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+
+# Rig builds only (feature "rig"), Linux only: trust the rig's one throwaway
+# embed certificate in the rig webview's own web context (src/rig.rs). Pinned
+# to the versions tauri's wry already resolves, so the lock gains no new crate.
+[target.'cfg(target_os = "linux")'.dependencies]
+webkit2gtk = { version = "=2.0.2", optional = true }
+gio = { version = "=0.18.4", optional = true }
 
 [dependencies]
 bento-hostcore = { path = "../hostcore" }

@@ -33,13 +33,14 @@ pub fn init_script(app: &tauri::AppHandle, label: &str, init: String) -> String 
     let init = init.replacen("armed = true\n", "armed = true; window.__rigCap = cap\n", 1);
     assert!(init.contains("window.__rigCap = cap"), "rig: the shim's arming line moved");
     format!(
-        "{init}window.__RIG_INVOKE_KEY={:?};window.__RIG_LABEL={b:?};window.__RIG_FULL_LABEL={label:?};window.__RIG_WATCHDOG={};window.__RIG_WEDGE={};window.__RIG_PEER={peer:?};window.__RIG_ALL={:?};window.__RIG_EMBED_URL={:?};\n{PROBE};\n",
+        "{init}window.__RIG_INVOKE_KEY={:?};window.__RIG_LABEL={b:?};window.__RIG_FULL_LABEL={label:?};window.__RIG_WATCHDOG={};window.__RIG_WEDGE={};window.__RIG_PEER={peer:?};window.__RIG_ALL={:?};window.__RIG_EMBED_URL={:?};window.__RIG_ROGUE_URL={:?};\n{PROBE};\n",
         app.invoke_key(),
         std::env::var_os("BENTO_RIG_WATCHDOG").is_some(),
         std::env::var_os("BENTO_RIG_WEDGE").is_some(),
         labels.join(","),
         // the attacker's page: served by rig/run.sh on loopback, never a third party
         std::env::var("BENTO_RIG_EMBED_URL").unwrap_or_default(),
+        std::env::var("BENTO_RIG_ROGUE_URL").unwrap_or_default(),
     )
 }
 
@@ -105,4 +106,27 @@ pub fn rig_done(app: tauri::AppHandle, webview: tauri::Webview, report: serde_js
 #[tauri::command]
 pub fn rig_recreate(app: tauri::AppHandle, webview: tauri::Webview) -> bool {
     crate::recreate(&app, webview.label(), None, 1500)
+}
+
+/// RIG BUILDS ONLY, Linux only. The rig's attacker page is served over https from
+/// a loopback port with a THROWAWAY self-signed certificate (rig/run.sh). Instead
+/// of adding that certificate to any trust store, trust exactly that certificate
+/// here, in this webview's own web context, for the host "127.0.0.1" alone
+/// (webkit_web_context_allow_tls_certificate_for_host). No TLS-errors policy is
+/// touched: any OTHER certificate for 127.0.0.1 is still rejected, which the rig
+/// proves in the same run (a second server with a different certificate must
+/// never be loaded). Fails loudly: if the certificate is named and cannot be
+/// loaded, the rig process aborts instead of letting every embed report nothing.
+#[cfg(target_os = "linux")]
+pub fn trust_embed_cert(window: &tauri::WebviewWindow) {
+    let Some(path) = std::env::var_os("BENTO_RIG_EMBED_CERT") else { return };
+    window
+        .with_webview(move |wv| {
+            use webkit2gtk::{WebContextExt, WebViewExt};
+            let cert = gio::TlsCertificate::from_file(&path).unwrap_or_else(|e| panic!("rig: cannot load the embed certificate {path:?}: {e}"));
+            let ctx = wv.inner().context().expect("rig: the webview has no web context");
+            ctx.allow_tls_certificate_for_host(&cert, "127.0.0.1");
+            eprintln!("RIG TLS: trusted one throwaway certificate for 127.0.0.1 in this webview's context");
+        })
+        .expect("rig: cannot reach the platform webview");
 }
