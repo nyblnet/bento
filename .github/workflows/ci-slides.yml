@@ -251,6 +251,12 @@ jobs:
         # Outdent do the same; committed, one undo step; Tab outside a list —
         # a plain box, a table cell — is unchanged.
         run: node scripts/test-slides-bullet-indent-browser.mjs
+      - name: Indent and Outdent in the formatting bar in Chromium
+        # #724: selecting list text shows Outdent / Indent in the bar; they nest
+        # and un-nest bulleted and numbered items with the selection and bar
+        # kept, nested items paint further in (canvas and thumbnail), and off a
+        # list the buttons are disabled and do nothing.
+        run: node scripts/test-slides-fmtbar-indent-browser.mjs
       - name: Leaving an inline code run in Chromium
         # A text box that already ends a line in `code` (reopened, pasted):
         # typing at the end of that line is plain text, at the box's end or
