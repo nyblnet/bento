@@ -158,10 +158,43 @@ const escapeHtml = (s: string) =>
  *  underscore and `a^*` is a starred superscript, not an escape or emphasis. */
 const FORMULA = /(\$\$[^$\n]+?\$\$|(?<!\\)\\\([^\n]+?\\\)|(?<!\\)\\\[[^\n]+?\\\]|(?<![\\$])\$\S(?:[^$\n]*?\S)?\$(?!\d))/
 
-/** Drop the backslash from escaped markdown markers (`\\*x\\*` → `*x*`) —
- *  outside formulas only (#540). */
+/** Which backslashes are ESCAPES. A backslash only means something before a
+ *  marker that would otherwise have acted: a `*`/`_`/`~`/backtick with another
+ *  of the same on its line (the pair autoformat or paste would convert), or a
+ *  bullet `- `/`* ` at the start of a line. Everywhere else it is text the
+ *  author typed (`a\-b`, `C:\_x`) and stays, which is also what makes the
+ *  strip idempotent: committing text again never eats a second backslash
+ *  (#697). `plain` is the line with tags and formulas removed (marker counts);
+ *  `seg` the same line as it will be rewritten. */
+function replaceEscapes(seg: string, plain: string, fn: (c: string) => string): string {
+  const count = (c: string) => plain.split(c).length - 1
+  return seg.replace(/\\([*_~`-])/g, (m, c: string, at: number) => {
+    const before = seg.slice(0, at).replace(/<[^>]*>|&nbsp;|\s|\u00a0/g, '')
+    const after = seg.slice(at + 2)
+    const bullet = before === '' && (c === '-' || c === '*') && /^(?:&nbsp;|\s|\u00a0)/.test(after)
+    return bullet || (c !== '-' && count(c) >= 2) ? fn(c) : m
+  })
+}
+
+/** One line split around its formulas, escapes resolved outside them
+ *  (formulas keep their backslashes, #540). */
+function resolveLine(line: string, fn: (c: string) => string): string {
+  const parts = line.split(FORMULA)
+  const plain = parts.filter((_, i) => i % 2 === 0).join('').replace(/<[^>]*>/g, '')
+  return parts.map((part, i) => {
+    if (i % 2) return part
+    // only the first part can hold the line-start bullet
+    const text = i === 0 ? part : 'x' + part
+    const out = replaceEscapes(text, plain, fn)
+    return i === 0 ? out : out.slice(1)
+  }).join('')
+}
+
+/** Drop the backslash from escaped markdown markers (`\*x\*` → `*x*`) —
+ *  outside formulas only (#540), and only where it escapes something (#697). */
 export function stripMarkerEscapes(s: string): string {
-  return s.split(FORMULA).map((part, i) => (i % 2 ? part : part.replace(/\\([*_~`-])/g, '$1'))).join('')
+  return s.split(/(<br\s*\/?>|<\/?(?:div|p|li|ul|ol|h[1-6])\b[^>]*>)/i)
+    .map((seg, i) => (i % 2 ? seg : resolveLine(seg, (c) => c))).join('')
 }
 
 /** Pasted plain text → the inline-HTML subset (bold/italic/strike/code/bullets/<br>).
@@ -177,9 +210,11 @@ export function markdownToHtml(text: string): string {
   const unfenced = text.replace(/^[ \t]*```[^\n]*\n[\s\S]*?\n[ \t]*```[ \t]*$/gm,
     (block) => park(escapeHtml(block).replace(/\n/g, '<br>')))
   // formulas next, whole and escaped, so no marker rule reaches inside one
-  const withParked = unfenced.split(FORMULA)
-    .map((part, i) => (i % 2 ? park(escapeHtml(part)) : part.replace(/\\([*_~`-])/g, (_, c: string) => park(c))))
-    .join('')
+  const withParked = unfenced.split('\n').map((line) => {
+    const parts = line.split(FORMULA)
+    const plain = parts.filter((_, k) => k % 2 === 0).join('')
+    return parts.map((part, k) => (k % 2 ? park(escapeHtml(part)) : replaceEscapes(part, plain, park))).join('')
+  }).join('\n')
   const out = withParked
     .split('\n')
     .map((line) => {

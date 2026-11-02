@@ -212,6 +212,13 @@ jobs:
         # range across a parent copies parents only, never its states; plural
         # and singular toasts.
         run: node scripts/test-slides-copy-slides-browser.mjs
+      - name: Locked elements in Chromium
+        # #838: a locked backdrop no longer swallows a marquee over the items
+        # above it (the unlocked control does) or a click; Layers and Alt-click
+        # still reach it; selected it shows the lock marker with no Moveable
+        # handles and arrows do not move it; ⌘L toggles, and with nothing
+        # selected it is left to the browser.
+        run: node scripts/test-slides-lock-browser.mjs
       - name: Press and drag on an unselected element in Chromium
         # The Selecto -> Moveable handoff: pressing an unselected element (or a
         # full-slide backdrop) and dragging moves it with no page errors (Moveable
@@ -262,6 +269,10 @@ jobs:
         # Outdent do the same; committed, one undo step; Tab outside a list —
         # a plain box, a table cell — is unchanged.
         run: node scripts/test-slides-bullet-indent-browser.mjs
+      - name: Typed backslashes in Chromium
+        # #697: `a\-b` typed and committed keeps its backslash, `a\\-b` keeps
+        # both after the first blur and after reopening; `\*x\*` still collapses.
+        run: node scripts/test-slides-backslash-browser.mjs
       - name: Leaving an inline code run in Chromium
         # A text box that already ends a line in `code` (reopened, pasted):
         # typing at the end of that line is plain text, at the box's end or
