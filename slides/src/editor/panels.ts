@@ -14,6 +14,7 @@ import { PALETTE_SLOTS, paletteOf, refAt, setColor, slotIsSet } from '../palette
 import { isMacOS } from '../screens'
 import { CHART_PRESETS } from '../charts'
 import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
+import { fontFaceDescriptors } from '../fontmeta'
 import { CODE_SCOPES, DEFAULT_CODE_COLORS } from '../code'
 import { TIPS } from '../tips'
 import { DATE_PRESETS, TIME_PRESETS, OTHER_FIELDS, formatDate } from '../datefmt'
@@ -1286,13 +1287,17 @@ export class PropsPanel {
       const file = input.files?.[0]
       if (!file) return
       const reader = new FileReader()
-      reader.onload = () => {
+      reader.onload = async () => {
         const family = file.name.replace(/\.[a-z0-9]+$/i, '').replace(/[-_]+/g, ' ').trim() || 'Embedded font'
         const asset = `font_${family.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+        const src = String(reader.result)
+        // the weights and style the file states (#850): otherwise every face is
+        // declared 400 and Bold on a variable or bold font is faux bold
+        const faces = await fontFaceDescriptors(new Uint8Array(await file.arrayBuffer()), src)
         this.store.commit(() => {
           const doc = this.store.doc
-          doc.assets = { ...(doc.assets ?? {}), [asset]: String(reader.result) }
-          doc.fonts = [...(doc.fonts ?? []).filter((f) => f.family !== family), { family, asset }]
+          doc.assets = { ...(doc.assets ?? {}), [asset]: src }
+          doc.fonts = [...(doc.fonts ?? []).filter((f) => f.family !== family), { family, asset, ...faces }]
           const live = this.store.element(el.id)
           if (live && live.type === 'text') live.fontFamily = family
         })
@@ -2200,6 +2205,16 @@ export class PropsPanel {
       textBtn('⇊', 'Send to back', () => this.reorder(els, 'back')),
     ])
 
+    const lk = document.createElement('button')
+    lk.className = 'ed-btn ed-btn-block'
+    const allLocked = els.every((e) => e.locked)
+    lk.textContent = allLocked ? t('🔓 Unlock') : t('🔒 Lock')
+    lk.title = allLocked
+      ? t('Make it selectable on the canvas again (⌘L)')
+      : t('Clicks and drags on the canvas skip it; reach it from Layers or Alt-click (⌘L)')
+    lk.addEventListener('click', () => this.lock(els))
+    this.host.appendChild(lk)
+
     const grouped = els.some((e) => e.groupId)
     if (els.length > 1 || grouped) {
       const g = document.createElement('button')
@@ -2216,6 +2231,13 @@ export class PropsPanel {
       }
       this.host.appendChild(g)
     }
+  }
+
+  /** Lock the selection, or unlock it when everything in it is already locked (#838). */
+  lock(els: SlideElement[]) {
+    if (!els.length) return
+    const on = !els.every((e) => e.locked)
+    this.edit(() => { for (const el of els) { if (on) el.locked = true; else delete el.locked } }, true)
   }
 
   /** Same width/height for the whole selection — first selected is the reference. */
@@ -2367,11 +2389,15 @@ export class PropsPanel {
   }
 
   deleteEls(els: SlideElement[]) {
-    const ids = new Set(els.map((e) => e.id))
+    // locked elements stay (#838); the rest go, and the locked ones stay selected
+    const doomed = els.filter((e) => !e.locked)
+    if (!doomed.length) return
+    const ids = new Set(doomed.map((e) => e.id))
+    const kept = els.filter((e) => e.locked).map((e) => e.id)
     this.store.commit(() => {
       this.store.slide.elements = this.store.slide.elements.filter((e) => !ids.has(e.id))
     })
-    this.store.select([])
+    this.store.select(kept)
   }
 
   /** Also driven by the canvas context menu (editor.ts). */

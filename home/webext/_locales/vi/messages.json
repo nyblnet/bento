@@ -934,5 +934,17 @@
   },
   "idErrNoWayBack": {
     "message": "Chưa thiết lập gì: khóa truy cập của bạn không mở được Bento ID và thiết bị này không tạo được mã khôi phục, nên sẽ không có cách quay lại."
+  },
+  "setIdServe": {
+    "message": "Mở bằng Bento ID (xem trước)",
+    "description": "Library settings, Bento ID section: checkbox, off by default; turns on the preview of opening documents with a Bento ID."
+  },
+  "setIdServeNote": {
+    "message": "Thêm “Mở bằng Bento ID” vào menu của tài liệu: tài liệu mở trong một trang được bảo vệ có thể dùng Bento ID của bạn. Nhấp đúp vào tệp không thay đổi.",
+    "description": "Library settings: note under that checkbox."
+  },
+  "menuOpenWithId": {
+    "message": "Mở bằng Bento ID",
+    "description": "Library: an item in a document card's menu (only when the preview is on)."
   }
 }

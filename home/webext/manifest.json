@@ -78,5 +78,14 @@
   "default_locale": "en",
   "host_permissions": [
     "file:///*"
-  ]
+  ],
+  "sandbox": {
+    "pages": [
+      "src/serve/sandbox.html"
+    ]
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'",
+    "sandbox": "sandbox allow-scripts allow-modals allow-popups allow-popups-to-escape-sandbox; default-src 'none'; script-src 'self' blob:; style-src 'unsafe-inline'; img-src data: blob: https:; media-src data: blob: https:; font-src data: blob:; connect-src https://bento.page https://sync.bento.page wss://sync.bento.page; frame-src https:; object-src 'none'; base-uri 'none'; form-action 'none'; worker-src 'none'"
+  }
 }

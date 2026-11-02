@@ -934,5 +934,17 @@
   },
   "idErrNoWayBack": {
     "message": "아무것도 설정되지 않았습니다. 이 패스키로는 Bento ID를 잠금 해제할 수 없고 이 기기에서는 복구 코드도 만들 수 없어, 되찾을 방법이 없게 됩니다."
+  },
+  "setIdServe": {
+    "message": "Bento ID로 열기(미리 보기)",
+    "description": "Library settings, Bento ID section: checkbox, off by default; turns on the preview of opening documents with a Bento ID."
+  },
+  "setIdServeNote": {
+    "message": "문서 메뉴에 ‘Bento ID로 열기’를 추가합니다. 문서가 Bento ID를 사용할 수 있는 보호된 페이지에서 열립니다. 파일을 더블클릭하는 동작은 바뀌지 않습니다.",
+    "description": "Library settings: note under that checkbox."
+  },
+  "menuOpenWithId": {
+    "message": "Bento ID로 열기",
+    "description": "Library: an item in a document card's menu (only when the preview is on)."
   }
 }

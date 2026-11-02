@@ -149,6 +149,16 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-webext-id.ts
 
+    - name: WebExtension served-document rig
+      # Opening a file WITH identity (bento/connect W2): the signed release
+      # histories are verified, anti-rollback held and fetched no more than
+      # daily, never before first use; a file is GENUINE only if exactly one
+      # held history matches it (every held history is tried, never one the
+      # document names); only the scanner's executable elements become blob:
+      # scripts; and the host acts only on fixed-shape requests on its port.
+      shell: bento-step {0}
+      run: node scripts/test-webext-serve.ts
+
     - name: WebExtension localisation rig
       # Every failure mode of a message catalogue is silent: a key the code
       # uses but English lacks renders as the key name, a locale missing a key

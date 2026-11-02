@@ -569,6 +569,8 @@ function scrubEmbeds(doc: Record<string, unknown>, depth: number): Record<string
 /** A footnote id a FILE may carry: what uid() mints and nothing that could
  *  leave an attribute. Render escapes ids too — a synced op never passes here. */
 const NOTE_ID = /^[A-Za-z0-9_.:-]{1,80}$/;
+/** A named style's id (`~` joins a duplicate's key, see parseDoc). */
+const STYLE_ID = /^[A-Za-z0-9_.:~-]{1,160}$/;
 
 export const uid = (p = 'b'): string => {
   const r = globalThis.crypto?.randomUUID?.();
@@ -713,7 +715,7 @@ export function parseDoc(raw: string): ParseResult {
     // dangling footnote: docstyles.ts falls back to the block's KIND default
     // when the id does not resolve, so an unknown id is never a rendering
     // failure — only a "this named style no longer exists" the panel can show.
-    if (typeof b.styleId === 'string' && b.styleId) out.styleId = b.styleId; else delete out.styleId;
+    if (typeof b.styleId === 'string' && STYLE_ID.test(b.styleId)) out.styleId = b.styleId; else delete out.styleId;
     delete out.level; delete out.cell; delete out.image; delete out.caption; delete out.refs; delete out.cites;
     delete out.fields;
     if (typeof b.role === 'string') out.role = b.role;
@@ -845,7 +847,11 @@ export function parseDoc(raw: string): ParseResult {
       if (!isObj(raw0)) continue;
       const raw = raw0 as Record<string, unknown>;
       let id = typeof raw.id === 'string' && raw.id ? raw.id : key;
+      // ids the app mints are block kinds; anything outside this charset is
+      // refused rather than carried into the style sheet (docstyles cssAttrId)
+      if (!STYLE_ID.test(id)) continue;
       if (usedIds.has(id)) id = `${id}~${key}`;
+      if (!STYLE_ID.test(id)) continue;
       usedIds.add(id);
       const kind: BlockKind = ['para', 'h1', 'h2', 'h3', 'quote', 'ul', 'ol', 'cell', 'image', 'caption', 'toc', 'math', 'embed']
         .includes(raw.kind as string) ? raw.kind as BlockKind : 'para';

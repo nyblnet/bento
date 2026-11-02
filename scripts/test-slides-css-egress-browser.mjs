@@ -18,8 +18,11 @@
 //      drop-shadow filter, a protocol-relative `url(//…)`, which has no colon
 //      for a colour's character allowlist to catch, and four CSS-escaped
 //      spellings of the name, `u\rl(`, `\75rl(`, `\75 rl(`, `\000075rl(`, which
-//      a sink that resolves escapes reads as url(), plus svg <style>,
-//      svg paint attributes and chart option colours. The decks are SERVED over
+//      a sink that resolves escapes reads as url(), plus an svg element's
+//      <style> and style="" (each shown to FETCH when unsanitized, so neither
+//      row can pass blind) and chart option colours. Every element is on
+//      screen: the fill's reveal step and hover set are removed, since an
+//      element they hide paints nothing. The decks are SERVED over
 //      https, as bento.page serves them, so a protocol-relative url() reaches
 //      the network as it would there;
 //   2. it is opened and walked on every surface: boot, both slides on the
@@ -41,6 +44,8 @@
 // --bento-accent feeds outline/border-color, a peer's selection outline is a
 // border-color, the preview's tinted boxes are a gradient, the title card's
 // text is a color), so dropping those alone stays green, by design.
+// The svg rows: a no-op sanitizeSvgCss turns the <style> row red, and an
+// svgUrlRefsAllowed that allows everything turns the style="" row red.
 import { readFileSync, writeFileSync, mkdtempSync, readdirSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -126,14 +131,38 @@ const write = (name, doc) => {
   return DECK + name
 }
 
+// The svg element's markup, every row of which FETCHES when it is not
+// sanitized — the raw-markup control below proves that, so a row that cannot
+// see its sanitizer fails instead of passing. An external paint server never
+// does: Chromium will not fetch `fill:url(https://…)`, in a <style>, a style=""
+// or a fill=""/stroke="" attribute, so those rows were blind (a no-op
+// sanitizeSvgCss stayed green) and are not here.
+const svgMarkup = (raw) => `<svg viewBox="0 0 10 10" style="background-image:url(${raw('svg style=""')})">` +
+  // An ordinary rule first, then the payload: scopeCss prefixes the stylesheet,
+  // and a payload in the first rule (or an @import, which must be first) is
+  // turned into a dead selector by the scoping alone, sanitizer or no — such a
+  // row passes for the wrong reason.
+  `<style>rect{fill:#88aaff} svg{background-image:url(${raw('svg <style> background')})}</style>` +
+  '<rect width="10" height="10" fill="#88aaff"/></svg>'
+
 // the every-field deck
 function fieldsDeck(P) {
   const element = (kind, i) => {
     const e = { ...P.fill(D[kind], kind), ...geo(i), id: `e-${kind}`, type: kind }
+    // The schema fill gives every element a reveal step and a hover set, and an
+    // element hidden by either renders display:none — so nothing it carries is
+    // ever painted, and its rows cannot see a sink. Neither field is a sink (a
+    // step is a number, a set name is a data attribute), so both go, and every
+    // element is on screen from the first frame.
+    delete e.showOnHover
+    if (e.fx) delete e.fx.step
+    // an svg element's asset WINS over its markup (render.ts svgMarkup), and
+    // the payload key names no asset, so the markup was never drawn
+    if (kind === 'svg') delete e.asset
     if (kind === 'text') e.html = `<p style="background:url(${P.raw('text.html style')})">x</p>`
     if (kind === 'shape') e.shape = 'rect'
     if (kind === 'image') e.src = PNG
-    if (kind === 'svg') e.markup = `<svg viewBox="0 0 10 10"><style>rect{fill:url(${P.raw('svg <style>')})}</style><rect width="10" height="10" style="fill:url(${P.raw('svg style=""')})" fill="url(${P.raw('svg fill=""')})" stroke="url(${P.raw('svg stroke=""')})"/></svg>`
+    if (kind === 'svg') e.markup = svgMarkup(P.raw)
     if (kind === 'chart') e.option = { color: [P.pay('chart option.color[0]')], backgroundColor: P.pay('chart backgroundColor'), textStyle: { color: P.pay('chart textStyle.color') }, legend: { show: true, textStyle: { color: P.pay('chart legend.textStyle.color') } }, xAxis: { type: 'category', data: ['a', 'b'], axisLabel: { color: P.pay('chart axisLabel.color') }, axisLine: { lineStyle: { color: P.pay('chart axisLine.color') } } }, yAxis: { type: 'value', splitLine: { lineStyle: { color: P.pay('chart splitLine.color') } } }, series: [{ name: 's', type: 'bar', data: [1, 2], itemStyle: { color: P.pay('chart series.itemStyle.color') }, label: { show: true, color: P.pay('chart series.label.color') } }, { name: 'l', type: 'line', data: [2, 1], lineStyle: { color: P.pay('chart series.lineStyle.color') }, itemStyle: { color: P.pay('chart line itemStyle.color') } }] }
     if (kind === 'table') { e.columns = [{ w: 1 }, { w: 1 }]; e.header = true; e.rows = [{ cells: [{ html: 'a', color: P.pay('table cell.color'), bg: P.pay('table cell.bg') }, { html: 'b' }] }, { cells: [{ html: '1' }, { html: '2' }] }] }
     if (kind === 'media') { e.kind = 'video'; e.src = 'x.mp4'; delete e.poster }
@@ -213,6 +242,24 @@ const report = (label, hits, tags) => {
 }
 
 try {
+  // --- the svg rows can see their sanitizer -------------------------------------
+  // The same markup, written UNSANITIZED into a live page: every row must fetch,
+  // or its zero below would prove nothing.
+  {
+    console.log('\nthe svg rows, unsanitized\n')
+    const P = payloads((u) => `url(${u})`)
+    const markup = svgMarkup(P.raw)
+    const hits = new Set()
+    const ctx = await context((t) => hits.add(t))
+    const p = await ctx.newPage()
+    await p.goto(write('raw.bento.html', { format: 'bento/slides', version: 1, docId: 'egress-raw', title: 'raw', size: { width: 1280, height: 720 }, theme: theme0, slides: [{ id: 's1', background: '#ffffff', transition: 'none', notes: '', elements: [] }] }))
+    await booted(p)
+    await p.evaluate((m) => { const d = document.createElement('div'); d.style.cssText = 'position:fixed;left:0;top:0;width:40px;height:40px'; d.innerHTML = m; document.body.appendChild(d); d.getBoundingClientRect() }, markup)
+    await p.waitForTimeout(700)
+    await ctx.close()
+    for (const [t, path] of P.tags) ok(hits.has(t), `${path}: fetches when unsanitized, so the row can see the sanitizer`)
+  }
+
   for (const [name, spell] of Object.entries(SPELLINGS)) {
     console.log(`\n${name}\n`)
     // --- every field, every surface ------------------------------------------

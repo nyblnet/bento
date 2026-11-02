@@ -169,6 +169,18 @@ try {
     'page.marginTop': (d) => { d.page.marginTop = `10px;background:url(http://rc.test/${tag}-mt)` },
     'page.marginX': (d) => { d.page.marginX = `10px;background:url(http://rc.test/${tag}-mx)` },
     'page.marginBottom': (d) => { d.page.marginBottom = `10px;background:url(http://rc.test/${tag}-mb)` },
+    // a block's own layout, and a named style's — both written by blockStyle /
+    // styleDeclarations into the editor, print and the saved preview
+    'block.align': (d) => { d.body[0].align = `left;background:url(http://rc.test/${tag}-align)` },
+    'block.lh': (d) => { d.body[0].lh = `1;background:url(http://rc.test/${tag}-lh)` },
+    'block.sb': (d) => { d.body[0].sb = `1;background:url(http://rc.test/${tag}-sb)` },
+    'block.sa': (d) => { d.body[0].sa = `1;background:url(http://rc.test/${tag}-sa)` },
+    'block.ind': (d) => { d.body[0].ind = `1;background:url(http://rc.test/${tag}-ind)` },
+    'style.align': (d) => { d.styles = { s1: { id: 's1', name: 'S', kind: 'para', align: `left;background:url(http://rc.test/${tag}-salign)` } }; d.body[0].styleId = 's1' },
+    'style.lh': (d) => { d.styles = { s1: { id: 's1', name: 'S', kind: 'para', lh: `1;background:url(http://rc.test/${tag}-slh)` } }; d.body[0].styleId = 's1' },
+    'style.sb': (d) => { d.styles = { s1: { id: 's1', name: 'S', kind: 'para', sb: `1;background:url(http://rc.test/${tag}-ssb)` } }; d.body[0].styleId = 's1' },
+    // the preview's colours: `rgb…` used to match with no end anchor
+    'theme.background': (d) => { d.theme = { background: `rgb(0,0,0);}*{background:url(http://rc.test/${tag}-theme)}` } },
   })
   for (const name of Object.keys(CSSP('x'))) {
     const hits = []
@@ -201,6 +213,63 @@ try {
     ok(preview.length > 0 && !printed.includes('rc.test') && !preview.includes('rc.test') && hits.length === 0,
       `${name}: a CSS-only payload is in neither the print output (${printed.includes('rc.test')}) nor the saved preview (${preview.includes('rc.test')}), and nothing was requested (${hits.length})${preview ? '' : ' — NO PREVIEW FOUND'}`)
     await ctx.close()
+  }
+
+  // ───────────────────────── 0c. a style id cannot end its CSS string
+  // The live editor writes named styles as `[data-style-id="<id>"]` rules into
+  // #t-style-rules. A newline, CR or form feed ENDS a CSS string, so an id
+  // escaped only for `\` and `"` let what followed it be parsed as rules.
+  // From a FILE (parseDoc) and from a SYNCED op (store mutated, then the
+  // editor re-renders — no parseDoc), for each of the three. The positive
+  // control writes the same id the old way into a sheet of its own and must
+  // fetch, so a clean row means the escape held, not that the payload is dead.
+  console.log('\n0c. a style id with a newline, CR or form feed stays inside its selector\n')
+  const SID = (ch, tag) => `x${ch}]{}*{background:url(http://rc.test/sid-${tag})}`
+  const CHARS = { '\\n': '\n', '\\r': '\r', '\\f': '\f' }
+  for (const [label, ch] of Object.entries(CHARS)) {
+    for (const via of ['control', 'file', 'synced']) {
+      const hits = []
+      const ctx = await browser.newContext()
+      await ctx.route(/^https?:/, (r) => { if (r.request().url().includes('rc.test')) hits.push(r.request().url()); r.abort() })
+      const p = await ctx.newPage()
+      await p.goto(SHELL.href)
+      await p.waitForFunction(() => window.bento?.doc)
+      const id = SID(ch, `${via}-${label.slice(1)}`)
+      const body = [{ id: 'b1', kind: 'para', text: 'Hello', styleId: id }]
+      if (via === 'control') {
+        // the OLD escape (only \ and "), into a sheet the rig owns
+        await p.evaluate((id) => {
+          const old = id.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+          const st = document.createElement('style'); st.textContent = `.t-paper [data-style-id="${old}"]{font-size:14px}`
+          document.head.appendChild(st)
+        }, id)
+      } else if (via === 'file') {
+        await p.evaluate((j) => window.bento.loadDoc(j), JSON.stringify({ format: 'bento/type', docId: 'doc-sid', title: 't',
+          styles: { [id]: { id, name: 'S', kind: 'para', size: 14 } }, body }))
+      } else {
+        await p.evaluate((j) => window.bento.loadDoc(j), JSON.stringify({ format: 'bento/type', docId: 'doc-sid', title: 't',
+          body: [{ id: 'b1', kind: 'para', text: 'Hello' }] }))
+        await p.evaluate(({ id }) => {
+          const d = window.bento.store.doc
+          d.styles = { [id]: { id, name: 'S', kind: 'para', size: 14 } }
+          d.body[0].styleId = id
+          window.bento.editor.render()
+        }, { id })
+      }
+      await p.waitForTimeout(400)
+      const star = await p.evaluate(() => [...document.styleSheets].flatMap((sh) => { try { return [...sh.cssRules] } catch { return [] } })
+        .filter((r) => r.selectorText === '*' && /rc\.test/.test(r.cssText)).length)
+      const rules = await p.evaluate(() => document.getElementById('t-style-rules')?.textContent || '')
+      const size = await p.evaluate(() => { const el = document.querySelector('#paper [data-block-id="b1"], #paper [data-id="b1"]') || document.querySelector('#paper [data-style-id]'); return el ? getComputedStyle(el).fontSize : '' })
+      const kept = await p.evaluate((id) => Object.hasOwn(window.bento.doc.styles || {}, id), id)
+      if (via === 'control') ok(hits.length > 0 && star > 0,
+        `control ${label}: the id escaped the OLD way breaks out (a * rule ${star}, fetched ${hits.length}), so the oracle can see it`)
+      else ok(hits.length === 0 && star === 0,
+        `${via} ${label}: the id stays in its selector (no * rule ${star}, fetched ${hits.length}${via === 'synced' ? `, rule written ${/data-style-id/.test(rules)}` : ''})`)
+      if (via === 'synced') ok(/data-style-id/.test(rules) && size === '14px', `synced ${label}: and the style still APPLIES — the escaped selector matches its paragraph (font-size ${size})`)
+      if (via === 'file') ok(!kept, `file ${label}: and parseDoc refuses the id outright (kept ${kept})`)
+      await ctx.close()
+    }
   }
 
   // ─────────────────────────────────────────── 1. the builder emits inert markup

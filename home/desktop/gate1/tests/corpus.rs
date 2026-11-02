@@ -123,3 +123,60 @@ fn every_corpus_file_is_covered_by_a_row() {
         }
     }
 }
+
+/// #842: each history named by `histories`, verified with its own key.
+fn named_histories(exp: &Value) -> Option<std::collections::HashMap<String, History>> {
+    let hs = exp.get("histories")?.as_object()?;
+    let mut out = std::collections::HashMap::new();
+    for (name, spec) in hs {
+        let key = json(spec["key"].as_str().unwrap());
+        let env = String::from_utf8(read(spec["history"].as_str().unwrap())).unwrap();
+        let h = History::from_signed(&env, key["x"].as_str().unwrap(), key["y"].as_str().unwrap()).unwrap_or_else(|e| panic!("history {name}: {e}"));
+        out.insert(name.clone(), h);
+    }
+    Some(out)
+}
+
+#[test]
+fn held_rows() {
+    let exp = json("expected.json");
+    let (Some(rows), Some(named)) = (exp.get("held").and_then(Value::as_array), named_histories(&exp)) else {
+        println!("NOTE: this corpus has no `held`/`histories` sections yet (they arrive with kernel #842)");
+        return;
+    };
+    assert!(rows.len() >= 6, "the held rows shrank to {}", rows.len());
+    let mut wrong = vec![];
+    for r in rows {
+        let held: Vec<History> = r["held"].as_array().unwrap().iter().map(|n| named[n.as_str().unwrap()].clone()).collect();
+        let (v, app) = verify_served_held(&read(r["case"].as_str().unwrap()), &held, "'none'");
+        let got = match &v {
+            ServedVerdict::Genuine { release, .. } => format!("genuine {} {}", app.clone().unwrap_or_default(), release.version),
+            ServedVerdict::Unknown { .. } => "unknown".into(),
+        };
+        let want = match r["verdict"].as_str().unwrap() {
+            "genuine" => format!("genuine {} {}", r["app"].as_str().unwrap(), r["release"].as_str().unwrap()),
+            o => o.to_string(),
+        };
+        if got != want { wrong.push(format!("{}: want {want}, got {got} ({v:?})", r["name"])) }
+    }
+    assert!(wrong.is_empty(), "held rows the port reads differently:\n{}", wrong.join("\n"));
+}
+
+#[test]
+fn every_named_history_verifies_and_a_flipped_byte_does_not() {
+    let exp = json("expected.json");
+    let Some(hs) = exp.get("histories").and_then(Value::as_object) else {
+        println!("NOTE: no `histories` section yet (kernel #842)");
+        return;
+    };
+    for (name, spec) in hs {
+        let key = json(spec["key"].as_str().unwrap());
+        let mut env = json(spec["history"].as_str().unwrap());
+        let p = env["payload"].as_str().unwrap().to_string();
+        let i = p.find("\"version\"").unwrap() + 12;
+        let mut b = p.into_bytes();
+        b[i] = if b[i] == b'1' { b'2' } else { b'1' };
+        env["payload"] = Value::String(String::from_utf8(b).unwrap());
+        assert!(History::from_signed(&env.to_string(), key["x"].as_str().unwrap(), key["y"].as_str().unwrap()).is_err(), "{name}: a changed payload must not verify");
+    }
+}

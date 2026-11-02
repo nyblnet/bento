@@ -52,6 +52,8 @@ const INCLUDE = [
   // (scripts/gen-webext-id.mjs), and the vendored Argon2id with its licence
   /^src\/id\/(gen\/)?[^/]+\.js$/,
   /^src\/id\/vendor\/noble-hashes\/([^/]+\.js|LICENSE)$/,
+  // bento/connect W2: the served-document host page and its sandbox page
+  /^src\/serve\/[^/]+\.(js|html)$/,
   /^_locales\/[a-zA-Z_]+\/messages\.json$/,
 ]
 /** Present on purpose, deliberately NOT shipped. */

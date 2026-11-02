@@ -934,5 +934,17 @@
   },
   "idErrNoWayBack": {
     "message": "কিছুই সেট আপ হয়নি: আপনার পাসকি Bento ID খুলতে পারে না এবং এই ডিভাইস রিকভারি কোড তৈরি করতে পারে না, তাই ফিরে আসার কোনো পথ থাকত না।"
+  },
+  "setIdServe": {
+    "message": "Bento ID দিয়ে খুলুন (প্রিভিউ)",
+    "description": "Library settings, Bento ID section: checkbox, off by default; turns on the preview of opening documents with a Bento ID."
+  },
+  "setIdServeNote": {
+    "message": "ডকুমেন্টের মেনুতে “Bento ID দিয়ে খুলুন” যোগ করে: ডকুমেন্টটি একটি সুরক্ষিত পাতায় খোলে যা আপনার Bento ID ব্যবহার করতে পারে। ফাইলে ডাবল-ক্লিক করায় কোনো পরিবর্তন হয় না।",
+    "description": "Library settings: note under that checkbox."
+  },
+  "menuOpenWithId": {
+    "message": "Bento ID দিয়ে খুলুন",
+    "description": "Library: an item in a document card's menu (only when the preview is on)."
   }
 }

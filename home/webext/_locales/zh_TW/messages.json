@@ -967,5 +967,17 @@
   },
   "idErrNoWayBack": {
     "message": "沒有完成設定：你的密碼金鑰無法解鎖 Bento ID，而此裝置也無法產生復原碼，這樣將無法找回。"
+  },
+  "setIdServe": {
+    "message": "使用 Bento ID 開啟(預覽)",
+    "description": "Library settings, Bento ID section: checkbox, off by default; turns on the preview of opening documents with a Bento ID."
+  },
+  "setIdServeNote": {
+    "message": "在文件選單中加入「使用 Bento ID 開啟」：文件會在可使用你的 Bento ID 的受保護頁面中開啟。按兩下檔案的行為不變。",
+    "description": "Library settings: note under that checkbox."
+  },
+  "menuOpenWithId": {
+    "message": "使用 Bento ID 開啟",
+    "description": "Library: an item in a document card's menu (only when the preview is on)."
   }
 }

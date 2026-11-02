@@ -967,5 +967,17 @@
   },
   "idErrNoWayBack": {
     "message": "何も設定されていません。このパスキーでは Bento ID のロックを解除できず、このデバイスでは復元コードも作れないため、取り戻す手段がなくなってしまいます。"
+  },
+  "setIdServe": {
+    "message": "Bento ID で開く(プレビュー)",
+    "description": "Library settings, Bento ID section: checkbox, off by default; turns on the preview of opening documents with a Bento ID."
+  },
+  "setIdServeNote": {
+    "message": "書類のメニューに「Bento ID で開く」を追加します。書類は Bento ID を使える保護されたページで開きます。ファイルのダブルクリックは変わりません。",
+    "description": "Library settings: note under that checkbox."
+  },
+  "menuOpenWithId": {
+    "message": "Bento ID で開く",
+    "description": "Library: an item in a document card's menu (only when the preview is on)."
   }
 }

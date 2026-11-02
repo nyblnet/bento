@@ -32,6 +32,7 @@ import { noteSavedFromWeb } from './returngate'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, onRecoveryOff, pruneOld, putRecovery, recoveryLooksOlder, type Snapshot } from '../autosave'
 import { insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
 import { estimatedFrames, fencedElements, splitFences } from './codefence'
+import { keepSpaces } from './markdown'
 import { openSpeakerWindow, speakerIdleBody, speakerWindow } from '../screens'
 import { neutralWindowTitle, speakerWindowTitle, titleSealed } from '../wintitle'
 import { routeAllConnectors } from '../connectors'
@@ -483,6 +484,11 @@ export class Editor {
     // main area
     const main = div('ed-main')
     this.sidebar = div('ed-sidebar')
+    // a link in a thumbnail's text is a picture of a link, not a control: a
+    // click selects the slide and never navigates the editor away
+    this.sidebar.addEventListener('click', (ev) => {
+      if ((ev.target as HTMLElement).closest('a[href]')) ev.preventDefault()
+    }, true)
     const canvasWrap = div('ed-canvas-wrap')
     // presenting lives in ONE split pill beside the zoom control: the main
     // half starts the fullscreen show; its menu holds tab-fill and speaker view.
@@ -1920,9 +1926,15 @@ export class Editor {
       if (slide.hidden) item.classList.add('ed-thumb-hidden')
       this.sidebar.appendChild(item)
     })
-    this.sidebar.appendChild(this.insertGap(slides.length))
+    const endGap = this.insertGap(slides.length)
+    this.sidebar.appendChild(endGap)
     const add = btn(ICONS.plus, t('New slide'), () => this.openLayoutPicker(add))
     add.classList.add('ed-add-slide')
+    // the list's end is a drop target too (#761): the last gap and the New-slide
+    // button both land the dragged slides after the final one. The gap sits
+    // after every parent's states, so it never splits a parent from its states.
+    this.wireEndDrop(endGap)
+    this.wireEndDrop(add)
     add.title = t('New slide from a layout')
     this.sidebar.appendChild(add)
     this.sidebar.scrollTop = scroll
@@ -2075,6 +2087,22 @@ export class Editor {
       ev.preventDefault()
       item.classList.remove('drop')
       this.dropSlides(ev.dataTransfer!.getData('text/bento-slide'), index)
+    })
+  }
+
+  private wireEndDrop(target: HTMLElement) {
+    const isSlideDrag = (ev: DragEvent) => !!ev.dataTransfer?.types.includes('text/bento-slide')
+    target.addEventListener('dragover', (ev) => {
+      if (!isSlideDrag(ev)) return
+      ev.preventDefault()
+      target.classList.add('drop')
+    })
+    target.addEventListener('dragleave', () => target.classList.remove('drop'))
+    target.addEventListener('drop', (ev) => {
+      if (!isSlideDrag(ev)) return
+      ev.preventDefault()
+      target.classList.remove('drop')
+      this.dropSlides(ev.dataTransfer!.getData('text/bento-slide'), this.store.doc.slides.length)
     })
   }
 
@@ -2537,7 +2565,7 @@ export class Editor {
         this.toast(made.length === 1 ? t('Pasted 1 item') : t('Pasted {n} items', { n: made.length }))
         return true
       }
-      const esc = text.trim().slice(0, 4000).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
+      const esc = text.replace(/^\s*\n/, '').trimEnd().slice(0, 4000).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').split('\n').map(keepSpaces).join('<br>')
       const el = defaultText({ html: esc, color: readableInk(this.store.slide.background), x: Math.round(width / 2 - 300), y: 260, w: 600 })
       this.store.commit(() => this.store.slide.elements.push(el))
       this.store.select([el.id])
@@ -3302,6 +3330,13 @@ export class Editor {
         this.canvas.toggleCommentMode()
         return
       }
+      // ⌘L / Ctrl+L locks the selection (#838). Only with something selected:
+      // otherwise the browser keeps its address-bar shortcut. (inField returned above.)
+      if (mod && !ev.shiftKey && !ev.altKey && ev.key.toLowerCase() === 'l' && this.store.selection.length && !this.store.readOnly) {
+        ev.preventDefault()
+        this.panel.lock(this.store.selectedElements)
+        return
+      }
       if (mod && ev.key.toLowerCase() === 'g') {
         ev.preventDefault()
         const els = this.store.selectedElements
@@ -3331,7 +3366,9 @@ export class Editor {
         ev.preventDefault()
         if (!this.store.selection.length || this.store.readOnly) return
         this.copySelection()
-        const ids = [...this.store.selection]
+        // a locked element is not moved off the slide either (#838)
+        const ids = this.store.selectedElements.filter((e) => !e.locked).map((e) => e.id)
+        if (!ids.length) return
         this.store.select([])
         this.canvas.setGhost({ slideId: this.store.slide.id, ids })
         return
@@ -3382,6 +3419,7 @@ export class Editor {
         const dy = ev.key === 'ArrowUp' ? -step : ev.key === 'ArrowDown' ? step : 0
         this.store.commit(() => {
           for (const el of this.store.selectedElements) {
+            if (el.locked) continue
             el.x += dx
             el.y += dy
           }
@@ -3426,12 +3464,9 @@ export class Editor {
 
   /** Remove the selected elements. Shared by ⌫ and the context menu. */
   private deleteSelection() {
-    if (!this.store.selection.length) return
-    const ids = new Set(this.store.selection)
-    this.store.commit(() => {
-      this.store.slide.elements = this.store.slide.elements.filter((e) => !ids.has(e.id))
-    })
-    this.store.select([])
+    // a locked element is never deleted from the canvas (#838): unlock it
+    // first. Like arrow nudges, a mixed selection acts on the unlocked part.
+    this.panel.deleteEls(this.store.selectedElements)
   }
 
   /** Selected slides + parents in deck order. */
@@ -3607,6 +3642,7 @@ export class Editor {
       { label: t('Copy'), hint: '⌘C', run: () => this.copySelection() },
       { label: t('Duplicate'), hint: '⌘D', run: () => this.duplicateSelection() },
       'sep',
+      { label: els.every((x) => x.locked) ? t('Unlock') : t('Lock'), hint: '⌘L', run: () => this.panel.lock(els) },
       { label: t('Bring to front'), run: () => this.panel.reorder(els, 'front') },
       { label: t('Send to back'), run: () => this.panel.reorder(els, 'back') },
       'sep',

@@ -934,5 +934,17 @@
   },
   "idErrNoWayBack": {
     "message": "کچھ سیٹ اپ نہیں ہوا: آپ کی پاس کی Bento ID نہیں کھول سکتی اور یہ آلہ ریکوری کوڈ نہیں بنا سکتا، اس لیے واپسی کا کوئی راستہ نہ رہتا۔"
+  },
+  "setIdServe": {
+    "message": "Bento ID کے ساتھ کھولیں (پیش نظارہ)",
+    "description": "Library settings, Bento ID section: checkbox, off by default; turns on the preview of opening documents with a Bento ID."
+  },
+  "setIdServeNote": {
+    "message": "دستاویز کے مینو میں “Bento ID کے ساتھ کھولیں” شامل کرتا ہے: دستاویز ایک محفوظ صفحے میں کھلتی ہے جو آپ کی Bento ID استعمال کر سکتا ہے۔ فائل پر ڈبل کلک کرنے پر کوئی فرق نہیں پڑتا۔",
+    "description": "Library settings: note under that checkbox."
+  },
+  "menuOpenWithId": {
+    "message": "Bento ID کے ساتھ کھولیں",
+    "description": "Library: an item in a document card's menu (only when the preview is on)."
   }
 }

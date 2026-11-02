@@ -934,5 +934,17 @@
   },
   "idErrNoWayBack": {
     "message": "Mitään ei otettu käyttöön: pääsyavaimesi ei voi avata Bento ID:täsi eikä tämä laite voi luoda palautuskoodia, joten takaisin ei olisi mitään tietä."
+  },
+  "setIdServe": {
+    "message": "Avaa Bento ID:llä (esikatselu)",
+    "description": "Library settings, Bento ID section: checkbox, off by default; turns on the preview of opening documents with a Bento ID."
+  },
+  "setIdServeNote": {
+    "message": "Lisää asiakirjan valikkoon ”Avaa Bento ID:llä”: asiakirja avautuu suojatulle sivulle, joka voi käyttää Bento ID:täsi. Tiedoston kaksoisnapsautus ei muutu.",
+    "description": "Library settings: note under that checkbox."
+  },
+  "menuOpenWithId": {
+    "message": "Avaa Bento ID:llä",
+    "description": "Library: an item in a document card's menu (only when the preview is on)."
   }
 }

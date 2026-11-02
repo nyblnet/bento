@@ -934,5 +934,17 @@
   },
   "idErrNoWayBack": {
     "message": "چیزی راه‌اندازی نشد: گذرکلید شما نمی‌تواند Bento ID را باز کند و این دستگاه نمی‌تواند کد بازیابی بسازد، پس راه بازگشتی نمی‌ماند."
+  },
+  "setIdServe": {
+    "message": "باز کردن با Bento ID (پیش‌نمایش)",
+    "description": "Library settings, Bento ID section: checkbox, off by default; turns on the preview of opening documents with a Bento ID."
+  },
+  "setIdServeNote": {
+    "message": "گزینهٔ «باز کردن با Bento ID» را به منوی سند اضافه می‌کند: سند در صفحه‌ای محافظت‌شده باز می‌شود که می‌تواند از Bento ID شما استفاده کند. دوبار کلیک روی فایل تغییری نمی‌کند.",
+    "description": "Library settings: note under that checkbox."
+  },
+  "menuOpenWithId": {
+    "message": "باز کردن با Bento ID",
+    "description": "Library: an item in a document card's menu (only when the preview is on)."
   }
 }

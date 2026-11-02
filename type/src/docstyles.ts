@@ -39,7 +39,7 @@
 
 import { fontAcross, safeFamily, safeSize } from './inline.ts';
 import type { Block, BlockKind, DocStyle, TypeDoc } from './model.ts';
-import { docEffective, propsOf, type ParaLayout } from './layout.ts';
+import { docEffective, propsOf, cssAlign, cssLen, type ParaLayout } from './layout.ts';
 import { t } from './i18n.ts';
 import type { FeatureContext } from './features.ts';
 // NOT `import './docstyles.css'` here: render.ts imports this module for
@@ -169,16 +169,20 @@ function styleDeclarations(s: DocStyle): string {
   if (s.italic) out.push('font-style:italic');
   const color = safeStyleColor(s.color);
   if (color) out.push(`color:${color}`);
-  if (s.align) out.push(`text-align:${s.align}`);
-  if (s.lh !== undefined) out.push(`line-height:${s.lh}`);
+  // checked at the write, as layout.ts blockStyle does (a synced style never
+  // passed parseDoc)
+  const align = cssAlign(s.align), lh = cssLen(s.lh, 0.5, 4);
+  if (align) out.push(`text-align:${align}`);
+  if (lh !== null) out.push(`line-height:${lh}`);
   // `padding-top:0` rides with `sb`, mirroring layout.ts's blockStyle: the
   // stylesheet spaces consecutive paragraphs with a
   // `margin-top:-10px; padding-top:10px` pair (the `p + p` first-line-indent
   // trick), and setting only margin-top would leave that padding behind and
   // add 10px on top of whatever the style asked for.
-  if (s.sb !== undefined) out.push(`margin-top:${s.sb}px`, 'padding-top:0');
-  if (s.sa !== undefined) out.push(`margin-bottom:${s.sa}px`);
-  if (s.ind !== undefined) out.push(`text-indent:${s.ind}px`);
+  const sb = cssLen(s.sb, 0, 2000), sa = cssLen(s.sa, 0, 2000), ind = cssLen(s.ind, -2000, 2000);
+  if (sb !== null) out.push(`margin-top:${sb}px`, 'padding-top:0');
+  if (sa !== null) out.push(`margin-bottom:${sa}px`);
+  if (ind !== null) out.push(`text-indent:${ind}px`);
   return out.join(';');
 }
 
@@ -200,8 +204,16 @@ export function docStyleCss(doc: TypeDoc, b: Block): string {
   return s ? styleDeclarations(s) : '';
 }
 
-/** A style's escaped id, safe inside a double-quoted CSS attribute selector. */
-const cssAttrId = (id: string): string => id.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+/**
+ * A style's id, safe inside a double-quoted CSS attribute selector: every code
+ * point outside [A-Za-z0-9_-] is written as a hex escape. Escaping only `\`
+ * and `"` was not enough — a newline, CR or form feed ENDS a CSS string, and
+ * what followed the id was parsed as rules (measured: a file's style id
+ * carried `*{background:url(…)}` into #t-style-rules and fetched on open). A
+ * synced op never passes parseDoc, so this is the layer it meets.
+ */
+export const cssAttrId = (id: string): string =>
+  id.replace(/[^A-Za-z0-9_-]/gu, (c) => `\\${c.codePointAt(0)!.toString(16)} `);
 
 /**
  * Every style the document could paint, as ONE stylesheet — `[data-style-id]`

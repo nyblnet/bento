@@ -934,5 +934,17 @@
   },
   "idErrNoWayBack": {
     "message": "Walang na-set up: hindi kayang i-unlock ng iyong passkey ang Bento ID at hindi makagawa ng recovery code ang device na ito, kaya walang magiging daan pabalik."
+  },
+  "setIdServe": {
+    "message": "Buksan gamit ang Bento ID (preview)",
+    "description": "Library settings, Bento ID section: checkbox, off by default; turns on the preview of opening documents with a Bento ID."
+  },
+  "setIdServeNote": {
+    "message": "Nagdadagdag ng “Buksan gamit ang Bento ID” sa menu ng dokumento: bubukas ang dokumento sa isang protektadong page na puwedeng gumamit ng iyong Bento ID. Hindi naaapektuhan ang pag-double-click sa file.",
+    "description": "Library settings: note under that checkbox."
+  },
+  "menuOpenWithId": {
+    "message": "Buksan gamit ang Bento ID",
+    "description": "Library: an item in a document card's menu (only when the preview is on)."
   }
 }

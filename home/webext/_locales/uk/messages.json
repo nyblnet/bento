@@ -934,5 +934,17 @@
   },
   "idErrNoWayBack": {
     "message": "Нічого не налаштовано: ключ доступу не може розблокувати Bento ID, а цей пристрій не може створити код відновлення, тож шляху назад не було б."
+  },
+  "setIdServe": {
+    "message": "Відкрити з Bento ID (попередня версія)",
+    "description": "Library settings, Bento ID section: checkbox, off by default; turns on the preview of opening documents with a Bento ID."
+  },
+  "setIdServeNote": {
+    "message": "Додає «Відкрити з Bento ID» до меню документа: документ відкривається на захищеній сторінці, яка може використовувати ваш Bento ID. Подвійне клацання по файлу працює як раніше.",
+    "description": "Library settings: note under that checkbox."
+  },
+  "menuOpenWithId": {
+    "message": "Відкрити з Bento ID",
+    "description": "Library: an item in a document card's menu (only when the preview is on)."
   }
 }

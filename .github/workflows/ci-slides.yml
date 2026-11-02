@@ -55,6 +55,11 @@ jobs:
         # surface (canvas, panels, present, speaker, print, the saved file with
         # JS off) the payload origin is never requested; a raw url() is.
         run: node scripts/test-slides-css-egress-browser.mjs
+      - name: The shared svg sanitizer's policy options only tighten
+        # kernel/src/svgsafe.ts, lifted from slides' renderer: slides' lists are
+        # the default, and every option an app adds (type's embed pictures use
+        # all of them) removes what the default keeps and never keeps more.
+        run: node scripts/test-svgsafe-policy-browser.mjs
 
   slides-font-browser:
     runs-on: ubuntu-latest
@@ -120,6 +125,12 @@ jobs:
         # Real UI and serialization, offline; delayed mock writes expose save races.
         run: |
           node scripts/test-slides-font-lifecycle-browser.mjs
+      - name: An embedded font keeps its weights in Chromium
+        # #850: "Embed font file…" writes the range a variable TTF/WOFF states,
+        # the range a variable WOFF2 renders (ours and Instrument Sans), a
+        # static face's weight and italic; Bold then draws the font's own 700,
+        # 1.55x wider than 400, where the old `normal` drew faux bold at 1x.
+        run: node scripts/test-slides-font-weight-browser.mjs
       - name: Write chrome follows the copy's role in Chromium
         # canWriteDeck is an allowlist that fails closed: an audience, reader or
         # unknown-role copy arriving in a running editor (dropped, loadDoc) gets
@@ -150,6 +161,11 @@ jobs:
         # primary in both themes, and N language rebuilds leaving one set of
         # window/document listeners and bar observers.
         run: node scripts/test-slides-topbar-browser.mjs
+      - name: A slide can be dragged to the end of the sidebar in Chromium
+        # #761: the gap after the last thumbnail and the New slide button both
+        # accept a slide drag and land it last, its states travelling with it;
+        # a drop on a thumb still moves, and a non-slide drag is left alone.
+        run: node scripts/test-slides-sidebar-drop-end-browser.mjs
       - name: One field look in Chromium
         # Every chrome text field, select and textarea (each element kind's
         # panel, About, the save-as dialogs, Share, comments) has the shared
@@ -196,6 +212,19 @@ jobs:
         # range across a parent copies parents only, never its states; plural
         # and singular toasts.
         run: node scripts/test-slides-copy-slides-browser.mjs
+      - name: Locked elements in Chromium
+        # #838: a locked backdrop no longer swallows a marquee over the items
+        # above it (the unlocked control does) or a click; Layers and Alt-click
+        # still reach it; selected it shows the lock marker with no Moveable
+        # handles and arrows do not move it; ⌘L toggles, and with nothing
+        # selected it is left to the browser.
+        run: node scripts/test-slides-lock-browser.mjs
+      - name: Press and drag on an unselected element in Chromium
+        # The Selecto -> Moveable handoff: pressing an unselected element (or a
+        # full-slide backdrop) and dragging moves it with no page errors (Moveable
+        # unset the drag it had just been handed, throwing on every move); a plain
+        # click still selects without moving.
+        run: node scripts/test-slides-press-handoff-browser.mjs
       - name: Clicking a slide never moves the list under the pointer in Chromium
         # With the current slide scrolled out of view, a click on a visible
         # thumb (plain, hidden, parent, state) leaves the list and the thumb
@@ -240,6 +269,31 @@ jobs:
         # Outdent do the same; committed, one undo step; Tab outside a list —
         # a plain box, a table cell — is unchanged.
         run: node scripts/test-slides-bullet-indent-browser.mjs
+      - name: URLs become links in Chromium
+        # #723: typing a URL then a space or Enter links it (a trailing full
+        # stop stays outside, what follows is plain, ⌘Z reverts), javascript:
+        # never links, the link commits with its href and is painted in the
+        # thumbnail, and pasted text with a URL is linked.
+        run: node scripts/test-slides-autolink-browser.mjs
+      - name: Links in the speaker view in Chromium
+        # A click on a link in the popup's current, next, rail or grid previews
+        # never navigates the popup that holds the presenter's notes.
+        run: node scripts/test-slides-speaker-links-browser.mjs
+      - name: Paste keeps spaces in Chromium
+        # #750: real paste events keep runs of spaces (plain text, <pre> and
+        # white-space: pre html), columns line up in a monospace box, ordinary
+        # html still collapses, and a paste with no box open keeps them too.
+        run: node scripts/test-slides-paste-spaces-browser.mjs
+      - name: Indent and Outdent in the formatting bar in Chromium
+        # #724: selecting list text shows Outdent / Indent in the bar; they nest
+        # and un-nest bulleted and numbered items with the selection and bar
+        # kept, nested items paint further in (canvas and thumbnail), and off a
+        # list the buttons are disabled and do nothing.
+        run: node scripts/test-slides-fmtbar-indent-browser.mjs
+      - name: Typed backslashes in Chromium
+        # #697: `a\-b` typed and committed keeps its backslash, `a\\-b` keeps
+        # both after the first blur and after reopening; `\*x\*` still collapses.
+        run: node scripts/test-slides-backslash-browser.mjs
       - name: Leaving an inline code run in Chromium
         # A text box that already ends a line in `code` (reopened, pasted):
         # typing at the end of that line is plain text, at the box's end or
@@ -261,3 +315,10 @@ jobs:
         # leftover lines are hidden for the edit, and a screenshot of the strip
         # beside the caret has no ring-blue in it; the text does not move.
         run: node scripts/test-slides-caret-ring-browser.mjs
+      - name: A formula's symbols stay on their box mid-morph in Chromium
+        # #855: the symbols ride 'spring' while the box rides power2.inOut, so
+        # the symbol translate is divided by the box's OWN eased scale. Sampled
+        # mid-morph on the manual clock, every travelling symbol sits within 2px
+        # of box scale + spring travel; a positive control shows the travel is
+        # on screen and the spring-scale counter-scale would miss.
+        run: node scripts/test-slides-math-morph-browser.mjs

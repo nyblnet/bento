@@ -12,6 +12,7 @@
 // (enumeration is fine here, resolution never enumerates; the absolute path is
 // learned, not derived) live there and are explained there.
 
+import { servedOpenEnabled, SETTING_KEY as SERVE_KEY } from './serve/gate.js'
 import { getGrants, putGrants, status } from './status.js'
 import { listDocuments, describe, newDocument, duplicate, rename, APPS } from './library.js'
 import { prefixFor } from './route.js'
@@ -866,6 +867,9 @@ function openDoc(d) {
 }
 
 // --------------------------------------------------------------------- menu
+// "Open with Bento ID" (serve/gate.js): an unpacked install AND the setting
+let serveOn = false
+servedOpenEnabled().then((on) => { serveOn = on })
 let menuEl = null
 const closeMenu = () => { menuEl?.remove(); menuEl = null }
 addEventListener('click', (e) => { if (menuEl && !menuEl.contains(e.target)) closeMenu() })
@@ -886,6 +890,7 @@ function openMenu(d, ev) {
   }
 
   if (d.path) item(t('menuOpen'), () => openDoc(d))
+  if (d.path && serveOn) item(t('menuOpenWithId'), () => chrome.tabs.create({ url: chrome.runtime.getURL(`src/serve/serve.html?path=${encodeURIComponent(d.path)}`) }))
   if (d.scanned && !d.granted) item(t('menuAddFolder'), () => addFolderFor(d))
   if (!d.scanned) item(t('menuDuplicate'), async () => {
     const made = await duplicate(d)
@@ -1685,6 +1690,20 @@ async function renderSettings() {
       p.textContent = t('setIdLocal')
       idSec.append(p)
     }
+    // the served-document preview: OFF unless turned on here
+    const serveRow = document.createElement('label')
+    serveRow.className = 'check'
+    const serveBox = document.createElement('input')
+    serveBox.type = 'checkbox'
+    serveBox.checked = (await chrome.storage.local.get(SERVE_KEY))[SERVE_KEY] === true
+    const serveNote = document.createElement('small')
+    serveNote.textContent = t('setIdServeNote')
+    serveRow.append(serveBox, document.createTextNode(` ${t('setIdServe')}`), serveNote)
+    serveBox.addEventListener('change', async () => {
+      await chrome.storage.local.set({ [SERVE_KEY]: serveBox.checked })
+      serveOn = await servedOpenEnabled()
+    })
+    idSec.append(serveRow)
   }
 
   // --- the assistant: where a chat about a deck goes, and which decks may ask
