@@ -584,3 +584,31 @@ runs:
       # inbound, and an unknown key from a peer is applied but never echoed.
       shell: bento-step {0}
       run: node scripts/test-slides-sync-allowlist.ts
+
+    - name: Autolink rig
+      # Where a typed or pasted URL ends (trailing punctuation, balanced
+      # brackets), http(s) only, and pasted text turning bare URLs into links
+      # without reading _ or * inside one as emphasis (#723).
+      shell: bento-step {0}
+      run: node scripts/test-slides-autolink.ts
+
+    - name: Paste keeps spaces rig
+      # Pasted plain text keeps runs of spaces, leading indentation and tabs
+      # (a text box paints with white-space: normal), and the PowerPoint export
+      # carries them through (#750).
+      shell: bento-step {0}
+      run: node scripts/test-slides-paste-spaces.ts
+
+    - name: Backslash rig
+      # A backslash is an escape only before a marker that would have acted;
+      # everywhere else it is typed text, and committing twice changes nothing
+      # (#697). Commit path and paste path, with the pre-fix behaviour red.
+      shell: bento-step {0}
+      run: node scripts/test-slides-backslash.ts
+
+    - name: Frozen schema snapshot rig
+      # A released schema/slides-<v>.json is a frozen URL: build-schema.mjs must
+      # not rewrite it once tag v<v> exists (#864 rewrote 1.2.10). Runs the real
+      # script in a scratch repo, with the old always-write behaviour red.
+      shell: bento-step {0}
+      run: node scripts/test-schema-frozen.mjs
