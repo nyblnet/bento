@@ -50,6 +50,13 @@ pre-1.0.
   dashed outline until you unlock it. Presenting, printing and export are
   unchanged. With nothing selected, ⌘L still goes to the browser. Thanks to
   johnbeard.
+- **Links in text survive the trip to PowerPoint and back.** A web address
+  linked inside a text box used to arrive in PowerPoint as plain words. It is
+  now a working hyperlink there, and links to email addresses are kept too.
+  Importing a PowerPoint deck brings its web links back as links. Bento's text
+  keeps web links only, so email links come in as plain text, and the import
+  report says so. Anything that is not an ordinary web or email address never
+  becomes a link either way.
 - **Pressing an unselected object and dragging moves it again.** Pressing on
   an object that isn't selected and dragging in one motion selected it but
   didn't move it, so it took a second press. It now moves with the first.

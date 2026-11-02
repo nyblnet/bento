@@ -59,6 +59,12 @@ export interface TextDeps {
    * explicitly fixed box is the author's stated intent).
    */
   needsRefit?(id: string): void
+  /**
+   * The target of an EXTERNAL hyperlink relationship on this slide, by r:id,
+   * or undefined when the id is not one. The value is source-file text: the
+   * caller hands it over verbatim and textFrom decides whether it is a link.
+   */
+  hyperlink?(rId: string): string | undefined
 }
 
 /** EMU → px, rounded to 1/100 px so emitted JSON stays diffable. */
@@ -136,6 +142,28 @@ interface Piece {
   italic: boolean
   underline: boolean
   strike: boolean
+  /** a run-level hyperlink to the web, already held to webHref */
+  href?: string
+}
+
+/**
+ * A run's hyperlink target becomes an `<a href>` only when the document can
+ * keep it: the slides renderer keeps an anchor's href when it is a web URL
+ * (model.ts isWebUrl — http or https, at most 2048 characters, no
+ * whitespace, quote or angle bracket) and unwraps every other anchor. The
+ * same rule here means an imported deck holds no markup its renderer would
+ * strip, and a javascript:, data: or file: target never enters a document.
+ * mailto: is not a web URL by that rule, so its text comes in unlinked.
+ */
+function webHref(v: string | undefined): string | undefined {
+  return typeof v === 'string' && v.length <= 2048 && /^https?:\/\/[^\s\x00-\x1f\x7f"'<>]+$/i.test(v) ? v : undefined
+}
+
+/** The r:id on a reference element (any prefix bound to the relationships
+ *  namespace; the bare `id` attribute is something else). */
+function relIdOf(el: XElem): string | undefined {
+  for (const [k, v] of el.attrs) if (k !== 'id' && k.endsWith(':id')) return v
+  return undefined
 }
 
 interface Para {
@@ -285,7 +313,18 @@ export function textFrom(sp: XElem, ctx: InheritCtx, deps: TextDeps): OutText | 
     const latin = rPr ? kid(rPr, NS.a, 'latin') : undefined
     const face = (latin ? attr(latin, 'typeface') : undefined) ?? d.font
     const family = face === '+mj-lt' ? ctx.theme.majorFont : face === '+mn-lt' ? ctx.theme.minorFont : face
+    // a run's hyperlink: hlinkClick with an r:id and no action (an action is
+    // a slide jump, a macro or a show — never a web address)
+    const hl = rPr ? kid(rPr, NS.a, 'hlinkClick') : undefined
+    const action = hl ? attr(hl, 'action') : undefined
+    const rId = hl && !action ? relIdOf(hl) : undefined
+    const target = rId ? deps.hyperlink?.(rId) : undefined
+    const href = webHref(target)
+    if (target !== undefined && !href) {
+      note('dropped', 'hyperlink-dropped', 'a text link that is not a web address (http or https) came in as plain text')
+    }
     return {
+      ...(href ? { href } : {}),
       html: preEscaped ? text : esc(text),
       chars: text.length,
       sizePt,
@@ -455,14 +494,25 @@ export function textFrom(sp: XElem, ctx: InheritCtx, deps: TextDeps): OutText | 
   const elementBold = dom.bold
   const paraHtml = (p: Para): string => {
     let out = p.prefix
+    // consecutive runs to the same address are ONE link (PowerPoint splits a
+    // link into runs wherever its formatting changes)
+    let openHref: string | undefined
     for (const piece of p.pieces) {
       let h = piece.html
       if (piece.strike) h = `<s>${h}</s>`
       if (piece.underline) h = `<u>${h}</u>`
       if (piece.italic) h = `<i>${h}</i>`
       if (piece.bold && !elementBold && piece.chars > 0) h = `<b>${h}</b>`
+      if (piece.href !== openHref) {
+        if (openHref) out += '</a>'
+        // webHref admits no quote, angle bracket or whitespace; & is escaped,
+        // and so is a quote, in case that rule is ever loosened
+        if (piece.href) out += `<a href="${esc(piece.href).replace(/"/g, '&quot;')}">`
+        openHref = piece.href
+      }
       out += h
     }
+    if (openHref) out += '</a>'
     return out
   }
   const html = assembleParagraphs(paras, paraHtml)
