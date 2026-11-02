@@ -11,6 +11,16 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Lock an element so clicks and drags skip it.** A full-slide image or fill
+  no longer gets in the way of drag-selecting the items above it. Select the
+  element and press ⌘L (Ctrl+L), or use Lock in the Arrange section or the
+  right-click menu; clicks and marquee drags on the canvas now pass over it,
+  and arrow keys won't nudge it. A locked element is still in the Layers list
+  (with a padlock), and Alt-click reaches it, where it shows a padlock and a
+  dashed outline until you unlock it. Presenting, printing and export are
+  unchanged. With nothing selected, ⌘L still goes to the browser. Thanks to
+  johnbeard.
+
 ## [1.2.10] — 2026-10-24
 
 - **Code can type itself out.** Give a code block the new Typewriter effect

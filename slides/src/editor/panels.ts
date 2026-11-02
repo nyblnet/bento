@@ -2205,6 +2205,16 @@ export class PropsPanel {
       textBtn('⇊', 'Send to back', () => this.reorder(els, 'back')),
     ])
 
+    const lk = document.createElement('button')
+    lk.className = 'ed-btn ed-btn-block'
+    const allLocked = els.every((e) => e.locked)
+    lk.textContent = allLocked ? t('🔓 Unlock') : t('🔒 Lock')
+    lk.title = allLocked
+      ? t('Make it selectable on the canvas again (⌘L)')
+      : t('Clicks and drags on the canvas skip it; reach it from Layers or Alt-click (⌘L)')
+    lk.addEventListener('click', () => this.lock(els))
+    this.host.appendChild(lk)
+
     const grouped = els.some((e) => e.groupId)
     if (els.length > 1 || grouped) {
       const g = document.createElement('button')
@@ -2221,6 +2231,13 @@ export class PropsPanel {
       }
       this.host.appendChild(g)
     }
+  }
+
+  /** Lock the selection, or unlock it when everything in it is already locked (#838). */
+  lock(els: SlideElement[]) {
+    if (!els.length) return
+    const on = !els.every((e) => e.locked)
+    this.edit(() => { for (const el of els) { if (on) el.locked = true; else delete el.locked } }, true)
   }
 
   /** Same width/height for the whole selection — first selected is the reference. */

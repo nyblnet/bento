@@ -3302,6 +3302,13 @@ export class Editor {
         this.canvas.toggleCommentMode()
         return
       }
+      // ⌘L / Ctrl+L locks the selection (#838). Only with something selected:
+      // otherwise the browser keeps its address-bar shortcut. (inField returned above.)
+      if (mod && !ev.shiftKey && !ev.altKey && ev.key.toLowerCase() === 'l' && this.store.selection.length && !this.store.readOnly) {
+        ev.preventDefault()
+        this.panel.lock(this.store.selectedElements)
+        return
+      }
       if (mod && ev.key.toLowerCase() === 'g') {
         ev.preventDefault()
         const els = this.store.selectedElements
@@ -3382,6 +3389,7 @@ export class Editor {
         const dy = ev.key === 'ArrowUp' ? -step : ev.key === 'ArrowDown' ? step : 0
         this.store.commit(() => {
           for (const el of this.store.selectedElements) {
+            if (el.locked) continue
             el.x += dx
             el.y += dy
           }
@@ -3607,6 +3615,7 @@ export class Editor {
       { label: t('Copy'), hint: '⌘C', run: () => this.copySelection() },
       { label: t('Duplicate'), hint: '⌘D', run: () => this.duplicateSelection() },
       'sep',
+      { label: els.every((x) => x.locked) ? t('Unlock') : t('Lock'), hint: '⌘L', run: () => this.panel.lock(els) },
       { label: t('Bring to front'), run: () => this.panel.reorder(els, 'front') },
       { label: t('Send to back'), run: () => this.panel.reorder(els, 'back') },
       'sep',
