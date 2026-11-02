@@ -11,7 +11,7 @@ import { t } from '../i18n'
 import { defaultShape, internAsset, readableInk, uid, type ShapeElement, type SlideElement, type TableElement, type TextElement } from '../model'
 import { estimatedFrames, fencedElements, splitFences, toggleCodeOnSelection, type FencePart, type PartFrame } from './codefence'
 import { cssColor, renderSlide, sanitizeHtml } from '../render'
-import { autoformatAtCaret, clearAutoformat, markdownToHtml, stripMarkerEscapes, undoAutoformat } from './markdown'
+import { autoformatAtCaret, autolinkAtCaret, clearAutoformat, markdownToHtml, stripMarkerEscapes, undoAutoformat } from './markdown'
 import { inList, shiftList, shiftListHtml, undoIndent } from './listindent'
 import { bulletsToLists } from './bullets'
 import { clipboardToHtml } from './paste'
@@ -1374,7 +1374,19 @@ export class SlideCanvas {
         let released = false
         const onMouseUp = () => { released = true }
         window.addEventListener('mouseup', onMouseUp, { capture: true, once: true })
-        this.moveable.waitToChangeTarget().then(() => {
+        //
+        // ...and TWO TIMER HOPS MORE. waitToChangeTarget resolves from the first
+        // render that sees the new target, but croact then runs a second render
+        // of Moveable from a setTimeout(0) (setState), and that pass still sees
+        // the old state: it unsets every able, which nulls `state.dragInfo`
+        // under the drag just begun while the gesture carries on, so every
+        // mouse move threw "Cannot set properties of null (setting 'dist')" and
+        // the press moved nothing. A timer queued from here fires after the one
+        // already pending (measured: 0 hops = 12/12 runs throw, 1 hop = 0/12),
+        // so the replay lands once Moveable has settled; the second hop is
+        // margin for a pass that queues another. rAF would not do: it is not
+        // ordered against timers (it passed 3 runs in 4, then failed).
+        this.moveable.waitToChangeTarget().then(async () => { for (let i = 0; i < 2; i++) await new Promise<void>((r) => setTimeout(r, 0)) }).then(() => {
           window.removeEventListener('mouseup', onMouseUp, true)
           if (released) return
           this.moveable.dragStart(e.inputEvent)
@@ -1538,6 +1550,10 @@ export class SlideCanvas {
     // markdown affordances: **bold** / *italic* / `code` / ~~strike~~ / "- "
     // collapse as you type (⌘Z reverts, backslash escapes); pasted plain
     // text converts the same patterns
+    inner.addEventListener('beforeinput', (ev) => {
+      // Enter finishes a typed URL the way a space does
+      if (ev.inputType === 'insertParagraph' || ev.inputType === 'insertLineBreak') autolinkAtCaret(false)
+    }, { signal })
     inner.addEventListener('input', () => {
       if (!autoformatAtCaret()) clearAutoformat()
     }, { signal })
