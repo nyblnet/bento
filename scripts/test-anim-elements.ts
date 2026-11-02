@@ -86,6 +86,16 @@ for (const [name, El] of [['HTMLElement', FakeHTML], ['SVGElement', FakeSVG]] as
   check('style-less Element does not throw', !threw)
 }
 
+// 5. Spring ease overshoots 1 mid-flight and settles to 1 at completion.
+{
+  const state = { p: 0 }
+  anim.to(state, { p: 1, duration: 1, ease: 'spring' })
+  anim.tick(0.78)
+  check('spring ease overshoots 1 gently around t=0.78', state.p > 1.015 && state.p < 1.02)
+  anim.tick(0.22)
+  check('spring ease settles to 1 at completion', state.p === 1)
+}
+
 anim.setManual(false)
 console.log(FAILS.length ? `\n${FAILS.length} FAILED` : '\nall passed')
 process.exit(FAILS.length ? 1 : 0)
