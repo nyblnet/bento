@@ -4,13 +4,13 @@
 // RIG BUILDS ONLY: the security §19d–§19h probe, injected after the shim and
 // bridge when BENTO_PROBE_<label> is set. Each window reports what it could and
 // could not do; rig/check.py asserts the verdicts. The embed is a cross-origin
-// https page (rig/embed.html, served from a pinned commit) that tries Tauri's IPC from inside the document
+// page (rig/embed.html, served by run.sh from its own loopback port) that tries Tauri's IPC from inside the document
 // with whatever key and capability it is handed in its URL fragment.
 ;(function () {
   if (window.top !== window) return
   if (location.protocol === 'https:') return
-  // pinned to a commit (immutable); rig/embed.html is that page. httpbin served the same bytes as text/plain from late 2026-10, which silently ran no embed.
-  const EMBED_URL = "https://rawcdn.githack.com/nyblnet/bento/e6dc1a9a5116a9a393165b376c680b58d8817521/home/desktop/host/rig/embed.html"
+  // The attacker's page is served by rig/run.sh on a loopback port the host passes in; no third party is involved.
+  const EMBED_URL = window.__RIG_EMBED_URL || ''
   const LABEL = window.__RIG_LABEL, PEER = window.__RIG_PEER
   const R = (window.__probeR = { label: LABEL, violations: [] })
   document.addEventListener('securitypolicyviolation', (e) => {
@@ -137,6 +137,8 @@
       // capability; CONTROL: the embed handed this window's own capability,
       // which must be ACCEPTED, or the refusals prove nothing.
       R.embeds = {}
+      R.embed_url = EMBED_URL
+      if (!EMBED_URL) throw new Error('rig: no BENTO_RIG_EMBED_URL: the attacker fixture is not being served')
       const cases = [['rig1-key-only', ''], ['rig2-peer-cap', peerCap || ''], ['control-own-cap', window.__rigCap]]
       for (const [tag, cap] of cases) {
         if (tag === 'rig2-peer-cap' && !peerCap) continue
@@ -147,6 +149,18 @@
         document.body.appendChild(f)
         R.embeds[tag] = await got
       }
+      // ORIGIN check (the sandboxed frames above report origin "null", as a real embed does): the
+      // same fixture UNSANDBOXED must report its own loopback origin, different from the document's,
+      // and be unable to read this realm.
+      R.origin_ctl = {}
+      const frameReport = (mk, tag) => new Promise((res) => {
+        const h = (e) => { if (e.data && e.data.embed && e.data.embed.tag === tag) { removeEventListener('message', h); res(e.data.embed) } }
+        addEventListener('message', h); setTimeout(() => res('no report'), 12000)
+        document.body.appendChild(mk())
+      })
+      let xf
+      R.origin_ctl.cross = await frameReport(() => { xf = document.createElement('iframe'); xf.src = EMBED_URL + '#' + encodeURIComponent(['', '', LABEL + ':xo'].join('|')); return xf }, LABEL + ':xo')
+      try { R.origin_ctl.cross_reads = String(xf.contentDocument.body) } catch (e) { R.origin_ctl.cross_reads = 'THREW' }
       // save in place through the bridge. A real Bento app saves with its own
       // serializer (what ⌘S writes); a corpus file gets a marker in its doc
       // block (the block is not pinned, so a genuine file stays genuine)

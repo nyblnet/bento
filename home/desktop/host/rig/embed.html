@@ -1,6 +1,7 @@
 <!doctype html><script>
 var h=decodeURIComponent(location.hash.slice(1)).split('|'),key=h[0]||'',cap=h[1]||null,tag=h[2]||'';
-var r={tag:tag};
+var r={tag:tag,origin:location.origin,page:'rig-embed-fixture'};
+try{r.parentRead=String(parent.__RIG_LABEL)}catch(e){r.parentRead='THREW'}
 r.bentoGlobals=Object.getOwnPropertyNames(window).filter(function(n){return /bento|spike|TAURI/i.test(n)});
 try{r.parentSecret=String(parent.__spikeCap)}catch(e){r.parentSecret='THREW'}
 r.wkIpc=!!(window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.ipc);

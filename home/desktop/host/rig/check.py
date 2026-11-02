@@ -61,6 +61,15 @@ def window(name, genuine, expect_heard, peer_cap_expected=True):
     emb = p.get("embeds") or {}
     for tag in ["rig1-key-only", "control-own-cap"] + (["rig2-peer-cap"] if peer_cap_expected else []):
         ok(isinstance(emb.get(tag), dict), f"{name}: embed {tag} reported ({emb.get(tag)})")
+    # the fixture was served by US and loaded: every embed reports the fixture's own marker (a
+    # fixture that never loaded reports 'no report' and fails above), from the loopback origin
+    for tag, e in emb.items():
+        if isinstance(e, dict): ok(e.get("page") == "rig-embed-fixture", f"{name}: embed {tag} is the locally served fixture")
+    oc = p.get("origin_ctl") or {}
+    xo = oc.get("cross")
+    ok(isinstance(xo, dict) and re.fullmatch(r"https://127\.0\.0\.1:\d+", xo.get("origin", "") or "") is not None and xo.get("origin") != p.get("origin"), f"{name}: origin control: the unsandboxed fixture is a DIFFERENT origin from the document ({xo.get('origin') if isinstance(xo, dict) else xo} vs {p.get('origin')})")
+    ok(isinstance(xo, dict) and xo.get("parentRead") == "THREW", f"{name}: origin control: that cross-origin frame cannot read the document's realm ({xo.get('parentRead') if isinstance(xo, dict) else xo})")
+    ok(oc.get("cross_reads") == "THREW", f"{name}: origin control: the document cannot read into the cross-origin frame ({oc.get('cross_reads')})")
     # rigs 1, 2 and the control, decided by the HOST for this webview
     scn, lbl = name.split("-")
     L = log(scn)
@@ -84,6 +93,12 @@ def embeds_in_log(scn, label):
     lines = [l for l in log(scn).splitlines() if l.startswith("IPC bento_file") and f"webview={label}" in l]
     return lines
 
+
+# a webview fetched the fixture from our server (preflight is the first GET; WebKit caches the rest,
+# so the per-embed proof is the fixture's own marker in every report, asserted per window)
+srv = (out / "embed-server.log").read_text(errors="replace") if (out / "embed-server.log").exists() else ""
+gets = len(re.findall(r'"GET /embed.html', srv))
+ok(gets >= 2, f"the local fixture server answered the embeds ({gets} GETs)")
 
 for scn, wins in [
     ("pair", [("pair-doc0", True, [], True), ("pair-doc1", False, [], True)]),

@@ -33,11 +33,13 @@ pub fn init_script(app: &tauri::AppHandle, label: &str, init: String) -> String 
     let init = init.replacen("armed = true\n", "armed = true; window.__rigCap = cap\n", 1);
     assert!(init.contains("window.__rigCap = cap"), "rig: the shim's arming line moved");
     format!(
-        "{init}window.__RIG_INVOKE_KEY={:?};window.__RIG_LABEL={b:?};window.__RIG_FULL_LABEL={label:?};window.__RIG_WATCHDOG={};window.__RIG_WEDGE={};window.__RIG_PEER={peer:?};window.__RIG_ALL={:?};\n{PROBE};\n",
+        "{init}window.__RIG_INVOKE_KEY={:?};window.__RIG_LABEL={b:?};window.__RIG_FULL_LABEL={label:?};window.__RIG_WATCHDOG={};window.__RIG_WEDGE={};window.__RIG_PEER={peer:?};window.__RIG_ALL={:?};window.__RIG_EMBED_URL={:?};\n{PROBE};\n",
         app.invoke_key(),
         std::env::var_os("BENTO_RIG_WATCHDOG").is_some(),
         std::env::var_os("BENTO_RIG_WEDGE").is_some(),
         labels.join(","),
+        // the attacker's page: served by rig/run.sh on loopback, never a third party
+        std::env::var("BENTO_RIG_EMBED_URL").unwrap_or_default(),
     )
 }
 

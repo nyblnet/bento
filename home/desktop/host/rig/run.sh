@@ -3,7 +3,8 @@
 # host with the "rig" feature against the gate-1 corpus history, makes its own
 # fixtures from the corpus, runs two multi-window scenarios, and asserts with
 # check.py. A scenario that times out or reports nothing FAILS (§19f).
-# Needs: a display (xvfb-run) and a D-Bus session; network for the embeds.
+# Needs: a display (xvfb-run) and a D-Bus session. No network: the attacker's embed
+# page is served from a loopback port of its own (see below), never a third party.
 set -u
 cd "$(dirname "$0")/.."
 OUT=${1:-/tmp/h2-rig}
@@ -16,6 +17,33 @@ mkdir -p "$OUT/hist/corpus" "$OUT/hist/slides"
 cp ../../fixtures/gate1/history.json "$OUT/hist/corpus/history.json"
 cp -r ../../fixtures/gate1/real/slides-1.2.10 "$OUT/real"
 cp "$OUT/real/history.json" "$OUT/hist/slides/history.json"
+# The ATTACKER'S PAGE: rig/embed.html on its own loopback origin (https://127.0.0.1:<port>),
+# served here with a throwaway certificate, so no launch-gating rig depends on a third party.
+# What the host's refusals branch on is the page's capability and the main-frame arming, not
+# origin or site (rig 1/2 and the control prove that); the fixture is nonetheless a true
+# different origin (scheme, host and port all differ from the document's bento:// origin).
+# HTTPS because the pinned CSP and the navigation policy admit only https frames. The
+# certificate is added to the system trust store for the run (needs root or passwordless
+# sudo; removed on exit); if the webview does not trust it the embeds report nothing and
+# the rig FAILS, loudly, below.
+mkdir -p "$OUT/embedsrv"; cp rig/embed.html "$OUT/embedsrv/embed.html"
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 1 -subj /CN=127.0.0.1 \
+  -addext "subjectAltName=IP:127.0.0.1,DNS:localhost" -addext "basicConstraints=critical,CA:TRUE" \
+  -keyout "$OUT/embed.key" -out "$OUT/embed.crt" 2>/dev/null || { echo "FAIL: openssl cannot make the fixture certificate" >&2; exit 1; }
+PORT=$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1])')
+python3 rig/embedsrv.py "$OUT/embedsrv" "$OUT/embed.crt" "$OUT/embed.key" "$PORT" >/dev/null 2>"$OUT/embed-server.log" &
+EMBED_PID=$!
+SUDO=""; [ "$(id -u)" = 0 ] || SUDO="sudo -n"
+CAF=/usr/local/share/ca-certificates/bento-rig-embed.crt
+$SUDO mkdir -p /usr/local/share/ca-certificates && $SUDO cp "$OUT/embed.crt" "$CAF" && $SUDO update-ca-certificates >/dev/null 2>&1 \
+  || { echo "FAIL: cannot trust the fixture certificate (needs root or passwordless sudo)" >&2; exit 1; }
+trap 'kill $EMBED_PID 2>/dev/null; $SUDO rm -f "$CAF"; $SUDO update-ca-certificates --fresh >/dev/null 2>&1' EXIT
+export BENTO_RIG_EMBED_URL="https://127.0.0.1:$PORT/embed.html"
+for i in $(seq 1 50); do curl -fsS --cacert "$OUT/embed.crt" -o "$OUT/embed-preflight.html" -D "$OUT/embed-preflight.hdr" "$BENTO_RIG_EMBED_URL" 2>/dev/null && break; sleep 0.2; done
+if ! grep -q "rig-embed-fixture" "$OUT/embed-preflight.html" 2>/dev/null || ! grep -qi '^content-type: text/html' "$OUT/embed-preflight.hdr" 2>/dev/null; then
+  echo "FAIL: the embed fixture is not being served as text/html at $BENTO_RIG_EMBED_URL" >&2; exit 1
+fi
+echo "embed fixture served at $BENTO_RIG_EMBED_URL"
 BENTO_HISTORIES_DIR="$OUT/hist" cargo build -q --features rig || exit 1
 BIN=target/debug/bento-home-desktop
 python3 - "$OUT/fix" <<'PY'
