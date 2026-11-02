@@ -125,3 +125,15 @@ runs:
       # and every rig step in every CI file runs through the wrapper.
       shell: bento-step {0}
       run: node scripts/test-ci-skips.mjs
+
+    - name: No frame is both scripted and same-origin
+      # Fails on any frame a document can cause that has allow-same-origin AND
+      # allow-scripts (or no sandbox at all), across every app's source and
+      # every built shell with its deflated payloads inflated. Type's print
+      # frame is allow-listed by name; two vendored Reveal frames are listed
+      # with their unreachability premise asserted. Placed here, after all the
+      # builds, because --require-built turns a missing shell into a failure
+      # instead of a quiet pass; the mutants (unsafe pair, dropped sandbox,
+      # computed value, extra frame) live in the rig.
+      shell: bento-step {0}
+      run: node scripts/test-frame-sandbox.mjs --require-built
