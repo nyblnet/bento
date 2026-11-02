@@ -11,6 +11,12 @@ pre-1.0.
 
 ## [Unreleased]
 
+## [1.2.12] — 2026-11-02
+
+- **Security: update this file. This release closes an issue found in our own
+  review.** What it was is described here once people have had time to
+  update.
+
 ## [1.2.11] — 2026-11-02
 
 - **Lock an element so clicks and drags skip it.** A full-slide image or fill

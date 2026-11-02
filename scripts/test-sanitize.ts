@@ -129,6 +129,31 @@ for (const attr of ['data-bento', 'data-bento-transient', 'data-bento-preview', 
   ok(!svgAttrAllowed(attr), `${attr} is reserved to the shell, not lent to a diagram`)
 }
 
+// The presentation runtime reads data-* from ANY element in a slide, and some of
+// those names are behaviour: Reveal's preview overlay binds a click on any
+// [data-preview-link] and opens an UNSANDBOXED iframe on its value, so a
+// javascript: value runs in this window. Every name Reveal can read is
+// reserved. The list is extracted from the vendored build itself, so a Reveal
+// upgrade that reads a new name turns this red instead of reopening the door.
+for (const attr of ['data-preview-link', 'data-preview-image', 'data-preview-video', 'data-preview-fit',
+  'data-background-iframe', 'data-background-image', 'data-background-video', 'data-background-interactive',
+  'data-src', 'data-fragment-index', 'data-auto-animate', 'data-autoslide', 'data-id', 'data-notes',
+  'DATA-PREVIEW-LINK', 'data-preview-anything-new']) {
+  ok(!svgAttrAllowed(attr), `${attr} is reserved to the presentation runtime`)
+}
+{
+  const revealBuild = path.join(process.cwd(), 'slides/node_modules/reveal.js/dist/reveal.esm.js')
+  const src = fs.readFileSync(revealBuild, 'utf8')
+  const names = new Set<string>()
+  for (const m of src.matchAll(/data-[a-z][a-z0-9-]*[a-z0-9]/g)) names.add(m[0])
+  for (const m of src.matchAll(/dataset\.([a-zA-Z]+)/g)) names.add('data-' + m[1].replace(/[A-Z]/g, (c) => '-' + c.toLowerCase()))
+  // positive control: the extraction found the trigger names, so "none allowed" is not vacuous
+  ok(names.has('data-preview-link') && names.has('data-background-iframe') && names.has('data-src') && names.size >= 40,
+    `the scan of the vendored Reveal build found its trigger names (${names.size} data-* names)`)
+  const open = [...names].filter((n) => svgAttrAllowed(n))
+  ok(open.length === 0, `every data-* name Reveal reads is refused on an author svg${open.length ? ` (still open: ${open.join(', ')})` : ''}`)
+}
+
 console.log('\nsvg href policy')
 
 ok(svgHrefAllowed('#grad-1'), 'a same-document fragment is kept — gradients and markers paint through url(#…)')
@@ -466,6 +491,19 @@ if (location.pathname === '/meta.html') {
     // away and it reports nothing (the same trap the click loop below avoids).
     // The handler cannot survive without the attribute, which is asserted.
     check('3b — no handler attribute survives on the surviving anchor', !linked.includes('onclick') && !linked.includes('__pwn(31)'))
+
+    // --- 3r. names the presentation runtime acts on ---------------------------
+    // Reveal binds a click on any [data-preview-link] inside the slides and opens
+    // an unsandboxed iframe on the value. The shipping render path must drop every
+    // runtime name, while a diagram's own data-* CSS hook survives (the control:
+    // without it, "nothing carries data-*" would pass on a walk that drops all).
+    const runtime = draw('<svg><g data-part="bar" data-preview-link="javascript:window.__pwn(91)" ' +
+      'data-preview-image="javascript:window.__pwn(92)" data-preview-video="x"><rect width="10" height="10" ' +
+      'data-background-iframe="javascript:window.__pwn(93)" data-src="javascript:window.__pwn(94)"/></g>' +
+      '<a href="https://bento.page/" data-preview-link="javascript:window.__pwn(95)"><rect width="5" height="5"/></a></svg>')
+    check('3r — control: a diagram data-* hook survives the walk', runtime.querySelectorAll('[data-part="bar"]').length === 1)
+    check('3r — no Reveal trigger name survives the walk (preview-*, background-*, src)',
+      runtime.querySelectorAll('[data-preview-link],[data-preview-image],[data-preview-video],[data-background-iframe],[data-src]').length === 0)
 
     // --- 3c. nested markup is walked like top-level markup -----------------
     // An allowed tag inside a tag the walk does not know, at any depth, is
