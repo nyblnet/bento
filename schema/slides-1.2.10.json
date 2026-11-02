@@ -357,9 +357,6 @@
         "link": {
           "$ref": "#/$defs/prop-link"
         },
-        "locked": {
-          "type": "boolean"
-        },
         "morphId": {
           "type": "string",
           "maxLength": 200,
@@ -616,9 +613,6 @@
         "link": {
           "$ref": "#/$defs/prop-link"
         },
-        "locked": {
-          "type": "boolean"
-        },
         "morphId": {
           "type": "string",
           "maxLength": 200,
@@ -812,9 +806,6 @@
         "link": {
           "$ref": "#/$defs/prop-link"
         },
-        "locked": {
-          "type": "boolean"
-        },
         "morphId": {
           "type": "string",
           "maxLength": 200,
@@ -935,9 +926,6 @@
         },
         "link": {
           "$ref": "#/$defs/prop-link"
-        },
-        "locked": {
-          "type": "boolean"
         },
         "markup": {
           "type": "string",
@@ -1061,9 +1049,6 @@
         },
         "link": {
           "$ref": "#/$defs/prop-link"
-        },
-        "locked": {
-          "type": "boolean"
         },
         "morphId": {
           "type": "string",
@@ -1310,9 +1295,6 @@
         "link": {
           "$ref": "#/$defs/prop-link"
         },
-        "locked": {
-          "type": "boolean"
-        },
         "morphId": {
           "type": "string",
           "maxLength": 200,
@@ -1442,9 +1424,6 @@
         },
         "link": {
           "$ref": "#/$defs/prop-link"
-        },
-        "locked": {
-          "type": "boolean"
         },
         "loop": {
           "type": "boolean"
@@ -1590,9 +1569,6 @@
           "$ref": "#/$defs/prop-link"
         },
         "live": {
-          "type": "boolean"
-        },
-        "locked": {
           "type": "boolean"
         },
         "morphId": {
@@ -1745,9 +1721,6 @@
         },
         "link": {
           "$ref": "#/$defs/prop-link"
-        },
-        "locked": {
-          "type": "boolean"
         },
         "morphId": {
           "type": "string",

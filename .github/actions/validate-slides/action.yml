@@ -605,3 +605,10 @@ runs:
       # (#697). Commit path and paste path, with the pre-fix behaviour red.
       shell: bento-step {0}
       run: node scripts/test-slides-backslash.ts
+
+    - name: Frozen schema snapshot rig
+      # A released schema/slides-<v>.json is a frozen URL: build-schema.mjs must
+      # not rewrite it once tag v<v> exists (#864 rewrote 1.2.10). Runs the real
+      # script in a scratch repo, with the old always-write behaviour red.
+      shell: bento-step {0}
+      run: node scripts/test-schema-frozen.mjs
