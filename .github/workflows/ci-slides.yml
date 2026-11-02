@@ -161,6 +161,11 @@ jobs:
         # primary in both themes, and N language rebuilds leaving one set of
         # window/document listeners and bar observers.
         run: node scripts/test-slides-topbar-browser.mjs
+      - name: A slide can be dragged to the end of the sidebar in Chromium
+        # #761: the gap after the last thumbnail and the New slide button both
+        # accept a slide drag and land it last, its states travelling with it;
+        # a drop on a thumb still moves, and a non-slide drag is left alone.
+        run: node scripts/test-slides-sidebar-drop-end-browser.mjs
       - name: One field look in Chromium
         # Every chrome text field, select and textarea (each element kind's
         # panel, About, the save-as dialogs, Share, comments) has the shared
