@@ -1920,9 +1920,15 @@ export class Editor {
       if (slide.hidden) item.classList.add('ed-thumb-hidden')
       this.sidebar.appendChild(item)
     })
-    this.sidebar.appendChild(this.insertGap(slides.length))
+    const endGap = this.insertGap(slides.length)
+    this.sidebar.appendChild(endGap)
     const add = btn(ICONS.plus, t('New slide'), () => this.openLayoutPicker(add))
     add.classList.add('ed-add-slide')
+    // the list's end is a drop target too (#761): the last gap and the New-slide
+    // button both land the dragged slides after the final one. The gap sits
+    // after every parent's states, so it never splits a parent from its states.
+    this.wireEndDrop(endGap)
+    this.wireEndDrop(add)
     add.title = t('New slide from a layout')
     this.sidebar.appendChild(add)
     this.sidebar.scrollTop = scroll
@@ -2075,6 +2081,22 @@ export class Editor {
       ev.preventDefault()
       item.classList.remove('drop')
       this.dropSlides(ev.dataTransfer!.getData('text/bento-slide'), index)
+    })
+  }
+
+  private wireEndDrop(target: HTMLElement) {
+    const isSlideDrag = (ev: DragEvent) => !!ev.dataTransfer?.types.includes('text/bento-slide')
+    target.addEventListener('dragover', (ev) => {
+      if (!isSlideDrag(ev)) return
+      ev.preventDefault()
+      target.classList.add('drop')
+    })
+    target.addEventListener('dragleave', () => target.classList.remove('drop'))
+    target.addEventListener('drop', (ev) => {
+      if (!isSlideDrag(ev)) return
+      ev.preventDefault()
+      target.classList.remove('drop')
+      this.dropSlides(ev.dataTransfer!.getData('text/bento-slide'), this.store.doc.slides.length)
     })
   }
 

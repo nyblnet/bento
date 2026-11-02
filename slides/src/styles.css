@@ -399,6 +399,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 
 .bento-thumb-surface { overflow: hidden; pointer-events: none; }
 
+.ed-add-slide.drop { border-color: var(--blue); color: var(--blue); }
 .ed-add-slide { border: 1.5px dashed var(--line); justify-content: center; color: var(--muted); align-self: stretch; }
 
 /* interactive-state thumbs: slightly smaller, centred under their parent.
@@ -1545,7 +1546,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   opacity: 0;
   transition: opacity 0.12s ease;
 }
-.ed-insertgap:hover { opacity: 1; }
+.ed-insertgap:hover, .ed-insertgap.drop { opacity: 1; }
 .ed-insertgap::before {
   content: '';
   position: absolute;
@@ -1708,6 +1709,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   transform: scale(tan(atan2(100cqw, var(--sv-doc-w, 1600px))));
   transform-origin: 0 0;
 }
+.sv-nextbox .sv-frame { width: min(100%, calc(30vh * var(--sv-ar, 1.7778))); }
 .sv-frame.end {
   display: flex;
   align-items: center;
