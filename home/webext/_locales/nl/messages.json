@@ -934,5 +934,17 @@
   },
   "idErrNoWayBack": {
     "message": "Er is niets ingesteld: je toegangssleutel kan je Bento ID niet ontgrendelen en dit apparaat kan geen herstelcode maken, dus er zou geen weg terug zijn."
+  },
+  "setIdServe": {
+    "message": "Openen met Bento ID (preview)",
+    "description": "Library settings, Bento ID section: checkbox, off by default; turns on the preview of opening documents with a Bento ID."
+  },
+  "setIdServeNote": {
+    "message": "Voegt ‘Openen met Bento ID’ toe aan het menu van een document: het document opent in een beschermde pagina die je Bento ID kan gebruiken. Dubbelklikken op een bestand verandert niet.",
+    "description": "Library settings: note under that checkbox."
+  },
+  "menuOpenWithId": {
+    "message": "Openen met Bento ID",
+    "description": "Library: an item in a document card's menu (only when the preview is on)."
   }
 }

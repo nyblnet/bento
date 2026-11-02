@@ -427,6 +427,23 @@ export async function verifyServed(html: string, history: History, opts: { frame
   return { verdict: 'genuine', release, csp: hostPolicy(release.pins, opts.frameAncestors) }
 }
 
+/**
+ * A served file, judged against EVERY history the host holds. A fresh shell (as
+ * New writes it, and as a release publishes it) has an empty document block, so
+ * nothing in the file says which app it is: never pick the history by a name read
+ * from the file or by a directory name. Exactly one app's history must match;
+ * none, or more than one, is UNKNOWN. The verdict names the app that matched.
+ */
+export async function verifyServedHeld(html: string, held: History[], opts: { frameAncestors?: string } = {}): Promise<ServedVerdict & { app?: string }> {
+  const hits: Array<{ app: string; v: ServedVerdict }> = []
+  for (const h of held) {
+    const v = await verifyServed(html, h, opts)
+    if (v.verdict === 'genuine') hits.push({ app: h.app, v })
+  }
+  if (hits.length === 1) return { ...hits[0].v, app: hits[0].app }
+  return { verdict: 'unknown', reason: hits.length ? `${hits.length} held histories match (${hits.map((x) => x.app).join(', ')})` : 'no held history matches' }
+}
+
 // --- the strict file:// fallback (vault's strict verifier; security §15) ------------
 
 const CLOSE = '</' + 'script>'

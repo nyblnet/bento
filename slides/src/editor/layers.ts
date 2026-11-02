@@ -134,6 +134,13 @@ export class LayersUI {
       label.className = 'ed-layer-label'
       label.textContent = r.label
       row.append(glyph, label)
+      if (r.locked) {
+        const lock = document.createElement('span')
+        lock.className = 'ed-layer-lock'
+        lock.textContent = '🔒'
+        lock.title = t('Locked')
+        row.appendChild(lock)
+      }
       row.title = r.label
       row.addEventListener('click', (ev) => this.onClick(ev, r))
       row.addEventListener('dragstart', (ev) => {

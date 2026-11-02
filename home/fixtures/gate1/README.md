@@ -30,8 +30,33 @@ disagrees with any declared verdict.
 - `served/*.html`: files for the **served path** (`verifyServed`).
 - `strict/*.html` and `strict-expected.json`: the **file:// fallback**
   (`verifyStrict`).
-- `expected.json`: the answer key, with four sections: `served`, `ambiguous`,
-  `strict` and `history`.
+- `real/slides-1.2.10/`: a **frozen real release**. These are bento.page's slides
+  1.2.10 shell, its signed history, and the release public key that
+  `kernel/src/update.ts` embeds. They were copied once, are never regenerated,
+  and are real bytes, so CI needs no download. The app id is `bento-slides`, not
+  the directory's `slides`. The shell's document block is empty: a published
+  shell is a fresh shell.
+- `expected.json`: the answer key, with six sections: `served`, `ambiguous`,
+  `strict`, `history`, `histories` (where each history and its key live) and
+  `held`.
+
+### Held histories (`verifyServedHeld`)
+
+A fresh shell, as New writes it and as a release publishes it, has an empty
+document block. Nothing in the file says which app it is. So a host judges a
+served file against **every** history it holds: exactly one app's history must
+match, and the verdict names that app. None, or more than one, is UNKNOWN.
+
+Never choose the history from a name read out of the file, or from a directory
+name: the real app id is `bento-slides`, its directory is `slides`, and the
+synthetic `bento-test` hid that difference until a real history was measured.
+Each `held` row lists the histories (by their key in `histories`) in the order
+the host holds them.
+
+The rig also checks that the synthetic history has the real one's exact shape:
+the same fields at every level, the same format versions, and the
+`bento-<app>` form. So the synthetic rows can't drift from what is actually
+published.
 
 The releases in the history:
 - **1.0.0 and 1.1.0** share a runtime and differ in their loader;

@@ -561,6 +561,29 @@ pub fn verify_served(doc: &[u8], history: &History, frame_ancestors: &str) -> Se
     }
 }
 
+/// A served file judged against EVERY history the host holds (the reference's
+/// verifyServedHeld). A fresh shell has an empty document block, so nothing in
+/// the file says which app it is: never pick the history by a name read from the
+/// file or from a directory. Exactly one held history must match; none, or more
+/// than one, is UNKNOWN. A genuine verdict names the app that matched.
+pub fn verify_served_held(doc: &[u8], held: &[History], frame_ancestors: &str) -> (ServedVerdict, Option<String>) {
+    let mut hits: Vec<(String, ServedVerdict)> = vec![];
+    for h in held {
+        let v = verify_served(doc, h, frame_ancestors);
+        if matches!(v, ServedVerdict::Genuine { .. }) { hits.push((h.app().unwrap_or("").to_string(), v)) }
+    }
+    if hits.len() == 1 {
+        let (app, v) = hits.pop().unwrap();
+        return (v, Some(app));
+    }
+    let reason = if hits.is_empty() {
+        "no held history matches".to_string()
+    } else {
+        format!("{} held histories match ({})", hits.len(), hits.iter().map(|(a, _)| a.as_str()).collect::<Vec<_>>().join(", "))
+    };
+    (ServedVerdict::Unknown { reason }, None)
+}
+
 // --- the strict file:// fallback (security §15) ------------------------------------
 //
 // The desktop host always SERVES the bytes it verified, so it never needs this

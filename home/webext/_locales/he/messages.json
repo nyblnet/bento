@@ -934,5 +934,17 @@
   },
   "idErrNoWayBack": {
     "message": "שום דבר לא הוגדר: מפתח הגישה לא יכול לפתוח את ה־Bento ID והמכשיר הזה לא יכול ליצור קוד שחזור, כך שלא הייתה דרך חזרה."
+  },
+  "setIdServe": {
+    "message": "פתיחה עם Bento ID (תצוגה מקדימה)",
+    "description": "Library settings, Bento ID section: checkbox, off by default; turns on the preview of opening documents with a Bento ID."
+  },
+  "setIdServeNote": {
+    "message": "מוסיף „פתיחה עם Bento ID” לתפריט של מסמך: המסמך נפתח בדף מוגן שיכול להשתמש ב-Bento ID שלך. לחיצה כפולה על קובץ לא משתנה.",
+    "description": "Library settings: note under that checkbox."
+  },
+  "menuOpenWithId": {
+    "message": "פתיחה עם Bento ID",
+    "description": "Library: an item in a document card's menu (only when the preview is on)."
   }
 }

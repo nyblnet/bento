@@ -1142,5 +1142,17 @@
   "idErrNoWayBack": {
     "message": "Nothing was set up: your passkey can't unlock your Bento ID and this device can't make a recovery code, so there would be no way back.",
     "description": "Setup error: neither recovery path is available."
+  },
+  "setIdServe": {
+    "message": "Open with Bento ID (preview)",
+    "description": "Library settings, Bento ID section: checkbox, off by default; turns on the preview of opening documents with a Bento ID."
+  },
+  "setIdServeNote": {
+    "message": "Adds “Open with Bento ID” to a document's menu: the document opens in a protected page that can use your Bento ID. Double-clicking a file is not affected.",
+    "description": "Library settings: note under that checkbox."
+  },
+  "menuOpenWithId": {
+    "message": "Open with Bento ID",
+    "description": "Library: an item in a document card's menu (only when the preview is on)."
   }
 }

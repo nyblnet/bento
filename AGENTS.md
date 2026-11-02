@@ -2,7 +2,8 @@
 
 Guidance for AI coding agents (Claude Code, Codex, Antigravity, …) and human
 contributors. This file is the **tool-agnostic contract**; Claude Code also
-reads `CLAUDE.md` (the deep architecture guide for `slides/`). If your tool
+reads `CLAUDE.md` (repo-wide notes) and `slides/CLAUDE.md` (the deep
+architecture guide for `slides/`). If your tool
 only reads one file, read this one, then follow the pointers.
 
 ## What this project is
@@ -29,8 +30,8 @@ are in `docs/DECISIONS.md` — don't reopen them.
   once (you are probably one of them).
 - `docs/DECISIONS.md` — settled decisions. Don't relitigate them in code;
   append new ones.
-- `CLAUDE.md` — deep architecture + hard-won gotchas, authoritative for
-  `slides/` internals.
+- `slides/CLAUDE.md` — deep architecture + hard-won gotchas, authoritative for
+  `slides/` internals (`kernel/CLAUDE.md` maps its kernel sections).
 - `docs/collab-design.md` — the sync/collab spec + threat model.
 
 ## Hard rules (each one has broken something before)

@@ -16,10 +16,10 @@
 // Signatures are random, so regenerating changes those bytes but no verdict.
 
 import { generateKeyPairSync, sign, createHash } from 'node:crypto'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { verifyServed, verifyStrict, strictExpectedFrom, acceptHistory, type History, type Pins } from '../kernel/src/gate1.ts'
+import { verifyServed, verifyServedHeld, verifyStrict, strictExpectedFrom, acceptHistory, type History, type Pins } from '../kernel/src/gate1.ts'
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'home/fixtures/gate1')
 const S = 'scr' + 'ipt'
@@ -68,6 +68,7 @@ const served: Served[] = [
   { name: 'genuine-1.1.0-shared-runtime', html: file(r11), verdict: 'genuine', release: '1.1.0', why: 'shares 1.0.0\'s runtime; the loader tells them apart' },
   { name: 'genuine-1.2.0', html: file(r12), verdict: 'genuine', release: '1.2.0', why: 'a genuine saved file' },
   { name: 'genuine-0.9.0-no-remover', html: file(r09), verdict: 'genuine', release: '0.9.0', why: 'a release from before previews saves no remover' },
+  { name: 'fresh-empty-doc', html: file(r1, { doc: '' }), verdict: 'genuine', release: '1.0.0', why: 'a fresh shell, as New writes it: an EMPTY document block, which names no app' },
   { name: 'genuine-1.0.0-shell', html: file(r1, { preview: null }), verdict: 'genuine', release: '1.0.0', why: 'the built shell itself: no preview yet' },
   { name: 'genuine-other-content', html: file(r1, { title: 'Other', doc: '{"format":"bento/test","title":"Other","slides":[{"x":"\\u003cb\\u003e"}]}', preview: '<h1 style="color:red">Other</h1>' }), verdict: 'genuine', release: '1.0.0', why: 'the document, title and inert preview vary freely' },
   // the grammar: only Bento's exact data types are inert
@@ -190,6 +191,24 @@ const histories: Array<{ name: string; held: History | null; incoming: History; 
   { name: 'not-newest-first', held: null, incoming: { ...history, releases: [...history.releases].reverse() }, ok: false, why: 'malformed: not newest first' },
 ]
 
+// --- the frozen REAL release (vault): bento.page's slides 1.2.10 shell and its signed
+// history, copied once and never regenerated, so the corpus carries real bytes and
+// the real history's shape. Its document block is empty: the published shell IS a
+// fresh shell. The app is "bento-slides", not the directory's "slides".
+const REAL = 'real/slides-1.2.10'
+const realEnv = JSON.parse(readFileSync(join(OUT, REAL, 'history.json'), 'utf8'))
+const realHistory: History = JSON.parse(realEnv.payload)
+const realShell = readFileSync(join(OUT, REAL, 'Bento_Slides.bento.html'), 'utf8')
+type Held = { name: string; case: string; html: string; held: Array<'synthetic' | 'real'>; verdict: 'genuine' | 'unknown'; app?: string; release?: string; why: string }
+const held: Held[] = [
+  { name: 'real-1.2.10-own-history', case: `${REAL}/Bento_Slides.bento.html`, html: realShell, held: ['real'], verdict: 'genuine', app: 'bento-slides', release: '1.2.10', why: 'the published 1.2.10 shell against its own published history' },
+  { name: 'real-1.2.10-every-held', case: `${REAL}/Bento_Slides.bento.html`, html: realShell, held: ['synthetic', 'real'], verdict: 'genuine', app: 'bento-slides', release: '1.2.10', why: 'its document block is empty, so the host tries EVERY held history: exactly one matches' },
+  { name: 'real-1.2.10-wrong-history', case: `${REAL}/Bento_Slides.bento.html`, html: realShell, held: ['synthetic'], verdict: 'unknown', why: 'only another app\'s history is held: nothing matches (the control: matching is not vacuous)' },
+  { name: 'synthetic-every-held', case: 'served/genuine-1.0.0.html', html: g, held: ['real', 'synthetic'], verdict: 'genuine', app: 'bento-test', release: '1.0.0', why: 'a synthetic genuine file, with the real history held first' },
+  { name: 'two-held-match', case: 'served/genuine-1.0.0.html', html: g, held: ['synthetic', 'synthetic'], verdict: 'unknown', why: 'two held histories match: ambiguous, never the first one found' },
+  { name: 'synthetic-fresh-every-held', case: 'served/fresh-empty-doc.html', html: file(r1, { doc: '' }), held: ['real', 'synthetic'], verdict: 'genuine', app: 'bento-test', release: '1.0.0', why: 'a synthetic fresh shell names no app: found by trying every held history' },
+]
+
 // --- an ambiguous history: two entries with identical blocks (unsigned: it's about the
 // matching rule, not the signature). A file matching both is UNKNOWN, never "the first".
 const twins: History = { ...history, releases: [{ ...history.releases.find((e) => e.version === '1.0.0')!, version: '1.3.0' }, ...history.releases] }
@@ -204,6 +223,10 @@ for (const r of served) {
   if (got !== want) disagree.push(`served ${r.name}: declared ${want}, the reference says ${got}`)
 }
 for (const r of ambiguous) if ((await verifyServed(r.html, r.history)).verdict !== r.verdict) disagree.push(`ambiguous ${r.name}: declared ${r.verdict}`)
+for (const r of held) {
+  const v = await verifyServedHeld(r.html, r.held.map((n) => n === 'real' ? realHistory : history))
+  if (v.verdict !== r.verdict || v.app !== r.app || (v.verdict === 'genuine' && v.release.version !== r.release)) disagree.push(`held ${r.name}: declared ${r.verdict} ${r.app ?? ''} ${r.release ?? ''}, got ${v.verdict} ${v.app ?? ''}`)
+}
 for (const r of strict) if (verifyStrict(r.html, expected).ok !== r.ok) disagree.push(`strict ${r.name}: declared ${r.ok ? 'pass' : 'refuse'}`)
 for (const r of histories) if (acceptHistory(r.held, r.incoming, 'bento-test').ok !== r.ok) disagree.push(`history ${r.name}: declared ${r.ok ? 'accept' : 'refuse'}`)
 if (disagree.length) { console.error(`the reference disagrees with the declared verdicts:\n  ${disagree.join('\n  ')}`); process.exit(1) }
@@ -226,6 +249,8 @@ writeFileSync(join(OUT, 'expected.json'), JSON.stringify({
   served: served.map((r) => ({ case: `served/${r.name}.html`, verdict: r.verdict, ...(r.release ? { release: r.release } : {}), why: r.why })),
   strict: strict.map((r) => ({ case: `strict/${r.name}.html`, ok: r.ok, why: r.why })),
   history: histories.map((r) => ({ name: r.name, held: r.held, incoming: r.incoming, ok: r.ok, why: r.why })),
+  histories: { synthetic: { history: 'history.json', key: 'test-public-key.json' }, real: { history: `${REAL}/history.json`, key: `${REAL}/release-public-key.json` } },
+  held: held.map((r) => ({ name: r.name, case: r.case, held: r.held, verdict: r.verdict, ...(r.app ? { app: r.app, release: r.release } : {}), why: r.why })),
   ambiguous: ambiguous.map((r) => { writeFileSync(join(OUT, 'served', `${r.name}.html`), r.html); return { case: `served/${r.name}.html`, history: r.history, verdict: r.verdict, why: r.why } }),
 }, null, 2) + '\n')
-console.log(`wrote ${OUT}: ${served.length} served rows, ${strict.length} strict rows (16 tampers), ${histories.length} history rows`)
+console.log(`wrote ${OUT}: ${served.length} served rows, ${strict.length} strict rows (16 tampers), ${histories.length} history rows, ${held.length} held-histories rows`)

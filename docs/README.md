@@ -12,7 +12,7 @@ Engineering and format documentation for bento/slides. Start here.
 
 Related, outside `docs/`:
 
-- [../CLAUDE.md](../CLAUDE.md) — the deep, module-by-module development guide
+- [../slides/CLAUDE.md](../slides/CLAUDE.md) — the deep, module-by-module development guide
   with the hard-won gotchas (also what AI agents read to work in this repo).
 - [../CHANGELOG.md](../CHANGELOG.md) — the version history.
 - [../CONTRIBUTING.md](../CONTRIBUTING.md) — setup, conventions, the splice

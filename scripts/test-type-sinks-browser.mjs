@@ -34,6 +34,14 @@ const ok = (c, m) => { checks++; if (!c) { failures++; console.log(`  FAIL  ${m}
 const SHELL = new URL('../type/dist-single/Bento_Type.bento.html', import.meta.url).href
 const RUN = 'window.__pwned=(window.__pwned||0)+1'
 
+// The attributes an embed picture refuses although slides' diagrams keep them
+// (EMBED_POLICY.refuseAttrs). Written out HERE, not read from the policy, so
+// emptying the policy's list cannot empty the check. Hygiene rather than a
+// boundary: remote url() and on* are refused by the base walk regardless.
+const REFUSED = ['baseprofile', 'color-interpolation', 'color-interpolation-filters', 'cursor', 'enable-background',
+  'font', 'font-size-adjust', 'font-stretch', 'font-variant', 'isolation', 'media', 'mix-blend-mode',
+  'pointer-events', 'requiredextensions', 'requiredfeatures', 'systemlanguage', 'tabindex', 'target',
+  'title', 'type', 'unicode-bidi', 'white-space', 'zoomandpan']
 const HOSTILE = {
   'slash before on*': `<svg width="120" height="120"><circle/onmouseover="${RUN}" cx="60" cy="60" r="50"/></svg>`,
   'quote before on*': `<svg width="120" height="120"><rect x="1"onclick="${RUN}" width="100" height="100"/></svg>`,
@@ -51,6 +59,15 @@ const HOSTILE = {
   // that judges an animation by the attribute it WRITES stops these
   'use animated to a remote href': `<svg width="80" height="80"><defs><rect id="a" width="60" height="60"/></defs><use href="#a"><animate attributeName="href" to="https://rc.test/x.svg#a" begin="0s" fill="freeze"/></use></svg>`,
   'a animated to a scheme-relative href': `<svg width="80" height="80"><a href="#x"><rect width="70" height="70"/><animate attributeName="href" to="//rc.test/p" begin="0s" fill="freeze"/></a></svg>`,
+  // an embed's picture may hold NO remote reference (a fetch out of a
+  // self-contained file is a read receipt) and NO data-* (names like
+  // data-bento-preview and data-el-id are what the shell and editor look up)
+  'remote https image': `<svg width="80" height="80"><image href="https://rc.test/i.png" width="70" height="70"/><rect width="10" height="10"/></svg>`,
+  // strictValues: a backslash anywhere in a value is refused (the base walk
+  // already decodes escapes before judging url(), so this is defence in depth)
+  'escaped values': `<svg width="80" height="80"><rect fill="r\\65 d" stroke="u\\72l(#g)" width="70" height="70"/></svg>`,
+  'slides-only attributes': `<svg width="80" height="80"><rect ${REFUSED.map((a) => `${a}="1"`).join(' ')} width="70" height="70"/></svg>`,
+  'data-* attributes': `<svg width="80" height="80" data-bento-preview="1"><rect data-el-id="x" data-note="n1" width="70" height="70"/></svg>`,
 }
 const BENIGN = `<svg width="200" height="120" viewBox="0 0 200 120"><defs><linearGradient id="g"><stop offset="0" stop-color="#f7a600"/><stop offset="1" stop-color="#5b8def"/></linearGradient><circle id="c" r="10"/></defs><rect width="200" height="120" fill="url(#g)"/><use href="#c" x="30" y="30"/><text x="10" y="110">Q3</text></svg>`
 
@@ -88,16 +105,19 @@ try {
     const before = requests.length
     await p.evaluate((j) => window.bento.loadDoc(j), docWith(view))
     await p.waitForTimeout(500)
-    const scan = await p.evaluate(() => {
+    const scan = await p.evaluate((REFUSED) => {
       const els = [...document.querySelectorAll('#paper .t-embed, #paper .t-embed *')]
       return {
         on: els.filter((e) => [...e.attributes].some((a) => /^on/i.test(a.name))).length,
         js: els.filter((e) => [...e.attributes].some((a) => /^(href|xlink:href|values|to|from)$/i.test(a.name) && /javascript:|https?:/i.test(a.value))).length,
-        bad: document.querySelectorAll('#paper .t-embed script, #paper .t-embed foreignObject, #paper .t-embed style').length,
+        bad: document.querySelectorAll('#paper .t-embed script, #paper .t-embed foreignObject, #paper .t-embed style, #paper .t-embed-view a').length,
         boxes: els.length,
         svg: !!document.querySelector('#paper .t-embed-view svg'),
+        data: [...document.querySelectorAll('#paper .t-embed-view svg, #paper .t-embed-view svg *')].filter((e) => [...e.attributes].some((a) => /^data-/i.test(a.name))).length,
+        esc: [...document.querySelectorAll('#paper .t-embed-view svg, #paper .t-embed-view svg *')].filter((e) => [...e.attributes].some((a) => a.value.includes('\\'))).length,
+        extra: [...document.querySelectorAll('#paper .t-embed-view svg *')].filter((e) => [...e.attributes].some((a) => REFUSED.includes(a.name.toLowerCase()))).length,
       }
-    })
+    }, REFUSED)
     // hover and click every element of the picture (or its placeholder)
     const targets = await p.$$('#paper .t-embed, #paper .t-embed *')
     for (const t of targets) { await t.hover({ force: true }).catch(() => {}); await t.click({ force: true, timeout: 500 }).catch(() => {}) }
@@ -105,17 +125,21 @@ try {
     await p.waitForTimeout(300)                     // let a frozen animation land before reading
     const ran = await p.evaluate(() => window.__pwned || 0)
     const stayed = p.url() === SHELL
-    const printed = await p.evaluate(() => {
+    const printed = await p.evaluate((REFUSED) => {
       const d = new DOMParser().parseFromString(window.bento.printHtml(), 'text/html')
       const all = [...d.querySelectorAll('.t-embed, .t-embed *')]
       return { on: all.filter((e) => [...e.attributes].some((a) => /^on/i.test(a.name))).length,
-               bad: d.querySelectorAll('.t-embed script, .t-embed foreignObject, .t-embed style').length,
-               js: all.filter((e) => [...e.attributes].some((a) => /javascript:/i.test(a.value))).length }
-    })
+               bad: d.querySelectorAll('.t-embed script, .t-embed foreignObject, .t-embed style, .t-embed a').length,
+               js: all.filter((e) => [...e.attributes].some((a) => /javascript:/i.test(a.value))).length,
+               data: d.querySelectorAll('.t-embed svg').length ? [...d.querySelectorAll('.t-embed svg, .t-embed svg *')].filter((e) => [...e.attributes].some((a) => /^data-/i.test(a.name))).length : 0,
+               esc: [...d.querySelectorAll('.t-embed svg, .t-embed svg *')].filter((e) => [...e.attributes].some((a) => a.value.includes('\\'))).length,
+               extra: [...d.querySelectorAll('.t-embed svg *')].filter((e) => [...e.attributes].some((a) => REFUSED.includes(a.name.toLowerCase()))).length }
+    }, REFUSED)
     const fetched = requests.slice(before).filter((u) => u.includes('rc.test')).length
-    ok(scan.svg && scan.on === 0 && scan.js === 0 && scan.bad === 0 && ran === 0 && fetched === 0 && stayed
-       && printed.on === 0 && printed.bad === 0 && printed.js === 0,
-      `${name}: the picture still RENDERS (${scan.svg}), no navigation on click (${stayed}), inert in the editor (on* ${scan.on}, js/remote ${scan.js}, script/foreign/style ${scan.bad}, ran ${ran}, fetched ${fetched}) and in print (on* ${printed.on}, ${printed.bad}, js ${printed.js})`)
+    ok(scan.svg && scan.on === 0 && scan.js === 0 && scan.bad === 0 && scan.data === 0 && ran === 0 && fetched === 0 && stayed
+       && printed.on === 0 && printed.bad === 0 && printed.js === 0 && printed.data === 0
+       && scan.esc === 0 && scan.extra === 0 && printed.esc === 0 && printed.extra === 0,
+      `${name}: the picture still RENDERS (${scan.svg}), no navigation on click (${stayed}), inert in the editor (on* ${scan.on}, js/remote ${scan.js}, data-* ${scan.data}, escapes ${scan.esc}, refused attrs ${scan.extra}, script/foreign/style/a ${scan.bad}, ran ${ran}, fetched ${fetched}) and in print (on* ${printed.on}, ${printed.bad}, js ${printed.js}, data-* ${printed.data}, escapes ${printed.esc}, refused attrs ${printed.extra})`)
     await p.close()
   }
 

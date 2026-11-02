@@ -3,12 +3,13 @@
 //
 // An embed's picture (an SVG from another Bento app) made safe by ALLOWLIST.
 //
-// Modelled on bento/slides' sanitizeSvg (slides/src/render.ts), which is
-// released and has held up — parse inert, walk every element, keep a tag or an
-// attribute only if its NAME is on a list — and kept STRICTER than it, because
-// an embed's picture needs less: no <style> element or attribute (so no CSS to
-// police beyond presentation values), no <a>, no remote reference of any kind.
-// To be replaced by a shared kernel module when slides' sanitizer is lifted.
+// Built on the kernel's shared sanitizer (kernel/src/svgsafe.ts — bento/slides'
+// sanitizeSvg, which is released and has held up, lifted so both apps audit
+// one walk): parse inert, walk every element, keep a tag or an attribute only
+// if its NAME is on a list. An embed's picture needs less than a slide's
+// diagram, so EMBED_POLICY TIGHTENS slides' default — a policy can only
+// tighten — to no <style> element or attribute, no <a>, no data-*, and no
+// remote reference of any kind.
 //
 // WHY A WALK, NOT A PATTERN. The earlier check (embed.ts safeView) looked for
 // an event handler as whitespace + "on…=". The HTML tokenizer also begins an
@@ -17,85 +18,25 @@
 // browser parsed the markup is right whatever the separators were, and an on*
 // attribute is never kept because it was never on the list.
 //
-// Guarded by scripts/test-type-sinks-browser.mjs.
+// Guarded by scripts/test-type-sinks-browser.mjs (and, for the shared walk,
+// scripts/test-sanitize.ts and scripts/test-svgsafe-policy-browser.mjs).
 
-const TAGS = new Set([
-  'svg', 'g', 'defs', 'symbol', 'use', 'switch', 'desc', 'title', 'metadata', 'view',
-  'path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon',
-  'text', 'tspan', 'textpath', 'image',
-  'lineargradient', 'radialgradient', 'stop', 'pattern', 'solidcolor',
-  'clippath', 'mask', 'marker',
-  'filter', 'feblend', 'fecolormatrix', 'fecomponenttransfer', 'fecomposite',
-  'feconvolvematrix', 'fediffuselighting', 'fedisplacementmap', 'fedistantlight',
-  'fedropshadow', 'feflood', 'fefunca', 'fefuncb', 'fefuncg', 'fefuncr',
-  'fegaussianblur', 'feimage', 'femerge', 'femergenode', 'femorphology',
-  'feoffset', 'fepointlight', 'fespecularlighting', 'fespotlight', 'fetile',
-  'feturbulence',
-  'animate', 'animatemotion', 'animatetransform', 'set', 'mpath',
-]);
+import { cleanSvgElement, type SvgPolicy } from '../../kernel/src/svgsafe.ts';
 
-/** SMIL elements WRITE an attribute later, so they are judged by their target. */
-const ANIM = new Set(['animate', 'set', 'animatetransform', 'animatemotion']);
-
-const ATTRS = new Set([
-  'id', 'class', 'lang', 'xml:lang', 'xml:space', 'xmlns', 'xmlns:xlink', 'role', 'version',
-  'href', 'xlink:href',
-  'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'rx', 'ry', 'width', 'height',
-  'd', 'points', 'pathlength', 'dx', 'dy', 'rotate', 'textlength', 'lengthadjust',
-  'transform', 'transform-origin', 'transform-box', 'viewbox', 'preserveaspectratio',
-  'refx', 'refy', 'markerwidth', 'markerheight', 'markerunits', 'orient',
-  'gradientunits', 'gradienttransform', 'spreadmethod', 'fx', 'fy', 'fr', 'offset',
-  'patternunits', 'patterncontentunits', 'patterntransform', 'clippathunits',
-  'maskunits', 'maskcontentunits', 'primitiveunits', 'filterunits',
-  'startoffset', 'method', 'spacing', 'side',
-  'fill', 'fill-opacity', 'fill-rule', 'stroke', 'stroke-width', 'stroke-linecap',
-  'stroke-linejoin', 'stroke-miterlimit', 'stroke-dasharray', 'stroke-dashoffset',
-  'stroke-opacity', 'opacity', 'color', 'display', 'visibility', 'overflow',
-  'shape-rendering', 'text-rendering', 'image-rendering', 'vector-effect', 'paint-order',
-  'font-family', 'font-size', 'font-style', 'font-weight', 'letter-spacing', 'word-spacing',
-  'text-anchor', 'text-decoration', 'dominant-baseline', 'alignment-baseline', 'baseline-shift',
-  'writing-mode', 'direction', 'clip', 'clip-path', 'clip-rule', 'mask', 'marker',
-  'marker-start', 'marker-mid', 'marker-end', 'filter', 'stop-color', 'stop-opacity',
-  'flood-color', 'flood-opacity', 'lighting-color',
-  'in', 'in2', 'result', 'mode', 'values', 'tablevalues', 'slope', 'intercept',
-  'amplitude', 'exponent', 'operator', 'k1', 'k2', 'k3', 'k4', 'order', 'kernelmatrix',
-  'divisor', 'bias', 'targetx', 'targety', 'edgemode', 'kernelunitlength', 'preservealpha',
-  'surfacescale', 'diffuseconstant', 'specularconstant', 'specularexponent', 'scale',
-  'xchannelselector', 'ychannelselector', 'stddeviation', 'radius', 'basefrequency',
-  'numoctaves', 'seed', 'stitchtiles', 'azimuth', 'elevation', 'pointsatx', 'pointsaty',
-  'pointsatz', 'limitingconeangle', 'z',
-  'attributename', 'attributetype', 'from', 'to', 'by', 'dur', 'begin', 'end', 'min',
-  'max', 'restart', 'repeatcount', 'repeatdur', 'calcmode', 'keytimes', 'keysplines',
-  'keypoints', 'path', 'additive', 'accumulate', 'origin',
-]);
-
-/** Exported for the rig: a pure decision. */
-export const attrAllowed = (name: string): boolean => {
-  const n = name.toLowerCase();
-  return n.startsWith('aria-') || ATTRS.has(n);
+/** An embed's picture needs less than a slide's diagram, so type TIGHTENS slides' default. */
+export const EMBED_POLICY: SvgPolicy = {
+  scopeStyle: null,              // no <style> element, no style attribute
+  refuseTags: ['a'],             // no navigation out of a picture
+  refuseAttrs: [
+    'baseprofile', 'color-interpolation', 'color-interpolation-filters', 'cursor', 'enable-background',
+    'font', 'font-size-adjust', 'font-stretch', 'font-variant', 'isolation', 'media', 'mix-blend-mode',
+    'pointer-events', 'requiredextensions', 'requiredfeatures', 'systemlanguage', 'tabindex', 'target',
+    'title', 'type', 'unicode-bidi', 'white-space', 'zoomandpan',
+  ],                             // hygiene, not a boundary: 'title' is the ATTRIBUTE (the <title> element stays)
+  dataAttrs: false,
+  remoteHref: false,             // #refs, and inline rasters on image/feImage only
+  strictValues: true,            // no escapes, no foreign schemes, url(#…) only (defence in depth: the base walk decodes escapes before judging url())
 };
-
-/** href: a same-document `#ref` anywhere; an inline raster only on image/feImage. */
-function hrefAllowed(value: string, tag: string): boolean {
-  const v = value.replace(/[\u0000- ]/g, '').toLowerCase();
-  if (v.startsWith('#')) return true;
-  return (tag === 'image' || tag === 'feimage') && /^data:image\/(png|jpe?g|gif|webp);base64,/.test(v);
-}
-
-/**
- * A presentation or SMIL value: no CSS escape (a backslash is how `url(` and
- * friends are spelled past a naive check, and a picture never needs one), and
- * every url() a same-document `#ref`. `values`/`from`/`to`/`by` are checked
- * too: an animation's values are written into its target later.
- */
-function valueAllowed(value: string): boolean {
-  if (value.includes('\\')) return false;
-  if (/javascript:|vbscript:|data:(?!image\/(png|jpe?g|gif|webp);base64,)/i.test(value.replace(/[\u0000- ]/g, ''))) return false;
-  for (const m of value.matchAll(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi)) {
-    if (!m[2].trim().startsWith('#')) return false;
-  }
-  return !/@import|expression\s*\(|image-set\s*\(|-webkit-image-set/i.test(value);
-}
 
 /**
  * The sanitized <svg>, as an element of an INERT document — the caller imports
@@ -106,32 +47,7 @@ export function sanitizeEmbedSvg(markup: string): Element | null {
   const parsed = new DOMParser().parseFromString(markup.trim(), 'text/html');
   const root = parsed.body.firstElementChild;
   if (!root || root.localName.toLowerCase() !== 'svg') return null;
-  const clean = (el: Element): boolean => {      // false = remove this element
-    const tag = el.localName.toLowerCase();
-    if (!TAGS.has(tag)) return false;
-    for (const attr of Array.from(el.attributes)) {
-      const name = attr.name.toLowerCase();
-      if (!attrAllowed(name)) { el.removeAttribute(attr.name); continue; }
-      if (ANIM.has(tag) && name === 'attributename') {
-        const target = attr.value.trim().toLowerCase();
-        if (!attrAllowed(target) || /(^|:)(href|style)$/.test(target)) return false;
-        continue;
-      }
-      if (name === 'href' || name === 'xlink:href') {
-        if (hrefAllowed(attr.value, tag)) continue;
-        if (tag === 'use') return false;          // a <use> IS its href
-        el.removeAttribute(attr.name);
-        continue;
-      }
-      if (!valueAllowed(attr.value)) el.removeAttribute(attr.name);
-    }
-    for (const child of Array.from(el.childNodes)) {
-      if (child.nodeType === 3) continue;            // text
-      if (child.nodeType !== 1 || !clean(child as Element)) child.remove();
-    }
-    return true;
-  };
-  if (!clean(root)) return null;
+  if (!cleanSvgElement(root, EMBED_POLICY)) return null;
   // nothing outside the one <svg> survives
   for (const n of Array.from(parsed.body.childNodes)) if (n !== root) n.remove();
   return root;

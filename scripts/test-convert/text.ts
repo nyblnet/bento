@@ -147,11 +147,11 @@ const has = (r: ReturnType<Report['build']>, code: string): boolean =>
 // ------------------------------------------------------------------ bullets
 {
   const sp = makeSp(`<p:txBody><a:bodyPr/><a:lstStyle/>
-    <a:p><a:pPr><a:buFont typeface="Arial"/><a:buChar char="•"/></a:pPr><a:r><a:rPr sz="1800"/><a:t>first point</a:t></a:r></a:p>
-    <a:p><a:pPr><a:buFont typeface="Arial"/><a:buChar char="•"/></a:pPr><a:r><a:rPr sz="1800"/><a:t>second point</a:t></a:r></a:p>
+    <a:p><a:pPr><a:buFont typeface="Arial"/><a:buChar char="▶"/></a:pPr><a:r><a:rPr sz="1800"/><a:t>first point</a:t></a:r></a:p>
+    <a:p><a:pPr><a:buFont typeface="Arial"/><a:buChar char="▶"/></a:pPr><a:r><a:rPr sz="1800"/><a:t>second point</a:t></a:r></a:p>
   </p:txBody>`)
   const { out, report } = run(sp)
-  ok(out !== undefined && out.html === `•${NBSP}first point<br>•${NBSP}second point`,
+  ok(out !== undefined && out.html === `▶${NBSP}first point<br>▶${NBSP}second point`,
     'buChar prepends glyph + NBSP per paragraph, paragraphs join with <br>')
   ok(has(report, 'bullet-flattened'), 'and the flattening is reported')
 
@@ -182,6 +182,39 @@ const has = (r: ReturnType<Report['build']>, code: string): boolean =>
   ok(mergedDefaults.bullet.kind === 'char', 'negative control: the inherited default carries a live ♦ bullet')
   ok(rn.out !== undefined && rn.out.html === 'no bullet here', 'buNone silences it — no glyph')
   ok(!has(rn.report, 'bullet-flattened'), 'and nothing bullet-shaped is reported')
+}
+
+// ------------------------------------------------------------- real lists
+// • / ◦ and decimal-from-1 are the markers bento's own lists draw, so those
+// paragraphs come in as UL/OL items nested by lvl (other glyphs flatten, above).
+{
+  const bu = (lvl: number, text: string, char = '•') =>
+    `<a:p><a:pPr lvl="${lvl}"><a:buFont typeface="Arial"/><a:buChar char="${char}"/></a:pPr><a:r><a:t>${text}</a:t></a:r></a:p>`
+  const num = (lvl: number, text: string) =>
+    `<a:p><a:pPr lvl="${lvl}"><a:buAutoNum type="arabicPeriod"/></a:pPr><a:r><a:t>${text}</a:t></a:r></a:p>`
+  const plain = (text: string) => `<a:p><a:pPr><a:buNone/></a:pPr><a:r><a:t>${text}</a:t></a:r></a:p>`
+  const body = (ps: string) => makeSp(`<p:txBody><a:bodyPr/><a:lstStyle/>${ps}</p:txBody>`)
+
+  const nested = run(body(bu(0, 'One') + bu(1, 'Two', '◦') + bu(0, 'Three')))
+  ok(nested.out?.html === '<ul><li>One<ul><li>Two</li></ul></li><li>Three</li></ul>',
+    'lists: • / ◦ paragraphs by lvl become nested UL items')
+  ok(!has(nested.report, 'bullet-flattened'), 'lists: and nothing is reported flattened')
+
+  // a level JUMP (0 → 2) nests one list deeper; its sibling at the same
+  // source level must stay a sibling, not nest again (a seen bug: clamping by
+  // html depth put c inside b)
+  const jump = run(body(bu(0, 'a') + bu(2, 'b') + bu(2, 'c') + bu(0, 'd')))
+  ok(jump.out?.html === '<ul><li>a<ul><li>b</li><li>c</li></ul></li><li>d</li></ul>',
+    `lists: a level jump nests once and keeps siblings together (got ${jump.out?.html})`)
+
+  const mixed = run(body(plain('Intro') + num(0, 'x') + num(0, 'y') + bu(0, 'z') + plain('Outro')))
+  ok(mixed.out?.html === 'Intro<ol><li>x</li><li>y</li></ol><ul><li>z</li></ul>Outro',
+    `lists: plain text, then numbers, then bullets — each its own block (got ${mixed.out?.html})`)
+  ok(!has(mixed.report, 'auto-number-frozen'), 'lists: decimal from 1 stays live, not frozen')
+
+  const deep = run(body(plain('Lead') + bu(1, 'starts deep') + bu(1, 'sibling')))
+  ok(deep.out?.html === 'Lead<ul><li>starts deep</li><li>sibling</li></ul>',
+    `lists: a list that starts at lvl 1 opens once (got ${deep.out?.html})`)
 }
 
 // ---------------------------------------------------------- algn and anchor

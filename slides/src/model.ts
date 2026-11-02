@@ -76,6 +76,8 @@ export interface ElementBase {
      * `scale` is the far end of the zoom (e.g. 1.06), `duration` in seconds.
      */
     ken?: { dir?: 'drift' | 'out' | 'in'; scale?: number; duration?: number }
+    /** code only: the text types in a character at a time when it appears (present) */
+    typeWriter?: boolean
     /** continuous looping animation */
     loop?:
       | { type: 'dash-march'; distance?: number; duration?: number }
@@ -108,6 +110,14 @@ export interface ElementBase {
    * Distinct from `group`, which carries presentation semantics.
    */
   groupId?: string
+  /**
+   * Editor lock (discussion #838): a locked element is skipped by canvas
+   * clicks and marquee drags so it cannot be bumped or block the items above
+   * it. Reachable through the Layers list, Alt-click, or ⌘L on a selection.
+   * Absent = unlocked; written only when true. Present, print and export
+   * ignore it entirely.
+   */
+  locked?: boolean
   /**
    * In-slide hover reveal: this element is only visible while an element
    * whose `group` equals this value is hovered (slide.hover type 'reveal').
@@ -598,6 +608,11 @@ export interface BentoDoc {
      * around them wants a slower beat. Clamped on read.
      */
     morphSeconds?: number
+    /**
+     * Typewriter pace, in seconds per character. Absent = 0.08; clamped to
+     * 0.08–1 on read, and a whole run never takes longer than 6 seconds.
+     */
+    typeWriterSeconds?: number
   }
   /** shared assets (raw SVG markup or data URIs), referenced by key */
   assets?: Record<string, string>

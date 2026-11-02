@@ -934,5 +934,17 @@
   },
   "idErrNoWayBack": {
     "message": "Hiçbir şey kurulmadı: geçiş anahtarınız Bento ID'nizin kilidini açamıyor ve bu cihaz kurtarma kodu oluşturamıyor, dolayısıyla geri dönüş yolu olmazdı."
+  },
+  "setIdServe": {
+    "message": "Bento ID ile aç (önizleme)",
+    "description": "Library settings, Bento ID section: checkbox, off by default; turns on the preview of opening documents with a Bento ID."
+  },
+  "setIdServeNote": {
+    "message": "Bir belgenin menüsüne “Bento ID ile aç” ekler: belge, Bento ID’nizi kullanabilen korumalı bir sayfada açılır. Bir dosyaya çift tıklamak değişmez.",
+    "description": "Library settings: note under that checkbox."
+  },
+  "menuOpenWithId": {
+    "message": "Bento ID ile aç",
+    "description": "Library: an item in a document card's menu (only when the preview is on)."
   }
 }

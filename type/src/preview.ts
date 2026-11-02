@@ -224,7 +224,9 @@ const PAPER = '#ffffff';
 
 function flat(v: unknown): string | null {
   const s = typeof v === 'string' ? v.trim() : '';
-  return /^#[0-9a-f]{3,8}$/i.test(s) || /^rgb/i.test(s) ? s : null;
+  // ANCHORED at both ends: `rgb…` alone let `rgb(0,0,0);}*{…}` end the rule
+  // in the stylesheet saved into every file
+  return /^#[0-9a-f]{3,8}$/i.test(s) || /^rgba?\(\s*[\d.]+%?(\s*,\s*[\d.]+%?){2,3}\s*\)$/i.test(s) ? s : null;
 }
 
 /** The preview's own scoped stylesheet — a deliberately plain sheet, not an

@@ -494,6 +494,15 @@ runs:
       shell: bento-step {0}
       run: node --no-warnings scripts/test-sync-session.ts
 
+    - name: the blob cache holds ciphertext only
+      # Live-session media is cached in IndexedDB, which every page on the
+      # same origin can read (on file://, every local file). The cache must
+      # hold the relay's ciphertext, never the decrypted bytes: every write
+      # path, a hit, a tampered entry, the version-1 purge, the shipped v1
+      # opener against an upgraded database, and a blocked upgrade.
+      shell: bento-step {0}
+      run: node --no-warnings scripts/test-blobcache.ts
+
     - name: Room snapshot carries no capability fields
       # Every snapshot path (relay upload, fork broadcast, re-snap, flush-time
       # fork snap) builds from one helper that strips the never-synced fields.

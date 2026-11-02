@@ -934,5 +934,17 @@
   },
   "idErrNoWayBack": {
     "message": "لم يُعدّ شيء: لا يستطيع مفتاح المرور فتح Bento ID ولا يستطيع هذا الجهاز إنشاء رمز استرداد، فلن يكون هناك طريق للعودة."
+  },
+  "setIdServe": {
+    "message": "الفتح باستخدام Bento ID (معاينة)",
+    "description": "Library settings, Bento ID section: checkbox, off by default; turns on the preview of opening documents with a Bento ID."
+  },
+  "setIdServeNote": {
+    "message": "يضيف «الفتح باستخدام Bento ID» إلى قائمة المستند: يُفتح المستند في صفحة محمية يمكنها استخدام Bento ID. لا يتأثر فتح الملف بالنقر المزدوج.",
+    "description": "Library settings: note under that checkbox."
+  },
+  "menuOpenWithId": {
+    "message": "الفتح باستخدام Bento ID",
+    "description": "Library: an item in a document card's menu (only when the preview is on)."
   }
 }

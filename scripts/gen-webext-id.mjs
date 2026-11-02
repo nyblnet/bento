@@ -23,7 +23,7 @@ import { stripTypeScriptTypes } from 'node:module'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const OUT = join(root, 'home/webext/src/id/gen')
 // The entry points; every module they import from kernel/src comes with them.
-const ENTRY = ['statements.ts', 'address.ts', 'recovery.ts']
+const ENTRY = ['statements.ts', 'address.ts', 'recovery.ts', 'gate1.ts']
 const VALUE_IMPORT = /^import (?!type )[^;]*?from '\.\/([a-z0-9-]+)\.ts'/gm
 
 export function generate() {

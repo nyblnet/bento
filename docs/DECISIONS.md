@@ -11882,3 +11882,32 @@ own rig run against the extension's copy.
   clearing. Measured: libsecret's clear silently skips items in a locked
   keyring, so the re-count is what keeps a wipe from reporting success while
   keys remain.
+
+## 2026-10-24 — One svg sanitizer in kernel; an app's policy only tightens it
+
+kernel/src/svgsafe.ts holds the untrusted-svg sanitizer, lifted verbatim from
+slides' renderer, so there is one implementation to audit instead of one per app.
+Type asked for this, at security's suggestion; slides agreed and named the
+couplings below.
+
+- **Slides' behaviour is the default.** Every policy option refuses more: a tag,
+  an attribute, `data-*`, remote hrefs, or escapes and foreign schemes in a
+  value. No option can add a name to a list. scripts/test-svgsafe-policy-browser.mjs
+  holds that: each option removes what the default keeps, and nothing an option
+  keeps was refused by the default.
+- **`scopeStyle` is required, and it only scopes.** There is no safe default
+  scope for a kept `<style>`, so a caller either passes its scoping (slides:
+  `css => scopeCss(css, scope)`) or `null`, which refuses `<style>` elements and
+  `style` attributes. The walk runs sanitizeSvgCss itself and hands the hook
+  the result, so an app passing `css => css` keeps a sanitized sheet, never a
+  raw one. Without that, this hook would be the one option able to loosen
+  (security's condition on #847).
+- **What stays in the app** is what isn't security: how it parses input into an
+  inert document, and scopeCss (hard-won detail #7).
+- **One decoder.** slides' colour gate reads values through the kernel's
+  `cssDecodeIdentEscapes`, the same function the svg-css path uses. Two copies
+  could disagree about what an escaped `u\72l(` says. Measured: making the
+  kernel's decoder a no-op turns the egress rig red at the chart colour sinks.
+- **render.ts re-exports** SVG_TAGS, svgAttrAllowed, svgHrefAllowed,
+  svgUrlRefsAllowed and sanitizeSvgCss, so callers and rigs keep importing them
+  from the renderer.

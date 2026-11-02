@@ -7,10 +7,10 @@
 //
 // WHAT THIS PROVES. The extension's bento/connect code IS the kernel reference,
 // unaltered: home/webext/src/id/gen/ is a current type-strip of kernel/src
-// (statements, address, display table, recovery), with no leftovers, and
-// kernel's own rigs, re-pointed at that copy, pass every row of
-// kernel/fixtures/identity-v1.json and recovery-v1.json, exactly as many rows
-// as on kernel's source.
+// (statements, address, display table, recovery, gate1), with no leftovers,
+// and kernel's own rigs, re-pointed at that copy, pass every row of
+// kernel/fixtures/identity-v1.json, recovery-v1.json and the gate-1 corpus
+// (home/fixtures/gate1), exactly as many rows as on kernel's source.
 
 import { readFileSync, writeFileSync, mkdtempSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -50,15 +50,15 @@ const run = (file: string) => {
   const m = tail.match(/^(\d+)\/(\d+) checks passed$/)
   return { ok: r.status === 0 && !!m && m[1] === m[2], total: m ? Number(m[2]) : 0, tail: tail || r.stderr.trim().split('\n').slice(-3).join(' | ') }
 }
-for (const [rig, contract] of [['test-statements.ts', 'kernel/fixtures/identity-v1.json'], ['test-recovery.ts', 'kernel/fixtures/recovery-v1.json']]) {
+for (const [rig, contract] of [['test-statements.ts', 'kernel/fixtures/identity-v1.json'], ['test-recovery.ts', 'kernel/fixtures/recovery-v1.json'], ['test-gate1.ts', 'home/fixtures/gate1']]) {
   console.log(`\n— ${contract}, against the extension's copy (scripts/${rig})`)
   const src = readFileSync(join(root, 'scripts', rig), 'utf8')
   const gen = (f: string) => pathToFileURL(join(root, 'home/webext/src/id/gen', f)).href
   const swapped = src
-    .replace(/from '\.\.\/kernel\/src\/(statements|address|recovery)\.ts'/g, (_m, f) => `from '${gen(f + '.js')}'`)
+    .replace(/from '\.\.\/kernel\/src\/(statements|address|recovery|gate1)\.ts'/g, (_m, f) => `from '${gen(f + '.js')}'`)
     .replace("from '../kernel/src/identity.ts'", `from '${pathToFileURL(join(root, 'kernel/src/identity.ts')).href}'`)
     .replace(/join\(dirname\(fileURLToPath\(import\.meta\.url\)\), '\.\.'/g, `join(${JSON.stringify(root)}`)
-  ok(swapped !== src && !/from '\.\.\/kernel\/src\/(statements|address|recovery)\.ts'/.test(swapped), `${rig} is re-pointed at the extension's generated files`)
+  ok(swapped !== src && !/from '\.\.\/kernel\/src\/(statements|address|recovery|gate1)\.ts'/.test(swapped), `${rig} is re-pointed at the extension's generated files`)
   const f = join(dir, rig)
   writeFileSync(f, swapped)
   const kernel = run(join(root, 'scripts', rig))

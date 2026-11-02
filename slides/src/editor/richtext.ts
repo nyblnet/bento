@@ -15,6 +15,7 @@
 // worse answer, not a more modern one.
 
 import { t } from '../i18n'
+import { inList, shiftList } from './listindent'
 
 /**
  * Make execCommand emit TAGS (`<b>`, `<i>`, `<u>`) instead of styled spans.
@@ -41,6 +42,7 @@ export function execFormat(name: string, value?: string) {
 type Cmd =
   | { kind: 'exec'; name: string; label: string; title: string; glyph: string }
   | { kind: 'block'; tag: 'H1' | 'H2' | 'P'; label: string; title: string; glyph: string }
+  | { kind: 'indent'; dir: 1 | -1; label: string; title: string; glyph: string }
   | { kind: 'code'; label: string; title: string; glyph: string }
   | { kind: 'clear'; label: string; title: string; glyph: string }
   | 'sep'
@@ -120,6 +122,9 @@ const COMMANDS = (): Cmd[] => {
     'sep',
     item('exec', '•—', t('Bulleted list'), { name: 'insertUnorderedList' }),
     item('exec', '1.', t('Numbered list'), { name: 'insertOrderedList' }),
+    // the same Indent / Outdent as Tab / ⇧Tab and the Typography panel
+    { kind: 'indent', dir: -1, glyph: '⇤', label: t('Outdent'), title: withKey(t('Outdent'), '⇧Tab') },
+    { kind: 'indent', dir: 1, glyph: '⇥', label: t('Indent'), title: withKey(t('Indent'), 'Tab') },
     'sep',
     item('clear', '⌫', t('Clear formatting')),
   ]
@@ -144,6 +149,7 @@ function build(editable: HTMLElement): HTMLElement {
     if (cmd.kind === 'exec') b.dataset.cmd = cmd.name
     if (cmd.kind === 'block') b.dataset.block = cmd.tag
     if (cmd.kind === 'code') b.dataset.code = '1'
+    if (cmd.kind === 'indent') b.dataset.indent = String(cmd.dir)
     b.addEventListener('click', (ev) => {
       ev.preventDefault()
       editable.focus()
@@ -158,6 +164,11 @@ function build(editable: HTMLElement): HTMLElement {
 }
 
 function run(cmd: Exclude<Cmd, 'sep'>, editable: HTMLElement) {
+  if (cmd.kind === 'indent') {
+    const sel = document.getSelection()
+    if (sel?.rangeCount) shiftList(editable, sel.getRangeAt(0), cmd.dir, true)
+    return
+  }
   if (cmd.kind === 'exec') {
     execFormat(cmd.name)
     return
@@ -271,6 +282,11 @@ function refresh(el: HTMLElement) {
       on = inCode()
     }
     b.classList.toggle('is-on', on)
+    if (b.dataset.indent) {
+      // only a list has levels: off the list the buttons say so
+      const sel = document.getSelection()
+      b.toggleAttribute('disabled', !sel?.rangeCount || !inList(editable, sel.getRangeAt(0)))
+    }
     if (b.dataset.cmd === 'bold') {
       const dead = boldWouldVanish(editable)
       b.toggleAttribute('disabled', dead)

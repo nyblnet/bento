@@ -934,5 +934,17 @@
   },
   "idErrNoWayBack": {
     "message": "Tidak ada yang disiapkan: kunci sandi Anda tidak dapat membuka Bento ID dan perangkat ini tidak dapat membuat kode pemulihan, jadi tidak akan ada jalan kembali."
+  },
+  "setIdServe": {
+    "message": "Buka dengan Bento ID (pratinjau)",
+    "description": "Library settings, Bento ID section: checkbox, off by default; turns on the preview of opening documents with a Bento ID."
+  },
+  "setIdServeNote": {
+    "message": "Menambahkan “Buka dengan Bento ID” ke menu dokumen: dokumen terbuka di halaman terlindungi yang dapat memakai Bento ID Anda. Klik dua kali pada file tidak berubah.",
+    "description": "Library settings: note under that checkbox."
+  },
+  "menuOpenWithId": {
+    "message": "Buka dengan Bento ID",
+    "description": "Library: an item in a document card's menu (only when the preview is on)."
   }
 }

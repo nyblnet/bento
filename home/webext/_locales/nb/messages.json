@@ -934,5 +934,17 @@
   },
   "idErrNoWayBack": {
     "message": "Ingenting ble satt opp: tilgangsnøkkelen din kan ikke låse opp Bento ID-en, og denne enheten kan ikke lage en gjenopprettingskode, så det ville ikke vært noen vei tilbake."
+  },
+  "setIdServe": {
+    "message": "Åpne med Bento ID (forhåndsvisning)",
+    "description": "Library settings, Bento ID section: checkbox, off by default; turns on the preview of opening documents with a Bento ID."
+  },
+  "setIdServeNote": {
+    "message": "Legger til «Åpne med Bento ID» i menyen til et dokument: dokumentet åpnes på en beskyttet side som kan bruke Bento ID-en din. Dobbeltklikk på en fil endres ikke.",
+    "description": "Library settings: note under that checkbox."
+  },
+  "menuOpenWithId": {
+    "message": "Åpne med Bento ID",
+    "description": "Library: an item in a document card's menu (only when the preview is on)."
   }
 }

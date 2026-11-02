@@ -934,5 +934,17 @@
   },
   "idErrNoWayBack": {
     "message": "ไม่ได้ตั้งค่าอะไรเลย: พาสคีย์ของคุณปลดล็อก Bento ID ไม่ได้ และอุปกรณ์นี้สร้างรหัสกู้คืนไม่ได้ จึงจะไม่มีทางกลับ"
+  },
+  "setIdServe": {
+    "message": "เปิดด้วย Bento ID (ตัวอย่าง)",
+    "description": "Library settings, Bento ID section: checkbox, off by default; turns on the preview of opening documents with a Bento ID."
+  },
+  "setIdServeNote": {
+    "message": "เพิ่ม “เปิดด้วย Bento ID” ในเมนูของเอกสาร: เอกสารจะเปิดในหน้าที่ได้รับการป้องกันซึ่งใช้ Bento ID ของคุณได้ การดับเบิลคลิกไฟล์ไม่เปลี่ยนแปลง",
+    "description": "Library settings: note under that checkbox."
+  },
+  "menuOpenWithId": {
+    "message": "เปิดด้วย Bento ID",
+    "description": "Library: an item in a document card's menu (only when the preview is on)."
   }
 }

@@ -934,5 +934,17 @@
   },
   "idErrNoWayBack": {
     "message": "Nic nie zostało skonfigurowane: klucz dostępu nie może odblokować Bento ID, a to urządzenie nie może utworzyć kodu odzyskiwania, więc nie byłoby drogi powrotu."
+  },
+  "setIdServe": {
+    "message": "Otwórz z Bento ID (wersja próbna)",
+    "description": "Library settings, Bento ID section: checkbox, off by default; turns on the preview of opening documents with a Bento ID."
+  },
+  "setIdServeNote": {
+    "message": "Dodaje „Otwórz z Bento ID” do menu dokumentu: dokument otwiera się na chronionej stronie, która może używać Twojego Bento ID. Dwukrotne kliknięcie pliku działa bez zmian.",
+    "description": "Library settings: note under that checkbox."
+  },
+  "menuOpenWithId": {
+    "message": "Otwórz z Bento ID",
+    "description": "Library: an item in a document card's menu (only when the preview is on)."
   }
 }

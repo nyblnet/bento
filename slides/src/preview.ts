@@ -33,7 +33,7 @@
 // the content scaled non-uniformly. It is not usable for the one renderer this
 // feature exists to serve.
 
-import { renderSlide, resolveAsset } from './render'
+import { cssColor, renderSlide, resolveAsset } from './render'
 import { PREVIEW_BUDGET, type BentoDoc, type Slide, inLinearFlow } from './model'
 
 /** Elements that must never reach a static preview (active or external). */
@@ -137,7 +137,7 @@ function staticize(root: HTMLElement, doc: BentoDoc, keepImages: boolean) {
       const tint = document.createElement('div')
       tint.setAttribute('style',
         `width:100%;height:100%;border-radius:${img.style.borderRadius || '0'};` +
-        `background:linear-gradient(135deg,${doc.theme.accent}2E,${doc.theme.accent}12)`)
+        `background:linear-gradient(135deg,${cssColor(doc.theme.accent, '#f7a600')}2E,${cssColor(doc.theme.accent, '#f7a600')}12)`)
       img.replaceWith(tint)
     }
   }
@@ -189,11 +189,11 @@ function titleCard(doc: BentoDoc): HTMLElement {
 
   const rule = document.createElement('div')
   rule.setAttribute('style',
-    `width:${Math.round(w * 0.07)}px;height:${Math.round(h * 0.011)}px;background:${doc.theme.accent};margin-bottom:${Math.round(h * 0.05)}px`)
+    `width:${Math.round(w * 0.07)}px;height:${Math.round(h * 0.011)}px;background:${cssColor(doc.theme.accent, '#f7a600')};margin-bottom:${Math.round(h * 0.05)}px`)
 
   const title = document.createElement('div')
   title.setAttribute('style',
-    `font-size:${Math.round(h * 0.1)}px;font-weight:800;line-height:1.1;color:${doc.theme.color};overflow-wrap:break-word`)
+    `font-size:${Math.round(h * 0.1)}px;font-weight:800;line-height:1.1;color:${cssColor(doc.theme.color, '#1E2A3A')};overflow-wrap:break-word`)
   title.textContent = doc.title
 
   page.append(rule, title)

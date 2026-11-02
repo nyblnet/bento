@@ -533,11 +533,13 @@ H('a read-only live viewer still materialises a relay-offloaded image (not via c
     }
     (globalThis as unknown as { indexedDB: unknown }).indexedDB = idbMod?.indexedDB;
   }
-  const { blobKey, cachePut, bytesToDataUri } = await import('../kernel/src/sync/blobs.ts');
+  const { blobKey, cachePut, encodeBlob, bytesToDataUri } = await import('../kernel/src/sync/blobs.ts');
   const rawKey = new Uint8Array(32).fill(7);
   const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3, 4]);
   const key = await blobKey(rawKey, bytes);
-  await cachePut(key, bytes); await settle(30); // prime the cache (let the IDB write commit) a same-machine peer would have written
+  // prime the cache as a same-machine peer would have written it — the cache
+  // holds CIPHERTEXT (scripts/test-blobcache.ts) — and let the IDB write commit
+  await cachePut(key, await encodeBlob(rawKey, bytes)); await settle(30);
   const doc = newDoc();
   doc.docId = `ro-${Math.random().toString(36).slice(2, 10)}`;
   (doc as unknown as { blobs: Record<string, { key: string; mime: string }> }).blobs = { hero: { key, mime: 'image/png' } };

@@ -967,5 +967,17 @@
   },
   "idErrNoWayBack": {
     "message": "Nichts wurde eingerichtet: Ihr Passkey kann Ihre Bento ID nicht entsperren und dieses Gerät kann keinen Wiederherstellungscode erstellen – es gäbe keinen Weg zurück."
+  },
+  "setIdServe": {
+    "message": "Mit Bento ID öffnen (Vorschau)",
+    "description": "Library settings, Bento ID section: checkbox, off by default; turns on the preview of opening documents with a Bento ID."
+  },
+  "setIdServeNote": {
+    "message": "Fügt dem Menü eines Dokuments „Mit Bento ID öffnen“ hinzu: Das Dokument öffnet sich auf einer geschützten Seite, die deine Bento ID verwenden kann. Doppelklicken auf eine Datei bleibt unverändert.",
+    "description": "Library settings: note under that checkbox."
+  },
+  "menuOpenWithId": {
+    "message": "Mit Bento ID öffnen",
+    "description": "Library: an item in a document card's menu (only when the preview is on)."
   }
 }
