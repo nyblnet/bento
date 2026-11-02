@@ -16,6 +16,23 @@ pre-1.0.
   finished (a space or Enter), leaving a full stop, comma or closing bracket
   after it outside the link; ⌘Z straight after turns it back into plain text.
   Only http and https addresses are linked. Thanks to Hermholtz.
+- **Backslashes you type stay.** `a\-b` no longer loses its backslash when you
+  click away, and `a\\-b` no longer loses one more on every edit. A backslash
+  is dropped only where it escapes something (`\*not bold\*`, `\- not a bullet`);
+  everywhere else, typed or pasted, it is text. Thanks to Hermholtz.
+- **Drag a slide to the very end.** The sidebar now accepts a dropped slide on the
+  last gap and on the New slide button, so a slide can be moved to the end of the
+  deck in one drag instead of two moves. A slide's hidden states go with it.
+  Thanks to Hermholtz.
+- **Copy works on text that uses the deck's font.** ⌘C and the Copy menu item did
+  nothing, silently, on a text box that had no font of its own (the usual case for
+  decks written as JSON), so the next paste brought back the old clipboard. Such
+  text now copies, and its embedded theme font travels with it. Thanks to b-per.
+- **Formulas morph with a little spring.** When a formula morphs from one
+  slide to the next, each symbol now travels to its new place with a gentle
+  overshoot and settle instead of a plain glide, and stays lined up with its
+  formula all the way even when the formula changes size between slides.
+  Thanks to tikurahul.
 
 ## [1.2.10] — 2026-10-24
 
