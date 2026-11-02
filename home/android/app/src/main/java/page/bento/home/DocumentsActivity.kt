@@ -368,10 +368,16 @@ class DocumentsActivity : AppCompatActivity() {
     /** Refresh every app's signed release history (gate 1's list of genuine releases). */
     private fun checkForUpdates() {
         Thread {
-            val reached = Releases.APPS.map { ReleaseHistory.refresh(applicationContext, it) }.all { it }
+            val outcomes = Releases.APPS.map { ReleaseHistory.refresh(applicationContext, it) }
+            // Worst outcome wins: a reply that would not verify is worse than an unreachable server.
+            val msg = when {
+                ReleaseHistory.Outcome.UNVERIFIED in outcomes -> R.string.updates_unverified
+                ReleaseHistory.Outcome.OFFLINE in outcomes -> R.string.updates_offline
+                else -> R.string.updates_checked
+            }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
-                notify(getString(if (reached) R.string.updates_checked else R.string.updates_offline))
+                notify(getString(msg))
             }
         }.start()
     }

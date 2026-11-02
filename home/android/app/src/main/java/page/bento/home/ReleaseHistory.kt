@@ -21,6 +21,12 @@ object ReleaseHistory {
     fun url(app: Releases.App) = "https://bento.page/releases/${app.id}/history.json"
     private fun file(c: Context, app: Releases.App) = File(File(c.noBackupFilesDir, "history"), "${app.id}.json")
 
+    /** [offer]'s reason when the reply's signature does not verify (the third "Check for updates" outcome). */
+    internal const val UNVERIFIED = "the history's signature does not verify"
+
+    /** What one contact with bento.page came to. */
+    enum class Outcome { REACHED, OFFLINE, UNVERIFIED }
+
     /** Verify an envelope under any trusted key; the parsed payload, or null. */
     internal fun verified(raw: String): Any? =
         HistoryKeys.trusted.firstNotNullOfOrNull { (x, y) -> Gate1.verifyEnvelope(raw, x, y) }
@@ -55,7 +61,7 @@ object ReleaseHistory {
      * accepts it over what is held. Returns null on success, else why not.
      */
     fun offer(c: Context, app: Releases.App, raw: String): String? {
-        val incoming = verified(raw) ?: return "the history's signature does not verify"
+        val incoming = verified(raw) ?: return UNVERIFIED
         val verdict = Gate1.acceptHistory(heldPayload(c, app), incoming, app.appId)
         if (verdict is Gate1.Accept.No) return verdict.reason
         val f = file(c, app)
@@ -71,17 +77,21 @@ object ReleaseHistory {
      * thread. Called ONLY on a contact the person starts: a New document (for
      * [app]) or "Check for updates". Opening a document never phones home.
      */
-    /** Returns false only when bento.page could not be reached; a refused or unpublished history is a reached server. */
-    fun refresh(c: Context, app: Releases.App): Boolean {
+    /**
+     * OFFLINE only when bento.page could not be reached; UNVERIFIED when it
+     * answered with a history whose signature does not verify; otherwise
+     * REACHED (an unpublished or anti-rollback-refused history is a reached server).
+     */
+    fun refresh(c: Context, app: Releases.App): Outcome {
         val raw = try { String(Releases.get(url(app)), Charsets.UTF_8) } catch (e: Releases.Failed) {
             // reached, but nothing published for this app yet (or refused): the held one stands
-            Log.i(TAG, "release history for ${app.id} unavailable: ${e.message}"); return true
+            Log.i(TAG, "release history for ${app.id} unavailable: ${e.message}"); return Outcome.REACHED
         } catch (e: Exception) {
-            Log.i(TAG, "release history for ${app.id}: offline (${e.message})"); return false
+            Log.i(TAG, "release history for ${app.id}: offline (${e.message})"); return Outcome.OFFLINE
         }
         val why = offer(c, app, raw)
         if (why != null) Log.w(TAG, "release history for ${app.id} not taken: $why")
-        return true
+        return if (why == UNVERIFIED) Outcome.UNVERIFIED else Outcome.REACHED
     }
 
     /**
