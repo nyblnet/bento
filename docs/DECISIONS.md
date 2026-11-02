@@ -11911,3 +11911,45 @@ couplings below.
 - **render.ts re-exports** SVG_TAGS, svgAttrAllowed, svgHrefAllowed,
   svgUrlRefsAllowed and sanitizeSvgCss, so callers and rigs keep importing them
   from the renderer.
+
+## 2026-11-02 — bento/connect: directory requests (dreq.), the rotation vouch (rot.), and op-specific consent
+
+Three additions to `kernel/src/statements.ts`, with vectors in
+`kernel/fixtures/identity-v1.json`. They are what the directory needs before
+key rotation, freezing and passkey management can be switched on.
+- **`dreq.<op>.<b64u(address)>.<bindHash>.<challenge>.<arg>`** is every
+  agent-signed request that only the directory verifies, in one layout with a
+  CLOSED op set: `contest`, `freeze`, `status`, `cred-add`, `cred-del`,
+  `rc-enrol`. It is bound to a single-use challenge the directory issued, spent
+  before anything else is checked, rather than to a timestamp, so there is no
+  replay window at all. Each op fixes its arg exactly (empty for freeze and
+  status; otherwise a SHA-256 the directory RECOMPUTES from what it holds, never
+  reads from the request). `cred-add` hashes the exact registration bytes
+  (attestationObject ‖ clientDataJSON), not the credential id, so the key under
+  an id cannot be swapped in transit. The signer is the account key of the
+  binding the directory currently serves as authoritative, which during a
+  pending rotation is the OLD one, so a pending key signs no request. While
+  frozen only `status` is accepted; `contest` only while pending; the three
+  credential and recovery ops only while active.
+- **Consent for `cred-add`, `cred-del` and `rc-enrol` names the op.** Those
+  three change who can recover the account, so each also needs a `cns.`, with
+  purposes of the same names whose families are `dreq.cred-add.`,
+  `dreq.cred-del.` and `dreq.rc-enrol.`. Never a bare `dreq.`: the family is a
+  prefix check, so a bare family would let one consent authorise any op.
+  Freeze, contest and status need no consent: they remove power or only read.
+- **`rot.<sha256(next bind)>.<sha256(live bind)>`, signed by the OLD account
+  key, is the rotation vouch**, replacing "the old key also signs the new
+  `bind.` bytes". A signature's meaning belongs in its own bytes, so nothing an
+  account key signs about its own binding can be replayed as a vouch. It
+  carries no challenge, because a client checks it OFFLINE against the binding
+  it pinned. `verifyRotation` requires: next self-signed and in date, same
+  address, seq + 1, next.prev = sha256(pinned), the rot. naming exactly those
+  two hashes in that order, and the rot. signed by the pinned key. The pinned
+  binding's own expiry is not re-checked: a pin may outlive it.
+- **A rotation resolved by the recovery code has no `rot.`**, and pinners warn.
+  That is intended: the old key was reported lost or contested, and no
+  directory-asserted marker may soften the warning.
+- **The new rows are in their own fixture sections** (`dreq`, `rot`,
+  `dreqConsent`), not in `statements`, because host runners dispatch
+  `statements` rows by type and refuse an unknown one. Each host adopts them in
+  its own change.
