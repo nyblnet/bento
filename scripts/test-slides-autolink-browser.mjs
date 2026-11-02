@@ -26,6 +26,8 @@ try {
   const p = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
   await p.route(/^https?:/, (r) => r.abort())
   const errors = []
+  const hits = []
+  p.on('request', (r) => { if (/^https?:/.test(r.url())) hits.push(r.url()) })
   p.on('pageerror', (e) => errors.push(e.message))
   await p.goto(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url).href)
   await p.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-stage-scale'))
@@ -98,6 +100,33 @@ try {
   })
   ok(JSON.stringify(await anchors('d')) === '[["https://a.b/c_d_e","https://a.b/c_d_e"]]', `pasted text is linked, no italics (${await live('d')})`)
   await leave()
+
+  console.log('\nclicking a link never leaves the deck\n')
+  hits.length = 0
+  const start = p.url()
+  const stay = (what) => ok(p.url() === start && hits.length === 0, `${what}: the tab stays and nothing is requested (${hits.length} requests)`)
+  const ab = await p.locator('.ed-stage-scale [data-el-id="a"] a').boundingBox()
+  await p.mouse.click(ab.x + 20, ab.y + 6)
+  await p.waitForTimeout(400)
+  stay('a click on the canvas')
+  await p.keyboard.press('Escape')
+  // a thumbnail's anchor is tiny and the thumb's own box wins a real pointer hit, so
+  // activate the anchor itself: the browser's default action is the navigation
+  await p.evaluate(() => [...document.querySelectorAll('[data-el-id="a"] a')].find((x) => !x.closest('.ed-stage-scale')).click())
+  await p.waitForTimeout(400)
+  stay('a click on the sidebar thumbnail')
+  await p.mouse.click(700, 800)
+  await p.keyboard.press('F5')
+  await p.waitForSelector('.reveal section a[href]', { state: 'attached' })
+  await p.waitForTimeout(2000)
+  const rels = await p.evaluate(() => [...document.querySelectorAll('.reveal section a[href]')].map((a) => a.rel))
+  ok(rels.length > 0 && rels.every((r) => r === 'noopener noreferrer'), `in the show every link has rel noopener noreferrer (${rels})`)
+  const pb = await p.locator('.reveal section a[href]').first().boundingBox()
+  await p.evaluate(() => { window.__opened = []; const o = window.open; window.open = (...a) => { window.__opened.push(a.join(',')); return o.apply(window, a) } ; })
+  await p.mouse.click(pb.x + 20, pb.y + 6)
+  await p.waitForTimeout(800)
+  const opened = await p.evaluate(() => window.__opened)
+  ok(p.url() === start && opened.length === 1 && opened[0] === 'https://keep.me,_blank,noopener,noreferrer', `in the show a click opens ONE new tab, noopener and noreferrer, and the deck stays (${JSON.stringify(opened)})`)
 
   ok(errors.length === 0, `no page errors ${errors.join('; ')}`)
 } finally {
