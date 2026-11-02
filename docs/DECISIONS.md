@@ -11966,7 +11966,7 @@ whether those bytes are one genuine release's.
 
 Identity is not exposed yet: the verdict is held for the agent bridge (stage 4,
 after security's run of A2).
-=======
+
 ## 2026-10-24 — One svg sanitizer in kernel; an app's policy only tightens it
 
 kernel/src/svgsafe.ts holds the untrusted-svg sanitizer, lifted verbatim from
@@ -11995,4 +11995,3 @@ couplings below.
 - **render.ts re-exports** SVG_TAGS, svgAttrAllowed, svgHrefAllowed,
   svgUrlRefsAllowed and sanitizeSvgCss, so callers and rigs keep importing them
   from the renderer.
->>>>>>> origin/main
