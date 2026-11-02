@@ -11,6 +11,11 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Drag a slide to the very end.** The sidebar now accepts a dropped slide on the
+  last gap and on the New slide button, so a slide can be moved to the end of the
+  deck in one drag instead of two moves. A slide's hidden states go with it.
+  Thanks to Hermholtz.
+
 ## [1.2.10] — 2026-10-24
 
 - **Code can type itself out.** Give a code block the new Typewriter effect
