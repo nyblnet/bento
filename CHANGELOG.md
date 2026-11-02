@@ -66,6 +66,11 @@ pre-1.0.
   monospace table keeps its columns, indentation stays, and a tab becomes four
   spaces. Thanks to Hermholtz.
 
+- **Indent and Outdent in the formatting bar.** Select text in a bulleted or
+  numbered list and the bar that appears now carries Outdent and Indent beside
+  the list buttons, with Tab and Shift+Tab still doing the same. Thanks to
+  Hermholtz.
+
 ## [1.2.10] — 2026-10-24
 
 - **Code can type itself out.** Give a code block the new Typewriter effect
