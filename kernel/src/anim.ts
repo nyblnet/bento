@@ -33,8 +33,8 @@ const EASES: Record<string, EaseFn> = {
   'sine.in': (t) => 1 - Math.cos((t * Math.PI) / 2),
   'sine.out': (t) => Math.sin((t * Math.PI) / 2),
   'sine.inOut': (t) => -(Math.cos(Math.PI * t) - 1) / 2,
-  // Underdamped harmonic spring: f(0)=0, f'(0)≈0, crosses 1 at t≈0.60,
-  // Overshoots gently (~1.8% at t≈0.78), and settles to f(1)=1, f'(1)=0.
+  // Underdamped harmonic spring: f(0)=0, f'(0)≈0, crosses 1 at t≈0.68,
+  // overshoots gently (~1.8% at t≈0.78), and settles to f(1)=1, f'(1)=0.
   // We only overshoot gently, given `overflow:hidden` elements tend to get clipped during animations.
   'spring': (t) => 1 - (1 - t) ** 2 * (Math.cos(Math.PI * t) + 0.625 * Math.sin(Math.PI * t)),
 }
@@ -247,6 +247,13 @@ function samplePath(d: string, speeds?: number[]): ((t: number) => { x: number; 
 }
 
 // --- the tween -----------------------------------------------------------------
+
+/** An ease by name, evaluated at linear progress t (unknown names are
+ *  linear, as in a tween). For a tween that must stay in step with another
+ *  one riding a DIFFERENT ease: drive one linear clock and derive both. */
+export function ease(name: string, t: number): number {
+  return (EASES[name] ?? EASES.linear)(t)
+}
 
 export interface TweenVars {
   duration?: number

@@ -6,7 +6,7 @@
 
 import Reveal from 'reveal.js'
 import 'reveal.js/dist/reveal.css'
-import { anim, resetXform } from './anim'
+import { anim, ease, resetXform } from './anim'
 import { chartSnapshotSvg, mountChart } from './charts'
 import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
 import { morphKey, paginates, inLinearFlow, isWebUrl } from './model'
@@ -2210,17 +2210,27 @@ function morphMathSymbols(
   }
   if (!pairs.length) return false
 
-  const state = { p: 0 }
+  // The symbols travel on a spring while their box (runMorph) rides
+  // MORPH_EASE, so they have TWO progresses, and the counter-scale must use
+  // the box's. Dividing by a scale computed from the spring's p — the box's
+  // scale only at t=0, t=1 and where the curves cross — threw every symbol up
+  // to ~30% of its travel off its line mid-morph whenever the formula changed
+  // size. One linear clock drives both: the box tween starts in the same
+  // runMorph call with the same duration and no delay, so on every tick its
+  // linear time equals this one's (and where it was skipped, a.w === b.w and
+  // the scale is 1 whatever q is). Guard: test-slides-math-morph-browser.mjs.
+  const state = { t: 0 }
   for (const { node } of pairs) node.style.willChange = 'transform'
   anim.to(state, {
-    p: 1,
+    t: 1,
     duration: MORPH_DURATION,
-    ease: MORPH_SPRING,
+    ease: 'linear',
     onUpdate() {
-      const p = state.p
-      // undo the box tween's scale so the symbol delta stays in model units
-      const sx = (a.w + (b.w - a.w) * p) / Math.max(b.w, 0.01)
-      const sy = (a.h + (b.h - a.h) * p) / Math.max(b.h, 0.01)
+      const p = ease(MORPH_SPRING, state.t) // the symbols' own travel
+      const q = ease(MORPH_EASE, state.t) // where the box tween has got to
+      // undo the box tween's CURRENT scale so the symbol delta stays in model units
+      const sx = (a.w + (b.w - a.w) * q) / Math.max(b.w, 0.01)
+      const sy = (a.h + (b.h - a.h) * q) / Math.max(b.h, 0.01)
       for (const { node, dx, dy } of pairs) {
         node.style.transform = `translate(${(dx * (1 - p)) / sx}px, ${(dy * (1 - p)) / sy}px)`
       }
