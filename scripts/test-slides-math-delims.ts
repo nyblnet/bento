@@ -111,7 +111,7 @@ ok(resolveMathHtml('$x^2$', lenient, hint) === inline('x^2'), 'a formula with no
 
 console.log('\npaste and commit keep backslashes in formulas\n')
 ok(stripMarkerEscapes('\\*not bold\\*') === '*not bold*', 'outside a formula a markdown escape still drops its backslash')
-ok(stripMarkerEscapes('$\\text{a\\_b}$ and \\_') === '$\\text{a\\_b}$ and _', 'inside $…$ the \\_ is LaTeX and keeps it')
+ok(stripMarkerEscapes('$\\text{a\\_b}$ and \\_x\\_') === '$\\text{a\\_b}$ and _x_', 'inside $…$ the \\_ is LaTeX and keeps it')
 ok(stripMarkerEscapes('\\(a\\_b\\) \\[c\\*\\]') === '\\(a\\_b\\) \\[c\\*\\]', 'inside \\(…\\) and \\[…\\] too')
 ok(markdownToHtml('\\(x^* + y^*\\)') === '\\(x^* + y^*\\)', 'a pasted formula is not read as emphasis')
 ok(markdownToHtml('see \\(\\frac{a}{b}\\) and $a\\_1$') === 'see \\(\\frac{a}{b}\\) and $a\\_1$', 'pasted \\( and \\_ keep their backslashes')

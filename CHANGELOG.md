@@ -11,6 +11,10 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Backslashes you type stay.** `a\-b` no longer loses its backslash when you
+  click away, and `a\\-b` no longer loses one more on every edit. A backslash
+  is dropped only where it escapes something (`\*not bold\*`, `\- not a bullet`);
+  everywhere else, typed or pasted, it is text. Thanks to Hermholtz.
 - **Drag a slide to the very end.** The sidebar now accepts a dropped slide on the
   last gap and on the New slide button, so a slide can be moved to the end of the
   deck in one drag instead of two moves. A slide's hidden states go with it.
