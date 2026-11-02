@@ -41,7 +41,11 @@ async function kxKey(): Promise<string> {
 
 const account = await signer(), device = await signer(), consent = await signer()
 const directory = await signer(), stranger = await signer()
-const kx = await kxKey(), kx2 = await kxKey()
+const kx = await kxKey(), rkx = await kxKey(), rkx2 = await kxKey(), phoneKx = await kxKey()
+/** A raw point with y nudged off the curve, and the same point compressed (33 bytes): both refused as kx. */
+const rawOf = (k: string) => Uint8Array.from(Buffer.from(k, 'base64url'))
+const offCurve = (k: string) => { const b = rawOf(k); b[64] ^= 1; return b64uEnc(b) }
+const compressed = (k: string) => { const b = rawOf(k); return b64uEnc(Uint8Array.of(2 + (b[64] & 1), ...b.subarray(1, 33))) }
 const KID = 'dir-2027a'
 const directoryKeys = { [KID]: directory.pub }
 const ROOM = 'w' + b64uEnc(new Uint8Array(32).fill(7))     // a room NAME, 43 chars after 'w'
@@ -71,22 +75,27 @@ const sign = (k: KP, t: string) => signStatement(k.key, t)
 
 // --- dev. -----------------------------------------------------------------------
 {
-  const base = { devicePub: device.pub, consentPub: consent.pub, accountPub: account.pub, kx: null, label: 'Café laptop', created, expires }
+  const base = { devicePub: device.pub, consentPub: consent.pub, accountPub: account.pub, kx, label: 'Café laptop', created, expires }
   const t = buildDev(base)
   const s = await sign(account, t)
-  row({ name: 'dev: a native device (routine + consent key)', type: 'dev', text: t, sig: s, expect: 'accept' })
+  row({ name: 'dev: a native device (routine + consent key + its own kx)', type: 'dev', text: t, sig: s, expect: 'accept' })
   const light = buildDev({ ...base, consentPub: null, label: null })
-  row({ name: 'dev: a light-tier device (no consent key)', type: 'dev', text: light, sig: await sign(account, light), expect: 'accept' })
-  const withKx = buildDev({ ...base, kx })
-  const sKx = await sign(account, withKx)
-  row({ name: 'dev: kx filled while placement is unruled', type: 'dev', text: withKx, sig: sKx, expect: 'reject', reason: 'kx' })
-  row({ name: 'dev: kx filled under mode B (per device)', type: 'dev', kxMode: 'B', text: withKx, sig: sKx, expect: 'accept' })
-  row({ name: 'dev: kx filled under mode A (it belongs in bind.)', type: 'dev', kxMode: 'A', text: withKx, sig: sKx, expect: 'reject', reason: 'kx' })
-  row({ name: 'dev: kx missing under mode C', type: 'dev', kxMode: 'C', text: t, sig: s, expect: 'reject', reason: 'kx' })
+  row({ name: 'dev: a light-tier device (no consent key, its own kx)', type: 'dev', text: light, sig: await sign(account, light), expect: 'accept' })
+  // kx placement is mode C (identity-design §6b): the per-device kx is REQUIRED
+  const noKx = buildDev({ ...base, kx: '' })
+  row({ name: 'dev: the kx slot empty (mode C requires a per-device kx)', type: 'dev', text: noKx, sig: await sign(account, noKx), expect: 'reject', reason: 'kx' })
+  const lightNoKx = buildDev({ ...base, consentPub: null, label: null, kx: '' })
+  row({ name: 'dev: a light-tier device with the kx slot empty', type: 'dev', text: lightNoKx, sig: await sign(account, lightNoKx), expect: 'reject', reason: 'kx' })
   const kxIsDevice = buildDev({ ...base, kx: device.pub })
-  row({ name: 'dev: kx equal to the device key', type: 'dev', kxMode: 'B', text: kxIsDevice, sig: await sign(account, kxIsDevice), expect: 'reject', reason: 'kx' })
+  row({ name: 'dev: kx equal to the device key', type: 'dev', text: kxIsDevice, sig: await sign(account, kxIsDevice), expect: 'reject', reason: 'kx' })
   const kxIsConsent = buildDev({ ...base, kx: consent.pub })
-  row({ name: 'dev: kx equal to the consent key', type: 'dev', kxMode: 'B', text: kxIsConsent, sig: await sign(account, kxIsConsent), expect: 'reject', reason: 'kx' })
+  row({ name: 'dev: kx equal to the consent key', type: 'dev', text: kxIsConsent, sig: await sign(account, kxIsConsent), expect: 'reject', reason: 'kx' })
+  const kxIsAccount = buildDev({ ...base, kx: account.pub })
+  row({ name: 'dev: kx equal to the account key', type: 'dev', text: kxIsAccount, sig: await sign(account, kxIsAccount), expect: 'reject', reason: 'kx' })
+  const kxOff = buildDev({ ...base, kx: offCurve(kx) })
+  row({ name: 'dev: kx not a point on P-256', type: 'dev', text: kxOff, sig: await sign(account, kxOff), expect: 'reject', reason: 'kx' })
+  const kxShort = buildDev({ ...base, kx: compressed(kx) })
+  row({ name: 'dev: kx in compressed form (33 bytes)', type: 'dev', text: kxShort, sig: await sign(account, kxShort), expect: 'reject', reason: 'kx' })
   const sameKeys = buildDev({ ...base, consentPub: device.pub })
   row({ name: 'dev: consent key equal to the routine key', type: 'dev', text: sameKeys, sig: await sign(account, sameKeys), expect: 'reject', reason: 'consent-key' })
   const old = buildDev({ ...base, created: NOW - 300 * DAY, expires: NOW - DAY })
@@ -108,7 +117,7 @@ const sign = (k: KP, t: string) => signStatement(k.key, t)
 // --- bind. ----------------------------------------------------------------------
 let bind1 = ''
 {
-  const base = { address: 'alice@example.com', accountPub: account.pub, kx: null, name: 'Alice', seq: 1, prev: null, created, expires }
+  const base = { address: 'alice@example.com', accountPub: account.pub, kx: rkx, name: 'Alice', seq: 1, prev: null, created, expires }
   bind1 = buildBind(base)
   row({ name: 'bind: first binding (seq 1, no prev)', type: 'bind', text: bind1, sig: await sign(account, bind1), expect: 'accept' })
   const b2 = buildBind({ ...base, seq: 2, prev: await sha256b64u(bind1) })
@@ -151,14 +160,15 @@ let bind1 = ''
     const t = buildBind({ ...base, name: n })
     row({ name: `bind: ${what} is accepted`, type: 'bind', text: t, sig: await sign(account, t), expect: 'accept' })
   }
-  const withKx = buildBind({ ...base, kx })
-  const sKx = await sign(account, withKx)
-  row({ name: 'bind: kx filled while placement is unruled', type: 'bind', text: withKx, sig: sKx, expect: 'reject', reason: 'kx' })
-  row({ name: 'bind: kx filled under mode A (shared)', type: 'bind', kxMode: 'A', text: withKx, sig: sKx, expect: 'accept' })
-  row({ name: 'bind: kx filled under mode C (recovery kx)', type: 'bind', kxMode: 'C', text: withKx, sig: sKx, expect: 'accept' })
-  row({ name: 'bind: kx filled under mode B (it belongs in dev.)', type: 'bind', kxMode: 'B', text: withKx, sig: sKx, expect: 'reject', reason: 'kx' })
+  // kx placement is mode C (identity-design §6b): the RECOVERY kx is REQUIRED
+  const noKx = buildBind({ ...base, kx: '' })
+  row({ name: 'bind: the kx slot empty (mode C requires the recovery kx)', type: 'bind', text: noKx, sig: await sign(account, noKx), expect: 'reject', reason: 'kx' })
   const kxIsKey = buildBind({ ...base, kx: account.pub })
-  row({ name: 'bind: kx equal to the account key', type: 'bind', kxMode: 'A', text: kxIsKey, sig: await sign(account, kxIsKey), expect: 'reject', reason: 'kx' })
+  row({ name: 'bind: kx equal to the account key', type: 'bind', text: kxIsKey, sig: await sign(account, kxIsKey), expect: 'reject', reason: 'kx' })
+  const kxOff = buildBind({ ...base, kx: offCurve(rkx) })
+  row({ name: 'bind: kx not a point on P-256', type: 'bind', text: kxOff, sig: await sign(account, kxOff), expect: 'reject', reason: 'kx' })
+  const kxShort = buildBind({ ...base, kx: compressed(rkx) })
+  row({ name: 'bind: kx in compressed form (33 bytes)', type: 'bind', text: kxShort, sig: await sign(account, kxShort), expect: 'reject', reason: 'kx' })
   row({ name: 'bind: signed by a stranger', type: 'bind', text: bind1, sig: await sign(stranger, bind1), expect: 'reject', reason: 'signature' })
 }
 
@@ -213,7 +223,7 @@ let bind1 = ''
 
 // --- cns. — security §24's five attacks, and the grammar ---------------------------
 {
-  const phone = { devicePub: (await signer()).pub, consentPub: (await signer()).pub, accountPub: account.pub, kx: null, label: 'Phone', created, expires }
+  const phone = { devicePub: (await signer()).pub, consentPub: (await signer()).pub, accountPub: account.pub, kx: phoneKx, label: 'Phone', created, expires }
   const linkPayload = buildDev(phone)
   const otherPayload = buildDev({ ...phone, label: 'Tablet' }) // a different statement, same keys
   const tLink = await consentTranscript('dir', CHALLENGE, linkPayload)
@@ -262,7 +272,7 @@ const dreqConsentRows: Record<string, unknown>[] = []
 {
   const newAccount = await signer()
   const live = bind1, liveHash = await sha256b64u(bind1)
-  const bindBase = { address: 'alice@example.com', accountPub: newAccount.pub, kx: null, name: 'Alice', seq: 2, prev: liveHash, created, expires }
+  const bindBase = { address: 'alice@example.com', accountPub: newAccount.pub, kx: rkx2, name: 'Alice', seq: 2, prev: liveHash, created, expires }
   const pendingBind = buildBind(bindBase)
   const bytes = (n: number, k: number) => new Uint8Array(n).map((_, i) => (i * k + 5) & 0xff)
   const te = new TextEncoder()
@@ -383,7 +393,7 @@ const dreqConsentRows: Record<string, unknown>[] = []
   }
   rr('a rotation vouched for by the old key', {}, 'accept')
   // the pinned binding may have expired by the time a client walks the chain
-  const pinned = (c: number, e: number) => buildBind({ address: 'alice@example.com', accountPub: account.pub, kx: null, name: 'Alice', seq: 1, prev: null, created: c, expires: e })
+  const pinned = (c: number, e: number) => buildBind({ address: 'alice@example.com', accountPub: account.pub, kx: rkx, name: 'Alice', seq: 1, prev: null, created: c, expires: e })
   const successor = async (prevText: string, c: number) =>
     vouched(buildBind({ ...bindBase, prev: await sha256b64u(prevText), created: c, expires: NOW + 300 * DAY }), prevText)
   const oldPinned = pinned(NOW - 400 * DAY, NOW - DAY)
@@ -515,8 +525,8 @@ const fixture = {
     'Every host must reach the stated verdict on every row; the reason is informative. ' +
     'Generated by scripts/gen-identity-vectors.ts, checked by scripts/test-statements.ts.',
   now: NOW,
-  kxModeDefault: 'unruled',
-  keys: { account: account.pub, device: device.pub, consent: consent.pub, directory: directory.pub, kx, kx2 },
+  kxMode: 'C',
+  keys: { account: account.pub, device: device.pub, consent: consent.pub, directory: directory.pub, kx, rkx, rkx2, phoneKx },
   directoryKeys,
   statements: rows,
   dreq: dreqRows,

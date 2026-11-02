@@ -120,29 +120,37 @@ let acct = hx(k["accountD"]!), kx = hx(k["kxD"]!), other = hx(k["otherD"]!)
 let pb = b["prf"] as! [String: Any], pin = pb["inputs"] as! [String: String]
 func blobStr(_ x: R.PrfBlob?) -> String { x.map { "\($0.v)|\($0.cred)|\($0.salt)|\($0.iv)|\($0.ct)" } ?? "nil" }
 func fixBlob(_ m: [String: Any]) -> R.PrfBlob { R.PrfBlob(v: m["v"] as! Int, cred: m["cred"] as! String, salt: m["salt"] as! String, iv: m["iv"] as! String, ct: m["ct"] as! String) }
-for (name, mode, keys) in [("unruled", R.KxMode.unruled, R.BlobKeys(account: acct, kx: nil)), ("modeA", R.KxMode.A, R.BlobKeys(account: acct, kx: kx))] {
-  emit("prf.\(name).seal", blobStr(R.sealPrfBlob(prfOutput: hx(pin["prfOutput"]!), credentialId: hx(pin["credentialId"]!), salt: hx(pin["salt"]!), iv: hx(pin["iv"]!), keys: keys, mode: mode)))
-  emit("prf.\(name).want", blobStr(fixBlob(pb[name] as! [String: Any])))
-  emit("prf.\(name).open", verdict(R.openPrfBlob(fixBlob(pb[name] as! [String: Any]), prfOutput: hx(pin["prfOutput"]!), credentialId: hx(pin["credentialId"]!), accountPub: k["accountPub"]!, kxPub: k["kxPub"]!, mode: mode)) { hs($0.account) + "+" + hs($0.kx) })
+let both = R.BlobKeys(account: acct, kx: kx)
+let kp = k["kxPub"]!
+emit("blobLen", R.blobLen)
+emit("prf.seal", blobStr(R.sealPrfBlob(prfOutput: hx(pin["prfOutput"]!), credentialId: hx(pin["credentialId"]!), salt: hx(pin["salt"]!), iv: hx(pin["iv"]!), keys: both)))
+emit("prf.want", blobStr(fixBlob(pb["blob"] as! [String: Any])))
+let ub = fixBlob(pb["blob"] as! [String: Any])
+emit("prf.open", verdict(R.openPrfBlob(ub, prfOutput: hx(pin["prfOutput"]!), credentialId: hx(pin["credentialId"]!), accountPub: k["accountPub"]!, kxPub: kp)) { hs($0.account) + "+" + hs($0.kx) })
+emit("prf.otherCred", verdict(R.openPrfBlob(ub, prfOutput: hx(pin["prfOutput"]!), credentialId: hx("00"), accountPub: k["accountPub"]!, kxPub: kp)) { _ in "" })
+emit("prf.otherPrf", verdict(R.openPrfBlob(ub, prfOutput: [UInt8](repeating: 9, count: 32), credentialId: hx(pin["credentialId"]!), accountPub: k["accountPub"]!, kxPub: kp)) { _ in "" })
+emit("prf.swappedKey", verdict(R.openPrfBlob(ub, prfOutput: hx(pin["prfOutput"]!), credentialId: hx(pin["credentialId"]!), accountPub: kp, kxPub: kp)) { _ in "" })
+emit("prf.noKxPub", verdict(R.openPrfBlob(ub, prfOutput: hx(pin["prfOutput"]!), credentialId: hx(pin["credentialId"]!), accountPub: k["accountPub"]!, kxPub: "")) { _ in "" })
+for (i, w) in (pb["wrongLength"] as! [[String: String]]).enumerated() {
+  emit("prf.wrongLength\(i)", verdict(R.openPrfBlob(R.PrfBlob(v: 1, cred: ub.cred, salt: ub.salt, iv: ub.iv, ct: R.b64uEnc(hx(w["ct"]!))), prfOutput: hx(pin["prfOutput"]!), credentialId: hx(pin["credentialId"]!), accountPub: k["accountPub"]!, kxPub: kp)) { _ in "" })
 }
-let ub = fixBlob(pb["unruled"] as! [String: Any])
-emit("prf.otherCred", verdict(R.openPrfBlob(ub, prfOutput: hx(pin["prfOutput"]!), credentialId: hx("00"), accountPub: k["accountPub"]!)) { _ in "" })
-emit("prf.otherPrf", verdict(R.openPrfBlob(ub, prfOutput: [UInt8](repeating: 9, count: 32), credentialId: hx(pin["credentialId"]!), accountPub: k["accountPub"]!)) { _ in "" })
-emit("prf.swappedKey", verdict(R.openPrfBlob(ub, prfOutput: hx(pin["prfOutput"]!), credentialId: hx(pin["credentialId"]!), accountPub: k["kxPub"]!)) { _ in "" })
-emit("prf.modeMismatch", verdict(R.openPrfBlob(ub, prfOutput: hx(pin["prfOutput"]!), credentialId: hx(pin["credentialId"]!), accountPub: k["accountPub"]!, kxPub: k["kxPub"]!, mode: .A)) { _ in "" })
-emit("prf.v2", verdict(R.openPrfBlob(R.PrfBlob(v: 2, cred: ub.cred, salt: ub.salt, iv: ub.iv, ct: ub.ct), prfOutput: hx(pin["prfOutput"]!), credentialId: hx(pin["credentialId"]!), accountPub: k["accountPub"]!)) { _ in "" })
-emit("prf.badSalt", verdict(R.openPrfBlob(R.PrfBlob(v: 1, cred: ub.cred, salt: "AAAA", iv: ub.iv, ct: ub.ct), prfOutput: hx(pin["prfOutput"]!), credentialId: hx(pin["credentialId"]!), accountPub: k["accountPub"]!)) { _ in "" })
+emit("pack.short", R.packScalars(R.BlobKeys(account: acct, kx: [])) == nil && R.packScalars(R.BlobKeys(account: acct, kx: Array(kx.dropLast()))) == nil)
+emit("prf.v2", verdict(R.openPrfBlob(R.PrfBlob(v: 2, cred: ub.cred, salt: ub.salt, iv: ub.iv, ct: ub.ct), prfOutput: hx(pin["prfOutput"]!), credentialId: hx(pin["credentialId"]!), accountPub: k["accountPub"]!, kxPub: kp)) { _ in "" })
+emit("prf.badSalt", verdict(R.openPrfBlob(R.PrfBlob(v: 1, cred: ub.cred, salt: "AAAA", iv: ub.iv, ct: ub.ct), prfOutput: hx(pin["prfOutput"]!), credentialId: hx(pin["credentialId"]!), accountPub: k["accountPub"]!, kxPub: kp)) { _ in "" })
 // a blob sealed around ANOTHER key: it decrypts, and the check refuses it
-let swapped = R.sealPrfBlob(prfOutput: hx(pin["prfOutput"]!), credentialId: hx(pin["credentialId"]!), salt: hx(pin["salt"]!), iv: hx(pin["iv"]!), keys: R.BlobKeys(account: other, kx: nil))!
-emit("prf.swappedBlob", verdict(R.openPrfBlob(swapped, prfOutput: hx(pin["prfOutput"]!), credentialId: hx(pin["credentialId"]!), accountPub: k["accountPub"]!)) { _ in "" })
+let swapped = R.sealPrfBlob(prfOutput: hx(pin["prfOutput"]!), credentialId: hx(pin["credentialId"]!), salt: hx(pin["salt"]!), iv: hx(pin["iv"]!), keys: R.BlobKeys(account: other, kx: kx))!
+emit("prf.swappedBlob", verdict(R.openPrfBlob(swapped, prfOutput: hx(pin["prfOutput"]!), credentialId: hx(pin["credentialId"]!), accountPub: k["accountPub"]!, kxPub: kp)) { _ in "" })
 
 let rb = b["recovery"] as! [String: Any], rin = rb["inputs"] as! [String: String]
 let wk = R.recoveryWrapKey(code: hx(rin["code"]!), salt: hx(rin["salt"]!))!
-emit("rc.inner", hs(R.sealRecoveryInner(wrapKey: wk, iv: hx(rin["iv"]!), accountPub: k["accountPub"]!, keys: R.BlobKeys(account: acct, kx: nil))))
-emit("rc.open", verdict(R.openRecoveryInner(hx(rb["inner"] as! String), wrapKey: wk, iv: hx(rin["iv"]!), accountPub: k["accountPub"]!)) { hs($0.account) })
-emit("rc.otherAccount", verdict(R.openRecoveryInner(hx(rb["inner"] as! String), wrapKey: wk, iv: hx(rin["iv"]!), accountPub: k["kxPub"]!)) { _ in "" })
+emit("rc.inner", hs(R.sealRecoveryInner(wrapKey: wk, iv: hx(rin["iv"]!), accountPub: k["accountPub"]!, keys: both)))
+emit("rc.open", verdict(R.openRecoveryInner(hx(rb["inner"] as! String), wrapKey: wk, iv: hx(rin["iv"]!), accountPub: k["accountPub"]!, kxPub: kp)) { hs($0.account) + "+" + hs($0.kx) })
+emit("rc.otherAccount", verdict(R.openRecoveryInner(hx(rb["inner"] as! String), wrapKey: wk, iv: hx(rin["iv"]!), accountPub: kp, kxPub: kp)) { _ in "" })
+for (i, w) in (rb["wrongLength"] as! [[String: String]]).enumerated() {
+  emit("rc.wrongLength\(i)", verdict(R.openRecoveryInner(hx(w["ct"]!), wrapKey: wk, iv: hx(rin["iv"]!), accountPub: k["accountPub"]!, kxPub: kp)) { _ in "" })
+}
 var flipped = hx(rb["inner"] as! String); flipped[3] ^= 1
-emit("rc.tampered", verdict(R.openRecoveryInner(flipped, wrapKey: wk, iv: hx(rin["iv"]!), accountPub: k["accountPub"]!)) { _ in "" })
+emit("rc.tampered", verdict(R.openRecoveryInner(flipped, wrapKey: wk, iv: hx(rin["iv"]!), accountPub: k["accountPub"]!, kxPub: kp)) { _ in "" })
 
 // the directory's pepper rows, from the same primitives (the host doesn't run these)
 let pp = b["pepper"] as! [String: String]
@@ -154,9 +162,9 @@ emit("pep.outer", hs(R.gcmSeal(key: pwk, iv: hx(pp["iv"]!), aad: "bento/id/rc-pe
 
 // scalars
 for (i, s) in (F["scalars"] as! [[String: String]]).enumerated() {
-  emit("scalar\(i)", verdict(R.unpackScalars(hx(s["d"]!), accountPub: s["pub"]!)) { _ in "" })
+  emit("scalar\(i)", verdict(R.unpackScalars(hx(s["pt"]!), accountPub: s["accountPub"]!, kxPub: s["kxPub"]!)) { _ in "" })
 }
-emit("scalar.length", verdict(R.unpackScalars(Array(acct.dropLast()), accountPub: k["accountPub"]!)) { _ in "" })
+emit("scalar.length", verdict(R.unpackScalars(acct + Array(kx.dropLast()), accountPub: k["accountPub"]!, kxPub: kp)) { _ in "" })
 `
 const dir = mkdtempSync(join(tmpdir(), 'bento-idrec-'))
 let out
@@ -210,20 +218,22 @@ ok(out['short.code'] === 'true', 'a code of the wrong length derives nothing')
 
 console.log('the PRF blob:')
 const k = F.blobs.keys
-for (const [name, kxPart] of [['unruled', 'nil'], ['modeA', k.kxD]]) {
-  ok(out[`prf.${name}.seal`] === out[`prf.${name}.want`], `${name}: sealed byte for byte`)
-  ok(out[`prf.${name}.open`] === `ok:${k.accountD}+${kxPart}`, `${name}: opens to the account scalar${name === 'modeA' ? ' and the kx scalar' : ''}`)
-}
+ok(F.kxMode === 'C' && F.blobLen === 64 && out.blobLen === '64', 'kx placement is mode C: the blob is 64 bytes (account ‖ recovery kx)')
+ok(out['prf.seal'] === out['prf.want'], 'sealed byte for byte (account ‖ recovery kx)')
+ok(out['prf.open'] === `ok:${k.accountD}+${k.kxD}`, 'opens to the account scalar and the recovery kx scalar')
+ok(out['prf.noKxPub'] === 'no:key-mismatch', 'with no recovery kx to match it against: key-mismatch')
+F.blobs.prf.wrongLength.forEach((w, i) => ok(out[`prf.wrongLength${i}`] === 'no:length', `${w.name}: decrypts, then refused (length)`))
+ok(out['pack.short'] === 'true', 'sealing refuses an empty or short kx scalar')
 ok(out['prf.otherCred'] === 'no:credential', 'another passkey\'s credential: refused before decrypting')
 ok(out['prf.otherPrf'] === 'no:decrypt', 'a wrong PRF output: does not decrypt')
 ok(out['prf.swappedKey'] === 'no:key-mismatch', 'checked against another public key: key-mismatch')
 ok(out['prf.swappedBlob'] === 'no:key-mismatch', 'a blob around ANOTHER key (a malicious directory\'s swap) decrypts, and is refused')
-ok(out['prf.modeMismatch'] === 'no:length', 'read under a kx mode it was not sealed for: length')
 ok(out['prf.v2'] === 'no:version' && out['prf.badSalt'] === 'no:grammar', 'an unknown version or a malformed salt: refused')
 
 console.log('the recovery-code blob:')
 ok(out['rc.inner'] === F.blobs.recovery.inner, 'the inner layer, sealed byte for byte')
-ok(out['rc.open'] === `ok:${k.accountD}`, 'and opened back to the account scalar')
+ok(out['rc.open'] === `ok:${k.accountD}+${k.kxD}`, 'and opened back to account ‖ recovery kx')
+F.blobs.recovery.wrongLength.forEach((w, i) => ok(out[`rc.wrongLength${i}`] === 'no:length', `recovery: ${w.name}: decrypts, then refused (length)`))
 ok(out['rc.otherAccount'] === 'no:decrypt', "bound to the account: another account's tag does not decrypt")
 ok(out['rc.tampered'] === 'no:decrypt', 'one flipped bit: does not decrypt')
 const pp = F.blobs.pepper
@@ -235,6 +245,6 @@ F.scalars.forEach((s, i) => {
   const want = s.expect === 'accept' ? 'ok:' : `no:${s.reason}`
   ok(out[`scalar${i}`] === want, `${s.name} → ${want}${out[`scalar${i}`] === want ? '' : ` (got ${out[`scalar${i}`]})`}`)
 })
-ok(out['scalar.length'] === 'no:length', 'a plaintext of the wrong length: refused')
+ok(out['scalar.length'] === 'no:length', 'a 63-byte plaintext: refused (length)')
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

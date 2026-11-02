@@ -7,21 +7,27 @@
 // One ceremony, on this device, with no server yet (the directory binding,
 // the email code and the blob upload come with the directory client):
 //
-//   1. an ACCOUNT key (the person) and a DEVICE key (this browser profile);
+//   1. an ACCOUNT key (the person), a DEVICE key (this browser profile), and two
+//      key-agreement (kx, ECDH P-256) keys, by kx placement mode C (identity-
+//      design §6b): this device's OWN kx, which never leaves it, and the
+//      account's RECOVERY kx, whose public half the bind. will carry;
 //   2. the device certificate `dev.` — the account key vouching for the device
-//      key — with an EMPTY consent slot: the light tier has no hardware consent
-//      key, and its high-authority consent is verified by the directory (§27);
+//      key and this device's kx — with an EMPTY consent slot: the light tier has
+//      no hardware consent key, and its high-authority consent is verified by
+//      the directory (§27);
 //   3. a PASSKEY for bento.page, evaluated with the PRF extension over the fixed
-//      input "bento/id/prf/v1": its output seals the account scalar into a
-//      blob only that passkey can open (kernel sealPrfBlob);
+//      input "bento/id/prf/v1": its output seals the account scalar AND the
+//      recovery kx scalar (64 bytes) into a blob only that passkey can open
+//      (kernel sealPrfBlob);
 //   4. a RECOVERY CODE (80 random bits, shown ONCE, never stored): Argon2id
 //      stretches it into the key for a second blob (sealRecoveryInner), and a
 //      separate salt gives the verifier the directory will hold.
 //
-// THE ACCOUNT KEY (security §28): generated extractable ONLY inside this
-// function, used to make the blobs and sign the certificate, then re-imported
-// NON-extractable for routine use. The raw scalar, the PRF output and the wrap
-// key are zeroed before returning — best effort: JavaScript may have copied
+// THE ACCOUNT KEY AND THE RECOVERY KX (security §28): generated extractable ONLY
+// inside this function, used to make the blobs (and the account key to sign the
+// certificate), then re-imported NON-extractable for routine use. The device's
+// own kx is generated non-extractable. The raw scalars, the PRF output and the
+// wrap key are zeroed before returning — best effort: JavaScript may have copied
 // them first (stated, not hidden). Never exported or stored as raw bytes by our
 // code; the browser still keeps the non-extractable key's material in the
 // profile, readable by same-user malware (security §20).
@@ -39,6 +45,10 @@ import { buildDev, verifyDev, signStatement, CERT_MAX_MS, b64uEnc, b64uDec } fro
 import { PRF_INPUT, sealPrfBlob, sealRecoveryInner, recoveryWrapKey, recoveryVerifier, formatRecoveryCode, SALT_LEN, CODE_BYTES } from './gen/recovery.js'
 
 const ECDSA = { name: 'ECDSA', namedCurve: 'P-256' }
+const ECDH = { name: 'ECDH', namedCurve: 'P-256' }
+/** The record's shape. A record of any other version is DISCARDED, never migrated:
+ *  every v1 record is a pre-mode-C test enrolment with no kx (keystore.js). */
+export const RECORD_V = 2
 const te = new TextEncoder()
 export const PRF_EVAL = te.encode(PRF_INPUT)
 
@@ -65,15 +75,21 @@ export async function createBentoId({ label = null } = {}, deps) {
   const created = now()
   const account = await subtle.generateKey(ECDSA, true, ['sign', 'verify'])
   const device = await subtle.generateKey(ECDSA, false, ['sign', 'verify'])
+  const deviceKx = await subtle.generateKey(ECDH, false, ['deriveBits'])
+  const recoveryKx = await subtle.generateKey(ECDH, true, ['deriveBits'])
   const accountPub = await rawPub(subtle, account.publicKey)
   const devicePub = await rawPub(subtle, device.publicKey)
+  const kxPub = await rawPub(subtle, deviceKx.publicKey)
+  const recoveryKxPub = await rawPub(subtle, recoveryKx.publicKey)
   // the raw scalar the blobs carry (WebCrypto exposes it only through a JWK, so
   // one base64url string of it exists briefly; strings can't be zeroed — stated)
   const accountD = b64uDec((await subtle.exportKey('jwk', account.privateKey)).d)
-  const secrets = [accountD]
+  const recoveryKxD = b64uDec((await subtle.exportKey('jwk', recoveryKx.privateKey)).d)
+  const secrets = [accountD, recoveryKxD]
+  const blobKeys = { account: accountD, kx: recoveryKxD }
   try {
     // 2. the device certificate, checked by the reference verifier before use
-    const devText = buildDev({ devicePub, consentPub: null, accountPub, kx: null, label, created, expires: created + Math.floor(CERT_MAX_MS) - 86_400_000 })
+    const devText = buildDev({ devicePub, consentPub: null, accountPub, kx: kxPub, label, created, expires: created + Math.floor(CERT_MAX_MS) - 86_400_000 })
     const devSig = await signStatement(account.privateKey, devText)
     const devOk = await verifyDev(devText, devSig, { now: created })
     if (!devOk.ok) throw new SetupRefused(`the device certificate does not verify (${devOk.reason})`)
@@ -83,7 +99,7 @@ export async function createBentoId({ label = null } = {}, deps) {
     const passkeys = []
     if (pk.prfOutput) {
       secrets.push(pk.prfOutput)
-      const blob = await sealPrfBlob({ prfOutput: pk.prfOutput, credentialId: pk.credentialId, salt: rand(32), iv: rand(12), keys: { account: accountD } })
+      const blob = await sealPrfBlob({ prfOutput: pk.prfOutput, credentialId: pk.credentialId, salt: rand(32), iv: rand(12), keys: blobKeys })
       passkeys.push({ credentialId: b64uEnc(pk.credentialId), blob, added: created })
     }
 
@@ -97,7 +113,7 @@ export async function createBentoId({ label = null } = {}, deps) {
       const wrapKey = await recoveryWrapKey(code, salt, argon2id)
       secrets.push(wrapKey)
       const verifier = await recoveryVerifier(code, saltV, argon2id)
-      const inner = await sealRecoveryInner({ wrapKey, iv, accountPub, keys: { account: accountD } })
+      const inner = await sealRecoveryInner({ wrapKey, iv, accountPub, keys: blobKeys })
       // the verifier and the inner blob wait here only until the directory takes them
       recovery = { salt: b64uEnc(salt), saltV: b64uEnc(saltV), iv: b64uEnc(iv), inner: b64uEnc(inner), verifier: b64uEnc(verifier) }
       recoveryCode = formatRecoveryCode(code)
@@ -112,12 +128,17 @@ export async function createBentoId({ label = null } = {}, deps) {
     const pkcs8 = new Uint8Array(await subtle.exportKey('pkcs8', account.privateKey))
     secrets.push(pkcs8)
     const accountKey = await subtle.importKey('pkcs8', pkcs8, ECDSA, false, ['sign'])
+    const kxPkcs8 = new Uint8Array(await subtle.exportKey('pkcs8', recoveryKx.privateKey))
+    secrets.push(kxPkcs8)
+    const recoveryKxKey = await subtle.importKey('pkcs8', kxPkcs8, ECDH, false, ['deriveBits'])
     const record = {
-      v: 1,
+      v: RECORD_V,
       state: 'local',          // not yet bound to an address (the directory comes next)
       label, created,
       accountPub, accountKey,
       devicePub, deviceKey: device.privateKey,
+      kxPub, kxKey: deviceKx.privateKey,                       // this device's kx (in dev.)
+      recoveryKxPub, recoveryKxKey,                            // the account's recovery kx (for bind.; its scalar is in the blobs)
       dev: { text: devText, sig: devSig },
       passkeys,
       recovery,                // null on a device that cannot run Argon2id at 64 MiB

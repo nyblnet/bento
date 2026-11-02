@@ -534,3 +534,12 @@ runs:
       # compile time (historySyncKeys); skipDoc is still the floor.
       shell: bento-step {0}
       run: node scripts/test-sync-history-override.ts
+
+    - name: kx placement mode C — lenient-path mutants
+      # bento/id (identity-design §6b, mode C): both kx slots are required and
+      # the account blob is exactly 64 bytes. Ten mutants each reintroduce one
+      # lenient path (an empty slot, a 32-byte blob, an unmatched kx...) into a
+      # copy of kernel/src; test-statements or test-recovery must go red on
+      # every one, after the unmutated copy passes both.
+      shell: bento-step {0}
+      run: node scripts/test-kx-mode-mutants.ts

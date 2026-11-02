@@ -26,7 +26,7 @@ import {
   buildDev, buildBind, buildAtt, buildTomb, buildDel, buildCmp, buildConsent,
   consentTranscript, webauthnChallengeFor, lowS, verifyStatementSig, payloadMatchesPurpose,
   b64uDec, b64uEnc, KX_MODE, RESERVED_PREFIXES, DISPLAY_FORBIDDEN_RANGES, DISPLAY_FORBIDDEN_UNICODE,
-  displayForbidden, type Verdict, type KxMode,
+  displayForbidden, type Verdict,
   verifyDreq, buildDreq, dreqArg, dreqNeedsConsent, verifyRotation, buildRot, sha256b64u,
   type AttState, type DreqOp, type DreqSubject,
 } from '../kernel/src/statements.ts'
@@ -48,10 +48,9 @@ type Row = Record<string, unknown> & { name: string; type: string; text: string;
 let spendCalls = 0
 async function check(r: Row, text = r.text, sig = r.sig): Promise<Verdict<unknown>> {
   const now = (r.now as number) ?? F.now
-  const kxMode = (r.kxMode as KxMode) ?? F.kxModeDefault
   switch (r.type) {
-    case 'dev': return verifyDev(text, sig, { now, kxMode })
-    case 'bind': return verifyBind(text, sig, { now, kxMode })
+    case 'dev': return verifyDev(text, sig, { now })
+    case 'bind': return verifyBind(text, sig, { now })
     case 'att': return verifyAtt(text, sig, { directoryKeys: F.directoryKeys, bindText: r.bindText as string, now, maxAgeMs: r.maxAgeMs as number })
     case 'tomb': return verifyTomb(text, sig, { directoryKeys: F.directoryKeys, now })
     case 'del': return verifyDel(text, sig, { accountPub: F.keys.account, now })
@@ -116,7 +115,13 @@ console.log('\nthe contract cannot quietly shrink: required rows are present')
   for (const t of ['dev', 'bind', 'att', 'tomb', 'del', 'cmp', 'cns'])
     ok((F.statements as Row[]).some((r) => r.type === t && r.expect === 'accept') &&
       (F.statements as Row[]).some((r) => r.type === t && r.expect === 'reject'), `${t}: at least one accept and one reject row`)
-  ok(F.kxModeDefault === 'unruled' && KX_MODE === 'unruled', 'kx placement is unruled: both slots must be empty until §6b is decided')
+  ok(F.kxMode === 'C' && KX_MODE === 'C' && F.kxModeDefault === undefined, 'kx placement is mode C (identity-design §6b): one rule, no per-row modes')
+  ok((F.statements as Row[]).every((r) => r.kxMode === undefined), 'no row selects another kx mode (there is no lenient path to test)')
+  for (const t of ['dev', 'bind'] as const) {
+    const accepted = (F.statements as Row[]).filter((r) => r.type === t && r.expect === 'accept')
+    ok(accepted.length > 0 && accepted.every((r) => r.text.split('.')[t === 'dev' ? 4 : 3] !== ''), `${t}: every accepted row fills the kx slot`)
+    ok((F.statements as Row[]).some((r) => r.type === t && r.reason === 'kx' && r.text.split('.')[t === 'dev' ? 4 : 3] === ''), `${t}: an empty kx slot is a reject row`)
+  }
 }
 
 console.log(`\ndreq.: the reference passes every directory-request row (${F.dreq.length})`)
@@ -173,7 +178,7 @@ console.log(`\nrot.: verifyRotation passes every rotation row (${F.rot.length})`
 type RotRow = { name: string; prevBindText: string; nextBindText: string; nextSig: string; rotText: string; rotSig: string; expect: string; reason?: string }
 const checkRot = (r: RotRow, o: Partial<RotRow> = {}) => {
   const x = { ...r, ...o }
-  return verifyRotation(x.prevBindText, x.nextBindText, x.nextSig, x.rotText, x.rotSig, { now: F.now, kxMode: F.kxModeDefault })
+  return verifyRotation(x.prevBindText, x.nextBindText, x.nextSig, x.rotText, x.rotSig, { now: F.now })
 }
 for (const r of F.rot as RotRow[]) {
   const v = await checkRot(r)
