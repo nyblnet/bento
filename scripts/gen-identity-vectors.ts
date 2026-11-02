@@ -329,6 +329,21 @@ const dreqConsentRows: Record<string, unknown>[] = []
     await req('cred-add', { arg: await dreqArg({ op: 'cred-del', credentialId }) }), account, 'reject', 'arg')
   const credAdd = await req('cred-add'), sCredAdd = await sign(account, credAdd)
   const swappedAtt = Uint8Array.from(attestationObject); swappedAtt[20] ^= 0x01
+  // the split between the two parts is bound: one byte moved across the boundary
+  // was the same arg under a bare concatenation, and is refused now
+  const shiftedAtt = attestationObject.slice(0, -1)
+  const shiftedCdj = Uint8Array.of(attestationObject[attestationObject.length - 1], ...clientDataJSON)
+  await push('cred-add with one byte moved from attestationObject into clientDataJSON (same bytes, other split)', 'active',
+    { op: 'cred-add', attestationObject: shiftedAtt, clientDataJSON: shiftedCdj }, credAdd, sCredAdd, 'reject', 'arg')
+  const bareCat = new Uint8Array(attestationObject.length + clientDataJSON.length)
+  bareCat.set(attestationObject); bareCat.set(clientDataJSON, attestationObject.length)
+  const bareArg = b64uEnc(new Uint8Array(await crypto.subtle.digest('SHA-256', bareCat)))
+  const bareReq = await req('cred-add', { arg: bareArg }), sBareReq = await sign(account, bareReq)
+  await push('cred-add over sha256(attestationObject ‖ clientDataJSON), the unbound-split arg', 'active', subjects['cred-add'],
+    bareReq, sBareReq, 'reject', 'arg')
+  // THE COLLISION: both splits share that unbound arg; the bound one tells them apart
+  await push('cred-add: the other split of the same bytes under the unbound-split arg (the collision)', 'active',
+    { op: 'cred-add', attestationObject: shiftedAtt, clientDataJSON: shiftedCdj }, bareReq, sBareReq, 'reject', 'arg')
   await push('cred-add whose attestationObject was changed in transit', 'active', { op: 'cred-add', attestationObject: swappedAtt, clientDataJSON },
     credAdd, sCredAdd, 'reject', 'arg')
   const contest = await req('contest')
@@ -368,8 +383,21 @@ const dreqConsentRows: Record<string, unknown>[] = []
   }
   rr('a rotation vouched for by the old key', {}, 'accept')
   // the pinned binding may have expired by the time a client walks the chain
-  const oldPinned = buildBind({ address: 'alice@example.com', accountPub: account.pub, kx: null, name: 'Alice', seq: 1, prev: null, created: NOW - 400 * DAY, expires: NOW - DAY })
-  rr('the pinned binding has since expired (it was checked when it was pinned)', await vouched(buildBind({ ...bindBase, prev: await sha256b64u(oldPinned) }), oldPinned), 'accept')
+  const pinned = (c: number, e: number) => buildBind({ address: 'alice@example.com', accountPub: account.pub, kx: null, name: 'Alice', seq: 1, prev: null, created: c, expires: e })
+  const successor = async (prevText: string, c: number) =>
+    vouched(buildBind({ ...bindBase, prev: await sha256b64u(prevText), created: c, expires: NOW + 300 * DAY }), prevText)
+  const oldPinned = pinned(NOW - 400 * DAY, NOW - DAY)
+  rr('the pinned binding has since expired (it was checked when it was pinned)', await successor(oldPinned, NOW - 10 * DAY), 'accept')
+  // a key may vouch only for a successor created within its own binding's lifetime (± SKEW_MS)
+  const SKEW = 5 * 60_000
+  const lapsed = pinned(NOW - 40 * DAY, NOW - 5 * DAY)
+  rr('next created while the pinned binding was live', await successor(lapsed, NOW - 10 * DAY), 'accept')
+  rr('next created exactly SKEW after the pinned binding expired', await successor(lapsed, NOW - 5 * DAY + SKEW), 'accept')
+  rr('next created SKEW + 1 ms after the pinned binding expired', await successor(lapsed, NOW - 5 * DAY + SKEW + 1), 'reject', 'stale-vouch')
+  rr('an EXPIRED key vouching for a successor minted days later', await successor(lapsed, NOW - DAY), 'reject', 'stale-vouch')
+  const young = pinned(NOW - 10 * DAY, NOW + 300 * DAY)
+  rr('next created exactly SKEW before the pinned binding was', await successor(young, NOW - 10 * DAY - SKEW), 'accept')
+  rr('next created SKEW + 1 ms before the pinned binding was', await successor(young, NOW - 10 * DAY - SKEW - 1), 'reject', 'stale-vouch')
   const swapped = buildRot(liveHash, nextHash)
   rr('SWAPPED HASHES', { rotText: swapped, rotSig: await sign(account, swapped) }, 'reject', 'rot-mismatch')
   rr('rot. SIGNED BY THE NEW KEY', { rotSig: await sign(newAccount, rot) }, 'reject', 'rot-signature')

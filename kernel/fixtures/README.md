@@ -82,8 +82,8 @@ bytes end to end. Reference: `kernel/src/recovery.ts`. Rig:
   brings `bindText` (the binding it serves as authoritative; the signer is its
   account key), its `state`, the `challenge` it issued, and the `subject` of the
   endpoint (bytes base64url): `pendingBindText` for contest,
-  `attestationObject` + `clientDataJSON` for cred-add (the arg hashes the two
-  concatenated), `credentialId` for cred-del, `body` for rc-enrol. Every row
+  `attestationObject` + `clientDataJSON` for cred-add (the arg is
+  sha256(attestationObject ‖ sha256(clientDataJSON))), `credentialId` for cred-del, `body` for rc-enrol. Every row
   carries `spendCalled`; every refusal before the spend is `grammar`.
 - `rot`: `verifyRotation(prevBindText, nextBindText, nextSig, rotText, rotSig)`
   at the file's `now`. `prevBindText` is the binding the client pinned.

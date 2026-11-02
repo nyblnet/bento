@@ -413,8 +413,10 @@ export interface Rotation { prev: BindCert; next: BindCert }
  * pinned)? All of: next is a valid binding signed by its OWN account key; same
  * address; next.seq = prev.seq + 1; next.prev = sha256(prev text); the rot.
  * names exactly sha256(next) then sha256(prev); and rotSig is by PREV's account
- * key. The pinned binding's own lifetime and signature are not re-checked here:
- * the client checked them when it pinned, and a pin may outlive its expiry.
+ * key; and next was created within prev's lifetime (± SKEW_MS), else
+ * `stale-vouch`. The pinned binding is never checked against `now`, nor is its
+ * signature re-checked: the client checked them when it pinned, and a pin may
+ * outlive its expiry.
  */
 export async function verifyRotation(prevBindText: string, nextBindText: string, nextSig: string,
   rotText: string, rotSig: string, opts: { now: number; kxMode?: KxMode }): Promise<Verdict<Rotation>> {
@@ -427,6 +429,13 @@ export async function verifyRotation(prevBindText: string, nextBindText: string,
   if (next.value.seq !== prev.value.seq + 1) return no('seq')
   const prevHash = await sha256b64u(prevBindText), nextHash = await sha256b64u(nextBindText)
   if (next.value.prev !== prevHash) return no('chain')
+  // A key may vouch only for a successor minted while its own binding was live:
+  // its authority ends when its binding does, or a key leaked after expiry (a
+  // retired device) could turn a pinner's "key changed" warning into a silent
+  // follow. prev is still never checked against `now`, so a legitimate chain
+  // keeps verifying after its old binding expires.
+  if (next.value.created > prev.value.expires + SKEW_MS ||
+      next.value.created < prev.value.created - SKEW_MS) return no('stale-vouch')
   const r = fields(rotText, 'rot', 3)
   if (!r || !isHash(r[1]) || !isHash(r[2])) return no('rot-grammar')
   if (r[1] !== nextHash || r[2] !== prevHash) return no('rot-mismatch')
@@ -578,9 +587,12 @@ export async function verifyCmp(text: string, sig: string, opts: { accountPub: s
  *   contest   sha256(the pending bind. text)       "this wasn't me"
  *   freeze    empty                                the owner's lost-or-stolen report
  *   status    empty                                the signed status read
- *   cred-add  sha256(attestationObject ‖ clientDataJSON), the exact registration
- *             bytes; not the credentialId alone, or the key registered under an
- *             id could be swapped in transit
+ *   cred-add  sha256(attestationObject ‖ sha256(clientDataJSON)), the exact
+ *             registration bytes; not the credentialId alone, or the key
+ *             registered under an id could be swapped in transit. The tail is a
+ *             fixed 32 bytes, so the split between the two parts is bound (a
+ *             bare concatenation lets a byte move across the boundary under the
+ *             same arg); it is WebAuthn's own authenticatorData ‖ clientDataHash shape
  *   cred-del  sha256(credentialId)
  *   rc-enrol  sha256(the exact enrolment body), so the signature covers what is
  *             enrolled
@@ -625,7 +637,8 @@ export async function dreqArg(subject: DreqSubject): Promise<string> {
     case 'freeze': case 'status': return ''
     case 'contest': return sha256b64u(subject.pendingBindText)
     case 'cred-add': {
-      const a = subject.attestationObject, c = subject.clientDataJSON
+      const a = subject.attestationObject
+      const c = new Uint8Array(await crypto.subtle.digest('SHA-256', subject.clientDataJSON as BufferSource))
       const both = new Uint8Array(a.length + c.length)
       both.set(a); both.set(c, a.length)
       return sha256Bytes(both)

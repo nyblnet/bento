@@ -11924,9 +11924,13 @@ key rotation, freezing and passkey management can be switched on.
   before anything else is checked, rather than to a timestamp, so there is no
   replay window at all. Each op fixes its arg exactly (empty for freeze and
   status; otherwise a SHA-256 the directory RECOMPUTES from what it holds, never
-  reads from the request). `cred-add` hashes the exact registration bytes
-  (attestationObject ‖ clientDataJSON), not the credential id, so the key under
-  an id cannot be swapped in transit. The signer is the account key of the
+  reads from the request). `cred-add` hashes the exact registration bytes,
+  `sha256(attestationObject ‖ sha256(clientDataJSON))`, not the credential id,
+  so the key under an id cannot be swapped in transit. The inner hash fixes the
+  tail at 32 bytes, so the split between the two parts is bound: under a bare
+  concatenation, moving one byte across the boundary gave the same arg, and
+  safety rested on every directory and host decoding CBOR and JSON strictly.
+  It is WebAuthn's own `authenticatorData ‖ clientDataHash` shape. The signer is the account key of the
   binding the directory currently serves as authoritative, which during a
   pending rotation is the OLD one, so a pending key signs no request. While
   frozen only `status` is accepted; `contest` only while pending; the three
@@ -11944,8 +11948,15 @@ key rotation, freezing and passkey management can be switched on.
   carries no challenge, because a client checks it OFFLINE against the binding
   it pinned. `verifyRotation` requires: next self-signed and in date, same
   address, seq + 1, next.prev = sha256(pinned), the rot. naming exactly those
-  two hashes in that order, and the rot. signed by the pinned key. The pinned
-  binding's own expiry is not re-checked: a pin may outlive it.
+  two hashes in that order, the rot. signed by the pinned key, and next
+  CREATED within the pinned binding's lifetime (± the 5-minute skew), else
+  `stale-vouch`. A key's authority to vouch ends when its binding does:
+  otherwise a key leaked after expiry (a retired device), with a directory
+  serving the chain, turns a pinner's "key changed" warning into a silent
+  follow. The pinned binding is never checked against the current time, so a
+  legitimate chain still verifies after its old binding expires; legitimate
+  rotations always pass, because the directory starts one only from a live
+  binding.
 - **A rotation resolved by the recovery code has no `rot.`**, and pinners warn.
   That is intended: the old key was reported lost or contested, and no
   directory-asserted marker may soften the warning.
