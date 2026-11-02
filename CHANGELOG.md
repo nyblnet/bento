@@ -13,6 +13,11 @@ pre-1.0.
 - **Speaker view scales to its window.** The current and next-slide previews now resize with the presenter window instead of a fixed width, and notes are larger (24px) so they read at a glance.
 - **Embedded fonts use their own bold.** A font added with "＋ Embed font file…" now declares the weights it contains, so Bold draws the font's real bold instead of a browser-thickened regular. Thanks to tikurahul (#850).
 
+- **Web addresses become links as you type and paste.** Type or paste
+  `https://github.com` into a text box and it becomes a link once the word is
+  finished (a space or Enter), leaving a full stop, comma or closing bracket
+  after it outside the link; ⌘Z straight after turns it back into plain text.
+  Only http and https addresses are linked. Thanks to Hermholtz.
 - **Backslashes you type stay.** `a\-b` no longer loses its backslash when you
   click away, and `a\\-b` no longer loses one more on every edit. A backslash
   is dropped only where it escapes something (`\*not bold\*`, `\- not a bullet`);
@@ -30,6 +35,36 @@ pre-1.0.
   overshoot and settle instead of a plain glide, and stays lined up with its
   formula all the way even when the formula changes size between slides.
   Thanks to tikurahul.
+- **Lists survive the trip to PowerPoint and back.** A bulleted or numbered
+  list used to arrive in PowerPoint as one run-together line. Each item is now
+  its own bulleted paragraph, nested lists keep their levels, and numbers stay
+  live, so PowerPoint renumbers them as you edit. Importing a PowerPoint deck
+  brings plain bullets and numbered lists back as real lists, nesting
+  included.
+- **Lock an element so clicks and drags skip it.** A full-slide image or fill
+  no longer gets in the way of drag-selecting the items above it. Select the
+  element and press ⌘L (Ctrl+L), or use Lock in the Arrange section or the
+  right-click menu; clicks and marquee drags on the canvas now pass over it,
+  and arrow keys and Delete leave it alone. A locked element is still in the Layers list
+  (with a padlock), and Alt-click reaches it, where it shows a padlock and a
+  dashed outline until you unlock it. Presenting, printing and export are
+  unchanged. With nothing selected, ⌘L still goes to the browser. Thanks to
+  johnbeard.
+- **Links in text survive the trip to PowerPoint and back.** A web address
+  linked inside a text box used to arrive in PowerPoint as plain words. It is
+  now a working hyperlink there, and links to email addresses are kept too.
+  Importing a PowerPoint deck brings its web links back as links. Bento's text
+  keeps web links only, so email links come in as plain text, and the import
+  report says so. Anything that is not an ordinary web or email address never
+  becomes a link either way.
+- **Pressing an unselected object and dragging moves it again.** Pressing on
+  an object that isn't selected and dragging in one motion selected it but
+  didn't move it, so it took a second press. It now moves with the first.
+
+- **Pasted text keeps its spaces.** Pasting plain text, or text copied from a
+  terminal or a code block, no longer squeezes runs of spaces into one: a
+  monospace table keeps its columns, indentation stays, and a tab becomes four
+  spaces. Thanks to Hermholtz.
 
 - **Indent and Outdent in the formatting bar.** Select text in a bulleted or
   numbered list and the bar that appears now carries Outdent and Indent beside
