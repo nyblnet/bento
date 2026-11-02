@@ -3,7 +3,7 @@
   "$id": "https://bento.page/schema/slides.json",
   "title": "bento/slides document",
   "description": "The #bento-doc JSON of a Bento Slides file, generated from the app's validation tables. Guide: https://bento.page/agents.md",
-  "x-bento-version": "1.2.10",
+  "x-bento-version": "1.2.11",
   "$ref": "#/$defs/doc",
   "$defs": {
     "prop-fx": {
