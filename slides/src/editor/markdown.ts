@@ -36,6 +36,7 @@ let lastFormat: LastFormat | null = null
 
 /** Forget the revertible conversion (any input that isn't a fresh conversion). */
 export function clearAutoformat() {
+  if (keepNextClear) { keepNextClear = false; return }
   lastFormat = null
 }
 
@@ -126,7 +127,77 @@ export function autoformatAtCaret(): boolean {
     lastFormat = { kind: 'inline', el, source: m[0], tail }
     return true
   }
-  return false
+  return autolinkAtCaret(true)
+}
+
+/** The web URL a typed or pasted token is, minus the punctuation that merely
+ *  follows it ("see https://x.com/a." / "(https://x.com)" / "https://x.com,").
+ *  Returns the URL's length within `token`, or 0 when it is not a web link.
+ *  Only http(s): the same `isWebUrl` test the sanitizer and the show apply. */
+export function urlLength(token: string): number {
+  if (!/^https?:\/\//i.test(token)) return 0
+  let end = token.length
+  for (;;) {
+    const c = token[end - 1]
+    if (/[.,;:!?'"*_~]/.test(c ?? '')) { end--; continue }
+    // a closing bracket belongs to the URL only when it has an opener inside it
+    const open = c === ')' ? '(' : c === ']' ? '[' : c === '}' ? '{' : ''
+    if (open) {
+      const body = token.slice(0, end)
+      if (body.split(c).length > body.split(open).length) { end--; continue }
+    }
+    break
+  }
+  const url = token.slice(0, end)
+  return /^https?:\/\/[^\s/?#]+/i.test(url) && /^https?:\/\/[^\s/?#]*[^\s/?#.]/i.test(url) && isWebUrl(url) ? end : 0
+}
+
+/** Set by the Enter path so the input event that follows does not forget the
+ *  conversion it just made (⌘Z still reverts it). */
+let keepNextClear = false
+
+/** A typed URL becomes a link when the word is finished: a space after it (the
+ *  input event, `afterSpace`) or Enter (beforeinput, caret still at its end).
+ *  ⌘Z right after puts the plain text back, like the other autoformats. */
+export function autolinkAtCaret(afterSpace: boolean): boolean {
+  const sel = document.getSelection()
+  if (!sel?.isCollapsed || !(sel.anchorNode instanceof Text)) return false
+  const node = sel.anchorNode
+  const off = sel.anchorOffset
+  if (node.parentElement?.closest('a')) return false
+  const root = node.parentElement?.closest<HTMLElement>('.bento-text-inner, .bento-cell-inner')
+  if (!root) return false
+  if (root.classList.contains('bento-text-inner') && insideOpenFence(textUpTo(root, node, off))) return false
+  let upto = node.data.slice(0, off)
+  if (afterSpace) {
+    if (!/[  ]$/.test(upto)) return false
+    upto = upto.slice(0, -1)
+  }
+  const word = upto.match(/[^\s ​]+$/)?.[0]
+  if (!word) return false
+  const len = urlLength(word)
+  if (!len) return false
+  const start = upto.length - word.length
+  const end = start + len
+  const a = document.createElement('a')
+  a.setAttribute('href', word.slice(0, len))
+  a.textContent = word.slice(0, len)
+  const range = document.createRange()
+  range.setStart(node, start)
+  range.setEnd(node, end)
+  range.deleteContents()
+  range.insertNode(a)
+  // the caret lands after what was typed, outside the link
+  const rest = a.nextSibling
+  if (rest instanceof Text) placeCaret(rest, Math.min(rest.data.length, off - end))
+  else {
+    const tail = document.createTextNode('​')
+    a.after(tail)
+    placeCaret(tail, 1)
+  }
+  lastFormat = { kind: 'inline', el: a, source: word.slice(0, len), tail: document.createTextNode('') }
+  if (!afterSpace) keepNextClear = true
+  return true
 }
 
 /** True when offset sits at the start of a rendered line (node start or after
@@ -224,6 +295,17 @@ export function markdownToHtml(text: string): string {
         .replace(/^( ?)[-*] /, '$1• ')
       s = s.replace(/\[([^\[\]]+)\]\((https?:\/\/[^\s()]+)\)/gi, (m, cap: string, href: string) =>
         isWebUrl(href) ? `<a href="${href.replaceAll('"', '&quot;')}">${cap}</a>` : m)
+      // bare http(s) URLs → links, parked so the emphasis rules below cannot
+      // read the _ or * inside one; text already in a link is left alone
+      s = s.split(/(<a href[^>]*>.*?<\/a>)/).map((part, i) => i % 2 ? part : part.replace(/https?:\/\/[^\s<>"]+/gi, (tok) => {
+        const len = urlLength(tok.replace(/&amp;/g, '&'))
+        if (!len) return tok
+        // length is in unescaped chars; map back onto the escaped token
+        let used = 0, k = 0
+        while (k < tok.length && used < len) { k += tok.startsWith('&amp;', k) ? 5 : 1; used++ }
+        const url = tok.slice(0, k)
+        return park(`<a href="${url.replaceAll('"', '&quot;')}">${url}</a>`) + tok.slice(k)
+      })).join('')
       s = s.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
       s = s.replace(/__([^_]+)__/g, '<b>$1</b>')
       s = s.replace(/(?<![*\w])\*([^*]+)\*/g, '<i>$1</i>')

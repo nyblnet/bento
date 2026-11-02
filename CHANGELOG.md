@@ -13,6 +13,11 @@ pre-1.0.
 - **Speaker view scales to its window.** The current and next-slide previews now resize with the presenter window instead of a fixed width, and notes are larger (24px) so they read at a glance.
 - **Embedded fonts use their own bold.** A font added with "＋ Embed font file…" now declares the weights it contains, so Bold draws the font's real bold instead of a browser-thickened regular. Thanks to tikurahul (#850).
 
+- **Web addresses become links as you type and paste.** Type or paste
+  `https://github.com` into a text box and it becomes a link once the word is
+  finished (a space or Enter), leaving a full stop, comma or closing bracket
+  after it outside the link; ⌘Z straight after turns it back into plain text.
+  Only http and https addresses are linked. Thanks to Hermholtz.
 - **Backslashes you type stay.** `a\-b` no longer loses its backslash when you
   click away, and `a\\-b` no longer loses one more on every edit. A backslash
   is dropped only where it escapes something (`\*not bold\*`, `\- not a bullet`);

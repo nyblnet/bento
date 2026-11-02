@@ -585,6 +585,12 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-slides-sync-allowlist.ts
 
+    - name: Autolink rig
+      # Where a typed or pasted URL ends (trailing punctuation, balanced
+      # brackets), http(s) only, and pasted text turning bare URLs into links
+      # without reading _ or * inside one as emphasis (#723).
+      shell: bento-step {0}
+      run: node scripts/test-slides-autolink.ts
     - name: Backslash rig
       # A backslash is an escape only before a marker that would have acted;
       # everywhere else it is typed text, and committing twice changes nothing
