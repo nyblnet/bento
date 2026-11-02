@@ -15,6 +15,11 @@ pre-1.0.
   click away, and `a\\-b` no longer loses one more on every edit. A backslash
   is dropped only where it escapes something (`\*not bold\*`, `\- not a bullet`);
   everywhere else, typed or pasted, it is text. Thanks to Hermholtz.
+- **Formulas morph with a little spring.** When a formula morphs from one
+  slide to the next, each symbol now travels to its new place with a gentle
+  overshoot and settle instead of a plain glide, and stays lined up with its
+  formula all the way even when the formula changes size between slides.
+  Thanks to tikurahul.
 
 ## [1.2.10] — 2026-10-24
 
