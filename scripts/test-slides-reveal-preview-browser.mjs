@@ -10,10 +10,15 @@
 // real mouse, every kind of hostile shape through each way a deck arrives:
 // file boot, window.bento.loadDoc, and pasting a bento clip.
 //   - CONTROL 1: every click reaches a shape (a capture listener counts them).
-//   - CONTROL 2: the attributes really are in the rendered DOM, so the
-//     overlay's trigger selector would match; only the disarmed engine stops it.
+//   - LAYER 2 (kernel svgsafe): on the render path the trigger attributes are
+//     STRIPPED from the svg. Asserted, not assumed.
+//   - CONTROL 2 plants the attributes with setAttribute AFTER render (a
+//     simulated sanitizer bypass) and checks they are really in the DOM, so
+//     the overlay's trigger selector would match. Layer 1 (the disarmed
+//     engine) is then proven ALONE: nothing but the bundle stands between
+//     the click and the frame.
 //   - Run it on a shell built WITHOUT the disarm and it fails (script runs,
-//     frame opens, URL fetched).
+//     frame opens, URL fetched), whether or not svgsafe strips.
 import { readFileSync, writeFileSync, mkdtempSync, realpathSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -47,6 +52,23 @@ const b = await chromium.launch({ headless: true })
 async function run(label, prep) {
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } })
   await ctx.addInitScript(() => { try { localStorage.setItem('bento-slideshow-started', '1') } catch {} })
+  // Simulated sanitizer bypass: the moment a presented svg shape is inserted
+  // (before Reveal's own sync binds its triggers), record whether the render
+  // path left a trigger attribute on it, then PLANT one with setAttribute.
+  await ctx.addInitScript(({ payloads, sel }) => {
+    window.__pre = { seen: 0, hostile: 0, planted: 0 }
+    new MutationObserver((muts) => {
+      for (const m of muts) for (const n of m.addedNodes) {
+        if (n.nodeType !== 1) continue
+        for (const g of [n, ...(n.querySelectorAll?.('svg g') || [])]) {
+          if (!g.matches?.('svg g') || !g.closest('.reveal .slides') || !g.querySelector(':scope > rect') || g.__planted) continue
+          g.__planted = 1; window.__pre.seen++
+          if (g.matches(sel)) window.__pre.hostile++
+          const [a, v] = payloads[window.__pre.planted++ % payloads.length]; g.setAttribute(a, v)
+        }
+      }
+    }).observe(document, { childList: true, subtree: true })
+  }, { payloads: PAYLOADS, sel: SEL })
   const reqs = []
   await ctx.route(/^https?:/, (r) => { reqs.push(r.request().url()); r.abort() })
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', (e) => errs.push(String(e)))
@@ -55,8 +77,10 @@ async function run(label, prep) {
   await p.locator('.ed-present-pill .ed-menu').getByText('Present in this tab', { exact: true }).click()
   await p.waitForSelector('.reveal .slides section.present [data-el-id]', { timeout: 10000 }); await p.waitForTimeout(800)
   await p.evaluate(() => { window.__hits = 0; document.addEventListener('click', (e) => { if (e.target.closest?.('.reveal .slides [data-el-id]')) window.__hits++ }, true) })
-  const n = await p.evaluate((sel) => document.querySelectorAll('.reveal .slides ' + sel).length, SEL)
-  ok(n >= 1, `${label}: CONTROL, the hostile attributes reach the rendered slide (${n})`)
+  const pre = await p.evaluate(() => window.__pre)
+  ok(pre.seen >= 1 && pre.hostile === 0, `${label}: LAYER 2, the sanitizer stripped every trigger attribute on render (${pre.hostile} of ${pre.seen} shapes carried one)`)
+  const planted = await p.evaluate((sel) => [window.__pre.planted, document.querySelectorAll('.reveal .slides ' + sel).length], SEL)
+  ok(planted[0] >= PAYLOADS.length && planted[1] === planted[0], `${label}: CONTROL, ${planted[0]} planted attributes are in the rendered slide (${planted[1]} match the trigger selector)`)
   const rects = await p.locator('.reveal .slides section.present [data-el-id] rect').all()
   ok(rects.length >= PAYLOADS.length && rects.length % PAYLOADS.length === 0, `${label}: ${rects.length} shapes to click`)
   for (const r of rects) {
