@@ -4,12 +4,13 @@
 // RIG BUILDS ONLY: the security §19d–§19h probe, injected after the shim and
 // bridge when BENTO_PROBE_<label> is set. Each window reports what it could and
 // could not do; rig/check.py asserts the verdicts. The embed is a cross-origin
-// https page (httpbin, base64) that tries Tauri's IPC from inside the document
+// https page (rig/embed.html, served from a pinned commit) that tries Tauri's IPC from inside the document
 // with whatever key and capability it is handed in its URL fragment.
 ;(function () {
   if (window.top !== window) return
   if (location.protocol === 'https:') return
-  const EMBED_URL = "https://httpbin.org/base64/PCFkb2N0eXBlIGh0bWw-PHNjcmlwdD4KdmFyIGg9ZGVjb2RlVVJJQ29tcG9uZW50KGxvY2F0aW9uLmhhc2guc2xpY2UoMSkpLnNwbGl0KCd8Jyksa2V5PWhbMF18fCcnLGNhcD1oWzFdfHxudWxsLHRhZz1oWzJdfHwnJzsKdmFyIHI9e3RhZzp0YWd9OwpyLmJlbnRvR2xvYmFscz1PYmplY3QuZ2V0T3duUHJvcGVydHlOYW1lcyh3aW5kb3cpLmZpbHRlcihmdW5jdGlvbihuKXtyZXR1cm4gL2JlbnRvfHNwaWtlfFRBVVJJL2kudGVzdChuKX0pOwp0cnl7ci5wYXJlbnRTZWNyZXQ9U3RyaW5nKHBhcmVudC5fX3NwaWtlQ2FwKX1jYXRjaChlKXtyLnBhcmVudFNlY3JldD0nVEhSRVcnfQpyLndrSXBjPSEhKHdpbmRvdy53ZWJraXQmJndpbmRvdy53ZWJraXQubWVzc2FnZUhhbmRsZXJzJiZ3aW5kb3cud2Via2l0Lm1lc3NhZ2VIYW5kbGVycy5pcGMpOwpyLmNocm9tZVd2PSEhKHdpbmRvdy5jaHJvbWUmJndpbmRvdy5jaHJvbWUud2Vidmlldyk7CmZ1bmN0aW9uIHNlbmQoKXtwYXJlbnQucG9zdE1lc3NhZ2Uoe2VtYmVkOnJ9LCcqJyl9CnRyeXt2YXIgbT1KU09OLnN0cmluZ2lmeSh7Y21kOidiZW50b19maWxlJyxjYWxsYmFjazoxLGVycm9yOjIscGF5bG9hZDp7bXNnOid7ImlkIjoiJyt0YWcrJyIsIm9wIjoicmVhZCIsIm5hbWUiOiJ4In0nLGNhcDpjYXB9LG9wdGlvbnM6e2hlYWRlcnM6e319LF9fVEFVUklfSU5WT0tFX0tFWV9fOmtleX0pOwppZih3aW5kb3cuaXBjKXdpbmRvdy5pcGMucG9zdE1lc3NhZ2UobSk7ZWxzZSBpZihyLndrSXBjKXdpbmRvdy53ZWJraXQubWVzc2FnZUhhbmRsZXJzLmlwYy5wb3N0TWVzc2FnZShtKTtlbHNlIGlmKHIuY2hyb21lV3Ypd2luZG93LmNocm9tZS53ZWJ2aWV3LnBvc3RNZXNzYWdlKG0pO3IucmF3PSdzZW50J31jYXRjaChlKXtyLnJhdz0nVEhSRVcgJytlfQpzZXRUaW1lb3V0KHNlbmQsMTIwMCkKPC9zY3JpcHQ-"
+  // pinned to a commit (immutable); rig/embed.html is that page. httpbin served the same bytes as text/plain from late 2026-10, which silently ran no embed.
+  const EMBED_URL = "https://rawcdn.githack.com/nyblnet/bento/e6dc1a9a5116a9a393165b376c680b58d8817521/home/desktop/host/rig/embed.html"
   const LABEL = window.__RIG_LABEL, PEER = window.__RIG_PEER
   const R = (window.__probeR = { label: LABEL, violations: [] })
   document.addEventListener('securitypolicyviolation', (e) => {
