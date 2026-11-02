@@ -56,6 +56,18 @@ BENTO_RIG_WATCHDOG=1 scenario watchdogu 90 "$OUT/WU.bento.html"
 # runtime's own serializer through the bridge
 cp "$OUT/real/Bento_Slides.bento.html" "$OUT/R.bento.html"
 scenario real 150 "$OUT/R.bento.html"
+# §19h wedge isolation: two documents each counting a heartbeat through the
+# host; rig/wedge.py stops their web processes one at a time (exactly one
+# document may freeze) and then all at once (the negative control: both freeze)
+cp "$OUT/fix/A.bento.html" "$OUT/wA.bento.html"; cp "$OUT/fix/U.bento.html" "$OUT/wU.bento.html"
+mkdir -p "$OUT/hb" "$OUT/wedge-data"
+BENTO_RIG_WEDGE=1 BENTO_HB_DIR="$OUT/hb" BENTO_PROBE_doc0="$OUT/wedge-doc0.json" BENTO_PROBE_doc1="$OUT/wedge-doc1.json" \
+  BENTO_DATA_DIR="$OUT/wedge-data" timeout 150 "$BIN" "$OUT/wA.bento.html" "$OUT/wU.bento.html" >/dev/null 2>"$OUT/wedge.log" &
+WPID=$!
+timeout 120 python3 rig/wedge.py "$OUT" "$WPID"
+# a stopped process must never outlive the rig
+pkill -CONT -P "$WPID" 2>/dev/null; kill "$WPID" 2>/dev/null; wait "$WPID" 2>/dev/null
+echo "== wedge done"
 # the saved file against the release key ONLY (hostcore's release_check), and a
 # one-byte-changed copy of it
 python3 - "$OUT" <<'PY'

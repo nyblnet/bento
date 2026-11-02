@@ -43,6 +43,12 @@ def window(name, genuine, expect_heard, peer_cap_expected=True):
     ok(p.get("bridge_installed") is True, f"{name}: bridge.js installed")
     ok(re.fullmatch(r"bento://[0-9a-f]{24}\.localhost", p.get("origin") or "") is not None, f"{name}: a 96-bit per-document origin ({p.get('origin')})")
     ok(str(p.get("core_cmd", "")).startswith("refused"), f"{name}: Tauri core/plugin commands refused to page script ({p.get('core_cmd')})")
+    # identity commands: only a GENUINE load reaches the agent (armed_genuine)
+    ok(p.get("id_no_cap") == "no capability", f"{name}: identity: no capability is refused before anything else ({p.get('id_no_cap')})")
+    if genuine:
+        ok(p.get("id_sign") == "purpose" and p.get("id_whoami") == "no-identity", f"{name}: identity: a genuine load REACHES the agent (sign -> purpose, whoami -> no-identity) ({p.get('id_sign')}, {p.get('id_whoami')})")
+    else:
+        ok(p.get("id_sign") == "unavailable" and p.get("id_whoami") == "unavailable", f"{name}: identity: an unknown document is refused by the host before the agent ({p.get('id_sign')}, {p.get('id_whoami')})")
     # CSP: pinned for genuine, none for unknown (the control)
     if genuine:
         ok(p.get("dom_inline_ran") is False, f"{name}: under the pinned CSP an added inline script does NOT run")
@@ -169,6 +175,24 @@ if r:
 rc = (out / "real-release-check.exit").read_text().strip() if (out / "real-release-check.exit").exists() else "missing"
 txt = (out / "real-release-check.txt").read_text() if (out / "real-release-check.txt").exists() else ""
 ok(rc == "0" and "R.bento.html: GENUINE" in txt and "R-flipped.bento.html: UNKNOWN" in txt, f"real: against the release key ONLY, the saved deck is GENUINE and a one-byte-changed copy UNKNOWN (exit {rc})")
+
+# §19h wedge isolation: a stopped web process freezes ITS document and no other
+wj = out / "wedge.json"
+if not wj.exists():
+    fails.append("wedge: NO REPORT (a timeout is a failure)")
+else:
+    w = json.loads(wj.read_text())
+    ok(w.get("error") is None, f"wedge: the driver ran clean ({w.get('error')})")
+    ok(w.get("both_counting_before") is True, "wedge: precondition: both documents were counting heartbeats")
+    pids = w.get("web_pids") or []
+    ok(len(pids) >= 2, f"wedge: §19h at least two distinct web-process PIDs for two documents ({pids})")
+    single = w.get("single") or {}
+    frozen_sets = [tuple(v["frozen"]) for v in single.values()]
+    ok(bool(single) and all(len(f) <= 1 for f in frozen_sets), f"wedge: stopping any ONE web process freezes at most one document, the other stays responsive ({frozen_sets})")
+    ok(set(d for f in frozen_sets for d in f) == {"doc0", "doc1"}, f"wedge: and each document is the one frozen by some process, so each has its own ({frozen_sets})")
+    ok(all(v["recovered"] for v in single.values()) and bool(single), "wedge: continuing the process restores the document")
+    ok(sorted(w.get("control_all_frozen") or []) == ["doc0", "doc1"], f"wedge: NEGATIVE CONTROL: stopping every web process freezes both documents, so a frozen heartbeat is what a wedge looks like ({w.get('control_all_frozen')})")
+    ok(w.get("control_recovered") is True and w.get("alive") is True, "wedge: after the control the host is alive and both documents count again")
 
 for o in oks:
     print("ok  ", o)

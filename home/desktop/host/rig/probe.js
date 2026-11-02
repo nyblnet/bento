@@ -23,6 +23,15 @@
   const seen = new Set(), js = JSON.stringify
   JSON.stringify = function (v) { try { if (v && typeof v === 'object' && typeof v.cap === 'string') seen.add(v.cap) } catch (_) {} return js.apply(this, arguments) }
   addEventListener('load', async () => {
+    // §19h wedge scenario: once armed, count a heartbeat through the host every
+    // 300 ms and do nothing else. The shell stops web processes and watches
+    // which documents' counters freeze.
+    if (window.__RIG_WEDGE) {
+      await until(() => window.__rigCap, 15000)
+      let n = 0
+      setInterval(() => inv('rig_stash', { key: LABEL + '.hb', value: String(++n) }).catch(() => {}), 300)
+      return
+    }
     // rig 9 (security's watchdog ruling): the recreated webview starts from
     // zero, the dead webview's secret is refused, and a stale secret cannot
     // ride the new label
@@ -80,6 +89,13 @@
       const s = document.createElement('script'); s.textContent = 'window.__rigInline = 1'; document.head.appendChild(s)
       await sleep(200)
       R.dom_inline_ran = window.__rigInline === 1
+      // identity calls: gated on a GENUINE load. A mismatched payload is the
+      // agent's own answer ("purpose"), so it proves the call REACHED the
+      // agent; an unknown document must be stopped before it ("unavailable").
+      const idCall = (cap, op) => inv('bento_id', { msg: JSON.stringify({ id: 'id-' + op, op, purpose: 'frame', payload: 'not-a-frame' }), cap }).then((t) => { const j = JSON.parse(t); return j.ok ? 'ok' : j.value }, (e) => 'THREW ' + e)
+      R.id_sign = await idCall(window.__rigCap, 'sign')
+      R.id_whoami = await idCall(window.__rigCap, 'whoami')
+      R.id_no_cap = await idCall(null, 'sign')
       // Tauri core/plugin commands: no capability file ships, so all refused
       R.core_cmd = await inv('plugin:window|title', {}).then((v) => 'ALLOWED ' + v, (e) => 'refused: ' + String(e).slice(0, 60))
       // rig 8: storage + BroadcastChannel isolation between documents

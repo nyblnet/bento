@@ -24,6 +24,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use bento_id_agent::agent::{Agent, Caller, Clock, KeyRole, KeyStore, Policy, StoreError};
 use bento_hostcore::{
     arming::{main_frame_load, navigation_allowed, Bounce, Load, Registry},
     origin::{self, Index},
@@ -68,6 +69,24 @@ pub(crate) struct Host {
     salt: Vec<u8>,
     index: Index,
     data_dir: PathBuf,
+    agent: Agent<NoStore, SysClock>,
+}
+
+/// The identity agent's key store in this build: EMPTY. The Linux stores
+/// (TPM, Secret Service) are the agent crate's and are wired in a later slice;
+/// until then every identity call that passes the host's gates reaches the
+/// agent and is answered `no-identity`.
+pub(crate) struct NoStore;
+impl KeyStore for NoStore {
+    fn public_key(&self, _: &KeyRole) -> Result<Option<[u8; 65]>, StoreError> { Ok(None) }
+    fn sign(&mut self, _: &KeyRole, _: &[u8], _: Option<&bento_id_agent::agent::Prompt>) -> Result<[u8; 64], StoreError> { Err(StoreError::NoKey) }
+    fn has_consent_key(&self) -> bool { false }
+}
+pub(crate) struct SysClock;
+impl Clock for SysClock {
+    fn now_ms(&self) -> u64 {
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+    }
 }
 
 pub(crate) type Shared = Mutex<Host>;
@@ -189,6 +208,46 @@ async fn bento_file(app: tauri::AppHandle, webview: tauri::Webview, msg: String,
         }
         _ => Err("unknown op".into()),
     };
+    reply(&id, r)
+}
+
+/// The identity calls (whoami, sign; unwrap, resolve and share are not built).
+/// Two gates in front of the agent, both HOST-side because Tauri cannot tell
+/// frames apart: this webview's capability, then `armed_genuine` (the bytes
+/// served for THIS load were genuine). An unknown document gets file commands
+/// only. Linux/WebKitGTK only until the WebView2 rigs have run.
+#[tauri::command]
+async fn bento_id(app: tauri::AppHandle, webview: tauri::Webview, msg: String, cap: Option<String>) -> String {
+    let m: serde_json::Value = match serde_json::from_str(&msg) { Ok(m) => m, Err(_) => return String::new() };
+    let id = m["id"].clone();
+    let label = webview.label().to_string();
+    let state = app.state::<Shared>();
+    let mut guard = state.lock().unwrap();
+    let h = &mut *guard;
+    if let Err(e) = h.reg.check(&label, cap.as_deref()) {
+        eprintln!("IPC bento_id op={} id={id} webview={label} REFUSED: {e}", m["op"]);
+        return reply(&id, Err(e.into()));
+    }
+    if !cfg!(target_os = "linux") {
+        eprintln!("IPC bento_id op={} id={id} webview={label} REFUSED: unavailable (platform)", m["op"]);
+        return reply(&id, Err("unavailable".into()));
+    }
+    if !h.reg.loads.get(&label).map(|l| l.armed_genuine()).unwrap_or(false) {
+        eprintln!("IPC bento_id op={} id={id} webview={label} REFUSED: unavailable (not genuine)", m["op"]);
+        return reply(&id, Err("unavailable".into()));
+    }
+    let doc_id = h.docs.iter().find(|d| d.label == label).and_then(|d| origin::doc_id(&d.bytes));
+    let caller = Caller { verified: true, doc_id };
+    let r = match m["op"].as_str() {
+        Some("whoami") => Err("no-identity".to_string()),
+        Some("sign") => h
+            .agent
+            .sign(&caller, m["purpose"].as_str().unwrap_or(""), m["payload"].as_str().unwrap_or(""))
+            .map(|s| serde_json::json!({ "sig": s.sig, "pub": s.pub_key }))
+            .map_err(|r| r.as_str().to_string()),
+        _ => Err("unavailable".into()),
+    };
+    eprintln!("IPC bento_id op={} id={id} webview={label} AGENT: {}", m["op"], match &r { Ok(_) => "ok".to_string(), Err(e) => e.clone() });
     reply(&id, r)
 }
 
@@ -330,11 +389,11 @@ pub(crate) fn recreate(app: &tauri::AppHandle, label: &str, expect_starts: Optio
 
 #[cfg(not(feature = "rig"))]
 fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
-    tauri::generate_handler![bento_arm, bento_file]
+    tauri::generate_handler![bento_arm, bento_file, bento_id]
 }
 #[cfg(feature = "rig")]
 fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
-    tauri::generate_handler![bento_arm, bento_file, rig::rig_stash, rig::rig_done, rig::rig_recreate]
+    tauri::generate_handler![bento_arm, bento_file, bento_id, rig::rig_stash, rig::rig_done, rig::rig_recreate]
 }
 
 fn data_dir() -> PathBuf {
@@ -376,7 +435,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .manage(Mutex::new(Host { docs, reg: Registry::default(), trust, salt, index, data_dir }))
+        .manage(Mutex::new(Host { docs, reg: Registry::default(), trust, salt, index, data_dir, agent: Agent::new(NoStore, SysClock, Policy::default()) }))
         .register_uri_scheme_protocol("bento", |ctx, req| {
             let not_found = || http::Response::builder().status(404).body(Vec::new()).unwrap();
             let state = ctx.app_handle().state::<Shared>();

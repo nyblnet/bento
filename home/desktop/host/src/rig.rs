@@ -33,9 +33,10 @@ pub fn init_script(app: &tauri::AppHandle, label: &str, init: String) -> String 
     let init = init.replacen("armed = true\n", "armed = true; window.__rigCap = cap\n", 1);
     assert!(init.contains("window.__rigCap = cap"), "rig: the shim's arming line moved");
     format!(
-        "{init}window.__RIG_INVOKE_KEY={:?};window.__RIG_LABEL={b:?};window.__RIG_FULL_LABEL={label:?};window.__RIG_WATCHDOG={};window.__RIG_PEER={peer:?};window.__RIG_ALL={:?};\n{PROBE};\n",
+        "{init}window.__RIG_INVOKE_KEY={:?};window.__RIG_LABEL={b:?};window.__RIG_FULL_LABEL={label:?};window.__RIG_WATCHDOG={};window.__RIG_WEDGE={};window.__RIG_PEER={peer:?};window.__RIG_ALL={:?};\n{PROBE};\n",
         app.invoke_key(),
         std::env::var_os("BENTO_RIG_WATCHDOG").is_some(),
+        std::env::var_os("BENTO_RIG_WEDGE").is_some(),
         labels.join(","),
     )
 }
@@ -45,6 +46,11 @@ pub fn rig_stash(key: String, value: Option<String>) -> Option<String> {
     let mut g = STASH.lock().unwrap();
     let m = g.get_or_insert_with(HashMap::new);
     if let (true, Some(v)) = (key.ends_with(".step"), &value) { eprintln!("STEP {key} = {v}") }
+    // §19h heartbeats: the wedge scenario's shell reads these files, so a page
+    // whose web process is stopped is seen to stop counting
+    if let (true, Some(v), Ok(dir)) = (key.ends_with(".hb"), &value, std::env::var("BENTO_HB_DIR")) {
+        let _ = std::fs::write(std::path::Path::new(&dir).join(&key), v);
+    }
     match value {
         Some(v) => {
             m.insert(key, v);
