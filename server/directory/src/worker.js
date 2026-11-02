@@ -571,6 +571,7 @@ export class Address {
       const f = await s.get('fpend')
       if (!f || f.expires <= now || f.attempts >= LIMITS.codeAttempts) return out(400, { error: 'invalid' })
       if (!same(await tokenHash(a.token), f.hash)) { f.attempts++; await s.put('fpend', f); return out(400, { error: 'invalid' }) }
+      // (`frz` here is belt and braces: a freeze deletes `fpend`, so a used token is already gone)
       if (!(await live()) || (await s.get('frz'))) return out(400, { error: 'invalid' })
       // resolvable ONLY by the recovery code (or the org), never by a device's
       // old key: the case this exists for is a thief holding the devices

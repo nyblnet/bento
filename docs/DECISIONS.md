@@ -11544,3 +11544,34 @@ installed jsdom.
   end, including the encrypted-title rig with jsdom hidden, which must turn the
   step red. It also checks that every allowlist entry's rig still prints its
   line, and that every rig step in every CI file runs through the wrapper.
+
+
+## 2026-11-02 — bento/connect directory: rotation states, freeze, and the consent it verifies
+
+The directory (`server/directory`) now has the binding states a key change
+needs: `active`, `pending` and `frozen`, each signed inside `att.`.
+
+- **A rotation is contestable for 72 hours.** The new `bind.` is signed by the
+  new key, the OLD key signs the same bytes, the request carries consent, and
+  a mailed code is signed by the new key. Lookups keep serving the old binding
+  as `pending` until the window passes, so pins don't move. Then the new
+  binding is served with `rotSig`, the old key's signature over it, which is
+  what lets a pinner follow without a warning. The old key co-signs the exact
+  `bind.` bytes rather than a new statement, so no layout was added.
+- **Consent is verified by the directory itself, against a challenge it
+  issued.** `/v1/challenge` issues a stateless, sealed challenge (60 seconds,
+  bound to one address). The Address object spends it before checking
+  anything, so a failed attempt still uses it up. The directory accepts a
+  `cns.` from a consent key certified by the live account key, or, for hosts
+  without one, a WebAuthn assertion over the hash of the `cns.` the directory
+  REBUILDS from its own audience, challenge and payload. It never parses a
+  transcript from the request. Desktop native origins are self-reported, so
+  they are never consent evidence.
+- **Email alone can freeze, never decide.** The freeze link opens a page; only a
+  POST of its single-use token freezes, because mail scanners fetch links.
+  While frozen, neither key is honoured, including the holder delete, which
+  would otherwise reopen the address to an email-only re-bind.
+- **Rotation ships OFF** (`ROTATION` unset answers 404). A pending window is safe
+  only if a device holding the old key can say "this wasn't me", and that
+  request needs a statement kernel hasn't defined. Until it exists, a thief
+  holding the old key and the mailbox could rotate first.

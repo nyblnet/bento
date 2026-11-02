@@ -50,6 +50,9 @@ export async function verifyDirConsent(env, o) {
       spend: () => true, // spent by the caller, first, before any of this ran
     })
     if (!v.ok) return no(`cns:${v.reason}`)
+    // Unreachable while each purpose authorises exactly one statement family
+    // (kernel's payload-family check already refuses a `link` cns. over a
+    // `bind.`). Kept so a future purpose sharing a family can't slip through.
     if (v.value.purpose !== o.purpose) return no('cns:purpose')
     return { ok: true, via: 'consent-key' }
   }

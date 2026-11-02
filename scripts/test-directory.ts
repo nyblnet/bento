@@ -16,7 +16,14 @@
 //   · bind/start answers 202 whatever happens (no existence or limit oracle);
 //   · per-address mail limits stop mail-bombing; per-IP limits are enforced;
 //   · deletion (holder-signed, or by mailed code) leaves a SIGNED tombstone;
-//   · no raw address or IP is ever written to storage.
+//   · no raw address or IP is ever written to storage;
+//   · rotation: old-key vouching + consent + the mailed code → 72 h pending
+//     (pins don't move) → active with the old key's signature; refusals for
+//     replay, relay, payload swap and expiry (native cns. AND WebAuthn), each
+//     beside a working control; the WebAuthn origin, type, flag, sign-count,
+//     cross-origin and lockout rows;
+//   · freeze: only a POSTed single-use token freezes, a freeze ends a pending
+//     rotation, and a frozen binding honours neither key.
 
 import worker, { Address, Cred, Ledger, LIMITS } from '../server/directory/src/worker.js'
 import { addressKey, normalize } from '../server/directory/src/address.js'
@@ -434,7 +441,7 @@ const alice = await person('alice@example.com', 'Alice')
     const s = await stmtFor(next, seq, await hashOf(was))
     return { stmt: s.text, sig: s.sig, oldSig: await owner.k.sign(s.text), was }
   }
-  const rotStart = async (body: Record<string, unknown>) => { const r = await api("POST", "/v1/rotate/start", body, freshIp()); if (process.env.DBG) console.log("rot", r.status, JSON.stringify(r.j)); return r }
+  const rotStart = (body: Record<string, unknown>) => api("POST", "/v1/rotate/start", body, freshIp())
   async function rotComplete(next: P, stmt: string) {
     const code = codeFor(next.email)!
     return api('POST', '/v1/rotate/complete', { email: next.email, code, sig: await next.k.sign(buildCmp(await hashOf(stmt), code)) }, freshIp())
