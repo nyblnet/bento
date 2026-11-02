@@ -164,6 +164,19 @@ export function stripMarkerEscapes(s: string): string {
   return s.split(FORMULA).map((part, i) => (i % 2 ? part : part.replace(/\\([*_~`-])/g, '$1'))).join('')
 }
 
+/** Keep the spaces of one line of text. A text box paints with
+ *  `white-space: normal`, so a run of spaces, a leading space and a trailing
+ *  space all collapse (a pasted monospace table lost its columns, #750). Each
+ *  run keeps an ordinary space only where a line may wrap — its LAST one — and
+ *  spells the rest as hard spaces, exactly what typing in the box does; a tab
+ *  is four. Works on text and on escaped html alike (it only touches spaces). */
+export function keepSpaces(line: string): string {
+  const NB = '\u00a0'
+  return line.replace(/\t/g, NB.repeat(4))
+    .replace(/^ +/, (run) => NB.repeat(run.length)).replace(/ +$/, (run) => NB.repeat(run.length))
+    .replace(/ {2,}/g, (run) => NB.repeat(run.length - 1) + ' ')
+}
+
 /** Pasted plain text → the inline-HTML subset (bold/italic/strike/code/bullets/<br>).
  *  Backslash escapes markers: \*x\* pastes as literal *x*. */
 export function markdownToHtml(text: string): string {
@@ -195,7 +208,7 @@ export function markdownToHtml(text: string): string {
       s = s.replace(/(?<![_\w])_([^_]+)_(?![\w])/g, '<i>$1</i>')
       s = s.replace(/~~([^~]+)~~/g, '<s>$1</s>')
       s = s.replace(/`([^`]+)`/g, '<code>$1</code>')
-      return s
+      return keepSpaces(s)
     })
     .join('<br>')
   return out.replace(/(\d+)/g, (_, i) => parked[+i])

@@ -584,3 +584,10 @@ runs:
       # inbound, and an unknown key from a peer is applied but never echoed.
       shell: bento-step {0}
       run: node scripts/test-slides-sync-allowlist.ts
+
+    - name: Paste keeps spaces rig
+      # Pasted plain text keeps runs of spaces, leading indentation and tabs
+      # (a text box paints with white-space: normal), and the PowerPoint export
+      # carries them through (#750).
+      shell: bento-step {0}
+      run: node scripts/test-slides-paste-spaces.ts

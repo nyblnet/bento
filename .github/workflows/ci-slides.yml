@@ -251,6 +251,11 @@ jobs:
         # Outdent do the same; committed, one undo step; Tab outside a list —
         # a plain box, a table cell — is unchanged.
         run: node scripts/test-slides-bullet-indent-browser.mjs
+      - name: Paste keeps spaces in Chromium
+        # #750: real paste events keep runs of spaces (plain text, <pre> and
+        # white-space: pre html), columns line up in a monospace box, ordinary
+        # html still collapses, and a paste with no box open keeps them too.
+        run: node scripts/test-slides-paste-spaces-browser.mjs
       - name: Leaving an inline code run in Chromium
         # A text box that already ends a line in `code` (reopened, pasted):
         # typing at the end of that line is plain text, at the box's end or
