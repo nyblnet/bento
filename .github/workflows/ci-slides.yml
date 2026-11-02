@@ -257,6 +257,10 @@ jobs:
         # never links, the link commits with its href and is painted in the
         # thumbnail, and pasted text with a URL is linked.
         run: node scripts/test-slides-autolink-browser.mjs
+      - name: Links in the speaker view in Chromium
+        # A click on a link in the popup's current, next, rail or grid previews
+        # never navigates the popup that holds the presenter's notes.
+        run: node scripts/test-slides-speaker-links-browser.mjs
       - name: Leaving an inline code run in Chromium
         # A text box that already ends a line in `code` (reopened, pasted):
         # typing at the end of that line is plain text, at the box's end or
