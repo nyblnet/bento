@@ -11,6 +11,12 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Web addresses become links as you type and paste.** Type or paste
+  `https://github.com` into a text box and it becomes a link once the word is
+  finished (a space or Enter), leaving a full stop, comma or closing bracket
+  after it outside the link; ⌘Z straight after turns it back into plain text.
+  Only http and https addresses are linked. Thanks to Hermholtz.
+
 ## [1.2.10] — 2026-10-24
 
 - **Code can type itself out.** Give a code block the new Typewriter effect

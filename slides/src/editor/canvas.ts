@@ -11,7 +11,7 @@ import { t } from '../i18n'
 import { defaultShape, internAsset, readableInk, uid, type ShapeElement, type SlideElement, type TableElement, type TextElement } from '../model'
 import { estimatedFrames, fencedElements, splitFences, toggleCodeOnSelection, type FencePart, type PartFrame } from './codefence'
 import { cssColor, renderSlide, sanitizeHtml } from '../render'
-import { autoformatAtCaret, clearAutoformat, markdownToHtml, stripMarkerEscapes, undoAutoformat } from './markdown'
+import { autoformatAtCaret, autolinkAtCaret, clearAutoformat, markdownToHtml, stripMarkerEscapes, undoAutoformat } from './markdown'
 import { inList, shiftList, shiftListHtml, undoIndent } from './listindent'
 import { bulletsToLists } from './bullets'
 import { clipboardToHtml } from './paste'
@@ -1530,6 +1530,10 @@ export class SlideCanvas {
     // markdown affordances: **bold** / *italic* / `code` / ~~strike~~ / "- "
     // collapse as you type (⌘Z reverts, backslash escapes); pasted plain
     // text converts the same patterns
+    inner.addEventListener('beforeinput', (ev) => {
+      // Enter finishes a typed URL the way a space does
+      if (ev.inputType === 'insertParagraph' || ev.inputType === 'insertLineBreak') autolinkAtCaret(false)
+    }, { signal })
     inner.addEventListener('input', () => {
       if (!autoformatAtCaret()) clearAutoformat()
     }, { signal })

@@ -584,3 +584,10 @@ runs:
       # inbound, and an unknown key from a peer is applied but never echoed.
       shell: bento-step {0}
       run: node scripts/test-slides-sync-allowlist.ts
+
+    - name: Autolink rig
+      # Where a typed or pasted URL ends (trailing punctuation, balanced
+      # brackets), http(s) only, and pasted text turning bare URLs into links
+      # without reading _ or * inside one as emphasis (#723).
+      shell: bento-step {0}
+      run: node scripts/test-slides-autolink.ts
