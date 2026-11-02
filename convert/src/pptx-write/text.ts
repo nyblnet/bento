@@ -13,9 +13,10 @@
 // says so and why — a first-party writer is not bound by PptxGenJS's blind
 // spots (strike-through, hollow glyphs, real letter-spacing).
 //
-// No DOM anywhere: the input html is the sanitizer's inline subset
-// (render.ts ALLOWED_TAGS: B I U BR SPAN DIV P STRONG EM S CODE, and A whose
-// web href is the one attribute kept — every other attribute already stripped), which a ~40-line tokenizer covers completely. The writer
+// No DOM anywhere: the input html is the sanitizer's subset (render.ts
+// ALLOWED_TAGS: B I U BR SPAN DIV P STRONG EM S CODE, the list tags UL OL LI,
+// and A, whose web href is the one attribute kept — every other attribute is
+// already stripped), which a small tokenizer covers completely. The writer
 // must run under node, and pulling in a DOM shim for eleven known tags would
 // be the dependency this rework exists to delete.
 
@@ -208,14 +209,36 @@ const sameStyle = (a: RunStyle, b: RunStyle): boolean =>
   !a.bold === !b.bold && !a.italic === !b.italic && !a.underline === !b.underline &&
   !a.strike === !b.strike && !a.code === !b.code && a.href === b.href
 
+/** A list item's place: which list kind, how deep, and whether a UL sits
+ *  above it (render's `ul ul` rule draws those with a circle, not a disc). */
+export interface ListInfo {
+  ordered: boolean
+  /** 0 = top-level item; OOXML a:pPr lvl */
+  level: number
+  /** a UL somewhere above this item's own list (styles.css `ul ul`) */
+  nestedInUl: boolean
+  /** text inside a list that is not an item's first line — what follows a
+   *  nested list inside its item (`<li>a<ul>…</ul>more</li>`): it sits at the
+   *  item's indent, unbulleted */
+  continuation?: boolean
+}
+
+/** One OOXML paragraph: each list item gets its own; text outside lists
+ *  shares one, with a:br between its lines, as before lists were exported. */
+export interface InlinePara {
+  runs: InlineRun[]
+  list?: ListInfo
+}
+
 /**
- * Parse the sanitized inline subset into flat styled runs — #88's richRuns
- * walker without the DOM. b/strong, i/em, u, s/strike nest via a style stack;
- * br marks a break; span is transparent; any other tag (the sanitizer should
- * have unwrapped it, but paste boundaries have leaked before) contributes only
- * its children's text. Attributes are skipped unparsed — the sanitizer strips
- * them, and nothing here should trust one that survived — except an anchor's
- * href, which is read and held to safeHref's rule before it becomes a link.
+ * Parse the sanitized subset into PARAGRAPHS of flat styled runs — #88's
+ * richRuns walker without the DOM. b/strong, i/em, u, s/strike nest via a
+ * style stack; br marks a break; span is transparent; any other tag (the
+ * sanitizer should have unwrapped it, but paste boundaries have leaked before)
+ * contributes only its children's text. Attributes are skipped unparsed — the
+ * sanitizer strips them, and nothing here should trust one that survived —
+ * except an anchor's href, which is read and held to safeHref's rule before
+ * it becomes a link.
  *
  * ONE deliberate divergence from #88: div/p mark a break on OPEN as well as on
  * close. contentEditable's most common shape is `line1<div>line2</div>` — the
@@ -223,15 +246,50 @@ const sameStyle = (a: RunStyle, b: RunStyle): boolean =>
  * line1 to line2 (a real #88 bug, visible in its own output). The breakAfter
  * flag is idempotent, so `</div><div>` seams still collapse to one break.
  *
+ * Lists: every LI opens its own paragraph carrying its depth, so
+ * `<li>One<ul><li>Two</li></ul></li><li>Three</li>` is three paragraphs at
+ * levels 0, 1, 0 — the shape PowerPoint itself writes for a bulleted body.
+ * Text outside lists stays ONE paragraph with breaks, so a list-free element
+ * exports byte-identically to before.
+ *
  * The TRAILING-BREAK TRIM is #88's, kept exactly: contentEditable loves to
  * leave a final <br> (or an empty trailing <div>), and without the trim every
  * exported box gains a phantom empty line that PowerPoint then includes in
  * anchor math — a bottom-anchored label visibly floats one line high. The rig
- * demonstrates the phantom by passing trimTrailingBreak=false.
+ * demonstrates the phantom by passing trimTrailingBreak=false. With lists it
+ * applies per paragraph: `<li>One<br></li>` is one line, not two.
  */
-export function parseInlineHtml(html: string, trimTrailingBreak = true): InlineRun[] {
-  const runs: InlineRun[] = []
+export function parseParagraphs(html: string, trimTrailingBreak = true): InlinePara[] {
+  const paras: InlinePara[] = []
+  let cur: InlinePara = { runs: [] }
+  /** keep `cur` even when empty: an item the author made (an empty bullet) */
+  let curExplicit = false
   const stack: RunStyle[] = [{}]
+  /** open UL/OL, outermost first: true = OL */
+  const lists: boolean[] = []
+
+  const listInfo = (continuation: boolean): ListInfo | undefined => {
+    if (!lists.length) return undefined
+    const info: ListInfo = {
+      ordered: lists[lists.length - 1],
+      level: lists.length - 1,
+      nestedInUl: lists.slice(0, -1).some((ordered) => !ordered),
+    }
+    if (continuation) info.continuation = true
+    return info
+  }
+  const openPara = (list: ListInfo | undefined, explicit: boolean) => {
+    const runs = cur.runs
+    // a list boundary ends a line, and layout drops the space before it
+    const last = runs[runs.length - 1]
+    if (last && !last.breakAfter) {
+      last.text = last.text.replace(/ +$/, '')
+      if (!last.text) runs.pop()
+    }
+    if (runs.length || curExplicit) paras.push(cur)
+    cur = list ? { runs: [], list } : { runs: [] }
+    curExplicit = explicit
+  }
 
   const pushText = (raw: string) => {
     // The canvas paints this html with white-space:normal, so runs of
@@ -242,6 +300,7 @@ export function parseInlineHtml(html: string, trimTrailingBreak = true): InlineR
     // same treatment the entity decoder gives an encoded one — dropped, so it
     // costs a character instead of throwing away the whole export at serialize.
     let text = scrubC0(decodeEntities(raw)).replace(/[ \t\r\n]+/g, ' ')
+    const runs = cur.runs
     const last = runs[runs.length - 1]
     // browser layout also eats whitespace at a line start / across a seam
     if (!last || last.breakAfter || last.text.endsWith(' ')) text = text.replace(/^ +/, '')
@@ -252,6 +311,7 @@ export function parseInlineHtml(html: string, trimTrailingBreak = true): InlineR
   }
 
   const markBreak = () => {
+    const runs = cur.runs
     if (runs.length) runs[runs.length - 1].breakAfter = true
     else runs.push({ text: '', style: {}, breakAfter: true })
   }
@@ -264,7 +324,27 @@ export function parseInlineHtml(html: string, trimTrailingBreak = true): InlineR
     const closing = m[0][1] === '/'
     const tag = m[1].toUpperCase()
     if (tag === 'BR') { markBreak(); continue }
-    if (tag === 'DIV' || tag === 'P') { if (runs.length) markBreak(); continue }
+    if (tag === 'DIV' || tag === 'P') { if (cur.runs.length) markBreak(); continue }
+    if (tag === 'UL' || tag === 'OL') {
+      if (!closing) {
+        // a list is a block: whatever came before it ends here
+        openPara(undefined, false)
+        lists.push(tag === 'OL')
+      } else if (lists.length) {
+        lists.pop()
+        // back in the enclosing item, if any: its text resumes unbulleted at
+        // that item's indent; outside every list, a plain paragraph
+        openPara(listInfo(true), false)
+      }
+      continue
+    }
+    if (tag === 'LI') {
+      // a stray LI outside any list: the sanitizer would keep it, the
+      // browser paints a block — a line of its own, no bullet
+      if (!lists.length) { if (cur.runs.length) markBreak(); continue }
+      openPara(listInfo(closing), !closing)
+      continue
+    }
     const next = { ...stack[stack.length - 1] }
     switch (tag) {
       case 'B': case 'STRONG': next.bold = true; break
@@ -281,9 +361,31 @@ export function parseInlineHtml(html: string, trimTrailingBreak = true): InlineR
     else stack.push(next)
   }
   if (pos < html.length) pushText(html.slice(pos))
+  // the last paragraph is not trimmed of spaces: list-free text keeps exactly
+  // the runs it always had
+  if (cur.runs.length || curExplicit || !paras.length) paras.push(cur)
 
-  if (trimTrailingBreak && runs.length) runs[runs.length - 1].breakAfter = false
-  return runs
+  if (trimTrailingBreak) {
+    for (const p of paras) {
+      const last = p.runs[p.runs.length - 1]
+      if (!last) continue
+      last.breakAfter = false
+      // `<li><br></li>` (contentEditable's empty bullet) holds no line
+      if (p.list && !last.text && p.runs.length === 1) p.runs.pop()
+    }
+  }
+  return paras
+}
+
+/** Every paragraph's runs in one stream, a break at each seam — the view
+ *  from before lists, for callers that want runs and nothing else. */
+export function parseInlineHtml(html: string, trimTrailingBreak = true): InlineRun[] {
+  const out: InlineRun[] = []
+  for (const p of parseParagraphs(html, trimTrailingBreak)) {
+    if (out.length && p.runs.length) out[out.length - 1].breakAfter = true
+    out.push(...p.runs)
+  }
+  return out
 }
 
 // --- dynamic fields -----------------------------------------------------------
@@ -432,34 +534,67 @@ export function textSp(el: TextElIn, opts: TextSpOpts): XNode | null {
     return x('a:rPr', attrs, kids)
   }
 
+  // Paragraph properties. A list item carries its level, its hanging indent
+  // and its bullet, all mirroring styles.css: each list level indents
+  // 1.35em with the marker hanging in that gutter (outside), `ul` draws a
+  // disc, `ul ul` a circle, `ol` decimal numbers — which PowerPoint keeps
+  // LIVE as buAutoNum, so renumbering follows edits there too. Centred and
+  // right-aligned lists keep the hanging indent: styles.css draws their
+  // markers inside the line instead, but a zero indent in OOXML glues the
+  // bullet to the first word (rendered, LibreOffice), while the hang keeps a
+  // gap and still centres the line. Once an element has a list, its other paragraphs say
+  // buNone outright rather than trusting what an inherited style might add.
+  const hang = 1.35 * el.fontSize
+  const lineSpacing = el.lineHeight > 0 && Number.isFinite(el.lineHeight)
+    ? [x('a:lnSpc', undefined, [x('a:spcPct', { val: Math.round(el.lineHeight * 100000) })])]
+    : []
+  const paraPr = (list: ListInfo | undefined, hasLists: boolean): XNode => {
+    if (!list) return x('a:pPr', { algn: ALGN[el.align] }, hasLists ? [...lineSpacing, x('a:buNone')] : lineSpacing.length ? lineSpacing : undefined)
+    // OOXML has nine levels (lvl 0..8); deeper html nests share the ninth
+    const level = Math.min(list.level, 8)
+    const marL = clamp(pxEmu((level + 1) * hang), 0, 51206400)
+    const indent = list.continuation ? 0 : -clamp(pxEmu(hang), 0, 51206400)
+    const attrs: Record<string, string | number> = { marL, indent }
+    if (level) attrs.lvl = level
+    attrs.algn = ALGN[el.align]
+    // schema order in CT_TextParagraphProperties: lnSpc, …, buFont, bullet
+    const bullet: XNode[] = list.continuation
+      ? [x('a:buNone')]
+      : list.ordered
+        ? [x('a:buAutoNum', { type: 'arabicPeriod' })]
+        : [x('a:buFont', { typeface: 'Arial' }), x('a:buChar', { char: list.nestedInUl ? '◦' : '•' })]
+    return x('a:pPr', attrs, [...lineSpacing, ...bullet])
+  }
+
   // runs → a:r / a:fld / a:br
   let frozenTokens = 0
   let padLost = false
   let fldSeq = 0
-  const paraKids: XChild[] = []
-  for (const run of parseInlineHtml(el.html)) {
-    if (run.text) {
-      for (const piece of splitFields(run.text, opts.fields, () => { frozenTokens++ })) {
-        if (piece.kind === 'text') {
-          if (piece.text) paraKids.push(x('a:r', undefined, [runRPr(run.style), x('a:t', undefined, [piece.text])]))
-        } else {
-          if (piece.frozenPad) padLost = true
-          // the id must be GUID-shaped; deterministic from shapeId + ordinal
-          // so identical input bytes give identical output (diffable exports)
-          const guid = `{BE27B040-0000-4000-8000-${(opts.shapeId * 4096 + fldSeq++).toString(16).toUpperCase().padStart(12, '0')}}`
-          paraKids.push(x('a:fld', { id: guid, type: piece.type }, [runRPr(run.style), x('a:t', undefined, [piece.cached])]))
+  const paraNodes: XNode[] = []
+  const paras = parseParagraphs(el.html)
+  const hasLists = paras.some((p) => p.list)
+  for (const para of paras) {
+    const paraKids: XChild[] = []
+    for (const run of para.runs) {
+      if (run.text) {
+        for (const piece of splitFields(run.text, opts.fields, () => { frozenTokens++ })) {
+          if (piece.kind === 'text') {
+            if (piece.text) paraKids.push(x('a:r', undefined, [runRPr(run.style), x('a:t', undefined, [piece.text])]))
+          } else {
+            if (piece.frozenPad) padLost = true
+            // the id must be GUID-shaped; deterministic from shapeId + ordinal
+            // so identical input bytes give identical output (diffable exports)
+            const guid = `{BE27B040-0000-4000-8000-${(opts.shapeId * 4096 + fldSeq++).toString(16).toUpperCase().padStart(12, '0')}}`
+            paraKids.push(x('a:fld', { id: guid, type: piece.type }, [runRPr(run.style), x('a:t', undefined, [piece.cached])]))
+          }
         }
       }
+      if (run.breakAfter) paraKids.push(x('a:br', undefined, [runRPr(run.style)]))
     }
-    if (run.breakAfter) paraKids.push(x('a:br', undefined, [runRPr(run.style)]))
+    paraNodes.push(x('a:p', undefined, [paraPr(para.list, hasLists), ...paraKids]))
   }
   if (frozenTokens) report?.add('approximated', 'text-field-frozen', where, 'dynamic field resolved to literal text (PowerPoint will not re-compute it)')
   if (padLost) report?.add('approximated', 'text-field-pad-lost', where, 'zero-padded {{page:N}} exported as a live slide-number field; the pad is lost when PowerPoint re-renders it')
-
-  const pPr = x('a:pPr', { algn: ALGN[el.align] },
-    el.lineHeight > 0 && Number.isFinite(el.lineHeight)
-      ? [x('a:lnSpc', undefined, [x('a:spcPct', { val: Math.round(el.lineHeight * 100000) })])]
-      : undefined)
 
   const rot = ((el.rotation % 360) + 360) % 360
 
@@ -489,7 +624,7 @@ export function textSp(el: TextElIn, opts: TextSpOpts): XNode | null {
       x('a:lstStyle'),
       // a txBody must contain at least one a:p; an empty element still
       // exports as an (empty) editable box
-      x('a:p', undefined, [pPr, ...paraKids]),
+      ...paraNodes,
     ]),
   ])
 }

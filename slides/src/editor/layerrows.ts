@@ -45,6 +45,8 @@ export type LayerRow = {
   /** the element belongs to a group (indented one level) */
   grouped: boolean
   groupId?: string
+  /** the element is locked (#838) */
+  locked?: boolean
 }
 
 const LABEL_MAX = 24
@@ -82,7 +84,7 @@ export function labelFor(el: SlideElement, tr: (s: string) => string = (s) => s)
 /** Rows top-first. */
 export function layerRows(slide: Pick<Slide, 'elements'>, tr?: (s: string) => string): LayerRow[] {
   const rows: LayerRow[] = slide.elements.map((el, index) => ({
-    id: el.id, index, type: el.type, label: labelFor(el, tr), grouped: !!el.groupId, groupId: el.groupId,
+    id: el.id, index, type: el.type, label: labelFor(el, tr), grouped: !!el.groupId, groupId: el.groupId, locked: !!el.locked,
   }))
   return rows.reverse()
 }
@@ -121,7 +123,7 @@ export function highlighted(rows: readonly LayerRow[], selection: readonly strin
 export function rowSignature(slide: Pick<Slide, 'elements'>, tr?: (s: string) => string): { order: string; labels: string } {
   const rows = layerRows(slide, tr)
   return {
-    order: rows.map((r) => `${r.id}\u001f${r.type}\u001f${r.groupId ?? ''}`).join('\u001e'),
+    order: rows.map((r) => `${r.id}\u001f${r.type}\u001f${r.groupId ?? ''}\u001f${r.locked ? 1 : 0}`).join('\u001e'),
     labels: rows.map((r) => r.label).join('\u001e'),
   }
 }

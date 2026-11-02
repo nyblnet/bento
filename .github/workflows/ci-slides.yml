@@ -161,6 +161,11 @@ jobs:
         # primary in both themes, and N language rebuilds leaving one set of
         # window/document listeners and bar observers.
         run: node scripts/test-slides-topbar-browser.mjs
+      - name: A slide can be dragged to the end of the sidebar in Chromium
+        # #761: the gap after the last thumbnail and the New slide button both
+        # accept a slide drag and land it last, its states travelling with it;
+        # a drop on a thumb still moves, and a non-slide drag is left alone.
+        run: node scripts/test-slides-sidebar-drop-end-browser.mjs
       - name: One field look in Chromium
         # Every chrome text field, select and textarea (each element kind's
         # panel, About, the save-as dialogs, Share, comments) has the shared
@@ -207,6 +212,13 @@ jobs:
         # range across a parent copies parents only, never its states; plural
         # and singular toasts.
         run: node scripts/test-slides-copy-slides-browser.mjs
+      - name: Locked elements in Chromium
+        # #838: a locked backdrop no longer swallows a marquee over the items
+        # above it (the unlocked control does) or a click; Layers and Alt-click
+        # still reach it; selected it shows the lock marker with no Moveable
+        # handles and arrows do not move it; ⌘L toggles, and with nothing
+        # selected it is left to the browser.
+        run: node scripts/test-slides-lock-browser.mjs
       - name: Clicking a slide never moves the list under the pointer in Chromium
         # With the current slide scrolled out of view, a click on a visible
         # thumb (plain, hidden, parent, state) leaves the list and the thumb
@@ -251,6 +263,10 @@ jobs:
         # Outdent do the same; committed, one undo step; Tab outside a list —
         # a plain box, a table cell — is unchanged.
         run: node scripts/test-slides-bullet-indent-browser.mjs
+      - name: Typed backslashes in Chromium
+        # #697: `a\-b` typed and committed keeps its backslash, `a\\-b` keeps
+        # both after the first blur and after reopening; `\*x\*` still collapses.
+        run: node scripts/test-slides-backslash-browser.mjs
       - name: Leaving an inline code run in Chromium
         # A text box that already ends a line in `code` (reopened, pasted):
         # typing at the end of that line is plain text, at the box's end or

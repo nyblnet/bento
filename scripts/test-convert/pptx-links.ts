@@ -136,6 +136,8 @@ for (const [html, label] of [
   ['Visit <a href="https://example.com/a?x=1&amp;y=2">our site</a> now', 'a link inside a sentence'],
   ['<a href="https://b.example/">plain <b>bold</b></a> after', 'formatting inside a link stays one link'],
   ['<a href="https://a.example/">one</a> <a href="https://z.example/">two</a>', 'two links side by side'],
+  ['<ul><li>See <a href="https://a.example/">this</a></li><li>two<ul><li><a href="https://z.example/">deep</a></li></ul></li></ul>',
+    'links inside list items, nested too'],
 ] as const) {
   const back = await roundTrip(html)
   ok(back.html === html, `${label}: comes back as the same html (got ${back.html})`)
