@@ -161,6 +161,11 @@ jobs:
         # primary in both themes, and N language rebuilds leaving one set of
         # window/document listeners and bar observers.
         run: node scripts/test-slides-topbar-browser.mjs
+      - name: A slide can be dragged to the end of the sidebar in Chromium
+        # #761: the gap after the last thumbnail and the New slide button both
+        # accept a slide drag and land it last, its states travelling with it;
+        # a drop on a thumb still moves, and a non-slide drag is left alone.
+        run: node scripts/test-slides-sidebar-drop-end-browser.mjs
       - name: One field look in Chromium
         # Every chrome text field, select and textarea (each element kind's
         # panel, About, the save-as dialogs, Share, comments) has the shared
@@ -256,6 +261,10 @@ jobs:
         # white-space: pre html), columns line up in a monospace box, ordinary
         # html still collapses, and a paste with no box open keeps them too.
         run: node scripts/test-slides-paste-spaces-browser.mjs
+      - name: Typed backslashes in Chromium
+        # #697: `a\-b` typed and committed keeps its backslash, `a\\-b` keeps
+        # both after the first blur and after reopening; `\*x\*` still collapses.
+        run: node scripts/test-slides-backslash-browser.mjs
       - name: Leaving an inline code run in Chromium
         # A text box that already ends a line in `code` (reopened, pasted):
         # typing at the end of that line is plain text, at the box's end or
@@ -277,3 +286,10 @@ jobs:
         # leftover lines are hidden for the edit, and a screenshot of the strip
         # beside the caret has no ring-blue in it; the text does not move.
         run: node scripts/test-slides-caret-ring-browser.mjs
+      - name: A formula's symbols stay on their box mid-morph in Chromium
+        # #855: the symbols ride 'spring' while the box rides power2.inOut, so
+        # the symbol translate is divided by the box's OWN eased scale. Sampled
+        # mid-morph on the manual clock, every travelling symbol sits within 2px
+        # of box scale + spring travel; a positive control shows the travel is
+        # on screen and the spring-scale counter-scale would miss.
+        run: node scripts/test-slides-math-morph-browser.mjs
