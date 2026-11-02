@@ -11,6 +11,11 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Copy works on text that uses the deck's font.** ⌘C and the Copy menu item did
+  nothing, silently, on a text box that had no font of its own (the usual case for
+  decks written as JSON), so the next paste brought back the old clipboard. Such
+  text now copies, and its embedded theme font travels with it. Thanks to b-per.
+
 ## [1.2.10] — 2026-10-24
 
 - **Code can type itself out.** Give a code block the new Typewriter effect
