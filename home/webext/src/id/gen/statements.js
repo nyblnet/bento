@@ -8,12 +8,13 @@
 // device is mine" (dev.), "this key is alice@example.com" (bind.), "the directory
 // checked that binding" (att.), "this person consented to exactly this action"
 // (cns.), and the directory's deletion record, delete request and email-code
-// completion (tomb., del., cmp.). The agents (Swift, Kotlin, Rust, and the
-// extension's JS) build and check them, and so do the directory and the
-// document. If two of them read the same bytes differently, a signature means
-// different things to different verifiers. So this module is the reference,
-// and kernel/fixtures/identity-v1.json is the conformance contract every host
-// must pass.
+// completion (tomb., del., cmp.), the account's requests to the directory
+// (dreq.) and the old key's vouch for a rotation (rot.). The agents (Swift,
+// Kotlin, Rust, and the extension's JS) build and check them, and so do the
+// directory and the document. If two of them read the same bytes differently,
+// a signature means different things to different verifiers. So this module is
+// the reference, and kernel/fixtures/identity-v1.json is the conformance
+// contract every host must pass.
 //
 // THE FAMILY RULES — the same as the shipped collab statements (inv./dlg./rev.):
 //   - A statement is dot-joined UTF-8 text, signed over its EXACT bytes. Nobody
@@ -352,15 +353,17 @@ export function buildBind(c          )         {
     c.name ? b64uEnc(utf8(c.name)) : '', c.seq, c.prev ?? '', c.created, c.expires].join('.')
 }
 
-export async function verifyBind(text        , sig        , opts                                  ) 
-                             {
+/** The grammar of a bind. text, without its lifetime or signature: shared by
+ *  verifyBind and verifyRotation (which must read the PINNED binding even after
+ *  it has expired). */
+async function parseBind(text        , kxMode        )                             {
   const p = fields(text, 'bind', 9)
   if (!p) return no('grammar')
   const [, addressF, accountPub, kxF, nameF, seqF, prevF, createdF, expiresF] = p
   const address = freeText(addressF)
   if (address === null || !isNormalAddress(address)) return no('address')
   if (!(await isSigningKey(accountPub))) return no('key')
-  const kx = await kxSlot(kxF, KX_SLOT[opts.kxMode ?? KX_MODE].bind, [accountPub])
+  const kx = await kxSlot(kxF, KX_SLOT[kxMode].bind, [accountPub])
   if (kx === false) return no('kx')
   let name                = null
   if (nameF !== '') { name = displayText(nameF); if (name === null) return no('name') }
@@ -370,10 +373,75 @@ export async function verifyBind(text        , sig        , opts                
   if (prevF !== '' && !isHash(prevF)) return no('prev')
   const created = ms(createdF), expires = ms(expiresF)
   if (created === null || expires === null) return no('grammar')
-  const life = lifetime(created, expires, opts.now)
-  if (life) return no(life)
-  if (!(await verifyStatementSig(accountPub, sig, text))) return no('signature')
   return { ok: true, value: { address, accountPub, kx, name, seq, prev: prevF || null, created, expires } }
+}
+
+export async function verifyBind(text        , sig        , opts                                  ) 
+                             {
+  const v = await parseBind(text, opts.kxMode ?? KX_MODE)
+  if (!v.ok) return v
+  const life = lifetime(v.value.created, v.value.expires, opts.now)
+  if (life) return no(life)
+  if (!(await verifyStatementSig(v.value.accountPub, sig, text))) return no('signature')
+  return v
+}
+
+// --- rot. — the OLD account key vouching for a rotation ------------------------
+
+/**
+ * `rot.<sha256(next bind text)>.<sha256(live bind text)>`, signed by the account
+ * key of the LIVE (old) binding.
+ *
+ * A rotation's continuity proof. It is its own statement, never a second
+ * signature over the new bind. bytes: a signature's meaning belongs in its own
+ * bytes, so nothing an account key signs about its own binding can be replayed
+ * as a vouch for a successor. It carries no challenge or time, because a client
+ * must be able to check it OFFLINE, against the binding it pinned, whenever the
+ * chain reaches it. The directory serves it beside the chain.
+ *
+ * A rotation resolved by the recovery code has no rot.: the old key was reported
+ * lost or contested, so a pinner warns. That is intended, and no directory
+ * marker may soften it.
+ */
+export function buildRot(nextBindHash        , liveBindHash        )         {
+  return ['rot', nextBindHash, liveBindHash].join('.')
+}
+
+                                                            
+
+/**
+ * Is `nextBindText` a genuine successor of `prevBindText` (the binding a client
+ * pinned)? All of: next is a valid binding signed by its OWN account key; same
+ * address; next.seq = prev.seq + 1; next.prev = sha256(prev text); the rot.
+ * names exactly sha256(next) then sha256(prev); and rotSig is by PREV's account
+ * key; and next was created within prev's lifetime (± SKEW_MS), else
+ * `stale-vouch`. The pinned binding is never checked against `now`, nor is its
+ * signature re-checked: the client checked them when it pinned, and a pin may
+ * outlive its expiry.
+ */
+export async function verifyRotation(prevBindText        , nextBindText        , nextSig        ,
+  rotText        , rotSig        , opts                                  )                             {
+  const kxMode = opts.kxMode ?? KX_MODE
+  const prev = await parseBind(prevBindText, kxMode)
+  if (!prev.ok) return no('prev')
+  const next = await verifyBind(nextBindText, nextSig, { now: opts.now, kxMode })
+  if (!next.ok) return no(`next-${next.reason}`)
+  if (next.value.address !== prev.value.address) return no('address')
+  if (next.value.seq !== prev.value.seq + 1) return no('seq')
+  const prevHash = await sha256b64u(prevBindText), nextHash = await sha256b64u(nextBindText)
+  if (next.value.prev !== prevHash) return no('chain')
+  // A key may vouch only for a successor minted while its own binding was live:
+  // its authority ends when its binding does, or a key leaked after expiry (a
+  // retired device) could turn a pinner's "key changed" warning into a silent
+  // follow. prev is still never checked against `now`, so a legitimate chain
+  // keeps verifying after its old binding expires.
+  if (next.value.created > prev.value.expires + SKEW_MS ||
+      next.value.created < prev.value.created - SKEW_MS) return no('stale-vouch')
+  const r = fields(rotText, 'rot', 3)
+  if (!r || !isHash(r[1]) || !isHash(r[2])) return no('rot-grammar')
+  if (r[1] !== nextHash || r[2] !== prevHash) return no('rot-mismatch')
+  if (!(await verifyStatementSig(prev.value.accountPub, rotSig, rotText))) return no('rot-signature')
+  return { ok: true, value: { prev: prev.value, next: next.value } }
 }
 
 // --- att. — the directory's attestation (signed by a directory key) ----------
@@ -503,6 +571,138 @@ export async function verifyCmp(text        , sig        , opts                 
   return { ok: true, value: { bindHash, code } }
 }
 
+// --- dreq. — an account-signed request to the directory ----------------------
+
+/**
+ * `dreq.<op>.<b64u(address)>.<bindHash>.<challenge>.<arg|empty>`
+ *
+ * Every agent-signed request that only the DIRECTORY verifies, in one layout
+ * with a closed op set. It is bound to a single-use challenge the directory
+ * issued (spent first, like cns.), so there is no replay window at all, where a
+ * timestamp would leave one. Signed by the account key of the binding named by
+ * bindHash, which must be the binding the directory currently serves as
+ * authoritative: during `pending` that is the OLD one, so a pending key can sign
+ * no request.
+ *
+ * Each op fixes its arg exactly; anything else is a grammar refusal:
+ *   contest   sha256(the pending bind. text)       "this wasn't me"
+ *   freeze    empty                                the owner's lost-or-stolen report
+ *   status    empty                                the signed status read
+ *   cred-add  sha256(attestationObject ‖ sha256(clientDataJSON)), the exact
+ *             registration bytes; not the credentialId alone, or the key
+ *             registered under an id could be swapped in transit. The tail is a
+ *             fixed 32 bytes, so the split between the two parts is bound (a
+ *             bare concatenation lets a byte move across the boundary under the
+ *             same arg); it is WebAuthn's own authenticatorData ‖ clientDataHash shape
+ *   cred-del  sha256(credentialId)
+ *   rc-enrol  sha256(the exact enrolment body), so the signature covers what is
+ *             enrolled
+ * State: while `frozen` only `status` is accepted; `contest` only while
+ * `pending`; cred-add, cred-del and rc-enrol only while `active`. Those three change who can recover
+ * the account, so the directory ALSO requires a cns. for them (purposes
+ * cred-add / cred-del / rc-enrol, payload = this dreq. text); `dreqNeedsConsent`
+ * names them. freeze, contest and status need only this signature: they remove
+ * power or read.
+ */
+                                                                                           
+const DREQ_OPS                    = Object.freeze(['contest', 'freeze', 'status', 'cred-add', 'cred-del', 'rc-enrol'])
+const DREQ_EMPTY_ARG = new Set        (['freeze', 'status'])
+const DREQ_CONSENT = new Set        (['cred-add', 'cred-del', 'rc-enrol'])
+export const dreqNeedsConsent = (op        )          => DREQ_CONSENT.has(op)
+/** frozen: status only. contest: only while pending (there is nothing else to
+ *  contest). cred-add / cred-del / rc-enrol: only while active. */
+function dreqStateAllows(op        , state          )          {
+  if (state === 'frozen') return op === 'status'
+  if (op === 'contest') return state === 'pending'
+  if (DREQ_CONSENT.has(op)) return state === 'active'
+  return state === 'active' || state === 'pending'
+}
+
+/** What the directory holds for the request it is about to apply: the arg is
+ *  RECOMPUTED from this, never taken from the request. */
+                         
+                                              
+                    
+                    
+                                                                                 
+                                                
+                                        
+
+async function sha256Bytes(b            )                  {
+  return b64uEnc(new Uint8Array(await crypto.subtle.digest('SHA-256', b                )))
+}
+
+/** The arg field for `subject`: empty for freeze and status, else a SHA-256. */
+export async function dreqArg(subject             )                  {
+  switch (subject.op) {
+    case 'freeze': case 'status': return ''
+    case 'contest': return sha256b64u(subject.pendingBindText)
+    case 'cred-add': {
+      const a = subject.attestationObject
+      const c = new Uint8Array(await crypto.subtle.digest('SHA-256', subject.clientDataJSON                ))
+      const both = new Uint8Array(a.length + c.length)
+      both.set(a); both.set(c, a.length)
+      return sha256Bytes(both)
+    }
+    case 'cred-del': return sha256Bytes(subject.credentialId)
+    case 'rc-enrol': return sha256Bytes(subject.body)
+  }
+}
+
+                             
+            
+                 
+                  
+                   
+             
+ 
+
+export function buildDreq(r            )         {
+  return ['dreq', r.op, b64uEnc(utf8(r.address)), r.bindHash, r.challenge, r.arg].join('.')
+}
+
+/** A challenge: canonical base64url of 16 to 64 bytes (the same rule as the
+ *  consent transcript's). */
+const isChallenge = (f        ) => { const b = b64uDec(f); return !!b && b.length >= 16 && b.length <= 64 }
+
+/**
+ * Verify a directory request. The directory brings what it holds: `bindText`,
+ * the binding it currently serves as authoritative for the address (the signer
+ * is that binding's account key), its `state`, the `challenge` it issued to this
+ * session, and the `subject` of the endpoint the request arrived on. `spend` is
+ * called once the text parses, before anything else is checked, and must return
+ * false if the challenge was already spent or has expired: every attempt that
+ * parses consumes its challenge, as with cns. Every refusal before the spend is
+ * `grammar`, so a host can tell from the reason alone whether it was spent.
+ */
+export async function verifyDreq(text        , sig        , opts   
+                  
+                 
+                   
+                      
+                                       
+ )                               {
+  const p = fields(text, 'dreq', 6)
+  if (!p) return no('grammar')
+  const [, opF, addressF, bindHash, challenge, arg] = p
+  if (!(DREQ_OPS                     ).includes(opF)) return no('grammar')
+  const op = opF          
+  const address = freeText(addressF)
+  if (address === null) return no('grammar')
+  if (!isHash(bindHash) || !isChallenge(challenge)) return no('grammar')
+  if (DREQ_EMPTY_ARG.has(op) ? arg !== '' : !isHash(arg)) return no('grammar')
+  if (!opts.spend(opts.challenge)) return no('replay')
+  if (challenge !== opts.challenge) return no('challenge')
+  if (op !== opts.subject.op) return no('op')
+  if (!dreqStateAllows(op, opts.state)) return no('state')
+  const b = fields(opts.bindText, 'bind', 9)
+  if (!b || bindHash !== (await sha256b64u(opts.bindText))) return no('bind-mismatch')
+  if (!isNormalAddress(address) || freeText(b[1]) !== address) return no('address')
+  if (arg !== (await dreqArg(opts.subject))) return no('arg')
+  if (!(await verifyStatementSig(b[2], sig, text))) return no('signature')
+  return { ok: true, value: { op, address, bindHash, challenge, arg } }
+}
+
 // --- cns. — host-stamped consent (signed by a certified consent key) ---------
 
 /**
@@ -511,9 +711,15 @@ export async function verifyCmp(text        , sig        , opts                 
  * until defined. (Distinct from identity.ts SignPurpose, which is about routine
  * signing with the device key.)
  */
-                                                                               
+                                                                                                                      
+/**
+ * The family is a PREFIX check on the payload, so the three directory-request
+ * purposes name their OP, never bare `dreq.`: a consent for adding a passkey
+ * must not authorise removing one, or enrolling a recovery verifier.
+ */
 const CONSENT_FAMILY                                 = {
   invite: 'inv.', revoke: 'rev.', link: 'dev.', rotate: 'bind.', unbind: 'del.',
+  'cred-add': 'dreq.cred-add.', 'cred-del': 'dreq.cred-del.', 'rc-enrol': 'dreq.rc-enrol.',
 }
 const RESERVED_PURPOSES = new Set(['grant', 'role'])
 /** Purposes about one document carry its docId; account-scoped ones carry none. */
