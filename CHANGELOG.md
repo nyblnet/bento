@@ -11,6 +11,7 @@ pre-1.0.
 
 ## [Unreleased]
 - **Speaker view scales to its window.** The current and next-slide previews now resize with the presenter window instead of a fixed width, and notes are larger (24px) so they read at a glance.
+- **Embedded fonts use their own bold.** A font added with "＋ Embed font file…" now declares the weights it contains, so Bold draws the font's real bold instead of a browser-thickened regular. Thanks to tikurahul (#850).
 
 ## [1.2.10] — 2026-10-24
 
