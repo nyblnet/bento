@@ -11,8 +11,9 @@
 import { buildAtt, buildTomb, signStatement } from '../../../kernel/src/statements.ts'
 
 export {
-  b64uEnc, buildBind, buildCmp, buildDel, sha256b64u as hashOf,
-  verifyBind, verifyCmp, verifyDel,
+  b64uDec, b64uEnc, buildBind, buildCmp, buildConsent, buildDel, consentTranscript, CONSENT_MAX_TTL_MS,
+  sha256b64u as hashOf, verifyBind, verifyCmp, verifyConsent, verifyDel, verifyDev, verifyStatementSig,
+  webauthnChallengeFor,
 } from '../../../kernel/src/statements.ts'
 
 /**
