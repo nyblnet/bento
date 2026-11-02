@@ -10,7 +10,21 @@ This project's versions roughly follow semantic-ish `0.MINOR.PATCH` while it is
 pre-1.0.
 
 ## [Unreleased]
+- **Speaker view scales to its window.** The current and next-slide previews now resize with the presenter window instead of a fixed width, and notes are larger (24px) so they read at a glance.
+- **Embedded fonts use their own bold.** A font added with "＋ Embed font file…" now declares the weights it contains, so Bold draws the font's real bold instead of a browser-thickened regular. Thanks to tikurahul (#850).
 
+- **Backslashes you type stay.** `a\-b` no longer loses its backslash when you
+  click away, and `a\\-b` no longer loses one more on every edit. A backslash
+  is dropped only where it escapes something (`\*not bold\*`, `\- not a bullet`);
+  everywhere else, typed or pasted, it is text. Thanks to Hermholtz.
+- **Drag a slide to the very end.** The sidebar now accepts a dropped slide on the
+  last gap and on the New slide button, so a slide can be moved to the end of the
+  deck in one drag instead of two moves. A slide's hidden states go with it.
+  Thanks to Hermholtz.
+- **Copy works on text that uses the deck's font.** ⌘C and the Copy menu item did
+  nothing, silently, on a text box that had no font of its own (the usual case for
+  decks written as JSON), so the next paste brought back the old clipboard. Such
+  text now copies, and its embedded theme font travels with it. Thanks to b-per.
 - **Formulas morph with a little spring.** When a formula morphs from one
   slide to the next, each symbol now travels to its new place with a gentle
   overshoot and settle instead of a plain glide, and stays lined up with its
@@ -22,6 +36,15 @@ pre-1.0.
   live, so PowerPoint renumbers them as you edit. Importing a PowerPoint deck
   brings plain bullets and numbered lists back as real lists, nesting
   included.
+- **Lock an element so clicks and drags skip it.** A full-slide image or fill
+  no longer gets in the way of drag-selecting the items above it. Select the
+  element and press ⌘L (Ctrl+L), or use Lock in the Arrange section or the
+  right-click menu; clicks and marquee drags on the canvas now pass over it,
+  and arrow keys and Delete leave it alone. A locked element is still in the Layers list
+  (with a padlock), and Alt-click reaches it, where it shows a padlock and a
+  dashed outline until you unlock it. Presenting, printing and export are
+  unchanged. With nothing selected, ⌘L still goes to the browser. Thanks to
+  johnbeard.
 
 ## [1.2.10] — 2026-10-24
 
