@@ -12019,3 +12019,28 @@ both slots had to stay empty until the ruling.
   scalar never matched, a missing kx public half skipping the match, a seal
   without a kx) and requires test-statements or test-recovery to fail on each,
   after the unmutated copy passes both.
+
+## 2026-11-03 — The People panel's "who vouched" asks only about proven keys
+
+- **Built, flag off.** slides' People panel can show `name ✓ via id.bento.page`
+  from the identity agent's `resolve({ pub })`, in six honest states (verified,
+  changed, not verified, key not provable, could not check, checking). It runs
+  only when localStorage `bento-people-vouch` is `on` AND the host exposes an
+  agent; the flag stays off until a host's bridge is live.
+- **A presence `pub` is a claim, not a proof.** Presence beats are unsigned
+  (docs/collab-design.md): anyone holding the room's read key can put any `pub`
+  in theirs, including another person's device key. Looking that key up and
+  ticking the row would let a reader wear someone else's ✓. So a peer is
+  resolved only when the session says its key is proven, through a METHOD
+  `session.keyProven(actor, pub)` rather than a field of the peer (a peer's
+  presence is whatever it sent). That method does not exist in the kernel yet:
+  until it does no peer is proven, no row is ticked, and the flag must stay off.
+  The existing "Key-verified identity" tooltip on a pub-carrying peer is
+  stronger than what presence proves; it is left as is for the kernel's call.
+- **Typed names cannot draw a tick.** Tick-like marks are removed from a name a
+  person typed, and the verified mark is a separate element; text from the agent
+  loses control, bidi and zero-width characters and is length-bounded.
+- Guarded by `scripts/test-slides-people-vouch-browser.mjs` (Chromium, a test
+  agent defined as a host must define it) with mutants for the proof check, the
+  tick strip, the invisible-character strip, the malformed-answer check, the
+  timeout and the flag.
