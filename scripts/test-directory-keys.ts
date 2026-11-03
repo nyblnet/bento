@@ -28,6 +28,10 @@
 //     resolution by the recovery code + a self-signed new binding (no vouch);
 //     the holder-delete window (§39.6): a new key over a holder tomb waits out
 //     72 h, the tombstoned key may contest, the verifier is kept, then dropped.
+//   · resolving an EMAIL-ONLY freeze waits 72 h, and the frozen key may freeze or
+//     contest it meanwhile (then nothing settles); a key-holder freeze resolves
+//     at once; a code from before a rotation never resolves the later key's freeze;
+//   · the bind re-check answers only for the exact bound statement, with its state.
 
 import worker, { Account, Address, Cred, Ledger, Link } from '../server/directory/src/worker.js'
 import { addressKey } from '../server/directory/src/address.js'
