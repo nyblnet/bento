@@ -40,6 +40,14 @@ day's hashes can't be linked to the next.
 | `GET /freeze` | none | the confirmation page the freeze link opens. A GET changes nothing |
 | `POST /v1/freeze/complete` `{email, token}` | the single-use token from the mail | 200 `{state: "frozen"}`, or a uniform 400 |
 | `GET /v1/keys` | none | the directory's public keys, for diagnosis (clients trust the list in the signed release) |
+| `POST /v1/link/open`, `/put`, `/get`, `/abort` `{id, tok, …}` | `tok`, derived from the link code | a ciphertext mailbox; see **Device linking**. Off unless `LINKING=1` |
+| `POST /v1/link/complete` | H's `dev.` + consent (purpose `link`) over N's `dev.`, on a `dir` challenge | 200, or 400 with a reason; the slot is deleted on any failure |
+| `POST /v1/status` `{email, req, sig, challenge}` | `dreq.status` | 200 `{state, events}`. Off unless `KEYSTORE=1`, like everything below |
+| `POST /v1/cred/add`, `/v1/cred/del` | `dreq.cred-add` / `dreq.cred-del` + consent | 200; see **Key store** |
+| `POST /v1/cred/challenge`, `/v1/cred/get` | a WebAuthn assertion on a single-use challenge | 200 with the passkey's PRF blob |
+| `POST /v1/recovery/enrol` | `dreq.rc-enrol` + consent | 200 |
+| `POST /v1/recovery/salt`, `/start`, `/release` | the recovery verifier | the salt; a ticket and `releaseAt`; after 72 hours, the code-wrapped blob |
+| `POST /v1/ledger/get`, `/put` | (needs a kernel request op) | 501 for now |
 
 **Email never changes a LIVE binding on its own** (security §25). While a
 binding is live, a new key proven by email alone is refused (start mails
@@ -113,11 +121,71 @@ maintainer's decision on international addresses): the platforms disagree on
 internationalised domains, so one address could otherwise bind as one mailbox
 and be looked up as another.
 
+## Device linking
+
+One of a person's devices (H) hands the account key to a new one (N) through a
+**slot**: a ciphertext mailbox in its own Durable Object class (`Link`), so a
+bug in it can't read an address or a credential. The slot id and `tok` are
+derived on the devices from a link code the directory never sees, and every
+message is encrypted under keys derived from it.
+
+- A slot lives 10 minutes; messages are at most 4 KB. Message 0 (the
+  displayer's) comes with `open`, 1 and 2 by `put`, 3 only through `complete`.
+- **Each message is written once.** A second write of the same number (or a
+  second `open` of the same id) means another device has the code: the slot
+  becomes CONTENDED, drops its messages, and both sides are told to start again.
+- **A slot completes once.** `complete` claims the slot first; then the address
+  spends the `dir` challenge and checks that H's `dev.` is certified by the LIVE
+  account key, that N's `dev.` names the same account and a different device,
+  and that H consented (purpose `link`, audience `dir`, over N's `dev.` text,
+  from H's own consent key, or the light tier's WebAuthn form) while the
+  binding is `active`. Any failure, or a second attempt, deletes the slot.
+- N reads message 3 only while the binding is still active under the same key:
+  a freeze after H's consent stops the key here.
+- Every link is notified (mail + the event list).
+
+It ships OFF (`LINKING` unset answers 404): N can only check what it receives
+against a pinned directory key, and the agents' link bytes are not in kernel yet.
+
+## Key store
+
+Off unless `KEYSTORE=1` and a `PEPPER_V<n>` secret are set. One `Account`
+object per address (it survives a key rotation; every record in it names the
+account key it belongs to, and material for any other key is treated as gone).
+
+- **Account-signed requests** are kernel's `dreq.`: challenge-bound, spent
+  first, verified against the binding served as authoritative. `cred-add`,
+  `cred-del` and `rc-enrol` also need consent for their own op.
+- **Passkeys.** A registration is ES256 with attestation `none`, UP + UV +
+  attested data, and its ceremony challenge is the `dir` challenge the request
+  spent; the `dreq.` covers its exact bytes. The PRF blob is stored in the
+  credential's `Cred` with BE, the attachment label and the account key. At
+  most 10 per account. A fetch is one assertion on a single-use challenge that
+  names no address; it is refused while frozen or once the binding's key has
+  changed, and every fetch notifies.
+- **The recovery code.** The device sends a verifier (Argon2id of the code,
+  its own salt) and the code-wrapped blob. The directory keeps the verifier
+  only as an HMAC under a per-account pepper key, and the blob sealed under a
+  second one (kernel's derivations); the pepper is a Worker secret. A right
+  verifier starts a 72-hour wait and returns a ticket; after it, the ticket and
+  the verifier release the blob once, and the code is spent. Five checks per
+  address per 24 hours; five failures lock recovery for 24 hours; every attempt
+  notifies. An address with nothing enrolled gets a stable fake salt.
+  Pepper versions upgrade on a successful check; a record under a version the
+  Worker doesn't hold is refused, never tried under another.
+- **The access ledger.** Stored only at bucket sizes (12.5% steps from 4 KiB,
+  1 MiB at most) and only for the current key. Its routes answer 501 until
+  kernel's request statement has a ledger op.
+- **Deletion** takes the passkeys and the ledger with it. A holder deletion
+  keeps the recovery verifier, for the deleted binding's own window; a mailbox
+  deletion (expired bindings) removes it too.
+
 **Not here yet:**
-- contest and lost-or-stolen freeze by the old key, the signed status read,
-  and credential registration and removal: each needs a kernel statement
-- resolving a freeze with the recovery code (the recovery verifier)
-- the passkey key-blob store and the access-ledger blob
+- contest and lost-or-stolen freeze by the old key, the `rot.` vouch and the
+  holder-delete window
+- resolving a freeze with the recovery code
+- the ledger routes (a kernel request op)
+- refusing refreshed synced (BE=1) blobs after a lost-or-stolen removal
 - the SES mailer
 
 ## Deploying is the maintainer's
@@ -129,6 +197,7 @@ SPF/DKIM/DMARC on a dedicated sending subdomain, all first. Then:
 cd server/directory
 npx wrangler secret put DIR_KEY_JWK     # the directory's ONLINE signing key; never the release key
 npx wrangler secret put CHALLENGE_KEY   # 32+ random characters; seals consent challenges
+npx wrangler secret put PEPPER_V1       # 32 random bytes, base64url; only when the key store is turned on
 npx wrangler deploy
 ```
 
@@ -136,6 +205,7 @@ npx wrangler deploy
 
 ```sh
 node scripts/test-directory.ts
+node scripts/test-directory-keys.ts   # device linking and the key store
 ```
 
 It drives the real worker and Durable Object classes against an in-memory

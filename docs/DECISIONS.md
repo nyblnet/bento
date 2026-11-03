@@ -12049,3 +12049,34 @@ needs: `active`, `pending` and `frozen`, each signed inside `att.`.
   only if a device holding the old key can say "this wasn't me", and that
   request needs a statement kernel hasn't defined. Until it exists, a thief
   holding the old key and the mailbox could rotate first.
+
+## 2026-11-03 — bento/connect directory: device linking and the key store
+
+The directory (`server/directory`) gains the two things a second device and a
+lost device need. Both ship OFF (`LINKING`, `KEYSTORE`).
+
+- **Linking goes through a slot on the directory, not the sync relay.** A slot
+  is its own Durable Object class holding only ciphertext the two devices
+  encrypt under keys from a code the directory never sees. The relay would have
+  meant every native agent speaking the collaboration protocol over WebSockets,
+  and the relay keeps frames.
+- **The directory, not just the host, checks the consent to link.** Before it
+  releases what H sealed for N, it spends a `dir` challenge and verifies H's
+  consent (purpose `link`) over N's `dev.` against the live binding, only while
+  `active`. That gives a link a notification hook, lets a frozen account refuse
+  to link, and makes the "relayed or replayed consent is refused" check run
+  against a production verifier.
+- **One scanner per slot.** A second write of any message makes the slot
+  CONTENDED and both sides start again, so a photographed code fails loudly
+  instead of racing. A slot completes once; any failed completion deletes it.
+- **Account-signed requests use kernel's `dreq.`** for the status read, passkey
+  registration and removal, and recovery enrolment; the last three also need
+  consent for their own op, so a consent to add a passkey never removes one.
+- **The recovery verifier is peppered with kernel's derivations** and the
+  pepper is a Worker secret. A right verifier only starts a 72-hour wait; every
+  attempt notifies; the released code is spent. A record under a pepper version
+  the Worker doesn't hold is refused rather than tried under another.
+- **The ledger's routes wait for a kernel request op.** A ledger read must be
+  account-signed (§2g: otherwise anyone could watch its size and cadence), and
+  the request statement's ops are a closed set. The storage rules (bucket sizes,
+  current key only) are in place behind them.

@@ -447,6 +447,14 @@ let kCred: Awaited<ReturnType<typeof addCred>>
   ok(reason(await fetchBlob(await signer(), kCred.reg.credId)) === 'signature', 'an assertion by another key → refused')
   ok(reason(await fetchBlob(kCred.reg.key, kCred.reg.credId, { origin: 'https://bento.page/' })) === 'origin', 'an origin near-miss → refused')
   ok((await fetchBlob(kCred.reg.key, kCred.reg.credId, { origin: 'bento-desktop:linux' })).status === 200, 'a self-reported desktop origin may fetch (advisory, §9.3) — the control for the origin rows')
+  const cKey = b64uEnc(await sha(kCred.reg.credId))
+  const credRec = store('Cred', cKey)!.get('cred') as Record<string, unknown>
+  store('Cred', cKey)!.set('cred', { ...credRec, accountPub: (await signer()).pub }) // as if the binding rotated since it was registered
+  ok(reason(await fetchBlob(kCred.reg.key, kCred.reg.credId)) === 'orphaned', 'a blob wrapping a key that is no longer the binding is never released')
+  store('Cred', cKey)!.set('cred', { ...(store('Cred', cKey)!.get('cred') as object), accountPub: K.k.pub })
+  const credDo = (env.CRED as { get(id: string): { fetch(u: string, i: RequestInit): Promise<Response> } }).get(cKey)
+  ok((await credDo.fetch('https://do/op', { method: 'POST', body: JSON.stringify({ op: 'delete', scope: await addressKey('someone-else@example.com') }) })).status === 400, 'a Cred refuses deletion asked for another address (second line behind the index)')
+  ok(store('Cred', cKey)!.has('cred'), '  …and keeps the credential')
   const dirCh = await challengeFor(K.email)
   ok((await api('/v1/cred/get', { challenge: dirCh, assertion: await assertion(kCred.reg.key, kCred.reg.credId, dirCh) })).status === 400, 'a dir challenge is not a passkey-fetch challenge (audience)')
 }
@@ -501,6 +509,7 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
   ok(reason((await enrol(R, rd, enrolment(), { signedBody: bodyOf(enrolment()) })).r) === 'dreq:arg', 'an enrolment body swapped after signing → refused')
   ok((await enrol(R, rd, { ...enrolment(), extra: 1 } as never)).r.status === 400, 'an enrolment body with an extra field → refused')
   ok((await enrol(R, rd, { ...enrolment(), ct: r64(79) })).r.status === 400, 'an enrolment body with a short ct → refused')
+  { const e0 = enrolment(); delete (e0 as Record<string, unknown>).saltW; ok((await enrol(R, rd, e0)).r.status === 400, 'an enrolment body missing a field → refused') }
   const before = noticesTo(R.email, 'rc-enrol')
   const { r, e } = await enrol(R, rd)
   ok(r.status === 200 && noticesTo(R.email, 'rc-enrol') === before + 1, 'CONTROL: rc-enrol with consent stores the verifier, notified')
@@ -536,6 +545,19 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
   ok(noticesTo(R.email, 'rc-release') === rel0 + 1, '  …notified')
   ok(reason(await start(R, e.verifier)) === 'invalid', 'a used recovery code is SPENT')
   ok((await api('/v1/recovery/salt', { email: R.email })).j.saltV !== e.saltV, '  …and its salt is gone')
+}
+{
+  // a new enrolment ends a release in flight for the old code
+  const N2 = await person('keys-n2@example.com'); await bind(N2)
+  const n2d = await device(N2)
+  const { e } = await enrol(N2, n2d)
+  const t = String((await start(N2, e.verifier)).j.ticket)
+  const { e: e2 } = await enrol(N2, n2d)
+  now += 72 * HOUR + MIN
+  ok(reason(await release(N2, e2.verifier, t)) === 'ticket', 'a release started under the old code dies with a re-enrolment')
+  const t2 = String((await start(N2, e2.verifier)).j.ticket)
+  now += 72 * HOUR + MIN
+  ok((await release(N2, e2.verifier, t2)).j.inner === innerOf(e2), 'CONTROL: the new code releases after its own wait')
 }
 {
   // attempts: 5 per 24 h; 5 failures lock for 24 h

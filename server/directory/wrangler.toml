@@ -2,6 +2,7 @@
 # Deploy is the MAINTAINER's (needs the id.bento.page DNS and the SES account first):
 #   npx wrangler secret put DIR_KEY_JWK   # the directory's ONLINE P-256 signing key (JWK, private) — never the release key
 #   npx wrangler secret put CHALLENGE_KEY # 32+ random characters: seals the single-use consent challenges
+#   npx wrangler secret put PEPPER_V1     # 32 random bytes, base64url: the recovery verifier's pepper (key store only)
 #   npx wrangler deploy
 # Local:
 #   npx wrangler dev --var DEV:1 --var MAILER:log --var DIR_KID:dev-1 --var DIR_KEY_JWK:"$(cat dev-key.jwk)"
@@ -18,6 +19,8 @@ DIR_KID = "dir-1"
 DIR_PUBKEYS = "[]"
 MAILER = "ses"
 # ROTATION stays unset (rotation answers 404) until an old-key holder can contest a pending rotation.
+# LINKING stays unset (link routes answer 404) until agents pin the directory key and kernel has the link bytes.
+# KEYSTORE stays unset (key-store routes answer 404) until reviewed; it also needs the PEPPER_V1 secret.
 
 [[durable_objects.bindings]]
 name = "ADDRESS"

@@ -58,7 +58,7 @@ export function parseEnrolment(bytes) {
   try { j = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) } catch { return null }
   if (!j || typeof j !== 'object' || Array.isArray(j)) return null
   const keys = Object.keys(j)
-  if (keys.length !== Object.keys(RC_FIELDS).length || !keys.every((k) => Object.hasOwn(RC_FIELDS, k)) || j.v !== 1) return null
+  if (!keys.every((k) => Object.hasOwn(RC_FIELDS, k)) || j.v !== 1) return null // a missing field fails below
   const out = {}
   for (const [k, len] of Object.entries(RC_FIELDS)) {
     if (len === null) continue
