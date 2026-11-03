@@ -427,7 +427,7 @@ const alice = await person('alice@example.com', 'Alice')
   type P = Awaited<ReturnType<typeof person>>
   async function device(owner: P, consent = true) {
     const dev = await signer(), cns = await signer()
-    const text = buildDev({ devicePub: dev.pub, consentPub: consent ? cns.pub : null, accountPub: owner.k.pub, kx: null, label: null, created: now, expires: now + 30 * DAY })
+    const text = buildDev({ devicePub: dev.pub, consentPub: consent ? cns.pub : null, accountPub: owner.k.pub, kx: await kxPub(), label: null, created: now, expires: now + 30 * DAY })
     return { dev: text, devSig: await owner.k.sign(text), cnsKey: cns }
   }
   async function nativeConsent(d: Awaited<ReturnType<typeof device>>, challenge: string, payload: string, o: { audience?: string; purpose?: string; exp?: number } = {}) {
