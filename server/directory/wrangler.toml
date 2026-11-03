@@ -1,0 +1,30 @@
+# bento/id directory — id.bento.page (layer 1 of bento/id).
+# Deploy is the MAINTAINER's (needs the id.bento.page DNS and the SES account first):
+#   npx wrangler secret put DIR_KEY_JWK   # the directory's ONLINE P-256 signing key (JWK, private) — never the release key
+#   npx wrangler deploy
+# Local:
+#   npx wrangler dev --var DEV:1 --var MAILER:log --var DIR_KID:dev-1 --var DIR_KEY_JWK:"$(cat dev-key.jwk)"
+name = "bento-id-directory"
+main = "src/worker.js"
+compatibility_date = "2026-07-01"
+
+routes = [{ pattern = "id.bento.page", custom_domain = true }]
+
+[vars]
+DIR_KID = "dir-1"
+# The public halves of the current and next directory keys, for /v1/keys
+# (diagnosis only: clients trust the list shipped in the signed release).
+DIR_PUBKEYS = "[]"
+MAILER = "ses"
+
+[[durable_objects.bindings]]
+name = "ADDRESS"
+class_name = "Address"
+
+[[durable_objects.bindings]]
+name = "LEDGER"
+class_name = "Ledger"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Address", "Ledger"]
