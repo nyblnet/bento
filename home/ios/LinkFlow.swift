@@ -26,9 +26,15 @@ import LocalAuthentication
 /// 4. **Each key seals exactly one message** (n2h: 2, h2n: 3). A retry is a new slot
 ///    with a new code, never a second message under a key.
 /// 5. **N checks what it was given** before storing anything: its OWN keys in the dev.,
-///    and the unsealed scalars against a binding served under a PINNED directory key.
+///    and the unsealed account scalar against the binding the directory serves, under a
+///    PINNED key, for the ADDRESS that arrived inside SEALED. N is never typed the address.
+///    **Then N asks the person to confirm that address** (`Confirm`), and declining aborts
+///    the slot and stores nothing.
 /// 6. **N shows the label H wrote**, from the dev. it was issued, not the one it offered.
 /// 7. **An unknown platform token is never shown as verified.**
+/// 9. **H sends the account scalar and the address, never the recovery kx**; H does not
+///    even read it (security §26c.4: a linked device's history comes from H re-wrapping to
+///    N's own kx, not from the recovery key). A linked device therefore holds no recovery kx.
 /// 8. **Never act while blind**: an unreadable store is `unavailable`, never "no account".
 ///
 /// While any identity managed-config key is present no identity operation runs (O1).
@@ -168,6 +174,7 @@ final class LinkAgent {
     }
 
     /// Wait for message n: poll until it is there, the slot ends, or the step runs out.
+    /// The result is the slot WIRE; `IdentityLink.decodeSlotMsg` turns it into the message.
     private func await_(_ s: Session, _ n: Int) -> Result<String, Refusal> {
         let deadline = Date().addingTimeInterval(stepSeconds)
         while true {
@@ -183,9 +190,7 @@ final class LinkAgent {
         _ = slotCall(s, "abort")
     }
 
-    private func text(_ wire: String) -> String? {
-        IdentityRecovery.b64uDec(wire).flatMap { String(bytes: $0, encoding: .utf8) }
-    }
+    private func decode(_ n: IdentityLink.SlotMsgNo, _ wire: String) -> String? { IdentityLink.decodeSlotMsg(n, wire).value }
 
     // MARK: 1. begin — display a code, or scan one
 
@@ -206,8 +211,8 @@ final class LinkAgent {
         let e = P256.KeyAgreement.PrivateKey()
         let eD = b64(Array(e.publicKey.x963Representation))
         let s = Session(agent: self, me: me, displays: true, slot: slot, ephemeral: e, printedCode: printed, roleD: me)
-        let msg0 = IdentityLink.buildMsg0(eD, me)
-        let r = slotCall(s, "open", ["msg": b64(Array(msg0.utf8))])
+        guard let wire0 = IdentityLink.encodeSlotMsg(.m0, IdentityLink.buildMsg0(eD, me)) else { return .failure(.unavailable) }
+        let r = slotCall(s, "open", ["msg": wire0])
         guard r.status == 200 else { return .failure(refusal(r)) }
         return .success(s)
     }
@@ -218,7 +223,7 @@ final class LinkAgent {
         switch await_(s, 1) {
         case .failure(let f): s.dead = true; return .failure(f)
         case .success(let w):
-            guard let t1 = text(w), let eS = IdentityLink.parseMsg1(t1).value else { abort(s); return .failure(.badMessage("msg1")) }
+            guard let t1 = decode(.m1, w), let eS = IdentityLink.parseMsg1(t1).value else { abort(s); return .failure(.badMessage("msg1")) }
             let eD = b64(Array(s.ephemeral.publicKey.x963Representation))
             guard s.derive(eD: eD, eS: eS) else { abort(s); return .failure(.badMessage("reflected")) }
             return .success(())
@@ -237,7 +242,7 @@ final class LinkAgent {
                             ephemeral: P256.KeyAgreement.PrivateKey(), printedCode: printed, roleD: .H)
         let r = slotCall(probe, "get", ["n": 0, "wait": 0])
         guard r.status == 200, let w = r.json?["msg"] as? String else { return .failure(r.status == 202 ? .gone("not-open") : refusal(r)) }
-        guard let t0 = text(w), let m0 = IdentityLink.parseMsg0(t0).value else { return .failure(.badMessage("msg0")) }
+        guard let t0 = decode(.m0, w), let m0 = IdentityLink.parseMsg0(t0).value else { return .failure(.badMessage("msg0")) }
         guard IdentityLink.scannerMayProceed(roleD: m0.role, scannerHoldsAccount: h == .account) else {
             return .failure(.notHere("role-contradicts-state"))
         }
@@ -247,7 +252,8 @@ final class LinkAgent {
                         ephemeral: probe.ephemeral, printedCode: printed, roleD: m0.role)
         let eS = b64(Array(s.ephemeral.publicKey.x963Representation))
         guard s.derive(eD: m0.eD, eS: eS) else { return .failure(.badMessage("reflected")) }
-        let put = slotCall(s, "put", ["n": 1, "msg": b64(Array(IdentityLink.buildMsg1(eS).utf8))])
+        guard let wire1 = IdentityLink.encodeSlotMsg(.m1, IdentityLink.buildMsg1(eS)) else { return .failure(.unavailable) }
+        let put = slotCall(s, "put", ["n": 1, "msg": wire1])
         guard put.status == 200 else { return .failure(refusal(put)) }
         return .success(s)
     }
@@ -281,7 +287,8 @@ final class LinkAgent {
         // our own work is checked by the verifier H will use
         guard IdentityLink.verifyOffer(plain, t: t).ok else { return .failure(.unavailable) }
         s.spentOffer = true                                  // set BEFORE sending: a failed send is not a second try
-        guard let wire = IdentityLink.seal(keys, .offer, t: t, iv: random(12), Array(plain.utf8)) else { return .failure(.unavailable) }
+        guard let sealedOffer = IdentityLink.seal(keys, .offer, t: t, iv: random(12), Array(plain.utf8)),
+              let wire = IdentityLink.encodeSlotMsg(.m2, sealedOffer) else { return .failure(.unavailable) }
         let r = slotCall(s, "put", ["n": 2, "msg": wire])
         guard r.status == 200 else { return .failure(refusal(r)) }
         s.setOffer(offer)
@@ -294,37 +301,56 @@ final class LinkAgent {
         let devicePub: String
     }
 
-    /// N waits for msg3, then checks it against the binding the directory serves for
-    /// `address` under a PINNED key, and only then stores anything.
-    func awaitLinked(_ s: Session, address typed: String) -> Result<Linked, Refusal> {
+    /// What the person is asked before N stores anything: the ADDRESS is the thing being
+    /// confirmed, and the name is only what that account chose to call itself. Returns
+    /// true to link. The host shows `confirmWording`.
+    typealias Confirm = (_ address: String, _ name: String?) -> Bool
+
+    /// PLACEHOLDER wording (the maintainer owns the strings). The address leads and is the
+    /// question; the name, if any, is attributed to the account and never stands in for it.
+    static func confirmWording(address: String, name: String?) -> (title: String, detail: String?) {
+        ("Link this device to \(address)?",
+         name.map { "The account calls itself \u{201C}\($0)\u{201D}. That name was chosen by the account, not checked by Bento." })
+    }
+
+    /// N waits for msg3, opens it, and checks it against the binding the directory serves,
+    /// under a PINNED key, for the address that arrived inside SEALED. It then asks `confirm`
+    /// with that address and the account's chosen name. Only a yes stores anything; a no
+    /// aborts the slot (which deletes it) and stores nothing.
+    func awaitLinked(_ s: Session, confirm: Confirm) -> Result<Linked, Refusal> {
         guard s.me == .N, !s.dead, let t = s.t, let keys = s.keys, let offer = s.offer else { return .failure(.notHere("not-n")) }
         guard !managed() else { return .failure(.managed) }
-        guard case .ok(let address) = IdentityStatements.normalizeAddress(typed) else { abort(s); return .failure(.untrusted("address")) }
         let fail = { (r: Refusal) -> Result<Linked, Refusal> in self.abort(s); return .failure(r) }
         let m3: String
         switch await_(s, 3) {
         case .failure(let f): s.dead = true; return .failure(f)
-        case .success(let m): m3 = m
+        case .success(let w):
+            guard let m = decode(.m3, w) else { return fail(.badMessage("msg3")) }
+            m3 = m
         }
-        // the binding, from the directory, under the pinned key
-        let q = address.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-_.~"))) ?? address
-        let l = net.get("/v1/lookup?e=\(q)")
-        guard l.status == 200, let j = l.json, let bindText = j["binding"] as? String, let bindSig = j["sig"] as? String,
-              let attText = j["attestation"] as? String, let attSig = j["attestationSig"] as? String else { return fail(.untrusted("lookup")) }
-        guard let bind = IdentityStatements.verifyBind(bindText, bindSig, now: now()).value, bind.address == address else { return fail(.untrusted("binding")) }
-        guard let att = IdentityStatements.verifyAtt(attText, attSig, directoryKeys: directoryKeys, bindText: bindText,
-                                                     now: now(), maxAgeMs: 5 * 60_000).value, att.state == "active" else { return fail(.untrusted("attestation")) }
-        let v = IdentityLink.openFinal(m3, keys: keys, t: t, offer: offer, accountPub: bind.accountPub, kxPub: bind.kx, now: now())
-        guard let o = v.value else { return fail(.badMessage(v.reason ?? "final")) }
-        // store: recovery kx and record first, the account key LAST (its presence is "holds an account")
+        // the lookup runs only for an address that came out of SEALED in normal form; the
+        // raw answer is kept so the record stores the very bytes that were verified
+        var answer: IdentityLink.Lookup?
+        let lookup = { (address: String) -> IdentityLink.Lookup? in
+            let q = address.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-_.~"))) ?? address
+            let l = self.net.get("/v1/lookup?e=\(q)")
+            guard l.status == 200, let j = l.json, let bindText = j["binding"] as? String, let bindSig = j["sig"] as? String,
+                  let attText = j["attestation"] as? String, let attSig = j["attestationSig"] as? String else { return nil }
+            answer = IdentityLink.Lookup(bindText: bindText, bindSig: bindSig, attText: attText, attSig: attSig)
+            return answer
+        }
+        let v = IdentityLink.openFinal(m3, keys: keys, t: t, offer: offer, lookup: lookup, directoryKeys: directoryKeys, now: now())
+        guard let o = v.value, let a = answer else { return fail(.badMessage(v.reason ?? "final")) }
+        // ask before storing; declining leaves nothing behind
+        guard confirm(o.address, o.name) else { return fail(.declined) }
+        // store: the record first, the account key LAST (its presence is "holds an account")
         guard case .absent = store.get(IdentityKeys.accountItem) else { return fail(.unavailable) }
-        let rec = IdentitySetup.Record(address: address, bindText: bindText, bindSig: bindSig, recoveryKx: "", attempts: 0,
-                                       att: attText + "\n" + attSig, recovery: nil, dev: o.dev + "\n" + o.devSig, linked: true)
+        let rec = IdentitySetup.Record(address: o.address, bindText: a.bindText, bindSig: a.bindSig, recoveryKx: "", attempts: 0,
+                                       att: a.attText + "\n" + a.attSig, recovery: nil, dev: o.dev + "\n" + o.devSig, linked: true)
         guard let recData = try? JSONEncoder().encode(rec) else { return fail(.unavailable) }
-        guard store.set(IdentitySetup.recoveryKxItem, Data(o.keys.kx)) else { return fail(.unavailable) }
-        guard store.set(IdentitySetup.recordItem, recData) else { store.delete(IdentitySetup.recoveryKxItem); return fail(.unavailable) }
-        guard store.set(IdentityKeys.accountItem, Data(o.keys.account)) else {
-            store.delete(IdentitySetup.recoveryKxItem); store.delete(IdentitySetup.recordItem); return fail(.unavailable)
+        guard store.set(IdentitySetup.recordItem, recData) else { return fail(.unavailable) }
+        guard store.set(IdentityKeys.accountItem, Data(o.account)) else {
+            store.delete(IdentitySetup.recordItem); return fail(.unavailable)
         }
         abort(s)                                              // N is done: delete the slot
         return .success(Linked(label: o.device.label, devicePub: o.device.devicePub))
@@ -341,7 +367,8 @@ final class LinkAgent {
         guard IdentityLink.sasMatches(typed: typed, sas: keys.sas) else { abort(s); return .failure(.wrongSAS) }
         switch await_(s, 2) {
         case .failure(let f): s.dead = true; return .failure(f)
-        case .success(let wire):
+        case .success(let w):
+            guard let wire = decode(.m2, w) else { abort(s); return .failure(.badMessage("msg2")) }
             let v = IdentityLink.openOffer(keys, t: t, wire: wire)
             guard let o = v.value else { abort(s); return .failure(.badMessage(v.reason ?? "offer")) }
             s.setOffer(o)
@@ -358,7 +385,6 @@ final class LinkAgent {
         guard let loaded = IdentitySetup(store: store, post: { _, _ in .init(status: 0, json: nil) }, directoryKeys: directoryKeys, managed: { false }).load(),
               let rec = loaded, rec.att != nil, let own = rec.dev,
               let account = try? IdentityKeys.account(in: store) else { return .failure(.unavailable) }
-        guard case .found(let kx) = store.get(IdentitySetup.recoveryKxItem), kx.count == 32 else { return .failure(.unavailable) }
         let hDev = own.components(separatedBy: "\n")
         guard hDev.count == 2 else { return .failure(.unavailable) }
         let accountPub = b64(Array(account.publicKey.x963Representation))
@@ -379,10 +405,12 @@ final class LinkAgent {
         case .success(let c): cns = c
         }
         guard case .consent(let cnsText, let cnsSig, _) = cns else { return .failure(.unavailable) }
-        guard let blob = IdentityRecovery.packScalars(.init(account: Array(account.rawRepresentation), kx: Array(kx))) else { return .failure(.unavailable) }
+        // the account scalar and the address, nothing else: never the recovery kx
+        guard let blob = IdentityLink.sealedPlaintext(account: Array(account.rawRepresentation), address: rec.address) else { return .failure(.unavailable) }
         s.spentFinal = true                                  // from here this key has sealed its one message
         guard let sealed = IdentityLink.seal(keys, .final, t: t, iv: random(12), blob) else { return .failure(.unavailable) }
         let msg3 = IdentityLink.buildFinal(.init(hDev: hDev[0], hDevSig: hDev[1], cns: cnsText, cnsSig: cnsSig, nDev: nDev, nDevSig: nDevSig, sealed: sealed))
+        guard IdentityLink.encodeSlotMsg(.m3, msg3) != nil else { return .failure(.unavailable) }
         // our own msg3 is checked by the verifier the directory will run
         guard IdentityLink.verifyRelease(msg3, bindText: rec.bindText, state: "active", challenge: challenge, now: t0, spend: { _ in true }).ok
         else { abort(s); return .failure(.unavailable) }

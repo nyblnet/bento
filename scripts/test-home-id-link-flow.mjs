@@ -16,7 +16,8 @@
  *
  * ROWS (security §39.1 run-it list, and this host's own rules):
  *  - the honest link completes both ways round (H displays / N displays), N ends up
- *    holding H's account key and recovery kx, and kernel's verifiers accept N's dev.
+ *    holding H's account key and NO recovery kx, the address came to N inside SEALED,
+ *    and kernel's verifiers accept N's dev.
  *  - N shows the label H WROTE; an unknown platform token is never shown as known
  *  - the H side starts ONLY from the in-app action: a universal link or camera intent on
  *    a device that holds an account is refused, in either seat, with nothing sent
@@ -24,6 +25,8 @@
  *  - CONTENDED: a second scanner ends the slot for everyone, and a retry is a new code
  *  - WRONG SAS: one attempt; the right digits afterwards do not revive the slot
  *  - each key seals exactly one message; a FAILED send is not a second try
+ *  - N CONFIRMS THE ADDRESS before it stores anything (the name is shown as the account's
+ *    own choice); declining aborts the slot and stores nothing
  *  - N stores nothing from an altered msg3 or an attestation the pin does not accept,
  *    and deletes the slot
  *  - O1: a managed-config key present refuses everything
@@ -63,7 +66,12 @@ const MUTANTS = {
   'offered-label-shown': ['LinkFlow.swift', 'return .success(Linked(label: o.device.label, devicePub: o.device.devicePub))', 'return .success(Linked(label: offer.label, devicePub: o.device.devicePub))'],
   'no-abort-on-fail': ['LinkFlow.swift', 'let fail = { (r: Refusal) -> Result<Linked, Refusal> in self.abort(s); return .failure(r) }', 'let fail = { (r: Refusal) -> Result<Linked, Refusal> in return .failure(r) }'],
   // (no mutant for N's `att.state == active` check: the rig cannot freeze a binding here; kernel's release rows and the directory's own rig cover frozen and pending)
-  'unpinned-att-skipped': ['LinkFlow.swift', 'directoryKeys: directoryKeys, bindText: bindText', 'directoryKeys: ["dev-1": b64(Array(P256.Signing.PrivateKey().publicKey.x963Representation))], bindText: bindText'],
+  'unpinned-att-skipped': ['LinkFlow.swift', 'lookup: lookup, directoryKeys: directoryKeys, now: now())', 'lookup: lookup, directoryKeys: ["dev-1": b64(Array(P256.Signing.PrivateKey().publicKey.x963Representation))], now: now())'],
+  'decline-stores': ['LinkFlow.swift', 'guard confirm(o.address, o.name) else { return fail(.declined) }', '_ = confirm(o.address, o.name)'],
+  'decline-keeps-slot': ['LinkFlow.swift', 'guard confirm(o.address, o.name) else { return fail(.declined) }', 'guard confirm(o.address, o.name) else { return .failure(.declined) }'],
+  'confirm-never-asked': ['LinkFlow.swift', 'guard confirm(o.address, o.name) else { return fail(.declined) }', ''],
+  'confirm-shows-typed-name-only': ['LinkFlow.swift', 'guard confirm(o.address, o.name) else { return fail(.declined) }', 'guard confirm("", o.name) else { return fail(.declined) }'],
+  'h-seals-another-address': ['LinkFlow.swift', 'address: rec.address) else { return .failure(.unavailable) }', 'address: "mallory@example.com") else { return .failure(.unavailable) }'],
   'tampered-final-stored': ['LinkFlow.swift', 'guard let o = v.value else { return fail(.badMessage(v.reason ?? "final")) }', 'let o = v.value ?? IdentityLink.Opened(keys: .init(account: [UInt8](repeating: 1, count: 32), kx: [UInt8](repeating: 2, count: 32)), device: IdentityStatements.verifyDev(rec0Dev, rec0DevSig, now: now()).value!, dev: "", devSig: "")'],
   'managed-ignored': ['LinkFlow.swift', 'func display(as me: IdentityLink.Role, origin: Origin) -> Result<Session, Refusal> {\n        guard !managed() else { return .failure(.managed) }', 'func display(as me: IdentityLink.Role, origin: Origin) -> Result<Session, Refusal> {'],
   'unknown-platform-known': ['IdentityLink.swift', 'PlatformShown(name: "Unknown device type", known: false)', 'PlatformShown(name: token, known: true)'],
@@ -188,11 +196,11 @@ let hPub = acctPub(hMem)
 emit("h.pub", hPub)
 
 /// one whole link; returns the pieces rows need
-struct Run { var h: LinkAgent.Session?; var n: LinkAgent.Session?; var offer: L.Offer?; var linked: Result<LinkAgent.Linked, LinkAgent.Refusal>?; var nMem: Mem; var hTap: Tap; var nTap: Tap; var steps: [String] }
+struct Run { var h: LinkAgent.Session?; var n: LinkAgent.Session?; var offer: L.Offer?; var linked: Result<LinkAgent.Linked, LinkAgent.Refusal>?; var nMem: Mem; var hTap: Tap; var nTap: Tap; var steps: [String]; var asked: [(String, String?)] }
 func link(hDisplays: Bool, nLabel: String? = "Rig phone", hLabel: String? = "Alice's iPad", platform: String = "ios", nPins: [String: String] = pins,
-          nTap: Tap = Tap(), typeSAS: ((String) -> String)? = nil, tamper: Bool = false) -> Run {
+          nTap: Tap = Tap(), typeSAS: ((String) -> String)? = nil, tamper: Bool = false, accept: Bool = true) -> Run {
   let nMem = Mem(), hTap = Tap()
-  var run = Run(h: nil, n: nil, offer: nil, linked: nil, nMem: nMem, hTap: hTap, nTap: nTap, steps: [])
+  var run = Run(h: nil, n: nil, offer: nil, linked: nil, nMem: nMem, hTap: hTap, nTap: nTap, steps: [], asked: [])
   let H = agent(hMem, hTap, name: "Alice phone"), N = agent(nMem, nTap, pins: nPins, platform: platform, name: "New device")
   var sh: LinkAgent.Session, sn: LinkAgent.Session
   if hDisplays {
@@ -216,7 +224,9 @@ func link(hDisplays: Bool, nLabel: String? = "Rig phone", hLabel: String? = "Ali
   }
   if case .failure(let f) = H.approve(sh, label: hLabel) { run.steps.append("h.approve:\(f)"); return run }
   if tamper { nTap.tamper3 = true }
-  run.linked = N.awaitLinked(sn, address: alice)
+  var asked: [(String, String?)] = []
+  run.linked = N.awaitLinked(sn, confirm: { a, n in asked.append((a, n)); return accept })
+  run.asked = asked
   return run
 }
 
@@ -230,7 +240,13 @@ emit("a.hSasHidden", r1.h?.sas == nil)
 emit("a.sameKeys", r1.h?.keys != nil && r1.h?.keys == r1.n?.keys)
 emit("a.platform", r1.offer.map { "\(L.showPlatform($0.platform).known)" } ?? "nil")
 emit("a.offerLabel", r1.offer?.label ?? "nil")
-emit("a.nPub", acctPub(r1.nMem)); emit("a.nKx", r1.nMem.d[IdentitySetup.recoveryKxItem] == hMem.d[IdentitySetup.recoveryKxItem])
+emit("a.nPub", acctPub(r1.nMem)); emit("a.nKx", r1.nMem.d[IdentitySetup.recoveryKxItem] == nil)
+emit("a.asked", r1.asked.map { "\($0.0)|\($0.1 ?? "nil")" }.joined(separator: ";"))
+emit("a.wording", { let w = LinkAgent.confirmWording(address: alice, name: "Alice"); return "\(w.title)|\(w.detail ?? "nil")" }())
+emit("a.wordingNoName", LinkAgent.confirmWording(address: alice, name: nil).detail ?? "nil")
+if let c = r1.hTap.posts.first(where: { $0.0 == "/v1/link/complete" }), let m = c.1["msg3"] as? String {
+  emit("a.sealedLen", IdentityStatements.b64uDec(m.components(separatedBy: "\n")[7])?.count ?? -1)
+}
 let nr = rec(r1.nMem)
 emit("a.nLinked", nr?.linked ?? false); emit("a.nRecoveryEmpty", nr?.recovery == nil)
 emit("a.nDev", nr?.dev ?? ""); emit("a.nBind", nr?.bindText ?? ""); emit("a.nBindSig", nr?.bindSig ?? "")
@@ -315,7 +331,7 @@ do {
     emit("s.wrong", d(H.submitSAS(sh, typed: wrong)))
     emit("s.rightAfter", d(H.submitSAS(sh, typed: sas)))
     emit("s.approve", d(H.approve(sh, label: nil)))
-    emit("s.nWaits", d(N.awaitLinked(sn, address: alice)))
+    emit("s.nWaits", d(N.awaitLinked(sn, confirm: { _, _ in true })))
     emit("s.nStores", nothing(nMem))
     let g = real.post("/v1/link/get", ["id": sh.slot.id, "tok": sh.slot.tok, "n": 2, "wait": 0])
     emit("s.slot", "\(g.status):\((g.json?["error"] as? String) ?? "")")
@@ -384,6 +400,19 @@ do {
   let rk = link(hDisplays: true, nPins: ["dir-9": pin])
   emit("t.kid", rk.linked.map(d) ?? "nil"); emit("t.kid.stores", nothing(rk.nMem))
 }
+// ===== 7b. N asks before it stores: the ADDRESS is confirmed, and a no leaves nothing
+do {
+  let rd = link(hDisplays: true, accept: false)
+  emit("q.result", rd.linked.map(d) ?? "nil")
+  emit("q.asked", rd.asked.map { "\($0.0)|\($0.1 ?? "nil")" }.joined(separator: ";"))
+  emit("q.stores", nothing(rd.nMem))
+  if let sn = rd.n { let g = real.post("/v1/link/get", ["id": sn.slot.id, "tok": sn.slot.tok, "n": 3, "wait": 0]); emit("q.slot", "\(g.status)") }
+  // nothing was asked for a message that failed to open: a tampered msg3 never reaches the prompt
+  let rt = link(hDisplays: true, nTap: Tap(), tamper: true)
+  emit("q.tamperedAsked", rt.asked.count)
+  // and the sender-side check: H seals no address that is not in normal form
+  emit("q.sealBad", L.sealedPlaintext(account: [UInt8](repeating: 1, count: 32), address: "Alice@Example.com") == nil)
+}
 let r8 = link(hDisplays: false)
 emit("z.control", r8.linked.map(d) ?? "nil")
 `
@@ -417,12 +446,15 @@ const NOW = Date.now()
 const K = await import(join(ROOT, 'kernel/src/statements.ts'))
 
 ok(out['h.start'] === 'mailed' && out['h.verify'] === 'bound' && out['h.confirm'] === 'confirmed' && out['h.mint'].startsWith('minted'), 'setup: H is a bound account holder with a dev. (the real setup flow)')
-ok(Number(out['h.kxKept']) === 32 && out['h.recordKxEmpty'] === 'true', 'H keeps the recovery kx scalar as its own device-only item (link v1 seals it for N), not in the setup record')
+ok(Number(out['h.kxKept']) === 32 && out['h.recordKxEmpty'] === 'true', 'H keeps the recovery kx scalar as its own device-only item, not in the setup record (and link v1 never sends it)')
 
 console.log('1. the honest link, H displays')
 ok(out['a.steps'] === '' && out['a.linked'] === 'ok', 'H displays, N scans: every step completes')
 ok(/^\d{6}$/.test(out['a.sas']) && out['a.hSasHidden'] === 'true' && out['a.sameKeys'] === 'true', 'both sides derive the same keys; only N has a SAS to show')
-ok(out['a.nPub'] === out['h.pub'] && out['a.nKx'] === 'true', "N ends up holding H's account key and recovery kx")
+ok(out['a.nPub'] === out['h.pub'] && out['a.nKx'] === 'true', "N ends up holding H's account key and NO recovery kx (H never sends it)")
+ok(Number(out['a.sealedLen']) === 12 + 32 + 'alice-link@example.com'.length + 16, 'msg3 on the wire carries exactly the 32-byte scalar and the address, sealed (not a 64-byte blob)')
+ok(out['a.asked'] === 'alice-link@example.com|Alice', 'N asked the person about the address it found in SEALED, with the account\'s name beside it')
+ok(out['a.wording'].startsWith('Link this device to alice-link@example.com?|') && out['a.wording'].includes('chosen by the account') && out['a.wordingNoName'] === 'nil', 'the prompt names the ADDRESS, and the name is labelled as chosen by the account (no name, no line)')
 ok(out['a.label'] === "Alice's iPad" && out['a.offerLabel'] === 'Rig phone', 'N shows the label H WROTE ("Alice\'s iPad"), not the one it offered ("Rig phone")')
 ok(out['a.platform'] === 'true', 'a known platform token is shown by name')
 const dev = await K.verifyDev(out['a.nDev'].split('|')[0], out['a.nDev'].split('|')[1], { now: NOW })
@@ -471,9 +503,12 @@ ok(out['d.declined'] === 'declined' && out['d.completes'] === '0' && out['d.retr
 
 console.log('7. N stores nothing it cannot trust')
 ok(out['t.msg3'].startsWith('badMessage') && out['t.msg3.stores'] === 'true' && out['t.msg3.slot'] === '409', 'an altered msg3 is refused, nothing is stored, the slot is deleted')
-ok(out['t.att'].startsWith('untrusted') && out['t.att.stores'] === 'true' && out['t.att.slot'] === '409', 'a binding whose attestation does not verify is refused, nothing stored, slot deleted')
-ok(out['t.pin'].startsWith('untrusted') && out['t.pin.stores'] === 'true', 'an attestation under a key N does not pin is refused')
-ok(out['t.kid'].startsWith('untrusted') && out['t.kid.stores'] === 'true', 'an attestation under an unpinned kid is refused')
+ok(out['t.att'] === 'badMessage("att-signature")' && out['t.att.stores'] === 'true' && out['t.att.slot'] === '409', 'a binding whose attestation does not verify is refused, nothing stored, slot deleted')
+ok(out['t.pin'] === 'badMessage("att-signature")' && out['t.pin.stores'] === 'true', 'an attestation under a key N does not pin is refused')
+ok(out['t.kid'] === 'badMessage("att-unknown-kid")' && out['t.kid.stores'] === 'true', 'an attestation under an unpinned kid is refused')
+ok(out['q.result'] === 'declined' && out['q.asked'] === 'alice-link@example.com|Alice', 'declining the address refuses the link; the prompt carried the address and the name')
+ok(out['q.stores'] === 'true' && out['q.slot'] === '409', 'and nothing is stored, and the slot is deleted')
+ok(out['q.tamperedAsked'] === '0' && out['q.sealBad'] === 'true', 'a msg3 that does not check never reaches the prompt; H seals no address that is not normal')
 ok(out['z.control'] === 'ok', 'CONTROL: after all that, the honest link still completes')
 
 stop(); rmSync(tmp, { recursive: true, force: true })

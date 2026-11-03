@@ -232,7 +232,22 @@ enum IdentityLink {
         let nDev: String, nDevSig: String
         let sealed: String
     }
-    private static let sealedLen = 12 + R.blobLen + 16
+    /// SEALED opens to the 32-byte account scalar then the address in normal form (UTF-8),
+    /// so its length is a bounded range. Deliberately NOT derived from the recovery blob:
+    /// linking must never hand N the recovery kx (security §26c.4).
+    static let scalarLen = 32
+    static let addressMax = 254
+    static let sealedMin = 12 + scalarLen + 1 + 16
+    static let sealedMax = 12 + scalarLen + addressMax + 16
+    /// The oldest directory answer N will act on.
+    static let attMaxMs = 10 * 60_000
+
+    /// H's SEALED plaintext: nil rather than seal what no N would open.
+    static func sealedPlaintext(account: [UInt8], address: String) -> [UInt8]? {
+        guard account.count == scalarLen, S.isNormalAddress(address) else { return nil }
+        let a = Array(address.utf8)
+        return a.count >= 1 && a.count <= addressMax ? account + a : nil
+    }
 
     static func buildFinal(_ f: Final) -> String {
         ["lnk3", f.hDev, f.hDevSig, f.cns, f.cnsSig, f.nDev, f.nDevSig, f.sealed].joined(separator: "\n")
@@ -242,7 +257,7 @@ enum IdentityLink {
         guard text.utf8.count <= 8 * (maxLine + 1) else { return nil }
         let l = text.components(separatedBy: "\n")
         guard l.count == 8, l[0] == "lnk3", l.allSatisfy(printable) else { return nil }
-        guard isSig(l[2]), isSig(l[4]), isSig(l[6]), S.b64uDec(l[7])?.count == sealedLen else { return nil }
+        guard isSig(l[2]), isSig(l[4]), isSig(l[6]), (S.b64uDec(l[7])?.count).map({ $0 >= sealedMin && $0 <= sealedMax }) == true else { return nil }
         return Final(hDev: l[1], hDevSig: l[2], cns: l[3], cnsSig: l[4], nDev: l[5], nDevSig: l[6], sealed: l[7])
     }
 
@@ -271,29 +286,114 @@ enum IdentityLink {
         return .yes((f.sealed, nd))
     }
 
+    /// The directory's answer to a lookup of one address (`/v1/lookup`).
+    struct Lookup: Equatable {
+        let bindText: String, bindSig: String
+        let attText: String, attSig: String
+    }
+
+    /// Strict UTF-8: invalid bytes are a refusal, and a byte-order mark is kept (Foundation
+    /// would swallow it, giving one text two wires), so a BOM-led address fails to be normal.
+    private static func strictUTF8(_ b: [UInt8]) -> String? {
+        guard let s = String(bytes: b, encoding: .utf8), Array(s.utf8) == b else { return nil }
+        return s
+    }
+
+    private static func sealedAddress(_ pt: [UInt8]) -> String? {
+        guard pt.count > scalarLen, let a = strictUTF8(Array(pt[scalarLen...])) else { return nil }
+        return S.isNormalAddress(a) ? a : nil
+    }
+
     struct Opened {
-        let keys: R.BlobKeys
+        /// the account scalar, checked against the binding found for `address`
+        let account: [UInt8]
+        let address: String
+        /// the name the ACCOUNT chose for itself, from the binding: shown to the person only
+        /// as that, never as a fact about who the account is
+        let name: String?
         let device: S.DeviceCert
         let dev: String
         let devSig: String
     }
 
-    /// N's check of msg3 before it stores anything (security §39.1 cond. 4). `offer` is
-    /// exactly what N sent; `binding` the public halves of the binding the directory
-    /// served under a PINNED key.
-    static func openFinal(_ text: String, keys: Keys, t: String, offer: Offer,
-                          accountPub: String, kxPub: String, now: Int) -> Verdict<Opened> {
+    /// The binding for exactly this address, attested `active` under a pinned directory key.
+    private static func bindingFor(_ address: String, lookup: (String) -> Lookup?, directoryKeys: [String: String],
+                                   now: Int) -> Verdict<S.BindCert> {
+        guard let a = lookup(address) else { return .no("lookup") }
+        let b = S.verifyBind(a.bindText, a.bindSig, now: now)
+        guard let bind = b.value else { return .no("bind-\(b.reason ?? "?")") }
+        if bind.address != address { return .no("address-mismatch") }
+        let att = S.verifyAtt(a.attText, a.attSig, directoryKeys: directoryKeys, bindText: a.bindText, now: now, maxAgeMs: attMaxMs)
+        guard let at = att.value else { return .no("att-\(att.reason ?? "?")") }
+        if at.state != "active" { return .no("state") }
+        return .yes(bind)
+    }
+
+    /// N's check of msg3 before it stores anything (security §39.1 cond. 4), the same order
+    /// as the reference: N's dev. names N's own keys, SEALED opens under h2n as message 3
+    /// and carries an address in normal form; only THEN is that address looked up, and the
+    /// binding found must be for it, attested active under a pinned key, with the received
+    /// scalar the private half of its account key. Nothing is stored here: the host asks the
+    /// person to confirm the returned ADDRESS first, and declining aborts the slot.
+    static func openFinal(_ text: String, keys: Keys, t: String, offer: Offer, lookup: (String) -> Lookup?,
+                          directoryKeys: [String: String], now: Int) -> Verdict<Opened> {
         guard let f = parseFinal(text) else { return .no("grammar") }
         let n = S.verifyDev(f.nDev, f.nDevSig, now: now)
         guard let nd = n.value else { return .no("dev-\(n.reason ?? "?")") }
-        if nd.accountPub != accountPub { return .no("account") }
         if nd.devicePub != offer.devicePub { return .no("device-mismatch") }
         if nd.consentPub != offer.consentPub { return .no("consent-mismatch") }
         if nd.kx != offer.kx { return .no("kx-mismatch") }
         guard let pt = open(keys, .final, t: t, wire: f.sealed) else { return .no("decrypt") }
-        switch R.unpackScalars(pt, accountPub: accountPub, kxPub: kxPub) {
-        case .ok(let k): return .yes(Opened(keys: k, device: nd, dev: f.nDev, devSig: f.nDevSig))
+        guard let address = sealedAddress(pt) else { return .no("address") }
+        let b = bindingFor(address, lookup: lookup, directoryKeys: directoryKeys, now: now)
+        guard let bind = b.value else { return .no(b.reason ?? "lookup") }
+        switch R.unpackAccountScalar(Array(pt[0..<scalarLen]), accountPub: bind.accountPub) {
         case .no(let r): return .no(r)
+        case .ok(let account):
+            if nd.accountPub != bind.accountPub { return .no("account") }
+            return .yes(Opened(account: account, address: address, name: bind.name, device: nd, dev: f.nDev, devSig: f.nDevSig))
         }
+    }
+
+    // MARK: the slot wire
+
+    /// No slot message is longer than this once decoded.
+    static let maxSlotMsg = 4096
+    enum SlotMsgNo: Int { case m0 = 0, m1 = 1, m2 = 2, m3 = 3 }
+
+    private static func decodable(_ n: SlotMsgNo, _ text: String) -> Bool {
+        guard !text.isEmpty else { return false }
+        if n == .m2 {
+            guard let b = S.b64uDec(text) else { return false }
+            return b.count >= 12 + 16 && b.count <= maxSlotMsg
+        }
+        guard text.utf8.count <= maxSlotMsg else { return false }
+        switch n {
+        case .m0: return text.hasPrefix("lnk0.")
+        case .m1: return text.hasPrefix("lnk1.")
+        case .m3: return text.hasPrefix("lnk3\n")
+        case .m2: return false
+        }
+    }
+
+    /// A message as it is written to the slot: msg0/msg1 as canonical unpadded base64url
+    /// of their UTF-8 text, msg2 the sealed wire as is, msg3 the text as is. nil for a
+    /// message no peer would decode, so an agent never writes one.
+    static func encodeSlotMsg(_ n: SlotMsgNo, _ msg: String) -> String? {
+        guard decodable(n, msg) else { return nil }
+        return n == .m0 || n == .m1 ? S.b64uEnc(Data(msg.utf8)) : msg
+    }
+
+    /// The slot wire back to the message, or `grammar`. Canonical base64url only for
+    /// msg0/msg1 (a raw `lnk0.` text is refused), strict UTF-8, the decoded text must
+    /// carry its own prefix, and the 4096-byte limit is on the DECODED message.
+    static func decodeSlotMsg(_ n: SlotMsgNo, _ wire: String) -> Verdict<String> {
+        guard !wire.isEmpty else { return .no("grammar") }
+        var text = wire
+        if n == .m0 || n == .m1 {
+            guard let b = S.b64uDec(wire), b.count <= maxSlotMsg, let s = strictUTF8(Array(b)) else { return .no("grammar") }
+            text = s
+        }
+        return decodable(n, text) ? .yes(text) : .no("grammar")
     }
 }

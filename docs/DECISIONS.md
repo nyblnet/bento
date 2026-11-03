@@ -12147,30 +12147,36 @@ with seven conditions).
   `scripts/test-link-mutants.ts` reintroduces fifteen lenient paths into a copy
   of `link.ts` and requires the rig to fail on each.
 
-## 2026-11-03 — bento/connect on iOS: how a host speaks link v1 where the vectors say nothing
+## 2026-11-03 — bento/connect on iOS: link v1 as the fixture and the kernel now fix it
 
 The iOS host (`home/ios/IdentityLink.swift`, `LinkFlow.swift`) passes the `link`
-section of the identity fixture and links two simulated agents through a local
-directory. Four choices the fixture does not make, recorded so another host can
-agree or contradict them on purpose:
+section of the identity fixture (every row, including `link.final` and
+`link.wire`) and links two simulated agents through a local directory. It adopts
+the sealed wire and slot encoding that the kernel fixed, and records the choices
+that remain a host's:
 
-- **Slot messages 0 and 1 travel as base64url of their UTF-8 text.** The
-  directory requires every `msg` to be canonical base64url, and `lnk0.…`/`lnk1.…`
-  contain dots. Message 2 is already base64url (iv ‖ ciphertext ‖ tag) and is sent
-  as it is. Message 3 is the raw `lnk3` text, only through `/v1/link/complete`.
-  Neither the fixture nor the directory pins this; a host that wraps message 2
-  too would not interoperate.
-- **A device that can link keeps the recovery kx scalar.** The sealed payload is
-  `account ‖ recovery kx`, so H must hold both scalars. iOS keeps the recovery kx
-  as its own device-only Keychain item (`identity/recovery-kx`), written when the
-  recovery blob is made, and N stores it from message 3. This is the opposite of
-  "unwrap once and drop" for a device that linked rather than recovered; security
-  to rule on it.
-- **N asks the person for the address.** Message 3 names no address, and the
-  binding must come from the directory under a pinned key, so N looks up the
-  address the person types and requires the served binding to name it, to be
-  `active`, and to match the unsealed scalars. N never takes an address from the
-  directory or from the peer.
+- **The slot wire is the kernel's** (`encodeSlotMsg` / `decodeSlotMsg`, ported):
+  msg0 and msg1 as canonical unpadded base64url of their UTF-8 text, msg2 as its
+  sealed wire, msg3 as its text, every limit on the decoded message. The agent
+  encodes and decodes through them, so it neither writes nor accepts a message
+  the other hosts would refuse.
+- **SEALED is the account scalar and the address, and H never reads the recovery
+  kx.** `sealedPlaintext` seals the 32-byte scalar then the address in normal
+  form, and refuses to seal an address that is not normal. A linked device
+  stores no recovery kx (its history comes from H re-wrapping to its own kx, not
+  from the recovery key, security §26c.4). The recovery kx item a device keeps
+  from setup is setup's business and is not touched by linking.
+- **N is never typed the address.** `openFinal` opens SEALED, requires the
+  address in it to be in normal form, and only then looks it up, requiring a
+  binding for exactly that address, attested `active` under a PINNED key, whose
+  account key is the received scalar's public half.
+- **N confirms the ADDRESS before it stores anything.** The prompt leads with
+  `Link this device to <address>?` and, if the binding has a name, a second line
+  that attributes it: the name is what the account chose, not something Bento
+  checked. Declining aborts the slot (which deletes it) and stores nothing, and a
+  message that does not check never reaches the prompt. The wording is a
+  placeholder for the maintainer. There is no typed-address fallback: a failed
+  lookup is a refusal.
 - **The H side starts only from the in-app action**, on every path: displaying a
   code and scanning one. A universal link or camera intent on a device that holds
   an account is refused in either seat, before anything is written.

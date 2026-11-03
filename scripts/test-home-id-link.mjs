@@ -33,8 +33,8 @@ if (!existsSync(FIXTURE)) { console.log(`home id link: the fixture is missing ($
   if (!L) { console.log('home id link: the fixture has no `link` section.'); process.exit(1) }
   // a floor: a shrunken fixture must not pass with fewer rows to fail
   const n = { codes: L.codes.length, sessions: L.sessions.length, sas: L.sas.length, sasMatch: L.sasMatch.length, roles: L.roles.length,
-    msgs: L.msgs.length, offers: L.offers.length, offerWire: L.offerWire.length, release: L.release.length, final: L.final.length }
-  const FLOOR = { codes: 3, sessions: 2, sas: 6, sasMatch: 7, roles: 4, msgs: 12, offers: 17, offerWire: 5, release: 26, final: 15 }
+    msgs: L.msgs.length, offers: L.offers.length, offerWire: L.offerWire.length, release: L.release.length, final: L.final.length, wire: L.wire.length }
+  const FLOOR = { codes: 3, sessions: 2, sas: 6, sasMatch: 7, roles: 4, msgs: 12, offers: 17, offerWire: 5, release: 26, final: 43, wire: 30 }
   const short = Object.entries(FLOOR).filter(([k, min]) => n[k] < min)
   if (short.length) { console.log(`home id link: the fixture is SHORT: ${short.map(([k, m]) => `${k} ${n[k]} < ${m}`).join(', ')}`); process.exit(1) }
   console.log(`fixture floor met: ${Object.entries(n).map(([k, v]) => `${k} ${v}`).join(', ')}`)
@@ -144,17 +144,20 @@ print("msg3: the sealed key release")
 let bind = LK["bind"] as! [String: Any]
 do {
   let m = LK["msg3"] as! [String: Any], K = keysOf(m), t = m["t"] as! String
-  let blob = IdentityRecovery.packScalars(.init(account: unhex(bind["accountScalarHex"] as! String), kx: unhex(bind["kxScalarHex"] as! String)))!
-  ok(hex(blob) == (m["sealedPlaintextHex"] as! String) && blob.count == 64, "the sealed plaintext is packScalars(account, recovery kx): 64 bytes")
+  let addr = bind["address"] as! String
+  let pt = L.sealedPlaintext(account: unhex(bind["accountScalarHex"] as! String), address: addr)!
+  ok(hex(pt) == (m["sealedPlaintextHex"] as! String) && pt.count == 32 + addr.utf8.count, "the sealed plaintext is the 32-byte account scalar then the address, and no recovery kx")
+  ok(L.sealedPlaintext(account: unhex(bind["accountScalarHex"] as! String), address: "Alice@Example.com") == nil, "H seals no address that is not in normal form")
   ok(L.aad(t, .final) == (m["aad"] as! String), "AAD for message 3")
-  ok(L.seal(K, .final, t: t, iv: unhex(m["ivHex"] as! String), blob) == (m["sealed"] as! String), "SEALED = iv ‖ AES-GCM(h2n, blob, AAD) byte for byte")
+  ok(L.seal(K, .final, t: t, iv: unhex(m["ivHex"] as! String), pt) == (m["sealed"] as! String), "SEALED = iv ‖ AES-GCM(h2n, scalar ‖ address, AAD) byte for byte")
   ok((m["text"] as! String).components(separatedBy: "\n")[7] == (m["sealed"] as! String), "msg3 carries SEALED as its last line")
-  ok(L.open(K, .final, t: t, wire: m["sealed"] as! String).map(hex) == (m["sealedPlaintextHex"] as! String), "opens back to the blob")
+  ok(L.open(K, .final, t: t, wire: m["sealed"] as! String).map(hex) == (m["sealedPlaintextHex"] as! String), "opens back to the scalar and the address")
   ok(L.open(K, .offer, t: t, wire: m["sealed"] as! String) == nil, "SEALED does not open as message 2 (one key, one message)")
   let b = S.parseBind(bind["text"] as! String).value
   ok(b != nil && S.verifyBind(bind["text"] as! String, bind["sig"] as! String, now: fNow).ok, "the binding verifies")
   let f = L.parseFinal(m["text"] as! String)!
   ok(L.buildFinal(f) == (m["text"] as! String), "msg3 parses and rebuilds to the same eight lines")
+  ok(L.sealedMin == 61 && L.sealedMax == 314, "SEALED's length range is 61...314 bytes")
 }
 
 print("the directory's release check")
@@ -174,15 +177,46 @@ do {
 }
 
 print("N's final check")
+let dirKeys = LK["directoryKeys"] as! [String: String]
 for x in rows("final") {
-  let b = x["binding"] as! [String: String], offer = offerOf(x["offer"] as! [String: Any])
-  let v = L.openFinal(x["text"] as! String, keys: keysOf(x), t: x["t"] as! String, offer: offer, accountPub: b["accountPub"]!, kxPub: b["kxPub"]!,
-    now: (x["now"] as? NSNumber)?.intValue ?? fNow)
-  ok(verdictOk(v, x), "\(x["name"] as! String): \(show(v))")
-  if (x["expect"] as! String) == "accept", let o = v.value {
-    ok(hex(o.keys.account) == (bind["accountScalarHex"] as! String) && hex(o.keys.kx) == (bind["kxScalarHex"] as! String), "\(x["name"] as! String): N recovers the account and recovery kx scalars")
-    ok(o.device.devicePub == offer.devicePub, "\(x["name"] as! String): N's own dev. certificate")
+  let offer = offerOf(x["offer"] as! [String: Any])
+  let table = x["lookup"] as! [String: [String: String]]
+  var asked: [String] = []
+  let lookup = { (a: String) -> L.Lookup? in
+    asked.append(a)
+    guard let r = table[a] else { return nil }
+    return L.Lookup(bindText: r["bindText"]!, bindSig: r["bindSig"]!, attText: r["attText"]!, attSig: r["attSig"]!)
   }
+  let v = L.openFinal(x["text"] as! String, keys: keysOf(x), t: x["t"] as! String, offer: offer, lookup: lookup, directoryKeys: dirKeys,
+    now: (x["now"] as? NSNumber)?.intValue ?? fNow)
+  let name = x["name"] as! String
+  ok(verdictOk(v, x), "\(name): \(show(v))")
+  let want = (x["lookupCalled"] as! Bool) ? 1 : 0
+  ok(asked.count == want, "\(name): lookup called \(asked.count)× (want \(want))")
+  if (x["expect"] as! String) == "accept", let o = v.value {
+    ok(hex(o.account) == (bind["accountScalarHex"] as! String), "\(name): N recovers the account scalar")
+    ok(o.address == (x["address"] as! String) && asked.first == o.address, "\(name): N looks up, and returns, the sealed address")
+    ok(o.name == (x["displayName"] as? String), "\(name): and the binding's name, for the confirmation")
+    ok(o.device.devicePub == offer.devicePub, "\(name): N's own dev. certificate")
+  }
+}
+
+print("the slot wire")
+for x in rows("wire") {
+  let n = L.SlotMsgNo(rawValue: x["n"] as! Int)!
+  let v = L.decodeSlotMsg(n, x["wire"] as! String)
+  ok(verdictOk(v, x), "\(x["name"] as! String): \(show(v))")
+  if (x["expect"] as! String) == "accept", let text = v.value {
+    ok(text == (x["text"] as! String), "\(x["name"] as! String): decodes to the text byte for byte")
+    ok(L.encodeSlotMsg(n, text) == (x["wire"] as! String), "\(x["name"] as! String): encodes to the wire byte for byte")
+  }
+}
+do {
+  let s0 = rows("sessions")[0]
+  let pairs: [(L.SlotMsgNo, String)] = [(.m0, s0["msg0"] as! String), (.m1, s0["msg1"] as! String), (.m2, (LK["msg2"] as! [String: Any])["wire"] as! String), (.m3, (LK["msg3"] as! [String: Any])["text"] as! String)]
+  for (n, text) in pairs { ok(L.encodeSlotMsg(n, text).flatMap { L.decodeSlotMsg(n, $0).value } == text, "msg\(n.rawValue): decode(encode(m)) = m") }
+  ok(L.maxSlotMsg == 4096, "no slot message is over 4096 bytes after decoding")
+  ok(L.encodeSlotMsg(.m0, s0["msg1"] as! String) == nil, "an agent cannot encode a msg1 as message 0")
 }
 
 print("the platform field is context, never proof")
@@ -209,6 +243,18 @@ const MUTANTS = {
   'sas-not-compared': ['IdentityLink.swift', 'isDigits(a) && isDigits(b) && a == b', 'isDigits(a) && isDigits(b)'],
   'unknown-platform-shown': ['IdentityLink.swift', 'PlatformShown(name: "Unknown device type", known: false)', 'PlatformShown(name: token, known: true)'],
   'reflected-ok': ['IdentityLink.swift', 'eD == eS ? nil :', ''],
+  'sealed-no-upper-bound': ['IdentityLink.swift', '$0 >= sealedMin && $0 <= sealedMax', '$0 >= sealedMin'],
+  'sealed-no-lower-bound': ['IdentityLink.swift', '$0 >= sealedMin && $0 <= sealedMax', '$0 <= sealedMax'],
+  'address-not-normal-ok': ['IdentityLink.swift', 'return S.isNormalAddress(a) ? a : nil', 'return a'],
+  'bom-swallowed': ['IdentityLink.swift', 'guard let s = String(bytes: b, encoding: .utf8), Array(s.utf8) == b else { return nil }', 'guard let s = String(bytes: b, encoding: .utf8) else { return nil }'],
+  'binding-for-another-address': ['IdentityLink.swift', 'if bind.address != address { return .no("address-mismatch") }', ''],
+  'att-not-active': ['IdentityLink.swift', 'if at.state != "active" { return .no("state") }', ''],
+  'scalar-not-binding': ['IdentityRecovery.swift', 'guard scalarMatches(pt, accountPub) else { return .no("key-mismatch") }\n        return .ok(pt)', 'return .ok(pt)'],
+  'dev-account-unchecked': ['IdentityLink.swift', 'if nd.accountPub != bind.accountPub { return .no("account") }', ''],
+  'lookup-before-decrypt-address': ['IdentityLink.swift', 'guard let address = sealedAddress(pt) else { return .no("address") }', 'let address = sealedAddress(pt) ?? String(decoding: pt.dropFirst(scalarLen), as: UTF8.self)'],
+  'msg2-limit-on-text': ['IdentityLink.swift', 'return b.count >= 12 + 16 && b.count <= maxSlotMsg', 'return b.count >= 12 + 16 && text.utf8.count <= maxSlotMsg'],
+  'slot-raw-msg0-ok': ['IdentityLink.swift', 'guard let b = S.b64uDec(wire), b.count <= maxSlotMsg, let s = strictUTF8(Array(b)) else { return .no("grammar") }', 'guard let b = S.b64uDec(wire), b.count <= maxSlotMsg, let s = strictUTF8(Array(b)) else { return decodable(n, wire) ? .yes(wire) : .no("grammar") }'],
+  'slot-no-prefix': ['IdentityLink.swift', 'case .m3: return text.hasPrefix("lnk3\\n")', 'case .m3: return true'],
   'light-h-allowed': ['IdentityLink.swift', 'guard let hConsent = hd.consentPub else { return .no("h-no-consent") }', 'let hConsent = hd.consentPub ?? hd.devicePub'],
 }
 const mutant = process.env.LINK_MUTANT
