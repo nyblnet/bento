@@ -23,7 +23,7 @@ import {
 import { publicKeyOf, packScalars } from '../kernel/src/recovery.ts'
 import {
   linkSlot, linkTokHash, formatLinkCode, linkTranscript, linkKeys, sasDigits, sasMatches, buildMsg0, buildMsg1,
-  linkPopText, buildOffer, sealLinkMsg, linkAad, buildFinal, type LinkKeys, type LinkRole, type LinkOffer, type LinkFinal,
+  linkPopText, buildOffer, sealLinkMsg, linkAad, buildFinal, encodeSlotMsg, decodeSlotMsg, MAX_SLOT_MSG, type LinkKeys, type LinkRole, type LinkOffer, type LinkFinal,
 } from '../kernel/src/link.ts'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -658,7 +658,11 @@ const link: Record<string, unknown> = {}
   const hDev = buildDev(hCert), hDevSig = await sign(acct, hDev)
   const nCert = { devicePub: offer.devicePub, consentPub: offer.consentPub, accountPub: acct.pub, kx: offer.kx, label: offer.label, created: NOW - 1000, expires }
   const nDev = buildDev(nCert), nDevSig = await sign(acct, nDev)
-  const blob = packScalars({ account: acct.d, kx: rkxL.d })
+  // SEALED carries the account scalar ONLY, 32 bytes (security §26c.4): never the
+  // recovery blob. `oldBlob` is the 64-byte payload #878 sealed (account ‖
+  // recovery kx); it stays as reject rows so a host still on those bytes fails loudly.
+  const blob = acct.d
+  const oldBlob = packScalars({ account: acct.d, kx: rkxL.d })
   const sealed = await sealLinkMsg(K, 3, t, iv(3), blob)
   const consentFor = async (payload: string, o: { audience?: string; challenge?: string; purpose?: string; exp?: number; by?: KP } = {}) => {
     const c = buildConsent({ rp: 'bento', purpose: (o.purpose ?? 'link') as never, docId: null, transcript: (await consentTranscript(o.audience ?? 'dir', o.challenge ?? CHALLENGE, payload))!, exp: o.exp ?? NOW + 60_000 })
@@ -666,7 +670,7 @@ const link: Record<string, unknown> = {}
   }
   const honest: LinkFinal = { hDev, hDevSig, ...(await consentFor(nDev)), nDev, nDevSig, sealed }
   const msg3 = buildFinal(honest)
-  link.bind = { text: bindText, sig: await sign(acct, bindText), accountScalarHex: hex(acct.d), kxScalarHex: hex(rkxL.d) }
+  link.bind = { text: bindText, sig: await sign(acct, bindText), accountScalarHex: hex(acct.d) }
   link.msg3 = { t, ...keysHex(K), ivHex: hex(iv(3)), aad: linkAad(t, 3), sealedPlaintextHex: hex(blob), sealed, text: msg3 }
 
   // the directory's release check
@@ -694,7 +698,8 @@ const link: Record<string, unknown> = {}
   const foreignN = buildDev({ ...nCert, accountPub: strangerAcct.pub })
   rl('N\'s dev. names ANOTHER account', { nDev: foreignN, nDevSig: await sign(strangerAcct, foreignN), ...(await consentFor(foreignN)) }, 'reject', 'n-account')
   rl('N\'s dev. not signed by the account key', { nDevSig: await sign(stranger, nDev) }, 'reject', 'n-dev-signature')
-  rl('a sealed payload of a 32-byte (pre-mode-C) blob', { sealed: await sealLinkMsg(K, 3, t, iv(3), blob.slice(0, 32)) }, 'reject', 'grammar')
+  rl('SEALED is the OLD 64-byte payload (account and recovery kx)', { sealed: await sealLinkMsg(K, 3, t, iv(3), oldBlob) }, 'reject', 'grammar')
+  rl('SEALED is a 16-byte payload', { sealed: await sealLinkMsg(K, 3, t, iv(3), blob.slice(0, 16)) }, 'reject', 'grammar')
   rl('an extra line', msg3 + '\nx', 'reject', 'grammar')
   rl('an empty line', msg3.replace('\n', '\n\n').split('\n').slice(0, 8).join('\n'), 'reject', 'grammar')
   rl('a cns. with an extra field', { cns: honest.cns + '.x' }, 'reject', 'grammar')
@@ -712,7 +717,7 @@ const link: Record<string, unknown> = {}
 
   // N's final check
   const finals: Record<string, unknown>[] = []
-  const binding = { accountPub: acct.pub, kxPub: rkxL.pub }
+  const binding = { accountPub: acct.pub }
   const fn = (name: string, f: Partial<LinkFinal>, expect: 'accept' | 'reject', reason?: string, extra: Record<string, unknown> = {}) =>
     finals.push({ name: `final: ${name}`, text: buildFinal({ ...honest, ...f }), t, ...keysHex(K), offer, binding, ...extra, expect, ...(reason ? { reason } : {}) })
   const reissue = async (c: typeof nCert) => { const d = buildDev(c); return { nDev: d, nDevSig: await sign(acct, d) } }
@@ -727,12 +732,54 @@ const link: Record<string, unknown> = {}
   fn('SEALED under ANOTHER transcript', { sealed: await sealLinkMsg(K, 3, otherT, iv(3), blob) }, 'reject', 'decrypt')
   fn('SEALED as message 2', { sealed: await sealLinkMsg({ ...K, n2h: K.h2n }, 2, t, iv(3), blob) }, 'reject', 'decrypt')
   const other = await ecdsa('stranger-account-2')
-  fn('SEALED scalars of ANOTHER account key', { sealed: await sealLinkMsg(K, 3, t, iv(3), packScalars({ account: other.d, kx: rkxL.d })) }, 'reject', 'key-mismatch')
-  fn('SEALED with ANOTHER recovery kx scalar', { sealed: await sealLinkMsg(K, 3, t, iv(3), packScalars({ account: acct.d, kx: nKx.d })) }, 'reject', 'key-mismatch')
+  fn('SEALED: a 32-byte scalar of ANOTHER account key', { sealed: await sealLinkMsg(K, 3, t, iv(3), other.d) }, 'reject', 'key-mismatch')
+  fn("SEALED: the binding's RECOVERY kx scalar in place of the account scalar", { sealed: await sealLinkMsg(K, 3, t, iv(3), rkxL.d) }, 'reject', 'key-mismatch')
+  fn('SEALED is the OLD 64-byte payload (account and recovery kx)', { sealed: await sealLinkMsg(K, 3, t, iv(3), oldBlob) }, 'reject', 'grammar')
   fn('a space inside a line', { nDev: nDev.replace('.', '. ') }, 'reject', 'grammar')
   fn('a control character inside a line', { hDev: hDev + '\u0000' }, 'reject', 'grammar')
-  fn('SEALED with a zero scalar', { sealed: await sealLinkMsg(K, 3, t, iv(3), new Uint8Array(64)) }, 'reject', 'scalar-range')
+  fn('SEALED with a zero scalar', { sealed: await sealLinkMsg(K, 3, t, iv(3), new Uint8Array(32)) }, 'reject', 'scalar-range')
+  fn('SEALED with the scalar n (out of range)', { sealed: await sealLinkMsg(K, 3, t, iv(3), Uint8Array.from(Buffer.from('ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551', 'hex'))) }, 'reject', 'scalar-range')
   link.final = finals
+
+  // --- the slot wire: how each message travels (encodeSlotMsg / decodeSlotMsg) ----------
+  // msg0/msg1: canonical unpadded base64url of the UTF-8 text; msg2: the sealed wire
+  // as is; msg3: the text as is. Accept rows are byte for byte both ways.
+  const s0 = sessions[0] as { msg0: string; msg1: string }
+  const b64 = (text: string | Uint8Array) => b64uEnc(typeof text === 'string' ? te.encode(text) : text)
+  const ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+  const trailing = (w: string) => { // set a trailing bit the last character carries but encodes nothing
+    if (w.length % 4 === 0) throw new Error('no trailing bits to set')
+    return w.slice(0, -1) + ALPHA[ALPHA.indexOf(w.at(-1)!) + 1]
+  }
+  const pad = (w: string) => w + '='.repeat((4 - (w.length % 4)) % 4)
+  const at4096 = 'lnk0.' + 'A'.repeat(MAX_SLOT_MSG - 5)
+  const wire: Record<string, unknown>[] = [
+    { name: 'msg0: base64url of its UTF-8 text', n: 0, wire: b64(s0.msg0), text: s0.msg0, expect: 'accept' },
+    { name: 'msg1: base64url of its UTF-8 text', n: 1, wire: b64(s0.msg1), text: s0.msg1, expect: 'accept' },
+    { name: 'msg2: the sealed wire as is', n: 2, wire: msg2, text: msg2, expect: 'accept' },
+    { name: 'msg3: the text as is', n: 3, wire: msg3, text: msg3, expect: 'accept' },
+    { name: 'msg0: exactly 4096 bytes after decoding', n: 0, wire: b64(at4096), text: at4096, expect: 'accept' },
+    { name: 'msg0: PADDED base64url', n: 0, wire: pad(b64(s0.msg0)), expect: 'reject', reason: 'grammar' },
+    { name: 'msg1: PADDED base64url', n: 1, wire: pad(b64(s0.msg1)), expect: 'reject', reason: 'grammar' },
+    { name: 'msg0: NON-CANONICAL base64url (a trailing bit set)', n: 0, wire: trailing(b64(s0.msg0)), expect: 'reject', reason: 'grammar' },
+    { name: 'msg1: NON-CANONICAL base64url (a trailing bit set)', n: 1, wire: trailing(b64(s0.msg1)), expect: 'reject', reason: 'grammar' },
+    { name: 'msg0: NOT UTF-8 after decoding', n: 0, wire: b64(Uint8Array.from([...te.encode('lnk0.'), 0xff, 0xfe, 0x80])), expect: 'reject', reason: 'grammar' },
+    { name: 'msg0: OVER 4 KB after decoding', n: 0, wire: b64(at4096 + 'A'), expect: 'reject', reason: 'grammar' },
+    { name: 'msg3: OVER 4 KB', n: 3, wire: 'lnk3\n' + 'A'.repeat(MAX_SLOT_MSG - 4), expect: 'reject', reason: 'grammar' },
+    { name: 'msg0: sent RAW, not encoded', n: 0, wire: s0.msg0, expect: 'reject', reason: 'grammar' },
+    { name: 'msg1: sent RAW, not encoded', n: 1, wire: s0.msg1, expect: 'reject', reason: 'grammar' },
+    { name: 'msg0: a msg1 under the msg0 number', n: 0, wire: b64(s0.msg1), expect: 'reject', reason: 'grammar' },
+    { name: 'msg2: with base64 padding (=) after it', n: 2, wire: msg2 + '=', expect: 'reject', reason: 'grammar' },
+    { name: 'msg3: base64url-encoded, not sent as text', n: 3, wire: b64(msg3), expect: 'reject', reason: 'grammar' },
+    { name: 'msg0: empty', n: 0, wire: '', expect: 'reject', reason: 'grammar' },
+  ]
+  for (const r of wire) { // the generator checks its own rows against the reference
+    const v = decodeSlotMsg(r.n as 0, r.wire as string)
+    if (v.ok !== (r.expect === 'accept') || (v.ok && v.value !== r.text)) throw new Error(`wire row: ${r.name}`)
+    if (v.ok && encodeSlotMsg(r.n as 0, r.text as string) !== r.wire) throw new Error(`wire row encode: ${r.name}`)
+  }
+  if (pad(b64(s0.msg0)) === b64(s0.msg0)) throw new Error('a padded row needs a length that pads')
+  link.wire = wire
 }
 
 const fixture = {
@@ -759,4 +806,4 @@ const fixture = {
 }
 mkdirSync(dirname(OUT), { recursive: true })
 writeFileSync(OUT, JSON.stringify(fixture, null, 2) + '\n')
-console.log(`wrote ${OUT}: ${rows.length} statement rows, ${dreqRows.length} dreq, ${rotRows.length} rot, ${dreqConsentRows.length} dreq consent rows, link: ${(link.offers as unknown[]).length} offer, ${(link.release as unknown[]).length} release, ${(link.final as unknown[]).length} final rows, ${addresses.length} address rows, ${purposes.length} purpose rows`)
+console.log(`wrote ${OUT}: ${rows.length} statement rows, ${dreqRows.length} dreq, ${rotRows.length} rot, ${dreqConsentRows.length} dreq consent rows, link: ${(link.offers as unknown[]).length} offer, ${(link.release as unknown[]).length} release, ${(link.final as unknown[]).length} final, ${(link.wire as unknown[]).length} wire rows, ${addresses.length} address rows, ${purposes.length} purpose rows`)

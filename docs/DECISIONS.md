@@ -12107,3 +12107,33 @@ with seven conditions).
   deterministic row byte for byte and checks every verdict;
   `scripts/test-link-mutants.ts` reintroduces fifteen lenient paths into a copy
   of `link.ts` and requires the rig to fail on each.
+## 2026-11-03 — link v1: SEALED carries the account key only, and the slot wire is fixed
+
+Two follow-ups to the link v1 entry above, both from porting it to iOS.
+
+- **msg3's SEALED is the 32-byte account scalar, and nothing else.** The first
+  cut sealed the 64-byte recovery blob (account ‖ recovery kx), which handed
+  every newly linked device the recovery kx. That contradicts security §26c.4:
+  the recovery kx is touched as rarely as possible, and when an existing device
+  is reachable the new device's history comes from that device re-wrapping to
+  the new device's own kx, never from unwrapping the recovery kx. Linking always
+  has H present, so it never needs it. SEALED is now AES-GCM over the account
+  scalar alone; on the wire it is iv ‖ 32 bytes ‖ tag (`SEALED_LEN` =
+  12 + 32 + 16, a constant of its own rather than one derived from the recovery
+  blob's length). The directory's release check and N's parse refuse any other
+  length as `grammar`. N checks the scalar against the pinned binding's account
+  key only (`unpackAccountScalar`); the binding's recovery kx plays no part.
+  H therefore never needs the recovery kx to link a device.
+- **The old 64-byte payload stays in the vectors as a reject row**, in both the
+  release check and N's check, so a host still sealing those bytes fails loudly
+  rather than half-working. So does a 32-byte scalar that is not the binding's
+  account key (another account's, and the binding's own recovery kx scalar).
+  The mutant rig requires a 64-byte SEALED to be refused.
+- **How each message travels on the slot is now part of the contract**
+  (`encodeSlotMsg` / `decodeSlotMsg`): msg0 and msg1 as canonical unpadded
+  base64url of their UTF-8 text, msg2 as its sealed wire unchanged, msg3 as its
+  text unchanged. Decoding refuses padding, set trailing bits, text that is not
+  UTF-8, a msg0 or msg1 sent raw instead of encoded, a message under the wrong
+  number, and anything over 4096 bytes once decoded. Before this, iOS had to
+  choose an encoding that no spec pinned, and two hosts choosing differently
+  would never link. The `link.wire` rows are byte for byte both ways.

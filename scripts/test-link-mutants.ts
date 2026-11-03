@@ -23,7 +23,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 let failures = 0, checks = 0
 const ok = (c: boolean, m: string) => { checks++; if (!c) { failures++; console.log(`  FAIL  ${m}`) } else console.log(`  ok    ${m}`) }
 
-type Mutant = { name: string; file: 'link.ts'; from: string; to: string }
+type Mutant = { name: string; file: 'link.ts' | 'recovery.ts' | 'statements.ts'; from: string; to: string }
 const MUTANTS: Mutant[] = [
   { name: 'the code is left out of the key salt', file: 'link.ts',
     from: "    h2n: await hkdf(z, salt, `bento/id/link/v1/h2n.${t}`),",
@@ -85,6 +85,29 @@ const MUTANTS: Mutant[] = [
   { name: 'N stores a dev. naming another kx', file: 'link.ts',
     from: "  if (n.value.kx !== opts.offer.kx) return no('kx-mismatch')\n",
     to: "" },
+  // security §26c.4: SEALED is the account scalar only, never account ‖ recovery kx
+  { name: 'a 64-byte SEALED is accepted', file: 'link.ts',
+    from: "b64uDec(sealed)?.length !== SEALED_LEN) return null",
+    to: "![SEALED_LEN, 12 + 64 + 16].includes(b64uDec(sealed)?.length ?? -1)) return null" },
+  { name: "N takes a scalar the binding's accountPub does not name", file: 'recovery.ts',
+    from: "  if (typeof accountPub !== 'string' || !(await scalarMatches(pt, accountPub, subtle))) return no('key-mismatch')\n",
+    to: "" },
+  // the slot wire
+  { name: 'msg0/msg1 accept padded base64url', file: 'link.ts',
+    from: "    const b = b64uDec(wire)\n    if (!b || b.length > MAX_SLOT_MSG) return no('grammar')",
+    to: "    const b = b64uDec(wire.replace(/=+$/, ''))\n    if (!b || b.length > MAX_SLOT_MSG) return no('grammar')" },
+  { name: 'base64url decoding ignores trailing bits', file: 'statements.ts',
+    from: "  return b64uEnc(out) === s ? out : null",
+    to: "  return out" },
+  { name: 'msg0/msg1 decode as lenient UTF-8', file: 'link.ts',
+    from: "    try { text = strictUtf8.decode(b) } catch { return no('grammar') }\n  } else text = wire",
+    to: "    text = new TextDecoder().decode(b)\n  } else text = wire" },
+  { name: 'a raw msg0/msg1 is taken as sent', file: 'link.ts',
+    from: "  if (n === 0 || n === 1) {\n    const b = b64uDec(wire)",
+    to: "  if ((n === 0 || n === 1) && !wire.startsWith('lnk')) {\n    const b = b64uDec(wire)" },
+  { name: 'the 4 KB limit is not applied to the decoded text', file: 'link.ts',
+    from: "text.length === 0 || te.encode(text).length > MAX_SLOT_MSG) return false",
+    to: "text.length === 0 || te.encode(text).length > 2 * MAX_SLOT_MSG) return false" },
 ]
 
 function tree(): string {

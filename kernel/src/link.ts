@@ -3,8 +3,9 @@
 //
 // bento/id — device linking, link v1: one protocol for every pair of hosts.
 //
-// Linking hands a NEW device (N) the account key and the recovery kx, from a
-// device that HOLDS them (H). It is the most sensitive transfer after recovery,
+// Linking hands a NEW device (N) the account key, from a device that HOLDS it
+// (H). Never the recovery kx: N gets its history from H re-wrapping to N's own
+// kx (security §26c.4). It is the most sensitive transfer after recovery,
 // so every agent must derive the same bytes: this module is the reference, and
 // the `link` section of kernel/fixtures/identity-v1.json is the contract.
 //
@@ -33,13 +34,17 @@
 //   7. H draws its consent, gets a single-use `dir` challenge, issues N's dev.
 //      certificate and signs a cns. (purpose `link`, audience `dir`) over that
 //      dev. text. msg3 = `lnk3` and seven lines: H's dev. + sig, the cns. + sig,
-//      N's dev. + sig, and SEALED = the account blob plaintext (recovery.ts
-//      packScalars: account scalar ‖ recovery kx scalar, 64 bytes) under h2n,
-//      message number 3 (buildFinal). The directory releases msg3 to N only if
+//      N's dev. + sig, and SEALED = the 32-byte ACCOUNT SCALAR ONLY under h2n,
+//      message number 3 (buildFinal). Not the recovery blob: the recovery kx
+//      stays out of linking (§26c.4). The directory releases msg3 to N only if
 //      verifyLinkRelease accepts it, once per slot.
 //   8. N checks the dev. it was issued names exactly the keys it offered, opens
-//      SEALED and matches both scalars to the binding the directory served under
-//      a PINNED directory key (openFinal).
+//      SEALED and matches the account scalar to the binding the directory served
+//      under a PINNED directory key (openFinal).
+//
+// On the slot, each message travels in its WIRE form (encodeSlotMsg /
+// decodeSlotMsg): msg0 and msg1 as canonical unpadded base64url of their UTF-8
+// text, msg2 as its sealed wire unchanged, msg3 as its text unchanged.
 //
 // What this module does NOT do: the slot transport, the single-scanner rule, the
 // one-completion-per-slot rule and the notifications are the directory's; the
@@ -53,7 +58,7 @@ import {
   b64uEnc, b64uDec, sha256b64u, isSigningKey, isKxKey, verifyStatementSig, verifyDev, verifyConsent,
   displayText, parseBind, type Verdict, type DeviceCert, type AttState,
 } from './statements.ts'
-import { formatRecoveryCode, parseRecoveryCode, unpackScalars, CODE_BYTES, BLOB_LEN, type BlobKeys, type BlobPubs } from './recovery.ts'
+import { formatRecoveryCode, parseRecoveryCode, unpackAccountScalar, CODE_BYTES } from './recovery.ts'
 
 const no = (reason: string): { ok: false; reason: string } => ({ ok: false, reason })
 const te = new TextEncoder()
@@ -322,12 +327,19 @@ export interface LinkFinal {
   cns: string; cnsSig: string
   /** the dev. certificate H issued for N, signed by the account key */
   nDev: string; nDevSig: string
-  /** sealLinkMsg(keys, 3, t, iv, packScalars(account, recovery kx)) */
+  /** sealLinkMsg(keys, 3, t, iv, the 32-byte account scalar) */
   sealed: string
 }
 
-/** The sealed payload on the wire: iv ‖ the 64-byte blob plaintext ‖ tag. */
-const SEALED_LEN = 12 + BLOB_LEN + 16
+/** What SEALED carries: the account scalar, 32 bytes big-endian, and nothing else. */
+export const LINK_SEALED_PLAINTEXT_LEN = 32
+/**
+ * SEALED on the wire: iv ‖ the 32-byte account scalar ‖ tag. Deliberately NOT
+ * recovery.ts BLOB_LEN: the recovery blob is account ‖ recovery kx, and linking
+ * must never hand N the recovery kx (security §26c.4: link-time history comes
+ * from H re-wrapping to N's kx). A 64-byte payload is refused as grammar.
+ */
+export const SEALED_LEN = 12 + LINK_SEALED_PLAINTEXT_LEN + 16
 
 /** msg3: "lnk3" and the seven fields, one per line, joined by "\n" (no line may be empty). */
 export function buildFinal(f: LinkFinal): string {
@@ -394,20 +406,21 @@ export async function verifyLinkRelease(text: string, opts: {
 
 /**
  * N's check of msg3 before it stores anything (security §39.1 cond. 4). `offer`
- * is exactly what N sent in msg2; `binding` is the account key and recovery kx
- * of the binding the directory served under a PINNED directory key. N's dev.
- * must verify, name that account key, and name N's own devicePub, consentPub
- * and kx; SEALED must open under h2n as message 3; and both scalars must be in
- * range and match the binding (recovery.ts unpackScalars). Any refusal: abort
- * and delete the slot.
+ * is exactly what N sent in msg2; `binding` carries the account key of the
+ * binding the directory served under a PINNED directory key. N's dev. must
+ * verify, name that account key, and name N's own devicePub, consentPub and kx;
+ * SEALED must open under h2n as message 3; and the 32-byte scalar must be in
+ * range and the private half of the binding's accountPub (recovery.ts
+ * unpackAccountScalar). The binding's recovery kx plays no part: N never
+ * receives it. Any refusal: abort and delete the slot.
  */
 export async function openFinal(text: string, opts: {
   keys: LinkKeys
   t: string
   offer: LinkOffer
-  binding: BlobPubs
+  binding: { accountPub: string }
   now: number
-}): Promise<Verdict<{ keys: BlobKeys; device: DeviceCert; dev: string; devSig: string }>> {
+}): Promise<Verdict<{ account: Uint8Array; device: DeviceCert; dev: string; devSig: string }>> {
   const f = parseFinal(text)
   if (!f) return no('grammar')
   const n = await verifyDev(f.nDev, f.nDevSig, { now: opts.now })
@@ -418,7 +431,55 @@ export async function openFinal(text: string, opts: {
   if (n.value.kx !== opts.offer.kx) return no('kx-mismatch')
   const pt = await openLinkMsg(opts.keys, 3, opts.t, f.sealed)
   if (!pt) return no('decrypt')
-  const u = await unpackScalars(pt, opts.binding)
+  const u = await unpackAccountScalar(pt, opts.binding.accountPub)
   if (!u.ok) return u
-  return { ok: true, value: { keys: u.value, device: n.value, dev: f.nDev, devSig: f.nDevSig } }
+  return { ok: true, value: { account: u.value, device: n.value, dev: f.nDev, devSig: f.nDevSig } }
+}
+
+// --- the slot wire ---------------------------------------------------------------------
+
+export type SlotMsgNo = 0 | 1 | 2 | 3
+/** No slot message is longer than this once decoded: 4 KiB. */
+export const MAX_SLOT_MSG = 4096
+
+/**
+ * A message as it is written to the slot. msg0 and msg1: canonical unpadded
+ * base64url of the UTF-8 text. msg2: the sealed wire (already base64url),
+ * unchanged. msg3: the text, unchanged. Throws on a message no peer would
+ * decode (the wrong prefix, or over MAX_SLOT_MSG), so an agent never writes one.
+ */
+export function encodeSlotMsg(n: SlotMsgNo, msg: string): string {
+  if (!decodable(n, msg)) throw new Error(`not a link v1 message ${n}`)
+  return n === 0 || n === 1 ? b64uEnc(te.encode(msg)) : msg
+}
+
+/**
+ * The slot wire back to the message, or `grammar`. msg0/msg1: canonical
+ * base64url only (no padding, zero trailing bits; a raw `lnk0.` text is
+ * refused), strict UTF-8, and the decoded text must carry its own prefix.
+ * msg2: canonical base64url. msg3: text starting `lnk3` and a line feed. Every
+ * message is at most MAX_SLOT_MSG bytes once decoded. The parsers (parseMsg0,
+ * parseMsg1, openOffer, verifyLinkRelease, openFinal) still check what this
+ * returns; this only fixes how the bytes travel.
+ */
+export function decodeSlotMsg(n: SlotMsgNo, wire: string): Verdict<string> {
+  if (typeof wire !== 'string' || wire.length === 0) return no('grammar')
+  let text: string
+  if (n === 0 || n === 1) {
+    const b = b64uDec(wire)
+    if (!b || b.length > MAX_SLOT_MSG) return no('grammar')
+    try { text = strictUtf8.decode(b) } catch { return no('grammar') }
+  } else text = wire
+  return decodable(n, text) ? { ok: true, value: text } : no('grammar')
+}
+
+/** What every slot message satisfies once decoded: its prefix and its size,
+ *  and for msg2 canonical base64url of at least an iv and a tag. */
+function decodable(n: SlotMsgNo, text: string): boolean {
+  if (typeof text !== 'string' || text.length === 0 || te.encode(text).length > MAX_SLOT_MSG) return false
+  if (n === 0) return text.startsWith('lnk0.')
+  if (n === 1) return text.startsWith('lnk1.')
+  if (n === 2) { const b = b64uDec(text); return !!b && b.length >= 12 + 16 }
+  if (n === 3) return text.startsWith('lnk3\n')
+  return false
 }

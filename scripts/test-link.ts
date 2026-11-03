@@ -13,7 +13,9 @@
 // SAS, the exact msg2 and sealed ciphertexts) are RECOMPUTED here from their
 // inputs and compared byte for byte, and every verdict row (msg0/msg1, the
 // offer, the directory's release check, N's final check) must reach the stated
-// verdict for the stated reason. The release rows also pin spend-first: the
+// verdict for the stated reason, and the slot wire rows decode (and encode) byte
+// for byte. SEALED is the 32-byte account scalar only (security §26c.4): the old
+// 64-byte payload must be refused. The release rows also pin spend-first: the
 // directory's challenge is consumed by every attempt that parses. Finally the
 // attack rows security's §39.1 run-it list names must exist, so deleting one
 // cannot quietly shrink the contract.
@@ -22,11 +24,11 @@ import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { b64uEnc, b64uDec, verifyBind, RESERVED_PREFIXES, LINK_PREFIXES } from '../kernel/src/statements.ts'
-import { publicKeyOf, packScalars } from '../kernel/src/recovery.ts'
+import { publicKeyOf } from '../kernel/src/recovery.ts'
 import {
   linkSlot, linkTokHash, parseLinkCode, formatLinkCode, linkTranscript, linkKeys, linkKeysFromShared, sasDigits, sasMatches,
   scannerMayProceed, buildMsg0, buildMsg1, parseMsg0, parseMsg1, linkAad, sealLinkMsg, openLinkMsg, verifyOffer, openOffer,
-  buildOffer, verifyLinkRelease, openFinal, buildFinal, linkPopText, type LinkKeys, type LinkRole, type LinkOffer,
+  buildOffer, verifyLinkRelease, openFinal, buildFinal, linkPopText, encodeSlotMsg, decodeSlotMsg, SEALED_LEN, MAX_SLOT_MSG, type LinkKeys, type LinkRole, type LinkOffer,
 } from '../kernel/src/link.ts'
 import type { AttState } from '../kernel/src/statements.ts'
 
@@ -139,16 +141,17 @@ for (const x of L.offerWire) {
 console.log('\nmsg3: the sealed key release')
 {
   const m = L.msg3, K = keysOf(m)
-  ok(hex(packScalars({ account: unhex(L.bind.accountScalarHex), kx: unhex(L.bind.kxScalarHex) })) === m.sealedPlaintextHex, 'the sealed plaintext is packScalars(account, recovery kx): 64 bytes')
-  ok(m.sealedPlaintextHex.length === 128, 'mode C: the released blob is exactly 64 bytes')
+  ok(m.sealedPlaintextHex === L.bind.accountScalarHex, 'the sealed plaintext is the account scalar')
+  ok(m.sealedPlaintextHex.length === 64, 'SEALED carries exactly 32 bytes: the account scalar, never the recovery kx (§26c.4)')
+  ok(L.bind.kxScalarHex === undefined, 'the vectors hold no recovery kx scalar for linking')
+  ok(SEALED_LEN === 12 + 32 + 16 && b64uDec(m.sealed)?.length === SEALED_LEN, `SEALED on the wire is iv ‖ 32 bytes ‖ tag = ${SEALED_LEN} bytes`)
   ok(linkAad(m.t, 3) === m.aad, 'AAD for message 3')
   ok((await sealLinkMsg(K, 3, m.t, unhex(m.ivHex), unhex(m.sealedPlaintextHex))) === m.sealed, 'SEALED = iv ‖ AES-GCM(h2n, blob, AAD) byte for byte')
   ok(m.text.split('\n')[7] === m.sealed, 'msg3 carries SEALED as its last line')
   const pt = await openLinkMsg(K, 3, m.t, m.sealed)
   ok(!!pt && hex(pt) === m.sealedPlaintextHex, 'opens back to the blob')
   const b = await verifyBind(L.bind.text, L.bind.sig, { now: F.now })
-  ok(b.ok && b.value.accountPub === publicKeyOf(unhex(L.bind.accountScalarHex)) && b.value.kx === publicKeyOf(unhex(L.bind.kxScalarHex)),
-    "the binding names the released scalars' public keys")
+  ok(b.ok && b.value.accountPub === publicKeyOf(unhex(L.bind.accountScalarHex)), "the binding names the released scalar's public key")
 }
 
 console.log(`\nthe directory's release check (${L.release.length})`)
@@ -172,9 +175,32 @@ for (const x of L.final) {
   const v = await caught(() => openFinal(x.text, { keys: keysOf(x), t: x.t, offer: x.offer, binding: x.binding, now: x.now ?? F.now }))
   ok(verdict(v, x), `${x.name}: ${show(v)}`)
   if (x.expect === 'accept' && v.ok) {
-    ok(hex(v.value.keys.account) === L.bind.accountScalarHex && hex(v.value.keys.kx) === L.bind.kxScalarHex, `${x.name}: N recovers the account and recovery kx scalars`)
+    ok(hex(v.value.account) === L.bind.accountScalarHex, `${x.name}: N recovers the account scalar`)
+    ok(!('keys' in v.value) && !('kx' in v.value), `${x.name}: and nothing else (no recovery kx)`)
     ok(v.value.device.devicePub === x.offer.devicePub, `${x.name}: N's own dev. certificate`)
   }
+}
+
+console.log(`\nthe slot wire (${L.wire.length})`)
+for (const x of L.wire) {
+  ok([0, 1, 2, 3].includes(x.n), `${x.name}: names its message number`)
+  const v = await caught(async () => decodeSlotMsg(x.n, x.wire))
+  ok(verdict(v, x), `${x.name}: ${show(v)}`)
+  if (x.expect === 'accept' && v.ok) {
+    ok((v as { value: string }).value === x.text, `${x.name}: decodes to the text byte for byte`)
+    ok(encodeSlotMsg(x.n, x.text) === x.wire, `${x.name}: encodes to the wire byte for byte`)
+  }
+}
+{
+  const s0 = L.sessions[0]
+  for (const [n, text] of [[0, s0.msg0], [1, s0.msg1], [2, L.msg2.wire], [3, L.msg3.text]] as [0 | 1 | 2 | 3, string][]) {
+    const w = encodeSlotMsg(n, text), d = decodeSlotMsg(n, w)
+    ok(d.ok && d.value === text, `msg${n}: decode(encode(m)) = m`)
+  }
+  ok(MAX_SLOT_MSG === 4096, 'no slot message is over 4096 bytes after decoding')
+  let threw = false
+  try { encodeSlotMsg(0, s0.msg1) } catch { threw = true }
+  ok(threw, 'an agent cannot encode a msg1 as message 0')
 }
 
 console.log('\nthe contract holds its attack rows (security §39.1 run-it list, K6)')
@@ -182,11 +208,20 @@ console.log('\nthe contract holds its attack rows (security §39.1 run-it list, 
   const names = [...L.release, ...L.final, ...L.offers, ...L.offerWire].map((x: { name: string }) => x.name)
   const has = (needle: string) => names.some((n) => n.includes(needle))
   for (const needle of ['REPLAY', 'RELAY', 'ANOTHER CHALLENGE', 'PAYLOAD SWAP', 'FROZEN', 'PENDING', 'ANOTHER devicePub', 'ANOTHER consentPub',
-    'ANOTHER kx', 'WRONG DIRECTION', 'ANOTHER transcript', 'OFFERED WITHOUT ITS PoP', 'ANOTHER account key', 'pre-mode-C',
+    'ANOTHER kx', 'WRONG DIRECTION', 'ANOTHER transcript', 'OFFERED WITHOUT ITS PoP', 'ANOTHER account key', 'RECOVERY kx scalar in place',
     'MALFORMED served binding', "H's OWN devicePub", 'a space inside a line', 'a control character inside a line'])
     ok(has(needle), `attack row present: ${needle}`)
   ok(L.release.filter((x: RelRow) => x.reason === 'grammar').every((x: RelRow) => !x.spendCalled) &&
     L.release.filter((x: RelRow) => x.reason !== 'grammar').every((x: RelRow) => x.spendCalled), 'release: every refusal before the spend is grammar')
+  for (const sec of ['release', 'final'])
+    ok(L[sec].some((x: { name: string; expect: string; reason?: string }) => x.name.includes('OLD 64-byte payload') && x.expect === 'reject' && x.reason === 'grammar'),
+      `${sec}: the old 64-byte SEALED is refused as grammar`)
+  ok(L.final.some((x: { name: string; reason?: string }) => x.name.includes('32-byte scalar of ANOTHER account key') && x.reason === 'key-mismatch'),
+    "final: a 32-byte scalar that is not the binding's is key-mismatch")
+  const wireNames = L.wire.map((x: { name: string }) => x.name)
+  for (const needle of ['msg0: PADDED', 'msg0: NON-CANONICAL', 'msg0: NOT UTF-8', 'msg0: OVER 4 KB', 'msg0: sent RAW'])
+    ok(wireNames.some((n: string) => n.startsWith(needle)), `wire row present: ${needle}`)
+  for (const n of [0, 1, 2, 3]) ok(L.wire.some((x: { n: number; expect: string }) => x.n === n && x.expect === 'accept'), `wire: an accept row for msg${n}`)
   for (const k of ['msg0', 'msg1']) ok(L.msgs.some((x: { kind: string; reason?: string }) => x.kind === k && x.reason === 'key'), `${k} has an invalid-point row`)
   for (const v of ['accept', 'reject']) for (const sec of ['offers', 'release', 'final', 'msgs'])
     ok(L[sec].some((x: { expect: string }) => x.expect === v), `${sec} has ${v === 'accept' ? 'an accept' : 'a reject'} row`)

@@ -192,9 +192,12 @@ judged by verdict, like the statement rows.
   proofs of possession over `lnkp.v1.<t>`. `offerWire`: opening msg2 under the
   wrong direction's key, the wrong message number or another transcript must
   fail to decrypt.
-- `bind` and `msg3`: the account binding, the released scalars, and the exact
-  SEALED ciphertext (key `h2n`, AAD `lnka.v1.<t>.3`, plaintext = the 64-byte
-  account blob).
+- `bind` and `msg3`: the account binding, the released account scalar, and the
+  exact SEALED ciphertext (key `h2n`, AAD `lnka.v1.<t>.3`, plaintext = the
+  32-byte ACCOUNT SCALAR ONLY, so SEALED is 12 + 32 + 16 bytes). Never the
+  recovery kx (security §26c.4): N's history comes from H re-wrapping to N's
+  kx. The old 64-byte payload (account ‖ recovery kx) is a reject row in both
+  `release` and `final` (`grammar`).
 - `release`: the DIRECTORY's check before it hands msg3 to N
   (`verifyLinkRelease`). The verifier brings `bindText` (the binding it serves),
   its `state`, the `challenge` it issued and whether that challenge is already
@@ -204,7 +207,18 @@ judged by verdict, like the statement rows.
   H's own devicePub is `n-device-is-h`. Every msg3 line is printable ASCII
   0x21–0x7E: a space, a control or a non-ASCII byte in any line is `grammar`.
 - `final`: N's check of msg3 (`openFinal`), given what it offered (`offer`) and
-  the binding's public halves (`binding`, from a pinned directory key).
+  the binding's account key (`binding.accountPub`, from a pinned directory
+  key). The 32-byte scalar must be in 1..n−1 and the private half of that key:
+  another account's scalar, or the binding's recovery kx scalar, is
+  `key-mismatch`.
+- `wire`: how each message travels on the slot (`encodeSlotMsg` /
+  `decodeSlotMsg`), `n` naming the message. msg0 and msg1 are canonical
+  unpadded base64url of their UTF-8 text; msg2 is its sealed wire as is; msg3
+  is its text as is. An accept row's `wire` decodes to `text` and `text`
+  encodes to `wire`, byte for byte. Refused as `grammar`: padding, a set
+  trailing bit, bytes that are not UTF-8, a msg0/msg1 sent raw, a message under
+  the wrong number, an empty message, and anything over 4096 bytes once
+  decoded.
 
 Host port notes for link v1:
 
