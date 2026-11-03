@@ -223,6 +223,12 @@ if sa and su:
     ok(A.get("after_overall_reauth") == "ok", f"sign: overall: re-authenticating restores it ({A.get('after_overall_reauth')})")
     ok(A.get("after_lock") == "reauth", f"sign: a lock (screen lock, sleep) refuses until re-authentication ({A.get('after_lock')})")
 
+# B1: an unverifiable file gets the notice (placeholder wording, the maintainer's to word), a genuine one does not
+for scn, notice_for, none_for in [("pair", "U.bento.html", "A.bento.html"), ("sign", "SU.bento.html", "SA.bento.html")]:
+    L = log(scn)
+    ok(re.search(r"NOTICE " + re.escape(notice_for) + r": Bento can't verify this file", L) is not None, f"{scn}: the UNVERIFIABLE document ({notice_for}) is told it opens without a Bento ID")
+    ok("NOTICE " + none_for not in L, f"{scn}: the genuine document ({none_for}) is not shown it")
+
 # §19h wedge isolation: a stopped web process freezes ITS document and no other
 wj = out / "wedge.json"
 if not wj.exists():

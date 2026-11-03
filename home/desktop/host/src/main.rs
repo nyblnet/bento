@@ -285,6 +285,33 @@ async fn bento_id(app: tauri::AppHandle, webview: tauri::Webview, msg: String, c
     reply(&id, r)
 }
 
+/// PLACEHOLDER WORDING: the maintainer words this message (identity-phase1-plan,
+/// H2/I2 security condition 3). It must never claim the file IS newer, and it
+/// offers no "trust anyway". Until the update check exists on desktop the only
+/// action is to carry on without a Bento ID, so there is one button.
+pub(crate) const UNVERIFIED_NOTICE: &str =
+    "Bento can't verify this file, so it opens without your Bento ID. It may be from a newer version of Bento.";
+
+/// Tell the person, once when the file is opened, that an unverifiable document
+/// gets no identity. The words go to the log in every build, so the rig can hold
+/// the host to showing it; the dialog itself is skipped in the rig, where nobody
+/// is there to dismiss it.
+fn unverified_notice(app: &tauri::AppHandle, name: &str) {
+    eprintln!("NOTICE {name}: {UNVERIFIED_NOTICE}");
+    #[cfg(not(feature = "rig"))]
+    {
+        use tauri_plugin_dialog::{MessageDialogButtons, MessageDialogKind};
+        app.dialog()
+            .message(UNVERIFIED_NOTICE)
+            .title(name.to_string())
+            .kind(MessageDialogKind::Info)
+            .buttons(MessageDialogButtons::OkCustom("Open without Bento ID".into()))
+            .show(|_| {});
+    }
+    #[cfg(feature = "rig")]
+    let _ = app;
+}
+
 /// Build (or rebuild) the webview for document `i`.
 fn open_window(app: &tauri::AppHandle, i: usize) -> tauri::Result<()> {
     let (label, host, title, data) = {
@@ -304,7 +331,6 @@ fn open_window(app: &tauri::AppHandle, i: usize) -> tauri::Result<()> {
     let own = doc_url(&host);
     // `;` between the parts: each is an IIFE, and `})()\n(function…` parses as
     // ONE call expression (measured: bridge.js never ran).
-    #[allow(unused_mut)]
     // The 'identity' capability is declared ONLY for a document whose bytes are
     // genuine right now (gate 1): an unverified file then has no agent object at
     // all. The host still re-checks every call (`armed_genuine`), so this is the
@@ -315,6 +341,7 @@ fn open_window(app: &tauri::AppHandle, i: usize) -> tauri::Result<()> {
         matches!(h.trust.verdict(&h.docs[i].bytes), Verdict::Genuine { .. })
     };
     let caps = if genuine_now && cfg!(target_os = "linux") { "window.__bentoHostCaps=['identity'];\n" } else { "" };
+    #[allow(unused_mut)]
     let mut init = format!("{caps}{SHIM};\n{BRIDGE};\n");
     #[cfg(feature = "rig")]
     { init = rig::init_script(app, &label, init); }
@@ -513,7 +540,15 @@ fn main() {
         })
         .invoke_handler(handlers())
         .setup(move |app| {
-            for i in 0..count { open_window(app.handle(), i)? }
+            for i in 0..count {
+                open_window(app.handle(), i)?;
+                let (unknown, name) = {
+                    let s = app.state::<Shared>();
+                    let h = s.lock().unwrap();
+                    (matches!(h.trust.verdict(&h.docs[i].bytes), Verdict::Unknown { .. }), h.docs[i].name.clone())
+                };
+                if unknown { unverified_notice(app.handle(), &name) }
+            }
             Ok(())
         })
         .run(tauri::generate_context!())
