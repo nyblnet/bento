@@ -41,9 +41,11 @@ let key = P256.Signing.PrivateKey(), stranger = P256.Signing.PrivateKey()
 func pub(_ k: P256.Signing.PrivateKey) -> String { R.b64uEnc(Array(k.publicKey.x963Representation)) }
 Argon2id.availableMemory = full
 let wrap = R.recoveryWrapKey(code: code, salt: salt)!
-func material(sealing k: P256.Signing.PrivateKey, binding: String) -> RecoveryFlow.Material {
-    let ct = R.sealRecoveryInner(wrapKey: wrap, iv: iv, accountPub: binding, keys: .init(account: Array(k.rawRepresentation), kx: nil))!
-    return .init(salt: salt, iv: iv, ct: ct, accountPub: binding, kxPub: nil)
+let kxKey = P256.Signing.PrivateKey()   // the recovery kx (mode C): required, sealed beside the account scalar
+func material(sealing k: P256.Signing.PrivateKey, binding: String, kx: P256.Signing.PrivateKey? = nil, kxBinding: String? = nil) -> RecoveryFlow.Material {
+    let kxk = kx ?? kxKey
+    let ct = R.sealRecoveryInner(wrapKey: wrap, iv: iv, accountPub: binding, keys: .init(account: Array(k.rawRepresentation), kx: Array(kxk.rawRepresentation)))!
+    return .init(salt: salt, iv: iv, ct: ct, accountPub: binding, kxPub: kxBinding ?? pub(kxk))
 }
 let m = material(sealing: key, binding: pub(key))
 
@@ -101,6 +103,10 @@ emit("typo.count", t.wrongCodes)
 var b = RecoveryFlow()
 emit("swap.outcome", tag(b.attempt(printed, material(sealing: stranger, binding: pub(key)))))
 emit("swap.count", b.wrongCodes)
+// mode C: the same for the recovery kx the binding names
+var c = RecoveryFlow()
+emit("kxswap.outcome", tag(c.attempt(printed, material(sealing: key, binding: pub(key), kx: stranger))))
+emit("kxswap.count", c.wrongCodes)
 `
 
 const dir = mkdtempSync(join(tmpdir(), 'bento-rcflow-'))
@@ -130,6 +136,8 @@ ok(out['typo.outcome'] === 'notACode:check' && out['typo.short'] === 'notACode:l
   'a typo (check symbol) and a short code are "not a code", caught before any work, and not counted')
 ok(out['swap.outcome'] === 'blobRejected:key-mismatch' && out['swap.count'] === '0',
   'a right code that opens a blob around another key is refused as a swap, and not counted as a wrong code')
+ok(out['kxswap.outcome'] === 'blobRejected:key-mismatch' && out['kxswap.count'] === '0',
+  'a blob whose recovery kx is not the one the binding names is refused (mode C), and not counted')
 
 console.log(failures === 0 ? `\n${checks}/${checks} checks passed` : `\n${failures} of ${checks} checks FAILED`)
 process.exit(failures === 0 ? 0 : 1)

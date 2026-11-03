@@ -38,7 +38,7 @@ struct RecoveryFlow {
         let iv: [UInt8]
         let ct: [UInt8]
         let accountPub: String
-        let kxPub: String?
+        let kxPub: String
     }
 
     /// guesses that really were guesses
