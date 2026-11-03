@@ -39,7 +39,7 @@ const MUTANTS = [
   [F, 'roles are not checked against the device\'s own state (display)', 'if (!roleFits()) return fail(Why.ROLE)\n        val code', 'val code'],
   [F, 'roles are not checked against the device\'s own state (scan)', 'if (!Link.scannerMayProceed(msg0.value.roleD, holdsAccount()) || msg0.value.roleD == role || !roleFits()) return fail(Why.ROLE)', ''],
   [F, 'N accepts a completion with no pinned directory key', 'if (pins.isEmpty()) return fail(Why.UNVERIFIED, "no-pinned-key")', ''],
-  [L, 'N accepts a binding that is not active', 'if (v.att.state != "active") return no("state")', ''],
+  [L, 'N accepts a binding that is not active', 'if (v.att.state != "active") return no("state")', 'if (false) return no("state")'],
   [L, 'N does not check the attestation at all', 'is Statements.Verdict.No -> return no("att-${v.reason}")', 'is Statements.Verdict.No -> {}'],
   [L, 'N takes a binding for another address than the one SEALED names', 'if (b.address != address) return no("address-mismatch")', ''],
   [L, 'N does not check the scalar is the binding\'s account key', 'if (!Recovery.scalarMatches(scalar, b.accountPub)) return no("key-mismatch")', ''],
