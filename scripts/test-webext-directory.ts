@@ -170,5 +170,22 @@ for (const [name, enrol] of [
   const res = await dc.retireRecovery(d as any, async () => { await d.del('self'); await d.put('self', { ...r, accountPub: 'someone-else' }); return { ok: true } }, { now: () => 1 })
   ok(!res.ok && res.reason === 'record-changed' && material(await d.get('self')), 'a record replaced while the request was in flight is left alone')
 }
+console.log('\n— the passkey backup is ready only after a read-back unwraps')
+{
+  const prf = crypto.getRandomValues(new Uint8Array(32)), cid = crypto.getRandomValues(new Uint8Array(32))
+  const r = (await agent.createBentoId({ label: 'rb' }, { subtle: crypto.subtle, rand: (n: number) => crypto.getRandomValues(new Uint8Array(n)), now: () => Date.now(), argon2id,
+    passkey: async () => ({ credentialId: cid, prfOutput: prf.slice() }) })).record
+  const blob = r.passkeys[0].blob
+  const other = (await agent.createBentoId({ label: 'x' }, { subtle: crypto.subtle, rand: (n: number) => crypto.getRandomValues(new Uint8Array(n)), now: () => Date.now(), argon2id,
+    passkey: async () => ({ credentialId: cid, prfOutput: prf.slice() }) })).record.passkeys[0].blob
+  const flip = (b: any) => { const ct = st.b64uDec(b.ct); ct[3] ^= 1; return { ...b, ct: st.b64uEnc(ct) } }
+  const ready = (fetchBlob: any, prfOutput = prf) => dc.passkeyBackupReady({ record: r, credentialId: cid, prfOutput, fetchBlob })
+  ok((await ready(async () => blob)).ready === true, 'the blob fetched back unwraps with the PRF key → ready')
+  for (const [n, f] of [['a corrupt blob', async () => flip(blob)], ['a swapped blob (another account\'s)', async () => other], ['no blob', async () => null], ['a failed fetch', async () => { throw new Error('x') }]] as const) {
+    const res = await ready(f as any)
+    ok(res.ready === false, `${n}: NOT ready (${res.reason})`)
+  }
+  ok((await ready(async () => blob, crypto.getRandomValues(new Uint8Array(32)))).ready === false, 'the wrong PRF output: NOT ready')
+}
 console.log(failures ? `\n${failures} FAILED` : '\nall passed')
 process.exit(failures ? 1 : 0)

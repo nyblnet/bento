@@ -25,6 +25,7 @@
 
 import { buildBind, verifyBind, buildCmp, verifyAtt, signStatement, sha256b64u, CERT_MAX_MS } from './gen/statements.js'
 import { normalizeAddress } from './gen/address.js'
+import { openPrfBlob } from './gen/recovery.js'
 
 export const DIRECTORY = 'https://id.bento.page'
 /** An attestation older than this is not accepted as the answer to a request just made. */
@@ -105,4 +106,20 @@ export async function retireRecovery(db, enrol, deps) {
   if (!fresh?.recovery || fresh.accountPub !== record.accountPub) return { ok: false, reason: 'record-changed' }
   await db.put('self', { ...fresh, recovery: { enrolled: deps.now() } })
   return { ok: true }
+}
+
+/**
+ * Security's read-back rule: the UI may say the passkey backup is READY only
+ * after the blob has been fetched BACK from the directory and unwrapped with the
+ * PRF key, to this account's keys. Only a successful unwrap counts; an upload
+ * ack, a fetch that returns bytes, or a blob that opens to other keys does not.
+ * `fetchBlob(credentialId) → blob` is the seam (the route is D1c's).
+ */
+export async function passkeyBackupReady({ record, credentialId, prfOutput, fetchBlob }) {
+  let blob
+  try { blob = await fetchBlob(credentialId) } catch { return { ready: false, reason: 'fetch-failed' } }
+  if (!blob) return { ready: false, reason: 'no-blob' }
+  let r
+  try { r = await openPrfBlob(blob, { prfOutput, credentialId, expected: { accountPub: record.accountPub, kxPub: record.recoveryKxPub } }) } catch { return { ready: false, reason: 'unwrap-failed' } }
+  return r && r.ok === true ? { ready: true } : { ready: false, reason: 'unwrap-failed' }
 }
