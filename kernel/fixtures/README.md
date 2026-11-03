@@ -192,9 +192,15 @@ judged by verdict, like the statement rows.
   proofs of possession over `lnkp.v1.<t>`. `offerWire`: opening msg2 under the
   wrong direction's key, the wrong message number or another transcript must
   fail to decrypt.
-- `bind` and `msg3`: the account binding, the released scalars, and the exact
-  SEALED ciphertext (key `h2n`, AAD `lnka.v1.<t>.3`, plaintext = the 64-byte
-  account blob).
+- `bind` and `msg3`: the account binding, the released account scalar, the
+  address, and the exact SEALED ciphertext (key `h2n`, AAD `lnka.v1.<t>.3`,
+  plaintext = the 32-byte ACCOUNT SCALAR ‖ the ADDRESS in UTF-8). The address
+  is 1 to 254 bytes, so SEALED is 12 + 32 + 1 + 16 to 12 + 32 + 254 + 16 bytes
+  (`SEALED_MIN_LEN`, `SEALED_MAX_LEN`); outside that range is `grammar` in both
+  `release` and `final`. Never the recovery kx (security §26c.4): N's history
+  comes from H re-wrapping to N's kx. The directory sees only the length, so
+  the old 64-byte payload (account ‖ recovery kx) passes `release` and N
+  refuses it in `final` (`address`).
 - `release`: the DIRECTORY's check before it hands msg3 to N
   (`verifyLinkRelease`). The verifier brings `bindText` (the binding it serves),
   its `state`, the `challenge` it issued and whether that challenge is already
@@ -203,8 +209,32 @@ judged by verdict, like the statement rows.
   served binding is `bind` (after the spend), never a crash; N's dev. naming
   H's own devicePub is `n-device-is-h`. Every msg3 line is printable ASCII
   0x21–0x7E: a space, a control or a non-ASCII byte in any line is `grammar`.
-- `final`: N's check of msg3 (`openFinal`), given what it offered (`offer`) and
-  the binding's public halves (`binding`, from a pinned directory key).
+- `final`: N's check of msg3 (`openFinal`), given what it offered (`offer`), the
+  keys it pinned (`link.directoryKeys`, this section's own) and `lookup`, the
+  directory's answers by address (`bindText`, `bindSig`, `attText`, `attSig`;
+  an address with no entry is a failed lookup, `lookup`). The sealed address
+  must be strict UTF-8 and already in normal form (`address`: it re-normalises
+  to itself under `normalizeAddress`, so case, a Unicode dot, whitespace or a
+  byte-order mark are refused, even when `lookup` has an entry for that exact
+  text). Only then does N look it up, and every row's `lookupCalled` says
+  whether it got that far. The answer's binding must verify (`bind-*`), be for
+  exactly that address (`address-mismatch`), and be attested under a pinned key
+  (`att-*`) as `active` (`state`), the att. at most `LINK_ATT_MAX_MS` (10
+  minutes) old. The 32-byte scalar must be in 1..n−1 and the private half of
+  that binding's accountPub: another account's scalar, the binding's recovery
+  kx scalar, or an address whose binding names another account is
+  `key-mismatch`. An accept row carries the `address` and `displayName` (the
+  binding's name, or null) that `openFinal` returns.
+- `wire`: how each message travels on the slot (`encodeSlotMsg` /
+  `decodeSlotMsg`), `n` naming the message. msg0 and msg1 are canonical
+  unpadded base64url of their UTF-8 text; msg2 is its sealed wire as is; msg3
+  is its text as is. An accept row's `wire` decodes to `text` and `text`
+  encodes to `wire`, byte for byte. Refused as `grammar`: padding, a set
+  trailing bit, bytes that are not UTF-8, a byte-order mark, a msg0/msg1 sent
+  raw, a message under the wrong number, an empty message, a msg2 shorter than
+  an iv and a tag, and anything over 4096 bytes once decoded. The limit is
+  always on the DECODED message: for msg2 that is the sealed bytes, so its
+  base64url text may be longer than 4096 characters.
 
 Host port notes for link v1:
 
@@ -214,5 +244,10 @@ Host port notes for link v1:
   host does not know is shown as unknown, never presented as verified.
 - After linking, N shows the label H wrote into N's dev., not the one N
   offered.
+- N asks before it stores. When `openFinal` accepts, N shows
+  `Link this device to <address> (<name>)?`, with the address and name it
+  returned, and stores nothing until the person agrees. Declining aborts and
+  deletes the slot. The address comes from SEALED: a typed address is only a
+  fallback for when the lookup fails, and it never replaces the binding check.
 - Each direction key seals exactly ONE message (n2h message 2, h2n message 3).
   A retry is a new slot with a new code, never a second message under a key.

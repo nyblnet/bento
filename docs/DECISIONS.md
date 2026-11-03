@@ -12185,3 +12185,52 @@ The Android host speaks link v1 (`Link.kt`, held to the `link` section of
   and `qa-home-android-link-mutants.mjs` (twenty edits to the link code, each
   required to turn the rigs red). The screen itself is not yet exercised on a
   device.
+
+## 2026-11-03 — link v1: SEALED carries the account key and the address, and the slot wire is fixed
+
+Two follow-ups to the link v1 entry above, both from porting it to iOS.
+
+- **msg3's SEALED is the 32-byte account scalar and the address, and nothing
+  else.** The first cut sealed the 64-byte recovery blob (account ‖ recovery kx), which handed
+  every newly linked device the recovery kx. That contradicts security §26c.4:
+  the recovery kx is touched as rarely as possible, and when an existing device
+  is reachable the new device's history comes from that device re-wrapping to
+  the new device's own kx, never from unwrapping the recovery kx. Linking always
+  has H present, so it never needs it. H therefore never needs the recovery kx
+  to link a device.
+- **The address travels inside SEALED**: the plaintext is the scalar, then the
+  address in UTF-8, in normal form (it re-normalises to itself under
+  `kernel/src/address.ts`) and at most 254 bytes. A new device otherwise has no
+  way to learn which account it is joining except by a person typing it, and
+  the address must not ride in the QR or the code. So SEALED's length is a
+  bounded range, `SEALED_MIN_LEN` to `SEALED_MAX_LEN` (constants of their own,
+  not derived from the recovery blob's length), and the directory's release
+  check and N's parse refuse anything outside it as `grammar`.
+- **N takes the account key from the binding for THAT address.** `openFinal`
+  requires normal form, then looks the address up and verifies the answer
+  itself: the binding must be for exactly that address, attested `active` under
+  a pinned directory key, and its accountPub must be the received scalar's
+  public key (`unpackAccountScalar`). Its recovery kx plays no part. So H cannot
+  name an address the scalar does not belong to, and the directory cannot answer
+  with some other address's binding. N looks nothing up until SEALED has opened.
+- **N asks before it stores.** `openFinal` returns the address and the binding's
+  name; the host shows `Link this device to <address> (<name>)?` and declining
+  aborts and deletes the slot. A typed address is only a fallback for a failed
+  lookup. This supersedes any host flow that asks for the address up front.
+- **The old 64-byte payload stays in the vectors**, so a host still sealing those
+  bytes fails loudly rather than half-working. Its length is now in range and the
+  directory sees only ciphertext, so the release check passes it and N refuses
+  it, as `address`. A 32-byte scalar that is not the binding's account key
+  (another account's, and the binding's own recovery kx scalar) is `key-mismatch`.
+- **How each message travels on the slot is now part of the contract**
+  (`encodeSlotMsg` / `decodeSlotMsg`): msg0 and msg1 as canonical unpadded
+  base64url of their UTF-8 text, msg2 as its sealed wire unchanged, msg3 as its
+  text unchanged. Decoding refuses padding, set trailing bits, text that is not
+  UTF-8, a byte-order mark (the decoder would otherwise swallow it, giving one
+  text two wires), a msg0 or msg1 sent raw instead of encoded, a message under
+  the wrong number, a msg2 shorter than an iv and a tag, and anything over 4096
+  bytes once decoded. The limit is always on the decoded message, and the
+  directory must count it the same way: for msg2, the sealed bytes rather than
+  their base64url text. Before this, iOS had to
+  choose an encoding that no spec pinned, and two hosts choosing differently
+  would never link. The `link.wire` rows are byte for byte both ways.
