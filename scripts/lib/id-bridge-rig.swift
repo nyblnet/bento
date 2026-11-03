@@ -184,6 +184,18 @@ do {
 
     s.lock()
     row("sign.lock.reauth", why(d.sign("show", showLive)) == "reauth")
+
+    // a clock moved BACKWARDS fails closed (it would stretch both limits). The refusal above
+    // reopened a session at `clock`; a use renews `last`, so even one ms back is refused.
+    row("sign.clock.session-open.ok", ok(d.sign("show", showLive)))
+    clock += 400
+    row("sign.clock.forward.ok", ok(d.sign("show", showLive)))
+    clock -= 1
+    row("sign.clock.back-one-ms.reauth", why(d.sign("show", showLive)) == "reauth")
+    // and a long way back, across many uses, never revives the overall limit
+    var stayed = 0, base = clock
+    for i in 0..<50 { clock = base + (i % 2 == 0 ? 400 : -400) * (i / 2 + 1); if ok(d.sign("show", showLive)) && clock < base { stayed += 1 } }
+    row("sign.clock.set-back.never-live", stayed == 0)
 }
 
 // ---- reauth prompts: coalesced, and a cancel is not re-raised at once
