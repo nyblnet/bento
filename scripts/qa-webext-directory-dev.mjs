@@ -119,52 +119,62 @@ const hadRc = !!me.recovery?.inner
 
 ok(typeof await dc.dirChallenge('qa2@example.com', deps) === 'string', '/v1/challenge issues a dir challenge')
 
-// (1) the extension is the LIGHT tier: dev. has no consent key. With no passkey registered at the directory it has NO consent to give.
+// The extension is the LIGHT tier: dev. has no consent key. Setup goes PASSKEY FIRST, under the directory's
+// setup allowance (absent consent, 15 min after the two-proof bind, empty account, once); the code then goes
+// in by the new passkey's ordinary WebAuthn consent.
 {
-  const r = await dc.retireRecovery(db, dc.directoryEnrol({ record: me }, { ...deps, consent: null }), { now: () => Date.now() })
-  ok(r.ok === false && !!(await db.get('self')).recovery?.inner, `first recovery enrol with no consent → refused by the real route, local material KEPT (${r.reason})`)
-  const lightConsent = async ({ challenge, req }) => {
+  const lightConsentBy = (key) => async ({ challenge, req }) => {
     const transcript = await st.consentTranscript('dir', challenge, req)
     const cns = st.buildConsent({ rp: 'bento', purpose: 'rc-enrol', docId: null, transcript, exp: Date.now() + 2 * 60_000 })
-    return { webauthn: await assertionFor(soft.privateKey, credId, await st.webauthnChallengeFor(cns)), exp: Date.now() + 2 * 60_000 }
+    return { webauthn: await assertionFor(key, credId, await st.webauthnChallengeFor(cns)), exp: Date.now() + 2 * 60_000 }
   }
-  const r2 = await dc.retireRecovery(db, dc.directoryEnrol({ record: me }, { ...deps, consent: lightConsent }), { now: () => Date.now() })
-  ok(r2.ok === false && !!(await db.get('self')).recovery?.inner, `…and a WebAuthn consent from a passkey the directory does not hold yet is refused too, material KEPT (${r2.reason}) — the bootstrap gap`)
+  const lightConsent = lightConsentBy(soft.privateKey)
+  const other = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])
+  let enrolPosts = 0
+  const counting = { ...deps, fetch: (u, i) => { if (String(u).endsWith('/v1/recovery/enrol')) enrolPosts++; return fetch(u, i) } }
+  const register = (rid, blob) => async (challenge) => { const r = await registrationFor(rid, challenge); return { attestationObject: r.att, clientDataJSON: r.cdj, blob, attachment: 'platform' } }
 
-  // (2) BOOTSTRAP, rig-only: a device with a consent key (what a native host has and the extension does not) registers the passkey
-  const devKey = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])
-  const cnsKey = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])
-  const rawOf = async (k) => st.b64uEnc(new Uint8Array(await crypto.subtle.exportKey('raw', k)))
-  const devText = st.buildDev({ devicePub: await rawOf(devKey.publicKey), consentPub: await rawOf(cnsKey.publicKey), accountPub: me.accountPub, kx: me.kxPub, label: null, created: Date.now(), expires: Date.now() + 86_400_000 })
-  const devSig = await st.signStatement(me.accountKey, devText)
-  const nativeConsent = (purpose) => async ({ challenge, req }) => {
-    const cns = st.buildConsent({ rp: 'bento', purpose, docId: null, transcript: await st.consentTranscript('dir', challenge, req), exp: Date.now() + 2 * 60_000 })
-    return { dev: devText, devSig, cns, cnsSig: await st.signStatement(cnsKey.privateKey, cns) }
+  // (1) CODE FIRST is refused on this tier, before anything is sent
+  enrolPosts = 0
+  const r1 = await dc.retireRecovery(db, dc.directoryEnrol({ record: me }, { ...counting, consent: null }), { now: () => Date.now() })
+  ok(hadRc && r1.ok === false && enrolPosts === 0 && !!(await db.get('self')).recovery?.inner, `a code before any passkey is refused locally, nothing sent, material KEPT (${r1.reason})`)
+
+  // (2) a passkey that does not land: nothing else is attempted, material kept (a third account, whose allowance this uses up)
+  {
+    const f = await agent.createBentoId({ label: 'qa3' }, { subtle: crypto.subtle, rand: (n) => crypto.getRandomValues(new Uint8Array(n)), now: () => Date.now(), argon2id, passkey: async () => ({ credentialId: crypto.getRandomValues(new Uint8Array(32)), prfOutput: crypto.getRandomValues(new Uint8Array(32)) }) })
+    const p3 = await dc.bindStart({ record: f.record, email: 'qa3@example.com' }, deps)
+    const d3 = await dc.bindComplete({ record: f.record, pending: p3.pending, code: await codeFor('qa3@example.com') }, deps)
+    const rec3 = { ...f.record, state: 'bound', bind: d3.bound }
+    const m3 = new Map([['self', rec3]])
+    const db3 = { get: async (k) => m3.get(k), put: async (k, v) => { m3.set(k, v) } }
+    const wrongCeremony = async () => { const r = await registrationFor(credId, 'AAAA'); return { attestationObject: r.att, clientDataJSON: r.cdj, blob: rec3.passkeys[0].blob, attachment: 'platform' } }
+    enrolPosts = 0
+    const fc = await dc.firstCredentials({ db: db3 }, { ...counting, register: wrongCeremony, consent: lightConsent })
+    ok(d3.ok === true && fc.ok === false && fc.step === 'passkey' && enrolPosts === 0 && !!m3.get('self').recovery?.inner, `a registration the directory rejects → step 'passkey' (${fc.reason}); NO code was attempted and the local material is KEPT`)
   }
-  // cred-add: the registration ceremony's challenge IS the dir challenge the request spends
-  const ch = await dc.dirChallenge('qa2@example.com', deps)
-  const r0 = await registrationFor(credId, ch)
-  const req = st.buildDreq({ op: 'cred-add', address: 'qa2@example.com', bindHash: await st.sha256b64u(me.bind.text), challenge: ch, arg: await st.dreqArg({ op: 'cred-add', attestationObject: r0.att, clientDataJSON: r0.cdj }) })
-  const sig = await st.signStatement(me.accountKey, req)
-  const add = await fetch(`${base}/v1/cred/add`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'qa2@example.com', req, sig, challenge: ch, consent: await nativeConsent('cred-add')({ challenge: ch, req }), attestationObject: st.b64uEnc(r0.att), clientDataJSON: st.b64uEnc(r0.cdj), blob: me.passkeys[0].blob, attachment: 'platform', devicePub: me.devicePub }) })
-  const addBody = add.status === 200 ? '' : await add.text()
-  ok(add.status === 200, `(rig bootstrap, native consent) /v1/cred/add registers the passkey and its PRF blob (${add.status} ${addBody})`)
 
-  // (3) the real fetch + the read-back
+  // (3) the real order: passkey with ABSENT consent, then a code by that passkey. A bad consent on the code is refused and the material (present beforehand) is kept.
+  enrolPosts = 0
+  const fcBad = await dc.firstCredentials({ db }, { ...counting, register: register(credId, me.passkeys[0].blob), consent: lightConsentBy(other.privateKey) })
+  ok(fcBad.passkey === true && fcBad.step === 'code' && enrolPosts === 1 && !!(await db.get('self')).recovery?.inner, `passkey lands over HTTP with no consent; a code carrying another key's assertion is refused (${fcBad.reason}) and the material is KEPT (it was present: ${hadRc})`)
+  const r3 = await dc.retireRecovery(db, dc.directoryEnrol({ record: me }, { ...deps, consent: lightConsent }), { now: () => Date.now() })
+  ok(hadRc && r3.ok === true && !(await db.get('self')).recovery?.inner, 'the code by the new passkey\'s WebAuthn consent → 200; the local material goes ONLY now')
+
+  // (4) the allowance was for ONE passkey: a second cred-add with no consent is refused
+  const again = await dc.directoryCredAdd({ record: me }, { ...deps, register: register(crypto.getRandomValues(new Uint8Array(32)), me.passkeys[0].blob) })()
+  ok(again.ok === false, `a second passkey with no consent is refused (${again.reason})`)
+
+  // (5) the real fetch + the read-back
   const fetchBlob = dc.directoryFetchBlob({ ...deps, assert: (id, c) => assertionFor(soft.privateKey, credId, c) })
   const good = await dc.passkeyBackupReady({ record: me, credentialId: credId, prfOutput, fetchBlob })
   ok(good.ready === true, 'POSITIVE CONTROL: passkeyBackupReady → ready after a real /v1/cred/challenge + /v1/cred/get and an unwrap with the PRF key')
   const wrong = await dc.passkeyBackupReady({ record: me, credentialId: credId, prfOutput: crypto.getRandomValues(new Uint8Array(32)), fetchBlob })
   ok(wrong.ready === false && wrong.reason === 'unwrap-failed', 'wrong PRF output → not ready (the blob was fetched, and did not open)')
-  const other = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])
   const bad = await dc.passkeyBackupReady({ record: me, credentialId: credId, prfOutput, fetchBlob: dc.directoryFetchBlob({ ...deps, assert: (id, c) => assertionFor(other.privateKey, credId, c) }) })
   ok(bad.ready === false && bad.reason === 'no-blob', 'an assertion by another key → the directory refuses the fetch → not ready')
   const gone = await dc.passkeyBackupReady({ record: me, credentialId: credId, prfOutput, fetchBlob: dc.directoryFetchBlob({ ...deps, base: 'http://localhost:1', assert: (id, c) => assertionFor(soft.privateKey, credId, c) }) })
   ok(gone.ready === false, `an unreachable directory → not ready (${gone.reason})`)
 
-  // (4) the light tier's steady state: with a passkey held, WebAuthn consent now enrols the recovery code
-  const r3 = await dc.retireRecovery(db, dc.directoryEnrol({ record: me }, { ...deps, consent: lightConsent }), { now: () => Date.now() })
-  ok(hadRc && r3.ok === true && !(await db.get('self')).recovery?.inner, 'recovery enrol with WebAuthn consent from the held passkey → 200; the local material goes ONLY now')
 }
 
 stop()

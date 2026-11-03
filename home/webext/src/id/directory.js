@@ -158,6 +158,10 @@ const reasonOf = (r) => (typeof r.j?.reason === 'string' ? r.j.reason : r.status
  * `dreq.rc-enrol` over the exact body. `{ ok: true }` only on the directory's 200.
  */
 export const directoryEnrol = ({ record }, deps) => async (m) => {
+  // PASSKEY FIRST. On the light tier a code that lands before any passkey marks the key as having had
+  // something, so a fresh email proof will not re-arm the setup allowance, and the account is left with a
+  // code, no passkey and no consent key. This tier enrols a code only by a passkey's WebAuthn consent.
+  if (typeof deps.consent !== 'function') throw new DirectoryRefused('passkey-first')
   const bytes = new TextEncoder().encode(JSON.stringify({ v: 1, saltV: m.saltV, verifier: m.verifier, saltW: m.salt, iv: m.iv, ct: m.inner }))
   const body = b64uEnc(bytes)
   const q = await signedRequest({ record, subject: { op: 'rc-enrol', body: bytes } }, deps)
@@ -176,4 +180,43 @@ export const directoryFetchBlob = (deps) => async (credentialId) => {
   if (c.status !== 200 || typeof c.j?.challenge !== 'string') return null
   const r = await post(deps, '/v1/cred/get', { challenge: c.j.challenge, assertion: await deps.assert(credentialId, c.j.challenge) })
   return r.status === 200 && r.j?.blob ? r.j.blob : null
+}
+
+/**
+ * The FIRST passkey, under the directory's setup allowance (security's ruling: the two-proof bind arms a
+ * 15-minute window for ONE cred-add with NO consent, into an empty account). POST /v1/cred/add with a
+ * `dreq.cred-add` over the exact registration bytes, sent with NO consent. This is the only op the light tier
+ * can send without one; every later cred-add goes by an existing passkey's consent via signedRequest.
+ *
+ * `deps.register(challenge) → { attestationObject, clientDataJSON, blob, attachment?, devicePub? }` runs the
+ * browser's navigator.credentials.create with `challenge` as the ceremony challenge: the registration's
+ * challenge IS the dir challenge the request spends. The bytes are Uint8Arrays; `blob` is the PRF blob.
+ * A failed registration uses the allowance up; the person asks for a new email code, which re-arms it.
+ */
+export const directoryCredAdd = ({ record }, deps) => async () => {
+  if (record?.state !== 'bound' || !record.bind?.text) throw new DirectoryRefused('not-bound')
+  if (typeof deps.register !== 'function') throw new DirectoryRefused('no-register')
+  const email = record.bind.address
+  const challenge = await dirChallenge(email, deps)
+  const reg = await deps.register(challenge)
+  const req = buildDreq({ op: 'cred-add', address: email, bindHash: await sha256b64u(record.bind.text), challenge, arg: await dreqArg({ op: 'cred-add', attestationObject: reg.attestationObject, clientDataJSON: reg.clientDataJSON }) })
+  const sig = await signStatement(record.accountKey, req)
+  const r = await post(deps, '/v1/cred/add', { email, req, sig, challenge, attestationObject: b64uEnc(reg.attestationObject), clientDataJSON: b64uEnc(reg.clientDataJSON), blob: reg.blob, attachment: reg.attachment, devicePub: reg.devicePub })
+  return r.status === 200 && r.j?.ok === true ? { ok: true } : { ok: false, reason: reasonOf(r) }
+}
+
+/**
+ * First-time setup, in the only order that does not strand a light-tier account: the passkey, then the code.
+ * The code is enrolled by the NEW passkey's ordinary WebAuthn consent (`deps.consent`, as for directoryEnrol),
+ * and only after the directory has acknowledged the passkey. If the passkey does not land, nothing is
+ * enrolled and the local recovery material is untouched. The UI says: a failed registration uses up the
+ * allowance and a new email code re-arms it. Firefox has no consent form (§33a), so it stops after the passkey.
+ */
+export async function firstCredentials({ db }, deps) {
+  const record = await db.get('self')
+  let add
+  try { add = await directoryCredAdd({ record }, deps)() } catch (e) { add = { ok: false, reason: e instanceof DirectoryRefused ? e.message : 'cred-add-failed' } }
+  if (!add.ok) return { ok: false, step: 'passkey', reason: add.reason }
+  const rc = await retireRecovery(db, directoryEnrol({ record }, deps), deps)
+  return rc.ok ? { ok: true } : { ok: false, step: 'code', passkey: true, reason: rc.reason }
 }
