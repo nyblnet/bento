@@ -66,8 +66,23 @@ object Recovery {
     fun heapNeeded(memoryKiB: Int): Long = memoryKiB.toLong() * 1040 + HEADROOM
     private const val HEADROOM = 16L shl 20
 
-    /** The heap this process can still grow into. */
-    fun heapAvailable(): Long = Runtime.getRuntime().let { it.maxMemory() - (it.totalMemory() - it.freeMemory()) }
+    /** The heap this process can still grow into, counting uncollected garbage as USED. */
+    fun heapUnreclaimed(): Long = Runtime.getRuntime().let { it.maxMemory() - (it.totalMemory() - it.freeMemory()) }
+
+    /**
+     * The heap this process can still grow into, once garbage is out of the way. A finished derivation
+     * leaves 64 MiB of dead blocks until the next collection, and the collector runs when IT decides:
+     * on a loaded machine (or a unit-test JVM that has just derived a few times) the dead blocks were
+     * still counted, so a heap that could hold the next derivation was refused as "not enough memory",
+     * and setup reported an unavailable device. So when the figure falls short of a full derivation,
+     * collect once and measure again; only what is still short after that is a real shortage.
+     */
+    fun heapAvailable(): Long {
+        val now = heapUnreclaimed()
+        if (now >= heapNeeded(MEMORY_KIB)) return now
+        System.gc()
+        return heapUnreclaimed()
+    }
 
     /**
      * Argon2id with arbitrary parameters (the RFC 9106 row uses its own). Call off

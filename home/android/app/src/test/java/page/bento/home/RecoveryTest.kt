@@ -130,6 +130,20 @@ class RecoveryTest {
         assertTrue(seen.any { (v.get(it) as LongArray).any { w -> w != 0L } })
     }
 
+    @Test fun `dead blocks from earlier derivations do not count against the heap`() {
+        // Fill most of the heap with garbage, drop it, and ask again WITHOUT letting the collector run first.
+        val rt = Runtime.getRuntime()
+        var junk: ArrayList<ByteArray>? = ArrayList()
+        val target = rt.maxMemory() - Recovery.heapNeeded(Recovery.MEMORY_KIB) / 2
+        try { while (rt.totalMemory() - rt.freeMemory() < target) junk!!.add(ByteArray(1 shl 20)) } catch (_: OutOfMemoryError) {}
+        junk = null
+        val unreclaimed = Recovery.heapUnreclaimed()
+        // the control: the garbage really was counted as used (otherwise this test proves nothing)
+        assertTrue("garbage was counted ($unreclaimed)", unreclaimed < Recovery.heapNeeded(Recovery.MEMORY_KIB))
+        assertTrue("and heapAvailable collects before it refuses", Recovery.heapAvailable() >= Recovery.heapNeeded(Recovery.MEMORY_KIB))
+        assertEquals(32, Recovery.argon2id(ByteArray(10), ByteArray(16)).size)      // the real parameters, the default check
+    }
+
     @Test fun `a heap too small for the blocks refuses BEFORE allocating anything`() {
         var allocated = 0
         val counting = object : Argon2BytesGenerator.BlockPool {
