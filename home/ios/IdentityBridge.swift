@@ -92,11 +92,12 @@ final class IdentityBridgeHost {
         func begin() { let t = clock(); window = (t, t) }
         /// Idle lock, sleep, session lock: signing is refused until `begin()`.
         func lock() { window = nil }
-        /// Live exactly when neither limit has been passed. The boundary itself is
-        /// still inside (<=), one millisecond past is not.
+        /// Live only while BOTH limits are still to come: a limit ENDS the session AT
+        /// the limit (security's ruling), so a use exactly 1 h after the last one, or
+        /// 24 h after the start, is already refused. One millisecond short still signs.
         func live() -> Bool {
             let t = clock()
-            if let w = window, t - w.last <= policy.idleMs, t - w.start <= policy.overallMs { return true }
+            if let w = window, t - w.last < policy.idleMs, t - w.start < policy.overallMs { return true }
             window = nil
             return false
         }
