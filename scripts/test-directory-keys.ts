@@ -804,7 +804,7 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
     const st = await status(A)
     const pend = st.j.pending as { binding: string; sig: string; rot: string; rotSig: string; activeAt: number }
     ok(st.status === 200 && st.j.state === 'pending' && pend?.binding === ra.text, 'the old key\'s signed status read names the pending binding')
-    ok((await verifyRotation(ra.was, pend.binding, pend.sig, pend.rot, pend.rotSig, { now })).ok, '  …with its rot. vouch, so the device can show what it is contesting')
+    ok(!!pend && (await verifyRotation(ra.was, pend.binding, pend.sig, pend.rot, pend.rotSig, { now })).ok, '  …with its rot. vouch, so the device can show what it is contesting')
     ok(reason(await api('/v1/status', await dreq(A, null, { op: 'status' }, { signer: A2, bindText: ra.text }))) === 'dreq:bind-mismatch', 'a PENDING key signs no request (status naming the pending binding → refused)')
   }
   ok(reason(await contest(A, A2, ra.text)) === 'dreq:signature', 'a contest signed by the pending (new) key → refused')
@@ -897,6 +897,10 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
       const yb = await bindNext(await nextOf(T), null)
       await api('/v1/bind/start', { stmt: yb.text, sig: yb.sig })
       ok(mailbox.length === n0, 'a second re-bind while one is pending over the tomb mails nothing')
+    }
+    {
+      const q = await dreq(T, null, { op: 'freeze' }, { bindText: tText })
+      ok(reason(await api('/v1/freeze', { ...q, bind: tText })) === 'state', 'in the window the tombstoned key may CONTEST only: its freeze, even bringing the deleted text, → refused')
     }
     ok(reason(await contest(T, T, xb.text, { bindText: tText })) === 'state', 'a contest by the tombstoned key WITHOUT the deleted binding\'s text → refused')
     ok(reason(await contest(T, T, xb.text, { bindText: tText, bind: tText + 'x' })) === 'state', 'a contest bringing a text that is not the tombstoned binding → refused')
