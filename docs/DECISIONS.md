@@ -12127,6 +12127,74 @@ lost device need. Both ship OFF (`LINKING`, `KEYSTORE`).
   While frozen, a device polls its status on open and shows a waiting
   resolution with the one action that stops it.
 
+## 2026-11-03 — Android: Bento ID setup (home/android)
+
+Setup is built and reachable only from a dev build (debug, or the minified `releaseCheck`). What it settles, so a
+later change does not undo it by accident:
+
+- **The setup screen has no entry point in a release build.** `SetupActivity` is
+  not exported and nothing launches it, and a release build pins no directory key
+  (the keys are not minted), so the flow refuses before it asks for anything. A
+  dev build exports it and takes the directory URL and a test key from the
+  launching intent. Release behaviour is unchanged until the strings are ruled on
+  and the directory is live.
+- **The account's scalars rest under a Keystore AES key that needs the person for
+  every use.** The account signing key and the two kx keys must move between
+  devices, so they cannot be Keystore keys. They are generated in memory, sealed
+  under an AES-256-GCM key with the consent key's authentication parameters
+  (BiometricPrompt; the device PIN as well from API 30; it survives a new
+  fingerprint), and zeroed. The portable copy is the recovery blob, not this
+  file. Nothing secret reaches disk before the last step, and a process death
+  before then restarts setup.
+- **Order, and what each step refuses.** The memory Argon2id needs and the
+  derivation self-check are checked BEFORE an email is bound; the directory's
+  attestation is checked against a pinned key, by exact kid, and anything but
+  `active` stops setup; the typed recovery code is checked against the one shown,
+  and a device short of memory is reported as that, never as a wrong code. A
+  managed device (any identity managed-config key present) does no identity
+  operation.
+- **The recovery code is enrolled at setup** with an account-signed
+  `dreq.rc-enrol.` over the exact enrolment body, plus the consent key's `cns.`
+  (two fingerprint prompts in all: consent, then sealing). A device with no consent
+  key (API 26–29, no biometric enrolled) finishes setup with the recovery code
+  NOT registered and says so; it is never shown as registered.
+- **The derivation self-check is a known answer** (kernel's recovery-v1
+  `derivations` row) run before binding. The release-APK check builds the
+  minified `releaseCheck` variant, which is release as configured (full R8 optimisation and obfuscation) plus the
+  dev switch, and runs it on a device; its positive control is a build whose R8 rules break
+  a function the check covers, which must read FAIL.
+- **Not ported:** the display `name` and device `label` fields are emitted empty
+  until the Unicode display filter has an Android port. Certificates live a year.
+
+## 2026-11-03 — bento/connect B1: the identity calls in `home/bridge.js` (whoami, sign, resolve)
+
+- **One shared object, built from a declared capability.** A host that has
+  verified the document's bytes (gate 1) declares `window.__bentoHostCaps =
+  ['identity']` ahead of `bridge.js`. The bridge then defines `__bentoIdentity`
+  exactly as `kernel/src/identity.ts` requires: a non-writable, non-configurable
+  data property holding a frozen object of closures with `contract: 1` and the
+  three phase-1 calls. A host that does not declare it, and any subframe, gets no
+  object, so the kernel does what it did before identity existed. `unwrap` and
+  `share` (phase 2) are not defined.
+- **The wire** is the ordinary `call()` channel: `{id, op:'id.whoami'}`,
+  `{id, op:'id.sign', purpose, payload}`, `{id, op:'id.resolve', pub}`. Nothing
+  names the document or a caller; the host knows who is asking. Replies are
+  `(id, ok, value)`; a refusal word is the K1 `SignRefusal`. The bridge re-shapes
+  every reply: a wrong-typed field is a refusal or `null`, an unknown word is
+  `unavailable`, and an `{email}` lookup (phase 2) is answered `null` without
+  leaving the page.
+- **The session limits are the host's, not the bridge's.** Past the idle or
+  overall limit (security §2e B) the host answers `sign` with `reauth` until the
+  person re-authenticates AT THE HOST. The bridge passes the word through, caches
+  nothing and never retries. On desktop the limit is the agent's, and the rig
+  drives the real agent across both limits.
+- **A replaced reply hook cannot redirect replies.** The Android-style transport
+  now calls its reply function directly instead of through `window.__bentoNativeReply`,
+  which page script can overwrite.
+- **Each host routes the `id.*` ops to its own agent and keeps its own gates**
+  (on desktop: this webview's capability, then genuine bytes). No host ships a key
+  store yet, so a host with no account answers `no-identity` (`whoami`, `sign`)
+  and `null` (`resolve`).
 ## 2026-11-03 — bento/connect: device linking is one protocol, link v1, with kernel vectors
 
 Linking hands a new device (N) the account key and the recovery kx from a
