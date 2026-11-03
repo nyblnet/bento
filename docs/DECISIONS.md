@@ -12019,3 +12019,62 @@ both slots had to stay empty until the ruling.
   scalar never matched, a missing kx public half skipping the match, a seal
   without a kx) and requires test-statements or test-recovery to fail on each,
   after the unmutated copy passes both.
+
+## 2026-11-03 — bento/connect: device linking is one protocol, link v1, with kernel vectors
+
+Linking hands a new device (N) the account key and the recovery kx from a
+device that holds them (H). iOS and Android had designed two different
+pairings; this replaces both with one protocol every pair of hosts runs, and
+fixes its bytes in `kernel/src/link.ts` with a `link` section in
+`kernel/fixtures/identity-v1.json` (security §39.1, which accepted the design
+with seven conditions).
+
+- **The link code is a recovery code in every byte**: 80 random bits, printed
+  `XXXX-XXXX-XXXX-XXXX-C`, parsed by the same forgiving reader. The displayer
+  shows it as a QR and as text; typing it is the no-camera path, not a second
+  protocol. HKDF over the code's 10 bytes (empty salt, infos
+  `bento/id/link/v1/{id,tok,salt}`) gives the slot id, its bearer token (the
+  directory stores the token's SHA-256) and a 32-byte salt that is never sent.
+- **The code is in the key salt.** The displayer writes `lnk0.<E_D>.<H|N>`, the
+  scanner `lnk1.<E_S>`; both compute the transcript
+  t = b64u(SHA-256("lnkt.v1." ‖ id ‖ "." ‖ E_D ‖ "." ‖ E_S ‖ "." ‖ roleD)) and,
+  from the ECDH x-coordinate Z with that salt, `h2n`, `n2h` and the SAS key
+  (infos `bento/id/link/v1/{h2n,n2h,sas}.` ‖ t). The directory relays both
+  ephemerals but never sees the code, so it can derive no key, and an
+  ephemeral it substitutes changes the SAS. A reflected ephemeral (E_S = E_D)
+  gets no transcript.
+- **The SAS is 6 digits that N shows and the person types into H**, never a
+  "do these match?" tap. It is the first 4 bytes of the SAS key, big-endian,
+  mod 10^6, zero-padded. One attempt per slot.
+- **Roles are checked, not trusted.** The scanner proceeds only if exactly one
+  side holds an account. (Hosts must also never start the H side from an
+  `id.bento.page/l#` link; that is UI, not bytes.)
+- **Every sealed message is AES-256-GCM with AAD = `lnka.v1.<t>.<n>`**, the
+  transcript and the message number, on the wire as iv ‖ ciphertext ‖ tag.
+  Each key seals one message in one direction (n2h seals 2, h2n seals 3), and
+  the module picks the key from the number, never the caller.
+- **msg2, N's offer**: `lnk2.<devicePub>.<consentPub|empty>.<kx>.<label|empty>.<platform>.<popDevice>.<popConsent|empty>`.
+  The kx is N's own (mode C). Each key proves possession by signing
+  `lnkp.v1.<t>`; a consent PoP is present exactly when a consent key is.
+- **msg3, H's completion**: `lnk3` and seven lines (H's `dev.` + sig, a `cns.`
+  with purpose `link` and audience `dir` over N's `dev.` text + sig, N's `dev.`
+  + sig, and SEALED = the 64-byte account blob plaintext under h2n). The
+  directory releases it only through `verifyLinkRelease`: the challenge is
+  spent first (every refusal before the spend is `grammar`), the binding must
+  be `active`, H's `dev.` and N's `dev.` must both name the binding's account
+  key, and the consent must verify under H's certified consent key. A
+  light-tier H consents by WebAuthn instead, which this message does not
+  carry. One completion per slot is the directory's rule, not these bytes.
+- **N checks what it was given** (`openFinal`): its `dev.` must name exactly
+  the devicePub, consentPub and kx it offered and the account key of the
+  binding served under a pinned directory key, and both released scalars must
+  match that binding.
+- **No new signed statement family.** `dev.` and `cns.` purpose `link` already
+  existed. The link texts take the prefixes `lnk0`–`lnk3`, `lnkt`, `lnkp` and
+  `lnka` (`LINK_PREFIXES`), which no statement family may use. The `link`
+  section is a new top-level section, so host runners that do not know it yet
+  keep passing until they adopt it.
+- **Guarded by mutants.** `scripts/test-link.ts` recomputes every
+  deterministic row byte for byte and checks every verdict;
+  `scripts/test-link-mutants.ts` reintroduces fifteen lenient paths into a copy
+  of `link.ts` and requires the rig to fail on each.
