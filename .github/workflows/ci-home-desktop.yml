@@ -190,10 +190,16 @@ jobs:
       - name: Desktop host release check (the bundled history is the current published one)
         working-directory: home/desktop/host
         run: ./release-check.sh
+      - name: Rig host logs (printed so a failure can be read without the artifact)
+        if: always()
+        run: |
+          for f in "$RUNNER_TEMP"/h2-rig/*.log; do echo "=== $f"; tr -d '\r' < "$f" | head -c 6000; done
       - name: Rig output (kept for the measurements)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: home-desktop-windows-rig
-          path: ${{ runner.temp }}/h2-rig/*.json
+          path: |
+            ${{ runner.temp }}/h2-rig/*.json
+            ${{ runner.temp }}/h2-rig/*.log
           if-no-files-found: warn
