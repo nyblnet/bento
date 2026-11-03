@@ -106,10 +106,10 @@ async function scenario(label, mutant) {
   try {
     let [sw] = ctx.serviceWorkers(); if (!sw) sw = await ctx.waitForEvent('serviceworker')
     const id = new URL(sw.url()).host
-    // the worker can be reported before its global scope has `chrome`: retry, bounded
+    // the worker can be reported before its global scope has `chrome.storage.local` (what the next line uses): retry, bounded
     for (let i = 0; ; i++) {
-      if (await sw.evaluate(() => typeof chrome === 'object').catch(() => false)) break
-      if (i >= 50) throw new Error("service worker never exposed `chrome` (5s)")
+      if (await sw.evaluate(() => !!globalThis.chrome?.storage?.local).catch(() => false)) break
+      if (i >= 50) throw new Error("service worker never exposed `chrome.storage.local` (5s)")
       await new Promise((r) => setTimeout(r, 100))
     }
     await sw.evaluate((h) => chrome.storage.local.set({ serveWithIdentity: true, gate1Used: true, gate1History: { 'bento-slides': { history: h, fetchedAt: Date.now() } } }), history)
