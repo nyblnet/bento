@@ -516,13 +516,15 @@ export class Address {
     const codeHash = (code) => sha256hex(`bento-dir/1/code\n${code}`)
     const tokenHash = (t) => sha256hex(`bento-dir/1/freeze\n${t}`)
     const fail = async (p) => { p.attempts++; await s.put('pend', p); return out(400, { error: 'invalid' }) }
-    /** the retained recovery verifier of a deleted binding goes once its window has closed */
-    const dropRc = async (ht) => {
+    /** the retained recovery verifier of a deleted binding goes once its window has
+     *  closed (rcDrop), or is the live one again when the same key re-binds (rcKeep) */
+    const rcCall = async (ht, op) => {
       if (!ht || !ht.scope || !this.env.ACCOUNT) return
       try {
-        await this.env.ACCOUNT.get(this.env.ACCOUNT.idFromName(ht.scope)).fetch('https://account/op', { method: 'POST', body: JSON.stringify({ op: 'rcDrop', accountPub: ht.key }) })
-      } catch (e) { console.log(`rcDrop failed: ${e.message}`) }
+        await this.env.ACCOUNT.get(this.env.ACCOUNT.idFromName(ht.scope)).fetch('https://account/op', { method: 'POST', body: JSON.stringify({ op, accountPub: ht.key }) })
+      } catch (e) { console.log(`${op} failed: ${e.message}`) }
     }
+    const dropRc = (ht) => rcCall(ht, 'rcDrop')
     /** a binding that is replaced keeps serving as a step, while the chain is unbroken */
     const stepOf = (c) => ({ binding: c.stmt, sig: c.sig, ...(c.rot ? { rot: c.rot, rotSig: c.rotSig } : {}) })
     const keepStep = async (c) => s.put('steps', [...((await s.get('steps')) || []), stepOf(c)].slice(-LIMITS.steps))
@@ -635,6 +637,7 @@ export class Address {
       // over an expired binding, whatever state it was in goes with it
       await s.delete(['pend', 'tomb', 'htomb', 'rot', 'frz', 'fpend'])
       if (rebound && ht) await dropRc(ht)
+      else if (guard && ht) await rcCall(ht, 'rcKeep') // the same key, inside the window: its code is current again
       return out(200, { binding: p.stmt, sig: p.sig, attestation: att.text, attestationSig: att.sig, rebound })
     }
 

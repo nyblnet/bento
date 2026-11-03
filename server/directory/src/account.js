@@ -411,6 +411,11 @@ export class Account {
       }
       return out(200, { creds })
     }
+    if (a.op === 'rcKeep') {
+      const rc = await s.get('rc')
+      if (rc && rc.accountPub === a.accountPub && rc.keepUntil) { const { keepUntil: _, ...kept } = rc; await s.put('rc', kept) }
+      return out(200, { ok: true })
+    }
     if (a.op === 'rcDrop') {
       const rc = await s.get('rc')
       if (rc && rc.accountPub === a.accountPub) await s.delete(['rc', 'rel'])

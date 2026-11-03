@@ -546,7 +546,7 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
   {
     const m = [...mailbox].reverse().find((x) => x.to === R.email && x.kind === 'rc-attempt')!
     ok(/set a new recovery code/.test(m.body) && /That cancels it/.test(m.body) && !/and freeze your keys\./.test(m.body), 'the recovery-attempt notice says to set a new recovery code (the cancel), never to freeze')
-    const ev = (store('Address', await addressKey(R.email))!.get('uevents') as Record<string, { act?: string }>)['rc-attempt']
+    const ev = (store('Address', await addressKey(R.email))!.get('uevents') as Record<string, { act?: string }> | undefined)?.['rc-attempt']
     ok(ev?.act === 'rc-enrol', '  …and its event-list entry leads to that action (act: rc-enrol)')
     const fm = [...mailbox].reverse().find((x) => x.to === K.email && x.kind === 'cred-add')!
     ok(/and freeze your keys\./.test(fm.body), 'CONTROL: a passkey notice still advises freezing')
@@ -588,7 +588,7 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
   for (let i = 0; i < 30; i++) await start(V, r64(32)) // 30 attempts, 30 IPs, no signature
   const after = await listed()
   ok(after.some((x) => x.k === 'rc-enrol'), `…and still listed after 30 unsigned recovery attempts (${after.map((x) => x.k).join(',')})`)
-  ok(after.filter((x) => x.k === 'rc-attempt').length === 1 && after.find((x) => x.k === 'rc-attempt')!.n === 30, '  …which show as ONE entry counting 30')
+  ok(after.filter((x) => x.k === 'rc-attempt').length === 1 && after.find((x) => x.k === 'rc-attempt')?.n === 30, '  …which show as ONE entry counting 30')
   const W = await person('keys-ev2@example.com'); await bind(W)
   const wd = await device(W)
   for (let i = 0; i < 21; i++) await enrol(W, wd)
@@ -603,8 +603,8 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
     ok(noticesTo(T.email, 'rc-attempt') === m0 + 1, `CONTROL (${enrolled ? 'enrolled' : 'nothing enrolled'}): the first wrong attempt mails a notice`)
     for (let i = 0; i < 39; i++) await start(T, r64(32)) // 40 attempts, each from its own IP
     ok(noticesTo(T.email, 'rc-attempt') === m0 + 1, `40 wrong recovery attempts from 40 IPs → 1 mail, not 40 (${noticesTo(T.email, 'rc-attempt') - m0})`)
-    const ue = (store('Address', await addressKey(T.email))!.get('uevents') as Record<string, { n: number }>)['rc-attempt']
-    ok(ue.n === 40, `  …while the event list records them, as ONE entry with a count (${ue.n})`)
+    const ue = (store('Address', await addressKey(T.email))!.get('uevents') as Record<string, { n: number }> | undefined)?.['rc-attempt']
+    ok(ue?.n === 40, `  …while the event list records them, as ONE entry with a count (${ue.n})`)
     now += 2 * HOUR
     const m1 = noticesTo(T.email, 'rc-attempt')
     ok(reason(await start(T, r64(32))) === 'locked' && noticesTo(T.email, 'rc-attempt') === m1, `a refusal while locked is listed but never mailed, even an hour later (${enrolled ? 'enrolled' : 'nothing enrolled'})`)
@@ -946,6 +946,56 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
     const code = codeFor(S.email)!
     const c = await api('/v1/bind/complete', { email: S.email, code, sig: await S.k.sign(buildCmp(await hashOf(sb.text), code)) })
     ok(c.status === 200 && c.j.rebound === false && (await lookup(S.email)).status === 200, 'CONTROL: the same key over its own holder tomb → active at once, not rebound')
+  }
+  {
+    // the same key back inside the window: its recovery code is current again, past the old expiry
+    const S2 = await person('d1b-s2@example.com')
+    now += 2 * MIN
+    const b1 = await bindNext(S2, null, { life: 2 * HOUR })
+    await api('/v1/bind/start', { stmt: b1.text, sig: b1.sig })
+    let code = codeFor(S2.email)!
+    await api('/v1/bind/complete', { email: S2.email, code, sig: await S2.k.sign(buildCmp(await hashOf(b1.text), code)) })
+    const { e } = await enrol(S2, await device(S2))
+    await del(S2)
+    now += 2 * MIN
+    const b2 = await bindNext(S2, null)
+    await api('/v1/bind/start', { stmt: b2.text, sig: b2.sig })
+    code = codeFor(S2.email)!
+    await api('/v1/bind/complete', { email: S2.email, code, sig: await S2.k.sign(buildCmp(await hashOf(b2.text), code)) })
+    ok(!('keepUntil' in ((await rcOf(S2)) ?? {})), 'the same key re-bound inside the window: the verifier is no longer on a deletion clock')
+    now += 3 * HOUR
+    await accountAlarm(await addressKey(S2.email))
+    ok((await start(S2, e.verifier)).status === 200, '  …so its code still works after the deleted binding\'s expiry')
+  }
+  {
+    // past the window with the alarm missed: the verifier is gone at the next check anyway
+    const S3 = await person('d1b-s3@example.com')
+    now += 2 * MIN
+    const b1 = await bindNext(S3, null, { life: HOUR })
+    await api('/v1/bind/start', { stmt: b1.text, sig: b1.sig })
+    let code = codeFor(S3.email)!
+    await api('/v1/bind/complete', { email: S3.email, code, sig: await S3.k.sign(buildCmp(await hashOf(b1.text), code)) })
+    const { e } = await enrol(S3, await device(S3))
+    await del(S3)
+    now += 2 * HOUR
+    const b2 = await bindNext(S3, null)
+    await api('/v1/bind/start', { stmt: b2.text, sig: b2.sig })
+    code = codeFor(S3.email)!
+    await api('/v1/bind/complete', { email: S3.email, code, sig: await S3.k.sign(buildCmp(await hashOf(b2.text), code)) })
+    ok(reason(await start(S3, e.verifier)) === 'invalid', 'the same key back AFTER the window, alarm missed: the old verifier is not honoured (deleted on use)')
+  }
+  {
+    // a freeze whose binding has since expired is not "resolved": email alone re-binds it
+    const H2 = await person('d1b-h2@example.com')
+    now += 2 * MIN
+    const b1 = await bindNext(H2, null, { life: 10 * MIN })
+    await api('/v1/bind/start', { stmt: b1.text, sig: b1.sig })
+    const code = codeFor(H2.email)!
+    await api('/v1/bind/complete', { email: H2.email, code, sig: await H2.k.sign(buildCmp(await hashOf(b1.text), code)) })
+    const { e } = await enrol(H2, await device(H2))
+    ok((await freezeBy(H2, H2)).j.state === 'frozen', 'H2 is frozen')
+    now += 11 * MIN
+    ok(reason(await resolve(await bindNext(await nextOf(H2), b1.text), e.verifier)) === 'state', 'a freeze whose binding expired cannot be resolved (the expired re-bind applies)')
   }
   {
     // CONTROL: after the deleted binding's own expiry, a new key re-binds by email (pinners warn)
