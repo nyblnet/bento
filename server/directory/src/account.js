@@ -251,8 +251,10 @@ export async function keysRoute(p, b, env, ip, deps) {
     if (!st.body.live) return json(400, { error: 'invalid' })
     const start = p === '/v1/recovery/start'
     const r = await call(accountStub(env, scope), start ? 'rcStart' : 'rcRelease', { accountPub: st.body.accountPub, verifier: b.verifier, ticket: b.ticket })
-    if (r.body.notify) await notify(scope, r.body.notify, '') // every attempt, right or wrong, notifies
-    const { notify: _, ...body } = r.body
+    // every counted attempt, right or wrong, notifies; a refusal past the daily
+    // count or while locked is listed but not mailed (it would be a mail cannon)
+    if (r.body.notify) await notify(scope, r.body.notify, '', { mail: !r.body.quiet })
+    const { notify: _, quiet: __, ...body } = r.body
     return json(r.status, body)
   }
 
@@ -327,9 +329,9 @@ export class Account {
     if (a.op === 'rcStart' || a.op === 'rcRelease') {
       const start = a.op === 'rcStart'
       const kind = start ? 'rc-attempt' : 'rc-release'
-      if (((await s.get('rcLock')) || 0) > now) return refuse('locked', { notify: kind })
+      if (((await s.get('rcLock')) || 0) > now) return refuse('locked', { notify: kind, quiet: true })
       const log = ((await s.get('rcLog')) || []).filter((t) => now - t < 24 * HOUR)
-      if (log.length >= KEYS.rcAttemptsPerDay) return refuse('limit', { notify: kind })
+      if (log.length >= KEYS.rcAttemptsPerDay) return refuse('limit', { notify: kind, quiet: true })
       await s.put('rcLog', [...log, now])
       const wrong = async (reason) => {
         const fails = ((await s.get('rcFails')) || 0) + 1

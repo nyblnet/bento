@@ -55,6 +55,11 @@ export const LIMITS = {
   credFailures: 5, // consecutive WebAuthn failures before a credential locks
   credLockMs: 15 * 60_000,
   events: 20, // the short event list a status read returns (§9.7)
+  // notice MAIL per address (the event list still records every event): one per
+  // kind per hour, and a daily ceiling across kinds, so a notice can't be used
+  // to mail-bomb an address from many IPs
+  noticeKindMs: 3_600_000,
+  noticesPerDay: 8,
 }
 const DAY = 86_400_000
 const CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ' // no 0/O, 1/I/L
@@ -135,7 +140,14 @@ function same(a, b) {
 export const freezeLink = (to, token) => `https://id.bento.page/freeze#e=${b64uEnc(new TextEncoder().encode(to))}&t=${token}`
 
 // Every link, passkey change or fetch, recovery-code change and recovery attempt
-// notifies the address (§9.3, §9.4, §39.1). Placeholder wording.
+// notifies the address (§9.3, §9.4, §39.1). Placeholder wording. The advice line
+// is the one action that helps: freezing for a device or passkey, but for a
+// recovery attempt a NEW recovery code, since a freeze neither stops a release
+// nor allows the new code that does (rc-enrol is refused while frozen).
+const FREEZE_ADVICE = 'If this was not you, open bento/home on one of your devices and freeze your keys.'
+const RC_ADVICE = 'If this was not you, open bento/home on one of your devices and set a new recovery code. That cancels it. Do not freeze your keys: a freeze does not stop it, and blocks setting a new code.'
+/** what the event list tells a device to offer for each kind (the notice's own advice) */
+export const NOTICE_ACTION = Object.freeze({ 'rc-attempt': 'rc-enrol', 'rc-release': 'rc-enrol' })
 export const NOTICES = Object.freeze({
   link: ['A device was linked to your bento/id', 'A new device was linked to the bento/id keys for this address (device key {fp}).'],
   'cred-add': ['A passkey was added to your bento/id', 'A passkey ({fp}) was added for getting the bento/id keys for this address onto a new device.'],
@@ -179,7 +191,7 @@ export async function sendCode(env, to, code, fp, kind, freezeToken = null) {
     body = [
       line.replace('{fp}', fp),
       '',
-      'If this was not you, open bento/home on one of your devices and freeze your keys.',
+      NOTICE_ACTION[kind] === 'rc-enrol' ? RC_ADVICE : FREEZE_ADVICE,
     ].join('\n')
   } else {
     subject = kind === 'delete' ? 'Your bento/id removal code' : 'Your bento/id code'
@@ -219,10 +231,11 @@ const call = async (stub, op, args) => {
   return { status: r.status, body: await r.json() }
 }
 
-/** Append to the address's event list (§9.7) and mail it. Never fails the request. */
-async function notify(env, scope, kind, fp) {
+/** Append to the address's event list (§9.7) and mail it, within the per-address
+ *  notice cap; `mail: false` records the event only. Never fails the request. */
+async function notify(env, scope, kind, fp, o = {}) {
   try {
-    const r = await call(env.ADDRESS.get(env.ADDRESS.idFromName(scope)), 'event', { kind, fp })
+    const r = await call(env.ADDRESS.get(env.ADDRESS.idFromName(scope)), 'event', { kind, fp, mail: o.mail !== false })
     if (r.body.to) await sendCode(env, r.body.to, '', fp, kind)
   } catch (e) { console.log(`notice failed: ${e.message}`) }
 }
@@ -275,7 +288,7 @@ export default {
     const b = await body(req)
     if (!b) return json(400, { error: 'bad-request' })
 
-    const deps = { json, ledger, addressCall: call, notify: (scope, kind, fp) => notify(env, scope, kind, fp) }
+    const deps = { json, ledger, addressCall: call, notify: (scope, kind, fp, o) => notify(env, scope, kind, fp, o) }
     const routed = (await linkRoute(p, b, env, ip, deps)) ?? (await keysRoute(p, b, env, ip, deps))
     if (routed) return routed
 
@@ -641,8 +654,15 @@ export class Address {
       const cur = await s.get('cur')
       const b = cur && (await readBind(cur.stmt, cur.sig, cur.verifiedAt))
       if (!b) return out(200, { to: null })
-      const events = [...((await s.get('events')) || []), { k: a.kind, at: now, fp: a.fp || '' }].slice(-LIMITS.events)
+      const ev = { k: a.kind, at: now, fp: a.fp || '' }
+      if (Object.hasOwn(NOTICE_ACTION, a.kind)) ev.act = NOTICE_ACTION[a.kind]
+      const events = [...((await s.get('events')) || []), ev].slice(-LIMITS.events)
       await s.put('events', events)
+      // every event is listed; MAIL is capped per address (one per kind per hour, a daily ceiling)
+      const sent = ((await s.get('nmail')) || []).filter((x) => now - x.at < DAY)
+      const mail = a.mail !== false && !sent.some((x) => x.k === a.kind && now - x.at < LIMITS.noticeKindMs) && sent.length < LIMITS.noticesPerDay
+      if (!mail) return out(200, { to: null })
+      await s.put('nmail', [...sent, { k: a.kind, at: now }])
       return out(200, { to: b.address })
     }
 

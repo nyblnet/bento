@@ -526,6 +526,15 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
   const a0 = noticesTo(R.email, 'rc-attempt')
   ok(reason(await start(R, r64(32))) === 'invalid', 'a wrong verifier → refused')
   ok(noticesTo(R.email, 'rc-attempt') === a0 + 1, '  …and notified')
+  {
+    const m = [...mailbox].reverse().find((x) => x.to === R.email && x.kind === 'rc-attempt')!
+    ok(/set a new recovery code/.test(m.body) && /That cancels it/.test(m.body) && !/and freeze your keys\./.test(m.body), 'the recovery-attempt notice says to set a new recovery code (the cancel), never to freeze')
+    const ev = (store('Address', await addressKey(R.email))!.get('events') as { k: string; act?: string }[]).filter((x) => x.k === 'rc-attempt').pop()
+    ok(ev?.act === 'rc-enrol', '  …and its event-list entry leads to that action (act: rc-enrol)')
+    const fm = [...mailbox].reverse().find((x) => x.to === K.email && x.kind === 'cred-add')!
+    ok(/and freeze your keys\./.test(fm.body), 'CONTROL: a passkey notice still advises freezing')
+  }
+  now += HOUR // one rc-attempt notice per hour per address
   const go = await start(R, e.verifier)
   ok(go.status === 200 && typeof go.j.ticket === 'string' && go.j.releaseAt === now + 72 * HOUR, 'CONTROL: the right verifier starts the 72-hour wait')
   ok(noticesTo(R.email, 'rc-attempt') === a0 + 2, '  …notified too')
@@ -539,12 +548,54 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
   now += DAY // five verifier checks so far today: the rows below need a fresh day's budget
   ok(reason(await release(R, e.verifier, r64(32))) === 'ticket', 'a made-up ticket → refused')
   ok(reason(await release(R, r64(32), String(go2.j.ticket))) === 'invalid', 'the right ticket with a wrong verifier → refused')
+  now += HOUR // the refused releases above were notified within the hour
   const rel0 = noticesTo(R.email, 'rc-release')
   const out = await release(R, e.verifier, String(go2.j.ticket))
   ok(out.status === 200 && out.j.inner === innerOf(e), 'CONTROL: after 72 hours the right ticket and verifier release the code-wrapped blob, pepper layer removed')
   ok(noticesTo(R.email, 'rc-release') === rel0 + 1, '  …notified')
+  {
+    const m = [...mailbox].reverse().find((x) => x.to === R.email && x.kind === 'rc-release')!
+    ok(/set a new recovery code/.test(m.body) && !/and freeze your keys\./.test(m.body), 'the release notice says to set a new recovery code, never to freeze')
+  }
   ok(reason(await start(R, e.verifier)) === 'invalid', 'a used recovery code is SPENT')
   ok((await api('/v1/recovery/salt', { email: R.email })).j.saltV !== e.saltV, '  …and its salt is gone')
+}
+// --- notice mail is capped per address; the event list records everything (F1) ---
+{
+  for (const enrolled of [true, false]) {
+    const T = await person(`keys-cap-${enrolled ? 'e' : 'u'}@example.com`); await bind(T)
+    const te = enrolled ? (await enrol(T, await device(T))).e : null
+    const m0 = noticesTo(T.email, 'rc-attempt')
+    await start(T, r64(32))
+    ok(noticesTo(T.email, 'rc-attempt') === m0 + 1, `CONTROL (${enrolled ? 'enrolled' : 'nothing enrolled'}): the first wrong attempt mails a notice`)
+    for (let i = 0; i < 39; i++) await start(T, r64(32)) // 40 attempts, each from its own IP
+    ok(noticesTo(T.email, 'rc-attempt') === m0 + 1, `40 wrong recovery attempts from 40 IPs → 1 mail, not 40 (${noticesTo(T.email, 'rc-attempt') - m0})`)
+    const evs = (store('Address', await addressKey(T.email))!.get('events') as { k: string }[]).filter((x) => x.k === 'rc-attempt')
+    ok(evs.length === 20, `  …while the event list records them (${evs.length}, the list's length)`)
+    now += 2 * HOUR
+    const m1 = noticesTo(T.email, 'rc-attempt')
+    ok(reason(await start(T, r64(32))) === 'locked' && noticesTo(T.email, 'rc-attempt') === m1, `a refusal while locked is listed but never mailed, even an hour later (${enrolled ? 'enrolled' : 'nothing enrolled'})`)
+    if (te) {
+      now += DAY // the lock is over; four wrong checks and one right one fill the day's count without locking
+      for (let i = 0; i < 4; i++) await start(T, r64(32))
+      ok((await start(T, te.verifier)).status === 200, '  (the fifth check of the day, right, starts a wait)')
+      now += 2 * HOUR
+      const m2 = noticesTo(T.email, 'rc-attempt')
+      ok(reason(await start(T, r64(32))) === 'limit' && noticesTo(T.email, 'rc-attempt') === m2, 'a refusal past the daily count is listed but never mailed')
+    }
+  }
+  // the daily ceiling across kinds, at the event op the worker's notify() mails through
+  const C = await person('keys-cap-c@example.com'); await bind(C)
+  const cScope = await addressKey(C.email)
+  const addr = (env.ADDRESS as { get(id: string): { fetch(u: string, i: RequestInit): Promise<Response> } }).get(cScope)
+  const ev = async (kind: string) => (await (await addr.fetch('https://a/op', { method: 'POST', body: JSON.stringify({ op: 'event', kind, fp: '', mail: true }) })).json()).to
+  ok((await ev('link')) === C.email, 'CONTROL: a first notice of a kind is mailed')
+  ok((await ev('link')) === null, 'a second of the same kind within the hour is listed, not mailed')
+  let mailed = 1
+  for (const k of ['cred-add', 'cred-del', 'cred-fetch', 'rc-enrol', 'rc-attempt', 'rc-release', 'link-x', 'link-y', 'link-z']) if (await ev(k)) mailed++
+  ok(mailed === 8, `at most 8 notice mails a day per address across kinds (${mailed})`)
+  now += DAY + MIN
+  ok((await ev('link')) === C.email, 'CONTROL: the next day notices mail again')
 }
 {
   // a new enrolment ends a release in flight for the old code

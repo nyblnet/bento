@@ -169,8 +169,13 @@ account key it belongs to, and material for any other key is treated as gone).
   second one (kernel's derivations); the pepper is a Worker secret. A right
   verifier starts a 72-hour wait and returns a ticket; after it, the ticket and
   the verifier release the blob once, and the code is spent. Five checks per
-  address per 24 hours; five failures lock recovery for 24 hours; every attempt
-  notifies. An address with nothing enrolled gets a stable fake salt.
+  address per 24 hours; five failures lock recovery for 24 hours; every counted
+  attempt notifies, and the notice says to set a new recovery code, which
+  cancels a release (a freeze does not, and blocks the new code). An address
+  with nothing enrolled gets a stable fake salt.
+- **Notices.** The event list records every event. Notice MAIL is capped per
+  address: one per kind per hour and eight a day, and a recovery attempt
+  refused past the day's count or while locked is listed, never mailed.
   Pepper versions upgrade on a successful check; a record under a version the
   Worker doesn't hold is refused, never tried under another.
 - **The access ledger.** Stored only at bucket sizes (12.5% steps from 4 KiB,
@@ -185,7 +190,9 @@ account key it belongs to, and material for any other key is treated as gone).
   holder-delete window
 - resolving a freeze with the recovery code
 - the ledger routes (a kernel request op)
-- refusing refreshed synced (BE=1) blobs after a lost-or-stolen removal
+- refusing refreshed synced (BE=1) blobs after a lost-or-stolen removal. This
+  is a HARD prerequisite: no deploy may set `ROTATION=1`, or ship freeze
+  resolution together with `KEYSTORE=1`, before it exists
 - the SES mailer
 
 ## Deploying is the maintainer's
