@@ -124,17 +124,41 @@ async function testKey(name: string) {
 const account = await testKey('account'), kx = await testKey('kx'), other = await testKey('other')
 const credentialId = bytes(16, (i) => 0xc0 + i)
 const prfOutput = bytes(32, (i) => 0xa0 + i), prfSalt = bytes(32, (i) => 0x70 + i), iv = bytes(12, (i) => 0x20 + i)
+const wrapKey = await recoveryWrapKey(code, salt, argon2)
+const both = { account: account.d, kx: kx.d }
+const cat = (...a: Uint8Array[]) => { const o = new Uint8Array(a.reduce((n, x) => n + x.length, 0)); let i = 0; for (const x of a) { o.set(x, i); i += x.length } return o }
+
+// A blob of the WRONG length, sealed correctly under the right key and aad, so a
+// host must refuse it on length AFTER a successful decrypt (packScalars itself
+// refuses to make one: a 32-byte account-only blob is what every pre-C enrolment
+// sealed, and under mode C it is refused, never read as a partial key set).
+async function sealRaw(key: Uint8Array, aad: string, pt: Uint8Array): Promise<string> {
+  const k = await crypto.subtle.importKey('raw', key as BufferSource, 'AES-GCM', false, ['encrypt'])
+  return hex(new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv as BufferSource, additionalData: new TextEncoder().encode(aad) as BufferSource, tagLength: 128 }, k, pt as BufferSource)))
+}
+const cred = Buffer.from(new Uint8Array(await crypto.subtle.digest('SHA-256', credentialId as BufferSource))).toString('base64url')
+const rcAad = `bento/id/rc-wrap/v1.${Buffer.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(account.pub)))).toString('base64url')}`
+const prfAad = `bento/id/acct-wrap/v1.${cred}`
+const kek = await prfKek(prfOutput, prfSalt)
+const wrongLength = (seal: (pt: Uint8Array) => Promise<string>) => Promise.all([
+  { name: 'a 32-byte account-only blob (every pre-C enrolment)', pt: account.d },
+  { name: 'a 63-byte blob (one byte short)', pt: cat(account.d, kx.d).slice(0, 63) },
+  { name: 'a 65-byte blob (one byte over)', pt: cat(account.d, kx.d, Uint8Array.of(0)) },
+  { name: 'a 96-byte blob (a third scalar)', pt: cat(account.d, kx.d, other.d) },
+].map(async (r) => ({ name: r.name, ct: await seal(r.pt), expect: 'reject', reason: 'length' })))
 
 const blobs = {
   keys: { accountD: hex(account.d), accountPub: account.pub, kxD: hex(kx.d), kxPub: kx.pub, otherD: hex(other.d) },
   prf: {
-    unruled: await sealPrfBlob({ prfOutput, credentialId, salt: prfSalt, iv, keys: { account: account.d } }),
-    modeA: await sealPrfBlob({ prfOutput, credentialId, salt: prfSalt, iv, keys: { account: account.d, kx: kx.d }, mode: 'A' }),
+    blob: await sealPrfBlob({ prfOutput, credentialId, salt: prfSalt, iv, keys: both }),
     inputs: { prfOutput: hex(prfOutput), credentialId: hex(credentialId), salt: hex(prfSalt), iv: hex(iv) },
+    /** ct (hex) to put in place of blob.ct: each decrypts, then must be refused on length */
+    wrongLength: await wrongLength((pt) => sealRaw(kek, prfAad, pt)),
   },
   recovery: {
     inputs: { code: base.bytes, salt: hex(salt), iv: hex(iv) },
-    inner: hex(await sealRecoveryInner({ wrapKey: await recoveryWrapKey(code, salt, argon2), iv, accountPub: account.pub, keys: { account: account.d } })),
+    inner: hex(await sealRecoveryInner({ wrapKey, iv, accountPub: account.pub, keys: both })),
+    wrongLength: await wrongLength((pt) => sealRaw(wrapKey, rcAad, pt)),
   },
   pepper: { secret: hex(bytes(32, (i) => 0xe0 + i)), iv: hex(bytes(12, (i) => 0x30 + i)), verifyKey: '', wrapKey: '', verifierTag: '', outer: '' },
 }
@@ -148,16 +172,47 @@ const blobs = {
 
 const N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n
 const scalarHex = (x: bigint) => x.toString(16).padStart(64, '0')
+// Each row is a blob PLAINTEXT `pt` (hex) checked against the binding's
+// accountPub and recovery kxPub: unpackScalars, before anything uses a key.
+const A_ = hex(account.d), K_ = hex(kx.d)
 const scalars = [
-  { name: 'the account scalar matching the signed public half', d: hex(account.d), pub: account.pub, expect: 'accept' },
-  { name: 'scalar 0', d: scalarHex(0n), pub: account.pub, expect: 'reject', reason: 'scalar-range' },
-  { name: 'scalar n (the group order)', d: scalarHex(N), pub: account.pub, expect: 'reject', reason: 'scalar-range' },
-  { name: 'scalar n−1 for a mismatched public half', d: scalarHex(N - 1n), pub: account.pub, expect: 'reject', reason: 'key-mismatch' },
-  { name: "another key's scalar (a swapped blob)", d: hex(other.d), pub: account.pub, expect: 'reject', reason: 'key-mismatch' },
+  { name: 'account ‖ recovery kx, each matching its signed public half', pt: A_ + K_, accountPub: account.pub, kxPub: kx.pub, expect: 'accept' },
+  { name: 'account scalar 0', pt: scalarHex(0n) + K_, accountPub: account.pub, kxPub: kx.pub, expect: 'reject', reason: 'scalar-range' },
+  { name: 'kx scalar 0', pt: A_ + scalarHex(0n), accountPub: account.pub, kxPub: kx.pub, expect: 'reject', reason: 'scalar-range' },
+  { name: 'account scalar n (the group order)', pt: scalarHex(N) + K_, accountPub: account.pub, kxPub: kx.pub, expect: 'reject', reason: 'scalar-range' },
+  { name: 'kx scalar n (the group order)', pt: A_ + scalarHex(N), accountPub: account.pub, kxPub: kx.pub, expect: 'reject', reason: 'scalar-range' },
+  { name: 'account scalar n−1 for a mismatched public half', pt: scalarHex(N - 1n) + K_, accountPub: account.pub, kxPub: kx.pub, expect: 'reject', reason: 'key-mismatch' },
+  { name: "another key's scalar as the account (a swapped blob)", pt: hex(other.d) + K_, accountPub: account.pub, kxPub: kx.pub, expect: 'reject', reason: 'key-mismatch' },
+  { name: "another key's scalar as the kx (a swapped blob)", pt: A_ + hex(other.d), accountPub: account.pub, kxPub: kx.pub, expect: 'reject', reason: 'key-mismatch' },
+  { name: 'the two scalars in the wrong order', pt: K_ + A_, accountPub: account.pub, kxPub: kx.pub, expect: 'reject', reason: 'key-mismatch' },
+  { name: 'the account scalar twice (kx slot filled with the account key)', pt: A_ + A_, accountPub: account.pub, kxPub: kx.pub, expect: 'reject', reason: 'key-mismatch' },
+  { name: 'a 32-byte account-only plaintext (pre-C)', pt: A_, accountPub: account.pub, kxPub: kx.pub, expect: 'reject', reason: 'length' },
+  { name: 'a 64-byte plaintext with no kx public half to match (empty kxPub)', pt: A_ + K_, accountPub: account.pub, kxPub: '', expect: 'reject', reason: 'key-mismatch' },
+  { name: 'empty plaintext', pt: '', accountPub: account.pub, kxPub: kx.pub, expect: 'reject', reason: 'length' },
 ]
+
+// sanity: the reference agrees with every refusal row it is about to publish
+{
+  const { unpackScalars, openPrfBlob, openRecoveryInner } = await import('../kernel/src/recovery.ts')
+  for (const r of scalars) {
+    const v = await unpackScalars(Uint8Array.from(Buffer.from(r.pt, 'hex')), { accountPub: r.accountPub, kxPub: r.kxPub })
+    if (r.expect === 'accept' ? !v.ok : (v.ok || v.reason !== r.reason)) throw new Error(`scalar row disagrees: ${r.name}`)
+  }
+  const exp = { accountPub: account.pub, kxPub: kx.pub }
+  for (const r of blobs.prf.wrongLength) {
+    const v = await openPrfBlob({ ...blobs.prf.blob, ct: Buffer.from(r.ct, 'hex').toString('base64url') }, { prfOutput, credentialId, expected: exp })
+    if (v.ok || v.reason !== 'length') throw new Error(`prf wrongLength row disagrees: ${r.name}`)
+  }
+  for (const r of blobs.recovery.wrongLength) {
+    const v = await openRecoveryInner(Uint8Array.from(Buffer.from(r.ct, 'hex')), { wrapKey, iv, expected: exp })
+    if (v.ok || v.reason !== 'length') throw new Error(`recovery wrongLength row disagrees: ${r.name}`)
+  }
+}
 
 const fixture = {
   version: 1,
+  kxMode: 'C',
+  blobLen: 64,
   note: 'bento/id recovery-code and key-blob vectors (identity-design §2f, security §28). TEST KEYS ONLY. ' +
     'Every value is deterministic: reproduce the bytes exactly. Generated by scripts/gen-recovery-vectors.ts, ' +
     'checked by scripts/test-recovery.ts.',

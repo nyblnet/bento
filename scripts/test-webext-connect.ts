@@ -7,7 +7,10 @@
 //
 // WHAT THIS PROVES, on the extension's own code (id/agent.js, id/keystore.js,
 // id/passkey.js) with kernel's verifiers as the judge:
-//   · the device certificate verifies under kernel's verifyDev, consent slot empty;
+//   · the device certificate verifies under kernel's verifyDev, consent slot empty,
+//     its kx slot carrying this device's own kx (mode C, identity-design §6b);
+//   · both blobs are 64 bytes: the account scalar ‖ the recovery kx scalar, each
+//     matched to its public half; a v1 (pre-C) record is DISCARDED on load;
 //   · the passkey blob opens with that passkey's PRF output to the account key,
 //     and the recovery blob opens with the code shown (kernel's open functions);
 //   · the recovery code appears NOWHERE in the stored record, nor does the raw
@@ -66,32 +69,44 @@ console.log('\n— a Bento ID, created with a PRF passkey and a recovery code')
   ok(p.calls.length === 1 && new TextDecoder().decode(p.calls[0].prfEval) === 'bento/id/prf/v1', 'the passkey ceremony evaluates the fixed PRF input "bento/id/prf/v1"')
   const dev = await st.verifyDev(record.dev.text, record.dev.sig, { now: NOW })
   ok(dev.ok && dev.value.devicePub === record.devicePub && dev.value.accountPub === record.accountPub && dev.value.consentPub === null && dev.value.label === 'Chrome on my laptop', 'the device certificate verifies under kernel\'s verifyDev, with the consent slot EMPTY (light tier)')
-  ok(record.accountKey.extractable === false && record.deviceKey.extractable === false, 'both keys are stored NON-extractable')
-  ok(record.accountKey.usages.join() === 'sign' && record.deviceKey.usages.join() === 'sign', 'both are sign-only')
+  ok(dev.ok && dev.value.kx === record.kxPub && record.kxPub !== record.recoveryKxPub, 'its kx slot carries THIS device\'s kx, distinct from the recovery kx (mode C)')
+  ok(record.v === 2 && agent.RECORD_V === 2, 'the record is v2 (mode C)')
+  ok(record.accountKey.extractable === false && record.deviceKey.extractable === false && record.kxKey.extractable === false && record.recoveryKxKey.extractable === false, 'all four keys are stored NON-extractable')
+  ok(record.accountKey.usages.join() === 'sign' && record.deviceKey.usages.join() === 'sign', 'the signing keys are sign-only')
+  ok(record.kxKey.usages.join() === 'deriveBits' && record.recoveryKxKey.usages.join() === 'deriveBits' && record.kxKey.algorithm.name === 'ECDH', 'the kx keys are ECDH, deriveBits only')
+  const kxProbe = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']) as CryptoKeyPair
+  const pubOf = async (k: CryptoKey) => st.b64uEnc(new Uint8Array(await crypto.subtle.exportKey('raw', k)))
+  const dh = async (priv: CryptoKey, pub: string) => Buffer.from(await crypto.subtle.deriveBits({ name: 'ECDH', public: await crypto.subtle.importKey('raw', st.b64uDec(pub), { name: 'ECDH', namedCurve: 'P-256' }, false, []) }, priv, 256)).toString('hex')
+  ok(await dh(record.recoveryKxKey, await pubOf(kxProbe.publicKey)) === await dh(kxProbe.privateKey, record.recoveryKxPub), 'the stored recovery kx key is the one recoveryKxPub names (an ECDH agreement matches)')
   // the account key in the record IS the account key the certificate names
   const probe = new TextEncoder().encode('probe')
   const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, record.accountKey, probe)
   const pubKey = await crypto.subtle.importKey('raw', st.b64uDec(record.accountPub), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify'])
   ok(await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, pubKey, sig, probe), 'the stored (non-extractable) account key is the one the certificate names')
   // the passkey blob opens with that passkey, to that account key
-  const opened = await rc.openPrfBlob(record.passkeys[0].blob, { prfOutput: prf, credentialId: p.credentialId, expected: { accountPub: record.accountPub } })
-  ok(opened.ok === true, `the passkey blob opens with that passkey's PRF output, to the account key (kernel openPrfBlob: ${opened.ok ? 'ok' : opened.reason})`)
-  ok((await rc.openPrfBlob(record.passkeys[0].blob, { prfOutput: crypto.getRandomValues(new Uint8Array(32)), credentialId: p.credentialId, expected: { accountPub: record.accountPub } })).ok === false, 'and not with another passkey\'s')
+  const expected = { accountPub: record.accountPub, kxPub: record.recoveryKxPub }
+  const opened = await rc.openPrfBlob(record.passkeys[0].blob, { prfOutput: prf, credentialId: p.credentialId, expected })
+  ok(opened.ok === true, `the passkey blob opens with that passkey's PRF output, to account ‖ recovery kx (kernel openPrfBlob: ${opened.ok ? 'ok' : opened.reason})`)
+  ok(st.b64uDec(record.passkeys[0].blob.ct).length === 64 + 16, 'the passkey blob is 64 bytes plus the tag')
+  const noKx = await rc.openPrfBlob(record.passkeys[0].blob, { prfOutput: prf, credentialId: p.credentialId, expected: { accountPub: record.accountPub, kxPub: record.kxPub } })
+  ok(noKx.ok === false && noKx.reason === 'key-mismatch', 'checked against the DEVICE kx instead, it is refused: the blob carries the recovery kx')
+  ok((await rc.openPrfBlob(record.passkeys[0].blob, { prfOutput: crypto.getRandomValues(new Uint8Array(32)), credentialId: p.credentialId, expected })).ok === false, 'and not with another passkey\'s')
   // the recovery code
   const parsed = rc.parseRecoveryCode(recoveryCode)
   ok(parsed.ok === true && /^[0-9A-Z]{4}(-[0-9A-Z]{4}){3}-[0-9A-Z*~$=]$/.test(recoveryCode), `the recovery code is shown in the printed form (${recoveryCode.replace(/[0-9A-Z]/g, 'X')})`)
   if (parsed.ok) {
     const r = record.recovery
     const wrapKey = await rc.recoveryWrapKey(parsed.code, st.b64uDec(r.salt), argon2id)
-    const inner = await rc.openRecoveryInner(st.b64uDec(r.inner), { wrapKey, iv: st.b64uDec(r.iv), expected: { accountPub: record.accountPub } })
-    ok(inner.ok === true, 'the recovery blob opens with the code shown, to the account key (kernel openRecoveryInner)')
+    const inner = await rc.openRecoveryInner(st.b64uDec(r.inner), { wrapKey, iv: st.b64uDec(r.iv), expected })
+    ok(inner.ok === true, 'the recovery blob opens with the code shown, to account ‖ recovery kx (kernel openRecoveryInner)')
     ok(st.b64uEnc(await rc.recoveryVerifier(parsed.code, st.b64uDec(r.saltV), argon2id)) === r.verifier, 'the stored verifier is Argon2id(code, salt_v), with its own salt')
     const all = bytesIn(record).join('|')
     const codeHex = Buffer.from(parsed.code).toString('hex')
     ok(!all.includes(codeHex) && !all.includes(st.b64uEnc(parsed.code)) && !all.includes(recoveryCode) && !all.includes(recoveryCode.replace(/-/g, '')), 'the recovery code appears NOWHERE in the stored record')
     if (inner.ok) {
-      const d = inner.value.account
+      const d = inner.value.account, k = inner.value.kx
       ok(!all.includes(Buffer.from(d).toString('hex')) && !all.includes(st.b64uEnc(d)), 'nor does the raw account scalar')
+      ok(!all.includes(Buffer.from(k).toString('hex')) && !all.includes(st.b64uEnc(k)), 'nor does the raw recovery kx scalar')
     }
   }
   ok(record.state === 'local', 'the new Bento ID is "local": not yet bound to an address (the directory comes next)')
@@ -122,6 +137,15 @@ console.log('\n— the keystore')
   ok((await ks.saveNewSelf(second.record, db)).reason === 'exists' && (await ks.loadSelf(db)).accountPub === record.accountPub, 'a second setup never replaces the first')
   const extractable = { ...record, accountKey: { extractable: true } }
   ok((await ks.saveNewSelf(extractable, memdb())).reason === 'extractable key', 'a record carrying an extractable key is refused')
+  for (const k of ['kxKey', 'recoveryKxKey']) ok((await ks.saveNewSelf({ ...record, [k]: { extractable: true } }, memdb())).reason === 'extractable key', `an extractable ${k} is refused`)
+  ok((await ks.saveNewSelf({ ...record, v: 1 }, memdb())).reason === 'version', 'a v1 record is never stored')
+  // test enrolments from before mode C are DISCARDED on load, never migrated
+  const old = memdb()
+  old.m.set('self', { v: 1, state: 'local', accountPub: 'x', devicePub: 'y', passkeys: [], recovery: null, dev: { text: 'dev.x', sig: 'z' } })
+  ok((await ks.loadSelf(old)) === null && !old.m.has('self'), 'a stored v1 (pre-C) record reads as none, and is DELETED')
+  ok((await ks.saveNewSelf(record, old)).ok === true && (await ks.loadSelf(old)) === record, 'setup then stores a fresh v2 record in its place')
+  const unversioned = memdb(); unversioned.m.set('self', { state: 'local' })
+  ok((await ks.loadSelf(unversioned)) === null && !unversioned.m.has('self'), 'so is a record with no version')
   const view = ks.publicView(record)
   ok(view && !('accountKey' in view) && !('deviceKey' in view) && !('recovery' in view && typeof view.recovery !== 'boolean'), 'the public view carries no key and no blob')
 }

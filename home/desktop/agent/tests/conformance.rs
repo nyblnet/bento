@@ -30,7 +30,6 @@ fn s<'a>(r: &'a Value, k: &str) -> &'a str {
 
 struct Ctx {
     now: u64,
-    kx_default: st::KxMode,
     dir_keys: HashMap<String, String>,
     account: String,
     consent: String,
@@ -49,10 +48,10 @@ enum Parsed {
 
 fn check(c: &Ctx, r: &Value, text: &str, sig: &str) -> Result<Parsed, &'static str> {
     let now = r["now"].as_u64().unwrap_or(c.now);
-    let kx = r["kxMode"].as_str().map(|m| st::KxMode::parse(m).expect("kxMode")).unwrap_or(c.kx_default);
+    assert!(r.get("kxMode").is_none(), "no row selects a kx mode: mode C is the only one ({})", s(r, "name"));
     match s(r, "type") {
-        "dev" => st::verify_dev(text, sig, now, kx).map(Parsed::Dev),
-        "bind" => st::verify_bind(text, sig, now, kx).map(Parsed::Bind),
+        "dev" => st::verify_dev(text, sig, now).map(Parsed::Dev),
+        "bind" => st::verify_bind(text, sig, now).map(Parsed::Bind),
         "att" => st::verify_att(text, sig, &c.dir_keys, s(r, "bindText"), now, r["maxAgeMs"].as_u64().expect("maxAgeMs"))
             .map(Parsed::Att),
         "tomb" => st::verify_tomb(text, sig, &c.dir_keys, now).map(Parsed::Tomb),
@@ -100,7 +99,6 @@ fn rebuild(p: &Parsed) -> String {
 fn ctx(f: &Value) -> Ctx {
     Ctx {
         now: f["now"].as_u64().unwrap(),
-        kx_default: st::KxMode::parse(f["kxModeDefault"].as_str().unwrap()).unwrap(),
         dir_keys: f["directoryKeys"].as_object().unwrap().iter().map(|(k, v)| (k.clone(), v.as_str().unwrap().into())).collect(),
         account: f["keys"]["account"].as_str().unwrap().into(),
         consent: f["keys"]["consent"].as_str().unwrap().into(),
@@ -166,8 +164,14 @@ fn the_contract_cannot_quietly_shrink() {
         assert!(rows.iter().any(|r| r["type"] == t && r["expect"] == "accept"), "{t} has an accept row");
         assert!(rows.iter().any(|r| r["type"] == t && r["expect"] == "reject"), "{t} has a reject row");
     }
-    assert_eq!(f["kxModeDefault"], "unruled");
-    assert_eq!(st::KX_MODE, st::KxMode::Unruled, "kx placement is unruled: both slots empty");
+    assert_eq!(f["kxMode"], "C");
+    assert!(f.get("kxModeDefault").is_none(), "no default: mode C is the only kx placement");
+    assert_eq!(st::KX_MODE, "C", "kx placement is mode C: both slots required");
+    for t in ["dev", "bind"] {
+        let slot = if t == "dev" { 4 } else { 3 };
+        assert!(rows.iter().filter(|r| r["type"] == t && r["expect"] == "accept").all(|r| !s(r, "text").split('.').nth(slot).unwrap().is_empty()), "{t}: every accepted row fills the kx slot");
+        assert!(rows.iter().any(|r| r["type"] == t && r["reason"] == "kx" && s(r, "text").split('.').nth(slot).unwrap().is_empty()), "{t}: an empty kx slot is a reject row");
+    }
 }
 
 #[test]

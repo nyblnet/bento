@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- DEBUG BUILDS ONLY. Never in a release: src/debug is not compiled into one. -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Cleartext, so the emulator can reach a local directory (wrangler dev) at 10.0.2.2.
+         HttpDirectory only accepts that host and loopback, and only when the build says it is debuggable. -->
+    <application android:usesCleartextTraffic="true" tools:replace="android:usesCleartextTraffic">
         <activity android:name=".RecoveryProbeActivity" android:exported="true"
             android:theme="@style/Theme.Tray" />
         <activity android:name=".Gate1OracleActivity" android:exported="true"
