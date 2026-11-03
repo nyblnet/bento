@@ -93,12 +93,16 @@
     <string name="link_h_approve">Link this device</string>
     <string name="link_h_prompt">Confirm it is you to give this device your Bento ID.</string>
     <string name="link_h_done">The device is linked.</string>
-    <string name="link_n_start">Type your email address and the code shown on your other device, or scan its QR.</string>
+    <string name="link_n_start">Type the code shown on your other device, or scan its QR.</string>
     <string name="link_code_hint">Code from the other device</string>
     <string name="link_scan">Scan the QR</string>
     <string name="link_n_begin">Link this device</string>
     <string name="link_n_sas">Type these 6 digits on your other device.</string>
     <string name="link_n_prompt">Confirm it is you to prove this device\'s key.</string>
+    <string name="link_n_confirm">Link this device to %1$s?</string>
+    <string name="link_n_name">The account calls itself \u201c%1$s\u201d. That name was chosen by the account; this device has not checked it. Check the address.</string>
+    <string name="link_n_confirm_yes">Yes, link this device</string>
+    <string name="link_n_decline">Cancel</string>
     <string name="link_n_done">This device is linked to %1$s.</string>
     <string name="link_err_role">This device can\'t do that: it must be the one that has the account (to show a code) or the one that has none (to enter one).</string>
     <string name="link_err_code">That isn\'t a link code, or it has expired.</string>

@@ -65,7 +65,7 @@ class LinkAgent(
     }
     sealed class Step<out T> { class Ok<T>(val value: T) : Step<T>(); class Fail(val why: Why, val detail: String = "") : Step<Nothing>() }
 
-    private enum class S { NEW, DISPLAYING, PAIRED, SAS_OK, OFFERED, DONE, DEAD }
+    private enum class S { NEW, DISPLAYING, PAIRED, SAS_OK, OFFERED, CONFIRM, DONE, DEAD }
     private var state = S.NEW
     private var slot: Link.Slot? = null
     private var own: SoftKeys.Pair? = null
@@ -80,8 +80,8 @@ class LinkAgent(
     private fun fail(why: Why, detail: String = ""): Step.Fail { kill(abort = why != Why.OFFLINE && why != Why.STATE); return Step.Fail(why, detail) }
     private fun kill(abort: Boolean) {
         if (abort) slot?.let { try { dir.abort(it) } catch (_: Exception) {} }
-        own?.wipe(); keys?.wipe(); dkx?.wipe()
-        own = null; keys = null; dkx = null
+        own?.wipe(); keys?.wipe(); dkx?.wipe(); pending?.secrets?.fill(0)
+        own = null; keys = null; dkx = null; pending = null
         if (state != S.DONE) state = S.DEAD
     }
     /** Zero everything secret; safe at any point (the screen went away). Deletes the slot if it is live. */
@@ -109,7 +109,7 @@ class LinkAgent(
         val code = ByteArray(Link.CODE_BYTES).also { random.nextBytes(it) }
         val s = Link.slot(code); val e = SoftKeys.generate()
         slot = s; own = e; roleD = role
-        val r = dir.open(s, B64u.enc(Link.buildMsg0(e.pub, role).toByteArray()))
+        val r = dir.open(s, Link.encodeSlotMsg(0, Link.buildMsg0(e.pub, role)))
         if (r != LinkDirectory.R.Ok) return fromReply(r)
         state = S.DISPLAYING
         val printed = Link.formatCode(code); code.fill(0)
@@ -123,7 +123,7 @@ class LinkAgent(
         while (true) {
             when (val g = dir.get(s, 1, minOf(pollMs, maxOf(0, deadline - now())))) {
                 is LinkDirectory.Got.Msg -> {
-                    val text = decode(g.text) ?: return fail(Why.BAD_MESSAGE)
+                    val text = Link.decodeSlotMsg(1, g.text) ?: return fail(Why.BAD_MESSAGE)
                     val eS = (Link.parseMsg1(text) as? Link.V.Ok)?.value ?: return fail(Why.BAD_MESSAGE)
                     return derive(eS)
                 }
@@ -141,7 +141,7 @@ class LinkAgent(
         val s = Link.slot(p.code); p.code.fill(0)
         slot = s
         val msg0 = when (val g = dir.get(s, 0, 0)) {
-            is LinkDirectory.Got.Msg -> decode(g.text)?.let { Link.parseMsg0(it) } ?: return fail(Why.BAD_MESSAGE)
+            is LinkDirectory.Got.Msg -> Link.decodeSlotMsg(0, g.text)?.let { Link.parseMsg0(it) } ?: return fail(Why.BAD_MESSAGE)
             LinkDirectory.Got.Pending -> return Step.Fail(Why.BAD_CODE, "empty")
             is LinkDirectory.Got.Failed -> return if (g.why == LinkDirectory.R.NotFound) Step.Fail(Why.BAD_CODE, "no slot") else fromReply(g.why)
         }
@@ -150,7 +150,7 @@ class LinkAgent(
         if (!Link.scannerMayProceed(msg0.value.roleD, holdsAccount()) || msg0.value.roleD == role || !roleFits()) return fail(Why.ROLE)
         roleD = msg0.value.roleD
         val e = SoftKeys.generate(); own = e
-        val r = dir.put(s, 1, B64u.enc(Link.buildMsg1(e.pub).toByteArray()))
+        val r = dir.put(s, 1, Link.encodeSlotMsg(1, Link.buildMsg1(e.pub)))
         if (r != LinkDirectory.R.Ok) return fromReply(r)
         return derive(msg0.value.eD)
     }
@@ -187,54 +187,73 @@ class LinkAgent(
         val iv = ByteArray(12).also { random.nextBytes(it) }
         sealedN2h = true
         val wire = Link.seal(keys!!, 2, t!!, iv, Link.buildOffer(offer, popD, popC).toByteArray())
-        val r = dir.put(slot!!, 2, wire)
+        val r = dir.put(slot!!, 2, Link.encodeSlotMsg(2, wire))
         if (r != LinkDirectory.R.Ok) return fromReply(r)
         offerSent = offer; state = S.OFFERED
         return Step.Ok(Unit)
     }
 
-    /** Everything N keeps once it is linked. [secrets] is account ‖ recovery kx ‖ device kx. */
+    /**
+     * Everything N keeps once it is linked. [secrets] is account ‖ device kx (64 bytes): the recovery kx lives
+     * only on the device that set the account up. [name] is what the ACCOUNT calls itself in its binding: a
+     * claim by the account, never something this device or the directory checked.
+     */
     class Linked(val address: String, val bindText: String, val bindSig: String, val attText: String, val attSig: String,
-                 val devText: String, val devSig: String, val label: String?, val secrets: ByteArray) {
+                 val devText: String, val devSig: String, val label: String?, val name: String?, val secrets: ByteArray) {
         fun record() = IdentitySetup.Record(address, bindText, bindSig, attText, attSig, devText, devSig, recoveryEnrolled = false)
     }
 
+    private var pending: Linked? = null
+
     /**
-     * N waits for message 3 and checks it before keeping anything: the dev. must name N's own keys, the
-     * account must be the binding the directory serves for [address] under a PINNED key, and both
-     * scalars must match it. On success N deletes the slot (it is done); on any failure it aborts.
+     * N waits for message 3 and checks it before keeping anything. The address is not typed: it arrives inside
+     * SEALED, and [Link.openFinal] looks THAT address up and checks the binding under a PINNED key. Nothing is
+     * stored and the slot is NOT deleted yet: the host shows [Linked.address] for the person to confirm, then
+     * calls [confirm] (keep) or [decline] (abort and delete the slot). On any failure the slot is aborted.
      */
-    fun awaitFinal(address: String, pins: Map<String, String>, totalMs: Long): Step<Linked> {
+    fun awaitFinal(pins: Map<String, String>, totalMs: Long): Step<Linked> {
         if (role != Link.Role.N || state != S.OFFERED) return Step.Fail(Why.STATE)
         val s = slot!!; val deadline = now() + totalMs
         val msg3: String
         while (true) {
             when (val g = dir.get(s, 3, minOf(pollMs, maxOf(0, deadline - now())))) {
-                is LinkDirectory.Got.Msg -> { msg3 = g.text; break }
+                is LinkDirectory.Got.Msg -> { msg3 = Link.decodeSlotMsg(3, g.text) ?: return fail(Why.BAD_MESSAGE, "wire"); break }
                 LinkDirectory.Got.Pending -> if (now() >= deadline) return fail(Why.GONE, "timeout")
                 is LinkDirectory.Got.Failed -> return fromReply(g.why)
             }
         }
         if (pins.isEmpty()) return fail(Why.UNVERIFIED, "no-pinned-key")
-        val addr = (Address.normalize(address) as? Address.Result.Ok)?.address ?: return fail(Why.UNVERIFIED, "address")
-        val lk = dir.lookup(addr) ?: return fail(Why.OFFLINE)
-        val bind = parseBind(lk.binding) ?: return fail(Why.UNVERIFIED, "bind")
-        if (bind.address != addr) return fail(Why.UNVERIFIED, "bind-address")
-        if (!Statements.verifySig(bind.accountPub, lk.sig, lk.binding)) return fail(Why.UNVERIFIED, "bind-signature")
-        when (val v = Statements.verifyAtt(lk.attestation, lk.attestationSig, pins, lk.binding, now(), IdentitySetup.ATT_MAX_AGE_MS)) {
-            is Statements.Verdict.No -> return fail(Why.UNVERIFIED, v.reason)
-            is Statements.Verdict.Ok -> if (v.att.state != "active") return fail(Why.UNVERIFIED, "state-${v.att.state}")
+        var lookupAnswer: LinkDirectory.Lookup? = null; var asked = false
+        val lookup = { address: String ->
+            asked = true
+            dir.lookup(address)?.also { lookupAnswer = it }?.let { Link.Lookup(it.binding, it.sig, it.attestation, it.attestationSig) }
         }
-        val opened = when (val v = Link.openFinal(msg3, keys!!, t!!, offerSent!!, bind.accountPub, bind.kx, now())) {
-            is Link.V.No -> return fail(Why.UNVERIFIED, v.reason)
+        val opened = when (val v = Link.openFinal(msg3, keys!!, t!!, offerSent!!, lookup, pins, now())) {
+            is Link.V.No -> return if (v.reason == "lookup" && asked && lookupAnswer == null) fail(Why.OFFLINE) else fail(Why.UNVERIFIED, v.reason)
             is Link.V.Ok -> v.value
         }
-        val secrets = opened.keys.account + opened.keys.kx + dkx!!.scalar
-        opened.keys.account.fill(0); opened.keys.kx.fill(0)
-        try { dir.abort(s) } catch (_: Exception) {}
-        val linked = Linked(addr, lk.binding, lk.sig, lk.attestation, lk.attestationSig, opened.dev, opened.devSig, opened.device.label, secrets)
-        state = S.DONE; kill(abort = false)
+        val lk = lookupAnswer!!
+        val secrets = opened.account + dkx!!.scalar
+        opened.account.fill(0)
+        val linked = Linked(opened.address, lk.binding, lk.sig, lk.attestation, lk.attestationSig, opened.dev, opened.devSig,
+            opened.device.label, opened.name, secrets)
+        pending = linked; state = S.CONFIRM
         return Step.Ok(linked)
+    }
+
+    /** The person confirmed the address: N is done with the slot, which it deletes. */
+    fun confirm(): Step<Linked> {
+        val l = pending ?: return Step.Fail(Why.STATE)
+        if (state != S.CONFIRM) return Step.Fail(Why.STATE)
+        try { dir.abort(slot!!) } catch (_: Exception) {}
+        pending = null; state = S.DONE; kill(abort = false)
+        return Step.Ok(l)
+    }
+
+    /** The person declined: nothing is kept, the secrets are zeroed and the slot is deleted. */
+    fun decline(): Step.Fail {
+        pending?.secrets?.fill(0); pending = null
+        return fail(Why.DECLINED, "address not confirmed")
     }
 
     // ---- H -----------------------------------------------------------------------------------------
@@ -257,7 +276,7 @@ class LinkAgent(
         val deadline = now() + totalMs
         while (true) {
             when (val g = dir.get(slot!!, 2, minOf(pollMs, maxOf(0, deadline - now())))) {
-                is LinkDirectory.Got.Msg -> return when (val o = Link.openOffer(keys!!, t!!, g.text)) {
+                is LinkDirectory.Got.Msg -> return when (val o = Link.openOffer(keys!!, t!!, Link.decodeSlotMsg(2, g.text) ?: return fail(Why.BAD_MESSAGE, "wire"))) {
                     is Link.V.No -> fail(Why.BAD_MESSAGE, o.reason)
                     is Link.V.Ok -> { offerSent = o.value; state = S.OFFERED; Step.Ok(o.value) }
                 }
@@ -267,13 +286,13 @@ class LinkAgent(
         }
     }
 
-    /** What H holds: its address, the account and recovery kx scalars, and its own dev. */
-    class Holder(val address: String, val bindText: String, val accountScalar: ByteArray, val recoveryKxScalar: ByteArray,
+    /** What H holds: its address, the account scalar, and its own dev. Never the recovery kx: linking does not use it. */
+    class Holder(val address: String, val bindText: String, val accountScalar: ByteArray,
                  val devText: String, val devSig: String, val hasConsentKey: Boolean)
 
     /**
      * H approves: issues N's dev. (with the label H chose), asks the directory for a fresh challenge,
-     * has the person consent (a `cns.` purpose `link` over that dev. text), seals the account blob
+     * has the person consent (a `cns.` purpose `link` over that dev. text), seals the account scalar and address
      * under h2n exactly once and sends the whole of message 3 to the directory, which checks it.
      */
     fun approve(holder: Holder, label: String?, signer: IdentitySetup.ConsentSigner): Step<Unit> {
@@ -288,13 +307,13 @@ class LinkAgent(
         val nDevSig = Statements.sign(holder.accountScalar, nDev)
         val iv = ByteArray(12).also { random.nextBytes(it) }
         sealedH2n = true
-        val sealed = Link.seal(keys!!, 3, t!!, iv, Recovery.pack(Recovery.Keys(holder.accountScalar, holder.recoveryKxScalar)))
+        val sealed = Link.seal(keys!!, 3, t!!, iv, Link.sealedPlaintext(holder.accountScalar, holder.address))
         // the challenge lives 60 s: fetch it LAST, then ask the person
         val challenge = dir.challenge(holder.address) ?: return fail(Why.OFFLINE)
         val cns = Consent.stamp(Consent.Purpose.LINK, null, challenge, nDev, now()) ?: return fail(Why.REFUSED, "consent")
         val cnsSig = signer.sign(cns) ?: return fail(Why.DECLINED)
         val msg3 = Link.buildFinal(Link.Final(holder.devText, holder.devSig, cns, cnsSig, nDev, nDevSig, sealed))
-        val r = dir.complete(slot!!, holder.address, challenge, msg3)
+        val r = dir.complete(slot!!, holder.address, challenge, Link.encodeSlotMsg(3, msg3))
         if (r != LinkDirectory.R.Ok) return fromReply(r)
         state = S.DONE; kill(abort = false)
         return Step.Ok(Unit)
@@ -303,8 +322,6 @@ class LinkAgent(
     private fun accountPubOf(h: Holder): String = parseBind(h.bindText)!!.accountPub
 
     // ---- helpers ----------------------------------------------------------------------------------------
-
-    private fun decode(wire: String): String? = B64u.dec(wire)?.let { String(it, Charsets.UTF_8) }
 
     class Bind(val address: String, val accountPub: String, val kx: String)
 

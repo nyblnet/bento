@@ -135,7 +135,7 @@ class LinkFlowTest {
         val h = LinkAgent(Link.Role.H, dir, { true }, { dir.now })
         val n = LinkAgent(Link.Role.N, dir, { false }, { dir.now })
         val nProofs = NProofs()
-        val holder get() = LinkAgent.Holder(ADDRESS, acc.bindText, acc.acct.scalar, acc.rkx.scalar, hDev, hDevSig, hasConsent)
+        val holder get() = LinkAgent.Holder(ADDRESS, acc.bindText, acc.acct.scalar, hDev, hDevSig, hasConsent)
         val signer = IdentitySetup.ConsentSigner { Statements.sign(hConsent.scalar, it) }
     }
 
@@ -161,15 +161,24 @@ class LinkFlowTest {
         val offer = r.h.readOffer(60_000).ok()
         assertEquals("Pixel 9", offer.label)
         r.h.approve(r.holder, "Alice's phone", r.signer).ok()
-        return r.n.awaitFinal(ADDRESS, r.pins, 60_000).ok()
+        return confirmed(r.n, r.pins, 60_000)
+    }
+
+    /** awaitFinal, then the person confirms the address: the way a link ends. */
+    private fun confirmed(n: LinkAgent, pins: Map<String, String>, ms: Long): LinkAgent.Linked {
+        val l = n.awaitFinal(pins, ms).ok()
+        return n.confirm().ok().also { assertTrue(it === l) }
     }
 
     // ---- the honest links ------------------------------------------------------------------------
 
     @Test fun `H displays and N scans - the account arrives, under the label H wrote`() {
         val r = Rig(); val linked = honest(r, true)
-        assertArrayEquals(r.acc.acct.scalar + r.acc.rkx.scalar, linked.secrets.copyOfRange(0, 64))
-        assertEquals(96, linked.secrets.size)
+        // account ‖ N's own device kx: N never receives the recovery kx
+        assertArrayEquals(r.acc.acct.scalar, linked.secrets.copyOfRange(0, 32))
+        assertEquals(64, linked.secrets.size)
+        assertTrue(Recovery.scalarMatches(linked.secrets.copyOfRange(32, 64), linked.devText.split('.')[4]))
+        assertFalse(linked.secrets.toList().windowed(32).any { it.toByteArray().contentEquals(r.acc.rkx.scalar) })
         assertEquals("Alice's phone", linked.label)            // H's label, not the one N offered
         assertEquals(r.nProofs.routine.pub, linked.devText.split('.')[1])
         assertEquals(1, r.dir.completions)
@@ -185,7 +194,7 @@ class LinkFlowTest {
         val r = Rig(); val np = NProofs(hasConsent = false)
         pair(r, true); r.n.sendOffer(np, null).ok(); r.h.enterSas(r.n.sas()!!).ok(); r.h.readOffer(1000).ok()
         r.h.approve(r.holder, null, r.signer).ok()
-        val l = r.n.awaitFinal(ADDRESS, r.pins, 1000).ok()
+        val l = confirmed(r.n, r.pins, 1000)
         assertEquals("", l.devText.split('.')[2])
     }
 
@@ -202,7 +211,7 @@ class LinkFlowTest {
         r.h.enterSas(wrong).failed(LinkAgent.Why.SAS)
         assertEquals("aborted", r.dir.burned.values.single())
         r.h.enterSas(r.n.sas()!!).failed(LinkAgent.Why.STATE)         // the agent is dead: no second try
-        r.n.awaitFinal(ADDRESS, r.pins, 5000).failed(LinkAgent.Why.GONE)
+        r.n.awaitFinal(r.pins, 5000).failed(LinkAgent.Why.GONE)
         assertEquals(0, r.dir.completions)
         // control: the right digits, typed with a space, pass
         val ok = Rig(); pair(ok, true); ok.n.sendOffer(ok.nProofs, "x").ok()
@@ -279,7 +288,7 @@ class LinkFlowTest {
         val r = Rig(); pair(r, true); r.n.sendOffer(r.nProofs, "pixel‮").ok(); r.h.enterSas(r.n.sas()!!).ok()
         assertNull(r.h.readOffer(1000).ok().label)
         r.h.approve(r.holder, "ok‮", r.signer).ok()
-        assertNull(r.n.awaitFinal(ADDRESS, r.pins, 1000).ok().label)
+        assertNull(confirmed(r.n, r.pins, 1000).label)
     }
 
     // ---- what N checks before it keeps anything ----------------------------------------------------------------
@@ -296,26 +305,65 @@ class LinkFlowTest {
             l[6] = Statements.sign(r.acc.acct.scalar, l[5]); l.joinToString("\n")
         }
         r.h.approve(r.holder, null, r.signer).ok()
-        val f = r.n.awaitFinal(ADDRESS, r.pins, 1000).failed(LinkAgent.Why.UNVERIFIED)
+        val f = r.n.awaitFinal(r.pins, 1000).failed(LinkAgent.Why.UNVERIFIED)
         assertEquals("device-mismatch", f.detail)
     }
 
     @Test fun `N refuses with no pinned key, an att under an unpinned kid, and a binding that is not the account`() {
         fun prepared(): Rig { val r = Rig(); pair(r, true); r.n.sendOffer(r.nProofs, "x").ok(); r.h.enterSas(r.n.sas()!!).ok(); r.h.readOffer(1000).ok(); r.h.approve(r.holder, null, r.signer).ok(); return r }
-        prepared().let { assertEquals("no-pinned-key", it.n.awaitFinal(ADDRESS, emptyMap(), 1000).failed(LinkAgent.Why.UNVERIFIED).detail) }
-        prepared().let { it.dir.attKid = "dir-other"; it.n.awaitFinal(ADDRESS, it.pins, 1000).failed(LinkAgent.Why.UNVERIFIED) }
+        prepared().let { assertEquals("no-pinned-key", it.n.awaitFinal(emptyMap(), 1000).failed(LinkAgent.Why.UNVERIFIED).detail) }
+        prepared().let { it.dir.attKid = "dir-other"; it.n.awaitFinal(it.pins, 1000).failed(LinkAgent.Why.UNVERIFIED) }
         // the binding the directory serves is for ANOTHER account: the dev. no longer names it
-        prepared().let { val b = account(); it.dir.bindText = b.bindText; it.dir.bindSig = b.bindSig; it.n.awaitFinal(ADDRESS, it.pins, 1000).failed(LinkAgent.Why.UNVERIFIED) }
-        prepared().let { it.dir.state = "frozen"; assertEquals("state-frozen", it.n.awaitFinal(ADDRESS, it.pins, 1000).failed(LinkAgent.Why.UNVERIFIED).detail) }
+        prepared().let { val b = account(); it.dir.bindText = b.bindText; it.dir.bindSig = b.bindSig; it.n.awaitFinal(it.pins, 1000).failed(LinkAgent.Why.UNVERIFIED) }
+        prepared().let { it.dir.state = "frozen"; assertEquals("state", it.n.awaitFinal(it.pins, 1000).failed(LinkAgent.Why.UNVERIFIED).detail) }
         // control
-        prepared().let { it.n.awaitFinal(ADDRESS, it.pins, 1000).ok() }
+        prepared().let { confirmed(it.n, it.pins, 1000) }
     }
 
-    @Test fun `N refuses sealed scalars of another account`() {
+    @Test fun `N refuses an address the directory's answer is not for`() {
+        // H seals "bob@example.com"; the directory answers the lookup with alice's genuine binding
         val r = Rig(); pair(r, true); r.n.sendOffer(r.nProofs, "x").ok(); r.h.enterSas(r.n.sas()!!).ok(); r.h.readOffer(1000).ok()
-        val wrong = LinkAgent.Holder(ADDRESS, r.acc.bindText, r.acc.acct.scalar, SoftKeys.generate().scalar, r.hDev, r.hDevSig, true)
-        r.h.approve(wrong, null, r.signer).ok()
-        r.n.awaitFinal(ADDRESS, r.pins, 1000).failed(LinkAgent.Why.UNVERIFIED).let { assertEquals("key-mismatch", it.detail) }
+        val bob = LinkAgent.Holder("bob@example.com", r.acc.bindText, r.acc.acct.scalar, r.hDev, r.hDevSig, true)
+        r.h.approve(bob, null, r.signer).ok()
+        r.n.awaitFinal(r.pins, 1000).failed(LinkAgent.Why.UNVERIFIED).let { assertEquals("address-mismatch", it.detail) }
+        assertEquals("aborted", r.dir.burned.values.single())       // a refusal aborts and deletes the slot
+    }
+
+    // (a scalar that is not the binding's account key is refused as key-mismatch: the fixture's final rows)
+
+    // ---- N confirms the ADDRESS before it keeps anything -------------------------------------------------------
+
+    @Test fun `the address arrives sealed, not typed - N shows it and the slot stays until the person answers`() {
+        val r = Rig(); pair(r, true); r.n.sendOffer(r.nProofs, "x").ok(); r.h.enterSas(r.n.sas()!!).ok(); r.h.readOffer(1000).ok()
+        r.h.approve(r.holder, null, r.signer).ok()
+        val l = r.n.awaitFinal(r.pins, 1000).ok()
+        assertEquals(ADDRESS, l.address)
+        assertEquals(1, r.dir.slots.size)                              // not deleted yet: nothing has been confirmed
+        assertTrue(r.dir.burned.isEmpty())
+        r.n.confirm().ok()
+        assertEquals("aborted", r.dir.burned.values.single())          // confirmed: N is done with the slot, which it deletes
+    }
+
+    @Test fun `declining aborts and deletes the slot, and the secrets are zeroed`() {
+        val r = Rig(); pair(r, true); r.n.sendOffer(r.nProofs, "x").ok(); r.h.enterSas(r.n.sas()!!).ok(); r.h.readOffer(1000).ok()
+        r.h.approve(r.holder, null, r.signer).ok()
+        val l = r.n.awaitFinal(r.pins, 1000).ok()
+        r.n.decline().let { assertEquals(LinkAgent.Why.DECLINED, it.why) }
+        assertTrue(r.dir.slots.isEmpty()); assertEquals("aborted", r.dir.burned.values.single())
+        assertTrue(l.secrets.all { it == 0.toByte() })
+        r.n.confirm().failed(LinkAgent.Why.STATE)                     // too late: there is nothing left to keep
+    }
+
+    @Test fun `confirm needs an opened completion`() {
+        val r = Rig(); pair(r, true); r.n.sendOffer(r.nProofs, "x").ok()
+        r.n.confirm().failed(LinkAgent.Why.STATE)
+    }
+
+    @Test fun `a lookup that is unreachable is offline, not unverified`() {
+        val r = Rig(); pair(r, true); r.n.sendOffer(r.nProofs, "x").ok(); r.h.enterSas(r.n.sas()!!).ok(); r.h.readOffer(1000).ok()
+        r.h.approve(r.holder, null, r.signer).ok()
+        r.dir.lookupOffline = true
+        r.n.awaitFinal(r.pins, 1000).failed(LinkAgent.Why.OFFLINE)
     }
 
     @Test fun `a timeout is not a link`() {

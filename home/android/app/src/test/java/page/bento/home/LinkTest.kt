@@ -145,25 +145,64 @@ class LinkTest {
         }
     }
 
-    @Test fun `N's check of msg3 reaches the stated verdict`() {
-        val r = rows("final"); assertEquals(15, r.size)
-        var ok = 0; var no = 0
+    @Test fun `N's check of msg3 reaches the stated verdict, and looks the address up only when the fixture says it does`() {
+        val r = rows("final"); assertEquals(43, r.size)
+        val pins = link.getAsJsonObject("directoryKeys").entrySet().associate { it.key to it.value.asString }
+        var ok = 0; var no = 0; var looked = 0; var notLooked = 0
         for (x in r) {
-            val b = x.getAsJsonObject("binding")
-            val v = Link.openFinal(x.s("text"), keysOf(x), x.s("t"), x.offerOf(), b.s("accountPub"), b.s("kxPub"),
-                x.get("now")?.asLong ?: now)
+            var called = false
+            val table = x.getAsJsonObject("lookup")
+            val lookup = { address: String ->
+                called = true
+                table.getAsJsonObject(address)?.let { Link.Lookup(it.s("bindText"), it.s("bindSig"), it.s("attText"), it.s("attSig")) }
+            }
+            val v = Link.openFinal(x.s("text"), keysOf(x), x.s("t"), x.offerOf(), lookup, pins, x.get("now")?.asLong ?: now)
+            assertEquals(x.s("name") + " lookupCalled", x.get("lookupCalled").asBoolean, called)
+            if (called) looked++ else notLooked++
             if (x.s("expect") == "accept") {
-                assertTrue(x.s("name"), v is Link.V.Ok); ok++
+                assertTrue(x.s("name") + " " + V(v), v is Link.V.Ok); ok++
                 val o = (v as Link.V.Ok).value
                 assertEquals(x.offerOf().devicePub, o.device.devicePub)
-                assertEquals(64, o.keys.account.size + o.keys.kx.size)
+                assertEquals(x.s("address"), o.address)
+                assertEquals(x.str("displayName"), o.name)
+                assertEquals(32, o.account.size)
             } else { assertEquals(x.s("name"), x.s("reason"), V(v)); no++ }
         }
-        assertTrue(ok >= 1 && no >= 12)
+        assertEquals(3, ok); assertEquals(40, no)
+        assertEquals(19, looked); assertEquals(24, notLooked)   // grammar/address/decrypt/dev refusals never reach the directory
+    }
+
+    @Test fun `H seals the account scalar and the address, and nothing else`() {
+        val b = link.getAsJsonObject("bind"); val m3 = link.getAsJsonObject("msg3")
+        assertEquals(m3.s("sealedPlaintextHex"), Hex.str(Link.sealedPlaintext(hex(b.s("accountScalarHex")), b.s("address"))))
+        assertEquals(32 + b.s("address").length, hex(m3.s("sealedPlaintextHex")).size)
+        for (bad in listOf("Alice@example.com", " alice@example.com", "alice@example.com\n", "a", "alice@EXAMPLE.com"))
+            assertTrue(bad, runCatching { Link.sealedPlaintext(ByteArray(32) { 1 }, bad) }.isFailure)
+        assertTrue(runCatching { Link.sealedPlaintext(ByteArray(64) { 1 }, "alice@example.com") }.isFailure)   // the old blob length
+    }
+
+    @Test fun `the slot wire is byte for byte the fixture's, both ways`() {
+        val r = rows("wire"); assertEquals(30, r.size)
+        var ok = 0; var no = 0
+        for (x in r) {
+            val n = x.get("n").asInt
+            val decoded = Link.decodeSlotMsg(n, x.s("wire"))
+            if (x.s("expect") == "accept") {
+                assertEquals(x.s("name"), x.s("text"), decoded)
+                assertEquals(x.s("name") + " (encode)", x.s("wire"), Link.encodeSlotMsg(n, x.s("text"))); ok++
+            } else { assertNull(x.s("name"), decoded); no++ }
+        }
+        assertEquals(9, ok); assertEquals(21, no)
+    }
+
+    @Test fun `encodeSlotMsg refuses what no peer would decode`() {
+        assertTrue(runCatching { Link.encodeSlotMsg(0, "lnk1.x") }.isFailure)
+        assertTrue(runCatching { Link.encodeSlotMsg(3, "lnk3.x") }.isFailure)
+        assertTrue(runCatching { Link.encodeSlotMsg(1, "lnk1." + "a".repeat(5000)) }.isFailure)
     }
 
     @Test fun `the release rows belong to the directory, and are all counted`() {
-        assertEquals(26, rows("release").size)   // not ported: Link has no verifyLinkRelease
+        assertEquals(32, rows("release").size)   // not ported: Link has no verifyLinkRelease
     }
 
     @Test fun `an unknown platform token is not shown as a known device`() {

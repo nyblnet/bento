@@ -225,7 +225,24 @@ object Link {
     class Final(val hDev: String, val hDevSig: String, val cns: String, val cnsSig: String,
                 val nDev: String, val nDevSig: String, val sealed: String)
 
-    private const val SEALED_LEN = 12 + Recovery.BLOB_LEN + 16
+    /** SEALED opens to the account scalar (32 bytes big-endian) then the address, in normal form. */
+    const val SCALAR_LEN = 32
+    /** The longest address SEALED carries: 254 ASCII characters. */
+    const val ADDRESS_MAX = 254
+    /** iv ‖ scalar ‖ address ‖ tag: a bounded range. NOT derived from the recovery blob: N never gets the recovery kx. */
+    const val SEALED_MIN_LEN = 12 + SCALAR_LEN + 1 + 16
+    const val SEALED_MAX_LEN = 12 + SCALAR_LEN + ADDRESS_MAX + 16
+    /** The oldest directory answer N acts on (an att.'s issuedAt). */
+    const val ATT_MAX_MS = 10 * 60_000L
+
+    /** H's SEALED plaintext: the account scalar, then the address. Throws rather than seal what no N would open. */
+    fun sealedPlaintext(account: ByteArray, address: String): ByteArray {
+        require(account.size == SCALAR_LEN) { "an account scalar is 32 bytes" }
+        require(isNormalAddress(address)) { "the address is not in normal form" }
+        return account + address.toByteArray(Charsets.UTF_8)
+    }
+
+    fun isNormalAddress(s: String): Boolean = (Address.normalize(s) as? Address.Result.Ok)?.address == s
 
     fun buildFinal(f: Final): String = listOf("lnk3", f.hDev, f.hDevSig, f.cns, f.cnsSig, f.nDev, f.nDevSig, f.sealed).joinToString("\n")
 
@@ -233,7 +250,7 @@ object Link {
         if (text.length > 8 * (MAX_LINE + 1)) return null
         val l = text.split('\n')
         if (l.size != 8 || l[0] != "lnk3" || !l.all { printable(it) }) return null
-        if (!isSig(l[2]) || !isSig(l[4]) || !isSig(l[6]) || B64u.dec(l[7])?.size != SEALED_LEN) return null
+        if (!isSig(l[2]) || !isSig(l[4]) || !isSig(l[6]) || (B64u.dec(l[7])?.size ?: 0).let { it < SEALED_MIN_LEN || it > SEALED_MAX_LEN }) return null
         return Final(l[1], l[2], l[3], l[4], l[5], l[6], l[7])
     }
 
@@ -269,26 +286,115 @@ object Link {
         return V.Ok(Dev(devicePub, consentPub, accountPub, kxF, label, created, expires))
     }
 
-    class Opened(val keys: Recovery.Keys, val device: Dev, val dev: String, val devSig: String)
+    /** The directory's answer to a lookup of one address: the binding and its att. */
+    class Lookup(val bindText: String, val bindSig: String, val attText: String, val attSig: String)
+
+    class Opened(val account: ByteArray, val address: String, val name: String?, val device: Dev, val dev: String, val devSig: String)
+
+    private fun strictUtf8(b: ByteArray, off: Int = 0, len: Int = b.size - off): String? = try {
+        Charsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+            .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT).decode(java.nio.ByteBuffer.wrap(b, off, len)).toString()
+    } catch (e: java.nio.charset.CharacterCodingException) { null }
+
+    /** The address SEALED carries, or null: strict UTF-8 and already in normal form. */
+    private fun sealedAddress(pt: ByteArray): String? = strictUtf8(pt, SCALAR_LEN)?.takeIf { isNormalAddress(it) }
+
+    private val HASH_RE = Regex("^[A-Za-z0-9_-]{43}$")
+
+    class Bound(val address: String, val accountPub: String, val kx: String, val name: String?)
+
+    /** kernel verifyBind: grammar, address in normal form, keys, name, seq/prev, lifetime, then the account key's signature. */
+    fun verifyBind(text: String, sig: String, now: Long): V<Bound> {
+        val p = fields(text, "bind", 9) ?: return no("grammar")
+        val address = B64u.dec(p[1])?.let { strictUtf8(it) }
+        if (address == null || !isNormalAddress(address)) return no("address")
+        val accountPub = p[2]; val kx = p[3]
+        if (!Statements.isPoint(accountPub)) return no("key")
+        if (kx == "" || !Statements.isPoint(kx) || kx == accountPub) return no("kx")
+        var name: String? = null
+        if (p[4] != "") { name = DisplayText.parse(p[4]) ?: return no("name") }
+        val seq = if (INT_RE.matches(p[5])) p[5].toLong() else null
+        if (seq == null || seq < 1) return no("seq")
+        if ((seq == 1L) != (p[6] == "")) return no("prev")
+        if (p[6] != "" && !HASH_RE.matches(p[6])) return no("prev")
+        val created = ms(p[7]); val expires = ms(p[8])
+        if (created == null || expires == null) return no("grammar")
+        when {
+            expires <= created -> return no("lifetime")
+            expires - created > Statements.CERT_MAX_MS -> return no("lifetime")
+            created > now + Statements.SKEW_MS -> return no("not-yet-valid")
+            now >= expires -> return no("expired")
+        }
+        if (!Statements.verifySig(accountPub, sig, text)) return no("signature")
+        return V.Ok(Bound(address, accountPub, kx, name))
+    }
+
+    /** The binding for exactly this address, attested `active` under a pinned directory key. */
+    private fun bindingFor(address: String, lookup: (String) -> Lookup?, directoryKeys: Map<String, String>, now: Long): V<Bound> {
+        val a = try { lookup(address) } catch (e: Exception) { null } ?: return no("lookup")
+        val b = when (val v = verifyBind(a.bindText, a.bindSig, now)) { is V.No -> return no("bind-${v.reason}"); is V.Ok -> v.value }
+        if (b.address != address) return no("address-mismatch")
+        when (val v = Statements.verifyAtt(a.attText, a.attSig, directoryKeys, a.bindText, now, ATT_MAX_MS)) {
+            is Statements.Verdict.No -> return no("att-${v.reason}")
+            is Statements.Verdict.Ok -> if (v.att.state != "active") return no("state")
+        }
+        return V.Ok(b)
+    }
 
     /**
-     * N's check of msg3 before it stores anything (security §39.1 condition 4). [offer] is exactly what
-     * N sent in msg2; [accountPub] and [recoveryKx] come from the binding the directory served under a
-     * PINNED key. The dev. must name N's OWN devicePub, consentPub and kx; SEALED must open under h2n as
-     * message 3; both scalars must be in range and match the binding.
+     * N's check of msg3 before it stores anything (security §39.1 condition 4). [offer] is exactly what N
+     * sent in msg2. The dev. must name N's OWN devicePub, consentPub and kx; SEALED must open under h2n as
+     * message 3 and carry an address in normal form. ONLY THEN does N look that address up: the binding
+     * must verify, be for exactly this address, be attested active under a PINNED key, and its accountPub
+     * must be the received scalar's public key; the dev. must name the same key. The binding's recovery kx
+     * plays no part: N never receives it. Nothing is stored here: the host shows the address (and the
+     * name, which the ACCOUNT chose) for the person to confirm first.
      */
-    fun openFinal(text: String, k: Keys, t: String, offer: Offer, accountPub: String, recoveryKx: String, now: Long): V<Opened> {
+    fun openFinal(text: String, k: Keys, t: String, offer: Offer, lookup: (String) -> Lookup?, directoryKeys: Map<String, String>, now: Long): V<Opened> {
         val f = parseFinal(text) ?: return no("grammar")
         val n = when (val v = verifyDev(f.nDev, f.nDevSig, now)) { is V.No -> return no("dev-${v.reason}"); is V.Ok -> v.value }
-        if (n.accountPub != accountPub) return no("account")
         if (n.devicePub != offer.devicePub) return no("device-mismatch")
         if (n.consentPub != offer.consentPub) return no("consent-mismatch")
         if (n.kx != offer.kx) return no("kx-mismatch")
         val pt = open(k, 3, t, f.sealed) ?: return no("decrypt")
-        return when (val u = Recovery.unpack(pt, accountPub, recoveryKx)) {
-            is Recovery.Opened.No -> no(u.reason)
-            is Recovery.Opened.Ok -> V.Ok(Opened(u.keys, n, f.nDev, f.nDevSig))
-        }
+        val address = sealedAddress(pt) ?: return no("address")
+        val b = when (val v = bindingFor(address, lookup, directoryKeys, now)) { is V.No -> return v; is V.Ok -> v.value }
+        val scalar = pt.copyOfRange(0, SCALAR_LEN)
+        if (!Recovery.scalarInRange(scalar)) return no("scalar-range")
+        if (!Recovery.scalarMatches(scalar, b.accountPub)) return no("key-mismatch")
+        if (n.accountPub != b.accountPub) return no("account")
+        return V.Ok(Opened(scalar, address, b.name, n, f.nDev, f.nDevSig))
+    }
+
+    // ---- the slot wire ---------------------------------------------------------------------------------
+
+    /** No slot message is longer than this once decoded: 4 KiB. */
+    const val MAX_SLOT_MSG = 4096
+
+    /**
+     * A message as it is written to the slot: msg0 and msg1 as canonical unpadded base64url of their UTF-8
+     * text, msg2 (the sealed wire) and msg3 (the text) unchanged. Throws on a message no peer would decode.
+     */
+    fun encodeSlotMsg(n: Int, msg: String): String {
+        require(decodable(n, msg)) { "not a link v1 message $n" }
+        return if (n == 0 || n == 1) B64u.enc(msg.toByteArray(Charsets.UTF_8)) else msg
+    }
+
+    /** The slot wire back to the message, or null (kernel: `grammar`). A byte-order mark stays and fails the prefix. */
+    fun decodeSlotMsg(n: Int, wire: String): String? {
+        if (wire.isEmpty()) return null
+        val text = if (n == 0 || n == 1) {
+            val b = B64u.dec(wire)?.takeIf { it.size <= MAX_SLOT_MSG } ?: return null
+            strictUtf8(b) ?: return null
+        } else wire
+        return text.takeIf { decodable(n, it) }
+    }
+
+    private fun decodable(n: Int, text: String): Boolean {
+        if (text.isEmpty()) return false
+        if (n == 2) { val b = B64u.dec(text); return b != null && b.size >= 12 + 16 && b.size <= MAX_SLOT_MSG }
+        if (text.toByteArray(Charsets.UTF_8).size > MAX_SLOT_MSG) return false
+        return when (n) { 0 -> text.startsWith("lnk0."); 1 -> text.startsWith("lnk1."); 3 -> text.startsWith("lnk3\n"); else -> false }
     }
 
     // ---- what the person is shown about the other device ------------------------------------------

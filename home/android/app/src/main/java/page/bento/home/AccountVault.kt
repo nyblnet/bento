@@ -67,17 +67,20 @@ object AccountVault {
         return Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.DECRYPT_MODE, key, javax.crypto.spec.GCMParameterSpec(128, iv)) }
     }
 
-    /** account ‖ recovery kx ‖ device kx (96 bytes), or null. The caller zeroes it. */
+    /**
+     * The setup device holds account ‖ recovery kx ‖ device kx (96 bytes); a LINKED device never receives the
+     * recovery kx and holds account ‖ device kx (64). Null for any other length. The caller zeroes it.
+     */
     fun secrets(c: Context, cipher: Cipher): ByteArray? = try {
         val ct = B64u.dec(sealedText(c)?.substringAfter('.') ?: "") ?: return null
-        cipher.updateAAD(AAD); cipher.doFinal(ct).takeIf { it.size == 96 }
+        cipher.updateAAD(AAD); cipher.doFinal(ct).takeIf { it.size == 96 || it.size == 64 }
     } catch (e: Exception) { null }
 
-    /** What the H side of a link holds, from the record and the unsealed scalars. */
+    /** What the H side of a link holds: the account scalar (the first 32 bytes on either layout) and the record. */
     fun holder(c: Context, cipher: Cipher): LinkAgent.Holder? {
         val rec = IdentitySetup.Record.parse(recordText(c) ?: return null) ?: return null
         val s = secrets(c, cipher) ?: return null
-        val h = LinkAgent.Holder(rec.address, rec.bindText, s.copyOfRange(0, 32), s.copyOfRange(32, 64), rec.devText, rec.devSig,
+        val h = LinkAgent.Holder(rec.address, rec.bindText, s.copyOfRange(0, 32), rec.devText, rec.devSig,
             rec.devText.split('.').getOrNull(2)?.isNotEmpty() == true)
         s.fill(0)
         return h

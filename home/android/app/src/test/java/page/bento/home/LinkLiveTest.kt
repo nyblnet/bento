@@ -64,7 +64,7 @@ class LinkLiveTest {
     private fun n() = LinkAgent(Link.Role.N, dir, { false })
     private fun <T> LinkAgent.Step<T>.ok(): T { assertTrue("got " + (this as? LinkAgent.Step.Fail)?.let { "${it.why} ${it.detail}" }, this is LinkAgent.Step.Ok); return (this as LinkAgent.Step.Ok).value }
     private fun LinkAgent.Step<*>.failed(w: LinkAgent.Why) { assertTrue("expected $w, got " + if (this is LinkAgent.Step.Fail) "${this.why} ${this.detail}" else "ok", this is LinkAgent.Step.Fail && this.why == w) }
-    private fun holder(a: Holder) = LinkAgent.Holder(a.address, a.bindText, a.acct.scalar, a.rkx.scalar, a.devText, a.devSig, true)
+    private fun holder(a: Holder) = LinkAgent.Holder(a.address, a.bindText, a.acct.scalar, a.devText, a.devSig, true)
     private fun signer(a: Holder) = IdentitySetup.ConsentSigner { Statements.sign(a.consent.scalar, it) }
 
     private fun pair(hA: LinkAgent, nA: LinkAgent, hDisplays: Boolean) {
@@ -79,8 +79,10 @@ class LinkLiveTest {
             val hA = h(); val nA = n(); pair(hA, nA, displays)
             nA.sendOffer(NProofs(), "Pixel 9").ok(); hA.enterSas(nA.sas()!!).ok(); hA.readOffer(20_000).ok()
             hA.approve(holder(a), "Alice's phone", signer(a)).ok()
-            val l = nA.awaitFinal(a.address, pins, 20_000).ok()
-            assertArrayEquals(a.acct.scalar + a.rkx.scalar, l.secrets.copyOfRange(0, 64))
+            val l = nA.awaitFinal(pins, 20_000).ok()
+            assertEquals(a.address, l.address)
+            nA.confirm().ok()
+            assertArrayEquals(a.acct.scalar, l.secrets.copyOfRange(0, 32)); assertEquals(64, l.secrets.size)
             assertEquals("Alice's phone", l.label)
         }
         val a = account("live-sas-${System.nanoTime()}@example.com")
@@ -88,7 +90,7 @@ class LinkLiveTest {
             val hA = h(); val nA = n(); pair(hA, nA, true); nA.sendOffer(NProofs(), "x").ok()
             hA.enterSas((nA.sas()!!.toInt() + 1).toString().padStart(6, '0').takeLast(6)).failed(LinkAgent.Why.SAS)
             hA.enterSas(nA.sas()!!).failed(LinkAgent.Why.STATE)
-            nA.awaitFinal(a.address, pins, 5_000).failed(LinkAgent.Why.GONE)
+            nA.awaitFinal(pins, 5_000).failed(LinkAgent.Why.GONE)
         }
         run { // a second scanner
             val hA = h(); val nA = n(); val shown = hA.display().ok(); nA.scan(shown.code).ok()
@@ -107,7 +109,7 @@ class LinkLiveTest {
             val h3 = LinkAgent(Link.Role.H, spent, { true }); val n3 = n(); pair(h3, n3, true)
             n3.sendOffer(NProofs(), "x").ok(); h3.enterSas(n3.sas()!!).ok(); h3.readOffer(20_000).ok()
             h3.approve(holder(a), null, signer(a)).failed(LinkAgent.Why.REFUSED)
-            n3.awaitFinal(a.address, pins, 5_000).failed(LinkAgent.Why.GONE)
+            n3.awaitFinal(pins, 5_000).failed(LinkAgent.Why.GONE)
             hA.abandon(); nA.abandon()
         }
     }

@@ -12234,3 +12234,38 @@ Two follow-ups to the link v1 entry above, both from porting it to iOS.
   their base64url text. Before this, iOS had to
   choose an encoding that no spec pinned, and two hosts choosing differently
   would never link. The `link.wire` rows are byte for byte both ways.
+
+## 2026-11-04 — Android: linking adopts SEALED = account scalar + address; N confirms the address
+
+Supersedes two bullets of the Android linking entry above (2026-11-03): "N is asked
+for the account's address" and "Where the recovery kx is held".
+
+- **N types only the code.** The address arrives inside SEALED and
+  `Link.openFinal` looks that address up through the directory, under a pinned
+  key, after SEALED has opened and not before. `LinkAgent.awaitFinal` takes no
+  address. A binding the directory serves for some other address, or a scalar
+  that is not the binding's account key, is refused (`address-mismatch`,
+  `key-mismatch`) and the slot is aborted.
+- **N confirms the ADDRESS, and the name is labelled as the account's own.** The
+  screen asks "Link this device to <address>?". The binding's name, when it has
+  one, sits beneath as "The account calls itself “<name>”. That name was chosen by
+  the account; this device has not checked it." A name is whatever the account
+  signed, so it is never the thing confirmed. Nothing is stored and the slot is
+  not deleted until the person answers: `confirm()` deletes the slot and hands the
+  account over to be sealed, `decline()` aborts and deletes the slot and zeroes
+  what arrived.
+- **The recovery kx is not linked.** H seals the 32-byte account scalar and the
+  address (`Link.sealedPlaintext`); `LinkAgent.Holder` and `AccountVault.holder`
+  carry no recovery kx. A linked device holds account ‖ its own device kx (64
+  bytes); the setup device holds account ‖ recovery kx ‖ device kx (96), and
+  `AccountVault.secrets` accepts both lengths. The recovery kx stays on the setup
+  device, as the kernel entry above rules.
+- **The slot wire** is `Link.encodeSlotMsg` / `decodeSlotMsg`, held to the
+  fixture's `link.wire` rows both ways: msg0 and msg1 as unpadded base64url of the
+  text, msg2 and msg3 as they are, 4096 bytes after decoding.
+- **Evidence.** `LinkTest` runs the regenerated `final` (43), `wire` (30) and
+  `release` (32, counted, not ported) rows and asserts which rows reach the
+  lookup; `LinkFlowTest` covers confirm, decline, the lookup being unreachable and
+  an address the answer is not for; `qa-home-android-link-mutants.mjs` has the
+  mutants for each of these. Not yet run on a device or against the live
+  directory.

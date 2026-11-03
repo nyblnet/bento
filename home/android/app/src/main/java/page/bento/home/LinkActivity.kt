@@ -32,9 +32,12 @@ import com.google.zxing.qrcode.QRCodeWriter
  *  - ROLE H ("Link a new device"): this device holds the account. The code and a QR are shown; the
  *    person types the six digits the NEW device shows (one attempt), looks at what is asking, and
  *    approves with a fingerprint or screen lock.
- *  - ROLE N ("Link this device to an account"): this device holds none. The person types the address
- *    and the code (or scans the QR with the Google code scanner), reads out the six digits, and the
- *    account arrives sealed by this device's own authentication.
+ *  - ROLE N ("Link this device to an account"): this device holds none. The person types the code (or
+ *    scans the QR with the Google code scanner) and reads out the six digits. The ADDRESS is not typed:
+ *    it arrives inside the sealed message and is checked against the directory's binding for it, then
+ *    SHOWN as the thing to confirm (the account's own name for itself is labelled as the account's
+ *    claim). Declining aborts and deletes the slot. Only after the person confirms is the account
+ *    sealed by this device's own authentication.
  *
  * H starts ONLY from the in-app action: the activity is not exported and nothing in the manifest
  * routes a link to it ([LinkEntry] is the rule a link handler must call). The role is also checked
@@ -55,6 +58,8 @@ class LinkActivity : AppCompatActivity() {
     private lateinit var input2: EditText
     private lateinit var action: Button
     private lateinit var scan: Button
+    private lateinit var cancel: Button
+    private var pendingLinked: LinkAgent.Linked? = null
     private var agent: LinkAgent? = null
     private var role = Link.Role.N
     private var pins: Map<String, String> = emptyMap()
@@ -62,7 +67,7 @@ class LinkActivity : AppCompatActivity() {
     private var holder: LinkAgent.Holder? = null
     private var offer: Link.Offer? = null
     private var step = Step.START
-    private enum class Step { START, H_WAIT, H_SAS, H_CONFIRM, N_INPUT, N_SAS, DONE }
+    private enum class Step { START, H_WAIT, H_SAS, H_CONFIRM, N_INPUT, N_SAS, N_CONFIRM, DONE }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -79,7 +84,7 @@ class LinkActivity : AppCompatActivity() {
 
     override fun onDestroy() { if (!done) agent?.abandon(); super.onDestroy() }
 
-    private fun unavailable() { status.setText(R.string.link_unavailable_here); for (v in listOf(input, input2, action, scan, sasView, codeView, qr)) v.visibility = View.GONE }
+    private fun unavailable() { status.setText(R.string.link_unavailable_here); for (v in listOf(input, input2, action, scan, cancel, sasView, codeView, qr)) v.visibility = View.GONE }
 
     private fun buildViews() {
         val pad = (16 * resources.displayMetrics.density).toInt()
@@ -93,14 +98,15 @@ class LinkActivity : AppCompatActivity() {
         input2 = EditText(this).apply { id = R.id.link_input2; setSingleLine(); visibility = View.GONE }
         action = Button(this).apply { id = R.id.link_action; setOnClickListener { onAction() } }
         scan = Button(this).apply { id = R.id.link_scan; setText(R.string.link_scan); visibility = View.GONE; setOnClickListener { scanQr() } }
-        for (v in listOf(status, codeView, qr, sasView, input, input2, scan, action)) col.addView(v, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        cancel = Button(this).apply { id = R.id.link_cancel; setText(R.string.link_n_decline); visibility = View.GONE; setOnClickListener { declineN() } }
+        for (v in listOf(status, codeView, qr, sasView, input, input2, scan, action, cancel)) col.addView(v, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         setContentView(col)
         window.setFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE, android.view.WindowManager.LayoutParams.FLAG_SECURE)
     }
 
     private fun render(message: Int? = null, vararg args: Any) {
         val text = message?.let { getString(it, *args) }
-        input.visibility = View.GONE; input2.visibility = View.GONE; scan.visibility = View.GONE; action.visibility = View.VISIBLE; action.isEnabled = true
+        input.visibility = View.GONE; input2.visibility = View.GONE; scan.visibility = View.GONE; cancel.visibility = View.GONE; action.visibility = View.VISIBLE; action.isEnabled = true
         codeView.visibility = View.GONE; qr.visibility = View.GONE; sasView.visibility = View.GONE
         when (step) {
             Step.START -> { status.text = text ?: getString(R.string.link_h_start); action.setText(R.string.link_h_begin) }
@@ -114,11 +120,17 @@ class LinkActivity : AppCompatActivity() {
                 input.visibility = View.VISIBLE; input.setText(o.label ?: ""); input.hint = getString(R.string.link_label_hint); input.inputType = InputType.TYPE_CLASS_TEXT
                 action.setText(R.string.link_h_approve)
             }
-            Step.N_INPUT -> { status.text = text ?: getString(R.string.link_n_start); input.visibility = View.VISIBLE; input2.visibility = View.VISIBLE; scan.visibility = View.VISIBLE
-                input.hint = getString(R.string.setup_email_hint); input.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
-                input2.hint = getString(R.string.link_code_hint); input2.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
+            Step.N_INPUT -> { status.text = text ?: getString(R.string.link_n_start); input.visibility = View.VISIBLE; scan.visibility = View.VISIBLE
+                input.hint = getString(R.string.link_code_hint); input.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
                 action.setText(R.string.link_n_begin) }
             Step.N_SAS -> { status.text = text ?: getString(R.string.link_n_sas); sasView.visibility = View.VISIBLE; action.visibility = View.GONE }
+            Step.N_CONFIRM -> {
+                val l = pendingLinked!!
+                // the ADDRESS is what is confirmed; the name is the account's own claim and is labelled so
+                status.text = text ?: (getString(R.string.link_n_confirm, l.address) +
+                    (l.name?.let { "\n\n" + getString(R.string.link_n_name, it) } ?: ""))
+                action.setText(R.string.link_n_confirm_yes); cancel.visibility = View.VISIBLE
+            }
             Step.DONE -> { status.text = text ?: ""; action.visibility = View.GONE }
         }
     }
@@ -163,9 +175,10 @@ class LinkActivity : AppCompatActivity() {
                         is LinkAgent.Step.Fail -> ended(r)
                         is LinkAgent.Step.Ok -> { done = true; step = Step.DONE; render(R.string.link_h_done); Log.i(TAG, "LINK DONE H") }
                     }
-                    holder?.let { it.accountScalar.fill(0); it.recoveryKxScalar.fill(0) }; holder = null
+                    holder?.accountScalar?.fill(0); holder = null
                 } } }
-            Step.N_INPUT -> beginN(input.text.toString(), input2.text.toString())
+            Step.N_INPUT -> beginN(input.text.toString())
+            Step.N_CONFIRM -> confirmN()
             else -> {}
         }
     }
@@ -200,14 +213,12 @@ class LinkActivity : AppCompatActivity() {
     private fun scanQr() {
         val options = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
         GmsBarcodeScanning.getClient(this, options).startScan()
-            .addOnSuccessListener { b -> input2.setText(b.rawValue ?: "") }
+            .addOnSuccessListener { b -> input.setText(b.rawValue ?: "") }
             .addOnFailureListener { Log.i(TAG, "scanner: $it") }
     }
 
-    private fun beginN(address: String, code: String) = background {
+    private fun beginN(code: String) = background {
         val a = agent!!
-        val addr = (Address.normalize(address) as? Address.Result.Ok)?.address
-        if (addr == null) { ui { render(R.string.setup_err_address) }; return@background }
         when (val s = a.scan(code)) {
             is LinkAgent.Step.Fail -> ui { if (s.why == LinkAgent.Why.BAD_CODE) render(R.string.link_err_code) else ended(s) }
             is LinkAgent.Step.Ok -> {
@@ -223,13 +234,25 @@ class LinkActivity : AppCompatActivity() {
                     is LinkAgent.Step.Fail -> { ui { ended(o) }; return@background }
                     is LinkAgent.Step.Ok -> {}
                 }
-                when (val f = a.awaitFinal(addr, pins, 600_000)) {
+                when (val f = a.awaitFinal(pins, 600_000)) {
                     is LinkAgent.Step.Fail -> ui { ended(f) }
-                    is LinkAgent.Step.Ok -> ui { saveN(f.value) }
+                    is LinkAgent.Step.Ok -> ui { pendingLinked = f.value; step = Step.N_CONFIRM; render() }
                 }
             }
         }
     }
+
+    /** The person confirmed the ADDRESS: only now is the slot deleted and the account sealed. */
+    private fun confirmN() { val a = agent ?: return; background { when (val c = a.confirm()) {
+        is LinkAgent.Step.Fail -> ui { ended(c) }
+        is LinkAgent.Step.Ok -> ui { pendingLinked = null; saveN(c.value) }
+    } } }
+
+    /** The person declined: abort and delete the slot, zero what arrived, keep nothing. */
+    private fun declineN() { val a = agent ?: return; background {
+        a.decline()   // talks to the directory (deletes the slot): off the main thread
+        ui { pendingLinked = null; done = true; step = Step.DONE; render(R.string.link_err_declined) }
+    } }
 
     /** The account is sealed only inside an authentication the person just gave. */
     private fun saveN(linked: LinkAgent.Linked) {

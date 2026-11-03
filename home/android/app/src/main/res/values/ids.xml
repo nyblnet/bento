@@ -13,4 +13,5 @@
     <item name="link_input2" type="id" />
     <item name="link_action" type="id" />
     <item name="link_scan" type="id" />
+    <item name="link_cancel" type="id" />
 </resources>
