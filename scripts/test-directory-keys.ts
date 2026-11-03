@@ -1159,6 +1159,8 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
     await api('/v1/bind/start', { stmt: xb.text, sig: xb.sig })
     const code = codeFor(TB.email)!
     await api('/v1/bind/complete', { email: TB.email, code, sig: await XT.k.sign(buildCmp(await hashOf(xb.text), code)) })
+    const xo = await bindNext(XT, null, { life: 12 * MONTH })
+    ok((await check(xo.text, xo.sig)).status === 404, 're-check: over a holder tomb, a statement that is not the pending one → 404')
     const c = await check(xb.text, xb.sig)
     ok(c.status === 200 && c.j.state === 'pending' && c.j.rebound === true, 're-check: a re-bind over a holder tomb → the same pending answer bind/complete gave')
   }

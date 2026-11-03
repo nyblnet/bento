@@ -583,10 +583,10 @@ export class Address {
     // here, with no mail (nothing calls out from this point; the start was mailed).
     {
       const rsv = await s.get('rsv'), frz = await s.get('frz')
-      if (rsv && (!frz || frz.by !== 'email')) await s.delete('rsv') // belt and braces: a key-holder freeze voids it
-      else if (rsv && now >= rsv.until) {
+      // (a freeze or contest by the frozen key deletes `rsv`: see freeze())
+      if (rsv && now >= rsv.until) {
         const b = await readBind(rsv.stmt, rsv.sig, now)
-        if (b && frz.base && (await frozenHolds(frz.base))) {
+        if (b && frz && frz.base && (await frozenHolds(frz.base))) {
           await commitResolve(rsv.stmt, rsv.sig, rsv.h, b, frz.base)
           await s.put('events', [...((await s.get('events')) || []), { k: 'resolve', at: now, fp: (await hashOf(b.accountPub)).slice(0, 8) }].slice(-LIMITS.events))
         } else await s.delete('rsv') // the frozen binding expired, or the new one did: nothing to move
