@@ -12146,3 +12146,41 @@ with seven conditions).
   deterministic row byte for byte and checks every verdict;
   `scripts/test-link-mutants.ts` reintroduces fifteen lenient paths into a copy
   of `link.ts` and requires the rig to fail on each.
+
+## 2026-11-03 — bento/connect B1 on iOS: the identity calls, answered by the host
+
+`home/ios/IdentityBridge.swift` answers `id.whoami`, `id.sign` and `id.resolve`
+for the shared bridge. It is plain Foundation and CryptoKit so a macOS rig drives
+the code the editor runs; the editor supplies only the two prompts.
+
+- **'identity' is declared per load, after gate 1.** The bridge script is
+  installed twice: with `['store']` before the document's origin is settled, and
+  again, once gate 1 has judged the bytes, with `['store', 'identity']` only for
+  a GENUINE load. An unknown document's page has no agent object. The host also
+  refuses every `id.*` message from a load that did not pass (`unavailable`), so
+  a page that forges the wire gets nothing even with a live session.
+- **Gates run in one order on every call:** genuine, then no identity
+  managed-config key present (O1 deferred, §39.4: `whoami`/`sign` answer
+  `no-identity`, `resolve` nothing; checked per call, so a key added after load
+  still stops it), then the op's own rule.
+- **`whoami` answers nothing until the person agrees for THIS document.** The
+  host's own prompt shows the real address; one prompt however many calls arrive
+  while it is up; a "no" lasts the life of the process, a "yes" is remembered per
+  document origin string. The person's own keys passed to `resolve` need the
+  same consent (they are `whoami`'s answer by another door).
+- **`sign` is purpose-locked and session-bound.** The payload's shape is checked
+  first, before any session or key. Only the routine purposes are served;
+  `invite`/`revoke` are the room owner's key, which in phase 1 lives in the
+  document, so they are `unavailable` and mint nothing. The host owns the limits
+  (1 h idle, 24 h overall, an injectable clock): a use renews the idle clock,
+  never the overall one, and the boundary itself still signs while one
+  millisecond past does not. Past either, the answer is `reauth` and it raises
+  ONE device-owner prompt (coalesced; a cancelled prompt is not raised again for
+  30 s). The bridge neither retries nor caches. A session exists only after the
+  person re-authenticates, so the first sign of a run answers `reauth`.
+- **`resolve` is local.** It answers for the person's own keys (after consent) and
+  for a binding the host already holds; an `{email}` query never leaves the page.
+- **Not wired yet:** the profile (name, address, who vouched) comes from the
+  verified binding the setup flow stores, and the pin store for other people's
+  keys; until those land `whoami` answers `no-identity` and `resolve` finds nothing.
+  The consent and re-authentication wording is placeholder text.

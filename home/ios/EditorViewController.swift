@@ -5,6 +5,7 @@ import UIKit
 import WebKit
 import UniformTypeIdentifiers
 import CryptoKit
+import LocalAuthentication
 
 /// Hosts one open deck in a WKWebView and bridges saving to UIDocument.
 ///
@@ -277,19 +278,7 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
         cfg.userContentController.add(self, name: "bentoFile")
         cfg.userContentController.add(self, name: "bentoOriginProbe")
 
-        // .atDocumentStart is required, not stylistic: Bento decides whether it
-        // can save during boot, so a bridge injected later arrives after the
-        // editor has already concluded it cannot.
-        if let js = Bundle.main.url(forResource: "bridge", withExtension: "js"),
-           let src = try? String(contentsOf: js, encoding: .utf8) {
-            // What THIS host implements, declared before the bridge reads it. The
-            // bridge offers the page a per-document store only when told so: a
-            // bridge that advertised one a host didn't implement would have the
-            // kernel keep member keys for the page only, and lose them on reload.
-            let caps = "window.__bentoHostCaps = ['store'];\n"
-            cfg.userContentController.addUserScript(
-                WKUserScript(source: caps + src, injectionTime: .atDocumentStart, forMainFrameOnly: true))
-        }
+        installBridge(into: cfg.userContentController)
 
         webView = WKWebView(frame: view.bounds, configuration: cfg)
         // frame is driven by viewDidLayoutSubviews, not autoresizing
@@ -329,6 +318,84 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
         navigationItem.leftBarButtonItem = UIBarButtonItem(
             title: NSLocalizedString("Documents", comment: "back to the file browser"),
             style: .plain, target: self, action: #selector(doneTapped))
+    }
+
+
+    // MARK: - the bridge script, and what it is told
+
+    /// bridge.js with the capabilities THIS load may have, declared ahead of it.
+    ///
+    /// .atDocumentStart is required, not stylistic: Bento decides whether it can
+    /// save during boot, so a bridge injected later arrives after the editor has
+    /// already concluded it cannot.
+    ///
+    /// Called again once gate 1 has judged the document and before the document is
+    /// loaded: 'identity' is declared ONLY for a load that passed gate 1
+    /// (IdentityBridgeHost.hostCaps), so an unknown document's page has no agent
+    /// object at all. 'store' is what this host implements; the bridge offers the
+    /// per-document store only when told so, because one it advertised and the
+    /// host did not serve would cost the user their member identity on reload.
+    private func installBridge(into ucc: WKUserContentController) {
+        ucc.removeAllUserScripts()
+        guard let js = Bundle.main.url(forResource: "bridge", withExtension: "js"),
+              let src = try? String(contentsOf: js, encoding: .utf8) else { return }
+        let list = IdentityBridgeHost.hostCaps(genuine: isGenuine).map { "'\($0)'" }.joined(separator: ", ")
+        ucc.addUserScript(WKUserScript(source: "window.__bentoHostCaps = [\(list)];\n" + src,
+                                       injectionTime: .atDocumentStart, forMainFrameOnly: true))
+    }
+
+    // MARK: - identity (bento/connect B1)
+
+    /// One routine session for the app run: re-authentication is the person's.
+    static let identitySession = IdentityBridgeHost.Session()
+    private static let consentKey = "bento.identity.whoamiConsent"
+    private static let consentBook = IdentityBridgeHost.ConsentBook(
+        granted: Set(UserDefaults.standard.stringArray(forKey: consentKey) ?? []),
+        save: { UserDefaults.standard.set(Array($0).sorted(), forKey: consentKey) })
+    private var identityHost: IdentityBridgeHost?
+
+    /// Built when the origin is settled, from the gate's verdict: an unknown
+    /// document still gets a host object, which refuses everything.
+    private func makeIdentityHost() {
+        identityHost = IdentityBridgeHost(
+            genuine: isGenuine, docKey: originHost, store: KeychainSecrets(),
+            session: Self.identitySession, consent: Self.consentBook,
+            // The verified binding the setup flow stores backs this; until it is
+            // wired, whoami says there is no identity.
+            profile: { nil },
+            askConsent: { [weak self] p, done in self?.promptWhoami(p, done) ?? done(false) },
+            askReauth: { [weak self] done in self?.promptReauth(done) ?? done(false) })
+    }
+
+    // PLACEHOLDER wording (maintainer to confirm before this ships).
+    private func promptWhoami(_ p: IdentityBridgeHost.Profile, _ done: @escaping (Bool) -> Void) {
+        let a = UIAlertController(
+            title: NSLocalizedString("Let this document see who you are?", comment: ""),
+            message: String(format: NSLocalizedString("It will see %@ (%@).", comment: ""), p.name, p.email),
+            preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: NSLocalizedString("Don't allow", comment: ""), style: .cancel) { _ in done(false) })
+        a.addAction(UIAlertAction(title: NSLocalizedString("Allow", comment: ""), style: .default) { _ in done(true) })
+        present(a, animated: true)
+    }
+
+    /// The device-owner check that opens a routine session. The call that raised
+    /// it has already been answered 'reauth'; the next one finds the session.
+    private func promptReauth(_ done: @escaping (Bool) -> Void) {
+        let c = LAContext()
+        var err: NSError?
+        guard c.canEvaluatePolicy(.deviceOwnerAuthentication, error: &err) else { return done(false) }
+        c.evaluatePolicy(.deviceOwnerAuthentication,
+                         localizedReason: NSLocalizedString("Continue using your Bento ID in this document", comment: "")) { ok, _ in
+            DispatchQueue.main.async { done(ok) }
+        }
+    }
+
+    private func handleIdentity(_ op: String, _ m: [String: Any], _ id: Int) {
+        guard let host = identityHost else { return reply(id, ok: false, value: "unavailable") }
+        host.handle(op: op, message: m) { [weak self] r in
+            let w = IdentityBridgeHost.wire(r)
+            self?.replyValue(id, ok: w.ok, json: w.value)
+        }
     }
 
     // MARK: - gate 1
@@ -494,6 +561,8 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
         probing = nil
         originHost = origin
         gate = Self.gate(document.html)
+        installBridge(into: webView.configuration.userContentController)
+        makeIdentityHost()
         webView.load(URLRequest(url: URL(string: "bento-tray://\(origin)/index.html")!))
     }
 
@@ -783,6 +852,9 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
         case "store.get", "store.set", "store.list", "store.delete":
             handleStore(op, m, id)
 
+        case _ where IdentityBridgeHost.ops.contains(op):
+            handleIdentity(op, m, id)
+
         default:
             reply(id, ok: false, value: "unknown op")
         }
@@ -821,6 +893,13 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
     /// handle a write came through is the question, not how many exist.
     private func targetsOpenDocument(_ name: String) -> Bool {
         openDocumentVended && name == document.fileURL.lastPathComponent
+    }
+
+    /// A reply whose value is a JSON value (an object, null or a refusal word),
+    /// not a string: the identity calls answer with objects.
+    private func replyValue(_ id: Int, ok: Bool, json: Any) {
+        guard let js = IdentityBridgeHost.replyScript(id: id, ok: ok, json: json) else { return reply(id, ok: false, value: "unavailable") }
+        webView.evaluateJavaScript(js)
     }
 
     private func reply(_ id: Int, ok: Bool, value: String?) {
