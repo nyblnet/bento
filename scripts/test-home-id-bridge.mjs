@@ -83,6 +83,7 @@ const MUTANTS = [
   ['idle limit ignored', `t - w.last < policy.idleMs, `, ``, ['sign.idle.past.reauth', 'realtime.idle.past.reauth']],
   ['overall limit ignored', `, t - w.start < policy.overallMs`, ``, ['sign.overall.at-limit.reauth']],
   ['overall boundary off by one', `t - w.start < policy.overallMs`, `t - w.start <= policy.overallMs`, ['sign.overall.at-limit.reauth']],
+  ['clock moved backwards stays live', `t >= w.last, `, ``, ['sign.clock.back-one-ms.reauth']],
   ['use renews the overall clock', `window = (w.start, clock())`, `window = (clock(), clock())`, ['sign.overall.at-limit.reauth']],
   ['use does not renew idle', `if let w = window { window = (w.start, clock()) }`, `_ = window`, ['sign.idle.again.ok']],
   ['unknown document served', `guard genuine, !docKey.isEmpty else`, `guard !docKey.isEmpty else`,

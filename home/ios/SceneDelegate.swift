@@ -47,10 +47,19 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         if let w = window { SnapshotCover.hide(from: w) }
     }
 
+    /// Backgrounding locks the routine signing session: the person re-authenticates
+    /// before the next `sign` (security §2e B). Every build, not only DEBUG.
+    func sceneDidEnterBackground(_ scene: UIScene) {
+        EditorViewController.identitySession.lock()
+        #if DEBUG
+        snapshotForRig()
+        #endif
+    }
+
     #if DEBUG
     /// scripts/test-home-snapshot-cover.mjs: what the window shows as it goes to
     /// the background, the moment the system takes its snapshot
-    func sceneDidEnterBackground(_ scene: UIScene) {
+    private func snapshotForRig() {
         guard let path = ProcessInfo.processInfo.environment["BENTO_RIG_SNAPSHOT"], let w = window else { return }
         let image = UIGraphicsImageRenderer(bounds: w.bounds).image { _ in _ = w.drawHierarchy(in: w.bounds, afterScreenUpdates: false) }
         try? image.pngData()?.write(to: URL(fileURLWithPath: path))

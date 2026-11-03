@@ -97,7 +97,9 @@ final class IdentityBridgeHost {
         /// 24 h after the start, is already refused. One millisecond short still signs.
         func live() -> Bool {
             let t = clock()
-            if let w = window, t - w.last < policy.idleMs, t - w.start < policy.overallMs { return true }
+            // a clock that moved BACKWARDS would stretch both limits (a set-back clock held a
+            // session live for ever), so it fails closed, as Android does
+            if let w = window, t >= w.last, t - w.last < policy.idleMs, t - w.start < policy.overallMs { return true }
             window = nil
             return false
         }
