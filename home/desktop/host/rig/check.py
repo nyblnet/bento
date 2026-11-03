@@ -197,6 +197,38 @@ rc = (out / "real-release-check.exit").read_text().strip() if (out / "real-relea
 txt = (out / "real-release-check.txt").read_text() if (out / "real-release-check.txt").exists() else ""
 ok(rc == "0" and "R.bento.html: GENUINE" in txt and "R-flipped.bento.html: UNKNOWN" in txt, f"real: against the release key ONLY, the saved deck is GENUINE and a one-byte-changed copy UNKNOWN (exit {rc})")
 
+# B1, security §2e (B): a routine signature is REFUSED past the idle or overall
+# limit until the person re-authenticates. Every refusal row sits beside a row that
+# is ACCEPTED in the same run (the agent signs, and the signature verifies).
+sa, su = report("sign-doc0"), report("sign-doc1")
+if sa and su:
+    A, U = sa["page"].get("sign", {}), su["page"].get("sign", {})
+    ok(not A.get("error") and not U.get("error"), f"sign: no error in either probe ({A.get('error')}, {U.get('error')})")
+    ok(A.get("present") is True and A.get("shape") == {"data": True, "writable": False, "configurable": False, "frozen": True, "keys": ["contract", "resolve", "sign", "whoami"]},
+       f"sign: the genuine document has the agent: a frozen, non-writable, non-configurable data property ({A.get('shape')})")
+    ok(U.get("present") is False, f"sign: the UNKNOWN document has no agent object at all ({U.get('present')})")
+    ok(A.get("raw_sign_prefixed") == "purpose", f"sign: the id.* ops reach the agent on the genuine document ({A.get('raw_sign_prefixed')})")
+    ok(U.get("raw_sign_prefixed") == "unavailable", f"sign: and the unknown document is stopped by the host even by raw IPC ({U.get('raw_sign_prefixed')})")
+    ok(A.get("whoami") is None and A.get("resolve") is None and A.get("resolve_email") is None, f"sign: whoami and resolve answer null: no account, no bindings ({A.get('whoami')}, {A.get('resolve')}, {A.get('resolve_email')})")
+    ok(A.get("before_session") == "reauth", f"sign: with no session the agent refuses 'reauth' ({A.get('before_session')})")
+    ok(A.get("first") == "ok" and A.get("sig_valid") is True and A.get("sig_binds_payload") is True, f"sign: CONTROL after authenticating: signed, the signature verifies for exactly the payload ({A.get('first')}, {A.get('sig_valid')}, {A.get('sig_binds_payload')})")
+    ok(A.get("prove") == "ok" and A.get("mismatch") == "purpose", f"sign: purpose-locked: prove signs, a frame payload under 'prove' is refused 'purpose' ({A.get('prove')}, {A.get('mismatch')})")
+    ok(A.get("idle_inside") == "ok", f"sign: idle: one second INSIDE the hour still signs ({A.get('idle_inside')})")
+    ok(A.get("idle_past") == "reauth" and A.get("idle_past_prove") == "reauth", f"sign: idle: one second PAST the hour is refused 'reauth', for every routine purpose ({A.get('idle_past')}, {A.get('idle_past_prove')})")
+    ok(A.get("idle_past_again") == "reauth" and A.get("idle_past_later") == "reauth", f"sign: idle: it stays refused (not healed by retrying or by time) ({A.get('idle_past_again')}, {A.get('idle_past_later')})")
+    ok(A.get("after_reauth") == "ok", f"sign: re-authenticating restores it ({A.get('after_reauth')})")
+    steps = A.get("overall_steps") or []
+    ok(len(steps) == 30 and steps[:28] == ["ok"] * 28, f"sign: overall: steady use every 50 minutes keeps signing for 23h20 (idle never trips) ({steps[:28].count('ok')}/28)")
+    ok(A.get("overall_first_refusal") == 29 and set(steps[28:]) == {"reauth"}, f"sign: overall: the 29th step (24h10) is the first refusal and it stays refused ({A.get('overall_first_refusal')}, {steps[28:]})")
+    ok(A.get("after_overall_reauth") == "ok", f"sign: overall: re-authenticating restores it ({A.get('after_overall_reauth')})")
+    ok(A.get("after_lock") == "reauth", f"sign: a lock (screen lock, sleep) refuses until re-authentication ({A.get('after_lock')})")
+
+# B1: an unverifiable file gets the notice (placeholder wording, the maintainer's to word), a genuine one does not
+for scn, notice_for, none_for in [("pair", "U.bento.html", "A.bento.html"), ("sign", "SU.bento.html", "SA.bento.html")]:
+    L = log(scn)
+    ok(re.search(r"NOTICE " + re.escape(notice_for) + r": Bento can't verify this file", L) is not None, f"{scn}: the UNVERIFIABLE document ({notice_for}) is told it opens without a Bento ID")
+    ok("NOTICE " + none_for not in L, f"{scn}: the genuine document ({none_for}) is not shown it")
+
 # §19h wedge isolation: a stopped web process freezes ITS document and no other
 wj = out / "wedge.json"
 if not wj.exists():

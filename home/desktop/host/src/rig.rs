@@ -33,10 +33,11 @@ pub fn init_script(app: &tauri::AppHandle, label: &str, init: String) -> String 
     let init = init.replacen("armed = true\n", "armed = true; window.__rigCap = cap\n", 1);
     assert!(init.contains("window.__rigCap = cap"), "rig: the shim's arming line moved");
     format!(
-        "{init}window.__RIG_INVOKE_KEY={:?};window.__RIG_LABEL={b:?};window.__RIG_FULL_LABEL={label:?};window.__RIG_WATCHDOG={};window.__RIG_WEDGE={};window.__RIG_PEER={peer:?};window.__RIG_ALL={:?};window.__RIG_EMBED_URL={:?};window.__RIG_ROGUE_URL={:?};\n{PROBE};\n",
+        "{init}window.__RIG_INVOKE_KEY={:?};window.__RIG_LABEL={b:?};window.__RIG_FULL_LABEL={label:?};window.__RIG_WATCHDOG={};window.__RIG_WEDGE={};window.__RIG_SIGN={};window.__RIG_PEER={peer:?};window.__RIG_ALL={:?};window.__RIG_EMBED_URL={:?};window.__RIG_ROGUE_URL={:?};\n{PROBE};\n",
         app.invoke_key(),
         std::env::var_os("BENTO_RIG_WATCHDOG").is_some(),
         std::env::var_os("BENTO_RIG_WEDGE").is_some(),
+        std::env::var_os("BENTO_RIG_SIGN").is_some(),
         labels.join(","),
         // the attacker's page: served by rig/run.sh on loopback, never a third party
         std::env::var("BENTO_RIG_EMBED_URL").unwrap_or_default(),
@@ -129,4 +130,27 @@ pub fn trust_embed_cert(window: &tauri::WebviewWindow) {
             eprintln!("RIG TLS: trusted one throwaway certificate for 127.0.0.1 in this webview's context");
         })
         .expect("rig: cannot reach the platform webview");
+}
+
+/// The person re-authenticating at the host (what Windows Hello, a TPM PIN or an
+/// unlock will be): opens or ends the agent's routine session. The page can
+/// never do this in a shipped build; here the rig plays the person.
+#[tauri::command]
+pub fn rig_session(app: tauri::AppHandle, action: String) -> Result<(), String> {
+    let s = app.state::<Shared>();
+    let mut h = s.lock().unwrap();
+    match action.as_str() {
+        "begin" => h.agent.begin_session(),
+        "lock" => h.agent.lock(),
+        _ => return Err("unknown action".into()),
+    }
+    Ok(())
+}
+
+/// Moves the agent's clock forward, so the rig crosses the idle and overall
+/// session limits without waiting hours. Returns the skew now in force.
+#[tauri::command]
+pub fn rig_skew(add_ms: u64) -> u64 {
+    use std::sync::atomic::Ordering;
+    crate::CLOCK_SKEW_MS.fetch_add(add_ms, Ordering::SeqCst) + add_ms
 }

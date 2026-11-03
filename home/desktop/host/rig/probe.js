@@ -33,6 +33,72 @@
       setInterval(() => inv('rig_stash', { key: LABEL + '.hb', value: String(++n) }).catch(() => {}), 300)
       return
     }
+    // B1 (security §2e B): the sign path through the REAL bridge, shim, host and
+    // agent, across the idle and overall session limits. The genuine document
+    // calls window.__bentoIdentity; the unknown one must not have it. The rig
+    // plays the person (rig_session) and the clock (rig_skew).
+    if (window.__RIG_SIGN) {
+      const S = { label: LABEL }
+      try {
+        await until(() => window.__rigCap, 15000)
+        const d = Object.getOwnPropertyDescriptor(window, '__bentoIdentity')
+        S.present = !!d
+        S.shape = d ? { data: 'value' in d, writable: d.writable, configurable: d.configurable, frozen: Object.isFrozen(d.value), keys: Object.keys(d.value).sort() } : null
+        const raw = (op, extra) => inv('bento_id', { msg: JSON.stringify(Object.assign({ id: 's-' + op, op }, extra)), cap: window.__rigCap }).then((t) => { const j = JSON.parse(t); return j.ok ? 'ok' : j.value }, (e) => 'THREW ' + e)
+        S.raw_sign_prefixed = await raw('id.sign', { purpose: 'frame', payload: 'not-a-frame' })
+        if (!d) { await inv('rig_done', { report: { sign: S } }); return }
+        const ag = window.__bentoIdentity
+        const FRAME = 'AAAAAAAAAAAAAAAA.' + 'A'.repeat(22)
+        const PROVE = 'prove.' + 'A'.repeat(22) + '.rabc'
+        const MIN = 60000
+        const sess = (a) => inv('rig_session', { action: a })
+        const skew = (ms) => inv('rig_skew', { addMs: ms })
+        const tag = (r) => (r && r.ok ? 'ok' : r && r.reason) || String(r)
+        const b64u = (t) => Uint8Array.from(atob(t.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0))
+        S.whoami = await ag.whoami()
+        S.resolve = await ag.resolve({ pub: 'A'.repeat(87) })
+        S.resolve_email = await ag.resolve({ email: 'a@example.org' })
+        // no session yet: refused until the person authenticates
+        S.before_session = tag(await ag.sign('frame', FRAME))
+        await sess('begin')
+        const first = await ag.sign('frame', FRAME)
+        S.first = tag(first)
+        // the signature is real: valid for this key over exactly these bytes, and only these
+        const key = await crypto.subtle.importKey('raw', b64u(first.pub), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify'])
+        const ver = (msg) => crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, b64u(first.sig), new TextEncoder().encode(msg))
+        S.sig_valid = await ver(FRAME)
+        S.sig_binds_payload = !(await ver(FRAME + 'x'))
+        // routine purposes the agent holds a key for; an owner purpose is not a phase-1 agent's
+        S.prove = tag(await ag.sign('prove', PROVE))
+        S.mismatch = tag(await ag.sign('prove', FRAME))
+        // IDLE: one second inside the hour is fine (and counts as use), one second past is not
+        await skew(60 * MIN - 1000)
+        S.idle_inside = tag(await ag.sign('frame', FRAME))
+        await skew(60 * MIN + 1000)
+        S.idle_past = tag(await ag.sign('frame', FRAME))
+        S.idle_past_prove = tag(await ag.sign('prove', PROVE))
+        S.idle_past_again = tag(await ag.sign('frame', FRAME))
+        // not healed by the passage of time, nor by a call that was refused
+        await skew(1 * MIN)
+        S.idle_past_later = tag(await ag.sign('frame', FRAME))
+        // re-authentication restores it
+        await sess('begin')
+        S.after_reauth = tag(await ag.sign('frame', FRAME))
+        // OVERALL: steady use every 50 minutes never trips the idle limit, so only the
+        // 24-hour limit can end it. 28 steps = 23h20 (inside); the 29th = 24h10 (past).
+        await sess('begin')
+        const steps = []
+        for (let k = 1; k <= 30; k++) { await skew(50 * MIN); steps.push(tag(await ag.sign('frame', FRAME))) }
+        S.overall_steps = steps
+        S.overall_first_refusal = steps.findIndex((x) => x !== 'ok') + 1
+        await sess('begin')
+        S.after_overall_reauth = tag(await ag.sign('frame', FRAME))
+        await sess('lock')
+        S.after_lock = tag(await ag.sign('frame', FRAME))
+      } catch (e) { S.error = String((e && e.stack) || e) }
+      await inv('rig_done', { report: { sign: S } })
+      return
+    }
     // rig 9 (security's watchdog ruling): the recreated webview starts from
     // zero, the dead webview's secret is refused, and a stale secret cannot
     // ride the new label
