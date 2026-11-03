@@ -80,7 +80,7 @@ export const ALLOWED_SKIPS = [
     when: notMac,
     why: 'the Security framework exists only on Apple platforms (see test-tray-releases)',
   },
-  ...['keys', 'statements', 'agent', 'recovery', 'recovery-flow'].map((n) => ({
+  ...['keys', 'statements', 'agent', 'recovery', 'recovery-flow', 'link'].map((n) => ({
     rig: `scripts/test-home-id-${n}.mjs`,
     line: new RegExp(`home id ${n}: SKIPPED — needs an Apple toolchain`),
     when: notMac,
@@ -90,6 +90,11 @@ export const ALLOWED_SKIPS = [
     rig: 'scripts/test-home-id-setup.mjs',
     line: /home id setup: SKIPPED/,
     why: 'drives the real Swift against a local `wrangler dev` of server/directory, which CI does not install (no network install from a rig) and which is not in this tree until the directory PR lands; run by hand with BENTO_WRANGLER, see the rig header',
+  },
+  {
+    rig: 'scripts/test-home-id-link-flow.mjs',
+    line: /home id link flow: SKIPPED/,
+    why: 'links two simulated agents through a local `wrangler dev` of server/directory with the link routes on, which CI does not install (no network install from a rig); run by hand with BENTO_WRANGLER, see the rig header. The Swift bytes are held to the fixture by test-home-id-link.mjs, which does run on macOS',
   },
   {
     rig: 'scripts/test-home-spotlight.mjs',

@@ -108,6 +108,18 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-home-id-setup.mjs
 
+    - name: home/ios bento/connect link v1 conformance rig
+      # The Swift link v1 against the `link` section of the identity fixture, byte for
+      # byte, plus mutants. Apple only.
+      shell: bento-step {0}
+      run: node scripts/test-home-id-link.mjs
+
+    - name: home/ios bento/connect linking flow rig
+      # Two simulated agents linked end to end through a local directory (both roles,
+      # contended, wrong SAS). Skips (reasoned, ALLOWED_SKIPS) where wrangler is absent.
+      shell: bento-step {0}
+      run: node scripts/test-home-id-link-flow.mjs
+
     - name: home/ios Spotlight rig
       # What the system search index holds for a document and keeping it current
       # after a save: replaced at once, delete-before-add when sealed, and

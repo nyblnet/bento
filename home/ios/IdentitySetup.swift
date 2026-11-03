@@ -66,6 +66,8 @@ struct IdentitySetup {
     static let maxCodeAttempts = 5            // the directory's own limit; we stop asking too
     static let recordItem = "identity/setup"
     static let deviceKxItem = "identity/device-kx"
+    /// the account's RECOVERY kx scalar, kept so this device can link another (link v1)
+    static let recoveryKxItem = "identity/recovery-kx"
     /// PLACEHOLDER namespace for the presence key (vault to name it): any key under it counts.
     static let managedPrefix = "bento.id"
 
@@ -91,6 +93,9 @@ struct IdentitySetup {
         var att: String?                                        // text.sig of the verified attestation
         var recovery: Pkg?
         var dev: String?                                        // dev. text + "\n" + sig
+        /// true on a device that arrived by linking (LinkFlow): it has no recovery blob of
+        /// its own to make, and setup's recovery steps are not for it
+        var linked: Bool?
     }
 
     func load() -> Record?? {
@@ -223,7 +228,7 @@ struct IdentitySetup {
         guard !managed() else { return .managed }
         guard let loaded = load() else { return .unavailable }
         guard var r = loaded, r.att != nil else { return .notBound }
-        if r.recovery != nil { return .already }
+        if r.recovery != nil || r.linked == true { return .already }
         guard Argon2id.hasMemory() else { return .noMemory }
         guard let account = try? IdentityKeys.account(in: store) else { return .unavailable }
         var code = random(IdentityRecovery.codeBytes)
@@ -240,8 +245,13 @@ struct IdentitySetup {
             wrapKey: wrap, iv: iv, accountPub: accountPub,
             keys: .init(account: Array(account.rawRepresentation), kx: kx)) else { return .unavailable }
         r.recovery = .init(salt: b64(salt), iv: b64(iv), ct: b64(ct), saltV: b64(saltV), verifier: b64(verifier), confirmed: false)
-        r.recoveryKx = ""                                   // sealed into the blob: not kept in the clear
-        guard save(r) else { return .unavailable }
+        // Link v1 seals account ‖ recovery kx for a NEW device, so a device that can link
+        // must keep the recovery kx scalar. It is kept as its own Keychain item, this
+        // device only, never in the setup record. (Open question for security: §26c's
+        // "unwrap once and drop" is the policy for a device that only RECOVERED.)
+        guard store.set(Self.recoveryKxItem, Data(kx)) else { return .unavailable }
+        r.recoveryKx = ""                                   // not kept in the setup record
+        guard save(r) else { store.delete(Self.recoveryKxItem); return .unavailable }
         salt = []; saltV = []
         return .code(printed)
     }

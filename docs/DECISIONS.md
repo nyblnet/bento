@@ -12078,3 +12078,31 @@ with seven conditions).
   deterministic row byte for byte and checks every verdict;
   `scripts/test-link-mutants.ts` reintroduces fifteen lenient paths into a copy
   of `link.ts` and requires the rig to fail on each.
+
+## 2026-11-03 — bento/connect on iOS: how a host speaks link v1 where the vectors say nothing
+
+The iOS host (`home/ios/IdentityLink.swift`, `LinkFlow.swift`) passes the `link`
+section of the identity fixture and links two simulated agents through a local
+directory. Four choices the fixture does not make, recorded so another host can
+agree or contradict them on purpose:
+
+- **Slot messages 0 and 1 travel as base64url of their UTF-8 text.** The
+  directory requires every `msg` to be canonical base64url, and `lnk0.…`/`lnk1.…`
+  contain dots. Message 2 is already base64url (iv ‖ ciphertext ‖ tag) and is sent
+  as it is. Message 3 is the raw `lnk3` text, only through `/v1/link/complete`.
+  Neither the fixture nor the directory pins this; a host that wraps message 2
+  too would not interoperate.
+- **A device that can link keeps the recovery kx scalar.** The sealed payload is
+  `account ‖ recovery kx`, so H must hold both scalars. iOS keeps the recovery kx
+  as its own device-only Keychain item (`identity/recovery-kx`), written when the
+  recovery blob is made, and N stores it from message 3. This is the opposite of
+  "unwrap once and drop" for a device that linked rather than recovered; security
+  to rule on it.
+- **N asks the person for the address.** Message 3 names no address, and the
+  binding must come from the directory under a pinned key, so N looks up the
+  address the person types and requires the served binding to name it, to be
+  `active`, and to match the unsealed scalars. N never takes an address from the
+  directory or from the peer.
+- **The H side starts only from the in-app action**, on every path: displaying a
+  code and scanning one. A universal link or camera intent on a device that holds
+  an account is refused in either seat, before anything is written.
