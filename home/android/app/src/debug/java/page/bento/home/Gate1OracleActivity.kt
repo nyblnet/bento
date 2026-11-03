@@ -40,7 +40,7 @@ class Gate1OracleActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         File(dir, "results.json").delete()
-        history = Gate1.historyOf(Json.read(File(dir, "history.json").readText()))!!
+        history = Gate1.historyOf(HistoryJson.read(File(dir, "history.json").readText()))!!
         web = WebView(this).apply { settings.javaScriptEnabled = true }
         setContentView(web)
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
@@ -54,7 +54,7 @@ class Gate1OracleActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView, url: String) {
                 view.postDelayed({
                     view.evaluateJavascript("JSON.stringify({ran:window.__ran||null,errors:window.__errors})") { s ->
-                        val ran = Json.read(Json.read(s) as String) as Map<*, *>
+                        val ran = HistoryJson.read(HistoryJson.read(s) as String) as Map<*, *>
                         val cur = queue.removeFirst()
                         results += mapOf("file" to cur["file"], "ref" to cur["ref"], "kotlin" to cur["kotlin"],
                             "control" to cur["control"], "ran" to ran["ran"], "errors" to ran["errors"])
@@ -64,7 +64,7 @@ class Gate1OracleActivity : AppCompatActivity() {
             }
         }
         @Suppress("UNCHECKED_CAST")
-        val cases = Json.read(File(dir, "index.json").readText()) as List<Map<*, *>>
+        val cases = HistoryJson.read(File(dir, "index.json").readText()) as List<Map<*, *>>
         var verdicts = 0
         for (c in cases) {
             val f = File(dir, c["file"] as String).readText()
@@ -81,7 +81,7 @@ class Gate1OracleActivity : AppCompatActivity() {
     private fun next() {
         val cur = queue.firstOrNull()
         if (cur == null) {
-            File(dir, "results.json.tmp").writeText(Json.write(results))
+            File(dir, "results.json.tmp").writeText(HistoryJson.write(results))
             File(dir, "results.json.tmp").renameTo(File(dir, "results.json"))
             Log.i(TAG, "ORACLE DONE ${results.size}")
             return

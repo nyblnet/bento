@@ -20,8 +20,8 @@ import java.io.File
 class Gate1Test {
     private val dir = File("../../../home/fixtures/gate1")
     private fun read(p: String) = File(dir, p).readText()
-    private val expected = Json.read(read("expected.json")) as Map<*, *>
-    private val key = Json.read(read("test-public-key.json")) as Map<*, *>
+    private val expected = HistoryJson.read(read("expected.json")) as Map<*, *>
+    private val key = HistoryJson.read(read("test-public-key.json")) as Map<*, *>
     private val payload by lazy {
         Gate1.verifyEnvelope(read("history.json"), key["x"] as String, key["y"] as String)
             ?: error("history.json must verify under the test key")
@@ -33,8 +33,8 @@ class Gate1Test {
         val app = expected["app"] as String
         assertEquals(app, history.app)
         assertTrue(Gate1.historyProblems(payload).isEmpty())
-        val env = Json.read(read("history.json")) as Map<*, *>
-        val tampered = Json.write(mapOf("payload" to (env["payload"] as String).replaceFirst("1.0.0", "1.0.1"), "sig" to env["sig"]))
+        val env = HistoryJson.read(read("history.json")) as Map<*, *>
+        val tampered = HistoryJson.write(mapOf("payload" to (env["payload"] as String).replaceFirst("1.0.0", "1.0.1"), "sig" to env["sig"]))
         assertNull(Gate1.verifyEnvelope(tampered, key["x"] as String, key["y"] as String))
         assertNull("another key refuses it", Gate1.verifyEnvelope(read("history.json"),
             "GMHSKwWcAoJVq-Dz1ZxWZM6TXATWIKbaQBpjoTystH8", "flFNzbdXCmJN8RQYCeG71rBZnnbN-MCEnp1EbCLFrj0"))
@@ -97,8 +97,8 @@ class Gate1Test {
 
     @Test fun `the JSON writer matches JSON_stringify on key order and numbers`() {
         val s = """{"b":1,"a":[true,null,"x\"y"],"c":{"z":2.5,"y":-3}}"""
-        assertEquals(s, Json.write(Json.read(s)))
-        assertTrue(Json.write(Json.read("""{"a":1,"b":2}""")) != Json.write(Json.read("""{"b":2,"a":1}""")))
+        assertEquals(s, HistoryJson.write(HistoryJson.read(s)))
+        assertTrue(HistoryJson.write(HistoryJson.read("""{"a":1,"b":2}""")) != HistoryJson.write(HistoryJson.read("""{"b":2,"a":1}""")))
     }
 
     @Test fun `every oracle failure is UNKNOWN against the oracle's own history`() {
@@ -108,7 +108,7 @@ class Gate1Test {
         val d = File(dir, "oracle-failures")
         val h = File(d, "history.json")
         if (!h.isFile) return
-        val history = Gate1.historyOf(Json.read(h.readText()))!!
+        val history = Gate1.historyOf(HistoryJson.read(h.readText()))!!
         val files = d.listFiles { f -> f.name.endsWith(".html") }!!.sortedBy { it.name }
         for (f in files) assertTrue("${f.name} must be UNKNOWN", Gate1.verifyServed(f.readText(), history) is Gate1.Verdict.Unknown)
     }
@@ -118,7 +118,7 @@ class Gate1Test {
     @Suppress("UNCHECKED_CAST")
     private val histories: Map<String, Gate1.History> by lazy {
         (expected["histories"] as Map<String, Map<String, String>>).mapValues { (name, h) ->
-            val k = Json.read(read(h["key"]!!)) as Map<*, *>
+            val k = HistoryJson.read(read(h["key"]!!)) as Map<*, *>
             val payload = Gate1.verifyEnvelope(read(h["history"]!!), k["x"] as String, k["y"] as String)
                 ?: error("the $name history must verify under its own key")
             Gate1.historyOf(payload) ?: error("the $name history must be well formed")
@@ -126,7 +126,7 @@ class Gate1Test {
     }
 
     @Test fun `the real 1_2_10 history verifies under the key Android pins, and names bento-slides`() {
-        val k = Json.read(read("real/slides-1.2.10/release-public-key.json")) as Map<*, *>
+        val k = HistoryJson.read(read("real/slides-1.2.10/release-public-key.json")) as Map<*, *>
         assertEquals("Releases.kt pins the real release key", Releases.KEY_X, k["x"])
         assertEquals(Releases.KEY_Y, k["y"])
         val real = histories["real"]!!

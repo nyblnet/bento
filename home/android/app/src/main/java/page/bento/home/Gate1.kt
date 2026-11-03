@@ -167,7 +167,7 @@ object Gate1 {
             if (next == '/' && i + 2 < html.length && html[i + 2].let { it in 'a'..'z' || it in 'A'..'Z' }) {
                 val et = parseEndTag(html, i)
                 if (et == null) { problems += "an unterminated end tag"; break }
-                if (!TAG_NAME_OK.matches(et.name)) problems += "an end tag named ${Json.write(et.name)}"
+                if (!TAG_NAME_OK.matches(et.name)) problems += "an end tag named ${HistoryJson.write(et.name)}"
                 // a browser drops them, but they move where the tag ends: Bento writes none
                 if (et.attrs.isNotEmpty()) problems += "an end tag </${et.name}> carrying attributes"
                 i = et.end; continue
@@ -182,7 +182,7 @@ object Gate1 {
             val tag = parseStartTag(html, i)
             if (tag == null) { problems += "an unterminated start tag"; break }
             val name = tag.name
-            if (!TAG_NAME_OK.matches(name)) problems += "a start tag named ${Json.write(name)}"
+            if (!TAG_NAME_OK.matches(name)) problems += "a start tag named ${HistoryJson.write(name)}"
             if (name in setOf("iframe", "object", "embed", "base")) problems += "a <$name>"
             if (name == "meta" && META_BAD.containsMatchIn(tag.attrs["http-equiv"] ?: "")) problems += "a <meta> refresh or CSP"
             if (tag.attrs.keys.any { it.startsWith("on") }) problems += "an on*= attribute on <$name>"
@@ -341,7 +341,7 @@ object Gate1 {
         for (e in h.releases) {
             val there = inc.releases.firstOrNull { it.version == e.version }
                 ?: return Accept.No("rollback: it lacks ${e.version}, which is already held")
-            if (Json.write(there.raw) != Json.write(e.raw)) return Accept.No("${e.version} changed: a history never changes an entry")
+            if (HistoryJson.write(there.raw) != HistoryJson.write(e.raw)) return Accept.No("${e.version} changed: a history never changes an entry")
         }
         return Accept.Ok
     }
@@ -364,7 +364,7 @@ object Gate1 {
      * The same envelope and key handling as Releases.verify, without org.json.
      */
     fun verifyEnvelope(raw: String, keyX: String, keyY: String): Any? = try {
-        val env = Json.read(raw) as? Map<*, *>
+        val env = HistoryJson.read(raw) as? Map<*, *>
         val payload = env?.get("payload") as? String
         val sig = env?.get("sig") as? String
         if (payload.isNullOrEmpty() || sig.isNullOrEmpty()) null else {
@@ -378,7 +378,7 @@ object Gate1 {
             val ok = rs.size == 64 && java.security.Signature.getInstance("SHA256withECDSA").run {
                 initVerify(key); update(payload.toByteArray(Charsets.UTF_8)); verify(derOf(rs))
             }
-            if (ok) Json.read(payload) else null
+            if (ok) HistoryJson.read(payload) else null
         }
     } catch (e: Exception) { null }
 
@@ -449,7 +449,7 @@ object Gate1 {
  * decides "an entry changed" by comparing JSON text. Numbers read as Double.
  * Strict: anything else is Gate1.Malformed.
  */
-object Json {
+object HistoryJson {
     fun read(s: String): Any? {
         val p = P(s); p.ws(); val v = p.value(); p.ws()
         if (p.i != s.length) throw Gate1.Malformed("json: trailing data at ${p.i}")
