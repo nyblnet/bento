@@ -15,7 +15,7 @@
  * null and keep the glyph path in markdown.ts, which commit still converts
  * (bullets.ts), as it does pasted text and decks saved before this.
  */
-import { offsetOf, placeAt, shiftList } from './listindent'
+import { offsetOf, placeAt, shiftList } from './listindent.ts'
 
 const BLOCK = new Set(['DIV', 'P', 'UL', 'OL', 'LI', 'H1', 'H2', 'H3', 'PRE', 'TABLE'])
 const isZw = (n: Node) => n.nodeType === Node.TEXT_NODE && /^[​]*$/.test((n as Text).data)
