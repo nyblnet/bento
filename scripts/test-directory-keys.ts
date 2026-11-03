@@ -163,7 +163,8 @@ async function freezeByEmail(p: P) {
 // device linking (link v1, security §39.1)
 // =====================================================================
 {
-  const link = (op: string, body: Record<string, unknown>) => api('/v1/link/' + op, body)
+  const sentToks = new Set<string>() // every tok the rig sent: none may be stored
+  const link = (op: string, body: Record<string, unknown>) => { if (typeof body.tok === 'string') sentToks.add(body.tok); return api('/v1/link/' + op, body) }
   const msg = () => r64(120)
   async function slot(o: { fill?: number } = {}) {
     const id = r64(32), tok = r64(32), m = [msg(), msg(), msg()]
@@ -345,7 +346,11 @@ async function freezeByEmail(p: P) {
     ok(idle.status === 202 && performance.now() - t0 >= 50, 'a waiting read with nothing written ends pending')
   }
 
-  ok(![...stores.keys()].filter((k) => k.startsWith('Link:')).some((k) => /tok|email|@/.test(JSON.stringify([...stores.get(k)!.entries()]))), 'link slots store no tok and no address')
+  {
+    // the tok VALUES (random base64 can spell "tok", so a name regex alone is no check), and no address
+    const slots = [...stores.keys()].filter((k) => k.startsWith('Link:')).map((k) => JSON.stringify([...stores.get(k)!.entries()]))
+    ok(sentToks.size > 3 && !slots.some((j) => [...sentToks].some((t) => j.includes(t)) || /"tok"|"email"|@/.test(j)), 'link slots store no tok and no address')
+  }
 }
 
 // =====================================================================
