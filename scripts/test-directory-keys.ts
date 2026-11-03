@@ -1155,7 +1155,7 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
     const tb = await bindNext(thief, oText)
     const tr = await resolve(tb, oRc.verifier)
     ok(tr.status === 202 && (await lookup(O.email)).j.binding === oText, 'owner-wins: the thief\'s resolution (code + mailbox) waits')
-    ok((st => (st.j.pending as Record<string, unknown>)?.binding === tb.text)(await status(O)), '  …and the owner\'s device sees it in its status read')
+    ok((st => st.j.state === 'frozen' && (st.j.pending as Record<string, unknown>)?.binding === tb.text)(await status(O)), '  …and the owner\'s device sees it in its status read, the address still frozen')
     ok((await freezeBy(O, O)).j.state === 'frozen' && !('pending' in (await lookup(O.email)).j), 'owner-wins: the owner voids it with the frozen key')
     ok(!!(await rcOf(O)), '  …the code is still live')
     const ob = await bindNext(owner2, oText)

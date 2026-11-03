@@ -116,23 +116,49 @@ offers the freeze link by email (`/v1/freeze/start`), which needs no key.
 
 **Resolution.** Only the recovery code unfreezes: the device sends a new
 binding, signed by its own new key and chained to the frozen one, and the
-recovery verifier (the same checks, count and lock as a recovery start). The
-code is spent. No old-key signature exists in this case, so pinners WARN; that
-is intended, and nothing the directory says softens it.
+recovery verifier (the same checks, count and lock as a recovery start: every
+resolve counts against the 5-per-24-hour limit, failures lock, and each attempt
+notifies). **The code is spent only when a resolution COMMITS**, at once or when
+a waiting one settles; a resolution that waits leaves it live, so one that is
+voided does not burn it. No old-key signature exists in this case, so pinners
+WARN; that is intended, and nothing the directory says softens it.
 
 - A **key-holder freeze** (the owner's signed freeze, or a contest) resolves at
-  once.
+  once, unless it is contested (below).
 - An **email-only freeze** resolves after 72 hours (security ruling b): the
   recovery code and the mailbox together were an instant takeover. The answer
   is 202; the address stays frozen, a notice is mailed (`resolve-pending`), and
   lookups and the signed status read name the waiting binding (`pending`,
   `activeAt`). During those 72 hours, and only then, a `dreq.freeze` or
   `dreq.contest` (naming the waiting binding) signed by the FROZEN binding's
-  key is accepted: the narrow exception to "frozen: status only". It turns the
-  freeze into a key-holder freeze and voids the waiting resolution; the code
-  stays spent. Uncontested, the new binding becomes active at 72 hours
-  (`rebound`, no vouch) and the event list records it. A second resolution
-  while one waits is refused (`resolving`).
+  key is accepted: the narrow exception to "frozen: status only" (rc-enrol,
+  cred-add and cred-del stay refused). It turns the freeze into a key-holder
+  freeze and voids the waiting resolution; the code stays live. Uncontested,
+  the new binding becomes active at 72 hours (`rebound`, no vouch), the code is
+  spent, and the event list records it. A second resolution while one waits is
+  refused (`resolving`).
+- A freeze that has had a resolution voided is **contested**: the code has been
+  in two hands. Every later resolution of it waits 72 hours the same way and
+  can be voided the same way, by the frozen key, and a contested freeze never
+  resolves at once, even though the frozen key froze it. This is the
+  owner-wins sequence: an owner holding the device and the code, against a
+  thief holding the code and the mailbox, voids the thief's resolution,
+  resolves, waits 72 hours, and wins, because the thief holds no key that can
+  void it. The reverse (the thief holds the old key) is a stalemate: the
+  address stays frozen while that key keeps voiding, until the binding expires.
+
+**Host conditions while frozen** (a host that does not meet them must not offer
+resolution):
+
+- On every open, a device holding the frozen key polls the signed status read.
+  When it names a waiting resolution (`pending.resolve: true`), the device shows
+  it prominently, with its `activeAt`, and with the ONE action that stops it:
+  freeze (or contest). Nothing else on that screen competes with it.
+- A device whose own resolution was voided (a 202 that later reads back frozen,
+  with no `pending`) says so honestly, in these words: "A device holding your
+  old key is blocking the move. Your address stays frozen while it does." It
+  does not suggest that retrying will help, and does not present the freeze as
+  something it can undo.
 
 **A holder delete keeps the binding's protection** until the deleted binding's
 own expiry: a DIFFERENT key re-binding the address goes `pending` for the full

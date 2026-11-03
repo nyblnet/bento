@@ -12115,3 +12115,14 @@ lost device need. Both ship OFF (`LINKING`, `KEYSTORE`).
 - **A host can ask for its bind answer again** (`/v1/bind/check`), for exactly
   the statement it bound, so setup resumes after a failed check without a second
   mail. It reveals nothing a lookup doesn't.
+- **2026-11-03: the recovery code is spent only when a resolution commits, and a
+  freeze that voided one is contested.** This reverses "the code it used stays
+  spent" above. A resolution that waits and is voided leaves the code live, so
+  the owner who voided a thief's resolution still has the code to resolve with.
+  Because the code has then been in two hands, that freeze is contested: every
+  later resolution of it waits 72 hours and can be voided by the frozen key,
+  even though the frozen key froze it. An owner with the device and the code
+  beats a thief with the code and the mailbox; a thief holding the old key
+  leaves a stalemate, and the address stays frozen until the binding expires.
+  While frozen, a device polls its status on open and shows a waiting
+  resolution with the one action that stops it.
