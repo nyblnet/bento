@@ -10,8 +10,7 @@
 use bento_id_agent::agent::{Agent, Caller, Clock, KeyRole, KeyStore, Policy, Prompt, StoreError};
 use bento_id_agent::tpm_linux::{PinPrompt, TpmStore};
 use bento_id_agent::{b64u, statements as st};
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use zeroize::Zeroizing;
 
 fn tcti(var: &str) -> String {
@@ -23,11 +22,11 @@ fn dir(tag: &str) -> std::path::PathBuf {
     d
 }
 /// A PIN prompt that answers from a queue and records every prompt it was shown.
-fn pins(answers: Vec<Option<&str>>, seen: Rc<RefCell<Vec<Prompt>>>) -> PinPrompt {
-    let q = RefCell::new(answers.into_iter().map(|a| a.map(|s| s.to_string())).collect::<Vec<_>>());
+fn pins(answers: Vec<Option<&str>>, seen: Arc<Mutex<Vec<Prompt>>>) -> PinPrompt {
+    let q = Mutex::new(answers.into_iter().map(|a| a.map(|s| s.to_string())).collect::<Vec<_>>());
     Box::new(move |p: &Prompt| {
-        seen.borrow_mut().push(p.clone());
-        let mut q = q.borrow_mut();
+        seen.lock().unwrap().push(p.clone());
+        let mut q = q.lock().unwrap();
         if q.is_empty() { None } else { q.remove(0).map(Zeroizing::new) }
     })
 }
@@ -56,7 +55,7 @@ fn routine_key_signs_in_the_tpm_and_verifies_under_k2() {
 #[test]
 fn consent_key_needs_the_pin_every_time() {
     let d = dir("consent");
-    let seen = Rc::new(RefCell::new(vec![]));
+    let seen = Arc::new(Mutex::new(vec![]));
     let mut s = TpmStore::open(&tcti("BENTO_TPM_TCTI"), d,
         pins(vec![Some("wrong-pin"), None, Some(PIN), Some(PIN)], seen.clone())).unwrap();
     s.create_signing_key(&KeyRole::Consent, Some(PIN)).unwrap();
@@ -65,7 +64,7 @@ fn consent_key_needs_the_pin_every_time() {
     assert_eq!(s.sign(&KeyRole::Consent, b"x", Some(&p)), Err(StoreError::Declined), "a declined prompt signs nothing");
     assert!(s.sign(&KeyRole::Consent, b"x", Some(&p)).is_ok(), "the right PIN signs");
     assert!(s.sign(&KeyRole::Consent, b"y", Some(&p)).is_ok(), "and again: one PIN per signature");
-    assert_eq!(seen.borrow().len(), 4, "every consent signature prompted");
+    assert_eq!(seen.lock().unwrap().len(), 4, "every consent signature prompted");
     assert!(s.sign(&KeyRole::Consent, b"x", None).is_err(), "no prompt, no consent signature");
 }
 

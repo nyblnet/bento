@@ -105,6 +105,23 @@ scenario real 150 "$OUT/R.bento.html"
 # that signs, one unknown document that must not even have the agent.
 cp "$OUT/fix/A.bento.html" "$OUT/SA.bento.html"; cp "$OUT/fix/U.bento.html" "$OUT/SU.bento.html"
 BENTO_RIG_SIGN=1 scenario sign 120 "$OUT/SA.bento.html" "$OUT/SU.bento.html"
+# B1 slice 2 (security §2e B, §26.3): whoami with consent per document, resolve of keys
+# already in the room, and the host's re-auth prompt. Three documents on the in-memory key:
+# A (the person says no), B (yes) and an unknown file that must reach none of it.
+cp "$OUT/fix/A.bento.html" "$OUT/IA.bento.html"; cp "$OUT/fix/B.bento.html" "$OUT/IB.bento.html"; cp "$OUT/fix/U.bento.html" "$OUT/IU.bento.html"
+BENTO_RIG_MODE=ident scenario ident 150 "$OUT/IA.bento.html" "$OUT/IB.bento.html" "$OUT/IU.bento.html"
+# The REAL key stores, end to end through the bridge. A missing tool is a FAILURE, never a skip.
+command -v gnome-keyring-daemon >/dev/null || { echo "FAIL: gnome-keyring-daemon is not installed; the keystore rig cannot run" >&2; exit 1; }
+command -v swtpm >/dev/null && command -v swtpm_setup >/dev/null || { echo "FAIL: swtpm is not installed; the keystore-tpm rig cannot run" >&2; exit 1; }
+echo -n "rig-login-password" | gnome-keyring-daemon --unlock --components=secrets >/dev/null
+cp "$OUT/fix/A.bento.html" "$OUT/KS.bento.html"; cp "$OUT/fix/A.bento.html" "$OUT/KT.bento.html"
+# no TPM here (the device is named and absent): the Secret Service, with its exposure stated
+BENTO_RIG_MODE=keystore BENTO_RIG_REALSTORE=1 BENTO_RIG_TPM_DEVICE=/nonexistent/tpmrm0 scenario keystore 120 "$OUT/KS.bento.html"
+# a TPM present (a software TPM): the key is made inside it and the keyring is never touched
+TD=$(mktemp -d); swtpm_setup --tpm2 --tpmstate "$TD" --create-ek-cert --create-platform-cert --overwrite >/dev/null 2>&1 || true
+swtpm socket --tpm2 --tpmstate dir="$TD" --server type=tcp,port=2321 --ctrl type=tcp,port=2322 --flags not-need-init,startup-clear --daemon --pid file="$TD/pid"
+BENTO_RIG_MODE=keystore-tpm BENTO_RIG_REALSTORE=1 BENTO_RIG_TPM_TCTI="swtpm:host=127.0.0.1,port=2321" scenario keystoretpm 120 "$OUT/KT.bento.html"
+kill "$(cat "$TD/pid" 2>/dev/null)" 2>/dev/null
 # §19h wedge isolation: two documents each counting a heartbeat through the
 # host; rig/wedge.py stops their web processes one at a time (exactly one
 # document may freeze) and then all at once (the negative control: both freeze)

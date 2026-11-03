@@ -52,10 +52,15 @@ jobs:
         # commands refused, save in place re-verified, one web process per
         # document, and no cross-document BroadcastChannel or IndexedDB with a
         # same-document control. A timeout or a missing report fails.
+        # B1 slice 2 rows run in the same pass: whoami with consent per document,
+        # resolve of keys already held, the host's re-auth prompt (asked, refused,
+        # not asked again inside the cooldown), and the REAL key stores through the
+        # bridge: the Secret Service (TPM device absent, exposure stated once) and a
+        # software TPM (key made inside it, the keyring never touched).
         working-directory: home/desktop/host
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev libxdo-dev xvfb xauth dbus-x11 >/dev/null
+          sudo apt-get install -y -qq libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev libxdo-dev xvfb xauth dbus-x11 libtss2-dev libsecret-1-dev gnome-keyring swtpm swtpm-tools >/dev/null
           dbus-run-session -- xvfb-run -a ./rig/run.sh "$RUNNER_TEMP/h2-rig"
       - name: Desktop host release check (the bundled history is the current published one)
         # Fetches each published app's signed history, manifest and shell from

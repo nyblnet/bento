@@ -12026,3 +12026,40 @@ key rotation, freezing and passkey management can be switched on.
   (on desktop: this webview's capability, then genuine bytes). No host ships a key
   store yet, so a host with no account answers `no-identity` (`whoami`, `sign`)
   and `null` (`resolve`).
+
+## 2026-11-03 — bento/connect B1 on the Linux desktop host: a real key store, consent per document, a host re-auth prompt
+
+- **The key store is the machine's, never the webview's.** The Linux host holds
+  the device key in the TPM where this user can open one, in the desktop's
+  Secret Service otherwise, and in no other place. The choice is made once at
+  start, TPM first; a machine with a TPM never touches the keyring. Where there
+  is no TPM the host says so, once, the first time the identity is used: any
+  program running as the person can read that key while the keyring is unlocked.
+  Where there is a TPM the key cannot be copied off the machine, though a program
+  running as the person can still ask it to sign while they are signed in.
+- **`whoami` is consent per document.** With nothing to share (no account, or no
+  key on this device) it answers `no-identity` and never asks. Otherwise the
+  first time a document asks, the host asks the person, showing what the
+  document would see (name, address, who vouches). A yes is remembered for that
+  document across launches, keyed by a hash of its id so the file does not list
+  documents; a no is remembered until the host exits (there is no screen yet to
+  undo a permanent no, so none is stored).
+- **`resolve` answers only for a document the person has allowed, and only for
+  keys this host already holds a binding for.** It never prompts (a prompt on
+  `resolve` would let a document spend the person's attention) and never reaches
+  the network; an unknown key and a refused document both read `null`. A key's
+  binding is pinned on first sight; a different binding for the same key reads
+  `changed` and the first stays pinned.
+- **Past the idle or overall limit the host asks the person to confirm, then
+  signs once.** The prompt is reached only by an otherwise valid request (a
+  payload that matches its purpose, a device key present), one at a time; a no is
+  not asked again for a minute. This is a confirmation of presence, not a
+  verification of the person: on Linux there is no user-verifying step for a
+  software key, and the TPM store's device key has no PIN. What it adds over the
+  session limits alone is that a page cannot keep signing after the limit; what
+  it does not add is protection from a program that can press the dialog's
+  button as the person.
+- **The book of bindings is plain JSON in the host's data directory** (public
+  data only; no key material). A same-user program could edit it and make a name
+  read wrongly, though it can reach no key. Storing the signed binding and
+  re-verifying it on read is for the directory client to add when it exists.

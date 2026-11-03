@@ -154,6 +154,20 @@ impl<S: KeyStore, C: Clock> Agent<S, C> {
         Agent { store, clock, policy, session: None }
     }
 
+    /// The key store, for the flows that mint keys (account setup) and for rigs.
+    pub fn store_mut(&mut self) -> &mut S {
+        &mut self.store
+    }
+
+    pub fn now_ms(&self) -> u64 {
+        self.clock.now_ms()
+    }
+
+    /// This device's routine public key, if the store holds one.
+    pub fn device_pub(&self) -> Result<Option<[u8; 65]>, Refusal> {
+        self.store.public_key(&KeyRole::Device).map_err(store_refusal)
+    }
+
     /// Open (or renew) the routine session. The host calls this only after the
     /// person has re-authenticated (Windows Hello / the TPM PIN / unlock).
     pub fn begin_session(&mut self) {

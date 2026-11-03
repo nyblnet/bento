@@ -5,8 +5,10 @@
 // of every shipped build, and inert unless BENTO_PROBE_<label> names a report
 // file for that webview.
 
+use crate::IdentState;
 use crate::Shared;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use tauri::Manager;
 
@@ -33,7 +35,8 @@ pub fn init_script(app: &tauri::AppHandle, label: &str, init: String) -> String 
     let init = init.replacen("armed = true\n", "armed = true; window.__rigCap = cap\n", 1);
     assert!(init.contains("window.__rigCap = cap"), "rig: the shim's arming line moved");
     format!(
-        "{init}window.__RIG_INVOKE_KEY={:?};window.__RIG_LABEL={b:?};window.__RIG_FULL_LABEL={label:?};window.__RIG_WATCHDOG={};window.__RIG_WEDGE={};window.__RIG_SIGN={};window.__RIG_PEER={peer:?};window.__RIG_ALL={:?};window.__RIG_EMBED_URL={:?};window.__RIG_ROGUE_URL={:?};\n{PROBE};\n",
+        "{init}window.__RIG_MODE={:?};window.__RIG_INVOKE_KEY={:?};window.__RIG_LABEL={b:?};window.__RIG_FULL_LABEL={label:?};window.__RIG_WATCHDOG={};window.__RIG_WEDGE={};window.__RIG_SIGN={};window.__RIG_PEER={peer:?};window.__RIG_ALL={:?};window.__RIG_EMBED_URL={:?};window.__RIG_ROGUE_URL={:?};\n{PROBE};\n",
+        std::env::var("BENTO_RIG_MODE").unwrap_or_default(),
         app.invoke_key(),
         std::env::var_os("BENTO_RIG_WATCHDOG").is_some(),
         std::env::var_os("BENTO_RIG_WEDGE").is_some(),
@@ -137,11 +140,11 @@ pub fn trust_embed_cert(window: &tauri::WebviewWindow) {
 /// never do this in a shipped build; here the rig plays the person.
 #[tauri::command]
 pub fn rig_session(app: tauri::AppHandle, action: String) -> Result<(), String> {
-    let s = app.state::<Shared>();
+    let s = app.state::<IdentState>();
     let mut h = s.lock().unwrap();
     match action.as_str() {
-        "begin" => h.agent.begin_session(),
-        "lock" => h.agent.lock(),
+        "begin" => h.calls.agent.begin_session(),
+        "lock" => h.calls.agent.lock(),
         _ => return Err("unknown action".into()),
     }
     Ok(())
@@ -153,4 +156,78 @@ pub fn rig_session(app: tauri::AppHandle, action: String) -> Result<(), String> 
 pub fn rig_skew(add_ms: u64) -> u64 {
     use std::sync::atomic::Ordering;
     crate::CLOCK_SKEW_MS.fetch_add(add_ms, Ordering::SeqCst) + add_ms
+}
+
+// The host's two prompts, answered by the rig as the person would: counted, and
+// DECLINED unless the probe says otherwise (so a scenario that does not mean to
+// confirm anything never does).
+static CONSENT_YES: AtomicBool = AtomicBool::new(false);
+static REAUTH_YES: AtomicBool = AtomicBool::new(false);
+static CONSENT_N: AtomicU64 = AtomicU64::new(0);
+static REAUTH_N: AtomicU64 = AtomicU64::new(0);
+
+pub fn answer_consent() -> bool {
+    CONSENT_N.fetch_add(1, Ordering::SeqCst);
+    CONSENT_YES.load(Ordering::SeqCst)
+}
+pub fn answer_reauth() -> bool {
+    REAUTH_N.fetch_add(1, Ordering::SeqCst);
+    REAUTH_YES.load(Ordering::SeqCst)
+}
+
+#[tauri::command]
+pub fn rig_answers(consent: bool, reauth: bool) {
+    CONSENT_YES.store(consent, Ordering::SeqCst);
+    REAUTH_YES.store(reauth, Ordering::SeqCst);
+}
+
+/// How many times each host prompt was put in front of the person, and which
+/// store the host chose.
+#[tauri::command]
+pub fn rig_counts(app: tauri::AppHandle) -> serde_json::Value {
+    let s = app.state::<IdentState>();
+    let h = s.lock().unwrap();
+    serde_json::json!({ "consent": CONSENT_N.load(Ordering::SeqCst), "reauth": REAUTH_N.load(Ordering::SeqCst), "store": h.kind.name(),
+                        "exposure_marker": h.dir.join("exposure-shown").exists() })
+}
+
+/// The account setup this host does not have yet, played by the rig: give this
+/// device a key in the REAL store (when the rig runs one) and the person a
+/// binding, plus one other person's binding learned earlier.
+#[tauri::command]
+pub fn rig_provision(app: tauri::AppHandle, action: String) -> Result<String, String> {
+    use bento_id_agent::{b64u, book::{Binding, Book}};
+    let s = app.state::<IdentState>();
+    let mut h = s.lock().unwrap();
+    let path = h.dir.join("identity.json");
+    match action.as_str() {
+        "account" => {
+            let mut book = Book::load(&path).map_err(|e| format!("{e:?}"))?;
+            book.own = Some(Binding { name: "Rig Person".into(), email: "rig@example.org".into(), vouched_by: "id.bento.page".into(), account_pub: "RIG-ACCOUNT".into() });
+            book.observe("RIG-BOB", Binding { name: "Bob Rig".into(), email: "bob@example.org".into(), vouched_by: "id.bento.page".into(), account_pub: "RIG-BOB-ACC".into() }, 4242);
+            book.save(&path).map_err(|e| format!("{e:?}"))?;
+            Ok("ok".into())
+        }
+        // a second, different binding for the same key (the key-changed case)
+        "changed" => {
+            let mut book = Book::load(&path).map_err(|e| format!("{e:?}"))?;
+            book.observe("RIG-BOB", Binding { name: "Bob Rig".into(), email: "mallory@example.org".into(), vouched_by: "id.bento.page".into(), account_pub: "RIG-BOB-ACC".into() }, 9999);
+            book.save(&path).map_err(|e| format!("{e:?}"))?;
+            Ok("ok".into())
+        }
+        "device-key" => match h.calls.agent.store_mut() {
+            crate::HostStore::Real(st) => st.create_device_key().map(|p| b64u::enc(&p)).map_err(|e| format!("{e:?}")),
+            _ => Err("not the real store".into()),
+        },
+        "wipe" => match h.calls.agent.store_mut() {
+            crate::HostStore::Real(st) => st.wipe().map(|_| "ok".into()).map_err(|e| format!("{e:?}")),
+            _ => Err("not the real store".into()),
+        },
+        // how many keyring items this run's profile holds: the TPM store must leave it at 0
+        "keyring-items" => bento_id_agent::secret_linux::SecretStore::open(&h.profile)
+            .and_then(|k| k.count_items())
+            .map(|n| n.to_string())
+            .map_err(|e| format!("{e:?}")),
+        _ => Err("unknown action".into()),
+    }
 }

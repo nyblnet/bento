@@ -24,7 +24,10 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use bento_id_agent::agent::{Agent, Caller, Clock, KeyRole, KeyStore, Policy, StoreError};
+use bento_id_agent::agent::{Agent, Caller, Clock, KeyRole, KeyStore, Policy, Prompt, StoreError};
+use bento_id_agent::book::Binding;
+use bento_id_agent::calls::{Calls, Ui};
+use bento_id_agent::select::Kind;
 use bento_hostcore::{
     arming::{main_frame_load, navigation_allowed, Bounce, Load, Registry},
     origin::{self, Index},
@@ -69,34 +72,97 @@ pub(crate) struct Host {
     salt: Vec<u8>,
     index: Index,
     data_dir: PathBuf,
-    agent: Agent<Store, SysClock>,
 }
 
-/// The identity agent's key store in this build: EMPTY. The Linux stores
-/// (TPM, Secret Service) are the agent crate's and are wired in a later slice;
-/// until then every identity call that passes the host's gates reaches the
-/// agent and is answered `no-identity`.
-#[cfg_attr(feature = "rig", allow(dead_code))]
-pub(crate) struct NoStore;
-impl KeyStore for NoStore {
-    fn public_key(&self, _: &KeyRole) -> Result<Option<[u8; 65]>, StoreError> { Ok(None) }
-    fn sign(&mut self, _: &KeyRole, _: &[u8], _: Option<&bento_id_agent::agent::Prompt>) -> Result<[u8; 64], StoreError> { Err(StoreError::NoKey) }
-    fn has_consent_key(&self) -> bool { false }
+/// The key store the identity agent is built over.
+/// - Linux: the TPM where this user can open one, the Secret Service otherwise,
+///   and nothing else: never the webview's storage (security §26.3).
+/// - Elsewhere: none yet (Windows waits on the runner ruling), so every call
+///   that passes the host's gates is answered `no-identity`.
+/// - Rig builds can swap in an in-memory key so the session timeout can be
+///   driven end to end (security §2e B). The rig build is never shipped:
+///   gate-binary.sh fails a binary carrying the rig's commands.
+pub(crate) enum HostStore {
+    #[cfg(target_os = "linux")]
+    Real(bento_id_agent::linux_store::LinuxStore),
+    #[cfg(feature = "rig")]
+    Memory(bento_id_agent::agent::memory::MemoryStore),
+    #[cfg(not(target_os = "linux"))]
+    Empty,
 }
-/// The key store the agent is built over. A shipped build has none yet (every
-/// call that passes the host's gates is answered `no-identity`); the rig build
-/// holds an in-memory device key so the sign path, and its session timeout, can
-/// be driven end to end (security §2e B). The rig build is never shipped:
-/// gate-binary.sh fails a binary carrying the rig's commands.
-#[cfg(not(feature = "rig"))]
-pub(crate) type Store = NoStore;
-#[cfg(feature = "rig")]
-pub(crate) type Store = bento_id_agent::agent::memory::MemoryStore;
+impl KeyStore for HostStore {
+    fn public_key(&self, r: &KeyRole) -> Result<Option<[u8; 65]>, StoreError> {
+        match self {
+            #[cfg(target_os = "linux")]
+            HostStore::Real(s) => s.public_key(r),
+            #[cfg(feature = "rig")]
+            HostStore::Memory(s) => s.public_key(r),
+            #[cfg(not(target_os = "linux"))]
+            HostStore::Empty => { let _ = r; Ok(None) }
+        }
+    }
+    fn sign(&mut self, r: &KeyRole, m: &[u8], p: Option<&Prompt>) -> Result<[u8; 64], StoreError> {
+        match self {
+            #[cfg(target_os = "linux")]
+            HostStore::Real(s) => s.sign(r, m, p),
+            #[cfg(feature = "rig")]
+            HostStore::Memory(s) => s.sign(r, m, p),
+            #[cfg(not(target_os = "linux"))]
+            HostStore::Empty => { let _ = (r, m, p); Err(StoreError::NoKey) }
+        }
+    }
+    fn has_consent_key(&self) -> bool {
+        match self {
+            #[cfg(target_os = "linux")]
+            HostStore::Real(s) => s.has_consent_key(),
+            #[cfg(feature = "rig")]
+            HostStore::Memory(s) => s.has_consent_key(),
+            #[cfg(not(target_os = "linux"))]
+            HostStore::Empty => false,
+        }
+    }
+}
 
-#[cfg(not(feature = "rig"))]
-fn new_store() -> Store { NoStore }
-#[cfg(feature = "rig")]
-fn new_store() -> Store { bento_id_agent::agent::memory::MemoryStore::with_keys() }
+fn new_store(identity_dir: &std::path::Path) -> (HostStore, Kind, String) {
+    #[cfg(feature = "rig")]
+    if std::env::var_os("BENTO_RIG_REALSTORE").is_none() {
+        return (HostStore::Memory(bento_id_agent::agent::memory::MemoryStore::with_keys()), Kind::None, String::new());
+    }
+    #[cfg(target_os = "linux")]
+    {
+        // a rig's keyring items are named for the run, never the person's own
+        #[cfg(feature = "rig")]
+        let profile = format!("rig-{}", std::process::id());
+        #[cfg(not(feature = "rig"))]
+        let profile = "default".to_string();
+        // Rigs only: a software TPM's socket, or a device that is not there (the
+        // control that forces the keyring). A shipped build reads neither.
+        #[allow(unused_mut)]
+        let mut source = bento_id_agent::linux_store::TpmSource::Device(PathBuf::from(bento_id_agent::select::TPM_DEVICE));
+        #[cfg(feature = "rig")]
+        {
+            if let Some(t) = std::env::var_os("BENTO_RIG_TPM_TCTI") { source = bento_id_agent::linux_store::TpmSource::Tcti(t.to_string_lossy().into()) }
+            else if let Some(d) = std::env::var_os("BENTO_RIG_TPM_DEVICE") { source = bento_id_agent::linux_store::TpmSource::Device(PathBuf::from(d)) }
+        }
+        let o = bento_id_agent::linux_store::open_best_with(&profile, identity_dir.join("tpm"), source);
+        return (HostStore::Real(o.store), o.kind, profile);
+    }
+    #[cfg(not(target_os = "linux"))]
+    { let _ = identity_dir; (HostStore::Empty, Kind::None, String::new()) }
+}
+
+/// The identity agent and what it needs, behind ONE lock of its own: a host
+/// dialog is up while it is held, so the document and file commands (which take
+/// `Shared`) must not wait on it, and two prompts never stack.
+pub(crate) struct Ident {
+    pub calls: Calls<HostStore, SysClock>,
+    pub kind: Kind,
+    pub dir: PathBuf,
+    /// the keyring item set this host uses (rigs read it)
+    #[allow(dead_code)]
+    pub profile: String,
+}
+pub(crate) type IdentState = Mutex<Ident>;
 
 /// Rig builds only: milliseconds added to the clock, so the rig crosses the
 /// agent's one-hour idle and 24-hour overall limits without waiting for them.
@@ -235,7 +301,84 @@ async fn bento_file(app: tauri::AppHandle, webview: tauri::Webview, msg: String,
     reply(&id, r)
 }
 
-/// The identity calls (whoami, sign; unwrap, resolve and share are not built).
+/// PLACEHOLDER WORDING (maintainer to word). Host-drawn prompts: the person is
+/// the only one who can answer them, and the page can draw none of them.
+#[cfg_attr(feature = "rig", allow(dead_code))]
+const CONSENT_TITLE: &str = "Use your Bento ID?";
+#[cfg_attr(feature = "rig", allow(dead_code))]
+const REAUTH_TITLE: &str = "Confirm it's you";
+
+/// What the host shows for the identity calls. Real dialogs in a shipped build;
+/// in a rig build the answers are scripted and every prompt is logged and counted.
+struct HostUi<'a> {
+    app: &'a tauri::AppHandle,
+}
+impl Ui for HostUi<'_> {
+    fn consent(&mut self, doc_name: &str, who: &Binding) -> bool {
+        let text = format!(
+            "\u{201c}{doc_name}\u{201d} is asking who you are. If you allow it, it will see your name ({}), your address ({}) and who vouches for them ({}). It will not see your keys.",
+            who.name, who.email, who.vouched_by
+        );
+        eprintln!("PROMPT consent doc={doc_name:?}: {text}");
+        #[cfg(feature = "rig")]
+        { let _ = self.app; return rig::answer_consent() }
+        #[cfg(not(feature = "rig"))]
+        {
+            use tauri_plugin_dialog::{MessageDialogButtons, MessageDialogKind};
+            self.app
+                .dialog()
+                .message(text)
+                .title(CONSENT_TITLE)
+                .kind(MessageDialogKind::Info)
+                .buttons(MessageDialogButtons::OkCancelCustom("Share".into(), "Don't share".into()))
+                .blocking_show()
+        }
+    }
+    fn reauth(&mut self, doc_name: &str) -> bool {
+        let text = format!("\u{201c}{doc_name}\u{201d} needs to sign something for you, and it has been a while. Confirm to let Bento ID sign again.");
+        eprintln!("PROMPT reauth doc={doc_name:?}: {text}");
+        #[cfg(feature = "rig")]
+        { let _ = self.app; return rig::answer_reauth() }
+        #[cfg(not(feature = "rig"))]
+        {
+            use tauri_plugin_dialog::{MessageDialogButtons, MessageDialogKind};
+            self.app
+                .dialog()
+                .message(text)
+                .title(REAUTH_TITLE)
+                .kind(MessageDialogKind::Warning)
+                .buttons(MessageDialogButtons::OkCancelCustom("Confirm".into(), "Not now".into()))
+                .blocking_show()
+        }
+    }
+}
+
+/// PLACEHOLDER WORDING. Where the key lives in the Secret Service there is no
+/// hardware behind it, and the person is told once, the first time the identity
+/// is used on that store (security §26.3). The TPM store has nothing to confess
+/// beyond what its exposure line says, which the log carries.
+fn exposure_notice(app: &tauri::AppHandle, id: &Ident) {
+    if id.kind != Kind::SecretService { return }
+    let marker = id.dir.join("exposure-shown");
+    if marker.exists() { return }
+    eprintln!("NOTICE exposure ({}): {}", id.kind.name(), id.kind.exposure());
+    #[cfg(not(feature = "rig"))]
+    {
+        use tauri_plugin_dialog::{MessageDialogButtons, MessageDialogKind};
+        app.dialog()
+            .message(id.kind.exposure())
+            .title("Where your Bento ID key is kept")
+            .kind(MessageDialogKind::Warning)
+            .buttons(MessageDialogButtons::OkCustom("I understand".into()))
+            .blocking_show();
+    }
+    #[cfg(feature = "rig")]
+    let _ = app;
+    let _ = std::fs::create_dir_all(&id.dir);
+    let _ = std::fs::write(marker, b"1");
+}
+
+/// The identity calls (whoami, sign, resolve; unwrap and share are not built).
 /// Two gates in front of the agent, both HOST-side because Tauri cannot tell
 /// frames apart: this webview's capability, then `armed_genuine` (the bytes
 /// served for THIS load were genuine). An unknown document gets file commands
@@ -245,43 +388,52 @@ async fn bento_id(app: tauri::AppHandle, webview: tauri::Webview, msg: String, c
     let m: serde_json::Value = match serde_json::from_str(&msg) { Ok(m) => m, Err(_) => return String::new() };
     let id = m["id"].clone();
     let label = webview.label().to_string();
-    let state = app.state::<Shared>();
-    let mut guard = state.lock().unwrap();
-    let h = &mut *guard;
-    if let Err(e) = h.reg.check(&label, cap.as_deref()) {
-        eprintln!("IPC bento_id op={} id={id} webview={label} REFUSED: {e}", m["op"]);
-        return reply(&id, Err(e.into()));
-    }
-    if !cfg!(target_os = "linux") {
-        eprintln!("IPC bento_id op={} id={id} webview={label} REFUSED: unavailable (platform)", m["op"]);
-        return reply(&id, Err("unavailable".into()));
-    }
-    if !h.reg.loads.get(&label).map(|l| l.armed_genuine()).unwrap_or(false) {
-        eprintln!("IPC bento_id op={} id={id} webview={label} REFUSED: unavailable (not genuine)", m["op"]);
-        return reply(&id, Err("unavailable".into()));
-    }
-    let doc_id = h.docs.iter().find(|d| d.label == label).and_then(|d| origin::doc_id(&d.bytes));
+    let op = m["op"].as_str().unwrap_or("").to_string();
+    // The gates and the facts about the caller, under the document lock; the lock
+    // is released BEFORE anything can put a dialog on screen.
+    let (doc_id, doc_name) = {
+        let state = app.state::<Shared>();
+        let h = state.lock().unwrap();
+        if let Err(e) = h.reg.check(&label, cap.as_deref()) {
+            eprintln!("IPC bento_id op={op} id={id} webview={label} REFUSED: {e}");
+            return reply(&id, Err(e.into()));
+        }
+        if !cfg!(target_os = "linux") {
+            eprintln!("IPC bento_id op={op} id={id} webview={label} REFUSED: unavailable (platform)");
+            return reply(&id, Err("unavailable".into()));
+        }
+        if !h.reg.loads.get(&label).map(|l| l.armed_genuine()).unwrap_or(false) {
+            eprintln!("IPC bento_id op={op} id={id} webview={label} REFUSED: unavailable (not genuine)");
+            return reply(&id, Err("unavailable".into()));
+        }
+        let d = h.docs.iter().find(|d| d.label == label);
+        (d.and_then(|d| origin::doc_id(&d.bytes)), d.map(|d| d.name.clone()).unwrap_or_default())
+    };
     let caller = Caller { verified: true, doc_id };
+    let ident = app.state::<IdentState>();
+    let mut guard = ident.lock().unwrap();
+    let ig = &mut *guard;
     // bridge.js sends `id.<call>`; the bare names are the rig's own probe.
-    let r = match m["op"].as_str().map(|o| o.strip_prefix("id.").unwrap_or(o)) {
-        // No account can exist in this host yet (accounts, bindings and the
-        // consent prompt arrive with the real key store), so the honest answer
-        // is that nobody is signed in. Never a name, never a guess.
-        Some("whoami") => Err("no-identity".to_string()),
-        // Purpose-locked and session-bound inside the agent: a payload that
-        // does not match the purpose is `purpose`; past the idle or overall
-        // limit it is `reauth` until the person re-authenticates here.
-        Some("sign") => h
-            .agent
-            .sign(&caller, m["purpose"].as_str().unwrap_or(""), m["payload"].as_str().unwrap_or(""))
-            .map(|s| serde_json::json!({ "sig": s.sig, "pub": s.pub_key }))
-            .map_err(|r| r.as_str().to_string()),
-        // A key already in the room: this host holds no bindings yet, so no key
-        // is known. null is "unknown", the same answer for every key.
-        Some("resolve") => Ok(serde_json::Value::Null),
+    let r = match op.strip_prefix("id.").unwrap_or(&op) {
+        "whoami" | "sign" => {
+            if ig.calls.agent.device_pub().ok().flatten().is_some() { exposure_notice(&app, ig) }
+            let mut ui = HostUi { app: &app };
+            if op.ends_with("whoami") {
+                ig.calls.whoami(&caller, &doc_name, &mut ui).map_err(|r| r.as_str().to_string())
+            } else {
+                ig.calls
+                    .sign(&caller, &doc_name, m["purpose"].as_str().unwrap_or(""), m["payload"].as_str().unwrap_or(""), &mut ui)
+                    .map(|s| serde_json::json!({ "sig": s.sig, "pub": s.pub_key }))
+                    .map_err(|r| r.as_str().to_string())
+            }
+        }
+        // A key already in the room, from bindings this host already holds; never
+        // a prompt and never the network. null is "unknown", the same answer for
+        // every key and for a document the person has not allowed.
+        "resolve" => ig.calls.resolve(&caller, m["pub"].as_str().unwrap_or("")).map_err(|r| r.as_str().to_string()),
         _ => Err("unavailable".into()),
     };
-    eprintln!("IPC bento_id op={} id={id} webview={label} AGENT: {}", m["op"], match &r { Ok(_) => "ok".to_string(), Err(e) => e.clone() });
+    eprintln!("IPC bento_id op={op} id={id} webview={label} AGENT: {}", match &r { Ok(_) => "ok".to_string(), Err(e) => e.clone() });
     reply(&id, r)
 }
 
@@ -467,7 +619,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
 }
 #[cfg(feature = "rig")]
 fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
-    tauri::generate_handler![bento_arm, bento_file, bento_id, rig::rig_stash, rig::rig_done, rig::rig_recreate, rig::rig_session, rig::rig_skew]
+    tauri::generate_handler![bento_arm, bento_file, bento_id, rig::rig_stash, rig::rig_done, rig::rig_recreate, rig::rig_session, rig::rig_skew, rig::rig_answers, rig::rig_provision, rig::rig_counts]
 }
 
 fn data_dir() -> PathBuf {
@@ -506,10 +658,21 @@ fn main() {
     if docs.is_empty() { std::process::exit(1) }
     let count = docs.len();
 
+    let identity_dir = data_dir.join("identity");
+    let (store, kind, profile) = new_store(&identity_dir);
+    eprintln!("KEYSTORE {}: {}", kind.name(), kind.exposure());
+    let ident: IdentState = Mutex::new(Ident {
+        calls: Calls::new(Agent::new(store, SysClock, Policy::default()), identity_dir.join("identity.json")),
+        kind,
+        dir: identity_dir,
+        profile,
+    });
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .manage(Mutex::new(Host { docs, reg: Registry::default(), trust, salt, index, data_dir, agent: Agent::new(new_store(), SysClock, Policy::default()) }))
+        .manage(Mutex::new(Host { docs, reg: Registry::default(), trust, salt, index, data_dir: data_dir.clone() }))
+        .manage(ident)
         .register_uri_scheme_protocol("bento", |ctx, req| {
             let not_found = || http::Response::builder().status(404).body(Vec::new()).unwrap();
             let state = ctx.app_handle().state::<Shared>();
