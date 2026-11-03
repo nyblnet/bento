@@ -20,6 +20,11 @@ import {
   buildDreq, dreqArg, buildRot, type DreqSubject, type DreqOp,
   DISPLAY_FORBIDDEN_RANGES, DISPLAY_FORBIDDEN_UNICODE,
 } from '../kernel/src/statements.ts'
+import { publicKeyOf, packScalars } from '../kernel/src/recovery.ts'
+import {
+  linkSlot, linkTokHash, formatLinkCode, linkTranscript, linkKeys, sasDigits, sasMatches, buildMsg0, buildMsg1,
+  linkPopText, buildOffer, sealLinkMsg, linkAad, buildFinal, type LinkKeys, type LinkRole, type LinkOffer, type LinkFinal,
+} from '../kernel/src/link.ts'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const OUT = join(root, 'kernel/fixtures/identity-v1.json')
@@ -519,6 +524,217 @@ const addresses = [
 // (home-desktop found the gap: a late spend passed every row.)
 for (const r of rows) if (r.type === 'cns') r.spendCalled = !(r.expect === 'reject' && r.reason === 'grammar')
 
+// --- link v1: device linking (kernel/src/link.ts, security §39.1) -------------------
+// The derivations are DETERMINISTIC (fixed codes, ephemeral scalars, ivs and
+// account scalars), so a host reproduces the exact bytes; only the ECDSA
+// signatures inside msg2/msg3 are random, and those rows are judged by verdict.
+const link: Record<string, unknown> = {}
+{
+  const hex = (b: Uint8Array) => Buffer.from(b).toString('hex')
+  const te = new TextEncoder()
+  const scalar = async (label: string) => {
+    const d = new Uint8Array(await crypto.subtle.digest('SHA-256', te.encode(`bento/id/link/v1/test/${label}`)))
+    if (!publicKeyOf(d)) throw new Error(`scalar ${label} out of range`)
+    return d
+  }
+  const jwkOf = (d: Uint8Array) => { const raw = rawOf(publicKeyOf(d)!); return { kty: 'EC', crv: 'P-256', d: b64uEnc(d), x: b64uEnc(raw.slice(1, 33)), y: b64uEnc(raw.slice(33)), ext: true } }
+  const ecdh = async (label: string) => { const d = await scalar(label); return { d, pub: publicKeyOf(d)!, key: await crypto.subtle.importKey('jwk', jwkOf(d), { name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']) } }
+  const ecdsa = async (label: string) => { const d = await scalar(label); return { d, pub: publicKeyOf(d)!, key: await crypto.subtle.importKey('jwk', jwkOf(d), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']) } }
+  const iv = (b: number) => new Uint8Array(12).fill(b)
+  const keysHex = (k: LinkKeys) => ({ h2n: hex(k.h2n), n2h: hex(k.n2h) })
+
+  // the link code: the K2b format, then HKDF to the slot
+  const codes = []
+  for (const bytes of [Uint8Array.from({ length: 10 }, (_, i) => i * 25 + 7), new Uint8Array(10).fill(0xff), new Uint8Array(10)]) {
+    const s = await linkSlot(bytes)
+    codes.push({ codeHex: hex(bytes), printed: formatLinkCode(bytes), id: s.id, tok: s.tok, tokHash: await linkTokHash(s.tok), saltHex: hex(s.salt) })
+  }
+  link.codes = codes
+
+  // two honest sessions, one per displayer role; Z is the ECDH x-coordinate
+  const sessions = []
+  const session = async (name: string, code: Uint8Array, roleD: LinkRole) => {
+    const slot = await linkSlot(code)
+    const eD = await ecdh(`${name}/eD`), eS = await ecdh(`${name}/eS`)
+    const t = (await linkTranscript(slot.id, eD.pub, eS.pub, roleD))!
+    const z = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: await crypto.subtle.importKey('raw', rawOf(eS.pub), { name: 'ECDH', namedCurve: 'P-256' }, false, []) }, eD.key, 256))
+    const kD = (await linkKeys(eD.key, eS.pub, slot.salt, t))!, kS = (await linkKeys(eS.key, eD.pub, slot.salt, t))!
+    if (hex(kD.h2n) !== hex(kS.h2n) || kD.sas !== kS.sas) throw new Error('the two sides disagree')
+    sessions.push({ name, codeHex: hex(code), printed: formatLinkCode(code), roleD, eDScalarHex: hex(eD.d), eD: eD.pub, eSScalarHex: hex(eS.d), eS: eS.pub,
+      msg0: buildMsg0(eD.pub, roleD), msg1: buildMsg1(eS.pub), t, zHex: hex(z), ...keysHex(kD), sasKeyHex: hex(kD.sasKey), sas: kD.sas })
+    return { slot, t, keys: kD }
+  }
+  const A = await session('desktop H displays, phone N scans', Uint8Array.from({ length: 10 }, (_, i) => 0x11 * (i + 1)), 'H')
+  await session('desktop N displays, phone H scans', Uint8Array.from({ length: 10 }, (_, i) => 0xa0 + i), 'N')
+  link.sessions = sessions
+  const { t } = A, K = A.keys
+  const otherT = (await linkTranscript(A.slot.id, (await ecdh('x/eD')).pub, (await ecdh('x/eS')).pub, 'H'))!
+
+  // the SAS: first 4 bytes big-endian mod 10^6, zero-padded
+  const sasKeyOf = (first4: number[]) => { const b = new Uint8Array(32).fill(0x5a); b.set(first4); return b }
+  link.sas = [
+    [0, 0, 0, 0], [0xff, 0xff, 0xff, 0xff], [0x00, 0x0f, 0x42, 0x45], [0x00, 0x0f, 0x42, 0x3f], [0x3b, 0x9a, 0xca, 0x07], [0x80, 0, 0, 0],
+  ].map((f) => { const k = sasKeyOf(f); return { sasKeyHex: hex(k), sas: sasDigits(k) } })
+  link.sasMatch = [
+    { typed: '042195', sas: '042195', match: true },
+    { typed: '042 195', sas: '042195', match: true, note: 'spaces are ignored' },
+    { typed: '042-195', sas: '042195', match: true, note: 'a hyphen is ignored' },
+    { typed: '42195', sas: '042195', match: false, note: 'the leading zero is a digit' },
+    { typed: '042196', sas: '042195', match: false },
+    { typed: '０４２１９５', sas: '042195', match: false, note: 'full-width digits are not digits here' },
+    { typed: '0421950', sas: '042195', match: false },
+  ]
+  for (const r of link.sasMatch as { typed: string; sas: string; match: boolean }[]) if (sasMatches(r.typed, r.sas) !== r.match) throw new Error(`sasMatch ${r.typed}`)
+
+  link.roles = [
+    { roleD: 'H', scannerHoldsAccount: false, proceed: true, note: 'D holds the account; S is the new device' },
+    { roleD: 'N', scannerHoldsAccount: true, proceed: true, note: 'D is the new device; S holds the account' },
+    { roleD: 'H', scannerHoldsAccount: true, proceed: false, note: 'both claim the account' },
+    { roleD: 'N', scannerHoldsAccount: false, proceed: false, note: 'neither holds the account' },
+  ]
+
+  // msg0 / msg1 grammar
+  const eD = (sessions[0] as { eD: string }).eD
+  link.msgs = [
+    { name: 'msg0: an H displayer', msg: buildMsg0(eD, 'H'), expect: 'accept' },
+    { name: 'msg0: an N displayer', msg: buildMsg0(eD, 'N'), expect: 'accept' },
+    { name: 'msg0: a role outside H/N', msg: `lnk0.${eD}.X`, expect: 'reject', reason: 'grammar' },
+    { name: 'msg0: lowercase role', msg: `lnk0.${eD}.h`, expect: 'reject', reason: 'grammar' },
+    { name: 'msg0: an extra field', msg: `lnk0.${eD}.H.x`, expect: 'reject', reason: 'grammar' },
+    { name: 'msg0: a compressed point', msg: `lnk0.${compressed(eD)}.H`, expect: 'reject', reason: 'key' },
+    { name: 'msg0: a point off the curve', msg: `lnk0.${offCurve(eD)}.H`, expect: 'reject', reason: 'key' },
+    { name: 'msg1: an ephemeral', msg: buildMsg1(eD), expect: 'accept' },
+    { name: 'msg1: an extra field', msg: `lnk1.${eD}.H`, expect: 'reject', reason: 'grammar' },
+    { name: 'msg1: under the msg0 prefix', msg: `lnk0.${eD}`, expect: 'reject', reason: 'grammar' },
+    { name: 'msg1: a point off the curve', msg: `lnk1.${offCurve(eD)}`, expect: 'reject', reason: 'key' },
+    { name: 'msg1: a compressed point', msg: `lnk1.${compressed(eD)}`, expect: 'reject', reason: 'key' },
+  ].map((m) => ({ kind: m.name.slice(0, 4), ...m }))
+  link.reflected = { id: A.slot.id, eD, eS: eD, roleD: 'H', t: await linkTranscript(A.slot.id, eD, eD, 'H'), note: 'msg1 echoing E_D: no transcript' }
+
+  // --- msg2: N's offer ---------------------------------------------------------------
+  const nDevice = await ecdsa('N/device'), nConsent = await ecdsa('N/consent'), nKx = await ecdh('N/kx')
+  const offer: LinkOffer = { devicePub: nDevice.pub, consentPub: nConsent.pub, kx: nKx.pub, label: 'Pixel 9', platform: 'android' }
+  const pop = (k: KP, tt = t) => signStatement(k.key, linkPopText(tt))
+  const offerText = buildOffer(offer, await pop(nDevice), await pop(nConsent))
+  const msg2 = await sealLinkMsg(K, 2, t, iv(2), te.encode(offerText))
+  link.msg2 = { t, ...keysHex(K), ivHex: hex(iv(2)), aad: linkAad(t, 2), plaintext: offerText, wire: msg2 }
+  const offers: Record<string, unknown>[] = []
+  const of = (name: string, text: string, expect: 'accept' | 'reject', reason?: string) => offers.push({ name: `offer: ${name}`, t, text, expect, ...(reason ? { reason } : {}) })
+  of('an offer with a consent key', offerText, 'accept')
+  const light = { ...offer, consentPub: null, label: null, platform: 'extension' }
+  of('a light-tier offer (no consent key, no label)', buildOffer(light, await pop(nDevice), null), 'accept')
+  of('the device PoP over ANOTHER transcript', buildOffer(offer, await pop(nDevice, otherT), await pop(nConsent)), 'reject', 'pop-device')
+  of('the consent PoP over ANOTHER transcript', buildOffer(offer, await pop(nDevice), await pop(nConsent, otherT)), 'reject', 'pop-consent')
+  of('a consent key OFFERED WITHOUT ITS PoP', buildOffer(offer, await pop(nDevice), null), 'reject', 'pop-consent')
+  of('a consent PoP without a consent key', buildOffer(light, await pop(nDevice), await pop(nConsent)), 'reject', 'pop-consent')
+  of('the device PoP signed by the consent key', buildOffer(offer, await pop(nConsent), await pop(nConsent)), 'reject', 'pop-device')
+  of('a device key N does not hold (PoP by a stranger)', buildOffer(offer, await pop(stranger), await pop(nConsent)), 'reject', 'pop-device')
+  of('the consent key equal to the device key', buildOffer({ ...offer, consentPub: nDevice.pub }, await pop(nDevice), await pop(nDevice)), 'reject', 'consent-key')
+  of('the kx equal to the device key', buildOffer({ ...offer, kx: nDevice.pub }, await pop(nDevice), await pop(nConsent)), 'reject', 'kx')
+  of('no kx (mode C: per-device kx required)', buildOffer({ ...offer, kx: '' }, await pop(nDevice), await pop(nConsent)), 'reject', 'kx')
+  of('a kx off the curve', buildOffer({ ...offer, kx: offCurve(nKx.pub) }, await pop(nDevice), await pop(nConsent)), 'reject', 'kx')
+  of('a label with a bidi override', buildOffer({ ...offer, label: 'Pixel‮9' }, await pop(nDevice), await pop(nConsent)), 'reject', 'label')
+  of('a platform outside the token grammar', buildOffer({ ...offer, platform: 'Android' }, await pop(nDevice), await pop(nConsent)), 'reject', 'grammar')
+  of('an extra field', offerText + '.x', 'reject', 'grammar')
+  of('a high-S device PoP', buildOffer(offer, highS(await pop(nDevice)), await pop(nConsent)), 'reject', 'pop-device')
+  of('a DER device PoP', buildOffer(offer, der(await pop(nDevice)), await pop(nConsent)), 'reject', 'grammar')
+  link.offers = offers
+  const swapped = { h2n: K.n2h, n2h: K.h2n, sasKey: K.sasKey, sas: K.sas }
+  const wrongN = { h2n: K.n2h, n2h: K.n2h, sasKey: K.sasKey, sas: K.sas }
+  const tampered = (w: string) => { const b = rawOf(w); b[20] ^= 1; return b64uEnc(b) }
+  link.offerWire = [
+    { name: 'msg2 sealed under n2h as message 2', wire: msg2, expect: 'accept' },
+    { name: 'msg2 sealed under h2n (WRONG DIRECTION)', wire: await sealLinkMsg(swapped, 2, t, iv(2), te.encode(offerText)), expect: 'reject', reason: 'decrypt' },
+    { name: 'msg2 under n2h but with message number 3 in the AAD', wire: await sealLinkMsg(wrongN, 3, t, iv(2), te.encode(offerText)), expect: 'reject', reason: 'decrypt' },
+    { name: 'msg2 under ANOTHER transcript in the AAD', wire: await sealLinkMsg(K, 2, otherT, iv(2), te.encode(offerText)), expect: 'reject', reason: 'decrypt' },
+    { name: 'msg2 with one ciphertext bit flipped', wire: tampered(msg2), expect: 'reject', reason: 'decrypt' },
+  ].map((r) => ({ ...r, t, ...keysHex(K) }))
+
+  // --- msg3: H's completion ------------------------------------------------------------
+  const acct = await ecdsa('account'), rkxL = await ecdh('account/recovery-kx')
+  const bindText = buildBind({ address: 'alice@example.com', accountPub: acct.pub, kx: rkxL.pub, name: 'Alice', seq: 1, prev: null, created, expires })
+  const hDevice = await ecdsa('H/device'), hConsent = await ecdsa('H/consent'), hKx = await ecdh('H/kx')
+  const hCert = { devicePub: hDevice.pub, consentPub: hConsent.pub, accountPub: acct.pub, kx: hKx.pub, label: 'Laptop', created, expires }
+  const hDev = buildDev(hCert), hDevSig = await sign(acct, hDev)
+  const nCert = { devicePub: offer.devicePub, consentPub: offer.consentPub, accountPub: acct.pub, kx: offer.kx, label: offer.label, created: NOW - 1000, expires }
+  const nDev = buildDev(nCert), nDevSig = await sign(acct, nDev)
+  const blob = packScalars({ account: acct.d, kx: rkxL.d })
+  const sealed = await sealLinkMsg(K, 3, t, iv(3), blob)
+  const consentFor = async (payload: string, o: { audience?: string; challenge?: string; purpose?: string; exp?: number; by?: KP } = {}) => {
+    const c = buildConsent({ rp: 'bento', purpose: (o.purpose ?? 'link') as never, docId: null, transcript: (await consentTranscript(o.audience ?? 'dir', o.challenge ?? CHALLENGE, payload))!, exp: o.exp ?? NOW + 60_000 })
+    return { cns: c, cnsSig: await sign(o.by ?? hConsent, c) }
+  }
+  const honest: LinkFinal = { hDev, hDevSig, ...(await consentFor(nDev)), nDev, nDevSig, sealed }
+  const msg3 = buildFinal(honest)
+  link.bind = { text: bindText, sig: await sign(acct, bindText), accountScalarHex: hex(acct.d), kxScalarHex: hex(rkxL.d) }
+  link.msg3 = { t, ...keysHex(K), ivHex: hex(iv(3)), aad: linkAad(t, 3), sealedPlaintextHex: hex(blob), sealed, text: msg3 }
+
+  // the directory's release check
+  const release: Record<string, unknown>[] = []
+  const CHALLENGE2 = b64uEnc(new Uint8Array(24).fill(9))
+  const rl = (name: string, f: Partial<LinkFinal> | string, expect: 'accept' | 'reject', reason?: string, extra: Record<string, unknown> = {}) =>
+    release.push({ name: `release: ${name}`, text: typeof f === 'string' ? f : buildFinal({ ...honest, ...f }), bindText, state: 'active', challenge: CHALLENGE, ...extra, expect, ...(reason ? { reason } : {}) })
+  rl('the honest completion', {}, 'accept')
+  rl('REPLAY: the challenge was already spent', {}, 'reject', 'replay', { challengeSpent: true })
+  rl('a FROZEN binding releases nothing', {}, 'reject', 'state', { state: 'frozen' })
+  rl('a PENDING binding releases nothing', {}, 'reject', 'state', { state: 'pending' })
+  rl('RELAY: a cns. made for a room audience', await consentFor(nDev, { audience: `room:${ROOM}` }), 'reject', 'cns-transcript')
+  rl('a cns. made for ANOTHER CHALLENGE', await consentFor(nDev, { challenge: CHALLENGE2 }), 'reject', 'cns-transcript')
+  const tablet = buildDev({ ...nCert, label: 'Tablet' })
+  rl('PAYLOAD SWAP: the cns. covers another dev.', { ...(await consentFor(tablet)) }, 'reject', 'cns-transcript')
+  rl('the cns. signed by H\'s routine device key', await consentFor(nDev, { by: hDevice }), 'reject', 'cns-signature')
+  rl('a cns. with purpose rotate over the dev.', await consentFor(nDev, { purpose: 'rotate' }), 'reject', 'cns-payload-family')
+  rl('an EXPIRED cns.', {}, 'reject', 'cns-expired', { now: NOW + 120_000 })
+  const strangerAcct = await ecdsa('stranger-account')
+  const foreignH = buildDev({ ...hCert, accountPub: strangerAcct.pub })
+  rl('H is a device of ANOTHER account', { hDev: foreignH, hDevSig: await sign(strangerAcct, foreignH) }, 'reject', 'h-account')
+  const lightH = buildDev({ ...hCert, consentPub: null })
+  rl('a light-tier H (no consent key) cannot complete with a cns.', { hDev: lightH, hDevSig: await sign(acct, lightH) }, 'reject', 'h-no-consent')
+  rl('H\'s dev. not signed by the account key', { hDevSig: await sign(stranger, hDev) }, 'reject', 'h-dev-signature')
+  const foreignN = buildDev({ ...nCert, accountPub: strangerAcct.pub })
+  rl('N\'s dev. names ANOTHER account', { nDev: foreignN, nDevSig: await sign(strangerAcct, foreignN), ...(await consentFor(foreignN)) }, 'reject', 'n-account')
+  rl('N\'s dev. not signed by the account key', { nDevSig: await sign(stranger, nDev) }, 'reject', 'n-dev-signature')
+  rl('a sealed payload of a 32-byte (pre-mode-C) blob', { sealed: await sealLinkMsg(K, 3, t, iv(3), blob.slice(0, 32)) }, 'reject', 'grammar')
+  rl('an extra line', msg3 + '\nx', 'reject', 'grammar')
+  rl('an empty line', msg3.replace('\n', '\n\n').split('\n').slice(0, 8).join('\n'), 'reject', 'grammar')
+  rl('a cns. with an extra field', { cns: honest.cns + '.x' }, 'reject', 'grammar')
+  rl('CRLF line ends', msg3.replace(/\n/g, '\r\n'), 'reject', 'grammar')
+  rl('a space inside a line', { hDev: hDev.replace('.', '. ') }, 'reject', 'grammar')
+  rl('a control character inside a line', { nDev: nDev + '\t' }, 'reject', 'grammar')
+  rl('a non-ASCII character inside a line', { hDev: hDev + '\u00e9' }, 'reject', 'grammar')
+  rl('a MALFORMED served binding', {}, 'reject', 'bind', { bindText: bindText.replace(/^bind\./, 'bind.x.') })
+  rl('a served binding that is not a bind. at all', {}, 'reject', 'bind', { bindText: 'garbage' })
+  const sameAsH = buildDev({ ...nCert, devicePub: hDevice.pub })
+  const sameAsHSig = await sign(acct, sameAsH)
+  rl("N's dev. names H's OWN devicePub", { nDev: sameAsH, nDevSig: sameAsHSig, ...(await consentFor(sameAsH)) }, 'reject', 'n-device-is-h')
+  for (const r of release) r.spendCalled = r.reason !== 'grammar'
+  link.release = release
+
+  // N's final check
+  const finals: Record<string, unknown>[] = []
+  const binding = { accountPub: acct.pub, kxPub: rkxL.pub }
+  const fn = (name: string, f: Partial<LinkFinal>, expect: 'accept' | 'reject', reason?: string, extra: Record<string, unknown> = {}) =>
+    finals.push({ name: `final: ${name}`, text: buildFinal({ ...honest, ...f }), t, ...keysHex(K), offer, binding, ...extra, expect, ...(reason ? { reason } : {}) })
+  const reissue = async (c: typeof nCert) => { const d = buildDev(c); return { nDev: d, nDevSig: await sign(acct, d) } }
+  fn('the honest completion', {}, 'accept')
+  fn('the dev. names ANOTHER devicePub', await reissue({ ...nCert, devicePub: stranger.pub }), 'reject', 'device-mismatch')
+  fn('the dev. names ANOTHER consentPub', await reissue({ ...nCert, consentPub: consent.pub }), 'reject', 'consent-mismatch')
+  fn('the dev. DROPS the consent key N offered', await reissue({ ...nCert, consentPub: null }), 'reject', 'consent-mismatch')
+  fn('the dev. names ANOTHER kx', await reissue({ ...nCert, kx: phoneKx }), 'reject', 'kx-mismatch')
+  fn('the dev. is under ANOTHER account than the pinned binding', { nDev: foreignN, nDevSig: await sign(strangerAcct, foreignN) }, 'reject', 'account')
+  fn('the dev. has expired', {}, 'reject', 'dev-expired', { now: expires + 1 })
+  fn('SEALED under n2h (WRONG DIRECTION)', { sealed: await sealLinkMsg(swapped, 3, t, iv(3), blob) }, 'reject', 'decrypt')
+  fn('SEALED under ANOTHER transcript', { sealed: await sealLinkMsg(K, 3, otherT, iv(3), blob) }, 'reject', 'decrypt')
+  fn('SEALED as message 2', { sealed: await sealLinkMsg({ ...K, n2h: K.h2n }, 2, t, iv(3), blob) }, 'reject', 'decrypt')
+  const other = await ecdsa('stranger-account-2')
+  fn('SEALED scalars of ANOTHER account key', { sealed: await sealLinkMsg(K, 3, t, iv(3), packScalars({ account: other.d, kx: rkxL.d })) }, 'reject', 'key-mismatch')
+  fn('SEALED with ANOTHER recovery kx scalar', { sealed: await sealLinkMsg(K, 3, t, iv(3), packScalars({ account: acct.d, kx: nKx.d })) }, 'reject', 'key-mismatch')
+  fn('a space inside a line', { nDev: nDev.replace('.', '. ') }, 'reject', 'grammar')
+  fn('a control character inside a line', { hDev: hDev + '\u0000' }, 'reject', 'grammar')
+  fn('SEALED with a zero scalar', { sealed: await sealLinkMsg(K, 3, t, iv(3), new Uint8Array(64)) }, 'reject', 'scalar-range')
+  link.final = finals
+}
+
 const fixture = {
   version: 1,
   note: 'bento/id conformance vectors. TEST KEYS ONLY — never use them for anything real. ' +
@@ -532,6 +748,7 @@ const fixture = {
   dreq: dreqRows,
   rot: rotRows,
   dreqConsent: dreqConsentRows,
+  link,
   transcripts,
   webauthn,
   lowS: lowSPairs,
@@ -542,4 +759,4 @@ const fixture = {
 }
 mkdirSync(dirname(OUT), { recursive: true })
 writeFileSync(OUT, JSON.stringify(fixture, null, 2) + '\n')
-console.log(`wrote ${OUT}: ${rows.length} statement rows, ${dreqRows.length} dreq, ${rotRows.length} rot, ${dreqConsentRows.length} dreq consent rows, ${addresses.length} address rows, ${purposes.length} purpose rows`)
+console.log(`wrote ${OUT}: ${rows.length} statement rows, ${dreqRows.length} dreq, ${rotRows.length} rot, ${dreqConsentRows.length} dreq consent rows, link: ${(link.offers as unknown[]).length} offer, ${(link.release as unknown[]).length} release, ${(link.final as unknown[]).length} final rows, ${addresses.length} address rows, ${purposes.length} purpose rows`)

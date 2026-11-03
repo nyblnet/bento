@@ -119,7 +119,8 @@ export function displayForbidden(cp        )          {
   return false
 }
 const ZWNJ = 0x200c, ZWJ = 0x200d
-function displayText(f        )                {
+/** A display-text FIELD (base64url of UTF-8) → the text, or null if refused. */
+export function displayText(f        )                {
   const t = freeText(f)
   if (t === null || t.length === 0) return null
   const cps = [...t].map((c) => c.codePointAt(0) )
@@ -351,7 +352,7 @@ export function buildBind(c          )         {
 /** The grammar of a bind. text, without its lifetime or signature: shared by
  *  verifyBind and verifyRotation (which must read the PINNED binding even after
  *  it has expired). */
-async function parseBind(text        )                             {
+export async function parseBind(text        )                             {
   const p = fields(text, 'bind', 9)
   if (!p) return no('grammar')
   const [, addressF, accountPub, kxF, nameF, seqF, prevF, createdF, expiresF] = p
@@ -821,6 +822,14 @@ export const webauthnChallengeFor = (cnsText        )                  => sha256
  *           device keys (security §25b).
  */
 export const RESERVED_PREFIXES                    = Object.freeze(['pk', 'drev'])
+
+/**
+ * Prefixes taken by device linking (link.ts, link v1). None is a statement the
+ * account key signs, but each is a byte layout every agent must agree on, so no
+ * statement family may ever take one: lnk0–lnk3 are the four slot messages,
+ * lnkt the transcript, lnkp the proof of possession, lnka the AEAD's AAD.
+ */
+export const LINK_PREFIXES                    = Object.freeze(['lnk0', 'lnk1', 'lnk2', 'lnk3', 'lnkt', 'lnkp', 'lnka'])
 
 // --- routine signing: what payload each SignPurpose (identity.ts) may sign ----
 
