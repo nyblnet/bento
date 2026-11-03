@@ -12,6 +12,7 @@ import { defaultShape, internAsset, readableInk, uid, type ShapeElement, type Sl
 import { estimatedFrames, fencedElements, splitFences, toggleCodeOnSelection, type FencePart, type PartFrame } from './codefence'
 import { cssColor, renderSlide, sanitizeHtml } from '../render'
 import { autoformatAtCaret, autolinkAtCaret, clearAutoformat, markdownToHtml, stripMarkerEscapes, undoAutoformat } from './markdown'
+import { enterInEmptyNested } from './typedlist'
 import { inList, shiftList, shiftListHtml, undoIndent } from './listindent'
 import { bulletsToLists } from './bullets'
 import { clipboardToHtml } from './paste'
@@ -1552,6 +1553,7 @@ export class SlideCanvas {
     // text converts the same patterns
     inner.addEventListener('beforeinput', (ev) => {
       // Enter finishes a typed URL the way a space does
+      if (ev.inputType === 'insertParagraph' && enterInEmptyNested(inner)) { ev.preventDefault(); return }
       if (ev.inputType === 'insertParagraph' || ev.inputType === 'insertLineBreak') autolinkAtCaret(false)
     }, { signal })
     inner.addEventListener('input', () => {

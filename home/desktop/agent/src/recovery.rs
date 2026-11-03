@@ -10,7 +10,7 @@
 // `Zeroizing` so they are wiped when dropped (§26b: plaintext key material
 // lives only for the prompted use).
 
-use crate::{b64u, statements::KxMode};
+use crate::b64u;
 use aes_gcm::{aead::{Aead, KeyInit, Payload}, Aes256Gcm, Nonce};
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
@@ -270,26 +270,22 @@ pub fn prf_kek(prf_output: &[u8], salt: &[u8]) -> Secret {
 
 // --- blob plaintext: raw private scalars, checked on import ------------------------
 
-fn blob_kx(mode: KxMode) -> bool {
-    matches!(mode, KxMode::A | KxMode::C)
-}
+/// The blob's plaintext is always 64 bytes: account d ‖ recovery kx d (kx
+/// placement mode C, identity-design §6b). A 32-byte account-only blob, which
+/// every pre-C enrolment sealed, is refused.
+pub const BLOB_LEN: usize = 64;
 
 pub struct BlobKeys {
     pub account: Zeroizing<[u8; 32]>,
-    pub kx: Option<Zeroizing<[u8; 32]>>,
+    /// the RECOVERY kx scalar (the bind. kx slot's); required
+    pub kx: Zeroizing<[u8; 32]>,
 }
 
-pub fn pack_scalars(keys: &BlobKeys, mode: KxMode) -> Secret {
-    match (blob_kx(mode), &keys.kx) {
-        (false, None) => Zeroizing::new(keys.account.to_vec()),
-        (true, Some(kx)) => {
-            let mut v = Zeroizing::new(keys.account.to_vec());
-            v.extend_from_slice(&kx[..]);
-            v
-        }
-        (false, Some(_)) => panic!("this kx mode carries no kx in the blob"),
-        (true, None) => panic!("this kx mode needs a kx in the blob"),
-    }
+pub fn pack_scalars(keys: &BlobKeys) -> Secret {
+    let mut v = Zeroizing::new(Vec::with_capacity(BLOB_LEN));
+    v.extend_from_slice(&keys.account[..]);
+    v.extend_from_slice(&keys.kx[..]);
+    v
 }
 
 /// d·G as a raw uncompressed point, base64url; None when d is 0 or ≥ n.
@@ -305,20 +301,20 @@ fn public_of(d: &[u8]) -> Option<String> {
     Some(b64u::enc(sk.public_key().to_sec1_point(false).as_bytes()))
 }
 
-/// Check a blob's plaintext before anything uses it: the right length for the
-/// mode, every scalar in 1..n−1, and each one's public half equal to the
-/// directory-signed one. A swapped blob fails closed here.
-pub fn unpack_scalars(pt: &[u8], account_pub: &str, kx_pub: Option<&str>, mode: KxMode) -> Result<BlobKeys, &'static str> {
-    let with_kx = blob_kx(mode);
-    if pt.len() != if with_kx { 64 } else { 32 } {
+/// Check a blob's plaintext before anything uses it: exactly BLOB_LEN bytes,
+/// both scalars in 1..n−1, and each one's public half equal to the
+/// directory-signed one (the account key, the binding's recovery kx). A swapped
+/// blob fails closed here.
+pub fn unpack_scalars(pt: &[u8], account_pub: &str, kx_pub: &str) -> Result<BlobKeys, &'static str> {
+    if pt.len() != BLOB_LEN {
         return Err("length");
     }
     let mut out = vec![];
-    for (i, want) in [Some(account_pub), kx_pub].iter().take(if with_kx { 2 } else { 1 }).enumerate() {
+    for (i, want) in [account_pub, kx_pub].iter().enumerate() {
         let d = &pt[i * 32..i * 32 + 32];
         // range first (1..n−1), as the reference
         let pub_d = public_of(d).ok_or("scalar-range")?;
-        if *want != Some(pub_d.as_str()) {
+        if *want != pub_d.as_str() {
             return Err("key-mismatch");
         }
         let mut s = Zeroizing::new([0u8; 32]);
@@ -326,7 +322,7 @@ pub fn unpack_scalars(pt: &[u8], account_pub: &str, kx_pub: Option<&str>, mode: 
         out.push(s);
     }
     let mut it = out.into_iter();
-    Ok(BlobKeys { account: it.next().unwrap(), kx: it.next() })
+    Ok(BlobKeys { account: it.next().unwrap(), kx: it.next().unwrap() })
 }
 
 // --- AES-256-GCM ------------------------------------------------------------------------
@@ -359,10 +355,10 @@ pub struct PrfBlob {
     pub ct: String,
 }
 
-pub fn seal_prf_blob(prf_output: &[u8], credential_id: &[u8], salt: &[u8], iv: &[u8], keys: &BlobKeys, mode: KxMode) -> PrfBlob {
+pub fn seal_prf_blob(prf_output: &[u8], credential_id: &[u8], salt: &[u8], iv: &[u8], keys: &BlobKeys) -> PrfBlob {
     let cred = sha256_b64u(credential_id);
     let kek = prf_kek(prf_output, salt);
-    let ct = gcm_seal(&kek, iv, &format!("bento/id/acct-wrap/v1.{cred}"), &pack_scalars(keys, mode));
+    let ct = gcm_seal(&kek, iv, &format!("bento/id/acct-wrap/v1.{cred}"), &pack_scalars(keys));
     PrfBlob { v: 1, cred, salt: b64u::enc(salt), iv: b64u::enc(iv), ct: b64u::enc(&ct) }
 }
 
@@ -371,8 +367,7 @@ pub fn open_prf_blob(
     prf_output: &[u8],
     credential_id: &[u8],
     account_pub: &str,
-    kx_pub: Option<&str>,
-    mode: KxMode,
+    kx_pub: &str,
 ) -> Result<BlobKeys, &'static str> {
     if blob.v != 1 {
         return Err("version");
@@ -387,13 +382,13 @@ pub fn open_prf_blob(
         return Err("grammar");
     }
     let pt = gcm_open(&prf_kek(prf_output, &salt), &iv, &format!("bento/id/acct-wrap/v1.{cred}"), &ct).ok_or("decrypt")?;
-    unpack_scalars(&pt, account_pub, kx_pub, mode)
+    unpack_scalars(&pt, account_pub, kx_pub)
 }
 
 // --- the recovery-code blob, and the directory's pepper layer -------------------------
 
-pub fn seal_recovery_inner(wrap_key: &[u8], iv: &[u8], account_pub: &str, keys: &BlobKeys, mode: KxMode) -> Vec<u8> {
-    gcm_seal(wrap_key, iv, &format!("bento/id/rc-wrap/v1.{}", account_tag(account_pub)), &pack_scalars(keys, mode))
+pub fn seal_recovery_inner(wrap_key: &[u8], iv: &[u8], account_pub: &str, keys: &BlobKeys) -> Vec<u8> {
+    gcm_seal(wrap_key, iv, &format!("bento/id/rc-wrap/v1.{}", account_tag(account_pub)), &pack_scalars(keys))
 }
 
 pub fn open_recovery_inner(
@@ -401,11 +396,10 @@ pub fn open_recovery_inner(
     wrap_key: &[u8],
     iv: &[u8],
     account_pub: &str,
-    kx_pub: Option<&str>,
-    mode: KxMode,
+    kx_pub: &str,
 ) -> Result<BlobKeys, &'static str> {
     let pt = gcm_open(wrap_key, iv, &format!("bento/id/rc-wrap/v1.{}", account_tag(account_pub)), ct).ok_or("decrypt")?;
-    unpack_scalars(&pt, account_pub, kx_pub, mode)
+    unpack_scalars(&pt, account_pub, kx_pub)
 }
 
 /// The directory's per-account pepper keys (server side; here so the vectors

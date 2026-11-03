@@ -39,10 +39,15 @@ bytes end to end. Reference: `kernel/src/recovery.ts`. Rig:
   string.
 - **HKDF salt "empty" means zero-length** (equivalent to 32 zero bytes). AES-GCM
   ciphertexts are `ciphertext ‖ 16-byte tag` with a 12-byte IV.
-- **Blob plaintext** is raw 32-byte big-endian private scalars: the account
-  scalar alone while kx is unruled, or with kx appended under modes A and C. On
-  import, each scalar must be in 1..n−1 AND its public point d·G must equal the
-  public key in the directory-signed binding. A swapped blob fails closed.
+- **Blob plaintext is exactly 64 bytes**: the account scalar ‖ the RECOVERY kx
+  scalar, each 32 bytes big-endian (kx placement mode C). On import, the length
+  must be 64, each scalar must be in 1..n−1, AND each one's public point d·G
+  must equal its public key in the directory-signed binding: the account key,
+  and the binding's kx slot. A swapped blob fails closed. A 32-byte
+  account-only plaintext (what every pre-C enrolment sealed) is REFUSED with
+  `length`; never read it as a partial key set. `blobs.*.wrongLength` carries
+  blobs of 32, 63, 65 and 96 bytes sealed under the right key and aad: each
+  must decrypt and then be refused on length.
 - **The PRF input is the UTF-8 bytes of `bento/id/prf/v1`.** A host that
   speaks CTAP `hmac-secret` directly, with no WebAuthn PRF API (libfido2 on
   desktop), must send `prf.hmacSecretSalt`: SHA-256("WebAuthn PRF" ‖ 0x00 ‖
@@ -68,7 +73,7 @@ bytes end to end. Reference: `kernel/src/recovery.ts`. Rig:
 
 - `statements`: one row per case. `type` names the verifier. `text` and `sig`
   are what arrives. The other fields are what the VERIFIER brings: its `now`,
-  `kxMode`, the `bindText` it holds, and for `cns` its own `rp`, `audience`,
+  the `bindText` it holds, and for `cns` its own `rp`, `audience`,
   `challenge`, `payloadText` and `docId`. `challengeSpent: true` means its
   challenge book has already seen that challenge.
 - `transcripts`: the consent channel binding (security §24), including the
@@ -146,10 +151,68 @@ refuses an unknown row type keeps passing until it adopts them.
   `spendCalled`: assert your spend callback was (or was not) invoked. A port
   that spends late passes every verdict and fails these. (home-desktop found the
   gap.)
-- **kx placement is unruled** (identity-design §6b). Both the `bind.` and the
-  `dev.` kx slots must be EMPTY in the default mode. Rows with `kxMode` A, B or C
-  show the format the ruling will select.
+- **kx placement is mode C** (identity-design §6b, ruled 2026-11-02; the
+  fixture's top-level `kxMode`). Every `dev.` carries that device's own kx and
+  every `bind.` carries the account's recovery kx: both slots are REQUIRED. An
+  empty slot, a value that is not an uncompressed P-256 point, or one equal to a
+  signing key of the same certificate is refused with `kx`. There is no other
+  mode: no row carries `kxMode`, and a host must not keep a switch that accepts
+  an empty slot or a 32-byte blob. Enrolments made before the ruling (no kx,
+  32-byte blobs) are test enrolments: DISCARD them, never migrate.
 - **The consent key is per use on Android** (measured by home-android on the
   emulator): one BiometricPrompt authorises exactly one signature, and the
   Keystore, not the UI, refuses a second. Residency in the TEE or StrongBox still
   needs a real phone.
+
+## `link`: device linking, link v1
+
+Reference: `kernel/src/link.ts`. Rig: `scripts/test-link.ts` (and
+`scripts/test-link-mutants.ts`). The derivation rows are DETERMINISTIC (fixed
+codes, ephemeral scalars, ivs and account scalars), so reproduce them byte for
+byte. Only the ECDSA signatures inside msg2 and msg3 are random; those rows are
+judged by verdict, like the statement rows.
+
+- `codes`: code bytes → printed form (the recovery-code format), the slot `id`,
+  `tok`, `tokHash` (SHA-256 of the token's 32 bytes) and `salt`, each by
+  HKDF-SHA-256 with an EMPTY salt and info `bento/id/link/v1/{id,tok,salt}`.
+- `sessions`: two honest runs, one per displayer role. From the two ephemeral
+  scalars: msg0, msg1, the transcript `t`, Z (the ECDH x-coordinate),
+  `h2n`, `n2h`, the SAS key and the SAS. `t` is base64url; HKDF infos append it
+  as text: `bento/id/link/v1/h2n.` ‖ t.
+- `sas`: SAS key → 6 digits (first 4 bytes big-endian, mod 1,000,000,
+  zero-padded). `sasMatch`: what a person typed vs the SAS; only spaces and
+  hyphens are ignored, and full-width digits are not digits.
+- `roles`: whether the scanner may proceed, from the displayer's claimed role
+  and whether the scanner holds an account.
+- `msgs`: msg0/msg1 grammar (`kind` names the parser). `reflected`: E_S = E_D
+  gets no transcript.
+- `msg2`: the exact ciphertext of an offer: key `n2h`, iv, AAD
+  `lnka.v1.<t>.2`, plaintext → wire (base64url of iv ‖ ciphertext ‖ tag).
+- `offers`: the offer plaintext as H checks it (`verifyOffer`), including the
+  proofs of possession over `lnkp.v1.<t>`. `offerWire`: opening msg2 under the
+  wrong direction's key, the wrong message number or another transcript must
+  fail to decrypt.
+- `bind` and `msg3`: the account binding, the released scalars, and the exact
+  SEALED ciphertext (key `h2n`, AAD `lnka.v1.<t>.3`, plaintext = the 64-byte
+  account blob).
+- `release`: the DIRECTORY's check before it hands msg3 to N
+  (`verifyLinkRelease`). The verifier brings `bindText` (the binding it serves),
+  its `state`, the `challenge` it issued and whether that challenge is already
+  spent. Every row carries `spendCalled`: every refusal before the spend is
+  `grammar`, everything after it has consumed the challenge. A malformed
+  served binding is `bind` (after the spend), never a crash; N's dev. naming
+  H's own devicePub is `n-device-is-h`. Every msg3 line is printable ASCII
+  0x21–0x7E: a space, a control or a non-ASCII byte in any line is `grammar`.
+- `final`: N's check of msg3 (`openFinal`), given what it offered (`offer`) and
+  the binding's public halves (`binding`, from a pinned directory key).
+
+Host port notes for link v1:
+
+- Verifiers answer every row; none may throw. A malformed input is a refusal
+  with a reason.
+- The platform field is shown through a FIXED map of known tokens. A token the
+  host does not know is shown as unknown, never presented as verified.
+- After linking, N shows the label H wrote into N's dev., not the one N
+  offered.
+- Each direction key seals exactly ONE message (n2h message 2, h2n message 3).
+  A retry is a new slot with a new code, never a second message under a key.
