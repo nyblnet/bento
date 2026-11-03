@@ -102,6 +102,12 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-home-id-recovery-flow.mjs
 
+    - name: home/ios bento/connect setup rig
+      # The setup flow driven end to end against a local directory under wrangler
+      # dev. Skips (reasoned, ALLOWED_SKIPS) where wrangler or the directory is absent.
+      shell: bento-step {0}
+      run: node scripts/test-home-id-setup.mjs
+
     - name: home/ios Spotlight rig
       # What the system search index holds for a document and keeping it current
       # after a save: replaced at once, delete-before-add when sealed, and

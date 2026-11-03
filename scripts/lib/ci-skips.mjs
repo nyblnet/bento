@@ -87,6 +87,11 @@ export const ALLOWED_SKIPS = [
     why: 'the bento/id Swift core needs CryptoKit and Security, Apple platforms only (see test-tray-releases)',
   })),
   {
+    rig: 'scripts/test-home-id-setup.mjs',
+    line: /home id setup: SKIPPED/,
+    why: 'drives the real Swift against a local `wrangler dev` of server/directory, which CI does not install (no network install from a rig) and which is not in this tree until the directory PR lands; run by hand with BENTO_WRANGLER, see the rig header',
+  },
+  {
     rig: 'scripts/test-home-spotlight.mjs',
     line: /home spotlight: SKIPPED — needs an Apple toolchain/,
     when: notMac,
