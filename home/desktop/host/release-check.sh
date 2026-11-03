@@ -22,12 +22,13 @@ for a in ${BENTO_APPS:-slides}; do
   mkdir -p "releases/$a"
   curl -fsS -o "releases/$a/history.json" "$BASE/$a/history.json"
   curl -fsS -o "releases/$a/manifest.json" "$BASE/$a/manifest.json"
-  shell=$(python3 -c "import json,sys;print(json.loads(json.load(open(sys.argv[1]))['payload'])['url'].rsplit('/',1)[1])" "releases/$a/manifest.json")
+  shell=$("${PY:-python3}" -c "import json,sys;print(json.loads(json.load(open(sys.argv[1]))['payload'])['url'].rsplit('/',1)[1])" "releases/$a/manifest.json")
   curl -fsS -o "releases/$a/$shell" "$BASE/$a/$shell"
   ( cd ../hostcore && cargo run -q --example release_check -- "../host/releases/$a" )
 done
 env -u BENTO_HISTORIES_DIR cargo build -q $FLAG
 BIN="target/$PROFILE/bento-home-desktop"
+[ -f "$BIN" ] || BIN="$BIN.exe" # Windows
 ./gate-binary.sh "$BIN" || exit 1
 n=$(find releases -name 'history.json' | wc -l | tr -d ' ')
 echo "release check passed: $n app history(ies) bundled into $BIN"

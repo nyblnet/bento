@@ -7,7 +7,13 @@
 # page is served from a loopback port of its own (see below), never a third party.
 set -u
 cd "$(dirname "$0")/.."
+# Windows (Git Bash on a hosted windows-latest runner, WebView2): the same rigs,
+# with the platform differences named here and nowhere else. WIN=1 selects them.
+WIN=0; PY=python3
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) WIN=1; PY=python; export MSYS2_ARG_CONV_EXCL='*' ;; esac
+export PY
 OUT=${1:-/tmp/h2-rig}
+[ "$WIN" = 1 ] && { mkdir -p "$OUT"; OUT=$(cygpath -m "$OUT"); }
 rm -rf "$OUT"; mkdir -p "$OUT/fix"
 # Histories: the corpus's (test key, rig builds only) and the REAL slides
 # release frozen in the corpus (home/fixtures/gate1/real/slides-1.2.10, signed
@@ -36,33 +42,47 @@ mkcert() { # prefix
     -addext "subjectAltName=IP:127.0.0.1,DNS:localhost" -keyout "$OUT/$1.key" -out "$OUT/$1.crt" 2>/dev/null \
     || { echo "FAIL: openssl cannot make the $1 certificate" >&2; exit 1; }
 }
-freeport() { python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1])'; }
+freeport() { $PY -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1])'; }
 mkcert embed; mkcert rogue
 PORT=$(freeport); RPORT=$(freeport)
-python3 rig/embedsrv.py "$OUT/embedsrv" "$OUT/embed.crt" "$OUT/embed.key" "$PORT" >/dev/null 2>"$OUT/embed-server.log" &
+$PY rig/embedsrv.py "$OUT/embedsrv" "$OUT/embed.crt" "$OUT/embed.key" "$PORT" >/dev/null 2>"$OUT/embed-server.log" &
 EMBED_PID=$!
-python3 rig/embedsrv.py "$OUT/embedsrv" "$OUT/rogue.crt" "$OUT/rogue.key" "$RPORT" >/dev/null 2>"$OUT/rogue-server.log" &
+$PY rig/embedsrv.py "$OUT/embedsrv" "$OUT/rogue.crt" "$OUT/rogue.key" "$RPORT" >/dev/null 2>"$OUT/rogue-server.log" &
 ROGUE_PID=$!
 trap 'kill $EMBED_PID $ROGUE_PID 2>/dev/null' EXIT
 export BENTO_RIG_EMBED_URL="https://127.0.0.1:$PORT/embed.html"
 export BENTO_RIG_ROGUE_URL="https://127.0.0.1:$RPORT/embed.html"
 export BENTO_RIG_EMBED_CERT="$OUT/embed.crt"
-for i in $(seq 1 50); do curl -fsS --cacert "$OUT/embed.crt" -o "$OUT/embed-preflight.html" -D "$OUT/embed-preflight.hdr" "$BENTO_RIG_EMBED_URL" 2>/dev/null && break; sleep 0.2; done
+CURL="curl"
+if [ "$WIN" = 1 ]; then
+  CURL="curl --ssl-no-revoke"
+  # WebView2 has no per-context certificate hook in the host: Chromium's own
+  # switch trusts ONE certificate by its public-key hash, for the rig's browser
+  # processes only (an environment variable, so no rig code is in the binary).
+  # The rogue server's certificate has a different key, so it stays refused.
+  SPKI=$(openssl x509 -in "$OUT/embed.crt" -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl base64)
+  [ -n "$SPKI" ] || { echo "FAIL: cannot hash the embed certificate's public key" >&2; exit 1; }
+  export WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS="--ignore-certificate-errors-spki-list=$SPKI"
+  WV2=$(powershell -NoProfile -ExecutionPolicy Bypass -File rig/wv2version.ps1 | tr -d '\r') || exit 1
+  echo "WebView2 runtime: $WV2"
+fi
+for i in $(seq 1 50); do $CURL -fsS --cacert "$OUT/embed.crt" -o "$OUT/embed-preflight.html" -D "$OUT/embed-preflight.hdr" "$BENTO_RIG_EMBED_URL" 2>/dev/null && break; sleep 0.2; done
 if ! grep -q "rig-embed-fixture" "$OUT/embed-preflight.html" 2>/dev/null || ! grep -qi '^content-type: text/html' "$OUT/embed-preflight.hdr" 2>/dev/null; then
   echo "FAIL: the embed fixture is not being served as text/html at $BENTO_RIG_EMBED_URL" >&2; exit 1
 fi
 # the rogue server must be ALIVE (its own certificate verifies with its own cert), or "refused" below proves nothing
-for i in $(seq 1 50); do curl -fsS --cacert "$OUT/rogue.crt" -o "$OUT/rogue-preflight.html" "$BENTO_RIG_ROGUE_URL?preflight" 2>/dev/null && break; sleep 0.2; done
+for i in $(seq 1 50); do $CURL -fsS --cacert "$OUT/rogue.crt" -o "$OUT/rogue-preflight.html" "$BENTO_RIG_ROGUE_URL?preflight" 2>/dev/null && break; sleep 0.2; done
 grep -q "rig-embed-fixture" "$OUT/rogue-preflight.html" 2>/dev/null || { echo "FAIL: the rogue-certificate server is not serving at $BENTO_RIG_ROGUE_URL" >&2; exit 1; }
 # the two certificates really differ
 [ "$(openssl x509 -in "$OUT/embed.crt" -noout -fingerprint -sha256)" != "$(openssl x509 -in "$OUT/rogue.crt" -noout -fingerprint -sha256)" ] || { echo "FAIL: the rogue certificate is the trusted one" >&2; exit 1; }
 echo "embed fixture served at $BENTO_RIG_EMBED_URL (rogue-certificate twin at $BENTO_RIG_ROGUE_URL)"
 BENTO_HISTORIES_DIR="$OUT/hist" cargo build -q --features rig || exit 1
 BIN=target/debug/bento-home-desktop
+[ "$WIN" = 1 ] && BIN=$BIN.exe
 # POSITIVE CONTROL for the release gate: the binary just built has the test-only TLS trust
 # in it, so the same check release-check.sh runs on a shipped build MUST fail here.
 if ./gate-binary.sh "$BIN" >"$OUT/gate-control.txt" 2>&1; then echo "gate-control PASSED a rig build" >>"$OUT/gate-control.txt"; echo 1 >"$OUT/gate-control.exit"; else echo 0 >"$OUT/gate-control.exit"; fi
-python3 - "$OUT/fix" <<'PY'
+$PY - "$OUT/fix" <<'PY'
 import sys, pathlib
 out = pathlib.Path(sys.argv[1]); src = pathlib.Path('../../fixtures/gate1/served')
 def make(name, fixture, doc_id):
@@ -74,9 +94,12 @@ make('A.bento.html', 'genuine-1.0.0.html', 'rig-a')         # genuine, pinned CS
 make('B.bento.html', 'genuine-1.2.0.html', 'rig-b')         # genuine, another release
 make('U.bento.html', 'extra-plain-script.html', 'rig-u')    # unknown: no CSP
 PY
-procs() { # max WebKit web processes seen while the scenario runs
-  local max=0 n; while kill -0 "$1" 2>/dev/null; do n=$(ps -eo comm | grep -c '^WebKitWebProces'); [ "$n" -gt "$max" ] && max=$n; sleep 0.5; done; echo "$max"
+procs() { # max web processes seen while the scenario runs (WebKit web processes; WebView2 renderers)
+  local max=0 n; while kill -0 "$1" 2>/dev/null; do
+    if [ "$WIN" = 1 ]; then n=$($PY rig/webprocs.py count | tr -d '\r'); else n=$(ps -eo comm | grep -c '^WebKitWebProces'); fi
+    [ "$n" -gt "$max" ] && max=$n; sleep 0.5; done; echo "$max"
 }
+hostgone() { [ "$WIN" = 1 ] && taskkill //F //IM bento-home-desktop.exe >/dev/null 2>&1; true; } # a scenario's host never outlives it
 scenario() { # name timeout files...
   local name=$1 t=$2; shift 2
   local env=() n=0
@@ -85,12 +108,16 @@ scenario() { # name timeout files...
   env "${env[@]}" BENTO_DATA_DIR="$OUT/$name-data" timeout "$t" "$BIN" "$@" >/dev/null 2>"$OUT/$name.log" &
   local pid=$!
   procs "$pid" > "$OUT/$name.procs"
-  wait "$pid"; local rc=$?; echo "$rc" > "$OUT/$name.exit"; echo "== $name exit $rc (web processes seen: $(cat "$OUT/$name.procs"))"
+  wait "$pid"; local rc=$?; hostgone; echo "$rc" > "$OUT/$name.exit"; echo "== $name exit $rc (web processes seen: $(cat "$OUT/$name.procs"))"
 }
 cp "$OUT/fix/A.bento.html" "$OUT/fix/U.bento.html" "$OUT/"; cp "$OUT/fix/B.bento.html" "$OUT/B.bento.html"
 cp "$OUT/fix/U.bento.html" "$OUT/U2.bento.html"
 scenario pair 120 "$OUT/A.bento.html" "$OUT/U.bento.html"
 scenario tri 150 "$OUT/B.bento.html" "$OUT/U2.bento.html" "$OUT/B.bento.html"
+# The same pair on ONE shared profile: the per-document ORIGIN is then the only thing
+# separating storage, cookies and channels (check.py asserts the profile really was shared).
+cp "$OUT/fix/A.bento.html" "$OUT/SA.bento.html"; cp "$OUT/fix/U.bento.html" "$OUT/SU.bento.html"
+BENTO_RIG_SHARED_PROFILE=1 scenario pairshared 120 "$OUT/SA.bento.html" "$OUT/SU.bento.html"
 cp "$OUT/fix/A.bento.html" "$OUT/W.bento.html"
 BENTO_RIG_WATCHDOG=1 scenario watchdog 90 "$OUT/W.bento.html"
 # the same on an UNKNOWN document: no CSP, so a fetch can reach the protocol handler
@@ -108,13 +135,13 @@ mkdir -p "$OUT/hb" "$OUT/wedge-data"
 BENTO_RIG_WEDGE=1 BENTO_HB_DIR="$OUT/hb" BENTO_PROBE_doc0="$OUT/wedge-doc0.json" BENTO_PROBE_doc1="$OUT/wedge-doc1.json" \
   BENTO_DATA_DIR="$OUT/wedge-data" timeout 150 "$BIN" "$OUT/wA.bento.html" "$OUT/wU.bento.html" >/dev/null 2>"$OUT/wedge.log" &
 WPID=$!
-timeout 120 python3 rig/wedge.py "$OUT" "$WPID"
+timeout 120 $PY rig/wedge.py "$OUT" "$WPID"
 # a stopped process must never outlive the rig
-pkill -CONT -P "$WPID" 2>/dev/null; kill "$WPID" 2>/dev/null; wait "$WPID" 2>/dev/null
+[ "$WIN" = 1 ] || pkill -CONT -P "$WPID" 2>/dev/null; kill "$WPID" 2>/dev/null; wait "$WPID" 2>/dev/null; hostgone
 echo "== wedge done"
 # the saved file against the release key ONLY (hostcore's release_check), and a
 # one-byte-changed copy of it
-python3 - "$OUT" <<'PY'
+$PY - "$OUT" <<'PY'
 import sys, pathlib
 out = pathlib.Path(sys.argv[1]); b = bytearray((out / "R.bento.html").read_bytes())
 i = b.find(b'id="bento-rt"'); j = b.find(b'>', i) + 50
@@ -122,4 +149,4 @@ b[j] = ord('B') if b[j] == ord('A') else ord('A')
 (out / "R-flipped.bento.html").write_bytes(bytes(b))
 PY
 ( cd ../hostcore && cargo run -q --example release_check -- "$OUT/real" --genuine "$OUT/R.bento.html" --unknown "$OUT/R-flipped.bento.html" ) > "$OUT/real-release-check.txt" 2>&1; echo "$?" > "$OUT/real-release-check.exit"
-python3 rig/check.py "$OUT"
+$PY rig/check.py "$OUT" $([ "$WIN" = 1 ] && echo windows || echo linux)

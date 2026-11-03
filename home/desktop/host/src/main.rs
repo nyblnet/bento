@@ -261,6 +261,10 @@ fn open_window(app: &tauri::AppHandle, i: usize) -> tauri::Result<()> {
         // from the origin hash (never the file name or docId). Tauri keys web
         // contexts by data directory, so documents never share a web process.
         let data = h.data_dir.join("web").join(d.host.trim_end_matches(".localhost"));
+        // RIG BUILDS ONLY: every document on ONE profile, so the rigs can show that
+        // the per-document ORIGIN alone separates storage, cookies and channels.
+        #[cfg(feature = "rig")]
+        let data = if std::env::var_os("BENTO_RIG_SHARED_PROFILE").is_some() { eprintln!("RIG PROFILE shared"); h.data_dir.join("web").join("shared") } else { data };
         (d.label.clone(), d.host.clone(), title_for(&d.name, &d.bytes), data)
     };
     {

@@ -13,6 +13,11 @@
 # report: a driver failure is recorded as an error and fails the check.
 import json, os, pathlib, signal, subprocess, sys, time
 
+WIN = sys.platform == "win32"
+if WIN:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import webprocs
+
 out = pathlib.Path(sys.argv[1]); hb = out / "hb"; host_pid = int(sys.argv[2])
 DOCS = ["doc0", "doc1"]
 res = {"error": None}
@@ -27,6 +32,7 @@ def counter(d):
 
 
 def web_pids():
+    if WIN: return webprocs.renderers()
     # WebKitWebProcess descendants of the host (comm is cut to 15 chars)
     ps = subprocess.run(["ps", "-eo", "pid=,ppid=,comm="], capture_output=True, text=True).stdout.split("\n")
     rows = [l.split(None, 2) for l in ps if l.strip()]
@@ -48,7 +54,7 @@ def advancing(d, secs=1.5):
 
 
 def frozen_after(pids_stopped, settle=0.8, window=2.5):
-    for pid in pids_stopped: os.kill(pid, signal.SIGSTOP)
+    for pid in pids_stopped: (webprocs.suspend(pid) if WIN else os.kill(pid, signal.SIGSTOP))
     time.sleep(settle)
     before = {d: counter(d) for d in DOCS}
     time.sleep(window)
@@ -58,7 +64,7 @@ def frozen_after(pids_stopped, settle=0.8, window=2.5):
 
 def cont(pids):
     for pid in pids:
-        try: os.kill(pid, signal.SIGCONT)
+        try: (webprocs.resume(pid) if WIN else os.kill(pid, signal.SIGCONT))
         except ProcessLookupError: pass
 
 
@@ -83,7 +89,7 @@ try:
         cont(pids)
     time.sleep(1.5)
     res["control_recovered"] = all(advancing(d) for d in DOCS)
-    res["alive"] = os.path.exists(f"/proc/{host_pid}")
+    res["alive"] = webprocs.host_alive() if WIN else os.path.exists(f"/proc/{host_pid}")
 except Exception as e:
     res["error"] = repr(e)
     cont(web_pids())

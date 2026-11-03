@@ -116,6 +116,19 @@
         bcA.postMessage({ rig8: LABEL })
         if (od) new BroadcastChannel('bento-sync-' + od).postMessage({ rig8: LABEL })
       }
+      // rig 8, cookies and Origin-Agent-Cluster. A document sets cookies on its own host and on every
+      // PARENT domain it may name; once every peer has done the same, it lists what it can see. A
+      // sibling document's cookie in the list is a leak; its own host-only cookie is the positive control.
+      R.rig8_oac = window.originAgentClustered
+      const hexHost = location.hostname.replace(/^bento\./, '')
+      const ck = (n, dom) => { try { document.cookie = 'rck_' + LABEL + '_' + n + '=1; path=/' + (dom ? '; Domain=' + dom : '') } catch (_) {} }
+      ck('host', ''); ck('dom_localhost', 'localhost'); ck('dom_dotlocalhost', '.localhost'); ck('dom_hex', hexHost)
+      await inv('rig_stash', { key: LABEL + '.ck', value: 'set' })
+      for (const other of ALL) { if (other === LABEL) continue; for (let t = 0; t < 50 && !(await inv('rig_stash', { key: other + '.ck' })); t++) await sleep(200) }
+      await sleep(500)
+      try { R.rig8_cookies = document.cookie } catch (e) { R.rig8_cookies = 'THREW ' + String(e).slice(0, 60) }
+      try { document.domain = 'localhost' } catch (e) { R.rig8_domain_err = String(e).slice(0, 80) }
+      R.rig8_domain_after = document.domain
       R.rig8_idb_owner = await new Promise((res) => {
         const rq = indexedDB.open('rig8-db', 1)
         rq.onupgradeneeded = () => rq.result.createObjectStore('kv')

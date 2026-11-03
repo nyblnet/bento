@@ -135,3 +135,65 @@ jobs:
           export BENTO_RIG_PYTHON="$RUNNER_TEMP/rigvenv/bin/python"
           rustup toolchain install nightly-2026-06-03 --profile minimal
           ./fido-rig.sh
+
+  home-desktop-windows:
+    # The WebView2 half, on GitHub's HOSTED windows-latest runner (maintainer, 2026-11-03):
+    # the same host rigs as the Linux job, run under WebView2. Windows Hello and a real
+    # TPM-backed consent key cannot be measured on a hosted runner; they are measured later in
+    # one manual session on a real PC, and the Windows key store is an explicit refusing stub
+    # until then. Every step FAILS rather than skips: a rig that cannot run is a red job.
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: WebView2 runtime (installed, and its version printed)
+        # The rig needs the Evergreen runtime. The image may carry it; if not, install it
+        # from Microsoft's bootstrapper. No runtime after that is a failure, never a skip.
+        shell: pwsh
+        working-directory: home/desktop/host
+        run: |
+          $v = & powershell -NoProfile -ExecutionPolicy Bypass -File rig/wv2version.ps1 2>$null
+          if (-not $v) {
+            Invoke-WebRequest 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile "$env:RUNNER_TEMP\wv2setup.exe"
+            Start-Process "$env:RUNNER_TEMP\wv2setup.exe" -ArgumentList '/silent','/install' -Wait
+            $v = & powershell -NoProfile -ExecutionPolicy Bypass -File rig/wv2version.ps1
+          }
+          if (-not $v) { throw 'no WebView2 runtime' }
+          "WebView2 runtime version: $v"
+          (Get-CimInstance Win32_OperatingSystem).Caption + ' ' + (Get-CimInstance Win32_OperatingSystem).Version
+      - name: Desktop crates on Windows (agent, host security core, gate 1)
+        # The same unit tests as the Linux job, built for Windows: file_id (the Windows file ID),
+        # GlobalMemoryStatusEx, and the refusing Windows key store run here.
+        run: |
+          for d in agent hostcore gate1; do
+            ( cd home/desktop/$d && cargo test 2>&1 | tee "$RUNNER_TEMP/cargo-$d.log" )
+            grep -E '^test result' "$RUNNER_TEMP/cargo-$d.log"
+          done
+      - name: Desktop host rigs on WebView2 (security §19d–§19h, rig 8)
+        # rig/run.sh on Windows: the same scenarios and assertions as the WebKitGTK job, plus a
+        # shared-profile pair (the per-document origin alone separates documents), the parent-Domain
+        # cookie case and Origin-Agent-Cluster. A timeout or a missing report fails.
+        working-directory: home/desktop/host
+        run: |
+          set -o pipefail
+          ./rig/run.sh "$RUNNER_TEMP/h2-rig" 2>&1 | tee "$RUNNER_TEMP/h2-rig.log"
+          tr -d '\r' < "$RUNNER_TEMP/h2-rig.log" > "$RUNNER_TEMP/h2-rig-clean.log"
+          grep -E '^WebView2 runtime:' "$RUNNER_TEMP/h2-rig-clean.log"
+          grep -E '^[0-9]+ ok, 0 failed$' "$RUNNER_TEMP/h2-rig-clean.log"
+          if grep -E '^FAIL' "$RUNNER_TEMP/h2-rig-clean.log"; then exit 1; fi
+      - name: Desktop host release check (the bundled history is the current published one)
+        working-directory: home/desktop/host
+        run: ./release-check.sh
+      - name: Rig output (kept for the measurements)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: home-desktop-windows-rig
+          path: ${{ runner.temp }}/h2-rig/*.json
+          if-no-files-found: warn

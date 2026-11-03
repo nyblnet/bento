@@ -17,4 +17,7 @@ serde_json = { version = "1", features = ["preserve_order"] }
 sha2 = "0.10"
 getrandom = "0.3"
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
+
 [workspace]

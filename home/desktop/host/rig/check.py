@@ -6,6 +6,13 @@
 import json, sys, pathlib, re
 
 out = pathlib.Path(sys.argv[1])
+# The platform the rigs ran on. WebKitGTK serves a document at bento://<24 hex>.localhost/;
+# WebView2 (wry's custom-protocol workaround) at http://bento.<24 hex>.localhost/. The identity
+# agent's key store is built for Linux only: on Windows every identity call is refused by the
+# host as unavailable (its key store is an explicit "not built, needs a real PC" stub).
+PLATFORM = sys.argv[2] if len(sys.argv) > 2 else "linux"
+WINDOWS = PLATFORM == "windows"
+SCHEME = r"http://bento\." if WINDOWS else r"bento://"
 fails, oks = [], []
 
 
@@ -41,14 +48,14 @@ def window(name, genuine, expect_heard, peer_cap_expected=True):
     # the page
     ok(p.get("secure_context") is True and p.get("webcrypto") is True, f"{name}: secure context with WebCrypto")
     ok(p.get("bridge_installed") is True, f"{name}: bridge.js installed")
-    ok(re.fullmatch(r"bento://[0-9a-f]{24}\.localhost", p.get("origin") or "") is not None, f"{name}: a 96-bit per-document origin ({p.get('origin')})")
+    ok(re.fullmatch(SCHEME + r"[0-9a-f]{24}\.localhost", p.get("origin") or "") is not None, f"{name}: a 96-bit per-document origin ({p.get('origin')})")
     ok(str(p.get("core_cmd", "")).startswith("refused"), f"{name}: Tauri core/plugin commands refused to page script ({p.get('core_cmd')})")
     # identity commands: only a GENUINE load reaches the agent (armed_genuine)
     ok(p.get("id_no_cap") == "no capability", f"{name}: identity: no capability is refused before anything else ({p.get('id_no_cap')})")
-    if genuine:
+    if genuine and not WINDOWS:
         ok(p.get("id_sign") == "purpose" and p.get("id_whoami") == "no-identity", f"{name}: identity: a genuine load REACHES the agent (sign -> purpose, whoami -> no-identity) ({p.get('id_sign')}, {p.get('id_whoami')})")
     else:
-        ok(p.get("id_sign") == "unavailable" and p.get("id_whoami") == "unavailable", f"{name}: identity: an unknown document is refused by the host before the agent ({p.get('id_sign')}, {p.get('id_whoami')})")
+        ok(p.get("id_sign") == "unavailable" and p.get("id_whoami") == "unavailable", f"{name}: identity: {'on Windows the key store is not built, so every call' if WINDOWS else 'an unknown document'} is refused by the host before the agent ({p.get('id_sign')}, {p.get('id_whoami')})")
     # CSP: pinned for genuine, none for unknown (the control)
     if genuine:
         ok(p.get("dom_inline_ran") is False, f"{name}: under the pinned CSP an added inline script does NOT run")
@@ -57,6 +64,21 @@ def window(name, genuine, expect_heard, peer_cap_expected=True):
         ok(p.get("dom_inline_ran") is True, f"{name}: control: with no CSP an added inline script runs")
     # rig 8
     ok(sorted(p.get("rig8_heard") or []) == sorted(expect_heard), f"{name}: rig 8 BroadcastChannel heard exactly {expect_heard} (got {p.get('rig8_heard')})")
+    # rig 8: cookies (every parent-Domain attempt included) and Origin-Agent-Cluster. Siblings
+    # (distinct documents) must never see each other's cookies; a document's own host-only cookie
+    # being visible is the positive control (Windows: http origin, cookies work; WebKit's bento://
+    # scheme keeps no cookies, so there only the leak row stands).
+    cookies = p.get("rig8_cookies")
+    names = [c.split("=")[0].strip() for c in (cookies or "").split(";") if c.strip()]
+    me = name.split("-")[1]
+    others = [n for n in names if n.startswith("rck_") and not n.startswith(f"rck_{me}_")]
+    if name.split("-")[0] in ("pair", "pairshared"):
+        ok(isinstance(cookies, str) and others == [], f"{name}: rig 8 no sibling document's cookie is visible, parent-Domain attempts included (saw {names})")
+        if WINDOWS: ok(f"rck_{me}_host" in names, f"{name}: rig 8 control: the document's own host-only cookie IS visible, so the cookie jar works ({names})")
+    ok("rig8_oac" in p, f"{name}: rig 8 Origin-Agent-Cluster reported (originAgentClustered = {p.get('rig8_oac')}; document.domain after a set attempt = {p.get('rig8_domain_after')})")
+    if WINDOWS:
+        ok(p.get("rig8_oac") is True, f"{name}: rig 8 the page is origin-agent-clustered (the header was honoured) ({p.get('rig8_oac')})")
+        ok(p.get("rig8_domain_after") != "localhost", f"{name}: rig 8 document.domain cannot be relaxed to the parent domain ({p.get('rig8_domain_after')}, err {p.get('rig8_domain_err')})")
     # rigs 1, 2 and the control, by the host's log for this webview
     emb = p.get("embeds") or {}
     for tag in ["rig1-key-only", "control-own-cap"] + (["rig2-peer-cap"] if peer_cap_expected else []):
@@ -111,6 +133,7 @@ for scn, wins in [
     # doc0 and doc2 are the SAME file: the same-document control hears each other
     # (a window also hears its OWN post on its document's sync channel: another
     # BroadcastChannel object in the same window)
+    ("pairshared", [("pairshared-doc0", True, [], True), ("pairshared-doc1", False, [], True)]),
     ("tri", [("tri-doc0", True, ["rig8<-doc2", "sync<-doc0", "sync<-doc2"], True), ("tri-doc1", False, [], True), ("tri-doc2", True, ["rig8<-doc0", "sync<-doc0", "sync<-doc2"], True)]),
 ]:
     reps = {n: window(n, g, h, pc) for n, g, h, pc in wins}
@@ -129,17 +152,26 @@ for scn, wins in [
     # rig 5: the main frame sent away was bounced back, and only the document was ever armed
     ok("BOUNCE" in L, f"{scn}: rig 5 a main frame sent to a foreign page was bounced back")
     pend = re.findall(r"^PENDING \S+ generation \d+ url=(\S+)$", L, re.M)
-    ok(len(pend) >= 2 * len(wins) and all(re.fullmatch(r"bento://[0-9a-f]{24}\.localhost/", u) for u in pend), f"{scn}: rig 5 only the document itself was ever armed ({len(pend)} armings, {sorted(set(u for u in pend if not u.startswith('bento://')))} foreign)")
+    ok(len(pend) >= 2 * len(wins) and all(re.fullmatch(SCHEME + r"[0-9a-f]{24}\.localhost/", u) for u in pend), f"{scn}: rig 5 only the document itself was ever armed ({len(pend)} armings, {sorted(set(u for u in pend if not re.match(SCHEME, u)))} foreign)")
     # §19h: one web process per document
     procs = int((out / f"{scn}.procs").read_text().strip() or 0) if (out / f"{scn}.procs").exists() else 0
     distinct = 2
-    ok(procs >= distinct, f"{scn}: §19h at least one web process per document ({procs} seen for {distinct} documents)")
+    if scn == "pairshared":
+        # the positive control for this scenario: the two documents REALLY ran on one profile
+        L = log(scn)
+        dirs = sorted(p.name for p in (out / "pairshared-data" / "web").glob("*")) if (out / "pairshared-data" / "web").exists() else []
+        ok(L.count("RIG PROFILE shared") >= 2 and dirs == ["shared"], f"pairshared: the two documents shared ONE profile directory, so only the origin separates them ({dirs})")
+        pdirs = sorted(p.name for p in (out / "pair-data" / "web").glob("*")) if (out / "pair-data" / "web").exists() else []
+        ok(len(pdirs) == 2, f"pair: control: the normal build gives each document its own profile directory ({len(pdirs)})")
+    else:
+      ok(procs >= distinct, f"{scn}: §19h at least one web process per document ({procs} seen for {distinct} documents)")
     # rig 8 storage: distinct documents never share IndexedDB; the same document does
-    if scn == "pair":
-        a, b = reps.get("pair-doc0"), reps.get("pair-doc1")
+    if scn in ("pair", "pairshared"):
+        a, b = reps.get(f"{scn}-doc0"), reps.get(f"{scn}-doc1")
         if a and b:
             ok(a["page"]["rig8_idb_owner"].endswith("(claimed)") and b["page"]["rig8_idb_owner"].endswith("(claimed)"), f"pair: rig 8 each document claims its own IndexedDB ({a['page']['rig8_idb_owner']}, {b['page']['rig8_idb_owner']})")
             ok(a["origin_host"] != b["origin_host"], "pair: distinct origins")
+            ok(a["page"]["origin"] != b["page"]["origin"] and a["page"]["origin"].endswith(a["origin_host"]) and b["page"]["origin"].endswith(b["origin_host"]), f"pair: the BROWSER reports two distinct per-document origins, each the host's ({a['page']['origin']}, {b['page']['origin']})")
     if scn == "tri":
         b0, u, b2 = reps.get("tri-doc0"), reps.get("tri-doc1"), reps.get("tri-doc2")
         if b0 and b2 and u:

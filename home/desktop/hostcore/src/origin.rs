@@ -67,16 +67,48 @@ pub fn origin_host(salt: &[u8], canonical: &Path, doc_id: Option<&str>, epoch: u
 }
 
 /// The file's instance identity: what changes when the file is REPLACED.
-/// Unix: device and inode. Elsewhere: unmeasured, so never changes (the
-/// Windows file ID is owed with the Windows host).
+/// Unix: device and inode. Windows: the volume serial number and the 128-bit
+/// file ID (NTFS/ReFS; the 64-bit index of GetFileInformationByHandle where the
+/// volume has no 128-bit IDs). Both survive a rename of the SAME file and
+/// change when another file is renamed over it, which is the host's own
+/// temp-and-rename save versus someone else's replace. Anywhere the platform
+/// cannot say: "" (never changes).
 pub fn file_id(p: &Path) -> String {
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
         if let Ok(m) = std::fs::metadata(p) { return format!("{}:{}", m.dev(), m.ino()) }
     }
+    #[cfg(windows)]
+    {
+        if let Some(id) = windows_file_id(p) { return id }
+    }
     let _ = p;
     String::new()
+}
+
+#[cfg(windows)]
+fn windows_file_id(p: &Path) -> Option<String> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::{
+        FileIdInfo, GetFileInformationByHandle, GetFileInformationByHandleEx, BY_HANDLE_FILE_INFORMATION, FILE_ID_INFO,
+    };
+    let f = std::fs::File::open(p).ok()?;
+    let h = f.as_raw_handle() as windows_sys::Win32::Foundation::HANDLE;
+    // SAFETY: `h` is a valid open handle for the duration of both calls and
+    // each out-structure is a plain zeroed C struct of the size we pass.
+    unsafe {
+        let mut info: FILE_ID_INFO = std::mem::zeroed();
+        if GetFileInformationByHandleEx(h, FileIdInfo, &mut info as *mut _ as *mut _, std::mem::size_of::<FILE_ID_INFO>() as u32) != 0 {
+            let id: String = info.FileId.Identifier.iter().map(|b| format!("{b:02x}")).collect();
+            return Some(format!("{:x}:{id}", info.VolumeSerialNumber));
+        }
+        let mut b: BY_HANDLE_FILE_INFORMATION = std::mem::zeroed();
+        if GetFileInformationByHandle(h, &mut b) != 0 {
+            return Some(format!("{:x}:{:x}{:08x}", b.dwVolumeSerialNumber, b.nFileIndexHigh, b.nFileIndexLow));
+        }
+    }
+    None
 }
 
 /// The change detector's memory, kept in the data directory: per path (salted
@@ -211,7 +243,7 @@ mod tests {
         assert_ne!(origin_host(b"s", Path::new("/a"), Some("B"), 0), origin_host(b"s", Path::new("/b"), Some("B"), 0));
     }
 
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     #[test]
     fn an_envelope_replaced_behind_the_hosts_back_gets_a_fresh_origin_and_the_hosts_own_save_does_not() {
         let d = tmp("envelope");
