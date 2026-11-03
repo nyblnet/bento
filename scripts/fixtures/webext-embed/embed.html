@@ -1,0 +1,43 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>cross-origin embed (W2 launch-gate fixture)</title>
+<!-- SPDX-License-Identifier: MIT -->
+<!-- The hostile third party in scripts/qa-webext-embed-gate.mjs: a real https: page, framed by a
+     genuine served document, that tries to talk to whatever it can reach. Served
+     from the rig's own local origin, never a CDN. -->
+<script>
+(() => {
+  const got = []          // everything this page RECEIVES, from anyone
+  const tried = []        // what it sent, and what the browser said
+  window.addEventListener('message', (e) => { got.push({ origin: e.origin, data: (() => { try { return JSON.stringify(e.data) } catch { return '?' } })() }) })
+  const note = (what, fn) => { try { fn(); tried.push(what + ': sent') } catch (err) { tried.push(what + ': ' + err.name) } }
+  const reqs = [
+    { id: 'e1', op: 'identity.whoami', args: null },
+    { id: 'e2', op: 'identity.sign', args: { purpose: 'frame', payload: 'x' } },
+    { id: 'e3', op: 'identity.resolve', args: { pub: null, email: 'a@b.c' } },
+    { id: 'e4', op: 'save.write', args: { text: 'EVIL' } },
+    { id: 'e5', op: 'serve.failed', args: { reason: 'x' } },
+  ]
+  const attack = () => {
+    for (const r of reqs) {
+      note('parent ' + r.op, () => window.parent.postMessage(r, '*'))
+      note('top ' + r.op, () => window.top.postMessage(r, '*'))
+    }
+    // forged handshakes: a document and a port of its own, to the sandbox and to the host page
+    for (const [who, w] of [['parent', window.parent], ['top', window.top]]) {
+      const { port1, port2 } = new MessageChannel()
+      port1.onmessage = (e) => got.push({ origin: 'forged-port', data: JSON.stringify(e.data) })
+      note('forged handshake to ' + who, () => w.postMessage({ kind: 'bento-serve', html: '<!doctype html><p>FORGED</p>', plan: [], name: 'forged.bento.html' }, '*', [port2]))
+      note('forged ready to ' + who, () => w.postMessage({ kind: 'bento-serve-ready' }, '*'))
+    }
+    // reaching for the agent directly
+    note('read parent.__bentoIdentity', () => { void window.parent.__bentoIdentity })
+    note('read top.document', () => { void window.top.document })
+    note('read parent.document', () => { void window.parent.document })
+  }
+  window.__embed = { got, tried, attack, origin: location.origin, secure: isSecureContext, hasAgent: typeof window.__bentoIdentity !== 'undefined' }
+  attack()
+  setTimeout(attack, 700)   // again, later, in case something listens only after boot
+})()
+</script>
+<body>embed</body>

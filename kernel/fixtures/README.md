@@ -163,3 +163,56 @@ refuses an unknown row type keeps passing until it adopts them.
   emulator): one BiometricPrompt authorises exactly one signature, and the
   Keystore, not the UI, refuses a second. Residency in the TEE or StrongBox still
   needs a real phone.
+
+## `link`: device linking, link v1
+
+Reference: `kernel/src/link.ts`. Rig: `scripts/test-link.ts` (and
+`scripts/test-link-mutants.ts`). The derivation rows are DETERMINISTIC (fixed
+codes, ephemeral scalars, ivs and account scalars), so reproduce them byte for
+byte. Only the ECDSA signatures inside msg2 and msg3 are random; those rows are
+judged by verdict, like the statement rows.
+
+- `codes`: code bytes → printed form (the recovery-code format), the slot `id`,
+  `tok`, `tokHash` (SHA-256 of the token's 32 bytes) and `salt`, each by
+  HKDF-SHA-256 with an EMPTY salt and info `bento/id/link/v1/{id,tok,salt}`.
+- `sessions`: two honest runs, one per displayer role. From the two ephemeral
+  scalars: msg0, msg1, the transcript `t`, Z (the ECDH x-coordinate),
+  `h2n`, `n2h`, the SAS key and the SAS. `t` is base64url; HKDF infos append it
+  as text: `bento/id/link/v1/h2n.` ‖ t.
+- `sas`: SAS key → 6 digits (first 4 bytes big-endian, mod 1,000,000,
+  zero-padded). `sasMatch`: what a person typed vs the SAS; only spaces and
+  hyphens are ignored, and full-width digits are not digits.
+- `roles`: whether the scanner may proceed, from the displayer's claimed role
+  and whether the scanner holds an account.
+- `msgs`: msg0/msg1 grammar (`kind` names the parser). `reflected`: E_S = E_D
+  gets no transcript.
+- `msg2`: the exact ciphertext of an offer: key `n2h`, iv, AAD
+  `lnka.v1.<t>.2`, plaintext → wire (base64url of iv ‖ ciphertext ‖ tag).
+- `offers`: the offer plaintext as H checks it (`verifyOffer`), including the
+  proofs of possession over `lnkp.v1.<t>`. `offerWire`: opening msg2 under the
+  wrong direction's key, the wrong message number or another transcript must
+  fail to decrypt.
+- `bind` and `msg3`: the account binding, the released scalars, and the exact
+  SEALED ciphertext (key `h2n`, AAD `lnka.v1.<t>.3`, plaintext = the 64-byte
+  account blob).
+- `release`: the DIRECTORY's check before it hands msg3 to N
+  (`verifyLinkRelease`). The verifier brings `bindText` (the binding it serves),
+  its `state`, the `challenge` it issued and whether that challenge is already
+  spent. Every row carries `spendCalled`: every refusal before the spend is
+  `grammar`, everything after it has consumed the challenge. A malformed
+  served binding is `bind` (after the spend), never a crash; N's dev. naming
+  H's own devicePub is `n-device-is-h`. Every msg3 line is printable ASCII
+  0x21–0x7E: a space, a control or a non-ASCII byte in any line is `grammar`.
+- `final`: N's check of msg3 (`openFinal`), given what it offered (`offer`) and
+  the binding's public halves (`binding`, from a pinned directory key).
+
+Host port notes for link v1:
+
+- Verifiers answer every row; none may throw. A malformed input is a refusal
+  with a reason.
+- The platform field is shown through a FIXED map of known tokens. A token the
+  host does not know is shown as unknown, never presented as verified.
+- After linking, N shows the label H wrote into N's dev., not the one N
+  offered.
+- Each direction key seals exactly ONE message (n2h message 2, h2n message 3).
+  A retry is a new slot with a new code, never a second message under a key.
