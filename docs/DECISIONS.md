@@ -12022,6 +12022,7 @@ key rotation, freezing and passkey management can be switched on.
 - **A replaced reply hook cannot redirect replies.** The Android-style transport
   now calls its reply function directly instead of through `window.__bentoNativeReply`,
   which page script can overwrite.
-- **Desktop routes `id.*` ops to `bento_id`**, which keeps its own gates (this
-  webview's capability, then genuine bytes). The shipped desktop build has no key
-  store yet: `whoami` and `sign` answer `no-identity`, `resolve` answers `null`.
+- **Each host routes the `id.*` ops to its own agent and keeps its own gates**
+  (on desktop: this webview's capability, then genuine bytes). No host ships a key
+  store yet, so a host with no account answers `no-identity` (`whoami`, `sign`)
+  and `null` (`resolve`).
