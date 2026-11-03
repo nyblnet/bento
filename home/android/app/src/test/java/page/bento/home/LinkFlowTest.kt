@@ -26,7 +26,7 @@ private fun account(address: String = ADDRESS): Account {
  * Two LinkAgents linking end to end against a model of the directory's link routes (server/directory
  * src/link.js: one slot per code, contended on a second write, one completion, burn on abort) that also
  * runs the release checks of kernel's verifyLinkRelease before it hands msg3 over. The live directory
- * is the other half of this evidence (scripts/test-home-android-link-live.mjs).
+ * is the other half of this evidence (scripts/qa-home-android-link-live.mjs).
  *
  * Each row ends with its positive control: the honest link in the same shape completes.
  */

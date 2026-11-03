@@ -11,12 +11,12 @@
  * verifyLinkRelease, challenge spend, slot rules and attestations.
  *
  *   BENTO_DIRECTORY_SRC=<checkout holding server/directory with link routes> \
- *   WRANGLER=<path to wrangler> node scripts/test-home-android-link-live.mjs
+ *   WRANGLER=<path to wrangler> node scripts/qa-home-android-link-live.mjs
  *
  * Not a CI rig: it needs the directory branch and wrangler. No emulator is involved.
  */
-import { spawn, spawnSync } from 'node:child_process'
-import { mkdtempSync, existsSync, writeFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+import { mkdtempSync, existsSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -47,14 +47,22 @@ for (let i = 0; i < 120 && !/Ready on/.test(out.join('')); i++) await sleep(500)
 if (!/Ready on/.test(out.join(''))) { console.error('wrangler did not start:\n' + out.join('').slice(-1500)); process.exit(2) }
 console.log(`local directory up on 127.0.0.1:${PORT} (kid dev-1, LINKING=1)`)
 
-const r = spawnSync('./gradlew', ['--no-daemon', '--rerun-tasks', 'testDebugUnitTest', '--tests', 'page.bento.home.LinkLiveTest', '-i'], {
-  cwd: join(root, 'home/android'), encoding: 'utf8', maxBuffer: 1 << 28,
+// ASYNC on purpose: a blocking spawn would stop this process reading the worker's output, which is where the mailer prints
+const g = spawn('./gradlew', ['--no-daemon', '--rerun-tasks', 'testDebugUnitTest', '--tests', 'page.bento.home.LinkLiveTest', '-i'], {
+  cwd: join(root, 'home/android'),
   env: { ...process.env, JAVA_HOME: process.env.JAVA_HOME || '/opt/homebrew/opt/openjdk@17',
     ANDROID_HOME: process.env.ANDROID_HOME || '/opt/homebrew/share/android-commandlinetools',
     BENTO_LINK_DIRECTORY: `http://127.0.0.1:${PORT}`, BENTO_LINK_MAILLOG: logPath, BENTO_LINK_PIN: `dev-1=${dirPub}` } })
-const text = r.stdout + r.stderr
-const ran = /LinkLiveTest/.test(text) && /PASSED|FAILED/.test(text) && !/SKIPPED/.test(text.split('LinkLiveTest')[1] || '')
-console.log(text.split('\n').filter((l) => /LinkLiveTest|PASSED|FAILED|SKIPPED|AssertionError|expected/.test(l)).slice(0, 20).join('\n'))
+const gout = []
+for (const s of [g.stdout, g.stderr]) s.on('data', (d) => gout.push(d.toString()))
+const r = { status: await new Promise((res) => g.on('close', res)) }
+r.stdout = gout.join(''); r.stderr = ''
+// the verdict is Gradle's own result file: ONE test, run, not skipped, not failed
+const xml = join(root, 'home/android/app/build/test-results/testDebugUnitTest/TEST-page.bento.home.LinkLiveTest.xml')
+const m = existsSync(xml) ? /tests="(\d+)" skipped="(\d+)" failures="(\d+)" errors="(\d+)"/.exec(readFileSync(xml, 'utf8')) : null
+const ran = !!m && m[1] === '1' && m[2] === '0' && m[3] === '0' && m[4] === '0'
+if (!ran) console.log(r.stdout.split('\n').filter((l) => /FAILED|AssertionError|expected|got /.test(l)).slice(0, 12).join('\n'))
 const ok = r.status === 0 && ran
+console.log(m ? `LinkLiveTest: ${m[1]} test, ${m[2]} skipped, ${m[3]} failed, ${m[4]} errors` : 'no result file')
 console.log(ok ? 'ok   the live directory linked, refused and contended as the unit rig does' : 'FAIL live link rig (a SKIPPED test is not a pass)')
 process.exit(ok ? 0 : 1)

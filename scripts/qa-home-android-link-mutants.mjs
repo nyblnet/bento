@@ -11,7 +11,7 @@
  * exactly once) and that the unmutated build is green (the control), and always restores the file.
  * Gradle runs with --rerun-tasks so a cached result cannot stand in for a run.
  *
- *   node scripts/test-home-android-link-mutants.mjs [--only N]
+ *   node scripts/qa-home-android-link-mutants.mjs [--only N]
  *
  * Not a CI rig: one Gradle run per mutant. Run it when Link.kt or LinkFlow.kt changes.
  */

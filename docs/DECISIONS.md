@@ -12146,3 +12146,42 @@ with seven conditions).
   deterministic row byte for byte and checks every verdict;
   `scripts/test-link-mutants.ts` reintroduces fifteen lenient paths into a copy
   of `link.ts` and requires the rig to fail on each.
+
+## 2026-11-03 — Android: device linking, both roles (home/android)
+
+The Android host speaks link v1 (`Link.kt`, held to the `link` section of
+`kernel/fixtures/identity-v1.json` row by row; `LinkFlow.kt` is the two agents).
+
+- **The roles are checked against the device's own state, never taken from the
+  screen or an intent.** H needs an account in this app's vault, N needs none;
+  a scanner also refuses a displayer that claims its own role. A device that
+  holds an account cannot be N and one that holds none cannot be H, so an
+  intent extra can pick the screen but not the role.
+- **H starts only from the in-app "Link a new device".** `LinkActivity` is not
+  exported and has no intent filter in a release build; `LinkEntry` is the rule
+  a future link handler must call (an `id.bento.page/l#` link starts the N side
+  on a device with no account, and on one that holds an account starts nothing).
+  A CI step reads the MERGED release manifest for both link and setup screens.
+- **N is asked for the account's address.** The protocol carries no address to
+  N, and N must check the key it is handed against the binding the directory
+  serves under a pinned key, which a lookup returns only for an address. The
+  person types it with the code.
+- **One attempt at the SAS, one message per key.** A wrong SAS aborts the slot;
+  an agent refuses a second seal under either direction key and dies on any
+  failure, so a retry is a new slot with a new code.
+- **N shows the label H wrote** (it is in N's `dev.`), through the display
+  filter; the platform token is shown through a fixed map and an unknown token
+  is shown as an unrecognised device.
+- **Where the recovery kx is held.** The sealed account of the setup device
+  holds it (as setup already does) and H holds it in memory while it builds
+  msg3. N, on this port, receives it in msg3's sealed payload because the
+  current fixture carries 64 bytes. The ruling is that the payload carries the
+  account scalar only, never the recovery kx; this port adopts it when the
+  fixture changes (the places are `Link.openFinal`, `LinkAgent.approve` and the
+  secrets layout in `awaitFinal`).
+- **Evidence.** `LinkTest` (the fixture), `LinkFlowTest` (two agents against a
+  model of the directory's slot rules and release checks), `LinkLiveTest` (the
+  same agents through the real directory worker; `qa-home-android-link-live.mjs`),
+  and `qa-home-android-link-mutants.mjs` (twenty edits to the link code, each
+  required to turn the rigs red). The screen itself is not yet exercised on a
+  device.

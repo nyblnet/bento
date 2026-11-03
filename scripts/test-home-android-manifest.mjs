@@ -5,7 +5,7 @@
 /**
  * Does the MERGED RELEASE manifest keep the Bento ID setup screen closed?
  *
- * SetupActivity is exported, and reads a directory URL and test key from its
+ * SetupActivity and LinkActivity are exported, and read a directory URL and test key from its
  * launching intent, only in builds a test drives (manifest placeholders
  * setupExported / setupDev). A slip in those placeholders would ship an
  * exported activity that takes its directory from any app on the phone. The
@@ -17,18 +17,20 @@
  */
 import { readFileSync } from 'node:fs'
 
-export function check(xml) {
+const SCREENS = ['SetupActivity', 'LinkActivity']
+function checkScreen(xml, name) {
   const problems = []
-  const m = xml.match(/<activity\b[^>]*android:name="[^"]*\.SetupActivity"[^>]*?(?:\/>|>[\s\S]*?<\/activity>)/)
-  if (!m) return ['SetupActivity is not in the manifest']
+  const m = xml.match(new RegExp(`<activity\\b[^>]*android:name="[^"]*\\.${name}"[^>]*?(?:\\/>|>[\\s\\S]*?<\\/activity>)`))
+  if (!m) return [`${name} is not in the manifest`]
   const el = m[0]
-  if (!/android:exported="false"/.test(el)) problems.push('SetupActivity is not exported="false"')
-  if (/<intent-filter/.test(el)) problems.push('SetupActivity has an intent-filter')
+  if (!/android:exported="false"/.test(el)) problems.push(`${name} is not exported="false"`)
+  if (/<intent-filter/.test(el)) problems.push(`${name} has an intent-filter`)
   const dev = el.match(/<meta-data\b[^>]*android:name="bento\.setup\.dev"[^>]*>/)
-  if (!dev) problems.push('bento.setup.dev is missing')
-  else if (!/android:value="false"/.test(dev[0])) problems.push('bento.setup.dev is not "false"')
+  if (!dev) problems.push(`${name}: bento.setup.dev is missing`)
+  else if (!/android:value="false"/.test(dev[0])) problems.push(`${name}: bento.setup.dev is not "false"`)
   return problems
 }
+export const check = (xml) => SCREENS.flatMap((n) => checkScreen(xml, n))
 
 const path = process.argv[2]
 if (!path) { console.error('usage: test-home-android-manifest.mjs <AndroidManifest.xml>'); process.exit(2) }
@@ -37,11 +39,13 @@ let bad = 0
 const say = (ok, what) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${what}`); if (!ok) bad++ }
 
 const real = check(xml)
-say(real.length === 0, `merged release manifest keeps SetupActivity closed${real.length ? ' (' + real.join('; ') + ')' : ''}`)
+say(real.length === 0, `merged release manifest keeps SetupActivity and LinkActivity closed${real.length ? ' (' + real.join('; ') + ')' : ''}`)
 
 // positive controls: the check must go red on each way to open it
 const mutants = {
   'exported="true"': x => x.replace(/(\.SetupActivity"[\s\S]*?android:exported=")false"/, '$1true"'),
+  'LinkActivity exported="true"': x => x.replace(/(\.LinkActivity"[\s\S]*?android:exported=")false"/, '$1true"'),
+  'LinkActivity dev switch true': x => x.replace(/(\.LinkActivity"[\s\S]*?android:name="bento\.setup\.dev"[\s\S]*?android:value=")false"/, '$1true"'),
   'bento.setup.dev true': x => x.replace(/(android:name="bento\.setup\.dev"[\s\S]*?android:value=")false"/, '$1true"'),
   'an intent-filter': x => x.replace(/(\.SetupActivity"[\s\S]*?android:theme="[^"]*"\s*>)/, '$1<intent-filter><action android:name="android.intent.action.VIEW"/></intent-filter>'),
   'bento.setup.dev removed': x => x.replace(/<meta-data\b[^>]*bento\.setup\.dev[^>]*>/, ''),

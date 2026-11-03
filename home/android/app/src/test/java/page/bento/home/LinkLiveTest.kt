@@ -13,7 +13,7 @@ import java.io.File
 /**
  * Two LinkAgents linking through the REAL directory worker (`wrangler dev` with LINKING=1), so the
  * release checks run are kernel's verifyLinkRelease itself, not a model of it. Skipped unless
- * BENTO_LINK_DIRECTORY is set; scripts/test-home-android-link-live.mjs starts the worker and sets
+ * BENTO_LINK_DIRECTORY is set; scripts/qa-home-android-link-live.mjs starts the worker and sets
  * BENTO_LINK_DIRECTORY, BENTO_LINK_MAILLOG (the worker's output, where the local mailer prints) and
  * BENTO_LINK_PIN ("kid=publicKey"). Rows: the honest link in both displayer shapes, a wrong SAS
  * (aborted, no second try), a second scanner (CONTENDED), and a replayed consent (the directory refuses
