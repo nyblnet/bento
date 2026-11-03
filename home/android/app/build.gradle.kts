@@ -197,6 +197,11 @@ android {
         }
     }
 
+    // releaseCheck is a build TYPE of its own, and matchingFallbacks does not apply to source sets: without this it
+    // sees only src/main, and HistoryKeys (in src/debug and src/release only) is unresolved. It must be src/release,
+    // never src/debug: the variant is "release as configured", so it keeps the production history keys.
+    sourceSets.getByName("releaseCheck").java.srcDir("src/release/java")
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
