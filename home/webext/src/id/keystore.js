@@ -67,11 +67,24 @@ export async function saveNewSelf(record, db = idb()) {
   return { ok: true }
 }
 
+/**
+ * The directory said yes: local → bound. Only a record that is still `local`
+ * and whose account key IS the one the binding names can become bound.
+ */
+export async function markBound(bound, db = idb()) {
+  const r = await loadSelf(db)
+  if (!r) return { ok: false, reason: 'none' }
+  if (r.state !== 'local') return { ok: false, reason: 'state' }
+  if (bound?.text?.split('.')[2] !== r.accountPub) return { ok: false, reason: 'other key' } // bind.<address>.<accountPub>…
+  await db.put(SELF, { ...r, state: 'bound', bind: bound })
+  return { ok: true }
+}
+
 /** What a page may show about it: public fields only. */
 export function publicView(record) {
   if (!record) return null
   return {
-    state: record.state, label: record.label, created: record.created, accountPub: record.accountPub, devicePub: record.devicePub,
+    state: record.state, address: record.bind?.address ?? null, label: record.label, created: record.created, accountPub: record.accountPub, devicePub: record.devicePub,
     kxPub: record.kxPub, recoveryKxPub: record.recoveryKxPub,
     passkeys: record.passkeys.length, recovery: !!record.recovery,
   }
