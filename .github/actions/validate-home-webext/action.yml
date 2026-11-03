@@ -139,6 +139,15 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-webext-connect.ts
 
+    - name: WebExtension directory-client rig
+      # Binding a Bento ID to an address (bento/connect W1): the extension's own
+      # client against the real directory worker. Both proofs are needed; the
+      # client believes the answer only if it is the exact binding it signed and
+      # the attestation verifies under a key the client holds; and the local
+      # recovery material is deleted only on the directory's acknowledgement.
+      shell: bento-step {0}
+      run: node scripts/test-webext-directory.ts
+
     - name: WebExtension bento/connect rig
       # The extension's identity code must be the kernel reference, unaltered
       # (a generated type-strip, checked current), and pass kernel's own rigs
