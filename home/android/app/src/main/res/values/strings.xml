@@ -75,4 +75,37 @@
     <string name="setup_err_mistyped">That doesn\'t match the recovery code. Check it and try again.</string>
     <string name="setup_err_not_saved">Couldn\'t save your account on this device.</string>
     <string name="setup_unavailable_here">Bento ID isn\'t available in this version.</string>
+
+    <!-- Link a device (link v1). PLACEHOLDER wording, for the maintainer to rule on; the screen has
+         no entry point in a release build yet. -->
+    <string name="link_title">Link a device</string>
+    <string name="link_unavailable_here">Linking devices isn\'t available in this version.</string>
+    <string name="link_h_start">Show a code that another device can use to join this Bento ID.</string>
+    <string name="link_h_begin">Link a new device</string>
+    <string name="link_h_unseal">Confirm it is you to link a new device.</string>
+    <string name="link_h_show">Open Bento on the new device and scan this, or type the code. Don\'t share it with anyone else.</string>
+    <string name="link_h_type_sas">Type the 6 digits shown on the new device.</string>
+    <string name="link_sas_hint">6 digits</string>
+    <string name="link_continue">Continue</string>
+    <string name="link_h_confirm">%1$s is asking to join your Bento ID. Only link a device you are holding.</string>
+    <string name="link_platform_unknown">A device we don\'t recognise</string>
+    <string name="link_label_hint">Name for this device</string>
+    <string name="link_h_approve">Link this device</string>
+    <string name="link_h_prompt">Confirm it is you to give this device your Bento ID.</string>
+    <string name="link_h_done">The device is linked.</string>
+    <string name="link_n_start">Type your email address and the code shown on your other device, or scan its QR.</string>
+    <string name="link_code_hint">Code from the other device</string>
+    <string name="link_scan">Scan the QR</string>
+    <string name="link_n_begin">Link this device</string>
+    <string name="link_n_sas">Type these 6 digits on your other device.</string>
+    <string name="link_n_prompt">Confirm it is you to prove this device\'s key.</string>
+    <string name="link_n_done">This device is linked to %1$s.</string>
+    <string name="link_err_role">This device can\'t do that: it must be the one that has the account (to show a code) or the one that has none (to enter one).</string>
+    <string name="link_err_code">That isn\'t a link code, or it has expired.</string>
+    <string name="link_err_contended">Another device used this code too, so it has been cancelled. Start again with a new code.</string>
+    <string name="link_err_sas">Those digits didn\'t match, so the link was cancelled. Start again with a new code.</string>
+    <string name="link_err_noconsent">This device can\'t approve a link: it has no fingerprint or screen lock set up.</string>
+    <string name="link_err_declined">Cancelled.</string>
+    <string name="link_err_unverified">What this device received couldn\'t be verified, so nothing was saved.</string>
+    <string name="link_err_gone">The link was cancelled or ran out of time. Start again with a new code.</string>
 </resources>

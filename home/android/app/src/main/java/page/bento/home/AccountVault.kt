@@ -60,6 +60,29 @@ object AccountVault {
         } catch (e: Exception) { false }
     }
 
+    /** A decrypt Cipher for the sealed secrets, for a BiometricPrompt: the account is opened only by a person present. */
+    fun openCipher(c: Context): Cipher? {
+        val iv = B64u.dec(sealedText(c)?.substringBefore('.') ?: return null) ?: return null
+        val key = keystore().getKey(WRAP, null) as? SecretKey ?: return null
+        return Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.DECRYPT_MODE, key, javax.crypto.spec.GCMParameterSpec(128, iv)) }
+    }
+
+    /** account ‖ recovery kx ‖ device kx (96 bytes), or null. The caller zeroes it. */
+    fun secrets(c: Context, cipher: Cipher): ByteArray? = try {
+        val ct = B64u.dec(sealedText(c)?.substringAfter('.') ?: "") ?: return null
+        cipher.updateAAD(AAD); cipher.doFinal(ct).takeIf { it.size == 96 }
+    } catch (e: Exception) { null }
+
+    /** What the H side of a link holds, from the record and the unsealed scalars. */
+    fun holder(c: Context, cipher: Cipher): LinkAgent.Holder? {
+        val rec = IdentitySetup.Record.parse(recordText(c) ?: return null) ?: return null
+        val s = secrets(c, cipher) ?: return null
+        val h = LinkAgent.Holder(rec.address, rec.bindText, s.copyOfRange(0, 32), s.copyOfRange(32, 64), rec.devText, rec.devSig,
+            rec.devText.split('.').getOrNull(2)?.isNotEmpty() == true)
+        s.fill(0)
+        return h
+    }
+
     private val AAD = "bento/id/account-seal/v1".toByteArray(Charsets.UTF_8)
 
     private fun write(f: File, text: String) {

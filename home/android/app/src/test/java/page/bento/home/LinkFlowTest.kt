@@ -302,11 +302,11 @@ class LinkFlowTest {
 
     @Test fun `N refuses with no pinned key, an att under an unpinned kid, and a binding that is not the account`() {
         fun prepared(): Rig { val r = Rig(); pair(r, true); r.n.sendOffer(r.nProofs, "x").ok(); r.h.enterSas(r.n.sas()!!).ok(); r.h.readOffer(1000).ok(); r.h.approve(r.holder, null, r.signer).ok(); return r }
-        prepared().let { it.n.awaitFinal(ADDRESS, emptyMap(), 1000).failed(LinkAgent.Why.UNVERIFIED) }
+        prepared().let { assertEquals("no-pinned-key", it.n.awaitFinal(ADDRESS, emptyMap(), 1000).failed(LinkAgent.Why.UNVERIFIED).detail) }
         prepared().let { it.dir.attKid = "dir-other"; it.n.awaitFinal(ADDRESS, it.pins, 1000).failed(LinkAgent.Why.UNVERIFIED) }
         // the binding the directory serves is for ANOTHER account: the dev. no longer names it
         prepared().let { val b = account(); it.dir.bindText = b.bindText; it.dir.bindSig = b.bindSig; it.n.awaitFinal(ADDRESS, it.pins, 1000).failed(LinkAgent.Why.UNVERIFIED) }
-        prepared().let { it.dir.state = "frozen"; it.n.awaitFinal(ADDRESS, it.pins, 1000).failed(LinkAgent.Why.UNVERIFIED) }
+        prepared().let { it.dir.state = "frozen"; assertEquals("state-frozen", it.n.awaitFinal(ADDRESS, it.pins, 1000).failed(LinkAgent.Why.UNVERIFIED).detail) }
         // control
         prepared().let { it.n.awaitFinal(ADDRESS, it.pins, 1000).ok() }
     }

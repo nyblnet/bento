@@ -57,6 +57,14 @@ class IdentitySetup(
         fun serialize(): String = listOf("address" to address, "bind" to bindText, "bindSig" to bindSig, "att" to attText,
             "attSig" to attSig, "dev" to devText, "devSig" to devSig, "recoveryEnrolled" to recoveryEnrolled.toString())
             .joinToString("\n") { "${it.first}\t${it.second}" }
+        companion object {
+            fun parse(text: String): Record? {
+                val m = text.lines().filter { it.contains('\t') }.associate { it.substringBefore('\t') to it.substringAfter('\t') }
+                fun g(k: String): String { return m[k] ?: "\u0000" }
+                if (listOf("address", "bind", "bindSig", "att", "attSig", "dev", "devSig").any { it !in m }) return null
+                return Record(g("address"), g("bind"), g("bindSig"), g("att"), g("attSig"), g("dev"), g("devSig"), g("recoveryEnrolled") == "true")
+            }
+        }
     }
 
     /** What the directory needs to hold for a recovery (identity-directory §9.4): the code-wrapped
