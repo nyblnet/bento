@@ -1479,7 +1479,7 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
       const code = codeFor(E.email)!
       const r = await api('/v1/bind/complete', { email: E.email, code, sig: await E2.k.sign(buildCmp(await hashOf(b.text), code)) })
       ok(r.status === 200 && r.j.rebound === true, `  (a new key over the expired binding: rebound, ${reason(r)})`)
-      ok(await nCreds(E) === 0 && !store('Cred', ck)!.has('cred'), "a rebound over an expired binding drops the old key's passkeys: the index and the Cred")
+      ok(await nCreds(E) === 0 && !store('Cred', ck)?.has('cred'), "a rebound over an expired binding drops the old key's passkeys: the index and the Cred")
       ok(!(await rcOf(E)), "  …and its recovery record (before this it lingered until the next attempt)")
       ok(reason(await fetchBlob(c.reg.key, c.reg.credId)) === 'unknown', '  …so the old passkey fetches nothing')
       ok(await armed(E), '  …and the new key, which never had anything, is armed')
