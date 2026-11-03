@@ -354,7 +354,7 @@ function parseFinal(text: unknown): LinkFinal | null {
  * released); H's dev. must verify and name the binding's account key, and carry
  * a consent key; the cns. must verify under that consent key with audience
  * `dir`, this challenge and N's dev. text as its payload; and N's dev. must
- * verify and name the same account key.
+ * verify, name the same account key, and name a devicePub other than H's.
  *
  * The directory accepts ONE msg3 per slot and deletes the slot on a second
  * attempt (cond. 5); that is its state, not these bytes. A light-tier H (no
@@ -387,6 +387,8 @@ export async function verifyLinkRelease(text: string, opts: {
   const n = await verifyDev(f.nDev, f.nDevSig, { now: opts.now })
   if (!n.ok) return no(`n-dev-${n.reason}`)
   if (n.value.accountPub !== bind.value.accountPub) return no('n-account')
+  // the new device must be a NEW key: a dev. for N naming H's own devicePub re-issues H
+  if (n.value.devicePub === h.value.devicePub) return no('n-device-is-h')
   return { ok: true, value: { sealed: f.sealed, device: n.value } }
 }
 

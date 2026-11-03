@@ -606,6 +606,8 @@ const link: Record<string, unknown> = {}
     { name: 'msg1: an ephemeral', msg: buildMsg1(eD), expect: 'accept' },
     { name: 'msg1: an extra field', msg: `lnk1.${eD}.H`, expect: 'reject', reason: 'grammar' },
     { name: 'msg1: under the msg0 prefix', msg: `lnk0.${eD}`, expect: 'reject', reason: 'grammar' },
+    { name: 'msg1: a point off the curve', msg: `lnk1.${offCurve(eD)}`, expect: 'reject', reason: 'key' },
+    { name: 'msg1: a compressed point', msg: `lnk1.${compressed(eD)}`, expect: 'reject', reason: 'key' },
   ].map((m) => ({ kind: m.name.slice(0, 4), ...m }))
   link.reflected = { id: A.slot.id, eD, eS: eD, roleD: 'H', t: await linkTranscript(A.slot.id, eD, eD, 'H'), note: 'msg1 echoing E_D: no transcript' }
 
@@ -697,6 +699,14 @@ const link: Record<string, unknown> = {}
   rl('an empty line', msg3.replace('\n', '\n\n').split('\n').slice(0, 8).join('\n'), 'reject', 'grammar')
   rl('a cns. with an extra field', { cns: honest.cns + '.x' }, 'reject', 'grammar')
   rl('CRLF line ends', msg3.replace(/\n/g, '\r\n'), 'reject', 'grammar')
+  rl('a space inside a line', { hDev: hDev.replace('.', '. ') }, 'reject', 'grammar')
+  rl('a control character inside a line', { nDev: nDev + '\t' }, 'reject', 'grammar')
+  rl('a non-ASCII character inside a line', { hDev: hDev + '\u00e9' }, 'reject', 'grammar')
+  rl('a MALFORMED served binding', {}, 'reject', 'bind', { bindText: bindText.replace(/^bind\./, 'bind.x.') })
+  rl('a served binding that is not a bind. at all', {}, 'reject', 'bind', { bindText: 'garbage' })
+  const sameAsH = buildDev({ ...nCert, devicePub: hDevice.pub })
+  const sameAsHSig = await sign(acct, sameAsH)
+  rl("N's dev. names H's OWN devicePub", { nDev: sameAsH, nDevSig: sameAsHSig, ...(await consentFor(sameAsH)) }, 'reject', 'n-device-is-h')
   for (const r of release) r.spendCalled = r.reason !== 'grammar'
   link.release = release
 
@@ -719,6 +729,8 @@ const link: Record<string, unknown> = {}
   const other = await ecdsa('stranger-account-2')
   fn('SEALED scalars of ANOTHER account key', { sealed: await sealLinkMsg(K, 3, t, iv(3), packScalars({ account: other.d, kx: rkxL.d })) }, 'reject', 'key-mismatch')
   fn('SEALED with ANOTHER recovery kx scalar', { sealed: await sealLinkMsg(K, 3, t, iv(3), packScalars({ account: acct.d, kx: nKx.d })) }, 'reject', 'key-mismatch')
+  fn('a space inside a line', { nDev: nDev.replace('.', '. ') }, 'reject', 'grammar')
+  fn('a control character inside a line', { hDev: hDev + '\u0000' }, 'reject', 'grammar')
   fn('SEALED with a zero scalar', { sealed: await sealLinkMsg(K, 3, t, iv(3), new Uint8Array(64)) }, 'reject', 'scalar-range')
   link.final = finals
 }

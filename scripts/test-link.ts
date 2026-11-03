@@ -47,6 +47,10 @@ type V = { ok: boolean; reason?: string }
 const verdict = (v: V, r: { expect: string; reason?: string }) =>
   r.expect === 'accept' ? v.ok : !v.ok && (r.reason === undefined || v.reason === r.reason)
 const show = (v: V) => (v.ok ? 'accept' : `reject (${v.reason})`)
+/** A verifier must answer, never throw: a throw is reported as the verdict `threw`. */
+async function caught<T extends V>(f: () => Promise<T>): Promise<V> {
+  try { return await f() } catch (e) { return { ok: false, reason: `threw: ${(e as Error).message}` } }
+}
 
 async function ecdhFrom(dHex: string) {
   const d = unhex(dHex), pub = publicKeyOf(d)!, raw = b64uDec(pub)!
@@ -102,7 +106,7 @@ for (const x of L.roles) ok(scannerMayProceed(x.roleD, x.scannerHoldsAccount) ==
 console.log(`\nmsg0 / msg1 grammar (${L.msgs.length})`)
 for (const m of L.msgs) {
   ok(m.kind === 'msg0' || m.kind === 'msg1', `${m.name}: names its parser`)
-  const v = m.kind === 'msg1' ? await parseMsg1(m.msg) : await parseMsg0(m.msg)
+  const v = await caught(() => (m.kind === 'msg1' ? parseMsg1(m.msg) : parseMsg0(m.msg)))
   ok(verdict(v, m), `${m.name}: ${show(v)}`)
 }
 
@@ -151,8 +155,8 @@ console.log(`\nthe directory's release check (${L.release.length})`)
 type RelRow = { name: string; text: string; bindText: string; state: AttState; challenge: string; challengeSpent?: boolean; now?: number; expect: string; reason?: string; spendCalled: boolean }
 for (const x of L.release as RelRow[]) {
   let calls = 0
-  const v = await verifyLinkRelease(x.text, { bindText: x.bindText, state: x.state, challenge: x.challenge, now: x.now ?? F.now,
-    spend: () => { calls++; return !x.challengeSpent } })
+  const v = await caught(() => verifyLinkRelease(x.text, { bindText: x.bindText, state: x.state, challenge: x.challenge, now: x.now ?? F.now,
+    spend: () => { calls++; return !x.challengeSpent } }))
   ok(verdict(v, x), `${x.name}: ${show(v)}`)
   ok(calls === (x.spendCalled ? 1 : 0), `${x.name}: spend called ${calls}× (want ${x.spendCalled ? 1 : 0})`)
 }
@@ -165,7 +169,7 @@ for (const x of L.release as RelRow[]) {
 
 console.log(`\nN's final check (${L.final.length})`)
 for (const x of L.final) {
-  const v = await openFinal(x.text, { keys: keysOf(x), t: x.t, offer: x.offer, binding: x.binding, now: x.now ?? F.now })
+  const v = await caught(() => openFinal(x.text, { keys: keysOf(x), t: x.t, offer: x.offer, binding: x.binding, now: x.now ?? F.now }))
   ok(verdict(v, x), `${x.name}: ${show(v)}`)
   if (x.expect === 'accept' && v.ok) {
     ok(hex(v.value.keys.account) === L.bind.accountScalarHex && hex(v.value.keys.kx) === L.bind.kxScalarHex, `${x.name}: N recovers the account and recovery kx scalars`)
@@ -178,10 +182,12 @@ console.log('\nthe contract holds its attack rows (security §39.1 run-it list, 
   const names = [...L.release, ...L.final, ...L.offers, ...L.offerWire].map((x: { name: string }) => x.name)
   const has = (needle: string) => names.some((n) => n.includes(needle))
   for (const needle of ['REPLAY', 'RELAY', 'ANOTHER CHALLENGE', 'PAYLOAD SWAP', 'FROZEN', 'PENDING', 'ANOTHER devicePub', 'ANOTHER consentPub',
-    'ANOTHER kx', 'WRONG DIRECTION', 'ANOTHER transcript', 'OFFERED WITHOUT ITS PoP', 'ANOTHER account key', 'pre-mode-C'])
+    'ANOTHER kx', 'WRONG DIRECTION', 'ANOTHER transcript', 'OFFERED WITHOUT ITS PoP', 'ANOTHER account key', 'pre-mode-C',
+    'MALFORMED served binding', "H's OWN devicePub", 'a space inside a line', 'a control character inside a line'])
     ok(has(needle), `attack row present: ${needle}`)
   ok(L.release.filter((x: RelRow) => x.reason === 'grammar').every((x: RelRow) => !x.spendCalled) &&
     L.release.filter((x: RelRow) => x.reason !== 'grammar').every((x: RelRow) => x.spendCalled), 'release: every refusal before the spend is grammar')
+  for (const k of ['msg0', 'msg1']) ok(L.msgs.some((x: { kind: string; reason?: string }) => x.kind === k && x.reason === 'key'), `${k} has an invalid-point row`)
   for (const v of ['accept', 'reject']) for (const sec of ['offers', 'release', 'final', 'msgs'])
     ok(L[sec].some((x: { expect: string }) => x.expect === v), `${sec} has ${v === 'accept' ? 'an accept' : 'a reject'} row`)
 }

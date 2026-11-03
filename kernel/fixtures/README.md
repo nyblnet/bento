@@ -199,6 +199,20 @@ judged by verdict, like the statement rows.
   (`verifyLinkRelease`). The verifier brings `bindText` (the binding it serves),
   its `state`, the `challenge` it issued and whether that challenge is already
   spent. Every row carries `spendCalled`: every refusal before the spend is
-  `grammar`, everything after it has consumed the challenge.
+  `grammar`, everything after it has consumed the challenge. A malformed
+  served binding is `bind` (after the spend), never a crash; N's dev. naming
+  H's own devicePub is `n-device-is-h`. Every msg3 line is printable ASCII
+  0x21–0x7E: a space, a control or a non-ASCII byte in any line is `grammar`.
 - `final`: N's check of msg3 (`openFinal`), given what it offered (`offer`) and
   the binding's public halves (`binding`, from a pinned directory key).
+
+Host port notes for link v1:
+
+- Verifiers answer every row; none may throw. A malformed input is a refusal
+  with a reason.
+- The platform field is shown through a FIXED map of known tokens. A token the
+  host does not know is shown as unknown, never presented as verified.
+- After linking, N shows the label H wrote into N's dev., not the one N
+  offered.
+- Each direction key seals exactly ONE message (n2h message 2, h2n message 3).
+  A retry is a new slot with a new code, never a second message under a key.
