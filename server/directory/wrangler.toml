@@ -31,6 +31,14 @@ class_name = "Ledger"
 name = "CRED"
 class_name = "Cred"
 
+[[durable_objects.bindings]]
+name = "ACCOUNT"
+class_name = "Account"
+
+[[durable_objects.bindings]]
+name = "LINK"
+class_name = "Link"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Address", "Ledger"]
@@ -38,3 +46,7 @@ new_sqlite_classes = ["Address", "Ledger"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["Cred"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["Account", "Link"]

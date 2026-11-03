@@ -40,6 +40,15 @@ export function consentOrigins(env) {
   return set
 }
 
+/** The origins accepted for a passkey ASSERTION or REGISTRATION (§9.3): the whole
+ *  set. A desktop native origin is self-asserted and advisory: it is accepted
+ *  here, but earns nothing, and is never consent evidence (consentOrigins). */
+export function assertionOrigins(env) {
+  const set = new Set(ORIGINS.map((o) => o.origin))
+  for (const o of consentOrigins(env)) set.add(o)
+  return set
+}
+
 const sha256 = async (bytes) => new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))
 const eq = (a, b) => a.length === b.length && a.every((x, i) => x === b[i])
 
@@ -111,4 +120,88 @@ export async function credKey(credentialIdB64u) {
   const id = b64uDec(credentialIdB64u ?? '')
   if (!id || id.length === 0 || id.length > 1023) return null
   return b64uEnc(await sha256(id))
+}
+
+// --- registration (§9.3) -------------------------------------------------------------
+
+/** Minimal CBOR (RFC 8949) for attestation objects and COSE keys: definite
+ *  lengths only, no tags, no floats. Returns [value, nextOffset] or throws. */
+function cbor(b, i = 0, depth = 0) {
+  if (depth > 8 || i >= b.length) throw new Error('cbor')
+  const ib = b[i++], major = ib >> 5, ai = ib & 31
+  let n
+  if (ai < 24) n = ai
+  else if (ai === 24) n = b[i++]
+  else if (ai === 25) { n = (b[i] << 8) | b[i + 1]; i += 2 }
+  else if (ai === 26) { n = ((b[i] << 24) >>> 0) + ((b[i + 1] << 16) | (b[i + 2] << 8) | b[i + 3]); i += 4 }
+  else throw new Error('cbor')
+  if (n === undefined || i > b.length) throw new Error('cbor')
+  switch (major) {
+    case 0: return [n, i]
+    case 1: return [-1 - n, i]
+    case 2: case 3: {
+      if (i + n > b.length) throw new Error('cbor')
+      const v = b.slice(i, i + n)
+      return [major === 2 ? v : new TextDecoder('utf-8', { fatal: true }).decode(v), i + n]
+    }
+    case 4: { const arr = []; for (let k = 0; k < n; k++) { let v; [v, i] = cbor(b, i, depth + 1); arr.push(v) } return [arr, i] }
+    case 5: {
+      const m = new Map()
+      for (let k = 0; k < n; k++) {
+        let key, v
+        ;[key, i] = cbor(b, i, depth + 1)
+        ;[v, i] = cbor(b, i, depth + 1)
+        if (m.has(key)) throw new Error('cbor')
+        m.set(key, v)
+      }
+      return [m, i]
+    }
+    case 7: if (ai === 20 || ai === 21 || ai === 22) return [ai === 21 ? true : ai === 20 ? false : null, i]
+  }
+  throw new Error('cbor')
+}
+
+/**
+ * Check a registration (navigator.credentials.create) and return what the Cred
+ * stores: { ok, credentialId (b64u), pub (raw P-256), signCount, be }. ES256 only;
+ * attestation "none" only (the directory learns no authenticator model). Never
+ * throws on bad input.
+ */
+export async function parseRegistration(attObj, cdjBytes, { challenge, origins }) {
+  const no = (reason) => ({ ok: false, reason })
+  let cd
+  try { cd = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(cdjBytes)) } catch { return no('grammar') }
+  if (!cd || typeof cd !== 'object') return no('grammar')
+  if (cd.type !== 'webauthn.create') return no('type')
+  if (typeof cd.challenge !== 'string' || cd.challenge !== challenge) return no('challenge')
+  if (typeof cd.origin !== 'string' || !origins.has(cd.origin)) return no('origin')
+  if (cd.crossOrigin !== undefined && cd.crossOrigin !== false) return no('cross-origin')
+  if (Object.hasOwn(cd, 'topOrigin')) return no('cross-origin')
+
+  let ao, end
+  try { [ao, end] = cbor(attObj) } catch { return no('grammar') }
+  if (end !== attObj.length || !(ao instanceof Map)) return no('grammar')
+  if (ao.get('fmt') !== 'none') return no('attestation')
+  const st = ao.get('attStmt')
+  if (!(st instanceof Map) || st.size !== 0) return no('attestation')
+  const ad = ao.get('authData')
+  if (!(ad instanceof Uint8Array) || ad.length < 55) return no('grammar')
+  if (!eq(ad.slice(0, 32), await sha256(new TextEncoder().encode(RP_ID)))) return no('rp')
+  const flags = ad[32]
+  if (!(flags & 0x01) || !(flags & 0x04)) return no('flags') // UP and UV
+  if (!(flags & 0x40)) return no('flags') // AT: attested credential data present
+  if ((flags & 0x10) && !(flags & 0x08)) return no('flags') // backed up but not backup-eligible
+  const signCount = new DataView(ad.buffer, ad.byteOffset + 33, 4).getUint32(0)
+  const idLen = (ad[53] << 8) | ad[54]
+  if (idLen === 0 || idLen > 1023 || 55 + idLen > ad.length) return no('grammar')
+  const credentialId = ad.slice(55, 55 + idLen)
+  let cose, after
+  try { [cose, after] = cbor(ad, 55 + idLen) } catch { return no('key') }
+  if (after !== ad.length && !(flags & 0x80)) return no('grammar') // trailing bytes only as extensions
+  if (!(cose instanceof Map) || cose.get(1) !== 2 || cose.get(3) !== -7 || cose.get(-1) !== 1) return no('key') // EC2, ES256, P-256
+  const x = cose.get(-2), y = cose.get(-3)
+  if (!(x instanceof Uint8Array) || !(y instanceof Uint8Array) || x.length !== 32 || y.length !== 32) return no('key')
+  const raw = new Uint8Array(65); raw[0] = 4; raw.set(x, 1); raw.set(y, 33)
+  try { await crypto.subtle.importKey('raw', raw, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']) } catch { return no('key') }
+  return { ok: true, credentialId: b64uEnc(credentialId), pub: b64uEnc(raw), signCount, be: !!(flags & 0x08) }
 }

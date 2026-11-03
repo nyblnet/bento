@@ -22,10 +22,14 @@ import { addressKey, normalize } from './address.js'
 import { issueChallenge, openChallenge, CHALLENGE_TTL_MS } from './challenge.js'
 import { AUDIENCE, verifyDirConsent } from './consent.js'
 import {
-  attest, b64uEnc, buildCmp, buildDel, hashOf, importDirKey, tombstone as tombText, verifyBind, verifyCmp, verifyDel,
-  verifyStatementSig,
+  attest, b64uDec, b64uEnc, buildCmp, buildDel, hashOf, importDirKey, tombstone as tombText, verifyBind, verifyCmp, verifyDel,
+  dreqNeedsConsent, verifyDev, verifyDreq, verifyStatementSig,
 } from './statements.js'
 import { verifyAssertion } from './webauthn.js'
+import { Link, linkRoute } from './link.js'
+import { Account, keysRoute } from './account.js'
+
+export { Account, Link }
 
 /** A bind. statement's fields, or null. `at` is the time it is judged at: now
  *  for a new submission; for one the directory already accepted, the time it
@@ -45,11 +49,12 @@ export const LIMITS = {
   mailCooldownMs: 60_000,
   mailPerDay: 3, // per ADDRESS: the mail-bombing control
   mailPerMonth: 10,
-  ip: { start: 20, complete: 60, lookup: 300, delete: 20, challenge: 120, rotate: 20 }, // per IP per hour
+  ip: { start: 20, complete: 60, lookup: 300, delete: 20, challenge: 120, rotate: 20, linkOpen: 30, link: 600, keys: 60, recovery: 20 }, // per IP per hour
   rotationWindowMs: 72 * 3_600_000, // a pending rotation is contestable for 72 hours (security §25)
   freezeTokenTtlMs: 24 * 3_600_000, // an emailed freeze link stays usable for a day
   credFailures: 5, // consecutive WebAuthn failures before a credential locks
   credLockMs: 15 * 60_000,
+  events: 20, // the short event list a status read returns (§9.7)
 }
 const DAY = 86_400_000
 const CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ' // no 0/O, 1/I/L
@@ -129,6 +134,18 @@ function same(a, b) {
 // the directory can never be used to deliver someone else's words.
 export const freezeLink = (to, token) => `https://id.bento.page/freeze#e=${b64uEnc(new TextEncoder().encode(to))}&t=${token}`
 
+// Every link, passkey change or fetch, recovery-code change and recovery attempt
+// notifies the address (§9.3, §9.4, §39.1). Placeholder wording.
+export const NOTICES = Object.freeze({
+  link: ['A device was linked to your bento/id', 'A new device was linked to the bento/id keys for this address (device key {fp}).'],
+  'cred-add': ['A passkey was added to your bento/id', 'A passkey ({fp}) was added for getting the bento/id keys for this address onto a new device.'],
+  'cred-del': ['A passkey was removed from your bento/id', 'A passkey ({fp}) was removed from the bento/id keys for this address.'],
+  'cred-fetch': ['Your bento/id passkey was used', 'A passkey ({fp}) was used to put the bento/id keys for this address on a device.'],
+  'rc-enrol': ['Your bento/id recovery code changed', 'A new recovery code was set up for the bento/id keys for this address. Any earlier code no longer works.'],
+  'rc-attempt': ['Your bento/id recovery code was tried', 'Someone entered a recovery code for this address. If it was right, the keys are released to them 72 hours later.'],
+  'rc-release': ['Your bento/id recovery code was used', 'The recovery code for this address was used to collect its keys after the 72-hour wait, or someone tried to.'],
+})
+
 export async function sendCode(env, to, code, fp, kind, freezeToken = null) {
   let subject, body
   if (kind === 'freeze') {
@@ -154,6 +171,15 @@ export async function sendCode(env, to, code, fp, kind, freezeToken = null) {
       'If you did not ask for this, someone may have your device. Freeze your keys here:',
       freezeLink(to, freezeToken),
       'Opening the link does nothing on its own. Once frozen, only your recovery code can unfreeze it.',
+    ].join('\n')
+  } else if (Object.hasOwn(NOTICES, kind)) {
+    // a NOTICE: no code, fixed text, and at most a key fingerprint
+    const [subj, line] = NOTICES[kind]
+    subject = subj
+    body = [
+      line.replace('{fp}', fp),
+      '',
+      'If this was not you, open bento/home on one of your devices and freeze your keys.',
     ].join('\n')
   } else {
     subject = kind === 'delete' ? 'Your bento/id removal code' : 'Your bento/id code'
@@ -191,6 +217,24 @@ async function addressStub(env, email) {
 const call = async (stub, op, args) => {
   const r = await stub.fetch('https://address/op', { method: 'POST', body: JSON.stringify({ op, ...args }) })
   return { status: r.status, body: await r.json() }
+}
+
+/** Append to the address's event list (§9.7) and mail it. Never fails the request. */
+async function notify(env, scope, kind, fp) {
+  try {
+    const r = await call(env.ADDRESS.get(env.ADDRESS.idFromName(scope)), 'event', { kind, fp })
+    if (r.body.to) await sendCode(env, r.body.to, '', fp, kind)
+  } catch (e) { console.log(`notice failed: ${e.message}`) }
+}
+
+/** Deleting an address takes its account material with it (§9.1): the passkeys
+ *  and the ledger always; the recovery verifier only with a MAILBOX deletion,
+ *  since a holder deletion keeps it for the deleted binding's window (§39.6). */
+async function cascade(env, email, by) {
+  if (!env.ACCOUNT) return
+  const scope = await addressKey(email)
+  const r = await call(env.ACCOUNT.get(env.ACCOUNT.idFromName(scope)), 'wipe', { keepRc: by === 'holder' })
+  for (const k of r.body.creds || []) await call(env.CRED.get(env.CRED.idFromName(k)), 'delete', { scope })
 }
 
 async function body(req) {
@@ -231,6 +275,10 @@ export default {
     const b = await body(req)
     if (!b) return json(400, { error: 'bad-request' })
 
+    const deps = { json, ledger, addressCall: call, notify: (scope, kind, fp) => notify(env, scope, kind, fp) }
+    const routed = (await linkRoute(p, b, env, ip, deps)) ?? (await keysRoute(p, b, env, ip, deps))
+    if (routed) return routed
+
     if (p === '/v1/bind/start') {
       // ALWAYS 202 from here on, whatever happens: the answer must not reveal
       // whether the address exists, is rate-limited, or was mailed.
@@ -259,6 +307,7 @@ export default {
       if (!email || typeof b.sig !== 'string') return json(400, { error: 'invalid' })
       if (!(await ledger(env, ip, 'delete'))) return json(429, { error: 'rate-limited' })
       const r = await call(await addressStub(env, email), 'delete', { ts: b.ts, sig: b.sig })
+      if (r.status === 200 && r.body.deleted) await cascade(env, email, 'holder')
       return relay(r)
     }
 
@@ -278,6 +327,7 @@ export default {
       if (!email || !codeOk(b.code)) return json(400, { error: 'invalid' })
       if (!(await ledger(env, ip, 'complete'))) return json(429, { error: 'rate-limited' })
       const r = await call(await addressStub(env, email), 'deleteComplete', { code: b.code })
+      if (r.status === 200 && r.body.deleted) await cascade(env, email, 'mailbox')
       return relay(r)
     }
 
@@ -579,7 +629,79 @@ export class Address {
       return out(200, { state: 'frozen' })
     }
 
+    // --- what the other classes ask an address -------------------------------------
+    if (a.op === 'peek') {
+      const cur = await live()
+      return out(200, cur ? { live: true, accountPub: cur.b.key, state: await stateOf() } : { live: false, state: 'none' })
+    }
+
+    if (a.op === 'event') {
+      // the short event list devices read with a signed status request (§9.7);
+      // `to` is read from the stored statement, so the address is never stored twice
+      const cur = await s.get('cur')
+      const b = cur && (await readBind(cur.stmt, cur.sig, cur.verifiedAt))
+      if (!b) return out(200, { to: null })
+      const events = [...((await s.get('events')) || []), { k: a.kind, at: now, fp: a.fp || '' }].slice(-LIMITS.events)
+      await s.put('events', events)
+      return out(200, { to: b.address })
+    }
+
+    // an account-signed request (dreq.): spend FIRST, then verify it against the
+    // binding served as authoritative (the OLD one while pending), and the consent
+    // the op needs (cred-add, cred-del, rc-enrol; security §39.3)
+    if (a.op === 'authorize') {
+      if (!(await spend(a.nonce))) return refuse('replay')
+      const cur = await live()
+      if (!cur || typeof a.req !== 'string' || typeof a.sig !== 'string') return refuse('state')
+      const state = await stateOf()
+      const subject = dreqSubject(a.subject)
+      if (!subject) return refuse('grammar')
+      const v = await verifyDreq(a.req, a.sig, { bindText: cur.stmt, state, challenge: a.challenge, subject, spend: () => true })
+      if (!v.ok) return refuse(`dreq:${v.reason}`)
+      if (dreqNeedsConsent(subject.op)) {
+        const c = await verifyDirConsent(this.env, {
+          scope: a.scope, accountPub: cur.b.key, purpose: subject.op, challenge: a.challenge, payloadText: a.req, consent: a.consent, now,
+        })
+        if (!c.ok) return refuse(`consent:${c.reason}`)
+      }
+      const body = { accountPub: cur.b.key, state }
+      if (subject.op === 'status') body.events = (await s.get('events')) || []
+      return out(200, body)
+    }
+
+    // device linking (§39.1): H's consent to link N, checked before the slot
+    // releases anything. Spend first; active only; both certificates by the LIVE key.
+    if (a.op === 'link') {
+      if (!(await spend(a.nonce))) return refuse('replay')
+      const cur = await live()
+      if (!cur || (await stateOf()) !== 'active') return refuse('state')
+      const h = await verifyDev(a.hDev, a.hDevSig, { now })
+      if (!h.ok || h.value.accountPub !== cur.b.key) return refuse('h-dev')
+      const n = await verifyDev(a.nDev, a.nDevSig, { now })
+      if (!n.ok || n.value.accountPub !== cur.b.key || n.value.devicePub === h.value.devicePub) return refuse('n-dev')
+      // a native consent must come from H's own consent key
+      if (a.consent && typeof a.consent.cns === 'string' && a.consent.dev !== a.hDev) return refuse('consent:dev')
+      const c = await verifyDirConsent(this.env, {
+        scope: a.scope, accountPub: cur.b.key, purpose: 'link', challenge: a.challenge, payloadText: a.nDev, consent: a.consent, now,
+      })
+      if (!c.ok) return refuse(`consent:${c.reason}`)
+      return out(200, { accountPub: cur.b.key, fp: (await hashOf(n.value.devicePub)).slice(0, 8) })
+    }
+
     return out(400, { error: 'bad-op' })
+  }
+}
+
+/** The subject of a directory request, from the request's own bytes (base64url). */
+function dreqSubject(x) {
+  if (!x || typeof x !== 'object') return null
+  const bytes = (v) => { const d = typeof v === 'string' ? b64uDec(v) : null; return d && b64uEnc(d) === v ? d : null }
+  switch (x.op) {
+    case 'status': case 'freeze': return { op: x.op }
+    case 'cred-add': { const a = bytes(x.attestationObject), c = bytes(x.clientDataJSON); return a && c ? { op: x.op, attestationObject: a, clientDataJSON: c } : null }
+    case 'cred-del': { const c = bytes(x.credentialId); return c ? { op: x.op, credentialId: c } : null }
+    case 'rc-enrol': { const b = bytes(x.body); return b ? { op: x.op, body: b } : null }
+    default: return null // contest arrives with the D1b routes
   }
 }
 
@@ -612,6 +734,41 @@ export class Cred {
       await s.put('cred', { ...cred, signCount: v.signCount })
       await s.put('fails', 0)
       return res({ ok: true })
+    }
+
+    // --- the key-blob store (§9.3) ---
+    const st = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+    if (a.op === 'register') {
+      if (await s.get('cred')) return st(400, { error: 'invalid', reason: 'exists' })
+      await s.put('cred', a.rec)
+      return st(200, { ok: true })
+    }
+
+    if (a.op === 'get') {
+      // the challenge's nonce is recorded HERE, first: one fetch per challenge
+      const spent = Object.fromEntries(Object.entries((await s.get('spent')) || {}).filter(([, t]) => t > now))
+      if (typeof a.nonce !== 'string' || Object.hasOwn(spent, a.nonce)) return st(400, { reason: 'replay' })
+      spent[a.nonce] = now + 2 * CHALLENGE_TTL_MS
+      await s.put('spent', spent)
+      const cred = await s.get('cred')
+      if (!cred || !cred.blob) return st(400, { reason: 'unknown' })
+      if (((await s.get('lockedUntil')) || 0) > now) return st(400, { reason: 'locked' })
+      const v = await verifyAssertion(cred, a.assertion, { challenge: a.challenge, origins: new Set(a.origins) })
+      if (!v.ok) {
+        const fails = ((await s.get('fails')) || 0) + 1
+        if (fails >= LIMITS.credFailures) { await s.put('lockedUntil', now + LIMITS.credLockMs); await s.put('fails', 0) } else await s.put('fails', fails)
+        return st(400, { reason: v.reason })
+      }
+      await s.put('cred', { ...cred, signCount: v.signCount })
+      await s.put('fails', 0)
+      return st(200, { scope: cred.scope, accountPub: cred.accountPub, blob: cred.blob })
+    }
+
+    if (a.op === 'delete') {
+      const cred = await s.get('cred')
+      if (!cred || cred.scope !== a.scope) return st(400, { reason: 'unknown' })
+      await s.delete(['cred', 'fails', 'lockedUntil', 'spent'])
+      return st(200, { ok: true })
     }
 
     return res({ ok: false, reason: 'bad-op' })
