@@ -11911,3 +11911,111 @@ couplings below.
 - **render.ts re-exports** SVG_TAGS, svgAttrAllowed, svgHrefAllowed,
   svgUrlRefsAllowed and sanitizeSvgCss, so callers and rigs keep importing them
   from the renderer.
+
+## 2026-11-02 — bento/connect: directory requests (dreq.), the rotation vouch (rot.), and op-specific consent
+
+Three additions to `kernel/src/statements.ts`, with vectors in
+`kernel/fixtures/identity-v1.json`. They are what the directory needs before
+key rotation, freezing and passkey management can be switched on.
+- **`dreq.<op>.<b64u(address)>.<bindHash>.<challenge>.<arg>`** is every
+  agent-signed request that only the directory verifies, in one layout with a
+  CLOSED op set: `contest`, `freeze`, `status`, `cred-add`, `cred-del`,
+  `rc-enrol`. It is bound to a single-use challenge the directory issued, spent
+  before anything else is checked, rather than to a timestamp, so there is no
+  replay window at all. Each op fixes its arg exactly (empty for freeze and
+  status; otherwise a SHA-256 the directory RECOMPUTES from what it holds, never
+  reads from the request). `cred-add` hashes the exact registration bytes,
+  `sha256(attestationObject ‖ sha256(clientDataJSON))`, not the credential id,
+  so the key under an id cannot be swapped in transit. The inner hash fixes the
+  tail at 32 bytes, so the split between the two parts is bound: under a bare
+  concatenation, moving one byte across the boundary gave the same arg, and
+  safety rested on every directory and host decoding CBOR and JSON strictly.
+  It is WebAuthn's own `authenticatorData ‖ clientDataHash` shape. The signer is the account key of the
+  binding the directory currently serves as authoritative, which during a
+  pending rotation is the OLD one, so a pending key signs no request. While
+  frozen only `status` is accepted; `contest` only while pending; the three
+  credential and recovery ops only while active.
+- **Consent for `cred-add`, `cred-del` and `rc-enrol` names the op.** Those
+  three change who can recover the account, so each also needs a `cns.`, with
+  purposes of the same names whose families are `dreq.cred-add.`,
+  `dreq.cred-del.` and `dreq.rc-enrol.`. Never a bare `dreq.`: the family is a
+  prefix check, so a bare family would let one consent authorise any op.
+  Freeze, contest and status need no consent: they remove power or only read.
+- **`rot.<sha256(next bind)>.<sha256(live bind)>`, signed by the OLD account
+  key, is the rotation vouch**, replacing "the old key also signs the new
+  `bind.` bytes". A signature's meaning belongs in its own bytes, so nothing an
+  account key signs about its own binding can be replayed as a vouch. It
+  carries no challenge, because a client checks it OFFLINE against the binding
+  it pinned. `verifyRotation` requires: next self-signed and in date, same
+  address, seq + 1, next.prev = sha256(pinned), the rot. naming exactly those
+  two hashes in that order, the rot. signed by the pinned key, and next
+  CREATED within the pinned binding's lifetime (± the 5-minute skew), else
+  `stale-vouch`. A key's authority to vouch ends when its binding does:
+  otherwise a key leaked after expiry (a retired device), with a directory
+  serving the chain, turns a pinner's "key changed" warning into a silent
+  follow. The pinned binding is never checked against the current time, so a
+  legitimate chain still verifies after its old binding expires; legitimate
+  rotations always pass, because the directory starts one only from a live
+  binding.
+- **A rotation resolved by the recovery code has no `rot.`**, and pinners warn.
+  That is intended: the old key was reported lost or contested, and no
+  directory-asserted marker may soften the warning.
+- **The new rows are in their own fixture sections** (`dreq`, `rot`,
+  `dreqConsent`), not in `statements`, because host runners dispatch
+  `statements` rows by type and refuse an unknown one. Each host adopts them in
+  its own change.
+
+## 2026-11-02 — bento/connect: kx placement is mode C (a per-device kx and a recovery kx, both required)
+
+The maintainer ruled identity-design §6b: **mode C.** Every `dev.` carries
+that device's own key-agreement key (ECDH P-256) and every `bind.` carries the
+account's RECOVERY kx. This replaces the 2026-10-18 holding rule, under which
+both slots had to stay empty until the ruling.
+
+- **Both slots are REQUIRED, and there is no other mode.** An empty slot is
+  refused with `kx`, as is a value that is not an uncompressed P-256 point or
+  that repeats a signing key of the same certificate. The kernel's mode table
+  (`unruled`/A/B/C) and every host's copy of it are gone, not set to C: a
+  switch that still accepted an empty slot or a 32-byte blob would be a
+  lenient path one call away. `KX_MODE` stays as a constant, `'C'`, for the
+  rigs to assert.
+- **The account blob is exactly 64 bytes**: the account scalar ‖ the recovery
+  kx scalar. Both blobs (PRF and recovery code) carry the same plaintext, and
+  each scalar must be in 1..n−1 and match its directory-signed public half: the
+  account key and the binding's kx slot. A 32-byte account-only plaintext is
+  refused with `length` after it decrypts, never read as a partial key set.
+  `blobs.*.wrongLength` in recovery-v1.json carries 32-, 63-, 65- and 96-byte
+  blobs sealed under the right key and aad, so every host proves it refuses on
+  length rather than failing to decrypt.
+- **A device's own kx never leaves it**; only the recovery kx's scalar travels,
+  in the blobs. The light tier (the extension) generates its device kx
+  non-extractable and re-imports the recovery kx non-extractable after sealing
+  the blobs, as it already did for the account key.
+- **Enrolments made before this ruling are discarded, never migrated.** They
+  have no kx and 32-byte blobs, and nothing under mode C accepts either. The
+  extension's stored identity record moves to v2; a v1 record (or one with no
+  version) reads as none and is deleted, and setup starts again. No upgrade
+  path exists by design: every such enrolment is a test enrolment.
+- **identity-v1.json and recovery-v1.json are regenerated.** identity-v1 drops
+  `kxModeDefault` and every per-row `kxMode` for a top-level `kxMode: "C"`, and
+  every accepted `dev.` and `bind.` fills its slot. recovery-v1's `scalars`
+  rows are now 64-byte plaintexts checked against both public halves. The
+  Swift, Kotlin, Rust and extension ports and their rigs change in the same
+  PR, so no host runs against vectors it cannot pass.
+- **Security's conditions for C (§26c) bind the sharing work that uses the
+  recovery kx, not this format change:** "unwrap once and drop" bounds only a
+  device compromised after the drop; the recovery kx is exactly as safe as the
+  blobs, so blob compromise exposes all history until the next rotation;
+  removing a device as lost or stolen always rotates the recovery kx; history
+  for a new device comes from an existing device re-wrapping to its kx
+  whenever one is reachable, and from the recovery kx only when none is; and
+  the organisation option is pure B (no recovery kx), with escrow elsewhere.
+  Senders wrap to every device kx AND the recovery kx, never the recovery kx
+  alone.
+- **Guarded by mutants.** `scripts/test-kx-mode-mutants.ts` reintroduces ten
+  lenient paths into a copy of kernel/src (an empty slot read as no kx, no
+  point check, a kx equal to a signing key, either certificate ignoring its
+  slot, a 32-byte blob beside a 64-byte one, any length of at least 64, the kx
+  scalar never matched, a missing kx public half skipping the match, a seal
+  without a kx) and requires test-statements or test-recovery to fail on each,
+  after the unmutated copy passes both.
