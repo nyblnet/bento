@@ -602,6 +602,19 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-webauthn-mutants.ts
 
+    - name: Sync — presence key proof
+      # SyncSession.keyProven(actor, pub) over real sessions on a
+      # BroadcastChannel: owner, member, reader and legacy copies, each refusal
+      # row beside a control the same path accepts.
+      shell: bento-step {0}
+      run: node scripts/test-sync-keyproof.ts
+
+    - name: Sync — presence key proof mutants
+      # Each mutant weakens one rule in a copy of the sources; the rig above
+      # must go red on every one, after the unmutated copy passes.
+      shell: bento-step {0}
+      run: node scripts/test-sync-keyproof-mutants.ts
+
     - name: bento/id roster chain
       # kernel/src/roster.ts against kernel/fixtures/roster-v1.json: the option G
       # roster (ros.) and the directory's ripening countersign (rip.). A change is
