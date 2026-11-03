@@ -18,6 +18,7 @@
 
 import { isWebUrl } from '../model.ts'
 import { insideOpenFence, textUpTo } from './codefence.ts'
+import { typedListAtCaret, undoTypedList, type ListUndo } from './typedlist.ts'
 
 const INLINE: Array<{ re: RegExp; tag: string }> = [
   { re: /\*\*([^*\n]+)\*\*$/, tag: 'b' },
@@ -32,6 +33,7 @@ const INLINE: Array<{ re: RegExp; tag: string }> = [
 type LastFormat =
   | { kind: 'inline'; el: HTMLElement; source: string; tail: Text }
   | { kind: 'bullet'; node: Text; offset: number; source: string }
+  | { kind: 'list'; undo: ListUndo }
 let lastFormat: LastFormat | null = null
 
 /** Forget the revertible conversion (any input that isn't a fresh conversion). */
@@ -46,6 +48,7 @@ export function undoAutoformat(): boolean {
   const last = lastFormat
   lastFormat = null
   if (!last) return false
+  if (last.kind === 'list') return undoTypedList(last.undo)
   if (last.kind === 'bullet') {
     if (!last.node.isConnected) return false
     last.node.replaceData(last.offset, 2, last.source)
@@ -79,6 +82,8 @@ export function autoformatAtCaret(): boolean {
   // the next typed character simply replaces — "•x", no gap (discussion
   // #501; measured: "- " then "x" gave U+2022 U+0078). Indented by two or more spaces → a hollow sub-bullet, the
   // indent kept (discussions #255, #368).
+  const made = typedListAtCaret(node, off)
+  if (made) { lastFormat = { kind: 'list', undo: made }; return true }
   const bullet = upto.match(/(?:^|\n)([  ]{2,})?[-*][  ]$/)
   if (bullet && off >= 2 && isLineStart(node, off - 2 - (bullet[1]?.length ?? 0))) {
     const source = node.data.slice(off - 2, off)

@@ -274,6 +274,13 @@ jobs:
         # Outdent do the same; committed, one undo step; Tab outside a list —
         # a plain box, a table cell — is unchanged.
         run: node scripts/test-slides-bullet-indent-browser.mjs
+      - name: Typed lists in Chromium
+        # #711: "- " / "* " is a real list while the box is open, Enter
+        # continues it and ends it on an empty item, two spaces nest, an empty
+        # nested item outdents on Enter, Tab / Shift+Tab and ⌘Z still work, a
+        # marker typed inside an item is not a second bullet, glyph decks,
+        # pasted text and table cells are unchanged.
+        run: node scripts/test-slides-typed-list-browser.mjs
       - name: URLs become links in Chromium
         # #723: typing a URL then a space or Enter links it (a trailing full
         # stop stays outside, what follows is plain, ⌘Z reverts), javascript:
