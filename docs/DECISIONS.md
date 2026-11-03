@@ -12020,6 +12020,45 @@ both slots had to stay empty until the ruling.
   without a kx) and requires test-statements or test-recovery to fail on each,
   after the unmutated copy passes both.
 
+## 2026-11-03 — Android: Bento ID setup (home/android)
+
+Setup is built and reachable only from a dev build (debug, or the minified `releaseCheck`). What it settles, so a
+later change does not undo it by accident:
+
+- **The setup screen has no entry point in a release build.** `SetupActivity` is
+  not exported and nothing launches it, and a release build pins no directory key
+  (the keys are not minted), so the flow refuses before it asks for anything. A
+  dev build exports it and takes the directory URL and a test key from the
+  launching intent. Release behaviour is unchanged until the strings are ruled on
+  and the directory is live.
+- **The account's scalars rest under a Keystore AES key that needs the person for
+  every use.** The account signing key and the two kx keys must move between
+  devices, so they cannot be Keystore keys. They are generated in memory, sealed
+  under an AES-256-GCM key with the consent key's authentication parameters
+  (BiometricPrompt; the device PIN as well from API 30; it survives a new
+  fingerprint), and zeroed. The portable copy is the recovery blob, not this
+  file. Nothing secret reaches disk before the last step, and a process death
+  before then restarts setup.
+- **Order, and what each step refuses.** The memory Argon2id needs and the
+  derivation self-check are checked BEFORE an email is bound; the directory's
+  attestation is checked against a pinned key, by exact kid, and anything but
+  `active` stops setup; the typed recovery code is checked against the one shown,
+  and a device short of memory is reported as that, never as a wrong code. A
+  managed device (any identity managed-config key present) does no identity
+  operation.
+- **The recovery code is enrolled at setup** with an account-signed
+  `dreq.rc-enrol.` over the exact enrolment body, plus the consent key's `cns.`
+  (two fingerprint prompts in all: consent, then sealing). A device with no consent
+  key (API 26–29, no biometric enrolled) finishes setup with the recovery code
+  NOT registered and says so; it is never shown as registered.
+- **The derivation self-check is a known answer** (kernel's recovery-v1
+  `derivations` row) run before binding. The release-APK check builds the
+  minified `releaseCheck` variant, which is release as configured (full R8 optimisation and obfuscation) plus the
+  dev switch, and runs it on a device; its positive control is a build whose R8 rules break
+  a function the check covers, which must read FAIL.
+- **Not ported:** the display `name` and device `label` fields are emitted empty
+  until the Unicode display filter has an Android port. Certificates live a year.
+
 ## 2026-11-03 — bento/connect B1: the identity calls in `home/bridge.js` (whoami, sign, resolve)
 
 - **One shared object, built from a declared capability.** A host that has
