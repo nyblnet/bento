@@ -180,11 +180,14 @@ impl<S: KeyStore, C: Clock> Agent<S, C> {
         self.session = None;
     }
 
+    /// A session ENDS AT the idle or overall limit, not after it (>=; security's
+    /// cross-host ruling, matching Android): at exactly `idle_ms` of idleness or
+    /// `overall_ms` of age the session is gone.
     fn session_live(&mut self) -> bool {
         let now = self.clock.now_ms();
         match self.session {
             Some((start, last))
-                if now.saturating_sub(last) <= self.policy.idle_ms && now.saturating_sub(start) <= self.policy.overall_ms =>
+                if now.saturating_sub(last) < self.policy.idle_ms && now.saturating_sub(start) < self.policy.overall_ms =>
             {
                 true
             }
@@ -358,14 +361,22 @@ mod tests {
         a.begin_session();
         t.set(t.get() + 60 * 60_000 + 1);
         assert_eq!(a.sign(&OK, "frame", &frame()), Err(Refusal::Reauth), "idle > 1 h");
+        // the boundary rows: ONE ms under the idle limit still signs, exactly AT it does not
+        a.begin_session();
+        t.set(t.get() + 60 * 60_000 - 1);
+        assert!(a.sign(&OK, "frame", &frame()).is_ok(), "idle 1 ms under the limit");
+        t.set(t.get() + 60 * 60_000);
+        assert_eq!(a.sign(&OK, "frame", &frame()), Err(Refusal::Reauth), "idle exactly AT the limit ends the session");
         a.begin_session();
         // keep it busy every 30 min for 24 h: never idle, but past overall
-        for _ in 0..48 {
+        for _ in 0..47 {
             t.set(t.get() + 30 * 60_000);
             assert!(a.sign(&OK, "frame", &frame()).is_ok());
         }
-        t.set(t.get() + 30 * 60_000);
-        assert_eq!(a.sign(&OK, "frame", &frame()), Err(Refusal::Reauth), "overall > 24 h");
+        t.set(t.get() + 30 * 60_000 - 1);
+        assert!(a.sign(&OK, "frame", &frame()).is_ok(), "overall 1 ms under 24 h");
+        t.set(t.get() + 1);
+        assert_eq!(a.sign(&OK, "frame", &frame()), Err(Refusal::Reauth), "overall exactly AT 24 h ends the session");
         a.begin_session();
         a.lock();
         assert_eq!(a.sign(&OK, "frame", &frame()), Err(Refusal::Reauth), "locked");
