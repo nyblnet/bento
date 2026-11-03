@@ -12019,3 +12019,33 @@ both slots had to stay empty until the ruling.
   scalar never matched, a missing kx public half skipping the match, a seal
   without a kx) and requires test-statements or test-recovery to fail on each,
   after the unmutated copy passes both.
+
+## 2026-11-03 — bento/connect B1: the identity calls in `home/bridge.js` (whoami, sign, resolve)
+
+- **One shared object, built from a declared capability.** A host that has
+  verified the document's bytes (gate 1) declares `window.__bentoHostCaps =
+  ['identity']` ahead of `bridge.js`. The bridge then defines `__bentoIdentity`
+  exactly as `kernel/src/identity.ts` requires: a non-writable, non-configurable
+  data property holding a frozen object of closures with `contract: 1` and the
+  three phase-1 calls. A host that does not declare it, and any subframe, gets no
+  object, so the kernel does what it did before identity existed. `unwrap` and
+  `share` (phase 2) are not defined.
+- **The wire** is the ordinary `call()` channel: `{id, op:'id.whoami'}`,
+  `{id, op:'id.sign', purpose, payload}`, `{id, op:'id.resolve', pub}`. Nothing
+  names the document or a caller; the host knows who is asking. Replies are
+  `(id, ok, value)`; a refusal word is the K1 `SignRefusal`. The bridge re-shapes
+  every reply: a wrong-typed field is a refusal or `null`, an unknown word is
+  `unavailable`, and an `{email}` lookup (phase 2) is answered `null` without
+  leaving the page.
+- **The session limits are the host's, not the bridge's.** Past the idle or
+  overall limit (security §2e B) the host answers `sign` with `reauth` until the
+  person re-authenticates AT THE HOST. The bridge passes the word through, caches
+  nothing and never retries. On desktop the limit is the agent's, and the rig
+  drives the real agent across both limits.
+- **A replaced reply hook cannot redirect replies.** The Android-style transport
+  now calls its reply function directly instead of through `window.__bentoNativeReply`,
+  which page script can overwrite.
+- **Each host routes the `id.*` ops to its own agent and keeps its own gates**
+  (on desktop: this webview's capability, then genuine bytes). No host ships a key
+  store yet, so a host with no account answers `no-identity` (`whoami`, `sign`)
+  and `null` (`resolve`).
