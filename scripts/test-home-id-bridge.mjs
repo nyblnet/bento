@@ -16,7 +16,7 @@
  *     it is refused by the host even with a live session (the bridge is a
  *     courtesy, the host is the authority)
  *   - the host's own idle limit (1 s here; 1 h shipped) inside and past, the
- *     overall limit at the boundary (still signs AT it, refuses one ms past),
+ *     overall limit at the boundary (signs one ms short, refuses AT it: a limit ends the session AT the limit),
  *     a lock, and a refusal that raises ONE prompt (coalesced; a cancel is not
  *     re-raised at once); the real clock for the idle row
  *   - purpose lock: a payload of the wrong shape is refused before any session
@@ -78,13 +78,13 @@ for (const n of names) ok(base.rows[n], n)
 // [name, exact text in IdentityBridge.swift, replacement, rows that must go red]
 const MUTANTS = [
   ['session gate removed', `guard session.live() else { raiseReauth(); return .refuse("reauth") }`, `_ = session.live()`,
-    ['sign.nosession.reauth', 'sign.idle.past.reauth', 'sign.overall.past.reauth', 'sign.lock.reauth', 'realtime.idle.past.reauth']],
-  ['idle boundary off by one', `t - w.last <= policy.idleMs`, `t - w.last < policy.idleMs`, ['sign.idle.at-limit.ok']],
-  ['idle limit ignored', `t - w.last <= policy.idleMs, `, ``, ['sign.idle.past.reauth', 'realtime.idle.past.reauth']],
-  ['overall limit ignored', `, t - w.start <= policy.overallMs`, ``, ['sign.overall.past.reauth']],
-  ['overall boundary off by one', `t - w.start <= policy.overallMs`, `t - w.start < policy.overallMs`, ['sign.overall.up-to-limit.ok']],
-  ['use renews the overall clock', `window = (w.start, clock())`, `window = (clock(), clock())`, ['sign.overall.past.reauth']],
-  ['use does not renew idle', `if let w = window { window = (w.start, clock()) }`, `_ = window`, ['sign.idle.at-limit-again.ok']],
+    ['sign.nosession.reauth', 'sign.idle.past.reauth', 'sign.overall.at-limit.reauth', 'sign.lock.reauth', 'realtime.idle.past.reauth']],
+  ['idle boundary off by one', `t - w.last < policy.idleMs`, `t - w.last <= policy.idleMs`, ['sign.idle.at-limit.reauth']],
+  ['idle limit ignored', `t - w.last < policy.idleMs, `, ``, ['sign.idle.past.reauth', 'realtime.idle.past.reauth']],
+  ['overall limit ignored', `, t - w.start < policy.overallMs`, ``, ['sign.overall.at-limit.reauth']],
+  ['overall boundary off by one', `t - w.start < policy.overallMs`, `t - w.start <= policy.overallMs`, ['sign.overall.at-limit.reauth']],
+  ['use renews the overall clock', `window = (w.start, clock())`, `window = (clock(), clock())`, ['sign.overall.at-limit.reauth']],
+  ['use does not renew idle', `if let w = window { window = (w.start, clock()) }`, `_ = window`, ['sign.idle.again.ok']],
   ['unknown document served', `guard genuine, !docKey.isEmpty else`, `guard !docKey.isEmpty else`,
     ['agent.unknown.forged-sign', 'agent.unknown.forged-sign-live-session', 'agent.unknown.forged-whoami']],
   ['identity declared for every load', `genuine ? ["store", "identity"] : ["store"]`, `["store", "identity"]`, ['agent.unknown.none']],

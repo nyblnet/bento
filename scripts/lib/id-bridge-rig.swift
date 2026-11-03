@@ -157,10 +157,14 @@ do {
         row("sign.signature-verifies", pk.isValidSignature(es, for: Data(showLive.utf8)))
     } else { row("sign.signature-verifies", false) }
 
-    clock = t0 + 1000
-    row("sign.idle.at-limit.ok", ok(d.sign("show", showLive)))
+    // a limit ENDS the session AT the limit (security's ruling): 1 ms short signs, exactly at it does not
+    clock = t0 + 999
+    row("sign.idle.just-inside.ok", ok(d.sign("show", showLive)))
+    clock += 999
+    row("sign.idle.again.ok", ok(d.sign("show", showLive)))
     clock += 1000
-    row("sign.idle.at-limit-again.ok", ok(d.sign("show", showLive)))
+    let atLimit = d.sign("show", showLive)
+    row("sign.idle.at-limit.reauth", why(atLimit) == "reauth" && atLimit?["sig"] == nil)
     clock += 1001
     let past = d.sign("show", showLive)
     row("sign.idle.past.reauth", why(past) == "reauth" && past?["sig"] == nil)
@@ -170,10 +174,12 @@ do {
     let tb = clock
     var allOk = true
     var t = 500
-    while t <= 10_000 { clock = tb + t; if !ok(d.sign("show", showLive)) { allOk = false }; t += 500 }
+    while t < 10_000 { clock = tb + t; if !ok(d.sign("show", showLive)) { allOk = false }; t += 500 }
+    clock = tb + 9_999
+    if !ok(d.sign("show", showLive)) { allOk = false }
     row("sign.overall.up-to-limit.ok", allOk)
-    clock = tb + 10_001
-    row("sign.overall.past.reauth", why(d.sign("show", showLive)) == "reauth")
+    clock = tb + 10_000
+    row("sign.overall.at-limit.reauth", why(d.sign("show", showLive)) == "reauth")
     row("sign.overall.reauth-prompted", d.reauthAsks > asks)
 
     s.lock()

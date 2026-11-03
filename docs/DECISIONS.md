@@ -12173,8 +12173,8 @@ the code the editor runs; the editor supplies only the two prompts.
   `invite`/`revoke` are the room owner's key, which in phase 1 lives in the
   document, so they are `unavailable` and mint nothing. The host owns the limits
   (1 h idle, 24 h overall, an injectable clock): a use renews the idle clock,
-  never the overall one, and the boundary itself still signs while one
-  millisecond past does not. Past either, the answer is `reauth` and it raises
+  never the overall one, and a limit ENDS the session AT the limit (security's
+  ruling): one millisecond short still signs, exactly at it does not. Past either, the answer is `reauth` and it raises
   ONE device-owner prompt (coalesced; a cancelled prompt is not raised again for
   30 s). The bridge neither retries nor caches. A session exists only after the
   person re-authenticates, so the first sign of a run answers `reauth`.
