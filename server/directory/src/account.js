@@ -97,6 +97,8 @@ function eqBytes(a, b) {
 const sha256hex = async (text) =>
   [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, '0')).join('')
 const ticketHash = (t) => sha256hex(`bento-dir/1/rc-ticket\n${t}`)
+/** The storage key of "this account key has had a credential or a code" (§39.3). */
+const everKey = async (accountPub) => `ever:${await sha256hex(`bento-dir/1/ever\n${accountPub}`)}`
 
 const call = async (stub, op, args) => {
   const r = await stub.fetch('https://do/op', { method: 'POST', body: JSON.stringify({ op, ...args }) })
@@ -174,7 +176,7 @@ export async function keysRoute(p, b, env, ip, deps) {
     if (!prfBlobOk(blob, ck)) return json(400, { error: 'invalid', reason: 'blob' })
     const attachment = b.attachment === 'platform' || b.attachment === 'cross-platform' ? b.attachment : null // a LABEL, never evidence
     const devicePub = typeof b.devicePub === 'string' && b.devicePub.length <= 100 ? b.devicePub : null
-    const ix = await call(accountStub(env, a.scope), 'credAdd', { key: ck, accountPub: a.accountPub })
+    const ix = await call(accountStub(env, a.scope), 'credAdd', { key: ck, accountPub: a.accountPub, setup: a.setup === true })
     if (ix.status !== 200) return json(ix.status, ix.body)
     const r = await call(credStub(env, ck), 'register', {
       rec: { scope: a.scope, accountPub: a.accountPub, pub: reg.pub, signCount: reg.signCount, be: reg.be, attachment, devicePub, created: Date.now(), blob },
@@ -183,7 +185,7 @@ export async function keysRoute(p, b, env, ip, deps) {
       await call(accountStub(env, a.scope), 'credDel', { key: ck })
       return json(r.status, r.body)
     }
-    await notify(a.scope, 'cred-add', ck.slice(0, 8))
+    await notify(a.scope, 'cred-add', ck.slice(0, 8), { setup: a.setup === true })
     return json(200, { ok: true })
   }
 
@@ -226,9 +228,9 @@ export async function keysRoute(p, b, env, ip, deps) {
     if (!(await ledger(env, ip, 'keys'))) return json(429, { error: 'rate-limited' })
     const a = await authorize(env, email, b, { op: 'rc-enrol', body: b.body })
     if (!a.ok) return json(400, { error: 'invalid', reason: a.reason })
-    const r = await call(accountStub(env, a.scope), 'rcEnrol', { accountPub: a.accountPub, body: b.body })
+    const r = await call(accountStub(env, a.scope), 'rcEnrol', { accountPub: a.accountPub, body: b.body, setup: a.setup === true })
     if (r.status !== 200) return json(r.status, r.body)
-    await notify(a.scope, 'rc-enrol', '')
+    await notify(a.scope, 'rc-enrol', '', { setup: a.setup === true })
     return json(200, { ok: true })
   }
 
@@ -281,7 +283,9 @@ function prfBlobOk(blob, ck) {
 // Storage: `creds` (credential storage names), `rc` (the peppered verifier and the
 // sealed code-wrapped blob, with the account key they belong to and the pepper
 // version), `rcLog` (attempt times, last 24 h), `rcFails`, `rcLock`, `rel` (a
-// pending release: its ticket hash and when it opens), `led` (the ledger blob).
+// pending release: its ticket hash and when it opens), `led` (the ledger blob),
+// `ever:<hash of an account key>` (that key has had a credential or a code: what
+// the setup allowance asks, set once and NEVER cleared, by a wipe or anything else).
 
 export class Account {
   constructor(state, env) { this.state = state; this.env = env }
@@ -297,7 +301,10 @@ export class Account {
       const creds = (await s.get('creds')) || []
       if (creds.includes(a.key)) return refuse('exists')
       if (creds.length >= KEYS.maxCreds) return refuse('limit')
+      if (a.setup === true && creds.length) return refuse('filled') // the setup allowance fills an empty slot, never adds to one
+      const ever = await everKey(a.accountPub)
       await s.put('creds', [...creds, a.key])
+      await s.put(ever, true)
       return out(200, { ok: true })
     }
     if (a.op === 'credDel') {
@@ -313,14 +320,21 @@ export class Account {
       const { v, key } = currentPepper(this.env)
       const pk = await pepperKeys(key, a.accountPub)
       const iv = crypto.getRandomValues(new Uint8Array(12))
-      await s.put('rc', {
+      const rec = {
         v, accountPub: a.accountPub, saltV: b64uEnc(parsed.saltV),
         tag: b64uEnc(await pepperVerifierTag(pk.verifyKey, parsed.verifier)),
         iv: b64uEnc(iv), ct: b64uEnc(await pepperSeal(pk.wrapKey, iv, parsed.inner, a.accountPub)), at: now,
-      })
+      }
+      const ever = await everKey(a.accountPub)
+      // read after the awaits above, beside the write: the setup allowance never replaces a code
+      if (a.setup === true && (await s.get('rc'))) return refuse('filled')
+      await s.put('rc', rec)
+      await s.put(ever, true)
       await s.delete('rel') // a new code ends any release in flight for the old one
       return out(200, { ok: true })
     }
+
+    if (a.op === 'everHad') return out(200, { ever: (await s.get(await everKey(a.accountPub))) === true })
 
     if (a.op === 'rcSalt') {
       const rc = await s.get('rc')
@@ -355,7 +369,7 @@ export class Account {
         // the code is right, but it is NOT spent here: a resolution that waits (an
         // email-only or contested freeze) can still be voided by the frozen key, and
         // a voided one must leave the code usable. The Address object spends it
-        // (rcDrop) when the resolution COMMITS, at once or at settle (§39.3, §28a).
+        // (dropOld) when the resolution COMMITS, at once or at settle (§39.3, §28a).
         await s.put('rcFails', 0)
         return out(200, { ok: true })
       }
@@ -407,10 +421,20 @@ export class Account {
       await s.delete(a.keepRc ? ['creds', 'led'] : ['creds', 'rc', 'rcLog', 'rcFails', 'rcLock', 'rel', 'led'])
       if (a.keepRc) {
         // kept for the deleted binding's window only (§39.6): deleted at its expiry
-        // at the latest, by the alarm, or sooner when the window closes (rcDrop)
+        // at the latest, by the alarm, or sooner when the window closes (rekey)
         const rc = await s.get('rc')
         if (rc && Number.isSafeInteger(a.keepUntil)) { await s.put('rc', { ...rc, keepUntil: a.keepUntil }); await s.setAlarm(a.keepUntil) }
       }
+      return out(200, { creds })
+    }
+    if (a.op === 'rekey') {
+      // the address REBOUND to `accountPub`: every passkey here was the old key's
+      // (a new key can add none before its binding is served), and so was any
+      // recovery record naming another key. The caller deletes the Cred objects.
+      const creds = (await s.get('creds')) || []
+      await s.delete('creds')
+      const rc = await s.get('rc')
+      if (rc && rc.accountPub !== a.accountPub) await s.delete(['rc', 'rel'])
       return out(200, { creds })
     }
     if (a.op === 'rcKeep') {
@@ -418,12 +442,6 @@ export class Account {
       if (rc && rc.accountPub === a.accountPub && rc.keepUntil) { const { keepUntil: _, ...kept } = rc; await s.put('rc', kept) }
       return out(200, { ok: true })
     }
-    if (a.op === 'rcDrop') {
-      const rc = await s.get('rc')
-      if (rc && rc.accountPub === a.accountPub) await s.delete(['rc', 'rel'])
-      return out(200, { ok: true })
-    }
-
     return out(400, { error: 'bad-op' })
   }
 

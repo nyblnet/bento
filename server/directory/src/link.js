@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// Device linking (link v1): a short-lived, ciphertext-only mailbox that two of
-// one person's devices use to hand the account key from the device that holds
-// it (H) to a new one (N). Its own Durable Object class, so a bug here can never
-// read an Address, an Account or a Cred.
+// Device linking (link v1): a short-lived mailbox that two of one person's
+// devices use to hand the account key from the device that holds it (H) to a
+// new one (N). Its own Durable Object class, so a bug here can never read an
+// Address, an Account or a Cred.
 //
-// The directory never sees a key. Every message is encrypted on the devices
-// under keys derived from a code the directory never receives; the slot id and
+// The directory never sees a key. Messages 0 to 2 and message 3's sealed key are
+// protected on the devices by keys derived from a code the directory never
+// receives; message 3's certificates and consent are clear, as the directory
+// must verify them, and are burned with the slot. The slot id and
 // `tok` are derived from that code too, so only the two devices can address the
 // slot. What the directory DOES check is the one step that matters: before it
 // releases the sealed account key to N, it runs kernel's verifyLinkRelease over
@@ -34,7 +36,7 @@
 import { addressKey, normalize } from './address.js'
 import { openChallenge } from './challenge.js'
 import { AUDIENCE } from './consent.js'
-import { b64uDec, b64uEnc, linkTokHash } from './statements.js'
+import { b64uDec, b64uEnc, decodeSlotMsg, linkTokHash } from './statements.js'
 
 export const LINK = Object.freeze({
   ttlMs: 10 * 60_000, // a slot lives 10 minutes from open
@@ -52,8 +54,6 @@ const msgOk = (m) => {
   return !!b && b.length > 0 && b.length <= LINK.maxMsg && b64uEnc(b) === m
 }
 
-// msg3 is kernel's lnk3 text: eight lines of at most 4096 printable bytes each
-const MSG3_MAX = 8 * (4096 + 1)
 const tokHash = (tok) => linkTokHash(tok)
 function same(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false
@@ -113,7 +113,9 @@ export async function linkRoute(p, b, env, ip, deps) {
     const email = normalize(b.email ?? '')
     // ONE text: H's message 3, exactly as kernel's buildFinal makes it. Its
     // grammar, H's and N's certificates and H's consent are all kernel's to check.
-    if (!email || typeof b.challenge !== 'string' || typeof b.msg3 !== 'string' || b.msg3.length > MSG3_MAX) return json(400, { error: 'invalid' })
+    // Its slot-wire size and prefix are checked HERE, before anything is claimed or
+    // spent: N would refuse the same message after the challenge was gone.
+    if (!email || typeof b.challenge !== 'string' || !decodeSlotMsg(3, b.msg3).ok) return json(400, { error: 'invalid' })
     // claim FIRST: one completion per slot, and any later attempt deletes it
     const c = await linkCall(env, b.id, 'claim', { tok: b.tok })
     if (c.status !== 200) return relay(c)

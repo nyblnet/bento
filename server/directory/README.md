@@ -44,7 +44,7 @@ day's hashes can't be linked to the next.
 | `GET /freeze` | none | the confirmation page the freeze link opens. A GET changes nothing |
 | `POST /v1/freeze/complete` `{email, token}` | the single-use token from the mail | 200 `{state: "frozen"}`, or a uniform 400 |
 | `GET /v1/keys` | none | the directory's public keys, for diagnosis (clients trust the list in the signed release) |
-| `POST /v1/link/open`, `/put`, `/get`, `/abort` `{id, tok, …}` | `tok`, derived from the link code | a ciphertext mailbox; see **Device linking**. Off unless `LINKING=1` |
+| `POST /v1/link/open`, `/put`, `/get`, `/abort` `{id, tok, …}` | `tok`, derived from the link code | a short-lived mailbox; see **Device linking**. Off unless `LINKING=1` |
 | `POST /v1/link/complete` `{id, tok, email, challenge, msg3}` | H's message 3 (kernel's `lnk3` text: H's `dev.`, its consent over N's `dev.`, N's `dev.`, the sealed key), on a `dir` challenge | 200, or 400 with kernel's reason; the slot is deleted on any failure |
 | `POST /v1/status` `{email, req, sig, challenge}` | `dreq.status` | 200 `{state, events}`, plus `pending` while a key change waits and `contested: true` on a contested freeze. Off unless `KEYSTORE=1`, like everything below |
 | `POST /v1/cred/add`, `/v1/cred/del` | `dreq.cred-add` / `dreq.cred-del` + consent | 200; see **Key store** |
@@ -202,13 +202,16 @@ and be looked up as another.
 ## Device linking
 
 One of a person's devices (H) hands the account key to a new one (N) through a
-**slot**: a ciphertext mailbox in its own Durable Object class (`Link`), so a
-bug in it can't read an address or a credential. The slot id and `tok` are
-derived on the devices from a link code the directory never sees, and every
-message is encrypted under keys derived from it.
+**slot**: a mailbox in its own Durable Object class (`Link`), so a bug in it
+can't read an address or a credential. The slot id and `tok` are derived on the
+devices from a link code the directory never sees. The sealed key is ciphertext;
+message 3's certificates and consent are clear, as the directory must verify
+them. They are held for at most 10 minutes, then burned.
 
-- A slot lives 10 minutes; messages are at most 4 KB. Message 0 (the
-  displayer's) comes with `open`, 1 and 2 by `put`, 3 only through `complete`.
+- A slot lives 10 minutes; messages are at most 4096 bytes once decoded, and an
+  oversized message 3 is refused before the slot is claimed or the challenge
+  spent. Message 0 (the displayer's) comes with `open`, 1 and 2 by `put`, 3 only
+  through `complete`.
 - **Each message is written once.** A second write of the same number (or a
   second `open` of the same id) means another device has the code: the slot
   becomes CONTENDED, drops its messages, and both sides are told to start again.
@@ -239,6 +242,17 @@ account key it belongs to, and material for any other key is treated as gone).
 - **Account-signed requests** are kernel's `dreq.`: challenge-bound, spent
   first, verified against the binding served as authoritative. `cred-add`,
   `cred-del` and `rc-enrol` also need consent for their own op.
+- **The first credential.** A bind that lands `active` with both proofs arms a
+  15-minute setup allowance, but only for an account key that has NEVER had a
+  passkey or a recovery code (a stored flag per key, not a count, and nothing
+  clears it). Inside it, one `cred-add` and one `rc-enrol` may come with no
+  consent, on the account key's `dreq.` alone. It only fills an empty slot,
+  it stands in only for ABSENT consent (a bad consent is refused, never rescued),
+  and any freeze, contest, rotation or new bind ends it. Both ops still notify,
+  and the event says `setup: true`. Running out of time means verifying the
+  email again, which re-arms it while the key still has nothing.
+- **A rebound** (a new key with no vouch: over an expired or deleted binding, or
+  a resolved freeze) takes the old key's passkeys and recovery record with it.
 - **Passkeys.** A registration is ES256 with attestation `none`, UP + UV +
   attested data, and its ceremony challenge is the `dir` challenge the request
   spent; the `dreq.` covers its exact bytes. The PRF blob is stored in the

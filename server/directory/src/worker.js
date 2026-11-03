@@ -51,6 +51,7 @@ export const LIMITS = {
   mailPerMonth: 10,
   ip: { start: 20, complete: 60, lookup: 300, delete: 20, challenge: 120, rotate: 20, linkOpen: 30, link: 600, keys: 60, recovery: 20 }, // per IP per hour
   rotationWindowMs: 72 * 3_600_000, // a pending rotation is contestable for 72 hours (security §25)
+  setupMs: 15 * 60_000, // how long a two-proof bind may stand in for consent on the first passkey and code (§39.3)
   steps: 8, // earlier bindings served with a lookup, so a pinner a few steps behind can follow the chain
   freezeTokenTtlMs: 24 * 3_600_000, // an emailed freeze link stays usable for a day
   credFailures: 5, // consecutive WebAuthn failures before a credential locks
@@ -159,6 +160,8 @@ export const NOTICES = Object.freeze({
   'cred-del': ['A passkey was removed from your bento/id', 'A passkey ({fp}) was removed from the bento/id keys for this address.'],
   'cred-fetch': ['Your bento/id passkey was used', 'A passkey ({fp}) was used to put the bento/id keys for this address on a device.'],
   'rc-enrol': ['Your bento/id recovery code changed', 'A new recovery code was set up for the bento/id keys for this address. Any earlier code no longer works.'],
+  'cred-add-setup': ['A passkey was added to your bento/id', 'A first passkey ({fp}) was added while the bento/id keys for this address were being set up.'],
+  'rc-enrol-setup': ['A recovery code was set up for your bento/id', 'A first recovery code was set up while the bento/id keys for this address were being set up.'],
   'rc-attempt': ['Your bento/id recovery code was tried', 'Someone entered a recovery code for this address. If it was right, the keys are released to them 72 hours later.'],
   'rc-release': ['Your bento/id recovery code was used', 'The recovery code for this address was used to collect its keys after the 72-hour wait, or someone tried to.'],
   contest: ['A key change for your bento/id was stopped', 'A device holding the previous key said a key change for this address was not theirs. The address is frozen until its recovery code is used.'],
@@ -244,8 +247,9 @@ const call = async (stub, op, args) => {
  *  notice cap; `mail: false` records the event only. Never fails the request. */
 async function notify(env, scope, kind, fp, o = {}) {
   try {
-    const r = await call(env.ADDRESS.get(env.ADDRESS.idFromName(scope)), 'event', { kind, fp, mail: o.mail !== false })
-    if (r.body.to) await sendCode(env, r.body.to, '', fp, kind)
+    const setup = o.setup === true // done under the setup allowance: the event and the mail say so
+    const r = await call(env.ADDRESS.get(env.ADDRESS.idFromName(scope)), 'event', { kind, fp, mail: o.mail !== false, setup })
+    if (r.body.to) await sendCode(env, r.body.to, '', fp, setup ? `${kind}-setup` : kind)
   } catch (e) { console.log(`notice failed: ${e.message}`) }
 }
 
@@ -451,7 +455,7 @@ export default {
       if (rc.body.notify) await notify(env, scope, rc.body.notify, '')
       if (rc.status !== 200) return json(rc.status, { error: 'invalid', reason: rc.body.reason })
       // re-checked: the address may have moved while the code was checked
-      const r = await call(addr, 'resolve', { stmt: b.stmt, sig: b.sig, key: prep.body.key, scope })
+      const r = await call(addr, 'resolve', { stmt: b.stmt, sig: b.sig, key: prep.body.key })
       // a key-holder freeze resolves at once; an EMAIL-ONLY or CONTESTED one waits 72 h
       // (202), so a device still holding the frozen key can stop it (code + mailbox
       // alone is no takeover). The code is spent only when the resolution commits.
@@ -495,7 +499,8 @@ export default {
 // the address), and the binding STATE (security §25): `rot` (a pending rotation:
 // the next binding, contestable until `until`), `frz` (a freeze, naming the
 // binding it froze), `fpend` (an emailed freeze token), `spent` (consent
-// challenges already used here). Strongly consistent per address, so a re-bind,
+// challenges already used here), `setup` (the first-credential allowance: the
+// bind that armed it, when it ends, the ops left). Strongly consistent per address, so a re-bind,
 // a rotation and a lookup can never race into a mixed answer.
 //
 // States: active (no `rot`, no `frz`) · pending (`rot`) · frozen (`frz`).
@@ -535,14 +540,43 @@ export class Address {
     const tokenHash = (t) => sha256hex(`bento-dir/1/freeze\n${t}`)
     const fail = async (p) => { p.attempts++; await s.put('pend', p); return out(400, { error: 'invalid' }) }
     /** the retained recovery verifier of a deleted binding goes once its window has
-     *  closed (rcDrop), or is the live one again when the same key re-binds (rcKeep) */
+     *  closed (dropOld), or is the live one again when the same key re-binds (rcKeep) */
     const rcCall = async (ht, op) => {
       if (!ht || !ht.scope || !this.env.ACCOUNT) return
       try {
         await this.env.ACCOUNT.get(this.env.ACCOUNT.idFromName(ht.scope)).fetch('https://account/op', { method: 'POST', body: JSON.stringify({ op, accountPub: ht.key }) })
       } catch (e) { console.log(`${op} failed: ${e.message}`) }
     }
-    const dropRc = (ht) => rcCall(ht, 'rcDrop')
+    /** a REBOUND: the address moved to a key with no vouch from the old one, so
+     *  nothing of the old key's may stay. Its recovery record and its passkeys go
+     *  together: a passkey left behind would fill the new key's empty slot, and,
+     *  being scoped to the address, could still consent for it. */
+    const dropOld = async (address, accountPub) => {
+      if (!this.env.ACCOUNT) return
+      try {
+        const scope = await addressKey(address)
+        const r = await call(this.env.ACCOUNT.get(this.env.ACCOUNT.idFromName(scope)), 'rekey', { accountPub })
+        for (const k of r.body.creds || []) await call(this.env.CRED.get(this.env.CRED.idFromName(k)), 'delete', { scope })
+      } catch (e) { console.log(`rekey failed: ${e.message}`) }
+    }
+    /** arm the setup allowance (§39.3), after a bind landed `active`: only for a key
+     *  that has NEVER had a credential or a code. Any doubt leaves it unarmed. */
+    const armSetup = async (address, accountPub, h) => {
+      if (!this.env.ACCOUNT) return
+      try {
+        const r = await call(this.env.ACCOUNT.get(this.env.ACCOUNT.idFromName(await addressKey(address))), 'everHad', { accountPub })
+        if (r.status === 200 && r.body.ever === false) await s.put('setup', { h, until: now + LIMITS.setupMs, ops: ['cred-add', 'rc-enrol'] })
+      } catch (e) { console.log(`setup not armed: ${e.message}`) }
+    }
+    /** use the allowance for one op: armed, unexpired, naming the binding served,
+     *  `active`, and that op unused. Consumed here, before anything else can run. */
+    const useSetup = async (op, cur, state) => {
+      const su = await s.get('setup')
+      if (!su || state !== 'active' || su.until <= now || su.h !== cur?.h || !su.ops.includes(op)) return false
+      const ops = su.ops.filter((x) => x !== op)
+      if (ops.length) await s.put('setup', { ...su, ops }); else await s.delete('setup')
+      return true
+    }
     /** a binding that is replaced keeps serving as a step, while the chain is unbroken */
     const stepOf = (c) => ({ binding: c.stmt, sig: c.sig, ...(c.rot ? { rot: c.rot, rotSig: c.rotSig } : {}) })
     const keepStep = async (c) => s.put('steps', [...((await s.get('steps')) || []), stepOf(c)].slice(-LIMITS.steps))
@@ -558,7 +592,8 @@ export class Address {
         if (ht) await s.put('chain', [...((await s.get('chain')) || []), ht.h])
         await s.put('cur', { stmt: rot.stmt, sig: rot.sig, h: rot.h, b: rot.b, verifiedAt: rot.at, rebound: true })
         await s.delete(['rot', 'fpend', 'htomb', 'tomb', 'steps'])
-        await dropRc(ht)
+        const nb = await readBind(rot.stmt, rot.sig, rot.at)
+        if (nb) await dropOld(nb.address, rot.b.key)
         return
       }
       if (cur) { await s.put('chain', [...((await s.get('chain')) || []), cur.h]); await keepStep(cur) }
@@ -575,12 +610,13 @@ export class Address {
     }
     /** a resolution commits: the new binding, self-signed, no vouch (pinners warn, §39.3).
      *  This, and only this, spends the recovery code that resolved it (§28a): a
-     *  resolution that waits and is voided leaves the code usable. */
-    const commitResolve = async (stmt, sig, h, b, base, scope) => {
+     *  resolution that waits and is voided leaves the code usable. It arms nothing:
+     *  a new key's first passkey takes a fresh email proof. */
+    const commitResolve = async (stmt, sig, h, b, base) => {
       await s.put('chain', [...((await s.get('chain')) || []), base.h])
       await s.put('cur', { stmt, sig, h, b: { key: b.accountPub, seq: b.seq, expires: b.expires }, verifiedAt: now, rebound: true })
       await s.delete(['frz', 'rot', 'pend', 'fpend', 'htomb', 'tomb', 'steps', 'rsv'])
-      await rcCall({ scope, key: base.key }, 'rcDrop')
+      await dropOld(b.address, b.accountPub)
     }
     // an email-only freeze's resolution whose 72 hours passed without the frozen
     // key stopping it (ruling b). Lazily, like a rotation; the event is recorded
@@ -591,7 +627,7 @@ export class Address {
       if (rsv && now >= rsv.until) {
         const b = await readBind(rsv.stmt, rsv.sig, now)
         if (b && frz && frz.base && (await frozenHolds(frz.base))) {
-          await commitResolve(rsv.stmt, rsv.sig, rsv.h, b, frz.base, rsv.scope)
+          await commitResolve(rsv.stmt, rsv.sig, rsv.h, b, frz.base)
           await s.put('events', [...((await s.get('events')) || []), { k: 'resolve', at: now, fp: (await hashOf(b.accountPub)).slice(0, 8) }].slice(-LIMITS.events))
         } else await s.delete('rsv') // the frozen binding expired, or the new one did: nothing to move
       }
@@ -618,7 +654,7 @@ export class Address {
       // address takes a freeze only while `rsv` waits, so every re-freeze is a void.
       const contested = !!(await s.get('rsv'))
       await s.put('frz', { at: now, by, base, ...(contested ? { contested: true } : {}) })
-      await s.delete(['rot', 'pend', 'fpend', 'rsv']) // a freeze ends any rotation, or resolution, in flight
+      await s.delete(['rot', 'pend', 'fpend', 'rsv', 'setup']) // a freeze ends any rotation, resolution or setup in flight
     }
     /** spend a consent challenge HERE, before anything else is checked (§24b: spend-first) */
     const spend = async (nonce) => {
@@ -669,7 +705,7 @@ export class Address {
           // a DIFFERENT key inside the deleted binding's window: a rotation in all
           // but the old-key vouch (§39.6), so it waits out the full contest window
           await s.put('rot', { stmt: p.stmt, sig: p.sig, h, b: { key: b.accountPub, seq: b.seq, expires: b.expires }, at: now, until: now + LIMITS.rotationWindowMs, overTomb: true })
-          await s.delete('pend')
+          await s.delete('pend') // it ended `pending`: nothing arms
           return out(200, { state: 'pending', activeAt: now + LIMITS.rotationWindowMs, rebound: true })
         }
       } else if (b.seq !== 1 && !continues(cur && { seq: cur.b.seq, h: cur.h }) && !continues(ht)) {
@@ -687,9 +723,10 @@ export class Address {
       // or the name, which live once, inside the signed statement it serves
       await s.put('cur', { stmt: p.stmt, sig: p.sig, h, b: { key: b.accountPub, seq: b.seq, expires: b.expires }, verifiedAt: now, rebound })
       // over an expired binding, whatever state it was in goes with it
-      await s.delete(['pend', 'tomb', 'htomb', 'rot', 'frz', 'fpend', 'rsv'])
-      if (rebound && ht) await dropRc(ht)
+      await s.delete(['pend', 'tomb', 'htomb', 'rot', 'frz', 'fpend', 'rsv', 'setup'])
+      if (rebound) await dropOld(b.address, b.accountPub)
       else if (guard && ht) await rcCall(ht, 'rcKeep') // the same key, inside the window: its code is current again
+      await armSetup(b.address, b.accountPub, h) // both proofs just landed: the only thing that arms it
       return out(200, { binding: p.stmt, sig: p.sig, attestation: att.text, attestationSig: att.sig, rebound })
     }
 
@@ -746,7 +783,7 @@ export class Address {
 
     const tombstone = async (by, scope) => {
       const cur = await s.get('cur')
-      await s.delete(['cur', 'pend', 'rot', 'frz', 'fpend', 'steps', 'rsv'])
+      await s.delete(['cur', 'pend', 'rot', 'frz', 'fpend', 'steps', 'rsv', 'setup'])
       if (!cur) return // nothing was bound: nothing to record
       const dirKey = await importDirKey(this.env.DIR_KEY_JWK)
       await s.put('tomb', await tombText(dirKey, this.env.DIR_KID, cur.h, cur.b.seq, now, by))
@@ -812,6 +849,7 @@ export class Address {
       const code = mintCode(), freezeToken = mintToken()
       await s.put('pend', { kind: 'rotate', stmt: a.stmt, sig: a.sig, rotText: a.rot, rotSig: a.rotSig, codeHash: await codeHash(code), expires: now + LIMITS.codeTtlMs, attempts: 0 })
       await s.put('fpend', { hash: await tokenHash(freezeToken), expires: now + LIMITS.freezeTokenTtlMs, attempts: 0 })
+      await s.delete('setup') // a key change under way ends the setup window
       return out(202, { mail: { code, fp: (await hashOf(b.accountPub)).slice(0, 8), freezeToken } })
     }
 
@@ -877,15 +915,14 @@ export class Address {
         // by the frozen key voids it and marks the freeze CONTESTED, and every later
         // resolution of a contested freeze waits the same way. The code stays live
         // until one commits.
-        const scope = typeof a.scope === 'string' ? a.scope : null
-        await s.put('rsv', { stmt: a.stmt, sig: a.sig, h, at: now, until: now + LIMITS.rotationWindowMs, scope })
+        await s.put('rsv', { stmt: a.stmt, sig: a.sig, h, at: now, until: now + LIMITS.rotationWindowMs })
         return out(202, { state: 'frozen', resolving: true, activeAt: now + LIMITS.rotationWindowMs })
       }
       // a key-holder freeze (owner, contest): at once
       const dirKey = await importDirKey(this.env.DIR_KEY_JWK)
       const att = await attest(dirKey, this.env.DIR_KID, h, now, now)
       // no vouch: pinners warn (intended, §39.3), and nothing here softens that
-      await commitResolve(a.stmt, a.sig, h, b, base, typeof a.scope === 'string' ? a.scope : null)
+      await commitResolve(a.stmt, a.sig, h, b, base)
       return out(200, { binding: a.stmt, sig: a.sig, attestation: att.text, attestationSig: att.sig, rebound: true })
     }
 
@@ -910,7 +947,7 @@ export class Address {
         u[a.kind] = { k: a.kind, at: now, first: prev ? prev.first : now, n: (prev ? prev.n : 0) + 1, fp: '', act: NOTICE_ACTION[a.kind] }
         await s.put('uevents', u)
       } else {
-        const ev = { k: a.kind, at: now, fp: a.fp || '' }
+        const ev = { k: a.kind, at: now, fp: a.fp || '', ...(a.setup === true ? { setup: true } : {}) }
         if (Object.hasOwn(NOTICE_ACTION, a.kind)) ev.act = NOTICE_ACTION[a.kind]
         await s.put('events', [...((await s.get('events')) || []), ev].slice(-LIMITS.events))
       }
@@ -955,7 +992,10 @@ export class Address {
       if (subject.op === 'contest') subject.pendingBindText = rsv ? rsv.stmt : rot ? rot.stmt : ''
       const v = await verifyDreq(a.req, a.sig, { bindText, state, challenge: a.challenge, subject, spend: () => true })
       if (!v.ok) return refuse(`dreq:${v.reason}`)
-      if (dreqNeedsConsent(subject.op)) {
+      // the setup allowance stands in only for ABSENT consent: a request that
+      // presents consent is judged on it, and a bad one never falls through
+      const setup = dreqNeedsConsent(subject.op) && a.consent === null && (await useSetup(subject.op, cur, state))
+      if (dreqNeedsConsent(subject.op) && !setup) {
         const c = await verifyDirConsent(this.env, {
           scope: a.scope, accountPub, purpose: subject.op, challenge: a.challenge, payloadText: a.req, consent: a.consent, now,
         })
@@ -965,7 +1005,7 @@ export class Address {
         await freeze(subject.op === 'contest' ? (overTomb ? 'contest-tomb' : 'contest') : 'owner')
         return out(200, { accountPub, state: 'frozen' })
       }
-      const body = { accountPub, state }
+      const body = { accountPub, state, ...(setup ? { setup: true } : {}) }
       if (subject.op === 'status') {
         body.events = [...((await s.get('events')) || []), ...Object.values((await s.get('uevents')) || {})].sort((x, y) => x.at - y.at)
         // what a device holding the old key needs in order to contest, and to show

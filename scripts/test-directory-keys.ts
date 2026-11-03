@@ -40,7 +40,12 @@
 //   · link completion is ONE text (kernel's msg3) through ONE verifier
 //     (kernel's verifyLinkRelease): n≠h, active-only, h-no-consent, grammar,
 //     and the slot stores kernel's linkTokHash;
-//   · the bind re-check answers only for the exact bound statement, with its state.
+//   · the bind re-check answers only for the exact bound statement, with its state;
+//   · the setup allowance: a two-proof bind may stand in for ABSENT consent on the
+//     first passkey and code, once each, for 15 minutes, only for a key that has
+//     never had either, only into empty slots, and anything else ends it;
+//   · a rebound takes the old key's passkeys and code; a same-key renewal and a
+//     vouched rotation do not.
 
 import worker, { Account, Address, Cred, Ledger, Link } from '../server/directory/src/worker.js'
 import { addressKey } from '../server/directory/src/address.js'
@@ -142,13 +147,14 @@ const reason = (r: { j: Record<string, unknown> }) => String(r.j.reason ?? r.j.e
 // ---------- people, bindings, devices, consent ----------
 type P = { email: string; k: Awaited<ReturnType<typeof signer>>; kx: string }
 async function person(email: string): Promise<P> { return { email, k: await signer(), kx: await kxPub() } }
-async function bind(p: P) {
+async function bind(p: P, o: { setup?: boolean } = {}) {
   now += 2 * MIN // past the per-address mail cooldown
   const text = buildBind({ address: p.email, accountPub: p.k.pub, kx: p.kx, name: null, seq: 1, prev: null, created: now, expires: Math.floor(now + 13 * MONTH) })
   await api('/v1/bind/start', { stmt: text, sig: await p.k.sign(text) })
   const code = codeFor(p.email)!
   const c = await api('/v1/bind/complete', { email: p.email, code, sig: await p.k.sign(buildCmp(await hashOf(text), code)) })
   if (c.status !== 200) throw new Error('bind failed for ' + p.email)
+  if (!o.setup) now += 16 * MIN // past the setup allowance: only its own rows run inside it
   return text
 }
 const lookup = async (email: string) => api('/v1/lookup?e=' + encodeURIComponent(email), undefined, 'GET')
@@ -193,7 +199,7 @@ async function freezeByEmail(p: P) {
   const hd = await device(H)
   // H builds N's dev. (account-signed) from what N sent in msg2
   const nDevFor = async (owner: P, o: { account?: P } = {}) => { const n = await device(owner, o); return { nDev: n.dev, nDevSig: n.devSig, n } }
-  // the sealed payload is iv ‖ 64-byte blob ‖ tag = 92 bytes (opaque to the directory)
+  // the sealed payload is iv ‖ account scalar ‖ address ‖ tag, 61 to 314 bytes (opaque to the directory)
   const sealed92 = () => r64(92)
   // H's message 3, ONE text, built with kernel's buildFinal: the directory gets nothing else
   async function msg3For(p: P, h: D, o: { ch: string; nd?: Awaited<ReturnType<typeof nDevFor>>; consent?: { cns: string; cnsSig: string }; hDev?: string; hDevSig?: string; sealed?: string }) {
@@ -322,12 +328,24 @@ async function freezeByEmail(p: P) {
     // grammar: msg3 is one text in kernel's exact shape; anything else burns the challenge
     const s6 = await slot(), ch6 = await challengeFor(H.email)
     const good6 = await msg3For(H, hd, { ch: ch6, nd })
-    ok(reason(await complete(s6, H, hd, { ch: ch6, msg3: good6.replace(/\n[^\n]*$/, '\n' + r64(200)) })) === 'grammar', 'a msg3 whose sealed line is the wrong size → refused (grammar)')
+    ok(reason(await complete(s6, H, hd, { ch: ch6, msg3: good6.replace(/\n[^\n]*$/, '\n' + r64(315)) })) === 'grammar', 'a msg3 whose sealed line is the wrong size → refused (grammar)')
     const s6b = await slot()
     ok(reason(await complete(s6b, H, hd, { ch: ch6, msg3: good6 })) === 'replay', '  …and that malformed attempt spent its challenge (spend first)')
-    const s6c = await slot()
-    ok((await complete(s6c, H, hd, { msg3: 'x'.repeat(8 * 4097 + 1) })).status === 400, 'a msg3 over 8 lines of 4 KB → refused at the route')
-    ok((await complete(s6c, H, hd, { nd })).status === 200, '  …before the slot is claimed: the same slot still completes')
+    // the cap is kernel's slot wire: 4096 bytes DECODED, refused before anything is claimed or spent
+    const s6c = await slot(), ch6c = await challengeFor(H.email)
+    const over = 'lnk3\n' + 'x'.repeat(4097 - 5), wide = 'lnk3\n' + 'é'.repeat(2046)
+    ok(enc(over).length === 4097 && enc(wide).length === 4097 && wide.length < 4096, '  (the over-cap texts are 4097 bytes; the wide one is under 4096 characters)')
+    const atRoute = (r: { status: number; j: Record<string, unknown> }) => r.status === 400 && r.j.error === 'invalid' && !('reason' in r.j)
+    ok(atRoute(await complete(s6c, H, hd, { ch: ch6c, msg3: over })), 'a msg3 of 4097 bytes → refused at the route')
+    ok(atRoute(await complete(s6c, H, hd, { ch: ch6c, msg3: wide })), 'a msg3 of 4097 bytes in fewer characters → refused: the cap counts bytes')
+    ok(atRoute(await complete(s6c, H, hd, { ch: ch6c, msg3: 'x'.repeat(4096) })), "a msg3 without kernel's lnk3 prefix → refused at the route")
+    ok(atRoute(await complete(s6c, H, hd, { ch: ch6c, msg3: '' })), 'an empty msg3 → refused at the route')
+    const biggest = await complete(s6c, H, hd, { ch: ch6c, nd, sealed: r64(314) })
+    ok(biggest.status === 200, `  …none of those claimed the slot or spent the challenge: both still complete, with the longest SEALED (${reason(biggest)})`)
+    const s6d = await slot(), ch6d = await challengeFor(H.email), edge = 'lnk3\n' + 'x'.repeat(4096 - 5)
+    ok(enc(edge).length === 4096 && reason(await complete(s6d, H, hd, { ch: ch6d, msg3: edge })) === 'grammar', "a msg3 of exactly 4096 bytes passes the cap and reaches kernel's verifier (grammar)")
+    const s6e = await slot()
+    ok(reason(await complete(s6e, H, hd, { ch: ch6d })) === 'replay', '  …and that attempt did spend its challenge')
     const s7 = await slot()
     ok((await complete(s7, H, hd, { nd: await nDevFor(H) })).status === 200, 'CONTROL: the native consent from the same H still completes')
   }
@@ -442,13 +460,13 @@ async function registration(ch: string, o: RegOpts = {}) {
   return { key, credId, attestationObject: b64uEnc(att), clientDataJSON: b64uEnc(cdj) }
 }
 const blobFor = async (credId: Uint8Array) => ({ v: 1, cred: b64uEnc(await sha(credId)), salt: r64(32), iv: r64(12), ct: r64(80) })
-async function addCred(p: P, d: D, o: RegOpts & { blob?: unknown; purpose?: string | null; tamper?: boolean } = {}) {
+async function addCred(p: P, d: D, o: RegOpts & { blob?: unknown; purpose?: string | null; tamper?: boolean; consent?: unknown } = {}) {
   const ch = await challengeFor(p.email)
   const reg = await registration(ch, o)
   const signedReg = o.tamper ? await registration(ch, o) : reg // the dreq. covers different bytes than are sent
   const q = await dreq(p, d, { op: 'cred-add', attestationObject: signedReg.attestationObject, clientDataJSON: signedReg.clientDataJSON }, { ch, purpose: o.purpose === null ? undefined : (o.purpose ?? 'cred-add') })
   const blob = o.blob ?? await blobFor(reg.credId)
-  const r = await api('/v1/cred/add', { ...q, attestationObject: reg.attestationObject, clientDataJSON: reg.clientDataJSON, blob, attachment: 'platform', devicePub: d.devicePub })
+  const r = await api('/v1/cred/add', { ...q, ...(o.consent !== undefined ? { consent: o.consent } : {}), attestationObject: reg.attestationObject, clientDataJSON: reg.clientDataJSON, blob, attachment: 'platform', devicePub: d.devicePub })
   return { r, reg, blob }
 }
 const toDer = (raw: Uint8Array) => {
@@ -1273,6 +1291,225 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
     ok(c.status === 200 && c.j.state === 'pending' && c.j.rebound === true, 're-check: a re-bind over a holder tomb → the same pending answer bind/complete gave')
   }
 
+  // --- the first-credential setup allowance (security's ruling, §39.3) ---
+  {
+    const addrStore = async (p: P) => store('Address', await addressKey(p.email))!
+    const acctStore = async (p: P) => store('Account', await addressKey(p.email))!
+    const armed = async (p: P) => (await addrStore(p)).has('setup')
+    const nCreds = async (p: P) => (((await acctStore(p)).get('creds') as string[] | undefined) ?? []).length
+    /** a same-key renewal: a new emailed code, both proofs again */
+    async function renew(p: P) {
+      now += 2 * MIN
+      const n = await bindNext(p, await current(p))
+      await api('/v1/bind/start', { stmt: n.text, sig: n.sig })
+      const code = codeFor(p.email)!
+      const c = await api('/v1/bind/complete', { email: p.email, code, sig: await p.k.sign(buildCmp(await hashOf(n.text), code)) })
+      ok(c.status === 200 && c.j.rebound === false, `  (a same-key renewal for ${p.email} lands: ${reason(c)})`)
+    }
+    const delCred = async (p: P, d: D | null, id: Uint8Array, purpose?: string) => {
+      const credentialId = b64uEnc(id)
+      return api('/v1/cred/del', { ...await dreq(p, d, { op: 'cred-del', credentialId }, { purpose }), credentialId })
+    }
+    const free = { purpose: null } as const // the request carries no consent at all
+
+    // row 1, the control; row 2, once each
+    {
+      const S = await person('setup-1@example.com'); await bind(S, { setup: true })
+      const d = await device(S, { consent: false }) // the light tier: it has nothing to consent with yet
+      ok(await armed(S), 'CONTROL: a fresh two-proof bind arms the setup allowance')
+      const c = await addCred(S, d, free)
+      ok(c.r.status === 200, `row 1: with no consent, the first passkey is accepted inside the window (${reason(c.r)})`)
+      ok(reason((await addCred(S, d, free)).r) === 'consent:consent', 'row 2: a second cred-add in the window → refused')
+      ok(await nCreds(S) === 1, '  …and nothing was added')
+      ok(reason(await delCred(S, null, c.reg.credId)) === 'consent:consent', 'cred-del is not an allowance op: no consent → refused, inside the window')
+      const e = await enrol(S, d, enrolment(), free)
+      ok(e.r.status === 200, `row 1: with no consent, the first recovery code is accepted inside the window (${reason(e.r)})`)
+      const rc = JSON.stringify(await rcOf(S))
+      ok(reason((await enrol(S, d, enrolment(), free)).r) === 'consent:consent' && JSON.stringify(await rcOf(S)) === rc, 'row 2: a second rc-enrol in the window → refused, the code unchanged')
+      ok(!(await armed(S)), '  …both ops used: the allowance is gone')
+      ok((await fetchBlob(c.reg.key, c.reg.credId)).status === 200, 'a passkey added at setup fetches its blob like any other')
+      const evs = (await status(S)).j.events as { k: string; setup?: boolean }[]
+      ok(evs.some((x) => x.k === 'cred-add' && x.setup === true) && evs.some((x) => x.k === 'rc-enrol' && x.setup === true), 'rule 7: both events say they were at setup')
+      ok(noticesTo(S.email, 'cred-add-setup') === 1 && noticesTo(S.email, 'rc-enrol-setup') === 1, '  …and both ops mail a notice that says so')
+      const ke = store('Address', kScope)!.get('events') as { k: string; setup?: boolean }[]
+      ok(ke.some((x) => x.k === 'cred-add') && !ke.some((x) => 'setup' in x), 'CONTROL: an ordinary passkey add carries no setup mark')
+      const flags = [...(await acctStore(S)).keys()].filter((k) => k.startsWith('ever:'))
+      ok(flags.length === 1 && !flags[0].includes(S.k.pub), 'the "ever" flag is stored by hash, not by the account key')
+    }
+    // row 3: the proposal's bypass. Row 5: a renewal does not arm
+    {
+      const S = await person('setup-3@example.com'); await bind(S)
+      const d = await device(S)
+      ok((await enrol(S, d)).r.status === 200 && await nCreds(S) === 0, '  (S has a code and no passkey: zero credentials, not a new account)')
+      ok(reason((await addCred(S, d, free)).r) === 'consent:consent', "row 3: an account with a code and no passkey, key-signed cred-add, no consent → refused")
+      await renew(S)
+      ok(!(await armed(S)), 'row 5: a same-key renewal of an account that has had a code does not arm')
+      ok(reason((await addCred(S, d, free)).r) === 'consent:consent', '  …so a thief who also renews gets no passkey by it')
+      ok((await addCred(S, d)).r.status === 200, 'CONTROL: the same add WITH consent is accepted')
+    }
+    // row 4: a count of current credentials is not "never"
+    {
+      const S = await person('setup-4@example.com'); await bind(S)
+      const d = await device(S)
+      const c = await addCred(S, d)
+      ok((await delCred(S, d, c.reg.credId, 'cred-del')).status === 200 && await nCreds(S) === 0, '  (the last credential is deleted: back to zero)')
+      await renew(S)
+      ok(!(await armed(S)), 'row 4: renewing after the last credential was deleted does not arm')
+      ok(reason((await addCred(S, d, free)).r) === 'consent:consent', '  …and a cred-add with no consent → refused')
+      ok(reason((await enrol(S, d, enrolment(), free)).r) === 'consent:consent', '  …so is an rc-enrol')
+    }
+    // a holder deletion clears the slots, not the flag
+    {
+      const S = await person('setup-del@example.com'); await bind(S, { setup: true })
+      const d = await device(S, { consent: false })
+      ok((await addCred(S, d, free)).r.status === 200, '  (a passkey at setup)')
+      ok((await del(S)).status === 204 && !(await armed(S)), 'a holder deletion ends the window')
+      now += DAY
+      await bind(S)
+      ok(!(await armed(S)) && await nCreds(S) === 0, 'the same key re-bound after its own deletion has zero passkeys and is NOT armed: wipe never clears the flag')
+    }
+    // row 6: the window's edge, and re-arming by email
+    {
+      const S = await person('setup-6@example.com'); await bind(S, { setup: true })
+      const d = await device(S, { consent: false })
+      now += 15 * MIN
+      ok(reason((await addCred(S, d, free)).r) === 'consent:consent', 'row 6: at exactly 15 minutes the window is over → refused')
+      ok(reason((await enrol(S, d, enrolment(), free)).r) === 'consent:consent', '  …for rc-enrol too')
+      await renew(S)
+      ok(await armed(S), 'row 6: a new email code on a never-enrolled account re-arms')
+      now += 15 * MIN - 1 // the last millisecond of the new window
+      ok((await addCred(S, d, free)).r.status === 200, 'row 6: inside the new window the first passkey is accepted')
+    }
+    // row 7: absent, never rescued
+    {
+      const S = await person('setup-7@example.com'); await bind(S, { setup: true })
+      const d = await device(S)
+      ok(reason((await addCred(S, d, { purpose: 'cred-del' })).r).startsWith('consent:cns:'), 'row 7: a bad consent inside the window → refused, no fall-through')
+      ok(reason((await addCred(S, d, { consent: '' })).r) === 'consent:consent', '  …an empty one is presented too, and refused')
+      ok(reason((await addCred(S, d, { consent: 0 })).r) === 'consent:consent', '  …so is a zero')
+      ok(reason((await enrol(S, d, enrolment(), { purpose: 'cred-add' })).r).startsWith('consent:cns:'), '  …and on rc-enrol')
+      ok(await nCreds(S) === 0 && !(await rcOf(S)), '  …and nothing landed')
+      ok((await addCred(S, d, free)).r.status === 200, 'CONTROL: the same window with consent ABSENT is accepted')
+    }
+    // row 8: it only fills empty slots
+    {
+      const S = await person('setup-8@example.com'); await bind(S, { setup: true })
+      const d = await device(S)
+      const held = await enrol(S, d) // a consented code, inside the window
+      ok(held.r.status === 200, '  (a code enrolled with consent inside the window)')
+      const rc = JSON.stringify(await rcOf(S))
+      const e = await enrol(S, d, enrolment(), free)
+      ok(reason(e.r) === 'filled', `row 8: rc-enrol under the allowance where a code exists → refused (${reason(e.r)})`)
+      ok(JSON.stringify(await rcOf(S)) === rc && (await api('/v1/recovery/salt', { email: S.email })).j.saltV === held.e.saltV, '  …the code unchanged')
+      const added = await addCred(S, d) // and the same for a passkey
+      ok(added.r.status === 200, '  (a passkey added with consent inside the window)')
+      ok(reason((await addCred(S, d, free)).r) === 'filled' && await nCreds(S) === 1, 'rule 5: cred-add under the allowance where a passkey exists → refused')
+    }
+    // row 9: frozen. Rule 6: it dies early
+    {
+      const S = await person('setup-9@example.com'); await bind(S, { setup: true })
+      const d = await device(S, { consent: false })
+      const e = await enrol(S, d, enrolment(), free)
+      ok(e.r.status === 200 && await armed(S), '  (armed, the cred-add still unused)')
+      ok((await freezeBy(S, S)).status === 200 && !(await armed(S)), 'rule 6: a freeze clears the allowance')
+      ok(reason((await addCred(S, d, free)).r) === 'dreq:state', 'row 9: armed, then frozen → refused')
+      const S2 = await nextOf(S)
+      const nb = await bindNext(S2, await current(S))
+      ok((await resolve(nb, e.e.verifier)).status === 200, '  (the freeze is resolved to a new key)')
+      ok(!(await armed(S)), 'row 9: a resolution arms nothing')
+      ok(reason((await addCred(S2, d, free)).r) === 'consent:consent', 'row 9: still refused after the freeze resolves')
+    }
+    for (const [how, end] of [
+      ['an email freeze', async (p: P) => freezeByEmail(p)],
+      ['a rotation start', async (p: P) => (await rotate(p, await nextOf(p))).st],
+    ] as const) {
+      const S = await person(`setup-end-${how.length}@example.com`); await bind(S, { setup: true })
+      const before = await armed(S)
+      const r = await end(S)
+      ok(before && r.status < 300 && !(await armed(S)), `rule 6: ${how} clears the allowance`)
+    }
+    {
+      const S = await person('setup-new@example.com'); await bind(S, { setup: true })
+      const d = await device(S, { consent: false })
+      ok((await addCred(S, d, free)).r.status === 200, '  (the passkey half of the allowance is used)')
+      await renew(S)
+      ok(!(await armed(S)) && reason((await enrol(S, d, enrolment(), free)).r) === 'consent:consent', 'rule 6: a new bind ends the window; the unused op is gone with it')
+    }
+    {
+      // it names the bind that armed it
+      const S = await person('setup-names@example.com'); await bind(S, { setup: true })
+      const d = await device(S, { consent: false })
+      const su = (await addrStore(S)).get('setup') as { h: string }
+      ;(await addrStore(S)).set('setup', { ...su, h: await hashOf('another binding') })
+      ok(reason((await addCred(S, d, free)).r) === 'consent:consent', 'an allowance naming another binding → refused')
+    }
+    // row 10: a bind that ends pending never arms
+    {
+      const T = await person('setup-10@example.com'); await bind(T)
+      ok((await del(T)).status === 204, '  (a holder deletion: the tomb protects the address)')
+      const T2 = await nextOf(T)
+      now += 2 * MIN
+      const b = await bindNext(T2, null)
+      await api('/v1/bind/start', { stmt: b.text, sig: b.sig })
+      const code = codeFor(T.email)!
+      const c = await api('/v1/bind/complete', { email: T.email, code, sig: await T2.k.sign(buildCmp(await hashOf(b.text), code)) })
+      ok(c.status === 200 && c.j.state === 'pending', '  (a new key over the tomb ended pending)')
+      ok(!(await armed(T)), 'row 10: a bind that ended pending is not armed')
+      now += 73 * HOUR
+      ok((await lookup(T.email)).j.binding === b.text && !(await armed(T)), 'row 10: nor does it arm when it settles to active')
+      ok(reason((await addCred(T2, await device(T2, { consent: false }), free)).r) === 'consent:consent', '  …so a cred-add with no consent → refused')
+    }
+
+    // --- a rebound takes the old key's passkeys, as it takes its code ---
+    {
+      const E = await person('rebound-exp@example.com'); await bind(E, { setup: true })
+      const d = await device(E, { consent: false })
+      const c = await addCred(E, d, free)
+      const e = await enrol(E, d, enrolment(), free)
+      ok(c.r.status === 200 && e.r.status === 200, '  (the old key has a passkey and a code)')
+      const ck = b64uEnc(await sha(c.reg.credId))
+      const keep = await person('rebound-keep@example.com'); await bind(keep)
+      const kc = await addCred(keep, await device(keep))
+      await renew(keep)
+      ok(await nCreds(keep) === 1 && (await fetchBlob(kc.reg.key, kc.reg.credId)).status === 200, 'CONTROL: a same-key renewal keeps the passkey')
+      now += 14 * MONTH // E's binding expires
+      const E2 = await nextOf(E)
+      const b = await bindNext(E2, null)
+      await api('/v1/bind/start', { stmt: b.text, sig: b.sig })
+      const code = codeFor(E.email)!
+      const r = await api('/v1/bind/complete', { email: E.email, code, sig: await E2.k.sign(buildCmp(await hashOf(b.text), code)) })
+      ok(r.status === 200 && r.j.rebound === true, `  (a new key over the expired binding: rebound, ${reason(r)})`)
+      ok(await nCreds(E) === 0 && !store('Cred', ck)!.has('cred'), "a rebound over an expired binding drops the old key's passkeys: the index and the Cred")
+      ok(!(await rcOf(E)), "  …and its recovery record (before this it lingered until the next attempt)")
+      ok(reason(await fetchBlob(c.reg.key, c.reg.credId)) === 'unknown', '  …so the old passkey fetches nothing')
+      ok(await armed(E), '  …and the new key, which never had anything, is armed')
+      const d2 = await device(E2, { consent: false })
+      const c2 = await addCred(E2, d2, free)
+      ok(c2.r.status === 200, `the new key's first passkey fills the emptied slot: the new owner is not stuck (${reason(c2.r)})`)
+      ok((await enrol(E2, d2, enrolment(), free)).r.status === 200, "  …and its first code")
+    }
+    {
+      // a resolved freeze is a rebound too: the frozen key's passkey must not consent for the new key
+      const A = await person('rebound-res@example.com'); await bind(A)
+      const d = await device(A)
+      const c = await addCred(A, d)
+      const e = await enrol(A, d)
+      const ck = b64uEnc(await sha(c.reg.credId))
+      ok((await freezeBy(A, A)).status === 200, '  (frozen by its key)')
+      const A2 = await nextOf(A)
+      ok((await resolve(await bindNext(A2, await current(A)), e.e.verifier)).status === 200, '  (resolved to a new key)')
+      ok(await nCreds(A) === 0 && !store('Cred', ck)!.has('cred') && !(await rcOf(A)), "a resolved freeze drops the frozen key's passkeys and spends its code")
+    }
+    {
+      // a VOUCHED rotation is not a rebound: the index stays (§9.4 re-enrols in the same flow)
+      const A = await person('rotate-keeps@example.com'); await bind(A)
+      await addCred(A, await device(A))
+      const A2 = await nextOf(A)
+      await rotate(A, A2)
+      now += 73 * HOUR
+      ok((await lookup(A.email)).j.binding !== undefined && await nCreds(A) === 1, "CONTROL: a settled rotation leaves the passkey index alone")
+    }
+  }
 }
 
 console.log(`${passes} passed, ${fails} failed`)
