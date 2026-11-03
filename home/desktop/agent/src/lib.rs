@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// bento/id — the desktop agent core (Windows, Linux).
+// bento/connect — the desktop agent core (Windows, Linux).
 //
 // The reference for every byte is kernel/src/statements.ts and
 // kernel/src/address.ts; the CONTRACT is kernel/fixtures/identity-v1.json,
@@ -13,6 +13,7 @@ pub mod address;
 pub mod agent;
 pub mod b64u;
 pub mod device_list;
+pub mod webauthn;
 pub mod recovery;
 mod display_table;
 pub mod statements;
@@ -22,3 +23,6 @@ pub mod tpm_linux;
 
 #[cfg(all(target_os = "linux", feature = "keyring"))]
 pub mod secret_linux;
+
+#[cfg(all(target_os = "linux", feature = "fido"))]
+pub mod fido_linux;

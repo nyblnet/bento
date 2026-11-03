@@ -550,8 +550,9 @@ real hole rather than a stylistic one.
 
 7. Construct the session, mount the panel, connect on eligibility, and stamp
    the state on save — about six lines:
-   `const sync = new SyncSession(store)`, `mountPeople(el, sync, store)`,
-   `if (sync.shareEligible()) joinFromDoc(sync, store)`,
+   `const sync = new SyncSession(store)`, the Share popover (`shareui.ts`,
+   whose `tryJoin()` is `if (sync.shareEligible()) joinFromDoc(sync, store)` —
+   done 2026-10-20),
    `sync.stampInto(store.doc)` before serializing, and `sync.setSheet(id)` when
    the visible sheet changes.
 
@@ -578,7 +579,8 @@ project. When that project happens, these two files are the callers to
 reconcile.
 
 **Written for dash:** the engine (`crdt.ts`), the patch tap and snapshot policy
-(`session.ts`), and the People panel (`people.ts`).
+(`session.ts`), and the Share popover with its People list (`shareui.ts`,
+spaces' panel, which replaced the old `people.ts` chip).
 
 ---
 

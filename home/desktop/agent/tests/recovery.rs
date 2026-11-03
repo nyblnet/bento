@@ -8,7 +8,7 @@
 // Override the path with BENTO_RECOVERY_FIXTURE.
 
 use bento_id_agent::recovery as rc;
-use bento_id_agent::statements::KxMode;
+use bento_id_agent::b64u;
 use serde_json::Value;
 use zeroize::Zeroizing;
 
@@ -95,9 +95,9 @@ fn derivations() {
     let f = fixture();
     let d = &f["derivations"];
     let (code, salt, salt_v) = (unhex(s(d, "code")), unhex(s(d, "salt")), unhex(s(d, "saltV")));
-    assert_eq!(hex(&rc::argon2id(&code, &salt)), s(d, "argon2_A"), "A = Argon2id(code bytes, salt)");
-    assert_eq!(hex(&rc::recovery_wrap_key(&code, &salt)), s(d, "wrapKey"), "wrap key = HKDF(A, empty, rc-wrap)");
-    assert_eq!(hex(&rc::recovery_verifier(&code, &salt_v)), s(d, "verifier"), "verifier = Argon2id(code, salt_v)");
+    assert_eq!(hex(&rc::argon2id(&code, &salt).unwrap()), s(d, "argon2_A"), "A = Argon2id(code bytes, salt)");
+    assert_eq!(hex(&rc::recovery_wrap_key(&code, &salt).unwrap()), s(d, "wrapKey"), "wrap key = HKDF(A, empty, rc-wrap)");
+    assert_eq!(hex(&rc::recovery_verifier(&code, &salt_v).unwrap()), s(d, "verifier"), "verifier = Argon2id(code, salt_v)");
     assert_ne!(s(d, "verifier"), s(d, "argon2_A"));
     assert_eq!(hex(&rc::prf_kek(&unhex(s(&d["prf"], "output")), &unhex(s(&d["prf"], "salt")))), s(d, "prfKek"));
 }
@@ -112,36 +112,44 @@ fn whole_blobs_end_to_end() {
     let acct = s(k, "accountPub");
     let kx_pub = s(k, "kxPub");
 
-    let only = rc::BlobKeys { account: key32(s(k, "accountD")), kx: None };
-    assert_eq!(rc::seal_prf_blob(&prf, &cred, &salt, &iv, &only, KxMode::Unruled), blob(&b["prf"]["unruled"]), "PRF blob re-seals byte for byte");
-    let with_kx = rc::BlobKeys { account: key32(s(k, "accountD")), kx: Some(key32(s(k, "kxD"))) };
-    assert_eq!(rc::seal_prf_blob(&prf, &cred, &salt, &iv, &with_kx, KxMode::A), blob(&b["prf"]["modeA"]), "mode A re-seals byte for byte");
+    assert_eq!((f["kxMode"].as_str(), f["blobLen"].as_u64(), rc::BLOB_LEN), (Some("C"), Some(64), 64), "kx placement is mode C: a 64-byte blob");
+    let keys = rc::BlobKeys { account: key32(s(k, "accountD")), kx: key32(s(k, "kxD")) };
+    assert_eq!(rc::seal_prf_blob(&prf, &cred, &salt, &iv, &keys), blob(&b["prf"]["blob"]), "PRF blob (account ‖ recovery kx) re-seals byte for byte");
 
-    let opened = rc::open_prf_blob(&blob(&b["prf"]["unruled"]), &prf, &cred, acct, None, KxMode::Unruled).unwrap();
-    assert_eq!(hex(&opened.account[..]), s(k, "accountD"));
-    let opened_a = rc::open_prf_blob(&blob(&b["prf"]["modeA"]), &prf, &cred, acct, Some(kx_pub), KxMode::A).unwrap();
-    assert_eq!(hex(&opened_a.kx.unwrap()[..]), s(k, "kxD"));
+    let opened = rc::open_prf_blob(&blob(&b["prf"]["blob"]), &prf, &cred, acct, kx_pub).unwrap();
+    assert_eq!((hex(&opened.account[..]), hex(&opened.kx[..])), (s(k, "accountD").to_string(), s(k, "kxD").to_string()));
     let flip = |v: &[u8]| v.iter().map(|x| x ^ 1).collect::<Vec<u8>>();
-    assert_eq!(rc::open_prf_blob(&blob(&b["prf"]["unruled"]), &flip(&prf), &cred, acct, None, KxMode::Unruled).err(), Some("decrypt"));
-    assert_eq!(rc::open_prf_blob(&blob(&b["prf"]["unruled"]), &prf, &flip(&cred), acct, None, KxMode::Unruled).err(), Some("credential"));
-    assert_eq!(rc::open_prf_blob(&blob(&b["prf"]["unruled"]), &prf, &cred, acct, Some(kx_pub), KxMode::A).err(), Some("length"));
+    assert_eq!(rc::open_prf_blob(&blob(&b["prf"]["blob"]), &flip(&prf), &cred, acct, kx_pub).err(), Some("decrypt"));
+    assert_eq!(rc::open_prf_blob(&blob(&b["prf"]["blob"]), &prf, &flip(&cred), acct, kx_pub).err(), Some("credential"));
+    assert_eq!(rc::open_prf_blob(&blob(&b["prf"]["blob"]), &prf, &cred, acct, "").err(), Some("key-mismatch"), "no recovery kx to match: refused");
+    let wl = b["prf"]["wrongLength"].as_array().unwrap();
+    assert_eq!(wl.len(), 4);
+    for w in wl {
+        let mut bl = blob(&b["prf"]["blob"]);
+        bl.ct = b64u::enc(&unhex(s(w, "ct")));
+        assert_eq!(rc::open_prf_blob(&bl, &prf, &cred, acct, kx_pub).err(), Some("length"), "PRF: {}", s(w, "name"));
+    }
 
     let r = &b["recovery"]["inputs"];
-    let wk = rc::recovery_wrap_key(&unhex(s(r, "code")), &unhex(s(r, "salt")));
+    let wk = rc::recovery_wrap_key(&unhex(s(r, "code")), &unhex(s(r, "salt"))).unwrap();
     let riv = unhex(s(r, "iv"));
-    assert_eq!(hex(&rc::seal_recovery_inner(&wk, &riv, acct, &only, KxMode::Unruled)), s(&b["recovery"], "inner"), "recovery inner re-seals");
+    assert_eq!(hex(&rc::seal_recovery_inner(&wk, &riv, acct, &keys)), s(&b["recovery"], "inner"), "recovery inner re-seals");
     let inner = unhex(s(&b["recovery"], "inner"));
-    assert_eq!(hex(&rc::open_recovery_inner(&inner, &wk, &riv, acct, None, KxMode::Unruled).unwrap().account[..]), s(k, "accountD"));
+    let back = rc::open_recovery_inner(&inner, &wk, &riv, acct, kx_pub).unwrap();
+    assert_eq!((hex(&back.account[..]), hex(&back.kx[..])), (s(k, "accountD").to_string(), s(k, "kxD").to_string()));
+    for w in b["recovery"]["wrongLength"].as_array().unwrap() {
+        assert_eq!(rc::open_recovery_inner(&unhex(s(w, "ct")), &wk, &riv, acct, kx_pub).err(), Some("length"), "recovery: {}", s(w, "name"));
+    }
     let other = rc::parse_recovery_code(s(&f["codes"][1], "printed")).unwrap();
-    let wk2 = rc::recovery_wrap_key(&other[..], &unhex(s(r, "salt")));
-    assert_eq!(rc::open_recovery_inner(&inner, &wk2, &riv, acct, None, KxMode::Unruled).err(), Some("decrypt"), "another code cannot open it");
-    assert_eq!(rc::open_recovery_inner(&inner, &wk, &riv, kx_pub, None, KxMode::Unruled).err(), Some("decrypt"), "aad binds the account");
+    let wk2 = rc::recovery_wrap_key(&other[..], &unhex(s(r, "salt"))).unwrap();
+    assert_eq!(rc::open_recovery_inner(&inner, &wk2, &riv, acct, kx_pub).err(), Some("decrypt"), "another code cannot open it");
+    assert_eq!(rc::open_recovery_inner(&inner, &wk, &riv, kx_pub, kx_pub).err(), Some("decrypt"), "aad binds the account");
 
     let pp = &b["pepper"];
     let (vk, wkey) = rc::pepper_keys(&unhex(s(pp, "secret")), acct);
     assert_eq!((hex(&vk), hex(&wkey)), (s(pp, "verifyKey").to_string(), s(pp, "wrapKey").to_string()));
     let d = &f["derivations"];
-    let verifier = rc::recovery_verifier(&unhex(s(d, "code")), &unhex(s(d, "saltV")));
+    let verifier = rc::recovery_verifier(&unhex(s(d, "code")), &unhex(s(d, "saltV"))).unwrap();
     assert_eq!(hex(&rc::pepper_verifier_tag(&vk, &verifier)), s(pp, "verifierTag"));
     let piv = unhex(s(pp, "iv"));
     assert_eq!(hex(&rc::pepper_seal(&wkey, &piv, &inner, acct)), s(pp, "outer"));
@@ -153,7 +161,7 @@ fn whole_blobs_end_to_end() {
 fn scalars_on_import() {
     let f = fixture();
     for sc in f["scalars"].as_array().unwrap() {
-        let v = rc::unpack_scalars(&unhex(s(sc, "d")), s(sc, "pub"), None, KxMode::Unruled);
+        let v = rc::unpack_scalars(&unhex(s(sc, "pt")), s(sc, "accountPub"), s(sc, "kxPub"));
         match s(sc, "expect") {
             "accept" => assert!(v.is_ok(), "{}", s(sc, "name")),
             _ => assert_eq!(v.err(), Some(s(sc, "reason")), "{}", s(sc, "name")),
@@ -169,3 +177,4 @@ fn normaliser_is_unicode_17_or_later() {
     let (major, _, _) = unicode_normalization::UNICODE_VERSION;
     assert!(major >= 17, "unicode-normalization data is {:?}", unicode_normalization::UNICODE_VERSION);
 }
+

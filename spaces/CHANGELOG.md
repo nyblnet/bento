@@ -1396,6 +1396,15 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   closing now never changes the desktop layout, and widening the window
   brings back the layout you last chose there. `[`, `]` and the panel
   chevrons at desktop width are remembered as before.
+- **The calendar's second shape is called Agenda, and calendars go by Due.**
+  The calendar's Month button now switches to **Agenda**. It used to say
+  "Timeline", the same name as the timeline layout, which is a different
+  picture. Files are unchanged: an agenda is still saved as
+  `span: "timeline"`, so existing views open exactly as before. A page with
+  both a Start and a Due date now sits on its Due day. A page with only a
+  Start still sits on its Start day, and a journal entry still sits on its own
+  date. The line above the grid states the order, for example "Dated by the
+  journal date, then Due, Start."
 
 ## [0.1.0] — 2026-08-03
 

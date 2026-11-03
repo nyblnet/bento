@@ -1,0 +1,13 @@
+[package]
+name = "bento-agent-testkit"
+version = "0.0.0"
+edition = "2021"
+license = "MIT"
+publish = false
+description = "TEST-ONLY: a virtual FIDO2 authenticator (Google OpenSK, Apache-2.0) over Linux uhid, for the desktop agent's CI rigs. Never a dependency of the shipped agent."
+
+# OpenSK is not on crates.io: pinned to an exact commit. Apache-2.0.
+[dependencies]
+opensk = { git = "https://github.com/google/OpenSK", rev = "636d85b8ae492f30157cb38d9d84c3c40b9f1f0c", features = ["std"] }
+
+[workspace]

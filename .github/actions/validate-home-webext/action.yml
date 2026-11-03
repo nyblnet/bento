@@ -130,14 +130,34 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-webext-store.ts
 
-    - name: WebExtension bento/id rig
-      # The extension's statement code must be the kernel reference, unaltered
-      # (a generated type-strip, checked current), and must pass the whole
-      # conformance contract in kernel/fixtures/identity-v1.json. The
-      # passkey-wrapped account key must fail closed for the wrong passkey,
-      # credential or binding; the recovery code is 80 random bits.
+    - name: WebExtension Bento ID setup rig
+      # Creating a Bento ID: the device certificate verifies under kernel's
+      # verifier; the passkey and recovery blobs open with kernel's openers to
+      # the account key; the recovery code and the raw scalar appear nowhere in
+      # the stored record; both keys are non-extractable; no PRF means no blob,
+      # and with no way back at all, setup refuses.
+      shell: bento-step {0}
+      run: node scripts/test-webext-connect.ts
+
+    - name: WebExtension bento/connect rig
+      # The extension's identity code must be the kernel reference, unaltered
+      # (a generated type-strip, checked current), and pass kernel's own rigs
+      # for identity-v1.json and recovery-v1.json with the same row counts.
+      # The vendored Argon2id (@noble/hashes) must match its pinned file
+      # hashes, RFC 9106 and every recovery vector, agree with Node's native
+      # Argon2id, zero its block array, and fail closed on allocation failure.
       shell: bento-step {0}
       run: node scripts/test-webext-id.ts
+
+    - name: WebExtension served-document rig
+      # Opening a file WITH identity (bento/connect W2): the signed release
+      # histories are verified, anti-rollback held and fetched no more than
+      # daily, never before first use; a file is GENUINE only if exactly one
+      # held history matches it (every held history is tried, never one the
+      # document names); only the scanner's executable elements become blob:
+      # scripts; and the host acts only on fixed-shape requests on its port.
+      shell: bento-step {0}
+      run: node scripts/test-webext-serve.ts
 
     - name: WebExtension localisation rig
       # Every failure mode of a message catalogue is silent: a key the code

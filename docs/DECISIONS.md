@@ -11544,3 +11544,478 @@ installed jsdom.
   end, including the encrypted-title rig with jsdom hidden, which must turn the
   step red. It also checks that every allowlist entry's rig still prints its
   line, and that every rig step in every CI file runs through the wrapper.
+
+## 2026-10-20 — dash: the shell takes slides' chrome (Share popover, measured bar, live language)
+
+Dash's bar, Save menu and sharing now follow slides and spaces, per the rule
+that slides is the chrome reference. Four things a later session could undo
+by accident:
+
+- **Sharing is a popover, and connecting needs eligibility.** The one-click
+  "Start live session" chip is gone; dash/src/shareui.ts is spaces' Share
+  panel. Nothing connects until Go live (or a live copy is sent). A workbook
+  that arrives SHARED — saved with its session on, an invite, a view-only copy
+  — rejoins its room on open through `SyncSession.shareEligible()`, which is
+  what slides and spaces do. Before this, dash never joined on open, so a copy
+  sent to someone stayed offline. A fresh workbook or template still never
+  connects: the keys are minted a beat after boot, so only the eligibility
+  test stands between the first edit and the relay.
+- **Copies for someone else go through the kernel copy table.**
+  dash/src/docclass.ts is dash's field map (exhaustive over DashDoc's declared
+  keys, enforced by tsc); dash/src/share.ts builds the reading copy ('package'),
+  the invite ('invite') and the view-only copy ('reader') with it, so a
+  top-level field this build does not declare is dropped from all three.
+- **The bar is fitted by measuring, not by breakpoints.** dash/src/topbar.ts
+  ports slides' fitTopbar and fold. Below the fold the BAR scrolls, never the
+  document, and the ＋/⋯ menus are position: fixed under it. Widgets parked in
+  ⋯ (Share, 🌐, Data) render inline (CLAUDE.md hard-won 9 and 10).
+- **The language switches live by translating in place.** Slides rebuilds its
+  editor. Dash builds its app once from one template, so re-running boot would
+  mint a second store and sync session, and a reload of a file:// page drops
+  unsaved work. Instead the visible strings are mapped back to their
+  English-as-key source under the old locale and re-translated. Interpolated
+  strings are re-rendered by their owners.
+
+Comments take the accent colour. The violet `--cmt` was dash's own and read as
+a third accent next to amber and the selection blue; slides' comment pins are
+amber.
+
+## 2026-10-20 — dash: a column header click selects; sorting is a command
+
+In dash a click on a column header (dataset name or spreadsheet letter) selects
+the column, shift extends, ⌘/Ctrl adds, and it never sorts. Excel, Sheets,
+Numbers and Airtable all do this, and the old click-to-sort left the selection
+on its screen rectangle, which after the sort held different records. Sorting
+lives in the header's ▾ menu and the right-click menu. Double-clicking a
+dataset column's name renames it in place. A sort or filter now carries the
+selection by ROW identity: whole columns stay whole, single-row ranges move
+with their row, and a taller block collapses to the cursor cell (its rows no
+longer sit together). Point mode inserts a dataset reference in the FILE's
+row and column numbering (`tableCellSource`), not the sorted view's.
+
+## 2026-10-20 — bento/dash: what typing into a spreadsheet cell stores, and text in arithmetic
+
+Typing into a spreadsheet cell (and pasting text into one) goes through
+`cellprops.ts coerceInput`. It was written and tested earlier but never wired:
+grid.ts kept a narrower reader, so `15%` and `$5` were stored as TEXT. The rules
+are in cellprops.ts's header. Two of them changed here:
+
+- **Unambiguous dates are read from typing.** ISO (`2026-03-04`) and a named
+  month (`Mar 4 2026`, `4 March 2026`) store the canonical `YYYY-MM-DD` string
+  and stamp the Date format. A slash date stays text from typing even when the
+  day is over 12. Otherwise `13/2/2026` would be a date and `12/2/2026` one row
+  up would be text. In a cell already formatted Date, every unambiguous spelling
+  is read, as before. The refusal of `3/4/2026` is unchanged.
+- **One digit reader.** `import.ts readEntryNumber` reads typed entry, the
+  formula engine's text coercion, and (through the same digit shapes)
+  `inferColumn`. A field that fits only one decimal convention reads that way
+  for everyone (`3,50` is 3.5). A field that fits both (`1,234`) follows the
+  viewer's locale when typed, because the typist meant something by it. The
+  formula engine always uses '.', import's own tie-break, because a computed
+  value is document data and must not depend on who opens the file.
+
+**Text in arithmetic follows Excel** (formula.ts, the block above `num`). A
+range or reference given to an aggregate counts only its numbers: text, even
+numeric-looking text, and booleans are skipped. This includes the step
+engine's open-coded fast path, which test-dash-steps.ts keeps bit-identical. A
+value written directly as an argument is coerced, and #VALUE! if it is not a
+number (COUNT just doesn't count it). Direct arithmetic coerces text only when
+the whole string reads as a typed number (`"15%"` is 0.15, `"(5)"` is -5).
+Anything else is #VALUE!; the old code read whatever digits were left after
+stripping symbols. Aggregates take every argument (`SUM(1,2,3)` was 1), and
+`%` is a postfix operator (`=10*15%` was 150).
+
+**A cell formula that does not parse is refused at entry**, in the cell editor
+and in the formula bar (`cellFormulaProblem` → `formula.ts syntaxProblem`). It
+is never refused on evaluation: formulas already in a file evaluate as
+leniently as before, because refusing them would put a blank where an answer
+was. The formula bar shows a value cell's ENTERED form (`cellprops.ts
+enteredForm`): `100%`, `$300.50`, or `'15%` for text that would otherwise be
+read back as a number. Re-entering what the bar shows always stores the same
+value again.
+
+Guarded by scripts/test-dash-entryparse.ts and
+scripts/test-dash-entryparse-browser.mjs.
+
+## 2026-10-20 — dash: a pivot opens as a sheet; the chart is edited in the panel
+
+A pivot sheet now OPENS where the grid was (its tab works), and the properties
+panel becomes its field editor — Excel's PivotTable Fields layout. Which pivot
+is up is view state, like which tab is up; the grid stays on its last sheet
+underneath, and `isOpenable` still means "the grid can show it" (tabs.ts takes a
+separate `SheetViews` hook for kinds another owner draws). The pivot's own
+filters are stored in model.ts's `StoredFilter` spelling (`isOneOf` as a
+`values` array, never a Set); a Filters-area field with no `pred` means
+"(All)". A grouping field sits in one of Filters/Columns/Rows; Values may repeat
+a column but not a column-and-function.
+
+The 2D chart is edited in the properties panel while it is selected (clicking
+the plot or Edit), as a slides chart is. New `ChartBinding` fields are additive:
+`title`, `legend`, `colors` (keyed by column id, never position) and
+`allowLine`. A line whose category column has no order (text, enum, bool) is
+drawn as bars unless `allowLine` is set, and the refusal is made in
+`optionFor`, so the panel, a story and a dashboard all refuse alike. The value
+axis takes its label pattern from the series columns only when they all share
+one format; percent axes are scaled by 100.
+
+3D is hidden behind a per-viewer developer flag
+(`localStorage['bento-dash-dev-3d'] = 'on'`), never in the document; viz3d.ts
+stays.
+
+Escape does not leave a pivot: it is a sheet now, and as in Excel you leave a
+sheet by its tab. #808's Escape-closes-Pivot existed for the Pivot side panel
+(review 4.8), which this removes; Escape still closes the Story panel.
+
+## 2026-10-20 — dash: the grid owns Tab only inside itself; F6 walks regions; slides' focus ring
+
+dash's document key handler took every key from every target that was not a
+text field, so Tab moved the grid's cursor from anywhere — the top bar, panel
+and sheet tabs could not be reached by keyboard — and Enter on a focused button
+moved the cursor instead of pressing it. Now: off the grid, Tab is always the
+browser's, and on a focused control Enter, Space and the navigation keys are
+the control's; other keys (a letter typed after clicking a toolbar button, ⌘Z)
+still reach the grid. Inside the grid Tab stays "next cell" (the data-entry
+run every spreadsheet keeps), and at the sheet's first or last column it hands
+the key back to the browser so the grid is not a keyboard trap. F6 / ⇧F6 move
+between top bar, formula bar, grid, panel and sheet tabs, Excel's key for it.
+Focus rings move from --blue to --accent-ink, the token slides' buttons and
+every field already use, with a zero-specificity floor for any reachable
+control that has no ring of its own. This supersedes the --blue choice recorded
+in dash's styles.css comment.
+
+Also settled the same day: a stored `bento-lang` is validated before `Intl`
+sees it (dash/src/i18n.ts `intlLocale`), because the key is shared across every
+file on the origin and a bad value used to stop boot.
+
+## 2026-10-21 — bento/connect K4: release pins and the signed release history
+
+A host that SERVES a document (iOS, Android, desktop, the hosted runtime)
+decides "genuine runtime" by hashing the file's code blocks and serving it under
+a hash-pinned script CSP (security §18). K4 publishes what that needs, per
+release, signed with the release key:
+- **Pins, in the manifest (additively: shipped shells read only
+  app/version/sha256/url):** `pins = { v: 1, blocks: { bento-rt, bento-rt-css,
+  loader, remover }, scriptSrc: [loader, remover] }`. Blocks are sha256 hex of
+  each code block's text; `scriptSrc` is the CSP form. They're derived from the
+  release's OWN bytes: the built shell, and a file it saved through its real ⌘S
+  fallback (`scripts/derive-pins.mjs`). The remover exists only in saved files,
+  and one app's scripting API returns JSON, not a file.
+- **A signed, cumulative history:** `releases/<app>/history.json`, the release
+  envelope over `{ app, v: 1, releases: [{ version, sha256, at, pins }] }`,
+  newest first. It's append-only: a release must be newer than everything held,
+  and a held entry never changes. The first history is backfilled from every
+  earlier release with a signed manifest, each shell checked against its own
+  manifest's sha256 first. For slides that's 66 versions, 0.7.0 to 1.2.9.
+  Earlier shells have no compressed runtime blocks, so they're unknown to hosts.
+- **The host rules (scripts/lib/release-history.mjs, security §36):**
+  - a file matches a release only if ONE entry matches EVERY block, with
+    exactly one block per id. A partial or ambiguous match is UNKNOWN:
+    restricted mode or an update offer, never a borrowed pinned CSP.
+  - a host keeps the newest history it has verified and refuses one that lacks
+    a held entry or rolls its newest version back. (With a well-formed history
+    the second check is implied by the first, and is kept as defence in depth.)
+- **The signing gate:** `release.mjs` refuses to sign on any pins mismatch, on
+  any executable inline script in a saved file other than the pinned loader and
+  remover, and on any CSP refusal while the release is driven under its pins,
+  except the loader's two designed fallbacks (an inline script, then `new
+  Function`). Those are matched on directive AND on a line inside the pinned
+  loader's span: matching on the source file alone excused an injected script.
+  There's no unchecked path. CI runs the same check on every PR's build of all
+  four apps, and the required `validate` job's release rehearsal runs the whole
+  pipeline.
+- **Refusal COLUMNS aren't reliable across Chrome versions.** Chrome Headless
+  Shell 149, Playwright's bundled browser and the one CI runs, reports a script
+  injected right after the loader's `</script>` at column 0, a position INSIDE
+  the loader's span. Chrome 155 reports its real column. So on CI's browser the
+  line-and-column rule alone would excuse that script, and the ONCE-EACH CAP
+  (at most one inline and one eval refusal excused) is what catches it. The cap
+  is the real guard and the column a refinement (security, measured). Rigs
+  identify an injected refusal by its line, with its column matching or 0, and
+  run under the bundled browser as well as system Chrome.
+- **The verdict is a GRAMMAR, not a list of cases (security, 2026-10-21).** A
+  `<script>` is inert only if its type is exactly one of the data types Bento
+  writes (`application/bento+json`, `application/bento+lang`,
+  `bento/deflate-b64`, `bento/deflate-b86`). Everything else is executable,
+  including no type, any JavaScript type, `module`, an unknown type, a
+  differently cased data type, and any `src=`. An executable script must then
+  be exactly the pinned loader or remover by hash. A file carrying `<iframe>`,
+  `<object>`, `<embed>`, `<base>`, a `<meta>` refresh or CSP, an `on*=`
+  attribute, a comment or `<style>` holding a `<script>`, or a data block
+  containing `<` is UNKNOWN. Bento's data blocks never contain `<`: the JSON is
+  escaped and the b64/b86 alphabets exclude it. Every genuine build of the four
+  apps, a real deck with a live embed and an svg diagram, and all 66 backfilled
+  slides releases pass it unchanged. Agreement between the hosts' scanners
+  (Rust, Swift, Kotlin, JS) is K5's shared corpus.
+- **No style pins in phase 1 (security §36a).** The policy is
+  `script-src <pins> blob:; style-src 'unsafe-inline'`. A document's own svg
+  `<style>` (an svg element's `css`, sanitized and scoped) can't be pinned per
+  release: measured, the pinned style policy refused it, which breaks every
+  user diagram with hover or animation. Style injection gives no route to
+  Bento's secrets: keys and the document JSON live in script text, which CSS
+  selectors can't read, and document CSS is sanitized and scoped. So pinning
+  would only remove what the svg element provides on purpose. The style control
+  is the SANITIZER, whose rig covers the obfuscated url() forms with a browser
+  fetch check. The route to style pins later is moving svg CSS into constructed
+  stylesheets (a slides change); collecting the hashes from the browser's own
+  CSP engine under a report-only policy was measured to work.
+## 2026-10-20 — calendar span renamed Agenda (gantt keeps Timeline); calendars prefer Due — maintainer, 2026-10-20
+
+Two rulings on the bento/spaces calendar layout, made by the maintainer.
+
+- **The calendar's second shape is "Agenda" on screen.** It was "Timeline",
+  the word the gantt layout also uses, so the view head could show two
+  different pictures under one name. Only the words changed: the span button
+  reads "Agenda" and its tooltip "Show an agenda"; the gantt layout keeps
+  "Timeline" everywhere (layout button, Insert menu, "Show as a timeline").
+- **The stored value stays `span: "timeline"`.** Files written since the
+  calendar shipped carry it, the format is additive, and renaming the value
+  would open every one of those views as a month grid. Do not "tidy" it to
+  `"agenda"`; a reader that wants the new name gets it from the label, never
+  from the file. `CAL_SPANS` in `spaces/src/calendar.ts` says so beside it.
+- **A calendar prefers Due.** The date a page sits on is: its journal date;
+  else `due`, when the schema declares it as a date field and the page carries
+  a real ISO value; else the other date fields in schema order; else "No
+  date". A task with both a Start and a Due belongs on the day it is due —
+  that is what a calendar of work is opened to answer. `DEFAULT_FIELDS` is
+  NOT reordered: the property strip still shows Start before Due. The order
+  lives in one function, `dateOrderOf`, which both `dateOf` and the hint above
+  the grid read, so the sentence cannot drift from the behaviour.
+
+## 2026-10-20 — Designs: system font stacks or embedded fonts, never web fonts — maintainer, 2026-10-20
+
+Fonts in a bento/spaces design are system font stacks (`FONT_STACKS`) or fonts
+an author embeds in the file (`asset:`). No bundled or downloaded web fonts —
+maintainer, 2026-10-20. This is already how `spaces/src/designs.ts` validates
+fonts: `validFont` accepts a `FONT_STACKS` name, or an `asset:` key that
+resolves to a `data:` font in the document's own assets, and drops anything
+else to the base design's font. It is recorded so that a later change does not
+add a web-font fetch.
+
+## 2026-10-21 — bento/connect K5: one gate-1 verifier, and the corpus every host runs
+
+`kernel/src/gate1.ts` is the ONE gate-1 implementation for every JavaScript
+host (the extension, the hosted runtime) and for the release tooling. The K4
+scripts import its scanner, grammar and host rules rather than carrying copies.
+It hashes with WebCrypto, so it runs in a page, a worker, an extension and node.
+- **`verifyServed(html, history)`** is the PRIMARY path, for a host that serves
+  the bytes it verified (security §17). ONE release must match EVERY block
+  under the grammar (§36 and the 2026-10-21 ruling). The answer carries the CSP
+  to serve under (`hostPolicy`). Unknown never borrows a release's CSP.
+- **`verifyStrict(html, expected)`** is the file:// fallback: vault's strict
+  verifier, signed off in security §15. The final whole-string compare, bound
+  at both ends, is the load-bearing part. Its expectation comes from a genuine
+  saved file of the release (`strictExpectedFrom`). A signed skeleton waits for
+  canonical save, and a file:// result is never grounds for identity (§16).
+- **`home/fixtures/gate1/`** is the conformance corpus: a synthetic app's signed
+  history (with a test key), served rows, the 16 strict tamper rows plus two
+  genuine saves, anti-rollback rows, and an ambiguous-history row. Every row
+  DECLARES its verdict, and the generator refuses to write the corpus if the
+  reference disagrees, so the answers are the rules, not what the JS happens to
+  do. Native hosts (Swift, Kotlin, Rust) port gate 1 and must pass every row.
+  Encodings are stated per field: block pins are sha256 HEX of the block text,
+  `scriptSrc` is `'sha256-'` + BASE64, and the entry `sha256` is HEX of the
+  shell file.
+## 2026-10-21 — bento/connect in the extension: Argon2id is @noble/hashes, and the recovery code is generated from kernel
+
+**Argon2id is `@noble/hashes` 2.4.0, vendored, not hash-wasm.** The recovery
+code is stretched with Argon2id, which WebCrypto lacks, so the extension
+vendors one. hash-wasm was the first choice, but its Argon2id takes no
+associated data, so it can't run the RFC 9106 §5.3 test vector, which has
+some. Security requires that vector. Noble's `argon2idAsync` runs it, equals
+Node's native Argon2id at Bento's parameters, and is pure JavaScript, so the
+extension needs no `'wasm-unsafe-eval'` anywhere. It takes about a second per
+derivation at 64 MiB, which is fine for a code used at setup and recovery.
+
+The files are copied unmodified from the npm tarball, each pinned by sha256 in
+`home/webext/src/id/vendor/noble-hashes/VENDOR.json`. `scripts/test-webext-id.ts`
+recomputes the hashes on every run, then checks RFC 9106, every
+`recovery-v1.json` derivation, and a randomized cross-check against Node's
+native Argon2id. It proves by probe that the 64 MiB block array reads zero
+afterwards. A derivation that can't allocate that memory reports "recovery
+unavailable on this device" and never retries with weaker parameters.
+
+**The recovery code and the key blobs are generated from kernel too.**
+`kernel/src/recovery.ts` now covers everything the extension's hand-written
+`id/blob.js` and `id/recovery.js` did, plus the recovery wrap. So it is
+type-stripped into `id/gen/` like the statements, and the hand-written
+modules are gone: one implementation, held to `recovery-v1.json` by kernel's
+own rig run against the extension's copy.
+
+## 2026-10-18 — bento/connect: the desktop agent's security-key ceremony, and one rule for C libraries (home/desktop/agent)
+
+- **One authenticator stack per platform.**
+  - **Linux** uses the distribution's **libfido2** (Yubico, BSD-2-Clause,
+    minimum 1.12). **Windows** will use only the platform WebAuthn API
+    (`webauthn.dll`), which covers security keys, Windows Hello and phone
+    hybrid: non-admin apps can't reach CTAP-HID keys directly there. libfido2 is
+    never shipped on Windows.
+  - **The PRF → CTAP hmac-secret transform**, SHA-256("WebAuthn PRF" ‖ 0x00 ‖
+    input), is applied exactly once. On Linux the agent applies it before
+    libfido2. On Windows the raw input goes to `webauthn.dll`'s PRF path, which
+    applies it itself. Applying it twice still gives deterministic output, but
+    it never matches what the same key gives on the web.
+- **The desktop's clientDataJSON origin** is exactly `bento-desktop:linux` or
+  `bento-desktop:windows`, never `https://bento.page`. A native app
+  self-asserts its origin; on the web the browser vouches for it, which is where
+  phishing resistance comes from. The fields are type, challenge, origin and
+  crossOrigin, in spec order, with CCDToString escaping and no topOrigin.
+- **C libraries are the distribution's, behind a thin in-tree FFI.** That
+  applies to libfido2 and to the keyring. The keyring moved from the
+  secret-service crate to libsecret, which removed a zbus tree carrying three
+  RustSec "unmaintained" notices. There are no binding crates, no bundled
+  copies and no OpenSSL crate in the shipped graph. Any future bundled build
+  must say so and pin and checksum its source.
+- **Supply chain (`supply-chain-check.sh`).** cargo-deny runs over the shipped
+  graph: a permissive-only licence allow-list, RustSec advisories and
+  crates.io-only sources. A second check proves the test-only authenticator is
+  absent from that graph. Each has a positive control: an LGPL crate, and the
+  testkit as a normal dependency, must both be refused.
+- **The test authenticator is Google's OpenSK** (Apache-2.0, pinned commit and
+  nightly), in a separate test-only crate with our own MIT uhid adapter. An
+  AGPL alternative was rejected even for tests.
+- **The PRF interop rig.** One virtual key and one credential, with an
+  independent WebAuthn client (Yubico python-fido2, BSD-2, hash-pinned) that
+  applies the PRF transform itself, as a browser does. The agent's output must
+  be byte-equal to it. Two mutant builds, double-hash and raw-input-hash, must
+  each fail ON THAT COMPARISON, not by failing to build or to reach the key.
+- **The no-TPM store's wipe** re-counts every item, locked or not, after
+  clearing. Measured: libsecret's clear silently skips items in a locked
+  keyring, so the re-count is what keeps a wipe from reporting success while
+  keys remain.
+
+## 2026-10-24 — One svg sanitizer in kernel; an app's policy only tightens it
+
+kernel/src/svgsafe.ts holds the untrusted-svg sanitizer, lifted verbatim from
+slides' renderer, so there is one implementation to audit instead of one per app.
+Type asked for this, at security's suggestion; slides agreed and named the
+couplings below.
+
+- **Slides' behaviour is the default.** Every policy option refuses more: a tag,
+  an attribute, `data-*`, remote hrefs, or escapes and foreign schemes in a
+  value. No option can add a name to a list. scripts/test-svgsafe-policy-browser.mjs
+  holds that: each option removes what the default keeps, and nothing an option
+  keeps was refused by the default.
+- **`scopeStyle` is required, and it only scopes.** There is no safe default
+  scope for a kept `<style>`, so a caller either passes its scoping (slides:
+  `css => scopeCss(css, scope)`) or `null`, which refuses `<style>` elements and
+  `style` attributes. The walk runs sanitizeSvgCss itself and hands the hook
+  the result, so an app passing `css => css` keeps a sanitized sheet, never a
+  raw one. Without that, this hook would be the one option able to loosen
+  (security's condition on #847).
+- **What stays in the app** is what isn't security: how it parses input into an
+  inert document, and scopeCss (hard-won detail #7).
+- **One decoder.** slides' colour gate reads values through the kernel's
+  `cssDecodeIdentEscapes`, the same function the svg-css path uses. Two copies
+  could disagree about what an escaped `u\72l(` says. Measured: making the
+  kernel's decoder a no-op turns the egress rig red at the chart colour sinks.
+- **render.ts re-exports** SVG_TAGS, svgAttrAllowed, svgHrefAllowed,
+  svgUrlRefsAllowed and sanitizeSvgCss, so callers and rigs keep importing them
+  from the renderer.
+
+## 2026-11-02 — bento/connect: directory requests (dreq.), the rotation vouch (rot.), and op-specific consent
+
+Three additions to `kernel/src/statements.ts`, with vectors in
+`kernel/fixtures/identity-v1.json`. They are what the directory needs before
+key rotation, freezing and passkey management can be switched on.
+- **`dreq.<op>.<b64u(address)>.<bindHash>.<challenge>.<arg>`** is every
+  agent-signed request that only the directory verifies, in one layout with a
+  CLOSED op set: `contest`, `freeze`, `status`, `cred-add`, `cred-del`,
+  `rc-enrol`. It is bound to a single-use challenge the directory issued, spent
+  before anything else is checked, rather than to a timestamp, so there is no
+  replay window at all. Each op fixes its arg exactly (empty for freeze and
+  status; otherwise a SHA-256 the directory RECOMPUTES from what it holds, never
+  reads from the request). `cred-add` hashes the exact registration bytes,
+  `sha256(attestationObject ‖ sha256(clientDataJSON))`, not the credential id,
+  so the key under an id cannot be swapped in transit. The inner hash fixes the
+  tail at 32 bytes, so the split between the two parts is bound: under a bare
+  concatenation, moving one byte across the boundary gave the same arg, and
+  safety rested on every directory and host decoding CBOR and JSON strictly.
+  It is WebAuthn's own `authenticatorData ‖ clientDataHash` shape. The signer is the account key of the
+  binding the directory currently serves as authoritative, which during a
+  pending rotation is the OLD one, so a pending key signs no request. While
+  frozen only `status` is accepted; `contest` only while pending; the three
+  credential and recovery ops only while active.
+- **Consent for `cred-add`, `cred-del` and `rc-enrol` names the op.** Those
+  three change who can recover the account, so each also needs a `cns.`, with
+  purposes of the same names whose families are `dreq.cred-add.`,
+  `dreq.cred-del.` and `dreq.rc-enrol.`. Never a bare `dreq.`: the family is a
+  prefix check, so a bare family would let one consent authorise any op.
+  Freeze, contest and status need no consent: they remove power or only read.
+- **`rot.<sha256(next bind)>.<sha256(live bind)>`, signed by the OLD account
+  key, is the rotation vouch**, replacing "the old key also signs the new
+  `bind.` bytes". A signature's meaning belongs in its own bytes, so nothing an
+  account key signs about its own binding can be replayed as a vouch. It
+  carries no challenge, because a client checks it OFFLINE against the binding
+  it pinned. `verifyRotation` requires: next self-signed and in date, same
+  address, seq + 1, next.prev = sha256(pinned), the rot. naming exactly those
+  two hashes in that order, the rot. signed by the pinned key, and next
+  CREATED within the pinned binding's lifetime (± the 5-minute skew), else
+  `stale-vouch`. A key's authority to vouch ends when its binding does:
+  otherwise a key leaked after expiry (a retired device), with a directory
+  serving the chain, turns a pinner's "key changed" warning into a silent
+  follow. The pinned binding is never checked against the current time, so a
+  legitimate chain still verifies after its old binding expires; legitimate
+  rotations always pass, because the directory starts one only from a live
+  binding.
+- **A rotation resolved by the recovery code has no `rot.`**, and pinners warn.
+  That is intended: the old key was reported lost or contested, and no
+  directory-asserted marker may soften the warning.
+- **The new rows are in their own fixture sections** (`dreq`, `rot`,
+  `dreqConsent`), not in `statements`, because host runners dispatch
+  `statements` rows by type and refuse an unknown one. Each host adopts them in
+  its own change.
+
+## 2026-11-02 — bento/connect: kx placement is mode C (a per-device kx and a recovery kx, both required)
+
+The maintainer ruled identity-design §6b: **mode C.** Every `dev.` carries
+that device's own key-agreement key (ECDH P-256) and every `bind.` carries the
+account's RECOVERY kx. This replaces the 2026-10-18 holding rule, under which
+both slots had to stay empty until the ruling.
+
+- **Both slots are REQUIRED, and there is no other mode.** An empty slot is
+  refused with `kx`, as is a value that is not an uncompressed P-256 point or
+  that repeats a signing key of the same certificate. The kernel's mode table
+  (`unruled`/A/B/C) and every host's copy of it are gone, not set to C: a
+  switch that still accepted an empty slot or a 32-byte blob would be a
+  lenient path one call away. `KX_MODE` stays as a constant, `'C'`, for the
+  rigs to assert.
+- **The account blob is exactly 64 bytes**: the account scalar ‖ the recovery
+  kx scalar. Both blobs (PRF and recovery code) carry the same plaintext, and
+  each scalar must be in 1..n−1 and match its directory-signed public half: the
+  account key and the binding's kx slot. A 32-byte account-only plaintext is
+  refused with `length` after it decrypts, never read as a partial key set.
+  `blobs.*.wrongLength` in recovery-v1.json carries 32-, 63-, 65- and 96-byte
+  blobs sealed under the right key and aad, so every host proves it refuses on
+  length rather than failing to decrypt.
+- **A device's own kx never leaves it**; only the recovery kx's scalar travels,
+  in the blobs. The light tier (the extension) generates its device kx
+  non-extractable and re-imports the recovery kx non-extractable after sealing
+  the blobs, as it already did for the account key.
+- **Enrolments made before this ruling are discarded, never migrated.** They
+  have no kx and 32-byte blobs, and nothing under mode C accepts either. The
+  extension's stored identity record moves to v2; a v1 record (or one with no
+  version) reads as none and is deleted, and setup starts again. No upgrade
+  path exists by design: every such enrolment is a test enrolment.
+- **identity-v1.json and recovery-v1.json are regenerated.** identity-v1 drops
+  `kxModeDefault` and every per-row `kxMode` for a top-level `kxMode: "C"`, and
+  every accepted `dev.` and `bind.` fills its slot. recovery-v1's `scalars`
+  rows are now 64-byte plaintexts checked against both public halves. The
+  Swift, Kotlin, Rust and extension ports and their rigs change in the same
+  PR, so no host runs against vectors it cannot pass.
+- **Security's conditions for C (§26c) bind the sharing work that uses the
+  recovery kx, not this format change:** "unwrap once and drop" bounds only a
+  device compromised after the drop; the recovery kx is exactly as safe as the
+  blobs, so blob compromise exposes all history until the next rotation;
+  removing a device as lost or stolen always rotates the recovery kx; history
+  for a new device comes from an existing device re-wrapping to its kx
+  whenever one is reachable, and from the recovery kx only when none is; and
+  the organisation option is pure B (no recovery kx), with escrow elsewhere.
+  Senders wrap to every device kx AND the recovery kx, never the recovery kx
+  alone.
+- **Guarded by mutants.** `scripts/test-kx-mode-mutants.ts` reintroduces ten
+  lenient paths into a copy of kernel/src (an empty slot read as no kx, no
+  point check, a kx equal to a signing key, either certificate ignoring its
+  slot, a 32-byte blob beside a 64-byte one, any length of at least 64, the kx
+  scalar never matched, a missing kx public half skipping the match, a seal
+  without a kx) and requires test-statements or test-recovery to fail on each,
+  after the unmutated copy passes both.

@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url'
 import {
   b64uEnc, signStatement, sha256b64u, buildDev, buildBind, buildAtt, buildTomb, buildDel, buildCmp,
   buildConsent, consentTranscript, webauthnChallengeFor, lowS, CONSENT_MAX_TTL_MS,
+  buildDreq, dreqArg, buildRot, type DreqSubject, type DreqOp,
   DISPLAY_FORBIDDEN_RANGES, DISPLAY_FORBIDDEN_UNICODE,
 } from '../kernel/src/statements.ts'
 
@@ -40,7 +41,11 @@ async function kxKey(): Promise<string> {
 
 const account = await signer(), device = await signer(), consent = await signer()
 const directory = await signer(), stranger = await signer()
-const kx = await kxKey(), kx2 = await kxKey()
+const kx = await kxKey(), rkx = await kxKey(), rkx2 = await kxKey(), phoneKx = await kxKey()
+/** A raw point with y nudged off the curve, and the same point compressed (33 bytes): both refused as kx. */
+const rawOf = (k: string) => Uint8Array.from(Buffer.from(k, 'base64url'))
+const offCurve = (k: string) => { const b = rawOf(k); b[64] ^= 1; return b64uEnc(b) }
+const compressed = (k: string) => { const b = rawOf(k); return b64uEnc(Uint8Array.of(2 + (b[64] & 1), ...b.subarray(1, 33))) }
 const KID = 'dir-2027a'
 const directoryKeys = { [KID]: directory.pub }
 const ROOM = 'w' + b64uEnc(new Uint8Array(32).fill(7))     // a room NAME, 43 chars after 'w'
@@ -70,22 +75,27 @@ const sign = (k: KP, t: string) => signStatement(k.key, t)
 
 // --- dev. -----------------------------------------------------------------------
 {
-  const base = { devicePub: device.pub, consentPub: consent.pub, accountPub: account.pub, kx: null, label: 'Café laptop', created, expires }
+  const base = { devicePub: device.pub, consentPub: consent.pub, accountPub: account.pub, kx, label: 'Café laptop', created, expires }
   const t = buildDev(base)
   const s = await sign(account, t)
-  row({ name: 'dev: a native device (routine + consent key)', type: 'dev', text: t, sig: s, expect: 'accept' })
+  row({ name: 'dev: a native device (routine + consent key + its own kx)', type: 'dev', text: t, sig: s, expect: 'accept' })
   const light = buildDev({ ...base, consentPub: null, label: null })
-  row({ name: 'dev: a light-tier device (no consent key)', type: 'dev', text: light, sig: await sign(account, light), expect: 'accept' })
-  const withKx = buildDev({ ...base, kx })
-  const sKx = await sign(account, withKx)
-  row({ name: 'dev: kx filled while placement is unruled', type: 'dev', text: withKx, sig: sKx, expect: 'reject', reason: 'kx' })
-  row({ name: 'dev: kx filled under mode B (per device)', type: 'dev', kxMode: 'B', text: withKx, sig: sKx, expect: 'accept' })
-  row({ name: 'dev: kx filled under mode A (it belongs in bind.)', type: 'dev', kxMode: 'A', text: withKx, sig: sKx, expect: 'reject', reason: 'kx' })
-  row({ name: 'dev: kx missing under mode C', type: 'dev', kxMode: 'C', text: t, sig: s, expect: 'reject', reason: 'kx' })
+  row({ name: 'dev: a light-tier device (no consent key, its own kx)', type: 'dev', text: light, sig: await sign(account, light), expect: 'accept' })
+  // kx placement is mode C (identity-design §6b): the per-device kx is REQUIRED
+  const noKx = buildDev({ ...base, kx: '' })
+  row({ name: 'dev: the kx slot empty (mode C requires a per-device kx)', type: 'dev', text: noKx, sig: await sign(account, noKx), expect: 'reject', reason: 'kx' })
+  const lightNoKx = buildDev({ ...base, consentPub: null, label: null, kx: '' })
+  row({ name: 'dev: a light-tier device with the kx slot empty', type: 'dev', text: lightNoKx, sig: await sign(account, lightNoKx), expect: 'reject', reason: 'kx' })
   const kxIsDevice = buildDev({ ...base, kx: device.pub })
-  row({ name: 'dev: kx equal to the device key', type: 'dev', kxMode: 'B', text: kxIsDevice, sig: await sign(account, kxIsDevice), expect: 'reject', reason: 'kx' })
+  row({ name: 'dev: kx equal to the device key', type: 'dev', text: kxIsDevice, sig: await sign(account, kxIsDevice), expect: 'reject', reason: 'kx' })
   const kxIsConsent = buildDev({ ...base, kx: consent.pub })
-  row({ name: 'dev: kx equal to the consent key', type: 'dev', kxMode: 'B', text: kxIsConsent, sig: await sign(account, kxIsConsent), expect: 'reject', reason: 'kx' })
+  row({ name: 'dev: kx equal to the consent key', type: 'dev', text: kxIsConsent, sig: await sign(account, kxIsConsent), expect: 'reject', reason: 'kx' })
+  const kxIsAccount = buildDev({ ...base, kx: account.pub })
+  row({ name: 'dev: kx equal to the account key', type: 'dev', text: kxIsAccount, sig: await sign(account, kxIsAccount), expect: 'reject', reason: 'kx' })
+  const kxOff = buildDev({ ...base, kx: offCurve(kx) })
+  row({ name: 'dev: kx not a point on P-256', type: 'dev', text: kxOff, sig: await sign(account, kxOff), expect: 'reject', reason: 'kx' })
+  const kxShort = buildDev({ ...base, kx: compressed(kx) })
+  row({ name: 'dev: kx in compressed form (33 bytes)', type: 'dev', text: kxShort, sig: await sign(account, kxShort), expect: 'reject', reason: 'kx' })
   const sameKeys = buildDev({ ...base, consentPub: device.pub })
   row({ name: 'dev: consent key equal to the routine key', type: 'dev', text: sameKeys, sig: await sign(account, sameKeys), expect: 'reject', reason: 'consent-key' })
   const old = buildDev({ ...base, created: NOW - 300 * DAY, expires: NOW - DAY })
@@ -107,7 +117,7 @@ const sign = (k: KP, t: string) => signStatement(k.key, t)
 // --- bind. ----------------------------------------------------------------------
 let bind1 = ''
 {
-  const base = { address: 'alice@example.com', accountPub: account.pub, kx: null, name: 'Alice', seq: 1, prev: null, created, expires }
+  const base = { address: 'alice@example.com', accountPub: account.pub, kx: rkx, name: 'Alice', seq: 1, prev: null, created, expires }
   bind1 = buildBind(base)
   row({ name: 'bind: first binding (seq 1, no prev)', type: 'bind', text: bind1, sig: await sign(account, bind1), expect: 'accept' })
   const b2 = buildBind({ ...base, seq: 2, prev: await sha256b64u(bind1) })
@@ -150,14 +160,15 @@ let bind1 = ''
     const t = buildBind({ ...base, name: n })
     row({ name: `bind: ${what} is accepted`, type: 'bind', text: t, sig: await sign(account, t), expect: 'accept' })
   }
-  const withKx = buildBind({ ...base, kx })
-  const sKx = await sign(account, withKx)
-  row({ name: 'bind: kx filled while placement is unruled', type: 'bind', text: withKx, sig: sKx, expect: 'reject', reason: 'kx' })
-  row({ name: 'bind: kx filled under mode A (shared)', type: 'bind', kxMode: 'A', text: withKx, sig: sKx, expect: 'accept' })
-  row({ name: 'bind: kx filled under mode C (recovery kx)', type: 'bind', kxMode: 'C', text: withKx, sig: sKx, expect: 'accept' })
-  row({ name: 'bind: kx filled under mode B (it belongs in dev.)', type: 'bind', kxMode: 'B', text: withKx, sig: sKx, expect: 'reject', reason: 'kx' })
+  // kx placement is mode C (identity-design §6b): the RECOVERY kx is REQUIRED
+  const noKx = buildBind({ ...base, kx: '' })
+  row({ name: 'bind: the kx slot empty (mode C requires the recovery kx)', type: 'bind', text: noKx, sig: await sign(account, noKx), expect: 'reject', reason: 'kx' })
   const kxIsKey = buildBind({ ...base, kx: account.pub })
-  row({ name: 'bind: kx equal to the account key', type: 'bind', kxMode: 'A', text: kxIsKey, sig: await sign(account, kxIsKey), expect: 'reject', reason: 'kx' })
+  row({ name: 'bind: kx equal to the account key', type: 'bind', text: kxIsKey, sig: await sign(account, kxIsKey), expect: 'reject', reason: 'kx' })
+  const kxOff = buildBind({ ...base, kx: offCurve(rkx) })
+  row({ name: 'bind: kx not a point on P-256', type: 'bind', text: kxOff, sig: await sign(account, kxOff), expect: 'reject', reason: 'kx' })
+  const kxShort = buildBind({ ...base, kx: compressed(rkx) })
+  row({ name: 'bind: kx in compressed form (33 bytes)', type: 'bind', text: kxShort, sig: await sign(account, kxShort), expect: 'reject', reason: 'kx' })
   row({ name: 'bind: signed by a stranger', type: 'bind', text: bind1, sig: await sign(stranger, bind1), expect: 'reject', reason: 'signature' })
 }
 
@@ -212,7 +223,7 @@ let bind1 = ''
 
 // --- cns. — security §24's five attacks, and the grammar ---------------------------
 {
-  const phone = { devicePub: (await signer()).pub, consentPub: (await signer()).pub, accountPub: account.pub, kx: null, label: 'Phone', created, expires }
+  const phone = { devicePub: (await signer()).pub, consentPub: (await signer()).pub, accountPub: account.pub, kx: phoneKx, label: 'Phone', created, expires }
   const linkPayload = buildDev(phone)
   const otherPayload = buildDev({ ...phone, label: 'Tablet' }) // a different statement, same keys
   const tLink = await consentTranscript('dir', CHALLENGE, linkPayload)
@@ -250,6 +261,186 @@ let bind1 = ''
   row({ name: 'cns: DOCID SWAP — applied to another document', type: 'cns', ...ictx, docId: 'doc-other', text: inv, sig: sInv, expect: 'reject', reason: 'docid' })
   const noDoc = buildConsent({ rp: 'bento', purpose: 'invite', docId: null, transcript: tInv!, exp: NOW + 60_000 })
   row({ name: 'cns: a document-scoped purpose with no docId', type: 'cns', ...ictx, text: noDoc, sig: await sign(consent, noDoc), expect: 'reject', reason: 'docid' })
+}
+
+// --- dreq. — account-signed requests the directory verifies ----------------------
+// Their own sections, so a host runner that dispatches `statements` rows by type
+// meets nothing it does not know; each host adopts these in its own change.
+const dreqRows: Record<string, unknown>[] = []
+const rotRows: Record<string, unknown>[] = []
+const dreqConsentRows: Record<string, unknown>[] = []
+{
+  const newAccount = await signer()
+  const live = bind1, liveHash = await sha256b64u(bind1)
+  const bindBase = { address: 'alice@example.com', accountPub: newAccount.pub, kx: rkx2, name: 'Alice', seq: 2, prev: liveHash, created, expires }
+  const pendingBind = buildBind(bindBase)
+  const bytes = (n: number, k: number) => new Uint8Array(n).map((_, i) => (i * k + 5) & 0xff)
+  const te = new TextEncoder()
+  // stand-ins for the WebAuthn registration bytes: the arg hashes the exact bytes, whatever they hold
+  const attestationObject = Uint8Array.of(0xa3, ...te.encode('fmt'), ...bytes(60, 7))
+  const clientDataJSON = te.encode('{"type":"webauthn.create","challenge":"' + CHALLENGE + '","origin":"https://id.bento.page"}')
+  const credentialId = bytes(32, 13)
+  const enrolBody = bytes(80, 17)
+  const subjects: Record<DreqOp, DreqSubject> = {
+    contest: { op: 'contest', pendingBindText: pendingBind },
+    freeze: { op: 'freeze' },
+    status: { op: 'status' },
+    'cred-add': { op: 'cred-add', attestationObject, clientDataJSON },
+    'cred-del': { op: 'cred-del', credentialId },
+    'rc-enrol': { op: 'rc-enrol', body: enrolBody },
+  }
+  /** a subject as JSON: bytes as base64url */
+  const json = (x: DreqSubject) => Object.fromEntries(Object.entries(x).map(([k, v]) => [k, v instanceof Uint8Array ? b64uEnc(v) : v]))
+  const req = async (op: DreqOp, over: Partial<{ address: string; bindHash: string; challenge: string; arg: string }> = {}) =>
+    buildDreq({ op, address: 'alice@example.com', bindHash: liveHash, challenge: CHALLENGE, arg: await dreqArg(subjects[op]), ...over })
+  const push = async (name: string, state: string, subject: DreqSubject, text: string, sig: string, expect: 'accept' | 'reject',
+    reason?: string, extra: Record<string, unknown> = {}) => {
+    dreqRows.push({ name: `dreq: ${name}`, bindText: live, state, challenge: CHALLENGE, subject: json(subject),
+      text, sig, expect, ...(reason ? { reason } : {}), ...extra })
+  }
+  const dr = async (name: string, op: DreqOp, state: string, text: string, by: KP, expect: 'accept' | 'reject', reason?: string,
+    extra: Record<string, unknown> = {}) => push(name, state, subjects[op], text, await sign(by, text), expect, reason, extra)
+
+  // every op, in a state that allows it
+  await dr('contest a pending rotation (signed by the OLD key, which the directory still serves)', 'contest', 'pending', await req('contest'), account, 'accept')
+  await dr('freeze (lost or stolen)', 'freeze', 'active', await req('freeze'), account, 'accept')
+  await dr('freeze during a pending rotation', 'freeze', 'pending', await req('freeze'), account, 'accept')
+  await dr('status read', 'status', 'active', await req('status'), account, 'accept')
+  await dr('status read while frozen', 'status', 'frozen', await req('status'), account, 'accept')
+  await dr('status read during a pending rotation', 'status', 'pending', await req('status'), account, 'accept')
+  await dr('cred-add over the exact registration bytes', 'cred-add', 'active', await req('cred-add'), account, 'accept')
+  await dr('cred-del', 'cred-del', 'active', await req('cred-del'), account, 'accept')
+  await dr('rc-enrol over the exact enrolment body', 'rc-enrol', 'active', await req('rc-enrol'), account, 'accept')
+
+  // the challenge
+  const freeze = await req('freeze')
+  await dr('REPLAY — the challenge was already spent', 'freeze', 'active', freeze, account, 'reject', 'replay', { challengeSpent: true })
+  await dr('a challenge the directory did not issue to this session', 'freeze', 'active',
+    await req('freeze', { challenge: b64uEnc(bytes(24, 29)) }), account, 'reject', 'challenge')
+  await dr('a challenge under 16 bytes', 'freeze', 'active', await req('freeze', { challenge: b64uEnc(bytes(8, 3)) }), account, 'reject', 'grammar')
+  await dr('a padded challenge', 'freeze', 'active', await req('freeze', { challenge: CHALLENGE + '=' }), account, 'reject', 'grammar')
+  // op, endpoint and state
+  const status = await req('status')
+  await push('OP SWAP — a status request presented to the freeze endpoint', 'active', subjects.freeze, status, await sign(account, status), 'reject', 'op')
+  await dr('an op outside the closed set', 'freeze', 'active', freeze.replace('dreq.freeze.', 'dreq.unfreeze.'), account, 'reject', 'grammar')
+  await dr('a freeze while frozen (only status is accepted)', 'freeze', 'frozen', freeze, account, 'reject', 'state')
+  await dr('a contest while frozen', 'contest', 'frozen', await req('contest'), account, 'reject', 'state')
+  await dr('a contest with nothing pending', 'contest', 'active', await req('contest'), account, 'reject', 'state')
+  await dr('cred-add while frozen', 'cred-add', 'frozen', await req('cred-add'), account, 'reject', 'state')
+  await dr('cred-add during a pending rotation', 'cred-add', 'pending', await req('cred-add'), account, 'reject', 'state')
+  await dr('cred-del during a pending rotation', 'cred-del', 'pending', await req('cred-del'), account, 'reject', 'state')
+  await dr('rc-enrol during a pending rotation', 'rc-enrol', 'pending', await req('rc-enrol'), account, 'reject', 'state')
+  // the arg: exact per op
+  await dr('a freeze carrying an arg', 'freeze', 'active', await req('freeze', { arg: liveHash }), account, 'reject', 'grammar')
+  await dr('a status read carrying an arg', 'status', 'active', await req('status', { arg: liveHash }), account, 'reject', 'grammar')
+  await dr('a contest with an empty arg', 'contest', 'pending', await req('contest', { arg: '' }), account, 'reject', 'grammar')
+  await dr('a cred-add arg that is not a SHA-256', 'cred-add', 'active', await req('cred-add', { arg: b64uEnc(bytes(16, 3)) }), account, 'reject', 'grammar')
+  await dr('cred-add over the credentialId alone (the key under it could be swapped)', 'cred-add', 'active',
+    await req('cred-add', { arg: await dreqArg({ op: 'cred-del', credentialId }) }), account, 'reject', 'arg')
+  const credAdd = await req('cred-add'), sCredAdd = await sign(account, credAdd)
+  const swappedAtt = Uint8Array.from(attestationObject); swappedAtt[20] ^= 0x01
+  // the split between the two parts is bound: one byte moved across the boundary
+  // was the same arg under a bare concatenation, and is refused now
+  const shiftedAtt = attestationObject.slice(0, -1)
+  const shiftedCdj = Uint8Array.of(attestationObject[attestationObject.length - 1], ...clientDataJSON)
+  await push('cred-add with one byte moved from attestationObject into clientDataJSON (same bytes, other split)', 'active',
+    { op: 'cred-add', attestationObject: shiftedAtt, clientDataJSON: shiftedCdj }, credAdd, sCredAdd, 'reject', 'arg')
+  const bareCat = new Uint8Array(attestationObject.length + clientDataJSON.length)
+  bareCat.set(attestationObject); bareCat.set(clientDataJSON, attestationObject.length)
+  const bareArg = b64uEnc(new Uint8Array(await crypto.subtle.digest('SHA-256', bareCat)))
+  const bareReq = await req('cred-add', { arg: bareArg }), sBareReq = await sign(account, bareReq)
+  await push('cred-add over sha256(attestationObject ‖ clientDataJSON), the unbound-split arg', 'active', subjects['cred-add'],
+    bareReq, sBareReq, 'reject', 'arg')
+  // THE COLLISION: both splits share that unbound arg; the bound one tells them apart
+  await push('cred-add: the other split of the same bytes under the unbound-split arg (the collision)', 'active',
+    { op: 'cred-add', attestationObject: shiftedAtt, clientDataJSON: shiftedCdj }, bareReq, sBareReq, 'reject', 'arg')
+  await push('cred-add whose attestationObject was changed in transit', 'active', { op: 'cred-add', attestationObject: swappedAtt, clientDataJSON },
+    credAdd, sCredAdd, 'reject', 'arg')
+  const contest = await req('contest')
+  await push('a contest naming a different pending binding', 'pending', { op: 'contest', pendingBindText: buildBind({ ...bindBase, name: 'Mallory' }) },
+    contest, await sign(account, contest), 'reject', 'arg')
+  const rcEnrol = await req('rc-enrol')
+  await push('rc-enrol over a different enrolment body', 'active', { op: 'rc-enrol', body: bytes(80, 19) }, rcEnrol, await sign(account, rcEnrol), 'reject', 'arg')
+  const credDel = await req('cred-del')
+  await push('cred-del naming a different credential', 'active', { op: 'cred-del', credentialId: bytes(32, 11) }, credDel, await sign(account, credDel), 'reject', 'arg')
+  // the binding and the signer
+  await dr('signed by the PENDING key (a pending key signs no request)', 'contest', 'pending', contest, newAccount, 'reject', 'signature')
+  await dr('naming the pending binding instead of the authoritative one', 'freeze', 'pending',
+    await req('freeze', { bindHash: await sha256b64u(pendingBind) }), newAccount, 'reject', 'bind-mismatch')
+  await dr('another address than the binding\'s', 'freeze', 'active', await req('freeze', { address: 'bob@example.com' }), account, 'reject', 'address')
+  await dr('an address not in normal form', 'freeze', 'active', await req('freeze', { address: 'Alice@example.com' }), account, 'reject', 'address')
+  await dr('a raw (unencoded) email breaks the field count', 'freeze', 'active',
+    ['dreq', 'freeze', 'alice@example.com', liveHash, CHALLENGE, ''].join('.'), account, 'reject', 'grammar')
+  await dr('signed by a stranger', 'freeze', 'active', freeze, stranger, 'reject', 'signature')
+  const sFreeze = await sign(account, freeze)
+  await push('high-S signature', 'active', subjects.freeze, freeze, highS(sFreeze), 'reject', 'signature')
+  await push('DER signature (a host forgot to convert)', 'active', subjects.freeze, freeze, der(sFreeze), 'reject', 'signature')
+  await push('an extra field', 'active', subjects.freeze, freeze + '.x', sFreeze, 'reject', 'grammar')
+  await push('a field missing', 'active', subjects.freeze, freeze.slice(0, freeze.lastIndexOf('.')), sFreeze, 'reject', 'grammar')
+  // every attempt that parses consumes its challenge, as for cns.
+  for (const r of dreqRows) r.spendCalled = !(r.expect === 'reject' && r.reason === 'grammar')
+
+  // --- rot. — the OLD key vouching for a rotation (client-verifiable offline) -------
+  const next = pendingBind, nextSig = await sign(newAccount, next), nextHash = await sha256b64u(next)
+  const rot = buildRot(nextHash, liveHash), rotSig = await sign(account, rot)
+  type RotIn = { prevBindText: string; nextBindText: string; nextSig: string; rotText: string; rotSig: string }
+  const rr = (name: string, o: Partial<RotIn>, expect: 'accept' | 'reject', reason?: string) =>
+    rotRows.push({ name: `rot: ${name}`, prevBindText: live, nextBindText: next, nextSig, rotText: rot, rotSig, ...o, expect, ...(reason ? { reason } : {}) })
+  /** a successor `b` of the live binding, fully and correctly vouched for */
+  const vouched = async (b: string, prevText = live): Promise<Partial<RotIn>> => {
+    const r = buildRot(await sha256b64u(b), await sha256b64u(prevText))
+    return { prevBindText: prevText, nextBindText: b, nextSig: await sign(newAccount, b), rotText: r, rotSig: await sign(account, r) }
+  }
+  rr('a rotation vouched for by the old key', {}, 'accept')
+  // the pinned binding may have expired by the time a client walks the chain
+  const pinned = (c: number, e: number) => buildBind({ address: 'alice@example.com', accountPub: account.pub, kx: rkx, name: 'Alice', seq: 1, prev: null, created: c, expires: e })
+  const successor = async (prevText: string, c: number) =>
+    vouched(buildBind({ ...bindBase, prev: await sha256b64u(prevText), created: c, expires: NOW + 300 * DAY }), prevText)
+  const oldPinned = pinned(NOW - 400 * DAY, NOW - DAY)
+  rr('the pinned binding has since expired (it was checked when it was pinned)', await successor(oldPinned, NOW - 10 * DAY), 'accept')
+  // a key may vouch only for a successor created within its own binding's lifetime (± SKEW_MS)
+  const SKEW = 5 * 60_000
+  const lapsed = pinned(NOW - 40 * DAY, NOW - 5 * DAY)
+  rr('next created while the pinned binding was live', await successor(lapsed, NOW - 10 * DAY), 'accept')
+  rr('next created exactly SKEW after the pinned binding expired', await successor(lapsed, NOW - 5 * DAY + SKEW), 'accept')
+  rr('next created SKEW + 1 ms after the pinned binding expired', await successor(lapsed, NOW - 5 * DAY + SKEW + 1), 'reject', 'stale-vouch')
+  rr('an EXPIRED key vouching for a successor minted days later', await successor(lapsed, NOW - DAY), 'reject', 'stale-vouch')
+  const young = pinned(NOW - 10 * DAY, NOW + 300 * DAY)
+  rr('next created exactly SKEW before the pinned binding was', await successor(young, NOW - 10 * DAY - SKEW), 'accept')
+  rr('next created SKEW + 1 ms before the pinned binding was', await successor(young, NOW - 10 * DAY - SKEW - 1), 'reject', 'stale-vouch')
+  const swapped = buildRot(liveHash, nextHash)
+  rr('SWAPPED HASHES', { rotText: swapped, rotSig: await sign(account, swapped) }, 'reject', 'rot-mismatch')
+  rr('rot. SIGNED BY THE NEW KEY', { rotSig: await sign(newAccount, rot) }, 'reject', 'rot-signature')
+  const rotB = buildRot(await sha256b64u(buildBind({ ...bindBase, name: 'Alicia' })), liveHash)
+  rr('rot. OVER A DIFFERENT NEXT binding', { rotText: rotB, rotSig: await sign(account, rotB) }, 'reject', 'rot-mismatch')
+  rr('SEQ SKIP (seq 1 → 3)', await vouched(buildBind({ ...bindBase, seq: 3 })), 'reject', 'seq')
+  rr('ADDRESS CHANGE', await vouched(buildBind({ ...bindBase, address: 'bob@example.com' })), 'reject', 'address')
+  rr('next.prev is not the hash of the pinned binding', await vouched(buildBind({ ...bindBase, prev: await sha256b64u(live + 'x') })), 'reject', 'chain')
+  rr('the next binding is not self-signed (signed by the old key)', { nextSig: await sign(account, next) }, 'reject', 'next-signature')
+  rr('the next binding has expired', await vouched(buildBind({ ...bindBase, created: NOW - 300 * DAY, expires: NOW - DAY })), 'reject', 'next-expired')
+  rr('the old key signing the bare next bind. bytes is NOT a vouch', { rotText: next, rotSig: await sign(account, next) }, 'reject', 'rot-grammar')
+  rr('rot. with an extra field', { rotText: rot + '.x', rotSig: await sign(account, rot + '.x') }, 'reject', 'rot-grammar')
+  rr('rot. with a high-S signature', { rotSig: highS(rotSig) }, 'reject', 'rot-signature')
+  rr('a pinned binding that does not parse', { prevBindText: live + '.x' }, 'reject', 'prev')
+
+  // --- cns. for the three dreq. ops that change who can recover the account ---------
+  const ctx = { rp: 'bento', audience: 'dir', challenge: CHALLENGE, docId: null }
+  const cn = async (name: string, purpose: string, payloadText: string, expect: 'accept' | 'reject', reason?: string, docId: string | null = null) => {
+    const t = buildConsent({ rp: 'bento', purpose: purpose as never, docId, transcript: (await consentTranscript('dir', CHALLENGE, payloadText))!, exp: NOW + 60_000 })
+    dreqConsentRows.push({ name: `cns: ${name}`, type: 'cns', ...ctx, payloadText, text: t, sig: await sign(consent, t), expect, ...(reason ? { reason } : {}) })
+  }
+  await cn('cred-add consents to a dreq.cred-add', 'cred-add', credAdd, 'accept')
+  await cn('cred-del consents to a dreq.cred-del', 'cred-del', credDel, 'accept')
+  await cn('rc-enrol consents to a dreq.rc-enrol', 'rc-enrol', rcEnrol, 'accept')
+  await cn('purpose cred-add over a dreq.cred-del (one consent never authorises another op)', 'cred-add', credDel, 'reject', 'payload-family')
+  await cn('purpose cred-del over a dreq.cred-add', 'cred-del', credAdd, 'reject', 'payload-family')
+  await cn('purpose rc-enrol over a dreq.cred-add', 'rc-enrol', credAdd, 'reject', 'payload-family')
+  await cn('purpose cred-add over a dreq.freeze', 'cred-add', freeze, 'reject', 'payload-family')
+  await cn('purpose rotate over a dreq.cred-add', 'rotate', credAdd, 'reject', 'payload-family')
+  await cn('a bare "dreq" purpose is not in the set', 'dreq', credAdd, 'reject', 'grammar')
+  await cn('cred-add carrying a docId (account-scoped)', 'cred-add', credAdd, 'reject', 'docid', 'doc-1')
+  // every row parses as a cns., so every one consumes its challenge (an unknown purpose is checked after the spend)
+  for (const r of dreqConsentRows) r.spendCalled = true
 }
 
 // --- derivations ------------------------------------------------------------------
@@ -334,10 +525,13 @@ const fixture = {
     'Every host must reach the stated verdict on every row; the reason is informative. ' +
     'Generated by scripts/gen-identity-vectors.ts, checked by scripts/test-statements.ts.',
   now: NOW,
-  kxModeDefault: 'unruled',
-  keys: { account: account.pub, device: device.pub, consent: consent.pub, directory: directory.pub, kx, kx2 },
+  kxMode: 'C',
+  keys: { account: account.pub, device: device.pub, consent: consent.pub, directory: directory.pub, kx, rkx, rkx2, phoneKx },
   directoryKeys,
   statements: rows,
+  dreq: dreqRows,
+  rot: rotRows,
+  dreqConsent: dreqConsentRows,
   transcripts,
   webauthn,
   lowS: lowSPairs,
@@ -348,4 +542,4 @@ const fixture = {
 }
 mkdirSync(dirname(OUT), { recursive: true })
 writeFileSync(OUT, JSON.stringify(fixture, null, 2) + '\n')
-console.log(`wrote ${OUT}: ${rows.length} statement rows, ${addresses.length} address rows, ${purposes.length} purpose rows`)
+console.log(`wrote ${OUT}: ${rows.length} statement rows, ${dreqRows.length} dreq, ${rotRows.length} rot, ${dreqConsentRows.length} dreq consent rows, ${addresses.length} address rows, ${purposes.length} purpose rows`)

@@ -15,7 +15,9 @@
 // - Consent (`cns.`) is host-STAMPED (§2e (A)): the rp, audience, docId and
 //   expiry are chosen here; the page supplies only the statement and the
 //   verifier's challenge. Signed by the CONSENT key, which prompts every use.
-// - kx: none. Its placement is unruled (§6b).
+// - kx: placement is mode C (§6b): a per-device kx in dev., a recovery kx in
+//   bind. This agent does not enrol yet, so it holds no kx; the enrolment that
+//   comes must mint both (see kernel/fixtures/README.md).
 
 use crate::{b64u, statements as st};
 
@@ -286,7 +288,7 @@ pub mod memory {
     }
     impl KeyStore for MemoryStore {
         fn public_key(&self, role: &KeyRole) -> Result<Option<[u8; 65]>, StoreError> {
-            Ok(self.keys.get(&k(role)).map(|s| s.verifying_key().to_encoded_point(false).as_bytes().try_into().unwrap()))
+            Ok(self.keys.get(&k(role)).map(|s| s.verifying_key().to_sec1_point(false).as_bytes().try_into().unwrap()))
         }
         fn sign(&mut self, role: &KeyRole, msg: &[u8], prompt: Option<&Prompt>) -> Result<[u8; 64], StoreError> {
             if let Some(p) = prompt {

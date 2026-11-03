@@ -170,19 +170,16 @@ enum IdentityStatements {
         return nil
     }
 
-    // MARK: kx placement (unruled, identity-design §6b)
+    // MARK: kx placement: mode C (ruled 2026-11-02, identity-design §6b)
 
-    enum KxMode: String { case unruled, A, B, C }
-    /// Until the maintainer rules, BOTH slots must be empty.
-    static let kxMode: KxMode = .unruled
-    private static func kxRule(_ m: KxMode) -> (bind: Bool, dev: Bool) {   // true = required
-        switch m { case .unruled: return (false, false); case .A: return (true, false); case .B: return (false, true); case .C: return (true, true) }
-    }
-    /// nil = empty and allowed; .some(key) = present and valid; throws-as-false via `ok`
-    private static func kxSlot(_ f: String, required: Bool, others: [String]) -> (ok: Bool, kx: String?) {
-        if !required { return (f.isEmpty, nil) }
-        if f.isEmpty || !isKxKey(f) || others.contains(f) { return (false, nil) }
-        return (true, f)
+    /// The one kx placement: a per-device kx in every dev. AND a recovery kx in
+    /// every bind., both REQUIRED. There is no other mode and no lenient path.
+    static let kxMode = "C"
+    /// A kx slot: required, a valid ECDH point, never equal to any signing key in
+    /// the same certificate. nil = refuse.
+    private static func kxSlot(_ f: String, others: [String]) -> String? {
+        if f.isEmpty || !isKxKey(f) || others.contains(f) { return nil }
+        return f
     }
 
     // MARK: dev. — the device certificate
@@ -191,18 +188,18 @@ enum IdentityStatements {
         let devicePub: String
         let consentPub: String?
         let accountPub: String
-        let kx: String?
+        let kx: String
         let label: String?
         let created: Int
         let expires: Int
     }
 
     static func buildDev(_ c: DeviceCert) -> String {
-        ["dev", c.devicePub, c.consentPub ?? "", c.accountPub, c.kx ?? "",
+        ["dev", c.devicePub, c.consentPub ?? "", c.accountPub, c.kx,
          c.label.map { b64uEnc(Data($0.utf8)) } ?? "", String(c.created), String(c.expires)].joined(separator: ".")
     }
 
-    static func verifyDev(_ text: String, _ sig: String, now: Int, kxMode m: KxMode = kxMode) -> Verdict<DeviceCert> {
+    static func verifyDev(_ text: String, _ sig: String, now: Int) -> Verdict<DeviceCert> {
         guard let p = fields(text, "dev", 8) else { return .no("grammar") }
         let devicePub = p[1], consentF = p[2], accountPub = p[3], kxF = p[4], labelF = p[5]
         guard isSigningKey(devicePub), isSigningKey(accountPub) else { return .no("key") }
@@ -212,14 +209,13 @@ enum IdentityStatements {
             guard isSigningKey(consentF), consentF != devicePub, consentF != accountPub else { return .no("consent-key") }
             consentPub = consentF
         }
-        let kx = kxSlot(kxF, required: kxRule(m).dev, others: [devicePub, accountPub, consentF])
-        guard kx.ok else { return .no("kx") }
+        guard let kx = kxSlot(kxF, others: [devicePub, accountPub, consentF]) else { return .no("kx") }
         var label: String?
         if !labelF.isEmpty { guard let l = displayText(labelF) else { return .no("label") }; label = l }
         guard let created = ms(p[6]), let expires = ms(p[7]) else { return .no("grammar") }
         if let life = lifetime(created, expires, now) { return .no(life) }
         guard verifyStatementSig(accountPub, sig, text) else { return .no("signature") }
-        return .yes(DeviceCert(devicePub: devicePub, consentPub: consentPub, accountPub: accountPub, kx: kx.kx, label: label, created: created, expires: expires))
+        return .yes(DeviceCert(devicePub: devicePub, consentPub: consentPub, accountPub: accountPub, kx: kx, label: label, created: created, expires: expires))
     }
 
     // MARK: bind. — the person certificate
@@ -227,7 +223,7 @@ enum IdentityStatements {
     struct BindCert: Equatable {
         let address: String
         let accountPub: String
-        let kx: String?
+        let kx: String
         let name: String?
         let seq: Int
         let prev: String?
@@ -236,17 +232,16 @@ enum IdentityStatements {
     }
 
     static func buildBind(_ c: BindCert) -> String {
-        ["bind", b64uEnc(Data(c.address.utf8)), c.accountPub, c.kx ?? "", c.name.map { b64uEnc(Data($0.utf8)) } ?? "",
+        ["bind", b64uEnc(Data(c.address.utf8)), c.accountPub, c.kx, c.name.map { b64uEnc(Data($0.utf8)) } ?? "",
          String(c.seq), c.prev ?? "", String(c.created), String(c.expires)].joined(separator: ".")
     }
 
-    static func verifyBind(_ text: String, _ sig: String, now: Int, kxMode m: KxMode = kxMode) -> Verdict<BindCert> {
+    static func verifyBind(_ text: String, _ sig: String, now: Int) -> Verdict<BindCert> {
         guard let p = fields(text, "bind", 9) else { return .no("grammar") }
         guard let address = freeText(p[1]), isNormalAddress(address) else { return .no("address") }
         let accountPub = p[2]
         guard isSigningKey(accountPub) else { return .no("key") }
-        let kx = kxSlot(p[3], required: kxRule(m).bind, others: [accountPub])
-        guard kx.ok else { return .no("kx") }
+        guard let kx = kxSlot(p[3], others: [accountPub]) else { return .no("kx") }
         var name: String?
         if !p[4].isEmpty { guard let nm = displayText(p[4]) else { return .no("name") }; name = nm }
         guard let seq = int(p[5]), seq >= 1 else { return .no("seq") }
@@ -256,7 +251,7 @@ enum IdentityStatements {
         guard let created = ms(p[7]), let expires = ms(p[8]) else { return .no("grammar") }
         if let life = lifetime(created, expires, now) { return .no(life) }
         guard verifyStatementSig(accountPub, sig, text) else { return .no("signature") }
-        return .yes(BindCert(address: address, accountPub: accountPub, kx: kx.kx, name: name, seq: seq,
+        return .yes(BindCert(address: address, accountPub: accountPub, kx: kx, name: name, seq: seq,
                              prev: prevF.isEmpty ? nil : prevF, created: created, expires: expires))
     }
 

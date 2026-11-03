@@ -8,12 +8,13 @@ import type { Store } from '../store'
 import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, paginates, isWebUrl, tableStyleFor, uid, type ChartElement, type ImageElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind, type CodeElement, type BentoDoc, type EmbedElement } from '../model'
 import { CROP_MAX_SCALE, normalizeCrop } from '../crop'
 import { LANGS } from '../../../kernel/src/tokenize.ts'
-import { resolveAsset } from '../render'
+import { cssColor, resolveAsset } from '../render'
 import { measureElement } from '../measure'
 import { PALETTE_SLOTS, paletteOf, refAt, setColor, slotIsSet } from '../palette'
 import { isMacOS } from '../screens'
 import { CHART_PRESETS } from '../charts'
 import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
+import { fontFaceDescriptors } from '../fontmeta'
 import { CODE_SCOPES, DEFAULT_CODE_COLORS } from '../code'
 import { TIPS } from '../tips'
 import { DATE_PRESETS, TIME_PRESETS, OTHER_FIELDS, formatDate } from '../datefmt'
@@ -58,6 +59,7 @@ const ROW_TIPS: Record<string, string> = {
   'Enter secs': 'How long the entrance takes, in seconds',
   'Reveal step': 'Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)',
   'Count up': 'Numbers in this text count up from zero when the slide enters',
+  'Typewriter': 'Code types in a character at a time, behind a cursor, when it appears',
   'Ambient': 'Continuous motion while the slide is on screen — Ken Burns drift or zoom',
   'Zoom': 'Ken Burns direction — drift, settle out, or settle in',
   'Zoom %': 'How far the Ken Burns zoom travels',
@@ -757,7 +759,7 @@ export class PropsPanel {
     const setFx = (patch: Partial<NonNullable<SlideElement['fx']>>) =>
       this.mutate(el.id, (e) => {
         const fx = { ...(e.fx ?? {}), ...patch }
-        if (!fx.enter && !fx.countUp && !fx.ambient && !fx.loop && !fx.step) delete e.fx
+        if (!fx.enter && !fx.countUp && !fx.ambient && !fx.loop && !fx.step && !fx.typeWriter) delete e.fx
         else e.fx = fx
       }, true)
 
@@ -789,6 +791,9 @@ export class PropsPanel {
     this.row('Count up', this.select(
       ['off', 'on'], el.fx?.countUp ? 'on' : 'off',
       (v) => setFx({ countUp: v === 'on' ? true : undefined })))
+    if (el.type === 'code') this.row('Typewriter', this.select(
+      ['off', 'on'], el.fx?.typeWriter ? 'on' : 'off',
+      (v) => setFx({ typeWriter: v === 'on' ? true : undefined })))
     this.row('Ambient', this.select(
       ['none', 'kenburns'], el.fx?.ambient ?? 'none',
       (v) => setFx(v === 'none' ? { ambient: undefined, ken: undefined } : { ambient: 'kenburns' })))
@@ -1282,13 +1287,17 @@ export class PropsPanel {
       const file = input.files?.[0]
       if (!file) return
       const reader = new FileReader()
-      reader.onload = () => {
+      reader.onload = async () => {
         const family = file.name.replace(/\.[a-z0-9]+$/i, '').replace(/[-_]+/g, ' ').trim() || 'Embedded font'
         const asset = `font_${family.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+        const src = String(reader.result)
+        // the weights and style the file states (#850): otherwise every face is
+        // declared 400 and Bold on a variable or bold font is faux bold
+        const faces = await fontFaceDescriptors(new Uint8Array(await file.arrayBuffer()), src)
         this.store.commit(() => {
           const doc = this.store.doc
-          doc.assets = { ...(doc.assets ?? {}), [asset]: String(reader.result) }
-          doc.fonts = [...(doc.fonts ?? []).filter((f) => f.family !== family), { family, asset }]
+          doc.assets = { ...(doc.assets ?? {}), [asset]: src }
+          doc.fonts = [...(doc.fonts ?? []).filter((f) => f.family !== family), { family, asset, ...faces }]
           const live = this.store.element(el.id)
           if (live && live.type === 'text') live.fontFamily = family
         })
@@ -2196,6 +2205,16 @@ export class PropsPanel {
       textBtn('⇊', 'Send to back', () => this.reorder(els, 'back')),
     ])
 
+    const lk = document.createElement('button')
+    lk.className = 'ed-btn ed-btn-block'
+    const allLocked = els.every((e) => e.locked)
+    lk.textContent = allLocked ? t('🔓 Unlock') : t('🔒 Lock')
+    lk.title = allLocked
+      ? t('Make it selectable on the canvas again (⌘L)')
+      : t('Clicks and drags on the canvas skip it; reach it from Layers or Alt-click (⌘L)')
+    lk.addEventListener('click', () => this.lock(els))
+    this.host.appendChild(lk)
+
     const grouped = els.some((e) => e.groupId)
     if (els.length > 1 || grouped) {
       const g = document.createElement('button')
@@ -2212,6 +2231,13 @@ export class PropsPanel {
       }
       this.host.appendChild(g)
     }
+  }
+
+  /** Lock the selection, or unlock it when everything in it is already locked (#838). */
+  lock(els: SlideElement[]) {
+    if (!els.length) return
+    const on = !els.every((e) => e.locked)
+    this.edit(() => { for (const el of els) { if (on) el.locked = true; else delete el.locked } }, true)
   }
 
   /** Same width/height for the whole selection — first selected is the reference. */
@@ -2302,7 +2328,7 @@ export class PropsPanel {
         const el = this.store.element(id)
         if (!el) continue
         const fx = { ...(el.fx ?? {}), step: step > 0 ? step : undefined }
-        if (!fx.enter && !fx.countUp && !fx.ambient && !fx.loop && !fx.step) delete el.fx
+        if (!fx.enter && !fx.countUp && !fx.ambient && !fx.loop && !fx.step && !fx.typeWriter) delete el.fx
         else el.fx = fx
       }
     }, true)
@@ -2363,11 +2389,15 @@ export class PropsPanel {
   }
 
   deleteEls(els: SlideElement[]) {
-    const ids = new Set(els.map((e) => e.id))
+    // locked elements stay (#838); the rest go, and the locked ones stay selected
+    const doomed = els.filter((e) => !e.locked)
+    if (!doomed.length) return
+    const ids = new Set(doomed.map((e) => e.id))
+    const kept = els.filter((e) => e.locked).map((e) => e.id)
     this.store.commit(() => {
       this.store.slide.elements = this.store.slide.elements.filter((e) => !ids.has(e.id))
     })
-    this.store.select([])
+    this.store.select(kept)
   }
 
   /** Also driven by the canvas context menu (editor.ts). */
@@ -2493,7 +2523,7 @@ export class PropsPanel {
       const b = document.createElement('button')
       b.type = 'button'
       b.className = 'ed-swatch'
-      b.style.background = base
+      b.style.background = cssColor(base, 'transparent') // a document colour: gated
       b.title = slot
       if (current && current.split(' ')[0] === slot) b.classList.add('is-on')
       b.addEventListener('click', () => {

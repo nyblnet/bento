@@ -89,6 +89,23 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-body-seal.ts
 
+    - name: release history — append-only, anti-rollback, every block or unknown
+      # bento/connect K4 (security §36): the signed release history only grows;
+      # a host refuses a history that lacks an entry it holds or rolls its
+      # newest version back; a file matches a release only if ONE entry matches
+      # EVERY block. sign-history.mjs end to end with a throwaway test key.
+      shell: bento-step {0}
+      run: node scripts/test-release-history.ts
+
+    - name: gate 1 — the shared verifier against the conformance corpus
+      # bento/connect K5: kernel/src/gate1.ts, the one JavaScript gate-1
+      # verifier, against home/fixtures/gate1/ read from disk as every host
+      # reads it. The served path (one release matches every block, under the
+      # grammar), the strict file:// path (both genuine saves pass, all 16
+      # tampers refuse), anti-rollback, and the CSP a host serves under.
+      shell: bento-step {0}
+      run: node scripts/test-gate1.ts
+
     - name: Language pack verification rig
       # Packs come off the network, so the signature + hash-pin chain is the
       # only thing between a hostile channel and the strings in the UI.
@@ -477,6 +494,15 @@ runs:
       shell: bento-step {0}
       run: node --no-warnings scripts/test-sync-session.ts
 
+    - name: the blob cache holds ciphertext only
+      # Live-session media is cached in IndexedDB, which every page on the
+      # same origin can read (on file://, every local file). The cache must
+      # hold the relay's ciphertext, never the decrypted bytes: every write
+      # path, a hit, a tampered entry, the version-1 purge, the shipped v1
+      # opener against an upgraded database, and a blocked upgrade.
+      shell: bento-step {0}
+      run: node --no-warnings scripts/test-blobcache.ts
+
     - name: Room snapshot carries no capability fields
       # Every snapshot path (relay upload, fork broadcast, re-snap, flush-time
       # fork snap) builds from one helper that strips the never-synced fields.
@@ -508,3 +534,12 @@ runs:
       # compile time (historySyncKeys); skipDoc is still the floor.
       shell: bento-step {0}
       run: node scripts/test-sync-history-override.ts
+
+    - name: kx placement mode C — lenient-path mutants
+      # bento/id (identity-design §6b, mode C): both kx slots are required and
+      # the account blob is exactly 64 bytes. Ten mutants each reintroduce one
+      # lenient path (an empty slot, a 32-byte blob, an unmatched kx...) into a
+      # copy of kernel/src; test-statements or test-recovery must go red on
+      # every one, after the unmutated copy passes both.
+      shell: bento-step {0}
+      run: node scripts/test-kx-mode-mutants.ts

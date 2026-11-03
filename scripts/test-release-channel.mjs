@@ -156,6 +156,27 @@ ok(payload.url === `https://bento.page/releases/${app.dir}/${app.shell}`,
   `the download URL is under the path the shell fetches (${payload.url})`)
 ok(typeof payload.at === 'string', 'the payload is stamped with a time')
 
+// ---- 3b. the pins and the release history (K4) ------------------------------
+//
+// release.mjs derived the pins from the staged shell and a file it saved, and
+// booted it under them (derive-pins.mjs) before signing. The manifest carries
+// them, ADDITIVELY, and the signed history holds this release with the SAME
+// pins: hosts check a file against either.
+ok(payload.pins?.v === 1 && /^sha256-/.test(payload.pins.scriptSrc?.[0] ?? '') && /^[0-9a-f]{64}$/.test(payload.pins.blocks?.['bento-rt'] ?? ''),
+  'the manifest carries the release pins: the CSP script hashes and the code-block hashes')
+{
+  const { checkAgainstPins } = await import('./lib/release-pins.mjs')
+  ok((await checkAgainstPins(readFileSync(stagedShell, 'utf8'), payload.pins)).length === 0,
+    "the staged shell's code blocks and loader match the signed pins")
+  const historyPath = join(site, `releases/${app.dir}/history.json`)
+  ok(existsSync(historyPath), `the release signed a history at releases/${app.dir}/history.json`)
+  const history = existsSync(historyPath) ? verifyEnvelope(readFileSync(historyPath, 'utf8'), pubJwk) : null
+  const mine = history?.releases.find((e) => e.version === payload.version)
+  ok(history?.app === app.appId && history.releases[0]?.version === payload.version, 'the history is for this app, newest release first')
+  ok(!!mine && mine.sha256 === payload.sha256 && JSON.stringify(mine.pins) === JSON.stringify(payload.pins),
+    'the history entry for this release has the same shell sha256 and the same pins as the manifest')
+}
+
 // ---- 4. the verifier every shipped file runs --------------------------------
 //
 // kernel/src/update.ts, copied to a temp directory with ONE edit: the embedded
