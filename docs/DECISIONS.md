@@ -12104,3 +12104,14 @@ lost device need. Both ship OFF (`LINKING`, `KEYSTORE`).
   however many arrive, they can't push a signed event out of a device's list or
   spend its mail. A recovery notice says to set a new recovery code, which
   cancels a release; a freeze would not, and would block the new code.
+- **Resolving an email-only freeze waits 72 hours; a key-holder freeze resolves
+  at once.** With the recovery code and the mailbox together, an attacker could
+  freeze by email and resolve to their own key in one sitting. Now that
+  resolution waits 72 hours, with notices, and during it a freeze or contest
+  signed by the frozen binding's key turns it into a key-holder freeze and voids
+  the waiting resolution. That is the one exception to "frozen: status only",
+  and the code it used stays spent. A failed contest must be reported plainly by
+  the client, which then offers the email freeze.
+- **A host can ask for its bind answer again** (`/v1/bind/check`), for exactly
+  the statement it bound, so setup resumes after a failed check without a second
+  mail. It reveals nothing a lookup doesn't.

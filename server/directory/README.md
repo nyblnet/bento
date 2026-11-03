@@ -30,15 +30,16 @@ day's hashes can't be linked to the next.
 |---|---|---|
 | `POST /v1/bind/start` `{stmt, sig}` | the holder's signature over `bind.…` | **always 202** once the statement is valid, whether or not a code was mailed (no existence or limit oracle) |
 | `POST /v1/bind/complete` `{email, code, sig}` | the code + the key's signature over `cmp.…` | 200 with the statement and a signed `att.…`, or a uniform 400 |
+| `POST /v1/bind/check` `{stmt, sig}` | any valid signature over the exact bound `bind.…` | the bind answer again, with the state in a fresh `att.…` (or `{state: "pending"}` over a holder tomb), else 404. For a host whose check of the bind answer failed: setup resumes without a second mail. Reveals nothing a lookup doesn't |
 | `GET /v1/lookup?e=` | none | 200 (statement + fresh attestation + `state` + chain; after a rotation the previous key's `rot`/`rotSig` vouch, and up to 8 earlier `steps`), 410 (signed tombstone) or 404 (never existed *or* expired: the same answer). Exact address only |
 | `POST /v1/delete` `{email, ts, sig}` | the key's signature over `del.…`, ±5 min | 204, leaving a signed `tomb.…`. Refused while frozen |
 | `POST /v1/delete/start`, `/complete` | a mailed code, for an EXPIRED binding only | 202, then 204 |
 | `POST /v1/challenge` `{email}` | none | a single-use consent challenge, audience `dir`, good for 60 seconds at that address only |
 | `POST /v1/rotate/start` | see **Rotation** | 202 (a code is mailed), or 400 with a reason |
 | `POST /v1/rotate/complete` `{email, code, sig}` | the code + the NEW key's signature over `cmp.…` | 200 `{state: "pending", activeAt}` |
-| `POST /v1/contest` `{email, challenge, req, sig, bind?}` | a `dreq.contest` by the key the directory serves (the OLD one), only while pending; `bind` is the deleted binding's text in the holder-delete window | 200 `{state: "frozen"}` |
-| `POST /v1/freeze` `{email, challenge, req, sig}` | a `dreq.freeze` by the served key, active or pending | 200 `{state: "frozen"}` |
-| `POST /v1/resolve` `{stmt, sig, verifier}` | a NEW binding signed by its own key, chained to the frozen one, and the recovery verifier | 200 (binding + attestation, `rebound: true`) |
+| `POST /v1/contest` `{email, challenge, req, sig, bind?}` | a `dreq.contest` by the key the directory serves (the OLD one), only while pending, or while an email-only freeze's resolution waits; `bind` is the deleted binding's text in the holder-delete window | 200 `{state: "frozen"}` |
+| `POST /v1/freeze` `{email, challenge, req, sig}` | a `dreq.freeze` by the served key, active or pending, or while an email-only freeze's resolution waits | 200 `{state: "frozen"}` |
+| `POST /v1/resolve` `{stmt, sig, verifier}` | a NEW binding signed by its own key, chained to the frozen one, and the recovery verifier | a key-holder freeze: 200 (binding + attestation, `rebound: true`). An email-only freeze: 202 `{state: "frozen", resolving: true, activeAt}`, see **Resolution** |
 | `POST /v1/freeze/start` `{email}` | none | **always 202**; mails a freeze link only for a live, unfrozen binding |
 | `GET /freeze` | none | the confirmation page the freeze link opens. A GET changes nothing |
 | `POST /v1/freeze/complete` `{email, token}` | the single-use token from the mail | 200 `{state: "frozen"}`, or a uniform 400 |
@@ -77,8 +78,8 @@ signed `att.`, so a frozen answer can't be replayed as active.
   (mail scanners pre-fetch links). A freeze ends any rotation in flight.
   While frozen, neither key is honoured: no renewal, no rotation and no
   holder delete (a delete would reopen the address to an email-only re-bind).
-- **Leaving frozen** takes the recovery code. That arrives with the recovery
-  verifier, so for now a frozen binding stays frozen until it expires.
+- **Leaving frozen** takes the recovery code (see **Resolution**); without
+  one, a frozen binding stays frozen until it expires.
 
 **Consent** for a rotation is bound to a challenge from `/v1/challenge`. The
 challenge is sealed to its address, spent before anything else is checked, and
@@ -102,15 +103,36 @@ client checks it; the lookup serves it with the binding.
 spent first), signed by the key the directory serves: during `pending` that is
 the OLD key, and a pending key signs nothing. `contest` names the pending
 binding and is accepted only while pending; `freeze` is accepted active or
-pending; while frozen only `status` is. Neither needs consent (they only remove
-power). The signed status read returns the pending binding and its vouch, which
-is what a device needs to show and contest it.
+pending; while frozen only `status` is, with one exception below. Neither
+needs consent (they only remove power). The signed status read returns the
+pending binding and its vouch, which is what a device needs to show and
+contest it.
+
+**When a contest fails, the client must say so plainly and offer the email
+freeze** (security ruling a). A contest can fail for reasons the holder can't
+fix from that device (the window closed, the challenge expired, the request was
+refused): the screen says the key change was NOT stopped, in those words, and
+offers the freeze link by email (`/v1/freeze/start`), which needs no key.
 
 **Resolution.** Only the recovery code unfreezes: the device sends a new
 binding, signed by its own new key and chained to the frozen one, and the
 recovery verifier (the same checks, count and lock as a recovery start). The
 code is spent. No old-key signature exists in this case, so pinners WARN; that
 is intended, and nothing the directory says softens it.
+
+- A **key-holder freeze** (the owner's signed freeze, or a contest) resolves at
+  once.
+- An **email-only freeze** resolves after 72 hours (security ruling b): the
+  recovery code and the mailbox together were an instant takeover. The answer
+  is 202; the address stays frozen, a notice is mailed (`resolve-pending`), and
+  lookups and the signed status read name the waiting binding (`pending`,
+  `activeAt`). During those 72 hours, and only then, a `dreq.freeze` or
+  `dreq.contest` (naming the waiting binding) signed by the FROZEN binding's
+  key is accepted: the narrow exception to "frozen: status only". It turns the
+  freeze into a key-holder freeze and voids the waiting resolution; the code
+  stays spent. Uncontested, the new binding becomes active at 72 hours
+  (`rebound`, no vouch) and the event list records it. A second resolution
+  while one waits is refused (`resolving`).
 
 **A holder delete keeps the binding's protection** until the deleted binding's
 own expiry: a DIFFERENT key re-binding the address goes `pending` for the full
@@ -222,6 +244,11 @@ account key it belongs to, and material for any other key is treated as gone).
 - refusing refreshed synced (BE=1) blobs after a lost-or-stolen removal. This
   is a HARD prerequisite: no deploy may set `ROTATION=1`, or ship freeze
   resolution together with `KEYSTORE=1`, before it exists
+
+**`KEYSTORE=1` prerequisites**, both required: (1) the BE=1 refresh refusal
+above (not built); (2) the 72-hour wait on resolving an email-only freeze
+(built, see **Resolution**; it must never be removed or flagged off while the
+key store is on).
 - the SES mailer
 
 ## Deploying is the maintainer's
