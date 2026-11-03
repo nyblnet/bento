@@ -17,7 +17,7 @@
 // extension passes its vendored WASM, the rigs pass Node's native one, and the
 // kernel ships no WASM. Everything else here is WebCrypto (HKDF, AES-GCM, HMAC).
 
-import { b64uEnc, b64uDec, sha256b64u, type Verdict, type KxMode, KX_MODE } from './statements.ts'
+import { b64uEnc, b64uDec, sha256b64u, type Verdict } from './statements.ts'
 
 // --- parameters (security §28) -------------------------------------------------
 
@@ -189,34 +189,32 @@ function publicOf(d: bigint): string {
   return b64uEnc(out)
 }
 
-/** Which scalars a blob carries, by the kx placement (identity-design §6b). */
-const BLOB_KX: Record<KxMode, boolean> = { unruled: false, A: true, B: false, C: true }
+/** The blob's plaintext: always 64 bytes (identity-design §6b, mode C). */
+export const BLOB_LEN = 64
 
 export interface BlobKeys {
   /** the account signing key's private scalar, 32 bytes big-endian */
   account: Uint8Array
-  /** the kx private scalar — the shared kx (A) or the recovery kx (C); absent otherwise */
-  kx?: Uint8Array
+  /** the RECOVERY kx private scalar (the bind. kx slot's), 32 bytes big-endian; required */
+  kx: Uint8Array
 }
 
-/** account d ‖ kx d (when the mode carries one), each 32 bytes big-endian. */
-export function packScalars(keys: BlobKeys, mode: KxMode = KX_MODE): Uint8Array {
+/** account d ‖ recovery kx d, each 32 bytes big-endian: exactly BLOB_LEN bytes. */
+export function packScalars(keys: BlobKeys): Uint8Array {
   checkLen(keys.account, 32, 'account scalar')
-  if (!BLOB_KX[mode]) {
-    if (keys.kx) throw new Error(`kx mode ${mode} carries no kx in the blob`)
-    return keys.account.slice()
-  }
-  if (!keys.kx) throw new Error(`kx mode ${mode} needs a kx in the blob`)
+  if (!keys.kx) throw new Error('the blob needs the recovery kx scalar (mode C)')
   checkLen(keys.kx, 32, 'kx scalar')
-  const out = new Uint8Array(64); out.set(keys.account); out.set(keys.kx, 32)
+  const out = new Uint8Array(BLOB_LEN); out.set(keys.account); out.set(keys.kx, 32)
   return out
 }
 
 /**
- * Read a blob's plaintext and CHECK it before anything uses it: the right length
- * for the mode, every scalar in 1..n−1 (security §28), and each one's public
- * half equal to the public key in the directory-signed binding. A blob swapped by
- * a malicious directory fails closed here.
+ * Read a blob's plaintext and CHECK it before anything uses it: exactly 64 bytes
+ * (a 32-byte account-only blob from before mode C is refused, never read as a
+ * partial key set), both scalars in 1..n−1 (security §28), and each one's public
+ * half equal to the public key in the directory-signed binding: the account key
+ * and the binding's recovery kx. A blob swapped by a malicious directory fails
+ * closed here.
  *
  * These are RECOVERED PRIVATE SCALARS, so nothing here branches on their bits.
  * The range check is a branch-free byte compare, and the match goes through the
@@ -226,18 +224,20 @@ export function packScalars(keys: BlobKeys, mode: KxMode = KX_MODE): Uint8Array 
  * mismatched pair), then signs a probe that must verify under that public key,
  * so a platform that skips the pair check on import is caught too (security, #770).
  */
-export async function unpackScalars(pt: Uint8Array, expected: { accountPub: string; kxPub?: string }, mode: KxMode = KX_MODE,
+export async function unpackScalars(pt: Uint8Array, expected: BlobPubs,
   subtle: SubtleCrypto = crypto.subtle): Promise<Verdict<BlobKeys>> {
-  const withKx = BLOB_KX[mode]
-  if (pt.length !== (withKx ? 64 : 32)) return no('length')
-  const scalars = withKx ? [pt.slice(0, 32), pt.slice(32)] : [pt.slice(0, 32)]
-  const pubs = withKx ? [expected.accountPub, expected.kxPub] : [expected.accountPub]
-  for (let i = 0; i < scalars.length; i++) {
+  if (pt.length !== BLOB_LEN) return no('length')
+  const scalars = [pt.slice(0, 32), pt.slice(32)]
+  const pubs = [expected.accountPub, expected.kxPub]
+  for (let i = 0; i < 2; i++) {
     if (!scalarInRange(scalars[i])) return no('scalar-range')
-    if (pubs[i] === undefined || !(await scalarMatches(scalars[i], pubs[i]!, subtle))) return no('key-mismatch')
+    if (typeof pubs[i] !== 'string' || !(await scalarMatches(scalars[i], pubs[i], subtle))) return no('key-mismatch')
   }
-  return { ok: true, value: withKx ? { account: scalars[0], kx: scalars[1] } : { account: scalars[0] } }
+  return { ok: true, value: { account: scalars[0], kx: scalars[1] } }
 }
+
+/** The public halves a blob must match: the binding's account key and its recovery kx. */
+export interface BlobPubs { accountPub: string; kxPub: string }
 
 const N_BYTES = Uint8Array.from({ length: 32 }, (_, i) => Number((N >> BigInt(8 * (31 - i))) & 0xffn))
 
@@ -289,16 +289,16 @@ export interface PrfBlob { v: 1; cred: string; salt: string; iv: string; ct: str
 
 /** cred = b64u(sha256(credentialId)); aad = "bento/id/acct-wrap/v1." ‖ cred; ct = ciphertext ‖ tag. */
 export async function sealPrfBlob(a: {
-  prfOutput: Uint8Array; credentialId: Uint8Array; salt: Uint8Array; iv: Uint8Array; keys: BlobKeys; mode?: KxMode
+  prfOutput: Uint8Array; credentialId: Uint8Array; salt: Uint8Array; iv: Uint8Array; keys: BlobKeys
 }): Promise<PrfBlob> {
   const cred = b64uEnc(new Uint8Array(await crypto.subtle.digest('SHA-256', a.credentialId as BufferSource)))
   const kek = await prfKek(a.prfOutput, a.salt)
-  const ct = await gcm('encrypt', kek, a.iv, `bento/id/acct-wrap/v1.${cred}`, packScalars(a.keys, a.mode))
+  const ct = await gcm('encrypt', kek, a.iv, `bento/id/acct-wrap/v1.${cred}`, packScalars(a.keys))
   return { v: 1, cred, salt: b64uEnc(a.salt), iv: b64uEnc(a.iv), ct: b64uEnc(ct) }
 }
 
 export async function openPrfBlob(blob: PrfBlob, a: {
-  prfOutput: Uint8Array; credentialId: Uint8Array; expected: { accountPub: string; kxPub?: string }; mode?: KxMode
+  prfOutput: Uint8Array; credentialId: Uint8Array; expected: BlobPubs
 }): Promise<Verdict<BlobKeys>> {
   if (blob?.v !== 1) return no('version')
   const cred = b64uEnc(new Uint8Array(await crypto.subtle.digest('SHA-256', a.credentialId as BufferSource)))
@@ -307,23 +307,23 @@ export async function openPrfBlob(blob: PrfBlob, a: {
   if (!salt || salt.length !== 32 || !iv || iv.length !== 12 || !ct) return no('grammar')
   let pt: Uint8Array
   try { pt = await gcm('decrypt', await prfKek(a.prfOutput, salt), iv, `bento/id/acct-wrap/v1.${cred}`, ct) } catch { return no('decrypt') }
-  return unpackScalars(pt, a.expected, a.mode)
+  return unpackScalars(pt, a.expected)
 }
 
 // --- the recovery-code blob, and the directory's pepper layer ---------------------
 
 /** Inner layer: AES-GCM(rc wrap key, scalars), aad = "bento/id/rc-wrap/v1." ‖ b64u(sha256(accountPub)). */
-export async function sealRecoveryInner(a: { wrapKey: Uint8Array; iv: Uint8Array; accountPub: string; keys: BlobKeys; mode?: KxMode }):
+export async function sealRecoveryInner(a: { wrapKey: Uint8Array; iv: Uint8Array; accountPub: string; keys: BlobKeys }):
   Promise<Uint8Array> {
-  return gcm('encrypt', a.wrapKey, a.iv, `bento/id/rc-wrap/v1.${await accountTag(a.accountPub)}`, packScalars(a.keys, a.mode))
+  return gcm('encrypt', a.wrapKey, a.iv, `bento/id/rc-wrap/v1.${await accountTag(a.accountPub)}`, packScalars(a.keys))
 }
 
 export async function openRecoveryInner(ct: Uint8Array, a: {
-  wrapKey: Uint8Array; iv: Uint8Array; expected: { accountPub: string; kxPub?: string }; mode?: KxMode
+  wrapKey: Uint8Array; iv: Uint8Array; expected: BlobPubs
 }): Promise<Verdict<BlobKeys>> {
   let pt: Uint8Array
   try { pt = await gcm('decrypt', a.wrapKey, a.iv, `bento/id/rc-wrap/v1.${await accountTag(a.expected.accountPub)}`, ct) } catch { return no('decrypt') }
-  return unpackScalars(pt, a.expected, a.mode)
+  return unpackScalars(pt, a.expected)
 }
 
 /**

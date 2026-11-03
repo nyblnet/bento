@@ -20,7 +20,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   ARGON2, formatRecoveryCode, parseRecoveryCode, recoveryWrapKey, recoveryVerifier, prfKek,
-  sealPrfBlob, openPrfBlob, sealRecoveryInner, openRecoveryInner, unpackScalars,
+  sealPrfBlob, openPrfBlob, sealRecoveryInner, openRecoveryInner, unpackScalars, BLOB_LEN,
   pepperKeys, pepperVerifierTag, pepperSeal, pepperOpen, publicKeyOf, PRF_INPUT, prfHmacSecretSalt, type Argon2id,
 } from '../kernel/src/recovery.ts'
 
@@ -93,34 +93,49 @@ console.log('\nwhole blobs, end to end')
 {
   const b = F.blobs, k = b.keys, i = b.prf.inputs
   const prfIn = { prfOutput: unhex(i.prfOutput), credentialId: unhex(i.credentialId), salt: unhex(i.salt), iv: unhex(i.iv) }
-  const resealed = await sealPrfBlob({ ...prfIn, keys: { account: unhex(k.accountD) } })
-  ok(JSON.stringify(resealed) === JSON.stringify(b.prf.unruled), 'the PRF blob re-seals byte for byte (account key only)')
-  const resealedA = await sealPrfBlob({ ...prfIn, keys: { account: unhex(k.accountD), kx: unhex(k.kxD) }, mode: 'A' })
-  ok(JSON.stringify(resealedA) === JSON.stringify(b.prf.modeA), 'the PRF blob under kx mode A (account ‖ kx) re-seals byte for byte')
+  ok(F.kxMode === 'C' && F.blobLen === 64 && BLOB_LEN === 64, 'kx placement is mode C: the blob is 64 bytes (account ‖ recovery kx)')
+  const keys = { account: unhex(k.accountD), kx: unhex(k.kxD) }
+  const exp = { accountPub: k.accountPub, kxPub: k.kxPub }
+  const resealed = await sealPrfBlob({ ...prfIn, keys })
+  ok(JSON.stringify(resealed) === JSON.stringify(b.prf.blob), 'the PRF blob (account ‖ recovery kx) re-seals byte for byte')
+  ok(unhex(Buffer.from(b.prf.blob.ct, 'base64url').toString('hex')).length === 64 + 16, 'its ciphertext is 64 bytes plus the tag')
 
-  const opened = await openPrfBlob(b.prf.unruled, { prfOutput: prfIn.prfOutput, credentialId: prfIn.credentialId, expected: { accountPub: k.accountPub } })
-  ok(opened.ok && hex(opened.value.account) === k.accountD, 'it opens to the account scalar, checked against the signed public half')
-  const openedA = await openPrfBlob(b.prf.modeA, { prfOutput: prfIn.prfOutput, credentialId: prfIn.credentialId, expected: { accountPub: k.accountPub, kxPub: k.kxPub }, mode: 'A' })
-  ok(openedA.ok && hex(openedA.value.kx!) === k.kxD, 'mode A opens to account ‖ kx, both checked')
-  const wrongPrf = await openPrfBlob(b.prf.unruled, { prfOutput: unhex(i.prfOutput).map((x: number) => x ^ 1), credentialId: prfIn.credentialId, expected: { accountPub: k.accountPub } })
+  const opened = await openPrfBlob(b.prf.blob, { prfOutput: prfIn.prfOutput, credentialId: prfIn.credentialId, expected: exp })
+  ok(opened.ok && hex(opened.value.account) === k.accountD && hex(opened.value.kx) === k.kxD, 'it opens to account ‖ kx, each checked against its signed public half')
+  const wrongPrf = await openPrfBlob(b.prf.blob, { prfOutput: unhex(i.prfOutput).map((x: number) => x ^ 1), credentialId: prfIn.credentialId, expected: exp })
   ok(!wrongPrf.ok && wrongPrf.reason === 'decrypt', 'a different passkey PRF output cannot open it')
-  const wrongCred = await openPrfBlob(b.prf.unruled, { prfOutput: prfIn.prfOutput, credentialId: unhex(i.credentialId).map((x: number) => x ^ 1), expected: { accountPub: k.accountPub } })
+  const wrongCred = await openPrfBlob(b.prf.blob, { prfOutput: prfIn.prfOutput, credentialId: unhex(i.credentialId).map((x: number) => x ^ 1), expected: exp })
   ok(!wrongCred.ok && wrongCred.reason === 'credential', 'a blob for another credential is refused')
-  const unruledAsA = await openPrfBlob(b.prf.unruled, { prfOutput: prfIn.prfOutput, credentialId: prfIn.credentialId, expected: { accountPub: k.accountPub, kxPub: k.kxPub }, mode: 'A' })
-  ok(!unruledAsA.ok && unruledAsA.reason === 'length', 'a blob opened under the wrong kx mode is refused (length)')
+  const noKxPub = await openPrfBlob(b.prf.blob, { prfOutput: prfIn.prfOutput, credentialId: prfIn.credentialId, expected: { accountPub: k.accountPub } as typeof exp })
+  ok(!noKxPub.ok && noKxPub.reason === 'key-mismatch', 'opened with no recovery kx to match, it is refused (key-mismatch)')
+  ok(b.prf.wrongLength.length === 4 && b.prf.wrongLength[0].name.includes('32-byte'), 'the fixture carries the wrong-length PRF rows, the 32-byte pre-C blob first')
+  for (const w of b.prf.wrongLength) {
+    const v = await openPrfBlob({ ...b.prf.blob, ct: Buffer.from(unhex(w.ct)).toString('base64url') }, { prfOutput: prfIn.prfOutput, credentialId: prfIn.credentialId, expected: exp })
+    ok(!v.ok && v.reason === 'length', `PRF: ${w.name} decrypts, then is refused (length)`)
+  }
+  let packThrew = 0
+  for (const bad of [{ account: keys.account }, { account: keys.account, kx: new Uint8Array(0) }, { account: keys.account, kx: new Uint8Array(31) }]) {
+    try { await sealPrfBlob({ ...prfIn, keys: bad as typeof keys }) } catch { packThrew++ }
+  }
+  ok(packThrew === 3, 'sealing refuses a blob without a 32-byte recovery kx (no kx, empty, 31 bytes)')
 
   const r = b.recovery.inputs
   const wk = await recoveryWrapKey(unhex(r.code), unhex(r.salt), argon2)
-  const inner = await sealRecoveryInner({ wrapKey: wk, iv: unhex(r.iv), accountPub: k.accountPub, keys: { account: unhex(k.accountD) } })
+  const inner = await sealRecoveryInner({ wrapKey: wk, iv: unhex(r.iv), accountPub: k.accountPub, keys })
   ok(hex(inner) === b.recovery.inner, 'the recovery blob (inner layer) re-seals byte for byte')
-  const rOpen = await openRecoveryInner(unhex(b.recovery.inner), { wrapKey: wk, iv: unhex(r.iv), expected: { accountPub: k.accountPub } })
-  ok(rOpen.ok && hex(rOpen.value.account) === k.accountD, 'the recovery code opens it')
+  ok(inner.length === 64 + 16, 'its ciphertext is 64 bytes plus the tag')
+  const rOpen = await openRecoveryInner(unhex(b.recovery.inner), { wrapKey: wk, iv: unhex(r.iv), expected: exp })
+  ok(rOpen.ok && hex(rOpen.value.account) === k.accountD && hex(rOpen.value.kx) === k.kxD, 'the recovery code opens it to account ‖ kx')
+  for (const w of b.recovery.wrongLength) {
+    const v = await openRecoveryInner(unhex(w.ct), { wrapKey: wk, iv: unhex(r.iv), expected: exp })
+    ok(!v.ok && v.reason === 'length', `recovery: ${w.name} decrypts, then is refused (length)`)
+  }
   const otherCode = parseRecoveryCode(F.codes[1].printed)
   const wk2 = await recoveryWrapKey(otherCode.ok ? otherCode.code : new Uint8Array(10), unhex(r.salt), argon2)
-  const rWrong = await openRecoveryInner(unhex(b.recovery.inner), { wrapKey: wk2, iv: unhex(r.iv), expected: { accountPub: k.accountPub } })
+  const rWrong = await openRecoveryInner(unhex(b.recovery.inner), { wrapKey: wk2, iv: unhex(r.iv), expected: exp })
   ok(!rWrong.ok && rWrong.reason === 'decrypt', 'a different recovery code cannot open it')
   // the aad binds the blob to its account: presented as another account's, it fails
-  const rOther = await openRecoveryInner(unhex(b.recovery.inner), { wrapKey: wk, iv: unhex(r.iv), expected: { accountPub: F.blobs.keys.kxPub } })
+  const rOther = await openRecoveryInner(unhex(b.recovery.inner), { wrapKey: wk, iv: unhex(r.iv), expected: { accountPub: F.blobs.keys.kxPub, kxPub: k.kxPub } })
   ok(!rOther.ok && rOther.reason === 'decrypt', "a recovery blob presented as another account's fails (aad binds the account)")
 
   const pp = b.pepper
@@ -136,7 +151,7 @@ console.log('\nwhole blobs, end to end')
 
 console.log('\nscalars on import: in range, and matching the signed public half')
 for (const s of F.scalars) {
-  const v = await unpackScalars(unhex(s.d), { accountPub: s.pub })
+  const v = await unpackScalars(unhex(s.pt), { accountPub: s.accountPub, kxPub: s.kxPub })
   ok(s.expect === 'accept' ? v.ok : !v.ok && v.reason === s.reason, `${s.name} → ${s.expect === 'accept' ? 'accept' : `refused: ${s.reason}`}`)
 }
 
@@ -177,11 +192,11 @@ console.log('\non a platform that skips the pair check on import, the probe stil
   } as unknown as SubtleCrypto
   // positive control: the lax import really does accept a mismatched pair
   const mismatched = F.scalars.find((s: { reason?: string; name: string }) => s.name.startsWith("another key's"))
-  const accepted = await lax.importKey('jwk', { kty: 'EC', crv: 'P-256', d: Buffer.from(unhex(mismatched.d)).toString('base64url'),
+  const accepted = await lax.importKey('jwk', { kty: 'EC', crv: 'P-256', d: Buffer.from(unhex(mismatched.pt).slice(0, 32)).toString('base64url'),
     x: 'x', y: 'y' }, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']).then(() => true, () => false)
   ok(accepted, 'control: the lax platform imports a scalar without checking its public half')
   for (const s of F.scalars) {
-    const v = await unpackScalars(unhex(s.d), { accountPub: s.pub }, undefined, lax)
+    const v = await unpackScalars(unhex(s.pt), { accountPub: s.accountPub, kxPub: s.kxPub }, lax)
     ok(s.expect === 'accept' ? v.ok : !v.ok && v.reason === s.reason, `lax: ${s.name} → ${s.expect === 'accept' ? 'accept' : `refused: ${s.reason}`}`)
   }
 }

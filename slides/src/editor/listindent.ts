@@ -90,14 +90,14 @@ function outdentItem(li: HTMLLIElement): boolean {
 }
 
 /** Text offset of a boundary point from the start of root (for restoring a caret). */
-function offsetOf(root: HTMLElement, node: Node, off: number): number {
+export function offsetOf(root: HTMLElement, node: Node, off: number): number {
   const r = document.createRange()
   r.selectNodeContents(root)
   r.setEnd(node, off)
   return r.toString().length
 }
 
-function placeAt(root: HTMLElement, at: number) {
+export function placeAt(root: HTMLElement, at: number) {
   const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
   let left = at
   for (let n = walk.nextNode() as Text | null; n; n = walk.nextNode() as Text | null) {

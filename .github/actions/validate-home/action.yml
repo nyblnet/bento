@@ -36,6 +36,16 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-home-docstore.mjs
 
+    - name: home identity calls rig
+      # bento/id B1: home/bridge.js turns a host's declared 'identity' capability
+      # into the frozen window.__bentoIdentity object kernel/src/identity.ts
+      # accepts, and relays whoami / sign / resolve. Runs the real bridge and the
+      # real kernel detector against a fake host: no capability, no agent;
+      # every refusal word passes through ('reauth' included); a malformed reply
+      # is 'unavailable', never a half-trusted object.
+      shell: bento-step {0}
+      run: node scripts/test-home-identity.mjs
+
     - name: home legacy-origin inspector rig
       # Before an Android document adopts the storage it used under the old
       # per-path origins, an inspector page reports which documents own data
