@@ -12324,3 +12324,35 @@ Two follow-ups to the link v1 entry above, both from porting it to iOS.
   their base64url text. Before this, iOS had to
   choose an encoding that no spec pinned, and two hosts choosing differently
   would never link. The `link.wire` rows are byte for byte both ways.
+
+## 2026-11-03: the first credential rides on the bind's two proofs, not on "no credentials"
+
+A light-tier account has no consent key, and consent for a passkey comes from a
+passkey, so its first one had no way in. "Allow the first cred-add when the
+account has no credentials" was refused: no credentials does not mean new. An
+account with a recovery code and no passkey has none, deleting the last passkey
+returns to none, and the same rule on rc-enrol would let a stolen account key
+replace the recovery code.
+
+Instead a bind that lands `active` with both proofs arms a 15-minute allowance:
+one `cred-add` and one `rc-enrol` with no consent, on the account key's `dreq.`
+alone. It arms only for a key that has NEVER had a credential or a code. That is
+a stored flag per key, never cleared, not by `cred-del` and not by a deletion
+(so a hash of the key outlives a deleted address, like a tombstone's hash of its
+binding). It fills empty slots only, it stands in only for ABSENT consent (a bad
+consent is refused, never rescued), and any freeze, contest, rotation or new bind
+ends it. A bind that ends `pending`, its settling, and a resolved freeze arm
+nothing. Running out of time means verifying the email again.
+
+Left open on purpose: an account key and a mailbox together, on an account that
+never had either, can arm it. Those are the same two proofs as setup, and nothing
+yet exists to protect.
+
+A rebound now drops the old key's passkeys with its recovery record, on every
+path (over an expired binding, over a tomb, and a resolved freeze). A passkey
+left behind filled the new key's empty slot and, being scoped to the address,
+could still answer a consent. A vouched rotation keeps them: the agent re-enrols
+in the same flow, and a light-tier account needs the old passkey's consent to do it.
+
+msg3's cap is kernel's slot wire, 4096 decoded bytes, checked at the route, so an
+oversized message is refused before a slot is claimed or a challenge spent.

@@ -1296,7 +1296,7 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
     const addrStore = async (p: P) => store('Address', await addressKey(p.email))!
     const acctStore = async (p: P) => store('Account', await addressKey(p.email))!
     const armed = async (p: P) => (await addrStore(p)).has('setup')
-    const nCreds = async (p: P) => (((await acctStore(p)).get('creds') as string[] | undefined) ?? []).length
+    const nCreds = async (p: P) => (((await acctStore(p))?.get('creds') as string[] | undefined) ?? []).length
     /** a same-key renewal: a new emailed code, both proofs again */
     async function renew(p: P) {
       now += 2 * MIN
@@ -1333,7 +1333,7 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
       ok(noticesTo(S.email, 'cred-add-setup') === 1 && noticesTo(S.email, 'rc-enrol-setup') === 1, '  …and both ops mail a notice that says so')
       const ke = store('Address', kScope)!.get('events') as { k: string; setup?: boolean }[]
       ok(ke.some((x) => x.k === 'cred-add') && !ke.some((x) => 'setup' in x), 'CONTROL: an ordinary passkey add carries no setup mark')
-      const flags = [...(await acctStore(S)).keys()].filter((k) => k.startsWith('ever:'))
+      const flags = [...((await acctStore(S))?.keys() ?? [])].filter((k) => k.startsWith('ever:'))
       ok(flags.length === 1 && !flags[0].includes(S.k.pub), 'the "ever" flag is stored by hash, not by the account key')
     }
     // row 3: the proposal's bypass. Row 5: a renewal does not arm

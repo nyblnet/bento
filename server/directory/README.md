@@ -47,9 +47,9 @@ day's hashes can't be linked to the next.
 | `POST /v1/link/open`, `/put`, `/get`, `/abort` `{id, tok, …}` | `tok`, derived from the link code | a short-lived mailbox; see **Device linking**. Off unless `LINKING=1` |
 | `POST /v1/link/complete` `{id, tok, email, challenge, msg3}` | H's message 3 (kernel's `lnk3` text: H's `dev.`, its consent over N's `dev.`, N's `dev.`, the sealed key), on a `dir` challenge | 200, or 400 with kernel's reason; the slot is deleted on any failure |
 | `POST /v1/status` `{email, req, sig, challenge}` | `dreq.status` | 200 `{state, events}`, plus `pending` while a key change waits and `contested: true` on a contested freeze. Off unless `KEYSTORE=1`, like everything below |
-| `POST /v1/cred/add`, `/v1/cred/del` | `dreq.cred-add` / `dreq.cred-del` + consent | 200; see **Key store** |
+| `POST /v1/cred/add`, `/v1/cred/del` | `dreq.cred-add` / `dreq.cred-del` + consent (the first passkey: the setup allowance instead) | 200; see **Key store** |
 | `POST /v1/cred/challenge`, `/v1/cred/get` | a WebAuthn assertion on a single-use challenge | 200 with the passkey's PRF blob |
-| `POST /v1/recovery/enrol` | `dreq.rc-enrol` + consent | 200 |
+| `POST /v1/recovery/enrol` | `dreq.rc-enrol` + consent (the first code: the setup allowance instead) | 200 |
 | `POST /v1/recovery/salt`, `/start`, `/release` | the recovery verifier | the salt; a ticket and `releaseAt`; after 72 hours, the code-wrapped blob |
 | `POST /v1/ledger/get`, `/put` | (needs a kernel request op) | 501 for now |
 

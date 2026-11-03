@@ -568,11 +568,12 @@ export class Address {
         if (r.status === 200 && r.body.ever === false) await s.put('setup', { h, until: now + LIMITS.setupMs, ops: ['cred-add', 'rc-enrol'] })
       } catch (e) { console.log(`setup not armed: ${e.message}`) }
     }
-    /** use the allowance for one op: armed, unexpired, naming the binding served,
-     *  `active`, and that op unused. Consumed here, before anything else can run. */
-    const useSetup = async (op, cur, state) => {
+    /** use the allowance for one op: armed, unexpired, naming the binding served, and
+     *  that op unused (`active` is verifyDreq's, already run: these ops are refused
+     *  in any other state). Consumed here, before anything else can run. */
+    const useSetup = async (op, cur) => {
       const su = await s.get('setup')
-      if (!su || state !== 'active' || su.until <= now || su.h !== cur?.h || !su.ops.includes(op)) return false
+      if (!su || su.until <= now || su.h !== cur?.h || !su.ops.includes(op)) return false
       const ops = su.ops.filter((x) => x !== op)
       if (ops.length) await s.put('setup', { ...su, ops }); else await s.delete('setup')
       return true
@@ -994,7 +995,7 @@ export class Address {
       if (!v.ok) return refuse(`dreq:${v.reason}`)
       // the setup allowance stands in only for ABSENT consent: a request that
       // presents consent is judged on it, and a bad one never falls through
-      const setup = dreqNeedsConsent(subject.op) && a.consent === null && (await useSetup(subject.op, cur, state))
+      const setup = dreqNeedsConsent(subject.op) && a.consent === null && (await useSetup(subject.op, cur))
       if (dreqNeedsConsent(subject.op) && !setup) {
         const c = await verifyDirConsent(this.env, {
           scope: a.scope, accountPub, purpose: subject.op, challenge: a.challenge, payloadText: a.req, consent: a.consent, now,

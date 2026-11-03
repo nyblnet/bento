@@ -6,7 +6,9 @@
 //
 //  · PASSKEYS. Each passkey's PRF output wraps the account key into a blob kept
 //    in that credential's `Cred` object. Adding or removing one is an
-//    account-signed `dreq.` plus consent; fetching one is a WebAuthn assertion.
+//    account-signed `dreq.` plus consent (the first passkey and code may instead
+//    ride on the bind's two proofs: the Address object's setup allowance);
+//    fetching one is a WebAuthn assertion.
 //  · THE RECOVERY CODE. The device derives a verifier from the code (Argon2id,
 //    its own salt) and wraps the account key under another derivation of it. The
 //    directory stores the verifier only as an HMAC under a per-account pepper
