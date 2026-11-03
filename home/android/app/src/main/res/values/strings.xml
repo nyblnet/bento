@@ -80,4 +80,9 @@
     <string name="setup_err_mistyped">That doesn\'t match the recovery code. Check it and try again.</string>
     <string name="setup_err_not_saved">Couldn\'t save your account on this device.</string>
     <string name="setup_unavailable_here">Bento ID isn\'t available in this version.</string>
+    <!-- Placeholder wording for the maintainer: identity use in a document (bento/connect B1). -->
+    <string name="id_consent_title">Use your Bento ID here?</string>
+    <string name="id_consent_body">This document is asking who you are. If you allow it, it can see your name and address and ask Bento to sign for you. You can say no and still use it.</string>
+    <string name="id_consent_allow">Allow</string>
+    <string name="id_consent_deny">Not now</string>
 </resources>

@@ -73,6 +73,7 @@ class EditorActivity : Activity() {
         const val EXTRA_URI = "page.bento.home.URI"
         private const val TAG = "BentoTray"
         private const val REQ_EXPORT = 1
+        private const val REQ_REAUTH = 9
         private const val REQ_FILE_CHOOSER = 2
 
         /** Reduce a page-supplied filename to ONE plain component, or refuse it.
@@ -482,7 +483,15 @@ class EditorActivity : Activity() {
         // Capabilities first, then the shared bridge, in one injected script:
         // bridge.js advertises the per-document store to the page ONLY when
         // the host declares it here, so a host without one never offers it.
-        val src = "window.__bentoHostCaps = ['store', 'seal'];\n" +
+        //
+        // 'identity' is declared for a load whose bytes passed gate 1, on a device with no
+        // managed-configuration key, and for no other (IdentityHost.capabilities). This
+        // is the courtesy; onIdentity re-checks both on every call.
+        val genuineLoad = served.gate1 is Gate1.Verdict.Genuine
+        val managedNow = IdentityRuntime.managed(this)
+        identityLoad = genuineLoad && !managedNow
+        val caps = IdentityHost.capabilities(genuineLoad, managedNow)
+        val src = "window.__bentoHostCaps = [" + caps.joinToString(",") { "'$it'" } + "];\n" +
             assets.open("bridge.js").use { it.readBytes().toString(Charsets.UTF_8) }
         WebViewCompat.addDocumentStartJavaScript(web, src, rules)
     }
@@ -715,6 +724,8 @@ class EditorActivity : Activity() {
 
             "store.get", "store.set", "store.list", "store.delete" -> onStore(id, m)
 
+            "id.whoami", "id.sign", "id.resolve" -> onIdentity(id, m)
+
             else -> reply(id, false, "unknown op")
         }
     }
@@ -854,6 +865,72 @@ class EditorActivity : Activity() {
         }
     }
 
+    // MARK: - bento/id (the shared bridge's id.* calls)
+
+    private var identityLoad = false
+    private var pendingReauth = false
+    private val idHost: IdentityHost by lazy { IdentityRuntime.host(this) }
+
+    /**
+     * whoami / sign / resolve for THIS document. The caller is what the host knows, never
+     * what the page says: this load passed gate 1 (checked now against the bytes currently
+     * served, not only when the page started) and the per-document origin label names it.
+     */
+    private fun onIdentity(id: Int, m: JSONObject) {
+        val genuine = identityLoad && served.gate1 is Gate1.Verdict.Genuine
+        val caller = IdentityHost.Caller(genuine, originHost.substringBefore('.'))
+        io.execute {
+            val out = when (m.optString("op")) {
+                "id.whoami" -> idHost.whoami(caller)
+                "id.sign" -> idHost.sign(caller, m.optString("purpose"), m.optString("payload"))
+                else -> idHost.resolve(caller, m.optString("pub"))
+            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                when (out) {
+                    is IdentityHost.Out.Ok -> replyValue(id, true, out.value)
+                    is IdentityHost.Out.Refuse -> {
+                        reply(id, false, out.word)
+                        if (out.word == "reauth") askReauth()
+                    }
+                    IdentityHost.Out.NeedConsent -> askConsent(caller.doc) { granted ->
+                        if (granted) io.execute {
+                            val again = idHost.whoami(caller)
+                            runOnUiThread { if (again is IdentityHost.Out.Ok) replyValue(id, true, again.value) else reply(id, false, "declined") }
+                        } else reply(id, false, "declined")
+                    }
+                }
+            }
+        }
+    }
+
+    /** Placeholder wording (flagged for the maintainer): the person decides, once per document. */
+    private fun askConsent(doc: String, done: (Boolean) -> Unit) {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.id_consent_title).setMessage(R.string.id_consent_body)
+            .setPositiveButton(R.string.id_consent_allow) { _, _ -> IdentityRuntime.consent(this).grant(doc); done(true) }
+            .setNegativeButton(R.string.id_consent_deny) { _, _ -> IdentityRuntime.consent(this).decline(doc); done(false) }
+            .setOnCancelListener { IdentityRuntime.consent(this).decline(doc); done(false) }
+            .show()
+    }
+
+    /** The host's re-authentication: the device credential, asked once at a time. The refused call already got `reauth`. */
+    private fun askReauth() {
+        if (pendingReauth) return
+        val intent = IdentityRuntime.reauthIntent(this) ?: return
+        pendingReauth = true
+        @Suppress("DEPRECATION") startActivityForResult(intent, REQ_REAUTH)
+    }
+
+    /** A JSON value (not a string) travels back as the call's result. */
+    private fun replyValue(id: Int, ok: Boolean, value: Map<String, Any?>?) {
+        if (id < 0) return
+        val v: Any = if (value == null) JSONObject.NULL else JSONObject().also { o -> value.forEach { (k, x) -> o.put(k, x) } }
+        try { replyProxy?.postMessage(JSONObject().put("id", id).put("ok", ok).put("value", v).toString()) } catch (e: Exception) {
+            Log.w(TAG, "reply failed", e)
+        }
+    }
+
     private fun beginExport(id: Int, name: String, text: String) {
         val safe = safeFileName(name) ?: return reply(id, false, "unsafe name")
         val open = pendingExport
@@ -898,6 +975,11 @@ class EditorActivity : Activity() {
                     WebChromeClient.FileChooserParams.parseResult(resultCode, data)
                 else null
             )
+            return
+        }
+        if (requestCode == REQ_REAUTH) {
+            pendingReauth = false
+            if (resultCode == RESULT_OK) idHost.reauthenticated()
             return
         }
         if (requestCode != REQ_EXPORT) return super.onActivityResult(requestCode, resultCode, data)

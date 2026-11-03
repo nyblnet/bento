@@ -12230,3 +12230,49 @@ with seven conditions).
   deterministic row byte for byte and checks every verdict;
   `scripts/test-link-mutants.ts` reintroduces fifteen lenient paths into a copy
   of `link.ts` and requires the rig to fail on each.
+
+## 2026-11-03 — Android identity calls: who may sign, and who owns the clock
+
+home/android adopts the shared bridge's `id.whoami`, `id.sign` and `id.resolve`
+(bento/connect B1). What was settled, so another host or agent does not
+contradict it:
+
+- **The capability is per load.** `identity` is declared to the bridge only for
+  a load whose served bytes passed gate 1, on a device with no
+  managed-configuration key. The host also re-checks both on every call, against
+  the bytes currently served: a document that stops being genuine, or a device
+  that becomes managed after load, gets `unavailable` from then on. An unknown
+  document therefore has no agent object at all, and cannot reach one by naming
+  the op.
+- **Who is asking is the host's knowledge.** The document is the per-document
+  origin label the host chose; nothing in a request names it.
+- **Consent is per document and asked once.** `whoami` shows the person a prompt
+  the first time a document asks; a yes is kept (a file in no-backup storage),
+  a no lasts the process. `sign` and `resolve` serve only a granted document;
+  `sign` never prompts for consent itself.
+- **Sign is purpose-locked** by the shared payload matcher, signs only the
+  routine purposes (`frame`, `prove`, `delegate`, `show`) with the device's
+  routine key, and refuses `invite` and `revoke` as `unavailable`: no phase-1
+  agent holds an owner key.
+- **The host owns the session** (security §2e B): one hour idle, 24 hours
+  overall, process-wide. Past either, `sign` answers `reauth` until the person
+  confirms their device credential at the host; a refusal is not a use and the
+  page cannot reopen the session. The Keystore's own authentication window is a
+  floor beneath it, and its lapse also reads as `reauth` and closes the session.
+  Boundary: Android refuses AT the limit (`>=`), the desktop agent allows the
+  limit itself; the tests pin each side.
+- **`resolve` is local.** It knows this account's own keys, makes no network
+  call and takes no address; any other key is `null`.
+- Until the binding carries a display name, `whoami`'s `name` is the verified
+  address. A placeholder, flagged for the maintainer with the consent wording.
+- **What keeps consent, and the residual (§19g).** Consent is keyed by the
+  per-document origin label, and `DocumentOrigin` decides that label by the URI
+  and, when the file carries one, only the docId: a different docId at the same URI
+  gets a fresh origin, and a docId alone never selects an origin at an unknown URI.
+  So a file REPLACED in place (a save, a sync client, another editor writing the
+  same path) that still carries the same docId keeps its origin, and with it the
+  grant, whatever its bytes now are. The host re-checks on every call that the
+  bytes it serves are genuine, so a replacement that is not a genuine release gets
+  nothing, but a genuine one inherits the grant. A copy, or the same document at a
+  new path, is a new URI and starts without consent. Accepted as a residual, not a
+  guarantee.
