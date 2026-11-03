@@ -66,8 +66,9 @@ directory's own: its online signing key and the storage name. The rig runs
 kernel's conformance vectors (`kernel/fixtures/identity-v1.json`) end to end
 through the Worker, and checks every answer with kernel's client verifiers.
 
-The `kx` slot in `bind.` stays EMPTY, and a filled one is refused, until the
-maintainer rules where the key-agreement key lives (kernel's `KX_MODE`).
+Every `bind.` must carry the account's recovery key-agreement key in its `kx`
+slot (kx placement mode C, kernel's `KX_MODE`): an empty slot, a value that is
+not an uncompressed P-256 point, and one equal to the account key are refused.
 
 Phase 1 accepts **ASCII addresses only** (recommended, pending the
 maintainer's decision on international addresses): the platforms disagree on
