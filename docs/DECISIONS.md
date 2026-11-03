@@ -12265,3 +12265,14 @@ contradict it:
   call and takes no address; any other key is `null`.
 - Until the binding carries a display name, `whoami`'s `name` is the verified
   address. A placeholder, flagged for the maintainer with the consent wording.
+- **What keeps consent, and the residual (§19g).** Consent is keyed by the
+  per-document origin label, and `DocumentOrigin` decides that label by the URI
+  and, when the file carries one, only the docId: a different docId at the same URI
+  gets a fresh origin, and a docId alone never selects an origin at an unknown URI.
+  So a file REPLACED in place (a save, a sync client, another editor writing the
+  same path) that still carries the same docId keeps its origin, and with it the
+  grant, whatever its bytes now are. The host re-checks on every call that the
+  bytes it serves are genuine, so a replacement that is not a genuine release gets
+  nothing, but a genuine one inherits the grant. A copy, or the same document at a
+  new path, is a new URI and starts without consent. Accepted as a residual, not a
+  guarantee.
