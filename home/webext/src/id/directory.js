@@ -23,7 +23,7 @@
 // Pure: fetch, time and the key list come in as deps, so scripts/
 // test-webext-directory.ts runs this exact code against the real worker.
 
-import { buildBind, verifyBind, buildCmp, verifyAtt, signStatement, sha256b64u, CERT_MAX_MS } from './gen/statements.js'
+import { buildBind, verifyBind, buildCmp, verifyAtt, signStatement, sha256b64u, CERT_MAX_MS, buildDreq, dreqArg, b64uEnc } from './gen/statements.js'
 import { normalizeAddress } from './gen/address.js'
 import { openPrfBlob } from './gen/recovery.js'
 
@@ -122,4 +122,58 @@ export async function passkeyBackupReady({ record, credentialId, prfOutput, fetc
   let r
   try { r = await openPrfBlob(blob, { prfOutput, credentialId, expected: { accountPub: record.accountPub, kxPub: record.recoveryKxPub } }) } catch { return { ready: false, reason: 'unwrap-failed' } }
   return r && r.ok === true ? { ready: true } : { ready: false, reason: 'unwrap-failed' }
+}
+
+// --- the key-store routes (D1c: /v1/challenge, /v1/recovery/enrol, /v1/cred/*) ---------
+
+/** A consent challenge for `email` (audience `dir`): good at that address for 60 s, spent by one use. */
+export async function dirChallenge(email, deps) {
+  const r = await post(deps, '/v1/challenge', { email })
+  if (r.status !== 200 || typeof r.j?.challenge !== 'string') throw new DirectoryRefused(r.status === 429 ? 'rate-limited' : `http ${r.status}`)
+  return r.j.challenge
+}
+
+/**
+ * An account-signed request (`dreq.`) for one op, on a fresh challenge, over the
+ * binding that is bound. `subject` carries the op's bytes (Uint8Arrays).
+ * `deps.consent({ op, challenge, req }) → consent` supplies the consent the op
+ * needs (cred-add, rc-enrol): a native `cns.` or a WebAuthn assertion. This
+ * module does not mint consent: the light tier has no consent key (dev.
+ * consentPub is null), so it can only be the WebAuthn form, from a credential
+ * the directory already holds.
+ */
+export async function signedRequest({ record, subject }, deps) {
+  if (record?.state !== 'bound' || !record.bind?.text) throw new DirectoryRefused('not-bound')
+  const email = record.bind.address
+  const challenge = await dirChallenge(email, deps)
+  const req = buildDreq({ op: subject.op, address: email, bindHash: await sha256b64u(record.bind.text), challenge, arg: await dreqArg(subject) })
+  const sig = await signStatement(record.accountKey, req)
+  return { email, req, sig, challenge, consent: deps.consent ? await deps.consent({ op: subject.op, challenge, req }) : null }
+}
+
+const reasonOf = (r) => (typeof r.j?.reason === 'string' ? r.j.reason : r.status === 429 ? 'rate-limited' : `http ${r.status}`)
+
+/**
+ * The real `enrol` seam for retireRecovery: POST /v1/recovery/enrol with a
+ * `dreq.rc-enrol` over the exact body. `{ ok: true }` only on the directory's 200.
+ */
+export const directoryEnrol = ({ record }, deps) => async (m) => {
+  const bytes = new TextEncoder().encode(JSON.stringify({ v: 1, saltV: m.saltV, verifier: m.verifier, saltW: m.salt, iv: m.iv, ct: m.inner }))
+  const body = b64uEnc(bytes)
+  const q = await signedRequest({ record, subject: { op: 'rc-enrol', body: bytes } }, deps)
+  const r = await post(deps, '/v1/recovery/enrol', { ...q, body })
+  return r.status === 200 ? { ok: true } : { ok: false, reason: reasonOf(r) }
+}
+
+/**
+ * The real `fetchBlob` seam for passkeyBackupReady: one WebAuthn ceremony on a
+ * single-use challenge. `deps.assert(credentialId, challenge) → assertion` is
+ * the browser's navigator.credentials.get (or a rig's software key).
+ * Returns the stored blob, or null on any refusal.
+ */
+export const directoryFetchBlob = (deps) => async (credentialId) => {
+  const c = await post(deps, '/v1/cred/challenge', {})
+  if (c.status !== 200 || typeof c.j?.challenge !== 'string') return null
+  const r = await post(deps, '/v1/cred/get', { challenge: c.j.challenge, assertion: await deps.assert(credentialId, c.j.challenge) })
+  return r.status === 200 && r.j?.blob ? r.j.blob : null
 }
