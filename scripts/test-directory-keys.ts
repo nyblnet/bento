@@ -47,9 +47,12 @@
 //   · a rebound takes the old key's passkeys and code; a same-key renewal and a
 //     vouched rotation do not;
 //   · a passkey consents for its own key only. After a settled vouched rotation the
-//     previous key's may consent to cred-add and rc-enrol until the new key's first
-//     credential or 30 days; then they are deleted, with a notice, and its blob is
-//     stale from the settle on. A rebound and a recovery get no grace;
+//     previous key's may consent to cred-add, and nothing else, until the new key's
+//     first credential or 30 days; then they are deleted, with a notice, and its blob
+//     is stale from the settle on. A rebound and a recovery get no grace;
+//   · a recovery code younger than 72 h resolves as an email-only freeze does, on any
+//     account: it waits, and the frozen key can void it. enrol() below ages every
+//     code past that, as the rows mean a long-held one; `young: true` keeps it fresh;
 //   · a rekey that fails is recorded and retried (next authorize, or the alarm), so
 //     old passkeys can't strand the new key's first one.
 
@@ -593,11 +596,16 @@ let kCred: Awaited<ReturnType<typeof addCred>>
 // --- the recovery code ---
 const enrolment = () => ({ v: 1, saltV: r64(16), verifier: r64(32), saltW: r64(16), iv: r64(12), ct: r64(80) })
 const bodyOf = (e: unknown) => b64uEnc(enc(JSON.stringify(e)))
-async function enrol(p: P, d: D, e = enrolment(), o: { purpose?: string | null; signedBody?: string; passkey?: Pk } = {}) {
+async function enrol(p: P, d: D, e = enrolment(), o: { purpose?: string | null; signedBody?: string; passkey?: Pk; young?: boolean } = {}) {
   const body = bodyOf(e)
   const q = await dreq(p, d, { op: 'rc-enrol', body: o.signedBody ?? body }, { purpose: o.purpose === null ? undefined : (o.purpose ?? 'rc-enrol') })
   if (o.passkey) q.consent = await waConsent(o.passkey, q.challenge, q.req, 'rc-enrol') as never
-  return { r: await api('/v1/recovery/enrol', { ...q, body }), e }
+  const r = await api('/v1/recovery/enrol', { ...q, body })
+  if (r.status === 200 && !o.young) {
+    const s = store('Account', await addressKey(p.email))!
+    s.set('rc', { ...(s.get('rc') as { at: number }), at: now - KEYS.rcYoungMs })
+  }
+  return { r, e }
 }
 const start = (p: P, verifier: string) => api('/v1/recovery/start', { email: p.email, verifier })
 const release = (p: P, verifier: string, ticket: string) => api('/v1/recovery/release', { email: p.email, verifier, ticket })
@@ -1146,6 +1154,7 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
       ok((how === 'owner' ? (await freezeBy(k2, k2)).j.state : (await freezeByEmail(k2)).j.state) === 'frozen', `[b/${how}] K2 is frozen (${how})`)
       const r = await resolve(await bindNext(await nextOf(K1), rr.text), k1Rc.verifier)
       ok(r.status === 400 && reason(r) === 'invalid' && (await lookup(K1.email)).j.binding === rr.text && (await attOf(await lookup(K1.email))) === 'frozen', `[b/${how}] K1's recovery code resolving K2's freeze → refused, still frozen (${r.status} ${reason(r)})`)
+      ok((await rcOf(K1))?.accountPub === K1.k.pub, `[b/${how}] …and a resolve deletes no orphan: it names the frozen key, not the code's`)
     }
   }
   // [c] + ruling (b): the email-only freeze, its waiting resolution, and the frozen key stopping it
@@ -1579,10 +1588,10 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
       ok(await hasGrace(A) && !(await credGone(c)), '  …though the grace is open and the passkey is still there')
     }
     {
-      // in the grace: cred-add and rc-enrol, and nothing else
+      // in the grace: cred-add, and nothing else
       const { A, A2, c, d2 } = await rotated('grace-ops@example.com')
       const e = await enrol(A2, d2, enrolment(), { passkey: c.reg })
-      ok(e.r.status === 200 && (await rcOf(A2))?.accountPub === A2.k.pub, `grace: an old passkey consents to rc-enrol for the new key (${reason(e.r)})`)
+      ok(reason(e.r) === 'consent:webauthn:unknown' && !(await rcOf(A2)), `grace: an old passkey refused for rc-enrol: passkey first, enforced (${reason(e.r)})`)
       ok(await hasGrace(A) && !(await credGone(c)), '  …which does not end the grace: only a credential does')
       const A3 = await nextOf(A2)
       ok(reason((await rotate(A2, A3, { passkey: c.reg })).st) === 'consent:webauthn:unknown', 'grace: an old passkey refused for rotate')
@@ -1606,17 +1615,25 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
       await renew(A2)
       ok(await armed(A), 'grace: after it, a fresh email proof re-arms the allowance: the new key has never had a credential')
       ok((await addCred(A2, d2, free)).r.status === 200, '  …and the light tier is back in, with no passkey in hand')
-      ok(reason((await enrol(A2, d2, enrolment(), free)).r) === 'filled' && JSON.stringify(await rcOf(A2)) === code, '  …while the code slot stays protected: refused, the code unchanged')
+      ok(reason((await enrol(A2, d2, enrolment(), free)).r) === 'filled' && JSON.stringify(await rcOf(A2)) === code, '  …and the allowance fills empty slots only: refused, the dead old-key code unchanged')
       void e
     }
     {
-      // a code enrolled in the grace counts as "ever": the way back is then the code, not the mailbox
-      const { A, A2, c, d2, graceEnd } = await rotated('grace-edge@example.com')
+      // the last moment of the grace, and the one order that strands nobody
+      const { A2, c, d2, graceEnd } = await rotated('grace-edge@example.com')
       now = graceEnd - 1
-      ok((await enrol(A2, d2, enrolment(), { passkey: c.reg })).r.status === 200, 'grace: still open a millisecond before 30 days')
-      now = graceEnd
+      const n = await addCred(A2, d2, { passkey: c.reg })
+      ok(n.r.status === 200, 'grace: still open a millisecond before 30 days')
+      ok((await enrol(A2, d2, enrolment(), { passkey: n.reg })).r.status === 200, "  …and the code then lands by the new passkey's ordinary consent")
+    }
+    {
+      // a planted old passkey can't overwrite a code the new key already has
+      const { A, A2, c, d2 } = await rotated('grace-plant@example.com')
       await renew(A2)
-      ok(await credGone(c) && !(await armed(A)), 'grace: a key that enrolled a code in it has had something: its end does not re-arm (row 3 holds)')
+      ok((await enrol(A2, d2, enrolment(), free)).r.status === 200, "  (the new key's own code, by the allowance)")
+      const code = JSON.stringify(await rcOf(A2))
+      ok(await hasGrace(A), '  (a code is not a credential: the grace is still open)')
+      ok(reason((await enrol(A2, d2, enrolment(), { passkey: c.reg })).r) === 'consent:webauthn:unknown' && JSON.stringify(await rcOf(A2)) === code, "grace: an old passkey can't replace the new key's code")
     }
     {
       // the old key's code slot is left alone too, when the grace ends with it unclaimed
@@ -1667,7 +1684,7 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
       const n = await addCred(A2, d2, { passkey: c.reg })
       ok(n.r.status === 200 && await hasGrace(A) && !(await credGone(c)), '  (the Address object missed the landing)')
       ok(reason((await addCred(A2, d2, { passkey: c.reg })).r) === 'grace-over', 'grace: a lost landing still ends it: cred-add refused by the Account')
-      ok(reason((await enrol(A2, d2, enrolment(), { passkey: c.reg })).r) === 'grace-over', '  …and rc-enrol')
+      ok(reason((await enrol(A2, d2, enrolment(), { passkey: c.reg })).r) === 'consent:webauthn:unknown', '  …and rc-enrol was never in it')
       ok((await addCred(A2, d2, { passkey: n.reg })).r.status === 200, "CONTROL: the new passkey's own consent is not grace")
       // the grace is still open when the next rotation settles, and this time the previous key HAS a passkey
       await rotate(A2, await nextOf(A2))
@@ -1735,7 +1752,7 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
       now += 73 * HOUR
       await lookup(A.email)
       ok(!(await credGone(n)) && await nCreds(A) === 1 && gone(A) === 1, "CONTROL: the previous key's passkey survives the next rotation")
-      ok((await enrol(A3, d2, enrolment(), { passkey: n.reg })).r.status === 200, '  …and has its own grace')
+      ok((await addCred(A3, d2, { passkey: n.reg })).r.status === 200, '  …and has its own grace')
     }
     {
       // no grace where there was no vouch
@@ -1744,11 +1761,174 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
       ok(!(await hasGrace(A)) && await credGone(c) && gone(A) === 1, 'grace: a freeze ends it: a key reported lost keeps nothing for a renewal to pick up')
     }
     {
-      const { A, A2, c, d2 } = await rotated('grace-res@example.com')
-      const e = await enrol(A2, d2, enrolment(), { passkey: c.reg })
+      const { A, A2, d2 } = await rotated('grace-res@example.com')
+      await renew(A2)
+      const e = await enrol(A2, d2, enrolment(), free)
       ok((await freezeBy(A2, A2)).status === 200, '  (frozen)')
       const A3 = await nextOf(A2)
       ok((await resolve(await bindNext(A3, await current(A2)), e.e.verifier)).status === 200 && !(await hasGrace(A)), 'grace: recovery gets none')
+    }
+
+    // --- a young code: resolving with one waits, on any account ---
+    // Key + passkey could enrol a code, freeze and resolve to a third key at once:
+    // a rotation by another door, with no 72 h contest. A waiting resolution is what
+    // gives the owner their answer.
+    const rcAt = async (p: P) => (await rcOf(p))!.at as number
+    const stuck = async (p: P, text: string, label: string) => {
+      const l = await lookup(p.email)
+      ok(l.j.binding === text && (await attOf(l)) === 'frozen', label)
+    }
+    /** the frozen key voids the waiting resolution, and nothing settles after it */
+    async function voided(p: P, by: P, text: string, label: string) {
+      ok((await freezeBy(p, by)).status === 200 && (await addrStore(p)).get('frz')?.contested === true && !(await addrStore(p)).has('rsv'), `${label}: the frozen key voids it, and the freeze is contested`)
+      now += 73 * HOUR
+      await stuck(p, text, `${label}: 73 h later nothing moved`)
+      ok(!!(await rcOf(p)), `${label}: and the voided resolution spent no code`)
+    }
+    {
+      // CONTROL: the front door, the same two factors: a rotation waits and can be contested
+      const B = await person('young-rotate@example.com'); const text = await bind(B)
+      const c = await addCred(B, await device(B))
+      const r = await rotate(B, await nextOf(B), { passkey: c.reg })
+      ok(r.st.status === 202 && (await lookup(B.email)).j.binding === text, 'young: CONTROL key + passkey rotating waits, the old binding served')
+    }
+    {
+      const A = await person('young-chain@example.com'); const text = await bind(A)
+      const d = await device(A)
+      const c = await addCred(A, d)
+      const own = await enrol(A, d, enrolment(), { passkey: c.reg })
+      const t = await enrol(A, d, enrolment(), { passkey: c.reg, young: true })
+      ok(t.r.status === 200, '  (key + passkey replace the code)')
+      ok((await freezeBy(A, A)).status === 200, '  (the same key freezes: no consent, §39.3)')
+      const nb = await bindNext(await nextOf(A), text)
+      const pend = noticesTo(A.email, 'resolve-pending'), done = noticesTo(A.email, 'resolve')
+      const r = await resolve(nb, t.e.verifier)
+      ok(r.status === 202 && r.j.resolving === true && r.j.activeAt === now + 72 * HOUR, `young: the code just enrolled resolves a KEY-HOLDER freeze → 202, waits 72 h (${r.status} ${reason(r)})`)
+      await stuck(A, text, '  …the old binding not moved, still frozen')
+      ok((await lookup(A.email)).j.pending === await hashOf(nb.text), '  …and the lookup names the waiting binding')
+      ok(!!(await rcOf(A)) && await nCreds(A) === 1, '  …the code not spent, the passkey not dropped')
+      ok(noticesTo(A.email, 'resolve-pending') === pend + 1 && noticesTo(A.email, 'resolve') === done, '  …and the notice is the waiting one')
+      ok(reason(await resolve(nb, own.e.verifier)) === 'resolving', '  …one resolution at a time')
+      await voided(A, A, text, 'young')
+      // the code is 73 h old now, but this freeze has had a resolution voided
+      const again = await resolve(nb, t.e.verifier)
+      ok(again.status === 202, `young: after a void the same code, aged, still waits: the freeze is contested (${again.status} ${reason(again)})`)
+    }
+    {
+      // nobody voids it: it lands at 72 h, as an email-only freeze's does
+      const A = await person('young-settle@example.com'); const text = await bind(A)
+      const d = await device(A)
+      const c = await addCred(A, d)
+      const t = await enrol(A, d, enrolment(), { passkey: c.reg, young: true })
+      await freezeBy(A, A)
+      const nb = await bindNext(await nextOf(A), text)
+      ok((await resolve(nb, t.e.verifier)).status === 202, '  (a young code waits)')
+      now += 72 * HOUR - MIN
+      await stuck(A, text, 'young: one minute before 72 h, still the frozen binding')
+      now += MIN
+      const l = await lookup(A.email)
+      ok(l.j.binding === nb.text && l.j.rebound === true, 'young: uncontested for 72 h, the new binding, rebound')
+      ok(!(await rcOf(A)) && await nCreds(A) === 0, '  …the code spent at the commit, the frozen key\'s passkey gone')
+    }
+    for (const [edge, want] of [[72 * HOUR - 1, 202], [72 * HOUR, 200]] as const) {
+      // to the millisecond, from the record's own `at`
+      const A = await person(`young-edge-${want}@example.com`); const text = await bind(A)
+      const d = await device(A)
+      const c = await addCred(A, d)
+      const t = await enrol(A, d, enrolment(), { passkey: c.reg, young: true })
+      const at = (await rcAt(A)) ?? now
+      ok(at === now, '  (the record carries the time it was enrolled)')
+      await freezeBy(A, A)
+      now = at + edge
+      const nb = await bindNext(await nextOf(A), text)
+      const r = await resolve(nb, t.e.verifier)
+      ok(r.status === want && (await lookup(A.email)).j.binding === (want === 200 ? nb.text : text), `young: a code ${want === 200 ? 'exactly 72 h old resolves at once' : '72 h minus 1 ms old waits'} (${r.status} ${reason(r)})`)
+    }
+    {
+      // the age is the enrolment's: a pepper upgrade moves the record and keeps `at`
+      for (const [how, young, want] of [['an aged', false, 200], ['a young', true, 202]] as const) {
+        const A = await person(`young-pepper-${want}@example.com`); const text = await bind(A)
+        const d = await device(A)
+        const c = await addCred(A, d)
+        const t = await enrol(A, d, enrolment(), { passkey: c.reg, young })
+        env.PEPPER_V2 = r64(32)
+        const at = await rcAt(A)
+        ok((await start(A, t.e.verifier)).status === 200 && (await rcOf(A))!.v === 2 && (await rcAt(A)) === at, `young: a pepper upgrade of ${how} code keeps its \`at\``)
+        await freezeBy(A, A)
+        const r = await resolve(await bindNext(await nextOf(A), text), t.e.verifier)
+        ok(r.status === want, `  …and it then resolves ${want === 200 ? 'at once' : 'by waiting'} (${r.status} ${reason(r)})`)
+        delete env.PEPPER_V2
+      }
+    }
+    {
+      // rotated, a dead old-key code in the slot: anyone can empty it, and that is fine
+      const { A, A2, d2, graceEnd } = await rotated('young-orphan@example.com', { code: true })
+      now = graceEnd
+      await lookup(A.email)
+      ok((await rcOf(A))?.accountPub === A.k.pub, '  (the old key\'s code is still in the slot)')
+      ok(reason((await enrol(A2, d2, enrolment(), { ...free, young: true })).r) === 'consent:consent', 'young: the key alone can\'t fill it')
+      await start(A, r64(32))
+      ok(!(await rcOf(A)), '  (an anonymous attempt deletes the orphan)')
+      ok(reason((await enrol(A2, d2, enrolment(), { ...free, young: true })).r) === 'consent:consent', '  …and the key alone still can\'t')
+      await renew(A2)
+      const t = await enrol(A2, d2, enrolment(), { ...free, young: true })
+      ok(t.r.status === 200, '  (key + mailbox fill it: the accepted residual)')
+      const text = await current(A2)
+      await freezeBy(A2, A2)
+      const r = await resolve(await bindNext(await nextOf(A2), text), t.e.verifier)
+      ok(r.status === 202, `young: anonymous start, the fill, then a freeze: the move still waits its 72 h (${r.status} ${reason(r)})`)
+      await stuck(A, text, '  …the old binding not moved')
+      await voided(A, A2, text, 'young/orphan')
+    }
+    {
+      // the orphan is not the cause: a slot that was never filled runs the same chain
+      const { A, A2, d2, graceEnd } = await rotated('young-empty@example.com')
+      now = graceEnd
+      await lookup(A.email)
+      await renew(A2)
+      const t = await enrol(A2, d2, enrolment(), { ...free, young: true })
+      const text = await current(A2)
+      await freezeBy(A2, A2)
+      const r = await resolve(await bindNext(await nextOf(A2), text), t.e.verifier)
+      ok(t.r.status === 200 && r.status === 202, `young: a rotated account's never-filled slot waits the same (${r.status} ${reason(r)})`)
+      await stuck(A, text, '  …the old binding not moved')
+    }
+    {
+      // and restricting the allowance to passkeys would not help: a passkey consents to a code
+      const { A, A2, d2, graceEnd } = await rotated('young-passkey@example.com')
+      now = graceEnd
+      await lookup(A.email)
+      await renew(A2)
+      const n = await addCred(A2, d2, free)
+      const t = await enrol(A2, d2, enrolment(), { passkey: n.reg, young: true })
+      const text = await current(A2)
+      await freezeBy(A2, A2)
+      const r = await resolve(await bindNext(await nextOf(A2), text), t.e.verifier)
+      ok(n.r.status === 200 && t.r.status === 200 && r.status === 202, `young: passkey by the allowance, code by that passkey: it waits too (${r.status} ${reason(r)})`)
+      await stuck(A, text, '  …the old binding not moved')
+    }
+    for (const [how, young, want] of [['long held', false, 200], ['young', true, 202]] as const) {
+      // a code and no passkey, past the window: email can't re-arm, so the way out is
+      // freeze, resolve, a fresh email proof on the new key, its passkey, then its code
+      const S = await person(`way-out-${want}@example.com`); await bind(S, { setup: true })
+      const d = await device(S, { consent: false })
+      const t = await enrol(S, d, enrolment(), { ...free, young })
+      now += 16 * MIN
+      await renew(S)
+      ok(!(await armed(S)) && reason((await addCred(S, d, free)).r) === 'consent:consent', `way out (${how}): code first, window lapsed: email does not arm`)
+      const text = await current(S)
+      await freezeBy(S, S)
+      const T = await nextOf(S)
+      const nb = await bindNext(T, text)
+      const r = await resolve(nb, t.e.verifier)
+      ok(r.status === want, `way out (${how}): the resolve ${want === 200 ? 'lands at once' : 'waits 72 h'} (${r.status} ${reason(r)})`)
+      if (want === 202) { now += 72 * HOUR; await lookup(S.email) }
+      ok((await lookup(S.email)).j.binding === nb.text && !(await armed(S)), `way out (${how}): rebound, and a resolution alone arms nothing`)
+      await renew(T)
+      ok(await armed(S), `way out (${how}): a fresh email proof on the new key arms`)
+      const dT = await device(T, { consent: false })
+      const n = await addCred(T, dT, free)
+      ok(n.r.status === 200 && (await enrol(T, dT, enrolment(), { passkey: n.reg })).r.status === 200, `way out (${how}): the passkey lands, and the code by that passkey`)
     }
 
     // --- a rekey that fails is recorded and retried ---

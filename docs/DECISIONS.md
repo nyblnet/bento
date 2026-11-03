@@ -12390,3 +12390,39 @@ Deleting old passkeys could fail silently, and passkeys left behind fill the new
 key's empty slot with no way out. The Address object now records the deletion
 before trying it, and retries at the next signed request and from an alarm. While
 one is unfinished, ops that need consent answer `rekey` and use nothing up.
+
+## 2026-11-03: a recovery code younger than 72 hours waits, and the rotation grace keeps cred-add only
+
+An account key and a passkey could replace the recovery code, freeze with the key,
+and resolve to a third key at once, on any account, rotated or not. That is a
+rotation with no 72-hour contest, and afterwards the owner's key and old code both
+answered nothing. A resolution is meant to need a factor the thief does not have, and
+a code the thief enrolled a minute ago is not one. The at-once resolve assumed a
+long-held code.
+
+A code younger than the contest window now resolves as an email-only freeze does:
+202, the old binding still served, voidable by the frozen key, and the code spent
+only when it commits. The age is read on the record that verified, and only an
+enrolment sets it, so a pepper upgrade does not make a code young or old. A code
+72 hours old resolves at once as before: the owner has had the enrolment's notice
+and the same time a rotation gives.
+
+This corrects the entry above. It said the code slot stays protected, and that was
+wrong. An old-key code is already dead, since it neither releases nor resolves, so
+an anonymous recovery attempt deleting it as orphaned costs nothing and the slot
+protects nothing. A rotated account whose slot was never filled reaches the same
+place with no deletion at all, and limiting the setup allowance would not help,
+because a passkey added under it can consent to a code. What was worth protecting
+is the 72 hours, and this rule is what protects it. So the accepted residual is:
+an account key and a mailbox on a rotated account with no credential can get a
+passkey and a code, and any move of the address is contestable for 72 hours. The
+key alone stays refused.
+
+`rc-enrol` also leaves the rotation grace, which amends the same entry. A previous
+key's passkey may now consent to `cred-add` only. Passkey first is the only order
+that strands nobody, a code then lands by the new passkey's ordinary consent, and
+this removes the one grace op that could overwrite a current-key code from a planted
+old passkey. The sentence about a key that enrolled a code during the grace no
+longer applies to the grace. The same state still exists, from a setup that enrolled
+a code and let the window lapse: email does not re-arm it, and its way out is freeze,
+resolve, a fresh email proof on the new key, then a passkey, then a code.

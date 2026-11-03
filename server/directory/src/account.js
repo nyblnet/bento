@@ -37,6 +37,7 @@ export const KEYS = Object.freeze({
   rcFailLock: 5, // consecutive wrong verifiers that lock recovery
   rcLockMs: 24 * HOUR,
   rcWaitMs: 72 * HOUR, // a correct verifier releases the blob only after this
+  rcYoungMs: 72 * HOUR, // a code younger than the contest window (the Address object's rotationWindowMs) resolves as an email-only freeze does
   ledgerMin: 4096,
   ledgerMax: 1 << 20, // 1 MiB
 })
@@ -235,7 +236,7 @@ export async function keysRoute(p, b, env, ip, deps) {
     if (!(await ledger(env, ip, 'keys'))) return json(429, { error: 'rate-limited' })
     const a = await authorize(env, email, b, { op: 'rc-enrol', body: b.body })
     if (!a.ok) return json(400, { error: 'invalid', reason: a.reason })
-    const r = await call(accountStub(env, a.scope), 'rcEnrol', { accountPub: a.accountPub, body: b.body, setup: a.setup === true, grace: a.grace === true })
+    const r = await call(accountStub(env, a.scope), 'rcEnrol', { accountPub: a.accountPub, body: b.body, setup: a.setup === true })
     if (r.status !== 200) return json(r.status, r.body)
     await notify(a.scope, 'rc-enrol', '', { setup: a.setup === true })
     return json(200, { ok: true })
@@ -343,7 +344,6 @@ export class Account {
       const ever = await everKey(a.accountPub)
       // read after the awaits above, beside the write: the setup allowance never replaces a code
       if (a.setup === true && (await s.get('rc'))) return refuse('filled')
-      if (a.grace === true && (await holds(a.accountPub))) return refuse('grace-over')
       await s.put('rc', rec)
       await s.put(ever, true)
       await s.delete('rel') // a new code ends any release in flight for the old one
@@ -386,8 +386,12 @@ export class Account {
         // email-only or contested freeze) can still be voided by the frozen key, and
         // a voided one must leave the code usable. The Address object spends it
         // (dropOld) when the resolution COMMITS, at once or at settle (§39.3, §28a).
+        // A code younger than the contest window is not a factor a thief lacks: key +
+        // passkey can enrol one a minute before freezing. Its age is read here, on the
+        // record that verified; `at` is set only by rcEnrol, so nothing else makes a
+        // code young or old.
         await s.put('rcFails', 0)
-        return out(200, { ok: true })
+        return out(200, { ok: true, ...(now - rc.at < KEYS.rcYoungMs ? { young: true } : {}) })
       }
 
       if (start) {

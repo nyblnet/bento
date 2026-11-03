@@ -68,7 +68,7 @@ export const LIMITS = {
 const DAY = 86_400_000
 const CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ' // no 0/O, 1/I/L
 /** the only ops a previous key's passkey may consent to, and only during the grace */
-const GRACE_OPS = Object.freeze(['cred-add', 'rc-enrol'])
+const GRACE_OPS = Object.freeze(['cred-add'])
 
 const BASE = {
   'content-type': 'application/json',
@@ -460,10 +460,11 @@ export default {
       if (rc.body.notify) await notify(env, scope, rc.body.notify, '')
       if (rc.status !== 200) return json(rc.status, { error: 'invalid', reason: rc.body.reason })
       // re-checked: the address may have moved while the code was checked
-      const r = await call(addr, 'resolve', { stmt: b.stmt, sig: b.sig, key: prep.body.key })
-      // a key-holder freeze resolves at once; an EMAIL-ONLY or CONTESTED one waits 72 h
-      // (202), so a device still holding the frozen key can stop it (code + mailbox
-      // alone is no takeover). The code is spent only when the resolution commits.
+      const r = await call(addr, 'resolve', { stmt: b.stmt, sig: b.sig, key: prep.body.key, young: rc.body.young === true })
+      // a key-holder freeze resolves at once; an EMAIL-ONLY or CONTESTED one, or any
+      // resolved by a code younger than 72 h, waits 72 h (202), so a device still
+      // holding the frozen key can stop it (code + mailbox alone is no takeover, and
+      // neither is a code enrolled just now). The code is spent only when it commits.
       if (r.status === 200 || r.status === 202) await notify(env, scope, r.status === 200 ? 'resolve' : 'resolve-pending', (await hashOf(binding.accountPub)).slice(0, 8))
       return json(r.status, r.body)
     }
@@ -973,16 +974,17 @@ export class Address {
       if (a.op === 'resolvePrep') return out(200, { key: base.key })
       if (a.key !== base.key) return refuse('state') // the code was checked against another binding
       const h = await hashOf(a.stmt)
-      if (frz.by === 'email' || frz.contested) {
+      if (frz.by === 'email' || frz.contested || a.young === true) {
         // EMAIL-ONLY freeze (ruling b): the code + the mailbox alone were an instant
         // takeover. It waits 72 h, still frozen; meanwhile a freeze or contest signed
         // by the frozen key voids it and marks the freeze CONTESTED, and every later
         // resolution of a contested freeze waits the same way. The code stays live
-        // until one commits.
+        // until one commits. A YOUNG code waits too, on any freeze: key + passkey could
+        // otherwise enrol one, freeze and resolve, a rotation with no 72 h contest.
         await s.put('rsv', { stmt: a.stmt, sig: a.sig, h, at: now, until: now + LIMITS.rotationWindowMs })
         return out(202, { state: 'frozen', resolving: true, activeAt: now + LIMITS.rotationWindowMs })
       }
-      // a key-holder freeze (owner, contest): at once
+      // a key-holder freeze (owner, contest) by a code older than the window: at once
       const dirKey = await importDirKey(this.env.DIR_KEY_JWK)
       const att = await attest(dirKey, this.env.DIR_KID, h, now, now)
       // no vouch: pinners warn (intended, §39.3), and nothing here softens that
@@ -1052,8 +1054,8 @@ export class Address {
       let state = await stateOf()
       const rot = await s.get('rot')
       const rsv = await s.get('rsv')
-      // the one exception to "frozen: status only" (ruling b): while an email-only
-      // freeze's resolution waits, the address IS pending a key change, from the
+      // the one exception to "frozen: status only" (ruling b): while a freeze's
+      // resolution waits, the address IS pending a key change, from the
       // frozen binding (still the one served) to the resolution's. Its key may then
       // freeze or contest, exactly as in a pending rotation; nothing else.
       if (rsv && state === 'frozen' && (subject.op === 'freeze' || subject.op === 'contest')) state = 'pending'

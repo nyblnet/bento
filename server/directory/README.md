@@ -124,7 +124,7 @@ voided does not burn it. No old-key signature exists in this case, so pinners
 WARN; that is intended, and nothing the directory says softens it.
 
 - A **key-holder freeze** (the owner's signed freeze, or a contest) resolves at
-  once, unless it is contested (below).
+  once, unless it is contested or the code is young (both below).
 - An **email-only freeze** resolves after 72 hours (security ruling b): the
   recovery code and the mailbox together were an instant takeover. The answer
   is 202; the address stays frozen, a notice is mailed (`resolve-pending`), and
@@ -137,6 +137,13 @@ WARN; that is intended, and nothing the directory says softens it.
   the new binding becomes active at 72 hours (`rebound`, no vouch), the code is
   spent, and the event list records it. A second resolution while one waits is
   refused (`resolving`).
+- A **young code** waits too, on any freeze. A code enrolled less than 72 hours
+  ago resolves the way an email-only freeze does: 202, `resolve-pending`, and the
+  frozen key can void it. Key and passkey together could otherwise replace the
+  code, freeze and resolve to a third key at once, which is a rotation with no
+  contest. The age is the enrolment's (`at`; a pepper upgrade keeps it). At 72
+  hours the code resolves at once: the owner has had the `rc-enrol` notice and the
+  time a rotation would have given them.
 - A freeze that has had a resolution voided is **contested**: the code has been
   in two hands. Every later resolution of it waits 72 hours the same way and
   can be voided the same way, by the frozen key, and a contested freeze never
@@ -262,16 +269,24 @@ account key it belongs to, and material for any other key is treated as gone).
   with the key consent is being given for, so consent never rests on a deletion
   having succeeded.
 - **The rotation grace.** After a settled VOUCHED rotation, a passkey of the
-  immediately previous key may still consent to `cred-add` and `rc-enrol`, and
-  to nothing else: never a rotation, a `cred-del` or a native consent. The grace
+  immediately previous key may still consent to `cred-add`, and to nothing else:
+  never an `rc-enrol`, a rotation, a `cred-del` or a native consent. The grace
   ends at the new key's first credential, however it was added, or 30 days after
   the settle, whichever is first; any freeze ends it too. The old passkeys are
   then deleted with a notice (`cred-old-del`), and a key's code slot is left as
   it was. An account that misses it gets back in with a fresh email proof, which
-  re-arms the setup allowance, as long as the new key has had nothing.
-  **For the UI:** add the passkey first. A code enrolled in the grace counts as
-  having had something, so if the passkey then never comes, email can't re-arm
-  it and the way back is that recovery code.
+  re-arms the setup allowance, as long as the new key has had nothing. An old-key
+  code left in the slot protects nothing: it neither releases nor resolves, and
+  any recovery attempt deletes it as orphaned. So an account key and a mailbox on
+  a rotated account with no credential can get a passkey and a code, and what
+  protects the address then is the young-code wait: any move is contestable for
+  72 hours.
+  **For the UI:** the passkey comes first, and a code then lands by that passkey's
+  ordinary consent. A key with a code and no passkey (a setup that stopped halfway)
+  has had something, so email can't re-arm it. Its way out is freeze, resolve with
+  the code, a fresh email proof on the new key, then its passkey, then its code; a
+  resolution alone arms nothing, so send the person to the email step. That means
+  a third key, and pinners warn.
 - **A rekey that fails is recorded** (`rekey` in the Address object) before it is
   tried, and retried by the next signed request and hourly by the alarm. While
   one is unfinished, `cred-add`, `cred-del` and `rc-enrol` answer `rekey` with
