@@ -480,10 +480,13 @@ written before layouts existed carries, and a stored `"board"` is a byte
 difference that says nothing.
 
 A **calendar** lays the view's pages out by date, and has two shapes: a month
-grid (`span` absent) and a chronological timeline (`span: "timeline"`, newest
-first). Which date a page sits on is a **fixed rule, not a setting** — its
-`journal` date if it has one, otherwise the first `date`-typed field in the
-schema it carries a real `YYYY-MM-DD` value for. A page the rule finds no date
+grid (`span` absent) and a chronological agenda, newest first. The agenda is
+stored as `span: "timeline"` — write that value; the UI calls it "Agenda", but
+the stored name predates the label and does not change. Which date a page sits
+on is a **fixed rule, not a setting** — its `journal` date if it has one,
+otherwise its `due` date (when the schema declares `due` as a date field),
+otherwise the first other `date`-typed field, in schema order, that it carries
+a real `YYYY-MM-DD` value for. A page the rule finds no date
 for is listed under "No date" rather than dropped, and a value that is
 digit-shaped but not a real day (`2026-13-99`) counts as no date rather than
 being rolled into some other day. Month names, weekday names and the first day

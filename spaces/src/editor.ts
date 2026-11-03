@@ -2126,12 +2126,13 @@ export class Editor {
   }
 
   /**
-   * MONTH ⇄ TIMELINE, the calendar's own second shape.
+   * MONTH ⇄ AGENDA, the calendar's own second shape (stored as `span:
+   * 'timeline'` — the agenda's on-disk name; see calendar.ts CAL_SPANS).
    *
    * A parameter of one layout, like `groupBy` — not a sixth entry in the layout
    * cycle, whose cost is one click for everybody every time they pass it. Same
    * writer discipline as every other view key: `month` is the DEFAULT, so it is
-   * stored as an ABSENT key and a view toggled to the timeline and back is
+   * stored as an ABSENT key and a view toggled to the agenda and back is
    * byte-identical to one nobody touched.
    */
   private toggleViewSpan(blockId: string): void {

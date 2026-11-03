@@ -1,0 +1,15 @@
+[package]
+name = "bento-gate1"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Gate 1 for the desktop host: is this file's runtime a genuine Bento release? A port of kernel/src/gate1.ts, held to home/fixtures/gate1."
+publish = false
+
+[dependencies]
+p256 = { version = "0.14", features = ["ecdsa"] }
+sha2 = "0.10"
+base64 = "0.22"
+serde_json = { version = "1", features = ["preserve_order"] }
+
+[workspace]

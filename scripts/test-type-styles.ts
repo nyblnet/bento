@@ -372,8 +372,17 @@ H('styleSheetCss — the mechanism the live editor actually uses');
   // reaches an id in practice
   const hostile: TypeDoc = { ...doc, styles: { 'x"}body{display:none}[x="y': { id: 'x"}body{display:none}[x="y', kind: 'para', name: 'x', size: 10 } } };
   const hcss = styleSheetCss(hostile);
-  ok(hcss.includes('\\"') && !hcss.includes('}body{display:none}[x="y"]{font-size'),
+  ok(hcss.includes('\\22 ') && !hcss.includes('}body{'),
      'a quote inside a style id is escaped, not left to break out of the selector');
+  // a newline, CR or form feed ENDS a CSS string — escaping only \\ and " left
+  // these open (measured in the editor: the rule after the id applied)
+  for (const [label, ch, hex] of [['newline', '\n', 'a'], ['CR', '\r', 'd'], ['form feed', '\f', 'c']]) {
+    const nid = `x${ch}]{}*{background:url(http://rc.test/x)}`;
+    const ncss = styleSheetCss({ ...doc, styles: { [nid]: { id: nid, kind: 'para', name: 'x', size: 10 } } });
+    const rule = ncss.split('\n').find(r => r.includes('font-size:10px')) ?? '';
+    ok(rule.startsWith(`.t-paper [data-style-id="x\\${hex} `) && rule.endsWith('"]{font-size:10px}') && !ncss.includes(']{}*{'),
+       `a ${label} inside a style id is a hex escape, so the id stays one selector (${JSON.stringify(rule.slice(0, 60))})`);
+  }
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

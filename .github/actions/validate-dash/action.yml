@@ -638,18 +638,12 @@ runs:
       run: node scripts/test-dash-starter.ts
 
     - name: dash — the off switch for a live session
-      # A polish sweep drove the app at 880px with a session running:
-      # collab.on true, the room live on the relay, and the string "Stop
-      # sharing" NOWHERE in the document — sync.css hid the toggle outright
-      # below 900px to buy width in the top bar, and that toggle is the only
-      # control that stops sharing. The nearest thing left was About's
-      # "Offline mode", which also kills the signed update check: to stop one
-      # workbook being shared you had to switch off the app's networking.
-      # The rule is narrow: a control that REPORTS nothing may stand down at a
-      # narrow width (the 390px measurement behind those rules is real and
-      # still honoured), a control that STOPS something already happening may
-      # not. Checked as CSS text because dash-dom.ts is a parser, not a layout
-      # engine, and cannot say what a viewport width does to a declaration.
+      # Sharing is a labelled Share popover now (spaces'): "Stop sharing" is
+      # inside it whenever a session runs, the button says "Share" or "Live"
+      # at every width, and no stylesheet rule hides it or its word. It
+      # replaced a one-click "Start live session" chip that collapsed to a
+      # bare dot below 900px and vanished on a phone. Widths are measured in
+      # the browser by test-dash-chrome-browser.mjs.
       shell: bento-step {0}
       run: node scripts/test-dash-stopsharing.ts
 
@@ -696,3 +690,44 @@ runs:
       # that has it exactly backwards.
       shell: bento-step {0}
       run: node scripts/test-dash-datavalid.ts
+
+    - name: bento/dash typed entry and text in arithmetic
+      # 10, $5, 15% typed into a spreadsheet then =SUM said 30 and =G13*G15
+      # said 150: typing stored the text, and the engine read "15%" as 15.
+      # Entry values + formats, Excel's text-in-arithmetic rule, the formula
+      # bar's entered form, and malformed formulas refused at entry.
+      shell: bento-step {0}
+      run: node scripts/test-dash-entryparse.ts
+
+    - name: bento/dash pivot field editor
+      # The editor's spec operations (a grouping field in one area, values
+      # never the same column and function twice, inputs never mutated) and
+      # pivots computed over configured fields — sum, average, distinct, min,
+      # max — with the pivot's own filters through a JSON round trip.
+      shell: bento-step {0}
+      run: node scripts/test-dash-pivotfields.ts
+
+    - name: bento/dash chart from the selection
+      # The selected columns are the series; a line through categories with
+      # no order is refused unless asked; the axis wears the column's format;
+      # series colours follow the column, not the position.
+      shell: bento-step {0}
+      run: node scripts/test-dash-chartbind.ts
+
+    - name: bento/dash formula dialog, sheet names, Intl locale
+      # The dialog refuses `Value * 2 +` and every other broken shape while
+      # accepting every formula the starter and the function pack use; every
+      # function has a signature; new sheets are "Sheet3"; a stored
+      # x-pseudo or malformed language tag never reaches Intl.
+      shell: bento-step {0}
+      run: node scripts/test-dash-formula-dialog.ts
+
+    - name: dash — what each Share copy may carry
+      # The reading copy has no collab block; the invite carries an
+      # owner-signed invite and never ownerPriv or a legacy writerPriv; the
+      # view-only copy is role reader, read-only, with no private half. A
+      # field this build does not declare is dropped from all three. The
+      # same fixture through the owner's own 'file' tier keeps them all —
+      # the positive control.
+      shell: bento-step {0}
+      run: node scripts/test-dash-share.ts

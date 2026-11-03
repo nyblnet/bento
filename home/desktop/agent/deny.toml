@@ -1,0 +1,40 @@
+# cargo-deny policy for the SHIPPED desktop agent (security §34). Test-only
+# crates (agent-testkit) are separate crates with their own policy and are
+# proven absent from this graph by supply-chain-check.sh.
+[graph]
+all-features = true
+targets = [
+  { triple = "x86_64-unknown-linux-gnu" },
+  { triple = "aarch64-unknown-linux-gnu" },
+  { triple = "x86_64-pc-windows-msvc" },
+]
+
+[advisories]
+version = 2
+yanked = "deny"
+
+[licenses]
+version = 2
+# Permissive only: no GPL/LGPL/AGPL/MPL can enter the shipped graph unnoticed.
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Zlib",
+  "Unicode-3.0",
+  "Unicode-DFS-2016",
+  "CC0-1.0",
+]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

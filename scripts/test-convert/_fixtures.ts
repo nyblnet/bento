@@ -281,7 +281,7 @@ export function fxBullets(): Promise<Uint8Array> {
     sp(2, 'Bullets',
       `<p:spPr>${xfrm(914400, 914400, 4572000, 1828800)}</p:spPr>` +
       '<p:txBody><a:bodyPr><a:noAutofit/></a:bodyPr>' +
-      '<a:lstStyle><a:lvl1pPr><a:buFont typeface="Arial"/><a:buChar char="•"/>' +
+      '<a:lstStyle><a:lvl1pPr><a:buFont typeface="Arial"/><a:buChar char="♦"/>' +
       '<a:defRPr sz="1800"><a:latin typeface="Georgia"/></a:defRPr></a:lvl1pPr></a:lstStyle>' +
       '<a:p><a:r><a:t>One</a:t></a:r></a:p>' +
       '<a:p><a:pPr><a:buNone/></a:pPr><a:r><a:t>Two</a:t></a:r></a:p>' +

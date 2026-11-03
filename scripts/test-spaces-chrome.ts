@@ -1275,6 +1275,49 @@ async function browser(chrome: string, html: string): Promise<void> {
       const s = await shape(host)
       ok(!!s && s.chips.includes('launch=#launch') && s.raw, `after blur, ${what}: the chip is redrawn and the [^1] token is still raw`)
     }
+
+    // ——— CALENDAR "AGENDA" vs GANTT "TIMELINE" (maintainer, 2026-10-20) ———
+    // The calendar's second shape was labelled "Timeline", the same word as the
+    // gantt layout. Its button now reads "Agenda"; the gantt keeps "Timeline";
+    // and the toggle still STORES `span: 'timeline'`, because that is the
+    // format every existing file carries. Measured in the rendered head and in
+    // the committed block, after a trusted click.
+    console.log('\n  calendar agenda vs gantt timeline\n')
+    await open(false)
+    const CA_PAGE = 'capage', CA_CAL = 'cacal', CA_GANTT = 'cagantt'
+    const caLoaded = await js<boolean>(`(() => {
+      const d = JSON.parse(JSON.stringify(window.bento.doc))
+      d.pages = [{ id: ${JSON.stringify(CA_PAGE)}, title: 'Calendar and timeline', blocks: [
+        { id: ${JSON.stringify(CA_CAL)}, type: 'view', layout: 'calendar', html: 'Cal' },
+        { id: ${JSON.stringify(CA_GANTT)}, type: 'view', layout: 'gantt', html: 'Plan' },
+      ] }]
+      return window.bento.loadDoc(JSON.stringify(d))
+    })()`)
+    await sleep(400)
+    ok(caLoaded, 'the calendar × gantt fixture loads through window.bento.loadDoc')
+    const viewHead = (id: string) => js<any>(`(() => { const v = document.querySelector('.sp-view[data-block-id="${id}"]'); if (!v) return null;
+      const s = v.querySelector('[data-view-span]'), l = v.querySelector('[data-view-layout]');
+      return { span: s ? { text: s.textContent, title: s.title } : null, layout: l?.textContent ?? null } })()`)
+    const calBlock = () => js<any>(`(() => window.bento.doc.pages.find(p => p.id === ${JSON.stringify(CA_PAGE)})?.blocks.find(b => b.id === ${JSON.stringify(CA_CAL)}))()`)
+    const g = await viewHead(CA_GANTT)
+    ok(g?.layout === 'Timeline' && g?.span === null,
+      `the gantt layout is still labelled "Timeline", with no span button (${JSON.stringify(g)})`)
+    const m0 = await viewHead(CA_CAL)
+    ok(m0?.layout === 'Calendar' && m0?.span?.text === 'Month' && m0?.span?.title === 'Show an agenda',
+      `a fresh calendar reads "Month" and offers "Show an agenda" (${JSON.stringify(m0)})`)
+    await tap(`document.querySelector('.sp-view[data-block-id="${CA_CAL}"] [data-view-span]')`)
+    await sleep(300)
+    const m1 = await viewHead(CA_CAL)
+    ok(m1?.span?.text === 'Agenda' && m1?.span?.title === 'Show a month at a time',
+      `after one click the span button reads "Agenda", never "Timeline" (${JSON.stringify(m1)})`)
+    const cb = await calBlock()
+    ok(cb?.span === 'timeline',
+      `…and the block STORES span: 'timeline', the unchanged format value (${JSON.stringify(cb?.span)})`)
+    await tap(`document.querySelector('.sp-view[data-block-id="${CA_CAL}"] [data-view-span]')`)
+    await sleep(300)
+    const cb2 = await calBlock()
+    ok(cb2 && !('span' in cb2) && (await viewHead(CA_CAL))?.span?.text === 'Month',
+      `a second click returns to the month grid and removes the key (${JSON.stringify(cb2?.span)})`)
     ws.close()
   } finally {
     try { child.kill('SIGKILL') } catch { /* gone */ }

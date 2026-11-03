@@ -57,8 +57,8 @@
 // rows together, and that is a wrong number that looks like a right one.
 
 import {
-  evaluate, isErr, recalc, spillError, vecShape, FormulaError,
-  type Cell, type Shaped, type Vec,
+  evaluate, isErr, recalc, spillError, syntaxProblem, vecShape, FormulaError,
+  type Cell, type Shaped, type SyntaxProblem, type Vec,
 } from './formula.ts'
 import {
   expandRange, formatRef, isNameLike, mapNames, mapRefs, rewriteFormulaRefs,
@@ -733,6 +733,29 @@ export function evalCellArray(
   if (out.length <= 1) return one(out[0] ?? null)
   const shape = vecShape(out)
   return { value: out[0] ?? null, rows: shape.rows, cols: shape.cols, cells: out }
+}
+
+/**
+ * Would this cell formula PARSE? null when it would; otherwise why not, with
+ * the place it went wrong spelled as the author wrote it.
+ *
+ * ENTRY ONLY — the cell editor and the formula bar ask before committing
+ * (finding 3.4). A formula already in a file is never refused: it evaluates,
+ * forgivingly, as it always has. References are swapped for placeholders that
+ * read as plain words (they are what `bindRefs` would swap them for), so the
+ * grammar is formula.ts's own and the only thing this adds is the swap back.
+ */
+export function cellFormulaProblem(src: string, scope: RefScope = NO_SHEETS): SyntaxProblem | null {
+  const named = expandNames(formulaBody(src), scope.names)
+  if (named.cycle !== undefined) return null          // evaluates to its own error
+  // `#REF!` is a reference that was deleted — a formula, not a typo
+  if (named.expr.includes(REF_ERR)) return null
+  const texts: string[] = []
+  const expr = mapRefs(named.expr, (u) => { texts.push(u.text); return `_ref${texts.length - 1}_` })
+  const why = syntaxProblem(expr)
+  if (!why) return null
+  const back = why.near.match(/^_ref(\d+)_$/)
+  return back ? { ...why, near: texts[Number(back[1])] ?? why.near } : why
 }
 
 // --- ordering ---------------------------------------------------------------

@@ -103,14 +103,31 @@ try {
   // your own People row: the name stays whole and the key fingerprint gives
   // way (it was the other way round: "Guest (y…" beside a whole key). A
   // mid-length name makes the row too narrow for both whatever the key is.
-  const me = await p.evaluate(() => {
+  // Measured only once there IS a key to show and the fonts have settled: the
+  // deck's signing key is minted asynchronously at load, and a row rendered
+  // before it lands shows the role alone — too short to cut, which read as
+  // "neither cut" on a slow runner.
+  await p.waitForFunction(() => { const c = window.bento?.doc?.collab; return !!(c && (c.owner || c.writerPub)) }, null, { timeout: 15000 })
+  await p.evaluate(async () => {
     try { localStorage.setItem('bento-author', 'Jordan Whitaker') } catch {}
+    await document.fonts.ready
     const btn = document.querySelector('.ed-btn-share'); btn.click(); btn.click() // close + reopen = re-render
+  })
+  await p.waitForFunction(() => /·/.test(document.querySelector('.ed-share-me .where')?.textContent || ''), null, { timeout: 5000 }).catch(() => {})
+  const me = await p.evaluate(async () => {
+    await document.fonts.ready
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))) // layout settled
     const who = document.querySelector('.ed-share-me .who'), where = document.querySelector('.ed-share-me .where'), row = document.querySelector('.ed-share-me')
     const cut = (e) => e.scrollWidth > e.clientWidth + 1
-    return { who: who.textContent, whoCut: cut(who), keyCut: cut(where), over: row.scrollWidth > row.clientWidth + 1 }
+    // the widths and faces travel with the result: a recurrence then says why
+    const w = (e) => `${e.scrollWidth}/${e.clientWidth}`
+    return {
+      who: who.textContent, where: where.textContent, whoCut: cut(who), keyCut: cut(where), over: row.scrollWidth > row.clientWidth + 1,
+      why: `row ${w(row)}, name ${w(who)}, key ${w(where)} (scroll/client px); face ${getComputedStyle(who).fontFamily.split(',')[0]}; fonts ${document.fonts.status}`,
+    }
   })
-  ok(!me.whoCut && me.keyCut && !me.over, `your own People row keeps "${me.who}" whole and ellipses the key instead (name cut: ${me.whoCut}, key cut: ${me.keyCut})`)
+  ok(/·/.test(me.where), `the row shows a key fingerprint to give way ("${me.where}")`)
+  ok(!me.whoCut && me.keyCut && !me.over, `your own People row keeps "${me.who}" whole and ellipses the key instead (name cut: ${me.whoCut}, key cut: ${me.keyCut})${me.whoCut || !me.keyCut || me.over ? ' — ' + me.why : ''}`)
   ok(shareBottom <= 768, `the Share menu ends on a 768px laptop screen (bottom ${shareBottom})`)
   await p.setViewportSize({ width: 1440, height: 900 })
   await closeAll()

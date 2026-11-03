@@ -35,6 +35,15 @@ jobs:
         # fails; it never skips.
         working-directory: home/desktop/agent
         run: cargo test
+      - name: Desktop gate 1 against the conformance corpus
+        # home/desktop/gate1 is the desktop host's Rust port of kernel/src/gate1.ts
+        # (bento/connect K5): is this file's runtime a genuine Bento release? It
+        # must reach every declared verdict in home/fixtures/gate1/ (served,
+        # ambiguous, strict file:// and anti-rollback rows), read from the
+        # corpus each run. The signed history must verify and a one-byte change
+        # to it must not. A corpus file without a row fails.
+        working-directory: home/desktop/gate1
+        run: cargo test
       - name: Desktop agent TPM rigs (two software TPMs)
         # The Linux key store against a real TPM 2.0 (swtpm): the routine key
         # signs inside the TPM; the consent key and the sealed account key need
@@ -56,5 +65,42 @@ jobs:
         # no prompt once the keyring is unlocked.
         working-directory: home/desktop/agent
         run: |
-          sudo apt-get install -y -qq gnome-keyring dbus >/dev/null
+          sudo apt-get install -y -qq gnome-keyring dbus libsecret-1-dev >/dev/null
           ./keyring-rig.sh
+      - name: Desktop agent supply chain (cargo-deny, test-only crates absent)
+        # The SHIPPED agent's graph: a permissive-only licence allow-list,
+        # RustSec advisories, crates.io-only sources; and the test-only virtual
+        # authenticator (agent-testkit / OpenSK) must not be in it. Each check
+        # has a positive control (an LGPL crate, the testkit as a normal
+        # dependency) that must be refused.
+        working-directory: home/desktop/agent
+        run: |
+          cargo install -q cargo-deny --locked --version 0.18.9
+          ./supply-chain-check.sh
+      - name: Desktop agent PRF interop rig (virtual security key)
+        # One virtual FIDO2 key (Google OpenSK, Apache-2.0, test-only, over
+        # uhid), an independent WebAuthn client (Yubico python-fido2, BSD-2,
+        # hash-pinned) and the agent's libfido2 layer must produce the SAME PRF
+        # output for the same credential; two mutant builds (double hash, raw
+        # input hash) must each fail that comparison.
+        working-directory: home/desktop/agent
+        run: |
+          sudo apt-get install -y -qq libfido2-dev python3-cryptography python3-venv >/dev/null
+          # uhid (the virtual key's transport) moves between the runner kernels'
+          # packages: in linux-modules-extra on 6.17 Azure kernels, in the base
+          # linux-modules (always installed) on 7.0. Install -extra only when the
+          # running kernel has one; the rig's `modprobe uhid` still fails loudly
+          # if the module is missing.
+          if apt-cache show "linux-modules-extra-$(uname -r)" >/dev/null 2>&1; then
+            sudo apt-get install -y -qq "linux-modules-extra-$(uname -r)" >/dev/null
+          fi
+          # python-fido2 1.2.0, hash-pinned, in a venv: the rig runs Python
+          # isolated (-I), which ignores a user-site install. The venv sees
+          # apt's cryptography (system site) but always installs its own pinned
+          # fido2 (--ignore-installed), whatever else is on the machine.
+          printf 'fido2==1.2.0 --hash=sha256:f7c8ee62e359aa980a45773f9493965bb29ede1b237a9218169dbfe60c80e130\n' > "$RUNNER_TEMP/fido2-req.txt"
+          python3 -m venv --system-site-packages "$RUNNER_TEMP/rigvenv"
+          "$RUNNER_TEMP/rigvenv/bin/python" -m pip install --ignore-installed --no-deps --require-hashes -r "$RUNNER_TEMP/fido2-req.txt"
+          export BENTO_RIG_PYTHON="$RUNNER_TEMP/rigvenv/bin/python"
+          rustup toolchain install nightly-2026-06-03 --profile minimal
+          ./fido-rig.sh

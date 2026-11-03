@@ -88,3 +88,9 @@ jobs:
         # given, refuses a malformed value, and never emits a placeholder: the
         # platforms cache these files, so a wrong one is worse than none.
         run: node scripts/test-well-known.ts
+      - name: Release pins in Chromium
+        # bento/connect K4 (security §18/§36): this build's pins come from its
+        # own bytes, a real file its ⌘S saved, and it boots under them while its
+        # UI is driven, with only the loader's two designed refusals. What
+        # release.mjs requires before it signs, checked on every PR.
+        run: node scripts/derive-pins.mjs spaces/dist-single/Bento_Spaces.bento.html

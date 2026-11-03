@@ -12,6 +12,7 @@
 // (enumeration is fine here, resolution never enumerates; the absolute path is
 // learned, not derived) live there and are explained there.
 
+import { servedOpenEnabled, SETTING_KEY as SERVE_KEY } from './serve/gate.js'
 import { getGrants, putGrants, status } from './status.js'
 import { listDocuments, describe, newDocument, duplicate, rename, APPS } from './library.js'
 import { prefixFor } from './route.js'
@@ -19,6 +20,7 @@ import { learnPrefix, prefixes, recentOpened, GRANT, get, put } from './db.js'
 import { placeFolder, scanDisk, fileUrl, blockedFolders } from './place.js'
 import { listFileGrants, addFileGrant, dropFileGrant, handleIsPath, downloadsUnusable, setDownloadsUnusable } from './filegrant.js'
 import { startInFor } from './grantflow.js'
+import { loadSelf, publicView } from './id/keystore.js'
 import { checkForUpdate, pendingUpdate, isSelfManaged, autoCheckEnabled, setAutoCheck } from './update.js'
 import {
   CONFIG_KEY, ALLOWED_KEY, MODELS_KEY, BUILTIN_KEY, PROVIDERS, normalizeConfig, builtinAvailability,
@@ -865,6 +867,9 @@ function openDoc(d) {
 }
 
 // --------------------------------------------------------------------- menu
+// "Open with Bento ID" (serve/gate.js): an unpacked install AND the setting
+let serveOn = false
+servedOpenEnabled().then((on) => { serveOn = on })
 let menuEl = null
 const closeMenu = () => { menuEl?.remove(); menuEl = null }
 addEventListener('click', (e) => { if (menuEl && !menuEl.contains(e.target)) closeMenu() })
@@ -885,6 +890,7 @@ function openMenu(d, ev) {
   }
 
   if (d.path) item(t('menuOpen'), () => openDoc(d))
+  if (d.path && serveOn) item(t('menuOpenWithId'), () => chrome.tabs.create({ url: chrome.runtime.getURL(`src/serve/serve.html?path=${encodeURIComponent(d.path)}`) }))
   if (d.scanned && !d.granted) item(t('menuAddFolder'), () => addFolderFor(d))
   if (!d.scanned) item(t('menuDuplicate'), async () => {
     const made = await duplicate(d)
@@ -1662,6 +1668,43 @@ async function renderSettings() {
   tsel.addEventListener('change', () => { globalThis.bentoTheme?.set(tsel.value) })
   trow.appendChild(tsel)
   theme.appendChild(trow)
+
+  // --- Bento ID (bento/connect). Shown only in an UNPACKED install until the
+  // directory exists: setup works on this device, but a Bento ID can't yet be
+  // verified or used anywhere, and a store user shouldn't be offered a dead end.
+  let devInstall = false
+  try { devInstall = (await chrome.management.getSelf())?.installType === 'development' } catch { devInstall = false }
+  if (devInstall) {
+    const idSec = section(t('setIdTitle'), t('setIdSub'))
+    const self = publicView(await loadSelf().catch(() => null))
+    const p = document.createElement('p')
+    p.className = 'dim'
+    if (!self) {
+      p.textContent = t('setIdNone')
+      const btn = document.createElement('button')
+      btn.className = 'btn'
+      btn.textContent = t('setIdCreate')
+      btn.addEventListener('click', () => chrome.tabs.create({ url: chrome.runtime.getURL('src/setup.html') }))
+      idSec.append(p, btn)
+    } else {
+      p.textContent = t('setIdLocal')
+      idSec.append(p)
+    }
+    // the served-document preview: OFF unless turned on here
+    const serveRow = document.createElement('label')
+    serveRow.className = 'check'
+    const serveBox = document.createElement('input')
+    serveBox.type = 'checkbox'
+    serveBox.checked = (await chrome.storage.local.get(SERVE_KEY))[SERVE_KEY] === true
+    const serveNote = document.createElement('small')
+    serveNote.textContent = t('setIdServeNote')
+    serveRow.append(serveBox, document.createTextNode(` ${t('setIdServe')}`), serveNote)
+    serveBox.addEventListener('change', async () => {
+      await chrome.storage.local.set({ [SERVE_KEY]: serveBox.checked })
+      serveOn = await servedOpenEnabled()
+    })
+    idSec.append(serveRow)
+  }
 
   // --- the assistant: where a chat about a deck goes, and which decks may ask
   const asst = section(t('setAsstTitle'), t('setAsstSub'))

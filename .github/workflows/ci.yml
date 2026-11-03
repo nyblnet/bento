@@ -37,7 +37,10 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 20, not 15: the dash slice's release rehearsal now boots the release in
+    # Chromium to check its pins (K4), about two minutes on top of a 9–11
+    # minute job.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -63,6 +66,16 @@ jobs:
         # The encrypted-title, type preview and type font rigs import it from
         # the repo root. Until this step existed they skipped in every run.
         run: npm install --prefix "$GITHUB_WORKSPACE" --no-save --no-package-lock --no-audit --no-fund jsdom@25.0.1
+
+      - name: Install browser test runtime (the release rehearsal checks pins)
+        # release.mjs refuses to sign without checking the release's pins in a
+        # real browser (scripts/derive-pins.mjs, K4), and the dash slice runs
+        # that real pipeline as its release rehearsal. Pinned outside the app
+        # packages, as in the ci-<zone>.yml browser jobs.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
 
       - name: Rig steps fail on a skip
         # Puts scripts/ci on PATH, so every slice step below can declare

@@ -182,6 +182,27 @@ export function mintSheetName(doc: DashDoc, base: string): string {
 }
 
 /**
+ * The name a NEW sheet gets: "Sheet3" on a workbook of two, as Excel and
+ * Sheets name it — the number counts sheets, and skips any name already taken
+ * (compared without case, because a formula's `Sheet3!A1` does not see case).
+ *
+ * The same for both kinds. A new spreadsheet used to be called "Spreadsheet",
+ * which put the kind's word on the tab twice ("Spreadsheet SPREADSHEET") and
+ * said nothing about which sheet it was. `pattern` is the translated
+ * "Sheet{n}" ("Hoja{n}", "Tabelle{n}"), so it reads as the reader's own Excel.
+ */
+export function newSheetName(doc: DashDoc, pattern: string): string {
+  const taken = new Set(doc.sheets.map((s) => s.name.toLowerCase()))
+  for (let i = doc.sheets.length + 1; ; i++) {
+    // A pattern that lost its {n} (a translation that dropped it, or the
+    // x-pseudo audit locale, which accents the placeholder too) must still
+    // count — or every candidate is the same string and this never returns.
+    const n = pattern.includes('{n}') ? pattern.replace('{n}', String(i)) : `${pattern} ${i}`
+    if (!taken.has(n.toLowerCase())) return n
+  }
+}
+
+/**
  * An empty table sheet.
  *
  * `steps[0]` is the provenance record, and it is present even here: a dash file
@@ -376,7 +397,7 @@ export function stepSheet(doc: DashDoc, from: string, dir: -1 | 1): string | nul
  *  arrived, and a label that confidently states the wrong thing is worse than
  *  a vague one. */
 export function describeKind(kind: string): { chip: string; why: string } {
-  if (kind === 'pivot') return { chip: t('Pivot'), why: t('pivot table — open it from ＋ Pivot') }
+  if (kind === 'pivot') return { chip: t('Pivot'), why: t('pivot table — a summary of another sheet') }
   // "Canvas" is the WIRE word and does not change (PLATFORM §3). What a reader
   // sees is "Spreadsheet", the same way select() localises display labels while
   // values stay model words.
@@ -510,11 +531,11 @@ export function kindMarkSvg(kind: string): string {
 
 /** Every `data-act` in the top bar. */
 export type ActionId =
-  | 'formula' | 'chart' | 'viz3d' | 'pivot' | 'dashboard' | 'story'
+  | 'formula' | 'chart' | 'viz3d' | 'pivot' | 'dashboard' | 'story' | 'comment'
   | 'undo' | 'redo'
   | 'import' | 'export' | 'import-xlsx' | 'export-xlsx'
   | 'print'
-  | 'save' | 'about' | 'settings' | 'help'
+  | 'save' | 'about' | 'help'
 
 /**
  * `on: 'workbook'` means the action is not about the sheet on screen at all —
@@ -567,6 +588,14 @@ export const ACTIONS: Readonly<Record<ActionId, ActionRule>> = {
       ? t('A story step saves a dataset’s view — its filters, sorts and chart. A spreadsheet has none.')
       : t('A story step saves a dataset’s view — its filters, sorts and chart. This sheet has none.'),
   },
+  // A comment anchors to a dataset CELL (a column id and a row id, so it
+  // survives a sort). A spreadsheet's cells have no such identity yet.
+  comment: {
+    on: ['table'],
+    why: (k) => k === 'canvas'
+      ? t('A comment anchors to a dataset’s cell, which keeps it through a sort — this is a spreadsheet.')
+      : t('A comment anchors to a dataset’s cell, and this sheet has none.'),
+  },
   export: {
     on: ['table'],
     why: (k) => k === 'canvas'
@@ -589,10 +618,6 @@ export const ACTIONS: Readonly<Record<ActionId, ActionRule>> = {
   print: { on: 'workbook' },
   save: { on: 'workbook' },
   about: { on: 'workbook' },
-  // Language, appearance and the update check follow the READER and are kept in
-  // this browser — none of them is a fact about a sheet, so no sheet kind can
-  // make them inapplicable.
-  settings: { on: 'workbook' },
   help: { on: 'workbook' },
 }
 
@@ -636,6 +661,32 @@ export interface TabsHost {
   /** the `.dx-body` element — the strip is inserted directly after it, so it
    *  lands between the grid and the status bar without main.ts changing shape */
   body: HTMLElement
+  /** sheets shown somewhere OTHER than the grid — a pivot sheet. Optional, so
+   *  the strip still mounts (and refuses those tabs) without one. */
+  views?: SheetViews
+}
+
+/**
+ * A sheet the GRID cannot show and the app can — the pivot, drawn where the grid
+ * was. The strip asks this before falling back to "this build cannot open it",
+ * and highlights its tab while it is up.
+ *
+ * WHY A HOOK AND NOT `isOpenable`: `isOpenable` answers "can `grid.setSheet`
+ * take this", and a dozen callers (sheet deletion, ctrl+PgDn, the drag-to-open)
+ * rely on that meaning, because handing the grid a pivot throws. A pivot is
+ * opened by a different owner, so it gets a different door.
+ */
+export interface SheetViews {
+  /** the id of the sheet shown instead of the grid, or null */
+  showing(): string | null
+  /** can this sheet be opened by `open`? */
+  canOpen(sheet: Sheet): boolean
+  /** open it; false when it cannot be */
+  open(sheet: Sheet): boolean
+  /** back to the grid */
+  close(): void
+  /** set by the strip: call when `showing()` changes */
+  onChange?: () => void
 }
 
 export interface Tabs {
@@ -693,8 +744,11 @@ export function mountTabs(host: TabsHost): Tabs {
    * a repaint. The kind-agnostic accessor is the whole fix.
    */
   function showing(): string {
-    return grid.showingId()
+    return host.views?.showing() ?? grid.showingId()
   }
+
+  /** Does clicking this tab do anything? The grid's kinds, or a view's. */
+  const canShow = (s: Sheet): boolean => isOpenable(s) || !!host.views?.canOpen(s)
 
   function commit(p: Patch | Patch[]): void {
     if (ro()) return
@@ -768,7 +822,16 @@ export function mountTabs(host: TabsHost): Tabs {
       el.appendChild(w)
     }
 
-    if (!isOpenable(sheet)) {
+    if (!isOpenable(sheet) && host.views?.canOpen(sheet)) {
+      // Opens where the grid was — a sheet like any other, with its kind named
+      // in the chip because it has no drawn mark of its own.
+      const { chip, why } = describeKind(kind)
+      el.title = `${sheet.name} — ${why}`
+      const badge = document.createElement('span')
+      badge.className = 'dx-tab-kind'
+      badge.textContent = chip
+      el.appendChild(badge)
+    } else if (!isOpenable(sheet)) {
       // HONEST, NOT HIDDEN. The sheet is really in the file; a tab that is
       // missing reads as a sheet that was deleted. The chip says what it is at
       // a glance and the tooltip says why it will not open.
@@ -827,6 +890,19 @@ export function mountTabs(host: TabsHost): Tabs {
 
   // --- switching ---------------------------------------------------------------
 
+  // POINT MODE: a tab clicked while a formula is waiting for a reference puts
+  // `Sheet!A1` into the formula instead of switching sheets (grid.ts
+  // `pointToSheet`). CAPTURE, and the mousedown's default prevented, because
+  // the focus leaving the cell editor is a blur and a blur commits the edit.
+  strip.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return
+    const el = tabAt(e)
+    if (!el?.dataset.sheet || !grid.isPointing()) return
+    e.preventDefault()
+    e.stopPropagation()
+    if (grid.pointToSheet(el.dataset.sheet)) suppressClick = true
+  }, true)
+
   strip.addEventListener('click', (e) => {
     if (suppressClick) { suppressClick = false; return }
     const el = tabAt(e)
@@ -836,7 +912,20 @@ export function mountTabs(host: TabsHost): Tabs {
     // A tab this build cannot open explains itself rather than doing nothing:
     // the menu's first line is what the sheet IS, and the operations that DO
     // work on it (duplicate, delete, move) are right there under it.
-    if (!isOpenable(sheet)) { openMenu(el, sheet); return }
+    if (!isOpenable(sheet)) {
+      if (host.views?.open(sheet)) return
+      openMenu(el, sheet)
+      return
+    }
+    // Leaving a pivot for the grid. The grid may already be on this very sheet
+    // (it stays where it was under the pivot), and `setSheet` to the sheet it
+    // is showing changes nothing — so closing the view is the whole switch.
+    if (host.views?.showing()) {
+      host.views.close()
+      if (sheet.id !== grid.showingId()) grid.setSheet(sheet.id)
+      refresh(true)
+      return
+    }
     if (sheet.id === showing()) return
     grid.setSheet(sheet.id)
   })
@@ -1093,8 +1182,8 @@ export function mountTabs(host: TabsHost): Tabs {
     const doc = store.doc
     const id = mintSheetId(doc)
     const sheet = kind === 'canvas'
-      ? blankSpreadsheet(id, mintSheetName(doc, t('Spreadsheet')))
-      : blankSheet(id, mintSheetName(doc, t('Sheet')), new Date().toISOString())
+      ? blankSpreadsheet(id, newSheetName(doc, t('Sheet{n}')))
+      : blankSheet(id, newSheetName(doc, t('Sheet{n}')), new Date().toISOString())
     commit({ op: 'setSheet', id, sheet })
     grid.setSheet(id)
     refresh(true)
@@ -1145,13 +1234,16 @@ export function mountTabs(host: TabsHost): Tabs {
       // trap this file's own header names: `isTable` answers "has columns",
       // `isOpenable` answers "does clicking do anything", and only the second
       // one is what a navigation list is asking.
-      const open = isOpenable(sheet)
+      const open = canShow(sheet)
       const kind = String((sheet as { kind?: unknown }).kind ?? '')
       const label = (sheet.id === cur ? '✓ ' : '') + (sheet.name || t('(untitled sheet)')) +
         (isTable(sheet) ? '' : ` · ${describeKind(kind).chip}`)
       menuItem(menu, label, () => {
         if (!open) return
-        grid.setSheet(sheet.id)
+        if (!isOpenable(sheet)) { host.views?.open(sheet); return }
+        if (host.views?.showing()) host.views.close()
+        if (sheet.id !== grid.showingId()) grid.setSheet(sheet.id)
+        refresh(true)
       }, !open, open ? '' : describeKind(kind).why)
     }
   })
@@ -1220,7 +1312,11 @@ export function mountTabs(host: TabsHost): Tabs {
    * here too.
    */
   store.beforePatch((patches) => {
-    const cur = showing()
+    // THE GRID'S sheet, not `showing()`: this guards `grid.setSheet` against a
+    // sheet it cannot paint. While a pivot is up `showing()` is the pivot, and
+    // every edit to its fields is a `setSheet` to a non-grid kind — read as
+    // "doomed", it threw the reader onto the next tab on every drag.
+    const cur = grid.showingId()
     if (!cur) return
     // `isOpenable`, not `isTable`: a SPREADSHEET renders now, so a patch that
     // replaces the showing sheet with one is not a sheet the grid has to flee.
@@ -1245,6 +1341,7 @@ export function mountTabs(host: TabsHost): Tabs {
   window.addEventListener('resize', () => scrollActiveIntoView())
 
   store.on('doc', () => refresh())
+  if (host.views) host.views.onChange = () => refresh()
   // CHAINED, never replaced: panels.ts hangs its own rebuild off this callback
   // and main.ts's import path is what fires it.
   const announced = grid.onSheetChange

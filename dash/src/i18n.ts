@@ -26,6 +26,7 @@
 
 import { PACKED, PACKED_LOCALES } from './i18n/packed.ts'
 import { registerI18n } from '../../kernel/src/i18n.ts'
+import { locale } from '../../kernel/src/i18n.ts'
 import type { LocaleChoice } from '../../kernel/src/i18n.ts'
 
 /** Locales offered in the About picker (each label in its own language). */
@@ -38,6 +39,8 @@ const CHOICES: LocaleChoice[] = [
   { code: 'fr', label: 'Français' },
   { code: 'it', label: 'Italiano' },
   { code: 'de', label: 'Deutsch' },
+  // the pt catalog shipped (#416) and the picker never offered it
+  { code: 'pt', label: 'Português' },
 ]
 
 registerI18n({
@@ -60,6 +63,33 @@ registerI18n({
 })
 
 export const LOCALE_CHOICES = CHOICES
+
+/** True when `Intl` accepts `tag` — the one question every Intl caller needs
+ *  answered before it hands a locale over, because Intl THROWS on a bad one. */
+export function isIntlTag(tag: string | undefined | null): tag is string {
+  if (!tag || tag === 'x-pseudo') return false
+  try { return Intl.getCanonicalLocales(tag).length > 0 } catch { return false }
+}
+
+/**
+ * The locale to hand to `Intl` — never the raw `locale()`.
+ *
+ * `locale()` is whatever 'bento-lang' says, and that key is SHARED by every
+ * Bento file on the origin (every file:// page is one origin). A malformed
+ * value written by anything — an older build, a hand-edited devtools session,
+ * the `x-pseudo` audit locale, which is a private-use tag `Intl` rejects —
+ * used to reach `new Intl.NumberFormat` and throw a RangeError on the first
+ * formatted cell, which stopped boot: "This file could not start". The chrome
+ * copes with an unknown tag already (t() falls back to English); only `Intl`
+ * cannot. So: the chosen locale if `Intl` accepts it, else the browser's, else
+ * English.
+ */
+export function intlLocale(): string {
+  const chosen = locale()
+  if (isIntlTag(chosen)) return chosen
+  const nav = typeof navigator !== 'undefined' ? navigator.language : undefined
+  return isIntlTag(nav) ? nav : 'en'
+}
 
 export { t, locale, setLocale, i18nApi, localeChoices } from '../../kernel/src/i18n.ts'
 export type { Catalog } from '../../kernel/src/i18n.ts'

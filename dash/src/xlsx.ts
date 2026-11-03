@@ -71,6 +71,8 @@ import {
   nameText, translateCellFormula, validateDefinedName, type NameProblem,
 } from './cellformula.ts'
 import { FUNCTIONS } from './formula.ts'
+import { t } from './i18n.ts'
+import { TYPE_LABEL } from './format.ts'
 import { readCell } from './store.ts'
 import type {
   CellOverride, Column, ColumnData, ColumnType, DashDoc, DataRule, DefinedName,
@@ -804,7 +806,7 @@ function toDataRule(
   if (v.type === 'list') {
     const list = inlineList(v.f1)
     if (!list?.length) {
-      return { rule: null, lost: `its list of values is a reference (${v.f1 ?? '—'}) rather than a written-out list, and dash stores the values themselves` }
+      return { rule: null, lost: t('its list of values points at other cells ({ref}), and dash needs the values written out', { ref: v.f1 ?? '—' }) }
     }
     return { rule: { kind: 'list', list, ...(v.hideDropdown ? { noDropdown: true } : {}), ...base } }
   }
@@ -830,15 +832,15 @@ function toDataRule(
     case 'greaterThan':
       return {
         rule: { kind, ...(a !== undefined ? { min: a } : {}), ...base },
-        lost: `its "greater than ${v.f1}" test became "${v.f1} or more" — dash's bounds are inclusive, so the boundary value itself is now allowed`,
+        lost: t('“greater than {v}” became “{v} or more”, because dash’s limits include the boundary value', { v: v.f1 ?? '' }),
       }
     case 'lessThan':
       return {
         rule: { kind, ...(a !== undefined ? { max: a } : {}), ...base },
-        lost: `its "less than ${v.f1}" test became "${v.f1} or less" — dash's bounds are inclusive, so the boundary value itself is now allowed`,
+        lost: t('“less than {v}” became “{v} or less”, because dash’s limits include the boundary value', { v: v.f1 ?? '' }),
       }
     default:
-      return { rule: null, lost: `dash has no "${v.operator}" test` }
+      return { rule: null, lost: t('dash has no “{op}” test', { op: v.operator }) }
   }
 }
 
@@ -858,7 +860,10 @@ function validationsByColumn(
     if (!rule) {
       findings.push({
         code: 'data-validation', sheet: sheetName,
-        message: `A data validation rule on ${v.sqref} of "${sheetName}" was not imported: ${lost ?? `dash has no equivalent of its "${v.type}" test`}. The cells keep their values; nothing on them is checked.`,
+        message: t('A data validation rule on {range} of “{sheet}” was not imported: {why}. The cells keep their values, but nothing checks them.', {
+          range: v.sqref, sheet: sheetName,
+          why: lost ?? t('dash has no equivalent of its “{type}” test', { type: v.type }),
+        }),
       })
       continue
     }
@@ -871,11 +876,11 @@ function validationsByColumn(
     }
     if (widened || lost) {
       const parts: string[] = []
-      if (widened) parts.push(`it covered ${v.sqref} and now applies to the whole column, because a dash dataset keeps its rules on the column that owns the type`)
+      if (widened) parts.push(t('it covered {range} and now applies to the whole column, because in dash a rule belongs to the column', { range: v.sqref }))
       if (lost) parts.push(lost)
       findings.push({
         code: 'data-validation', sheet: sheetName,
-        message: `A data validation rule on "${sheetName}" was imported with a change: ${parts.join('; ')}.`,
+        message: t('A data validation rule on “{sheet}” changed on the way in: {why}.', { sheet: sheetName, why: parts.join('; ') }),
       })
     }
   }
@@ -1159,10 +1164,11 @@ interface NameImport {
   live: Set<string>
 }
 
+/** Why a name was refused — English, translated where it is used. */
 const NAME_REFUSED: Record<NameProblem, string> = {
   empty: 'it has no name',
-  shape: 'its spelling is not one a formula can mention (letters, digits, "_" and "." only, starting with a letter)',
-  cellshaped: 'it is spelled like a cell address, so a formula would read the cell and never the name',
+  shape: 'its spelling can’t be used in a formula (letters, digits, “_” and “.” only, starting with a letter)',
+  cellshaped: 'it is spelled like a cell address, so a formula would read the cell instead',
   taken: 'another name is already spelled that way',
 }
 
@@ -1188,22 +1194,22 @@ function readDefinedNames(wbXml: string, findings: XlsxFinding[]): NameImport {
     const drop = (why: string): void => {
       findings.push({
         code: 'defined-name',
-        message: `The name "${raw}" was not imported: ${why}. Any formula that used it keeps the value Excel last calculated, with the formula text beside it.`,
+        message: t('The name “{name}” was not imported: {why}. Formulas that used it show the value Excel last calculated, with the formula text kept beside it.', { name: raw, why }),
       })
     }
     const problem = validateDefinedName(raw, names)
-    if (problem) { drop(NAME_REFUSED[problem]); continue }
-    if (!body) { drop('it defines nothing'); continue }
+    if (problem) { drop(t(NAME_REFUSED[problem])); continue }
+    if (!body) { drop(t('it defines nothing')); continue }
 
     let def: DefinedName | undefined
     if (NUM_LITERAL.test(body)) def = { v: Number(body) }
     else if (STR_LITERAL.test(body)) def = { v: body.slice(1, -1).replace(/""/g, '"') }
     else if (QUALIFIED_REF.test(body)) def = { ref: body }
     else if (BARE_REF.test(body)) {
-      drop(`it points at ${body} without saying which sheet, and a dash name means one thing across the whole workbook`)
+      drop(t('it points at {ref} without naming a sheet, and a dash name has to mean one thing across the whole workbook', { ref: body }))
       continue
     } else {
-      drop(`it is defined as "${body}", which is not a number, a piece of text, or a single range`)
+      drop(t('it is defined as “{def}”, which is not a number, a piece of text or a single range', { def: body }))
       continue
     }
     names[raw] = def
@@ -1451,9 +1457,16 @@ export async function importXlsx(
     const listed = Object.keys(nameImport.names)
     const total = listed.length + nameFindings.length
     if (total) {
+      const list = `${listed.slice(0, 4).join(', ')}${listed.length > 4 ? ', …' : ''}`
       findings.push({
         code: 'defined-name',
-        message: `This workbook defines ${total} name${total === 1 ? '' : 's'}${listed.length ? ` (${listed.slice(0, 4).join(', ')}${listed.length > 4 ? ', …' : ''})` : ''}, which this import does not carry. A formula that used one shows the value Excel last calculated, with the formula text kept beside it.`,
+        message: total === 1
+          ? (listed.length
+            ? t('This workbook defines a name ({list}) that this import doesn’t bring in. Formulas that used it show the value Excel last calculated, with the formula text kept beside it.', { list })
+            : t('This workbook defines a name that this import doesn’t bring in. Formulas that used it show the value Excel last calculated, with the formula text kept beside it.'))
+          : (listed.length
+            ? t('This workbook defines {n} names ({list}) that this import doesn’t bring in. Formulas that used them show the value Excel last calculated, with the formula text kept beside it.', { n: total, list })
+            : t('This workbook defines {n} names that this import doesn’t bring in. Formulas that used them show the value Excel last calculated, with the formula text kept beside it.', { n: total })),
       })
     }
   }
@@ -1464,7 +1477,7 @@ export async function importXlsx(
   if (epoch1904) {
     findings.push({
       code: 'date-system',
-      message: 'This workbook uses the 1904 date system (Mac Excel). Dates were converted from that epoch — read on the 1900 system they would all be four years and a day early.',
+      message: t('This workbook uses the 1904 date system (from Excel for Mac). Its dates were converted, so they read correctly here.'),
     })
   }
 
@@ -1479,24 +1492,24 @@ export async function importXlsx(
     const state = attr(s.a, 'state') ?? ''
     const rel = rels.get(rid)
     if (!rel) {
-      findings.push({ code: 'sheet-skipped', sheet: name, message: `"${name}" could not be located in the package and was not imported.` })
+      findings.push({ code: 'sheet-skipped', sheet: name, message: t('“{sheet}” couldn’t be found inside the file, so it was not imported.', { sheet: name }) })
       continue
     }
     const partPath = resolvePart(wbPath, rel.target)
     const xml = text(partPath)
     if (xml === undefined) {
-      findings.push({ code: 'sheet-skipped', sheet: name, message: `"${name}" is listed in the workbook but its data is missing from the file.` })
+      findings.push({ code: 'sheet-skipped', sheet: name, message: t('“{sheet}” is listed in the workbook, but its data is missing from the file.', { sheet: name }) })
       continue
     }
     // A chartsheet has no `sheetData` at all.
     if (rel.type.endsWith('/chartsheet') || !/<(?:[A-Za-z0-9_.-]+:)?sheetData[\s>]/.test(xml)) {
-      findings.push({ code: 'chart-dropped', sheet: name, message: `"${name}" is a chart sheet, which has no data of its own; it was not imported.` })
+      findings.push({ code: 'chart-dropped', sheet: name, message: t('“{sheet}” is a chart sheet with no data of its own, so it was not imported.', { sheet: name }) })
       continue
     }
     if (state === 'hidden' || state === 'veryHidden') {
       findings.push({
         code: 'hidden-sheet', sheet: name,
-        message: `"${name}" was hidden in Excel. It was imported anyway — hiding a sheet is not deleting it, and dropping data silently is the worse mistake.`,
+        message: t('“{sheet}” was hidden in Excel. It was imported anyway, because hiding a sheet doesn’t delete it.', { sheet: name }),
       })
     }
     n++
@@ -1564,7 +1577,13 @@ function condense(findings: XlsxFinding[]): XlsxFinding[] {
   for (const [, { n, f }] of extra) {
     out.push({
       code: f.code, sheet: f.sheet,
-      message: `…and ${n} more column${n === 1 ? '' : 's'}${f.sheet ? ` in "${f.sheet}"` : ''} with the same finding.`,
+      message: f.sheet
+        ? (n === 1
+          ? t('…and 1 more column in “{sheet}” with the same note.', { sheet: f.sheet })
+          : t('…and {n} more columns in “{sheet}” with the same note.', { n, sheet: f.sheet }))
+        : (n === 1
+          ? t('…and 1 more column with the same note.')
+          : t('…and {n} more columns with the same note.', { n })),
     })
   }
   return out
@@ -1591,14 +1610,18 @@ function readOneSheet(
   if (ctx.tables.length > 1) {
     findings.push({
       code: 'totals-row', sheet: name,
-      message: `"${name}" carries ${ctx.tables.length} Excel tables. A dash sheet is ONE dataset, so the first was read as this sheet and the others arrived as ordinary rows beside it — including any totals rows they had.`,
+      message: t('“{sheet}” holds {n} Excel tables. A dash sheet holds one, so the first became this sheet and the others came in as ordinary rows beside it, totals rows included.', { sheet: name, n: ctx.tables.length }),
     })
   }
 
   if (merges.length) {
     findings.push({
       code: 'merged-cells', sheet: name,
-      message: `"${name}" has ${merges.length} merged range${merges.length === 1 ? '' : 's'} (${merges.slice(0, 3).join(', ')}${merges.length > 3 ? ', …' : ''}). A merged range holds ONE value, in its top-left cell, and that is where it stayed — filling every cell of the range would turn one spanning heading into a row of repeated values and one total into several.`,
+      message: merges.length === 1
+        ? t('“{sheet}” has a merged range ({list}). Its value stays in the top-left cell only, so a heading isn’t repeated across every cell it spanned.', { sheet: name, list: merges[0] })
+        : t('“{sheet}” has {n} merged ranges ({list}). Each keeps its value in its top-left cell only, so a heading isn’t repeated across every cell it spanned.', {
+          sheet: name, n: merges.length, list: `${merges.slice(0, 3).join(', ')}${merges.length > 3 ? ', …' : ''}`,
+        }),
     })
   }
 
@@ -1643,13 +1666,15 @@ function readOneSheet(
     const at = firstRow + 2
     findings.push({
       code: 'header-row', sheet: name,
-      message: `Row ${firstRow + 1} of "${name}" is a title spanning ${title.merge} — one value across several columns, which is not a header. Its header is row ${at}, and that is the row the columns were named from; the title ("${title.text}") is not one of them and is not in the data either. If that is wrong, re-import saying the header is row ${firstRow + 1}.`,
+      message: t('Row {row} of “{sheet}” is a title spanning {range}, so the column names were taken from row {header} instead. The title (“{title}”) is not in the data. If that’s wrong, import again and say the header is row {row}.', {
+        row: firstRow + 1, sheet: name, range: title.merge, header: at, title: title.text,
+      }),
     })
   }
   if (bodyStart === 0 && opts.header === undefined) {
     findings.push({
       code: 'no-header', sheet: name,
-      message: `"${name}" does not appear to start with a header row (its first row holds values, not labels), so the columns are named by position. Rename them, or re-import telling dash there is a header.`,
+      message: t('“{sheet}” doesn’t seem to start with a header row, so its columns are named by position. Rename them, or import again and say there is a header.', { sheet: name }),
     })
   } else if (!head.sure && !told) {
     // The undecidable case, and it costs a ROW OF DATA if we are wrong. Every
@@ -1658,7 +1683,7 @@ function readOneSheet(
     // was resolved rather than to resolve it quietly.
     findings.push({
       code: 'no-header', sheet: name,
-      message: `Every column in "${name}" is text, so its first row is indistinguishable from its data. It was taken as a header (which is what it usually is) — if those were values, re-import without one, because a wrong guess here costs a row.`,
+      message: t('Every column in “{sheet}” is text, so its first row could be a header or data. It was taken as the header — if it was data, import again without a header.', { sheet: name }),
     })
   }
 
@@ -1667,7 +1692,9 @@ function readOneSheet(
   if (leadingBlank > 0 && leadingBlank < width) {
     findings.push({
       code: 'leading-blanks', sheet: name,
-      message: `"${name}" starts at column ${colToLetters(leadingBlank)}. The ${leadingBlank} empty column${leadingBlank === 1 ? '' : 's'} before it ${leadingBlank === 1 ? 'was' : 'were'} kept, because every A1 formula in the sheet is written against those positions.`,
+      message: leadingBlank === 1
+        ? t('“{sheet}” starts at column {col}. The empty column before it was kept, so its formulas still point at the right cells.', { sheet: name, col: colToLetters(leadingBlank) })
+        : t('“{sheet}” starts at column {col}. The {n} empty columns before it were kept, so its formulas still point at the right cells.', { sheet: name, col: colToLetters(leadingBlank), n: leadingBlank }),
     })
   }
 
@@ -1713,7 +1740,7 @@ function readOneSheet(
       while (ids.has(`${colId}-${k}`)) k++
       findings.push({
         code: 'duplicate-header', sheet: name, column: rawName,
-        message: `"${name}" has two columns called "${rawName}"; the second is kept separately.`,
+        message: t('“{sheet}” has two columns called “{column}”; the second is kept as a separate column.', { sheet: name, column: rawName }),
       })
       colId = `${colId}-${k}`
     }
@@ -1721,7 +1748,7 @@ function readOneSheet(
     if (bodyStart > 0 && blank(rawName)) {
       findings.push({
         code: 'empty-header', sheet: name, column: colId,
-        message: `Column ${colToLetters(ci)} of "${name}" has no name in the header row.`,
+        message: t('Column {col} of “{sheet}” has no name in the header row.', { col: colToLetters(ci), sheet: name }),
       })
     }
 
@@ -1730,7 +1757,7 @@ function readOneSheet(
     if (plan.ambiguous) {
       findings.push({
         code: 'mixed-types', sheet: name, column: rawName || colId,
-        message: `"${rawName || colId}" mixes kinds of value (${plan.ambiguous}). Imported as text so nothing is lost — set the column type once you have decided what it is.`,
+        message: t('“{column}” holds more than one kind of value, so it came in as text and nothing was lost. Set its type once you’ve decided what it is.', { column: rawName || colId }),
       })
     }
 
@@ -1793,7 +1820,9 @@ function readOneSheet(
     if (lostHere) {
       findings.push({
         code: 'coerce-failed', sheet: name, column: rawName || colId,
-        message: `${lostHere} value${lostHere === 1 ? '' : 's'} in "${rawName || colId}" could not be read as ${plan.type} and ${lostHere === 1 ? 'is' : 'are'} blank.`,
+        message: lostHere === 1
+          ? t('1 value in “{column}” couldn’t be read as {type} and was left blank.', { column: rawName || colId, type: t(TYPE_LABEL[plan.type]) })
+          : t('{n} values in “{column}” couldn’t be read as {type} and were left blank.', { n: lostHere, column: rawName || colId, type: t(TYPE_LABEL[plan.type]) }),
       })
     }
 
@@ -1812,30 +1841,32 @@ function readOneSheet(
   if (leapSeen) {
     findings.push({
       code: 'date-1900-bug', sheet: name,
-      message: `"${name}" contains serial 60, which Excel displays as 29 February 1900 — a date that does not exist (the 1900 system inherited Lotus 1-2-3's leap-year bug). It was kept as written rather than quietly moved a day.`,
+      message: t('“{sheet}” contains 29 February 1900, a date Excel shows but that never existed. It was kept as written rather than moved a day.', { sheet: name }),
     })
   }
   if (timeSeen) {
     findings.push({
       code: 'time-of-day', sheet: name,
-      message: `"${name}" has dates carrying a time of day; they were kept as full ISO date-times so the time is not thrown away.`,
+      message: t('Some dates in “{sheet}” include a time of day; the time was kept.', { sheet: name }),
     })
   }
   if (formatSkipped) {
     findings.push({
       code: 'cell-format', sheet: name,
-      message: `${formatted} formatted cells in "${name}" kept their bold, colour, background and borders; ${formatSkipped} more did not. dash's per-cell appearance is a sparse overlay, and a workbook that styles every cell of a long sheet would put an entry in it for every one of them — which costs more in file size than the styling is worth. The values are all there; the paint is not.`,
+      message: t('{n} formatted cells in “{sheet}” kept their bold, colour, background and borders; {skipped} more did not, because styling every cell of a long sheet would make the file much larger. All the values are there.', { n: formatted, sheet: name, skipped: formatSkipped }),
     })
   }
   if (notLive) {
     const fns = [...missingFns].slice(0, 4).join(', ')
     const nms = [...missingNames].slice(0, 4).join(', ')
-    const why = fns ? `dash has no ${fns} yet`
-      : nms ? `they use the name${missingNames.size === 1 ? '' : 's'} ${nms}, which dash could not follow`
-        : 'they point at other sheets or external data'
+    const why = fns ? t('dash doesn’t have {fns} yet', { fns })
+      : nms ? t('dash couldn’t follow {names}', { names: nms })
+        : t('references to other sheets or outside data')
     findings.push({
       code: 'formula-not-live', sheet: name,
-      message: `${notLive} formula${notLive === 1 ? '' : 's'} in "${name}" could not be made live (${why}). The values Excel last calculated are shown, and the formula text is kept with each cell so nothing is lost — a live formula dash cannot evaluate would replace real numbers with #NAME?.`,
+      message: notLive === 1
+        ? t('1 formula in “{sheet}” couldn’t be made live ({why}). It shows the value Excel last calculated, and its formula text is kept.', { sheet: name, why })
+        : t('{n} formulas in “{sheet}” couldn’t be made live ({why}). They show the values Excel last calculated, and their formula text is kept.', { n: notLive, sheet: name, why }),
     })
   }
 
@@ -1855,14 +1886,24 @@ function readOneSheet(
     }
     const kept = Object.keys(totals).length
     const label = [...table.labels.values()][0]
+    // One sentence per fact, in the reader's terms: what became of the row,
+    // then anything that did not survive the trip.
     const parts = [
-      `${table.name}'s totals row left the data and became ${kept ? `${kept} column total${kept === 1 ? '' : 's'}` : 'nothing'}`,
+      kept === 0
+        ? t('The totals row of {table} was taken out of the data, so it won’t sort or filter with it.', { table: table.name })
+        : kept === 1
+          ? t('The totals row of {table} became a column total, so it won’t sort or filter with the data.', { table: table.name })
+          : t('The totals row of {table} became {n} column totals, so it won’t sort or filter with the data.', { table: table.name, n: kept }),
     ]
-    if (label) parts.push(`its "${label}" label is not carried — dash labels its own totals row`)
-    if (lostTotals.length) parts.push(`and dash has no total for ${lostTotals.join(', ')}, so ${lostTotals.length === 1 ? 'that column has' : 'those columns have'} none`)
+    if (label) parts.push(t('Its “{label}” label isn’t carried — dash labels its own totals row.', { label }))
+    if (lostTotals.length) {
+      parts.push(lostTotals.length === 1
+        ? t('There is no equivalent here for {list}, so that total was left off.', { list: lostTotals[0] })
+        : t('There is no equivalent here for {list}, so those totals were left off.', { list: lostTotals.join(', ') }))
+    }
     findings.push({
       code: 'totals-row', sheet: name,
-      message: `${parts.join('; ')}. A totals row imported as an ordinary row sorts into the middle of the data, is caught by filters and is counted by aggregates, which is why it is a property here instead.`,
+      message: parts.join(' '),
     })
   }
 
@@ -2291,7 +2332,7 @@ export async function exportXlsx(
 
   const tables = doc.sheets.filter((s): s is TableSheet => s.kind === 'table')
   if (!tables.length) {
-    findings.push({ code: 'sheet-skipped', message: 'This workbook has no table sheets to export.' })
+    findings.push({ code: 'sheet-skipped', message: t('This workbook has no datasets to export.') })
   }
 
   const sheetXml: string[] = []
@@ -2303,7 +2344,7 @@ export async function exportXlsx(
     if (name !== sheet.name) {
       findings.push({
         code: 'renamed-sheet', sheet: sheet.name,
-        message: `"${sheet.name}" was renamed to "${name}": Excel rejects a sheet name over 31 characters or containing []:*?/\\, and refuses to open the file rather than warning.`,
+        message: t('“{sheet}” was renamed “{name}” in the export, because Excel won’t open a file whose sheet name is longer than 31 characters or contains []:*?/\\.', { sheet: sheet.name, name }),
       })
     }
     names.push(name)
@@ -2466,12 +2507,12 @@ function writeSheet(
     if (col.formula && !computed?.has(col.id)) {
       findings.push({
         code: 'formula-column', sheet: sheet.name, column: col.name,
-        message: `"${col.name}" is a computed column (${col.formula}) and its values were not available to the export, so it is empty. Excel has no equivalent of a whole-column expression, so the numbers are what travels — export from the editor, where they have been calculated.`,
+        message: t('“{column}” is a formula column ({formula}) and its values weren’t available, so it was exported empty. Excel has no whole-column formulas — export from the editor, where the values are calculated.', { column: col.name, formula: col.formula }),
       })
     } else if (col.formula) {
       findings.push({
         code: 'formula-column', sheet: sheet.name, column: col.name,
-        message: `"${col.name}" is a computed column (${col.formula}). Excel has no whole-column expression, so its VALUES were exported rather than a per-row translation — a translation that is right most of the time is worse than numbers that are right all of it.`,
+        message: t('“{column}” is a formula column ({formula}). Excel has no whole-column formulas, so its values were exported instead.', { column: col.name, formula: col.formula }),
       })
     }
   }
@@ -2592,7 +2633,7 @@ function tablePart(
   if (names.some((n) => !n) || unique.size !== names.length) {
     findings.push({
       code: 'totals-row', sheet: sheet.name,
-      message: `The totals row of "${sheet.name}" was written as SUM() formulas rather than as an Excel table, because Excel requires a table's column headings to be present and all different and this sheet's are not. The numbers are the same; re-importing the file will read the total as an ordinary row.`,
+      message: t('The totals row of “{sheet}” was written as SUM() formulas instead of an Excel table, because Excel needs every column heading filled in and different. The numbers are the same; importing the file again will read the totals as an ordinary row.', { sheet: sheet.name }),
     })
     return undefined
   }
@@ -2648,7 +2689,7 @@ function writeValidations(
       if (body.length + 2 > 255) {
         findings.push({
           code: 'data-validation', sheet: sheetName, column: col.name,
-          message: `"${col.name}" has a list rule with ${(rule.list ?? []).length} values, which is longer than the 255 characters Excel allows in a written-out list. It was not exported: a truncated list would have refused values the rule allows.`,
+          message: t('“{column}” has a list rule of {n} values — longer than the 255 characters Excel allows — so it was not exported rather than cut short.', { column: col.name, n: (rule.list ?? []).length }),
         })
         return
       }
@@ -2685,7 +2726,11 @@ function writeValidations(
     if (lo === null && hi === null) {
       findings.push({
         code: 'data-validation', sheet: sheetName, column: col.name,
-        message: `"${col.name}" must be a ${rule.kind === 'date' ? 'date' : rule.kind === 'number' ? 'number' : 'text length'} with no upper or lower limit. Excel's data validation always compares against a value, so this rule has no equivalent there and was not exported.`,
+        message: rule.kind === 'date'
+          ? t('“{column}” must be a date, with no lower or upper limit. Excel’s data validation always needs a limit, so this rule was not exported.', { column: col.name })
+          : rule.kind === 'number'
+            ? t('“{column}” must be a number, with no lower or upper limit. Excel’s data validation always needs a limit, so this rule was not exported.', { column: col.name })
+            : t('“{column}” has a text-length rule with no lower or upper limit. Excel’s data validation always needs a limit, so this rule was not exported.', { column: col.name }),
       })
       return
     }

@@ -48,11 +48,23 @@ matters. Neither needs the signing key.
 
    The `CNAME` file in the site sets the custom domain; after the certificate
    is issued, tick *Enforce HTTPS* (mandatory for `.page` anyway).
-3. **DNS at the registrar** for the apex `bento.page`:
+3. **A browser for the pins gate.** `release.mjs` won't sign until it has
+   checked the release's pins in a real browser (below), so the release machine
+   needs Playwright and Chromium, pinned outside the app packages as CI does:
+
+   ```sh
+   npm install --prefix ~/.bento/browser --no-package-lock playwright@1.61.1
+   ~/.bento/browser/node_modules/.bin/playwright install chromium
+   export PLAYWRIGHT_MODULE=~/.bento/browser/node_modules/playwright/index.mjs
+   ```
+
+   Or point `CHROME_PATH` at an installed Chrome. Without either, the release
+   stops before anything is signed. There's no unchecked path.
+4. **DNS at the registrar** for the apex `bento.page`:
    - `A` records → `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`
    - `AAAA` records → `2606:50c0:8000::153`, `2606:50c0:8001::153`, `2606:50c0:8002::153`, `2606:50c0:8003::153`
    - Optional `www` `CNAME` → `<user>.github.io`
-4. **Verify the domain on GitHub** (Settings → Pages → Verified domains: add
+5. **Verify the domain on GitHub** (Settings → Pages → Verified domains: add
    the `_github-pages-challenge-<user>` TXT record it gives you). This
    prevents Pages domain takeover if the site is ever unconfigured.
 
@@ -142,6 +154,25 @@ matters. Neither needs the signing key.
    manifest, language packs + their signed index). `--app` defaults to
    `slides`. It finishes by printing the exact tag-push and publish commands
    for the app it just built.
+
+   Before it signs, it derives the release's **pins** from the release's own
+   bytes (`scripts/derive-pins.mjs`): the hashes of its code blocks, its loader
+   and its preview remover, taken from a file the release itself saved through
+   ⌘S. It then boots the release under the CSP a host will serve it with, while
+   driving its UI. Any mismatch, or any script refusal beyond the loader's two
+   designed fallbacks, stops the release. The pins go into the manifest
+   (additively: shipped shells ignore them) and into the app's signed
+   **release history**, `releases/<app>/history.json`. That cumulative list
+   lets a host verify a file saved by ANY genuine release, not only the newest.
+   The history only grows: `sign-history.mjs` verifies the published one, adds
+   this release, and refuses an older version or a changed entry.
+
+   The FIRST history is backfilled from every earlier signed release, found in
+   the history of the `../bento-site` clone (`scripts/backfill-history.mjs`).
+   Each shell is checked against its own signed manifest before it's pinned.
+   That needs the clone's FULL history, so don't use a shallow clone. Releases
+   from before the runtime shipped compressed (slides < 0.7.0) can't be pinned,
+   and stay unknown to hosts.
 
    It also stamps `site/.bento-release.json` with the app and version it
    staged. `publish-site.mjs` reads that to name the tag, the release title and
@@ -280,7 +311,10 @@ throwaway half. It asserts the positives (gate passes, manifest shape, the pin
 is the sha256 of the staged bytes, a correctly signed manifest is offered) and,
 more importantly, the refusals: a tampered payload, a manifest validly signed
 for a **different app**, a downgrade replay, a shell with one bit flipped, and
-a shell whose doc block closes its own script. CI runs it for dash on every PR.
+a shell whose doc block closes its own script. It also checks that the
+manifest carries the pins and that the signed history holds this release with
+the same pins. CI runs it for dash on every PR, in the required `validate`
+job, which installs Chromium for it.
 
 This is as close to a release as anything can get without the key. What it
 cannot cover is the live channel — step 7 above is still the last word.

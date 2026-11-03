@@ -153,7 +153,7 @@ Practical rules for a small team running many agents:
   append to it (date, decision, why, owner). Decisions live here, not in any
   one tool's chat history.
 - `docs/PLATFORM.md` — the invariants; change only with maintainer sign-off.
-- `AGENTS.md` / `CLAUDE.md` — behavioral contract + deep architecture.
+- `AGENTS.md` / `CLAUDE.md` / `slides/CLAUDE.md` — behavioral contract + deep architecture.
 - Work assignment lives with the maintainer (issues/task list); an agent that
   finds adjacent-but-out-of-scope work files it as a note or issue instead of
   expanding its own PR.

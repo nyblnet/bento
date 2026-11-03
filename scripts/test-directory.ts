@@ -123,7 +123,7 @@ async function api(method: string, path: string, body?: unknown, ip = IP) {
 
 async function person(email: string, name?: string) {
   const k = await signer()
-  return { email, k, kx: null as string | null, name } // the kx slot stays EMPTY until §6b is ruled
+  return { email, k, kx: (await kxPub()) as string | null, name } // mode C: every bind. carries the account's recovery kx
 }
 async function stmtFor(p: Awaited<ReturnType<typeof person>>, seq = 1, prev?: string, life = 13 * MONTH) {
   const text = bindText({ email: p.email, key: p.k.pub, kx: p.kx, name: p.name, seq, prev, created: now, expires: Math.floor(now + life) })
@@ -206,8 +206,10 @@ const alice = await person('alice@example.com', 'Alice')
   const p = await person('carol@example.com')
   const sameKx = bindText({ email: p.email, key: p.k.pub, kx: p.k.pub, seq: 1, created: now, expires: now + MONTH })
   ok((await api('POST', '/v1/bind/start', { stmt: sameKx, sig: await p.k.sign(sameKx) })).status === 400, 'kx == signing key → refused')
-  const kxFilled = bindText({ email: p.email, key: p.k.pub, kx: await kxPub(), seq: 1, created: now, expires: now + MONTH })
-  ok((await api('POST', '/v1/bind/start', { stmt: kxFilled, sig: await p.k.sign(kxFilled) })).status === 400, 'a filled kx slot → refused while the placement is unruled (§6b)')
+  const kxEmpty = bindText({ email: p.email, key: p.k.pub, kx: null, seq: 1, created: now, expires: now + MONTH })
+  ok((await api('POST', '/v1/bind/start', { stmt: kxEmpty, sig: await p.k.sign(kxEmpty) })).status === 400, 'an EMPTY kx slot → refused (mode C requires the recovery kx)')
+  const kxOk = bindText({ email: 'kxctl@example.com', key: p.k.pub, kx: await kxPub(), seq: 1, created: now, expires: now + MONTH })
+  ok((await api('POST', '/v1/bind/start', { stmt: kxOk, sig: await p.k.sign(kxOk) }, freshIp())).status === 202, 'CONTROL: the same statement with its kx filled → accepted')
   const g0 = await stmtFor(p)
   const raw = new Uint8Array(await crypto.subtle.sign(SIG, p.k.kp.privateKey, new TextEncoder().encode(g0.text)))
   const N_ = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n
@@ -756,12 +758,15 @@ for (const r of V.addresses) {
   const saved = now
   let n = 0
   now = V.now
-  for (const v of V.statements.filter((x: { type: string; kxMode?: string }) => x.type === 'bind' && (x.kxMode ?? V.kxModeDefault) === V.kxModeDefault)) {
+  ok(V.kxMode === 'C', `the vectors are mode C (${V.kxMode})`)
+  ok(!V.statements.some((x: { kxMode?: string }) => 'kxMode' in x), 'no per-row kx modes remain in the vectors')
+  for (const v of V.statements.filter((x: { type: string }) => x.type === 'bind')) {
     n++
     const r = await api('POST', '/v1/bind/start', { stmt: v.text, sig: v.sig }, freshIp())
     ok(r.status === (v.expect === 'accept' ? 202 : 400), `vector ${v.name} → ${r.status}`)
   }
-  ok(n >= 8, `the bind vectors actually ran (${n})`)
+  ok(n >= 30, `the bind vectors actually ran (${n})`)
+  ok(V.statements.some((x: { type: string; name: string }) => x.type === 'bind' && /kx slot empty/.test(x.name)), 'the empty-kx reject vector is among them')
   now = saved
   mailbox.length = 0
 }

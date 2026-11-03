@@ -45,6 +45,7 @@ import { CHART_PRESETS, mountChart, type ChartLike } from '../../kernel/src/char
 import type { TableSheet } from './model.ts'
 import { isErr } from './formula.ts'
 import { readCell } from './store.ts'
+import { readPattern } from './format.ts'
 import { t } from './i18n.ts'
 
 export interface ChartBinding {
@@ -55,6 +56,107 @@ export interface ChartBinding {
   kind: 'bar' | 'line' | 'pie' | 'scatter'
   /** group rows by the x value and total the series, rather than one bar per row */
   aggregate?: 'sum' | 'avg' | 'count' | 'none'
+  // ADDITIVE, all of them: a binding without these is the chart every earlier
+  // build drew, and an earlier build reading one with them ignores them.
+  /** the chart's title; absent = the generated "Region · Value" heading */
+  title?: string
+  /** show the legend; absent = only when there is more than one series */
+  legend?: boolean
+  /** a colour per series, by column id; absent = the palette, in order */
+  colors?: Record<string, string>
+  /**
+   * The author ASKED for a line through categories that have no order. Absent,
+   * a line over a text axis is refused and drawn as bars (see `lineRefused`).
+   */
+  allowLine?: boolean
+  [extra: string]: unknown
+}
+
+type ColLike = { id: string; type?: string; format?: string; name?: string }
+
+const MEASURE = new Set(['number', 'money', 'percent'])
+const CATEGORY = new Set(['text', 'enum'])
+
+/**
+ * Does this column put its values IN ORDER?
+ *
+ * A line is a claim that the space between two points means something — that
+ * March comes after February and a value between them would sit between them.
+ * Dates and numbers make that claim honestly. Regions do not: North, South, East
+ * in first-seen order is an accident of the data, and a line from North down to
+ * South "trends" between two things that are not on a scale at all. Measured in
+ * the review: the type toggle drew exactly that line, through Region.
+ */
+export const isOrdered = (c: Pick<ColLike, 'type'> | undefined): boolean =>
+  !!c && (c.type === 'date' || MEASURE.has(c.type ?? ''))
+
+/**
+ * A line the chart will NOT draw: kind is line, the category column has no
+ * order, and the author did not say "draw it anyway". Drawn as bars instead,
+ * and the panel says so with a button that sets `allowLine`.
+ */
+export function lineRefused(sheet: TableSheet, bind: ChartBinding): boolean {
+  if (bind.kind !== 'line' || bind.allowLine) return false
+  return !isOrdered(sheet.columns.find((c) => c.id === bind.x))
+}
+
+/**
+ * A binding from what the reader SELECTED — what "Chart the selected columns"
+ * has always promised and, until this, never did (it charted the first three
+ * numeric columns whatever was selected: the review selected Value and got
+ * Value, Weighted and Computed).
+ *
+ * `selected` is the column ids under the selection, in sheet order. Its
+ * measures become the series; its first text column becomes the categories, or
+ * — when the selection holds none, the usual case of "select the numbers" — the
+ * sheet's first text column does. A selection with no measure in it at all asks
+ * for nothing chartable, so the sheet's default stands in rather than an empty
+ * axis.
+ */
+export function bindingFromSelection(sheet: TableSheet, selected: readonly string[]): ChartBinding | null {
+  const cols = selected
+    .map((id) => sheet.columns.find((c) => c.id === id))
+    .filter((c): c is TableSheet['columns'][number] => !!c)
+  const series = cols.filter((c) => MEASURE.has(c.type)).map((c) => c.id)
+  if (!series.length) return defaultBinding(sheet)
+  const cat = cols.find((c) => CATEGORY.has(c.type)) ??
+    sheet.columns.find((c) => CATEGORY.has(c.type))
+  const x = cat?.id ?? cols.find((c) => !series.includes(c.id))?.id ??
+    sheet.columns.find((c) => !series.includes(c.id))?.id ?? series[0]
+  // Grouping by a category is the chart people mean ("Value by Region"); with
+  // no category there is nothing to group by, and every row is its own point.
+  return { x, series, kind: 'bar', aggregate: cat ? 'sum' : 'none' }
+}
+
+/**
+ * The value axis's label pattern, from the columns being charted — so a money
+ * column's axis reads £20,000 and not 20,000, and a percent column's reads 40%
+ * and not 0.4.
+ *
+ * ONLY WHEN EVERY SERIES AGREES. Pounds and percentages on one axis share no
+ * unit, and labelling that axis "£" would put a currency sign on a probability.
+ * Mixed series get the bare numbers, which are at least not wrong.
+ *
+ * `scale` is 100 for a percent axis: percent columns store the FRACTION
+ * (import.ts:281), and charts-lite prints the number it is given.
+ */
+export function axisFormat(
+  sheet: TableSheet, series: readonly string[],
+): { formatter?: string; scale: number; pattern: string; mixed: boolean } {
+  const cols = series.map((id) => sheet.columns.find((c) => c.id === id)).filter(Boolean) as ColLike[]
+  if (!cols.length) return { scale: 1, pattern: '', mixed: false }
+  const key = (c: ColLike): string => `${c.type}|${c.format ?? ''}`
+  if (cols.some((c) => key(c) !== key(cols[0]))) return { scale: 1, pattern: '', mixed: true }
+  const c = cols[0]
+  const p = readPattern(c.format)
+  const pct = p.pct || c.type === 'percent'
+  if (!p.prefix && !p.suffix && !pct) return { scale: 1, pattern: c.format ?? '', mixed: false }
+  return {
+    formatter: `${p.prefix}{value}${p.suffix}${pct && !p.suffix ? '%' : ''}`,
+    scale: pct ? 100 : 1,
+    pattern: c.format ?? (pct ? '0%' : ''),
+    mixed: false,
+  }
 }
 
 /**
@@ -172,6 +274,7 @@ export function optionFor(
     return {
       ...CHART_PRESETS.pie(),
       color: palette,
+      ...(bind.legend === false ? { legend: undefined } : {}),
       series: [{
         type: 'pie',
         radius: '68%',
@@ -182,20 +285,33 @@ export function optionFor(
     }
   }
 
-  const base = CHART_PRESETS[bind.kind]?.() ?? CHART_PRESETS.bar()
-  return {
+  // A line through unordered categories is REFUSED here, at the one place the
+  // option is built, so every surface that draws a binding (panel, story,
+  // dashboard) refuses it alike rather than one of them forgetting to.
+  const kind = lineRefused(sheet, bind) ? 'bar' : bind.kind
+  const base = CHART_PRESETS[kind]?.() ?? CHART_PRESETS.bar()
+  const ax = axisFormat(sheet, bind.series)
+  const showLegend = bind.legend ?? series.length > 1
+  // Colours are matched to SERIES, by column id — never by position: removing
+  // the first series must not repaint the second in the first one's colour.
+  const colors = bind.series.map((id, i) => bind.colors?.[id] ?? palette[i % palette.length])
+  const option: Record<string, unknown> = {
     ...base,
-    color: palette,
-    legend: { bottom: 0, show: series.length > 1 },
+    color: colors,
     xAxis: { type: 'category', data: cats },
-    yAxis: { type: 'value' },
+    yAxis: { type: 'value', ...(ax.formatter ? { axisLabel: { formatter: ax.formatter } } : {}) },
     series: series.map((s) => ({
-      type: bind.kind,
+      type: kind,
       name: s.name,
-      data: s.data,
-      ...(bind.kind === 'line' ? { smooth: false, symbolSize: 6 } : {}),
+      data: ax.scale === 1 ? s.data : s.data.map((v) => (v === null ? null : v * ax.scale)),
+      ...(kind === 'line' ? { smooth: false, symbolSize: 6 } : {}),
     })),
   }
+  // charts-lite reads a PRESENT `legend` as "draw one" and ignores `show`, so
+  // a hidden legend is an absent key — `{show:false}` drew it anyway.
+  if (showLegend) option.legend = { bottom: 0 }
+  else delete option.legend
+  return option
 }
 
 /**
@@ -266,6 +382,8 @@ export interface ChartHostOpts extends ChartViewOpts {
    * quietly.
    */
   onRebind?: () => void
+  /** "Draw a line anyway" — offered beside a refused line (`lineRefused`). */
+  onAllowLine?: () => void
 }
 
 /** A line of chrome above or below the plot. Text only — never innerHTML: a
@@ -338,6 +456,13 @@ export function renderChart(
         : t('This chart was drawn from {cols}, and {sheet} does not have {n} of them any more.',
           { cols: [bind.x, ...bind.series].join(', '), sheet: sheet.name, n: missing.length }),
       away ? undefined : rebind))
+  }
+
+  if (drawable && lineRefused(sheet, live)) {
+    const xName = sheet.columns.find((c) => c.id === live.x)?.name ?? live.x
+    host.append(noteBar(
+      t('Drawn as bars: {col} has no order for a line to follow.', { col: xName }),
+      opts.onAllowLine ? { label: t('Draw a line anyway'), run: opts.onAllowLine } : undefined))
   }
 
   if (!drawable) {

@@ -460,6 +460,13 @@ export interface DistinctOpts {
   rows?: number[]
   /** case-insensitive substring the value must contain */
   match?: string
+  /**
+   * How the list SHOWS a value, when that is not how it is stored (a money
+   * column lists £4,300 and stores 4300). A search matches either spelling:
+   * the reader types what they can see, and "4,300" finding nothing beside a
+   * box that says £4,300 is the same two-spellings problem one step later.
+   */
+  display?: (v: unknown) => string
 }
 
 /**
@@ -526,7 +533,8 @@ export function distinctValues(
     }
     if (memo.has(v)) continue
     if (memo.size < memoCap) memo.add(v)
-    if (needle && !key(v).includes(needle)) continue
+    if (needle && !key(v).includes(needle) &&
+      !(opts.display && key(opts.display(v)).includes(needle))) continue
     const k = matchKey(v)
     if (seen.has(k)) continue
     if (seen.size >= cap) {

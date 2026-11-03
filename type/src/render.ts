@@ -8,7 +8,7 @@
 // Everything it emits is reconstructible from the model, which is what lets the
 // editor re-render a block at any moment without asking whether it is safe.
 
-import { toHtml, fromDom, type Mark } from './inline.ts';
+import { toHtml, fromDom, escAttr, type Mark } from './inline.ts';
 import { isList, MAX_LIST_LEVEL, type Block, type TypeDoc } from './model.ts';
 import { captionPrefixHtml, isXrefAtom, refAtoms, readXrefs, numberXrefs } from './xref.ts';
 import { blockStyle } from './layout.ts';
@@ -127,8 +127,11 @@ const decorate = (b: Block, base: string): string => {
   return out;
 };
 
+// The note id comes from the document — a file, or a collaborator's synced op
+// that never passed parseDoc — so it is ESCAPED into its attribute: unescaped,
+// an id could close the quote and add an event handler (it did, in the editor).
 const noteMarker = (id: string) =>
-  `<sup class="t-note" data-note="${id}" contenteditable="false">•</sup>`;
+  `<sup class="t-note" data-note="${escAttr(id)}" contenteditable="false">•</sup>`;
 
 /** One block, as HTML. Marks become tags; note refs become atoms. */
 export function blockHtml(b: Block): string {

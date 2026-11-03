@@ -178,7 +178,7 @@ function serializeBody(shell: Document, body: string, doc: KernelDoc): string {
     el.id = b.id
     for (const [k, v] of Object.entries(b.attrs ?? {})) el.setAttribute(k, v)
     // same <-escape as the doc block: these can never contain "</script>"
-    el.textContent = '\n' + b.body.replace(/</g, '\\u003c') + '\n'
+    el.textContent = '\n' + (b.body.includes('<') ? b.body.replace(/</g, '\\u003c') : b.body) + '\n'
     clone.head.appendChild(el)
   }
 
@@ -190,7 +190,7 @@ function serializeBody(shell: Document, body: string, doc: KernelDoc): string {
     clone.head.appendChild(block)
   }
   // <-escape so the JSON can never contain "</script>" and break the file.
-  block.textContent = '\n' + body.replace(/</g, '\\u003c') + '\n'
+  block.textContent = '\n' + (body.includes('<') ? body.replace(/</g, '\\u003c') : body) + '\n'
 
   writePreview(clone, body, doc)
 
@@ -211,7 +211,15 @@ function serializeBody(shell: Document, body: string, doc: KernelDoc): string {
   const html = '<!DOCTYPE html>\n' + clone.documentElement.outerHTML
   // Belt-and-braces: an unescaped close tag anywhere in generated output would
   // corrupt the file; this should never trigger given the escaping above.
-  if (html.split(SCRIPT_CLOSE).length !== clone.querySelectorAll('script').length + 1) {
+  // Count occurrences with indexOf instead of splitting the multi-megabyte string into an array.
+  let scripts = 0
+  let position = 0
+  // Use `indexOf` here to avoid allocations galore.
+  while ((position = html.indexOf(SCRIPT_CLOSE, position)) !== -1) {
+    scripts += 1
+    position += SCRIPT_CLOSE.length
+  }
+  if (scripts !== clone.querySelectorAll('script').length) {
     console.warn('bento: unexpected script-close count in serialized file')
   }
   return html
@@ -825,6 +833,10 @@ async function pickHandle(
 }
 
 async function writeHandle(handle: FsFileHandle, html: string) {
+  // Yield to the event loop before disk I/O.
+  // On Linux + Wayland it is important to give the compositor a chance to
+  // commit pending frames, before Disk I/O.
+  await new Promise((r) => setTimeout(r, 0))
   const writable = await handle.createWritable()
   await writable.write(new Blob([html], { type: 'text/html' }))
   await writable.close()

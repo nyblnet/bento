@@ -120,5 +120,34 @@ console.log('\n— embedded documents don\'t carry sharing keys —');
   ok(nblob.includes('deck-1'), 'and the inner document is still there to open');
 }
 
+// ─────────────────────────────── a footnote id is ESCAPED into its attribute
+// A synced op never passes parseDoc, so the escape at render is the layer it
+// meets. Unescaped, an id could close data-note="…" and add an event handler
+// (it did: measured in the editor). Asserted on the string render produces.
+{
+  const { blockHtml } = await import('../type/src/render.ts');
+  const NID = 'n1" onmouseover="window.__pwned=1" data-x="';
+  const html = blockHtml({ id: 'b1', kind: 'para', text: 'Hello world', notes: [{ id: NID, at: 5 }] } as never);
+  ok(html.includes('data-note='), 'control: the note marker IS rendered for the hostile id');
+  ok(!/data-note="[^"]*"\s+onmouseover=/.test(html) && !html.includes('" onmouseover="'),
+     `a footnote id cannot close its attribute: the quote is escaped (${html.match(/data-note="[^>]*/)?.[0].slice(0, 60)})`);
+  const { parseDoc } = await import('../type/src/model.ts');
+  const r = parseDoc(JSON.stringify({ format: 'bento/type', docId: 'd', title: 't', footnotes: { [NID]: 'x', ok1: 'y' },
+    body: [{ id: 'b1', kind: 'para', text: 'Hello world', notes: [{ id: NID, at: 2 }, { id: 'ok1', at: 5 }] }] }));
+  ok(r.ok && !Object.hasOwn(r.doc.footnotes, NID) && Object.hasOwn(r.doc.footnotes, 'ok1')
+     && (r.doc.body[0].notes ?? []).map(n => n.id).join() === 'ok1',
+     'and a FILE cannot carry such an id at all: parseDoc keeps only ids of a safe charset (a normal id survives)');
+}
+
+// ───────────────────── a mark type that is not one of ours renders as a plain span
+// (a synced mark never passed parseDoc; `constructor` used to read an inherited
+// property — a function's source — into the markup as a tag name)
+{
+  const { blockHtml } = await import('../type/src/render.ts');
+  const html = blockHtml({ id: 'b1', kind: 'para', text: 'Hello world', marks: [{ t: 'constructor', from: 0, to: 5 }, { t: '__proto__', from: 6, to: 11 }] } as never);
+  ok(!/function|native code|\[object/i.test(html), `an unknown mark type never reads an inherited property into the markup (${html.slice(0, 80)})`);
+  ok(html.includes('Hello') && html.includes('world'), 'and the text itself still renders');
+}
+
 console.log(`\n${checks - bad}/${checks} checks passed`);
 if (bad) process.exit(1);
