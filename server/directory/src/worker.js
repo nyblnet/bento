@@ -23,7 +23,7 @@ import { issueChallenge, openChallenge, CHALLENGE_TTL_MS } from './challenge.js'
 import { AUDIENCE, verifyDirConsent } from './consent.js'
 import {
   attest, b64uDec, b64uEnc, buildCmp, buildDel, hashOf, importDirKey, tombstone as tombText, verifyBind, verifyCmp, verifyDel,
-  dreqNeedsConsent, verifyDev, verifyDreq, verifyRotation,
+  dreqNeedsConsent, verifyDreq, verifyLinkRelease, verifyRotation,
 } from './statements.js'
 import { verifyAssertion } from './webauthn.js'
 import { Link, linkRoute } from './link.js'
@@ -972,30 +972,31 @@ export class Address {
         if (rot && !rot.overTomb) body.pending = { binding: rot.stmt, sig: rot.sig, rot: rot.rotText, rotSig: rot.rotSig, activeAt: rot.until }
         // a resolution of an email-only freeze: what the frozen key's contest names (no vouch exists)
         if (rsv) body.pending = { binding: rsv.stmt, sig: rsv.sig, activeAt: rsv.until, resolve: true }
+        // a freeze that voided a waiting resolution (security's ruling): told to
+        // the account-signed status read ONLY, never to the public lookup, so the
+        // key holder learns its resolution was voided and will wait 72 hours
+        const frz = await s.get('frz')
+        if (state === 'frozen' && frz && frz.contested) body.contested = true
       }
       return out(200, body)
     }
 
-    // device linking (§39.1): H's consent to link N, checked before the slot
-    // releases anything. Spend first; active only; both certificates by the LIVE key.
+    // device linking (§39.1): H's message 3, checked before the slot releases
+    // anything. Spend FIRST (every attempt burns its challenge, a malformed one
+    // too), then ONE verifier: kernel's verifyLinkRelease over the whole text,
+    // against the LIVE binding and its state. Kernel refuses everything but
+    // `active`, an N naming H's own device, and an H with no consent key (the
+    // light tier's WebAuthn link consent stays off).
     if (a.op === 'link') {
       if (!(await spend(a.nonce))) return refuse('replay')
       const cur = await live()
-      if (!cur || (await stateOf()) !== 'active') return refuse('state')
-      const h = await verifyDev(a.hDev, a.hDevSig, { now })
-      if (!h.ok || h.value.accountPub !== cur.b.key) return refuse('h-dev')
-      const n = await verifyDev(a.nDev, a.nDevSig, { now })
-      if (!n.ok || n.value.accountPub !== cur.b.key || n.value.devicePub === h.value.devicePub) return refuse('n-dev')
-      // a light-tier H (no hardware consent key, or the WebAuthn consent form) is
-      // refused until kernel ships the msg3 WebAuthn variant with vectors (§39.1)
-      if (!h.value.consentPub || !a.consent || typeof a.consent !== 'object' || typeof a.consent.cns !== 'string' || 'webauthn' in a.consent) return refuse('h-no-consent')
-      // a native consent must come from H's own consent key
-      if (a.consent.dev !== a.hDev) return refuse('consent:dev')
-      const c = await verifyDirConsent(this.env, {
-        scope: a.scope, accountPub: cur.b.key, purpose: 'link', challenge: a.challenge, payloadText: a.nDev, consent: a.consent, now,
+      if (!cur) return refuse('state')
+      const v = await verifyLinkRelease(a.msg3, {
+        bindText: cur.stmt, state: await stateOf(), challenge: a.challenge, now,
+        spend: () => true, // spent above, first
       })
-      if (!c.ok) return refuse(`consent:${c.reason}`)
-      return out(200, { accountPub: cur.b.key, fp: (await hashOf(n.value.devicePub)).slice(0, 8) })
+      if (!v.ok) return refuse(v.reason)
+      return out(200, { accountPub: cur.b.key, fp: (await hashOf(v.value.device.devicePub)).slice(0, 8) })
     }
 
     return out(400, { error: 'bad-op' })

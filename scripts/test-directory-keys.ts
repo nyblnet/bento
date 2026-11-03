@@ -35,6 +35,11 @@
 //     voided one leaves it live, and the freeze is then CONTESTED, so every later
 //     resolution of it waits 72 h (the owner-wins sequence), and the frozen key
 //     signs nothing but freeze/contest while one waits;
+//   · contested shows in the SIGNED status read only (never the public lookup),
+//     with an uncontested freeze as the control;
+//   · link completion is ONE text (kernel's msg3) through ONE verifier
+//     (kernel's verifyLinkRelease): n≠h, active-only, h-no-consent, grammar,
+//     and the slot stores kernel's linkTokHash;
 //   · the bind re-check answers only for the exact bound statement, with its state.
 
 import worker, { Account, Address, Cred, Ledger, Link } from '../server/directory/src/worker.js'
@@ -44,6 +49,7 @@ import {
   b64uDec, b64uEnc, buildBind, buildCmp, buildConsent, buildDev, buildDreq, consentTranscript, dreqArg,
   sha256b64u as hashOf, signStatement, webauthnChallengeFor,
 } from '../kernel/src/statements.ts'
+import { buildFinal, linkTokHash } from '../kernel/src/link.ts'
 
 let fails = 0, passes = 0
 const ok = (c: unknown, n: string) => { if (c) passes++; else { fails++; console.log('FAIL ' + n) } }
@@ -187,14 +193,18 @@ async function freezeByEmail(p: P) {
   const hd = await device(H)
   // H builds N's dev. (account-signed) from what N sent in msg2
   const nDevFor = async (owner: P, o: { account?: P } = {}) => { const n = await device(owner, o); return { nDev: n.dev, nDevSig: n.devSig, n } }
-  async function complete(s: { id: string; tok: string }, p: P, h: D, o: { ch?: string; nd?: Awaited<ReturnType<typeof nDevFor>>; consent?: unknown; hDev?: string; hDevSig?: string; sealed?: string } = {}) {
-    const ch = o.ch ?? await challengeFor(p.email)
+  // the sealed payload is iv ‖ 64-byte blob ‖ tag = 92 bytes (opaque to the directory)
+  const sealed92 = () => r64(92)
+  // H's message 3, ONE text, built with kernel's buildFinal: the directory gets nothing else
+  async function msg3For(p: P, h: D, o: { ch: string; nd?: Awaited<ReturnType<typeof nDevFor>>; consent?: { cns: string; cnsSig: string }; hDev?: string; hDevSig?: string; sealed?: string }) {
     const nd = o.nd ?? await nDevFor(p)
-    const consent = o.consent ?? await nativeConsent(h, ch, nd.nDev)
-    return link('complete', {
-      id: s.id, tok: s.tok, email: p.email, challenge: ch, hDev: o.hDev ?? h.dev, hDevSig: o.hDevSig ?? h.devSig,
-      nDev: nd.nDev, nDevSig: nd.nDevSig, consent, sealed: o.sealed ?? r64(200),
-    })
+    const c = o.consent ?? await nativeConsent(h, o.ch, nd.nDev)
+    return buildFinal({ hDev: o.hDev ?? h.dev, hDevSig: o.hDevSig ?? h.devSig, cns: c.cns, cnsSig: c.cnsSig, nDev: nd.nDev, nDevSig: nd.nDevSig, sealed: o.sealed ?? sealed92() })
+  }
+  async function complete(s: { id: string; tok: string }, p: P, h: D, o: { ch?: string; nd?: Awaited<ReturnType<typeof nDevFor>>; consent?: { cns: string; cnsSig: string }; hDev?: string; hDevSig?: string; sealed?: string; msg3?: string; extra?: Record<string, unknown> } = {}) {
+    const ch = o.ch ?? await challengeFor(p.email)
+    const msg3 = o.msg3 ?? await msg3For(p, h, { ...o, ch })
+    return link('complete', { id: s.id, tok: s.tok, email: p.email, challenge: ch, msg3, ...(o.extra ?? {}) })
   }
 
   // OFF unless LINKING=1
@@ -212,14 +222,16 @@ async function freezeByEmail(p: P) {
     ok((await link('put', { id: s.id, tok: s.tok, n: 2, msg: s.m[2] })).status === 200, 'N writes msg2')
     ok((await link('get', { id: s.id, tok: s.tok, n: 2 })).j.msg === s.m[2], 'H reads msg2')
     const before = noticesTo(H.email, 'link')
-    const sealed = r64(300)
-    const c = await complete(s, H, hd, { sealed })
+    const sealed = sealed92()
+    const ch = await challengeFor(H.email)
+    const m3 = await msg3For(H, hd, { ch, sealed })
+    const c = await complete(s, H, hd, { ch, msg3: m3 })
     ok(c.status === 200, `CONTROL: H completes with its consent over N's dev. (${c.status} ${reason(c)})`)
     ok(noticesTo(H.email, 'link') === before + 1, 'the link is notified to the verified address')
     const notice = mailbox[mailbox.length - 1]
     ok(!notice.body.includes(sealed.slice(0, 20)) && notice.code === '', 'the notice carries no code and nothing from the slot')
     const g = await link('get', { id: s.id, tok: s.tok, n: 3 })
-    ok(g.status === 200 && g.j.msg === sealed && Object.keys(g.j).length === 1, 'N receives exactly what H sealed, and nothing else')
+    ok(g.status === 200 && g.j.msg === m3 && Object.keys(g.j).length === 1, "N receives H's message 3 exactly as written (for kernel's openFinal), and nothing else")
     ok((await link('abort', { id: s.id, tok: s.tok })).status === 200, 'N deletes the slot when done')
     ok((await link('get', { id: s.id, tok: s.tok, n: 3 })).status === 409, 'a deleted slot answers nothing more')
     ok((await link('open', { id: s.id, tok: s.tok, msg: msg() })).status === 409, 'and cannot be reopened in its window')
@@ -272,17 +284,17 @@ async function freezeByEmail(p: P) {
   {
     const nd = await nDevFor(H)
     const tries: [string, (ch: string) => Promise<unknown>, string][] = [
-      ['RELAY: a cns. for another audience', async (ch) => nativeConsent(hd, ch, nd.nDev, { audience: 'room:w' + 'A'.repeat(43) }), 'consent:cns:'],
-      ['PAYLOAD SWAP: a cns. over another dev.', async (ch) => nativeConsent(hd, ch, (await nDevFor(H)).nDev), 'consent:cns:'],
-      ['EXPIRED: a cns. past its exp', async (ch) => nativeConsent(hd, ch, nd.nDev, { exp: now - 1 }), 'consent:cns:'],
-      ['a cns. with purpose rotate', async (ch) => nativeConsent(hd, ch, nd.nDev, { purpose: 'rotate' }), 'consent:cns:'],
-      ['a cns. from a device certified by ANOTHER account', async (ch) => nativeConsent(await device(await person('x@example.com')), ch, nd.nDev), 'consent:'],
+      ['RELAY: a cns. for another audience', async (ch) => nativeConsent(hd, ch, nd.nDev, { audience: 'room:w' + 'A'.repeat(43) }), 'cns-'],
+      ['PAYLOAD SWAP: a cns. over another dev.', async (ch) => nativeConsent(hd, ch, (await nDevFor(H)).nDev), 'cns-'],
+      ['EXPIRED: a cns. past its exp', async (ch) => nativeConsent(hd, ch, nd.nDev, { exp: now - 1 }), 'cns-'],
+      ['a cns. with purpose rotate', async (ch) => nativeConsent(hd, ch, nd.nDev, { purpose: 'rotate' }), 'cns-'],
+      ['a cns. from a device certified by ANOTHER account', async (ch) => nativeConsent(await device(await person('x@example.com')), ch, nd.nDev), 'cns-'],
     ]
     for (const [name, make, want] of tries) {
       const s = await slot()
       const ch = await challengeFor(H.email)
       const before = noticesTo(H.email, 'link')
-      const r = await complete(s, H, hd, { ch, nd, consent: await make(ch) })
+      const r = await complete(s, H, hd, { ch, nd, consent: await make(ch) as { cns: string; cnsSig: string } })
       ok(r.status === 400 && reason(r).startsWith(want), `${name} → refused (${reason(r)})`)
       ok((await link('get', { id: s.id, tok: s.tok, n: 3 })).status === 409 && noticesTo(H.email, 'link') === before, `  …releases nothing, notifies nothing, and deletes the slot`)
     }
@@ -302,12 +314,19 @@ async function freezeByEmail(p: P) {
     const s4 = await slot(), ch4 = await challengeFor(H.email)
     const c4 = await nativeConsent({ ...light }, ch4, nd.nDev)
     ok(reason(await complete(s4, H, light, { ch: ch4, nd, consent: c4 })) === 'h-no-consent', 'a light-tier H (dev. with no consent key) is refused: no WebAuthn link consent until kernel has its msg3 variant')
-    // the WebAuthn consent form, from an H that does hold a consent key: still refused
+    // the WebAuthn consent form: msg3 has no place for it, and a request carrying
+    // one beside a light-tier H's msg3 is still refused (the field is never read)
     const s5 = await slot(), ch5 = await challengeFor(H.email)
     const wa = { webauthn: { credentialId: r64(32), authenticatorData: r64(37), clientDataJSON: r64(80), signature: r64(70) }, exp: now + 2 * MIN }
-    ok(reason(await complete(s5, H, hd, { ch: ch5, nd, consent: wa })) === 'h-no-consent', 'the WebAuthn consent form for a link is refused (off until kernel\'s msg3 WebAuthn vectors)')
+    ok(reason(await complete(s5, H, light, { ch: ch5, nd, consent: await nativeConsent(light, ch5, nd.nDev), extra: { consent: wa, webauthn: wa.webauthn } })) === 'h-no-consent', 'a light-tier H with a WebAuthn assertion riding along → refused (link WebAuthn consent is OFF)')
+    // grammar: msg3 is one text in kernel's exact shape; anything else burns the challenge
     const s6 = await slot(), ch6 = await challengeFor(H.email)
-    ok(reason(await complete(s6, H, hd, { ch: ch6, nd, consent: { ...(await nativeConsent(hd, ch6, nd.nDev)), webauthn: wa.webauthn } })) === 'h-no-consent', 'a native cns. with a WebAuthn assertion riding along is refused too')
+    const good6 = await msg3For(H, hd, { ch: ch6, nd })
+    ok(reason(await complete(s6, H, hd, { ch: ch6, msg3: good6.replace(/\n[^\n]*$/, '\n' + r64(200)) })) === 'grammar', 'a msg3 whose sealed line is the wrong size → refused (grammar)')
+    const s6b = await slot()
+    ok(reason(await complete(s6b, H, hd, { ch: ch6, msg3: good6 })) === 'replay', '  …and that malformed attempt spent its challenge (spend first)')
+    const s6c = await slot()
+    ok((await complete(s6c, H, hd, { msg3: 'x'.repeat(8 * 4097 + 1) })).status === 400, 'a msg3 over 8 lines of 4 KB → refused at the route')
     const s7 = await slot()
     ok((await complete(s7, H, hd, { nd: await nDevFor(H) })).status === 200, 'CONTROL: the native consent from the same H still completes')
   }
@@ -317,14 +336,16 @@ async function freezeByEmail(p: P) {
     const intruder = await person('link-h@example.com') // same address, another key: not the live binding
     const fakeH = await device(intruder)
     const s = await slot()
-    ok(reason(await complete(s, H, fakeH, { hDev: fakeH.dev, hDevSig: fakeH.devSig })) === 'h-dev', "H's dev. by a key that is not the live binding → refused")
+    ok(reason(await complete(s, H, fakeH, { hDev: fakeH.dev, hDevSig: fakeH.devSig })) === 'h-account', "H's dev. by a key that is not the live binding → refused")
     const s2 = await slot()
-    ok(reason(await complete(s2, H, hd, { nd: await nDevFor(H, { account: intruder }) })) === 'n-dev', "N's dev. naming another account → refused")
+    ok(reason(await complete(s2, H, hd, { nd: await nDevFor(H, { account: intruder }) })) === 'n-account', "N's dev. naming another account → refused")
     const s3 = await slot()
-    ok(reason(await complete(s3, H, hd, { nd: { nDev: hd.dev, nDevSig: hd.devSig, n: hd } })) === 'n-dev', "N's dev. naming H's own device → refused")
+    ok(reason(await complete(s3, H, hd, { nd: { nDev: hd.dev, nDevSig: hd.devSig, n: hd } })) === 'n-device-is-h', "N's dev. naming H's own device → refused (n≠h, kernel's check)")
+    const s3c = await slot()
+    ok((await complete(s3c, H, hd, { nd: await nDevFor(H) })).status === 200, "CONTROL: N's dev. naming a NEW device of the same account completes")
     const other = await device(H) // a second device of H's, whose consent is not the one H presents
     const s4 = await slot(), ch = await challengeFor(H.email), nd = await nDevFor(H)
-    ok(reason(await complete(s4, H, hd, { ch, nd, consent: await nativeConsent(other, ch, nd.nDev) })) === 'consent:dev', "a cns. from a device other than the H named → refused")
+    ok(reason(await complete(s4, H, hd, { ch, nd, consent: await nativeConsent(other, ch, nd.nDev) })).startsWith('cns-'), "a cns. from a device other than the H named → refused")
   }
 
   // (d) frozen or pending → refused; and a freeze AFTER completion stops the release
@@ -357,6 +378,11 @@ async function freezeByEmail(p: P) {
   {
     // the tok VALUES (random base64 can spell "tok", so a name regex alone is no check), and no address
     const slots = [...stores.keys()].filter((k) => k.startsWith('Link:')).map((k) => JSON.stringify([...stores.get(k)!.entries()]))
+    {
+      const s = await slot({ fill: 0 })
+      const th = (store('Link', s.id)!.get('slot') as { th: string }).th
+      ok(th === await linkTokHash(s.tok), "a slot stores kernel's linkTokHash(tok), nothing of the directory's own")
+    }
     ok(sentToks.size > 3 && !slots.some((j) => [...sentToks].some((t) => j.includes(t)) || /"tok"|"email"|@/.test(j)), 'link slots store no tok and no address')
   }
 }
@@ -1108,6 +1134,12 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
     // the code-spend rule: a resolution that WAITS leaves the code live; only a commit spends it
     ok(!!(await rcOf(V)), '(spend) a VOIDED resolution leaves the recovery code usable')
     ok(store('Address', await addressKey(V.email))?.get('frz')?.contested === true, '(contested) the freeze that voided it is marked contested')
+    {
+      // security's ruling: contested is SHOWN in the signed status read, NOT in the public lookup
+      const st = await status(V), lk = await lookup(V.email)
+      ok(st.status === 200 && st.j.state === 'frozen' && st.j.contested === true, '(contested) the signed status read says contested: true')
+      ok(lk.status === 200 && !('contested' in lk.j) && !JSON.stringify(lk.j).includes('contested'), '(contested) …and the public lookup says nothing of it')
+    }
     const V3 = await nextOf(V)
     const nb3 = await bindNext(V3, vText)
     const r3 = await resolve(nb3, vRc.verifier)
@@ -1132,6 +1164,7 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
     ok((await lookup(W.email)).j.binding === wText, '[c] …and 73 h later nothing settled')
     ok(reason(await freezeBy(W, W)) === 'dreq:state', '  …and with nothing waiting, "frozen: status only" holds again')
     ok(!!(await rcOf(W)) && store('Address', await addressKey(W.email))?.get('frz')?.contested === true, '(spend) voided by a freeze: the code stays usable, the freeze contested')
+    ok((await status(W)).j.contested === true && !JSON.stringify((await lookup(W.email)).j).includes('contested'), '(contested) W: status says contested, lookup does not')
   }
   {
     // CONTROL for the spend rule: a resolution that COMMITS at once spends the code
@@ -1139,6 +1172,11 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
     const { e: zRc } = await enrol(Z, await device(Z))
     await freezeBy(Z, Z)
     ok(store('Address', await addressKey(Z.email))?.get('frz')?.contested !== true, 'Z: a plain owner freeze is not contested')
+    {
+      const st = await status(Z)
+      ok(st.status === 200 && st.j.state === 'frozen' && !('contested' in st.j), 'CONTROL: an uncontested freeze\'s signed status carries no contested field')
+      ok(!JSON.stringify((await lookup(Z.email)).j).includes('contested'), 'CONTROL: …nor its lookup')
+    }
     ok((await resolve(await bindNext(await nextOf(Z), zText), zRc.verifier)).status === 200, 'CONTROL: an uncontested key-holder freeze resolves at once')
     ok(!(await rcOf(Z)), '  …and that commit spent the code')
   }

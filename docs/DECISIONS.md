@@ -12185,3 +12185,26 @@ with seven conditions).
   deterministic row byte for byte and checks every verdict;
   `scripts/test-link-mutants.ts` reintroduces fifteen lenient paths into a copy
   of `link.ts` and requires the rig to fail on each.
+
+## 2026-11-03 — bento/connect directory: link completion runs kernel's verifier, and contested shows in the signed status only
+
+- **One verifier for message 3.** `/v1/link/complete` now takes H's message 3
+  as ONE text (kernel's `lnk3`) and the Address object runs kernel's
+  `verifyLinkRelease` over it against the live binding and its state. The
+  directory's own parallel checks (H's and N's certificates, the consent, the
+  device-differs and active-only conditions) are gone; those conditions still
+  hold, now as kernel's `n-device-is-h` and `state` refusals, and the rig keeps
+  a row and a control for each. The directory still spends the challenge first,
+  before kernel parses anything, so a malformed message 3 also burns it.
+- **The slot stores kernel's `linkTokHash(tok)`**, replacing the directory's own
+  domain-separated hex hash, so every party derives the stored form one way.
+- **N receives message 3 whole**, not only the sealed payload, because kernel's
+  `openFinal` checks N's `dev.` from the same text.
+- **WebAuthn link consent stays off.** Message 3 has no form for it; an H with
+  no consent key is refused (`h-no-consent`), and a WebAuthn assertion sent
+  beside message 3 is never read.
+- **`contested: true` appears in the account-signed status read, never in the
+  public lookup.** The key holder needs to know its resolution was voided and
+  that the next one will wait 72 hours; a stranger looking up the address does
+  not, and telling them would advertise that the code is in two hands. An
+  uncontested freeze's status carries no such field.

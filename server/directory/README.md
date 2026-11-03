@@ -45,8 +45,8 @@ day's hashes can't be linked to the next.
 | `POST /v1/freeze/complete` `{email, token}` | the single-use token from the mail | 200 `{state: "frozen"}`, or a uniform 400 |
 | `GET /v1/keys` | none | the directory's public keys, for diagnosis (clients trust the list in the signed release) |
 | `POST /v1/link/open`, `/put`, `/get`, `/abort` `{id, tok, …}` | `tok`, derived from the link code | a ciphertext mailbox; see **Device linking**. Off unless `LINKING=1` |
-| `POST /v1/link/complete` | H's `dev.` + consent (purpose `link`) over N's `dev.`, on a `dir` challenge | 200, or 400 with a reason; the slot is deleted on any failure |
-| `POST /v1/status` `{email, req, sig, challenge}` | `dreq.status` | 200 `{state, events}`. Off unless `KEYSTORE=1`, like everything below |
+| `POST /v1/link/complete` `{id, tok, email, challenge, msg3}` | H's message 3 (kernel's `lnk3` text: H's `dev.`, its consent over N's `dev.`, N's `dev.`, the sealed key), on a `dir` challenge | 200, or 400 with kernel's reason; the slot is deleted on any failure |
+| `POST /v1/status` `{email, req, sig, challenge}` | `dreq.status` | 200 `{state, events}`, plus `pending` while a key change waits and `contested: true` on a contested freeze. Off unless `KEYSTORE=1`, like everything below |
 | `POST /v1/cred/add`, `/v1/cred/del` | `dreq.cred-add` / `dreq.cred-del` + consent | 200; see **Key store** |
 | `POST /v1/cred/challenge`, `/v1/cred/get` | a WebAuthn assertion on a single-use challenge | 200 with the passkey's PRF blob |
 | `POST /v1/recovery/enrol` | `dreq.rc-enrol` + consent | 200 |
@@ -146,6 +146,9 @@ WARN; that is intended, and nothing the directory says softens it.
   resolves, waits 72 hours, and wins, because the thief holds no key that can
   void it. The reverse (the thief holds the old key) is a stalemate: the
   address stays frozen while that key keeps voiding, until the binding expires.
+  The signed status read says `contested: true` (so the key holder learns its
+  resolution was voided and the next one will wait); the public lookup never
+  shows it.
 
 **Host conditions while frozen** (a host that does not meet them must not offer
 resolution):
@@ -210,17 +213,22 @@ message is encrypted under keys derived from it.
   second `open` of the same id) means another device has the code: the slot
   becomes CONTENDED, drops its messages, and both sides are told to start again.
 - **A slot completes once.** `complete` claims the slot first; then the address
-  spends the `dir` challenge and checks that H's `dev.` is certified by the LIVE
-  account key, that N's `dev.` names the same account and a different device,
-  and that H consented (purpose `link`, audience `dir`, over N's `dev.` text,
-  from H's own consent key, or the light tier's WebAuthn form) while the
-  binding is `active`. Any failure, or a second attempt, deletes the slot.
+  spends the `dir` challenge (every attempt, a malformed one too) and runs
+  kernel's `verifyLinkRelease` over H's whole message 3, one text, against the
+  LIVE binding: H's `dev.` certified by that account key and carrying a consent
+  key, H's consent (purpose `link`, audience `dir`, over N's `dev.` text), N's
+  `dev.` naming the same account and a device other than H's, and the binding
+  `active`. There is no second verifier here. Any failure, or a second attempt,
+  deletes the slot. The slot stores kernel's `linkTokHash(tok)`, never `tok`.
+- N receives message 3 whole and checks it with kernel's `openFinal`.
+- The light tier's WebAuthn link consent is OFF: message 3 has no form for it,
+  and an H without a consent key is refused (`h-no-consent`).
 - N reads message 3 only while the binding is still active under the same key:
   a freeze after H's consent stops the key here.
 - Every link is notified (mail + the event list).
 
 It ships OFF (`LINKING` unset answers 404): N can only check what it receives
-against a pinned directory key, and the agents' link bytes are not in kernel yet.
+against a pinned directory key, and the hosts do not speak link v1 yet.
 
 ## Key store
 

@@ -10,10 +10,12 @@
 // under keys derived from a code the directory never receives; the slot id and
 // `tok` are derived from that code too, so only the two devices can address the
 // slot. What the directory DOES check is the one step that matters: before it
-// releases the sealed account key to N, it verifies H's consent (a `cns.` with
-// purpose `link`, audience `dir`, over N's `dev.` text, or the light tier's
-// WebAuthn form) against the LIVE binding, spending its challenge first, and only
-// while the binding is `active`. Every completed link is notified.
+// releases the sealed account key to N, it runs kernel's verifyLinkRelease over
+// H's whole message 3 (H's consent: a `cns.` with purpose `link`, audience `dir`,
+// over N's `dev.` text) against the LIVE binding, spending its challenge first,
+// and only while the binding is `active`. The light tier's WebAuthn link consent
+// is OFF: message 3 has no form for it, and kernel refuses an H with no consent
+// key. Every completed link is notified.
 //
 // Rules (security §39.1):
 //  · one slot per code, 10 minutes from open, messages of at most 4 KB;
@@ -25,13 +27,14 @@
 //  · an aborted or completed slot can't be reopened while its window lasts.
 //
 // Message numbers: 0 = the displayer's ephemeral key and role (sent with open),
-// 1 = the scanner's ephemeral key, 2 = N's device keys and proofs, 3 = what H
-// seals for N, written only through /v1/link/complete.
+// 1 = the scanner's ephemeral key, 2 = N's device keys and proofs, 3 = H's
+// message 3 (kernel's buildFinal text), written only through /v1/link/complete
+// and handed to N whole, which checks it with kernel's openFinal.
 
 import { addressKey, normalize } from './address.js'
 import { openChallenge } from './challenge.js'
 import { AUDIENCE } from './consent.js'
-import { b64uDec, b64uEnc } from './statements.js'
+import { b64uDec, b64uEnc, linkTokHash } from './statements.js'
 
 export const LINK = Object.freeze({
   ttlMs: 10 * 60_000, // a slot lives 10 minutes from open
@@ -40,8 +43,8 @@ export const LINK = Object.freeze({
   pollMs: 25_000, // the longest a read waits for a message
 })
 
-// id and tok are 32 bytes each (HKDF outputs). Provisional until kernel's link
-// vectors (K6) fix them; the directory only needs them to be unguessable.
+// id and tok are 32 bytes each: kernel's linkSlot HKDF outputs (link v1). The
+// slot stores kernel's linkTokHash(tok), never the token.
 const b32 = (s) => typeof s === 'string' && /^[A-Za-z0-9_-]{43}$/.test(s) && b64uDec(s)?.length === 32
 const msgOk = (m) => {
   if (typeof m !== 'string' || m.length === 0) return false
@@ -49,9 +52,9 @@ const msgOk = (m) => {
   return !!b && b.length > 0 && b.length <= LINK.maxMsg && b64uEnc(b) === m
 }
 
-const sha256hex = async (text) =>
-  [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, '0')).join('')
-const tokHash = (tok) => sha256hex(`bento-dir/1/link-tok\n${tok}`)
+// msg3 is kernel's lnk3 text: eight lines of at most 4096 printable bytes each
+const MSG3_MAX = 8 * (4096 + 1)
+const tokHash = (tok) => linkTokHash(tok)
 function same(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false
   let d = 0
@@ -108,21 +111,22 @@ export async function linkRoute(p, b, env, ip, deps) {
 
   if (op === 'complete') {
     const email = normalize(b.email ?? '')
-    const strings = [b.hDev, b.hDevSig, b.nDev, b.nDevSig, b.challenge]
-    if (!email || !msgOk(b.sealed) || strings.some((x) => typeof x !== 'string')) return json(400, { error: 'invalid' })
+    // ONE text: H's message 3, exactly as kernel's buildFinal makes it. Its
+    // grammar, H's and N's certificates and H's consent are all kernel's to check.
+    if (!email || typeof b.challenge !== 'string' || typeof b.msg3 !== 'string' || b.msg3.length > MSG3_MAX) return json(400, { error: 'invalid' })
     // claim FIRST: one completion per slot, and any later attempt deletes it
     const c = await linkCall(env, b.id, 'claim', { tok: b.tok })
     if (c.status !== 200) return relay(c)
     const scope = await addressKey(email)
     const ch = await openChallenge(env.CHALLENGE_KEY, AUDIENCE, scope, b.challenge, Date.now())
     const v = ch && await addressCall(env.ADDRESS.get(env.ADDRESS.idFromName(scope)), 'link', {
-      nonce: ch.nonce, scope, challenge: b.challenge, hDev: b.hDev, hDevSig: b.hDevSig, nDev: b.nDev, nDevSig: b.nDevSig, consent: b.consent,
+      nonce: ch.nonce, scope, challenge: b.challenge, msg3: b.msg3,
     })
     if (!v || v.status !== 200) {
       await linkCall(env, b.id, 'abort', { tok: b.tok })
       return json(400, { error: 'invalid', reason: v ? v.body.reason : 'challenge' })
     }
-    const d = await linkCall(env, b.id, 'deliver', { tok: b.tok, msg: b.sealed, scope, accountPub: v.body.accountPub })
+    const d = await linkCall(env, b.id, 'deliver', { tok: b.tok, msg: b.msg3, scope, accountPub: v.body.accountPub })
     if (d.status !== 200) return relay(d)
     await deps.notify(scope, 'link', v.body.fp) // every link notifies (§39.1 condition 6)
     return json(200, { ok: true })

@@ -16,6 +16,9 @@ export {
   webauthnChallengeFor, verifyDreq, dreqNeedsConsent, verifyRotation, buildRot,
 } from '../../../kernel/src/statements.ts'
 
+// device linking (link v1): the slot's token hash and the release check are kernel's too
+export { linkTokHash, verifyLinkRelease } from '../../../kernel/src/link.ts'
+
 /**
  * `att.<hash(bind)>.<verifiedAt>.<issuedAt>.<kid>.<state>`, signed with the
  * directory's ONLINE key (a Worker secret, never the release key). issuedAt is

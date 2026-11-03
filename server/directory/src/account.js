@@ -149,7 +149,8 @@ export async function keysRoute(p, b, env, ip, deps) {
     if (!(await ledger(env, ip, 'keys'))) return json(429, { error: 'rate-limited' })
     const a = await authorize(env, email, b, { op: 'status' })
     if (!a.ok) return json(400, { error: 'invalid', reason: a.reason })
-    return json(200, { state: a.state, events: a.events, ...(a.pending ? { pending: a.pending } : {}) })
+    // contested (security's ruling): here, to the key holder only; never in the public lookup
+    return json(200, { state: a.state, events: a.events, ...(a.pending ? { pending: a.pending } : {}), ...(a.contested === true ? { contested: true } : {}) })
   }
 
   // --- passkeys ---------------------------------------------------------------------
