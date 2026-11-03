@@ -54,6 +54,7 @@ import { shrinkImageFile, shrinkEnabled, setShrinkEnabled, shrinkNote, fmtBytes,
 import { deletePlan, expand, moveBlock, parents as selParents, range as selRange, toggle as selToggle } from './slidesel'
 import { dryRun, applyCompress, type DryRun } from './compressdeck'
 import { createDialog } from '../../../kernel/src/ui/dialog.ts'
+import { decoratePeer, vouchAgent as vouchPeopleAgent } from './vouch'
 import '../../../kernel/src/ui/dialog.css'
 import { PresenceToasts } from './presencetoasts'
 
@@ -1468,6 +1469,7 @@ export class Editor {
         panel.appendChild(me)
       }
     }
+    const vouchAgent = vouchPeopleAgent()
     if (peers.length) {
       const list = div('ed-share-peers')
       for (const peer of peers) {
@@ -1481,6 +1483,15 @@ export class Editor {
         who.textContent = peer.editing ? `${peer.name} ✏️` : peer.name
         // a pub-carrying peer's name is bound to its signing key, not just typed
         if (peer.pub) who.title = t('Key-verified identity') + ` · ${fp(peer.pub)}`
+        // P1, flag-gated: who vouched for this person (vouch.ts). The key is
+        // asked about only when the session proved the peer holds it.
+        if (vouchAgent) {
+          // `keyProven` is the kernel session's answer, not a field of the peer's own
+          // presence (which is attacker-controlled); until the kernel has it, never.
+          const proven = !!peer.pub && (this.session as { keyProven?(a: string, k: string): boolean } | undefined)
+            ?.keyProven?.(peer.actor, peer.pub) === true
+          decoratePeer(who, peer.name, peer.pub, proven, vouchAgent, t, !!peer.editing)
+        }
         const where = document.createElement('span')
         where.className = 'where'
         const idx = this.store.doc.slides.findIndex((s) => s.id === peer.slide)
