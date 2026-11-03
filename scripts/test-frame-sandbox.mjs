@@ -60,18 +60,6 @@ const ALLOW = [
     sig: 'position:fixed;right:0;bottom:0;width:1px;height:1px' },
 ]
 
-// Reveal.js ships two frame builders (a background iframe and a link-preview
-// overlay) that carry no sandbox. They are driven only by data-background-
-// iframe / data-preview-link attributes, which no document can cause: slide
-// text goes through sanitizeHtml, which strips EVERY attribute, and our own
-// section builders never emit them. The premise is asserted below, so this
-// entry fails the day it stops being true. Shells only; matched by the
-// library's own markup, since minified names are gone.
-const VENDOR = [
-  { shell: 'slides', name: 'reveal background iframe', sig: 'mozallowfullscreen' },
-  { shell: 'slides', name: 'reveal link-preview overlay', sig: 'r-overlay-content' },
-]
-
 const SITE = /createElement\(\s*['"`](?:iframe|frame|object|embed)['"`]\s*\)|<(?:iframe|frame|object|embed)\b[^>]*|\bsrcdoc\s*[=:]|\.srcdoc\b/gi
 const BOTH = /allow-same-origin[^'"`<>]*allow-scripts|allow-scripts[^'"`<>]*allow-same-origin/i
 // sandbox="..." in markup, setAttribute('sandbox', '..'), sandbox: '..', .sandbox = '..'
@@ -104,8 +92,6 @@ export function scanText(text, id, { minified = false, allowSeen = new Set() } =
     const line = lineOf(at)
     const allowed = ALLOW.find((a) => (a.file === id || `shell:${a.shell}` === id)
       && (minified ? win.includes(a.sig) : fnAround(src, at) === a.fn))
-    const vendor = minified && VENDOR.find((v) => `shell:${v.shell}` === id && win.includes(v.sig))
-    if (vendor) { allowSeen.add(vendor.name); continue }
     if (allowed) {
       if (near) out.push({ line, why: `allow-listed frame ${allowed.fn} gained a sandbox value; remove the allow-list entry` })
       else allowSeen.add(allowed.fn)
@@ -190,22 +176,6 @@ for (const [app, p] of Object.entries(SHELLS)) {
 }
 for (const a of ALLOW) {
   if (shellSeen[a.shell] && !shellSeen[a.shell].has(a.fn)) fail(`allow-list entry for the ${a.shell} shell no longer matches`)
-}
-
-for (const v of VENDOR) {
-  if (shellSeen[v.shell] && !shellSeen[v.shell].has(v.name)) fail(`vendored entry '${v.name}' no longer matches the ${v.shell} shell`)
-}
-// premise of VENDOR: documents cannot cause those frames
-{
-  const rd = readFileSync(join(root, 'slides/src/render.ts'), 'utf8')
-  if (!/for \(const attr of Array\.from\(elChild\.attributes\)\) elChild\.removeAttribute\(attr\.name\)/.test(rd)) {
-    fail('sanitizeHtml no longer strips every attribute: the vendored Reveal frames become document-creatable')
-  }
-  for (const f of walk(join(root, 'slides/src'))) {
-    if (/data-background-iframe|data-preview-link|data-preview-video|previewLinks/.test(readFileSync(f, 'utf8'))) {
-      fail(`${relative(root, f)} mentions a Reveal frame trigger: the vendored allow-list premise is gone`)
-    }
-  }
 }
 
 // ---- 3. mutants: the scanner must have teeth ----
