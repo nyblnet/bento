@@ -11,6 +11,15 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Typing `- ` or `* ` starts a real list straight away.** It used to type a
+  bullet character that only became a list once you clicked out of the box, so
+  Enter could not continue it. Now Enter starts the next bullet at the same
+  level, Enter on an empty bullet ends the list (or steps a nested one back out),
+  two spaces before the marker nest it, and ⌘Z right after puts the typed
+  marker back. Typing a marker inside a bullet you already have no longer
+  paints a second bullet beside it. Thanks to Hermholtz for the report
+  (discussion #711).
+
 ## [1.2.12] — 2026-11-02
 
 - **Security: update this file. This release closes an issue found in our own
