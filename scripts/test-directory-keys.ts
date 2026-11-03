@@ -604,7 +604,7 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
     for (let i = 0; i < 39; i++) await start(T, r64(32)) // 40 attempts, each from its own IP
     ok(noticesTo(T.email, 'rc-attempt') === m0 + 1, `40 wrong recovery attempts from 40 IPs → 1 mail, not 40 (${noticesTo(T.email, 'rc-attempt') - m0})`)
     const ue = (store('Address', await addressKey(T.email))!.get('uevents') as Record<string, { n: number }> | undefined)?.['rc-attempt']
-    ok(ue?.n === 40, `  …while the event list records them, as ONE entry with a count (${ue.n})`)
+    ok(ue?.n === 40, `  …while the event list records them, as ONE entry with a count (${ue?.n})`)
     now += 2 * HOUR
     const m1 = noticesTo(T.email, 'rc-attempt')
     ok(reason(await start(T, r64(32))) === 'locked' && noticesTo(T.email, 'rc-attempt') === m1, `a refusal while locked is listed but never mailed, even an hour later (${enrolled ? 'enrolled' : 'nothing enrolled'})`)
