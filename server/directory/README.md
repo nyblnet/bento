@@ -30,12 +30,15 @@ day's hashes can't be linked to the next.
 |---|---|---|
 | `POST /v1/bind/start` `{stmt, sig}` | the holder's signature over `bind.…` | **always 202** once the statement is valid, whether or not a code was mailed (no existence or limit oracle) |
 | `POST /v1/bind/complete` `{email, code, sig}` | the code + the key's signature over `cmp.…` | 200 with the statement and a signed `att.…`, or a uniform 400 |
-| `GET /v1/lookup?e=` | none | 200 (statement + fresh attestation + `state` + chain, and `rotSig` after a rotation), 410 (signed tombstone) or 404 (never existed *or* expired: the same answer). Exact address only |
+| `GET /v1/lookup?e=` | none | 200 (statement + fresh attestation + `state` + chain; after a rotation the previous key's `rot`/`rotSig` vouch, and up to 8 earlier `steps`), 410 (signed tombstone) or 404 (never existed *or* expired: the same answer). Exact address only |
 | `POST /v1/delete` `{email, ts, sig}` | the key's signature over `del.…`, ±5 min | 204, leaving a signed `tomb.…`. Refused while frozen |
 | `POST /v1/delete/start`, `/complete` | a mailed code, for an EXPIRED binding only | 202, then 204 |
 | `POST /v1/challenge` `{email}` | none | a single-use consent challenge, audience `dir`, good for 60 seconds at that address only |
 | `POST /v1/rotate/start` | see **Rotation** | 202 (a code is mailed), or 400 with a reason |
 | `POST /v1/rotate/complete` `{email, code, sig}` | the code + the NEW key's signature over `cmp.…` | 200 `{state: "pending", activeAt}` |
+| `POST /v1/contest` `{email, challenge, req, sig, bind?}` | a `dreq.contest` by the key the directory serves (the OLD one), only while pending; `bind` is the deleted binding's text in the holder-delete window | 200 `{state: "frozen"}` |
+| `POST /v1/freeze` `{email, challenge, req, sig}` | a `dreq.freeze` by the served key, active or pending | 200 `{state: "frozen"}` |
+| `POST /v1/resolve` `{stmt, sig, verifier}` | a NEW binding signed by its own key, chained to the frozen one, and the recovery verifier | 200 (binding + attestation, `rebound: true`) |
 | `POST /v1/freeze/start` `{email}` | none | **always 202**; mails a freeze link only for a live, unfrozen binding |
 | `GET /freeze` | none | the confirmation page the freeze link opens. A GET changes nothing |
 | `POST /v1/freeze/complete` `{email, token}` | the single-use token from the mail | 200 `{state: "frozen"}`, or a uniform 400 |
@@ -91,10 +94,34 @@ good once. Two forms are accepted:
   desktop apps') are never accepted as consent. Five failures in a row lock
   the credential for 15 minutes.
 
-**Rotation is OFF unless `ROTATION=1`.** A pending window is safe only when a
-device still holding the old key can contest it, and that request needs a
-statement that kernel has not defined yet. The emailed freeze link is the only
-contest until then.
+**The vouch** is kernel's `rot.<sha256(new bind.)>.<sha256(live bind.)>`, signed
+by the OLD key and checked with kernel's `verifyRotation`, exactly as a pinning
+client checks it; the lookup serves it with the binding.
+
+**Contest and freeze by the old key** are kernel's `dreq.` (challenge-bound,
+spent first), signed by the key the directory serves: during `pending` that is
+the OLD key, and a pending key signs nothing. `contest` names the pending
+binding and is accepted only while pending; `freeze` is accepted active or
+pending; while frozen only `status` is. Neither needs consent (they only remove
+power). The signed status read returns the pending binding and its vouch, which
+is what a device needs to show and contest it.
+
+**Resolution.** Only the recovery code unfreezes: the device sends a new
+binding, signed by its own new key and chained to the frozen one, and the
+recovery verifier (the same checks, count and lock as a recovery start). The
+code is spent. No old-key signature exists in this case, so pinners WARN; that
+is intended, and nothing the directory says softens it.
+
+**A holder delete keeps the binding's protection** until the deleted binding's
+own expiry: a DIFFERENT key re-binding the address goes `pending` for the full
+72 hours, lookups keep answering the tomb (with the state and the pending
+hash), and the tombstoned key may contest, bringing the deleted binding's text
+(only its hash is kept). Its recovery verifier is kept for that window and
+deleted when it closes, or at the deleted binding's expiry at the latest. The
+same key re-binds at once; after the expiry, email alone works again and the
+lookup says `rebound`. A delete is refused while pending or frozen.
+
+**Rotation is OFF unless `ROTATION=1`**, until security has run the contest.
 
 **Limits:**
 - a code lives 20 minutes and allows 5 attempts; a freeze link lives 24 hours
@@ -174,8 +201,11 @@ account key it belongs to, and material for any other key is treated as gone).
   cancels a release (a freeze does not, and blocks the new code). An address
   with nothing enrolled gets a stable fake salt.
 - **Notices.** The event list records every event. Notice MAIL is capped per
-  address: one per kind per hour and eight a day, and a recovery attempt
-  refused past the day's count or while locked is listed, never mailed.
+  address: one per kind per hour. Recovery attempts and releases need no
+  signature, so they are kept apart: one entry per kind with a count (they can
+  never push a signed event out of the list), their own ceiling of four mails
+  a day (they can never spend the signed kinds' mail), and a refusal past the
+  day's count or while locked is counted, never mailed.
   Pepper versions upgrade on a successful check; a record under a version the
   Worker doesn't hold is refused, never tried under another.
 - **The access ledger.** Stored only at bucket sizes (12.5% steps from 4 KiB,
@@ -186,10 +216,9 @@ account key it belongs to, and material for any other key is treated as gone).
   deletion (expired bindings) removes it too.
 
 **Not here yet:**
-- contest and lost-or-stolen freeze by the old key, the `rot.` vouch and the
-  holder-delete window
-- resolving a freeze with the recovery code
 - the ledger routes (a kernel request op)
+- WebAuthn (light-tier) consent for a link: refused until kernel has the
+  msg3 WebAuthn variant with vectors
 - refusing refreshed synced (BE=1) blobs after a lost-or-stolen removal. This
   is a HARD prerequisite: no deploy may set `ROTATION=1`, or ship freeze
   resolution together with `KEYSTORE=1`, before it exists

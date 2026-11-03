@@ -12080,3 +12080,27 @@ lost device need. Both ship OFF (`LINKING`, `KEYSTORE`).
   account-signed (§2g: otherwise anyone could watch its size and cadence), and
   the request statement's ops are a closed set. The storage rules (bucket sizes,
   current key only) are in place behind them.
+
+## 2026-11-03 — bento/connect directory: contest, the rotation vouch, resolving a freeze
+
+- **The old key vouches with `rot.`, not by signing the new binding's bytes.**
+  `rot.<sha256(new)>.<sha256(old)>` says what the signature means in its own
+  bytes, and the directory checks it with kernel's `verifyRotation`, the same
+  function a pinning client runs offline.
+- **A device holding the old key can stop a key change.** `dreq.contest`, signed
+  by the key the directory still serves, freezes a pending rotation; `dreq.freeze`
+  is the owner's lost-or-stolen report. Neither needs consent: both only remove
+  power. Rotation stays off until this has been run by security.
+- **Only the recovery code unfreezes**, with a new binding signed by its own key.
+  No old-key signature exists in that case, so pinners warn, deliberately: a
+  "recovered" flag from the directory would not be proof.
+- **A holder delete keeps the protection the binding had.** Deleting with the
+  key and re-binding a different key by email would otherwise skip the 72-hour
+  window, so until the deleted binding's own expiry that re-bind waits the full
+  window, the deleted key may contest it, and its recovery verifier is kept for
+  that long (then deleted).
+- **Notices that anyone can trigger are kept apart.** Recovery attempts need no
+  signature, so they are one counted entry per kind with their own mail budget:
+  however many arrive, they can't push a signed event out of a device's list or
+  spend its mail. A recovery notice says to set a new recovery code, which
+  cancels a release; a freeze would not, and would block the new code.

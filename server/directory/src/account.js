@@ -149,7 +149,7 @@ export async function keysRoute(p, b, env, ip, deps) {
     if (!(await ledger(env, ip, 'keys'))) return json(429, { error: 'rate-limited' })
     const a = await authorize(env, email, b, { op: 'status' })
     if (!a.ok) return json(400, { error: 'invalid', reason: a.reason })
-    return json(200, { state: a.state, events: a.events })
+    return json(200, { state: a.state, events: a.events, ...(a.pending ? { pending: a.pending } : {}) })
   }
 
   // --- passkeys ---------------------------------------------------------------------
@@ -326,9 +326,9 @@ export class Account {
       return out(200, { saltV: rc ? rc.saltV : null })
     }
 
-    if (a.op === 'rcStart' || a.op === 'rcRelease') {
-      const start = a.op === 'rcStart'
-      const kind = start ? 'rc-attempt' : 'rc-release'
+    if (a.op === 'rcStart' || a.op === 'rcRelease' || a.op === 'rcResolve') {
+      const start = a.op === 'rcStart', resolve = a.op === 'rcResolve'
+      const kind = a.op === 'rcRelease' ? 'rc-release' : 'rc-attempt'
       if (((await s.get('rcLock')) || 0) > now) return refuse('locked', { notify: kind, quiet: true })
       const log = ((await s.get('rcLog')) || []).filter((t) => now - t < 24 * HOUR)
       if (log.length >= KEYS.rcAttemptsPerDay) return refuse('limit', { notify: kind, quiet: true })
@@ -340,13 +340,23 @@ export class Account {
       }
 
       let rc = await s.get('rc')
-      if (rc && rc.accountPub !== a.accountPub) { await s.delete(['rc', 'rel']); rc = null } // orphaned by a rotation (§9.4b)
+      if (rc && rc.keepUntil && rc.keepUntil <= now) { await s.delete(['rc', 'rel']); rc = null } // a deleted binding's window is over (§39.6)
+      // orphaned by a rotation (§9.4b); a resolution names the FROZEN binding's key, so it never orphans one
+      if (rc && rc.accountPub !== a.accountPub) { if (!resolve) await s.delete(['rc', 'rel']); rc = null }
       if (!rc) return wrong('invalid')
       const pep = peppers(this.env).get(rc.v)
       if (!pep) return refuse('pepper', { notify: kind }) // never a version this Worker doesn't hold
       const pk = await pepperKeys(pep, rc.accountPub)
       const verifier = b64uDec(a.verifier)
       if (!eqBytes(await pepperVerifierTag(pk.verifyKey, verifier), b64uDec(rc.tag))) return wrong('invalid')
+
+      if (resolve) {
+        // unfreezing by the recovery code (§39.3) spends it, like a release (§28a);
+        // the new key enrols its own code
+        await s.delete(['rc', 'rel'])
+        await s.put('rcFails', 0)
+        return out(200, { ok: true })
+      }
 
       if (start) {
         await s.put('rcFails', 0)
@@ -393,10 +403,26 @@ export class Account {
     if (a.op === 'wipe') {
       const creds = (await s.get('creds')) || []
       await s.delete(a.keepRc ? ['creds', 'led'] : ['creds', 'rc', 'rcLog', 'rcFails', 'rcLock', 'rel', 'led'])
+      if (a.keepRc) {
+        // kept for the deleted binding's window only (§39.6): deleted at its expiry
+        // at the latest, by the alarm, or sooner when the window closes (rcDrop)
+        const rc = await s.get('rc')
+        if (rc && Number.isSafeInteger(a.keepUntil)) { await s.put('rc', { ...rc, keepUntil: a.keepUntil }); await s.setAlarm(a.keepUntil) }
+      }
       return out(200, { creds })
+    }
+    if (a.op === 'rcDrop') {
+      const rc = await s.get('rc')
+      if (rc && rc.accountPub === a.accountPub) await s.delete(['rc', 'rel'])
+      return out(200, { ok: true })
     }
 
     return out(400, { error: 'bad-op' })
+  }
+
+  async alarm() {
+    const rc = await this.state.storage.get('rc')
+    if (rc && rc.keepUntil && rc.keepUntil <= Date.now()) await this.state.storage.delete(['rc', 'rel'])
   }
 }
 

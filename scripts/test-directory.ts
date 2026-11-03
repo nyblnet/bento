@@ -17,8 +17,9 @@
 //   · per-address mail limits stop mail-bombing; per-IP limits are enforced;
 //   · deletion (holder-signed, or by mailed code) leaves a SIGNED tombstone;
 //   · no raw address or IP is ever written to storage;
-//   · rotation: old-key vouching + consent + the mailed code → 72 h pending
-//     (pins don't move) → active with the old key's signature; refusals for
+//   · rotation: the old key's rot. vouch (kernel verifyRotation) + consent +
+//     the mailed code → 72 h pending (pins don't move) → active, serving the
+//     rot. and the earlier steps; refusals for
 //     replay, relay, payload swap and expiry (native cns. AND WebAuthn), each
 //     beside a working control; the WebAuthn origin, type, flag, sign-count,
 //     cross-origin and lockout rows;
@@ -29,7 +30,7 @@ import worker, { Address, Cred, Ledger, LIMITS } from '../server/directory/src/w
 import { addressKey, normalize } from '../server/directory/src/address.js'
 import {
   b64uDec, b64uEnc, buildBind, buildCmp, buildConsent, buildDel, buildDev, consentTranscript, sha256b64u as hashOf, signStatement,
-  verifyAtt, verifyStatementSig, verifyTomb, webauthnChallengeFor,
+  verifyAtt, verifyTomb, webauthnChallengeFor, buildRot, verifyRotation, buildDreq, dreqArg,
 } from '../kernel/src/statements.ts'
 import { readFileSync } from 'node:fs'
 
@@ -441,7 +442,8 @@ const alice = await person('alice@example.com', 'Alice')
     const was = String(cur.j.binding)
     const seq = Number(was.split('.')[5]) + 1
     const s = await stmtFor(next, seq, await hashOf(was))
-    return { stmt: s.text, sig: s.sig, oldSig: await owner.k.sign(s.text), was }
+    const rot = buildRot(await hashOf(s.text), await hashOf(was))
+    return { stmt: s.text, sig: s.sig, rot, rotSig: await owner.k.sign(rot), was }
   }
   const rotStart = (body: Record<string, unknown>) => api("POST", "/v1/rotate/start", body, freshIp())
   async function rotComplete(next: P, stmt: string) {
@@ -459,7 +461,7 @@ const alice = await person('alice@example.com', 'Alice')
     const d = await device(alice), alice2 = { ...(await person(alice.email, 'Alice')) }
     const r = await rotation(alice, alice2), ch = await challengeFor(alice.email)
     delete env.ROTATION
-    ok((await rotStart({ ...r, challenge: ch, consent: await nativeConsent(d, ch, r.stmt) })).status === 404, 'rotation routes answer 404 unless ROTATION=1 (no old-key contest yet)')
+    ok((await rotStart({ ...r, challenge: ch, consent: await nativeConsent(d, ch, r.stmt) })).status === 404, 'rotation routes answer 404 unless ROTATION=1')
     env.ROTATION = '1'
   }
 
@@ -485,7 +487,8 @@ const alice = await person('alice@example.com', 'Alice')
     now += MIN
     l = await look(alice.email)
     ok(l.j.binding === r.stmt && l.j.state === 'active' && (await attState(l)) === 'active', 'at 72 h uncontested: the new binding is active')
-    ok(typeof l.j.rotSig === 'string' && (await verifyStatementSig(alice.k.pub, String(l.j.rotSig), r.stmt)), 'the lookup carries the OLD key\'s signature over the new binding (pinners follow silently)')
+    ok(l.j.rot === r.rot && (await verifyRotation(r.was, String(l.j.binding), String(l.j.sig), String(l.j.rot), String(l.j.rotSig), { now })).ok, 'the lookup serves the OLD key\'s rot. vouch, and it passes kernel verifyRotation (pinners follow silently)')
+    ok(Array.isArray(l.j.steps) && (l.j.steps as { binding: string }[]).at(-1)!.binding === r.was, 'the replaced binding is served as a step, so a pinner further behind can follow')
     ok((l.j.chain as string[]).includes(await hashOf(r.was)) && l.j.rebound === false, 'the old binding is in the chain; not flagged rebound')
   }
 
@@ -524,8 +527,20 @@ const alice = await person('alice@example.com', 'Alice')
     ok(reason(x) === 'challenge', 'a challenge older than 60 s is refused')
     const r2 = await rotation(alice2, next) // re-made at the new time
     ch = await challengeFor(alice.email)
-    x = await rotStart({ ...r2, oldSig: await next.k.sign(r2.stmt), challenge: ch, consent: await nativeConsent(d, ch, r2.stmt) })
-    ok(reason(x) === 'old-key', 'without the OLD key\'s signature over the exact statement: refused')
+    x = await rotStart({ ...r2, rotSig: await next.k.sign(r2.rot), challenge: ch, consent: await nativeConsent(d, ch, r2.stmt) })
+    ok(reason(x) === 'rot:rot-signature', 'a rot. signed by the NEW key is refused')
+    ch = await challengeFor(alice.email)
+    { const sw = buildRot(await hashOf(r2.was), await hashOf(r2.stmt)); x = await rotStart({ ...r2, rot: sw, rotSig: await alice2.k.sign(sw), challenge: ch, consent: await nativeConsent(d, ch, r2.stmt) }) }
+    ok(reason(x) === 'rot:rot-mismatch', 'a rot. with its two hashes swapped is refused')
+    ch = await challengeFor(alice.email)
+    { const other = await stmtFor(next, Number(r2.was.split('.')[5]) + 1, await hashOf(r2.was), 5 * MONTH); const ro = buildRot(await hashOf(other.text), await hashOf(r2.was)); x = await rotStart({ ...r2, rot: ro, rotSig: await alice2.k.sign(ro), challenge: ch, consent: await nativeConsent(d, ch, r2.stmt) }) }
+    ok(reason(x) === 'rot:rot-mismatch', 'a rot. over a DIFFERENT next binding is refused')
+    ch = await challengeFor(alice.email)
+    x = await rotStart({ ...r2, rotSig: await alice2.k.sign(r2.stmt), challenge: ch, consent: await nativeConsent(d, ch, r2.stmt) })
+    ok(reason(x) === 'rot:rot-signature', 'the OLD scheme (old key signs the exact bind. bytes) is no longer a vouch')
+    ch = await challengeFor(alice.email)
+    x = await rotStart({ stmt: r2.stmt, sig: r2.sig, challenge: ch, consent: await nativeConsent(d, ch, r2.stmt) })
+    ok(reason(x) === 'rot:missing', 'no rot. at all is refused')
     ch = await challengeFor(alice.email)
     x = await rotStart({ ...r2, challenge: ch, consent: await nativeConsent(await device(alice), ch, r2.stmt) })
     ok(reason(x) === 'consent:dev:account', 'a consent key certified by a RETIRED account key is refused')
@@ -534,11 +549,11 @@ const alice = await person('alice@example.com', 'Alice')
     ok(reason(x) === 'consent:dev:no-consent-key', 'a dev. with no consent key (the light tier) cannot sign a cns.')
     ch = await challengeFor(alice.email)
     const same = await stmtFor(alice2, Number(r2.was.split('.')[5]) + 1, await hashOf(r2.was))
-    x = await rotStart({ stmt: same.text, sig: same.sig, oldSig: same.sig, challenge: ch, consent: await nativeConsent(d, ch, same.text) })
+    x = await rotStart({ stmt: same.text, sig: same.sig, rot: r2.rot, rotSig: r2.rotSig, challenge: ch, consent: await nativeConsent(d, ch, same.text) })
     ok(reason(x) === 'same-key', 'the same key is a renewal, not a rotation')
     ch = await challengeFor(alice.email)
     const skip = await stmtFor(next, Number(r2.was.split('.')[5]) + 2, await hashOf(r2.was))
-    x = await rotStart({ stmt: skip.text, sig: skip.sig, oldSig: await alice2.k.sign(skip.text), challenge: ch, consent: await nativeConsent(d, ch, skip.text) })
+    { const rs = buildRot(await hashOf(skip.text), await hashOf(r2.was)); x = await rotStart({ stmt: skip.text, sig: skip.sig, rot: rs, rotSig: await alice2.k.sign(rs), challenge: ch, consent: await nativeConsent(d, ch, skip.text) }) }
     ok(reason(x) === 'sequence', 'a skipped seq is refused')
     // the control for all of the above: the same request, correctly consented, works
     ch = await challengeFor(alice.email)

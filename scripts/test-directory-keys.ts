@@ -21,7 +21,13 @@
 //     capped, failures lock, everything notifies; pepper versions upgrade on use
 //     and an unknown version is never picked;
 //   · the ledger keeps only bucket sizes and the current key's blob;
-//   · nothing secret (tok, verifier, inner blob) is stored in the clear.
+//   · nothing secret (tok, verifier, inner blob) is stored in the clear;
+//   · notices: mail capped per address, unsigned kinds coalesced and budgeted
+//     apart, so they can neither evict nor starve the signed ones;
+//   · D1b: contest (old key, only while pending) and owner freeze by dreq.;
+//     resolution by the recovery code + a self-signed new binding (no vouch);
+//     the holder-delete window (§39.6): a new key over a holder tomb waits out
+//     72 h, the tombstoned key may contest, the verifier is kept, then dropped.
 
 import worker, { Account, Address, Cred, Ledger, Link } from '../server/directory/src/worker.js'
 import { addressKey } from '../server/directory/src/address.js'
@@ -41,6 +47,8 @@ const MIN = 60_000, HOUR = 60 * MIN, DAY = 24 * HOUR, MONTH = 30.44 * DAY
 
 // ---------- in-memory Durable Object namespaces ----------
 const stores = new Map<string, Map<string, unknown>>() // `${class}:${id}` → storage
+const instances = new Map<string, unknown>() // `${class}:${id}` → the object, for alarms
+const accountAlarm = async (id: string) => (instances.get(`Account:${id}`) as { alarm(): Promise<void> }).alarm()
 function namespace(name: string, Klass: new (state: unknown, env: unknown) => { fetch(r: Request): Promise<Response> }) {
   const objs = new Map<string, { fetch(r: Request): Promise<Response> }>()
   return {
@@ -59,6 +67,7 @@ function namespace(name: string, Klass: new (state: unknown, env: unknown) => { 
           },
         }
         objs.set(id, new Klass(state, env))
+        instances.set(`${name}:${id}`, objs.get(id))
       }
       const obj = objs.get(id)!
       return { fetch: (u: string | Request, init?: RequestInit) => obj.fetch(u instanceof Request ? u : new Request(u, init)) }
@@ -283,7 +292,15 @@ async function freezeByEmail(p: P) {
     const light = await device(H, { consent: false })
     const s4 = await slot(), ch4 = await challengeFor(H.email)
     const c4 = await nativeConsent({ ...light }, ch4, nd.nDev)
-    ok(reason(await complete(s4, H, light, { ch: ch4, nd, consent: c4 })) === 'consent:dev:no-consent-key', 'a light-tier dev. cannot sign a cns.')
+    ok(reason(await complete(s4, H, light, { ch: ch4, nd, consent: c4 })) === 'h-no-consent', 'a light-tier H (dev. with no consent key) is refused: no WebAuthn link consent until kernel has its msg3 variant')
+    // the WebAuthn consent form, from an H that does hold a consent key: still refused
+    const s5 = await slot(), ch5 = await challengeFor(H.email)
+    const wa = { webauthn: { credentialId: r64(32), authenticatorData: r64(37), clientDataJSON: r64(80), signature: r64(70) }, exp: now + 2 * MIN }
+    ok(reason(await complete(s5, H, hd, { ch: ch5, nd, consent: wa })) === 'h-no-consent', 'the WebAuthn consent form for a link is refused (off until kernel\'s msg3 WebAuthn vectors)')
+    const s6 = await slot(), ch6 = await challengeFor(H.email)
+    ok(reason(await complete(s6, H, hd, { ch: ch6, nd, consent: { ...(await nativeConsent(hd, ch6, nd.nDev)), webauthn: wa.webauthn } })) === 'h-no-consent', 'a native cns. with a WebAuthn assertion riding along is refused too')
+    const s7 = await slot()
+    ok((await complete(s7, H, hd, { nd: await nDevFor(H) })).status === 200, 'CONTROL: the native consent from the same H still completes')
   }
 
   // the certificates: H's by the LIVE key; N's names the same account and a different device
@@ -529,7 +546,7 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
   {
     const m = [...mailbox].reverse().find((x) => x.to === R.email && x.kind === 'rc-attempt')!
     ok(/set a new recovery code/.test(m.body) && /That cancels it/.test(m.body) && !/and freeze your keys\./.test(m.body), 'the recovery-attempt notice says to set a new recovery code (the cancel), never to freeze')
-    const ev = (store('Address', await addressKey(R.email))!.get('events') as { k: string; act?: string }[]).filter((x) => x.k === 'rc-attempt').pop()
+    const ev = (store('Address', await addressKey(R.email))!.get('uevents') as Record<string, { act?: string }>)['rc-attempt']
     ok(ev?.act === 'rc-enrol', '  …and its event-list entry leads to that action (act: rc-enrol)')
     const fm = [...mailbox].reverse().find((x) => x.to === K.email && x.kind === 'cred-add')!
     ok(/and freeze your keys\./.test(fm.body), 'CONTROL: a passkey notice still advises freezing')
@@ -562,6 +579,22 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
 }
 // --- notice mail is capped per address; the event list records everything (F1) ---
 {
+  // unauthenticated attempts can't evict a signed event from the list (G1)
+  const V = await person('keys-ev@example.com'); await bind(V)
+  const vd = await device(V)
+  await enrol(V, vd)
+  const listed = async () => ((await api('/v1/status', await dreq(V, null, { op: 'status' }))).j.events as { k: string; n?: number }[])
+  ok((await listed()).some((x) => x.k === 'rc-enrol'), 'CONTROL: a recovery-code change is listed')
+  for (let i = 0; i < 30; i++) await start(V, r64(32)) // 30 attempts, 30 IPs, no signature
+  const after = await listed()
+  ok(after.some((x) => x.k === 'rc-enrol'), `…and still listed after 30 unsigned recovery attempts (${after.map((x) => x.k).join(',')})`)
+  ok(after.filter((x) => x.k === 'rc-attempt').length === 1 && after.find((x) => x.k === 'rc-attempt')!.n === 30, '  …which show as ONE entry counting 30')
+  const W = await person('keys-ev2@example.com'); await bind(W)
+  const wd = await device(W)
+  for (let i = 0; i < 21; i++) await enrol(W, wd)
+  ok(((await api('/v1/status', await dreq(W, null, { op: 'status' }))).j.events as { k: string }[]).filter((x) => x.k === 'rc-enrol').length === 20, 'signed events keep the list\'s length of 20 (it is short by design)')
+}
+{
   for (const enrolled of [true, false]) {
     const T = await person(`keys-cap-${enrolled ? 'e' : 'u'}@example.com`); await bind(T)
     const te = enrolled ? (await enrol(T, await device(T))).e : null
@@ -570,8 +603,8 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
     ok(noticesTo(T.email, 'rc-attempt') === m0 + 1, `CONTROL (${enrolled ? 'enrolled' : 'nothing enrolled'}): the first wrong attempt mails a notice`)
     for (let i = 0; i < 39; i++) await start(T, r64(32)) // 40 attempts, each from its own IP
     ok(noticesTo(T.email, 'rc-attempt') === m0 + 1, `40 wrong recovery attempts from 40 IPs → 1 mail, not 40 (${noticesTo(T.email, 'rc-attempt') - m0})`)
-    const evs = (store('Address', await addressKey(T.email))!.get('events') as { k: string }[]).filter((x) => x.k === 'rc-attempt')
-    ok(evs.length === 20, `  …while the event list records them (${evs.length}, the list's length)`)
+    const ue = (store('Address', await addressKey(T.email))!.get('uevents') as Record<string, { n: number }>)['rc-attempt']
+    ok(ue.n === 40, `  …while the event list records them, as ONE entry with a count (${ue.n})`)
     now += 2 * HOUR
     const m1 = noticesTo(T.email, 'rc-attempt')
     ok(reason(await start(T, r64(32))) === 'locked' && noticesTo(T.email, 'rc-attempt') === m1, `a refusal while locked is listed but never mailed, even an hour later (${enrolled ? 'enrolled' : 'nothing enrolled'})`)
@@ -591,11 +624,16 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
   const ev = async (kind: string) => (await (await addr.fetch('https://a/op', { method: 'POST', body: JSON.stringify({ op: 'event', kind, fp: '', mail: true }) })).json()).to
   ok((await ev('link')) === C.email, 'CONTROL: a first notice of a kind is mailed')
   ok((await ev('link')) === null, 'a second of the same kind within the hour is listed, not mailed')
-  let mailed = 1
-  for (const k of ['cred-add', 'cred-del', 'cred-fetch', 'rc-enrol', 'rc-attempt', 'rc-release', 'link-x', 'link-y', 'link-z']) if (await ev(k)) mailed++
-  ok(mailed === 8, `at most 8 notice mails a day per address across kinds (${mailed})`)
+  // the kinds anyone can trigger have their own daily ceiling…
+  let attack = 0
+  for (let i = 0; i < 10; i++) { now += HOUR + MIN; if (await ev(i % 2 ? 'rc-release' : 'rc-attempt')) attack++ }
+  ok(attack === 4, `recovery-attempt notices: at most 4 mails a day, one an hour (${attack} of 10 hours)`)
+  // …so they can't spend the signed kinds' mail
+  let signed = 0
+  for (const k of ['cred-add', 'cred-del', 'cred-fetch', 'rc-enrol']) if (await ev(k)) signed++
+  ok(signed === 4, `after those, 4 signed notices (passkey, recovery-code change) are all mailed (${signed})`)
   now += DAY + MIN
-  ok((await ev('link')) === C.email, 'CONTROL: the next day notices mail again')
+  ok((await ev('rc-attempt')) === C.email, 'CONTROL: the next day recovery notices mail again')
 }
 {
   // a new enrolment ends a release in flight for the old code
@@ -703,6 +741,240 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
   ok(!store('Cred', b64uEnc(await sha(xc.reg.credId)))!.has('cred') && !store('Account', xScope)!.has('creds'), 'a holder deletion removes every passkey and the index')
   ok(store('Account', xScope)!.has('rc'), '  …and keeps the recovery verifier for the deleted binding\'s window (§39.6)')
   void xb
+}
+
+// =====================================================================
+// D1b: the rot. vouch, contest and owner freeze (dreq.), resolution by the
+// recovery code, and the holder-delete window (security §39.3, §39.6)
+// =====================================================================
+{
+  env.ROTATION = '1'
+  const { buildDel, buildRot, verifyAtt, verifyRotation } = await import('../kernel/src/statements.ts')
+  const DK = { 'dir-1': dir.pub }
+  const attOf = async (l: { j: Record<string, unknown> }) => {
+    const v = await verifyAtt(String(l.j.attestation), String(l.j.attestationSig), { directoryKeys: DK, bindText: String(l.j.binding), now, maxAgeMs: 10 * MIN })
+    return v.ok ? v.value.state : `bad:${v.reason}`
+  }
+  const nextOf = async (p: P): Promise<P> => ({ email: p.email, k: await signer(), kx: await kxPub() })
+  const bindNext = async (next: P, prevText: string | null, o: { seq?: number; life?: number; prevHash?: string | null } = {}) => {
+    const seq = o.seq ?? (prevText ? Number(prevText.split('.')[5]) + 1 : 1)
+    const text = buildBind({ address: next.email, accountPub: next.k.pub, kx: next.kx, name: null, seq, prev: o.prevHash !== undefined ? o.prevHash : prevText ? await hashOf(prevText) : null, created: now, expires: Math.floor(now + (o.life ?? 13 * MONTH)) })
+    return { text, sig: await next.k.sign(text) }
+  }
+  /** a full rotation of p to next: vouch, consent, mailed code → pending */
+  async function rotate(p: P, next: P) {
+    now += 2 * MIN
+    const was = await current(p)
+    const n = await bindNext(next, was)
+    const rot = buildRot(await hashOf(n.text), await hashOf(was))
+    const ch = await challengeFor(p.email)
+    const d = await device(p)
+    const st = await api('/v1/rotate/start', { stmt: n.text, sig: n.sig, rot, rotSig: await p.k.sign(rot), challenge: ch, consent: await nativeConsent(d, ch, n.text, { purpose: 'rotate' }) })
+    const code = codeFor(p.email)!
+    const c = await api('/v1/rotate/complete', { email: p.email, code, sig: await next.k.sign(buildCmp(await hashOf(n.text), code)) })
+    return { ...n, was, rot, st, c }
+  }
+  async function contest(p: P, by: P, pendingText: string, o: { ch?: string; bindText?: string; bind?: string } = {}) {
+    const ch = o.ch ?? await challengeFor(p.email)
+    const req = buildDreq({ op: 'contest', address: p.email, bindHash: await hashOf(o.bindText ?? await current(p)), challenge: ch, arg: await hashOf(pendingText) })
+    return api('/v1/contest', { email: p.email, req, sig: await by.k.sign(req), challenge: ch, bind: o.bind })
+  }
+  const freezeBy = async (p: P, by: P, o: { bindText?: string } = {}) => api('/v1/freeze', await dreq(p, null, { op: 'freeze' }, { signer: by, bindText: o.bindText }))
+  const resolve = (b: { text: string; sig: string }, verifier: string) => api('/v1/resolve', { stmt: b.text, sig: b.sig, verifier })
+  const del = async (p: P) => { const ts = now; return api('/v1/delete', { email: p.email, ts, sig: await p.k.sign(buildDel(p.email, ts)) }) }
+  const status = async (p: P) => api('/v1/status', await dreq(p, null, { op: 'status' }))
+  const rcOf = async (p: P) => store('Account', await addressKey(p.email))?.get('rc') as Record<string, unknown> | undefined
+
+  // --- ROTATION stays off until the contest exists: the gate itself ---
+  {
+    const G = await person('d1b-gate@example.com'); await bind(G)
+    delete env.ROTATION
+    ok((await rotate(G, await nextOf(G))).st.status === 404, 'rotation answers 404 unless ROTATION=1')
+    env.ROTATION = '1'
+  }
+
+  // --- the pending window, contest by the old key → frozen ---
+  const A = await person('d1b-a@example.com'); await bind(A)
+  const ad = await device(A)
+  const { e: aRc } = await enrol(A, ad)
+  const A2 = await nextOf(A)
+  const ra = await rotate(A, A2)
+  ok(ra.st.status === 202 && ra.c.status === 200 && ra.c.j.state === 'pending', `CONTROL: a vouched, consented rotation goes pending (${ra.st.status}/${ra.c.status})`)
+  {
+    const st = await status(A)
+    const pend = st.j.pending as { binding: string; sig: string; rot: string; rotSig: string; activeAt: number }
+    ok(st.status === 200 && st.j.state === 'pending' && pend?.binding === ra.text, 'the old key\'s signed status read names the pending binding')
+    ok((await verifyRotation(ra.was, pend.binding, pend.sig, pend.rot, pend.rotSig, { now })).ok, '  …with its rot. vouch, so the device can show what it is contesting')
+    ok(reason(await api('/v1/status', await dreq(A, null, { op: 'status' }, { signer: A2, bindText: ra.text }))) === 'dreq:bind-mismatch', 'a PENDING key signs no request (status naming the pending binding → refused)')
+  }
+  ok(reason(await contest(A, A2, ra.text)) === 'dreq:signature', 'a contest signed by the pending (new) key → refused')
+  ok(reason(await contest(A, A2, ra.text, { bindText: ra.text })) === 'dreq:bind-mismatch', 'a contest naming the pending binding → refused')
+  ok(reason(await contest(A, A, ra.was)) === 'dreq:arg', 'a contest whose arg is not the pending binding → refused')
+  ok(reason(await contest(A, await person(A.email), ra.text)) === 'dreq:signature', 'a contest signed by an unrelated key → refused')
+  {
+    const ch = await challengeFor(A.email)
+    const c0 = noticesTo(A.email, 'contest')
+    const c = await contest(A, A, ra.text, { ch })
+    ok(c.status === 200 && c.j.state === 'frozen', `CONTROL: the old key contests "this wasn't me" → frozen (${c.status} ${reason(c)})`)
+    ok(noticesTo(A.email, 'contest') === c0 + 1, '  …notified')
+    ok(reason(await contest(A, A, ra.text, { ch })) === 'replay', 'the same contest again → refused (its challenge was spent)')
+  }
+  {
+    const l = await lookup(A.email)
+    ok(l.j.binding === ra.was && (await attOf(l)) === 'frozen', 'contested: lookups serve the OLD binding with att.…frozen')
+    now += 73 * HOUR
+    ok((await lookup(A.email)).j.binding === ra.was, 'a contested rotation never becomes active')
+    ok(reason(await contest(A, A, ra.text)) === 'dreq:state', 'frozen: a second contest → refused (only status is accepted)')
+    ok(reason(await freezeBy(A, A)) === 'dreq:state', 'frozen: a freeze → refused')
+    ok((await status(A)).j.state === 'frozen', 'frozen: the status read still works')
+    ok((await del(A)).status === 400, 'frozen: a holder delete → refused')
+  }
+  {
+    const B = await person('d1b-b@example.com'); await bind(B)
+    ok(reason(await contest(B, B, await current(B))) === 'dreq:state', 'nothing pending: a contest → refused')
+  }
+
+  // --- resolution by the recovery code ---
+  {
+    const A3 = await nextOf(A)
+    const head = await current(A) // the frozen binding: the new one chains to it
+    const nb = await bindNext(A3, head)
+    ok(reason(await resolve(nb, r64(32))) === 'invalid' && (await lookup(A.email)).j.binding === head, 'a wrong verifier → refused, still frozen')
+    ok(reason(await resolve(await bindNext(A, head), aRc.verifier)) === 'same-key', 'resolving to the frozen (lost) key → refused')
+    ok(reason(await resolve(await bindNext(A3, head, { seq: Number(head.split('.')[5]) + 2 }), aRc.verifier)) === 'sequence', 'a skipped seq → refused')
+    ok(reason(await resolve(await bindNext(A3, head, { prevHash: await hashOf(ra.text) }), aRc.verifier)) === 'sequence', 'chained to the DISCARDED pending binding → refused')
+    ok((await resolve({ text: nb.text, sig: await A.k.sign(nb.text) }, aRc.verifier)).status === 400, 'a new binding not signed by its own key → refused')
+    ok(!!(await rcOf(A)), '  (no refusal above spent the code)')
+    const r = await resolve(nb, aRc.verifier)
+    ok(r.status === 200 && r.j.rebound === true, `CONTROL: the recovery verifier + a self-signed new binding resolve the freeze (${r.status} ${reason(r)})`)
+    const l = await lookup(A.email)
+    ok(l.j.binding === nb.text && (await attOf(l)) === 'active' && l.j.rebound === true && !('rot' in l.j), '  …active under the new key, rebound, NO vouch (pinners warn, as intended)')
+    ok((l.j.chain as string[]).includes(await hashOf(head)) && !(l.j.chain as string[]).includes(await hashOf(ra.text)), '  …the frozen binding is in the chain; the contested one never was')
+    ok(!(await rcOf(A)), '  …and the recovery code is spent')
+    ok(noticesTo(A.email, 'resolve') === 1, '  …notified')
+    ok(reason(await resolve(await bindNext(await nextOf(A), nb.text), aRc.verifier)) === 'state', 'an address that is not frozen cannot be "resolved"')
+  }
+
+  // --- the owner's lost-or-stolen freeze, signed by the served key ---
+  {
+    const F = await person('d1b-f@example.com'); await bind(F)
+    ok(reason(await freezeBy(F, await person(F.email))) === 'dreq:signature', 'a freeze signed by another key → refused')
+    ok(reason(await api('/v1/freeze', await dreq(F, null, { op: 'status' }))) === 'dreq:op', 'a signed STATUS request sent to the freeze route → refused (dreq:op)')
+    { const ch = await challengeFor(F.email); const req = buildDreq({ op: 'freeze', address: F.email, bindHash: await hashOf(await current(F)), challenge: ch, arg: await hashOf('x') }); ok(reason(await api('/v1/freeze', { email: F.email, req, sig: await F.k.sign(req), challenge: ch })) === 'dreq:grammar', 'a freeze with a non-empty arg → refused') }
+    const f = await freezeBy(F, F)
+    ok(f.status === 200 && f.j.state === 'frozen' && (await attOf(await lookup(F.email))) === 'frozen', 'CONTROL: active → the owner\'s signed freeze → frozen')
+    const P2 = await person('d1b-p@example.com'); await bind(P2)
+    const P3 = await nextOf(P2)
+    const rp = await rotate(P2, P3)
+    ok(reason(await freezeBy(P2, P3, { bindText: rp.text })) === 'dreq:bind-mismatch', 'pending: a freeze by the pending key → refused')
+    ok((await del(P2)).status === 400, 'pending: a holder delete → refused (it would race the contest window)')
+    const fp = await freezeBy(P2, P2)
+    ok(fp.status === 200 && fp.j.state === 'frozen', 'pending: the old key\'s signed freeze → frozen')
+    now += 73 * HOUR
+    ok((await lookup(P2.email)).j.binding === rp.was, '  …and the rotation in flight is gone')
+  }
+
+  // --- §39.6: a holder delete does not shorten the protection the binding had ---
+  {
+    const T = await person('d1b-t@example.com'); const tText = await bind(T)
+    const td = await device(T)
+    const { e: tRc } = await enrol(T, td)
+    ok((await del(T)).status === 204, 'T deletes its binding with its key')
+    ok((await rcOf(T))?.keepUntil === Number(tText.split('.')[8]), 'the recovery verifier is kept until the deleted binding\'s own expiry')
+    // the thief, holding T's key and mailbox, re-binds a NEW key by email
+    const X = await nextOf(T)
+    now += 2 * MIN
+    const xb = await bindNext(X, null)
+    await api('/v1/bind/start', { stmt: xb.text, sig: xb.sig })
+    const code = codeFor(T.email)!
+    const c = await api('/v1/bind/complete', { email: T.email, code, sig: await X.k.sign(buildCmp(await hashOf(xb.text), code)) })
+    ok(c.status === 200 && c.j.state === 'pending' && c.j.rebound === true, `a new key over the holder tomb → PENDING, not active (${c.status} ${JSON.stringify(c.j).slice(0, 60)})`)
+    let l = await lookup(T.email)
+    ok(l.status === 410 && l.j.state === 'pending' && l.j.pending === await hashOf(xb.text), 'lookups keep answering the tomb (410, no ✓), naming what is pending')
+    {
+      now += 2 * MIN
+      const n0 = mailbox.length
+      const yb = await bindNext(await nextOf(T), null)
+      await api('/v1/bind/start', { stmt: yb.text, sig: yb.sig })
+      ok(mailbox.length === n0, 'a second re-bind while one is pending over the tomb mails nothing')
+    }
+    ok(reason(await contest(T, T, xb.text, { bindText: tText })) === 'state', 'a contest by the tombstoned key WITHOUT the deleted binding\'s text → refused')
+    ok(reason(await contest(T, T, xb.text, { bindText: tText, bind: tText + 'x' })) === 'state', 'a contest bringing a text that is not the tombstoned binding → refused')
+    ok(reason(await contest(T, X, xb.text, { bindText: tText, bind: tText })) === 'dreq:signature', 'a "contest" signed by the new key → refused')
+    const ct = await contest(T, T, xb.text, { bindText: tText, bind: tText })
+    ok(ct.status === 200 && ct.j.state === 'frozen', `CONTROL: the tombstoned key contests with dreq.contest → frozen (${reason(ct)})`)
+    now += 73 * HOUR
+    l = await lookup(T.email)
+    ok(l.status === 410 && l.j.state === 'frozen', 'the re-bind never becomes active; the tomb answers, frozen')
+    ok(!!(await rcOf(T)), 'the deleted binding\'s recovery verifier is still held')
+    const T2 = await nextOf(T)
+    const tb = await bindNext(T2, tText)
+    const r = await resolve(tb, tRc.verifier)
+    ok(r.status === 200 && r.j.rebound === true, `CONTROL: the recovery code resolves the tomb freeze to the owner's new key (${reason(r)})`)
+    l = await lookup(T.email)
+    ok(l.status === 200 && l.j.binding === tb.text && (l.j.chain as string[]).includes(await hashOf(tText)), '  …active, with the tombstoned hash in the chain')
+  }
+  {
+    // uncontested: the full window, then active, flagged rebound, the old verifier dropped
+    const U = await person('d1b-u@example.com'); const uText = await bind(U)
+    await enrol(U, await device(U))
+    await del(U)
+    const X = await nextOf(U)
+    now += 2 * MIN
+    const xb = await bindNext(X, null)
+    await api('/v1/bind/start', { stmt: xb.text, sig: xb.sig })
+    const code = codeFor(U.email)!
+    await api('/v1/bind/complete', { email: U.email, code, sig: await X.k.sign(buildCmp(await hashOf(xb.text), code)) })
+    now += 72 * HOUR - MIN
+    ok((await lookup(U.email)).status === 410, 'one minute before 72 h: still the tomb')
+    now += MIN
+    const l = await lookup(U.email)
+    ok(l.status === 200 && l.j.binding === xb.text && l.j.rebound === true && (l.j.chain as string[]).includes(await hashOf(uText)), 'uncontested for 72 h: active, rebound, the tombstoned hash in the chain (an explained discontinuity)')
+    ok(!(await rcOf(U)), '  …and the deleted binding\'s recovery verifier is dropped when the window closes')
+  }
+  {
+    // CONTROL: the same key re-binding over its own tomb is immediate
+    const S = await person('d1b-s@example.com'); await bind(S)
+    await del(S)
+    now += 2 * MIN
+    const sb = await bindNext(S, null)
+    await api('/v1/bind/start', { stmt: sb.text, sig: sb.sig })
+    const code = codeFor(S.email)!
+    const c = await api('/v1/bind/complete', { email: S.email, code, sig: await S.k.sign(buildCmp(await hashOf(sb.text), code)) })
+    ok(c.status === 200 && c.j.rebound === false && (await lookup(S.email)).status === 200, 'CONTROL: the same key over its own holder tomb → active at once, not rebound')
+  }
+  {
+    // CONTROL: after the deleted binding's own expiry, a new key re-binds by email (pinners warn)
+    const E = await person('d1b-e@example.com')
+    now += 2 * MIN
+    const eb = await bindNext(E, null, { life: 10 * MIN })
+    await api('/v1/bind/start', { stmt: eb.text, sig: eb.sig })
+    let code = codeFor(E.email)!
+    await api('/v1/bind/complete', { email: E.email, code, sig: await E.k.sign(buildCmp(await hashOf(eb.text), code)) })
+    await enrol(E, await device(E))
+    ok((await del(E)).status === 204, 'E deletes a binding that has 10 minutes left')
+    now += 11 * MIN
+    const E2 = await nextOf(E)
+    const nb = await bindNext(E2, null)
+    await api('/v1/bind/start', { stmt: nb.text, sig: nb.sig })
+    code = codeFor(E.email)!
+    const c = await api('/v1/bind/complete', { email: E.email, code, sig: await E2.k.sign(buildCmp(await hashOf(nb.text), code)) })
+    ok(c.status === 200 && c.j.rebound === true && (await lookup(E.email)).status === 200, 'CONTROL: a new key after the deleted binding\'s expiry → active + rebound')
+    ok(!(await rcOf(E)), '  …and the old verifier is dropped')
+  }
+  {
+    // the retention backstop: nothing happens after a delete, and the alarm removes the verifier at expiry
+    const R2 = await person('d1b-r@example.com'); await bind(R2)
+    await enrol(R2, await device(R2))
+    await del(R2)
+    const keep = Number((await rcOf(R2))!.keepUntil)
+    const alarm = async () => accountAlarm(await addressKey(R2.email))
+    await alarm()
+    ok(!!(await rcOf(R2)), 'the alarm before the expiry keeps the verifier')
+    now = keep + 1
+    await alarm()
+    ok(!(await rcOf(R2)), 'the alarm at the deleted binding\'s expiry removes it')
+  }
 }
 
 console.log(`${passes} passed, ${fails} failed`)

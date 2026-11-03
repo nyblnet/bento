@@ -13,7 +13,7 @@ import { buildAtt, buildTomb, signStatement } from '../../../kernel/src/statemen
 export {
   b64uDec, b64uEnc, buildBind, buildCmp, buildConsent, buildDel, consentTranscript, CONSENT_MAX_TTL_MS,
   sha256b64u as hashOf, verifyBind, verifyCmp, verifyConsent, verifyDel, verifyDev, verifyStatementSig,
-  webauthnChallengeFor, verifyDreq, dreqNeedsConsent,
+  webauthnChallengeFor, verifyDreq, dreqNeedsConsent, verifyRotation, buildRot,
 } from '../../../kernel/src/statements.ts'
 
 /**
