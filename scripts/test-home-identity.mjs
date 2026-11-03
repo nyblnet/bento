@@ -128,6 +128,9 @@ async function scenario(name) {
   out.resolveEmail = await run(() => agent.resolve({ email: 'grace@example.org' }))
   out.resolveJunk = await run(() => agent.resolve(null))
   out.emailNeverSent = take().length
+  // {pub, email}: the wire carries ONLY pub (the email probe is a phase-2 door behind host consent)
+  out.resolveBoth = await run(() => agent.resolve({ pub: 'G'.repeat(87), email: 'grace@example.org' }))
+  out.resolveBothWire = take()
 
   // phase 2 members are absent
   out.phase2 = { unwrap: agent.unwrap === undefined, share: agent.share === undefined }
@@ -196,6 +199,9 @@ if (process.argv[2] === '--scenario') {
     'resolve({pub}) returns the binding; the wire is {id, op, pub}')
   ok(r.resolveNone?.v === null && r.resolveMalformed?.v === null && r.resolveErr?.v === null, 'resolve: unknown, malformed and failed lookups are all null')
   ok(r.resolveEmail?.v === null && r.resolveJunk?.v === null && r.emailNeverSent === 0, 'resolve({email}) is phase 2: null, and the address never leaves the page')
+  ok(eq(r.resolveBoth?.v, RES) && eq(r.resolveBothWire?.map((m) => Object.keys(m).sort()), [['id', 'op', 'pub']]) &&
+    !JSON.stringify(r.resolveBothWire).includes('grace@example.org'),
+    'resolve({pub, email}) sends a wire request carrying ONLY pub; the email is never forwarded')
 
   ok(r.afterHookRewrite?.v?.ok === true && r.hookCalled !== true, 'page script rewriting window.__bentoNativeReply cannot redirect or swallow replies')
 
