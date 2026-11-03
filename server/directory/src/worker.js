@@ -568,14 +568,11 @@ export class Address {
       if (!t) return
       try {
         const r = await call(this.env.ACCOUNT.get(this.env.ACCOUNT.idFromName(t.scope)), 'rekey', { keep: t.keep, rc: t.rc })
-        if (r.status !== 200) throw new Error(`account ${r.status}`)
         // the Account's list is gone now: this record is the only memory of these
         const creds = [...new Set([...t.creds, ...r.body.creds])]
         await s.put('rekey', { ...t, creds })
-        for (const k of creds) {
-          const d = await call(this.env.CRED.get(this.env.CRED.idFromName(k)), 'delete', { scope: t.scope })
-          if (d.status !== 200 && d.body.reason !== 'unknown') throw new Error(`cred ${d.status}`) // unknown: an earlier try got it
-        }
+        // a call that fails throws; `unknown` only means an earlier try got this one
+        for (const k of creds) await call(this.env.CRED.get(this.env.CRED.idFromName(k)), 'delete', { scope: t.scope })
         await s.delete('rekey')
         if (t.notice && creds.length) await oldCredsGone()
       } catch (e) {

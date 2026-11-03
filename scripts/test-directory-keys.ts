@@ -465,11 +465,11 @@ function cborEnc(v: unknown): number[] {
   if (v instanceof Map) return [...head(5, v.size), ...[...v.entries()].flatMap(([k, x]) => [...cborEnc(k), ...cborEnc(x)])]
   throw new Error('cbor')
 }
-type RegOpts = { flags?: number; alg?: number; fmt?: string; attStmt?: Map<unknown, unknown>; origin?: string; type?: string; challenge?: string; key?: Awaited<ReturnType<typeof signer>> }
+type RegOpts = { flags?: number; alg?: number; fmt?: string; attStmt?: Map<unknown, unknown>; origin?: string; type?: string; challenge?: string; key?: Awaited<ReturnType<typeof signer>>; credId?: Uint8Array }
 async function registration(ch: string, o: RegOpts = {}) {
   const key = o.key ?? await signer()
   const raw = b64uDec(key.pub)!
-  const credId = rnd(32)
+  const credId = o.credId ?? rnd(32)
   const cose = new Map<unknown, unknown>([[1, 2], [3, o.alg ?? -7], [-1, 1], [-2, raw.slice(1, 33)], [-3, raw.slice(33)]])
   const ad = Uint8Array.from([...(await sha(enc('bento.page'))), o.flags ?? 0x4d, 0, 0, 0, 0, ...new Uint8Array(16), 0, credId.length, ...credId, ...cborEnc(cose)])
   const att = Uint8Array.from(cborEnc(new Map<unknown, unknown>([['fmt', o.fmt ?? 'none'], ['attStmt', o.attStmt ?? new Map()], ['authData', ad]])))
@@ -846,10 +846,10 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
     return { text, sig: await next.k.sign(text) }
   }
   /** a full rotation of p to next: vouch, consent, mailed code → pending */
-  async function rotate(p: P, next: P, o: { passkey?: Pk } = {}) {
+  async function rotate(p: P, next: P, o: { passkey?: Pk; life?: number } = {}) {
     now += 2 * MIN
     const was = await current(p)
-    const n = await bindNext(next, was)
+    const n = await bindNext(next, was, { life: o.life })
     const rot = buildRot(await hashOf(n.text), await hashOf(was))
     const ch = await challengeFor(p.email)
     const d = await device(p)
@@ -1545,13 +1545,13 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
     const credGone = async (c: { reg: { credId: Uint8Array } }) => !store('Cred', await ckOf(c))?.has('cred')
     const gone = (p: P) => noticesTo(p.email, 'cred-old-del')
     /** a key with a passkey (and a code), rotated to a new key, settled */
-    async function rotated(email: string, o: { code?: boolean; nocred?: boolean } = {}) {
+    async function rotated(email: string, o: { code?: boolean; nocred?: boolean; life?: number } = {}) {
       const A = await person(email); await bind(A)
       const d = await device(A)
       const c = o.nocred ? null as never : await addCred(A, d)
       const e = o.code ? await enrol(A, d) : null
       const A2 = await nextOf(A)
-      const r = await rotate(A, A2)
+      const r = await rotate(A, A2, { life: o.life })
       if (r.st.status !== 202 || r.c.status !== 200) throw new Error('rotation failed for ' + email)
       const graceEnd = now + 72 * HOUR + 30 * DAY
       now += 73 * HOUR
@@ -1669,6 +1669,39 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
       ok(reason((await addCred(A2, d2, { passkey: c.reg })).r) === 'grace-over', 'grace: a lost landing still ends it: cred-add refused by the Account')
       ok(reason((await enrol(A2, d2, enrolment(), { passkey: c.reg })).r) === 'grace-over', '  …and rc-enrol')
       ok((await addCred(A2, d2, { passkey: n.reg })).r.status === 200, "CONTROL: the new passkey's own consent is not grace")
+      // the grace is still open when the next rotation settles, and this time the previous key HAS a passkey
+      await rotate(A2, await nextOf(A2))
+      now += 73 * HOUR
+      await lookup(A.email)
+      ok(await credGone(c) && !(await credGone(n)), "grace: the settle's clean-up takes the key before last and keeps the previous key's passkeys")
+    }
+    {
+      // a registration the Cred refuses is rolled back whole: it was no first credential
+      const O = await person('grace-other@example.com'); await bind(O)
+      const taken = await addCred(O, await device(O))
+      const { A, A2, c, d2 } = await rotated('grace-rollback@example.com')
+      ok(reason((await addCred(A2, d2, { passkey: c.reg, credId: taken.reg.credId })).r) === 'exists', "  (a credential id another account holds: refused at the Cred)")
+      ok(await hasGrace(A) && await nCreds(A) === 1, 'grace: a rolled-back registration does not end it')
+      ok((await addCred(A2, d2, { passkey: c.reg })).r.status === 200, '  …and the old passkey can still consent to the real one')
+    }
+    {
+      // a deletion takes the grace and the record of who owned what
+      const { A, A2, c } = await rotated('grace-del@example.com')
+      ok((await del(A2)).status === 204, '  (the holder deletes the binding)')
+      ok(!(await hasGrace(A)) && await credGone(c) && !(await acctStore(A)).has('owners'), 'grace: a deletion ends it, and leaves no account key in the passkey owners')
+    }
+    {
+      // the binding runs out inside the grace: a new key is a rebound, with no grace left to inherit
+      const { A, A2, c, d2 } = await rotated('grace-expiry@example.com', { life: 10 * DAY })
+      void d2
+      now += 8 * DAY
+      ok(!!(await hasGrace(A)) && (await lookup(A.email)).status === 404, '  (the binding expired, the grace not yet)')
+      const A3 = await nextOf(A2)
+      const b = await bindNext(A3, null)
+      await api('/v1/bind/start', { stmt: b.text, sig: b.sig })
+      const code = codeFor(A.email)!
+      const r = await api('/v1/bind/complete', { email: A.email, code, sig: await A3.k.sign(buildCmp(await hashOf(b.text), code)) })
+      ok(r.j.rebound === true && !(await hasGrace(A)) && await credGone(c), `grace: a rebound inside it ends it, with no notice owed (${reason(r)})`)
     }
     {
       // only the IMMEDIATELY previous key
@@ -1679,6 +1712,19 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
       await lookup(A.email)
       ok(await credGone(c) && gone(A) === 1, 'grace: a second rotation settling takes the key before last')
       ok((await addrStore(A)).get('grace') !== undefined && ((await addrStore(A)).get('grace') as { key: string }).key === A2.k.pub, '  …and the grace now names the previous key')
+    }
+    {
+      // a retry's alarm replaces the grace's: the tick puts the appointment back
+      const { A, A2, c } = await rotated('grace-tick@example.com')
+      await rotate(A2, await nextOf(A2))
+      const end = now + 72 * HOUR + 30 * DAY
+      now += 73 * HOUR
+      failing('Account', 'rekey', 1)
+      await lookup(A.email)
+      const scope = await addressKey(A.email)
+      ok(alarms.get(`Address:${scope}`) === now + 3_600_000 && !(await credGone(c)), '  (the clean-up failed: the alarm is the retry)')
+      await addressAlarm(scope)
+      ok(await credGone(c) && alarms.get(`Address:${scope}`) === end, 'grace: after the retry the alarm is back on the grace\'s end')
     }
     {
       const { A, A2, c, d2 } = await rotated('grace-keep@example.com')
@@ -1764,6 +1810,29 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
       ok(n.r.status === 200 && !(await hasGrace(A)) && (await addrStore(A)).has('rekey') && gone(A) === 0, 'rekey: a grace end that failed: over, recorded, no notice yet')
       ok(reason((await addCred(A2, d2, { passkey: c.reg })).r) === 'consent:webauthn:unknown', '  …the grace does not come back (the retry ran first, and took the passkey)')
       ok(await credGone(c) && gone(A) === 1 && !(await credGone(n)), '  …one notice, and the new passkey kept')
+    }
+    {
+      // a task queued over an unfinished one owes everything the first owed
+      const { A, A2, c, d2 } = await rotated('rekey-owed@example.com')
+      failing('Cred', 'delete', 1)
+      const n = await addCred(A2, await device(A2))
+      ok(n.r.status === 200 && (await addrStore(A)).has('rekey') && gone(A) === 0, '  (the grace ended, its Cred not deleted: still owed, no notice yet)')
+      await rotate(A2, await nextOf(A2)) // rotate/start is no authorize: nothing retries it
+      now += 73 * HOUR
+      await lookup(A.email)
+      ok(await credGone(c) && !(await addrStore(A)).has('rekey'), 'rekey: a settle over an unfinished rekey finishes it, the owed Cred included')
+      ok(gone(A) === 1, '  …and the notice it owed is sent')
+      ok(!(await credGone(n)), "  …and the previous key's passkey is not taken by the older task's `keep`")
+      void d2
+    }
+    {
+      failing('Account', 'rekey', 1)
+      const { E, E2 } = await expired('rekey-rc@example.com')
+      ok(!!(await rcOf(E)), "  (the rebound's rekey failed: the old code is still here)")
+      await rotate(E2, await nextOf(E2))
+      now += 73 * HOUR
+      await lookup(E.email)
+      ok(!(await rcOf(E)) && await nCreds(E) === 0, "rekey: a task queued over a rebound's still drops the old code")
     }
   }
 }
