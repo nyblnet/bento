@@ -105,7 +105,7 @@ emit("swap.outcome", tag(b.attempt(printed, material(sealing: stranger, binding:
 emit("swap.count", b.wrongCodes)
 // mode C: the same for the recovery kx the binding names
 var c = RecoveryFlow()
-emit("kxswap.outcome", tag(c.attempt(printed, material(sealing: key, binding: pub(key), kx: stranger))))
+emit("kxswap.outcome", tag(c.attempt(printed, material(sealing: key, binding: pub(key), kx: stranger, kxBinding: pub(kxKey)))))
 emit("kxswap.count", c.wrongCodes)
 `
 
