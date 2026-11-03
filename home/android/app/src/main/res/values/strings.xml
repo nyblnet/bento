@@ -44,4 +44,35 @@
     <string name="theme_dark">Theme: dark</string>
     <string name="open_selected">Open</string>
     <string name="detail_none">Pick a document to see it here.</string>
+
+    <!-- Bento ID setup. PLACEHOLDER wording, for the maintainer to rule on; the screen has no
+         entry point in a release build yet. -->
+    <string name="setup_title">Set up Bento ID</string>
+    <string name="setup_email_hint">Email address</string>
+    <string name="setup_send">Send code</string>
+    <string name="setup_sent">We emailed a code to %1$s. It expires in 20 minutes.</string>
+    <string name="setup_code_hint">Code from the email</string>
+    <string name="setup_verify">Verify</string>
+    <string name="setup_recovery_title">Your recovery code. It is shown once. Write it down and keep it somewhere safe.</string>
+    <string name="setup_recovery_written">I have written it down</string>
+    <string name="setup_recovery_type">Type the recovery code to check it</string>
+    <string name="setup_recovery_hint">Recovery code</string>
+    <string name="setup_confirm">Confirm</string>
+    <string name="setup_enrolling">Confirm it is you to register your recovery code.</string>
+    <string name="setup_saving">Confirm it is you to save your account on this device.</string>
+    <string name="setup_done">Bento ID is set up for %1$s.</string>
+    <string name="setup_done_recovery_pending">Your recovery code could not be registered, so it cannot recover this account yet.</string>
+    <string name="setup_done_recovery_ok">Your recovery code is registered.</string>
+    <string name="setup_err_managed">Your organisation manages Bento. Bento ID for organisations isn\'t available yet.</string>
+    <string name="setup_err_memory">This device doesn\'t have enough free memory to make a recovery code, so Bento ID can\'t be set up here.</string>
+    <string name="setup_err_address">That doesn\'t look like an email address we can use.</string>
+    <string name="setup_err_offline">Couldn\'t reach bento.page. Check your connection and try again.</string>
+    <string name="setup_err_refused">The directory refused that request. Try again later.</string>
+    <string name="setup_err_nodevice">This device can\'t hold a Bento ID key. Set a screen lock first.</string>
+    <string name="setup_err_code_format">That isn\'t a code from the email: it is 8 letters and digits.</string>
+    <string name="setup_err_code_wrong">That code didn\'t work. It may be wrong or out of date.</string>
+    <string name="setup_err_unverified">The reply from bento.page couldn\'t be verified, so nothing was set up.</string>
+    <string name="setup_err_mistyped">That doesn\'t match the recovery code. Check it and try again.</string>
+    <string name="setup_err_not_saved">Couldn\'t save your account on this device.</string>
+    <string name="setup_unavailable_here">Bento ID isn\'t available in this version.</string>
 </resources>

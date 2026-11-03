@@ -12020,6 +12020,74 @@ both slots had to stay empty until the ruling.
   without a kx) and requires test-statements or test-recovery to fail on each,
   after the unmutated copy passes both.
 
+## 2026-11-03 — Android: Bento ID setup (home/android)
+
+Setup is built and reachable only from a dev build (debug, or the minified `releaseCheck`). What it settles, so a
+later change does not undo it by accident:
+
+- **The setup screen has no entry point in a release build.** `SetupActivity` is
+  not exported and nothing launches it, and a release build pins no directory key
+  (the keys are not minted), so the flow refuses before it asks for anything. A
+  dev build exports it and takes the directory URL and a test key from the
+  launching intent. Release behaviour is unchanged until the strings are ruled on
+  and the directory is live.
+- **The account's scalars rest under a Keystore AES key that needs the person for
+  every use.** The account signing key and the two kx keys must move between
+  devices, so they cannot be Keystore keys. They are generated in memory, sealed
+  under an AES-256-GCM key with the consent key's authentication parameters
+  (BiometricPrompt; the device PIN as well from API 30; it survives a new
+  fingerprint), and zeroed. The portable copy is the recovery blob, not this
+  file. Nothing secret reaches disk before the last step, and a process death
+  before then restarts setup.
+- **Order, and what each step refuses.** The memory Argon2id needs and the
+  derivation self-check are checked BEFORE an email is bound; the directory's
+  attestation is checked against a pinned key, by exact kid, and anything but
+  `active` stops setup; the typed recovery code is checked against the one shown,
+  and a device short of memory is reported as that, never as a wrong code. A
+  managed device (any identity managed-config key present) does no identity
+  operation.
+- **The recovery code is enrolled at setup** with an account-signed
+  `dreq.rc-enrol.` over the exact enrolment body, plus the consent key's `cns.`
+  (two fingerprint prompts in all: consent, then sealing). A device with no consent
+  key (API 26–29, no biometric enrolled) finishes setup with the recovery code
+  NOT registered and says so; it is never shown as registered.
+- **The derivation self-check is a known answer** (kernel's recovery-v1
+  `derivations` row) run before binding. The release-APK check builds the
+  minified `releaseCheck` variant, which is release as configured (full R8 optimisation and obfuscation) plus the
+  dev switch, and runs it on a device; its positive control is a build whose R8 rules break
+  a function the check covers, which must read FAIL.
+- **Not ported:** the display `name` and device `label` fields are emitted empty
+  until the Unicode display filter has an Android port. Certificates live a year.
+
+## 2026-11-03 — bento/connect B1: the identity calls in `home/bridge.js` (whoami, sign, resolve)
+
+- **One shared object, built from a declared capability.** A host that has
+  verified the document's bytes (gate 1) declares `window.__bentoHostCaps =
+  ['identity']` ahead of `bridge.js`. The bridge then defines `__bentoIdentity`
+  exactly as `kernel/src/identity.ts` requires: a non-writable, non-configurable
+  data property holding a frozen object of closures with `contract: 1` and the
+  three phase-1 calls. A host that does not declare it, and any subframe, gets no
+  object, so the kernel does what it did before identity existed. `unwrap` and
+  `share` (phase 2) are not defined.
+- **The wire** is the ordinary `call()` channel: `{id, op:'id.whoami'}`,
+  `{id, op:'id.sign', purpose, payload}`, `{id, op:'id.resolve', pub}`. Nothing
+  names the document or a caller; the host knows who is asking. Replies are
+  `(id, ok, value)`; a refusal word is the K1 `SignRefusal`. The bridge re-shapes
+  every reply: a wrong-typed field is a refusal or `null`, an unknown word is
+  `unavailable`, and an `{email}` lookup (phase 2) is answered `null` without
+  leaving the page.
+- **The session limits are the host's, not the bridge's.** Past the idle or
+  overall limit (security §2e B) the host answers `sign` with `reauth` until the
+  person re-authenticates AT THE HOST. The bridge passes the word through, caches
+  nothing and never retries. On desktop the limit is the agent's, and the rig
+  drives the real agent across both limits.
+- **A replaced reply hook cannot redirect replies.** The Android-style transport
+  now calls its reply function directly instead of through `window.__bentoNativeReply`,
+  which page script can overwrite.
+- **Each host routes the `id.*` ops to its own agent and keeps its own gates**
+  (on desktop: this webview's capability, then genuine bytes). No host ships a key
+  store yet, so a host with no account answers `no-identity` (`whoami`, `sign`)
+  and `null` (`resolve`).
 ## 2026-11-03 — bento/connect: device linking is one protocol, link v1, with kernel vectors
 
 Linking hands a new device (N) the account key and the recovery kx from a
@@ -12106,3 +12174,52 @@ agree or contradict them on purpose:
 - **The H side starts only from the in-app action**, on every path: displaying a
   code and scanning one. A universal link or camera intent on a device that holds
   an account is refused in either seat, before anything is written.
+
+## 2026-11-03 — link v1: SEALED carries the account key and the address, and the slot wire is fixed
+
+Two follow-ups to the link v1 entry above, both from porting it to iOS.
+
+- **msg3's SEALED is the 32-byte account scalar and the address, and nothing
+  else.** The first cut sealed the 64-byte recovery blob (account ‖ recovery kx), which handed
+  every newly linked device the recovery kx. That contradicts security §26c.4:
+  the recovery kx is touched as rarely as possible, and when an existing device
+  is reachable the new device's history comes from that device re-wrapping to
+  the new device's own kx, never from unwrapping the recovery kx. Linking always
+  has H present, so it never needs it. H therefore never needs the recovery kx
+  to link a device.
+- **The address travels inside SEALED**: the plaintext is the scalar, then the
+  address in UTF-8, in normal form (it re-normalises to itself under
+  `kernel/src/address.ts`) and at most 254 bytes. A new device otherwise has no
+  way to learn which account it is joining except by a person typing it, and
+  the address must not ride in the QR or the code. So SEALED's length is a
+  bounded range, `SEALED_MIN_LEN` to `SEALED_MAX_LEN` (constants of their own,
+  not derived from the recovery blob's length), and the directory's release
+  check and N's parse refuse anything outside it as `grammar`.
+- **N takes the account key from the binding for THAT address.** `openFinal`
+  requires normal form, then looks the address up and verifies the answer
+  itself: the binding must be for exactly that address, attested `active` under
+  a pinned directory key, and its accountPub must be the received scalar's
+  public key (`unpackAccountScalar`). Its recovery kx plays no part. So H cannot
+  name an address the scalar does not belong to, and the directory cannot answer
+  with some other address's binding. N looks nothing up until SEALED has opened.
+- **N asks before it stores.** `openFinal` returns the address and the binding's
+  name; the host shows `Link this device to <address> (<name>)?` and declining
+  aborts and deletes the slot. A typed address is only a fallback for a failed
+  lookup. This supersedes any host flow that asks for the address up front.
+- **The old 64-byte payload stays in the vectors**, so a host still sealing those
+  bytes fails loudly rather than half-working. Its length is now in range and the
+  directory sees only ciphertext, so the release check passes it and N refuses
+  it, as `address`. A 32-byte scalar that is not the binding's account key
+  (another account's, and the binding's own recovery kx scalar) is `key-mismatch`.
+- **How each message travels on the slot is now part of the contract**
+  (`encodeSlotMsg` / `decodeSlotMsg`): msg0 and msg1 as canonical unpadded
+  base64url of their UTF-8 text, msg2 as its sealed wire unchanged, msg3 as its
+  text unchanged. Decoding refuses padding, set trailing bits, text that is not
+  UTF-8, a byte-order mark (the decoder would otherwise swallow it, giving one
+  text two wires), a msg0 or msg1 sent raw instead of encoded, a message under
+  the wrong number, a msg2 shorter than an iv and a tag, and anything over 4096
+  bytes once decoded. The limit is always on the decoded message, and the
+  directory must count it the same way: for msg2, the sealed bytes rather than
+  their base64url text. Before this, iOS had to
+  choose an encoding that no spec pinned, and two hosts choosing differently
+  would never link. The `link.wire` rows are byte for byte both ways.

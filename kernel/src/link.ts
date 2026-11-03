@@ -3,8 +3,9 @@
 //
 // bento/id — device linking, link v1: one protocol for every pair of hosts.
 //
-// Linking hands a NEW device (N) the account key and the recovery kx, from a
-// device that HOLDS them (H). It is the most sensitive transfer after recovery,
+// Linking hands a NEW device (N) the account key, from a device that HOLDS it
+// (H). Never the recovery kx: N gets its history from H re-wrapping to N's own
+// kx (security §26c.4). It is the most sensitive transfer after recovery,
 // so every agent must derive the same bytes: this module is the reference, and
 // the `link` section of kernel/fixtures/identity-v1.json is the contract.
 //
@@ -33,13 +34,20 @@
 //   7. H draws its consent, gets a single-use `dir` challenge, issues N's dev.
 //      certificate and signs a cns. (purpose `link`, audience `dir`) over that
 //      dev. text. msg3 = `lnk3` and seven lines: H's dev. + sig, the cns. + sig,
-//      N's dev. + sig, and SEALED = the account blob plaintext (recovery.ts
-//      packScalars: account scalar ‖ recovery kx scalar, 64 bytes) under h2n,
-//      message number 3 (buildFinal). The directory releases msg3 to N only if
+//      N's dev. + sig, and SEALED = the 32-byte ACCOUNT SCALAR ‖ the ADDRESS in
+//      normal form, under h2n, message number 3 (buildFinal). Never the recovery
+//      blob: the recovery kx stays out of linking (§26c.4). The address is never
+//      in the QR or the code. The directory releases msg3 to N only if
 //      verifyLinkRelease accepts it, once per slot.
 //   8. N checks the dev. it was issued names exactly the keys it offered, opens
-//      SEALED and matches both scalars to the binding the directory served under
-//      a PINNED directory key (openFinal).
+//      SEALED, looks the ADDRESS up, and matches the account scalar to the
+//      binding found for that address under a PINNED directory key (openFinal).
+//      Then the host asks the person to confirm the address before it stores
+//      anything; declining aborts and deletes the slot.
+//
+// On the slot, each message travels in its WIRE form (encodeSlotMsg /
+// decodeSlotMsg): msg0 and msg1 as canonical unpadded base64url of their UTF-8
+// text, msg2 as its sealed wire unchanged, msg3 as its text unchanged.
 //
 // What this module does NOT do: the slot transport, the single-scanner rule, the
 // one-completion-per-slot rule and the notifications are the directory's; the
@@ -51,13 +59,16 @@
 
 import {
   b64uEnc, b64uDec, sha256b64u, isSigningKey, isKxKey, verifyStatementSig, verifyDev, verifyConsent,
-  displayText, parseBind, type Verdict, type DeviceCert, type AttState,
+  displayText, parseBind, verifyBind, verifyAtt, type Verdict, type DeviceCert, type AttState, type BindCert,
 } from './statements.ts'
-import { formatRecoveryCode, parseRecoveryCode, unpackScalars, CODE_BYTES, BLOB_LEN, type BlobKeys, type BlobPubs } from './recovery.ts'
+import { isNormalAddress } from './address.ts'
+import { formatRecoveryCode, parseRecoveryCode, unpackAccountScalar, CODE_BYTES } from './recovery.ts'
 
 const no = (reason: string): { ok: false; reason: string } => ({ ok: false, reason })
 const te = new TextEncoder()
-const strictUtf8 = new TextDecoder('utf-8', { fatal: true })
+// ignoreBOM keeps a leading U+FEFF in the text, so the parsers refuse it. Without
+// it the decoder swallows the mark, and two byte strings read as one message.
+const strictUtf8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
 
 // --- the link code and the slot -------------------------------------------------------
 
@@ -322,12 +333,36 @@ export interface LinkFinal {
   cns: string; cnsSig: string
   /** the dev. certificate H issued for N, signed by the account key */
   nDev: string; nDevSig: string
-  /** sealLinkMsg(keys, 3, t, iv, packScalars(account, recovery kx)) */
+  /** sealLinkMsg(keys, 3, t, iv, linkSealedPlaintext(account scalar, address)) */
   sealed: string
 }
 
-/** The sealed payload on the wire: iv ‖ the 64-byte blob plaintext ‖ tag. */
-const SEALED_LEN = 12 + BLOB_LEN + 16
+/** SEALED opens to the account scalar, 32 bytes big-endian, then the address. */
+export const LINK_SCALAR_LEN = 32
+/** The longest address SEALED carries: address.ts allows 254 characters, all ASCII. */
+export const LINK_ADDRESS_MAX = 254
+/**
+ * SEALED on the wire: iv ‖ the account scalar ‖ the address ‖ tag, so its length
+ * is a bounded range. A length outside it is `grammar`. Deliberately NOT derived
+ * from recovery.ts BLOB_LEN: the recovery blob is account ‖ recovery kx, and
+ * linking must never hand N the recovery kx (security §26c.4: link-time history
+ * comes from H re-wrapping to N's kx). The directory sees only this length, so
+ * the old 64-byte payload now passes its check; N refuses it, as `address`.
+ */
+export const SEALED_MIN_LEN = 12 + LINK_SCALAR_LEN + 1 + 16
+export const SEALED_MAX_LEN = 12 + LINK_SCALAR_LEN + LINK_ADDRESS_MAX + 16
+
+/** The oldest directory answer N will act on (an att.'s issuedAt, as the vectors use). */
+export const LINK_ATT_MAX_MS = 10 * 60_000
+
+/** H's SEALED plaintext. Throws rather than seal what no N would open. */
+export function linkSealedPlaintext(account: Uint8Array, address: string): Uint8Array {
+  if (account.length !== LINK_SCALAR_LEN) throw new Error('an account scalar is 32 bytes')
+  if (!isNormalAddress(address)) throw new Error('the address is not in normal form')
+  const a = te.encode(address), out = new Uint8Array(LINK_SCALAR_LEN + a.length)
+  out.set(account); out.set(a, LINK_SCALAR_LEN)
+  return out
+}
 
 /** msg3: "lnk3" and the seven fields, one per line, joined by "\n" (no line may be empty). */
 export function buildFinal(f: LinkFinal): string {
@@ -339,7 +374,8 @@ function parseFinal(text: unknown): LinkFinal | null {
   const l = text.split('\n')
   if (l.length !== 8 || l[0] !== 'lnk3' || !l.every(printable)) return null
   const [, hDev, hDevSig, cns, cnsSig, nDev, nDevSig, sealed] = l
-  if (!isSig(hDevSig) || !isSig(cnsSig) || !isSig(nDevSig) || b64uDec(sealed)?.length !== SEALED_LEN) return null
+  const sealedLen = b64uDec(sealed)?.length ?? 0
+  if (!isSig(hDevSig) || !isSig(cnsSig) || !isSig(nDevSig) || sealedLen < SEALED_MIN_LEN || sealedLen > SEALED_MAX_LEN) return null
   return { hDev, hDevSig, cns, cnsSig, nDev, nDevSig, sealed }
 }
 
@@ -392,33 +428,126 @@ export async function verifyLinkRelease(text: string, opts: {
   return { ok: true, value: { sealed: f.sealed, device: n.value } }
 }
 
+/** The directory's answer to a lookup of one address: the binding and its att. */
+export interface LinkLookup {
+  bindText: string; bindSig: string
+  attText: string; attSig: string
+}
+
+/** The address SEALED carries, or null: strict UTF-8, already in normal form. */
+function sealedAddress(pt: Uint8Array): string | null {
+  let address: string
+  try { address = strictUtf8.decode(pt.subarray(LINK_SCALAR_LEN)) } catch { return null }
+  return isNormalAddress(address) ? address : null
+}
+
+/** The binding for exactly this address, attested `active` under a pinned directory key. */
+async function bindingFor(address: string, opts: {
+  lookup: (address: string) => Promise<LinkLookup | null>
+  directoryKeys: Readonly<Record<string, string>>
+  now: number
+}): Promise<Verdict<BindCert>> {
+  let a: LinkLookup | null
+  try { a = await opts.lookup(address) } catch { return no('lookup') }
+  if (!a) return no('lookup')
+  const b = await verifyBind(a.bindText, a.bindSig, { now: opts.now })
+  if (!b.ok) return no(`bind-${b.reason}`)
+  if (b.value.address !== address) return no('address-mismatch')
+  const att = await verifyAtt(a.attText, a.attSig, { directoryKeys: opts.directoryKeys, bindText: a.bindText, now: opts.now, maxAgeMs: LINK_ATT_MAX_MS })
+  if (!att.ok) return no(`att-${att.reason}`)
+  if (att.value.state !== 'active') return no('state')
+  return b
+}
+
 /**
  * N's check of msg3 before it stores anything (security §39.1 cond. 4). `offer`
- * is exactly what N sent in msg2; `binding` is the account key and recovery kx
- * of the binding the directory served under a PINNED directory key. N's dev.
- * must verify, name that account key, and name N's own devicePub, consentPub
- * and kx; SEALED must open under h2n as message 3; and both scalars must be in
- * range and match the binding (recovery.ts unpackScalars). Any refusal: abort
- * and delete the slot.
+ * is exactly what N sent in msg2. N's dev. must verify and name N's own
+ * devicePub, consentPub and kx; SEALED must open under h2n as message 3 and
+ * carry an address in normal form. Only then does N look that address up:
+ * `lookup` returns the directory's answer for it (null if it has none), and
+ * `directoryKeys` are the keys N pinned. The binding must verify, be for exactly
+ * this address, and be attested `active` under a pinned key. The scalar must be
+ * in range and the private half of that binding's accountPub (recovery.ts
+ * unpackAccountScalar), and N's dev. must name the same key. The binding's
+ * recovery kx plays no part: N never receives it.
+ *
+ * Any refusal: abort and delete the slot. On success nothing is stored yet: the
+ * host shows the returned address and name for the person to confirm first.
  */
 export async function openFinal(text: string, opts: {
   keys: LinkKeys
   t: string
   offer: LinkOffer
-  binding: BlobPubs
+  lookup: (address: string) => Promise<LinkLookup | null>
+  directoryKeys: Readonly<Record<string, string>>
   now: number
-}): Promise<Verdict<{ keys: BlobKeys; device: DeviceCert; dev: string; devSig: string }>> {
+}): Promise<Verdict<{ account: Uint8Array; address: string; name: string | null; device: DeviceCert; dev: string; devSig: string }>> {
   const f = parseFinal(text)
   if (!f) return no('grammar')
   const n = await verifyDev(f.nDev, f.nDevSig, { now: opts.now })
   if (!n.ok) return no(`dev-${n.reason}`)
-  if (n.value.accountPub !== opts.binding.accountPub) return no('account')
   if (n.value.devicePub !== opts.offer.devicePub) return no('device-mismatch')
   if (n.value.consentPub !== opts.offer.consentPub) return no('consent-mismatch')
   if (n.value.kx !== opts.offer.kx) return no('kx-mismatch')
   const pt = await openLinkMsg(opts.keys, 3, opts.t, f.sealed)
   if (!pt) return no('decrypt')
-  const u = await unpackScalars(pt, opts.binding)
+  const address = sealedAddress(pt)
+  if (address === null) return no('address')
+  const b = await bindingFor(address, opts)
+  if (!b.ok) return b
+  const u = await unpackAccountScalar(pt.subarray(0, LINK_SCALAR_LEN), b.value.accountPub)
   if (!u.ok) return u
-  return { ok: true, value: { keys: u.value, device: n.value, dev: f.nDev, devSig: f.nDevSig } }
+  if (n.value.accountPub !== b.value.accountPub) return no('account')
+  return { ok: true, value: { account: u.value, address, name: b.value.name, device: n.value, dev: f.nDev, devSig: f.nDevSig } }
+}
+
+// --- the slot wire ---------------------------------------------------------------------
+
+export type SlotMsgNo = 0 | 1 | 2 | 3
+/** No slot message is longer than this once decoded: 4 KiB. */
+export const MAX_SLOT_MSG = 4096
+
+/**
+ * A message as it is written to the slot. msg0 and msg1: canonical unpadded
+ * base64url of the UTF-8 text. msg2: the sealed wire (already base64url),
+ * unchanged. msg3: the text, unchanged. Throws on a message no peer would
+ * decode (the wrong prefix, or over MAX_SLOT_MSG), so an agent never writes one.
+ */
+export function encodeSlotMsg(n: SlotMsgNo, msg: string): string {
+  if (!decodable(n, msg)) throw new Error(`not a link v1 message ${n}`)
+  return n === 0 || n === 1 ? b64uEnc(te.encode(msg)) : msg
+}
+
+/**
+ * The slot wire back to the message, or `grammar`. msg0/msg1: canonical
+ * base64url only (no padding, zero trailing bits; a raw `lnk0.` text is
+ * refused), strict UTF-8, and the decoded text must carry its own prefix.
+ * msg2: canonical base64url of at least an iv and a tag. msg3: text starting
+ * `lnk3` and a line feed. Every message is at most MAX_SLOT_MSG bytes once
+ * decoded, which for msg2 means the sealed bytes, not their text. The parsers (parseMsg0,
+ * parseMsg1, openOffer, verifyLinkRelease, openFinal) still check what this
+ * returns; this only fixes how the bytes travel.
+ */
+export function decodeSlotMsg(n: SlotMsgNo, wire: string): Verdict<string> {
+  if (typeof wire !== 'string' || wire.length === 0) return no('grammar')
+  let text: string
+  if (n === 0 || n === 1) {
+    const b = b64uDec(wire)
+    if (!b || b.length > MAX_SLOT_MSG) return no('grammar')
+    try { text = strictUtf8.decode(b) } catch { return no('grammar') } // a byte-order mark stays, and fails the prefix
+  } else text = wire
+  return decodable(n, text) ? { ok: true, value: text } : no('grammar')
+}
+
+/** What every slot message satisfies once decoded: its prefix and its size. The
+ *  size is always of the DECODED message, which for msg2 is the sealed bytes, not
+ *  their base64url text: canonical, at least an iv and a tag, at most 4096 bytes. */
+function decodable(n: SlotMsgNo, text: string): boolean {
+  if (typeof text !== 'string' || text.length === 0) return false
+  if (n === 2) { const b = b64uDec(text); return !!b && b.length >= 12 + 16 && b.length <= MAX_SLOT_MSG }
+  if (te.encode(text).length > MAX_SLOT_MSG) return false
+  if (n === 0) return text.startsWith('lnk0.')
+  if (n === 1) return text.startsWith('lnk1.')
+  if (n === 3) return text.startsWith('lnk3\n')
+  return false
 }
