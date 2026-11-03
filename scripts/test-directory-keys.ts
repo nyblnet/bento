@@ -1029,6 +1029,140 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
     await alarm()
     ok(!(await rcOf(R2)), 'the alarm at the deleted binding\'s expiry removes it')
   }
+  // =====================================================================
+  // security's D1b run (85527e8a): three rows for surviving mutants, and
+  // ruling (b): an EMAIL-ONLY freeze's resolution waits 72 h, and the frozen key
+  // may stop it; a key-holder freeze resolves at once
+  // =====================================================================
+  const addrOp = async (p: P, op: string, args: Record<string, unknown>) => {
+    const r = await env.ADDRESS.get(await addressKey(p.email)).fetch('https://address/op', { method: 'POST', body: JSON.stringify({ op, ...args }) })
+    return { status: r.status, j: await r.json() as Record<string, unknown> }
+  }
+  // [a] the Address object's own resolve op, called with a key that is not the frozen binding's
+  {
+    const Q = await person('d1b-qa@example.com'); const qText = await bind(Q)
+    ok((await freezeBy(Q, Q)).j.state === 'frozen', 'Q is frozen by its owner')
+    const nb = await bindNext(await nextOf(Q), qText)
+    const other = await signer()
+    const r = await addrOp(Q, 'resolve', { stmt: nb.text, sig: nb.sig, key: other.pub })
+    ok(r.status === 400 && reason(r) === 'state' && (await lookup(Q.email)).j.binding === qText, '[a] Address resolve with a key ≠ the frozen binding\'s → refused, still frozen')
+    const c = await addrOp(Q, 'resolve', { stmt: nb.text, sig: nb.sig, key: Q.k.pub })
+    ok(c.status === 200 && (await lookup(Q.email)).j.binding === nb.text, '  CONTROL: the same call naming the frozen key commits (so the key check is what refused)')
+  }
+  // [b] a code enrolled under K1 never resolves a freeze of K2, the key it rotated to
+  {
+    for (const how of ['owner', 'email'] as const) {
+      const K1 = await person(`d1b-qb-${how}@example.com`); await bind(K1)
+      const { e: k1Rc } = await enrol(K1, await device(K1))
+      const K2 = await nextOf(K1)
+      const rr = await rotate(K1, K2)
+      now += 73 * HOUR
+      ok((await lookup(K1.email)).j.binding === rr.text, `[b/${how}] the rotation to K2 settled`)
+      const k2 = { ...K1, k: K2.k, kx: K2.kx }
+      ok((how === 'owner' ? (await freezeBy(k2, k2)).j.state : (await freezeByEmail(k2)).j.state) === 'frozen', `[b/${how}] K2 is frozen (${how})`)
+      const r = await resolve(await bindNext(await nextOf(K1), rr.text), k1Rc.verifier)
+      ok(r.status === 400 && reason(r) === 'invalid' && (await lookup(K1.email)).j.binding === rr.text && (await attOf(await lookup(K1.email))) === 'frozen', `[b/${how}] K1's recovery code resolving K2's freeze → refused, still frozen (${r.status} ${reason(r)})`)
+    }
+  }
+  // [c] + ruling (b): the email-only freeze, its waiting resolution, and the frozen key stopping it
+  {
+    const V = await person('d1b-v@example.com'); const vText = await bind(V)
+    const { e: vRc } = await enrol(V, await device(V))
+    ok((await freezeByEmail(V)).j.state === 'frozen', 'V is frozen by email only')
+    const V2 = await nextOf(V)
+    const nb = await bindNext(V2, vText)
+    const n0 = noticesTo(V.email, 'resolve-pending')
+    const r = await resolve(nb, vRc.verifier)
+    ok(r.status === 202 && r.j.resolving === true && r.j.activeAt === now + 72 * HOUR, `(b) resolving an EMAIL-ONLY freeze → 202, waits 72 h (${r.status} ${reason(r)})`)
+    ok(noticesTo(V.email, 'resolve-pending') === n0 + 1 && noticesTo(V.email, 'resolve') === 0, '  …notified as pending, not as done')
+    let l = await lookup(V.email)
+    ok(l.j.binding === vText && (await attOf(l)) === 'frozen' && l.j.pending === await hashOf(nb.text), '  …still frozen, the old binding served, the lookup naming the pending one')
+    const st = await status(V)
+    ok((st.j.pending as Record<string, unknown>)?.binding === nb.text && (st.j.pending as Record<string, unknown>)?.resolve === true, '  …the frozen key\'s status read names it')
+    ok(reason(await resolve(await bindNext(await nextOf(V), vText), vRc.verifier)) === 'resolving', '(b) a second resolution while one waits → refused')
+    ok(reason((await enrol(V, await device(V))).r) === 'dreq:state', '(b) while it waits, the frozen key may NOT enrol a code (only freeze or contest)')
+    ok(reason(await contest(V, V2, nb.text)) === 'dreq:signature', '(b) a contest signed by the RESOLVING key → refused')
+    ok(reason(await contest(V, V, vText)) === 'dreq:arg', '(b) a contest naming something other than the pending resolution → refused')
+    const ct = await contest(V, V, nb.text)
+    ok(ct.status === 200 && ct.j.state === 'frozen', `(b) CONTROL: the frozen key contests the waiting resolution → frozen (${reason(ct)})`)
+    ok(store('Address', await addressKey(V.email))?.get('frz')?.by === 'contest', '  …now a key-holder freeze')
+    l = await lookup(V.email)
+    const st2 = await status(V)
+    ok(!('pending' in l.j) && !('pending' in st2.j), '[c] after the contest, neither lookup nor status shows a pending binding')
+    now += 73 * HOUR
+    l = await lookup(V.email)
+    ok(l.j.binding === vText && (await attOf(l)) === 'frozen' && !('pending' in l.j), '[c] …and 73 h later nothing settled: the old binding, frozen')
+    ok(reason(await resolve(await bindNext(await nextOf(V), vText), vRc.verifier)) === 'invalid', '  …the code was spent by the voided resolution, so it cannot resolve the key-holder freeze')
+  }
+  {
+    // the same with a FREEZE by the frozen key
+    const W = await person('d1b-w@example.com'); const wText = await bind(W)
+    const { e: wRc } = await enrol(W, await device(W))
+    await freezeByEmail(W)
+    const nb = await bindNext(await nextOf(W), wText)
+    ok((await resolve(nb, wRc.verifier)).status === 202, 'W: an email-only freeze\'s resolution is waiting')
+    const f = await freezeBy(W, W)
+    ok(f.status === 200 && f.j.state === 'frozen' && store('Address', await addressKey(W.email))?.get('frz')?.by === 'owner', '(b) the frozen key\'s signed FREEZE while it waits → an owner (key-holder) freeze')
+    ok(!('pending' in (await lookup(W.email)).j) && !('pending' in (await status(W)).j), '[c] after the freeze, neither lookup nor status shows a pending binding')
+    now += 73 * HOUR
+    ok((await lookup(W.email)).j.binding === wText, '[c] …and 73 h later nothing settled')
+    ok(reason(await freezeBy(W, W)) === 'dreq:state', '  …and with nothing waiting, "frozen: status only" holds again')
+  }
+  {
+    // CONTROL: uncontested, the resolution lands at 72 h, not before
+    const Y = await person('d1b-y@example.com'); const yText = await bind(Y)
+    const { e: yRc } = await enrol(Y, await device(Y))
+    await freezeByEmail(Y)
+    const Y2 = await nextOf(Y)
+    const nb = await bindNext(Y2, yText)
+    ok((await resolve(nb, yRc.verifier)).status === 202, 'Y: waiting')
+    now += 72 * HOUR - MIN
+    ok((await lookup(Y.email)).j.binding === yText, 'one minute before 72 h: still the frozen binding')
+    now += MIN
+    const l = await lookup(Y.email)
+    ok(l.j.binding === nb.text && (await attOf(l)) === 'active' && l.j.rebound === true && !('rot' in l.j) && !('pending' in l.j) && (l.j.chain as string[]).includes(await hashOf(yText)), 'CONTROL: uncontested for 72 h → active under the new key, rebound, no vouch, the frozen hash in the chain')
+    const y2 = { ...Y, k: Y2.k, kx: Y2.kx }
+    ok(((await status(y2)).j.events as { k: string }[]).some((e) => e.k === 'resolve'), '  …and the event list records the move')
+  }
+  {
+    // a resolution waiting on a binding that expires in the meantime moves nothing
+    const X = await person('d1b-x@example.com')
+    now += 2 * MIN
+    const b1 = await bindNext(X, null, { life: HOUR })
+    await api('/v1/bind/start', { stmt: b1.text, sig: b1.sig })
+    const code = codeFor(X.email)!
+    await api('/v1/bind/complete', { email: X.email, code, sig: await X.k.sign(buildCmp(await hashOf(b1.text), code)) })
+    const { e } = await enrol(X, await device(X))
+    await freezeByEmail(X)
+    ok((await resolve(await bindNext(await nextOf(X), b1.text), e.verifier)).status === 202, 'X: waiting on a binding with an hour left')
+    now += 73 * HOUR
+    ok((await lookup(X.email)).status === 404, 'the frozen binding expired while it waited: nothing moves (an expired binding re-binds by email, as ever)')
+  }
+
+  // --- the bind re-check (setup resumes after a failed check of the bind answer) ---
+  {
+    const RB = await person('d1b-rb@example.com'); const t = await bind(RB)
+    const check = async (stmt: string, sig: string) => api('/v1/bind/check', { stmt, sig })
+    const r = await check(t, await RB.k.sign(t)) // a fresh signature: any valid one over the bound text
+    ok(r.status === 200 && r.j.binding === t && (await attOf(r)) === 'active', `re-check: the bound statement → the bind answer again, attested active (${r.status})`)
+    const other = await bindNext(RB, null, { life: 12 * MONTH }) // differs from the bound text only in its expiry
+    { const o = await check(other.text, other.sig); ok(o.status === 404, `re-check: the same key, a statement that is not the bound one → 404 (${o.status} ${reason(o)})`) }
+    ok((await check(t, await (await signer()).sign(t))).status === 400, 're-check: a signature by another key → 400')
+    await freezeBy(RB, RB)
+    ok((await attOf(await check(t, await RB.k.sign(t)))) === 'frozen', 're-check: on a frozen address the attestation says frozen')
+    // over a holder tomb: the pending answer bind/complete gave
+    const TB = await person('d1b-tb@example.com'); await bind(TB)
+    await del(TB)
+    now += 2 * MIN
+    const XT = await nextOf(TB)
+    const xb = await bindNext(XT, null)
+    await api('/v1/bind/start', { stmt: xb.text, sig: xb.sig })
+    const code = codeFor(TB.email)!
+    await api('/v1/bind/complete', { email: TB.email, code, sig: await XT.k.sign(buildCmp(await hashOf(xb.text), code)) })
+    const c = await check(xb.text, xb.sig)
+    ok(c.status === 200 && c.j.state === 'pending' && c.j.rebound === true, 're-check: a re-bind over a holder tomb → the same pending answer bind/complete gave')
+  }
+
 }
 
 console.log(`${passes} passed, ${fails} failed`)

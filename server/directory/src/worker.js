@@ -164,6 +164,7 @@ export const NOTICES = Object.freeze({
   contest: ['A key change for your bento/id was stopped', 'A device holding the previous key said a key change for this address was not theirs. The address is frozen until its recovery code is used.'],
   'freeze-owner': ['Your bento/id keys were frozen', 'A device holding the key for this address froze it. Only the recovery code can unfreeze it.'],
   resolve: ['Your bento/id address was unfrozen', 'The recovery code for this address was used to unfreeze it and move it to a new key ({fp}).'],
+  'resolve-pending': ['Your bento/id address will move to a new key in 72 hours', 'The recovery code for this address was used to unfreeze it and move it to a new key ({fp}). The move happens in 72 hours. If this was not you, open bento/home on a device that still holds the frozen key and freeze it: that stops the move.'],
 })
 
 export async function sendCode(env, to, code, fp, kind, freezeToken = null) {
@@ -323,6 +324,20 @@ export default {
       return json(r.status, r.body)
     }
 
+    // a host whose check of the bind answer failed (an attestation it could not
+    // verify, a lost reply) asks again: the same answer, for EXACTLY the statement
+    // it bound, so setup can resume without a second email. It reveals nothing a
+    // lookup does not, and changes nothing.
+    if (p === '/v1/bind/check') {
+      const binding = await readBind(b.stmt, b.sig, Date.now())
+      if (!binding) return json(400, { error: 'bad-statement' })
+      const email = normalize(binding.address)
+      if (!email || email !== binding.address) return json(400, { error: 'bad-address' })
+      if (!(await ledger(env, ip, 'lookup'))) return json(429, { error: 'rate-limited' })
+      const r = await call(await addressStub(env, email), 'recheck', { stmt: b.stmt, sig: b.sig })
+      return json(r.status, r.body)
+    }
+
     if (p === '/v1/delete') {
       const email = normalize(b.email ?? '')
       if (!email || typeof b.sig !== 'string') return json(400, { error: 'invalid' })
@@ -437,7 +452,9 @@ export default {
       if (rc.status !== 200) return json(rc.status, { error: 'invalid', reason: rc.body.reason })
       // re-checked: the address may have moved while the code was checked
       const r = await call(addr, 'resolve', { stmt: b.stmt, sig: b.sig, key: prep.body.key })
-      if (r.status === 200) await notify(env, scope, 'resolve', (await hashOf(binding.accountPub)).slice(0, 8))
+      // a key-holder freeze resolves at once; an EMAIL-ONLY one waits 72 h (202), so a
+      // device still holding the frozen key can stop it (code + mailbox alone is no takeover)
+      if (r.status === 200 || r.status === 202) await notify(env, scope, r.status === 200 ? 'resolve' : 'resolve-pending', (await hashOf(binding.accountPub)).slice(0, 8))
       return json(r.status, r.body)
     }
 
@@ -549,6 +566,32 @@ export class Address {
     }
     await settle()
     const live = async () => { const c = await s.get('cur'); return c && c.b.expires > now ? c : null }
+    /** the frozen binding is still the one protecting the address */
+    const frozenHolds = async (base) => {
+      const cur = await live()
+      const ht = base.tomb ? await s.get('htomb') : null
+      return base.tomb ? !cur && !!ht && ht.h === base.h && ht.expires > now : !!cur && cur.h === base.h
+    }
+    /** a resolution commits: the new binding, self-signed, no vouch (pinners warn, §39.3) */
+    const commitResolve = async (stmt, sig, h, b, base) => {
+      await s.put('chain', [...((await s.get('chain')) || []), base.h])
+      await s.put('cur', { stmt, sig, h, b: { key: b.accountPub, seq: b.seq, expires: b.expires }, verifiedAt: now, rebound: true })
+      await s.delete(['frz', 'rot', 'pend', 'fpend', 'htomb', 'tomb', 'steps', 'rsv'])
+    }
+    // an email-only freeze's resolution whose 72 hours passed without the frozen
+    // key stopping it (ruling b). Lazily, like a rotation; the event is recorded
+    // here, with no mail (nothing calls out from this point; the start was mailed).
+    {
+      const rsv = await s.get('rsv'), frz = await s.get('frz')
+      if (rsv && (!frz || frz.by !== 'email')) await s.delete('rsv') // belt and braces: a key-holder freeze voids it
+      else if (rsv && now >= rsv.until) {
+        const b = await readBind(rsv.stmt, rsv.sig, now)
+        if (b && frz.base && (await frozenHolds(frz.base))) {
+          await commitResolve(rsv.stmt, rsv.sig, rsv.h, b, frz.base)
+          await s.put('events', [...((await s.get('events')) || []), { k: 'resolve', at: now, fp: (await hashOf(b.accountPub)).slice(0, 8) }].slice(-LIMITS.events))
+        } else await s.delete('rsv') // the frozen binding expired, or the new one did: nothing to move
+      }
+    }
     const stateOf = async () => ((await s.get('frz')) ? 'frozen' : (await s.get('rot')) ? 'pending' : 'active')
     /** the holder tomb, while it still protects the address: before the deleted
      *  binding's own expiry, or while a re-bind over it is pending or frozen */
@@ -566,7 +609,7 @@ export class Address {
       const ht = !cur && rot && rot.overTomb ? await s.get('htomb') : null
       const base = cur ? { h: cur.h, key: cur.b.key, seq: cur.b.seq } : ht ? { h: ht.h, key: ht.key, seq: ht.seq, tomb: true } : null
       await s.put('frz', { at: now, by, base })
-      await s.delete(['rot', 'pend', 'fpend']) // a freeze ends any rotation in flight
+      await s.delete(['rot', 'pend', 'fpend', 'rsv']) // a freeze ends any rotation, or resolution, in flight
     }
     /** spend a consent challenge HERE, before anything else is checked (§24b: spend-first) */
     const spend = async (nonce) => {
@@ -635,7 +678,7 @@ export class Address {
       // or the name, which live once, inside the signed statement it serves
       await s.put('cur', { stmt: p.stmt, sig: p.sig, h, b: { key: b.accountPub, seq: b.seq, expires: b.expires }, verifiedAt: now, rebound })
       // over an expired binding, whatever state it was in goes with it
-      await s.delete(['pend', 'tomb', 'htomb', 'rot', 'frz', 'fpend'])
+      await s.delete(['pend', 'tomb', 'htomb', 'rot', 'frz', 'fpend', 'rsv'])
       if (rebound && ht) await dropRc(ht)
       else if (guard && ht) await rcCall(ht, 'rcKeep') // the same key, inside the window: its code is current again
       return out(200, { binding: p.stmt, sig: p.sig, attestation: att.text, attestationSig: att.sig, rebound })
@@ -656,6 +699,8 @@ export class Address {
         if (cur.rot) { body.rot = cur.rot; body.rotSig = cur.rotSig }
         const steps = (await s.get('steps')) || []
         if (steps.length) body.steps = steps
+        const rsv = await s.get('rsv')
+        if (rsv) { body.pending = rsv.h; body.activeAt = rsv.until } // a resolution waiting out its 72 h
         return out(200, body)
       }
       const tomb = await s.get('tomb')
@@ -673,9 +718,26 @@ export class Address {
       return out(404, { error: 'not-found' }) // never existed, or expired: the same answer
     }
 
+    // the bind answer again, for the statement that is bound (see /v1/bind/check)
+    if (a.op === 'recheck') {
+      const cur = await live()
+      if (cur && cur.stmt === a.stmt) { // any valid signature over it: the worker checked it
+        // the state rides in the attestation: a host must not finish setup on a frozen
+        // or pending address any more than it would on a lookup that says so
+        const dirKey = await importDirKey(this.env.DIR_KEY_JWK)
+        const att = await attest(dirKey, this.env.DIR_KID, cur.h, cur.verifiedAt, now, await stateOf())
+        return out(200, { binding: cur.stmt, sig: cur.sig, attestation: att.text, attestationSig: att.sig, rebound: !!cur.rebound })
+      }
+      const rot = await s.get('rot')
+      if (rot && rot.overTomb && rot.stmt === a.stmt) { // a freeze deletes `rot`, so this is pending
+        return out(200, { state: 'pending', activeAt: rot.until, rebound: true }) // what bind/complete answered
+      }
+      return out(404, { error: 'not-bound' })
+    }
+
     const tombstone = async (by, scope) => {
       const cur = await s.get('cur')
-      await s.delete(['cur', 'pend', 'rot', 'frz', 'fpend', 'steps'])
+      await s.delete(['cur', 'pend', 'rot', 'frz', 'fpend', 'steps', 'rsv'])
       if (!cur) return // nothing was bound: nothing to record
       const dirKey = await importDirKey(this.env.DIR_KEY_JWK)
       await s.put('tomb', await tombText(dirKey, this.env.DIR_KID, cur.h, cur.b.seq, now, by))
@@ -789,10 +851,9 @@ export class Address {
       const base = frz && frz.base
       if (!base) return refuse('state')
       const cur = await live()
-      const ht = base.tomb ? await s.get('htomb') : null
       // the frozen binding must still be the one protecting the address
-      const holds = base.tomb ? !cur && !!ht && ht.h === base.h && ht.expires > now : !!cur && cur.h === base.h
-      if (!holds) return refuse('state')
+      if (!(await frozenHolds(base))) return refuse('state')
+      if (await s.get('rsv')) return refuse('resolving') // one resolution at a time: it waits out its 72 h
       const b = await readBind(a.stmt, a.sig, now) // self-signed by the NEW key
       if (!b) return refuse('statement')
       if (cur) { const was = await readBind(cur.stmt, cur.sig, cur.verifiedAt); if (!was || was.address !== b.address) return refuse('statement') }
@@ -801,12 +862,18 @@ export class Address {
       if (a.op === 'resolvePrep') return out(200, { key: base.key })
       if (a.key !== base.key) return refuse('state') // the code was checked against another binding
       const h = await hashOf(a.stmt)
+      if (frz.by === 'email') {
+        // EMAIL-ONLY freeze (ruling b): the code + the mailbox alone were an instant
+        // takeover. It waits 72 h, still frozen; meanwhile a freeze or contest signed
+        // by the frozen key turns this into a key-holder freeze and voids it.
+        await s.put('rsv', { stmt: a.stmt, sig: a.sig, h, at: now, until: now + LIMITS.rotationWindowMs })
+        return out(202, { state: 'frozen', resolving: true, activeAt: now + LIMITS.rotationWindowMs })
+      }
+      // a key-holder freeze (owner, contest): at once
       const dirKey = await importDirKey(this.env.DIR_KEY_JWK)
       const att = await attest(dirKey, this.env.DIR_KID, h, now, now)
-      await s.put('chain', [...((await s.get('chain')) || []), base.h])
       // no vouch: pinners warn (intended, §39.3), and nothing here softens that
-      await s.put('cur', { stmt: a.stmt, sig: a.sig, h, b: { key: b.accountPub, seq: b.seq, expires: b.expires }, verifiedAt: now, rebound: true })
-      await s.delete(['frz', 'rot', 'pend', 'fpend', 'htomb', 'tomb', 'steps'])
+      await commitResolve(a.stmt, a.sig, h, b, base)
       return out(200, { binding: a.stmt, sig: a.sig, attestation: att.text, attestationSig: att.sig, rebound: true })
     }
 
@@ -854,8 +921,14 @@ export class Address {
       if (typeof a.req !== 'string' || typeof a.sig !== 'string') return refuse('state')
       const subject = dreqSubject(a.subject)
       if (!subject) return refuse('grammar')
-      const state = await stateOf()
+      let state = await stateOf()
       const rot = await s.get('rot')
+      const rsv = await s.get('rsv')
+      // the one exception to "frozen: status only" (ruling b): while an email-only
+      // freeze's resolution waits, the address IS pending a key change, from the
+      // frozen binding (still the one served) to the resolution's. Its key may then
+      // freeze or contest, exactly as in a pending rotation; nothing else.
+      if (rsv && state === 'frozen' && (subject.op === 'freeze' || subject.op === 'contest')) state = 'pending'
       let bindText = null, accountPub = null, overTomb = false
       const cur = await live()
       if (cur) { bindText = cur.stmt; accountPub = cur.b.key } else if (subject.op === 'contest' && rot && rot.overTomb) {
@@ -867,7 +940,7 @@ export class Address {
         if (ht && typeof a.bind === 'string' && (await hashOf(a.bind)) === ht.h) { bindText = a.bind; accountPub = ht.key; overTomb = true }
       }
       if (!bindText) return refuse('state')
-      if (subject.op === 'contest') subject.pendingBindText = rot ? rot.stmt : ''
+      if (subject.op === 'contest') subject.pendingBindText = rsv ? rsv.stmt : rot ? rot.stmt : ''
       const v = await verifyDreq(a.req, a.sig, { bindText, state, challenge: a.challenge, subject, spend: () => true })
       if (!v.ok) return refuse(`dreq:${v.reason}`)
       if (dreqNeedsConsent(subject.op)) {
@@ -885,6 +958,8 @@ export class Address {
         body.events = [...((await s.get('events')) || []), ...Object.values((await s.get('uevents')) || {})].sort((x, y) => x.at - y.at)
         // what a device holding the old key needs in order to contest, and to show
         if (rot && !rot.overTomb) body.pending = { binding: rot.stmt, sig: rot.sig, rot: rot.rotText, rotSig: rot.rotSig, activeAt: rot.until }
+        // a resolution of an email-only freeze: what the frozen key's contest names (no vouch exists)
+        if (rsv) body.pending = { binding: rsv.stmt, sig: rsv.sig, activeAt: rsv.until, resolve: true }
       }
       return out(200, body)
     }
