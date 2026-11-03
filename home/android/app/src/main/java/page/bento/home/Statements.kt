@@ -123,10 +123,10 @@ object Statements {
 
     /** `dev.<devicePub>.<consentPub|empty>.<accountPub>.<kx>.<label|empty>.<created>.<expires>` (label: not ported, empty). */
     class DeviceCert(val devicePub: String, val consentPub: String?, val accountPub: String, val kx: String,
-                     val created: Long, val expires: Long)
+                     val created: Long, val expires: Long, val label: String? = null)
 
-    fun buildDev(c: DeviceCert): String = listOf("dev", c.devicePub, c.consentPub ?: "", c.accountPub, c.kx, "",
-        c.created.toString(), c.expires.toString()).joinToString(".")
+    fun buildDev(c: DeviceCert): String = listOf("dev", c.devicePub, c.consentPub ?: "", c.accountPub, c.kx,
+        c.label?.let { B64u.enc(it.toByteArray(Charsets.UTF_8)) } ?: "", c.created.toString(), c.expires.toString()).joinToString(".")
 
     /** `cmp.<sha256(bind text)>.<code>`. The code is upper-cased before it is signed. */
     fun buildCmp(bindHash: String, code: String): String? {

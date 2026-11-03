@@ -5,4 +5,12 @@
     <item name="setup_code" type="id" />
     <item name="setup_input" type="id" />
     <item name="setup_action" type="id" />
+    <item name="link_status" type="id" />
+    <item name="link_code" type="id" />
+    <item name="link_sas" type="id" />
+    <item name="link_qr" type="id" />
+    <item name="link_input" type="id" />
+    <item name="link_input2" type="id" />
+    <item name="link_action" type="id" />
+    <item name="link_scan" type="id" />
 </resources>
