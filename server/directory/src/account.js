@@ -351,9 +351,10 @@ export class Account {
       if (!eqBytes(await pepperVerifierTag(pk.verifyKey, verifier), b64uDec(rc.tag))) return wrong('invalid')
 
       if (resolve) {
-        // unfreezing by the recovery code (§39.3) spends it, like a release (§28a);
-        // the new key enrols its own code
-        await s.delete(['rc', 'rel'])
+        // the code is right, but it is NOT spent here: a resolution that waits (an
+        // email-only or contested freeze) can still be voided by the frozen key, and
+        // a voided one must leave the code usable. The Address object spends it
+        // (rcDrop) when the resolution COMMITS, at once or at settle (§39.3, §28a).
         await s.put('rcFails', 0)
         return out(200, { ok: true })
       }

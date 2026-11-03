@@ -31,6 +31,10 @@
 //   · resolving an EMAIL-ONLY freeze waits 72 h, and the frozen key may freeze or
 //     contest it meanwhile (then nothing settles); a key-holder freeze resolves
 //     at once; a code from before a rotation never resolves the later key's freeze;
+//   · the code is spent only when a resolution COMMITS (at once or at settle): a
+//     voided one leaves it live, and the freeze is then CONTESTED, so every later
+//     resolution of it waits 72 h (the owner-wins sequence), and the frozen key
+//     signs nothing but freeze/contest while one waits;
 //   · the bind re-check answers only for the exact bound statement, with its state.
 
 import worker, { Account, Address, Cred, Ledger, Link } from '../server/directory/src/worker.js'
@@ -1101,7 +1105,18 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
     now += 73 * HOUR
     l = await lookup(V.email)
     ok(l.j.binding === vText && (await attOf(l)) === 'frozen' && !('pending' in l.j), '[c] …and 73 h later nothing settled: the old binding, frozen')
-    ok(reason(await resolve(await bindNext(await nextOf(V), vText), vRc.verifier)) === 'invalid', '  …the code was spent by the voided resolution, so it cannot resolve the key-holder freeze')
+    // the code-spend rule: a resolution that WAITS leaves the code live; only a commit spends it
+    ok(!!(await rcOf(V)), '(spend) a VOIDED resolution leaves the recovery code usable')
+    ok(store('Address', await addressKey(V.email))?.get('frz')?.contested === true, '(contested) the freeze that voided it is marked contested')
+    const V3 = await nextOf(V)
+    const nb3 = await bindNext(V3, vText)
+    const r3 = await resolve(nb3, vRc.verifier)
+    ok(r3.status === 202 && r3.j.resolving === true && (await lookup(V.email)).j.binding === vText, `(contested) after a void, resolving the KEY-HOLDER freeze still waits 72 h, the code still good (${r3.status} ${reason(r3)})`)
+    ok(!!(await rcOf(V)), '  …and waiting did not spend it')
+    now += 73 * HOUR
+    l = await lookup(V.email)
+    ok(l.j.binding === nb3.text && (await attOf(l)) === 'active' && l.j.rebound === true && (l.j.chain as string[]).includes(await hashOf(vText)), '(contested) a 73 h settle in a contested freeze → active under the new key')
+    ok(!(await rcOf(V)), '  …and the settle spent the code')
   }
   {
     // the same with a FREEZE by the frozen key
@@ -1116,6 +1131,51 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
     now += 73 * HOUR
     ok((await lookup(W.email)).j.binding === wText, '[c] …and 73 h later nothing settled')
     ok(reason(await freezeBy(W, W)) === 'dreq:state', '  …and with nothing waiting, "frozen: status only" holds again')
+    ok(!!(await rcOf(W)) && store('Address', await addressKey(W.email))?.get('frz')?.contested === true, '(spend) voided by a freeze: the code stays usable, the freeze contested')
+  }
+  {
+    // CONTROL for the spend rule: a resolution that COMMITS at once spends the code
+    const Z = await person('d1b-z@example.com'); const zText = await bind(Z)
+    const { e: zRc } = await enrol(Z, await device(Z))
+    await freezeBy(Z, Z)
+    ok(store('Address', await addressKey(Z.email))?.get('frz')?.contested !== true, 'Z: a plain owner freeze is not contested')
+    ok((await resolve(await bindNext(await nextOf(Z), zText), zRc.verifier)).status === 200, 'CONTROL: an uncontested key-holder freeze resolves at once')
+    ok(!(await rcOf(Z)), '  …and that commit spent the code')
+  }
+  {
+    // the owner-wins sequence. The owner holds the device (the frozen key) and the
+    // code; the thief holds the code and the mailbox, never the key.
+    const O = await person('d1b-own@example.com'); const oText = await bind(O)
+    const od = await device(O)
+    const { e: oRc } = await enrol(O, od)
+    const cred = await addCred(O, od)
+    ok(cred.r.status === 200, 'owner: a passkey on file (CONTROL for cred-del below)')
+    const thief = await nextOf(O), owner2 = await nextOf(O)
+    ok((await freezeByEmail(O)).j.state === 'frozen', 'owner-wins: the thief freezes by email (the mailbox)')
+    const tb = await bindNext(thief, oText)
+    const tr = await resolve(tb, oRc.verifier)
+    ok(tr.status === 202 && (await lookup(O.email)).j.binding === oText, 'owner-wins: the thief\'s resolution (code + mailbox) waits')
+    ok((st => (st.j.pending as Record<string, unknown>)?.binding === tb.text)(await status(O)), '  …and the owner\'s device sees it in its status read')
+    ok((await freezeBy(O, O)).j.state === 'frozen' && !('pending' in (await lookup(O.email)).j), 'owner-wins: the owner voids it with the frozen key')
+    ok(!!(await rcOf(O)), '  …the code is still live')
+    const ob = await bindNext(owner2, oText)
+    const or = await resolve(ob, oRc.verifier)
+    ok(or.status === 202 && (await lookup(O.email)).j.binding === oText, `owner-wins: the owner resolves; the freeze is contested, so it WAITS 72 h (${or.status} ${reason(or)})`)
+    ok(reason(await freezeBy(O, thief)) === 'dreq:signature' && reason(await contest(O, thief, ob.text)) === 'dreq:signature', 'owner-wins: the thief cannot void it (no frozen key: freeze and contest → refused)')
+    ok(reason(await resolve(await bindNext(thief, oText, { life: 12 * MONTH }), oRc.verifier)) === 'resolving', 'owner-wins: nor replace it with a resolution of its own')
+    const m0 = mailbox.filter((m) => m.to === O.email && (m as unknown as { freezeToken?: string }).freezeToken).length
+    now += 2 * MIN; await api('/v1/freeze/start', { email: O.email })
+    ok(mailbox.filter((m) => m.to === O.email && (m as unknown as { freezeToken?: string }).freezeToken).length === m0, '  …nor email-freeze it again (frozen: no freeze mail)')
+    // pin: while a resolution waits, the frozen key signs freeze/contest and nothing else
+    const rc0 = JSON.stringify(await rcOf(O))
+    ok(reason((await enrol(O, od)).r) === 'dreq:state', '(pin) while it waits, the frozen key\'s rc-enrol → refused')
+    ok(reason((await addCred(O, od)).r) === 'dreq:state', '(pin) …its cred-add → refused')
+    { const q = await dreq(O, od, { op: 'cred-del', credentialId: b64uEnc(cred.reg.credId) }, { purpose: 'cred-del' })
+      ok(reason(await api('/v1/cred/del', { ...q, credentialId: b64uEnc(cred.reg.credId) })) === 'dreq:state', '(pin) …its cred-del → refused') }
+    ok(JSON.stringify(await rcOf(O)) === rc0 && (await lookup(O.email)).j.pending === await hashOf(ob.text), '  …the code and the waiting resolution untouched')
+    now += 73 * HOUR
+    const l = await lookup(O.email)
+    ok(l.j.binding === ob.text && (await attOf(l)) === 'active' && !(await rcOf(O)), 'owner-wins: 73 h later the OWNER\'s key is the binding, and the code is spent')
   }
   {
     // CONTROL: uncontested, the resolution lands at 72 h, not before

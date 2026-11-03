@@ -451,9 +451,10 @@ export default {
       if (rc.body.notify) await notify(env, scope, rc.body.notify, '')
       if (rc.status !== 200) return json(rc.status, { error: 'invalid', reason: rc.body.reason })
       // re-checked: the address may have moved while the code was checked
-      const r = await call(addr, 'resolve', { stmt: b.stmt, sig: b.sig, key: prep.body.key })
-      // a key-holder freeze resolves at once; an EMAIL-ONLY one waits 72 h (202), so a
-      // device still holding the frozen key can stop it (code + mailbox alone is no takeover)
+      const r = await call(addr, 'resolve', { stmt: b.stmt, sig: b.sig, key: prep.body.key, scope })
+      // a key-holder freeze resolves at once; an EMAIL-ONLY or CONTESTED one waits 72 h
+      // (202), so a device still holding the frozen key can stop it (code + mailbox
+      // alone is no takeover). The code is spent only when the resolution commits.
       if (r.status === 200 || r.status === 202) await notify(env, scope, r.status === 200 ? 'resolve' : 'resolve-pending', (await hashOf(binding.accountPub)).slice(0, 8))
       return json(r.status, r.body)
     }
@@ -572,11 +573,14 @@ export class Address {
       const ht = base.tomb ? await s.get('htomb') : null
       return base.tomb ? !cur && !!ht && ht.h === base.h && ht.expires > now : !!cur && cur.h === base.h
     }
-    /** a resolution commits: the new binding, self-signed, no vouch (pinners warn, §39.3) */
-    const commitResolve = async (stmt, sig, h, b, base) => {
+    /** a resolution commits: the new binding, self-signed, no vouch (pinners warn, §39.3).
+     *  This, and only this, spends the recovery code that resolved it (§28a): a
+     *  resolution that waits and is voided leaves the code usable. */
+    const commitResolve = async (stmt, sig, h, b, base, scope) => {
       await s.put('chain', [...((await s.get('chain')) || []), base.h])
       await s.put('cur', { stmt, sig, h, b: { key: b.accountPub, seq: b.seq, expires: b.expires }, verifiedAt: now, rebound: true })
       await s.delete(['frz', 'rot', 'pend', 'fpend', 'htomb', 'tomb', 'steps', 'rsv'])
+      await rcCall({ scope, key: base.key }, 'rcDrop')
     }
     // an email-only freeze's resolution whose 72 hours passed without the frozen
     // key stopping it (ruling b). Lazily, like a rotation; the event is recorded
@@ -587,7 +591,7 @@ export class Address {
       if (rsv && now >= rsv.until) {
         const b = await readBind(rsv.stmt, rsv.sig, now)
         if (b && frz && frz.base && (await frozenHolds(frz.base))) {
-          await commitResolve(rsv.stmt, rsv.sig, rsv.h, b, frz.base)
+          await commitResolve(rsv.stmt, rsv.sig, rsv.h, b, frz.base, rsv.scope)
           await s.put('events', [...((await s.get('events')) || []), { k: 'resolve', at: now, fp: (await hashOf(b.accountPub)).slice(0, 8) }].slice(-LIMITS.events))
         } else await s.delete('rsv') // the frozen binding expired, or the new one did: nothing to move
       }
@@ -608,7 +612,12 @@ export class Address {
       const rot = await s.get('rot')
       const ht = !cur && rot && rot.overTomb ? await s.get('htomb') : null
       const base = cur ? { h: cur.h, key: cur.b.key, seq: cur.b.seq } : ht ? { h: ht.h, key: ht.key, seq: ht.seq, tomb: true } : null
-      await s.put('frz', { at: now, by, base })
+      // a freeze that VOIDS a waiting resolution marks the freeze CONTESTED: the code
+      // has been in two hands, so no later resolution of it is instant, even though
+      // the frozen key froze it (the owner-wins sequence, security §39.3). A frozen
+      // address takes a freeze only while `rsv` waits, so every re-freeze is a void.
+      const contested = !!(await s.get('rsv'))
+      await s.put('frz', { at: now, by, base, ...(contested ? { contested: true } : {}) })
       await s.delete(['rot', 'pend', 'fpend', 'rsv']) // a freeze ends any rotation, or resolution, in flight
     }
     /** spend a consent challenge HERE, before anything else is checked (§24b: spend-first) */
@@ -862,18 +871,21 @@ export class Address {
       if (a.op === 'resolvePrep') return out(200, { key: base.key })
       if (a.key !== base.key) return refuse('state') // the code was checked against another binding
       const h = await hashOf(a.stmt)
-      if (frz.by === 'email') {
+      if (frz.by === 'email' || frz.contested) {
         // EMAIL-ONLY freeze (ruling b): the code + the mailbox alone were an instant
         // takeover. It waits 72 h, still frozen; meanwhile a freeze or contest signed
-        // by the frozen key turns this into a key-holder freeze and voids it.
-        await s.put('rsv', { stmt: a.stmt, sig: a.sig, h, at: now, until: now + LIMITS.rotationWindowMs })
+        // by the frozen key voids it and marks the freeze CONTESTED, and every later
+        // resolution of a contested freeze waits the same way. The code stays live
+        // until one commits.
+        const scope = typeof a.scope === 'string' ? a.scope : null
+        await s.put('rsv', { stmt: a.stmt, sig: a.sig, h, at: now, until: now + LIMITS.rotationWindowMs, scope })
         return out(202, { state: 'frozen', resolving: true, activeAt: now + LIMITS.rotationWindowMs })
       }
       // a key-holder freeze (owner, contest): at once
       const dirKey = await importDirKey(this.env.DIR_KEY_JWK)
       const att = await attest(dirKey, this.env.DIR_KID, h, now, now)
       // no vouch: pinners warn (intended, §39.3), and nothing here softens that
-      await commitResolve(a.stmt, a.sig, h, b, base)
+      await commitResolve(a.stmt, a.sig, h, b, base, typeof a.scope === 'string' ? a.scope : null)
       return out(200, { binding: a.stmt, sig: a.sig, attestation: att.text, attestationSig: att.sig, rebound: true })
     }
 
