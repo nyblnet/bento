@@ -975,8 +975,7 @@ export class Address {
         // a freeze that voided a waiting resolution (security's ruling): told to
         // the account-signed status read ONLY, never to the public lookup, so the
         // key holder learns its resolution was voided and will wait 72 hours
-        const frz = await s.get('frz')
-        if (state === 'frozen' && frz && frz.contested) body.contested = true
+        if ((await s.get('frz'))?.contested) body.contested = true // frz exists only while frozen
       }
       return out(200, body)
     }

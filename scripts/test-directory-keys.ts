@@ -327,6 +327,7 @@ async function freezeByEmail(p: P) {
     ok(reason(await complete(s6b, H, hd, { ch: ch6, msg3: good6 })) === 'replay', '  …and that malformed attempt spent its challenge (spend first)')
     const s6c = await slot()
     ok((await complete(s6c, H, hd, { msg3: 'x'.repeat(8 * 4097 + 1) })).status === 400, 'a msg3 over 8 lines of 4 KB → refused at the route')
+    ok((await complete(s6c, H, hd, { nd })).status === 200, '  …before the slot is claimed: the same slot still completes')
     const s7 = await slot()
     ok((await complete(s7, H, hd, { nd: await nDevFor(H) })).status === 200, 'CONTROL: the native consent from the same H still completes')
   }
