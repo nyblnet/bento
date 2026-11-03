@@ -267,6 +267,11 @@ jobs:
         # warning banner (Keep the file is the default and deletes nothing), a
         # newer one the plain banner that claims nothing.
         run: node scripts/test-slides-save-copy-browser.mjs
+      - name: People panel key proof in Chromium
+        # A presence key is shown as verified, and offered a remove control,
+        # only where the session has seen it proven; an unproven key reads
+        # "Claimed key" and points at Reset access; a legacy room shows neither.
+        run: node scripts/test-slides-people-keyproof-browser.mjs
       - name: Ghost Cut in Chromium
         # ⇧⌘X fades the selection by CSS (shadowed elements too) and copies it;
         # a ghost is never selected and the pointer passes through it; Esc

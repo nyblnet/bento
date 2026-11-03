@@ -1479,8 +1479,11 @@ export class Editor {
         const who = document.createElement('span')
         who.className = 'who'
         who.textContent = peer.editing ? `${peer.name} ✏️` : peer.name
-        // a pub-carrying peer's name is bound to its signing key, not just typed
-        if (peer.pub) who.title = t('Key-verified identity') + ` · ${fp(peer.pub)}`
+        // a peer's key reads as verified only where the session has proven it
+        // for this actor (v2 rooms); a legacy room has no per-key identity, so
+        // it shows no key at all
+        const keyOk = !!(peer.pub && cme?.v === 2 && this.session?.keyProven(peer.actor, peer.pub))
+        if (peer.pub && cme?.v === 2) who.title = (keyOk ? t('Key-verified identity') : t('Claimed key')) + ` · ${fp(peer.pub)}`
         const where = document.createElement('span')
         where.className = 'where'
         const idx = this.store.doc.slides.findIndex((s) => s.id === peer.slide)
@@ -1490,7 +1493,14 @@ export class Editor {
         row.addEventListener('click', () => {
           if (idx >= 0) this.store.goTo(idx)
         })
-        if (iAmOwner && peer.pub && peer.pub !== cme!.owner) {
+        if (iAmOwner && peer.pub && peer.pub !== cme!.owner && !keyOk) {
+          const unproven = document.createElement('span')
+          unproven.className = 'kick-unproven'
+          unproven.textContent = '?'
+          unproven.title = t('This key is only claimed, so it cannot be removed here. To cut off a device you cannot confirm, use “Reset access…”.')
+          row.appendChild(unproven)
+        }
+        if (iAmOwner && peer.pub && peer.pub !== cme!.owner && keyOk) {
           const kick = document.createElement('span')
           kick.className = 'kick'
           kick.textContent = '✕'

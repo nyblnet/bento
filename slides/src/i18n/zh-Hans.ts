@@ -606,6 +606,8 @@ export const zhHans: Catalog = {
   "Go live": "开始直播",
   "Invite to edit…": "邀请编辑…",
   "Key-verified identity": "密钥验证的身份",
+  "Claimed key": "声明的密钥",
+  "This key is only claimed, so it cannot be removed here. To cut off a device you cannot confirm, use “Reset access…”.": "此密钥仅为声明，无法在此移除。要切断无法确认的设备，请使用“重置访问权限…”。",
   "Keywords": "关键词",
   "Last slide": "最后一张幻灯片",
   "Mints brand-new keys. Every previously sent copy stops syncing for good; share fresh copies afterwards.": "铸造全新密钥。之前发送的所有副本将永久停止同步；此后请分享新副本。",

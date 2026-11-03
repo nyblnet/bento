@@ -594,6 +594,8 @@ export const pt: Catalog = {
   "Go live": "Ficar ao vivo",
   "Invite to edit…": "Convidar para editar…",
   "Key-verified identity": "Identidade verificada por chave",
+  "Claimed key": "Chave declarada",
+  "This key is only claimed, so it cannot be removed here. To cut off a device you cannot confirm, use “Reset access…”.": "Esta chave é apenas declarada, por isso não pode ser removida aqui. Para cortar um dispositivo que você não consegue confirmar, use “Redefinir acesso…”.",
   "Keywords": "Palavras-chave",
   "Last slide": "Último slide",
   "Mints brand-new keys. Every previously sent copy stops syncing for good; share fresh copies afterwards.": "Gera chaves totalmente novas. Toda cópia enviada antes para de sincronizar de vez; compartilhe cópias novas depois.",

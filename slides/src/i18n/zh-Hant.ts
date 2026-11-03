@@ -606,6 +606,8 @@ export const zhHant: Catalog = {
   "Go live": "開始直播",
   "Invite to edit…": "邀請編輯…",
   "Key-verified identity": "金鑰驗證的身份",
+  "Claimed key": "聲明的金鑰",
+  "This key is only claimed, so it cannot be removed here. To cut off a device you cannot confirm, use “Reset access…”.": "此金鑰僅為聲明，無法在此移除。若要切斷無法確認的裝置，請使用「重設存取權限…」。",
   "Keywords": "關鍵詞",
   "Last slide": "最後一張投影片",
   "Mints brand-new keys. Every previously sent copy stops syncing for good; share fresh copies afterwards.": "鑄造全新金鑰。之前傳送的所有副本將永久停止同步；此後請分享新副本。",
