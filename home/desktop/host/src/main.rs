@@ -76,23 +76,47 @@ pub(crate) struct Host {
     salt: Vec<u8>,
     index: Index,
     data_dir: PathBuf,
-    agent: Agent<NoStore, SysClock>,
+    agent: Agent<Store, SysClock>,
 }
 
 /// The identity agent's key store in this build: EMPTY. The Linux stores
 /// (TPM, Secret Service) are the agent crate's and are wired in a later slice;
 /// until then every identity call that passes the host's gates reaches the
 /// agent and is answered `no-identity`.
+#[cfg_attr(feature = "rig", allow(dead_code))]
 pub(crate) struct NoStore;
 impl KeyStore for NoStore {
     fn public_key(&self, _: &KeyRole) -> Result<Option<[u8; 65]>, StoreError> { Ok(None) }
     fn sign(&mut self, _: &KeyRole, _: &[u8], _: Option<&bento_id_agent::agent::Prompt>) -> Result<[u8; 64], StoreError> { Err(StoreError::NoKey) }
     fn has_consent_key(&self) -> bool { false }
 }
+/// The key store the agent is built over. A shipped build has none yet (every
+/// call that passes the host's gates is answered `no-identity`); the rig build
+/// holds an in-memory device key so the sign path, and its session timeout, can
+/// be driven end to end (security §2e B). The rig build is never shipped:
+/// gate-binary.sh fails a binary carrying the rig's commands.
+#[cfg(not(feature = "rig"))]
+pub(crate) type Store = NoStore;
+#[cfg(feature = "rig")]
+pub(crate) type Store = bento_id_agent::agent::memory::MemoryStore;
+
+#[cfg(not(feature = "rig"))]
+fn new_store() -> Store { NoStore }
+#[cfg(feature = "rig")]
+fn new_store() -> Store { bento_id_agent::agent::memory::MemoryStore::with_keys() }
+
+/// Rig builds only: milliseconds added to the clock, so the rig crosses the
+/// agent's one-hour idle and 24-hour overall limits without waiting for them.
+#[cfg(feature = "rig")]
+pub(crate) static CLOCK_SKEW_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 pub(crate) struct SysClock;
 impl Clock for SysClock {
     fn now_ms(&self) -> u64 {
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+        #[cfg(feature = "rig")]
+        let now = now + CLOCK_SKEW_MS.load(std::sync::atomic::Ordering::SeqCst);
+        now
     }
 }
 
@@ -248,13 +272,23 @@ async fn bento_id(app: tauri::AppHandle, webview: tauri::Webview, msg: String, c
     }
     let doc_id = h.docs.iter().find(|d| d.label == label).and_then(|d| origin::doc_id(&d.bytes));
     let caller = Caller { verified: true, doc_id };
-    let r = match m["op"].as_str() {
+    // bridge.js sends `id.<call>`; the bare names are the rig's own probe.
+    let r = match m["op"].as_str().map(|o| o.strip_prefix("id.").unwrap_or(o)) {
+        // No account can exist in this host yet (accounts, bindings and the
+        // consent prompt arrive with the real key store), so the honest answer
+        // is that nobody is signed in. Never a name, never a guess.
         Some("whoami") => Err("no-identity".to_string()),
+        // Purpose-locked and session-bound inside the agent: a payload that
+        // does not match the purpose is `purpose`; past the idle or overall
+        // limit it is `reauth` until the person re-authenticates here.
         Some("sign") => h
             .agent
             .sign(&caller, m["purpose"].as_str().unwrap_or(""), m["payload"].as_str().unwrap_or(""))
             .map(|s| serde_json::json!({ "sig": s.sig, "pub": s.pub_key }))
             .map_err(|r| r.as_str().to_string()),
+        // A key already in the room: this host holds no bindings yet, so no key
+        // is known. null is "unknown", the same answer for every key.
+        Some("resolve") => Ok(serde_json::Value::Null),
         _ => Err("unavailable".into()),
     };
     eprintln!("IPC bento_id op={} id={id} webview={label} AGENT: {}", m["op"], match &r { Ok(_) => "ok".to_string(), Err(e) => e.clone() });
@@ -285,7 +319,17 @@ fn open_window(app: &tauri::AppHandle, i: usize) -> tauri::Result<()> {
     // `;` between the parts: each is an IIFE, and `})()\n(function…` parses as
     // ONE call expression (measured: bridge.js never ran).
     #[allow(unused_mut)]
-    let mut init = format!("{SHIM};\n{BRIDGE};\n");
+    // The 'identity' capability is declared ONLY for a document whose bytes are
+    // genuine right now (gate 1): an unverified file then has no agent object at
+    // all. The host still re-checks every call (`armed_genuine`), so this is the
+    // courtesy, not the lock. bridge.js consumes the declaration at load.
+    let genuine_now = {
+        let s = app.state::<Shared>();
+        let h = s.lock().unwrap();
+        matches!(h.trust.verdict(&h.docs[i].bytes), Verdict::Genuine { .. })
+    };
+    let caps = if genuine_now && cfg!(target_os = "linux") { "window.__bentoHostCaps=['identity'];\n" } else { "" };
+    let mut init = format!("{caps}{SHIM};\n{BRIDGE};\n");
     #[cfg(feature = "rig")]
     { init = rig::init_script(app, &label, init); }
     #[allow(unused_variables)]
@@ -435,7 +479,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
 }
 #[cfg(feature = "rig")]
 fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
-    tauri::generate_handler![bento_arm, bento_file, bento_id, rig::rig_stash, rig::rig_done, rig::rig_recreate]
+    tauri::generate_handler![bento_arm, bento_file, bento_id, rig::rig_stash, rig::rig_done, rig::rig_recreate, rig::rig_session, rig::rig_skew]
 }
 
 fn data_dir() -> PathBuf {
@@ -477,7 +521,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .manage(Mutex::new(Host { docs, reg: Registry::default(), trust, salt, index, data_dir, agent: Agent::new(NoStore, SysClock, Policy::default()) }))
+        .manage(Mutex::new(Host { docs, reg: Registry::default(), trust, salt, index, data_dir, agent: Agent::new(new_store(), SysClock, Policy::default()) }))
         .register_uri_scheme_protocol("bento", |ctx, req| {
             let not_found = || http::Response::builder().status(404).body(Vec::new()).unwrap();
             let state = ctx.app_handle().state::<Shared>();

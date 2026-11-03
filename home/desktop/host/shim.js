@@ -24,7 +24,12 @@
   }
   function send(s) {
     const back = (data) => native.onmessage && native.onmessage({ data })
-    window.__TAURI_INTERNALS__.invoke('bento_file', { msg: s, cap }).then(back, (e) => {
+    // bridge.js builds every request as {"id":N,"op":"…"…}; the identity calls
+    // are the `id.*` ops and go to the identity command, which has its own
+    // gates (genuine bytes, this webview's capability). Anchored on the prefix
+    // so a large file write is never parsed here.
+    const cmd = /^\{"id":\d+,"op":"id\./.test(s) ? 'bento_id' : 'bento_file'
+    window.__TAURI_INTERNALS__.invoke(cmd, { msg: s, cap }).then(back, (e) => {
       let id = null
       try { id = JSON.parse(s).id } catch (_) {}
       back(JSON.stringify({ id, ok: false, value: String(e) }))
