@@ -12356,3 +12356,37 @@ in the same flow, and a light-tier account needs the old passkey's consent to do
 
 msg3's cap is kernel's slot wire, 4096 decoded bytes, checked at the route, so an
 oversized message is refused before a slot is claimed or a challenge spent.
+
+## 2026-11-03: a vouched rotation bounds the old key's passkeys, and a failed rekey is retried
+
+A vouched rotation used to keep the old key's passkeys with their full consent
+power, because the `Cred` checked only the address. A leftover passkey cannot act
+alone (every op also needs the current key's `dreq.`), but a rotation done because
+of a compromise should evict a passkey the intruder planted.
+
+A passkey now consents only for its own key, compared in the `Cred`, so consent
+does not depend on a deletion having succeeded. The one exception: after a settled
+vouched rotation, the immediately previous key's passkeys may consent to `cred-add`
+and `rc-enrol`, which is how a light-tier account, with no consent key, moves its
+passkey and code to the new key. That ends at the new key's first credential or 30
+days after the settle, whichever is first, and the old passkeys are then deleted
+with a notice. A rebound and a recovery get none. The old blob is never served
+after the settle: it opens to a superseded key.
+
+"First credential" is decided in the `Account` object, beside the write, so two
+adds in flight cannot both land and a lost message to the Address object cannot
+extend the grace. For that, the `Account` now records which key owns each passkey.
+The 30 days count from when the rotation settled, not from the first request to
+notice, and any freeze ends the grace.
+
+An account that misses the grace gets back in with a fresh email proof, which
+re-arms the setup allowance. Left open on purpose: an account key and a mailbox
+together, on a rotated account with no credential left, can add one. The code slot
+stays protected, because the end of a grace leaves it alone and the allowance never
+replaces a code. A key that enrolled a code during the grace has had something, so
+email does not re-arm it; its way back is that code.
+
+Deleting old passkeys could fail silently, and passkeys left behind fill the new
+key's empty slot with no way out. The Address object now records the deletion
+before trying it, and retries at the next signed request and from an alarm. While
+one is unfinished, ops that need consent answer `rekey` and use nothing up.

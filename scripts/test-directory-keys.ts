@@ -45,7 +45,13 @@
 //     first passkey and code, once each, for 15 minutes, only for a key that has
 //     never had either, only into empty slots, and anything else ends it;
 //   · a rebound takes the old key's passkeys and code; a same-key renewal and a
-//     vouched rotation do not.
+//     vouched rotation do not;
+//   · a passkey consents for its own key only. After a settled vouched rotation the
+//     previous key's may consent to cred-add and rc-enrol until the new key's first
+//     credential or 30 days; then they are deleted, with a notice, and its blob is
+//     stale from the settle on. A rebound and a recovery get no grace;
+//   · a rekey that fails is recorded and retried (next authorize, or the alarm), so
+//     old passkeys can't strand the new key's first one.
 
 import worker, { Account, Address, Cred, Ledger, Link } from '../server/directory/src/worker.js'
 import { addressKey } from '../server/directory/src/address.js'
@@ -68,6 +74,11 @@ const MIN = 60_000, HOUR = 60 * MIN, DAY = 24 * HOUR, MONTH = 30.44 * DAY
 const stores = new Map<string, Map<string, unknown>>() // `${class}:${id}` → storage
 const instances = new Map<string, unknown>() // `${class}:${id}` → the object, for alarms
 const accountAlarm = async (id: string) => (instances.get(`Account:${id}`) as { alarm(): Promise<void> }).alarm()
+const addressAlarm = async (id: string) => (instances.get(`Address:${id}`) as { alarm(): Promise<void> }).alarm()
+const alarms = new Map<string, number>() // `${class}:${id}` → when its alarm is set for
+// a DO call that fails: the next `n` calls of this op on this class throw before they arrive
+let chaos: { cls: string; op: string; n: number } | null = null
+const failing = (cls: string, op: string, n: number) => { chaos = { cls, op, n } }
 function namespace(name: string, Klass: new (state: unknown, env: unknown) => { fetch(r: Request): Promise<Response> }) {
   const objs = new Map<string, { fetch(r: Request): Promise<Response> }>()
   return {
@@ -82,14 +93,20 @@ function namespace(name: string, Klass: new (state: unknown, env: unknown) => { 
             async put(k: string, v: unknown) { store.set(k, structuredClone(v)) },
             async delete(k: string | string[]) { for (const x of [].concat(k as never)) store.delete(x) },
             async list() { return new Map(store) },
-            async setAlarm() { /* not under test */ },
+            async setAlarm(t: number) { alarms.set(`${name}:${id}`, t) },
           },
         }
         objs.set(id, new Klass(state, env))
         instances.set(`${name}:${id}`, objs.get(id))
       }
       const obj = objs.get(id)!
-      return { fetch: (u: string | Request, init?: RequestInit) => obj.fetch(u instanceof Request ? u : new Request(u, init)) }
+      return {
+        fetch: async (u: string | Request, init?: RequestInit) => {
+          const r = u instanceof Request ? u : new Request(u, init)
+          if (chaos && chaos.cls === name && chaos.n > 0 && (await r.clone().json().catch(() => ({}))).op === chaos.op) { chaos.n--; throw new Error('rig: this call fails') }
+          return obj.fetch(r)
+        },
+      }
     },
   }
 }
@@ -460,12 +477,20 @@ async function registration(ch: string, o: RegOpts = {}) {
   return { key, credId, attestationObject: b64uEnc(att), clientDataJSON: b64uEnc(cdj) }
 }
 const blobFor = async (credId: Uint8Array) => ({ v: 1, cred: b64uEnc(await sha(credId)), salt: r64(32), iv: r64(12), ct: r64(80) })
-async function addCred(p: P, d: D, o: RegOpts & { blob?: unknown; purpose?: string | null; tamper?: boolean; consent?: unknown } = {}) {
+/** light-tier consent: `pk`'s WebAuthn assertion over the cns. the directory will build */
+type Pk = { key: Awaited<ReturnType<typeof signer>>; credId: Uint8Array }
+async function waConsent(pk: Pk, ch: string, payload: string, purpose: string) {
+  const exp = now + 2 * MIN
+  const cns = buildConsent({ rp: 'bento', purpose: purpose as never, docId: null, transcript: (await consentTranscript('dir', ch, payload))!, exp })
+  return { webauthn: await assertion(pk.key, pk.credId, await webauthnChallengeFor(cns)), exp }
+}
+async function addCred(p: P, d: D, o: RegOpts & { blob?: unknown; purpose?: string | null; tamper?: boolean; consent?: unknown; passkey?: Pk } = {}) {
   const ch = await challengeFor(p.email)
   const reg = await registration(ch, o)
   const signedReg = o.tamper ? await registration(ch, o) : reg // the dreq. covers different bytes than are sent
   const q = await dreq(p, d, { op: 'cred-add', attestationObject: signedReg.attestationObject, clientDataJSON: signedReg.clientDataJSON }, { ch, purpose: o.purpose === null ? undefined : (o.purpose ?? 'cred-add') })
   const blob = o.blob ?? await blobFor(reg.credId)
+  if (o.passkey) q.consent = await waConsent(o.passkey, ch, q.req, 'cred-add') as never
   const r = await api('/v1/cred/add', { ...q, ...(o.consent !== undefined ? { consent: o.consent } : {}), attestationObject: reg.attestationObject, clientDataJSON: reg.clientDataJSON, blob, attachment: 'platform', devicePub: d.devicePub })
   return { r, reg, blob }
 }
@@ -525,7 +550,7 @@ let kCred: Awaited<ReturnType<typeof addCred>>
   const cKey = b64uEnc(await sha(kCred.reg.credId))
   const credRec = store('Cred', cKey)!.get('cred') as Record<string, unknown>
   store('Cred', cKey)!.set('cred', { ...credRec, accountPub: (await signer()).pub }) // as if the binding rotated since it was registered
-  ok(reason(await fetchBlob(kCred.reg.key, kCred.reg.credId)) === 'orphaned', 'a blob wrapping a key that is no longer the binding is never released')
+  ok(reason(await fetchBlob(kCred.reg.key, kCred.reg.credId)) === 'stale', 'a blob wrapping a key that is no longer the binding is never released')
   store('Cred', cKey)!.set('cred', { ...(store('Cred', cKey)!.get('cred') as object), accountPub: K.k.pub })
   const credDo = (env.CRED as { get(id: string): { fetch(u: string, i: RequestInit): Promise<Response> } }).get(cKey)
   ok((await credDo.fetch('https://do/op', { method: 'POST', body: JSON.stringify({ op: 'delete', scope: await addressKey('someone-else@example.com') }) })).status === 400, 'a Cred refuses deletion asked for another address (second line behind the index)')
@@ -568,9 +593,10 @@ let kCred: Awaited<ReturnType<typeof addCred>>
 // --- the recovery code ---
 const enrolment = () => ({ v: 1, saltV: r64(16), verifier: r64(32), saltW: r64(16), iv: r64(12), ct: r64(80) })
 const bodyOf = (e: unknown) => b64uEnc(enc(JSON.stringify(e)))
-async function enrol(p: P, d: D, e = enrolment(), o: { purpose?: string | null; signedBody?: string } = {}) {
+async function enrol(p: P, d: D, e = enrolment(), o: { purpose?: string | null; signedBody?: string; passkey?: Pk } = {}) {
   const body = bodyOf(e)
   const q = await dreq(p, d, { op: 'rc-enrol', body: o.signedBody ?? body }, { purpose: o.purpose === null ? undefined : (o.purpose ?? 'rc-enrol') })
+  if (o.passkey) q.consent = await waConsent(o.passkey, q.challenge, q.req, 'rc-enrol') as never
   return { r: await api('/v1/recovery/enrol', { ...q, body }), e }
 }
 const start = (p: P, verifier: string) => api('/v1/recovery/start', { email: p.email, verifier })
@@ -820,14 +846,14 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
     return { text, sig: await next.k.sign(text) }
   }
   /** a full rotation of p to next: vouch, consent, mailed code → pending */
-  async function rotate(p: P, next: P) {
+  async function rotate(p: P, next: P, o: { passkey?: Pk } = {}) {
     now += 2 * MIN
     const was = await current(p)
     const n = await bindNext(next, was)
     const rot = buildRot(await hashOf(n.text), await hashOf(was))
     const ch = await challengeFor(p.email)
     const d = await device(p)
-    const st = await api('/v1/rotate/start', { stmt: n.text, sig: n.sig, rot, rotSig: await p.k.sign(rot), challenge: ch, consent: await nativeConsent(d, ch, n.text, { purpose: 'rotate' }) })
+    const st = await api('/v1/rotate/start', { stmt: n.text, sig: n.sig, rot, rotSig: await p.k.sign(rot), challenge: ch, consent: o.passkey ? await waConsent(o.passkey, ch, n.text, 'rotate') : await nativeConsent(d, ch, n.text, { purpose: 'rotate' }) })
     const code = codeFor(p.email)!
     const c = await api('/v1/rotate/complete', { email: p.email, code, sig: await next.k.sign(buildCmp(await hashOf(n.text), code)) })
     return { ...n, was, rot, st, c }
@@ -1306,9 +1332,11 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
       const c = await api('/v1/bind/complete', { email: p.email, code, sig: await p.k.sign(buildCmp(await hashOf(n.text), code)) })
       ok(c.status === 200 && c.j.rebound === false, `  (a same-key renewal for ${p.email} lands: ${reason(c)})`)
     }
-    const delCred = async (p: P, d: D | null, id: Uint8Array, purpose?: string) => {
+    const delCred = async (p: P, d: D | null, id: Uint8Array, purpose?: string, passkey?: Pk) => {
       const credentialId = b64uEnc(id)
-      return api('/v1/cred/del', { ...await dreq(p, d, { op: 'cred-del', credentialId }, { purpose }), credentialId })
+      const q = await dreq(p, d, { op: 'cred-del', credentialId }, { purpose })
+      if (passkey) q.consent = await waConsent(passkey, q.challenge, q.req, 'cred-del') as never
+      return api('/v1/cred/del', { ...q, credentialId })
     }
     const free = { purpose: null } as const // the request carries no consent at all
 
@@ -1457,6 +1485,7 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
       ok(!(await armed(T)), 'row 10: a bind that ended pending is not armed')
       now += 73 * HOUR
       ok((await lookup(T.email)).j.binding === b.text && !(await armed(T)), 'row 10: nor does it arm when it settles to active')
+      ok(!(await addrStore(T)).has('grace'), '  …and with no vouch it opens no rotation grace')
       ok(reason((await addCred(T2, await device(T2, { consent: false }), free)).r) === 'consent:consent', '  …so a cred-add with no consent → refused')
     }
 
@@ -1508,6 +1537,233 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
       await rotate(A, A2)
       now += 73 * HOUR
       ok((await lookup(A.email)).j.binding !== undefined && await nCreds(A) === 1, "CONTROL: a settled rotation leaves the passkey index alone")
+    }
+
+    // --- a vouched rotation bounds the old key's passkeys ---
+    const hasGrace = async (p: P) => (await addrStore(p)).has('grace')
+    const ckOf = async (c: { reg: { credId: Uint8Array } }) => b64uEnc(await sha(c.reg.credId))
+    const credGone = async (c: { reg: { credId: Uint8Array } }) => !store('Cred', await ckOf(c))?.has('cred')
+    const gone = (p: P) => noticesTo(p.email, 'cred-old-del')
+    /** a key with a passkey (and a code), rotated to a new key, settled */
+    async function rotated(email: string, o: { code?: boolean; nocred?: boolean } = {}) {
+      const A = await person(email); await bind(A)
+      const d = await device(A)
+      const c = o.nocred ? null as never : await addCred(A, d)
+      const e = o.code ? await enrol(A, d) : null
+      const A2 = await nextOf(A)
+      const r = await rotate(A, A2)
+      if (r.st.status !== 202 || r.c.status !== 200) throw new Error('rotation failed for ' + email)
+      const graceEnd = now + 72 * HOUR + 30 * DAY
+      now += 73 * HOUR
+      await lookup(email)
+      return { A, A2, c, e, d2: await device(A2, { consent: false }), graceEnd }
+    }
+    {
+      // the control for every WebAuthn refusal below: a key's own passkey consents to all of it
+      const B = await person('grace-own@example.com'); await bind(B)
+      const d = await device(B)
+      const c1 = await addCred(B, d), c2 = await addCred(B, d)
+      ok((await addCred(B, d, { passkey: c1.reg })).r.status === 200, 'CONTROL: a passkey consents to cred-add for its own key')
+      ok((await enrol(B, d, enrolment(), { passkey: c1.reg })).r.status === 200, 'CONTROL: …and to rc-enrol')
+      ok((await delCred(B, null, c2.reg.credId, undefined, c1.reg)).status === 200, 'CONTROL: …and to cred-del')
+      ok((await rotate(B, await nextOf(B), { passkey: c1.reg })).st.status === 202, 'CONTROL: …and to a rotation')
+    }
+    {
+      // old blob: served while the key is current, never after the settle
+      const A = await person('grace-blob@example.com'); await bind(A)
+      const c = await addCred(A, await device(A))
+      await rotate(A, await nextOf(A))
+      ok((await fetchBlob(c.reg.key, c.reg.credId)).status === 200, 'CONTROL: while a rotation is pending the old blob is still the current one')
+      now += 73 * HOUR
+      ok(reason(await fetchBlob(c.reg.key, c.reg.credId)) === 'stale', 'grace: an old-key blob is not served after the settle: stale')
+      ok(await hasGrace(A) && !(await credGone(c)), '  …though the grace is open and the passkey is still there')
+    }
+    {
+      // in the grace: cred-add and rc-enrol, and nothing else
+      const { A, A2, c, d2 } = await rotated('grace-ops@example.com')
+      const e = await enrol(A2, d2, enrolment(), { passkey: c.reg })
+      ok(e.r.status === 200 && (await rcOf(A2))?.accountPub === A2.k.pub, `grace: an old passkey consents to rc-enrol for the new key (${reason(e.r)})`)
+      ok(await hasGrace(A) && !(await credGone(c)), '  …which does not end the grace: only a credential does')
+      const A3 = await nextOf(A2)
+      ok(reason((await rotate(A2, A3, { passkey: c.reg })).st) === 'consent:webauthn:unknown', 'grace: an old passkey refused for rotate')
+      ok(reason(await delCred(A2, null, c.reg.credId, undefined, c.reg)) === 'consent:webauthn:unknown' && !(await credGone(c)), 'grace: an old passkey refused for cred-del')
+      const n = await addCred(A2, d2, { passkey: c.reg })
+      ok(n.r.status === 200, `grace: CONTROL an old passkey consents to cred-add for the new key (${reason(n.r)})`)
+      ok(!(await hasGrace(A)) && await credGone(c) && await nCreds(A) === 1 && !(await credGone(n)), "grace: the first new-key credential ends it: the old passkey goes, the new one stays")
+      ok(gone(A) === 1, '  …with a notice')
+      ok(reason((await addCred(A2, d2, { passkey: c.reg })).r) === 'consent:webauthn:unknown', 'grace: an old passkey refused after the first new credential')
+    }
+    {
+      // the 30 days, to the millisecond
+      const { A, A2, c, e, d2, graceEnd } = await rotated('grace-30@example.com', { code: true })
+      ok(reason((await addCred(A2, d2, { purpose: null })).r) === 'consent:consent', '  (no allowance is armed by a settle)')
+      now = graceEnd
+      ok(reason((await addCred(A2, d2, { passkey: c.reg })).r) === 'consent:webauthn:unknown', 'grace: an old passkey refused at 30 days')
+      ok(await credGone(c) && await nCreds(A) === 0 && gone(A) === 1, '  …the old passkeys are deleted, with a notice')
+      ok(((await status(A2)).j.events as { k: string }[]).some((x) => x.k === 'cred-old-del'), '  …and the event list says so')
+      // the way back: both proofs, and it still fills empty slots only
+      const code = JSON.stringify(await rcOf(A2))
+      await renew(A2)
+      ok(await armed(A), 'grace: after it, a fresh email proof re-arms the allowance: the new key has never had a credential')
+      ok((await addCred(A2, d2, free)).r.status === 200, '  …and the light tier is back in, with no passkey in hand')
+      ok(reason((await enrol(A2, d2, enrolment(), free)).r) === 'filled' && JSON.stringify(await rcOf(A2)) === code, '  …while the code slot stays protected: refused, the code unchanged')
+      void e
+    }
+    {
+      // a code enrolled in the grace counts as "ever": the way back is then the code, not the mailbox
+      const { A, A2, c, d2, graceEnd } = await rotated('grace-edge@example.com')
+      now = graceEnd - 1
+      ok((await enrol(A2, d2, enrolment(), { passkey: c.reg })).r.status === 200, 'grace: still open a millisecond before 30 days')
+      now = graceEnd
+      await renew(A2)
+      ok(await credGone(c) && !(await armed(A)), 'grace: a key that enrolled a code in it has had something: its end does not re-arm (row 3 holds)')
+    }
+    {
+      // the old key's code slot is left alone too, when the grace ends with it unclaimed
+      const { A, A2, e, graceEnd } = await rotated('grace-rc@example.com', { code: true })
+      now = graceEnd
+      await lookup(A.email)
+      ok((await rcOf(A))?.accountPub === A.k.pub && !!e, "grace: its end leaves the code slot as it was (a rebound's rekey would empty it)")
+      void A2
+    }
+    {
+      // nobody calls: the alarm does it
+      const { A, c, graceEnd } = await rotated('grace-alarm@example.com')
+      const scope = await addressKey(A.email)
+      ok(alarms.get(`Address:${scope}`) === graceEnd, 'grace: the settle sets the alarm for its end')
+      now = graceEnd - 1
+      await addressAlarm(scope)
+      ok(await hasGrace(A) && !(await credGone(c)) && alarms.get(`Address:${scope}`) === graceEnd, '  …an early alarm changes nothing and keeps the appointment')
+      now = graceEnd
+      await addressAlarm(scope)
+      ok(await credGone(c) && gone(A) === 1, 'grace: with no request at all, the alarm deletes the old passkeys, with a notice')
+    }
+    {
+      const { A, graceEnd } = await rotated('grace-empty@example.com', { nocred: true })
+      now = graceEnd
+      await lookup(A.email)
+      ok(!(await hasGrace(A)) && gone(A) === 0, 'grace: a rotation that left no passkey behind ends with no notice')
+    }
+    {
+      // late to the settle: the grace counts from when it settled, not from who noticed
+      const A = await person('grace-late@example.com'); await bind(A)
+      const c = await addCred(A, await device(A))
+      await rotate(A, await nextOf(A))
+      now += 72 * HOUR + 30 * DAY
+      await lookup(A.email)
+      ok(await credGone(c) && !(await hasGrace(A)) && gone(A) === 1, 'grace: first request 33 days on: it settled and lapsed in the one pass')
+    }
+    {
+      // the allowance only fills an empty slot, and old passkeys are not one
+      const { A, A2, d2 } = await rotated('grace-filled@example.com')
+      await renew(A2)
+      ok(await armed(A), '  (a key with nothing is armed, as rule 1 says)')
+      ok(reason((await addCred(A2, d2, free)).r) === 'filled', 'grace: the allowance does not add beside old passkeys in the grace')
+    }
+    {
+      // the first credential is decided where the list lives, if the Address never hears of it
+      const { A, A2, c, d2 } = await rotated('grace-lost@example.com')
+      failing('Address', 'credLanded', 1)
+      const n = await addCred(A2, d2, { passkey: c.reg })
+      ok(n.r.status === 200 && await hasGrace(A) && !(await credGone(c)), '  (the Address object missed the landing)')
+      ok(reason((await addCred(A2, d2, { passkey: c.reg })).r) === 'grace-over', 'grace: a lost landing still ends it: cred-add refused by the Account')
+      ok(reason((await enrol(A2, d2, enrolment(), { passkey: c.reg })).r) === 'grace-over', '  …and rc-enrol')
+      ok((await addCred(A2, d2, { passkey: n.reg })).r.status === 200, "CONTROL: the new passkey's own consent is not grace")
+    }
+    {
+      // only the IMMEDIATELY previous key
+      const { A, A2, c } = await rotated('grace-two@example.com')
+      const A3 = await nextOf(A2)
+      await rotate(A2, A3)
+      now += 73 * HOUR
+      await lookup(A.email)
+      ok(await credGone(c) && gone(A) === 1, 'grace: a second rotation settling takes the key before last')
+      ok((await addrStore(A)).get('grace') !== undefined && ((await addrStore(A)).get('grace') as { key: string }).key === A2.k.pub, '  …and the grace now names the previous key')
+    }
+    {
+      const { A, A2, c, d2 } = await rotated('grace-keep@example.com')
+      const n = await addCred(A2, await device(A2))
+      ok(await credGone(c) && gone(A) === 1, '  (a native key added the first credential: the same end, by consent of its own)')
+      const A3 = await nextOf(A2)
+      await rotate(A2, A3)
+      now += 73 * HOUR
+      await lookup(A.email)
+      ok(!(await credGone(n)) && await nCreds(A) === 1 && gone(A) === 1, "CONTROL: the previous key's passkey survives the next rotation")
+      ok((await enrol(A3, d2, enrolment(), { passkey: n.reg })).r.status === 200, '  …and has its own grace')
+    }
+    {
+      // no grace where there was no vouch
+      const { A, A2, c } = await rotated('grace-freeze@example.com')
+      ok((await freezeBy(A2, A2)).status === 200, '  (frozen by the new key)')
+      ok(!(await hasGrace(A)) && await credGone(c) && gone(A) === 1, 'grace: a freeze ends it: a key reported lost keeps nothing for a renewal to pick up')
+    }
+    {
+      const { A, A2, c, d2 } = await rotated('grace-res@example.com')
+      const e = await enrol(A2, d2, enrolment(), { passkey: c.reg })
+      ok((await freezeBy(A2, A2)).status === 200, '  (frozen)')
+      const A3 = await nextOf(A2)
+      ok((await resolve(await bindNext(A3, await current(A2)), e.e.verifier)).status === 200 && !(await hasGrace(A)), 'grace: recovery gets none')
+    }
+
+    // --- a rekey that fails is recorded and retried ---
+    async function expired(email: string) {
+      const E = await person(email); await bind(E, { setup: true })
+      const d = await device(E, { consent: false })
+      const c = await addCred(E, d, free)
+      await enrol(E, d, enrolment(), free)
+      now += 14 * MONTH
+      ok(reason(await fetchBlob(c.reg.key, c.reg.credId)) === 'orphaned', '  (no live binding: orphaned, not stale)')
+      const E2 = await nextOf(E)
+      const b = await bindNext(E2, null)
+      await api('/v1/bind/start', { stmt: b.text, sig: b.sig })
+      const code = codeFor(E.email)!
+      const r = await api('/v1/bind/complete', { email: E.email, code, sig: await E2.k.sign(buildCmp(await hashOf(b.text), code)) })
+      if (r.status !== 200 || r.j.rebound !== true) throw new Error('rebound failed for ' + email)
+      return { E, E2, c, d2: await device(E2, { consent: false }) }
+    }
+    {
+      failing('Account', 'rekey', 1)
+      const { E, E2, c, d2 } = await expired('rekey-once@example.com')
+      ok((await addrStore(E)).has('rekey') && await nCreds(E) === 1 && await armed(E), 'rekey: a failure is recorded, the old passkey still there, the new key armed')
+      const scope = await addressKey(E.email)
+      ok(alarms.get(`Address:${scope}`) === now + 3_600_000, '  …and the alarm is set to retry')
+      const n = await addCred(E2, d2, free)
+      ok(n.r.status === 200, `rekey: fails once, then succeeds: the new key's first passkey lands, not stranded (${reason(n.r)})`)
+      ok(!(await addrStore(E)).has('rekey') && await credGone(c) && await nCreds(E) === 1 && !(await rcOf(E)), '  …the old passkey and code gone, the new one kept')
+    }
+    {
+      failing('Account', 'rekey', 2)
+      const { E, E2, c, d2 } = await expired('rekey-twice@example.com')
+      ok(reason((await addCred(E2, d2, free)).r) === 'rekey', 'rekey: still failing: refused as try-again, not as `filled`')
+      ok(((await addrStore(E)).get('setup') as { ops: string[] }).ops.length === 2, '  …with nothing of the allowance used up')
+      await addressAlarm(await addressKey(E.email))
+      ok(!(await addrStore(E)).has('rekey') && await credGone(c), 'rekey: the alarm retries it')
+      ok((await addCred(E2, d2, free)).r.status === 200, '  …and the first passkey lands')
+    }
+    {
+      failing('Cred', 'delete', 1)
+      const { E, c } = await expired('rekey-cred@example.com')
+      ok(await nCreds(E) === 0 && !(await credGone(c)) && ((await addrStore(E)).get('rekey') as { creds: string[] }).creds.length === 1, "rekey: the Account's list went but a Cred did not: the record still owes it")
+      await addressAlarm(await addressKey(E.email))
+      ok(await credGone(c) && !(await addrStore(E)).has('rekey'), '  …and the retry deletes it')
+    }
+    {
+      // the compare stands alone: rebound's old passkey is refused even with no rekey behind it
+      failing('Account', 'rekey', 1)
+      const { E, E2, c, d2 } = await expired('rekey-lost@example.com')
+      ;(await addrStore(E)).delete('rekey') // the record lost as well: the worst case
+      ok(!(await credGone(c)) && await nCreds(E) === 1, '  (the old passkey is still here)')
+      ok(reason((await addCred(E2, d2, { passkey: c.reg })).r) === 'consent:webauthn:unknown', "rekey: a rebound's old passkey is refused for the new key even if dropOld failed")
+      ok(!(await hasGrace(E)), '  …a rebound has no grace')
+    }
+    {
+      // a grace's end that fails: one notice, when the deletion is really done
+      const { A, A2, c, d2 } = await rotated('rekey-grace@example.com')
+      failing('Account', 'rekey', 1)
+      const n = await addCred(A2, d2, { passkey: c.reg })
+      ok(n.r.status === 200 && !(await hasGrace(A)) && (await addrStore(A)).has('rekey') && gone(A) === 0, 'rekey: a grace end that failed: over, recorded, no notice yet')
+      ok(reason((await addCred(A2, d2, { passkey: c.reg })).r) === 'consent:webauthn:unknown', '  …the grace does not come back (the retry ran first, and took the passkey)')
+      ok(await credGone(c) && gone(A) === 1 && !(await credGone(n)), '  …one notice, and the new passkey kept')
     }
   }
 }

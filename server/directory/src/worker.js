@@ -52,6 +52,8 @@ export const LIMITS = {
   ip: { start: 20, complete: 60, lookup: 300, delete: 20, challenge: 120, rotate: 20, linkOpen: 30, link: 600, keys: 60, recovery: 20 }, // per IP per hour
   rotationWindowMs: 72 * 3_600_000, // a pending rotation is contestable for 72 hours (security §25)
   setupMs: 15 * 60_000, // how long a two-proof bind may stand in for consent on the first passkey and code (§39.3)
+  graceMs: 30 * 86_400_000, // how long after a vouched rotation settles the previous key's passkeys may still consent
+  rekeyRetryMs: 3_600_000, // how soon the alarm retries a rekey that failed
   steps: 8, // earlier bindings served with a lookup, so a pinner a few steps behind can follow the chain
   freezeTokenTtlMs: 24 * 3_600_000, // an emailed freeze link stays usable for a day
   credFailures: 5, // consecutive WebAuthn failures before a credential locks
@@ -65,6 +67,8 @@ export const LIMITS = {
 }
 const DAY = 86_400_000
 const CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ' // no 0/O, 1/I/L
+/** the only ops a previous key's passkey may consent to, and only during the grace */
+const GRACE_OPS = Object.freeze(['cred-add', 'rc-enrol'])
 
 const BASE = {
   'content-type': 'application/json',
@@ -158,6 +162,7 @@ export const NOTICES = Object.freeze({
   link: ['A device was linked to your bento/id', 'A new device was linked to the bento/id keys for this address (device key {fp}).'],
   'cred-add': ['A passkey was added to your bento/id', 'A passkey ({fp}) was added for getting the bento/id keys for this address onto a new device.'],
   'cred-del': ['A passkey was removed from your bento/id', 'A passkey ({fp}) was removed from the bento/id keys for this address.'],
+  'cred-old-del': ['Your old bento/id passkeys were removed', 'The passkeys from before this address moved to a new key were removed, and no longer work. If you have no other passkey, verify this address again in bento/home to add one.'],
   'cred-fetch': ['Your bento/id passkey was used', 'A passkey ({fp}) was used to put the bento/id keys for this address on a device.'],
   'rc-enrol': ['Your bento/id recovery code changed', 'A new recovery code was set up for the bento/id keys for this address. Any earlier code no longer works.'],
   'cred-add-setup': ['A passkey was added to your bento/id', 'A first passkey ({fp}) was added while the bento/id keys for this address were being set up.'],
@@ -500,7 +505,10 @@ export default {
 // the next binding, contestable until `until`), `frz` (a freeze, naming the
 // binding it froze), `fpend` (an emailed freeze token), `spent` (consent
 // challenges already used here), `setup` (the first-credential allowance: the
-// bind that armed it, when it ends, the ops left). Strongly consistent per address, so a re-bind,
+// bind that armed it, when it ends, the ops left), `grace` (after a settled vouched
+// rotation: the previous key, the key it moved to, when the previous key's passkeys
+// stop consenting, the Account object's name), `rekey` (a deletion of old passkeys
+// not yet finished: what stays, and the Cred objects still to delete). Strongly consistent per address, so a re-bind,
 // a rotation and a lookup can never race into a mixed answer.
 //
 // States: active (no `rot`, no `frz`) · pending (`rot`) · frozen (`frz`).
@@ -547,17 +555,57 @@ export class Address {
         await this.env.ACCOUNT.get(this.env.ACCOUNT.idFromName(ht.scope)).fetch('https://account/op', { method: 'POST', body: JSON.stringify({ op, accountPub: ht.key }) })
       } catch (e) { console.log(`${op} failed: ${e.message}`) }
     }
+    /** record what must go BEFORE trying, so a failure or a crash leaves a task, not a
+     *  stranded key: a passkey left behind would fill the new key's empty slot. The newest
+     *  `keep` is the truth; the Cred objects an earlier try still owes stay owed. */
+    const queueRekey = async (scope, keep, o = {}) => {
+      const t = await s.get('rekey')
+      await s.put('rekey', { scope, keep, rc: o.rc === true || t?.rc === true, notice: o.notice === true || t?.notice === true, creds: t?.creds ?? [] })
+    }
+    /** one try, from the record: at once, at the next authorize, and from the alarm */
+    const runRekey = async () => {
+      const t = await s.get('rekey')
+      if (!t) return
+      try {
+        const r = await call(this.env.ACCOUNT.get(this.env.ACCOUNT.idFromName(t.scope)), 'rekey', { keep: t.keep, rc: t.rc })
+        if (r.status !== 200) throw new Error(`account ${r.status}`)
+        // the Account's list is gone now: this record is the only memory of these
+        const creds = [...new Set([...t.creds, ...r.body.creds])]
+        await s.put('rekey', { ...t, creds })
+        for (const k of creds) {
+          const d = await call(this.env.CRED.get(this.env.CRED.idFromName(k)), 'delete', { scope: t.scope })
+          if (d.status !== 200 && d.body.reason !== 'unknown') throw new Error(`cred ${d.status}`) // unknown: an earlier try got it
+        }
+        await s.delete('rekey')
+        if (t.notice && creds.length) await oldCredsGone()
+      } catch (e) {
+        console.log(`rekey failed: ${e.message}`)
+        await s.setAlarm(now + LIMITS.rekeyRetryMs)
+      }
+    }
+    /** the notice for a grace's end. Called from here, not the worker, since the alarm
+     *  can get here with no request. One per settled rotation, so it needs no mail cap. */
+    const oldCredsGone = async () => {
+      await s.put('events', [...((await s.get('events')) || []), { k: 'cred-old-del', at: now, fp: '' }].slice(-LIMITS.events))
+      const c = await s.get('cur')
+      const b = c && (await readBind(c.stmt, c.sig, c.verifiedAt))
+      if (b) { try { await sendCode(this.env, b.address, '', '', 'cred-old-del') } catch (e) { console.log(`notice failed: ${e.message}`) } }
+    }
+    /** the rotation grace is over: the previous key's passkeys go, with a notice. Its
+     *  code slot stays as it is: the setup allowance never replaces a code (rule 5). */
+    const endGrace = async (g) => {
+      await s.delete('grace')
+      await queueRekey(g.scope, [g.next], { notice: true })
+      await runRekey()
+    }
     /** a REBOUND: the address moved to a key with no vouch from the old one, so
-     *  nothing of the old key's may stay. Its recovery record and its passkeys go
-     *  together: a passkey left behind would fill the new key's empty slot, and,
-     *  being scoped to the address, could still consent for it. */
+     *  nothing of the old key's may stay, its recovery record and its passkeys
+     *  together, and it gets no grace. */
     const dropOld = async (address, accountPub) => {
       if (!this.env.ACCOUNT) return
-      try {
-        const scope = await addressKey(address)
-        const r = await call(this.env.ACCOUNT.get(this.env.ACCOUNT.idFromName(scope)), 'rekey', { accountPub })
-        for (const k of r.body.creds || []) await call(this.env.CRED.get(this.env.CRED.idFromName(k)), 'delete', { scope })
-      } catch (e) { console.log(`rekey failed: ${e.message}`) }
+      await s.delete('grace')
+      await queueRekey(await addressKey(address), [accountPub], { rc: true })
+      await runRekey()
     }
     /** arm the setup allowance (§39.3), after a bind landed `active`: only for a key
      *  that has NEVER had a credential or a code. Any doubt leaves it unarmed. */
@@ -600,6 +648,17 @@ export class Address {
       if (cur) { await s.put('chain', [...((await s.get('chain')) || []), cur.h]); await keepStep(cur) }
       await s.put('cur', { stmt: rot.stmt, sig: rot.sig, rot: rot.rotText, rotSig: rot.rotSig, h: rot.h, b: rot.b, verifiedAt: rot.at, rebound: false })
       await s.delete(['rot', 'fpend'])
+      const nb = await readBind(rot.stmt, rot.sig, rot.at)
+      if (!this.env.ACCOUNT || !cur || !nb) return
+      // the grace counts from the settle time, not from whichever request found it
+      const scope = await addressKey(nb.address), was = await s.get('grace'), until = rot.until + LIMITS.graceMs
+      await s.put('grace', { key: cur.b.key, next: rot.b.key, until, scope })
+      await s.setAlarm(until)
+      // only the IMMEDIATELY previous key's passkeys: anything older goes now
+      if (was || (await s.get('rekey'))) {
+        await queueRekey(scope, [cur.b.key, rot.b.key], { notice: !!was })
+        await runRekey()
+      }
     }
     await settle()
     const live = async () => { const c = await s.get('cur'); return c && c.b.expires > now ? c : null }
@@ -633,6 +692,11 @@ export class Address {
         } else await s.delete('rsv') // the frozen binding expired, or the new one did: nothing to move
       }
     }
+    // the grace lapses here and nowhere else, so nothing below needs to read its time
+    {
+      const g = await s.get('grace')
+      if (g && now >= g.until) await endGrace(g)
+    }
     const stateOf = async () => ((await s.get('frz')) ? 'frozen' : (await s.get('rot')) ? 'pending' : 'active')
     /** the holder tomb, while it still protects the address: before the deleted
      *  binding's own expiry, or while a re-bind over it is pending or frozen */
@@ -656,6 +720,8 @@ export class Address {
       const contested = !!(await s.get('rsv'))
       await s.put('frz', { at: now, by, base, ...(contested ? { contested: true } : {}) })
       await s.delete(['rot', 'pend', 'fpend', 'rsv', 'setup']) // a freeze ends any rotation, resolution or setup in flight
+      const g = await s.get('grace')
+      if (g) await endGrace(g) // and any grace: a key reported lost keeps nothing a renewal could pick up later
     }
     /** spend a consent challenge HERE, before anything else is checked (§24b: spend-first) */
     const spend = async (nonce) => {
@@ -784,7 +850,7 @@ export class Address {
 
     const tombstone = async (by, scope) => {
       const cur = await s.get('cur')
-      await s.delete(['cur', 'pend', 'rot', 'frz', 'fpend', 'steps', 'rsv', 'setup'])
+      await s.delete(['cur', 'pend', 'rot', 'frz', 'fpend', 'steps', 'rsv', 'setup', 'grace'])
       if (!cur) return // nothing was bound: nothing to record
       const dirKey = await importDirKey(this.env.DIR_KEY_JWK)
       await s.put('tomb', await tombText(dirKey, this.env.DIR_KID, cur.h, cur.b.seq, now, by))
@@ -928,6 +994,21 @@ export class Address {
     }
 
     // --- what the other classes ask an address -------------------------------------
+    // the new key's first credential landed: the grace is over at once
+    if (a.op === 'credLanded') {
+      const g = await s.get('grace')
+      if (g) await endGrace(g)
+      return out(200, { ok: true })
+    }
+
+    // the alarm: the grace's lapse ran above; this retries a failed rekey
+    if (a.op === 'tick') {
+      await runRekey()
+      const g = await s.get('grace')
+      if (g && !(await s.get('rekey'))) await s.setAlarm(g.until) // a retry's alarm replaced this one
+      return out(200, { ok: true })
+    }
+
     if (a.op === 'peek') {
       const cur = await live()
       return out(200, cur ? { live: true, accountPub: cur.b.key, state: await stateOf() } : { live: false, state: 'none' })
@@ -993,20 +1074,26 @@ export class Address {
       if (subject.op === 'contest') subject.pendingBindText = rsv ? rsv.stmt : rot ? rot.stmt : ''
       const v = await verifyDreq(a.req, a.sig, { bindText, state, challenge: a.challenge, subject, spend: () => true })
       if (!v.ok) return refuse(`dreq:${v.reason}`)
+      await runRekey()
+      // old passkeys still here would fill the new key's slot: ask again, with nothing used up
+      if (dreqNeedsConsent(subject.op) && (await s.get('rekey'))) return refuse('rekey')
       // the setup allowance stands in only for ABSENT consent: a request that
       // presents consent is judged on it, and a bad one never falls through
       const setup = dreqNeedsConsent(subject.op) && a.consent === null && (await useSetup(subject.op, cur))
+      let grace = false
       if (dreqNeedsConsent(subject.op) && !setup) {
+        const g = GRACE_OPS.includes(subject.op) ? await s.get('grace') : null
         const c = await verifyDirConsent(this.env, {
-          scope: a.scope, accountPub, purpose: subject.op, challenge: a.challenge, payloadText: a.req, consent: a.consent, now,
+          scope: a.scope, accountPub, graceKey: g ? g.key : null, purpose: subject.op, challenge: a.challenge, payloadText: a.req, consent: a.consent, now,
         })
         if (!c.ok) return refuse(`consent:${c.reason}`)
+        grace = c.grace === true
       }
       if (subject.op === 'contest' || subject.op === 'freeze') {
         await freeze(subject.op === 'contest' ? (overTomb ? 'contest-tomb' : 'contest') : 'owner')
         return out(200, { accountPub, state: 'frozen' })
       }
-      const body = { accountPub, state, ...(setup ? { setup: true } : {}) }
+      const body = { accountPub, state, ...(setup ? { setup: true } : {}), ...(grace ? { grace: true } : {}) }
       if (subject.op === 'status') {
         body.events = [...((await s.get('events')) || []), ...Object.values((await s.get('uevents')) || {})].sort((x, y) => x.at - y.at)
         // what a device holding the old key needs in order to contest, and to show
@@ -1040,6 +1127,11 @@ export class Address {
     }
 
     return out(400, { error: 'bad-op' })
+  }
+
+  /** Housekeeping with no request behind it: a grace's end, a rekey's retry. */
+  async alarm() {
+    await this.fetch(new Request('https://address/op', { method: 'POST', body: JSON.stringify({ op: 'tick' }) }))
   }
 }
 
@@ -1075,7 +1167,10 @@ export class Cred {
 
     if (a.op === 'assert') {
       const cred = await s.get('cred')
-      if (!cred || cred.scope !== a.scope) return res({ ok: false, reason: 'unknown' }) // one answer for both
+      // consent is for one key: this passkey must be that key's, or the previous key's
+      // when the Address object says so. Consent never rests on a rekey having succeeded.
+      const grace = !!cred && !!a.graceKey && cred.accountPub === a.graceKey
+      if (!cred || cred.scope !== a.scope || (cred.accountPub !== a.accountPub && !grace)) return res({ ok: false, reason: 'unknown' }) // one answer for all
       if (((await s.get('lockedUntil')) || 0) > now) return res({ ok: false, reason: 'locked' })
       const v = await verifyAssertion(cred, a.assertion, { challenge: a.challenge, origins: new Set(a.origins) })
       if (!v.ok) {
@@ -1085,7 +1180,7 @@ export class Cred {
       }
       await s.put('cred', { ...cred, signCount: v.signCount })
       await s.put('fails', 0)
-      return res({ ok: true })
+      return res({ ok: true, ...(grace ? { grace: true } : {}) })
     }
 
     // --- the key-blob store (§9.3) ---

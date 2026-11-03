@@ -251,15 +251,40 @@ account key it belongs to, and material for any other key is treated as gone).
   and any freeze, contest, rotation or new bind ends it. Both ops still notify,
   and the event says `setup: true`. Running out of time means verifying the
   email again, which re-arms it while the key still has nothing.
+  **For the UI:** the allowance is used when the request is authorized, so a
+  registration that then fails (a bad attestation, a bad blob) uses it up. Say
+  so plainly: the person asks for a new email code, which re-arms it, since a
+  failed registration leaves the key with nothing.
 - **A rebound** (a new key with no vouch: over an expired or deleted binding, or
-  a resolved freeze) takes the old key's passkeys and recovery record with it.
+  a resolved freeze) takes the old key's passkeys and recovery record with it,
+  and gets no grace.
+- **A passkey consents for its own key.** The `Cred` compares its account key
+  with the key consent is being given for, so consent never rests on a deletion
+  having succeeded.
+- **The rotation grace.** After a settled VOUCHED rotation, a passkey of the
+  immediately previous key may still consent to `cred-add` and `rc-enrol`, and
+  to nothing else: never a rotation, a `cred-del` or a native consent. The grace
+  ends at the new key's first credential, however it was added, or 30 days after
+  the settle, whichever is first; any freeze ends it too. The old passkeys are
+  then deleted with a notice (`cred-old-del`), and a key's code slot is left as
+  it was. An account that misses it gets back in with a fresh email proof, which
+  re-arms the setup allowance, as long as the new key has had nothing.
+  **For the UI:** add the passkey first. A code enrolled in the grace counts as
+  having had something, so if the passkey then never comes, email can't re-arm
+  it and the way back is that recovery code.
+- **A rekey that fails is recorded** (`rekey` in the Address object) before it is
+  tried, and retried by the next signed request and hourly by the alarm. While
+  one is unfinished, `cred-add`, `cred-del` and `rc-enrol` answer `rekey` with
+  nothing used up: try again. Old passkeys left behind would otherwise fill the
+  new key's empty slot.
 - **Passkeys.** A registration is ES256 with attestation `none`, UP + UV +
   attested data, and its ceremony challenge is the `dir` challenge the request
   spent; the `dreq.` covers its exact bytes. The PRF blob is stored in the
   credential's `Cred` with BE, the attachment label and the account key. At
   most 10 per account. A fetch is one assertion on a single-use challenge that
-  names no address; it is refused while frozen or once the binding's key has
-  changed, and every fetch notifies.
+  names no address; it is refused while frozen, and once the binding's key has
+  changed (`stale`: it opens to a superseded key, grace or no grace). Every fetch
+  notifies.
 - **The recovery code.** The device sends a verifier (Argon2id of the code,
   its own salt) and the code-wrapped blob. The directory keeps the verifier
   only as an HMAC under a per-account pepper key, and the blob sealed under a

@@ -178,7 +178,7 @@ export async function keysRoute(p, b, env, ip, deps) {
     if (!prfBlobOk(blob, ck)) return json(400, { error: 'invalid', reason: 'blob' })
     const attachment = b.attachment === 'platform' || b.attachment === 'cross-platform' ? b.attachment : null // a LABEL, never evidence
     const devicePub = typeof b.devicePub === 'string' && b.devicePub.length <= 100 ? b.devicePub : null
-    const ix = await call(accountStub(env, a.scope), 'credAdd', { key: ck, accountPub: a.accountPub, setup: a.setup === true })
+    const ix = await call(accountStub(env, a.scope), 'credAdd', { key: ck, accountPub: a.accountPub, setup: a.setup === true, grace: a.grace === true })
     if (ix.status !== 200) return json(ix.status, ix.body)
     const r = await call(credStub(env, ck), 'register', {
       rec: { scope: a.scope, accountPub: a.accountPub, pub: reg.pub, signCount: reg.signCount, be: reg.be, attachment, devicePub, created: Date.now(), blob },
@@ -187,6 +187,9 @@ export async function keysRoute(p, b, env, ip, deps) {
       await call(accountStub(env, a.scope), 'credDel', { key: ck })
       return json(r.status, r.body)
     }
+    // a new-key credential ends the rotation grace. If this call is lost the Account
+    // still refuses the grace (`grace-over`), and the old passkeys go at the 30 days.
+    try { await call(addressStub(env, a.scope), 'credLanded', {}) } catch (e) { console.log(`credLanded failed: ${e.message}`) }
     await notify(a.scope, 'cred-add', ck.slice(0, 8), { setup: a.setup === true })
     return json(200, { ok: true })
   }
@@ -215,7 +218,9 @@ export async function keysRoute(p, b, env, ip, deps) {
     if (r.status !== 200) return json(400, { error: 'invalid', reason: r.body.reason })
     // released only for the CURRENT account key, and never while frozen
     const st = await call(addressStub(env, r.body.scope), 'peek', {})
-    if (!st.body.live || st.body.accountPub !== r.body.accountPub) return json(400, { error: 'invalid', reason: 'orphaned' })
+    if (!st.body.live) return json(400, { error: 'invalid', reason: 'orphaned' })
+    // an old key's blob opens to a superseded key: never served, grace or no grace
+    if (st.body.accountPub !== r.body.accountPub) return json(400, { error: 'invalid', reason: 'stale' })
     if (st.body.state === 'frozen') return json(409, { error: 'state' })
     await notify(r.body.scope, 'cred-fetch', ck.slice(0, 8)) // every fetch notifies (§9.3)
     return json(200, { blob: r.body.blob })
@@ -230,7 +235,7 @@ export async function keysRoute(p, b, env, ip, deps) {
     if (!(await ledger(env, ip, 'keys'))) return json(429, { error: 'rate-limited' })
     const a = await authorize(env, email, b, { op: 'rc-enrol', body: b.body })
     if (!a.ok) return json(400, { error: 'invalid', reason: a.reason })
-    const r = await call(accountStub(env, a.scope), 'rcEnrol', { accountPub: a.accountPub, body: b.body, setup: a.setup === true })
+    const r = await call(accountStub(env, a.scope), 'rcEnrol', { accountPub: a.accountPub, body: b.body, setup: a.setup === true, grace: a.grace === true })
     if (r.status !== 200) return json(r.status, r.body)
     await notify(a.scope, 'rc-enrol', '', { setup: a.setup === true })
     return json(200, { ok: true })
@@ -282,7 +287,8 @@ function prfBlobOk(blob, ck) {
 }
 
 // --- one Durable Object per ADDRESS for the account's material ------------------------
-// Storage: `creds` (credential storage names), `rc` (the peppered verifier and the
+// Storage: `creds` (credential storage names), `owners` (each one's account key:
+// what tells a new key's passkey from one left by the key before it), `rc` (the peppered verifier and the
 // sealed code-wrapped blob, with the account key they belong to and the pepper
 // version), `rcLog` (attempt times, last 24 h), `rcFails`, `rcLock`, `rel` (a
 // pending release: its ticket hash and when it opens), `led` (the ledger blob),
@@ -298,14 +304,19 @@ export class Account {
     const s = this.state.storage
     const out = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
     const refuse = (reason, extra = {}) => out(400, { error: 'invalid', reason, ...extra })
+    /** does this key hold a passkey here? Asked beside the write it guards: the rotation
+     *  grace ends at the new key's first credential, so two adds in flight can't both land */
+    const holds = async (pub) => Object.values((await s.get('owners')) || {}).includes(pub)
 
     if (a.op === 'credAdd') {
       const creds = (await s.get('creds')) || []
       if (creds.includes(a.key)) return refuse('exists')
       if (creds.length >= KEYS.maxCreds) return refuse('limit')
       if (a.setup === true && creds.length) return refuse('filled') // the setup allowance fills an empty slot, never adds to one
+      if (a.grace === true && (await holds(a.accountPub))) return refuse('grace-over')
       const ever = await everKey(a.accountPub)
       await s.put('creds', [...creds, a.key])
+      await s.put('owners', { ...((await s.get('owners')) || {}), [a.key]: a.accountPub })
       await s.put(ever, true)
       return out(200, { ok: true })
     }
@@ -313,6 +324,8 @@ export class Account {
       const creds = (await s.get('creds')) || []
       if (!creds.includes(a.key)) return refuse('unknown')
       await s.put('creds', creds.filter((k) => k !== a.key))
+      const { [a.key]: _, ...owners } = (await s.get('owners')) || {}
+      await s.put('owners', owners)
       return out(200, { ok: true })
     }
 
@@ -330,6 +343,7 @@ export class Account {
       const ever = await everKey(a.accountPub)
       // read after the awaits above, beside the write: the setup allowance never replaces a code
       if (a.setup === true && (await s.get('rc'))) return refuse('filled')
+      if (a.grace === true && (await holds(a.accountPub))) return refuse('grace-over')
       await s.put('rc', rec)
       await s.put(ever, true)
       await s.delete('rel') // a new code ends any release in flight for the old one
@@ -420,7 +434,7 @@ export class Account {
 
     if (a.op === 'wipe') {
       const creds = (await s.get('creds')) || []
-      await s.delete(a.keepRc ? ['creds', 'led'] : ['creds', 'rc', 'rcLog', 'rcFails', 'rcLock', 'rel', 'led'])
+      await s.delete(a.keepRc ? ['creds', 'owners', 'led'] : ['creds', 'owners', 'rc', 'rcLog', 'rcFails', 'rcLock', 'rel', 'led'])
       if (a.keepRc) {
         // kept for the deleted binding's window only (§39.6): deleted at its expiry
         // at the latest, by the alarm, or sooner when the window closes (rekey)
@@ -430,14 +444,17 @@ export class Account {
       return out(200, { creds })
     }
     if (a.op === 'rekey') {
-      // the address REBOUND to `accountPub`: every passkey here was the old key's
-      // (a new key can add none before its binding is served), and so was any
-      // recovery record naming another key. The caller deletes the Cred objects.
-      const creds = (await s.get('creds')) || []
-      await s.delete('creds')
+      // only the passkeys of the keys in `keep` stay (the Address object may be retrying,
+      // and the new key may have added one since), and with `rc`, only a recovery record
+      // of theirs: a grace ending leaves the code slot alone. The caller deletes the Cred
+      // objects of the passkeys this answers with.
+      const keep = a.keep, creds = (await s.get('creds')) || [], owners = (await s.get('owners')) || {}
+      const stays = creds.filter((k) => keep.includes(owners[k]))
+      await s.put('creds', stays)
+      await s.put('owners', Object.fromEntries(stays.map((k) => [k, owners[k]])))
       const rc = await s.get('rc')
-      if (rc && rc.accountPub !== a.accountPub) await s.delete(['rc', 'rel'])
-      return out(200, { creds })
+      if (a.rc === true && rc && !keep.includes(rc.accountPub)) await s.delete(['rc', 'rel'])
+      return out(200, { creds: creds.filter((k) => !stays.includes(k)) })
     }
     if (a.op === 'rcKeep') {
       const rc = await s.get('rc')

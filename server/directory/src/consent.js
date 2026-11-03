@@ -27,7 +27,10 @@ export const RP = 'bento'
 /**
  * @param env      the Worker env (CRED namespace, DEV/DEV_ORIGINS)
  * @param o.scope  the address storage name (the challenge's scope; a credential must belong to it)
- * @param o.accountPub the LIVE binding's account key, the only key that may certify a consent key
+ * @param o.accountPub the LIVE binding's account key, the only key that may certify a consent key,
+ *                     and the key a passkey must belong to
+ * @param o.graceKey   the previous key, when its passkeys may consent to this op (the
+ *                     Address object's rotation grace); a native consent key never gets one
  * @param o.purpose the consent purpose this action needs ('rotate', …)
  * @param o.challenge the dir challenge, ALREADY SPENT by the caller
  * @param o.payloadText the exact statement the directory is about to apply
@@ -69,11 +72,11 @@ export async function verifyDirConsent(env, o) {
     const r = await (await stub.fetch('https://cred/op', {
       method: 'POST',
       body: JSON.stringify({
-        op: 'assert', scope: o.scope, challenge: await webauthnChallengeFor(cns),
+        op: 'assert', scope: o.scope, accountPub: o.accountPub, graceKey: o.graceKey ?? null, challenge: await webauthnChallengeFor(cns),
         assertion: c.webauthn, origins: [...consentOrigins(env)],
       }),
     })).json()
-    return r.ok ? { ok: true, via: 'webauthn' } : no(`webauthn:${r.reason}`)
+    return r.ok ? { ok: true, via: 'webauthn', ...(r.grace ? { grace: true } : {}) } : no(`webauthn:${r.reason}`)
   }
 
   return no('consent')

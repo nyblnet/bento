@@ -638,7 +638,7 @@ const alice = await person('alice@example.com', 'Alice')
     const credStore = stores.find((m) => m.has(cKey))!.get(cKey)!
     // one credential, re-pointed at each person below; its failure counter starts clean each time
     const seed = (rec: Record<string, unknown>) => { credStore.set('cred', rec); credStore.delete('fails'); credStore.delete('lockedUntil') }
-    seed({ scope, pub: pk.pub, signCount: 0, be: true, attachment: 'platform', devicePub: null, created: now })
+    seed({ scope, accountPub: carol.k.pub, pub: pk.pub, signCount: 0, be: true, attachment: 'platform', devicePub: null, created: now })
 
     const toDer = (raw: Uint8Array) => {
       const int = (v: Uint8Array) => { let i = 0; while (i < 31 && v[i] === 0) i++; v = v.slice(i); return v[0] & 0x80 ? Uint8Array.of(0, ...v) : v }
@@ -686,7 +686,7 @@ const alice = await person('alice@example.com', 'Alice')
     // origin allow-list: exact strings; desktop native origins are self-asserted, never consent evidence.
     // Carol now has a rotation in flight, so these rows run against a new person.
     const dave = await person('rot-dave@example.com'); await bind(dave)
-    seed({ scope: await addressKey(dave.email), pub: pk.pub, signCount: 5, be: true, attachment: 'platform', devicePub: null, created: now })
+    seed({ scope: await addressKey(dave.email), accountPub: dave.k.pub, pub: pk.pub, signCount: 5, be: true, attachment: 'platform', devicePub: null, created: now })
     const dave2 = await person(dave.email)
     const rd = await rotation(dave, dave2)
     const tryD = async (o: Parameters<typeof wa>[2] = {}) => {
@@ -707,7 +707,7 @@ const alice = await person('alice@example.com', 'Alice')
       const ch = await challengeFor(dave.email) // dave is pending now; the refusal must come from the origin, so use a fresh person
       void ch
       const gina = await person('rot-gina@example.com'); await bind(gina)
-      seed({ scope: await addressKey(gina.email), pub: pk.pub, signCount: 0, be: true, attachment: 'platform', devicePub: null, created: now })
+      seed({ scope: await addressKey(gina.email), accountPub: gina.k.pub, pub: pk.pub, signCount: 0, be: true, attachment: 'platform', devicePub: null, created: now })
       const gina2 = await person(gina.email)
       const rg = await rotation(gina, gina2)
       const ch2 = await challengeFor(gina.email)
@@ -715,7 +715,7 @@ const alice = await person('alice@example.com', 'Alice')
     }
     // the remaining WebAuthn field checks, against a third person
     const erin = await person('rot-erin@example.com'); await bind(erin)
-    seed({ scope: await addressKey(erin.email), pub: pk.pub, signCount: 10, be: true, attachment: 'platform', devicePub: null, created: now })
+    seed({ scope: await addressKey(erin.email), accountPub: erin.k.pub, pub: pk.pub, signCount: 10, be: true, attachment: 'platform', devicePub: null, created: now })
     const erin2 = await person(erin.email)
     const re = await rotation(erin, erin2)
     const tryE = async (o: Parameters<typeof wa>[2] = {}) => {
