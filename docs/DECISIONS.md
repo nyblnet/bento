@@ -12194,3 +12194,33 @@ Two follow-ups to the link v1 entry above, both from porting it to iOS.
   their base64url text. Before this, iOS had to
   choose an encoding that no spec pinned, and two hosts choosing differently
   would never link. The `link.wire` rows are byte for byte both ways.
+
+## 2026-11-04 — A saved document writes its picture data last, on its own line
+
+The `#bento-doc` block was one line of JSON, and `assets` (data URIs) sat in it
+wherever the key happened to fall. One 4K photo made that line megabytes of
+base64 mixed in with the slides. An agent reading the file line by line —
+which is what the Tooling note invites, and it meets the note first — cannot
+stop partway through a line, so it got either a truncated document or the
+whole picture. Measured on a three-slide deck with a 2.5 MB stand-in for one
+4K photo: 15,000 chars of document and 2.5 million of base64 on one line.
+
+- **The layout.** A plain save (`serializeWith`, the plain branch of
+  `encodeDocBody`) now writes `docText(doc)`: compact JSON of everything but
+  `assets`, then a line break, then `"assets":{…}}` — `assets` always the last
+  key. The Tooling note and docs/agents.md tell agents to stop before the line
+  that starts `"assets":`, or to load the JSON and drop the key.
+- **Nothing else changes.** The line break is JSON whitespace: every parser,
+  every older shell and the frozen updaters' splice (§2 asks only for
+  plaintext JSON with `<` escaped) read the same document, and an older shell
+  re-saving it writes one line again. A document without `assets` is exactly
+  `JSON.stringify(doc)`, byte for byte, in every app. Encrypted and sealed
+  bodies are ciphertext and are not laid out.
+- **Why not more.** Moving pictures into their own `application/bento+*`
+  blocks would give the same benefit with more machinery and a file older
+  shells cannot read; linking them as files beside the deck would end the
+  one-file promise.
+
+Rig: scripts/test-doc-layout.ts (the layout, the real write path through
+`encodeDocBody`, and a pin that no plain save path stringifies the document
+on its own).

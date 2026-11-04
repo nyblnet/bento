@@ -434,13 +434,36 @@ function writePreview(clone: Document, body: string, doc: KernelDoc): void {
 }
 
 /**
+ * The text of `#bento-doc` in a plain save: compact JSON, except that a
+ * top-level `assets` map — embedded pictures and files, megabytes of base64
+ * once a deck carries photos — is written LAST and starts its own line:
+ *
+ *   {"format":"bento/slides",…,"slides":[…],
+ *   "assets":{"a-…":"data:image/jpeg;base64,…"}}
+ *
+ * so anything reading the file line by line — an AI agent following the
+ * tooling comment above the block, most of all — can stop before the picture
+ * data instead of getting the document and the pictures as one unreadable
+ * line. The line break is JSON whitespace: every parser, older shells and the
+ * frozen updaters' splice included, reads the same document. With no `assets`
+ * the text is exactly JSON.stringify(doc). Encrypted and sealed bodies are
+ * ciphertext, so they are not laid out.
+ */
+export function docText(doc: object): string {
+  const { assets, ...rest } = doc as { assets?: unknown }
+  const head = JSON.stringify(rest)
+  if (assets === undefined) return head
+  return `${head.slice(0, -1)}${head === '{}' ? '' : ','}\n"assets":${JSON.stringify(assets)}}`
+}
+
+/**
  * Serialize `doc` into an arbitrary app shell (a parsed Bento HTML document).
  * Used with the boot-time pristine copy on every save, and by the self-update
  * flow with a freshly fetched NEWER shell — same document, new app around it.
  * PLAIN output — encryption-aware callers use serializeDocInto/serializeAuto.
  */
 export function serializeWith(shell: Document, doc: KernelDoc): string {
-  return serializeBody(shell, JSON.stringify(doc), doc)
+  return serializeBody(shell, docText(doc), doc)
 }
 
 /** The full .bento.html file content with `doc` embedded (plain). */
@@ -675,7 +698,7 @@ export async function decryptEnvelope(env: EncEnvelope, password: string): Promi
 export async function encodeDocBody(doc: KernelDoc): Promise<string> {
   if (encPassword) return encryptBody(JSON.stringify(doc), encPassword)
   if (sealBodyKey) return sealBody(JSON.stringify(doc), await sealBodyKey)
-  return JSON.stringify(doc)
+  return docText(doc)
 }
 
 export async function serializeDocInto(shell: Document, doc: KernelDoc): Promise<string> {

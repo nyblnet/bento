@@ -311,6 +311,11 @@ const SLIDES_TOOLING = `<!--
   · The document is the ONE script block of type "application/bento+json",
     id "bento-doc", below — plain readable JSON. Edit THAT block in place;
     never regenerate the whole file. Escape every "<" in the JSON as \\u003c.
+  · Inside that block the document is ONE line. When the deck has pictures
+    they follow on a SECOND line that starts "assets": — megabytes of image
+    data, which elements refer to as "asset:<key>". Do not read that line:
+    stop at the line starting "assets":, or load the JSON with a tool and
+    drop the key (jq 'del(.assets)').
   · The base64 blocks near the end are the DEFLATE-compressed app runtime
     (open source, https://bento.page) — no user content, leave them alone.
   · In a running file, window.bento exposes { doc, serialize(), loadDoc(json),
@@ -361,6 +366,10 @@ const GENERIC_TOOLING = `<!--
   · The document is the ONE script block of type "application/bento+json",
     id "bento-doc", below — plain readable JSON. Edit THAT block in place;
     never regenerate the whole file. Escape every "<" in the JSON as \\u003c.
+  · Inside that block the document is ONE line; embedded pictures and files,
+    if any, follow on a SECOND line that starts "assets": (megabytes of
+    base64). Do not read that line: stop before it, or load the JSON with a
+    tool and drop the key.
   · The base64 blocks near the end are the DEFLATE-compressed app runtime
     (open source, https://bento.page) — no user content, leave them alone.
   · In a running file, window.bento exposes { doc, serialize(), loadDoc(json) }.
