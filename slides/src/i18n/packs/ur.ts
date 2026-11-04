@@ -561,6 +561,8 @@ export const strings: Catalog = {
   "Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.": "پوری پریزنٹیشن کے لیے سلائیڈ کا ناپ۔ عناصر اپنی جگہ رہتے ہیں — ناپ بدلنے سے کینوس کا فریم بدلتا ہے، آپ کی تصویروں کا ناپ کبھی نہیں۔",
   "Custom slide width in pixels": "پکسل میں سلائیڈ کی مخصوص چوڑائی",
   "Custom slide height in pixels": "پکسل میں سلائیڈ کی مخصوص اونچائی",
+  "How its width follows its frame: Hug contents, Fixed or Fill container": "فریم میں چوڑائی کیسے طے ہوتی ہے: مواد کے مطابق، مقررہ یا کنٹینر بھریں",
+  "How its height follows its frame: Hug contents, Fixed or Fill container": "فریم میں اونچائی کیسے طے ہوتی ہے: مواد کے مطابق، مقررہ یا کنٹینر بھریں",
   "This slide’s background colour": "اس سلائیڈ کے پس منظر کا رنگ",
   "How this slide enters. Morph animates elements that share ids with the previous slide.": "یہ سلائیڈ کیسے داخل ہوتی ہے۔ مورف اُن عناصر کو متحرک کرتا ہے جن کی شناخت پچھلی سلائیڈ سے ملتی ہو۔",
   "A friendly name for this slide — shown in link pickers and state badges": "اس سلائیڈ کا سادہ نام — لنک چننے والوں اور حالت کے نشانات میں دکھایا جاتا ہے",

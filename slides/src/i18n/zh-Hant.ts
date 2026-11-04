@@ -577,6 +577,8 @@ export const zhHant: Catalog = {
   'Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.': '整份簡報的頁面尺寸。元素位置維持不變 — 變更尺寸只會重排畫布，不會縮放你的內容。',
   'Custom slide width in pixels': '自訂投影片寬度（像素）',
   'Custom slide height in pixels': '自訂投影片高度（像素）',
+  'How its width follows its frame: Hug contents, Fixed or Fill container': '寬度如何隨框架變化：符合內容、固定或填滿容器',
+  'How its height follows its frame: Hug contents, Fixed or Fill container': '高度如何隨框架變化：符合內容、固定或填滿容器',
   'This slide’s background colour': '此頁投影片的背景色',
   'How this slide enters. Morph animates elements that share ids with the previous slide.': '此頁的進場方式。變形會為與上一頁共享 id 的元素做過渡動畫。',
   'A friendly name for this slide — shown in link pickers and state badges': '此頁的名稱 — 顯示在連結選擇器與狀態標記中',

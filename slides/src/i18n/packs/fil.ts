@@ -560,6 +560,8 @@ export const strings: Catalog = {
   "Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.": "Laki ng slide para sa buong deck. Nananatili ang posisyon ng mga element — muling binabalangkas ng pagpapalit ng laki ang canvas, hindi nito kailanman binabago ang sukat ng art mo.",
   "Custom slide width in pixels": "Custom na lapad ng slide sa pixel",
   "Custom slide height in pixels": "Custom na taas ng slide sa pixel",
+  "How its width follows its frame: Hug contents, Fixed or Fill container": "Paano sinusundan ng lapad ang frame nito: Sakto sa laman, Fixed o Punuin ang container",
+  "How its height follows its frame: Hug contents, Fixed or Fill container": "Paano sinusundan ng taas ang frame nito: Sakto sa laman, Fixed o Punuin ang container",
   "This slide’s background colour": "Ang kulay ng background ng slide na ito",
   "How this slide enters. Morph animates elements that share ids with the previous slide.": "Paano pumapasok ang slide na ito. Pinagagalaw ng morph ang mga element na may parehong id sa nakaraang slide.",
   "A friendly name for this slide — shown in link pickers and state badges": "Isang madaling pangalan para sa slide na ito — lumalabas sa mga link picker at state badge",

@@ -566,6 +566,8 @@ export const strings: Catalog = {
   "Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.": "Bütin prezentasiýa üçin slaýd ölçegi. Elementler öz ýerlerinde galýar — ölçegi üýtgetmek iş meýdanyny täzeden çarçuwalaýar, işleriňiziň ölçegini hiç haçan üýtgetmeýär.",
   "Custom slide width in pixels": "Piksel bilen özleşdirilen slaýd ini",
   "Custom slide height in pixels": "Piksel bilen özleşdirilen slaýd beýikligi",
+  "How its width follows its frame: Hug contents, Fixed or Fill container": "Ini çarçuwa görä nähili kesgitlenýär: Mazmuna görä, Berkidilen ýa-da Konteýneri doldurmak",
+  "How its height follows its frame: Hug contents, Fixed or Fill container": "Beýiklik çarçuwa görä nähili kesgitlenýär: Mazmuna görä, Berkidilen ýa-da Konteýneri doldurmak",
   "This slide’s background colour": "Şu slaýdyň fon reňki",
   "How this slide enters. Morph animates elements that share ids with the previous slide.": "Şu slaýdyň nähili peýda bolýandygy. Öwrülme öňki slaýd bilen kimlikleri paýlaşýan elementleri janlandyrýar.",
   "A friendly name for this slide — shown in link pickers and state badges": "Şu slaýd üçin amatly at — baglanyşyk saýlaýjylarynda we ýagdaý nyşanlarynda görkezilýär",

@@ -577,6 +577,8 @@ export const zhHans: Catalog = {
   'Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.': '整套幻灯片的页面尺寸。元素位置保持不变 — 改变尺寸只会重排画布，不会缩放你的内容。',
   'Custom slide width in pixels': '自定义幻灯片宽度（像素）',
   'Custom slide height in pixels': '自定义幻灯片高度（像素）',
+  'How its width follows its frame: Hug contents, Fixed or Fill container': '宽度如何随框架变化：适应内容、固定或填充容器',
+  'How its height follows its frame: Hug contents, Fixed or Fill container': '高度如何随框架变化：适应内容、固定或填充容器',
   'This slide’s background colour': '本页幻灯片的背景色',
   'How this slide enters. Morph animates elements that share ids with the previous slide.': '本页的进入方式。变形会为与上一页共享 id 的元素做过渡动画。',
   'A friendly name for this slide — shown in link pickers and state badges': '本页的名称 — 显示在链接选择器和状态标记中',

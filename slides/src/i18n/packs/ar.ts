@@ -551,6 +551,8 @@ export const strings: Catalog = {
   "Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.": "حجم الشرائح على مستوى العرض التقديمي كله. تحتفظ العناصر بمواضعها — تغيير الحجم يعيد تأطير لوحة الرسم ولا يعيد تحجيم تصميمك أبدًا.",
   "Custom slide width in pixels": "عرض الشريحة المخصص بالبكسل",
   "Custom slide height in pixels": "ارتفاع الشريحة المخصص بالبكسل",
+  "How its width follows its frame: Hug contents, Fixed or Fill container": "كيف يتبع العرض إطاره: احتضان المحتوى، ثابت أو ملء الحاوية",
+  "How its height follows its frame: Hug contents, Fixed or Fill container": "كيف يتبع الارتفاع إطاره: احتضان المحتوى، ثابت أو ملء الحاوية",
   "This slide’s background colour": "لون خلفية هذه الشريحة",
   "How this slide enters. Morph animates elements that share ids with the previous slide.": "كيف تدخل هذه الشريحة. التحوّل يُحرّك العناصر التي تشترك في المعرّفات مع الشريحة السابقة.",
   "A friendly name for this slide — shown in link pickers and state badges": "اسم واضح لهذه الشريحة — يظهر في منتقيات الارتباط وشارات الحالات",

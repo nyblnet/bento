@@ -577,6 +577,8 @@ export const it: Catalog = {
   'Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.': 'Dimensione delle slide per tutto il deck. Gli elementi mantengono la posizione — cambiare dimensione reinquadra la tela, non riscala mai il tuo lavoro.',
   'Custom slide width in pixels': 'Larghezza personalizzata in pixel',
   'Custom slide height in pixels': 'Altezza personalizzata in pixel',
+  'How its width follows its frame: Hug contents, Fixed or Fill container': 'Come la larghezza segue la cornice: Adatta al contenuto, Fisso o Riempi contenitore',
+  'How its height follows its frame: Hug contents, Fixed or Fill container': 'Come l’altezza segue la cornice: Adatta al contenuto, Fisso o Riempi contenitore',
   'This slide’s background colour': 'Colore di sfondo di questa slide',
   'How this slide enters. Morph animates elements that share ids with the previous slide.': 'Come entra questa slide. Morph anima gli elementi che condividono l’id con la precedente.',
   'A friendly name for this slide — shown in link pickers and state badges': 'Nome di questa slide — mostrato nei selettori di link e nei badge di stato',

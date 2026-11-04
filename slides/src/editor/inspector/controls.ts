@@ -20,8 +20,10 @@ export const UNPAIR = '#unpair'
 
 export const ROW_TIPS: Record<string, string> = {
   'Page size': 'Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.',
-  'Width': 'Custom slide width in pixels',
-  'Height': 'Custom slide height in pixels',
+  // the rows a frame's child sizes by (layout.ts); the page size's W and H
+  // are fields with their own hints (slide.ts)
+  'Width': 'How its width follows its frame: Hug contents, Fixed or Fill container',
+  'Height': 'How its height follows its frame: Hug contents, Fixed or Fill container',
   'Slide number': 'Deck-wide. Show the slide counter to the audience while presenting.',
   'Progress bar': 'Deck-wide. Show the thin progress bar along the bottom while presenting.',
   'Corner arrows': 'Deck-wide. Show clickable ‹ › arrows in the corner while presenting. Off by default — clicks and arrow keys already move between slides.',

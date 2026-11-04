@@ -542,6 +542,8 @@ export const strings: Catalog = {
   "Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.": "Sunu genelinde slayt boyutu. Öğeler konumlarını korur — boyutu değiştirmek tuvali yeniden çerçeveler, çiziminizi asla yeniden ölçeklendirmez.",
   "Custom slide width in pixels": "Piksel cinsinden özel slayt genişliği",
   "Custom slide height in pixels": "Piksel cinsinden özel slayt yüksekliği",
+  "How its width follows its frame: Hug contents, Fixed or Fill container": "Genişlik çerçeveye nasıl uyar: İçeriğe sar, Sabit veya Kapsayıcıyı doldur",
+  "How its height follows its frame: Hug contents, Fixed or Fill container": "Yükseklik çerçeveye nasıl uyar: İçeriğe sar, Sabit veya Kapsayıcıyı doldur",
   "This slide’s background colour": "Bu slaydın arka plan rengi",
   "How this slide enters. Morph animates elements that share ids with the previous slide.": "Bu slaydın nasıl geleceği. Dönüşüm, bir önceki slaytla aynı kimliği paylaşan öğeleri canlandırır.",
   "A friendly name for this slide — shown in link pickers and state badges": "Bu slayt için anlaşılır bir ad — bağlantı seçicilerinde ve durum rozetlerinde gösterilir",

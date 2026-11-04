@@ -554,6 +554,8 @@ export const strings: Catalog = {
   "Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.": "গোটা প্রেজেন্টেশনের স্লাইডের আকার। এলিমেন্টগুলো নিজের জায়গাতেই থাকে — আকার বদলালে ক্যানভাসের ফ্রেম বদলায়, আপনার আঁকা জিনিসের মাপ কখনো বদলায় না।",
   "Custom slide width in pixels": "পিক্সেলে স্লাইডের কাস্টম প্রস্থ",
   "Custom slide height in pixels": "পিক্সেলে স্লাইডের কাস্টম উচ্চতা",
+  "How its width follows its frame: Hug contents, Fixed or Fill container": "ফ্রেমে প্রস্থ কীভাবে ঠিক হয়: কনটেন্ট অনুযায়ী, নির্দিষ্ট অথবা কন্টেইনার পূরণ",
+  "How its height follows its frame: Hug contents, Fixed or Fill container": "ফ্রেমে উচ্চতা কীভাবে ঠিক হয়: কনটেন্ট অনুযায়ী, নির্দিষ্ট অথবা কন্টেইনার পূরণ",
   "This slide’s background colour": "এই স্লাইডের ব্যাকগ্রাউন্ডের রঙ",
   "How this slide enters. Morph animates elements that share ids with the previous slide.": "এই স্লাইডটি কীভাবে আসে। মর্ফ সেই এলিমেন্টগুলোকে অ্যানিমেট করে যাদের আইডি আগের স্লাইডের সাথে মেলে।",
   "A friendly name for this slide — shown in link pickers and state badges": "এই স্লাইডের জন্য একটি সহজ নাম — লিঙ্ক বাছাইয়ের তালিকায় ও স্টেট ব্যাজে দেখানো হয়",

@@ -548,6 +548,8 @@ export const strings: Catalog = {
   "Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.": "Diakoko, joka koskee koko esitystä. Objektit pysyvät paikoillaan — koon muuttaminen rajaa piirtoalustan uudelleen, ei koskaan skaalaa työtäsi.",
   "Custom slide width in pixels": "Dian mukautettu leveys pikseleinä",
   "Custom slide height in pixels": "Dian mukautettu korkeus pikseleinä",
+  "How its width follows its frame: Hug contents, Fixed or Fill container": "Miten leveys seuraa kehystä: Sovita sisältöön, Kiinteä tai Täytä säiliö",
+  "How its height follows its frame: Hug contents, Fixed or Fill container": "Miten korkeus seuraa kehystä: Sovita sisältöön, Kiinteä tai Täytä säiliö",
   "This slide’s background colour": "Tämän dian taustaväri",
   "How this slide enters. Morph animates elements that share ids with the previous slide.": "Miten tämä dia tulee näkyviin. Muunto animoi objektit, joilla on sama tunnus kuin edellisessä diassa.",
   "A friendly name for this slide — shown in link pickers and state badges": "Selkeä nimi tälle dialle — näkyy linkkivalitsimissa ja tilamerkeissä",

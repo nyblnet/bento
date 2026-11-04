@@ -544,6 +544,8 @@ export const strings: Catalog = {
   "Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.": "גודל השקופיות בכל המצגת. האובייקטים שומרים על מיקומם — שינוי הגודל ממסגר מחדש את משטח העריכה ולעולם לא משנה את קנה המידה של העיצוב.",
   "Custom slide width in pixels": "רוחב שקופית מותאם אישית, בפיקסלים",
   "Custom slide height in pixels": "גובה שקופית מותאם אישית, בפיקסלים",
+  "How its width follows its frame: Hug contents, Fixed or Fill container": "איך הרוחב נקבע לפי המסגרת: התאמה לתוכן, קבוע או מילוי המכל",
+  "How its height follows its frame: Hug contents, Fixed or Fill container": "איך הגובה נקבע לפי המסגרת: התאמה לתוכן, קבוע או מילוי המכל",
   "This slide’s background colour": "צבע הרקע של השקופית הזו",
   "How this slide enters. Morph animates elements that share ids with the previous slide.": "איך השקופית הזו נכנסת. מורף מנפיש אובייקטים שחולקים מזהים עם השקופית הקודמת.",
   "A friendly name for this slide — shown in link pickers and state badges": "שם ידידותי לשקופית הזו — מוצג בבוררי הקישורים ובתגי המצבים",

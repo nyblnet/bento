@@ -541,6 +541,8 @@ export const strings: Catalog = {
   "Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.": "Kích thước trang chiếu cho cả bản trình bày. Các đối tượng giữ nguyên vị trí — đổi kích thước sẽ đóng khung lại khung vẽ, không bao giờ co giãn tác phẩm của bạn.",
   "Custom slide width in pixels": "Chiều rộng trang chiếu tùy chỉnh, tính bằng pixel",
   "Custom slide height in pixels": "Chiều cao trang chiếu tùy chỉnh, tính bằng pixel",
+  "How its width follows its frame: Hug contents, Fixed or Fill container": "Chiều rộng theo khung thế nào: Ôm nội dung, Cố định hoặc Lấp đầy vùng chứa",
+  "How its height follows its frame: Hug contents, Fixed or Fill container": "Chiều cao theo khung thế nào: Ôm nội dung, Cố định hoặc Lấp đầy vùng chứa",
   "This slide’s background colour": "Màu nền của trang chiếu này",
   "How this slide enters. Morph animates elements that share ids with the previous slide.": "Cách trang chiếu này xuất hiện. Biến hình tạo chuyển động cho các đối tượng dùng chung mã với trang chiếu trước.",
   "A friendly name for this slide — shown in link pickers and state badges": "Một cái tên dễ nhớ cho trang chiếu này — hiển thị trong bộ chọn liên kết và huy hiệu trạng thái",

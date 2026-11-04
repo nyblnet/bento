@@ -140,8 +140,8 @@ export function buildSlidePanel(p: PropsPanel) {
     mini(t('H'), dh, (v, fin) =>
       p.edit(() => { p.store.doc.size.height = Math.round(v) }, fin), undefined, { min: 320, max: 4000 }),
   )
-  size.firstElementChild!.setAttribute('title', t('Width'))
-  size.lastElementChild!.setAttribute('title', t('Height'))
+  size.firstElementChild!.setAttribute('title', t('Custom slide width in pixels'))
+  size.lastElementChild!.setAttribute('title', t('Custom slide height in pixels'))
   size.hidden = presetKey !== 'Custom…'
   p.host.appendChild(size)
   // These live in doc.present because they are AUDIENCE-facing: what the

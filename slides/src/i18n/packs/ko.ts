@@ -527,6 +527,8 @@ export const strings: Catalog = {
   "Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.": "프레젠테이션 전체의 슬라이드 크기입니다. 요소는 위치를 유지합니다 — 크기를 바꾸면 캔버스가 다시 구성될 뿐 작업물이 확대·축소되지는 않습니다.",
   "Custom slide width in pixels": "사용자 지정 슬라이드 너비(픽셀)",
   "Custom slide height in pixels": "사용자 지정 슬라이드 높이(픽셀)",
+  "How its width follows its frame: Hug contents, Fixed or Fill container": "프레임에 따라 너비를 정하는 방식: 내용에 맞춤, 고정 또는 컨테이너 채우기",
+  "How its height follows its frame: Hug contents, Fixed or Fill container": "프레임에 따라 높이를 정하는 방식: 내용에 맞춤, 고정 또는 컨테이너 채우기",
   "This slide’s background colour": "이 슬라이드의 배경색",
   "How this slide enters. Morph animates elements that share ids with the previous slide.": "이 슬라이드가 등장하는 방식입니다. 모프는 이전 슬라이드와 id를 공유하는 요소를 애니메이션합니다.",
   "A friendly name for this slide — shown in link pickers and state badges": "이 슬라이드의 알아보기 쉬운 이름 — 링크 선택기와 상태 배지에 표시됩니다",

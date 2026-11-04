@@ -544,6 +544,8 @@ export const strings: Catalog = {
   "Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.": "Saiz slaid untuk seluruh pembentangan. Elemen mengekalkan kedudukannya — mengubah saiz membingkai semula kanvas, tidak pernah mengubah skala karya anda.",
   "Custom slide width in pixels": "Lebar slaid tersuai dalam piksel",
   "Custom slide height in pixels": "Tinggi slaid tersuai dalam piksel",
+  "How its width follows its frame: Hug contents, Fixed or Fill container": "Cara lebar mengikut bingkainya: Muat kandungan, Tetap atau Isi bekas",
+  "How its height follows its frame: Hug contents, Fixed or Fill container": "Cara tinggi mengikut bingkainya: Muat kandungan, Tetap atau Isi bekas",
   "This slide’s background colour": "Warna latar belakang slaid ini",
   "How this slide enters. Morph animates elements that share ids with the previous slide.": "Cara slaid ini masuk. Morph menganimasikan elemen yang berkongsi ID dengan slaid sebelumnya.",
   "A friendly name for this slide — shown in link pickers and state badges": "Nama mesra untuk slaid ini — dipaparkan dalam pemilih pautan dan lencana keadaan",

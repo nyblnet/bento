@@ -541,6 +541,8 @@ export const strings: Catalog = {
   "Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.": "Ukuran slide untuk seluruh presentasi. Elemen mempertahankan posisinya — mengubah ukuran membingkai ulang kanvas, tidak pernah mengubah skala karya Anda.",
   "Custom slide width in pixels": "Lebar slide kustom dalam piksel",
   "Custom slide height in pixels": "Tinggi slide kustom dalam piksel",
+  "How its width follows its frame: Hug contents, Fixed or Fill container": "Cara lebar mengikuti bingkainya: Pas dengan isi, Tetap atau Isi kontainer",
+  "How its height follows its frame: Hug contents, Fixed or Fill container": "Cara tinggi mengikuti bingkainya: Pas dengan isi, Tetap atau Isi kontainer",
   "This slide’s background colour": "Warna latar belakang slide ini",
   "How this slide enters. Morph animates elements that share ids with the previous slide.": "Cara slide ini masuk. Morph menganimasikan elemen yang ID-nya sama dengan slide sebelumnya.",
   "A friendly name for this slide — shown in link pickers and state badges": "Nama yang mudah dikenali untuk slide ini — ditampilkan di pemilih tautan dan lencana status",

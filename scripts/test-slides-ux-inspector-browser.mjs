@@ -138,10 +138,13 @@ try {
     ok(await x.evaluate((i) => i.readOnly), 'its X is read-only (the frame places it)')
     await select('G')
     // the sizing rows sit right under W/H, in the header-less top block (Figma keeps them there)
-    const resizing = p.locator('.ed-props > .ed-row:has([data-axis])')
+    const resizing = p.locator('.ed-props .ed-row:has([data-axis])')
     const under = await p.evaluate(() => { const r = document.querySelector('.ed-props > .ed-row:has([data-axis])'); return r?.previousElementSibling?.classList.contains('ed-layer-block') && !document.querySelector('.ed-props .ed-section[data-key="Resizing"]') })
     ok(await resizing.count() === 2 && await resizing.locator('[data-value="hug"]').count() === 2 && under, 'a nested frame shows its sizing right under W/H, with Hug on both axes')
     ok(await resizing.locator('[data-value="fill"]').first().isDisabled(), 'Fill is refused where the parent hugs')
+    // they say how the child takes its size, not the page size's "Custom slide width"
+    const tips = await resizing.evaluateAll((rs) => rs.map((r) => r.title))
+    ok(tips.length === 2 && tips.every((x) => /frame/i.test(x) && !/slide/i.test(x)), `the sizing rows' hints are about the frame (${tips.join(' | ')})`)
     ok(await p.locator('.ed-props .ed-section[data-key="Auto layout"]').count() === 1, '…and its own Auto layout below')
     await select('F')
     const before = (await el('F')).w

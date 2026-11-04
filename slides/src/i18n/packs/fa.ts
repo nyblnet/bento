@@ -547,6 +547,8 @@ export const strings: Catalog = {
   "Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.": "اندازهٔ اسلاید برای کل ارائه. عنصرها موقعیت خود را حفظ می‌کنند — تغییر اندازه کادر بوم را از نو می‌چیند و هرگز طرح شما را تغییر مقیاس نمی‌دهد.",
   "Custom slide width in pixels": "عرض سفارشی اسلاید بر حسب پیکسل",
   "Custom slide height in pixels": "ارتفاع سفارشی اسلاید بر حسب پیکسل",
+  "How its width follows its frame: Hug contents, Fixed or Fill container": "عرض چگونه از قاب پیروی می‌کند: هم‌اندازهٔ محتوا، ثابت یا پر کردن ظرف",
+  "How its height follows its frame: Hug contents, Fixed or Fill container": "ارتفاع چگونه از قاب پیروی می‌کند: هم‌اندازهٔ محتوا، ثابت یا پر کردن ظرف",
   "This slide’s background colour": "رنگ پس‌زمینهٔ این اسلاید",
   "How this slide enters. Morph animates elements that share ids with the previous slide.": "شیوهٔ ورود این اسلاید. مورف عنصرهایی را که با اسلاید پیشین شناسهٔ مشترک دارند متحرک می‌کند.",
   "A friendly name for this slide — shown in link pickers and state badges": "یک نام خوانا برای این اسلاید — در انتخابگر پیوند و نشان‌های حالت دیده می‌شود",

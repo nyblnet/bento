@@ -545,6 +545,8 @@ export const strings: Catalog = {
   "Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.": "Lysbildestørrelse for hele presentasjonen. Elementene beholder posisjonene sine — å endre størrelsen rammer inn lerretet på nytt, den skalerer aldri innholdet ditt.",
   "Custom slide width in pixels": "Egendefinert lysbildebredde i piksler",
   "Custom slide height in pixels": "Egendefinert lysbildehøyde i piksler",
+  "How its width follows its frame: Hug contents, Fixed or Fill container": "Hvordan bredden følger rammen: Tilpass til innholdet, Fast eller Fyll beholder",
+  "How its height follows its frame: Hug contents, Fixed or Fill container": "Hvordan høyden følger rammen: Tilpass til innholdet, Fast eller Fyll beholder",
   "This slide’s background colour": "Bakgrunnsfargen til dette lysbildet",
   "How this slide enters. Morph animates elements that share ids with the previous slide.": "Hvordan dette lysbildet kommer inn. Morph animerer elementer som deler id-er med det forrige lysbildet.",
   "A friendly name for this slide — shown in link pickers and state badges": "Et vennlig navn på dette lysbildet — vises i lenkevelgere og tilstandsmerker",

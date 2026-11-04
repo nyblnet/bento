@@ -577,6 +577,8 @@ export const ja: Catalog = {
   'Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.': 'デッキ全体のスライドサイズ。要素の位置はそのまま — サイズ変更はキャンバスを組み直すだけで、作品を拡大縮小しません。',
   'Custom slide width in pixels': 'スライドの幅（px）',
   'Custom slide height in pixels': 'スライドの高さ（px）',
+  'How its width follows its frame: Hug contents, Fixed or Fill container': 'フレーム内での幅の決め方：内容に合わせる、固定またはコンテナに合わせる',
+  'How its height follows its frame: Hug contents, Fixed or Fill container': 'フレーム内での高さの決め方：内容に合わせる、固定またはコンテナに合わせる',
   'This slide’s background colour': 'このスライドの背景色',
   'How this slide enters. Morph animates elements that share ids with the previous slide.': 'スライドの入り方。モーフは前のスライドと id を共有する要素をアニメーションでつなぎます。',
   'A friendly name for this slide — shown in link pickers and state badges': 'このスライドの名前 — リンク選択や状態バッジに表示されます',

@@ -577,6 +577,8 @@ export const de: Catalog = {
   'Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.': 'Foliengröße für das ganze Deck. Elemente behalten ihre Position — eine Größenänderung rahmt die Leinwand neu, skaliert aber nie deine Inhalte.',
   'Custom slide width in pixels': 'Eigene Folienbreite in Pixeln',
   'Custom slide height in pixels': 'Eigene Folienhöhe in Pixeln',
+  'How its width follows its frame: Hug contents, Fixed or Fill container': 'Wie sich die Breite nach dem Rahmen richtet: An Inhalt anpassen, Fest oder Container füllen',
+  'How its height follows its frame: Hug contents, Fixed or Fill container': 'Wie sich die Höhe nach dem Rahmen richtet: An Inhalt anpassen, Fest oder Container füllen',
   'This slide’s background colour': 'Hintergrundfarbe dieser Folie',
   'How this slide enters. Morph animates elements that share ids with the previous slide.': 'Wie diese Folie erscheint. Morph animiert Elemente, die eine id mit der vorigen Folie teilen.',
   'A friendly name for this slide — shown in link pickers and state badges': 'Name dieser Folie — erscheint in Link-Auswahlen und Zustands-Badges',

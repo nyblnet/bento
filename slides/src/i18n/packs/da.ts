@@ -543,6 +543,8 @@ export const strings: Catalog = {
   "Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.": "Diasstørrelse for hele præsentationen. Elementerne beholder deres placering — en ændring af størrelsen giver arbejdsfladen en ny ramme, men skalerer aldrig dit indhold.",
   "Custom slide width in pixels": "Egen diasbredde i pixel",
   "Custom slide height in pixels": "Egen diashøjde i pixel",
+  "How its width follows its frame: Hug contents, Fixed or Fill container": "Hvordan bredden følger rammen: Tilpas til indhold, Fast eller Fyld beholder",
+  "How its height follows its frame: Hug contents, Fixed or Fill container": "Hvordan højden følger rammen: Tilpas til indhold, Fast eller Fyld beholder",
   "This slide’s background colour": "Baggrundsfarven på dette dias",
   "How this slide enters. Morph animates elements that share ids with the previous slide.": "Hvordan dette dias kommer ind. Morph animerer elementer, der deler id med det forrige dias.",
   "A friendly name for this slide — shown in link pickers and state badges": "Et sigende navn til dette dias — vises i link-vælgere og på tilstandsmærker",

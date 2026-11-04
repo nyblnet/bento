@@ -543,6 +543,8 @@ export const strings: Catalog = {
   "Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.": "Размер слайдов для всей презентации. Объекты сохраняют свои позиции — изменение размера меняет рамку холста, но никогда не масштабирует вашу графику.",
   "Custom slide width in pixels": "Произвольная ширина слайда в пикселях",
   "Custom slide height in pixels": "Произвольная высота слайда в пикселях",
+  "How its width follows its frame: Hug contents, Fixed or Fill container": "Как ширина зависит от фрейма: По содержимому, Фиксированный или Заполнить контейнер",
+  "How its height follows its frame: Hug contents, Fixed or Fill container": "Как высота зависит от фрейма: По содержимому, Фиксированный или Заполнить контейнер",
   "This slide’s background colour": "Цвет фона этого слайда",
   "How this slide enters. Morph animates elements that share ids with the previous slide.": "Как появляется этот слайд. Трансформация анимирует объекты, у которых те же id, что и на предыдущем слайде.",
   "A friendly name for this slide — shown in link pickers and state badges": "Понятное имя для этого слайда — отображается при выборе ссылок и на значках состояний",

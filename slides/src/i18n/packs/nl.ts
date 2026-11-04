@@ -539,6 +539,8 @@ export const strings: Catalog = {
   "Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.": "Diagrootte voor de hele presentatie. Elementen houden hun positie — een andere grootte herkadert het canvas en schaalt je werk nooit.",
   "Custom slide width in pixels": "Aangepaste diabreedte in pixels",
   "Custom slide height in pixels": "Aangepaste diahoogte in pixels",
+  "How its width follows its frame: Hug contents, Fixed or Fill container": "Hoe de breedte het frame volgt: Passend om inhoud, Vast of Container vullen",
+  "How its height follows its frame: Hug contents, Fixed or Fill container": "Hoe de hoogte het frame volgt: Passend om inhoud, Vast of Container vullen",
   "This slide’s background colour": "De achtergrondkleur van deze dia",
   "How this slide enters. Morph animates elements that share ids with the previous slide.": "Hoe deze dia binnenkomt. Morph animeert elementen die een id delen met de vorige dia.",
   "A friendly name for this slide — shown in link pickers and state badges": "Een herkenbare naam voor deze dia — te zien in linkkiezers en statusbadges",

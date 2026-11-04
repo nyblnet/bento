@@ -540,6 +540,8 @@ export const strings: Catalog = {
   "Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.": "Bildstorlek för hela presentationen. Objekten behåller sina positioner — en ändrad storlek ramar om arbetsytan och skalar aldrig om det du har ritat.",
   "Custom slide width in pixels": "Anpassad bildbredd i pixlar",
   "Custom slide height in pixels": "Anpassad bildhöjd i pixlar",
+  "How its width follows its frame: Hug contents, Fixed or Fill container": "Hur bredden följer ramen: Anpassa efter innehåll, Fast eller Fyll behållare",
+  "How its height follows its frame: Hug contents, Fixed or Fill container": "Hur höjden följer ramen: Anpassa efter innehåll, Fast eller Fyll behållare",
   "This slide’s background colour": "Den här bildens bakgrundsfärg",
   "How this slide enters. Morph animates elements that share ids with the previous slide.": "Hur den här bilden kommer in. Morf animerar objekt som delar id med föregående bild.",
   "A friendly name for this slide — shown in link pickers and state badges": "Ett begripligt namn för bilden — visas i länkväljare och lägesmärken",

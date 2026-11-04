@@ -545,6 +545,8 @@ export const strings: Catalog = {
   "Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.": "ขนาดสไลด์ทั้งงานนำเสนอ องค์ประกอบคงตำแหน่งเดิม — การเปลี่ยนขนาดจะปรับกรอบแคนวาส ไม่ย่อขยายงานของคุณ",
   "Custom slide width in pixels": "ความกว้างสไลด์ที่กำหนดเอง (พิกเซล)",
   "Custom slide height in pixels": "ความสูงสไลด์ที่กำหนดเอง (พิกเซล)",
+  "How its width follows its frame: Hug contents, Fixed or Fill container": "ความกว้างเป็นไปตามเฟรมอย่างไร: พอดีกับเนื้อหา, คงที่ หรือ เติมคอนเทนเนอร์",
+  "How its height follows its frame: Hug contents, Fixed or Fill container": "ความสูงเป็นไปตามเฟรมอย่างไร: พอดีกับเนื้อหา, คงที่ หรือ เติมคอนเทนเนอร์",
   "This slide’s background colour": "สีพื้นหลังของสไลด์นี้",
   "How this slide enters. Morph animates elements that share ids with the previous slide.": "วิธีที่สไลด์นี้ปรากฏ มอร์ฟจะทำแอนิเมชันให้องค์ประกอบที่ใช้ id ร่วมกับสไลด์ก่อนหน้า",
   "A friendly name for this slide — shown in link pickers and state badges": "ชื่อเรียกของสไลด์นี้ — แสดงในตัวเลือกลิงก์และป้ายสถานะ",

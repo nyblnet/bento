@@ -542,6 +542,8 @@ export const strings: Catalog = {
   "Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.": "Rozmiar slajdu dla całej prezentacji. Elementy zachowują swoje pozycje — zmiana rozmiaru zmienia kadr, nigdy nie przeskalowuje Twoich grafik.",
   "Custom slide width in pixels": "Niestandardowa szerokość slajdu w pikselach",
   "Custom slide height in pixels": "Niestandardowa wysokość slajdu w pikselach",
+  "How its width follows its frame: Hug contents, Fixed or Fill container": "Jak szerokość zależy od ramki: Dopasuj do zawartości, Stały lub Wypełnij kontener",
+  "How its height follows its frame: Hug contents, Fixed or Fill container": "Jak wysokość zależy od ramki: Dopasuj do zawartości, Stały lub Wypełnij kontener",
   "This slide’s background colour": "Kolor tła tego slajdu",
   "How this slide enters. Morph animates elements that share ids with the previous slide.": "Sposób wejścia tego slajdu. Morph animuje elementy o id wspólnych z poprzednim slajdem.",
   "A friendly name for this slide — shown in link pickers and state badges": "Przyjazna nazwa tego slajdu — widoczna na listach linków i na plakietkach stanów",
