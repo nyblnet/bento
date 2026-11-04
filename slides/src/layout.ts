@@ -43,14 +43,21 @@ export function moveIntoFrame(slide: Slide, ids: readonly string[], frameId: str
   const at = Math.max(0, Math.min(stay.length, slot))
   const order = [...stay.slice(0, at), ...moving, ...stay.slice(at)]
   for (const m of moving) { m.parentId = frameId; delete m.sizing }
+  layBlock(slide, f, order)
+  reflowByArray(slide, frameId)
+  return true
+}
+
+/** Lay frame `f`'s whole subtree back into the array as one block where the
+ *  frame stands: the frame, then each child's unit in `order` — so every
+ *  child paints above its frame, and its own contents above it. */
+function layBlock(slide: Slide, f: Frame, order: SlideElement[]): void {
   const block = [f, ...order.flatMap((c) => withDescendants(slide, [c]))]
   const inBlock = new Set(block.map((e) => e.id))
   const rest = slide.elements.filter((e) => !inBlock.has(e.id))
   const before = slide.elements.slice(0, slide.elements.indexOf(f)).filter((e) => !inBlock.has(e.id)).length
   rest.splice(before, 0, ...block)
   slide.elements = rest
-  reflowByArray(slide, frameId)
-  return true
 }
 
 /** Take `ids` out of their frames to the slide's top level, keeping where they
@@ -324,6 +331,24 @@ function place(slide: Slide, f: Frame, set: Put) {
   }
 }
 
+/** The largest box a NEW child can take in frame `f` without passing its
+ *  edges: the inner box (size less padding), and for a fixed-size row or
+ *  column what is left along the main axis after the children it has (fill
+ *  children at their least size) and one more gap; a fixed grid's cell width.
+ *  A frame that hugs grows to fit, so it sets no limit. */
+export function roomIn(slide: Slide, f: Frame): { w: number; h: number } {
+  if (f.layout.hug) return { w: Infinity, h: Infinity }
+  const { dir, gap, pad } = f.layout
+  const iw = Math.max(1, f.w - pad[1] - pad[3]), ih = Math.max(1, f.h - pad[0] - pad[2])
+  const kids = frameChildren(slide, f)
+  if (dir === 'grid') { const c = colsOf(f); return { w: Math.max(1, (iw - gap * (c - 1)) / c), h: ih } }
+  if (f.layout.wrap || !kids.length) return { w: iw, h: ih }
+  const M = dir === 'row' ? 'w' : 'h'
+  const used = kids.reduce((a, k) => a + (k.sizing?.[M] === 'fill' ? minOf(k, M) : k[M]), 0) + gap * kids.length
+  const free = Math.max(1, (M === 'w' ? iw : ih) - used)
+  return M === 'w' ? { w: free, h: ih } : { w: iw, h: free }
+}
+
 /** A fill child's least size on axis M (sizing.minW/minH, else 0). */
 const minOf = (k: SlideElement, M: 'w' | 'h') => (M === 'w' ? k.sizing?.minW : k.sizing?.minH) ?? 0
 
@@ -397,7 +422,8 @@ export function reflowByArray(slide: Slide, frameId: string): void {
 
 /** Move a frame's child to slot `to` of its siblings (layout order). Reports
  *  whether the order changed. Paint order among the siblings follows the
- *  flow order; nothing outside the frame moves in the array. */
+ *  flow order, each child moving with everything inside it (layBlock): a
+ *  card that only swapped its own slot would paint over its own texts. */
 export function moveInFrame(slide: Slide, id: string, to: number): boolean {
   const child = slide.elements.find((e) => e.id === id)
   const f = child?.parentId ? slide.elements.find((e) => e.id === child.parentId) : undefined
@@ -408,9 +434,7 @@ export function moveInFrame(slide: Slide, id: string, to: number): boolean {
   if (from < 0 || from === at) return false
   order.splice(from, 1)
   order.splice(at, 0, child)
-  // the siblings' array slots, refilled in the new flow order
-  const slots = slide.elements.map((e, i) => (e.parentId === f.id ? i : -1)).filter((i) => i >= 0)
-  slots.forEach((slot, k) => { slide.elements[slot] = order[k] })
+  layBlock(slide, f, order)
   reflowByArray(slide, f.id)
   return true
 }

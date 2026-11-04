@@ -15,10 +15,14 @@
 //      children, re-pointed at the copy; Delete takes the frame's children too.
 //   4. Figma's selection model: a click picks the outermost frame, a double-
 //      click goes in, Esc goes back out; a marquee takes top-level elements;
-//      ⇧A over a frame and its child wraps the frame, with the gap it had.
+//      ⇧A over a frame and its child wraps the frame, with the gap it had;
+//      a selected card pressed by its text drags (out of its row, too), and
+//      the drag after a ⌘-held one still moves it.
 //   5. The tools draw: R then a drag makes a rectangle of the dragged size, a
-//      click places it where clicked; T with an auto-layout frame selected
-//      puts the text inside it; F's frame is called a Frame.
+//      click places it where clicked; with an auto-layout frame selected a
+//      click in it puts the new element inside, held to the room a fixed
+//      frame has left (a hugging one grows), a drag in it sizes the child,
+//      a click outside places on the slide; F's frame is called a Frame.
 //   6. Layers names tell rows apart: three rectangles of different colours are
 //      three different labels, a text row shows its words.
 import { fileURLToPath } from 'node:url'
@@ -177,6 +181,34 @@ try {
   await drag(fromC2, [fromC2[0] + 100, fromC2[1]])
   all = await els()
   ok(all.find((e) => e.id === 'f').x > fx0 + 40 && all.find((e) => e.id === 'c1').parentId === 'f', `press-and-drag on a child moves the whole card (frame x ${fx0} → ${all.find((e) => e.id === 'f').x})`)
+  {
+    // a row of cards: a card entered by double-click, pressed by its text (the
+    // text paints over the card, so the press is not on the card's node)
+    const cardIn = (id, x) => [frame(id, x, 100, 200, 160, { dir: 'col' }), text(`${id}t`, x + 10, 110, 180, 50, id.toUpperCase(), { parentId: id })]
+    const rowOf = () => [frame('row', 100, 100, 700, 160, { gap: 30, pad: [0, 0, 0, 0], hug: true }), ...[['k1', 100], ['k2', 330], ['k3', 560]].flatMap(([id, x]) => cardIn(id, x).map((e, i) => (i ? e : { ...e, parentId: 'row' })))]
+    await load(rowOf()); await deselect()
+    await p.mouse.dblclick(...(await centre('k2t'))); await p.waitForTimeout(250)
+    ok((await selection()).join() === 'k2', `a double-click enters the row to the card (${(await selection()).join()})`)
+    const toC = async (x, y) => p.evaluate(([x, y]) => { const r = document.querySelector('.ed-stage-scale').getBoundingClientRect(); const k = r.width / window.bento.doc.size.width; return [r.left + x * k, r.top + y * k] }, [x, y])
+    await drag(await centre('k2t'), await toC(400, 560))
+    all = await els()
+    ok(!all.find((e) => e.id === 'k2').parentId && all.find((e) => e.id === 'k2').y > 300 && all.find((e) => e.id === 'k2t').parentId === 'k2', `pressed by its text and dragged past the row's edge, the card comes out (parent ${all.find((e) => e.id === 'k2').parentId ?? 'none'}, y ${all.find((e) => e.id === 'k2').y})`)
+    // a loose card above the row: its first press selects it and ⌘ held
+    // while dragging moves it over the row without dropping in; the next
+    // plain drag, pressed on its text again, must still move it
+    await load([...rowOf(), ...cardIn('k4', 300, 450).map((e) => (e.id === 'k4' ? { ...e, y: 450 } : { ...e, y: 460 }))]); await deselect()
+    const from = await centre('k4t'), over = await toC(450, 180)
+    await p.mouse.move(...from); await p.mouse.down(); await p.keyboard.down('Meta')
+    for (let i = 1; i <= 12; i++) { await p.mouse.move(from[0] + (over[0] - from[0]) * i / 12, from[1] + (over[1] - from[1]) * i / 12); await p.waitForTimeout(16) }
+    await p.mouse.up(); await p.keyboard.up('Meta'); await p.waitForTimeout(300)
+    all = await els()
+    const k4 = all.find((e) => e.id === 'k4')
+    ok(!k4.parentId && k4.y < 300 && all.length === 9, `⌘ held: the card moves over the row and stays out (y ${k4.y}, ${all.length} elements)`)
+    ok((await selection()).join() === 'k4', 'the card is still selected')
+    const again = await centre('k4t')
+    await drag(again, [again[0] + 160, again[1] + 220])
+    ok((await el('k4')).x > k4.x + 60, `the next plain drag, by its text again, moves it (x ${k4.x} → ${(await el('k4')).x})`)
+  }
   await load(card()); await deselect()
   {
     const fb = await node('f').boundingBox()
@@ -212,11 +244,50 @@ try {
   await p.keyboard.press('r'); await p.waitForTimeout(100); await p.keyboard.press('Escape'); await p.waitForTimeout(100)
   await p.mouse.click(...(await toClient(600, 600))); await p.waitForTimeout(200)
   ok((await els()).length === 2, 'Esc stands an armed tool down')
-  await load(card()); await deselect(); await pick('f')
-  await p.keyboard.press('t'); await p.waitForTimeout(300)
-  await p.keyboard.press('Escape'); await p.waitForTimeout(150)
-  all = await els()
-  ok(all.length === 4 && all.at(-1).type === 'text' && all.at(-1).parentId === 'f', 'T with an auto-layout frame selected puts the text inside it')
+  {
+    // a selected frame: a gesture inside it puts the new element in it, sized to fit
+    const inner = (all, fid) => { const f = all.find((e) => e.id === fid); const [t, r, b, l] = f.layout.pad; return { x0: f.x + l, y0: f.y + t, x1: f.x + f.w - r, y1: f.y + f.h - b } }
+    // a text box's height follows its words, so for text only the width is held
+    const fits = (all, fid, across = false) => { const i = inner(all, fid); return kidsOf(all, fid).every((k) => k.x >= i.x0 - 0.5 && k.x + k.w <= i.x1 + 0.5 && (across || (k.y >= i.y0 - 0.5 && k.y + k.h <= i.y1 + 0.5))) }
+    const fb = card()[0]
+    await load(card()); await deselect(); await pick('f')
+    await p.keyboard.press('t'); await p.waitForTimeout(150)
+    await p.mouse.click(...(await toClient(fb.x + fb.w - 20, fb.y + fb.h / 2))); await p.waitForTimeout(300)
+    await p.keyboard.press('Escape'); await p.waitForTimeout(150)
+    all = await els()
+    ok(all.length === 4 && all.at(-1).type === 'text' && all.at(-1).parentId === 'f', 'T with an auto-layout frame selected, then a click in it, puts the text inside it')
+    ok(fits(all, 'f', true), `…its width held to the room the fixed row has left: nothing passes the frame's edge (${kidsOf(all, "f").map((k) => `${k.id} ${k.x}+${k.w} ${k.y}+${k.h}`).join(', ')}; inner to ${inner(all, 'f').x1})`)
+    await load(card()); await deselect(); await pick('f')
+    await p.keyboard.press('r'); await p.waitForTimeout(150)
+    await p.mouse.click(...(await toClient(fb.x + fb.w - 20, fb.y + fb.h / 2))); await p.waitForTimeout(300)
+    all = await els()
+    const r1 = all.at(-1)
+    ok(r1?.parentId === 'f' && fits(all, 'f') && r1.h <= 100, `R + a click in a fixed card: the default rectangle is clamped to its inner box (${r1 && [r1.w, r1.h].join('×')})`)
+    await load([frame('c', 100, 100, 300, 300, { dir: 'col', gap: 10 }), rect('ck', 110, 110, 280, 200, { parentId: 'c' })]); await deselect(); await pick('c')
+    await p.keyboard.press('o'); await p.waitForTimeout(150)
+    await p.mouse.click(...(await toClient(250, 360))); await p.waitForTimeout(300)
+    all = await els()
+    const o1 = all.at(-1)
+    ok(o1?.parentId === 'c' && o1.w === 280 && o1.h === 70 && fits(all, 'c') && all.find((e) => e.id === 'ck').y === 110, `O + a click in a fixed column: the default is held to the free height and the inner width (${o1 && [o1.w, o1.h].join('×')})`)
+    await load([frame('w', 100, 100, 900, 300)]); await deselect(); await pick('w')
+    await p.keyboard.press('r'); await p.waitForTimeout(150)
+    await drag(await toClient(300, 150), await toClient(380, 210))
+    all = await els()
+    const r2 = all.at(-1)
+    ok(r2?.parentId === 'w' && Math.abs(r2.w - 80) < 4 && Math.abs(r2.h - 60) < 4, `R + a drag in the selected frame draws the child at the dragged size (${r2 && [r2.w, r2.h].join('×')})`)
+    await load([frame('h', 100, 100, 120, 80, { hug: true })]); await deselect(); await pick('h')
+    await p.keyboard.press('r'); await p.waitForTimeout(150)
+    await p.mouse.click(...(await toClient(150, 130))); await p.waitForTimeout(300)
+    all = await els()
+    const r3 = all.at(-1)
+    ok(r3?.parentId === 'h' && r3.w === 300 && r3.h === 200 && all[0].w === 320, `R + a click in a hugging frame: the stock default, and the frame grows round it (${r3 && [r3.w, r3.h].join('×')}, frame ${all[0].w})`)
+    await load([frame('o', 100, 100, 300, 200)]); await deselect(); await pick('o')
+    await p.keyboard.press('r'); await p.waitForTimeout(150)
+    await p.mouse.click(...(await toClient(900, 500))); await p.waitForTimeout(300)
+    all = await els()
+    const r4 = all.at(-1)
+    ok(r4 && !r4.parentId && Math.abs(r4.x + r4.w / 2 - 900) < 6, `a click outside the selected frame places on the slide as usual (${r4?.parentId ?? 'top level'})`)
+  }
   await load([]); await deselect()
   await p.keyboard.press('f'); await p.waitForTimeout(100)
   await p.mouse.click(...(await toClient(400, 300))); await p.waitForTimeout(300)

@@ -226,14 +226,14 @@ export function color(p: PropsPanel, value: string, onEdit: (v: string, final: b
  * 'change', so everything a picked colour does — the edit, clearing a
  * palette reference — a typed one does too.
  */
-export function colorField(col: HTMLInputElement, alpha?: HTMLInputElement): HTMLElement {
+export function colorField(col: HTMLInputElement, alpha?: HTMLInputElement, unpainted = false): HTMLElement {
   const box = document.createElement('div')
   box.className = 'ed-color'
   const hex = document.createElement('input')
   hex.type = 'text'
   hex.className = 'ed-color-hex'
   hex.spellcheck = false
-  hex.maxLength = 7
+  hex.maxLength = 9 // #rrggbbaa: an alpha may be typed too
   hex.setAttribute('aria-label', `${t('Color')} (hex)`)
   // a fully transparent colour reads None, not a hex nobody can see
   const show = () => {
@@ -249,10 +249,20 @@ export function colorField(col: HTMLInputElement, alpha?: HTMLInputElement): HTM
   hex.addEventListener('change', () => {
     const v = hex.value.trim().replace(/^#/, '')
     const full = /^[0-9a-f]{3}$/i.test(v) ? [...v].map((c) => c + c).join('') : v
-    if (/^[0-9a-f]{6}$/i.test(full) && '#' + full.toLowerCase() !== col.value) {
-      col.value = '#' + full.toLowerCase()
-      col.dispatchEvent(new Event('input'))
-      col.dispatchEvent(new Event('change'))
+    if (/^[0-9a-f]{6}([0-9a-f]{2})?$/i.test(full)) {
+      // a colour typed where there was no paint at all (absent, or the
+      // literal 'transparent' — a frame's unfilled box) is meant to be seen:
+      // it comes in at 100%. A fill the user set to 0% keeps its 0% (colour
+      // and opacity are separate fields, as in Figma). A typed alpha wins.
+      const was = alpha?.value
+      if (alpha && full.length === 8) alpha.value = String(Math.round((parseInt(full.slice(6), 16) / 255) * 100))
+      else if (alpha && unpainted && alphaOf(alpha) === 0) alpha.value = '100'
+      const next = '#' + full.slice(0, 6).toLowerCase()
+      if (next !== col.value || alpha?.value !== was) {
+        col.value = next
+        col.dispatchEvent(new Event('input'))
+        col.dispatchEvent(new Event('change'))
+      }
     }
     show()
   })
@@ -484,7 +494,7 @@ export function colorAlpha(p: PropsPanel, value: string, onEdit: (v: string, fin
   })
   alpha.addEventListener('change', () => emit(true))
   alpha.addEventListener(SCRUB, () => emit(false))
-  const wrap = colorField(col, alpha)
+  const wrap = colorField(col, alpha, !value || value.trim().toLowerCase() === 'transparent')
   popoverOn(p, col, alpha, paint)
   return ref ? themeLink(p, ref, col, wrap) : wrap
 }

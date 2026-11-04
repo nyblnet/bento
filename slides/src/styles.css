@@ -3629,7 +3629,14 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 /* Tool letters (commands.ts): a small key chip after the tool's name; the
    tightest tiers drop it with the labels, the tooltip still says it. */
 .ed-tool-key { font: 600 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 1px 3px; margin-inline-start: 2px; }
-.ed-topbar.ed-bar-compact .ed-tool-key, .ed-topbar.ed-bar-fold .ed-tool-key { display: none; }
+/* An icon-only tool (the compact and tight tiers, i.e. most windows) keeps its
+   letter as a small muted corner mark: absolutely placed inside the button's
+   own padding, so it takes no width (fitTopbar's measuring is unchanged) and
+   sits clear of the icon. Menu rows keep the full badge; the phone fold has
+   no room for either. */
+.ed-topbar.ed-bar-compact .ed-btn:not(.ed-menu .ed-btn):has(> .ed-tool-key) { position: relative; }
+.ed-topbar.ed-bar-compact .ed-btn:not(.ed-menu .ed-btn) > .ed-tool-key { position: absolute; right: 2px; bottom: 1px; margin: 0; padding: 0; border: 0; font-size: 9px; line-height: 1; pointer-events: none; }
+.ed-topbar.ed-bar-fold .ed-tool-key { display: none; }
 .ed-menu .ed-tool-key { margin-inline-start: auto; }
 
 /* Penpot's path bar: node type + close, only while one path shape is selected */

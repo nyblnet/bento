@@ -200,7 +200,8 @@ export class BezierEditor {
     hit.setAttribute('stroke', 'transparent')
     hit.setAttribute('stroke-width', String(16 * k))
     hit.classList.add('ed-bz-body')
-    hit.style.cssText = 'cursor:move;pointer-events:stroke'
+    // a closed shape is pressed anywhere inside it, as its own fill is; an open one on its stroke
+    hit.style.cssText = `cursor:move;pointer-events:${this.closed ? 'all' : 'stroke'}`
     hit.addEventListener('mousedown', (ev) => this.dragBody(ev))
     svg.appendChild(hit)
 
@@ -339,7 +340,8 @@ export class BezierEditor {
     window.addEventListener('mouseup', up)
   }
 
-  private dragBody(down: MouseEvent) {
+  /** Move the whole shape with this press — its body, or (canvas.ts) the press that just selected it. */
+  dragBody(down: MouseEvent) {
     down.stopPropagation()
     down.preventDefault()
     const start = this.toSlide(down)
@@ -398,6 +400,8 @@ export class BezierEditor {
       const dd = (pt.x - q.x) ** 2 + (pt.y - q.y) ** 2
       if (dd < bestD) { bestD = dd; best = i; bestT = t }
     }
+    // a closed shape's body takes a press anywhere inside it; only a double-click on its edge adds a point
+    if (Math.sqrt(bestD) > 8 / this.scale()) return
     const a = this.nodes[best]
     const b = this.nodes[(best + 1) % this.nodes.length]
     const split = splitSegment(a, b, bestT)

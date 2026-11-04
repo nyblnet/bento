@@ -34,7 +34,7 @@ import type { Peer } from '../sync/session'
 import { isMacOS } from '../screens'
 import { aabb, fmt, measureBoxes, union, type Box } from './measure-geom'
 import { drawFrameOverlay } from './frameoverlay'
-import { canAccept, flagged, frameChildren, isFrame, layoutSlide, moveInFrame, moveIntoFrame, withDescendants } from '../layout'
+import { canAccept, flagged, frameChildren, isFrame, layoutSlide, moveInFrame, moveIntoFrame, roomIn, withDescendants } from '../layout'
 import { drawGradientOverlay } from './gradientoverlay'
 import { TransformHud, hudNum, mountModHint } from './hud'
 import { applyMorphPreview, morphGhost } from './morph'
@@ -996,6 +996,8 @@ export class SlideCanvas {
    *  the selection LOOK like a whole-group click, but the author is still
    *  inside, and a further shift-click must drop one member, not all. */
   private enteredGroup: string | null = null
+  /** Step out of the entered group (Esc selects the whole of it again). */
+  leaveGroup() { this.enteredGroup = null }
 
   /** Runs on every selection change. A selection that is part of one group
    *  (only ⌘-click, Alt-click and the layer list can make one — every canvas
@@ -1039,10 +1041,23 @@ export class SlideCanvas {
   private enterFrameAt(clientX: number, clientY: number): boolean {
     const hit = this.topElementAt(clientX, clientY)
     const sel = this.store.selection
-    if (!hit || sel.length !== 1) return false
+    if (!hit || !sel.length) return false
     const byId = new Map(this.store.slide.elements.map((e) => [e.id, e]))
     const chain = [hit]
     for (let q = byId.get(hit)?.parentId; q && byId.has(q) && !chain.includes(q); q = byId.get(q)?.parentId) chain.push(q)
+    // a whole group (a component's copy is one) is entered the same way: to
+    // the member under the pointer — the outermost one, so a card in it comes
+    // before its texts — and the group's members are picked one at a time
+    const g = byId.get(sel[0])?.groupId
+    if (g && g !== this.enteredGroup && sel.every((id) => byId.get(id)?.groupId === g)
+      && this.store.slide.elements.filter((e) => e.groupId === g).length === sel.length) {
+      const member = [...chain].reverse().find((id) => byId.get(id)?.groupId === g)
+      if (!member) return false
+      this.enteredGroup = g
+      this.store.select([member])
+      return true
+    }
+    if (sel.length !== 1) return false
     const i = chain.indexOf(sel[0])
     if (i <= 0) return false
     this.enteredFrame = sel[0]
@@ -2039,8 +2054,24 @@ export class SlideCanvas {
         .filter((id): id is string => !!id && !this.isGhost(id)) // a marquee never picks up a ghost
         .filter((id) => !locked.has(id)) // ...nor a locked element, or one in a locked frame (#838)
         .map((id) => this.liftToFrame(id)))] // a click or a marquee picks frames, not what is inside them
+      const was = this.store.selection.join('|')
       this.store.select(this.expandGroups(ids))
-      if (e.isDragStartEnd && !this.marqueeOnly) {
+      if (e.isDragStartEnd && !this.marqueeOnly && this.store.selection.join('|') === was) {
+        // a press on what is inside a selected frame (its text paints over
+        // it, so the press is not on the frame's node) picked that frame
+        // again: the target did not change, so waitToChangeTarget would never
+        // resolve — the press moved nothing, and it could not leave a row.
+        // Hand it over now.
+        e.inputEvent.preventDefault()
+        const nodes = this.selectedNodes()
+        if (nodes.length) this.moveable.dragStart(e.inputEvent, nodes[0])
+      } else if (e.isDragStartEnd && !this.marqueeOnly && [this.lineEditor, this.bezierEditor].some((x) => x.active && this.store.selection.join() === x.elementId)) {
+        // a line or path just selected by this press: its editor, not
+        // Moveable (which has no target for it), moves it — one gesture
+        e.inputEvent.preventDefault()
+        const ed = this.lineEditor.active ? this.lineEditor : this.bezierEditor
+        ed.dragBody(e.inputEvent as MouseEvent)
+      } else if (e.isDragStartEnd && !this.marqueeOnly) {
         e.inputEvent.preventDefault()
         // Hand this same press to Moveable, so pressing an unselected element and
         // dragging moves it without needing a second press. Moveable cannot accept
@@ -2849,8 +2880,11 @@ export class SlideCanvas {
 
   /** Arm a box tool (R, O, F, T): a drag draws the element at the dragged
    *  size, a click drops the default one centred on the click. Esc or V
-   *  stands it down. */
-  armPlace(make: () => SlideElement, edit = false) {
+   *  stands it down. A gesture that starts inside frame `into` puts the
+   *  element in that frame (the frame places it, at the slot its default
+   *  position reads as): a drag gives it the dragged size, a click the
+   *  default held to the room the frame has left (layout.ts roomIn). */
+  armPlace(make: () => SlideElement, edit = false, into?: string) {
     this.cancelDraw()
     const { width, height } = this.store.doc.size
     const ov = document.createElement('div')
@@ -2879,14 +2913,20 @@ export class SlideCanvas {
         window.removeEventListener('mousemove', move, true)
         window.removeEventListener('mouseup', up, true)
         const el = make()
+        const f = into ? this.store.element(into) : undefined
+        const inF = isFrame(f) && a.x >= f.x && a.x <= f.x + f.w && a.y >= f.y && a.y <= f.y + f.h
         // a drag shorter than a few screen px was a click
         if (Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y)) * this.scale > 4) {
-          el.x = Math.round(Math.min(a.x, b.x)); el.y = Math.round(Math.min(a.y, b.y))
+          if (!inF) { el.x = Math.round(Math.min(a.x, b.x)); el.y = Math.round(Math.min(a.y, b.y)) }
           el.w = Math.max(1, Math.round(Math.abs(b.x - a.x)))
           if (el.type !== 'text') el.h = Math.max(1, Math.round(Math.abs(b.y - a.y))) // a text box sizes its own height
+        } else if (inF) {
+          const room = roomIn(this.store.slide, f)
+          el.w = Math.min(el.w, Math.floor(room.w)); el.h = Math.min(el.h, Math.floor(room.h))
         } else {
           el.x = Math.round(a.x - el.w / 2); el.y = Math.round(a.y - el.h / 2)
         }
+        if (inF) el.parentId = f.id
         this.cancelDraw()
         this.insert(el, edit)
       }

@@ -600,8 +600,10 @@ anim, charts, i18n, sync), shared by every app.
   duplicate, so a wobble is a click, never a hidden copy); Shift-click inside a
   multi-selection's box toggles the element under it; the right-click menu
   lists every element under the pointer ("Select …"). A group is ENTERED by
-  ⌘-click, Alt-dig or a member's layer row (`enteredGroup`): clicks and
-  Shift-clicks then pick members until the selection leaves the group.
+  ⌘-click, Alt-dig, a member's layer row or — as a frame is — a double-click
+  on the whole group (`enteredGroup`; a component copy is a group): clicks and
+  Shift-clicks then pick members until the selection leaves the group, and Esc
+  steps out a level (frame child → frame → whole group → nothing).
   Alt-HOVER measures from the selection to the element under the pointer
   (measure-geom.ts; an overlay in .ed-stage-scale, pointer-events none,
   inspection only). Fill/stroke colors carry alpha (swatch · hex · % field,

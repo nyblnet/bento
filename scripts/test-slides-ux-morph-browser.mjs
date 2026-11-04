@@ -14,7 +14,9 @@
 //      neighbouring slides in one step, so the pair survives; the field shows
 //      what was stored; a clash names the element that holds the name.
 //   3. The pairing picker lists the slide before first, by Layers names,
-//      never machine ids; it filters, and works from the keyboard.
+//      never machine ids; it filters, and works from the keyboard; after a
+//      pick, the status and the button name the partner as the picker did
+//      and the Morph name field shows no id.
 //   4. The Preview shows the whole slide — what leaves fades out, what enters
 //      fades in — keeps the released value, puts the slide back when the
 //      user moves on, and Tab moves on (not to the page body); a text pair
@@ -34,11 +36,12 @@ function ok(cond, msg) {
 }
 
 // machine-looking ids, so "no id on screen" means something
-const CARD = 's-mvut1a-9rdmmd', TITLE = 's-mvut2b-4kq1zz', GONE = 's-mvut3c-77xa0p', NEW = 's-mvut4d-p0p0p0'
+const CARD = 's-mvut1a-9rdmmd', TITLE = 's-mvut2b-4kq1zz', GONE = 's-mvut3c-77xa0p', NEW = 's-mvut4d-p0p0p0', BOX = 's-mvut5e-q1q1q1', NUM = 't-mvut6f-r2r2r2'
 const rect = (id, x, y, w, h, extra = {}) => ({ id, type: 'shape', shape: 'rect', x, y, w, h, rotation: 0, opacity: 1, fill: '#ff0000', stroke: 'transparent', strokeWidth: 0, radius: 0, ...extra })
 const text = (id, html, extra = {}) => ({ id, type: 'text', html, x: 100, y: 20, w: 600, h: 60, rotation: 0, opacity: 1, fontSize: 32, fontFamily: 'Inter', fontWeight: 600, color: '#111111', align: 'left', valign: 'top', lineHeight: 1.2, ...extra })
 const SLIDES = [
-  { id: 'sa', background: '#ffffff', transition: 'none', notes: '', elements: [rect(CARD, 100, 100, 200, 100), text(TITLE, 'Revenue'), rect(GONE, 900, 500, 120, 80, { fill: '#00aa00' })] },
+  { id: 'sa', background: '#ffffff', transition: 'none', notes: '', elements: [rect(CARD, 100, 100, 200, 100), text(TITLE, 'Revenue'), rect(GONE, 900, 500, 120, 80, { fill: '#00aa00' }),
+    rect(BOX, 400, 450, 200, 120, { fill: '#eeeeee', layout: { dir: 'col', gap: 10, pad: [10, 10, 10, 10], hug: true } }), text(NUM, '62', { x: 410, y: 460, w: 100, parentId: BOX })] },
   { id: 'sb', background: '#ffffff', transition: 'fade', notes: '', elements: [rect(CARD, 600, 300, 400, 200), text(TITLE, 'Enterprise'), rect(NEW, 100, 500, 100, 100, { shape: 'ellipse', fill: '#0000ff' })] },
   { id: 'sc', background: '#ffffff', transition: 'morph', notes: '', elements: [rect(CARD, 700, 320, 300, 150)] },
 ]
@@ -63,7 +66,7 @@ try {
   const link = () => p.locator('.ed-props label.ed-row:has-text("Morph from the slide before") input')
   const sectionText = () => p.evaluate(() => (document.querySelector('.ed-props')?.innerText ?? '') + ' ' + [...document.querySelectorAll('.ed-props input')].map((i) => i.value).join(' '))
   const undo = async () => { await p.evaluate(() => window.bento.undo()); await p.waitForTimeout(250) }
-  const ids = [CARD, TITLE, GONE, NEW]
+  const ids = [CARD, TITLE, GONE, NEW, BOX, NUM]
 
   console.log('\n1. one truth for "will this morph"\n')
   await thumb(1); await select(CARD); await animate()
@@ -124,6 +127,19 @@ try {
     const picked = d.slides[1].elements.find((e) => e.id === NEW)?.morphId
     ok(picked === GONE, `arrows and Enter choose it (${picked})`)
     ok(await p.evaluate(() => document.activeElement?.classList.contains('ed-morph-pick-btn')), 'focus returns to the picker button')
+    await undo()
+    // a frame partner: the picker, the status and the button name it alike, and the name field shows no id
+    await select(NEW); await animate()
+    await p.locator('.ed-props .ed-morph-pick-btn').click(); await p.waitForTimeout(200)
+    await p.keyboard.type('62'); await p.waitForTimeout(100)
+    const opt = (await p.locator('.ed-morph-pick [role=option]:not([hidden])').allInnerTexts())[0] ?? ''
+    await p.keyboard.press('Enter'); await p.waitForTimeout(300)
+    ok((await doc()).slides[1].elements.find((e) => e.id === NEW)?.morphId === BOX && /^Card · 62/.test(opt), `the frame is offered by its Layers name ("${opt}")`)
+    const stat = await p.locator('.ed-props .ed-morph-status').innerText()
+    const chip = await p.locator('.ed-props .ed-morph-pick-btn').innerText()
+    ok(stat.includes(`Slide 1 · ${opt}`) && chip.includes(`Slide 1 · ${opt}`), `the status and the button use the picker's name (status "${stat}", button "${chip}")`)
+    const after3 = await sectionText()
+    ok(!ids.some((id) => after3.includes(id)), `after the pick, no machine id anywhere in the inspector, the Morph name field included (${await nameField.inputValue()})`)
     await undo()
   }
 

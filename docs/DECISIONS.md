@@ -12614,3 +12614,42 @@ Where both had built the same thing, one implementation each:
   handler: the synthetic drags now carry a pointer position, since the drop
   line places a drop by where the pointer is, and the handler, like
   upstream's, claims only a drag carrying text/bento-slide.
+
+## 2026-11-04 — slides: ⇧A keeps loose-shape cards whole
+
+⇧A already kept frames whole (a selected child whose frame is selected
+rides along, 2026-10-30). A card drawn without frames — a rounded rect with
+a title and a body lying on it — had no such unit, so a marquee over three
+of them and ⇧A laid all nine elements out in one row. Now a plain rect
+(no layout, not rotated) whose box holds other selected elements that paint
+above it is a card: the rect itself becomes a hugging column frame holding
+them, its padding and gap read from where they sat, so its id, paint and
+morph partners stay and it looks as it did. The cards and every other
+selected element are then wrapped in one row with the spacing they had, as
+before; one card alone is just made a frame, nothing wraps it. One undo
+step. A holder is the outermost such rect, so a rect on a rect is one card.
+Only a rect can hold: an ellipse or an image under texts is not a frame, so
+its elements stay loose as before.
+
+## 2026-11-04 — slides: a hex typed where there was no paint comes in at 100%
+
+An auto-layout frame starts with no fill (absent, or the literal
+`transparent`), and typing a colour into it changed nothing visible until
+Opacity was set too — read as the field being broken. Now a 6-digit hex
+typed into such an unpainted fill comes in at 100%; a typed alpha
+(#rrggbbaa, which the field now takes) wins. A fill the user SET to 0% keeps
+its 0% when a hue is typed — 2026-10-29's rule stands, as in Figma, where
+colour and opacity are separate fields. One place: colorField, told by
+colorAlpha whether the value was unpainted.
+
+## 2026-11-04 — slides: a group is entered by double-click, like a frame
+
+A component copy is a group, and a click grows to whole groups, so the
+only ways into a copy were ⌘-click, Alt-dig and Layers — the card inside a
+copy could not be reached to change its corner radius the way a plain card
+is. Groups now follow the frames' rule (2026-10-30, the UX audit's Figma
+selection model): a click picks the whole group, a double-click goes in to
+the member under the pointer (the outermost one in the group, so a copied
+card comes before its texts), and Esc comes back out a level — frame child →
+frame → whole group → nothing. Esc to the whole group also leaves it, so
+the next click picks the group whole again.

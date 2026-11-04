@@ -18,7 +18,11 @@
 //      the token in the Tokens view moves the bound property; switching the
 //      mode rewrites bound literals; the pill detaches and the value stays
 //      (a hand edit dropping the binding is test-slides-tokens.ts's);
-//   7. no page error.
+//   7. no page error;
+//   8. ⌥⌘K on a card frame alone takes its texts into the main, so an
+//      inserted copy holds them; a copy is entered as a frame is: a click
+//      picks it whole, a double-click goes in (card, then text), Esc comes
+//      back out one level at a time.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -270,6 +274,48 @@ try {
     await p.evaluate((j) => window.bento.loadDoc(j), await tokDeck('#222222', '#00ff00')); await p.waitForTimeout(300)
     const tb = await el('tb')
     ok(tb.fill === '#00ff00' && !tb.themeRefs, `a replaced deck keeps a bound literal an older shell edited, and drops the binding (fill ${tb.fill}, refs ${JSON.stringify(tb.themeRefs)})`)
+  }
+
+  console.log('\na card frame alone makes a whole component; its copy is entered by double-click\n')
+  {
+    const txt = (id, x, y, html, parentId) => ({ id, type: 'text', x, y, w: 160, h: 40, rotation: 0, opacity: 1, html, fontSize: 20, fontFamily: 'system-ui', fontWeight: 400, color: '#111111', align: 'left', valign: 'top', lineHeight: 1.2, parentId })
+    await p.evaluate((els) => {
+      const d = JSON.parse(JSON.stringify(window.bento.doc))
+      d.slides = [{ id: 's1', background: '#ffffff', transition: 'none', notes: '', elements: els }]
+      window.bento.loadDoc(JSON.stringify(d))
+    }, [box('card', 100, 100, { w: 200, h: 140, fill: '#eeeeee', layout: { dir: 'col', gap: 10, pad: [16, 16, 16, 16], hug: true } }), txt('ct1', 116, 116, 'Revenue', 'card'), txt('ct2', 116, 166, '4.2M', 'card')])
+    await p.waitForTimeout(400)
+    await p.keyboard.press('Escape')
+    await pick('ct1') // a click on its text picks the card
+    ok((await p.evaluate(() => window.bento.selection.join())) === 'card', 'the card frame alone is selected')
+    await p.keyboard.press(`${MOD}+Alt+KeyK`); await p.waitForTimeout(300)
+    let list = await els()
+    ok(['card', 'ct1', 'ct2'].every((id) => list.find((e) => e.id === id).component?.main), `⌥⌘K on the frame alone makes it and its texts the main (${list.filter((e) => e.component?.main).map((e) => e.id).join(',')})`)
+    await p.locator('.ed-side-tabs [data-view="tokens"]').click(); await p.waitForTimeout(150)
+    await p.locator('.ed-side-tokens .ed-component-row .ed-btn', { hasText: /^Insert/ }).first().click(); await p.waitForTimeout(300)
+    list = await els()
+    const copyFrame = list.find((e) => e.layout && e.id !== 'card')
+    const copyKids = list.filter((e) => copyFrame && e.parentId === copyFrame.id)
+    ok(!!copyFrame && copyKids.length === 2 && copyKids.every((k) => k.type === 'text'), `Insert makes a copy that holds its two texts (${copyKids.length})`)
+    await p.locator('.ed-side-tabs [data-view="layers"]').click(); await p.waitForTimeout(150)
+    await p.keyboard.press('Escape'); await p.keyboard.press('Escape'); await p.waitForTimeout(150)
+    const kid = copyKids[0]
+    const kb = await p.locator(`.ed-stage-scale [data-el-id="${kid.id}"]`).boundingBox()
+    const at = [kb.x + kb.width / 2, kb.y + kb.height / 2]
+    await p.mouse.click(...at); await p.waitForTimeout(250)
+    const whole = (await p.evaluate(() => window.bento.selection.slice())).sort().join()
+    ok(whole === [copyFrame.id, ...copyKids.map((k) => k.id)].sort().join(), 'a click on the copy picks the whole copy')
+    await p.mouse.dblclick(...at); await p.waitForTimeout(250)
+    ok((await p.evaluate(() => window.bento.selection.join())) === copyFrame.id, 'a double-click goes in to the card (the outermost member)')
+    ok(await p.locator('.ed-props [aria-label="Corner radius"]').count() > 0, 'whose Corner radius is in reach')
+    await p.mouse.dblclick(...at); await p.waitForTimeout(250)
+    ok((await p.evaluate(() => window.bento.selection.join())) === kid.id, 'another double-click goes in to the text')
+    await p.keyboard.press('Escape'); await p.waitForTimeout(150)
+    ok((await p.evaluate(() => window.bento.selection.join())) === copyFrame.id, 'Esc comes out to the card')
+    await p.keyboard.press('Escape'); await p.waitForTimeout(150)
+    ok((await p.evaluate(() => window.bento.selection.slice().sort().join())) === whole, 'Esc again comes out to the whole copy')
+    await p.mouse.click(...at); await p.waitForTimeout(250)
+    ok((await p.evaluate(() => window.bento.selection.slice().sort().join())) === whole, 'out of it, a click picks the whole copy again')
   }
 
   ok(errors.length === 0, `no page error${errors.length ? ': ' + errors.join(' | ') : ''}`)

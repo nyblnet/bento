@@ -23,7 +23,9 @@
 //      undo; "1,000" is a thousand in English.
 //   5. The colour popover: one Solid | Linear | Radial (in the popover, not
 //      also on the row); a theme colour picked onto a 0% fill is opaque; a
-//      transparent fill reads None; the swatch has a name.
+//      transparent fill reads None; the swatch has a name; a hex typed into
+//      an unpainted fill (a frame's 'transparent', one or several) comes in
+//      at 100%, unless it carries its own alpha; a fill set to 0% keeps it.
 //   6. A paint layer row is grip · eye · paint · ⋯ with its blend behind ⋯,
 //      and nothing in it leaves the panel at 1024 wide.
 //   7. Focus: after + Add shadow it lands in the Shadow section, after a
@@ -198,6 +200,29 @@ try {
     await p.locator('.ed-tokpick-opt').first().click(); await p.waitForTimeout(250)
     const f = (await el('a')).fill
     ok(!/,\s*0\)$/.test(f) && (await el('a')).themeRefs?.fill, `a theme colour picked onto a 0% fill is opaque (${f})`)
+    await ctx.close()
+  })
+  await run(async () => {
+    // a hex typed into an unpainted fill (an auto-layout frame's 'transparent')
+    // shows: 100%, unless the typing carried an alpha; a fill set to 0% keeps it
+    const clear = (id, x) => shape(id, x, { fill: 'transparent', layout: { dir: 'row', gap: 16, pad: [16, 16, 16, 16] } })
+    const { ctx, p, select, el, undo } = await open('en-US', 1440, [clear('a', 100), clear('b', 500), clear('c', 900), shape('z', 100, { y: 400, fill: 'rgba(255, 0, 0, 0)' })])
+    const hex = p.locator('.ed-props .ed-section[data-key="Fill"] + .ed-section-body .ed-color-hex')
+    // the alpha of a stored colour: rgba(…, a), #rrggbbaa, else opaque
+    const alpha = (c) => { const m = /rgba\([^)]*,\s*([\d.]+)\)/.exec(c); if (m) return Number(m[1]); const h = /^#[0-9a-f]{6}([0-9a-f]{2})$/i.exec(c); return h ? parseInt(h[1], 16) / 255 : 1 }
+    // one unfilled frame shows + (no colour row); several share one colour row, reading None
+    const all3 = async () => [await el('a'), await el('b'), await el('c')]
+    await select('a', 'b', 'c')
+    await hex.fill('0000ff'); await hex.press('Enter'); await p.waitForTimeout(250)
+    ok((await all3()).every((e) => alpha(e.fill) === 1), `several frames with no fill: one typed hex comes in at 100% on all (${(await el('b')).fill})`)
+    await undo()
+    await select('a', 'b', 'c')
+    await hex.fill('0000ff80'); await hex.press('Enter'); await p.waitForTimeout(250)
+    ok((await all3()).every((e) => Math.abs(alpha(e.fill) - 0.5) < 0.01), `…unless the typing carries its own alpha (${(await el('b')).fill})`)
+    await undo()
+    await select('z')
+    await hex.fill('00ff00'); await hex.press('Enter'); await p.waitForTimeout(250)
+    ok(alpha((await el('z')).fill) === 0, `a fill set to 0% keeps its 0% when a hex is typed (${(await el('z')).fill})`)
     await ctx.close()
   })
 
