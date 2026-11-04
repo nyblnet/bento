@@ -1249,6 +1249,7 @@ export const zhHant: Catalog = {
   "Show tokens and components": "顯示權杖與元件",
   "Make a token from this color": "用此顏色建立權杖",
   "Made {name} — {n} uses follow it": "已建立 {name} — {n} 處使用跟隨它",
+  "Made {name} — 1 use follows it": "已建立 {name} — 1 處使用跟隨它",
   "Select all with this color": "選取所有使用此顏色的內容",
   "{n} elements on this slide use this color": "此投影片上有 {n} 個元素使用此顏色",
   "Colors & tokens": "顏色與權杖",

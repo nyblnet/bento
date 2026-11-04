@@ -1258,6 +1258,7 @@ export const strings: Catalog = {
   "Show tokens and components": "Visa tokens och komponenter",
   "Make a token from this color": "Gör en token av den här färgen",
   "Made {name} — {n} uses follow it": "{name} skapad — {n} användningar följer den",
+  "Made {name} — 1 use follows it": "{name} skapad — 1 användning följer den",
   "Select all with this color": "Markera allt med den här färgen",
   "{n} elements on this slide use this color": "{n} element på den här bilden använder den här färgen",
   "Colors & tokens": "Färger och tokens",

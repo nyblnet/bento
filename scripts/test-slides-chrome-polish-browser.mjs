@@ -350,6 +350,10 @@ await run(async () => {
     await p.locator('.ed-tokpick-act').filter({ hasText: /token from this value/ }).click(); await p.waitForTimeout(300)
     r = await el()
     ok(/^\$/.test(r.themeRefs?.radius ?? ''), `"Make a token from this value" binds the field to a new token (${r.themeRefs?.radius})`)
+    // named for its field (every number field used to make `space`), and the
+    // toast counts one use as one
+    const toast = await p.locator('.ed-toast').last().textContent().catch(() => '')
+    ok(r.themeRefs?.radius === '$radius.corner' && /— 1 use follows it/.test(toast), `the token is named for the field and its one use reads as one (${r.themeRefs?.radius}; "${toast}")`)
     await p.locator('.ed-props .ed-token-pill-name').first().click(); await p.waitForTimeout(250)
     ok(!!(await p.locator('.ed-tokpick-opt[aria-selected="true"]').count()), 'the pill reopens the picker with its token checked')
     await p.keyboard.press('Escape')

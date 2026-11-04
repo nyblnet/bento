@@ -11,6 +11,7 @@ import { setColor, refAt, keepAlpha, PALETTE_SLOTS } from '../../palette'
 import { cssColor, cssGradient, radialGeom } from '../../render'
 import { adoptColor, bindToken, colorUses, freeTokenName, tokenName, tokenValue } from '../../tokens'
 import { choices, openTokenPicker, slotOf, type Choice } from './tokenpicker'
+import { madeToken } from './tokenbind'
 import { openColorPopover } from './colorpopover'
 import { gradientBar } from './gradientbar'
 import { gradTarget } from '../gradientoverlay'
@@ -347,7 +348,7 @@ export function themeLink(p: PropsPanel, ref: { id: string | null; path: string;
             const name = freeTokenName(p.store.doc, 'color.brand')
             let n = 0
             p.store.commit(() => { n = adoptColor(p.store.doc, hex(), name) })
-            p.toast(t('Made {name} — {n} uses follow it', { name, n }))
+            p.toast(madeToken(name, n))
             document.querySelector<HTMLElement>('.ed-side-tabs [data-view="tokens"]')?.click()
           } }])(sameAs(p.store.doc, hex())),
           { icon: ICONS.selectSame, label: t('Select all with this color'), run: () => {

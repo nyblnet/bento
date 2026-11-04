@@ -1253,6 +1253,7 @@ export const strings: Catalog = {
   "Show tokens and components": "토큰 및 컴포넌트 표시",
   "Make a token from this color": "이 색으로 토큰 만들기",
   "Made {name} — {n} uses follow it": "{name}을(를) 만들었습니다 — {n}곳이 따릅니다",
+  "Made {name} — 1 use follows it": "{name}을(를) 만들었습니다 — 1곳이 따릅니다",
   "Select all with this color": "이 색을 쓰는 항목 모두 선택",
   "{n} elements on this slide use this color": "이 슬라이드에서 요소 {n}개가 이 색을 사용합니다",
   "Colors & tokens": "색상 및 토큰",

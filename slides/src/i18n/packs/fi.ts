@@ -1266,6 +1266,7 @@ export const strings: Catalog = {
   "Show tokens and components": "Näytä tokenit ja komponentit",
   "Make a token from this color": "Tee tästä väristä tokeni",
   "Made {name} — {n} uses follow it": "Luotu: {name} — sitä seuraavia käyttöjä: {n}",
+  "Made {name} — 1 use follows it": "Luotu: {name} — 1 käyttö seuraa sitä",
   "Select all with this color": "Valitse kaikki tällä värillä",
   "{n} elements on this slide use this color": "Tätä väriä käyttäviä elementtejä tällä dialla: {n}",
   "Colors & tokens": "Värit ja tokenit",

@@ -1259,6 +1259,7 @@ export const strings: Catalog = {
   "Show tokens and components": "Hiện token và thành phần",
   "Make a token from this color": "Tạo token từ màu này",
   "Made {name} — {n} uses follow it": "Đã tạo {name} — {n} chỗ dùng theo nó",
+  "Made {name} — 1 use follows it": "Đã tạo {name} — 1 chỗ dùng theo nó",
   "Select all with this color": "Chọn mọi thứ có màu này",
   "{n} elements on this slide use this color": "{n} phần tử trên trang này dùng màu này",
   "Colors & tokens": "Màu & token",

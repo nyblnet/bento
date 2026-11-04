@@ -1249,6 +1249,7 @@ export const zhHans: Catalog = {
   "Show tokens and components": "显示令牌和组件",
   "Make a token from this color": "用此颜色创建令牌",
   "Made {name} — {n} uses follow it": "已创建 {name} — {n} 处使用跟随它",
+  "Made {name} — 1 use follows it": "已创建 {name} — 1 处使用跟随它",
   "Select all with this color": "选择所有使用此颜色的内容",
   "{n} elements on this slide use this color": "此幻灯片上有 {n} 个元素使用此颜色",
   "Colors & tokens": "颜色和令牌",

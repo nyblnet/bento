@@ -1281,6 +1281,7 @@ export const strings: Catalog = {
   "Show tokens and components": "Tokenleri we komponentleri görkez",
   "Make a token from this color": "Bu reňkden token döret",
   "Made {name} — {n} uses follow it": "Döredildi: {name} — ony yzarlaýan ulanyşlar: {n}",
+  "Made {name} — 1 use follows it": "Döredildi: {name} — ony 1 ulanyş yzarlaýar",
   "Select all with this color": "Bu reňkli ähli zady saýla",
   "{n} elements on this slide use this color": "Bu slaýdda bu reňki ulanýan elementler: {n}",
   "Colors & tokens": "Reňkler we tokenler",

@@ -1257,6 +1257,7 @@ export const strings: Catalog = {
   "Show tokens and components": "Tokens en componenten tonen",
   "Make a token from this color": "Maak een token van deze kleur",
   "Made {name} — {n} uses follow it": "{name} gemaakt — {n} gebruiken volgen het",
+  "Made {name} — 1 use follows it": "{name} gemaakt — 1 gebruik volgt het",
   "Select all with this color": "Alles met deze kleur selecteren",
   "{n} elements on this slide use this color": "{n} elementen op deze dia gebruiken deze kleur",
   "Colors & tokens": "Kleuren en tokens",

@@ -1249,6 +1249,7 @@ export const it: Catalog = {
   "Show tokens and components": "Mostra token e componenti",
   "Make a token from this color": "Crea un token da questo colore",
   "Made {name} — {n} uses follow it": "{name} creato — {n} usi lo seguono",
+  "Made {name} — 1 use follows it": "{name} creato — 1 uso lo segue",
   "Select all with this color": "Seleziona tutto con questo colore",
   "{n} elements on this slide use this color": "{n} elementi in questa slide usano questo colore",
   "Colors & tokens": "Colori e token",

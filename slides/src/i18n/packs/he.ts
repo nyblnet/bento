@@ -1262,6 +1262,7 @@ export const strings: Catalog = {
   "Show tokens and components": "הצגת טוקנים וקומפוננטות",
   "Make a token from this color": "יצירת טוקן מהצבע הזה",
   "Made {name} — {n} uses follow it": "נוצר {name} — שימושים שעוקבים אחריו: {n}",
+  "Made {name} — 1 use follows it": "נוצר {name} — שימוש אחד עוקב אחריו",
   "Select all with this color": "בחירת כל מה שבצבע הזה",
   "{n} elements on this slide use this color": "רכיבים בשקופית הזו שמשתמשים בצבע הזה: {n}",
   "Colors & tokens": "צבעים וטוקנים",

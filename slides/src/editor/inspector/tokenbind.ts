@@ -12,8 +12,29 @@ import { ICONS } from '../../icons'
 import { choices, openTokenPicker } from './tokenpicker'
 import { t } from '../../i18n'
 
-/** A new token's name stem, by type. */
-const STEM: Record<TokenType, string> = { color: 'color.brand', number: 'space', fontSize: 'type.size', opacity: 'opacity', fontFamily: 'font', shadow: 'shadow' }
+/** A new token's name stem, by type — what is left when the field says nothing. */
+const STEM: Record<TokenType, string> = { color: 'color.brand', number: 'number', fontSize: 'type.size', opacity: 'opacity', fontFamily: 'font', shadow: 'shadow' }
+
+/** A new token is named for the field it was made from, in the starter deck's
+ *  words (radius.*, space.*, border.*): every number field is a 'number',
+ *  so the type alone named a corner radius `space`. */
+const PATH_STEM: Array<[RegExp, string]> = [
+  [/^radi(us|i)\b/, 'radius.corner'],
+  [/^layout\.gap$/, 'space.gap'],
+  [/^layout\.pad\b/, 'space.pad'],
+  [/^layout\.cols$/, 'grid.columns'],
+  [/^w$/, 'size.width'],
+  [/^h$/, 'size.height'],
+  [/^strokeWidth$/, 'border.width'],
+  [/^opacity$/, 'opacity.layer'],
+  [/^blur$/, 'blur.layer'],
+]
+export const tokenStem = (path: string, type: TokenType): string => PATH_STEM.find(([re]) => re.test(path))?.[1] ?? STEM[type]
+
+/** The toast after a token is made: one use, or several (two strings, as
+ *  t() has no plural forms). */
+export const madeToken = (name: string, n: number): string =>
+  n === 1 ? t('Made {name} — 1 use follows it', { name }) : t('Made {name} — {n} uses follow it', { name, n })
 
 /** Give a field a token binding for `path` on `el`, offering tokens of `types`. Returns the field. */
 /** The token picker for one property — the field's dot, a pill, or the
@@ -30,14 +51,14 @@ export function tokenPicker(p: PropsPanel, el: SlideElement, path: string, types
       : [{ icon: ICONS.tokenNew, label: t('Make a token from this value'), run: () => {
         const value = readAt(p.store.element(el.id), path)
         if (value === undefined) return
-        const name = freeTokenName(p.store.doc, STEM[types[0]])
+        const name = freeTokenName(p.store.doc, tokenStem(path, types[0]))
         p.edit(() => {
           const tk = p.store.doc.theme.tokens ??= { set: {} }
           tk.set[name] = { type: types[0], values: Object.fromEntries(modesOf(tk).map((m) => [m, structuredClone(value) as never])) }
           const e = p.store.element(el.id)
           if (e) bindToken(p.store.doc, e as never, path, name)
         }, true)
-        p.toast(t('Made {name} — {n} uses follow it', { name, n: 1 }))
+        p.toast(madeToken(name, 1))
       } }]).concat([{ icon: ICONS.settings, label: t('Manage tokens'), run: () => document.querySelector<HTMLElement>('.ed-side-tabs [data-view="tokens"]')?.click() }]),
   })
 }

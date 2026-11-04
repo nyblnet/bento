@@ -1249,6 +1249,7 @@ export const ja: Catalog = {
   "Show tokens and components": "トークンとコンポーネントを表示",
   "Make a token from this color": "この色からトークンを作成",
   "Made {name} — {n} uses follow it": "{name} を作成しました — {n} 箇所が追従します",
+  "Made {name} — 1 use follows it": "{name} を作成しました — 1 箇所が追従します",
   "Select all with this color": "この色を使うものをすべて選択",
   "{n} elements on this slide use this color": "このスライドの {n} 個の要素がこの色を使っています",
   "Colors & tokens": "色とトークン",
