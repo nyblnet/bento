@@ -11,7 +11,7 @@ import { endPreview, previewEnter } from '../fxpreview'
 import type { StepPatch } from '../reveal'
 import { stepOf } from '../../steps'
 import { morphPartners, morphSource, walkSource, wouldPair } from '../morph'
-import { labelFor } from '../layerrows'
+import { labelIn } from '../layerrows'
 
 /**
  * Morph section. The morph key is `morphId ?? id`: by default an element
@@ -71,16 +71,19 @@ export function buildMorphProps(p: PropsPanel, el: SlideElement) {
     }))
   }
 
-  // the name: an override the author typed, never a machine id
+  // the name: an override the author typed, never a machine id — a key that
+  // is some element's id (what the picker and the switch write) reads Automatic
   const input = document.createElement('input')
   input.type = 'text'
   input.spellcheck = false
-  input.value = el.morphId && !/-solo\d*$/.test(el.morphId) ? el.morphId : ''
+  const machine = (k: string) => /-solo\d*$/.test(k) || doc.slides.some((s) => s.elements.some((e) => e.id === k))
+  const shown = () => (el.morphId && !machine(el.morphId) ? el.morphId : '')
+  input.value = shown()
   input.placeholder = t('Automatic')
   input.addEventListener('change', () => {
     const err = renameMorph(p, el, input.value)
     say(err)
-    if (err) input.value = el.morphId ?? ''
+    if (err) input.value = shown()
     else input.value = cleanKey(input.value)
   })
   row(p, 'Morph name', input)
@@ -126,9 +129,10 @@ export function buildMorphProps(p: PropsPanel, el: SlideElement) {
   }
 }
 
-/** "Slide 2 · Revenue card" — the page, then the element as Layers names it. */
+/** "Slide 2 · Revenue card" — the page, then the element as Layers names it
+ *  (labelIn: the picker, the status and the button say the same words). */
 function pairLabel(p: PropsPanel, s: Slide, e: SlideElement): string {
-  return `${slideLabel(p, s, p.store.doc.slides.indexOf(s))} · ${labelFor(e, t)}`
+  return `${slideLabel(p, s, p.store.doc.slides.indexOf(s))} · ${labelIn(s, e, t)}`
 }
 
 function transitionName(tr: string): string {
@@ -194,7 +198,7 @@ function openMorphPicker(p: PropsPanel, el: SlideElement, anchor: HTMLElement, s
     h.textContent = slideLabel(p, src, doc.slides.indexOf(src))
     list.append(h)
     const mine = src.elements.filter(pairable)
-    for (const e of mine) list.append(option(labelFor(e, t, src), morphKey(e), e))
+    for (const e of mine) list.append(option(labelIn(src, e, t), morphKey(e), e))
     if (!mine.length) { const n = document.createElement('div'); n.className = 'ed-hint'; n.textContent = t('Everything there is already paired.'); list.append(n) }
   }
   const more = document.createElement('details')
@@ -209,7 +213,7 @@ function openMorphPicker(p: PropsPanel, el: SlideElement, anchor: HTMLElement, s
       const key = morphKey(e)
       if (!pairable(e) || seen.has(key) || key === el.id) continue
       seen.add(key)
-      more.append(option(`${slideLabel(p, s, i)} · ${labelFor(e, t, s)}`, key, e))
+      more.append(option(`${slideLabel(p, s, i)} · ${labelIn(s, e, t)}`, key, e))
     }
   })
   if (seen.size) list.append(more)
@@ -289,7 +293,7 @@ export function setMorphId(p: PropsPanel, el: SlideElement, raw: string, andMorp
   const clean = raw === UNPAIR ? el.id : cleanKey(raw)
   if (!clean) return t('Morph name can’t be empty.')
   const clash = holder(p.store.slide, clean, new Set([el.id]))
-  if (clash) return t('“{name}” on this slide already uses that morph name.', { name: labelFor(clash, t) })
+  if (clash) return t('“{name}” on this slide already uses that morph name.', { name: labelIn(p.store.slide, clash, t) })
   const slide = p.store.slide
   p.store.commit(() => {
     const e = slide.elements.find((x) => x.id === el.id)
@@ -323,8 +327,8 @@ export function renameMorph(p: PropsPanel, el: SlideElement, raw: string): strin
   for (const s of [slide, ...neighbours]) {
     const c = holder(s, next, ids)
     if (c) return s === slide
-      ? t('“{name}” on this slide already uses that morph name.', { name: labelFor(c, t) })
-      : t('“{name}” on {slide} already uses that morph name — it would pair with that instead.', { name: labelFor(c, t), slide: slideLabel(p, s, doc.slides.indexOf(s)) })
+      ? t('“{name}” on this slide already uses that morph name.', { name: labelIn(s, c, t) })
+      : t('“{name}” on {slide} already uses that morph name — it would pair with that instead.', { name: labelIn(s, c, t), slide: slideLabel(p, s, doc.slides.indexOf(s)) })
   }
   p.store.commit(() => {
     for (const { s, e } of moving) {
