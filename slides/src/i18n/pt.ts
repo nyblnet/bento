@@ -432,7 +432,7 @@ export const pt: Catalog = {
   "Paste an image or text straight onto the canvas with ⌘V.": "Cole uma imagem ou texto direto na tela com ⌘V.",
   "Copy a slide (⌘C with nothing selected) and paste it into another Bento deck.": "Copie um slide (⌘C sem nada selecionado) e cole-o em outra apresentação do Bento.",
   "Make a chart from a table and it stays linked — edit the table, the chart updates.": "Crie um gráfico a partir de uma tabela e ele permanece vinculado — edite a tabela e o gráfico se atualiza.",
-  "Your work auto-saves; restore earlier versions from Save → Version history.": "Seu trabalho é salvo automaticamente; restaure versões anteriores em Salvar → Histórico de versões.",
+  "Your work auto-saves; restore earlier versions from the bento/slides menu → Version history.": "Seu trabalho é salvo automaticamente; restaure versões anteriores no menu bento/slides → Histórico de versões.",
   "Slide copied — ⌘V in any deck to paste it": "Slide copiado — ⌘V em qualquer apresentação para colá-lo",
   "Slides copied — ⌘V in any deck to paste them": "Slides copiados — ⌘V em qualquer apresentação para colá-los",
   "📺 Use a second screen for notes": "📺 Usar uma segunda tela para as notas",

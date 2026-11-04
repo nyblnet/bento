@@ -3491,7 +3491,7 @@ export class Editor {
       t('Paste an image or text straight onto the canvas with ⌘V.'),
       t('Copy a slide (⌘C with nothing selected) and paste it into another Bento deck.'),
       t('Make a chart from a table and it stays linked — edit the table, the chart updates.'),
-      t('Your work auto-saves; restore earlier versions from Save → Version history.'),
+      t('Your work auto-saves; restore earlier versions from the bento/slides menu → Version history.'),
     ]) { const li = document.createElement('li'); li.textContent = tip; ul.appendChild(li) }
     tips.appendChild(ul); colL.appendChild(tips)
     const more = div('ed-help-more')

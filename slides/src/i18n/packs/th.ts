@@ -419,7 +419,7 @@ export const strings: Catalog = {
   "Paste an image or text straight onto the canvas with ⌘V.": "วางรูปภาพหรือข้อความลงบนแคนวาสได้เลยด้วย ⌘V",
   "Copy a slide (⌘C with nothing selected) and paste it into another Bento deck.": "คัดลอกสไลด์ (⌘C โดยไม่เลือกอะไร) แล้ววางลงในงานนำเสนอ Bento อื่นได้",
   "Make a chart from a table and it stays linked — edit the table, the chart updates.": "สร้างแผนภูมิจากตารางแล้วจะเชื่อมกันไว้ — แก้ตาราง แผนภูมิอัปเดตตาม",
-  "Your work auto-saves; restore earlier versions from Save → Version history.": "งานของคุณบันทึกอัตโนมัติ กู้คืนเวอร์ชันก่อนหน้าได้ที่ บันทึก → ประวัติเวอร์ชัน",
+  "Your work auto-saves; restore earlier versions from the bento/slides menu → Version history.": "งานของคุณบันทึกอัตโนมัติ กู้คืนเวอร์ชันก่อนหน้าได้ที่เมนู bento/slides → ประวัติเวอร์ชัน",
   "Slide copied — ⌘V in any deck to paste it": "คัดลอกสไลด์แล้ว — กด ⌘V ในงานนำเสนอใดก็ได้เพื่อวาง",
   "📺 Use a second screen for notes": "📺 ใช้จอที่สองสำหรับโน้ต",
   "Second screen ready — press S for speaker notes": "จอที่สองพร้อมแล้ว — กด S เพื่อดูโน้ตผู้บรรยาย",

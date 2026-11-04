@@ -419,7 +419,7 @@ export const strings: Catalog = {
   "Paste an image or text straight onto the canvas with ⌘V.": "Lim inn et bilde eller tekst rett på lerretet med ⌘V.",
   "Copy a slide (⌘C with nothing selected) and paste it into another Bento deck.": "Kopier et lysbilde (⌘C uten noe valgt) og lim det inn i en annen Bento-presentasjon.",
   "Make a chart from a table and it stays linked — edit the table, the chart updates.": "Lag et diagram av en tabell, så holder det seg koblet — rediger tabellen, og diagrammet oppdateres.",
-  "Your work auto-saves; restore earlier versions from Save → Version history.": "Arbeidet ditt lagres automatisk; gjenopprett tidligere versjoner fra Lagre → Versjonslogg.",
+  "Your work auto-saves; restore earlier versions from the bento/slides menu → Version history.": "Arbeidet ditt lagres automatisk; gjenopprett tidligere versjoner fra bento/slides-menyen → Versjonslogg.",
   "Slide copied — ⌘V in any deck to paste it": "Lysbildet er kopiert — ⌘V i en hvilken som helst presentasjon for å lime det inn",
   "📺 Use a second screen for notes": "📺 Bruk en ekstra skjerm til notater",
   "Second screen ready — press S for speaker notes": "Ekstra skjerm klar — trykk S for foredragsnotater",

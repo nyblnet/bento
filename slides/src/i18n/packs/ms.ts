@@ -418,7 +418,7 @@ export const strings: Catalog = {
   "Paste an image or text straight onto the canvas with ⌘V.": "Tampal imej atau teks terus ke atas kanvas dengan ⌘V.",
   "Copy a slide (⌘C with nothing selected) and paste it into another Bento deck.": "Salin satu slaid (⌘C tanpa apa-apa yang dipilih) dan tampalkannya ke dalam pembentangan Bento yang lain.",
   "Make a chart from a table and it stays linked — edit the table, the chart updates.": "Buat carta daripada jadual dan kedua-duanya kekal terpaut — sunting jadualnya, cartanya dikemas kini.",
-  "Your work auto-saves; restore earlier versions from Save → Version history.": "Kerja anda disimpan secara automatik; pulihkan versi terdahulu daripada Simpan → Sejarah versi.",
+  "Your work auto-saves; restore earlier versions from the bento/slides menu → Version history.": "Kerja anda disimpan secara automatik; pulihkan versi terdahulu daripada menu bento/slides → Sejarah versi.",
   "Slide copied — ⌘V in any deck to paste it": "Slaid disalin — tekan ⌘V dalam mana-mana pembentangan untuk menampalkannya",
   "📺 Use a second screen for notes": "📺 Guna skrin kedua untuk nota",
   "Second screen ready — press S for speaker notes": "Skrin kedua sedia — tekan S untuk nota pembentang",
