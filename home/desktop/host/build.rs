@@ -36,5 +36,22 @@ fn main() {
     }
     src.push_str("];\n");
     std::fs::write(PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("histories.rs"), src).unwrap();
-    tauri_build::build()
+    // Windows only: Tauri there calls only http://bento.localhost "local"; the per-document
+    // origins http://bento.<hex>.localhost are "remote" and are refused every custom command
+    // unless a remote capability names them (see capabilities-windows/documents.json). The
+    // other platforms are unchanged: no manifest, no capability file.
+    let mut attrs = tauri_build::Attributes::new();
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        println!("cargo:rerun-if-changed=capabilities-windows");
+        let rig = std::env::var_os("CARGO_FEATURE_RIG").is_some();
+        let commands: &'static [&'static str] = if rig {
+            &["bento_arm", "bento_file", "bento_id", "rig_stash", "rig_done", "rig_recreate"]
+        } else {
+            &["bento_arm", "bento_file", "bento_id"]
+        };
+        attrs = attrs
+            .app_manifest(tauri_build::AppManifest::new().commands(commands))
+            .capabilities_path_pattern(if rig { "capabilities-windows/*.json" } else { "capabilities-windows/documents.json" });
+    }
+    tauri_build::try_build(attrs).expect("failed to run the tauri build script")
 }

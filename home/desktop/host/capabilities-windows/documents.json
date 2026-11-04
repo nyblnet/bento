@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "documents",
+  "description": "WINDOWS ONLY (build.rs). Tauri on Windows treats only http://<protocol>.localhost as the app's own origin; a per-document origin http://bento.<24 hex>.localhost is 'remote' and is refused every custom command unless a remote capability says otherwise (measured on WebView2). This admits exactly the host's three commands to exactly those origins. Every one of them still demands the load's capability secret; no core or plugin permission is granted.",
+  "windows": ["doc*"],
+  "remote": { "urls": ["http://bento.*.localhost/*"] },
+  "permissions": ["allow-bento-arm", "allow-bento-file", "allow-bento-id"]
+}
