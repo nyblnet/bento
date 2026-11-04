@@ -136,19 +136,44 @@ export function wrapInFrame(p: PropsPanel, picked: SlideElement[]) {
   const ids0 = new Set(picked.map((e) => e.id))
   const byId = new Map(p.store.slide.elements.map((e) => [e.id, e]))
   const inside = (e: SlideElement) => { for (let q = e.parentId, n = 0; q && n < 64; q = byId.get(q)?.parentId, n++) if (ids0.has(q)) return true; return false }
-  const els = picked.filter((e) => !inside(e))
-  if (!els.length) return
+  const top = picked.filter((e) => !inside(e))
+  if (!top.length) return
+  // a card built of loose shapes: a plain rect with picked elements lying on
+  // it (inside its box, above it in paint order) is one unit. The rect
+  // becomes a hugging column frame holding them — its paint and id stay, the
+  // padding and gap are the ones it had — and the units are what get laid out
+  const all = p.store.slide.elements
+  const idx = new Map(all.map((e, i) => [e.id, i]))
+  const within = (e: SlideElement, c: SlideElement) => e.x >= c.x - 1 && e.y >= c.y - 1 && e.x + e.w <= c.x + c.w + 1 && e.y + e.h <= c.y + c.h + 1
+  const cards = new Map<SlideElement, SlideElement[]>()
+  for (const e of top) {
+    // the outermost holder, so a rect on a rect on a rect is one card
+    const c = top.filter((c) => c !== e && c.type === 'shape' && c.shape === 'rect' && !c.layout && !c.rotation && idx.get(c.id)! < idx.get(e.id)! && within(e, c))
+      .sort((m, n) => n.w * n.h - m.w * m.h)[0]
+    if (c) cards.set(c, [...(cards.get(c) ?? []), e])
+  }
+  const held = new Set([...cards.values()].flat())
+  const els = top.filter((e) => !held.has(e))
+  const makeCards = () => {
+    for (const [c, kids] of cards) {
+      const x0 = Math.min(...kids.map((e) => e.x)), y0 = Math.min(...kids.map((e) => e.y))
+      const x1 = Math.max(...kids.map((e) => e.x + e.w)), y1 = Math.max(...kids.map((e) => e.y + e.h))
+      const side = (v: number) => Math.max(0, Math.round(v))
+      ;(c as ShapeElement).layout = { dir: 'col', gap: spacing(kids, 'col'), pad: [side(y0 - c.y), side(c.x + c.w - x1), side(c.y + c.h - y1), side(x0 - c.x)], hug: true }
+      for (const k of kids) k.parentId = c.id
+    }
+  }
+  if (cards.size && els.length === 1) {
+    // one card and nothing else: the card is the frame
+    p.store.commit(makeCards)
+    p.store.select([els[0].id])
+    return
+  }
   const x = Math.min(...els.map((e) => e.x)), y = Math.min(...els.map((e) => e.y))
   const r = Math.max(...els.map((e) => e.x + e.w)), b = Math.max(...els.map((e) => e.y + e.h))
   const spreadX = Math.max(...els.map((e) => e.x)) - x, spreadY = Math.max(...els.map((e) => e.y)) - y
   const dir = spreadY > spreadX ? 'col' : 'row'
-  // the spacing they already have becomes the gap (the median, so one stray
-  // element does not set it); one element keeps the default
-  const run = [...els].sort((m, n) => (dir === 'row' ? m.x - n.x : m.y - n.y))
-  const gaps = run.slice(1).map((e, i) => (dir === 'row' ? e.x - (run[i].x + run[i].w) : e.y - (run[i].y + run[i].h))).sort((m, n) => m - n)
-  // overlapping copies (⌘D offsets 24px) have no real spacing to keep: 16, as with none
-  const median = gaps.length ? Math.round(gaps[Math.floor((gaps.length - 1) / 2)]) : 0
-  const gap = median > 0 ? median : 16
+  const gap = spacing(els, dir)
   const pad = 16
   const parent = els.every((e) => e.parentId === els[0].parentId) ? els[0].parentId : undefined
   const frame: ShapeElement = {
@@ -160,10 +185,21 @@ export function wrapInFrame(p: PropsPanel, picked: SlideElement[]) {
   }
   const ids = new Set(els.map((e) => e.id))
   p.store.commit(() => {
+    makeCards()
     const all = p.store.slide.elements
     const at = all.findIndex((e) => ids.has(e.id))
     for (const e of all) if (ids.has(e.id)) e.parentId = frame.id
     all.splice(at, 0, frame)
   })
   p.store.select([frame.id])
+}
+
+/** The spacing elements already have along `dir`, as a frame's gap: the
+ *  median, so one stray element does not set it. Overlapping copies (⌘D
+ *  offsets 24px) have no real spacing to keep: 16, as with one element. */
+function spacing(els: SlideElement[], dir: 'row' | 'col'): number {
+  const run = [...els].sort((m, n) => (dir === 'row' ? m.x - n.x : m.y - n.y))
+  const gaps = run.slice(1).map((e, i) => (dir === 'row' ? e.x - (run[i].x + run[i].w) : e.y - (run[i].y + run[i].h))).sort((m, n) => m - n)
+  const median = gaps.length ? Math.round(gaps[Math.floor((gaps.length - 1) / 2)]) : 0
+  return median > 0 ? median : 16
 }

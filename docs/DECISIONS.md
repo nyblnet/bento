@@ -12614,3 +12614,19 @@ Where both had built the same thing, one implementation each:
   handler: the synthetic drags now carry a pointer position, since the drop
   line places a drop by where the pointer is, and the handler, like
   upstream's, claims only a drag carrying text/bento-slide.
+
+## 2026-11-04 — slides: ⇧A keeps loose-shape cards whole
+
+⇧A already kept frames whole (a selected child whose frame is selected
+rides along, 2026-10-30). A card drawn without frames — a rounded rect with
+a title and a body lying on it — had no such unit, so a marquee over three
+of them and ⇧A laid all nine elements out in one row. Now a plain rect
+(no layout, not rotated) whose box holds other selected elements that paint
+above it is a card: the rect itself becomes a hugging column frame holding
+them, its padding and gap read from where they sat, so its id, paint and
+morph partners stay and it looks as it did. The cards and every other
+selected element are then wrapped in one row with the spacing they had, as
+before; one card alone is just made a frame, nothing wraps it. One undo
+step. A holder is the outermost such rect, so a rect on a rect is one card.
+Only a rect can hold: an ellipse or an image under texts is not a frame, so
+its elements stay loose as before.
