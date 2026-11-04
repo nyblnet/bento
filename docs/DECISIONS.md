@@ -12494,3 +12494,47 @@ What stays after the end is the signed tomb and the chain of earlier binding has
 Neither holds a key, but both are hashes of a statement that did, and the privacy page
 has to say so, along with the other half: a wipe that failed leaves the passkeys, the
 flags and the key record until it is finished.
+
+## 2026-11-04: a refused start costs no mail, the chain ends with the key, and a deletion's wipe is retried
+
+Five changes from one security run, one of them correcting a sentence of ours.
+
+The Address object's `start` took its place in the mail budget before it read the
+statement, so every refusal recorded a mail that was never sent. The route needs only a
+self-signed statement, by any key, with no proof. Three such requests before each ask
+left the owner of a rotating address with no freeze mail from hour 24, once the rotation
+mail's own link had lapsed, and the new key was served at hour 73: the wait protected
+nobody, in exactly the case the email freeze exists for. The budget is now spent last,
+just before the code is minted, so a start that mails nothing costs nothing. What is left
+is a burn by mail that really goes: anonymous askers can spend the budget with freeze
+requests, and those can't be told from the owner's, but each one lands in the mailbox
+with a live link and the same budget stops the thief's rotation.
+
+The entry above leaves the chain of earlier binding hashes after the end of `ever`.
+It now goes with `htomb` and the events. It is served only beside a live binding, so
+after the end it has no reader until a re-bind, and it would then hand the deleted
+holder's history to the address's next holder. That entry also broke the rule that a
+re-bind keeps the tombstoned hash in its chain, because the hash came from the record
+that had just gone, and over a mailbox tomb it was never kept. A re-bind with no key
+record now takes the hash from the tomb's own text.
+
+A rotation must outlive its wait: its new binding must run at least the 72 hours plus
+the 20 minutes its code can take to enter. Without that a short-lived rotation settled
+dead, and the address was open to email alone. This is a floor and not "never shortens".
+A new key may ask for a shorter life than the old one had, and nothing needs it not to.
+
+The entry above says a wipe that failed leaves the passkeys, the flags and the key
+record "until it is finished". That was false: nothing finished it. The client got an
+error, a second delete was refused, and the material stayed for good, or, when only a
+Cred object's delete failed, the flags ended while that object kept the key and its
+blob. So the cascade moved from the worker into the Address object as a record, retried
+by the alarm like a rekey, and the holder's answer no longer depends on it. The end of
+`ever` waits for it, since an empty Account is not "nothing held" while a Cred object
+still has the key. A bind is refused while it is owed, because a retry takes everything
+and must not find anything new; that is the only door, as nothing else makes a binding
+where a tomb stands, and it does not use up the code. The cost is that an Account object
+that stays down holds up a re-bind at that address.
+
+An abandoned start after a deletion's end left its statement, and so a key, in `pend` for
+good. A pending code now has an alarm at its expiry. The alarm is shared, so it may
+replace a later one for up to 20 minutes; tick puts that back.

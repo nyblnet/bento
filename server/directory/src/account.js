@@ -449,8 +449,9 @@ export class Account {
       return out(200, { creds })
     }
     if (a.op === 'everEnd') {
-      // the Address object's word that a deleted binding's own expiry has passed with
-      // no re-bind. With material here the wipe failed or a key is back: the rows stay.
+      // the Address object's word that a deleted binding's own expiry has passed with no
+      // re-bind and its wipe has finished. Material here all the same (a passkey that
+      // landed just behind the wipe) means a key may be back: the rows stay.
       const rc = await s.get('rc')
       if (rc && rc.keepUntil && rc.keepUntil <= now) await s.delete(['rc', 'rel']) // the alarm's job, if it has not run
       else if (rc) return out(200, { held: true })

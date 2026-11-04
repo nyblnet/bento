@@ -58,6 +58,8 @@
 //     expiry, and a re-bind before then cancels that. The raw key and the events end
 //     with it, and a re-bind over that tomb reports rebound;
 //   · a renewal never shortens, and nor does the same key taking a deleted binding back;
+//   · a start that mails nothing costs nothing, a rotation outlives its wait, and a
+//     deletion's cascade is retried, with nothing bound until it lands;
 //   · a rekey that fails is recorded and retried (next authorize, or the alarm), so
 //     old passkeys can't strand the new key's first one.
 
@@ -859,7 +861,7 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
     return { text, sig: await next.k.sign(text) }
   }
   /** a full rotation of p to next: vouch, consent, mailed code → pending */
-  async function rotate(p: P, next: P, o: { passkey?: Pk; life?: number } = {}) {
+  async function rotate(p: P, next: P, o: { passkey?: Pk; life?: number; wait?: number; abandon?: boolean } = {}) {
     now += 2 * MIN
     const was = await current(p)
     const n = await bindNext(next, was, { life: o.life })
@@ -867,8 +869,9 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
     const ch = await challengeFor(p.email)
     const d = await device(p)
     const st = await api('/v1/rotate/start', { stmt: n.text, sig: n.sig, rot, rotSig: await p.k.sign(rot), challenge: ch, consent: o.passkey ? await waConsent(o.passkey, ch, n.text, 'rotate') : await nativeConsent(d, ch, n.text, { purpose: 'rotate' }) })
+    now += o.wait ?? 0
     const code = codeFor(p.email)!
-    const c = await api('/v1/rotate/complete', { email: p.email, code, sig: await next.k.sign(buildCmp(await hashOf(n.text), code)) })
+    const c = o.abandon ? null as never : await api('/v1/rotate/complete', { email: p.email, code, sig: await next.k.sign(buildCmp(await hashOf(n.text), code)) })
     return { ...n, was, rot, st, c }
   }
   async function contest(p: P, by: P, pendingText: string, o: { ch?: string; bindText?: string; bind?: string } = {}) {
@@ -1118,7 +1121,7 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
     const R2 = await person('d1b-r@example.com'); await bind(R2)
     await enrol(R2, await device(R2))
     await del(R2)
-    const keep = Number((await rcOf(R2))!.keepUntil)
+    const keep = Number((await rcOf(R2))?.keepUntil ?? now) // a mutant's missing clock fails a row below, not the rig
     const alarm = async () => accountAlarm(await addressKey(R2.email))
     await alarm()
     ok(!!(await rcOf(R2)), 'the alarm before the expiry keeps the verifier')
@@ -2257,7 +2260,7 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
       await addCred(S, await device(S, { consent: false }), free)
       await enrol(S, await device(S, { consent: false }), enrolment(), free)
       await renew(S) // a chain row, and an `events` row with a fingerprint
-      const fp = (await hashOf(S.k.pub)).slice(0, 8)
+      const fp = (await hashOf(S.k.pub)).slice(0, 8), head = await hashOf(await current(S))
       await status(S)
       const expires = ((await addrStore(S)).get('cur') as { b: { expires: number } }).b.expires
       ok((await del(S)).status === 204, '  (deleted by its holder)')
@@ -2272,9 +2275,11 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
       ok(!t.includes(S.k.pub) && !t.includes(fp), 'end: no raw key and no fingerprint in either store')
       ok(!(await addrStore(S)).has('htomb') && !(await addrStore(S)).has('events'), 'end: htomb and events are gone')
       ok((await addrStore(S)).has('tomb') && (await lookup(S.email)).status === 410, 'end: the tomb stays and lookups still serve it')
-      ok(((await addrStore(S)).get('chain') as string[]).length === 1, 'end: the chain of binding hashes stays, what the privacy page has to say')
+      ok(!(await addrStore(S)).has('chain'), 'end: the chain goes too: the deleted holder\'s history is not handed to the next holder')
+      ok([...(await addrStore(S)).keys()].sort().join() === 'mail,nmail,spent,tomb', `end: what stays is the tomb and the mail and challenge books (${[...(await addrStore(S)).keys()].sort().join()})`)
       const X = await nextOf(S), r = await rebind(X, () => bindNext(X, null))
       ok(r.c.status === 200 && r.c.j.rebound === true && (await lookup(S.email)).j.rebound === true, 'end: a new key over the ended tomb lands at once and reports rebound')
+      ok(JSON.stringify((await lookup(S.email)).j.chain) === JSON.stringify([head]), 'end: the re-bind\'s chain starts from the tomb\'s hash, the deleted head and nothing older (§39.6 rule 6)')
     }
     {
       // no key to compare: the same key back is warned about too, the accepted false alarm
@@ -2295,24 +2300,43 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
     }
     {
       // a mailbox tomb never kept a key: the same answer, from the start
-      const S = await person('end-mailbox@example.com'); await bind(S, { setup: true })
+      const S = await person('end-mailbox@example.com'); const text = await bind(S, { setup: true })
       now += 14 * MONTH
       await lookup(S.email)
       await api('/v1/delete/start', { email: S.email })
       await api('/v1/delete/complete', { email: S.email, code: codeFor(S.email) })
       const r = await rebind(S, () => bindNext(S, null))
       ok(r.c.status === 200 && r.c.j.rebound === true, 'end: the same key over a mailbox tomb reports rebound')
+      ok(JSON.stringify((await lookup(S.email)).j.chain) === JSON.stringify([await hashOf(text)]), 'end: a re-bind over a mailbox tomb names the deleted head, which it never used to')
+    }
+    {
+      // and past the mailbox deletion's own end: the earlier hashes have gone, the head has not
+      const S = await person('end-mailbox2@example.com'); await bind(S, { setup: true })
+      await renew(S)
+      const head = await hashOf(await current(S))
+      now += 14 * MONTH
+      await lookup(S.email)
+      await api('/v1/delete/start', { email: S.email })
+      await api('/v1/delete/complete', { email: S.email, code: codeFor(S.email) })
+      ok(((await addrStore(S)).get('chain') as string[]).length === 1, '  (a mailbox-deleted address, its chain here until the end)')
+      now += HOUR
+      await tick(S)
+      ok(!(await addrStore(S)).has('chain'), 'end: a mailbox deletion\'s end takes the chain')
+      const r = await rebind(S, () => bindNext(S, null))
+      ok(r.c.status === 200 && JSON.stringify((await lookup(S.email)).j.chain) === JSON.stringify([head]), 'end: a re-bind after it names the deleted head alone')
     }
     {
       // held: the key may come back, so the comparison stays
-      const { S, expires } = await deleted('end-held@example.com')
+      const { S, text, expires } = await deleted('end-held@example.com')
       ;(await acctStore(S)).set('creds', ['left-behind'])
       ;(await addrStore(S)).set('events', [{ k: 'cred-add', at: now, fp: 'abcd1234' }])
+      ;(await addrStore(S)).set('chain', ['earlier'])
       now = expires
       await tick(S)
-      ok((await addrStore(S)).has('htomb') && (await addrStore(S)).has('events') && !(await appt(S)), 'end: a held answer keeps htomb and events')
+      ok((await addrStore(S)).has('htomb') && (await addrStore(S)).has('events') && (await addrStore(S)).has('chain') && !(await appt(S)), 'end: a held answer keeps htomb, events and the chain')
       const r = await rebind(S, () => bindNext(S, null))
       ok(r.c.status === 200 && r.c.j.rebound === false, '  …and the same key is compared, not warned about')
+      ok(JSON.stringify((await lookup(S.email)).j.chain) === JSON.stringify(['earlier', await hashOf(text)]), '  …and the chain goes on, with the deleted head')
     }
     {
       // the call fails: nothing goes until it answers
@@ -2417,6 +2441,233 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
       now += 2 * MIN
       const X = await nextOf(S), r = await rebind(X, () => bindNext(X, null, { life: DAY * 5 }))
       ok(r.mailed && r.c.j.state === 'pending', 'tomb: a new key with a shorter life still gets its code, and waits')
+    }
+
+    // --- a start that mails nothing costs nothing: the budget is the owner's freeze mail ---
+    const books = async (p: P) => (((await addrStore(p)).get('mail') as number[] | undefined) ?? []).length
+    const alarmOf = async (p: P) => alarms.get(`Address:${await addressKey(p.email)}`)
+    /** a pending rotation; three starts by a stranger, if asked, before each of the owner's
+     *  freeze asks at 25, 49 and 71 h (the rotation's own freeze link lapsed at 24 h) */
+    async function freezeAsks(email: string, stranger: boolean) {
+      const S = await held(email), was = await current(S)
+      const r = await rotate(S, await nextOf(S))
+      ok(r.st.status === 202 && r.c.status === 200, '  (a rotation is pending)')
+      const t0 = now, Z = await nextOf(S), got: number[] = []
+      for (const h of [25, 49, 71]) {
+        now = t0 + h * HOUR
+        for (let i = 0; stranger && i < 3; i++) {
+          now += 2 * MIN
+          const b = await bindNext(Z, null)
+          ok((await api('/v1/bind/start', { stmt: b.text, sig: b.sig })).status === 202, '  (the stranger\'s start: 202, as every start is)')
+        }
+        now += 2 * MIN
+        const n0 = noticesTo(S.email, 'freeze')
+        await api('/v1/freeze/start', { email: S.email })
+        got.push(noticesTo(S.email, 'freeze') - n0)
+      }
+      return { S, was, got, t0 }
+    }
+    {
+      const c = await freezeAsks('burn-control@example.com', false)
+      ok(c.got.join() === '1,1,1', `mail: CONTROL with no stranger the owner's freeze mail goes at 25, 49 and 71 h (${c.got})`)
+      const { S, was, got, t0 } = await freezeAsks('burn@example.com', true)
+      ok(got.join() === '1,1,1', `mail: nine refused starts spend none of it: the owner's freeze mail still goes (${got})`)
+      const token = [...mailbox].reverse().find((m) => m.to === S.email && m.kind === 'freeze')?.freezeToken
+      ok((await api('/v1/freeze/complete', { email: S.email, token })).status === 200, '  …and the link in the last one works')
+      now = t0 + 73 * HOUR
+      ok((await lookup(S.email)).j.binding === was, '  …so the rotation never lands')
+    }
+    {
+      // each refusal, with its cause proven by what would have been mailed otherwise
+      const refused = async (p: P, by: P, build: () => Promise<{ text: string; sig: string }>, label: string) => {
+        const n = await books(p), r = await rebind(by, build)
+        ok(!r.mailed && await books(p) === n, `mail: ${label}: no mail, and no row in the mail book`)
+      }
+      const S = await held('free-live@example.com'), was = await current(S), X = await nextOf(S)
+      await refused(S, X, () => bindNext(X, null), 'another key over a live binding')
+      await refused(S, S, () => bindNext(S, was, { life: 2 * MIN }), 'a renewal that would shorten')
+      const n = await books(S), ctl = await rebind(S, () => bindNext(S, was))
+      ok(ctl.mailed && ctl.c.status === 200 && await books(S) === n + 1, 'mail: CONTROL a start that mails takes one row')
+      const P2 = await held('free-pending@example.com')
+      await rotate(P2, await nextOf(P2))
+      await refused(P2, P2, async () => bindNext(P2, await current(P2)), 'a renewal while a rotation is pending')
+      const F = await held('free-frozen@example.com')
+      await freezeBy(F, F)
+      await refused(F, F, async () => bindNext(F, await current(F)), 'a renewal while frozen')
+      const d1 = await deleted('free-tomb@example.com')
+      await refused(d1.S, d1.S, () => bindNext(d1.S, d1.text, { life: 2 * MIN }), 'the same key back shorter over a tomb')
+      const d2 = await deleted('free-tomb2@example.com')
+      await overTomb(d2.S)
+      const Y = await nextOf(d2.S)
+      await refused(d2.S, Y, () => bindNext(Y, null), 'a second key while a re-bind over the tomb is pending')
+    }
+
+    // --- a rotation outlives its wait: it settles alive, however late its code is entered ---
+    const FLOOR = 72 * HOUR + 20 * MIN
+    {
+      const S = await held('floor-short@example.com'), was = await current(S), n = mailbox.length
+      const r = await rotate(S, await nextOf(S), { life: FLOOR - 1, abandon: true })
+      ok(r.st.status === 400 && reason(r.st) === 'statement' && mailbox.length === n && !(await addrStore(S)).has('pend'), `floor: one ms under the wait plus the code's life: refused, no mail, no code (${reason(r.st)})`)
+      ok(await keeps(S, was), '  …and the owner keeps everything')
+    }
+    {
+      // the floor exactly, the code entered at the last moment it is good
+      const S = await held('floor-edge@example.com')
+      const N = await nextOf(S), r = await rotate(S, N, { life: FLOOR, wait: 20 * MIN - 1 })
+      ok(r.st.status === 202 && r.c.status === 200, 'floor: exactly the floor is accepted, the code entered 1 ms before it lapses')
+      now += 72 * HOUR
+      const l = await lookup(S.email)
+      ok(l.status === 200 && l.j.binding === r.text && (await attOf(l)) === 'active', 'floor: …and it settles alive, not dead')
+    }
+
+    // --- a deletion's cascade is a record, retried, and nothing binds while it is owed ---
+    const owed = async (p: P) => (await addrStore(p)).get('wipe') as { creds: string[]; keepRc: boolean } | undefined
+    {
+      failing('Account', 'wipe', 1)
+      const { S, c, expires } = await deleted('wipe-retry@example.com')
+      ok(!!(await owed(S)) && await nCreds(S) === 1 && !(await credGone(c)), 'wipe: a failed wipe leaves a record, and the holder still had their 204 (see the row above)')
+      ok(await alarmOf(S) === now + HOUR, 'wipe: …and an alarm for the retry')
+      now += HOUR
+      await tick(S)
+      ok(!(await owed(S)) && await nCreds(S) === 0 && await credGone(c), 'wipe: the alarm finishes it: the list and the Cred object are gone')
+      ok((await rcOf(S))?.keepUntil === expires, 'wipe: …the code on the deleted binding\'s clock, as an unfailed wipe leaves it')
+      ok(await alarmOf(S) === expires, 'wipe: …and the appointment is back on the alarm')
+    }
+    {
+      failing('Account', 'wipe', 2)
+      const { S } = await deleted('wipe-twice@example.com')
+      const at = (await appt(S))!.at
+      now += HOUR
+      await tick(S)
+      ok(!!(await owed(S)) && await alarmOf(S) === now + HOUR && at > now + HOUR, 'wipe: a second failure keeps the record and the retry alarm, not the far appointment')
+      now += HOUR
+      await tick(S)
+      ok(!(await owed(S)) && await nCreds(S) === 0, 'wipe: …and the third try lands')
+    }
+    {
+      // the list is gone from the Account, the Cred delete fails: the record is the only memory
+      failing('Cred', 'delete', 1)
+      const { S, c, expires } = await deleted('wipe-cred@example.com')
+      ok((await owed(S))?.creds.length === 1 && await nCreds(S) === 0 && !(await credGone(c)), 'wipe: a failed Cred delete keeps the name in the record')
+      failing('Cred', 'delete', 99)
+      now = expires
+      await tick(S)
+      ok(!(await credGone(c)) && await everRows(S) === 1 && (await addrStore(S)).has('htomb') && !!(await appt(S)), 'wipe: the end waits for it: an empty Account is not "nothing held" while a Cred object has the key')
+      failing('Cred', 'delete', 0)
+      now += HOUR
+      await tick(S)
+      ok(await credGone(c) && !(await owed(S)) && await everRows(S) === 0 && !(await addrStore(S)).has('htomb'), 'wipe: …and once it lands the end goes ahead')
+    }
+    {
+      // a mailbox deletion's retry takes the code too
+      const S = await person('wipe-mailbox@example.com'); await bind(S, { setup: true })
+      await enrol(S, await device(S, { consent: false }), enrolment(), free)
+      now += 14 * MONTH
+      await lookup(S.email)
+      await api('/v1/delete/start', { email: S.email })
+      failing('Account', 'wipe', 1)
+      ok((await api('/v1/delete/complete', { email: S.email, code: codeFor(S.email) })).status === 204 && !!(await rcOf(S)), 'wipe: a failed mailbox wipe answers 204, its code still here')
+      now += HOUR
+      await tick(S)
+      ok(!(await rcOf(S)) && !(await owed(S)), 'wipe: …and the retry takes the code')
+    }
+    {
+      // nothing binds while it is owed: a retry would take what the bind goes on to add
+      failing('Account', 'wipe', 2)
+      const { S, text, c } = await deleted('wipe-bind@example.com')
+      now += 2 * MIN
+      const b = await bindNext(S, text)
+      await api('/v1/bind/start', { stmt: b.text, sig: b.sig })
+      const code = codeFor(S.email)!, sig = await S.k.sign(buildCmp(await hashOf(b.text), code))
+      const r = await api('/v1/bind/complete', { email: S.email, code, sig })
+      ok(r.status === 400 && reason(r) === 'wipe' && (await lookup(S.email)).status === 410, 'wipe: a bind while it is owed is refused')
+      ok(((await addrStore(S)).get('pend') as { attempts: number } | undefined)?.attempts === 0, '  …without using up a try')
+      const r2 = await api('/v1/bind/complete', { email: S.email, code, sig })
+      ok(r2.status === 200 && await nCreds(S) === 0 && await credGone(c) && !(await owed(S)), 'wipe: the same code lands once the bind\'s own try finishes the wipe')
+      ok((await addCred(S, await device(S))).r.status === 200, '  (a passkey added after it)')
+      await tick(S)
+      ok(await nCreds(S) === 1, 'wipe: …and nothing comes back for it')
+    }
+    {
+      failing('Account', 'wipe', 2)
+      const { S } = await deleted('wipe-newkey@example.com')
+      const X = await nextOf(S), r = await rebind(X, () => bindNext(X, null))
+      ok(r.c.status === 400 && reason(r.c) === 'wipe' && !(await addrStore(S)).has('rot'), 'wipe: a new key over the tomb waits for it too: `rot` never starts with it owed')
+    }
+
+    // --- a code nobody came back for goes at its expiry: it can hold a statement, so a key ---
+    const pendOf = async (p: P) => (await addrStore(p)).get('pend') as { expires: number } | undefined
+    {
+      const { S, expires } = await deleted('pend-end@example.com')
+      now = expires
+      await tick(S)
+      const Z = await nextOf(S), b = await bindNext(Z, null)
+      now += 2 * MIN
+      await api('/v1/bind/start', { stmt: b.text, sig: b.sig })
+      const until = (await pendOf(S))!.expires
+      ok(JSON.stringify([...(await addrStore(S)).entries()]).includes(Z.k.pub) && await alarmOf(S) === until, 'pend: CONTROL an abandoned start holds the key, with an alarm at its expiry')
+      now = until - 1
+      await tick(S)
+      ok(!!(await pendOf(S)) && await alarmOf(S) === until, 'pend: one ms before, it stays and the alarm stands')
+      now = until
+      await tick(S)
+      ok(!(await pendOf(S)) && !JSON.stringify([...(await addrStore(S)).entries()]).includes(Z.k.pub), 'pend: at its expiry it goes, and the key with it, with no request behind it')
+    }
+    {
+      // its alarm replaced the appointment's: tick puts it back
+      const { S, text, expires } = await deleted('pend-appt@example.com')
+      now += 2 * MIN
+      const b = await bindNext(S, text)
+      await api('/v1/bind/start', { stmt: b.text, sig: b.sig })
+      now = (await pendOf(S))!.expires
+      await tick(S)
+      ok(!(await pendOf(S)) && await alarmOf(S) === expires, 'pend: the deletion\'s appointment is back on the alarm after it')
+    }
+    {
+      // and the grace's
+      const { A, A2, graceEnd } = await rotated('pend-grace@example.com')
+      const b = await bindNext(A2, await current(A2))
+      now += 2 * MIN
+      await api('/v1/bind/start', { stmt: b.text, sig: b.sig })
+      now = (await pendOf(A))!.expires
+      await tick(A)
+      ok(await hasGrace(A) && await alarmOf(A) === graceEnd, 'pend: so is the grace\'s')
+    }
+    {
+      // a newer code replaced it: that one stays, on its own alarm, and still works
+      const S = await person('pend-newer@example.com'), b1 = await bindNext(S, null)
+      await api('/v1/bind/start', { stmt: b1.text, sig: b1.sig })
+      const first = (await pendOf(S))!.expires
+      now += 2 * MIN
+      const b2 = await bindNext(S, null)
+      await api('/v1/bind/start', { stmt: b2.text, sig: b2.sig })
+      const next = (await pendOf(S))!.expires
+      now = first
+      alarms.delete(`Address:${await addressKey(S.email)}`)
+      await tick(S)
+      ok(!!(await pendOf(S)) && await alarmOf(S) === next, 'pend: a newer code stays, on its own alarm')
+      const code = codeFor(S.email)!
+      ok((await api('/v1/bind/complete', { email: S.email, code, sig: await S.k.sign(buildCmp(await hashOf(b2.text), code)) })).status === 200, '  …and works')
+    }
+    {
+      const S = await held('pend-rotate@example.com')
+      const r = await rotate(S, await nextOf(S), { abandon: true })
+      const until = (await pendOf(S))!.expires
+      ok(r.st.status === 202 && await alarmOf(S) === until, 'pend: a rotation\'s code has its alarm too')
+      now = until
+      await tick(S)
+      ok(!(await pendOf(S)), 'pend: …and goes')
+    }
+    {
+      const S = await person('pend-delete@example.com'); await bind(S, { setup: true })
+      now += 14 * MONTH
+      await lookup(S.email)
+      await api('/v1/delete/start', { email: S.email })
+      const until = (await pendOf(S))!.expires
+      ok(await alarmOf(S) === until, 'pend: a removal code has its alarm too')
+      now = until
+      await tick(S)
+      ok(!(await pendOf(S)), 'pend: …and goes')
     }
   }
 }

@@ -258,16 +258,6 @@ async function notify(env, scope, kind, fp, o = {}) {
   } catch (e) { console.log(`notice failed: ${e.message}`) }
 }
 
-/** Deleting an address takes its account material with it (§9.1): the passkeys
- *  and the ledger always; the recovery verifier only with a MAILBOX deletion,
- *  since a holder deletion keeps it for the deleted binding's window (§39.6). */
-async function cascade(env, email, by, keepUntil) {
-  if (!env.ACCOUNT) return
-  const scope = await addressKey(email)
-  const r = await call(env.ACCOUNT.get(env.ACCOUNT.idFromName(scope)), 'wipe', { keepRc: by === 'holder', keepUntil })
-  for (const k of r.body.creds || []) await call(env.CRED.get(env.CRED.idFromName(k)), 'delete', { scope })
-}
-
 async function body(req) {
   try { const j = await req.json(); return j && typeof j === 'object' ? j : null } catch { return null }
 }
@@ -351,9 +341,7 @@ export default {
       const email = normalize(b.email ?? '')
       if (!email || typeof b.sig !== 'string') return json(400, { error: 'invalid' })
       if (!(await ledger(env, ip, 'delete'))) return json(429, { error: 'rate-limited' })
-      const r = await call(await addressStub(env, email), 'delete', { ts: b.ts, sig: b.sig, scope: await addressKey(email) })
-      if (r.status === 200 && r.body.deleted) await cascade(env, email, 'holder', r.body.keepUntil)
-      return relay(r)
+      return relay(await call(await addressStub(env, email), 'delete', { ts: b.ts, sig: b.sig, scope: await addressKey(email) }))
     }
 
     if (p === '/v1/delete/start') {
@@ -371,9 +359,7 @@ export default {
       const email = normalize(b.email ?? '')
       if (!email || !codeOk(b.code)) return json(400, { error: 'invalid' })
       if (!(await ledger(env, ip, 'complete'))) return json(429, { error: 'rate-limited' })
-      const r = await call(await addressStub(env, email), 'deleteComplete', { code: b.code, scope: await addressKey(email) })
-      if (r.status === 200 && r.body.deleted) await cascade(env, email, 'mailbox', 0)
-      return relay(r)
+      return relay(await call(await addressStub(env, email), 'deleteComplete', { code: b.code, scope: await addressKey(email) }))
     }
 
     // --- consent challenges (audience `dir`, §9.6c) --------------------------------
@@ -500,7 +486,7 @@ export default {
 // vouch `rot.<sha256(this)>.<sha256(previous)>`), `steps` (the last few earlier
 // bindings with their vouches, served so a pinner a few steps behind can follow),
 // `chain` (hashes of every earlier binding for this address), `pend` (a pending
-// code), `mail` (send times, for the per-address limits), `tomb` (a signed
+// code, gone at its expiry by the alarm: it can hold a statement and so a key), `mail` (send times, for the per-address limits), `tomb` (a signed
 // deletion), `htomb` (what a HOLDER deletion keeps for the deleted binding's
 // window, §39.6: its hash, key, seq, expiry and the Account object's name, never
 // the address), and the binding STATE (security §25): `rot` (a pending rotation:
@@ -510,10 +496,12 @@ export default {
 // bind that armed it, when it ends, the ops left), `grace` (after a settled vouched
 // rotation: the previous key, the key it moved to, when the previous key's passkeys
 // stop consenting, the Account object's name), `rekey` (a deletion of old passkeys
-// not yet finished: what stays, and the Cred objects still to delete), `everEnd` (a
+// not yet finished: what stays, and the Cred objects still to delete), `wipe` (a
+// deletion's cascade not yet finished, retried like `rekey`; while it stands nothing
+// binds, so nothing it would take can be new), `everEnd` (a
 // deletion's appointment to end the Account object's `ever:` rows, and with them
-// `htomb` and `events`: when, and that object's name; a re-bind deletes it, here, in
-// the same object). Strongly consistent per address, so a re-bind,
+// `htomb`, `events` and `chain`: when, and that object's name; a re-bind deletes it,
+// here, in the same object). Strongly consistent per address, so a re-bind,
 // a rotation and a lookup can never race into a mixed answer.
 //
 // States: active (no `rot`, no `frz`) · pending (`rot`) · frozen (`frz`).
@@ -552,6 +540,10 @@ export class Address {
     const codeHash = (code) => sha256hex(`bento-dir/1/code\n${code}`)
     const tokenHash = (t) => sha256hex(`bento-dir/1/freeze\n${t}`)
     const fail = async (p) => { p.attempts++; await s.put('pend', p); return out(400, { error: 'invalid' }) }
+    /** a pending code, and the alarm that clears it if nobody comes back: a bind's or a
+     *  rotation's holds a statement, so a key. Nothing else is due sooner that a slip of
+     *  20 minutes would hurt, and tick puts back whatever this replaces. */
+    const putPend = async (p) => { await s.put('pend', p); await s.setAlarm(p.expires) }
     /** the retained recovery verifier of a deleted binding goes once its window has
      *  closed (dropOld), or is the live one again when the same key re-binds (rcKeep) */
     const rcCall = async (ht, op) => {
@@ -585,6 +577,28 @@ export class Address {
         await s.setAlarm(now + LIMITS.rekeyRetryMs)
       }
     }
+    /** Deleting an address takes its account material with it (§9.1): the passkeys and
+     *  the ledger always; the recovery verifier only with a MAILBOX deletion, since a
+     *  holder deletion keeps it for the deleted binding's window (§39.6). One try, from
+     *  the record, like runRekey: at once, before a bind lands, and from the alarm. The
+     *  wipe takes everything, so a bind must not land while this is owed (see complete). */
+    const runWipe = async () => {
+      const t = await s.get('wipe')
+      if (!t) return
+      try {
+        const r = await call(this.env.ACCOUNT.get(this.env.ACCOUNT.idFromName(t.scope)), 'wipe', { keepRc: t.keepRc, keepUntil: t.keepUntil })
+        // the Account's list is gone now: this record is the only memory of these
+        const creds = [...new Set([...t.creds, ...r.body.creds])]
+        await s.put('wipe', { ...t, creds })
+        for (const k of creds) await call(this.env.CRED.get(this.env.CRED.idFromName(k)), 'delete', { scope: t.scope })
+        await s.delete('wipe')
+      } catch (e) {
+        console.log(`wipe failed: ${e.message}`)
+        await s.setAlarm(now + LIMITS.rekeyRetryMs)
+      }
+    }
+    /** try what a deletion still owes; true while it is owed */
+    const wipeOwed = async () => { await runWipe(); return !!(await s.get('wipe')) }
     /** the notice for a grace's end. Called from here, not the worker, since the alarm
      *  can get here with no request. One per settled rotation, so it needs no mail cap. */
     const oldCredsGone = async () => {
@@ -703,14 +717,19 @@ export class Address {
     // then the old key may still hold a code or come back, and "never had one" would arm
     // the allowance beside it. A re-bind deleted this record, and one still waiting out
     // its contest holds it: if it lands the rows stay, if it is contested they go then.
+    // A wipe still owed holds it too: the Account's list can be empty while a Cred object
+    // still has the key and its blob, and the Account would then answer "nothing held".
     {
       const e = await s.get('everEnd')
-      if (e && now >= e.at && !(await s.get('rot'))) {
+      if (e && now >= e.at && !(await s.get('rot')) && !(await wipeOwed())) {
         try {
           const r = await call(this.env.ACCOUNT.get(this.env.ACCOUNT.idFromName(e.scope)), 'everEnd', {})
-          // nothing held there: the raw key and the fingerprints go too, and `tomb` is
-          // what stays. Held, a key may still come back, and rebound compares against it
-          await s.delete(r.body.held ? 'everEnd' : ['everEnd', 'htomb', 'events'])
+          // nothing held there: the raw key, the fingerprints and the earlier hashes go too,
+          // and `tomb` is what stays. Held, a key may still come back, and rebound compares
+          // against it. The chain has no reader until a re-bind, and would then hand the
+          // deleted holder's history to whoever has the address next: complete starts a
+          // new one from the tomb's hash, so §39.6 rule 6 still holds
+          await s.delete(r.body.held ? 'everEnd' : ['everEnd', 'htomb', 'events', 'chain'])
         } catch (x) { console.log(`everEnd failed: ${x.message}`) } // the alarm comes back: see tick
       }
     }
@@ -750,7 +769,6 @@ export class Address {
     }
 
     if (a.op === 'start') {
-      if (!(await mayMail())) return out(202, { mail: null })
       const b = await readBind(a.stmt, a.sig, now)
       if (!b) return out(202, { mail: null })
       const cur = await live()
@@ -765,8 +783,11 @@ export class Address {
       const gt = cur ? null : await guardTomb()
       if (gt && (await stateOf()) !== 'active') return out(202, { mail: null })
       if (gt && b.accountPub === gt.key && b.expires < gt.expires) return out(202, { mail: null })
+      // last: a start that mails nothing costs nothing. This route takes any self-signed
+      // statement, so a budget spent on a refusal is a stranger silencing the owner's freeze mail
+      if (!(await mayMail())) return out(202, { mail: null })
       const code = mintCode()
-      await s.put('pend', { kind: 'bind', stmt: a.stmt, sig: a.sig, codeHash: await codeHash(code), expires: now + LIMITS.codeTtlMs, attempts: 0 })
+      await putPend({ kind: 'bind', stmt: a.stmt, sig: a.sig, codeHash: await codeHash(code), expires: now + LIMITS.codeTtlMs, attempts: 0 })
       return out(202, { mail: { code, fp: (await hashOf(b.accountPub)).slice(0, 8) } })
     }
 
@@ -777,6 +798,10 @@ export class Address {
       const h = await hashOf(p.stmt)
       if (!b || !same(await codeHash(a.code), p.codeHash)) return fail(p)
       if (!(await verifyCmp(buildCmp(h, a.code), a.sig, { accountPub: b.accountPub, bindText: p.stmt })).ok) return fail(p)
+      // a deletion still being carried out: its retry would take what this bind goes on to
+      // add. This is the only door: nothing else makes a binding where a tomb stands, and
+      // `rot` over a tomb comes from here. Not a failed try: the same code works once it lands.
+      if (await wipeOwed()) return refuse('wipe')
       // sequence rules against what is live now
       const cur = await s.get('cur')
       const lv = cur && cur.b.expires > now ? cur : null
@@ -809,10 +834,13 @@ export class Address {
       // A tomb with no key to compare is a rebound: the cautious answer, so the same key
       // back after a deletion's end gets the same warning a new key does
       const prevKey = cur ? cur.b.key : ht ? ht.key : null
-      const rebound = prevKey ? prevKey !== b.accountPub : !!(await s.get('tomb'))
+      const tomb = await s.get('tomb')
+      const rebound = prevKey ? prevKey !== b.accountPub : !!tomb
       const dirKey = await importDirKey(this.env.DIR_KEY_JWK)
       const att = await attest(dirKey, this.env.DIR_KID, h, now, now)
-      if (cur || ht) await s.put('chain', [...((await s.get('chain')) || []), cur ? cur.h : ht.h])
+      // the binding this one follows; with no key record left, the tomb's hash names it
+      const head = cur ? cur.h : ht ? ht.h : tomb ? tomb.text.split('.')[1] : null
+      if (head) await s.put('chain', [...((await s.get('chain')) || []), head])
       if (rebound) await s.delete('steps')
       else if (cur && b.prev === cur.h) await keepStep(cur)
       // `b` keeps only what the service needs between requests — NOT the address
@@ -886,12 +914,17 @@ export class Address {
       // a holder deletion keeps the binding's protection for its own lifetime (§39.6)
       if (by === 'holder') await s.put('htomb', { h: cur.h, key: cur.b.key, seq: cur.b.seq, expires: cur.b.expires, scope: typeof scope === 'string' ? scope : null })
       else await s.delete('htomb')
-      // the wipe follows this answer, so never sooner than an hour on, even for a binding
-      // that had already expired: an appointment kept before the wipe would find material
+      // never sooner than an hour on, even for a binding that had already expired, so the
+      // wipe has had a try and a retry; and the appointment waits for it (see above)
       if (typeof scope === 'string') {
         const at = Math.max(cur.b.expires, now + LIMITS.rekeyRetryMs)
         await s.put('everEnd', { at, scope })
         if (!(await s.get('rekey'))) await s.setAlarm(at) // a retry's alarm stands, and tick comes back to this
+        if (this.env.ACCOUNT) {
+          // recorded BEFORE trying, as rekey is: a failure or a crash leaves a task
+          await s.put('wipe', { scope, keepRc: by === 'holder', keepUntil: by === 'holder' ? cur.b.expires : 0, creds: [] })
+          await runWipe()
+        }
       }
     }
 
@@ -905,7 +938,7 @@ export class Address {
       if ((await stateOf()) !== 'active') return out(400, { error: 'invalid' })
       if (!(await verifyDel(buildDel(b.address, a.ts), a.sig, { accountPub: b.accountPub, now })).ok) return out(400, { error: 'invalid' })
       await tombstone('holder', a.scope)
-      return out(200, { deleted: true, keepUntil: cur.b.expires })
+      return out(200, { deleted: true })
     }
 
     if (a.op === 'deleteStart') {
@@ -915,7 +948,7 @@ export class Address {
       const cur = await s.get('cur')
       if (!cur || cur.b.expires > now || !(await mayMail())) return out(202, { mail: null })
       const code = mintCode()
-      await s.put('pend', { kind: 'delete', codeHash: await codeHash(code), expires: now + LIMITS.codeTtlMs, attempts: 0 })
+      await putPend({ kind: 'delete', codeHash: await codeHash(code), expires: now + LIMITS.codeTtlMs, attempts: 0 })
       return out(202, { mail: { code } })
     }
 
@@ -939,6 +972,10 @@ export class Address {
       const was = await readBind(cur.stmt, cur.sig, cur.verifiedAt)
       if (!b || !was || b.address !== was.address) return refuse('statement')
       if (b.accountPub === cur.b.key) return refuse('same-key') // a renewal, not a rotation
+      // a rotation must outlive its wait, counted from the latest its code can be entered,
+      // or it settles dead and the address is open to email alone. Not "never shortens": a
+      // new key may ask for a shorter life than the old one had, and nothing needs it not to
+      if (b.expires < now + LIMITS.rotationWindowMs + LIMITS.codeTtlMs) return refuse('statement')
       if (b.seq !== cur.b.seq + 1 || b.prev !== cur.h) return refuse('sequence')
       // the OLD key's vouch, checked exactly as a pinning client will check it
       if (typeof a.rot !== 'string' || typeof a.rotSig !== 'string') return refuse('rot:missing')
@@ -950,7 +987,7 @@ export class Address {
       if (!c.ok) return refuse(`consent:${c.reason}`)
       if (!(await mayMail())) return out(429, { error: 'mail-limit' })
       const code = mintCode(), freezeToken = mintToken()
-      await s.put('pend', { kind: 'rotate', stmt: a.stmt, sig: a.sig, rotText: a.rot, rotSig: a.rotSig, codeHash: await codeHash(code), expires: now + LIMITS.codeTtlMs, attempts: 0 })
+      await putPend({ kind: 'rotate', stmt: a.stmt, sig: a.sig, rotText: a.rot, rotSig: a.rotSig, codeHash: await codeHash(code), expires: now + LIMITS.codeTtlMs, attempts: 0 })
       await s.put('fpend', { hash: await tokenHash(freezeToken), expires: now + LIMITS.freezeTokenTtlMs, attempts: 0 })
       await s.delete('setup') // a key change under way ends the setup window
       return out(202, { mail: { code, fp: (await hashOf(b.accountPub)).slice(0, 8), freezeToken } })
@@ -1041,17 +1078,23 @@ export class Address {
       return out(200, { ok: true })
     }
 
-    // the alarm: the grace's lapse and a deletion's appointment ran above; this retries
-    // a failed rekey, and puts back the appointment a retry's alarm replaced
+    // the alarm: the grace's lapse and a deletion's appointment ran above; this retries a
+    // failed rekey or wipe, clears a code nobody came back for, and puts back the
+    // appointment a retry's alarm or a code's replaced
     if (a.op === 'tick') {
       await runRekey()
+      await runWipe()
+      const p = await s.get('pend')
+      if (p && p.expires <= now) await s.delete('pend')
+      const retrying = (await s.get('rekey')) || (await s.get('wipe'))
       const g = await s.get('grace')
-      if (g && !(await s.get('rekey'))) await s.setAlarm(g.until) // a retry's alarm replaced this one
+      if (g && !retrying) await s.setAlarm(g.until) // a retry's alarm replaced this one
       const e = await s.get('everEnd'), rot = await s.get('rot')
-      if (e && !(await s.get('rekey'))) { // still here: not due, held by a pending re-bind, or the call failed
+      if (e && !retrying) { // still here: not due, held by a pending re-bind, or the call failed
         const due = Math.max(e.at, rot ? rot.until : 0)
         await s.setAlarm(due > now ? due : now + LIMITS.rekeyRetryMs)
       }
+      if (p && p.expires > now) await s.setAlarm(p.expires) // a newer code; this tick comes back to the rest
       return out(200, { ok: true })
     }
 
@@ -1175,7 +1218,7 @@ export class Address {
     return out(400, { error: 'bad-op' })
   }
 
-  /** Housekeeping with no request behind it: a grace's end, a rekey's retry. */
+  /** Housekeeping with no request behind it: a grace's end, a rekey's or a wipe's retry, a lapsed code. */
   async alarm() {
     await this.fetch(new Request('https://address/op', { method: 'POST', body: JSON.stringify({ op: 'tick' }) }))
   }

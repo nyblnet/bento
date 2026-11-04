@@ -83,6 +83,10 @@ signed `att.`, so a frozen answer can't be replayed as active.
   same-key renewal with an earlier expiry is refused at start (no code is mailed)
   and at complete. So is the same key taking a deleted binding back inside its
   window for less than that binding had left. An equal expiry is accepted.
+- **A rotation outlives its wait.** Its new binding must run at least the 72 hours
+  plus the 20 minutes its code can take to enter, or it would settle dead and leave
+  the address open to email alone; `rotate/start` answers 400 `statement` with no
+  mail. It may otherwise be shorter than the binding it replaces.
 - **Leaving frozen** takes the recovery code (see **Resolution**); without
   one, a frozen binding stays frozen until it expires.
 
@@ -343,14 +347,23 @@ account key it belongs to, and material for any other key is treated as gone).
   the Account object still holds a passkey or a live code when the time comes, the
   flags stay. A binding that merely expires ends nothing: its material may remain.
   The key record goes at the same moment: `htomb`, the one place the raw key was
-  kept, and the event list with its key fingerprints. Left behind are the signed
-  tomb and the chain of earlier binding hashes, neither of which holds a key, so a
-  re-bind over that tomb has nothing to compare and reports `rebound`, even for the
-  same key, and only a fresh seq 1 lands.
+  kept, the event list with its key fingerprints, and the chain of earlier binding
+  hashes. Left behind is the signed tomb, which holds no key, so a re-bind over it
+  has nothing to compare and reports `rebound`, even for the same key, and only a
+  fresh seq 1 lands. That re-bind's chain starts from the tomb's hash: it names the
+  deleted binding and nothing older, so the next holder of the address is not handed
+  the last one's history.
+  The wipe itself is a record in the Address object, retried by the alarm every hour
+  like a rekey, so a call that fails delays a deletion and never loses it; the holder
+  gets their answer either way. While it is owed nothing binds at that address
+  (`complete` answers 400 `wipe`, and the same code works once it lands), since a
+  retry takes everything and must not find anything new, and the end above waits for
+  it. A pending code goes at its expiry, also by the alarm: a bind's or a rotation's
+  holds a statement, and so a key.
   **The privacy page must state both halves:** after a deleted binding's expiry
-  nothing identifying the key is held but binding hashes (the tomb's, and the
-  chain's if the address had earlier bindings), and a wipe that failed leaves the
-  passkeys AND the flags, and the key record with them, until it is finished.
+  nothing identifying the key is held but one binding hash, the tomb's, and until a
+  wipe that failed has been retried successfully the passkeys, the flags and the key
+  record are all still held.
 
 **Not here yet:**
 - the ledger routes (a kernel request op)
