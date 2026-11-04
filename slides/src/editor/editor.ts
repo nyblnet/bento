@@ -2326,7 +2326,7 @@ export class Editor {
    */
   private wireThumbDrop() {
     const at = (ev: DragEvent): number | null => {
-      if (!this.dragFrom) return null
+      if (!this.dragFrom || !ev.dataTransfer?.types.includes('text/bento-slide')) return null // only a slide drag
       const slides = this.store.doc.slides
       for (const item of this.thumbs.querySelectorAll<HTMLElement>('.ed-thumb')) {
         const r = item.getBoundingClientRect()

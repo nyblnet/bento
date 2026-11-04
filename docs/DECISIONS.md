@@ -12610,4 +12610,7 @@ Where both had built the same thing, one implementation each:
   against timers). The revamp's frame-aware drag target stays.
 - **A slide dragged to the end (#859 vs the drop line).** The revamp's drop
   line and end gap stay (they land at the end); upstream's separate end-drop
-  wiring is not carried.
+  wiring is not carried. Its rig (sidebar-drop-end) runs against the revamp's
+  handler: the synthetic drags now carry a pointer position, since the drop
+  line places a drop by where the pointer is, and the handler, like
+  upstream's, claims only a drag carrying text/bento-slide.
