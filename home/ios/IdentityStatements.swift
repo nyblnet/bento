@@ -236,7 +236,8 @@ enum IdentityStatements {
          String(c.seq), c.prev ?? "", String(c.created), String(c.expires)].joined(separator: ".")
     }
 
-    static func verifyBind(_ text: String, _ sig: String, now: Int) -> Verdict<BindCert> {
+    /// The grammar and keys of a bind., with no signature and no clock (kernel's parseBind).
+    static func parseBind(_ text: String) -> Verdict<BindCert> {
         guard let p = fields(text, "bind", 9) else { return .no("grammar") }
         guard let address = freeText(p[1]), isNormalAddress(address) else { return .no("address") }
         let accountPub = p[2]
@@ -249,10 +250,16 @@ enum IdentityStatements {
         if (seq == 1) != prevF.isEmpty { return .no("prev") }
         if !prevF.isEmpty && !isHash(prevF) { return .no("prev") }
         guard let created = ms(p[7]), let expires = ms(p[8]) else { return .no("grammar") }
-        if let life = lifetime(created, expires, now) { return .no(life) }
-        guard verifyStatementSig(accountPub, sig, text) else { return .no("signature") }
         return .yes(BindCert(address: address, accountPub: accountPub, kx: kx, name: name, seq: seq,
                              prev: prevF.isEmpty ? nil : prevF, created: created, expires: expires))
+    }
+
+    static func verifyBind(_ text: String, _ sig: String, now: Int) -> Verdict<BindCert> {
+        let v = parseBind(text)
+        guard let c = v.value else { return v }
+        if let life = lifetime(c.created, c.expires, now) { return .no(life) }
+        guard verifyStatementSig(c.accountPub, sig, text) else { return .no("signature") }
+        return v
     }
 
     // MARK: att. — the directory's attestation

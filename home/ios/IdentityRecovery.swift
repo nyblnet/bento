@@ -151,6 +151,17 @@ enum IdentityRecovery {
         return .ok(BlobKeys(account: scalars[0], kx: scalars[1]))
     }
 
+    /// The account scalar alone (link v1's SEALED carries this and nothing else of the
+    /// keys: security §26c.4, the recovery kx never travels at link time). Exactly 32
+    /// bytes, in 1..n−1, and the private half of the binding's account key. Same
+    /// reasons as the reference (recovery.ts unpackAccountScalar).
+    static func unpackAccountScalar(_ pt: [UInt8], accountPub: String) -> Verdict<[UInt8]> {
+        guard pt.count == 32 else { return .no("length") }
+        guard scalarInRange(pt) else { return .no("scalar-range") }
+        guard scalarMatches(pt, accountPub) else { return .no("key-mismatch") }
+        return .ok(pt)
+    }
+
     private static let nBytes: [UInt8] = [
         0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
         0xbc, 0xe6, 0xfa, 0xad, 0xa7, 0x17, 0x9e, 0x84, 0xf3, 0xb9, 0xca, 0xc2, 0xfc, 0x63, 0x25, 0x51,

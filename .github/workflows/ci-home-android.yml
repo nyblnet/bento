@@ -49,3 +49,12 @@ jobs:
         # pinned at 8.14.3 because AGP 8 cannot run on Gradle 9.6+.
         working-directory: home/android
         run: ./gradlew --no-daemon testDebugUnitTest
+      - name: Release manifest keeps the Bento ID setup screen closed
+        # Reads the MERGED release manifest (after the manifest merger, what a
+        # store sees): SetupActivity exported="false", bento.setup.dev "false",
+        # no intent-filter. The script shows itself red on four mutated copies.
+        # processReleaseMainManifest needs no signing and no site clone.
+        working-directory: home/android
+        run: |
+          ./gradlew --no-daemon -q processReleaseMainManifest
+          node ../../scripts/test-home-android-manifest.mjs app/build/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml

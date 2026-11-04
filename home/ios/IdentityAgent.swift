@@ -90,6 +90,24 @@ enum IdentityAgent {
         }
 
         guard let cp = consentFor[purpose] else { return .failure(.purpose) }
+        return consentSign(purpose: cp, payload: payload, host: host, store: store, enclave: enclave)
+    }
+
+    /// Linking a device (link v1): H's consent, purpose `link`, over the `dev.` text it
+    /// issued for the new device. HOST-ONLY: a page can never reach this, because `link`
+    /// is not in `consentFor` and `payloadMatchesPurpose` has no shape for it. It runs the
+    /// same gate as a page's consent (enrolment notice first, presence, host-stamped
+    /// `cns.`), so there is one consent path, not two.
+    static func signLink(devText: String, host: HostContext,
+                         store: IdentityKeys.Store, enclave: Bool = SecureEnclave.isAvailable) -> Result<Signed, Refusal> {
+        do { _ = try IdentityKeys.account(in: store) }
+        catch IdentityKeys.Failure.noIdentity { return .failure(.noIdentity) }
+        catch { return .failure(.unavailable) }
+        return consentSign(purpose: "link", payload: devText, host: host, store: store, enclave: enclave)
+    }
+
+    private static func consentSign(purpose cp: String, payload: String, host: HostContext,
+                                    store: IdentityKeys.Store, enclave: Bool) -> Result<Signed, Refusal> {
         // The consent key FIRST: minting it is what records the enrolment it was
         // born under, so a brand-new key isn't mistaken for a changed enrolment.
         let k: IdentityKeys.DeviceKey

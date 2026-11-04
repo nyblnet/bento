@@ -475,10 +475,19 @@ enum IdentityKeys {
         }
     }
 
+    #if DEBUG || BENTO_WIPE_PROBE
+    nonisolated(unsafe) static var rigPresenceGranted = false
+    #endif
+
     #if targetEnvironment(simulator) || BENTO_SOFTWARE_DEVICE_KEYS
     private static func wrapSoftware(_ role: Role, _ k: P256.Signing.PrivateKey) -> DeviceKey {
         DeviceKey(role: role, publicRaw: k.publicKey.x963Representation) { msg, ctx in
             if role == .consent {
+                #if DEBUG || BENTO_WIPE_PROBE
+                // rig seam: stands in for the person being present, which the stand-in
+                // below needs a human for. Absent from a Release build.
+                if rigPresenceGranted { return try k.signature(for: msg).rawRepresentation }
+                #endif
                 // the stand-in for the chip's .userPresence: an explicit check
                 let c = ctx ?? LAContext()
                 var err: NSError?
