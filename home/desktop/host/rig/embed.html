@@ -7,6 +7,8 @@ try{r.parentSecret=String(parent.__spikeCap)}catch(e){r.parentSecret='THREW'}
 r.wkIpc=!!(window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.ipc);
 r.chromeWv=!!(window.chrome&&window.chrome.webview);
 function send(){parent.postMessage({embed:r},'*')}
+var msg='{"id":"'+tag+'","op":"read","name":"x"}';
+if(window.__TAURI_INTERNALS__&&window.__TAURI_INTERNALS__.invoke){r.raw='invoke';window.__TAURI_INTERNALS__.invoke('bento_file',{msg:msg,cap:cap}).then(function(v){r.inv='ok:'+String(v).slice(0,120)},function(e){r.inv='err:'+String(e).slice(0,200)})}else
 try{var m=JSON.stringify({cmd:'bento_file',callback:1,error:2,payload:{msg:'{"id":"'+tag+'","op":"read","name":"x"}',cap:cap},options:{headers:{}},__TAURI_INVOKE_KEY__:key});
 if(window.ipc)window.ipc.postMessage(m);else if(r.wkIpc)window.webkit.messageHandlers.ipc.postMessage(m);else if(r.chromeWv)window.chrome.webview.postMessage(m);r.raw='sent'}catch(e){r.raw='THREW '+e}
 setTimeout(send,1200)

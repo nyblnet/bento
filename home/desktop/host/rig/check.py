@@ -87,6 +87,8 @@ def window(name, genuine, expect_heard, peer_cap_expected=True):
     # fixture that never loaded reports 'no report' and fails above), from the loopback origin
     for tag, e in emb.items():
         if isinstance(e, dict): ok(e.get("page") == "rig-embed-fixture", f"{name}: embed {tag} is the locally served fixture")
+    for tag, e in emb.items():
+        if isinstance(e, dict) and e.get("inv"): print(f"note {name}: embed {tag} invoke() result: {e.get('inv')}")
     # a DIFFERENT self-signed certificate for the same host is still refused (trust is per certificate)
     ok(p.get("rogue") == "no report", f"{name}: control: an embed from a DIFFERENT self-signed 127.0.0.1 certificate never loads ({p.get('rogue')})")
     oc = p.get("origin_ctl") or {}
