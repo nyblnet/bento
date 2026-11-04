@@ -729,6 +729,10 @@ export class Editor {
     this.panel.titleOf = (id, label) => titleFor(this.commands, id, label)
     this.panel.remove = () => this.deleteSelection()
     this.panel.layers.mount(this.sideLayers)
+    // The Tokens pane outlives build() (the constructor makes it once), but its
+    // host is the fresh sideTokens above — re-home it, or a language switch
+    // leaves it drawing into the detached old column and the view goes blank.
+    this.tokensPane?.mount(this.sideTokens)
     const offs = (['doc', 'selection', 'current'] as const).map((e) => this.store.on(e, () => this.panel.layers.refresh()))
     this.buildScope.signal.addEventListener('abort', () => offs.forEach((off) => off()), { once: true })
     this.panel.onListIndent = (dir) => { this.canvas.indentList(dir) }
