@@ -160,7 +160,7 @@ pub fn trust_embed_cert(window: &tauri::WebviewWindow) {
                 args.RequestUri(&mut uri)?;
                 let uri = webview2_com::take_pwstr(uri);
                 let mut pem = PWSTR::null();
-                args.ServerCertificate()?.PemEncodedSerialization(&mut pem)?;
+                args.ServerCertificate()?.ToPemEncoding(&mut pem)?;
                 let pem = webview2_com::take_pwstr(pem);
                 let allow = uri.starts_with("https://127.0.0.1:") && body(&pem) == want;
                 eprintln!("RIG TLS: certificate error for {uri}: {}", if allow { "the rig's one certificate, allowed" } else { "refused" });
