@@ -1295,6 +1295,8 @@ export const ja: Catalog = {
   "Code colors": "コードの色",
   "Bind {n} uses to {name}": "{n} 件の使用箇所を {name} に紐付け",
   "{n} uses now follow {name}": "{n} 件の使用箇所が {name} に従うようになりました",
+  "Bind 1 use to {name}": "1 件の使用箇所を {name} に紐付け",
+  "1 use now follows {name}": "1 件の使用箇所が {name} に従うようになりました",
   "Card": "カード",
   "Made {name} — rename it in its header; insert copies from Tokens": "{name} を作成しました — 見出しで名前を変更、コピーはトークンから挿入",
   "Main component": "メインコンポーネント",

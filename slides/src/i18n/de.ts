@@ -1295,6 +1295,8 @@ export const de: Catalog = {
   "Code colors": "Codefarben",
   "Bind {n} uses to {name}": "{n} Verwendungen an {name} binden",
   "{n} uses now follow {name}": "{n} Verwendungen folgen jetzt {name}",
+  "Bind 1 use to {name}": "1 Verwendung an {name} binden",
+  "1 use now follows {name}": "1 Verwendung folgt jetzt {name}",
   "Card": "Karte",
   "Made {name} — rename it in its header; insert copies from Tokens": "{name} erstellt — benenne es in seinem Kopf um; Kopien fügst du über Tokens ein",
   "Main component": "Hauptkomponente",

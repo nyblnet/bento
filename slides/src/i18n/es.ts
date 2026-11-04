@@ -1295,6 +1295,8 @@ export const es: Catalog = {
   "Code colors": "Colores de código",
   "Bind {n} uses to {name}": "Vincular {n} usos a {name}",
   "{n} uses now follow {name}": "{n} usos siguen ahora a {name}",
+  "Bind 1 use to {name}": "Vincular 1 uso a {name}",
+  "1 use now follows {name}": "1 uso sigue ahora a {name}",
   "Card": "Tarjeta",
   "Made {name} — rename it in its header; insert copies from Tokens": "Se creó {name}: renómbralo en su encabezado; inserta copias desde Tokens",
   "Main component": "Componente principal",

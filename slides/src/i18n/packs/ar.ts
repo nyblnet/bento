@@ -1315,6 +1315,8 @@ export const strings: Catalog = {
   "Code colors": "ألوان الشيفرة",
   "Bind {n} uses to {name}": "ربط {n} من الاستخدامات بـ {name}",
   "{n} uses now follow {name}": "{n} من الاستخدامات تتبع الآن {name}",
+  "Bind 1 use to {name}": "ربط استخدام واحد بـ {name}",
+  "1 use now follows {name}": "استخدام واحد يتبع الآن {name}",
   "Card": "بطاقة",
   "Made {name} — rename it in its header; insert copies from Tokens": "تم إنشاء {name} — أعد تسميته من ترويسته؛ أدرج النسخ من الرموز",
   "Main component": "المكوّن الرئيسي",

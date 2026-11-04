@@ -1308,6 +1308,8 @@ export const strings: Catalog = {
   "Code colors": "צבעי הקוד",
   "Bind {n} uses to {name}": "קישור {n} שימושים אל {name}",
   "{n} uses now follow {name}": "{n} שימושים עוקבים עכשיו אחרי {name}",
+  "Bind 1 use to {name}": "קישור שימוש אחד אל {name}",
+  "1 use now follows {name}": "שימוש אחד עוקב עכשיו אחרי {name}",
   "Card": "כרטיס",
   "Made {name} — rename it in its header; insert copies from Tokens": "{name} נוצר — שנו את שמו בכותרת; הוסיפו עותקים מתוך האסימונים",
   "Main component": "קומפוננטה ראשית",

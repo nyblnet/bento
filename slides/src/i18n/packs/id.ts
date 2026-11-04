@@ -1305,6 +1305,8 @@ export const strings: Catalog = {
   "Code colors": "Warna kode",
   "Bind {n} uses to {name}": "Kaitkan {n} penggunaan ke {name}",
   "{n} uses now follow {name}": "{n} penggunaan kini mengikuti {name}",
+  "Bind 1 use to {name}": "Kaitkan 1 penggunaan ke {name}",
+  "1 use now follows {name}": "1 penggunaan kini mengikuti {name}",
   "Card": "Kartu",
   "Made {name} — rename it in its header; insert copies from Tokens": "{name} dibuat — ganti namanya di header; sisipkan salinan dari Token",
   "Main component": "Komponen utama",

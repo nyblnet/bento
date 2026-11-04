@@ -31,10 +31,15 @@ const PATH_STEM: Array<[RegExp, string]> = [
 ]
 export const tokenStem = (path: string, type: TokenType): string => PATH_STEM.find(([re]) => re.test(path))?.[1] ?? STEM[type]
 
-/** The toast after a token is made: one use, or several (two strings, as
- *  t() has no plural forms). */
+/** The toasts and offers that count uses: one use, or several (two strings
+ *  each, as t() has no plural forms). The toast after a token is made: */
 export const madeToken = (name: string, n: number): string =>
   n === 1 ? t('Made {name} — 1 use follows it', { name }) : t('Made {name} — {n} uses follow it', { name, n })
+/** The colour popover's offer to bind every use of a colour, and its toast. */
+export const bindUses = (name: string, n: number): string =>
+  n === 1 ? t('Bind 1 use to {name}', { name }) : t('Bind {n} uses to {name}', { name, n })
+export const usesFollow = (name: string, n: number): string =>
+  n === 1 ? t('1 use now follows {name}', { name }) : t('{n} uses now follow {name}', { name, n })
 
 /** Give a field a token binding for `path` on `el`, offering tokens of `types`. Returns the field. */
 /** The token picker for one property — the field's dot, a pill, or the

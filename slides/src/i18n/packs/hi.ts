@@ -1315,6 +1315,8 @@ export const strings: Catalog = {
   "Code colors": "कोड के रंग",
   "Bind {n} uses to {name}": "{n} उपयोगों को {name} से जोड़ें",
   "{n} uses now follow {name}": "{n} उपयोग अब {name} का अनुसरण करते हैं",
+  "Bind 1 use to {name}": "1 उपयोग को {name} से जोड़ें",
+  "1 use now follows {name}": "1 उपयोग अब {name} का अनुसरण करता है",
   "Card": "कार्ड",
   "Made {name} — rename it in its header; insert copies from Tokens": "{name} बनाया गया — हेडर में नाम बदलें; टोकन से कॉपी डालें",
   "Main component": "मुख्य कॉम्पोनेंट",

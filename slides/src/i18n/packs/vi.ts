@@ -1305,6 +1305,8 @@ export const strings: Catalog = {
   "Code colors": "Màu mã",
   "Bind {n} uses to {name}": "Liên kết {n} chỗ dùng với {name}",
   "{n} uses now follow {name}": "{n} chỗ dùng giờ theo {name}",
+  "Bind 1 use to {name}": "Liên kết 1 chỗ dùng với {name}",
+  "1 use now follows {name}": "1 chỗ dùng giờ theo {name}",
   "Card": "Thẻ",
   "Made {name} — rename it in its header; insert copies from Tokens": "Đã tạo {name} — đổi tên ở tiêu đề; chèn bản sao từ Token",
   "Main component": "Thành phần chính",

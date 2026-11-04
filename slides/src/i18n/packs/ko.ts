@@ -1299,6 +1299,8 @@ export const strings: Catalog = {
   "Code colors": "코드 색",
   "Bind {n} uses to {name}": "사용 {n}곳을 {name}에 연결",
   "{n} uses now follow {name}": "이제 사용 {n}곳이 {name}을(를) 따릅니다",
+  "Bind 1 use to {name}": "사용 1곳을 {name}에 연결",
+  "1 use now follows {name}": "이제 사용 1곳이 {name}을(를) 따릅니다",
   "Card": "카드",
   "Made {name} — rename it in its header; insert copies from Tokens": "{name}을(를) 만들었습니다 — 머리글에서 이름을 바꾸고, 사본은 토큰에서 삽입하세요",
   "Main component": "메인 컴포넌트",

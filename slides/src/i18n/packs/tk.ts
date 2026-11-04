@@ -1327,6 +1327,8 @@ export const strings: Catalog = {
   "Code colors": "Kod reňkleri",
   "Bind {n} uses to {name}": "{n} ulanylyşy {name} bilen bagla",
   "{n} uses now follow {name}": "{n} ulanylyş indi {name} bilen gidýär",
+  "Bind 1 use to {name}": "1 ulanylyşy {name} bilen bagla",
+  "1 use now follows {name}": "1 ulanylyş indi {name} bilen gidýär",
   "Card": "Kart",
   "Made {name} — rename it in its header; insert copies from Tokens": "{name} döredildi — adyny sözbaşyndan üýtgediň; nusgalary Tokenlerden goşuň",
   "Main component": "Esasy komponent",

@@ -1324,6 +1324,8 @@ export const strings: Catalog = {
   "Code colors": "Mga kulay ng code",
   "Bind {n} uses to {name}": "Ikabit ang {n} gamit sa {name}",
   "{n} uses now follow {name}": "Sumusunod na ngayon sa {name} ang {n} gamit",
+  "Bind 1 use to {name}": "Ikabit ang 1 gamit sa {name}",
+  "1 use now follows {name}": "Sumusunod na ngayon sa {name} ang 1 gamit",
   "Card": "Card",
   "Made {name} — rename it in its header; insert copies from Tokens": "Nagawa ang {name} — palitan ang pangalan sa header nito; magsingit ng kopya mula sa Tokens",
   "Main component": "Pangunahing component",

@@ -1312,6 +1312,8 @@ export const strings: Catalog = {
   "Code colors": "Koodin värit",
   "Bind {n} uses to {name}": "Sido {n} käyttökohdetta kohteeseen {name}",
   "{n} uses now follow {name}": "{n} käyttökohdetta seuraa nyt kohdetta {name}",
+  "Bind 1 use to {name}": "Sido 1 käyttökohde kohteeseen {name}",
+  "1 use now follows {name}": "1 käyttökohde seuraa nyt kohdetta {name}",
   "Card": "Kortti",
   "Made {name} — rename it in its header; insert copies from Tokens": "{name} luotu — nimeä se uudelleen otsakkeessa; lisää kopiot Tokeneista",
   "Main component": "Pääkomponentti",

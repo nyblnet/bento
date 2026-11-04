@@ -1295,6 +1295,8 @@ export const zhHant: Catalog = {
   "Code colors": "程式碼顏色",
   "Bind {n} uses to {name}": "將 {n} 處使用繫結到 {name}",
   "{n} uses now follow {name}": "{n} 處使用現在跟隨 {name}",
+  "Bind 1 use to {name}": "將 1 處使用繫結到 {name}",
+  "1 use now follows {name}": "1 處使用現在跟隨 {name}",
   "Card": "卡片",
   "Made {name} — rename it in its header; insert copies from Tokens": "已建立 {name} — 在標題處重新命名；從權杖插入副本",
   "Main component": "主元件",

@@ -1309,6 +1309,8 @@ export const strings: Catalog = {
   "Code colors": "Kodefarger",
   "Bind {n} uses to {name}": "Koble {n} bruksområder til {name}",
   "{n} uses now follow {name}": "{n} bruksområder følger nå {name}",
+  "Bind 1 use to {name}": "Koble 1 bruksområde til {name}",
+  "1 use now follows {name}": "1 bruksområde følger nå {name}",
   "Card": "Kort",
   "Made {name} — rename it in its header; insert copies from Tokens": "{name} er laget — gi det nytt navn i overskriften; sett inn kopier fra Tokens",
   "Main component": "Hovedkomponent",

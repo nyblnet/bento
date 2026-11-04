@@ -1306,6 +1306,8 @@ export const strings: Catalog = {
   "Code colors": "Kod renkleri",
   "Bind {n} uses to {name}": "{n} kullanımı {name} ile bağla",
   "{n} uses now follow {name}": "{n} kullanım artık {name} değerini izliyor",
+  "Bind 1 use to {name}": "1 kullanımı {name} ile bağla",
+  "1 use now follows {name}": "1 kullanım artık {name} değerini izliyor",
   "Card": "Kart",
   "Made {name} — rename it in its header; insert copies from Tokens": "{name} oluşturuldu — adını başlığından değiştirin; kopyaları Token'lardan ekleyin",
   "Main component": "Ana bileşen",

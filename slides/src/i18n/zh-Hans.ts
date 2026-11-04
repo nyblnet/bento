@@ -1295,6 +1295,8 @@ export const zhHans: Catalog = {
   "Code colors": "代码颜色",
   "Bind {n} uses to {name}": "将 {n} 处使用绑定到 {name}",
   "{n} uses now follow {name}": "{n} 处使用现在跟随 {name}",
+  "Bind 1 use to {name}": "将 1 处使用绑定到 {name}",
+  "1 use now follows {name}": "1 处使用现在跟随 {name}",
   "Card": "卡片",
   "Made {name} — rename it in its header; insert copies from Tokens": "已创建 {name} — 在标题处重命名；从令牌中插入副本",
   "Main component": "主组件",

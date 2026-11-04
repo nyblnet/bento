@@ -1311,6 +1311,8 @@ export const strings: Catalog = {
   "Code colors": "رنگ‌های کد",
   "Bind {n} uses to {name}": "پیوند {n} کاربرد به {name}",
   "{n} uses now follow {name}": "{n} کاربرد اکنون از {name} پیروی می‌کند",
+  "Bind 1 use to {name}": "پیوند ۱ کاربرد به {name}",
+  "1 use now follows {name}": "۱ کاربرد اکنون از {name} پیروی می‌کند",
   "Card": "کارت",
   "Made {name} — rename it in its header; insert copies from Tokens": "{name} ساخته شد — در سرصفحهٔ آن نامش را تغییر دهید؛ کپی‌ها را از توکن‌ها درج کنید",
   "Main component": "مؤلفهٔ اصلی",

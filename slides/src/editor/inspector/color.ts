@@ -11,7 +11,7 @@ import { setColor, refAt, keepAlpha, PALETTE_SLOTS } from '../../palette'
 import { cssColor, cssGradient, radialGeom } from '../../render'
 import { adoptColor, bindToken, colorUses, freeTokenName, tokenName, tokenValue } from '../../tokens'
 import { choices, openTokenPicker, slotOf, type Choice } from './tokenpicker'
-import { madeToken } from './tokenbind'
+import { bindUses, madeToken, usesFollow } from './tokenbind'
 import { openColorPopover } from './colorpopover'
 import { gradientBar } from './gradientbar'
 import { gradTarget } from '../gradientoverlay'
@@ -340,10 +340,10 @@ export function themeLink(p: PropsPanel, ref: { id: string | null; path: string;
         : [
           // the colour is already a theme colour or a token: bind its uses to
           // that one rather than make a second token with the same value
-          ...((same) => same ? [{ icon: ICONS.viewTokens, label: t('Bind {n} uses to {name}', { n: colorUses(p.store.doc, hex()).length, name: same.kind === 'token' ? same.key : same.label }), run: () => {
+          ...((same) => same ? [{ icon: ICONS.viewTokens, label: bindUses(same.kind === 'token' ? same.key : same.label, colorUses(p.store.doc, hex()).length), run: () => {
             const uses = colorUses(p.store.doc, hex())
             p.store.commit(() => followChoice(p.store.doc, uses.map((u) => ({ holder: (u.element ?? u.slide) as unknown as Record<string, unknown>, path: u.path })), same))
-            p.toast(t('{n} uses now follow {name}', { n: uses.length, name: same.kind === 'token' ? same.key : same.label }))
+            p.toast(usesFollow(same.kind === 'token' ? same.key : same.label, uses.length))
           } }] : [{ icon: ICONS.tokenNew, label: t('Make a token from this color'), run: () => {
             const name = freeTokenName(p.store.doc, 'color.brand')
             let n = 0
