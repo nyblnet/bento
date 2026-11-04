@@ -22,6 +22,7 @@ import {
   type SvgElement, type TableElement, type FrameLayout,
 } from './model.ts'
 import { derive } from './derive.ts'
+import { paletteOf, resolveRef } from './palette.ts'
 
 /** Display face — the shell's own (fonts.ts BUILTIN_FONTS), named by the deck, not embedded. */
 const DISPLAY = "'Fraunces', Georgia, serif"
@@ -76,96 +77,63 @@ const S_CHOREO_3 = 'sd-s-choreo-3'
 // starterDoc() writes every bound literal from its token, so the two can never
 // disagree in the shipped deck.
 
-const color = (v: string) => ({ type: 'color' as const, values: { default: v } })
 const num = (v: number) => ({ type: 'number' as const, values: { default: v } })
+const shadow = (y: number, blur: number, color: string) => ({ type: 'shadow' as const, values: { default: { y, blur, color } } })
 const TOKENS: NonNullable<BentoDoc['theme']['tokens']>['set'] = {
-  // neutrals
-  'color.white': color('#FFFFFF'),
-  'color.black': color('#000000'),
-  'color.ink': color(INK),
-  'color.slate': color('#1E2A3A'),
-  'color.mist': color(MIST),
-  'color.frost': color('#DCE3EC'),
-  'color.glow': color('#FFF0DC'),
-  // ink panels
-  'color.panel': color(PANEL),
-  'color.panel-deep': color('#101F33'),
-  'color.panel-light': color('#1D3049'),
-  'color.panel-raised': color('#22344E'),
-  // paper
-  'color.paper': color(PAPER),
-  'color.paper-light': color('#F6F3EB'),
-  'color.paper-shade': color('#DDD9CD'),
-  'color.paper-dim': color('#D8D3C6'),
-  'color.tile': color(TILE_PAPER),
-  'color.card-line': color(CARD_STROKE),
-  // peach
-  'color.peach': color(PEACH),
-  'color.peach-soft': color(PEACH_SOFT),
-  'color.peach-light': color('#FFB29B'),
-  'color.peach-shade': color('#ED8266'),
-  'color.peach-deep': color(PEACH_DEEP),
-  // steel
-  'color.steel': color(STEEL),
-  'color.steel-soft': color(STEEL_SOFT),
-  'color.steel-light': color('#7089A8'),
-  'color.steel-shade': color('#48607F'),
-  'color.steel-deep': color('#41597A'),
+  // corners: five steps; a pill is the largest radius, which a rect clamps to half its height
+  'radius.xs': num(3),
+  'radius.sm': num(8),
+  'radius.md': num(14),
+  'radius.lg': num(20),
+  'radius.pill': num(26),
   // borders
   'border.hairline': num(1),
   'border.card': num(1.5),
-  'border.dash': num(2),
   'border.line': num(2.5),
-  'border.stat': num(3),
-  // corners
-  'radius.bar': num(3),
-  'radius.mini': num(6),
-  'radius.key': num(8),
-  'radius.chip': num(9),
-  'radius.tile': num(12),
-  'radius.icon': num(14),
-  'radius.logo-tile': num(16),
-  'radius.card': num(18),
-  'radius.panel': num(20),
-  'radius.pill-sm': num(22),
-  'radius.pill': num(26),
   // spacing
   'space.gap': num(16),
   'space.pad': num(24),
   'space.cards': num(40),
+  // elevation
+  'shadow.card': shadow(14, 34, 'rgba(30,42,58,0.10)'),
+  'shadow.panel': shadow(14, 34, 'rgba(30,42,58,0.18)'),
+  'shadow.float': shadow(10, 26, 'rgba(0,0,0,0.4)'),
   // type
   'font.display': { type: 'fontFamily', values: { default: DISPLAY } },
   'font.body': { type: 'fontFamily', values: { default: BODY } },
   'font.mono': { type: 'fontFamily', values: { default: defaultCode({}).fontFamily } },
   'size.kicker': { type: 'fontSize', values: { default: 13 } },
 }
-type Token = keyof typeof TOKENS & string
-
-/** Bind properties to tokens: `tok(el, { fill: 'color.panel' })`. */
-function tok<T extends SlideElement | Slide>(holder: T, refs: Record<string, Token>): T {
-  const h = holder as { themeRefs?: Record<string, string> }
-  h.themeRefs = { ...h.themeRefs, ...Object.fromEntries(Object.entries(refs).map(([k, v]) => [k, `$${v}`])) }
-  return holder
-}
-
 /**
- * Bind every literal the deck can drive from a token: colours by their RGB
- * (a colour token keeps the property's own alpha, so rgba(255,255,255,0.12)
- * binds to color.white and stays 12%), border widths, the recurring radii,
- * gaps and paddings, and the two font families. A few near-twins are snapped
- * onto one token on purpose — SNAP below — so the deck has one ink, one slate,
- * one mist. Fully transparent paints stay unbound: there is nothing to theme.
+ * The deck's colours are its THEME (Tokens ▸ Theme), not tokens: seven slots,
+ * and every other shade is a slot shifted in lightness (`accent2 -19%`), so
+ * re-colouring a slot carries its tints, gradients and glows with it.
+ * FAMILY says which slot each authored colour belongs to; the shift that
+ * reproduces it best is found at build time: within 8 RGB units, except
+ * the glow and one steel (11) and the deepest peach gradient stop (18). White and black are not brand
+ * colours and stay literal; fully transparent paints have nothing to theme.
  */
-const SNAP: Record<string, Token> = {
-  '#0f1724': 'color.ink', '#142236': 'color.slate', '#26303e': 'color.slate',
-  '#b9c4d4': 'color.mist', '#e6edf7': 'color.frost', '#3e5678': 'color.steel-deep',
+const THEME = { bg1: PAPER, tx1: INK, bg2: PANEL, tx2: MIST, accent1: PEACH, accent2: STEEL, accent3: PEACH_DEEP }
+const FAMILY: Record<keyof typeof THEME, string[]> = {
+  bg1: [PAPER, '#F6F3EB', '#DDD9CD', '#D8D3C6', TILE_PAPER, CARD_STROKE],
+  tx1: [INK, '#0F1724', '#142236'],
+  bg2: [PANEL, '#101F33', '#1D3049', '#22344E'],
+  // the greyer slates (table text, paper-slide shadows and rules) are mist darkened
+  tx2: [MIST, '#B9C4D4', '#DCE3EC', '#E6EDF7', '#1E2A3A', '#26303E'],
+  accent1: [PEACH, PEACH_SOFT, '#FFB29B', '#ED8266', '#FFF0DC'],
+  accent2: [STEEL, STEEL_SOFT, '#7089A8', '#48607F', '#41597A', '#3E5678'],
+  accent3: [PEACH_DEEP],
 }
-function bindAllTokens(doc: BentoDoc) {
-  const byValue = new Map<string, Token>()
-  for (const [name, t] of Object.entries(TOKENS)) {
-    const v = t.values.default
-    byValue.set(`${t.type}:${typeof v === 'string' && t.type === 'color' ? v.toLowerCase() : v}`, name)
-  }
+
+/** Numbers, shadows and fonts that snap onto a token (radii and borders onto their step). */
+const STEP: Record<string, Record<number, string>> = {
+  radius: { 2: 'radius.xs', 3: 'radius.xs', 6: 'radius.sm', 8: 'radius.sm', 9: 'radius.sm', 12: 'radius.md', 14: 'radius.md', 16: 'radius.md', 18: 'radius.lg', 20: 'radius.lg', 15: 'radius.pill', 22: 'radius.pill', 26: 'radius.pill' },
+  strokeWidth: { 1: 'border.hairline', 1.5: 'border.card', 2: 'border.line', 2.5: 'border.line', 3: 'border.line' },
+  space: { 16: 'space.gap', 24: 'space.pad', 40: 'space.cards' },
+}
+
+/** Bind every colour to the theme and every recurring number, shadow and font to a token. */
+function bindTheme(doc: BentoDoc) {
   const rgb = (c: string): { hex: string; a: number } | null => {
     const h = /^#([0-9a-f]{6})([0-9a-f]{2})?$/i.exec(c)
     if (h) return { hex: `#${h[1].toLowerCase()}`, a: h[2] ? parseInt(h[2], 16) / 255 : 1 }
@@ -173,30 +141,48 @@ function bindAllTokens(doc: BentoDoc) {
     if (!m) return null
     return { hex: '#' + [m[1], m[2], m[3]].map((n) => (+n).toString(16).padStart(2, '0')).join(''), a: m[4] === undefined ? 1 : +m[4] }
   }
-  const colorToken = (c: unknown): Token | undefined => {
+  const far = (a: string, b: string) => { const [x, y] = [rgb(a)!.hex, rgb(b)!.hex].map((h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16))); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) }
+  const palette = paletteOf(doc)
+  const ref = new Map<string, string>()
+  for (const [slot, hexes] of Object.entries(FAMILY)) for (const hex of hexes) {
+    let best = { r: slot, d: far(hex, THEME[slot as keyof typeof THEME]) }
+    for (let n = 1; n <= 100; n++) for (const sign of ['+', '-']) {
+      const r = `${slot} ${sign}${n}%`
+      const d = far(hex, resolveRef(r, palette)!)
+      if (d < best.d) best = { r, d }
+    }
+    ref.set(hex.toLowerCase(), best.r)
+  }
+  const colorRef = (c: unknown) => {
     const p = typeof c === 'string' ? rgb(c) : null
-    if (!p || p.a === 0) return undefined
-    return byValue.get(`color:${p.hex}`) ?? SNAP[p.hex]
+    return p && p.a > 0 ? ref.get(p.hex) : undefined
   }
-  const bind = (holder: SlideElement | Slide, path: string, name: Token | undefined) => {
+  const bind = (holder: SlideElement | Slide, path: string, r: string | undefined) => {
     const h = holder as { themeRefs?: Record<string, string> }
-    if (name && !h.themeRefs?.[path]) (h.themeRefs ??= {})[path] = `$${name}`
+    if (r && !h.themeRefs?.[path]) (h.themeRefs ??= {})[path] = r
   }
+  const tokenRef = (name: string | undefined) => (name ? `$${name}` : undefined)
+  const shadows = Object.entries(TOKENS).filter(([, t]) => t.type === 'shadow')
+  const sameShadow = (a: any, b: any) => (a.x ?? 0) === (b.x ?? 0) && a.y === b.y && a.blur === b.blur && a.color === b.color
   for (const s of doc.slides) {
-    bind(s, 'background', colorToken(s.background))
+    bind(s, 'background', colorRef(s.background))
     for (const el of s.elements) {
       const e = el as SlideElement & Record<string, any>
-      for (const k of ['fill', 'stroke', 'color']) bind(el, k, colorToken(e[k]))
-      e.fillGradient?.stops?.forEach((st: { color: string }, i: number) => bind(el, `fillGradient.stops.${i}.color`, colorToken(st.color)))
-      if (Array.isArray(e.shadow)) e.shadow.forEach((sh: { color: string }, i: number) => bind(el, `shadow.${i}.color`, colorToken(sh.color)))
-      else if (e.shadow) bind(el, 'shadow.color', colorToken(e.shadow.color))
-      if (e.type === 'table') for (const k of ['headerBg', 'headerColor', 'zebra', 'borderColor', 'color']) bind(el, `style.${k}`, colorToken((e.style as unknown as Record<string, unknown> | undefined)?.[k]))
-      if (e.strokeWidth) bind(el, 'strokeWidth', byValue.get(`number:${e.strokeWidth}`) as Token)
-      if (e.radius && e.type === 'shape') bind(el, 'radius', byValue.get(`number:${e.radius}`) as Token)
-      if (e.fontFamily) bind(el, 'fontFamily', byValue.get(`fontFamily:${e.fontFamily}`) as Token)
+      for (const k of ['fill', 'stroke', 'color']) bind(el, k, colorRef(e[k]))
+      e.fillGradient?.stops?.forEach((st: { color: string }, i: number) => bind(el, `fillGradient.stops.${i}.color`, colorRef(st.color)))
+      if (Array.isArray(e.shadow)) e.shadow.forEach((sh: { color: string }, i: number) => bind(el, `shadow.${i}.color`, colorRef(sh.color)))
+      else if (e.shadow) {
+        const hit = shadows.find(([, t]) => sameShadow(e.shadow, t.values.default))
+        bind(el, hit ? 'shadow' : 'shadow.color', hit ? tokenRef(hit[0]) : colorRef(e.shadow.color))
+      }
+      if (e.type === 'table') for (const k of ['headerBg', 'headerColor', 'zebra', 'borderColor', 'color']) bind(el, `style.${k}`, colorRef((e.style as unknown as Record<string, unknown> | undefined)?.[k]))
+      if (e.strokeWidth) bind(el, 'strokeWidth', tokenRef(STEP.strokeWidth[e.strokeWidth]))
+      if (e.radius && e.type === 'shape') bind(el, 'radius', tokenRef(STEP.radius[e.radius]))
+      const font = Object.entries(TOKENS).find(([, t]) => t.type === 'fontFamily' && t.values.default === e.fontFamily)
+      if (font) bind(el, 'fontFamily', tokenRef(font[0]))
       if (e.layout) {
-        bind(el, 'layout.gap', byValue.get(`number:${e.layout.gap}`) as Token)
-        e.layout.pad.forEach((n: number, i: number) => bind(el, `layout.pad.${i}`, byValue.get(`number:${n}`) as Token))
+        bind(el, 'layout.gap', tokenRef(STEP.space[e.layout.gap]))
+        e.layout.pad.forEach((n: number, i: number) => bind(el, `layout.pad.${i}`, tokenRef(STEP.space[n])))
       }
     }
   }
@@ -256,23 +242,18 @@ const text = (p: Partial<TextElement>): TextElement =>
 const shape = (kind: Parameters<typeof defaultShape>[0], p: Partial<ShapeElement>): ShapeElement =>
   ({ ...defaultShape(kind), stroke: 'transparent', strokeWidth: 0, ...p }) as ShapeElement
 
-const KICKER_TONE = { [PEACH]: 'color.peach', [PEACH_DEEP]: 'color.peach-deep', [INK]: 'color.ink' } as Record<string, Token>
-
-const kicker = (label: string, p: Partial<TextElement> = {}): TextElement => {
-  const el = text({
+const kicker = (label: string, p: Partial<TextElement> = {}): TextElement =>
+  text({
     id: KICKER, name: 'Kicker', role: 'kicker', x: 96, y: 54, w: 700, h: 26, html: label,
     fontSize: 13, fontWeight: 700, color: PEACH, letterSpacing: 4, ...p,
+    themeRefs: { fontSize: '$size.kicker' },
   })
-  return tok(el, { fontSize: 'size.kicker', ...(KICKER_TONE[el.color] ? { color: KICKER_TONE[el.color] } : {}) })
-}
 
-const title = (html: string, p: Partial<TextElement> = {}): TextElement => {
-  const el = text({
+const title = (html: string, p: Partial<TextElement> = {}): TextElement =>
+  text({
     id: TITLE, name: 'Title', role: 'title', x: 92, y: 112, w: 1000, h: 92, html,
     fontSize: 54, fontWeight: 900, fontFamily: DISPLAY, color: INK, lineHeight: 1.06, ...p,
   })
-  return el.color === INK ? tok(el, { color: 'color.ink' }) : el
-}
 
 /** Content-slide furniture: auto page numeral ({{page}}) + hairline rule.
  *  The {{page:2}} field re-numbers itself as slides are inserted/removed. */
@@ -368,9 +349,9 @@ function logo(
   x: number, y: number, size: number, pad: number, radius: number, tileR: number, bw: number, ah: number,
   extra: Partial<Record<'a' | 'b' | 'c' | 'd', Partial<ShapeElement>>> = {},
 ): SlideElement[] {
-  const d = tok(frame({ dir: 'row', gap: 16, pad: [pad, pad, pad, pad], align: 'stretch' }, {
+  const d = frame({ dir: 'row', gap: 16, pad: [pad, pad, pad, pad], align: 'stretch' }, {
     id: T_D, name: 'Logo', x, y, w: size, h: size, radius, fill: PANEL, fillGradient: GRAD_CARD, ...extra.d,
-  }), { fill: 'color.panel' })
+  })
   const inner = size - 2 * pad
   const b = shape('rect', { id: T_B, name: 'Tile · steel', x: x + pad, y: y + pad, w: bw, h: inner, radius: tileR, fill: STEEL, fillGradient: GRAD_STEEL, ...extra.b })
   const col = frame({ dir: 'col', gap: 16, align: 'stretch' }, {
@@ -416,18 +397,18 @@ function mathsAndCode(formula: string, code: string): SlideElement[] {
  * card, chart, panel and button morph in place while the chart changes form.
  */
 function chartPanel(option: Record<string, unknown>, preset: string, html: string, label: string, link: string): SlideElement[] {
-  const card = tok(frame({ dir: 'row', pad: [24, 24, 24, 24] }, {
+  const card = frame({ dir: 'row', pad: [24, 24, 24, 24] }, {
     id: T_C, name: 'Chart card', x: 72, y: 196, w: 828, h: 458, radius: 20, fill: '#FFFFFF',
     stroke: CARD_STROKE, strokeWidth: 1.5, shadow: { y: 14, blur: 34, color: 'rgba(30,42,58,0.10)' },
-  }), { stroke: 'color.card-line' })
+  })
   const chart = { ...defaultChart(option), id: CHART_MAIN, name: 'Chart', x: 96, y: 220, w: 780, h: 410, preset } as SlideElement
-  const panel = tok(frame({ dir: 'col', gap: 20, pad: [24, 24, 24, 24] }, {
+  const panel = frame({ dir: 'col', gap: 20, pad: [24, 24, 24, 24] }, {
     id: T_D, name: 'Side panel', x: 920, y: 196, w: 264, h: 458, fill: PANEL, shadow: { y: 14, blur: 34, color: 'rgba(30,42,58,0.18)' },
-  }), { fill: 'color.panel', radius: 'radius.card' })
-  const bar = tok(shape('rect', { id: T_A, name: 'Accent bar', x: 944, y: 220, w: 44, h: 6, radius: 3, fill: PEACH }), { fill: 'color.peach' })
-  const body = tok(text({
+  })
+  const bar = shape('rect', { id: T_A, name: 'Accent bar', x: 944, y: 220, w: 44, h: 6, radius: 3, fill: PEACH })
+  const body = text({
     name: 'Panel text', x: 944, y: 246, w: 216, h: 312, html, fontSize: 16.5, fontWeight: 500, color: MIST, lineHeight: 1.7,
-  }), { color: 'color.mist' })
+  })
   const button = BUTTON.at(920 + 24, 196 + 458 - 24 - 52, label, link, T_D)
   return [card, ...inFrame(card, [chart], { w: 'fill', h: 'fill' }), panel, ...inFrame(panel, [bar]), ...inFrame(panel, [body], { w: 'fill', h: 'fill' }), ...button]
 }
@@ -479,7 +460,7 @@ function alignHits(doc: BentoDoc) {
 /** A milestone on the motion slide's flow: node + label, one named group. */
 function milestone(name: string, x: number, y: number, size: number, fill: string, lx: number, ly: number, color: string): SlideElement[] {
   return group(`Milestone · ${name}`, [
-    tok(shape('ellipse', { name: 'Node', x, y, w: size, h: size, fill, stroke: INK, strokeWidth: 2.5 }), { stroke: 'color.ink' }),
+    shape('ellipse', { name: 'Node', x, y, w: size, h: size, fill, stroke: INK, strokeWidth: 2.5 }),
     text({ name: 'Label', x: lx, y: ly, w: 160, h: 26, html: name.toUpperCase(), fontSize: 13, fontWeight: 700, letterSpacing: 1.5, color, align: 'center' }),
   ])
 }
@@ -491,17 +472,17 @@ function milestone(name: string, x: number, y: number, size: number, fill: strin
  * The icon tiles keep the cast's ids, so the tiles morph into them.
  */
 function featureCards(): SlideElement[] {
-  const row = tok(frame({ dir: 'row', gap: 40, align: 'stretch' }, { id: 'sd-cards', name: 'Feature cards', x: 96, y: 228, w: 1088, h: 336 }), { 'layout.gap': 'space.cards' })
-  const card = (x: number, g: string) => tok(frame({ dir: 'col', gap: 16, pad: [32, 32, 32, 32] }, {
+  const row = frame({ dir: 'row', gap: 40, align: 'stretch' }, { id: 'sd-cards', name: 'Feature cards', x: 96, y: 228, w: 1088, h: 336 })
+  const card = (x: number, g: string) => frame({ dir: 'col', gap: 16, pad: [32, 32, 32, 32] }, {
     id: 'sd-card-0', name: 'Feature card', x, y: 228, w: 336, h: 336, fill: PANEL, stroke: GLASS, strokeWidth: 1, group: g,
-  }), { fill: 'color.panel', radius: 'radius.card' })
+  })
   const c = card(96, 'g-layout')
-  const icon = tok(shape('rect', { id: T_A, name: 'Icon', x: 128, y: 260, w: 52, h: 52, radius: 14, fill: PEACH, group: 'g-layout' }), { fill: 'color.peach' })
+  const icon = shape('rect', { id: T_A, name: 'Icon', x: 128, y: 260, w: 52, h: 52, radius: 14, fill: PEACH, group: 'g-layout' })
   const head = text({ id: 'sd-card-head', name: 'Heading', x: 128, y: 328, w: 272, h: 32, html: 'Auto layout', fontSize: 21, fontWeight: 700, color: '#FFFFFF', group: 'g-layout' })
-  const body = tok(text({
+  const body = text({
     id: 'sd-card-body', name: 'Body', x: 128, y: 376, w: 272, h: 156, fontSize: 16, fontWeight: 500, color: MIST, lineHeight: 1.7, group: 'g-layout',
     html: 'This row is a frame. The cards fill it, 40px apart — drag one past another and they reflow.',
-  }), { color: 'color.mist' })
+  })
   inFrame(row, [c], { w: 'fill' })
   inFrame(c, [icon]); inFrame(c, [head], { w: 'fill' }); inFrame(c, [body], { w: 'fill', h: 'fill' })
   const main = makeMain('sd-cmp-card', 'Feature card', [c, icon, head, body])
@@ -531,7 +512,7 @@ function mdCard(id: string, name: string, x: number, w: number, fill: string, la
       ? { shadow: { y: 12, blur: 30, color: 'rgba(30,42,58,0.16)' } }
       : { stroke: CARD_STROKE, strokeWidth: 1.5, shadow: { y: 12, blur: 30, color: 'rgba(30,42,58,0.10)' } }),
   })
-  tok(card, fill === PANEL ? { fill: 'color.panel', radius: 'radius.card' } : { stroke: 'color.card-line', radius: 'radius.card' })
+  card
   return [card, ...inFrame(card, [
     text({ name: 'Label', x: x + 32, y: 256, w: w - 64, h: 22, html: label, fontSize: 12, fontWeight: 700, color: labelColor, letterSpacing: 3 }),
   ], { w: 'fill' }), ...inFrame(card, [
@@ -710,10 +691,15 @@ export function starterDoc(): BentoDoc {
   // wordmark is app chrome and is unaffected.
   doc.title = 'Bento Slides Showcase'
   doc.theme.fontFamily = BODY
-  doc.theme.accent = PEACH
   // new charts (＋ Chart, table→chart) inherit the deck's midnight-&-peach family
   doc.theme.chartPalette = [PEACH, STEEL, PEACH_SOFT, STEEL_SOFT, MIST, PEACH_DEEP]
   doc.theme.tokens = { set: TOKENS }
+  // the theme: Background/Text are paper and ink, Background 2/Text 2 the ink
+  // panel and its mist, accents peach, steel and the text-safe deep peach
+  doc.theme.background = THEME.bg1
+  doc.theme.color = THEME.tx1
+  doc.theme.accent = THEME.accent1
+  doc.theme.palette = { bg2: THEME.bg2, tx2: THEME.tx2, accent2: THEME.accent2, accent3: THEME.accent3 }
   /**
    * Code Palette:
    * 8 colours, not four hundred scopes — the zero-cost tier. When the
@@ -746,12 +732,9 @@ export function starterDoc(): BentoDoc {
     'bokeh-cool': BOKEH_COOL,
   }
 
-  const GROUND = { [INK]: 'color.ink', [PAPER]: 'color.paper', [PEACH]: 'color.peach' } as Record<string, Token>
   BUTTON.reset()
-  const slide = (p: Partial<Slide> & { elements: SlideElement[] }): Slide => {
-    const s: Slide = { id: uid('slide'), background: INK, transition: 'morph', notes: '', ...p }
-    return GROUND[s.background] ? tok(s, { background: GROUND[s.background] }) : s
-  }
+  const slide = (p: Partial<Slide> & { elements: SlideElement[] }): Slide =>
+    ({ id: uid('slide'), background: INK, transition: 'morph', notes: '', ...p })
 
   doc.slides = [
     // ── 1 · TITLE ──────────────────────────────────────────────────────────
@@ -818,12 +801,12 @@ export function starterDoc(): BentoDoc {
           x: 88, y: 122, w: 660, h: 372, fontSize: 112, lineHeight: 1.02, color: '#FFFFFF',
           fx: { enter: 'fade-up', order: 1, ambient: 'kenburns', ken: { dir: 'out', scale: 1.05, duration: 2.6 } },
         }),
-        tok(text({
+        text({
           name: 'Subtitle', role: 'subtitle', x: 96, y: 524, w: 520, h: 76,
           html: 'One HTML file — deck, viewer and editor together.<br>Open it anywhere. It saves itself.',
           fontSize: 20, fontWeight: 500, color: MIST, lineHeight: 1.6,
           fx: { enter: 'fade-up', order: 3 },
-        }), { color: 'color.mist' }),
+        }),
         // keycap hints: a hugging row of one "Key hint" component — the first is
         // the main, the other two are copies overriding only their words
         ...keyHints(),
@@ -854,18 +837,18 @@ export function starterDoc(): BentoDoc {
         // the anatomy card: a column frame (24 padding, 16 gap) of three tile
         // frames, each holding its caption — no hand-placed coordinates inside
         ...(() => {
-          const card = tok(frame({ dir: 'col', gap: 16, pad: [24, 24, 24, 24], align: 'stretch' }, {
+          const card = frame({ dir: 'col', gap: 16, pad: [24, 24, 24, 24], align: 'stretch' }, {
             id: T_D, name: 'File anatomy', x: 96, y: 220, w: 420, h: 396, radius: 20, fill: '#FFFFFF', stroke: CARD_STROKE, strokeWidth: 1.5,
-          }), { stroke: 'color.card-line' })
-          const row = (id: string, name: string, h: number, fill: string, token: Token | null, html: string, color: string) => {
+          })
+          const row = (id: string, name: string, h: number, fill: string, html: string, color: string) => {
             const t = frame({ dir: 'row', pad: [16, 24, 16, 24], align: 'stretch' }, { id, name, x: 120, y: 0, w: 372, h, radius: 12, fill })
             const cap = text({ name: 'Caption', x: 144, y: 0, w: 324, h: h - 32, html, fontSize: 18, fontWeight: 500, color, lineHeight: 1.45, valign: 'middle' })
-            return [token ? tok(t, { fill: token }) : t, ...inFrame(t, [cap], { w: 'fill' })]
+            return [t, ...inFrame(t, [cap], { w: 'fill' })]
           }
           const tiles = [
-            row(T_A, 'Layer · your deck', 104, PEACH, 'color.peach', '<b>your deck</b> — JSON in a &lt;script&gt; block', INK),
-            row(T_B, 'Layer · viewer', 124, STEEL, 'color.steel', '<b>viewer + presenter</b> — morphs, charts, speaker view', '#FFFFFF'),
-            row(T_C, 'Layer · editor', 88, TILE_PAPER, null, '<b>the editor itself</b> — press Esc, it’s right there', INK_SOFT),
+            row(T_A, 'Layer · your deck', 104, PEACH, '<b>your deck</b> — JSON in a &lt;script&gt; block', INK),
+            row(T_B, 'Layer · viewer', 124, STEEL, '<b>viewer + presenter</b> — morphs, charts, speaker view', '#FFFFFF'),
+            row(T_C, 'Layer · editor', 88, TILE_PAPER, '<b>the editor itself</b> — press Esc, it’s right there', INK_SOFT),
           ]
           tiles[0][0].y = 244; tiles[1][0].y = 364; tiles[2][0].y = 504
           return [card, ...inFrame(card, tiles.map((t) => t[0])), ...tiles.flatMap((t) => t.slice(1))]
@@ -906,10 +889,10 @@ export function starterDoc(): BentoDoc {
           const chips = frame({ dir: 'row', gap: 10, align: 'center', hug: true }, { id: 'sd-chips', name: 'Cast chips', x: 96, y: 54, w: 166, h: 34 })
           const chip = (id: string, name: string, fill: string, x: number) => shape('rect', { id, name, x, y: 54, w: 34, h: 34, radius: 9, fill })
           return [chips, ...inFrame(chips, [
-            tok(chip(T_D, 'Tile · ink', INK, 96), { fill: 'color.ink' }),
-            tok(chip(T_B, 'Tile · steel', STEEL, 140), { fill: 'color.steel' }),
+            chip(T_D, 'Tile · ink', INK, 96),
+            chip(T_B, 'Tile · steel', STEEL, 140),
             chip(T_A, 'Tile · peach', PEACH_SOFT, 184),
-            tok(chip(T_C, 'Tile · paper', PAPER, 228), { fill: 'color.paper' }),
+            chip(T_C, 'Tile · paper', PAPER, 228),
           ])]
         })(),
         ...group('Slide furniture', [
@@ -933,11 +916,11 @@ export function starterDoc(): BentoDoc {
           const stat = (i: number, value: string, size: number, tip: Partial<ShapeElement>, label: string) => {
             const x = 96 + i * 368
             const col = frame({ dir: 'col', gap: 8 }, { id: `sd-stat-${i}`, name: `Stat · ${label.toLowerCase()}`, x, y: 352, w: 352, h: 242 })
-            const num = tok(text({
+            const num = text({
               name: 'Value', x, y: 352, w: 352, h: 188, html: value, fontSize: size, fontWeight: 900, fontFamily: DISPLAY, color: INK,
               fx: { enter: 'fade-up', order: 2 + i, countUp: true },
-            }), { color: 'color.ink' })
-            const line = tok(shape('line', { name: 'Tip', x, y: 548, w: 150, h: 8, fill: INK, strokeWidth: 3, ...tip, fx: { enter: 'fade', order: 5 } }), { fill: 'color.ink' })
+            })
+            const line = shape('line', { name: 'Tip', x, y: 548, w: 150, h: 8, fill: INK, strokeWidth: 3, ...tip, fx: { enter: 'fade', order: 5 } })
             const lab = text({
               name: 'Label', x, y: 564, w: 352, h: 30, html: label, fontSize: 14, fontWeight: 700, letterSpacing: 2, color: INK_SOFT,
               fx: { enter: 'fade', order: 6 },
@@ -1178,10 +1161,10 @@ export function starterDoc(): BentoDoc {
         ...furniture(false),
         title('Facts, lined up.'),
         // card frame: the table fills it inside a 44/28 margin
-        tok(frame({ dir: 'row', pad: [44, 28, 44, 28] }, {
+        frame({ dir: 'row', pad: [44, 28, 44, 28] }, {
           id: T_C, name: 'Table card', x: 72, y: 196, w: 828, h: 458, radius: 20, fill: '#FFFFFF',
           stroke: CARD_STROKE, strokeWidth: 1.5, shadow: { y: 14, blur: 34, color: 'rgba(30,42,58,0.10)' },
-        }), { stroke: 'color.card-line' }),
+        }),
         ...inFrame({ id: T_C } as SlideElement, [
           {
             ...defaultTable(),
@@ -1203,12 +1186,12 @@ export function starterDoc(): BentoDoc {
         ], { w: 'fill', h: 'fill' }),
         // side panel: a column frame — bar, label, the linked chart, a caption
         // taking the free height, and a copy of the Button (no link, shorter)
-        tok(frame({ dir: 'col', gap: 16, pad: [24, 24, 24, 24] }, {
+        frame({ dir: 'col', gap: 16, pad: [24, 24, 24, 24] }, {
           id: T_D, name: 'Side panel', x: 920, y: 196, w: 264, h: 458, fill: PANEL,
           shadow: { y: 14, blur: 34, color: 'rgba(30,42,58,0.18)' },
-        }), { fill: 'color.panel', radius: 'radius.card' }),
+        }),
         ...inFrame({ id: T_D } as SlideElement, [
-          tok(shape('rect', { id: T_A, name: 'Accent bar', x: 944, y: 220, w: 44, h: 6, radius: 3, fill: PEACH }), { fill: 'color.peach' }),
+          shape('rect', { id: T_A, name: 'Accent bar', x: 944, y: 220, w: 44, h: 6, radius: 3, fill: PEACH }),
         ]),
         ...inFrame({ id: T_D } as SlideElement, [
           text({
@@ -1244,11 +1227,11 @@ export function starterDoc(): BentoDoc {
           ),
         ], { w: 'fill' }),
         ...inFrame({ id: T_D } as SlideElement, [
-          tok(text({
+          text({
             name: 'Panel text', x: 944, y: 506, w: 216, h: 50,
             html: '<b>Edit the table</b> — bars and the growth line track it, live.',
             fontSize: 14, fontWeight: 500, color: MIST, lineHeight: 1.5,
-          }), { color: 'color.mist' }),
+          }),
         ], { w: 'fill', h: 'fill' }),
         ...BUTTON.at(944, 588, 'LIVE-LINKED', null, T_D, [T_B, 'sd-btn-label', ''], (pill, label) => {
           pill.h = 42
@@ -1272,16 +1255,16 @@ export function starterDoc(): BentoDoc {
         kicker('STORY WITH DATA'),
         ...furniture(true),
         title('Momentum you can feel.', { color: '#FFFFFF', w: 700 }),
-        tok(text({
+        text({
           name: 'Headline figure', x: 800, y: 92, w: 384, h: 116, html: '+975%', fontSize: 92, fontWeight: 900,
           fontFamily: DISPLAY, color: PEACH, align: 'right',
-        }), { color: 'color.peach' }),
+        }),
         // the cast as a legend: a hugging row, right edge on the 1184 margin
         frame({ dir: 'row', gap: 8, align: 'center', hug: true }, { id: 'sd-legend', name: 'Cast legend', x: 1096, y: 208, w: 88, h: 20 }),
         ...inFrame({ id: 'sd-legend' } as SlideElement, [
-          tok(shape('rect', { id: T_D, x: 1096, y: 208, w: 20, h: 20, radius: 6, fill: PANEL, stroke: 'rgba(185,196,212,0.3)', strokeWidth: 1 }), { fill: 'color.panel' }),
-          tok(shape('rect', { id: T_B, x: 1124, y: 208, w: 20, h: 20, radius: 6, fill: STEEL }), { fill: 'color.steel' }),
-          tok(shape('rect', { id: T_A, x: 1152, y: 208, w: 20, h: 20, radius: 6, fill: PEACH }), { fill: 'color.peach' }),
+          shape('rect', { id: T_D, x: 1096, y: 208, w: 20, h: 20, radius: 6, fill: PANEL, stroke: 'rgba(185,196,212,0.3)', strokeWidth: 1 }),
+          shape('rect', { id: T_B, x: 1124, y: 208, w: 20, h: 20, radius: 6, fill: STEEL }),
+          shape('rect', { id: T_A, x: 1152, y: 208, w: 20, h: 20, radius: 6, fill: PEACH }),
           shape('rect', { id: T_C, x: 1180, y: 208, w: 4, h: 20, radius: 2, fill: TILE_PAPER }),
         ]),
         { ...defaultChart(trendOption()), name: 'Momentum chart', x: 64, y: 244, w: 1152, h: 420 },
@@ -1318,12 +1301,12 @@ export function starterDoc(): BentoDoc {
         ...milestone('Reviewed', 944, 496, 20, '#FFFFFF', 874, 532, INK_SOFT),
         ...milestone('Shipped', 1106, 336, 24, PEACH, 1038, 292, PEACH_DEEP),
         // tiles parked as a hugging pill, right edge on the 1184 margin
-        tok(frame({ dir: 'row', gap: 8, pad: [13, 18, 13, 18], align: 'center', hug: true }, {
+        frame({ dir: 'row', gap: 8, pad: [13, 18, 13, 18], align: 'center', hug: true }, {
           id: T_D, name: 'Cast pill', x: 1078, y: 612, w: 106, h: 44, radius: 22, fill: '#FFFFFF', stroke: CARD_STROKE, strokeWidth: 1.5,
-        }), { stroke: 'color.card-line' }),
+        }),
         ...inFrame({ id: T_D } as SlideElement, [
-          tok(shape('rect', { id: T_B, x: 1096, y: 625, w: 18, h: 18, radius: 6, fill: STEEL }), { fill: 'color.steel' }),
-          tok(shape('rect', { id: T_A, x: 1122, y: 625, w: 18, h: 18, radius: 6, fill: PEACH }), { fill: 'color.peach' }),
+          shape('rect', { id: T_B, x: 1096, y: 625, w: 18, h: 18, radius: 6, fill: STEEL }),
+          shape('rect', { id: T_A, x: 1122, y: 625, w: 18, h: 18, radius: 6, fill: PEACH }),
           shape('rect', { id: T_C, x: 1148, y: 625, w: 18, h: 18, radius: 6, fill: TILE_PAPER }),
         ]),
         text({
@@ -1438,7 +1421,7 @@ export function starterDoc(): BentoDoc {
         kicker('BUILT LIKE A DESIGN FILE'),
         ...furniture(true),
         title('Frames, components, tokens.', { color: '#FFFFFF' }),
-        tok(shape('rect', { id: T_D, name: 'Accent bar', x: 96, y: 186, w: 64, h: 6, radius: 3, fill: PEACH }), { fill: 'color.peach' }),
+        shape('rect', { id: T_D, name: 'Accent bar', x: 96, y: 186, w: 64, h: 6, radius: 3, fill: PEACH }),
         ...featureCards(),
         text({
           name: 'Caption', x: 96, y: 608, w: 1088, h: 26,
@@ -1460,15 +1443,15 @@ export function starterDoc(): BentoDoc {
         kicker('WRITING', { color: PEACH_DEEP }),
         ...furniture(false),
         title('Type markdown, get typography.'),
-        tok(shape('rect', { id: T_A, name: 'Accent bar', x: 96, y: 186, w: 64, h: 6, radius: 3, fill: PEACH }), { fill: 'color.peach' }),
+        shape('rect', { id: T_A, name: 'Accent bar', x: 96, y: 186, w: 64, h: 6, radius: 3, fill: PEACH }),
         // two cards, one structure: a column frame (label, then the text filling the rest)
         ...mdCard(T_C, 'You type', 96, 520, '#FFFFFF', 'YOU TYPE', PEACH_DEEP,
           '<code>**instant** *formatting*</code><br><code>- bullets as you type</code><br><code>`code` and ~~strike~~</code>', INK, 400),
-        tok(shape('line', { name: 'Arrow', x: 636, y: 410, w: 116, h: 8, fill: 'rgba(30,42,58,0.5)', strokeWidth: 2.5, lineEnd: 'arrow' }), { fill: 'color.ink' }),
+        shape('line', { name: 'Arrow', x: 636, y: 410, w: 116, h: 8, fill: 'rgba(30,42,58,0.5)', strokeWidth: 2.5, lineEnd: 'arrow' }),
         ...mdCard(T_D, 'You get', 772, 412, PANEL, 'YOU GET', PEACH,
           '<b>instant</b> <i>formatting</i><br>•&nbsp; bullets as you type<br><code>code</code> and <s>strike</s>', '#FFFFFF', 500),
         // a ⌘B keycap: hugging frame around its label
-        tok(frame({ dir: 'row', pad: [5, 12, 5, 12], hug: true, align: 'center' }, { id: T_B, name: 'Shortcut chip', x: 1124, y: 116, w: 60, h: 30, radius: 15, fill: STEEL }), { fill: 'color.steel' }),
+        frame({ dir: 'row', pad: [5, 12, 5, 12], hug: true, align: 'center' }, { id: T_B, name: 'Shortcut chip', x: 1124, y: 116, w: 60, h: 30, radius: 15, fill: STEEL }),
         ...inFrame({ id: T_B } as SlideElement, [
           text({ name: 'Shortcut', x: 1136, y: 121, w: 36, h: 20, html: '⌘B', fontSize: 13, fontWeight: 700, color: '#FFFFFF', align: 'center' }),
         ]),
@@ -1523,11 +1506,11 @@ export function starterDoc(): BentoDoc {
           x: 240, y: 484, w: 800, h: 104, fontSize: 88, color: '#FFFFFF', align: 'center',
           fx: { ambient: 'kenburns', ken: { dir: 'out', scale: 1.05, duration: 2.6 } },
         }),
-        tok(text({
+        text({
           name: 'Call to action', x: 290, y: 600, w: 700, h: 28,
           html: 'Press <b>Esc</b> — this deck is already your copy of the editor.',
           fontSize: 17, fontWeight: 500, color: MIST, align: 'center',
-        }), { color: 'color.mist' }),
+        }),
         // the Button once more, peach and small — and a real link (web links open in a new tab)
         ...BUTTON.at(562, 644, 'bento.page', 'https://bento.page', undefined, ['sd-close-btn', 'sd-close-btnlabel', 'sd-close-hit'], (pill, label) => {
           Object.assign(pill, { w: 156, h: 44, radius: 22, fill: PEACH, fillGradient: GRAD_PEACH, stroke: 'transparent', strokeWidth: 0, shadow: { y: 10, blur: 26, color: 'rgba(0,0,0,0.4)' } })
@@ -1547,7 +1530,7 @@ export function starterDoc(): BentoDoc {
     if (!el.name && el.type === 'shape' && el.shape === 'line') el.name = 'Line'
   }
 
-  bindAllTokens(doc)
+  bindTheme(doc)
 
   // Settle what the deck derives — token literals, component copies, frame
   // children's boxes — so the shipped document is already a fixed point.

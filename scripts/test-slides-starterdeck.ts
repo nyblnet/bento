@@ -20,6 +20,7 @@ import { validateDoc } from '../slides/src/validate.ts'
 import { components, copiesOf } from '../slides/src/components.ts'
 import { isFrame } from '../slides/src/layout.ts'
 import { tokenName, tokenValue } from '../slides/src/tokens.ts'
+import { parseThemeRef } from '../slides/src/palette.ts'
 
 let failures = 0
 const ok = (c: unknown, msg: string) => { if (!c) { failures++; console.error('FAIL', msg) } }
@@ -37,14 +38,18 @@ let bound = 0
 for (const s of doc.slides) for (const h of [s, ...s.elements] as Array<{ themeRefs?: Record<string, string> }>) {
   for (const [, ref] of Object.entries(h.themeRefs ?? {})) {
     const n = tokenName(ref)
-    ok(n && tokenValue(doc, n) !== undefined, `token ${ref} exists`)
+    ok(n ? tokenValue(doc, n) !== undefined : parseThemeRef(ref), `${ref} is a token or a theme colour`)
     bound++
   }
 }
 ok(bound > 600, `tokens are used across the deck (${bound} bindings)`)
-// every visible colour, border width and font is bound; only zero widths,
-// fully transparent paints and the hand-set one-off radii may stay literal
-const parse = (c: string) => /rgba?\([^)]*,\s*0\s*\)$/.test(c) || c === 'transparent'
+// every visible colour is a theme colour and every border width and font a
+// token; only white and black (not brand colours), fully transparent paints,
+// zero widths and the hand-set one-off radii may stay literal
+const parse = (c: string) => /rgba?\([^)]*,\s*0\s*\)$/.test(c) || c === 'transparent' || /^(#fff(fff)?|#000(000)?|rgba?\((255,\s*255,\s*255|0,\s*0,\s*0)\b.*)$/i.test(c)
+const colourTokens = Object.values(doc.theme.tokens!.set).filter((t) => t.type === 'color').length
+ok(colourTokens === 0, `colours live in the theme, not in tokens (${colourTokens} colour tokens)`)
+ok(Object.keys(doc.theme.tokens!.set).length <= 20, `a small token set (${Object.keys(doc.theme.tokens!.set).length})`)
 for (const s of doc.slides) for (const e of s.elements as any[]) {
   const refs = e.themeRefs ?? {}
   for (const k of ['fill', 'stroke', 'color']) if (typeof e[k] === 'string' && !parse(e[k]) && !refs[k]) ok(false, `${e.name ?? e.id}.${k} ${e[k]} is bound to a token`)

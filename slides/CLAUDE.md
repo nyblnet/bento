@@ -23,9 +23,13 @@ anim, charts, i18n, sync), shared by every app.
   every layer named, background/bokeh/furniture/milestones grouped, auto-layout
   frames wherever things line up (logo, anatomy card, stats, panels, cards),
   three components (Key hint, Button — its copies override label or paint —
-  and Feature card), and EVERY colour (text included, by RGB, alpha kept),
-  border width, recurring radius, gap/pad and font family bound to `theme.tokens`
-  (`bindAllTokens`; near-twin colours snapped onto one token via SNAP).
+  and Feature card). Colours are the THEME, not tokens: seven palette slots
+  (paper, ink, panel, mist, peach, steel, deep peach) and every shade a
+  lightness shift of its family's slot (`accent2 -19%`, alpha kept), so
+  re-colouring a slot carries its tints and gradients; `bindTheme` finds each
+  shift at build time (FAMILY). Tokens hold only what is not a colour: five
+  radii, three borders, three spacings, three shadows, three fonts, the kicker
+  size (18 in all).
   `starterDoc()` ends with a derive pass so the shipped doc is a fixed point;
   `scripts/test-slides-starterdeck.ts` guards that and the structure. Gotchas learned
   building it: line shapes take their color from `fill` (not `stroke` — the
