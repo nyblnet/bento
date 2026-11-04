@@ -227,7 +227,7 @@ export function colorField(col: HTMLInputElement, alpha?: HTMLInputElement): HTM
   hex.type = 'text'
   hex.className = 'ed-color-hex'
   hex.spellcheck = false
-  hex.maxLength = 7
+  hex.maxLength = 9 // #rrggbbaa: an alpha may be typed too
   hex.setAttribute('aria-label', `${t('Color')} (hex)`)
   // a fully transparent colour reads None, not a hex nobody can see
   const show = () => {
@@ -243,10 +243,18 @@ export function colorField(col: HTMLInputElement, alpha?: HTMLInputElement): HTM
   hex.addEventListener('change', () => {
     const v = hex.value.trim().replace(/^#/, '')
     const full = /^[0-9a-f]{3}$/i.test(v) ? [...v].map((c) => c + c).join('') : v
-    if (/^[0-9a-f]{6}$/i.test(full) && '#' + full.toLowerCase() !== col.value) {
-      col.value = '#' + full.toLowerCase()
-      col.dispatchEvent(new Event('input'))
-      col.dispatchEvent(new Event('change'))
+    if (/^[0-9a-f]{6}([0-9a-f]{2})?$/i.test(full)) {
+      // a colour typed into a fully transparent field is meant to be seen:
+      // it comes in at 100% — unless the typing carried its own alpha
+      const was = alpha?.value
+      if (alpha && full.length === 8) alpha.value = String(Math.round((parseInt(full.slice(6), 16) / 255) * 100))
+      else if (alpha && alphaOf(alpha) === 0) alpha.value = '100'
+      const next = '#' + full.slice(0, 6).toLowerCase()
+      if (next !== col.value || alpha?.value !== was) {
+        col.value = next
+        col.dispatchEvent(new Event('input'))
+        col.dispatchEvent(new Event('change'))
+      }
     }
     show()
   })

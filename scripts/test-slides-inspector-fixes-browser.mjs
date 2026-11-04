@@ -13,8 +13,8 @@
 //   4. an arrow's stroke can be removed (it is a closed polygon); a line has
 //      ONE colour, under Stroke, and it is the `fill` the renderer draws with;
 //      an open path's Stroke colour is its `stroke`;
-//   5. a typed colour is ONE undo step, linked or not, and a 0% colour stays
-//      0% when its hue is typed;
+//   5. a typed colour is ONE undo step, linked or not, and a hex typed into a
+//      0% colour comes in at 100% (DECISIONS 2026-11-04);
 //   6. a click on a colour row's caption does not open the native picker;
 //   7. numeric fields are named by what they set (not '%' / 'pt'); a
 //      segmented control and the tabs are one tab stop, arrows move;
@@ -107,7 +107,7 @@ try {
   const r = await el('r')
   ok(r.fill === 'rgba(18, 52, 86, 0.5)' && r.themeRefs?.fill === 'accent1', `picking a theme colour keeps the field's 50% (${r.fill})`)
 
-  // 5. one undo step per typed colour, linked or not; 0% stays 0%
+  // 5. one undo step per typed colour, linked or not; a typed hex makes 0% visible
   // a linked field shows the theme colour's name, not a hex: pick from the
   // native picker, which holds focus while it is open, as the real one does
   await p.locator(`${body('Fill')} input[type=color]`).evaluate((c) => {
@@ -120,7 +120,8 @@ try {
   ok(ru.fill === 'rgba(18, 52, 86, 0.5)' && ru.themeRefs?.fill === 'accent1', `ONE undo restores colour and link together (${ru.fill}, ${JSON.stringify(ru.themeRefs)})`)
   await select('z')
   await typeHex(body('Fill'), '00ff00')
-  ok((await el('z')).fill === 'rgba(0, 255, 0, 0)', `a 0% fill stays 0% when its hue is typed (${(await el('z')).fill})`)
+  // a hex typed into a 0% field is meant to be seen (DECISIONS 2026-11-04): 100%
+  ok((await el('z')).fill === 'rgba(0, 255, 0, 1)' || (await el('z')).fill === '#00ff00', `a 0% fill typed a hex comes in at 100% (${(await el('z')).fill})`)
   await undo()
   ok((await el('z')).fill === 'rgba(255, 0, 0, 0)', `and one undo puts it back (${(await el('z')).fill})`)
 

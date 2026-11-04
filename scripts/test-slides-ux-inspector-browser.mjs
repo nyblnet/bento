@@ -22,7 +22,9 @@
 //      undo; "1,000" is a thousand in English.
 //   5. The colour popover: one Solid | Linear | Radial (in the popover, not
 //      also on the row); a theme colour picked onto a 0% fill is opaque; a
-//      transparent fill reads None; the swatch has a name.
+//      transparent fill reads None; the swatch has a name; a hex typed into
+//      a transparent fill (one or several) comes in at 100%, unless it
+//      carries its own alpha.
 //   6. A paint layer row is grip · eye · paint · ⋯ with its blend behind ⋯,
 //      and nothing in it leaves the panel at 1024 wide.
 //   7. Focus: after + Add shadow it lands in the Shadow section, after a
@@ -183,6 +185,26 @@ try {
     await p.locator('.ed-tokpick-opt').first().click(); await p.waitForTimeout(250)
     const f = (await el('a')).fill
     ok(!/,\s*0\)$/.test(f) && (await el('a')).themeRefs?.fill, `a theme colour picked onto a 0% fill is opaque (${f})`)
+    await ctx.close()
+  })
+  await run(async () => {
+    // a hex typed into a transparent fill shows: 100%, unless the typing carried an alpha
+    const clear = (id, x) => shape(id, x, { fill: 'rgba(255, 0, 0, 0)' })
+    const { ctx, p, select, el, undo } = await open('en-US', 1440, [clear('a', 100), clear('b', 500), clear('c', 900)])
+    const hex = p.locator('.ed-props .ed-section[data-key="Fill"] + .ed-section-body .ed-color-hex')
+    // the alpha of a stored colour: rgba(…, a), #rrggbbaa, else opaque
+    const alpha = (c) => { const m = /rgba\([^)]*,\s*([\d.]+)\)/.exec(c); if (m) return Number(m[1]); const h = /^#[0-9a-f]{6}([0-9a-f]{2})$/i.exec(c); return h ? parseInt(h[1], 16) / 255 : 1 }
+    await select('a')
+    await hex.fill('00ff00'); await hex.press('Enter'); await p.waitForTimeout(250)
+    ok(alpha((await el('a')).fill) === 1 && /255|ff/i.test((await el('a')).fill), `a hex typed into a 0% fill comes in at 100% (${(await el('a')).fill})`)
+    await undo()
+    await select('a')
+    await hex.fill('00ff0080'); await hex.press('Enter'); await p.waitForTimeout(250)
+    ok(Math.abs(alpha((await el('a')).fill) - 0.5) < 0.01, `…unless it carries its own alpha (${(await el('a')).fill})`)
+    await undo()
+    await select('a', 'b', 'c')
+    await hex.fill('0000ff'); await hex.press('Enter'); await p.waitForTimeout(250)
+    ok([await el('a'), await el('b'), await el('c')].every((e) => alpha(e.fill) === 1), `several transparent fills: one typed hex shows on all (${(await el('b')).fill})`)
     await ctx.close()
   })
 

@@ -12630,3 +12630,14 @@ before; one card alone is just made a frame, nothing wraps it. One undo
 step. A holder is the outermost such rect, so a rect on a rect is one card.
 Only a rect can hold: an ellipse or an image under texts is not a frame, so
 its elements stay loose as before.
+
+## 2026-11-04 — slides: a hex typed into a transparent colour comes in at 100%
+
+Reverses one clause of 2026-10-29's inspector review ("0% opacity no longer
+turns into 100%") for TYPED hexes only. A frame's fill starts transparent, and
+typing a colour into it changed nothing visible until Opacity was set too —
+read as the field being broken. Now a 6-digit hex typed into a field at 0%
+lifts it to 100%; a typed alpha (#rrggbbaa, which the field now takes) wins;
+a field above 0% keeps its opacity, as a theme pick already did (and a
+theme pick onto 0% was already made opaque, 2026-10-30). One place:
+colorField, under every colour row.
