@@ -512,6 +512,13 @@ export class PropsPanel {
     this.host.querySelector(':scope > .ed-tabs-band')!.after(bar)
   }
 
+  /** Lock the selection, or unlock it when everything in it is already locked (#838). */
+  lock(els: SlideElement[]) {
+    if (!els.length) return
+    const on = !els.every((e) => e.locked)
+    this.edit(() => { for (const el of els) { if (on) el.locked = true; else delete el.locked } }, true)
+  }
+
   /** ⇧A — wrap the selection in an auto-layout frame (inspector/layout.ts). */
   addAutoLayout(els: SlideElement[]) { wrapInFrame(this, els) }
 
@@ -572,11 +579,16 @@ export class PropsPanel {
   }
 
   private deleteEls(els: SlideElement[]) {
-    const ids = new Set(withDescendants(this.store.slide, els).map((e) => e.id))
+    // locked elements stay (#838); the rest go — a frame with its contents —
+    // and the locked ones stay selected
+    const doomed = els.filter((e) => !e.locked)
+    if (!doomed.length) return
+    const ids = new Set(withDescendants(this.store.slide, doomed).map((e) => e.id))
+    const kept = els.filter((e) => e.locked).map((e) => e.id)
     this.store.commit(() => {
       this.store.slide.elements = this.store.slide.elements.filter((e) => !ids.has(e.id))
     })
-    this.store.select([])
+    this.store.select(kept)
   }
 
   /** Also driven by the canvas context menu (editor.ts). */

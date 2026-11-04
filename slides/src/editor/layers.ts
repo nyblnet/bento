@@ -350,6 +350,7 @@ export class LayersUI {
     const b = document.createElement('button')
     b.type = 'button'
     b.className = `ed-layer-act ed-layer-${key}` + (on ? ' on' : '')
+    if (key === 'locked' && on) b.classList.add('ed-layer-lock') // the row's padlock IS its lock mark (#838)
     b.innerHTML = key === 'locked' ? ICONS.lock : ICONS.eye
     const label = key === 'locked' ? (on ? t('Unlock') : t('Lock')) : (on ? t('Show') : t('Hide'))
     b.title = label

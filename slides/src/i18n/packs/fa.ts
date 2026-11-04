@@ -1370,4 +1370,5 @@ export const strings: Catalog = {
   "Edit {what}": "ویرایش {what}",
   "Drop shadow": "سایه‌ی افتاده",
   "Layer blur": "محوی لایه",
+  "Lock or unlock": "قفل یا باز کردن قفل",
 }

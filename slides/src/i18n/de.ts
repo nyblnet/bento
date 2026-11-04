@@ -262,6 +262,7 @@ export const de: Catalog = {
   "{n}h ago": "vor {n} Std",
   "{n}m ago": "vor {n} Min",
   "— no notes for this slide —": "— keine Notizen zu dieser Folie —",
+  "Lock": "Sperren",
   "✎ Edit path on canvas": "✎ Pfad auf der Leinwand bearbeiten",
   "⧉ Apply layout…": "⧉ Layout anwenden…",
   "＋ Add stop": "＋ Stopp hinzufügen",
@@ -1128,7 +1129,6 @@ export const de: Catalog = {
   "{mod}: click selects exactly the element under the pointer, even in a group · drag duplicates": "{mod}: Klick wählt genau das Element unter dem Zeiger, auch in einer Gruppe · Ziehen dupliziert",
   "Shift: click adds to the selection or takes out · drag along one axis · resize keeps the ratio · rotate in 15° steps": "Umschalt: Klick fügt zur Auswahl hinzu oder nimmt heraus · Ziehen entlang einer Achse · Skalieren behält das Seitenverhältnis · Drehen in 15°-Schritten",
   "Morphs from the slide before": "Morpht von der vorherigen Folie",
-  "Lock": "Sperren",
   "Show": "Einblenden",
   "Hide": "Ausblenden",
   "Morph preview": "Morph-Vorschau",
@@ -1354,4 +1354,5 @@ export const de: Catalog = {
   "Edit {what}": "{what} bearbeiten",
   "Drop shadow": "Schlagschatten",
   "Layer blur": "Ebenenunschärfe",
+  "Lock or unlock": "Sperren oder entsperren",
 }

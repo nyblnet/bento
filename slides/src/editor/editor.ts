@@ -41,6 +41,7 @@ import { noteSavedFromWeb } from './returngate'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, onRecoveryOff, pruneOld, putRecovery, recoveryLooksOlder, type Snapshot } from '../autosave'
 import { freshGroups, insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
 import { estimatedFrames, fencedElements, splitFences } from './codefence'
+import { keepSpaces } from './markdown'
 import { openSpeakerWindow, speakerIdleBody, speakerWindow } from '../screens'
 import { neutralWindowTitle, speakerWindowTitle, titleSealed } from '../wintitle'
 import { ICONS } from '../icons'
@@ -593,6 +594,11 @@ export class Editor {
     this.sideLayers = div('ed-side-layers')
     this.sideTokens = div('ed-side-tokens')
     this.sidebar.append(this.sideTabs(), this.thumbs, this.sideLayers, this.sideTokens)
+    // a link in a thumbnail's text is a picture of a link, not a control: a
+    // click selects the slide and never navigates the editor away
+    this.sidebar.addEventListener('click', (ev) => {
+      if ((ev.target as HTMLElement).closest('a[href]')) ev.preventDefault()
+    }, true)
     const canvasWrap = div('ed-canvas-wrap')
     // presenting lives in ONE split pill beside the zoom control: the main
     // half starts the fullscreen show; its menu holds tab-fill and speaker view.
@@ -2849,7 +2855,7 @@ export class Editor {
         this.toast(made.length === 1 ? t('Pasted 1 item') : t('Pasted {n} items', { n: made.length }))
         return true
       }
-      const esc = text.trim().slice(0, 4000).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
+      const esc = text.replace(/^\s*\n/, '').trimEnd().slice(0, 4000).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').split('\n').map(keepSpaces).join('<br>')
       const el = defaultText({ html: esc, color: readableInk(this.store.slide.background), x: Math.round(width / 2 - 300), y: 260, w: 600 })
       this.store.commit(() => this.store.slide.elements.push(el))
       this.store.select([el.id])
@@ -3658,6 +3664,9 @@ export class Editor {
       { id: 'insert-text', label: 'Add a text box', keys: 'T', scope: 'canvas', when: toolFree, match: tool('t'), run: () => this.arm('insert-text', () => this.placeTool(() => defaultText({ color: readableInk(this.store.slide.background) }), true)) },
       { id: 'comment', label: 'Comment mode', keys: 'C', scope: 'canvas', when: canvasFree, match: (ev, mod) => !mod && key(ev) === 'c', run: () => this.canvas.toggleCommentMode() },
       { id: 'ungroup', label: 'Ungroup', keys: `⇧${MOD}G`, scope: 'canvas', when: () => writable() && sel().some((e) => e.groupId), match: (ev, mod) => mod && ev.shiftKey && key(ev) === 'g', run: () => this.panel.ungroup(sel()) },
+      // ⌘L / Ctrl+L locks the selection, or unlocks it when all of it is locked (#838);
+      // only with a selection, so the browser keeps its address-bar key otherwise
+      { id: 'lock', label: 'Lock or unlock', keys: `${MOD}L`, scope: 'canvas', when: () => writable() && sel().length > 0, yields: true, match: (ev, mod) => mod && !ev.shiftKey && !ev.altKey && key(ev) === 'l', run: () => this.panel.lock(sel()) },
       { id: 'group', label: 'Group', keys: `${MOD}G`, scope: 'canvas', when: () => writable() && sel().length > 1, match: (ev, mod) => mod && !ev.shiftKey && key(ev) === 'g', run: () => this.panel.group(sel()) },
       // ⌥⇧U/S/I/E (letter(): on a Mac, Option turns the key into a symbol)
       ...BOOL_OPS.map((op): Command => ({ id: `bool-${op}`, label: boolUi(op).label, keys: boolUi(op).key, scope: 'canvas', when: () => toolFree() && !!boolOperands(this.store, sel()), match: (ev, mod) => !mod && ev.altKey && ev.shiftKey && letter(ev, boolUi(op).code), run: () => { combine(this.store, sel(), op) } })),
@@ -3689,7 +3698,9 @@ export class Editor {
       { id: 'ghost-cut', label: 'Cut to move', keys: `⇧${MOD}X`, scope: 'canvas', when: writable, match: (ev, mod) => mod && ev.shiftKey && key(ev) === 'x', run: () => {
         if (!this.store.selection.length || this.store.readOnly) return
         this.copySelection()
-        const ids = withDescendants(this.store.slide, this.store.selectedElements).map((e) => e.id) // a frame moves with its contents
+        // a frame moves with its contents; a locked element is not moved off the slide (#838)
+        const ids = withDescendants(this.store.slide, this.store.selectedElements.filter((e) => !e.locked)).map((e) => e.id)
+        if (!ids.length) return
         this.store.select([])
         this.canvas.setGhost({ slideId: this.store.slide.id, ids })
       } },
@@ -3963,14 +3974,18 @@ export class Editor {
    *  `cut` (⌘X, to paste elsewhere) moves a main rather than losing it: no question. */
   private deleteSelection(cut = false) {
     if (!this.store.selection.length) return
-    const ids = new Set(withDescendants(this.store.slide, this.store.selectedElements).map((e) => e.id))
+    // a locked element is never deleted from the canvas (#838): unlock it first;
+    // a mixed selection acts on its unlocked part
+    const doomed = this.store.selectedElements.filter((e) => !e.locked)
+    if (!doomed.length) return
+    const ids = new Set(withDescendants(this.store.slide, doomed).map((e) => e.id))
     const lost = cut ? [] : mainsLost(this.store.doc, ids)
     if (lost.length && !confirm(t('Delete the main of “{name}”? Its copies keep their look, and the first one becomes the new main.', { name: lost[0].name || t('Component') }))) return
     this.store.commit(() => {
       this.store.slide.elements = this.store.slide.elements.filter((e) => !ids.has(e.id))
       for (const c of lost) promoteCopy(this.store.doc, c.id)
     })
-    this.store.select([])
+    this.store.select(this.store.selectedElements.filter((e) => e.locked).map((e) => e.id)) // the locked part stays selected
   }
 
   /** Selected slides + parents in deck order. */
@@ -4276,6 +4291,7 @@ export class Editor {
       { label: t('Copy'), hint: this.keysOf('copy'), cmd: 'copy', run: () => this.copySelection() },
       { label: t('Duplicate'), hint: this.keysOf('duplicate'), cmd: 'duplicate', run: () => this.duplicateSelection() },
       'sep',
+      { label: els.every((x) => x.locked) ? t('Unlock') : t('Lock'), hint: '⌘L', run: () => this.panel.lock(els) },
       { label: t('Bring to front'), run: () => this.panel.reorder(els, 'front') },
       { label: t('Send to back'), run: () => this.panel.reorder(els, 'back') },
       'sep',

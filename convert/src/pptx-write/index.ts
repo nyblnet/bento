@@ -420,6 +420,20 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
       return { rId, external: false }
     }
 
+    /** An inline `<a href>` in text → an external hyperlink rel, one per
+     *  address per slide. The address was already held to text.ts safeHref
+     *  (http, https or mailto) before it reaches here. */
+    const inlineRels = new Map<string, string>()
+    const inlineLink = (url: string): string => {
+      let rId = inlineRels.get(url)
+      if (!rId) {
+        rId = nextRelId()
+        rels.push({ id: rId, type: REL.hyperlink, target: url, external: true })
+        inlineRels.set(url, rId)
+      }
+      return rId
+    }
+
     /** Post-attach a link to a writer that does not take one (pic, table,
      *  chart frames — and the external case on shapes). Resolved only when a
      *  node actually landed, so a dropped image never allocates a rel. */
@@ -458,6 +472,7 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
             shapeId,
             themeFontFamily: doc.theme.fontFamily,
             fields,
+            linkFor: inlineLink,
             ...(link ? { link: { rId: link.rId, ...(link.external ? {} : { slideJump: true }) } } : {}),
             report, where,
           }))

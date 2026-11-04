@@ -138,7 +138,7 @@ try {
   await rowOf('top').hover()
   await rowOf('top').locator('.ed-layer-locked').click(); await p.waitForTimeout(200)
   ok((await el('top')).locked === true, 'the padlock sets locked')
-  ok(await node('top').evaluate((n) => n.classList.contains('ed-locked')), 'the canvas marks it')
+  ok(await node('top').evaluate((n) => n.dataset.locked === '1'), 'the canvas marks it')
   await p.keyboard.press('Escape')
   const t = await centre('top')
   await p.mouse.click(t.x, t.y); await p.waitForTimeout(200)

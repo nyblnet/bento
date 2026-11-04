@@ -1377,4 +1377,5 @@ export const strings: Catalog = {
   "Edit {what}": "{what} সম্পাদনা",
   "Drop shadow": "ড্রপ শ্যাডো",
   "Layer blur": "স্তরের ঝাপসা",
+  "Lock or unlock": "লক বা আনলক",
 }

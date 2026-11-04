@@ -1391,4 +1391,5 @@ export const strings: Catalog = {
   "Edit {what}": "Üýtget: {what}",
   "Drop shadow": "Düşýän kölege",
   "Layer blur": "Gatlak bulaşyklygy",
+  "Lock or unlock": "Gulpla ýa-da aç",
 }

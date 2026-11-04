@@ -72,6 +72,20 @@ console.log('\nelement clipboard')
   ok(font != null && target.assets![font.asset] === source.assets!['font-acme'], 'pasted element font points at its source bytes')
 }
 
+console.log('\ntext without its own fontFamily (#710)')
+{
+  const source = sourceDoc()
+  const bare = defaultText({ id: 'text-bare', html: 'B' })
+  delete (bare as { fontFamily?: string }).fontFamily
+  source.slides[0].elements = [bare]
+  let raw = ''
+  try { raw = serializeElements(source.slides[0].elements, source) } catch (e) { raw = '' }
+  ok(raw !== '' && parseClip(raw) != null, 'copy of a text element with no fontFamily produces a payload and does not throw')
+  source.theme.fontFamily = "'Acme', sans-serif"
+  const p = parseClip(serializeElements(source.slides[0].elements, source))!
+  ok(p.fonts?.length === 1 && p.fonts[0].family === 'Acme', 'it carries the embedded theme face it inherits')
+}
+
 console.log('\npaste position (#569)')
 {
   const doc = newDoc()

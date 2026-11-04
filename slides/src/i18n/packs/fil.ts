@@ -1383,4 +1383,5 @@ export const strings: Catalog = {
   "Edit {what}": "I-edit ang {what}",
   "Drop shadow": "Drop shadow",
   "Layer blur": "Blur ng layer",
+  "Lock or unlock": "I-lock o i-unlock",
 }

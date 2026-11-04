@@ -1384,4 +1384,5 @@ export const strings: Catalog = {
   "Edit {what}": "{what} میں ترمیم کریں",
   "Drop shadow": "ڈراپ شیڈو",
   "Layer blur": "پرت دھندلاہٹ",
+  "Lock or unlock": "لاک یا ان لاک کریں",
 }

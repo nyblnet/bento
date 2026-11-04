@@ -1363,4 +1363,5 @@ export const strings: Catalog = {
   "Edit {what}": "Redigera {what}",
   "Drop shadow": "Skugga",
   "Layer blur": "Lageroskärpa",
+  "Lock or unlock": "Lås eller lås upp",
 }

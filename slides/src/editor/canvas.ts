@@ -11,7 +11,8 @@ import { t } from '../i18n'
 import { defaultShape, internAsset, ratioLocked, readableInk, uid, type ShapeElement, type SlideElement, type TableElement, type TextElement } from '../model'
 import { estimatedFrames, fencedElements, splitFences, toggleCodeOnSelection, type FencePart, type PartFrame } from './codefence'
 import { cssColor, renderSlide, sanitizeHtml } from '../render'
-import { autoformatAtCaret, clearAutoformat, markdownToHtml, stripMarkerEscapes, undoAutoformat } from './markdown'
+import { autoformatAtCaret, autolinkAtCaret, clearAutoformat, markdownToHtml, stripMarkerEscapes, undoAutoformat } from './markdown'
+import { enterInEmptyNested } from './typedlist'
 import { inList, shiftList, shiftListHtml, undoIndent } from './listindent'
 import { bulletsToLists } from './bullets'
 import { clipboardToHtml } from './paste'
@@ -234,7 +235,7 @@ export class SlideCanvas {
     this.selecto = new Selecto({
       container: this.scroller,
       dragContainer: this.scroller,
-      selectableTargets: ['.bento-el:not(.ed-locked)'],
+      selectableTargets: ['.bento-el:not([data-locked])'],
       selectByClick: true,
       selectFromInside: false,
       toggleContinueSelect: 'shift',
@@ -1111,6 +1112,17 @@ export class SlideCanvas {
    *  model boxes, for the reason topElementAt gives. */
   private deepSelect(clientX: number, clientY: number) {
     const topFirst = this.elementsAt(clientX, clientY)
+    // A locked element paints but takes no pointer (#838), so the painted stack
+    // never lists it; Alt-click is one of its two ways in (Layers the other), so
+    // the locked ones whose box holds the point join the stack in paint order.
+    const s = this.scaleHost.getBoundingClientRect(), k = this.scale || 1
+    const px = (clientX - s.left) / k, py = (clientY - s.top) / k
+    const els = this.store.slide.elements
+    for (const el of els) {
+      if (!el.locked || topFirst.includes(el.id) || px < el.x || px > el.x + el.w || py < el.y || py > el.y + el.h) continue
+      const at = topFirst.findIndex((id) => els.findIndex((e) => e.id === id) < els.indexOf(el))
+      topFirst.splice(at < 0 ? topFirst.length : at, 0, el.id)
+    }
     if (!topFirst.length) return
     let pick = topFirst[0]
     if (this.store.selection.length === 1) {
@@ -1350,11 +1362,10 @@ export class SlideCanvas {
         if (node.dataset.showOnHover !== active) node.style.display = 'none'
       }
     }
-    const locked = new Set(slide.elements.filter((e) => e.locked).map((e) => e.id))
+    const lockedIds = new Set(slide.elements.filter((e) => e.locked).map((e) => e.id))
     for (const node of next.querySelectorAll<HTMLElement>('[data-el-id]')) {
       if (this.isGhost(node.dataset.elId!)) node.classList.add('bento-el-ghost-cut')
-      // locked (Layers' padlock): clicks pass through to what lies beneath
-      if (locked.has(node.dataset.elId!)) node.classList.add('ed-locked')
+      if (node.classList.contains('bento-el') && lockedIds.has(node.dataset.elId!)) node.dataset.locked = '1'
     }
     this.renderSetBar(sets)
     if (this.surface) this.surface.replaceWith(next)
@@ -1513,8 +1524,13 @@ export class SlideCanvas {
   private syncTargets() {
     // A single selected line/curve/connector is edited with endpoint handles
     // (LineEditor), not Moveable's box — grab an end and drag it.
-    const sel = this.store.selectedElements
-    const one = sel.length === 1 && !sel[0].locked && !this.editing && !this.pathEditor.active && !this.cropEditor?.active ? sel[0] : null
+    const sel = this.store.selectedElements.filter((e) => !e.locked)
+    // a locked element that IS selected (via Layers / Alt-click) gets the lock
+    // marker instead of Moveable handles
+    this.surface?.querySelectorAll('.bento-lock-sel').forEach((n) => n.classList.remove('bento-lock-sel'))
+    for (const n of this.selectedNodes()) if (n.dataset.locked) n.classList.add('bento-lock-sel')
+    this.scaleHost.style.setProperty('--lock-s', String(1 / (this.scale || 1)))
+    const one = sel.length === 1 && !this.editing && !this.pathEditor.active && !this.cropEditor?.active ? sel[0] : null
     // Curves get true bezier handles (BezierEditor); lines and straight polygons
     // keep endpoint/anchor handles (LineEditor).
     const curve = !!one && isCurve(one)
@@ -1525,7 +1541,7 @@ export class SlideCanvas {
     const handled = curve || lineLike
     drawFrameOverlay(this.scaleHost, this.store, () => this.scale, !!this.editing || !!this.pathEditor?.active || !!this.cropEditor?.active)
     drawGradientOverlay(this.scaleHost, this.store, () => this.scale, !!this.editing || !!this.pathEditor?.active || !!this.cropEditor?.active || handled)
-    const targets = this.editing || this.pathEditor?.active || this.cropEditor?.active || handled ? [] : this.selectedNodes().filter((n) => !n.classList.contains('ed-locked'))
+    const targets = this.editing || this.pathEditor?.active || this.cropEditor?.active || handled ? [] : this.selectedNodes().filter((n) => !n.dataset.locked)
     // snap against slide bounds/center and every non-selected element
     const others = this.surface
       ? [this.surface, ...Array.from(this.surface.querySelectorAll<HTMLElement>('.bento-el'))].filter(
@@ -2013,6 +2029,7 @@ export class SlideCanvas {
       const ids = [...new Set((e.selected as HTMLElement[])
         .map((n) => n.dataset.elId)
         .filter((id): id is string => !!id && !this.isGhost(id)) // a marquee never picks up a ghost
+        .filter((id) => !this.store.element(id)?.locked) // ...nor a locked element (#838)
         .map((id) => this.liftToFrame(id)))] // a click or a marquee picks frames, not what is inside them
       this.store.select(this.expandGroups(ids))
       if (e.isDragStartEnd && !this.marqueeOnly) {
@@ -2046,12 +2063,23 @@ export class SlideCanvas {
         // manager has settled, and the update that settles it UNSETS a drag begun
         // at the resolve — the gesture lived on with no drag state, so the
         // element never moved and every move threw "Cannot set properties of
-        // null (setting 'dist')". Two frames later the manager is stable.
-        // ponytail: two rAFs is the measured settle; a Moveable event for "ready" would be exact
+        // null (setting 'dist')" — hence the wait below.
         let released = false
         const onMouseUp = () => { released = true }
         window.addEventListener('mouseup', onMouseUp, { capture: true, once: true })
-        this.moveable.waitToChangeTarget().then(() => requestAnimationFrame(() => requestAnimationFrame(() => {
+        //
+        // ...and TWO TIMER HOPS MORE. waitToChangeTarget resolves from the first
+        // render that sees the new target, but croact then runs a second render
+        // of Moveable from a setTimeout(0) (setState), and that pass still sees
+        // the old state: it unsets every able, which nulls `state.dragInfo`
+        // under the drag just begun while the gesture carries on, so every
+        // mouse move threw "Cannot set properties of null (setting 'dist')" and
+        // the press moved nothing. A timer queued from here fires after the one
+        // already pending (measured: 0 hops = 12/12 runs throw, 1 hop = 0/12),
+        // so the replay lands once Moveable has settled; the second hop is
+        // margin for a pass that queues another. rAF would not do: it is not
+        // ordered against timers (it passed 3 runs in 4, then failed).
+        this.moveable.waitToChangeTarget().then(async () => { for (let i = 0; i < 2; i++) await new Promise<void>((r) => setTimeout(r, 0)) }).then(() => {
           window.removeEventListener('mouseup', onMouseUp, true)
           if (released) return
           // a press on a frame's child picked the frame (liftToFrame): the drag
@@ -2060,7 +2088,7 @@ export class SlideCanvas {
           const nodes = this.selectedNodes()
           const own = nodes.find((n) => n === at || n.contains(at)) ?? nodes[0]
           if (own) this.moveable.dragStart(e.inputEvent, own)
-        })))
+        })
       }
     })
   }
@@ -2220,6 +2248,11 @@ export class SlideCanvas {
     // markdown affordances: **bold** / *italic* / `code` / ~~strike~~ / "- "
     // collapse as you type (⌘Z reverts, backslash escapes); pasted plain
     // text converts the same patterns
+    inner.addEventListener('beforeinput', (ev) => {
+      // Enter finishes a typed URL the way a space does
+      if (ev.inputType === 'insertParagraph' && enterInEmptyNested(inner)) { ev.preventDefault(); return }
+      if (ev.inputType === 'insertParagraph' || ev.inputType === 'insertLineBreak') autolinkAtCaret(false)
+    }, { signal })
     inner.addEventListener('input', () => {
       if (!autoformatAtCaret()) clearAutoformat()
     }, { signal })

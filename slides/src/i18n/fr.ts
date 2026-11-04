@@ -262,6 +262,7 @@ export const fr: Catalog = {
   "{n}h ago": "il y a {n} h",
   "{n}m ago": "il y a {n} min",
   "— no notes for this slide —": "— pas de notes pour cette diapositive —",
+  "Lock": "Verrouiller",
   "✎ Edit path on canvas": "✎ Modifier le tracé sur la toile",
   "⧉ Apply layout…": "⧉ Appliquer une disposition…",
   "＋ Add stop": "＋ Ajouter un arrêt de couleur",
@@ -1128,7 +1129,6 @@ export const fr: Catalog = {
   "{mod}: click selects exactly the element under the pointer, even in a group · drag duplicates": "{mod} : un clic sélectionne exactement l’élément sous le pointeur, même dans un groupe · glisser duplique",
   "Shift: click adds to the selection or takes out · drag along one axis · resize keeps the ratio · rotate in 15° steps": "Maj : un clic ajoute à la sélection ou retire · glisse sur un seul axe · redimensionne en gardant les proportions · pivote par pas de 15°",
   "Morphs from the slide before": "Se transforme depuis la diapositive précédente",
-  "Lock": "Verrouiller",
   "Show": "Afficher",
   "Hide": "Masquer",
   "Morph preview": "Aperçu de la transformation",
@@ -1354,4 +1354,5 @@ export const fr: Catalog = {
   "Edit {what}": "Modifier {what}",
   "Drop shadow": "Ombre portée",
   "Layer blur": "Flou du calque",
+  "Lock or unlock": "Verrouiller ou déverrouiller",
 }

@@ -12,10 +12,11 @@
 // not after whichever run came first — and the report says so once per
 // element ('run-formatting-flattened'), which is the honest half of the deal.
 //
-// Bullets flatten the same way: no UL/LI survives the sanitizer, so buChar
-// becomes a literal glyph + NBSP baked into the line, buAutoNum is numbered
-// HERE, at convert time, and frozen ('auto-number-frozen' — renumbering will
-// not follow edits). buNone stays a silence, not an absence: the bullet unit
+// Bullets: the ones bento's lists draw themselves (• and ◦, decimal numbers
+// from 1) become real UL/OL items, nested by lvl. Every other glyph or scheme
+// flattens: buChar becomes a literal glyph + NBSP baked into the line,
+// buAutoNum is numbered HERE, at convert time, and frozen
+// ('auto-number-frozen' — renumbering will not follow edits). buNone stays a silence, not an absence: the bullet unit
 // resolved by inherit.textDefaults is overlaid by the paragraph's own pPr AS A
 // UNIT, never property-merged, or the master's bullet would resurrect under a
 // paragraph that turned bullets off (the trap inherit.ts documents).
@@ -58,6 +59,12 @@ export interface TextDeps {
    * explicitly fixed box is the author's stated intent).
    */
   needsRefit?(id: string): void
+  /**
+   * The target of an EXTERNAL hyperlink relationship on this slide, by r:id,
+   * or undefined when the id is not one. The value is source-file text: the
+   * caller hands it over verbatim and textFrom decides whether it is a link.
+   */
+  hyperlink?(rId: string): string | undefined
 }
 
 /** EMU → px, rounded to 1/100 px so emitted JSON stays diffable. */
@@ -135,6 +142,28 @@ interface Piece {
   italic: boolean
   underline: boolean
   strike: boolean
+  /** a run-level hyperlink to the web, already held to webHref */
+  href?: string
+}
+
+/**
+ * A run's hyperlink target becomes an `<a href>` only when the document can
+ * keep it: the slides renderer keeps an anchor's href when it is a web URL
+ * (model.ts isWebUrl — http or https, at most 2048 characters, no
+ * whitespace, quote or angle bracket) and unwraps every other anchor. The
+ * same rule here means an imported deck holds no markup its renderer would
+ * strip, and a javascript:, data: or file: target never enters a document.
+ * mailto: is not a web URL by that rule, so its text comes in unlinked.
+ */
+function webHref(v: string | undefined): string | undefined {
+  return typeof v === 'string' && v.length <= 2048 && /^https?:\/\/[^\s\x00-\x1f\x7f"'<>]+$/i.test(v) ? v : undefined
+}
+
+/** The r:id on a reference element (any prefix bound to the relationships
+ *  namespace; the bare `id` attribute is something else). */
+function relIdOf(el: XElem): string | undefined {
+  for (const [k, v] of el.attrs) if (k !== 'id' && k.endsWith(':id')) return v
+  return undefined
 }
 
 interface Para {
@@ -144,6 +173,52 @@ interface Para {
   lineHeight: number
   /** already-escaped bullet/number prefix, '' when none */
   prefix: string
+  /** a real list item (no prefix then): its kind and pPr lvl */
+  list?: { ordered: boolean; level: number }
+}
+
+/** buChar glyphs that ARE bento's list markers: styles.css draws `ul` as a
+ *  disc and `ul ul` as a circle, and the exporter writes exactly these. */
+const LIST_GLYPHS = new Set(['•', '◦'])
+
+/**
+ * Paragraphs → html. Without list items this is the original join on <br>,
+ * byte for byte. With them, each item is an LI at its level: a deeper item
+ * nests inside the open LI above it (`<li>One<ul><li>Two</li></ul></li>`), a
+ * shallower one closes lists back down, and plain paragraphs close every list.
+ * PowerPoint lets a paragraph jump levels (lvl 0 straight to 2); html can only
+ * nest one list inside an item, so an item lands at most one level deeper than
+ * the list it follows. A list is a block, so no <br> is needed on either side.
+ */
+function assembleParagraphs(paras: Para[], render: (p: Para) => string): string {
+  if (!paras.some((p) => p.list)) return paras.map(render).join('<br>')
+  let out = ''
+  // open lists, outermost first, each holding an open LI; `lvl` is the SOURCE
+  // level, so siblings of an item that jumped levels stay its siblings
+  const open: Array<{ ordered: boolean; lvl: number }> = []
+  let needBr = false
+  const closeOne = () => { out += open.pop()!.ordered ? '</li></ol>' : '</li></ul>' }
+  for (const p of paras) {
+    if (!p.list) {
+      while (open.length) closeOne()
+      if (needBr) out += '<br>'
+      out += render(p)
+      needBr = true
+      continue
+    }
+    const { ordered, level } = p.list
+    while (open.length && open[open.length - 1].lvl > level) closeOne()
+    const top = open[open.length - 1]
+    // the same level but the other kind of list: that list ends, a new begins
+    if (top && top.lvl === level && top.ordered !== ordered) closeOne()
+    const cur = open[open.length - 1]
+    if (cur && cur.lvl === level) out += '</li><li>'
+    else { out += ordered ? '<ol><li>' : '<ul><li>'; open.push({ ordered, lvl: level }) }
+    out += render(p)
+    needBr = false
+  }
+  while (open.length) closeOne()
+  return out
 }
 
 /**
@@ -238,7 +313,18 @@ export function textFrom(sp: XElem, ctx: InheritCtx, deps: TextDeps): OutText | 
     const latin = rPr ? kid(rPr, NS.a, 'latin') : undefined
     const face = (latin ? attr(latin, 'typeface') : undefined) ?? d.font
     const family = face === '+mj-lt' ? ctx.theme.majorFont : face === '+mn-lt' ? ctx.theme.minorFont : face
+    // a run's hyperlink: hlinkClick with an r:id and no action (an action is
+    // a slide jump, a macro or a show — never a web address)
+    const hl = rPr ? kid(rPr, NS.a, 'hlinkClick') : undefined
+    const action = hl ? attr(hl, 'action') : undefined
+    const rId = hl && !action ? relIdOf(hl) : undefined
+    const target = rId ? deps.hyperlink?.(rId) : undefined
+    const href = webHref(target)
+    if (target !== undefined && !href) {
+      note('dropped', 'hyperlink-dropped', 'a text link that is not a web address (http or https) came in as plain text')
+    }
     return {
+      ...(href ? { href } : {}),
       html: preEscaped ? text : esc(text),
       chars: text.length,
       sizePt,
@@ -335,7 +421,21 @@ export function textFrom(sp: XElem, ctx: InheritCtx, deps: TextDeps): OutText | 
     // a plain space would collapse against the glyph in html, and the char
     // does not survive retyping (edit these lines with line-targeted tools).
     let prefix = ''
-    if (chars > 0 && bullet.kind === 'char') {
+    let list: Para['list']
+    // The bullets bento's own lists draw — a disc or circle, plain decimal
+    // numbers from 1 — become real list items (render.ts has kept UL/OL/LI
+    // since 1.2.0, below the shell floor), so the hanging indent, the nesting
+    // and live renumbering survive. Any other glyph or numbering scheme has no
+    // list style to land on and is flattened as before; so is a numbered
+    // sequence that starts elsewhere than 1 (the sanitizer keeps no `start`),
+    // and once a level has frozen numbers it keeps freezing, so one sequence
+    // never mixes live and literal numbers.
+    if (chars > 0 && bullet.kind === 'char' && LIST_GLYPHS.has(bullet.char ?? '•')) {
+      list = { ordered: false, level: lvl }
+    } else if (chars > 0 && bullet.kind === 'autoNum' && (bullet.scheme ?? 'arabicPeriod') === 'arabicPeriod'
+      && (bullet.startAt ?? 1) === 1 && !counters.has(lvl)) {
+      list = { ordered: true, level: lvl }
+    } else if (chars > 0 && bullet.kind === 'char') {
       prefix = `${esc(bullet.char ?? '•')} `
       note('approximated', 'bullet-flattened', 'bullet glyphs are baked into the text — no list structure, so bullet colour/size and hanging indent are lost')
     } else if (chars > 0 && bullet.kind === 'autoNum') {
@@ -345,7 +445,7 @@ export function textFrom(sp: XElem, ctx: InheritCtx, deps: TextDeps): OutText | 
       note('approximated', 'auto-number-frozen', 'auto-numbered list frozen to literal numbers at convert time; renumbering will not follow edits')
     }
 
-    paras.push({ pieces, chars, align, lineHeight, prefix })
+    paras.push(list ? { pieces, chars, align, lineHeight, prefix, list } : { pieces, chars, align, lineHeight, prefix })
   }
 
   // Trailing empty paragraphs are producer noise (a bare endParaRPr closes
@@ -392,18 +492,30 @@ export function textFrom(sp: XElem, ctx: InheritCtx, deps: TextDeps): OutText | 
 
   // ------------------------------------------------------------- assembly
   const elementBold = dom.bold
-  const html = paras.map((p) => {
+  const paraHtml = (p: Para): string => {
     let out = p.prefix
+    // consecutive runs to the same address are ONE link (PowerPoint splits a
+    // link into runs wherever its formatting changes)
+    let openHref: string | undefined
     for (const piece of p.pieces) {
       let h = piece.html
       if (piece.strike) h = `<s>${h}</s>`
       if (piece.underline) h = `<u>${h}</u>`
       if (piece.italic) h = `<i>${h}</i>`
       if (piece.bold && !elementBold && piece.chars > 0) h = `<b>${h}</b>`
+      if (piece.href !== openHref) {
+        if (openHref) out += '</a>'
+        // webHref admits no quote, angle bracket or whitespace; & is escaped,
+        // and so is a quote, in case that rule is ever loosened
+        if (piece.href) out += `<a href="${esc(piece.href).replace(/"/g, '&quot;')}">`
+        openHref = piece.href
+      }
       out += h
     }
+    if (openHref) out += '</a>'
     return out
-  }).join('<br>')
+  }
+  const html = assembleParagraphs(paras, paraHtml)
 
   // A typeface name is source-file text headed for CSS (types.ts safeFace).
   const face = safeFace(dom.family)

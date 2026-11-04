@@ -262,6 +262,7 @@ export const zhHant: Catalog = {
   "{n}h ago": "{n} 小時前",
   "{n}m ago": "{n} 分鐘前",
   "— no notes for this slide —": "— 此投影片沒有備忘稿 —",
+  "Lock": "鎖定",
   "✎ Edit path on canvas": "✎ 在畫布上編輯路徑",
   "⧉ Apply layout…": "⧉ 套用版面配置…",
   "＋ Add stop": "＋ 新增色標",
@@ -1128,7 +1129,6 @@ export const zhHant: Catalog = {
   "{mod}: click selects exactly the element under the pointer, even in a group · drag duplicates": "{mod}:按一下精確選取指標下的元素,群組內亦可 · 拖曳即複製",
   "Shift: click adds to the selection or takes out · drag along one axis · resize keeps the ratio · rotate in 15° steps": "Shift:按一下加入或移出選取 · 沿單一軸拖曳 · 保持比例調整大小 · 以 15° 為單位旋轉",
   "Morphs from the slide before": "從上一張投影片變形而來",
-  "Lock": "鎖定",
   "Show": "顯示",
   "Hide": "隱藏",
   "Morph preview": "變形預覽",
@@ -1354,4 +1354,5 @@ export const zhHant: Catalog = {
   "Edit {what}": "編輯{what}",
   "Drop shadow": "投影",
   "Layer blur": "圖層模糊",
+  "Lock or unlock": "鎖定或解鎖",
 }

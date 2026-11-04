@@ -130,6 +130,20 @@ class RecoveryTest {
         assertTrue(seen.any { (v.get(it) as LongArray).any { w -> w != 0L } })
     }
 
+    @Test fun `dead blocks from earlier derivations do not count against the heap`() {
+        // Fill most of the heap with garbage, drop it, and ask again WITHOUT letting the collector run first.
+        val rt = Runtime.getRuntime()
+        var junk: ArrayList<ByteArray>? = ArrayList()
+        val target = rt.maxMemory() - Recovery.heapNeeded(Recovery.MEMORY_KIB) / 2
+        try { while (rt.totalMemory() - rt.freeMemory() < target) junk!!.add(ByteArray(1 shl 20)) } catch (_: OutOfMemoryError) {}
+        junk = null
+        val unreclaimed = Recovery.heapUnreclaimed()
+        // the control: the garbage really was counted as used (otherwise this test proves nothing)
+        assertTrue("garbage was counted ($unreclaimed)", unreclaimed < Recovery.heapNeeded(Recovery.MEMORY_KIB))
+        assertTrue("and heapAvailable collects before it refuses", Recovery.heapAvailable() >= Recovery.heapNeeded(Recovery.MEMORY_KIB))
+        assertEquals(32, Recovery.argon2id(ByteArray(10), ByteArray(16)).size)      // the real parameters, the default check
+    }
+
     @Test fun `a heap too small for the blocks refuses BEFORE allocating anything`() {
         var allocated = 0
         val counting = object : Argon2BytesGenerator.BlockPool {
@@ -185,40 +199,72 @@ class RecoveryTest {
     private val blobs get() = fx.getAsJsonObject("blobs")
     private val keys get() = blobs.getAsJsonObject("keys")
 
-    @Test fun `PRF blobs seal to the exact bytes and open back to checked keys`() {
+    private fun both() = Recovery.Keys(keys.h("accountD"), keys.h("kxD"))
+
+    @Test fun `kx placement is mode C - the blob is 64 bytes`() {
+        assertEquals("C", fx.get("kxMode").asString)
+        assertEquals(64, fx.get("blobLen").asInt)
+        assertEquals(64, Recovery.BLOB_LEN)
+    }
+
+    @Test fun `the PRF blob seals to the exact bytes and opens back to both checked scalars`() {
         val prf = blobs.getAsJsonObject("prf"); val inp = prf.getAsJsonObject("inputs")
-        for ((name, mode, kx) in listOf(Triple("unruled", Recovery.KxMode.UNRULED, null), Triple("modeA", Recovery.KxMode.A, keys.h("kxD")))) {
-            val want = prf.getAsJsonObject(name)
-            val got = Recovery.sealPrfBlob(inp.h("prfOutput"), inp.h("credentialId"), inp.h("salt"), inp.h("iv"),
-                Recovery.Keys(keys.h("accountD"), kx), mode)
-            assertEquals(name, want.s("cred"), got.cred); assertEquals(want.s("salt"), got.salt)
-            assertEquals(want.s("iv"), got.iv); assertEquals(name, want.s("ct"), got.ct)
-            val opened = Recovery.openPrfBlob(got, inp.h("prfOutput"), inp.h("credentialId"),
-                keys.s("accountPub"), if (kx != null) keys.s("kxPub") else null, mode)
-            assertArrayEquals(keys.h("accountD"), (opened as Recovery.Opened.Ok).keys.account)
+        val want = prf.getAsJsonObject("blob")
+        val got = Recovery.sealPrfBlob(inp.h("prfOutput"), inp.h("credentialId"), inp.h("salt"), inp.h("iv"), both())
+        assertEquals(want.s("cred"), got.cred); assertEquals(want.s("salt"), got.salt)
+        assertEquals(want.s("iv"), got.iv); assertEquals(want.s("ct"), got.ct)
+        val opened = Recovery.openPrfBlob(got, inp.h("prfOutput"), inp.h("credentialId"), keys.s("accountPub"), keys.s("kxPub"))
+        assertArrayEquals(keys.h("accountD"), (opened as Recovery.Opened.Ok).keys.account)
+        assertArrayEquals(keys.h("kxD"), opened.keys.kx)
+        val noKx = Recovery.openPrfBlob(got, inp.h("prfOutput"), inp.h("credentialId"), keys.s("accountPub"), "")
+        assertEquals("key-mismatch", (noKx as Recovery.Opened.No).reason)
+    }
+
+    @Test fun `a PRF blob of any other length decrypts and is refused`() {
+        val prf = blobs.getAsJsonObject("prf"); val inp = prf.getAsJsonObject("inputs")
+        val good = Recovery.sealPrfBlob(inp.h("prfOutput"), inp.h("credentialId"), inp.h("salt"), inp.h("iv"), both())
+        val rows = prf.getAsJsonArray("wrongLength").map { it.asJsonObject }
+        assertEquals(4, rows.size)
+        for (w in rows) {
+            val bl = Recovery.PrfBlob(1, good.cred, good.salt, good.iv, B64u.enc(w.h("ct")))
+            val o = Recovery.openPrfBlob(bl, inp.h("prfOutput"), inp.h("credentialId"), keys.s("accountPub"), keys.s("kxPub"))
+            assertEquals(w.s("name"), "length", (o as Recovery.Opened.No).reason)
+        }
+    }
+
+    @Test fun `sealing refuses a blob without a 32-byte recovery kx`() {
+        for (kx in listOf(ByteArray(0), ByteArray(31))) {
+            var threw = false
+            try { Recovery.pack(Recovery.Keys(keys.h("accountD"), kx)) } catch (e: IllegalArgumentException) { threw = true }
+            assertTrue("kx of ${kx.size} bytes", threw)
         }
     }
 
     @Test fun `a PRF blob opened with the wrong credential or a swapped key fails closed`() {
         val inp = blobs.getAsJsonObject("prf").getAsJsonObject("inputs")
-        val blob = Recovery.sealPrfBlob(inp.h("prfOutput"), inp.h("credentialId"), inp.h("salt"), inp.h("iv"), Recovery.Keys(keys.h("accountD")))
-        assertEquals("credential", (Recovery.openPrfBlob(blob, inp.h("prfOutput"), ByteArray(16), keys.s("accountPub")) as Recovery.Opened.No).reason)
-        val swapped = Recovery.sealPrfBlob(inp.h("prfOutput"), inp.h("credentialId"), inp.h("salt"), inp.h("iv"), Recovery.Keys(keys.h("otherD")))
-        assertEquals("key-mismatch", (Recovery.openPrfBlob(swapped, inp.h("prfOutput"), inp.h("credentialId"), keys.s("accountPub")) as Recovery.Opened.No).reason)
+        val blob = Recovery.sealPrfBlob(inp.h("prfOutput"), inp.h("credentialId"), inp.h("salt"), inp.h("iv"), both())
+        assertEquals("credential", (Recovery.openPrfBlob(blob, inp.h("prfOutput"), ByteArray(16), keys.s("accountPub"), keys.s("kxPub")) as Recovery.Opened.No).reason)
+        val swapped = Recovery.sealPrfBlob(inp.h("prfOutput"), inp.h("credentialId"), inp.h("salt"), inp.h("iv"), Recovery.Keys(keys.h("otherD"), keys.h("kxD")))
+        assertEquals("key-mismatch", (Recovery.openPrfBlob(swapped, inp.h("prfOutput"), inp.h("credentialId"), keys.s("accountPub"), keys.s("kxPub")) as Recovery.Opened.No).reason)
     }
 
     @Test fun `recovery inner layer seals to the exact bytes`() {
         val rec = blobs.getAsJsonObject("recovery"); val inp = rec.getAsJsonObject("inputs")
         val wk = Recovery.wrapKey(inp.h("code"), inp.h("salt"))
-        val ct = Recovery.sealRecoveryInner(wk, inp.h("iv"), keys.s("accountPub"), Recovery.Keys(keys.h("accountD")))
+        val ct = Recovery.sealRecoveryInner(wk, inp.h("iv"), keys.s("accountPub"), both())
         assertEquals(rec.s("inner"), Hex.str(ct))
-        val opened = Recovery.openRecoveryInner(ct, wk, inp.h("iv"), keys.s("accountPub"))
+        val opened = Recovery.openRecoveryInner(ct, wk, inp.h("iv"), keys.s("accountPub"), keys.s("kxPub"))
         assertArrayEquals(keys.h("accountD"), (opened as Recovery.Opened.Ok).keys.account)
+        assertArrayEquals(keys.h("kxD"), opened.keys.kx)
+        for (w in rec.getAsJsonArray("wrongLength").map { it.asJsonObject }) {
+            val o = Recovery.openRecoveryInner(w.h("ct"), wk, inp.h("iv"), keys.s("accountPub"), keys.s("kxPub"))
+            assertEquals(w.s("name"), "length", (o as Recovery.Opened.No).reason)
+        }
     }
 
     @Test fun `every scalar row reaches its verdict`() {
         for (r in fx.getAsJsonArray("scalars").map { it.asJsonObject }) {
-            val o = Recovery.unpack(r.h("d"), r.s("pub"))
+            val o = Recovery.unpack(r.h("pt"), r.s("accountPub"), r.s("kxPub"))
             if (r.s("expect") == "accept") assertTrue(r.s("name"), o is Recovery.Opened.Ok)
             else assertEquals(r.s("name"), r.s("reason"), (o as Recovery.Opened.No).reason)
         }

@@ -401,6 +401,12 @@ export async function convertPptx(bytes: Uint8Array): Promise<ConvertResult> {
     const baseTextDeps: TextDeps = {
       effectivePhType, textDefaults, resolveFrame, labeledChain, resolveColor,
       needsRefit: () => { refitPending = true },
+      // only an External hyperlink rel names an address; an internal one
+      // points into the package (another slide) and is not a web link
+      hyperlink: (rId) => {
+        const r = slideRels.get(rId)
+        return r && r.mode === 'External' && r.type.endsWith('/hyperlink') ? r.target : undefined
+      },
     }
 
     const emit = (el: XElem, frame?: GroupFrame, groupId?: string): void => {
