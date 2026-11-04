@@ -136,6 +136,10 @@ BENTO_RIG_SHARED_PROFILE=1 scenario pairshared 120 "$OUT/SA.bento.html" "$OUT/SU
 # on a genuine and an unknown document. Every row is a real save through the host.
 cp "$OUT/fix/A.bento.html" "$OUT/NA.bento.html"; cp "$OUT/fix/U.bento.html" "$OUT/NU.bento.html"
 BENTO_RIG_MODE=navlock BENTO_RIG_LINGER_MS=500 scenario navlock 120 "$OUT/NA.bento.html" "$OUT/NU.bento.html"
+# A document that moved its own fragment, then reloads. Genuine only: the reload stall on a page
+# with no CSP has no watchdog from a fragment URL (see on_navigation), and this row is about the URL.
+cp "$OUT/fix/A.bento.html" "$OUT/FA.bento.html"
+BENTO_RIG_MODE=fragment BENTO_RIG_LINGER_MS=200 scenario fragment 40 "$OUT/FA.bento.html"
 # B2, security's mk2.py: an unknown document racing a genuine shell over its own file during its
 # own reload. Each attempt is its own launch. The timing is the attacker's: each (delay, padding)
 # lands the swap somewhere else, so the row is the whole grid, and check.py requires that the

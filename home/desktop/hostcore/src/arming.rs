@@ -164,6 +164,16 @@ impl Registry {
     }
 }
 
+/// Is this URL the document? A fragment never reaches the protocol handler, so
+/// `own#x` is the same bytes from the same origin. It has to count: a page moves
+/// its own fragment without the host seeing it (pushState on both engines, a
+/// plain `#x` link on WebView2), and from then on the engine reports the page's
+/// URL with that fragment, so a reload compared exactly is refused, or bounced,
+/// or never armed. A query is another URL: exact, as before.
+pub fn is_document(url: &str, own: &str) -> bool {
+    url.split('#').next() == Some(own)
+}
+
 /// The navigation policy for Tauri's on_navigation: the document's own URL, or
 /// https (live embeds). Everything else is refused: http, file, data, blob,
 /// javascript, and other documents' origins.
@@ -173,7 +183,7 @@ impl Registry {
 /// alone, so it sees the MAIN FRAME only: frames there are held by the document's
 /// pinned CSP, and an unknown document (no CSP) has no frame policy at all.
 pub fn navigation_allowed(url: &str, own: &str) -> bool {
-    url == own || url.starts_with("https://")
+    is_document(url, own) || url.starts_with("https://")
 }
 
 /// What to do when the MAIN FRAME starts loading something that isn't the
@@ -189,7 +199,7 @@ pub enum Bounce {
 }
 
 pub fn main_frame_load(url: &str, own: &str) -> Bounce {
-    if url == own { return Bounce::Stay }
+    if is_document(url, own) { return Bounce::Stay }
     let lower = url.to_ascii_lowercase();
     if lower.starts_with("https://") || lower.starts_with("http://") || lower.starts_with("mailto:") {
         Bounce::BackAndOpen(url.to_string())
@@ -439,6 +449,22 @@ mod tests {
         let b = l.load_finished(true).unwrap();
         l.confirm(&b.nonce, &b.cap).unwrap();
         assert!(!l.armed_genuine(), "a serve between mints counts against the next: fail closed");
+    }
+
+    /// A fragment is the document; a query, a longer path or a look-alike host is not.
+    #[test]
+    fn the_document_url_carries_any_fragment_and_nothing_else() {
+        let own = "http://bento.abc.localhost/";
+        for same in [own.to_string(), format!("{own}#x"), format!("{own}#p/1"), format!("{own}#"), format!("{own}#a#b")] {
+            assert!(is_document(&same, own), "{same}");
+            assert!(navigation_allowed(&same, own), "{same}");
+            assert_eq!(main_frame_load(&same, own), Bounce::Stay, "{same}");
+        }
+        for other in ["http://bento.abc.localhost/?q", "http://bento.abc.localhost/?q#x", "http://bento.abc.localhost/x#y", "http://bento.abc.localhost", "http://bento.abd.localhost/#x", "#x", ""] {
+            assert!(!is_document(other, own), "{other}");
+            assert!(!navigation_allowed(other, own), "{other}");
+            assert_ne!(main_frame_load(other, own), Bounce::Stay, "{other}");
+        }
     }
 
     #[test]

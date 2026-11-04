@@ -276,15 +276,24 @@ def navlock():
             return len(re.findall(pat, L[sa[0].end():sb[0].start()], re.M)) if sa and sb else None
         for t in ("http", "file", "data", "mailto", "blob", "hash"):
             row = (N.get("rows") or {}).get(t) or {}
-            ok(row.get("same_realm") is True and row.get("same_cap") is True, f"{name}: blocked {t}: still the same page and the same capability ({row.get('same_realm')}, {row.get('same_cap')})")
-            ok(row.get("save") == "saved", f"{name}: blocked {t}: a real save through the host still works ({row.get('save')})")
-            ok(row.get("begin") == "the open document was already handed out", f"{name}: blocked {t}: per-load state survived, so nothing re-minted ({row.get('begin')})")
+            what = "a fragment link" if t == "hash" else f"blocked {t}"
+            if t != "hash": ok(row.get("hash") == "", f"{name}: {what}: the URL did not move ({row.get('hash')!r})")
+            ok(row.get("same_realm") is True and row.get("same_cap") is True, f"{name}: {what}: still the same page and the same capability ({row.get('same_realm')}, {row.get('same_cap')})")
+            ok(row.get("save") == "saved", f"{name}: {what}: a real save through the host still works ({row.get('save')})")
+            ok(row.get("begin") == "the open document was already handed out", f"{name}: {what}: per-load state survived, so nothing re-minted ({row.get('begin')})")
             sta = between(f"blocked-{t}", f"after-{t}", r"^STARTED %s " % lbl)
             measured[f"{lbl}:{t}"] = {"finished": between(f"blocked-{t}", f"after-{t}", r"^FINISHED %s " % lbl), "on_navigation_blocked": between(f"blocked-{t}", f"after-{t}", r"^NAVIGATION BLOCKED %s " % lbl), "started": sta}
-            ok(sta == 0, f"{name}: blocked {t}: no load started ({sta})")
+            ok(sta == 0, f"{name}: {what}: no load started ({sta})")
         ok(between("blocked-http", "after-http", r"^NAVIGATION BLOCKED %s " % lbl) == 1, f"{name}: positive control: the http navigation really reached the host's policy and was refused")
         plainlog = (out / "plain-server.log").read_text(errors="replace") if (out / "plain-server.log").exists() else ""
-        ok("?nl-" not in plainlog, f"{name}: and nothing was fetched: the blocked navigations never left the host")
+        # WebKitGTK decides before the request. WebView2 does not: the request goes out and only
+        # the commit is cancelled (measured; a note, since which side of the cancel it lands on is
+        # the engine's). The rows above are what must hold there: the page never moved.
+        if WINDOWS:
+            print(f"note {name}: requests that reached the server for cancelled navigations: {sorted(set(re.findall(r'[?]nl-[a-z]+', plainlog)))}")
+        else:
+            ok("?nl-" not in plainlog, f"{name}: and nothing was fetched: the blocked navigations never left the host")
+        ok(((N.get("rows") or {}).get("hash") or {}).get("hash") == "#nl", f"{name}: a fragment link is not blocked: the page's own #nl took effect ({((N.get('rows') or {}).get('hash') or {}).get('hash')})")
         # §19e d1
         d1 = N.get("d1") or {}
         for tag in ("loaded", "src_changed", "self_navigated"):
@@ -312,6 +321,22 @@ def navlock():
     (out / "navlock-measured.json").write_text(json.dumps(measured, indent=1))
     print(f"note navlock: FINISHED lines {len(re.findall(r'^FINISHED', L, re.M))}, PENDING lines {len(re.findall(r'^PENDING', L, re.M))}, ARMED lines {len(re.findall(r'ARMED', L))}")
 navlock()
+
+# A document that moved its own fragment, then reloaded
+def fragment():
+    L = log("fragment")
+    ex = (out / "fragment.exit").read_text().strip() if (out / "fragment.exit").exists() else "missing"
+    ok(ex == "0", f"fragment: the host exited cleanly (exit {ex})")
+    r = report("fragment-doc0")
+    F = ((r or {}).get("page") or {}).get("fragment") or {}
+    ok(F.get("link") == "#frag-link" and F.get("push") == "#p/frag", f"fragment: a link and pushState both moved the URL ({F.get('link')}, {F.get('push')})")
+    ok(F.get("same_cap") is True and F.get("save") == "saved", f"fragment: same capability and a real save after both ({F.get('save')})")
+    ok(F.get("after") == "#p/frag", f"fragment: precondition: the reload's URL really carried the fragment ({F.get('after')})")
+    ok(F.get("armed") is True and F.get("rotated") is True and F.get("save2") == "saved", f"fragment: the reload armed under a new secret and saved through the host ({F.get('armed')}, {F.get('rotated')}, {F.get('save2')})")
+    ok(re.search(r"^BOUNCE ", L, re.M) is None, "fragment: nothing bounced, so nothing went to the system browser")
+    ok("NAVIGATION BLOCKED" not in L, "fragment: the policy refused nothing")
+    ok(len(re.findall(r"^PENDING doc0 ", L, re.M)) >= 2 and re.search(r"^PENDING doc0 generation \d+ url=\S+#p/frag$", L, re.M) is not None, "fragment: the host minted for the reload's fragment URL")
+fragment()
 
 # B2, security's mk2.py, on both engines. The verdict comes from the host's own ARM line, since
 # on Windows bento_id stops at the platform gate whatever the verdict
@@ -360,7 +385,9 @@ if WINDOWS:
     caps = json.loads((out / "acl-capabilities.json").read_text()) if (out / "acl-capabilities.json").exists() else {}
     ok(sorted(caps) == ["documents", "rig"], f"acl: this build really has no rig-embed capability ({sorted(caps)})")
     nb = (out / "acl-binary-needles.txt").read_text(errors="replace").strip() if (out / "acl-binary-needles.txt").exists() else "missing"
-    ok(nb != "missing" and "127.0.0.1:*" not in nb and "rig-embed" not in nb, f"acl: and neither its name nor the loopback origin is in the binary ({nb})")
+    # the loopback origin only: every rig build carries the string rig-embed in the fixture's own
+    # marker (rig-embed-fixture), which says nothing about the capability
+    ok(nb != "missing" and "127.0.0.1:*" not in nb, f"acl: and the loopback origin it opens is not in the binary ({nb})")
     L = log("acl")
     ex = (out / "acl.exit").read_text().strip() if (out / "acl.exit").exists() else "missing"
     ok(ex == "0", f"acl: the host exited cleanly (exit {ex})")

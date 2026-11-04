@@ -12263,8 +12263,9 @@ neither); the Windows key store is an explicit stub that refuses everything unti
   `FrameNavigationStarting`, so "the policy fires for iframes" is true on WebKitGTK alone. On
   Windows the navigation policy for FRAMES (§19e d4) rests on the document's pinned CSP and nothing
   else. A genuine document's frame sent to plain http is refused by `frame-src` on both engines; an
-  unknown document has no CSP, so on Windows it can frame http (measured, rig row "d4"), holding no
-  secret and refused by the ACL. The main-frame half is unchanged.
+  unknown document has no CSP, so on Windows it can frame http (the rig's d4 row: the frame loaded
+  and the policy never saw it), holding no secret and refused by the ACL. The main-frame half is
+  unchanged.
 - **Origin-Agent-Cluster:** the attribute is `window.originAgentCluster`, and it is `true` on
   WebView2 (an earlier version of this entry read a misspelt name and called it unexposed).
   `document.domain = "<hex>.localhost"`, the document's own parent, is a silent no-op under the
@@ -12276,8 +12277,17 @@ neither); the Windows key store is an explicit stub that refuses everything unti
   its `<hex>.localhost` domain are accepted and invisible to a sibling.
 - **One renderer process per document:** distinct renderer PIDs for two documents, stopping any one
   (NtSuspendProcess) freezes exactly one document, stopping all freezes both (negative control).
-- **One mint per generation (all platforms).** WebView2 can report two finished loads for one
-  generation. `Load::load_finished` now mints once: a repeat while PENDING hands back the same
+- **A cancelled navigation reports a finished load on WebView2, and its request still goes out.**
+  Measured per navigation, on a genuine and an unknown document: `http:`, `mailto:` and `blob:`
+  reach `on_navigation`, are cancelled, and each report one finished load at the document's URL
+  with no load start, so any such link in a document does it. `file:` and `data:` never reach the
+  policy and report nothing. WebKitGTK reports no finished load for any of these. The `http:`
+  request also reached the rig's server every time on WebView2, while the page stayed where it
+  was: cancelling stops the commit, not the request, so on Windows "the policy refused it" does
+  not mean "nothing was sent". That adds no reach: an allowed `https:` navigation leaves before
+  its bounce on both engines, and an unknown document has no CSP to begin with.
+- **One mint per generation (all platforms).** Because of the above, WebView2 reports several
+  finished loads for one generation in ordinary use. `Load::load_finished` now mints once: a repeat while PENDING hands back the same
   secret and nonce, and a repeat once ARMED does nothing. Without this, the order
   pending, armed, pending left the host pending under a new secret an armed page ignores, so every
   later call failed for the rest of the load and the handle and exports were wiped. The rig row is
@@ -12293,9 +12303,22 @@ neither); the Windows key store is an explicit stub that refuses everything unti
   armed genuine while its unknown bytes ran (security measured this reaching the agent on
   WebKitGTK; nothing could sign, since no store is wired). One unknown serve now makes the load
   unknown, and the verdict dies with the mint that used it. The rig scenario is security's race
-  on both engines, read from the host's own arming line. It fails closed in two ways worth
+  on both engines, read from the host's own arming line (the swap landed between the two serves in
+  10 of 10 attempts on WebKitGTK and 7 of 10 on WebView2, and every one armed unknown). Each half
+  has a rig mutant: without the AND the attacker's bytes arm genuine and reach the agent. It fails closed in two ways worth
   knowing: a page that fetched its own URL while unknown makes its next load unknown too, and a
   document that reloads in the instant between its serve and the previous load's finish report
   has no verdict left, so it opens unarmed until the next reload.
+- **A document's URL includes its fragment (all platforms).** The host compared the URL exactly,
+  but a page moves its own fragment without asking: `history.pushState` is invisible on both
+  engines (bento/spaces does it on every page change), and a plain `#x` link is invisible on
+  WebView2 (no policy call, no load start, no finish). WebKitGTK does ask, and the policy refused
+  it, so in-page links did nothing on Linux. From then on a reload's URL carried the fragment and
+  the policy refused that too. `is_document` now takes the part before `#`, for the navigation
+  policy, the bounce and the mint: a fragment never reaches the protocol handler, so it is the same
+  bytes from the same origin. A query is still another URL. The watchdog keeps the exact compare,
+  since `own#x` is usually a same-document navigation that starts no load and it would rebuild a
+  healthy webview; so a reload from a fragment URL has no watchdog, and WebKitGTK's reload stall on
+  an unknown document is unrecovered in that one case.
 - **Windows file ID** (volume serial plus the 128-bit file ID, `GetFileInformationByHandleEx`) now
   drives the envelope epoch; `GlobalMemoryStatusEx` answers the recovery memory check.

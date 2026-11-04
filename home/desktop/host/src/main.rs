@@ -33,7 +33,7 @@
 
 use bento_id_agent::agent::{Agent, Caller, Clock, KeyRole, KeyStore, Policy, StoreError};
 use bento_hostcore::{
-    arming::{main_frame_load, navigation_allowed, Bounce, Load, Registry},
+    arming::{is_document, main_frame_load, navigation_allowed, Bounce, Load, Registry},
     origin::{self, Index},
     trust::{Trust, Verdict},
 };
@@ -307,6 +307,9 @@ fn open_window(app: &tauri::AppHandle, i: usize) -> tauri::Result<()> {
             let label = label.clone();
             move |url| {
                 let ok = navigation_allowed(url.as_str(), &own);
+                // Exact on purpose: `own#x` is usually a same-document navigation, which
+                // starts no load, and the watchdog would rebuild a healthy webview. So a
+                // reload from a fragment URL has no watchdog.
                 if url.as_str() == own { watchdog(app_h.clone(), label.clone()) }
                 if !ok { eprintln!("NAVIGATION BLOCKED {} -> {}", label, &url.as_str()[..url.as_str().len().min(80)]) }
                 ok
@@ -339,7 +342,7 @@ fn open_window(app: &tauri::AppHandle, i: usize) -> tauri::Result<()> {
                 }
                 let Some(l) = h.reg.loads.get_mut(&label) else { return };
                 eprintln!("FINISHED {label} generation {} url={}", l.generation, &url[..url.len().min(80)]);
-                if let Some(a) = l.load_finished(url == own) {
+                if let Some(a) = l.load_finished(is_document(&url, &own)) {
                     eprintln!("PENDING {label} generation {} url={url}", a.generation);
                     let _ = w.eval(&format!("window.__bentoArm && window.__bentoArm({:?}, {:?})", a.cap, a.nonce));
                 }

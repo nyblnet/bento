@@ -53,6 +53,7 @@
   JSON.stringify = function (v) { try { if (v && typeof v === 'object' && typeof v.cap === 'string') seen.add(v.cap) } catch (_) {} return js.apply(this, arguments) }
   addEventListener('load', async () => {
     if (MODE === 'navlock') return runNavlock()
+    if (MODE === 'fragment') return runFragment()
     if (MODE === 'race' || MODE === 'resave') return runRace()
     if (MODE === 'oac') return runOac()
     if (MODE === 'acl') return runAcl()
@@ -313,7 +314,7 @@
         try { location.href = url } catch (e) { N.rows[t + '_threw'] = String(e) }
         await sleep(900)
         await mark('after-' + t)
-        N.rows[t] = { same_realm: window.__nlRealm === realm, same_cap: window.__rigCap === cap, save: await saveVia(handle, 'b' + t), begin: await rawBegin() }
+        N.rows[t] = { same_realm: window.__nlRealm === realm, same_cap: window.__rigCap === cap, hash: location.hash, save: await saveVia(handle, 'b' + t), begin: await rawBegin() }
       }
       // §19e d1: a live embed loads and navigates after arming, three ways. None of it may
       // touch the load: no load start, no finish, no mint, and the capability keeps working.
@@ -335,6 +336,34 @@
     } catch (e) { N.error = String((e && e.stack) || e) }
     await mark('nl-done')
     await inv('rig_done', { report: { navlock: N } })
+  }
+
+  // A document that moved its own fragment, by a link and by pushState (bento/spaces does both),
+  // then reloads. The reload's URL carries the fragment: it must still load, arm and save, and
+  // nothing may reach the system browser. A refused reload never reports, which fails the row.
+  async function runFragment() {
+    await until(() => window.__rigCap, 15000)
+    const cap = window.__rigCap, kept = sessionStorage.getItem('frag')
+    const handle = await openHandle()
+    if (!kept) {
+      const F = {}
+      await mark('frag-start')
+      location.href = '#frag-link'
+      await sleep(600)
+      F.link = location.hash
+      history.pushState(null, '', '#p/frag')
+      F.push = location.hash
+      F.same_cap = window.__rigCap === cap
+      F.save = await saveVia(handle, 'frag')
+      sessionStorage.setItem('frag', JSON.stringify({ F, cap }))
+      await mark('frag-reload')
+      location.reload()
+      return
+    }
+    const { F, cap: old } = JSON.parse(kept)
+    await mark('frag-reloaded')
+    Object.assign(F, { after: location.hash, armed: !!cap, rotated: cap !== old, save2: await saveVia(handle, 'frag2') })
+    await inv('rig_done', { report: { fragment: F } })
   }
 
   // B2, security's mk2.py, on the rig. An UNKNOWN document, armed for its file only, tries
