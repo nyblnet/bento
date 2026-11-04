@@ -23,6 +23,7 @@
 // false, rather than guessing.
 
 import type { BentoDoc, Slide, SlideElement, TableElement, TextElement } from './model.ts'
+import { isWebUrl } from './model.ts'
 import { MODEL_KEYS } from './modelkeys.generated.ts'
 import { isRemoteUrl } from '../../kernel/src/net.ts'
 import { measureElements, measureTables } from './measure.ts'
@@ -355,7 +356,8 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
       }
 
       // references -----------------------------------------------------------
-      if (el.link && !slideIds.has(el.link)) {
+      // a web address is a link too (model.ts isWebUrl): it opens in a new tab
+      if (el.link && !slideIds.has(el.link) && !isWebUrl(el.link)) {
         add({ ...at, code: 'broken-link', severity: 'error', path: 'link',
           message: `Links to slide "${el.link}", which does not exist — clicking it does nothing.` })
       }
