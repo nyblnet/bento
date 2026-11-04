@@ -5,7 +5,6 @@
 // into a single undo checkpoint.
 
 import type { Store } from '../store'
-import { adoptComponents } from '../components'
 import { uid, type Slide, type SlideElement } from '../model'
 import { morphPairs } from './morph'
 
@@ -29,9 +28,8 @@ import { buildImageProps, buildMediaProps, buildCodeProps, buildEmbedProps } fro
 import { buildChartProps } from './inspector/chart'
 import { buildTableProps } from './inspector/table'
 import { buildAutoLayout, wrapInFrame } from './inspector/layout'
-import { reflowByArray, moveIntoFrame, moveOutBeside, withDescendants } from '../layout'
+import { reflowByArray, moveIntoFrame, moveOutBeside } from '../layout'
 import { buildShadow, buildBlur } from './inspector/effects'
-import { freshGroups } from './clipboard'
 
 export class PropsPanel {
   private burst = false
@@ -48,9 +46,11 @@ export class PropsPanel {
   /** A command's tooltip with its keys (commands.ts titleFor) — set by the
    *  editor, which owns the command list, so a hint cannot drift from the key. */
   titleOf: (id: string, label: string) => string = (_id, label) => label
-  /** Delete the selection — set by the editor, whose delete asks before a
-   *  component's main goes and promotes a copy; alone, the panel just deletes. */
-  remove: (els: SlideElement[]) => void = (els) => this.deleteEls(els)
+  /** Delete and Duplicate on the context strip — set by the editor, so the
+   *  buttons are ⌫ and ⌘D exactly (a component main's confirm, locked
+   *  elements kept, fresh ids), not a second implementation of either. */
+  remove: (els: SlideElement[]) => void = () => {}
+  duplicate: (els: SlideElement[]) => void = () => {}
   /** Morph preview on the canvas: 0..1 of the way in, null restores — set
    *  by the editor to the canvas, which owns the rendered nodes. */
   onMorphPreview: ((t: number | null) => void) | null = null
@@ -562,35 +562,6 @@ export class PropsPanel {
         if (el.groupId && gids.has(el.groupId)) { delete el.groupId; delete el.groupName }
       }
     }, true)
-  }
-
-  private duplicate(picked: SlideElement[]) {
-    // a frame brings its contents; the batch keeps its groups and frames among
-    // its copies (clipboard.freshGroups)
-    const els = withDescendants(this.store.slide, picked)
-    const clones = freshGroups(els.map((el) => ({
-      ...JSON.parse(JSON.stringify(el)),
-      id: `${el.id.replace(/-copy\d*$/, '')}-copy${Math.floor(Math.random() * 1000)}`,
-      x: el.x + 24,
-      y: el.y + 24,
-    })), els)
-    adoptComponents(clones, this.store.doc)
-    this.store.commit(() => this.store.slide.elements.push(...clones))
-    const top = new Set(picked.map((e) => els.indexOf(e)))
-    this.store.select(clones.filter((_, i) => top.has(i)).map((c) => c.id))
-  }
-
-  private deleteEls(els: SlideElement[]) {
-    // locked elements stay (#838); the rest go — a frame with its contents —
-    // and the locked ones stay selected
-    const doomed = els.filter((e) => !e.locked)
-    if (!doomed.length) return
-    const ids = new Set(withDescendants(this.store.slide, doomed).map((e) => e.id))
-    const kept = els.filter((e) => e.locked).map((e) => e.id)
-    this.store.commit(() => {
-      this.store.slide.elements = this.store.slide.elements.filter((e) => !ids.has(e.id))
-    })
-    this.store.select(kept)
   }
 
   /** Also driven by the canvas context menu (editor.ts). */

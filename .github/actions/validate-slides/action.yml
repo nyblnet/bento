@@ -704,3 +704,18 @@ runs:
       # script in a scratch repo, with the old always-write behaviour red.
       shell: bento-step {0}
       run: node scripts/test-schema-frozen.mjs
+
+    - name: Starter deck rig
+      # The starter deck is the example of how a deck is built: a derive fixed
+      # point (opening it loses no token binding or component override), valid,
+      # every bound token exists and agrees with its literal, every copy has a
+      # main, every frame child sits inside its frame, and layers are named.
+      shell: bento-step {0}
+      run: node scripts/test-slides-starterdeck.ts
+
+    - name: Locale resolution rig
+      # A browser whose language is an alias (pt-BR) resolves to a picker code,
+      # so Preferences shows the language the UI is in, and choosing English is
+      # an override that survives a reload instead of clearing back to Portuguese.
+      shell: bento-step {0}
+      run: node scripts/test-locale-resolve.ts

@@ -15,7 +15,8 @@
 // changes nothing (the solver is a fixed point, so the editor's doc hook
 // cannot loop); and the layer list shows children under their frame.
 
-import { layoutSlide, frameClip, frameChildren, moveInFrame, reflowByArray, moveIntoFrame, moveOutBeside, canAccept } from '../slides/src/layout.ts'
+import { layoutSlide, frameClip, frameChildren, moveInFrame, reflowByArray, moveIntoFrame, moveOutBeside, canAccept, flagged } from '../slides/src/layout.ts'
+import { syncComponents } from '../slides/src/components.ts'
 import { layerRows } from '../slides/src/editor/layerrows.ts'
 
 let failures = 0
@@ -282,6 +283,37 @@ console.log('\ndrop into a frame, take out (Layers drag, canvas drag)\n')
   const ax = at(s, 'a').x
   ok(moveOutBeside(s, ['a'], 'y', true) && at(s, 'a').parentId === undefined && at(s, 'a').x === ax, 'taken out, a keeps its place on the slide')
   ok(ids(s).indexOf('a') === ids(s).indexOf('y') + 1 && kids(s) === 'b', `…lands just above y in paint order, and the frame keeps b (${ids(s)})`)
+}
+
+console.log('\na locked or hidden frame holds its contents\n')
+{
+  const s = slide(frame({ dir: 'row' }), box('a', 0, 0, 50, 50, { parentId: 'f' }), frame({ dir: 'col' }, 0, 0, 100, 100), box('c', 0, 0, 10, 10))
+  s.elements[2].id = 'g'; s.elements[2].parentId = 'f'; s.elements[3].parentId = 'g'
+  s.elements[0].locked = true
+  const L = flagged(s, 'locked')
+  ok(L.has('f') && L.has('a') && L.has('g') && L.has('c'), 'a locked frame locks its children and theirs')
+  ok(!s.elements[1].locked && !s.elements[3].locked, '…in effect only: their own flags are untouched, so unlocking gives them back as they were')
+  s.elements[0].locked = undefined; s.elements[2].hidden = true
+  const H = flagged(s, 'hidden')
+  ok(H.has('g') && H.has('c') && !H.has('f') && !H.has('a') && flagged(s, 'locked').size === 0, 'a hidden inner frame hides its own contents, nothing above it')
+  const rows = layerRows(s)
+  ok(rows.find((r) => r.id === 'c')!.heldHidden && !rows.find((r) => r.id === 'g')!.heldHidden, 'Layers marks the child as hidden by its frame, the frame as hidden by itself')
+  const loop = slide(box('x', 0, 0, 10, 10, { parentId: 'y', locked: true }), box('y', 0, 0, 10, 10, { parentId: 'x' }))
+  ok(flagged(loop, 'locked').size === 2, 'a parentId cycle in a hand-written file terminates')
+}
+
+console.log('\nlock and visibility are a layer\'s own, not a component\'s\n')
+{
+  const comp = { id: 'k1' }
+  const doc: any = { slides: [
+    slide(box('m', 0, 0, 50, 50, { component: { ...comp, main: true } })),
+    { ...slide(box('c1', 100, 0, 50, 50, { component: { ...comp } })), id: 's2' },
+  ], theme: {} }
+  syncComponents(doc)
+  doc.slides[0].elements[0].locked = true; doc.slides[0].elements[0].hidden = true
+  syncComponents(doc)
+  const copy = doc.slides[1].elements[0]
+  ok(!copy.locked && !copy.hidden, `locking and hiding the main leaves its copies alone (copy L${+!!copy.locked}H${+!!copy.hidden})`)
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

@@ -248,6 +248,8 @@ export function openShortcuts(commands: Command[]) {
     opener?.focus?.()
   }
   const onKey = (ev: KeyboardEvent) => {
+    // a sheet removed without close() must not keep swallowing every key
+    if (!overlay.isConnected) { document.removeEventListener('keydown', onKey, true); return }
     ev.stopPropagation()
     if (ev.key === 'Escape') {
       ev.preventDefault()

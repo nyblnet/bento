@@ -382,7 +382,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-main { flex: 1; display: flex; min-height: 0; }
 
 .ed-sidebar {
-  width: var(--panew, 188px);
+  width: var(--panew, 232px);
   flex: none;
   overflow-y: auto;
   overflow-x: hidden;
@@ -3078,15 +3078,16 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-tokens-body > .ed-token-row:not(.ed-token-adding) { grid-template-columns: 20px minmax(0, 1fr) var(--tok-val) 20px; }
 .ed-tokens-body > .ed-token-row > .ed-token-value { justify-self: stretch; text-align: end; }
 .ed-tokens-body > .ed-token-row > .ed-token-uses { justify-self: stretch; }
+/* the hover − and ⋯ end where the name does: over the value they would block
+   its edit, and over the count they would take the click that walks the uses */
+.ed-tokens-body > .ed-token-row > .ed-token-acts { inset-inline-end: calc(var(--tok-val) + 32px); }
 /* a narrow column never breaks a row onto two lines (two uneven lines per
-   token was the bug): the value column narrows — a hex still fits in 44px —
-   and only past that does the value step aside for the name. */
+   token was the bug): the value column narrows to 52px — what a hex needs —
+   and the name truncates. The value never steps aside: it is the only way to
+   edit a token. ⋯ alone stays on hover there; its menu has Delete token. */
 @container (max-width: 220px) {
-  .ed-tokens-body > .ed-token-row:not(.ed-token-adding) { grid-template-columns: 20px minmax(0, 1fr) 44px 20px; }
-}
-@container (max-width: 150px) {
-  .ed-tokens-body > .ed-token-row:not(.ed-token-adding) { grid-template-columns: 20px minmax(0, 1fr) 20px; }
-  .ed-tokens-body > .ed-token-row > .ed-token-value { display: none; }
+  .ed-tokens-body { --tok-val: 52px; }
+  .ed-token-acts > .ed-token-remove:not(:only-child) { display: none; }
 }
 .ed-tokens-body > .ed-token-row > .ed-token-swatch, .ed-tokens-body > .ed-token-row > .ed-tokpick-prev { width: 20px; height: 20px; }
 /* a built-in's fixed name sits where an editable name's text does (button padding + border) */
@@ -3265,7 +3266,7 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 
 /* help folded behind a "?" on the section header line (panels.ts applyAccordion) */
 .ed-help-btn {
-  position: absolute; top: -24px; inset-inline-end: 0; width: 18px; height: 18px; padding: 0;
+  position: absolute; top: -26px; inset-inline-end: 0; width: 18px; height: 18px; padding: 0;
   display: grid; place-items: center; font: 600 11px/1 system-ui, sans-serif; color: var(--muted);
   background: none; border: 1px solid var(--line); border-radius: 50%; cursor: pointer;
 }
@@ -3603,11 +3604,13 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
      the row's other marks, and the list flickered under the pointer */
   opacity: 0; pointer-events: none; transition: opacity .1s;
 }
-.ed-layer-morph + .ed-layer-act, .ed-layer-label + .ed-layer-act { margin-inline-start: auto; }
+.ed-layer-label + .ed-layer-act { margin-inline-start: auto; }
 .ed-layer-act svg { width: 14px; height: 14px; }
 .ed-layer:hover .ed-layer-act, .ed-layer:focus-within .ed-layer-act, .ed-layer-act.on, .ed-layer-act:focus-visible { opacity: 1; pointer-events: auto; }
 .ed-layer-act:hover { background: var(--chrome-2); color: var(--ink); }
 .ed-layer.is-hidden .ed-layer-label, .ed-layer.is-hidden .ed-layer-glyph { opacity: 0.45; }
+/* locked by its frame: the padlock shows, faint — the frame's lock is the one to undo */
+.ed-layer.held-locked .ed-layer-locked { opacity: 0.4; }
 .ed-morph-preview { width: 100%; accent-color: var(--morph); }
 /* Vector booleans in the insert tools: shown only while 2+ closed shapes are
    selected, set off from the insert buttons by a hairline. */

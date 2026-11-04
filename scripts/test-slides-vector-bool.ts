@@ -111,6 +111,9 @@ console.log('\nelliptical arcs\n')
   ok(near(Math.abs(polyArea(big)), Math.PI * 2500 * 0.75, 0.01), 'the large-arc flag takes the long way (¾ disc)')
   // radii too small for the endpoints are scaled up to just reach (a half circle)
   ok(near(Math.abs(polyArea(flattenPath('M 0 0 A 1 1 0 0 1 100 0 Z'))), (Math.PI * 2500) / 2, 0.01), 'radii too small are scaled up, as SVG does')
+  let threw = ''
+  try { flattenPath('M0 0 L 10 0 L 10 10 A5 5 0 Z') } catch (e) { threw = String(e) }
+  ok(!threw, `a truncated arc (flags missing) does not throw (${threw || 'no throw'})`)
   check('arc-circle ∩ square', S({ shape: 'path', d: 'M 0 50 A 50 50 0 0 1 100 50 A 50 50 0 0 1 0 50 Z', pathBox: [0, 0, 100, 100] }), S({ x: 50, y: 0, w: 100, h: 100 }), 'intersect', (Math.PI * 2500) / 2)
 }
 

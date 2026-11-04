@@ -7,7 +7,7 @@
 // its import sites are unchanged.
 
 import type { ShapeElement, Slide } from './model'
-import { movePathEnds, pathEnds } from './tips'
+import { movePathEnds, pathEnds } from './tips.ts'
 import { boxCenter, connectorEndpoint, lineEndpoints, setLineEndpoints, type Pt } from '../../kernel/src/geom.ts'
 
 const rnd = (v: number) => Math.round(v * 100) / 100

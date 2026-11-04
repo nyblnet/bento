@@ -92,7 +92,7 @@ export function flattenPath(d: string): Poly {
   const n = () => Number(tk[i++])
   // an arc flag is one digit and may be packed against the next ("a5 5 0 01 10 10")
   const flag = (): number => {
-    const t = tk[i]
+    const t = tk[i] ?? '' // a truncated arc ("A5 5 0 Z") reads NaN, and orient() drops that contour
     if (t.length > 1 && /^[01]/.test(t)) { tk[i] = t.slice(1); return Number(t[0]) }
     i++
     return Number(t)

@@ -2,10 +2,9 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 // The starter deck is the example of how a Bento deck is built: named layers,
-// groups, auto-layout frames, components and design tokens. Bundled (the
-// slides sources use extensionless imports):
+// groups, auto-layout frames, components and design tokens.
 //
-//   slides/node_modules/.bin/esbuild scripts/test-slides-starterdeck.ts --bundle --platform=node --format=esm --outfile=/tmp/t.mjs && node /tmp/t.mjs
+//   node scripts/test-slides-starterdeck.ts
 //
 // WHAT THIS PROVES. The shipped deck is a derive fixed point (a boot changes
 // nothing, so no token binding or component override is lost on opening); it
@@ -14,13 +13,16 @@
 // frame child sits inside its frame; and each invisible hit rect covers the
 // button it serves.
 
-import { starterDoc } from '../slides/src/starterdeck.ts'
-import { derive, deriveMemory } from '../slides/src/derive.ts'
-import { validateDoc } from '../slides/src/validate.ts'
-import { components, copiesOf } from '../slides/src/components.ts'
-import { isFrame } from '../slides/src/layout.ts'
-import { tokenName, tokenValue } from '../slides/src/tokens.ts'
-import { parseThemeRef } from '../slides/src/palette.ts'
+// validate.ts reaches render.ts and its extensionless imports: resolve them as the build does
+import { register } from 'node:module'
+register('./lib/ts-resolve-hooks.mjs', import.meta.url)
+const { starterDoc } = await import('../slides/src/starterdeck.ts')
+const { derive, deriveMemory } = await import('../slides/src/derive.ts')
+const { validateDoc } = await import('../slides/src/validate.ts')
+const { components, copiesOf } = await import('../slides/src/components.ts')
+const { isFrame } = await import('../slides/src/layout.ts')
+const { tokenName, tokenValue } = await import('../slides/src/tokens.ts')
+const { parseThemeRef } = await import('../slides/src/palette.ts')
 
 let failures = 0
 const ok = (c: unknown, msg: string) => { if (!c) { failures++; console.error('FAIL', msg) } }

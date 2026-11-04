@@ -84,16 +84,23 @@ try {
   }
 
   console.log('a fully visible thumb, the current slide scrolled out of view\n')
-  // [current slide (off-screen), list scroll, target, what the target is]
-  for (const [from, scroll, target, what] of [
-    ['s01', 400, 's08', 'a plain slide (current one above, off-screen)'],
-    ['s01', 300, 's06', 'a parent with states'],
-    ['s01', 300, 's06a', 'a state slide'],
-    ['s01', 500, 's11', 'a hidden slide'],
-    ['s15', 0, 's03', 'a plain slide (current one below, off-screen)'],
-    ['s15', 0, 's04', 'a hidden slide (current one below)'],
+  // the list scroll that centres a thumb: measured, not a fixed offset, so a
+  // wider sidebar (taller thumbs) does not leave the target half out of view
+  const centred = (id) => p.evaluate((i) => {
+    const sb = document.querySelector('.ed-sidebar'), sr = sb.getBoundingClientRect()
+    const r = sb.querySelector(`.ed-thumb[data-index="${i}"]`).getBoundingClientRect()
+    return Math.max(0, Math.round(sb.scrollTop + r.top - sr.top - (sb.clientHeight - r.height) / 2))
+  }, idx(id))
+  // [current slide (off-screen), target, what the target is]
+  for (const [from, target, what] of [
+    ['s01', 's08', 'a plain slide (current one above, off-screen)'],
+    ['s01', 's06', 'a parent with states'],
+    ['s01', 's06a', 'a state slide'],
+    ['s01', 's11', 'a hidden slide'],
+    ['s15', 's03', 'a plain slide (current one below, off-screen)'],
+    ['s15', 's04', 'a hidden slide (current one below)'],
   ]) {
-    await setUp(from, scroll)
+    await setUp(from, await centred(target))
     const pre = await geom(from)
     const g0 = await geom(target)
     const fully = g0.top >= g0.visTop && g0.bottom <= g0.visBottom

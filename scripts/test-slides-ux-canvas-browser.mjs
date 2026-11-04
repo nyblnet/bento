@@ -109,6 +109,14 @@ try {
   await p.mouse.click(...(await centre('t'))); await p.waitForTimeout(250)
   await p.keyboard.press('Shift+A'); await p.waitForTimeout(300)
   ok((await els()).some((e) => e.layout), '⇧A on a selected text box still wraps it in a frame')
+  await load([text('t', 200, 100, 600, 80, 'Hello')])
+  await deselect()
+  await p.mouse.click(...(await centre('t'))); await p.waitForTimeout(250)
+  const leftOpen = () => p.evaluate(() => { const s = document.querySelector('.ed-sidebar'); return !!s && s.getBoundingClientRect().width > 0 })
+  const wasOpen = await leftOpen()
+  await p.keyboard.press('['); await p.waitForTimeout(300)
+  ok((await leftOpen()) !== wasOpen && (await els())[0].html === 'Hello', '[ on a selected text box toggles the slide list, and types no bracket')
+  await p.keyboard.press('['); await p.waitForTimeout(300)
 
   console.log('\n3. a frame is one unit\n')
   const card = () => [frame('f', 100, 100, 400, 120), rect('c1', 110, 110, 100, 100, { parentId: 'f' }), text('c2', 230, 110, 200, 60, 'Card', { parentId: 'f' })]

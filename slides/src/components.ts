@@ -31,8 +31,10 @@ type El = SlideElement & Record<string, unknown> & { component?: Comp }
 
 /** Keys a copy never takes from its main. x/y follow the main as an offset;
  *  parentId names a frame by id and sizing is relative to that frame, so both
- *  are the copy's own (instanceOf translates them once, through the copy's ids). */
-const OWN = new Set(['id', 'groupId', 'groupName', 'name', 'component', 'x', 'y', 'morphId', 'parentId', 'sizing'])
+ *  are the copy's own (instanceOf translates them once, through the copy's ids).
+ *  locked and hidden are editing state on one layer: locking or hiding the main
+ *  must not lock or hide every copy across the deck. */
+const OWN = new Set(['id', 'groupId', 'groupName', 'name', 'component', 'x', 'y', 'morphId', 'parentId', 'sizing', 'locked', 'hidden'])
 
 export interface ComponentInfo { id: string; name: string; slideId: string; main: El[] }
 
@@ -110,7 +112,7 @@ export function syncComponents(doc: BentoDoc): boolean {
           const m = byKey.get(el.component!.key)!
           const over = new Set(el.component!.over ?? [])
           if (moved.has(el)) { over.add('x'); over.add('y'); changed = true }
-          const keys = new Set([...Object.keys(m), ...Object.keys(el)].filter((k) => !OWN.has(k)))
+          const keys = new Set([...Object.keys(m), ...Object.keys(el)].filter((k) => !OWN.has(k) && k !== '__proto__'))
           for (const k of keys) {
             if (over.has(k) || eq(el[k], m[k])) continue
             if (mainMoved) {

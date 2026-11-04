@@ -20,12 +20,12 @@
 // One pass is a fixed point: running it again changes nothing.
 
 import type { BentoDoc } from './model'
-import { paletteSignature, resolveThemeRefs } from './palette'
-import { syncTokenRefs, tokenSignature } from './tokens'
-import { syncComponents } from './components'
-import { layoutAll } from './layout'
-import { routeAllConnectors } from './connectors'
-import { mirrorAllStacks } from './stacks'
+import { paletteSignature, resolveThemeRefs } from './palette.ts'
+import { syncTokenRefs, tokenSignature } from './tokens.ts'
+import { syncComponents } from './components.ts'
+import { layoutAll } from './layout.ts'
+import { routeAllConnectors } from './connectors.ts'
+import { mirrorAllStacks } from './stacks.ts'
 
 /** What the previous pass saw: a change since then is a move to follow; a
  *  disagreement without one is a hand edit to keep. */

@@ -39,13 +39,13 @@
 // untrusted intake — remote CRDT ops off the relay — can adopt the same
 // checks, key by key, through `checkElementProp`.
 
-import { stripEnvelope } from './envelope'
-import type { Slide, SlideElement } from './model'
-import { isWebUrl, REQUIRED_ELEMENT_KEYS } from './model'
+import { stripEnvelope } from './envelope.ts'
+import type { Slide, SlideElement } from './model.ts'
+import { isWebUrl, REQUIRED_ELEMENT_KEYS } from './model.ts'
 import { parseThemeRef } from './palette.ts'
 import { tokenName } from './tokens.ts'
-import { MODEL_KEYS } from './modelkeys.generated'
-import { TIP_KINDS } from './tips'
+import { MODEL_KEYS } from './modelkeys.generated.ts'
+import { TIP_KINDS } from './tips.ts'
 
 /** Reject. JSON has no `undefined`, so it can never collide with a real value. */
 const DROP = undefined

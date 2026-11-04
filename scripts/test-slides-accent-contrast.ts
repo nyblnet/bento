@@ -72,6 +72,7 @@ const AUDITED: Record<string, Bg> = {
   '.ed-ratio-lock[aria-pressed="true"]': 'surface',    // the closed padlock between W and H, in the inspector
   '.ed-a11y-badge.is-pass': 'surface',
   '.ed-link-btn': 'surface',                          // "Select the frame" under a frame child's hint, in the inspector                 // AA / AAA in the Export section
+  '.ed-keys-foot a': 'surface',                       // "Full guide at bento.page/help →" under the shortcuts dialog
 }
 const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim().split('\n').pop()!.trim(), body: m[2] }))
 const inkText = rules.filter((r) => /(^|;|\s)color:\s*var\(--accent-ink\)/.test(r.body)).map((r) => r.sel)

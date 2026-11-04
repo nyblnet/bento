@@ -80,6 +80,26 @@ type Frame = ShapeElement & { layout: NonNullable<ShapeElement['layout']> }
 export const isFrame = (el: SlideElement | undefined): el is Frame =>
   !!el && el.type === 'shape' && el.shape === 'rect' && !!(el as ShapeElement).layout
 
+/** The ids that are locked (or hidden) in effect: their own flag, or any
+ *  frame's they sit in — a locked frame locks its contents and a hidden one
+ *  hides them, as one unit, the way delete and duplicate already treat it.
+ *  Each element's own flag is untouched, so unlocking the frame gives the
+ *  children back exactly as they were. Cycle-safe on a hand-written file. */
+export function flagged(slide: Pick<Slide, 'elements'>, key: 'locked' | 'hidden'): Set<string> {
+  const byId = new Map(slide.elements.map((e) => [e.id, e]))
+  const memo = new Map<string, boolean>()
+  const on = (e: SlideElement, seen: Set<string>): boolean => {
+    const known = memo.get(e.id)
+    if (known !== undefined) return known
+    let v = !!e[key]
+    const up = e.parentId ? byId.get(e.parentId) : undefined
+    if (!v && up && !seen.has(up.id)) v = on(up, seen.add(e.id))
+    memo.set(e.id, v)
+    return v
+  }
+  return new Set(slide.elements.filter((e) => on(e, new Set())).map((e) => e.id))
+}
+
 /** The elements and everything inside them (a frame's children, theirs, …),
  *  in paint order. A frame and its contents are one unit: copy, duplicate
  *  and delete act on this, never on the frame alone. */
@@ -180,7 +200,7 @@ export function layoutSlide(slide: Slide): boolean {
 type Put = (el: SlideElement, k: 'x' | 'y' | 'w' | 'h', v: number) => void
 
 /** Grid columns as the solver uses them: a whole number 1..64, whatever the file or a token says. */
-const colsOf = (f: Frame) => { const c = Math.round(f.layout.cols ?? 2); return Number.isFinite(c) ? Math.min(64, Math.max(1, c)) : 2 }
+export const colsOf = (f: Frame) => { const c = Math.round(f.layout.cols ?? 2); return Number.isFinite(c) ? Math.min(64, Math.max(1, c)) : 2 }
 
 /** Whether `f`'s parent frame sets `f`'s size on axis k (fill on that axis, or stretch across). */
 function ownedByParent(f: Frame, byId: Map<string, SlideElement>, k: 'w' | 'h'): boolean {

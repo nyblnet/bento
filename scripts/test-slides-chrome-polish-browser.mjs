@@ -45,7 +45,8 @@ const open = async ({ locale = 'en-US', width = 1440, slides, storage = {} } = {
   await p.goto('file://' + SHELL)
   await p.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-props .ed-tabs'))
   if (slides) {
-    await p.evaluate((slides) => { const d = JSON.parse(JSON.stringify(window.bento.doc)); d.slides = slides; window.bento.loadDoc(JSON.stringify(d)) }, slides)
+    // the fixtures bring their own slides onto a plain theme: the starter deck's palette slots and tokens (ae0942c4) are not theirs
+    await p.evaluate((slides) => { const d = JSON.parse(JSON.stringify(window.bento.doc)); d.slides = slides; delete d.theme.palette; delete d.theme.tokens; window.bento.loadDoc(JSON.stringify(d)) }, slides)
     await p.waitForTimeout(400)
   }
   return { p, ctx, errors }
@@ -176,7 +177,7 @@ const pillOff = (p) => p.evaluate(() => [...document.querySelectorAll('.ed-sideb
   return { side: bar.closest('.ed-sidebar') ? 'side' : 'inspector', dx: Math.abs(b.left + bar.clientLeft + x - r.left), dw: Math.abs(parseFloat(ps.width) - r.width) }
 }))
 for (const locale of ['en-US', 'pt-BR', 'de-DE']) {
-  for (const [w, panels] of [['narrow', { left: 110, right: 190 }], ['default', { left: 188, right: 264 }], ['wide', { left: 330, right: 440 }]]) {
+  for (const [w, panels] of [['narrow', { left: 110, right: 190 }], ['default', { left: 232, right: 264 }], ['wide', { left: 330, right: 440 }]]) {
     await run(async () => {
       const { p, ctx } = await open({ locale, width: 1440, storage: { 'bento-ed-panels': JSON.stringify(panels) } })
       await p.evaluate(() => document.querySelector('.ed-stage-scale [data-el-id]')?.dispatchEvent(new MouseEvent('click', { bubbles: true })))

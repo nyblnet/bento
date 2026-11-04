@@ -33,6 +33,8 @@ import type { BentoDoc, Slide, SlideElement } from '../model'
 import type { Box } from './exportimages'
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+/** CSS in a CDATA section: a `]]>` inside it (a hostile font family) would end the section and open markup. */
+const cdata = (css: string) => `<![CDATA[${css.replace(/]]>/g, ']]]]><![CDATA[>')}]]>`
 const n = (v: number) => String(Math.round(v * 100) / 100)
 let uid = 0
 const nextId = (p: string) => `${p}${++uid}`
@@ -125,7 +127,7 @@ function textAttrs(cs: CSSStyleDeclaration, fill: string): string {
 async function snapshot(node: Element, w: number, h: number, css: string): Promise<string> {
   const k = 2
   const xhtml = new XMLSerializer().serializeToString(node)
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w * k}" height="${h * k}" viewBox="0 0 ${w} ${h}"><foreignObject width="${w}" height="${h}"><div xmlns="http://www.w3.org/1999/xhtml" style="font:${esc(getComputedStyle(node).font)};color:${esc(getComputedStyle(node).color)}"><style><![CDATA[${css}]]></style>${xhtml}</div></foreignObject></svg>`
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w * k}" height="${h * k}" viewBox="0 0 ${w} ${h}"><foreignObject width="${w}" height="${h}"><div xmlns="http://www.w3.org/1999/xhtml" style="font:${esc(getComputedStyle(node).font)};color:${esc(getComputedStyle(node).color)}"><style>${cdata(css)}</style>${xhtml}</div></foreignObject></svg>`
   const img = new Image()
   img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
   await img.decode()
@@ -407,7 +409,7 @@ export async function nativeSlideSvg(doc: BentoDoc, slide: Slide, box?: Box): Pr
     const used = [...fonts].flatMap((f) => f.split(',').map((x) => x.trim().replace(/^["']|["']$/g, '').toLowerCase()))
     const faces = [...fontCss.matchAll(/@font-face\s*{[^}]*}/g)].map((m) => m[0])
       .filter((f) => used.includes((/font-family:\s*["']?([^;"']+)/.exec(f)?.[1] ?? '').trim().toLowerCase()))
-    const style = faces.length ? `<style><![CDATA[${faces.join('\n')}]]></style>` : ''
+    const style = faces.length ? `<style>${cdata(faces.join('\n'))}</style>` : ''
     return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${n(v.w)}" height="${n(v.h)}" viewBox="${n(v.x)} ${n(v.y)} ${n(v.w)} ${n(v.h)}">` +
       `<title>${esc(doc.title || 'Bento slide')}</title>${style}<defs>${defs.join('')}</defs>${body.join('')}</svg>`
   } finally {

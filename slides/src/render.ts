@@ -3,7 +3,7 @@
 // Shared model → DOM renderer. One code path draws slides everywhere:
 // editor canvas, sidebar thumbnails, and Reveal.js sections.
 
-import { frameClip } from './layout'
+import { flagged, frameClip } from './layout'
 import { offlineEnabled, isRemoteUrl, remoteSrcBlocked } from '../../kernel/src/net.ts'
 import type { BentoDoc, EmbedElement, Slide, SlideElement, SvgElement, TableElement } from './model'
 import { morphKey, paginates, isWebUrl, visiblePaint } from './model'
@@ -1023,8 +1023,9 @@ export function renderSlide(slide: Slide, doc: BentoDoc, opts: RenderOpts = {}):
   const fields = opts.fields ?? fieldContext(doc, slide)
   const byId = new Map(slide.elements.map((e) => [e.id, e]))
   // a hidden element (Layers' eye) is drawn nowhere: canvas, thumbnails, the show, print
+  const hidden = flagged(slide, 'hidden') // a hidden frame hides what is inside it
   for (const el of slide.elements) {
-    if (el.hidden) continue
+    if (hidden.has(el.id)) continue
     const node = renderElement(el, doc, { ...opts, fields })
     // a child of a clipping frame (layout.ts) shows only what lies inside it
     const clip = frameClip(el, byId)

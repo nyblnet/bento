@@ -34,7 +34,7 @@ import type { Peer } from '../sync/session'
 import { isMacOS } from '../screens'
 import { aabb, fmt, measureBoxes, union, type Box } from './measure-geom'
 import { drawFrameOverlay } from './frameoverlay'
-import { canAccept, frameChildren, isFrame, layoutSlide, moveInFrame, moveIntoFrame, withDescendants } from '../layout'
+import { canAccept, flagged, frameChildren, isFrame, layoutSlide, moveInFrame, moveIntoFrame, withDescendants } from '../layout'
 import { drawGradientOverlay } from './gradientoverlay'
 import { TransformHud, hudNum, mountModHint } from './hud'
 import { applyMorphPreview, morphGhost } from './morph'
@@ -1118,8 +1118,9 @@ export class SlideCanvas {
     const s = this.scaleHost.getBoundingClientRect(), k = this.scale || 1
     const px = (clientX - s.left) / k, py = (clientY - s.top) / k
     const els = this.store.slide.elements
+    const locked = flagged(this.store.slide, 'locked')
     for (const el of els) {
-      if (!el.locked || topFirst.includes(el.id) || px < el.x || px > el.x + el.w || py < el.y || py > el.y + el.h) continue
+      if (!locked.has(el.id) || topFirst.includes(el.id) || px < el.x || px > el.x + el.w || py < el.y || py > el.y + el.h) continue
       const at = topFirst.findIndex((id) => els.findIndex((e) => e.id === id) < els.indexOf(el))
       topFirst.splice(at < 0 ? topFirst.length : at, 0, el.id)
     }
@@ -1362,7 +1363,7 @@ export class SlideCanvas {
         if (node.dataset.showOnHover !== active) node.style.display = 'none'
       }
     }
-    const lockedIds = new Set(slide.elements.filter((e) => e.locked).map((e) => e.id))
+    const lockedIds = flagged(slide, 'locked') // a locked frame locks its contents
     for (const node of next.querySelectorAll<HTMLElement>('[data-el-id]')) {
       if (this.isGhost(node.dataset.elId!)) node.classList.add('bento-el-ghost-cut')
       if (node.classList.contains('bento-el') && lockedIds.has(node.dataset.elId!)) node.dataset.locked = '1'
@@ -1524,7 +1525,8 @@ export class SlideCanvas {
   private syncTargets() {
     // A single selected line/curve/connector is edited with endpoint handles
     // (LineEditor), not Moveable's box — grab an end and drag it.
-    const sel = this.store.selectedElements.filter((e) => !e.locked)
+    const lockedNow = flagged(this.store.slide, 'locked')
+    const sel = this.store.selectedElements.filter((e) => !lockedNow.has(e.id))
     // a locked element that IS selected (via Layers / Alt-click) gets the lock
     // marker instead of Moveable handles
     this.surface?.querySelectorAll('.bento-lock-sel').forEach((n) => n.classList.remove('bento-lock-sel'))
@@ -2026,10 +2028,11 @@ export class SlideCanvas {
     })
 
     this.selecto.on('selectEnd', (e) => {
+      const locked = flagged(this.store.slide, 'locked')
       const ids = [...new Set((e.selected as HTMLElement[])
         .map((n) => n.dataset.elId)
         .filter((id): id is string => !!id && !this.isGhost(id)) // a marquee never picks up a ghost
-        .filter((id) => !this.store.element(id)?.locked) // ...nor a locked element (#838)
+        .filter((id) => !locked.has(id)) // ...nor a locked element, or one in a locked frame (#838)
         .map((id) => this.liftToFrame(id)))] // a click or a marquee picks frames, not what is inside them
       this.store.select(this.expandGroups(ids))
       if (e.isDragStartEnd && !this.marqueeOnly) {

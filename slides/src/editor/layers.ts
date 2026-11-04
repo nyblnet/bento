@@ -207,7 +207,7 @@ export class LayersUI {
       }
       if (r.groupId && this.folded.has(r.groupId)) continue
       const row = document.createElement('div')
-      row.className = 'ed-layer' + (lit.has(r.id) ? ' sel' : '') + (r.groupId && whole.has(r.groupId) ? ' in-sel' : '') + (r.grouped ? ' grouped' : '') + (r.hidden ? ' is-hidden' : '')
+      row.className = 'ed-layer' + (lit.has(r.id) ? ' sel' : '') + (r.groupId && whole.has(r.groupId) ? ' in-sel' : '') + (r.grouped ? ' grouped' : '') + (r.hidden || r.heldHidden ? ' is-hidden' : '') + (r.heldLocked ? ' held-locked' : '')
       row.dataset.id = r.id
       row.draggable = true
       row.setAttribute('role', 'option')
@@ -221,6 +221,9 @@ export class LayersUI {
       label.className = 'ed-layer-label'
       label.textContent = r.label
       row.append(glyph, label)
+      // the hover-only padlock and eye come BEFORE the marks: their reserved
+      // space sits left of them, so ◇ and ↔ stay flush right with no gap
+      if (this.host.toggle && !this.host.readOnly?.()) row.append(this.flagButton([r.id], !!r.locked, 'locked'), this.flagButton([r.id], !!r.hidden, 'hidden'))
       if (r.comp) {
         const mark = document.createElement('span')
         mark.className = 'ed-layer-comp'
@@ -235,7 +238,6 @@ export class LayersUI {
         badge.title = t('Morphs from the slide before')
         row.appendChild(badge)
       }
-      if (this.host.toggle && !this.host.readOnly?.()) row.append(this.flagButton([r.id], !!r.locked, 'locked'), this.flagButton([r.id], !!r.hidden, 'hidden'))
       row.title = r.label
       row.addEventListener('click', (ev) => this.onClick(ev, r))
       label.addEventListener('dblclick', (ev) => { ev.stopPropagation(); this.rename(r.id) })

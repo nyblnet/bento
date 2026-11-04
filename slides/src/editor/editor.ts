@@ -70,7 +70,7 @@ import { PresenceToasts } from './presencetoasts'
 import { BOOL_OPS, boolBlocked, boolOperands, boolUi, combine, flatten, release } from './booleans'
 import { align, distribute, flip } from './inspector/arrange'
 import type { NodeKind } from './beziereditor'
-import { withDescendants, frameChildren, isFrame, moveInFrame } from '../layout'
+import { withDescendants, flagged, frameChildren, isFrame, moveInFrame, colsOf } from '../layout'
 
 const i18nT = t
 
@@ -218,7 +218,7 @@ export class Editor {
   private updateFound: string | null = null
   private lastAutoCheck: import('../update').UpdateCheck | null = null
   /** side panel widths (px) — user-resizable, persisted per browser */
-  private panelW = { left: 188, right: 264 }
+  private panelW = { left: 232, right: 264 }
 
   constructor(
     private root: HTMLElement,
@@ -728,6 +728,7 @@ export class Editor {
     this.panel = new PropsPanel(this.props, this.store)
     this.panel.titleOf = (id, label) => titleFor(this.commands, id, label)
     this.panel.remove = () => this.deleteSelection()
+    this.panel.duplicate = () => this.duplicateSelection()
     this.panel.layers.mount(this.sideLayers)
     // The Tokens pane outlives build() (the constructor makes it once), but its
     // host is the fresh sideTokens above — re-home it, or a language switch
@@ -755,7 +756,7 @@ export class Editor {
   // --- resizable side panels ------------------------------------------------
 
   private static PANEL_BOUNDS = { left: [110, 400], right: [190, 520] } as const
-  private static PANEL_DEFAULTS = { left: 188, right: 264 } as const
+  private static PANEL_DEFAULTS = { left: 232, right: 264 } as const
 
   private restorePanelWidths() {
     try {
@@ -3575,7 +3576,8 @@ export class Editor {
         if (!this.store.selection.length || this.store.readOnly) return
         this.copySelection()
         // a frame moves with its contents; a locked element is not moved off the slide (#838)
-        const ids = withDescendants(this.store.slide, this.store.selectedElements.filter((e) => !e.locked)).map((e) => e.id)
+        const locked = flagged(this.store.slide, 'locked')
+        const ids = withDescendants(this.store.slide, this.store.selectedElements.filter((e) => !locked.has(e.id))).map((e) => e.id)
         if (!ids.length) return
         this.store.select([])
         this.canvas.setGhost({ slideId: this.store.slide.id, ids })
@@ -3598,7 +3600,8 @@ export class Editor {
       { id: 'select-all', label: 'Select all', keys: `${MOD}A`, scope: 'canvas', when: canvasFree, match: (ev, mod) => mod && !ev.shiftKey && !ev.altKey && key(ev) === 'a', run: () => {
         if (this.thumbs.contains(document.activeElement)) { this.setThumbSel(this.store.doc.slides.map((sl, i) => (sl.stateOf ? -1 : i)).filter((i) => i >= 0)); return }
         const ids = new Set(this.store.slide.elements.map((e) => e.id))
-        this.store.select(this.store.slide.elements.filter((e) => !e.locked && !e.hidden && !(e.parentId && ids.has(e.parentId))).map((e) => e.id))
+        const locked = flagged(this.store.slide, 'locked'), hidden = flagged(this.store.slide, 'hidden')
+        this.store.select(this.store.slide.elements.filter((e) => !locked.has(e.id) && !hidden.has(e.id) && !(e.parentId && ids.has(e.parentId))).map((e) => e.id))
       } },
       { id: 'select-parent', label: 'Select parent', keys: 'Esc', scope: 'canvas', when: () => canvasFree() && sel().length > 0 && sel().every((e) => !!e.parentId && !!this.store.element(e.parentId)), run: () => this.store.select([...new Set(sel().map((e) => e.parentId!))]) },
       { id: 'play-transition', label: 'Play transition', scope: 'always', when: () => !!walkSource(this.store.doc, this.store.slide), run: () => this.playTransition() },
@@ -3702,11 +3705,11 @@ export class Editor {
         // undo a nudge anyway
         const one = this.store.selectedElements.length === 1 ? this.store.selectedElements[0] : null
         const frame = one?.parentId ? this.store.element(one.parentId) : undefined
-        if (one && isFrame(frame) && !one.locked) {
+        if (one && isFrame(frame) && !flagged(this.store.slide, 'locked').has(one.id)) {
           const L = frame.layout
           const along = L.dir === 'col' ? ['ArrowUp', 'ArrowDown'] : ['ArrowLeft', 'ArrowRight']
           const across = L.dir === 'grid' ? ['ArrowUp', 'ArrowDown'] : []
-          const by = along.includes(ev.key) ? (ev.key === along[0] ? -1 : 1) : across.includes(ev.key) ? (ev.key === 'ArrowUp' ? -1 : 1) * (L.cols ?? 2) : 0
+          const by = along.includes(ev.key) ? (ev.key === along[0] ? -1 : 1) : across.includes(ev.key) ? (ev.key === 'ArrowUp' ? -1 : 1) * colsOf(frame) : 0
           if (by) {
             const sibs = frameChildren(this.store.slide, frame)
             const to = sibs.findIndex((e) => e.id === one.id) + by
@@ -3719,9 +3722,10 @@ export class Editor {
         const step = ev.shiftKey ? 10 : 1
         const dx = ev.key === 'ArrowLeft' ? -step : ev.key === 'ArrowRight' ? step : 0
         const dy = ev.key === 'ArrowUp' ? -step : ev.key === 'ArrowDown' ? step : 0
+        const locked = flagged(this.store.slide, 'locked')
         this.store.commit(() => {
           for (const el of this.store.selectedElements) {
-            if (el.locked) continue
+            if (locked.has(el.id)) continue
             el.x += dx
             el.y += dy
           }
@@ -3750,9 +3754,11 @@ export class Editor {
   private typeIntoText(ev: KeyboardEvent): boolean {
     if (ev.metaKey || ev.ctrlKey || ev.altKey || ev.isComposing || [...ev.key].length !== 1) return false
     const sel = this.store.selectedElements
-    if (sel.length !== 1 || sel[0].type !== 'text' || sel[0].locked || this.store.readOnly) return false
+    if (sel.length !== 1 || sel[0].type !== 'text' || this.store.readOnly || flagged(this.store.slide, 'locked').has(sel[0].id)) return false
     if (document.querySelector(MODAL) || this.canvas.isCropEditing || this.canvas.isPathEditing) return false
-    if (ev.shiftKey && this.commands.some((c) => c.match?.(ev, false))) return false
+    // Space is the pan gesture; a shifted key or a symbol bound to a command ([ ] the panels) runs it
+    if (ev.key === ' ') return false
+    if ((ev.shiftKey || !/[\p{L}\p{N}]/u.test(ev.key)) && this.commands.some((c) => c.match?.(ev, false))) return false
     ev.preventDefault()
     this.canvas.editElement(sel[0].id)
     if (!this.canvas.isEditingText) return true
@@ -3852,7 +3858,8 @@ export class Editor {
     if (!this.store.selection.length) return
     // a locked element is never deleted from the canvas (#838): unlock it first;
     // a mixed selection acts on its unlocked part
-    const doomed = this.store.selectedElements.filter((e) => !e.locked)
+    const locked = flagged(this.store.slide, 'locked')
+    const doomed = this.store.selectedElements.filter((e) => !locked.has(e.id))
     if (!doomed.length) return
     const ids = new Set(withDescendants(this.store.slide, doomed).map((e) => e.id))
     const lost = cut ? [] : mainsLost(this.store.doc, ids)
@@ -3861,7 +3868,7 @@ export class Editor {
       this.store.slide.elements = this.store.slide.elements.filter((e) => !ids.has(e.id))
       for (const c of lost) promoteCopy(this.store.doc, c.id)
     })
-    this.store.select(this.store.selectedElements.filter((e) => e.locked).map((e) => e.id)) // the locked part stays selected
+    this.store.select(this.store.selectedElements.filter((e) => locked.has(e.id)).map((e) => e.id)) // the locked part stays selected
   }
 
   /** Selected slides + parents in deck order. */

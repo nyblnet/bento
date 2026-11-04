@@ -118,7 +118,8 @@ try {
   await select('a')
   await p.keyboard.press('Shift+A'); await p.waitForTimeout(200)
   ok((await n()) === 4, `R, T, F and ⇧A behind the sheet insert nothing (${await n()} elements)`)
-  await p.evaluate(() => document.querySelector('.ed-about-overlay')?.remove())
+  // close it as a person does: the sheet's capture listener goes only with close()
+  await p.keyboard.press('Escape'); await p.keyboard.press('Escape'); await p.waitForTimeout(100)
 
   console.log('\n4. the ⌘K palette\n')
   await blur(); await p.keyboard.press('Escape')

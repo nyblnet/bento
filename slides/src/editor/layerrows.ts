@@ -41,6 +41,7 @@
  */
 
 import type { Slide, SlideElement } from '../model.ts'
+import { flagged } from '../layout.ts'
 
 export type LayerRow = {
   id: string
@@ -63,6 +64,9 @@ export type LayerRow = {
   /** Layers' padlock and eye (the element's `locked` / `hidden`) */
   locked?: boolean
   hidden?: boolean
+  /** Locked or hidden by the frame it sits in, not by its own flag. */
+  heldLocked?: boolean
+  heldHidden?: boolean
   /** morphs from an element on the slide before (badge ↔) */
   paired?: boolean
 }
@@ -138,11 +142,13 @@ export function layerRows(slide: Pick<Slide, 'elements'>, tr?: (s: string) => st
     seen.set(labels[i], n)
     return `${labels[i]} ${n}`
   }
+  const lockedIn = flagged(slide, 'locked'), hiddenIn = flagged(slide, 'hidden')
   const rows: LayerRow[] = slide.elements.map((el, index) => ({
     id: el.id, index, type: el.type, label: label(el, index), grouped: !!el.groupId, groupId: el.groupId, groupName: el.groupName,
     ...(el.type === 'shape' && el.layout ? { frame: el.layout.dir } : {}),
     ...(el.component ? { comp: el.component.main ? 'main' as const : 'copy' as const } : {}),
     locked: !!el.locked, hidden: !!el.hidden, paired: !!paired?.has(el.id),
+    heldLocked: !el.locked && lockedIn.has(el.id), heldHidden: !el.hidden && hiddenIn.has(el.id),
   }))
   const top = rows.reverse()
   // A frame's children list under their frame, whatever their paint index,
@@ -208,7 +214,7 @@ export function wholeGroups(rows: readonly LayerRow[], selection: readonly strin
 export function rowSignature(slide: Pick<Slide, 'elements'>, tr?: (s: string) => string, paired?: ReadonlySet<string>): { order: string; labels: string } {
   const rows = layerRows(slide, tr, paired)
   return {
-    order: rows.map((r) => `${r.id}\u001f${r.type}\u001f${r.groupId ?? ''}\u001f${r.groupName ?? ''}\u001f${r.frame ?? ''}\u001f${r.depth ?? 0}\u001f${r.comp ?? ''}\u001f${+!!r.locked}${+!!r.hidden}${+!!r.paired}`).join('\u001e'),
+    order: rows.map((r) => `${r.id}\u001f${r.type}\u001f${r.groupId ?? ''}\u001f${r.groupName ?? ''}\u001f${r.frame ?? ''}\u001f${r.depth ?? 0}\u001f${r.comp ?? ''}\u001f${+!!r.locked}${+!!r.hidden}${+!!r.paired}${+!!r.heldLocked}${+!!r.heldHidden}`).join('\u001e'),
     labels: rows.map((r) => r.label).join('\u001e'),
   }
 }
