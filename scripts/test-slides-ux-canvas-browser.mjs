@@ -15,7 +15,9 @@
 //      children, re-pointed at the copy; Delete takes the frame's children too.
 //   4. Figma's selection model: a click picks the outermost frame, a double-
 //      click goes in, Esc goes back out; a marquee takes top-level elements;
-//      ⇧A over a frame and its child wraps the frame, with the gap it had.
+//      ⇧A over a frame and its child wraps the frame, with the gap it had;
+//      a selected card pressed by its text drags (out of its row, too), and
+//      the drag after a ⌘-held one still moves it.
 //   5. The tools draw: R then a drag makes a rectangle of the dragged size, a
 //      click places it where clicked; with an auto-layout frame selected a
 //      click in it puts the new element inside, held to the room a fixed
@@ -179,6 +181,34 @@ try {
   await drag(fromC2, [fromC2[0] + 100, fromC2[1]])
   all = await els()
   ok(all.find((e) => e.id === 'f').x > fx0 + 40 && all.find((e) => e.id === 'c1').parentId === 'f', `press-and-drag on a child moves the whole card (frame x ${fx0} → ${all.find((e) => e.id === 'f').x})`)
+  {
+    // a row of cards: a card entered by double-click, pressed by its text (the
+    // text paints over the card, so the press is not on the card's node)
+    const cardIn = (id, x) => [frame(id, x, 100, 200, 160, { dir: 'col' }), text(`${id}t`, x + 10, 110, 180, 50, id.toUpperCase(), { parentId: id })]
+    const rowOf = () => [frame('row', 100, 100, 700, 160, { gap: 30, pad: [0, 0, 0, 0], hug: true }), ...[['k1', 100], ['k2', 330], ['k3', 560]].flatMap(([id, x]) => cardIn(id, x).map((e, i) => (i ? e : { ...e, parentId: 'row' })))]
+    await load(rowOf()); await deselect()
+    await p.mouse.dblclick(...(await centre('k2t'))); await p.waitForTimeout(250)
+    ok((await selection()).join() === 'k2', `a double-click enters the row to the card (${(await selection()).join()})`)
+    const toC = async (x, y) => p.evaluate(([x, y]) => { const r = document.querySelector('.ed-stage-scale').getBoundingClientRect(); const k = r.width / window.bento.doc.size.width; return [r.left + x * k, r.top + y * k] }, [x, y])
+    await drag(await centre('k2t'), await toC(400, 560))
+    all = await els()
+    ok(!all.find((e) => e.id === 'k2').parentId && all.find((e) => e.id === 'k2').y > 300 && all.find((e) => e.id === 'k2t').parentId === 'k2', `pressed by its text and dragged past the row's edge, the card comes out (parent ${all.find((e) => e.id === 'k2').parentId ?? 'none'}, y ${all.find((e) => e.id === 'k2').y})`)
+    // a loose card above the row: its first press selects it and ⌘ held
+    // while dragging moves it over the row without dropping in; the next
+    // plain drag, pressed on its text again, must still move it
+    await load([...rowOf(), ...cardIn('k4', 300, 450).map((e) => (e.id === 'k4' ? { ...e, y: 450 } : { ...e, y: 460 }))]); await deselect()
+    const from = await centre('k4t'), over = await toC(450, 180)
+    await p.mouse.move(...from); await p.mouse.down(); await p.keyboard.down('Meta')
+    for (let i = 1; i <= 12; i++) { await p.mouse.move(from[0] + (over[0] - from[0]) * i / 12, from[1] + (over[1] - from[1]) * i / 12); await p.waitForTimeout(16) }
+    await p.mouse.up(); await p.keyboard.up('Meta'); await p.waitForTimeout(300)
+    all = await els()
+    const k4 = all.find((e) => e.id === 'k4')
+    ok(!k4.parentId && k4.y < 300 && all.length === 9, `⌘ held: the card moves over the row and stays out (y ${k4.y}, ${all.length} elements)`)
+    ok((await selection()).join() === 'k4', 'the card is still selected')
+    const again = await centre('k4t')
+    await drag(again, [again[0] + 160, again[1] + 220])
+    ok((await el('k4')).x > k4.x + 60, `the next plain drag, by its text again, moves it (x ${k4.x} → ${(await el('k4')).x})`)
+  }
   await load(card()); await deselect()
   {
     const fb = await node('f').boundingBox()

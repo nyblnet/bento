@@ -2039,8 +2039,18 @@ export class SlideCanvas {
         .filter((id): id is string => !!id && !this.isGhost(id)) // a marquee never picks up a ghost
         .filter((id) => !locked.has(id)) // ...nor a locked element, or one in a locked frame (#838)
         .map((id) => this.liftToFrame(id)))] // a click or a marquee picks frames, not what is inside them
+      const was = this.store.selection.join('|')
       this.store.select(this.expandGroups(ids))
-      if (e.isDragStartEnd && !this.marqueeOnly) {
+      if (e.isDragStartEnd && !this.marqueeOnly && this.store.selection.join('|') === was) {
+        // a press on what is inside a selected frame (its text paints over
+        // it, so the press is not on the frame's node) picked that frame
+        // again: the target did not change, so waitToChangeTarget would never
+        // resolve — the press moved nothing, and it could not leave a row.
+        // Hand it over now.
+        e.inputEvent.preventDefault()
+        const nodes = this.selectedNodes()
+        if (nodes.length) this.moveable.dragStart(e.inputEvent, nodes[0])
+      } else if (e.isDragStartEnd && !this.marqueeOnly) {
         e.inputEvent.preventDefault()
         // Hand this same press to Moveable, so pressing an unselected element and
         // dragging moves it without needing a second press. Moveable cannot accept
