@@ -437,6 +437,13 @@ export class Account {
       return led ? out(200, { blob: led.blob }) : out(404, { error: 'not-found' })
     }
 
+    if (a.op === 'going') {
+      // the names a wipe (no `keep`) or a rekey is about to take, and nothing is taken:
+      // the Address object writes them down first. Those calls' answers can be lost after
+      // they commit, and the list here is the only other memory of the Cred objects
+      const creds = (await s.get('creds')) || [], owners = (await s.get('owners')) || {}
+      return out(200, { creds: a.keep ? creds.filter((k) => !a.keep.includes(owners[k])) : creds })
+    }
     if (a.op === 'wipe') {
       const creds = (await s.get('creds')) || []
       await s.delete(a.keepRc ? ['creds', 'owners', 'led'] : ['creds', 'owners', 'rc', 'rcLog', 'rcFails', 'rcLock', 'rel', 'led'])
@@ -464,14 +471,14 @@ export class Account {
       // only the passkeys of the keys in `keep` stay (the Address object may be retrying,
       // and the new key may have added one since), and with `rc`, only a recovery record
       // of theirs: a grace ending leaves the code slot alone. The caller deletes the Cred
-      // objects of the passkeys this answers with.
+      // objects of the passkeys this answers with, and never of one in `stays`.
       const keep = a.keep, creds = (await s.get('creds')) || [], owners = (await s.get('owners')) || {}
       const stays = creds.filter((k) => keep.includes(owners[k]))
       await s.put('creds', stays)
       await s.put('owners', Object.fromEntries(stays.map((k) => [k, owners[k]])))
       const rc = await s.get('rc')
       if (a.rc === true && rc && !keep.includes(rc.accountPub)) await s.delete(['rc', 'rel'])
-      return out(200, { creds: creds.filter((k) => !stays.includes(k)) })
+      return out(200, { creds: creds.filter((k) => !stays.includes(k)), stays })
     }
     if (a.op === 'rcKeep') {
       const rc = await s.get('rc')

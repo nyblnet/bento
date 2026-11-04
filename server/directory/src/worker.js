@@ -496,11 +496,11 @@ export default {
 // bind that armed it, when it ends, the ops left), `grace` (after a settled vouched
 // rotation: the previous key, the key it moved to, when the previous key's passkeys
 // stop consenting, the Account object's name), `rekey` (a deletion of old passkeys
-// not yet finished: what stays, and the Cred objects still to delete), `wipe` (a
-// deletion's cascade not yet finished, retried like `rekey`; while it stands nothing
-// binds, so nothing it would take can be new), `everEnd` (a
+// not yet finished: what stays, and the Cred objects still to delete, named before
+// anything is taken), `wipe` (a deletion's cascade not yet finished, retried like
+// `rekey`; while it stands nothing binds, so nothing it would take can be new), `everEnd` (a
 // deletion's appointment to end the Account object's `ever:` rows, and with them
-// `htomb`, `events` and `chain`: when, and that object's name; a re-bind deletes it,
+// `htomb`, `events`, `chain` and a freeze of that tomb: when, and that object's name; a re-bind deletes it,
 // here, in the same object). Strongly consistent per address, so a re-bind,
 // a rotation and a lookup can never race into a mixed answer.
 //
@@ -559,19 +559,31 @@ export class Address {
       const t = await s.get('rekey')
       await s.put('rekey', { scope, keep, rc: o.rc === true || t?.rc === true, notice: o.notice === true || t?.notice === true, creds: t?.creds ?? [] })
     }
-    /** one try, from the record: at once, at the next authorize, and from the alarm */
+    /** add names to a record, read fresh: another try may have moved it on across the call
+     *  just made, or finished it, and then this one's names are still owed */
+    const owe = async (key, t, names, stays = []) => {
+      const was = (await s.get(key)) ?? t
+      const rec = { ...was, creds: [...new Set([...was.creds, ...names])].filter((k) => !stays.includes(k)) }
+      await s.put(key, rec)
+      return rec
+    }
+    /** one try, from the record: at once, at the next authorize, and from the alarm. The
+     *  names go in the record BEFORE anything is taken: a rekey's answer can be lost after
+     *  it committed, and the Account's list is then no memory of them. A name read on a
+     *  try that never arrived may belong to a key the newest `keep` holds, so what the
+     *  Account says stays is struck off: only a name it no longer lists loses its Cred. */
     const runRekey = async () => {
       const t = await s.get('rekey')
       if (!t) return
       try {
-        const r = await call(this.env.ACCOUNT.get(this.env.ACCOUNT.idFromName(t.scope)), 'rekey', { keep: t.keep, rc: t.rc })
-        // the Account's list is gone now: this record is the only memory of these
-        const creds = [...new Set([...t.creds, ...r.body.creds])]
-        await s.put('rekey', { ...t, creds })
+        const acct = this.env.ACCOUNT.get(this.env.ACCOUNT.idFromName(t.scope))
+        await owe('rekey', t, (await call(acct, 'going', { keep: t.keep })).body.creds)
+        const r = await call(acct, 'rekey', { keep: t.keep, rc: t.rc })
+        const { creds, notice } = await owe('rekey', t, r.body.creds, r.body.stays)
         // a call that fails throws; `unknown` only means an earlier try got this one
         for (const k of creds) await call(this.env.CRED.get(this.env.CRED.idFromName(k)), 'delete', { scope: t.scope })
         await s.delete('rekey')
-        if (t.notice && creds.length) await oldCredsGone()
+        if (notice && creds.length) await oldCredsGone()
       } catch (e) {
         console.log(`rekey failed: ${e.message}`)
         await s.setAlarm(now + LIMITS.rekeyRetryMs)
@@ -581,15 +593,19 @@ export class Address {
      *  the ledger always; the recovery verifier only with a MAILBOX deletion, since a
      *  holder deletion keeps it for the deleted binding's window (§39.6). One try, from
      *  the record, like runRekey: at once, before a bind lands, and from the alarm. The
-     *  wipe takes everything, so a bind must not land while this is owed (see complete). */
+     *  wipe takes everything, so a bind must not land while this is owed (see complete).
+     *  The names go in the record BEFORE anything is taken, as in runRekey: lost after it
+     *  committed, the wipe's answer would leave a retry an empty list, and the record
+     *  would clear with the Cred objects, the raw key and the blobs still there. */
     const runWipe = async () => {
       const t = await s.get('wipe')
       if (!t) return
       try {
-        const r = await call(this.env.ACCOUNT.get(this.env.ACCOUNT.idFromName(t.scope)), 'wipe', { keepRc: t.keepRc, keepUntil: t.keepUntil })
-        // the Account's list is gone now: this record is the only memory of these
-        const creds = [...new Set([...t.creds, ...r.body.creds])]
-        await s.put('wipe', { ...t, creds })
+        const acct = this.env.ACCOUNT.get(this.env.ACCOUNT.idFromName(t.scope))
+        await owe('wipe', t, (await call(acct, 'going', {})).body.creds)
+        const r = await call(acct, 'wipe', { keepRc: t.keepRc, keepUntil: t.keepUntil })
+        // the answer still counts: a passkey can land between the read and the wipe
+        const { creds } = await owe('wipe', t, r.body.creds)
         for (const k of creds) await call(this.env.CRED.get(this.env.CRED.idFromName(k)), 'delete', { scope: t.scope })
         await s.delete('wipe')
       } catch (e) {
@@ -728,8 +744,11 @@ export class Address {
           // and `tomb` is what stays. Held, a key may still come back, and rebound compares
           // against it. The chain has no reader until a re-bind, and would then hand the
           // deleted holder's history to whoever has the address next: complete starts a
-          // new one from the tomb's hash, so §39.6 rule 6 still holds
-          await s.delete(r.body.held ? 'everEnd' : ['everEnd', 'htomb', 'events', 'chain'])
+          // new one from the tomb's hash, so §39.6 rule 6 still holds. A freeze of that tomb
+          // goes too: it holds the raw key, and rsv a statement, with nothing left for them
+          // to protect (frozenHolds needs the expiry ahead) and no alarm of their own
+          const tombFrz = (await s.get('frz'))?.base?.tomb === true
+          await s.delete(r.body.held ? 'everEnd' : ['everEnd', 'htomb', 'events', 'chain', ...(tombFrz ? ['frz', 'rsv'] : [])])
         } catch (x) { console.log(`everEnd failed: ${x.message}`) } // the alarm comes back: see tick
       }
     }
@@ -783,6 +802,9 @@ export class Address {
       const gt = cur ? null : await guardTomb()
       if (gt && (await stateOf()) !== 'active') return out(202, { mail: null })
       if (gt && b.accountPub === gt.key && b.expires < gt.expires) return out(202, { mail: null })
+      // a new key over it waits the same 72 hours a rotation does, and outlives them the same
+      // way, or it settles dead and the address is open to email alone (see rotateStart)
+      if (gt && b.accountPub !== gt.key && b.expires < now + LIMITS.rotationWindowMs + LIMITS.codeTtlMs) return out(202, { mail: null })
       // last: a start that mails nothing costs nothing. This route takes any self-signed
       // statement, so a budget spent on a refusal is a stranger silencing the owner's freeze mail
       if (!(await mayMail())) return out(202, { mail: null })
@@ -821,7 +843,9 @@ export class Address {
         if (b.seq !== 1 && !continues(guard)) return fail(p)
         if (b.accountPub !== guard.key) {
           // a DIFFERENT key inside the deleted binding's window: a rotation in all
-          // but the old-key vouch (§39.6), so it waits out the full contest window
+          // but the old-key vouch (§39.6), so it waits out the full contest window, and must
+          // outlive it. Start has allowed for this code's life, so here it is the wait alone
+          if (b.expires <= now + LIMITS.rotationWindowMs) return fail(p)
           await s.put('rot', { stmt: p.stmt, sig: p.sig, h, b: { key: b.accountPub, seq: b.seq, expires: b.expires }, at: now, until: now + LIMITS.rotationWindowMs, overTomb: true })
           await s.delete('pend') // it ended `pending`: nothing arms
           return out(200, { state: 'pending', activeAt: now + LIMITS.rotationWindowMs, rebound: true })

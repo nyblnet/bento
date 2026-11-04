@@ -12538,3 +12538,36 @@ that stays down holds up a re-bind at that address.
 An abandoned start after a deletion's end left its statement, and so a key, in `pend` for
 good. A pending code now has an alarm at its expiry. The alarm is shared, so it may
 replace a later one for up to 20 minutes; tick puts that back.
+
+## 2026-11-04: a deletion's names are written down first, a tomb's freeze ends with its key, and a re-bind over a tomb outlives its wait
+
+Three changes from the security run that signed the directory's rotation branch, one of
+them correcting a sentence of ours.
+
+The entry above, and the README, said a call that fails delays a deletion and never loses
+it. That was false for a call whose answer is lost after it committed. The Account object
+had taken its list, the retry got an empty one, the record cleared as finished, and the
+Cred objects kept the raw key and the blobs with nothing retrying. The end of `ever` then
+went ahead, and a passkey left that way could consent again if the same key came back,
+where the owner could not remove it. Nobody can make an answer get lost, so this is no door
+for an attacker; it is the case that makes "deleted" silently untrue. The Address object
+now reads the names into the record before anything is taken, for a rekey as for a wipe.
+A name read on a try that never arrived can belong to a key the newest `keep` holds, so a
+rekey's answer also says what stays, and only a name the Account no longer lists loses its
+Cred object. Each write to the record reads it fresh, since two tries can overlap across a
+call.
+
+A freeze of a holder tomb kept `frz.base.key`, and so the raw key, past the end of `ever`,
+with no alarm and for good. After the deleted binding's expiry that freeze protects
+nothing, so it now goes with the rest of the key record, and any resolution waiting on it
+with it. A re-bind still lands.
+
+A new key over a holder tomb waits the same 72 hours a rotation does, so it takes the same
+floor: `bind/start` mails nothing for a binding shorter than the wait plus the code's life.
+`bind/complete` checks it too, against the wait alone, because the code's life has by then
+been spent. It can't be reached from outside while start's check stands, and is there so
+the rule does not rest on one door. The same key taking its window back is not held to it:
+it has no wait to outlive.
+
+A failed wipe is retried every hour with no end, and the holder's answer is 204 either way,
+so the log line is the only signal. An alert on it is on the deploy list.

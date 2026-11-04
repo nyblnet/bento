@@ -61,7 +61,11 @@
 //   · a start that mails nothing costs nothing, a rotation outlives its wait, and a
 //     deletion's cascade is retried, with nothing bound until it lands;
 //   · a rekey that fails is recorded and retried (next authorize, or the alarm), so
-//     old passkeys can't strand the new key's first one.
+//     old passkeys can't strand the new key's first one;
+//   · a wipe or a rekey whose ANSWER is lost after it committed still takes the Cred
+//     objects: their names were read into the record first;
+//   · a freeze of a tomb ends with the key record, and a new key over a holder tomb
+//     outlives its wait.
 
 import worker, { Account, Address, Cred, Ledger, Link } from '../server/directory/src/worker.js'
 import { addressKey } from '../server/directory/src/address.js'
@@ -87,8 +91,13 @@ const accountAlarm = async (id: string) => (instances.get(`Account:${id}`) as { 
 const addressAlarm = async (id: string) => (instances.get(`Address:${id}`) as { alarm(): Promise<void> }).alarm()
 const alarms = new Map<string, number>() // `${class}:${id}` → when its alarm is set for
 // a DO call that fails: the next `n` calls of this op on this class throw before they arrive
-let chaos: { cls: string; op: string; n: number } | null = null
+let chaos: { cls: string; op: string; n: number; after?: boolean } | null = null
 const failing = (cls: string, op: string, n: number) => { chaos = { cls, op, n } }
+// the same, AFTER they arrive: the callee commits and the caller hears a failure
+const answerLost = (cls: string, op: string, n: number) => { chaos = { cls, op, n, after: true } }
+// something that happens just before a call arrives, once: what another request can do
+// while a stub call is in flight
+const arrivals: { cls: string; op: string; run: () => Promise<unknown> }[] = []
 function namespace(name: string, Klass: new (state: unknown, env: unknown) => { fetch(r: Request): Promise<Response> }) {
   const objs = new Map<string, { fetch(r: Request): Promise<Response> }>()
   return {
@@ -113,7 +122,14 @@ function namespace(name: string, Klass: new (state: unknown, env: unknown) => { 
       return {
         fetch: async (u: string | Request, init?: RequestInit) => {
           const r = u instanceof Request ? u : new Request(u, init)
-          if (chaos && chaos.cls === name && chaos.n > 0 && (await r.clone().json().catch(() => ({}))).op === chaos.op) { chaos.n--; throw new Error('rig: this call fails') }
+          const op = (await r.clone().json().catch(() => ({}))).op
+          const i = arrivals.findIndex((x) => x.cls === name && x.op === op)
+          if (i >= 0) await arrivals.splice(i, 1)[0].run()
+          if (chaos && chaos.cls === name && chaos.n > 0 && op === chaos.op) {
+            chaos.n--
+            if (chaos.after) await obj.fetch(r)
+            throw new Error('rig: this call fails')
+          }
           return obj.fetch(r)
         },
       }
@@ -2034,7 +2050,7 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
     {
       failing('Cred', 'delete', 1)
       const { E, c } = await expired('rekey-cred@example.com')
-      ok(await nCreds(E) === 0 && !(await credGone(c)) && ((await addrStore(E)).get('rekey') as { creds: string[] }).creds.length === 1, "rekey: the Account's list went but a Cred did not: the record still owes it")
+      ok(await nCreds(E) === 0 && !(await credGone(c)) && ((await addrStore(E)).get('rekey') as { creds: string[] } | undefined)?.creds.length === 1, "rekey: the Account's list went but a Cred did not: the record still owes it")
       await addressAlarm(await addressKey(E.email))
       ok(await credGone(c) && !(await addrStore(E)).has('rekey'), '  …and the retry deletes it')
     }
@@ -2593,6 +2609,179 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
       const { S } = await deleted('wipe-newkey@example.com')
       const X = await nextOf(S), r = await rebind(X, () => bindNext(X, null))
       ok(r.c.status === 400 && reason(r.c) === 'wipe' && !(await addrStore(S)).has('rot'), 'wipe: a new key over the tomb waits for it too: `rot` never starts with it owed')
+    }
+
+    // --- a lost answer loses nothing: the names are in the record before anything is taken ---
+    {
+      answerLost('Account', 'wipe', 1)
+      const { S, d, c, expires } = await deleted('wipe-lost@example.com')
+      ok(await nCreds(S) === 0 && !(await credGone(c)) && (await owed(S))?.creds.join() === await ckOf(c), "wipe: the Account committed and its answer was lost: its list is empty, the Cred object isn't, and the record has the name")
+      ok(await alarmOf(S) === now + HOUR, '  …with an alarm for the retry')
+      now += HOUR
+      await tick(S)
+      ok(!(await owed(S)) && await credGone(c), 'wipe: the retry, with an empty list to read, still deletes the Cred object')
+      now = expires
+      await tick(S)
+      ok(await everRows(S) === 0 && !(await addrStore(S)).has('htomb') && !dump().includes(S.k.pub), 'wipe: the end goes ahead with nothing left behind in any object')
+      await bind(S, { setup: true })
+      ok((await lookup(S.email)).status === 200 && (await fetchBlob(c.reg.key, c.reg.credId)).status === 400, 'wipe: the same key back: the old passkey fetches nothing')
+      ok(reason((await addCred(S, d, { passkey: c.reg })).r) === 'consent:webauthn:unknown', '  …and consents to nothing')
+    }
+    {
+      failing('Account', 'going', 1)
+      const { S, c } = await deleted('wipe-noread@example.com')
+      ok((await owed(S))?.creds.length === 0 && await nCreds(S) === 1 && !(await credGone(c)), 'wipe: the read failed: nothing was taken, and it is owed')
+      now += HOUR
+      await tick(S)
+      ok(!(await owed(S)) && await nCreds(S) === 0 && await credGone(c), '  …and the retry reads and takes it')
+    }
+    {
+      answerLost('Cred', 'delete', 1)
+      const { S, c } = await deleted('wipe-lostcred@example.com')
+      ok(await credGone(c) && !!(await owed(S)), 'wipe: a Cred delete whose answer was lost: gone, and still owed')
+      now += HOUR
+      await tick(S)
+      ok(!(await owed(S)), '  …and the retry finds it gone and clears the record')
+    }
+    {
+      // two tries across one stub call: the outer one read a record with no names, and hears
+      // the Account has none once the inner one took them and failed on the Cred object
+      failing('Account', 'going', 1)
+      const { S, c } = await deleted('wipe-overlap@example.com')
+      arrivals.push({ cls: 'Account', op: 'going', run: async () => { failing('Cred', 'delete', 1); await tick(S) } })
+      now += HOUR
+      await tick(S)
+      ok(await nCreds(S) === 0 && await credGone(c) && !(await owed(S)), 'wipe: overlapping tries: the later write keeps the names the other wrote')
+    }
+    {
+      // a passkey that lands behind the read: the wipe's own answer names it
+      const email = 'wipe-late@example.com', scope = await addressKey(email)
+      let list: unknown
+      arrivals.push(
+        { cls: 'Account', op: 'going', run: async () => { const a = store('Account', scope)!; list = a.get('creds'); a.set('creds', []) } },
+        { cls: 'Account', op: 'wipe', run: async () => { store('Account', scope)!.set('creds', list) } },
+      )
+      const { S, c } = await deleted(email)
+      ok(await credGone(c) && !(await owed(S)), 'wipe: a passkey landing between the read and the wipe goes too')
+    }
+    {
+      answerLost('Account', 'rekey', 1)
+      const { E, c } = await expired('rekey-answer@example.com')
+      const t = (await addrStore(E)).get('rekey') as { creds: string[] }
+      ok(await nCreds(E) === 0 && !(await credGone(c)) && t.creds.join() === await ckOf(c), 'rekey: the same for a rekey: its answer lost, the record has the name')
+      await tick(E)
+      ok(!(await addrStore(E)).has('rekey') && await credGone(c), '  …and the retry deletes the old Cred object')
+    }
+    {
+      const email = 'rekey-late@example.com', scope = await addressKey(email)
+      let list: unknown
+      arrivals.push(
+        { cls: 'Account', op: 'going', run: async () => { const a = store('Account', scope)!; list = a.get('creds'); a.set('creds', []) } },
+        { cls: 'Account', op: 'rekey', run: async () => { store('Account', scope)!.set('creds', list) } },
+      )
+      const { E, c } = await expired(email)
+      ok(await credGone(c) && !(await addrStore(E)).has('rekey'), 'rekey: a passkey the read missed goes by the answer')
+    }
+    {
+      // read on a try that never arrived, then the newest `keep` holds that key again (the
+      // address back with it): the name was never taken, so its Cred object must stay
+      failing('Account', 'rekey', 1)
+      const { E, E2, c } = await expired('rekey-kept@example.com')
+      const a = await addrStore(E), t = a.get('rekey') as { creds: string[]; keep: string[] }
+      ok(t.creds.join() === await ckOf(c) && await nCreds(E) === 1, '  (the name was read, and the Account still lists it)')
+      a.set('rekey', { ...t, keep: [E.k.pub, E2.k.pub] })
+      await tick(E)
+      ok(!a.has('rekey') && await nCreds(E) === 1 && !(await credGone(c)), 'rekey: a name read but never taken does not lose its Cred object when the newest keep holds it')
+    }
+
+    // --- a freeze of a tomb ends with the key record: past the expiry it protects nothing ---
+    {
+      const { S, text, expires } = await deleted('frz-end@example.com')
+      now = expires - HOUR
+      const { X, xb } = await overTomb(S)
+      ok((await contest(S, S, xb.text, { bindText: text, bind: text })).status === 200, '  (the tombstoned key contests inside the window)')
+      ok(JSON.stringify((await addrStore(S)).get('frz')).includes(S.k.pub), 'frz: CONTROL a freeze of a tomb holds the raw key')
+      now = expires - 1
+      await tick(S)
+      ok((await addrStore(S)).has('frz'), 'frz: one ms before the end it stands')
+      now = expires
+      await tick(S)
+      ok([...(await addrStore(S)).keys()].sort().join() === 'mail,nmail,spent,tomb' && !dump().includes(S.k.pub), `frz: at the end it goes, and the Address object holds no key (${[...(await addrStore(S)).keys()].sort()})`)
+      ok((await lookup(S.email)).status === 410, '  …the tomb still answers')
+      await bind(X, { setup: true })
+      ok((await lookup(S.email)).status === 200, 'frz: …and a re-bind still lands')
+    }
+    {
+      // a young code, so a resolution waits with its new key's statement in `rsv`. A real one
+      // needs a binding with days left at its deletion; the code's age is set by hand instead
+      const { S, e, text, expires } = await deleted('frz-rsv@example.com')
+      now = expires - 2 * HOUR
+      const { xb } = await overTomb(S)
+      ok((await contest(S, S, xb.text, { bindText: text, bind: text })).status === 200, '  (the tombstoned key contests)')
+      const acct = await acctStore(S)
+      acct.set('rc', { ...(acct.get('rc') as object), at: now })
+      const N = await nextOf(S), r = await resolve(await bindNext(N, text), e.e.verifier)
+      ok(r.status === 202 && JSON.stringify((await addrStore(S)).get('rsv')).length > 0, `  (its resolution waits: ${r.status} ${reason(r)})`)
+      now = expires
+      await tick(S)
+      ok(!(await addrStore(S)).has('rsv') && !(await addrStore(S)).has('frz'), 'frz: a resolution waiting on it goes with it, ahead of its own 72 hours')
+    }
+    {
+      // a live binding's freeze is not a tomb's: nothing here ends it
+      const S = await held('frz-live@example.com')
+      await freezeBy(S, S)
+      await lookup(S.email)
+      ok((await addrStore(S)).has('frz'), 'frz: CONTROL a live binding\'s freeze stays')
+    }
+
+    // --- a new key over a holder tomb outlives its wait, like a rotation ---
+    {
+      const { S } = await deleted('tomb-floor@example.com')
+      const X = await nextOf(S)
+      const r = await rebind(X, () => bindNext(X, null, { life: FLOOR - 1 }))
+      ok(!r.mailed && r.c.status === 400 && !(await addrStore(S)).has('pend') && !(await addrStore(S)).has('rot'), 'tomb floor: one ms under the wait plus the code\'s life: no code is mailed')
+      ok((await lookup(S.email)).status === 410, '  …and the tomb stands')
+    }
+    {
+      const { S } = await deleted('tomb-floor-edge@example.com')
+      const X = await nextOf(S)
+      now += 2 * MIN
+      const b = await bindNext(X, null, { life: FLOOR })
+      await api('/v1/bind/start', { stmt: b.text, sig: b.sig })
+      const code = codeFor(S.email)!
+      now += 20 * MIN - 1
+      const c = await api('/v1/bind/complete', { email: S.email, code, sig: await X.k.sign(buildCmp(await hashOf(b.text), code)) })
+      ok(c.status === 200 && c.j.state === 'pending', `tomb floor: exactly the floor is accepted, the code entered 1 ms before it lapses (${c.status} ${reason(c)})`)
+      now += 72 * HOUR
+      const l = await lookup(S.email)
+      ok(l.status === 200 && l.j.binding === b.text, 'tomb floor: …and it settles alive, not dead')
+    }
+    {
+      // complete's own check. Start's floor covers everything a client can send, so these
+      // rows put the shorter statement in the pending code by hand
+      const planted = async (email: string, life: number) => {
+        const { S } = await deleted(email)
+        const X = await nextOf(S)
+        now += 2 * MIN
+        const long = await bindNext(X, null)
+        await api('/v1/bind/start', { stmt: long.text, sig: long.sig })
+        const code = codeFor(S.email)!, b = await bindNext(X, null, { life }), a = await addrStore(S)
+        a.set('pend', { ...(a.get('pend') as object), stmt: b.text, sig: b.sig })
+        return { S, b, r: await api('/v1/bind/complete', { email: S.email, code, sig: await X.k.sign(buildCmp(await hashOf(b.text), code)) }) }
+      }
+      const short = await planted('tomb-complete@example.com', 72 * HOUR)
+      ok(short.r.status === 400 && !(await addrStore(short.S)).has('rot'), 'tomb floor: complete refuses a statement that would die as its wait ends')
+      const edge = await planted('tomb-complete-edge@example.com', 72 * HOUR + 1)
+      ok(edge.r.status === 200 && edge.r.j.state === 'pending', `tomb floor: CONTROL one ms past the wait is accepted (${edge.r.status} ${reason(edge.r)})`)
+      now += 72 * HOUR
+      ok((await lookup(edge.S.email)).j.binding === edge.b.text, '  …and settles alive')
+    }
+    {
+      // the same key takes its window back at once: no wait to outlive, only the rule above it
+      const { S, text, expires } = await deleted('tomb-floor-same@example.com')
+      now = expires - HOUR
+      const r = await rebind(S, () => bindNext(S, text, { life: 2 * HOUR }))
+      ok(r.mailed && r.c.status === 200, `tomb floor: CONTROL the same key is not held to it (${r.c.status} ${reason(r.c)})`)
     }
 
     // --- a code nobody came back for goes at its expiry: it can hold a statement, so a key ---

@@ -86,7 +86,10 @@ signed `att.`, so a frozen answer can't be replayed as active.
 - **A rotation outlives its wait.** Its new binding must run at least the 72 hours
   plus the 20 minutes its code can take to enter, or it would settle dead and leave
   the address open to email alone; `rotate/start` answers 400 `statement` with no
-  mail. It may otherwise be shorter than the binding it replaces.
+  mail. It may otherwise be shorter than the binding it replaces. A new key over a
+  holder tomb waits the same 72 hours under the same floor: `bind/start` mails
+  nothing for a shorter one, and `bind/complete` refuses one that no longer outlives
+  the wait.
 - **Leaving frozen** takes the recovery code (see **Resolution**); without
   one, a frozen binding stays frozen until it expires.
 
@@ -352,10 +355,15 @@ account key it belongs to, and material for any other key is treated as gone).
   has nothing to compare and reports `rebound`, even for the same key, and only a
   fresh seq 1 lands. That re-bind's chain starts from the tomb's hash: it names the
   deleted binding and nothing older, so the next holder of the address is not handed
-  the last one's history.
+  the last one's history. A freeze of that tomb, by a contest of a new key's re-bind,
+  goes at the same moment with any resolution waiting on it: it holds the raw key, and
+  past the expiry it protects nothing.
   The wipe itself is a record in the Address object, retried by the alarm every hour
-  like a rekey, so a call that fails delays a deletion and never loses it; the holder
-  gets their answer either way. While it is owed nothing binds at that address
+  like a rekey. Before anything is taken the Address object reads the passkeys' names
+  from the Account object into that record, so a call that fails delays a deletion,
+  and so does one whose answer is lost after it committed: the names are still there
+  for the retry. The Account object going down before that read leaves the record
+  with nothing yet taken. The holder gets their answer either way. While it is owed nothing binds at that address
   (`complete` answers 400 `wipe`, and the same code works once it lands), since a
   retry takes everything and must not find anything new, and the end above waits for
   it. A pending code goes at its expiry, also by the alarm: a bind's or a rotation's
@@ -391,6 +399,10 @@ npx wrangler secret put CHALLENGE_KEY   # 32+ random characters; seals consent c
 npx wrangler secret put PEPPER_V1       # 32 random bytes, base64url; only when the key store is turned on
 npx wrangler deploy
 ```
+
+Before it takes traffic, set an alert on the log line `wipe failed`. A failed wipe is
+retried every hour with no end, and that line is the only signal: the holder's answer
+is 204 whatever happened, so a stuck wipe has no other way to reach anyone.
 
 ## Testing
 
