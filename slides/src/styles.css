@@ -3879,7 +3879,12 @@ body.ed-morph-previewing .ed-morph-ghost { visibility: hidden !important; }
 body.ed-row-resizing .ed-notespane-text { transition: none !important; }
 
 /* what a click would select, outlined before the click (canvas.ts drawHover) */
-.ed-hover-layer { position: absolute; inset: 0; pointer-events: none; z-index: 40; }
+.ed-hover-layer { position: absolute; inset: 0; pointer-events: none; z-index: 40; overflow: clip; }
+/* Overlays on the slide clip at its edge, as the slide clips its elements:
+   a box drawn round an element that runs off the slide grew the canvas's
+   scrollable area, so the scrollbars came and went and the whole slide jumped
+   under the pointer (overflow: clip adds no scroll container of its own) */
+.ed-measure-layer { overflow: clip; }
 .ed-hover-box { position: absolute; box-sizing: border-box; border: 1.5px solid var(--blue); pointer-events: none; }
 /* the originals' stand-ins during a copy-drag: still, inert, never picked */
 .ed-copy-ghost { pointer-events: none !important; }

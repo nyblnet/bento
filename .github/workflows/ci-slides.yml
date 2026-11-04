@@ -360,6 +360,9 @@ jobs:
       - name: Selection handles fit what they select in Chromium
         # 8px handles at any zoom; corners only, or none, when the selection is small on screen.
         run: node scripts/test-slides-handles-browser.mjs
+      - name: Hovering never moves the canvas in Chromium
+        # The pick outline and Alt measure lines clip at the slide edge, so an off-slide element never grows the scroll area.
+        run: node scripts/test-slides-hover-steady-browser.mjs
       - name: Hover picks and copy-drags in Chromium
         # What a click would pick is outlined first (no key / ⌘ / Alt); a ⌘-drag copy never empties the spot it copies from; Esc cancels.
         run: node scripts/test-slides-drag-copy-browser.mjs
