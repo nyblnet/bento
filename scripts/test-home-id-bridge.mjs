@@ -25,6 +25,8 @@
  *     however many calls, a "no" is not re-asked, the person's own keys resolve
  *     only after consent
  *   - resolve: only a binding the host already holds; an email never leaves
+ *   - lock(): sceneDidEnterBackground and applicationProtectedDataWillBecomeUnavailable still call it
+ *     (source pins, each with a delete-the-line mutant)
  *   - O1 deferred: any identity managed-config key stops every identity op, even
  *     one added after load; CONTROL: key absent proceeds
  *
@@ -132,6 +134,40 @@ const iLoad = evc.indexOf('webView.load(', iGate)
 ok(iGate > 0 && iInstall > iGate && iLoad > iInstall, 'editor: gate 1 judges, then the bridge is reinstalled, then the document loads')
 ok(/IdentityBridgeHost\.hostCaps\(genuine: isGenuine\)/.test(evc) && !/__bentoHostCaps = \['store', 'identity'\]/.test(evc), "editor: 'identity' is declared only through hostCaps(genuine:)")
 ok(/IdentityBridgeHost\.ops\.contains\(op\)/.test(evc) && /genuine: isGenuine, docKey: originHost/.test(evc), 'editor: id.* ops reach the host, built from the gate verdict and the document origin')
+
+// lock() has a host caller (security §2e B): backgrounding and a device lock end the signing session.
+// The behaviour is UIKit's to trigger, so the pin is on source: the named callback must still contain
+// the call, and deleting that line must turn the pin red (a mutant applied exactly once, then re-judged).
+const LOCK_CALL = /EditorViewController\.identitySession\.lock\(\)/
+function bodyOf(src, sig) {
+  const i = src.indexOf(sig)
+  if (i < 0) return null
+  const open = src.indexOf('{', i)
+  let depth = 0
+  for (let j = open; j < src.length; j++) {
+    if (src[j] === '{') depth++
+    else if (src[j] === '}' && --depth === 0) return src.slice(open, j + 1)
+  }
+  return null
+}
+const LOCK_SITES = [
+  ['home/ios/SceneDelegate.swift', 'func sceneDidEnterBackground(_ scene: UIScene)', 'sceneDidEnterBackground'],
+  ['home/ios/AppDelegate.swift', 'func applicationProtectedDataWillBecomeUnavailable(_ application: UIApplication)', 'applicationProtectedDataWillBecomeUnavailable'],
+]
+for (const [file, sig, label] of LOCK_SITES) {
+  const src = readFileSync(join(ROOT, file), 'utf8')
+  const body = bodyOf(src, sig)
+  ok(body !== null && LOCK_CALL.test(body), `lock: ${label} ends the signing session`)
+  const lines = src.split('\n')
+  const hits = lines.map((l, i) => (LOCK_CALL.test(l) ? i : -1)).filter((i) => i >= 0)
+  const inBody = body ? hits.filter((i) => body.includes(lines[i].trim())) : []
+  ok(inBody.length === 1, `lock mutant "${label} stops calling lock()": the call occurs ${inBody.length} times in the callback (must be exactly 1)`)
+  if (inBody.length === 1) {
+    const mutated = lines.filter((_, i) => i !== inBody[0]).join('\n')
+    const mb = bodyOf(mutated, sig)
+    ok(mb !== null && !LOCK_CALL.test(mb), `lock mutant "${label} stops calling lock()" turns the pin red`)
+  }
+}
 
 rmSync(work, { recursive: true, force: true })
 console.log(`\nhome id bridge: ${checks - failures}/${checks} passed`)
