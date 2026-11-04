@@ -16,7 +16,8 @@
 //      reads Mixed, one typed colour sets all three, one undo takes it back.
 //   3. A frame's child offers no align (its frame places it), its X/Y are
 //      read-only, a nested frame shows Resizing with Hug, Fill is refused
-//      where the parent hugs, and W follows a layout change at once.
+//      where the parent hugs, and W follows a layout change at once. Its
+//      sizing rows say how it follows its frame and live on Format only.
 //   4. Number fields: "abc" is refused with a reason (not silently); Esc puts
 //      the value back and leaves the field; ⌘Z in a field is the document's
 //      undo; "1,000" is a thousand in English.
@@ -139,12 +140,20 @@ try {
     await select('G')
     // the sizing rows sit right under W/H, in the header-less top block (Figma keeps them there)
     const resizing = p.locator('.ed-props .ed-row:has([data-axis])')
-    const under = await p.evaluate(() => { const r = document.querySelector('.ed-props > .ed-row:has([data-axis])'); return r?.previousElementSibling?.classList.contains('ed-layer-block') && !document.querySelector('.ed-props .ed-section[data-key="Resizing"]') })
+    const under = await p.evaluate(() => { const r = document.querySelector('.ed-props .ed-row:has([data-axis])'); return !!r?.parentElement?.classList.contains('ed-layer-block') && !document.querySelector('.ed-props .ed-section[data-key="Resizing"]') })
     ok(await resizing.count() === 2 && await resizing.locator('[data-value="hug"]').count() === 2 && under, 'a nested frame shows its sizing right under W/H, with Hug on both axes')
     ok(await resizing.locator('[data-value="fill"]').first().isDisabled(), 'Fill is refused where the parent hugs')
     // they say how the child takes its size, not the page size's "Custom slide width"
     const tips = await resizing.evaluateAll((rs) => rs.map((r) => r.title))
     ok(tips.length === 2 && tips.every((x) => /frame/i.test(x) && !/slide/i.test(x)), `the sizing rows' hints are about the frame (${tips.join(' | ')})`)
+    // how it is sized is how it looks: Format only (one home per control)
+    const shown = []
+    for (const tab of await p.locator('.ed-props .ed-tabs [role=tab]').all()) {
+      await tab.click(); await p.waitForTimeout(100)
+      shown.push(`${(await tab.getAttribute('aria-label')) || (await tab.textContent()).trim()}:${await resizing.evaluateAll((rs) => rs.filter((r) => r.offsetParent).length)}`)
+    }
+    await p.locator('.ed-props .ed-tabs [role=tab]').first().click(); await p.waitForTimeout(100)
+    ok(shown.join() === 'Format:2,Animate:0,Interact:0', `the sizing rows show on Format only (${shown.join(', ')})`)
     ok(await p.locator('.ed-props .ed-section[data-key="Auto layout"]').count() === 1, '…and its own Auto layout below')
     await select('F')
     const before = (await el('F')).w

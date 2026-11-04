@@ -227,8 +227,11 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
   if (corners) block.appendChild(corners)
   // A frame's child sizes by its frame: Hug / Fixed / Fill sit right under W
   // and H, which they decide — Figma keeps them there too, not in a section
-  // further down.
+  // further down. Inside the block, so they are Format's like W and H: rows
+  // land on the panel itself, where no tab claims them and all three showed them.
+  const before = p.host.children.length
   if (els.length === 1) childResizing(p, els[0])
+  block.append(...[...p.host.children].slice(before))
 }
 
 /**
