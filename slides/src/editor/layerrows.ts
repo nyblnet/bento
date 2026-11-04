@@ -120,31 +120,35 @@ function frameLabel(el: SlideElement & { layout?: { dir: string } }, tr: (s: str
 }
 
 /** labelFor, told apart: unnamed elements that would read alike on one slide
- *  are numbered in paint order — "Rectangle 2" — as Figma names new layers.
- *  Twenty rows all reading "Rectangle" left Layers no way to tell them apart. */
+ *  are numbered — "Rectangle 2" — as Figma names new layers. Twenty rows all
+ *  reading "Rectangle" left Layers no way to tell them apart. The number
+ *  follows the id, not the paint order: ids carry their creation time and are
+ *  the element's identity, so a reorder never renames anything (counting in
+ *  paint order turned "Rectangle 1" into "Rectangle 3" when it moved). */
 export function labelIn(slide: Pick<Slide, 'elements'>, el: SlideElement, tr: (s: string) => string = (s) => s): string {
-  const base = labelFor(el, tr, slide)
-  if (el.name) return base
-  const same = slide.elements.filter((e) => !e.name && labelFor(e, tr, slide) === base)
-  return same.length > 1 ? `${base} ${same.indexOf(el) + 1}` : base
+  return numbered(slide, slide.elements.map((e) => labelFor(e, tr, slide))).get(el.id) ?? labelFor(el, tr, slide)
+}
+
+/** Every element's row label, the alike ones numbered in id order. */
+function numbered(slide: Pick<Slide, 'elements'>, labels: string[]): Map<string, string> {
+  const alike = new Map<string, string[]>()
+  slide.elements.forEach((el, i) => { if (!el.name) alike.set(labels[i], [...(alike.get(labels[i]) ?? []), el.id]) })
+  const out = new Map<string, string>()
+  slide.elements.forEach((el, i) => {
+    const ids = el.name ? [] : alike.get(labels[i])!
+    out.set(el.id, ids.length > 1 ? `${labels[i]} ${[...ids].sort().indexOf(el.id) + 1}` : labels[i])
+  })
+  return out
 }
 
 /** Rows top-first. */
 export function layerRows(slide: Pick<Slide, 'elements'>, tr?: (s: string) => string, paired?: ReadonlySet<string>): LayerRow[] {
   // labelIn's numbering, counted once for the whole list
-  const labels = slide.elements.map((el) => labelFor(el, tr, slide))
-  const count = new Map<string, number>()
-  for (const [i, el] of slide.elements.entries()) if (!el.name) count.set(labels[i], (count.get(labels[i]) ?? 0) + 1)
-  const seen = new Map<string, number>()
-  const label = (el: SlideElement, i: number) => {
-    if (el.name || (count.get(labels[i]) ?? 0) < 2) return labels[i]
-    const n = (seen.get(labels[i]) ?? 0) + 1
-    seen.set(labels[i], n)
-    return `${labels[i]} ${n}`
-  }
+  const names = numbered(slide, slide.elements.map((el) => labelFor(el, tr, slide)))
+  const label = (el: SlideElement) => names.get(el.id)!
   const lockedIn = flagged(slide, 'locked'), hiddenIn = flagged(slide, 'hidden')
   const rows: LayerRow[] = slide.elements.map((el, index) => ({
-    id: el.id, index, type: el.type, label: label(el, index), grouped: !!el.groupId, groupId: el.groupId, groupName: el.groupName,
+    id: el.id, index, type: el.type, label: label(el), grouped: !!el.groupId, groupId: el.groupId, groupName: el.groupName,
     ...(el.type === 'shape' && el.layout ? { frame: el.layout.dir } : {}),
     ...(el.component ? { comp: el.component.main ? 'main' as const : 'copy' as const } : {}),
     locked: !!el.locked, hidden: !!el.hidden, paired: !!paired?.has(el.id),

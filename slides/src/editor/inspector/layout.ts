@@ -29,12 +29,14 @@ export function buildAutoLayout(p: PropsPanel, el: SlideElement) {
     ? [gap, tokenBind(p, mini(t('Columns'), L.cols ?? 2, (v, fin) => set((l) => { l.cols = Math.max(1, Math.round(v)) }, fin), undefined, { min: 1, max: 64 }), el, 'layout.cols')]
     : [gap]
   field(p, ...parts)
-  // padding, top right bottom left: the arrow is the label, the side is the name
-  const sides = [[ICONS.dirUp, 'Top padding'], [ICONS.dirRight, 'Right padding'], [ICONS.dirDown, 'Bottom padding'], [ICONS.dirLeft, 'Left padding']] as const
-  field(p, ...sides.map(([glyph, name], i) => {
-    const m = mini(t(name), L.pad[i], (v, fin) => set((l) => { l.pad[i] = v }, fin), glyph, { min: 0 })
-    return tokenBind(p, m, el, `layout.pad.${i}`)
-  }))
+  // padding: the arrow is the label, the side is the name. Two to a row, in the
+  // panel's one grid — four in a row left each value ~20px ("16" read "1(").
+  // Vertical sides, then horizontal, as Penpot pairs them; pad keeps its
+  // top-right-bottom-left order.
+  const side = (i: number, glyph: string, name: string) =>
+    tokenBind(p, mini(t(name), L.pad[i], (v, fin) => set((l) => { l.pad[i] = v }, fin), glyph, { min: 0 }), el, `layout.pad.${i}`)
+  field(p, side(0, ICONS.dirUp, 'Top padding'), side(2, ICONS.dirDown, 'Bottom padding'))
+  field(p, side(3, ICONS.dirLeft, 'Left padding'), side(1, ICONS.dirRight, 'Right padding'))
   row(p, 'Alignment', alignMatrix(L, (justify, align) => set((l) => { l.justify = justify; l.align = align })))
   row(p, 'Space between', toggle(L.justify === 'space-between', (on) => set((l) => { l.justify = on ? 'space-between' : 'start' })))
   row(p, 'Stretch children', toggle(L.align === 'stretch', (on) => set((l) => { l.align = on ? 'stretch' : 'start' })))

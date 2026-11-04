@@ -137,6 +137,15 @@ const panels = [read('slides/src/editor/panels.ts'), ...readdirSync(join(root, '
   ok(/if \(diff === 'labels'\)[\s\S]*label\.textContent = r\.label/.test(ui), 'a labels-only change patches text in place')
   ok(!/store\.on\(/.test(ui) && !/'selection'/.test(ui), 'the list has no store subscription of its own — the editor drives it, and selection never rebuilds rows')
 }
+{
+  // Alike unnamed layers are numbered by id (creation), so a reorder never renames one
+  const r = (id: string) => ({ id, type: 'shape', shape: 'rect', x: 0, y: 0, w: 10, h: 10 }) as never
+  const before = { elements: [r('el-a'), r('el-b'), r('el-c')] }
+  const after = { elements: [r('el-b'), r('el-c'), r('el-a')] }
+  const names = (s: typeof before) => Object.fromEntries(layerRows(s).map((x) => [x.id, x.label]))
+  ok(['el-a', 'el-b', 'el-c'].every((id) => names(before)[id] === names(after)[id]) && names(after)['el-a'] === 'Rectangle 1',
+    `moving a layer keeps every layer's number (${JSON.stringify(names(after))})`)
+}
 ok(/setOrder: \(elements\) => this\.store\.commit\(/.test(panels), 'a move is one store.commit — one undo step, no new field')
 ok(/lsSet\('bento-side-view', view\)/.test(read('slides/src/editor/editor.ts')), 'the Slides | Layers choice is remembered')
 const layers = read('slides/src/editor/layers.ts') + read('slides/src/editor/layerrows.ts')
