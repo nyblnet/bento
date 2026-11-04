@@ -12312,8 +12312,25 @@ neither); the Windows key store is an explicit stub that refuses everything unti
   engine has been seen producing that order). The rig scenario is security's race
   on both engines, read from the host's own arming line (the swap landed between the two serves in
   9 or 10 of 10 attempts on WebKitGTK and 7 or 8 of 10 on WebView2, and every one armed unknown).
-  It fails closed in one way worth knowing: a page that fetched its own URL while unknown makes its
-  next load unknown too.
+  Each rule has a rig mutant on WebKitGTK: without the AND the old page's own fetch makes the
+  attacker's bytes arm genuine and reach the agent, and without the take a saved, reloaded document
+  stays unknown. Fixing the verdict at the start has a unit and a unit mutant only, since no engine
+  has shown the order it guards. It fails closed in one way worth knowing: a page that fetched its
+  own URL while unknown makes its next load unknown too.
+- **The WebKitGTK page cache is off, because a load needs a document serve (Linux).** Going back
+  through history restored a page whole from the page cache: a load start and a finish, and no
+  serve. A serve is the verdict's only evidence and hostcore cannot tell a page's fetch from a
+  document serve, so the restored page was judged on what was fetched before it. Measured on
+  WebKitGTK with the document's `no-store` in place: an unknown document left for https (the bounce
+  makes the history), swapped a genuine shell over its file, fetched its own URL and went back, and
+  its first page came back with its unknown bytes, armed genuine and reached the agent. The shim
+  was no obstacle: the secret passes through the realm's JSON.stringify, so a page can take it,
+  fail the shim's call and echo for itself. `set_enable_page_cache(false)` now runs on every
+  webview, and the host stops if it does not hold. The same scenario now serves the document before
+  the load starts, and removing the setting turns that row red. On WebView2 the same scenario also
+  served the document and reloaded, with no setting; why is not read, so the row is what holds it.
+  The rule rests on the engine: a future engine that restores a page without a serve reopens this.
+  Only this path was examined: a history traversal after a bounce.
 - **A document's URL includes its fragment (all platforms).** The host compared the URL exactly,
   but a page moves its own fragment without asking: `history.pushState` is invisible on both
   engines (bento/spaces does it on every page change), and a plain `#x` link is invisible on
