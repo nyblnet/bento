@@ -6,3 +6,5 @@ kernel/fixtures/** -text
 # Scripts that run under bash on every platform.
 *.sh text eol=lf
 *.py text eol=lf
+*.js text eol=lf
+*.ps1 text eol=lf
