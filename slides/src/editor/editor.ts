@@ -2916,7 +2916,9 @@ export class Editor {
 
   /** The selection becomes a component's main (⌘⌥K). */
   createComponent() {
-    const els = this.store.selectedElements
+    // a frame and its contents are one unit (as ⌘D and copy take them): the
+    // component's main is the selection with everything inside it
+    const els = withDescendants(this.store.slide, this.store.selectedElements)
     if (!els.length || els.some((e) => e.component)) return
     const id = uid('comp')
     // named at birth, so the toast, the inspector header and the Tokens list
