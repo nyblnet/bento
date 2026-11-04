@@ -21,11 +21,17 @@
 //      still writes an envelope, untouched by the layout
 //   3. both plain save paths go through docText, and none stringifies the
 //      document into the block on its own
+//   4. the shared recovery key (docfields.ts docContentKey, spaces' and dash's)
+//      is the same for a document and for that document saved and read back,
+//      wherever `assets` sat — so the move cannot raise a Restore banner by
+//      itself (slides' own key, and a real save → reopen, are in
+//      test-slides-doc-layout-browser.mjs)
 
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { configureApp } from '../kernel/src/app.ts'
 import { docText, encodeDocBody, setEncryptionPassword } from '../kernel/src/save.ts'
+import { docContentKey } from '../kernel/src/docfields.ts'
 
 const FAILS: string[] = []
 const ok = (cond: boolean, name: string, detail?: unknown) => {
@@ -67,6 +73,15 @@ console.log('\nthe write path')
   const k = read('kernel/src/save.ts')
   ok(/return serializeBody\(shell, docText\(doc\), doc\)/.test(k) && /\n {2}return docText\(doc\)\n\}/.test(k) && !/serializeBody\(shell, JSON\.stringify\(/.test(k),
     'both plain save paths (serializeWith, encodeDocBody) write docText, and none stringifies the document on its own')
+}
+
+console.log('\nthe recovery key')
+{
+  const { slides, ...head } = base()
+  const mid = { ...head, assets: { a1: PNG }, slides, collab: { on: false }, modified: 1 }
+  const reread = JSON.parse(docText(mid))
+  ok(Object.keys(mid).join() !== Object.keys(reread).join() && Object.keys(reread).pop() === 'assets', 'saving moves assets: the key order differs once read back')
+  ok(docContentKey(mid, {}) === docContentKey(reread, {}), 'the kernel recovery key is unchanged by it (keys are compared sorted)')
 }
 
 console.log(FAILS.length ? `\n${FAILS.length} FAILED` : '\nall checks passed')
