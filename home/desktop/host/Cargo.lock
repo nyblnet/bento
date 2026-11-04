@@ -314,6 +314,8 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
  "webkit2gtk",
+ "webview2-com",
+ "windows-core",
 ]
 
 [[package]]

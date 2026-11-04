@@ -119,7 +119,7 @@
       // rig 8, cookies and Origin-Agent-Cluster. A document sets cookies on its own host and on every
       // PARENT domain it may name; once every peer has done the same, it lists what it can see. A
       // sibling document's cookie in the list is a leak; its own host-only cookie is the positive control.
-      R.rig8_oac = window.originAgentClustered
+      R.rig8_oac_type = typeof window.originAgentClustered; R.rig8_oac = window.originAgentClustered
       const hexHost = location.hostname.replace(/^bento\./, '')
       const ck = (n, dom) => { try { document.cookie = 'rck_' + LABEL + '_' + n + '=1; path=/' + (dom ? '; Domain=' + dom : '') } catch (_) {} }
       ck('host', ''); ck('dom_localhost', 'localhost'); ck('dom_dotlocalhost', '.localhost'); ck('dom_hex', hexHost)

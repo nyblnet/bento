@@ -56,13 +56,7 @@ export BENTO_RIG_EMBED_CERT="$OUT/embed.crt"
 CURL="curl"
 if [ "$WIN" = 1 ]; then
   CURL="curl --ssl-no-revoke"
-  # WebView2 has no per-context certificate hook in the host: Chromium's own
-  # switch trusts ONE certificate by its public-key hash, for the rig's browser
-  # processes only (an environment variable, so no rig code is in the binary).
-  # The rogue server's certificate has a different key, so it stays refused.
-  SPKI=$(openssl x509 -in "$OUT/embed.crt" -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl base64)
-  [ -n "$SPKI" ] || { echo "FAIL: cannot hash the embed certificate's public key" >&2; exit 1; }
-  export WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS="--ignore-certificate-errors-spki-list=$SPKI"
+  # the rig build trusts the embed certificate in-process (src/rig.rs), as on Linux
   WV2=$(powershell -NoProfile -ExecutionPolicy Bypass -File rig/wv2version.ps1 | tr -d '\r') || exit 1
   echo "WebView2 runtime: $WV2"
 fi

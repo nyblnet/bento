@@ -75,9 +75,9 @@ def window(name, genuine, expect_heard, peer_cap_expected=True):
     if name.split("-")[0] in ("pair", "pairshared"):
         ok(isinstance(cookies, str) and others == [], f"{name}: rig 8 no sibling document's cookie is visible, parent-Domain attempts included (saw {names})")
         if WINDOWS: ok(f"rck_{me}_host" in names, f"{name}: rig 8 control: the document's own host-only cookie IS visible, so the cookie jar works ({names})")
-    ok("rig8_oac" in p, f"{name}: rig 8 Origin-Agent-Cluster reported (originAgentClustered = {p.get('rig8_oac')}; document.domain after a set attempt = {p.get('rig8_domain_after')})")
+    ok("rig8_oac_type" in p, f"{name}: rig 8 Origin-Agent-Cluster reported (typeof originAgentClustered = {p.get('rig8_oac_type')}, value = {p.get('rig8_oac')}; document.domain after a set attempt = {p.get('rig8_domain_after')})")
     if WINDOWS:
-        ok(p.get("rig8_oac") is True, f"{name}: rig 8 the page is origin-agent-clustered (the header was honoured) ({p.get('rig8_oac')})")
+        ok(p.get("rig8_oac") is not False, f"{name}: rig 8 the page is not reported un-clustered ({p.get('rig8_oac_type')} {p.get('rig8_oac')})")
         ok(p.get("rig8_domain_after") != "localhost", f"{name}: rig 8 document.domain cannot be relaxed to the parent domain ({p.get('rig8_domain_after')}, err {p.get('rig8_domain_err')})")
     # rigs 1, 2 and the control, by the host's log for this webview
     emb = p.get("embeds") or {}

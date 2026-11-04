@@ -130,3 +130,48 @@ pub fn trust_embed_cert(window: &tauri::WebviewWindow) {
         })
         .expect("rig: cannot reach the platform webview");
 }
+
+/// RIG BUILDS ONLY, Windows only. The same single-certificate trust as the Linux
+/// function above, for WebView2: when the engine reports a certificate error for
+/// a request to https://127.0.0.1:<port>, allow it ONLY if the presented
+/// certificate is byte-for-byte the rig's throwaway one (compared as PEM). The
+/// second server's different certificate is therefore still refused, which the
+/// rig proves in the same run. Fails loudly: an unreadable certificate or a
+/// webview without the event aborts the rig process.
+#[cfg(windows)]
+pub fn trust_embed_cert(window: &tauri::WebviewWindow) {
+    use webview2_com::Microsoft::Web::WebView2::Win32::{
+        ICoreWebView2_14, COREWEBVIEW2_SERVER_CERTIFICATE_ERROR_ACTION_ALWAYS_ALLOW,
+    };
+    use windows_core::{Interface, PWSTR};
+    fn body(pem: &str) -> String {
+        pem.lines().filter(|l| !l.starts_with("-----")).flat_map(|l| l.split_whitespace()).collect()
+    }
+    let Some(path) = std::env::var_os("BENTO_RIG_EMBED_CERT") else { return };
+    let want = body(&std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("rig: cannot read the embed certificate {path:?}: {e}")));
+    assert!(!want.is_empty(), "rig: the embed certificate is empty");
+    window
+        .with_webview(move |wv| unsafe {
+            let core = wv.controller().CoreWebView2().expect("rig: the webview has no core");
+            let core14: ICoreWebView2_14 = core.cast().expect("rig: this WebView2 runtime has no ServerCertificateErrorDetected (needs 1.0.1293+)");
+            let handler = webview2_com::ServerCertificateErrorDetectedEventHandler::create(Box::new(move |_, args| {
+                let Some(args) = args else { return Ok(()) };
+                let mut uri = PWSTR::null();
+                args.RequestUri(&mut uri)?;
+                let uri = webview2_com::take_pwstr(uri);
+                let mut pem = PWSTR::null();
+                args.ServerCertificate()?.PemEncodedSerialization(&mut pem)?;
+                let pem = webview2_com::take_pwstr(pem);
+                let allow = uri.starts_with("https://127.0.0.1:") && body(&pem) == want;
+                eprintln!("RIG TLS: certificate error for {uri}: {}", if allow { "the rig's one certificate, allowed" } else { "refused" });
+                if allow {
+                    args.SetAction(COREWEBVIEW2_SERVER_CERTIFICATE_ERROR_ACTION_ALWAYS_ALLOW)?;
+                }
+                Ok(())
+            }));
+            let mut token = 0i64;
+            core14.add_ServerCertificateErrorDetected(&handler, &mut token).expect("rig: cannot subscribe to certificate errors");
+            eprintln!("RIG TLS: trusting one throwaway certificate for 127.0.0.1 in this webview");
+        })
+        .expect("rig: cannot reach the platform webview");
+}

@@ -328,7 +328,7 @@ fn open_window(app: &tauri::AppHandle, i: usize) -> tauri::Result<()> {
             }
         })
         .build()?;
-    #[cfg(all(feature = "rig", target_os = "linux"))]
+    #[cfg(all(feature = "rig", any(target_os = "linux", windows)))]
     rig::trust_embed_cert(&window);
     Ok(())
 }

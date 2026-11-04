@@ -11,7 +11,7 @@ publish = false
 rig-test-key = ["bento-hostcore/rig-test-key"]
 # Rigs only: the §19d–§19h probe, a dead drop standing in for an attacker's
 # network, and a report sink. Never in a shipped build.
-rig = ["rig-test-key", "dep:webkit2gtk", "dep:gio"]
+rig = ["rig-test-key", "dep:webkit2gtk", "dep:gio", "dep:webview2-com", "dep:windows-core"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -22,6 +22,12 @@ tauri-build = { version = "2", features = [] }
 [target.'cfg(target_os = "linux")'.dependencies]
 webkit2gtk = { version = "=2.0.2", optional = true }
 gio = { version = "=0.18.4", optional = true }
+
+# Rig builds only (feature "rig"), Windows only: the same one-certificate trust for
+# WebView2 (src/rig.rs). Pinned to the versions tauri's wry already resolves.
+[target.'cfg(windows)'.dependencies]
+webview2-com = { version = "=0.39.1", optional = true }
+windows-core = { version = "=0.62.2", optional = true }
 
 [dependencies]
 bento-hostcore = { path = "../hostcore" }
