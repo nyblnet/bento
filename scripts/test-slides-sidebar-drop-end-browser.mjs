@@ -42,9 +42,13 @@ try {
     src.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }))
     if (kind !== 'text/bento-slide') { dt.clearData(); dt.setData(kind, 'x') }
     const t = typeof target === 'number' ? document.querySelectorAll('.ed-thumb')[target] : document.querySelector(target)
-    const over = new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt })
+    // the sidebar places a drop by the pointer, as a real drag carries it: a
+    // thumb's upper part lands before it, a button or gap at its centre
+    const r = t.getBoundingClientRect()
+    const xy = { clientX: r.left + r.width / 2, clientY: typeof target === 'number' ? r.top + r.height / 4 : r.top + r.height / 2 }
+    const over = new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt, ...xy })
     t.dispatchEvent(over)
-    const drop = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt })
+    const drop = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt, ...xy })
     t.dispatchEvent(drop)
     return { overClaimed: over.defaultPrevented }
   }, [from, target, kind])
