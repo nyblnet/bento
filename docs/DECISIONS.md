@@ -12164,8 +12164,10 @@ that remain a host's:
   kx.** `sealedPlaintext` seals the 32-byte scalar then the address in normal
   form, and refuses to seal an address that is not normal. A linked device
   stores no recovery kx (its history comes from H re-wrapping to its own kx, not
-  from the recovery key, security §26c.4). The recovery kx item a device keeps
-  from setup is setup's business and is not touched by linking.
+  from the recovery key, security §26c.4). No device keeps the recovery kx at rest either: setup
+  no longer writes it as a Keychain item (the interim rule would allow the setup
+  device to, under a per-use user-presence key, but nothing needs it), so it
+  lives only inside the code-wrapped recovery blob.
 - **N is never typed the address.** `openFinal` opens SEALED, requires the
   address in it to be in normal form, and only then looks it up, requiring a
   binding for exactly that address, attested `active` under a PINNED key, whose

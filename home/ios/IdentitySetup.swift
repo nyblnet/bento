@@ -67,7 +67,6 @@ struct IdentitySetup {
     static let recordItem = "identity/setup"
     static let deviceKxItem = "identity/device-kx"
     /// the account's RECOVERY kx scalar, kept so this device can link another (link v1)
-    static let recoveryKxItem = "identity/recovery-kx"
     /// PLACEHOLDER namespace for the presence key (vault to name it): any key under it counts.
     static let managedPrefix = "bento.id"
 
@@ -245,13 +244,12 @@ struct IdentitySetup {
             wrapKey: wrap, iv: iv, accountPub: accountPub,
             keys: .init(account: Array(account.rawRepresentation), kx: kx)) else { return .unavailable }
         r.recovery = .init(salt: b64(salt), iv: b64(iv), ct: b64(ct), saltV: b64(saltV), verifier: b64(verifier), confirmed: false)
-        // Link v1 seals account ‖ recovery kx for a NEW device, so a device that can link
-        // must keep the recovery kx scalar. It is kept as its own Keychain item, this
-        // device only, never in the setup record. (Open question for security: §26c's
-        // "unwrap once and drop" is the policy for a device that only RECOVERED.)
-        guard store.set(Self.recoveryKxItem, Data(kx)) else { return .unavailable }
+        // The recovery kx scalar now lives ONLY inside the code-wrapped recovery blob. Link v1
+        // seals the account scalar and the address and nothing else, so no device keeps the
+        // scalar at rest (the interim rule lets the setup device keep it only under a
+        // per-use user-presence key, and nothing needs it).
         r.recoveryKx = ""                                   // not kept in the setup record
-        guard save(r) else { store.delete(Self.recoveryKxItem); return .unavailable }
+        guard save(r) else { return .unavailable }
         salt = []; saltV = []
         return .code(printed)
     }

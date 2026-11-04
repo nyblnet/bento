@@ -177,7 +177,8 @@ func agent(_ m: Mem, _ t: Tap = Tap(), pins p: [String: String] = pins, platform
 func d<T>(_ r: Result<T, LinkAgent.Refusal>) -> String { switch r { case .success: return "ok"; case .failure(let f): return "\(f)" } }
 func rec(_ m: Mem) -> IdentitySetup.Record? { if case .found(let x) = m.get(IdentitySetup.recordItem) { return try? JSONDecoder().decode(IdentitySetup.Record.self, from: x) }; return nil }
 func acctPub(_ m: Mem) -> String { (try? IdentityKeys.account(in: m)).map { IdentityRecovery.b64uEnc(Array($0.publicKey.x963Representation)) } ?? "none" }
-func nothing(_ m: Mem) -> Bool { m.d[IdentityKeys.accountItem] == nil && m.d[IdentitySetup.recoveryKxItem] == nil && m.d[IdentitySetup.recordItem] == nil }
+func holdsRecoveryKx(_ m: Mem) -> Bool { m.d.keys.contains { $0.lowercased().contains("recovery") && $0.lowercased().contains("kx") } }
+func nothing(_ m: Mem) -> Bool { m.d[IdentityKeys.accountItem] == nil && !holdsRecoveryKx(m) && m.d[IdentitySetup.recordItem] == nil }
 let alice = "alice-link@example.com"
 
 // --- H: an account set up through the real flow
@@ -190,7 +191,7 @@ var printed = ""
 if case .code(let c) = setup.prepareRecovery() { printed = c }
 emit("h.confirm", "\(setup.confirmRecovery(typed: printed))")
 emit("h.mint", "\(setup.mintDevice(label: "Alice phone"))")
-emit("h.kxKept", hMem.d[IdentitySetup.recoveryKxItem]?.count ?? 0)
+emit("h.kxKept", holdsRecoveryKx(hMem))
 emit("h.recordKxEmpty", rec(hMem)?.recoveryKx.isEmpty ?? false)
 let hPub = acctPub(hMem)
 emit("h.pub", hPub)
@@ -240,7 +241,7 @@ emit("a.hSasHidden", r1.h?.sas == nil)
 emit("a.sameKeys", r1.h?.keys != nil && r1.h?.keys == r1.n?.keys)
 emit("a.platform", r1.offer.map { "\(L.showPlatform($0.platform).known)" } ?? "nil")
 emit("a.offerLabel", r1.offer?.label ?? "nil")
-emit("a.nPub", acctPub(r1.nMem)); emit("a.nKx", r1.nMem.d[IdentitySetup.recoveryKxItem] == nil)
+emit("a.nPub", acctPub(r1.nMem)); emit("a.nKx", !holdsRecoveryKx(r1.nMem))
 emit("a.asked", r1.asked.map { "\($0.0)|\($0.1 ?? "nil")" }.joined(separator: ";"))
 emit("a.wording", { let w = LinkAgent.confirmWording(address: alice, name: "Alice"); return "\(w.title)|\(w.detail ?? "nil")" }())
 emit("a.wordingNoName", LinkAgent.confirmWording(address: alice, name: nil).detail ?? "nil")
@@ -446,7 +447,7 @@ const NOW = Date.now()
 const K = await import(join(ROOT, 'kernel/src/statements.ts'))
 
 ok(out['h.start'] === 'mailed' && out['h.verify'] === 'bound' && out['h.confirm'] === 'confirmed' && out['h.mint'].startsWith('minted'), 'setup: H is a bound account holder with a dev. (the real setup flow)')
-ok(Number(out['h.kxKept']) === 32 && out['h.recordKxEmpty'] === 'true', 'H keeps the recovery kx scalar as its own device-only item, not in the setup record (and link v1 never sends it)')
+ok(out['h.kxKept'] === 'false' && out['h.recordKxEmpty'] === 'true', 'no device keeps the recovery kx scalar at rest (it lives only in the code-wrapped blob), and the setup record does not hold it')
 
 console.log('1. the honest link, H displays')
 ok(out['a.steps'] === '' && out['a.linked'] === 'ok', 'H displays, N scans: every step completes')
