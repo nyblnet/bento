@@ -1262,6 +1262,7 @@ export const strings: Catalog = {
   "Select all with this color": "Chọn mọi thứ có màu này",
   "{n} elements on this slide use this color": "{n} phần tử trên trang này dùng màu này",
   "Colors & tokens": "Màu & token",
+  "A gradient has no single colour to bind — its swatch’s Tokens tab makes it solid in a token’s colour": "Dải màu không có một màu duy nhất để gắn — thẻ Token trong ô màu của nó biến nó thành màu đặc theo màu của token",
   "Detach from token": "Tách khỏi token",
   "Detach from theme color": "Tách khỏi màu chủ đề",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "Bắt đầu bằng một chữ cái; sau đó chữ cái, chữ số, . - _ (tối đa 64)",

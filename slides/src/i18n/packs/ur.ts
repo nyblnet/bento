@@ -1282,6 +1282,7 @@ export const strings: Catalog = {
   "Select all with this color": "اس رنگ والی ہر چیز منتخب کریں",
   "{n} elements on this slide use this color": "اس سلائیڈ پر یہ رنگ استعمال کرنے والے عناصر: {n}",
   "Colors & tokens": "رنگ اور ٹوکنز",
+  "A gradient has no single colour to bind — its swatch’s Tokens tab makes it solid in a token’s colour": "گریڈینٹ کا باندھنے کے لیے کوئی ایک رنگ نہیں — اس کے سواچ کا ٹوکنز ٹیب اسے کسی ٹوکن کے رنگ میں ٹھوس بنا دیتا ہے",
   "Detach from token": "ٹوکن سے الگ کریں",
   "Detach from theme color": "تھیم کے رنگ سے الگ کریں",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "کسی حرف سے شروع کریں؛ پھر حروف، ہندسے، . - _ (زیادہ سے زیادہ 64)",

@@ -1252,6 +1252,7 @@ export const ja: Catalog = {
   "Select all with this color": "この色を使うものをすべて選択",
   "{n} elements on this slide use this color": "このスライドの {n} 個の要素がこの色を使っています",
   "Colors & tokens": "色とトークン",
+  "A gradient has no single colour to bind — its swatch’s Tokens tab makes it solid in a token’s colour": "グラデーションには結び付ける単一の色がありません — スウォッチの「トークン」タブで、トークンの色の単色にできます",
   "Detach from token": "トークンから切り離す",
   "Detach from theme color": "テーマカラーから切り離す",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "先頭は英字、続けて英字・数字・. - _(64 文字まで)",

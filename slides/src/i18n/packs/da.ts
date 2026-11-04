@@ -1264,6 +1264,7 @@ export const strings: Catalog = {
   "Select all with this color": "Vælg alt med denne farve",
   "{n} elements on this slide use this color": "{n} elementer på dette dias bruger denne farve",
   "Colors & tokens": "Farver og tokens",
+  "A gradient has no single colour to bind — its swatch’s Tokens tab makes it solid in a token’s colour": "En gradient har ingen enkelt farve at binde — fanen Tokens i dens farveprøve gør den ensfarvet i et tokens farve",
   "Detach from token": "Frakobl fra token",
   "Detach from theme color": "Frakobl fra temafarve",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "Start med et bogstav; derefter bogstaver, cifre, . - _ (højst 64)",

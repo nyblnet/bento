@@ -1252,6 +1252,7 @@ export const fr: Catalog = {
   "Select all with this color": "Tout sélectionner avec cette couleur",
   "{n} elements on this slide use this color": "{n} éléments de cette diapositive utilisent cette couleur",
   "Colors & tokens": "Couleurs et jetons",
+  "A gradient has no single colour to bind — its swatch’s Tokens tab makes it solid in a token’s colour": "Un dégradé n’a pas de couleur unique à lier — l’onglet Jetons de sa pastille le rend uni dans la couleur d’un jeton",
   "Detach from token": "Détacher du jeton",
   "Detach from theme color": "Détacher de la couleur du thème",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "Commencez par une lettre ; ensuite lettres, chiffres, . - _ (64 au plus)",

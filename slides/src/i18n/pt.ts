@@ -1250,6 +1250,7 @@ export const pt: Catalog = {
   "Select all with this color": "Selecionar tudo com esta cor",
   "{n} elements on this slide use this color": "{n} elementos deste slide usam esta cor",
   "Colors & tokens": "Cores e tokens",
+  "A gradient has no single colour to bind — its swatch’s Tokens tab makes it solid in a token’s colour": "Um degradê não tem uma cor única para vincular — a aba Tokens da amostra o deixa sólido na cor de um token",
   "Detach from token": "Desvincular do token",
   "Detach from theme color": "Desvincular da cor do tema",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "Comece com uma letra; depois letras, dígitos, . - _ (no máximo 64)",

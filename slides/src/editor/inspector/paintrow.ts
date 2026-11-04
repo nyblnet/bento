@@ -47,7 +47,7 @@ const cell = () => { const s = document.createElement('span'); s.className = 'ed
  *  top row's. With no row yet (no fill), `add` makes one and the picker opens
  *  on it once the panel has rebuilt. */
 export function colorCatalog(p: PropsPanel, add?: () => void) {
-  return (anchor: HTMLElement, head: HTMLElement) => {
+  const catalog = (anchor: HTMLElement, head: HTMLElement) => {
     const open = (h: HTMLElement) => {
       const body = h.nextElementSibling as HTMLElement | null
       const focused = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>('.ed-colorref')
@@ -64,4 +64,13 @@ export function colorCatalog(p: PropsPanel, add?: () => void) {
       if (h) open(h)
     }))
   }
+  // Tokens bind one colour per layer (fills.N.color). A gradient's paint is no
+  // one colour, so a section of gradients alone has nothing here to bind: the
+  // ⠿ says so instead of opening onto nothing. Its swatch's Tokens tab is the
+  // way, turning the layer solid in the token's colour.
+  catalog.unavailable = (head: HTMLElement) =>
+    !add && !head.nextElementSibling?.querySelector('.ed-colorref')
+      ? t('A gradient has no single colour to bind — its swatch’s Tokens tab makes it solid in a token’s colour')
+      : null
+  return catalog
 }

@@ -1272,6 +1272,7 @@ export const strings: Catalog = {
   "Select all with this color": "تحديد كل ما يستخدم هذا اللون",
   "{n} elements on this slide use this color": "العناصر التي تستخدم هذا اللون على هذه الشريحة: {n}",
   "Colors & tokens": "الألوان والرموز",
+  "A gradient has no single colour to bind — its swatch’s Tokens tab makes it solid in a token’s colour": "لا يملك التدرّج لونًا واحدًا للربط — يجعله تبويب «الرموز» في عيّنته لونًا مصمتًا بلون رمز",
   "Detach from token": "فصل عن الرمز",
   "Detach from theme color": "فصل عن لون السمة",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "ابدأ بحرف؛ ثم أحرف أو أرقام أو . - _ (64 كحد أقصى)",

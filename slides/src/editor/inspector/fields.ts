@@ -23,7 +23,7 @@ export function labeledSelect(pairs: Array<[string, string]>, value: string, onC
 /** A section header. `action` puts Penpot's + or − on the header line: an
  *  optional property (stroke, shadow, blur) is added from its header and
  *  removed from it, instead of a 'none' in a dropdown. */
-export function section(p: PropsPanel, title: string, action?: { add: boolean; hint: string; run: () => void; empty?: boolean }, catalog?: (anchor: HTMLElement, head: HTMLElement) => void) {
+export function section(p: PropsPanel, title: string, action?: { add: boolean; hint: string; run: () => void; empty?: boolean }, catalog?: ((anchor: HTMLElement, head: HTMLElement) => void) & { unavailable?: (head: HTMLElement) => string | null }) {
   const h = document.createElement('h3')
   h.className = 'ed-section'
   h.dataset.key = title
@@ -40,6 +40,12 @@ export function section(p: PropsPanel, title: string, action?: { add: boolean; h
     c.setAttribute('aria-haspopup', 'dialog')
     c.addEventListener('click', (ev) => { ev.stopPropagation(); catalog(c, h) })
     h.appendChild(c)
+    // whether there is anything to pick shows once the section's rows exist:
+    // after the rebuild that is building them, which runs to its end first
+    if (catalog.unavailable) queueMicrotask(() => {
+      const why = catalog.unavailable!(h)
+      if (why) { c.disabled = true; c.title = why }
+    })
   }
   if (action) {
     const b = document.createElement('button')

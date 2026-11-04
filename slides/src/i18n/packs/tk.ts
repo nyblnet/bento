@@ -1284,6 +1284,7 @@ export const strings: Catalog = {
   "Select all with this color": "Bu reňkli ähli zady saýla",
   "{n} elements on this slide use this color": "Bu slaýdda bu reňki ulanýan elementler: {n}",
   "Colors & tokens": "Reňkler we tokenler",
+  "A gradient has no single colour to bind — its swatch’s Tokens tab makes it solid in a token’s colour": "Gradiýentiň baglamak üçin ýeke reňki ýok — nusgasynyň Tokenler bölümi ony tokeniň reňkinde bir reňkli edýär",
   "Detach from token": "Tokenden aýyr",
   "Detach from theme color": "Tema reňkinden aýyr",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "Harp bilen başlaň; soňra harplar, sanlar, . - _ (iň köp 64)",

@@ -31,6 +31,7 @@
 //      the keyboard; the alignment box is one tab stop, ↓ moves a row.
 //   8. The Stroke line's Position never runs under its Weight, at 1280 and
 //      1440 wide, in English and German.
+//   9. A gradient fill's ⠿ (colours & tokens) is off and says why.
 import { fileURLToPath } from 'node:url'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const SHELL = process.env.SHELL_HTML || fileURLToPath(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url))
@@ -256,6 +257,20 @@ try {
       await ctx.close()
     })
   }
+
+  console.log('\n9. the ⠿ on a gradient fill\n')
+  await run(async () => {
+    const grad = shape('g', 100, { fillGradient: { angle: 90, stops: [{ at: 0, color: '#ff0000' }, { at: 1, color: '#0000ff' }] } })
+    const { ctx, p, select } = await open('en-US', 1440, [grad, shape('s', 400)])
+    const cat = p.locator('.ed-props .ed-section[data-key="Fill"] .ed-sec-cat')
+    await select('g')
+    // a gradient has no one colour a token could bind (refs are per layer):
+    // the ⠿ says so rather than opening onto nothing
+    const g = { off: await cat.isDisabled(), tip: await cat.getAttribute('title') }
+    await select('s')
+    ok(g.off && /gradient/i.test(g.tip) && !(await cat.isDisabled()), `a gradient fill's ⠿ is off and says why; a solid fill's works (${g.tip})`)
+    await ctx.close()
+  })
 } finally {
   await browser.close()
 }

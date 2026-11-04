@@ -1252,6 +1252,7 @@ export const zhHant: Catalog = {
   "Select all with this color": "選取所有使用此顏色的內容",
   "{n} elements on this slide use this color": "此投影片上有 {n} 個元素使用此顏色",
   "Colors & tokens": "顏色與權杖",
+  "A gradient has no single colour to bind — its swatch’s Tokens tab makes it solid in a token’s colour": "漸層沒有可綁定的單一顏色——在其色塊的「權杖」分頁中可將它改為權杖顏色的純色",
   "Detach from token": "與權杖分離",
   "Detach from theme color": "與主題顏色分離",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "以字母開頭;其後為字母、數字、. - _(最多 64 個)",

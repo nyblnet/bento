@@ -1265,6 +1265,7 @@ export const strings: Catalog = {
   "Select all with this color": "בחירת כל מה שבצבע הזה",
   "{n} elements on this slide use this color": "רכיבים בשקופית הזו שמשתמשים בצבע הזה: {n}",
   "Colors & tokens": "צבעים וטוקנים",
+  "A gradient has no single colour to bind — its swatch’s Tokens tab makes it solid in a token’s colour": "למעבר צבע אין צבע יחיד לקשירה — לשונית טוקנים בדוגמית שלו הופכת אותו לאחיד בצבע של טוקן",
   "Detach from token": "ניתוק מהטוקן",
   "Detach from theme color": "ניתוק מצבע ערכת הנושא",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "התחילו באות; אחר כך אותיות, ספרות, . - _ (עד 64)",

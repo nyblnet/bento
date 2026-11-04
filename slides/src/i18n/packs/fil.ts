@@ -1281,6 +1281,7 @@ export const strings: Catalog = {
   "Select all with this color": "Piliin lahat ng may ganitong kulay",
   "{n} elements on this slide use this color": "{n} element sa slide na ito ang gumagamit ng kulay na ito",
   "Colors & tokens": "Mga kulay at token",
+  "A gradient has no single colour to bind — its swatch’s Tokens tab makes it solid in a token’s colour": "Walang iisang kulay na maiuugnay ang gradient — ginagawa itong solid sa kulay ng token ng tab na Mga token ng swatch nito",
   "Detach from token": "I-detach sa token",
   "Detach from theme color": "I-detach sa kulay ng tema",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "Magsimula sa isang titik; pagkatapos ay mga titik, digit, . - _ (hanggang 64)",

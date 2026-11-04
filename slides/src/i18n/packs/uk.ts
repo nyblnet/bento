@@ -1272,6 +1272,7 @@ export const strings: Catalog = {
   "Select all with this color": "Вибрати все з цим кольором",
   "{n} elements on this slide use this color": "Елементів на цьому слайді з цим кольором: {n}",
   "Colors & tokens": "Кольори й токени",
+  "A gradient has no single colour to bind — its swatch’s Tokens tab makes it solid in a token’s colour": "Градієнт не має одного кольору для прив’язки — вкладка «Токени» його зразка робить його суцільним кольором токена",
   "Detach from token": "Від’єднати від токена",
   "Detach from theme color": "Від’єднати від кольору теми",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "Почніть із літери; далі літери, цифри, . - _ (не більше 64)",

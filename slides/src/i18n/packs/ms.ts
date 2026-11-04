@@ -1265,6 +1265,7 @@ export const strings: Catalog = {
   "Select all with this color": "Pilih semua dengan warna ini",
   "{n} elements on this slide use this color": "{n} elemen pada slaid ini menggunakan warna ini",
   "Colors & tokens": "Warna & token",
+  "A gradient has no single colour to bind — its swatch’s Tokens tab makes it solid in a token’s colour": "Gradien tiada satu warna untuk diikat — tab Token pada sampelnya menjadikannya pepejal dalam warna token",
   "Detach from token": "Tanggalkan daripada token",
   "Detach from theme color": "Tanggalkan daripada warna tema",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "Mulakan dengan huruf; kemudian huruf, digit, . - _ (paling banyak 64)",

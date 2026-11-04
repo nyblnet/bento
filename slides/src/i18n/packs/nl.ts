@@ -1260,6 +1260,7 @@ export const strings: Catalog = {
   "Select all with this color": "Alles met deze kleur selecteren",
   "{n} elements on this slide use this color": "{n} elementen op deze dia gebruiken deze kleur",
   "Colors & tokens": "Kleuren en tokens",
+  "A gradient has no single colour to bind — its swatch’s Tokens tab makes it solid in a token’s colour": "Een verloop heeft geen enkele kleur om te koppelen — het tabblad Tokens van het staaltje maakt het effen in de kleur van een token",
   "Detach from token": "Loskoppelen van token",
   "Detach from theme color": "Loskoppelen van themakleur",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "Begin met een letter; daarna letters, cijfers, . - _ (maximaal 64)",

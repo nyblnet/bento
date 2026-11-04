@@ -1256,6 +1256,7 @@ export const strings: Catalog = {
   "Select all with this color": "이 색을 쓰는 항목 모두 선택",
   "{n} elements on this slide use this color": "이 슬라이드에서 요소 {n}개가 이 색을 사용합니다",
   "Colors & tokens": "색상 및 토큰",
+  "A gradient has no single colour to bind — its swatch’s Tokens tab makes it solid in a token’s colour": "그라디언트에는 연결할 단일 색이 없습니다 — 견본의 토큰 탭에서 토큰 색의 단색으로 바꿀 수 있습니다",
   "Detach from token": "토큰에서 분리",
   "Detach from theme color": "테마 색에서 분리",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "영문자로 시작하고, 이어서 영문자·숫자·. - _ (최대 64자)",

@@ -1266,6 +1266,7 @@ export const strings: Catalog = {
   "Select all with this color": "เลือกทุกอย่างที่ใช้สีนี้",
   "{n} elements on this slide use this color": "องค์ประกอบ {n} รายการในสไลด์นี้ใช้สีนี้",
   "Colors & tokens": "สีและโทเค็น",
+  "A gradient has no single colour to bind — its swatch’s Tokens tab makes it solid in a token’s colour": "ไล่สีไม่มีสีเดียวให้ผูก — แท็บโทเค็นในแถบสีของมันจะเปลี่ยนเป็นสีทึบตามสีของโทเค็น",
   "Detach from token": "แยกออกจากโทเค็น",
   "Detach from theme color": "แยกออกจากสีธีม",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "ขึ้นต้นด้วยตัวอักษร ตามด้วยตัวอักษร ตัวเลข . - _ (ไม่เกิน 64 ตัว)",

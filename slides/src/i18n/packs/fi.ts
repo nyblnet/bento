@@ -1269,6 +1269,7 @@ export const strings: Catalog = {
   "Select all with this color": "Valitse kaikki tällä värillä",
   "{n} elements on this slide use this color": "Tätä väriä käyttäviä elementtejä tällä dialla: {n}",
   "Colors & tokens": "Värit ja tokenit",
+  "A gradient has no single colour to bind — its swatch’s Tokens tab makes it solid in a token’s colour": "Liukuvärillä ei ole yhtä väriä sidottavaksi — sen värinäytteen Tokenit-välilehti tekee siitä yksivärisen tokenin värissä",
   "Detach from token": "Irrota tokenista",
   "Detach from theme color": "Irrota teemaväristä",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "Aloita kirjaimella; sitten kirjaimia, numeroita, . - _ (enintään 64)",

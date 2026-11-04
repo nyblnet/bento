@@ -1275,6 +1275,7 @@ export const strings: Catalog = {
   "Select all with this color": "এই রঙের সবকিছু নির্বাচন করুন",
   "{n} elements on this slide use this color": "এই স্লাইডের {n}টি উপাদান এই রং ব্যবহার করে",
   "Colors & tokens": "রং ও টোকেন",
+  "A gradient has no single colour to bind — its swatch’s Tokens tab makes it solid in a token’s colour": "গ্রেডিয়েন্টে বাঁধার মতো একক রং নেই — এর সোয়াচের টোকেন ট্যাব একে কোনো টোকেনের রঙে একরঙা করে",
   "Detach from token": "টোকেন থেকে আলাদা করুন",
   "Detach from theme color": "থিমের রং থেকে আলাদা করুন",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "একটি অক্ষর দিয়ে শুরু করুন; তারপর অক্ষর, অঙ্ক, . - _ (সর্বোচ্চ ৬৪টি)",

@@ -1252,6 +1252,7 @@ export const zhHans: Catalog = {
   "Select all with this color": "选择所有使用此颜色的内容",
   "{n} elements on this slide use this color": "此幻灯片上有 {n} 个元素使用此颜色",
   "Colors & tokens": "颜色和令牌",
+  "A gradient has no single colour to bind — its swatch’s Tokens tab makes it solid in a token’s colour": "渐变没有可绑定的单一颜色——在其色块的“令牌”标签中可将它改为令牌颜色的纯色",
   "Detach from token": "与令牌分离",
   "Detach from theme color": "与主题颜色分离",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "以字母开头;其后为字母、数字、. - _(最多 64 个)",
