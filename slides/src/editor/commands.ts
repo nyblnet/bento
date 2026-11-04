@@ -93,7 +93,9 @@ export function rank(cmds: Command[], query: string): Command[] {
     return [...live].sort((a, b) => r(a) - r(b))
   }
   return live
-    .map((c) => ({ c, s: Math.max(fuzzy(query, t(c.label)), fuzzy(query, c.label)) }))
+    // the id too: it holds the other tools' word ("distribute-x" for "Space
+    // evenly across"), so a Figma or PowerPoint habit finds the command
+    .map((c) => ({ c, s: Math.max(fuzzy(query, t(c.label)), fuzzy(query, c.label), fuzzy(query, c.id.replace(/-/g, ' ')) - 1) }))
     .filter((x) => x.s >= 0)
     .sort((a, b) => b.s - a.s)
     .map((x) => x.c)

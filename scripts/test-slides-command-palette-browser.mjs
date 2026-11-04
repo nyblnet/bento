@@ -82,6 +82,13 @@ try {
   await p.keyboard.press(`${mod}+z`)
   await p.keyboard.press(`${mod}+z`) // and the inserted text box
   ok(await nEls() === before, 'undo walks back to the deck as it was')
+  await p.mouse.click(700, 120); await p.keyboard.press('Escape')
+  await p.keyboard.press(`${mod}+a`)
+  await p.keyboard.press(`${mod}+k`)
+  await p.keyboard.type('distribute')
+  const dist = await p.$$eval('.ed-cmdk-list li', (l) => l.map((x) => x.dataset.cmd))
+  ok(dist[0]?.startsWith('distribute-'), `the other tools' word finds the command — "distribute" → ${dist.slice(0, 2).join(', ')}`)
+  await p.keyboard.press('Escape'); await p.keyboard.press('Escape')
   const sideOpen = () => p.evaluate(() => !document.querySelector('.ed-root')?.classList.contains('left-collapsed') && (document.querySelector('.ed-sidebar')?.getBoundingClientRect().width ?? 0) > 40)
   const wasOpen = await sideOpen()
   await p.keyboard.press('[')
