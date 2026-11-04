@@ -12,6 +12,7 @@
 //      included) and nothing more, and its corner pixel is the element's fill.
 //   4. SVG is a standalone image of the same box (its viewBox is the box).
 //   5. Copy as JSON writes ⌘C's clipboard payload: the selected elements.
+//   6. A multi-selection exports in the slide's paint order.
 import { readFileSync } from 'node:fs'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
@@ -118,6 +119,34 @@ try {
   await p.selectOption('.ed-props .ed-export-row select[aria-label="Format"]', 'svg'); await p.waitForTimeout(150)
   ok(await p.$eval('.ed-props .ed-export-row select[aria-label="Scale"]', (x) => x.disabled), 'an SVG has no scale to pick')
   await p.selectOption('.ed-props .ed-export-row select[aria-label="Format"]', 'png'); await p.waitForTimeout(150)
+
+  console.log('\nframes and multi-selections\n')
+  const words = (id, x, y, extra = {}) => ({ id, type: 'text', x, y, w: 160, h: 40, rotation: 0, opacity: 1, html: 'Hello', fontSize: 24, fontFamily: 'Inter', fontWeight: 400, color: '#111111', ...extra })
+  await p.evaluate((els) => {
+    const d = JSON.parse(JSON.stringify(window.bento.doc))
+    d.slides = [{ id: 's1', background: '#ffffff', notes: '', transition: 'none', elements: els }]
+    window.bento.loadDoc(JSON.stringify(d))
+  }, [
+    rect('row', 100, 100, 464, 132, { fill: 'transparent', layout: { dir: 'row', gap: 16, pad: [16, 16, 16, 16] } }),
+    rect('c1', 116, 116, 200, 100, { fill: '#00aa00', parentId: 'row', layout: { dir: 'column', gap: 8, pad: [16, 16, 16, 16] } }),
+    words('t1', 132, 132, { parentId: 'c1' }),
+    rect('c2', 332, 116, 200, 100, { fill: '#00aa00', parentId: 'row', layout: { dir: 'column', gap: 8, pad: [16, 16, 16, 16] } }),
+    words('t2', 348, 132, { parentId: 'c2' }),
+    // ids sort the texts before the rect; the slide paints the rect first
+    rect('z', 700, 400, 300, 120, { fill: '#0000ff' }),
+    words('a1', 720, 410), words('a2', 720, 460),
+  ])
+  await p.waitForTimeout(400)
+  const pick = async (...ids) => {
+    await p.keyboard.press('Escape'); await p.waitForTimeout(100)
+    await p.evaluate((ids) => ids.forEach((id, i) => document.querySelector(`.ed-layer[data-id="${id}"]`)?.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: i > 0 }))), ids)
+    await p.waitForTimeout(250)
+  }
+  const order = (svg) => [...svg.matchAll(/data-el-id="([^"]+)"/g)].map((m) => m[1])
+  await pick('a2', 'a1', 'z')
+  const multi = order((await download('SVG')).buf.toString('utf8'))
+  ok(multi.join() === 'z,a1,a2', `a multi-selection exports in the slide's paint order, not the selection's (${multi.join()})`)
+
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
   await browser.close()

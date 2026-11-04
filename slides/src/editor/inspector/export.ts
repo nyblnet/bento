@@ -77,7 +77,11 @@ export function buildExport(p: PropsPanel, els: SlideElement[]) {
   // (renderSlide resolves clips through every element, draws only visible ones).
   const ids = new Set(els.map((e) => e.id))
   const frames = slide.elements.filter((f) => !ids.has(f.id) && els.some((e) => e.parentId === f.id)).map((f) => ({ ...f, hidden: true as const }))
-  const subject = (opaque: boolean) => els.length ? { ...slide, background: opaque ? slide.background : 'transparent', elements: [...frames, ...els] } : slide
+  // in the slide's paint order: the selection's own order (the order it was
+  // picked in) would draw a card's text under the card
+  const riders = new Map(frames.map((f) => [f.id, f]))
+  const unit = slide.elements.filter((e) => ids.has(e.id) || riders.has(e.id)).map((e) => riders.get(e.id) ?? e)
+  const subject = (opaque: boolean) => els.length ? { ...slide, background: opaque ? slide.background : 'transparent', elements: unit } : slide
   const box = els.length ? coverBox(els) : undefined
   const what = els.length === 1 ? labelIn(slide, els[0], t) : els.length ? t('{n} elements', { n: els.length }) : t('Slide {n}', { n: p.store.currentIndex + 1 })
   const fileBase = `${exportBase(doc)}${els.length ? `-${els.length === 1 ? (els[0].name || els[0].type) : 'selection'}` : ''}`
