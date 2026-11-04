@@ -75,7 +75,13 @@ android {
     }
 
     buildTypes {
+        debug {
+            manifestPlaceholders["setupExported"] = "true"
+            manifestPlaceholders["setupDev"] = "true"
+        }
         release {
+            manifestPlaceholders["setupExported"] = "false"
+            manifestPlaceholders["setupDev"] = "false"
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -83,6 +89,18 @@ android {
                 signingConfigs.getByName("release")
             else
                 signingConfigs.getByName("debug")
+        }
+        // Release as configured — R8 with optimisation and obfuscation (a DEBUGGABLE build gets neither,
+        // which is why this one is not), resource shrinking, the same rules — except that it has the
+        // setup screen's dev switch on and exported, so scripts/qa-home-android-setup.mjs can run the
+        // derivation check (SetupSelfCheck) in the real minified code. It never ships.
+        create("releaseCheck") {
+            initWith(getByName("release"))   // NB: copies release AS CONFIGURED SO FAR: this block must come after it
+            applicationIdSuffix = ".releasecheck"
+            matchingFallbacks += "release"
+            signingConfig = signingConfigs.getByName("debug")
+            manifestPlaceholders["setupExported"] = "true"
+            manifestPlaceholders["setupDev"] = "true"
         }
     }
 

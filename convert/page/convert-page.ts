@@ -155,6 +155,7 @@ const PLAIN: Record<string, string> = {
   'bullet-flattened': 'Bullet styles are simplified.',
   'auto-number-frozen': 'Numbered lists keep their numbers, but no longer renumber automatically.',
   'field-frozen': 'Slide numbers and dates are kept as plain text.',
+  'hyperlink-dropped': 'Links in text that are not web addresses (such as email or file links) are kept as plain text.',
   'image-crop-dropped': 'Cropped pictures show in full.',
   'image-external-dropped': 'Pictures linked from the web are left out. This page never downloads them.',
   'effect-dropped': 'Some visual effects (glows, reflections, 3-D) are left out.',

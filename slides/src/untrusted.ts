@@ -454,7 +454,7 @@ export const ELEMENT_CHECKS: Record<string, Check> = {
   themeRefs,
   // identity + geometry
   id: cssValue(), morphId: cssValue(), role: cssValue(), group: cssValue(),
-  groupId: cssValue(), showOnHover: cssValue(),
+  groupId: cssValue(), showOnHover: cssValue(), locked: bool,
   // a slide id, or an http(s) URL — the same test the renderer and the show apply
   link: tag((v) => (isWebUrl(v) ? v : cssValue()(v)), { type: 'string', maxLength: LIMITS.prose, description: 'slide id or http(s) URL' }),
   x: num(-1e6, 1e6), y: num(-1e6, 1e6), w: num(0, 1e6), h: num(0, 1e6),

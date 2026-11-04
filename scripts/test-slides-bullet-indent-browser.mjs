@@ -110,7 +110,7 @@ try {
   await p.keyboard.type('- b')
   await p.keyboard.press('Tab')
   const typedLive = await live('typed')
-  ok(/◦/.test(typedLive) && await focusedIn('typed'), 'Tab on a typed "- b" bullet makes it a sub-bullet, caret kept')
+  ok(/<ul><li>a<ul><li>b<\/li><\/ul><\/li><\/ul>/.test(norm(typedLive)) && await focusedIn('typed'), `Tab on a typed "- b" bullet makes it a sub-bullet, caret kept (${norm(typedLive)})`)
   await commit()
   ok(/<ul><li>a<ul><li>b<\/li><\/ul><\/li><\/ul>/.test(norm(await html('typed'))), `committed, b is nested under a (${norm(await html('typed'))})`)
 

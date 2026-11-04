@@ -120,40 +120,35 @@ enum IdentityRecovery {
 
     // MARK: - the blob plaintext: raw private scalars, checked before use
 
-    /// identity-design §6b: which kx placement is ruled (unruled while it isn't)
-    enum KxMode: String { case unruled, A, B, C
-        var blobCarriesKx: Bool { self == .A || self == .C }
-    }
-    static let kxMode: KxMode = .unruled
+    /// identity-design §6b, mode C (ruled 2026-11-02): the blob is always 64 bytes,
+    /// account d ‖ recovery kx d. A 32-byte account-only blob (every pre-C
+    /// enrolment) is refused; there is no other mode.
+    static let blobLen = 64
 
     struct BlobKeys: Equatable {
         let account: [UInt8]
-        let kx: [UInt8]?
+        /// the RECOVERY kx scalar (the bind. kx slot's); required
+        let kx: [UInt8]
     }
 
-    static func packScalars(_ keys: BlobKeys, mode: KxMode = kxMode) -> [UInt8]? {
-        guard keys.account.count == 32 else { return nil }
-        if !mode.blobCarriesKx { return keys.kx == nil ? keys.account : nil }
-        guard let kx = keys.kx, kx.count == 32 else { return nil }
-        return keys.account + kx
+    static func packScalars(_ keys: BlobKeys) -> [UInt8]? {
+        guard keys.account.count == 32, keys.kx.count == 32 else { return nil }
+        return keys.account + keys.kx
     }
 
-    /// Read a blob's plaintext and CHECK it before anything uses it: the right
-    /// length for the mode, every scalar in 1..n−1, and each one's public half
+    /// Read a blob's plaintext and CHECK it before anything uses it: exactly 64
+    /// bytes, both scalars in 1..n−1, and each one's public half
     /// equal to the key in the directory-signed binding, so a swapped blob fails
     /// closed. These are recovered PRIVATE scalars: the range check doesn't branch
     /// on their bytes, and the match goes through CryptoKit, never arithmetic here.
-    static func unpackScalars(_ pt: [UInt8], accountPub: String, kxPub: String? = nil,
-                              mode: KxMode = kxMode) -> Verdict<BlobKeys> {
-        let withKx = mode.blobCarriesKx
-        guard pt.count == (withKx ? 64 : 32) else { return .no("length") }
-        let scalars = withKx ? [Array(pt[0..<32]), Array(pt[32...])] : [pt]
-        let pubs = withKx ? [accountPub, kxPub] : [accountPub]
-        for (d, pub) in zip(scalars, pubs) {
+    static func unpackScalars(_ pt: [UInt8], accountPub: String, kxPub: String) -> Verdict<BlobKeys> {
+        guard pt.count == blobLen else { return .no("length") }
+        let scalars = [Array(pt[0..<32]), Array(pt[32...])]
+        for (d, pub) in zip(scalars, [accountPub, kxPub]) {
             guard scalarInRange(d) else { return .no("scalar-range") }
-            guard let pub, scalarMatches(d, pub) else { return .no("key-mismatch") }
+            guard scalarMatches(d, pub) else { return .no("key-mismatch") }
         }
-        return .ok(BlobKeys(account: scalars[0], kx: withKx ? scalars[1] : nil))
+        return .ok(BlobKeys(account: scalars[0], kx: scalars[1]))
     }
 
     private static let nBytes: [UInt8] = [
@@ -196,15 +191,15 @@ enum IdentityRecovery {
 
     /// aad = "bento/id/acct-wrap/v1." ‖ b64u(sha256(credentialId))
     static func sealPrfBlob(prfOutput: [UInt8], credentialId: [UInt8], salt: [UInt8], iv: [UInt8],
-                            keys: BlobKeys, mode: KxMode = kxMode) -> PrfBlob? {
+                            keys: BlobKeys) -> PrfBlob? {
         let cred = credTag(credentialId)
-        guard let kek = prfKek(prfOutput: prfOutput, salt: salt), let pt = packScalars(keys, mode: mode),
+        guard let kek = prfKek(prfOutput: prfOutput, salt: salt), let pt = packScalars(keys),
               let ct = gcmSeal(key: kek, iv: iv, aad: "bento/id/acct-wrap/v1.\(cred)", pt) else { return nil }
         return PrfBlob(v: 1, cred: cred, salt: b64uEnc(salt), iv: b64uEnc(iv), ct: b64uEnc(ct))
     }
 
     static func openPrfBlob(_ blob: PrfBlob, prfOutput: [UInt8], credentialId: [UInt8],
-                            accountPub: String, kxPub: String? = nil, mode: KxMode = kxMode) -> Verdict<BlobKeys> {
+                            accountPub: String, kxPub: String) -> Verdict<BlobKeys> {
         guard blob.v == 1 else { return .no("version") }
         let cred = credTag(credentialId)
         guard blob.cred == cred else { return .no("credential") }
@@ -212,7 +207,7 @@ enum IdentityRecovery {
               let ct = b64uDec(blob.ct) else { return .no("grammar") }
         guard prfOutput.count == 32, let kek = prfKek(prfOutput: prfOutput, salt: salt),
               let pt = gcmOpen(key: kek, iv: iv, aad: "bento/id/acct-wrap/v1.\(cred)", ct) else { return .no("decrypt") }
-        return unpackScalars(pt, accountPub: accountPub, kxPub: kxPub, mode: mode)
+        return unpackScalars(pt, accountPub: accountPub, kxPub: kxPub)
     }
 
     // MARK: - the recovery-code blob (inner layer; the directory adds its pepper)
@@ -220,17 +215,16 @@ enum IdentityRecovery {
     static func accountTag(_ accountPub: String) -> String { b64uEnc(Array(SHA256.hash(data: Data(accountPub.utf8)))) }
 
     /// aad = "bento/id/rc-wrap/v1." ‖ b64u(sha256(accountPub))
-    static func sealRecoveryInner(wrapKey: [UInt8], iv: [UInt8], accountPub: String, keys: BlobKeys,
-                                  mode: KxMode = kxMode) -> [UInt8]? {
-        guard let pt = packScalars(keys, mode: mode) else { return nil }
+    static func sealRecoveryInner(wrapKey: [UInt8], iv: [UInt8], accountPub: String, keys: BlobKeys) -> [UInt8]? {
+        guard let pt = packScalars(keys) else { return nil }
         return gcmSeal(key: wrapKey, iv: iv, aad: "bento/id/rc-wrap/v1.\(accountTag(accountPub))", pt)
     }
 
     static func openRecoveryInner(_ ct: [UInt8], wrapKey: [UInt8], iv: [UInt8], accountPub: String,
-                                  kxPub: String? = nil, mode: KxMode = kxMode) -> Verdict<BlobKeys> {
+                                  kxPub: String) -> Verdict<BlobKeys> {
         guard let pt = gcmOpen(key: wrapKey, iv: iv, aad: "bento/id/rc-wrap/v1.\(accountTag(accountPub))", ct)
         else { return .no("decrypt") }
-        return unpackScalars(pt, accountPub: accountPub, kxPub: kxPub, mode: mode)
+        return unpackScalars(pt, accountPub: accountPub, kxPub: kxPub)
     }
 
     // MARK: - canonical base64url (kernel statements.ts)

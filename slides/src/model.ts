@@ -111,6 +111,14 @@ export interface ElementBase {
    */
   groupId?: string
   /**
+   * Editor lock (discussion #838): a locked element is skipped by canvas
+   * clicks and marquee drags so it cannot be bumped or block the items above
+   * it. Reachable through the Layers list, Alt-click, or ⌘L on a selection.
+   * Absent = unlocked; written only when true. Present, print and export
+   * ignore it entirely.
+   */
+  locked?: boolean
+  /**
    * In-slide hover reveal: this element is only visible while an element
    * whose `group` equals this value is hovered (slide.hover type 'reveal').
    * The slide's hover.default set is shown when nothing is hovered.

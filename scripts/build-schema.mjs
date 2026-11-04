@@ -24,12 +24,41 @@ import { mkdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from 'nod
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { existsSync } from 'node:fs'
+import { APPS, tagFor } from './apps.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const version = JSON.parse(readFileSync(join(root, 'slides/package.json'), 'utf8')).version
 const outDir = join(root, 'schema')
 const OUT = join(outDir, 'slides.json')
 const PINNED = join(outDir, `slides-${version}.json`)
+
+/**
+ * Decide whether the version-pinned snapshot may be written.
+ *
+ * A snapshot whose version has a release tag is a FROZEN URL: files already in
+ * the wild point at it (bento.page/schema/slides-<version>.json). Between
+ * releases package.json still carries the released version, so naively writing
+ * slides-<version>.json rewrites a published file (#864 did exactly that to
+ * 1.2.10). Once the tag exists the snapshot is read-only; a differing schema
+ * belongs to the NEXT version.
+ */
+export function pinnedPlan({ repo, version, file, body, tag = tagFor(APPS.slides, version) }) {
+  if (!existsSync(file)) return { write: true }
+  if (readFileSync(file, 'utf8') === body) return { write: true } // identical: harmless
+  let tagged = false
+  try {
+    execFileSync('git', ['-C', repo, 'rev-parse', '-q', '--verify', `refs/tags/${tag}`], { stdio: 'ignore' })
+    tagged = true
+  } catch { /* no such tag */ }
+  if (!tagged) return { write: true } // unreleased: still being shaped
+  return {
+    write: false,
+    reason: `${file} is the published snapshot for ${tag} and must not change.\n` +
+      `The schema differs from it, so the change belongs to the next release: bump slides/package.json to the next version, then re-run.\n` +
+      `schema/slides.json was still updated.`,
+  }
+}
 
 /** Bundle schema.ts and return buildSchema. */
 export async function loadBuildSchema() {
@@ -64,7 +93,13 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   } else {
     mkdirSync(outDir, { recursive: true })
     writeFileSync(OUT, body)
-    writeFileSync(PINNED, body)
-    console.log(`wrote ${OUT} and ${PINNED} (${body.length} B)`)
+    const plan = pinnedPlan({ repo: root, version, file: PINNED, body })
+    if (plan.write) {
+      writeFileSync(PINNED, body)
+      console.log(`wrote ${OUT} and ${PINNED} (${body.length} B)`)
+    } else {
+      console.log(`wrote ${OUT} (${body.length} B); left ${PINNED} untouched`)
+      console.error(plan.reason)
+    }
   }
 }

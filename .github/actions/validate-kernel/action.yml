@@ -542,3 +542,30 @@ runs:
       # compile time (historySyncKeys); skipDoc is still the floor.
       shell: bento-step {0}
       run: node scripts/test-sync-history-override.ts
+
+    - name: kx placement mode C — lenient-path mutants
+      # bento/id (identity-design §6b, mode C): both kx slots are required and
+      # the account blob is exactly 64 bytes. Ten mutants each reintroduce one
+      # lenient path (an empty slot, a 32-byte blob, an unmatched kx...) into a
+      # copy of kernel/src; test-statements or test-recovery must go red on
+      # every one, after the unmutated copy passes both.
+      shell: bento-step {0}
+      run: node scripts/test-kx-mode-mutants.ts
+
+    - name: identity device linking (link v1)
+      # bento/id: every agent that links a device must derive the same bytes.
+      # The `link` section of kernel/fixtures/identity-v1.json: code → slot,
+      # the transcript, Z, the direction keys and the SAS, recomputed byte for
+      # byte; the offer, the directory's release check (spend-first) and the
+      # new device's final check, every verdict for its stated reason.
+      shell: bento-step {0}
+      run: node scripts/test-link.ts
+
+    - name: identity device linking mutants
+      # Each mutant reintroduces one lenient path into a copy of link.ts (the
+      # code out of the salt, an AAD without the message number, a late spend,
+      # a frozen binding that releases, an N that stores a dev. it never asked
+      # for...); test-link.ts must go red on every one, after the unmutated
+      # copy passes.
+      shell: bento-step {0}
+      run: node scripts/test-link-mutants.ts

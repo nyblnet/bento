@@ -69,5 +69,17 @@
                 <data android:scheme="file" android:mimeType="text/html" />
             </intent-filter>
         </activity>
+
+        <!-- Bento ID setup. Not exported and with no launcher: nothing in a release build starts it
+             (the directory is not live). A debuggable build exports it so a rig can; see
+             SetupActivity. -->
+        <activity
+            android:name=".SetupActivity"
+            android:exported="${setupExported}"
+            android:theme="@style/Theme.Tray">
+            <!-- true only in builds a test drives (debug, releaseCheck): the screen then reads its
+                 directory URL, test key and self-check request from the launching intent. -->
+            <meta-data android:name="bento.setup.dev" android:value="${setupDev}" />
+        </activity>
     </application>
 </manifest>

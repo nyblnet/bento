@@ -264,7 +264,7 @@ everywhere, which is what keeps WYSIWYG honest:
 
 | Surface | Host | Charts | Notes |
 |---|---|---|---|
-| Editor canvas | `.ed-stage-scale` (CSS-scaled) | static SVG snapshot | Moveable control box mounts *inside* the scale wrapper (see CLAUDE.md gotcha #1) |
+| Editor canvas | `.ed-stage-scale` (CSS-scaled) | static SVG snapshot | Moveable control box mounts *inside* the scale wrapper (see slides/CLAUDE.md hard-won detail 1) |
 | Sidebar thumbnails | per-slide mini surface | snapshot | `svg` elements collapse to `<img>` for cheapness |
 | Present | Reveal.js sections | **live instance** (tooltips, dataZoom) | fx/morph/states run here only |
 | PDF export | `#bento-print`, `@page` 1600×900 | snapshot | state slides excluded |
