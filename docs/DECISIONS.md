@@ -12340,7 +12340,8 @@ neither); the Windows key store is an explicit stub that refuses everything unti
   document's URL, the mint took the verdict, and the secret landed in the https page, whose realm
   has the shim and Tauri's IPC. `load_started` now takes whether the URL is the document's, and if
   it is not, the load has no verdict (the tally is still taken). WebView2 reports the https URL at
-  that finish, so it was not reachable that way; the row runs on both engines. The row's page
+  that finish, so the old mint was not reachable that way (measured with the verdict on the books);
+  the row runs on both engines, and the rule's mutants on WebKitGTK alone. The row's page
   catches a delivery of its own as a control, and must catch no other.
 - **One unknown serve taints the webview, for good (all platforms).** A tainted Load never mints
   genuine; only a new webview is a new Load. Every route found to a genuine verdict for unknown
@@ -12363,7 +12364,9 @@ neither); the Windows key store is an explicit stub that refuses everything unti
   and arm genuine, and identity stays on. A document made by a release newer than the bundled
   history is unknown before and after, with or without this rule. The residual is a FRESH webview
   running unknown bytes with no serve, which has nothing to taint it and only a persisted service
-  worker could do; registering the document as one is refused, and that is a row on both engines.
+  worker could do. Registering the document as one is refused on both engines: WebView2 refuses it
+  for its MIME type while a real script at that origin registers (the row's control), and WebKitGTK
+  refuses the custom scheme outright, so that half has no accepted control.
 - **A document's URL includes its fragment (all platforms).** The host compared the URL exactly,
   but a page moves its own fragment without asking: `history.pushState` is invisible on both
   engines (bento/spaces does it on every page change), and a plain `#x` link is invisible on

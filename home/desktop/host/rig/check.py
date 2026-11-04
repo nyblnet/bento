@@ -449,6 +449,10 @@ def swreg():
     ok(S.get("secure") is True, f"swreg: precondition: a secure context ({S.get('secure')})")
     for k in ("doc", "query"):
         ok(str(S.get(k)).startswith(("refused", "no api")), f"swreg: {k}: the document cannot register ({S.get(k)})")
+    # the control: on WebView2 a real script from the same origin registers, so the refusal above
+    # is the document's. WebKitGTK refuses any custom scheme, so there is nothing to control there.
+    if WINDOWS:
+        ok(S.get("control") == "registered", f"swreg: control: a real script at this origin registers ({S.get('control')})")
 swreg()
 
 if WINDOWS:

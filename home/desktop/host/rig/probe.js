@@ -64,6 +64,10 @@
       return plain.apply(this, arguments)
     }
   }
+  // realsave saves round the runtime's own bookkeeping, so the app would still ask about unsaved
+  // changes, and on WebView2 that prompt stops the reload (measured: the row timed out). Installed
+  // here so it runs ahead of the app's listener.
+  if (MODE === 'realsave') addEventListener('beforeunload', (e) => e.stopImmediatePropagation(), true)
   // rig 3: which capability values ever pass through THIS realm's JSON.stringify?
   const seen = new Set(), js = JSON.stringify
   JSON.stringify = function (v) { try { if (v && typeof v === 'object' && typeof v.cap === 'string') seen.add(v.cap) } catch (_) {} return js.apply(this, arguments) }
@@ -500,8 +504,6 @@
   }
 
   // The normal user: the real release, saved by its own serializer, reloaded in the SAME webview.
-  // The unsaved-changes prompt is not what this row is about, and the save below goes round the
-  // runtime's own bookkeeping, so the prompt is held off.
   async function runRealSave() {
     const stage = sessionStorage.getItem('realsave')
     await until(() => window.__rigCap, 15000)
@@ -516,7 +518,6 @@
       const w = await handle.createWritable(); await w.write(next); await w.close()
       sessionStorage.setItem('realsave', '1')
       await mark('realsave-reloading')
-      addEventListener('beforeunload', (e) => e.stopImmediatePropagation(), true)
       location.reload()
       return
     }
