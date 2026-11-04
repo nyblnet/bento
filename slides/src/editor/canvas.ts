@@ -631,6 +631,11 @@ export class SlideCanvas {
   private fitHandles(targets = (this.moveable.target ?? []) as HTMLElement[]) {
     // (the new targets are passed in: moveable.target still reads the old
     // selection until its next render)
+    // A re-render replaces the nodes a drag just moved; until the new ones are
+    // targeted, the old ones are detached and measure 0×0. Measuring those took
+    // every handle away after a drag, so only nodes still in the page count,
+    // and with none to measure the handles stay as they are.
+    if (targets.length && !(targets = targets.filter((n) => n.isConnected)).length) return
     let side = Infinity, long = Infinity
     if (targets.length) {
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity

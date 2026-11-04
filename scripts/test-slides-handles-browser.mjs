@@ -51,6 +51,14 @@ try {
   await pick('big')
   let h = await handles()
   ok(h.n === 8 && h.size === 8 && h.rot === 1, `a large selection gets all eight 8px handles and the rotation stem (${h.n} × ${h.size}px)`)
+  // a drag re-renders the element; its handles must come back on the new node
+  const bb = await p.locator('.ed-stage-scale [data-el-id="big"]').boundingBox()
+  const at = [bb.x + bb.width / 2, bb.y + bb.height / 2]
+  await p.mouse.move(...at); await p.mouse.down()
+  for (let i = 1; i <= 16; i++) await p.mouse.move(at[0] + i * 5, at[1] + i * 2)
+  await p.mouse.up(); await p.waitForTimeout(500)
+  h = await handles()
+  ok(h.n === 8 && h.rot === 1, `after a mouse drag the selection keeps all eight handles and the stem (${h.n}, stem ${h.rot})`)
   await pick('small')
   const sw = await screen('small')
   h = await handles()
