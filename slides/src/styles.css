@@ -804,8 +804,10 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
    click. Wears THE FIELD's box so it sits in a row like any other field. Icon
    segments are field-width; word segments take the row's full width, on a
    line of their own under the caption, so no translation has to squeeze. */
+/* never wider than the cell it sits in: in a column narrower than 110px
+   (the Stroke line's Position | Weight) it ran under its neighbour */
 .ed-seg {
-  box-sizing: border-box; display: flex; width: 110px; height: 26px; padding: 2px; gap: 2px;
+  box-sizing: border-box; display: flex; width: 110px; max-width: 100%; height: 26px; padding: 2px; gap: 2px;
   background: var(--field); border: 1px solid var(--field-line); border-radius: 6px;
 }
 .ed-seg-text { width: 100%; }

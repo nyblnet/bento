@@ -28,6 +28,8 @@
 //   7. Focus: after + Add shadow it lands in the Shadow section, after a
 //      toolbar button it stays on that button; a section header folds from
 //      the keyboard; the alignment box is one tab stop, ↓ moves a row.
+//   8. The Stroke line's Position never runs under its Weight, at 1280 and
+//      1440 wide, in English and German.
 import { fileURLToPath } from 'node:url'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const SHELL = process.env.SHELL_HTML || fileURLToPath(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url))
@@ -223,6 +225,25 @@ try {
     ok(errors.length === 0, `no page errors${errors.length ? `: ${errors.join(' | ')}` : ''}`)
     await ctx.close()
   })
+
+  console.log('\n8. the Stroke line\n')
+  // the position control kept its 110px field width in a column narrower
+  // than that, and its "Outside" glyph ran under the weight field
+  for (const [locale, width] of [['en-US', 1280], ['en-US', 1440], ['de-DE', 1280], ['de-DE', 1440]]) {
+    await run(async () => {
+      const { ctx, p, select } = await open(locale, width, [shape('s', 100, { stroke: '#000000', strokeWidth: 2 })])
+      await select('s')
+      const gap = await p.evaluate(() => {
+        const seg = document.querySelector('.ed-props .ed-stroke-line > .ed-seg')?.getBoundingClientRect()
+        const weight = document.querySelector('.ed-props .ed-stroke-line > :last-child')?.getBoundingClientRect()
+        // and each glyph still shows whole in its narrower segment
+        const whole = [...document.querySelectorAll('.ed-props .ed-stroke-line > .ed-seg button')].every((b) => b.getBoundingClientRect().width >= b.querySelector('svg').getBoundingClientRect().width + 4)
+        return seg && weight && whole ? weight.left - seg.right : NaN
+      })
+      ok(gap >= 0, `${locale} at ${width}: Position ends before Weight begins, its glyphs whole (gap ${gap.toFixed(1)}px)`)
+      await ctx.close()
+    })
+  }
 } finally {
   await browser.close()
 }
