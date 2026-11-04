@@ -12233,7 +12233,8 @@ Two follow-ups to the link v1 entry above, both from porting it to iOS.
 ## 2026-11-04 — bento/connect H2 on Windows: WebView2 measured on a hosted runner (home/desktop/host)
 
 Measured on GitHub's hosted `windows-latest` (WebView2 runtime 156.0.4314.50), the same rigs as
-Linux, 337 checks. Windows Hello and a real TPM consent key are NOT measured (a hosted runner has
+Linux, 543 checks passing (read from the job log; each race attempt that lands adds two rows, so
+the total moves between runs). Windows Hello and a real TPM consent key are NOT measured (a hosted runner has
 neither); the Windows key store is an explicit stub that refuses everything until a real-PC session.
 
 - **Per-document origins are distinct origins on WebView2.** A document is served at
@@ -12304,8 +12305,9 @@ neither); the Windows key store is an explicit stub that refuses everything unti
   WebKitGTK; nothing could sign, since no store is wired). One unknown serve now makes the load
   unknown, and the verdict dies with the mint that used it. The rig scenario is security's race
   on both engines, read from the host's own arming line (the swap landed between the two serves in
-  10 of 10 attempts on WebKitGTK and 7 of 10 on WebView2, and every one armed unknown). Each half
-  has a rig mutant: without the AND the attacker's bytes arm genuine and reach the agent. It fails closed in two ways worth
+  9 or 10 of 10 attempts on WebKitGTK and 7 or 8 of 10 on WebView2, and every one armed unknown).
+  Each half has a rig mutant on WebKitGTK: without the AND the attacker's bytes arm genuine and
+  reach the agent, and without the take a saved, reloaded document stays unknown. It fails closed in two ways worth
   knowing: a page that fetched its own URL while unknown makes its next load unknown too, and a
   document that reloads in the instant between its serve and the previous load's finish report
   has no verdict left, so it opens unarmed until the next reload.
@@ -12313,8 +12315,11 @@ neither); the Windows key store is an explicit stub that refuses everything unti
   but a page moves its own fragment without asking: `history.pushState` is invisible on both
   engines (bento/spaces does it on every page change), and a plain `#x` link is invisible on
   WebView2 (no policy call, no load start, no finish). WebKitGTK does ask, and the policy refused
-  it, so in-page links did nothing on Linux. From then on a reload's URL carried the fragment and
-  the policy refused that too. `is_document` now takes the part before `#`, for the navigation
+  it: a genuine document's in-page link did nothing on Linux. (An unknown document's URL moved
+  anyway, 3 of 3 runs with the policy's refusal in the log; why is not known.) Once the URL carries
+  a fragment, a reload's does too, and the policy refused that: measured on WebKitGTK with the fix
+  removed, the reload never happens. On WebView2 the same compare is read, not measured; the
+  fixed path is measured on both. `is_document` now takes the part before `#`, for the navigation
   policy, the bounce and the mint: a fragment never reaches the protocol handler, so it is the same
   bytes from the same origin. A query is still another URL. The watchdog keeps the exact compare,
   since `own#x` is usually a same-document navigation that starts no load and it would rebuild a
