@@ -12426,3 +12426,38 @@ old passkey. The sentence about a key that enrolled a code during the grace no
 longer applies to the grace. The same state still exists, from a setup that enrolled
 a code and let the window lapse: email does not re-arm it, and its way out is freeze,
 resolve, a fresh email proof on the new key, then a passkey, then a code.
+
+## 2026-11-04: a recovery code's age is counted at the freeze, and `ever` can end after a deletion
+
+The entry above let a code resolve at once once it was 72 hours old, because the
+owner would have had the enrolment's notice and the same time a rotation gives. That
+was wrong when the thief freezes first. A frozen address with nothing waiting is
+status-only: re-freeze, contest, `rc-enrol`, `cred-add`, rotation, an email freeze
+and a renewal are all refused, and the owner's own code no longer matches. So key
+and passkey could replace the code, freeze, wait 72 hours while the owner could do
+nothing, and move the address to a third key at once. A rotation followed by its own
+contest reached the same place.
+
+The time that counts is time the address was not frozen. A resolution now waits
+unless the code was enrolled 72 hours or more before the freeze: the Account object
+reports the enrolment time, and the Address object holds it against `frz.at`. The
+test is written so that a missing age waits. A code held 72 hours before the freeze
+still resolves at once, and an owner who enrolled a code under 72 hours before
+freezing waits 72 hours: that cost is accepted.
+
+The flag behind the setup allowance can now end. The 2026-11-03 entry said a key's
+flag is never cleared, not by a deletion. After a deletion it can be, with nothing
+lost, but only at the deleted binding's own expiry. By then every slot is empty and a
+key with its mailbox gets what a brand-new key gets anyway. Sooner it is not safe:
+the old code is still held, and clearing the flag would arm the allowance beside it.
+A plain expiry with no deletion ends nothing, since material may remain.
+
+The appointment is the Address object's, not the Account object's, so that a re-bind
+cancels it in the same write that lands the binding. Held in the Account object, the
+cancel would be a second call that can fail, and a failed cancel would bring back
+"add a credential, delete the binding, the flag is gone". The cost is a second
+object's word at the end: the Account object refuses if it still holds a passkey or a
+live code, and the flags then stay. A new key waiting out its contest holds the
+appointment; if it lands the flags stay, and if it is contested they go. A mailbox
+deletion counts too, an hour on, since its binding has already expired and its wipe
+follows the answer.

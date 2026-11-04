@@ -371,7 +371,7 @@ export default {
       const email = normalize(b.email ?? '')
       if (!email || !codeOk(b.code)) return json(400, { error: 'invalid' })
       if (!(await ledger(env, ip, 'complete'))) return json(429, { error: 'rate-limited' })
-      const r = await call(await addressStub(env, email), 'deleteComplete', { code: b.code })
+      const r = await call(await addressStub(env, email), 'deleteComplete', { code: b.code, scope: await addressKey(email) })
       if (r.status === 200 && r.body.deleted) await cascade(env, email, 'mailbox', 0)
       return relay(r)
     }
@@ -460,11 +460,12 @@ export default {
       if (rc.body.notify) await notify(env, scope, rc.body.notify, '')
       if (rc.status !== 200) return json(rc.status, { error: 'invalid', reason: rc.body.reason })
       // re-checked: the address may have moved while the code was checked
-      const r = await call(addr, 'resolve', { stmt: b.stmt, sig: b.sig, key: prep.body.key, young: rc.body.young === true })
+      const r = await call(addr, 'resolve', { stmt: b.stmt, sig: b.sig, key: prep.body.key, enrolledAt: rc.body.enrolledAt })
       // a key-holder freeze resolves at once; an EMAIL-ONLY or CONTESTED one, or any
-      // resolved by a code younger than 72 h, waits 72 h (202), so a device still
-      // holding the frozen key can stop it (code + mailbox alone is no takeover, and
-      // neither is a code enrolled just now). The code is spent only when it commits.
+      // resolved by a code enrolled under 72 h before the freeze, waits 72 h (202), so
+      // a device still holding the frozen key can stop it (code + mailbox alone is no
+      // takeover, and neither is a code enrolled just now). The code is spent only when
+      // it commits.
       if (r.status === 200 || r.status === 202) await notify(env, scope, r.status === 200 ? 'resolve' : 'resolve-pending', (await hashOf(binding.accountPub)).slice(0, 8))
       return json(r.status, r.body)
     }
@@ -509,7 +510,9 @@ export default {
 // bind that armed it, when it ends, the ops left), `grace` (after a settled vouched
 // rotation: the previous key, the key it moved to, when the previous key's passkeys
 // stop consenting, the Account object's name), `rekey` (a deletion of old passkeys
-// not yet finished: what stays, and the Cred objects still to delete). Strongly consistent per address, so a re-bind,
+// not yet finished: what stays, and the Cred objects still to delete), `everEnd` (a
+// deletion's appointment to end the Account object's `ever:` rows: when, and that
+// object's name; a re-bind deletes it, here, in the same object). Strongly consistent per address, so a re-bind,
 // a rotation and a lookup can never race into a mixed answer.
 //
 // States: active (no `rot`, no `frz`) · pending (`rot`) · frozen (`frz`).
@@ -638,7 +641,7 @@ export class Address {
         const ht = await s.get('htomb')
         if (ht) await s.put('chain', [...((await s.get('chain')) || []), ht.h])
         await s.put('cur', { stmt: rot.stmt, sig: rot.sig, h: rot.h, b: rot.b, verifiedAt: rot.at, rebound: true })
-        await s.delete(['rot', 'fpend', 'htomb', 'tomb', 'steps'])
+        await s.delete(['rot', 'fpend', 'htomb', 'tomb', 'steps', 'everEnd'])
         const nb = await readBind(rot.stmt, rot.sig, rot.at)
         if (nb) await dropOld(nb.address, rot.b.key)
         return
@@ -673,7 +676,7 @@ export class Address {
     const commitResolve = async (stmt, sig, h, b, base) => {
       await s.put('chain', [...((await s.get('chain')) || []), base.h])
       await s.put('cur', { stmt, sig, h, b: { key: b.accountPub, seq: b.seq, expires: b.expires }, verifiedAt: now, rebound: true })
-      await s.delete(['frz', 'rot', 'pend', 'fpend', 'htomb', 'tomb', 'steps', 'rsv'])
+      await s.delete(['frz', 'rot', 'pend', 'fpend', 'htomb', 'tomb', 'steps', 'rsv', 'everEnd'])
       await dropOld(b.address, b.accountPub)
     }
     // an email-only freeze's resolution whose 72 hours passed without the frozen
@@ -694,6 +697,19 @@ export class Address {
     {
       const g = await s.get('grace')
       if (g && now >= g.until) await endGrace(g)
+    }
+    // a deletion's `ever:` rows end at the deleted binding's own expiry, never sooner: until
+    // then the old key may still hold a code or come back, and "never had one" would arm
+    // the allowance beside it. A re-bind deleted this record, and one still waiting out
+    // its contest holds it: if it lands the rows stay, if it is contested they go then.
+    {
+      const e = await s.get('everEnd')
+      if (e && now >= e.at && !(await s.get('rot'))) {
+        try {
+          await call(this.env.ACCOUNT.get(this.env.ACCOUNT.idFromName(e.scope)), 'everEnd', {})
+          await s.delete('everEnd')
+        } catch (x) { console.log(`everEnd failed: ${x.message}`) } // the alarm comes back: see tick
+      }
     }
     const stateOf = async () => ((await s.get('frz')) ? 'frozen' : (await s.get('rot')) ? 'pending' : 'active')
     /** the holder tomb, while it still protects the address: before the deleted
@@ -788,7 +804,7 @@ export class Address {
       // or the name, which live once, inside the signed statement it serves
       await s.put('cur', { stmt: p.stmt, sig: p.sig, h, b: { key: b.accountPub, seq: b.seq, expires: b.expires }, verifiedAt: now, rebound })
       // over an expired binding, whatever state it was in goes with it
-      await s.delete(['pend', 'tomb', 'htomb', 'rot', 'frz', 'fpend', 'rsv', 'setup'])
+      await s.delete(['pend', 'tomb', 'htomb', 'rot', 'frz', 'fpend', 'rsv', 'setup', 'everEnd'])
       if (rebound) await dropOld(b.address, b.accountPub)
       else if (guard && ht) await rcCall(ht, 'rcKeep') // the same key, inside the window: its code is current again
       await armSetup(b.address, b.accountPub, h) // both proofs just landed: the only thing that arms it
@@ -855,6 +871,13 @@ export class Address {
       // a holder deletion keeps the binding's protection for its own lifetime (§39.6)
       if (by === 'holder') await s.put('htomb', { h: cur.h, key: cur.b.key, seq: cur.b.seq, expires: cur.b.expires, scope: typeof scope === 'string' ? scope : null })
       else await s.delete('htomb')
+      // the wipe follows this answer, so never sooner than an hour on, even for a binding
+      // that had already expired: an appointment kept before the wipe would find material
+      if (typeof scope === 'string') {
+        const at = Math.max(cur.b.expires, now + LIMITS.rekeyRetryMs)
+        await s.put('everEnd', { at, scope })
+        if (!(await s.get('rekey'))) await s.setAlarm(at) // a retry's alarm stands, and tick comes back to this
+      }
     }
 
     if (a.op === 'delete') {
@@ -887,7 +910,7 @@ export class Address {
       if (!same(await codeHash(a.code), p.codeHash)) return fail(p)
       const cur = await s.get('cur')
       if (cur && cur.b.expires > now) return fail(p) // renewed since the code was mailed
-      await tombstone('mailbox')
+      await tombstone('mailbox', a.scope)
       return out(200, { deleted: true })
     }
 
@@ -974,17 +997,20 @@ export class Address {
       if (a.op === 'resolvePrep') return out(200, { key: base.key })
       if (a.key !== base.key) return refuse('state') // the code was checked against another binding
       const h = await hashOf(a.stmt)
-      if (frz.by === 'email' || frz.contested || a.young === true) {
+      if (frz.by === 'email' || frz.contested || !(frz.at - a.enrolledAt >= LIMITS.rotationWindowMs)) {
         // EMAIL-ONLY freeze (ruling b): the code + the mailbox alone were an instant
         // takeover. It waits 72 h, still frozen; meanwhile a freeze or contest signed
         // by the frozen key voids it and marks the freeze CONTESTED, and every later
         // resolution of a contested freeze waits the same way. The code stays live
         // until one commits. A YOUNG code waits too, on any freeze: key + passkey could
-        // otherwise enrol one, freeze and resolve, a rotation with no 72 h contest.
+        // otherwise enrol one, freeze and resolve, a rotation with no 72 h contest. Young
+        // is counted AT THE FREEZE: a frozen address with no `rsv` is status-only, so
+        // time spent frozen is no time the owner could answer in, and a code must not
+        // age through it. Written so a missing age waits.
         await s.put('rsv', { stmt: a.stmt, sig: a.sig, h, at: now, until: now + LIMITS.rotationWindowMs })
         return out(202, { state: 'frozen', resolving: true, activeAt: now + LIMITS.rotationWindowMs })
       }
-      // a key-holder freeze (owner, contest) by a code older than the window: at once
+      // a key-holder freeze (owner, contest) by a code enrolled 72 h or more before it: at once
       const dirKey = await importDirKey(this.env.DIR_KEY_JWK)
       const att = await attest(dirKey, this.env.DIR_KID, h, now, now)
       // no vouch: pinners warn (intended, §39.3), and nothing here softens that
@@ -1000,11 +1026,17 @@ export class Address {
       return out(200, { ok: true })
     }
 
-    // the alarm: the grace's lapse ran above; this retries a failed rekey
+    // the alarm: the grace's lapse and a deletion's appointment ran above; this retries
+    // a failed rekey, and puts back the appointment a retry's alarm replaced
     if (a.op === 'tick') {
       await runRekey()
       const g = await s.get('grace')
       if (g && !(await s.get('rekey'))) await s.setAlarm(g.until) // a retry's alarm replaced this one
+      const e = await s.get('everEnd'), rot = await s.get('rot')
+      if (e && !(await s.get('rekey'))) { // still here: not due, held by a pending re-bind, or the call failed
+        const due = Math.max(e.at, rot ? rot.until : 0)
+        await s.setAlarm(due > now ? due : now + LIMITS.rekeyRetryMs)
+      }
       return out(200, { ok: true })
     }
 

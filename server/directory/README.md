@@ -138,12 +138,16 @@ WARN; that is intended, and nothing the directory says softens it.
   spent, and the event list records it. A second resolution while one waits is
   refused (`resolving`).
 - A **young code** waits too, on any freeze. A code enrolled less than 72 hours
-  ago resolves the way an email-only freeze does: 202, `resolve-pending`, and the
-  frozen key can void it. Key and passkey together could otherwise replace the
-  code, freeze and resolve to a third key at once, which is a rotation with no
-  contest. The age is the enrolment's (`at`; a pepper upgrade keeps it). At 72
-  hours the code resolves at once: the owner has had the `rc-enrol` notice and the
-  time a rotation would have given them.
+  before the freeze resolves the way an email-only freeze does: 202,
+  `resolve-pending`, and the frozen key can void it. Key and passkey together could
+  otherwise replace the code, freeze and resolve to a third key at once, which is a
+  rotation with no contest. The age is the enrolment's (`at`; a pepper upgrade keeps
+  it), counted at the freeze (`frz.at`), not at the resolve: a frozen address with
+  nothing waiting is status-only, so the owner can do nothing while it sits frozen,
+  and that time must not age the code. A resolve with no age waits. A code enrolled
+  72 hours or more before the freeze resolves at once: those 72 hours, unfrozen, are
+  the owner's time to answer the `rc-enrol` notice. An owner who enrolled a code
+  under 72 hours before freezing waits 72 hours too.
 - A freeze that has had a resolution voided is **contested**: the code has been
   in two hands. Every later resolution of it waits 72 hours the same way and
   can be voided the same way, by the frozen key, and a contested freeze never
@@ -251,8 +255,8 @@ account key it belongs to, and material for any other key is treated as gone).
   `cred-del` and `rc-enrol` also need consent for their own op.
 - **The first credential.** A bind that lands `active` with both proofs arms a
   15-minute setup allowance, but only for an account key that has NEVER had a
-  passkey or a recovery code (a stored flag per key, not a count, and nothing
-  clears it). Inside it, one `cred-add` and one `rc-enrol` may come with no
+  passkey or a recovery code (a stored flag per key, not a count; only the end of
+  a deletion clears it, see **Deletion**). Inside it, one `cred-add` and one `rc-enrol` may come with no
   consent, on the account key's `dreq.` alone. It only fills an empty slot,
   it stands in only for ABSENT consent (a bad consent is refused, never rescued),
   and any freeze, contest, rotation or new bind ends it. Both ops still notify,
@@ -323,7 +327,16 @@ account key it belongs to, and material for any other key is treated as gone).
   kernel's request statement has a ledger op.
 - **Deletion** takes the passkeys and the ledger with it. A holder deletion
   keeps the recovery verifier, for the deleted binding's own window; a mailbox
-  deletion (expired bindings) removes it too.
+  deletion (expired bindings) removes it too. The `ever:` flags go last, and only
+  after a deletion: every key's at that address, at the deleted binding's own
+  expiry and never earlier (an hour on, if it had already expired, so the wipe comes
+  first). By then every slot is empty and the key gets what a brand-new key gets;
+  sooner, the flag is what stops a key that still has its old code from arming. A
+  re-bind before then cancels this, in the Address object, in the same write, or a
+  credential and a deletion would clear the flag; a new key still waiting out its
+  contest holds it until it lands (cancelled) or is contested (it goes ahead). If
+  the Account object still holds a passkey or a live code when the time comes, the
+  flags stay. A binding that merely expires ends nothing: its material may remain.
 
 **Not here yet:**
 - the ledger routes (a kernel request op)

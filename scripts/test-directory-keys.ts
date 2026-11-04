@@ -50,9 +50,12 @@
 //     previous key's may consent to cred-add, and nothing else, until the new key's
 //     first credential or 30 days; then they are deleted, with a notice, and its blob
 //     is stale from the settle on. A rebound and a recovery get no grace;
-//   · a recovery code younger than 72 h resolves as an email-only freeze does, on any
-//     account: it waits, and the frozen key can void it. enrol() below ages every
-//     code past that, as the rows mean a long-held one; `young: true` keeps it fresh;
+//   · a recovery code enrolled under 72 h before the freeze resolves as an email-only
+//     freeze does, on any account: it waits, and the frozen key can void it. Time spent
+//     frozen does not age it. enrol() below ages every code past that, as the rows mean
+//     a long-held one; `young: true` keeps it fresh;
+//   · a key's `ever:` flag ends only after a deletion, at the deleted binding's own
+//     expiry, and a re-bind before then cancels that;
 //   · a rekey that fails is recorded and retried (next authorize, or the alarm), so
 //     old passkeys can't strand the new key's first one.
 
@@ -95,7 +98,7 @@ function namespace(name: string, Klass: new (state: unknown, env: unknown) => { 
             async get(k: string) { return structuredClone(store.get(k)) },
             async put(k: string, v: unknown) { store.set(k, structuredClone(v)) },
             async delete(k: string | string[]) { for (const x of [].concat(k as never)) store.delete(x) },
-            async list() { return new Map(store) },
+            async list(o?: { prefix?: string }) { return new Map([...store].filter(([k]) => k.startsWith(o?.prefix ?? ''))) },
             async setAlarm(t: number) { alarms.set(`${name}:${id}`, t) },
           },
         }
@@ -603,7 +606,7 @@ async function enrol(p: P, d: D, e = enrolment(), o: { purpose?: string | null; 
   const r = await api('/v1/recovery/enrol', { ...q, body })
   if (r.status === 200 && !o.young) {
     const s = store('Account', await addressKey(p.email))!
-    s.set('rc', { ...(s.get('rc') as { at: number }), at: now - KEYS.rcYoungMs })
+    s.set('rc', { ...(s.get('rc') as { at: number }), at: now - 72 * HOUR })
   }
   return { r, e }
 }
@@ -1138,7 +1141,7 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
     const other = await signer()
     const r = await addrOp(Q, 'resolve', { stmt: nb.text, sig: nb.sig, key: other.pub })
     ok(r.status === 400 && reason(r) === 'state' && (await lookup(Q.email)).j.binding === qText, '[a] Address resolve with a key ≠ the frozen binding\'s → refused, still frozen')
-    const c = await addrOp(Q, 'resolve', { stmt: nb.text, sig: nb.sig, key: Q.k.pub })
+    const c = await addrOp(Q, 'resolve', { stmt: nb.text, sig: nb.sig, key: Q.k.pub, enrolledAt: 0 })
     ok(c.status === 200 && (await lookup(Q.email)).j.binding === nb.text, '  CONTROL: the same call naming the frozen key commits (so the key check is what refused)')
   }
   // [b] a code enrolled under K1 never resolves a freeze of K2, the key it rotated to
@@ -1831,18 +1834,75 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
       ok(!(await rcOf(A)) && await nCreds(A) === 0, '  …the code spent at the commit, the frozen key\'s passkey gone')
     }
     for (const [edge, want] of [[72 * HOUR - 1, 202], [72 * HOUR, 200]] as const) {
-      // to the millisecond, from the record's own `at`
+      // to the millisecond, from the record's own `at` to the freeze's
       const A = await person(`young-edge-${want}@example.com`); const text = await bind(A)
       const d = await device(A)
       const c = await addCred(A, d)
       const t = await enrol(A, d, enrolment(), { passkey: c.reg, young: true })
       const at = (await rcAt(A)) ?? now
       ok(at === now, '  (the record carries the time it was enrolled)')
-      await freezeBy(A, A)
       now = at + edge
+      await freezeBy(A, A)
+      ok((await addrStore(A)).get('frz')?.at === at + edge, '  (the freeze lands at that moment)')
       const nb = await bindNext(await nextOf(A), text)
       const r = await resolve(nb, t.e.verifier)
-      ok(r.status === want && (await lookup(A.email)).j.binding === (want === 200 ? nb.text : text), `young: a code ${want === 200 ? 'exactly 72 h old resolves at once' : '72 h minus 1 ms old waits'} (${r.status} ${reason(r)})`)
+      ok(r.status === want && (await lookup(A.email)).j.binding === (want === 200 ? nb.text : text), `young: a code enrolled ${want === 200 ? 'exactly 72 h before the freeze resolves at once' : '72 h minus 1 ms before the freeze waits'} (${r.status} ${reason(r)})`)
+    }
+    // the code ages only while the owner could answer: a frozen address with no `rsv` is
+    // status-only, so sitting out the freeze must buy nothing
+    for (const [how, wait] of [['72 h', 72 * HOUR], ['30 days', 30 * DAY]] as const) {
+      const A = await person(`young-sit-${wait}@example.com`); const text = await bind(A)
+      const d = await device(A)
+      const c = await addCred(A, d)
+      await enrol(A, d, enrolment(), { passkey: c.reg })
+      const t = await enrol(A, d, enrolment(), { passkey: c.reg, young: true })
+      await freezeBy(A, A)
+      now += wait
+      const r = await resolve(await bindNext(await nextOf(A), text), t.e.verifier)
+      ok(r.status === 202 && r.j.resolving === true, `young: replace the code, freeze, sit out ${how}: the same code still waits (${r.status} ${reason(r)})`)
+      await stuck(A, text, '  …the old binding not moved')
+      await voided(A, A, text, `young/sit ${how}`)
+    }
+    {
+      // the thief's own rotation and self-contest: the same sit-out by another freeze
+      const A = await person('young-sit-rot@example.com'); const text = await bind(A)
+      const d = await device(A)
+      const c = await addCred(A, d)
+      const t = await enrol(A, d, enrolment(), { passkey: c.reg, young: true })
+      const p = await rotate(A, await nextOf(A), { passkey: c.reg })
+      ok((await contest(A, A, p.text)).status === 200, '  (the key contests its own rotation: frozen)')
+      now += 72 * HOUR
+      const r = await resolve(await bindNext(await nextOf(A), text), t.e.verifier)
+      ok(r.status === 202 && (await lookup(A.email)).j.binding === text, `young: rotate, self-contest, sit out 72 h: the code still waits (${r.status} ${reason(r)})`)
+      await voided(A, A, text, 'young/self-contest')
+    }
+    {
+      // CONTROL: 72 h with the address NOT frozen is the owner's time to answer
+      const A = await person('young-idle@example.com'); const text = await bind(A)
+      const d = await device(A)
+      const c = await addCred(A, d)
+      const t = await enrol(A, d, enrolment(), { passkey: c.reg, young: true })
+      now += 72 * HOUR
+      await freezeBy(A, A)
+      const nb = await bindNext(await nextOf(A), text)
+      const r = await resolve(nb, t.e.verifier)
+      ok(r.status === 200 && (await lookup(A.email)).j.binding === nb.text, `young: CONTROL 72 h unfrozen, then the freeze: at once (${r.status} ${reason(r)})`)
+    }
+    {
+      // a missing age waits: the Address object's own op with none, and a record with no `at`
+      const A = await person('young-noage@example.com'); const text = await bind(A)
+      await freezeBy(A, A)
+      const nb = await bindNext(await nextOf(A), text)
+      const r = await env.ADDRESS.get(await addressKey(A.email)).fetch('https://address/op', { method: 'POST', body: JSON.stringify({ op: 'resolve', stmt: nb.text, sig: nb.sig, key: A.k.pub }) })
+      ok(r.status === 202, `young: a resolve that carries no age waits (${r.status})`)
+      const B = await person('young-noat@example.com'); const bText = await bind(B)
+      const d = await device(B)
+      const c = await addCred(B, d)
+      const t = await enrol(B, d, enrolment(), { passkey: c.reg })
+      ;(await acctStore(B)).set('rc', { ...(await rcOf(B)), at: undefined })
+      await freezeBy(B, B)
+      const q = await resolve(await bindNext(await nextOf(B), bText), t.e.verifier)
+      ok(q.status === 202, `young: a record with no \`at\` waits (${q.status} ${reason(q)})`)
     }
     {
       // the age is the enrolment's: a pepper upgrade moves the record and keeps `at`
@@ -2013,6 +2073,166 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
       now += 73 * HOUR
       await lookup(E.email)
       ok(!(await rcOf(E)) && await nCreds(E) === 0, "rekey: a task queued over a rebound's still drops the old code")
+    }
+
+    // --- the end of `ever`: only after a deletion, at the deleted binding's own expiry ---
+    // Inside the window the flag is what stops a key with its old code from arming, so
+    // a re-bind cancels the end. A deletion's rows then go; a plain expiry's never do.
+    const everRows = async (p: P) => [...(await acctStore(p)).keys()].filter((k) => k.startsWith('ever:')).length
+    const appt = async (p: P) => (await addrStore(p)).get('everEnd') as { at: number; scope: string } | undefined
+    const tick = async (p: P) => addressAlarm(await addressKey(p.email))
+    /** an account with a passkey and a code, deleted by its holder */
+    async function deleted(email: string) {
+      const S = await person(email); const text = await bind(S, { setup: true })
+      const d = await device(S, { consent: false })
+      const c = await addCred(S, d, free)
+      const e = await enrol(S, d, enrolment(), free)
+      const expires = ((await addrStore(S)).get('cur') as { b: { expires: number } }).b.expires
+      ok((await del(S)).status === 204 && await everRows(S) === 1, `  (${email} is deleted, its flag still here)`)
+      return { S, text, d, c, e, expires }
+    }
+    /** a different key re-binds over the tomb: pending for 72 h */
+    async function overTomb(S: P) {
+      now += 2 * MIN
+      const X = await nextOf(S), xb = await bindNext(X, null)
+      await api('/v1/bind/start', { stmt: xb.text, sig: xb.sig })
+      const code = codeFor(S.email)!
+      const r = await api('/v1/bind/complete', { email: S.email, code, sig: await X.k.sign(buildCmp(await hashOf(xb.text), code)) })
+      ok(r.j.state === 'pending', '  (a new key over the tomb: pending)')
+      return { X, xb }
+    }
+    {
+      const { S, expires } = await deleted('ever-end@example.com')
+      const scope = await addressKey(S.email)
+      ok((await appt(S))?.at === expires && alarms.get(`Address:${scope}`) === expires, 'ever: a deletion sets the end for the deleted binding\'s own expiry, with an alarm')
+      now = expires - 1
+      await lookup(S.email)
+      await tick(S)
+      ok(await everRows(S) === 1 && !!(await appt(S)) && !!(await rcOf(S)) && alarms.get(`Address:${scope}`) === expires, 'ever: one ms before the expiry nothing ends, and the alarm keeps its time')
+      now = expires
+      await tick(S)
+      ok(await everRows(S) === 0 && !(await appt(S)) && !(await rcOf(S)), 'ever: at the expiry the alarm ends it, the kept code with it, ahead of the Account alarm')
+      await bind(S, { setup: true })
+      ok(await armed(S) && (await addCred(S, await device(S, { consent: false }), free)).r.status === 200, 'ever: after it, the key + its mailbox get what a brand-new key gets')
+      ok(await everRows(S) === 1, '  …and a credential sets the flag again')
+    }
+    {
+      // CONTROL for the row above: a brand-new key with a mailbox, nothing deleted
+      const S = await person('ever-new@example.com'); await bind(S, { setup: true })
+      ok(await armed(S), 'ever: CONTROL a brand-new key arms the same way')
+    }
+    {
+      // nobody calls and no alarm has run: the next request ends it, before a bind reads it
+      const { S, expires } = await deleted('ever-lazy@example.com')
+      now = expires + DAY
+      await bind(S, { setup: true })
+      ok(await armed(S) && await everRows(S) === 0, 'ever: a bind after the expiry finds it ended, whether or not the alarm ran')
+    }
+    {
+      // inside the window: re-binding cancels, or "credential, delete it, flag gone" is back
+      const { S, d, expires } = await deleted('ever-rebind@example.com')
+      now += DAY
+      await bind(S, { setup: true })
+      ok(!(await armed(S)) && !(await appt(S)), 'ever: a same-key re-bind inside the window does not arm, and cancels the end')
+      ok(reason((await addCred(S, d, free)).r) === 'consent:consent', '  …and the key + mailbox get no passkey by it')
+      now = expires + 1
+      await lookup(S.email); await tick(S)
+      ok(await everRows(S) === 1, 'ever: past the old expiry the flag stays')
+      await renew(S)
+      ok(!(await armed(S)) && reason((await addCred(S, d, free)).r) === 'consent:consent', 'ever: row 4 holds: a renewal after it does not arm')
+    }
+    {
+      // a new key still waiting at the expiry holds the end; when it lands, that cancels it
+      const { S, expires } = await deleted('ever-pending@example.com')
+      now = expires - HOUR
+      await overTomb(S)
+      const until = ((await addrStore(S)).get('rot') as { until: number }).until
+      now = expires
+      await tick(S)
+      ok(await everRows(S) === 1 && !!(await appt(S)) && alarms.get(`Address:${await addressKey(S.email)}`) === until, 'ever: a re-bind pending at the expiry holds it, and the alarm moves to its end')
+      now = until
+      await tick(S)
+      ok((await lookup(S.email)).status === 200 && !(await appt(S)) && await everRows(S) === 1, 'ever: it lands: cancelled, the flag stays')
+    }
+    {
+      // contested after the expiry: nothing landed, so the end goes ahead
+      const { S, text, expires } = await deleted('ever-contest@example.com')
+      now = expires - HOUR
+      const { xb } = await overTomb(S)
+      now = expires + 1
+            ok(await everRows(S) === 1, '  (it is held while pending)')
+      ok((await contest(S, S, xb.text, { bindText: text, bind: text })).status === 200, '  (the tombstoned key contests it past the expiry)')
+      await lookup(S.email)
+      ok(await everRows(S) === 0 && !(await appt(S)) && (await lookup(S.email)).status === 410, 'ever: the contested re-bind landed nothing: it ends at the next request')
+    }
+    {
+      // a resolution is a re-bind too
+      const { S, text, e, expires } = await deleted('ever-resolve@example.com')
+      const { xb } = await overTomb(S)
+      await contest(S, S, xb.text, { bindText: text, bind: text })
+      const r = await resolve(await bindNext(await nextOf(S), text), e.e.verifier)
+      ok(r.status === 200 && !(await appt(S)), 'ever: a resolution of the tomb freeze cancels the end')
+      now = expires + 1
+      await lookup(S.email)
+      ok(await everRows(S) === 1, '  …and the old key\'s flag stays past its expiry')
+    }
+    {
+      // a mailbox deletion: the binding had expired, and the wipe follows the answer
+      const S = await person('ever-mailbox@example.com'); await bind(S, { setup: true })
+      await addCred(S, await device(S, { consent: false }), free)
+      now += 14 * MONTH
+      await lookup(S.email); await tick(S)
+      ok(await everRows(S) === 1 && !(await appt(S)), 'ever: CONTROL a plain expiry ends nothing, material may remain')
+      await api('/v1/delete/start', { email: S.email })
+      ok((await api('/v1/delete/complete', { email: S.email, code: codeFor(S.email) })).status === 204, '  (deleted by mailbox)')
+      ok((await appt(S))?.at === now + HOUR, 'ever: a mailbox deletion ends it an hour on, past the wipe')
+      await lookup(S.email)
+      ok(await everRows(S) === 1, '  …not before')
+      now += HOUR
+      await tick(S)
+      ok(await everRows(S) === 0, 'ever: then it ends')
+    }
+    {
+      // every key's row at this address, not one key's
+      const { S, expires } = await deleted('ever-all@example.com')
+      ;(await acctStore(S)).set('ever:another-key', true)
+      now = expires
+      await tick(S)
+      ok(await everRows(S) === 0, "ever: it ends every key's flag at the address")
+    }
+    for (const [what, row, val] of [['a passkey', 'creds', ['left-behind']], ['a code with no end of its own', 'rc', { at: 0 }]] as const) {
+      // the wipe failed, or a key is back: material here means the flag still has work to do
+      const { S, expires } = await deleted(`ever-held-${row}@example.com`)
+      ;(await acctStore(S)).set(row, val)
+      now = expires
+      await tick(S)
+      ok(await everRows(S) === 1 && !(await appt(S)), `ever: ${what} still at the Account: the flag stays`)
+    }
+    {
+      // the call fails: the record stays, and the alarm comes back
+      const { S, expires } = await deleted('ever-retry@example.com')
+      now = expires
+      failing('Account', 'everEnd', 1)
+      await tick(S)
+      ok(await everRows(S) === 1 && !!(await appt(S)) && alarms.get(`Address:${await addressKey(S.email)}`) === now + HOUR, 'ever: a failed call keeps the record, and the alarm is set to retry')
+      now += HOUR
+      await tick(S)
+      ok(await everRows(S) === 0 && !(await appt(S)), '  …and the retry ends it')
+    }
+    {
+      // a rekey's retry owns the alarm: the deletion must not take it, and tick puts it back
+      const S = await person('ever-rekey@example.com'); await bind(S)
+      const scope = await addressKey(S.email)
+      await addCred(S, await device(S))
+      ;(await addrStore(S)).set('rekey', { scope, keep: [S.k.pub], creds: [] })
+      alarms.set(`Address:${scope}`, now + HOUR)
+      const retry = now + HOUR
+      await del(S)
+      const end = (await appt(S))!.at
+      ok(alarms.get(`Address:${scope}`) === retry && end > retry, "ever: a deletion leaves a rekey retry's alarm alone")
+      now = retry
+      await tick(S)
+      ok(alarms.get(`Address:${scope}`) === end, '  …and the tick puts the end back')
     }
   }
 }

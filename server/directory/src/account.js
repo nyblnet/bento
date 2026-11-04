@@ -37,7 +37,6 @@ export const KEYS = Object.freeze({
   rcFailLock: 5, // consecutive wrong verifiers that lock recovery
   rcLockMs: 24 * HOUR,
   rcWaitMs: 72 * HOUR, // a correct verifier releases the blob only after this
-  rcYoungMs: 72 * HOUR, // a code younger than the contest window (the Address object's rotationWindowMs) resolves as an email-only freeze does
   ledgerMin: 4096,
   ledgerMax: 1 << 20, // 1 MiB
 })
@@ -294,7 +293,9 @@ function prfBlobOk(blob, ck) {
 // version), `rcLog` (attempt times, last 24 h), `rcFails`, `rcLock`, `rel` (a
 // pending release: its ticket hash and when it opens), `led` (the ledger blob),
 // `ever:<hash of an account key>` (that key has had a credential or a code: what
-// the setup allowance asks, set once and NEVER cleared, by a wipe or anything else).
+// the setup allowance asks, set once and never cleared, by a cred-del or a wipe; only
+// `everEnd` ends it, which the Address object sends once a deleted binding's own expiry
+// passes with no re-bind).
 
 export class Account {
   constructor(state, env) { this.state = state; this.env = env }
@@ -386,12 +387,12 @@ export class Account {
         // email-only or contested freeze) can still be voided by the frozen key, and
         // a voided one must leave the code usable. The Address object spends it
         // (dropOld) when the resolution COMMITS, at once or at settle (§39.3, §28a).
-        // A code younger than the contest window is not a factor a thief lacks: key +
-        // passkey can enrol one a minute before freezing. Its age is read here, on the
-        // record that verified; `at` is set only by rcEnrol, so nothing else makes a
-        // code young or old.
+        // A code enrolled just before a freeze is not a factor a thief lacks: key +
+        // passkey can enrol one a minute earlier. So the enrolment time goes back, read
+        // here on the record that verified, for the Address object to hold against
+        // `frz.at`. `at` is set only by rcEnrol, so nothing else makes a code older.
         await s.put('rcFails', 0)
-        return out(200, { ok: true, ...(now - rc.at < KEYS.rcYoungMs ? { young: true } : {}) })
+        return out(200, { ok: true, enrolledAt: rc.at })
       }
 
       if (start) {
@@ -446,6 +447,17 @@ export class Account {
         if (rc && Number.isSafeInteger(a.keepUntil)) { await s.put('rc', { ...rc, keepUntil: a.keepUntil }); await s.setAlarm(a.keepUntil) }
       }
       return out(200, { creds })
+    }
+    if (a.op === 'everEnd') {
+      // the Address object's word that a deleted binding's own expiry has passed with
+      // no re-bind. With material here the wipe failed or a key is back: the rows stay.
+      const rc = await s.get('rc')
+      if (rc && rc.keepUntil && rc.keepUntil <= now) await s.delete(['rc', 'rel']) // the alarm's job, if it has not run
+      else if (rc) return out(200, { held: true })
+      if (((await s.get('creds')) || []).length) return out(200, { held: true })
+      const rows = [...(await s.list({ prefix: 'ever:' })).keys()]
+      for (let i = 0; i < rows.length; i += 128) await s.delete(rows.slice(i, i + 128))
+      return out(200, { ok: true })
     }
     if (a.op === 'rekey') {
       // only the passkeys of the keys in `keep` stay (the Address object may be retrying,
