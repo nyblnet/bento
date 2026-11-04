@@ -32,11 +32,18 @@
   }
   Object.defineProperty(window, '__bentoTrayNative', { value: native })
   // Non-writable, non-configurable: page script cannot swap it to catch the
-  // secret on its way in. Takes one secret per load.
+  // secret on its way in. The secret is ADOPTED only when the host accepts it
+  // (bento_arm resolves), never before: WebView2 can report a finished load of
+  // the document's URL twice for one generation (measured: after the
+  // navigation lock bounced a main frame, two finished events for one generation), and the host then holds the
+  // LATER secret, so a shim that kept the first would stay unarmed for the
+  // whole load. A secret the host refuses is dropped; once armed, later
+  // deliveries are ignored.
   Object.defineProperty(window, '__bentoArm', { value: function (s, nonce) {
-    if (cap || typeof s !== 'string' || typeof nonce !== 'string') return
-    cap = s
+    if (armed || typeof s !== 'string' || typeof nonce !== 'string') return
     window.__TAURI_INTERNALS__.invoke('bento_arm', { nonce, cap: s }).then(() => {
+      if (armed) return
+      cap = s
       armed = true
       queue.splice(0).forEach(send)
     }, () => {})
