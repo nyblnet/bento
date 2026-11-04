@@ -27,6 +27,7 @@
 use bento_id_agent::agent::{Agent, Caller, Clock, KeyRole, KeyStore, Policy, Prompt, StoreError};
 use bento_id_agent::book::Binding;
 use bento_id_agent::calls::{Calls, Ui};
+use bento_id_agent::lockgate::LockGate;
 use bento_id_agent::select::Kind;
 use bento_hostcore::{
     arming::{main_frame_load, navigation_allowed, Bounce, Load, Registry},
@@ -38,6 +39,8 @@ use tauri::{http, webview::PageLoadEvent, Manager, WebviewUrl, WebviewWindowBuil
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
+#[cfg(target_os = "linux")]
+mod logind;
 #[cfg(feature = "rig")]
 mod rig;
 
@@ -619,7 +622,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
 }
 #[cfg(feature = "rig")]
 fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
-    tauri::generate_handler![bento_arm, bento_file, bento_id, rig::rig_stash, rig::rig_done, rig::rig_recreate, rig::rig_session, rig::rig_skew, rig::rig_answers, rig::rig_provision, rig::rig_counts]
+    tauri::generate_handler![bento_arm, bento_file, bento_id, rig::rig_stash, rig::rig_done, rig::rig_recreate, rig::rig_session, rig::rig_skew, rig::rig_answers, rig::rig_provision, rig::rig_counts, rig::rig_gate, rig::rig_bus]
 }
 
 fn data_dir() -> PathBuf {
@@ -661,8 +664,15 @@ fn main() {
     let identity_dir = data_dir.join("identity");
     let (store, kind, profile) = new_store(&identity_dir);
     eprintln!("KEYSTORE {}: {}", kind.name(), kind.exposure());
+    // Closed until a watcher has reached the OS: nothing can sign before someone
+    // is listening for a lock. Off Linux no watcher exists yet, and no key store.
+    let gate = LockGate::new();
+    #[cfg(target_os = "linux")]
+    logind::watch(gate.clone());
+    #[cfg(all(feature = "rig", not(target_os = "linux")))]
+    gate.watched(false);
     let ident: IdentState = Mutex::new(Ident {
-        calls: Calls::new(Agent::new(store, SysClock, Policy::default()), identity_dir.join("identity.json")),
+        calls: Calls::new(Agent::new(store, SysClock, Policy::default(), gate.clone()), identity_dir.join("identity.json")),
         kind,
         dir: identity_dir,
         profile,
@@ -673,6 +683,7 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .manage(Mutex::new(Host { docs, reg: Registry::default(), trust, salt, index, data_dir: data_dir.clone() }))
         .manage(ident)
+        .manage(gate)
         .register_uri_scheme_protocol("bento", |ctx, req| {
             let not_found = || http::Response::builder().status(404).body(Vec::new()).unwrap();
             let state = ctx.app_handle().state::<Shared>();

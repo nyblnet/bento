@@ -74,7 +74,7 @@ fn agent_consent_on_the_tpm_verifies_under_k2() {
     let mut s = TpmStore::open(&tcti("BENTO_TPM_TCTI"), d, pins(vec![Some(PIN)], Default::default())).unwrap();
     let dev = s.create_signing_key(&KeyRole::Device, None).unwrap();
     s.create_signing_key(&KeyRole::Consent, Some(PIN)).unwrap();
-    let mut a = Agent::new(s, Now, Policy::default());
+    let mut a = Agent::new(s, Now, Policy::default(), { let g = bento_id_agent::lockgate::LockGate::new(); g.watched(false); g });
     let caller = Caller { verified: true, doc_id: Some("doc-lq3k9z-8f2h1x".into()) };
     let challenge = b64u::enc(&[5u8; 32]);
     let statement = format!("rev.{}", b64u::enc(&dev));

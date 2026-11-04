@@ -160,6 +160,134 @@
       await inv('rig_done', { report: { ident: I } })
       return
     }
+    // Security's ruling on #893: the OS ends the session. One genuine document signs through
+    // the real bridge, shim, host and agent while rig/fakelogind.py plays the machine. Modes:
+    // 'lock' the whole run, 'lock-start' a session that was already locked at launch,
+    // 'lock-nobus' no bus at all.
+    if ((window.__RIG_MODE || '').startsWith('lock')) {
+      const K = { label: LABEL, mode: window.__RIG_MODE }
+      const sess = (a) => inv('rig_session', { action: a })
+      const gate = () => inv('rig_gate', {})
+      const answers = (reauth, during) => inv('rig_answers', { consent: false, reauth, during: during || null })
+      const prompts = async () => (await inv('rig_counts', {})).reauth
+      const tag = (r) => (r && r.ok ? 'ok' : r && r.reason) || String(r)
+      const FRAME = 'AAAAAAAAAAAAAAAA.' + 'A'.repeat(22)
+      // act, then wait for the gate to move; if it never does, the row after it says so
+      const bus = async (a) => {
+        const g0 = await gate()
+        await inv('rig_bus', { action: a })
+        for (let t = 0; t < 2500 && (await gate()) === g0; t += 50) await sleep(50)
+      }
+      // for what must change nothing: the same wait, in full, so a change would be seen
+      const quiet = async (a) => { await inv('rig_bus', { action: a }); await sleep(800) }
+      const waitGate = async (want) => { for (let t = 0; t < 6000 && !(await gate()).startsWith(want); t += 100) await sleep(100); return gate() }
+      try {
+        await until(() => window.__rigCap, 15000)
+        const ag = window.__bentoIdentity
+        K.present = !!ag
+        const sign = async () => tag(await ag.sign('frame', FRAME))
+        await answers(false)
+        if (window.__RIG_MODE === 'lock-nobus') {
+          await sleep(2500) // the watcher has had its attempts
+          K.gate = await gate()
+          K.begin = await sess('begin')
+          await answers(true)
+          K.sign = await sign()
+          K.prompts = await prompts()
+        } else if (window.__RIG_MODE === 'lock-start') {
+          K.gate = await waitGate('Locked')
+          K.begin = await sess('begin')
+          await answers(true)
+          K.sign = await sign()
+          K.prompts = await prompts()
+          await bus('hint-off')
+          K.gate_after = await gate()
+          K.sign_after = await sign()
+          K.prompts_after = await prompts()
+        } else {
+          K.gate0 = await waitGate('Open')
+          K.begin0 = await sess('begin')
+          K.control = await sign()
+          K.control_again = await sign()
+          // Lock: ends it, and the matching Unlock gives nothing back
+          await bus('lock')
+          K.after_lock = await sign()
+          await quiet('unlock')
+          K.after_unlock = await sign()
+          // sleep: ends it, and waking gives nothing back
+          K.begin1 = await sess('begin')
+          K.sleep_control = await sign()
+          await bus('sleep')
+          K.after_sleep = await sign()
+          await quiet('wake')
+          K.after_wake = await sign()
+          // waking is not a sleep
+          K.begin2 = await sess('begin')
+          await quiet('wake')
+          K.wake_alone = await sign()
+          // LockedHint: ends it; while it stands nothing opens and nobody is asked
+          await bus('hint-on')
+          K.gate_locked = await gate()
+          K.after_hint = await sign()
+          K.begin_locked = await sess('begin')
+          await answers(true)
+          const p0 = await prompts()
+          K.locked_sign = await sign()
+          K.locked_prompts = (await prompts()) - p0
+          // a signal claiming "unlocked" that logind does not back up changes nothing
+          await quiet('hint-lie')
+          K.gate_after_lie = await gate()
+          // unlocked: the person can be asked, and a yes signs
+          await bus('hint-off')
+          K.gate_unlocked = await gate()
+          await inv('rig_skew', { addMs: 120000 }) // past the cooldown of the no's above
+          const p1 = await prompts()
+          K.unlocked_sign = await sign()
+          K.unlocked_prompts = (await prompts()) - p1
+          // the same flag, announced with no value (a property invalidated, not changed)
+          await bus('hint-on-invalidated')
+          K.gate_invalidated = await gate()
+          K.after_invalidated = await sign()
+          await bus('hint-off')
+          // a yes given across a lock opens nothing, and the next ask is a fresh one
+          await sess('lock')
+          await answers(true, 'lock')
+          const p2 = await prompts()
+          K.straddle = await sign()
+          K.straddle_prompts = (await prompts()) - p2
+          await answers(true)
+          K.after_straddle = await sign()
+          K.straddle_retry_prompts = (await prompts()) - p2
+          // logind leaves the bus: closed, nobody asked, and it reopens with no session
+          K.begin3 = await sess('begin')
+          K.name_control = await sign()
+          await bus('name-drop')
+          K.gate_no_name = await gate()
+          K.begin_no_name = await sess('begin')
+          const p3 = await prompts()
+          K.no_name_sign = await sign()
+          K.no_name_prompts = (await prompts()) - p3
+          await inv('rig_bus', { action: 'name-back' })
+          K.gate_name_back = await waitGate('Open')
+          await answers(false)
+          K.name_back_sign = await sign()
+          // the session goes away under the host: the same
+          await answers(true)
+          await inv('rig_skew', { addMs: 120000 }) // past the cooldown that no set
+          K.session_control = await sign()
+          await bus('session-gone')
+          K.gate_session_gone = await gate()
+          K.session_gone_sign = await sign()
+          await inv('rig_bus', { action: 'session-back' })
+          K.gate_session_back = await waitGate('Open')
+          K.session_back_sign = await sign()
+        }
+      } catch (e) { K.error = String((e && e.stack) || e) }
+      await inv('rig_done', { report: { lock: K } })
+      // the bus itself dies. This page dies with it, so the host reports (rig_bus)
+      if (window.__RIG_MODE === 'lock') await inv('rig_bus', { action: 'bus-down' })
+      return
+    }
     // B1 (security §2e B): the sign path through the REAL bridge, shim, host and
     // agent, across the idle and overall session limits. The genuine document
     // calls window.__bentoIdentity; the unknown one must not have it. The rig

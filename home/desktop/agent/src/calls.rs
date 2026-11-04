@@ -16,11 +16,14 @@
 //   this agent already holds; it never prompts (a prompt on resolve would let a
 //   document spend the person's attention) and never reaches the network. An
 //   unknown key and a refused document look the same: null.
-// - sign: past the idle or overall limit the agent says `reauth`; here the host
-//   asks the person to confirm (host-drawn) and, on yes, opens a new session and
-//   signs once. The prompt is reached only by a request that is otherwise valid
-//   (a matching payload, a device key present), at most one at a time, and a
-//   no is not asked again for REAUTH_COOLDOWN_MS.
+// - sign: past the idle or overall limit, or after the OS locked or slept, the
+//   agent says `reauth`; here the host asks the person to confirm (host-drawn)
+//   and, on yes, opens a new session and signs once. The prompt is reached only
+//   by a request that is otherwise valid (a matching payload, a device key
+//   present), at most one at a time, and a no is not asked again for
+//   REAUTH_COOLDOWN_MS. Nobody is asked while the screen is locked, or while
+//   nothing is listening for a lock (`unavailable`: no answer could help), and a
+//   yes that spans a lock or a sleep opens nothing.
 
 use crate::agent::{Agent, Caller, Clock, KeyStore, Refusal, Signed};
 use crate::book::{Binding, Book};
@@ -114,6 +117,7 @@ impl<S: KeyStore, C: Clock> Calls<S, C> {
             other => return other,
         }
         // `Reauth` is only reached by a request that is otherwise valid.
+        let ticket = self.agent.reauth_ticket()?;
         if self.agent.now_ms() < self.reauth_blocked_until {
             return Err(Refusal::Reauth);
         }
@@ -121,7 +125,9 @@ impl<S: KeyStore, C: Clock> Calls<S, C> {
             self.reauth_blocked_until = self.agent.now_ms() + REAUTH_COOLDOWN_MS;
             return Err(Refusal::Reauth);
         }
-        self.agent.begin_session();
+        if !self.agent.begin_session_from(ticket) {
+            return Err(Refusal::Reauth);
+        }
         self.agent.sign(caller, purpose, payload)
     }
 }
@@ -130,6 +136,8 @@ impl<S: KeyStore, C: Clock> Calls<S, C> {
 mod tests {
     use super::*;
     use crate::agent::{memory::MemoryStore, Policy};
+    use crate::lockgate::LockGate;
+    use std::sync::Arc;
     use std::cell::Cell;
     use std::rc::Rc;
 
@@ -140,10 +148,17 @@ mod tests {
             self.0.get()
         }
     }
+    fn open_gate() -> Arc<LockGate> {
+        let g = LockGate::new();
+        g.watched(false);
+        g
+    }
     #[derive(Default)]
     struct Fake {
         yes_consent: bool,
         yes_reauth: bool,
+        /// the machine locks while this prompt is on screen
+        lock_during: Option<Arc<LockGate>>,
         consents: Vec<(String, String)>,
         reauths: Vec<String>,
     }
@@ -154,6 +169,9 @@ mod tests {
         }
         fn reauth(&mut self, d: &str) -> bool {
             self.reauths.push(d.into());
+            if let Some(g) = &self.lock_during {
+                g.lock();
+            }
             self.yes_reauth
         }
     }
@@ -170,7 +188,7 @@ mod tests {
         }
         b.save(&p).unwrap();
         let t = Rc::new(Cell::new(1_800_000_000_000));
-        (Calls::new(Agent::new(MemoryStore::with_keys(), T(t.clone()), Policy::default()), p.clone()), t, p)
+        (Calls::new(Agent::new(MemoryStore::with_keys(), T(t.clone()), Policy::default(), open_gate()), p.clone()), t, p)
     }
     fn caller(doc: &str) -> Caller {
         Caller { verified: true, doc_id: Some(doc.into()) }
@@ -192,7 +210,7 @@ mod tests {
         c.whoami(&caller("B"), "b.bento.html", &mut ui).unwrap();
         assert_eq!(ui.consents.len(), 2, "a different document is asked");
         // across a launch: a fresh Calls over the same file
-        let (mut c2, _, _) = (Calls::new(Agent::new(MemoryStore::with_keys(), T(Rc::new(Cell::new(1))), Policy::default()), p), (), ());
+        let (mut c2, _, _) = (Calls::new(Agent::new(MemoryStore::with_keys(), T(Rc::new(Cell::new(1))), Policy::default(), open_gate()), p), (), ());
         c2.whoami(&caller("A"), "a.bento.html", &mut ui).unwrap();
         assert_eq!(ui.consents.len(), 2, "a yes survives a restart");
     }
@@ -215,7 +233,7 @@ mod tests {
         let (mut c, _, _) = calls("w3b", true);
         assert_eq!(c.whoami(&Caller { verified: true, doc_id: None }, "a", &mut ui).unwrap_err(), Refusal::NoIdentity, "no docId");
         assert_eq!(c.whoami(&Caller { verified: false, doc_id: Some("A".into()) }, "a", &mut ui).unwrap_err(), Refusal::Unavailable, "unverified");
-        c.agent = Agent::new(MemoryStore::default(), T(Rc::new(Cell::new(1))), Policy::default());
+        c.agent = Agent::new(MemoryStore::default(), T(Rc::new(Cell::new(1))), Policy::default(), open_gate());
         assert_eq!(c.whoami(&caller("A"), "a", &mut ui).unwrap_err(), Refusal::NoIdentity, "no device key");
         assert!(ui.consents.is_empty());
     }
@@ -289,13 +307,42 @@ mod tests {
     }
 
     #[test]
+    fn nobody_is_asked_while_the_screen_is_locked_or_nothing_is_listening() {
+        let (mut c, _, _) = calls("s3", true);
+        let g = open_gate();
+        let keys = MemoryStore::with_keys();
+        c.agent = Agent::new(keys, T(Rc::new(Cell::new(1_800_000_000_000))), Policy::default(), g.clone());
+        let mut ui = Fake { yes_reauth: true, ..Default::default() };
+        g.set_locked(true);
+        assert_eq!(c.sign(&caller("A"), "a", "frame", &frame(), &mut ui).unwrap_err(), Refusal::Reauth);
+        g.lost();
+        assert_eq!(c.sign(&caller("A"), "a", "frame", &frame(), &mut ui).unwrap_err(), Refusal::Unavailable);
+        assert!(ui.reauths.is_empty(), "no prompt on a locked screen, none that could not help");
+        g.watched(false);
+        assert!(c.sign(&caller("A"), "a", "frame", &frame(), &mut ui).is_ok(), "control: unlocked, watched, confirmed");
+        assert_eq!(ui.reauths.len(), 1);
+    }
+
+    #[test]
+    fn a_confirm_across_a_lock_signs_nothing_and_is_not_a_no() {
+        let (mut c, _, _) = calls("s4", true);
+        let g = open_gate();
+        c.agent = Agent::new(MemoryStore::with_keys(), T(Rc::new(Cell::new(1_800_000_000_000))), Policy::default(), g.clone());
+        let mut ui = Fake { yes_reauth: true, lock_during: Some(g), ..Default::default() };
+        assert_eq!(c.sign(&caller("A"), "a", "frame", &frame(), &mut ui).unwrap_err(), Refusal::Reauth);
+        ui.lock_during = None;
+        assert!(c.sign(&caller("A"), "a", "frame", &frame(), &mut ui).is_ok(), "the person is asked afresh, with no cooldown");
+        assert_eq!(ui.reauths.len(), 2);
+    }
+
+    #[test]
     fn reauth_is_reached_only_by_a_valid_request() {
         let (mut c, _, _) = calls("s2", true);
         let mut ui = Fake { yes_reauth: true, ..Default::default() };
         assert_eq!(c.sign(&caller("A"), "a", "frame", "not-a-frame", &mut ui).unwrap_err(), Refusal::Purpose);
         assert_eq!(c.sign(&Caller { verified: false, doc_id: None }, "a", "frame", &frame(), &mut ui).unwrap_err(), Refusal::Unavailable);
         assert_eq!(c.sign(&caller("A"), "a", "invite", "inv.x", &mut ui).unwrap_err(), Refusal::Purpose);
-        c.agent = Agent::new(MemoryStore::default(), T(Rc::new(Cell::new(1))), Policy::default());
+        c.agent = Agent::new(MemoryStore::default(), T(Rc::new(Cell::new(1))), Policy::default(), open_gate());
         assert_eq!(c.sign(&caller("A"), "a", "frame", &frame(), &mut ui).unwrap_err(), Refusal::NoIdentity, "no key: nothing to unlock");
         assert!(ui.reauths.is_empty(), "no prompt for a bad payload, an unverified caller, an owner purpose or no key");
     }

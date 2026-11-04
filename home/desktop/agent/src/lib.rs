@@ -13,6 +13,7 @@ pub mod address;
 pub mod agent;
 pub mod book;
 pub mod calls;
+pub mod lockgate;
 pub mod select;
 pub mod b64u;
 pub mod device_list;

@@ -43,7 +43,7 @@ python3 rig/embedsrv.py "$OUT/embedsrv" "$OUT/embed.crt" "$OUT/embed.key" "$PORT
 EMBED_PID=$!
 python3 rig/embedsrv.py "$OUT/embedsrv" "$OUT/rogue.crt" "$OUT/rogue.key" "$RPORT" >/dev/null 2>"$OUT/rogue-server.log" &
 ROGUE_PID=$!
-trap 'kill $EMBED_PID $ROGUE_PID 2>/dev/null' EXIT
+trap 'kill $EMBED_PID $ROGUE_PID ${FAKE_LOGIND_PID:-} ${FAKE_BUS_PID:-} 2>/dev/null' EXIT
 export BENTO_RIG_EMBED_URL="https://127.0.0.1:$PORT/embed.html"
 export BENTO_RIG_ROGUE_URL="https://127.0.0.1:$RPORT/embed.html"
 export BENTO_RIG_EMBED_CERT="$OUT/embed.crt"
@@ -59,6 +59,10 @@ grep -q "rig-embed-fixture" "$OUT/rogue-preflight.html" 2>/dev/null || { echo "F
 echo "embed fixture served at $BENTO_RIG_EMBED_URL (rogue-certificate twin at $BENTO_RIG_ROGUE_URL)"
 BENTO_HISTORIES_DIR="$OUT/hist" cargo build -q --features rig || exit 1
 BIN=target/debug/bento-home-desktop
+# Nothing signs unless something is listening for a lock: a fake logind for every scenario.
+# rig/lock-rig.sh is where it is driven; here it just stands still, unlocked.
+. rig/fakebus.sh
+mkdir -p "$OUT/bus"; fakebus_start "$OUT/bus"
 # POSITIVE CONTROL for the release gate: the binary just built has the test-only TLS trust
 # in it, so the same check release-check.sh runs on a shipped build MUST fail here.
 if ./gate-binary.sh "$BIN" >"$OUT/gate-control.txt" 2>&1; then echo "gate-control PASSED a rig build" >>"$OUT/gate-control.txt"; echo 1 >"$OUT/gate-control.exit"; else echo 0 >"$OUT/gate-control.exit"; fi

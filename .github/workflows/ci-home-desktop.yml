@@ -60,7 +60,7 @@ jobs:
         working-directory: home/desktop/host
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev libxdo-dev xvfb xauth dbus-x11 libtss2-dev libsecret-1-dev gnome-keyring swtpm swtpm-tools >/dev/null
+          sudo apt-get install -y -qq libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev libxdo-dev xvfb xauth dbus-x11 libtss2-dev libsecret-1-dev gnome-keyring swtpm swtpm-tools python3-gi gir1.2-glib-2.0 >/dev/null
           dbus-run-session -- xvfb-run -a ./rig/run.sh "$RUNNER_TEMP/h2-rig"
       - name: Desktop host release check (the bundled history is the current published one)
         # Fetches each published app's signed history, manifest and shell from
@@ -140,3 +140,23 @@ jobs:
           export BENTO_RIG_PYTHON="$RUNNER_TEMP/rigvenv/bin/python"
           rustup toolchain install nightly-2026-06-03 --profile minimal
           ./fido-rig.sh
+
+  home-desktop-lock:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - name: Desktop host lock rig and its mutants (security's ruling on #893)
+        # A machine locked or asleep stops signing, and a host that cannot hear
+        # logind does not sign at all. The real host, a genuine document, a fake
+        # logind on a private system bus (reached exactly as a shipped host
+        # reaches the real one): Lock, LockedHint, PrepareForSleep, logind or the
+        # session or the bus going away, a session already locked at launch, no
+        # bus at all. Then every place the OS's word reaches the agent is removed
+        # in turn, and each must fail on its own row.
+        working-directory: home/desktop/host
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev libxdo-dev xvfb xauth dbus-x11 libtss2-dev libsecret-1-dev python3-gi gir1.2-glib-2.0 >/dev/null
+          dbus-run-session -- xvfb-run -a ./rig/lock-rig.sh "$RUNNER_TEMP/lock-rig"
+          dbus-run-session -- xvfb-run -a python3 rig/lock-mutants.py "$RUNNER_TEMP/lock-mutants"
