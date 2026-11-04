@@ -106,6 +106,7 @@ export function gradientChip(p: PropsPanel, host: PaintHost): HTMLElement {
   b.type = 'button'
   b.className = 'ed-gradchip'
   b.dataset.gradEdit = host.target
+  b.dataset.paint = host.target // the swatch's place: settle() finds it by this
   b.style.setProperty('--grad', host.grad ? cssGradient(host.grad) : 'none')
   b.textContent = host.kind === 'radial' ? t('Radial') : t('Linear')
   b.title = t('Edit the gradient')
@@ -119,7 +120,7 @@ export function gradientChip(p: PropsPanel, host: PaintHost): HTMLElement {
       commit: (hex, a) => host.write('solid', undefined, combineColor(hex, a), true),
       cancel: () => p.cancelBurst(),
       paint: host,
-      done: () => settle(p),
+      done: () => settle(p, host.target),
     })
   })
   return b
@@ -127,11 +128,15 @@ export function gradientChip(p: PropsPanel, host: PaintHost): HTMLElement {
 
 /** After the popover changed the fill's kind, the section must be rebuilt:
  *  let go of the field the popover handed focus back to, so the panel's
- *  deferred rebuild runs. */
-function settle(p: PropsPanel) {
+ *  deferred rebuild runs — then give focus to whatever now paints that
+ *  layer. The swatch it was handed to may be gone (a gradient chip stands in
+ *  its place, or the other way round); <body> would strand the keyboard and,
+ *  taking focus off the chip, put the canvas handle away. */
+function settle(p: PropsPanel, target: string) {
   const a = document.activeElement as HTMLElement | null
   if (a && p.host.contains(a)) a.blur()
   if (p.stale) p.rebuild()
+  p.host.querySelector<HTMLElement>(`[data-paint="${CSS.escape(target)}"]`)?.focus({ preventScroll: true })
 }
 
 /** A gradient's angle and stops, shared by text and shapes. `edit` hands
@@ -497,6 +502,7 @@ function popoverOn(p: PropsPanel, col: HTMLInputElement, alpha?: HTMLInputElemen
     col.style.setProperty('--see', combineColor(col.value, a))
   }
   swatch()
+  if (paint) col.dataset.paint = paint.target // the gradient chip takes this place: settle() finds either
   col.addEventListener('input', swatch)
   alpha?.addEventListener('change', swatch)
   alpha?.addEventListener(SCRUB, swatch)
@@ -523,7 +529,7 @@ function popoverOn(p: PropsPanel, col: HTMLInputElement, alpha?: HTMLInputElemen
       commit: () => col.dispatchEvent(new Event('change')),
       cancel: () => p.cancelBurst(),
       paint,
-      done: paint ? () => settle(p) : undefined,
+      done: paint ? () => settle(p, paint.target) : undefined,
     })
   })
 }

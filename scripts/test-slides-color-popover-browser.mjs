@@ -15,7 +15,9 @@
 //      field's opacity, exactly as the palette list does;
 //   5. Esc closes the popover and KEEPS what it previewed (focus back on the
 //      swatch); one undo takes the whole pick back;
-//   6. a translucent colour's swatch is marked see-through.
+//   6. a translucent colour's swatch is marked see-through;
+//   7. after switching to a gradient, Esc puts focus on the gradient chip
+//      that replaced the swatch, and the canvas handle stays.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -135,6 +137,16 @@ try {
   ok(await p.locator(swatch).first().evaluate((c) => c.classList.contains('ed-see-through')), 'a 50% fill marks its swatch see-through')
   await select('q')
   ok(await p.locator(swatch).first().evaluate((c) => !c.classList.contains('ed-see-through')), 'an opaque one does not')
+
+  console.log('\n7. switched to a gradient, Esc hands focus to what took the swatch\'s place\n')
+  // the swatch the popover would hand focus back to is gone, replaced by the
+  // gradient chip; focus used to fall to <body> and take the canvas handle
+  pp = await openPop()
+  await pp.locator('.ed-cpop-kinds [data-kind="radial"]').click(); await p.waitForTimeout(150)
+  await p.keyboard.press('Escape'); await p.waitForTimeout(250)
+  const on = await p.evaluate(() => document.activeElement?.className ?? '')
+  const handle = await p.locator('.ed-stage-scale .ed-grad-layer').count()
+  ok(on.includes('ed-gradchip') && handle === 1, `focus is on the gradient chip and the canvas handle stays (focus: ${on || 'body'}, handles: ${handle})`)
   ok(errors.length === 0, `no page error${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
   await browser.close()
