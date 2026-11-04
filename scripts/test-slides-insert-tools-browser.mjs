@@ -16,6 +16,8 @@
 //      Symmetric act on, Close path opens and closes it, ⌘Z undoes each.
 //   4. Undo, Redo, Help, PDF, Save and the element menu's rows carry data-cmd.
 //   5. The ? sheet's Tools section lists the letters from the same list.
+//   7. A path shape (polygon or curve) is dragged from inside its fill,
+//      selected or not, as a rectangle is.
 //   6. At 1280 wide (the icon-only tier) the tools still show their keys, in
 //      the button's corner, clear of the icon, and the bar does not overflow.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
@@ -223,6 +225,33 @@ try {
   ok(!/Z/.test(await d()) && (await pressed()).close === false, 'Close path opens it (no Z)')
   await p.click('.ed-pathbar [data-node="close"]'); await p.waitForTimeout(300)
   ok(/Z/.test(await d()) && (await pressed()).close === true, '…and again closes it')
+
+  console.log('\na path shape drags like any other\n')
+  {
+    // inside its fill, not on its outline: the polygon (line editor) and a curve (bezier editor)
+    const curve = { ...tri, id: 'cur', x: 800, y: 200, d: 'M 0 300 C 0 100 400 100 400 300 L 200 300 Z' }
+    await load([tri, curve]); await p.waitForTimeout(400)
+    const toC = (x, y) => p.evaluate(([x, y]) => { const r = document.querySelector('.ed-stage-scale').getBoundingClientRect(); const k = r.width / window.bento.doc.size.width; return [r.left + x * k, r.top + y * k] }, [x, y])
+    // where the drawn outline is (a curve's box is re-fitted to its anchors on commit, so not el.y)
+    const yOf = (id) => p.evaluate((id) => { const r = document.querySelector('.ed-stage-scale').getBoundingClientRect(), k = r.width / window.bento.doc.size.width; return Math.round((document.querySelector(`.ed-stage-scale [data-el-id="${id}"] path`).getBoundingClientRect().top - r.top) / k) }, id)
+    const pull = async (x, y, dy) => {
+      const a = await toC(x, y), b = await toC(x, y + dy)
+      await p.mouse.move(...a); await p.mouse.down()
+      for (let i = 1; i <= 10; i++) { await p.mouse.move(a[0], a[1] + (b[1] - a[1]) * i / 10); await p.waitForTimeout(16) }
+      await p.mouse.up(); await p.waitForTimeout(300)
+    }
+    for (const [id, x] of [['tri', 500], ['cur', 1000]]) {
+      await deselect()
+      const y0 = await yOf(id)
+      await pull(x, 420, 60)
+      const y1 = await yOf(id)
+      ok(Math.abs(y1 - y0 - 60) < 3, `${id}: pressed unselected inside its fill and dragged, it moves in the same gesture (top ${y0} → ${y1})`)
+      await pull(x, 480, 60)
+      const y2 = await yOf(id)
+      ok(Math.abs(y2 - y1 - 60) < 3, `${id}: selected, a drag inside its fill moves it again (top ${y1} → ${y2})`)
+    }
+    await load([tri, { ...tri, id: 'box', shape: 'rect', x: 900, y: 200, w: 100, h: 100, d: undefined, pathBox: undefined }]); await p.waitForTimeout(400)
+  }
 
   console.log('\ncommand names on the chrome\n')
   const named = await p.evaluate(() => ['undo', 'redo', 'help', 'export-pdf', 'save'].filter((c) => !document.querySelector(`.ed-topbar [data-cmd="${c}"]`)))

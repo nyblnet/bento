@@ -2050,6 +2050,12 @@ export class SlideCanvas {
         e.inputEvent.preventDefault()
         const nodes = this.selectedNodes()
         if (nodes.length) this.moveable.dragStart(e.inputEvent, nodes[0])
+      } else if (e.isDragStartEnd && !this.marqueeOnly && [this.lineEditor, this.bezierEditor].some((x) => x.active && this.store.selection.join() === x.elementId)) {
+        // a line or path just selected by this press: its editor, not
+        // Moveable (which has no target for it), moves it — one gesture
+        e.inputEvent.preventDefault()
+        const ed = this.lineEditor.active ? this.lineEditor : this.bezierEditor
+        ed.dragBody(e.inputEvent as MouseEvent)
       } else if (e.isDragStartEnd && !this.marqueeOnly) {
         e.inputEvent.preventDefault()
         // Hand this same press to Moveable, so pressing an unselected element and

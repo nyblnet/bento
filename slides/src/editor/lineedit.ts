@@ -137,7 +137,8 @@ export class LineEditor {
     hit.setAttribute('stroke-width', String(16 * k))
     hit.classList.add('ed-le-body')
     hit.style.cursor = 'move'
-    hit.style.pointerEvents = 'stroke'
+    // a closed shape is pressed anywhere inside it, as its own fill is; a line or open curve on its stroke
+    hit.style.pointerEvents = this.closed ? 'all' : 'stroke'
     hit.addEventListener('mousedown', (ev) => this.dragBody(ev))
     svg.appendChild(hit)
 
@@ -203,7 +204,8 @@ export class LineEditor {
     window.addEventListener('mouseup', up)
   }
 
-  private dragBody(down: MouseEvent) {
+  /** Move the whole shape with this press — its body, or (canvas.ts) the press that just selected it. */
+  dragBody(down: MouseEvent) {
     down.stopPropagation()
     down.preventDefault()
     const start = this.toSlide(down)
@@ -243,6 +245,10 @@ export class LineEditor {
       }
       return
     }
+    // a closed shape's body takes a press anywhere inside it; only a double-click on its edge adds a point
+    const edge = (a: Pt, b: Pt) => { const dx = b.x - a.x, dy = b.y - a.y, l = dx * dx + dy * dy || 1, u = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l)); return Math.hypot(p.x - a.x - u * dx, p.y - a.y - u * dy) }
+    const ring = this.closed ? [...this.pts, this.pts[0]] : this.pts
+    if (Math.min(...ring.slice(1).map((b, i) => edge(ring[i], b))) > 8 / this.scale()) return
     // insert into the nearest segment midpoint
     let best = 0
     let bestDist = Infinity
