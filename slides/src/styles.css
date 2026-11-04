@@ -2094,7 +2094,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 }
 /* Alt-hover measuring (canvas.ts drawMeasure). Sizes are counter-scaled
    inline so lines stay 1px and labels 11px at any zoom. */
-.ed-measure-layer { position: absolute; inset: 0; pointer-events: none; z-index: 41; }
+.ed-measure-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3001; } /* over Moveable's control box (3000): a distance is read, a handle is not, while ⌥ is held */
 .ed-measure-layer > * { position: absolute; box-sizing: border-box; pointer-events: none; }
 .ed-measure-line { background: var(--blue); }
 .ed-measure-dash { border: 0 dashed var(--blue); opacity: .8; }
@@ -3578,8 +3578,11 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 
 /* ————— CANVAS FEEDBACK (editor/hud.ts) — modifier line, transform pill ——————— */
 .ed-modhint {
-  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 6;
-  max-width: calc(100% - 220px); padding: 4px 10px; border-radius: 999px; pointer-events: none;
+  /* above the Slideshow/zoom row, never beside it: centred at the foot it ran
+     under the 300px corner cluster on a narrow canvas. It is the indicator the
+     person is reading right now, so it also stacks above that cluster. */
+  position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%); z-index: 12;
+  max-width: calc(100% - 40px); padding: 4px 10px; border-radius: 999px; pointer-events: none;
   font: 500 11.5px/1.4 system-ui, sans-serif; color: var(--tip-ink); background: var(--tip-bg);
   box-shadow: 0 0 0 1px var(--tip-edge), 0 4px 14px rgb(0 0 0 / 0.2); text-align: center;
 }
@@ -3731,9 +3734,11 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-has-lock { position: relative; }
 .ed-has-lock input { padding-inline-end: 24px; }
 .ed-has-lock .ed-token-dot { inset-inline-end: 24px; }
-.ed-ratio-lock { position: absolute; top: 4px; inset-inline-end: 4px; width: 18px; height: 18px; min-height: 0; padding: 1px; color: var(--muted); border: 0; background: none; }
-.ed-ratio-lock[aria-pressed="true"] { color: var(--accent-ink); }
-.ed-ratio-lock svg { width: 14px; height: 14px; }
+/* scoped like `.ed-props .ed-tool` (26px, 15px icon) so the lock's own size wins:
+   at 26px it covered the token dot and hung below the field */
+.ed-props .ed-has-lock .ed-ratio-lock { position: absolute; top: 4px; inset-inline-end: 4px; width: 18px; height: 18px; min-height: 0; padding: 1px; color: var(--muted); border: 0; background: none; }
+.ed-props .ed-has-lock .ed-ratio-lock[aria-pressed="true"] { color: var(--accent-ink); }
+.ed-props .ed-has-lock .ed-ratio-lock svg { width: 14px; height: 14px; }
 
 /* Motion: floating surfaces arrive with a short, slightly springy scale + fade;
    section bodies fold over --ed-fold-ms (panels.ts foldSection). One place to tune. */
