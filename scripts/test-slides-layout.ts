@@ -257,6 +257,14 @@ console.log('\nreorder inside a frame (drop slot, arrow key, Layers)\n')
   reflowByArray(s2, 'f')
   ok(kids(s2) === 'cab', `a Layers reorder reflows the frame by array order (${kids(s2)})`)
   ok(!moveInFrame(slide(box('x', 0, 0, 1, 1)), 'x', 1), 'an element outside a frame does not move')
+  // a row of cards, each a column frame with its texts: a card moved a slot
+  // keeps its texts right after it in paint order, or it paints over them
+  const card = (id: string) => [box(id, 0, 0, 100, 100, { parentId: 'f', layout: { dir: 'col', gap: 0, pad: [0, 0, 0, 0], hug: true } }), box(`${id}1`, 0, 0, 40, 20, { parentId: id }), box(`${id}2`, 0, 0, 40, 20, { parentId: id })]
+  const cards = slide(frame({ dir: 'row', gap: 10, pad: [0, 0, 0, 0] }), ...card('p'), ...card('q'), ...card('r'))
+  reflowByArray(cards, 'f')
+  ok(moveInFrame(cards, 'q', 2) && kids(cards) === 'prq', `a card to the last slot: p r q (${kids(cards)})`)
+  const ids = cards.elements.map((e: any) => e.id).join(' ')
+  ok(ids === 'f p p1 p2 r r1 r2 q q1 q2', `each card moves with its texts, frame before them (${ids})`)
 }
 
 console.log('\ndrop into a frame, take out (Layers drag, canvas drag)\n')

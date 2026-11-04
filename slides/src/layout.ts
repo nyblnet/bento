@@ -43,14 +43,21 @@ export function moveIntoFrame(slide: Slide, ids: readonly string[], frameId: str
   const at = Math.max(0, Math.min(stay.length, slot))
   const order = [...stay.slice(0, at), ...moving, ...stay.slice(at)]
   for (const m of moving) { m.parentId = frameId; delete m.sizing }
+  layBlock(slide, f, order)
+  reflowByArray(slide, frameId)
+  return true
+}
+
+/** Lay frame `f`'s whole subtree back into the array as one block where the
+ *  frame stands: the frame, then each child's unit in `order` — so every
+ *  child paints above its frame, and its own contents above it. */
+function layBlock(slide: Slide, f: Frame, order: SlideElement[]): void {
   const block = [f, ...order.flatMap((c) => withDescendants(slide, [c]))]
   const inBlock = new Set(block.map((e) => e.id))
   const rest = slide.elements.filter((e) => !inBlock.has(e.id))
   const before = slide.elements.slice(0, slide.elements.indexOf(f)).filter((e) => !inBlock.has(e.id)).length
   rest.splice(before, 0, ...block)
   slide.elements = rest
-  reflowByArray(slide, frameId)
-  return true
 }
 
 /** Take `ids` out of their frames to the slide's top level, keeping where they
@@ -415,7 +422,8 @@ export function reflowByArray(slide: Slide, frameId: string): void {
 
 /** Move a frame's child to slot `to` of its siblings (layout order). Reports
  *  whether the order changed. Paint order among the siblings follows the
- *  flow order; nothing outside the frame moves in the array. */
+ *  flow order, each child moving with everything inside it (layBlock): a
+ *  card that only swapped its own slot would paint over its own texts. */
 export function moveInFrame(slide: Slide, id: string, to: number): boolean {
   const child = slide.elements.find((e) => e.id === id)
   const f = child?.parentId ? slide.elements.find((e) => e.id === child.parentId) : undefined
@@ -426,9 +434,7 @@ export function moveInFrame(slide: Slide, id: string, to: number): boolean {
   if (from < 0 || from === at) return false
   order.splice(from, 1)
   order.splice(at, 0, child)
-  // the siblings' array slots, refilled in the new flow order
-  const slots = slide.elements.map((e, i) => (e.parentId === f.id ? i : -1)).filter((i) => i >= 0)
-  slots.forEach((slot, k) => { slide.elements[slot] = order[k] })
+  layBlock(slide, f, order)
   reflowByArray(slide, f.id)
   return true
 }
