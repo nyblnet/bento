@@ -12019,3 +12019,522 @@ both slots had to stay empty until the ruling.
   scalar never matched, a missing kx public half skipping the match, a seal
   without a kx) and requires test-statements or test-recovery to fail on each,
   after the unmutated copy passes both.
+
+## 2026-11-02 — bento/connect directory: rotation states, freeze, and the consent it verifies
+
+The directory (`server/directory`) now has the binding states a key change
+needs: `active`, `pending` and `frozen`, each signed inside `att.`.
+
+- **A rotation is contestable for 72 hours.** The new `bind.` is signed by the
+  new key, the OLD key signs the same bytes, the request carries consent, and
+  a mailed code is signed by the new key. Lookups keep serving the old binding
+  as `pending` until the window passes, so pins don't move. Then the new
+  binding is served with `rotSig`, the old key's signature over it, which is
+  what lets a pinner follow without a warning. The old key co-signs the exact
+  `bind.` bytes rather than a new statement, so no layout was added.
+- **Consent is verified by the directory itself, against a challenge it
+  issued.** `/v1/challenge` issues a stateless, sealed challenge (60 seconds,
+  bound to one address). The Address object spends it before checking
+  anything, so a failed attempt still uses it up. The directory accepts a
+  `cns.` from a consent key certified by the live account key, or, for hosts
+  without one, a WebAuthn assertion over the hash of the `cns.` the directory
+  REBUILDS from its own audience, challenge and payload. It never parses a
+  transcript from the request. Desktop native origins are self-reported, so
+  they are never consent evidence.
+- **Email alone can freeze, never decide.** The freeze link opens a page; only a
+  POST of its single-use token freezes, because mail scanners fetch links.
+  While frozen, neither key is honoured, including the holder delete, which
+  would otherwise reopen the address to an email-only re-bind.
+- **Rotation ships OFF** (`ROTATION` unset answers 404). A pending window is safe
+  only if a device holding the old key can say "this wasn't me", and that
+  request needs a statement kernel hasn't defined. Until it exists, a thief
+  holding the old key and the mailbox could rotate first.
+
+## 2026-11-03 — bento/connect directory: device linking and the key store
+
+The directory (`server/directory`) gains the two things a second device and a
+lost device need. Both ship OFF (`LINKING`, `KEYSTORE`).
+
+- **Linking goes through a slot on the directory, not the sync relay.** A slot
+  is its own Durable Object class holding only ciphertext the two devices
+  encrypt under keys from a code the directory never sees. The relay would have
+  meant every native agent speaking the collaboration protocol over WebSockets,
+  and the relay keeps frames.
+- **The directory, not just the host, checks the consent to link.** Before it
+  releases what H sealed for N, it spends a `dir` challenge and verifies H's
+  consent (purpose `link`) over N's `dev.` against the live binding, only while
+  `active`. That gives a link a notification hook, lets a frozen account refuse
+  to link, and makes the "relayed or replayed consent is refused" check run
+  against a production verifier.
+- **One scanner per slot.** A second write of any message makes the slot
+  CONTENDED and both sides start again, so a photographed code fails loudly
+  instead of racing. A slot completes once; any failed completion deletes it.
+- **Account-signed requests use kernel's `dreq.`** for the status read, passkey
+  registration and removal, and recovery enrolment; the last three also need
+  consent for their own op, so a consent to add a passkey never removes one.
+- **The recovery verifier is peppered with kernel's derivations** and the
+  pepper is a Worker secret. A right verifier only starts a 72-hour wait; every
+  attempt notifies; the released code is spent. A record under a pepper version
+  the Worker doesn't hold is refused rather than tried under another.
+- **The ledger's routes wait for a kernel request op.** A ledger read must be
+  account-signed (§2g: otherwise anyone could watch its size and cadence), and
+  the request statement's ops are a closed set. The storage rules (bucket sizes,
+  current key only) are in place behind them.
+
+## 2026-11-03 — bento/connect directory: contest, the rotation vouch, resolving a freeze
+
+- **The old key vouches with `rot.`, not by signing the new binding's bytes.**
+  `rot.<sha256(new)>.<sha256(old)>` says what the signature means in its own
+  bytes, and the directory checks it with kernel's `verifyRotation`, the same
+  function a pinning client runs offline.
+- **A device holding the old key can stop a key change.** `dreq.contest`, signed
+  by the key the directory still serves, freezes a pending rotation; `dreq.freeze`
+  is the owner's lost-or-stolen report. Neither needs consent: both only remove
+  power. Rotation stays off until this has been run by security.
+- **Only the recovery code unfreezes**, with a new binding signed by its own key.
+  No old-key signature exists in that case, so pinners warn, deliberately: a
+  "recovered" flag from the directory would not be proof.
+- **A holder delete keeps the protection the binding had.** Deleting with the
+  key and re-binding a different key by email would otherwise skip the 72-hour
+  window, so until the deleted binding's own expiry that re-bind waits the full
+  window, the deleted key may contest it, and its recovery verifier is kept for
+  that long (then deleted).
+- **Notices that anyone can trigger are kept apart.** Recovery attempts need no
+  signature, so they are one counted entry per kind with their own mail budget:
+  however many arrive, they can't push a signed event out of a device's list or
+  spend its mail. A recovery notice says to set a new recovery code, which
+  cancels a release; a freeze would not, and would block the new code.
+- **Resolving an email-only freeze waits 72 hours; a key-holder freeze resolves
+  at once.** With the recovery code and the mailbox together, an attacker could
+  freeze by email and resolve to their own key in one sitting. Now that
+  resolution waits 72 hours, with notices, and during it a freeze or contest
+  signed by the frozen binding's key turns it into a key-holder freeze and voids
+  the waiting resolution. That is the one exception to "frozen: status only",
+  and the code it used stays spent. A failed contest must be reported plainly by
+  the client, which then offers the email freeze.
+- **A host can ask for its bind answer again** (`/v1/bind/check`), for exactly
+  the statement it bound, so setup resumes after a failed check without a second
+  mail. It reveals nothing a lookup doesn't.
+- **2026-11-03: the recovery code is spent only when a resolution commits, and a
+  freeze that voided one is contested.** This reverses "the code it used stays
+  spent" above. A resolution that waits and is voided leaves the code live, so
+  the owner who voided a thief's resolution still has the code to resolve with.
+  Because the code has then been in two hands, that freeze is contested: every
+  later resolution of it waits 72 hours and can be voided by the frozen key,
+  even though the frozen key froze it. An owner with the device and the code
+  beats a thief with the code and the mailbox; a thief holding the old key
+  leaves a stalemate, and the address stays frozen until the binding expires.
+  While frozen, a device polls its status on open and shows a waiting
+  resolution with the one action that stops it.
+
+## 2026-11-03 — Android: Bento ID setup (home/android)
+
+Setup is built and reachable only from a dev build (debug, or the minified `releaseCheck`). What it settles, so a
+later change does not undo it by accident:
+
+- **The setup screen has no entry point in a release build.** `SetupActivity` is
+  not exported and nothing launches it, and a release build pins no directory key
+  (the keys are not minted), so the flow refuses before it asks for anything. A
+  dev build exports it and takes the directory URL and a test key from the
+  launching intent. Release behaviour is unchanged until the strings are ruled on
+  and the directory is live.
+- **The account's scalars rest under a Keystore AES key that needs the person for
+  every use.** The account signing key and the two kx keys must move between
+  devices, so they cannot be Keystore keys. They are generated in memory, sealed
+  under an AES-256-GCM key with the consent key's authentication parameters
+  (BiometricPrompt; the device PIN as well from API 30; it survives a new
+  fingerprint), and zeroed. The portable copy is the recovery blob, not this
+  file. Nothing secret reaches disk before the last step, and a process death
+  before then restarts setup.
+- **Order, and what each step refuses.** The memory Argon2id needs and the
+  derivation self-check are checked BEFORE an email is bound; the directory's
+  attestation is checked against a pinned key, by exact kid, and anything but
+  `active` stops setup; the typed recovery code is checked against the one shown,
+  and a device short of memory is reported as that, never as a wrong code. A
+  managed device (any identity managed-config key present) does no identity
+  operation.
+- **The recovery code is enrolled at setup** with an account-signed
+  `dreq.rc-enrol.` over the exact enrolment body, plus the consent key's `cns.`
+  (two fingerprint prompts in all: consent, then sealing). A device with no consent
+  key (API 26–29, no biometric enrolled) finishes setup with the recovery code
+  NOT registered and says so; it is never shown as registered.
+- **The derivation self-check is a known answer** (kernel's recovery-v1
+  `derivations` row) run before binding. The release-APK check builds the
+  minified `releaseCheck` variant, which is release as configured (full R8 optimisation and obfuscation) plus the
+  dev switch, and runs it on a device; its positive control is a build whose R8 rules break
+  a function the check covers, which must read FAIL.
+- **Not ported:** the display `name` and device `label` fields are emitted empty
+  until the Unicode display filter has an Android port. Certificates live a year.
+
+## 2026-11-03 — bento/connect B1: the identity calls in `home/bridge.js` (whoami, sign, resolve)
+
+- **One shared object, built from a declared capability.** A host that has
+  verified the document's bytes (gate 1) declares `window.__bentoHostCaps =
+  ['identity']` ahead of `bridge.js`. The bridge then defines `__bentoIdentity`
+  exactly as `kernel/src/identity.ts` requires: a non-writable, non-configurable
+  data property holding a frozen object of closures with `contract: 1` and the
+  three phase-1 calls. A host that does not declare it, and any subframe, gets no
+  object, so the kernel does what it did before identity existed. `unwrap` and
+  `share` (phase 2) are not defined.
+- **The wire** is the ordinary `call()` channel: `{id, op:'id.whoami'}`,
+  `{id, op:'id.sign', purpose, payload}`, `{id, op:'id.resolve', pub}`. Nothing
+  names the document or a caller; the host knows who is asking. Replies are
+  `(id, ok, value)`; a refusal word is the K1 `SignRefusal`. The bridge re-shapes
+  every reply: a wrong-typed field is a refusal or `null`, an unknown word is
+  `unavailable`, and an `{email}` lookup (phase 2) is answered `null` without
+  leaving the page.
+- **The session limits are the host's, not the bridge's.** Past the idle or
+  overall limit (security §2e B) the host answers `sign` with `reauth` until the
+  person re-authenticates AT THE HOST. The bridge passes the word through, caches
+  nothing and never retries. On desktop the limit is the agent's, and the rig
+  drives the real agent across both limits.
+- **A replaced reply hook cannot redirect replies.** The Android-style transport
+  now calls its reply function directly instead of through `window.__bentoNativeReply`,
+  which page script can overwrite.
+- **Each host routes the `id.*` ops to its own agent and keeps its own gates**
+  (on desktop: this webview's capability, then genuine bytes). No host ships a key
+  store yet, so a host with no account answers `no-identity` (`whoami`, `sign`)
+  and `null` (`resolve`).
+## 2026-11-03 — bento/connect: device linking is one protocol, link v1, with kernel vectors
+
+Linking hands a new device (N) the account key and the recovery kx from a
+device that holds them (H). iOS and Android had designed two different
+pairings; this replaces both with one protocol every pair of hosts runs, and
+fixes its bytes in `kernel/src/link.ts` with a `link` section in
+`kernel/fixtures/identity-v1.json` (security §39.1, which accepted the design
+with seven conditions).
+
+- **The link code is a recovery code in every byte**: 80 random bits, printed
+  `XXXX-XXXX-XXXX-XXXX-C`, parsed by the same forgiving reader. The displayer
+  shows it as a QR and as text; typing it is the no-camera path, not a second
+  protocol. HKDF over the code's 10 bytes (empty salt, infos
+  `bento/id/link/v1/{id,tok,salt}`) gives the slot id, its bearer token (the
+  directory stores the token's SHA-256) and a 32-byte salt that is never sent.
+- **The code is in the key salt.** The displayer writes `lnk0.<E_D>.<H|N>`, the
+  scanner `lnk1.<E_S>`; both compute the transcript
+  t = b64u(SHA-256("lnkt.v1." ‖ id ‖ "." ‖ E_D ‖ "." ‖ E_S ‖ "." ‖ roleD)) and,
+  from the ECDH x-coordinate Z with that salt, `h2n`, `n2h` and the SAS key
+  (infos `bento/id/link/v1/{h2n,n2h,sas}.` ‖ t). The directory relays both
+  ephemerals but never sees the code, so it can derive no key, and an
+  ephemeral it substitutes changes the SAS. A reflected ephemeral (E_S = E_D)
+  gets no transcript.
+- **The SAS is 6 digits that N shows and the person types into H**, never a
+  "do these match?" tap. It is the first 4 bytes of the SAS key, big-endian,
+  mod 10^6, zero-padded. One attempt per slot.
+- **Roles are checked, not trusted.** The scanner proceeds only if exactly one
+  side holds an account. (Hosts must also never start the H side from an
+  `id.bento.page/l#` link; that is UI, not bytes.)
+- **Every sealed message is AES-256-GCM with AAD = `lnka.v1.<t>.<n>`**, the
+  transcript and the message number, on the wire as iv ‖ ciphertext ‖ tag.
+  Each key seals one message in one direction (n2h seals 2, h2n seals 3), and
+  the module picks the key from the number, never the caller.
+- **msg2, N's offer**: `lnk2.<devicePub>.<consentPub|empty>.<kx>.<label|empty>.<platform>.<popDevice>.<popConsent|empty>`.
+  The kx is N's own (mode C). Each key proves possession by signing
+  `lnkp.v1.<t>`; a consent PoP is present exactly when a consent key is.
+- **msg3, H's completion**: `lnk3` and seven lines (H's `dev.` + sig, a `cns.`
+  with purpose `link` and audience `dir` over N's `dev.` text + sig, N's `dev.`
+  + sig, and SEALED = the 64-byte account blob plaintext under h2n). The
+  directory releases it only through `verifyLinkRelease`: the challenge is
+  spent first (every refusal before the spend is `grammar`), the binding must
+  be `active`, H's `dev.` and N's `dev.` must both name the binding's account
+  key, and the consent must verify under H's certified consent key. A
+  light-tier H consents by WebAuthn instead, which this message does not
+  carry. One completion per slot is the directory's rule, not these bytes.
+- **N checks what it was given** (`openFinal`): its `dev.` must name exactly
+  the devicePub, consentPub and kx it offered and the account key of the
+  binding served under a pinned directory key, and both released scalars must
+  match that binding.
+- **No new signed statement family.** `dev.` and `cns.` purpose `link` already
+  existed. The link texts take the prefixes `lnk0`–`lnk3`, `lnkt`, `lnkp` and
+  `lnka` (`LINK_PREFIXES`), which no statement family may use. The `link`
+  section is a new top-level section, so host runners that do not know it yet
+  keep passing until they adopt it.
+- **Guarded by mutants.** `scripts/test-link.ts` recomputes every
+  deterministic row byte for byte and checks every verdict;
+  `scripts/test-link-mutants.ts` reintroduces fifteen lenient paths into a copy
+  of `link.ts` and requires the rig to fail on each.
+
+## 2026-11-03 — bento/connect directory: link completion runs kernel's verifier, and contested shows in the signed status only
+
+- **One verifier for message 3.** `/v1/link/complete` now takes H's message 3
+  as ONE text (kernel's `lnk3`) and the Address object runs kernel's
+  `verifyLinkRelease` over it against the live binding and its state. The
+  directory's own parallel checks (H's and N's certificates, the consent, the
+  device-differs and active-only conditions) are gone; those conditions still
+  hold, now as kernel's `n-device-is-h` and `state` refusals, and the rig keeps
+  a row and a control for each. The directory still spends the challenge first,
+  before kernel parses anything, so a malformed message 3 also burns it.
+- **The slot stores kernel's `linkTokHash(tok)`**, replacing the directory's own
+  domain-separated hex hash, so every party derives the stored form one way.
+- **N receives message 3 whole**, not only the sealed payload, because kernel's
+  `openFinal` checks N's `dev.` from the same text.
+- **WebAuthn link consent stays off.** Message 3 has no form for it; an H with
+  no consent key is refused (`h-no-consent`), and a WebAuthn assertion sent
+  beside message 3 is never read.
+- **`contested: true` appears in the account-signed status read, never in the
+  public lookup.** The key holder needs to know its resolution was voided and
+  that the next one will wait 72 hours; a stranger looking up the address does
+  not, and telling them would advertise that the code is in two hands. An
+  uncontested freeze's status carries no such field.
+## 2026-11-03 — link v1: SEALED carries the account key and the address, and the slot wire is fixed
+
+Two follow-ups to the link v1 entry above, both from porting it to iOS.
+
+- **msg3's SEALED is the 32-byte account scalar and the address, and nothing
+  else.** The first cut sealed the 64-byte recovery blob (account ‖ recovery kx), which handed
+  every newly linked device the recovery kx. That contradicts security §26c.4:
+  the recovery kx is touched as rarely as possible, and when an existing device
+  is reachable the new device's history comes from that device re-wrapping to
+  the new device's own kx, never from unwrapping the recovery kx. Linking always
+  has H present, so it never needs it. H therefore never needs the recovery kx
+  to link a device.
+- **The address travels inside SEALED**: the plaintext is the scalar, then the
+  address in UTF-8, in normal form (it re-normalises to itself under
+  `kernel/src/address.ts`) and at most 254 bytes. A new device otherwise has no
+  way to learn which account it is joining except by a person typing it, and
+  the address must not ride in the QR or the code. So SEALED's length is a
+  bounded range, `SEALED_MIN_LEN` to `SEALED_MAX_LEN` (constants of their own,
+  not derived from the recovery blob's length), and the directory's release
+  check and N's parse refuse anything outside it as `grammar`.
+- **N takes the account key from the binding for THAT address.** `openFinal`
+  requires normal form, then looks the address up and verifies the answer
+  itself: the binding must be for exactly that address, attested `active` under
+  a pinned directory key, and its accountPub must be the received scalar's
+  public key (`unpackAccountScalar`). Its recovery kx plays no part. So H cannot
+  name an address the scalar does not belong to, and the directory cannot answer
+  with some other address's binding. N looks nothing up until SEALED has opened.
+- **N asks before it stores.** `openFinal` returns the address and the binding's
+  name; the host shows `Link this device to <address> (<name>)?` and declining
+  aborts and deletes the slot. A typed address is only a fallback for a failed
+  lookup. This supersedes any host flow that asks for the address up front.
+- **The old 64-byte payload stays in the vectors**, so a host still sealing those
+  bytes fails loudly rather than half-working. Its length is now in range and the
+  directory sees only ciphertext, so the release check passes it and N refuses
+  it, as `address`. A 32-byte scalar that is not the binding's account key
+  (another account's, and the binding's own recovery kx scalar) is `key-mismatch`.
+- **How each message travels on the slot is now part of the contract**
+  (`encodeSlotMsg` / `decodeSlotMsg`): msg0 and msg1 as canonical unpadded
+  base64url of their UTF-8 text, msg2 as its sealed wire unchanged, msg3 as its
+  text unchanged. Decoding refuses padding, set trailing bits, text that is not
+  UTF-8, a byte-order mark (the decoder would otherwise swallow it, giving one
+  text two wires), a msg0 or msg1 sent raw instead of encoded, a message under
+  the wrong number, a msg2 shorter than an iv and a tag, and anything over 4096
+  bytes once decoded. The limit is always on the decoded message, and the
+  directory must count it the same way: for msg2, the sealed bytes rather than
+  their base64url text. Before this, iOS had to
+  choose an encoding that no spec pinned, and two hosts choosing differently
+  would never link. The `link.wire` rows are byte for byte both ways.
+
+## 2026-11-03: the first credential rides on the bind's two proofs, not on "no credentials"
+
+A light-tier account has no consent key, and consent for a passkey comes from a
+passkey, so its first one had no way in. "Allow the first cred-add when the
+account has no credentials" was refused: no credentials does not mean new. An
+account with a recovery code and no passkey has none, deleting the last passkey
+returns to none, and the same rule on rc-enrol would let a stolen account key
+replace the recovery code.
+
+Instead a bind that lands `active` with both proofs arms a 15-minute allowance:
+one `cred-add` and one `rc-enrol` with no consent, on the account key's `dreq.`
+alone. It arms only for a key that has NEVER had a credential or a code. That is
+a stored flag per key, never cleared, not by `cred-del` and not by a deletion
+(so a hash of the key outlives a deleted address, like a tombstone's hash of its
+binding). It fills empty slots only, it stands in only for ABSENT consent (a bad
+consent is refused, never rescued), and any freeze, contest, rotation or new bind
+ends it. A bind that ends `pending`, its settling, and a resolved freeze arm
+nothing. Running out of time means verifying the email again.
+
+Left open on purpose: an account key and a mailbox together, on an account that
+never had either, can arm it. Those are the same two proofs as setup, and nothing
+yet exists to protect.
+
+A rebound now drops the old key's passkeys with its recovery record, on every
+path (over an expired binding, over a tomb, and a resolved freeze). A passkey
+left behind filled the new key's empty slot and, being scoped to the address,
+could still answer a consent. A vouched rotation keeps them: the agent re-enrols
+in the same flow, and a light-tier account needs the old passkey's consent to do it.
+
+msg3's cap is kernel's slot wire, 4096 decoded bytes, checked at the route, so an
+oversized message is refused before a slot is claimed or a challenge spent.
+
+## 2026-11-03: a vouched rotation bounds the old key's passkeys, and a failed rekey is retried
+
+A vouched rotation used to keep the old key's passkeys with their full consent
+power, because the `Cred` checked only the address. A leftover passkey cannot act
+alone (every op also needs the current key's `dreq.`), but a rotation done because
+of a compromise should evict a passkey the intruder planted.
+
+A passkey now consents only for its own key, compared in the `Cred`, so consent
+does not depend on a deletion having succeeded. The one exception: after a settled
+vouched rotation, the immediately previous key's passkeys may consent to `cred-add`
+and `rc-enrol`, which is how a light-tier account, with no consent key, moves its
+passkey and code to the new key. That ends at the new key's first credential or 30
+days after the settle, whichever is first, and the old passkeys are then deleted
+with a notice. A rebound and a recovery get none. The old blob is never served
+after the settle: it opens to a superseded key.
+
+"First credential" is decided in the `Account` object, beside the write, so two
+adds in flight cannot both land and a lost message to the Address object cannot
+extend the grace. For that, the `Account` now records which key owns each passkey.
+The 30 days count from when the rotation settled, not from the first request to
+notice, and any freeze ends the grace.
+
+An account that misses the grace gets back in with a fresh email proof, which
+re-arms the setup allowance. Left open on purpose: an account key and a mailbox
+together, on a rotated account with no credential left, can add one. The code slot
+stays protected, because the end of a grace leaves it alone and the allowance never
+replaces a code. A key that enrolled a code during the grace has had something, so
+email does not re-arm it; its way back is that code.
+
+Deleting old passkeys could fail silently, and passkeys left behind fill the new
+key's empty slot with no way out. The Address object now records the deletion
+before trying it, and retries at the next signed request and from an alarm. While
+one is unfinished, ops that need consent answer `rekey` and use nothing up.
+
+## 2026-11-03: a recovery code younger than 72 hours waits, and the rotation grace keeps cred-add only
+
+An account key and a passkey could replace the recovery code, freeze with the key,
+and resolve to a third key at once, on any account, rotated or not. That is a
+rotation with no 72-hour contest, and afterwards the owner's key and old code both
+answered nothing. A resolution is meant to need a factor the thief does not have, and
+a code the thief enrolled a minute ago is not one. The at-once resolve assumed a
+long-held code.
+
+A code younger than the contest window now resolves as an email-only freeze does:
+202, the old binding still served, voidable by the frozen key, and the code spent
+only when it commits. The age is read on the record that verified, and only an
+enrolment sets it, so a pepper upgrade does not make a code young or old. A code
+72 hours old resolves at once as before: the owner has had the enrolment's notice
+and the same time a rotation gives.
+
+This corrects the entry above. It said the code slot stays protected, and that was
+wrong. An old-key code is already dead, since it neither releases nor resolves, so
+an anonymous recovery attempt deleting it as orphaned costs nothing and the slot
+protects nothing. A rotated account whose slot was never filled reaches the same
+place with no deletion at all, and limiting the setup allowance would not help,
+because a passkey added under it can consent to a code. What was worth protecting
+is the 72 hours, and this rule is what protects it. So the accepted residual is:
+an account key and a mailbox on a rotated account with no credential can get a
+passkey and a code, and any move of the address is contestable for 72 hours. The
+key alone stays refused.
+
+`rc-enrol` also leaves the rotation grace, which amends the same entry. A previous
+key's passkey may now consent to `cred-add` only. Passkey first is the only order
+that strands nobody, a code then lands by the new passkey's ordinary consent, and
+this removes the one grace op that could overwrite a current-key code from a planted
+old passkey. The sentence about a key that enrolled a code during the grace no
+longer applies to the grace. The same state still exists, from a setup that enrolled
+a code and let the window lapse: email does not re-arm it, and its way out is freeze,
+resolve, a fresh email proof on the new key, then a passkey, then a code.
+
+## 2026-11-04: a recovery code's age is counted at the freeze, and `ever` can end after a deletion
+
+The entry above let a code resolve at once once it was 72 hours old, because the
+owner would have had the enrolment's notice and the same time a rotation gives. That
+was wrong when the thief freezes first. A frozen address with nothing waiting is
+status-only: re-freeze, contest, `rc-enrol`, `cred-add`, rotation, an email freeze
+and a renewal are all refused, and the owner's own code no longer matches. So key
+and passkey could replace the code, freeze, wait 72 hours while the owner could do
+nothing, and move the address to a third key at once. A rotation followed by its own
+contest reached the same place.
+
+The time that counts is time the address was not frozen. A resolution now waits
+unless the code was enrolled 72 hours or more before the freeze: the Account object
+reports the enrolment time, and the Address object holds it against `frz.at`. The
+test is written so that a missing age waits. A code held 72 hours before the freeze
+still resolves at once, and an owner who enrolled a code under 72 hours before
+freezing waits 72 hours: that cost is accepted.
+
+The flag behind the setup allowance can now end. The 2026-11-03 entry said a key's
+flag is never cleared, not by a deletion. After a deletion it can be, with nothing
+lost, but only at the deleted binding's own expiry. By then every slot is empty and a
+key with its mailbox gets what a brand-new key gets anyway. Sooner it is not safe:
+the old code is still held, and clearing the flag would arm the allowance beside it.
+A plain expiry with no deletion ends nothing, since material may remain.
+
+The appointment is the Address object's, not the Account object's, so that a re-bind
+cancels it in the same write that lands the binding. Held in the Account object, the
+cancel would be a second call that can fail, and a failed cancel would bring back
+"add a credential, delete the binding, the flag is gone". The cost is a second
+object's word at the end: the Account object refuses if it still holds a passkey or a
+live code, and the flags then stay. A new key waiting out its contest holds the
+appointment; if it lands the flags stay, and if it is contested they go. A mailbox
+deletion counts too, an hour on, since its binding has already expired and its wipe
+follows the answer.
+
+## 2026-11-04: a renewal never shortens, and the key record ends with `ever`
+
+A same-key renewal had no floor on `expires`. Key and mailbox could renew a live
+binding to a two-minute life, wait, and then a brand-new key needed email alone: the
+address moved at once, with no consent and no 72 hours, and the owner's passkey and
+code went with it. That is the move security §25 refuses, reached by the renewal door,
+and it also cut short the deletion window (§39.6) and the end of `ever`, which read the
+same date. Every earlier row renewed at full life, so none of them saw it.
+
+A renewal may now keep or extend its expiry, never bring it forward. The check is in
+`complete`, against what is live then, and in `start`, so that no code is mailed for
+one. The same door was open by way of a deletion: delete by key, then take the binding
+back with the same key for two minutes, and the window was gone. So the same key
+taking a deleted binding back is held to that binding's expiry. A different key needs
+no floor there, because it waits its 72 hours whatever life it asks for. A client whose
+clock runs behind can be refused a renewal it meant in good faith, and that is accepted.
+
+The entry above leaves the raw account key in the holder tomb until a re-bind. It now
+goes when `ever` ends: when the Account object answers that nothing is held, the
+Address object deletes `htomb` and the event list with the appointment. After a
+deleted binding's expiry the key's one job was the `rebound` answer, and no client
+reads which key it was. With no key to compare, a re-bind over a tomb reports
+`rebound`, which is the cautious answer. The same key back gets a false warning, and
+that is accepted, and a mailbox tomb, which never kept a key, now answers the same
+way. A continuation of the deleted binding is refused once the record has gone, as it
+always was over a mailbox tomb: seq 1 lands. A held answer keeps both, since a key may
+still come back and the comparison still means something.
+
+What stays after the end is the signed tomb and the chain of earlier binding hashes.
+Neither holds a key, but both are hashes of a statement that did, and the privacy page
+has to say so, along with the other half: a wipe that failed leaves the passkeys, the
+flags and the key record until it is finished.
+
+## 2026-11-04: a refused start costs no mail, the chain ends with the key, and a deletion's wipe is retried
+
+Five changes from one security run, one of them correcting a sentence of ours.
+
+The Address object's `start` took its place in the mail budget before it read the
+statement, so every refusal recorded a mail that was never sent. The route needs only a
+self-signed statement, by any key, with no proof. Three such requests before each ask
+left the owner of a rotating address with no freeze mail from hour 24, once the rotation
+mail's own link had lapsed, and the new key was served at hour 73: the wait protected
+nobody, in exactly the case the email freeze exists for. The budget is now spent last,
+just before the code is minted, so a start that mails nothing costs nothing. What is left
+is a burn by mail that really goes: anonymous askers can spend the budget with freeze
+requests, and those can't be told from the owner's, but each one lands in the mailbox
+with a live link and the same budget stops the thief's rotation.
+
+The entry above leaves the chain of earlier binding hashes after the end of `ever`.
+It now goes with `htomb` and the events. It is served only beside a live binding, so
+after the end it has no reader until a re-bind, and it would then hand the deleted
+holder's history to the address's next holder. That entry also broke the rule that a
+re-bind keeps the tombstoned hash in its chain, because the hash came from the record
+that had just gone, and over a mailbox tomb it was never kept. A re-bind with no key
+record now takes the hash from the tomb's own text.
+
+A rotation must outlive its wait: its new binding must run at least the 72 hours plus
+the 20 minutes its code can take to enter. Without that a short-lived rotation settled
+dead, and the address was open to email alone. This is a floor and not "never shortens".
+A new key may ask for a shorter life than the old one had, and nothing needs it not to.
+
+The entry above says a wipe that failed leaves the passkeys, the flags and the key
+record "until it is finished". That was false: nothing finished it. The client got an
+error, a second delete was refused, and the material stayed for good, or, when only a
+Cred object's delete failed, the flags ended while that object kept the key and its
+blob. So the cascade moved from the worker into the Address object as a record, retried
+by the alarm like a rekey, and the holder's answer no longer depends on it. The end of
+`ever` waits for it, since an empty Account is not "nothing held" while a Cred object
+still has the key. A bind is refused while it is owed, because a retry takes everything
+and must not find anything new; that is the only door, as nothing else makes a binding
+where a tomb stands, and it does not use up the code. The cost is that an Account object
+that stays down holds up a re-bind at that address.
+
+An abandoned start after a deletion's end left its statement, and so a key, in `pend` for
+good. A pending code now has an alarm at its expiry. The alarm is shared, so it may
+replace a later one for up to 20 minutes; tick puts that back.

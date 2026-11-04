@@ -3,10 +3,13 @@
 // Copyright (c) 2026 The Bento authors
 // home/webext — the directory client against a LOCAL directory over real HTTP (manual).
 //
-//   WRANGLER=/path/to/wrangler node scripts/qa-webext-directory-dev.mjs
+//   WRANGLER=/path/to/wrangler [DIRECTORY_DIR=<server/directory with the key-store routes>] node scripts/qa-webext-directory-dev.mjs
+//
+// Part 2 (key store) needs a directory that has /v1/challenge, /v1/recovery/enrol and /v1/cred/* (D1c).
 //
 // scripts/test-webext-directory.ts drives the same client against the worker in
-// memory (that one runs in CI). This one starts `wrangler dev` on server/directory
+// memory (that one runs in CI), and part 2's rows are the same rows, from
+// scripts/lib/webext-directory-keystore.mjs. This one starts `wrangler dev` on server/directory
 // with a throwaway signing key, a log mailer and an empty state directory, then
 // runs the extension's own bindStart/bindComplete across the network: the mailed
 // code is read from the worker's dev log, exactly as a person would read an inbox.
@@ -18,11 +21,11 @@ import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { argon2 as nodeArgon2 } from 'node:crypto'
+import { keyStoreRows } from './lib/webext-directory-keystore.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const agent = await import(join(root, 'home/webext/src/id/agent.js'))
 const dc = await import(join(root, 'home/webext/src/id/directory.js'))
-const ks = await import(join(root, 'home/webext/src/id/keystore.js'))
 const st = await import(join(root, 'home/webext/src/id/gen/statements.js'))
 
 let failures = 0
@@ -34,7 +37,7 @@ const jwk = await crypto.subtle.exportKey('jwk', kp.privateKey)
 const dirPub = st.b64uEnc(new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey)))
 const port = 8700 + Math.floor(Math.random() * 200)
 const wr = process.env.WRANGLER ?? 'wrangler'
-const child = spawn(wr, ['dev', '--port', String(port), '--persist-to', mkdtempSync(join(tmpdir(), 'dir-state-')), '--var', 'DEV:1', '--var', 'MAILER:log', '--var', 'DIR_KID:dev-1', '--var', `DIR_KEY_JWK:${JSON.stringify(jwk)}`], { cwd: join(root, 'server/directory'), stdio: ['ignore', 'pipe', 'pipe'] })
+const child = spawn(wr, ['dev', '--port', String(port), '--persist-to', mkdtempSync(join(tmpdir(), 'dir-state-')), '--var', 'DEV:1', '--var', 'MAILER:log', '--var', 'DIR_KID:dev-1', '--var', 'KEYSTORE:1', '--var', `PEPPER_V1:${Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url')}`, '--var', 'CHALLENGE_KEY:qa-challenge-secret-0123456789abcdef', '--var', `DIR_KEY_JWK:${JSON.stringify(jwk)}`], { cwd: process.env.DIRECTORY_DIR ?? join(root, 'server/directory'), stdio: ['ignore', 'pipe', 'pipe'] })
 let log = ''
 for (const s of [child.stdout, child.stderr]) s.on('data', (d) => { log += d })
 const stop = () => { child.kill('SIGTERM') }
@@ -67,6 +70,12 @@ const lk = await (await fetch(`${base}/v1/lookup?e=qa@example.com`)).json()
 ok(lk.binding === pending.text, 'a lookup over HTTP returns the binding we signed')
 const nothing = await fetch(`${base}/v1/lookup?e=nobody@example.com`)
 ok(nothing.status === 404, 'an unknown address is 404')
+
+// ---------------------------------------------------------------------------------
+// part 2: the key-store routes (D1c), the REAL ones, over HTTP
+// ---------------------------------------------------------------------------------
+await keyStoreRows({ ok, deps, codeFor, argon2id })
+
 stop()
 console.log(failures ? `\n${failures} FAILED` : '\nall passed')
 process.exit(failures ? 1 : 0)

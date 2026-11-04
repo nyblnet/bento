@@ -23,13 +23,15 @@
 // Pure: fetch, time and the key list come in as deps, so scripts/
 // test-webext-directory.ts runs this exact code against the real worker.
 
-import { buildBind, verifyBind, buildCmp, verifyAtt, signStatement, sha256b64u, CERT_MAX_MS } from './gen/statements.js'
+import { buildBind, verifyBind, buildCmp, verifyAtt, signStatement, sha256b64u, CERT_MAX_MS, buildDreq, dreqArg, b64uEnc, buildConsent, consentTranscript, webauthnChallengeFor } from './gen/statements.js'
 import { normalizeAddress } from './gen/address.js'
 import { openPrfBlob } from './gen/recovery.js'
 
 export const DIRECTORY = 'https://id.bento.page'
 /** An attestation older than this is not accepted as the answer to a request just made. */
 export const ATT_MAX_AGE_MS = 10 * 60_000
+/** How long a WebAuthn consent is good for. The directory's ceiling is 5 minutes; its challenge lapses first. */
+export const CONSENT_TTL_MS = 2 * 60_000
 
 export class DirectoryRefused extends Error {
   constructor(reason) { super(reason); this.reason = reason }
@@ -72,7 +74,11 @@ export async function bindComplete({ record, pending, code }, deps) {
   const cmpText = buildCmp(pending.hash, typed)
   const r = await post(deps, '/v1/bind/complete', { email: pending.address, code: typed, sig: await signStatement(record.accountKey, cmpText) })
   if (r.status === 429) return { ok: false, reason: 'rate-limited' }
-  if (r.status !== 200 || !r.j) return { ok: false, reason: 'rejected' } // the directory's 400 is uniform on purpose
+  // Not a failed try. A deletion is still being carried out, and the directory says so only to someone who
+  // sent the right code and the right key, so "wrong code" would be false: keep `pending`, say to try again
+  // later, and the same code completes the binding once the deletion lands.
+  if (r.status === 400 && r.j?.reason === 'wipe') return { ok: false, reason: 'try-later' }
+  if (r.status !== 200 || !r.j) return { ok: false, reason: 'rejected' } // every other 400 is uniform on purpose
   const { binding, attestation, attestationSig } = r.j
   // the directory returned exactly what we signed — not a different binding it prefers
   if (binding !== pending.text) return { ok: false, reason: 'wrong-binding' }
@@ -122,4 +128,115 @@ export async function passkeyBackupReady({ record, credentialId, prfOutput, fetc
   let r
   try { r = await openPrfBlob(blob, { prfOutput, credentialId, expected: { accountPub: record.accountPub, kxPub: record.recoveryKxPub } }) } catch { return { ready: false, reason: 'unwrap-failed' } }
   return r && r.ok === true ? { ready: true } : { ready: false, reason: 'unwrap-failed' }
+}
+
+// --- the key-store routes (D1c: /v1/challenge, /v1/recovery/enrol, /v1/cred/*) ---------
+
+/** A consent challenge for `email` (audience `dir`): good at that address for 60 s, spent by one use. */
+export async function dirChallenge(email, deps) {
+  const r = await post(deps, '/v1/challenge', { email })
+  if (r.status !== 200 || typeof r.j?.challenge !== 'string') throw new DirectoryRefused(r.status === 429 ? 'rate-limited' : `http ${r.status}`)
+  return r.j.challenge
+}
+
+/**
+ * An account-signed request (`dreq.`) for one op, on a fresh challenge, over the
+ * binding that is bound. `subject` carries the op's bytes (Uint8Arrays).
+ * `deps.consent({ op, challenge, req }) → consent` supplies the consent the op
+ * needs (cred-add, rc-enrol): a native `cns.` or a WebAuthn assertion. The
+ * light tier has no consent key (dev. consentPub is null), so it can only be
+ * the WebAuthn form, from a credential the directory already holds:
+ * webauthnConsent below.
+ */
+export async function signedRequest({ record, subject }, deps) {
+  if (record?.state !== 'bound' || !record.bind?.text) throw new DirectoryRefused('not-bound')
+  const email = record.bind.address
+  const challenge = await dirChallenge(email, deps)
+  const req = buildDreq({ op: subject.op, address: email, bindHash: await sha256b64u(record.bind.text), challenge, arg: await dreqArg(subject) })
+  const sig = await signStatement(record.accountKey, req)
+  return { email, req, sig, challenge, consent: deps.consent ? await deps.consent({ op: subject.op, challenge, req }) : null }
+}
+
+/**
+ * The light tier's `deps.consent`: one WebAuthn ceremony over the only `cns.` the directory will accept.
+ * The directory never reads a `cns.` from the request. It rebuilds it from its own values plus the `exp` sent
+ * here, and requires the assertion to carry that hash, so the `exp` hashed and the `exp` sent must be the same
+ * number: read the clock ONCE. Two reads either side of an await differ by a millisecond now and then, and the
+ * consent is then refused as consent:webauthn:challenge. `deps.assert(credentialId, challenge) → assertion` is
+ * the seam directoryFetchBlob uses too; the purpose is the op, as the directory asks for it.
+ */
+export const webauthnConsent = ({ credentialId }, deps) => async ({ op, challenge, req }) => {
+  const exp = deps.now() + CONSENT_TTL_MS
+  const cns = buildConsent({ rp: 'bento', purpose: op, docId: null, transcript: await consentTranscript('dir', challenge, req), exp })
+  return { webauthn: await deps.assert(credentialId, await webauthnChallengeFor(cns)), exp }
+}
+
+const reasonOf = (r) => (typeof r.j?.reason === 'string' ? r.j.reason : r.status === 429 ? 'rate-limited' : `http ${r.status}`)
+
+/**
+ * The real `enrol` seam for retireRecovery: POST /v1/recovery/enrol with a
+ * `dreq.rc-enrol` over the exact body. `{ ok: true }` only on the directory's 200.
+ */
+export const directoryEnrol = ({ record }, deps) => async (m) => {
+  // PASSKEY FIRST. On the light tier a code that lands before any passkey marks the key as having had
+  // something, so a fresh email proof will not re-arm the setup allowance, and the account is left with a
+  // code, no passkey and no consent key. This tier enrols a code only by a passkey's WebAuthn consent.
+  if (typeof deps.consent !== 'function') throw new DirectoryRefused('passkey-first')
+  const bytes = new TextEncoder().encode(JSON.stringify({ v: 1, saltV: m.saltV, verifier: m.verifier, saltW: m.salt, iv: m.iv, ct: m.inner }))
+  const body = b64uEnc(bytes)
+  const q = await signedRequest({ record, subject: { op: 'rc-enrol', body: bytes } }, deps)
+  const r = await post(deps, '/v1/recovery/enrol', { ...q, body })
+  return r.status === 200 ? { ok: true } : { ok: false, reason: reasonOf(r) }
+}
+
+/**
+ * The real `fetchBlob` seam for passkeyBackupReady: one WebAuthn ceremony on a
+ * single-use challenge. `deps.assert(credentialId, challenge) → assertion` is
+ * the browser's navigator.credentials.get (or a rig's software key).
+ * Returns the stored blob, or null on any refusal.
+ */
+export const directoryFetchBlob = (deps) => async (credentialId) => {
+  const c = await post(deps, '/v1/cred/challenge', {})
+  if (c.status !== 200 || typeof c.j?.challenge !== 'string') return null
+  const r = await post(deps, '/v1/cred/get', { challenge: c.j.challenge, assertion: await deps.assert(credentialId, c.j.challenge) })
+  return r.status === 200 && r.j?.blob ? r.j.blob : null
+}
+
+/**
+ * The FIRST passkey, under the directory's setup allowance (security's ruling: the two-proof bind arms a
+ * 15-minute window for ONE cred-add with NO consent, into an empty account). POST /v1/cred/add with a
+ * `dreq.cred-add` over the exact registration bytes, sent with NO consent. This is the only op the light tier
+ * can send without one; every later cred-add goes by an existing passkey's consent via signedRequest.
+ *
+ * `deps.register(challenge) → { attestationObject, clientDataJSON, blob, attachment?, devicePub? }` runs the
+ * browser's navigator.credentials.create with `challenge` as the ceremony challenge: the registration's
+ * challenge IS the dir challenge the request spends. The bytes are Uint8Arrays; `blob` is the PRF blob.
+ * A failed registration uses the allowance up; the person asks for a new email code, which re-arms it.
+ */
+export const directoryCredAdd = ({ record }, deps) => async () => {
+  if (record?.state !== 'bound' || !record.bind?.text) throw new DirectoryRefused('not-bound')
+  if (typeof deps.register !== 'function') throw new DirectoryRefused('no-register')
+  const email = record.bind.address
+  const challenge = await dirChallenge(email, deps)
+  const reg = await deps.register(challenge)
+  const req = buildDreq({ op: 'cred-add', address: email, bindHash: await sha256b64u(record.bind.text), challenge, arg: await dreqArg({ op: 'cred-add', attestationObject: reg.attestationObject, clientDataJSON: reg.clientDataJSON }) })
+  const sig = await signStatement(record.accountKey, req)
+  const r = await post(deps, '/v1/cred/add', { email, req, sig, challenge, attestationObject: b64uEnc(reg.attestationObject), clientDataJSON: b64uEnc(reg.clientDataJSON), blob: reg.blob, attachment: reg.attachment, devicePub: reg.devicePub })
+  return r.status === 200 && r.j?.ok === true ? { ok: true } : { ok: false, reason: reasonOf(r) }
+}
+
+/**
+ * First-time setup, in the only order that does not strand a light-tier account: the passkey, then the code.
+ * The code is enrolled by the NEW passkey's ordinary WebAuthn consent (`deps.consent`, as for directoryEnrol),
+ * and only after the directory has acknowledged the passkey. If the passkey does not land, nothing is
+ * enrolled and the local recovery material is untouched. The UI says: a failed registration uses up the
+ * allowance and a new email code re-arms it. Firefox has no consent form (§33a), so it stops after the passkey.
+ */
+export async function firstCredentials({ db }, deps) {
+  const record = await db.get('self')
+  let add
+  try { add = await directoryCredAdd({ record }, deps)() } catch (e) { add = { ok: false, reason: e instanceof DirectoryRefused ? e.message : 'cred-add-failed' } }
+  if (!add.ok) return { ok: false, step: 'passkey', reason: add.reason }
+  const rc = await retireRecovery(db, directoryEnrol({ record }, deps), deps)
+  return rc.ok ? { ok: true } : { ok: false, step: 'code', passkey: true, reason: rc.reason }
 }

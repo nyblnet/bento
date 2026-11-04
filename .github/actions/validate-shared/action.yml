@@ -135,3 +135,32 @@ runs:
       # limits and per-IP limits hold; no raw address or IP at rest.
       shell: bento-step {0}
       run: node scripts/test-directory.ts
+
+    - name: bento/connect directory (device linking, passkeys, recovery code, ledger)
+      # Link slots complete once, a second scanner contends them, and the
+      # sealed key is released only after consent verified against the live,
+      # active binding. Passkey registration and removal need an account-signed
+      # request plus consent; the recovery verifier is stored peppered, releases
+      # after 72 hours, and is spent on use. Every refusal beside a control.
+      shell: bento-step {0}
+      run: node scripts/test-directory-keys.ts
+
+    - name: bento/connect directory mutants
+      # Each mutant reopens one path (the rotation grace, the rekey retry, a young
+      # recovery code resolving at once) in a copy of the tree, and a directory rig
+      # must fail a row. A mutant that no longer applies, or a rig that crashes
+      # instead of counting, fails this step.
+      shell: bento-step {0}
+      run: node scripts/test-directory-mutants.ts
+
+    - name: No frame is both scripted and same-origin
+      # Fails on any frame a document can cause that has allow-same-origin AND
+      # allow-scripts (or no sandbox at all), across every app's source and
+      # every built shell with its deflated payloads inflated. Type's print
+      # frame is allow-listed by name; two vendored Reveal frames are listed
+      # with their unreachability premise asserted. Placed here, after all the
+      # builds, because --require-built turns a missing shell into a failure
+      # instead of a quiet pass; the mutants (unsafe pair, dropped sandbox,
+      # computed value, extra frame) live in the rig.
+      shell: bento-step {0}
+      run: node scripts/test-frame-sandbox.mjs --require-built

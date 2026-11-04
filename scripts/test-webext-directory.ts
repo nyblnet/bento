@@ -20,26 +20,40 @@
 //   · the locally held recovery inner blob and verifier are deleted ONLY after
 //     the directory acknowledges (ok === true) — a refusal, a throw, a network
 //     failure, a non-boolean "truthy" answer and a record replaced while the
-//     request was in flight each keep everything.
-// The recovery-blob UPLOAD route is not in the directory yet (key-blob store,
-// D1c): the ack is a seam here, exercised with a stand-in directory answer.
+//     request was in flight each keep everything;
+//   · on the real key-store routes (rows shared with the manual HTTP rig, in
+//     scripts/lib/webext-directory-keystore.mjs): the first passkey goes in under
+//     the setup allowance, the code after it by that passkey's WebAuthn consent, a
+//     code before any passkey is refused locally, and the backup is ready only on
+//     a real fetch and unwrap;
+//   · a right code told a deletion is still being carried out is `try-later`,
+//     not `rejected`, and that same code completes the binding once it lands.
 
 import { argon2 as nodeArgon2 } from 'node:crypto'
-import worker, { Address, Ledger } from '../server/directory/src/worker.js'
+import worker, { Account, Address, Cred, Ledger, Link } from '../server/directory/src/worker.js'
+import { buildDel } from '../server/directory/src/statements.js'
+import { keyStoreRows } from './lib/webext-directory-keystore.mjs'
 
 const agent = await import('../home/webext/src/id/agent.js')
 const ks = await import('../home/webext/src/id/keystore.js')
 const dc = await import('../home/webext/src/id/directory.js')
 const st = await import('../home/webext/src/id/gen/statements.js')
 
-let failures = 0
-function ok(cond: boolean, msg: string) { if (!cond) { failures++; console.log(`  FAIL  ${msg}`) } else console.log(`  ok    ${msg}`) }
+let failures = 0, passes = 0
+function ok(cond: boolean, msg: string) { if (!cond) { failures++; console.log(`  FAIL  ${msg}`) } else { passes++; console.log(`  ok    ${msg}`) } }
+
+// the mail cooldown between two binds of one address is the only reason this rig moves the clock
+const realNow = Date.now
+let skew = 0
+Date.now = () => realNow() + skew
 
 const argon2id = (password: Uint8Array, salt: Uint8Array) => new Promise<Uint8Array>((res, rej) =>
   nodeArgon2('argon2id', { message: password, nonce: salt, parallelism: 1, tagLength: 32, memory: 65536, passes: 3 }, (e: any, k: any) => (e ? rej(e) : res(new Uint8Array(k)))))
 const memdb = () => { const m = new Map<string, any>(); return { m, get: async (k: string) => m.get(k) ?? null, put: async (k: string, v: any) => { m.set(k, v) }, del: async (k: string) => { m.delete(k) } } }
 
 // --- the real directory, in memory ------------------------------------------------
+// the next `n` calls of this op on this class throw before they arrive
+let chaos: { cls: any; op: string; n: number } | null = null
 function namespace(Klass: any, env: any) {
   const objs = new Map<string, any>()
   return {
@@ -51,11 +65,15 @@ function namespace(Klass: any, env: any) {
           async get(k: string) { return structuredClone(store.get(k)) },
           async put(k: string, v: unknown) { store.set(k, structuredClone(v)) },
           async delete(k: string | string[]) { for (const x of ([] as string[]).concat(k)) store.delete(x) },
-          async list() { return new Map(store) }, async setAlarm() {},
+          async list(o?: { prefix?: string }) { return new Map([...store].filter(([k]) => k.startsWith(o?.prefix ?? ''))) }, async setAlarm() {},
         } }, env))
       }
       const obj = objs.get(id)
-      return { fetch: (u: any, init?: any) => obj.fetch(u instanceof Request ? u : new Request(u, init)) }
+      return { fetch: async (u: any, init?: any) => {
+        const r = u instanceof Request ? u : new Request(u, init)
+        if (chaos && chaos.cls === Klass && chaos.n > 0 && (await r.clone().json().catch(() => ({}))).op === chaos.op) { chaos.n--; throw new Error('rig: this call fails') }
+        return obj.fetch(r)
+      } }
     },
   }
 }
@@ -65,8 +83,10 @@ const dirPub = st.b64uEnc(new Uint8Array(await crypto.subtle.exportKey('raw', di
 const otherKp = (await crypto.subtle.generateKey(EC, true, ['sign', 'verify'])) as CryptoKeyPair
 const otherPub = st.b64uEnc(new Uint8Array(await crypto.subtle.exportKey('raw', otherKp.publicKey)))
 const mailbox: { to: string; code: string }[] = []
-const env: any = { DIR_KID: 'dir-1', DIR_KEY_JWK: JSON.stringify(await crypto.subtle.exportKey('jwk', dirKp.privateKey)), DIR_PUBKEYS: '[]', MAILER: { send: (m: any) => { mailbox.push(m) } } }
+const env: any = { DIR_KID: 'dir-1', DIR_KEY_JWK: JSON.stringify(await crypto.subtle.exportKey('jwk', dirKp.privateKey)), DIR_PUBKEYS: '[]', MAILER: { send: (m: any) => { mailbox.push(m) } },
+  KEYSTORE: '1', CHALLENGE_KEY: 'rig-challenge-secret-0123456789abcdef', PEPPER_V1: st.b64uEnc(crypto.getRandomValues(new Uint8Array(32))) }
 env.ADDRESS = namespace(Address, env); env.LEDGER = namespace(Ledger, env)
+env.CRED = namespace(Cred, env); env.ACCOUNT = namespace(Account, env); env.LINK = namespace(Link, env)
 let ip = 0
 const toWorker = (tamper?: (path: string, body: any) => any) => async (url: string, init: any) => {
   const path = new URL(url).pathname
@@ -187,5 +207,31 @@ console.log('\n— the passkey backup is ready only after a read-back unwraps')
   }
   ok((await ready(async () => blob, crypto.getRandomValues(new Uint8Array(32)))).ready === false, 'the wrong PRF output: NOT ready')
 }
-console.log(failures ? `\n${failures} FAILED` : '\nall passed')
+
+console.log('\n— the key-store routes, in the only order that does not strand this tier')
+await keyStoreRows({ ok, deps: deps(), codeFor, argon2id })
+
+console.log('\n— a right code while a deletion is being carried out: try later, and the code still works')
+{
+  const r = await newId(); const addr = 'wipe@example.com'
+  const s1 = (await dc.bindStart({ record: r, email: addr }, deps())).pending
+  ok((await dc.bindComplete({ record: r, pending: s1, code: codeFor(addr) }, deps())).ok === true, 'CONTROL: bound before the delete')
+  chaos = { cls: Account, op: 'wipe', n: 1000 } // the Account object stays down
+  const ts = Date.now()
+  const del = await toWorker()('https://id.bento.page/v1/delete', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: addr, ts, sig: await st.signStatement(r.accountKey, buildDel(addr, ts)) }) })
+  ok(del.status === 204 && chaos.n < 1000, `CONTROL: the delete answers ${del.status} and its wipe really failed, so it is still owed`)
+  skew += 2 * 60_000 // past the per-address mail cooldown
+  const sent = mailbox.length
+  const s2 = (await dc.bindStart({ record: r, email: addr }, deps())).pending
+  ok(mailbox.length === sent + 1, 'CONTROL: a new code was mailed for the same key')
+  const code = codeFor(addr)
+  ok((await dc.bindComplete({ record: r, pending: s2, code: 'AAAAAAAA' }, deps())).reason === 'rejected', 'a wrong code while it is owed is still `rejected`: only the right code and key hear otherwise')
+  const later = await dc.bindComplete({ record: r, pending: s2, code }, deps())
+  ok(!later.ok && later.reason === 'try-later', `the right code while it is owed → try later, not rejected (${later.reason})`)
+  ok((await dc.bindComplete({ record: r, pending: s2, code }, deps())).reason === 'try-later', 'and asking again costs nothing')
+  chaos = null // the Account object is back
+  const landed = await dc.bindComplete({ record: r, pending: s2, code }, deps())
+  ok(landed.ok === true, `once the deletion lands, the SAME code completes the binding (${landed.reason ?? 'bound'})`)
+}
+console.log(failures ? `\n${failures} FAILED, ${passes} ok` : `\nall passed: ${passes} ok`)
 process.exit(failures ? 1 : 0)

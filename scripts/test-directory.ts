@@ -16,11 +16,22 @@
 //   · bind/start answers 202 whatever happens (no existence or limit oracle);
 //   · per-address mail limits stop mail-bombing; per-IP limits are enforced;
 //   · deletion (holder-signed, or by mailed code) leaves a SIGNED tombstone;
-//   · no raw address or IP is ever written to storage.
+//   · no raw address or IP is ever written to storage;
+//   · rotation: the old key's rot. vouch (kernel verifyRotation) + consent +
+//     the mailed code → 72 h pending (pins don't move) → active, serving the
+//     rot. and the earlier steps; refusals for
+//     replay, relay, payload swap and expiry (native cns. AND WebAuthn), each
+//     beside a working control; the WebAuthn origin, type, flag, sign-count,
+//     cross-origin and lockout rows;
+//   · freeze: only a POSTed single-use token freezes, a freeze ends a pending
+//     rotation, and a frozen binding honours neither key.
 
-import worker, { Address, Ledger, LIMITS } from '../server/directory/src/worker.js'
+import worker, { Address, Cred, Ledger, LIMITS } from '../server/directory/src/worker.js'
 import { addressKey, normalize } from '../server/directory/src/address.js'
-import { b64uEnc, buildBind, buildCmp, buildDel, sha256b64u as hashOf, signStatement, verifyAtt, verifyTomb } from '../kernel/src/statements.ts'
+import {
+  b64uDec, b64uEnc, buildBind, buildCmp, buildConsent, buildDel, buildDev, consentTranscript, sha256b64u as hashOf, signStatement,
+  verifyAtt, verifyTomb, webauthnChallengeFor, buildRot, verifyRotation, buildDreq, dreqArg,
+} from '../kernel/src/statements.ts'
 import { readFileSync } from 'node:fs'
 
 let fails = 0, passes = 0
@@ -93,6 +104,9 @@ const env: Record<string, unknown> = {
 }
 env.ADDRESS = namespace(Address as never)
 env.LEDGER = namespace(Ledger as never)
+env.CRED = namespace(Cred as never)
+env.CHALLENGE_KEY = 'rig-challenge-secret-0123456789abcdef'
+env.ROTATION = '1'
 const codeFor = (to: string) => [...mailbox].reverse().find((m) => m.to === to)?.code
 
 let ipN = 0
@@ -395,6 +409,346 @@ const alice = await person('alice@example.com', 'Alice')
 }
 
 // =====================================================================
+// D1b: consent challenges (audience `dir`), rotation, freeze (security §24, §25, §27)
+// =====================================================================
+{
+  mailbox.length = 0
+  const sha = async (b: Uint8Array) => new Uint8Array(await crypto.subtle.digest('SHA-256', b))
+  const enc = (t: string) => new TextEncoder().encode(t)
+  const challengeFor = async (email: string) => String((await api('POST', '/v1/challenge', { email }, freshIp())).j.challenge)
+
+  // --- challenges ---
+  const alice = await person('rot-alice@example.com', 'Alice')
+  await bind(alice)
+  const c1 = await api('POST', '/v1/challenge', { email: alice.email }, freshIp())
+  ok(c1.status === 200 && typeof c1.j.challenge === 'string' && b64uDec(String(c1.j.challenge))!.length === 40 && c1.j.audience === 'dir', 'a dir challenge is issued: 40 sealed bytes, audience dir')
+  ok((await api('POST', '/v1/challenge', { email: 'not an address' }, freshIp())).status === 400, 'no challenge for a malformed address')
+
+  // a native host's consent: a dev. cert from the CURRENT account key certifying a hardware consent key
+  type P = Awaited<ReturnType<typeof person>>
+  async function device(owner: P, consent = true) {
+    const dev = await signer(), cns = await signer()
+    const text = buildDev({ devicePub: dev.pub, consentPub: consent ? cns.pub : null, accountPub: owner.k.pub, kx: await kxPub(), label: null, created: now, expires: now + 30 * DAY })
+    return { dev: text, devSig: await owner.k.sign(text), cnsKey: cns }
+  }
+  async function nativeConsent(d: Awaited<ReturnType<typeof device>>, challenge: string, payload: string, o: { audience?: string; purpose?: string; exp?: number } = {}) {
+    const transcript = (await consentTranscript(o.audience ?? 'dir', challenge, payload))!
+    const cns = buildConsent({ rp: 'bento', purpose: (o.purpose ?? 'rotate') as never, docId: null, transcript, exp: o.exp ?? now + 2 * MIN })
+    return { dev: d.dev, devSig: d.devSig, cns, cnsSig: await d.cnsKey.sign(cns) }
+  }
+  async function rotation(owner: P, next: P) {
+    now += 2 * MIN // past the per-address mail cooldown left by the previous mail
+    const cur = await api('GET', '/v1/lookup?e=' + encodeURIComponent(owner.email), undefined, freshIp())
+    const was = String(cur.j.binding)
+    const seq = Number(was.split('.')[5]) + 1
+    const s = await stmtFor(next, seq, await hashOf(was))
+    const rot = buildRot(await hashOf(s.text), await hashOf(was))
+    return { stmt: s.text, sig: s.sig, rot, rotSig: await owner.k.sign(rot), was }
+  }
+  const rotStart = (body: Record<string, unknown>) => api("POST", "/v1/rotate/start", body, freshIp())
+  async function rotComplete(next: P, stmt: string) {
+    const code = codeFor(next.email)!
+    return api('POST', '/v1/rotate/complete', { email: next.email, code, sig: await next.k.sign(buildCmp(await hashOf(stmt), code)) }, freshIp())
+  }
+  const look = async (email: string) => api('GET', '/v1/lookup?e=' + encodeURIComponent(email), undefined, freshIp())
+  const attState = async (r: Awaited<ReturnType<typeof look>>) => {
+    const v = await verifyAtt(String(r.j.attestation), String(r.j.attestationSig), { directoryKeys: DIR_KEYS, bindText: String(r.j.binding), now, maxAgeMs: 10 * MIN })
+    return v.ok ? v.value.state : `bad:${v.reason}`
+  }
+
+  // --- rotation is OFF unless ROTATION=1 ---
+  {
+    const d = await device(alice), alice2 = { ...(await person(alice.email, 'Alice')) }
+    const r = await rotation(alice, alice2), ch = await challengeFor(alice.email)
+    delete env.ROTATION
+    ok((await rotStart({ ...r, challenge: ch, consent: await nativeConsent(d, ch, r.stmt) })).status === 404, 'rotation routes answer 404 unless ROTATION=1')
+    env.ROTATION = '1'
+  }
+
+  // --- the happy path: native consent → pending (72 h, pins do not move) → active ---
+  const alice2 = await person(alice.email, 'Alice')
+  {
+    const d = await device(alice)
+    const r = await rotation(alice, alice2), ch = await challengeFor(alice.email)
+    const st = await rotStart({ ...r, challenge: ch, consent: await nativeConsent(d, ch, r.stmt) })
+    ok(st.status === 202, `rotation start with old-key vouching + native cns. → 202 (got ${st.status} ${JSON.stringify(st.j)})`)
+    const m = mailbox[mailbox.length - 1]
+    ok(m && m.to === alice.email && (m as { kind?: string }).kind === 'rotate' && /^[2-9A-Z]{8}$/.test(m.code), 'the rotation code is mailed to the address')
+    ok(m && /#e=[A-Za-z0-9_-]+&t=[A-Za-z0-9_-]{43}$/m.test(m.body) && !m.body.includes('Alice'), 'the mail carries a freeze link (token in the fragment) and no user text')
+    const bad = await api('POST', '/v1/rotate/complete', { email: alice.email, code: m.code, sig: await alice.k.sign(buildCmp(await hashOf(r.stmt), m.code)) }, freshIp())
+    ok(bad.status === 400, 'rotation complete signed by the OLD key is refused (the new key proves the code)')
+    const done = await rotComplete(alice2, r.stmt)
+    ok(done.status === 200 && done.j.state === 'pending', 'rotation complete → pending')
+    let l = await look(alice.email)
+    ok(l.status === 200 && l.j.binding === r.was && l.j.state === 'pending' && (await attState(l)) === 'pending', 'while pending, lookups serve the OLD binding with a signed att.…pending (pins do not move)')
+    now += 72 * HOUR - MIN
+    l = await look(alice.email)
+    ok(l.j.binding === r.was && (await attState(l)) === 'pending', 'one minute before 72 h: still pending')
+    now += MIN
+    l = await look(alice.email)
+    ok(l.j.binding === r.stmt && l.j.state === 'active' && (await attState(l)) === 'active', 'at 72 h uncontested: the new binding is active')
+    ok(l.j.rot === r.rot && (await verifyRotation(r.was, String(l.j.binding), String(l.j.sig), String(l.j.rot), String(l.j.rotSig), { now })).ok, 'the lookup serves the OLD key\'s rot. vouch, and it passes kernel verifyRotation (pinners follow silently)')
+    ok(Array.isArray(l.j.steps) && (l.j.steps as { binding: string }[]).at(-1)!.binding === r.was, 'the replaced binding is served as a step, so a pinner further behind can follow')
+    ok((l.j.chain as string[]).includes(await hashOf(r.was)) && l.j.rebound === false, 'the old binding is in the chain; not flagged rebound')
+  }
+
+  // --- refusals, each beside a working control above; every one consumes its challenge ---
+  {
+    const d = await device(alice2)
+    const next = await person(alice.email, 'Alice')
+    const r = await rotation(alice2, next)
+    const reason = (x: Awaited<ReturnType<typeof rotStart>>) => String(x.j.reason)
+    let ch = await challengeFor(alice.email)
+    // spend-first: a failing attempt consumes the challenge, so the good one after it is a replay
+    const first = await rotStart({ ...r, challenge: ch, consent: await nativeConsent(d, ch, r.stmt, { audience: 'room:w' + 'A'.repeat(43) }) })
+    ok(first.status === 400 && reason(first) === 'consent:cns:transcript', `RELAY: a cns. made for another audience is refused (${reason(first)})`)
+    const again = await rotStart({ ...r, challenge: ch, consent: await nativeConsent(d, ch, r.stmt) })
+    ok(again.status === 400 && reason(again) === 'replay', 'REPLAY: the challenge was spent by the failed attempt, so even a good consent is refused')
+    ch = await challengeFor(alice.email)
+    const other = await stmtFor(next, 3, await hashOf(r.was), 6 * MONTH)
+    let x = await rotStart({ ...r, challenge: ch, consent: await nativeConsent(d, ch, other.text) })
+    ok(reason(x) === 'consent:cns:transcript', 'PAYLOAD SWAP: a cns. over a different bind. is refused')
+    ch = await challengeFor(alice.email)
+    x = await rotStart({ ...r, challenge: ch, consent: await nativeConsent(d, ch, r.stmt, { exp: now - 1 }) })
+    ok(reason(x) === 'consent:cns:expired', 'EXPIRED: a cns. past its exp is refused')
+    ch = await challengeFor(alice.email)
+    x = await rotStart({ ...r, challenge: ch, consent: await nativeConsent(d, ch, r.stmt, { purpose: 'link' }) })
+    ok(reason(x) === 'consent:cns:payload-family', 'a cns. for another purpose (link) does not authorise a rotation')
+    ch = await challengeFor('someone-else@example.com')
+    x = await rotStart({ ...r, challenge: ch, consent: await nativeConsent(d, ch, r.stmt) })
+    ok(x.status === 400 && reason(x) === 'challenge', 'a challenge issued for another address is refused (scope sealed in)')
+    ch = await challengeFor(alice.email)
+    const forged = b64uDec(ch)!; forged[30] ^= 1
+    x = await rotStart({ ...r, challenge: b64uEnc(forged), consent: await nativeConsent(d, b64uEnc(forged), r.stmt) })
+    ok(reason(x) === 'challenge', 'a challenge with a broken seal is refused')
+    ch = await challengeFor(alice.email)
+    now += 61_000
+    x = await rotStart({ ...r, challenge: ch, consent: await nativeConsent(d, ch, r.stmt) })
+    ok(reason(x) === 'challenge', 'a challenge older than 60 s is refused')
+    const r2 = await rotation(alice2, next) // re-made at the new time
+    ch = await challengeFor(alice.email)
+    x = await rotStart({ ...r2, rotSig: await next.k.sign(r2.rot), challenge: ch, consent: await nativeConsent(d, ch, r2.stmt) })
+    ok(reason(x) === 'rot:rot-signature', 'a rot. signed by the NEW key is refused')
+    ch = await challengeFor(alice.email)
+    { const sw = buildRot(await hashOf(r2.was), await hashOf(r2.stmt)); x = await rotStart({ ...r2, rot: sw, rotSig: await alice2.k.sign(sw), challenge: ch, consent: await nativeConsent(d, ch, r2.stmt) }) }
+    ok(reason(x) === 'rot:rot-mismatch', 'a rot. with its two hashes swapped is refused')
+    ch = await challengeFor(alice.email)
+    { const other = await stmtFor(next, Number(r2.was.split('.')[5]) + 1, await hashOf(r2.was), 5 * MONTH); const ro = buildRot(await hashOf(other.text), await hashOf(r2.was)); x = await rotStart({ ...r2, rot: ro, rotSig: await alice2.k.sign(ro), challenge: ch, consent: await nativeConsent(d, ch, r2.stmt) }) }
+    ok(reason(x) === 'rot:rot-mismatch', 'a rot. over a DIFFERENT next binding is refused')
+    ch = await challengeFor(alice.email)
+    x = await rotStart({ ...r2, rotSig: await alice2.k.sign(r2.stmt), challenge: ch, consent: await nativeConsent(d, ch, r2.stmt) })
+    ok(reason(x) === 'rot:rot-signature', 'the OLD scheme (old key signs the exact bind. bytes) is no longer a vouch')
+    ch = await challengeFor(alice.email)
+    x = await rotStart({ stmt: r2.stmt, sig: r2.sig, challenge: ch, consent: await nativeConsent(d, ch, r2.stmt) })
+    ok(reason(x) === 'rot:missing', 'no rot. at all is refused')
+    ch = await challengeFor(alice.email)
+    x = await rotStart({ ...r2, challenge: ch, consent: await nativeConsent(await device(alice), ch, r2.stmt) })
+    ok(reason(x) === 'consent:dev:account', 'a consent key certified by a RETIRED account key is refused')
+    ch = await challengeFor(alice.email)
+    x = await rotStart({ ...r2, challenge: ch, consent: await nativeConsent(await device(alice2, false), ch, r2.stmt) })
+    ok(reason(x) === 'consent:dev:no-consent-key', 'a dev. with no consent key (the light tier) cannot sign a cns.')
+    ch = await challengeFor(alice.email)
+    const same = await stmtFor(alice2, Number(r2.was.split('.')[5]) + 1, await hashOf(r2.was))
+    x = await rotStart({ stmt: same.text, sig: same.sig, rot: r2.rot, rotSig: r2.rotSig, challenge: ch, consent: await nativeConsent(d, ch, same.text) })
+    ok(reason(x) === 'same-key', 'the same key is a renewal, not a rotation')
+    ch = await challengeFor(alice.email)
+    const skip = await stmtFor(next, Number(r2.was.split('.')[5]) + 2, await hashOf(r2.was))
+    { const rs = buildRot(await hashOf(skip.text), await hashOf(r2.was)); x = await rotStart({ stmt: skip.text, sig: skip.sig, rot: rs, rotSig: await alice2.k.sign(rs), challenge: ch, consent: await nativeConsent(d, ch, skip.text) }) }
+    ok(reason(x) === 'sequence', 'a skipped seq is refused')
+    // the control for all of the above: the same request, correctly consented, works
+    ch = await challengeFor(alice.email)
+    x = await rotStart({ ...r2, challenge: ch, consent: await nativeConsent(d, ch, r2.stmt) })
+    ok(x.status === 202, 'CONTROL: the same rotation, correctly consented, is accepted')
+    ok((await rotComplete(next, r2.stmt)).status === 200, 'CONTROL: and completes to pending')
+    const third = await person(alice.email)
+    const r3 = await rotation(alice2, third)
+    ch = await challengeFor(alice.email)
+    x = await rotStart({ ...r3, challenge: ch, consent: await nativeConsent(d, ch, r3.stmt) })
+    ok(reason(x) === 'state', 'one rotation at a time: a second one while pending is refused')
+    {
+      now += 2 * MIN // past the per-address mail cooldown, so "nothing mailed" is the state rule and not the limit
+      const n0 = mailbox.length
+      const ren = await stmtFor(alice2, Number(r2.was.split('.')[5]) + 1, await hashOf(r2.was))
+      ok((await api('POST', '/v1/bind/start', { stmt: ren.text, sig: ren.sig }, freshIp())).status === 202 && mailbox.length === n0, 'while pending, a renewal by the old key answers 202 and mails nothing')
+    }
+
+    // --- CONTEST by the emailed freeze link: the pending rotation is discarded ---
+    const rm = [...mailbox].reverse().find((m) => m.to === alice.email && (m as { kind?: string }).kind === 'rotate')!
+    const token = String((rm as { freezeToken?: string }).freezeToken)
+    ok((await api('GET', '/freeze', undefined, freshIp())).status === 200, 'the freeze page is served')
+    let l = await look(alice.email)
+    ok(l.j.state === 'pending', 'opening the freeze page changes nothing (no action on a GET)')
+    ok((await api('POST', '/v1/freeze/complete', { email: alice.email, token: 'A'.repeat(43) }, freshIp())).status === 400, 'a wrong freeze token is refused')
+    const fz = await api('POST', '/v1/freeze/complete', { email: alice.email, token }, freshIp())
+    ok(fz.status === 200 && fz.j.state === 'frozen', 'the rotation mail\'s freeze link, POSTed, freezes')
+    ok((await api('POST', '/v1/freeze/complete', { email: alice.email, token }, freshIp())).status === 400, 'the freeze token is single-use')
+    l = await look(alice.email)
+    ok(l.j.binding === r2.was && l.j.state === 'frozen' && (await attState(l)) === 'frozen', 'frozen: the last binding is served with a signed att.…frozen')
+    now += 73 * HOUR
+    l = await look(alice.email)
+    ok(l.j.binding === r2.was && (await attState(l)) === 'frozen', 'a contested rotation never becomes active, even after 72 h')
+    // neither key is honoured while frozen
+    const r4 = await rotation(alice2, third)
+    ch = await challengeFor(alice.email)
+    x = await rotStart({ ...r4, challenge: ch, consent: await nativeConsent(d, ch, r4.stmt) })
+    ok(reason(x) === 'state', 'frozen: no rotation out of it (only the recovery code resolves a freeze)')
+    const ts = now
+    const del = await api('POST', '/v1/delete', { email: alice.email, ts, sig: await alice2.k.sign(buildDel(alice.email, ts)) }, freshIp())
+    ok(del.status === 400, 'frozen: a holder delete is refused (it would reopen the address to an email-only re-bind)')
+    const n0 = mailbox.length
+    const ren = await stmtFor(alice2, Number(r2.was.split('.')[5]) + 1, await hashOf(r2.was))
+    ok((await api('POST', '/v1/bind/start', { stmt: ren.text, sig: ren.sig }, freshIp())).status === 202 && mailbox.length === n0, 'frozen: a renewal by the old key mails nothing')
+  }
+
+  // --- the email-only freeze from cold, and expiry clears it ---
+  {
+    const bob = await person('rot-bob@example.com')
+    const n0 = mailbox.length
+    ok((await api('POST', '/v1/freeze/start', { email: bob.email }, freshIp())).status === 202 && mailbox.length === n0, 'freeze/start for an unbound address: 202, nothing mailed')
+    const { s } = await bindFor(bob, 1, undefined, 2 * MONTH)
+    now += 2 * MIN
+    ok((await api('POST', '/v1/freeze/start', { email: bob.email }, freshIp())).status === 202, 'freeze/start for a live binding: 202')
+    const fm = mailbox[mailbox.length - 1] as { to: string; kind?: string; freezeToken?: string; body: string }
+    ok(fm.to === bob.email && fm.kind === 'freeze' && fm.body.includes(fm.freezeToken!), 'the freeze mail carries a single-use link')
+    ok((await api('POST', '/v1/freeze/complete', { email: bob.email, token: fm.freezeToken }, freshIp())).j.state === 'frozen', 'POSTing it freezes')
+    ok((await attState(await look(bob.email))) === 'frozen', 'the binding is frozen')
+    ok((await api('POST', '/v1/freeze/start', { email: bob.email }, freshIp())).status === 202 && mailbox[mailbox.length - 1] === (fm as never), 'an already-frozen binding mails nothing more')
+    now += 2 * MONTH + DAY
+    ok((await look(bob.email)).status === 404, 'a frozen binding still expires')
+    const bob2 = await person(bob.email)
+    const re = await bindFor(bob2, 1)
+    ok(re.c.status === 200 && (await attState(await look(bob.email))) === 'active' && re.c.j.rebound === true, 'after expiry the address can be bound again by email (flagged rebound), and the freeze is gone')
+    void s
+  }
+  {
+    const tokens = mailbox.map((m) => (m as { freezeToken?: string }).freezeToken).filter((t): t is string => !!t)
+    const dump = JSON.stringify(stores.map((m) => [...m.entries()].map(([k, v]) => [k, [...(v as Map<string, unknown>).entries()]])))
+    ok(tokens.length >= 3 && tokens.every((t) => !dump.includes(t)), `freeze tokens are stored only as hashes (${tokens.length} checked)`)
+  }
+
+  // --- light-tier consent: a WebAuthn assertion verified by the directory (§9.6c) ---
+  {
+    const carol = await person('rot-carol@example.com')
+    await bind(carol)
+    const pk = await signer()
+    const credId = b64uEnc(crypto.getRandomValues(new Uint8Array(32)))
+    const cKey = b64uEnc(await sha(b64uDec(credId)!))
+    const scope = await addressKey(carol.email)
+    ;(env.CRED as { get(id: string): unknown }).get(cKey) // materialise, then seed its storage (registration arrives with the key-blob store)
+    const credStore = stores.find((m) => m.has(cKey))!.get(cKey)!
+    // one credential, re-pointed at each person below; its failure counter starts clean each time
+    const seed = (rec: Record<string, unknown>) => { credStore.set('cred', rec); credStore.delete('fails'); credStore.delete('lockedUntil') }
+    seed({ scope, accountPub: carol.k.pub, pub: pk.pub, signCount: 0, be: true, attachment: 'platform', devicePub: null, created: now })
+
+    const toDer = (raw: Uint8Array) => {
+      const int = (v: Uint8Array) => { let i = 0; while (i < 31 && v[i] === 0) i++; v = v.slice(i); return v[0] & 0x80 ? Uint8Array.of(0, ...v) : v }
+      const r = int(raw.slice(0, 32)), s = int(raw.slice(32))
+      return Uint8Array.of(0x30, r.length + s.length + 4, 0x02, r.length, ...r, 0x02, s.length, ...s)
+    }
+    async function assertion(challengeB64: string, o: { origin?: string; type?: string; flags?: number; count?: number; extra?: Record<string, unknown>; key?: CryptoKey; id?: string } = {}) {
+      const rp = await sha(enc('bento.page'))
+      const ad = new Uint8Array(37); ad.set(rp, 0); ad[32] = o.flags ?? 0x05
+      new DataView(ad.buffer).setUint32(33, o.count ?? 0)
+      const cdj = enc(JSON.stringify({ type: o.type ?? 'webauthn.get', challenge: challengeB64, origin: o.origin ?? 'https://bento.page', ...(o.extra ?? {}) }))
+      const signed = new Uint8Array(ad.length + 32); signed.set(ad); signed.set(await sha(cdj), ad.length)
+      const raw = new Uint8Array(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, o.key ?? pk.kp.privateKey, signed))
+      return { credentialId: o.id ?? credId, authenticatorData: b64uEnc(ad), clientDataJSON: b64uEnc(cdj), signature: b64uEnc(toDer(raw)) }
+    }
+    async function wa(ch: string, payload: string, o: Parameters<typeof assertion>[1] & { audience?: string; exp?: number } = {}) {
+      const exp = o.exp ?? now + 2 * MIN
+      const transcript = (await consentTranscript(o.audience ?? 'dir', ch, payload))!
+      const cns = buildConsent({ rp: 'bento', purpose: 'rotate', docId: null, transcript, exp })
+      return { webauthn: await assertion(await webauthnChallengeFor(cns), o), exp }
+    }
+    const carol2 = await person(carol.email)
+    const r = await rotation(carol, carol2)
+    const reason = (x: Awaited<ReturnType<typeof rotStart>>) => String(x.j.reason)
+    const tryWa = async (o: Parameters<typeof wa>[2] = {}, payload = r.stmt) => {
+      const ch = await challengeFor(carol.email)
+      return rotStart({ ...r, challenge: ch, consent: await wa(ch, payload, o) })
+    }
+    // the refusals first (each spends its own challenge); fewer than 5 in a row, so no lock yet
+    ok(reason(await tryWa({ audience: 'room:w' + 'A'.repeat(43) })) === 'consent:webauthn:challenge', 'WebAuthn RELAY: a cns. for another audience is refused')
+    ok(reason(await tryWa({}, (await stmtFor(carol2, 2, await hashOf(r.was), 5 * MONTH)).text)) === 'consent:webauthn:challenge', 'WebAuthn PAYLOAD SWAP is refused')
+    ok(reason(await tryWa({ exp: now - 1 })) === 'consent:expired', 'WebAuthn EXPIRED consent is refused')
+    ok(reason(await tryWa({ exp: now + 6 * MIN })) === 'consent:lifetime', 'WebAuthn consent living longer than 5 minutes is refused')
+    {
+      const ch = await challengeFor(carol.email)
+      const c = await wa(ch, r.stmt)
+      const a1 = await rotStart({ ...r, challenge: ch, consent: { ...c, webauthn: { ...c.webauthn, signature: c.webauthn.signature.slice(0, -4) + 'AAAA' } } })
+      ok(reason(a1) === 'consent:webauthn:signature', 'a bad assertion signature is refused')
+      ok(reason(await rotStart({ ...r, challenge: ch, consent: c })) === 'replay', 'WebAuthn REPLAY: the spent challenge refuses even a good assertion')
+    }
+    // control → accepted (resets the failure counter)
+    let x = await tryWa({ count: 5 })
+    ok(x.status === 202, `CONTROL: WebAuthn consent from https://bento.page is accepted (${JSON.stringify(x.j)})`)
+    mailbox.length = 0
+    // origin allow-list: exact strings; desktop native origins are self-asserted, never consent evidence.
+    // Carol now has a rotation in flight, so these rows run against a new person.
+    const dave = await person('rot-dave@example.com'); await bind(dave)
+    seed({ scope: await addressKey(dave.email), accountPub: dave.k.pub, pub: pk.pub, signCount: 5, be: true, attachment: 'platform', devicePub: null, created: now })
+    const dave2 = await person(dave.email)
+    const rd = await rotation(dave, dave2)
+    const tryD = async (o: Parameters<typeof wa>[2] = {}) => {
+      const ch = await challengeFor(dave.email)
+      return rotStart({ ...rd, challenge: ch, consent: await wa(ch, rd.stmt, o) })
+    }
+    ok(reason(await tryD({ count: 6, origin: 'https://bento.page/' })) === 'consent:webauthn:origin', 'origin near-miss https://bento.page/ is refused')
+    ok(reason(await tryD({ count: 6, origin: 'https://bento.page.evil' })) === 'consent:webauthn:origin', 'origin near-miss https://bento.page.evil is refused')
+    ok(reason(await tryD({ count: 6, origin: 'bento-desktop:linux' })) === 'consent:webauthn:origin', 'a self-asserted desktop origin is never consent evidence')
+    credStore.delete('fails') // three failures so far; keep the next rows clear of the five-failure lock
+    env.DEV = '1'; env.DEV_ORIGINS = JSON.stringify(['chrome-extension://devid'])
+    ok(reason(await tryD({ count: 6, origin: 'chrome-extension://devid2' })) === 'consent:webauthn:origin', 'DEV: a one-character near-miss of the dev extension id is refused')
+    ok(reason(await tryD({ count: 6, origin: 'BENTO-DESKTOP:linux' })) === 'consent:webauthn:origin', 'origin match is case-exact')
+    x = await tryD({ count: 6, origin: 'chrome-extension://devid' })
+    ok(x.status === 202, 'DEV=1 with DEV_ORIGINS: the development extension id is accepted (CONTROL for the origin rows)')
+    delete env.DEV; delete env.DEV_ORIGINS
+    {
+      const ch = await challengeFor(dave.email) // dave is pending now; the refusal must come from the origin, so use a fresh person
+      void ch
+      const gina = await person('rot-gina@example.com'); await bind(gina)
+      seed({ scope: await addressKey(gina.email), accountPub: gina.k.pub, pub: pk.pub, signCount: 0, be: true, attachment: 'platform', devicePub: null, created: now })
+      const gina2 = await person(gina.email)
+      const rg = await rotation(gina, gina2)
+      const ch2 = await challengeFor(gina.email)
+      ok(reason(await rotStart({ ...rg, challenge: ch2, consent: await wa(ch2, rg.stmt, { origin: 'chrome-extension://devid' }) })) === 'consent:webauthn:origin', 'the production config (no DEV) refuses the development extension id')
+    }
+    // the remaining WebAuthn field checks, against a third person
+    const erin = await person('rot-erin@example.com'); await bind(erin)
+    seed({ scope: await addressKey(erin.email), accountPub: erin.k.pub, pub: pk.pub, signCount: 10, be: true, attachment: 'platform', devicePub: null, created: now })
+    const erin2 = await person(erin.email)
+    const re = await rotation(erin, erin2)
+    const tryE = async (o: Parameters<typeof wa>[2] = {}) => {
+      const ch = await challengeFor(erin.email)
+      return rotStart({ ...re, challenge: ch, consent: await wa(ch, re.stmt, o) })
+    }
+    ok(reason(await tryE({ count: 11, type: 'webauthn.create' })) === 'consent:webauthn:type', 'a webauthn.create clientData is refused')
+    ok(reason(await tryE({ count: 11, flags: 0x01 })) === 'consent:webauthn:flags', 'an assertion without UV is refused')
+    ok(reason(await tryE({ count: 11, extra: { crossOrigin: true } })) === 'consent:webauthn:cross-origin', 'crossOrigin: true is refused')
+    ok(reason(await tryE({ count: 11, extra: { topOrigin: 'https://evil.example' } })) === 'consent:webauthn:cross-origin', 'a topOrigin is refused')
+    // five consecutive failures lock the credential for 15 minutes
+    ok(reason(await tryE({ count: 9 })) === 'consent:webauthn:sign-count', 'a sign-count regression is refused (the fifth failure in a row)')
+    ok(reason(await tryE({ count: 12 })) === 'consent:webauthn:locked', 'five consecutive failures lock the credential: even a good assertion is refused')
+    now += 15 * MIN + 1
+    const re2 = await rotation(erin, erin2)
+    {
+      const ch = await challengeFor(erin.email)
+      x = await rotStart({ ...re2, challenge: ch, consent: await wa(ch, re2.stmt, { count: 0 }) })
+      ok(x.status === 202, 'after the lock: a signCount of 0 (synced passkey) is accepted')
+    }
+    // a credential bound to ANOTHER address is unknown here
+    const frank = await person('rot-frank@example.com'); await bind(frank)
+    const frank2 = await person(frank.email)
+    const rf = await rotation(frank, frank2)
+    {
+      const ch = await challengeFor(frank.email)
+      ok(reason(await rotStart({ ...rf, challenge: ch, consent: await wa(ch, rf.stmt, { count: 20 }) })) === 'consent:webauthn:unknown', 'a credential registered to another address is refused')
+    }
+  }
+  mailbox.length = 0
+}
+
+// =====================================================================
 // nothing identifying at rest
 // =====================================================================
 {
@@ -403,7 +757,7 @@ const alice = await person('alice@example.com', 'Alice')
   // (base64url, which is an encoding, not protection). What must hold: storage is
   // KEYED by a hash, so nothing lists addresses, and no OTHER copy exists.
   ok(!/@example\.com/.test(dump), 'no plaintext address anywhere in storage, beyond the signed statement it serves')
-  ok(stores.every((m) => [...m.keys()].every((k) => k === 'ledger' || /^[0-9a-f]{64}$/.test(k))), 'every address object is named by a hash, never the address')
+  ok(stores.every((m) => [...m.keys()].every((k) => k === 'ledger' || /^[0-9a-f]{64}$/.test(k) || /^[A-Za-z0-9_-]{43}$/.test(k))), 'every object is named by a hash (address or credential), never the address')
   ok(!/10\.0\.\d+\.\d+/.test(dump), 'no raw IP in storage')
 }
 

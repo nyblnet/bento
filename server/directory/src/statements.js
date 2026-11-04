@@ -11,9 +11,13 @@
 import { buildAtt, buildTomb, signStatement } from '../../../kernel/src/statements.ts'
 
 export {
-  b64uEnc, buildBind, buildCmp, buildDel, sha256b64u as hashOf,
-  verifyBind, verifyCmp, verifyDel,
+  b64uDec, b64uEnc, buildBind, buildCmp, buildConsent, buildDel, consentTranscript, CONSENT_MAX_TTL_MS,
+  sha256b64u as hashOf, verifyBind, verifyCmp, verifyConsent, verifyDel, verifyDev, verifyStatementSig,
+  webauthnChallengeFor, verifyDreq, dreqNeedsConsent, verifyRotation, buildRot,
 } from '../../../kernel/src/statements.ts'
+
+// device linking (link v1): the slot's token hash, its wire and the release check are kernel's too
+export { decodeSlotMsg, linkTokHash, verifyLinkRelease } from '../../../kernel/src/link.ts'
 
 /**
  * `att.<hash(bind)>.<verifiedAt>.<issuedAt>.<kid>.<state>`, signed with the
