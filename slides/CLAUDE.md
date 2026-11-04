@@ -19,7 +19,15 @@ anim, charts, i18n, sync), shared by every app.
   into the row of chips. Verified by measurement, not belief: on that morph
   arrival all four tiles travel, 13 elements stagger in, and the count-up runs
   0→100%. Charts slide + hidden pie state demo the bar⇄pie data morph, speaker
-  notes double as the feature tour. Gotchas learned
+  notes double as the feature tour. It is also the reference for how a deck is BUILT:
+  every layer named, background/bokeh/furniture/milestones grouped, auto-layout
+  frames wherever things line up (logo, anatomy card, stats, panels, cards),
+  three components (Key hint, Button — its copies override label or paint —
+  and Feature card), and EVERY colour (text included, by RGB, alpha kept),
+  border width, recurring radius, gap/pad and font family bound to `theme.tokens`
+  (`bindAllTokens`; near-twin colours snapped onto one token via SNAP).
+  `starterDoc()` ends with a derive pass so the shipped doc is a fixed point;
+  `scripts/test-slides-starterdeck.ts` guards that and the structure. Gotchas learned
   building it: line shapes take their color from `fill` (not `stroke` — the
   stroke attr is what morphs tween), and the renderer draws lines horizontally
   across the element box (vertical lines = rotation), keep 96px side margins
