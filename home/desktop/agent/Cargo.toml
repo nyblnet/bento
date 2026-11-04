@@ -20,6 +20,9 @@ unicode-normalization = "0.1"
 [target.'cfg(target_os = "linux")'.dependencies]
 tss-esapi = { version = "7", optional = true }
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_SystemInformation"] }
+
 [features]
 # the Linux TPM key store (needs libtss2)
 tpm = ["dep:tss-esapi"]
