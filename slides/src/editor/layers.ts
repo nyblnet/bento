@@ -27,8 +27,9 @@ export interface LayersHost {
   /** put elements inside a frame at a slot, or beside an element (taking
    *  them out of their frames), as one undo step */
   reparent?: (ids: string[], to: { frame: string; slot: number } | { beside: string; above: boolean }) => void
-  /** flip an element's `locked` or `hidden`, as one undo step */
-  toggle?: (id: string, key: 'locked' | 'hidden') => void
+  /** flip `locked` or `hidden` on elements, as one undo step: all on unless
+   *  every one already is (a group row acts on its members like this) */
+  toggle?: (ids: string[], key: 'locked' | 'hidden') => void
   /** ids on this slide that morph from an element on the slide before */
   paired?: () => ReadonlySet<string>
 }
@@ -234,7 +235,7 @@ export class LayersUI {
         badge.title = t('Morphs from the slide before')
         row.appendChild(badge)
       }
-      if (this.host.toggle && !this.host.readOnly?.()) row.append(this.flagButton(r, 'locked'), this.flagButton(r, 'hidden'))
+      if (this.host.toggle && !this.host.readOnly?.()) row.append(this.flagButton([r.id], !!r.locked, 'locked'), this.flagButton([r.id], !!r.hidden, 'hidden'))
       row.title = r.label
       row.addEventListener('click', (ev) => this.onClick(ev, r))
       label.addEventListener('dblclick', (ev) => { ev.stopPropagation(); this.rename(r.id) })
@@ -308,7 +309,12 @@ export class LayersUI {
     label.textContent = this.host.slide().elements.find((e) => e.groupId === gid)?.groupName || t('Group of {n}', { n: members.length })
     label.addEventListener('dblclick', (ev) => { ev.stopPropagation(); this.renameGroup(gid) })
     row.append(fold, glyph, label)
-    const all = this.host.slide().elements.filter((e) => e.groupId === gid).map((e) => e.id)
+    const els = this.host.slide().elements.filter((e) => e.groupId === gid)
+    const all = els.map((e) => e.id)
+    // a group locks and hides like any layer: its flag is on when every member's is
+    const flags = { locked: els.every((e) => e.locked), hidden: els.every((e) => e.hidden) }
+    if (flags.hidden) row.classList.add('is-hidden')
+    if (this.host.toggle && !this.host.readOnly?.()) row.append(this.flagButton(all, flags.locked, 'locked'), this.flagButton(all, flags.hidden, 'hidden'))
     row.addEventListener('click', (ev) => {
       const cur = [...this.host.selection()]
       if (ev.shiftKey || ev.metaKey || ev.ctrlKey) {
@@ -345,8 +351,7 @@ export class LayersUI {
   }
 
   /** A row's padlock or eye: shown on hover, and always while it is on. */
-  private flagButton(r: LayerRow, key: 'locked' | 'hidden'): HTMLElement {
-    const on = !!r[key]
+  private flagButton(ids: string[], on: boolean, key: 'locked' | 'hidden'): HTMLElement {
     const b = document.createElement('button')
     b.type = 'button'
     b.className = `ed-layer-act ed-layer-${key}` + (on ? ' on' : '')
@@ -357,7 +362,7 @@ export class LayersUI {
     b.setAttribute('aria-label', label)
     b.setAttribute('aria-pressed', String(on))
     b.draggable = false
-    b.addEventListener('click', (ev) => { ev.stopPropagation(); this.host.toggle!(r.id, key) })
+    b.addEventListener('click', (ev) => { ev.stopPropagation(); this.host.toggle!(ids, key) })
     return b
   }
 

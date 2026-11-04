@@ -279,11 +279,13 @@ export class PropsPanel {
         else delete el.groupName
       }
     }),
-    toggle: (id, key) => this.store.commit(() => {
-      const el = this.store.element(id)
-      if (!el) return
-      if (el[key]) delete el[key]
-      else el[key] = true
+    toggle: (ids, key) => this.store.commit(() => {
+      const els = ids.map((id) => this.store.element(id)).filter((el) => !!el)
+      const on = !els.every((el) => el[key])
+      for (const el of els) {
+        if (on) el[key] = true
+        else delete el[key]
+      }
     }),
     paired: () => morphPairs(this.store.doc, this.store.slide),
   })
