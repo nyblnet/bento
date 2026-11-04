@@ -12312,9 +12312,10 @@ neither); the Windows key store is an explicit stub that refuses everything unti
   engine has been seen producing that order). The rig scenario is security's race
   on both engines, read from the host's own arming line (the swap landed between the two serves in
   9 or 10 of 10 attempts on WebKitGTK and 7 or 8 of 10 on WebView2, and every one armed unknown).
-  Each rule has a rig mutant on WebKitGTK: without the AND the old page's own fetch makes the
-  attacker's bytes arm genuine and reach the agent, and without the take a saved, reloaded document
-  stays unknown. Fixing the verdict at the start has a unit and a unit mutant only, since no engine
+  The AND has a rig mutant on WebKitGTK: without it the old page's own fetch makes the attacker's
+  bytes arm genuine and reach the agent (measured before the taint below, which now stands behind it
+  too). The take has units only since the taint: its rig row was a saved, reloaded unknown document
+  arming genuine, which no longer happens by design. Fixing the verdict at the start has a unit and a unit mutant only, since no engine
   has shown the order it guards. It fails closed in one way worth knowing: a page that fetched its
   own URL while unknown makes its next load unknown too.
 - **The WebKitGTK page cache is off, because a load needs a document serve (Linux).** Going back
@@ -12329,8 +12330,40 @@ neither); the Windows key store is an explicit stub that refuses everything unti
   webview, and the host stops if it does not hold. The same scenario now serves the document before
   the load starts, and removing the setting turns that row red. On WebView2 the same scenario also
   served the document and reloaded, with no setting; why is not read, so the row is what holds it.
-  The rule rests on the engine: a future engine that restores a page without a serve reopens this.
-  Only this path was examined: a history traversal after a bounce.
+  This setting is the second layer, not the rule: it proves a negative about one engine build, and
+  the host does not ship the engine (distro WebKitGTK, evergreen WebView2, which has no such
+  setting). What holds without it is the taint below; a rig row turns the cache back on to show that.
+- **A load that started off the document never mints (all platforms).** Security measured a remote
+  https page reaching the agent on WebKitGTK: an unknown document swapped a genuine shell over its
+  file, fetched its own URL so a genuine verdict sat on the books, and sent the main frame to https.
+  The bounce's navigate changed what the engine reported, so that load's finish carried the
+  document's URL, the mint took the verdict, and the secret landed in the https page, whose realm
+  has the shim and Tauri's IPC. `load_started` now takes whether the URL is the document's, and if
+  it is not, the load has no verdict (the tally is still taken). WebView2 reports the https URL at
+  that finish, so it was not reachable that way; the row runs on both engines. The row's page
+  catches a delivery of its own as a control, and must catch no other.
+- **One unknown serve taints the webview, for good (all platforms).** A tainted Load never mints
+  genuine; only a new webview is a new Load. Every route found to a genuine verdict for unknown
+  bytes (the race, the reload before a finish, the restored page, the https page) begins with
+  unknown script running in this webview, and that takes an unknown serve here. So the rule needs no
+  knowledge of which serve was which, and no engine's ordering carries unknown to genuine.
+  Requiring a document serve instead cannot be built: WebKitGTK sends no Sec-Fetch on `bento://`, and
+  an XHR setting the two headers a document request has arrives identical in the handler.
+  Each of the two rules closes what the other does not, and each has a rig mutant showing it: with
+  the first removed the https page still takes the file capability; with the taint removed and the
+  page cache on, an unknown page comes back whole and arms genuine.
+- **The cost, stated: a document re-saved genuine stays unknown until it is opened again.** If an
+  unknown document writes genuine bytes over its own file and reloads, those bytes run and identity
+  stays off in that window; closing and reopening the file arms it genuine (both rig rows). It keeps
+  its file capability throughout, so it opens, edits and saves as before. The watchdog's rebuild
+  counts as a reopen, correctly, since nothing that ran survives it. **A normal user saving a
+  genuine document is not affected:** the taint needs an unknown serve, a document's bytes change
+  only by the host's own write, and a genuine runtime's save is genuine. Measured on the real 1.2.10
+  release: saved by its own serializer and reloaded in the same webview, both loads serve genuine
+  and arm genuine, and identity stays on. A document made by a release newer than the bundled
+  history is unknown before and after, with or without this rule. The residual is a FRESH webview
+  running unknown bytes with no serve, which has nothing to taint it and only a persisted service
+  worker could do; registering the document as one is refused, and that is a row on both engines.
 - **A document's URL includes its fragment (all platforms).** The host compared the URL exactly,
   but a page moves its own fragment without asking: `history.pushState` is invisible on both
   engines (bento/spaces does it on every page change), and a plain `#x` link is invisible on

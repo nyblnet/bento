@@ -72,6 +72,10 @@
     if (MODE === 'fragment') return runFragment()
     if (MODE === 'race' || MODE === 'resave') return runRace()
     if (MODE === 'restore') return runRestore()
+    if (MODE === 'leave' || MODE === 'leavestop') return runLeave()
+    if (MODE === 'pushback') return runPushBack()
+    if (MODE === 'swreg') return runSwReg()
+    if (MODE === 'realsave') return runRealSave()
     if (MODE === 'oac') return runOac()
     if (MODE === 'acl') return runAcl()
     // §19h wedge scenario: once armed, count a heartbeat through the host every
@@ -387,7 +391,9 @@
   // to get a genuine verdict for its own unknown bytes: it reloads, and swaps a genuine shell
   // over its own file after the reload's document was served and before the commit ends the
   // old page. Both pages then fetch their own URL, which serves the genuine bytes.
-  // `resave` is the honest route: the same swap, finished BEFORE the reload.
+  // `resave` is the same swap, finished BEFORE the reload: the bytes that load are genuine, and
+  // they stay unknown to the host because unknown script ran in this webview. Opening the
+  // file again is what makes them genuine (scenario `reopened`).
   async function runRace() {
     const stage = sessionStorage.getItem('race')
     await until(() => window.__rigCap, 15000)
@@ -438,6 +444,83 @@
       return report('stayed')
     }
     await report('reloaded')
+  }
+
+  // Puts a genuine verdict on the books while unknown bytes run: a genuine shell over the file,
+  // then the document's own URL fetched.
+  async function bookGenuine(cap, tag) {
+    const name = JSON.parse(await inv('bento_file', { msg: JSON.stringify({ id: tag + '-b', op: 'begin', launch: true }), cap })).value
+    await inv('bento_file', { msg: JSON.stringify({ id: tag + '-w', op: 'write', name, text: window.__RIG_RACE_G }), cap })
+    const x = new XMLHttpRequest(); x.open('GET', location.href, false); try { x.send() } catch (_) {}
+  }
+
+  // B5, security's chain: an unknown document books a genuine verdict and leaves for https. The
+  // hostile page is rig/embed.html (?b5). Afterwards the bounce brings back the file, which is
+  // now the genuine shell, in a webview that ran unknown script.
+  async function runLeave() {
+    const stage = sessionStorage.getItem('leave')
+    await until(() => window.__rigCap, 15000)
+    const cap = window.__rigCap
+    const attacker = document.getElementById('bento-doc').textContent.includes('"docId":"rig-u"')
+    await mark(`leave stage=${stage || 0} attacker=${attacker} armed=${!!cap}`)
+    if (!stage && attacker) {
+      await bookGenuine(cap, 'leave')
+      await mark('leave-going')
+      sessionStorage.setItem('leave', '1')
+      location.href = EMBED_URL + (MODE === 'leavestop' ? '?b5-stop' : '?b5')
+      return
+    }
+    await inv('rig_done', { report: { leave: { stage: stage || '0', attacker, armed: !!cap, id: await idCall(cap, 'sign') } } })
+  }
+
+  // A move back through history that serves nothing, with a verdict on the books: same-document, so
+  // no load may start and nothing may mint.
+  async function runPushBack() {
+    await until(() => window.__rigCap, 15000)
+    const cap = window.__rigCap
+    history.pushState({}, '', '#p')
+    await bookGenuine(cap, 'pushback')
+    await mark('pushback-going')
+    history.back()
+    await sleep(3000)
+    await inv('rig_done', { report: { pushback: { hash: location.hash, same_cap: window.__rigCap === cap, id: await idCall(cap, 'sign') } } })
+  }
+
+  // A service worker is the one thing that could run unknown bytes in a FRESH webview, which has no
+  // unknown serve to taint it. The document's origin serves only "/", as text/html, so a
+  // registration must fail. The control is a real script from the same origin (rig builds only).
+  async function runSwReg() {
+    await until(() => window.__rigCap, 15000)
+    const S = { secure: isSecureContext, api: 'serviceWorker' in navigator }
+    const reg = (u) => S.api ? within(navigator.serviceWorker.register(u).then((r) => r.unregister().then(() => 'registered')), 8000, 'no answer').catch((e) => 'refused: ' + e) : 'no api'
+    S.doc = await reg('/')
+    S.query = await reg('/?sw')
+    S.control = await reg('/rig-sw.js')
+    await inv('rig_done', { report: { swreg: S } })
+  }
+
+  // The normal user: the real release, saved by its own serializer, reloaded in the SAME webview.
+  // The unsaved-changes prompt is not what this row is about, and the save below goes round the
+  // runtime's own bookkeeping, so the prompt is held off.
+  async function runRealSave() {
+    const stage = sessionStorage.getItem('realsave')
+    await until(() => window.__rigCap, 15000)
+    const booted = await until(() => window.bento && typeof window.bento.serialize === 'function', 30000)
+    await mark(`realsave stage=${stage || 0} armed=${!!window.__rigCap} booted=${!!booted}`)
+    if (!stage) {
+      const handle = await openHandle()
+      const d = JSON.parse(JSON.stringify(window.bento.doc)); d.title = 'desktop-rig-marker'
+      window.bento.loadDoc(JSON.stringify(d))
+      await sleep(500)
+      const next = await window.bento.serialize()
+      const w = await handle.createWritable(); await w.write(next); await w.close()
+      sessionStorage.setItem('realsave', '1')
+      await mark('realsave-reloading')
+      addEventListener('beforeunload', (e) => e.stopImmediatePropagation(), true)
+      location.reload()
+      return
+    }
+    await inv('rig_done', { report: { realsave: { title: window.bento.doc.title, armed: !!window.__rigCap, id: await idCall(window.__rigCap, 'sign') } } })
   }
 
   // §19e condition f: no embed gets past the ACL that ships. This build has no rig-embed.json,

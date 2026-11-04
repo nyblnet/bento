@@ -326,7 +326,7 @@ fn open_window(app: &tauri::AppHandle, i: usize) -> tauri::Result<()> {
                 if p.event() == PageLoadEvent::Started {
                     if let Some(d) = h.docs.iter_mut().find(|d| d.label == label) { d.starts += 1 }
                     if let Some(l) = h.reg.loads.get_mut(&label) {
-                        l.load_started();
+                        l.load_started(is_document(&url, &own));
                         eprintln!("STARTED {label} generation {} url={}", l.generation, &url[..url.len().min(80)]);
                     }
                     match main_frame_load(&url, &own) {
@@ -352,11 +352,14 @@ fn open_window(app: &tauri::AppHandle, i: usize) -> tauri::Result<()> {
     // A page brought back whole from WebKit's page cache is a load with no document serve, and
     // a serve is the only evidence the verdict has: it would be judged on whatever was fetched
     // before it (measured: an unknown page armed genuine that way, with the document's `no-store`
-    // in place). Never open with the cache on.
+    // in place). The taint in hostcore is what closes that; this is the second layer.
     #[cfg(target_os = "linux")]
     window.with_webview(|wv| {
         use webkit2gtk::{SettingsExt, WebViewExt};
         let s = WebViewExt::settings(&wv.inner()).expect("the webview has no settings");
+        // RIG BUILDS ONLY: the row that shows the taint holds with this layer gone.
+        #[cfg(feature = "rig")]
+        if std::env::var_os("BENTO_RIG_PAGE_CACHE_ON").is_some() { eprintln!("RIG PAGE CACHE on"); return }
         s.set_enable_page_cache(false);
         assert!(!s.enables_page_cache(), "the page cache stayed on");
     })?;
@@ -483,7 +486,7 @@ fn main() {
             let (host, rest) = (req.uri().host().unwrap_or("").to_string(), req.uri().path().to_string());
             let label = ctx.webview_label().to_string();
             #[cfg(feature = "rig")]
-            if let Some(r) = rig::off_document_origin(&host) { return r }
+            if let Some(r) = rig::off_document_origin(&host).or_else(|| rig::sw_script(&rest)) { return r }
             // A document's origin serves only its root, and only to a webview that
             // document was opened in (the same file opened twice shares its origin).
             if rest != "/" { eprintln!("PROTO REFUSED {label} {host}{rest}"); return not_found() }

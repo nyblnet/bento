@@ -3,7 +3,7 @@
 #
 # Asserts the H2 rig reports (rig/run.sh). Every check is a verdict, never a
 # printout: a missing report or an unexpected value FAILS the run.
-import json, sys, pathlib, re
+import json, sys, pathlib, re, urllib.parse
 
 out = pathlib.Path(sys.argv[1])
 # The platform the rigs ran on. WebKitGTK serves a document at bento://<24 hex>.localhost/;
@@ -364,35 +364,92 @@ def races():
             ok(arms[-1:] == ["false"], f"{scn}: and the host armed that load as unknown ({arms})")
     print("note race grid:", json.dumps(grid))
     ok(won >= 1, f"race: the swap really landed between the two serves at least once, or the grid proved nothing ({won} of 10; the attacker's bytes kept running in {stayed})")
-    # the honest route, and the take half: a save that makes the file genuine, then a reload,
-    # arms genuine, whatever the last load's verdict was
+    # the cost of the taint: a save that makes the file genuine, then a reload, runs the genuine
+    # bytes and stays unknown to the host, and opening the file again is what arms it genuine
     L = log("resave")
     rc = ((report_quiet("resave-doc0") or {}).get("page") or {}).get("race") or {}
     arms = re.findall(r"^ARM doc0 generation \d+: ARMED genuine=(true|false)$", L, re.M)
     ok(rc.get("attacker") is False and rc.get("armed") is True, f"resave: the reload after the save runs the genuine bytes, armed ({rc})")
-    ok(arms == ["false", "true"], f"resave: unknown, then genuine: the last load's verdict did not follow it ({arms})")
-    ok(rc.get("id") == ("unavailable" if WINDOWS else "purpose"), f"resave: identity follows the new verdict ({rc.get('id')})")
+    ok(re.search(r"SERVED doc0 \d+ bytes, genuine", L) is not None, "resave: precondition: the reload served the genuine bytes")
+    ok(arms == ["false", "false"], f"resave: unknown script ran in this webview, so the reload stays unknown ({arms})")
+    ok(rc.get("id") == "unavailable", f"resave: and identity stays off ({rc.get('id')})")
+    L = log("reopened")
+    rc = ((report("reopened-doc0") or {}).get("page") or {}).get("race") or {}
+    arms = re.findall(r"^ARM doc0 generation \d+: ARMED genuine=(true|false)$", L, re.M)
+    ok(rc.get("attacker") is False and arms == ["true"], f"reopened: the same file opened again arms genuine ({rc.get('attacker')}, {arms})")
+    ok(rc.get("id") == ("unavailable" if WINDOWS else "purpose"), f"reopened: identity is back on the genuine bytes ({rc.get('id')})")
 races()
 
 # A load with no document serve: an unknown document goes back through its history after
-# setting up a genuine verdict (see runRestore in probe.js)
-def restore():
-    L = log("restore")
-    ex = (out / "restore.exit").read_text().strip() if (out / "restore.exit").exists() else "missing"
-    ok(ex == "0", f"restore: the host exited cleanly (exit {ex})")
-    rs = (((report("restore-doc0") or {}).get("page") or {}).get("restore")) or {}
-    ok(re.search(r"STEP doc0\.step = restore stage=1 attacker=true armed=true length=[2-9]", L) is not None, "restore: precondition: the attacker's second page has history to go back through")
-    ok(re.search(r'SERVED doc0 \d+ bytes, unknown[^\n]*\n(?:.*\n)*?IPC bento_file op="write" id="restore-w" webview=doc0 OK\n(?:.*\n)*?SERVED doc0 \d+ bytes, genuine[^\n]*\nSTEP doc0\.step = restore-going-back', L) is not None, "restore: precondition: a genuine serve was on the books when the document went back")
-    ok((rs.get("hooked") or 0) >= 1, f"restore: precondition: the page took the secret itself, so the shim did not stand in the way ({rs.get('hooked')})")
-    ok(rs.get("how") == "reloaded", f"restore: the page did not come back whole: going back is a new load ({rs.get('how')})")
+# setting up a genuine verdict (see runRestore in probe.js). `restore` has the page cache off and the
+# document is served again; `restorecache` has it on, the page comes back whole, and the taint
+# alone holds.
+def restore(scn, how):
+    L = log(scn)
+    ex = (out / f"{scn}.exit").read_text().strip() if (out / f"{scn}.exit").exists() else "missing"
+    ok(ex == "0", f"{scn}: the host exited cleanly (exit {ex})")
+    rs = (((report(f"{scn}-doc0") or {}).get("page") or {}).get("restore")) or {}
+    ok(re.search(r"STEP doc0\.step = restore stage=1 attacker=true armed=true length=[2-9]", L) is not None, f"{scn}: precondition: the attacker's second page has history to go back through")
+    ok(re.search(r'SERVED doc0 \d+ bytes, unknown[^\n]*\n(?:.*\n)*?IPC bento_file op="write" id="restore-w" webview=doc0 OK\n(?:.*\n)*?SERVED doc0 \d+ bytes, genuine[^\n]*\nSTEP doc0\.step = restore-going-back', L) is not None, f"{scn}: precondition: a genuine serve was on the books when the document went back")
+    ok((rs.get("hooked") or 0) >= 1, f"{scn}: precondition: the page took the secret itself, so the shim did not stand in the way ({rs.get('hooked')})")
+    ok(rs.get("how") == how, f"{scn}: going back: {how} ({rs.get('how')})")
     back = L.split("STEP doc0.step = restore-going-back", 1)[-1]
     first = re.search(r"^(SERVED|STARTED) doc0", back, re.M)
-    ok(first is not None and first.group(1) == "SERVED", f"restore: going back served the document before its load started ({first and first.group(1)})")
+    want = "SERVED" if how == "reloaded" else "STARTED"
+    ok(first is not None and first.group(1) == want, f"{scn}: going back: {want} comes first ({first and first.group(1)})")
     arms = re.findall(r"^ARM doc0 generation \d+: ARMED genuine=(\w+)", L, re.M)
-    ok(arms == ["false", "false", "true"], f"restore: armed genuine only for the load that ran the genuine bytes ({arms})")
-    ok(rs.get("attacker") is False and rs.get("armed") is True, f"restore: what armed at the end is the genuine bytes ({rs.get('attacker')}, {rs.get('armed')})")
-    ok(rs.get("id") == ("unavailable" if WINDOWS else "purpose"), f"restore: identity follows those bytes ({rs.get('id')})")
-restore()
+    ok(arms == ["false", "false", "false"], f"{scn}: nothing arms genuine in a webview that ran unknown script ({arms})")
+    ok(rs.get("attacker") is (how == "restored") and rs.get("armed") is True, f"{scn}: the bytes that armed, for the file capability only ({rs.get('attacker')}, {rs.get('armed')})")
+    ok(rs.get("id") == "unavailable", f"{scn}: identity stays off ({rs.get('id')})")
+restore("restore", "reloaded")
+if not WINDOWS:
+    ok("RIG PAGE CACHE on" in log("restorecache"), "restorecache: precondition: the rig build left the page cache on")
+    restore("restorecache", "restored")
+
+# B5: a document that booked a genuine verdict and left for https. The hostile page must get no
+# secret at all, on either engine, whatever URL the engine reports its finish with.
+def leave(scn, tag):
+    L = log(scn)
+    srv = (out / "embed-server.log").read_text(errors="replace") if (out / "embed-server.log").exists() else ""
+    says = [urllib.parse.unquote(v) for v in re.findall(r'"GET /' + tag + r'\?(\S*) HTTP', srv)] + re.findall(r"^STEP doc0\.step = " + tag + r" (.*)$", L, re.M)
+    print(f"note {scn}: the page said {sorted(set(says))}")
+    ok(re.search(r'SERVED doc0 \d+ bytes, unknown[^\n]*\n(?:.*\n)*?IPC bento_file op="write" id="leave-w" webview=doc0 OK\n(?:.*\n)*?SERVED doc0 \d+ bytes, genuine[^\n]*\nSTEP doc0\.step = leave-going', L) is not None, f"{scn}: precondition: a genuine verdict was on the books when the document left")
+    ok("ran" in says, f"{scn}: precondition: the hostile page ran")
+    ok("control" in says, f"{scn}: control: the page's hook catches a delivery, so catching none means something")
+    ok(not [v for v in says if v not in ("ran", "control")], f"{scn}: the https page received no secret at all ({sorted(set(says))})")
+    starts = dict(re.findall(r"^STARTED doc0 generation (\d+) url=(\S*)", L, re.M))
+    off = {g for g, u in starts.items() if u.startswith("https://")}
+    pend = set(re.findall(r"^PENDING doc0 generation (\d+) ", L, re.M))
+    ok(bool(off) and not (off & pend), f"{scn}: no mint for a load that started off the document (off {sorted(off)}, minted {sorted(pend)})")
+    arms = re.findall(r"^ARM doc0 generation \d+: ARMED genuine=(\w+)", L, re.M)
+    ok("true" not in arms, f"{scn}: nothing armed genuine in this webview ({arms})")
+    ok(re.search(r"IPC bento_id \S+ id=\S+ webview=doc0 AGENT", L) is None, f"{scn}: nothing in this webview reached the agent")
+    lv = (((report(f"{scn}-doc0") or {}).get("page") or {}).get("leave")) or {}
+    ok(lv.get("attacker") is False and lv.get("armed") is True, f"{scn}: the document came back, the genuine shell, armed ({lv})")
+    if "RECREATE" not in L and "WATCHDOG" not in L:
+        ok(lv.get("id") == "unavailable", f"{scn}: identity stays off in the webview that ran unknown script ({lv.get('id')})")
+leave("leave", "b5")
+leave("leavestop", "b5-stop")
+
+# Same-document history with a verdict on the books: no load, no mint (security's n-push)
+def pushback():
+    L = log("pushback")
+    pb = (((report("pushback-doc0") or {}).get("page") or {}).get("pushback")) or {}
+    ok(re.search(r'IPC bento_file op="write" id="pushback-w" webview=doc0 OK\n(?:.*\n)*?SERVED doc0 \d+ bytes, genuine[^\n]*\nSTEP doc0\.step = pushback-going', L) is not None, "pushback: precondition: a genuine verdict was on the books when the document went back")
+    ok(pb.get("hash") == "", f"pushback: precondition: it really went back ({pb.get('hash')!r})")
+    after = L.split("STEP doc0.step = pushback-going", 1)[-1]
+    ok(re.search(r"^(STARTED|PENDING) doc0", after, re.M) is None, "pushback: going back started no load and minted nothing")
+    ok(pb.get("same_cap") is True and pb.get("id") == "unavailable", f"pushback: the same capability, still unknown ({pb})")
+pushback()
+
+# A service worker could run unknown bytes in a fresh webview: the document cannot register as one.
+def swreg():
+    S = (((report("swreg-doc0") or {}).get("page") or {}).get("swreg")) or {}
+    print(f"note swreg: {json.dumps(S)}")
+    ok(S.get("secure") is True, f"swreg: precondition: a secure context ({S.get('secure')})")
+    for k in ("doc", "query"):
+        ok(str(S.get(k)).startswith(("refused", "no api")), f"swreg: {k}: the document cannot register ({S.get(k)})")
+swreg()
 
 if WINDOWS:
     # B3's negative control: the rows above can fail
@@ -437,6 +494,18 @@ if r:
     ok(r.get("verdict_on_disk_after", "").startswith("genuine"), f"real: the SAVED deck is genuine to the host ({r.get('verdict_on_disk_after')})")
     other = [v for v in p.get("violations", []) if "__rigInline" not in str(v.get("sample", ""))]
     print(f"note real: CSP reports other than the rig's own inline script: {other}")
+# The taint's cost must stop at unknown documents: a genuine document saved by its own runtime
+# is served genuine, so the next load in the SAME webview arms genuine.
+L = log("realsave")
+ex = (out / "realsave.exit").read_text().strip() if (out / "realsave.exit").exists() else "missing"
+rv = (((report("realsave-doc0") or {}).get("page") or {}).get("realsave")) or {}
+ok(ex == "0", f"realsave: the host exited cleanly (exit {ex})")
+ok(rv.get("title") == "desktop-rig-marker", f"realsave: precondition: the reload runs the saved deck ({rv.get('title')})")
+served = re.findall(r"^SERVED doc0 (\d+) bytes, (\w+)", L, re.M)
+ok(len(served) >= 2 and all(v == "genuine" for _, v in served) and served[0][0] != served[-1][0], f"realsave: both loads served genuine, and the second served the saved bytes ({served})")
+arms = re.findall(r"^ARM doc0 generation \d+: ARMED genuine=(\w+)", L, re.M)
+ok(arms == ["true", "true"], f"realsave: saved and reloaded in the same webview, it arms genuine ({arms})")
+ok(rv.get("id") == ("unavailable" if WINDOWS else "purpose"), f"realsave: identity is still on ({rv.get('id')})")
 rc = (out / "real-release-check.exit").read_text().strip() if (out / "real-release-check.exit").exists() else "missing"
 txt = (out / "real-release-check.txt").read_text() if (out / "real-release-check.txt").exists() else ""
 ok(rc == "0" and "R.bento.html: GENUINE" in txt and "R-flipped.bento.html: UNKNOWN" in txt, f"real: against the release key ONLY, the saved deck is GENUINE and a one-byte-changed copy UNKNOWN (exit {rc})")

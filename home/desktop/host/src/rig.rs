@@ -35,6 +35,14 @@ pub fn off_document_origin(host: &str) -> Option<tauri::http::Response<Vec<u8>>>
     Some(tauri::http::Response::builder().header("Content-Type", "text/html; charset=utf-8").body(EMBED.as_bytes().to_vec()).unwrap())
 }
 
+/// The control for the service worker row: a real script at the document's origin, so a
+/// refused registration of the document itself is the document's doing, not the engine's.
+pub fn sw_script(path: &str) -> Option<tauri::http::Response<Vec<u8>>> {
+    if path != "/rig-sw.js" { return None }
+    eprintln!("RIG SERVED service worker script");
+    Some(tauri::http::Response::builder().header("Content-Type", "text/javascript").body(b"// rig".to_vec()).unwrap())
+}
+
 fn base(label: &str) -> &str {
     label.split("_r").next().unwrap_or(label)
 }

@@ -158,6 +158,19 @@ n=0; for s in "1 0" "1 1" "2 1" "3 1" "5 1" "2 4" "5 4" "10 4" "20 4" "0 4"; do 
 race resave resave 0 0
 # A load with no document serve: the document goes back through its history (see runRestore).
 race restore restore 0 0
+# The cost of the taint, its other half: the file `resave` left is genuine, and opening it again
+# is a new webview, so it arms genuine.
+BENTO_RIG_MODE=resave BENTO_RIG_LINGER_MS=200 scenario reopened 25 "$OUT/resave.bento.html"
+# `restore` with the second layer removed: the page really comes back whole, and the taint alone
+# holds. WebKitGTK only, since the setting is. (WebView2 has none, so `restore` is that row there.)
+[ "$WIN" = 1 ] || BENTO_RIG_PAGE_CACHE_ON=1 race restorecache restore 0 0
+# B5: an unknown document books a genuine verdict and leaves for https (see runLeave); with
+# leavestop the hostile page also holds off the bounce until the watchdog.
+race leave leave 0 0
+race leavestop leavestop 0 0
+# Same-document history with a verdict on the books, and a service worker's registration.
+race pushback pushback 0 0
+race swreg swreg 0 0
 # B3's negative control: the same read with the header at ?0
 cp "$OUT/fix/U.bento.html" "$OUT/O.bento.html"
 BENTO_RIG_MODE=oac BENTO_RIG_LINGER_MS=200 BENTO_RIG_OAC_OFF=1 scenario oacoff 30 "$OUT/O.bento.html"
@@ -170,6 +183,10 @@ BENTO_RIG_WATCHDOG=1 scenario watchdogu 90 "$OUT/WU.bento.html"
 # runtime's own serializer through the bridge
 cp "$OUT/real/Bento_Slides.bento.html" "$OUT/R.bento.html"
 scenario real 150 "$OUT/R.bento.html"
+# The taint's cost must stop at unknown documents: the same release, saved by its own serializer
+# and reloaded in the same webview.
+cp "$OUT/real/Bento_Slides.bento.html" "$OUT/RS.bento.html"
+BENTO_RIG_MODE=realsave BENTO_RIG_LINGER_MS=200 scenario realsave 60 "$OUT/RS.bento.html"
 # §19h wedge isolation: two documents each counting a heartbeat through the
 # host; rig/wedge.py stops their web processes one at a time (exactly one
 # document may freeze) and then all at once (the negative control: both freeze)
