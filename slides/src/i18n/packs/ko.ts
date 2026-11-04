@@ -1350,4 +1350,5 @@ export const strings: Catalog = {
   "No shortcut matches": "일치하는 단축키가 없습니다",
   "or": "또는",
   "Categories": "카테고리",
+  "Lock or unlock": "잠금 또는 잠금 해제",
 }

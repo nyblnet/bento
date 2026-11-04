@@ -261,6 +261,7 @@ export const zhHans: Catalog = {
   "{n}h ago": "{n} 小时前",
   "{n}m ago": "{n} 分钟前",
   "— no notes for this slide —": "— 此幻灯片没有备注 —",
+  "Lock": "锁定",
   "✎ Edit path on canvas": "✎ 在画布上编辑路径",
   "⧉ Apply layout…": "⧉ 应用版式…",
   "＋ Add stop": "＋ 添加色标",
@@ -1110,7 +1111,6 @@ export const zhHans: Catalog = {
   "{mod}: click selects exactly the element under the pointer, even in a group · drag duplicates": "{mod}:单击精确选择指针下的元素,组内也可 · 拖动即复制",
   "Shift: click adds to the selection or takes out · drag along one axis · resize keeps the ratio · rotate in 15° steps": "Shift:单击加入或移出选择 · 沿单一轴拖动 · 保持比例调整大小 · 以 15° 为步长旋转",
   "Morphs from the slide before": "从上一张幻灯片变形而来",
-  "Lock": "锁定",
   "Show": "显示",
   "Hide": "隐藏",
   "Morph preview": "变形预览",
@@ -1346,4 +1346,5 @@ export const zhHans: Catalog = {
   "No shortcut matches": "没有匹配的快捷键",
   "or": "或",
   "Categories": "类别",
+  "Lock or unlock": "锁定或解锁",
 }

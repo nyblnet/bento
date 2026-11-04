@@ -1366,4 +1366,5 @@ export const strings: Catalog = {
   "No shortcut matches": "कोई शॉर्टकट मेल नहीं खाता",
   "or": "या",
   "Categories": "श्रेणियाँ",
+  "Lock or unlock": "लॉक या अनलॉक करें",
 }

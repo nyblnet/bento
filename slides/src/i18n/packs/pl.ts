@@ -1357,4 +1357,5 @@ export const strings: Catalog = {
   "No shortcut matches": "Brak pasującego skrótu",
   "or": "lub",
   "Categories": "Kategorie",
+  "Lock or unlock": "Zablokuj lub odblokuj",
 }

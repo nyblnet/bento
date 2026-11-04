@@ -261,6 +261,7 @@ export const es: Catalog = {
   "{n}h ago": "hace {n} h",
   "{n}m ago": "hace {n} min",
   "— no notes for this slide —": "— sin notas para esta diapositiva —",
+  "Lock": "Bloquear",
   "✎ Edit path on canvas": "✎ Editar trazado en el lienzo",
   "⧉ Apply layout…": "⧉ Aplicar diseño…",
   "＋ Add stop": "＋ Añadir parada",
@@ -1110,7 +1111,6 @@ export const es: Catalog = {
   "{mod}: click selects exactly the element under the pointer, even in a group · drag duplicates": "{mod}: clic selecciona exactamente el elemento bajo el puntero, incluso en un grupo · arrastrar duplica",
   "Shift: click adds to the selection or takes out · drag along one axis · resize keeps the ratio · rotate in 15° steps": "Mayús: clic añade a la selección o la quita · arrastra en un solo eje · redimensiona con la proporción · gira en pasos de 15°",
   "Morphs from the slide before": "Se transforma desde la diapositiva anterior",
-  "Lock": "Bloquear",
   "Show": "Mostrar",
   "Hide": "Ocultar",
   "Morph preview": "Vista previa de la transformación",
@@ -1346,4 +1346,5 @@ export const es: Catalog = {
   "No shortcut matches": "Ningún atajo coincide",
   "or": "o",
   "Categories": "Categorías",
+  "Lock or unlock": "Bloquear o desbloquear",
 }

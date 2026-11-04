@@ -1362,4 +1362,5 @@ export const strings: Catalog = {
   "No shortcut matches": "هیچ میان‌بری پیدا نشد",
   "or": "یا",
   "Categories": "دسته‌ها",
+  "Lock or unlock": "قفل یا باز کردن قفل",
 }

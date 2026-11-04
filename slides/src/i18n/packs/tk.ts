@@ -1378,4 +1378,9 @@ export const strings: Catalog = {
   "No shortcut matches": "Gabat gelýän gysga ýol ýok",
   "or": "ýa-da",
   "Categories": "Kategoriýalar",
+  "Lock or unlock": "Gulpla ýa-da aç",
+  "Good to know": "Bilmek peýdaly",
+  "Paste an image or text straight onto the canvas with ⌘V.": "Suraty ýa-da teksti ⌘V bilen göni kanwasa goýuň.",
+  "Copy a slide (⌘C with nothing selected) and paste it into another Bento deck.": "Slaýdy göçüriň (hiç zat saýlanmadyk wagty ⌘C) we ony başga bir Bento prezentasiýasyna goýuň.",
+  "Make a chart from a table and it stays linked — edit the table, the chart updates.": "Tablisadan diagramma düzüň, ol baglanyşykly galýar — tablisany üýtgetseňiz, diagramma täzelenýär.",
 }

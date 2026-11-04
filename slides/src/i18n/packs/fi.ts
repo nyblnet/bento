@@ -1363,4 +1363,5 @@ export const strings: Catalog = {
   "No shortcut matches": "Mikään pikanäppäin ei vastaa",
   "or": "tai",
   "Categories": "Luokat",
+  "Lock or unlock": "Lukitse tai avaa lukitus",
 }

@@ -1376,4 +1376,5 @@ export const strings: Catalog = {
   "No shortcut matches": "کوئی شارٹ کٹ مماثل نہیں",
   "or": "یا",
   "Categories": "زمرے",
+  "Lock or unlock": "لاک یا ان لاک کریں",
 }

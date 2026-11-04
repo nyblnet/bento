@@ -252,6 +252,7 @@ export const pt: Catalog = {
   "{n}h ago": "há {n}h",
   "{n}m ago": "há {n}min",
   "— no notes for this slide —": "— sem notas para este slide —",
+  "Lock": "Bloquear",
   "✎ Edit path on canvas": "✎ Editar caminho na tela",
   "⧉ Apply layout…": "⧉ Aplicar layout…",
   "＋ Add stop": "＋ Adicionar parada",
@@ -1108,7 +1109,6 @@ export const pt: Catalog = {
   "{mod}: click selects exactly the element under the pointer, even in a group · drag duplicates": "{mod}: clique seleciona exatamente o elemento sob o ponteiro, mesmo em um grupo · arrastar duplica",
   "Shift: click adds to the selection or takes out · drag along one axis · resize keeps the ratio · rotate in 15° steps": "Shift: clique adiciona à seleção ou retira · arrasta em um só eixo · redimensiona mantendo a proporção · gira de 15° em 15°",
   "Morphs from the slide before": "Transforma-se a partir do slide anterior",
-  "Lock": "Bloquear",
   "Show": "Mostrar",
   "Hide": "Ocultar",
   "Morph preview": "Prévia da transformação",
@@ -1344,4 +1344,5 @@ export const pt: Catalog = {
   "No shortcut matches": "Nenhum atalho corresponde",
   "or": "ou",
   "Categories": "Categorias",
+  "Lock or unlock": "Bloquear ou desbloquear",
 }

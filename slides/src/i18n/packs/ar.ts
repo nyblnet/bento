@@ -1366,4 +1366,5 @@ export const strings: Catalog = {
   "No shortcut matches": "لا يوجد اختصار مطابق",
   "or": "أو",
   "Categories": "الفئات",
+  "Lock or unlock": "قفل أو إلغاء القفل",
 }

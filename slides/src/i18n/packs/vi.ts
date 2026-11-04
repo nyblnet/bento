@@ -1356,4 +1356,5 @@ export const strings: Catalog = {
   "No shortcut matches": "Không có phím tắt phù hợp",
   "or": "hoặc",
   "Categories": "Danh mục",
+  "Lock or unlock": "Khóa hoặc mở khóa",
 }

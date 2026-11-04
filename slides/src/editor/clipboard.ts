@@ -48,7 +48,9 @@ function fontsFor(els: SlideElement[], doc: BentoDoc): NonNullable<BentoDoc['fon
   const families = new Set(
     els
       .filter((el): el is TextElement => el.type === 'text')
-      .map((el) => firstFamily(el.fontFamily)),
+      // a text element without its own fontFamily inherits the theme's, so the
+      // theme face's embedded font travels with it (#710)
+      .map((el) => firstFamily(el.fontFamily ?? doc.theme?.fontFamily ?? '')),
   )
   return (doc.fonts ?? []).filter((font) => families.has(firstFamily(font.family)))
 }

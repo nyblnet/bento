@@ -261,6 +261,7 @@ export const ja: Catalog = {
   "{n}h ago": "{n}時間前",
   "{n}m ago": "{n}分前",
   "— no notes for this slide —": "— このスライドにノートはありません —",
+  "Lock": "ロック",
   "✎ Edit path on canvas": "✎ キャンバスでパスを編集",
   "⧉ Apply layout…": "⧉ レイアウトを適用…",
   "＋ Add stop": "＋ ストップを追加",
@@ -1110,7 +1111,6 @@ export const ja: Catalog = {
   "{mod}: click selects exactly the element under the pointer, even in a group · drag duplicates": "{mod}: クリックでポインター下の要素だけを選択(グループ内も) · ドラッグで複製",
   "Shift: click adds to the selection or takes out · drag along one axis · resize keeps the ratio · rotate in 15° steps": "Shift: クリックで選択に追加または解除 · 1 軸に沿ってドラッグ · 縦横比を保って拡大縮小 · 15° 単位で回転",
   "Morphs from the slide before": "前のスライドからモーフ",
-  "Lock": "ロック",
   "Show": "表示",
   "Hide": "非表示",
   "Morph preview": "モーフのプレビュー",
@@ -1346,4 +1346,5 @@ export const ja: Catalog = {
   "No shortcut matches": "一致するショートカットはありません",
   "or": "または",
   "Categories": "カテゴリ",
+  "Lock or unlock": "ロック／ロック解除",
 }

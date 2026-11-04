@@ -28,6 +28,9 @@ export interface Command {
   inField?: boolean
   /** offered (palette) and run (keys) only while this holds */
   when?: () => boolean
+  /** while `when` fails, the chord is the browser's again (⌘L with nothing
+   *  selected is the address bar, #838) — the exception to owned chords */
+  yields?: boolean
   run: (ev?: KeyboardEvent) => void
 }
 
@@ -43,7 +46,7 @@ export function dispatch(cmds: Command[], ev: KeyboardEvent, inField: boolean): 
   let owned = false
   for (const c of cmds) {
     if (!c.match || (inField && !c.inField) || !c.match(ev, mod)) continue
-    if (c.when && !c.when()) { owned ||= mod; continue }
+    if (c.when && !c.when()) { owned ||= mod && !c.yields; continue }
     ev.preventDefault()
     c.run(ev)
     return true

@@ -6,7 +6,7 @@
 
 import Reveal from 'reveal.js'
 import 'reveal.js/dist/reveal.css'
-import { anim, resetXform } from './anim'
+import { anim, ease, resetXform } from './anim'
 import { chartSnapshotSvg, mountChart } from './charts'
 import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
 import { morphKey, paginates, inLinearFlow, isWebUrl, visiblePaint } from './model'
@@ -29,6 +29,7 @@ const MORPH_DURATION_DEFAULT = 0.65
 /** Set per-deck by doc.present.morphSeconds; clamped to something sane. */
 let MORPH_DURATION = MORPH_DURATION_DEFAULT
 const MORPH_EASE = 'power2.inOut'
+const MORPH_SPRING = 'spring'
 const TYPE_WRITER_DURATION_DEFAULT = 0.08
 /** Seconds per typed character, per-deck by doc.present.typeWriterSeconds. */
 let TYPE_WRITER_DURATION = TYPE_WRITER_DURATION_DEFAULT
@@ -824,15 +825,16 @@ export function startPresentation(
     }
     return -1
   }
-  const svSlide = (idx: number, w: number): HTMLElement => {
+  const svSlide = (idx: number, w?: number): HTMLElement => {
     const frame = document.createElement('div')
     frame.className = 'sv-frame'
-    const scale = w / doc.size.width
-    frame.style.width = `${w}px`
-    frame.style.height = `${doc.size.height * scale}px`
+    frame.style.setProperty('--sv-doc-w', `${doc.size.width}px`)
+    frame.style.aspectRatio = `${doc.size.width} / ${doc.size.height}`
+    frame.style.setProperty('--sv-ar', String(doc.size.width / doc.size.height))
+    if (w) frame.style.width = `${w}px`
     if (idx >= 0) {
       const inner = document.createElement('div')
-      inner.style.cssText = `transform:scale(${scale});transform-origin:0 0`
+      inner.className = 'sv-scale'
       inner.appendChild(renderSlide(doc.slides[idx], doc, { hidePlaceholders: true }))
       frame.appendChild(inner)
     } else {
@@ -989,9 +991,9 @@ export function startPresentation(
     const nxtBox = d.querySelector('.sv-nextbox')
     if (!curBox || !nxtBox) return
     curBox.innerHTML = ''
-    curBox.appendChild(d.importNode(svSlide(cur, 660), true))
+    curBox.appendChild(d.importNode(svSlide(cur), true))
     nxtBox.innerHTML = ''
-    nxtBox.appendChild(d.importNode(svSlide(nxt, 300), true))
+    nxtBox.appendChild(d.importNode(svSlide(nxt), true))
     const notes = d.querySelector('.sv-notes')
     if (notes) notes.textContent = doc.slides[cur]?.notes || t('— no notes for this slide —')
     updateSpeakerControls()
@@ -1130,6 +1132,12 @@ export function startPresentation(
     d.querySelectorAll<HTMLButtonElement>('.sv-btn[data-nav]').forEach((b) => {
       b.addEventListener('click', () => doNav(b.dataset.nav!))
     })
+
+    // the previews (current, next, rail, grid) render real anchors: a click on
+    // one must never navigate this window, which holds the presenter's notes
+    d.addEventListener('click', (ev) => {
+      if ((ev.target as HTMLElement).closest?.('a[href]')) ev.preventDefault()
+    }, true)
 
     // drive the show FROM the speaker window (its keys fire in its own document)
     d.addEventListener('keydown', (ev: KeyboardEvent) => {
@@ -2250,17 +2258,27 @@ function morphMathSymbols(
   }
   if (!pairs.length) return false
 
-  const state = { p: 0 }
+  // The symbols travel on a spring while their box (runMorph) rides
+  // MORPH_EASE, so they have TWO progresses, and the counter-scale must use
+  // the box's. Dividing by a scale computed from the spring's p — the box's
+  // scale only at t=0, t=1 and where the curves cross — threw every symbol up
+  // to ~30% of its travel off its line mid-morph whenever the formula changed
+  // size. One linear clock drives both: the box tween starts in the same
+  // runMorph call with the same duration and no delay, so on every tick its
+  // linear time equals this one's (and where it was skipped, a.w === b.w and
+  // the scale is 1 whatever q is). Guard: test-slides-math-morph-browser.mjs.
+  const state = { t: 0 }
   for (const { node } of pairs) node.style.willChange = 'transform'
   anim.to(state, {
-    p: 1,
+    t: 1,
     duration: MORPH_DURATION,
-    ease: MORPH_EASE,
+    ease: 'linear',
     onUpdate() {
-      const p = state.p
-      // undo the box tween's scale so the symbol delta stays in model units
-      const sx = (a.w + (b.w - a.w) * p) / Math.max(b.w, 0.01)
-      const sy = (a.h + (b.h - a.h) * p) / Math.max(b.h, 0.01)
+      const p = ease(MORPH_SPRING, state.t) // the symbols' own travel
+      const q = ease(MORPH_EASE, state.t) // where the box tween has got to
+      // undo the box tween's CURRENT scale so the symbol delta stays in model units
+      const sx = (a.w + (b.w - a.w) * q) / Math.max(b.w, 0.01)
+      const sy = (a.h + (b.h - a.h) * q) / Math.max(b.h, 0.01)
       for (const { node, dx, dy } of pairs) {
         node.style.transform = `translate(${(dx * (1 - p)) / sx}px, ${(dy * (1 - p)) / sy}px)`
       }

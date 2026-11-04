@@ -1366,4 +1366,5 @@ export const strings: Catalog = {
   "No shortcut matches": "Немає відповідних сполучень",
   "or": "або",
   "Categories": "Категорії",
+  "Lock or unlock": "Заблокувати або розблокувати",
 }

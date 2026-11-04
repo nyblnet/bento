@@ -1355,4 +1355,5 @@ export const strings: Catalog = {
   "No shortcut matches": "Inget kortkommando matchar",
   "or": "eller",
   "Categories": "Kategorier",
+  "Lock or unlock": "Lås eller lås upp",
 }

@@ -201,27 +201,6 @@
           "minimum": -3600,
           "maximum": 3600
         },
-        "cx": {
-          "type": "number",
-          "minimum": -10,
-          "maximum": 10
-        },
-        "cy": {
-          "type": "number",
-          "minimum": -10,
-          "maximum": 10
-        },
-        "kind": {
-          "type": "string",
-          "enum": [
-            "radial"
-          ]
-        },
-        "r": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 100
-        },
         "stops": {
           "type": "array",
           "maxItems": 64,
@@ -258,7 +237,7 @@
         "type": "string"
       },
       "maxProperties": 64,
-      "description": "property path → palette slot, or $token name"
+      "description": "property path → palette token"
     },
     "prop-textStroke": {
       "type": "object",
@@ -301,10 +280,6 @@
             "right"
           ]
         },
-        "alt": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "backdropFilter": {
           "type": "number",
           "minimum": 0,
@@ -320,9 +295,6 @@
           "minimum": 0,
           "maximum": 1000
         },
-        "blurHidden": {
-          "type": "boolean"
-        },
         "color": {
           "type": "string",
           "maxLength": 64,
@@ -330,59 +302,6 @@
         },
         "colorGradient": {
           "$ref": "#/$defs/prop-colorGradient"
-        },
-        "component": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string",
-              "maxLength": 200,
-              "pattern": "^[^\"'<>{};]*$"
-            },
-            "key": {
-              "type": "string",
-              "maxLength": 200,
-              "pattern": "^[^\"'<>{};]*$"
-            },
-            "main": {
-              "const": true
-            },
-            "over": {
-              "type": "array",
-              "maxItems": 64,
-              "items": {
-                "type": "string",
-                "maxLength": 64,
-                "pattern": "^[^\"'<>{};]*$"
-              }
-            },
-            "off": {
-              "type": "array",
-              "minItems": 2,
-              "maxItems": 2,
-              "items": {
-                "type": "number"
-              }
-            },
-            "sig": {
-              "type": "string",
-              "pattern": "^[0-9a-z]{1,16}$"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "id",
-            "key"
-          ]
-        },
-        "fillHidden": {
-          "type": "boolean"
-        },
-        "flipX": {
-          "type": "boolean"
-        },
-        "flipY": {
-          "type": "boolean"
         },
         "fontFamily": {
           "type": "string",
@@ -411,17 +330,10 @@
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
-        "groupName": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "h": {
           "type": "number",
           "minimum": 0,
           "maximum": 1000000
-        },
-        "hidden": {
-          "type": "boolean"
         },
         "html": {
           "type": "string",
@@ -431,9 +343,6 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
-        },
-        "keepAspectRatio": {
-          "type": "boolean"
         },
         "letterSpacing": {
           "type": "number",
@@ -448,27 +357,15 @@
         "link": {
           "$ref": "#/$defs/prop-link"
         },
-        "locked": {
-          "type": "boolean"
-        },
         "morphId": {
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
-        "name": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "opacity": {
           "type": "number",
           "minimum": 0,
           "maximum": 1
-        },
-        "parentId": {
-          "type": "string",
-          "maxLength": 200,
-          "pattern": "^[^\"'<>{};]*$"
         },
         "placeholder": {
           "type": "string",
@@ -487,46 +384,10 @@
         "shadow": {
           "$ref": "#/$defs/prop-shadow"
         },
-        "shadowHidden": {
-          "type": "boolean"
-        },
         "showOnHover": {
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
-        },
-        "sizing": {
-          "type": "object",
-          "properties": {
-            "h": {
-              "type": "string",
-              "enum": [
-                "fixed",
-                "fill"
-              ]
-            },
-            "minH": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100000
-            },
-            "minW": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100000
-            },
-            "w": {
-              "type": "string",
-              "enum": [
-                "fixed",
-                "fill"
-              ]
-            }
-          },
-          "additionalProperties": false
-        },
-        "strokeHidden": {
-          "type": "boolean"
         },
         "textStroke": {
           "$ref": "#/$defs/prop-textStroke"
@@ -576,27 +437,6 @@
           "type": "number",
           "minimum": -3600,
           "maximum": 3600
-        },
-        "cx": {
-          "type": "number",
-          "minimum": -10,
-          "maximum": 10
-        },
-        "cy": {
-          "type": "number",
-          "minimum": -10,
-          "maximum": 10
-        },
-        "kind": {
-          "type": "string",
-          "enum": [
-            "radial"
-          ]
-        },
-        "r": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 100
         },
         "stops": {
           "type": "array",
@@ -679,10 +519,6 @@
     "shape": {
       "type": "object",
       "properties": {
-        "alt": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "backdropFilter": {
           "type": "number",
           "minimum": 0,
@@ -698,80 +534,6 @@
           "minimum": 0,
           "maximum": 1000
         },
-        "blurHidden": {
-          "type": "boolean"
-        },
-        "bool": {
-          "type": "object",
-          "properties": {
-            "op": {
-              "type": "string",
-              "enum": [
-                "union",
-                "subtract",
-                "intersect",
-                "exclude"
-              ]
-            },
-            "shapes": {
-              "type": "array",
-              "minItems": 2,
-              "maxItems": 5000,
-              "items": {
-                "$ref": "#/$defs/element"
-              }
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "op",
-            "shapes"
-          ]
-        },
-        "component": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string",
-              "maxLength": 200,
-              "pattern": "^[^\"'<>{};]*$"
-            },
-            "key": {
-              "type": "string",
-              "maxLength": 200,
-              "pattern": "^[^\"'<>{};]*$"
-            },
-            "main": {
-              "const": true
-            },
-            "over": {
-              "type": "array",
-              "maxItems": 64,
-              "items": {
-                "type": "string",
-                "maxLength": 64,
-                "pattern": "^[^\"'<>{};]*$"
-              }
-            },
-            "off": {
-              "type": "array",
-              "minItems": 2,
-              "maxItems": 2,
-              "items": {
-                "type": "number"
-              }
-            },
-            "sig": {
-              "type": "string",
-              "pattern": "^[0-9a-z]{1,16}$"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "id",
-            "key"
-          ]
-        },
         "d": {
           "type": "string",
           "maxLength": 65536,
@@ -784,115 +546,6 @@
         },
         "fillGradient": {
           "$ref": "#/$defs/prop-fillGradient"
-        },
-        "fillHidden": {
-          "type": "boolean"
-        },
-        "fills": {
-          "type": "array",
-          "maxItems": 16,
-          "items": {
-            "type": "object",
-            "properties": {
-              "blend": {
-                "type": "string",
-                "enum": [
-                  "multiply",
-                  "screen",
-                  "overlay",
-                  "darken",
-                  "lighten",
-                  "color-dodge",
-                  "color-burn",
-                  "hard-light",
-                  "soft-light",
-                  "difference",
-                  "exclusion",
-                  "hue",
-                  "saturation",
-                  "color",
-                  "luminosity"
-                ]
-              },
-              "color": {
-                "type": "string",
-                "maxLength": 64,
-                "description": "CSS colour or url(#local-id)"
-              },
-              "gradient": {
-                "type": "object",
-                "properties": {
-                  "angle": {
-                    "type": "number",
-                    "minimum": -3600,
-                    "maximum": 3600
-                  },
-                  "cx": {
-                    "type": "number",
-                    "minimum": -10,
-                    "maximum": 10
-                  },
-                  "cy": {
-                    "type": "number",
-                    "minimum": -10,
-                    "maximum": 10
-                  },
-                  "kind": {
-                    "type": "string",
-                    "enum": [
-                      "radial"
-                    ]
-                  },
-                  "r": {
-                    "type": "number",
-                    "minimum": 0,
-                    "maximum": 100
-                  },
-                  "stops": {
-                    "type": "array",
-                    "maxItems": 64,
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "at": {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 1
-                        },
-                        "color": {
-                          "type": "string",
-                          "maxLength": 64,
-                          "description": "CSS colour; no url()"
-                        }
-                      },
-                      "additionalProperties": false,
-                      "required": [
-                        "at",
-                        "color"
-                      ]
-                    }
-                  }
-                },
-                "additionalProperties": false,
-                "required": [
-                  "stops"
-                ]
-              },
-              "hidden": {
-                "type": "boolean"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "color"
-            ]
-          }
-        },
-        "flipX": {
-          "type": "boolean"
-        },
-        "flipY": {
-          "type": "boolean"
         },
         "from": {
           "$ref": "#/$defs/prop-from"
@@ -910,10 +563,6 @@
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
-        "groupName": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "h": {
           "type": "number",
           "minimum": 0,
@@ -924,80 +573,10 @@
           "minimum": 2,
           "maximum": 2
         },
-        "hidden": {
-          "type": "boolean"
-        },
         "id": {
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
-        },
-        "keepAspectRatio": {
-          "type": "boolean"
-        },
-        "layout": {
-          "type": "object",
-          "properties": {
-            "align": {
-              "type": "string",
-              "enum": [
-                "start",
-                "center",
-                "end",
-                "stretch"
-              ]
-            },
-            "clip": {
-              "type": "boolean"
-            },
-            "cols": {
-              "type": "number",
-              "minimum": 1,
-              "maximum": 64
-            },
-            "dir": {
-              "type": "string",
-              "enum": [
-                "row",
-                "col",
-                "grid"
-              ]
-            },
-            "gap": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100000
-            },
-            "hug": {
-              "type": "boolean"
-            },
-            "justify": {
-              "type": "string",
-              "enum": [
-                "start",
-                "center",
-                "end",
-                "space-between"
-              ]
-            },
-            "pad": {
-              "type": "array",
-              "minItems": 4,
-              "maxItems": 4,
-              "items": {
-                "type": "number"
-              }
-            },
-            "wrap": {
-              "type": "boolean"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "dir",
-            "gap",
-            "pad"
-          ]
         },
         "lineEnd": {
           "type": "string",
@@ -1034,37 +613,17 @@
         "link": {
           "$ref": "#/$defs/prop-link"
         },
-        "locked": {
-          "type": "boolean"
-        },
         "morphId": {
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
-        },
-        "name": {
-          "type": "string",
-          "maxLength": 4000
         },
         "opacity": {
           "type": "number",
           "minimum": 0,
           "maximum": 1
         },
-        "parentId": {
-          "type": "string",
-          "maxLength": 200,
-          "pattern": "^[^\"'<>{};]*$"
-        },
         "pathBox": {
-          "type": "array",
-          "minItems": 4,
-          "maxItems": 4,
-          "items": {
-            "type": "number"
-          }
-        },
-        "radii": {
           "type": "array",
           "minItems": 4,
           "maxItems": 4,
@@ -1090,9 +649,6 @@
         "shadow": {
           "$ref": "#/$defs/prop-shadow"
         },
-        "shadowHidden": {
-          "type": "boolean"
-        },
         "shape": {
           "type": "string",
           "enum": [
@@ -1109,123 +665,15 @@
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
-        "sizing": {
-          "type": "object",
-          "properties": {
-            "h": {
-              "type": "string",
-              "enum": [
-                "fixed",
-                "fill"
-              ]
-            },
-            "minH": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100000
-            },
-            "minW": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100000
-            },
-            "w": {
-              "type": "string",
-              "enum": [
-                "fixed",
-                "fill"
-              ]
-            }
-          },
-          "additionalProperties": false
-        },
         "stroke": {
           "type": "string",
           "maxLength": 64,
           "description": "CSS colour or url(#local-id)"
         },
-        "strokeAlign": {
-          "type": "string",
-          "enum": [
-            "inside",
-            "center",
-            "outside"
-          ]
-        },
         "strokeDash": {
           "type": "number",
           "minimum": 0,
           "maximum": 10000
-        },
-        "strokeDashes": {
-          "type": "array",
-          "minItems": 2,
-          "maxItems": 2,
-          "items": {
-            "type": "number"
-          }
-        },
-        "strokeGradient": {
-          "type": "object",
-          "properties": {
-            "angle": {
-              "type": "number",
-              "minimum": -3600,
-              "maximum": 3600
-            },
-            "cx": {
-              "type": "number",
-              "minimum": -10,
-              "maximum": 10
-            },
-            "cy": {
-              "type": "number",
-              "minimum": -10,
-              "maximum": 10
-            },
-            "kind": {
-              "type": "string",
-              "enum": [
-                "radial"
-              ]
-            },
-            "r": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "stops": {
-              "type": "array",
-              "maxItems": 64,
-              "items": {
-                "type": "object",
-                "properties": {
-                  "at": {
-                    "type": "number",
-                    "minimum": 0,
-                    "maximum": 1
-                  },
-                  "color": {
-                    "type": "string",
-                    "maxLength": 64,
-                    "description": "CSS colour; no url()"
-                  }
-                },
-                "additionalProperties": false,
-                "required": [
-                  "at",
-                  "color"
-                ]
-              }
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "stops"
-          ]
-        },
-        "strokeHidden": {
-          "type": "boolean"
         },
         "strokeStyle": {
           "type": "string",
@@ -1239,128 +687,6 @@
           "type": "number",
           "minimum": 0,
           "maximum": 10000
-        },
-        "strokes": {
-          "type": "array",
-          "maxItems": 16,
-          "items": {
-            "type": "object",
-            "properties": {
-              "align": {
-                "type": "string",
-                "enum": [
-                  "inside",
-                  "center",
-                  "outside"
-                ]
-              },
-              "blend": {
-                "type": "string",
-                "enum": [
-                  "multiply",
-                  "screen",
-                  "overlay",
-                  "darken",
-                  "lighten",
-                  "color-dodge",
-                  "color-burn",
-                  "hard-light",
-                  "soft-light",
-                  "difference",
-                  "exclusion",
-                  "hue",
-                  "saturation",
-                  "color",
-                  "luminosity"
-                ]
-              },
-              "color": {
-                "type": "string",
-                "maxLength": 64,
-                "description": "CSS colour or url(#local-id)"
-              },
-              "dashes": {
-                "type": "array",
-                "minItems": 2,
-                "maxItems": 2,
-                "items": {
-                  "type": "number"
-                }
-              },
-              "gradient": {
-                "type": "object",
-                "properties": {
-                  "angle": {
-                    "type": "number",
-                    "minimum": -3600,
-                    "maximum": 3600
-                  },
-                  "cx": {
-                    "type": "number",
-                    "minimum": -10,
-                    "maximum": 10
-                  },
-                  "cy": {
-                    "type": "number",
-                    "minimum": -10,
-                    "maximum": 10
-                  },
-                  "kind": {
-                    "type": "string",
-                    "enum": [
-                      "radial"
-                    ]
-                  },
-                  "r": {
-                    "type": "number",
-                    "minimum": 0,
-                    "maximum": 100
-                  },
-                  "stops": {
-                    "type": "array",
-                    "maxItems": 64,
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "at": {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 1
-                        },
-                        "color": {
-                          "type": "string",
-                          "maxLength": 64,
-                          "description": "CSS colour; no url()"
-                        }
-                      },
-                      "additionalProperties": false,
-                      "required": [
-                        "at",
-                        "color"
-                      ]
-                    }
-                  }
-                },
-                "additionalProperties": false,
-                "required": [
-                  "stops"
-                ]
-              },
-              "hidden": {
-                "type": "boolean"
-              },
-              "width": {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 10000
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "color",
-              "width"
-            ]
-          }
         },
         "themeRefs": {
           "$ref": "#/$defs/prop-themeRefs"
@@ -1425,10 +751,6 @@
     "image": {
       "type": "object",
       "properties": {
-        "alt": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "backdropFilter": {
           "type": "number",
           "minimum": 0,
@@ -1444,58 +766,8 @@
           "minimum": 0,
           "maximum": 1000
         },
-        "blurHidden": {
-          "type": "boolean"
-        },
-        "component": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string",
-              "maxLength": 200,
-              "pattern": "^[^\"'<>{};]*$"
-            },
-            "key": {
-              "type": "string",
-              "maxLength": 200,
-              "pattern": "^[^\"'<>{};]*$"
-            },
-            "main": {
-              "const": true
-            },
-            "over": {
-              "type": "array",
-              "maxItems": 64,
-              "items": {
-                "type": "string",
-                "maxLength": 64,
-                "pattern": "^[^\"'<>{};]*$"
-              }
-            },
-            "off": {
-              "type": "array",
-              "minItems": 2,
-              "maxItems": 2,
-              "items": {
-                "type": "number"
-              }
-            },
-            "sig": {
-              "type": "string",
-              "pattern": "^[0-9a-z]{1,16}$"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "id",
-            "key"
-          ]
-        },
         "crop": {
           "$ref": "#/$defs/prop-crop"
-        },
-        "fillHidden": {
-          "type": "boolean"
         },
         "fit": {
           "type": "string",
@@ -1504,12 +776,6 @@
             "cover",
             "fill"
           ]
-        },
-        "flipX": {
-          "type": "boolean"
-        },
-        "flipY": {
-          "type": "boolean"
         },
         "fx": {
           "$ref": "#/$defs/prop-fx"
@@ -1524,17 +790,10 @@
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
-        "groupName": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "h": {
           "type": "number",
           "minimum": 0,
           "maximum": 1000000
-        },
-        "hidden": {
-          "type": "boolean"
         },
         "id": {
           "type": "string",
@@ -1547,27 +806,15 @@
         "link": {
           "$ref": "#/$defs/prop-link"
         },
-        "locked": {
-          "type": "boolean"
-        },
         "morphId": {
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
-        "name": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "opacity": {
           "type": "number",
           "minimum": 0,
           "maximum": 1
-        },
-        "parentId": {
-          "type": "string",
-          "maxLength": 200,
-          "pattern": "^[^\"'<>{};]*$"
         },
         "radius": {
           "type": "number",
@@ -1587,51 +834,15 @@
         "shadow": {
           "$ref": "#/$defs/prop-shadow"
         },
-        "shadowHidden": {
-          "type": "boolean"
-        },
         "showOnHover": {
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
-        "sizing": {
-          "type": "object",
-          "properties": {
-            "h": {
-              "type": "string",
-              "enum": [
-                "fixed",
-                "fill"
-              ]
-            },
-            "minH": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100000
-            },
-            "minW": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100000
-            },
-            "w": {
-              "type": "string",
-              "enum": [
-                "fixed",
-                "fill"
-              ]
-            }
-          },
-          "additionalProperties": false
-        },
         "src": {
           "type": "string",
           "maxLength": 33554432,
           "description": "data: URI, asset:<key> or URL"
-        },
-        "strokeHidden": {
-          "type": "boolean"
         },
         "themeRefs": {
           "$ref": "#/$defs/prop-themeRefs"
@@ -1666,10 +877,6 @@
     "svg": {
       "type": "object",
       "properties": {
-        "alt": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "asset": {
           "type": "string",
           "maxLength": 200,
@@ -1690,65 +897,9 @@
           "minimum": 0,
           "maximum": 1000
         },
-        "blurHidden": {
-          "type": "boolean"
-        },
-        "component": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string",
-              "maxLength": 200,
-              "pattern": "^[^\"'<>{};]*$"
-            },
-            "key": {
-              "type": "string",
-              "maxLength": 200,
-              "pattern": "^[^\"'<>{};]*$"
-            },
-            "main": {
-              "const": true
-            },
-            "over": {
-              "type": "array",
-              "maxItems": 64,
-              "items": {
-                "type": "string",
-                "maxLength": 64,
-                "pattern": "^[^\"'<>{};]*$"
-              }
-            },
-            "off": {
-              "type": "array",
-              "minItems": 2,
-              "maxItems": 2,
-              "items": {
-                "type": "number"
-              }
-            },
-            "sig": {
-              "type": "string",
-              "pattern": "^[0-9a-z]{1,16}$"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "id",
-            "key"
-          ]
-        },
         "css": {
           "type": "string",
           "maxLength": 131072
-        },
-        "fillHidden": {
-          "type": "boolean"
-        },
-        "flipX": {
-          "type": "boolean"
-        },
-        "flipY": {
-          "type": "boolean"
         },
         "fx": {
           "$ref": "#/$defs/prop-fx"
@@ -1763,31 +914,18 @@
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
-        "groupName": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "h": {
           "type": "number",
           "minimum": 0,
           "maximum": 1000000
-        },
-        "hidden": {
-          "type": "boolean"
         },
         "id": {
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
-        "keepAspectRatio": {
-          "type": "boolean"
-        },
         "link": {
           "$ref": "#/$defs/prop-link"
-        },
-        "locked": {
-          "type": "boolean"
         },
         "markup": {
           "type": "string",
@@ -1798,19 +936,10 @@
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
-        "name": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "opacity": {
           "type": "number",
           "minimum": 0,
           "maximum": 1
-        },
-        "parentId": {
-          "type": "string",
-          "maxLength": 200,
-          "pattern": "^[^\"'<>{};]*$"
         },
         "role": {
           "type": "string",
@@ -1825,46 +954,10 @@
         "shadow": {
           "$ref": "#/$defs/prop-shadow"
         },
-        "shadowHidden": {
-          "type": "boolean"
-        },
         "showOnHover": {
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
-        },
-        "sizing": {
-          "type": "object",
-          "properties": {
-            "h": {
-              "type": "string",
-              "enum": [
-                "fixed",
-                "fill"
-              ]
-            },
-            "minH": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100000
-            },
-            "minW": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100000
-            },
-            "w": {
-              "type": "string",
-              "enum": [
-                "fixed",
-                "fill"
-              ]
-            }
-          },
-          "additionalProperties": false
-        },
-        "strokeHidden": {
-          "type": "boolean"
         },
         "themeRefs": {
           "$ref": "#/$defs/prop-themeRefs"
@@ -1916,10 +1009,6 @@
     "chart": {
       "type": "object",
       "properties": {
-        "alt": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "backdropFilter": {
           "type": "number",
           "minimum": 0,
@@ -1935,62 +1024,6 @@
           "minimum": 0,
           "maximum": 1000
         },
-        "blurHidden": {
-          "type": "boolean"
-        },
-        "component": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string",
-              "maxLength": 200,
-              "pattern": "^[^\"'<>{};]*$"
-            },
-            "key": {
-              "type": "string",
-              "maxLength": 200,
-              "pattern": "^[^\"'<>{};]*$"
-            },
-            "main": {
-              "const": true
-            },
-            "over": {
-              "type": "array",
-              "maxItems": 64,
-              "items": {
-                "type": "string",
-                "maxLength": 64,
-                "pattern": "^[^\"'<>{};]*$"
-              }
-            },
-            "off": {
-              "type": "array",
-              "minItems": 2,
-              "maxItems": 2,
-              "items": {
-                "type": "number"
-              }
-            },
-            "sig": {
-              "type": "string",
-              "pattern": "^[0-9a-z]{1,16}$"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "id",
-            "key"
-          ]
-        },
-        "fillHidden": {
-          "type": "boolean"
-        },
-        "flipX": {
-          "type": "boolean"
-        },
-        "flipY": {
-          "type": "boolean"
-        },
         "fx": {
           "$ref": "#/$defs/prop-fx"
         },
@@ -2004,40 +1037,23 @@
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
-        "groupName": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "h": {
           "type": "number",
           "minimum": 0,
           "maximum": 1000000
-        },
-        "hidden": {
-          "type": "boolean"
         },
         "id": {
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
-        "keepAspectRatio": {
-          "type": "boolean"
-        },
         "link": {
           "$ref": "#/$defs/prop-link"
-        },
-        "locked": {
-          "type": "boolean"
         },
         "morphId": {
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
-        },
-        "name": {
-          "type": "string",
-          "maxLength": 4000
         },
         "opacity": {
           "type": "number",
@@ -2046,11 +1062,6 @@
         },
         "option": {
           "$ref": "#/$defs/prop-option"
-        },
-        "parentId": {
-          "type": "string",
-          "maxLength": 200,
-          "pattern": "^[^\"'<>{};]*$"
         },
         "preset": {
           "type": "string",
@@ -2070,49 +1081,13 @@
         "shadow": {
           "$ref": "#/$defs/prop-shadow"
         },
-        "shadowHidden": {
-          "type": "boolean"
-        },
         "showOnHover": {
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
-        "sizing": {
-          "type": "object",
-          "properties": {
-            "h": {
-              "type": "string",
-              "enum": [
-                "fixed",
-                "fill"
-              ]
-            },
-            "minH": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100000
-            },
-            "minW": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100000
-            },
-            "w": {
-              "type": "string",
-              "enum": [
-                "fixed",
-                "fill"
-              ]
-            }
-          },
-          "additionalProperties": false
-        },
         "source": {
           "$ref": "#/$defs/prop-source"
-        },
-        "strokeHidden": {
-          "type": "boolean"
         },
         "themeRefs": {
           "$ref": "#/$defs/prop-themeRefs"
@@ -2273,10 +1248,6 @@
     "table": {
       "type": "object",
       "properties": {
-        "alt": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "backdropFilter": {
           "type": "number",
           "minimum": 0,
@@ -2292,64 +1263,8 @@
           "minimum": 0,
           "maximum": 1000
         },
-        "blurHidden": {
-          "type": "boolean"
-        },
         "columns": {
           "$ref": "#/$defs/prop-columns"
-        },
-        "component": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string",
-              "maxLength": 200,
-              "pattern": "^[^\"'<>{};]*$"
-            },
-            "key": {
-              "type": "string",
-              "maxLength": 200,
-              "pattern": "^[^\"'<>{};]*$"
-            },
-            "main": {
-              "const": true
-            },
-            "over": {
-              "type": "array",
-              "maxItems": 64,
-              "items": {
-                "type": "string",
-                "maxLength": 64,
-                "pattern": "^[^\"'<>{};]*$"
-              }
-            },
-            "off": {
-              "type": "array",
-              "minItems": 2,
-              "maxItems": 2,
-              "items": {
-                "type": "number"
-              }
-            },
-            "sig": {
-              "type": "string",
-              "pattern": "^[0-9a-z]{1,16}$"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "id",
-            "key"
-          ]
-        },
-        "fillHidden": {
-          "type": "boolean"
-        },
-        "flipX": {
-          "type": "boolean"
-        },
-        "flipY": {
-          "type": "boolean"
         },
         "fx": {
           "$ref": "#/$defs/prop-fx"
@@ -2364,10 +1279,6 @@
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
-        "groupName": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "h": {
           "type": "number",
           "minimum": 0,
@@ -2376,41 +1287,23 @@
         "header": {
           "type": "boolean"
         },
-        "hidden": {
-          "type": "boolean"
-        },
         "id": {
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
-        "keepAspectRatio": {
-          "type": "boolean"
-        },
         "link": {
           "$ref": "#/$defs/prop-link"
-        },
-        "locked": {
-          "type": "boolean"
         },
         "morphId": {
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
-        "name": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "opacity": {
           "type": "number",
           "minimum": 0,
           "maximum": 1
-        },
-        "parentId": {
-          "type": "string",
-          "maxLength": 200,
-          "pattern": "^[^\"'<>{};]*$"
         },
         "role": {
           "type": "string",
@@ -2428,46 +1321,10 @@
         "shadow": {
           "$ref": "#/$defs/prop-shadow"
         },
-        "shadowHidden": {
-          "type": "boolean"
-        },
         "showOnHover": {
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
-        },
-        "sizing": {
-          "type": "object",
-          "properties": {
-            "h": {
-              "type": "string",
-              "enum": [
-                "fixed",
-                "fill"
-              ]
-            },
-            "minH": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100000
-            },
-            "minW": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100000
-            },
-            "w": {
-              "type": "string",
-              "enum": [
-                "fixed",
-                "fill"
-              ]
-            }
-          },
-          "additionalProperties": false
-        },
-        "strokeHidden": {
-          "type": "boolean"
         },
         "style": {
           "$ref": "#/$defs/prop-style"
@@ -2506,10 +1363,6 @@
     "media": {
       "type": "object",
       "properties": {
-        "alt": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "autoplay": {
           "type": "boolean"
         },
@@ -2528,57 +1381,7 @@
           "minimum": 0,
           "maximum": 1000
         },
-        "blurHidden": {
-          "type": "boolean"
-        },
-        "component": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string",
-              "maxLength": 200,
-              "pattern": "^[^\"'<>{};]*$"
-            },
-            "key": {
-              "type": "string",
-              "maxLength": 200,
-              "pattern": "^[^\"'<>{};]*$"
-            },
-            "main": {
-              "const": true
-            },
-            "over": {
-              "type": "array",
-              "maxItems": 64,
-              "items": {
-                "type": "string",
-                "maxLength": 64,
-                "pattern": "^[^\"'<>{};]*$"
-              }
-            },
-            "off": {
-              "type": "array",
-              "minItems": 2,
-              "maxItems": 2,
-              "items": {
-                "type": "number"
-              }
-            },
-            "sig": {
-              "type": "string",
-              "pattern": "^[0-9a-z]{1,16}$"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "id",
-            "key"
-          ]
-        },
         "controls": {
-          "type": "boolean"
-        },
-        "fillHidden": {
           "type": "boolean"
         },
         "fit": {
@@ -2588,12 +1391,6 @@
             "cover",
             "fill"
           ]
-        },
-        "flipX": {
-          "type": "boolean"
-        },
-        "flipY": {
-          "type": "boolean"
         },
         "fx": {
           "$ref": "#/$defs/prop-fx"
@@ -2608,25 +1405,15 @@
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
-        "groupName": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "h": {
           "type": "number",
           "minimum": 0,
           "maximum": 1000000
         },
-        "hidden": {
-          "type": "boolean"
-        },
         "id": {
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
-        },
-        "keepAspectRatio": {
-          "type": "boolean"
         },
         "kind": {
           "type": "string",
@@ -2637,9 +1424,6 @@
         },
         "link": {
           "$ref": "#/$defs/prop-link"
-        },
-        "locked": {
-          "type": "boolean"
         },
         "loop": {
           "type": "boolean"
@@ -2652,19 +1436,10 @@
         "muted": {
           "type": "boolean"
         },
-        "name": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "opacity": {
           "type": "number",
           "minimum": 0,
           "maximum": 1
-        },
-        "parentId": {
-          "type": "string",
-          "maxLength": 200,
-          "pattern": "^[^\"'<>{};]*$"
         },
         "poster": {
           "type": "string",
@@ -2689,51 +1464,15 @@
         "shadow": {
           "$ref": "#/$defs/prop-shadow"
         },
-        "shadowHidden": {
-          "type": "boolean"
-        },
         "showOnHover": {
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
-        "sizing": {
-          "type": "object",
-          "properties": {
-            "h": {
-              "type": "string",
-              "enum": [
-                "fixed",
-                "fill"
-              ]
-            },
-            "minH": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100000
-            },
-            "minW": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100000
-            },
-            "w": {
-              "type": "string",
-              "enum": [
-                "fixed",
-                "fill"
-              ]
-            }
-          },
-          "additionalProperties": false
-        },
         "src": {
           "type": "string",
           "maxLength": 33554432,
           "description": "data: URI, asset:<key> or URL"
-        },
-        "strokeHidden": {
-          "type": "boolean"
         },
         "themeRefs": {
           "$ref": "#/$defs/prop-themeRefs"
@@ -2780,10 +1519,6 @@
     "embed": {
       "type": "object",
       "properties": {
-        "alt": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "app": {
           "type": "string",
           "maxLength": 200,
@@ -2804,64 +1539,8 @@
           "minimum": 0,
           "maximum": 1000
         },
-        "blurHidden": {
-          "type": "boolean"
-        },
-        "component": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string",
-              "maxLength": 200,
-              "pattern": "^[^\"'<>{};]*$"
-            },
-            "key": {
-              "type": "string",
-              "maxLength": 200,
-              "pattern": "^[^\"'<>{};]*$"
-            },
-            "main": {
-              "const": true
-            },
-            "over": {
-              "type": "array",
-              "maxItems": 64,
-              "items": {
-                "type": "string",
-                "maxLength": 64,
-                "pattern": "^[^\"'<>{};]*$"
-              }
-            },
-            "off": {
-              "type": "array",
-              "minItems": 2,
-              "maxItems": 2,
-              "items": {
-                "type": "number"
-              }
-            },
-            "sig": {
-              "type": "string",
-              "pattern": "^[0-9a-z]{1,16}$"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "id",
-            "key"
-          ]
-        },
         "doc": {
           "$ref": "#/$defs/prop-doc"
-        },
-        "fillHidden": {
-          "type": "boolean"
-        },
-        "flipX": {
-          "type": "boolean"
-        },
-        "flipY": {
-          "type": "boolean"
         },
         "fx": {
           "$ref": "#/$defs/prop-fx"
@@ -2876,25 +1555,15 @@
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
-        "groupName": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "h": {
           "type": "number",
           "minimum": 0,
           "maximum": 1000000
         },
-        "hidden": {
-          "type": "boolean"
-        },
         "id": {
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
-        },
-        "keepAspectRatio": {
-          "type": "boolean"
         },
         "link": {
           "$ref": "#/$defs/prop-link"
@@ -2902,27 +1571,15 @@
         "live": {
           "type": "boolean"
         },
-        "locked": {
-          "type": "boolean"
-        },
         "morphId": {
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
-        "name": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "opacity": {
           "type": "number",
           "minimum": 0,
           "maximum": 1
-        },
-        "parentId": {
-          "type": "string",
-          "maxLength": 200,
-          "pattern": "^[^\"'<>{};]*$"
         },
         "role": {
           "type": "string",
@@ -2937,46 +1594,10 @@
         "shadow": {
           "$ref": "#/$defs/prop-shadow"
         },
-        "shadowHidden": {
-          "type": "boolean"
-        },
         "showOnHover": {
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
-        },
-        "sizing": {
-          "type": "object",
-          "properties": {
-            "h": {
-              "type": "string",
-              "enum": [
-                "fixed",
-                "fill"
-              ]
-            },
-            "minH": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100000
-            },
-            "minW": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100000
-            },
-            "w": {
-              "type": "string",
-              "enum": [
-                "fixed",
-                "fill"
-              ]
-            }
-          },
-          "additionalProperties": false
-        },
-        "strokeHidden": {
-          "type": "boolean"
         },
         "themeRefs": {
           "$ref": "#/$defs/prop-themeRefs"
@@ -3027,10 +1648,6 @@
             "right"
           ]
         },
-        "alt": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "backdropFilter": {
           "type": "number",
           "minimum": 0,
@@ -3046,70 +1663,14 @@
           "minimum": 0,
           "maximum": 1000
         },
-        "blurHidden": {
-          "type": "boolean"
-        },
         "color": {
           "type": "string",
           "maxLength": 64,
           "description": "CSS colour; no url()"
         },
-        "component": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string",
-              "maxLength": 200,
-              "pattern": "^[^\"'<>{};]*$"
-            },
-            "key": {
-              "type": "string",
-              "maxLength": 200,
-              "pattern": "^[^\"'<>{};]*$"
-            },
-            "main": {
-              "const": true
-            },
-            "over": {
-              "type": "array",
-              "maxItems": 64,
-              "items": {
-                "type": "string",
-                "maxLength": 64,
-                "pattern": "^[^\"'<>{};]*$"
-              }
-            },
-            "off": {
-              "type": "array",
-              "minItems": 2,
-              "maxItems": 2,
-              "items": {
-                "type": "number"
-              }
-            },
-            "sig": {
-              "type": "string",
-              "pattern": "^[0-9a-z]{1,16}$"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "id",
-            "key"
-          ]
-        },
         "content": {
           "type": "string",
           "maxLength": 65536
-        },
-        "fillHidden": {
-          "type": "boolean"
-        },
-        "flipX": {
-          "type": "boolean"
-        },
-        "flipY": {
-          "type": "boolean"
         },
         "fontFamily": {
           "type": "string",
@@ -3143,25 +1704,15 @@
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
-        "groupName": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "h": {
           "type": "number",
           "minimum": 0,
           "maximum": 1000000
         },
-        "hidden": {
-          "type": "boolean"
-        },
         "id": {
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
-        },
-        "keepAspectRatio": {
-          "type": "boolean"
         },
         "lineHeight": {
           "type": "number",
@@ -3171,27 +1722,15 @@
         "link": {
           "$ref": "#/$defs/prop-link"
         },
-        "locked": {
-          "type": "boolean"
-        },
         "morphId": {
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
-        "name": {
-          "type": "string",
-          "maxLength": 4000
-        },
         "opacity": {
           "type": "number",
           "minimum": 0,
           "maximum": 1
-        },
-        "parentId": {
-          "type": "string",
-          "maxLength": 200,
-          "pattern": "^[^\"'<>{};]*$"
         },
         "role": {
           "type": "string",
@@ -3206,46 +1745,10 @@
         "shadow": {
           "$ref": "#/$defs/prop-shadow"
         },
-        "shadowHidden": {
-          "type": "boolean"
-        },
         "showOnHover": {
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
-        },
-        "sizing": {
-          "type": "object",
-          "properties": {
-            "h": {
-              "type": "string",
-              "enum": [
-                "fixed",
-                "fill"
-              ]
-            },
-            "minH": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100000
-            },
-            "minW": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100000
-            },
-            "w": {
-              "type": "string",
-              "enum": [
-                "fixed",
-                "fill"
-              ]
-            }
-          },
-          "additionalProperties": false
-        },
-        "strokeHidden": {
-          "type": "boolean"
         },
         "themeAssetId": {
           "type": "string",
@@ -3465,7 +1968,7 @@
             "type": "string"
           },
           "maxProperties": 64,
-          "description": "property path → palette slot, or $token name"
+          "description": "property path → palette token"
         },
         "transition": {
           "type": "string",
@@ -3683,64 +2186,6 @@
         },
         "table": {
           "$ref": "#/$defs/tableStyle"
-        },
-        "tokens": {
-          "type": "object",
-          "properties": {
-            "mode": {
-              "type": "string",
-              "maxLength": 64,
-              "description": "the active mode; absent = the first"
-            },
-            "modes": {
-              "type": "array",
-              "maxItems": 16,
-              "items": {
-                "type": "string",
-                "maxLength": 64
-              }
-            },
-            "set": {
-              "type": "object",
-              "maxProperties": 500,
-              "description": "token name → {type, values: mode → value}; bound with themeRefs \"$name\"",
-              "additionalProperties": {
-                "type": "object",
-                "required": [
-                  "type",
-                  "values"
-                ],
-                "additionalProperties": false,
-                "properties": {
-                  "type": {
-                    "enum": [
-                      "color",
-                      "number",
-                      "fontFamily",
-                      "fontSize",
-                      "shadow",
-                      "opacity"
-                    ]
-                  },
-                  "values": {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": [
-                        "string",
-                        "number",
-                        "object"
-                      ],
-                      "description": "a shadow token holds {x, y, blur, color}"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "set"
-          ]
         }
       },
       "additionalProperties": false,

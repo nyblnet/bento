@@ -1357,4 +1357,5 @@ export const strings: Catalog = {
   "No shortcut matches": "Eşleşen kısayol yok",
   "or": "veya",
   "Categories": "Kategoriler",
+  "Lock or unlock": "Kilitle veya kilidi aç",
 }

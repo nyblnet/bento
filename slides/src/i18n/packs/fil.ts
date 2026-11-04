@@ -1375,4 +1375,5 @@ export const strings: Catalog = {
   "No shortcut matches": "Walang tugmang shortcut",
   "or": "o",
   "Categories": "Mga kategorya",
+  "Lock or unlock": "I-lock o i-unlock",
 }

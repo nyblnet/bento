@@ -1354,4 +1354,5 @@ export const strings: Catalog = {
   "No shortcut matches": "Geen sneltoets gevonden",
   "or": "of",
   "Categories": "Categorieën",
+  "Lock or unlock": "Vergrendelen of ontgrendelen",
 }
