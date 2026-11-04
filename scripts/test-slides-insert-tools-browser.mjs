@@ -16,6 +16,8 @@
 //      Symmetric act on, Close path opens and closes it, ⌘Z undoes each.
 //   4. Undo, Redo, Help, PDF, Save and the element menu's rows carry data-cmd.
 //   5. The ? sheet's Tools section lists the letters from the same list.
+//   6. At 1280 wide (the icon-only tier) the tools still show their keys, in
+//      the button's corner, clear of the icon, and the bar does not overflow.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -56,6 +58,38 @@ try {
   for (const cmd of ['insert-image', 'insert-table', 'insert-chart', 'insert-code']) ok(!!byCmd[cmd], `${cmd} is a command button`)
   const shapeKeys = await p.evaluate(() => Object.fromEntries([...document.querySelectorAll('.ed-topbar .ed-menu [data-cmd^="tool-"]')].map((b) => [b.dataset.cmd, b.querySelector('.ed-tool-key')?.textContent])))
   ok(shapeKeys['tool-rect'] === 'R' && shapeKeys['tool-ellipse'] === 'O' && shapeKeys['tool-line'] === 'L' && shapeKeys['tool-pen'] === 'P', `the Shape menu badges R O L P (${JSON.stringify(shapeKeys)})`)
+
+  console.log('\nthe letters at a normal window width\n')
+  {
+    // at 1280 the bar is icon-only (compact); each tool still shows its key in its corner
+    const q = await ctx.newPage()
+    await q.setViewportSize({ width: 1280, height: 800 })
+    await q.goto(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url).href)
+    await q.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-stage-scale [data-el-id]'))
+    await q.waitForTimeout(300)
+    const look = () => q.evaluate(() => {
+      const bar = document.querySelector('.ed-topbar')
+      const out = { compact: bar.classList.contains('ed-bar-compact'), fold: bar.classList.contains('ed-bar-fold'), overflow: bar.scrollWidth - bar.clientWidth, keys: {} }
+      for (const b of document.querySelectorAll('.ed-topbar [data-cmd] ')) {
+        const k = b.querySelector(':scope > .ed-tool-key')
+        if (!k) continue
+        const kr = k.getBoundingClientRect(), br = b.getBoundingClientRect(), ir = b.querySelector('svg')?.getBoundingClientRect()
+        const cs = getComputedStyle(k)
+        const seen = kr.width > 0 && kr.height > 0 && cs.display !== 'none' && cs.visibility !== 'hidden' && Number(cs.opacity) > 0
+        const inside = kr.left >= br.left - 0.5 && kr.right <= br.right + 0.5 && kr.top >= br.top - 0.5 && kr.bottom <= br.bottom + 0.5
+        const clear = !ir || b.closest('.ed-menu') || kr.left >= ir.right - 0.5 || kr.top >= ir.bottom - 0.5
+        out.keys[k.textContent] = seen && inside && clear && br.width > 0
+      }
+      return out
+    })
+    let at = await look()
+    ok(at.compact && !at.fold && at.overflow <= 1, `at 1280 the bar is icon-only and does not overflow (compact ${at.compact}, overflow ${at.overflow})`)
+    ok(['V', 'S', 'F', 'T'].every((k) => at.keys[k]), `V S F T show their keys on their buttons, clear of the icon (${JSON.stringify(at.keys)})`)
+    await q.click('.ed-topbar .ed-shape-trigger'); await q.waitForTimeout(200)
+    at = await look()
+    ok(['R', 'O', 'L', 'P'].every((k) => at.keys[k]), `the Shape menu rows show R O L P (${JSON.stringify(at.keys)})`)
+    await q.close()
+  }
 
   console.log('\nthe letters\n')
   await load([])
