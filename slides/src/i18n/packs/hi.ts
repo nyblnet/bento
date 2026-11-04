@@ -425,7 +425,7 @@ export const strings: Catalog = {
   "Paste an image or text straight onto the canvas with ⌘V.": "⌘V से सीधे कैनवस पर इमेज या टेक्स्ट पेस्ट करें।",
   "Copy a slide (⌘C with nothing selected) and paste it into another Bento deck.": "स्लाइड कॉपी करें (कुछ भी चुने बिना ⌘C) और उसे किसी दूसरे bento प्रज़ेंटेशन में पेस्ट करें।",
   "Make a chart from a table and it stays linked — edit the table, the chart updates.": "टेबल से चार्ट बनाएं और वह जुड़ा रहता है — टेबल एडिट करें, चार्ट अपडेट हो जाता है।",
-  "Your work auto-saves; restore earlier versions from Save → Version history.": "आपका काम अपने आप सेव होता है; पुराने वर्शन 'सेव करें' → 'वर्शन इतिहास' से वापस लाएं।",
+  "Your work auto-saves; restore earlier versions from the bento/slides menu → Version history.": "आपका काम अपने आप सेव होता है; पुराने वर्शन 'bento/slides' मेनू → 'वर्शन इतिहास' से वापस लाएं।",
   "Slide copied — ⌘V in any deck to paste it": "स्लाइड कॉपी हो गई — किसी भी प्रज़ेंटेशन में ⌘V से पेस्ट करें",
   "📺 Use a second screen for notes": "📺 नोट्स के लिए दूसरी स्क्रीन इस्तेमाल करें",
   "Second screen ready — press S for speaker notes": "दूसरी स्क्रीन तैयार है — स्पीकर नोट्स के लिए S दबाएं",

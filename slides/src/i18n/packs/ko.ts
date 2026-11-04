@@ -401,7 +401,7 @@ export const strings: Catalog = {
   "Paste an image or text straight onto the canvas with ⌘V.": "⌘V로 이미지나 텍스트를 캔버스에 바로 붙여 넣으세요.",
   "Copy a slide (⌘C with nothing selected) and paste it into another Bento deck.": "슬라이드를 복사해(아무것도 선택하지 않은 채 ⌘C) 다른 Bento 프레젠테이션에 붙여 넣으세요.",
   "Make a chart from a table and it stays linked — edit the table, the chart updates.": "표로 차트를 만들면 연결이 유지됩니다 — 표를 편집하면 차트가 업데이트됩니다.",
-  "Your work auto-saves; restore earlier versions from Save → Version history.": "작업은 자동 저장됩니다. 저장 → 버전 기록에서 이전 버전을 복원하세요.",
+  "Your work auto-saves; restore earlier versions from the bento/slides menu → Version history.": "작업은 자동 저장됩니다. bento/slides 메뉴 → 버전 기록에서 이전 버전을 복원하세요.",
   "Slide copied — ⌘V in any deck to paste it": "슬라이드를 복사했습니다 — 어떤 프레젠테이션에서든 ⌘V로 붙여 넣으세요",
   "📺 Use a second screen for notes": "📺 노트에 두 번째 화면 사용",
   "Second screen ready — press S for speaker notes": "두 번째 화면 준비됨 — S를 누르면 발표자 노트가 열립니다",

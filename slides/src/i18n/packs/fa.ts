@@ -421,7 +421,7 @@ export const strings: Catalog = {
   "Paste an image or text straight onto the canvas with ⌘V.": "با ⌘V می‌توانید تصویر یا متن را مستقیم روی بوم بچسبانید.",
   "Copy a slide (⌘C with nothing selected) and paste it into another Bento deck.": "یک اسلاید را کپی کنید (با ⌘C وقتی چیزی انتخاب نشده) و در ارائهٔ bento دیگری بچسبانید.",
   "Make a chart from a table and it stays linked — edit the table, the chart updates.": "از یک جدول نمودار بسازید و پیوند برقرار می‌ماند — جدول را ویرایش کنید، نمودار به‌روز می‌شود.",
-  "Your work auto-saves; restore earlier versions from Save → Version history.": "کار شما خودکار ذخیره می‌شود؛ نسخه‌های پیشین را از بخش ذخیره ← تاریخچهٔ نسخه‌ها بازیابی کنید.",
+  "Your work auto-saves; restore earlier versions from the bento/slides menu → Version history.": "کار شما خودکار ذخیره می‌شود؛ نسخه‌های پیشین را از منوی bento/slides ← تاریخچهٔ نسخه‌ها بازیابی کنید.",
   "Slide copied — ⌘V in any deck to paste it": "اسلاید کپی شد — در هر ارائه‌ای با ⌘V آن را بچسبانید",
   "📺 Use a second screen for notes": "📺 استفاده از نمایشگر دوم برای یادداشت‌ها",
   "Second screen ready — press S for speaker notes": "نمایشگر دوم آماده است — برای یادداشت‌های ارائه‌دهنده کلید S را بزنید",

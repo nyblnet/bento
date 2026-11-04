@@ -422,7 +422,7 @@ export const strings: Catalog = {
   "Paste an image or text straight onto the canvas with ⌘V.": "Liitä kuva tai teksti suoraan piirtoalustalle näppäimillä ⌘V.",
   "Copy a slide (⌘C with nothing selected) and paste it into another Bento deck.": "Kopioi dia (⌘C ilman valintaa) ja liitä se toiseen Bento-esitykseen.",
   "Make a chart from a table and it stays linked — edit the table, the chart updates.": "Tee taulukosta kaavio, niin ne pysyvät linkitettyinä — muokkaa taulukkoa, ja kaavio päivittyy.",
-  "Your work auto-saves; restore earlier versions from Save → Version history.": "Työsi tallentuu automaattisesti; palauta aiempia versioita kohdasta Tallenna → Versiohistoria.",
+  "Your work auto-saves; restore earlier versions from the bento/slides menu → Version history.": "Työsi tallentuu automaattisesti; palauta aiempia versioita bento/slides-valikosta → Versiohistoria.",
   "Slide copied — ⌘V in any deck to paste it": "Dia kopioitu — liitä se mihin tahansa esitykseen näppäimillä ⌘V",
   "📺 Use a second screen for notes": "📺 Käytä muistiinpanoihin toista näyttöä",
   "Second screen ready — press S for speaker notes": "Toinen näyttö valmis — avaa puhujan muistiinpanot painamalla S",

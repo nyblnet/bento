@@ -441,7 +441,7 @@ export const ja: Catalog = {
   "Paste an image or text straight onto the canvas with ⌘V.": "⌘V で画像やテキストをキャンバスに直接貼り付けられます。",
   "Copy a slide (⌘C with nothing selected) and paste it into another Bento deck.": "スライドをコピー（何も選択せずに ⌘C）して、別の Bento デッキに貼り付けられます。",
   "Make a chart from a table and it stays linked — edit the table, the chart updates.": "表からグラフを作ると連携が保たれ、表を編集するとグラフも更新されます。",
-  "Your work auto-saves; restore earlier versions from Save → Version history.": "作業は自動保存されます。以前のバージョンは「保存」→「バージョン履歴」から復元できます。",
+  "Your work auto-saves; restore earlier versions from the bento/slides menu → Version history.": "作業は自動保存されます。以前のバージョンは「bento/slides」メニュー →「バージョン履歴」から復元できます。",
   "Slide copied — ⌘V in any deck to paste it": "スライドをコピーしました — 任意のデッキで ⌘V で貼り付け",
   "Slides copied — ⌘V in any deck to paste them": "スライドをコピーしました — 任意のデッキで ⌘V で貼り付け",
   "📺 Use a second screen for notes": "📺 ノートに2台目の画面を使う",

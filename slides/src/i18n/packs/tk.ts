@@ -685,7 +685,7 @@ export const strings: Catalog = {
   "Opened {name} — ⌘S will save a copy": "{name} açyldy — ⌘S nusga saklar",
   "⌘S asks where to save, then rewrites that file in place": "⌘S nirä saklamalydygyny soraýar, soňra şol faýlyň üstüne göni ýazýar",
   "{name} is an empty copy of Bento, not a saved deck. Open it on its own to start one.": "{name} saklanan prezentasiýa däl-de, Bento-nyň boş nusgasy. Täzesine başlamak üçin ony aýratyn açyň.",
-  "Your work auto-saves; restore earlier versions from Save → Version history.": "Işiňiz awtomatik saklanýar; öňki wersiýalary «Barada» → «Wersiýa taryhy» arkaly dikeldiň.",
+  "Your work auto-saves; restore earlier versions from the bento/slides menu → Version history.": "Işiňiz awtomatik saklanýar; öňki wersiýalary «bento/slides» menýusy → «Wersiýa taryhy» arkaly dikeldiň.",
   "Unnumbered — in the show, continues the previous page number": "Belgisiz — görkezişde, öňki sahypa belgisini dowam etdirýär",
   "Hidden until that press of → while presenting; ← hides it again. Give several elements the same step to reveal them together.": "Prezentasiýa wagtynda → şol basyşyna çenli gizlin; ← ony ýene gizleýär. Bilelikde açmak üçin birnäçe elemente şol bir ädimi beriň.",
   "hidden": "gizlin",

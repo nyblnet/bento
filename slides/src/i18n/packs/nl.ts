@@ -413,7 +413,7 @@ export const strings: Catalog = {
   "Paste an image or text straight onto the canvas with ⌘V.": "Plak een afbeelding of tekst met ⌘V rechtstreeks op het canvas.",
   "Copy a slide (⌘C with nothing selected) and paste it into another Bento deck.": "Kopieer een dia (⌘C zonder selectie) en plak die in een andere Bento-presentatie.",
   "Make a chart from a table and it stays linked — edit the table, the chart updates.": "Maak een grafiek van een tabel: die blijft gekoppeld — bewerk de tabel en de grafiek loopt mee.",
-  "Your work auto-saves; restore earlier versions from Save → Version history.": "Je werk wordt automatisch opgeslagen; herstel eerdere versies via Opslaan → Versiegeschiedenis.",
+  "Your work auto-saves; restore earlier versions from the bento/slides menu → Version history.": "Je werk wordt automatisch opgeslagen; herstel eerdere versies via het bento/slides-menu → Versiegeschiedenis.",
   "Slide copied — ⌘V in any deck to paste it": "Dia gekopieerd — ⌘V in een willekeurige presentatie om die te plakken",
   "📺 Use a second screen for notes": "📺 Een tweede scherm voor notities gebruiken",
   "Second screen ready — press S for speaker notes": "Tweede scherm klaar — druk op S voor de sprekersnotities",

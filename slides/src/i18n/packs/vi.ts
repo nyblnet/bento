@@ -415,7 +415,7 @@ export const strings: Catalog = {
   "Paste an image or text straight onto the canvas with ⌘V.": "Dán hình ảnh hoặc văn bản thẳng lên khung vẽ bằng ⌘V.",
   "Copy a slide (⌘C with nothing selected) and paste it into another Bento deck.": "Sao chép một trang chiếu (⌘C khi không chọn gì) rồi dán vào một bản trình bày Bento khác.",
   "Make a chart from a table and it stays linked — edit the table, the chart updates.": "Tạo biểu đồ từ một bảng và nó vẫn được liên kết — sửa bảng thì biểu đồ cập nhật theo.",
-  "Your work auto-saves; restore earlier versions from Save → Version history.": "Công việc của bạn được tự động lưu; khôi phục các phiên bản trước từ Lưu → Lịch sử phiên bản.",
+  "Your work auto-saves; restore earlier versions from the bento/slides menu → Version history.": "Công việc của bạn được tự động lưu; khôi phục các phiên bản trước từ menu bento/slides → Lịch sử phiên bản.",
   "Slide copied — ⌘V in any deck to paste it": "Đã sao chép trang chiếu — nhấn ⌘V trong bản trình bày bất kỳ để dán",
   "📺 Use a second screen for notes": "📺 Dùng màn hình thứ hai cho ghi chú",
   "Second screen ready — press S for speaker notes": "Màn hình thứ hai đã sẵn sàng — nhấn S để xem ghi chú người trình bày",

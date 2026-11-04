@@ -441,7 +441,7 @@ export const zhHant: Catalog = {
   "Paste an image or text straight onto the canvas with ⌘V.": "用 ⌘V 直接把圖片或文字貼到畫布上。",
   "Copy a slide (⌘C with nothing selected) and paste it into another Bento deck.": "複製一張投影片（未選取任何內容時按 ⌘C），貼到另一個 Bento 簡報中。",
   "Make a chart from a table and it stays linked — edit the table, the chart updates.": "從表格產生圖表後會保持關聯 — 編輯表格，圖表隨之更新。",
-  "Your work auto-saves; restore earlier versions from Save → Version history.": "你的工作會自動儲存；可從「儲存 → 版本歷程」還原較早的版本。",
+  "Your work auto-saves; restore earlier versions from the bento/slides menu → Version history.": "你的工作會自動儲存；可從「bento/slides 選單 → 版本歷程」還原較早的版本。",
   "Slide copied — ⌘V in any deck to paste it": "已複製投影片 — 在任意簡報中按 ⌘V 貼上",
   "Slides copied — ⌘V in any deck to paste them": "已複製投影片 — 在任意簡報中按 ⌘V 貼上",
   "📺 Use a second screen for notes": "📺 用第二個螢幕顯示備註",

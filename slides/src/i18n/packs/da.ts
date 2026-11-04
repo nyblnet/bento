@@ -417,7 +417,7 @@ export const strings: Catalog = {
   "Paste an image or text straight onto the canvas with ⌘V.": "Sæt et billede eller tekst direkte ind på arbejdsfladen med ⌘V.",
   "Copy a slide (⌘C with nothing selected) and paste it into another Bento deck.": "Kopiér et dias (⌘C uden markering), og sæt det ind i en anden Bento-præsentation.",
   "Make a chart from a table and it stays linked — edit the table, the chart updates.": "Lav et diagram ud fra en tabel, og det forbliver forbundet — rediger tabellen, og diagrammet opdateres.",
-  "Your work auto-saves; restore earlier versions from Save → Version history.": "Dit arbejde gemmes automatisk; gendan tidligere versioner under Gem → Versionshistorik.",
+  "Your work auto-saves; restore earlier versions from the bento/slides menu → Version history.": "Dit arbejde gemmes automatisk; gendan tidligere versioner i bento/slides-menuen → Versionshistorik.",
   "Slide copied — ⌘V in any deck to paste it": "Dias kopieret — ⌘V i en hvilken som helst præsentation for at sætte det ind",
   "📺 Use a second screen for notes": "📺 Brug en ekstra skærm til noter",
   "Second screen ready — press S for speaker notes": "Ekstra skærm klar — tryk på S for talernoter",

@@ -417,7 +417,7 @@ export const strings: Catalog = {
   "Paste an image or text straight onto the canvas with ⌘V.": "Вставляйте изображение или текст прямо на холст с помощью ⌘V.",
   "Copy a slide (⌘C with nothing selected) and paste it into another Bento deck.": "Скопируйте слайд (⌘C, когда ничего не выделено) и вставьте его в другую презентацию Bento.",
   "Make a chart from a table and it stays linked — edit the table, the chart updates.": "Создайте диаграмму из таблицы — связь сохранится: измените таблицу, и диаграмма обновится.",
-  "Your work auto-saves; restore earlier versions from Save → Version history.": "Работа сохраняется автоматически; восстановить прежние версии можно в меню «Сохранить» → «Журнал версий».",
+  "Your work auto-saves; restore earlier versions from the bento/slides menu → Version history.": "Работа сохраняется автоматически; восстановить прежние версии можно в меню «bento/slides» → «Журнал версий».",
   "Slide copied — ⌘V in any deck to paste it": "Слайд скопирован — нажмите ⌘V в любой презентации, чтобы вставить его",
   "📺 Use a second screen for notes": "📺 Использовать второй экран для заметок",
   "Second screen ready — press S for speaker notes": "Второй экран готов — нажмите S для заметок докладчика",
