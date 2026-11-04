@@ -180,7 +180,9 @@ const WHERE = [
 
 /** The selection's contrast against what is behind it, graded, and its alt text. */
 function accessibility(p: PropsPanel, el: SlideElement, slide: Slide) {
-  const reading = measureContrast(el, slide, 5, el.type === 'text' ? glyphAreas(el, p.store.doc.size.width) : undefined)
+  const glyphs = el.type === 'text' ? glyphAreas(el, p.store.doc.size.width) : undefined
+  // a text with no words has nothing to read against its backdrop
+  const reading = el.type === 'text' && !glyphs ? null : measureContrast(el, slide, 5, glyphs)
   if (reading) {
     const ratio = reading.ratio
     // WCAG 2.2: text 4.5 (AA) / 7 (AAA), large text (≥24px, or ≥18.66px bold) 3 / 4.5; graphics 3 (AA)

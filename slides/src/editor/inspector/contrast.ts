@@ -72,7 +72,9 @@ function ownPaint(el: SlideElement, px: number, py: number): RGBA | null {
   const [x, y] = local(el, px, py)
   if (el.type === 'text') return el.colorGradient?.stops.length ? gradientAt(el.colorGradient, el, x, y) : rgba(el.color)
   if (el.type !== 'shape') return null
-  if (el.fills?.some((f) => !f.hidden) || (el.fill && el.fill !== 'none' && rgba(el.fill)[3] > 0) || el.fillGradient) return shapePaint(el, px, py, [0, 0, 0, 0])
+  if (!el.fillHidden && (el.fills?.some((f) => !f.hidden) || (el.fill && el.fill !== 'none' && rgba(el.fill)[3] > 0) || el.fillGradient)) return shapePaint(el, px, py, [0, 0, 0, 0])
+  // no fill and no stroke (a bare frame): nothing painted, nothing to judge
+  if (!(el.strokeWidth > 0) || el.strokeHidden || rgba(el.stroke)[3] === 0) return null
   return rgba(el.stroke)
 }
 
@@ -98,7 +100,8 @@ export interface Area { x: number; y: number; w: number; h: number }
  * `areas` — for text, the boxes its glyphs actually fill (one per rendered
  * line, measured by the caller), since a text box larger than its words has
  * corners with nothing in them to read. Absent `areas` = the whole box.
- * null when the element has no colour of its own to judge (pictures, charts).
+ * null when the element has no colour of its own to judge (pictures, charts,
+ * a shape with neither fill nor stroke).
  */
 export function measureContrast(el: SlideElement, slide: Slide, n = 5, areas?: Area[]): ContrastReading | null {
   const below = slide.elements.slice(0, Math.max(0, slide.elements.findIndex((e) => e.id === el.id)))

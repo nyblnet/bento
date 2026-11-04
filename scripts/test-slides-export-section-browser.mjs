@@ -14,6 +14,7 @@
 //   5. Copy as JSON writes ⌘C's clipboard payload: the selected elements.
 //   6. A multi-selection exports in the slide's paint order.
 //   7. A selected frame exports with its contents, a frame's child too.
+//   8. Contrast is graded only where something is painted.
 import { readFileSync } from 'node:fs'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
@@ -136,6 +137,7 @@ try {
     // ids sort the texts before the rect; the slide paints the rect first
     rect('z', 700, 400, 300, 120, { fill: '#0000ff' }),
     words('a1', 720, 410), words('a2', 720, 460),
+    words('e0', 100, 600, { html: '' }),
   ])
   await p.waitForTimeout(400)
   const pick = async (...ids) => {
@@ -162,6 +164,13 @@ try {
   }, png.buf.toString('base64'))
   ok(row.join() === 'row,c1,t1,c2,t2' && order(card).join() === 'c1,t1' && /#00aa00|rgb\(0, 170, 0\)/i.test(card) && mid[1] > 150 && mid[3] > 200,
     `a selected frame exports with everything inside it (Row: ${row.join()}; card: ${order(card).join()}, PNG corner ${mid.join(',')})`)
+  // nothing painted, nothing to grade: no "1.00:1 Fails" for a frame with no
+  // fill or stroke, nor for a text with no words
+  const graded = []
+  for (const id of ['row', 'e0']) { await pick(id); if (await p.locator('.ed-props .ed-a11y').count()) graded.push(`${id}: ${await p.locator('.ed-props .ed-a11y').textContent()}`) }
+  await pick('c1')
+  const card1 = await p.locator('.ed-props .ed-a11y').count()
+  ok(!graded.length && card1 === 1, `contrast says nothing where nothing is painted, and still grades a filled card (${graded.join('; ') || 'none'}, card ${card1})`)
 
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
