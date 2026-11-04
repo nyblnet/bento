@@ -145,6 +145,8 @@ runs:
       # client believes the answer only if it is the exact binding it signed and
       # the attestation verifies under a key the client holds; and the local
       # recovery material is deleted only on the directory's acknowledgement.
+      # On the key-store routes: passkey first under the setup allowance, the code
+      # after it by that passkey's consent, and a code first refused locally.
       shell: bento-step {0}
       run: node scripts/test-webext-directory.ts
 

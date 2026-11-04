@@ -23,13 +23,15 @@
 // Pure: fetch, time and the key list come in as deps, so scripts/
 // test-webext-directory.ts runs this exact code against the real worker.
 
-import { buildBind, verifyBind, buildCmp, verifyAtt, signStatement, sha256b64u, CERT_MAX_MS, buildDreq, dreqArg, b64uEnc } from './gen/statements.js'
+import { buildBind, verifyBind, buildCmp, verifyAtt, signStatement, sha256b64u, CERT_MAX_MS, buildDreq, dreqArg, b64uEnc, buildConsent, consentTranscript, webauthnChallengeFor } from './gen/statements.js'
 import { normalizeAddress } from './gen/address.js'
 import { openPrfBlob } from './gen/recovery.js'
 
 export const DIRECTORY = 'https://id.bento.page'
 /** An attestation older than this is not accepted as the answer to a request just made. */
 export const ATT_MAX_AGE_MS = 10 * 60_000
+/** How long a WebAuthn consent is good for. The directory's ceiling is 5 minutes; its challenge lapses first. */
+export const CONSENT_TTL_MS = 2 * 60_000
 
 export class DirectoryRefused extends Error {
   constructor(reason) { super(reason); this.reason = reason }
@@ -72,7 +74,11 @@ export async function bindComplete({ record, pending, code }, deps) {
   const cmpText = buildCmp(pending.hash, typed)
   const r = await post(deps, '/v1/bind/complete', { email: pending.address, code: typed, sig: await signStatement(record.accountKey, cmpText) })
   if (r.status === 429) return { ok: false, reason: 'rate-limited' }
-  if (r.status !== 200 || !r.j) return { ok: false, reason: 'rejected' } // the directory's 400 is uniform on purpose
+  // Not a failed try. A deletion is still being carried out, and the directory says so only to someone who
+  // sent the right code and the right key, so "wrong code" would be false: keep `pending`, say to try again
+  // later, and the same code completes the binding once the deletion lands.
+  if (r.status === 400 && r.j?.reason === 'wipe') return { ok: false, reason: 'try-later' }
+  if (r.status !== 200 || !r.j) return { ok: false, reason: 'rejected' } // every other 400 is uniform on purpose
   const { binding, attestation, attestationSig } = r.j
   // the directory returned exactly what we signed — not a different binding it prefers
   if (binding !== pending.text) return { ok: false, reason: 'wrong-binding' }
@@ -137,10 +143,10 @@ export async function dirChallenge(email, deps) {
  * An account-signed request (`dreq.`) for one op, on a fresh challenge, over the
  * binding that is bound. `subject` carries the op's bytes (Uint8Arrays).
  * `deps.consent({ op, challenge, req }) → consent` supplies the consent the op
- * needs (cred-add, rc-enrol): a native `cns.` or a WebAuthn assertion. This
- * module does not mint consent: the light tier has no consent key (dev.
- * consentPub is null), so it can only be the WebAuthn form, from a credential
- * the directory already holds.
+ * needs (cred-add, rc-enrol): a native `cns.` or a WebAuthn assertion. The
+ * light tier has no consent key (dev. consentPub is null), so it can only be
+ * the WebAuthn form, from a credential the directory already holds:
+ * webauthnConsent below.
  */
 export async function signedRequest({ record, subject }, deps) {
   if (record?.state !== 'bound' || !record.bind?.text) throw new DirectoryRefused('not-bound')
@@ -149,6 +155,20 @@ export async function signedRequest({ record, subject }, deps) {
   const req = buildDreq({ op: subject.op, address: email, bindHash: await sha256b64u(record.bind.text), challenge, arg: await dreqArg(subject) })
   const sig = await signStatement(record.accountKey, req)
   return { email, req, sig, challenge, consent: deps.consent ? await deps.consent({ op: subject.op, challenge, req }) : null }
+}
+
+/**
+ * The light tier's `deps.consent`: one WebAuthn ceremony over the only `cns.` the directory will accept.
+ * The directory never reads a `cns.` from the request. It rebuilds it from its own values plus the `exp` sent
+ * here, and requires the assertion to carry that hash, so the `exp` hashed and the `exp` sent must be the same
+ * number: read the clock ONCE. Two reads either side of an await differ by a millisecond now and then, and the
+ * consent is then refused as consent:webauthn:challenge. `deps.assert(credentialId, challenge) → assertion` is
+ * the seam directoryFetchBlob uses too; the purpose is the op, as the directory asks for it.
+ */
+export const webauthnConsent = ({ credentialId }, deps) => async ({ op, challenge, req }) => {
+  const exp = deps.now() + CONSENT_TTL_MS
+  const cns = buildConsent({ rp: 'bento', purpose: op, docId: null, transcript: await consentTranscript('dir', challenge, req), exp })
+  return { webauthn: await deps.assert(credentialId, await webauthnChallengeFor(cns)), exp }
 }
 
 const reasonOf = (r) => (typeof r.j?.reason === 'string' ? r.j.reason : r.status === 429 ? 'rate-limited' : `http ${r.status}`)
