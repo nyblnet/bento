@@ -21,12 +21,13 @@ M = [
     ("wake-counts-as-sleep", LOGIND, "if p.child_value(0).get::<bool>() != Some(false) { g.lock() }", "let _ = p; g.lock()", "CONTROL: PrepareForSleep(false) alone ends nothing"),
     ("no-lockedhint-signal", LOGIND, "Ok(locked) => g.set_locked(locked),", "Ok(_) => {}", "LockedHint true reaches the gate"),
     ("lockedhint-not-read-at-start", LOGIND, "gate.watched(locked);", "let _ = locked; gate.watched(false);", "started under a locked session"),
-    ("signal-believed-not-logind", LOGIND, "move |c, _, _, _, _, _| {\n            match locked_hint(c, &path) {", "move |c, _, _, _, _, p| {\n            match p.child_value(1).lookup_value(\"LockedHint\", None).and_then(|v| v.get::<bool>()).ok_or(()).or_else(|_| locked_hint(c, &path).map_err(|_| ())).map_err(|_| ()) {", "a signal saying 'unlocked' is checked"),
+    ("signal-believed-not-logind", LOGIND, "move |c, _, _, _, _, _| {\n            match locked_hint(c, &path) {", "move |c, _, _, _, _, p| {\n            match glib::VariantDict::new(Some(&p.child_value(1))).lookup_value(\"LockedHint\", None).and_then(|v| v.get::<bool>()).ok_or(String::new()).or_else(|_| locked_hint(c, &path)) {", "a signal saying 'unlocked' is checked"),
     ("name-owner-ignored", LOGIND, "if p.child_value(2).str().unwrap_or(\"\").is_empty() { m.quit() }", "let _ = (&m, p);", "logind leaving the bus closes the gate"),
     ("session-removed-ignored", LOGIND, "if p.child_value(1).str() == Some(path.as_str()) { m.quit() }", "let _ = (&m, &path, p);", "the session going away closes the gate"),
     ("bus-closed-ignored", LOGIND, "c.connect_closed(move |_, _, _| m.quit());", "let _ = m;", "the bus dying closes the gate"),
     ("lost-leaves-it-open", LOGIND, "                gate.lost();\n", "", "logind leaving the bus closes the gate"),
-    ("gate-starts-open", GATE, "Arc::new(LockGate::default())", "Arc::new(LockGate(AtomicU64::new(WATCHED)))", "no bus: the gate stays closed"),
+    # both: the watcher's first failure closes the gate anyway, so starting open alone survives
+    ("gate-starts-open-and-stays", [(GATE, "Arc::new(LockGate::default())", "Arc::new(LockGate(AtomicU64::new(WATCHED)))"), (LOGIND, "                gate.lost();\n", "")], None, None, "no bus: the gate stays closed"),
     ("prompt-while-locked", AGENT, "GateState::Locked => Err(Refusal::Reauth),", "GateState::Locked => Ok(0),", "while locked nobody is asked"),
     ("ticket-not-held", CALLS, "if !self.agent.begin_session_from(ticket) {", "let _ = ticket; if !self.agent.begin_session() {", "a yes given across a lock opens nothing"),
 ]
@@ -39,13 +40,15 @@ bad = []
 for name, path, old, new, row in M:
     if only and name not in only:
         continue
-    src = path.read_text()
-    assert src.count(old) == 1, f"{name}: the line to mutate moved ({src.count(old)} matches)"
-    path.write_text(src.replace(old, new))
+    edits = path if isinstance(path, list) else [(path, old, new)]
+    for p, o, n in edits:
+        src = p.read_text()
+        assert src.count(o) == 1, f"{name}: the line to mutate moved ({src.count(o)} matches)"
+        p.write_text(src.replace(o, n))
     try:
         r = subprocess.run(["./rig/lock-rig.sh", f"{out}/{name}"], cwd=ROOT, capture_output=True, text=True, timeout=600)
     finally:
-        subprocess.run(["git", "checkout", "--", str(path)], cwd=ROOT, check=True)
+        subprocess.run(["git", "checkout", "--"] + [str(p) for p, _, _ in edits], cwd=ROOT, check=True)
     text = r.stdout + r.stderr
     fails = [l for l in text.splitlines() if l.startswith("FAIL")]
     hit = any(row in l for l in fails)

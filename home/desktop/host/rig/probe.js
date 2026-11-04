@@ -231,6 +231,7 @@
           K.after_hint = await sign()
           K.begin_locked = await sess('begin')
           await answers(true)
+          await inv('rig_skew', { addMs: 120000 }) // past the cooldown of the no's above, or a prompt could not show here
           const p0 = await prompts()
           K.locked_sign = await sign()
           K.locked_prompts = (await prompts()) - p0
@@ -240,7 +241,6 @@
           // unlocked: the person can be asked, and a yes signs
           await bus('hint-off')
           K.gate_unlocked = await gate()
-          await inv('rig_skew', { addMs: 120000 }) // past the cooldown of the no's above
           const p1 = await prompts()
           K.unlocked_sign = await sign()
           K.unlocked_prompts = (await prompts()) - p1

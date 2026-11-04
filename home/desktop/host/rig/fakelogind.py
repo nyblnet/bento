@@ -78,7 +78,7 @@ def act(a):
     elif a == "session-back": state["gone"] = False
     elif a == "name-drop": bus("ReleaseName", LOGIND)
     elif a == "name-back": bus("RequestName", LOGIND, 4)
-    elif a == "bus-down": os.kill(int(os.environ["FAKE_BUS_PID"]), signal.SIGTERM)
+    elif a == "bus-down": os.kill(int(os.environ["FAKE_BUS_PID"]), signal.SIGKILL)  # a TERM lets it say goodbye: logind's NameOwnerChanged would close the gate instead
     else: return "unknown"
     return "done"
 
