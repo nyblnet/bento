@@ -12641,3 +12641,15 @@ lifts it to 100%; a typed alpha (#rrggbbaa, which the field now takes) wins;
 a field above 0% keeps its opacity, as a theme pick already did (and a
 theme pick onto 0% was already made opaque, 2026-10-30). One place:
 colorField, under every colour row.
+
+## 2026-11-04 — slides: a group is entered by double-click, like a frame
+
+A component copy is a group, and a click grows to whole groups, so the
+only ways into a copy were ⌘-click, Alt-dig and Layers — the card inside a
+copy could not be reached to change its corner radius the way a plain card
+is. Groups now follow the frames' rule (2026-10-30, the UX audit's Figma
+selection model): a click picks the whole group, a double-click goes in to
+the member under the pointer (the outermost one in the group, so a copied
+card comes before its texts), and Esc comes back out a level — frame child →
+frame → whole group → nothing. Esc to the whole group also leaves it, so
+the next click picks the group whole again.

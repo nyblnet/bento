@@ -3741,10 +3741,15 @@ export class Editor {
         else if (this.canvas.isPathEditing) this.canvas.stopPathEdit(true)
         else if (!this.store.selection.length && this.marquee) this.useTool(false) // nothing left to let go of: back to Move
         else {
-          // out one level first, as in Figma: a frame's children → the frame
+          // out one level first, as in Figma: a frame's children → the frame,
+          // then a group's members (a component copy's) → the whole group
           const sel = this.store.selectedElements
           const up = sel[0]?.parentId
-          this.store.select(up && sel.every((e) => e.parentId === up) && this.store.element(up) ? [up] : [])
+          const g = sel[0]?.groupId
+          const kin = g && sel.every((e) => e.groupId === g) ? this.store.slide.elements.filter((e) => e.groupId === g) : []
+          if (up && sel.every((e) => e.parentId === up) && this.store.element(up)) this.store.select([up])
+          else if (kin.length > sel.length) { this.store.select(kin.map((e) => e.id)); this.canvas.leaveGroup() }
+          else this.store.select([])
         }
         return
       }

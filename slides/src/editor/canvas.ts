@@ -996,6 +996,8 @@ export class SlideCanvas {
    *  the selection LOOK like a whole-group click, but the author is still
    *  inside, and a further shift-click must drop one member, not all. */
   private enteredGroup: string | null = null
+  /** Step out of the entered group (Esc selects the whole of it again). */
+  leaveGroup() { this.enteredGroup = null }
 
   /** Runs on every selection change. A selection that is part of one group
    *  (only ⌘-click, Alt-click and the layer list can make one — every canvas
@@ -1039,10 +1041,23 @@ export class SlideCanvas {
   private enterFrameAt(clientX: number, clientY: number): boolean {
     const hit = this.topElementAt(clientX, clientY)
     const sel = this.store.selection
-    if (!hit || sel.length !== 1) return false
+    if (!hit || !sel.length) return false
     const byId = new Map(this.store.slide.elements.map((e) => [e.id, e]))
     const chain = [hit]
     for (let q = byId.get(hit)?.parentId; q && byId.has(q) && !chain.includes(q); q = byId.get(q)?.parentId) chain.push(q)
+    // a whole group (a component's copy is one) is entered the same way: to
+    // the member under the pointer — the outermost one, so a card in it comes
+    // before its texts — and the group's members are picked one at a time
+    const g = byId.get(sel[0])?.groupId
+    if (g && g !== this.enteredGroup && sel.every((id) => byId.get(id)?.groupId === g)
+      && this.store.slide.elements.filter((e) => e.groupId === g).length === sel.length) {
+      const member = [...chain].reverse().find((id) => byId.get(id)?.groupId === g)
+      if (!member) return false
+      this.enteredGroup = g
+      this.store.select([member])
+      return true
+    }
+    if (sel.length !== 1) return false
     const i = chain.indexOf(sel[0])
     if (i <= 0) return false
     this.enteredFrame = sel[0]
