@@ -130,6 +130,7 @@ export function buildSlidePanel(p: PropsPanel) {
     tile(key, s.w, s.h, /\d+:\d+/.exec(key)?.[0] ?? key.split(' ')[0])
   }
   tile('Custom…', presetKey === 'Custom…' ? dw : 4, presetKey === 'Custom…' ? dh : 3, t('Custom…').replace(/…$/, ''))
+  tiles.lastElementChild!.classList.add('ed-page-custom') // a word, not a ratio: it takes two cells
   p.host.appendChild(tiles)
   size = document.createElement('div')
   size.className = 'ed-grid2'

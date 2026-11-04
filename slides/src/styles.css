@@ -3526,6 +3526,9 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
   font: inherit; font-size: 11px; color: var(--muted); background-color: var(--field); border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
 }
 .ed-page-tile > span:last-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Custom's caption is a word (de 'Benutzerdefiniert', it 'Personalizzato'),
+   too long for one cell: it spans two, which the row of A4s leaves free */
+.ed-page-tile.ed-page-custom { grid-column: span 2; }
 .ed-page-tile:hover { color: var(--ink); background-color: var(--chrome-2); }
 .ed-page-tile:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -1px; }
 .ed-page-tile[aria-checked='true'] { color: var(--ink); border-color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }

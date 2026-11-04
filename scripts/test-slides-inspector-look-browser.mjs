@@ -20,8 +20,14 @@
 //      palette button, NAMED, and a colour taken from them shows its name in
 //      the field (it follows the theme) until it is detached;
 //   6. page sizes are tiles drawn at their proportions, one click each;
-//      Custom opens W and H, held to 320–4000.
+//      Custom opens W and H, held to 320–4000; its caption reads in full in
+//      every catalog's language.
+import { readFileSync, readdirSync } from 'node:fs'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
+// every catalog's word for Custom, as the tile shows it (no ellipsis)
+const I18N = new URL('../slides/src/i18n/', import.meta.url)
+const CUSTOM_WORDS = [...readdirSync(I18N).filter((f) => f.endsWith('.ts') && f !== 'packed.ts').map((f) => new URL(f, I18N)), ...readdirSync(new URL('packs/', I18N)).map((f) => new URL(`packs/${f}`, I18N))]
+  .map((u) => /"Custom…":\s*"([^"]*)"/.exec(readFileSync(u, 'utf8'))?.[1]).filter(Boolean).map((w) => w.replace(/…$/, ''))
 
 let checks = 0
 let failures = 0
@@ -186,6 +192,21 @@ try {
       ok(+(await wField.locator('input').inputValue()) === 320, `a width drag stops at 320 (${await wField.locator('input').inputValue()})`)
       await p.mouse.up(); await p.waitForTimeout(250)
       ok(await p.evaluate(() => window.bento.doc.size.width) === 320, 'and the deck agrees')
+    }
+    if (locale === 'de-DE') {
+      // the Custom tile reads in full in every language the app carries (de
+      // 'Benutzerdefiniert' was cut to 'Ben…'): each catalog's word put in it
+      await p.keyboard.press('Escape'); await p.mouse.click(5, 500); await p.waitForTimeout(250)
+      await p.locator('.ed-props .ed-tabs [role=tab]').first().click(); await p.waitForTimeout(150)
+      const cut = await p.evaluate((words) => {
+        const cap = document.querySelector('.ed-props .ed-page-tile:last-child > span:last-child')
+        if (!cap?.clientWidth) return ['(the tile is not showing)']
+        const keep = cap.textContent
+        const bad = words.filter((w) => { cap.textContent = w; return cap.scrollWidth > cap.clientWidth + 0.5 })
+        cap.textContent = keep
+        return bad
+      }, CUSTOM_WORDS)
+      ok(CUSTOM_WORDS.length > 20 && !cut.length, `the Custom tile reads in full in all ${CUSTOM_WORDS.length} languages${cut.length ? ` (cut: ${cut.join(', ')})` : ''}`)
     }
     ok(errors.length === 0, `${tag} no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
     await ctx.close()
