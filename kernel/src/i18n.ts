@@ -18,7 +18,7 @@
 // fall everyone back to English. Registration also clears the memo.
 
 
-import { lsDel, lsGet, lsSet } from './storage.ts'
+import { lsGet, lsSet } from './storage.ts'
 
 export type Catalog = Record<string, string>
 export interface LocaleChoice { code: string; label: string }
@@ -172,14 +172,18 @@ const pseudo = (s: string): string =>
   }) +
   '⟧'
 
+/** An alias ('pt-BR', 'zh-TW') names its catalog's code ('pt', 'zh-Hant'):
+ *  locale() must equal a picker choice's code, or no choice reads as active. */
+const canonical = (code: string): string => PACKED?.alias?.[code] ?? code
+
 function resolve(): string {
   const saved = lsGet('bento-lang')
-  if (saved) return saved
+  if (saved) return canonical(saved)
   const nav = navigator.language || 'en'
-  if (hasLocale(nav)) return nav
+  if (hasLocale(nav)) return canonical(nav)
   const base = nav.split('-')[0]
   if (base === 'zh') return 'zh-Hans'
-  return hasLocale(base) ? base : 'en'
+  return hasLocale(base) ? canonical(base) : 'en'
 }
 
 let current: string | null = null
@@ -193,9 +197,11 @@ export const locale = (): string => activeLocale()
 
 /** Persist the override and switch. Callers re-render their own UI. */
 export function setLocale(code: string): void {
-  if (code === 'en') lsDel('bento-lang')
-  else lsSet('bento-lang', code)
-  current = code
+  // English is stored too, never cleared: clearing it meant "follow the
+  // browser", so on a pt-BR browser choosing English came back Portuguese
+  // after a reload.
+  lsSet('bento-lang', canonical(code))
+  current = canonical(code)
 }
 
 /** Translate an English source string, then interpolate {placeholders}. */

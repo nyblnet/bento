@@ -3071,11 +3071,16 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-token-acts .ed-btn { width: 22px; height: 22px; padding: 0; display: grid; place-items: center; }
 .ed-token-acts svg { width: 14px; height: 14px; }
 .ed-token-uses.ed-token-unused { visibility: hidden; }
+/* the value is ONE fixed column (--tok-val), so values line up down the view
+   and a long one (a font stack, a shadow) ellipsises instead of eating the name */
+.ed-tokens-body > .ed-token-row:not(.ed-token-adding) { grid-template-columns: 20px minmax(0, 1fr) var(--tok-val) 20px; }
 .ed-tokens-body > .ed-token-row > .ed-token-value { justify-self: stretch; text-align: end; }
 .ed-tokens-body > .ed-token-row > .ed-token-uses { justify-self: stretch; }
 /* a narrow column: the name keeps the line, the value and uses go under it,
-   still right-aligned to the same column */
-@container (max-width: 240px) {
+   still right-aligned to the same column. Only when the name would be left
+   under ~60px: at 240px — the DEFAULT 280px sidebar's content width — this
+   fired for everyone and every row broke onto two uneven lines. */
+@container (max-width: 180px) {
   .ed-tokens-body > .ed-token-row:not(.ed-token-adding) { grid-template-columns: 20px minmax(0, 1fr) auto 20px; row-gap: 0; }
   .ed-tokens-body > .ed-token-row > :nth-child(2) { grid-column: 2 / 5; grid-row: 1; }
   .ed-tokens-body > .ed-token-row > .ed-token-value { grid-column: 2 / 4; grid-row: 2; }
