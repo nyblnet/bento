@@ -12571,3 +12571,16 @@ it has no wait to outlive.
 
 A failed wipe is retried every hour with no end, and the holder's answer is 204 either way,
 so the log line is the only signal. An alert on it is on the deploy list.
+
+Two tries of one record can overlap, since other requests run across every stub call, and
+two closes were not safe for that. A try that read a wipe record could carry on after
+another try had finished it and the same key had re-bound: its write put the finished
+record back and the wipe ran on a live binding. And a rekey's close deleted whatever
+record stood, so a newer queue landing under the Cred calls went with no retry left. Now a
+try stops if its record has gone after the read, sends its next call from the record as it
+stands rather than as it read it, and at the end deletes only the record it finished; the
+notice goes with that delete. Whoever wrote a record last has its own try, which ends in a
+delete or a retry, so a record left standing is never left alone. One overlap stays: a
+stale wipe or rekey already in flight when its record is finished. That needs the call to
+take longer than another try and a whole bind, and no check on this side of the call can
+see it.

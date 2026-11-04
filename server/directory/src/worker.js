@@ -567,21 +567,32 @@ export class Address {
       await s.put(key, rec)
       return rec
     }
+    /** is the record still the one this try finished? A newer queue, or another try's
+     *  names, may have landed across the Cred calls. Whoever wrote last has its own try,
+     *  which ends in a delete or a retry, so a try that finds it moved on just leaves it. */
+    const finished = async (key, rec) => JSON.stringify(await s.get(key)) === JSON.stringify(rec)
     /** one try, from the record: at once, at the next authorize, and from the alarm. The
      *  names go in the record BEFORE anything is taken: a rekey's answer can be lost after
      *  it committed, and the Account's list is then no memory of them. A name read on a
      *  try that never arrived may belong to a key the newest `keep` holds, so what the
-     *  Account says stays is struck off: only a name it no longer lists loses its Cred. */
+     *  Account says stays is struck off: only a name it no longer lists loses its Cred.
+     *  Other work runs across every call here. A record gone after the read was finished
+     *  by another try and the address may be bound again, so this one stops; a record
+     *  still there may be newer, so the next call goes from it and not from `t`. */
     const runRekey = async () => {
       const t = await s.get('rekey')
       if (!t) return
       try {
         const acct = this.env.ACCOUNT.get(this.env.ACCOUNT.idFromName(t.scope))
-        await owe('rekey', t, (await call(acct, 'going', { keep: t.keep })).body.creds)
-        const r = await call(acct, 'rekey', { keep: t.keep, rc: t.rc })
-        const { creds, notice } = await owe('rekey', t, r.body.creds, r.body.stays)
+        const names = (await call(acct, 'going', { keep: t.keep })).body.creds
+        if (!(await s.get('rekey'))) return
+        const q = await owe('rekey', t, names)
+        const r = await call(acct, 'rekey', { keep: q.keep, rc: q.rc })
+        const rec = await owe('rekey', q, r.body.creds, r.body.stays)
+        const { creds, notice } = rec
         // a call that fails throws; `unknown` only means an earlier try got this one
         for (const k of creds) await call(this.env.CRED.get(this.env.CRED.idFromName(k)), 'delete', { scope: t.scope })
+        if (!(await finished('rekey', rec))) return
         await s.delete('rekey')
         if (notice && creds.length) await oldCredsGone()
       } catch (e) {
@@ -596,18 +607,22 @@ export class Address {
      *  wipe takes everything, so a bind must not land while this is owed (see complete).
      *  The names go in the record BEFORE anything is taken, as in runRekey: lost after it
      *  committed, the wipe's answer would leave a retry an empty list, and the record
-     *  would clear with the Cred objects, the raw key and the blobs still there. */
+     *  would clear with the Cred objects, the raw key and the blobs still there. Stopping
+     *  after the read matters most here: a stale wipe would run on a live binding. */
     const runWipe = async () => {
       const t = await s.get('wipe')
       if (!t) return
       try {
         const acct = this.env.ACCOUNT.get(this.env.ACCOUNT.idFromName(t.scope))
-        await owe('wipe', t, (await call(acct, 'going', {})).body.creds)
-        const r = await call(acct, 'wipe', { keepRc: t.keepRc, keepUntil: t.keepUntil })
+        const names = (await call(acct, 'going', {})).body.creds
+        if (!(await s.get('wipe'))) return
+        const q = await owe('wipe', t, names)
+        const r = await call(acct, 'wipe', { keepRc: q.keepRc, keepUntil: q.keepUntil })
         // the answer still counts: a passkey can land between the read and the wipe
-        const { creds } = await owe('wipe', t, r.body.creds)
+        const rec = await owe('wipe', q, r.body.creds)
+        const { creds } = rec
         for (const k of creds) await call(this.env.CRED.get(this.env.CRED.idFromName(k)), 'delete', { scope: t.scope })
-        await s.delete('wipe')
+        if (await finished('wipe', rec)) await s.delete('wipe')
       } catch (e) {
         console.log(`wipe failed: ${e.message}`)
         await s.setAlarm(now + LIMITS.rekeyRetryMs)

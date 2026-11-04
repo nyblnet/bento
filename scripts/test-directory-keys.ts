@@ -2694,6 +2694,148 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
       ok(!a.has('rekey') && await nCreds(E) === 1 && !(await credGone(c)), 'rekey: a name read but never taken does not lose its Cred object when the newest keep holds it')
     }
 
+    // --- tries overlap: another request runs across every stub call ---
+    const landBy = async (p: P, b: { text: string; sig: string }) => {
+      now += 2 * MIN
+      const n0 = mailbox.length
+      await api('/v1/bind/start', { stmt: b.text, sig: b.sig })
+      const code = mailbox.length > n0 ? codeFor(p.email)! : '000000'
+      return api('/v1/bind/complete', { email: p.email, code, sig: await p.k.sign(buildCmp(await hashOf(b.text), code)) })
+    }
+    for (const overlap of [false, true]) {
+      // a try reads the record; another finishes it and the same key is back before the read
+      // answers. Carrying on would put the finished record back and wipe a live binding
+      const tag = overlap ? 'wipe-stale' : 'wipe-stale-ctl'
+      failing('Account', 'going', 1)
+      const { S, text, expires } = await deleted(`${tag}@example.com`)
+      let bound = 0
+      const back = async () => {
+        await tick(S)
+        bound = (await landBy(S, await bindNext(S, text, { life: expires - now }))).status
+      }
+      now += HOUR
+      if (overlap) { arrivals.push({ cls: 'Account', op: 'going', run: back }); await tick(S) } else await back()
+      const l = await lookup(S.email)
+      ok(bound === 200 && l.status === 200 && !(await owed(S)) && (await rcOf(S))?.keepUntil === undefined,
+        `wipe: ${overlap ? 'a stale try stops once the record has gone: the same key back keeps its code' : 'CONTROL the same key back with no overlap'} (${(await rcOf(S))?.keepUntil ?? 'no end date'})`)
+    }
+    {
+      // a second deletion's record stands by the time the read answers: it is the one to run
+      failing('Account', 'going', 1)
+      const { S, text, expires } = await deleted('wipe-newer@example.com')
+      let bound = 0, until = 0
+      arrivals.push({ cls: 'Account', op: 'going', run: async () => {
+        await tick(S)
+        bound = (await landBy(S, await bindNext(S, text, { life: expires + DAY - now }))).status
+        until = ((await addrStore(S)).get('cur') as { b: { expires: number } }).b.expires
+        failing('Account', 'going', 1)
+        await del(S)
+      } })
+      now += HOUR
+      await tick(S)
+      ok(bound === 200 && until > expires && !(await owed(S)) && (await rcOf(S))?.keepUntil === until, 'wipe: a try that outlives its record runs the newest one, with its end date')
+    }
+    {
+      // a name the first try doesn't have, and the second fails on: planted, as a wipe's record
+      // can't be replaced under a Cred call (a bind waits for it)
+      const { S, d, c } = await (async () => {
+        const S = await person('wipe-del@example.com'); await bind(S, { setup: true })
+        const d = await device(S, { consent: false })
+        return { S, d, c: await addCred(S, d, free) }
+      })()
+      const scope = await addressKey(S.email)
+      arrivals.push({ cls: 'Cred', op: 'delete', run: async () => {
+        store('Account', scope)!.set('creds', ['planted'])
+        failing('Cred', 'delete', 1)
+        await tick(S)
+      } })
+      await del(S)
+      ok((await owed(S))?.creds.includes('planted') === true && alarms.has(`Address:${scope}`), `wipe: a name another try added under a Cred call stays owed, with a retry (${(await owed(S))?.creds.length})`)
+      now += HOUR
+      await tick(S)
+      ok(!(await owed(S)) && await credGone(c), '  …and the retry finishes it')
+      void d
+    }
+    for (const overlap of [false, true]) {
+      // the key back during the read: the newest `keep` holds it, so its passkey must stay
+      const tag = overlap ? 'rekey-newer' : 'rekey-newer-ctl'
+      const E = await person(`${tag}@example.com`); await bind(E, { setup: true })
+      const c = await addCred(E, await device(E, { consent: false }), free)
+      now += 14 * MONTH
+      const E2 = await nextOf(E), b2 = await bindNext(E2, null, { life: 2 * HOUR })
+      failing('Account', 'rekey', 1)
+      ok((await landBy(E2, b2)).status === 200 && await nCreds(E) === 1, '  (the rebound key lands with its rekey owed)')
+      now += 3 * HOUR
+      let bound = 0
+      const back = async () => {
+        failing('Account', 'going', 9)
+        bound = (await landBy(E, await bindNext(E, null))).status
+        failing('Account', 'going', 0)
+      }
+      if (overlap) { arrivals.push({ cls: 'Account', op: 'going', run: back }); await tick(E) } else { await back(); await tick(E) }
+      ok(bound === 200 && !(await addrStore(E)).has('rekey') && await nCreds(E) === 1 && !(await credGone(c)),
+        `rekey: ${overlap ? 'a try runs the newest `keep`, not the one it read: the key that came back keeps its passkey' : 'CONTROL the same with no overlap'}`)
+    }
+    {
+      // the rekey's own stale try: another finishes it and the key is back with a new passkey
+      // before the read answers. Carrying on would take that passkey on the old `keep`
+      const E = await person('rekey-stale@example.com'); await bind(E)
+      const c = await addCred(E, await device(E))
+      now += 14 * MONTH
+      const E2 = await nextOf(E), b2 = await bindNext(E2, null, { life: 2 * HOUR })
+      failing('Account', 'going', 1)
+      ok((await landBy(E2, b2)).status === 200 && (await addrStore(E)).has('rekey'), '  (the rebound key lands with its rekey owed)')
+      let bound = 0, added = 0, c2: Awaited<ReturnType<typeof addCred>> | null = null
+      arrivals.push({ cls: 'Account', op: 'going', run: async () => {
+        await tick(E)
+        now += 3 * HOUR
+        bound = (await landBy(E, await bindNext(E, null))).status
+        c2 = await addCred(E, await device(E))
+        added = c2.r.status
+      } })
+      await tick(E)
+      ok(bound === 200 && added === 200 && await credGone(c) && !(await addrStore(E)).has('rekey') && await nCreds(E) === 1 && !(await credGone(c2!)),
+        `rekey: a stale try stops once the record has gone: the key that came back keeps its new passkey (${bound} ${added})`)
+    }
+    {
+      // a newer queue landing under the Cred loop, whose own try fails: it stays, and is retried
+      const E = await person('rekey-del@example.com'); await bind(E, { setup: true })
+      const c = await addCred(E, await device(E, { consent: false }), free)
+      now += 14 * MONTH
+      const E2 = await nextOf(E), b2 = await bindNext(E2, null, { life: 2 * HOUR })
+      failing('Account', 'rekey', 1)
+      ok((await landBy(E2, b2)).status === 200, '  (the rebound key lands with its rekey owed)')
+      let bound = 0
+      arrivals.push({ cls: 'Cred', op: 'delete', run: async () => {
+        now += 3 * HOUR
+        failing('Account', 'going', 1)
+        bound = (await landBy(E, await bindNext(E, null))).status
+      } })
+      await tick(E)
+      const t = (await addrStore(E)).get('rekey') as { keep: string[] } | undefined
+      ok(bound === 200 && t?.keep.join() === E.k.pub && alarms.has(`Address:${await addressKey(E.email)}`), 'rekey: a newer queue under the Cred calls is not deleted by the try that finished the older one')
+      now += HOUR
+      await tick(E)
+      ok(!(await addrStore(E)).has('rekey') && await credGone(c), '  …and its retry finishes it')
+    }
+    {
+      // the notice belongs to the try that closes the record, so it goes once
+      const A = await person('rekey-notice@example.com'); await bind(A)
+      const c = await addCred(A, await device(A))
+      const N = await nextOf(A), r = await rotate(A, N, {})
+      ok(r.st.status === 202 && r.c.status === 200, '  (a rotation)')
+      const end = now + 72 * HOUR + 30 * DAY + HOUR
+      arrivals.push({ cls: 'Cred', op: 'delete', run: async () => {
+        // planted: a newer queue whose own try hasn't run yet
+        const a = await addrStore(N), t = a.get('rekey') as { keep: string[] }
+        a.set('rekey', { ...t, keep: [...t.keep, 'another'] })
+      } })
+      now = end
+      await tick(N)
+      const notices = async () => (((await addrStore(N)).get('events') as { k: string }[]) || []).filter((e) => e.k === 'cred-old-del').length
+      ok(await credGone(c) && !(await addrStore(N)).has('rekey') && await notices() === 1, `rekey: the try that leaves a newer record sends no notice; the one that closes it does, once (${await notices()})`)
+    }
+
     // --- a freeze of a tomb ends with the key record: past the expiry it protects nothing ---
     {
       const { S, text, expires } = await deleted('frz-end@example.com')
@@ -2712,19 +2854,41 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
       ok((await lookup(S.email)).status === 200, 'frz: …and a re-bind still lands')
     }
     {
-      // a young code, so a resolution waits with its new key's statement in `rsv`. A real one
-      // needs a binding with days left at its deletion; the code's age is set by hand instead
-      const { S, e, text, expires } = await deleted('frz-rsv@example.com')
-      now = expires - 2 * HOUR
+      // nothing planted: a code enrolled late in the binding's life is young at the freeze,
+      // so a resolution waits with its new key's statement in `rsv`, due past the end
+      const S = await person('frz-rsv@example.com'); const text = await bind(S, { setup: true })
+      const d = await device(S, { consent: false })
+      const c = await addCred(S, d, free)
+      const expires = ((await addrStore(S)).get('cur') as { b: { expires: number } }).b.expires
+      now = expires - 3 * HOUR
+      const e = await enrol(S, d, enrolment(), { passkey: c.reg, young: true })
+      ok(e.r.status === 200 && (await del(S)).status === 204, '  (a code three hours before the expiry, then the delete)')
       const { xb } = await overTomb(S)
       ok((await contest(S, S, xb.text, { bindText: text, bind: text })).status === 200, '  (the tombstoned key contests)')
-      const acct = await acctStore(S)
-      acct.set('rc', { ...(acct.get('rc') as object), at: now })
       const N = await nextOf(S), r = await resolve(await bindNext(N, text), e.e.verifier)
-      ok(r.status === 202 && JSON.stringify((await addrStore(S)).get('rsv')).length > 0, `  (its resolution waits: ${r.status} ${reason(r)})`)
+      const w = (await addrStore(S)).get('rsv') as { until: number } | undefined
+      ok(r.status === 202 && (w?.until ?? 0) > expires, `  (its resolution waits, due past the end: ${r.status} ${reason(r)})`)
       now = expires
       await tick(S)
       ok(!(await addrStore(S)).has('rsv') && !(await addrStore(S)).has('frz'), 'frz: a resolution waiting on it goes with it, ahead of its own 72 hours')
+      ok(!dump().includes(S.k.pub) && !dump().includes(N.k.pub), '  …and neither side\'s key stays anywhere')
+      ok((await lookup(S.email)).status === 410, '  …the tomb still answers')
+    }
+    {
+      // CONTROL for the row above: one due inside the window still lands
+      const S = await person('frz-rsv-in@example.com'); const text = await bind(S, { setup: true })
+      const d = await device(S, { consent: false })
+      const c = await addCred(S, d, free)
+      const expires = ((await addrStore(S)).get('cur') as { b: { expires: number } }).b.expires
+      now = expires - 100 * HOUR
+      const e = await enrol(S, d, enrolment(), { passkey: c.reg, young: true })
+      await del(S)
+      const { xb } = await overTomb(S)
+      await contest(S, S, xb.text, { bindText: text, bind: text })
+      const N = await nextOf(S), nb = await bindNext(N, text), r = await resolve(nb, e.e.verifier)
+      now += 72 * HOUR + MIN
+      const l = await lookup(S.email)
+      ok(r.status === 202 && l.status === 200 && l.j.binding === nb.text, 'frz: CONTROL a resolution due inside the window commits')
     }
     {
       // a live binding's freeze is not a tomb's: nothing here ends it

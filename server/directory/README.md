@@ -363,7 +363,9 @@ account key it belongs to, and material for any other key is treated as gone).
   from the Account object into that record, so a call that fails delays a deletion,
   and so does one whose answer is lost after it committed: the names are still there
   for the retry. The Account object going down before that read leaves the record
-  with nothing yet taken. The holder gets their answer either way. While it is owed nothing binds at that address
+  with nothing yet taken. Tries can overlap: one whose record has gone after the read
+  stops, and one that closes deletes only the record it finished, so a newer one
+  stands and is retried. The holder gets their answer either way. While it is owed nothing binds at that address
   (`complete` answers 400 `wipe`, and the same code works once it lands), since a
   retry takes everything and must not find anything new, and the end above waits for
   it. A pending code goes at its expiry, also by the alarm: a bind's or a rotation's
