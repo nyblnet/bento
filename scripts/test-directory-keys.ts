@@ -55,7 +55,9 @@
 //     frozen does not age it. enrol() below ages every code past that, as the rows mean
 //     a long-held one; `young: true` keeps it fresh;
 //   · a key's `ever:` flag ends only after a deletion, at the deleted binding's own
-//     expiry, and a re-bind before then cancels that;
+//     expiry, and a re-bind before then cancels that. The raw key and the events end
+//     with it, and a re-bind over that tomb reports rebound;
+//   · a renewal never shortens, and nor does the same key taking a deleted binding back;
 //   · a rekey that fails is recorded and retried (next authorize, or the alarm), so
 //     old passkeys can't strand the new key's first one.
 
@@ -2233,6 +2235,188 @@ const innerOf = (e: ReturnType<typeof enrolment>) => b64uEnc(Uint8Array.from([..
       now = retry
       await tick(S)
       ok(alarms.get(`Address:${scope}`) === end, '  …and the tick puts the end back')
+    }
+
+    // --- what is left after the end: nothing that names the key but binding hashes ---
+    /** every value in both stores as one text, to search for the key itself */
+    const heldText = async (p: P) => JSON.stringify([...(await addrStore(p)).entries(), ...(await acctStore(p)).entries()])
+    /** a bind of `p`, completed if a code comes. Past the mail cooldown first, or "no
+     *  code was mailed" would be the cooldown's doing, and the statement is built after
+     *  that, or a two-minute life is refused for having expired: neither proves the rule */
+    async function rebind(p: P, build: () => Promise<{ text: string; sig: string }>) {
+      now += 2 * MIN
+      const b = await build()
+      const n0 = mailbox.length
+      await api('/v1/bind/start', { stmt: b.text, sig: b.sig })
+      const mailed = mailbox.length > n0
+      const code = mailed ? codeFor(p.email)! : '000000'
+      return { mailed, c: await api('/v1/bind/complete', { email: p.email, code, sig: await p.k.sign(buildCmp(await hashOf(b.text), code)) }) }
+    }
+    {
+      const S = await person('end-keys@example.com'); await bind(S, { setup: true })
+      await addCred(S, await device(S, { consent: false }), free)
+      await enrol(S, await device(S, { consent: false }), enrolment(), free)
+      await renew(S) // a chain row, and an `events` row with a fingerprint
+      const fp = (await hashOf(S.k.pub)).slice(0, 8)
+      await status(S)
+      const expires = ((await addrStore(S)).get('cur') as { b: { expires: number } }).b.expires
+      ok((await del(S)).status === 204, '  (deleted by its holder)')
+      ;(await addrStore(S)).set('events', [{ k: 'cred-add', at: now, fp }])
+      ok((await heldText(S)).includes(S.k.pub) && (await heldText(S)).includes(fp), 'end: CONTROL before the end the raw key and its fingerprint are held')
+      now = expires - 1
+      await tick(S)
+      ok((await addrStore(S)).has('htomb') && (await addrStore(S)).has('events'), 'end: one ms before, htomb and events stay')
+      now = expires
+      await tick(S)
+      const t = await heldText(S)
+      ok(!t.includes(S.k.pub) && !t.includes(fp), 'end: no raw key and no fingerprint in either store')
+      ok(!(await addrStore(S)).has('htomb') && !(await addrStore(S)).has('events'), 'end: htomb and events are gone')
+      ok((await addrStore(S)).has('tomb') && (await lookup(S.email)).status === 410, 'end: the tomb stays and lookups still serve it')
+      ok(((await addrStore(S)).get('chain') as string[]).length === 1, 'end: the chain of binding hashes stays, what the privacy page has to say')
+      const X = await nextOf(S), r = await rebind(X, () => bindNext(X, null))
+      ok(r.c.status === 200 && r.c.j.rebound === true && (await lookup(S.email)).j.rebound === true, 'end: a new key over the ended tomb lands at once and reports rebound')
+    }
+    {
+      // no key to compare: the same key back is warned about too, the accepted false alarm
+      const { S, expires } = await deleted('end-same@example.com')
+      now = expires
+      await tick(S)
+      const r = await rebind(S, () => bindNext(S, null))
+      ok(r.c.status === 200 && r.c.j.rebound === true, 'end: the same key over the ended tomb reports rebound too')
+      ok(await armed(S) && (await addCred(S, await device(S, { consent: false }), free)).r.status === 200, '  …and the rebound takes nothing it needs: it arms and adds a passkey')
+    }
+    {
+      // the seq chain ended with the key: only a fresh start lands over an ended tomb
+      const { S, text, expires } = await deleted('end-seq@example.com')
+      now = expires
+      await tick(S)
+      ok((await rebind(S, () => bindNext(S, text))).c.status === 400, 'end: a continuation of the deleted binding is refused: nothing is left to continue')
+      ok((await rebind(S, () => bindNext(S, null))).c.status === 200, '  …and seq 1 lands')
+    }
+    {
+      // a mailbox tomb never kept a key: the same answer, from the start
+      const S = await person('end-mailbox@example.com'); await bind(S, { setup: true })
+      now += 14 * MONTH
+      await lookup(S.email)
+      await api('/v1/delete/start', { email: S.email })
+      await api('/v1/delete/complete', { email: S.email, code: codeFor(S.email) })
+      const r = await rebind(S, () => bindNext(S, null))
+      ok(r.c.status === 200 && r.c.j.rebound === true, 'end: the same key over a mailbox tomb reports rebound')
+    }
+    {
+      // held: the key may come back, so the comparison stays
+      const { S, expires } = await deleted('end-held@example.com')
+      ;(await acctStore(S)).set('creds', ['left-behind'])
+      ;(await addrStore(S)).set('events', [{ k: 'cred-add', at: now, fp: 'abcd1234' }])
+      now = expires
+      await tick(S)
+      ok((await addrStore(S)).has('htomb') && (await addrStore(S)).has('events') && !(await appt(S)), 'end: a held answer keeps htomb and events')
+      const r = await rebind(S, () => bindNext(S, null))
+      ok(r.c.status === 200 && r.c.j.rebound === false, '  …and the same key is compared, not warned about')
+    }
+    {
+      // the call fails: nothing goes until it answers
+      const { S, expires } = await deleted('end-retry@example.com')
+      now = expires
+      failing('Account', 'everEnd', 1)
+      await tick(S)
+      ok((await addrStore(S)).has('htomb'), 'end: a failed call keeps htomb')
+    }
+    {
+      // a new key while the tomb still holds the key: compared, and rebound as before
+      const { S, expires } = await deleted('end-pre@example.com')
+      now = expires + 1 // the guard is over; no request has ended it yet
+      ;(await addrStore(S)).delete('everEnd') // as a held answer leaves it
+      const X = await nextOf(S), r = await rebind(X, () => bindNext(X, null))
+      ok(r.c.status === 200 && r.c.j.rebound === true, 'end: CONTROL a new key against a kept key still reports rebound')
+    }
+
+    // --- a renewal never shortens: `expires` is what a new key's email-only bind waits for ---
+    const expiryOf = async (p: P) => ((await addrStore(p)).get('cur') as { b: { expires: number } }).b.expires
+    /** a passkey and a long-held code, the account the shortening door took */
+    async function held(email: string) {
+      const S = await person(email); await bind(S, { setup: true })
+      const d = await device(S, { consent: false })
+      await addCred(S, d, free)
+      await enrol(S, d, enrolment(), free)
+      now += 2 * MIN
+      return S
+    }
+    const keeps = async (S: P, text: string) => (await lookup(S.email)).j.binding === text && await nCreds(S) === 1 && !!(await rcOf(S))
+    {
+      const S = await held('renew-short@example.com'), was = await current(S), end = await expiryOf(S)
+      const r = await rebind(S, () => bindNext(S, was, { life: 2 * MIN }))
+      ok(!r.mailed && r.c.status === 400 && await keeps(S, was) && await expiryOf(S) === end, 'renewal: a shorter life mails no code, is refused and changes nothing')
+      now += 3 * MIN
+      const X = await nextOf(S), x = await rebind(X, () => bindNext(X, null))
+      ok(x.c.status === 400 && await keeps(S, was), 'renewal: the chain: 3 minutes on, a brand-new key by email alone is refused, the owner keeps everything')
+    }
+    {
+      // CONTROL: the same account and the same new key, nothing renewed
+      const S = await held('renew-control@example.com'), was = await current(S)
+      now += 3 * MIN
+      const X = await nextOf(S), x = await rebind(X, () => bindNext(X, null))
+      ok(x.c.status === 400 && await keeps(S, was), 'renewal: CONTROL no renewal at all: the new key is refused the same way')
+    }
+    {
+      const S = await held('renew-equal@example.com'), was = await current(S), end = await expiryOf(S)
+      const r = await rebind(S, () => bindNext(S, was, { life: end - now }))
+      ok(r.mailed && r.c.status === 200 && r.c.j.rebound === false && await expiryOf(S) === end, 'renewal: an equal expiry is accepted')
+      const n = await rebind(S, async () => bindNext(S, await current(S), { life: end - now + 1 }))
+      ok(n.mailed && n.c.status === 200 && await expiryOf(S) === end + 1, 'renewal: one ms longer is accepted')
+      const o = await rebind(S, async () => bindNext(S, await current(S), { life: end - now }))
+      ok(!o.mailed && o.c.status === 400, 'renewal: one ms shorter is refused')
+    }
+    {
+      // complete holds the floor alone: the binding grew after the code was mailed
+      const S = await held('renew-race@example.com'), was = await current(S), end = await expiryOf(S)
+      const b = await bindNext(S, was, { life: end - now })
+      await api('/v1/bind/start', { stmt: b.text, sig: b.sig })
+      const cur = (await addrStore(S)).get('cur') as { b: { expires: number } }
+      ;(await addrStore(S)).set('cur', { ...cur, b: { ...cur.b, expires: end + 1 } })
+      const code = codeFor(S.email)!
+      ok((await api('/v1/bind/complete', { email: S.email, code, sig: await S.k.sign(buildCmp(await hashOf(b.text), code)) })).status === 400, 'renewal: complete checks again, against what is live now')
+    }
+    {
+      // the same door by delete: the same key takes the binding back for two minutes
+      const { S, text, expires } = await deleted('tomb-short@example.com')
+      now += 2 * MIN
+      const r = await rebind(S, () => bindNext(S, text, { life: 2 * MIN }))
+      ok(!r.mailed && r.c.status === 400 && (await lookup(S.email)).status === 410 && (await addrStore(S)).has('htomb'), 'tomb: the same key back with a shorter life mails no code and is refused')
+      now += 3 * MIN
+      const X = await nextOf(S), x = await rebind(X, () => bindNext(X, null))
+      ok(x.c.j.state === 'pending' && (await lookup(S.email)).status === 410, 'tomb: the chain: 3 minutes on, a new key still waits its 72 h')
+      ok(expires > now, '  (inside the deleted binding\'s window)')
+    }
+    {
+      const { S, text, expires } = await deleted('tomb-equal@example.com')
+      now += 2 * MIN
+      const r = await rebind(S, () => bindNext(S, text, { life: expires - now }))
+      ok(r.mailed && r.c.status === 200 && await expiryOf(S) === expires, 'tomb: the same key back at an equal expiry lands')
+    }
+    {
+      const { S, text, expires } = await deleted('tomb-longer@example.com')
+      now += 2 * MIN
+      const r = await rebind(S, () => bindNext(S, text, { life: expires - now + 1 }))
+      ok(r.mailed && r.c.status === 200 && await expiryOf(S) === expires + 1, 'tomb: the same key back one ms longer lands')
+    }
+    {
+      // complete alone: the deleted binding's date moved after the code was mailed
+      const { S, text, expires } = await deleted('tomb-race@example.com')
+      now += 2 * MIN
+      const b = await bindNext(S, text, { life: expires - now })
+      await api('/v1/bind/start', { stmt: b.text, sig: b.sig })
+      const ht = (await addrStore(S)).get('htomb') as { expires: number }
+      ;(await addrStore(S)).set('htomb', { ...ht, expires: expires + 1 })
+      const code = codeFor(S.email)!
+      ok((await api('/v1/bind/complete', { email: S.email, code, sig: await S.k.sign(buildCmp(await hashOf(b.text), code)) })).status === 400, 'tomb: complete checks again')
+    }
+    {
+      // the floor is the same key's: any other key waits its 72 h at whatever life it asks
+      const { S } = await deleted('tomb-other@example.com')
+      now += 2 * MIN
+      const X = await nextOf(S), r = await rebind(X, () => bindNext(X, null, { life: DAY * 5 }))
+      ok(r.mailed && r.c.j.state === 'pending', 'tomb: a new key with a shorter life still gets its code, and waits')
     }
   }
 }

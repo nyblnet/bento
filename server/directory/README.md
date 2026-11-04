@@ -78,6 +78,11 @@ signed `att.`, so a frozen answer can't be replayed as active.
   (mail scanners pre-fetch links). A freeze ends any rotation in flight.
   While frozen, neither key is honoured: no renewal, no rotation and no
   holder delete (a delete would reopen the address to an email-only re-bind).
+- **A renewal never shortens.** `expires` is the date a new key's email-only bind
+  waits for, and the date the deletion window and the end of `ever` read, so a
+  same-key renewal with an earlier expiry is refused at start (no code is mailed)
+  and at complete. So is the same key taking a deleted binding back inside its
+  window for less than that binding had left. An equal expiry is accepted.
 - **Leaving frozen** takes the recovery code (see **Resolution**); without
   one, a frozen binding stays frozen until it expires.
 
@@ -337,6 +342,15 @@ account key it belongs to, and material for any other key is treated as gone).
   contest holds it until it lands (cancelled) or is contested (it goes ahead). If
   the Account object still holds a passkey or a live code when the time comes, the
   flags stay. A binding that merely expires ends nothing: its material may remain.
+  The key record goes at the same moment: `htomb`, the one place the raw key was
+  kept, and the event list with its key fingerprints. Left behind are the signed
+  tomb and the chain of earlier binding hashes, neither of which holds a key, so a
+  re-bind over that tomb has nothing to compare and reports `rebound`, even for the
+  same key, and only a fresh seq 1 lands.
+  **The privacy page must state both halves:** after a deleted binding's expiry
+  nothing identifying the key is held but binding hashes (the tomb's, and the
+  chain's if the address had earlier bindings), and a wipe that failed leaves the
+  passkeys AND the flags, and the key record with them, until it is finished.
 
 **Not here yet:**
 - the ledger routes (a kernel request op)

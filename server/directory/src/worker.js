@@ -511,8 +511,9 @@ export default {
 // rotation: the previous key, the key it moved to, when the previous key's passkeys
 // stop consenting, the Account object's name), `rekey` (a deletion of old passkeys
 // not yet finished: what stays, and the Cred objects still to delete), `everEnd` (a
-// deletion's appointment to end the Account object's `ever:` rows: when, and that
-// object's name; a re-bind deletes it, here, in the same object). Strongly consistent per address, so a re-bind,
+// deletion's appointment to end the Account object's `ever:` rows, and with them
+// `htomb` and `events`: when, and that object's name; a re-bind deletes it, here, in
+// the same object). Strongly consistent per address, so a re-bind,
 // a rotation and a lookup can never race into a mixed answer.
 //
 // States: active (no `rot`, no `frz`) · pending (`rot`) · frozen (`frz`).
@@ -706,8 +707,10 @@ export class Address {
       const e = await s.get('everEnd')
       if (e && now >= e.at && !(await s.get('rot'))) {
         try {
-          await call(this.env.ACCOUNT.get(this.env.ACCOUNT.idFromName(e.scope)), 'everEnd', {})
-          await s.delete('everEnd')
+          const r = await call(this.env.ACCOUNT.get(this.env.ACCOUNT.idFromName(e.scope)), 'everEnd', {})
+          // nothing held there: the raw key and the fingerprints go too, and `tomb` is
+          // what stays. Held, a key may still come back, and rebound compares against it
+          await s.delete(r.body.held ? 'everEnd' : ['everEnd', 'htomb', 'events'])
         } catch (x) { console.log(`everEnd failed: ${x.message}`) } // the alarm comes back: see tick
       }
     }
@@ -755,8 +758,13 @@ export class Address {
       // that is the 72-hour contestable rotation. And while it is pending or
       // frozen, nothing renews it either: neither key is honoured in a freeze.
       if (cur && (cur.b.key !== b.accountPub || (await stateOf()) !== 'active')) return out(202, { mail: null })
+      // a renewal never shortens: `expires` is where a new key's email-only bind begins
+      // (see complete), so no code is mailed for one
+      if (cur && b.expires < cur.b.expires) return out(202, { mail: null })
       // over a protecting holder tomb, one re-bind at a time, and none out of a freeze
-      if (!cur && (await guardTomb()) && (await stateOf()) !== 'active') return out(202, { mail: null })
+      const gt = cur ? null : await guardTomb()
+      if (gt && (await stateOf()) !== 'active') return out(202, { mail: null })
+      if (gt && b.accountPub === gt.key && b.expires < gt.expires) return out(202, { mail: null })
       const code = mintCode()
       await s.put('pend', { kind: 'bind', stmt: a.stmt, sig: a.sig, codeHash: await codeHash(code), expires: now + LIMITS.codeTtlMs, attempts: 0 })
       return out(202, { mail: { code, fp: (await hashOf(b.accountPub)).slice(0, 8) } })
@@ -779,6 +787,10 @@ export class Address {
         if (b.accountPub !== lv.b.key) return fail(p) // re-checked: it may have gone live since start
         if ((await stateOf()) !== 'active') return fail(p) // pending or frozen since start
         if (b.seq !== lv.b.seq + 1 || b.prev !== lv.h) return fail(p)
+        // a renewal never shortens. Key and mailbox could otherwise bring the expiry
+        // forward to a minute from now, and a new key would then need email alone: the
+        // move with no 72 hours that §25 refuses, and §39.6's window read the same date
+        if (b.expires < lv.b.expires) return fail(p)
       } else if (guard) {
         if ((await stateOf()) !== 'active') return fail(p) // a re-bind over the tomb is already pending, or frozen
         if (b.seq !== 1 && !continues(guard)) return fail(p)
@@ -789,12 +801,15 @@ export class Address {
           await s.delete('pend') // it ended `pending`: nothing arms
           return out(200, { state: 'pending', activeAt: now + LIMITS.rotationWindowMs, rebound: true })
         }
+        if (b.expires < guard.expires) return fail(p) // the same key takes the window back whole, or a delete is the way round the rule above
       } else if (b.seq !== 1 && !continues(cur && { seq: cur.b.seq, h: cur.h }) && !continues(ht)) {
         return fail(p) // a fresh start is seq 1; an expired or deleted binding may also be continued
       }
-      // a new key over an EXPIRED or deleted binding, proven by email alone: pinners warn
+      // a new key over an EXPIRED or deleted binding, proven by email alone: pinners warn.
+      // A tomb with no key to compare is a rebound: the cautious answer, so the same key
+      // back after a deletion's end gets the same warning a new key does
       const prevKey = cur ? cur.b.key : ht ? ht.key : null
-      const rebound = !!prevKey && prevKey !== b.accountPub
+      const rebound = prevKey ? prevKey !== b.accountPub : !!(await s.get('tomb'))
       const dirKey = await importDirKey(this.env.DIR_KEY_JWK)
       const att = await attest(dirKey, this.env.DIR_KID, h, now, now)
       if (cur || ht) await s.put('chain', [...((await s.get('chain')) || []), cur ? cur.h : ht.h])

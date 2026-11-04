@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
-// Mutation check for the directory's rotation grace, rekey retry, young-code and
-// end-of-`ever` rules (server/directory/src).
+// Mutation check for the directory's rotation grace, rekey retry, young-code,
+// end-of-`ever` and renewal-floor rules (server/directory/src).
 //
 //   node scripts/test-directory-mutants.ts
 //
@@ -24,7 +24,9 @@ const TREE = ['kernel/src', 'kernel/fixtures', 'server/directory/src']
 let failures = 0, checks = 0
 const ok = (c: boolean, m: string) => { checks++; if (!c) { failures++; console.log(`  FAIL  ${m}`) } else console.log(`  ok    ${m}`) }
 
-type Mutant = { name: string; file: 'worker.js' | 'account.js' | 'consent.js'; from: string; to: string }
+type Edit = { from: string; to: string }
+/** `also`: further edits in the same file, for a rule held at two doors */
+type Mutant = Edit & { name: string; file: 'worker.js' | 'account.js' | 'consent.js'; also?: Edit[] }
 const MUTANTS: Mutant[] = [
   { name: "assert: no key compare", file: "worker.js",
     from: "(cred.accountPub !== a.accountPub && !grace)",
@@ -273,8 +275,58 @@ const MUTANTS: Mutant[] = [
     from: "} catch (x) { console.log(`everEnd failed: ${x.message}`) }",
     to: "} catch (x) { await s.delete('everEnd') }" },
   { name: "ever: the record outlives the call", file: "worker.js",
-    from: "'everEnd', {})\n          await s.delete('everEnd')\n",
-    to: "'everEnd', {})\n" },
+    from: "await s.delete(r.body.held ? 'everEnd' : ['everEnd', 'htomb', 'events'])\n",
+    to: "void r\n" },
+  { name: "ever: htomb kept", file: "worker.js",
+    from: "r.body.held ? 'everEnd' : ['everEnd', 'htomb', 'events']",
+    to: "r.body.held ? 'everEnd' : ['everEnd', 'events']" },
+  { name: "ever: events kept", file: "worker.js",
+    from: "r.body.held ? 'everEnd' : ['everEnd', 'htomb', 'events']",
+    to: "r.body.held ? 'everEnd' : ['everEnd', 'htomb']" },
+  { name: "ever: a held answer loses the key too", file: "worker.js",
+    from: "r.body.held ? 'everEnd' : ['everEnd', 'htomb', 'events']",
+    to: "['everEnd', 'htomb', 'events']" },
+  { name: "rebound: a tomb with no key reads as no rebound", file: "worker.js",
+    from: "prevKey ? prevKey !== b.accountPub : !!(await s.get('tomb'))",
+    to: "!!prevKey && prevKey !== b.accountPub" },
+  { name: "rebound: a kept key is not compared", file: "worker.js",
+    from: "prevKey ? prevKey !== b.accountPub : !!(await s.get('tomb'))",
+    to: "!!prevKey || !!(await s.get('tomb'))" },
+  { name: "renewal: complete may shorten", file: "worker.js",
+    from: "        if (b.expires < lv.b.expires) return fail(p)\n",
+    to: "" },
+  { name: "renewal: complete refuses an equal life", file: "worker.js",
+    from: "if (b.expires < lv.b.expires) return fail(p)",
+    to: "if (b.expires <= lv.b.expires) return fail(p)" },
+  { name: "renewal: start mails a shorter one", file: "worker.js",
+    from: "      if (cur && b.expires < cur.b.expires) return out(202, { mail: null })\n",
+    to: "" },
+  { name: "renewal: start refuses an equal life", file: "worker.js",
+    from: "if (cur && b.expires < cur.b.expires) return out(202, { mail: null })",
+    to: "if (cur && b.expires <= cur.b.expires) return out(202, { mail: null })" },
+  { name: "renewal: both doors open", file: "worker.js",
+    from: "      if (cur && b.expires < cur.b.expires) return out(202, { mail: null })\n",
+    to: "",
+    also: [{ from: "        if (b.expires < lv.b.expires) return fail(p)\n", to: "" }] },
+  { name: "tomb re-bind: complete may shorten", file: "worker.js",
+    from: "        if (b.expires < guard.expires) return fail(p)",
+    to: "        void 0" },
+  { name: "tomb re-bind: complete refuses an equal life", file: "worker.js",
+    from: "if (b.expires < guard.expires) return fail(p)",
+    to: "if (b.expires <= guard.expires) return fail(p)" },
+  { name: "tomb re-bind: start mails a shorter one", file: "worker.js",
+    from: "      if (gt && b.accountPub === gt.key && b.expires < gt.expires) return out(202, { mail: null })\n",
+    to: "" },
+  { name: "tomb re-bind: start refuses an equal life", file: "worker.js",
+    from: "b.accountPub === gt.key && b.expires < gt.expires",
+    to: "b.accountPub === gt.key && b.expires <= gt.expires" },
+  { name: "tomb re-bind: start holds a new key to the old life", file: "worker.js",
+    from: "if (gt && b.accountPub === gt.key && b.expires < gt.expires)",
+    to: "if (gt && b.expires < gt.expires)" },
+  { name: "tomb re-bind: both doors open", file: "worker.js",
+    from: "      if (gt && b.accountPub === gt.key && b.expires < gt.expires) return out(202, { mail: null })\n",
+    to: "",
+    also: [{ from: "        if (b.expires < guard.expires) return fail(p)", to: "        void 0" }] },
   { name: "ever: rows not deleted", file: "account.js",
     from: "for (let i = 0; i < rows.length; i += 128) await s.delete(rows.slice(i, i + 128))",
     to: "" },
@@ -320,10 +372,12 @@ for (const m of MUTANTS) {
   const d = tree()
   const p = join(d, 'server/directory/src', m.file)
   const src = readFileSync(p, 'utf8')
-  const n = src.split(m.from).length - 1
-  ok(n === 1, `applies exactly once: ${m.name} (found ${n})`)
+  const edits: Edit[] = [m, ...(m.also ?? [])]
+  const ns = edits.map((e) => src.split(e.from).length - 1)
+  const n = ns.every((x) => x === 1) ? 1 : 0
+  ok(n === 1, `applies exactly once: ${m.name} (found ${ns.join(', ')})`)
   if (n === 1) {
-    writeFileSync(p, src.replace(m.from, () => m.to))
+    writeFileSync(p, edits.reduce((t, e) => t.replace(e.from, () => e.to), src))
     const rs = run(d)
     ok(rs.every((r) => r.failed !== null) && rs.some((r) => r.failed! > 0), `killed: ${m.name} (${rs.map((r) => `${r.f} ${r.failed === null ? 'CRASHED' : `${r.failed} failed`}`).join(', ')})`)
   }

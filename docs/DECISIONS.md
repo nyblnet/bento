@@ -12461,3 +12461,36 @@ live code, and the flags then stay. A new key waiting out its contest holds the
 appointment; if it lands the flags stay, and if it is contested they go. A mailbox
 deletion counts too, an hour on, since its binding has already expired and its wipe
 follows the answer.
+
+## 2026-11-04: a renewal never shortens, and the key record ends with `ever`
+
+A same-key renewal had no floor on `expires`. Key and mailbox could renew a live
+binding to a two-minute life, wait, and then a brand-new key needed email alone: the
+address moved at once, with no consent and no 72 hours, and the owner's passkey and
+code went with it. That is the move security §25 refuses, reached by the renewal door,
+and it also cut short the deletion window (§39.6) and the end of `ever`, which read the
+same date. Every earlier row renewed at full life, so none of them saw it.
+
+A renewal may now keep or extend its expiry, never bring it forward. The check is in
+`complete`, against what is live then, and in `start`, so that no code is mailed for
+one. The same door was open by way of a deletion: delete by key, then take the binding
+back with the same key for two minutes, and the window was gone. So the same key
+taking a deleted binding back is held to that binding's expiry. A different key needs
+no floor there, because it waits its 72 hours whatever life it asks for. A client whose
+clock runs behind can be refused a renewal it meant in good faith, and that is accepted.
+
+The entry above leaves the raw account key in the holder tomb until a re-bind. It now
+goes when `ever` ends: when the Account object answers that nothing is held, the
+Address object deletes `htomb` and the event list with the appointment. After a
+deleted binding's expiry the key's one job was the `rebound` answer, and no client
+reads which key it was. With no key to compare, a re-bind over a tomb reports
+`rebound`, which is the cautious answer. The same key back gets a false warning, and
+that is accepted, and a mailbox tomb, which never kept a key, now answers the same
+way. A continuation of the deleted binding is refused once the record has gone, as it
+always was over a mailbox tomb: seq 1 lands. A held answer keeps both, since a key may
+still come back and the comparison still means something.
+
+What stays after the end is the signed tomb and the chain of earlier binding hashes.
+Neither holds a key, but both are hashes of a statement that did, and the privacy page
+has to say so, along with the other half: a wipe that failed leaves the passkeys, the
+flags and the key record until it is finished.
