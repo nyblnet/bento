@@ -431,7 +431,12 @@ export function openColorPopover(anchor: HTMLElement, o: ColorPopoverOpts) {
     } else if (touched) o.cancel()
     if (kindChanged || !commit) o.done?.()
   }
-  const outside = (e: Event) => { if (!pop.contains(e.target as Node) && e.target !== anchor) finish(true) }
+  // the gradient's canvas handle edits what the popover shows: pressing it is
+  // working inside the popover, not leaving it
+  const outside = (e: Event) => {
+    const t = e.target as Element
+    if (!pop.contains(t) && t !== anchor && !t.closest?.('.ed-grad-layer')) finish(true)
+  }
   const key = (e: KeyboardEvent) => {
     // Esc closes and KEEPS what the canvas already shows — a popover that
     // previews live has applied it, and ⌘Z is the way back (Figma, Penpot)

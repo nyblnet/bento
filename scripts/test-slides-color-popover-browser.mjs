@@ -17,7 +17,8 @@
 //      swatch); one undo takes the whole pick back;
 //   6. a translucent colour's swatch is marked see-through;
 //   7. after switching to a gradient, Esc puts focus on the gradient chip
-//      that replaced the swatch, and the canvas handle stays.
+//      that replaced the swatch, and the canvas handle stays;
+//   8. dragging the canvas handle with the popover open keeps it open.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -147,6 +148,17 @@ try {
   const on = await p.evaluate(() => document.activeElement?.className ?? '')
   const handle = await p.locator('.ed-stage-scale .ed-grad-layer').count()
   ok(on.includes('ed-gradchip') && handle === 1, `focus is on the gradient chip and the canvas handle stays (focus: ${on || 'body'}, handles: ${handle})`)
+
+  console.log('\n8. the canvas handle works with the popover open\n')
+  // a press on the handle used to count as a click outside and close it
+  await p.locator('.ed-props .ed-gradchip').first().click(); await p.waitForTimeout(150)
+  const g0 = JSON.stringify((await el('q')).fillGradient)
+  const k = await p.locator('.ed-stage-scale .ed-grad-knob').first().boundingBox()
+  await p.mouse.move(k.x + k.width / 2, k.y + k.height / 2); await p.mouse.down()
+  await p.mouse.move(k.x + 40, k.y + 30, { steps: 6 }); await p.mouse.up(); await p.waitForTimeout(200)
+  const g1 = JSON.stringify((await el('q')).fillGradient)
+  ok(await p.locator('.ed-cpop').count() === 1 && g1 !== g0, `a handle drag keeps the popover open and moves the gradient (open: ${await p.locator('.ed-cpop').count()}, moved: ${g1 !== g0})`)
+  await p.keyboard.press('Escape'); await p.waitForTimeout(200)
   ok(errors.length === 0, `no page error${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
   await browser.close()
