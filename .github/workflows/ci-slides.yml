@@ -317,9 +317,12 @@ jobs:
         # Under the canvas, following the slide, one undo per burst; meets both
         # side panels; resized from its top edge; folds.
         run: node scripts/test-slides-notes-pane-browser.mjs
-      - name: Shortcuts sheet fits in Chromium
-        # No key overlaps a description, in en, pt and de, at two widths.
+      - name: Shortcuts dialog fits in Chromium
+        # No key overlaps a name, in en, pt and de, desktop and phone.
         run: node scripts/test-slides-help-sheet-browser.mjs
+      - name: Shortcuts dialog searches and walks in Chromium
+        # Opens three ways; finds by name or keys; rail; each command once; Esc and focus.
+        run: node scripts/test-slides-shortcuts-ui-browser.mjs
       - name: Laser fades when released in Chromium
         run: node scripts/test-slides-laser-release-browser.mjs
       - name: Auto-layout frames in Chromium

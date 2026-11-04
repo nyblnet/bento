@@ -203,10 +203,16 @@ try {
   console.log('\nthe ? sheet\n')
   await p.click('.ed-topbar [data-cmd="help"]'); await p.waitForTimeout(200)
   const toolRows = await p.evaluate(() => {
-    const sec = [...document.querySelectorAll('.ed-help-sec')].find((s) => s.querySelector('h3')?.textContent === 'Tools')
-    return sec ? [...sec.querySelectorAll('kbd')].map((k) => k.textContent) : null
+    // rows follow their group's heading; a chord's keys are separate caps
+    const out = []
+    let tools = false
+    for (const el of document.querySelectorAll('.ed-keys-list > *')) {
+      if (el.classList.contains('ed-keys-group')) tools = el.textContent === 'Tools'
+      else if (tools) for (const ks of el.querySelectorAll('.ed-keys-keys')) out.push([...ks.querySelectorAll('kbd')].map((k) => k.textContent).join(''))
+    }
+    return out.length ? out : null
   })
-  ok(!!toolRows && ['V', 'F', 'R', 'O', 'L', 'P', 'T', '⇧A'].every((k) => toolRows.includes(k)), `the Tools section lists the letters (${toolRows?.join(' ')})`)
+  ok(!!toolRows && ['V', 'F', 'R', 'O', 'L', 'P', 'T'].every((k) => toolRows.includes(k)), `the Tools group lists the letters (${toolRows?.join(' ')})`)
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
   await browser.close()

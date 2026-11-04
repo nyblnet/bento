@@ -12,7 +12,7 @@
 //      picker; a refused name says why (aria-invalid + aria-describedby); the
 //      new row has focus after it is created.
 //   2. Tokens can be found: ⌘K lists New color token, the component commands
-//      and Switch mode; the ? sheet has a Tokens row; a field's bind dot shows
+//      and Switch mode; the ? dialog points to the Tokens view; a field's bind dot shows
 //      while the field has keyboard focus.
 //   3. Feedback: a token's uses count is a button that walks its uses across
 //      slides; a mode switch toasts what changed; the inspector's bound swatch
@@ -119,7 +119,7 @@ try {
   ok(/Switch mode/.test(await palette('mode')), '⌘K "mode" lists Switch mode')
   ok(/Show tokens and components/.test(await palette('component')), '⌘K "component" finds the Tokens view (Show tokens and components)')
   await p.keyboard.press('?'); await p.waitForTimeout(200)
-  ok(await p.evaluate(() => [...document.querySelectorAll('.ed-help-row kbd')].some((k) => k.textContent === 'Tokens')), 'the ? sheet has a Tokens row')
+  ok(await p.evaluate(() => [...document.querySelectorAll('.ed-keys-row .ed-keys-hint')].some((k) => k.textContent.includes('Tokens view'))), 'the ? dialog points to the Tokens view')
   await p.keyboard.press('Escape'); await p.waitForTimeout(100)
   await select('a')
   const dotOnFocus = await p.evaluate(() => {

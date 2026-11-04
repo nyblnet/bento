@@ -137,7 +137,7 @@ export function openPalette(cmds: Command[]) {
       if (c.keys) {
         const keys = document.createElement('span')
         keys.className = 'ed-tip-keys'
-        for (const k of c.keys.split(/\s*·\s*/)) {
+        for (const k of c.keys.split(/\s*(?:·|or)\s*/)) {
           const kbd = document.createElement('kbd')
           kbd.textContent = k
           keys.appendChild(kbd)
