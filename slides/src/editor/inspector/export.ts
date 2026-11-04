@@ -17,6 +17,7 @@ import type { ImageScale } from '../../exportimages'
 import { nativeSlideSvg } from '../svgexport'
 import { exportBase } from '../../exportimages'
 import { serializeElements, serializeSlides } from '../clipboard'
+import { withDescendants } from '../../layout'
 import { ALT_TYPES } from '../../render'
 
 /**
@@ -72,14 +73,15 @@ export function buildExport(p: PropsPanel, els: SlideElement[]) {
   // Figma's Export, fixed: one setting row (scale · format · ⋯) and one
   // full-width button that exports it
   section(p, t('Export'))
-  // the selection alone, on no background, cropped to what it covers
-  // A child of a clipping frame exports clipped: its frame rides along hidden
-  // (renderSlide resolves clips through every element, draws only visible ones).
-  const ids = new Set(els.map((e) => e.id))
-  const frames = slide.elements.filter((f) => !ids.has(f.id) && els.some((e) => e.parentId === f.id)).map((f) => ({ ...f, hidden: true as const }))
+  // the selection alone, on no background, cropped to what it covers. A
+  // frame is its contents too (withDescendants, as ⌘C copies it).
+  const ids = new Set(withDescendants(slide, els).map((e) => e.id))
+  // A child of a clipping frame exports clipped: its frame rides along at 0%
+  // (renderSlide resolves clips through every element). Not `hidden`: a
+  // hidden frame hides what is inside it, which was the whole export.
+  const riders = new Map(slide.elements.filter((f) => !ids.has(f.id) && slide.elements.some((e) => ids.has(e.id) && e.parentId === f.id)).map((f) => [f.id, { ...f, opacity: 0 }]))
   // in the slide's paint order: the selection's own order (the order it was
   // picked in) would draw a card's text under the card
-  const riders = new Map(frames.map((f) => [f.id, f]))
   const unit = slide.elements.filter((e) => ids.has(e.id) || riders.has(e.id)).map((e) => riders.get(e.id) ?? e)
   const subject = (opaque: boolean) => els.length ? { ...slide, background: opaque ? slide.background : 'transparent', elements: unit } : slide
   const box = els.length ? coverBox(els) : undefined
@@ -118,7 +120,7 @@ export function buildExport(p: PropsPanel, els: SlideElement[]) {
     rows.appendChild(row)
   }
   const copyJson = async () => {
-    await navigator.clipboard.writeText(els.length ? serializeElements(els, doc) : serializeSlides([slide], doc))
+    await navigator.clipboard.writeText(els.length ? serializeElements(withDescendants(slide, els), doc) : serializeSlides([slide], doc))
     p.toast(t('Copied — ⌘V pastes it into any Bento deck'))
   }
   {

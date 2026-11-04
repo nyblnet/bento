@@ -370,7 +370,8 @@ export async function nativeSlideSvg(doc: BentoDoc, slide: Slide, box?: Box): Pr
     }
     for (const node of [...surface.children] as HTMLElement[]) {
       const el = byId.get(node.dataset.elId ?? '')
-      if (!el || getComputedStyle(node).display === 'none') continue
+      // at 0% an element draws nothing (an export's clipping frame rides along so)
+      if (!el || el.opacity === 0 || getComputedStyle(node).display === 'none') continue
       // measure unturned and unmirrored; the group puts the turn and the mirror back
       const lifted: Array<[HTMLElement | SVGElement, string]> = [[node, node.style.transform]]
       if (el.flipX || el.flipY) for (const c of node.children) lifted.push([c as HTMLElement, (c as HTMLElement).style.transform])

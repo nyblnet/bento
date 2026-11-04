@@ -13,6 +13,7 @@
 //   4. SVG is a standalone image of the same box (its viewBox is the box).
 //   5. Copy as JSON writes ⌘C's clipboard payload: the selected elements.
 //   6. A multi-selection exports in the slide's paint order.
+//   7. A selected frame exports with its contents, a frame's child too.
 import { readFileSync } from 'node:fs'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
@@ -128,9 +129,9 @@ try {
     window.bento.loadDoc(JSON.stringify(d))
   }, [
     rect('row', 100, 100, 464, 132, { fill: 'transparent', layout: { dir: 'row', gap: 16, pad: [16, 16, 16, 16] } }),
-    rect('c1', 116, 116, 200, 100, { fill: '#00aa00', parentId: 'row', layout: { dir: 'column', gap: 8, pad: [16, 16, 16, 16] } }),
+    rect('c1', 116, 116, 200, 100, { fill: '#00aa00', parentId: 'row', layout: { dir: 'col', gap: 8, pad: [16, 16, 16, 16] } }),
     words('t1', 132, 132, { parentId: 'c1' }),
-    rect('c2', 332, 116, 200, 100, { fill: '#00aa00', parentId: 'row', layout: { dir: 'column', gap: 8, pad: [16, 16, 16, 16] } }),
+    rect('c2', 332, 116, 200, 100, { fill: '#00aa00', parentId: 'row', layout: { dir: 'col', gap: 8, pad: [16, 16, 16, 16] } }),
     words('t2', 348, 132, { parentId: 'c2' }),
     // ids sort the texts before the rect; the slide paints the rect first
     rect('z', 700, 400, 300, 120, { fill: '#0000ff' }),
@@ -146,6 +147,21 @@ try {
   await pick('a2', 'a1', 'z')
   const multi = order((await download('SVG')).buf.toString('utf8'))
   ok(multi.join() === 'z,a1,a2', `a multi-selection exports in the slide's paint order, not the selection's (${multi.join()})`)
+  // a frame is its contents too: the Row with its cards and their texts, a
+  // card (inside the Row) with its fill and its text
+  await pick('row')
+  const row = order((await download('SVG')).buf.toString('utf8'))
+  await pick('c1')
+  const card = (await download('SVG')).buf.toString('utf8')
+  const png = await download('PNG 1×')
+  const mid = await p.evaluate(async (b64) => {
+    const img = new Image(); img.src = 'data:image/png;base64,' + b64; await img.decode()
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height
+    const g = c.getContext('2d'); g.drawImage(img, 0, 0)
+    return [...g.getImageData(4, img.height - 4, 1, 1).data]
+  }, png.buf.toString('base64'))
+  ok(row.join() === 'row,c1,t1,c2,t2' && order(card).join() === 'c1,t1' && /#00aa00|rgb\(0, 170, 0\)/i.test(card) && mid[1] > 150 && mid[3] > 200,
+    `a selected frame exports with everything inside it (Row: ${row.join()}; card: ${order(card).join()}, PNG corner ${mid.join(',')})`)
 
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
