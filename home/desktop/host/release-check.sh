@@ -26,9 +26,12 @@ for a in ${BENTO_APPS:-slides}; do
   curl -fsS -o "releases/$a/$shell" "$BASE/$a/$shell"
   ( cd ../hostcore && cargo run -q --example release_check -- "../host/releases/$a" )
 done
+# tauri-build leaves generated ACL files (gen/, permissions/) in the crate directory: a rig build
+# that ran earlier in the same checkout (Windows lists its commands there) must not leak into this one.
+rm -rf gen permissions
 env -u BENTO_HISTORIES_DIR cargo build -q $FLAG
 BIN="target/$PROFILE/bento-home-desktop"
 [ -f "$BIN" ] || BIN="$BIN.exe" # Windows
-./gate-binary.sh "$BIN" || exit 1
+./gate-binary.sh "$BIN" || { echo "where the rig names appear:"; grep -rla rig_stash gen permissions target/*/build/bento-home-desktop-*/out 2>/dev/null | head; exit 1; }
 n=$(find releases -name 'history.json' | wc -l | tr -d ' ')
 echo "release check passed: $n app history(ies) bundled into $BIN"
