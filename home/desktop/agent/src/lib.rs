@@ -11,6 +11,10 @@
 
 pub mod address;
 pub mod agent;
+pub mod book;
+pub mod calls;
+pub mod lockgate;
+pub mod select;
 pub mod b64u;
 pub mod device_list;
 pub mod webauthn;
@@ -26,3 +30,6 @@ pub mod secret_linux;
 
 #[cfg(all(target_os = "linux", feature = "fido"))]
 pub mod fido_linux;
+
+#[cfg(all(target_os = "linux", any(feature = "tpm", feature = "keyring")))]
+pub mod linux_store;
