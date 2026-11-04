@@ -156,6 +156,8 @@ race() { # tag mode delay padding
 }
 n=0; for s in "1 0" "1 1" "2 1" "3 1" "5 1" "2 4" "5 4" "10 4" "20 4" "0 4"; do set -- $s; race "race$n" race "$1" "$2"; n=$((n+1)); done
 race resave resave 0 0
+# A load with no document serve: the document goes back through its history (see runRestore).
+race restore restore 0 0
 # B3's negative control: the same read with the header at ?0
 cp "$OUT/fix/U.bento.html" "$OUT/O.bento.html"
 BENTO_RIG_MODE=oac BENTO_RIG_LINGER_MS=200 BENTO_RIG_OAC_OFF=1 scenario oacoff 30 "$OUT/O.bento.html"

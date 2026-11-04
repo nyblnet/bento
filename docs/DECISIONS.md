@@ -12285,8 +12285,10 @@ neither); the Windows key store is an explicit stub that refuses everything unti
   policy and report nothing. WebKitGTK reports no finished load for any of these. The `http:`
   request also reached the rig's server every time on WebView2, while the page stayed where it
   was: cancelling stops the commit, not the request, so on Windows "the policy refused it" does
-  not mean "nothing was sent". That adds no reach: an allowed `https:` navigation leaves before
-  its bounce on both engines, and an unknown document has no CSP to begin with.
+  not mean "nothing was sent". For `https:` that adds no reach, since an allowed `https:` navigation
+  leaves before its bounce on both engines. Plain `http:` is reach an allowed navigation lacks: a
+  local http-only service gets a GET. An unknown document already has that, having no CSP; for a
+  genuine document it is a bare GET to a URL written in the deck.
 - **One mint per generation (all platforms).** Because of the above, WebView2 reports several
   finished loads for one generation in ordinary use. `Load::load_finished` now mints once: a repeat while PENDING hands back the same
   secret and nonce, and a repeat once ARMED does nothing. Without this, the order
@@ -12296,27 +12298,33 @@ neither); the Windows key store is an explicit stub that refuses everything unti
 - **Shim change (all platforms):** the shim adopts a capability secret only when `bento_arm`
   succeeds, and ignores later deliveries once armed. It is needed beside the rule above, not
   instead of it: alone it fixes only the order pending, pending, armed.
-- **A load's verdict is every serve since the last mint, ANDed, and the mint consumes it (all
-  platforms).** A serve cannot be tied to a generation, because the main document is served before
+- **A load's verdict is every serve since the previous load start, ANDed and fixed at this load's
+  start, and the mint consumes it (all platforms).** A serve cannot be tied to a generation, because the main document is served before
   its load start, which both engines raise at commit. So the old page still holds a live capability
   after its reload was served, and with an overwriting verdict an unknown document could reload,
   swap a genuine shell over its own file in that gap, fetch its own URL from the new page, and be
   armed genuine while its unknown bytes ran (security measured this reaching the agent on
   WebKitGTK; nothing could sign, since no store is wired). One unknown serve now makes the load
-  unknown, and the verdict dies with the mint that used it. The rig scenario is security's race
+  unknown, and a serve after the load's start counts only against the next load. The verdict is
+  fixed at the start and not at the mint because the finish is the page's to time on WebView2 (any
+  cancelled navigation reports one): a mint reading the running tally would use up the next load's
+  unknown serve, and a later serve alone would then judge that load (armed genuine in hostcore; no
+  engine has been seen producing that order). The rig scenario is security's race
   on both engines, read from the host's own arming line (the swap landed between the two serves in
   9 or 10 of 10 attempts on WebKitGTK and 7 or 8 of 10 on WebView2, and every one armed unknown).
-  Each half has a rig mutant on WebKitGTK: without the AND the attacker's bytes arm genuine and
-  reach the agent, and without the take a saved, reloaded document stays unknown. It fails closed in two ways worth
-  knowing: a page that fetched its own URL while unknown makes its next load unknown too, and a
-  document that reloads in the instant between its serve and the previous load's finish report
-  has no verdict left, so it opens unarmed until the next reload.
+  It fails closed in one way worth knowing: a page that fetched its own URL while unknown makes its
+  next load unknown too.
 - **A document's URL includes its fragment (all platforms).** The host compared the URL exactly,
   but a page moves its own fragment without asking: `history.pushState` is invisible on both
   engines (bento/spaces does it on every page change), and a plain `#x` link is invisible on
   WebView2 (no policy call, no load start, no finish). WebKitGTK does ask, and the policy refused
   it: a genuine document's in-page link did nothing on Linux. (An unknown document's URL moved
-  anyway, 3 of 3 runs with the policy's refusal in the log; why is not known.) Once the URL carries
+  anyway, with the policy's refusal in the log. The cause is the CSP, not the verdict: with the fix
+  removed the genuine document stayed at `''` and the unknown one moved to `#nl`, 4 of 4 runs, and
+  the same genuine document with its CSP header dropped moved too, 3 of 3. So on WebKitGTK refusing
+  a same-document navigation does not bind a page with no CSP; the mechanism is unread. Refusals
+  of cross-document navigations on that same page hold, and a same-document move changes no bytes
+  and starts no load, so arming is untouched.) Once the URL carries
   a fragment, a reload's does too, and the policy refused that: measured on WebKitGTK with the fix
   removed, the reload never happens. On WebView2 the same compare is read, not measured; the
   fixed path is measured on both. `is_document` now takes the part before `#`, for the navigation

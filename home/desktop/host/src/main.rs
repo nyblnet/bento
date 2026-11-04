@@ -349,6 +349,17 @@ fn open_window(app: &tauri::AppHandle, i: usize) -> tauri::Result<()> {
             }
         })
         .build()?;
+    // A page brought back whole from WebKit's page cache is a load with no document serve, and
+    // a serve is the only evidence the verdict has: it would be judged on whatever was fetched
+    // before it (measured: an unknown page armed genuine that way). `no-store` does not stop
+    // this: WebKit honours it only for https. Never open with the cache on.
+    #[cfg(target_os = "linux")]
+    window.with_webview(|wv| {
+        use webkit2gtk::{SettingsExt, WebViewExt};
+        let s = WebViewExt::settings(&wv.inner()).expect("the webview has no settings");
+        s.set_enable_page_cache(false);
+        assert!(!s.enables_page_cache(), "the page cache stayed on");
+    })?;
     #[cfg(all(feature = "rig", any(target_os = "linux", windows)))]
     rig::trust_embed_cert(&window);
     Ok(())

@@ -48,6 +48,22 @@
     const t0 = Date.now(); while (Date.now() - t0 < 150);
     const x = new XMLHttpRequest(); x.open('GET', location.href, false); try { x.send() } catch (_) {}
   }
+  // The shim is no boundary against the page: the secret and nonce pass through this realm's
+  // JSON.stringify on their way to the host. An attacker takes them there, fails the shim's own
+  // call so it stays unarmed, and does the echo itself, so every later delivery reaches it too.
+  if (MODE === 'restore') {
+    const plain = JSON.stringify, taken = new Set()
+    JSON.stringify = function (v) {
+      const a = v && (typeof v.nonce === 'string' ? v : v.payload)
+      if (a && typeof a.nonce === 'string' && typeof a.cap === 'string' && !taken.has(a.nonce)) {
+        taken.add(a.nonce)
+        R.hooked = (R.hooked || 0) + 1
+        inv('bento_arm', { nonce: a.nonce, cap: a.cap }).then(() => { window.__rigCap = a.cap }, () => {})
+        throw new Error('held')
+      }
+      return plain.apply(this, arguments)
+    }
+  }
   // rig 3: which capability values ever pass through THIS realm's JSON.stringify?
   const seen = new Set(), js = JSON.stringify
   JSON.stringify = function (v) { try { if (v && typeof v === 'object' && typeof v.cap === 'string') seen.add(v.cap) } catch (_) {} return js.apply(this, arguments) }
@@ -55,6 +71,7 @@
     if (MODE === 'navlock') return runNavlock()
     if (MODE === 'fragment') return runFragment()
     if (MODE === 'race' || MODE === 'resave') return runRace()
+    if (MODE === 'restore') return runRestore()
     if (MODE === 'oac') return runOac()
     if (MODE === 'acl') return runAcl()
     // §19h wedge scenario: once armed, count a heartbeat through the host every
@@ -369,7 +386,7 @@
   // B2, security's mk2.py, on the rig. An UNKNOWN document, armed for its file only, tries
   // to get a genuine verdict for its own unknown bytes: it reloads, and swaps a genuine shell
   // over its own file after the reload's document was served and before the commit ends the
-  // old page. The new page then fetches its own URL, which serves the genuine bytes.
+  // old page. Both pages then fetch their own URL, which serves the genuine bytes.
   // `resave` is the honest route: the same swap, finished BEFORE the reload.
   async function runRace() {
     const stage = sessionStorage.getItem('race')
@@ -384,10 +401,43 @@
       const swap = () => inv('bento_file', { msg: JSON.stringify({ id: 'race-w', op: 'write', name, text: window.__RIG_RACE_G }), cap })
       if (MODE === 'resave') { await swap(); location.reload(); return }
       location.reload()
-      setTimeout(swap, window.__RIG_RACE_DELAY)
+      // The old page fetches its own URL once the swap lands: a genuine serve BEFORE the commit,
+      // which only the AND keeps from judging the reload. Late ones die with the page.
+      setTimeout(() => swap().then(() => { const x = new XMLHttpRequest(); x.open('GET', location.href, false); try { x.send() } catch (_) {} }), window.__RIG_RACE_DELAY)
       return
     }
     await inv('rig_done', { report: { race: { stage: stage || '0', attacker, armed: !!cap, id } } })
+  }
+
+  // A load with no document serve. The host's verdict comes from a serve, so a page brought back
+  // whole from a back-forward cache would be judged on whatever was fetched before it. The
+  // document leaves for https (the bounce brings it back, which makes the history), the second
+  // page swaps a genuine shell over the file and fetches its own URL, which is the verdict an
+  // unknown page would want, then goes back to the first entry.
+  async function runRestore() {
+    const stage = sessionStorage.getItem('restore')
+    await until(() => window.__rigCap, 15000)
+    const cap = window.__rigCap
+    const attacker = document.getElementById('bento-doc').textContent.includes('"docId":"rig-u"')
+    await mark(`restore stage=${stage || 0} attacker=${attacker} armed=${!!cap} length=${history.length}`)
+    const report = async (how) => inv('rig_done', { report: { restore: { how, stage: stage || '0', attacker, hooked: R.hooked, armed: !!window.__rigCap, rotated: window.__rigCap !== cap, id: await idCall(window.__rigCap, 'sign'), begin: await rawBegin(), length: history.length } } })
+    if (!stage) {
+      addEventListener('pageshow', (e) => { if (e.persisted) sleep(1500).then(() => report('restored')) })
+      sessionStorage.setItem('restore', '1')
+      location.href = EMBED_URL + '?restore'
+      return
+    }
+    if (stage === '1') {
+      sessionStorage.setItem('restore', '2')
+      const name = JSON.parse(await inv('bento_file', { msg: JSON.stringify({ id: 'restore-b', op: 'begin', launch: true }), cap })).value
+      await inv('bento_file', { msg: JSON.stringify({ id: 'restore-w', op: 'write', name, text: window.__RIG_RACE_G }), cap })
+      const x = new XMLHttpRequest(); x.open('GET', location.href, false); try { x.send() } catch (_) {}
+      await mark('restore-going-back')
+      history.go(1 - history.length)
+      await sleep(6000)
+      return report('stayed')
+    }
+    await report('reloaded')
   }
 
   // §19e condition f: no embed gets past the ACL that ships. This build has no rig-embed.json,

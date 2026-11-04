@@ -374,6 +374,26 @@ def races():
     ok(rc.get("id") == ("unavailable" if WINDOWS else "purpose"), f"resave: identity follows the new verdict ({rc.get('id')})")
 races()
 
+# A load with no document serve: an unknown document goes back through its history after
+# setting up a genuine verdict (see runRestore in probe.js)
+def restore():
+    L = log("restore")
+    ex = (out / "restore.exit").read_text().strip() if (out / "restore.exit").exists() else "missing"
+    ok(ex == "0", f"restore: the host exited cleanly (exit {ex})")
+    rs = (((report("restore-doc0") or {}).get("page") or {}).get("restore")) or {}
+    ok(re.search(r"STEP doc0\.step = restore stage=1 attacker=true armed=true length=[2-9]", L) is not None, "restore: precondition: the attacker's second page has history to go back through")
+    ok(re.search(r'SERVED doc0 \d+ bytes, unknown[^\n]*\n(?:.*\n)*?IPC bento_file op="write" id="restore-w" webview=doc0 OK\n(?:.*\n)*?SERVED doc0 \d+ bytes, genuine[^\n]*\nSTEP doc0\.step = restore-going-back', L) is not None, "restore: precondition: a genuine serve was on the books when the document went back")
+    ok((rs.get("hooked") or 0) >= 1, f"restore: precondition: the page took the secret itself, so the shim did not stand in the way ({rs.get('hooked')})")
+    ok(rs.get("how") == "reloaded", f"restore: the page did not come back whole: going back is a new load ({rs.get('how')})")
+    back = L.split("STEP doc0.step = restore-going-back", 1)[-1]
+    first = re.search(r"^(SERVED|STARTED) doc0", back, re.M)
+    ok(first is not None and first.group(1) == "SERVED", f"restore: going back served the document before its load started ({first and first.group(1)})")
+    arms = re.findall(r"^ARM doc0 generation \d+: ARMED genuine=(\w+)", L, re.M)
+    ok(arms == ["false", "false", "true"], f"restore: armed genuine only for the load that ran the genuine bytes ({arms})")
+    ok(rs.get("attacker") is False and rs.get("armed") is True, f"restore: what armed at the end is the genuine bytes ({rs.get('attacker')}, {rs.get('armed')})")
+    ok(rs.get("id") == ("unavailable" if WINDOWS else "purpose"), f"restore: identity follows those bytes ({rs.get('id')})")
+restore()
+
 if WINDOWS:
     # B3's negative control: the rows above can fail
     r = report("oacoff-doc0")
