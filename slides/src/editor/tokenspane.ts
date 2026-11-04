@@ -152,6 +152,9 @@ export class TokensPane {
   private host: HTMLElement | null = null
   /** per token (or theme slot), where its uses button last stepped to */
   private cursor = new Map<string, number>()
+  /** a colour pick is previewing live: the deck already shows it, and a
+   *  rebuild would pull the swatch out from under the open popover */
+  private live = false
   constructor(private store: Store, private ui: TokensPaneHost = { toast: () => {} }) {}
 
   mount(into: HTMLElement) {
@@ -162,7 +165,7 @@ export class TokensPane {
   /** Rebuild, unless someone is typing in it (their `change` blurs, then rebuilds). */
   refresh() {
     const host = this.host
-    if (!host || host.querySelector('input:focus, .ed-token-name[aria-invalid]')) return
+    if (!host || this.live || host.querySelector('input:focus, .ed-token-name[aria-invalid]')) return
     host.replaceChildren(this.tokensSection(), this.componentsSection())
   }
 
@@ -287,7 +290,9 @@ export class TokensPane {
     h.tabIndex = 0
     h.setAttribute('role', 'button')
     const label = document.createElement('span')
+    label.className = 'ed-tokens-sec-title'
     label.textContent = title
+    label.title = title
     const n = document.createElement('span')
     n.className = 'ed-sec-count'
     n.textContent = String(count)
@@ -430,13 +435,14 @@ export class TokensPane {
     return PALETTE_SLOTS.filter((s) => palette[s] && slotIsSet(doc, s)).map((slot) => {
       const row = div('ed-token-row ed-token-builtin')
       row.dataset.slot = slot
-      const set = (v: string) => this.store.commit(() => {
+      const write = (v: string) => {
         const th = this.store.doc.theme
         if (slot === 'bg1') th.background = v
         else if (slot === 'tx1') th.color = v
         else if (slot === 'accent1') th.accent = v
         else (th.palette ??= {})[slot as 'accent2'] = v
-      })
+      }
+      const set = (v: string) => this.store.commit(() => write(v))
       const name = document.createElement('span')
       name.className = 'ed-token-name'
       name.textContent = slotLabel(slot)
@@ -448,7 +454,7 @@ export class TokensPane {
         delete th.palette?.[slot as 'accent2']
         if (th.palette && !Object.keys(th.palette).length) delete th.palette
       }) : null, [])
-      row.append(this.swatch(palette[slot]!, t('Value of {name}', { name: label }), set), name,
+      row.append(this.swatch(palette[slot]!, t('Value of {name}', { name: label }), set, write), name,
         this.colorValue(palette[slot]!, label, set),
         this.usesButton(`slot:${slot}`, n.get(slot)?.length ?? 0, () => n.get(slot) ?? [], label), more)
       return row
@@ -488,8 +494,14 @@ export class TokensPane {
     return b
   }
 
-  /** A colour value: a swatch that opens the app's colour popover (not the browser's picker). */
-  private swatch(value: string, label: string, set: (v: string) => void): HTMLButtonElement {
+  /**
+   * A colour value: a swatch that opens the app's colour popover (not the
+   * browser's picker). The pick applies LIVE — every bound literal in the deck
+   * follows while the colour is dragged or typed (the PropsPanel burst: one
+   * checkpoint at the first preview, in-place writes after it). Enter, Esc and
+   * a click outside all keep it; the pick is one undo step.
+   */
+  private swatch(value: string, label: string, set: (v: string) => void, write?: (v: string) => void): HTMLButtonElement {
     const b = document.createElement('button')
     b.type = 'button'
     b.className = 'ed-token-swatch'
@@ -503,9 +515,25 @@ export class TokensPane {
       alpha: a,
       // the deck's colours to start from, as every colour picker offers them
       groups: colorGroups(this.store.doc, (c) => set(String(c.value))),
-      preview: (h, al) => { b.style.background = cssColor(literal(h, al), 'transparent') },
-      commit: (h, al) => set(literal(h, al)),
-      cancel: () => { b.style.background = cssColor(value, 'transparent') },
+      preview: (h, al) => {
+        b.style.background = cssColor(literal(h, al), 'transparent')
+        if (!write) return
+        if (!this.live) { this.store.checkpoint(); this.live = true }
+        write(literal(h, al))
+        this.store.touch()
+      },
+      commit: (h, al) => {
+        if (!this.live) return set(literal(h, al))
+        write!(literal(h, al))
+        this.live = false
+        this.store.touch()
+      },
+      cancel: () => {
+        b.style.background = cssColor(value, 'transparent')
+        if (!this.live) return
+        this.live = false
+        this.store.undo()
+      },
     }))
     return b
   }
@@ -519,7 +547,8 @@ export class TokensPane {
     row.dataset.token = name
     // one line, Penpot's: preview · name · value · uses · ⋯ — names and values
     // are text until clicked, then a field that commits on Enter or leaving
-    const set = (v: string | number | ShadowSpec) => this.edit((x) => { x.set[name].values[m] = v })
+    const write = (v: string | number | ShadowSpec) => { tk.set[name].values[m] = v }
+    const set = (v: string | number | ShadowSpec) => this.edit(() => write(v))
     const num = (v: number, label: string, onSet: (n: number) => void, unit = '') =>
       editing(`${v}${unit}`, label, (s) => (Number.isFinite(parseFloat(s)) ? null : t('Type a number')), (s) => onSet(parseFloat(s)), undefined, 'ed-token-value')
     const valueLabel = t('Value of {name}', { name })
@@ -527,12 +556,12 @@ export class TokensPane {
     lead.classList.add('ed-token-preview')
     let val: HTMLElement
     if (tok.type === 'color') {
-      lead = this.swatch(String(value), valueLabel, set)
+      lead = this.swatch(String(value), valueLabel, set, write)
       val = this.colorValue(String(value), name, set)
     } else if (tok.type === 'shadow') {
       const sh = (typeof value === 'object' ? value : { blur: 0, color: '#000' }) as ShadowSpec
       // the lead tile shows the shadow itself; a click edits its colour
-      lead = this.swatch(sh.color, t('Shadow color'), (c) => set({ ...sh, color: c }))
+      lead = this.swatch(sh.color, t('Shadow color'), (c) => set({ ...sh, color: c }), (c) => write({ ...sh, color: c }))
       lead.classList.add('ed-token-preview')
       lead.style.background = 'var(--surface)'
       lead.style.boxShadow = `${sh.x ?? 0}px ${sh.y ?? 0}px ${sh.blur}px ${sh.color}`

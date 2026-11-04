@@ -389,6 +389,17 @@ export function openColorPopover(anchor: HTMLElement, o: ColorPopoverOpts) {
   hue.addEventListener('input', () => { h = +hue.value; emit() })
   alpha.addEventListener('input', () => { a = +alpha.value / 100; emit() })
   models.addEventListener('change', () => { model = models.value as Model; paint() })
+  // typing applies as soon as the text is a whole colour — no Enter needed —
+  // and leaves the field as typed; a hex needs all 6 (or 8) digits, so the
+  // short forms passed on the way ("f2f" of "f2f0ea") never flash
+  text.addEventListener('input', () => {
+    if (model === 'hex' && !/^#?([0-9a-f]{6}|[0-9a-f]{8})$/i.test(text.value.trim())) return
+    const c = parse(text.value, model)
+    if (!c) return
+    ;[h, s, v] = hexToHsv(c.hex)
+    if (o.alpha !== undefined && c.a < 1) a = c.a
+    emit(true)
+  })
   text.addEventListener('change', () => {
     const c = parse(text.value, model)
     if (!c) { paint(); return }
