@@ -11,11 +11,29 @@ use std::sync::Mutex;
 use tauri::Manager;
 
 const PROBE: &str = include_str!("../rig/probe.js");
+const EMBED: &str = include_str!("../rig/embed.html");
 
 /// A dead drop between windows, standing in for an attacker exfiltrating a
 /// value over the network. Deliberately unauthenticated: the attacker HAS a
 /// network.
 static STASH: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
+
+/// The negative control for the Windows Origin-Agent-Cluster rows: with the header
+/// at ?0 the same read and the same document.domain write must change, or those
+/// rows could never fail.
+pub fn oac(shipped: &'static str) -> &'static str {
+    if std::env::var_os("BENTO_RIG_OAC_OFF").is_some() { "?0" } else { shipped }
+}
+
+/// The ACL rows (Windows): a page at an origin that is not a document, served so
+/// that the ONLY thing deciding its fate is the origin pattern in the capability
+/// file. Two hosts the pattern must refuse, and one it must admit (the control:
+/// 24 hex, so the frame reaches the host and the capability refuses it instead).
+pub fn off_document_origin(host: &str) -> Option<tauri::http::Response<Vec<u8>>> {
+    if !matches!(host, "evil.localhost" | "a.b.c.localhost" | "0123456789abcdef01234567.localhost") { return None }
+    eprintln!("RIG SERVED off-document origin {host}");
+    Some(tauri::http::Response::builder().header("Content-Type", "text/html; charset=utf-8").body(EMBED.as_bytes().to_vec()).unwrap())
+}
 
 fn base(label: &str) -> &str {
     label.split("_r").next().unwrap_or(label)
@@ -32,8 +50,15 @@ pub fn init_script(app: &tauri::AppHandle, label: &str, init: String) -> String 
     let peer = std::env::var(format!("BENTO_PEER_{b}")).unwrap_or_else(|_| labels.iter().find(|l| l.as_str() != b).cloned().unwrap_or_default());
     let init = init.replacen("armed = true\n", "armed = true; window.__rigCap = cap\n", 1);
     assert!(init.contains("window.__rigCap = cap"), "rig: the shim's arming line moved");
+    // The race scenario's replacement bytes: the genuine shell the attacker writes.
+    let race_g = std::env::var_os("BENTO_RIG_RACE_G").map(|p| std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("rig: cannot read {p:?}: {e}"))).unwrap_or_default();
     format!(
-        "{init}window.__RIG_INVOKE_KEY={:?};window.__RIG_LABEL={b:?};window.__RIG_FULL_LABEL={label:?};window.__RIG_WATCHDOG={};window.__RIG_WEDGE={};window.__RIG_PEER={peer:?};window.__RIG_ALL={:?};window.__RIG_EMBED_URL={:?};window.__RIG_ROGUE_URL={:?};\n{PROBE};\n",
+        "{init}window.__RIG_RACE_G={};window.__RIG_RACE_DELAY={};window.__RIG_MODE={:?};window.__RIG_PLAIN_URL={:?};window.__RIG_INVOKE_KEY={:?};window.__RIG_LABEL={b:?};window.__RIG_FULL_LABEL={label:?};window.__RIG_WATCHDOG={};window.__RIG_WEDGE={};window.__RIG_PEER={peer:?};window.__RIG_ALL={:?};window.__RIG_EMBED_URL={:?};window.__RIG_ROGUE_URL={:?};\n{PROBE};\n",
+        // `</` cannot end anything in an init script, but the rig keeps the habit
+        serde_json::to_string(&race_g).unwrap().replace("</", "<\\/"),
+        std::env::var("BENTO_RIG_RACE_DELAY").ok().and_then(|d| d.parse::<u32>().ok()).unwrap_or(0),
+        std::env::var("BENTO_RIG_MODE").unwrap_or_default(),
+        std::env::var("BENTO_RIG_PLAIN_URL").unwrap_or_default(),
         app.invoke_key(),
         std::env::var_os("BENTO_RIG_WATCHDOG").is_some(),
         std::env::var_os("BENTO_RIG_WEDGE").is_some(),
@@ -88,12 +113,14 @@ pub fn rig_done(app: tauri::AppHandle, webview: tauri::Webview, report: serde_js
         if !std::path::Path::new(&p).exists() { let _ = std::fs::write(p, serde_json::to_string_pretty(&out).unwrap()); }
     }
     eprintln!("RIG REPORT {label}");
-    // When every window has reported, linger for rig 5's bounce, then exit 0.
+    // When every window has reported, linger for rig 5's bounce, then exit 0. A
+    // scenario with no bounce names a shorter wait.
+    let linger = std::env::var("BENTO_RIG_LINGER_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(10_000);
     let all = h.docs.iter().all(|d| std::env::var(format!("BENTO_PROBE_{}", base(&d.label))).map(|p| std::path::Path::new(&p).exists()).unwrap_or(true));
     if all {
         let app = app.clone();
         std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs(10));
+            std::thread::sleep(std::time::Duration::from_millis(linger));
             let bounced: Vec<String> = STASH.lock().unwrap().as_ref().map(|m| m.iter().filter(|(k, _)| k.ends_with(".bounced-back")).map(|(k, v)| format!("{k}={v}")).collect()).unwrap_or_default();
             eprintln!("RIG BOUNCED-BACK {}", bounced.join(" "));
             app.exit(0)

@@ -13,12 +13,19 @@
 // - Every privileged command needs this load's capability secret, armed only
 //   after a finished document load and a nonce echo from the same generation,
 //   and checked against the webview the call arrived on (hostcore::arming,
-//   security §19d/§19e). No Tauri capability file ships: page script reaches no
-//   core or plugin command at all.
+//   security §19d/§19e). That secret is the rule, on every platform. Tauri's own
+//   ACL is a second layer: Linux ships no capability file, so page script reaches
+//   no core or plugin command, and Windows ships exactly one
+//   (capabilities-windows/documents.json, build.rs), because Tauri calls a
+//   per-document origin remote there. It admits bento_arm and bento_file to those
+//   origins and nothing else: no core or plugin command, and no bento_id, since
+//   nothing on Windows can use it until a key store exists.
 // - One origin per document (hostcore::origin, §19g/§19i), and one web context
 //   (data directory, hence one web process) per document (§19h).
 // - The main frame never leaves the document: a navigation away is sent back
-//   and opened in the system browser (§19e 1).
+//   and opened in the system browser (§19e 1). The navigation policy reaches
+//   frames on WebKitGTK only: WebView2 reports the main frame alone, so its
+//   frames are held by the pinned CSP (see the on_navigation call below).
 // - While a document is sealed or password-protected, its window title is the
 //   neutral app name, matching the saved file's title (§30).
 
@@ -93,8 +100,8 @@ pub(crate) type Shared = Mutex<Host>;
 
 fn doc_url(host: &str) -> String {
     // Windows: wry serves custom schemes at http://<scheme>.<host>/, and
-    // *.localhost keeps it a secure context. Per-document origins there are
-    // UNMEASURED until the WebView2 rigs run (H2 is held until then).
+    // *.localhost keeps it a secure context. Measured on WebView2: each
+    // http://bento.<hex>.localhost/ is its own origin, on one shared profile too.
     if cfg!(windows) { format!("http://bento.{host}/") } else { format!("bento://{host}/") }
 }
 
@@ -125,7 +132,7 @@ fn bento_arm(app: tauri::AppHandle, webview: tauri::Webview, nonce: String, cap:
     let label = webview.label().to_string();
     let load = h.reg.loads.get_mut(&label).ok_or("unknown webview")?;
     let r = load.confirm(&nonce, &cap).map_err(str::to_string);
-    eprintln!("ARM {label} generation {}: {}", load.generation, if r.is_ok() { "ARMED".to_string() } else { format!("REFUSED {r:?}") });
+    eprintln!("ARM {label} generation {}: {}", load.generation, if r.is_ok() { format!("ARMED genuine={}", load.armed_genuine()) } else { format!("REFUSED {r:?}") });
     r
 }
 
@@ -215,7 +222,10 @@ async fn bento_file(app: tauri::AppHandle, webview: tauri::Webview, msg: String,
 /// Two gates in front of the agent, both HOST-side because Tauri cannot tell
 /// frames apart: this webview's capability, then `armed_genuine` (the bytes
 /// served for THIS load were genuine). An unknown document gets file commands
-/// only. Linux/WebKitGTK only until the WebView2 rigs have run.
+/// only. Linux only, because Linux alone has a key store to reach: the rigs have
+/// run on both engines, and what stops Windows is the missing store. Widening
+/// this gate takes the Windows Hello and TPM measurements on a real PC, in its
+/// own PR, with a security run.
 #[tauri::command]
 async fn bento_id(app: tauri::AppHandle, webview: tauri::Webview, msg: String, cap: Option<String>) -> String {
     let m: serde_json::Value = match serde_json::from_str(&msg) { Ok(m) => m, Err(_) => return String::new() };
@@ -285,8 +295,12 @@ fn open_window(app: &tauri::AppHandle, i: usize) -> tauri::Result<()> {
         .inner_size(1280.0, 800.0)
         // main frame only
         .initialization_script(&init)
-        // Fires for iframes too, with no frame identity: allow the document and
-        // https (live embeds); the MAIN frame's lock is in on_page_load.
+        // Allow the document and https (live embeds); the MAIN frame's lock is in
+        // on_page_load. WebKitGTK calls this for iframes too, with no frame
+        // identity. WebView2 calls it for the main frame ALONE (wry wires it to
+        // NavigationStarting, never FrameNavigationStarting), so there a frame's
+        // navigation is held by the document's pinned CSP and by nothing here:
+        // an unknown document, which has no CSP, can frame http (rig row "d4").
         .on_navigation({
             let own = own.clone();
             let app_h = app.clone();
@@ -308,7 +322,10 @@ fn open_window(app: &tauri::AppHandle, i: usize) -> tauri::Result<()> {
                 let url = p.url().as_str().to_string();
                 if p.event() == PageLoadEvent::Started {
                     if let Some(d) = h.docs.iter_mut().find(|d| d.label == label) { d.starts += 1 }
-                    if let Some(l) = h.reg.loads.get_mut(&label) { l.load_started() }
+                    if let Some(l) = h.reg.loads.get_mut(&label) {
+                        l.load_started();
+                        eprintln!("STARTED {label} generation {} url={}", l.generation, &url[..url.len().min(80)]);
+                    }
                     match main_frame_load(&url, &own) {
                         Bounce::Stay => {}
                         b => {
@@ -321,6 +338,7 @@ fn open_window(app: &tauri::AppHandle, i: usize) -> tauri::Result<()> {
                     return;
                 }
                 let Some(l) = h.reg.loads.get_mut(&label) else { return };
+                eprintln!("FINISHED {label} generation {} url={}", l.generation, &url[..url.len().min(80)]);
                 if let Some(a) = l.load_finished(url == own) {
                     eprintln!("PENDING {label} generation {} url={url}", a.generation);
                     let _ = w.eval(&format!("window.__bentoArm && window.__bentoArm({:?}, {:?})", a.cap, a.nonce));
@@ -450,6 +468,8 @@ fn main() {
             let h = &mut *guard;
             let (host, rest) = (req.uri().host().unwrap_or("").to_string(), req.uri().path().to_string());
             let label = ctx.webview_label().to_string();
+            #[cfg(feature = "rig")]
+            if let Some(r) = rig::off_document_origin(&host) { return r }
             // A document's origin serves only its root, and only to a webview that
             // document was opened in (the same file opened twice shares its origin).
             if rest != "/" { eprintln!("PROTO REFUSED {label} {host}{rest}"); return not_found() }
@@ -457,11 +477,14 @@ fn main() {
                 eprintln!("PROTO REFUSED {label} {host}{rest}");
                 return not_found();
             };
+            let oac = "?1";
+            #[cfg(feature = "rig")]
+            let oac = rig::oac(oac);
             let mut res = http::Response::builder()
                 .header("Content-Type", "text/html; charset=utf-8")
                 .header("Cache-Control", "no-store")
                 // §19f(3): no document.domain relaxation across sibling origins.
-                .header("Origin-Agent-Cluster", "?1");
+                .header("Origin-Agent-Cluster", oac);
             // Gate 1 on exactly these bytes, now.
             let verdict = h.trust.verdict(&d.bytes);
             let genuine = matches!(verdict, Verdict::Genuine { .. });

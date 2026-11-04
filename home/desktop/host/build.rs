@@ -39,10 +39,12 @@ fn main() {
     // Windows only: Tauri there calls only http://bento.localhost "local"; the per-document
     // origins http://bento.<hex>.localhost are "remote" and are refused every custom command
     // unless a remote capability names them (see capabilities-windows/documents.json). The
-    // other platforms are unchanged: no manifest, no capability file.
+    // other platforms are unchanged: no manifest, no capability file. bento_id stays in the
+    // manifest because the handler exists; only a rig capability grants it.
     let mut attrs = tauri_build::Attributes::new();
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
         println!("cargo:rerun-if-changed=capabilities-windows");
+        println!("cargo:rerun-if-env-changed=BENTO_RIG_SHIPPED_ACL");
         let rig = std::env::var_os("CARGO_FEATURE_RIG").is_some();
         let commands: &'static [&'static str] = if rig {
             &["bento_arm", "bento_file", "bento_id", "rig_stash", "rig_done", "rig_recreate"]
@@ -51,7 +53,13 @@ fn main() {
         };
         attrs = attrs
             .app_manifest(tauri_build::AppManifest::new().commands(commands))
-            .capabilities_path_pattern(if rig { "capabilities-windows/*.json" } else { "capabilities-windows/documents.json" });
+            .capabilities_path_pattern(match (rig, std::env::var_os("BENTO_RIG_SHIPPED_ACL").is_some()) {
+                (false, _) => "capabilities-windows/documents.json",
+                (true, false) => "capabilities-windows/*.json",
+                // The rig's shipped-ACL build: every file but rig-embed.json, so an embed
+                // meets the ACL that ships. rig/check.py checks that the file really is gone.
+                (true, true) => "capabilities-windows/*[!d].json",
+            });
     }
     tauri_build::try_build(attrs).expect("failed to run the tauri build script")
 }

@@ -28,6 +28,11 @@ def report(name):
     return json.loads(p.read_text())
 
 
+def report_quiet(name):
+    p = out / f"{name}.json"
+    return json.loads(p.read_text()) if p.exists() else None
+
+
 def log(name):
     p = out / f"{name}.log"
     return p.read_text(errors="replace") if p.exists() else ""
@@ -49,7 +54,8 @@ def window(name, genuine, expect_heard, peer_cap_expected=True):
     ok(p.get("secure_context") is True and p.get("webcrypto") is True, f"{name}: secure context with WebCrypto")
     ok(p.get("bridge_installed") is True, f"{name}: bridge.js installed")
     ok(re.fullmatch(SCHEME + r"[0-9a-f]{24}\.localhost", p.get("origin") or "") is not None, f"{name}: a 96-bit per-document origin ({p.get('origin')})")
-    ok(str(p.get("core_cmd", "")).startswith("refused"), f"{name}: Tauri core/plugin commands refused to page script ({p.get('core_cmd')})")
+    for row, what in (("core_cmd", "plugin:window|title"), ("core_opener", "plugin:opener|open_url"), ("core_dialog", "plugin:dialog|message")):
+        ok(str(p.get(row, "")).startswith("refused") and "not allowed" in str(p.get(row, "")), f"{name}: {what} refused to page script by the ACL ({p.get(row)})")
     # identity commands: only a GENUINE load reaches the agent (armed_genuine)
     ok(p.get("id_no_cap") == "no capability", f"{name}: identity: no capability is refused before anything else ({p.get('id_no_cap')})")
     if genuine and not WINDOWS:
@@ -75,10 +81,12 @@ def window(name, genuine, expect_heard, peer_cap_expected=True):
     if name.split("-")[0] in ("pair", "pairshared"):
         ok(isinstance(cookies, str) and others == [], f"{name}: rig 8 no sibling document's cookie is visible, parent-Domain attempts included (saw {names})")
         if WINDOWS: ok(f"rck_{me}_host" in names, f"{name}: rig 8 control: the document's own host-only cookie IS visible, so the cookie jar works ({names})")
-    ok("rig8_oac_type" in p, f"{name}: rig 8 Origin-Agent-Cluster reported (typeof originAgentClustered = {p.get('rig8_oac_type')}, value = {p.get('rig8_oac')}; document.domain after a set attempt = {p.get('rig8_domain_after')})")
+    ok("rig8_oac_type" in p, f"{name}: rig 8 Origin-Agent-Cluster reported (typeof originAgentCluster = {p.get('rig8_oac_type')}, value = {p.get('rig8_oac')}; document.domain after a set attempt = {p.get('rig8_domain_after')})")
     if WINDOWS:
-        ok(p.get("rig8_oac") is not False, f"{name}: rig 8 the page is not reported un-clustered ({p.get('rig8_oac_type')} {p.get('rig8_oac')})")
+        ok(p.get("rig8_oac") is True, f"{name}: rig 8 window.originAgentCluster is true ({p.get('rig8_oac_type')} {p.get('rig8_oac')})")
         ok(p.get("rig8_domain_after") != "localhost", f"{name}: rig 8 document.domain cannot be relaxed to the parent domain ({p.get('rig8_domain_after')}, err {p.get('rig8_domain_err')})")
+        own = p.get("rig8_domain_own") or ""
+        ok(re.fullmatch(r"bento\.[0-9a-f]{24}\.localhost", own) is not None and p.get("rig8_domain_hex_after") == own and p.get("rig8_domain_hex_tried") == own[len("bento."):], f"{name}: rig 8 document.domain = {p.get('rig8_domain_hex_tried')} is a no-op under the header ({p.get('rig8_domain_hex_after')})")
     # rigs 1, 2 and the control, by the host's log for this webview
     emb = p.get("embeds") or {}
     for tag in ["rig1-key-only", "control-own-cap"] + (["rig2-peer-cap"] if peer_cap_expected else []):
@@ -92,6 +100,24 @@ def window(name, genuine, expect_heard, peer_cap_expected=True):
     if WINDOWS:
         sb = emb.get("win-sandboxed")
         ok(isinstance(sb, dict) and str(sb.get("inv", "")).startswith("err:"), f"{name}: Windows: a SANDBOXED frame (origin null) is refused by Tauri's IPC itself, even holding this window's own capability ({sb.get('inv') if isinstance(sb, dict) else sb})")
+    if WINDOWS:
+        # the capability's origin pattern, in the running ACL: only a document with no CSP can frame
+        # these, so the genuine windows see nothing load
+        af = p.get("acl_frames") or {}
+        scn0, me0 = name.split("-")
+        L0 = log(scn0)
+        for tag in ("evil", "abc"):
+            e = af.get(tag)
+            if genuine:
+                ok(e == "no report", f"{name}: acl {tag}: the pinned CSP keeps this frame out ({e})")
+            else:
+                ok(isinstance(e, dict) and e.get("page") == "rig-embed-fixture" and "not allowed" in str(e.get("inv", "")), f"{name}: acl {tag}: a page at an off-pattern origin is refused by the ACL ({e.get('origin') if isinstance(e, dict) else e}: {str(e.get('inv'))[:90] if isinstance(e, dict) else ''})")
+                ok(f'id="{me0}:acl-{tag}"' not in L0, f"{name}: acl {tag}: and the call never reached the host")
+        e = af.get("hex")
+        if genuine:
+            ok(e == "no report", f"{name}: acl hex: the pinned CSP keeps this frame out ({e})")
+        else:
+            ok(re.search(r'IPC bento_file op="read" id="%s:acl-hex" webview=%s(?:_r\d+)? REFUSED: no capability' % (me0, me0), L0) is not None, f"{name}: control: a 24-hex origin passes the ACL and is refused by the capability, so the two above were the pattern's doing")
     # a DIFFERENT self-signed certificate for the same host is still refused (trust is per certificate)
     ok(p.get("rogue") == "no report", f"{name}: control: an embed from a DIFFERENT self-signed 127.0.0.1 certificate never loads ({p.get('rogue')})")
     oc = p.get("origin_ctl") or {}
@@ -131,7 +157,20 @@ rsrv = (out / "rogue-server.log").read_text(errors="replace") if (out / "rogue-s
 ok(len(re.findall(r'"GET /embed\.html HTTP', rsrv)) == 0, "the rogue-certificate server was never asked for the page (the TLS handshake was refused, not merely unreported)")
 ok((out / "gate-control.exit").exists() and (out / "gate-control.exit").read_text().strip() == "0" and "FAIL the binary contains" in (out / "gate-control.txt").read_text(errors="replace"),
    "release gate positive control: gate-binary.sh REFUSES this rig build (a gate that never fires proves nothing)")
+ok('GET /embed.html?rig5' in srv, "rig 5 the foreign page is the local fixture, and the server was asked for it")
 ok(gets >= 2, f"the local fixture server answered the embeds ({gets} GETs)")
+nd = (out / "gate-needles.txt").read_text(errors="replace").splitlines() if (out / "gate-needles.txt").exists() else []
+ok(nd[:1] == ["clean passes"] and len(nd) >= 12 and not [l for l in nd[1:] if not l.startswith("caught ")], f"release gate: each needle alone is refused and a clean file passes ({len(nd) - 1} needles; {[l for l in nd if not l.startswith('caught ')]})")
+ct = (out / "capabilities-test.txt").read_text(errors="replace") if (out / "capabilities-test.txt").exists() else ""
+crc = (out / "capabilities-test.exit").read_text().strip() if (out / "capabilities-test.exit").exists() else "missing"
+ok(crc == "0" and "2 passed" in ct, f"capability pattern: Tauri's own matcher admits 24 hex and refuses every other shape (rc {crc})")
+cc = (out / "capcheck-control.exit").read_text().strip() if (out / "capcheck-control.exit").exists() else "missing"
+if WINDOWS:
+    ok(cc != "0" and "FAIL" in (out / "capcheck-control.txt").read_text(errors="replace"), f"release gate positive control: capcheck REFUSES a rig build's capability set (exit {cc})")
+    rb = (out / "rig-binary-needles.txt").read_text(errors="replace").strip() if (out / "rig-binary-needles.txt").exists() else ""
+    ok("127.0.0.1:*" in rb, f"release gate: the loopback needle really is in a binary that compiled rig-embed.json ({rb})")
+else:
+    ok(cc == "0", f"capcheck: no capability file in a Linux build (exit {cc})")
 
 for scn, wins in [
     ("pair", [("pair-doc0", True, [], True), ("pair-doc1", False, [], True)]),
@@ -147,7 +186,11 @@ for scn, wins in [
     ok(ex == "0", f"{scn}: the host exited cleanly after every window reported (exit {ex}; 124 = timeout)")
     m = re.search(r"RIG BOUNCED-BACK (.*)", L)
     back = dict(x.split("=", 1) for x in (m.group(1).split() if m else []))
-    ok(len(back) == len(wins) and all(v == "armed" for v in back.values()), f"{scn}: rig 5 every window came back to its document and re-armed ({back})")
+    ok(len(back) == len(wins) and all(v == "armed,saved" for v in back.values()), f"{scn}: rig 5 every window came back to its document, re-armed, and SAVED through the host ({back})")
+    tail = L[L.find("BOUNCE "):] if "BOUNCE " in L else ""
+    for n, *_ in wins:
+        lbl = n.split("-")[1]
+        ok(re.search(r'BOUNCE %s:[^\n]*\n(?:.*\n)*?IPC bento_file op="write" id=\S+ webview=%s(?:_r\d+)? OK' % (lbl, lbl), tail) is not None, f"{n}: rig 5 the save after the bounce reached the op (host log)")
     # rigs 1/2: the host refused the key-only and peer-capability embeds; the
     # control was let through to the op (proving the embed reaches the IPC)
     refused_nocap = len(re.findall(r"IPC bento_file .*REFUSED: no capability", L))
@@ -155,7 +198,7 @@ for scn, wins in [
     ok(refused_nocap >= len(wins), f"{scn}: rig 1 key-only embeds refused in the host ({refused_nocap})")
     ok(refused_wrong >= len(wins), f"{scn}: rig 2 peer-capability embeds (and rig 6's old capability) refused ({refused_wrong})")
     # rig 5: the main frame sent away was bounced back, and only the document was ever armed
-    ok("BOUNCE" in L, f"{scn}: rig 5 a main frame sent to a foreign page was bounced back")
+    ok(len(re.findall(r"^BOUNCE \S+: main frame left the document for https://127\.0\.0\.1:\d+/embed\.html\?rig5", L, re.M)) >= len(wins), f"{scn}: rig 5 a main frame sent to the local fixture was bounced back")
     pend = re.findall(r"^PENDING \S+ generation \d+ url=(\S+)$", L, re.M)
     ok(len(pend) >= 2 * len(wins) and all(re.fullmatch(SCHEME + r"[0-9a-f]{24}\.localhost/", u) for u in pend), f"{scn}: rig 5 only the document itself was ever armed ({len(pend)} armings, {sorted(set(u for u in pend if not re.match(SCHEME, u)))} foreign)")
     # §19h: one web process per document
@@ -211,6 +254,123 @@ def rig9(scn, genuine):
 
 rig9("watchdog", True)
 rig9("watchdogu", False)
+
+# B1 and §19e d1/d4: blocked main-frame navigations leave the document armed and saving, a live
+# embed navigating touches nothing, and frames sent to plain http are held by what each engine has
+def navlock():
+    L = log("navlock")
+    ex = (out / "navlock.exit").read_text().strip() if (out / "navlock.exit").exists() else "missing"
+    ok(ex == "0", f"navlock: the host exited cleanly (exit {ex})")
+    measured = {}
+    for lbl, genuine in (("doc0", True), ("doc1", False)):
+        name = f"navlock-{lbl}"
+        r = report(name)
+        if not r:
+            continue
+        N = r["page"].get("navlock") or {}
+        ok(not N.get("error"), f"{name}: no error in the probe ({N.get('error')})")
+        ok(N.get("armed") is True and N.get("first") == "saved", f"{name}: armed and saving, after a blocked navigation during its own load ({N.get('armed')}, {N.get('first')})")
+        steps = list(re.finditer(r"^STEP %s\.step = (\S+)$" % lbl, L, re.M))
+        def between(a, b, pat):
+            sa = [m for m in steps if m.group(1) == a]; sb = [m for m in steps if m.group(1) == b]
+            return len(re.findall(pat, L[sa[0].end():sb[0].start()], re.M)) if sa and sb else None
+        for t in ("http", "file", "data", "mailto", "blob", "hash"):
+            row = (N.get("rows") or {}).get(t) or {}
+            ok(row.get("same_realm") is True and row.get("same_cap") is True, f"{name}: blocked {t}: still the same page and the same capability ({row.get('same_realm')}, {row.get('same_cap')})")
+            ok(row.get("save") == "saved", f"{name}: blocked {t}: a real save through the host still works ({row.get('save')})")
+            ok(row.get("begin") == "the open document was already handed out", f"{name}: blocked {t}: per-load state survived, so nothing re-minted ({row.get('begin')})")
+            sta = between(f"blocked-{t}", f"after-{t}", r"^STARTED %s " % lbl)
+            measured[f"{lbl}:{t}"] = {"finished": between(f"blocked-{t}", f"after-{t}", r"^FINISHED %s " % lbl), "on_navigation_blocked": between(f"blocked-{t}", f"after-{t}", r"^NAVIGATION BLOCKED %s " % lbl), "started": sta}
+            ok(sta == 0, f"{name}: blocked {t}: no load started ({sta})")
+        ok(between("blocked-http", "after-http", r"^NAVIGATION BLOCKED %s " % lbl) == 1, f"{name}: positive control: the http navigation really reached the host's policy and was refused")
+        plainlog = (out / "plain-server.log").read_text(errors="replace") if (out / "plain-server.log").exists() else ""
+        ok("?nl-" not in plainlog, f"{name}: and nothing was fetched: the blocked navigations never left the host")
+        # §19e d1
+        d1 = N.get("d1") or {}
+        for tag in ("loaded", "src_changed", "self_navigated"):
+            e = d1.get(tag)
+            ok(isinstance(e, dict) and e.get("page") == "rig-embed-fixture", f"{name}: d1 the live embed {tag} ({e if not isinstance(e, dict) else e.get('tag')})")
+        for what, pat in (("started", r"^STARTED %s "), ("finished", r"^FINISHED %s "), ("minted", r"^PENDING %s ")):
+            n = between("d1-start", "d1-end", pat % lbl)
+            ok(n == 0, f"{name}: d1 a frame's loads and navigations {what} nothing in the main frame ({n})")
+        ok(d1.get("same_cap") is True and d1.get("save") == "saved", f"{name}: d1 the capability keeps working after them ({d1.get('save')})")
+        # §19e d4: on_navigation reaches frames on WebKitGTK only
+        d4 = N.get("d4") or {}
+        asked = f"?d4-{lbl}" in plainlog
+        policy = re.search(r"^NAVIGATION BLOCKED %s -> http://127\.0\.0\.1:\d+/embed\.html\?d4" % lbl, L, re.M) is not None
+        ok(d4.get("save") == "saved", f"{name}: d4 still saving after the frame row ({d4.get('save')})")
+        if genuine:
+            ok(d4.get("plain") == "no report" and not asked, f"{name}: d4 under the pinned CSP a frame sent to plain http never loads, and its server is never asked ({d4.get('plain')}, asked={asked})")
+            ok(len(d4.get("csp") or []) >= 1, f"{name}: d4 and the CSP is what refused it ({d4.get('csp')})")
+            if WINDOWS:
+                ok(not policy, f"{name}: d4 WebView2's on_navigation never saw the frame: for frames the CSP is the whole policy")
+        elif WINDOWS:
+            ok(isinstance(d4.get("plain"), dict) and asked and not policy, f"{name}: d4 MEASURED: WebView2's on_navigation does not see frames, so with no CSP a plain http frame loads ({d4.get('plain') if not isinstance(d4.get('plain'), dict) else d4['plain'].get('origin')})")
+        else:
+            ok(d4.get("plain") == "no report" and not asked and policy, f"{name}: d4 on WebKitGTK on_navigation refuses the frame ({d4.get('plain')}, asked={asked})")
+    print("note navlock, per blocked navigation (does a cancelled navigation report Finished?):", json.dumps(measured))
+    (out / "navlock-measured.json").write_text(json.dumps(measured, indent=1))
+    print(f"note navlock: FINISHED lines {len(re.findall(r'^FINISHED', L, re.M))}, PENDING lines {len(re.findall(r'^PENDING', L, re.M))}, ARMED lines {len(re.findall(r'ARMED', L))}")
+navlock()
+
+# B2, security's mk2.py, on both engines. The verdict comes from the host's own ARM line, since
+# on Windows bento_id stops at the platform gate whatever the verdict
+def races():
+    won = stayed = 0
+    grid = []
+    for n in range(10):
+        scn = f"race{n}"
+        L = log(scn)
+        ex = (out / f"{scn}.exit").read_text().strip() if (out / f"{scn}.exit").exists() else "missing"
+        r = report_quiet(scn + "-doc0")
+        rc = ((r or {}).get("page") or {}).get("race") or {}
+        ok(ex == "0" or "RECREATE" in L, f"{scn}: finished, or stopped by the known reload stall with the watchdog in the log (exit {ex})")
+        m = re.search(r"STEP doc0\.step = race stage=0 attacker=true armed=true id=(.*)", L)
+        ok(m is not None and m.group(1) == "unavailable", f"{scn}: control: stage 0 is an armed unknown document, refused identity ({m.group(1) if m else 'no line'})")
+        order = re.search(r'SERVED doc0 \d+ bytes, unknown[^\n]*\n(?:.*\n)*?IPC bento_file op="write" id="race-w" webview=doc0 OK\n(?:.*\n)*?SERVED doc0 \d+ bytes, genuine', L)
+        ran = bool(rc.get("attacker")) and rc.get("stage") == "1"
+        hit = ran and order is not None
+        arms = re.findall(r"^ARM doc0 generation \d+: ARMED genuine=(true|false)$", L, re.M)
+        won += hit
+        stayed += ran
+        grid.append({"scn": scn, "exit": ex, "attacker_ran": ran, "won": hit, "arms": arms, "id": rc.get("id")})
+        if ran:
+            ok(rc.get("id") == "unavailable", f"{scn}: the attacker's bytes running after the swap are refused identity ({rc.get('id')})")
+            ok(arms[-1:] == ["false"], f"{scn}: and the host armed that load as unknown ({arms})")
+    print("note race grid:", json.dumps(grid))
+    ok(won >= 1, f"race: the swap really landed between the two serves at least once, or the grid proved nothing ({won} of 10; the attacker's bytes kept running in {stayed})")
+    # the honest route, and the take half: a save that makes the file genuine, then a reload,
+    # arms genuine, whatever the last load's verdict was
+    L = log("resave")
+    rc = ((report_quiet("resave-doc0") or {}).get("page") or {}).get("race") or {}
+    arms = re.findall(r"^ARM doc0 generation \d+: ARMED genuine=(true|false)$", L, re.M)
+    ok(rc.get("attacker") is False and rc.get("armed") is True, f"resave: the reload after the save runs the genuine bytes, armed ({rc})")
+    ok(arms == ["false", "true"], f"resave: unknown, then genuine: the last load's verdict did not follow it ({arms})")
+    ok(rc.get("id") == ("unavailable" if WINDOWS else "purpose"), f"resave: identity follows the new verdict ({rc.get('id')})")
+races()
+
+if WINDOWS:
+    # B3's negative control: the rows above can fail
+    r = report("oacoff-doc0")
+    if r:
+        p = r["page"]
+        ok(p.get("oac") is False, f"oacoff: negative control: with the header at ?0 window.originAgentCluster is false ({p.get('oac_type')} {p.get('oac')})")
+        ok(p.get("rig8_domain_hex_after") == p.get("rig8_domain_hex_tried"), f"oacoff: negative control: and document.domain DOES relax to {p.get('rig8_domain_hex_tried')} ({p.get('rig8_domain_hex_after')})")
+    # §19e condition f: the ACL that ships, with no rig-embed.json in the build
+    caps = json.loads((out / "acl-capabilities.json").read_text()) if (out / "acl-capabilities.json").exists() else {}
+    ok(sorted(caps) == ["documents", "rig"], f"acl: this build really has no rig-embed capability ({sorted(caps)})")
+    nb = (out / "acl-binary-needles.txt").read_text(errors="replace").strip() if (out / "acl-binary-needles.txt").exists() else "missing"
+    ok(nb != "missing" and "127.0.0.1:*" not in nb and "rig-embed" not in nb, f"acl: and neither its name nor the loopback origin is in the binary ({nb})")
+    L = log("acl")
+    ex = (out / "acl.exit").read_text().strip() if (out / "acl.exit").exists() else "missing"
+    ok(ex == "0", f"acl: the host exited cleanly (exit {ex})")
+    for lbl in ("doc0", "doc1"):
+        r = report(f"acl-{lbl}")
+        A = ((r or {}).get("page") or {}).get("acl") or {}
+        e = A.get("embed")
+        ok(A.get("armed") is True and A.get("save") == "saved", f"acl-{lbl}: the document itself is armed and saving under this ACL ({A.get('save')})")
+        ok(isinstance(e, dict) and e.get("page") == "rig-embed-fixture" and "not allowed" in str(e.get("inv", "")), f"acl-{lbl}: an embed holding this window's OWN capability is refused by the ACL ({str(e.get('inv'))[:100] if isinstance(e, dict) else e})")
+        ok(f'id="{lbl}:acl-own-cap"' not in L, f"acl-{lbl}: and the call never reached the host (with rig-embed.json it does: the control-own-cap rows)")
 
 # the REAL release (1.2.10 from bento.page, verified with the release key)
 r = report("real-doc0")

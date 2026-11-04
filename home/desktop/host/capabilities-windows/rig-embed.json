@@ -1,8 +1,17 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "rig-embed",
-  "description": "RIG BUILDS ONLY, Windows only (build.rs): lets Tauri's ACL admit bento_file from the rig's attacker fixture (https://127.0.0.1:<port>), so rigs 1 and 2 test the load's capability SECRET with the platform ACL out of the way. Without this file every embedded frame is refused by the ACL before the host sees it (measured).",
-  "windows": ["doc*"],
-  "remote": { "urls": ["https://127.0.0.1:*/*"] },
-  "permissions": ["allow-bento-file"]
+  "description": "RIG BUILDS ONLY, Windows only (build.rs): lets Tauri's ACL admit bento_file from the rig's attacker fixture (https://127.0.0.1:<port>), so rigs 1 and 2 test the load's capability SECRET with the platform ACL out of the way. Without this file every embedded frame is refused by the ACL before the host sees it (measured; the rig's shipped-ACL build asserts it).",
+  "local": false,
+  "windows": [
+    "doc*"
+  ],
+  "remote": {
+    "urls": [
+      "https://127.0.0.1:*/*"
+    ]
+  },
+  "permissions": [
+    "allow-bento-file"
+  ]
 }

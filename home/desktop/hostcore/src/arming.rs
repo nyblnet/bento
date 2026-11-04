@@ -15,10 +15,19 @@
 //   PENDING until the page echoes the nonce with the generation unchanged
 //   (§19e 2). A load that starts between the mint and the echo voids it, which
 //   closes the arming race.
+// - ONE mint per generation. The engine may report a finished load twice for
+//   one generation (measured on WebView2): a second report while PENDING hands
+//   the page the SAME secret and nonce, and a second report once ARMED does
+//   nothing at all. Re-minting there left the host pending under a secret an
+//   armed page never takes, so every later call failed for the rest of the load.
 // - Per-load state (the open-document handle, exports) resets in the SAME
 //   step that mints (§19e 3), so a reload never carries a handle across.
 // - Arming binds to the verdict of the bytes SERVED for this load (§19e 3):
-//   identity commands ask `armed_genuine()`, never a re-read of the file.
+//   identity commands ask `armed_genuine()`, never a re-read of the file. Every
+//   serve since the last mint counts, and ONE unknown serve makes the load
+//   unknown: a later genuine serve (the page fetching its own URL after the
+//   file changed) proves nothing about the bytes already running. The verdict
+//   is consumed by the mint, so it can never outlive the load it judged.
 // - The host holds every Load behind one lock, and load events and IPC take it
 //   in arrival order: one serialized queue.
 
@@ -55,7 +64,10 @@ pub struct Arming {
 pub struct Load {
     pub generation: u64,
     state: State,
-    /// The verdict on the bytes most recently SERVED to this webview.
+    /// Every serve to this webview since the last mint, ANDed: `Some(true)` only
+    /// if all of them were genuine. It cannot be keyed to a generation: the main
+    /// document is served BEFORE its load start, which the engines raise at
+    /// commit, so a serve cannot tell which load it belongs to.
     served_genuine: Option<bool>,
     /// bridge.js's rule: the FIRST begin is the open document, any later one an export.
     pub handed_out: bool,
@@ -70,8 +82,9 @@ impl Default for Load {
 
 impl Load {
     /// The protocol handler served the document's bytes, with this verdict.
+    /// ANY request to the document's URL lands here, a page's own fetch included.
     pub fn served(&mut self, genuine: bool) {
-        self.served_genuine = Some(genuine);
+        self.served_genuine = Some(self.served_genuine.unwrap_or(true) && genuine);
     }
 
     /// Any main-frame load start: revoke, and start a new generation.
@@ -81,11 +94,22 @@ impl Load {
     }
 
     /// A main-frame load finished. Mints a PENDING capability only for the
-    /// document's own URL, and only if its bytes were served; resets per-load
-    /// state in the same step.
+    /// document's own URL, only if its bytes were served, and only once per
+    /// generation; resets per-load state in the same step as the mint.
+    ///
+    /// A repeat report for this generation mints nothing and resets nothing:
+    /// PENDING hands back the same secret and nonce (the page may have missed
+    /// the first delivery), ARMED answers None.
     pub fn load_finished(&mut self, is_document_url: bool) -> Option<Arming> {
         if !is_document_url { return None }
-        let genuine = self.served_genuine?;
+        match &self.state {
+            State::Pending { cap, nonce, generation, .. } if *generation == self.generation => {
+                return Some(Arming { cap: cap.clone(), nonce: nonce.clone(), generation: *generation })
+            }
+            State::Armed { generation, .. } if *generation == self.generation => return None,
+            _ => {}
+        }
+        let genuine = self.served_genuine.take()?;
         let (cap, nonce) = (random_hex(16), random_hex(16));
         self.state = State::Pending { cap: cap.clone(), nonce: nonce.clone(), generation: self.generation, genuine };
         self.handed_out = false;
@@ -140,10 +164,14 @@ impl Registry {
     }
 }
 
-/// The navigation policy for Tauri's on_navigation (which also fires for
-/// iframes, with no frame identity): the document's own URL, or https (live
-/// embeds). Everything else is refused: http, file, data, blob, javascript, and
-/// other documents' origins.
+/// The navigation policy for Tauri's on_navigation: the document's own URL, or
+/// https (live embeds). Everything else is refused: http, file, data, blob,
+/// javascript, and other documents' origins.
+///
+/// What this covers differs by engine. On WebKitGTK the callback also fires for
+/// iframes, with no frame identity. On WebView2 it is wired to NavigationStarting
+/// alone, so it sees the MAIN FRAME only: frames there are held by the document's
+/// pinned CSP, and an unknown document (no CSP) has no frame policy at all.
 pub fn navigation_allowed(url: &str, own: &str) -> bool {
     url == own || url.starts_with("https://")
 }
@@ -304,6 +332,113 @@ mod tests {
         let c = l.load_finished(true).unwrap();
         l.confirm(&c.nonce, &c.cap).unwrap();
         assert!(!l.armed_genuine());
+    }
+
+    /// WebView2's report order, A: the page echoes between the two reports.
+    #[test]
+    fn a_repeat_finish_after_arming_changes_nothing() {
+        let (mut l, a) = armed(true);
+        l.handed_out = true;
+        l.exports.insert("x".into(), PathBuf::from("/x"));
+        assert_eq!(l.load_finished(true), None, "armed: nothing to deliver");
+        assert_eq!(l.check(Some(&a.cap)), Ok(()), "the armed secret still works");
+        assert!(l.armed_genuine());
+        assert!(l.handed_out && l.exports.len() == 1, "a repeat report is not a new load");
+    }
+
+    /// WebView2's report order, B: both reports land before the echo.
+    #[test]
+    fn a_repeat_finish_while_pending_hands_back_the_same_secret() {
+        let mut l = Load::default();
+        l.load_started();
+        l.served(true);
+        let a = l.load_finished(true).unwrap();
+        l.handed_out = true;
+        let b = l.load_finished(true).unwrap();
+        assert_eq!(a, b, "one mint per generation");
+        assert!(l.handed_out, "a repeat report resets nothing");
+        l.confirm(&a.nonce, &a.cap).unwrap();
+        assert_eq!(l.check(Some(&a.cap)), Ok(()));
+        assert_eq!(l.confirm(&b.nonce, &b.cap), Err("already armed"), "the second echo is refused, and changes nothing");
+        assert_eq!(l.check(Some(&a.cap)), Ok(()));
+    }
+
+    #[test]
+    fn the_next_generation_mints_afresh_after_a_repeat_finish() {
+        let (mut l, a) = armed(true);
+        assert_eq!(l.load_finished(true), None);
+        l.load_started();
+        l.served(true);
+        let b = l.load_finished(true).unwrap();
+        assert_ne!(a.cap, b.cap);
+        assert_ne!(a.nonce, b.nonce);
+    }
+
+    /// B2, the AND half: the page's own fetch, after the file became genuine,
+    /// cannot launder the unknown bytes already running.
+    #[test]
+    fn one_unknown_serve_makes_the_load_unknown() {
+        for serves in [&[false, true][..], &[true, false], &[true, false, true], &[false, false]] {
+            let mut l = Load::default();
+            l.load_started();
+            for s in serves { l.served(*s) }
+            let a = l.load_finished(true).unwrap();
+            l.confirm(&a.nonce, &a.cap).unwrap();
+            assert!(!l.armed_genuine(), "{serves:?}");
+        }
+        let mut l = Load::default();
+        l.load_started();
+        l.served(true);
+        l.served(true);
+        let a = l.load_finished(true).unwrap();
+        l.confirm(&a.nonce, &a.cap).unwrap();
+        assert!(l.armed_genuine(), "every serve genuine: genuine");
+    }
+
+    /// B2 as reported: the reload's document is served BEFORE its load start, and
+    /// the old page, still holding a live capability, swaps the file in between.
+    #[test]
+    fn a_reload_served_unknown_stays_unknown_whatever_is_served_after_the_commit() {
+        let (mut l, _) = armed(false);
+        l.served(false); // the reload's document, before the commit
+        l.load_started(); // the commit
+        l.served(true); // the new page fetches its own URL: the file is now genuine
+        let a = l.load_finished(true).unwrap();
+        l.confirm(&a.nonce, &a.cap).unwrap();
+        assert!(!l.armed_genuine());
+    }
+
+    /// B2, the take half: a verdict dies with the mint that used it.
+    #[test]
+    fn a_verdict_is_consumed_by_its_mint() {
+        let (mut l, _) = armed(true);
+        l.load_started();
+        assert_eq!(l.load_finished(true), None, "a load nobody served has no verdict to borrow");
+        let (mut l, _) = armed(false);
+        l.load_started();
+        l.served(true);
+        let a = l.load_finished(true).unwrap();
+        l.confirm(&a.nonce, &a.cap).unwrap();
+        assert!(l.armed_genuine(), "the last load's unknown verdict does not reach this one");
+    }
+
+    /// A serve after arming with a repeat report: the armed verdict stands, and
+    /// the stray serve is still counted against the next load.
+    #[test]
+    fn a_serve_after_arming_with_a_repeat_finish_changes_nothing_now() {
+        let (mut l, a) = armed(false);
+        l.served(true);
+        assert_eq!(l.load_finished(true), None);
+        assert!(!l.armed_genuine(), "still the bytes that were served");
+        assert_eq!(l.check(Some(&a.cap)), Ok(()));
+        let (mut l, _) = armed(true);
+        l.served(false); // the page fetched its own URL, and the bytes were unknown by then
+        assert_eq!(l.load_finished(true), None);
+        l.load_started();
+        l.served(true);
+        let b = l.load_finished(true).unwrap();
+        l.confirm(&b.nonce, &b.cap).unwrap();
+        assert!(!l.armed_genuine(), "a serve between mints counts against the next: fail closed");
     }
 
     #[test]

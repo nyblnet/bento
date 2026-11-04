@@ -12245,24 +12245,57 @@ neither); the Windows key store is an explicit stub that refuses everything unti
 - **Tauri on Windows treats only `http://bento.localhost` as the app's own origin.** A per-document
   origin is "remote" to it and every custom command is refused ("not allowed on origin") unless a
   remote capability names it. **This reverses "no Tauri capability file ships" on Windows only:**
-  `capabilities-windows/documents.json` admits exactly `bento_arm`, `bento_file`, `bento_id` to
-  `http://bento.*.localhost/*`, nothing from core or any plugin, and every one of them still
-  demands the load's capability secret. Linux ships none, as before. The rig adds two more files
-  (rig commands; the attacker fixture's origin) that only exist in rig builds.
+  `capabilities-windows/documents.json` admits exactly `bento_arm` and `bento_file` to
+  `http://bento.:h([0-9a-f]{24}).localhost/` (`"local": false`), nothing from core or any plugin,
+  and both still demand the load's capability secret. The ACL is a second layer and never the
+  boundary: the capability stays the rule. The pattern is the tight form because the first glob,
+  `http://bento.*.localhost/*`, also matched `bento.evil.localhost` and `bento.a.b.c.localhost`.
+  `bento_id` is not granted, since nothing on Windows can use it until a key store exists. Linux
+  ships none, as before. `release-check.sh` asserts the compiled set exactly (`capcheck.py`). The
+  rig adds two more files (rig commands and `bento_id`; the attacker fixture's origin) that exist
+  only in rig builds, so every rig also has a build without `rig-embed.json` for one scenario:
+  the ACL that ships, refusing an embed that holds the window's own secret.
 - **Embedded frames.** A sandboxed frame (origin null) is refused by Tauri's IPC itself ("Origin
   header is not a valid URL") even holding the window's own secret; an unsandboxed frame of another
   origin reaches the host only if the platform ACL admits it (rig only) and is then refused by the
   secret (no capability / capability refused), with the own-secret control accepted.
-- **Origin-Agent-Cluster:** the header is sent, but WebView2 156 does not expose
-  `window.originAgentClustered` (typeof undefined), so the header's effect is not directly
-  observable. What is observed: `document.domain = "localhost"` throws SecurityError, so no
-  relaxation to the parent domain. Cookies set with `Domain=localhost` are refused; the document's
-  own host and its `<hex>.localhost` domain are accepted and invisible to a sibling.
+- **`on_navigation` is main-frame only on WebView2.** wry wires it to `NavigationStarting`, never
+  `FrameNavigationStarting`, so "the policy fires for iframes" is true on WebKitGTK alone. On
+  Windows the navigation policy for FRAMES (§19e d4) rests on the document's pinned CSP and nothing
+  else. A genuine document's frame sent to plain http is refused by `frame-src` on both engines; an
+  unknown document has no CSP, so on Windows it can frame http (measured, rig row "d4"), holding no
+  secret and refused by the ACL. The main-frame half is unchanged.
+- **Origin-Agent-Cluster:** the attribute is `window.originAgentCluster`, and it is `true` on
+  WebView2 (an earlier version of this entry read a misspelt name and called it unexposed).
+  `document.domain = "<hex>.localhost"`, the document's own parent, is a silent no-op under the
+  header, and with the header at `?0` (the rig's negative control) the attribute reads false and
+  the same write takes effect, so these rows can fail. `document.domain = "localhost"` throws
+  SecurityError with or without the header, because a single label can never be set, so it says
+  nothing about the header; it is why §19f(3) holds in substance, since sibling documents share
+  only `localhost`. Cookies set with `Domain=localhost` are refused; the document's own host and
+  its `<hex>.localhost` domain are accepted and invisible to a sibling.
 - **One renderer process per document:** distinct renderer PIDs for two documents, stopping any one
   (NtSuspendProcess) freezes exactly one document, stopping all freezes both (negative control).
+- **One mint per generation (all platforms).** WebView2 can report two finished loads for one
+  generation. `Load::load_finished` now mints once: a repeat while PENDING hands back the same
+  secret and nonce, and a repeat once ARMED does nothing. Without this, the order
+  pending, armed, pending left the host pending under a new secret an armed page ignores, so every
+  later call failed for the rest of the load and the handle and exports were wiped. The rig row is
+  a real save through the host after each blocked navigation and after the bounce, never page state.
 - **Shim change (all platforms):** the shim adopts a capability secret only when `bento_arm`
-  succeeds. WebView2 reported two finished loads for one generation after the navigation lock
-  bounced a main frame; the host held the later secret and a shim that kept the first stayed
-  unarmed (fail closed, but the document could not save).
+  succeeds, and ignores later deliveries once armed. It is needed beside the rule above, not
+  instead of it: alone it fixes only the order pending, pending, armed.
+- **A load's verdict is every serve since the last mint, ANDed, and the mint consumes it (all
+  platforms).** A serve cannot be tied to a generation, because the main document is served before
+  its load start, which both engines raise at commit. So the old page still holds a live capability
+  after its reload was served, and with an overwriting verdict an unknown document could reload,
+  swap a genuine shell over its own file in that gap, fetch its own URL from the new page, and be
+  armed genuine while its unknown bytes ran (security measured this reaching the agent on
+  WebKitGTK; nothing could sign, since no store is wired). One unknown serve now makes the load
+  unknown, and the verdict dies with the mint that used it. The rig scenario is security's race
+  on both engines, read from the host's own arming line. It fails closed in two ways worth
+  knowing: a page that fetched its own URL while unknown makes its next load unknown too, and a
+  document that reloads in the instant between its serve and the previous load's finish report
+  has no verdict left, so it opens unarmed until the next reload.
 - **Windows file ID** (volume serial plus the 128-bit file ID, `GetFileInformationByHandleEx`) now
   drives the envelope epoch; `GlobalMemoryStatusEx` answers the recovery memory check.

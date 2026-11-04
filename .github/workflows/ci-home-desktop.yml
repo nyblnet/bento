@@ -23,7 +23,7 @@ concurrency:
 jobs:
   home-desktop-agent:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Desktop agent against the bento/id vectors
@@ -51,7 +51,10 @@ jobs:
         # navigation bounce, the pinned CSP (and a no-CSP control), Tauri core
         # commands refused, save in place re-verified, one web process per
         # document, and no cross-document BroadcastChannel or IndexedDB with a
-        # same-document control. A timeout or a missing report fails.
+        # same-document control. Blocked navigations leave a document armed and
+        # saving, a live embed navigating touches nothing, and security's race
+        # (an unknown document swapping a genuine shell under its own reload)
+        # never arms genuine. A timeout or a missing report fails.
         working-directory: home/desktop/host
         run: |
           sudo apt-get update -qq
@@ -178,7 +181,9 @@ jobs:
       - name: Desktop host rigs on WebView2 (security §19d–§19h, rig 8)
         # rig/run.sh on Windows: the same scenarios and assertions as the WebKitGTK job, plus a
         # shared-profile pair (the per-document origin alone separates documents), the parent-Domain
-        # cookie case and Origin-Agent-Cluster. A timeout or a missing report fails.
+        # cookie case, Origin-Agent-Cluster with a ?0 negative control, the capability's origin pattern
+        # in the running ACL, and a second build without rig-embed.json, so one scenario meets the
+        # ACL that ships. A timeout or a missing report fails.
         working-directory: home/desktop/host
         run: |
           set -o pipefail

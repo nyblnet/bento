@@ -20,10 +20,42 @@
   const inv = (cmd, args) => window.__TAURI_INTERNALS__.invoke(cmd, args)
   const mark = (step) => inv('rig_stash', { key: LABEL + '.step', value: step }).catch(() => {})
   const until = async (f, ms) => { for (let t = 0; t < ms && !f(); t += 100) await sleep(100); return f() }
+  const MODE = window.__RIG_MODE || ''
+  // Never hangs: a call the shim queued for ever (armed nowhere) must read as a failure.
+  const within = (p, ms, late) => Promise.race([p, sleep(ms).then(() => late)])
+  const frameTag = (u, tag) => u + '#' + encodeURIComponent(['', '', tag].join('|'))
+  const frameReport = (tag, go, ms) => new Promise((res) => {
+    const h = (e) => { if (e.data && e.data.embed && e.data.embed.tag === tag) { removeEventListener('message', h); res(e.data.embed) } }
+    addEventListener('message', h); setTimeout(() => { removeEventListener('message', h); res('no report') }, ms || 8000)
+    go()
+  })
+  const addFrame = (url) => { const f = document.createElement('iframe'); f.src = url; document.body.appendChild(f); return f }
+  // The real path: bridge handle, shim, this load's capability, the op, the disk, and back.
+  const openHandle = () => within(new Promise((res) => window.launchQueue.setConsumer((p) => res(p.files[0]))), 15000, null)
+  const saveVia = (handle, tag) => within((async () => {
+    if (!handle) return 'no handle'
+    const text = await (await handle.getFile()).text()
+    const w = await handle.createWritable()
+    await w.write(text.replace('"docId"', `"rig_${tag}":1,"docId"`))
+    await w.close()
+    return (await (await handle.getFile()).text()).includes(`"rig_${tag}":1`) ? 'saved' : 'not on disk'
+  })().catch((e) => 'THREW ' + e), 6000, 'no answer')
+  const rawBegin = () => inv('bento_file', { msg: JSON.stringify({ id: 'rig-begin', op: 'begin', launch: true }), cap: window.__rigCap }).then((t) => JSON.parse(t).value, (e) => 'THREW ' + e)
+  const idCall = (cap, op) => inv('bento_id', { msg: JSON.stringify({ id: 'id-' + op, op, purpose: 'frame', payload: 'not-a-frame' }), cap }).then((t) => { const j = JSON.parse(t); return j.ok ? 'ok' : j.value }, (e) => 'THREW ' + e)
+  // B2: the new page asks for its own URL, after the old page swapped the file
+  // underneath it. Runs while the document parses, as security's mk2.py did.
+  if (MODE === 'race' && sessionStorage.getItem('race') === '1') {
+    const t0 = Date.now(); while (Date.now() - t0 < 150);
+    const x = new XMLHttpRequest(); x.open('GET', location.href, false); try { x.send() } catch (_) {}
+  }
   // rig 3: which capability values ever pass through THIS realm's JSON.stringify?
   const seen = new Set(), js = JSON.stringify
   JSON.stringify = function (v) { try { if (v && typeof v === 'object' && typeof v.cap === 'string') seen.add(v.cap) } catch (_) {} return js.apply(this, arguments) }
   addEventListener('load', async () => {
+    if (MODE === 'navlock') return runNavlock()
+    if (MODE === 'race' || MODE === 'resave') return runRace()
+    if (MODE === 'oac') return runOac()
+    if (MODE === 'acl') return runAcl()
     // §19h wedge scenario: once armed, count a heartbeat through the host every
     // 300 ms and do nothing else. The shell stops web processes and watches
     // which documents' counters freeze.
@@ -59,10 +91,13 @@
       await inv('rig_done', { report: { watchdog: W, violations: [] } })
       return
     }
-    // rig 5's bounce brings the main frame back: record it, never run twice
+    // rig 5's bounce brings the main frame back: record it, never run twice. Armed is
+    // page state, so it proves nothing alone: the row is a real save through the host.
     if (sessionStorage.getItem('rig-done')) {
       const back = await until(() => window.__rigCap, 15000)
-      await inv('rig_stash', { key: LABEL + '.bounced-back', value: back ? 'armed' : 'not armed' })
+      const handle = await openHandle()
+      const saved = await saveVia(handle, 'rig5')
+      await inv('rig_stash', { key: LABEL + '.bounced-back', value: (back ? 'armed' : 'not-armed') + ',' + String(saved).replace(/\s+/g, '_').slice(0, 60) })
       return
     }
     try {
@@ -93,12 +128,16 @@
       // identity calls: gated on a GENUINE load. A mismatched payload is the
       // agent's own answer ("purpose"), so it proves the call REACHED the
       // agent; an unknown document must be stopped before it ("unavailable").
-      const idCall = (cap, op) => inv('bento_id', { msg: JSON.stringify({ id: 'id-' + op, op, purpose: 'frame', payload: 'not-a-frame' }), cap }).then((t) => { const j = JSON.parse(t); return j.ok ? 'ok' : j.value }, (e) => 'THREW ' + e)
       R.id_sign = await idCall(window.__rigCap, 'sign')
       R.id_whoami = await idCall(window.__rigCap, 'whoami')
       R.id_no_cap = await idCall(null, 'sign')
-      // Tauri core/plugin commands: no capability file ships, so all refused
-      R.core_cmd = await inv('plugin:window|title', {}).then((v) => 'ALLOWED ' + v, (e) => 'refused: ' + String(e).slice(0, 60))
+      // Tauri core and plugin commands: nothing grants them, on either platform (§19e d3). The
+      // two plugins the host links are named too: a dialog that opened would never answer,
+      // and that is a failure as well.
+      const refusedCmd = (cmd, args) => within(inv(cmd, args).then((v) => 'ALLOWED ' + v, (e) => 'refused: ' + String(e).slice(0, 80)), 3000, 'ALLOWED no answer')
+      R.core_cmd = await refusedCmd('plugin:window|title', {})
+      R.core_opener = await refusedCmd('plugin:opener|open_url', { url: 'https://127.0.0.1:9/rig-opener' })
+      R.core_dialog = await refusedCmd('plugin:dialog|message', { message: 'rig' })
       // rig 8: storage + BroadcastChannel isolation between documents
       const ALL = (window.__RIG_ALL || LABEL).split(',')
       let myDoc = null
@@ -119,7 +158,7 @@
       // rig 8, cookies and Origin-Agent-Cluster. A document sets cookies on its own host and on every
       // PARENT domain it may name; once every peer has done the same, it lists what it can see. A
       // sibling document's cookie in the list is a leak; its own host-only cookie is the positive control.
-      R.rig8_oac_type = typeof window.originAgentClustered; R.rig8_oac = window.originAgentClustered
+      R.rig8_oac_type = typeof window.originAgentCluster; R.rig8_oac = window.originAgentCluster
       const hexHost = location.hostname.replace(/^bento\./, '')
       const ck = (n, dom) => { try { document.cookie = 'rck_' + LABEL + '_' + n + '=1; path=/' + (dom ? '; Domain=' + dom : '') } catch (_) {} }
       ck('host', ''); ck('dom_localhost', 'localhost'); ck('dom_dotlocalhost', '.localhost'); ck('dom_hex', hexHost)
@@ -129,6 +168,9 @@
       try { R.rig8_cookies = document.cookie } catch (e) { R.rig8_cookies = 'THREW ' + String(e).slice(0, 60) }
       try { document.domain = 'localhost' } catch (e) { R.rig8_domain_err = String(e).slice(0, 80) }
       R.rig8_domain_after = document.domain
+      // `localhost` is one label and can never be set, so that row says nothing about the
+      // header. The row that does: the document's own parent, a no-op under ?1.
+      Object.assign(R, domainRow())
       R.rig8_idb_owner = await new Promise((res) => {
         const rq = indexedDB.open('rig8-db', 1)
         rq.onupgradeneeded = () => rq.result.createObjectStore('kv')
@@ -173,13 +215,8 @@
       // same fixture UNSANDBOXED must report its own loopback origin, different from the document's,
       // and be unable to read this realm.
       R.origin_ctl = {}
-      const frameReport = (mk, tag) => new Promise((res) => {
-        const h = (e) => { if (e.data && e.data.embed && e.data.embed.tag === tag) { removeEventListener('message', h); res(e.data.embed) } }
-        addEventListener('message', h); setTimeout(() => res('no report'), 12000)
-        document.body.appendChild(mk())
-      })
       let xf
-      R.origin_ctl.cross = await frameReport(() => { xf = document.createElement('iframe'); xf.src = EMBED_URL + '#' + encodeURIComponent(['', '', LABEL + ':xo'].join('|')); return xf }, LABEL + ':xo')
+      R.origin_ctl.cross = await frameReport(LABEL + ':xo', () => { xf = addFrame(frameTag(EMBED_URL, LABEL + ':xo')) }, 12000)
       // CONTROL (trust is per certificate, not per host): the same fixture served from a second
       // loopback port with a DIFFERENT self-signed certificate for 127.0.0.1 must NOT load. The
       // trusted certificate above is the positive control that frames do load.
@@ -192,6 +229,16 @@
         })
       }
       try { R.origin_ctl.cross_reads = String(xf.contentDocument.body) } catch (e) { R.origin_ctl.cross_reads = 'THREW' }
+      // Windows, the capability's origin pattern in the real ACL: the rig serves a page at two
+      // origins the pattern must refuse and one 24-hex origin it must admit. Only a document with
+      // no CSP can frame them, so the genuine windows report nothing here.
+      R.acl_frames = {}
+      if (WIN) {
+        for (const [tag, host] of [['evil', 'evil'], ['abc', 'a.b.c'], ['hex', '0123456789abcdef01234567']]) {
+          const t = LABEL + ':acl-' + tag
+          R.acl_frames[tag] = await frameReport(t, () => addFrame(frameTag(`http://bento.${host}.localhost/`, t)), 6000)
+        }
+      }
       // save in place through the bridge. A real Bento app saves with its own
       // serializer (what ⌘S writes); a corpus file gets a marker in its doc
       // block (the block is not pinned, so a genuine file stays genuine)
@@ -219,8 +266,112 @@
     mark('reporting')
     sessionStorage.setItem('rig-done', '1')
     await inv('rig_done', { report: R })
-    // rig 5, AFTER reporting: send the main frame to a foreign page. The host
-    // must bounce it back (BOUNCE in its log) and never arm the foreign page.
-    location.assign('https://example.com/')
+    // rig 5, AFTER reporting: send the main frame to a foreign page, the rig's own
+    // loopback fixture, so no third party is involved. The host must bounce it back
+    // (BOUNCE in its log) and never arm the foreign page.
+    location.assign(EMBED_URL + '?rig5')
   })
+
+  function domainRow() {
+    const own = document.domain, r = { rig8_domain_own: own }
+    const parent = own.replace(/^bento\./, '')
+    try { document.domain = parent; r.rig8_domain_hex_after = document.domain } catch (e) { r.rig8_domain_hex_after = 'THREW ' + e.name }
+    r.rig8_domain_hex_tried = parent
+    return r
+  }
+
+  // B3's negative control: this load's header is ?0.
+  async function runOac() {
+    await until(() => window.__rigCap, 15000)
+    await inv('rig_done', { report: Object.assign({ oac: window.originAgentCluster, oac_type: typeof window.originAgentCluster }, domainRow()) })
+  }
+
+  // B1 and §19e d1/d4. Every row is a real save, so a host pending under a secret the
+  // page never took reads as a failure. `begin` for the open document must still be
+  // refused as already handed out: per-load state survived, so nothing re-minted.
+  async function runNavlock() {
+    const N = { rows: {}, d1: {}, d4: {} }
+    // B1, order pending, pending, armed: a blocked navigation from the load event, before the
+    // echo, so a finished report for it (WebView2) can land between the mint and the echo.
+    // (A live port: the engines refuse port 9 themselves, before any policy is asked.)
+    const plain = window.__RIG_PLAIN_URL
+    if (!window.__rigCap) { N.early = true; try { location.href = plain + '?nl-early' } catch (_) {} }
+    try {
+      await mark('nl-load')
+      N.armed = !!(await until(() => window.__rigCap, 15000))
+      const cap = window.__rigCap
+      const handle = await openHandle()
+      N.first = await saveVia(handle, 'first')
+      const realm = (window.__nlRealm = String(Math.random()))
+      const targets = [
+        ['http', plain + '?nl-http'], ['file', 'file:///etc/hosts'], ['data', 'data:text/html,x'],
+        ['mailto', 'mailto:a@b.invalid'], ['blob', URL.createObjectURL(new Blob(['x'], { type: 'text/html' }))],
+        ['hash', '#nl'],
+      ]
+      for (const [t, url] of targets) {
+        await mark('blocked-' + t)
+        try { location.href = url } catch (e) { N.rows[t + '_threw'] = String(e) }
+        await sleep(900)
+        await mark('after-' + t)
+        N.rows[t] = { same_realm: window.__nlRealm === realm, same_cap: window.__rigCap === cap, save: await saveVia(handle, 'b' + t), begin: await rawBegin() }
+      }
+      // §19e d1: a live embed loads and navigates after arming, three ways. None of it may
+      // touch the load: no load start, no finish, no mint, and the capability keeps working.
+      if (!EMBED_URL) throw new Error('rig: no BENTO_RIG_EMBED_URL')
+      await mark('d1-start')
+      let f
+      N.d1.loaded = await frameReport(LABEL + ':d1a', () => { f = addFrame(frameTag(EMBED_URL, LABEL + ':d1a')) })
+      N.d1.src_changed = await frameReport(LABEL + ':d1b', () => { f.src = frameTag(EMBED_URL + '?d1b', LABEL + ':d1b') })
+      N.d1.self_navigated = await frameReport(LABEL + ':d1c', () => { f.contentWindow.location.href = frameTag(EMBED_URL + '?d1c', LABEL + ':d1c') })
+      await sleep(500)
+      await mark('d1-end')
+      N.d1.same_cap = window.__rigCap === cap
+      N.d1.save = await saveVia(handle, 'd1')
+      // §19e d4: a frame sent to plain http. The pinned CSP refuses it on both engines; with no
+      // CSP WebKitGTK's on_navigation refuses it, and on WebView2 nothing does.
+      if (plain) N.d4.plain = await frameReport(LABEL + ':d4', () => addFrame(frameTag(plain + '?d4-' + LABEL, LABEL + ':d4')), 5000)
+      N.d4.csp = R.violations.filter((v) => /frame-src|child-src|default-src/.test(v.dir || '')).map((v) => v.uri)
+      N.d4.save = await saveVia(handle, 'd4')
+    } catch (e) { N.error = String((e && e.stack) || e) }
+    await mark('nl-done')
+    await inv('rig_done', { report: { navlock: N } })
+  }
+
+  // B2, security's mk2.py, on the rig. An UNKNOWN document, armed for its file only, tries
+  // to get a genuine verdict for its own unknown bytes: it reloads, and swaps a genuine shell
+  // over its own file after the reload's document was served and before the commit ends the
+  // old page. The new page then fetches its own URL, which serves the genuine bytes.
+  // `resave` is the honest route: the same swap, finished BEFORE the reload.
+  async function runRace() {
+    const stage = sessionStorage.getItem('race')
+    await until(() => window.__rigCap, 15000)
+    const cap = window.__rigCap
+    const attacker = document.getElementById('bento-doc').textContent.includes('"docId":"rig-u"')
+    const id = await idCall(cap, 'sign')
+    await mark(`race stage=${stage || 0} attacker=${attacker} armed=${!!cap} id=${id}`)
+    if (!stage && attacker) {
+      const name = JSON.parse(await inv('bento_file', { msg: JSON.stringify({ id: 'race-b', op: 'begin', launch: true }), cap })).value
+      sessionStorage.setItem('race', '1')
+      const swap = () => inv('bento_file', { msg: JSON.stringify({ id: 'race-w', op: 'write', name, text: window.__RIG_RACE_G }), cap })
+      if (MODE === 'resave') { await swap(); location.reload(); return }
+      location.reload()
+      setTimeout(swap, window.__RIG_RACE_DELAY)
+      return
+    }
+    await inv('rig_done', { report: { race: { stage: stage || '0', attacker, armed: !!cap, id } } })
+  }
+
+  // §19e condition f: no embed gets past the ACL that ships. This build has no rig-embed.json,
+  // so the frame holds this window's OWN capability and is still stopped before the host.
+  async function runAcl() {
+    const A = {}
+    try {
+      await until(() => window.__rigCap, 15000)
+      const t = LABEL + ':acl-own-cap'
+      A.armed = !!window.__rigCap
+      A.embed = await frameReport(t, () => addFrame(window.__RIG_EMBED_URL + '#' + encodeURIComponent([window.__RIG_INVOKE_KEY, window.__rigCap, t].join('|'))), 12000)
+      A.save = await saveVia(await openHandle(), 'acl')
+    } catch (e) { A.error = String((e && e.stack) || e) }
+    await inv('rig_done', { report: { acl: A } })
+  }
 })()
