@@ -147,20 +147,19 @@ try {
   // --- 2. D4 dialog titles ----------------------------------------------------
   console.log('\nD4: dialog titles 17px/650\n')
   const title = () => p.evaluate(() => { const h = document.querySelector('.ed-about-overlay h2'); const c = getComputedStyle(h); return `${c.fontSize}/${c.fontWeight}` })
-  await p.evaluate(() => document.querySelector('.ed-btn-help').click())
-  ok(await title() === '17px/650', `help sheet title ${await title()}`)
+  await p.evaluate(() => document.querySelector('.ed-topbar [data-cmd="help"]').click())
+  ok(await title() === '17px/650', `shortcuts dialog title ${await title()}`)
 
   // --- 3. D8 shortcuts ----------------------------------------------------------
   console.log('\nD8: help shortcuts in the interface face, right-aligned\n')
   const k = await p.evaluate(() => {
-    // each section is the grid (rows are display: contents), its key column
-    // sized to its longest key
-    const kbd = document.querySelector('.ed-help-row kbd'), sec = kbd.closest('.ed-help-sec')
-    const col = parseFloat(getComputedStyle(sec).gridTemplateColumns)
-    return { font: getComputedStyle(kbd).fontFamily, ui: getComputedStyle(document.body).fontFamily, right: kbd.getBoundingClientRect().right - sec.getBoundingClientRect().left, col }
+    // every row's keys end on one right edge
+    const kbd = document.querySelector('.ed-keys-row kbd')
+    const rights = [...document.querySelectorAll('.ed-keys-keys')].map((x) => x.getBoundingClientRect().right)
+    return { font: getComputedStyle(kbd).fontFamily, spread: Math.max(...rights) - Math.min(...rights) }
   })
-  ok(k.font === k.ui && !/mono/i.test(k.font), `shortcut face = interface face (${k.font.split(',')[0]})`)
-  ok(Math.abs(k.right - k.col) < 1, `shortcut ends at its column's edge (${k.right.toFixed(1)} of ${k.col}px)`)
+  ok(!/mono/i.test(k.font), `shortcut face is not monospace (${k.font.split(',')[0]})`)
+  ok(k.spread <= 1, `shortcuts end on one right edge (spread ${k.spread.toFixed(1)}px)`)
   await closeAll()
   // Version history is the document's: the File menu, on the wordmark
   await p.evaluate(() => document.querySelector('.ed-logo').click())

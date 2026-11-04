@@ -47,6 +47,7 @@ import { ICONS } from '../icons'
 import { segmented } from './inspector/fields'
 import { t, setLocale, locale, localeChoices, LOCALE_CHOICES, applyDirection, isRtl } from '../i18n'
 import { MOD, dispatch, openPalette, titleFor, type Command } from './commands'
+import { openShortcuts } from './shortcuts'
 import { stepOf } from '../steps'
 import { availablePacks, fetchPack, markFileSaved, packCoverage, packsInFile, stageForFile, unstageFromFile } from '../packs'
 import { injectFonts } from '../fonts'
@@ -3378,137 +3379,8 @@ export class Editor {
     document.body.appendChild(overlay)
   }
 
-  /** Shortcuts + tips overlay (press ? or the topbar help button). */
-  private openHelp() {
-    document.querySelector('.ed-about-overlay')?.remove()
-    const overlay = div('ed-about-overlay')
-    const box = div('ed-about ed-help-box')
-    const h = document.createElement('h2')
-    h.textContent = t('Shortcuts & tips')
-    box.appendChild(h)
-    // Two explicit columns, placed by hand for balance + theme: LEFT = general
-    // shortcuts & tips, RIGHT = the line/curve/path pointer-editing features.
-    // (Auto column-count balanced poorly with these chunky, unsplittable sections.)
-    const cols = div('ed-help-cols')
-    box.appendChild(cols)
-    const colL = div('ed-help-col')
-    const colR = div('ed-help-col')
-    cols.append(colL, colR)
-    const mod = navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'
-    const section = (col: HTMLElement, title: string, rows: Array<[string, string]>) => {
-      const sec = div('ed-help-sec')
-      const st = document.createElement('h3'); st.textContent = title; sec.appendChild(st)
-      for (const [k, d] of rows) {
-        const r = div('ed-help-row')
-        r.innerHTML = `<kbd></kbd><span></span>`
-        r.querySelector('kbd')!.textContent = k
-        r.querySelector('span')!.textContent = d
-        sec.appendChild(r)
-      }
-      col.appendChild(sec)
-    }
-    // A row that IS one command reads its keys from the command list
-    // (commands.ts), so the sheet cannot drift from what the keys do.
-    const cmd = (id: string, desc?: string): [string, string] => {
-      const c = this.commands.find((x) => x.id === id)!
-      return [c.keys ?? '', desc ?? t(c.label)]
-    }
-    section(colL, t('Editing'), [
-      cmd('save'),
-      [`${mod}Z · ${mod}⇧Z`, t('Undo · redo')],
-      [`${mod}C · ${mod}V`, t('Copy · paste — elements, or the whole slide when nothing is selected')],
-      [`${mod}⇧X`, t('Cut to move — the selection fades until you paste it in its new place; Esc cancels')],
-      cmd('duplicate', t('Duplicate selection')),
-      [`${mod}G · ${mod}⇧G`, t('Group · ungroup')],
-      cmd('component', t('Create component — copies inserted from the Tokens view follow it')),
-      [t('Tokens'), t('Name a color or number once and bind it anywhere (Colors & tokens, or a field’s dot); a mode — Dark — switches every bound value at once')],
-      [`${mod}B · ${mod}I · ${mod}U`, t('Bold · italic · underline while editing text')],
-      [t('Text ▸ Field'), t('Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}')],
-      ['[ · ]', t('Collapse · expand the side panels')],
-      cmd('comment'),
-      cmd('help', t('This help')),
-      cmd('palette', t('Command palette — search every action by name')),
-    ])
-    section(colL, t('Canvas'), [
-      [`⇧-${t('click')}`, t('Add an element to the selection, or take it out')],
-      [`${mod}-${t('click')}`, t('Select the element under the pointer, even inside a group')],
-      [`${t('Alt')}-${t('click')}`, t('Select the element behind it; click again to go deeper')],
-      [`${t('Alt')}-${t('hover')}`, t('Measure from the selection to the element under the pointer')],
-      [t('Right-click'), t('Lists every element under the pointer, to select one that is covered')],
-      [t('Double-click'), t('Rename a layer or a group in the Layers list')],
-      [t('Space-drag'), t('Pan the canvas, including past the edges of the slide')],
-      [t('Middle-drag'), t('Pan as well, if your mouse has a middle button')],
-      [`${mod}-${t('scroll')}`, t('Zoom in and out')],
-      [`${mod}+ · ${mod}− · ${mod}0`, t('Zoom in · out · fit the slide')],
-      ['← · →', t('Walk the slides when nothing is selected; nudge the selection otherwise')],
-      [`${mod}-${t('click')} · ⇧-${t('click')}`, t('Select several slides in the sidebar; drag any of them to move them all, Delete removes them')],
-    ])
-    // the one-letter tools, straight from the command list
-    section(colR, t('Tools'), [
-      ...['tool-select', 'tool-marquee', 'tool-frame', 'tool-rect', 'tool-ellipse', 'tool-line', 'tool-pen', 'insert-text'].map((id) => cmd(id)),
-      cmd('auto-layout', t('Wrap the selection in an auto-layout frame')),
-      [t('Drag onto a frame'), t('Puts it inside, where the bar shows — in Layers, drop it on the frame row; hold {mod} while dragging to move over it instead', { mod })],
-      [BOOL_OPS.map((op) => boolUi(op).key).join(' · '), BOOL_OPS.map((op) => boolUi(op).label).join(' · ')],
-    ])
-    section(colR, t('Inspector'), [
-      [t('Drag a label'), t('Scrub the number — ⇧ ×10, Alt ×0.1; the drag never stops at the screen edge')],
-      ['360/2 · +24 · *2', t('Type arithmetic into a number; a leading + * / starts from its current value')],
-      ['↑ · ↓', t('Step a number; ⇧ steps by 10')],
-      [t('Mixed'), t('Several elements differ: an edit moves each by the same amount')],
-    ])
-    section(colR, t('Lines & curves'), [
-      [t('Shape ▾'), t('Draw a line, curved line or connector — then drag on the canvas')],
-      [t('Drag a point'), t('Move an endpoint or anchor; drag the body to move the whole line')],
-      [t('Click a point'), t('Reveal its bézier handles for a precise curve')],
-      [`${t('Alt')}-${t('drag')}`, t('Break a smooth point into a sharp corner')],
-      [`${t('Pen')} · P`, t('Click to place corners, drag to pull out curves (Alt breaks a handle); click the first point to close, Enter or Esc to finish')],
-      [t('Path bar'), t('Corner, Smooth or Symmetric for the clicked point (or every point); Close path joins the ends')],
-      [t('Double-click'), t('Add a point on the line; double-click a point to remove it')],
-    ])
-    section(colR, t('Motion paths'), [
-      [t('Animate ▸ Loop animation'), t('Choose Follow a path, then Edit path on canvas')],
-      [t('Drag points'), t('Shape the trajectory — the first point is the element’s rest spot')],
-      [t('Click a point'), t('Reveal bézier handles; Alt-drag one for a sharp corner')],
-      [t('Double-click'), t('Add a point on the path; double-click a point to remove it')],
-      [t('Scroll a point'), t('Set how fast the element moves through that point')],
-    ])
-    section(colL, t('Presenting'), [
-      ['F5', t('Present')],
-      ['F', t('Toggle fullscreen while presenting')],
-      ['S', t('Speaker view — notes on a second screen if you have one')],
-      ['L', t('Toggle laser pointer while presenting')],
-      ['M', t('Reduce motion — pause animations (also honours your OS setting)')],
-      ['B', t('Black screen — and back')],
-      ['G', t('All slides in the speaker view — pick one to jump to')],
-      ['← · →', t('Previous · next slide, or the next reveal step on a slide that has them')],
-      [t('Right-click ▸ Reveal in order'), t('Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order')],
-      ['Esc', t('End the show')],
-    ])
-    const tips = div('ed-help-sec')
-    const tt = document.createElement('h3'); tt.textContent = t('Good to know'); tips.appendChild(tt)
-    const ul = document.createElement('ul'); ul.className = 'ed-help-tips'
-    for (const tip of [
-      t('Paste an image or text straight onto the canvas with ⌘V.'),
-      t('Copy a slide (⌘C with nothing selected) and paste it into another Bento deck.'),
-      t('Make a chart from a table and it stays linked — edit the table, the chart updates.'),
-      t('Your work auto-saves; restore earlier versions from the bento/slides menu → Version history.'),
-    ]) { const li = document.createElement('li'); li.textContent = tip; ul.appendChild(li) }
-    tips.appendChild(ul); colL.appendChild(tips)
-    const more = div('ed-help-more')
-    const link = document.createElement('a')
-    link.href = 'https://bento.page/help'
-    link.target = '_blank'
-    link.rel = 'noopener'
-    link.textContent = t('Full guide at bento.page/help →')
-    more.appendChild(link)
-    box.appendChild(more)
-    overlay.appendChild(box)
-    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey, true) }
-    const onKey = (ev: KeyboardEvent) => { if (ev.key === 'Escape') { ev.stopPropagation(); close() } }
-    overlay.addEventListener('click', (ev) => { if (ev.target === overlay) close() })
-    document.addEventListener('keydown', onKey, true)
-    document.body.appendChild(overlay)
-  }
+  /** The keyboard shortcuts dialog (?, ⌘/, the ⌨ button) — editor/shortcuts.ts. */
+  private openHelp() { openShortcuts(this.commands) }
 
   private savedTimer = 0
   private flashSaved(message = t('Saved'), holdMs = 1400) {
@@ -3643,7 +3515,7 @@ export class Editor {
       { id: 'zoom-fit', label: 'Fit the slide', keys: `${MOD}0`, scope: 'canvas', inField: true, match: (ev, mod) => mod && ev.key === '0', run: () => this.canvas.zoomReset() },
       { id: 'present', label: 'Present', keys: 'F5', scope: 'always', inField: true, match: (ev) => ev.key === 'F5', run: (ev) => this.present(!ev?.shiftKey) },
       { id: 'palette', label: 'Command palette', keys: `${MOD}K`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && !ev.altKey && key(ev) === 'k', run: () => openPalette(this.commands) },
-      { id: 'help', label: 'Keyboard shortcuts', keys: '?', scope: 'always', when: canvasFree, match: (ev, mod) => !mod && (ev.key === '?' || (ev.key === '/' && ev.shiftKey)), run: () => this.openHelp() },
+      { id: 'help', label: 'Keyboard shortcuts', keys: `? or ${MOD}/`, scope: 'always', when: canvasFree, match: (ev, mod) => (!mod && (ev.key === '?' || (ev.key === '/' && ev.shiftKey))) || (mod && !ev.shiftKey && ev.key === '/'), run: () => this.openHelp() },
       // The tools, one letter each as in Figma and Penpot (C stays Comment)
       { id: 'tool-select', label: 'Move', keys: 'V', scope: 'canvas', when: canvasFree, match: tool('v'), run: () => this.useTool(false) },
       // S: Select only — a drag selects and never moves (the Move tool moves).
