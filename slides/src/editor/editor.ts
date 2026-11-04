@@ -3823,19 +3823,13 @@ export class Editor {
     })
   }
 
-  /** R, O, F, T: with an auto-layout frame selected the new element goes
-   *  straight into it (the frame places it); otherwise the tool arms, and a
-   *  click or a drag on the slide puts it down. */
+  /** R, O, F, T: the tool arms, and a click or a drag on the slide puts it
+   *  down. With an auto-layout frame selected, a gesture that starts inside
+   *  that frame puts the new element in it (canvas.armPlace). */
   private placeTool(make: () => SlideElement, edit = false) {
     const sel = this.store.selectedElements
     const f = sel.length === 1 && sel[0].type === 'shape' && sel[0].layout ? sel[0] : null
-    if (f) {
-      const el = make()
-      el.parentId = f.id
-      this.canvas.insert(el, edit)
-      return
-    }
-    this.canvas.armPlace(make, edit)
+    this.canvas.armPlace(make, edit, f?.id)
   }
 
   private duplicateSelection() {

@@ -324,6 +324,24 @@ function place(slide: Slide, f: Frame, set: Put) {
   }
 }
 
+/** The largest box a NEW child can take in frame `f` without passing its
+ *  edges: the inner box (size less padding), and for a fixed-size row or
+ *  column what is left along the main axis after the children it has (fill
+ *  children at their least size) and one more gap; a fixed grid's cell width.
+ *  A frame that hugs grows to fit, so it sets no limit. */
+export function roomIn(slide: Slide, f: Frame): { w: number; h: number } {
+  if (f.layout.hug) return { w: Infinity, h: Infinity }
+  const { dir, gap, pad } = f.layout
+  const iw = Math.max(1, f.w - pad[1] - pad[3]), ih = Math.max(1, f.h - pad[0] - pad[2])
+  const kids = frameChildren(slide, f)
+  if (dir === 'grid') { const c = colsOf(f); return { w: Math.max(1, (iw - gap * (c - 1)) / c), h: ih } }
+  if (f.layout.wrap || !kids.length) return { w: iw, h: ih }
+  const M = dir === 'row' ? 'w' : 'h'
+  const used = kids.reduce((a, k) => a + (k.sizing?.[M] === 'fill' ? minOf(k, M) : k[M]), 0) + gap * kids.length
+  const free = Math.max(1, (M === 'w' ? iw : ih) - used)
+  return M === 'w' ? { w: free, h: ih } : { w: iw, h: free }
+}
+
 /** A fill child's least size on axis M (sizing.minW/minH, else 0). */
 const minOf = (k: SlideElement, M: 'w' | 'h') => (M === 'w' ? k.sizing?.minW : k.sizing?.minH) ?? 0
 

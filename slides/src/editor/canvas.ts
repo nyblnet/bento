@@ -34,7 +34,7 @@ import type { Peer } from '../sync/session'
 import { isMacOS } from '../screens'
 import { aabb, fmt, measureBoxes, union, type Box } from './measure-geom'
 import { drawFrameOverlay } from './frameoverlay'
-import { canAccept, flagged, frameChildren, isFrame, layoutSlide, moveInFrame, moveIntoFrame, withDescendants } from '../layout'
+import { canAccept, flagged, frameChildren, isFrame, layoutSlide, moveInFrame, moveIntoFrame, roomIn, withDescendants } from '../layout'
 import { drawGradientOverlay } from './gradientoverlay'
 import { TransformHud, hudNum, mountModHint } from './hud'
 import { applyMorphPreview, morphGhost } from './morph'
@@ -2849,8 +2849,11 @@ export class SlideCanvas {
 
   /** Arm a box tool (R, O, F, T): a drag draws the element at the dragged
    *  size, a click drops the default one centred on the click. Esc or V
-   *  stands it down. */
-  armPlace(make: () => SlideElement, edit = false) {
+   *  stands it down. A gesture that starts inside frame `into` puts the
+   *  element in that frame (the frame places it, at the slot its default
+   *  position reads as): a drag gives it the dragged size, a click the
+   *  default held to the room the frame has left (layout.ts roomIn). */
+  armPlace(make: () => SlideElement, edit = false, into?: string) {
     this.cancelDraw()
     const { width, height } = this.store.doc.size
     const ov = document.createElement('div')
@@ -2879,14 +2882,20 @@ export class SlideCanvas {
         window.removeEventListener('mousemove', move, true)
         window.removeEventListener('mouseup', up, true)
         const el = make()
+        const f = into ? this.store.element(into) : undefined
+        const inF = isFrame(f) && a.x >= f.x && a.x <= f.x + f.w && a.y >= f.y && a.y <= f.y + f.h
         // a drag shorter than a few screen px was a click
         if (Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y)) * this.scale > 4) {
-          el.x = Math.round(Math.min(a.x, b.x)); el.y = Math.round(Math.min(a.y, b.y))
+          if (!inF) { el.x = Math.round(Math.min(a.x, b.x)); el.y = Math.round(Math.min(a.y, b.y)) }
           el.w = Math.max(1, Math.round(Math.abs(b.x - a.x)))
           if (el.type !== 'text') el.h = Math.max(1, Math.round(Math.abs(b.y - a.y))) // a text box sizes its own height
+        } else if (inF) {
+          const room = roomIn(this.store.slide, f)
+          el.w = Math.min(el.w, Math.floor(room.w)); el.h = Math.min(el.h, Math.floor(room.h))
         } else {
           el.x = Math.round(a.x - el.w / 2); el.y = Math.round(a.y - el.h / 2)
         }
+        if (inF) el.parentId = f.id
         this.cancelDraw()
         this.insert(el, edit)
       }
