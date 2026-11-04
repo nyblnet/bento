@@ -67,15 +67,24 @@ export class PropsPanel {
     store.on('selection', () => this.rebuild(true))
     store.on('current', () => this.rebuild(true))
     store.on('doc', () => this.rebuild())
-    this.host.addEventListener('focusout', () => {
-      setTimeout(() => {
-        if (this.stale && !this.host.matches(':focus-within')) this.rebuild()
-      }, 0)
-    })
+    const catchUp = () => setTimeout(() => {
+      if (this.stale && !this.pressed && !this.host.matches(':focus-within')) this.rebuild()
+    }, 0)
+    this.host.addEventListener('focusout', catchUp)
+    // A press inside the panel that takes a field's focus (a layer's ⠿)
+    // commits that field, and the rebuild would replace the very control
+    // being pressed — a drag that starts on it then never drops. Doc edits
+    // wait for the gesture to end. Not pointercancel: Chrome sends it when a
+    // native drag starts, and the drag is what must survive.
+    this.host.addEventListener('pointerdown', () => { this.pressed = true }, true)
+    for (const end of ['pointerup', 'dragend', 'drop'] as const) {
+      window.addEventListener(end, () => { if (this.pressed) { this.pressed = false; catchUp() } }, true)
+    }
     this.rebuild()
   }
 
   stale = false
+  private pressed = false
 
   /**
    * True only while the user is mid-edit in a control a rebuild would
@@ -119,8 +128,8 @@ export class PropsPanel {
   }
 
   rebuild(force = false) {
-    if (!force && this.isActiveEditFocus()) {
-      this.stale = true // don't rip the field out from under the user; catch up on focusout
+    if (!force && (this.pressed || this.isActiveEditFocus())) {
+      this.stale = true // don't rip the field out from under the user; catch up on focusout or release
       return
     }
     this.stale = false

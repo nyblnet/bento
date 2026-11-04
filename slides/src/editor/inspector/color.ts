@@ -250,6 +250,17 @@ export function colorField(col: HTMLInputElement, alpha?: HTMLInputElement): HTM
     }
     show()
   })
+  // Enter commits and hands the keyboard back to the canvas, as a number
+  // field's does (DECISIONS 2026-10-30). Commit while still focused: the
+  // panel then holds its rebuild until the edit's input and change are both
+  // in, so the colour stays one undo step (the blur's own 'change' finds
+  // nothing new)
+  hex.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return
+    e.preventDefault(); e.stopPropagation()
+    hex.dispatchEvent(new Event('change'))
+    hex.blur()
+  })
   box.append(col, hex)
   if (alpha) {
     const a = document.createElement('label')

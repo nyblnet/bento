@@ -101,6 +101,30 @@ try {
   ok(stk.fills?.length === 2, 'one undo per removal')
   await undo()
 
+  console.log('\ndragging a layer while its hex has focus\n')
+  // A hex typed into a layer commits when the press on ⠿ takes its focus; the
+  // panel's catch-up rebuild used to run right then, under the starting drag,
+  // and swap the row out, so the drop never came.
+  await select('one')
+  await click('.ed-props .ed-section[data-key="Fill"] .ed-sec-act:not(.ed-sec-cat)')
+  const hex = p.locator(`${fillRow(0)} >> .ed-color-hex`)
+  await hex.click(); await hex.fill('654321'); await p.keyboard.press('Enter'); await p.waitForTimeout(150)
+  const kept = await p.evaluate(() => !!document.activeElement?.classList.contains('ed-color-hex'))
+  // typed and left in the field: the press on ⠿ is what commits it
+  await hex.click(); await hex.fill('123456'); await p.waitForTimeout(100)
+  const g = await p.locator(`${fillRow(0)} >> .ed-paintlayer-grip`).boundingBox({ timeout: 2000 }).catch(() => null)
+    ?? await p.evaluate(() => { const r = document.querySelector('.ed-props .ed-paintlayer-grip').getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height } })
+  const below = await p.locator(fillRow(1)).boundingBox()
+  await p.mouse.move(g.x + g.width / 2, g.y + g.height / 2)
+  await p.mouse.down()
+  await p.mouse.move(g.x + g.width / 2, g.y + 20, { steps: 4 })
+  await p.mouse.move(below.x + below.width / 2, below.y + below.height / 2, { steps: 8 })
+  await p.mouse.up(); await p.waitForTimeout(250)
+  one = await el('one')
+  const order = one.fills?.map((f) => f.color).join(' | ') ?? ''
+  ok(/^rgba\(18, 52, 86|^#123456/.test(order) && order.endsWith('#5E7699'), `the ⠿ drag reorders right after a hex was typed (${order})`)
+  ok(!kept, 'Enter in a hex hands the keyboard back, as a number field does')
+
   console.log('\nstrokes\n')
   await select('one')
   await click('.ed-props .ed-section[data-key="Stroke"] .ed-sec-act:not(.ed-sec-cat)')
