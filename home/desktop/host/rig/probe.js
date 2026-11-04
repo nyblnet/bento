@@ -152,12 +152,19 @@
       R.embeds = {}
       R.embed_url = EMBED_URL
       if (!EMBED_URL) throw new Error('rig: no BENTO_RIG_EMBED_URL: the attacker fixture is not being served')
+      // WebView2 (Windows): Tauri's IPC refuses a sandboxed frame outright ("Origin header is not a
+      // valid URL": its origin is "null"), so the three capability rows use an UNSANDBOXED frame of
+      // the attacker's own origin instead (a stronger attacker: a real origin, and the platform ACL
+      // opened to it by capabilities-windows/rig-embed.json), and the sandboxed frame is recorded
+      // as its own row. WebKitGTK keeps the sandboxed frames.
+      const WIN = /Windows/.test(navigator.userAgent)
       const cases = [['rig1-key-only', ''], ['rig2-peer-cap', peerCap || ''], ['control-own-cap', window.__rigCap]]
+      if (WIN) cases.push(['win-sandboxed', window.__rigCap])
       for (const [tag, cap] of cases) {
         if (tag === 'rig2-peer-cap' && !peerCap) continue
         const got = new Promise((res) => { const h = (e) => { if (e.data && e.data.embed && e.data.embed.tag === LABEL + ':' + tag) { removeEventListener('message', h); res(e.data.embed) } }; addEventListener('message', h); setTimeout(() => res('no report'), 12000) })
         const f = document.createElement('iframe')
-        f.setAttribute('sandbox', 'allow-scripts allow-forms')
+        if (!WIN || tag === 'win-sandboxed') f.setAttribute('sandbox', 'allow-scripts allow-forms')
         f.src = EMBED_URL + '#' + encodeURIComponent([window.__RIG_INVOKE_KEY, cap, LABEL + ':' + tag].join('|'))
         document.body.appendChild(f)
         R.embeds[tag] = await got
