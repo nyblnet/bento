@@ -12228,3 +12228,41 @@ Two follow-ups to the link v1 entry above, both from porting it to iOS.
 - **The rigs are part of the host**: the `rig` feature (never shipped) adds the
   probe, a dead drop and a report sink; `rig/check.py` asserts every row, and a
   deliberately broken capability check fails rigs 2 and 6.
+
+
+## 2026-11-04 — bento/connect H2 on Windows: WebView2 measured on a hosted runner (home/desktop/host)
+
+Measured on GitHub's hosted `windows-latest` (WebView2 runtime 156.0.4314.50), the same rigs as
+Linux, 337 checks. Windows Hello and a real TPM consent key are NOT measured (a hosted runner has
+neither); the Windows key store is an explicit stub that refuses everything until a real-PC session.
+
+- **Per-document origins are distinct origins on WebView2.** A document is served at
+  `http://bento.<24 hex>.localhost/` (wry's custom-protocol form on Windows). Two documents report
+  two different `location.origin`s, and with BOTH forced onto one shared profile directory
+  (`pairshared`, rig only) IndexedDB, BroadcastChannel and cookies are still separate, so the origin
+  alone separates them. The separate-profile fallback (§19e 5) is not needed, and the host still
+  gives each document its own profile directory.
+- **Tauri on Windows treats only `http://bento.localhost` as the app's own origin.** A per-document
+  origin is "remote" to it and every custom command is refused ("not allowed on origin") unless a
+  remote capability names it. **This reverses "no Tauri capability file ships" on Windows only:**
+  `capabilities-windows/documents.json` admits exactly `bento_arm`, `bento_file`, `bento_id` to
+  `http://bento.*.localhost/*`, nothing from core or any plugin, and every one of them still
+  demands the load's capability secret. Linux ships none, as before. The rig adds two more files
+  (rig commands; the attacker fixture's origin) that only exist in rig builds.
+- **Embedded frames.** A sandboxed frame (origin null) is refused by Tauri's IPC itself ("Origin
+  header is not a valid URL") even holding the window's own secret; an unsandboxed frame of another
+  origin reaches the host only if the platform ACL admits it (rig only) and is then refused by the
+  secret (no capability / capability refused), with the own-secret control accepted.
+- **Origin-Agent-Cluster:** the header is sent, but WebView2 156 does not expose
+  `window.originAgentClustered` (typeof undefined), so the header's effect is not directly
+  observable. What is observed: `document.domain = "localhost"` throws SecurityError, so no
+  relaxation to the parent domain. Cookies set with `Domain=localhost` are refused; the document's
+  own host and its `<hex>.localhost` domain are accepted and invisible to a sibling.
+- **One renderer process per document:** distinct renderer PIDs for two documents, stopping any one
+  (NtSuspendProcess) freezes exactly one document, stopping all freezes both (negative control).
+- **Shim change (all platforms):** the shim adopts a capability secret only when `bento_arm`
+  succeeds. WebView2 reported two finished loads for one generation after the navigation lock
+  bounced a main frame; the host held the later secret and a shim that kept the first stayed
+  unarmed (fail closed, but the document could not save).
+- **Windows file ID** (volume serial plus the 128-bit file ID, `GetFileInformationByHandleEx`) now
+  drives the envelope epoch; `GlobalMemoryStatusEx` answers the recovery memory check.
