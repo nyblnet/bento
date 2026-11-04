@@ -122,3 +122,11 @@ runs:
       # signed history is bundled; a debug build only warns.
       shell: bento-step {0}
       run: node scripts/test-check-ios-release-history.mjs
+
+    - name: home/ios identity bridge rig
+      # bento/connect B1 on iOS: whoami (per-document consent), purpose-locked
+      # sign under the host's own idle and overall limits, resolve, the
+      # managed-config stop and "an unknown document gets no agent", in real
+      # WebKit with the real bridge.js, plus mutants. Apple only.
+      shell: bento-step {0}
+      run: node scripts/test-home-id-bridge.mjs
