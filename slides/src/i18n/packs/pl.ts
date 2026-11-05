@@ -1364,4 +1364,5 @@ export const strings: Catalog = {
   "or": "lub",
   "Categories": "Kategorie",
   "Lock or unlock": "Zablokuj lub odblokuj",
+  "Each has its own fill layers — select one to edit": "Każdy ma własne warstwy wypełnienia — zaznacz jeden, aby edytować",
 }

@@ -1365,4 +1365,5 @@ export const strings: Catalog = {
   "or": "eller",
   "Categories": "Kategorier",
   "Lock or unlock": "Lås eller lås op",
+  "Each has its own fill layers — select one to edit": "Hver har sine egne fyldlag — vælg ét for at redigere",
 }

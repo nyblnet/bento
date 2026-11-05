@@ -1560,7 +1560,8 @@ export class SlideCanvas {
     if (curve) { this.bezierEditor.attach(one!.id); this.lineEditor.detach() }
     else if (lineLike) { this.lineEditor.attach(one!.id); this.bezierEditor.detach() }
     else { this.lineEditor.detach(); this.bezierEditor.detach() }
-    const handled = curve || lineLike
+    // an editor may decline (a compound path): then Moveable's box takes it
+    const handled = this.bezierEditor.active || this.lineEditor.active
     drawFrameOverlay(this.scaleHost, this.store, () => this.scale, !!this.editing || !!this.pathEditor?.active || !!this.cropEditor?.active)
     drawGradientOverlay(this.scaleHost, this.store, () => this.scale, !!this.editing || !!this.pathEditor?.active || !!this.cropEditor?.active || handled)
     const targets = this.editing || this.pathEditor?.active || this.cropEditor?.active || handled ? [] : this.selectedNodes().filter((n) => !n.dataset.locked)

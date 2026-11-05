@@ -1353,4 +1353,5 @@ export const de: Catalog = {
   "or": "oder",
   "Categories": "Kategorien",
   "Lock or unlock": "Sperren oder entsperren",
+  "Each has its own fill layers — select one to edit": "Jedes hat eigene Füllebenen — eines auswählen, um es zu bearbeiten",
 }

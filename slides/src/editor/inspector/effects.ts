@@ -29,7 +29,13 @@ export function buildShadow(p: PropsPanel, el: SlideElement) {
   const editor = effectChip(p, `${el.id}:shadow`, bound ?? (current === 'custom' ? t('Drop shadow') : `${t('Drop shadow')} · ${optLabel(current)}`),
     (sw) => { sw.style.boxShadow = `${(sh0.x ?? 0) / 4}px ${(sh0.y ?? 0) / 4}px ${sh0.blur / 4}px ${sh0.color}` },
     { hidden: !!el.shadowHidden, toggle: () => p.mutate(el.id, (e) => { if (e.shadowHidden) delete e.shadowHidden; else e.shadowHidden = true }, true) },
-    () => p.mutate(el.id, (e) => { delete e.shadow; delete e.shadowHidden; delete e.themeRefs?.shadow }, true))
+    () => p.mutate(el.id, (e) => { delete e.shadow; delete e.shadowHidden; delete e.themeRefs?.shadow }, true),
+    // the chip's arrows step through the presets, as the tiles' do
+    (by) => {
+      const keys = Object.keys(SHADOW_PRESETS), i = keys.indexOf(current)
+      const key = keys[i < 0 ? (by > 0 ? 0 : keys.length - 1) : (i + by + keys.length) % keys.length]
+      p.mutate(el.id, (e) => { e.shadow = { ...SHADOW_PRESETS[key] } }, true)
+    })
   if (!editor) return
   // The presets as tiles: each one SHOWS its shadow, its name under it —
   // one click, all visible, where a dropdown of words hid what they meant.
@@ -96,7 +102,7 @@ const openFx = new Set<string>()
  * the effect's settings under the row, then 👁 and −. Returns the settings
  * box to fill, or null while it is closed.
  */
-function effectChip(p: PropsPanel, key: string, label: string, paint: (swatch: HTMLElement) => void, eye: { hidden: boolean; toggle: () => void }, remove: () => void): HTMLElement | null {
+function effectChip(p: PropsPanel, key: string, label: string, paint: (swatch: HTMLElement) => void, eye: { hidden: boolean; toggle: () => void }, remove: () => void, step?: (by: 1 | -1) => void): HTMLElement | null {
   const chip = document.createElement('button')
   chip.type = 'button'
   chip.className = 'ed-btn ed-effect-chip'
@@ -114,6 +120,15 @@ function effectChip(p: PropsPanel, key: string, label: string, paint: (swatch: H
     if (openFx.has(key)) openFx.delete(key)
     else openFx.add(key)
     p.rebuild(true)
+  })
+  if (step) chip.dataset.arrows = '' // controls.ts ownsArrows
+  if (step) chip.addEventListener('keydown', (e) => {
+    const back = getComputedStyle(chip).direction === 'rtl' ? 'ArrowRight' : 'ArrowLeft'
+    const by = e.key === back || e.key === 'ArrowUp' ? -1 : e.key.startsWith('Arrow') ? 1 : 0
+    if (!by) return
+    e.preventDefault()
+    e.stopPropagation() // the step rebuilds the panel: the chip is gone before the editor's guard could see it
+    step(by)
   })
   paintRow(p, chip, eye, remove)
   if (!open) return null

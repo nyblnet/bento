@@ -1369,4 +1369,5 @@ export const strings: Catalog = {
   "or": "یا",
   "Categories": "دسته‌ها",
   "Lock or unlock": "قفل یا باز کردن قفل",
+  "Each has its own fill layers — select one to edit": "هرکدام لایه‌های پرکردن خودش را دارد — یکی را برای ویرایش انتخاب کنید",
 }

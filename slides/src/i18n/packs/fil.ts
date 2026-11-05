@@ -1382,4 +1382,5 @@ export const strings: Catalog = {
   "or": "o",
   "Categories": "Mga kategorya",
   "Lock or unlock": "I-lock o i-unlock",
+  "Each has its own fill layers — select one to edit": "May sariling fill layer ang bawat isa — pumili ng isa para i-edit",
 }

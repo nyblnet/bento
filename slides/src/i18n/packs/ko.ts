@@ -1357,4 +1357,5 @@ export const strings: Catalog = {
   "or": "또는",
   "Categories": "카테고리",
   "Lock or unlock": "잠금 또는 잠금 해제",
+  "Each has its own fill layers — select one to edit": "각각 고유한 채우기 레이어가 있습니다 — 편집하려면 하나를 선택하세요",
 }

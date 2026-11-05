@@ -1365,4 +1365,5 @@ export const strings: Catalog = {
   "or": "или",
   "Categories": "Категории",
   "Lock or unlock": "Заблокировать или разблокировать",
+  "Each has its own fill layers — select one to edit": "У каждого свои слои заливки — выберите один, чтобы изменить",
 }

@@ -127,6 +127,9 @@ export class PropsPanel {
     }
   }
 
+  /** what the inspector last showed: the slide and the selection */
+  private subject = ''
+
   rebuild(force = false) {
     if (!force && (this.pressed || this.isActiveEditFocus())) {
       this.stale = true // don't rip the field out from under the user; catch up on focusout or release
@@ -134,13 +137,17 @@ export class PropsPanel {
     }
     this.stale = false
     this.burst = false
-    // A doc edit rebuilds the same inspector in place: keep its scroll so a
-    // control near the bottom does not throw the panel back to the top on
-    // every change. A selection or slide switch (force) starts the new
-    // inspector at the top, which is where a different subject belongs.
-    const scrollTop = force ? 0 : this.host.scrollTop
+    // The same subject rebuilds in place: keep its scroll, so a control near
+    // the bottom (Export's Scale, a doc edit) does not throw the panel back to
+    // the top, and keep focus. Only a different subject — another selection
+    // or slide — starts at the top. `force` only says "rebuild now", past the
+    // mid-edit guard; it is not a change of subject.
+    const subject = `${this.store.slide.id}|${this.store.selection.join()}`
+    const same = subject === this.subject
+    this.subject = subject
+    const scrollTop = same ? this.host.scrollTop : 0
     // an action inside the panel rebuilds it: remember where focus was
-    const spot = force ? null : this.focusSpot()
+    const spot = same ? this.focusSpot() : null
     this.host.innerHTML = ''
     const els = this.store.selectedElements
     if (els.length === 0) buildSlidePanel(this)

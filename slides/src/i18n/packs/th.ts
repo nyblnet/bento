@@ -1367,4 +1367,5 @@ export const strings: Catalog = {
   "or": "หรือ",
   "Categories": "หมวดหมู่",
   "Lock or unlock": "ล็อกหรือปลดล็อก",
+  "Each has its own fill layers — select one to edit": "แต่ละรายการมีเลเยอร์สีพื้นของตัวเอง — เลือกหนึ่งรายการเพื่อแก้ไข",
 }

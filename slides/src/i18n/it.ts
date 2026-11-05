@@ -1353,4 +1353,5 @@ export const it: Catalog = {
   "or": "o",
   "Categories": "Categorie",
   "Lock or unlock": "Blocca o sblocca",
+  "Each has its own fill layers — select one to edit": "Ognuno ha i propri livelli di riempimento — selezionane uno per modificarlo",
 }

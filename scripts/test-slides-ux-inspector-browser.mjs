@@ -243,6 +243,17 @@ try {
     ok(await p.locator('.ed-props .ed-layer-blend').first().isVisible(), 'a right-click on the row shows the blend')
     await ctx.close()
   })
+  await run(async () => {
+    // a stack is the element's own: a multi-selection whose fills differ keeps
+    // its Fill header and says why there is nothing to edit, never vanishes
+    const st = shape('s', 100, { fills: [{ color: '#ff0000' }, { color: '#00ff00', blend: 'multiply' }], fill: '#00ff00' })
+    const { ctx, p, select } = await open('en-US', 1440, [st, shape('t', 500)])
+    await select('s', 't')
+    const note = p.locator('.ed-props .ed-section[data-key="Fill"] + .ed-section-body .ed-fill-differ')
+    ok(await note.isVisible() && (await note.textContent()) === 'Each has its own fill layers — select one to edit' && !(await p.locator('.ed-props [data-shared="fill"]').count()),
+      'differing fill stacks: the Fill header stays, with "Each has its own fill layers — select one to edit" and no shared field')
+    await ctx.close()
+  })
 
   console.log('\n7. keyboard\n')
   await run(async () => {
@@ -261,6 +272,25 @@ try {
     await p.keyboard.press('ArrowDown'); await p.waitForTimeout(250)
     ok(await p.evaluate(() => document.activeElement?.getAttribute('aria-label')) === 'Left', `↓ moves a whole row (now ${await p.evaluate(() => document.activeElement?.getAttribute('aria-label'))})`)
     ok(errors.length === 0, `no page errors${errors.length ? `: ${errors.join(' | ')}` : ''}`)
+    await ctx.close()
+  })
+  await run(async () => {
+    // a shadow just added hands focus to its chip; → there is the chip's (the
+    // next preset), never the canvas's nudge of the card
+    const { ctx, p, select, el } = await open('en-US', 1440, [shape('c', 100)])
+    await select('c')
+    // a plain button owns no arrows: after a + (focus stays on it), → nudges
+    await p.click('.ed-props .ed-section[data-key="Fill"] button[aria-label="Add fill layer"]'); await p.waitForTimeout(250)
+    const onPlus = await p.evaluate(() => document.activeElement?.getAttribute('aria-label'))
+    await p.keyboard.press('ArrowRight'); await p.waitForTimeout(250)
+    const x1 = (await el('c')).x
+    ok(onPlus === 'Add fill layer' && x1 === 101, `→ on a section's + (focus on "${onPlus}") still nudges the card (x ${x1})`)
+    await p.click('.ed-props .ed-section[data-key="Shadow"] button[aria-label="Add shadow"]'); await p.waitForTimeout(250)
+    const s0 = JSON.stringify((await el('c')).shadow)
+    await p.keyboard.press('ArrowRight'); await p.waitForTimeout(250)
+    const c = await el('c')
+    ok(c.x === x1 && JSON.stringify(c.shadow) !== s0 && await p.evaluate(() => !!document.activeElement?.closest('.ed-props')),
+      `→ on a new shadow's chip moves to the next preset and leaves the card where it is (x ${c.x}, focus ${await p.evaluate(() => document.activeElement?.className)})`)
     await ctx.close()
   })
 

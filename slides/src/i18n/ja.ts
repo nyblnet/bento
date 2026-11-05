@@ -1353,4 +1353,5 @@ export const ja: Catalog = {
   "or": "または",
   "Categories": "カテゴリ",
   "Lock or unlock": "ロック／ロック解除",
+  "Each has its own fill layers — select one to edit": "それぞれに独自の塗りレイヤーがあります — 1つを選択して編集",
 }

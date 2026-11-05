@@ -1373,4 +1373,5 @@ export const strings: Catalog = {
   "or": "या",
   "Categories": "श्रेणियाँ",
   "Lock or unlock": "लॉक या अनलॉक करें",
+  "Each has its own fill layers — select one to edit": "हर एक की अपनी फ़िल लेयर हैं — संपादित करने के लिए एक चुनें",
 }

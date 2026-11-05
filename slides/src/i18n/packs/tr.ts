@@ -1364,4 +1364,5 @@ export const strings: Catalog = {
   "or": "veya",
   "Categories": "Kategoriler",
   "Lock or unlock": "Kilitle veya kilidi aç",
+  "Each has its own fill layers — select one to edit": "Her birinin kendi dolgu katmanları var — düzenlemek için birini seçin",
 }

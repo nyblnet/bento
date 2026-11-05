@@ -1389,4 +1389,5 @@ export const strings: Catalog = {
   "Paste an image or text straight onto the canvas with ⌘V.": "Suraty ýa-da teksti ⌘V bilen göni kanwasa goýuň.",
   "Copy a slide (⌘C with nothing selected) and paste it into another Bento deck.": "Slaýdy göçüriň (hiç zat saýlanmadyk wagty ⌘C) we ony başga bir Bento prezentasiýasyna goýuň.",
   "Make a chart from a table and it stays linked — edit the table, the chart updates.": "Tablisadan diagramma düzüň, ol baglanyşykly galýar — tablisany üýtgetseňiz, diagramma täzelenýär.",
+  "Each has its own fill layers — select one to edit": "Her biriniň öz doldurma gatlaklary bar — üýtgetmek üçin birini saýlaň",
 }

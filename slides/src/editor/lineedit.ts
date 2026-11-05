@@ -62,6 +62,24 @@ export function setPathAnchors(el: ShapeElement, pts: Pt[], opts: { closed?: boo
     : anchorsToPath(rel)) + (opts.closed ? ' Z' : '')
 }
 
+/** A compound path — more than one subpath (a boolean's outline and its hole,
+ *  an imported SVG with several contours). The line and curve editors hold
+ *  one contour, so neither attaches: it is selected and moved as a box. */
+export const isCompoundPath = (d?: string) => (d?.match(/m/gi)?.length ?? 0) > 1
+
+/** A body drag of a line or path editor: move the element by (dx, dy), as an
+ *  arrow nudge does. Never re-derive `d` — a boolean or imported path holds
+ *  several subpaths (an outline and its holes) that the editors' anchor list
+ *  would join into one. */
+export function moveShapeBy(store: Store, id: string, dx: number, dy: number): void {
+  store.commit(() => {
+    const el = store.element(id)
+    if (!el) return
+    el.x = rnd(el.x + dx)
+    el.y = rnd(el.y + dy)
+  })
+}
+
 export class LineEditor {
   private overlay: SVGSVGElement | null = null
   private elId = ''
@@ -90,7 +108,7 @@ export class LineEditor {
   /** Show handles for a line/path shape (idempotent — re-reads geometry). */
   attach(elId: string) {
     const el = this.store.element(elId) as ShapeElement | undefined
-    if (!el || !isLineLike(el)) return this.detach()
+    if (!el || !isLineLike(el) || isCompoundPath(el.d)) return this.detach()
     this.elId = elId
     this.kind = el.shape === 'path' ? 'path' : 'line'
     this.closed = this.kind === 'path' && pathIsClosed(el.d)
@@ -213,10 +231,11 @@ export class LineEditor {
     const node = this.elNode()
     if (node) node.style.opacity = '0.4'
     let moved = false
+    let dx = 0, dy = 0
     const move = (ev: MouseEvent) => {
       const p = this.toSlide(ev)
-      const dx = p.x - start.x
-      const dy = p.y - start.y
+      dx = p.x - start.x
+      dy = p.y - start.y
       moved = true
       this.pts = orig.map((o) => ({ x: o.x + dx, y: o.y + dy }))
       this.draw()
@@ -225,7 +244,7 @@ export class LineEditor {
       window.removeEventListener('mousemove', move)
       window.removeEventListener('mouseup', up)
       if (node) node.style.opacity = ''
-      if (moved) this.commit(null)
+      if (moved) { moveShapeBy(this.store, this.elId, dx, dy); this.attach(this.elId) }
     }
     window.addEventListener('mousemove', move)
     window.addEventListener('mouseup', up)

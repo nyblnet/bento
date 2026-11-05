@@ -121,6 +121,19 @@ try {
   await p.selectOption('.ed-props .ed-export-row select[aria-label="Format"]', 'svg'); await p.waitForTimeout(150)
   ok(await p.$eval('.ed-props .ed-export-row select[aria-label="Scale"]', (x) => x.disabled), 'an SVG has no scale to pick')
   await p.selectOption('.ed-props .ed-export-row select[aria-label="Format"]', 'png'); await p.waitForTimeout(150)
+  {
+    // a setting changed at the foot of a scrolled panel rebuilds it in place:
+    // the panel stays where it was (it jumped to the top, 507 → 0)
+    await p.setViewportSize({ width: 1600, height: 560 }); await p.waitForTimeout(200)
+    await p.locator('.ed-props .ed-export-btn').scrollIntoViewIfNeeded(); await p.waitForTimeout(150)
+    const top0 = await p.$eval('.ed-props', (x) => x.scrollTop)
+    await p.selectOption('.ed-props .ed-export-row select[aria-label="Scale"]', '2'); await p.waitForTimeout(150)
+    await p.selectOption('.ed-props .ed-export-row select[aria-label="Format"]', 'jpeg'); await p.waitForTimeout(150)
+    const top1 = await p.$eval('.ed-props', (x) => x.scrollTop)
+    ok(top0 > 100 && Math.abs(top1 - top0) < 2, `changing Scale and Format keeps the panel's scroll (${top0} → ${top1})`)
+    await p.selectOption('.ed-props .ed-export-row select[aria-label="Format"]', 'png'); await p.waitForTimeout(150)
+    await p.setViewportSize({ width: 1600, height: 1000 }); await p.waitForTimeout(200)
+  }
 
   console.log('\nframes and multi-selections\n')
   const words = (id, x, y, extra = {}) => ({ id, type: 'text', x, y, w: 160, h: 40, rotation: 0, opacity: 1, html: 'Hello', fontSize: 24, fontFamily: 'Inter', fontWeight: 400, color: '#111111', ...extra })

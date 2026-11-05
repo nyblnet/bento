@@ -93,6 +93,43 @@ try {
   }, res?.id)
   ok(!centreIsHole.centre && centreIsHole.corner, 'the hole is a hole: the centre misses the path, a corner hits it')
 
+  console.log('\na compound path is a box, not an anchor editor\n')
+  {
+    // a hole is a second subpath; the line/curve editors hold one contour, so
+    // neither attaches — Moveable's box resizes it, and d (both subpaths) stays
+    const ui = await p.evaluate(() => ({
+      anchors: !!document.querySelector('.ed-lineedit, .ed-bezedit'),
+      box: [...document.querySelectorAll('.moveable-control-box .moveable-control.moveable-direction')].filter((c) => c.getBoundingClientRect().width > 0).length,
+    }))
+    const se = p.locator('.moveable-control-box .moveable-control.moveable-se').first()
+    const h = await se.boundingBox()
+    if (h) {
+      await p.mouse.move(h.x + h.width / 2, h.y + h.height / 2); await p.mouse.down()
+      for (let i = 1; i <= 10; i++) await p.mouse.move(h.x + h.width / 2 + i * 6, h.y + h.height / 2 + i * 3)
+      await p.mouse.up(); await p.waitForTimeout(250)
+    }
+    const big = (await els()).find((e) => e.id === res.id)
+    const b = await p.locator(`.ed-stage-scale [data-el-id="${res.id}"]`).boundingBox()
+    await p.mouse.dblclick(b.x + 2, b.y + b.height / 2); await p.waitForTimeout(250)
+    const after2 = (await els()).find((e) => e.id === res.id)
+    ok(!ui.anchors && ui.box > 0 && big.w > res.w + 20 && big.d === res.d && after2.d === res.d,
+      `no anchor handles (${ui.anchors}), Moveable's box (${ui.box} handles); a resize (w ${res.w} → ${big.w}) and a double-click on its edge keep d, both subpaths (${(after2.d.match(/M/g) || []).length})`)
+    await p.keyboard.press(`${MOD}+z`); await p.waitForTimeout(250)
+  }
+
+  console.log('\na mouse drag moves it whole\n')
+  {
+    // the line/curve editor's body drag used to re-derive `d` from its anchor
+    // list, joining the hole's subpath onto the outline (a wedge rendered)
+    const b = await p.locator(`.ed-stage-scale [data-el-id="${res.id}"]`).boundingBox()
+    await p.mouse.move(b.x + 20, b.y + 20); await p.mouse.down()
+    for (let i = 1; i <= 12; i++) await p.mouse.move(b.x + 20 + i * 5, b.y + 20 + i * 3)
+    await p.mouse.up(); await p.waitForTimeout(250)
+    const moved = (await els()).find((e) => e.id === res.id)
+    ok(moved.d === res.d && moved.x > res.x + 20, `the drag moves x (${res.x} → ${moved.x}) and keeps d, hole and all (${(moved.d.match(/M/g) || []).length} subpaths)`)
+    await p.keyboard.press(`${MOD}+z`); await p.waitForTimeout(250)
+  }
+
   console.log('\nundo / redo\n')
   await p.keyboard.press(`${MOD}+z`); await p.waitForTimeout(250)
   ok(await ids() === 'under donut hole tx', `one ⌘Z gives both operands back (${await ids()})`)

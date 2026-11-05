@@ -24,7 +24,7 @@ import { derive, deriveMemory, type DeriveMemory } from '../derive'
 import { TokensPane } from './tokenspane'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
-import { fitTabNames, iconTab, slidingPill, tabBarNeed } from './inspector/controls'
+import { fitTabNames, iconTab, ownsArrows, slidingPill, tabBarNeed } from './inspector/controls'
 import { openCtxMenu, type CtxItem } from './ctxmenu'
 import { mountNotesPane } from './notespane'
 import { mountHints } from './hints'
@@ -3692,6 +3692,10 @@ export class Editor {
         }
         return
       }
+      // an arrow pressed on an inspector control that uses arrows (a picker,
+      // a chip) is that control's, never a slide walk or a nudge; on a plain
+      // button there (a +, a fold) it still nudges
+      if (ev.key.startsWith('Arrow') && ev.target instanceof Element && ev.target.closest('.ed-props') && ownsArrows(ev.target)) return
       // nothing selected → arrows walk slides (Left/Up = prev, Right/Down = next);
       // when an element IS selected they nudge it (branch below). inField already
       // returned above, so this never fires mid text/cell edit.
