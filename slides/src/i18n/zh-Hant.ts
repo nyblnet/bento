@@ -1353,4 +1353,5 @@ export const zhHant: Catalog = {
   "or": "或",
   "Categories": "類別",
   "Lock or unlock": "鎖定或解鎖",
+  "Fills differ — select one to edit": "填色各不相同 — 選取一個以編輯",
 }

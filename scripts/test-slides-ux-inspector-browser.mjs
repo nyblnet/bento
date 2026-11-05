@@ -243,6 +243,17 @@ try {
     ok(await p.locator('.ed-props .ed-layer-blend').first().isVisible(), 'a right-click on the row shows the blend')
     await ctx.close()
   })
+  await run(async () => {
+    // a stack is the element's own: a multi-selection whose fills differ keeps
+    // its Fill header and says why there is nothing to edit, never vanishes
+    const st = shape('s', 100, { fills: [{ color: '#ff0000' }, { color: '#00ff00', blend: 'multiply' }], fill: '#00ff00' })
+    const { ctx, p, select } = await open('en-US', 1440, [st, shape('t', 500)])
+    await select('s', 't')
+    const note = p.locator('.ed-props .ed-section[data-key="Fill"] + .ed-section-body .ed-fill-differ')
+    ok(await note.isVisible() && (await note.textContent()) === 'Fills differ — select one to edit' && !(await p.locator('.ed-props [data-shared="fill"]').count()),
+      'differing fill stacks: the Fill header stays, with "Fills differ — select one to edit" and no shared field')
+    await ctx.close()
+  })
 
   console.log('\n7. keyboard\n')
   await run(async () => {

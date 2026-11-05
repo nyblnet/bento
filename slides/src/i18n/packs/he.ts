@@ -1366,4 +1366,5 @@ export const strings: Catalog = {
   "or": "או",
   "Categories": "קטגוריות",
   "Lock or unlock": "נעילה או ביטול נעילה",
+  "Fills differ — select one to edit": "המילויים שונים — בחרו אחד כדי לערוך",
 }

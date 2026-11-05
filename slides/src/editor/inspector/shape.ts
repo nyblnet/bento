@@ -470,6 +470,14 @@ export function buildSharedPaint(p: PropsPanel, els: SlideElement[]) {
   } else if (texts && texts.every((x) => !x.colorGradient)) {
     section(p, t('Fill'))
     shared('color', texts.map((x) => x.color), (e, v) => { (e as TextElement).color = v; delete e.themeRefs?.color })
+  } else if ((shapes && closed) || texts) {
+    // a stack or gradient stays each element's own (never flattened): say so,
+    // where a missing Fill section read as a bug
+    section(p, t('Fill'))
+    const why = document.createElement('p')
+    why.className = 'ed-hint ed-keep ed-fill-differ'
+    why.textContent = t('Fills differ — select one to edit')
+    p.host.appendChild(why)
   }
   if (shapes && closed && shapes.every((s) => !s.strokes && !s.strokeGradient)) {
     const on = shapes.filter((s) => s.strokeWidth > 0 && parseColor(s.stroke).a > 0)

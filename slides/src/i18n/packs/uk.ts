@@ -1373,4 +1373,5 @@ export const strings: Catalog = {
   "or": "або",
   "Categories": "Категорії",
   "Lock or unlock": "Заблокувати або розблокувати",
+  "Fills differ — select one to edit": "Заливки відрізняються — виберіть одну, щоб змінити",
 }

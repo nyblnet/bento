@@ -1373,4 +1373,5 @@ export const strings: Catalog = {
   "or": "أو",
   "Categories": "الفئات",
   "Lock or unlock": "قفل أو إلغاء القفل",
+  "Fills differ — select one to edit": "التعبئات مختلفة — حدد واحدًا لتحريره",
 }

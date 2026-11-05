@@ -1382,4 +1382,5 @@ export const strings: Catalog = {
   "or": "o",
   "Categories": "Mga kategorya",
   "Lock or unlock": "I-lock o i-unlock",
+  "Fills differ — select one to edit": "Magkakaiba ang mga fill — pumili ng isa para i-edit",
 }

@@ -1383,4 +1383,5 @@ export const strings: Catalog = {
   "or": "یا",
   "Categories": "زمرے",
   "Lock or unlock": "لاک یا ان لاک کریں",
+  "Fills differ — select one to edit": "بھرائیاں مختلف ہیں — ترمیم کے لیے ایک منتخب کریں",
 }

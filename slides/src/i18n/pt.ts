@@ -1351,4 +1351,5 @@ export const pt: Catalog = {
   "or": "ou",
   "Categories": "Categorias",
   "Lock or unlock": "Bloquear ou desbloquear",
+  "Fills differ — select one to edit": "Os preenchimentos diferem — selecione um para editar",
 }
