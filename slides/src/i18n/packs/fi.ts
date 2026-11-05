@@ -1370,5 +1370,5 @@ export const strings: Catalog = {
   "or": "tai",
   "Categories": "Luokat",
   "Lock or unlock": "Lukitse tai avaa lukitus",
-  "Fills differ — select one to edit": "Täytöt eroavat — valitse yksi muokataksesi",
+  "Each has its own fill layers — select one to edit": "Jokaisella on omat täyttötasonsa — valitse yksi muokataksesi",
 }

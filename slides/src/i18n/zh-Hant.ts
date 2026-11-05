@@ -1353,5 +1353,5 @@ export const zhHant: Catalog = {
   "or": "或",
   "Categories": "類別",
   "Lock or unlock": "鎖定或解鎖",
-  "Fills differ — select one to edit": "填色各不相同 — 選取一個以編輯",
+  "Each has its own fill layers — select one to edit": "每個都有自己的填色圖層 — 選取一個以編輯",
 }

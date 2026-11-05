@@ -1359,5 +1359,5 @@ export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
   "or": ["または","或","或","o","ou","oder","o","ou"],
   "Categories": ["カテゴリ","类别","類別","Categorías","Catégories","Kategorien","Categorie","Categorias"],
   "Lock or unlock": ["ロック／ロック解除","锁定或解锁","鎖定或解鎖","Bloquear o desbloquear","Verrouiller ou déverrouiller","Sperren oder entsperren","Blocca o sblocca","Bloquear ou desbloquear"],
-  "Fills differ — select one to edit": ["塗りが異なります — 1つを選択して編集","填充各不相同 — 选择一个进行编辑","填色各不相同 — 選取一個以編輯","Los rellenos difieren — selecciona uno para editarlo","Les remplissages diffèrent — sélectionnez-en un pour le modifier","Füllungen unterscheiden sich — eine auswählen, um sie zu bearbeiten","I riempimenti sono diversi — selezionane uno per modificarlo","Os preenchimentos diferem — selecione um para editar"],
+  "Each has its own fill layers — select one to edit": ["それぞれに独自の塗りレイヤーがあります — 1つを選択して編集","每个都有自己的填充图层 — 选择一个进行编辑","每個都有自己的填色圖層 — 選取一個以編輯","Cada uno tiene sus propias capas de relleno — selecciona uno para editarlo","Chacun a ses propres calques de remplissage — sélectionnez-en un pour le modifier","Jedes hat eigene Füllebenen — eines auswählen, um es zu bearbeiten","Ognuno ha i propri livelli di riempimento — selezionane uno per modificarlo","Cada um tem suas próprias camadas de preenchimento — selecione um para editar"],
 }

@@ -476,7 +476,7 @@ export function buildSharedPaint(p: PropsPanel, els: SlideElement[]) {
     section(p, t('Fill'))
     const why = document.createElement('p')
     why.className = 'ed-hint ed-keep ed-fill-differ'
-    why.textContent = t('Fills differ — select one to edit')
+    why.textContent = t('Each has its own fill layers — select one to edit')
     p.host.appendChild(why)
   }
   if (shapes && closed && shapes.every((s) => !s.strokes && !s.strokeGradient)) {

@@ -1376,5 +1376,5 @@ export const strings: Catalog = {
   "or": "অথবা",
   "Categories": "বিভাগ",
   "Lock or unlock": "লক বা আনলক",
-  "Fills differ — select one to edit": "ফিল আলাদা — সম্পাদনা করতে একটি নির্বাচন করুন",
+  "Each has its own fill layers — select one to edit": "প্রত্যেকটির নিজস্ব ফিল লেয়ার আছে — সম্পাদনা করতে একটি নির্বাচন করুন",
 }

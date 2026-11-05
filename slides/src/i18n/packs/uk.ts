@@ -1373,5 +1373,5 @@ export const strings: Catalog = {
   "or": "або",
   "Categories": "Категорії",
   "Lock or unlock": "Заблокувати або розблокувати",
-  "Fills differ — select one to edit": "Заливки відрізняються — виберіть одну, щоб змінити",
+  "Each has its own fill layers — select one to edit": "Кожен має власні шари заливки — виберіть один, щоб змінити",
 }

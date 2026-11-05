@@ -1366,5 +1366,5 @@ export const strings: Catalog = {
   "or": "atau",
   "Categories": "Kategori",
   "Lock or unlock": "Kunci atau buka kunci",
-  "Fills differ — select one to edit": "Isian berbeza — pilih satu untuk diedit",
+  "Each has its own fill layers — select one to edit": "Setiap satu ada lapisan isian sendiri — pilih satu untuk diedit",
 }

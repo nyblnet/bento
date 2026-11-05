@@ -250,8 +250,8 @@ try {
     const { ctx, p, select } = await open('en-US', 1440, [st, shape('t', 500)])
     await select('s', 't')
     const note = p.locator('.ed-props .ed-section[data-key="Fill"] + .ed-section-body .ed-fill-differ')
-    ok(await note.isVisible() && (await note.textContent()) === 'Fills differ — select one to edit' && !(await p.locator('.ed-props [data-shared="fill"]').count()),
-      'differing fill stacks: the Fill header stays, with "Fills differ — select one to edit" and no shared field')
+    ok(await note.isVisible() && (await note.textContent()) === 'Each has its own fill layers — select one to edit' && !(await p.locator('.ed-props [data-shared="fill"]').count()),
+      'differing fill stacks: the Fill header stays, with "Each has its own fill layers — select one to edit" and no shared field')
     await ctx.close()
   })
 

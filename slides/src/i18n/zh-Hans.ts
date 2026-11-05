@@ -1353,5 +1353,5 @@ export const zhHans: Catalog = {
   "or": "或",
   "Categories": "类别",
   "Lock or unlock": "锁定或解锁",
-  "Fills differ — select one to edit": "填充各不相同 — 选择一个进行编辑",
+  "Each has its own fill layers — select one to edit": "每个都有自己的填充图层 — 选择一个进行编辑",
 }

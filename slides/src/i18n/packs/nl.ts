@@ -1361,5 +1361,5 @@ export const strings: Catalog = {
   "or": "of",
   "Categories": "Categorieën",
   "Lock or unlock": "Vergrendelen of ontgrendelen",
-  "Fills differ — select one to edit": "Vullingen verschillen — selecteer er één om te bewerken",
+  "Each has its own fill layers — select one to edit": "Elk heeft eigen vullagen — selecteer er één om te bewerken",
 }

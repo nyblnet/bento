@@ -1363,5 +1363,5 @@ export const strings: Catalog = {
   "or": "hoặc",
   "Categories": "Danh mục",
   "Lock or unlock": "Khóa hoặc mở khóa",
-  "Fills differ — select one to edit": "Các màu tô khác nhau — chọn một để chỉnh sửa",
+  "Each has its own fill layers — select one to edit": "Mỗi đối tượng có các lớp màu tô riêng — chọn một để chỉnh sửa",
 }
