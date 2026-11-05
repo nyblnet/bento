@@ -13,6 +13,7 @@
 
 import type { Store } from '../store'
 import type { ShapeElement } from '../model'
+import { moveShapeBy } from './lineedit'
 import { type BezNode, type Pt, handleLen, mirrorHandle, nearestT, parseBezier, serializeBezier, splitSegment } from './bezier'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -349,10 +350,11 @@ export class BezierEditor {
     const node = this.elNode()
     if (node) node.style.opacity = '0.4'
     let moved = false
+    let dx = 0, dy = 0
     const move = (ev: MouseEvent) => {
       const p = this.toSlide(ev)
-      const dx = p.x - start.x
-      const dy = p.y - start.y
+      dx = p.x - start.x
+      dy = p.y - start.y
       moved = true
       this.nodes = orig.map((o) => ({
         p: { x: o.p.x + dx, y: o.p.y + dy },
@@ -366,7 +368,7 @@ export class BezierEditor {
       window.removeEventListener('mousemove', move)
       window.removeEventListener('mouseup', up)
       if (node) node.style.opacity = ''
-      if (moved) this.commit(true)
+      if (moved) { moveShapeBy(this.store, this.elId, dx, dy); this.attach(this.elId) }
     }
     window.addEventListener('mousemove', move)
     window.addEventListener('mouseup', up)

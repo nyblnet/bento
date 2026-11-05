@@ -93,6 +93,19 @@ try {
   }, res?.id)
   ok(!centreIsHole.centre && centreIsHole.corner, 'the hole is a hole: the centre misses the path, a corner hits it')
 
+  console.log('\na mouse drag moves it whole\n')
+  {
+    // the line/curve editor's body drag used to re-derive `d` from its anchor
+    // list, joining the hole's subpath onto the outline (a wedge rendered)
+    const b = await p.locator(`.ed-stage-scale [data-el-id="${res.id}"]`).boundingBox()
+    await p.mouse.move(b.x + 20, b.y + 20); await p.mouse.down()
+    for (let i = 1; i <= 12; i++) await p.mouse.move(b.x + 20 + i * 5, b.y + 20 + i * 3)
+    await p.mouse.up(); await p.waitForTimeout(250)
+    const moved = (await els()).find((e) => e.id === res.id)
+    ok(moved.d === res.d && moved.x > res.x + 20, `the drag moves x (${res.x} → ${moved.x}) and keeps d, hole and all (${(moved.d.match(/M/g) || []).length} subpaths)`)
+    await p.keyboard.press(`${MOD}+z`); await p.waitForTimeout(250)
+  }
+
   console.log('\nundo / redo\n')
   await p.keyboard.press(`${MOD}+z`); await p.waitForTimeout(250)
   ok(await ids() === 'under donut hole tx', `one ⌘Z gives both operands back (${await ids()})`)
