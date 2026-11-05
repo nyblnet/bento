@@ -12239,9 +12239,9 @@ Supersedes, for slides, the 2026-09-26 ruling "the Save menu holds the
 file's commands". In use the Save ▾ list had grown to eleven rows of which
 three were saving; the rest were the document's (import, export, history,
 JSON) — and About mixed the app's settings with the document's properties.
-The maintainer: "too much responsibility on the save menu that is not related
-to save at all … some are configuration for the application itself, while
-others are related to the file."
+In the words of this change's author, it put "too much responsibility on the
+save menu that is not related to save at all … some are configuration for the
+application itself, while others are related to the file."
 
 - **Save ▾ — saving only**: Save a copy…, Duplicate as new deck…, Save with
   password… (or Change password… / Save without password). ⌘S is Save.
