@@ -338,6 +338,18 @@ function refuse(input: HTMLInputElement, typed: string) {
 }
 
 /**
+ * Does this focused control use the arrow keys itself? Fields (text, number,
+ * select), radio and tab groups (segmented and icon pickers, preset tiles —
+ * roving tabindex), sliders, spinbuttons, list options, and anything marked
+ * `data-arrows` (an effect chip stepping its presets). The editor leaves an
+ * arrow to such a control; a plain button — a +, a section's fold — owns
+ * none, and there → still nudges the selection. The one place this is said.
+ */
+export function ownsArrows(el: Element): boolean {
+  return !!el.closest('input:not([type=checkbox], [type=radio], [type=button], [type=color]), textarea, select, [contenteditable="true"], [role=radio], [role=tab], [role=slider], [role=spinbutton], [role=option], [data-arrows]')
+}
+
+/**
  * One tab stop for a group of radios or tabs (roving tabindex): Tab lands on
  * the chosen one, the arrows (Home/End) move to and choose a neighbour, as the
  * WAI-ARIA radio-group and tabs patterns ask. Mirrored in RTL.

@@ -121,6 +121,7 @@ function effectChip(p: PropsPanel, key: string, label: string, paint: (swatch: H
     else openFx.add(key)
     p.rebuild(true)
   })
+  if (step) chip.dataset.arrows = '' // controls.ts ownsArrows
   if (step) chip.addEventListener('keydown', (e) => {
     const back = getComputedStyle(chip).direction === 'rtl' ? 'ArrowRight' : 'ArrowLeft'
     const by = e.key === back || e.key === 'ArrowUp' ? -1 : e.key.startsWith('Arrow') ? 1 : 0

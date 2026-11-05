@@ -279,11 +279,17 @@ try {
     // next preset), never the canvas's nudge of the card
     const { ctx, p, select, el } = await open('en-US', 1440, [shape('c', 100)])
     await select('c')
+    // a plain button owns no arrows: after a + (focus stays on it), → nudges
+    await p.click('.ed-props .ed-section[data-key="Fill"] button[aria-label="Add fill layer"]'); await p.waitForTimeout(250)
+    const onPlus = await p.evaluate(() => document.activeElement?.getAttribute('aria-label'))
+    await p.keyboard.press('ArrowRight'); await p.waitForTimeout(250)
+    const x1 = (await el('c')).x
+    ok(onPlus === 'Add fill layer' && x1 === 101, `→ on a section's + (focus on "${onPlus}") still nudges the card (x ${x1})`)
     await p.click('.ed-props .ed-section[data-key="Shadow"] button[aria-label="Add shadow"]'); await p.waitForTimeout(250)
     const s0 = JSON.stringify((await el('c')).shadow)
     await p.keyboard.press('ArrowRight'); await p.waitForTimeout(250)
     const c = await el('c')
-    ok(c.x === 100 && JSON.stringify(c.shadow) !== s0 && await p.evaluate(() => !!document.activeElement?.closest('.ed-props')),
+    ok(c.x === x1 && JSON.stringify(c.shadow) !== s0 && await p.evaluate(() => !!document.activeElement?.closest('.ed-props')),
       `→ on a new shadow's chip moves to the next preset and leaves the card where it is (x ${c.x}, focus ${await p.evaluate(() => document.activeElement?.className)})`)
     await ctx.close()
   })
