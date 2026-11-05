@@ -62,6 +62,11 @@ export function setPathAnchors(el: ShapeElement, pts: Pt[], opts: { closed?: boo
     : anchorsToPath(rel)) + (opts.closed ? ' Z' : '')
 }
 
+/** A compound path — more than one subpath (a boolean's outline and its hole,
+ *  an imported SVG with several contours). The line and curve editors hold
+ *  one contour, so neither attaches: it is selected and moved as a box. */
+export const isCompoundPath = (d?: string) => (d?.match(/m/gi)?.length ?? 0) > 1
+
 /** A body drag of a line or path editor: move the element by (dx, dy), as an
  *  arrow nudge does. Never re-derive `d` — a boolean or imported path holds
  *  several subpaths (an outline and its holes) that the editors' anchor list
@@ -103,7 +108,7 @@ export class LineEditor {
   /** Show handles for a line/path shape (idempotent — re-reads geometry). */
   attach(elId: string) {
     const el = this.store.element(elId) as ShapeElement | undefined
-    if (!el || !isLineLike(el)) return this.detach()
+    if (!el || !isLineLike(el) || isCompoundPath(el.d)) return this.detach()
     this.elId = elId
     this.kind = el.shape === 'path' ? 'path' : 'line'
     this.closed = this.kind === 'path' && pathIsClosed(el.d)

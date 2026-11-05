@@ -13,7 +13,7 @@
 
 import type { Store } from '../store'
 import type { ShapeElement } from '../model'
-import { moveShapeBy } from './lineedit'
+import { isCompoundPath, moveShapeBy } from './lineedit'
 import { type BezNode, type Pt, handleLen, mirrorHandle, nearestT, parseBezier, serializeBezier, splitSegment } from './bezier'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -87,7 +87,7 @@ export class BezierEditor {
 
   attach(elId: string) {
     const el = this.store.element(elId) as ShapeElement | undefined
-    if (!el || !isCurve(el)) return this.detach()
+    if (!el || !isCurve(el) || isCompoundPath(el.d)) return this.detach()
     this.load(el)
     if (!this.overlay) {
       const svg = document.createElementNS(SVG_NS, 'svg')
