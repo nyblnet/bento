@@ -204,6 +204,26 @@ function findNamed(node: XNode, name: string): XNode | null {
 }
 
 /**
+ * What every element carries beyond its own writer: `hidden` → cNvPr
+ * hidden="1" (PowerPoint's own hide, same meaning: in the file, not shown),
+ * `alt` → cNvPr descr (its alt text), flipX/flipY → a:xfrm flipH/flipV where
+ * the node has an a:xfrm and a flip means the same thing there (shapes and
+ * pictures). Text, charts, tables and frames mirror differently or not at
+ * all in OOXML, so their flip is reported instead.
+ */
+function decorate(node: XNode, el: { type: string; hidden?: boolean; alt?: string; flipX?: boolean; flipY?: boolean }, report: Report, where: string): void {
+  const cNvPr = findNamed(node, 'p:cNvPr')
+  if (cNvPr) {
+    if (el.hidden) cNvPr.attrs = { ...cNvPr.attrs, hidden: 1 }
+    if (el.alt) cNvPr.attrs = { ...cNvPr.attrs, descr: el.alt }
+  }
+  if (!el.flipX && !el.flipY) return
+  const xfrm = el.type === 'shape' || el.type === 'image' || el.type === 'svg' ? findNamed(node, 'a:xfrm') : null
+  if (xfrm) xfrm.attrs = { ...xfrm.attrs, ...(el.flipX ? { flipH: 1 } : {}), ...(el.flipY ? { flipV: 1 } : {}) }
+  else report.add('approximated', 'flip-dropped', where, `a mirrored ${el.type} is exported unmirrored`)
+}
+
+/**
  * The per-slide p:bg. Bento backgrounds are css — overwhelmingly a solid
  * colour; anything else (a gradient string, an image url) flattens to the
  * theme background and is reported, #88's 'slide-background-simplified'.
@@ -433,7 +453,9 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
       else stats.editable++
     }
 
-    for (const el of slide.elements) {
+    for (const raw of slide.elements) {
+      const el = visiblePaint(raw)
+      const first = children.length
       if (hasStaticFx(el)) {
         // once per slide via the Report's (code, where) folding — #88's rule
         report.add('approximated', 'presentation-effects-static', where,
@@ -526,6 +548,7 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
           report.add('dropped', 'element-unsupported', where,
             `element type '${(el as { type?: string }).type}' has no pptx mapping`)
       }
+      for (const n of children.slice(first)) if (typeof n !== 'string') decorate(n, el as Parameters<typeof decorate>[1], report, where)
     }
 
     // Slide-level features with no mapping, #88's codes: Morph is a PowerPoint
@@ -632,4 +655,26 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
   if (problems.length) throw new Error(`the PowerPoint package failed its self-check (a bug in the writer): ${problems.join('; ')}`)
   const bytes = await writeZip(entries, opts.at ? { at: opts.at } : {})
   return { bytes, report: report.build(), stats }
+}
+
+/**
+ * Paint switched off with the inspector's eye (`fillHidden`, `strokeHidden`,
+ * `shadowHidden`, `blurHidden`) is not exported — it is kept in the deck,
+ * not drawn. The writer never imports an app, so this mirrors
+ * slides/src/model.ts visiblePaint.
+ */
+function visiblePaint<E extends object>(el: E): E {
+  const f = el as Record<string, unknown>
+  if (!f.fillHidden && !f.strokeHidden && !f.shadowHidden && !f.blurHidden) return el
+  const e: Record<string, unknown> = { ...f }
+  if (e.type === 'shape') {
+    if (f.fillHidden || (f.strokeHidden && e.shape === 'line')) { e.fill = 'transparent'; delete e.fillGradient; delete e.fills }
+    if (f.strokeHidden) { e.strokeWidth = 0; delete e.strokes; delete e.strokeGradient }
+  } else if (e.type === 'text') {
+    if (f.fillHidden) { e.color = 'transparent'; delete e.colorGradient }
+    if (f.strokeHidden) delete e.textStroke
+  }
+  if (f.shadowHidden) delete e.shadow
+  if (f.blurHidden) { delete e.blur; delete e.backdropFilter }
+  return e as unknown as E
 }

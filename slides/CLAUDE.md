@@ -19,7 +19,19 @@ anim, charts, i18n, sync), shared by every app.
   into the row of chips. Verified by measurement, not belief: on that morph
   arrival all four tiles travel, 13 elements stagger in, and the count-up runs
   0→100%. Charts slide + hidden pie state demo the bar⇄pie data morph, speaker
-  notes double as the feature tour. Gotchas learned
+  notes double as the feature tour. It is also the reference for how a deck is BUILT:
+  every layer named, background/bokeh/furniture/milestones grouped, auto-layout
+  frames wherever things line up (logo, anatomy card, stats, panels, cards),
+  three components (Key hint, Button — its copies override label or paint —
+  and Feature card). Colours are the THEME, not tokens: seven palette slots
+  (paper, ink, panel, mist, peach, steel, deep peach) and every shade a
+  lightness shift of its family's slot (`accent2 -19%`, alpha kept), so
+  re-colouring a slot carries its tints and gradients; `bindTheme` finds each
+  shift at build time (FAMILY). Tokens hold only what is not a colour: five
+  radii, three borders, three spacings, three shadows, three fonts, the kicker
+  size (18 in all).
+  `starterDoc()` ends with a derive pass so the shipped doc is a fixed point;
+  `scripts/test-slides-starterdeck.ts` guards that and the structure. Gotchas learned
   building it: line shapes take their color from `fill` (not `stroke` — the
   stroke attr is what morphs tween), and the renderer draws lines horizontally
   across the element box (vertical lines = rotation), keep 96px side margins
@@ -71,8 +83,8 @@ anim, charts, i18n, sync), shared by every app.
   `docContentKey` (content minus volatile modified/collab fields) to the loaded
   doc; a mismatch shows a Restore/Discard banner. Encrypted decks are NEVER
   snapshotted to IndexedDB (plaintext-to-disk) — their file write-back stays
-  encrypted. readonly players skip autosave. Version history UI in the About
-  dialog; restore = `store.replaceDoc` (undoable). Keyed by docId, so recovery
+  encrypted. readonly players skip autosave. Version history UI from File ▸
+  Version history…; restore = `store.replaceDoc` (undoable). Keyed by docId, so recovery
   needs a stable docId (saved files) — the fresh-each-load anonymous demo won't
   cross-reload-recover, by design.
 - `src/render.ts` — single model→DOM renderer shared by editor canvas, thumbnails, and
@@ -83,18 +95,21 @@ anim, charts, i18n, sync), shared by every app.
   `morphId`), but an optional `morphId` re-targets the pairing WITHOUT mutating
   `id` — so two independently-created elements on different slides can morph. This
   one line is the whole engine change; everything downstream reads `data-flip-id`.
-  Edited in the panel's Morph section (`panels.ts buildMorphProps`): a "Morph id"
-  field (writing the element's own id clears the override) + a "Pair with" picker
-  that adopts another slide element's key; both reject a key that would collide
-  with another element's effective key on the SAME slide (present.ts maps by flip
-  id, so same-slide dupes would break pairing).
+  Edited in the panel's Morph section (`inspector/animate.ts buildMorphProps`): a
+  status line ("Pairs with: Slide 2 · Revenue card", or "this slide uses Fade" +
+  Use Morph), the "Morph from the slide before" switch, a "Morph name" field
+  (blank = automatic; a rename carries to the partners on the neighbouring
+  slides) and a "Morph with" picker (slide before first, by Layers names,
+  type-to-filter). Status, switch, layer badge and canvas ghost all read
+  `editor/morph.ts morphPartners` — one truth. Keys never collide on one slide
+  (present.ts maps by flip id, so same-slide dupes would break pairing).
   **Dynamic fields (v0.9.12, doc-props v1.0.2)**: text resolves `{{page}}`,
   `{{pages}}`, `{{title}}`, `{{date}}`, `{{time}}` plus the document-property
   tokens `{{author}}`, `{{company}}`, `{{subject}}`, `{{event}}` at render time
   (`resolveFields`); page/pages take a zero-pad width (`{{page:2}}`→"06"). The
   doc-props live in optional `doc.meta` (`{author,company,subject,event,keywords}`
   — additive, backward-compatible; old files lack it and tokens resolve empty)
-  and are edited in the About dialog's "Document properties" section (title stays
+  and are edited in File ▸ Document properties… (its own dialog; title stays
   top-level). `renderSlide` auto-fills `RenderOpts.fields` via `fieldContext(doc,
   slide)` (page = 1-based position among NON-state slides).
   The MODEL stores the raw token; only output is resolved, so inserting/removing
@@ -112,7 +127,8 @@ anim, charts, i18n, sync), shared by every app.
   and Bento payloads (insert elements on the current slide / slides after it, fresh
   ids). Pasted slides drop `stateOf`. Guarded to skip when a text field is focused.
   Also v0.9.9: a `?` help overlay (editor.openHelp — shortcuts + tips, topbar ?
-  button) and richer toolbar tooltips.
+  button) and one shared hint for the chrome (editor/hints.ts: on pointer
+  only, the title handed back, shortcut chips).
 - `src/anim.ts` — in-house animation engine (no GSAP): to/fromTo tweens with
   channels opacity/y/scale/color/strokeDashoffset/attr{}/motionPath, delay/
   repeat/yoyo/ease, per-channel overwrite, killTweensOf/getTweensOf, manual
@@ -207,8 +223,8 @@ anim, charts, i18n, sync), shared by every app.
   home (v0.9.1 fix — v0.9.0 connected every visitor). "Stop sharing" opts
   out; Offline mode hard-blocks regardless.
 - `src/update.ts` — signed self-update: checks a release manifest at LAUNCH
-  by default (localStorage 'bento-auto-check'='off' disables; toggle in the
-  About dialog; found updates badge the topbar sync button) and on demand via
+  by default (localStorage 'bento-auto-check'='off' disables; toggle in
+  Preferences (⚙, ⌘,); found updates badge the topbar sync button) and on demand via
   About/topbar (`bento.page`; dev override localStorage 'bento-update-url'),
   verifies ECDSA P-256 signature against the embedded
   PUBLIC_KEY_JWK + sha256 of the fetched shell + version monotonicity, then
@@ -224,7 +240,7 @@ anim, charts, i18n, sync), shared by every app.
   {placeholder} interpolation, catalogs compiled in (ja, zh-Hans, zh-Hant, es,
   fr, de, it — 7 locales + English fallback = 8 UI languages);
   locale follows the VIEWER (navigator.language; localStorage 'bento-lang'
-  override; picker in About rebuilds the workspace). Language never enters the
+  override; picker in Preferences rebuilds the workspace). Language never enters the
   document format. select() localizes DISPLAY labels only (values stay model
   words). GOTCHAS: never call t() in module-level consts (frozen at import —
   translate at render time); keys must match source EXACTLY (validate with the
@@ -261,7 +277,7 @@ anim, charts, i18n, sync), shared by every app.
   `symbolSize`. Legend measurement treats CJK characters as full-width so
   localized series names do not overlap.
   **Visual
-  chart editor** (panels.ts buildChartProps): structured UI over the option —
+  chart editor** (inspector/chart.ts buildChartProps): structured UI over the option —
   Type, Legend + Second-axis toggles, a Series list (name · bar/line · left/right
   axis · colour · remove), per-axis min/max, and an editable categories×series
   data grid (add/remove rows keep xAxis.data + every series.data in lockstep);
@@ -293,7 +309,7 @@ anim, charts, i18n, sync), shared by every app.
   (updateTableHandles/startColResize — live DOM update during drag, commit on
   release; needs real-mouse QA like Moveable). Panel: row/col steppers, header
   toggle, style presets (Lined/Zebra/Boxed/Minimal), colours, and a
-  table→chart bridge (buildTableProps/tableToChart: first column = labels,
+  table→chart bridge (inspector/table.ts buildTableProps/tableToChart: first column = labels,
   first numeric column = series). Morphs as a BOX (cell content does not
   morph); under collab `rows` is a whole-value LWW register (concurrent
   different-cell edits are last-writer-wins — documented limitation).
@@ -311,7 +327,7 @@ anim, charts, i18n, sync), shared by every app.
   `startMediaIn`/`pauseMediaIn` play flagged clips (`data-autoplay="1"`) on
   slide-enter and pause on exit/teardown; browsers need `muted` for video
   autoplay so `defaultMedia` mutes video. Panel 'Source & playback'
-  (buildMediaProps): embedded/linked status+size, Choose/Replace file, URL,
+  (inspector/media.ts buildMediaProps): embedded/linked status+size, Choose/Replace file, URL,
   controls/autoplay/loop/muted, and (video) fit/corner/poster.
 - **Diagram philosophy**: complex diagrams are ordinary Bento elements (rects, texts,
   `path` shapes) with groups — interactivity = linked state slides + morph (filters,
@@ -369,7 +385,7 @@ anim, charts, i18n, sync), shared by every app.
   are two SEPARATE gestures and neither steals the other's activation. That is
   the whole fix for the macOS bug where a popup opened *after* fullscreen got
   trapped in the slides' exclusive fullscreen Space on the wrong monitor — open
-  it FIRST, drag it to the second screen, then present (the Slide-panel notes
+  it FIRST, drag it to the second screen, then present (the speaker-notes pane's
   hint says this, and warns on macOS via `isMacOS()`). Present closes a window it
   opened itself on exit; an ADOPTED (editor-owned) window is left open and reset
   to an idle placeholder (`speakerIdleBody`). A 1s poll (`watchSpeaker`) clears
@@ -386,6 +402,13 @@ anim, charts, i18n, sync), shared by every app.
   "Sync from parent" (id-lineage merge — generators must emit deterministic
   element ids for it and for cross-state morphs); slide deletion cascades states
   and clears inbound links after confirm; `[`/`]` collapse the side panels.
+- **Keys are commands**: every keyed editor action is one entry in the
+  `commands` list (editor.ts; the type, `dispatch`, `titleFor` and the ⌘K
+  palette live in editor/commands.ts). keydown dispatches through it in list
+  order; topbar tooltips, the insert buttons' letter badges, the element
+  menu's hints and the ? sheet's one-command rows read their keys from it.
+  ⌘C, Delete/Backspace, the arrows and Esc stay hand-coded in the keydown
+  handler because they branch on canvas state.
 - **Panel accordion**: every `.ed-section` header is retrofitted into a
   collapsible group after each rebuild (panels.applyAccordion) — open state
   persisted per title in localStorage; Presenting/Interactivity/Layout
@@ -434,7 +457,7 @@ anim, charts, i18n, sync), shared by every app.
   a fork `snap` frame carries its state to peers (mergeSnapshot) — merge is
   two-way, verified under partition. hello replies include a `need` (ops
   minted before connecting flow back); onRelayReady re-sends log ops the
-  room's replay lacked. "Duplicate as new deck…" (About) = identity fork:
+  room's replay lacked. "Duplicate as new deck…" (Save ▾) = identity fork:
   new docId + fresh creds, never syncs with its ancestor. Relay:
   `server/sync-worker/` (blind DO, ciphertext-only storage — verified;
   `npx wrangler dev --port 8787` + localStorage 'bento-sync-url' for local
@@ -529,7 +552,7 @@ anim, charts, i18n, sync), shared by every app.
   the mark and the title — and an iPhone SE (or any iPhone with Display Zoom
   on) is 320px. `.ed-root` is `overflow: hidden` so a wide bar can never become
   document scroll, so the excess was simply CUT OFF: ⋯ — which on a phone
-  carries Redo, Comment, PDF, Share, Language, Help and the whole save-as list
+  carries Redo, Comment, Share, the app cluster, Print and the Save and File lists
   — sat at x=356 on a 320px screen and could not be reached at all (measured,
   not inferred). Hiding text is still the strategy and still does all the work;
   scrolling is only the floor beneath it, for the widths where the fold has
@@ -558,19 +581,70 @@ anim, charts, i18n, sync), shared by every app.
   aspect). Size changes reframe the canvas, never rescale elements.
   FULLSCREEN paints only the fullscreened element's subtree — anything
   body-mounted (chart tooltips!) must reparent into
-  document.fullscreenElement while it's active. Save is a dropdown: copy (identity-keeping invite) / new
-  deck (fresh identity) / template. "Live" button popover: name field,
+  document.fullscreenElement while it's active. **The bar's three kinds**
+  (DECISIONS 2026-10-30): Save ▾ holds only the ways to SAVE (a copy, a new
+  deck, with/without password); the wordmark opens the FILE menu — what acts
+  on the document (start from scratch, import, Export: print/PDF ⌘P, images,
+  PowerPoint; version history, document properties, compress pictures,
+  Advanced: the JSON round-trip; About); the corner app cluster — ⌨ shortcuts
+  (?), Help (guide, what's new, ask), ⚙ Preferences (⌘,: appearance,
+  language, update check, shrink photos, offline) — is the APP, never the
+  document. Print stays a visible bar button too. About is only about. "Live" button popover: name field,
   collaborator list (click follows), join/leave toasts. Deck buttons use
   ONE invisible hit-rect above button+label (hard-won #7) — never put
   `link` on both a rect and its label text (two mismatched hover pills).
-  Alt/Option-click digs through overlapping elements (capture-phase, beats
-  Moveable's control box). Fill/stroke colors carry alpha (color input + % pair,
-  rgba round-trip); shapes support `fillGradient` (linear, CSS-convention angle,
-  multi-stop) — rendered as per-instance svg `<defs>` gradients (unique ids:
-  url(#…) refs are document-global across canvas/thumbs/present). Arrange kit in
-  the panel: align/distribute/z-step + Group (⌘G/⇧⌘G — `groupId`, distinct from
-  presentation `group`; click selects the group, Alt-click reaches a member;
-  duplicate remaps groupIds). Text editing supports ⌘B/I/U plus markdown
+  Picking (canvas.ts): Alt/Option-click digs through overlapping elements
+  (decided in Moveable's end handlers, so a press on a handle of a small label
+  that does not move still digs); ⌘/Ctrl-click selects exactly the element
+  under the pointer, inside a group (one 3px dead zone shared with the ⌘-drag
+  duplicate, so a wobble is a click, never a hidden copy); Shift-click inside a
+  multi-selection's box toggles the element under it; the right-click menu
+  lists every element under the pointer ("Select …"). A group is ENTERED by
+  ⌘-click, Alt-dig, a member's layer row or — as a frame is — a double-click
+  on the whole group (`enteredGroup`; a component copy is a group): clicks and
+  Shift-clicks then pick members until the selection leaves the group, and Esc
+  steps out a level (frame child → frame → whole group → nothing).
+  Alt-HOVER measures from the selection to the element under the pointer
+  (measure-geom.ts; an overlay in .ed-stage-scale, pointer-events none,
+  inspection only). Fill/stroke colors carry alpha (swatch · hex · % field,
+  rgba round-trip; the swatch opens our own colour popover — inspector/
+  colorpopover.ts: saturation/hue, opacity, HEX/RGB/HSL/OKLCH, eyedropper,
+  theme and on-slide swatches — driving the same hidden colour input as the
+  inline row; a linked colour shows its slot name until detached); shapes
+  support `fillGradient` (linear, CSS-convention angle, multi-stop;
+  `kind:'radial'` + cx/cy/r; aimed by a canvas handle, gradientoverlay.ts) — rendered as per-instance svg `<defs>`
+  gradients (unique ids: url(#…) refs are document-global across
+  canvas/thumbs/present). Inspector: `panels.ts` is the PropsPanel
+  controller (rebuild, tabs, accordion, dispatch, public verbs); each
+  section's builders live in `editor/inspector/*.ts` as functions taking the
+  panel. Format | Animate | Interact tabs; Format opens with a header-less
+  block (align/order toolbar, blend · opacity, W · padlock · H, X Y, rotation,
+  radius), then the kind's section, Fill and Stroke (each a stack of layers,
+  stacks.ts), Shadow, Blur (optional, added/removed from their header's
+  + / −), Auto layout (frames, layout.ts), Layout (layout role, explained)
+  and Export at the foot (PNG 1×/2×, SVG, Copy as JSON, contrast, alt text).
+  Numeric fields are text spinbuttons: they take arithmetic
+  (inspector/numexpr.ts, never eval), show Mixed on a multi-selection (an
+  edit there is a per-element delta), and scrub from their label under
+  pointer lock, held to their min/max. The side column is Slides | Layers |
+  Tokens (tokenspane.ts: design tokens and components) — the ONE home for the
+  deck's colours: its Colors group leads with the theme colours as built-in
+  tokens (+ adds a palette slot, − removes an optional one; they write the
+  palette), then the deck's own; names and values are text that edits in
+  place. The slide panel's Theme section only links there; code colours have
+  their own section, shown when the deck has code. Binding any field to a
+  token or theme colour goes through one picker (inspector/tokenpicker.ts:
+  search, Theme first, tokens grouped by dotted name, actions at the foot);
+  a bound field shows a pill that reopens it. Both bars' tabs are one icon-tab
+  component (controls.ts fitTabNames/iconTab): the chosen tab always shows its
+  name, the others all do or none do, and a panel never resizes below the
+  width its tabs need (editor.ts panelMin); layer rows carry a
+  padlock (`locked`) and an eye (`hidden`); layer rows and
+  group rows rename in place (double-click or Rename) — `name` / `groupName`,
+  display only. Group (⌘G/⇧⌘G — `groupId`, distinct from presentation
+  `group`; click selects the group, Alt-click reaches a member; duplicate,
+  paste and ⌘-drag remap groupIds; ungroup drops groupName). Speaker notes
+  live in a pane under the canvas (notespane.ts), resized from its top edge. Text editing supports ⌘B/I/U plus markdown
   autoformat (editor/markdown.ts: **bold** *italic* `code` ~~strike~~ and "- "
   bullets collapse as typed — mind contentEditable NBSPs and stale
   Selection offsets after DOM surgery; pasted plain text converts too).
@@ -580,7 +654,8 @@ anim, charts, i18n, sync), shared by every app.
   chars (NBSP, ZWSP, U+E000) — they don't survive retyping; edit that file
   with line-targeted scripts, not copy-typed strings.
   Sidebar has hover insert-gaps between thumbnails (never between a parent and
-  its states). Selecto's continue-select list is synced in syncTargets — stale
+  its states); a slide drag lights the gap it will land in as a thick accent
+  line (one dragover listener on the list, editor.ts wireThumbDrop). Selecto's continue-select list is synced in syncTargets — stale
   cross-slide shift-click selections were a real bug.
 
 ## Hard-won details — do not regress
@@ -636,7 +711,7 @@ anim, charts, i18n, sync), shared by every app.
   for a local build, never for a release.
   blocks + ~1KB loader (DecompressionStream → blob import; pre-2023 browsers
   get a plain-HTML message). Byte order: chrome → NOTICE → tooling comment →
-  PLAINTEXT #bento-doc → splash → payloads last. Shell ~560KB (was 1.33MB).
+  PLAINTEXT #bento-doc → splash → payloads last. Shell ~800KB compressed (was 1.33MB before compression).
   The loader's injected `<style>` carries `data-bento-transient` and
   `serializeBody` (kernel/src/save.ts) strips marked nodes from the clone —
   `capturePristine()` clones the LIVE document, so without that the inflated
@@ -647,7 +722,7 @@ anim, charts, i18n, sync), shared by every app.
   release.mjs runs a conformance GATE before signing every release.
 - **AI round-trip**: the DOCUMENT is the interchange unit (chat AIs can't emit
   1MB+ files). Save → "Copy document JSON" / "Replace from JSON…"
-  (store.replaceDoc, undoable); `window.bento.loadDoc(json)` for scripts; the
+  (File ▸ Advanced; store.replaceDoc, undoable); `window.bento.loadDoc(json)` for scripts; the
   shell carries a Tooling-note comment pointing AIs at #bento-doc + the API.
   Agent harnesses edit files in place; chat AIs round-trip the JSON.
 

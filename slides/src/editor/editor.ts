@@ -10,18 +10,27 @@ import {
   applyChartPalette, applyLayout, builtinLayouts, defaultChart, defaultCode, defaultImage, defaultMedia, defaultShape, defaultTable, defaultText,
   instantiateLayout, isLightBg, layoutElementIds, newDocId, parseDoc, readableInk, syncLinkedChart, uid,
   paginates, inLinearFlow,
-  type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement } from '../model'
+  type ChartElement, type ShapeKind, type ShapeElement, type Slide, type SlideElement, type TableElement } from '../model'
 import { THEME_CHOICES, setTheme, themeChoice } from '../../../kernel/src/theme.ts'
 import type { InPlaceOutcome } from '../update'
 import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, compareVersions, offlineEnabled, sandboxed, setAutoCheck, setOffline } from '../update'
 import { CHART_PRESETS } from '../charts'
 import { cssColor, renderSlide, renderThumbnail } from '../render'
 import { openExportImagesDialog } from './exportimages'
-import { paletteSignature, resolveThemeRefs } from '../palette'
+import { adoptComponents, components, detach, mainsLost, makeComponent, promoteCopy, resetOverrides } from '../components'
+import { goToMain, selectedComponent } from './inspector/component'
+import { activeMode, bindToken, modesOf } from '../tokens'
+import { derive, deriveMemory, type DeriveMemory } from '../derive'
+import { TokensPane } from './tokenspane'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
+import { fitTabNames, iconTab, ownsArrows, slidingPill, tabBarNeed } from './inspector/controls'
 import { openCtxMenu, type CtxItem } from './ctxmenu'
+import { mountNotesPane } from './notespane'
+import { mountHints } from './hints'
+import { labelIn } from './layerrows'
 import { startPresentation } from '../present'
+import { walkSource, wouldPair } from './morph'
 // serializeFile (plain output) is deliberately NOT imported here: every path
 // in this file writes a real file for a person, so all of them must inherit an
 // active password. serializeAuto is the only encryption-aware serializer.
@@ -30,14 +39,16 @@ import { createSaveQueue, saveRevision } from '../saving'
 import type { SaveQueue } from '../../../kernel/src/savequeue.ts'
 import { noteSavedFromWeb } from './returngate'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, onRecoveryOff, pruneOld, putRecovery, recoveryLooksOlder, type Snapshot } from '../autosave'
-import { insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
+import { freshGroups, insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
 import { estimatedFrames, fencedElements, splitFences } from './codefence'
 import { keepSpaces } from './markdown'
 import { openSpeakerWindow, speakerIdleBody, speakerWindow } from '../screens'
 import { neutralWindowTitle, speakerWindowTitle, titleSealed } from '../wintitle'
-import { routeAllConnectors } from '../connectors'
 import { ICONS } from '../icons'
+import { segmented } from './inspector/fields'
 import { t, setLocale, locale, localeChoices, LOCALE_CHOICES, applyDirection, isRtl } from '../i18n'
+import { MOD, dispatch, openPalette, titleFor, type Command } from './commands'
+import { openShortcuts } from './shortcuts'
 import { stepOf } from '../steps'
 import { availablePacks, fetchPack, markFileSaved, packCoverage, packsInFile, stageForFile, unstageFromFile } from '../packs'
 import { injectFonts } from '../fonts'
@@ -56,11 +67,21 @@ import { dryRun, applyCompress, type DryRun } from './compressdeck'
 import { createDialog } from '../../../kernel/src/ui/dialog.ts'
 import '../../../kernel/src/ui/dialog.css'
 import { PresenceToasts } from './presencetoasts'
+import { BOOL_OPS, boolBlocked, boolOperands, boolUi, combine, flatten, release } from './booleans'
+import { align, distribute, flip } from './inspector/arrange'
+import type { NodeKind } from './beziereditor'
+import { withDescendants, flagged, frameChildren, isFrame, moveInFrame, colsOf } from '../layout'
 
 const i18nT = t
 
 /** Per-BROWSER, not per-deck: whether the "this browser can't rewrite files"
  *  notice has been acknowledged. It is a property of the browser. */
+/** What owns the keyboard while it shows: the editor's sheets and dialogs,
+ *  the return gate, a context menu or an open topbar menu. (The ⌘K palette
+ *  keeps its keys to itself — its field stops them — and must still list
+ *  the commands, so it is not one of these.) */
+const MODAL = '.ed-about-overlay, .ed-gate-overlay, .ed-ctxmenu, .ed-dropdown.open, dialog[open]'
+
 const SAVE_NOTICE_KEY = 'bento-save-notice'
 
 /** sessionStorage: set just before the post-update reload, read once by the
@@ -78,7 +99,12 @@ const LONG_PRESS_MS = 500
 /** …and how far it may wander first. Past this it was a drag or a pan. */
 const LONG_PRESS_SLOP = 10
 
-const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; heads?: 2; draw?: 'line' | 'path' | 'connector' | 'curve-connector' | 'free' | 'poly'; tip: string }> = [
+/** Shape-menu rows that are also one-letter tools (commands.ts), by label. */
+const SHAPE_TOOL: Record<string, string> = { Rectangle: 'tool-rect', Ellipse: 'tool-ellipse', Line: 'tool-line', Pen: 'tool-pen' }
+/** The topbar's tools: one of them is pressed at any time (refreshTools). */
+const TOOL_CMDS = ['tool-select', 'tool-marquee', 'tool-frame', 'tool-rect', 'tool-ellipse', 'tool-line', 'tool-pen', 'insert-text', 'comment']
+
+const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; heads?: 2; draw?: 'line' | 'path' | 'connector' | 'curve-connector' | 'free' | 'poly' | 'pen'; tip: string }> = [
   { kind: 'rect', label: 'Rectangle', icon: ICONS.rect, tip: 'A rectangle — rounded corners, fills, gradients and shadows in the panel' },
   { kind: 'ellipse', label: 'Ellipse', icon: ICONS.ellipse, tip: 'An ellipse or circle' },
   { kind: 'triangle', label: 'Triangle', icon: ICONS.triangle, tip: 'A triangle' },
@@ -89,6 +115,7 @@ const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; heads?: 
   { kind: 'line', label: 'Connector', icon: ICONS.connector, draw: 'connector', tip: 'Drag between two elements — the ends snap on and re-route when they move' },
   { kind: 'path', label: 'Curved connector', icon: ICONS.curveConnector, draw: 'curve-connector', tip: 'A curved line between two elements — the ends snap on and re-route, the tip follows the curve' },
   { kind: 'path', label: 'Freeform', icon: ICONS.freeform, draw: 'free', tip: 'Draw by hand — the stroke smooths into an editable curve' },
+  { kind: 'path', label: 'Pen', icon: ICONS.pen, draw: 'pen', tip: 'Click to place corners, drag to pull out curves (Alt breaks a handle); click the first point to close, Enter or Esc to finish' },
   { kind: 'path', label: 'Polygon', icon: ICONS.polygon, draw: 'poly', tip: 'Click to place corners; click the first point (or double-click) to close the shape' },
 ]
 
@@ -130,6 +157,23 @@ export function canWriteDeck(collab: { role?: string } | undefined): boolean {
  * along. An empty description adds nothing.
  */
 let menuDescSeq = 0
+/**
+ * One row of a command menu — Save ▾, File, Help: icon · label · optional key,
+ * the description as tooltip and ARIA description (D2). Every command menu
+ * builds its rows here, so their markup cannot drift apart.
+ */
+function menuRow(icon: string, label: string, title: string, onClick: () => void, keys?: string, cmd?: string): HTMLButtonElement {
+  const b = document.createElement('button')
+  b.type = 'button'
+  b.className = 'ed-btn ed-menu-row'
+  if (icon) b.innerHTML = icon
+  b.appendChild(menuLabel(label, title, b))
+  if (cmd) b.dataset.cmd = cmd
+  if (keys) { const k = document.createElement('kbd'); k.className = 'ed-menu-keys'; k.textContent = keys; b.appendChild(k) }
+  b.addEventListener('click', onClick)
+  return b
+}
+
 function menuLabel(label: string, desc: string, row: HTMLElement): HTMLSpanElement {
   if (!desc) return Object.assign(document.createElement('span'), { textContent: label })
   const span = document.createElement('span')
@@ -150,6 +194,11 @@ export class Editor {
    *  Delete removes. Empty = just the current slide, as before. */
   private thumbSel: number[] = []
   private sidebar!: HTMLElement
+  /** the side column's two views: slide thumbnails, and the current slide's layers */
+  private thumbs!: HTMLElement
+  private sideLayers!: HTMLElement
+  private sideTokens!: HTMLElement
+  private tokensPane!: TokensPane
   private props!: HTMLElement
   private dirtyDot!: HTMLElement
   private fileChip?: HTMLElement
@@ -169,7 +218,7 @@ export class Editor {
   private updateFound: string | null = null
   private lastAutoCheck: import('../update').UpdateCheck | null = null
   /** side panel widths (px) — user-resizable, persisted per browser */
-  private panelW = { left: 188, right: 236 }
+  private panelW = { left: 232, right: 264 }
 
   constructor(
     private root: HTMLElement,
@@ -192,8 +241,20 @@ export class Editor {
     this.wirePaste()
     this.wireContextMenu()
     store.on('doc', () => this.syncLinkedCharts())
-    store.on('doc', () => this.syncConnectors())
-    store.on('doc', () => this.syncThemeRefs())
+    // every derived value — palette, tokens, components, layout, connectors,
+    // stack fallbacks — in one pass, in dependency order (derive.ts). Seeded
+    // with the document as it opened, and re-seeded when another document
+    // replaces it: nothing has "moved" yet, so a value edited in an older
+    // shell reads as a hand edit and is kept. Undo/redo keep the memory.
+    this.derived = deriveMemory(store.doc)
+    derive(store.doc, this.derived)
+    store.on('replace', () => { this.derived = deriveMemory(store.doc); derive(store.doc, this.derived) })
+    store.on('doc', () => this.syncDerived())
+    store.on('doc', () => this.offerMorph())
+    this.tokensPane = new TokensPane(store, { toast: (m) => this.toast(m) })
+    this.tokensPane.mount(this.sideTokens)
+    store.on('doc', () => this.tokensPane.refresh())
+    store.on('current', () => this.tokensPane.refresh())
     store.on('doc', () => this.syncFonts())
     this.syncFonts()
     // A document that cannot write can ARRIVE in a running editor, not only boot
@@ -331,7 +392,7 @@ export class Editor {
     const logo = document.createElement('button')
     logo.type = 'button'
     logo.className = 'ed-logo'
-    logo.setAttribute('aria-label', t('About bento/slides — version, updates, licenses'))
+    logo.setAttribute('aria-label', t('File — new, import, export, history, properties'))
     logo.innerHTML =
       `<svg class="ed-logo-mark" viewBox="0 0 32 32" width="20" height="20" aria-hidden="true">` +
       `<rect width="32" height="32" rx="7" fill="#16273E"/>` +
@@ -339,8 +400,8 @@ export class Editor {
       `<rect x="14" y="5" width="13" height="10" rx="2.5" fill="#FF9E8A"/>` +
       `<rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/>` +
       `</svg> <b>bento<span style="color:#FF9E8A">/</span>slides</b>`
-    logo.title = t('About bento/slides — version, updates, licenses')
-    logo.addEventListener('click', () => this.openAbout())
+    logo.title = t('File — new, import, export, history, properties')
+    const fileD = this.fileDropdown(logo)
     const title = document.createElement('input')
     title.className = 'ed-title'
     title.title = t('Deck title — shown in the tab, on {{title}} fields, and as the suggested file name')
@@ -376,23 +437,50 @@ export class Editor {
       : t('Unsaved changes — ⌘S downloads an updated copy (this browser can’t rewrite the file)')
 
     const insert = div('ed-group ed-insert')
+    // Each tool is a command (commands.ts): the button runs it, its tooltip
+    // and letter badge come from it, and data-cmd names it.
+    const tool = (id: string, icon: string, label: string, tip?: string) => this.cmdButton(id, icon, label, tip)
     insert.append(
-      btn(ICONS.text, t('Text'), () => this.canvas.insert(defaultText({ color: readableInk(this.store.slide.background), y: 120 + Math.random() * 200 }), true),
-        t('Add a text box — double-click it to edit; **bold**, *italic*, `code` and “- ” bullets format as you type')),
+      tool('tool-select', ICONS.cursor, '', t('Move — select and move; back to the pointer')),
+      tool('tool-marquee', ICONS.marquee, '', t('Select only — a drag selects, from on top of things too, and never moves anything')),
+      tool('tool-frame', ICONS.frameRow, t('Frame'), t('Add a frame — what you put in it lines up in a row, a column or a grid')),
+      tool('insert-text', ICONS.text, t('Text'), t('Add a text box — double-click it to edit; **bold**, *italic*, `code` and “- ” bullets format as you type')),
       this.shapeDropdown(),
-      btn(ICONS.image, t('Image'), () => this.pickImage(),
-        t('Add an image — or just paste one (⌘V) straight onto the slide')),
+      tool('insert-image', ICONS.image, t('Image'), t('Add an image — or just paste one (⌘V) straight onto the slide')),
       this.mediaDropdown(),
-      btn(ICONS.table, t('Table'), () => this.canvas.insert(this.newTable()),
-        t('Add a table — edit cells inline; turn it into a live chart from the panel')),
-      btn(ICONS.chart, t('Chart'), () => this.canvas.insert(defaultChart(applyChartPalette(CHART_PRESETS.bar(), this.store.doc.theme))),
-        t('Add a chart — edit it visually or link it to a table so it updates live')),
-      btn(ICONS.code, t('Code'), () => this.canvas.insert(defaultCode({ color: readableInk(this.store.slide.background) }), true),
-        t('Add a code snippet')),
+      tool('insert-table', ICONS.table, t('Table'), t('Add a table — edit cells inline; turn it into a live chart from the panel')),
+      tool('insert-chart', ICONS.chart, t('Chart'), t('Add a chart — edit it visually or link it to a table so it updates live')),
+      tool('insert-code', ICONS.code, t('Code'), t('Add a code snippet')),
     )
-    const commentB = btn(ICONS.comment, t('Comment'), () => this.canvas.toggleCommentMode(),
-      t('Comment (C) — click an element or a spot on the slide'))
+    const commentB = tool('comment', ICONS.comment, t('Comment'), t('Comment — click an element or a spot on the slide'))
     insert.appendChild(commentB)
+    // Vector booleans, Penpot's contextual bar: present only while two or more
+    // closed shapes are selected — never greyed out, simply not there.
+    const boolBar = div('ed-bool')
+    boolBar.setAttribute('role', 'group')
+    boolBar.setAttribute('aria-label', t('Combine shapes'))
+    for (const op of BOOL_OPS) {
+      const ui = boolUi(op)
+      const b = btn(ui.icon, '', () => combine(this.store, this.store.selectedElements, op), `${ui.label} (${ui.key})`)
+      b.dataset.bool = op
+      b.setAttribute('aria-label', ui.label)
+      boolBar.appendChild(b)
+    }
+    // a selection with a line or an open path in it shows the bar greyed, saying why
+    const syncBool = () => {
+      const els = this.store.selectedElements
+      const blocked = boolBlocked(els)
+      boolBar.hidden = this.store.readOnly || (!boolOperands(this.store, els) && !blocked)
+      boolBar.title = blocked ?? ''
+      for (const b of boolBar.querySelectorAll('button')) b.disabled = !!blocked
+    }
+    syncBool()
+    for (const e of ['selection', 'doc', 'current'] as const) {
+      const off = this.store.on(e, syncBool)
+      this.buildScope.signal.addEventListener('abort', off)
+    }
+    insert.appendChild(boolBar)
+    insert.appendChild(this.pathBar())
 
     const actions = div('ed-group ed-group-right')
     // the update chip sits beside the wordmark and exists ONLY when an
@@ -412,19 +500,28 @@ export class Editor {
         this.updatesB.innerHTML = `${ICONS.sync}<span>v${r.release.version}</span>`
         this.updatesB.title = t('Version {v} is available — click to update', { v: r.release.version })
         this.toast(t('Update available: v{v} — click the peach button to update', { v: r.release.version }))
-      } else if (r.status === 'current') {
+      } else if (r.status === 'current' && !document.querySelector(MODAL)) {
+        // passive news: never over a dialog the author has opened meanwhile
         this.toast(t('Up to date — v{v}', { v: APP_VERSION }))
       }
     }, 1500)
-    const undoB = btn(ICONS.undo, '', () => this.store.undo(), t('Undo (⌘Z)'))
-    const redoB = btn(ICONS.redo, '', () => this.store.redo(), t('Redo (⇧⌘Z)'))
+    const undoB = this.cmdButton('undo', ICONS.undo, '')
+    const redoB = this.cmdButton('redo', ICONS.redo, '')
     const saveB = btn(ICONS.save, t('Save'), () => this.save(false), canWriteInPlace()
       ? t('Save — rewrite this file in place (⌘S)')
       : t('Save — download an updated copy (⌘S). This browser can’t rewrite the open file.'))
+    saveB.dataset.cmd = 'save'
     saveB.appendChild(this.dirtyDot) // the amber unsaved-changes dot lives ON Save
-    const pdfB = btn(ICONS.pdf, '', () => this.exportPdf(), t('Export PDF (print)'))
-    const helpB = btn('<b class="ed-help-q">?</b>', '', () => this.openHelp(), t('Shortcuts & tips (?)'))
-    helpB.classList.add('ed-btn-help')
+    // the APP's own buttons, one cluster at the corner: how to drive it, where
+    // to learn it, and how it is set up for you — never the document's
+    const keysB = this.cmdButton('help', ICONS.keyboard, '')
+    keysB.classList.add('ed-btn-help') // the shortcut sheet's button, as the old ? was
+    const helpD = this.helpDropdown()
+    const prefsB = this.cmdButton('preferences', ICONS.settings, '')
+    const appGroup = div('ed-group ed-app')
+    appGroup.setAttribute('role', 'group')
+    appGroup.setAttribute('aria-label', t('App'))
+    appGroup.append(keysB, helpD, prefsB)
     this.avatarsBox = div('ed-avatars')
     // Intuitive grouping: LEFT = the document (identity · title · save-state ·
     // undo/redo history) · CENTRE = insert tools · RIGHT = output & sharing
@@ -434,8 +531,9 @@ export class Editor {
     const saveGroup = div('ed-split')
     saveGroup.append(saveB, this.saveDropdown())
     const shareD = this.shareDropdown()
-    const langD = this.languageDropdown()
-    actions.append(pdfB, this.avatarsBox, shareD, saveGroup, langD, helpB)
+    // Print stays in sight (⌘P): output, beside Share; also in File ▸ Export
+    const pdfB = this.cmdButton('export-pdf', ICONS.pdf, '')
+    actions.append(pdfB, this.avatarsBox, shareD, saveGroup, appGroup)
 
     // Phone chrome: two menus that stay EMPTY on a wide screen. Nothing is
     // duplicated — applyPhoneChrome moves the real buttons in and out, so every
@@ -464,7 +562,7 @@ export class Editor {
     this.closeOnOutsidePress(moreD)
     const slidesB = btn(ICONS.panelLeft, t('Slides'), () => this.togglePanel('left'), t('Slides — show or hide the slide list'))
     slidesB.classList.add('ed-phone-only')
-    const formatB = btn(ICONS.panelRight, t('Format'), () => this.togglePanel('right'), t('Format — show or hide the properties panel'))
+    const formatB = btn(ICONS.panelRight, t('Format'), () => this.togglePanel('right'), t('Show or hide the Format, Animate and Interact panel (])'))
     formatB.classList.add('ed-phone-only')
     const phoneTools = div('ed-phone-tools')
     phoneTools.append(slidesB, insertD, history)
@@ -474,16 +572,29 @@ export class Editor {
     this.phoneChrome = {
       insertD, insertMenu, moreD, moreMenu, slidesB, formatB, insert, actions, history,
       // order matters: this is the order they appear in the ⋯ menu
-      demote: [redoB, commentB, pdfB, shareD, langD, helpB],
+      demote: [redoB, commentB, shareD, keysB, helpD, prefsB, pdfB],
       // filled in once the bar is fully assembled (formatB lands last)
       authored: new Map(), homeOf: new Map(),
     }
 
-    bar.append(logo, this.updatesB, title, this.fileChip, phoneTools, insert, actions, moreD)
+    // Three zones: the document | insert | output. The document's zone and the
+    // output group share the spare width equally (styles.css), which is what
+    // keeps the insert tools centred whatever the deck is called.
+    const docZone = div('ed-zone-doc')
+    docZone.append(fileD, this.updatesB, title, this.fileChip, phoneTools)
+    bar.append(docZone, insert, actions, moreD)
 
     // main area
     const main = div('ed-main')
     this.sidebar = div('ed-sidebar')
+    // Slides | Layers: navigation on the left, properties on the right, the
+    // way Penpot (Pages / Layers) and Figma (Layers) lay it out. The layer
+    // list used to sit at the top of the inspector, on every tab.
+    this.thumbs = div('ed-thumbs')
+    this.wireThumbDrop()
+    this.sideLayers = div('ed-side-layers')
+    this.sideTokens = div('ed-side-tokens')
+    this.sidebar.append(this.sideTabs(), this.thumbs, this.sideLayers, this.sideTokens)
     // a link in a thumbnail's text is a picture of a link, not a control: a
     // click selects the slide and never navigates the editor away
     this.sidebar.addEventListener('click', (ev) => {
@@ -493,8 +604,8 @@ export class Editor {
     // presenting lives in ONE split pill beside the zoom control: the main
     // half starts the fullscreen show; its menu holds tab-fill and speaker view.
     const pill = div('ed-dropdown ed-present-pill')
-    const showB = btn(ICONS.slideshow, t('Slideshow'), () => this.present(false, true),
-      t('Start the slideshow fullscreen — F toggles fullscreen, S opens speaker view, Esc ends'))
+    const showB = btn(ICONS.slideshow, t('Slideshow'), (ev) => ev.shiftKey ? this.playTransition() : this.present(false, true),
+      t('Start the slideshow fullscreen — F toggles fullscreen, S opens speaker view, Esc ends; ⇧-click plays the transition into this slide'))
     showB.classList.add('ed-pill-main')
     // Nudge: newcomers don't always spot how to start a show — run the neon
     // runner around the Slideshow pill on EVERY editor load until they've
@@ -531,9 +642,17 @@ export class Editor {
       if (zb) corner.appendChild(zb)
     })
     this.props = div('ed-props')
-    main.append(this.sidebar, this.makeResizer('left'), canvasWrap, this.makeResizer('right'), this.props)
+    // the canvas over its speaker notes, as in every slide editor
+    const centre = div('ed-centre')
+    centre.appendChild(canvasWrap)
+    mountNotesPane(this.store, centre, this.buildScope.signal)
+    main.append(this.sidebar, this.makeResizer('left'), centre, this.makeResizer('right'), this.props)
 
     this.root.append(bar, main)
+    requestAnimationFrame(() => this.holdPanelMins())
+    // the whole page, not just the editor root: menus, the ⌘K palette and
+    // dialogs are appended to <body>, and their titles were native tooltips
+    mountHints(document.body, this.buildScope.signal)
 
     // phones/small windows: start with both panels collapsed so the CANVAS
     // is what you see — the topbar toggles (and [ / ]) bring them back
@@ -601,11 +720,25 @@ export class Editor {
 
     this.wireDrawerDismiss()
     this.restorePanelWidths()
-    this.canvas = new SlideCanvas(canvasWrap, this.store)
-    this.canvas.onCommentModeChange = (on) => commentB.classList.toggle('ed-btn-armed', on)
+    this.canvas = new SlideCanvas(canvasWrap, this.store, this.buildScope.signal)
+    this.canvas.onCommentModeChange = () => this.refreshTools()
+    this.canvas.onToolEnd = () => { this.armed = null; this.refreshTools() }
+    queueMicrotask(() => this.refreshTools())
     this.canvas.onSlideNav = (dir) => this.store.goToLinear(dir)
     this.panel = new PropsPanel(this.props, this.store)
+    this.panel.titleOf = (id, label) => titleFor(this.commands, id, label)
+    this.panel.remove = () => this.deleteSelection()
+    this.panel.duplicate = () => this.duplicateSelection()
+    this.panel.layers.mount(this.sideLayers)
+    // The Tokens pane outlives build() (the constructor makes it once), but its
+    // host is the fresh sideTokens above — re-home it, or a language switch
+    // leaves it drawing into the detached old column and the view goes blank.
+    this.tokensPane?.mount(this.sideTokens)
+    const offs = (['doc', 'selection', 'current'] as const).map((e) => this.store.on(e, () => this.panel.layers.refresh()))
+    this.buildScope.signal.addEventListener('abort', () => offs.forEach((off) => off()), { once: true })
     this.panel.onListIndent = (dir) => { this.canvas.indentList(dir) }
+    this.panel.onMorphPreview = (t) => this.canvas.previewMorph(t)
+    this.panel.onPlayTransition = () => this.playTransition()
 
     if (!canWriteDeck(this.store.doc.collab)) this.enterReaderMode()
   }
@@ -623,7 +756,7 @@ export class Editor {
   // --- resizable side panels ------------------------------------------------
 
   private static PANEL_BOUNDS = { left: [110, 400], right: [190, 520] } as const
-  private static PANEL_DEFAULTS = { left: 188, right: 236 } as const
+  private static PANEL_DEFAULTS = { left: 232, right: 264 } as const
 
   private restorePanelWidths() {
     try {
@@ -634,6 +767,30 @@ export class Editor {
       }
     } catch { /* corrupt storage — keep defaults */ }
     this.applyPanelWidths()
+  }
+
+  /**
+   * The narrowest a panel may be: its bound, or wider when its tab bar needs
+   * the room — the chosen tab's whole name and the other tabs' glyphs, in the
+   * current language (controls.ts tabBarNeed) — so dragging can never break
+   * the tabs. Collapsing the panel is the chevron's job, not the resizer's.
+   */
+  private panelMin(side: 'left' | 'right'): number {
+    const panel = side === 'left' ? this.sidebar : this.props
+    const bar = panel.querySelector<HTMLElement>('.ed-icon-tabs')
+    const need = bar ? tabBarNeed(bar) + (panel.getBoundingClientRect().width - bar.getBoundingClientRect().width) : 0
+    return Math.max(Editor.PANEL_BOUNDS[side][0], Math.ceil(need))
+  }
+
+  /** A stored or default width under the minimum (a longer language, a
+   *  file from before the minimum) is raised to it once the tabs exist. */
+  private holdPanelMins() {
+    let changed = false
+    for (const side of ['left', 'right'] as const) {
+      const min = this.panelMin(side)
+      if (this.panelW[side] < min) { this.panelW[side] = min; changed = true }
+    }
+    if (changed) this.applyPanelWidths()
   }
 
   private applyPanelWidths() {
@@ -649,13 +806,16 @@ export class Editor {
       // chevron points where clicking will move the boundary. 'left'/'right'
       // name the DOM order, not the screen: under an RTL chrome the slide list
       // sits on the right, so the arrow that means "open me" turns around too.
-      const g = side === 'left' ? (collapsed ? '›' : '‹') : (collapsed ? '‹' : '›')
-      return isRtl() ? (g === '›' ? '‹' : '›') : g
+      const g = side === 'left' ? (collapsed ? 'right' : 'left') : (collapsed ? 'left' : 'right')
+      return isRtl() ? (g === 'right' ? 'left' : 'right') : g
     }
     for (const side of ['left', 'right'] as const) {
       const b = this.panelToggles[side]
       if (b) {
-        b.textContent = glyph(side)
+        // an SVG chevron, not a ‹ › character: a glyph sits on the font's
+        // baseline and never centres in the pill
+        if (!b.firstElementChild) b.innerHTML = ICONS.chevron
+        b.dataset.dir = glyph(side)
         const collapsed = (side === 'left' ? this.sidebar : this.props).classList.contains('ed-collapsed')
         b.title = collapsed
           ? side === 'left' ? t('Show slide list ([)') : t('Show properties (])')
@@ -688,7 +848,8 @@ export class Editor {
       down.preventDefault()
       const startX = down.clientX
       const startW = this.panelW[side]
-      const [min, max] = Editor.PANEL_BOUNDS[side]
+      const [, max] = Editor.PANEL_BOUNDS[side]
+      const min = this.panelMin(side)
       panel.classList.add('ed-noanim')
       document.body.classList.add('ed-col-resizing')
       const move = (ev: MouseEvent) => {
@@ -842,7 +1003,17 @@ export class Editor {
     // overflow visible, so "scrollWidth > clientWidth" IS the clipped-buttons
     // condition (ed-root clips whatever leaks). The 1px slack absorbs
     // subpixel rounding at fractional zoom levels.
-    const overflow = () => bar.scrollWidth - bar.clientWidth > 1
+    // …and the centred insert group can run over its neighbours without the
+    // bar overflowing at all (at 768px it sat on Undo and Redo): two of the
+    // bar's own groups overlapping is the same condition.
+    // (a group's buttons spill past its own box, so compare the buttons)
+    const collide = () => {
+      const boxes = [...bar.querySelectorAll<HTMLElement>('button')]
+        .filter((b) => !b.closest('.ed-menu'))
+        .map((b) => b.getBoundingClientRect()).filter((r) => r.width > 0).sort((a, b) => a.left - b.left)
+      return boxes.some((r, i) => i > 0 && boxes[i - 1].right - r.left > 1)
+    }
+    const overflow = () => bar.scrollWidth - bar.clientWidth > 1 || collide()
     // The title input is the bar's only shrinkable item, so flexbox crushes
     // it toward its 48px floor before anything overflows. Waiting for hard
     // overflow would mean full button labels beside an unusable title, so
@@ -926,11 +1097,11 @@ export class Editor {
 
   private saveDropdown(): HTMLElement {
     const wrap = div('ed-dropdown')
-    const menu = div('ed-menu ed-save-menu')
+    const menu = div('ed-menu ed-cmd-menu ed-save-menu')
     const trigger = btn('<span class="ed-caret" aria-hidden="true">▾</span>', '', () => {
       wrap.classList.toggle('open')
       if (wrap.classList.contains('open')) rebuild()
-    }, t('Save as… — copy, new deck, password'))
+    }, t('Save options — a copy, a new deck, a password'))
     trigger.classList.add('ed-split-caret')
     const rebuild = () => {
       menu.textContent = ''
@@ -960,71 +1131,112 @@ export class Editor {
       if (mark) el.dataset.phoneSaveas = '1'
       return el
     }
-    const item = (icon: string, label: string, title: string, onClick: () => void) => {
-      const b = document.createElement('button')
-      b.className = 'ed-btn'
-      if (icon) b.innerHTML = icon
-      b.appendChild(menuLabel(label, title, b))
-      b.addEventListener('click', () => {
-        close()
-        onClick()
-      })
-      into.appendChild(tag(b))
+    const item = (icon: string, label: string, title: string, onClick: () => void) =>
+      into.appendChild(tag(menuRow(icon, label, title, () => { close(); onClick() })))
+    // SAVING only — the ways to write this deck to a file. What acts on the
+    // document (export, import, history, data) is the File menu's (buildFileItems);
+    // what goes to OTHER PEOPLE is the Share panel's.
+    item(ICONS.copy, t('Save a copy…'),
+      t('A backup of this deck for yourself — same deck, same live session.'),
+      () => void this.save(true))
+    item(ICONS.plus, t('Duplicate as new deck…'),
+      t('A separate deck for you — same content, new identity; it never syncs with this one.'),
+      () => this.saveAsNewDeck())
+    if (isEncryptionActive()) {
+      item(ICONS.lock, t('Change password…'),
+        t('Pick a new password for this file — takes effect on the next save.'),
+        () => void this.setFilePassword())
+      item(ICONS.unlock, t('Save without password'),
+        t('Stop encrypting this file — the next save writes it as plain, readable JSON again.'),
+        () => {
+          setEncryptionPassword(null)
+          this.syncWindowTitle() // the deck title may return to the tab
+          this.toast(t('Password removed — the next save writes an unencrypted file'))
+          void this.save(false)
+        })
+    } else {
+      item(ICONS.lock, t('Save with password…'),
+        t('Protect this file with a password: the document (collaboration keys included) is encrypted at rest with AES-256. The password cannot be recovered.'),
+        () => void this.setFilePassword())
     }
-    {
-      // FILE operations only — everything that goes to OTHER PEOPLE lives in
-      // the Share panel (one mental model: Save = for me, Share = for others).
-      item(ICONS.copy, t('Save a copy…'),
-        t('A backup of this deck for yourself — same deck, same live session.'),
-        () => void this.save(true))
-      item(ICONS.plus, t('Duplicate as new deck…'),
-        t('A separate deck for you — same content, new identity; it never syncs with this one.'),
-        () => this.saveAsNewDeck())
-      // the dialog explains itself; a tooltip here would say the same twice
-      item(ICONS.image, t('Export slides as images…'), '', () => this.exportImages())
-      if (isEncryptionActive()) {
-        item(ICONS.lock, t('Change password…'),
-          t('Pick a new password for this file — takes effect on the next save.'),
-          () => void this.setFilePassword())
-        item(ICONS.lock, t('Remove password'),
-          t('Stop encrypting this file — the next save writes it as plain, readable JSON again.'),
-          () => {
-            setEncryptionPassword(null)
-            this.syncWindowTitle() // the deck title may return to the tab
-            this.toast(t('Password removed — the next save writes an unencrypted file'))
-            void this.save(false)
-          })
-      } else {
-        item(ICONS.lock, t('Encrypt with password…'),
-          t('Protect this file with a password: the document (collaboration keys included) is encrypted at rest with AES-256. The password cannot be recovered.'),
-          () => void this.setFilePassword())
-      }
-      // the document AS DATA — history and the AI/JSON round-trip live with
-      // the other file operations now (they were buried in the About dialog)
-      into.appendChild(tag(div('ed-menu-sep')))
-      item(ICONS.history, t('Version history…'),
-        t('Restore an earlier auto-saved version of this deck (kept locally in this browser).'),
-        () => void this.openVersionHistory())
-      item(ICONS.code, t('Copy document JSON'),
-        t('Copies this deck as plain JSON — content only, no live-session keys. Edit it in another tool, then bring it back with Replace from JSON.'),
-        () => void this.copyDocJson())
-      item(ICONS.code, t('Copy compact JSON (for agents)'),
-        t('The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.'),
-        () => void this.copyDocJson(true))
-      item(ICONS.code, t('Replace from JSON…'),
-        t('Paste edited document JSON to replace this deck’s content — ⌘Z undoes.'),
-        () => this.openReplaceJson())
-      // with the other import, where spaces has Import Markdown…
-      item(ICONS.importDoc, t('Import PowerPoint…'),
-        t('Opens the PowerPoint importer on bento.page in a new tab — it turns a .pptx into a Bento deck. Needs an internet connection.'),
-        () => { window.open(IMPORT_PPTX_URL, '_blank', 'noopener,noreferrer') })
-      item(ICONS.exportDoc, t('Export for PowerPoint…'),
-        t('Opens the converter on bento.page in a new tab — drop this deck’s saved file there to get a .pptx. The deck is not uploaded. Needs an internet connection.'),
-        () => { window.open(EXPORT_PPTX_URL, '_blank', 'noopener,noreferrer') })
-      item(ICONS.template, t('Start from scratch…'),
-        t('Replace every slide with one blank slide. Keeps the deck’s theme, name and live session — ⌘Z undoes.'),
-        () => this.startFromScratch())
+  }
+
+  /**
+   * The File menu, on the wordmark: what acts on the DOCUMENT — make, bring
+   * in, send out, look back, describe, and the document as data. Grouped
+   * under captions in one list rather than flyouts: one click deep, no hover
+   * timing, and the same list fits the phone's ⋯.
+   */
+  private buildFileItems(into: HTMLElement, close: () => void, mark = false) {
+    const tag = <T extends HTMLElement>(el: T): T => {
+      if (mark) el.dataset.phoneSaveas = '1'
+      return el
     }
+    const item = (icon: string, label: string, title: string, onClick: () => void, cmd?: string) =>
+      into.appendChild(tag(menuRow(icon, label, title, () => { close(); onClick() }, cmd ? this.commands.find((c) => c.id === cmd)?.keys : undefined, cmd)))
+    const cap = (text: string) => {
+      const c = div('ed-menu-cap')
+      c.textContent = text
+      into.appendChild(tag(c))
+    }
+    const sep = () => into.appendChild(tag(div('ed-menu-sep')))
+    // every group under a caption — all or none
+    cap(t('New'))
+    item(ICONS.template, t('Start from scratch…'),
+      t('Replace every slide with one blank slide. Keeps the deck’s theme, name and live session — ⌘Z undoes.'),
+      () => this.startFromScratch(), 'start-scratch')
+    item(ICONS.importDoc, t('Import PowerPoint…'),
+      t('Opens the PowerPoint importer on bento.page in a new tab — it turns a .pptx into a Bento deck. Needs an internet connection.'),
+      () => { window.open(IMPORT_PPTX_URL, '_blank', 'noopener,noreferrer') }, 'import-pptx')
+    sep()
+    cap(t('Export'))
+    item(ICONS.pdf, t('Print or save as PDF…'), t('Every slide on its own page — your browser’s print dialog saves a PDF.'), () => this.exportPdf(), 'export-pdf')
+    // the dialog explains itself; a tooltip here would say the same twice
+    item(ICONS.image, t('Export slides as images…'), '', () => this.exportImages(), 'export-images')
+    item(ICONS.exportDoc, t('Export for PowerPoint…'),
+      t('Opens the converter on bento.page in a new tab — drop this deck’s saved file there to get a .pptx. The deck is not uploaded. Needs an internet connection.'),
+      () => { window.open(EXPORT_PPTX_URL, '_blank', 'noopener,noreferrer') }, 'export-pptx')
+    sep()
+    cap(t('Document'))
+    item(ICONS.history, t('Version history…'),
+      t('Restore an earlier auto-saved version of this deck (kept locally in this browser).'),
+      () => void this.openVersionHistory(), 'version-history')
+    item(ICONS.docInfo, t('Document properties…'),
+      t('Title, author, company, subject, event and keywords — {{author}} and friends fill in from here.'),
+      () => this.openDocProps(), 'doc-props')
+    item(ICONS.compress, t('Compress pictures in this deck…'),
+      t('Re-encodes every photo already in the deck at up to 2560 px; screenshots and logos stay sharp. Undo restores them until you save.'),
+      () => void this.compressDeckPictures(), 'compress-images')
+    sep()
+    cap(t('Advanced'))
+    item(ICONS.code, t('Copy document JSON'),
+      t('Copies this deck as plain JSON — content only, no live-session keys. Edit it in another tool, then bring it back with Replace from JSON.'),
+      () => void this.copyDocJson(), 'copy-json')
+    item(ICONS.codeCompact, t('Copy compact JSON (for agents)'),
+      t('The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.'),
+      () => void this.copyDocJson(true), 'copy-compact-json')
+    item(ICONS.code, t('Replace from JSON…'),
+      t('Paste edited document JSON to replace this deck’s content — ⌘Z undoes.'),
+      () => this.openReplaceJson(), 'replace-json')
+    sep()
+    cap(t('App'))
+    item(ICONS.info, t('About bento/slides'), t('Version, updates and licenses'), () => this.openAbout(), 'about')
+  }
+
+  /** The File menu's dropdown, opened from the wordmark. */
+  private fileDropdown(trigger: HTMLElement): HTMLElement {
+    const wrap = div('ed-dropdown ed-file')
+    const menu = div('ed-menu ed-cmd-menu ed-file-menu')
+    trigger.addEventListener('click', () => {
+      wrap.classList.toggle('open')
+      if (wrap.classList.contains('open')) { menu.textContent = ''; this.buildFileItems(menu, () => wrap.classList.remove('open')) }
+    })
+    trigger.setAttribute('aria-haspopup', 'menu')
+    wrap.append(trigger, menu)
+    document.addEventListener('pointerdown', (ev) => {
+      if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
+    }, { signal: this.buildScope.signal })
+    return wrap
   }
 
   /**
@@ -1053,6 +1265,10 @@ export class Editor {
     sep.dataset.phoneSaveas = '1'
     menu.appendChild(sep)
     this.buildSaveAsItems(menu, () => wrap.classList.remove('open'), true)
+    const sep2 = div('ed-menu-sep')
+    sep2.dataset.phoneSaveas = '1'
+    menu.appendChild(sep2)
+    this.buildFileItems(menu, () => wrap.classList.remove('open'), true)
   }
 
   /**
@@ -1484,7 +1700,7 @@ export class Editor {
         const where = document.createElement('span')
         where.className = 'where'
         const idx = this.store.doc.slides.findIndex((s) => s.id === peer.slide)
-        where.textContent = [roleLabel(peer.role), idx >= 0 ? t('slide {n}', { n: idx + 1 }) : ''].filter(Boolean).join(' · ')
+        where.textContent = [roleLabel(peer.role), idx >= 0 ? t('Slide {n}', { n: idx + 1 }) : ''].filter(Boolean).join(' · ')
         row.append(dot, who, where)
         row.title = t('{name} — on slide {n} (click to follow)', { name: peer.name, n: idx + 1 })
         row.addEventListener('click', () => {
@@ -1791,32 +2007,20 @@ export class Editor {
   }
 
   /** Globe → locale picker. UI language follows the VIEWER, never the file. */
-  private languageDropdown(): HTMLElement {
+  /** Help: where to learn the app — the guide, what changed, where to ask.
+   *  The shortcut sheet is its own button beside it (⌨, ?). */
+  private helpDropdown(): HTMLElement {
     const wrap = div('ed-dropdown')
-    const trigger = btn(ICONS.globe, '', () => wrap.classList.toggle('open'), t('Language'))
-    const menu = div('ed-menu ed-lang-menu')
-    // localeChoices(), NOT the frozen LOCALE_CHOICES const: installing a pack
-    // appends a language at runtime, and a static list could never show it.
-    for (const c of localeChoices()) {
-      const b = btn('', c.label, () => {
-        wrap.classList.remove('open')
-        setLocale(c.code)
-        // switching to (or away from) Arabic/Hebrew/… turns the chrome around
-        applyDirection()
-        this.build()
-        this.rebuildSidebar()
-      })
-      if (c.code === locale()) b.classList.add('ed-lang-on')
-      menu.appendChild(b)
-    }
+    const trigger = btn(ICONS.helpCircle, '', () => wrap.classList.toggle('open'), t('Help'))
+    trigger.setAttribute('aria-haspopup', 'menu')
+    const menu = div('ed-menu ed-cmd-menu ed-help-menu')
+    const link = (icon: string, label: string, href: string) =>
+      menu.appendChild(menuRow(icon, label, '', () => { wrap.classList.remove('open'); window.open(href, '_blank', 'noopener,noreferrer') }))
+    link(ICONS.helpCircle, t('Guide on bento.page'), 'https://bento.page/help')
+    link(ICONS.history, t('What’s new →'), `https://github.com/nyblnet/bento/releases/tag/v${APP_VERSION}`)
+    link(ICONS.comment, t('Ask or report a problem'), 'https://github.com/nyblnet/bento/issues')
     menu.appendChild(div('ed-menu-sep'))
-    menu.appendChild(btn('', t('Manage languages…'), () => {
-      wrap.classList.remove('open')
-      void this.openLanguages()
-    }))
-    // end-anchored so the menu never overflows the window edge — as a class,
-    // not inline left/right, so it follows the chrome's direction (.ed-lang-menu
-    // in styles.css, alongside the Save menu's identical rule)
+    menu.appendChild(menuRow(ICONS.keyboard, t('Keyboard shortcuts'), '', () => { wrap.classList.remove('open'); this.openHelp() }, '?', 'help'))
     wrap.append(trigger, menu)
     document.addEventListener('pointerdown', (ev) => {
       if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
@@ -1827,8 +2031,16 @@ export class Editor {
   private shapeDropdown(): HTMLElement {
     const wrap = div('ed-dropdown')
     const trigger = btn(ICONS.shapes, t('Shape'), () => wrap.classList.toggle('open'))
+    trigger.classList.add('ed-shape-trigger')
     const menu = div('ed-menu')
     for (const item of SHAPE_MENU) {
+      const id = SHAPE_TOOL[item.label]
+      if (id) {
+        const b = this.cmdButton(id, item.icon, t(item.label), t(item.tip))
+        b.addEventListener('click', () => wrap.classList.remove('open'))
+        menu.appendChild(b)
+        continue
+      }
       const b = btn(item.icon, t(item.label), () => {
         wrap.classList.remove('open')
         // line / curve / connector arm a draw tool — drag on the canvas to draw
@@ -1855,7 +2067,7 @@ export class Editor {
     if (isState) {
       const parentIdx = this.store.doc.slides.findIndex((s) => s.id === slide.stateOf)
       num.textContent = slide.name ?? `⤷ ${parentIdx + 1}`
-      num.title = `Interactive state of slide ${parentIdx + 1} — reached via links while presenting`
+      num.title = t('Variant of slide {n} — opens when a linked element is clicked while presenting', { n: parentIdx + 1 })
     } else if (slide.hidden) {
       // The sidebar shows what the AUDIENCE would count. With the default
       // numbering a hidden slide has no number at all, so show the marker
@@ -1879,7 +2091,7 @@ export class Editor {
     const surface = renderThumbnail(slide, this.store.doc, isState ? Math.round(base * 0.84) : base)
     if (slide.comments?.some((c) => !c.resolved)) {
       const badge = div('ed-thumb-cmt')
-      badge.title = `${slide.comments.filter((c) => !c.resolved).length} open comment(s)`
+      badge.title = t('Open comments: {n}', { n: slide.comments.filter((c) => !c.resolved).length })
       item.appendChild(badge)
     }
     const tools = div('ed-thumb-tools')
@@ -1912,31 +2124,51 @@ export class Editor {
     return this.store.doc.slides.slice(0, i + 1).filter((s) => paginates(s, this.store.doc)).length
   }
 
+  /** Slides | Layers, in the same tab look as the inspector's. */
+  private sideTabs(): HTMLElement {
+    const bar = div('ed-tabs ed-side-tabs ed-icon-tabs')
+    bar.setAttribute('role', 'tablist')
+    const show = (view: string) => {
+      this.sidebar.dataset.view = view
+      for (const b of bar.children) b.setAttribute('aria-selected', String((b as HTMLElement).dataset.view === view))
+    }
+    // Each tab is its glyph; the chosen one also says its name (fitTabNames)
+    const glyphs = { slides: ICONS.viewSlides, layers: ICONS.viewLayers, tokens: ICONS.viewTokens }
+    for (const [view, label] of [['slides', t('Slides')], ['layers', t('Layers')], ['tokens', t('Tokens')]] as const) {
+      const b = iconTab(glyphs[view], label)
+      b.dataset.view = view
+      b.addEventListener('click', () => { show(view); lsSet('bento-side-view', view) })
+      bar.appendChild(b)
+    }
+    fitTabNames(bar)
+    const saved = lsGet('bento-side-view')
+    show(saved === 'layers' || saved === 'tokens' ? saved : 'slides')
+    slidingPill(bar)
+    // the inspector's band (panels.ts mountTabs): sticky, edge to edge
+    const band = div('ed-tabs-band ed-side-band')
+    band.appendChild(bar)
+    return band
+  }
+
   private rebuildSidebar() {
     // States sit in doc order right after their parent and render nested —
     // smaller, indented, dimmed — so the structure reads at a glance.
     const scroll = this.sidebar.scrollTop
-    this.sidebar.innerHTML = ''
+    this.thumbs.innerHTML = ''
     const slides = this.store.doc.slides
     slides.forEach((slide, i) => {
       // hover gap = insert here; never between a parent and its states
-      if (!slide.stateOf) this.sidebar.appendChild(this.insertGap(i))
+      if (!slide.stateOf) this.thumbs.appendChild(this.insertGap(i))
       const item = this.makeThumb(slide, i, !!slide.stateOf)
       if (slide.stateOf) item.classList.add('ed-thumb-state')
       if (slide.hidden) item.classList.add('ed-thumb-hidden')
-      this.sidebar.appendChild(item)
+      this.thumbs.appendChild(item)
     })
-    const endGap = this.insertGap(slides.length)
-    this.sidebar.appendChild(endGap)
-    const add = btn(ICONS.plus, t('New slide'), () => this.openLayoutPicker(add))
+    this.thumbs.appendChild(this.insertGap(slides.length))
+    const add = btn(ICONS.plus, t('New slide'), () => this.openLayoutPicker(add, { kind: 'insert', at: this.store.doc.slides.length }))
     add.classList.add('ed-add-slide')
-    // the list's end is a drop target too (#761): the last gap and the New-slide
-    // button both land the dragged slides after the final one. The gap sits
-    // after every parent's states, so it never splits a parent from its states.
-    this.wireEndDrop(endGap)
-    this.wireEndDrop(add)
-    add.title = t('New slide from a layout')
-    this.sidebar.appendChild(add)
+    add.title = t('New slide at the end, from a layout')
+    this.thumbs.appendChild(add)
     this.sidebar.scrollTop = scroll
     this.highlightSidebar()
   }
@@ -2035,6 +2267,7 @@ export class Editor {
   /** Slim hover strip between thumbnails — click inserts a blank slide there. */
   private insertGap(at: number): HTMLElement {
     const gap = div('ed-insertgap')
+    gap.dataset.at = String(at)
     gap.title = t('Insert slide here')
     const plus = document.createElement('button')
     plus.className = 'ed-insertgap-btn'
@@ -2073,37 +2306,61 @@ export class Editor {
     item.addEventListener('dragstart', (ev) => {
       // the payload is every parent index that moves — the selection when
       // this thumb is part of it, else this one; states follow their parent
-      ev.dataTransfer!.setData('text/bento-slide', JSON.stringify(this.thumbTargets(index)))
+      this.dragFrom = this.thumbTargets(index)
+      ev.dataTransfer!.setData('text/bento-slide', JSON.stringify(this.dragFrom))
       ev.dataTransfer!.effectAllowed = 'move'
       item.classList.add('dragging')
     })
-    item.addEventListener('dragend', () => item.classList.remove('dragging'))
-    item.addEventListener('dragover', (ev) => {
+    item.addEventListener('dragend', () => { item.classList.remove('dragging'); this.dragFrom = null; this.showDropLine(null) })
+  }
+
+  /** The slides being dragged in the list (dataTransfer is unreadable during
+   *  dragover, so the drop line needs its own copy). */
+  private dragFrom: number[] | null = null
+
+  /**
+   * Where dragged slides would land, drawn as a thick line in the gap: the
+   * pointer above a thumbnail's middle means before its unit, below means
+   * after it — never between a parent and its states, since those gaps do not
+   * exist. A drop that would change nothing shows no line. One listener on the
+   * list, so the line follows the pointer across thumbnails and gaps alike.
+   */
+  private wireThumbDrop() {
+    const at = (ev: DragEvent): number | null => {
+      if (!this.dragFrom || !ev.dataTransfer?.types.includes('text/bento-slide')) return null // only a slide drag
+      const slides = this.store.doc.slides
+      for (const item of this.thumbs.querySelectorAll<HTMLElement>('.ed-thumb')) {
+        const r = item.getBoundingClientRect()
+        if (ev.clientY > r.bottom) continue
+        const i = Number(item.dataset.index)
+        const unit = expand(slides, [i])
+        return ev.clientY < r.top + r.height / 2 ? unit[0] : unit[unit.length - 1] + 1
+      }
+      return slides.length
+    }
+    this.thumbs.addEventListener('dragover', (ev) => {
+      const to = at(ev)
+      if (to === null) return
       ev.preventDefault()
-      item.classList.add('drop')
+      ev.dataTransfer!.dropEffect = 'move'
+      this.showDropLine(moveBlock(this.store.doc.slides, this.dragFrom!, to) === this.store.doc.slides ? null : to)
     })
-    item.addEventListener('dragleave', () => item.classList.remove('drop'))
-    item.addEventListener('drop', (ev) => {
+    this.thumbs.addEventListener('dragleave', (ev) => {
+      if (!this.thumbs.contains(ev.relatedTarget as Node | null)) this.showDropLine(null)
+    })
+    this.thumbs.addEventListener('drop', (ev) => {
+      const to = at(ev)
+      this.showDropLine(null)
+      if (to === null) return
       ev.preventDefault()
-      item.classList.remove('drop')
-      this.dropSlides(ev.dataTransfer!.getData('text/bento-slide'), index)
+      this.dropSlides(ev.dataTransfer!.getData('text/bento-slide'), to)
     })
   }
 
-  private wireEndDrop(target: HTMLElement) {
-    const isSlideDrag = (ev: DragEvent) => !!ev.dataTransfer?.types.includes('text/bento-slide')
-    target.addEventListener('dragover', (ev) => {
-      if (!isSlideDrag(ev)) return
-      ev.preventDefault()
-      target.classList.add('drop')
-    })
-    target.addEventListener('dragleave', () => target.classList.remove('drop'))
-    target.addEventListener('drop', (ev) => {
-      if (!isSlideDrag(ev)) return
-      ev.preventDefault()
-      target.classList.remove('drop')
-      this.dropSlides(ev.dataTransfer!.getData('text/bento-slide'), this.store.doc.slides.length)
-    })
+  private showDropLine(at: number | null) {
+    this.thumbs.querySelectorAll('.ed-insertgap.drop').forEach((g) => { if (g.getAttribute('data-at') !== String(at)) g.classList.remove('drop') })
+    if (at !== null) this.thumbs.querySelector(`.ed-insertgap[data-at="${at}"]`)?.classList.add('drop')
+    this.thumbs.classList.toggle('ed-thumbs-dragging', at !== null)
   }
 
   /** Move the dragged units (a JSON list of parent indices, or one index
@@ -2181,10 +2438,37 @@ export class Editor {
     // get PowerPoint-Morph behaviour for free.
     const clone = JSON.parse(JSON.stringify(this.store.doc.slides[i]))
     clone.id = uid('slide')
+    adoptComponents(clone.elements, this.store.doc) // one main per component: the duplicate's main becomes a copy
     this.store.commit(() => {
       this.store.doc.slides.splice(i + 1, 0, clone)
     }, 'slides')
     this.store.goTo(i + 1)
+    if (clone.transition !== 'morph') this.morphOffer = clone.id
+  }
+
+  /** A duplicated slide, until the first time something on it moves or
+   *  resizes — then Morph is offered, once (the duplicate-and-move idiom is
+   *  how a morph is built, and the duplicate keeps the original's transition). */
+  private morphOffer: string | null = null
+
+  private offerMorph() {
+    const slide = this.store.slide
+    // Morph set from anywhere (the inspector, the transition picker, the
+    // toast's own button) answers the question: the offer goes
+    if (slide.transition === 'morph') document.querySelector('.ed-toast[data-kind="morph"]')?.remove()
+    if (!this.morphOffer || slide.id !== this.morphOffer) return
+    if (slide.transition === 'morph') { this.morphOffer = null; return }
+    const pairs = wouldPair(this.store.doc, slide)
+    const moved = slide.elements.some((e) => {
+      const f = pairs.get(e.id)
+      return f && (f.x !== e.x || f.y !== e.y || f.w !== e.w || f.h !== e.h)
+    })
+    if (!moved) return
+    this.morphOffer = null
+    this.toast(t('Things moved — morph them from the slide before?'), {
+      label: t('Use Morph'),
+      run: () => this.store.commit(() => { slide.transition = 'morph' }),
+    }, 'morph')
   }
 
   /** Delete several units at once — the sidebar's multi-selection — with
@@ -2427,18 +2711,30 @@ export class Editor {
     if (!w) this.toast(t('Couldn’t open the speaker view — allow pop-ups for this site.'))
   }
 
-  present(fromStart = false, fullscreen = true) {
-    if (this.presenting) return
+  present(fromStart = false, fullscreen = true, at = fromStart ? 0 : this.store.currentIndex) {
+    if (this.presenting) return null
     // They've started a slideshow — retire the first-run nudge for good.
     lsSet('bento-slideshow-started', '1')
     document.querySelector('.ed-hint-pulse')?.classList.remove('ed-hint-pulse')
     this.canvas.commitTextEdit()
+    document.querySelector('.ed-toast')?.remove() // never drawn over the show
     this.presenting = true
-    startPresentation(this.store.doc, fromStart ? 0 : this.store.currentIndex, (last) => {
+    return startPresentation(this.store.doc, at, (last) => {
       this.presenting = false
       this.store.goTo(last)
       this.canvas.render()
     }, { fullscreen, broadcast: this.presenterBroadcast() })
+  }
+
+  /** Check a transition without presenting the deck: start on the slide the
+   *  show arrives from and step once into this one. */
+  playTransition() {
+    const here = this.store.currentIndex
+    const src = walkSource(this.store.doc, this.store.slide)
+    if (!src) return this.toast(t('Nothing comes before this slide.'))
+    const show = this.present(false, false, this.store.doc.slides.indexOf(src))
+    // ponytail: a fixed beat for the show to settle before stepping; a ready event if it ever jumps
+    if (show) setTimeout(() => show.goTo(here), 700)
   }
 
   /**
@@ -2598,27 +2894,55 @@ export class Editor {
     })
   }
 
-  // --- brand palette → referenced literals ---------------------------------
+  // --- derived values ----------------------------------------------------------
 
-  private paletteSig = ''
-  /**
-   * Re-derive every colour that points at a palette slot, whenever the palette
-   * moves. Same shape as the table→chart binding below: guarded by a signature
-   * so it cannot loop, and DERIVE-NOT-COMMIT — the literals are a pure function
-   * of `doc.theme`, so each collaborating replica computes the same values
-   * without an operation crossing the wire.
-   *
-   * Runs across the whole document, not just the current slide: a palette edit
-   * changes slide 40 as much as slide 1, and nothing else will visit it.
-   */
-  private syncThemeRefs() {
-    const sig = paletteSignature(this.store.doc)
-    if (sig === this.paletteSig) return
-    this.paletteSig = sig
-    if (resolveThemeRefs(this.store.doc)) {
+  private derived!: DeriveMemory
+  /** Palette and token literals, component copies, frame layout, connector
+   *  endpoints and stack fallbacks, re-derived on EVERY slide after any change
+   *  — a palette edit changes slide 40 as much as slide 1, and a remote op or
+   *  an undo can touch any slide. Derive-not-commit: every replica computes
+   *  the same values from the same document, so no operation crosses the wire
+   *  and nothing is an undo step (derive.ts). */
+  private syncDerived() {
+    if (derive(this.store.doc, this.derived)) {
       this.canvas.render()
       this.scheduleThumbs()
+      // the panel rebuilt on this same doc event BEFORE the derive pass ran
+      // (it subscribed first): a bound swatch showed the token's old value and
+      // W/H/X/Y the boxes before layout, until the next edit
+      this.panel.rebuild()
     }
+  }
+
+  /** The selection becomes a component's main (⌘⌥K). */
+  createComponent() {
+    // a frame and its contents are one unit (as ⌘D and copy take them): the
+    // component's main is the selection with everything inside it
+    const els = withDescendants(this.store.slide, this.store.selectedElements)
+    if (!els.length || els.some((e) => e.component)) return
+    const id = uid('comp')
+    // named at birth, so the toast, the inspector header and the Tokens list
+    // all say the same thing ("Component 3"), and the name is the user's to change
+    const name = els[0].groupName || t('Component {n}', { n: components(this.store.doc).length + 1 })
+    this.store.commit(() => {
+      const live = els.map((e) => this.store.element(e.id)!).filter(Boolean)
+      makeComponent(live, id, live[0].groupId && live.every((e) => e.groupId === live[0].groupId) ? live[0].groupId! : uid('g'))
+      for (const e of live) e.groupName = name
+    })
+    this.toast(t('Made {name} — rename it in its header; insert copies from Tokens', { name }))
+    this.showSideView('tokens')
+    this.tokensPane.showComponent(id)
+  }
+
+  /** Show one of the side column's views (Slides | Layers | Tokens). */
+  showSideView(view: 'slides' | 'layers' | 'tokens') {
+    this.sidebar.querySelector<HTMLElement>(`.ed-side-tabs [data-view="${view}"]`)?.click()
+  }
+
+  /** The selection stops following its component; a main's copies keep their values. */
+  detachComponent() {
+    const ids = new Set(this.store.selectedElements.map((e) => e.id))
+    this.store.commit(() => detach(this.store.slide.elements.filter((e) => ids.has(e.id))))
   }
 
   /**
@@ -2650,17 +2974,6 @@ export class Editor {
     // the triggering table edit already dirtied the doc + drives collab/autosave;
     // each replica derives identically from the synced table, so just re-render.
     if (changed) this.canvas.render()
-  }
-
-  /** Re-route connectors (line and open-path shapes anchored to elements via
-   *  from/to) when anything moves — on EVERY slide, not just the one on screen:
-   *  a deck replaced by JSON, a remote op on another slide, or an undo can
-   *  leave any slide's connectors stale, and the thumbnails, the show and print
-   *  all read the model. Derived, not committed — every replica computes the
-   *  same endpoints from the element boxes (mirrors syncLinkedCharts); see
-   *  connectors.ts routeConnectors. Boot routes the whole deck once (main.ts). */
-  private syncConnectors() {
-    if (routeAllConnectors(this.store.doc)) this.canvas.render()
   }
 
   // --- auto-save + crash recovery -----------------------------------------------
@@ -3079,107 +3392,8 @@ export class Editor {
     document.body.appendChild(overlay)
   }
 
-  /** Shortcuts + tips overlay (press ? or the topbar help button). */
-  private openHelp() {
-    document.querySelector('.ed-about-overlay')?.remove()
-    const overlay = div('ed-about-overlay')
-    const box = div('ed-about ed-help-box')
-    const h = document.createElement('h2')
-    h.textContent = t('Shortcuts & tips')
-    box.appendChild(h)
-    // Two explicit columns, placed by hand for balance + theme: LEFT = general
-    // shortcuts & tips, RIGHT = the line/curve/path pointer-editing features.
-    // (Auto column-count balanced poorly with these chunky, unsplittable sections.)
-    const cols = div('ed-help-cols')
-    box.appendChild(cols)
-    const colL = div('ed-help-col')
-    const colR = div('ed-help-col')
-    cols.append(colL, colR)
-    const mod = navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'
-    const section = (col: HTMLElement, title: string, rows: Array<[string, string]>) => {
-      const sec = div('ed-help-sec')
-      const st = document.createElement('h3'); st.textContent = title; sec.appendChild(st)
-      for (const [k, d] of rows) {
-        const r = div('ed-help-row')
-        r.innerHTML = `<kbd></kbd><span></span>`
-        r.querySelector('kbd')!.textContent = k
-        r.querySelector('span')!.textContent = d
-        sec.appendChild(r)
-      }
-      col.appendChild(sec)
-    }
-    section(colL, t('Editing'), [
-      [`${mod}S`, t('Save')],
-      [`${mod}Z · ${mod}⇧Z`, t('Undo · redo')],
-      [`${mod}C · ${mod}V`, t('Copy · paste — elements, or the whole slide when nothing is selected')],
-      [`${mod}⇧X`, t('Ghost cut — the selection fades until you paste to move it; Esc cancels')],
-      [`${mod}D`, t('Duplicate selection')],
-      [`${mod}G · ${mod}⇧G`, t('Group · ungroup')],
-      [`${mod}B · ${mod}I · ${mod}U`, t('Bold · italic · underline while editing text')],
-      [t('Text ▸ Field'), t('Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}')],
-      ['[ · ]', t('Collapse · expand the side panels')],
-      ['C', t('Comment mode')],
-      ['?', t('This help')],
-    ])
-    section(colL, t('Canvas'), [
-      [t('Space-drag'), t('Pan the canvas, including past the edges of the slide')],
-      [t('Middle-drag'), t('Pan as well, if your mouse has a middle button')],
-      [`${mod}-${t('scroll')}`, t('Zoom in and out')],
-      [`${mod}+ · ${mod}− · ${mod}0`, t('Zoom in · out · fit the slide')],
-      ['← · →', t('Walk the slides when nothing is selected; nudge the selection otherwise')],
-      [`${mod}-${t('click')} · ⇧-${t('click')}`, t('Select several slides in the sidebar; drag any of them to move them all, Delete removes them')],
-    ])
-    section(colR, t('Lines & curves'), [
-      [t('Shape ▾'), t('Draw a line, curved line or connector — then drag on the canvas')],
-      [t('Drag a point'), t('Move an endpoint or anchor; drag the body to move the whole line')],
-      [t('Click a point'), t('Reveal its bézier handles for a precise curve')],
-      [`${t('Alt')}-${t('drag')}`, t('Break a smooth point into a sharp corner')],
-      [t('Double-click'), t('Add a point on the line; double-click a point to remove it')],
-    ])
-    section(colR, t('Motion paths'), [
-      [t('Presenting ▸ Loop'), t('Give an element a motion-path loop, then Edit path on canvas')],
-      [t('Drag points'), t('Shape the trajectory — the first point is the element’s rest spot')],
-      [t('Click a point'), t('Reveal bézier handles; Alt-drag one for a sharp corner')],
-      [t('Double-click'), t('Add a point on the path; double-click a point to remove it')],
-      [t('Scroll a point'), t('Set how fast the element moves through that point')],
-    ])
-    section(colL, t('Presenting'), [
-      ['F5', t('Present')],
-      ['F', t('Toggle fullscreen while presenting')],
-      ['S', t('Speaker view — notes on a second screen if you have one')],
-      ['L', t('Toggle laser pointer while presenting')],
-      ['M', t('Reduce motion — pause animations (also honours your OS setting)')],
-      ['B', t('Black screen — and back')],
-      ['G', t('All slides in the speaker view — pick one to jump to')],
-      ['← · →', t('Previous · next slide, or the next reveal step on a slide that has them')],
-      [t('Right-click ▸ Reveal in order'), t('Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order')],
-      ['Esc', t('End the show')],
-    ])
-    const tips = div('ed-help-sec')
-    const tt = document.createElement('h3'); tt.textContent = t('Good to know'); tips.appendChild(tt)
-    const ul = document.createElement('ul'); ul.className = 'ed-help-tips'
-    for (const tip of [
-      t('Paste an image or text straight onto the canvas with ⌘V.'),
-      t('Copy a slide (⌘C with nothing selected) and paste it into another Bento deck.'),
-      t('Make a chart from a table and it stays linked — edit the table, the chart updates.'),
-      t('Your work auto-saves; restore earlier versions from Save → Version history.'),
-    ]) { const li = document.createElement('li'); li.textContent = tip; ul.appendChild(li) }
-    tips.appendChild(ul); colL.appendChild(tips)
-    const more = div('ed-help-more')
-    const link = document.createElement('a')
-    link.href = 'https://bento.page/help'
-    link.target = '_blank'
-    link.rel = 'noopener'
-    link.textContent = t('Full guide at bento.page/help →')
-    more.appendChild(link)
-    box.appendChild(more)
-    overlay.appendChild(box)
-    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey, true) }
-    const onKey = (ev: KeyboardEvent) => { if (ev.key === 'Escape') { ev.stopPropagation(); close() } }
-    overlay.addEventListener('click', (ev) => { if (ev.target === overlay) close() })
-    document.addEventListener('keydown', onKey, true)
-    document.body.appendChild(overlay)
-  }
+  /** The keyboard shortcuts dialog (?, ⌘/, the ⌨ button) — editor/shortcuts.ts. */
+  private openHelp() { openShortcuts(this.commands) }
 
   private savedTimer = 0
   private flashSaved(message = t('Saved'), holdMs = 1400) {
@@ -3282,104 +3496,178 @@ export class Editor {
 
   // --- keyboard ------------------------------------------------------------------
 
+  /**
+   * Every keyed action, in dispatch order (commands.ts). `inField` ones run
+   * while a text field has focus; the rest wait until it does not, and not
+   * while a picture is being cropped (crop mode owns Enter/Esc/Delete).
+   */
+  private commandList?: Command[]
+  get commands(): Command[] {
+    // the deck's modes come and go, so their Switch mode commands are listed fresh
+    if (this.commandList) return [...this.commandList, ...this.modeCommands()]
+    const sel = () => this.store.selectedElements
+    const key = (ev: KeyboardEvent) => ev.key.toLowerCase()
+    // Nothing modal is up: a sheet, dialog, the palette or an open menu owns the
+    // keyboard while it shows, so R or ⌘Z must not reach the slide behind it.
+    const canvasFree = () => !this.canvas.isCropEditing && !document.querySelector(MODAL)
+    const writable = () => canvasFree() && !this.store.readOnly
+    // the tools and selection verbs also wait while a path is being edited
+    const toolFree = () => writable() && !this.canvas.isPathEditing
+    // A letter as the keyboard's layout writes it (Dvorak's K is K); only when
+    // Option turned it into a symbol (macOS: ⌥K is ˚) does the physical key
+    // decide — the one case a layout cannot answer.
+    // a selection the editor may align: not a frame's child (its frame places it)
+    const free = () => sel().length > 0 && !sel().some((e) => e.parentId && this.store.element(e.parentId))
+    const letter = (ev: KeyboardEvent, code: string) => /^[a-z]$/i.test(ev.key) ? `Key${ev.key.toUpperCase()}` === code : ev.code === code
+    // a bare letter: no modifier, so ⌘R, ⇧A and ⌥⇧O stay theirs
+    const tool = (k: string) => (ev: KeyboardEvent, mod: boolean) => !mod && !ev.altKey && !ev.shiftKey && key(ev) === k
+    const list: Command[] = [
+      { id: 'save', label: 'Save', keys: `${MOD}S`, scope: 'always', inField: true, match: (ev, mod) => mod && key(ev) === 's', run: () => this.save(false) },
+      { id: 'zoom-in', label: 'Zoom in', keys: `${MOD}+`, scope: 'canvas', inField: true, match: (ev, mod) => mod && (ev.key === '=' || ev.key === '+'), run: () => this.canvas.zoomIn() },
+      { id: 'zoom-out', label: 'Zoom out', keys: `${MOD}−`, scope: 'canvas', inField: true, match: (ev, mod) => mod && ev.key === '-', run: () => this.canvas.zoomOut() },
+      { id: 'zoom-fit', label: 'Fit the slide', keys: `${MOD}0`, scope: 'canvas', inField: true, match: (ev, mod) => mod && ev.key === '0', run: () => this.canvas.zoomReset() },
+      { id: 'present', label: 'Present', keys: 'F5', scope: 'always', inField: true, match: (ev) => ev.key === 'F5', run: (ev) => this.present(!ev?.shiftKey) },
+      { id: 'palette', label: 'Command palette', keys: `${MOD}K`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && !ev.altKey && key(ev) === 'k', run: () => openPalette(this.commands) },
+      { id: 'help', label: 'Keyboard shortcuts', keys: `? or ${MOD}/`, scope: 'always', when: canvasFree, match: (ev, mod) => (!mod && (ev.key === '?' || (ev.key === '/' && ev.shiftKey))) || (mod && !ev.shiftKey && ev.key === '/'), run: () => this.openHelp() },
+      // The tools, one letter each as in Figma and Penpot (C stays Comment)
+      { id: 'tool-select', label: 'Move', keys: 'V', scope: 'canvas', when: canvasFree, match: tool('v'), run: () => this.useTool(false) },
+      // S: Select only — a drag selects and never moves (the Move tool moves).
+      // S is free while editing; in the show it opens the speaker view, a
+      // different scope.
+      { id: 'tool-marquee', label: 'Select only', keys: 'S', scope: 'canvas', when: canvasFree, match: tool('s'), run: () => this.useTool(true) },
+      { id: 'tool-frame', label: 'Frame', keys: 'F', scope: 'canvas', when: toolFree, match: tool('f'), run: () => this.arm('tool-frame', () => this.placeTool(() => this.newFrame())) },
+      { id: 'tool-rect', label: 'Rectangle', keys: 'R', scope: 'canvas', when: toolFree, match: tool('r'), run: () => this.arm('tool-rect', () => this.placeTool(() => defaultShape('rect'))) },
+      { id: 'tool-ellipse', label: 'Ellipse', keys: 'O', scope: 'canvas', when: toolFree, match: tool('o'), run: () => this.arm('tool-ellipse', () => this.placeTool(() => defaultShape('ellipse'))) },
+      { id: 'tool-line', label: 'Line', keys: 'L', scope: 'canvas', when: toolFree, match: tool('l'), run: () => this.arm('tool-line', () => this.canvas.armDraw('line')) },
+      { id: 'tool-pen', label: 'Pen', keys: 'P', scope: 'canvas', when: toolFree, match: tool('p'), run: () => this.arm('tool-pen', () => this.canvas.armDraw('pen')) },
+      { id: 'insert-text', label: 'Add a text box', keys: 'T', scope: 'canvas', when: toolFree, match: tool('t'), run: () => this.arm('insert-text', () => this.placeTool(() => defaultText({ color: readableInk(this.store.slide.background) }), true)) },
+      { id: 'comment', label: 'Comment mode', keys: 'C', scope: 'canvas', when: canvasFree, match: (ev, mod) => !mod && key(ev) === 'c', run: () => this.canvas.toggleCommentMode() },
+      { id: 'ungroup', label: 'Ungroup', keys: `⇧${MOD}G`, scope: 'canvas', when: () => writable() && sel().some((e) => e.groupId), match: (ev, mod) => mod && ev.shiftKey && key(ev) === 'g', run: () => this.panel.ungroup(sel()) },
+      // ⌘L / Ctrl+L locks the selection, or unlocks it when all of it is locked (#838);
+      // only with a selection, so the browser keeps its address-bar key otherwise
+      { id: 'lock', label: 'Lock or unlock', keys: `${MOD}L`, scope: 'canvas', when: () => writable() && sel().length > 0, yields: true, match: (ev, mod) => mod && !ev.shiftKey && !ev.altKey && key(ev) === 'l', run: () => this.panel.lock(sel()) },
+      { id: 'group', label: 'Group', keys: `${MOD}G`, scope: 'canvas', when: () => writable() && sel().length > 1, match: (ev, mod) => mod && !ev.shiftKey && key(ev) === 'g', run: () => this.panel.group(sel()) },
+      // ⌥⇧U/S/I/E (letter(): on a Mac, Option turns the key into a symbol)
+      ...BOOL_OPS.map((op): Command => ({ id: `bool-${op}`, label: boolUi(op).label, keys: boolUi(op).key, scope: 'canvas', when: () => toolFree() && !!boolOperands(this.store, sel()), match: (ev, mod) => !mod && ev.altKey && ev.shiftKey && letter(ev, boolUi(op).code), run: () => { combine(this.store, sel(), op) } })),
+      // Align and space, Figma's keys: ⌥A ⌥H ⌥D across, ⌥W ⌥V ⌥S down, ⌃⌥H ⌃⌥V even gaps.
+      // A frame's child is the frame's to place, so these wait for a free selection.
+      ...([['align-left', 'Align left', 'A', 'left'], ['align-center', 'Align centers', 'H', 'centerX'], ['align-right', 'Align right', 'D', 'right'],
+        ['align-top', 'Align top', 'W', 'top'], ['align-middle', 'Align middles', 'V', 'middleY'], ['align-bottom', 'Align bottom', 'S', 'bottom']] as const)
+        .map(([id, label, k, edge]): Command => ({ id, label, keys: `⌥${k}`, scope: 'canvas', when: () => toolFree() && free(), match: (ev, mod) => !mod && ev.altKey && !ev.shiftKey && letter(ev, `Key${k}`), run: () => align(this.panel, sel(), edge) })),
+      { id: 'distribute-x', label: 'Space evenly across', keys: '⌃⌥H', scope: 'canvas', when: () => toolFree() && free() && sel().length >= 3, match: (ev) => ev.ctrlKey && ev.altKey && !ev.metaKey && !ev.shiftKey && letter(ev, 'KeyH'), run: () => distribute(this.panel, sel(), 'x') },
+      { id: 'distribute-y', label: 'Space evenly down', keys: '⌃⌥V', scope: 'canvas', when: () => toolFree() && free() && sel().length >= 3, match: (ev) => ev.ctrlKey && ev.altKey && !ev.metaKey && !ev.shiftKey && letter(ev, 'KeyV'), run: () => distribute(this.panel, sel(), 'y') },
+      { id: 'flip-h', label: 'Flip horizontal', keys: '⇧H', scope: 'canvas', when: () => toolFree() && sel().length > 0, match: (ev, mod) => !mod && ev.shiftKey && !ev.altKey && key(ev) === 'h', run: () => flip(this.panel, sel(), 'flipX') },
+      { id: 'flip-v', label: 'Flip vertical', keys: '⇧V', scope: 'canvas', when: () => toolFree() && sel().length > 0, match: (ev, mod) => !mod && ev.shiftKey && !ev.altKey && key(ev) === 'v', run: () => flip(this.panel, sel(), 'flipY') },
+      { id: 'auto-layout', label: 'Add auto layout', keys: '⇧A', scope: 'canvas', when: () => toolFree() && sel().length > 0, match: (ev, mod) => !mod && ev.shiftKey && !ev.altKey && key(ev) === 'a', run: () => this.panel.addAutoLayout(sel()) },
+      { id: 'component', label: 'Create component', keys: `⌥${MOD}K`, scope: 'canvas', when: () => toolFree() && sel().length > 0, match: (ev, mod) => mod && ev.altKey && letter(ev, 'KeyK'), run: () => this.createComponent() },
+      // tokens and components, for ⌘K (palette only: no keys of their own)
+      { id: 'component-main', label: 'Go to main component', scope: 'canvas', when: () => canvasFree() && !!selectedComponent(this.panel, sel()) && !selectedComponent(this.panel, sel())!.main, run: () => goToMain(this.panel, sel()[0].component!.id) },
+      { id: 'component-reset', label: 'Reset overrides', scope: 'canvas', when: () => writable() && sel().some((e) => e.component && !e.component.main && e.component.over?.length), run: () => this.resetSelectedOverrides() },
+      { id: 'component-detach', label: 'Detach component', scope: 'canvas', when: () => writable() && sel().some((e) => e.component), run: () => this.detachComponent() },
+      { id: 'token-new-color', label: 'New color token', scope: 'canvas', when: writable, run: () => { this.showSideView('tokens'); this.tokensPane.newToken('color') } },
+      { id: 'token-new-number', label: 'New number token', scope: 'canvas', when: writable, run: () => { this.showSideView('tokens'); this.tokensPane.newToken('number') } },
+      { id: 'token-bind', label: 'Bind to token…', scope: 'canvas', when: () => writable() && sel().length > 0, run: () => this.bindToTokenMenu() },
+      { id: 'tokens-show', label: 'Show tokens and components', scope: 'always', run: () => this.showSideView('tokens') },
+      { id: 'redo', label: 'Redo', keys: `⇧${MOD}Z`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && ((ev.shiftKey && key(ev) === 'z') || key(ev) === 'y'), run: () => this.store.redo() },
+      { id: 'undo', label: 'Undo', keys: `${MOD}Z`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && key(ev) === 'z', run: () => this.store.undo() },
+      { id: 'duplicate', label: 'Duplicate', keys: `${MOD}D`, scope: 'canvas', when: writable, match: (ev, mod) => mod && key(ev) === 'd', run: () => this.duplicateSelection() },
+      // Ghost Cut: the selection fades where it stands and ⌘V MOVES it (same
+      // ids, one undo step); Esc cancels. Also copied, so pasting elsewhere
+      // works as after ⌘C. Plain ⌘X is unchanged.
+      { id: 'ghost-cut', label: 'Cut to move', keys: `⇧${MOD}X`, scope: 'canvas', when: writable, match: (ev, mod) => mod && ev.shiftKey && key(ev) === 'x', run: () => {
+        if (!this.store.selection.length || this.store.readOnly) return
+        this.copySelection()
+        // a frame moves with its contents; a locked element is not moved off the slide (#838)
+        const locked = flagged(this.store.slide, 'locked')
+        const ids = withDescendants(this.store.slide, this.store.selectedElements.filter((e) => !locked.has(e.id))).map((e) => e.id)
+        if (!ids.length) return
+        this.store.select([])
+        this.canvas.setGhost({ slideId: this.store.slide.id, ids })
+      } },
+      { id: 'toggle-left', label: 'Show or hide the slide list', keys: '[', scope: 'always', when: canvasFree, match: (ev) => ev.key === '[', run: () => this.togglePanel('left') },
+      { id: 'toggle-right', label: 'Show or hide the Format panel', keys: ']', scope: 'always', when: canvasFree, match: (ev) => ev.key === ']', run: () => this.togglePanel('right') },
+      { id: 'next-slide', label: 'Next slide', keys: 'PageDown', scope: 'canvas', when: canvasFree, match: (ev) => ev.key === 'PageDown', run: () => this.store.goToLinear(1) },
+      { id: 'prev-slide', label: 'Previous slide', keys: 'PageUp', scope: 'canvas', when: canvasFree, match: (ev) => ev.key === 'PageUp', run: () => this.store.goToLinear(-1) },
+      // palette only: what the topbar inserts, and its other one-click actions
+      { id: 'insert-image', when: toolFree, label: 'Add an image', scope: 'canvas', run: () => this.pickImage() },
+      { id: 'insert-table', when: toolFree, label: 'Add a table', scope: 'canvas', run: () => this.canvas.insert(this.newTable()) },
+      { id: 'insert-chart', when: toolFree, label: 'Add a chart', scope: 'canvas', run: () => this.canvas.insert(defaultChart(applyChartPalette(CHART_PRESETS.bar(), this.store.doc.theme))) },
+      { id: 'insert-code', when: toolFree, label: 'Add a code snippet', scope: 'canvas', run: () => this.canvas.insert(defaultCode({ color: readableInk(this.store.slide.background) }), true) },
+      { id: 'copy', label: 'Copy', keys: `${MOD}C`, scope: 'canvas', when: () => sel().length > 0, run: () => this.copySelection() },
+      { id: 'delete', label: 'Delete', keys: '⌫', scope: 'canvas', when: () => writable() && sel().length > 0, run: () => this.deleteSelection() },
+      { id: 'slideshow', label: 'Slideshow', scope: 'always', run: () => this.present(false, true) },
+      { id: 'use-morph', label: 'Use Morph', scope: 'always', when: () => writable() && this.store.slide.transition !== 'morph' && !!walkSource(this.store.doc, this.store.slide), run: () => { const sl = this.store.slide; this.store.commit(() => { sl.transition = 'morph' }) } },
+      // ⌘A: every top-level element on the slide (a frame's children come with
+      // it) — or, with focus in the slide list, every slide
+      { id: 'select-all', label: 'Select all', keys: `${MOD}A`, scope: 'canvas', when: canvasFree, match: (ev, mod) => mod && !ev.shiftKey && !ev.altKey && key(ev) === 'a', run: () => {
+        if (this.thumbs.contains(document.activeElement)) { this.setThumbSel(this.store.doc.slides.map((sl, i) => (sl.stateOf ? -1 : i)).filter((i) => i >= 0)); return }
+        const ids = new Set(this.store.slide.elements.map((e) => e.id))
+        const locked = flagged(this.store.slide, 'locked'), hidden = flagged(this.store.slide, 'hidden')
+        this.store.select(this.store.slide.elements.filter((e) => !locked.has(e.id) && !hidden.has(e.id) && !(e.parentId && ids.has(e.parentId))).map((e) => e.id))
+      } },
+      { id: 'select-parent', label: 'Select parent', keys: 'Esc', scope: 'canvas', when: () => canvasFree() && sel().length > 0 && sel().every((e) => !!e.parentId && !!this.store.element(e.parentId)), run: () => this.store.select([...new Set(sel().map((e) => e.parentId!))]) },
+      { id: 'play-transition', label: 'Play transition', scope: 'always', when: () => !!walkSource(this.store.doc, this.store.slide), run: () => this.playTransition() },
+      { id: 'export-pdf', label: 'Print or save as PDF…', keys: `${MOD}P`, scope: 'always', inField: true, match: (ev, mod) => mod && !ev.shiftKey && !ev.altKey && key(ev) === 'p', run: () => this.exportPdf() },
+      { id: 'preferences', label: 'Preferences', keys: `${MOD},`, scope: 'always', inField: true, match: (ev, mod) => mod && ev.key === ',', run: () => this.openPreferences() },
+      { id: 'doc-props', label: 'Document properties…', scope: 'always', run: () => this.openDocProps() },
+      { id: 'version-history', label: 'Version history…', scope: 'always', run: () => void this.openVersionHistory() },
+      { id: 'export-images', label: 'Export slides as images…', scope: 'always', run: () => this.exportImages() },
+      { id: 'import-pptx', label: 'Import PowerPoint…', scope: 'always', run: () => { window.open(IMPORT_PPTX_URL, '_blank', 'noopener,noreferrer') } },
+      { id: 'export-pptx', label: 'Export for PowerPoint…', scope: 'always', run: () => { window.open(EXPORT_PPTX_URL, '_blank', 'noopener,noreferrer') } },
+      { id: 'compress-images', label: 'Compress pictures in this deck…', scope: 'always', when: writable, run: () => void this.compressDeckPictures() },
+      { id: 'copy-json', label: 'Copy document JSON', scope: 'always', run: () => void this.copyDocJson() },
+      { id: 'copy-compact-json', label: 'Copy compact JSON (for agents)', scope: 'always', run: () => void this.copyDocJson(true) },
+      { id: 'replace-json', label: 'Replace from JSON…', scope: 'always', when: writable, run: () => this.openReplaceJson() },
+      { id: 'start-scratch', label: 'Start from scratch…', scope: 'always', when: writable, run: () => this.startFromScratch() },
+      { id: 'save-copy', label: 'Save a copy…', scope: 'always', run: () => void this.save(true) },
+      { id: 'language', label: 'Language', scope: 'always', run: () => this.openPreferences() },
+      { id: 'speaker', label: 'Speaker view', scope: 'always', run: () => this.openSpeakerView() },
+      { id: 'about', label: 'About bento/slides', scope: 'always', run: () => this.openAbout() },
+    ]
+    this.commandList = list
+    return [...list, ...this.modeCommands()]
+  }
+
+  /** One Switch mode command per mode the deck has, but the active one. */
+  private modeCommands(): Command[] {
+    const tk = this.store.doc.theme.tokens
+    if (!tk || modesOf(tk).length < 2) return []
+    return modesOf(tk).filter((m) => m !== activeMode(tk)).map((m): Command => ({
+      id: `mode-${m}`, label: t('Switch mode → {mode}', { mode: m === 'default' ? t('Default') : m }), scope: 'canvas',
+      when: () => !this.store.readOnly, run: () => this.tokensPane.switchMode(m),
+    }))
+  }
+
+
   private wireKeyboard() {
     document.addEventListener('keydown', (ev) => {
       if (this.presenting) return
       const mod = ev.metaKey || ev.ctrlKey
+      // a number field hands ⌘Z/⇧⌘Z back to the document (controls.ts numeric)
+      const numUndo = mod && /^[zy]$/i.test(ev.key) && ev.target instanceof Element && !!ev.target.closest('.ed-num')
       const inField =
-        ev.target instanceof Element &&
-        ev.target.closest('input, textarea, select, [contenteditable="true"]') != null
+        ev.target instanceof Element && !numUndo &&
+        // a colour swatch opens the popover — a button, not a field for typing
+        ev.target.closest('input:not([type=color]), textarea, select, [contenteditable="true"]') != null
 
-      if (mod && ev.key.toLowerCase() === 's') {
-        ev.preventDefault()
-        this.save(false)
-        return
-      }
-      if (mod && (ev.key === '=' || ev.key === '+')) {
-        ev.preventDefault()
-        this.canvas.zoomIn()
-        return
-      }
-      if (mod && ev.key === '-') {
-        ev.preventDefault()
-        this.canvas.zoomOut()
-        return
-      }
-      if (mod && ev.key === '0') {
-        ev.preventDefault()
-        this.canvas.zoomReset()
-        return
-      }
-      if (ev.key === 'F5') {
-        ev.preventDefault()
-        this.present(!ev.shiftKey)
-        return
-      }
+      // A key typed at a selected text box is text, as in PowerPoint and Keynote:
+      // it opens the box with the character. Before the command list, so the R
+      // of "Revenue" is never the rectangle tool; a shifted key a command claims
+      // (⇧A, ?) stays the command's.
+      if (!inField && this.typeIntoText(ev)) return
+      if (dispatch(this.commands, ev, inField)) return
       if (inField) return
       // Crop mode owns the keyboard: Enter/Esc are its (cropedit.ts), and a
       // Delete meant for the picture being cropped must not remove it.
       if (this.canvas.isCropEditing) return
 
-      if (!mod && (ev.key === '?' || (ev.key === '/' && ev.shiftKey))) {
-        ev.preventDefault()
-        this.openHelp()
-        return
-      }
-      if (!mod && ev.key.toLowerCase() === 'c') {
-        ev.preventDefault()
-        this.canvas.toggleCommentMode()
-        return
-      }
-      // ⌘L / Ctrl+L locks the selection (#838). Only with something selected:
-      // otherwise the browser keeps its address-bar shortcut. (inField returned above.)
-      if (mod && !ev.shiftKey && !ev.altKey && ev.key.toLowerCase() === 'l' && this.store.selection.length && !this.store.readOnly) {
-        ev.preventDefault()
-        this.panel.lock(this.store.selectedElements)
-        return
-      }
-      if (mod && ev.key.toLowerCase() === 'g') {
-        ev.preventDefault()
-        const els = this.store.selectedElements
-        if (ev.shiftKey) this.panel.ungroup(els)
-        else this.panel.group(els)
-        return
-      }
-      if (mod && ev.key.toLowerCase() === 'z') {
-        ev.preventDefault()
-        ev.shiftKey ? this.store.redo() : this.store.undo()
-        return
-      }
-      if (mod && ev.key.toLowerCase() === 'y') {
-        ev.preventDefault()
-        this.store.redo()
-        return
-      }
-      if (mod && ev.key.toLowerCase() === 'd') {
-        ev.preventDefault()
-        this.duplicateSelection()
-        return
-      }
-      // Ghost Cut: the selection fades where it stands and ⌘V MOVES it (same
-      // ids, one undo step); Esc cancels. Also copied, so pasting elsewhere
-      // works as after ⌘C. Plain ⌘X is unchanged.
-      if (mod && ev.shiftKey && ev.key.toLowerCase() === 'x') {
-        ev.preventDefault()
-        if (!this.store.selection.length || this.store.readOnly) return
-        this.copySelection()
-        // a locked element is not moved off the slide either (#838)
-        const ids = this.store.selectedElements.filter((e) => !e.locked).map((e) => e.id)
-        if (!ids.length) return
-        this.store.select([])
-        this.canvas.setGhost({ slideId: this.store.slide.id, ids })
-        return
-      }
       if (mod && ev.key.toLowerCase() === 'c') {
         this.canvas.ghost = null // a fresh copy is what ⌘V should paste now
         // Copy to BOTH the in-app clipboard (fast, same session) and the system
         // clipboard as a Bento payload (works across decks/tabs). Elements when
         // any are selected; otherwise the current slide.
         if (this.store.selection.length) {
-          void navigator.clipboard?.writeText?.(serializeElements(this.store.selectedElements, this.store.doc)).catch(() => {})
+          void navigator.clipboard?.writeText?.(serializeElements(withDescendants(this.store.slide, this.store.selectedElements), this.store.doc)).catch(() => {})
         } else {
           const slides = this.selectedSlides()
           void navigator.clipboard?.writeText?.(serializeSlides(slides, this.store.doc)).catch(() => {})
@@ -3404,6 +3692,10 @@ export class Editor {
         }
         return
       }
+      // an arrow pressed on an inspector control that uses arrows (a picker,
+      // a chip) is that control's, never a slide walk or a nudge; on a plain
+      // button there (a +, a fold) it still nudges
+      if (ev.key.startsWith('Arrow') && ev.target instanceof Element && ev.target.closest('.ed-props') && ownsArrows(ev.target)) return
       // nothing selected → arrows walk slides (Left/Up = prev, Right/Down = next);
       // when an element IS selected they nudge it (branch below). inField already
       // returned above, so this never fires mid text/cell edit.
@@ -3414,24 +3706,36 @@ export class Editor {
       }
       if (ev.key.startsWith('Arrow') && this.store.selection.length) {
         ev.preventDefault()
+        // inside an auto-layout frame an arrow moves the child one slot along
+        // the flow (a grid's ↑/↓ a whole row), as Figma does — the layout would
+        // undo a nudge anyway
+        const one = this.store.selectedElements.length === 1 ? this.store.selectedElements[0] : null
+        const frame = one?.parentId ? this.store.element(one.parentId) : undefined
+        if (one && isFrame(frame) && !flagged(this.store.slide, 'locked').has(one.id)) {
+          const L = frame.layout
+          const along = L.dir === 'col' ? ['ArrowUp', 'ArrowDown'] : ['ArrowLeft', 'ArrowRight']
+          const across = L.dir === 'grid' ? ['ArrowUp', 'ArrowDown'] : []
+          const by = along.includes(ev.key) ? (ev.key === along[0] ? -1 : 1) : across.includes(ev.key) ? (ev.key === 'ArrowUp' ? -1 : 1) * colsOf(frame) : 0
+          if (by) {
+            const sibs = frameChildren(this.store.slide, frame)
+            const to = sibs.findIndex((e) => e.id === one.id) + by
+            const slide = this.store.slide
+            // at either end there is nowhere to go, and no undo step to record
+            if (to >= 0 && to < sibs.length) this.store.commit(() => { moveInFrame(slide, one.id, to) })
+          }
+          return
+        }
         const step = ev.shiftKey ? 10 : 1
         const dx = ev.key === 'ArrowLeft' ? -step : ev.key === 'ArrowRight' ? step : 0
         const dy = ev.key === 'ArrowUp' ? -step : ev.key === 'ArrowDown' ? step : 0
+        const locked = flagged(this.store.slide, 'locked')
         this.store.commit(() => {
           for (const el of this.store.selectedElements) {
-            if (el.locked) continue
+            if (locked.has(el.id)) continue
             el.x += dx
             el.y += dy
           }
         })
-        return
-      }
-      if (ev.key === '[') {
-        this.togglePanel('left')
-        return
-      }
-      if (ev.key === ']') {
-        this.togglePanel('right')
         return
       }
       if (ev.key === 'Escape') {
@@ -3439,34 +3743,137 @@ export class Editor {
         if (this.thumbSel.length) this.setThumbSel([])
         if (this.canvas.isDrawing) this.canvas.cancelDraw()
         else if (this.canvas.isPathEditing) this.canvas.stopPathEdit(true)
-        else this.store.select([])
+        else if (!this.store.selection.length && this.marquee) this.useTool(false) // nothing left to let go of: back to Move
+        else {
+          // out one level first, as in Figma: a frame's children → the frame,
+          // then a group's members (a component copy's) → the whole group
+          const sel = this.store.selectedElements
+          const up = sel[0]?.parentId
+          const g = sel[0]?.groupId
+          const kin = g && sel.every((e) => e.groupId === g) ? this.store.slide.elements.filter((e) => e.groupId === g) : []
+          if (up && sel.every((e) => e.parentId === up) && this.store.element(up)) this.store.select([up])
+          else if (kin.length > sel.length) { this.store.select(kin.map((e) => e.id)); this.canvas.leaveGroup() }
+          else this.store.select([])
+        }
         return
-      }
-      if (ev.key === 'PageDown') {
-        ev.preventDefault()
-        this.store.goToLinear(1)
-        return
-      }
-      if (ev.key === 'PageUp') {
-        ev.preventDefault()
-        this.store.goToLinear(-1)
       }
     })
   }
 
+  /** Open the one selected text box with the key just typed: it replaces the
+   *  words the edit selects on opening, or fills an empty placeholder. */
+  private typeIntoText(ev: KeyboardEvent): boolean {
+    if (ev.metaKey || ev.ctrlKey || ev.altKey || ev.isComposing || [...ev.key].length !== 1) return false
+    const sel = this.store.selectedElements
+    if (sel.length !== 1 || sel[0].type !== 'text' || this.store.readOnly || flagged(this.store.slide, 'locked').has(sel[0].id)) return false
+    if (document.querySelector(MODAL) || this.canvas.isCropEditing || this.canvas.isPathEditing) return false
+    // Space is the pan gesture; a shifted key or a symbol bound to a command ([ ] the panels) runs it
+    if (ev.key === ' ') return false
+    if ((ev.shiftKey || !/[\p{L}\p{N}]/u.test(ev.key)) && this.commands.some((c) => c.match?.(ev, false))) return false
+    ev.preventDefault()
+    this.canvas.editElement(sel[0].id)
+    if (!this.canvas.isEditingText) return true
+    document.execCommand('insertText', false, ev.key)
+    return true
+  }
+
+  /** V: back to the plain pointer — an armed draw tool, the comment tool
+   *  and a motion-path edit all stand down. */
+  private selectTool() {
+    if (this.canvas.isDrawing) this.canvas.cancelDraw()
+    if (this.canvas.isCommenting) this.canvas.toggleCommentMode()
+    if (this.canvas.isPathEditing) this.canvas.stopPathEdit(true)
+  }
+
+  /** The pointer the canvas returns to: Move (V) or Select only (S, marquee). */
+  private marquee = false
+  /** The draw or place tool armed right now, by command id. */
+  private armed: string | null = null
+
+  /** V or S: stand any armed tool down and make that pointer the resting one. */
+  private useTool(marquee: boolean) {
+    this.selectTool()
+    this.marquee = marquee
+    this.canvas.setMarqueeOnly(marquee)
+    this.refreshTools()
+  }
+
+  /** Arm a draw/place tool by command id, so the topbar can show it pressed. */
+  private arm(id: string, go: () => void) {
+    go()
+    this.armed = this.canvas.isDrawing ? id : null
+    this.refreshTools()
+  }
+
+  /** Exactly one tool reads as pressed in the topbar, as in Figma: the armed
+   *  one, else Comment while commenting, else the resting pointer. */
+  private refreshTools() {
+    const active = this.canvas.isDrawing && this.armed ? this.armed
+      : this.canvas.isCommenting ? 'comment'
+      : this.marquee ? 'tool-marquee' : 'tool-select'
+    for (const b of document.querySelectorAll<HTMLElement>(TOOL_CMDS.map((id) => `.ed-topbar [data-cmd="${id}"]`).join(', '))) {
+      const on = b.dataset.cmd === active
+      b.classList.toggle('ed-btn-armed', on)
+      b.setAttribute('aria-pressed', String(on))
+    }
+    // a tool picked from the Shape menu presses the menu's button
+    const shape = document.querySelector<HTMLElement>('.ed-topbar .ed-shape-trigger')
+    if (shape) {
+      const on = Object.values(SHAPE_TOOL).includes(active)
+      shape.classList.toggle('ed-btn-armed', on)
+      shape.setAttribute('aria-pressed', String(on))
+    }
+  }
+
+  /** F: an empty auto-layout frame (a rect carrying `layout`, layout.ts) —
+   *  whatever is later given it as a child lines up inside. */
+  private newFrame(): SlideElement {
+    return defaultShape('rect', {
+      fill: '#FFFFFF', stroke: '#D0D5DD', strokeWidth: 1, radius: 8,
+      layout: { dir: 'row', gap: 16, pad: [16, 16, 16, 16] },
+    })
+  }
+
+  /** R, O, F, T: the tool arms, and a click or a drag on the slide puts it
+   *  down. With an auto-layout frame selected, a gesture that starts inside
+   *  that frame puts the new element in it (canvas.armPlace). */
+  private placeTool(make: () => SlideElement, edit = false) {
+    const sel = this.store.selectedElements
+    const f = sel.length === 1 && sel[0].type === 'shape' && sel[0].layout ? sel[0] : null
+    this.canvas.armPlace(make, edit, f?.id)
+  }
+
   private duplicateSelection() {
-    const els = this.store.selectedElements
-    if (!els.length) return
-    const clones = els.map((el) => cloneElement(el))
+    const picked = this.store.selectedElements
+    if (!picked.length) return
+    const els = withDescendants(this.store.slide, picked)
+    const clones = freshGroups(els.map((el) => cloneElement(el)), els)
+    adoptComponents(clones, this.store.doc)
     this.store.commit(() => this.store.slide.elements.push(...clones))
-    this.store.select(clones.map((c) => c.id))
+    // the copies of what was picked; their contents ride along unselected
+    const top = new Set(picked.map((e) => els.indexOf(e)))
+    this.store.select(clones.filter((_, i) => top.has(i)).map((c) => c.id))
   }
 
   /** Remove the selected elements. Shared by ⌫ and the context menu. */
-  private deleteSelection() {
-    // a locked element is never deleted from the canvas (#838): unlock it
-    // first. Like arrow nudges, a mixed selection acts on the unlocked part.
-    this.panel.deleteEls(this.store.selectedElements)
+  /** Delete the selection. A main with copies asks first, and its first copy
+   *  becomes the main, so the copies keep following something (one undo step).
+   *  `cut` (⌘X, to paste elsewhere) moves a main rather than losing it: no question. */
+  private deleteSelection(cut = false) {
+    if (!this.store.selection.length) return
+    // a locked element is never deleted from the canvas (#838): unlock it first;
+    // a mixed selection acts on its unlocked part
+    const locked = flagged(this.store.slide, 'locked')
+    const doomed = this.store.selectedElements.filter((e) => !locked.has(e.id))
+    if (!doomed.length) return
+    const ids = new Set(withDescendants(this.store.slide, doomed).map((e) => e.id))
+    const lost = cut ? [] : mainsLost(this.store.doc, ids)
+    if (lost.length && !confirm(t('Delete the main of “{name}”? Its copies keep their look, and the first one becomes the new main.', { name: lost[0].name || t('Component') }))) return
+    this.store.commit(() => {
+      this.store.slide.elements = this.store.slide.elements.filter((e) => !ids.has(e.id))
+      for (const c of lost) promoteCopy(this.store.doc, c.id)
+    })
+    this.store.select(this.store.selectedElements.filter((e) => locked.has(e.id)).map((e) => e.id)) // the locked part stays selected
   }
 
   /** Selected slides + parents in deck order. */
@@ -3494,23 +3901,13 @@ export class Editor {
    *  clipboard as a Bento payload. Shared by ⌘C and the context menu. */
   private copySelection() {
     const text = this.store.selection.length
-      ? serializeElements(this.store.selectedElements, this.store.doc)
+      ? serializeElements(withDescendants(this.store.slide, this.store.selectedElements), this.store.doc)
       : serializeSlides(this.selectedSlides(), this.store.doc)
     void navigator.clipboard?.writeText?.(text).catch(() => {})
   }
 
   // --- context menu -------------------------------------------------------
 
-  /** The element id under a viewport point on the canvas, or null.
-   *  Walks the stack rather than taking the topmost node, because once
-   *  something is selected Moveable's control box covers it. */
-  private elementIdAtPoint(x: number, y: number): string | null {
-    for (const n of document.elementsFromPoint(x, y)) {
-      const el = n.closest<HTMLElement>('.bento-el')
-      if (el?.dataset.elId && el.closest('.ed-stage-scale')) return el.dataset.elId
-    }
-    return null
-  }
 
   private wireContextMenu() {
     // A right-click COMMITS a live text edit — the press blurs the caret —
@@ -3556,8 +3953,19 @@ export class Editor {
       openCtxMenu(x, y, this.slideMenuItems(Number(thumb.dataset.index), thumb))
       return true
     }
+    // a layer row: the canvas's own element menu (Group, Ungroup, order,
+    // delete…), on that row's element — or, on a group's row, the group
+    const layer = target.closest<HTMLElement>('.ed-side-layers .ed-layer')
+    if (layer) {
+      const gid = layer.dataset.group
+      const ids = gid ? this.store.slide.elements.filter((e) => e.groupId === gid).map((e) => e.id) : [layer.dataset.id!]
+      if (!ids.every((id) => this.store.selection.includes(id))) this.store.select(ids)
+      openCtxMenu(x, y, this.elementMenuItems())
+      return true
+    }
     if (!target.closest('.ed-scroll')) return false // not the canvas — leave it alone
-    const id = this.elementIdAtPoint(x, y)
+    const stack = this.canvas.elementsAt(x, y)
+    const id = stack[0]
     if (!id) {
       openCtxMenu(x, y, this.canvasMenuItems())
       return true
@@ -3566,8 +3974,23 @@ export class Editor {
     // follows, and the only way the menu's verbs can be honest about what they
     // will act on.
     if (!this.store.selection.includes(id)) this.store.select([id])
-    openCtxMenu(x, y, this.elementMenuItems())
+    openCtxMenu(x, y, [...this.layerPickItems(stack), ...this.elementMenuItems()])
     return true
+  }
+
+  /** With more than one element under the pointer, the menu opens with the
+   *  whole stack, topmost first — the way to reach something buried, without
+   *  knowing a modifier. Labels are the layers panel's own. */
+  private layerPickItems(stack: string[]): CtxItem[] {
+    if (stack.length < 2) return []
+    const rows: CtxItem[] = []
+    for (const id of stack.slice(0, 8)) { // ponytail: capped; a deeper stack is the layers panel's job
+      const el = this.store.element(id)
+      if (!el) continue
+      const on = this.store.selection.length === 1 && this.store.selection[0] === id
+      rows.push({ label: t('Select {name}', { name: labelIn(this.store.slide, el, t) }), hint: on ? '✓' : undefined, run: () => this.store.select([id]) })
+    }
+    return [...rows, 'sep']
   }
 
   /**
@@ -3630,25 +4053,152 @@ export class Editor {
     this.root.addEventListener('touchcancel', cancel, true)
   }
 
+  /** A topbar button that runs a command: its tooltip and its letter badge
+   *  are the command's (commands.ts), and data-cmd names it. */
+  private cmdButton(id: string, icon: string, label: string, tip?: string): HTMLElement {
+    const c = this.commands.find((x) => x.id === id)!
+    const b = btn(icon, label, () => c.run(), titleFor(this.commands, id, tip))
+    b.dataset.cmd = id
+    if (c.keys && /^[A-Z]$/.test(c.keys)) {
+      const k = document.createElement('kbd')
+      k.className = 'ed-tool-key'
+      k.textContent = c.keys
+      k.setAttribute('aria-hidden', 'true') // the tooltip and aria name carry it
+      b.appendChild(k)
+    }
+    if (!label) b.setAttribute('aria-label', tip ?? t(c.label))
+    return b
+  }
+
+  /** Penpot's path bar: while one path shape is selected, its node type
+   *  (on the selected anchor, or every anchor) and whether it is closed. */
+  private pathBar(): HTMLElement {
+    const bar = div('ed-pathbar')
+    bar.setAttribute('role', 'group')
+    bar.setAttribute('aria-label', t('Path'))
+    const one = () => {
+      const els = this.store.selectedElements
+      return els.length === 1 && els[0].type === 'shape' && els[0].shape === 'path' ? els[0] : null
+    }
+    const kinds: Array<[NodeKind, string, string]> = [
+      ['corner', ICONS.nodeCorner, t('Corner — sharp, no handles')],
+      ['smooth', ICONS.nodeSmooth, t('Smooth — handles in line')],
+      ['symmetric', ICONS.nodeSymmetric, t('Symmetric — handles in line and the same length')],
+    ]
+    const pills = kinds.map(([kind, icon, tip]) => {
+      const b = btn(icon, '', () => { const el = one(); if (el) this.canvas.curves.setKind(el.id, kind) }, `${tip} — ${t('the selected point, or every point')}`)
+      b.dataset.node = kind
+      b.setAttribute('aria-label', tip)
+      return b
+    })
+    const close = btn(ICONS.closePath, t('Close path'), () => { const el = one(); if (el) this.canvas.curves.toggleClosed(el.id) },
+      t('Close the path — join its last point to the first; again to open it'))
+    close.dataset.node = 'close'
+    bar.append(...pills, close)
+    const sync = () => {
+      // build() runs before the canvas exists: until then there is no path to edit
+      const curves = this.canvas?.curves
+      const el = this.store.readOnly || !curves ? null : one()
+      bar.hidden = !el
+      if (!el || !curves) return
+      curves.onSelect = sync
+      const st = curves.pathState(el.id)
+      for (const b of pills) b.setAttribute('aria-pressed', String(st?.kind === b.dataset.node))
+      close.setAttribute('aria-pressed', String(!!st?.closed))
+    }
+    sync()
+    // after the canvas has re-attached its editor for the new selection
+    const later = () => requestAnimationFrame(sync)
+    for (const e of ['selection', 'doc', 'current'] as const) {
+      const off = this.store.on(e, later)
+      this.buildScope.signal.addEventListener('abort', off)
+    }
+    return bar
+  }
+
+  /** A command's keys as the chrome prints them (commands.ts is the one source). */
+  /** The element menu's component rows: make one, or — on a member — reach its
+   *  main, reset a copy's local edits, and detach (a part of a main is removed). */
+  private componentMenu(els: SlideElement[]): CtxItem[] {
+    const c = selectedComponent(this.panel, els)
+    if (!els.some((e) => e.component)) return [{ label: t('Create component'), hint: this.keysOf('component'), cmd: 'component', disabled: !els.length, run: () => this.createComponent() }]
+    return [
+      ...(c && !c.main ? [{ label: t('Go to main component'), cmd: 'component-main', run: () => goToMain(this.panel, c.info.id) }] : []),
+      ...(c && !c.main && els.some((e) => e.component?.over?.length) ? [{ label: t('Reset overrides'), cmd: 'component-reset', run: () => this.resetSelectedOverrides() }] : []),
+      { label: c?.main && !c.whole ? t('Remove from component') : t('Detach component'), cmd: 'component-detach', run: () => this.detachComponent() },
+    ]
+  }
+
+  private resetSelectedOverrides() {
+    const ids = new Set(this.store.selection)
+    this.store.commit(() => resetOverrides(this.store.slide.elements.filter((e) => ids.has(e.id))))
+  }
+
+  /** ⌘K's Bind to token…: the selection's main colour (a shape's fill, a text's
+   *  colour) to one of the deck's colour tokens, from a menu at the canvas centre. */
+  private bindToTokenMenu() {
+    const els = this.store.selectedElements
+    const set = this.store.doc.theme.tokens?.set ?? {}
+    const names = Object.keys(set).filter((n) => set[n].type === 'color')
+    if (!els.length || !names.length) { this.toast(names.length ? t('Select an element first') : t('Make a color token in the Tokens view first')); return }
+    const r = (document.querySelector('.ed-scroll') ?? document.body).getBoundingClientRect()
+    openCtxMenu(r.left + r.width / 2, r.top + r.height / 3, names.map((n) => ({
+      label: n,
+      run: () => this.store.commit(() => {
+        for (const e of els) {
+          const el = this.store.element(e.id)
+          if (el) bindToken(this.store.doc, el as never, el.type === 'text' || el.type === 'code' ? 'color' : 'fill', n)
+        }
+      }),
+    })))
+  }
+
+  private keysOf(id: string): string | undefined {
+    return this.commands.find((c) => c.id === id)?.keys
+  }
+
   private elementMenuItems(): CtxItem[] {
     const els = this.store.selectedElements
     const one = els.length === 1 ? els[0] : null
     const openable = !!one && (one.type === 'text' || one.type === 'table')
     const grouped = els.some((e) => e.groupId)
+    const gid = els[0]?.groupId
+    const wholeGroup = els.length > 1 && gid && els.every((e) => e.groupId === gid) &&
+      this.store.slide.elements.filter((e) => e.groupId === gid).length === els.length ? gid : undefined
     return [
       { label: t('Edit text'), disabled: !openable, run: () => one && this.canvas.editElement(one.id) },
+      // naming happens in the layer list, so Rename shows it first; a whole
+      // group selected renames the group
+      { label: t('Rename'), disabled: this.store.readOnly || (!one && !wholeGroup), run: () => {
+        this.sidebar.querySelector<HTMLElement>('.ed-side-tabs [data-view="layers"]')?.click()
+        if (one) this.panel.layers.rename(one.id)
+        else if (wholeGroup) this.panel.layers.renameGroup(wholeGroup)
+      } },
       'sep',
-      { label: t('Cut'), hint: '⌘X', run: () => { this.copySelection(); this.deleteSelection() } },
-      { label: t('Copy'), hint: '⌘C', run: () => this.copySelection() },
-      { label: t('Duplicate'), hint: '⌘D', run: () => this.duplicateSelection() },
+      { label: t('Cut'), hint: '⌘X', run: () => { this.copySelection(); this.deleteSelection(true) } },
+      { label: t('Copy'), hint: this.keysOf('copy'), cmd: 'copy', run: () => this.copySelection() },
+      { label: t('Duplicate'), hint: this.keysOf('duplicate'), cmd: 'duplicate', run: () => this.duplicateSelection() },
       'sep',
       { label: els.every((x) => x.locked) ? t('Unlock') : t('Lock'), hint: '⌘L', run: () => this.panel.lock(els) },
       { label: t('Bring to front'), run: () => this.panel.reorder(els, 'front') },
       { label: t('Send to back'), run: () => this.panel.reorder(els, 'back') },
       'sep',
       grouped
-        ? { label: t('Ungroup'), hint: '⇧⌘G', run: () => this.panel.ungroup(els) }
-        : { label: t('Group'), hint: '⌘G', disabled: els.length < 2, run: () => this.panel.group(els) },
+        ? { label: t('Ungroup'), hint: this.keysOf('ungroup'), cmd: 'ungroup', run: () => this.panel.ungroup(els) }
+        : { label: t('Group'), hint: this.keysOf('group'), cmd: 'group', disabled: els.length < 2, run: () => this.panel.group(els) },
+      { label: t('Add auto layout'), hint: this.keysOf('auto-layout'), cmd: 'auto-layout', disabled: !els.length, run: () => this.panel.addAutoLayout(els) },
+      ...this.componentMenu(els),
+      ...(boolOperands(this.store, els)
+        ? ['sep' as const, ...BOOL_OPS.map((op) => {
+          const ui = boolUi(op)
+          return { label: ui.label, hint: ui.key, cmd: `bool-${op}`, run: () => { combine(this.store, els, op) } }
+        })]
+        : []),
+      ...(one?.type === 'shape' && one.bool
+        ? ['sep' as const,
+          { label: t('Flatten'), run: () => flatten(this.store, one as ShapeElement) },
+          { label: t('Release shapes'), run: () => release(this.store, one as ShapeElement) }]
+        : []),
       'sep',
       // Reveal (fx.step) from the menu — the one place a user who has never
       // opened the Presenting section will find it. In order = reading order.
@@ -3656,7 +4206,7 @@ export class Editor {
       { label: t('Reveal together'), run: () => this.panel.revealTogether(els) },
       { label: t('Remove reveal'), disabled: !els.some((e) => stepOf(e) > 0), run: () => this.panel.removeReveal(els) },
       'sep',
-      { label: t('Delete'), hint: '⌫', danger: true, run: () => this.deleteSelection() },
+      { label: t('Delete'), hint: this.keysOf('delete'), cmd: 'delete', danger: true, run: () => this.deleteSelection() },
     ]
   }
 
@@ -3700,9 +4250,10 @@ export class Editor {
 
   /** About dialog: version, user-initiated update check, licenses. */
   private openAbout(runCheck = false) {
-    document.querySelector('.ed-about-overlay')?.remove()
-    const overlay = div('ed-about-overlay')
-    const box = div('ed-about')
+    const { box, show } = this.dialogShell()
+    // as wide as Preferences, in three blocks: who (head + links), updates
+    // (status beside its button), and the fine print at the foot
+    box.classList.add('ed-about-main')
 
     const head = div('ed-about-head')
     // The logo/wordmark links home (new tab) — a gentle route back to the site.
@@ -3875,24 +4426,71 @@ export class Editor {
       }
     })
     row.appendChild(checkB)
-    box.append(row, status)
+    const updates = div('ed-about-updates')
+    const cap = document.createElement('h3')
+    cap.textContent = t('Updates')
+    updates.append(cap, status, row)
+    box.append(updates)
 
+    const fine = div('ed-about-fine')
+    fine.innerHTML =
+      `${t('Checks contact the release server and send nothing about you or this document — no ids, no telemetry.')}<br>` +
+      t('Includes reveal.js, Moveable, Selecto (MIT) · Fraunces + Instrument Sans typefaces (OFL-1.1) — full notices travel in this file’s source.')
+    box.appendChild(fine)
+
+    show()
+    if (runCheck || this.updateFound) checkB.click()
+  }
+
+  /**
+   * One dialog's frame — the About styling, a scrim that closes on click,
+   * Escape — shared by About, Preferences and Document properties. Returns the
+   * box to fill and `show` to put it on screen.
+   */
+  private dialogShell(extra = ''): { box: HTMLElement; overlay: HTMLElement; show: () => void } {
+    // a dialog already open closes properly — overlay AND its Escape listener
+    ;(document.querySelector('.ed-about-overlay') as (HTMLElement & { close?: () => void }) | null)?.close?.()
+    document.querySelector('.ed-about-overlay')?.remove()
+    const overlay: HTMLElement & { close?: () => void } = div('ed-about-overlay')
+    const box = div(`ed-about${extra ? ' ' + extra : ''}`)
+    overlay.appendChild(box)
+    const close = () => {
+      overlay.remove()
+      document.removeEventListener('keydown', onKey, true)
+    }
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') {
+        ev.stopPropagation()
+        close()
+      }
+    }
+    overlay.addEventListener('click', (ev) => {
+      if (ev.target === overlay) close()
+    })
+    overlay.close = close
+    return { box, overlay, show: () => { document.addEventListener('keydown', onKey, true); document.body.appendChild(overlay) } }
+  }
+
+  /** Preferences: how the APP is set up for you, in this browser — never the
+   *  document. Appearance, language, updates, pictures on insert, network. */
+  openPreferences() {
+    const { box, show } = this.dialogShell('ed-prefs')
+    const h = document.createElement('h2')
+    h.textContent = t('Preferences')
+    box.appendChild(h)
     // Appearance — a VIEWER preference, so it sits with the others (language,
     // auto-update) rather than anywhere near the document's own settings.
     // "Auto" is first and is the default: most people want their machine's
     // choice, and the explicit options exist for the ones who do not.
-    const themeRow = document.createElement('label')
+    const themeRow = document.createElement('div')
     themeRow.className = 'ed-about-auto'
-    const themeSel = document.createElement('select')
-    for (const c of THEME_CHOICES) {
-      const o = document.createElement('option')
-      o.value = c
-      o.textContent = c === 'auto' ? t('Match my system') : c === 'light' ? t('Light mode') : t('Dark mode')
-      if (c === themeChoice()) o.selected = true
-      themeSel.appendChild(o)
-    }
-    themeSel.addEventListener('change', () => setTheme(themeSel.value as never))
-    themeRow.append(document.createTextNode(t('Appearance') + ' '), themeSel)
+    const themeCap = document.createElement('span')
+    themeCap.textContent = t('Appearance')
+    themeCap.id = 'ed-about-theme'
+    const themeSel = segmented([...THEME_CHOICES], themeChoice(), (v) => setTheme(v as never), { auto: t('Match my system'), light: t('Light mode'), dark: t('Dark mode') },
+    { auto: ICONS.window, light: ICONS.sun, dark: ICONS.moon })
+    themeSel.setAttribute('aria-labelledby', themeCap.id)
+    themeRow.append(themeCap, themeSel)
     box.appendChild(themeRow)
 
     const autoRow = document.createElement('label')
@@ -3916,20 +4514,36 @@ export class Editor {
     shrinkRow.title = t('A pasted phone photo is stored at slide resolution instead of full size. Off: pictures are stored exactly as they come.')
     box.appendChild(shrinkRow)
 
-    // the explicit pass over pictures already in the deck (editor/compressdeck.ts):
-    // dry run → the real numbers in a confirmation → one undo step
-    const compressRow = document.createElement('div')
-    compressRow.className = 'ed-about-auto'
-    const compressBtn = document.createElement('button')
-    compressBtn.className = 'ed-btn'
-    compressBtn.textContent = t('Compress pictures in this deck…')
-    compressBtn.title = t('Re-encodes every photo already in the deck at up to 2560 px; screenshots and logos stay sharp. Undo restores them until you save.')
-    const compressNote = document.createElement('span')
-    compressNote.className = 'ed-hint'
-    compressBtn.addEventListener('click', () => { void this.compressDeckPictures(compressBtn, compressNote, overlay) })
-    compressRow.append(compressBtn, compressNote)
-    box.appendChild(compressRow)
-
+    // the interface language — the list the globe menu held
+    const langRow = div('ed-about-auto')
+    const langCap = document.createElement('span')
+    langCap.textContent = t('Language')
+    langCap.id = 'ed-prefs-lang'
+    const langSel = document.createElement('select')
+    langSel.setAttribute('aria-labelledby', langCap.id)
+    // localeChoices(), NOT a frozen list: an installed pack appends a language
+    for (const c of localeChoices()) {
+      const o = document.createElement('option')
+      o.value = c.code
+      o.textContent = c.label
+      if (c.code === locale()) o.selected = true
+      langSel.appendChild(o)
+    }
+    langSel.addEventListener('change', () => {
+      setLocale(langSel.value)
+      // switching to (or away from) Arabic/Hebrew/… turns the chrome around
+      applyDirection()
+      this.build()
+      this.rebuildSidebar()
+      this.openPreferences()
+    })
+    const manage = document.createElement('button')
+    manage.type = 'button'
+    manage.className = 'ed-btn'
+    manage.textContent = t('Manage languages…')
+    manage.addEventListener('click', () => void this.openLanguages())
+    langRow.append(langCap, langSel, manage)
+    themeRow.after(langRow)
     // the hard no-network switch: blocks update checks AND online
     // collaboration for this browser. Same-machine tab sync is not
     // networking and stays on.
@@ -3961,12 +4575,17 @@ export class Editor {
     offRow.append(offCb, document.createTextNode(' ' + t('Offline mode — block all network features (updates, online collaboration)')))
     box.appendChild(offRow)
 
+    show()
+  }
+
+  /** Document properties: what THIS deck says about itself — its fields. */
+  openDocProps() {
+    const { box, show } = this.dialogShell('ed-docprops')
+    const h = document.createElement('h2')
+    h.textContent = t('Document properties')
+    box.appendChild(h)
     // Document properties → fillable {{author}} {{company}} {{subject}} {{event}} fields
     const metaWrap = div('ed-about-row ed-about-meta-wrap')
-    const metaTitle = document.createElement('div')
-    metaTitle.className = 'ed-about-h'
-    metaTitle.textContent = t('Document properties')
-    metaWrap.appendChild(metaTitle)
     const metaHint = document.createElement('p')
     metaHint.className = 'ed-hint'
     metaHint.innerHTML = t('Type <b>{{author}}</b>, <b>{{company}}</b>, <b>{{subject}}</b> or <b>{{event}}</b> in any text box and it fills in from here — everywhere at once. Handy for title slides and footers.')
@@ -3991,45 +4610,18 @@ export class Editor {
     metaField(t('Keywords'), () => this.store.doc.meta?.keywords ?? '', (v) => { ensureMeta().keywords = v })
     box.appendChild(metaWrap)
 
-    const fine = div('ed-about-fine')
-    fine.innerHTML =
-      `${t('Checks contact the release server and send nothing about you or this document — no ids, no telemetry.')}<br>` +
-      t('Includes reveal.js, Moveable, Selecto (MIT) · Fraunces + Instrument Sans typefaces (OFL-1.1) — full notices travel in this file’s source.')
-    box.appendChild(fine)
-
-    overlay.appendChild(box)
-    const close = () => {
-      overlay.remove()
-      document.removeEventListener('keydown', onKey, true)
-    }
-    const onKey = (ev: KeyboardEvent) => {
-      if (ev.key === 'Escape') {
-        ev.stopPropagation()
-        close()
-      }
-    }
-    overlay.addEventListener('click', (ev) => {
-      if (ev.target === overlay) close()
-    })
-    document.addEventListener('keydown', onKey, true)
-    document.body.appendChild(overlay)
-    if (runCheck || this.updateFound) checkB.click()
+    show()
   }
 
-  /** About ▸ Compress pictures in this deck…: every picture runs through the
+  /** File ▸ Compress pictures in this deck…: every picture runs through the
    *  insert-time shrink rules; the confirmation states the measured total; one
    *  store commit applies it. Nothing is written until Compress is clicked. */
-  private async compressDeckPictures(btn: HTMLButtonElement, note: HTMLElement, aboutOverlay: HTMLElement) {
+  private async compressDeckPictures() {
     if (this.store.readOnly) return
-    btn.disabled = true
     const doc = this.store.doc
-    let run: DryRun
-    try {
-      run = await dryRun(doc, (done, total) => { note.textContent = t('{done} of {total}…', { done: String(done), total: String(total) }) })
-    } finally {
-      btn.disabled = false
-      note.textContent = ''
-    }
+    // a long deck takes a moment: say so where the author is looking
+    this.toast(t('Looking at the pictures in this deck…'))
+    const run: DryRun = await dryRun(doc, () => {})
     if (!run.shrunk.length) {
       this.toast(run.examined ? t('Every picture is already as small as it gets') : t('This deck has no pictures to compress'))
       return
@@ -4055,22 +4647,39 @@ export class Editor {
       dlg.close()
       let applied = 0
       this.store.commit(() => { applied = applyCompress(this.store.doc, run) })
-      aboutOverlay.remove()
       this.toast(t('{n} pictures compressed — {before} → {after}', { n: String(applied), before: fmtBytes(run.before), after: fmtBytes(run.after) }))
     })
     dlg.open()
   }
 
-  toast(message: string) {
+  toast(message: string, action?: { label: string; run: () => void }, kind?: string) {
     document.querySelector('.ed-toast')?.remove()
     const t = div('ed-toast')
+    if (kind) t.dataset.kind = kind
     t.textContent = message
+    if (action) {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'ed-toast-act'
+      b.textContent = action.label
+      b.addEventListener('click', () => { action.run(); t.remove() })
+      t.append(' ', b)
+      t.classList.add('has-act')
+    }
+    // dock at the top of the canvas, centred on it: the window's foot covered
+    // the speaker notes, and the canvas's foot the zoom and Slideshow controls
+    const canvas = document.querySelector('.ed-scroll')?.getBoundingClientRect()
+    if (canvas?.height) {
+      t.style.top = `${canvas.top + 12}px`
+      t.style.bottom = 'auto'
+      t.style.left = `${canvas.left + canvas.width / 2}px`
+    }
     document.body.appendChild(t)
     setTimeout(() => t.classList.add('show'))
     setTimeout(() => {
       t.classList.remove('show')
       setTimeout(() => t.remove(), 300)
-    }, 2200)
+    }, action ? 8000 : 2200)
   }
 }
 

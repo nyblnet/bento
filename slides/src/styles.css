@@ -28,7 +28,22 @@
   --accent-on: #3a2a00;      /* text sitting ON the solid --accent fill */
   --blue: #5b8def;
   --field: #ffffff;          /* form-control surface — CHROME, not the slide */
+  --field-line: var(--line); /* a form control's edge */
+  --field-line-hot: var(--muted); /* …under the pointer */
   --surface: #ffffff;        /* panels, dialogs, menus */
+  --tab-track: var(--chrome-2); /* a tab strip's track */
+  --tab-on: var(--surface);  /* the selected tab's pill, lifted off its track */
+  --tab-on-line: #d5dbe4;    /* …and its hairline edge */
+  --tip-bg: #1b1f26;         /* the one tooltip (hints.ts): dark in both themes */
+  --tip-ink: #f3f5f8;
+  --tip-key: #c9d0db;
+  --tip-edge: transparent;
+  --danger: #b4232a;         /* destructive text (context menu Delete) */
+  --danger-tint: rgb(180 35 42 / 0.12);
+  --tip-key-bg: rgb(255 255 255 / 0.1); /* a shortcut chip on the tooltip */
+  --preview-card: #ffffff;   /* the card a shadow preview is drawn under — light in both themes */
+  --morph: #0f8f86;         /* morph pairing (layer badge, ghost + curve): teal, 4.5:1 on white */
+  --blue-label: #3a6fd8;     /* fill under white 11px text (measure labels): 4.7:1, --blue was 3.3:1 */
   --grid-dot: #d5dbe4;       /* the canvas dot grid behind the stage */
   --chip: rgb(255 255 255 / 0.85);   /* translucent label over a thumbnail */
   --slide-shadow: 0 10px 40px rgb(20 30 45 / 0.18), 0 2px 8px rgb(20 30 45 / 0.10);
@@ -52,7 +67,28 @@
   --accent-on: #3a2a00;
   --blue: #7aa5f5;           /* lifted: #5b8def is unreadable on dark chrome */
   --field: #12151a;
+  /* A field at rest is a sunk well with a quiet edge, as Figma and Penpot draw
+     theirs: a bright edge on every control turned the dark inspector into a
+     grid of outlines. The edge lights up under the pointer (3.3:1 on the
+     panel) and focus draws the accent ring, so the control still reads the
+     moment it is used — the trade-off against WCAG 1.4.11 at rest is
+     deliberate (docs/DECISIONS.md, 2026-10-30). */
+  --field-line: #3a414d;
+  --field-line-hot: #6b7585;
   --surface: #21262e;
+  --tab-track: #12151a;      /* sunk below the panel, as Penpot does */
+  --tab-on: #363d49;
+  --tab-on-line: #4b5465;
+  --tip-bg: #1b1f26;         /* the tooltip stays dark in both themes… */
+  --tip-ink: #f3f5f8;
+  --tip-key: #c9d0db;
+  --tip-key-bg: rgb(255 255 255 / 0.1);
+  --preview-card: #ffffff;
+  --tip-edge: var(--line);   /* …and here its fill IS the dark chrome: give it an edge */
+  --danger: #f08a8f;
+  --danger-tint: rgb(240 138 143 / 0.14);
+  --morph: #2dd4bf;
+  --blue-label: var(--blue); /* dark text on the lifted blue */
   --grid-dot: #2b313b;
   --chip: rgb(24 28 34 / 0.85);
   /* deeper: a light slide on a dark canvas needs more separation than the
@@ -130,7 +166,7 @@ option { background: var(--field); color: var(--ink); }
   font-size: 12.5px;
   color: var(--ink);
   background: var(--field);
-  border: 1px solid var(--line);
+  border: 1px solid var(--field-line);
   border-radius: 6px;
 }
 :where(textarea) { height: auto; padding: 6px 8px; line-height: 1.5; resize: vertical; }
@@ -139,10 +175,11 @@ option { background: var(--field); color: var(--ink); }
   height: 26px;
   padding: 1px 2px;
   background: var(--field);
-  border: 1px solid var(--line);
+  border: 1px solid var(--field-line);
   border-radius: 6px;
 }
 :where(input, select, textarea):focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -1px; }
+:where(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file']), select, textarea):hover:not(:disabled, :focus) { border-color: var(--field-line-hot); }
 
 /* ————— THE DOCUMENT NEVER MIRRORS —————————————————————————————————————————
    An Arabic/Hebrew viewer gets an RTL *chrome* (i18n.ts applyDirection sets
@@ -345,7 +382,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-main { flex: 1; display: flex; min-height: 0; }
 
 .ed-sidebar {
-  width: var(--panew, 188px);
+  width: var(--panew, 232px);
   flex: none;
   overflow-y: auto;
   overflow-x: hidden;
@@ -375,7 +412,6 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-thumb.selected { border-color: var(--accent); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
 .ed-thumb.selected::after { content: ''; position: absolute; inset: 0; background: color-mix(in srgb, var(--accent) 12%, transparent); pointer-events: none; }
 .ed-thumb.dragging { opacity: .5; }
-.ed-thumb.drop { border-color: var(--blue); }
 .ed-thumb-num {
   position: absolute;
   top: 4px; inset-inline-start: 4px;
@@ -657,12 +693,17 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 /* ————— properties panel ————— */
 
 .ed-props {
-  width: var(--panew, 236px);
+  width: var(--panew, 264px);
   flex: none;
   overflow-y: auto;
+  overflow-x: hidden;           /* no horizontal scrollbar, ever */
+  /* a slim 6px scrollbar whose gutter is paid for out of the right padding
+     (12 − 6): the right margin equals the left. A full-width gutter on one
+     side only made the right margin twice the left. */
+  scrollbar-gutter: stable;
   background: var(--surface);
   border-inline-start: 1px solid var(--line);
-  padding: 14px;
+  padding: 0 6px 16px 12px;
 }
 
 .ed-section {
@@ -682,18 +723,34 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
      controls a screen down: the list scrolls inside itself past ~12 rows */
   max-height: 300px; overflow-y: auto;
 }
-.ed-layers:focus-visible { box-shadow: 0 0 0 2px var(--accent); border-radius: 6px; }
+.ed-layers:focus-visible:not(:has(.ed-layer.sel)) { box-shadow: 0 0 0 2px var(--accent); border-radius: 6px; }
 .ed-layer {
-  display: flex; align-items: center; gap: 7px;
+  display: flex; align-items: center; gap: 7px; box-sizing: border-box; height: 26px; /* hover never changes a row's box */
   padding: 3px 6px; border-radius: 6px; font-size: 12px; line-height: 18px;
   cursor: default; user-select: none; border: 1px solid transparent;
 }
 .ed-layer:hover { background: rgb(94 118 153 / 0.10); }
 .ed-layer.sel { background: rgb(94 118 153 / 0.18); border-color: rgb(94 118 153 / 0.35); }
-.ed-layer.grouped { padding-left: 20px; }
+.ed-layer.in-sel { background: rgb(94 118 153 / 0.07); } /* inside a group selected whole: the group row carries the highlight */
+/* a group's own row heads its members, which nest under it on a guide line
+   (layers.ts groupRow), as Penpot and Figma draw a group */
+.ed-layer.grouped { position: relative; padding-inline-start: 26px; }
+.ed-layer.grouped::before { content: ''; position: absolute; inset-inline-start: 12px; top: 0; bottom: 0; border-inline-start: 1px solid var(--line); }
+.ed-layer-group { padding-inline-start: 2px; }
+.ed-layer-group .ed-layer-label { font-weight: 600; }
+.ed-layer-fold { flex: none; position: relative; width: 14px; height: 18px; padding: 0; margin-inline-end: -4px; color: var(--muted); background: none; border: 0; cursor: pointer; }
+.ed-layer-fold::before {
+  content: ''; position: absolute; top: 50%; inset-inline-start: 4px;
+  border-left: 5px solid currentColor; border-top: 4px solid transparent; border-bottom: 4px solid transparent;
+  transform: translateY(-50%) rotate(90deg); transition: transform .12s ease; opacity: .7;
+}
+.ed-layer-fold[aria-expanded='false']::before { transform: translateY(-50%); }
+[dir='rtl'] .ed-layer-fold[aria-expanded='false']::before { transform: translateY(-50%) scaleX(-1); }
 .ed-layer.dragging { opacity: 0.4; }
 .ed-layer.drop-above { box-shadow: 0 -2px 0 0 var(--accent); }
 .ed-layer.drop-below { box-shadow: 0 2px 0 0 var(--accent); }
+/* a frame row taking the drag inside it: the row itself is the target */
+.ed-layer.drop-into { background: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: inset 0 0 0 1.5px var(--accent); }
 .ed-layer-glyph { flex: none; width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); font-size: 10px; font-weight: 700; }
 .ed-layer-glyph svg { width: 14px; height: 14px; }
 .ed-layer-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -708,16 +765,113 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   color: var(--ink-2);
 }
 .ed-row > span { flex: none; }
-.ed-row input[type='number'], .ed-row select, .ed-row input[type='color'] { width: 110px; }
+/* Format | Animate | Interact (panels.ts mountTabs). A tab hides the others' sections. */
+.ed-props:not([data-tab='format']) [data-tab='format'],
+.ed-props:not([data-tab='animate']) [data-tab='animate'],
+.ed-props:not([data-tab='interact']) [data-tab='interact'] { display: none; } /* (0,3,0): no section rule reaches it */
+.ed-tab-empty { margin: 4px 2px; }
+/* Tab strips (Slides | Layers, Format | Animate | Interact), Penpot's way: the
+   track sits apart from the panel (sunk, in dark) and the selected tab is a
+   lifted pill with a hairline edge, so the choice reads at a glance in both
+   themes. Text stays ≥4.5:1 in either state; hover brightens the text and
+   tints the slot, but never borders it, so it can't pass for selected. Each
+   strip sits in a full-width sticky band of its column's own surface, so it
+   covers what scrolls under it edge to edge instead of floating over it. */
+.ed-tabs-band {
+  position: sticky; top: 0; z-index: 3; margin: 0 -12px 6px; padding: 10px 12px 8px;
+  background: var(--surface); border-bottom: 1px solid var(--line);
+}
+.ed-tabs {
+  display: flex; gap: 2px; padding: 3px; margin: 0;
+  background: var(--tab-track); border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line);
+}
+.ed-tabs button {
+  flex: 1 1 auto; min-width: 0; height: 26px; padding: 0 6px;
+  font: inherit; font-size: 12px; font-weight: 600; white-space: nowrap;
+  /* a narrow sidebar cuts each label inside its OWN tab — never over the next */
+  overflow: hidden; text-overflow: ellipsis;
+  color: var(--muted); background: none; border: 1px solid transparent; border-radius: 6px; cursor: pointer;
+}
+.ed-tabs button[aria-selected='true'] { flex-shrink: .35; } /* the chosen tab keeps more of its name */
+.ed-tabs button:hover:not([aria-selected='true']) { color: var(--ink); background: var(--chrome-2); }
+.ed-tabs button[aria-selected='true'] {
+  color: var(--ink); background: var(--tab-on); border-color: var(--tab-on-line);
+  box-shadow: 0 1px 2px rgb(0 0 0 / .18);
+}
+.ed-tabs button:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -1px; }
+.ed-row input.ed-num, .ed-row select, .ed-row input[type='color'] { width: 110px; }
+/* Segmented control (panels.ts segmented()): a few options, all visible, one
+   click. Wears THE FIELD's box so it sits in a row like any other field. Icon
+   segments are field-width; word segments take the row's full width, on a
+   line of their own under the caption, so no translation has to squeeze. */
+/* never wider than the cell it sits in: in a column narrower than 110px
+   (the Stroke line's Position | Weight) it ran under its neighbour */
+.ed-seg {
+  box-sizing: border-box; display: flex; width: 110px; max-width: 100%; height: 26px; padding: 2px; gap: 2px;
+  background: var(--field); border: 1px solid var(--field-line); border-radius: 6px;
+}
+.ed-seg-text { width: 100%; }
+.ed-seg button {
+  flex: 1 1 0; min-width: 0; display: grid; place-items: center; padding: 0 4px;
+  font: inherit; font-size: 12px; color: var(--muted); background: none; border: 0; border-radius: 4px;
+  cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ed-seg button svg { width: 14px; height: 14px; }
+.ed-seg button:hover { color: var(--ink); background: var(--chrome); }
+.ed-seg button[aria-checked='true'] { color: var(--ink); background: var(--chrome-2); box-shadow: inset 0 0 0 1px var(--line); }
+.ed-seg button:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -1px; }
 
-.ed-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
-.ed-mini { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--ink-2); }
-.ed-mini input { width: 100%; min-width: 0; padding: 0 5px; }
+/* Numeric pairs (X/Y, W/H…) as Penpot draws them: the label INSIDE the
+   field. The input keeps THE FIELD's own box (#729 — border, fill, radius,
+   height are the input's); the label sits over its start padding, which
+   panels.ts mini() sizes to the label (--lab). Still the scrub handle. */
+.ed-mini { position: relative; display: flex; align-items: center; gap: 0; font-size: 12.5px; color: var(--ink-2); }
+.ed-mini > span {
+  position: absolute; z-index: 1; inset-inline-start: 8px; top: 50%; transform: translateY(-50%);
+  max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11px; color: var(--muted);
+}
+/* the value starts after the label — and the label never takes more than 55%, so neither does this */
+.ed-mini input { width: 100%; min-width: 0; padding: 0 5px; padding-inline-start: calc(min(var(--lab, 12px), 55%) + 13px); }
+/* an icon inside a numeric field, where a word would be (rotation, radius, line height…) */
+.ed-mini > .ed-mini-icon { display: grid; place-items: center; max-width: none; }
+.ed-mini > .ed-mini-icon svg { width: 13px; height: 13px; }
+/* a numeric field's label is a scrub handle (panels.ts scrub()) */
+.ed-scrub { cursor: ew-resize; user-select: none; -webkit-user-select: none; touch-action: none; }
+.ed-scrub:hover { color: var(--ink); }
+.ed-unit { flex: none; font-size: 11.5px; color: var(--muted); }
+body.ed-scrubbing, body.ed-scrubbing * { cursor: ew-resize; }
 
-.ed-ops { display: flex; gap: 4px; margin-bottom: 10px; }
 .ed-btn-icon { border: 1px solid var(--line); padding: 6px; }
 
-.ed-notes { width: 100%; min-height: 130px; }
+/* the canvas over its speaker notes (editor/notespane.ts): edge to edge under
+   the canvas — under the two 5px resize strips too, so the pane meets both
+   side panels — and resized from its top edge as the side panels are from
+   theirs, with their chevron laid on its side. The text box keeps THE FIELD's
+   look and fills the pane. */
+.ed-centre { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ed-centre > .ed-canvas-wrap { flex: 1; min-height: 0; }
+.ed-notespane { position: relative; flex: none; margin-inline: -5px; padding: 0 17px 10px; background: var(--surface); border-top: 1px solid var(--line); }
+.ed-notespane.closed { padding-bottom: 0; }
+.ed-notespane-head { display: block; width: 100%; margin: 0; padding-block: 8px 6px; padding-inline: 14px 0; font-family: inherit; text-align: start; background: none; border: 0; }
+.ed-notespane-head.ed-sec-toggle::before { inset-inline-start: 1px; }
+.ed-notespane-text { display: block; width: 100%; height: 84px; margin: 0; resize: none; }
+/* the side panes' reveal contract, on the vertical: the notes fold and open
+   over the same .18s ease (height, padding, fade) instead of snapping; once
+   folded the field is out of the tab order (visibility, after the fold) */
+.ed-notespane.ed-anim { transition: padding .18s ease; }
+.ed-notespane.ed-anim .ed-notespane-text { transition: height .18s ease, padding .18s ease, opacity .18s ease, border-width .18s ease, visibility 0s linear 0s; }
+.ed-notespane.closed .ed-notespane-text {
+  height: 0 !important; padding-block: 0; border-width: 0; opacity: 0; visibility: hidden;
+}
+.ed-notespane.ed-anim.closed .ed-notespane-text {
+  transition: height .18s ease, padding .18s ease, opacity .12s ease, border-width .18s ease, visibility 0s linear .18s;
+}
+@media (prefers-reduced-motion: reduce) { .ed-notespane, .ed-notespane-text, .ed-notespane.closed .ed-notespane-text { transition: none; } }
+.ed-notes-grip { position: absolute; inset-inline: 0; top: -3px; height: 6px; cursor: ns-resize; touch-action: none; z-index: 5; transition: background .12s ease .08s; }
+.ed-notes-grip:hover, body.ed-row-resizing .ed-notes-grip { background: color-mix(in srgb, var(--blue) 45%, transparent); }
+.ed-notespane.closed .ed-notes-grip { cursor: default; background: none; }
+body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize; user-select: none; }
 
 .ed-hint {
   font-size: 11.5px;
@@ -914,7 +1068,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   position: fixed;
   left: 50%;
   bottom: 26px;
-  transform: translate(-50%, 12px);
+  transform: translate(-50%, -8px);
   background: var(--ink);
   color: var(--surface);
   font-size: 13px;
@@ -1003,6 +1157,8 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   transition: opacity 0.08s linear;
 }
 .bento-laser-dot.visible { opacity: 1; }
+/* appearing is instant-ish; letting go fades the dot with its trail */
+.bento-laser-dot:not(.visible) { transition-duration: 0.3s; transition-timing-function: ease-out; }
 .bento-laser-dot.bento-remote {
   /* Frames arrive at ~30fps; a short linear tween (longer than one frame
      interval so it always settles, short enough to add no lag) smooths the
@@ -1075,24 +1231,32 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 /* The glyph is narrower and shorter than a 16px icon, so without a floor the
    button came out 28×29 beside 36×30 neighbours. */
 .ed-btn-help { min-width: 36px; min-height: 30px; justify-content: center; }
-.ed-help-box { width: 700px; max-width: 92vw; }
-/* two hand-placed columns so the (now longer) list stays short vertically */
-.ed-help-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 30px; align-items: start; }
+/* Room for everything, nothing spilling. The key column was a fixed 128px: a
+   long key ('Animate ▸ Loop animation', longer still translated) spilled LEFT
+   across the other column and over its text. Each section is its own grid
+   whose key column fits its longest key (capped, and a key that long wraps),
+   keys right-aligned against what they do (D8); the sheet is wide, so
+   descriptions do not wrap into towers, and drops to one column well before
+   the two would crowd. */
+.ed-help-box { width: min(980px, 94vw); max-width: none; }
+.ed-help-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 40px; align-items: start; }
 .ed-help-col { min-width: 0; }
-.ed-help-sec { margin: 0 0 14px; }
-/* one column when there isn't room for two (narrow / phone) */
-@media (max-width: 560px) { .ed-help-cols { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .ed-help-cols { grid-template-columns: 1fr; } }
+.ed-help-sec { margin: 0 0 14px; display: grid; grid-template-columns: fit-content(15em) 1fr; column-gap: 14px; align-items: baseline; }
 .ed-help-sec h3 {
+  grid-column: 1 / -1;
   font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
   color: var(--muted); margin: 0 0 6px;
 }
-.ed-help-row { display: grid; grid-template-columns: 128px 1fr; gap: 12px; align-items: baseline; padding: 3px 0; font-size: 13px; }
+.ed-help-row { display: contents; }
+.ed-help-row > * { margin: 3px 0; }
+.ed-help-row > span { font-size: 13px; }
 /* D8: shortcuts in the interface face, not monospace, right-aligned against
    what they do — the column reads as a list of keys, as a menu's does */
 .ed-help-row kbd {
   font: inherit; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
   background: var(--chrome-2); border: 1px solid var(--line);
-  border-radius: 5px; padding: 2px 6px; color: var(--ink); white-space: nowrap; justify-self: end;
+  border-radius: 5px; padding: 2px 6px; color: var(--ink); white-space: normal; text-align: end; justify-self: end;
 }
 .ed-help-tips { margin: 4px 0 0; padding-inline-start: 18px; font-size: 13px; line-height: 1.5; color: var(--ink); }
 .ed-help-tips li { margin: 3px 0; }
@@ -1195,10 +1359,14 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-chart-link .ed-btn { padding: 3px 9px; font-size: 12px; }
 .ed-series-row {
   display: flex;
+  flex-wrap: wrap;   /* a series / slice row wraps rather than squeezing its controls past the edge */
   align-items: center;
   gap: 5px;
   padding: 3px 0;
 }
+/* the fields give way, the remove button stays in */
+.ed-series-row > * { min-width: 0; }
+.ed-series-row > .ed-btn { flex: none; }
 .ed-series-row .ed-series-name { flex: 1 1 auto; min-width: 0; }
 .ed-series-row select { flex: 0 0 auto; }
 .ed-series-row input[type='color'] { flex: 0 0 auto; width: 26px; padding: 0; }
@@ -1206,9 +1374,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-series-rm { flex: 0 0 auto; color: #9aa4b2; }
 .ed-series-rm:hover { color: #c9302c; }
 .ed-chart-add { margin: 4px 0 2px; }
-.ed-chart-add .ed-btn { width: 100%; justify-content: center; font-size: 12px; }
-.ed-axis-range { display: flex; gap: 6px; }
-.ed-axis-range input { width: 100%; }
+.ed-chart-add .ed-btn { width: 100%; font-size: 12px; }
 .ed-chart-grid-wrap { overflow-x: auto; margin: 2px 0; }
 .ed-chart-grid { border-collapse: collapse; width: 100%; }
 .ed-chart-grid th {
@@ -1236,48 +1402,23 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   border-radius: 3px;
 }
 
-/* arrange kit: one compact row per group — tiny label left, buttons right */
-/* arrange rows: caption + a shared 6-column track of near-fixed square
-   buttons — columns align vertically across Align/Space/Order, buttons
-   never stretch with the panel, spare width just rests at the row end */
-.ed-arrange-row {
-  display: grid;
-  grid-template-columns: 40px repeat(6, minmax(20px, 26px));
-  align-items: center;
-  gap: 3px;
-  margin: 3px 0;
-}
-.ed-arrange-row .ed-arrange-cap { width: auto; }
-/* Typography → Bullets: Outdent · Indent, two equal halves of the field */
-.ed-shift-row { display: flex; gap: 4px; flex: 1; min-width: 0; }
-.ed-shift-row .ed-btn { flex: 1; justify-content: center; padding: 4px 6px; font-size: 12px; border: 1px solid var(--line); }
-.ed-arrange-row .ed-btn {
-  min-width: 0;
-  padding: 5px 0;
-  justify-content: center;
-}
-/* reveal verbs: caption + three text buttons sharing the row */
-.ed-reveal-row { display: flex; align-items: center; gap: 4px; margin: 3px 0; }
-.ed-reveal-row .ed-btn { flex: 1; min-width: 0; padding: 5px 4px; justify-content: center; font-size: 11px; }
+/* Reveal (panels.ts revealRow): caption above, three buttons with a
+   button's look sharing the row — no language has to fit a caption column */
+.ed-props .ed-reveal-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; gap: 4px; margin: 3px 0 6px; }
 .ed-arrange-cap {
-  flex: none;
-  width: 46px;
-  font-size: 9px;
+  grid-column: 1 / -1;
+  margin-bottom: 1px;
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
-  opacity: 0.85;
 }
-.ed-arrange { display: flex; gap: 4px; margin-top: 0; }
-.ed-arrange-btn {
-  flex: 1 0 17%;
-  min-width: 30px;
-  padding: 4px 0;
-  font-size: 13px;
-  line-height: 1.1;
+.ed-props .ed-reveal-row .ed-btn {
+  min-width: 0; height: 26px; padding: 0 4px; justify-content: center; font-size: 12px; color: var(--ink-2);
+  background: var(--field); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.ed-arrange-btn:disabled { opacity: 0.35; cursor: default; }
+.ed-props .ed-reveal-row .ed-btn:hover:not(:disabled) { color: var(--ink); background: var(--chrome-2); }
 
 /* armed topbar tool (comment mode) */
 .ed-btn-armed { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent-ink); }
@@ -1300,7 +1441,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 }
 .ed-sec-toggle.closed::before { transform: translateY(-50%); }
 .ed-sec-toggle:hover { color: var(--ink); }
-.ed-section-body { display: flex; flex-direction: column; }
+.ed-section-body { position: relative; display: flex; flex-direction: column; }
 
 /* review comments: canvas markers, thread popover, thumb badge */
 .ed-comment-hl {
@@ -1546,7 +1687,23 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   opacity: 0;
   transition: opacity 0.12s ease;
 }
-.ed-insertgap:hover, .ed-insertgap.drop { opacity: 1; }
+.ed-insertgap:hover { opacity: 1; }
+/* Where dragged slides will land: a thick accent line with round caps in the
+   gap, glowing just enough to read over any thumbnail. Hover's + stays out of
+   it, and the other gaps stay hidden while a drag is on. */
+.ed-insertgap.drop { opacity: 1; transition: none; } /* it tracks the pointer: no fade */
+.ed-insertgap.drop::before {
+  left: 0; right: 0; height: 4px; margin-top: -2px; border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--surface), 0 0 10px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+.ed-insertgap.drop::after {
+  content: ''; position: absolute; inset-inline: -3px; top: 50%; height: 10px; margin-top: -5px;
+  background: radial-gradient(circle at 5px 50%, var(--accent) 4px, transparent 4.5px), radial-gradient(circle at calc(100% - 5px) 50%, var(--accent) 4px, transparent 4.5px);
+  pointer-events: none;
+}
+.ed-insertgap.drop .ed-insertgap-btn,
+.ed-thumbs-dragging .ed-insertgap:not(.drop) { visibility: hidden; }
 .ed-insertgap::before {
   content: '';
   position: absolute;
@@ -1573,22 +1730,17 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   cursor: pointer;
 }
 
-/* color + alpha pair, and gradient stop rows */
-.ed-coloralpha { display: flex; align-items: center; gap: 6px; }
-.ed-coloralpha input[type='number'] { width: 52px; }
-.ed-gradstop { display: flex; align-items: center; gap: 6px; }
-.ed-gradstop > input[type='number'] { width: 44px; }
-.ed-gradstop .ed-btn-icon { padding: 2px 6px; }
-
 /* resizable side panels — thin grab strips between panel and canvas */
 .ed-resizer {
+  position: relative;   /* the panel collapse chevrons live ON the strips */
+  z-index: 4;
   flex: none;
   width: 5px;
   cursor: col-resize;
   background: transparent;
   transition: background .12s ease .08s;
 }
-.ed-resizer:hover, body.ed-col-resizing .ed-resizer { background: rgb(91 141 239 / 0.45); }
+.ed-resizer:hover, body.ed-col-resizing .ed-resizer { background: color-mix(in srgb, var(--blue) 45%, transparent); }
 body.ed-col-resizing { cursor: col-resize; user-select: none; }
 .ed-noanim { transition: none !important; }
 /* against a collapsed panel the strip only carries the reopen chevron */
@@ -1637,6 +1789,17 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 .moveable-control-box {
   --moveable-color: var(--blue);
 }
+/* Figma-sized handles: 8px squares-in-circles at any zoom (moveable.zoom keeps
+   them screen-sized), a short rotation stem — the defaults (14px, a 40px
+   stem) swallowed a small element whole when zoomed out */
+.moveable-control-box .moveable-control {
+  width: 8px !important; height: 8px !important; margin-top: -4px !important; margin-left: -4px !important;
+  border-width: 1px !important; box-sizing: border-box;
+}
+.moveable-control-box .moveable-rotation .moveable-rotation-control {
+  width: 10px !important; height: 10px !important; margin-top: -5px !important; margin-left: -5px !important;
+}
+.moveable-control-box .moveable-rotation { height: 18px !important; }
 
 /* ————— speaker view popup ————— */
 .bento-speaker {
@@ -1929,6 +2092,23 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   border-radius: 4px;
   color: #16273e;
   font: 600 11px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  white-space: nowrap;
+}
+/* Alt-hover measuring (canvas.ts drawMeasure). Sizes are counter-scaled
+   inline so lines stay 1px and labels 11px at any zoom. */
+.ed-measure-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3001; } /* over Moveable's control box (3000): a distance is read, a handle is not, while ⌥ is held */
+.ed-measure-layer > * { position: absolute; box-sizing: border-box; pointer-events: none; }
+.ed-measure-line { background: var(--blue); }
+.ed-measure-dash { border: 0 dashed var(--blue); opacity: .8; }
+.ed-measure-align { background: var(--accent); }
+.ed-measure-target { border: 1px solid var(--blue); }
+.ed-measure-label {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--blue-label);
+  color: var(--surface);
+  font: 600 11px/15px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .ed-share-pop {
@@ -2380,8 +2560,11 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   .ed-props { right: 0; }
   .ed-sidebar.ed-collapsed, .ed-props.ed-collapsed { box-shadow: none; }
   .ed-main { position: relative; }
-  /* the 16px resizer chevrons are replaced by real buttons in the bar */
-  .ed-panel-toggle { display: none; }
+  /* the 16px resizer chevrons are replaced by real buttons in the bar; the
+     notes pane's own fold has no button there, so it stays */
+  .ed-panel-toggle:not(.ed-notes-toggle) { display: none; }
+  /* the tab bands wear their drawer's surface */
+  .ed-tabs-band { background: var(--chrome); }
   .ed-title { min-width: 0; }
 
   /* Folding is not enough on the narrowest phones. Even fully folded the bar
@@ -2417,7 +2600,6 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 }
 
 /* panel collapse chevrons live ON the resizer strips, not in the topbar */
-.ed-resizer { position: relative; }
 .ed-panel-toggle {
   position: absolute;
   top: 50%;
@@ -2432,36 +2614,40 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
      grey-blue that read at 5.41:1 on white sat at 2.81:1 on the dark surface,
      under the 4.5 floor. With the token it is 5.98:1 light, 5.02:1 dark. */
   color: var(--muted);
-  font-size: 11px;
-  line-height: 1;
   padding: 0;
   cursor: pointer;
   z-index: 15;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 1px 4px rgba(20, 30, 45, 0.12);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 1px 3px rgb(20 30 45 / 0.14);
+  transition: color .12s, background-color .12s, border-color .12s;
 }
-.ed-panel-toggle:hover { color: var(--ink); border-color: #b9c3d2; }
+.ed-panel-toggle:hover { color: var(--ink); background: var(--chrome-2); border-color: var(--field-line-hot, var(--line)); }
+/* one chevron for every handle, turned to point where a click moves the edge */
+.ed-panel-toggle svg { width: 12px; height: 12px; stroke-width: 2.25; transition: transform .14s ease; }
+.ed-panel-toggle[data-dir='left'] svg { transform: rotate(180deg); }
+.ed-panel-toggle[data-dir='down'] svg { transform: rotate(90deg); }
+.ed-panel-toggle[data-dir='up'] svg { transform: rotate(-90deg); }
+@media (prefers-reduced-motion: reduce) { .ed-panel-toggle svg { transition: none; } }
 /* menus that hang off a topbar control at the END of the bar open toward the
    bar's start, so they can never overflow the window edge — in either
    direction (the language menu sets the same anchoring from JS). */
-.ed-save-menu, .ed-lang-menu {
+.ed-save-menu, .ed-lang-menu, .ed-help-menu {
   inset-inline-end: 0;
   inset-inline-start: auto;
 }
 .ed-save-menu { min-width: 190px; }
-.ed-save-menu .ed-btn { font-size: 12.5px; }
+.ed-save-menu .ed-btn, .ed-file-menu .ed-btn, .ed-help-menu .ed-btn { font-size: 12.5px; }
 /* D2 (revised 2026-09-26): Save as and Share keep one-line rows and put each
    description in the tooltip, with the same text in a visually-hidden node for
    aria-describedby (editor.ts menuLabel). The Save list keeps spaces' width
    for the same list (240–264). */
-.ed-save-menu { width: min(264px, calc(100vw - 16px)); }
+.ed-save-menu, .ed-file-menu { width: min(264px, calc(100vw - 16px)); }
 /* A long list on a short window (phone landscape, a split screen) must not
    run off the bottom with its last commands unreachable: it scrolls within
    the space under the bar. Safe to make a scroll box (hard-won #10): nothing in
    it floats. --ed-bar-bottom is published by editor.ts. */
-.ed-save-menu { max-height: calc(100dvh - var(--ed-bar-bottom, 56px) - 12px); overflow-y: auto; }
+.ed-save-menu, .ed-file-menu { max-height: calc(100dvh - var(--ed-bar-bottom, 56px) - 12px); overflow-y: auto; }
 /* present for assistive tech, absent for the eye */
 .ed-sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -2495,15 +2681,6 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
    right corner); side by side so neither ever covers the slide above */
 
 
-/* right panel: no horizontal scrollbar, ever */
-.ed-props {
-  overflow-x: hidden;
-  scrollbar-gutter: stable;
-}
-.ed-props .ed-row { flex-wrap: wrap; }
-.ed-props input[type='number'] { min-width: 0; }
-.ed-props select { max-width: 100%; min-width: 0; }
-.ed-props input[type='text'] { min-width: 0; max-width: 100%; }
 
 /* ————— password gate (encrypted files) + read-only player ————— */
 
@@ -2616,9 +2793,6 @@ dialog.ed-pwdialog .ed-pwerr { color: #C33; }
 .bento-el-table.bento-editing td { cursor: text; }
 
 /* table properties: steppers + toggle */
-.ed-stepper { display: inline-flex; align-items: center; gap: 6px; }
-.ed-stepper .ed-btn-icon { width: 24px; height: 24px; line-height: 1; font-size: 15px; padding: 0; }
-.ed-stepper-val { min-width: 20px; text-align: center; font-variant-numeric: tabular-nums; font-size: 13px; }
 input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: pointer; }
 /* --- rich text inside a box ------------------------------------------------
    Every size here is in `em`, never px: the element's own `fontSize` is the
@@ -2691,7 +2865,7 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
   line-height: 1;
   cursor: pointer;
 }
-.ed-fmtbar-btn:hover { background: var(--hover, #f2f5f9); }
+.ed-fmtbar-btn:hover { background: var(--chrome-2); }
 /* --blue INVERTS with the theme (#5b8def light, #7aa5f5 dark), so its text has
    to invert with it — main's own `.ed-insertgap-btn` pairs the same token with
    var(--surface) for exactly this reason. A literal white here reads fine in
@@ -2773,13 +2947,17 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 /* Coordinates, sizes and JSON are LTR content whatever the interface language:
    a base-RTL context renders "-5" as "5-" and reorders a JSON line's brackets.
    Panel prose and every text field the user writes words into are untouched. */
-[dir="rtl"] .ed-row input[type='number'],
+[dir="rtl"] .ed-row input.ed-num,
 [dir="rtl"] .ed-mini input,
 [dir="rtl"] .ed-axis-range input,
 [dir="rtl"] .ed-about-json,
 [dir="rtl"] .ed-chart-json {
   direction: ltr;
 }
+/* …and an LTR input resolves its logical padding the LTR way, while the
+   in-field label (.ed-mini > span, inset-inline-start) sits at the RTL start,
+   the right: pad the side the label is on */
+[dir="rtl"] .ed-mini input { padding-left: 5px; padding-right: calc(min(var(--lab, 12px), 55%) + 13px); }
 
 /* --- context menu ---------------------------------------------------------
    Positioned from JS against the VIEWPORT (ctxmenu.ts), so it is never clipped
@@ -2791,6 +2969,7 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
   display: flex;
   flex-direction: column;
   min-width: 184px;
+  max-width: min(360px, calc(100vw - 16px)); /* a long layer name wraps, never a menu across the screen */
   padding: 4px;
   /* the token, not white: --surface is #ffffff in light and #21262e in dark,
      and a chrome surface pinned to a literal puts light text on a light
@@ -2821,7 +3000,9 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
   text-align: start;
   cursor: pointer;
 }
-.ed-ctxmenu-item:hover:not(:disabled) { background: var(--hover, #f2f5f9); }
+.ed-ctxmenu-item:hover:not(:disabled) { background: var(--chrome-2); }
+/* a disabled row never lights, whatever holds it (hover, focus) */
+.ed-ctxmenu-item:disabled { background: transparent; }
 .ed-ctxmenu-item:disabled { opacity: 0.4; cursor: default; }
 .ed-ctxmenu-item kbd {
   font: inherit;
@@ -2829,8 +3010,8 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
   color: #8a95a6;
   white-space: nowrap;
 }
-.ed-ctxmenu-danger:not(:disabled) { color: #b4232a; }
-.ed-ctxmenu-danger:hover:not(:disabled) { background: #fdeced; }
+.ed-ctxmenu-danger:not(:disabled) { color: var(--danger); }
+.ed-ctxmenu-danger:hover:not(:disabled) { background: var(--danger-tint); }
 .ed-ctxmenu-sep { height: 1px; margin: 4px 2px; background: var(--line); }
 
 /* A long press on the canvas or the slide list is the context-menu gesture
@@ -2842,6 +3023,143 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-sidebar .ed-thumb {
   -webkit-touch-callout: none;
 }
+
+/* the side column's two views (editor.ts sideTabs); its tab strip is the
+   inspector's (.ed-tabs, .ed-tabs-band) */
+.ed-sidebar { padding-top: 0; }
+.ed-side-band { flex: none; align-self: stretch; margin-bottom: 0; }
+.ed-side-tabs { width: 100%; flex: none; }
+/* icon tabs — the side column's and the inspector's (controls.ts fitTabNames) */
+.ed-icon-tabs button { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 4px; }
+.ed-icon-tabs button[aria-selected='true'] { flex: 0 0 auto; }
+.ed-icon-tabs.ed-tabs-all button { flex: 1 0 auto; }
+.ed-icon-tabs button svg { flex: none; width: 14px; height: 14px; }
+/* names: the chosen tab's always; the others' only when every one fits */
+.ed-icon-tabs:not(.ed-tabs-all) button:not([aria-selected='true']) .ed-tab-name { display: none; }
+.ed-icon-tabs .ed-tab-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ed-thumbs { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
+.ed-side-layers { width: 100%; }
+.ed-side-layers > .ed-section { display: none; } /* the tab already says Layers */
+.ed-side-layers .ed-layers { max-height: none; overflow: visible; }
+.ed-sidebar:not([data-view='layers']) .ed-side-layers, .ed-sidebar:not([data-view='slides']) .ed-thumbs,
+.ed-sidebar:not([data-view='tokens']) .ed-side-tokens { display: none; }
+/* the Tokens view (editor/tokenspane.ts): tokens by type, then components */
+/* the Tokens view (editor/tokenspane.ts), in the inspector's own grammar:
+   section headers with fold, count and +, 26px rows, the sidebar's 12px sides */
+.ed-side-tokens { width: 100%; display: flex; flex-direction: column; padding: 0 0 16px; box-sizing: border-box; container-type: inline-size; --tok-val: 64px; }
+.ed-tokens { display: flex; flex-direction: column; }
+.ed-tokens-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; margin-top: 6px; }
+.ed-tokens-head h3 { margin: 0; font-size: 12px; font-weight: 600; color: var(--ink); }
+.ed-tokens-head .ed-tokens-modes { justify-content: flex-end; }
+/* a long translated group name ("Tamanhos de fonte") ellipsises; the header stays one line */
+.ed-tokens-sec-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-sec-count { font-size: 10.5px; font-weight: 600; letter-spacing: 0; color: var(--muted); text-transform: none; }
+.ed-tokens-body { display: flex; flex-direction: column; gap: 2px; }
+.ed-tokens-body[hidden] { display: none; }
+.ed-tokens-group[data-type="color"] > .ed-tokens-body { gap: 2px; }
+.ed-token-row { display: flex; align-items: center; gap: 6px; min-height: 26px; }
+/* every row on one grid, the same at every group: preview · name · value ·
+   uses · ⋯, the value a right-aligned column of one width across the view */
+.ed-tokens-body > .ed-token-row:not(.ed-token-adding), .ed-components > .ed-token-row {
+  position: relative;
+  display: grid; grid-template-columns: 20px minmax(0, 1fr) auto 20px; column-gap: 6px; align-items: center;
+}
+/* − and ⋯ ride over the row's end on hover or focus, on the row's own colour */
+.ed-token-acts {
+  position: absolute; inset-inline-end: 0; top: 50%; transform: translateY(-50%);
+  display: flex; gap: 2px; padding-inline-start: 6px; background: var(--surface);
+  opacity: 0; pointer-events: none; transition: opacity .1s;
+}
+.ed-token-row:hover > .ed-token-acts, .ed-token-row:focus-within > .ed-token-acts { opacity: 1; pointer-events: auto; }
+.ed-token-acts:empty { display: none; }
+.ed-token-acts .ed-btn { width: 22px; height: 22px; padding: 0; display: grid; place-items: center; }
+.ed-token-acts svg { width: 14px; height: 14px; }
+.ed-token-uses.ed-token-unused { visibility: hidden; }
+/* the value is ONE fixed column (--tok-val), so values line up down the view
+   and a long one (a font stack, a shadow) ellipsises instead of eating the name */
+.ed-tokens-body > .ed-token-row:not(.ed-token-adding) { grid-template-columns: 20px minmax(0, 1fr) var(--tok-val) 20px; }
+.ed-tokens-body > .ed-token-row > .ed-token-value { justify-self: stretch; text-align: end; }
+.ed-tokens-body > .ed-token-row > .ed-token-uses { justify-self: stretch; }
+/* the hover − and ⋯ end where the name does: over the value they would block
+   its edit, and over the count they would take the click that walks the uses */
+.ed-tokens-body > .ed-token-row > .ed-token-acts { inset-inline-end: calc(var(--tok-val) + 32px); }
+/* a narrow column never breaks a row onto two lines (two uneven lines per
+   token was the bug): the value column narrows to 52px — what a hex needs —
+   and the name truncates. The value never steps aside: it is the only way to
+   edit a token. ⋯ alone stays on hover there; its menu has Delete token. */
+@container (max-width: 220px) {
+  .ed-tokens-body { --tok-val: 52px; }
+  .ed-token-acts > .ed-token-remove:not(:only-child) { display: none; }
+}
+.ed-tokens-body > .ed-token-row > .ed-token-swatch, .ed-tokens-body > .ed-token-row > .ed-tokpick-prev { width: 20px; height: 20px; }
+/* a built-in's fixed name sits where an editable name's text does (button padding + border) */
+.ed-tokens-body > .ed-token-builtin > .ed-token-name { padding-inline: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.ed-token-more { width: 22px; height: 22px; padding: 0; }
+/* inside Colors: Theme and Yours, quieter than the section header */
+.ed-tokens-sub { display: flex; align-items: center; justify-content: space-between; height: 22px; margin-top: 4px; font-size: 10.5px; font-weight: 500; color: var(--muted); }
+.ed-tokens-subadd { width: 20px; height: 20px; padding: 0; font: inherit; font-size: 14px; line-height: 1; color: var(--muted); background: none; border: 0; border-radius: 5px; cursor: pointer; }
+.ed-tokens-subadd:hover { color: var(--ink); background: var(--chrome-2); }
+/* the kinds of token the deck has none of yet: one quiet row, not five headers */
+.ed-components .ed-hint { margin: 2px 0 0; }
+/* text that edits in place (tokenspane.ts editing): looks like text, a click makes it a field */
+.ed-edit {
+  min-width: 0; max-width: 100%; height: 24px; padding: 0 4px; font: inherit; font-size: 12px; color: var(--ink); text-align: start;
+  background: none; border: 1px solid transparent; border-radius: 5px; cursor: text;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ed-edit:hover { border-color: var(--line); }
+.ed-edit.ed-token-value { color: var(--muted); font-variant-numeric: tabular-nums; }
+.ed-edit.ed-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+.ed-edit-placeholder { color: var(--muted); font-style: italic; }
+.ed-edit-field { min-width: 0; width: 100%; height: 24px; box-sizing: border-box; font-size: 12px; }
+/* modes as chips: the shown one pressed */
+.ed-tokens-modes { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.ed-tokens-mode {
+  height: 22px; max-width: 100%; padding: 0 8px; font: inherit; font-size: 11.5px; color: var(--muted);
+  background: none; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ed-tokens-mode[aria-pressed='true'] { color: var(--ink); background: var(--tab-on); border-color: var(--tab-on-line); }
+.ed-token-top, .ed-token-val { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ed-token-val:empty { display: none; }
+.ed-token-val > .ed-token-uses { margin-inline-start: auto; }
+.ed-token-val > input[type='number'] { flex: none; width: 52px; }
+.ed-token-swatch { flex: none; width: 24px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; background-clip: padding-box; }
+.ed-token-swatch:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+.ed-token-badge { flex: none; font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.ed-token-builtin .ed-token-name { padding-inline: 2px; }
+.ed-token-why { font-size: 11px; color: var(--danger); line-height: 1.3; }
+.ed-token-name[aria-invalid='true'] { border-color: var(--danger); }
+.ed-token-name { flex: 1; min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-token-preview { flex: none; width: 24px; height: 24px; display: grid; place-items: center; font-size: 12px; line-height: 1; border: 1px solid var(--line); border-radius: 6px; background: var(--ink); color: var(--surface); overflow: hidden; }
+.ed-tokens-group[data-type="fontFamily"] .ed-token-preview, .ed-tokens-group[data-type="fontSize"] .ed-token-preview { background: none; color: var(--ink); }
+.ed-tokens-group[data-type="shadow"] .ed-token-preview { background: var(--surface); border-color: transparent; margin: 4px; width: 18px; height: 18px; }
+.ed-tokens-group[data-type="shadow"] .ed-token-row > input[type="number"] { width: 38px; }
+.ed-token-font { flex: 1.4; min-width: 0; font-size: 12px; }
+.ed-token-uses { flex: none; min-width: 22px; height: 20px; padding: 0 4px; font: inherit; font-size: 10.5px; color: var(--muted); text-align: end; font-variant-numeric: tabular-nums; background: none; border: 1px solid transparent; border-radius: 4px; cursor: pointer; }
+.ed-token-uses:not(:disabled):hover, .ed-token-uses:focus-visible { color: var(--ink); border-color: var(--line); }
+.ed-token-uses:disabled { cursor: default; }
+/* a bound numeric field (inspector/tokenbind.ts): the dot binds, the pill detaches */
+.ed-mini.ed-has-token input { padding-inline-end: 18px; }
+.ed-token-dot { position: absolute; inset-inline-end: 4px; width: 10px; height: 10px; padding: 0; border: 1.5px solid var(--muted); border-radius: 50%; background: none; cursor: pointer; opacity: 0; }
+/* the dot shows on hover AND whenever the field has keyboard focus — not a hover-only control */
+.ed-mini:hover .ed-token-dot, .ed-has-token:focus-within .ed-token-dot, .ed-token-dot:focus-visible { opacity: 1; }
+.ed-token-pill { position: absolute; inset: 1px; display: flex; align-items: center; gap: 4px; padding-inline: 8px 2px; font-size: 11.5px; color: var(--ink); background: var(--chrome-2); border-radius: 5px; overflow: hidden; white-space: nowrap; }
+.ed-token-pill::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+/* the pill's name reopens the picker; its detach shows on hover or focus */
+.ed-token-pill-name, .ed-color-token-name {
+  flex: 1 1 0; min-width: 0; padding: 0; font: inherit; color: inherit; text-align: start; background: none; border: 0; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ed-token-pill .ed-color-detach, .ed-color-token .ed-color-detach { opacity: 0; }
+.ed-token-pill:hover .ed-color-detach, .ed-token-pill:focus-within .ed-color-detach,
+.ed-color-token:hover .ed-color-detach, .ed-color-token:focus-within .ed-color-detach { opacity: 1; }
+.ed-token-wrap { position: relative; }
+.ed-token-wrap > select { width: 100%; }
+.ed-token-wrap.ed-has-token > select { padding-inline-end: 22px; }
+.ed-token-wrap > .ed-token-dot { top: 50%; translate: 0 -50%; inset-inline-end: 20px; }
+.ed-token-wrap:hover > .ed-token-dot, .ed-token-wrap:focus-within > .ed-token-dot { opacity: 1; }
+.ed-shadow-tiles + .ed-token-dot { top: 4px; translate: none; inset-inline-end: 4px; }
+.ed-layer-comp { flex: none; font-size: 10px; color: var(--accent); }
 .ed-scroll .bento-editing {
   -webkit-touch-callout: default;
 }
@@ -2908,12 +3226,771 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 }
 .ed-gate-offer { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
 .ed-gate-acts { display: flex; justify-content: flex-end; margin-top: 4px; }
-/* ————— brand palette swatches beside a colour control ————— */
-.ed-colorref { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
-.ed-swatches { display: flex; gap: 3px; flex-wrap: wrap; justify-content: flex-end; }
-.ed-swatch {
-  width: 14px; height: 14px; padding: 0; border-radius: 3px; cursor: pointer;
-  border: 1px solid var(--line);
+/* ————— HINTS (editor/hints.ts) — one tooltip for the whole chrome —————————— */
+.ed-tip {
+  position: fixed; z-index: 10000; max-width: 260px; padding: 5px 8px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; white-space: pre-line;
+  font: 500 11.5px/1.4 system-ui, sans-serif; color: var(--tip-ink); background: var(--tip-bg);
+  border-radius: 6px; box-shadow: 0 0 0 1px var(--tip-edge), 0 4px 14px rgb(0 0 0 / 0.28); pointer-events: none;
 }
+.ed-tip[hidden] { display: none; }
+.ed-tip-keys { display: inline-flex; gap: 3px; margin-inline-start: auto; }
+.ed-tip kbd {
+  font: inherit; font-size: 10.5px; padding: 0 5px; min-width: 18px; text-align: center;
+  color: var(--tip-key); background: var(--tip-key-bg); border-radius: 4px;
+}
+
+/* ————— INSPECTOR — Penpot's Design tab, measure for measure ————————————————
+   One rhythm: 26px fields, 4px between the controls of a line, 6px between
+   lines, sections split by a hairline. A row is a two-column grid — caption |
+   control — so every control in a section starts on the same edge; a caption
+   too long for its column wraps rather than being cut. Controls whose section
+   already names them (Fill, Stroke, Shadow…) take the whole line, no caption.
+   The tab strip is with the tabs (.ed-tabs), the numeric field with .ed-mini. */
+:is(.ed-props, .ed-side-tokens) .ed-section {
+  display: flex; align-items: center; gap: 6px; min-height: 28px;
+  margin: 10px -12px 4px; padding: 6px 12px 0; border-top: 1px solid var(--line);
+  font-size: 11px; letter-spacing: .05em; color: var(--ink-2);
+}
+:is(.ed-props, .ed-side-tokens) .ed-section.ed-sec-empty { color: var(--muted); }
+/* Penpot's chevron: inside the header's own padding, before the title */
+:is(.ed-props, .ed-side-tokens) .ed-section.ed-sec-toggle { padding-inline-start: 26px; }
+/* an empty section shows the open chevron but folds nothing: no hand, no hover */
+.ed-props .ed-section.ed-sec-flat { cursor: default; }
+.ed-props .ed-section.ed-sec-flat:hover { color: inherit; }
+:is(.ed-props, .ed-side-tokens) .ed-section.ed-sec-toggle::before { inset-inline-start: 12px; top: calc(50% + 3px); }
+:is(.ed-props, .ed-side-tokens) .ed-sec-act {
+  margin-inline-start: auto; flex: none; width: 22px; height: 22px; padding: 0; display: grid; place-items: center;
+  color: var(--muted); background: none; border: 0; border-radius: 5px; cursor: pointer;
+}
+:is(.ed-props, .ed-side-tokens) .ed-sec-act svg { width: 14px; height: 14px; }
+:is(.ed-props, .ed-side-tokens) .ed-sec-act:hover { color: var(--ink); background: var(--chrome-2); }
+
+/* help folded behind a "?" on the section header line (panels.ts applyAccordion) */
+.ed-help-btn {
+  position: absolute; top: -26px; inset-inline-end: 0; width: 18px; height: 18px; padding: 0;
+  display: grid; place-items: center; font: 600 11px/1 system-ui, sans-serif; color: var(--muted);
+  background: none; border: 1px solid var(--line); border-radius: 50%; cursor: pointer;
+}
+.ed-help-btn:hover, .ed-help-btn[aria-expanded='true'] { color: var(--ink); border-color: var(--muted); }
+/* the ? sits left of a + / − when a section has both */
+.ed-props .ed-section:has(> .ed-sec-act) + .ed-section-body > .ed-help-btn { inset-inline-end: 28px; }
+.ed-section-body:not(.ed-help-open) > p.ed-hint:not(.ed-status, .ed-morph-warn, .ed-keep) { display: none; }
+
+/* the designed focus ring on the panel's own small buttons */
+.ed-sec-act:focus-visible, .ed-shadow-tile:focus-visible, .ed-palette-item:focus-visible,
+.ed-color-detach:focus-visible, .ed-layer-fold:focus-visible, .ed-help-btn:focus-visible,
+.ed-notes-toggle:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -1px; }
+
+/* what the panel is about (panels.ts mountContext): glyph, name, actions,
+   and a quiet line on how the selection changes it */
+.ed-context { display: flex; align-items: center; gap: 6px; min-height: 26px; margin: 4px 0 2px; }
+.ed-context-glyph { flex: none; display: grid; place-items: center; width: 22px; height: 22px; color: var(--muted); background: var(--chrome-2); border-radius: 5px; }
+.ed-context-glyph svg { width: 14px; height: 14px; }
+.ed-context-name { flex: 0 1 auto; min-width: 3em; max-width: 60%; font-size: 12.5px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-context .ed-btn-icon { flex: none; padding: 3px; color: var(--muted); }
+.ed-context .ed-btn-icon:hover { color: var(--ink); }
+/* one line: the hint after the name, cut with an ellipsis (whole in its tooltip) */
+.ed-context-how { flex: 1 1 0; min-width: 0; font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-context { margin-bottom: 6px; }
+
+/* rows: caption | control */
+.ed-props .ed-row {
+  display: grid; grid-template-columns: minmax(0, 40%) minmax(0, 1fr); align-items: center;
+  gap: 4px 8px; margin-bottom: 6px; font-size: 11.5px; color: var(--muted);
+}
+.ed-props .ed-row > span:first-child { line-height: 1.2; overflow-wrap: anywhere; }
+.ed-props .ed-row > :not(span:first-child) { width: 100%; min-width: 0; max-width: none; justify-self: stretch; }
+/* a switch row: the caption has the room, the box sits at the panel's edge
+   (it used to stretch to the field column and overrun the edge by 4px) */
+.ed-props .ed-row:has(> .ed-toggle) { grid-template-columns: minmax(0, 1fr) 26px; min-height: 26px; }
+/* a switch row is a 26px row like every other, and its box sits centred in
+   the same 26px trailing column as a field's palette or token button, so the
+   column of boxes on the right edge lines up */
+.ed-props .ed-row > .ed-toggle { width: 16px; margin: 0; justify-self: center; }
+.ed-props .ed-row > select { height: 26px; }
+/* caption above, control full width: a dropdown whose value would be cut off
+   (panels.ts stackCrampedRows), a colour field with opacity or theme colours
+   (one with only swatch and hex — the theme's slots — stays beside its
+   caption), a chart axis range (min and max side by side) */
+.ed-props .ed-row.ed-row-stack,
+.ed-props .ed-row:has(> .ed-color), .ed-props .ed-row:has(> .ed-colorref),
+.ed-props .ed-row:has(> .ed-axis-range) { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+/* a stacked row, and a colour row beside its caption, top-align the caption */
+.ed-props .ed-row.ed-row-stack, .ed-props .ed-row:has(> .ed-color), .ed-props .ed-row:has(> .ed-colorref) { align-items: stretch; }
+.ed-props .ed-axis-range { display: grid; grid-template-columns: auto 1fr auto 1fr; align-items: center; gap: 4px 6px; }
+.ed-props .ed-axis-range input { width: 100%; min-width: 0; }
+
+/* a captionless line: controls side by side, the first one takes the room */
+.ed-props .ed-line { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; min-width: 0; }
+.ed-props .ed-line > * { min-width: 0; }
+.ed-props .ed-line > select, .ed-props .ed-line > .ed-color, .ed-props .ed-line > .ed-colorref,
+.ed-props .ed-line > .ed-seg, .ed-props .ed-line > .ed-mini { flex: 1 1 0; width: auto; }
+.ed-props .ed-line-even > * { flex: 1 1 0; }
+.ed-props .ed-line > .ed-seg-text { width: auto; }
+/* numeric pairs and triples shrink with the column (a long label — de 'Weichzeichnung' — ellipsises instead of pushing) */
+.ed-props .ed-grid2, .ed-props .ed-grid3 { display: grid; gap: 4px; margin-bottom: 6px; }
+.ed-props .ed-grid2 { grid-template-columns: 1fr 1fr; }
+.ed-props .ed-grid3 { grid-template-columns: 1fr 1fr 1fr; }
+.ed-props .ed-grid3 > *, .ed-props .ed-grid2 > * { min-width: 0; width: 100%; }
+.ed-props .ed-grid-wide { grid-template-columns: 1fr 1fr; } /* one grid: blend · opacity line up with W · H */
+
+/* the block above the sections: the toolbar, blend · opacity, measures */
+.ed-layer-block { margin-bottom: 2px; }
+.ed-props .ed-tool {
+  flex: none; width: 26px; height: 26px; padding: 0; display: grid; place-items: center;
+  color: var(--ink-2); background: none; border: 1px solid transparent; border-radius: 6px;
+}
+.ed-props .ed-tool:hover:not(:disabled) { color: var(--ink); background: var(--chrome-2); }
+.ed-props .ed-tool:disabled { opacity: .35; cursor: default; }
+.ed-props .ed-tool svg { width: 15px; height: 15px; }
+.ed-props .ed-tool[aria-expanded='true'] { color: var(--ink); background: var(--chrome-2); }
+/* ONE toolbar line: kinds side by side, a hairline between, the tools growing
+   to fill the line when the panel is wide. A kind never splits and never
+   overlaps: when the line is too short the bar wraps at a kind's edge. Each
+   kind's hairline sits in its own start padding; the bar is pulled 6px out and
+   clipped back, so the hairline of a kind that starts a line is cut away and
+   no line begins with a stray separator. */
+.ed-props .ed-toolbar {
+  display: flex; align-items: center; flex-wrap: wrap; column-gap: 0; row-gap: 4px;
+  margin: 0 0 6px; margin-inline-start: -6px; clip-path: inset(0 0 0 6px);
+}
+[dir='rtl'] .ed-props .ed-toolbar { clip-path: inset(0 6px 0 0); }
+.ed-toolbar-kind { box-sizing: border-box; min-width: 0; flex: var(--n, 1) 0 calc(var(--n, 1) * 23px + 6px); flex-grow: var(--n, 1); position: relative; display: flex; align-items: center; gap: 0; padding-inline-start: 6px; }
+.ed-toolbar-kind::before { content: ''; position: absolute; inset-inline-start: 2.5px; top: 5px; bottom: 5px; width: 1px; background: var(--line); }
+.ed-props .ed-toolbar .ed-tool { box-sizing: border-box; flex: 1 1 23px; min-width: 23px; max-width: 32px; height: 26px; padding: 0; }
+.ed-frame-placed { margin: 0 0 6px; }
+.ed-link-btn { border: 0; background: none; padding: 0; color: var(--accent-ink); text-decoration: underline; cursor: pointer; font: inherit; }
+.ed-mini.ed-readonly input { color: var(--muted); }
+.ed-props .ed-toolbar .ed-tool svg { width: 16px; height: 16px; }
+
+/* the colour field (panels.ts colorField), Penpot's: swatch · hex · % opacity.
+   Each part is its own FIELD box; the row gives the field the full width. */
+.ed-colorref { display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
+.ed-color { display: flex; align-items: center; gap: 4px; min-width: 0; flex: 1 1 auto; }
+.ed-color > input[type='color'] { flex: none; width: 26px; padding: 3px; cursor: pointer; }
+.ed-color > input[type='color']::-webkit-color-swatch-wrapper { padding: 0; }
+.ed-color > input[type='color']::-webkit-color-swatch { border: 0; border-radius: 3px; }
+.ed-color > input[type='color']::-moz-color-swatch { border: 0; border-radius: 3px; }
+.ed-color-hex { flex: 1 1 0; width: 0; min-width: 0; font-variant-numeric: tabular-nums; text-transform: lowercase; }
+.ed-props .ed-color-hex { padding-inline: 6px; }
+.ed-color-alpha { flex: none; width: 58px; }
+.ed-color-alpha input { width: 100%; }
+/* theme colours (panels.ts themeLink) — Penpot's library: named, behind a button */
+.ed-color-token {
+  flex: 1 1 0; min-width: 0; height: 26px; box-sizing: border-box; display: flex; align-items: center; gap: 4px;
+  padding-block: 0; padding-inline: 8px 4px; font-size: 12px; color: var(--ink); background: var(--chrome-2);
+  border: 1px solid var(--line); border-radius: 6px; overflow: hidden; white-space: nowrap;
+}
+.ed-color-token::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.ed-color-detach { margin-inline-start: auto; flex: none; width: 20px; height: 20px; padding: 0; display: grid; place-items: center; color: var(--muted); background: none; border: 0; border-radius: 4px; cursor: pointer; }
+.ed-color-detach:hover { color: var(--ink); background: var(--chrome); }
+.ed-color-detach svg { width: 13px; height: 13px; }
+.ed-palette { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: 6px; background: var(--chrome); border: 1px solid var(--line); border-radius: 6px; }
+.ed-palette[hidden] { display: none; }
+.ed-palette-cap { grid-column: 1 / -1; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; color: var(--muted); padding: 0 2px 2px; }
+.ed-palette-item { display: flex; align-items: center; gap: 6px; min-width: 0; height: 24px; padding: 0 4px; font: inherit; font-size: 11.5px; color: var(--ink-2); background: none; border: 0; border-radius: 4px; cursor: pointer; text-align: start; }
+.ed-palette-item > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-palette-item:hover { color: var(--ink); background: var(--chrome-2); }
+.ed-palette-item.is-on { color: var(--ink); box-shadow: inset 0 0 0 1px var(--blue); }
+.ed-swatch { flex: none; width: 14px; height: 14px; padding: 0; border-radius: 3px; cursor: pointer; border: 1px solid var(--line); }
 .ed-swatch:hover { transform: scale(1.15); }
-.ed-swatch.is-on { outline: 2px solid var(--blue); outline-offset: 1px; }
+
+/* a gradient stop: position · colour · remove, on one line, room for the whole hex */
+.ed-props .ed-gradstop { flex: 1; min-width: 0; display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; margin-bottom: 6px; }
+.ed-props .ed-gradstop > .ed-gradstop-at { flex: none; width: 54px; }
+.ed-props .ed-gradstop > .ed-color { flex: 1 1 0; }
+.ed-props .ed-gradstop .ed-color > input[type='color'] { width: 22px; min-width: 0; }
+.ed-props .ed-gradstop .ed-color-hex { padding-inline: 4px; }
+.ed-props .ed-gradstop .ed-color-alpha { width: 52px; }
+.ed-props .ed-gradstop > .ed-tool { width: 22px; }
+
+/* shadow presets as tiles (panels.ts buildShadow); each preview is a small
+   light card on a mid-grey patch, in both themes: a dark shadow and a light
+   glow both show there, as they would on a slide */
+.ed-shadow-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin-bottom: 6px; }
+.ed-shadow-tile {
+  display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; padding: 7px 2px 5px;
+  font: inherit; font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
+  background: var(--field) linear-gradient(#aeb7c4, #aeb7c4) 0 0 / 100% 30px no-repeat;
+}
+.ed-shadow-tile > span:last-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-shadow-tile:hover { color: var(--ink); background-color: var(--chrome-2); }
+.ed-shadow-tile[aria-checked='true'] { color: var(--ink); border-color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }
+.ed-shadow-swatch { width: 24px; height: 16px; margin-bottom: 3px; border-radius: 3px; background: var(--preview-card); box-sizing: border-box; }
+
+/* a full-width action: wraps inside the panel instead of running past it */
+.ed-props .ed-btn-block { box-sizing: border-box; width: 100%; max-width: 100%; min-height: 26px; height: auto; padding: 4px 8px; margin: 2px 0 6px; white-space: normal; line-height: 1.3; text-align: center; }
+/* the native arrow keeps its own lane: a long value stops short of it */
+.ed-props select { min-width: 0; max-width: 100%; padding-inline-end: 22px; text-overflow: ellipsis; }
+.ed-props input[type='text'] { min-width: 0; max-width: 100%; }
+/* no spinner arrows: they ate a third of a narrow field, and the caption
+   scrubs (panels.ts scrub()) — arrows keys still step, as in Penpot */
+.ed-props input[type='number'] { min-width: 0; -moz-appearance: textfield; appearance: textfield; }
+.ed-props input[type='number']::-webkit-inner-spin-button,
+.ed-props input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+/* numeric fields take arithmetic (controls.ts numeric()): digits never jitter while scrubbing */
+.ed-props input.ed-num { min-width: 0; font-variant-numeric: tabular-nums; }
+.ed-props input.ed-num::placeholder { color: var(--muted); font-style: italic; }
+/* a unit inside the field's far end (° on angles), muted, never in the way */
+.ed-mini[data-unit]::after {
+  content: attr(data-unit); position: absolute; inset-inline-end: 7px; top: 50%; transform: translateY(-50%);
+  font-size: 11px; color: var(--muted); pointer-events: none;
+}
+.ed-mini[data-unit] input { padding-inline-end: 18px; }
+
+/* a translucent colour's swatch: the colour top-left, the colour over a
+   checkerboard bottom-right — the opacity shows, not just the hue */
+.ed-color > input[type='color'].ed-see-through {
+  /* images only: the field keeps its own fill (the one field look, test-slides-fields) */
+  background-image: linear-gradient(var(--see), var(--see)), repeating-conic-gradient(#c8ccd2 0 25%, #fff 0 50%);
+  background-size: auto, 8px 8px;
+}
+.ed-color > input[type='color'].ed-see-through::-webkit-color-swatch { clip-path: polygon(0 0, 100% 0, 0 100%); }
+.ed-color > input[type='color'].ed-see-through::-moz-color-swatch { clip-path: polygon(0 0, 100% 0, 0 100%); }
+
+/* the colour popover (inspector/colorpopover.ts) */
+.ed-cpop {
+  position: fixed; z-index: 60; box-sizing: border-box; width: 248px; padding: 10px;
+  display: flex; flex-direction: column; gap: 8px;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 10px 30px rgb(0 0 0 / .28);
+}
+@keyframes ed-cpop-in { from { opacity: 0; transform: scale(.96); } }
+.ed-cpop-sv {
+  position: relative; height: 150px; border-radius: 6px; cursor: crosshair; touch-action: none;
+  background: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, var(--hue));
+}
+.ed-cpop-sv:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+.ed-cpop-sv > span {
+  position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%;
+  border: 2px solid #fff; box-shadow: 0 0 0 1px rgb(0 0 0 / .45); pointer-events: none;
+}
+.ed-cpop input[type='range'] { -webkit-appearance: none; appearance: none; width: 100%; height: 12px; margin: 0; border-radius: 6px; }
+.ed-cpop-hue { background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); }
+.ed-cpop-alpha {
+  background: linear-gradient(to right, transparent, var(--c, #000)), repeating-conic-gradient(#c8ccd2 0 25%, #fff 0 50%) 0 0 / 8px 8px;
+}
+.ed-cpop input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 0; box-shadow: 0 0 0 1px rgb(0 0 0 / .45);
+}
+.ed-cpop input[type='range']::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 0; box-shadow: 0 0 0 1px rgb(0 0 0 / .45); }
+.ed-cpop-line { display: flex; gap: 4px; align-items: center; }
+.ed-cpop-line select { flex: none; width: 64px; }
+.ed-cpop-text { flex: 1 1 0; min-width: 0; font-variant-numeric: tabular-nums; }
+.ed-cpop-text.is-clamped { box-shadow: inset 0 0 0 1px var(--danger); }
+.ed-cpop-swatches { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+.ed-cpop-swatch { aspect-ratio: 1; width: auto; height: auto; padding: 0; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+.ed-cpop-swatch:hover { box-shadow: 0 0 0 2px var(--accent-ink); }
+
+/* tab strips: the selected pill SLIDES to the chosen tab (controls.ts slidingPill) */
+.ed-tabs { position: relative; }
+.ed-tabs button { position: relative; z-index: 1; }
+.ed-tabs.ed-tabs-pill::before {
+  content: ''; position: absolute; top: 3px; bottom: 3px; left: 0; box-sizing: border-box;
+  width: var(--pill-w); transform: translateX(var(--pill-x));
+  background: var(--tab-on); border: 1px solid var(--tab-on-line); border-radius: 6px; box-shadow: 0 1px 2px rgb(0 0 0 / .18);
+  transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1), width 140ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ed-tabs.ed-tabs-pill button[aria-selected='true'] { background: none; border-color: transparent; box-shadow: none; }
+@media (prefers-reduced-motion: reduce) { .ed-tabs.ed-tabs-pill::before, .ed-cpop { transition: none; animation: none; } }
+
+/* the layer list takes focus on every row click (keyboard order works from
+   there), and a 2px frame round the whole list on each click read as
+   "everything is selected". Focus shows on the selected row instead — and
+   on the list itself only while no row is selected to carry it. */
+.ed-layers:focus-visible .ed-layer.sel { border-color: var(--blue); }
+.ed-layer-rename { flex: 1; min-width: 0; height: 20px; padding: 0 4px; font: inherit; font-size: 12px; }
+
+/* the notes pane's fold is a resizer chevron laid on its side (after .ed-panel-toggle, which it reshapes) */
+.ed-notes-toggle { width: 44px; height: 16px; }
+
+/* ————— TOPBAR ZONES — document | insert | output ————————————————————————————
+   Three zones, each intentional: the DOCUMENT on the left (mark, name, undo),
+   the INSERT tools in the middle, OUTPUT on the right. The name and the right
+   zone take equal shares of the spare width, so the tools sit between two
+   balanced margins and a long deck name gets the room the left zone has —
+   ellipsed at its end, never wrapping, never pushing a button off the bar. */
+.ed-zone-doc { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: inherit; }
+.ed-topbar .ed-title { flex: 1 1 auto; width: auto; min-width: 48px; max-width: 520px; text-overflow: ellipsis; }
+.ed-topbar .ed-title:focus { text-overflow: clip; }
+.ed-topbar .ed-group-right { flex: 1 1 0; justify-content: flex-end; margin-inline-start: 0; min-width: max-content; }
+.ed-topbar .ed-insert { padding-inline: 10px; border-inline: 1px solid var(--line); }
+.ed-topbar.ed-bar-fold .ed-insert { border-inline: 0; padding-inline: 0; }
+.bento-laser-dot.bento-remote:not(.visible) { transition: left 0.045s linear, top 0.045s linear, opacity 0.3s ease-out; }
+
+/* page sizes as tiles (panels.ts, Deck): each drawn at its proportions */
+.ed-page-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin-bottom: 6px; }
+.ed-page-tile {
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; min-width: 0; height: 52px; padding: 4px 2px 5px;
+  font: inherit; font-size: 11px; color: var(--muted); background-color: var(--field); border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
+}
+.ed-page-tile > span:last-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Custom's caption is a word (de 'Benutzerdefiniert', it 'Personalizzato'),
+   too long for one cell: it spans two, which the row of A4s leaves free */
+.ed-page-tile.ed-page-custom { grid-column: span 2; }
+.ed-page-tile:hover { color: var(--ink); background-color: var(--chrome-2); }
+.ed-page-tile:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -1px; }
+.ed-page-tile[aria-checked='true'] { color: var(--ink); border-color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }
+.ed-page-shape { flex: none; border: 1.5px solid currentColor; border-radius: 2px; box-sizing: border-box; }
+.ed-page-tile[aria-checked='true'] .ed-page-shape { background: color-mix(in srgb, var(--blue) 25%, transparent); border-color: var(--blue); }
+
+/* the sticky tab band sits over the top of the list: anything scrolled into
+   view (keyboard paging, a reveal) lands below it, not under it */
+.ed-sidebar { scroll-padding-top: 56px; }
+.ed-props { scroll-padding-top: 52px; }
+
+/* Auto layout (inspector/layout.ts): the 3×3 alignment box, Penpot's */
+.ed-align-matrix {
+  box-sizing: border-box; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;
+  grid-template-rows: repeat(3, 1fr); /* square cells: rows were sized by content, 21/15/15 */
+  width: 66px; height: 66px; padding: 4px; background: var(--field); border: 1px solid var(--field-line); border-radius: 6px;
+}
+.ed-align-matrix button { padding: 0; border: 0; border-radius: 3px; background: none; cursor: pointer; display: grid; place-items: center; }
+.ed-align-matrix button::after { content: ''; width: 4px; height: 4px; border-radius: 50%; background: var(--muted); }
+.ed-align-matrix button:hover { background: var(--chrome); }
+.ed-align-matrix button[aria-checked='true']::after { width: 10px; height: 10px; border-radius: 2px; background: var(--accent, #3b82f6); }
+/* the frame's padding and gaps on canvas (canvas.ts frameOverlay), Figma's pink */
+.ed-frame-band { position: absolute; background: rgba(236, 72, 153, 0.16); pointer-events: auto; z-index: 5; }
+.ed-frame-band:hover { background: rgba(236, 72, 153, 0.32); }
+.ed-frame-band[data-axis='x'] { cursor: ew-resize; }
+.ed-frame-band[data-axis='y'] { cursor: ns-resize; }
+/* ————— COMMAND PALETTE (editor/commands.ts) — ⌘K ————————————————————————— */
+.ed-cmdk-overlay {
+  position: fixed; inset: 0; z-index: 1500; background: rgb(15 23 36 / 0.25);
+  display: flex; justify-content: center; align-items: flex-start; padding-top: 14vh;
+}
+.ed-cmdk {
+  width: min(520px, calc(100vw - 24px)); background: var(--surface); color: var(--ink);
+  border-radius: 12px; box-shadow: 0 18px 50px rgb(15 23 36 / 0.3); overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.ed-cmdk-input {
+  font: 15px system-ui, sans-serif; padding: 14px 16px; border: 0; border-bottom: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); outline: none;
+}
+.ed-cmdk-list { list-style: none; margin: 0; padding: 6px; max-height: 50vh; overflow-y: auto; }
+.ed-cmdk-list li {
+  display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 7px;
+  font-size: 13px; cursor: pointer;
+}
+.ed-cmdk-list li[aria-selected="true"] { background: var(--chrome-2); }
+.ed-cmdk-list .ed-cmdk-empty { color: var(--muted); cursor: default; }
+.ed-cmdk-list kbd {
+  font: 11px system-ui, sans-serif; padding: 1px 6px; min-width: 18px; text-align: center;
+  color: var(--muted); background: var(--chrome); border: 1px solid var(--line); border-radius: 4px;
+}
+
+/* ————— CANVAS FEEDBACK (editor/hud.ts) — modifier line, transform pill ——————— */
+.ed-modhint {
+  /* above the Slideshow/zoom row, never beside it: centred at the foot it ran
+     under the 300px corner cluster on a narrow canvas. It is the indicator the
+     person is reading right now, so it also stacks above that cluster. */
+  position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%); z-index: 12;
+  max-width: calc(100% - 40px); padding: 4px 10px; border-radius: 999px; pointer-events: none;
+  font: 500 11.5px/1.4 system-ui, sans-serif; color: var(--tip-ink); background: var(--tip-bg);
+  box-shadow: 0 0 0 1px var(--tip-edge), 0 4px 14px rgb(0 0 0 / 0.2); text-align: center;
+}
+.ed-modhint[hidden], .ed-hud[hidden] { display: none; }
+.ed-hud {
+  position: fixed; z-index: 10000; padding: 2px 7px; border-radius: 999px; pointer-events: none;
+  font: 600 11px/1.5 system-ui, sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap;
+  color: var(--surface); background: var(--blue-label);
+}
+
+/* Layers' padlock: a locked element is click-through on the canvas */
+.ed-stage-scale .bento-el[data-locked] { pointer-events: none; } /* one lock marker: data-locked (#838), set by canvas.ts */
+
+/* ————— MORPH PAIRING (editor/morph.ts) — layer badge, canvas ghost ——————————— */
+.ed-morph-ghost { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; z-index: 5; }
+.ed-morph-ghost rect, .ed-morph-ghost path { fill: none; stroke: var(--morph); }
+.ed-layer-morph { color: var(--morph); font-weight: 700; font-size: 11px; margin-inline-start: auto; }
+.ed-layer-act {
+  display: inline-flex; flex: none; width: 20px; height: 20px; padding: 3px; border: 0; border-radius: 4px;
+  background: none; color: var(--muted); cursor: pointer;
+  /* always laid out, only shown on hover: appearing would push the label and
+     the row's other marks, and the list flickered under the pointer */
+  opacity: 0; pointer-events: none; transition: opacity .1s;
+}
+.ed-layer-label + .ed-layer-act { margin-inline-start: auto; }
+.ed-layer-act svg { width: 14px; height: 14px; }
+.ed-layer:hover .ed-layer-act, .ed-layer:focus-within .ed-layer-act, .ed-layer-act.on, .ed-layer-act:focus-visible { opacity: 1; pointer-events: auto; }
+.ed-layer-act:hover { background: var(--chrome-2); color: var(--ink); }
+.ed-layer.is-hidden .ed-layer-label, .ed-layer.is-hidden .ed-layer-glyph { opacity: 0.45; }
+/* locked by its frame: the padlock shows, faint — the frame's lock is the one to undo */
+.ed-layer.held-locked .ed-layer-locked { opacity: 0.4; }
+.ed-morph-preview { width: 100%; accent-color: var(--morph); }
+/* Vector booleans in the insert tools: shown only while 2+ closed shapes are
+   selected, set off from the insert buttons by a hairline. */
+.ed-bool { display: flex; align-items: center; gap: 2px; padding-inline-start: 6px; margin-inline-start: 4px; border-inline-start: 1px solid var(--line); }
+.ed-topbar.ed-bar-fold .ed-bool { border: 0; padding: 0; margin: 0; }
+.ed-bool[hidden] { display: none; }
+
+/* Tool letters (commands.ts): a small key chip after the tool's name; the
+   tightest tiers drop it with the labels, the tooltip still says it. */
+.ed-tool-key { font: 600 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 1px 3px; margin-inline-start: 2px; }
+/* An icon-only tool (the compact and tight tiers, i.e. most windows) keeps its
+   letter as a small muted corner mark: absolutely placed inside the button's
+   own padding, so it takes no width (fitTopbar's measuring is unchanged) and
+   sits clear of the icon. Menu rows keep the full badge; the phone fold has
+   no room for either. */
+.ed-topbar.ed-bar-compact .ed-btn:not(.ed-menu .ed-btn):has(> .ed-tool-key) { position: relative; }
+.ed-topbar.ed-bar-compact .ed-btn:not(.ed-menu .ed-btn) > .ed-tool-key { position: absolute; right: 2px; bottom: 1px; margin: 0; padding: 0; border: 0; font-size: 9px; line-height: 1; pointer-events: none; }
+.ed-topbar.ed-bar-fold .ed-tool-key { display: none; }
+.ed-menu .ed-tool-key { margin-inline-start: auto; }
+
+/* Penpot's path bar: node type + close, only while one path shape is selected */
+.ed-pathbar { display: flex; align-items: center; gap: 2px; padding-inline-start: 6px; margin-inline-start: 4px; border-inline-start: 1px solid var(--line); }
+.ed-topbar.ed-bar-fold .ed-pathbar { border: 0; padding: 0; margin: 0; }
+.ed-pathbar[hidden] { display: none; }
+.ed-pathbar .ed-btn[aria-pressed="true"] { background: var(--tab-on); box-shadow: inset 0 0 0 1px var(--tab-on-line); color: var(--accent-ink); }
+
+/* Export, at the foot of the Format tab */
+/* Figma's Export, fixed: one setting row (scale · format · ⋯) and one
+   full-width Export button below it */
+.ed-export-rows { display: flex; flex-direction: column; gap: 4px; margin-bottom: 4px; }
+.ed-export-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 26px; gap: 4px; align-items: center; }
+.ed-export-row > select { width: 100%; min-width: 0; }
+.ed-export-row > .ed-btn-icon { width: 26px; height: 26px; padding: 0; display: grid; place-items: center; color: var(--muted); }
+.ed-export-row > .ed-btn-icon:hover { color: var(--ink); }
+.ed-export-row > .ed-btn-icon svg { width: 16px; height: 16px; }
+.ed-export-rows > .ed-export-btn { width: 100%; height: 28px; margin-top: 2px; font-weight: 600; }
+/* --- paint: gradient stops, kinds, the canvas gradient handle, corners, entrance pills --- */
+.ed-gradbar {
+  position: relative; height: 16px; margin: 4px 7px 10px; border: 1px solid var(--line); border-radius: 4px; cursor: copy;
+  background: var(--grad), repeating-conic-gradient(#c8ccd2 0 25%, #fff 0 50%) 0 0 / 8px 8px;
+}
+.ed-gradbar-stop {
+  position: absolute; top: 50%; width: 14px; height: 22px; padding: 0; translate: -50% -50%; cursor: ew-resize;
+  border: 2px solid #fff; border-radius: 4px; background: var(--c); box-shadow: 0 0 0 1px rgb(0 0 0 / .45);
+}
+.ed-gradbar-stop.is-on { box-shadow: 0 0 0 2px var(--blue); }
+.ed-gradbar-stop:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+.ed-gradchip {
+  width: 100%; height: 26px; padding: 0 8px; text-align: start; font: inherit; font-size: 12px; color: var(--ink); cursor: pointer;
+  border: 1px solid var(--line); border-radius: 6px;
+  background: linear-gradient(90deg, var(--field) 0 30%, transparent 70%), var(--grad), repeating-conic-gradient(#c8ccd2 0 25%, #fff 0 50%) 0 0 / 8px 8px;
+}
+.ed-cpop-kinds { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; padding: 2px; border-radius: 6px; background: var(--field); }
+.ed-cpop-kinds button { padding: 4px 0; font: inherit; font-size: 11.5px; color: var(--muted); background: none; border: 0; border-radius: 4px; cursor: pointer; }
+.ed-cpop-kinds button[aria-checked='true'] { color: var(--ink); background: var(--chrome-2); box-shadow: inset 0 0 0 1px var(--line); }
+.ed-cpop-bar .ed-gradbar { margin: 2px 7px 4px; }
+.ed-cpop-color { display: flex; flex-direction: column; gap: 8px; }
+.ed-cpop-color[hidden], .ed-cpop-tokens[hidden], .ed-cpop-bar[hidden], .ed-cpop input[hidden] { display: none; }
+.ed-cpop-tokens { display: flex; flex-direction: column; gap: 2px; max-height: 220px; overflow: auto; }
+.ed-grad-layer .ed-grad-lines line, .ed-grad-layer .ed-grad-lines ellipse { stroke: #fff; fill: none; filter: drop-shadow(0 0 1px rgb(0 0 0 / .8)); }
+.ed-grad-knob {
+  position: absolute; box-sizing: border-box; border-style: solid; border-color: #fff; border-radius: 50%;
+  background: var(--blue); box-shadow: 0 0 0 1px rgb(0 0 0 / .5); pointer-events: auto; cursor: grab; z-index: 6;
+}
+/* left of the token dot (tokenbind.ts), which owns the field's end */
+.ed-mini:has(> .ed-corners-btn) input { padding-inline-end: 38px; }
+.ed-corners-btn { position: absolute; inset-inline-end: 16px; top: 50%; translate: 0 -50%; width: 20px; height: 20px; min-height: 0; padding: 0; }
+.ed-corners-btn svg { width: 12px; height: 12px; }
+.ed-corners-btn[aria-pressed='true'] { color: var(--ink); background: var(--chrome-2); }
+.ed-props .ed-grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin-bottom: 6px; }
+.ed-props .ed-grid4 > * { min-width: 0; width: 100%; }
+.ed-row-pills { align-items: start; }
+.ed-fx-pills { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.ed-fx-pills button {
+  padding: 3px 8px; font: inherit; font-size: 11.5px; color: var(--muted); cursor: pointer;
+  background: var(--field); border: 1px solid var(--line); border-radius: 999px;
+}
+.ed-fx-pills button:hover { color: var(--ink); background: var(--chrome-2); }
+.ed-fx-pills button[aria-checked='true'] { color: var(--ink); border-color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }
+.ed-fx-pills button:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 1px; }
+
+/* Figma's paint row (inspector/paintrow.ts): [field] · 👁 · − — the eye and
+   the − in a trailing column of 26px squares, the same right edge in Fill,
+   Stroke, Shadow and Blur, under the header's ⠿ and + */
+.ed-paintrow { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 26px 26px; gap: 4px; align-items: center; margin: 0 0 4px; }
+.ed-paintrow > .ed-btn-icon { width: 26px; height: 26px; padding: 0; display: grid; place-items: center; color: var(--muted); border: 0; background: none; border-radius: 6px; } /* bare icons, like the header's ⠿ and + */
+.ed-paintrow > .ed-btn-icon:hover { color: var(--ink); background: var(--chrome-2); }
+.ed-paintrow > .ed-btn-icon svg { width: 16px; height: 16px; }
+.ed-paintrow.off > :first-child, .ed-paintrow.off > .ed-paintlayer-grip + * { opacity: .45; }
+/* the field's own palette button gives way to the section's ⠿ */
+.ed-props .ed-paintrow .ed-color-open { display: none; }
+.ed-paint-cell { width: 26px; height: 26px; }
+/* a stack's grip: at the row's left edge, only under the pointer */
+.ed-paintlayer > .ed-paintlayer-grip {
+  position: absolute; inset-inline-start: -11px; top: 0; width: 10px; height: 26px; display: grid; place-items: center;
+  color: var(--muted); font-size: 10px; cursor: grab; user-select: none; opacity: 0; transition: opacity .1s;
+}
+.ed-paintlayer:hover > .ed-paintlayer-grip { opacity: 1; }
+.ed-paintlayer.is-dragging { opacity: .5; }
+.ed-paintlayer.is-over { box-shadow: inset 0 2px 0 var(--blue); }
+.ed-paintlayer-extras { display: grid; gap: 4px; margin: 0 0 6px; }
+.ed-paintlayer-extras[hidden] { display: none; }
+/* Stroke's Position | Weight line, then the sliders button in the eye column */
+.ed-stroke-line { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4px; align-items: center; }
+.ed-stroke-line:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
+.ed-stroke-more { display: grid; gap: 4px; margin: 0 0 6px; }
+.ed-stroke-more[hidden] { display: none; }
+/* Shadow / Blur: an effect chip — preview and name — opening its settings */
+.ed-effect-chip { display: flex; align-items: center; gap: 8px; width: 100%; height: 26px; padding: 0 8px; box-sizing: border-box; border: 1px solid var(--field-line); border-radius: 6px; background: var(--field); color: var(--ink); font-size: 12px; text-align: start; }
+.ed-effect-chip:hover { border-color: var(--field-line-hot, var(--line)); }
+.ed-effect-chip[aria-expanded="true"] { border-color: var(--blue); }
+.ed-effect-swatch { flex: none; width: 14px; height: 14px; border-radius: 3px; background: var(--surface); border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted); }
+.ed-effect-swatch svg { width: 12px; height: 12px; }
+.ed-effect-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-effect-editor { display: grid; gap: 4px; margin: 0 0 6px; }
+/* the header's ⠿ and +: 26px squares over the row's 👁 and − */
+.ed-props .ed-section > .ed-sec-cat + .ed-sec-act { margin-inline-start: -2px; } /* the header's 6px gap less 2: the rows' 4px */
+/* a ⠿ with no + beside it still sits over the 👁 column, not the − one */
+.ed-props .ed-section > .ed-sec-cat:last-child { margin-inline-end: 30px; }
+.ed-props .ed-section > .ed-sec-act { width: 26px; height: 26px; }
+.ed-props .ed-section > .ed-sec-act svg { width: 16px; height: 16px; }
+.ed-layer-blend { width: 100%; }
+.ed-grad-knob.ed-grad-stop { border-radius: 3px; cursor: ew-resize; }
+/* the padlock (arrange.ts ratioLock): at the end of W's own field */
+.ed-has-lock { position: relative; }
+.ed-has-lock input { padding-inline-end: 24px; }
+.ed-has-lock .ed-token-dot { inset-inline-end: 24px; }
+/* scoped like `.ed-props .ed-tool` (26px, 15px icon) so the lock's own size wins:
+   at 26px it covered the token dot and hung below the field */
+.ed-props .ed-has-lock .ed-ratio-lock { position: absolute; top: 4px; inset-inline-end: 4px; width: 18px; height: 18px; min-height: 0; padding: 1px; color: var(--muted); border: 0; background: none; }
+.ed-props .ed-has-lock .ed-ratio-lock[aria-pressed="true"] { color: var(--accent-ink); }
+.ed-props .ed-has-lock .ed-ratio-lock svg { width: 14px; height: 14px; }
+
+/* Motion: floating surfaces arrive with a short, slightly springy scale + fade;
+   section bodies fold over --ed-fold-ms (panels.ts foldSection). One place to tune. */
+:root { --ed-pop-in: ed-cpop-in 120ms cubic-bezier(0.34, 1.36, 0.64, 1); --ed-fold-ms: 140; }
+.ed-cpop, .ed-ctxmenu, .ed-menu, .ed-cmdk { animation: var(--ed-pop-in); }
+.ed-ctxmenu, .ed-menu { transform-origin: top left; }
+.ed-cmdk { transform-origin: top center; }
+@media (prefers-reduced-motion: reduce) {
+  :root { --ed-fold-ms: 0; }
+  .ed-cpop, .ed-ctxmenu, .ed-menu, .ed-cmdk { animation: none; }
+}
+
+/* Export ▸ accessibility: the contrast readout and its grade */
+.ed-a11y { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 26px; margin: 2px 7px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.ed-a11y-badge { padding: 1px 6px; border-radius: 4px; font-size: 10.5px; font-weight: 700; letter-spacing: .03em; border: 1px solid currentColor; }
+.ed-a11y-badge.is-pass { color: var(--accent-ink); }
+.ed-a11y-badge.is-fail { color: var(--danger); }
+.ed-a11y-alt { width: 100%; }
+
+/* --- morph: one truth, a usable picker, a toast that can act --- */
+.ed-morph-status { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ed-morph-use, .ed-morph-play { height: 26px; padding: 0 10px; }
+.ed-morph-play { margin-top: 6px; }
+.ed-morph-pick-btn { box-sizing: border-box; width: 100%; height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 8px; justify-content: space-between; background: var(--field); border: 1px solid var(--field-line); border-radius: 6px; }
+.ed-morph-pick-txt { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: start; }
+.ed-morph-pick-btn svg { flex: none; width: 12px; height: 12px; stroke-width: 2.25; transform: rotate(90deg); color: var(--muted); }
+.ed-morph-pick {
+  position: fixed; z-index: 60; box-sizing: border-box; width: 260px; max-height: min(420px, calc(100vh - 16px));
+  display: flex; flex-direction: column; gap: 6px; padding: 8px; overflow: hidden;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 10px 30px rgb(0 0 0 / .28); animation: var(--ed-pop-in);
+}
+.ed-morph-pick input[type=search] { height: 26px; }
+/* the token picker (inspector/tokenpicker.ts): the morph picker's look, plus
+   preview · name · value · ✓ rows and a foot of actions */
+.ed-tokpick-opt { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto 12px; }
+.ed-tokpick-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-tokpick-val { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11px; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-tokpick-check { color: var(--ink); font-size: 11px; }
+.ed-tokpick-opt[aria-selected='true'] { background: var(--chip); }
+.ed-tokpick-prev { flex: none; width: 18px; height: 18px; box-sizing: border-box; display: grid; place-items: center; font-size: 10px; line-height: 1; color: var(--ink); border: 1px solid var(--line); border-radius: 4px; background: var(--chrome); overflow: hidden; }
+.ed-tokpick-shadow { background: var(--surface); border-color: transparent; }
+.ed-tokpick-foot { display: flex; flex-direction: column; gap: 1px; margin-top: 2px; padding-top: 6px; border-top: 1px solid var(--line); }
+.ed-tokpick-act { min-height: 26px; padding: 0 6px; font: inherit; font-size: 12px; color: var(--ink); text-align: start; background: none; border: 0; border-radius: 6px; cursor: pointer; }
+.ed-tokpick-act:hover, .ed-tokpick-act:focus-visible { background: var(--chip); outline: none; }
+.ed-tokpick-none[hidden] { display: none; }
+.ed-morph-pick [role=listbox] { overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
+.ed-morph-pick-h, .ed-morph-pick-more > summary { font-size: 11px; color: var(--muted); padding: 6px 6px 2px; cursor: default; }
+.ed-morph-pick-more > summary { cursor: pointer; }
+.ed-morph-opt { display: flex; align-items: center; gap: 6px; min-height: 26px; padding: 0 6px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+.ed-morph-opt[hidden] { display: none; }
+.ed-morph-opt:hover, .ed-morph-opt:focus-visible { background: var(--chip); outline: none; }
+.ed-morph-opt:focus-visible { box-shadow: inset 0 0 0 2px var(--accent-ink); }
+.ed-morph-hint { flex: none; width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--line); }
+@media (prefers-reduced-motion: reduce) { .ed-morph-pick { animation: none; } }
+/* while the Preview scrubs, the slide shows the morph, not the editing chrome */
+body.ed-morph-previewing .moveable-control-box,
+body.ed-morph-previewing .ed-morph-ghost { visibility: hidden !important; }
+.ed-toast.has-act { pointer-events: auto; display: flex; align-items: center; gap: 10px; }
+.ed-toast-act { font: inherit; font-weight: 600; color: inherit; background: none; border: 1px solid currentColor; border-radius: 999px; padding: 2px 10px; cursor: pointer; }
+/* Tokens UX pass: the colour menu's adopt actions, the component header, the Theme → Tokens link */
+.ed-palette-acts { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line); }
+.ed-palette-act { font-size: 12px; color: var(--ink); }
+.ed-comp-head { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+.ed-seg[data-axis='h'] svg { transform: rotate(90deg); }
+/* where a dragged frame child will land: a thick accent bar in the gap, with
+   round end caps, a soft glow (canvas.ts trackSlot; slide px, scaled back) */
+.ed-slot-bar { position: absolute; z-index: 20; pointer-events: none; background: var(--accent); border-radius: calc(3px * var(--k, 1)); box-shadow: 0 0 0 calc(2px * var(--k, 1)) color-mix(in srgb, var(--accent) 30%, transparent); } /* resizing glyphs, turned for height */
+/* the frame a drag will drop INTO: outlined in the accent, the slot bar inside it */
+.ed-drop-frame { position: absolute; z-index: 19; pointer-events: none; box-sizing: border-box; border: calc(2px * var(--k, 1)) solid var(--accent); border-radius: calc(2px * var(--k, 1)); background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.ed-comp-title { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; font-weight: 600; color: var(--ink); }
+.ed-comp-title > span:first-child { flex: none; color: var(--accent); }
+/* the name reads as text; a click makes it a field (click-to-edit) */
+.ed-comp-name { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 4px; margin-inline-start: -4px; border: 1px solid transparent; border-radius: 4px; background: none; font: inherit; color: inherit; text-align: start; cursor: text; }
+.ed-comp-name:hover { border-color: var(--field-line-hot, var(--line)); }
+.ed-comp-name-field { flex: 1 1 auto; min-width: 0; height: 24px; font-weight: 600; }
+.ed-comp-role { flex: none; font-weight: 400; font-size: 11px; color: var(--muted); }
+.ed-comp-acts { display: flex; flex-wrap: wrap; gap: 4px; }
+.ed-comp-acts .ed-btn { font-size: 11.5px; }
+.ed-theme-tokens { align-self: flex-start; margin: 2px 0 8px; font-size: 11.5px; }
+.ed-component-row.ed-flash { animation: ed-flash 1.2s ease-out; border-radius: 6px; }
+@keyframes ed-flash { from { background: color-mix(in srgb, var(--accent) 30%, transparent); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .ed-component-row.ed-flash { animation: none; outline: 2px solid var(--accent-ink); } }
+/* a typed value the field could not read: a short flash and the reason under it (controls.ts refuse) */
+@keyframes ed-num-refused { 0%, 100% { box-shadow: none } 30% { box-shadow: 0 0 0 2px var(--danger) } }
+.ed-num.ed-num-refused { animation: ed-num-refused 600ms ease-out; }
+.ed-num[aria-invalid='true'] { outline: 1px solid var(--danger); outline-offset: -1px; }
+.ed-num-why { position: fixed; z-index: 60; max-width: 240px; padding: 6px 8px; border-radius: 6px; font-size: 11.5px; line-height: 1.35; background: var(--surface); color: var(--ink); border: 1px solid var(--danger); box-shadow: 0 4px 14px rgb(0 0 0 / .18); pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .ed-num.ed-num-refused { animation: none; } }
+
+/* the colour field's Colors & tokens button is a field box like its swatch and
+   hex — a bare glyph floated off the row's right edge */
+.ed-props .ed-color-open {
+  flex: none; box-sizing: border-box; width: 26px; height: 26px; padding: 0; display: grid; place-items: center;
+  background: var(--field); border: 1px solid var(--field-line); border-radius: 6px; color: var(--muted);
+}
+.ed-props .ed-color-open:hover { border-color: var(--field-line-hot); color: var(--ink); }
+.ed-props .ed-color-open svg { width: 15px; height: 15px; }
+
+/* ————— FILE · SAVE · APP — the bar's three menus of different kinds —————————
+   File (on the wordmark): what acts on the document. Save ▾: the ways to
+   write it to a file. The app cluster at the corner: shortcuts · help ·
+   preferences — the app itself, never the document. */
+.ed-file { position: relative; }
+.ed-file-menu { inset-inline-start: 0; inset-inline-end: auto; }
+.ed-menu-cap { padding: 6px 9px 2px; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.ed-menu .ed-btn > .ed-menu-keys { margin-inline-start: auto; padding-inline-start: 12px; font: 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); background: none; border: 0; }
+/* the app cluster: one group, same-size icon buttons, a hairline before it */
+.ed-app { display: flex; align-items: center; gap: 2px; padding-inline-start: 8px; margin-inline-start: 4px; border-inline-start: 1px solid var(--line); }
+.ed-app > .ed-btn, .ed-app > .ed-dropdown > .ed-btn { width: 30px; min-width: 30px; height: 30px; padding: 0; display: grid; place-items: center; }
+.ed-app > .ed-btn svg, .ed-app > .ed-dropdown > .ed-btn svg { width: 17px; height: 17px; }
+.ed-prefs .ed-about-auto select { min-width: 0; flex: 1 1 auto; }
+.ed-prefs h2, .ed-docprops h2 { margin: 0 0 12px; font-size: 17px; font-weight: 650; }
+/* the Select-only tool: nothing on the slide offers to move */
+.ed-marquee-tool .bento-el, .ed-marquee-tool .moveable-area { cursor: default !important; }
+/* Folded, the document zone keeps its content's width: squeezed to its flex
+   share it let undo/redo slide UNDER the right group (390px, measured). Past
+   the fold's floor the bar scrolls instead (CLAUDE.md, the topbar note). */
+.ed-topbar.ed-bar-fold .ed-zone-doc { min-width: max-content; }
+
+/* The command menus — Save ▾, File, Help — share one row and one width rule:
+   as wide as their longest row (German and Portuguese run longest), never
+   cut, never a sideways scrollbar; an icon never shrinks to make room. Only a
+   very short window scrolls them vertically. */
+.ed-cmd-menu { width: max-content; min-width: 240px; max-width: calc(100vw - 16px); overflow-x: hidden; }
+.ed-cmd-menu .ed-menu-row { display: flex; align-items: center; justify-content: flex-start; gap: 8px; white-space: nowrap; text-align: start; }
+.ed-cmd-menu .ed-menu-row > svg { flex: none; width: 16px; height: 16px; }
+.ed-cmd-menu .ed-menu-row > span:not(.ed-sr-only) { flex: 1 1 auto; }
+.ed-save-menu, .ed-file-menu { width: max-content; }
+/* Preferences: room for a label and its control on one line */
+.ed-about.ed-prefs { width: min(560px, calc(100vw - 32px)); }
+.ed-prefs .ed-about-auto { flex-wrap: nowrap; }
+
+/* About, laid out like Preferences: as wide, the head then the promo line, an
+   Updates block with its status beside the button, the fine print last */
+.ed-about.ed-about-main { width: min(560px, calc(100vw - 32px)); }
+.ed-about-main .ed-about-promo { margin: 12px 0 0; }
+.ed-about-updates {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 4px; align-items: center;
+  margin-top: 16px; padding: 12px; border: 1px solid var(--line); border-radius: 8px;
+}
+.ed-about-updates > h3 { grid-column: 1 / -1; margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.ed-about-updates > .ed-about-status { grid-column: 1; margin: 0; }
+.ed-about-updates > .ed-about-row { grid-column: 2; grid-row: 2; margin: 0; }
+/* an update card (notes, actions) takes the whole block width under the line */
+.ed-about-updates > .ed-about-status:has(.ed-about-update) { grid-column: 1 / -1; grid-row: 3; }
+.ed-about-main .ed-about-fine { margin-top: 16px; }
+
+/* the token picker's footer actions carry a glyph like every menu row */
+.ed-tokpick-act { display: flex; align-items: center; gap: 8px; }
+.ed-tokpick-ico { flex: none; display: grid; place-items: center; width: 16px; height: 16px; color: var(--muted); }
+.ed-tokpick-ico svg { width: 16px; height: 16px; }
+
+/* every section header is one box, whatever it carries: a ⠿ and + made a
+   header 33px and a bare one 28px, so an empty section and a folded one
+   stepped by 5px down the column */
+.ed-props .ed-section { box-sizing: border-box; height: 34px; min-height: 34px; }
+.ed-props .ed-section > .ed-sec-act, .ed-props .ed-section > .ed-sec-cat { height: 24px; }
+.ed-props .ed-section-body:not(:has(> *:not(.ed-help-btn))) { display: none; } /* an empty body is no box: the gap is the same as under a folded section */
+
+/* a select carrying its glyph at the start, like the number fields */
+.ed-isel { position: relative; display: block; min-width: 0; }
+.ed-isel > select { width: 100%; padding-inline-start: 26px; }
+.ed-isel-ico { position: absolute; inset-inline-start: 7px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 14px; height: 14px; color: var(--muted); pointer-events: none; }
+.ed-isel-ico svg { width: 14px; height: 14px; }
+
+.ed-props::-webkit-scrollbar { width: 6px; }
+/* Chrome ignores ::-webkit-scrollbar once scrollbar-width is set; elsewhere thin is the closest */
+@supports not selector(::-webkit-scrollbar) { .ed-props { scrollbar-width: thin; } }
+.ed-props::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--muted) 45%, transparent); border-radius: 3px; }
+.ed-props::-webkit-scrollbar-track { background: transparent; }
+[dir='rtl'] .ed-props { padding: 0 12px 16px 6px; }
+/* dragging the pane's edge is direct manipulation: no easing, or the height
+   lags the pointer and the size saved on release is a frame of the tween */
+body.ed-row-resizing .ed-notespane-text { transition: none !important; }
+
+/* what a click would select, outlined before the click (canvas.ts drawHover) */
+.ed-hover-layer { position: absolute; inset: 0; pointer-events: none; z-index: 40; overflow: clip; }
+/* Overlays on the slide clip at its edge, as the slide clips its elements:
+   a box drawn round an element that runs off the slide grew the canvas's
+   scrollable area, so the scrollbars came and went and the whole slide jumped
+   under the pointer (overflow: clip adds no scroll container of its own) */
+.ed-measure-layer { overflow: clip; }
+.ed-hover-box { position: absolute; box-sizing: border-box; border: 1.5px solid var(--blue); pointer-events: none; }
+/* the originals' stand-ins during a copy-drag: still, inert, never picked */
+.ed-copy-ghost { pointer-events: none !important; }
+
+/* ————— KEYBOARD SHORTCUTS (editor/shortcuts.ts) ——————————————————————————
+   Figma's and Linear's shape: search on top, a category rail, rows of
+   name · keycaps. The dialog family's surface, radius and shadow. */
+.ed-keys {
+  display: flex; flex-direction: column;
+  width: min(720px, calc(100vw - 24px)); height: min(560px, calc(100dvh - 48px));
+  background: var(--surface); color: var(--ink);
+  border-radius: 14px; box-shadow: 0 18px 50px rgb(15 23 36 / 0.3); overflow: hidden;
+}
+.ed-keys-head { display: flex; align-items: center; gap: 16px; padding: 16px 20px 12px; border-bottom: 1px solid var(--line); }
+.ed-keys-head h2 { margin: 0; flex: none; font-size: 17px; font-weight: 650; }
+.ed-keys-search { flex: 1; min-width: 0; height: 32px; font-size: 13px; padding: 0 10px; }
+.ed-keys-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 184px minmax(0, 1fr); }
+.ed-keys-rail { display: flex; flex-direction: column; gap: 1px; padding: 10px 8px; overflow-y: auto; border-inline-end: 1px solid var(--line); background: var(--chrome); }
+.ed-keys-cat {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-height: 30px; padding: 0 10px; border: 0; border-radius: 7px; background: none;
+  font: inherit; font-size: 12.5px; color: var(--ink-2); text-align: start; cursor: pointer;
+}
+.ed-keys-cat > span:first-child { min-width: 0; line-height: 1.25; padding-block: 5px; } /* a long name (de) wraps, never cut */
+.ed-keys-cat:hover { background: var(--chrome-2); color: var(--ink); }
+.ed-keys-cat[aria-pressed='true'] { background: var(--tab-on, var(--surface)); color: var(--ink); font-weight: 600; box-shadow: inset 0 0 0 1px var(--line); }
+.ed-keys-count { flex: none; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ed-keys-list { overflow-y: auto; padding: 4px 20px 16px; }
+.ed-keys-group { margin: 14px 0 4px; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.ed-keys-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  min-height: 36px; padding: 5px 8px; margin: 0 -8px; border-radius: 7px;
+}
+.ed-keys-row + .ed-keys-row { box-shadow: 0 -1px 0 var(--line); }
+.ed-keys-row:hover, .ed-keys-row:focus { background: var(--chrome-2); outline: none; }
+.ed-keys-row:focus-visible { box-shadow: inset 0 0 0 2px var(--accent-ink); }
+.ed-keys-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ed-keys-name { font-size: 13px; line-height: 1.35; }
+.ed-keys-hint { font-size: 11.5px; line-height: 1.35; color: var(--muted); }
+.ed-keys-keys { flex: none; display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 4px; max-width: 50%; }
+.ed-keys-keys kbd {
+  display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; box-sizing: border-box;
+  font: 600 12px/1 system-ui, -apple-system, 'Segoe UI', sans-serif; color: var(--ink);
+  background: var(--field); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px;
+}
+.ed-keys-or { font-size: 11px; color: var(--muted); padding: 0 2px; }
+.ed-keys-empty { margin: 40px 0; text-align: center; color: var(--muted); font-size: 13px; }
+.ed-keys-foot { padding: 10px 20px; border-top: 1px solid var(--line); text-align: center; }
+.ed-keys-foot a { color: var(--accent-ink); font-weight: 600; font-size: 12.5px; text-decoration: none; }
+.ed-keys-foot a:hover { text-decoration: underline; }
+/* a phone: a full-screen sheet, the rail a scrolling row of chips */
+@media (max-width: 700px) {
+  .ed-keys { width: 100vw; height: 100dvh; border-radius: 0; }
+  .ed-keys-head { flex-wrap: wrap; }
+  .ed-keys-search { flex-basis: 100%; }
+  .ed-keys-body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .ed-keys-rail { flex-direction: row; overflow-x: auto; overflow-y: hidden; border-inline-end: 0; border-bottom: 1px solid var(--line); }
+  .ed-keys-cat { flex: none; }
+  .ed-keys-list { padding: 4px 16px 16px; }
+}

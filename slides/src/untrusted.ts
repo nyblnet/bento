@@ -39,12 +39,13 @@
 // untrusted intake — remote CRDT ops off the relay — can adopt the same
 // checks, key by key, through `checkElementProp`.
 
-import { stripEnvelope } from './envelope'
-import type { Slide, SlideElement } from './model'
-import { isWebUrl, REQUIRED_ELEMENT_KEYS } from './model'
+import { stripEnvelope } from './envelope.ts'
+import type { Slide, SlideElement } from './model.ts'
+import { isWebUrl, REQUIRED_ELEMENT_KEYS } from './model.ts'
 import { parseThemeRef } from './palette.ts'
-import { MODEL_KEYS } from './modelkeys.generated'
-import { TIP_KINDS } from './tips'
+import { tokenName } from './tokens.ts'
+import { MODEL_KEYS } from './modelkeys.generated.ts'
+import { TIP_KINDS } from './tips.ts'
 
 /** Reject. JSON has no `undefined`, so it can never collide with a real value. */
 const DROP = undefined
@@ -145,6 +146,8 @@ export const LIMITS = {
   cols: 200,
   comments: 500,
   stops: 64,
+  /** layers in one shape's fill or stroke stack */
+  paintLayers: 16,
   speeds: 2_000,
   /** a chart option is free-form JSON — bounded, not typed */
   optionNodes: 20_000,
@@ -304,7 +307,20 @@ const gradient = shape(MODEL_KEYS.gradient, {
   stops: list(LIMITS.stops, shape(
     ['at', 'color'], { at: num(0, 1), color: color() }, ['at', 'color'],
   )),
+  kind: oneOf('radial'), cx: num(-10, 10), cy: num(-10, 10), r: num(0, 100),
 }, ['stops'])
+
+// fill and stroke stacks (stacks.ts): a whole stack drops on one bad layer —
+// a layer out of place would repaint the shape in a different order
+const strokeDashPair = tag((v) => (Array.isArray(v) && v.length === 2 ? list(2, num(0, 1e4))(v) : DROP), { type: 'array', minItems: 2, maxItems: 2, items: { type: 'number' } })
+// a layer's blend is a word from CSS's closed mix-blend-mode list, never free CSS
+const layerBlend = oneOf('multiply', 'screen', 'overlay', 'darken', 'lighten', 'color-dodge', 'color-burn',
+  'hard-light', 'soft-light', 'difference', 'exclusion', 'hue', 'saturation', 'color', 'luminosity')
+const paintLayer = shape(MODEL_KEYS.paintLayer, { color: paint, gradient, hidden: bool, blend: layerBlend }, ['color'])
+const strokeLayer = shape(MODEL_KEYS.strokeLayer, {
+  color: paint, width: num(0, 1e4), align: oneOf('inside', 'center', 'outside'), dashes: strokeDashPair, hidden: bool,
+  gradient, blend: layerBlend,
+}, ['color', 'width'])
 
 const shadowSpec = shape(MODEL_KEYS.shadow, {
   x: num(-1e4, 1e4), y: num(-1e4, 1e4), blur: num(0, 1e4), color: color(),
@@ -429,9 +445,31 @@ const connectorEnd = shape(MODEL_KEYS.connectorEnd, {
  * create anything that is not already a string, which blocks it, but a paste
  * boundary should not be relying on a downstream guard. And a token that does
  * not parse is dead weight the validator will report forever, so it is dropped
- * here rather than carried.
+ * here rather than carried. A `$token` ref may only sit on a property a token
+ * can drive (tokens.ts TOKEN_KEYS): a token value is written straight into the
+ * element, so a ref on `id`, `html`, `link` or `component` is refused here as
+ * the writer refuses it. A palette ref is held to the same keys: it writes a
+ * colour, and a colour in `html` is content lost.
  */
-const themeRefs: Check = tag((v) => {
+/** The element properties a token may be bound to: paint, size and spacing —
+ *  never identity, content, links, structure or another feature's data. */
+export const TOKEN_KEYS: ReadonlySet<string> = new Set([
+  'fill', 'fillGradient', 'fills', 'stroke', 'strokeWidth', 'strokeGradient', 'strokes', 'strokeDashes',
+  'radius', 'radii', 'opacity', 'color', 'colorGradient', 'textStroke', 'fontSize', 'fontFamily', 'fontWeight',
+  'letterSpacing', 'lineHeight', 'shadow', 'blur', 'backdropFilter', 'layout', 'w', 'h', 'style',
+])
+/** …and on a slide, its background. */
+export const SLIDE_TOKEN_KEYS: ReadonlySet<string> = new Set(['background'])
+
+/** How deep booleans of booleans may nest in a file. */
+const BOOL_DEPTH = 8
+let boolDepth = 0
+/** What a boolean's operand never carries: it is no member of a component or a
+ *  frame, and it is not lockable while it is inside — so Release cannot give
+ *  back a second main, or pull a shape into a frame it never sat in. */
+export const OPERAND_DROPS = ['component', 'parentId', 'sizing', 'layout', 'locked'] as const
+
+const themeRefsFor = (tokenKeys: ReadonlySet<string>): Check => tag((v) => {
   if (!isPlainObject(v)) return DROP
   const out: Record<string, string> = {}
   let n = 0
@@ -444,17 +482,35 @@ const themeRefs: Check = tag((v) => {
     const segs = key.split('.')
     if (!segs.length || !segs.every((sg) => /^[A-Za-z_$][A-Za-z0-9_$]*$|^\d+$/.test(sg))) continue
     if (segs.some((sg) => sg === PROTO || sg === 'constructor' || sg === 'prototype')) continue
-    if (!parseThemeRef(token)) continue
+    // a palette slot is written into its path as a colour, a token as its
+    // value: either way only a paint/size/spacing key may receive it — a ref
+    // on `html` or `link` would overwrite content with a colour
+    if (!tokenKeys.has(segs[0]) || !(tokenName(token) || parseThemeRef(token))) continue
     out[key] = token
   }
   return Object.keys(out).length ? out : DROP
-}, { type: 'object', additionalProperties: { type: 'string' }, maxProperties: LIMITS.themeRefs, description: 'property path → palette token' })
+}, { type: 'object', additionalProperties: { type: 'string' }, maxProperties: LIMITS.themeRefs, description: 'property path → palette slot, or $token name' })
+const themeRefs = themeRefsFor(TOKEN_KEYS)
 
 export const ELEMENT_CHECKS: Record<string, Check> = {
   themeRefs,
+  // component membership: ids and keys are lookups, `over` names this element's own keys
+  component: shape(['id', 'key', 'main', 'over', 'off', 'sig'], {
+    id: cssValue(), key: cssValue(), main: tag((v) => (v === true ? v : DROP), { const: true }),
+    over: list(LIMITS.themeRefs, cssValue(64)),
+    off: tag((v) => (Array.isArray(v) && v.length === 2 ? list(2, num(-1e6, 1e6))(v) : DROP), { type: 'array', minItems: 2, maxItems: 2, items: { type: 'number' } }),
+    sig: tag((v) => (typeof v === 'string' && /^[0-9a-z]{1,16}$/.test(v) ? v : DROP), { type: 'string', pattern: '^[0-9a-z]{1,16}$' }),
+  }, ['id', 'key']),
   // identity + geometry
   id: cssValue(), morphId: cssValue(), role: cssValue(), group: cssValue(),
-  groupId: cssValue(), showOnHover: cssValue(), locked: bool,
+  groupId: cssValue(), showOnHover: cssValue(),
+  // the author's names in the layer list — display text, only ever set as textContent
+  name: str(LIMITS.prose), groupName: str(LIMITS.prose), alt: str(LIMITS.prose),
+  // Layers' lock and eye: true or absent
+  locked: bool, hidden: bool,
+  // the inspector's eye on a single paint: switched off, the literal kept
+  fillHidden: bool, strokeHidden: bool, shadowHidden: bool, blurHidden: bool,
+  flipX: bool, flipY: bool,
   // a slide id, or an http(s) URL — the same test the renderer and the show apply
   link: tag((v) => (isWebUrl(v) ? v : cssValue()(v)), { type: 'string', maxLength: LIMITS.prose, description: 'slide id or http(s) URL' }),
   x: num(-1e6, 1e6), y: num(-1e6, 1e6), w: num(0, 1e6), h: num(0, 1e6),
@@ -474,14 +530,45 @@ export const ELEMENT_CHECKS: Record<string, Check> = {
   // shape
   shape: oneOf('rect', 'ellipse', 'triangle', 'arrow', 'line', 'path'),
   heads: num(2, 2),
-  fill: paint, fillGradient: gradient, stroke: paint,
+  fill: paint, fillGradient: gradient, stroke: paint, strokeGradient: gradient,
   strokeWidth: num(0, 1e4), strokeDash: num(0, 1e4),
   strokeStyle: oneOf('solid', 'dashed', 'dotted'),
+  strokeDashes: tag((v) => (Array.isArray(v) && v.length === 2 ? list(2, num(0, 1e4))(v) : DROP), { type: 'array', minItems: 2, maxItems: 2, items: { type: 'number' } }),
+  strokeAlign: oneOf('inside', 'center', 'outside'),
+  fills: list(LIMITS.paintLayers, paintLayer), strokes: list(LIMITS.paintLayers, strokeLayer),
+  radii: tag((v) => (Array.isArray(v) && v.length === 4 ? list(4, num(0, 1e5))(v) : DROP), { type: 'array', minItems: 4, maxItems: 4, items: { type: 'number' } }),
   // the tip list is tips.ts's — one catalogue for the gate, the panel and the renderer
   lineStart: oneOf(...TIP_KINDS), lineEnd: oneOf(...TIP_KINDS),
   radius: num(0, 1e5), d: pathData,
   pathBox: tag((v) => (Array.isArray(v) && v.length === 4 ? list(4, num(-1e6, 1e6))(v) : DROP), { type: 'array', minItems: 4, maxItems: 4, items: { type: 'number' } }),
   from: connectorEnd, to: connectorEnd,
+  // auto layout (layout.ts): a frame's rules, and a child's link to its frame
+  layout: shape(MODEL_KEYS.frameLayout, {
+    dir: oneOf('row', 'col', 'grid'), gap: num(0, 1e5),
+    pad: tag((v) => (Array.isArray(v) && v.length === 4 ? list(4, num(0, 1e5))(v) : DROP), { type: 'array', minItems: 4, maxItems: 4, items: { type: 'number' } }),
+    justify: oneOf('start', 'center', 'end', 'space-between'), align: oneOf('start', 'center', 'end', 'stretch'),
+    cols: num(1, 64), clip: bool, hug: bool, wrap: bool,
+  }, ['dir', 'gap', 'pad']),
+  parentId: cssValue(),
+  sizing: shape(MODEL_KEYS.sizing, { w: oneOf('fixed', 'fill'), h: oneOf('fixed', 'fill'), minW: num(0, 1e5), minH: num(0, 1e5) }),
+  // a boolean's operands are whole shapes, sanitized as any pasted element is;
+  // one bad operand drops the operand list (and with it only re-editing — the
+  // computed d above still draws)
+  bool: shape(['op', 'shapes'], {
+    op: oneOf('union', 'subtract', 'intersect', 'exclude'),
+    shapes: tag((v) => {
+      if (!Array.isArray(v) || v.length < 2 || v.length > LIMITS.elements) return DROP
+      // a boolean of a boolean is real; one nested past BOOL_DEPTH is a stack-overflow attempt
+      if (boolDepth >= BOOL_DEPTH) return DROP
+      boolDepth++
+      try {
+        const out = v.map((el, i) => within(String(i), () => sanitizeElement(el)))
+        if (!out.every((el) => el?.type === 'shape')) return DROP
+        for (const el of out) for (const k of OPERAND_DROPS) delete (el as unknown as Record<string, unknown>)[k]
+        return out
+      } finally { boolDepth-- }
+    }, { type: 'array', minItems: 2, maxItems: LIMITS.elements, items: { $ref: '#/$defs/element' } }),
+  }, ['op', 'shapes']),
   // image / svg / media
   src: mediaRef, poster: mediaRef, asset: cssValue(),
   fit: oneOf('contain', 'cover', 'fill'), keepAspectRatio: bool,
@@ -585,7 +672,7 @@ export function sanitizeElement(value: unknown): SlideElement | null {
 
 
 export const SLIDE_CHECKS: Record<string, Check> = {
-  id: cssValue(), name: str(LIMITS.prose), stateOf: cssValue(), themeRefs,
+  id: cssValue(), name: str(LIMITS.prose), stateOf: cssValue(), themeRefs: themeRefsFor(SLIDE_TOKEN_KEYS),
   // background is a CSS `background` shorthand, so it gets the colour rule at
   // the shorthand's length — wide enough for a multi-stop linear-gradient(),
   // still no url() reaching for the network from a pasted slide

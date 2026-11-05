@@ -196,11 +196,14 @@ BentoDoc
    └─ elements: SlideElement[]     ← array order = paint order (z)
       ├─ common: id · x y w h · rotation · opacity
       │          fx? · link? · group? · groupId? · showOnHover? · role?
+      │          parentId? · sizing? · locked? · hidden? · alt? · component? · themeRefs?
       ├─ text:  html (sanitized inline: b/i/u/s/code/br/span…) · placeholder? · fontSize · fontFamily
       │         fontWeight · color · align · valign · lineHeight · letterSpacing?
       ├─ shape: shape (rect|ellipse|triangle|arrow|line|path) · fill · fillGradient?
       │         stroke · strokeWidth · strokeStyle? (solid|dashed|dotted) · radius
       │         lineStart?/lineEnd? (none|arrow|dot|bar) · d?/pathBox? (path kind)
+      │         layout? (frame) · fills?/strokes? (stacks) · bool? · radii? · strokeAlign?
+      │         strokeDashes? · flipX?/flipY?
       ├─ image: src ("asset:key" or data URI) · fit · radius
       ├─ svg:   asset?/markup? · css? (scoped per element at render)
       ├─ chart: preset? · option · source? ← ECharts-SHAPED pure-JSON option
@@ -249,7 +252,7 @@ flowchart TB
     ANIM["anim.ts<br/>in-house tween engine"]
     CHARTS["charts.ts<br/>in-house engine: SVG snapshots + live mounts"]
     PRESENT["present.ts<br/>Reveal overlay · morph · fx · states · hover"]
-    ED["editor/*<br/>editor · canvas (Moveable/Selecto) · panels<br/>patheditor · markdown"]
+    ED["editor/*<br/>editor · canvas (Moveable/Selecto) · panels · inspector/*<br/>patheditor · markdown"]
 
     MAIN --> SAVE & STORE & ED
     ED --> STORE & RENDER

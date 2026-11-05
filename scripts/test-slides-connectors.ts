@@ -47,10 +47,10 @@ const modelKinds = [...union.matchAll(/'([a-z-]+)'/g)].map((m) => m[1])
 ok(modelKinds.join() === TIP_KINDS.join(), `the model's LineEnding union is the catalogue, in order (${TIP_KINDS.length} kinds)`)
 const gate = read('slides/src/untrusted.ts')
 ok(/lineStart: oneOf\(\.\.\.TIP_KINDS\), lineEnd: oneOf\(\.\.\.TIP_KINDS\)/.test(gate), 'the shape gate admits exactly the catalogue')
-const panels = read('slides/src/editor/panels.ts')
+const panels = read('slides/src/editor/inspector/shape.ts')
 const editor = read('slides/src/editor/editor.ts')
 const lineedit = read('slides/src/connectors.ts') // the routing moved here (#493)
-ok(/TIPS\.map\(\(tip\) => \[tip\.kind, t\(tip\.label\)\]\)/.test(panels), 'the panel lists the catalogue — model words as values, translated labels for display')
+ok(/TIPS\.map\(\(tip\) => \(\{\s*label: optLabel\(tip\.label\)[\s\S]{0,160}pick\(tip\.kind\)/.test(panels), 'the panel lists the catalogue — model words as values, translated labels for display (the tip picker menu)')
 ok(/el\.shape === 'line' \|\| \(el\.shape === 'path' && !\/z\\s\*\$\/i\.test/.test(panels), 'tips are offered on lines and OPEN paths, never on a polygon')
 const render = read('slides/src/render.ts')
 // shapeSvg + markerRef moved to the kernel (kernel/src/shape.ts) with step 2 of
@@ -83,7 +83,7 @@ ok(!/arrow2/.test(model) && !/arrow2/.test(gate) && !/'arrow2'/.test(render), 'n
 const kinds = /export type ShapeKind = ([^\n]+)/.exec(model)![1]
 ok(kinds === "'rect' | 'ellipse' | 'triangle' | 'arrow' | 'line' | 'path'", 'ShapeKind is exactly what 1.1.0 knows (no new kinds — a shipped shell throws on one)')
 ok(/kind: 'arrow', label: 'Double arrow', icon: ICONS\.arrow2, heads: 2/.test(editor) && /defaultShape\(item\.kind, item\.heads \? \{ heads: item\.heads \} : \{\}\)/.test(editor), 'the Shape menu makes a Double arrow as {shape: arrow, heads: 2}')
-ok(/this\.row\('Double-headed', this\.toggle\(el\.heads === 2/.test(panels) && /if \(on\) s\.heads = 2; else delete s\.heads/.test(panels), 'the panel toggle writes heads: 2 and deletes it when off')
+ok(/row\(p, 'Double-headed', toggle\(el\.heads === 2/.test(panels) && /if \(on\) s\.heads = 2; else delete s\.heads/.test(panels), 'the panel toggle writes heads: 2 and deletes it when off')
 // mirror the polygon exactly as render.ts computes it
 const w = 300, h = 120
 const shaftH = h * 0.44, headW = Math.min(w * 0.3, h), y0 = (h - shaftH) / 2
@@ -320,11 +320,13 @@ console.log('\n#493: every slide routes, from the model alone\n')
   const one: any = { id: 'x', elements: [box('A', 100), box('B', 800), conn('c2')] }
   ok(routeConnectors(one) === true, 'routeConnectors routes a single slide')
   // the two entry points
+  // both go through the one derive pass (derive.ts), which routes the whole deck
+  ok(/routeAllConnectors\(doc\)/.test(read('slides/src/derive.ts')), 'the derive pass routes every connector in the deck')
   const main = read('slides/src/main.ts')
-  const boot = main.slice(main.indexOf('function bootWith('), main.indexOf('function bootWith(') + 1200)
-  ok(/routeAllConnectors\(doc\)[\s\S]*audienceMode\(doc\)[\s\S]*playerMode\(doc\)[\s\S]*editorMode\(doc/.test(boot), 'boot routes the whole deck before editor, player or audience render anything')
-  const sync = editor.slice(editor.indexOf('  private syncConnectors() {'), editor.indexOf('  private syncConnectors() {') + 300)
-  ok(/routeAllConnectors\(this\.store\.doc\)/.test(sync) && !/this\.store\.slide/.test(sync), 'the editor re-routes the whole deck on a doc event, not only the slide on screen')
+  const boot = main.slice(main.indexOf('function bootWith('), main.indexOf('function bootWith(') + 1600)
+  ok(/derive\(doc, deriveMemory\(doc\)\)[\s\S]*audienceMode\(doc\)[\s\S]*playerMode\(doc\)[\s\S]*editorMode\(doc/.test(boot), 'boot derives the whole deck before editor, player or audience render anything')
+  const sync = editor.slice(editor.indexOf('  private syncDerived() {'), editor.indexOf('  private syncDerived() {') + 300)
+  ok(/derive\(this\.store\.doc, this\.derived\)/.test(sync) && !/this\.store\.slide/.test(sync), 'the editor re-derives the whole deck on a doc event, not only the slide on screen')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

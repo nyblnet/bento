@@ -448,6 +448,12 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-slides-layers.ts
 
+    - name: Measure overlay geometry rig
+      # editor/measure-geom.ts, DOM-free: Alt-hover gaps per axis — separated,
+      # diagonal, overlapping, contained, aligned within 0.5px, zero-size.
+      shell: bento-step {0}
+      run: node scripts/test-slides-measure-geom.ts
+
     - name: Export slides as images rig
       # exportimages.ts decisions (DOM-free): the page set is the print set
       # (hidden/state out, deck order), names pad NN and use the kernel's
@@ -585,6 +591,92 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-slides-sync-allowlist.ts
 
+    - name: Auto-layout solver rig
+      # layout.ts: row/column/grid, gap, padding, fill, hug (nested inner-first),
+      # space-between, reorder by position, clip insets, dangling parentId dropped,
+      # a slide with no frames untouched, a second run is a fixed point; the
+      # layer tree lists children under their frame.
+      shell: bento-step {0}
+      run: node scripts/test-slides-layout.ts
+    - name: Gate rules for the revamp's keys rig
+      # untrusted.ts + restoregate.ts, DOM-free: every rule a new key is held
+      # to (booleans, components, frames, paint stacks, token refs, theme
+      # tokens on restore AND on open) takes a good value and refuses a bad
+      # one, so loosening a rule fails here rather than only in schema drift.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-slides-gate-keys.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-gate-keys.mjs"
+        node "$RUNNER_TEMP/test-slides-gate-keys.mjs"
+    - name: Derive pass rig
+      # slides/src/derive.ts, DOM-free: palette, tokens, components, layout,
+      # connectors and stack fallbacks run as ONE pass in dependency order, so
+      # a token bound to a frame's gap or a main frame's edit settles in the
+      # same pass and a second pass changes nothing; a document that just
+      # opened keeps a stack fallback an older shell edited.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-slides-derive.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-derive.mjs"
+        node "$RUNNER_TEMP/test-slides-derive.mjs"
+    - name: Derive pass rig
+      # slides/src/derive.ts, DOM-free: palette, tokens, components, layout,
+      # connectors and stack fallbacks run as ONE pass in dependency order, so
+      # a token bound to a frame's gap or a main frame's edit settles in the
+      # same pass and a second pass changes nothing.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-slides-derive.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-derive.mjs"
+        node "$RUNNER_TEMP/test-slides-derive.mjs"
+    - name: Design tokens and components rig
+      # slides/src/tokens.ts + components.ts, DOM-free: binding writes value and
+      # ref; token edits and mode switches rewrite bound literals; a hand edit
+      # unbinds; a copy follows its main, keeps its offset and its overrides.
+      shell: bento-step {0}
+      run: node scripts/test-slides-tokens.ts
+    - name: Vector booleans rig
+      # slides/src/vector-bool.ts, DOM-free: union/subtract/intersect/exclude of
+      # overlapping, disjoint, nested, abutting, rotated and elliptical shapes
+      # cover the area the arithmetic says — by wound area (holes wind opposite,
+      # so an old shell's nonzero fill draws them) and by evenodd over the d.
+      shell: bento-step {0}
+      run: node scripts/test-slides-vector-bool.ts
+    - name: Inspector arithmetic rig
+      # A numeric field's entry is evaluated by a hand-written parser, never
+      # eval: precedence, the relative forms (+24, *2), a typed unit, and
+      # junk refused.
+      shell: bento-step {0}
+      run: node scripts/test-slides-inspector-math.ts
+    - name: Paint keys rig
+      # The file gate keeps radial gradients, stroke position and dashes,
+      # per-corner radii and flip, and drops a bad value without the element;
+      # a radial gradient's CSS is sized like its SVG.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-slides-paint.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-paint.mjs"
+        node "$RUNNER_TEMP/test-slides-paint.mjs"
+    - name: Fill and stroke stacks rig
+      # The top visible layer is mirrored into the plain paint keys an older
+      # shell draws; colour refs move with their layer; the gate keeps a good
+      # stack and drops a bad one whole; every layer's paint is gated.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-slides-stacks.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-stacks.mjs"
+        node "$RUNNER_TEMP/test-slides-stacks.mjs"
+
+    - name: Contrast reading rig
+      # editor/inspector/contrast.ts, DOM-free: the Export section's WCAG
+      # reading is the WORST of a grid of points, each against what lies
+      # behind it there — opacity, a fill's alpha, gradients evaluated at the
+      # point, rotated cards — and it says where the weak point is.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-slides-contrast.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-contrast.mjs"
+        node "$RUNNER_TEMP/test-slides-contrast.mjs"
+
+    - name: Hint key chips rig
+      # A tooltip's trailing (…) becomes key chips only when it is keys,
+      # a lone key like the speaker view's (L) included.
+      shell: bento-step {0}
+      run: node scripts/test-slides-hint-keys.ts
     - name: Autolink rig
       # Where a typed or pasted URL ends (trailing punctuation, balanced
       # brackets), http(s) only, and pasted text turning bare URLs into links
@@ -612,3 +704,18 @@ runs:
       # script in a scratch repo, with the old always-write behaviour red.
       shell: bento-step {0}
       run: node scripts/test-schema-frozen.mjs
+
+    - name: Starter deck rig
+      # The starter deck is the example of how a deck is built: a derive fixed
+      # point (opening it loses no token binding or component override), valid,
+      # every bound token exists and agrees with its literal, every copy has a
+      # main, every frame child sits inside its frame, and layers are named.
+      shell: bento-step {0}
+      run: node scripts/test-slides-starterdeck.ts
+
+    - name: Locale resolution rig
+      # A browser whose language is an alias (pt-BR) resolves to a picker code,
+      # so Preferences shows the language the UI is in, and choosing English is
+      # an override that survives a reload instead of clearing back to Portuguese.
+      shell: bento-step {0}
+      run: node scripts/test-locale-resolve.ts

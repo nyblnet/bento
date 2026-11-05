@@ -10,17 +10,24 @@
  * somewhere ends up exactly where the Order buttons would have put it
  * (moveInPaintOrder below is the same splice as repeated steps).
  *
- * WHERE IT LIVES: FIRST in the properties panel, whatever is selected. The
+ * WHERE IT LIVES: the side column's Layers view (Slides | Layers), as in
+ * Penpot and Figma — navigation on the left, properties on the right. It
+ * used to be FIRST in the properties panel, whatever was selected. The
  * #481 measurement (Chrome 1565 px wide, starter deck, panel viewport 740 px:
  * the Slide panel is 1192 px of content, a selected text element's 2219 px)
  * argued for putting it first on the Slide panel and LAST on an element's, so
  * it was reachable in both — but a section that moves is worse than one that
  * is far: every click on the canvas hopped it from the top of the panel to
- * the bottom, and a user who opened it expected it where they left it. One
- * home now: structure first, then the properties of the selection; closed by
- * default, open state shared under one title. The list caps itself at ~12
- * rows and scrolls inside (the showcase title slide has 39 elements: uncapped
- * it pushed the Slide controls ~975 px down).
+ * the bottom, and a user who opened it expected it where they left it. Its
+ * own column settles both: it never moves, and it no longer pushes anything
+ * down, so it runs the full height instead of capping itself at ~12 rows.
+ *
+ * GROUPS read as Penpot and Figma show them: a row for the group (disclosure
+ * arrow, 'Group of N'), its members nested under it. Grouping gathers the
+ * members into one block of the stack (panels.ts group), so a group is one
+ * run; a file grouped before that can still interleave, and then each run
+ * gets its own group row — the list never pretends the stack is other than
+ * it is.
  *
  * WHAT REBUILDS IT: only a change in what the rows SAY. A drag emits a doc
  * event per frame, and none of them changes a row (position and size are not
@@ -34,9 +41,12 @@
  */
 
 import type { Slide, SlideElement } from '../model.ts'
+import { flagged } from '../layout.ts'
 
 export type LayerRow = {
   id: string
+  /** component membership: ◆ the main, ◇ a copy (components.ts) */
+  comp?: 'main' | 'copy'
   /** paint index in slide.elements (0 = bottom) */
   index: number
   type: SlideElement['type']
@@ -45,11 +55,26 @@ export type LayerRow = {
   /** the element belongs to a group (indented one level) */
   grouped: boolean
   groupId?: string
-  /** the element is locked (#838) */
+  /** the group's name, when the author gave it one */
+  groupName?: string
+  /** an auto-layout frame (layout.ts): its direction, for the row's icon */
+  frame?: 'row' | 'col' | 'grid'
+  /** how many frames deep the element sits (0 = on the slide) */
+  depth?: number
+  /** Layers' padlock and eye (the element's `locked` / `hidden`) */
   locked?: boolean
+  hidden?: boolean
+  /** Locked or hidden by the frame it sits in, not by its own flag. */
+  heldLocked?: boolean
+  heldHidden?: boolean
+  /** morphs from an element on the slide before (badge ↔) */
+  paired?: boolean
 }
 
-const LABEL_MAX = 24
+// Long enough that a wide sidebar shows a real sentence: the row cuts what
+// does not fit with a CSS ellipsis at whatever width the column has. 24 was a
+// fixed cut that left a wide Layers list showing three words.
+const LABEL_MAX = 96
 
 /** Text with the markup taken out, entities decoded enough to read, collapsed. */
 export function excerpt(html: string, max = LABEL_MAX): string {
@@ -66,10 +91,11 @@ export function excerpt(html: string, max = LABEL_MAX): string {
 
 /** What a row says about its element. Kind names go through t() at build
  *  time (never at module level). */
-export function labelFor(el: SlideElement, tr: (s: string) => string = (s) => s): string {
+export function labelFor(el: SlideElement, tr: (s: string) => string = (s) => s, slide?: Pick<Slide, 'elements'>): string {
+  if (el.name) return el.name
   switch (el.type) {
     case 'text': return excerpt(el.html) || tr('Text')
-    case 'shape': return tr({ rect: 'Rectangle', ellipse: 'Ellipse', triangle: 'Triangle', arrow: 'Arrow', line: 'Line', path: 'Curve' }[el.shape] ?? 'Shape')
+    case 'shape': return el.layout ? frameLabel(el, tr, slide) : tr({ rect: 'Rectangle', ellipse: 'Ellipse', triangle: 'Triangle', arrow: 'Arrow', line: 'Line', path: 'Curve' }[el.shape] ?? 'Shape')
     case 'image': return tr('Image')
     case 'svg': return tr('Diagram')
     case 'chart': return tr('Chart')
@@ -81,12 +107,68 @@ export function labelFor(el: SlideElement, tr: (s: string) => string = (s) => s)
   }
 }
 
+/** A frame says what it holds, so nesting levels read apart in Layers and the
+ *  header: a card is named after its first text ("Card · Revenue"), a frame of
+ *  frames by its direction ("Row", "Column", "Grid"), an empty one "Frame". */
+function frameLabel(el: SlideElement & { layout?: { dir: string } }, tr: (s: string) => string, slide?: Pick<Slide, 'elements'>): string {
+  const kids = slide?.elements.filter((c) => c.parentId === el.id) ?? []
+  if (!kids.length) return tr('Frame')
+  const text = kids.find((c) => c.type === 'text')
+  const words = text?.type === 'text' ? excerpt(text.html, 24) : ''
+  if (words) return `${tr('Card')} · ${words}`
+  return tr({ row: 'Row', col: 'Column', grid: 'Grid' }[el.layout?.dir ?? 'row'] ?? 'Frame')
+}
+
+/** labelFor, told apart: unnamed elements that would read alike on one slide
+ *  are numbered — "Rectangle 2" — as Figma names new layers. Twenty rows all
+ *  reading "Rectangle" left Layers no way to tell them apart. The number
+ *  follows the id, not the paint order: ids carry their creation time and are
+ *  the element's identity, so a reorder never renames anything (counting in
+ *  paint order turned "Rectangle 1" into "Rectangle 3" when it moved). */
+export function labelIn(slide: Pick<Slide, 'elements'>, el: SlideElement, tr: (s: string) => string = (s) => s): string {
+  return numbered(slide, slide.elements.map((e) => labelFor(e, tr, slide))).get(el.id) ?? labelFor(el, tr, slide)
+}
+
+/** Every element's row label, the alike ones numbered in id order. */
+function numbered(slide: Pick<Slide, 'elements'>, labels: string[]): Map<string, string> {
+  const alike = new Map<string, string[]>()
+  slide.elements.forEach((el, i) => { if (!el.name) alike.set(labels[i], [...(alike.get(labels[i]) ?? []), el.id]) })
+  const out = new Map<string, string>()
+  slide.elements.forEach((el, i) => {
+    const ids = el.name ? [] : alike.get(labels[i])!
+    out.set(el.id, ids.length > 1 ? `${labels[i]} ${[...ids].sort().indexOf(el.id) + 1}` : labels[i])
+  })
+  return out
+}
+
 /** Rows top-first. */
-export function layerRows(slide: Pick<Slide, 'elements'>, tr?: (s: string) => string): LayerRow[] {
+export function layerRows(slide: Pick<Slide, 'elements'>, tr?: (s: string) => string, paired?: ReadonlySet<string>): LayerRow[] {
+  // labelIn's numbering, counted once for the whole list
+  const names = numbered(slide, slide.elements.map((el) => labelFor(el, tr, slide)))
+  const label = (el: SlideElement) => names.get(el.id)!
+  const lockedIn = flagged(slide, 'locked'), hiddenIn = flagged(slide, 'hidden')
   const rows: LayerRow[] = slide.elements.map((el, index) => ({
-    id: el.id, index, type: el.type, label: labelFor(el, tr), grouped: !!el.groupId, groupId: el.groupId, locked: !!el.locked,
+    id: el.id, index, type: el.type, label: label(el), grouped: !!el.groupId, groupId: el.groupId, groupName: el.groupName,
+    ...(el.type === 'shape' && el.layout ? { frame: el.layout.dir } : {}),
+    ...(el.component ? { comp: el.component.main ? 'main' as const : 'copy' as const } : {}),
+    locked: !!el.locked, hidden: !!el.hidden, paired: !!paired?.has(el.id),
+    heldLocked: !el.locked && lockedIn.has(el.id), heldHidden: !el.hidden && hiddenIn.has(el.id),
   }))
-  return rows.reverse()
+  const top = rows.reverse()
+  // A frame's children list under their frame, whatever their paint index,
+  // as every design tool's layer tree does. No frames, no change.
+  const frames = new Set(rows.filter((r) => r.frame).map((r) => r.id))
+  if (!frames.size) return top
+  const parentOf = new Map(slide.elements.map((e) => [e.id, e.parentId && frames.has(e.parentId) ? e.parentId : undefined]))
+  const out: LayerRow[] = []
+  const visit = (r: LayerRow, depth: number) => {
+    if (out.includes(r) || depth > 32) return
+    out.push(depth ? { ...r, depth } : r)
+    if (r.frame) for (const c of top) if (parentOf.get(c.id) === r.id) visit(c, depth + 1)
+  }
+  for (const r of top) if (!parentOf.get(r.id)) visit(r, 0)
+  for (const r of top) if (!out.some((o) => o.id === r.id)) out.push(r) // a parent cycle: list it flat
+  return out
 }
 
 /**
@@ -109,21 +191,34 @@ export function moveInPaintOrder<E extends { id: string; groupId?: string }>(ele
   return next.every((e, i) => e === elements[i]) ? (elements as E[]) : next
 }
 
-/** Which rows read as selected — a grouped element's row lights when any
- *  member is selected, the way the canvas selects the group. */
+/** Which element rows read as selected: exactly the selected elements. A
+ *  group has its own row now (layers.ts groupRow), lit when the whole group is
+ *  selected — so a member reached on its own (⌘-click, or its row) lights
+ *  alone, and a group selected by a canvas click lights every row of it. */
 export function highlighted(rows: readonly LayerRow[], selection: readonly string[]): Set<string> {
   const sel = new Set(selection)
-  const groups = new Set(rows.filter((r) => sel.has(r.id) && r.groupId).map((r) => r.groupId))
-  return new Set(rows.filter((r) => sel.has(r.id) || (r.groupId && groups.has(r.groupId))).map((r) => r.id))
+  // A group selected whole is lit on its own row only, as in Figma and Penpot:
+  // lighting every member too read as "these were picked one by one".
+  const whole = wholeGroups(rows, selection)
+  return new Set(rows.filter((r) => sel.has(r.id) && !(r.groupId && whole.has(r.groupId))).map((r) => r.id))
+}
+
+/** The groups every member of which is selected — the selection IS the group. */
+export function wholeGroups(rows: readonly LayerRow[], selection: readonly string[]): Set<string> {
+  const sel = new Set(selection)
+  const byGroup = new Map<string, boolean>()
+  for (const r of rows) if (r.groupId) byGroup.set(r.groupId, (byGroup.get(r.groupId) ?? true) && sel.has(r.id))
+  return new Set([...byGroup].filter(([, all]) => all).map(([g]) => g))
 }
 
 /** What the rows depend on, as one comparable string — ids in paint order,
- *  labels and groups. Position, size, colour and every other property are
- *  deliberately absent: a drag frame must not touch the list. */
-export function rowSignature(slide: Pick<Slide, 'elements'>, tr?: (s: string) => string): { order: string; labels: string } {
-  const rows = layerRows(slide, tr)
+ *  labels, groups and the row's flags (lock, eye, morph badge). Position,
+ *  size, colour and every other property are deliberately absent: a drag
+ *  frame must not touch the list. */
+export function rowSignature(slide: Pick<Slide, 'elements'>, tr?: (s: string) => string, paired?: ReadonlySet<string>): { order: string; labels: string } {
+  const rows = layerRows(slide, tr, paired)
   return {
-    order: rows.map((r) => `${r.id}\u001f${r.type}\u001f${r.groupId ?? ''}\u001f${r.locked ? 1 : 0}`).join('\u001e'),
+    order: rows.map((r) => `${r.id}\u001f${r.type}\u001f${r.groupId ?? ''}\u001f${r.groupName ?? ''}\u001f${r.frame ?? ''}\u001f${r.depth ?? 0}\u001f${r.comp ?? ''}\u001f${+!!r.locked}${+!!r.hidden}${+!!r.paired}${+!!r.heldLocked}${+!!r.heldHidden}`).join('\u001e'),
     labels: rows.map((r) => r.label).join('\u001e'),
   }
 }

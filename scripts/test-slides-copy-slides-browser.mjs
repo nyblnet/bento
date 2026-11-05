@@ -100,7 +100,9 @@ try {
     // selection is a range that runs across them
     const after = plan.stateOf.findIndex((s, i) => i > plan.state && !s)
     await thumb(plan.plain)
-    const b = await p.locator(`.ed-sidebar .ed-thumb[data-index="${after}"]`).boundingBox()
+    const end = p.locator(`.ed-sidebar .ed-thumb[data-index="${after}"]`)
+    await end.scrollIntoViewIfNeeded() // a real user scrolls to the thumb they mean
+    const b = await end.boundingBox()
     await p.keyboard.down('Shift')
     await p.mouse.click(b.x + b.width / 2, b.y + b.height / 2)
     await p.keyboard.up('Shift')

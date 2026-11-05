@@ -51,8 +51,8 @@ console.log('\nslides pt is pt-BR\n')
 console.log('\nthe Appearance picker has its own words\n')
 {
   const editor = read('slides/src/editor/editor.ts')
-  const panels = read('slides/src/editor/panels.ts')
-  ok(/c === 'light' \? t\('Light mode'\) : t\('Dark mode'\)/.test(editor), "the picker reads t('Light mode') / t('Dark mode')")
+  const panels = read('slides/src/editor/inspector/text.ts')
+  ok(/light: t\('Light mode'\), dark: t\('Dark mode'\)/.test(editor), "the picker reads t('Light mode') / t('Dark mode')")
   ok(/\[300, 'Light'\]/.test(panels), "the 300 font weight keeps 'Light'")
   for (const l of ['ja', 'zh-Hans', 'zh-Hant', 'es', 'fr', 'de', 'it', 'pt']) {
     const m = new Map(values(read(`slides/src/i18n/${l}.ts`)))

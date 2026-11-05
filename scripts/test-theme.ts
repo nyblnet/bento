@@ -24,7 +24,7 @@
 import type { BentoDoc } from '../slides/src/model.ts'
 import {
   parseThemeRef, formatThemeRef, shiftLightness, paletteOf, resolveRef,
-  resolveThemeRefs, paletteSignature, setColor, refAt,
+  resolveThemeRefs, paletteSignature, setColor, refAt, keepAlpha,
 } from '../slides/src/palette.ts'
 
 let failures = 0
@@ -176,6 +176,24 @@ ok(shiftLightness('#abc', 0) === '#abc', 'shorthand hex with no shift is untouch
     'and the next palette derivation does not overwrite it — the whole point of clearing')
   setColor(el, 'fill', '#F7A600', 'accent1')
   ok(refAt(el, 'fill') === 'accent1', 'setColor can put a ref back')
+}
+
+// ------------------------------------------------------- the field's alpha
+// A reference names the hue; the field keeps its opacity. A 50% text colour
+// linked to accent 1 must still be 50% after accent 1 changes.
+{
+  const d = deck()
+  const el: any = d.slides[0].elements[0]
+  setColor(el, 'fill', 'rgba(247, 166, 0, 0.5)', 'accent1')
+  el.stroke = '#C5850080'
+  d.theme.accent = '#123456'
+  resolveThemeRefs(d)
+  ok(el.fill === 'rgba(18, 52, 86, 0.5)', `a re-derived rgba colour keeps its 50% (${el.fill})`)
+  ok(/^#[0-9a-f]{6}80$/i.test(el.stroke), `a re-derived #rrggbbaa colour keeps its AA byte (${el.stroke})`)
+  const once = JSON.stringify(d)
+  ok(resolveThemeRefs(d) === false && JSON.stringify(d) === once, 'and the derivation still settles in one pass')
+  ok(keepAlpha('#ffffff', '#123456') === '#123456' && keepAlpha('rgba(1,2,3,1)', '#123456') === '#123456', 'an opaque literal stays a plain hex')
+  ok(keepAlpha('rgba(1,2,3,0)', '#123456') === 'rgba(18, 52, 86, 0)', 'a 0% colour stays 0%, not opaque')
 }
 
 // ------------------------------------------------------------- signature

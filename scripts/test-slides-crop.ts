@@ -96,7 +96,7 @@ ok(/a\.crop && b\.crop && !isIdentityCrop\(a\.crop\) && !isIdentityCrop\(b\.crop
 const canvas = read('slides/src/editor/canvas.ts')
 ok(/closest<HTMLElement>\('\.bento-el-image'\)[\s\S]*?this\.startCropEdit\(/.test(canvas), 'double-click on a picture enters crop mode')
 ok(/this\.cropEditor\?\.active \|\| handled \? \[\] : this\.selectedNodes\(\)/.test(canvas), 'Moveable stands down while cropping')
-ok(/private buildCropProps\(el: ImageElement\)/.test(read('slides/src/editor/panels.ts')), 'the image panel has a Crop block')
+ok(/export function buildCropProps\(p: PropsPanel, el: ImageElement\)/.test(read('slides/src/editor/inspector/media.ts')), 'the image panel has a Crop block')
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

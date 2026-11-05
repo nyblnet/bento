@@ -16,9 +16,15 @@ export type CtxItem =
       label: string
       run: () => void
       hint?: string
+      /** the command (editor/commands.ts) this row runs — its id lands on data-cmd */
+      cmd?: string
       disabled?: boolean
       /** destructive — rendered in red, and always placed last by convention */
       danger?: boolean
+      /** a glyph before the label (trusted svg markup from icons.ts or a preview) */
+      icon?: string
+      /** the row that is the current value (a picker menu) */
+      checked?: boolean
     }
 
 let open: HTMLElement | null = null
@@ -61,6 +67,14 @@ export function openCtxMenu(x: number, y: number, items: CtxItem[]) {
     b.setAttribute('role', 'menuitem')
     if (item.danger) b.classList.add('ed-ctxmenu-danger')
     b.disabled = !!item.disabled
+    if (item.cmd) b.dataset.cmd = item.cmd
+    if (item.checked !== undefined) { b.setAttribute('role', 'menuitemradio'); b.setAttribute('aria-checked', String(item.checked)) }
+    if (item.icon) {
+      const g = document.createElement('span')
+      g.className = 'ed-ctxmenu-icon'
+      g.innerHTML = item.icon
+      b.appendChild(g)
+    }
     const label = document.createElement('span')
     label.textContent = item.label
     b.appendChild(label)

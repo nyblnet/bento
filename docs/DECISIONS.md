@@ -11912,6 +11912,387 @@ couplings below.
   svgUrlRefsAllowed and sanitizeSvgCss, so callers and rigs keep importing them
   from the renderer.
 
+## 2026-10-29 — slides: the inspector in Penpot's order; layers beside slides; notes under the canvas
+
+Proposed in a contributor branch (to be split into issues before upstreaming).
+The inspector had grown section by section; its information architecture was
+checked against Keynote (Format | Animate), Google Slides, PowerPoint's
+Selection Pane and Penpot (Design | Prototype, layers on the left).
+
+- **Three tabs, one home per control.** Format (how it looks), Animate (how it
+  moves — Animation, Morph, the slide's Transition), Interact (what it does
+  when pointed at — links, hover). A tab with nothing for the selection says so.
+- **Format opens with a header-less block**, as Penpot's Design tab: one
+  align/order toolbar, blend mode with opacity, then W H X Y, rotation and
+  radius with their labels inside the fields. Then the element's own section,
+  Fill, Stroke, Shadow, Blur — optional layers added and removed from their
+  header's + / − instead of a 'none' in a dropdown — and Layout, which says
+  what a layout role does.
+- **Layers live in the side column** (Slides | Layers), not in the inspector.
+  Group rows; rows and groups rename in place. Names are new optional element
+  keys, display only: `name`, and `groupName` carried by every member because
+  a group is no object of its own (docs/format.md).
+- **Speaker notes moved under the canvas**, where PowerPoint, Keynote and
+  Google Slides keep them; in the slide panel they were invisible while an
+  element was selected.
+- **Numbers scrub from their label** and are held to the field's limits.
+- **D8's help layout** moved from a fixed 128px key column to a per-section
+  `fit-content` grid: long keys (and their translations) spilled over the
+  other column. chrome-rulings checks the right edge against the section grid.
+
+## 2026-10-29 — slides: the Penpot-grade editor revamp — everything new is additive
+
+Carried out from an architecture brief ("Extending Bento", not in the repo), with one rule
+overriding the brief wherever they disagreed: **no format version bump and no
+new element type or shape kind.** Shipped shells switch on `type`/`shape`
+with no default and fail the slide on a kind they do not know (the reason
+`heads: 2` is a property). So every new capability is an optional key on an
+existing element, and an older shell sees an ordinary deck.
+
+- **The inspector is a package.** `editor/panels.ts` keeps the PropsPanel
+  controller (rebuild, tabs, accordion, dispatch, the public verbs); each
+  section's builders live under `editor/inspector/` as functions taking the
+  panel. A moved body changed only `this.` to `p.`.
+- **Auto-layout frames are derived geometry, not a container type.** A frame
+  is a `rect` with `layout` (row/col/grid, gap, pad, justify, align, cols,
+  clip, hug); children name it by `parentId` and may `fill` an axis.
+  `layout.ts` writes each child's box (and a hugging frame's size) into the
+  model, derived without committing exactly like connector routing, so the
+  morph, exporters, thumbnails and old shells read plain positioned
+  elements and lose only `clip`. Main-axis order is current position, so a
+  drag reorders. Cost: in an old shell, moving a frame leaves its children
+  until a current editor re-lays the slide.
+- **Tokens extend the palette contract.** `theme.tokens` (values per mode, an
+  active mode); an element binds with `themeRefs[path] = '$name'` and the
+  literal always stays in place. Hand edits are detected, not declared: a
+  bound literal that disagrees with an unchanged token was edited, so the
+  binding drops — one rule covering the inspector, scripts, pastes and old
+  shells.
+- **Components are Penpot's main/copy on ordinary grouped elements**
+  (`component {id, key, main?, over?}`), copies re-derived on every change
+  like connectors; overrides are detected the same way tokens' hand edits are.
+- **A vector boolean is a computed path that remembers its operands.**
+  `d`/`pathBox` are the result, `bool {op, shapes}` keeps the operands for
+  re-editing. Render-time masks were rejected because old shells would show
+  the raw operands. Geometry is zero-dependency (`vector-bool.ts`); exactly
+  abutting shapes are nudged 1e-4px apart, a known ceiling.
+- **One command list.** Keyed editor actions are declared once (the
+  `commands` list in editor.ts, typed and dispatched by
+  `editor/commands.ts`); keydown dispatches through it, ⌘K searches it, and
+  tooltips read their keys from it. ⌘C, Delete, the arrows and Esc stay in
+  the keydown handler because they branch on canvas state; Copy and Delete
+  are listed for the palette only. Gestures stay prose in the ? sheet.
+- **Numbers are text spinbuttons** so `/` and `*` can be typed; a hand-written
+  parser (`inspector/numexpr.ts`, never eval) evaluates them. A leading
+  `+ * /` is relative, a leading `−` is a negative number. On a
+  multi-selection a differing field shows Mixed and an edit there is a delta
+  per element. Field height stays 26px: the one-field-look rule wins over the
+  brief's 28px.
+- **The colour popover drives the same hidden colour input** the inline row
+  uses, so preview, undo, palette links and opacity keep one path.
+- **Canvas feedback never writes the model**: the modifier line, transform
+  pill, morph ghost and morph preview are overlays.
+- **`locked` and `hidden` are `true`-or-absent element keys.** `locked` is
+  editor-only. `hidden` is honoured by renderSlide everywhere; an older shell
+  draws a hidden element — accepted over a non-additive encoding.
+- **The brief's size budget did not hold**: the shell was 737KB compressed
+  before this work (not 560KB) and 770KB after this first pass.
+
+## 2026-10-29 — slides: the revamp's second pass — tools, paint, polish
+
+- **Tools are commands.** The one-letter tools (V F R O L P T; C stays
+  Comment) live in the command list; the topbar's insert buttons are built
+  from it, so `data-cmd`, the letter badge and the tooltip key cannot drift
+  from the key that runs it. The ? sheet's one-command rows read the same
+  list. The path bar (Corner / Smooth / Symmetric, Close path) is contextual
+  like the boolean group and acts on the last-pressed anchor, or all of them.
+- **Paint grows by optional keys.** Radial is the linear `GradientFill` plus
+  `kind: 'radial'` and `cx/cy/r`; an older shell draws the same stops
+  linearly. `strokeDashes` (wins over `strokeStyle`), `strokeAlign` (absent =
+  the old placement, so every existing deck is pixel-identical) and per-corner
+  `radii` (with `radius` kept at the largest corner) each fall back to what an
+  older shell already draws. `flipX/flipY` mirror the content node, never the
+  frame; an older shell draws unmirrored. The shape renderer change is in
+  `kernel/src/shape.ts` (kernel zone): additive optional `ShapeSpec` fields,
+  spaces and type typecheck against it.
+- **Frames follow live**: during a drag the canvas lays out a shallow copy of
+  the slide and moves nodes, never the model; release commits and layout.ts
+  derives the same boxes. Wrap breaks greedily; children whose cross-axis
+  spans overlap share a line, so a settled layout is a fixed point.
+- **A component copy's position is an offset per instance**; a member moved
+  alone overrides `x`/`y` like any other hand edit.
+- **Names are typed where they appear**, never in `prompt()`.
+- **Canvas affordances never write the model**: gradient knobs commit one
+  checkpoint per drag; hover previews restyle the live node and restore it.
+
+## 2026-10-29 — slides: the revamp's last pass — stacks and the last mile
+
+- **Fill and stroke stacks; the top layer is what an older shell draws.**
+  `fills`/`strokes` (bottom first) are drawn when set; the single-paint keys
+  mirror the top visible layer, derived on boot and every doc change like
+  connector routing. A stack exists only with two or more layers, so
+  single-paint decks are byte-identical. The kernel draws each layer as the
+  one-paint shape it would be alone and merges the nodes rather than growing
+  a second renderer. Refs live per layer (`fills.N.color`) and follow
+  reorders. A stack morphs layer by layer only when both sides have the same
+  layers.
+- **Token types widen** to fontSize, opacity, fontFamily and shadow on the same
+  contract (literal stays; only colours keep the property's own alpha; a
+  shadow compares ignoring key order).
+- **`keepAspectRatio` is an every-element padlock** read through
+  `ratioLocked()`: images keep absent = locked, everything else needs `true`.
+- **OKLCH** flags out-of-gamut only past what 8-bit rounding hides; clipping is
+  per channel.
+- **One entrance for floating surfaces** (`--ed-pop-in`, 120ms) and one fold
+  (`--ed-fold-ms`); reduced motion turns both off.
+- **`alt`** is additive, rendered as `role="img"` + `aria-label`; absent means
+  decorative. Contrast is graded against what lies behind the element's centre.
+- **Unpairing a morph never mutates `id`**: a self-paired element gets a unique
+  `-solo` morph key.
+
+## 2026-10-29 — slides: one derive pass; stack layers win on opening
+
+- **Every derived value runs as one pass, in dependency order**
+  (`slides/src/derive.ts`): palette → tokens → components → layout →
+  connectors → stack fallbacks. Boot, every `doc` event and a document
+  replaced in a running editor all call it. Layout used to run first, before
+  tokens and components — both of which write layout inputs (a number token on
+  `layout.gap`, a main frame's gap reaching its copies) — so such an edit
+  settled only on the next, unrelated event. One pass is now a fixed point.
+- **A replaced document is read like a cold boot.** `store.replaceDoc` emits
+  `replace`, and the editor re-seeds the derive memory (the token signature)
+  from the arriving document. Without it, the memory of the PREVIOUS deck's
+  tokens read as "the tokens moved" and overwrote a bound literal an older
+  shell had edited. Undo/redo keep the memory: they restore this deck's own past.
+- **"Has the main moved?" is in the file, not in a replica's memory.** Each
+  copy keeps `component.sig`, a short hash of the main it last followed. A
+  main that no longer matches has moved (the copy follows); a copy that
+  differs from an unmoved main was edited by hand (an override). A replica
+  that just joined, or a session opening a file an older shell edited, reads
+  the same answer as the one that wrote it. Ceiling: a main AND its copy both
+  edited before the next pass (two older-shell edits, or one collab merge)
+  read as "the main moved", and the copy's edit is overwritten.
+- **Tokens drive only what they can drive.** A `$token` ref sits only on paint,
+  size and spacing properties (`TOKEN_KEYS`, in untrusted.ts beside the rule
+  that enforces it at intake), every token write must pass the property's own
+  gate rule unchanged, and token and mode names never resolve through
+  Object.prototype. Opened files get the token rule a restored snapshot gets.
+- **Stack layers are the truth, also on opening — accepted cost.** A file
+  whose single-paint fallback disagrees with its top visible layer has it
+  rewritten from the layer. That is what a hand- or agent-written deck needs
+  (placeholder fallback keys); the cost is that a colour changed in a shell
+  that predates stacks (which can only change the fallback) is lost when a
+  current shell opens the file. The two cases are indistinguishable in the
+  file, and the agent round-trip is the documented workflow.
+- **A copy's frame is its own.** `parentId` and `sizing` are not re-derived
+  from the main: `instanceOf` translates them once through the copy's ids,
+  and drops them when the frame lies outside the component. A batch of copies
+  (paste, ⌘D, Duplicate, Alt-drag) keeps its frames among its copies through
+  `freshGroups`; a child copied without its frame stays a sibling in it.
+
+## 2026-10-30 — slides: one truth for "will this morph"
+
+The Morph section, the layer badge and the canvas ghost all read
+`morphPartners`: a partner on the slide the show arrives from, under a Morph
+transition. A pair that would only exist under Morph is stated, with Use
+Morph. A morph name is renamed together with its partners on the neighbouring
+slides, because renaming one side alone silently ended the pair. The pairing
+picker names elements by their Layers names and never shows ids. The Preview
+plays the whole slide, including what leaves. Play transition waits a fixed
+700ms before stepping, because the show has no ready signal — a known ceiling.
+## 2026-10-30 — slides: the inspector after the UX audit — Esc keeps, focus survives, toolbars wrap
+
+From docs/audit/ux-pyramid-2026-10-30.md. Amends the 2026-10-29 entries where noted.
+
+- **Esc in the colour popover closes and KEEPS the colour** (amending "Esc
+  undoes the preview burst"). The popover previews live, so what the canvas
+  shows is already applied; an Esc that silently reverted it lost work the
+  user thought was done. ⌘Z takes the whole pick back in one step. Focus
+  returns to the swatch.
+- **Focus survives a rebuild.** Every action inside the panel rebuilds it;
+  PropsPanel.rebuild now remembers the focused control by its name and
+  position and puts focus back, or — when the action replaced it (a + became
+  a −) — on the first control of the same section. One place, not one per
+  call site. Section headers are the fold's buttons (Tab, Enter/Space).
+- **The arrange toolbars wrap at a kind's edge** (align · spacing · size,
+  then order · group · flip · boolean), fixed 24×26 tools: a kind never
+  splits and no tool can be covered or pushed out of the panel. Align and
+  distribute have Figma's keys (⌥A ⌥H ⌥D ⌥W ⌥V ⌥S, ⌃⌥H ⌃⌥V) and line up the
+  boxes elements cover on the slide (rotated bounds). A frame's child offers
+  no align and read-only X/Y — the frame places it.
+- **One Solid | Linear | Radial**, in the popover; the fill row no longer
+  carries a second copy.
+- **A refused number says why** instead of reverting silently; Esc in a
+  number field puts the value back and leaves the field; ⌘Z there is the
+  document's undo. "1,000" and "1.000" are read by the interface language's
+  decimal mark; anything still ambiguous is refused, never guessed.
+- **A multi-selection shows Fill, Stroke and Shadow** when every element has
+  them in the same plain form; a paint stack or gradient stays the element's
+  own and hides the shared section rather than flattening it.
+
+## 2026-10-30 — slides: one home for colours, one token picker, one tab component
+
+- **The Tokens view is the single home for the deck's colours.** Theme colours
+  are its built-in "Theme" group (Background, Text, Accent 1 always; Accent
+  2–6, Background 2, Text 2, Link added with + and removed with −), then the
+  deck's own colour tokens. They still write the palette — the format's
+  palette contract and themeRefs are unchanged. The slide panel's Theme
+  section lists no colour (two lists made "theme" and "tokens" look like two
+  systems); code colours, which are not the brand, get their own section,
+  shown only in a deck with code, folded.
+- **One picker binds any field** (inspector/tokenpicker.ts, after Figma's
+  variables picker and Penpot's tokens panel): search, the theme colours first
+  for colour fields, then tokens grouped by the dotted prefix of their names,
+  each row preview · name · value · ✓, and the actions — make a token from
+  this value, select all using it, detach — as a list at the foot. A colour
+  that already equals a theme colour or token offers to bind its uses to that
+  one instead of minting a twin. A multi-selection binds every element at
+  once and shows the pill when they all share one. Every colour popover offers
+  the same swatches, applied as a ref where the field can follow one.
+- **Names and values are text that edits in place**, in the Tokens view, for
+  components and for modes (chips): a click (or F2) makes it a field, Enter
+  or leaving commits and it is text again, Esc puts it back.
+- **Both bars' tabs are one icon-tab component.** The chosen tab always shows
+  its name; the others show theirs only when every one fits, otherwise all are
+  glyphs at once — never a word cut in half. A panel's minimum width is
+  measured from its tab bar in the current language (editor.ts panelMin), so
+  the resizer stops before the tabs could break; the chevron still collapses.
+- **A slide drag lights the gap where it will land** — a thick accent line —
+  and none where the drop would change nothing; the end of the list is a gap
+  too.
+- **The speaker view uses the app's hints** (the hint system takes its own
+  document; both ways of opening the window mount it once), and a lone key —
+  "(L)", "(→)" — is a key chip.
+## 2026-10-30 — slides: one arrange toolbar; quiet field edges in dark
+
+- **One toolbar line.** Align, then spacing and size (several selected), flip,
+  one "Stacking order" menu (four buttons cost a line; Figma and Penpot keep
+  order out of the design panel too), group, boolean — each kind set off by a
+  hairline. Kinds never split; the bar wraps at a kind's edge only when the
+  panel is too narrow. A single element's nine tools fit the default 264px
+  panel on one line; tools grow to fill a wider one.
+- **Dark-mode fields are sunk wells with a quiet edge** (1.5:1 at rest), lit to
+  3.3:1 under the pointer, with the accent ring on focus — Figma's and
+  Penpot's treatment. A 3.3:1 edge on every resting control (the WCAG 1.4.11
+  reading) turned the dark inspector into a grid of outlines; the trade-off
+  at rest is deliberate, and the accent-contrast rig holds both values.
+
+## 2026-10-30 — slides: reordering inside a frame; Enter hands the keys back; frames named for what they hold
+
+- **A frame's flow order is set by placing, not by a field.** The solver reads
+  order from position (ties by array order), so an explicit reorder — a drop
+  slot, an arrow key, a Layers drag — reorders the siblings in the array,
+  stacks them at the frame's origin and lays the frame out again
+  (`layout.ts moveInFrame` / `reflowByArray`). No format change; the result is
+  a fixed point. A drag shows an insertion bar in the gap it will take; a drop
+  past the frame's edge takes the child out (Figma's rule). Inside a frame the
+  arrows move the child a slot (a grid's ↑/↓ a row) instead of nudging it,
+  since the layout would undo a nudge. Paint order among siblings follows the
+  flow order.
+- **Enter in a number field commits and returns focus to the canvas** (Figma),
+  so ⌘D/⌘Z right after act on the document; Tab still walks the fields; Esc
+  still restores and leaves.
+- **Frames are labelled from their contents**, not a stored "Frame" name: a
+  frame holding text is "Card · <its first words>", a frame of frames is named
+  by its direction ("Row", "Column", "Grid"), an empty one "Frame" — so nesting
+  levels read apart in Layers and the header. ⇧A gives a gap of 16 when the
+  selection's spacing is ≤ 0 (overlapping ⌘D copies).
+- **A component is named at birth** ("Component 3"), so the toast, the
+  inspector header and the Tokens list say the same thing; the header's name
+  is click-to-edit text.
+- **Toasts dock at the top of the canvas** (the canvas's foot holds Slideshow
+  and zoom); presenting clears any toast, and the morph offer goes the moment
+  the slide uses Morph, wherever that was set.
+- **No caption wraps beside its control**: one that would wrap goes above it
+  (the measure pass now stacks at more than one line, not two).
+
+## 2026-10-30 — slides: Move (V) and Select (S) are two tools; one is always pressed
+
+In Move, a press-drag moves what it starts on — and a full-bleed background
+image or shape is something, so a slide built on one could not be
+box-selected at all. Select (S) only selects: a drag anywhere draws the box
+and moves nothing, a click selects, Shift adds; it stays on across
+selections, and Esc lets go of the selection before returning to Move.
+Moving stays Move's job, as in Figma. The tool bar presses exactly one tool
+at a time (Move at rest), so which mode a drag will act in is always on
+screen.
+
+## 2026-10-30 — slides: drag INTO a frame, in Layers and on the canvas
+
+Frames could be made (⇧A, F) and their children reordered, but nothing could
+be put into one afterwards. Now, as in Figma and Penpot: in Layers, a row
+dropped on the middle of a frame row goes inside it (the top and bottom
+quarters still mean above and below), and a row dropped beside a frame's
+child joins that frame at that slot; dropped beside a top-level row, a child
+comes out. On the canvas, dragging over an auto-layout frame outlines it and
+shows the slot bar, and the drop puts the selection inside at that slot.
+⌘/Ctrl held while dragging moves over a frame without dropping in — the same
+modifier that, held at the press, duplicates; a duplicate-drag never drops
+into a frame either. A frame never goes inside itself or anything it holds,
+and a locked frame takes nothing. The frame's whole subtree is laid back into
+the array as one block (frame, then each child's unit in flow order), so
+children always paint above their frame and the solver reads the slot order
+(layout.ts moveIntoFrame / moveOutBeside / canAccept); one undo step each.
+## 2026-10-30 — slides: the top bar's three kinds — Save saves, File acts on the document, the app cluster is the app
+
+Supersedes, for slides, the 2026-09-26 ruling "the Save menu holds the
+file's commands". In use the Save ▾ list had grown to eleven rows of which
+three were saving; the rest were the document's (import, export, history,
+JSON) — and About mixed the app's settings with the document's properties.
+In the words of this change's author, it put "too much responsibility on the
+save menu that is not related to save at all … some are configuration for the
+application itself, while others are related to the file."
+
+- **Save ▾ — saving only**: Save a copy…, Duplicate as new deck…, Save with
+  password… (or Change password… / Save without password). ⌘S is Save.
+- **File — the wordmark**: what acts on the DOCUMENT, one list under
+  captions (one click deep — no flyouts, no hover timing, and the same list
+  fits the phone's ⋯): Start from scratch…, Import PowerPoint… · Export:
+  Print or save as PDF… ⌘P, Export slides as images…, Export for PowerPoint…
+  · Version history…, Document properties… (its own dialog), Compress
+  pictures in this deck… · Advanced: Copy document JSON, Copy compact JSON,
+  Replace from JSON… · About bento/slides.
+- **The app cluster — the corner**: ⌨ Keyboard shortcuts (?), Help (guide on
+  bento.page, what's new, ask or report), ⚙ Preferences (⌘,): appearance,
+  language, the launch update check, shrink photos on insert, offline mode.
+  No loose globe button: the language is a preference.
+- **Kept in sight**: Present, Share, the Save split button, Print (also in
+  File ▸ Export) and the app cluster. Print folds into ⋯ only with the rest
+  at the phone tier.
+- **About is only about**: version and format, the update check, credits.
+
+Every moved command is in the command list (⌘K finds it) with its key.
+Spaces still follows the 2026-09-26 map; porting it is a follow-up, not part
+of this change.
+## 2026-10-30 — slides: Fill, Stroke, Shadow and Blur read as Figma's
+
+Each paint section heads with Figma's ⠿ catalog (the deck's theme colours
+and tokens for that property, with Manage tokens) and +; each paint is a row
+of the field, 👁 and −, the eye and − in one 26px column under the header's
+⠿ and +. The field's own palette button gave way to the ⠿: one entry point
+per section. Hiding a single paint keeps it: additive `fillHidden`,
+`strokeHidden`, `shadowHidden`, `blurHidden` (true or absent), read through
+model.ts `visiblePaint` by the renderer and the morph, and stripped by the
+PowerPoint writer — so the canvas, thumbnails, the show and export all agree.
+An older shell draws the paint (it ignores the key); the value is never
+lost. Stacks keep their per-layer `hidden`. A stack row's blend and dashes
+open on right-click (or the menu key); Alt+↑/↓ moves a layer, the grip shows
+on hover. Stroke's line style and dashes sit behind its sliders button, under
+a Position | Weight row. Shadow and Blur are one row each — a chip opens the
+settings — so a second shadow is still not offered.
+
+## 2026-10-30 — slides: hover shows what a click picks; a copy-drag leaves its original drawn
+
+Hovering the canvas outlines what a click would select, before the click
+(Figma's hover): with no key the outermost frame or the whole group, with ⌘
+(Ctrl) the exact element under the pointer, with Alt the next one down the
+dig — and it follows the key being pressed or released with the pointer
+still. Nothing is outlined over the selection itself. A ⌘-drag copy moves the
+originals and commits the stationary copies on release, as before; for the
+drag, a still, inert clone of each original (its subtree included) stands
+where it was, so the spot copied from is never empty — the copy used to seem
+to vanish and reappear. Esc during a move or copy-drag cancels it: nothing is
+committed and the originals are drawn back where the model has them.
 ## 2026-11-02 — bento/connect: directory requests (dreq.), the rotation vouch (rot.), and op-specific consent
 
 Three additions to `kernel/src/statements.ts`, with vectors in
@@ -12194,3 +12575,81 @@ Two follow-ups to the link v1 entry above, both from porting it to iOS.
   their base64url text. Before this, iOS had to
   choose an encoding that no spec pinned, and two hosts choosing differently
   would never link. The `link.wire` rows are byte for byte both ways.
+
+## 2026-11-04 — slides: upstream 1.2.11 and 1.2.12 merged into the revamp; where the two met
+
+Merged as is: the 1.2.12 security fix (Reveal's link-preview overlay and
+background iframe cut from the bundle, svgsafe hardening), the release
+bookkeeping, and every 1.2.11 feature the revamp lacked — Indent/Outdent in
+the formatting bar, typed and pasted web addresses become links, pasted runs
+of spaces kept, a typed backslash kept, `- `/`* ` starting a list at once,
+Copy on text with no fontFamily, links and lists round-tripping through
+PowerPoint, the speaker-view work, the formula spring — and the bento/connect
+kernel commits. slides/CLAUDE.md now holds the slides architecture (#853);
+the revamp's notes moved there with it. schema/slides-1.2.10.json is
+upstream's released snapshot again; build-schema now refuses to rewrite a
+released twin, so the revamp's keys live in schema/slides.json until the
+next version.
+
+Where both had built the same thing, one implementation each:
+
+- **Lock (#838 / #864 vs Layers' padlock).** Same key, `locked`, upstream's
+  declaration (boolean, written only when true). One canvas marker,
+  upstream's `data-locked` (the revamp's `ed-locked` class is gone), with its
+  selected-lock outline. Upstream's semantics win: never deleted from the
+  canvas (a mixed selection deletes its unlocked part and keeps the locked one
+  selected), never ghost-cut, reached by Layers or Alt-click — the dig adds
+  locked elements under the point to the painted stack, since a locked node
+  takes no pointer. ⌘L is a command in the list (⌘K, the ? sheet) that yields
+  the chord to the browser when nothing is selected (`yields`). Layers' padlock
+  button stays the UI; upstream's inspector Lock button is not carried, and
+  its strings were dropped as orphans.
+- **Press-and-drag an unselected element (#867 vs ux-canvas).** Upstream's
+  fix won: two timer hops after waitToChangeTarget, measured against croact's
+  second render; the revamp's two-rAF settle is removed (rAF is not ordered
+  against timers). The revamp's frame-aware drag target stays.
+- **A slide dragged to the end (#859 vs the drop line).** The revamp's drop
+  line and end gap stay (they land at the end); upstream's separate end-drop
+  wiring is not carried. Its rig (sidebar-drop-end) runs against the revamp's
+  handler: the synthetic drags now carry a pointer position, since the drop
+  line places a drop by where the pointer is, and the handler, like
+  upstream's, claims only a drag carrying text/bento-slide.
+
+## 2026-11-04 — slides: ⇧A keeps loose-shape cards whole
+
+⇧A already kept frames whole (a selected child whose frame is selected
+rides along, 2026-10-30). A card drawn without frames — a rounded rect with
+a title and a body lying on it — had no such unit, so a marquee over three
+of them and ⇧A laid all nine elements out in one row. Now a plain rect
+(no layout, not rotated) whose box holds other selected elements that paint
+above it is a card: the rect itself becomes a hugging column frame holding
+them, its padding and gap read from where they sat, so its id, paint and
+morph partners stay and it looks as it did. The cards and every other
+selected element are then wrapped in one row with the spacing they had, as
+before; one card alone is just made a frame, nothing wraps it. One undo
+step. A holder is the outermost such rect, so a rect on a rect is one card.
+Only a rect can hold: an ellipse or an image under texts is not a frame, so
+its elements stay loose as before.
+
+## 2026-11-04 — slides: a hex typed where there was no paint comes in at 100%
+
+An auto-layout frame starts with no fill (absent, or the literal
+`transparent`), and typing a colour into it changed nothing visible until
+Opacity was set too — read as the field being broken. Now a 6-digit hex
+typed into such an unpainted fill comes in at 100%; a typed alpha
+(#rrggbbaa, which the field now takes) wins. A fill the user SET to 0% keeps
+its 0% when a hue is typed — 2026-10-29's rule stands, as in Figma, where
+colour and opacity are separate fields. One place: colorField, told by
+colorAlpha whether the value was unpainted.
+
+## 2026-11-04 — slides: a group is entered by double-click, like a frame
+
+A component copy is a group, and a click grows to whole groups, so the
+only ways into a copy were ⌘-click, Alt-dig and Layers — the card inside a
+copy could not be reached to change its corner radius the way a plain card
+is. Groups now follow the frames' rule (2026-10-30, the UX audit's Figma
+selection model): a click picks the whole group, a double-click goes in to
+the member under the pointer (the outermost one in the group, so a copied
+card comes before its texts), and Esc comes back out a level — frame child →
+frame → whole group → nothing. Esc to the whole group also leaves it, so
+the next click picks the group whole again.

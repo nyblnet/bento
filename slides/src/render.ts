@@ -3,9 +3,10 @@
 // Shared model → DOM renderer. One code path draws slides everywhere:
 // editor canvas, sidebar thumbnails, and Reveal.js sections.
 
+import { flagged, frameClip } from './layout'
 import { offlineEnabled, isRemoteUrl, remoteSrcBlocked } from '../../kernel/src/net.ts'
 import type { BentoDoc, EmbedElement, Slide, SlideElement, SvgElement, TableElement } from './model'
-import { morphKey, paginates, isWebUrl } from './model'
+import { morphKey, paginates, isWebUrl, visiblePaint } from './model'
 import { chartSnapshotSvg } from './charts'
 import { renderMath as mathsLite, mathError } from './maths/index.ts'
 import { resolveMathHtml } from './maths/delimiters.ts'
@@ -259,8 +260,8 @@ export function applyElementFrame(node: HTMLElement, el: SlideElement) {
 // diagrams render shapes through one engine. Re-exported here so render.ts stays
 // the import site (present.ts imports gradientLineCoords; renderElement below uses
 // shapeSvg and cssLinearGradient) and the pixels are unchanged.
-import { cssLinearGradient, shapeSvg } from '../../kernel/src/shape.ts'
-export { cssLinearGradient, gradientLineCoords, shapeSvg } from '../../kernel/src/shape.ts'
+import { cssGradient, shapeSvg } from '../../kernel/src/shape.ts'
+export { cssGradient, cssLinearGradient, gradientLineCoords, radialGeom, shapeSvg } from '../../kernel/src/shape.ts'
 
 // --- math ($…$ → MathML) -----------------------------------------------------
 
@@ -552,13 +553,22 @@ export function svgPaint(v: unknown, fallback: string): string {
  * which tweens fill/stroke/stop-color straight into attributes) receive
  * instead of the model's own strings. A copy; the model is untouched.
  */
-export function paintSafeShape<T extends { fill?: unknown; stroke?: unknown; fillGradient?: { stops?: Array<{ color?: unknown }> } }>(el: T): T {
+type Gradientish = { stops?: Array<{ color?: unknown }> }
+const safeGradient = <G extends Gradientish>(g: G): G =>
+  ({ ...g, stops: g.stops!.map((s) => ({ ...s, color: cssColor(s.color, 'transparent') })) })
+
+export function paintSafeShape<T extends {
+  fill?: unknown; stroke?: unknown; fillGradient?: Gradientish; strokeGradient?: Gradientish
+  fills?: Array<{ color: unknown; gradient?: Gradientish }>; strokes?: Array<{ color: unknown; gradient?: Gradientish }>
+}>(el: T): T {
   const out = { ...el }
   if ('fill' in el) out.fill = svgPaint(el.fill, 'transparent')
   if ('stroke' in el) out.stroke = svgPaint(el.stroke, 'transparent')
-  if (el.fillGradient?.stops) {
-    out.fillGradient = { ...el.fillGradient, stops: el.fillGradient.stops.map((s) => ({ ...s, color: cssColor(s.color, 'transparent') })) }
-  }
+  if (el.fillGradient?.stops) out.fillGradient = safeGradient(el.fillGradient)
+  if (el.strokeGradient?.stops) out.strokeGradient = safeGradient(el.strokeGradient)
+  // the layers' paint reaches the same svg attributes, so it passes the same gate
+  if (el.fills) out.fills = el.fills.map((l) => ({ ...l, color: svgPaint(l.color, 'transparent'), ...(l.gradient?.stops ? { gradient: safeGradient(l.gradient) } : {}) }))
+  if (el.strokes) out.strokes = el.strokes.map((l) => ({ ...l, color: svgPaint(l.color, 'transparent'), ...(l.gradient?.stops ? { gradient: safeGradient(l.gradient) } : {}) }))
   return out
 }
 
@@ -672,6 +682,7 @@ export function renderTableHtml(el: TableElement, doc: BentoDoc): string {
  * re-targeted without disturbing the stable identity used everywhere else.
  */
 export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts = {}): HTMLElement {
+  el = visiblePaint(el) // the inspector's eye: paint switched off but kept
   const node = document.createElement('div')
   node.className = `bento-el bento-el-${el.type}`
   node.dataset.elId = el.id
@@ -679,6 +690,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
   if (el.link) node.dataset.link = el.link
   if (el.group) node.dataset.group = el.group
   if (el.showOnHover) node.dataset.showOnHover = el.showOnHover
+  if (el.alt && ALT_TYPES.has(el.type)) { node.setAttribute('role', 'img'); node.setAttribute('aria-label', el.alt) }
   applyElementFrame(node, el)
 
   switch (el.type) {
@@ -701,7 +713,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       inner.style.fontWeight = String(el.fontWeight)
       const cg = el.colorGradient
       if (cg && cg.stops && cg.stops.length) {
-        inner.style.backgroundImage = cssLinearGradient(cg)
+        inner.style.backgroundImage = cssGradient(cg)
         inner.style.setProperty('-webkit-background-clip', 'text')
         inner.style.setProperty('background-clip', 'text')
         inner.style.color = 'transparent'
@@ -854,7 +866,10 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       if (opts.svgAsImage) {
         // thumbnails: one <img> instead of thousands of svg nodes
         const img = document.createElement('img')
-        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(markup)
+        // markup written for inline use may omit the namespace, which an svg
+        // LOADED AS AN IMAGE cannot do without: it would draw as a broken picture
+        const standalone = markup.replace(/^(\s*<svg\b)(?![^>]*\sxmlns=)/, '$1 xmlns="http://www.w3.org/2000/svg"')
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(standalone)
         img.draggable = false
         img.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block'
         node.appendChild(img)
@@ -966,10 +981,35 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       break
     }
   }
+  // Mirrored content (flipX/flipY): the box stays put, what is drawn in it is
+  // mirrored about its centre. On the content, not the frame, so the frame's
+  // transform (rotation, and the morph and fx tweens) is left alone.
+  flipContent(node, el)
   // Every element type funnels through here, so this is the one place that
   // sees author markup after it has been built into DOM.
   stripRemoteRefs(node)
   return node
+}
+
+/** Elements that ARE a picture to assistive technology and so take `alt`.
+ *  Text reads as itself; media, tables and embeds have controls and cells of
+ *  their own, which role="img" would hide. */
+export const ALT_TYPES = new Set<SlideElement['type']>(['shape', 'image', 'svg', 'chart'])
+
+/** An element's mirror as a CSS transform ('' when it has none). */
+export const flipOf = (el: { flipX?: boolean; flipY?: boolean }) =>
+  el.flipX || el.flipY ? `scale(${el.flipX ? -1 : 1}, ${el.flipY ? -1 : 1})` : ''
+
+/** Mirror a rendered node's content (flipX/flipY). Anything that rewrites the
+ *  content after render — the show's live charts, a crop morph — calls this
+ *  again, or the mirror is lost (the show would disagree with the editor). */
+export function flipContent(node: Element, el: { flipX?: boolean; flipY?: boolean }) {
+  const flip = flipOf(el)
+  if (!flip) return
+  for (const c of node.children) {
+    const s = (c as HTMLElement | SVGElement).style
+    s.transform = s.transform ? `${s.transform} ${flip}` : flip
+  }
 }
 
 /** Render a full slide surface (background + elements) at model coordinates. */
@@ -981,7 +1021,17 @@ export function renderSlide(slide: Slide, doc: BentoDoc, opts: RenderOpts = {}):
   surface.style.height = `${doc.size.height}px`
   surface.style.background = slide.background
   const fields = opts.fields ?? fieldContext(doc, slide)
-  for (const el of slide.elements) surface.appendChild(renderElement(el, doc, { ...opts, fields }))
+  const byId = new Map(slide.elements.map((e) => [e.id, e]))
+  // a hidden element (Layers' eye) is drawn nowhere: canvas, thumbnails, the show, print
+  const hidden = flagged(slide, 'hidden') // a hidden frame hides what is inside it
+  for (const el of slide.elements) {
+    if (hidden.has(el.id)) continue
+    const node = renderElement(el, doc, { ...opts, fields })
+    // a child of a clipping frame (layout.ts) shows only what lies inside it
+    const clip = frameClip(el, byId)
+    if (clip) node.style.clipPath = clip
+    surface.appendChild(node)
+  }
   return surface
 }
 

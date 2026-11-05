@@ -9,10 +9,12 @@ import 'reveal.js/dist/reveal.css'
 import { anim, ease, resetXform } from './anim'
 import { chartSnapshotSvg, mountChart } from './charts'
 import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
-import { morphKey, paginates, inLinearFlow, isWebUrl } from './model'
-import { applyElementFrame, cssColor, fetchFreeOption, gradientLineCoords, paintSafeShape, renderSlide } from './render'
+import { morphKey, paginates, inLinearFlow, isWebUrl, visiblePaint } from './model'
+import { fillLayers, strokeLayers } from './stacks'
+import { isFrame, morphClip } from './layout'
+import { applyElementFrame, cssColor, fetchFreeOption, flipContent, flipOf, gradientLineCoords, paintSafeShape, radialGeom, renderSlide } from './render'
 import { cropImgStyle, isIdentityCrop, lerpCrop } from './crop'
-import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
+import { hintWindow, paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
 import { speakerWindowTitle } from './wintitle'
 import { ICONS } from './icons'
 import { t } from './i18n'
@@ -477,6 +479,20 @@ export function startPresentation(
     laserSentThisStroke = false
   }
 
+  // Letting go ends the stroke, not the picture: the dot fades and the trail
+  // runs out its own decay, as it does behind a moving pointer — clearing it
+  // on release made the laser vanish mid-sweep. Only leaving the slide, a
+  // blackout or switching the laser off still clear at once (resetLaserPointer).
+  const releaseLaser = () => {
+    hideLaserDot()
+    if (laserFrame) cancelAnimationFrame(laserFrame)
+    laserFrame = 0
+    laserPoint = null
+    overlay.classList.remove('laser-over-slide')
+    laserSentThisStroke = false
+    if (!reduceMotion && laserTrailLength > 1 && !laserTrailFrame) laserTrailFrame = requestAnimationFrame(renderLaserTrail)
+  }
+
   const paintLaser = (now: number) => {
     laserFrame = 0
     const point = laserPoint
@@ -562,8 +578,16 @@ export function startPresentation(
   }
 
   const setRemoteLaser = (p: string | null) => {
-    if (!p || blacked) {
+    if (blacked) {
       clearRemoteLaser()
+      return
+    }
+    if (!p) {
+      // the presenter let go: fade, as their own screen does
+      if (remoteTrailFrame) cancelAnimationFrame(remoteTrailFrame)
+      remoteTrailFrame = 0
+      remoteLaserDot.classList.remove('visible')
+      if (!reduceMotion && laserTrailLength > 1 && !laserTrailFrame) laserTrailFrame = requestAnimationFrame(renderLaserTrail)
       return
     }
     // The laser layer only enters the DOM when the laser was armed locally —
@@ -596,6 +620,7 @@ export function startPresentation(
       // CSS left/top tween would fly it across the gap — the trail sampler
       // traces that ghost glide into a line from the last position. Snap it to
       // the new position first (tween off), then re-enable for the stream.
+      clearLaserTrail() // the last stroke may still be fading: it must not join this one
       remoteLaserDot.style.transition = 'none'
       remoteLaserDot.style.left = `${x}px`
       remoteLaserDot.style.top = `${y}px`
@@ -628,6 +653,7 @@ export function startPresentation(
       ev.clientX < rect.left || ev.clientX > rect.right ||
       ev.clientY < rect.top || ev.clientY > rect.bottom
     ) return
+    clearLaserTrail() // a stroke still fading must not join the new one
     laserDrawing = true
     laserSentThisStroke = false
     laserPoint = { x: ev.clientX, y: ev.clientY }
@@ -644,7 +670,7 @@ export function startPresentation(
     // resetLaserPointer's own off-send guard needs laserDrawing still true, so
     // the off frame fires HERE — before the stroke is cleared.
     if (laserSentThisStroke) sendLaserPoint(null)
-    resetLaserPointer()
+    releaseLaser()
   })
   overlay.addEventListener('pointerleave', resetLaserPointer)
   const onWindowBlur = () => resetLaserPointer()
@@ -1002,6 +1028,7 @@ export function startPresentation(
       for (const st of document.querySelectorAll('style')) d.head.appendChild(d.importNode(st, true))
     }
     d.body.className = 'bento-speaker'
+    hintWindow(speaker)
     const navBtn = (k: string, glyph: string, label: string, pressed = false) =>
       `<button class="sv-btn" data-nav="${k}" title="${label}" aria-label="${label}"${pressed ? ' aria-pressed="false"' : ''}>${glyph}</button>`
     d.body.innerHTML =
@@ -1593,7 +1620,16 @@ function mountLiveCharts(slide: Slide, section: HTMLElement, fromSlide?: Slide) 
     const fromEl = fromSlide?.elements.find((e) => e.id === el.id && e.type === 'chart')
     // the engine writes option colours into svg paint: hand it a fetch-free copy
     const live = { ...el, option: fetchFreeOption(el.option) }
-    const dispose = mountChart(live, node, fromEl && fromEl.type === 'chart' ? fetchFreeOption(fromEl.option) : undefined)
+    // a mirrored chart mounts inside a wrapper that carries the mirror: the
+    // engine empties its host and redraws its svg on every frame of a sweep
+    let host = node
+    if (flipOf(el)) {
+      host = document.createElement('div')
+      host.style.cssText = 'position:absolute;inset:0'
+      node.replaceChildren(host)
+      flipContent(node, el)
+    }
+    const dispose = mountChart(live, host, fromEl && fromEl.type === 'chart' ? fetchFreeOption(fromEl.option) : undefined)
     handles.push(() => {
       dispose()
       node.innerHTML = chartSnapshotSvg(live)
@@ -1602,6 +1638,7 @@ function mountLiveCharts(slide: Slide, section: HTMLElement, fromSlide?: Slide) 
         csvg.setAttribute('preserveAspectRatio', 'none')
         ;(csvg as SVGElement).style.cssText = 'width:100%;height:100%;display:block'
       }
+      flipContent(node, el)
     })
   }
   if (handles.length) chartHandles.set(section, handles)
@@ -1637,7 +1674,7 @@ type EnterKind = NonNullable<NonNullable<SlideElement['fx']>['enter']>
  * fade-* nudge 16px; slide-* sweep 120px in from an edge (slide-left starts to
  * the RIGHT and travels leftward). x needs the x transform channel in anim.ts.
  */
-function enterSpec(kind: EnterKind, enterDur?: number) {
+export function enterSpec(kind: EnterKind, enterDur?: number) {
   const D = 120
   const from = { opacity: 0, x: 0, y: 0 }
   if (kind === 'fade-up') from.y = 16
@@ -1879,7 +1916,10 @@ function runAmbientFx(slide: Slide, section: HTMLElement) {
       }
     }
     if (fx.loop?.type === 'dash-march') {
-      const target = node.querySelector('path, line, rect, ellipse, polygon') as SVGElement | null
+      // the drawn stroke — a shape's top stroke node, never a <mask>/<clipPath>
+      // child or a tip <marker> in its <defs>; other svg (markup) as before
+      const target = [...node.querySelectorAll<SVGElement>(':scope > svg > [stroke-width]')].pop()
+        ?? node.querySelector<SVGElement>('path, line, rect, ellipse, polygon')
       if (target) {
         // Seamless marching ants: the offset must travel a WHOLE number of
         // dash+gap periods, or the pattern snaps back mid-cycle each loop and
@@ -1976,7 +2016,8 @@ function elementsById(root: HTMLElement): Map<string, HTMLElement> {
  */
 function modelByMorphKey(doc: BentoDoc, index: number): Map<string, SlideElement> {
   const map = new Map<string, SlideElement>()
-  for (const el of doc.slides[index]?.elements ?? []) map.set(morphKey(el), el)
+  // the morph tweens what is drawn: a paint switched off is off at both ends
+  for (const el of doc.slides[index]?.elements ?? []) map.set(morphKey(el), visiblePaint(el))
   return map
 }
 
@@ -2375,6 +2416,33 @@ function runMorph(
     })
   }
 
+  // A child of a clipping frame stays clipped by the frame while both travel:
+  // each step maps the frame's box at that moment into the child node as the
+  // box tween above draws it. The resting clip (renderSlide) takes over at the end.
+  const toById = new Map((toSlide?.elements ?? []).map((e) => [e.id, e]))
+  for (const node of matchedTo) {
+    const id = node.dataset.flipId!
+    const a = fromModel.get(id)
+    const b = toModel.get(id)
+    const fb = b?.parentId ? toById.get(b.parentId) : undefined
+    if (!a || !b || !isFrame(fb) || !fb.layout.clip) continue
+    const fa = fromModel.get(morphKey(fb)) ?? fb
+    const rest = node.style.clipPath
+    const state = { p: 0 }
+    anim.to(state, {
+      p: 1, duration: MORPH_DURATION, ease: MORPH_EASE,
+      onUpdate() {
+        const p = state.p
+        const L = (u: number, v: number) => u + (v - u) * p
+        node.style.clipPath = morphClip(
+          { x: L(fa.x, fb.x), y: L(fa.y, fb.y), w: L(fa.w, fb.w), h: L(fa.h, fb.h) },
+          L(a.x, b.x), L(a.y, b.y), L(a.w, b.w) / Math.max(b.w, 0.01), L(a.h, b.h) / Math.max(b.h, 0.01),
+          L(a.rotation ?? 0, b.rotation ?? 0), b.w, b.h)
+      },
+      onComplete() { node.style.clipPath = rest },
+    })
+  }
+
   // Symbol-level math morph, layered on top of the box morph above. The
   // from-side offsets come from the cache captured while that slide was
   // visible — measuring it now would read zeros (it has no layout).
@@ -2396,8 +2464,8 @@ function runMorph(
       anim.fromTo(to, { opacity: a.opacity }, { opacity: b.opacity, duration: MORPH_DURATION, ease: MORPH_EASE })
     }
     if (a.type === 'shape' && b.type === 'shape') {
-      const target = to.querySelector<SVGElement>('rect,ellipse,polygon,line,path')
-      if (target) morphShapeFill(target, a, b)
+      const svg = to.querySelector(':scope > svg')
+      if (svg) playSteps(shapePaintSteps(svg, a, b))
     }
     if (a.type === 'text' && b.type === 'text' && a.color !== b.color) {
       const inner = to.querySelector<HTMLElement>('.bento-text-inner')
@@ -2416,8 +2484,9 @@ function runMorph(
         const state = { p: 0 }
         anim.to(state, {
           p: 1, duration: MORPH_DURATION, ease: MORPH_EASE,
-          onUpdate() { img.style.cssText = cropImgStyle(lerpCrop(a.crop!, b.crop!, state.p)) },
-          onComplete() { img.style.cssText = cropImgStyle(b.crop!) },
+          // cssText replaces the whole style: the mirror goes back on each write
+          onUpdate() { img.style.cssText = cropImgStyle(lerpCrop(a.crop!, b.crop!, state.p)); img.style.transform = flipOf(b) },
+          onComplete() { img.style.cssText = cropImgStyle(b.crop!); img.style.transform = flipOf(b) },
         })
       }
     }
@@ -2430,7 +2499,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg'
 let morphGradSeq = 0
 
 /** Any solid CSS color we author (#hex / rgb / rgba) → [r, g, b, a]. */
-function colorParts(v: string): [number, number, number, number] {
+export function colorParts(v: string): [number, number, number, number] {
   const m = v?.match(/rgba?\(([^)]+)\)/)
   if (m) {
     const p = m[1].split(/[\s,/]+/).map(Number)
@@ -2449,7 +2518,7 @@ function colorParts(v: string): [number, number, number, number] {
   return [0, 0, 0, v === 'transparent' || v === 'none' ? 0 : 1]
 }
 
-const rgbaStr = (c: [number, number, number, number]) =>
+export const rgbaStr = (c: [number, number, number, number]) =>
   `rgba(${Math.round(c[0])}, ${Math.round(c[1])}, ${Math.round(c[2])}, ${Math.round(c[3] * 1000) / 1000})`
 
 /** Color of a gradient evaluated at position t (piecewise-linear between stops). */
@@ -2469,79 +2538,170 @@ function sampleGradient(stops: GradientFill['stops'], t: number): string {
   return rgbaStr(colorParts(s[s.length - 1].color))
 }
 
+/** One paint as the morph sees it: a colour, and the gradient that wins over it. */
+interface Paint { color: string; gradient?: GradientFill }
+
+/** Two colours mixed at p, as rgba() (what every colour tween here writes). */
+export function mixColor(a: string, b: string, p: number): string {
+  const ca = colorParts(a), cb = colorParts(b)
+  return rgbaStr([0, 1, 2, 3].map((k) => ca[k] + (cb[k] - ca[k]) * p) as [number, number, number, number])
+}
+
 /**
- * Tween a shape's fill from element a's to element b's. Solids tween the fill
- * attribute; when a gradient is involved the tween runs on the <stop> nodes
- * (colors sampled from the other side at matching positions) and on the
- * gradient line, so angle changes sweep too. A solid destination gets a
- * temporary gradient that collapses to the flat color and is then removed.
+ * Everything a shape's paint does between two of its frames, as steppers:
+ * each takes p (0 = element a's paint, 1 = b's) and writes it onto the
+ * rendered node — the show drives them with a tween (runMorph), the editor's
+ * Preview scrubber calls them at its slider's value (editor/morph.ts). One
+ * code path, so the preview is the show.
+ *
+ * Fills and strokes morph layer by layer when both sides have the same layers
+ * (count and eyes); otherwise the destination's layers simply appear — there
+ * is no honest pairing between a two-layer stack and a three-layer one. A
+ * single paint is a stack of one. A stroke layer's width tweens with its paint.
  */
-function morphShapeFill(target: SVGElement, a: ShapeElement, b: ShapeElement) {
+export function shapePaintSteps(svg: Element, a: ShapeElement, b: ShapeElement): Array<(p: number) => void> {
   // the model's paint goes into fill/stroke/stop-color attributes: gated first
   a = paintSafeShape(a)
   b = paintSafeShape(b)
-  if (a.fill === b.fill && JSON.stringify(a.fillGradient) === JSON.stringify(b.fillGradient)) return
-  // line shapes paint with stroke (fill is the line color in the model)
-  if (b.shape === 'line' && target.tagName === 'line') {
-    anim.fromTo(target, { attr: { stroke: a.fill } }, { attr: { stroke: b.fill }, duration: MORPH_DURATION, ease: MORPH_EASE })
-    return
+  const steps: Array<(p: number) => void> = []
+  const same = <L extends { hidden?: true }>(x: L[], y: L[]) => x.length === y.length && x.every((l, i) => !!l.hidden === !!y[i].hidden)
+  // single paint: the node that carries it; a stack: the layer's own node
+  const node = (stack: boolean, kind: 'fill' | 'stroke', i: number) => stack
+    ? svg.querySelector<SVGElement>(`[data-layer="${kind}${i}"]`)
+    : kind === 'fill'
+      ? svg.querySelector<SVGElement>(':scope > rect, :scope > ellipse, :scope > polygon, :scope > path')
+      : [...svg.querySelectorAll<SVGElement>(':scope > [stroke-width]')].pop() ?? null
+  if (b.shape !== 'line') {
+    const fa = fillLayers(a), fb = fillLayers(b)
+    if (same(fa, fb)) fb.forEach((l, i) => {
+      const target = l.hidden ? null : node(!!b.fills, 'fill', i)
+      const step = target && paintTween(target, 'fill', fa[i], l)
+      if (step) steps.push(step)
+    })
   }
-  const ag = a.fillGradient?.stops.length ? a.fillGradient : undefined
-  const bg = b.fillGradient?.stops.length ? b.fillGradient : undefined
-  if (!ag && !bg) {
-    if (a.fill !== b.fill) {
-      anim.fromTo(target, { attr: { fill: a.fill } }, { attr: { fill: b.fill }, duration: MORPH_DURATION, ease: MORPH_EASE })
+  const sa = strokeLayers(a), sb = strokeLayers(b)
+  if (same(sa, sb)) sb.forEach((l, i) => {
+    const target = l.hidden ? null : node(!!b.strokes, 'stroke', i)
+    if (!target) return
+    const step = paintTween(target, 'stroke', sa[i], l)
+    if (step) steps.push(step)
+    // the drawn width is the layer's (an aligned stroke draws it doubled): scale it by the ratio
+    const w = parseFloat(target.getAttribute('stroke-width') ?? '')
+    if (sa[i].width !== l.width && l.width > 0 && Number.isFinite(w)) {
+      const from = (w * sa[i].width) / l.width
+      steps.push((p) => target.setAttribute('stroke-width', String(p >= 1 ? w : from + (w - from) * p)))
     }
-    return
-  }
-  const svg = target.ownerSVGElement
-  if (!svg) return
+  })
+  return steps
+}
 
-  let lin = svg.querySelector('linearGradient')
+/** Play paint steppers over the morph's duration. */
+function playSteps(steps: Array<(p: number) => void>) {
+  if (!steps.length) return
+  const state = { p: 0 }
+  anim.to(state, {
+    p: 1, duration: MORPH_DURATION, ease: MORPH_EASE,
+    onUpdate() { for (const s of steps) s(state.p) },
+    onComplete() { for (const s of steps) s(1) },
+  })
+}
+
+/**
+ * The stepper for one paint attribute (`fill` or `stroke`) from a to b, or
+ * null when they are the same. Solids mix. When a gradient is involved the
+ * stops mix (each sampled from the other side at its own position) and the
+ * gradient's geometry tweens between two of a kind — a linear line sweeps, a
+ * radial centre and radius move. Across kinds no geometry maps onto the
+ * other, so the destination fades in over a copy painted with the source
+ * gradient (one copy per node, reused by repeated Preview calls). A solid
+ * destination gets a temporary gradient that collapses to the flat colour and
+ * is removed at p = 1.
+ */
+function paintTween(target: SVGElement, attr: 'fill' | 'stroke', a: Paint, b: Paint): ((p: number) => void) | null {
+  const ag = a.gradient?.stops.length ? a.gradient : undefined
+  const bg = b.gradient?.stops.length ? b.gradient : undefined
+  if (a.color === b.color && JSON.stringify(ag) === JSON.stringify(bg)) return null
+  if (!ag && !bg) return (p) => target.setAttribute(attr, p >= 1 ? b.color : mixColor(a.color, b.color, p))
+  const svg = target.ownerSVGElement
+  if (!svg) return null
+  // the gradient THIS node paints with — a stack has one per layer
+  const ref = /url\(#([^)]+)\)/.exec(target.getAttribute(attr) ?? '')?.[1]
+  let lin = ref ? svg.querySelector<SVGElement>(`[id="${ref}"]`) : null
+  let temp = false
   if (!lin) {
     // destination is solid — fabricate a gradient shaped like the source so
-    // there is something to tween through, then collapse it to b.fill
-    lin = document.createElementNS(SVG_NS, 'linearGradient')
+    // there is something to tween through, then collapse it to b's colour
+    temp = true
+    lin = document.createElementNS(SVG_NS, ag!.kind === 'radial' ? 'radialGradient' : 'linearGradient')
     lin.id = `bento-morph-grad-${morphGradSeq++}`
     for (const s of ag!.stops) {
       const stop = document.createElementNS(SVG_NS, 'stop')
       stop.setAttribute('offset', String(s.at))
       lin.appendChild(stop)
     }
+    const geom: Record<string, number> = ag!.kind === 'radial' ? radialGeom(ag!) : gradientLineCoords(ag!.angle)
+    for (const [k, v] of Object.entries(geom)) lin.setAttribute(k, String(v))
     const defs = document.createElementNS(SVG_NS, 'defs')
     defs.appendChild(lin)
     svg.appendChild(defs)
-    target.setAttribute('fill', `url(#${lin.id})`)
+    target.setAttribute(attr, `url(#${lin.id})`)
   }
-
   const stops = [...lin.querySelectorAll('stop')]
   // per rendered stop: where it sits, what it starts as, what it ends as
-  const finals = bg ? bg.stops : ag!.stops.map((s) => ({ at: s.at, color: b.fill }))
-  stops.forEach((node, i) => {
+  const finals = bg ? bg.stops : ag!.stops.map((s) => ({ at: s.at, color: b.color }))
+  let fade: SVGElement | null = null
+  if (ag && bg && (ag.kind === 'radial') !== (bg.kind === 'radial')) {
+    const prev = target.previousElementSibling
+    fade = prev?.hasAttribute('data-morph-fade') ? prev as SVGElement : null
+    if (!fade) {
+      const src = document.createElementNS(SVG_NS, ag.kind === 'radial' ? 'radialGradient' : 'linearGradient')
+      src.id = `bento-morph-grad-${morphGradSeq++}`
+      for (const st of ag.stops) {
+        const stop = document.createElementNS(SVG_NS, 'stop')
+        stop.setAttribute('offset', String(st.at))
+        stop.setAttribute('stop-color', st.color)
+        src.appendChild(stop)
+      }
+      const geom: Record<string, number> = ag.kind === 'radial' ? radialGeom(ag) : gradientLineCoords(ag.angle)
+      for (const [k, v] of Object.entries(geom)) src.setAttribute(k, String(v))
+      const defs = document.createElementNS(SVG_NS, 'defs')
+      defs.appendChild(src)
+      svg.appendChild(defs)
+      fade = target.cloneNode() as SVGElement
+      fade.setAttribute('data-morph-fade', '')
+      fade.removeAttribute('data-layer')
+      fade.setAttribute(attr === 'fill' ? 'stroke' : 'fill', 'none')
+      fade.setAttribute(attr, `url(#${src.id})`)
+      target.before(fade)
+    }
+  }
+  const colours = stops.map((_, i) => {
     const at = finals[i]?.at ?? 1
-    const fromColor = ag ? sampleGradient(ag.stops, at) : rgbaStr(colorParts(a.fill))
-    const toColor = finals[i]?.color ?? b.fill
-    anim.fromTo(
-      node,
-      { attr: { 'stop-color': fromColor } },
-      {
-        attr: { 'stop-color': toColor },
-        duration: MORPH_DURATION,
-        ease: MORPH_EASE,
-        ...(i === 0 && !bg
-          ? {
-              // solid destination: swap the temp gradient back to a flat fill
-              onComplete: () => {
-                target.setAttribute('fill', b.fill)
-                lin!.parentElement?.remove()
-              },
-            }
-          : {}),
-      },
-    )
+    const end = finals[i]?.color ?? b.color
+    // crossfading: the destination holds its own colours while it fades in
+    return [fade ? end : ag ? sampleGradient(ag.stops, at) : rgbaStr(colorParts(a.color)), end]
   })
-
-  const fromLine = gradientLineCoords((ag ?? bg)!.angle)
-  const toLine = gradientLineCoords((bg ?? ag)!.angle)
-  anim.fromTo(lin, { attr: fromLine }, { attr: toLine, duration: MORPH_DURATION, ease: MORPH_EASE })
+  const ga = (ag ?? bg)!, gb = (bg ?? ag)!
+  const linear = lin.tagName === 'linearGradient' && ga.kind !== 'radial' && gb.kind !== 'radial'
+  const radial = lin.tagName === 'radialGradient' && ga.kind === 'radial' && gb.kind === 'radial'
+  const g0: Record<string, number> = linear ? gradientLineCoords(ga.angle) : radial ? radialGeom(ga) : {}
+  const g1: Record<string, number> = linear ? gradientLineCoords(gb.angle) : radial ? radialGeom(gb) : {}
+  const node = lin
+  return (p) => {
+    stops.forEach((s, i) => s.setAttribute('stop-color', p >= 1 ? colours[i][1] : mixColor(colours[i][0], colours[i][1], p)))
+    for (const k of Object.keys(g0)) node.setAttribute(k, String(g0[k] + (g1[k] - g0[k]) * p))
+    if (fade) {
+      if (p >= 1) {
+        target.removeAttribute(`${attr}-opacity`)
+        const ref = /url\(#([^)]+)\)/.exec(fade.getAttribute(attr) ?? '')?.[1]
+        if (ref) svg.querySelector(`[id="${ref}"]`)?.parentElement?.remove()
+        fade.remove()
+      } else target.setAttribute(`${attr}-opacity`, String(p))
+    }
+    if (p >= 1 && temp) {
+      // solid destination: swap the temp gradient back to a flat paint
+      target.setAttribute(attr, b.color)
+      node.parentElement?.remove()
+    }
+  }
 }

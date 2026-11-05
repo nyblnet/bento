@@ -23,11 +23,13 @@
 // false, rather than guessing.
 
 import type { BentoDoc, Slide, SlideElement, TableElement, TextElement } from './model.ts'
+import { isWebUrl } from './model.ts'
 import { MODEL_KEYS } from './modelkeys.generated.ts'
 import { isRemoteUrl } from '../../kernel/src/net.ts'
 import { measureElements, measureTables } from './measure.ts'
 import { BUILTIN_FONTS } from './fonts.ts'
-import { eachRef, paletteOf, parseThemeRef, resolveRef, _readPath } from './palette.ts'
+import { eachRef, keepAlpha, paletteOf, parseThemeRef, resolveRef, _readPath } from './palette.ts'
+import { tokenName } from './tokens.ts'
 
 export type Severity = 'error' | 'warning' | 'info'
 
@@ -212,6 +214,12 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
     const palette = paletteOf(doc)
     eachRef(doc, ({ slide, element, path, token }) => {
       const at = { slide: slide.id, ...(element ? { element: element.id } : {}) }
+      const name = tokenName(token)
+      if (name) {
+        if (!(doc.theme.tokens?.set && Object.hasOwn(doc.theme.tokens.set, name))) add({ ...at, code: 'token-unknown', severity: 'warning', path: `themeRefs.${path}`,
+          message: `There is no token "${name}" in theme.tokens, so this value will not follow it. Add the token, or drop the reference.` })
+        return
+      }
       const parsed = parseThemeRef(token)
       if (!parsed) {
         add({ ...at, code: 'theme-ref-malformed', severity: 'warning', path: `themeRefs.${path}`,
@@ -223,8 +231,10 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
           message: `Palette slot "${parsed.slot}" is empty, so this colour will not follow the palette. Set it in the theme, or drop the reference.` })
         return
       }
-      const want = resolveRef(token, palette)
       const have = _readPath(element ?? slide, path)
+      // a reference names the hue; the colour keeps its own opacity (palette.ts keepAlpha)
+      const base = resolveRef(token, palette)
+      const want = base ? keepAlpha(have, base) : base
       if (typeof have !== 'string') {
         add({ ...at, code: 'theme-ref-dangling', severity: 'warning', path: `themeRefs.${path}`,
           message: `There is no colour at "${path}" for this reference to control — it does nothing. Remove it, or restore the property.` })
@@ -346,7 +356,8 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
       }
 
       // references -----------------------------------------------------------
-      if (el.link && !slideIds.has(el.link)) {
+      // a web address is a link too (model.ts isWebUrl): it opens in a new tab
+      if (el.link && !slideIds.has(el.link) && !isWebUrl(el.link)) {
         add({ ...at, code: 'broken-link', severity: 'error', path: 'link',
           message: `Links to slide "${el.link}", which does not exist — clicking it does nothing.` })
       }

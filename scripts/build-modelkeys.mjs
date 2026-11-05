@@ -116,7 +116,11 @@ const tables = {
   tableRow: uniq(keysOf('TableRow')),
   tableCell: uniq(keysOf('TableCell')),
   gradient: uniq(keysOf('GradientFill')),
+  paintLayer: uniq(keysOf('PaintLayer')),
+  strokeLayer: uniq(keysOf('StrokeLayer')),
   imageCrop: uniq(keysOf('ImageCrop')),
+  frameLayout: uniq(keysOf('FrameLayout')),
+  sizing: uniq(keysOf('ElementSizing')),
   // the document's own nested objects — the schema (schema.ts) describes the
   // top level from these, so a field added to the theme reaches the schema
   // the same way a field added to an element does
@@ -125,6 +129,7 @@ const tables = {
   theme: uniq(nestedKeys('BentoDoc', ['theme'])),
   themePalette: uniq(nestedKeys('BentoDoc', ['theme', 'palette'])),
   themeCodePalette: uniq(nestedKeys('BentoDoc', ['theme', 'codePalette'])),
+  themeTokens: uniq(keysOf('DesignTokens')),
   present: uniq(nestedKeys('BentoDoc', ['present'])),
   font: uniq(nestedKeys('BentoDoc', ['fonts'])),
 }

@@ -84,16 +84,23 @@ try {
   }
 
   console.log('a fully visible thumb, the current slide scrolled out of view\n')
-  // [current slide (off-screen), list scroll, target, what the target is]
-  for (const [from, scroll, target, what] of [
-    ['s01', 400, 's08', 'a plain slide (current one above, off-screen)'],
-    ['s01', 300, 's06', 'a parent with states'],
-    ['s01', 300, 's06a', 'a state slide'],
-    ['s01', 500, 's11', 'a hidden slide'],
-    ['s15', 0, 's03', 'a plain slide (current one below, off-screen)'],
-    ['s15', 0, 's04', 'a hidden slide (current one below)'],
+  // the list scroll that centres a thumb: measured, not a fixed offset, so a
+  // wider sidebar (taller thumbs) does not leave the target half out of view
+  const centred = (id) => p.evaluate((i) => {
+    const sb = document.querySelector('.ed-sidebar'), sr = sb.getBoundingClientRect()
+    const r = sb.querySelector(`.ed-thumb[data-index="${i}"]`).getBoundingClientRect()
+    return Math.max(0, Math.round(sb.scrollTop + r.top - sr.top - (sb.clientHeight - r.height) / 2))
+  }, idx(id))
+  // [current slide (off-screen), target, what the target is]
+  for (const [from, target, what] of [
+    ['s01', 's08', 'a plain slide (current one above, off-screen)'],
+    ['s01', 's06', 'a parent with states'],
+    ['s01', 's06a', 'a state slide'],
+    ['s01', 's11', 'a hidden slide'],
+    ['s15', 's03', 'a plain slide (current one below, off-screen)'],
+    ['s15', 's04', 'a hidden slide (current one below)'],
   ]) {
-    await setUp(from, scroll)
+    await setUp(from, await centred(target))
     const pre = await geom(from)
     const g0 = await geom(target)
     const fully = g0.top >= g0.visTop && g0.bottom <= g0.visBottom
@@ -107,12 +114,19 @@ try {
   console.log('\na partly visible thumb\n')
   {
     await setUp('s01', 0)
-    // pick the first thumb that straddles the bottom edge
+    // pick the first thumb that straddles the bottom edge — scrolling the
+    // list a little until one does, so the set-up does not hang on where the
+    // thumbs happen to fall at scroll 0
     const target = await p.evaluate(() => {
       const sb = document.querySelector('.ed-sidebar'), bot = sb.getBoundingClientRect().top + sb.clientHeight
-      const t = [...sb.querySelectorAll('.ed-thumb')].find((n) => { const r = n.getBoundingClientRect(); return r.top < bot - 20 && r.bottom > bot })
-      return t ? window.bento.doc.slides[Number(t.dataset.index)].id : null
+      for (let y = 0; y <= 200; y += 10) {
+        sb.scrollTop = y
+        const t = [...sb.querySelectorAll('.ed-thumb')].find((n) => { const r = n.getBoundingClientRect(); return r.top < bot - 20 && r.bottom > bot + 10 })
+        if (t) return window.bento.doc.slides[Number(t.dataset.index)].id
+      }
+      return null
     })
+    await p.waitForTimeout(150)
     if (!target) ok(false, 'set-up: a thumb straddling the bottom edge')
     else {
       const r = await click(target)

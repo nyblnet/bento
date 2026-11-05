@@ -75,9 +75,8 @@ ok(/case 'date': return escapeFieldText\(arg\?\.trim\(\) \? formatDate\(ctx\.dat
 ok(/case 'time': return escapeFieldText\(arg\?\.trim\(\) \? formatDate\(ctx\.date, arg\.trim\(\)\) :/.test(render), '{{time:…}} likewise')
 const names = /\(page\|pages\|title\|date\|time\|author\|company\|subject\|event\)/.exec(render)
 ok(!!names, 'the field-name alternation is unchanged (no new names, the format is untouched)')
-const panels = read('slides/src/editor/panels.ts')
-ok(/private buildFieldPicker\(el: TextElement\)/.test(panels) && /this\.buildFieldPicker\(el\)/.test(panels), 'the Text panel builds the field picker')
-ok(/Text ▸ Field/.test(read('slides/src/editor/editor.ts')), 'the ? sheet names it')
+const panels = read('slides/src/editor/inspector/text.ts')
+ok(/export function buildFieldPicker\(p: PropsPanel, el: TextElement\)/.test(panels) && /buildFieldPicker\(p, el\)/.test(panels), 'the Text panel builds the field picker')
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

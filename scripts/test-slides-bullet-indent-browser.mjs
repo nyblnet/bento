@@ -115,7 +115,8 @@ try {
   ok(/<ul><li>a<ul><li>b<\/li><\/ul><\/li><\/ul>/.test(norm(await html('typed'))), `committed, b is nested under a (${norm(await html('typed'))})`)
 
   console.log('\nthe panel buttons\n')
-  const panelBtn = (label) => p.locator('.ed-shift-row .ed-btn', { hasText: label })
+  // the text section's list tools: icon buttons named for assistive tech
+  const panelBtn = (label) => p.locator(`.ed-props .ed-tool[aria-label="${label}"]`)
   await edit('list')
   await caretAfter('list', 'Two')
   await panelBtn('Indent').click()

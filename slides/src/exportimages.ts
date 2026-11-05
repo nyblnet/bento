@@ -19,7 +19,7 @@ import { inLinearFlow, type BentoDoc, type Slide } from './model.ts'
 import { fileBase, suggestedFileName } from '../../kernel/src/save.ts'
 
 export type ImageFormat = 'png' | 'jpeg'
-export type ImageScale = 1 | 2
+export type ImageScale = 0.5 | 1 | 1.5 | 2 | 3 | 4
 export const IMAGE_FORMATS: ReadonlyArray<ImageFormat> = ['png', 'jpeg']
 export const IMAGE_SCALES: ReadonlyArray<ImageScale> = [1, 2]
 

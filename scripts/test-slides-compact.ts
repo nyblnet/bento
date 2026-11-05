@@ -224,8 +224,9 @@ console.log('\nwhat the editor dereferences on first render\n')
 }
 
 console.log('\nthe numbers\n')
-const sj = JSON.stringify(starterDoc()), sc = compactJson(starterDoc())
-ok(sc.length / sj.length < 0.9, `the starter deck compacts to ${(sc.length / sj.length * 100).toFixed(1)}% of full (a designed deck overrides most defaults; measured 86.1%)`)
+// one deck, both ways: two starterDoc() calls differ in their random ids, and that noise alone moved the ratio ±0.7%
+const sd = starterDoc(), sj = JSON.stringify(sd), sc = compactJson(sd)
+ok(sc.length / sj.length < 0.92, `the starter deck compacts to ${(sc.length / sj.length * 100).toFixed(1)}% of full (a designed deck overrides most defaults; measured 90.0% since it names its layers and binds its tokens, 86.1% before)`)
 const agentCompact = JSON.stringify(compact), agentFull = JSON.stringify(ex)
 ok(agentFull.length / agentCompact.length > 2.5, `an agent deck written compact is ${(agentFull.length / agentCompact.length).toFixed(1)}× smaller than its expansion`)
 
