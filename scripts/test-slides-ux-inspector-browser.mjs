@@ -263,6 +263,19 @@ try {
     ok(errors.length === 0, `no page errors${errors.length ? `: ${errors.join(' | ')}` : ''}`)
     await ctx.close()
   })
+  await run(async () => {
+    // a shadow just added hands focus to its chip; → there is the chip's (the
+    // next preset), never the canvas's nudge of the card
+    const { ctx, p, select, el } = await open('en-US', 1440, [shape('c', 100)])
+    await select('c')
+    await p.click('.ed-props .ed-section[data-key="Shadow"] button[aria-label="Add shadow"]'); await p.waitForTimeout(250)
+    const s0 = JSON.stringify((await el('c')).shadow)
+    await p.keyboard.press('ArrowRight'); await p.waitForTimeout(250)
+    const c = await el('c')
+    ok(c.x === 100 && JSON.stringify(c.shadow) !== s0 && await p.evaluate(() => !!document.activeElement?.closest('.ed-props')),
+      `→ on a new shadow's chip moves to the next preset and leaves the card where it is (x ${c.x}, focus ${await p.evaluate(() => document.activeElement?.className)})`)
+    await ctx.close()
+  })
 
   console.log('\n8. the Stroke line\n')
   // the position control kept its 110px field width in a column narrower

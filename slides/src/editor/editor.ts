@@ -3692,6 +3692,9 @@ export class Editor {
         }
         return
       }
+      // an arrow pressed in the inspector is its control's (a chip, a picker),
+      // never a slide walk or a nudge — whether or not the control uses it
+      if (ev.key.startsWith('Arrow') && ev.target instanceof Element && ev.target.closest('.ed-props')) return
       // nothing selected → arrows walk slides (Left/Up = prev, Right/Down = next);
       // when an element IS selected they nudge it (branch below). inField already
       // returned above, so this never fires mid text/cell edit.
