@@ -92,6 +92,11 @@ export const ALLOWED_SKIPS = [
     when: notMac,
     why: 'the Spotlight index code is Swift against Apple frameworks, Apple platforms only (see test-tray-releases)',
   },
+  {
+    rig: 'scripts/test-home-android-gate1-oracle.mjs',
+    line: /android gate1 oracle: SKIPPED — no Android device or emulator connected/,
+    why: "gate 1's oracle runs in Android's own WebView, which needs an emulator or device; the ubuntu runners have neither. Gate1Test (home-android-unit) still runs the whole corpus on every change",
+  },
 ]
 
 /** The rigs allowed to skip off macOS must run, unskipped, on the macOS job. */

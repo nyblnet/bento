@@ -332,6 +332,10 @@ class DocumentsActivity : AppCompatActivity() {
         pendingApp = null
         Thread {
             var error: String? = null
+            // The release history rides on this contact (vault): the app already
+            // reaches bento.page for this app here, and nowhere else. Opening a
+            // document never fetches it; the editor uses the held copy.
+            ReleaseHistory.refresh(applicationContext, app)
             val bytes = try {
                 Releases.seedFor(this, app)
             } catch (e: Exception) {
@@ -357,6 +361,23 @@ class DocumentsActivity : AppCompatActivity() {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 if (ok) open(uri)
                 else notify(getString(R.string.err_create_fetch, error ?: getString(R.string.err_offline)))
+            }
+        }.start()
+    }
+
+    /** Refresh every app's signed release history (gate 1's list of genuine releases). */
+    private fun checkForUpdates() {
+        Thread {
+            val outcomes = Releases.APPS.map { ReleaseHistory.refresh(applicationContext, it) }
+            // Worst outcome wins: a reply that would not verify is worse than an unreachable server.
+            val msg = when {
+                ReleaseHistory.Outcome.UNVERIFIED in outcomes -> R.string.updates_unverified
+                ReleaseHistory.Outcome.OFFLINE in outcomes -> R.string.updates_offline
+                else -> R.string.updates_checked
+            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                notify(getString(msg))
             }
         }.start()
     }
@@ -531,6 +552,17 @@ class DocumentsActivity : AppCompatActivity() {
             }
         }
         header.addView(viewToggle)
+        // ⋮: actions that aren't about one document. "Check for updates" is the
+        // only contact with bento.page besides New, and the person starts it.
+        header.addView(TextView(this, null, 0, R.style.IconBtn).apply {
+            text = "⋮"
+            contentDescription = getString(R.string.more_actions)
+            setOnClickListener { v ->
+                android.widget.PopupMenu(this@DocumentsActivity, v).apply {
+                    menu.add(R.string.check_updates).setOnMenuItemClickListener { checkForUpdates(); true }
+                }.show()
+            }
+        })
         // Only offered where it can be honoured: setApplicationNightMode is API
         // 31+, and without AndroidX there is no way to override the system
         // theme below it. A control that silently does nothing is worse than no
