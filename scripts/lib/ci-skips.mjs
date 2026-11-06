@@ -92,6 +92,18 @@ export const ALLOWED_SKIPS = [
     when: notMac,
     why: 'the Spotlight index code is Swift against Apple frameworks, Apple platforms only (see test-tray-releases)',
   },
+  {
+    rig: 'scripts/test-home-release-history.mjs',
+    line: /home release history: SKIPPED — needs an Apple toolchain/,
+    when: notMac,
+    why: 'ReleaseHistory verifies signatures with CryptoKit, Apple platforms only (see test-tray-releases)',
+  },
+  {
+    rig: 'scripts/test-home-gate1.mjs',
+    line: /home gate1: SKIPPED — needs an Apple toolchain/,
+    when: notMac,
+    why: 'the gate-1 Swift port hashes and verifies signatures with CryptoKit, Apple platforms only (see test-tray-releases)',
+  },
 ]
 
 /** The rigs allowed to skip off macOS must run, unskipped, on the macOS job. */
