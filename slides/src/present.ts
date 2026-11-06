@@ -1026,6 +1026,7 @@ export function startPresentation(
             `<div class="sv-view-menu">` +
               `<label><input type="checkbox" value="current" checked>${t('Current slide')}</label>` +
               `<label><input type="checkbox" value="next" checked>${t('Next')}</label>` +
+              `<label><input type="checkbox" value="notes" checked>${t('Notes')}</label>` +
               `<label><input type="checkbox" value="rail" checked>${t('Slide thumbnails')}</label>` +
             `</div></details>` +
         `</div>` +

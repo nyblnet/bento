@@ -5,7 +5,7 @@ import { t } from './i18n'
 
 // Keep the presenter's choices across shows in this editor, including when the
 // editor-owned popup is repainted with its idle placeholder between shows.
-const layout = { current: true, next: true, rail: true, columns: 0.6, rows: null as number | null }
+const layout = { current: true, next: true, notes: true, rail: true, columns: 0.6, rows: null as number | null }
 
 export function setupSpeakerLayout(w: Window): () => void {
   const d = w.document
@@ -13,6 +13,7 @@ export function setupSpeakerLayout(w: Window): () => void {
   const current = d.querySelector<HTMLElement>('.sv-current')!
   const side = d.querySelector<HTMLElement>('.sv-side')!
   const next = d.querySelector<HTMLElement>('.sv-next-wrap')!
+  const notes = d.querySelector<HTMLElement>('.sv-notes-wrap')!
   const rail = d.querySelector<HTMLElement>('.sv-rail')!
   const view = d.querySelector<HTMLDetailsElement>('.sv-view')!
 
@@ -29,21 +30,26 @@ export function setupSpeakerLayout(w: Window): () => void {
     return el
   }
   const columns = separator(main, side, true, t('Resize slide previews'), 'sv-current sv-side')
-  const rows = separator(side, d.querySelector<HTMLElement>('.sv-notes-wrap')!, false,
+  const rows = separator(side, notes, false,
     t('Resize next slide and notes'), 'sv-next sv-notes')
 
   const apply = () => {
-    current.hidden = columns.hidden = !layout.current
-    next.hidden = rows.hidden = !layout.next
+    const hasSide = layout.next || layout.notes
+    current.hidden = !layout.current
+    side.hidden = !hasSide
+    next.hidden = !layout.next
+    notes.hidden = !layout.notes
+    columns.hidden = !layout.current || !hasSide
+    rows.hidden = !layout.next || !layout.notes
     rail.hidden = !layout.rail
-    main.classList.toggle('sv-without-current', !layout.current)
-    side.classList.toggle('sv-without-next', !layout.next)
-    main.style.gridTemplateColumns = layout.current
+    main.classList.toggle('sv-single-pane', !layout.current || !hasSide)
+    side.classList.toggle('sv-single-pane', !layout.next || !layout.notes)
+    main.style.gridTemplateColumns = layout.current && hasSide
       ? `minmax(0, ${layout.columns}fr) 22px minmax(0, ${1 - layout.columns}fr)` : ''
-    side.style.gridTemplateRows = layout.next && layout.rows !== null
+    side.style.gridTemplateRows = layout.next && layout.notes && layout.rows !== null
       ? `minmax(0, ${layout.rows}fr) 16px minmax(0, ${1 - layout.rows}fr)` : ''
     view.querySelectorAll<HTMLInputElement>('input').forEach((input) => {
-      input.checked = layout[input.value as 'current' | 'next' | 'rail']
+      input.checked = layout[input.value as 'current' | 'next' | 'notes' | 'rail']
     })
   }
 
@@ -127,7 +133,7 @@ export function setupSpeakerLayout(w: Window): () => void {
   const updateRows = bind(rows, false)
   view.addEventListener('change', () => {
     view.querySelectorAll<HTMLInputElement>('input').forEach((input) => {
-      layout[input.value as 'current' | 'next' | 'rail'] = input.checked
+      layout[input.value as 'current' | 'next' | 'notes' | 'rail'] = input.checked
     })
     apply()
   })

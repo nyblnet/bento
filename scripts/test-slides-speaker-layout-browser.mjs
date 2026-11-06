@@ -39,7 +39,7 @@ try {
     const start = async () => {
       await p.locator('.ed-present-pill .ed-pill-caret').click()
       await p.getByText('Present in this tab', { exact: true }).click()
-      await sp.waitForSelector('.sv-notes')
+      await sp.waitForSelector('.sv-view summary')
     }
     await start()
     await sp.setViewportSize({ width: 1200, height: 800 })
@@ -96,6 +96,26 @@ try {
     ok(!await sp.locator('.sv-view').evaluate((el) => el.open), 'Escape closes View')
     if (process.env.SPEAKER_SCREENSHOTS) await sp.screenshot({ path: `${process.env.SPEAKER_SCREENSHOTS}/resized-${width}.png` })
 
+    const nextBefore = await box('.sv-nextbox .sv-frame')
+    await toggle('notes', false)
+    ok(await sp.locator('.sv-notes-wrap').isHidden() && await sp.locator('.sv-splitter-rows').isHidden()
+      && (await box('.sv-nextbox .sv-frame')).height > nextBefore.height + 40,
+    'hiding notes gives the next preview more space and hides its divider')
+    if (process.env.SPEAKER_SCREENSHOTS) await sp.screenshot({ path: `${process.env.SPEAKER_SCREENSHOTS}/without-notes-${width}.png` })
+    await toggle('next', false)
+    ok(await sp.locator('.sv-side').isHidden() && await sp.locator('.sv-splitter-columns').isHidden()
+      && (await box('.sv-current')).width > 1100, 'hiding notes and Next gives the current preview the full width')
+    await toggle('current', false)
+    ok(await sp.locator('.sv-view summary').isVisible(), 'View stays available with all content panes hidden')
+    await toggle('next', true)
+    ok((await box('.sv-next-wrap')).width > 1100, 'the next preview can fill the content area on its own')
+    await toggle('current', true)
+    await toggle('notes', true)
+    const withNotes = await metrics()
+    ok(Math.abs(withNotes.w - split.w) < 2 && Math.abs(withNotes.h - split.h) < 2,
+      'restoring notes and previews recovers the chosen proportions')
+    await sp.keyboard.press('Escape')
+
     for (const [vw, vh] of [[1600, 900], [400, 700], [900, 400], [700, 600]]) {
       await sp.setViewportSize({ width: vw, height: vh })
       await sp.waitForFunction(() => {
@@ -127,11 +147,14 @@ try {
     ok(await p.evaluate(() => JSON.stringify(window.bento.doc)) === original, 'layout choices leave the document byte-identical')
 
     await toggle('next', false)
+    await toggle('notes', false)
     await p.keyboard.press('Escape')
     await sp.waitForSelector('.sv-idle')
     await start()
-    ok(await sp.locator('.sv-next-wrap').isHidden(), 'visibility choices survive ending and restarting a show')
+    ok(await sp.locator('.sv-next-wrap').isHidden() && await sp.locator('.sv-notes-wrap').isHidden()
+      && await sp.locator('.sv-side').isHidden(), 'visibility choices, including hidden notes, survive restarting a show')
     await toggle('next', true)
+    await toggle('notes', true)
     await ctx.close()
   }
   ok(errors.length === 0, `no page errors: ${errors.join('; ')}`)

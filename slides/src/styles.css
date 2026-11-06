@@ -1693,7 +1693,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 .sv-btn[disabled] { opacity: 0.35; cursor: default; }
 .sv-btn.active { background: var(--accent); border-color: var(--accent); color: #14181d; }
 .sv-main { display: grid; grid-template-columns: minmax(0, 3fr) 22px minmax(0, 2fr); padding: 14px 22px; flex: 1; min-height: 0; }
-.sv-main.sv-without-current { grid-template-columns: minmax(0, 1fr); }
+.sv-main.sv-single-pane { grid-template-columns: minmax(0, 1fr); }
 .sv-current { min-width: 0; min-height: 0; container-type: size; }
 .sv-current > .sv-frame { width: min(100cqw, calc(100cqh * var(--sv-ar, 1.7778))); }
 .sv-frame {
@@ -1723,7 +1723,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   background: #1a2029;
 }
 .sv-side { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, min(30vh + 18px, 45%)) 16px minmax(0, 1fr); }
-.sv-side.sv-without-next { grid-template-rows: minmax(0, 1fr); }
+.sv-side.sv-single-pane { grid-template-rows: minmax(0, 1fr); }
 .sv-label {
   font-size: 10.5px;
   font-weight: 700;

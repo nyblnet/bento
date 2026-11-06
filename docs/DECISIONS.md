@@ -23,6 +23,10 @@ notes the whole content area. Proportions and visibility live in memory in
 but never entering document JSON, sync or saved files. Previews retain the
 deck's aspect ratio and fit their panes; long notes still scroll when needed.
 
+Notes can also be hidden from View. The remaining preview fills its available
+pane; hiding both side panes removes their column and divider. Visibility
+remains independently reversible, including when all content panes are hidden.
+
 ## 2026-10-18 — Native hosts keep a document's recovery copy and member key outside the page
 
 **Decision.** The native hosts provide the per-document store that

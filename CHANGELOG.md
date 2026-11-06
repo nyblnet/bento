@@ -13,8 +13,9 @@ pre-1.0.
 
 - **More room for speaker notes.** Drag the dividers between the current
   slide, next slide and notes, or focus a divider and use the arrow keys.
-  The speaker view's View menu can hide either preview and the thumbnail
-  strip so notes fill the window. Choices last while the editor stays open.
+  The speaker view's View menu can hide either preview, speaker notes or the
+  thumbnail strip. Show just the panes you need; notes or a single preview
+  can fill the content area. Choices last while the editor stays open.
 
 - **Typing `- ` or `* ` starts a real list straight away.** It used to type a
   bullet character that only became a list once you clicked out of the box, so
