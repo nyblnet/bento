@@ -19,6 +19,11 @@ import type { Catalog } from '../../i18n'
 export const label = 'Tiếng Việt'
 
 export const strings: Catalog = {
+  "View": "Hiển thị",
+  "Current slide": "Trang chiếu hiện tại",
+  "Slide thumbnails": "Hình thu nhỏ trang chiếu",
+  "Resize slide previews": "Đổi kích thước bản xem trước trang chiếu",
+  "Resize next slide and notes": "Đổi kích thước trang chiếu tiếp theo và ghi chú",
   "Insert — text, shapes, images, media, tables, charts": "Chèn — văn bản, hình khối, hình ảnh, phương tiện, bảng, biểu đồ",
   "More actions": "Thao tác khác",
   "Slides — show or hide the slide list": "Trang chiếu — hiện hoặc ẩn danh sách trang chiếu",

@@ -4,6 +4,11 @@
 import type { Catalog } from '../i18n'
 
 export const it: Catalog = {
+  "View": "Vista",
+  "Current slide": "Diapositiva attuale",
+  "Slide thumbnails": "Miniature delle diapositive",
+  "Resize slide previews": "Ridimensiona le anteprime delle diapositive",
+  "Resize next slide and notes": "Ridimensiona la diapositiva successiva e le note",
   "This text box is already bold": "Questa casella di testo è già in grassetto",
   "Italic": "Corsivo",
   "Underline": "Sottolineato",

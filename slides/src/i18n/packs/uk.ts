@@ -29,6 +29,11 @@ import type { Catalog } from '../../i18n'
 export const label = 'Українська'
 
 export const strings: Catalog = {
+  "View": "Вигляд",
+  "Current slide": "Поточний слайд",
+  "Slide thumbnails": "Мініатюри слайдів",
+  "Resize slide previews": "Змінити розмір попереднього перегляду слайдів",
+  "Resize next slide and notes": "Змінити розмір наступного слайда та нотаток",
   "Insert — text, shapes, images, media, tables, charts": "Вставити — текст, фігури, зображення, медіа, таблиці, діаграми",
   "More actions": "Інші дії",
   "Slides — show or hide the slide list": "Слайди — показати або сховати список слайдів",

@@ -14,6 +14,7 @@ import { applyElementFrame, cssColor, fetchFreeOption, gradientLineCoords, paint
 import { cropImgStyle, isIdentityCrop, lerpCrop } from './crop'
 import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
 import { speakerWindowTitle } from './wintitle'
+import { setupSpeakerLayout } from './speakerlayout'
 import { ICONS } from './icons'
 import { t } from './i18n'
 import { lsGet, lsSet } from '../../kernel/src/storage.ts'
@@ -746,6 +747,7 @@ export function startPresentation(
   // with the same renderer from this one app instance and synced directly.
   let speaker: Window | null = null
   let speakerTimer = 0
+  let cleanupSpeakerLayout: (() => void) | undefined
   let speakerStart = 0
   // opening the speaker popup drops the main window out of OS fullscreen on most
   // browsers; this guards the fullscreenchange handler so that bounce doesn't
@@ -1020,18 +1022,27 @@ export function startPresentation(
           navBtn('reduce', '⏸', t('Reduce motion (M)')) +
           navBtn('live', ICONS.broadcast, t('Go live — audience copies follow your slides')) +
           navBtn('lock', '🔒', t('Lock keeps the audience on your slide. It does not hide the rest of the deck, which they already have.')) +
+          `<details class="sv-view"><summary class="sv-btn" title="${t('View')}" aria-label="${t('View')}">${ICONS.eye}</summary>` +
+            `<div class="sv-view-menu">` +
+              `<label><input type="checkbox" value="current" checked>${t('Current slide')}</label>` +
+              `<label><input type="checkbox" value="next" checked>${t('Next')}</label>` +
+              `<label><input type="checkbox" value="rail" checked>${t('Slide thumbnails')}</label>` +
+            `</div></details>` +
         `</div>` +
         `<span class="sv-bcast" hidden title="${t('N viewers')}"></span>` +
       `</div>` +
       `<div class="sv-main">` +
-        `<div class="sv-current"></div>` +
-        `<div class="sv-side">` +
-          `<div class="sv-next-wrap"><div class="sv-label">${t('Next')}</div><div class="sv-nextbox"></div></div>` +
-          `<div class="sv-notes-wrap"><div class="sv-label">${t('Notes')}</div><div class="sv-notes"></div></div>` +
+        `<div class="sv-current" id="sv-current"></div>` +
+        `<div class="sv-side" id="sv-side">` +
+          `<div class="sv-next-wrap" id="sv-next"><div class="sv-label">${t('Next')}</div><div class="sv-nextbox"></div></div>` +
+          `<div class="sv-notes-wrap" id="sv-notes"><div class="sv-label">${t('Notes')}</div><div class="sv-notes"></div></div>` +
         `</div>` +
       `</div>` +
       `<div class="sv-rail"></div>` +
       `<div class="sv-grid" hidden><div class="sv-grid-inner"></div></div>`
+
+    cleanupSpeakerLayout?.()
+    cleanupSpeakerLayout = setupSpeakerLayout(speaker)
 
     const bcastStyle = d.createElement('style')
     bcastStyle.textContent =
@@ -1218,6 +1229,7 @@ export function startPresentation(
     releaseWakeLock()
     reduceQuery.removeEventListener?.('change', onMotionQuery)
     clearInterval(speakerTimer)
+    cleanupSpeakerLayout?.()
     if (speaker && !speaker.closed) {
       if (speakerAdopted) {
         // editor-owned window — leave it open, reset to the idle placeholder so

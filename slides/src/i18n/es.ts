@@ -4,6 +4,11 @@
 import type { Catalog } from '../i18n'
 
 export const es: Catalog = {
+  "View": "Vista",
+  "Current slide": "Diapositiva actual",
+  "Slide thumbnails": "Miniaturas de diapositivas",
+  "Resize slide previews": "Redimensionar las vistas previas",
+  "Resize next slide and notes": "Redimensionar la siguiente diapositiva y las notas",
   "This text box is already bold": "Este cuadro de texto ya está en negrita",
   "Italic": "Cursiva",
   "Underline": "Subrayado",
