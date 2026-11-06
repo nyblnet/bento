@@ -81,5 +81,14 @@
                  directory URL, test key and self-check request from the launching intent. -->
             <meta-data android:name="bento.setup.dev" android:value="${setupDev}" />
         </activity>
+
+        <!-- Link a device (link v1). The same rules as SetupActivity: not exported and no launcher in a
+             release build; a dev build exports it so a rig can. H starts ONLY from the in-app action. -->
+        <activity
+            android:name=".LinkActivity"
+            android:exported="${setupExported}"
+            android:theme="@style/Theme.Tray">
+            <meta-data android:name="bento.setup.dev" android:value="${setupDev}" />
+        </activity>
     </application>
 </manifest>

@@ -163,6 +163,9 @@ dependencies {
     // bento/connect (phase-1 plan A1): BiometricPrompt with a CryptoObject, so the
     // consent key signs only inside an authentication the person just gave.
     implementation("androidx.biometric:biometric:1.1.0")
+    // Link a device: Google's code scanner reads the QR (no camera permission of our own), zxing draws it.
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+    implementation("com.google.zxing:core:3.5.3")
 
     // Test-only. The indexer is held to the shared corpus in home/fixtures/ by
     // a plain JVM test — no emulator, so there is no excuse not to run it.

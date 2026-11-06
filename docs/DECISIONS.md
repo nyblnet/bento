@@ -12146,6 +12146,46 @@ with seven conditions).
   deterministic row byte for byte and checks every verdict;
   `scripts/test-link-mutants.ts` reintroduces fifteen lenient paths into a copy
   of `link.ts` and requires the rig to fail on each.
+
+## 2026-11-03 — Android: device linking, both roles (home/android)
+
+The Android host speaks link v1 (`Link.kt`, held to the `link` section of
+`kernel/fixtures/identity-v1.json` row by row; `LinkFlow.kt` is the two agents).
+
+- **The roles are checked against the device's own state, never taken from the
+  screen or an intent.** H needs an account in this app's vault, N needs none;
+  a scanner also refuses a displayer that claims its own role. A device that
+  holds an account cannot be N and one that holds none cannot be H, so an
+  intent extra can pick the screen but not the role.
+- **H starts only from the in-app "Link a new device".** `LinkActivity` is not
+  exported and has no intent filter in a release build; `LinkEntry` is the rule
+  a future link handler must call (an `id.bento.page/l#` link starts the N side
+  on a device with no account, and on one that holds an account starts nothing).
+  A CI step reads the MERGED release manifest for both link and setup screens.
+- **N is asked for the account's address.** The protocol carries no address to
+  N, and N must check the key it is handed against the binding the directory
+  serves under a pinned key, which a lookup returns only for an address. The
+  person types it with the code.
+- **One attempt at the SAS, one message per key.** A wrong SAS aborts the slot;
+  an agent refuses a second seal under either direction key and dies on any
+  failure, so a retry is a new slot with a new code.
+- **N shows the label H wrote** (it is in N's `dev.`), through the display
+  filter; the platform token is shown through a fixed map and an unknown token
+  is shown as an unrecognised device.
+- **Where the recovery kx is held.** The sealed account of the setup device
+  holds it (as setup already does) and H holds it in memory while it builds
+  msg3. N, on this port, receives it in msg3's sealed payload because the
+  current fixture carries 64 bytes. The ruling is that the payload carries the
+  account scalar only, never the recovery kx; this port adopts it when the
+  fixture changes (the places are `Link.openFinal`, `LinkAgent.approve` and the
+  secrets layout in `awaitFinal`).
+- **Evidence.** `LinkTest` (the fixture), `LinkFlowTest` (two agents against a
+  model of the directory's slot rules and release checks), `LinkLiveTest` (the
+  same agents through the real directory worker; `qa-home-android-link-live.mjs`),
+  and `qa-home-android-link-mutants.mjs` (twenty edits to the link code, each
+  required to turn the rigs red). The screen itself is not yet exercised on a
+  device.
+
 ## 2026-11-03 — link v1: SEALED carries the account key and the address, and the slot wire is fixed
 
 Two follow-ups to the link v1 entry above, both from porting it to iOS.
@@ -12194,3 +12234,38 @@ Two follow-ups to the link v1 entry above, both from porting it to iOS.
   their base64url text. Before this, iOS had to
   choose an encoding that no spec pinned, and two hosts choosing differently
   would never link. The `link.wire` rows are byte for byte both ways.
+
+## 2026-11-04 — Android: linking adopts SEALED = account scalar + address; N confirms the address
+
+Supersedes two bullets of the Android linking entry above (2026-11-03): "N is asked
+for the account's address" and "Where the recovery kx is held".
+
+- **N types only the code.** The address arrives inside SEALED and
+  `Link.openFinal` looks that address up through the directory, under a pinned
+  key, after SEALED has opened and not before. `LinkAgent.awaitFinal` takes no
+  address. A binding the directory serves for some other address, or a scalar
+  that is not the binding's account key, is refused (`address-mismatch`,
+  `key-mismatch`) and the slot is aborted.
+- **N confirms the ADDRESS, and the name is labelled as the account's own.** The
+  screen asks "Link this device to <address>?". The binding's name, when it has
+  one, sits beneath as "The account calls itself “<name>”. That name was chosen by
+  the account; this device has not checked it." A name is whatever the account
+  signed, so it is never the thing confirmed. Nothing is stored and the slot is
+  not deleted until the person answers: `confirm()` deletes the slot and hands the
+  account over to be sealed, `decline()` aborts and deletes the slot and zeroes
+  what arrived.
+- **The recovery kx is not linked.** H seals the 32-byte account scalar and the
+  address (`Link.sealedPlaintext`); `LinkAgent.Holder` and `AccountVault.holder`
+  carry no recovery kx. A linked device holds account ‖ its own device kx (64
+  bytes); the setup device holds account ‖ recovery kx ‖ device kx (96), and
+  `AccountVault.secrets` accepts both lengths. The recovery kx stays on the setup
+  device, as the kernel entry above rules.
+- **The slot wire** is `Link.encodeSlotMsg` / `decodeSlotMsg`, held to the
+  fixture's `link.wire` rows both ways: msg0 and msg1 as unpadded base64url of the
+  text, msg2 and msg3 as they are, 4096 bytes after decoding.
+- **Evidence.** `LinkTest` runs the regenerated `final` (43), `wire` (30) and
+  `release` (32, counted, not ported) rows and asserts which rows reach the
+  lookup; `LinkFlowTest` covers confirm, decline, the lookup being unreachable and
+  an address the answer is not for; `qa-home-android-link-mutants.mjs` has the
+  mutants for each of these. Not yet run on a device or against the live
+  directory.
