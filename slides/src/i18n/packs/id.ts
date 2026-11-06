@@ -19,6 +19,11 @@ import type { Catalog } from '../../i18n'
 export const label = 'Bahasa Indonesia'
 
 export const strings: Catalog = {
+  "View": "Tampilan",
+  "Current slide": "Slide saat ini",
+  "Slide thumbnails": "Thumbnail slide",
+  "Resize slide previews": "Ubah ukuran pratinjau slide",
+  "Resize next slide and notes": "Ubah ukuran slide berikutnya dan catatan",
   "Insert — text, shapes, images, media, tables, charts": "Sisipkan — teks, bentuk, gambar, media, tabel, bagan",
   "More actions": "Tindakan lainnya",
   "Slides — show or hide the slide list": "Slide — tampilkan atau sembunyikan daftar slide",

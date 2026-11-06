@@ -18,6 +18,11 @@ import type { Catalog } from '../../i18n'
 export const label = 'Svenska'
 
 export const strings: Catalog = {
+  "View": "Visa",
+  "Current slide": "Aktuell bild",
+  "Slide thumbnails": "Bildminiatyrer",
+  "Resize slide previews": "Ändra storlek på bildförhandsvisningar",
+  "Resize next slide and notes": "Ändra storlek på nästa bild och anteckningar",
   "Insert — text, shapes, images, media, tables, charts": "Infoga — text, former, bilder, media, tabeller, diagram",
   "More actions": "Fler åtgärder",
   "Slides — show or hide the slide list": "Bilder — visa eller dölj bildlistan",

@@ -23,6 +23,11 @@ import type { Catalog } from '../../i18n'
 export const label = 'ไทย'
 
 export const strings: Catalog = {
+  "View": "มุมมอง",
+  "Current slide": "สไลด์ปัจจุบัน",
+  "Slide thumbnails": "ภาพขนาดย่อของสไลด์",
+  "Resize slide previews": "ปรับขนาดตัวอย่างสไลด์",
+  "Resize next slide and notes": "ปรับขนาดสไลด์ถัดไปและบันทึกย่อ",
   "Insert — text, shapes, images, media, tables, charts": "แทรก — ข้อความ รูปทรง รูปภาพ สื่อ ตาราง แผนภูมิ",
   "More actions": "การกระทำเพิ่มเติม",
   "Slides — show or hide the slide list": "สไลด์ — แสดงหรือซ่อนรายการสไลด์",

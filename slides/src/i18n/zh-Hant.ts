@@ -4,6 +4,11 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
+  "View": "檢視",
+  "Current slide": "目前投影片",
+  "Slide thumbnails": "投影片縮圖",
+  "Resize slide previews": "調整投影片預覽大小",
+  "Resize next slide and notes": "調整下一張投影片與備忘稿大小",
   "This text box is already bold": "此文字方塊已是粗體",
   "Italic": "斜體",
   "Underline": "底線",

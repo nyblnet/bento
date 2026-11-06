@@ -26,6 +26,11 @@ import type { Catalog } from '../../i18n'
 export const label = 'Suomi'
 
 export const strings: Catalog = {
+  "View": "Näkymä",
+  "Current slide": "Nykyinen dia",
+  "Slide thumbnails": "Diojen pikkukuvat",
+  "Resize slide previews": "Muuta diojen esikatselujen kokoa",
+  "Resize next slide and notes": "Muuta seuraavan dian ja muistiinpanojen kokoa",
   "Insert — text, shapes, images, media, tables, charts": "Lisää — teksti, muodot, kuvat, media, taulukot, kaaviot",
   "More actions": "Lisää toimintoja",
   "Slides — show or hide the slide list": "Diat — näytä tai piilota dialuettelo",
