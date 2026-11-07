@@ -137,3 +137,13 @@ runs:
       # computed value, extra frame) live in the rig.
       shell: bento-step {0}
       run: node scripts/test-frame-sandbox.mjs --require-built
+
+    - name: Host routing files for bento.page
+      # site-routing.mjs generates the _redirects that bento.page needs on
+      # Workers static assets (html_handling "none"): every HTML file in the
+      # published tree gets its extensionless / directory rules, or that URL
+      # 404s. Also pins the template properties the move depends on: ACAO on
+      # every path, no route or custom domain in wrangler.toml, .git and
+      # .wrangler never uploaded.
+      shell: bento-step {0}
+      run: node scripts/test-site-routing.mjs
