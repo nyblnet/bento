@@ -110,8 +110,11 @@ export function initCollab(store: Store, editor: Editor): void {
       wireOnlineStatus();
     }
   }
-  tryJoin();
-  store.on(() => tryJoin());
+  // The first tryJoin() runs at the END of this function, once the Share
+  // button it repaints exists: a saved file arrives share-eligible and joins
+  // at boot, and calling wireOnlineStatus() before `const shareB` threw a
+  // ReferenceError that aborted the rest of initCollab (no Share button, no
+  // window.bento.sync, no stamp-on-save). scripts/test-type-reopen-browser.mjs.
 
   // Sharing sends the CRDT state along with every saved copy (doc.collab.sync)
   // so an offline-edited copy can rejoin as a true fork later (PLATFORM §5).
@@ -468,6 +471,8 @@ export function initCollab(store: Store, editor: Editor): void {
 
   renderPresence();
   wireOnlineStatus();
+  tryJoin();
+  store.on(() => tryJoin());
 
   // scripting surface, per PLATFORM §7 (mirrors bento/slides window.bento.sync)
   const w = window as unknown as { bento?: Record<string, unknown> };
