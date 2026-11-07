@@ -137,3 +137,13 @@ runs:
       # computed value, extra frame) live in the rig.
       shell: bento-step {0}
       run: node scripts/test-frame-sandbox.mjs --require-built
+
+    - name: Site verifier catches every way a host can differ
+      # verify-site.mjs compares a served bento.page against the published
+      # tree and, optionally, a second host. Offline: two local servers over a
+      # tree signed with a throwaway key. The identical host must pass with the
+      # update path proven to have run; each mutant (.html redirect, a redirect
+      # hop without a CORS grant, a missing grant, an added security header, a
+      # changed byte, a cacheable 404, a tampered envelope) must fail.
+      shell: bento-step {0}
+      run: node scripts/test-verify-site.mjs
