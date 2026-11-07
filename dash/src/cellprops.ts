@@ -100,7 +100,7 @@
 
 import './cellprops.css'
 import { t } from './i18n.ts'
-import { formatValue, readPattern, typedNumber, viewerDecimal } from './format.ts'
+import { formatValue, formatTemporalValue, readPattern, typedNumber, viewerDecimal } from './format.ts'
 import { readEntryNumber, type EntryNumber } from './import.ts'
 import { formatRef } from './a1.ts'
 import { isFormula } from './cellformula.ts'
@@ -129,8 +129,14 @@ export const DATE_PATTERN = 'yyyy-mm-dd'
  *  Date — a time is stored as `HH:MM` (or `HH:MM:SS`) TEXT, never a fraction
  *  of a day nobody can read in the file. */
 export const TIME_PATTERN = 'hh:mm'
+/** …with seconds, stamped when somebody TYPED seconds — hiding them would show
+ *  a different moment from the one stored. */
+export const TIME_SECONDS_PATTERN = 'hh:mm:ss'
+/** A date with a time of day: ISO order, 24-hour, the same reasoning as Date. */
+export const DATETIME_PATTERN = 'yyyy-mm-dd hh:mm'
+export const DATETIME_SECONDS_PATTERN = 'yyyy-mm-dd hh:mm:ss'
 
-export type FormatKind = 'general' | 'number' | 'currency' | 'percent' | 'date' | 'time' | 'text'
+export type FormatKind = 'general' | 'number' | 'currency' | 'percent' | 'date' | 'datetime' | 'time' | 'text'
 
 export interface FormatChoice {
   kind: FormatKind
@@ -186,6 +192,7 @@ export function buildPattern(c: FormatChoice): string | undefined {
     case 'general': return undefined
     case 'text': return TEXT_PATTERN
     case 'date': return DATE_PATTERN
+    case 'datetime': return DATETIME_PATTERN
     case 'time': return TIME_PATTERN
     case 'percent': return `${digitsFor(dp, c.group)}%`
     case 'currency': return `${c.symbol}${digitsFor(dp, c.group)}`
@@ -201,6 +208,9 @@ export const isTextFormat = (fmt: unknown): boolean =>
  *  `m{1,4}` would otherwise claim `hh:mm` for a date by its minutes. */
 const looksLikeTime = (f: string): boolean => /h/i.test(f) && !/[#0]/.test(f) && !/[yd]/i.test(f)
 
+/** A calendar AND a clock — `yyyy-mm-dd hh:mm`, `d mmm yyyy h:mm AM/PM`. */
+const looksLikeDateTime = (f: string): boolean => /h/i.test(f) && /[yd]/i.test(f) && !/[#0]/.test(f)
+
 const looksLikeDate = (f: string): boolean =>
   /[ymd]/i.test(f) && !/[#0]/.test(f) && /y{2,4}|d{1,2}|m{1,4}/i.test(f)
 
@@ -215,6 +225,7 @@ export function classifyFormat(fmt: string | undefined): FormatChoice {
   const f = (fmt ?? '').trim()
   if (!f) return { ...DEFAULT_CHOICE }
   if (f === TEXT_PATTERN) return { ...DEFAULT_CHOICE, kind: 'text' }
+  if (looksLikeDateTime(f)) return { ...DEFAULT_CHOICE, kind: 'datetime' }
   if (looksLikeTime(f)) return { ...DEFAULT_CHOICE, kind: 'time' }
   if (looksLikeDate(f)) return { ...DEFAULT_CHOICE, kind: 'date' }
 
@@ -330,6 +341,23 @@ export function readEnteredDate(text: string): string | null {
 }
 
 /**
+ * A date WITH a time of day, canonical `YYYY-MM-DD HH:MM[:SS]`, or null.
+ *
+ * The date half is read by `readDate` — `readEnteredDate` from bare typing,
+ * `readTypedDate` in a cell already formatted as a date — so `3/4/2026 9:00`
+ * is refused exactly where `3/4/2026` is. The time half is `readTypedTime`.
+ * A `T` between them is ISO's spelling and reads too; the stored form has a
+ * space, which is what a person reads.
+ */
+export function readTypedDateTime(text: string, readDate: (s: string) => string | null = readTypedDate): string | null {
+  const m = text.trim().match(/^(.+?)(?:T|,?\s+)(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[ap]\.?m\.?)?)$/i)
+  if (!m) return null
+  const d = readDate(m[1])
+  const tm = readTypedTime(m[2])
+  return d && tm ? `${d} ${tm}` : null
+}
+
+/**
  * A time of day, canonical `HH:MM` (or `HH:MM:SS`), or null.
  *
  * Accepts `14:30`, `9:05`, `2:30 pm`, `2:30PM`, `14:30:15`. Unlike a date there
@@ -394,12 +422,22 @@ export function coerceInput(prev: CanvasCell | undefined, text: string): CanvasC
     // (in a Date cell any unambiguous spelling; in a blank one the narrower set
     // `readEnteredDate` allows; in a cell somebody formatted as a NUMBER, none —
     // typing never overwrites a format somebody chose, rule 5)
-    if (choice?.kind === 'date') {
-      const d = readTypedDate(s)
+    // A date or time is STORED as its canonical text (datetime.ts says why the
+    // file never holds a serial) and the stamped format is what makes it a
+    // date to the reader; the formula engine reads the text as the moment.
+    if (choice?.kind === 'date' || choice?.kind === 'datetime') {
+      const d = readTypedDate(s) ?? readTypedDateTime(s)
       if (d) return { ...rest, v: d }
+    } else if (choice?.kind === 'time') {
+      const tm = readTypedTime(s)
+      if (tm) return { ...rest, v: tm }
     } else if (!has) {
       const d = readEnteredDate(s)
       if (d) return { ...rest, v: d, format: DATE_PATTERN }
+      const dt = readTypedDateTime(s, readEnteredDate)
+      if (dt) return { ...rest, v: dt, format: dt.length > 16 ? DATETIME_SECONDS_PATTERN : DATETIME_PATTERN }
+      const tm = readTypedTime(s)
+      if (tm) return { ...rest, v: tm, format: tm.length > 5 ? TIME_SECONDS_PATTERN : TIME_PATTERN }
     }
     return { ...rest, v: s }
   }
@@ -455,6 +493,12 @@ export function recastForFormat(prev: CanvasCell | undefined, fmt: string | unde
   if (kind === 'date') {
     if (typeof v !== 'string') return { cell: base, refused: typeof v === 'number' }
     const d = readTypedDate(v)
+    return d ? { cell: { ...base, v: d }, refused: false } : { cell: base, refused: true }
+  }
+  if (kind === 'datetime') {
+    if (typeof v !== 'string') return { cell: base, refused: typeof v === 'number' }
+    // a plain date is a datetime at midnight and is kept as the date it is
+    const d = readTypedDateTime(v) ?? readTypedDate(v)
     return d ? { cell: { ...base, v: d }, refused: false } : { cell: base, refused: true }
   }
   if (kind === 'time') {
@@ -693,7 +737,7 @@ export interface CellPropsHost {
 /** The presets a SPREADSHEET cell offers — every kind there is, since the cell
  *  is where this kind of sheet decides what a value IS. */
 export const CELL_KINDS: readonly FormatKind[] =
-  ['general', 'number', 'currency', 'percent', 'date', 'time', 'text']
+  ['general', 'number', 'currency', 'percent', 'date', 'datetime', 'time', 'text']
 
 /**
  * A LITERAL translation call per preset, rather than one over a lookup table.
@@ -710,14 +754,16 @@ const kindLabel = (k: FormatKind): string =>
       : k === 'currency' ? t('Currency')
         : k === 'percent' ? t('Percent')
           : k === 'date' ? t('Date')
-            : k === 'time' ? t('Time')
-              : t('Text')
+            : k === 'datetime' ? t('Date and time')
+              : k === 'time' ? t('Time')
+                : t('Text')
 
 /** A quantity for the preview when the cell is empty — something with a shape. */
 const SAMPLE = 1234.5
 /** …and a moment, for the two presets that print one. */
 const SAMPLE_DATE = '2026-03-05'
 const SAMPLE_TIME = '14:30'
+const SAMPLE_DATETIME = '2026-03-05 14:30'
 
 const valueType = (v: unknown): ColumnType =>
   typeof v === 'number' ? 'number' : typeof v === 'boolean' ? 'bool' : 'text'
@@ -887,8 +933,8 @@ export function cellPreview(
   const empty = value === undefined || value === null || value === ''
   const kind = classifyFormat(fmt).kind
   const v = !empty ? value
-    : kind === 'date' ? SAMPLE_DATE : kind === 'time' ? SAMPLE_TIME : SAMPLE
-  return { text: formatValue(v, { type: valueType(v), format: fmt }), sample: empty }
+    : kind === 'date' ? SAMPLE_DATE : kind === 'datetime' ? SAMPLE_DATETIME : kind === 'time' ? SAMPLE_TIME : SAMPLE
+  return { text: formatTemporalValue(v, fmt) ?? formatValue(v, { type: valueType(v), format: fmt }), sample: empty }
 }
 
 /**
