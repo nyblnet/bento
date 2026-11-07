@@ -200,8 +200,8 @@ const T = { region: REGION, stage: STAGE, value: VALUE }
   ok(ev('DATE(2026, 13, 1)') === '2027-01-01', 'and rolls a 13th month into the next year')
   ok(ev('EOMONTH("2026-02-10", 0)') === '2026-02-28', 'EOMONTH finds the last day')
   ok(ev('EOMONTH("2024-02-10", 0)') === '2024-02-29', 'including a leap February')
-  ok(ev('EDATE("2026-01-31", 1)') === '2026-03-03',
-    'EDATE adds months arithmetically — 31 Jan + 1 month overflows, as JavaScript dates do')
+  ok(ev('EDATE("2026-01-31", 1)') === '2026-02-28',
+    'EDATE clamps to the end of a shorter month — 31 Jan + 1 month is 28 Feb, Excel’s answer (it used to overflow into 3 March)')
   ok(ev('DAYS("2026-03-01", "2026-02-01")') === 28, 'DAYS counts between two dates')
   ok(ev('WEEKDAY("2026-08-05")') === 4, 'WEEKDAY is 1-based from Sunday')
   ok(isErr(ev('EOMONTH("not a date", 0)')), 'a non-date is an error rather than 1970')
@@ -346,9 +346,15 @@ const grid = (v: Vec, cols: number): Vec => {
     'a date pattern does NOT print the number with the pattern silently dropped')
   ok(ev('TEXT("2026-01-05", "dd/mm/yyyy")') !== '2026-01-05',
     'nor hand a date back unchanged, which would look like it had worked')
-  const dp = ev('TEXT("2026-01-05", "dd/mm/yyyy")')
-  ok(isErr(dp) && String(dp.why).includes('0 or #'),
-    'it says why: a pattern with no 0 and no # in it is not a number format')
+  // Since date values, a date pattern over a DATE prints it (test-dash-dates.ts
+  // holds the patterns); over a NUMBER it is still refused — dash keeps no serial.
+  ok(ev('TEXT("2026-01-05", "dd/mm/yyyy")') === '05/01/2026', 'a date pattern prints a date')
+  const dp = ev('TEXT(1234, "dd/mm/yyyy")')
+  ok(isErr(dp) && String(dp.why).includes('not a date'),
+    'and says why it will not print a number as a date: dash keeps no serial number')
+  const nonPattern = ev('TEXT(5, "kg")')
+  ok(isErr(nonPattern) && String(nonPattern.why).includes('0 or #'),
+    'a pattern with no 0, no # and no date token is not a number format, and it says so')
   ok(code(ev('TEXT("abc", "0")')) === '#VALUE!', 'and a value that is not a number is refused')
 }
 

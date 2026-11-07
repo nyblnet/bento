@@ -31,6 +31,14 @@ import { sheetQualifiers } from './a1.ts'
 // to "what day is 03/04/2026", is one wrong number waiting for a date change.
 import { formatNumber, readPattern } from './format.ts'
 import { coerce, inferColumn, readEntryNumber } from './import.ts'
+// Dates and times are canonical ISO TEXT, read as moments here — datetime.ts
+// says why the file never holds a serial number.
+import {
+  readTemporal, writeTemporal, temporalArith, compareTemporal, partsOf, dateFromParts,
+  daysInMonth, isoDay, localWallClock, isTemporalPattern, isTimeOnlyPattern,
+  type Temporal,
+} from './datetime.ts'
+import { formatTemporalValue } from './format.ts'
 
 export type Cell = number | string | boolean | null | FormulaError
 export type Vec = Cell[]
@@ -320,8 +328,13 @@ export function dependencies(src: string): string[] {
 //      `"1,234"` is 1234, `"1e3"` is 1000 — and anything else is #VALUE!, never
 //      the digits that happened to be in it. The reading is import.ts's
 //      `readEntryNumber` with import's own tie-break ('.' wins `1,234`), so the
-//      answer does not depend on who opens the file. A date string is #VALUE!:
-//      dash keeps a date as a date, not as Excel's serial number (see VALUE).
+//      answer does not depend on who opens the file. A DATE is not a number:
+//      dash keeps a date as a date, not as Excel's serial number (see VALUE),
+//      so `A1 * 2` over a date is #VALUE! — but `+` and `-` are date
+//      arithmetic (`binop`, datetime.ts `temporalArith`), so `A1 + 1` is the
+//      next day and `B1 - A1` is the days between. A TIME OF DAY is the
+//      fraction of a day it is (`"12:00"` is 0.5), Excel's reading, so that
+//      `(B1 - A1) * 24` is hours and `A1 * 24` over a time is too.
 //   4. A blank is 0 in arithmetic, a boolean is 1 or 0 — unchanged.
 const num = (v: Cell): number | FormulaError => {
   if (isErr(v)) return v
@@ -329,7 +342,14 @@ const num = (v: Cell): number | FormulaError => {
   if (typeof v === 'number') return v
   if (typeof v === 'boolean') return v ? 1 : 0
   const r = readEntryNumber(String(v), { prefer: '.' })
-  return r ? r.n : ERR.value(`"${v}" is not a number`)
+  if (r) return r.n
+  const t = readTemporal(v)
+  if (t?.kind === 'time') return t.days
+  if (t) {
+    return ERR.value(`"${v}" is a date, not a number. Add or subtract days (A1 + 7), ` +
+      'subtract two dates for the days between them, or take it apart with YEAR, MONTH and DAY.')
+  }
+  return ERR.value(`"${v}" is not a number`)
 }
 
 /** Rule 1: what a cell IN A RANGE contributes to an aggregate — a number, or nothing. */
@@ -409,6 +429,17 @@ const largest = (n: number[]): number => {
 
 const REF = '#REF!'
 
+/** The earliest (`dir` −1) or latest (+1) date or datetime in a range, or null. */
+function extremeMoment(v: Vec, dir: 1 | -1): string | null {
+  let best: { t: Temporal; s: string } | null = null
+  for (const x of v) {
+    const t = readTemporal(x)
+    if (!t || t.kind === 'time') continue
+    if (!best || (dir > 0 ? t.days > best.t.days : t.days < best.t.days)) best = { t, s: String(x).trim() }
+  }
+  return best ? writeTemporal(best.t) : null
+}
+
 const AGG: Record<string, (v: Vec) => Cell> = {
   VAR: (v) => variance(numbersIn(v), true),
   VARP: (v) => variance(numbersIn(v), false),
@@ -429,8 +460,11 @@ const AGG: Record<string, (v: Vec) => Cell> = {
   },
   SUM: (v) => numbersIn(v).reduce((a, b) => a + b, 0),
   AVERAGE: (v) => { const n = numbersIn(v); return n.length ? n.reduce((a, b) => a + b, 0) / n.length : ERR.div0() },
-  MIN: (v) => { const n = numbersIn(v); return n.length ? smallest(n) : 0 },
-  MAX: (v) => { const n = numbersIn(v); return n.length ? largest(n) : 0 },
+  // A range of DATES has a first and a last one, and `MAX(A2:A40)` is how
+  // people ask for it. Numbers win when there are any (rule 1 above); a range
+  // holding no numbers and some dates answers with the earliest/latest date.
+  MIN: (v) => { const n = numbersIn(v); return n.length ? smallest(n) : extremeMoment(v, -1) ?? 0 },
+  MAX: (v) => { const n = numbersIn(v); return n.length ? largest(n) : extremeMoment(v, 1) ?? 0 },
   COUNT: (v) => numbersIn(v).length,
   COUNTA: (v) => v.filter((x) => x != null && x !== '').length,
   COUNTBLANK: (v) => v.filter((x) => x == null || x === '').length,
@@ -649,6 +683,18 @@ const SCALAR: Record<string, (a: Cell[]) => Cell> = {
     if (isErr(a[0])) return a[0]
     const fmt = str(a[1])
     if (!fmt) return ERR.value('TEXT needs a format to print with, like "#,##0.00"')
+    // A DATE PATTERN prints a date: `TEXT(A4, "dd mmm yyyy")`. Its value must
+    // BE a date (or a time, or — under a clock-only pattern — a number of
+    // days, which is what `B1 - A1` over two times gives).
+    if (!readPattern(fmt).digits && isTemporalPattern(fmt)) {
+      const shown = formatTemporalValue(a[0], fmt)
+      if (shown !== null) return shown
+      if (typeof a[0] === 'number' && !isTimeOnlyPattern(fmt)) {
+        return ERR.value(`${a[0]} is a number, not a date — dash keeps a date as a date, ` +
+          'not as a serial number. DATE(y, m, d) makes one.')
+      }
+      return ERR.value(`"${str(a[0])}" is not a date or a time, so "${fmt}" has nothing to print`)
+    }
     if (!readPattern(fmt).digits) {
       return ERR.value(`"${fmt}" is not a number format — it has no 0 or # in it. ` +
         'dash formats NUMBERS this way (a prefix, grouping, decimals, %); a date ' +
@@ -756,23 +802,105 @@ const SCALAR: Record<string, (a: Cell[]) => Cell> = {
   DATE: (a) => {
     const y = num(a[0]); const m = num(a[1]); const d = num(a[2])
     if (isErr(y)) return y; if (isErr(m)) return m; if (isErr(d)) return d
-    return isoOf(new Date(Date.UTC(y, m - 1, d)))
+    const day = dateFromParts(y, m, d)
+    return day === null ? ERR.value(`${y}-${m}-${d} is not a day on the calendar`) : isoDay(day)
+  },
+  /** `TIME(h, m, s)` — a time of day; 25 hours wraps to 01:00, as in Excel. */
+  TIME: (a) => {
+    const h = num(a[0]); const m = num(a[1] ?? 0); const s = num(a[2] ?? 0)
+    if (isErr(h)) return h; if (isErr(m)) return m; if (isErr(s)) return s
+    const secs = Math.trunc(h) * 3600 + Math.trunc(m) * 60 + Math.trunc(s)
+    if (secs < 0) return ERR.value('a time of day cannot be negative')
+    return writeTemporal({ kind: 'time', days: secs / 86400 })
+  },
+  /** `TIMEVALUE("2:30 PM")` — the time a string spells, as a time. */
+  TIMEVALUE: (a) => {
+    if (isErr(a[0])) return a[0]
+    const s = str(a[0]).trim()
+    const t = readTemporal(s) ?? readTemporal(clock12(s))
+    if (!t) return ERR.value(`"${s}" is not a time dash can read — it reads 14:30, 14:30:15 and 2:30 PM`)
+    return writeTemporal({ kind: 'time', days: t.kind === 'time' ? t.days : t.days - Math.floor(t.days) })
   },
   EOMONTH: (a) => {
     const d = asDate(a[0]); const k = num(a[1] ?? 0)
-    if (!d) return ERR.value('not a date'); if (isErr(k)) return k
-    return isoOf(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + k + 1, 0)))
+    if (!d) return notDate(a[0]); if (isErr(k)) return k
+    const p = partsOf(d)
+    const day = dateFromParts(p.y, p.mo + Math.trunc(k) + 1, 0)
+    return day === null ? ERR.value() : isoDay(day)
   },
+  /**
+   * `EDATE(start, months)` — the same day `months` later, CLAMPED to the end of
+   * a shorter month: 31 January + 1 month is 28 February, Excel's answer. It
+   * used to overflow into 3 March, which is a date in the wrong month.
+   */
   EDATE: (a) => {
     const d = asDate(a[0]); const k = num(a[1] ?? 0)
-    if (!d) return ERR.value('not a date'); if (isErr(k)) return k
-    return isoOf(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + k, d.getUTCDate())))
+    if (!d) return notDate(a[0]); if (isErr(k)) return k
+    const p = partsOf(d)
+    const total = p.y * 12 + (p.mo - 1) + Math.trunc(k)
+    const y = Math.floor(total / 12)
+    const mo = total - y * 12 + 1
+    const day = dateFromParts(y, mo, Math.min(p.d, daysInMonth(y, mo)))
+    return day === null ? ERR.value() : isoDay(day)
   },
   DAYS: (a) => {
     const b = asDate(a[0]); const c = asDate(a[1])
-    return b && c ? Math.round((b.getTime() - c.getTime()) / DAY_MS) : ERR.value('not a date')
+    if (!b) return notDate(a[0]); if (!c) return notDate(a[1])
+    return Math.floor(b.days) - Math.floor(c.days)
   },
-  WEEKDAY: (a) => { const d = asDate(a[0]); return d ? d.getUTCDay() + 1 : ERR.value('not a date') },
+  /**
+   * `WEEKDAY(date, [type])` — 1 (default) counts Sunday = 1; 2 Monday = 1;
+   * 3 Monday = 0; 11–17 start the week on Monday…Sunday = 1. Excel's table.
+   */
+  WEEKDAY: (a) => {
+    const d = asDate(a[0])
+    if (!d) return notDate(a[0])
+    const type = a[1] === undefined || a[1] === null ? 1 : num(a[1])
+    if (isErr(type)) return type
+    const wd = partsOf(d).wd                       // 0 = Sunday
+    if (type === 1 || type === 17) return wd + 1
+    if (type === 2 || type === 11) return ((wd + 6) % 7) + 1
+    if (type === 3) return (wd + 6) % 7
+    if (type >= 12 && type <= 16) return ((wd - (type - 10) + 7) % 7) + 1
+    return new FormulaError('#NUM!', `WEEKDAY's type is 1, 2, 3 or 11–17, not ${type}`)
+  },
+  /**
+   * `DATEDIF(start, end, unit)` — whole "Y"ears, "M"onths or "D"ays between
+   * two dates, or the remainders "YM", "MD", "YD". Excel's undocumented
+   * favourite; the end must not be before the start (#NUM!, as there).
+   */
+  DATEDIF: (a) => {
+    const s = asDate(a[0]); const e = asDate(a[1])
+    if (!s) return notDate(a[0]); if (!e) return notDate(a[1])
+    const unit = str(a[2]).trim().toUpperCase()
+    const ds = Math.floor(s.days); const de = Math.floor(e.days)
+    if (de < ds) return new FormulaError('#NUM!', 'DATEDIF needs the end date on or after the start date')
+    const p = partsOf({ kind: 'date', days: ds }); const q = partsOf({ kind: 'date', days: de })
+    let months = (q.y - p.y) * 12 + (q.mo - p.mo)
+    if (q.d < p.d) months--
+    switch (unit) {
+      case 'D': return de - ds
+      case 'M': return months
+      case 'Y': return Math.floor(months / 12)
+      case 'YM': return months % 12
+      case 'MD': {
+        if (q.d >= p.d) return q.d - p.d
+        // days since the same day-of-month in the month before the end
+        const pm = q.mo === 1 ? { y: q.y - 1, mo: 12 } : { y: q.y, mo: q.mo - 1 }
+        const from = dateFromParts(pm.y, pm.mo, Math.min(p.d, daysInMonth(pm.y, pm.mo)))
+        return from === null ? ERR.value() : de - from
+      }
+      case 'YD': {
+        let anchor = dateFromParts(q.y, p.mo, Math.min(p.d, daysInMonth(q.y, p.mo)))
+        if (anchor !== null && anchor > de) anchor = dateFromParts(q.y - 1, p.mo, Math.min(p.d, daysInMonth(q.y - 1, p.mo)))
+        return anchor === null ? ERR.value() : de - anchor
+      }
+      default: return new FormulaError('#NUM!', `DATEDIF's unit is "Y", "M", "D", "YM", "MD" or "YD", not "${unit}"`)
+    }
+  },
+  HOUR: (a) => { const t = asMoment(a[0]); return t ? partsOf(t).h : notDate(a[0]) },
+  MINUTE: (a) => { const t = asMoment(a[0]); return t ? partsOf(t).mi : notDate(a[0]) },
+  SECOND: (a) => { const t = asMoment(a[0]); return t ? partsOf(t).s : notDate(a[0]) },
   // --- finance. Every rate is PER PERIOD; nothing here divides by twelve for you.
   PMT: (a) => {
     const r = num(a[0]); const n = num(a[1]); const p = num(a[2])
@@ -824,9 +952,9 @@ const SCALAR: Record<string, (a: Cell[]) => Cell> = {
   TRIM: (a) => str(a[0]).trim().replace(/\s+/g, ' '),
   SUBSTITUTE: (a) => str(a[0]).split(str(a[1])).join(str(a[2])),
   FIND: (a) => { const i = str(a[1]).indexOf(str(a[0])); return i < 0 ? ERR.na() : i + 1 },
-  YEAR: (a) => Number(str(a[0]).slice(0, 4)) || ERR.value(),
-  MONTH: (a) => Number(str(a[0]).slice(5, 7)) || ERR.value(),
-  DAY: (a) => Number(str(a[0]).slice(8, 10)) || ERR.value(),
+  YEAR: (a) => { const d = asDate(a[0]); return d ? partsOf(d).y : notDate(a[0]) },
+  MONTH: (a) => { const d = asDate(a[0]); return d ? partsOf(d).mo : notDate(a[0]) },
+  DAY: (a) => { const d = asDate(a[0]); return d ? partsOf(d).d : notDate(a[0]) },
 }
 
 /**
@@ -837,6 +965,9 @@ const SCALAR: Record<string, (a: Cell[]) => Cell> = {
  * opens it, and re-running is an explicit act.
  */
 export const VOLATILE = new Set(['TODAY', 'NOW'])
+
+/** Dispatched by name in `callFn`: two per-row dates and one unbroadcast holiday list. */
+const WORKDAYS = ['NETWORKDAYS', 'WORKDAY']
 
 export interface EvalCtx {
   /** column name (or id) → its values */
@@ -911,11 +1042,24 @@ function binop(op: string, l: Cell | Vec, r: Cell | Vec): Cell | Vec {
     if (op === '=') return looseEq(x, y)
     if (op === '<>') return !looseEq(x, y)
     if (op === '<' || op === '>' || op === '<=' || op === '>=') {
+      // two moments compare as moments — `"9:05" < "12:30"` is TRUE, which
+      // their text is not, and a date against a datetime compares the instant
+      const c = compareTemporal(x, y)
+      if (c !== null) return op === '<' ? c < 0 : op === '>' ? c > 0 : op === '<=' ? c <= 0 : c >= 0
       const a = typeof x === 'string' && typeof y === 'string' ? x : num(x)
       const b = typeof x === 'string' && typeof y === 'string' ? y : num(y)
       if (isErr(a)) return a
       if (isErr(b)) return b
       return op === '<' ? a < b : op === '>' ? a > b : op === '<=' ? a <= b : a >= b
+    }
+    if (op === '+' || op === '-') {
+      const plain = (v: Cell): number | null => {
+        if (readTemporal(v)) return null
+        const n = num(v)
+        return isErr(n) ? null : n
+      }
+      const d = temporalArith(op, x, y, plain(x), plain(y))
+      if (d) return 'refuse' in d ? ERR.value(d.refuse) : d.value
     }
     const a = num(x); if (isErr(a)) return a
     const b = num(y); if (isErr(b)) return b
@@ -933,6 +1077,8 @@ function binop(op: string, l: Cell | Vec, r: Cell | Vec): Cell | Vec {
 }
 
 const looseEq = (x: Cell, y: Cell): boolean => {
+  const c = compareTemporal(x, y)
+  if (c !== null) return c === 0
   if (typeof x === 'number' || typeof y === 'number') {
     const a = num(x); const b = num(y)
     return !isErr(a) && !isErr(b) && a === b
@@ -1258,15 +1404,66 @@ function correl(xs: number[], ys: number[]): Cell {
 // parses, computes in UTC and formats back — never through the local timezone,
 // which would move a date across midnight for half the world's readers.
 
-const asDate = (v: Cell): Date | null => {
-  if (typeof v !== 'string') return null
-  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})/)
-  if (!m) return null
-  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]))
-  return Number.isNaN(d.getTime()) ? null : d
+/** A date or datetime (never a bare time of day), or null. */
+const asDate = (v: Cell): Temporal | null => {
+  const t = readTemporal(v)
+  return t && t.kind !== 'time' ? t : null
 }
-const isoOf = (d: Date): string => d.toISOString().slice(0, 10)
-const DAY_MS = 86_400_000
+/** Any moment — a date, datetime or time — for HOUR/MINUTE/SECOND. */
+const asMoment = (v: Cell): Temporal | null => readTemporal(v)
+const notDate = (v: Cell | undefined): FormulaError =>
+  isErr(v) ? v : ERR.value(`"${str(v ?? null)}" is not a date dash can read. It reads 2026-03-04; DATE(y, m, d) makes one`)
+/** `2:30 PM` → `14:30`, for TIMEVALUE; anything else unchanged. */
+function clock12(s: string): string {
+  const m = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap])\.?m\.?$/i)
+  if (!m) return s
+  const h = +m[1]
+  if (h < 1 || h > 12) return s
+  const hh = (h % 12) + (/p/i.test(m[4]) ? 12 : 0)
+  return `${hh}:${m[2]}${m[3] ? `:${m[3]}` : ''}`
+}
+
+/**
+ * NETWORKDAYS / WORKDAY's holidays: every date in the argument, as day numbers.
+ * Anything in the list that is not a date is ignored, as Excel ignores it.
+ */
+function holidaySet(v: Cell | Vec | undefined): Set<number> {
+  const out = new Set<number>()
+  if (v === undefined) return out
+  for (const x of (isVec(v) ? v : [v])) {
+    const t = asDate(x)
+    if (t) out.add(Math.floor(t.days))
+  }
+  return out
+}
+const isWeekend = (day: number): boolean => { const wd = partsOf({ kind: 'date', days: day }).wd; return wd === 0 || wd === 6 }
+
+/** `NETWORKDAYS(start, end, [holidays])` — Mon–Fri between, both ends counted. */
+function networkDays(s: Cell, e: Cell, hol: Set<number>): Cell {
+  const a = asDate(s); const b = asDate(e)
+  if (!a) return notDate(s); if (!b) return notDate(e)
+  let lo = Math.floor(a.days); let hi = Math.floor(b.days)
+  const sign = lo <= hi ? 1 : -1
+  if (sign < 0) [lo, hi] = [hi, lo]
+  if (hi - lo > 100_000) return new FormulaError('#NUM!', 'NETWORKDAYS counts at most 100,000 days')
+  let n = 0
+  for (let d = lo; d <= hi; d++) if (!isWeekend(d) && !hol.has(d)) n++
+  return sign * n
+}
+
+/** `WORKDAY(start, days, [holidays])` — the working day `days` working days on. */
+function workDay(s: Cell, k: Cell, hol: Set<number>): Cell {
+  const a = asDate(s)
+  if (!a) return notDate(s)
+  const n = num(k)
+  if (isErr(n)) return n
+  let left = Math.trunc(Math.abs(n))
+  if (left > 100_000) return new FormulaError('#NUM!', 'WORKDAY moves at most 100,000 days')
+  const step = n < 0 ? -1 : 1
+  let d = Math.floor(a.days)
+  while (left > 0) { d += step; if (!isWeekend(d) && !hol.has(d)) left-- }
+  return isoDay(d)
+}
 
 /** The aggregates that count raw entries rather than numbers — they see every arg as given. */
 const RAW_COUNT = new Set(['COUNTA', 'COUNTBLANK', 'COUNTUNIQUE'])
@@ -1308,9 +1505,27 @@ function aggArgs(name: string, args: Node[], ctx: EvalCtx): Vec | FormulaError {
 function callFn(node: Node & { k: 'call' }, ctx: EvalCtx): Cell | Vec {
   const name = node.name
 
+  // The INSTANT is frozen in the document (`ctx.now`, UTC); the reading is the
+  // viewer's own clock. It used to print the instant itself —
+  // `2026-11-07T11:57:37.957Z` — and TODAY() its UTC date, which is
+  // yesterday's date all evening in New York and tomorrow's all morning in
+  // Tokyo.
   if (name === 'TODAY' || name === 'NOW') {
-    const iso = ctx.now ?? new Date().toISOString()
-    return name === 'TODAY' ? iso.slice(0, 10) : iso
+    const t = localWallClock(ctx.now ?? new Date())
+    if (!t) return ERR.value('the document has no readable time to show')
+    return writeTemporal(name === 'TODAY' ? { kind: 'date', days: Math.floor(t.days) } : t)
+  }
+  // The holidays argument is a LIST, never broadcast against; the two dates
+  // are per row, so a column expression `NETWORKDAYS(Start, End)` works.
+  if (name === 'NETWORKDAYS' || name === 'WORKDAY') {
+    const args = node.args.map((x) => evalNode(x, ctx))
+    if (args.length < 2) return ERR.value(`${name} needs a start and an ${name === 'WORKDAY' ? 'number of days' : 'end date'}`)
+    const hol = holidaySet(args[2])
+    const f = name === 'NETWORKDAYS' ? networkDays : workDay
+    const [s, e] = args
+    if (!isVec(s) && !isVec(e)) return f(s, e, hol)
+    const width = Math.max(isVec(s) ? s.length : 0, isVec(e) ? e.length : 0)
+    return carryShape(Array.from({ length: width }, (_, i) => f(at(s, i), at(e, i), hol)), s, e)
   }
   // BEFORE the aggregates, and before broadcasting: these read the vectors as
   // they were BOUND — shape, view mask and all — and may hand back a rectangle.
@@ -1578,7 +1793,7 @@ export function recalc(sheet: TableSheet, now?: string): RecalcResult {
 /** Every function name this build knows — the agent surface needs to say. */
 export const FUNCTIONS: string[] = [
   ...Object.keys(AGG), ...CONDITIONAL, ...MULTI, ...LOOKUPS,
-  ...Object.keys(RAW), ...Object.keys(SCALAR), ...Object.keys(SHAPED), ...VOLATILE,
+  ...Object.keys(RAW), ...Object.keys(SCALAR), ...Object.keys(SHAPED), ...VOLATILE, ...WORKDAYS,
 ].sort()
 
 // --- strict syntax check (the formula dialog) --------------------------------

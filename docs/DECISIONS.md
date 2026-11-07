@@ -12194,3 +12194,35 @@ Two follow-ups to the link v1 entry above, both from porting it to iOS.
   their base64url text. Before this, iOS had to
   choose an encoding that no spec pinned, and two hosts choosing differently
   would never link. The `link.wire` rows are byte for byte both ways.
+
+## 2026-11-07 — bento/dash: a date is a value, stored as the ISO text it always was
+
+Dates and times on a dash sheet now compute (`=A4+1`, `=B1-A1`,
+`=TEXT(A4, "dd mmm yyyy")`). What was decided, so nobody re-derives it:
+
+- **The stored form does not change.** A date stays its canonical text in the
+  file: `YYYY-MM-DD`, `YYYY-MM-DD HH:MM[:SS]` (a space; a `T` is read, never
+  written), `HH:MM[:SS]`. The cell's date or time format says what the reader
+  sees. The formula engine reads the text as the moment (`dash/src/datetime.ts`)
+  and writes results back in the same spellings. Excel's serial numbers were
+  rejected: an older dash would have treated them as plain numbers, summing,
+  charting and printing 46085. With text, an older build shows the date, cannot
+  compute with it, and saves it back byte for byte. `test-dash-dates-oldshell.ts`
+  runs the real dash 0.2.0 and 0.3.0 code against the new values.
+- **Arithmetic follows Excel where Excel means something.** A date plus or
+  minus a number is a date. A date minus a date is a number of days. A date
+  plus a time is a datetime. A time minus a time is a number (a fraction of a
+  day, which a Time cell shows as a duration). `date + date`, `number − date`
+  and `date × n` are refused with a reason, never turned into a number. A time
+  of day reads as its fraction of a day in other arithmetic (`A1*24`).
+- **Datetimes are wall-clock, with no zone.** Adding an hour to 01:30 on a
+  spring-forward night gives 02:30.
+- **NOW() and TODAY() read the frozen instant on the viewer's clock.** The
+  instant in the file (`doc.modified`) is the same for everybody. The date and
+  time shown are local to whoever opens it, as in Excel. This replaces "a
+  saved file shows the same date to everyone": that rule printed the raw UTC
+  instant, and showed the wrong date for half the day in the Americas and Asia.
+- **Ambiguous entry is unchanged.** `3/4/2026` is still kept as text. Whether
+  to guess from the locale is a pending maintainer decision.
+- **EDATE clamps to the end of a shorter month**, as Excel does: 31 January +
+  1 month is 28 February.
