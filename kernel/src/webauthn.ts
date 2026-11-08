@@ -66,6 +66,8 @@ const FLAG_UP = 0x01, FLAG_UV = 0x04, FLAG_BE = 0x08, FLAG_BS = 0x10, FLAG_AT = 
 export const MAX_AUTH_DATA = 1024
 export const MAX_CLIENT_DATA = 4096
 const MAX_DEPTH = 16
+/** WebAuthn's minimum challenge length; bento's (a SHA-256) is 32. */
+export const MIN_CHALLENGE = 16
 
 export interface Assertion {
   /** base64url, no padding */
@@ -79,13 +81,18 @@ export interface Assertion {
 export interface AssertionOpts {
   /** the passkey's raw uncompressed P-256 point, base64url (65 bytes) */
   publicKey: string
-  /** the exact challenge bytes expected (for a statement: SHA-256 of its text) */
+  /** the exact challenge bytes expected (for a statement: SHA-256 of its text).
+   *  At least 16 bytes (WebAuthn's minimum); a shorter one is a caller error, `grammar`. */
   challenge: Uint8Array
   /** the relying party id the passkey belongs to */
   rpId: string
   /** the closed list of origins allowed to have produced the assertion */
   origins: readonly string[]
-  /** the stored signature counter, when the caller keeps one */
+  /** The stored signature counter for this credential. Pass it ONLY where
+   *  assertions are verified in the order they were made (the directory, per
+   *  credential, as each arrives). A peer verifying a log offline or out of
+   *  order must leave it out: a later-arriving older statement carries a
+   *  lower count and would be refused. Synced passkeys report 0 and 0, which passes. */
   storedSignCount?: number
 }
 
@@ -280,7 +287,7 @@ export async function verifyAssertion(a: Assertion, opts: AssertionOpts): Promis
 async function verify(a: Assertion, opts: AssertionOpts): Promise<Verdict<AssertionInfo>> {
   if (!a || typeof a !== 'object') return no('grammar')
   if (typeof opts.rpId !== 'string' || opts.rpId === '' || !Array.isArray(opts.origins) || opts.origins.length === 0 ||
-    !(opts.challenge instanceof Uint8Array)) return no('grammar')
+    !(opts.challenge instanceof Uint8Array) || opts.challenge.length < MIN_CHALLENGE) return no('grammar')
 
   const ad = b64uDec(a.authenticatorData)
   const cdj = b64uDec(a.clientDataJSON)

@@ -33,7 +33,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 // WEBAUTHN_FIXTURE: check a fixture generated for another rp id (gen-webauthn-vectors.mjs --rp … --out …)
 const F = JSON.parse(readFileSync(process.env.WEBAUTHN_FIXTURE || join(root, 'kernel/fixtures/webauthn-v1.json'), 'utf8'))
 
-type Row = { name: string; key: string; challenge: string; text: string; assertion: { authenticatorData: string; clientDataJSON: string; signature: string };
+type Row = { name: string; key: string; challenge: string; text: string | null; assertion: { authenticatorData: string; clientDataJSON: string; signature: string };
   storedSignCount?: number; expect: 'accept' | 'reject'; reason?: string; highS?: boolean; extraKeys?: boolean; be?: boolean; bs?: boolean }
 const rows: Row[] = F.rows
 
@@ -45,7 +45,8 @@ for (const r of rows) {
   let v: { ok: boolean; reason?: string; value?: { highS: boolean; be: boolean; bs: boolean; signCount: number } }
   try {
     const ch = b64uDec(r.challenge)!
-    ok(b64uEnc(await statementChallenge(r.text)) === r.challenge, `${r.name}: challenge is SHA-256 of its text`)
+    // text null: the row pins the caller's challenge bytes directly (the length rows)
+    if (r.text !== null) ok(b64uEnc(await statementChallenge(r.text)) === r.challenge, `${r.name}: challenge is SHA-256 of its text`)
     v = await verifyAssertion(r.assertion, { publicKey: F.keys[r.key], challenge: ch, rpId: F.rpId, origins: F.origins,
       ...(r.storedSignCount !== undefined ? { storedSignCount: r.storedSignCount } : {}) }) as typeof v
   } catch (e) { v = { ok: false, reason: `threw: ${(e as Error).message}` } }
@@ -72,6 +73,8 @@ const REQUIRED: Array<[string, string]> = [
   ['sw/rp-parent', 'rp'], ['sw/up-clear', 'up'], ['sw/uv-clear', 'uv'], ['sw/type-create', 'type'],
   ['sw/challenge-other', 'challenge'], ['sw/challenge-noncanonical', 'challenge'], ['sw/challenge-padded', 'challenge'],
   ['sw/attested-data-flag', 'grammar'], ['sw/trailing-bytes-without-ed', 'grammar'], ['sw/backed-up-not-eligible', 'grammar'], ['sw/byte-order-mark', 'grammar'],
+  ['sw/der-negative', 'signature'], ['sw/der-s-zero', 'signature'], ['sw/der-r-s-zero', 'signature'],
+  ['sw/challenge-empty', 'grammar'], ['sw/challenge-15-bytes', 'grammar'], ['sw/challenge-16-bytes', 'accept'],
   ['sw/der-non-minimal', 'signature'], ['sw/der-trailing-byte', 'signature'], ['sw/der-sequence-length', 'signature'], ['sw/invalid-utf8', 'grammar'], ['sw/raw-not-der', 'signature'], ['sw/der-r-is-n', 'signature'],
   ['sw/client-data-tampered', 'signature'], ['sw/another-key', 'signature'], ['sw/key-off-curve', 'key'],
   ['sw/sign-count-0-stored-0', 'accept'], ['sw/sign-count-5-stored-5', 'sign-count'], ['sw/sign-count-0-stored-3', 'sign-count'],

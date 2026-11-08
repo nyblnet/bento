@@ -279,6 +279,12 @@ for, and regenerating with `--rp` / `--origin` produces rows for others.
   list: no subdomain, parent, port, case or trailing-slash forgiveness),
   challenge as canonical base64url of exactly the expected bytes, `crossOrigin`
   absent or boolean `false` (never the string), and no `topOrigin` key.
-- STRICT DER: minimal integers, nothing trailing, the SEQUENCE length exact.
+- STRICT DER: minimal integers, no negative integer (a top-bit r or s needs its
+  0x00 pad), r and s in 1..n−1 (`sw/der-r-s-zero` is the CVE-2022-21449 shape),
+  nothing trailing, the SEQUENCE length exact.
+- The caller's challenge is at least 16 bytes; shorter is `grammar`. Rows with
+  `text: null` give their challenge directly.
+- Pass `storedSignCount` only where assertions are verified in the order they
+  were made (the directory, per credential); an offline peer leaves it out.
 - `sw/` rows come from a software authenticator: the inputs a browser will not
   produce but a self-asserting client can.

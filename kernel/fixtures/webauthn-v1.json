@@ -6,13 +6,13 @@
     "https://signin.id.bento.page"
   ],
   "keys": {
-    "real": "BKziI-5bMSChhWjfXwjIS0Fh3WHJfv6BmJ9aYmZPrMtTxomLONS53dd1zB-Emwj9PIo5eemOcdizItmDllZ0uVw",
-    "realParent": "BMBqp3SH2AqXEt0KL1NP1osew59HsbEe5uRIilSNnaVhtwsC1_kIxDOkxuehSq2taN35Cm4Es8InNTrjc9TRQLg",
-    "realChild": "BKnUBhWKaRBSRJpZUbdkNPZjmUqx1y-7PZwMa31h9mvYt9KLqfpcvfVfD8tpTx-6qsd82_95L6sDkAyOS_Zqagc",
-    "sw": "BKQehVhxXySzU_Ils0YKJpYZndA7ElnNviJww6WWrvQ6WzPzZgzOvYgP7_9D1AEbekQrczp0xSN5wgi5VUTHdYg",
-    "other": "BMIs62fGRTBphcspJUeFeLqGnATET3YfoIfAnf6cVD3M3IARXZAGEFvXy_F8bq_S14QmKyBt1UP-uFnzA_yt7R4",
-    "offCurve": "BKQehVhxXySzU_Ils0YKJpYZndA7ElnNviJww6WWrvQ6WzPzZgzOvYgP7_9D1AEbekQrczp0xSN5wgi5VUTHdYk",
-    "compressed": "AqQehVhxXySzU_Ils0YKJpYZndA7ElnNviJww6WWrvQ6"
+    "real": "BD3oA_D_pq6sBmLj5JbfvYFrapaLwDdv9AkGKVYj1prsLzugEi90gX7k37V4z65Nu3Bnm-RsQIFO4K9cI6w0Nwc",
+    "realParent": "BCOrj1YPUylbrwhHg3RkCwaFdnIOiEgWBuEa2-q1JSZ0pwkh42t5hS_lIpsDzzsqZHhc19sehGV-HyuiNIWNSbI",
+    "realChild": "BEOcGHVXompG3nrJ9RCWEtDH3Tk-u1KzApVrmUdHaPqbo-BnQU0qOeZCmcWDQDg6F8u0y_Oe4I3Nm55j6Mc2tyQ",
+    "sw": "BN6SWofVB9gFBacgYovqhOt9GMgaqvGAGec71FTNc0BRryvWlxpC2FA2_MH066oP5fT1fqRkBRhSBa0C3igOodI",
+    "other": "BArG5-Q7wBSAcphZSzpgx1clgc8rFl3k4DMjbhcyjEzNhzDigcMUVryktH-6XXjkYKID33iL7o5Jcewm1nLMAPc",
+    "offCurve": "BN6SWofVB9gFBacgYovqhOt9GMgaqvGAGec71FTNc0BRryvWlxpC2FA2_MH066oP5fT1fqRkBRhSBa0C3igOodM",
+    "compressed": "At6SWofVB9gFBacgYovqhOt9GMgaqvGAGec71FTNc0BR"
   },
   "rows": [
     {
@@ -24,7 +24,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAg",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZ2F6UnFhaG1fdWVKV1RqNFlzN1hnb0oxQnZuVVZrQVJ2NFVTM1hPSFV5RSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEQCIBP1qh09qwjBwvwJ79OtzH6FpoOvXk1zU2621cmPsVlJAiAcSlSoYd2E5oeSNMuCXBHYphR_Y8bilWPXNzWnMTCGxA"
+        "signature": "MEQCIFH4KzHNzp802KmK3ETI0NIkrdl6hWr-wo6uHT8vlt39AiBKNWnUTsxZKwf3dyrt-zH1nFnGKOjbZTQLRN2W9fh6Xw"
       },
       "highS": false,
       "extraKeys": false,
@@ -38,11 +38,11 @@
       "text": "wdev.real.1",
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAw",
-        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQTNpR2VuOEhOSDFrdHZvR0JiWU54OGJsdXRhQTVIUEdhRHdYdlFmeDVsTSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIm90aGVyX2tleXNfY2FuX2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIFNlZSBodHRwczovL2dvby5nbC95YWJQZXgifQ",
-        "signature": "MEYCIQCoVqGTQQnZ95tGxyp4pOudrXIxBgzmCMlnRZIV0o7ZHQIhAPl_flsMHix7lk09wD2jAlAGJqUL77s8DruQAKBWI_Zn"
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQTNpR2VuOEhOSDFrdHZvR0JiWU54OGJsdXRhQTVIUEdhRHdYdlFmeDVsTSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQDGylJWkZM6g3xsap0Cpfbo91AtkwPCmVGmXocCLCLAnAIgTsmKM3Ty5Wuv_cajDsXv6f_vZ8gpEKYfTMj-8bgqsSU"
       },
-      "highS": true,
-      "extraKeys": true,
+      "highS": false,
+      "extraKeys": false,
       "expect": "accept"
     },
     {
@@ -54,7 +54,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAABA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiVlhqcE9lODZFVFdVd1JONjZBOWlJLWdReFVEWE83bG4xQzBJNklYeHlnTSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEQCIG4y3P7uVKQWjINA7AYZGNAydDUdPU3cpdyxhKX5UKyjAiBAtXT-3poV3FqqRZfSJ4fVNxjjN6i-ar9OpDs637Ho6Q"
+        "signature": "MEQCIE7BFX1fDyk3bbZ8PVcyLJ0xwXc0XVlGws3pp-o1UE9aAiARQ-YUJIYOU4PrcwNamDGze-0quW0DwTPXiifeWRnVBQ"
       },
       "highS": false,
       "extraKeys": false,
@@ -68,11 +68,11 @@
       "text": "wdev.real.3",
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAABQ",
-        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoid0MycUduNV9DanNtd2psZVhSYVVzWm9SQnFXSlBIekRaald4OF84Q1hMTSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIm90aGVyX2tleXNfY2FuX2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIFNlZSBodHRwczovL2dvby5nbC95YWJQZXgifQ",
-        "signature": "MEUCIQD_voM5oJkWAJDbVwAApbzjtVeWoDknRgbKjHISVQlTAgIgdayu0XWiR0vt2FKCAVqLH1DVSUt54kpoWzwfiA8DLMM"
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoid0MycUduNV9DanNtd2psZVhSYVVzWm9SQnFXSlBIekRaald4OF84Q1hMTSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEQCIFZy8Q_AoY5VyX4WKYHm5OwErIZbMNJ94a6SKnHTbV7eAiAcg5vdiMuvo8mFs6ENEvYOQ7LvURfaM3JWI87bWdwxvg"
       },
       "highS": false,
-      "extraKeys": true,
+      "extraKeys": false,
       "expect": "accept"
     },
     {
@@ -84,9 +84,9 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAABg",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiaS1CQ196VkE3azNCQnRlUzViYW5xN0JkMjE3UlNHMXExVXVlSzV1VWI2NCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEQCIFfUQJkyehgpXhjIFrm_itdSYrHD77rcc4xevaSGoMzbAiAVkurtwloAF_5FONXGyDWc8ShttJu9AUnIknuqeK9Gdw"
+        "signature": "MEYCIQCslL5oNNufQ6GACv8aWbPRVERYrhZn40wcjwPyfm1mQAIhAM3uKtUvVUj3Nks0L2XQE7I-iM1GHh3-RyD-Qoxt9-_-"
       },
-      "highS": false,
+      "highS": true,
       "extraKeys": false,
       "expect": "accept"
     },
@@ -99,7 +99,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAABw",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiekNZOF9UX0s4a0g1V29VRXJKV0JOXzZNT0VBSXg4THBYcmVPWURfWlhRYyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIm90aGVyX2tleXNfY2FuX2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIFNlZSBodHRwczovL2dvby5nbC95YWJQZXgifQ",
-        "signature": "MEUCIQCA_mwBlevS1HGKgjiEyukyqRcamVwc5KaVuNmjK2BVHwIgHxj2DpK20Zrf32ILdN0YOshJlCGKGfAO8tT5dBfxMMA"
+        "signature": "MEQCIECYgk9nh4_TtSids8Bz-nYKs0AjUxsIb55Fgtu4RZmoAiBicbP-aAS1ju1ck_O0iUMY-Z-jlnJkW4lmPE_J0YvrIA"
       },
       "highS": false,
       "extraKeys": true,
@@ -114,9 +114,9 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAACA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiNE03cFdUSGl6RjAzVjY3UExPX19vbTZIaHMzbDc4TjBLWkVmNkJxYVRJYyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIELzIg2bW_2Ad5I0OPx3b20QihyXE7k9o9tzd2fkjprXAiEA8jRifmiaGaZfRtUzo-gsGwzR4wV3P5Uy0lHIcxQEP9w"
+        "signature": "MEUCIQDZfVX0EVYkszVeuxjjRFxfIM7KAyqEGV90KJzkd-_KlwIgIQpl2eEs0dv-b9-BjsYy5DYMrHraqbeA4lp5lL3jx1Q"
       },
-      "highS": true,
+      "highS": false,
       "extraKeys": false,
       "expect": "accept"
     },
@@ -129,7 +129,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAACQ",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiWHprZDB6em5ISTdOOUlvR1BnNjdONWN5STM2SXRSa3N6c05ocGo1YXZqcyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEYCIQDweKJluT7yedkORwzwOFrGthGaQANiJ1kwniTq2kdQPAIhAPj78qSXJQnKrU08vfG42WnvkPNmfJ45YQ00GpqD-plL"
+        "signature": "MEYCIQCviCXWIsohbE1_I5CJzJdnwA6qoKcRBGkoD6xUUDou6AIhAIr7IBMarAFxmJCq9FOH-QQMcdnO28bEKAOgoRRCSx4j"
       },
       "highS": true,
       "extraKeys": false,
@@ -143,11 +143,11 @@
       "text": "wdev.real.8",
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAACg",
-        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSHZrNGwyQmJGUUFfWVhtMEhxZU9sY0pPTzQyT1ZBb2NXdEVkRWxKbjN1ZyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIm90aGVyX2tleXNfY2FuX2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIFNlZSBodHRwczovL2dvby5nbC95YWJQZXgifQ",
-        "signature": "MEUCIQDqbYjUEwKD2pFjVju6iFtDJIO_o6jOSAfJgZhZn_yvbAIgJbdvtfgKD9OsM7cDE0nPcCw4PIf_2WRJoXNaugyILaU"
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSHZrNGwyQmJGUUFfWVhtMEhxZU9sY0pPTzQyT1ZBb2NXdEVkRWxKbjN1ZyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEYCIQDVzVn3xIDTy6Czil_HVA-bl-Mi1J8qZgfev37mBSuKJwIhAJXBGT8EqxS9W5eIIWOr3KGoS0hZA2W-qmBXGX26A8oo"
       },
-      "highS": false,
-      "extraKeys": true,
+      "highS": true,
+      "extraKeys": false,
       "expect": "accept"
     },
     {
@@ -159,7 +159,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAACw",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiRHk5QmxIWFQ0N3c0UGV3V0t1U2FmbGg5Q18xa3dsQlNiQ0JUekxqM0FhNCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIHf1BryD3MTN8VQTihBbf5AhHjLzWIam8ivFK-GmK1pAAiEA3kbSN8yUVUnPSAyxC80EWOU_qCMAdRTqvBGOOsppwNw"
+        "signature": "MEUCIDJzt1P-RqqL6vWEr7u2LtfyndbsU_3lz7nptlgjLkncAiEAnkU7eGPnrPXqJTiHqMG6yGVvahqI6VPrqveJSZ8m7g4"
       },
       "highS": true,
       "extraKeys": false,
@@ -174,9 +174,9 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAADA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoickVKRFVlMzlHOUhsSl9Qd0NGd2Rxcmthd0ZPVlBxYjRjaExDUFc1V2N2SSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIQDJxz1l-idwWlICoiUl5gTgFDDUQwnMD5rD4L7h5RacywIgYCUHlqmkdFnNgNmoeuOjk__C88qoyrJvAdBEoy_6WGA"
+        "signature": "MEUCIBe0SbwnDGUd6462BoQE992c0ass2bb64MuCNU3W0VrmAiEA2yiV-wRSa7Fwgv0L0jLNvo0UKcrYr3Wz_Cj3fLCRhis"
       },
-      "highS": false,
+      "highS": true,
       "extraKeys": false,
       "expect": "accept"
     },
@@ -189,7 +189,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAADQ",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZlk4b1JjV21QMnZSNERJci1CcHFnQkpYZUhsOEJ0emZxR3Q2d3RQNkVqTSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEQCIBs21sVmPz6kmHOr4L3rx-Tira-5FF0AGReQiDBF5TuWAiAtZ7zNg7PM8HxvK4alWR6x_TjRC4RCUWZkVQEAiWxNwg"
+        "signature": "MEUCIQDica6QvYmPJIhlf3NYNS0quT-KPp7UBh7U6QIMr5gfHAIgBilv3_gC7a6ce0PezrIu2UG1izaGrc4Payb6H3ODRQI"
       },
       "highS": false,
       "extraKeys": false,
@@ -203,11 +203,11 @@
       "text": "wdev.real.12",
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAADg",
-        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiRGxNdVVjcmpnaEVuc0hvZkNKNF85Z2xnTDFyQXJSaEFwbTNHQmZRWDBQayIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIm90aGVyX2tleXNfY2FuX2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIFNlZSBodHRwczovL2dvby5nbC95YWJQZXgifQ",
-        "signature": "MEUCICa8_91Bhsbv-Ftk4IY178O451d4ZJG2bdSGT6mBCo5MAiEAiLd48u1BPFS5eKADmdr7ytCF0JkO9Du-kb6UfJNjAak"
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiRGxNdVVjcmpnaEVuc0hvZkNKNF85Z2xnTDFyQXJSaEFwbTNHQmZRWDBQayIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQDQrMubQGtCeG1i0-uIDcI3YT6esRU2lqkzqKJv6Z0fKAIgajX8Fsx4nIx-lm_HZ4DNO4n8NV89BsV5GOgLNP-AIvI"
       },
-      "highS": true,
-      "extraKeys": true,
+      "highS": false,
+      "extraKeys": false,
       "expect": "accept"
     },
     {
@@ -218,11 +218,11 @@
       "text": "wdev.real.13",
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAADw",
-        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiNXVoenROMlo2T29tSHhXTXV0OFEwcV90M0ttenFWcHdvd1dmVHJhbFlKbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIm90aGVyX2tleXNfY2FuX2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIFNlZSBodHRwczovL2dvby5nbC95YWJQZXgifQ",
-        "signature": "MEUCIQDJgO-0_E9Ml3ckIGxrhJBerZxVXZYszpEFzEhGkpM7uAIgRyPijT5NllBmugDjZboP7xhC6ptFnOgBK7rkK98tMiI"
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiNXVoenROMlo2T29tSHhXTXV0OFEwcV90M0ttenFWcHdvd1dmVHJhbFlKbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIDSmWvBDE-qITaNT2mm7VtuIhybY_9L0YrYQGcV0uPMWAiEAyvERLa8aIBMYeiAMpIIAk4JH_jQeU6xzCcUvKayi64g"
       },
-      "highS": false,
-      "extraKeys": true,
+      "highS": true,
+      "extraKeys": false,
       "expect": "accept"
     },
     {
@@ -234,9 +234,9 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAEA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidXdEeDR2UUVMRG01TG8zQmNNRjFOZmptR3hWSUVwMEdBLWMyZE1pc0s2NCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEYCIQDSUJNt1kcStoHBtmZ6NLQWAA28PMpDipZwH3nxNGv6hQIhAOkRksa1-IMzvqSuhz8Bu_2nFczz_3tzMRDFjtHIfX1D"
+        "signature": "MEQCIEygDUQHtS869FvR0fxyW4zRtkUehDt7VU5giz7cxEW8AiBWg5Oavei0wr7UBv1_UTDN5jmgt6HGs3ZlK7WQV02nGw"
       },
-      "highS": true,
+      "highS": false,
       "extraKeys": false,
       "expect": "accept"
     },
@@ -248,11 +248,11 @@
       "text": "wdev.real.15",
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAEQ",
-        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiNTc1M2xOQkNETkpfNFdpb1hja043QnJrNEdLa3JOVTJ6WUVLbUxuT0FUQSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIm90aGVyX2tleXNfY2FuX2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIFNlZSBodHRwczovL2dvby5nbC95YWJQZXgifQ",
-        "signature": "MEUCIA-b28jtLmGFOk2W5485h_Oh_3VlcFNsjQG9yPMEndarAiEAplqgrS5Yi1sWycEfL0dAaJW4blQYqPxS49HaZaM8kyk"
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiNTc1M2xOQkNETkpfNFdpb1hja043QnJrNEdLa3JOVTJ6WUVLbUxuT0FUQSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIBFrD24VbHcIjeIXd5V8HIM-B5jTb_d5vTvyOftF02lpAiEAvHeWBoA04-Z5A40-3e0XSednPA1en_IZP6S2wekH_pw"
       },
       "highS": true,
-      "extraKeys": true,
+      "extraKeys": false,
       "expect": "accept"
     },
     {
@@ -263,11 +263,11 @@
       "text": "wdev.real.16",
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAEg",
-        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoib1lvM3Azc2duY3NjV3RtTmhOLXlMM2dDMW1sMk1OenA1LVlsVkJreG9MOCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEYCIQDIpWD-s9Z9W77bw16IwwAQiPCZ-AOmeVIUfloMEoYtUgIhAPGn7TTQAKlN2pJXJ-mD7ycBVtiOlu413NXWBhNdUJlw"
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoib1lvM3Azc2duY3NjV3RtTmhOLXlMM2dDMW1sMk1OenA1LVlsVkJreG9MOCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIm90aGVyX2tleXNfY2FuX2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIFNlZSBodHRwczovL2dvby5nbC95YWJQZXgifQ",
+        "signature": "MEUCIQCotfBkX4NxjYMw24FL7YvxcC07oR-z8dtdlpWp3oh82wIgCp0yijWXueijhaJKiYHHzj-myq_pMPOrID8ZYw0Hm3c"
       },
-      "highS": true,
-      "extraKeys": false,
+      "highS": false,
+      "extraKeys": true,
       "expect": "accept"
     },
     {
@@ -279,7 +279,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAEw",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQU5maHI5c2QtYWtLd3NweEZlUkxIclE3Tll4WHNiZWVvMkF6T0ZEbm9fcyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEYCIQDCD_VwsJluPebDfB6-VatIj96oafrxfXQNNvUeViJmegIhAIsBzGOed0PAdFgC2P0nrVLnklTERG7A6yQI0dbSr90Q"
+        "signature": "MEYCIQD59SocFMy16iiMZG1B61xbeST-w__DTquBIQ3Pmt_gQAIhAIQTqcAvvJMIOrZjfB90QhNeM3K--DEgohoh4CzC_nh5"
       },
       "highS": true,
       "extraKeys": false,
@@ -294,7 +294,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAFA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiOEcwS3NUVGNzQWlCLVdwQkFOckZpOUZZcGg2MnFGZUxRbk5PWjJrUlFFZyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCID7NtSGDDzVFMj0a2CK8-LVMOiGv-pbUPeb3r_IFdV94AiEA1DxGOGdZSoHLnof0ZwZOSVHOxMPOd-p_5GkZMRzpBrU"
+        "signature": "MEUCIGumJhbp-_uQ2HLZ3Nh2XsJyIkwS3gpHbKGFP-oodMmjAiEA-O0QbF_owsD9lxuvdABPo953CykA0vtBrbMoQ96SyCo"
       },
       "highS": true,
       "extraKeys": false,
@@ -308,11 +308,11 @@
       "text": "wdev.real.19",
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAFQ",
-        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiRFMxSS05VHlERjRqV3ZzMFkzNjBGLTRlVlpVRHp4YjlEbHhMMVoydld0OCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIERAl3P69_0fepI9-QM-hvSnbiwbBJNTF5cnrQFzAv0AAiEA3PN-js7cjOX1tePGrO-yOlwLwSQsAN0vVaLNqg1qsyU"
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiRFMxSS05VHlERjRqV3ZzMFkzNjBGLTRlVlpVRHp4YjlEbHhMMVoydld0OCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIm90aGVyX2tleXNfY2FuX2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIFNlZSBodHRwczovL2dvby5nbC95YWJQZXgifQ",
+        "signature": "MEQCIEYOxWEMAZly_Uy9Q8Eo85tRsRPpeXxXDzdPE0H2MFf-AiAbxCDDZnBVYPol8q6A54-u4AqMEZPZCnfXikEgIjATUg"
       },
-      "highS": true,
-      "extraKeys": false,
+      "highS": false,
+      "extraKeys": true,
       "expect": "accept"
     },
     {
@@ -324,9 +324,9 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAFg",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSm1TUzFSNFgxV1ZWQ19PWGJFUkRWalZzUnN5VFBsMC1yOFB2LWx1M1V4byIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIEy-9NqsRMPkcUm2hpkUEa3gDpsV4wCuuAKnRL-iIhpwAiEA6OB3m2kvksoJzVicEh2H9GPaebbix-FBd9yLu8rsvzU"
+        "signature": "MEQCIHI0aHL0GN70BdfSN_xNsAvWtzPW_l4oz9uNLPqRo3oBAiBOAFGHZdW_XOZlcwAE71JMniGgzJ8Jhx-ufp3DXiexBg"
       },
-      "highS": true,
+      "highS": false,
       "extraKeys": false,
       "expect": "accept"
     },
@@ -338,11 +338,11 @@
       "text": "wdev.real.21",
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAFw",
-        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSHlnRXlqNXNKTmd1SUdja3ItUzBGQVRVTGtZQU9uVHFhSnVCRnNhZTVNSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEYCIQDJdPXIePxkHj0O9RkZRlEyAGdgWXGzfAx-8GnhhzrjcwIhAMKgjmWG8mSxv6AncCTkUTO05ZPt_hqzihmZIquuMGqO"
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSHlnRXlqNXNKTmd1SUdja3ItUzBGQVRVTGtZQU9uVHFhSnVCRnNhZTVNSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIm90aGVyX2tleXNfY2FuX2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIFNlZSBodHRwczovL2dvby5nbC95YWJQZXgifQ",
+        "signature": "MEUCIQDit6_794HO7jPHNIrl80k5PQP7JEVnU3-EzwXtj5h4HgIgBlVEAmPi_yBzBGeya1F1sJb-G5NFt6aGUARZy9IkG7U"
       },
-      "highS": true,
-      "extraKeys": false,
+      "highS": false,
+      "extraKeys": true,
       "expect": "accept"
     },
     {
@@ -354,7 +354,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAGA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiWkY1bTlCNFl4Mk16TDJmUW1xY0dMNWpMTU1KV2V3OVdiSEhadlZ2dEZaUSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIQCtBOjpBcpK0ujfKrat_RqwlL_HvInoXTrCAKelxe2j-wIgSV2qtUH2DJCoeVhAByLjEkU7xeH5YwlPSxjnC9xTez8"
+        "signature": "MEUCIQC24GssrRGrzCg9iGwxSkhpRFPqQDlm7o-zQPdfuWOQ4AIgUJ6JqGxaUzCOwVqbkuNVG-iy0jLdV7Ze1TSAo3Wu8_A"
       },
       "highS": false,
       "extraKeys": false,
@@ -369,9 +369,9 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAGQ",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZmVLMG5nTF9mbHhEdE8xOTRHaW5QRUh3YndKZVZTS2t0MnB4VHJEZVoxcyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIFvlgHUQvbN-0EWM3Eooa8eizWeg51GVRtjON-onwzCsAiEAva_yATDISLggkIfn1zcPxQWo3hiBX_EyzJz_rbunUz8"
+        "signature": "MEQCIB8JXVq3uZPFqzMR6SmFuY6AP3cYWlbw49oQZnDg3GmbAiADH7VUIo5fQhVyzswjJBP5MZj78QvTu-6wLH4TDslX3A"
       },
-      "highS": true,
+      "highS": false,
       "extraKeys": false,
       "expect": "accept"
     },
@@ -379,12 +379,12 @@
       "name": "real/high-s-made-low",
       "source": "chromium-149.0.7827.55",
       "key": "real",
-      "challenge": "A3iGen8HNH1ktvoGBbYNx8blutaA5HPGaDwXvQfx5lM",
-      "text": "wdev.real.1",
+      "challenge": "i-BC_zVA7k3BBteS5banq7Bd217RSG1q1UueK5uUb64",
+      "text": "wdev.real.4",
       "assertion": {
-        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAw",
-        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQTNpR2VuOEhOSDFrdHZvR0JiWU54OGJsdXRhQTVIUEdhRHdYdlFmeDVsTSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIm90aGVyX2tleXNfY2FuX2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIFNlZSBodHRwczovL2dvby5nbC95YWJQZXgifQ",
-        "signature": "MEUCIQCoVqGTQQnZ95tGxyp4pOudrXIxBgzmCMlnRZIV0o7ZHQIgBoCBo_Ph04VpssI_wlz9r7bAVaG3XGJ2OCnKIqY_Luo"
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAABg",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiaS1CQ196VkE3azNCQnRlUzViYW5xN0JkMjE3UlNHMXExVXVlSzV1VWI2NCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQCslL5oNNufQ6GACv8aWbPRVERYrhZn40wcjwPyfm1mQAIgMhHVKdCqtwnJtMvQmi_sTX5eLWeI-aA90ruINo5rNVM"
       },
       "highS": false,
       "expect": "accept"
@@ -398,7 +398,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAg",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZ2F6UnFhaG1fdWVKV1RqNFlzN1hnb0oxQnZuVVZrQVJ2NFVTM1hPSFV5RSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIBP1qh09qwjBwvwJ79OtzH6FpoOvXk1zU2621cmPsVlJAiEA47WrVp4iexp4bcs0faPuJxbSe0ngNQkhHIKVG8syno0"
+        "signature": "MEUCIFH4KzHNzp802KmK3ETI0NIkrdl6hWr-wo6uHT8vlt39AiEAtcqWKrEzptX4CIjVEgTOCiCNNIS-PDlQ6HTtLAZqqvI"
       },
       "highS": true,
       "expect": "accept"
@@ -412,7 +412,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAg",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZ2F6UnFhaG1fdWVKV1RqNFlzN1hnb0oxQnZuVVZrQVJ2NFVTM1hPSFV5RSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEQCIBP1qh09qwjBwvwJ79OtzH6FpoOvXk1zU2621cmPsVlJAiAcSlSoYd2E5oeSNMuCXBHYphR_Y8bilWPXNzWnMTCGxA"
+        "signature": "MEQCIFH4KzHNzp802KmK3ETI0NIkrdl6hWr-wo6uHT8vlt39AiBKNWnUTsxZKwf3dyrt-zH1nFnGKOjbZTQLRN2W9fh6Xw"
       },
       "expect": "reject",
       "reason": "challenge"
@@ -425,8 +425,8 @@
       "text": "ros.setup",
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAg",
-        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoiQVFpcFFQTHBPaFBuclBtVnZTYjRqd1pkakd3b3VQMUVaVmw3OUVJU2JkYyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEQCIBP1qh09qwjBwvwJ79OtzH6FpoOvXk1zU2621cmPsVlJAiAcSlSoYd2E5oeSNMuCXBHYphR_Y8bilWPXNzWnMTCGxA"
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoiQVFpcFFQTHBPaFBuclBtVnZTYjRqd1pkakd3b3VQMUVaVmw3OUVJU2JkYyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIm90aGVyX2tleXNfY2FuX2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIFNlZSBodHRwczovL2dvby5nbC95YWJQZXgifQ",
+        "signature": "MEQCIFH4KzHNzp802KmK3ETI0NIkrdl6hWr-wo6uHT8vlt39AiBKNWnUTsxZKwf3dyrt-zH1nFnGKOjbZTQLRN2W9fh6Xw"
       },
       "expect": "reject",
       "reason": "type"
@@ -440,7 +440,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAw",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZ2F6UnFhaG1fdWVKV1RqNFlzN1hnb0oxQnZuVVZrQVJ2NFVTM1hPSFV5RSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEQCIBP1qh09qwjBwvwJ79OtzH6FpoOvXk1zU2621cmPsVlJAiAcSlSoYd2E5oeSNMuCXBHYphR_Y8bilWPXNzWnMTCGxA"
+        "signature": "MEQCIFH4KzHNzp802KmK3ETI0NIkrdl6hWr-wo6uHT8vlt39AiBKNWnUTsxZKwf3dyrt-zH1nFnGKOjbZTQLRN2W9fh6Xw"
       },
       "expect": "reject",
       "reason": "signature"
@@ -454,7 +454,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAGQ",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZmVLMG5nTF9mbHhEdE8xOTRHaW5QRUh3YndKZVZTS2t0MnB4VHJEZVoxcyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIFvlgHUQvbN-0EWM3Eooa8eizWeg51GVRtjON-onwzCsAiEAva_yATDISLggkIfn1zcPxQWo3hiBX_EyzJz_rbunUz8"
+        "signature": "MEQCIB8JXVq3uZPFqzMR6SmFuY6AP3cYWlbw49oQZnDg3GmbAiADH7VUIo5fQhVyzswjJBP5MZj78QvTu-6wLH4TDslX3A"
       },
       "storedSignCount": 24,
       "expect": "accept"
@@ -468,7 +468,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAGQ",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZmVLMG5nTF9mbHhEdE8xOTRHaW5QRUh3YndKZVZTS2t0MnB4VHJEZVoxcyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIFvlgHUQvbN-0EWM3Eooa8eizWeg51GVRtjON-onwzCsAiEAva_yATDISLggkIfn1zcPxQWo3hiBX_EyzJz_rbunUz8"
+        "signature": "MEQCIB8JXVq3uZPFqzMR6SmFuY6AP3cYWlbw49oQZnDg3GmbAiADH7VUIo5fQhVyzswjJBP5MZj78QvTu-6wLH4TDslX3A"
       },
       "storedSignCount": 25,
       "expect": "reject",
@@ -483,7 +483,7 @@
       "assertion": {
         "authenticatorData": "lXmmZyQH0vPWsh6YVhTohLFxQ7fKOn_4F9t8bX_dPhkFAAAAAg",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiNUhFbGxvczdjUVNmdkVnQzBlUUtjZW9UV2Q3UHE2ejNDelJZZ0RmVV93dyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIF-vVQxORl1TuXQsiCR5hhSRrAgw3ai7iW6Qc-q6GXWQAiEAkRlO3qosusDPYTOmQF6h3SB1m6pobSdfegGgVLcM2RU"
+        "signature": "MEQCIAJmepUX6CLXfWnt5A6kFSSqGs5SOQYg38sftI10aK-rAiAz4tF0AtacQNpkNpxL_iGlZRXebmtTzbbNNHX6uZb6dg"
       },
       "expect": "reject",
       "reason": "rp"
@@ -497,7 +497,7 @@
       "assertion": {
         "authenticatorData": "10lWiTKNpWWaScw57M3ppkHtSgHWOaVKHj62KJx7LXQFAAAAAg",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiM2NubWFSbENWTTd3R2FLZE5obWl3V1dTNWRVdUdvSHBpd0c5VWpHUlNhTSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIFzDIXJi8pS_hFiIlg06b5fRQl2SeFi4bUXN-maF-KW0AiEA0XGPsTejcsM_3xVrJXVVdI7LSy1jvKY1-ULY9iU3cxY"
+        "signature": "MEUCIQCNfN9Ydw4SGjsNBnuyFHyKmZz7CeaAnVsBl6YJhEF80AIgSFbvrd4hjqAclkUdm3x7XYwLdrBN26QT9Zy50d9z6RI"
       },
       "expect": "reject",
       "reason": "rp"
@@ -511,7 +511,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAGg",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiM2NiaXNpVFFfWUlXYVNBaVdEaHBOdnljNG9tZUlWN3NZeUs1WDQzWmJXbyIsIm9yaWdpbiI6Imh0dHBzOi8veC5zaWduaW4uaWQuYmVudG8ucGFnZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
-        "signature": "MEUCIE_HL0JsQx10bK0TIGXdqOWUMf2QEjsY_Igf3coL1P3fAiEAqFK6uRRGUzNFDXiBxcp0UBn_PCNCxEoRBIEPo4V1Vqs"
+        "signature": "MEUCIGQ948huyTUa3JFyztcNVHYGNJlnt_fVt6LRXUbJhwJDAiEAgkYSC54CUkf59IciunTxpVtY-kECr8wttKCQ8aWD-jc"
       },
       "expect": "reject",
       "reason": "origin"
@@ -525,7 +525,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAGw",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQUNRSjFZX1NzNDdCUmhaUWZhc2YwWmhuYXRhRUdsSEp5VDBoWFRtdlhwdyIsIm9yaWdpbiI6Imh0dHBzOi8vaWQuYmVudG8ucGFnZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
-        "signature": "MEUCIQCBb2fIIADrqEu4JBFP7v8O8EznbQOyh9TilKiUku7UxgIgSA8k9c-z8pCeSEolUVYqHlS4qppnG5m8UXoim-_HYvc"
+        "signature": "MEUCIQCQJ8kwhEswTyD0OrnBbEgfaCCEXnFPkm6QDEA2afyjtAIgasf6cKVigSSY8aRmWzMnFgwxHZHqCNTUGYIb8PHd-Hs"
       },
       "expect": "reject",
       "reason": "origin"
@@ -539,7 +539,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAHA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZlJEZWhWVHRYS1FQblE4T0QwTjF0Yk00cnotNWJUUEpzdlU3VW9tNDlQNCIsIm9yaWdpbiI6Imh0dHBzOi8veC5pZC5iZW50by5wYWdlIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
-        "signature": "MEYCIQC7mZvDuTL1bb_aR47_JiJROQFK33HXy5GRXdl-4hN_4gIhANxs-DfgACq0w2XcDii2DJ2n6wYpVB_sszMSGxI5QIXx"
+        "signature": "MEQCIFRxDCwVU6slTO2S28WZKM3mpAKO1K0RcH5t1j7FaH-3AiAXeWdvErSAURd61sSnc5yyJiQkw6_1_9lqWBB4GguhSQ"
       },
       "expect": "reject",
       "reason": "origin"
@@ -553,7 +553,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAHQ",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZXllcFlLNGlodGNmZlNMWnBYMGRCRmRLWEM5eXF1YllvRnB3UWhheXVkVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6dHJ1ZSwidG9wT3JpZ2luIjoiaHR0cHM6Ly9iZW50by5wYWdlIn0",
-        "signature": "MEQCIHIlDH86kW2Iu_hZoaO6bWvlwSLJeU1wQdOqqkBllCgYAiBLnHOcEnr6rR6cWJ539hxIrWqW3Fsh7AMKzUKmmRqKBA"
+        "signature": "MEUCIF-gW9TvKEqPpaa5-SYQ46hyZtEMbSpz7tB0GKPtzd-9AiEAmWcuW-J5zwWthrCsA0eMtjZcUkcmNmSTkKbkM-BSxa4"
       },
       "expect": "reject",
       "reason": "cross-origin"
@@ -567,7 +567,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEYCIQDNFz5eri-Zj7eV0ZFclHEqZ2dLlaQfy8qfarlYlsu8jAIhANdgXeSyK-y8Zqxxry6ilc4vLMzrYutYknuuZCp8DanV"
+        "signature": "MEUCIQCkdI6T7W1YYm4qL8kV_e6tXoAH6AayEeItFP-vWWonzAIgP01xq9EV0grLL31ma0QeQurWfEM87yvxhaSULJZv1G8"
       },
       "expect": "accept"
     },
@@ -580,7 +580,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIm90aGVyX2tleXNfY2FuX2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIiwienoiOlsxLHsiYSI6bnVsbH1dfQ",
-        "signature": "MEQCIGgt8d4WH2CqJW6TGoHt7S574uZxm1Pl4CzgDpcv-RUOAiBRRwos5W9bD8HQjT_WPwm3OeNhrS1gjw8SO90czeNx6A"
+        "signature": "MEUCID1sNx3Pgxq9IONgflG-xmAp2pJmG_Z7sufDarGOmAmHAiEA2t4ZO_4mgpYlkKrydcwLYuUKm-JvOFYvIC5fUe6EuN8"
       },
       "expect": "accept"
     },
@@ -593,7 +593,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJvcmlnaW4iOiJodHRwczovL3NpZ25pbi5pZC5iZW50by5wYWdlIiwiY3Jvc3NPcmlnaW4iOmZhbHNlLCJjaGFsbGVuZ2UiOiJRb3ByTDJpTzREUTNHOHlWVkpieEUyeDcydHdubnFaUEE3UUs0Q25HVURvIiwidHlwZSI6IndlYmF1dGhuLmdldCJ9",
-        "signature": "MEUCIQDXBp9l1cFubxmNWaXiJVhEpQNIlqBH4e3MfvIUB-4sYgIgU6s9eGbjPYzp1YukEjrQr9Tjyh5KMiKMV2kWy1WE0Qo"
+        "signature": "MEUCIQDPa8XPMQcL_3YJ-MXOLgQtrI-p5YlXhS9LM62nMlBmEwIgPW-Mc4kPkTdwh92-kM7kw1BMlufXp_TN_zShOVnY8NI"
       },
       "expect": "accept"
     },
@@ -606,7 +606,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UifQ",
-        "signature": "MEQCIEMILufiM4E7DcAKX7g_IQ-uLE0xGv2-0FDxjFniIf5xAiBfNJ7gK3ybyfdR_In81drQkan6_QglgEE4rS1-Pa0CMg"
+        "signature": "MEYCIQDXeusIlSlPBtoKR-HBSEFef30f-wce_HdU8PVcWF07PQIhAI4fovaeZy4gbZ-HGYLyrjap1qmik20AcGraxP8tB9yd"
       },
       "expect": "accept"
     },
@@ -619,7 +619,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG5cdTAwMmVnZXQiLCJjaGFsbGVuZ2UiOiJRb3ByTDJpTzREUTNHOHlWVkpieEUyeDcydHdubnFaUEE3UUs0Q25HVURvIiwib3JpZ2luIjoiaHR0cHM6XC8vc2lnbmluLmlkLmJlbnRvLnBhZ2UifQ",
-        "signature": "MEYCIQCWRDtutwxCtpSB1Egf6IXTVtiF5Aq6dS7nrHz-We8u6wIhAPlfxyxU9bACHW61MiYwBwUmOkP57-qmn5RMTrSzCwse"
+        "signature": "MEQCIGdgn-F9mW-TwEecFM2x4GypKAPgUzdKmILcdEQxR2IjAiAY5GU1ijHfMX3Q6siRVjvNSMBjnzJJ4ew7KeJaAyiTVA"
       },
       "expect": "accept"
     },
@@ -632,7 +632,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYdAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIGt9XegoFz6z27edrUfjz5Gpw4yVPDrGQ0nF0Rg9JWLFAiEA7an86Aul-VvFRllcVQyTQG_mNtpS5pDSLwP9oCe2xj0"
+        "signature": "MEUCIQCsjpEFYUhqcXQJH8HPuSSirnmZ2Vr4eH1X_ot05M3V0gIgL4vsXKCIeP_vAnxTk7bkKdGs3tipZwkCSkNBfhsTXXU"
       },
       "expect": "accept",
       "reason": {
@@ -649,7 +649,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYaFAAAAAKA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIAVjYByg9GHRMG52z8OtescqWQt5amp0Jm2bmvWjcyVzAiEA_Upvy5OILW7N4q6zzNzC7wrAKLyp8Mf84rLZ6KOokik"
+        "signature": "MEUCIQDWPGneLciTUUF2NkruogMg4xcSwnbQuIMompzsZ2kucAIgDP8N5j-wd0XhDZt4aDnfX11SZ3PnIGk34YamYhcga0U"
       },
       "expect": "accept"
     },
@@ -662,7 +662,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIFgwNtsgKT87UOhicqiJYCBwGZN0aMuWHowq_nKMM29GAiEAuPso1TJkEJ-BSylBs9XmcJ3dxx_x8vutfgcPrz1BDnI"
+        "signature": "MEUCIEQRL7-ElydevvnKgexvp7LqFmDYsfUdwZqdSBd8sO8YAiEAwG70eM7Mdye0EqIatQLVCnbMo9lpexUasU78Nrw9z7w"
       },
       "expect": "accept",
       "reason": {
@@ -678,7 +678,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEQCIFgwNtsgKT87UOhicqiJYCBwGZN0aMuWHowq_nKMM29GAiBHBNcpzZvvYX601r5MKhmPHwkzjbUkotd1srsTvyIW3w"
+        "signature": "MEQCIEQRL7-ElydevvnKgexvp7LqFmDYsfUdwZqdSBd8sO8YAiA_kQuGMTOI2UvtXeVK_Sr1RhpW1D2ciWpCas6MQCVVlQ"
       },
       "expect": "accept",
       "reason": {
@@ -694,7 +694,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vYXR0YWNrZXIuZXhhbXBsZSIsImNyb3NzT3JpZ2luIjpmYWxzZSwib3JpZ2luIjoiaHR0cHM6Ly9zaWduaW4uaWQuYmVudG8ucGFnZSJ9",
-        "signature": "MEUCIGhblcrrV6Pv1kN4OBPObQ-Hi6dEs9fKAH6qrw5sGJcXAiEAnxqVBQMIdRQXG8wunrvSmEmXvMnlaj0TF6o5PSGHvrY"
+        "signature": "MEUCIDAdS8znJf1W-84nkZyyqn7Nzu59cG-rql2JHUq7c_Y8AiEA3yNWaqugWzEMRbOKUnpXkQXzA3O7S7k905hPNdO-rE0"
       },
       "expect": "reject",
       "reason": "duplicate-key"
@@ -708,7 +708,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIm9yaWdpbiI6Imh0dHBzOi8vYXR0YWNrZXIuZXhhbXBsZSJ9",
-        "signature": "MEYCIQDwrUF84T6mnyjK1cQKX_b-GUXezWKP7vy91w4wX8Rh4wIhAPM5hrabkE4iFWLeTGEHK0MMn45hGo8lCSBzyz7ZNMiw"
+        "signature": "MEUCIQCh9Ecv4cRl7b4652sIs9BCeaDjv_rpFAupJB1hIlKuuQIgEd5jCRGbWb-uXvcovjGUrel5_0fK2rHtOV88SX7qRus"
       },
       "expect": "reject",
       "reason": "duplicate-key"
@@ -722,7 +722,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vYXR0YWNrZXIuZXhhbXBsZSIsImNyb3NzT3JpZ2luIjpmYWxzZSwib3JcdTAwNjlnaW4iOiJodHRwczovL3NpZ25pbi5pZC5iZW50by5wYWdlIn0",
-        "signature": "MEUCIQCBvEH4I8p3ShAL8C0IrYPRnXJRKAOsiSbeApdcYXIhrwIgbFXAiDdIFDiZ_jmsyPFuMHF_GI2gupk85x8-xQ4smQ0"
+        "signature": "MEYCIQDvf-N2kFJi1DyCoSg6ABh_234Cd_2yyAwvMSzxA8J59QIhANd6y8Az_kT-GH5LUAK6UlxtVDdnGqkcnzh_2BORFO5n"
       },
       "expect": "reject",
       "reason": "duplicate-key"
@@ -736,7 +736,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6dHJ1ZSwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
-        "signature": "MEYCIQDRBS_fpmcZPCeFtFct49_3f-NEx9g9y_6N-dOFMzH27gIhAN3CKJ9XCoYK2b9D0zl5ftFBB1V2HfxK4q2ZHj_PtvXw"
+        "signature": "MEQCIDJzLc9o0VgSO6bi9F3xFx4g6xWFbyG1xfPHSiLT6VzmAiAb1KH2Qad-kIJ9Dzv3qiGVga6-mBvOfw3sbQ6QcVeW3g"
       },
       "expect": "reject",
       "reason": "duplicate-key"
@@ -750,7 +750,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIngiOnsiYSI6MSwiYSI6Mn19",
-        "signature": "MEUCIAkCpO4sF-ZRVDODc6gPzua06ivxuLHQkvKsbB4pFh00AiEAx2Ujs6TE7lKQNZJ9q5RUaRSuSw8a14_dU1_IriWqwqk"
+        "signature": "MEQCIBjiWNbETlICni4FCCpxS8Me1wBpn1nl7PO5uPtOjDoGAiAPhjOHppHHDujdu-OF7f16thhtRbVEWesPUOceGk5x_A"
       },
       "expect": "reject",
       "reason": "duplicate-key"
@@ -764,7 +764,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIBV63ufEN73095Ksk-911_-03FUgDRowGXXRVfeTocO-AiEA7rYyD9286jtB_y31CAp7tq5ux8Dqp0Tu6Bfn6DpI7B8"
+        "signature": "MEQCH09uE3QtgFSISk63u7Hopywl-fykqtEOZKc1eXjhoEcCIQDwGRv4nvLj3icUy5Ei5lBszw-i-gLShOgaiqsm4PZVlg"
       },
       "expect": "reject",
       "reason": "type"
@@ -778,7 +778,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJjaGFsbGVuZ2UiOiJRb3ByTDJpTzREUTNHOHlWVkpieEUyeDcydHdubnFaUEE3UUs0Q25HVURvIiwib3JpZ2luIjoiaHR0cHM6Ly9zaWduaW4uaWQuYmVudG8ucGFnZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
-        "signature": "MEUCIBpToKCt-pcGwv7bysEOWCMIVH77SUP7Sq3rtXXFueE3AiEAm5ACzw32iJ6AB-mVdaNDdvDkDjCpif5xoSg1lHr1wjQ"
+        "signature": "MEUCIBjE_WLTMoeV9NzIZVv43NYCY6m4BIRk5LoQE1pgXHkwAiEAuGdHYyD3jhEPeEj6IGm-M5lDXV25RoVw81nKJiWqjoM"
       },
       "expect": "reject",
       "reason": "type"
@@ -792,7 +792,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidGJoMmoySkQtQjlnSmxnUFI1czgxRld0WkNfa3Eycmk4SU93ajlJUW43MCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEYCIQDVcTWY-zxfdGN-v0ttNg0W9yKaz1lDIPu7YU4R46QRTwIhAL0htCEsP01SIZpdX_971TxkWG744vHrdsa0ltiDG80O"
+        "signature": "MEYCIQDnV5RUF1MKW_lomPj1T6oG9wYbgQk6-d0-_eX997rxuAIhAJd7k7cZIADQGH2Mk_1ZH97I8hvfyHGFTWLyQ8o9yPQB"
       },
       "expect": "reject",
       "reason": "challenge"
@@ -806,7 +806,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbz0iLCJvcmlnaW4iOiJodHRwczovL3NpZ25pbi5pZC5iZW50by5wYWdlIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
-        "signature": "MEYCIQDbPeE8RCdVTqlBZgns423GQiJqyff3P069vqppBU35hQIhAIxjsNbrCMfoOUmnwwkPZxRZdQ1Ue6IGiGewjVsows0r"
+        "signature": "MEYCIQCkNeEIm34gUEiKyZijj92N0lGKXoC3Khg_s_OTCz2szAIhAOXNeBV0C9XdKVI10NxIQiSAvHb3OJULDbl-MT_3v10t"
       },
       "expect": "reject",
       "reason": "challenge"
@@ -820,7 +820,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VBIiwib3JpZ2luIjoiaHR0cHM6Ly9zaWduaW4uaWQuYmVudG8ucGFnZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
-        "signature": "MEUCIQCwUyvNdHMylzDR7w_Cmm9BNcw_73cgi85KepsACd-p2gIgHwEcsvLvnptz53EsBjDH7eC8aY9mA5Ij00jPJk_4JzQ"
+        "signature": "MEUCIEwql3yXs9SKRSHR7RGd9qxnVCaqslsTY5SyHyBm6T8rAiEAyaAViCrpFQ_pjRzywVo-LAZZoYcbOhtRzsO5EwY7Trw"
       },
       "expect": "reject",
       "reason": "challenge"
@@ -834,7 +834,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiY205ekxuTjMiLCJvcmlnaW4iOiJodHRwczovL3NpZ25pbi5pZC5iZW50by5wYWdlIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
-        "signature": "MEQCIALAou_QvtphFopkaKx-LMBRxoYlwFiTWjuTlgSP2-1SAiBtXEf6bIEF3ng-P_OiGkPcFdV7yzi0zDsYZbAcTLQlIg"
+        "signature": "MEUCIQDenfx4Op2tWuS_LgU4nfw3DWTHBan8uZ1YYbQsTRrYmAIgceBbLm5a2WmKSQvL5pCIK0tsC2qk_GAkaNOU2kc5d6k"
       },
       "expect": "reject",
       "reason": "challenge"
@@ -848,10 +848,51 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEcCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIQC24gB72vCw3ourt3cYmo3IxSBH1tk4qVB2hGg7-ChAGwIgUJG9SiVkeWivqoA2golwzzgiasR-jfL4omeeqWcd6Bk"
+        "signature": "MEQCIEMsUJRoKWKI9sOdSaHkR1fL2h3GQAAoAqCuC6FHUX7eAiBmLN8lR1eHjrCgUNXmhKyYGD5yDa4eHQUBitgWvdMczw"
       },
       "expect": "reject",
       "reason": "challenge"
+    },
+    {
+      "name": "sw/challenge-empty",
+      "source": "software",
+      "key": "sw",
+      "challenge": "",
+      "text": null,
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiIiwib3JpZ2luIjoiaHR0cHM6Ly9zaWduaW4uaWQuYmVudG8ucGFnZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+        "signature": "MEUCIEURBfKOtpsREz2znuJ-wnonYrtvAtE-WC5_wQIuvqQMAiEAlNYGT5_NYqGOdFUYCQcV2QQgs_F_RVTbkcemkCH7iAc"
+      },
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "sw/challenge-15-bytes",
+      "source": "software",
+      "key": "sw",
+      "challenge": "xGOWflcIyrf5gIVeFAQt",
+      "text": null,
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoieEdPV2ZsY0l5cmY1Z0lWZUZBUXQiLCJvcmlnaW4iOiJodHRwczovL3NpZ25pbi5pZC5iZW50by5wYWdlIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+        "signature": "MEUCIQC2jA-xY47hOnfKCf_3vMalPgcWdKYJNeuxwlcR8CjBUwIgJZpsXfcwwBFizYUohQVegxAWUVbitIWyRhD67rKsGko"
+      },
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "sw/challenge-16-bytes",
+      "source": "software",
+      "key": "sw",
+      "challenge": "8s40H9qmdye73Ijj9_GdxQ",
+      "text": null,
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiOHM0MEg5cW1keWU3M0lqajlfR2R4USIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQDdSyxbE__-TH6CUaErV7RUiHR9D2-FCm0GGFEn1vPogQIgZjiBG7SqP6aWn3Zdv1OvyE_VlfVND03HdP-XrHhDbfs"
+      },
+      "expect": "accept"
     },
     {
       "name": "sw/challenge-missing",
@@ -862,7 +903,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0Iiwib3JpZ2luIjoiaHR0cHM6Ly9zaWduaW4uaWQuYmVudG8ucGFnZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
-        "signature": "MEYCIQDvZCuqzal_rO9RkrbSg-RTeBFuzmVxNVNHE-fA15EhnwIhALOyzWQd4-io6fygn8QUchDgUJ40OxnVFeKmR13aAC1y"
+        "signature": "MEYCIQCe0e0o-65GpP7akJzUTXVzKWPlfW2-JkQ307NcvuHg5wIhANLeDPko4bHeAoQzEFvArOYwEvzX7C0Faieo8_mO0xA4"
       },
       "expect": "reject",
       "reason": "challenge"
@@ -876,7 +917,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vaWQuYmVudG8ucGFnZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
-        "signature": "MEQCIEskJ2FafvNbxNF6u8JiRG9xRWjaF4nQEn6Sqmfv_r0kAiBlUywZPB5swnq2GHF-wWZp7hOAVq503lsy2ONb5TLK6A"
+        "signature": "MEQCIFtAQR5kvbJPXsxhHYxcWmYbFvmKU0x0swQQSd6egoRYAiBxjfRQhxpCF1IkFRyIsWX1C9luPZAFy2grbOe5b0Pj_g"
       },
       "expect": "reject",
       "reason": "origin"
@@ -890,7 +931,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8veC5pZC5iZW50by5wYWdlIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
-        "signature": "MEUCIQCFIQArBgsDyBFX-jxbDkw0-Gv-PnzJNJ80XBFvMNsMPAIgRocQ10yLGLShozHhJw-8bTG34pkbFdgiIQ9G2y8v6vk"
+        "signature": "MEUCIFvXFyE0r2ghP5Y816N2Z_h1SpyWvf9q1D9USFiFYyDIAiEA8E--cWZROYhcYke_J8yQmAN2gDoz9BOw54kazUWTmGA"
       },
       "expect": "reject",
       "reason": "origin"
@@ -904,7 +945,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vYmVudG8ucGFnZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
-        "signature": "MEQCIEGC8UlbtnInGZ46juf1fFjic7UMiaH7J-1f5jnc4CeKAiB7g7LKgaglkG5zsI9hlYWbbPIwF_ZL0iN6X8xrCWImmg"
+        "signature": "MEUCIApuLtDrKOSFMKHo1Hc2JXzUFK_InRm8pGH8SaAUU8rYAiEA_AQRhqK5XAKXh22nK55w4FABkdrtcBYElZL81VIik9k"
       },
       "expect": "reject",
       "reason": "origin"
@@ -918,7 +959,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vaG9tZS5iZW50by5wYWdlIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
-        "signature": "MEYCIQDrRVQ4yotjcRiWRJOOI18LWqm9JP96L6m6kbL0Arq_hwIhAMxxoIF9xT6OiDQwy0aHxb_GAaYxjzu84oMj7BQC9n1J"
+        "signature": "MEUCIQDkV-jLGHi63NeqzSRAII6ttD3xeWZKDi1LI6xaxy08LgIgCtG8psGwjzxJIu9FgfxplPF4qmNcbgIwbyUO7PkIc10"
       },
       "expect": "reject",
       "reason": "origin"
@@ -932,7 +973,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8veC5zaWduaW4uaWQuYmVudG8ucGFnZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
-        "signature": "MEQCIH8npsXwzPa43aUbfQDm8Njn5fizNCTG2qBLFmLage7uAiBkGFPu-xWEYcUIjtVF56UuE3rOCFU2SEBkANILLqegAw"
+        "signature": "MEUCIAI3qlJ7XzDrworViKUwWuZYemw2SDPdKTSq15HdOAmIAiEAzls3wSABIWDyybSM6T32sH_CWXX25vS2AiHeqUPfc2I"
       },
       "expect": "reject",
       "reason": "origin"
@@ -946,7 +987,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vYXR0YWNrZXIuZXhhbXBsZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
-        "signature": "MEQCIF3-MDenZ13zIGbUn6mm4Z1570AUMhMq_MrLbKKqY4xCAiAcL4camYli5kQ6yHrSssD3Tzceerlra1QacvmmaeIE9w"
+        "signature": "MEQCIH9GAtcNdDk6oXrPHv9jyrg42rJrqjkV04xJ5IQhQGllAiAJSbKz5MIhrKejxz8wM7S5W1FTKFQhSv8-RcRvCUttAw"
       },
       "expect": "reject",
       "reason": "origin"
@@ -960,7 +1001,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHA6Ly9zaWduaW4uaWQuYmVudG8ucGFnZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
-        "signature": "MEQCIDlJnaEOPs2qS5a2sciI8J9Xt892KVb4Mg0kKtZQvFYrAiBqQbTOKOu_MqmzxE45mLOv-KsAq7idCQkZGu7CKqWqeA"
+        "signature": "MEQCICQ384War1c31BqbmSQykNTIfrI0J6LIJywjtc4s_B4WAiBdw5vhXELtO0wDW6BeUKb-iOhWxSC6Usc1HFDoCq9goA"
       },
       "expect": "reject",
       "reason": "origin"
@@ -974,7 +1015,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UvIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
-        "signature": "MEYCIQCb0g-HDuf7Jh0qvKqM2WNQUn9Za8CkReEOzKuVEMNNjgIhAJHGg_z5VG7mw4b48nR4BWKpoIN8BDcLbX6CbQy15_iE"
+        "signature": "MEUCIAQaHfUnMn28_PPhz_iZKd7gOeAUUdL17edS2-c9e49iAiEA5gFaJDkUbaffOaMGt2JDSI874JVP5aiZ3pNV6YeEr94"
       },
       "expect": "reject",
       "reason": "origin"
@@ -988,7 +1029,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2U6NDQzIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
-        "signature": "MEUCIQCAR04QdvR5IOkrMvhLaqy1PiJzaPFHhepgj17j3jCF_wIgcDUd92k7vDmNdi3bOety0IklVDoo51qzLEKrNKYe7S8"
+        "signature": "MEQCIEJPvliD8YJRFFGZT4_SMfHIn9500i0nNQIrn6S-BtYuAiBDp0y5ROSC2lsdFh03mwf9FuCwnmc4M_1D0RDm_ed6pA"
       },
       "expect": "reject",
       "reason": "origin"
@@ -1002,7 +1043,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vU0lHTklOLklELkJFTlRPLlBBR0UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIGGh2OHeWCGG9SJh-U0zH5MmFCgltePu20TmtvrWXCCJAiEA3TXLQgneCudEob9sCyKwEqqC88zyXY7gqxkpR51PlWI"
+        "signature": "MEUCIEkEgvWU-pzzUxJXjJ-Wkcvx4fN1vuTcvnihY5rE-oitAiEA_-8KHEK5DeOIsk1n-X_NKfDYBnFfpUg03jTtxl_LzSw"
       },
       "expect": "reject",
       "reason": "origin"
@@ -1016,7 +1057,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UuYXR0YWNrZXIuZXhhbXBsZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
-        "signature": "MEUCIQDzYE1T4UJhV3b1Leaa25XjwXrdC1N5zQuWJnhlHN6jSgIgfVzfjibNOSgFAGOSh5FxrFQ7HBFxfv-KKccPO5S29mU"
+        "signature": "MEYCIQCoScE1jV2EubWfQ_9C1DvbBGrqPyauH-zA32U7k22PwAIhAIgmWC_aiYEPRxMeY_Tf3vfHiryoViUUXQrgR8TVVVLL"
       },
       "expect": "reject",
       "reason": "origin"
@@ -1030,7 +1071,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Im51bGwiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIAW-tWOge_8MQ9Vn7Qo11Xr-O7-aWoF0doUFVnOMtUogAiEA7bMuvsB5yYFBOy6vdCwuXjF2q4PrqmtyzpDRR_M5Zok"
+        "signature": "MEUCIB3qwPfnrPbmKccaV3DWNOofgU6tSoIxTPnDlKUWm6SlAiEArgBt0zECuVK6vwZUpPHJ0esmmq8CgDZC5VOkG9etH_A"
       },
       "expect": "reject",
       "reason": "origin"
@@ -1044,7 +1085,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6WyJodHRwczovL3NpZ25pbi5pZC5iZW50by5wYWdlIl0sImNyb3NzT3JpZ2luIjpmYWxzZX0",
-        "signature": "MEUCIFCJQinxLm8XdtLi7tDSUxni0TVAa1uFlZx3yIiPxCOYAiEA4cVo7l0u8rEiapdqOviocrvJ94Fi_xOkRfUCUKEeq54"
+        "signature": "MEYCIQCgwoLvOVY7heH8y4F67BCRbEODG0i-g9ltvWow9a4NqgIhAK2Y9mtutM-SZ0A4pMX24aOfe5l8wmENVi5dyo9JpyOh"
       },
       "expect": "reject",
       "reason": "origin"
@@ -1058,7 +1099,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
-        "signature": "MEQCIFI0PG3Z33ImlhlhIfsZwPWoEyYee8GUsRdFc6IZLwVlAiAGL2t1muS7bZ14OVVqxYQzzry8IRG1axpPqwlwnO4BGA"
+        "signature": "MEYCIQDEIgs4QjSSW-549V0ES7VIRFxjVBWMq2S0bhFUnvqnLwIhANLXtv3Jl6KhId4hXMu7SVbK9YoFcq4j8TsM47Yv0bhA"
       },
       "expect": "reject",
       "reason": "origin"
@@ -1072,7 +1113,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6dHJ1ZX0",
-        "signature": "MEUCIDrWo0gpzcE0Wget5QuIlrkPc89TgdtBY3hd7zt6OfyUAiEA8GBtoGKS89fJigun3YEQSkCJcS8rxN5PCoHfA92zIcI"
+        "signature": "MEUCIA1P1SYuDA7oZbkGtSgonvm2qQhJSL8d98vMi4uQQlWbAiEA0CK9xdkDhlQof5bWCPEqLRBMGQ-_eQTdtIPL_0TjZ6k"
       },
       "expect": "reject",
       "reason": "cross-origin"
@@ -1086,7 +1127,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ImZhbHNlIn0",
-        "signature": "MEUCIGGGKup9zDtqpFywsaTkjrK3-FKkpOBPcsuo0olTfBONAiEAzuLfXiqxQsPPCpyPCG2xM8nDr8oGUc_sWnThTo6O9HQ"
+        "signature": "MEYCIQChDnwTBa8NX7lbjwzKn8kUwVhBNO6fk4qr93dc-NvFSgIhAJBjn7kiidEoks6NqMH-WLmVa7bmD5KPLwByWyd_0IFP"
       },
       "expect": "reject",
       "reason": "cross-origin"
@@ -1100,7 +1141,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6bnVsbH0",
-        "signature": "MEUCIQDuatx0AiTfEJcNS3lGmXM4j2EtgrtwIi1k5LbI_itqeAIgWrDYzld4BKRiuzbYF3hHCaFvbHEZuLFDLbcDHgGoMko"
+        "signature": "MEQCICoUDlQaaQV9jEabBYh5iiIyjrcs6S8Minh7h4xAJ9WsAiB2fM1kqUBstrz1-gbmbV4j5gvQ2qRJToE0v1j6e2xziA"
       },
       "expect": "reject",
       "reason": "cross-origin"
@@ -1114,7 +1155,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6MH0",
-        "signature": "MEQCIGx2GOlZdLXDZI1bD4DZWmg9H1to3enwD94GgrnvOMx1AiB0zMQY1uWIl9CwoQsJo_Zk1SlxwBX2qzNhuw8ZK0DM_g"
+        "signature": "MEYCIQC5ZovpTynQUQBM5OBcJhUuKJIe_R-8_aU2veUro4fAlgIhAIVzdzFHEta1SEzGZQaRSYZqtI6CHAqRZZLVQ9CqaiDj"
       },
       "expect": "reject",
       "reason": "cross-origin"
@@ -1128,7 +1169,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsInRvcE9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UifQ",
-        "signature": "MEUCIQDtoynMX8fIxnr0jAglRMKHAByymWH7znhqUB2BBnzGbwIgdzmhMrR1AYw95S3dYUxMi5h6xHz_ZSZdhy77g_iPg4Q"
+        "signature": "MEQCIB_rn5LGXfWK9FoyFs1mnw_js884Io-cChhFOutXUzlvAiBKHNbIeKjqeAvXbbiiTHUOi7pV-FiGj8F8iMCZYnRlgQ"
       },
       "expect": "reject",
       "reason": "cross-origin"
@@ -1142,7 +1183,7 @@
       "assertion": {
         "authenticatorData": "lXmmZyQH0vPWsh6YVhTohLFxQ7fKOn_4F9t8bX_dPhkFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEQCIFn6wq3O2Ja-B9y9TMVJ2EdhvPGaCPGZ93N59DxD8_nPAiBjbLDKLkEpW9ceF5dJOHCN985_tzc0ofJ-53xOddNiOQ"
+        "signature": "MEYCIQD62GLGc46pTUbA6rMVr2c5HE2Tub_CwXV4EibiMxSgpAIhAKYK95h8y2UPEbgPyT1c7cXw6t5bVYTCY-sCmRSkI63V"
       },
       "expect": "reject",
       "reason": "rp"
@@ -1156,7 +1197,7 @@
       "assertion": {
         "authenticatorData": "Sanye02xph39ALkJVx-84ZOHlv6roujQY7yE6K5WjLUFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEQCIQCSC-VaZB6TJU8vm80dMaUMt8HMoC29m2Rdw0b59Oo_GwIfV-1cl95QHdryBfdQQxP9I8edZ2HQeOdJYxIUD-fCmg"
+        "signature": "MEUCIQC1Q7U9YZEAep7TOjh2cUETOfCaL1vJRyHIxridawgXTgIgH_eXI4-lTk6-8FtNKj1rDg6Vl3idTaSI6Nv919GNCO4"
       },
       "expect": "reject",
       "reason": "rp"
@@ -1170,7 +1211,7 @@
       "assertion": {
         "authenticatorData": "MNhEt91iWVlpJzq5cISlXrpMIC20tNM0ep4DJYaDD70FAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEQCICNzyf-itKUS5tArrnBuTPLnuXqVaF7criEwhb4BzQanAiBroGriQeCLVj1MNRHlhxw1dA_Zudaq8uvsqd49RR35yw"
+        "signature": "MEYCIQD7_iXV5jUPnjuzAjYlLZzKEjouOaqp0zklg3fO56BUNwIhAN4gSx2VDK5j9DErZn-yksfzImRxjeoArK4UZsc6aJb0"
       },
       "expect": "reject",
       "reason": "rp"
@@ -1184,7 +1225,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYEAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIQC3izsHR1Eay5YFQ-qb63WdGWO-NpfERsg3NmkPUhohDAIgKXyl9HYl_l_oq1ykN7myJqBbYZTxYaQik7tZPTZkJnE"
+        "signature": "MEQCICkLdKsVw1q-NaSsE8uTLO8yJmOyDAlmU_PRrAUrs706AiA87LwV6g-i8Xf41d-DdMbbycuSlYwh682PV00BDeZQPw"
       },
       "expect": "reject",
       "reason": "up"
@@ -1198,7 +1239,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYBAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIEQO0-Csxvjn9xUmjj6WM9k_h92jZrDuCIRy0arfbXLPAiEAnop1puE2iURA9kt6EnY0l2LwUQ0OPZfedr4-oY8Hmt4"
+        "signature": "MEQCIA3Gv-KcuRub_GSvEBIR_oSUN7-DuMvrjPl_MoiIQ5AuAiBSfuaqQyWfTCQ_b4L73aDzB713ED9oP6aR7UYo2fRS1A"
       },
       "expect": "reject",
       "reason": "uv"
@@ -1212,7 +1253,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYZFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEQCID9NMryDBJaEL0cBFjJxoYSTbSsRi3YxjXQCA2D2gR9-AiA7VipFnzmOD2RGNm4v0krHXa8EE_cSN1-oUs_E48PEJA"
+        "signature": "MEYCIQDuOWFPG4TB6vEwtZPnjYhU9Tmu11Ktie01nvaCoOhwUAIhAKUVXJH17vUBhKIC4pox2st2ZAA1hyvJROwd6pjrzG5A"
       },
       "expect": "reject",
       "reason": "grammar"
@@ -1226,7 +1267,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAKA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEYCIQDJR6C6S0u4ZJqg5enWKOz0C6B1Z_YDezMZXTapGN5ZPgIhAIw7esGdsu7c2XIarZP0GeGy8UdBmcT6zRdVILgBf_CL"
+        "signature": "MEQCIFlsQoA85969DenVjFCqZzhBtJUCWCFggNjHKv-oDgWjAiBbUG5m087bv4dfJh6dz7WDytzPGJpFuQRK1Kk0znmUGw"
       },
       "expect": "reject",
       "reason": "grammar"
@@ -1240,7 +1281,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYaFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIQD_qqBNL4LBhNrM4NE7duRRKbHRToQtwkJDsl9yN_OWQwIgb--vBvg6W5m5PC_JitZgJs0VLw2jINgbtiOlVrARNrc"
+        "signature": "MEUCIQDN-aHCMz2gjTi5uEUQHE9SPwkvc8jKe_cb_jtO2zFdtQIgZsZgp2ZjcDAYrdexYrYI95Biefil7bXOarpeIkXHhis"
       },
       "expect": "reject",
       "reason": "grammar"
@@ -1254,7 +1295,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYVAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIQCqmL5f1q9zJU1-sr3_KxwAnL5s-MIkbpxSBjZzEly5HQIgTqCDpzgqBaitIYbWUbukPXB06i6BTWB6wIUrK3EA_DQ"
+        "signature": "MEUCIQCyrRaddgYvhfVyzKtEVgDmEOrctY7EcOYkkv_VjDxXtgIgIgzP0eXF_vNfoPdUZYSuxuuNmaRiUfCHta2ERKN5kog"
       },
       "expect": "reject",
       "reason": "grammar"
@@ -1268,7 +1309,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "77u_eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIQCGD2WX57BoZAI6W7j-oS3T7KsvEJ8TLAKE-rb9vEXgvgIgMhvbDp9QsI4M1jrOk93Y0P3USAWW64MqyceI_cEmf50"
+        "signature": "MEQCIAGWWDHG1MXq0Y-h-3HEUk3tyo1wV1BiBo4AhUFSQBijAiB3cTAO3mWb384RobQcqnZ2uNBO1M9Xq7aCN4Fleb6L6Q"
       },
       "expect": "reject",
       "reason": "grammar"
@@ -1282,7 +1323,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIngiOiL_In0",
-        "signature": "MEQCIC8rPlbRhO-hkxG3PTTPA6IzvMTYXJfTz4aDvAhQOOt-AiATivQVyH4jF9M4eIMPxcXrxif3sMopysiFa6XLkcGhjQ"
+        "signature": "MEYCIQCLPhZ-gODOJxXhT-G_AnAwR7VfAR8Lh-4wU2LwRSg_jwIhAN794GPkRunudRcE4L65NUyLIaiLFcZrSRoO2el9kbhx"
       },
       "expect": "reject",
       "reason": "grammar"
@@ -1296,7 +1337,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "W3sidHlwZSI6IndlYmF1dGhuLmdldCIsImNoYWxsZW5nZSI6IlFvcHJMMmlPNERRM0c4eVZWSmJ4RTJ4NzJ0d25ucVpQQTdRSzRDbkdVRG8iLCJvcmlnaW4iOiJodHRwczovL3NpZ25pbi5pZC5iZW50by5wYWdlIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfV0",
-        "signature": "MEYCIQCITVBbG0SGL9CD6tiE0EOl84P10p2gjJrsRkSDvKGHFQIhAMgur-AnaHEBDGC2OGzLeiiVBbDuhsMwNde_SJoedUN5"
+        "signature": "MEYCIQD-ekHUruYH9cd47UMsFbBBxkzPGD9mYAC7rDmTXymQEwIhAN5a8apYkAMpW6HOh3V9GEVA9sEvsVYqHUnqM8H0rcgi"
       },
       "expect": "reject",
       "reason": "grammar"
@@ -1310,7 +1351,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsfQ",
-        "signature": "MEUCIHEQ-a4TfolotwAZyrTgq2kockrkVTS8lZcOmXUIe4_YAiEA2PfLzE7UaymX6LRsL88XUfE7swjZJDdaqG5hRkSJ2F8"
+        "signature": "MEUCIQCByR6MmQKS_pIBoZMImA8rMiUmp7i4eBKnOl3kaWu-HwIgW8gWUfHv6xugHqUvRp9-Z1Z-iLcZQY_doC9LpjZZvgc"
       },
       "expect": "reject",
       "reason": "grammar"
@@ -1324,7 +1365,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIngiOiJcdWQ4MDAifQ",
-        "signature": "MEYCIQC0YJw2bASJWUTXieebdTsnTMNZQuyUfdTrpjQ-5lskpQIhAMbl-bEQtwiy-_TBNmRcqSIa9au2Q6cZWKhXZwJNbLwo"
+        "signature": "MEUCIFVbuM3TpYoUU9j2VemGvEA-5KSwaxlntQMSpRX38YeMAiEAkdIuFsjMftny-qAKzbby9E8KvMFTLCpl6FVfv6XkncE"
       },
       "expect": "reject",
       "reason": "grammar"
@@ -1338,7 +1379,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9eA",
-        "signature": "MEUCIHpqL8VdWR-jYmud036vY87t_8GPAtOXI_y6BzSmwB7mAiEAhY5r4H2-u99Z41SyWkx1OPdwEsM3y3rwCx17nZ-bVyw"
+        "signature": "MEYCIQDn-RgT628UlVaFC6zAR2xpAMmv7gCCvqickANdlXEAywIhAP2WS21ezIVnpnXzdWUFg3Ng9qUhCfjDsKFtB2OVWs54"
       },
       "expect": "reject",
       "reason": "grammar"
@@ -1352,7 +1393,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIngiOiIBIn0",
-        "signature": "MEQCIEXQlT4L-XnVHVyNzQZUDHRGJocaMFw1n8aV4xXw1WvjAiBVeKfwN6tj1ur-t4T5zNHSnJxruVoJ9hbQlhZpmnLqcw"
+        "signature": "MEUCIQCFp8Ais_tJV7d15vwc0znxoiu0Em5trFbEfwODnr6zcgIgJWCO5GRi4qQdSPFNic8ZWrB1aCSOkKrNFhrhFwkA4mk"
       },
       "expect": "reject",
       "reason": "grammar"
@@ -1366,7 +1407,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG/OmSKrWHs0dUt+SZYYFAAAAAA==",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIC0ESLnZvXzwO42SUiRlN5Oo0Q4pPQmsmGOrEXRREHdjAiEA0d-NVxtcEB5S960z4Oxl-2dxOr9b7v_-a9vLvPNjGYs"
+        "signature": "MEUCIQCc-CpQYeFyiLENWKlCEFxI4MloKlzCqBc4hIEF63H0YgIgR5LAncE6I_sTG61P8-x_X7BsY3TzO9Nfn-r86HsXjTs"
       },
       "expect": "reject",
       "reason": "grammar"
@@ -1380,7 +1421,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIC0ESLnZvXzwO42SUiRlN5Oo0Q4pPQmsmGOrEXRREHdjAiEA0d-NVxtcEB5S960z4Oxl-2dxOr9b7v_-a9vLvPNjGYs"
+        "signature": "MEUCIQCc-CpQYeFyiLENWKlCEFxI4MloKlzCqBc4hIEF63H0YgIgR5LAncE6I_sTG61P8-x_X7BsY3TzO9Nfn-r86HsXjTs"
       },
       "expect": "reject",
       "reason": "grammar"
@@ -1394,7 +1435,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEYCIQBLbyEcw5bnKLUf2ojsa8vFyu1D2JxQ82fz4ymliIbrfwIhALZLsFJnafYzZAm2-Uz2KM4nXTM_34k-Dz881kM4eU4i"
+        "signature": "MEYCIQB-9Sdd4LQ42A6_XGu3mvHgXwQ9H0UAE73LsXMZkRtPlQIhAIekIf5wniyrtOJBD5vjZbNDPLYXh-aTxXqeUNPnB2IV"
       },
       "expect": "reject",
       "reason": "signature"
@@ -1408,7 +1449,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEYCIEtvIRzDlucotR_aiOxry8XK7UPYnFDzZ_PjKaWIhut_AiEAtkuwUmdp9jNkCbb5TPYoziddMz_fiT4PPzzWQzh5TiIA"
+        "signature": "MEYCIQCgFCwhAkV2-Jiw-j9ay35YKVxINp3HYOgEEXn9oXOzSQIgfC8hkYd5lMU36IdhGHHvGUnbeygrUCJ1_iEH_uH7IjwA"
       },
       "expect": "reject",
       "reason": "signature"
@@ -1422,7 +1463,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEYCIEtvIRzDlucotR_aiOxry8XK7UPYnFDzZ_PjKaWIhut_AiEAtkuwUmdp9jNkCbb5TPYoziddMz_fiT4PPzzWQzh5TiI"
+        "signature": "MEYCIQCgFCwhAkV2-Jiw-j9ay35YKVxINp3HYOgEEXn9oXOzSQIgfC8hkYd5lMU36IdhGHHvGUnbeygrUCJ1_iEH_uH7Ijw"
       },
       "expect": "reject",
       "reason": "signature"
@@ -1436,7 +1477,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "S28hHMOW5yi1H9qI7GvLxcrtQ9icUPNn8-MppYiG63-2S7BSZ2n2M2QJtvlM9ijOJ10zP9-JPg8_PNZDOHlOIg"
+        "signature": "oBQsIQJFdviYsPo_Wst-WClcSDadx2DoBBF5_aFzs0l8LyGRh3mUxTfoh2EYce8ZSdt7KCtQInX-IQf-4fsiPA"
       },
       "expect": "reject",
       "reason": "signature"
@@ -1450,7 +1491,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MCUCIEtvIRzDlucotR_aiOxry8XK7UPYnFDzZ_PjKaWIhut_AgEA"
+        "signature": "MCYCIQCgFCwhAkV2-Jiw-j9ay35YKVxINp3HYOgEEXn9oXOzSQIBAA"
       },
       "expect": "reject",
       "reason": "signature"
@@ -1464,7 +1505,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEYCIQD_____AAAAAP__________vOb6racXnoTzucrC_GMlUQIhALZLsFJnafYzZAm2-Uz2KM4nXTM_34k-Dz881kM4eU4i"
+        "signature": "MEUCIQD_____AAAAAP__________vOb6racXnoTzucrC_GMlUQIgfC8hkYd5lMU36IdhGHHvGUnbeygrUCJ1_iEH_uH7Ijw"
       },
       "expect": "reject",
       "reason": "signature"
@@ -1478,7 +1519,21 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIIBvIRzDlucotR_aiOxry8XK7UPYnFDzZ_PjKaWIhut_AiEAtkuwUmdp9jNkCbb5TPYoziddMz_fiT4PPzzWQzh5TiI"
+        "signature": "MEQCIKAULCECRXb4mLD6P1rLflgpXEg2ncdg6AQRef2hc7NJAiB8LyGRh3mUxTfoh2EYce8ZSdt7KCtQInX-IQf-4fsiPA"
+      },
+      "expect": "reject",
+      "reason": "signature"
+    },
+    {
+      "name": "sw/der-r-s-zero",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MAYCAQACAQA"
       },
       "expect": "reject",
       "reason": "signature"
@@ -1492,7 +1547,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsImV4dHJhIjoxfQ",
-        "signature": "MEUCIEtvIRzDlucotR_aiOxry8XK7UPYnFDzZ_PjKaWIhut_AiEAtkuwUmdp9jNkCbb5TPYoziddMz_fiT4PPzzWQzh5TiI"
+        "signature": "MEUCIQCgFCwhAkV2-Jiw-j9ay35YKVxINp3HYOgEEXn9oXOzSQIgfC8hkYd5lMU36IdhGHHvGUnbeygrUCJ1_iEH_uH7Ijw"
       },
       "expect": "reject",
       "reason": "signature"
@@ -1506,7 +1561,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIEtvIRzDlucotR_aiOxry8XK7UPYnFDzZ_PjKaWIhut_AiEAtkuwUmdp9jNkCbb5TPYoziddMz_fiT4PPzzWQzh5TiI"
+        "signature": "MEUCIQCgFCwhAkV2-Jiw-j9ay35YKVxINp3HYOgEEXn9oXOzSQIgfC8hkYd5lMU36IdhGHHvGUnbeygrUCJ1_iEH_uH7Ijw"
       },
       "expect": "reject",
       "reason": "signature"
@@ -1520,7 +1575,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIEtvIRzDlucotR_aiOxry8XK7UPYnFDzZ_PjKaWIhut_AiEAtkuwUmdp9jNkCbb5TPYoziddMz_fiT4PPzzWQzh5TiI"
+        "signature": "MEUCIQCgFCwhAkV2-Jiw-j9ay35YKVxINp3HYOgEEXn9oXOzSQIgfC8hkYd5lMU36IdhGHHvGUnbeygrUCJ1_iEH_uH7Ijw"
       },
       "expect": "reject",
       "reason": "key"
@@ -1534,7 +1589,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIEtvIRzDlucotR_aiOxry8XK7UPYnFDzZ_PjKaWIhut_AiEAtkuwUmdp9jNkCbb5TPYoziddMz_fiT4PPzzWQzh5TiI"
+        "signature": "MEUCIQCgFCwhAkV2-Jiw-j9ay35YKVxINp3HYOgEEXn9oXOzSQIgfC8hkYd5lMU36IdhGHHvGUnbeygrUCJ1_iEH_uH7Ijw"
       },
       "expect": "reject",
       "reason": "key"
@@ -1548,7 +1603,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEQCIBcitvObywWAVfEq2R27AwT5MFPvNV_0Lxv8UM3YQOEXAiB5DsRfH-4eryOv2xiApvZiro5lzkXMNwS1rZGgg6RmrQ"
+        "signature": "MEUCIQDVOt1QDlbQ2f9uFuW7OMKYfj6O-DGFkNgWn4mJSorxWQIgGs-sv3HPaiDBCT86kc45wFbqNhfTASvJa--09QBjltg"
       },
       "expect": "accept"
     },
@@ -1561,7 +1616,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIQDSNvCD0O3bEZYmiCHS4uU_75IOZQ3ZY27zSxcLbasxEQIgZA0aKH5Fy-6SSM4FcCG-NXk6ISNBarNvILyWhmiDh24"
+        "signature": "MEQCIEALnTzlTGfRC7k6oyKSZQmbpdBsl9gIuIdrqKm9RP2_AiAnwXQtIWdJHJEmTN5Qw_EKXbVTVQBxe8a0UHK5hJ4OvA"
       },
       "storedSignCount": 0,
       "expect": "accept"
@@ -1575,7 +1630,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAABw",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEQCIGEvYp4R3i4SRX2IBAc0n7AEPr-ITeUNnjm7uwViP4tbAiAk0uPEaqdGu24XIqbZaJ2LpwEZwhEf9zjXKBi-cLTS9Q"
+        "signature": "MEUCIAwlev-0v5BmpJEGsGIWKhpp_H-BduJrseJvTxe8jZcDAiEAnpLMCfEw_aJBeND3Je9ofQSwXOS38Q8XJ8qVlR-dhto"
       },
       "storedSignCount": 0,
       "expect": "accept"
@@ -1589,7 +1644,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAABQ",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEYCIQDziXGRqMhyv8Kzt4gjsA8LtndMajKPyYJ1poyIsye0PAIhAKRiMIXitemHLQIVNQ8AOTWx0W4IpxFAWuPpJ7bDmW3M"
+        "signature": "MEUCIQCXWMIOYRTf32cDsBn2sXJM7OU5I2_F0YYyHBLLI2z3BQIgUybgkx8d0UFLgalpd-QQbLVbRbjJZXAHl5Dil-KCRuo"
       },
       "storedSignCount": 4,
       "expect": "accept"
@@ -1603,7 +1658,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAABQ",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEYCIQCTb4fJC2jMpx0or4ddh53wdPzSxftt8IMD37G-k9vZjwIhAJJ1mjLCQWQSZ1TVemra5PiaZtVO57nU1ZTypNm13ZNv"
+        "signature": "MEQCIBbJ51Pcc84lVkDh2Izp0jTPnGB23dks6FZVQ1Ot4tt6AiA_uf9IthvYwjPGCG19lHVG7us2XvNVfwEnTx0WhQ7HlQ"
       },
       "storedSignCount": 5,
       "expect": "reject",
@@ -1618,7 +1673,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAABQ",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEUCIHU8KAlHQMmFyh2XYfOgYUh5U15ZxXFyubbJO6v8WDqqAiEA9gLRKf6NZ1AXz0O9yVEX86tZsTOd2qVIIhGNkL-JHzE"
+        "signature": "MEQCIExxa4ySNEP07hAnP1_jvZZCcfwgkHytk_4zNbXW6c1EAiAFwlxnKtGnYDOchLQW0GeQJ7gsCYzzLLjEK9PkltF4CA"
       },
       "storedSignCount": 6,
       "expect": "reject",
@@ -1633,7 +1688,7 @@
       "assertion": {
         "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
         "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-        "signature": "MEYCIQCmG6bJgTFY30KtH5mmXQzu1AEn647z8kILQXiHWAQMBQIhAJlRB0U7_gQx-CaFHdvp1JZP3yeWeejjXuSTGwX_HmXd"
+        "signature": "MEYCIQDuY5XtaU1WCU8F41hFajd0hHaLlMViCfZgbM4NFbS54gIhAJ9zxMZKxe-5yUDYEfKtfp34Pre6Kl6WBwXbSxfyqbLv"
       },
       "storedSignCount": 3,
       "expect": "reject",

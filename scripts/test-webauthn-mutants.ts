@@ -19,6 +19,8 @@
 // is below and must go red. Likewise the r, s < n range check in derToRaw:
 // WebCrypto refuses an out-of-range r or s by itself, so in JS the check is
 // redundant (the der-r-is-n row is refused either way); it stays for ports.
+// The same holds for r or s = 0 (the der-s-zero and der-r-s-zero rows, the
+// CVE-2022-21449 shape): a port whose library once accepted it must pin those rows.
 
 import { cpSync, mkdtempSync, readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -106,6 +108,10 @@ const MUTANTS: Mutant[] = [
     from: '  return i === der.length ? out : null\n', to: '  return out\n' },
   { name: 'DER sequence length is not checked', file: 'webauthn.ts',
     from: "der[0] !== 0x30 || der[1] !== der.length - 2) return null", to: "der[0] !== 0x30) return null" },
+  { name: 'a negative DER integer is read as positive', file: 'webauthn.ts',
+    from: '    if (v[0] & 0x80) return null                          // negative\n', to: '' },
+  { name: 'a challenge shorter than 16 bytes is accepted', file: 'webauthn.ts',
+    from: ' || opts.challenge.length < MIN_CHALLENGE) return no', to: ') return no' },
   { name: 'a raw 64-byte signature is taken as is', file: 'webauthn.ts',
     from: '  const raw0 = derToRaw(der)\n', to: '  const raw0 = der.length === 64 ? der : derToRaw(der)\n' },
   { name: 'the signature counter is not checked', file: 'webauthn.ts',

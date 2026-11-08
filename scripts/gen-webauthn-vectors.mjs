@@ -129,7 +129,7 @@ const { authenticatorId } = await cdp.send('WebAuthn.addVirtualAuthenticator', {
   isUserVerified: true, automaticPresenceSimulation: true } })
 const ev = (fn, ...a) => page.evaluate(([fn, a]) => window.T[fn](...a), [fn, a])
 const must = (x, what) => { if (!x || x.error) throw new Error(`${what}: ${x && x.error}`); return x }
-const SOURCE = `chromium-${browser.version()}`
+const SOURCE = `${process.argv.includes('--chrome') ? 'chrome' : 'chromium'}-${browser.version()}`
 
 await page.goto(ORIGIN + '/')
 const created = must(await ev('create', RP, 'ros.setup'), 'create')
@@ -284,6 +284,13 @@ await sw('challenge-text-not-hash', await sign(cdStd({ challenge: b64u(te.encode
   const bumped = CH.slice(0, -1) + alpha[alpha.indexOf(last) ^ 1]
   await sw('challenge-noncanonical', await sign(cdStd({ challenge: bumped })), 'reject', 'challenge')
 }
+// the caller's challenge: WebAuthn's minimum is 16 bytes; shorter is a caller error even when clientData agrees
+await sw('challenge-empty', await sign(cdStd({ challenge: '' })), 'reject', 'grammar', { challenge: '', text: null })
+{
+  const c15 = (await sha('fifteen')).slice(0, 15), c16 = (await sha('sixteen')).slice(0, 16)
+  await sw('challenge-15-bytes', await sign(cdStd({ challenge: b64u(c15) })), 'reject', 'grammar', { challenge: b64u(c15), text: null })
+  await sw('challenge-16-bytes', await sign(cdStd({ challenge: b64u(c16) })), 'accept', undefined, { challenge: b64u(c16), text: null })
+}
 await sw('challenge-missing', await sign(JSON.stringify({ type: 'webauthn.get', origin: ORIGIN, crossOrigin: false })), 'reject', 'challenge')
 // origin
 for (const [n, o] of [...(OHOST !== RP ? [['rp-host', RP_HOST], ['sibling-under-rp', `https://x.${RP}`]] : []),
@@ -348,7 +355,15 @@ await sw('control-character', await sign(cdStd({ x: 'PLACEHOLDER' }).replace('PL
   await sw('raw-not-der', { ...a, signature: b64u(a.raw) }, 'reject', 'signature')
   await sw('der-s-zero', { ...a, signature: b64u(derOf(minInt(r), Uint8Array.from([0]))) }, 'reject', 'signature')
   await sw('der-r-is-n', { ...a, signature: b64u(derOf(minInt(be32(N)), minInt(s))) }, 'reject', 'signature')
-  await sw('der-negative', { ...a, signature: b64u(derOf(Uint8Array.from([0x80, ...r.slice(1)]), minInt(s))) }, 'reject', 'signature')
+  {
+    // a VALID signature whose r has its top bit set, written without the 0x00 pad DER needs:
+    // the same (r, s), so only the negative-integer check refuses it (a second encoding of one signature)
+    let b = a
+    while (!(b.raw[0] & 0x80)) b = await sign(cdStd())
+    await sw('der-negative', { ...b, signature: b64u(derOf(b.raw.slice(0, 32), minInt(b.raw.slice(32)))) }, 'reject', 'signature')
+  }
+  // r = s = 0: the "psychic signature" shape (CVE-2022-21449), which some ECDSA verifiers accepted for any message
+  await sw('der-r-s-zero', { ...a, signature: b64u(Uint8Array.from([0x30, 0x06, 0x02, 0x01, 0x00, 0x02, 0x01, 0x00])) }, 'reject', 'signature')
   await sw('client-data-tampered', { ...a, clientDataJSON: b64u(te.encode(cdStd({ extra: 1 }))) }, 'reject', 'signature')
   await row('sw/another-key', 'software', 'other', T, a, 'reject', 'signature')
   await row('sw/key-off-curve', 'software', 'offCurve', T, a, 'reject', 'key')
