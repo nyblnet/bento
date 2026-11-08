@@ -12263,6 +12263,34 @@ Guards: `scripts/test-disk-change.ts` (fake handle on a 2 s-mtime file
 system, nine mutants and a control) and `scripts/test-disk-change-browser.mjs`
 (real Chromium handles).
 
+## 2026-11-08 — The bento/id directory (`server/directory/`) is AGPL-3.0-only, with a CLA
+
+Maintainer ruling, 2026-11-08. The directory service behind id.bento.page is
+licensed under the GNU Affero General Public License, version 3 only; the rest
+of the repository stays MIT.
+
+- **Why AGPL there:** the directory is a network service, not code that
+  travels inside a document. The AGPL's network clause means anyone who runs a
+  modified copy for others must offer those users its source.
+- **Scope is the directory alone.** `server/directory/` carries its own
+  `LICENSE` (the unmodified FSF text), `AGPL-3.0-only` SPDX headers on every
+  source file and in `wrangler.toml`, and a `package.json` whose only job is
+  the `license` field (plus `"type": "module"`, which its ESM sources already
+  are). The kernel modules it imports (`kernel/src/statements.ts`,
+  `address.ts` and friends) and its rig in `scripts/` stay MIT; MIT code can
+  be combined into AGPL work, and nothing MIT imports the directory except
+  that test rig.
+- **`-only`, not `-or-later`:** the repository has no GPL-family precedent,
+  and `-only` keeps the choice of any future licence version with the project
+  through the CLA rather than handing it to a licence steward in advance.
+- **CLA:** contributions to `server/directory/` need the individual CLA in
+  `server/directory/CLA.md` (adapted from the Apache ICLA v2.2), which grants
+  the project the right to relicense them. Contributions anywhere else need
+  nothing new. Until a CLA bot is installed (a maintainer account action), a
+  contributor agrees by posting the comment the CLA gives on their pull
+  request, and the reviewer checks for it before merging.
+
+Pointers: `server/directory/README.md` "Licence", `CONTRIBUTING.md` "License".
 
 ## 2026-10-21 — bento/connect H2: the desktop host's trust store, origins and arming (home/desktop/host, home/desktop/hostcore)
 
@@ -12494,3 +12522,60 @@ same held for forward Delete at a block's end, which the browser joined on scree
 Measured with the randomized screen-equals-model rig (keystrokes in a real browser, every step
 compared with a render of the model, plus what each step should have done), 64 seeds × 60 steps
 in both Playwright's headless shell and system Chrome.
+## dash: one grid, tables inside it — replace Excel and do everything Airtable does
+
+2026-10-20, set by the maintainer; confirmed by the maintainer on 2026-11-08,
+after the work behind it was held for that confirmation. dash's direction is
+to replace Excel, and better, AND to do everything Airtable does, and better,
+as ONE product.
+
+This REFINES the 2026-08-11 two-kinds decision rather than reversing it, and
+the tension is stated here so nobody resolves it silently. The two STORAGE
+kinds stay exactly as decided (`canvas` sparse and typed by cell, `table`
+columnar and typed by column), and nothing merges their storage. What changes
+is the SURFACE: a user no longer chooses a kind before typing. Every sheet is a
+grid; a table is an object placed IN a grid (`TableSheet.placed = {on, r, c}`,
+additive; an absent `placed` means the table fills its own sheet, which is every
+Dataset that exists, so there is no migration). The old "bridge between sheets"
+becomes in place: Format as table / Convert to range.
+
+Settled with it, so later work does not contradict them:
+- `A1` into a placed table resolves in STORED row order. View sorts and filters
+  never change what `A1` means.
+- Structured references use Excel's syntax (`T[Col]`, `T[@Col]`, `T[#Totals]`),
+  so tables round-trip through .xlsx as ListObjects with calculated columns.
+- Airtable's layer is a field `kind` BESIDE a base `type` every build knows
+  (never a new `type`: measured, a new type stopped the previous build from
+  booting at all), plus per-table `tableViews`. List-valued cells (link,
+  multi, attachment) use the EXISTING `raw` encoding with array values, never a
+  new encoding, because an unknown encoding breaks old builds' read paths while
+  a raw array degrades to text. A link stores ONE side; its mirror is derived,
+  so the two sides cannot diverge under collab.
+- Lookups and rollups are field kinds with settings, as in Airtable — not
+  formula functions, since `LOOKUP` is already Excel's.
+
+Full design: `docs/dash-unified.md`.
+## 2026-11-08 — Slides: what the author sees when another program changed the file
+
+The slides half of "A file another program changed is never overwritten"
+(same date). A banner names the file and offers two
+choices; until one is made, auto-save keeps its browser recovery copy but does
+not write the file or flash "Saved", and ⌘S answers with "Not saved — … was
+changed by another program" and brings the banner back.
+
+- **"Load the version on disk"** opens the file as it is now, by the same
+  route as a dropped file (block, parse, the open-file guard), as ONE undoable
+  step. The deck as it was goes into Version history first, and the toast says
+  so only when the timeline really has it. Not for a sealed deck on either side
+  (a password now, or one the file gained): that plaintext never reaches
+  IndexedDB, and ⌘Z is the way back. The file is not rewritten after loading.
+- **The file's password wins.** A version on disk that has a password asks for
+  it (a wrong one loads nothing), and later saves are encrypted with it; one
+  whose password was removed is loaded and saved without one. An
+  identity-sealed version cannot be opened from here: the author is told to
+  open the file again.
+- **"Keep mine"** overwrites once, deliberately; the next outside edit is
+  caught again.
+
+Guard: `scripts/test-slides-disk-change-browser.mjs` (the packaged document,
+real file handles through `launchQueue`).

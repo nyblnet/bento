@@ -752,3 +752,10 @@ runs:
       # recalculation does not throw. A ref that cannot be fetched fails.
       shell: bento-step {0}
       run: node scripts/test-dash-dates-oldshell.ts
+
+    - name: dash — a table placed inside a grid
+      # Tables placed inside a grid (docs/dash-unified.md): the rectangle a
+      # table covers, which part of which table a grid cell is, and the parse
+      # repairs, each with a control that a well-formed placement survives.
+      shell: bento-step {0}
+      run: node scripts/test-dash-placement.ts
