@@ -12485,6 +12485,39 @@ neither); the Windows key store is an explicit stub that refuses everything unti
 - **Windows file ID** (volume serial plus the 128-bit file ID, `GetFileInformationByHandleEx`) now
   drives the envelope epoch; `GlobalMemoryStatusEx` answers the recovery memory check.
 
+## dash: one grid, tables inside it — replace Excel and do everything Airtable does
+
+2026-10-20, set by the maintainer; confirmed by the maintainer on 2026-11-08,
+after the work behind it was held for that confirmation. dash's direction is
+to replace Excel, and better, AND to do everything Airtable does, and better,
+as ONE product.
+
+This REFINES the 2026-08-11 two-kinds decision rather than reversing it, and
+the tension is stated here so nobody resolves it silently. The two STORAGE
+kinds stay exactly as decided (`canvas` sparse and typed by cell, `table`
+columnar and typed by column), and nothing merges their storage. What changes
+is the SURFACE: a user no longer chooses a kind before typing. Every sheet is a
+grid; a table is an object placed IN a grid (`TableSheet.placed = {on, r, c}`,
+additive; an absent `placed` means the table fills its own sheet, which is every
+Dataset that exists, so there is no migration). The old "bridge between sheets"
+becomes in place: Format as table / Convert to range.
+
+Settled with it, so later work does not contradict them:
+- `A1` into a placed table resolves in STORED row order. View sorts and filters
+  never change what `A1` means.
+- Structured references use Excel's syntax (`T[Col]`, `T[@Col]`, `T[#Totals]`),
+  so tables round-trip through .xlsx as ListObjects with calculated columns.
+- Airtable's layer is a field `kind` BESIDE a base `type` every build knows
+  (never a new `type`: measured, a new type stopped the previous build from
+  booting at all), plus per-table `tableViews`. List-valued cells (link,
+  multi, attachment) use the EXISTING `raw` encoding with array values, never a
+  new encoding, because an unknown encoding breaks old builds' read paths while
+  a raw array degrades to text. A link stores ONE side; its mirror is derived,
+  so the two sides cannot diverge under collab.
+- Lookups and rollups are field kinds with settings, as in Airtable — not
+  formula functions, since `LOOKUP` is already Excel's.
+
+Full design: `docs/dash-unified.md`.
 ## 2026-11-08 — Slides: what the author sees when another program changed the file
 
 The slides half of "A file another program changed is never overwritten"
