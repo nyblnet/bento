@@ -1,0 +1,10 @@
+# Byte-exact files. Gate 1 and the desktop host hash these bytes, so a Windows
+# checkout must never rewrite their line endings (autocrlf made the frozen
+# real shell read UNKNOWN on a Windows runner).
+home/fixtures/** -text
+kernel/fixtures/** -text
+# Scripts that run under bash on every platform.
+*.sh text eol=lf
+*.py text eol=lf
+*.js text eol=lf
+*.ps1 text eol=lf

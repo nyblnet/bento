@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# The desktop host's release-build check (security: the bundled history must
+# verify, cover the shipped release and be the CURRENT published one; the rig
+# feature must be absent from a shipped build).
+#
+#   ./release-check.sh            # fetch, verify, debug build, assert
+#   ./release-check.sh --release  # the same with the release profile (packaging)
+#
+# For each app with a published history (BENTO_APPS, default "slides"), fetches
+# releases/<app>/{history.json,manifest.json,<shell>} from bento.page into
+# ./releases (gitignored; build.rs embeds only the *history*.json files), runs
+# hostcore's release_check against them with the PINNED RELEASE KEY ONLY, then
+# builds the host WITHOUT the rig feature and asserts that neither the rig
+# commands nor the gate-1 corpus test key are in the binary, and that the capability
+# set compiled in is exactly the shipped one (capcheck.py: none on Linux, on Windows
+# documents.json alone).
+set -euo pipefail
+cd "$(dirname "$0")"
+BASE=${BENTO_RELEASES_URL:-https://bento.page/releases}
+PROFILE=debug; FLAG=""
+[ "${1:-}" = "--release" ] && { PROFILE=release; FLAG="--release"; }
+rm -rf releases
+for a in ${BENTO_APPS:-slides}; do
+  mkdir -p "releases/$a"
+  curl -fsS -o "releases/$a/history.json" "$BASE/$a/history.json"
+  curl -fsS -o "releases/$a/manifest.json" "$BASE/$a/manifest.json"
+  shell=$("${PY:-python3}" -c "import json,sys;print(json.loads(json.load(open(sys.argv[1]))['payload'])['url'].rsplit('/',1)[1])" "releases/$a/manifest.json")
+  curl -fsS -o "releases/$a/$shell" "$BASE/$a/$shell"
+  ( cd ../hostcore && cargo run -q --example release_check -- "../host/releases/$a" )
+done
+# tauri-build leaves generated ACL files (gen/, permissions/) in the crate directory: a rig build
+# that ran earlier in the same checkout (Windows lists its commands there) must not leak into this one.
+rm -rf gen permissions
+# This build's own OUT_DIR is what generate_context! compiles in; a rig build's sits beside it.
+OUT_DIR=$(env -u BENTO_HISTORIES_DIR cargo build $FLAG --message-format=json 2>/dev/null \
+  | "${PY:-python3}" -c "import json,sys;print([m for m in map(json.loads,sys.stdin) if m.get('reason')=='build-script-executed' and 'bento-home-desktop' in m['package_id']][-1]['out_dir'])")
+"${PY:-python3}" capcheck.py "$OUT_DIR/capabilities.json"
+BIN="target/$PROFILE/bento-home-desktop"
+[ -f "$BIN" ] || BIN="$BIN.exe" # Windows
+./gate-binary.sh "$BIN" || { echo "where the rig names appear:"; grep -rla rig_stash gen permissions target/*/build/bento-home-desktop-*/out 2>/dev/null | head; exit 1; }
+n=$(find releases -name 'history.json' | wc -l | tr -d ' ')
+echo "release check passed: $n app history(ies) bundled into $BIN"

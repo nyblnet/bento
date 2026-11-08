@@ -43,8 +43,8 @@ thread_local! {
 /// Physical memory available to THIS process right now, in KiB, where the
 /// platform says. Linux: /proc/meminfo MemAvailable, capped by every cgroup v2
 /// ancestor's (memory.max − memory.current) — Flatpak, Snap and containers set
-/// those, and MemAvailable ignores them. Windows: GlobalMemoryStatusEx (owed
-/// with the Windows store). Elsewhere: unknown (None).
+/// those, and MemAvailable ignores them. Windows: GlobalMemoryStatusEx
+/// (ullAvailPhys; a job-object limit is not seen, unlike the Linux cgroup cap). Elsewhere: unknown (None).
 pub fn available_memory_kib() -> Option<u64> {
     #[cfg(test)]
     if let Some(v) = AVAILABLE_OVERRIDE_KIB.with(|c| c.get()) {
@@ -60,6 +60,18 @@ pub fn available_memory_kib() -> Option<u64> {
             Some(path) => mem.min(cgroup_free_kib(std::path::Path::new("/sys/fs/cgroup"), &path).unwrap_or(u64::MAX)),
             None => mem,
         });
+    }
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+        // SAFETY: a zeroed MEMORYSTATUSEX with dwLength set, as the API requires.
+        let avail = unsafe {
+            let mut m: MEMORYSTATUSEX = std::mem::zeroed();
+            m.dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
+            if GlobalMemoryStatusEx(&mut m) == 0 { return None }
+            m.ullAvailPhys
+        };
+        return Some(avail / 1024);
     }
     #[allow(unreachable_code)]
     None
@@ -415,6 +427,15 @@ pub fn pepper_open(wrap_key: &[u8], iv: &[u8], outer: &[u8], account_pub: &str) 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The real platform probe (no override): Windows and Linux must answer, and
+    /// a runner or a laptop has more than a megabyte free.
+    #[cfg(any(windows, target_os = "linux"))]
+    #[test]
+    fn the_platform_reports_available_memory() {
+        let kib = available_memory_kib().expect("the platform probe answers");
+        assert!(kib > 1024, "{kib} KiB");
+    }
 
     #[test]
     fn argon2id_refuses_cleanly_when_memory_is_short() {
