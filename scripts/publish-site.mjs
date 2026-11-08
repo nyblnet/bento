@@ -29,6 +29,7 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { gatePackIndex } from './sign-packs.mjs'
 import { walk, plannedDeletions, groupDeletions, supersededPacks } from './site-inventory.mjs'
+import { stageHostFiles } from './site-routing.mjs'
 import { APPS, RELEASE_MARKER, tagFor } from './apps.mjs'
 import { appHash, sameApp } from './lib/apphash.mjs'
 import { accountMayRelease, activeAccount, mismatchMessage, noOwnerMessage, ownerOfRemote, repoRemote } from './gh-account.mjs'
@@ -221,6 +222,16 @@ for (const [key, a] of Object.entries(APPS)) {
     die(`site/ carries a ${appKey} release marker but no ${staged.slice(site.length + 1)} — re-run release.mjs (nothing signed it).`)
   }
 }
+
+// ---- host routing files (Cloudflare Workers static assets) -----------------
+// _headers, _redirects, wrangler.toml and .assetsignore are written into the
+// tree HERE, not in release.mjs: --gallery and site-only publishes add .html
+// files after a release, and _redirects needs a rule for every one of them.
+// This is the one step that sees the exact tree being mirrored. They are
+// inert on GitHub Pages and read, never served, by Workers. See
+// scripts/site-routing.mjs; scripts/test-site-routing.mjs is the rig.
+stageHostFiles(site, root)
+console.log('• host routing files staged (_headers, _redirects, wrangler.toml, .assetsignore)')
 
 // ---- mirror site/ → dest (authoritative; never touches dest/.git) ----------
 // NEVER DELETE WHAT THIS BUILD DID NOT PRODUCE.

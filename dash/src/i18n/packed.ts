@@ -196,6 +196,7 @@ export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
   "Data story": ["データストーリー","数据故事","資料故事","Historia de datos","Récit de données","Datenstory","Storia dei dati","Narrativa de dados"],
   "Dataset": ["データセット","数据集","資料集","Conjunto de datos","Jeu de données","Datensatz","Set di dati","Conjunto de dados"],
   "Date": ["日付","日期","日期","Fecha","Date","Datum","Data","Data"],
+  "Date and time": ["日付と時刻","日期和时间","日期和時間","Fecha y hora","Date et heure","Datum und Uhrzeit","Data e ora","Data e hora"],
   "Decimals": ["小数点以下の桁数","小数位数","小數位數","Decimales","Décimales","Dezimalstellen","Decimali","Casas decimais"],
   "Delete": ["削除","删除","刪除","Eliminar","Supprimer","Löschen","Elimina","Excluir"],
   "Delete \"{name}\" and its {n} rows?": ["「{name}」とその {n} 行を削除しますか？","删除“{name}”及其 {n} 行数据？","要刪除「{name}」及其中的 {n} 列嗎？","¿Eliminar “{name}” y sus {n} filas?","Supprimer « {name} » et ses {n} lignes ?","„{name}“ mit seinen {n} Zeilen löschen?","Eliminare \"{name}\" e le sue {n} righe?","Excluir “{name}” e suas {n} linhas?"],

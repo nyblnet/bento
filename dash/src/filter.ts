@@ -41,6 +41,8 @@
 // Nothing here touches the DOM or the document: pure functions over a `get`
 // accessor, so the whole surface is provable in node.
 
+import { compareTemporal } from './datetime.ts'
+
 /**
  * What a filter menu offers.
  *
@@ -185,6 +187,19 @@ export const BLANK_KEY = matchKey(null)
  * predicates refuse them).
  */
 export function compare(a: unknown, b: unknown): number {
+  // Two DATES, two datetimes or two TIMES order as the moments they are. ISO
+  // text already sorts by date, but not `9:05` against `12:30`, and not a
+  // `T`-spelled datetime from an xlsx import against a typed one with a space.
+  // (only two strings that both START with a digit can be moments — the
+  // inline test keeps a column of words from paying for the question)
+  if (typeof a === 'string' && typeof b === 'string') {
+    const ca = a.charCodeAt(0)
+    const cb = b.charCodeAt(0)
+    if (ca >= 48 && ca <= 57 && cb >= 48 && cb <= 57) {
+      const m = compareTemporal(a, b)
+      if (m !== null) return m
+    }
+  }
   const x = asNumber(a)
   const y = asNumber(b)
   if (x !== null && y !== null) return x < y ? -1 : x > y ? 1 : 0

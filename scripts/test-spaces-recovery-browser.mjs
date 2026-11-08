@@ -67,7 +67,10 @@ const newCtx = async () => {
 }
 try {
   // A saved space with a fixed docId and modified time, spliced into the shell.
-  const MODIFIED = '2026-10-10T12:00:00.000Z'
+  // Relative to now, never a fixed date: the app prunes recovery snapshots older than
+  // 30 days on boot (kernel autosave pruneOld), so a fixed date would age the planted
+  // snapshot out and the banner checks would fail from a calendar date on.
+  const MODIFIED = new Date(Date.now() - 2 * 86_400_000).toISOString()
   const MS = Date.parse(MODIFIED)
   let doc
   {

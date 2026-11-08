@@ -157,6 +157,7 @@ export const pt: Catalog = {
   "Data story": "Narrativa de dados",
   "Dataset": "Conjunto de dados",
   "Date": "Data",
+  "Date and time": "Data e hora",
   "Decimals": "Casas decimais",
   "Delete": "Excluir",
   "Delete column": "Excluir coluna",

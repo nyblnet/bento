@@ -12230,3 +12230,119 @@ with seven conditions).
   deterministic row byte for byte and checks every verdict;
   `scripts/test-link-mutants.ts` reintroduces fifteen lenient paths into a copy
   of `link.ts` and requires the rig to fail on each.
+## 2026-11-03 — link v1: SEALED carries the account key and the address, and the slot wire is fixed
+
+Two follow-ups to the link v1 entry above, both from porting it to iOS.
+
+- **msg3's SEALED is the 32-byte account scalar and the address, and nothing
+  else.** The first cut sealed the 64-byte recovery blob (account ‖ recovery kx), which handed
+  every newly linked device the recovery kx. That contradicts security §26c.4:
+  the recovery kx is touched as rarely as possible, and when an existing device
+  is reachable the new device's history comes from that device re-wrapping to
+  the new device's own kx, never from unwrapping the recovery kx. Linking always
+  has H present, so it never needs it. H therefore never needs the recovery kx
+  to link a device.
+- **The address travels inside SEALED**: the plaintext is the scalar, then the
+  address in UTF-8, in normal form (it re-normalises to itself under
+  `kernel/src/address.ts`) and at most 254 bytes. A new device otherwise has no
+  way to learn which account it is joining except by a person typing it, and
+  the address must not ride in the QR or the code. So SEALED's length is a
+  bounded range, `SEALED_MIN_LEN` to `SEALED_MAX_LEN` (constants of their own,
+  not derived from the recovery blob's length), and the directory's release
+  check and N's parse refuse anything outside it as `grammar`.
+- **N takes the account key from the binding for THAT address.** `openFinal`
+  requires normal form, then looks the address up and verifies the answer
+  itself: the binding must be for exactly that address, attested `active` under
+  a pinned directory key, and its accountPub must be the received scalar's
+  public key (`unpackAccountScalar`). Its recovery kx plays no part. So H cannot
+  name an address the scalar does not belong to, and the directory cannot answer
+  with some other address's binding. N looks nothing up until SEALED has opened.
+- **N asks before it stores.** `openFinal` returns the address and the binding's
+  name; the host shows `Link this device to <address> (<name>)?` and declining
+  aborts and deletes the slot. A typed address is only a fallback for a failed
+  lookup. This supersedes any host flow that asks for the address up front.
+- **The old 64-byte payload stays in the vectors**, so a host still sealing those
+  bytes fails loudly rather than half-working. Its length is now in range and the
+  directory sees only ciphertext, so the release check passes it and N refuses
+  it, as `address`. A 32-byte scalar that is not the binding's account key
+  (another account's, and the binding's own recovery kx scalar) is `key-mismatch`.
+- **How each message travels on the slot is now part of the contract**
+  (`encodeSlotMsg` / `decodeSlotMsg`): msg0 and msg1 as canonical unpadded
+  base64url of their UTF-8 text, msg2 as its sealed wire unchanged, msg3 as its
+  text unchanged. Decoding refuses padding, set trailing bits, text that is not
+  UTF-8, a byte-order mark (the decoder would otherwise swallow it, giving one
+  text two wires), a msg0 or msg1 sent raw instead of encoded, a message under
+  the wrong number, a msg2 shorter than an iv and a tag, and anything over 4096
+  bytes once decoded. The limit is always on the decoded message, and the
+  directory must count it the same way: for msg2, the sealed bytes rather than
+  their base64url text. Before this, iOS had to
+  choose an encoding that no spec pinned, and two hosts choosing differently
+  would never link. The `link.wire` rows are byte for byte both ways.
+
+## 2026-11-07 — bento/dash: a date is a value, stored as the ISO text it always was
+
+Dates and times on a dash sheet now compute (`=A4+1`, `=B1-A1`,
+`=TEXT(A4, "dd mmm yyyy")`). What was decided, so nobody re-derives it:
+
+- **The stored form does not change.** A date stays its canonical text in the
+  file: `YYYY-MM-DD`, `YYYY-MM-DD HH:MM[:SS]` (a space; a `T` is read, never
+  written), `HH:MM[:SS]`. The cell's date or time format says what the reader
+  sees. The formula engine reads the text as the moment (`dash/src/datetime.ts`)
+  and writes results back in the same spellings. Excel's serial numbers were
+  rejected: an older dash would have treated them as plain numbers, summing,
+  charting and printing 46085. With text, an older build shows the date, cannot
+  compute with it, and saves it back byte for byte. `test-dash-dates-oldshell.ts`
+  runs the real dash 0.2.0 and 0.3.0 code against the new values.
+- **Arithmetic follows Excel where Excel means something.** A date plus or
+  minus a number is a date. A date minus a date is a number of days. A date
+  plus a time is a datetime. A time minus a time is a number (a fraction of a
+  day, which a Time cell shows as a duration). `date + date`, `number − date`
+  and `date × n` are refused with a reason, never turned into a number. A time
+  of day reads as its fraction of a day in other arithmetic (`A1*24`).
+- **Datetimes are wall-clock, with no zone.** Adding an hour to 01:30 on a
+  spring-forward night gives 02:30.
+- **NOW() and TODAY() read the frozen instant on the viewer's clock.** The
+  instant in the file (`doc.modified`) is the same for everybody. The date and
+  time shown are local to whoever opens it, as in Excel. This replaces "a
+  saved file shows the same date to everyone": that rule printed the raw UTC
+  instant, and showed the wrong date for half the day in the Americas and Asia.
+- **Ambiguous entry is unchanged.** `3/4/2026` is still kept as text. Whether
+  to guess from the locale is a pending maintainer decision.
+- **EDATE clamps to the end of a shorter month**, as Excel does: 31 January +
+  1 month is 28 February.
+
+## 2026-11-08 — A file another program changed is never overwritten
+
+Other programs edit `.bento.html` files in place: scripts, text editors,
+coding tools. A document open with a held File System Access handle rewrote
+its file on every auto-save (2.5 s after an edit), on ⌘S and on "Update this
+file", and each of those silently replaced the other program's edit. Maintainer
+decision, 2026-11-08: detect it and do not write.
+
+- **The signal is the file's own stamp**, `lastModified` and `size` from
+  `handle.getFile()`. It is taken when the handle is adopted (drop, launch
+  queue) and read back after each of our writes; every write through the held
+  handle compares first. A moved value means the write does not happen.
+- **Compared against the value read back, never the clock.** Some file
+  systems round mtime (FAT to 2 s), so a clock-derived stamp would raise false
+  alarms on our own saves. All reads and writes of the held file run one at a
+  time in the kernel, so one of our writes is never mistaken for an outside
+  edit by the next.
+- **Once tripped, the handle stops writing** until the author chooses. The
+  kernel exposes the choice and not the UI: `onFileChangedOnDisk` (the event),
+  `fileChangedOnDisk()`, `keepMineOverDisk()` (accept the disk's stamp as the
+  baseline so the next write overwrites once, deliberately, and tracking
+  resumes) and `readDiskVersion()` (the disk text; writes stay refused until
+  its `accept()`). Each app surfaces it; slides first.
+- **A reconnected handle** (a remembered handle re-permissioned on ⌘S) has no
+  stamp from this session, so the file's `#bento-doc` must still equal the one
+  the page booted with.
+- **What it cannot see:** a host handle whose `getFile()` reports no stamp is
+  written unchecked, as before; an edit landing between our check and our write
+  is lost, as before. Writes to a file just picked (copies, exports, backups)
+  are not checked: the picker already asked. Encrypted documents and the
+  IndexedDB recovery copy are unchanged.
+
+Guards: `scripts/test-disk-change.ts` (fake handle on a 2 s-mtime file
+system, nine mutants and a control) and `scripts/test-disk-change-browser.mjs`
+(real Chromium handles).

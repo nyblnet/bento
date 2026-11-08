@@ -41,6 +41,14 @@ import { execFileSync } from 'node:child_process'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const fixtureDir = join(root, 'scripts/fixtures/webext-embed')
 let failures = 0
+{ // header: what this run was measured on (Playwright and the browser binary)
+  const { createRequire } = await import('node:module')
+  let pw = '?'
+  try { const m = process.env.PLAYWRIGHT_MODULE; pw = createRequire(m ? (m.startsWith('/') ? m : join(process.cwd(), m)) : join(process.cwd(), 'x.js'))('playwright/package.json').version } catch {}
+  if (pw === '?') { try { let d = dirname(process.env.PLAYWRIGHT_MODULE || ''); for (let i = 0; i < 4 && pw === '?'; i++, d = dirname(d)) if (existsSync(join(d, 'package.json'))) { const j = JSON.parse(readFileSync(join(d, 'package.json'), 'utf8')); if (j.name === 'playwright' || j.name === 'playwright-core') pw = j.version } } catch {}}
+  let br = '?'; try { br = execFileSync(chromePath(), ['--version'], { encoding: 'utf8' }).trim() } catch {}
+  console.log(`playwright ${pw} | ${br} | node ${process.version}`)
+}
 const ok = (c, m) => { if (!c) failures++; console.log(`  ${c ? 'ok  ' : 'FAIL'}  ${m}`) }
 function chromePath() {
   if (process.env.CHROME_PATH) return process.env.CHROME_PATH
@@ -98,6 +106,12 @@ async function scenario(label, mutant) {
   try {
     let [sw] = ctx.serviceWorkers(); if (!sw) sw = await ctx.waitForEvent('serviceworker')
     const id = new URL(sw.url()).host
+    // the worker can be reported before its global scope has `chrome.storage.local` (what the next line uses): retry, bounded
+    for (let i = 0; ; i++) {
+      if (await sw.evaluate(() => !!globalThis.chrome?.storage?.local).catch(() => false)) break
+      if (i >= 50) throw new Error("service worker never exposed `chrome.storage.local` (5s)")
+      await new Promise((r) => setTimeout(r, 100))
+    }
     await sw.evaluate((h) => chrome.storage.local.set({ serveWithIdentity: true, gate1Used: true, gate1History: { 'bento-slides': { history: h, fetchedAt: Date.now() } } }), history)
     const page = await ctx.newPage()
     await page.goto(`chrome-extension://${id}/src/serve/serve.html?path=${encodeURIComponent(serveDoc)}`)

@@ -1,0 +1,9 @@
+# Not site content: read by wrangler or git, never uploaded as an asset.
+# Neither directory is skipped by wrangler on its own (measured, wrangler
+# 4.152.0, with the site root as the assets directory): it would upload the
+# repository's history from .git (or fail the deploy on a pack over 25 MiB),
+# and wrangler's own scratch state in .wrangler is written into the directory
+# it runs from, which here IS the assets directory.
+.git
+.wrangler
+wrangler.toml
