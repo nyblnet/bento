@@ -12554,7 +12554,9 @@ is "Check for updates". The result is one of:
 One check covers every app's release history, and **the worst outcome wins**: a
 reply that wouldn't verify beats an unreachable server, which beats up to date.
 A reply that verifies but isn't taken (nothing published yet, or anti-rollback
-refused it) counts as up to date: the held history stands. iOS shows the same set.
+refused it) counts as up to date: the held history stands. A check with no
+outcome at all reports "Couldn't reach bento.page", never "Up to date". iOS
+shows the same set under the same rule.
 
 Guard (Android): `ReleaseHistoryTest` checks the strings, the worst-wins rule, and
 the unverified outcome. The signature check is real, run over the frozen slides

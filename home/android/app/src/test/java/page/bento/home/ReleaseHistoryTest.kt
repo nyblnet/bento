@@ -78,5 +78,7 @@ class ReleaseHistoryTest {
         assertEquals(R.string.updates_offline, ReleaseHistory.message(listOf(r, o, r)))
         assertEquals(R.string.updates_unverified, ReleaseHistory.message(listOf(o, u, r)))
         assertEquals(R.string.updates_unverified, ReleaseHistory.message(listOf(u, r)))
+        assertEquals("no outcome is never up to date", R.string.updates_offline, ReleaseHistory.message(emptyList()))
+        assertEquals(o, ReleaseHistory.summary(emptyList()))
     }
 }

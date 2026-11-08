@@ -101,9 +101,11 @@ object ReleaseHistory {
     /**
      * One "Check for updates" across every app: the worst outcome wins. A reply
      * that would not verify is worse than an unreachable server, and either is
-     * reported over the apps that were reached.
+     * reported over the apps that were reached. No outcome at all is never
+     * "up to date": nothing was reached (iOS reports the same).
      */
     internal fun summary(outcomes: List<Outcome>): Outcome = when {
+        outcomes.isEmpty() -> Outcome.OFFLINE
         Outcome.UNVERIFIED in outcomes -> Outcome.UNVERIFIED
         Outcome.OFFLINE in outcomes -> Outcome.OFFLINE
         else -> Outcome.REACHED
