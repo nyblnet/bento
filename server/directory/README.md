@@ -101,3 +101,12 @@ It drives the real worker and Durable Object classes against an in-memory
 namespace and a hand-moved clock: both proofs, the attack a link would allow,
 exact lookups, the 202 rule, per-address and per-IP limits, sequence and
 rebound, signed tombstones, expiry, and nothing identifying at rest.
+
+## Licence
+
+This directory is licensed under the GNU Affero General Public License,
+version 3 only (`AGPL-3.0-only`, full text in [LICENSE](LICENSE)); the rest of
+the repository is MIT. It runs as a network service, so anyone who offers a
+modified copy to users over a network must offer those users its source.
+Contributions to it need the contributor licence agreement in
+[CLA.md](CLA.md); see [CONTRIBUTING.md](../../CONTRIBUTING.md#license).

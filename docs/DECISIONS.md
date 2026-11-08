@@ -12262,3 +12262,32 @@ decision, 2026-11-08: detect it and do not write.
 Guards: `scripts/test-disk-change.ts` (fake handle on a 2 s-mtime file
 system, nine mutants and a control) and `scripts/test-disk-change-browser.mjs`
 (real Chromium handles).
+
+## 2026-11-08 — The bento/id directory (`server/directory/`) is AGPL-3.0-only, with a CLA
+
+Maintainer ruling, 2026-11-08. The directory service behind id.bento.page is
+licensed under the GNU Affero General Public License, version 3 only; the rest
+of the repository stays MIT.
+
+- **Why AGPL there:** the directory is a network service, not code that
+  travels inside a document. The AGPL's network clause means anyone who runs a
+  modified copy for others must offer those users its source.
+- **Scope is the directory alone.** `server/directory/` carries its own
+  `LICENSE` (the unmodified FSF text), `AGPL-3.0-only` SPDX headers on every
+  source file and in `wrangler.toml`, and a `package.json` whose only job is
+  the `license` field (plus `"type": "module"`, which its ESM sources already
+  are). The kernel modules it imports (`kernel/src/statements.ts`,
+  `address.ts` and friends) and its rig in `scripts/` stay MIT; MIT code can
+  be combined into AGPL work, and nothing MIT imports the directory except
+  that test rig.
+- **`-only`, not `-or-later`:** the repository has no GPL-family precedent,
+  and `-only` keeps the choice of any future licence version with the project
+  through the CLA rather than handing it to a licence steward in advance.
+- **CLA:** contributions to `server/directory/` need the individual CLA in
+  `server/directory/CLA.md` (adapted from the Apache ICLA v2.2), which grants
+  the project the right to relicense them. Contributions anywhere else need
+  nothing new. Until a CLA bot is installed (a maintainer account action), a
+  contributor agrees by posting the comment the CLA gives on their pull
+  request, and the reviewer checks for it before merging.
+
+Pointers: `server/directory/README.md` "Licence", `CONTRIBUTING.md` "License".
