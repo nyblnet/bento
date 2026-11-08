@@ -66,12 +66,13 @@ let fNow = (F["now"] as! NSNumber).intValue
 var checks = 0, fails = 0
 var spendCalled = false
 func ok(_ c: Bool, _ m: String) { checks += 1; if !c { fails += 1 }; print("\(c ? "  ok  " : "  FAIL")  \(m)") }
+ok(S.kxMode == "C" && (F["kxMode"] as? String) == "C" && F["kxModeDefault"] == nil, "kx placement is mode C: both slots required, no other mode")
 func check(_ r: [String: Any], _ text: String, _ sig: String) -> (Bool, String?, String?) {
   let now = (r["now"] as? NSNumber)?.intValue ?? fNow
-  let kx = S.KxMode(rawValue: (r["kxMode"] as? String) ?? (F["kxModeDefault"] as! String)) ?? .unruled
+  precondition(r["kxMode"] == nil, "no row selects a kx mode: mode C is the only one")
   switch r["type"] as! String {
-  case "dev": let v = S.verifyDev(text, sig, now: now, kxMode: kx); return (v.ok, v.reason, v.value.map(S.buildDev))
-  case "bind": let v = S.verifyBind(text, sig, now: now, kxMode: kx); return (v.ok, v.reason, v.value.map(S.buildBind))
+  case "dev": let v = S.verifyDev(text, sig, now: now); return (v.ok, v.reason, v.value.map(S.buildDev))
+  case "bind": let v = S.verifyBind(text, sig, now: now); return (v.ok, v.reason, v.value.map(S.buildBind))
   case "att": let v = S.verifyAtt(text, sig, directoryKeys: dirKeys, bindText: r["bindText"] as! String, now: now, maxAgeMs: (r["maxAgeMs"] as! NSNumber).intValue); return (v.ok, v.reason, v.value.map(S.buildAtt))
   case "tomb": let v = S.verifyTomb(text, sig, directoryKeys: dirKeys, now: now); return (v.ok, v.reason, v.value.map(S.buildTomb))
   case "del": let v = S.verifyDel(text, sig, accountPub: keys["account"]!, now: now); return (v.ok, v.reason, v.value.map { S.buildDel(address: $0.address, ts: $0.ts) })

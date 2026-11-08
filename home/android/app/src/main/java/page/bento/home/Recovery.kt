@@ -66,8 +66,23 @@ object Recovery {
     fun heapNeeded(memoryKiB: Int): Long = memoryKiB.toLong() * 1040 + HEADROOM
     private const val HEADROOM = 16L shl 20
 
-    /** The heap this process can still grow into. */
-    fun heapAvailable(): Long = Runtime.getRuntime().let { it.maxMemory() - (it.totalMemory() - it.freeMemory()) }
+    /** The heap this process can still grow into, counting uncollected garbage as USED. */
+    fun heapUnreclaimed(): Long = Runtime.getRuntime().let { it.maxMemory() - (it.totalMemory() - it.freeMemory()) }
+
+    /**
+     * The heap this process can still grow into, once garbage is out of the way. A finished derivation
+     * leaves 64 MiB of dead blocks until the next collection, and the collector runs when IT decides:
+     * on a loaded machine (or a unit-test JVM that has just derived a few times) the dead blocks were
+     * still counted, so a heap that could hold the next derivation was refused as "not enough memory",
+     * and setup reported an unavailable device. So when the figure falls short of a full derivation,
+     * collect once and measure again; only what is still short after that is a real shortage.
+     */
+    fun heapAvailable(): Long {
+        val now = heapUnreclaimed()
+        if (now >= heapNeeded(MEMORY_KIB)) return now
+        System.gc()
+        return heapUnreclaimed()
+    }
 
     /**
      * Argon2id with arbitrary parameters (the RFC 9106 row uses its own). Call off
@@ -182,17 +197,20 @@ object Recovery {
 
     // ---- blob plaintext: raw private scalars, checked on import ---------------------------
 
-    /** Which kx placement the blob follows (identity-design §6b); phase 1 is unruled: account only. */
-    enum class KxMode(val carriesKx: Boolean) { UNRULED(false), A(true), B(false), C(true) }
+    /**
+     * kx placement is mode C (identity-design §6b, ruled 2026-11-02): the blob is
+     * always 64 bytes, account d ‖ recovery kx d. A 32-byte account-only blob
+     * (every pre-C enrolment) is refused; there is no other mode.
+     */
+    const val BLOB_LEN = 64
 
-    class Keys(val account: ByteArray, val kx: ByteArray? = null)
+    /** [kx] is the RECOVERY kx scalar (the bind. kx slot's); required. */
+    class Keys(val account: ByteArray, val kx: ByteArray)
 
-    fun pack(keys: Keys, mode: KxMode = KxMode.UNRULED): ByteArray {
-        require(keys.account.size == 32)
-        if (!mode.carriesKx) { require(keys.kx == null) { "kx mode $mode carries no kx" }; return keys.account.copyOf() }
-        val kx = requireNotNull(keys.kx) { "kx mode $mode needs a kx" }
-        require(kx.size == 32)
-        return keys.account + kx
+    fun pack(keys: Keys): ByteArray {
+        require(keys.account.size == 32) { "account scalar" }
+        require(keys.kx.size == 32) { "the blob needs the 32-byte recovery kx scalar (mode C)" }
+        return keys.account + keys.kx
     }
 
     sealed class Opened {
@@ -238,17 +256,18 @@ object Recovery {
         }
     } catch (e: Exception) { false }
 
-    /** Read a blob's plaintext and CHECK it before anything uses it. A swapped blob fails closed. */
-    fun unpack(pt: ByteArray, accountPub: String, kxPub: String? = null, mode: KxMode = KxMode.UNRULED): Opened {
-        if (pt.size != (if (mode.carriesKx) 64 else 32)) return Opened.No("length")
-        val scalars = if (mode.carriesKx) listOf(pt.copyOfRange(0, 32), pt.copyOfRange(32, 64)) else listOf(pt.copyOfRange(0, 32))
-        val pubs = if (mode.carriesKx) listOf(accountPub, kxPub) else listOf(accountPub)
+    /** Read a blob's plaintext and CHECK it before anything uses it: exactly 64 bytes,
+     *  both scalars in range and each matching its signed public half (the account
+     *  key, the binding's recovery kx). A swapped blob fails closed. */
+    fun unpack(pt: ByteArray, accountPub: String, kxPub: String): Opened {
+        if (pt.size != BLOB_LEN) return Opened.No("length")
+        val scalars = listOf(pt.copyOfRange(0, 32), pt.copyOfRange(32, 64))
+        val pubs = listOf(accountPub, kxPub)
         for (i in scalars.indices) {
             if (!scalarInRange(scalars[i])) return Opened.No("scalar-range")
-            val pub = pubs[i] ?: return Opened.No("key-mismatch")
-            if (!scalarMatches(scalars[i], pub)) return Opened.No("key-mismatch")
+            if (!scalarMatches(scalars[i], pubs[i])) return Opened.No("key-mismatch")
         }
-        return Opened.Ok(if (mode.carriesKx) Keys(scalars[0], scalars[1]) else Keys(scalars[0]))
+        return Opened.Ok(Keys(scalars[0], scalars[1]))
     }
 
     // ---- AES-256-GCM -------------------------------------------------------------------------
@@ -271,14 +290,14 @@ object Recovery {
 
     /** cred = b64u(sha256(credentialId)); aad = "bento/id/acct-wrap/v1." ‖ cred. */
     fun sealPrfBlob(prfOutput: ByteArray, credentialId: ByteArray, salt: ByteArray, iv: ByteArray,
-                    keys: Keys, mode: KxMode = KxMode.UNRULED): PrfBlob {
+                    keys: Keys): PrfBlob {
         val cred = B64u.enc(sha256(credentialId))
-        val ct = gcm(Cipher.ENCRYPT_MODE, prfKek(prfOutput, salt), iv, "bento/id/acct-wrap/v1.$cred", pack(keys, mode))
+        val ct = gcm(Cipher.ENCRYPT_MODE, prfKek(prfOutput, salt), iv, "bento/id/acct-wrap/v1.$cred", pack(keys))
         return PrfBlob(1, cred, B64u.enc(salt), B64u.enc(iv), B64u.enc(ct))
     }
 
     fun openPrfBlob(blob: PrfBlob, prfOutput: ByteArray, credentialId: ByteArray,
-                    accountPub: String, kxPub: String? = null, mode: KxMode = KxMode.UNRULED): Opened {
+                    accountPub: String, kxPub: String): Opened {
         if (blob.v != 1) return Opened.No("version")
         val cred = B64u.enc(sha256(credentialId))
         if (blob.cred != cred) return Opened.No("credential")
@@ -286,20 +305,20 @@ object Recovery {
         if (salt == null || salt.size != 32 || iv == null || iv.size != 12 || ct == null) return Opened.No("grammar")
         val pt = try { gcm(Cipher.DECRYPT_MODE, prfKek(prfOutput, salt), iv, "bento/id/acct-wrap/v1.$cred", ct) }
                  catch (e: Exception) { return Opened.No("decrypt") }
-        return unpack(pt, accountPub, kxPub, mode)
+        return unpack(pt, accountPub, kxPub)
     }
 
     // ---- the recovery-code blob's inner layer (the directory adds its pepper layer) --------
 
     /** aad = "bento/id/rc-wrap/v1." ‖ b64u(sha256(accountPub)). */
-    fun sealRecoveryInner(wrapKey: ByteArray, iv: ByteArray, accountPub: String, keys: Keys, mode: KxMode = KxMode.UNRULED): ByteArray =
-        gcm(Cipher.ENCRYPT_MODE, wrapKey, iv, "bento/id/rc-wrap/v1.${accountTag(accountPub)}", pack(keys, mode))
+    fun sealRecoveryInner(wrapKey: ByteArray, iv: ByteArray, accountPub: String, keys: Keys): ByteArray =
+        gcm(Cipher.ENCRYPT_MODE, wrapKey, iv, "bento/id/rc-wrap/v1.${accountTag(accountPub)}", pack(keys))
 
     fun openRecoveryInner(ct: ByteArray, wrapKey: ByteArray, iv: ByteArray,
-                          accountPub: String, kxPub: String? = null, mode: KxMode = KxMode.UNRULED): Opened {
+                          accountPub: String, kxPub: String): Opened {
         val pt = try { gcm(Cipher.DECRYPT_MODE, wrapKey, iv, "bento/id/rc-wrap/v1.${accountTag(accountPub)}", ct) }
                  catch (e: Exception) { return Opened.No("decrypt") }
-        return unpack(pt, accountPub, kxPub, mode)
+        return unpack(pt, accountPub, kxPub)
     }
 }
 

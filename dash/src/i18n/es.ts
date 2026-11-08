@@ -144,6 +144,7 @@ export const es: Catalog = {
   "Data story": "Historia de datos",
   "Dataset": "Conjunto de datos",
   "Date": "Fecha",
+  "Date and time": "Fecha y hora",
   "Decimals": "Decimales",
   "Delete": "Eliminar",
   "Delete \"{name}\" and its {n} rows?": "¿Eliminar “{name}” y sus {n} filas?",

@@ -23,7 +23,7 @@ import type { KernelDoc } from './doc.ts'
 import { appConfig } from './app.ts'
 import {
   serializeDocInto, serializeAuto, suggestedFileName, downloadFile, openedFileName, fileBase,
-  hasFileHandle, writeUpdatedFile, writeUpdatedFileAs, writeBackupBeside, hostCan,
+  hasFileHandle, writeUpdatedFile, writeUpdatedFileAs, writeBackupBeside, hostCan, checkFileOnDisk,
 } from './save.ts'
 import { lsDel, lsGet, lsSet } from './storage.ts'
 import { netFetch, sharedStorageOrigin } from './net.ts'
@@ -338,6 +338,11 @@ export async function applyUpdateInPlace(
   // destination, and may well choose a new file — the original survives on its
   // own, and an unasked-for download on top of that is noise.
   const silent = hasFileHandle() || hostCan('write')
+  // A file another program changed since we last read or wrote it is not
+  // overwritten (save.ts, "outside edits"). Ask BEFORE the backup: a rollback
+  // copy of our version beside a refused update would only mislead. Throws
+  // FileChangedOnDiskError for the caller to surface.
+  if (hasFileHandle()) await checkFileOnDisk()
   const backup = silent
     ? await writeBackupBeside(await serializeAuto(doc), `${base}.v${APP_VERSION}-backup.bento.html`)
     : 'none'

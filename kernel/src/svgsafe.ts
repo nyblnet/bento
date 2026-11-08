@@ -155,6 +155,26 @@ const SVG_ATTRS = new Set([
 const SVG_DATA_RESERVED = /^data-(el-id|flip-id|slide-id|autoplay|r|c)$|^data-bento/
 
 /**
+ * `data-*` names the PRESENTATION RUNTIME (Reveal.js, vendored by slides) reads
+ * from any element inside a slide, not only from its own markup. They are
+ * behaviour, not data: `data-preview-link` makes a click open an iframe on the
+ * value, `data-background-iframe` builds one, `data-src` lazy-loads a URL. An
+ * author svg is never allowed to speak to the runtime, so every name Reveal can
+ * read is reserved, each as a FAMILY: the name itself and every `<name>-…`
+ * (so a future Reveal adding `data-preview-foo` stays covered).
+ * `scripts/test-sanitize.ts` extracts every `data-*` literal and `dataset.*`
+ * read from the vendored Reveal build and fails if any one is not reserved
+ * here, so a Reveal upgrade cannot quietly reopen this.
+ */
+const SVG_DATA_RUNTIME = new RegExp('^data-(' + [
+  'preview', 'background', 'auto-animate', 'fragment', 'index', 'transition', 'start-indexv',
+  'previous-indexv', 'controls', 'line-number', 'line-numbers', 'ln', 'menu', 'markdown', 'separator', 'notes',
+  'src', 'lazy-loaded', 'preload', 'loaded', 'autoslide', 'id', 'ignore', 'visibility', 'state',
+  'prevent-swipe', 'navigation-mode', 'layout', 'paused-by-reveal', 'scrollbar', 'timing',
+  'trim', 'noescape', 'template', 'charset', 'vertical', 'element-attributes', 'attributes',
+].join('|') + ')($|-)')
+
+/**
  * `aria-*` is open-ended by design and inert; `data-*` is how a diagram's own
  * `<style>` selects its parts. Everything else is the list.
  *
@@ -164,7 +184,7 @@ const SVG_DATA_RESERVED = /^data-(el-id|flip-id|slide-id|autoplay|r|c)$|^data-be
 export function svgAttrAllowed(name: string): boolean {
   const n = name.toLowerCase()
   if (n.startsWith('aria-')) return true
-  if (n.startsWith('data-')) return !SVG_DATA_RESERVED.test(n)
+  if (n.startsWith('data-')) return !SVG_DATA_RESERVED.test(n) && !SVG_DATA_RUNTIME.test(n)
   return SVG_ATTRS.has(n)
 }
 
