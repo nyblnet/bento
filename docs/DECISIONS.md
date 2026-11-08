@@ -12226,3 +12226,39 @@ Dates and times on a dash sheet now compute (`=A4+1`, `=B1-A1`,
   to guess from the locale is a pending maintainer decision.
 - **EDATE clamps to the end of a shorter month**, as Excel does: 31 January +
   1 month is 28 February.
+
+## 2026-11-08 — A file another program changed is never overwritten
+
+Other programs edit `.bento.html` files in place: scripts, text editors,
+coding tools. A document open with a held File System Access handle rewrote
+its file on every auto-save (2.5 s after an edit), on ⌘S and on "Update this
+file", and each of those silently replaced the other program's edit. Maintainer
+decision, 2026-11-08: detect it and do not write.
+
+- **The signal is the file's own stamp**, `lastModified` and `size` from
+  `handle.getFile()`. It is taken when the handle is adopted (drop, launch
+  queue) and read back after each of our writes; every write through the held
+  handle compares first. A moved value means the write does not happen.
+- **Compared against the value read back, never the clock.** Some file
+  systems round mtime (FAT to 2 s), so a clock-derived stamp would raise false
+  alarms on our own saves. All reads and writes of the held file run one at a
+  time in the kernel, so one of our writes is never mistaken for an outside
+  edit by the next.
+- **Once tripped, the handle stops writing** until the author chooses. The
+  kernel exposes the choice and not the UI: `onFileChangedOnDisk` (the event),
+  `fileChangedOnDisk()`, `keepMineOverDisk()` (accept the disk's stamp as the
+  baseline so the next write overwrites once, deliberately, and tracking
+  resumes) and `readDiskVersion()` (the disk text; writes stay refused until
+  its `accept()`). Each app surfaces it; slides first.
+- **A reconnected handle** (a remembered handle re-permissioned on ⌘S) has no
+  stamp from this session, so the file's `#bento-doc` must still equal the one
+  the page booted with.
+- **What it cannot see:** a host handle whose `getFile()` reports no stamp is
+  written unchecked, as before; an edit landing between our check and our write
+  is lost, as before. Writes to a file just picked (copies, exports, backups)
+  are not checked: the picker already asked. Encrypted documents and the
+  IndexedDB recovery copy are unchanged.
+
+Guards: `scripts/test-disk-change.ts` (fake handle on a 2 s-mtime file
+system, nine mutants and a control) and `scripts/test-disk-change-browser.mjs`
+(real Chromium handles).
