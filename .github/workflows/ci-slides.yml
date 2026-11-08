@@ -161,6 +161,11 @@ jobs:
         # Opened as a file and shown: a fit draws as its keyword, a radius as
         # pixels, and anything else as the default with nothing added.
         run: node scripts/test-image-style-browser.mjs
+      - name: The QR page plays its deck in Chromium
+        # bento.page/q/ draws a deck carried in its URL: text with its bold,
+        # italic and line breaks, flat shapes, nothing loaded, and only its
+        # own script run. The built-in deck and a formatted box are controls.
+        run: node scripts/test-qr-page-browser.mjs
       - name: Exercise the packaged documents in Chromium
         # Real UI and serialization, offline; delayed mock writes expose save races.
         run: |
