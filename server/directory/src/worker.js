@@ -238,13 +238,16 @@ export class Address {
     const fail = async (p) => { p.attempts++; await s.put('pend', p); return out(400, { error: 'invalid' }) }
 
     if (a.op === 'start') {
-      if (!(await mayMail())) return out(202, { mail: null })
       const b = await readBind(a.stmt, a.sig, now)
       if (!b) return out(202, { mail: null })
       // a LIVE binding never moves to another key by email alone (security §25):
       // that is the 72-hour contestable rotation, which is not built yet. No mail.
       const live = await s.get('cur')
       if (live && live.b.expires > now && live.b.key !== b.accountPub) return out(202, { mail: null })
+      // The budget is spent LAST, just before the mail: a start that mails nothing
+      // costs nothing. Spent first, a stranger's refused starts (any key, no proof)
+      // used up the address's daily mail and the holder's own next code never went.
+      if (!(await mayMail())) return out(202, { mail: null })
       const code = mintCode()
       await s.put('pend', { kind: 'bind', stmt: a.stmt, sig: a.sig, codeHash: await codeHash(code), expires: now + LIMITS.codeTtlMs, attempts: 0 })
       return out(202, { mail: { code, fp: (await hashOf(b.accountPub)).slice(0, 8) } })
