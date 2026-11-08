@@ -401,6 +401,8 @@ export class Editor {
           if (tail) commentsOnEdit(d, B.id, B.text, tail.text);
           merged = head ?? tail ?? { id: uid(), kind: 'para', text: '' };
         }
+        // a thread on a block that goes is detached, as one on deleted text is
+        for (let n = i + 1; n < j; n++) commentsOnEdit(d, d.body[n].id, d.body[n].text, '');
         at = head ? head.text.length : 0;
         d.body.splice(i, j - i + 1, merged);
         k = i;
