@@ -245,6 +245,22 @@ async function apply(p, { op, r }) {
   const caret = async (where) => p.evaluate(([a]) => window.__fz.select(a), [where])
   const range = async (a, b) => p.evaluate(([x, y]) => window.__fz.select(x, y), [a, b])
   const textOf = (bid) => p.evaluate((x) => window.__fz.text(x), bid)
+  const texts = blocks.map((b) => b[2]), idx = blocks.findIndex(([b]) => b === id)
+  /** The whole document's text after this op: block k replaced by `repl`. */
+  const edit = (k, n, ...repl) => { const w = texts.slice(); w.splice(k, n, ...repl); return w }
+  /**
+   * Intent as the WHOLE document, block by block — not just the block touched.
+   * A merge that leaves its source block behind gets the merged block right
+   * and is still wrong (the M6 mutant survived a one-block check).
+   */
+  const docIs = (want) => async () => {
+    const got = (await p.evaluate(() => window.__fz.blocks())).map((b) => b[2])
+    if (got.length === want.length && got.every((t, k) => t === want[k])) return null
+    let k = 0
+    while (k < want.length && got[k] === want[k]) k++
+    return `the document should have ${want.length} blocks, block ${k} ${JSON.stringify(want[k] ?? null)}; ` +
+      `it has ${got.length}, block ${k} ${JSON.stringify(got[k] ?? null)}`
+  }
   /** The two block ends of a random cross-block range, in order. */
   const cross = () => {
     let i = pick(r[0], blocks.length), j = pick(r[3], blocks.length)
@@ -255,47 +271,34 @@ async function apply(p, { op, r }) {
   switch (op) {
     case 'type': {
       await caret([id, at]); await p.keyboard.type(word)
-      return { what: `type ${JSON.stringify(word)} at ${id}:${at}`, intent: async () => {
-        const t = await textOf(id)
-        return t?.slice(at, at + word.length) === word ? null : `${id} should hold ${JSON.stringify(word)} at ${at}: ${JSON.stringify(t)}`
-      } }
+      return { what: `type ${JSON.stringify(word)} at ${id}:${at}`,
+        intent: docIs(edit(idx, 1, txt.slice(0, at) + word + txt.slice(at))) }
     }
     case 'enter': {
-      if (txt[at - 1] === ' ' || txt[at] === ' ') return { what: `enter: would leave an edge space at ${id}:${at}, skipped` }
+      if (txt[at - 1] === ' ' || txt[at] === ' ') return { what: `enter: would leave an edge space at ${id}:${at}: no-op` }
       const listExit = len === 0 && /^(ul|ol)$/.test(await p.evaluate((x) => window.bento.store.block(x)?.kind, id))
       await caret([id, at]); await p.keyboard.press('Enter')
-      return { what: `Enter at ${id}:${at}`, intent: listExit ? null : async () => {
-        const after = await p.evaluate(() => window.__fz.blocks())
-        const k = after.findIndex(([b]) => b === id)
-        const got = [after[k]?.[2], after[k + 1]?.[2]], want = [txt.slice(0, at), txt.slice(at)]
-        return got[0] === want[0] && got[1] === want[1] ? null : `the split should give ${JSON.stringify(want)}: ${JSON.stringify(got)}`
-      } }
+      return { what: `Enter at ${id}:${at}`,
+        intent: docIs(listExit ? texts : edit(idx, 1, txt.slice(0, at), txt.slice(at))) }
     }
     case 'backspace': {
       const k = r[3] < 0.3 ? 0 : at
-      if (k > 0 && spaceLeft(txt, k - 1)) return { what: `backspace: would leave an edge or double space at ${id}:${k}, skipped` }
-      const i = blocks.findIndex(([b]) => b === id)
-      const [want, into] = k > 0 ? [txt.slice(0, k - 1) + txt.slice(k), id]
-        : i > 0 ? [blocks[i - 1][2] + txt, blocks[i - 1][0]] : [txt, id]
+      if (k > 0 && spaceLeft(txt, k - 1)) return { what: `backspace: would leave an edge or double space at ${id}:${k}: no-op` }
+      const want = k > 0 ? edit(idx, 1, txt.slice(0, k - 1) + txt.slice(k))
+        : idx > 0 ? edit(idx - 1, 2, texts[idx - 1] + txt) : texts
       await caret([id, k]); await p.keyboard.press('Backspace')
-      return { what: `Backspace at ${id}:${k}`, intent: async () => {
-        const t = await textOf(into)
-        return t === want ? null : `${into} should read ${JSON.stringify(want)}: ${JSON.stringify(t)}`
-      } }
+      return { what: `Backspace at ${id}:${k}`, intent: docIs(want) }
     }
     case 'delete': {            // forward Delete INSIDE a block (the end of a block is 'deljoin')
-      if (len === 0) return { what: 'delete: empty block, skipped' }
+      if (len === 0) return { what: 'delete: empty block: no-op' }
       const k = Math.min(at, len - 1)
-      if (spaceLeft(txt, k)) return { what: `delete: would leave an edge or double space at ${id}:${k}, skipped` }
+      if (spaceLeft(txt, k)) return { what: `delete: would leave an edge or double space at ${id}:${k}: no-op` }
       await caret([id, k]); await p.keyboard.press('Delete')
-      return { what: `Delete at ${id}:${k}`, intent: async () => {
-        const t = await textOf(id), want = txt.slice(0, k) + txt.slice(k + 1)
-        return t === want ? null : `${id} should read ${JSON.stringify(want)}: ${JSON.stringify(t)}`
-      } }
+      return { what: `Delete at ${id}:${k}`, intent: docIs(edit(idx, 1, txt.slice(0, k) + txt.slice(k + 1))) }
     }
     case 'spaces': {            // split right after a space, then type at the end of the first half
       const k = txt.indexOf(' ', at) >= 0 ? txt.indexOf(' ', at) + 1 : txt.lastIndexOf(' ') + 1
-      if (k <= 0) return { what: 'spaces: no space in the block, skipped' }
+      if (k <= 0) return { what: 'spaces: no space in the block: no-op' }
       const head = txt.slice(0, k)
       await caret([id, k]); await p.keyboard.press('Enter')
       await caret([id, k]); await p.keyboard.type(word)
@@ -308,7 +311,7 @@ async function apply(p, { op, r }) {
     case 'overtype': case 'bold': {
       const a = Math.round(r[1] * len), b = Math.round(r[3] * len)
       const [from, to] = a <= b ? [a, b] : [b, a]
-      if (from === to) return { what: `${op}: empty range, skipped` }
+      if (from === to) return { what: `${op}: empty range: no-op` }
       const before = op === 'bold' ? await p.evaluate(([x, y]) => window.__fz.boldOver(x, y), [[id, from], [id, to]]) : null
       await range([id, from], [id, to])
       if (op === 'bold') {
@@ -320,14 +323,11 @@ async function apply(p, { op, r }) {
         } }
       }
       await p.keyboard.type(word)
-      return { what: `overtype ${id}:${from}-${to} with ${JSON.stringify(word)}`, intent: async () => {
-        const t = await textOf(id)
-        return t?.length === len - (to - from) + word.length && t.slice(from, from + word.length) === word
-          ? null : `${id} should read ${JSON.stringify(word)} at ${from} in ${len - (to - from) + word.length} chars: ${JSON.stringify(t)}`
-      } }
+      return { what: `overtype ${id}:${from}-${to} with ${JSON.stringify(word)}`,
+        intent: docIs(edit(idx, 1, txt.slice(0, from) + word + txt.slice(to))) }
     }
     case 'xdelete': case 'xtype': case 'xbold': {
-      if (blocks.length < 2) return { what: `${op}: one block, skipped` }
+      if (blocks.length < 2) return { what: `${op}: one block: no-op` }
       const [a, b] = cross()
       const before = op === 'xbold' ? await p.evaluate(([x, y]) => window.__fz.boldOver(x, y), [a, b]) : null
       await range(a, b)
@@ -346,23 +346,21 @@ async function apply(p, { op, r }) {
     case 'paste1': case 'pastesp': case 'pasteN': {
       const text = op === 'pasteN' ? `one ${word}\ntwo\nthree` : `pasted ${word}`
       let k = at
-      if (op === 'paste1' && txt[at] === ' ') return { what: `paste1: right before a space at ${id}:${at} (that is 'pastesp'), skipped` }
+      if (op === 'paste1' && txt[at] === ' ') return { what: `paste1: right before a space at ${id}:${at} (that is 'pastesp'): no-op` }
       if (op === 'pastesp') {
         k = txt.indexOf(' ', at) >= 0 ? txt.indexOf(' ', at) : txt.indexOf(' ')
-        if (k < 0) return { what: 'pastesp: no space in the block, skipped' }
+        if (k < 0) return { what: 'pastesp: no space in the block: no-op' }
       }
       await caret([id, k]); await paste(p, text)
-      return { what: `paste ${JSON.stringify(text)} at ${id}:${k}`, intent: op === 'pasteN' ? null : async () => {
-        const t = await textOf(id), want = txt.slice(0, k) + text + txt.slice(k)
-        return t === want ? null : `${id} should read ${JSON.stringify(want)}: ${JSON.stringify(t)}`
-      } }
+      return { what: `paste ${JSON.stringify(text)} at ${id}:${k}`,
+        intent: op === 'pasteN' ? null : docIs(edit(idx, 1, txt.slice(0, k) + text + txt.slice(k))) }
     }
     case 'undo': await caret([id, at]); await p.keyboard.press(`${MOD}+z`); return { what: 'undo' }
     case 'redo': await caret([id, at]); await p.keyboard.press(`${MOD}+Shift+z`); return { what: 'redo' }
     case 'undoredo': {          // ⌘Z then ⇧⌘Z gives back exactly the document you had
       const body = () => p.evaluate(() => JSON.stringify(window.bento.doc.body))
       // with nothing to undo, ⌘Z does nothing and ⇧⌘Z replays a pending redo — correctly
-      if (!(await p.evaluate(() => window.bento.store.canUndo))) return { what: 'undoredo: nothing to undo, skipped' }
+      if (!(await p.evaluate(() => window.bento.store.canUndo))) return { what: 'undoredo: nothing to undo: no-op' }
       const before = await body()
       await caret([id, at]); await p.keyboard.press(`${MOD}+z`); await p.keyboard.press(`${MOD}+Shift+z`)
       return { what: 'undo, redo', intent: async () => (await body()) === before ? null : 'undo then redo changed the document' }
