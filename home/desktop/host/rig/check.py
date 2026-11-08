@@ -550,6 +550,76 @@ elif sa and su:
     ok(A.get("overall_first_refusal") == 29 and set(steps[28:]) == {"reauth"}, f"sign: overall: the 29th step (24h10) is the first refusal and it stays refused ({A.get('overall_first_refusal')}, {steps[28:]})")
     ok(A.get("after_overall_reauth") == "ok", f"sign: overall: re-authenticating restores it ({A.get('after_overall_reauth')})")
     ok(A.get("after_lock") == "reauth", f"sign: a lock (screen lock, sleep) refuses until re-authentication ({A.get('after_lock')})")
+    ok(A.get("back_control") == "ok" and A.get("back_1min") == "reauth", f"sign: a clock moved BACK by a minute ends the session, with a signing control just before ({A.get('back_control')}, {A.get('back_1min')})")
+    ok(A.get("back_later") == "reauth", f"sign: and it stays ended when the clock runs forward again ({A.get('back_later')})")
+    ok(A.get("fwd_control") == "ok" and A.get("fwd_1min") == "ok", f"sign: CONTROL: the same step FORWARD keeps signing ({A.get('fwd_control')}, {A.get('fwd_1min')})")
+
+# B1 slice 2: whoami (consent per document), resolve (keys already in the room), the
+# host's re-auth prompt. Every refusal row has an accepted control in the same run.
+# Linux only: on Windows no key store is built, so these scenarios do not run there.
+ia, ib, iu, ic = (None, None, None, None) if WINDOWS else (report("ident-doc0"), report("ident-doc1"), report("ident-doc2"), report("ident-doc3"))
+if ia and ib and iu and ic:
+    A, B, U, C = ia["page"].get("ident", {}), ib["page"].get("ident", {}), iu["page"].get("ident", {}), ic["page"].get("ident", {})
+    # security #918 C1: consent is per FILE the host opened, not per docId
+    ok(not C.get("error") and C.get("present") is True, f"ident: the copy is genuine and has the agent ({C.get('error')}, {C.get('present')})")
+    ok((C.get("c_counts") or {}).get("consent") == (C.get("c_before") or {}).get("consent", -9) + 1, f"ident: a COPY of B carrying B's docId, at another path, is ASKED ({C.get('c_before')} -> {C.get('c_counts')})")
+    ok(C.get("c_whoami") is None and C.get("c_resolve_bob") is None, f"ident: the copy, refused, gets null from whoami and from resolve ({C.get('c_whoami')}, {C.get('c_resolve_bob')})")
+    ok((B.get("b_after_copy_whoami") or {}).get("email") == "rig@example.org" and (B.get("b_after_copy_resolve") or {}).get("email") == "bob@example.org" and (B.get("b_after_copy_counts") or {}).get("consent") == 3, f"ident: CONTROL: the original B keeps its yes after the copy's no, with no new prompt ({B.get('b_after_copy_counts')})")
+    ok(not A.get("error") and not B.get("error") and not U.get("error"), f"ident: no error in any probe ({A.get('error')}, {B.get('error')}, {U.get('error')})")
+    ok(A.get("present") is True and B.get("present") is True and U.get("present") is False, "ident: A and B (genuine) have the agent, U (unknown) has none")
+    ok(A.get("no_account_whoami") is None and A.get("no_account_counts", {}).get("consent") == 0, f"ident: nothing to share, so whoami is null and NOTHING is asked ({A.get('no_account_whoami')}, {A.get('no_account_counts')})")
+    ok(A.get("a_decline") is None and A.get("a_decline_again") is None and A.get("a_counts", {}).get("consent") == 1, f"ident: consent per document: A's person said no -> null, and asked once, not twice ({A.get('a_counts')})")
+    ok(A.get("a_resolve_before") is None, f"ident: resolve answers null for a document the person has not allowed ({A.get('a_resolve_before')})")
+    w = B.get("b_whoami") or {}
+    ok(sorted(w) == ["accountPub", "devicePub", "email", "name", "vouchedBy"] and w.get("email") == "rig@example.org" and len(w.get("devicePub", "")) == 87,
+       f"ident: CONTROL: B's person said yes -> the public identity and nothing else ({sorted(w)})")
+    ok(B.get("b_whoami_again") == w and B.get("b_counts", {}).get("consent") == 2, f"ident: a yes is remembered for B: no second prompt ({B.get('b_counts')})")
+    ok(A.get("a_after_b_whoami") is None and A.get("a_after_b_resolve") is None, f"ident: B's yes is not A's: A still gets null from whoami and resolve ({A.get('a_after_b_whoami')}, {A.get('a_after_b_resolve')})")
+    rb = B.get("b_resolve_bob") or {}
+    ok((rb.get("name"), rb.get("email"), rb.get("firstSeen"), rb.get("changed")) == ("Bob Rig", "bob@example.org", 4242, False), f"ident: CONTROL: resolve of a key already held answers with its binding ({rb})")
+    ok(B.get("b_resolve_unknown") is None and B.get("b_resolve_email") is None, f"ident: an unknown key and an {{email}} query answer null ({B.get('b_resolve_unknown')}, {B.get('b_resolve_email')})")
+    ok((B.get("b_resolve_own") or {}).get("email") == "rig@example.org", f"ident: the person's own device key resolves to their own binding ({B.get('b_resolve_own')})")
+    rc = B.get("b_resolve_changed") or {}
+    ok(rc.get("changed") is True and rc.get("email") == "bob@example.org", f"ident: a different binding for the same key reads changed, and the first one stays pinned ({rc})")
+    def n(k, f): return (B.get(k) or {}).get(f)
+    # re-auth, Linux v1 (maintainer 2026-11-08): no verifier, so refuse and say so; never a presence prompt
+    ok(B.get("s_first") == "reauth" and n("s_first_counts", "reauth") == 1, f"ident: re-auth: no session -> REFUSED, and the host tells the person why (no verifier) ({B.get('s_first')}, {n('s_first_counts', 'reauth')} notice)")
+    ok(B.get("s_again") == "reauth" and n("s_again_counts", "reauth") == 1, f"ident: refused again, and NOT told again inside the cooldown ({B.get('s_again')}, {n('s_again_counts', 'reauth')})")
+    ok(B.get("s_bad") == "purpose" and n("s_bad_counts", "reauth") == 1, f"ident: a payload that does not match its purpose never reaches the host's notice ({B.get('s_bad')}, {n('s_bad_counts', 'reauth')})")
+    ok(B.get("s_after_cooldown") == "reauth" and n("s_after_cooldown_counts", "reauth") == 2, f"ident: past the cooldown it is still refused, and told again ({B.get('s_after_cooldown')}, {n('s_after_cooldown_counts', 'reauth')})")
+    ok(B.get("s_begin") is True and B.get("s_inside") == "ok" and n("s_inside_counts", "reauth") == 2, f"ident: CONTROL: a session opened by a verification signs, and nothing is shown ({B.get('s_inside')}, {n('s_inside_counts', 'reauth')})")
+    ok(B.get("s_idle") == "reauth" and n("s_idle_counts", "reauth") == 3, f"ident: past the idle limit it is refused and told; the host re-opens nothing ({B.get('s_idle')}, {n('s_idle_counts', 'reauth')})")
+    ok(U.get("raw_whoami") == "unavailable" and U.get("raw_resolve") == "unavailable" and U.get("raw_sign") == "unavailable", f"ident: the UNKNOWN document is stopped by the host even by raw IPC ({U.get('raw_whoami')}, {U.get('raw_resolve')}, {U.get('raw_sign')})")
+    ok((U.get("counts") or {}).get("consent") == 3 and (U.get("counts") or {}).get("reauth") == 3, f"ident: and it put nothing in front of the person ({U.get('counts')})")
+    L = log("ident")
+    cons = re.findall(r'PROMPT consent doc="([^"]*)": (.*)', L)
+    ok([d for d, _ in cons] == ["IA.bento.html", "IB.bento.html", "IB.bento.html"], f"ident: the host drew exactly three consent prompts, for A, B, then B's copy (same name, another folder) ({[d for d, _ in cons]})")
+    ok(all("rig@example.org" in t and "Rig Person" in t for _, t in cons), "ident: each consent prompt shows what would be shared (name, address)")
+    ok(len(re.findall(r"PROMPT reauth-refused doc=\"IB.bento.html\"", L)) == 3 and "PROMPT reauth-refused doc=\"IA" not in L and "PROMPT reauth-refused doc=\"IU" not in L, "ident: three refusal notices, all for B's own sign calls")
+    ok("PROMPT reauth doc=" not in L, "ident: the host never draws a confirm-to-sign prompt (no presence prompt on Linux)")
+
+# B1 slice 2, the REAL key stores through the bridge
+for scn, mode, kind, items in ([] if WINDOWS else [("keystore", "keystore", "secret-service", "1"), ("keystoretpm", "keystore-tpm", "tpm", "0")]):
+    r0 = report(scn + "-doc0")
+    if not r0: continue
+    K = r0["page"].get("ident", {})
+    ok(not K.get("error"), f"{scn}: no error ({K.get('error')})")
+    ok((K.get("c0") or {}).get("store") == kind, f"{scn}: the host chose the {kind} store ({(K.get('c0') or {}).get('store')})")
+    ok(K.get("before_key_whoami") is None and K.get("no_key_sign") == "no-identity" and (K.get("no_key_counts") or {}).get("reauth") == 0, f"{scn}: an account with no key on this device has nothing to sign with, and nothing is asked ({K.get('no_key_sign')})")
+    ok(len(K.get("devpub") or "") == 87 and (K.get("whoami") or {}).get("devicePub") == K.get("devpub"), f"{scn}: whoami carries the device key the store holds ({K.get('devpub')})")
+    ok(K.get("sign") == "ok" and K.get("sig_valid") is True and K.get("sig_binds") is True and K.get("sign_pub") == K.get("devpub"), f"{scn}: signed by the store's own key; the signature verifies for exactly the payload ({K.get('sign')}, {K.get('sig_valid')}, {K.get('sig_binds')})")
+    ok(K.get("keyring_items") == items, f"{scn}: keyring items for this run: {items} ({K.get('keyring_items')})")
+    ok(K.get("no_session_sign") == "reauth" and K.get("begin") is True, f"{scn}: with no session the real store is not reached: refused, and only a verification opens one ({K.get('no_session_sign')}, {K.get('begin')})")
+    ok((K.get("counts") or {}).get("reauth") == 1 and (K.get("counts") or {}).get("consent") == 1, f"{scn}: one consent prompt, one re-auth refusal notice ({K.get('counts')})")
+    ok(K.get("idle_no") == "reauth", f"{scn}: the idle limit binds the real store too ({K.get('idle_no')})")
+    L = log(scn)
+    exposed = "NOTICE exposure (secret-service): This computer has no usable TPM" in L and "Any program running as you can read it" in L
+    if kind == "secret-service":
+        ok(exposed and L.count("NOTICE exposure") == 1 and (K.get("counts") or {}).get("exposure_marker") is True, f"{scn}: the same-user exposure is stated, once ({L.count('NOTICE exposure')})")
+        ok(K.get("wipe") == "ok", f"{scn}: the run's keyring items are removed ({K.get('wipe')})")
+    else:
+        ok("NOTICE exposure" not in L and (K.get("counts") or {}).get("exposure_marker") is False, f"{scn}: CONTROL: with a TPM the keyring exposure is not claimed")
+        ok(re.search(r"KEYSTORE tpm: Your Bento ID key is kept in this computer's TPM", L) is not None, f"{scn}: the host states what the TPM does and does not protect")
 
 # B1: an unverifiable file gets the notice (placeholder wording, the maintainer's to word), a genuine one does not
 for scn, notice_for, none_for in [("pair", "U.bento.html", "A.bento.html"), ("sign", "SU.bento.html", "SA.bento.html")]:

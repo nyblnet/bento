@@ -11,18 +11,20 @@ publish = false
 rig-test-key = ["bento-hostcore/rig-test-key"]
 # Rigs only: the §19d–§19h probe, a dead drop standing in for an attacker's
 # network, and a report sink. Never in a shipped build.
-rig = ["rig-test-key", "bento-id-agent/test-store", "dep:gio", "dep:webview2-com", "dep:windows-core"]
+rig = ["rig-test-key", "bento-id-agent/test-store", "dep:webview2-com", "dep:windows-core"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
-# webkit2gtk: the page cache is switched off in every build (main.rs). gio, rig builds
-# only (feature "rig"): trust the rig's one throwaway embed certificate in the rig
-# webview's own web context (src/rig.rs). Pinned to the versions tauri's wry already
-# resolves, so the lock gains no new crate.
+# webkit2gtk: the page cache is switched off in every build (main.rs). gio, every Linux
+# build: the logind watcher (src/logind.rs), and in rig builds the rig's one throwaway
+# embed certificate trusted in the rig webview's own web context (src/rig.rs). Pinned to
+# the versions tauri's wry already resolves, so the lock gains no new crate.
 [target.'cfg(target_os = "linux")'.dependencies]
+# the real key stores: TPM where this user can open one, Secret Service otherwise
+bento-id-agent = { path = "../agent", features = ["tpm", "keyring"] }
 webkit2gtk = "=2.0.2"
-gio = { version = "=0.18.4", optional = true }
+gio = "=0.18.4"
 
 # Rig builds only (feature "rig"), Windows only: the same one-certificate trust for
 # WebView2 (src/rig.rs). Pinned to the versions tauri's wry already resolves.

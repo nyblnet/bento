@@ -19,7 +19,9 @@
 //   bind. This agent does not enrol yet, so it holds no kx; the enrolment that
 //   comes must mint both (see kernel/fixtures/README.md).
 
+use crate::lockgate::{GateState, LockGate};
 use crate::{b64u, statements as st};
+use std::sync::Arc;
 
 /// Which key. The account key is handled by the account flows (link, rotate,
 /// unbind), not by `sign`.
@@ -81,8 +83,10 @@ impl Default for Policy {
 }
 
 /// Who is asking, as the HOST established it: after the per-webview capability
-/// check, on a verified shell, with the docId the host read from the file it
-/// opened. Not constructible from page input by design: the host builds it.
+/// check, on a verified shell. `doc_id` is the host's key for THE FILE IT OPENED
+/// (on desktop: install salt + canonical path + the file's docId, hashed), never
+/// the bare docId, which whoever wrote the file chose. Not constructible from
+/// page input by design: the host builds it.
 #[derive(Debug, Clone)]
 pub struct Caller {
     pub verified: bool,
@@ -139,8 +143,18 @@ pub struct Agent<S: KeyStore, C: Clock> {
     store: S,
     clock: C,
     policy: Policy,
-    /// (session start, last routine use), None = must re-authenticate
-    session: Option<(u64, u64)>,
+    /// None = must re-authenticate
+    session: Option<Session>,
+    /// What the OS says about the person's session. A routine session lives only
+    /// while this stays open at the epoch it began in.
+    gate: Arc<LockGate>,
+}
+
+#[derive(Clone, Copy)]
+struct Session {
+    start: u64,
+    last: u64,
+    epoch: u64,
 }
 
 fn store_refusal(e: StoreError) -> Refusal {
@@ -152,27 +166,84 @@ fn store_refusal(e: StoreError) -> Refusal {
 }
 
 impl<S: KeyStore, C: Clock> Agent<S, C> {
-    pub fn new(store: S, clock: C, policy: Policy) -> Self {
-        Agent { store, clock, policy, session: None }
+    pub fn new(store: S, clock: C, policy: Policy, gate: Arc<LockGate>) -> Self {
+        Agent { store, clock, policy, session: None, gate }
     }
 
-    /// Open (or renew) the routine session. The host calls this only after the
-    /// person has re-authenticated (Windows Hello / the TPM PIN / unlock).
-    pub fn begin_session(&mut self) {
+    /// The key store, for the flows that mint keys (account setup) and for rigs.
+    pub fn store_mut(&mut self) -> &mut S {
+        &mut self.store
+    }
+
+    pub fn now_ms(&self) -> u64 {
+        self.clock.now_ms()
+    }
+
+    /// This device's routine public key, if the store holds one.
+    pub fn device_pub(&self) -> Result<Option<[u8; 65]>, Refusal> {
+        self.store.public_key(&KeyRole::Device).map_err(store_refusal)
+    }
+
+    /// Whether the person could re-authenticate now, and the epoch to do it
+    /// under. Take this BEFORE asking them. A locked screen is `Reauth` with
+    /// nobody asked; with nothing listening for a lock, no answer could open a
+    /// session, so it is `Unavailable`, again with nobody asked.
+    pub fn reauth_ticket(&self) -> Result<u64, Refusal> {
+        match self.gate.state() {
+            GateState::Open(epoch) => Ok(epoch),
+            GateState::Locked => Err(Refusal::Reauth),
+            GateState::Unwatched => Err(Refusal::Unavailable),
+        }
+    }
+
+    /// Open (or renew) the routine session under a ticket. False, and no
+    /// session, if a lock came in since the ticket: a yes given across a lock or
+    /// a sleep may not be from the person who is here now.
+    pub fn begin_session_from(&mut self, ticket: u64) -> bool {
+        if self.gate.state() != GateState::Open(ticket) {
+            self.session = None;
+            return false;
+        }
         let now = self.clock.now_ms();
-        self.session = Some((now, now));
+        self.session = Some(Session { start: now, last: now, epoch: ticket });
+        true
+    }
+
+    /// `begin_session_from` for a host that has no prompt to span.
+    pub fn begin_session(&mut self) -> bool {
+        match self.reauth_ticket() {
+            Ok(t) => self.begin_session_from(t),
+            Err(_) => false,
+        }
     }
 
     /// Lock: idle lock, sleep, session lock. Routine signing is refused after.
+    /// The OS watcher reaches the same gate directly, since it must not wait for
+    /// the host's lock on this agent.
     pub fn lock(&mut self) {
         self.session = None;
+        self.gate.lock();
     }
 
+    /// A session ENDS AT the idle or overall limit, not after it (>=; security's
+    /// cross-host ruling, matching Android): at exactly `idle_ms` of idleness or
+    /// `overall_ms` of age the session is gone.
     fn session_live(&mut self) -> bool {
         let now = self.clock.now_ms();
         match self.session {
-            Some((start, last))
-                if now.saturating_sub(last) <= self.policy.idle_ms && now.saturating_sub(start) <= self.policy.overall_ms =>
+            // The OS locked, slept or stopped telling us since this session began.
+            Some(s) if self.gate.state() != GateState::Open(s.epoch) => {
+                self.session = None;
+                false
+            }
+            // A clock that moved BACKWARDS (before the session began or before its last use) would
+            // stretch both limits: the session ends instead (security: iOS finding, as Android does).
+            Some(Session { start, last, .. }) if now < last || now < start => {
+                self.session = None;
+                false
+            }
+            Some(Session { start, last, .. })
+                if now.saturating_sub(last) < self.policy.idle_ms && now.saturating_sub(start) < self.policy.overall_ms =>
             {
                 true
             }
@@ -204,8 +275,9 @@ impl<S: KeyStore, C: Clock> Agent<S, C> {
             return Err(Refusal::Reauth);
         }
         let raw = self.store.sign(&KeyRole::Device, payload.as_bytes(), None).map_err(store_refusal)?;
-        if let Some((start, _)) = self.session {
-            self.session = Some((start, self.clock.now_ms()));
+        let now = self.clock.now_ms();
+        if let Some(s) = &mut self.session {
+            s.last = now;
         }
         Ok(Signed { sig: b64u::enc(&st::low_s(&raw)), pub_key: b64u::enc(&pub_key) })
     }
@@ -323,7 +395,9 @@ mod tests {
     }
     fn agent() -> (Agent<MemoryStore, FakeClock>, Rc<Cell<u64>>) {
         let t = Rc::new(Cell::new(1_800_000_000_000));
-        (Agent::new(MemoryStore::with_keys(), FakeClock(t.clone()), Policy::default()), t)
+        let gate = LockGate::new();
+        gate.watched(false);
+        (Agent::new(MemoryStore::with_keys(), FakeClock(t.clone()), Policy::default(), gate), t)
     }
     const OK: Caller = Caller { verified: true, doc_id: None };
     fn frame() -> String {
@@ -346,17 +420,87 @@ mod tests {
         a.begin_session();
         t.set(t.get() + 60 * 60_000 + 1);
         assert_eq!(a.sign(&OK, "frame", &frame()), Err(Refusal::Reauth), "idle > 1 h");
+        // the boundary rows: ONE ms under the idle limit still signs, exactly AT it does not
+        a.begin_session();
+        t.set(t.get() + 60 * 60_000 - 1);
+        assert!(a.sign(&OK, "frame", &frame()).is_ok(), "idle 1 ms under the limit");
+        t.set(t.get() + 60 * 60_000);
+        assert_eq!(a.sign(&OK, "frame", &frame()), Err(Refusal::Reauth), "idle exactly AT the limit ends the session");
         a.begin_session();
         // keep it busy every 30 min for 24 h: never idle, but past overall
-        for _ in 0..48 {
+        for _ in 0..47 {
             t.set(t.get() + 30 * 60_000);
             assert!(a.sign(&OK, "frame", &frame()).is_ok());
         }
-        t.set(t.get() + 30 * 60_000);
-        assert_eq!(a.sign(&OK, "frame", &frame()), Err(Refusal::Reauth), "overall > 24 h");
+        t.set(t.get() + 30 * 60_000 - 1);
+        assert!(a.sign(&OK, "frame", &frame()).is_ok(), "overall 1 ms under 24 h");
+        t.set(t.get() + 1);
+        assert_eq!(a.sign(&OK, "frame", &frame()), Err(Refusal::Reauth), "overall exactly AT 24 h ends the session");
+        // a clock moved backwards ends the session, by however little, and stays ended
+        a.begin_session();
+        t.set(t.get() + 10 * 60_000);
+        assert!(a.sign(&OK, "frame", &frame()).is_ok());
+        t.set(t.get() - 1);
+        assert_eq!(a.sign(&OK, "frame", &frame()), Err(Refusal::Reauth), "clock 1 ms before the last use");
+        t.set(t.get() + 5 * 60_000);
+        assert_eq!(a.sign(&OK, "frame", &frame()), Err(Refusal::Reauth), "and the session does not come back");
+        // control: the same steps with the clock moving forward keep signing
+        a.begin_session();
+        t.set(t.get() + 10 * 60_000);
+        assert!(a.sign(&OK, "frame", &frame()).is_ok());
+        t.set(t.get() + 1);
+        assert!(a.sign(&OK, "frame", &frame()).is_ok(), "control: forward is fine");
         a.begin_session();
         a.lock();
         assert_eq!(a.sign(&OK, "frame", &frame()), Err(Refusal::Reauth), "locked");
+    }
+
+    fn gated() -> (Agent<MemoryStore, FakeClock>, Arc<LockGate>) {
+        let (a, _) = agent();
+        let g = a.gate.clone();
+        (a, g)
+    }
+
+    #[test]
+    fn the_os_ends_a_session_without_touching_the_agent() {
+        let (mut a, g) = gated();
+        assert!(a.begin_session());
+        assert!(a.sign(&OK, "frame", &frame()).is_ok(), "control: signs while nothing has happened");
+        g.lock();
+        assert_eq!(a.sign(&OK, "frame", &frame()), Err(Refusal::Reauth), "Lock or PrepareForSleep");
+        assert!(a.begin_session());
+        g.set_locked(true);
+        assert_eq!(a.sign(&OK, "frame", &frame()), Err(Refusal::Reauth), "LockedHint");
+        g.set_locked(false);
+        assert_eq!(a.sign(&OK, "frame", &frame()), Err(Refusal::Reauth), "an unlock opens nothing");
+        assert!(a.begin_session());
+        g.lost();
+        g.watched(false);
+        assert_eq!(a.sign(&OK, "frame", &frame()), Err(Refusal::Reauth), "the watcher came back: the session did not");
+    }
+
+    #[test]
+    fn no_session_opens_while_locked_or_unwatched() {
+        let (mut a, g) = gated();
+        g.set_locked(true);
+        assert!(!a.begin_session());
+        assert_eq!(a.reauth_ticket(), Err(Refusal::Reauth));
+        g.lost();
+        assert!(!a.begin_session());
+        assert_eq!(a.reauth_ticket(), Err(Refusal::Unavailable));
+        assert_eq!(a.sign(&OK, "frame", &frame()), Err(Refusal::Reauth));
+        g.watched(false);
+        assert!(a.begin_session(), "control: open again once the OS is back");
+    }
+
+    #[test]
+    fn a_yes_that_spans_a_lock_opens_nothing() {
+        let (mut a, g) = gated();
+        let t = a.reauth_ticket().unwrap();
+        g.lock();
+        assert!(!a.begin_session_from(t));
+        assert_eq!(a.sign(&OK, "frame", &frame()), Err(Refusal::Reauth));
+        assert!(a.begin_session_from(a.reauth_ticket().unwrap()), "control: a fresh ticket works");
     }
 
     #[test]
