@@ -4,7 +4,7 @@
 import CryptoKit
 import Foundation
 
-/// bento/connect B1 on iOS: what answers the shared bridge's `id.whoami`,
+/// bento/id B1 on iOS: what answers the shared bridge's `id.whoami`,
 /// `id.sign` and `id.resolve` (home/bridge.js, contract kernel/src/identity.ts).
 ///
 /// This file is pure Foundation + CryptoKit, with no UIKit, so a macOS rig drives

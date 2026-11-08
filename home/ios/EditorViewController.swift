@@ -344,7 +344,7 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
                                        injectionTime: .atDocumentStart, forMainFrameOnly: true))
     }
 
-    // MARK: - identity (bento/connect B1)
+    // MARK: - identity (bento/id B1)
 
     /// One routine session for the app run: re-authentication is the person's.
     static let identitySession = IdentityBridgeHost.Session()

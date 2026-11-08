@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 /**
- * bento/connect B1 on iOS and the Mac — the shared bridge's identity calls
+ * bento/id B1 on iOS and the Mac — the shared bridge's identity calls
  * (home/bridge.js) answered by the iOS host (home/ios/IdentityBridge.swift).
  *
  *   node scripts/test-home-id-bridge.mjs

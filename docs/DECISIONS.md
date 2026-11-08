@@ -12562,7 +12562,7 @@ is visible, and anonymous senders cannot be told apart.
 Guard: `scripts/test-directory.ts` (the "budget" rows) and
 `scripts/test-directory-mutants.ts` (the budget back in front of each refusal).
 
-## 2026-11-03 — bento/connect B1 on iOS: the identity calls, answered by the host
+## 2026-11-03 — bento/id B1 on iOS: the identity calls, answered by the host
 
 `home/ios/IdentityBridge.swift` answers `id.whoami`, `id.sign` and `id.resolve`
 for the shared bridge. It is plain Foundation and CryptoKit so a macOS rig drives
