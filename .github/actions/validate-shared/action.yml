@@ -135,3 +135,35 @@ runs:
       # limits and per-IP limits hold; no raw address or IP at rest.
       shell: bento-step {0}
       run: node scripts/test-directory.ts
+
+    - name: No frame is both scripted and same-origin
+      # Fails on any frame a document can cause that has allow-same-origin AND
+      # allow-scripts (or no sandbox at all), across every app's source and
+      # every built shell with its deflated payloads inflated. Type's print
+      # frame is allow-listed by name; two vendored Reveal frames are listed
+      # with their unreachability premise asserted. Placed here, after all the
+      # builds, because --require-built turns a missing shell into a failure
+      # instead of a quiet pass; the mutants (unsafe pair, dropped sandbox,
+      # computed value, extra frame) live in the rig.
+      shell: bento-step {0}
+      run: node scripts/test-frame-sandbox.mjs --require-built
+
+    - name: Host routing files for bento.page
+      # site-routing.mjs generates the _redirects that bento.page needs on
+      # Workers static assets (html_handling "none"): every HTML file in the
+      # published tree gets its extensionless / directory rules, or that URL
+      # 404s. Also pins the template properties the move depends on: ACAO on
+      # every path, no route or custom domain in wrangler.toml, .git and
+      # .wrangler never uploaded.
+      shell: bento-step {0}
+      run: node scripts/test-site-routing.mjs
+
+    - name: Site verifier catches every way a host can differ
+      # verify-site.mjs compares a served bento.page against the published
+      # tree and, optionally, a second host. Offline: two local servers over a
+      # tree signed with a throwaway key. The identical host must pass with the
+      # update path proven to have run; each mutant (.html redirect, a redirect
+      # hop without a CORS grant, a missing grant, an added security header, a
+      # changed byte, a cacheable 404, a tampered envelope) must fail.
+      shell: bento-step {0}
+      run: node scripts/test-verify-site.mjs

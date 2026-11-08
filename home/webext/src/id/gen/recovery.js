@@ -237,6 +237,20 @@ export async function unpackScalars(pt            , expected          ,
   return { ok: true, value: { account: scalars[0], kx: scalars[1] } }
 }
 
+/**
+ * Read ONE account scalar, exactly 32 bytes, and check it the same way: in
+ * 1..n−1 and the private half of `accountPub`. Link v1's sealed payload is
+ * this and nothing else (security §26c.4: history at link time comes from H
+ * re-wrapping to N's kx, never from handing N the recovery kx).
+ */
+export async function unpackAccountScalar(pt            , accountPub        ,
+  subtle               = crypto.subtle)                               {
+  if (pt.length !== 32) return no('length')
+  if (!scalarInRange(pt)) return no('scalar-range')
+  if (typeof accountPub !== 'string' || !(await scalarMatches(pt, accountPub, subtle))) return no('key-mismatch')
+  return { ok: true, value: pt.slice() }
+}
+
 /** The public halves a blob must match: the binding's account key and its recovery kx. */
                                                                
 

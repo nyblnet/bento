@@ -731,3 +731,24 @@ runs:
       # the positive control.
       shell: bento-step {0}
       run: node scripts/test-dash-share.ts
+
+    - name: dash — dates and times are values
+      # A typed or pasted date, datetime or time stores its canonical text and
+      # stamps its format; 3/4/2026 stays text. Through a real sheet
+      # recalculation: =A1+1, date − date, DATE()+1, TEXT with date patterns,
+      # WEEKDAY/EOMONTH/EDATE/DATEDIF/NETWORKDAYS/WORKDAY, MIN/MAX of dates,
+      # and the refusals (date + date, date * 2). NOW()/TODAY() pinned to
+      # zones either side of UTC and across both daylight-saving changes. A
+      # cell's own date pattern, the sort order of times, and a dataset's
+      # datetimes out to .xlsx and back.
+      shell: bento-step {0}
+      run: node scripts/test-dash-dates.ts
+
+    - name: dash — an older dash does not corrupt the new date values
+      # dash/src at dash-v0.2.0 and at the 0.3.0 main this change branched
+      # from, fetched by git and imported as they are: each opens a file with
+      # the new datetime/time values, reports no repair, saves it back
+      # unchanged; the 0.3.0 cell editor round-trips every value cell and its
+      # recalculation does not throw. A ref that cannot be fetched fails.
+      shell: bento-step {0}
+      run: node scripts/test-dash-dates-oldshell.ts

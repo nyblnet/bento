@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The setup screen's views, by id so a test can find them in the UI hierarchy. -->
+    <item name="setup_status" type="id" />
+    <item name="setup_code" type="id" />
+    <item name="setup_input" type="id" />
+    <item name="setup_action" type="id" />
+</resources>

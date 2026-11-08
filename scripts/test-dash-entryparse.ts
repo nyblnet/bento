@@ -185,7 +185,10 @@ console.log('\n4. text in arithmetic — Excel\'s rule (formula.ts, above `num`)
   err('=A4*1', '#VALUE!')
   num('="(5)"*1', -5)
   num('="1,234"+0', 1234)
-  err('="2026-03-04"+1', '#VALUE!')
+  // a canonical date string is a DATE to arithmetic since date values (rig:
+  // test-dash-dates.ts) — `+` adds days, `*` still refuses (A4 above)
+  { const got = ev('="2026-03-04"+1'); ok(got === '2026-03-05', `="2026-03-04"+1 is the next day   (got ${String(got)})`) }
+  err('="2026-03-04"*1', '#VALUE!')
   err('="12abc"*1', '#VALUE!')       // never the digits that happened to be in it
   // postfix percent in a formula
   num('=10*15%', 1.5)

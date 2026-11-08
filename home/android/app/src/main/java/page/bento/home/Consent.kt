@@ -33,7 +33,12 @@ object Consent {
         REVOKE("revoke", "rev.", true),
         LINK("link", "dev.", false),
         ROTATE("rotate", "bind.", false),
-        UNBIND("unbind", "del.", false);
+        UNBIND("unbind", "del.", false),
+        // The directory-request purposes name their OP (kernel's CONSENT_FAMILY): a consent to enrol a
+        // recovery code must not authorise adding or removing a passkey. Account-scoped: no docId.
+        CRED_ADD("cred-add", "dreq.cred-add.", false),
+        CRED_DEL("cred-del", "dreq.cred-del.", false),
+        RC_ENROL("rc-enrol", "dreq.rc-enrol.", false);
         companion object { fun of(w: String) = values().firstOrNull { it.word == w } }
     }
 

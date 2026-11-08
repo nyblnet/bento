@@ -543,3 +543,38 @@ runs:
       # every one, after the unmutated copy passes both.
       shell: bento-step {0}
       run: node scripts/test-kx-mode-mutants.ts
+
+    - name: identity device linking (link v1)
+      # bento/id: every agent that links a device must derive the same bytes.
+      # The `link` section of kernel/fixtures/identity-v1.json: code → slot,
+      # the transcript, Z, the direction keys and the SAS, recomputed byte for
+      # byte; the offer, the directory's release check (spend-first) and the
+      # new device's final check, every verdict for its stated reason.
+      shell: bento-step {0}
+      run: node scripts/test-link.ts
+
+    - name: identity device linking mutants
+      # Each mutant reintroduces one lenient path into a copy of link.ts (the
+      # code out of the salt, an AAD without the message number, a late spend,
+      # a frozen binding that releases, an N that stores a dev. it never asked
+      # for...); test-link.ts must go red on every one, after the unmutated
+      # copy passes.
+      shell: bento-step {0}
+      run: node scripts/test-link-mutants.ts
+
+    - name: Outside-edit guard rig
+      # kernel/src/save.ts never overwrites a file another program changed: every
+      # write through the held handle compares lastModified + size with the stamp
+      # read back after our last write (or at open). On a file system that rounds
+      # mtime: an outside edit is refused and announced, our own consecutive and
+      # concurrent writes never are, keep-mine overwrites once and tracking
+      # resumes. Nine mutants of save.ts must each turn it red; a control must not.
+      shell: bento-step {0}
+      run: node scripts/test-disk-change.ts
+
+    - name: Outside-edit guard in Chromium
+      # The same guard against real FileSystemFileHandles (origin-private file
+      # system), with a second handle as the other program: the false-positive
+      # question a fake cannot answer — our own writes, read back by the browser.
+      shell: bento-step {0}
+      run: node scripts/test-disk-change-browser.mjs
