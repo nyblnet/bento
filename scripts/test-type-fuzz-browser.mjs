@@ -516,9 +516,21 @@ async function shrink(ops, budget = 30) {
   return cur
 }
 
-async function report(label, ops, fail) {
+/**
+ * Print a failure, shrunk. Shrinking replays the run up to 30 times, so only
+ * the first failure in a pass is shrunk: a regression that breaks every seed
+ * must still finish inside the CI job's timeout. The rest print their step and
+ * a full-prefix replay.
+ */
+let shrunk = false
+async function report(label, ops, fail, { always = false } = {}) {
   console.log(`        ${label}: step ${fail.step} (${fail.what})`)
   for (const d of fail.diffs) console.log(`          ${d}`)
+  if (shrunk && !always) {
+    console.log(`        replay: FUZZ_REPLAY='${JSON.stringify(ops.slice(0, fail.step + 1))}'`)
+    return
+  }
+  shrunk = true
   const min = await shrink(ops.slice(0, fail.step + 1))
   const again = await run(min)
   console.log(`        minimal (${min.length} op${min.length === 1 ? '' : 's'}): FUZZ_REPLAY='${JSON.stringify(min)}'`)
@@ -576,7 +588,7 @@ try {
       for (let s = 1; s <= 6 && !found; s++) {
         const ops = genOps(1000 + s, 8, [cls, cls, 'type'])
         const fail = await run(ops)
-        if (fail) { found = fail; await report(`${cls} seed ${1000 + s}`, ops, fail) }
+        if (fail) { found = fail; await report(`${cls} seed ${1000 + s}`, ops, fail, { always: true }) }
       }
       ok(!!found, found
         ? `${cls} still diverges — ${why}`
