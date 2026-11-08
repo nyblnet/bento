@@ -759,3 +759,10 @@ runs:
       # repairs, each with a control that a well-formed placement survives.
       shell: bento-step {0}
       run: node scripts/test-dash-placement.ts
+
+    - name: dash — A1 references read a table placed on a grid
+      # A1 into a table placed on a grid reads the table (header names,
+      # values, calculated columns, totals) through the real workbook recalc,
+      # each row against an unplaced control.
+      shell: bento-step {0}
+      run: node scripts/test-dash-placed-refs.ts
