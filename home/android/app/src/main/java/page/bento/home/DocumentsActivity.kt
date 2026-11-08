@@ -369,11 +369,10 @@ class DocumentsActivity : AppCompatActivity() {
     private fun checkForUpdates() {
         Thread {
             val outcomes = Releases.APPS.map { ReleaseHistory.refresh(applicationContext, it) }
-            // Worst outcome wins: a reply that would not verify is worse than an unreachable server.
-            val msg = when {
-                ReleaseHistory.Outcome.UNVERIFIED in outcomes -> R.string.updates_unverified
-                ReleaseHistory.Outcome.OFFLINE in outcomes -> R.string.updates_offline
-                else -> R.string.updates_checked
+            val msg = when (ReleaseHistory.summary(outcomes)) {
+                ReleaseHistory.Outcome.UNVERIFIED -> R.string.updates_unverified
+                ReleaseHistory.Outcome.OFFLINE -> R.string.updates_offline
+                ReleaseHistory.Outcome.REACHED -> R.string.updates_checked
             }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread

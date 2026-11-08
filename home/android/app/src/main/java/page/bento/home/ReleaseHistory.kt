@@ -77,21 +77,36 @@ object ReleaseHistory {
      * thread. Called ONLY on a contact the person starts: a New document (for
      * [app]) or "Check for updates". Opening a document never phones home.
      */
+    fun refresh(c: Context, app: Releases.App): Outcome =
+        classify(app.id, { Releases.get(url(app)) }, { offer(c, app, it) })
+
     /**
-     * OFFLINE only when bento.page could not be reached; UNVERIFIED when it
-     * answered with a history whose signature does not verify; otherwise
-     * REACHED (an unpublished or anti-rollback-refused history is a reached server).
+     * What one fetch-and-offer came to. OFFLINE only when bento.page could not
+     * be reached; UNVERIFIED when it answered with a history whose signature
+     * does not verify; otherwise REACHED (an unpublished or anti-rollback-
+     * refused history is a reached server, and the held one stands).
      */
-    fun refresh(c: Context, app: Releases.App): Outcome {
-        val raw = try { String(Releases.get(url(app)), Charsets.UTF_8) } catch (e: Releases.Failed) {
+    internal fun classify(id: String, fetch: () -> ByteArray, take: (String) -> String?): Outcome {
+        val raw = try { String(fetch(), Charsets.UTF_8) } catch (e: Releases.Failed) {
             // reached, but nothing published for this app yet (or refused): the held one stands
-            Log.i(TAG, "release history for ${app.id} unavailable: ${e.message}"); return Outcome.REACHED
+            Log.i(TAG, "release history for $id unavailable: ${e.message}"); return Outcome.REACHED
         } catch (e: Exception) {
-            Log.i(TAG, "release history for ${app.id}: offline (${e.message})"); return Outcome.OFFLINE
+            Log.i(TAG, "release history for $id: offline (${e.message})"); return Outcome.OFFLINE
         }
-        val why = offer(c, app, raw)
-        if (why != null) Log.w(TAG, "release history for ${app.id} not taken: $why")
+        val why = take(raw)
+        if (why != null) Log.w(TAG, "release history for $id not taken: $why")
         return if (why == UNVERIFIED) Outcome.UNVERIFIED else Outcome.REACHED
+    }
+
+    /**
+     * One "Check for updates" across every app: the worst outcome wins. A reply
+     * that would not verify is worse than an unreachable server, and either is
+     * reported over the apps that were reached.
+     */
+    internal fun summary(outcomes: List<Outcome>): Outcome = when {
+        Outcome.UNVERIFIED in outcomes -> Outcome.UNVERIFIED
+        Outcome.OFFLINE in outcomes -> Outcome.OFFLINE
+        else -> Outcome.REACHED
     }
 
     /**
