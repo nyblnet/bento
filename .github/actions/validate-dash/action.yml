@@ -766,3 +766,10 @@ runs:
       # each row against an unplaced control.
       shell: bento-step {0}
       run: node scripts/test-dash-placed-refs.ts
+
+    - name: dash — structured references and Excel error literals
+      # Excel's table syntax (Sales[Amount], Sales[@Qty], Sales[#Totals]) gives
+      # the same answers placed and unplaced, follows a moved table, and
+      # resolves what has no address to an error IFERROR can catch.
+      shell: bento-step {0}
+      run: node scripts/test-dash-structured.ts
