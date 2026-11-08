@@ -25,7 +25,7 @@ import { startPresentation } from '../present'
 // serializeFile (plain output) is deliberately NOT imported here: every path
 // in this file writes a real file for a person, so all of them must inherit an
 // active password. serializeAuto is the only encryption-aware serializer.
-import { adoptFileHandle, canWriteInPlace, currentFileName, fileBase, hasFileHandle, hostCan, isBodySealed, isEncryptionActive, openedFileName, saveFile, serializeAuto, setEncryptionPassword, suggestedFileName, writeUpdatedFile, writeUpdatedFileAs } from '../save'
+import { adoptFileHandle, canWriteInPlace, currentFileName, decryptEnvelope, embeddedDocBlock, fileBase, fileChangedOnDisk, hasFileHandle, hostCan, isBodySealed, isEncryptionActive, keepMineOverDisk, onFileChangedOnDisk, openedFileName, parseEnvelope, readDiskVersion, saveFile, serializeAuto, setEncryptionPassword, suggestedFileName, writeUpdatedFile, writeUpdatedFileAs, type EncEnvelope } from '../save'
 import { createSaveQueue, saveRevision } from '../saving'
 import type { SaveQueue } from '../../../kernel/src/savequeue.ts'
 import { noteSavedFromWeb } from './returngate'
@@ -2684,6 +2684,7 @@ export class Editor {
     this.noticeIfJustUpdated()
     this.store.on('doc', () => this.scheduleAutosave())
     onRecoveryOff((docId) => this.noticeRecoveryOff(docId))
+    onFileChangedOnDisk(({ name }) => this.showDiskChangedBanner(name))
   }
 
   /** Decks told, in this page, that their crash recovery is off — once each. */
@@ -2730,7 +2731,13 @@ export class Editor {
     // snapshot taken as it starts, and the dot goes out only if no edit landed
     // while the bytes were on their way — the old unconditional
     // setDirty(false) here marked such an edit saved, and it never reached disk.
+    // Another program changed the file and the author has not chosen yet
+    // (showDiskChangedBanner): the kernel refuses every write, so do not try,
+    // and do not flash "Backed up" over a banner saying the file is not being
+    // saved. The snapshot above is still the backstop.
+    const refusedOnDisk = fileChangedOnDisk()
     if (hasFileHandle()) {
+      if (refusedOnDisk) return
       const out = await saveRevision(this.store, this.saveQueue,
         async (snapshot) => { await writeUpdatedFile(await serializeAuto(snapshot)); return 'saved' as const },
         () => this.session?.stampInto(this.store.doc))
@@ -2742,6 +2749,8 @@ export class Editor {
         if (out.current) this.flashSaved()
         return
       }
+      // refused because the file changed on disk: the banner is up, say nothing else
+      if (out.kind === 'failed' && isDiskChange(out.error)) return
       // failed: keep dirty; the IndexedDB snapshot is the backstop
     }
     // No handle (Safari/Firefox/iOS) or the write failed: the file on disk is
@@ -2982,6 +2991,190 @@ export class Editor {
     document.body.appendChild(bar)
   }
 
+  // --- the file changed on disk -------------------------------------------------
+  //
+  // The kernel refuses to write the open file once another program (a sync
+  // client, a second editor, a coding assistant) has changed it since we last
+  // read or wrote it (kernel/src/save.ts, "outside edits"). Writing stops until
+  // the author chooses: load the version on disk, or keep theirs and overwrite
+  // it once, deliberately. Neither choice loses work: loading puts the deck as
+  // it is now into Version history first and is one undoable step.
+
+  private diskBar: HTMLElement | null = null
+
+  private showDiskChangedBanner(name: string) {
+    this.diskBar?.remove()
+    const bar = div('ed-recover ed-disk-changed')
+    bar.setAttribute('role', 'alert')
+    this.diskBar = bar
+    const msg = document.createElement('span')
+    msg.textContent = t('{name} was changed by another program. Your edits are not being saved to it.', { name })
+    const load = document.createElement('button')
+    load.className = 'ed-btn ed-btn-primary ed-disk-load'
+    load.textContent = t('Load the version on disk')
+    load.title = t('Replaces this deck with the file as the other program left it. ⌘Z brings your edits back.')
+    const keep = document.createElement('button')
+    keep.className = 'ed-btn ed-disk-keep'
+    keep.textContent = t('Keep mine')
+    keep.title = t('Saves this deck over the file, replacing the other program’s changes.')
+    const busy = (on: boolean) => { load.disabled = on; keep.disabled = on }
+    load.addEventListener('click', async () => {
+      busy(true)
+      try { await this.loadDiskVersion(name) } finally { busy(false) }
+    })
+    keep.addEventListener('click', async () => {
+      busy(true)
+      try {
+        await keepMineOverDisk()
+        this.closeDiskBanner()
+        // the one deliberate overwrite; a further outside edit before it lands
+        // is caught again and brings the banner back (save() above)
+        await this.save(false)
+      } finally { busy(false) }
+    })
+    bar.append(msg, load, keep)
+    document.body.appendChild(bar)
+  }
+
+  private closeDiskBanner() {
+    this.diskBar?.remove()
+    this.diskBar = null
+  }
+
+  /** "Load the version on disk": parse the file as it is now, exactly as a
+   *  dropped file is opened (openDroppedDeck), and swap it in as one undoable
+   *  step. Writing resumes (accept()) only once it has actually loaded. */
+  private async loadDiskVersion(name: string) {
+    let disk: { html: string; accept(): void }
+    try {
+      disk = await readDiskVersion()
+    } catch (err) {
+      console.error(err)
+      this.toast(t('Couldn’t read {name} — it may have been moved or deleted.', { name }))
+      return
+    }
+    const block = embeddedDocBlock(disk.html)
+    if (!block) { alert(t('{name} isn’t a Bento document.', { name })); return }
+
+    // A password-protected file goes through the password, whatever this deck
+    // has now: the other program may have set, changed or removed it. The
+    // password that opens it is the one later saves keep writing with.
+    let json = block
+    let password: string | null | undefined // undefined: leave the seal as it is
+    const env = parseEnvelope(block)
+    if (env) {
+      if ((env as { kdf?: string }).kdf === 'hkdf-kdoc') {
+        // sealed to a person's identity: only the boot path can unseal it
+        alert(t('{name} is sealed on disk. Open it again to load that version.', { name }))
+        return
+      }
+      const opened = await this.askDiskPassword(name, env)
+      if (!opened) return
+      json = opened.json
+      password = opened.password
+    } else if (isEncryptionActive()) {
+      password = null // the version on disk has no password any more
+    }
+
+    const next = parseDoc(json)
+    if (!next) { alert(t('{name} isn’t a Bento document.', { name })); return }
+    const neutralised = guardOpenedDoc(next)
+    if (neutralised.length) console.info('[bento] loaded from disk: neutralised', neutralised)
+
+    // Nothing is lost: the deck as it is now goes to Version history first,
+    // and the swap below is one undoable step. Not when either side is sealed:
+    // a sealed deck's plaintext never reaches IndexedDB, and a version written
+    // now would be purged a line later when the disk's password takes over —
+    // ⌘Z is the way back then.
+    const sealedAfter = password === undefined ? isBodySealed() : password !== null
+    let kept = false
+    if (!isBodySealed() && !sealedAfter) {
+      // addVersion reports nothing (no IndexedDB here is silent), so the toast's
+      // claim is checked against the timeline, never assumed
+      const mine = this.store.doc, at = Date.now()
+      try {
+        await addVersion(mine)
+        kept = ((await listVersions(mine.docId))[0]?.at ?? 0) >= at
+      } catch (err) { console.error(err) }
+    }
+
+    if (password !== undefined) {
+      const wasSealed = isBodySealed()
+      setEncryptionPassword(password)
+      // newly password-protected: purge plaintext snapshots, as setting a
+      // password by hand does (setFilePassword)
+      if (password !== null && !wasSealed) {
+        await clearRecovery(this.store.doc.docId); await clearVersions(this.store.doc.docId)
+        await clearRecovery(next.docId); await clearVersions(next.docId)
+      }
+    }
+    this.store.replaceDoc(next)
+    // replaceDoc's 'doc' event armed an auto-save that would write the version
+    // we just read straight back; the file already holds it
+    clearTimeout(this.autosaveTimer)
+    this.autosaveTimer = 0
+    this.store.setDirty(false)
+    disk.accept()
+    if (!isBodySealed()) void putRecovery(next) // the recovery baseline is the file again
+    this.canvas.render()
+    this.syncWindowTitle()
+    this.closeDiskBanner()
+    this.toast(kept ? t('Loaded the version on disk — your edits are in Version history') : t('Loaded the version on disk'))
+  }
+
+  /** The password for the version on disk, asked the way the boot gate asks:
+   *  tried against the file itself, again on a wrong one, null on Cancel. */
+  private askDiskPassword(name: string, env: EncEnvelope): Promise<{ json: string; password: string } | null> {
+    return new Promise((resolve) => {
+      const dlg = document.createElement('dialog')
+      dlg.className = 'ed-dialog ed-pwdialog ed-disk-pw'
+      const h = document.createElement('h2')
+      h.textContent = t('Load the version on disk')
+      const p = document.createElement('p')
+      p.textContent = t('{name} is password-protected on disk. Enter its password to load it.', { name })
+      const label = document.createElement('label')
+      label.textContent = t('Password')
+      const input = document.createElement('input')
+      input.type = 'password'
+      input.autocomplete = 'current-password'
+      label.appendChild(input)
+      const err = div('ed-pwerr')
+      const actions = div('ed-dialog-actions')
+      const cancel = document.createElement('button')
+      cancel.className = 'cancel'
+      cancel.textContent = t('Cancel')
+      const ok = document.createElement('button')
+      ok.className = 'ok ed-primary'
+      ok.textContent = t('Unlock')
+      actions.append(cancel, ok)
+      dlg.append(h, p, label, err, actions)
+      document.body.appendChild(dlg)
+      let settled = false
+      const done = (v: { json: string; password: string } | null) => {
+        if (settled) return
+        settled = true
+        dlg.close()
+        dlg.remove()
+        resolve(v)
+      }
+      const tryOpen = async () => {
+        const pass = input.value
+        if (!pass) return
+        ok.disabled = true
+        const json = await decryptEnvelope(env, pass)
+        ok.disabled = false
+        if (json === null) { err.textContent = t('Wrong password — try again'); input.select(); return }
+        done({ json, password: pass })
+      }
+      cancel.addEventListener('click', () => done(null))
+      ok.addEventListener('click', () => void tryOpen())
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); void tryOpen() } })
+      dlg.addEventListener('cancel', () => done(null))
+      dlg.showModal()
+      input.focus()
+    })
+  }
+
   private showRecoveryBanner(snap: Snapshot) {
     document.querySelector('.ed-recover')?.remove()
     const bar = div('ed-recover')
@@ -3214,6 +3407,15 @@ export class Editor {
       () => this.session?.stampInto(this.store.doc))
     if (out.kind === 'discarded' || out.kind === 'cancelled') return
     if (out.kind === 'failed') {
+      // Refused because another program changed the file: not a failure to
+      // report on the console but a choice to put back in front of the author.
+      // ⌘S while the banner is up lands here too (the kernel refuses without
+      // trying), so the press is answered rather than swallowed.
+      if (isDiskChange(out.error)) {
+        this.showDiskChangedBanner(out.error.fileName)
+        this.toast(t('Not saved — {name} was changed by another program', { name: out.error.fileName }))
+        return
+      }
       console.error(out.error)
       this.toast(t('Save failed — see console'))
       return
@@ -3783,7 +3985,11 @@ export class Editor {
           card.appendChild(releaseNotes(release.notes))
         }
         const actions = div('ed-about-actions')
-        const fail = (err: any) => { status.textContent = t('Update failed: {m}', { m: String(err?.message ?? err) }) }
+        const fail = (err: any) => {
+          status.textContent = isDiskChange(err)
+            ? t('{name} was changed by another program, so it was not updated. Choose which version to keep in the banner, then try again.', { name: err.fileName })
+            : t('Update failed: {m}', { m: String(err?.message ?? err) })
+        }
         const done = (outcome: InPlaceOutcome & { current: boolean }) => {
           status.textContent = ''
           const after = div('ed-about-update')
@@ -4189,6 +4395,12 @@ function cloneElement(el: SlideElement): SlideElement {
 }
 
 // tiny DOM helpers
+/** A write refused because another program changed the file on disk
+ *  (kernel FileChangedOnDiskError). By name: the class is the kernel's. */
+function isDiskChange(err: unknown): err is Error & { fileName: string } {
+  return (err as { name?: unknown } | null)?.name === 'FileChangedOnDiskError'
+}
+
 function div(cls: string): HTMLElement {
   const d = document.createElement('div')
   d.className = cls

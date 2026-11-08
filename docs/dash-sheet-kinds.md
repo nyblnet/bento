@@ -1,5 +1,9 @@
 # Two kinds of sheet: spreadsheets and datasets
 
+> **Refined 2026-10-20 by `docs/dash-unified.md`.** The two storage kinds below
+> stand; the user-facing choice between them does not. A table now lives inside
+> a grid instead of being a different kind of sheet you pick first.
+
 Proposal, 2026-08-11. Not built. Settles the tension found when someone asked
 why the footer's `SUM` was not a formula in D9: dash ships the *table* model
 while painting the *canvas* model, with nothing saying which you are in.
