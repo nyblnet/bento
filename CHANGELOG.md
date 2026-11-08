@@ -19,6 +19,15 @@ pre-1.0.
   marker back. Typing a marker inside a bullet you already have no longer
   paints a second bullet beside it. Thanks to Hermholtz for the report
   (discussion #711).
+- **Edits another program makes to your open deck are no longer overwritten.**
+  When a sync client, a second editor or a coding assistant changes the file
+  while it is open here, auto-save and ⌘S stop writing to it and a banner says
+  so, with two choices. **Load the version on disk** opens the file as the other
+  program left it, as one step ⌘Z undoes, and puts your edits into Version
+  history first; a file that now has a password asks for it. **Keep mine**
+  saves your deck over the file once, on purpose, and watching resumes. Before,
+  auto-save silently replaced the other program's changes, or, once refused,
+  stopped with nothing but "Save failed".
 
 ## [1.2.12] — 2026-11-02
 

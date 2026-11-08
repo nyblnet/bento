@@ -12263,6 +12263,34 @@ Guards: `scripts/test-disk-change.ts` (fake handle on a 2 s-mtime file
 system, nine mutants and a control) and `scripts/test-disk-change-browser.mjs`
 (real Chromium handles).
 
+## 2026-11-08 — The bento/id directory (`server/directory/`) is AGPL-3.0-only, with a CLA
+
+Maintainer ruling, 2026-11-08. The directory service behind id.bento.page is
+licensed under the GNU Affero General Public License, version 3 only; the rest
+of the repository stays MIT.
+
+- **Why AGPL there:** the directory is a network service, not code that
+  travels inside a document. The AGPL's network clause means anyone who runs a
+  modified copy for others must offer those users its source.
+- **Scope is the directory alone.** `server/directory/` carries its own
+  `LICENSE` (the unmodified FSF text), `AGPL-3.0-only` SPDX headers on every
+  source file and in `wrangler.toml`, and a `package.json` whose only job is
+  the `license` field (plus `"type": "module"`, which its ESM sources already
+  are). The kernel modules it imports (`kernel/src/statements.ts`,
+  `address.ts` and friends) and its rig in `scripts/` stay MIT; MIT code can
+  be combined into AGPL work, and nothing MIT imports the directory except
+  that test rig.
+- **`-only`, not `-or-later`:** the repository has no GPL-family precedent,
+  and `-only` keeps the choice of any future licence version with the project
+  through the CLA rather than handing it to a licence steward in advance.
+- **CLA:** contributions to `server/directory/` need the individual CLA in
+  `server/directory/CLA.md` (adapted from the Apache ICLA v2.2), which grants
+  the project the right to relicense them. Contributions anywhere else need
+  nothing new. Until a CLA bot is installed (a maintainer account action), a
+  contributor agrees by posting the comment the CLA gives on their pull
+  request, and the reviewer checks for it before merging.
+
+Pointers: `server/directory/README.md` "Licence", `CONTRIBUTING.md` "License".
 
 ## 2026-10-21 — bento/connect H2: the desktop host's trust store, origins and arming (home/desktop/host, home/desktop/hostcore)
 
@@ -12456,3 +12484,28 @@ neither); the Windows key store is an explicit stub that refuses everything unti
   an unknown document is unrecovered in that one case.
 - **Windows file ID** (volume serial plus the 128-bit file ID, `GetFileInformationByHandleEx`) now
   drives the envelope epoch; `GlobalMemoryStatusEx` answers the recovery memory check.
+
+## 2026-11-08 — Slides: what the author sees when another program changed the file
+
+The slides half of "A file another program changed is never overwritten"
+(same date). A banner names the file and offers two
+choices; until one is made, auto-save keeps its browser recovery copy but does
+not write the file or flash "Saved", and ⌘S answers with "Not saved — … was
+changed by another program" and brings the banner back.
+
+- **"Load the version on disk"** opens the file as it is now, by the same
+  route as a dropped file (block, parse, the open-file guard), as ONE undoable
+  step. The deck as it was goes into Version history first, and the toast says
+  so only when the timeline really has it. Not for a sealed deck on either side
+  (a password now, or one the file gained): that plaintext never reaches
+  IndexedDB, and ⌘Z is the way back. The file is not rewritten after loading.
+- **The file's password wins.** A version on disk that has a password asks for
+  it (a wrong one loads nothing), and later saves are encrypted with it; one
+  whose password was removed is loaded and saved without one. An
+  identity-sealed version cannot be opened from here: the author is told to
+  open the file again.
+- **"Keep mine"** overwrites once, deliberately; the next outside edit is
+  caught again.
+
+Guard: `scripts/test-slides-disk-change-browser.mjs` (the packaged document,
+real file handles through `launchQueue`).
