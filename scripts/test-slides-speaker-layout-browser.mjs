@@ -71,8 +71,6 @@ try {
     await sp.keyboard.press('ArrowLeft')
     ok((await metrics()).w > resized.w + 10, 'keyboard splitter resizing changes rendered geometry')
     await sp.locator('.sv-splitter-rows').focus()
-    await sp.keyboard.press('ArrowUp')
-    ok(await sp.locator('.sv-count').textContent() === count, 'splitter keys do not advance the presentation')
     await sp.keyboard.press('b')
     ok(await sp.locator('.sv-btn[data-nav="black"]').evaluate((el) => el.classList.contains('active')), 'presenter shortcuts still work with a focused splitter')
     await sp.keyboard.press('b')
@@ -116,6 +114,28 @@ try {
       'restoring notes and previews recovers the chosen proportions')
     await sp.keyboard.press('Escape')
 
+    // From a middle slide, where Previous, Next, Home and End would all move
+    // the counter if a divider let its keys through to the show.
+    const counter = () => sp.locator('.sv-count').textContent()
+    await sp.locator('.sv-btn[data-nav="next"]').click()
+    const middle = await counter()
+    ok(middle.startsWith('2 /'), 'the splitter key check starts on a middle slide')
+    const leaked = []
+    for (const selector of ['.sv-splitter-columns', '.sv-splitter-rows']) {
+      for (const key of ['ArrowLeft', 'ArrowRight', 'Home', 'End']) {
+        await sp.locator(selector).focus()
+        await sp.keyboard.press(key)
+        const now = await counter()
+        if (now !== middle) {
+          leaked.push(`${selector} ${key}: ${now}`)
+          // Back to the middle slide (First is disabled when already on slide 1).
+          await sp.evaluate(() => ['first', 'next'].forEach((k) => document.querySelector(`.sv-btn[data-nav="${k}"]`).click()))
+        }
+      }
+    }
+    ok(leaked.length === 0, `splitter keys do not move the presentation${leaked.length ? `: ${leaked.join("; ")}` : ""}`)
+    await sp.locator('.sv-btn[data-nav="prev"]').click()
+
     for (const [vw, vh] of [[1600, 900], [400, 700], [900, 400], [700, 600]]) {
       await sp.setViewportSize({ width: vw, height: vh })
       await sp.waitForFunction(() => {
@@ -142,6 +162,25 @@ try {
       }, width)
       ok(bounds, `previews fit and notes stay usable at ${vw}×${vh}, even at splitter limits`)
     }
+
+    // Closing View leaves focus on its summary; the clicker keys must still
+    // reach the show from there.
+    const black = () => sp.locator('.sv-btn[data-nav="black"]').evaluate((el) => el.classList.contains('active'))
+    await sp.locator('.sv-view summary').click()
+    await sp.keyboard.press('Escape')
+    ok(!await sp.locator('.sv-view').evaluate((el) => el.open), 'Escape closes View before the clicker check')
+    await sp.keyboard.press('ArrowRight')
+    ok((await counter()).startsWith('2 /'), 'after View closes with Escape, ArrowRight advances the show')
+    await sp.keyboard.press('b')
+    ok(await black(), 'after View closes with Escape, B toggles the black screen')
+    await sp.keyboard.press('b')
+    await sp.keyboard.press('ArrowLeft')
+    await sp.locator('.sv-view summary').click()
+    await sp.locator('.sv-view summary').click()
+    await sp.keyboard.press('ArrowRight')
+    ok((await counter()).startsWith('2 /'), 'after View closes with a click, ArrowRight advances the show')
+    await sp.locator('.sv-btn[data-nav="first"]').click()
+
     await sp.locator('.sv-btn[data-nav="next"]').click()
     ok((await sp.locator('.sv-count').textContent()).startsWith('2 /'), 'normal slide navigation still works')
     ok(await p.evaluate(() => JSON.stringify(window.bento.doc)) === original, 'layout choices leave the document byte-identical')
