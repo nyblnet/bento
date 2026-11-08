@@ -13009,6 +13009,13 @@ whole picture. Measured on a three-slide deck with a 2.5 MB stand-in for one
   re-saving it writes one line again. A document without `assets` is exactly
   `JSON.stringify(doc)`, byte for byte, in every app. Encrypted and sealed
   bodies are ciphertext and are not laid out.
+- **A writer convention, not a guarantee about every file.** Only a file
+  saved by this version on has the layout. A file last written by an older
+  shell, by the PowerPoint converter or by hand is one line with `assets`
+  wherever it fell, older slides decks can carry inline `data:` sources, and
+  bento/type keeps pictures inline in its document (no top-level `assets`).
+  So the Tooling notes and docs/agents.md say when to expect the second line
+  and to load the JSON with a tool whenever it is not there.
 - **Why not more.** Moving pictures into their own `application/bento+*`
   blocks would give the same benefit with more machinery and a file older
   shells cannot read; linking them as files beside the deck would end the
