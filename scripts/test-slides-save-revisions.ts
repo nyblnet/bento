@@ -186,8 +186,17 @@ console.log('\nthe editor writes through the queue')
   check(/saveRevision\(this\.store, this\.saveQueue,[\s\S]*writeUpdatedFile\(await serializeAuto\(snapshot\)\)/.test(auto), 'auto-save writes the queue\'s snapshot')
   check(/saveRevision\(this\.store, this\.saveQueue,[\s\S]*saveFile\(snapshot, forcePicker\)/.test(manual), '⌘S and Save a copy write the queue\'s snapshot')
   check(/saveRevision\(this\.store, this\.saveQueue,[\s\S]*applyUpdateInPlace\(release, snapshot\)/.test(update), 'Update this file writes the queue\'s snapshot')
+  // One clear that is not a save is allowed: "Load the version on disk"
+  // (loadDiskVersion) makes the deck EQUAL to the file and writes nothing, so
+  // there is no write for the queue to confirm. It must stay inside that method.
+  const load = body('private async loadDiskVersion(', 6000)
+  const loadEnd = load.indexOf('\n  private ', 10)
+  const loadClears = (loadEnd < 0 ? load : load.slice(0, loadEnd)).match(/^\s*this\.store\.setDirty\(false\)$/gm) ?? []
+  check(loadClears.length === 1, 'loading the version on disk clears the dot exactly once, inside loadDiskVersion')
   const clears = [...src.matchAll(/^.*setDirty\(false\).*$/gm)].map((m) => m[0].trim()).filter((l) => !l.startsWith('//'))
-  check(clears.length === 1 && /if \(outcome\.current\)/.test(clears[0]), `no unconditional clear left (${clears.join(' | ') || 'none'})`)
+  const saveClears = clears.filter((l) => l !== 'this.store.setDirty(false)')
+  check(saveClears.length === 1 && /if \(outcome\.current\)/.test(saveClears[0]) && clears.length === 1 + loadClears.length,
+    `no unconditional clear left (${clears.join(' | ') || 'none'})`)
   check(/\(\) => this\.session\?\.stampInto\(this\.store\.doc\)\)/.test(auto) && /\(\) => this\.session\?\.stampInto\(this\.store\.doc\)\)/.test(manual),
     'the CRDT stamp happens in the queue\'s prepare step, for auto-save and ⌘S')
 }

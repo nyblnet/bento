@@ -12484,3 +12484,28 @@ neither); the Windows key store is an explicit stub that refuses everything unti
   an unknown document is unrecovered in that one case.
 - **Windows file ID** (volume serial plus the 128-bit file ID, `GetFileInformationByHandleEx`) now
   drives the envelope epoch; `GlobalMemoryStatusEx` answers the recovery memory check.
+
+## 2026-11-08 — Slides: what the author sees when another program changed the file
+
+The slides half of "A file another program changed is never overwritten"
+(same date). A banner names the file and offers two
+choices; until one is made, auto-save keeps its browser recovery copy but does
+not write the file or flash "Saved", and ⌘S answers with "Not saved — … was
+changed by another program" and brings the banner back.
+
+- **"Load the version on disk"** opens the file as it is now, by the same
+  route as a dropped file (block, parse, the open-file guard), as ONE undoable
+  step. The deck as it was goes into Version history first, and the toast says
+  so only when the timeline really has it. Not for a sealed deck on either side
+  (a password now, or one the file gained): that plaintext never reaches
+  IndexedDB, and ⌘Z is the way back. The file is not rewritten after loading.
+- **The file's password wins.** A version on disk that has a password asks for
+  it (a wrong one loads nothing), and later saves are encrypted with it; one
+  whose password was removed is loaded and saved without one. An
+  identity-sealed version cannot be opened from here: the author is told to
+  open the file again.
+- **"Keep mine"** overwrites once, deliberately; the next outside edit is
+  caught again.
+
+Guard: `scripts/test-slides-disk-change-browser.mjs` (the packaged document,
+real file handles through `launchQueue`).
