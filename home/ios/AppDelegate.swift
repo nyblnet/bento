@@ -5,6 +5,11 @@ import UIKit
 
 @main
 final class AppDelegate: UIResponder, UIApplicationDelegate {
+    /// The device locked: the routine signing session ends with it.
+    func applicationProtectedDataWillBecomeUnavailable(_ application: UIApplication) {
+        EditorViewController.identitySession.lock()
+    }
+
     func application(_ app: UIApplication,
                      configurationForConnecting session: UISceneSession,
                      options: UIScene.ConnectionOptions) -> UISceneConfiguration {
