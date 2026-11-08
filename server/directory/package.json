@@ -1,0 +1,7 @@
+{
+  "name": "bento-directory",
+  "private": true,
+  "description": "The bento/id directory for id.bento.page",
+  "license": "AGPL-3.0-only",
+  "type": "module"
+}
