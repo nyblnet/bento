@@ -578,3 +578,18 @@ runs:
       # question a fake cannot answer — our own writes, read back by the browser.
       shell: bento-step {0}
       run: node scripts/test-disk-change-browser.mjs
+
+    - name: bento/id WebAuthn assertion verifier
+      # kernel/src/webauthn.ts against kernel/fixtures/webauthn-v1.json: real
+      # browser assertions (high-S and low-S, Chromium's extra clientDataJSON
+      # key) verify; every refusal (other origin, sibling host, subdomain,
+      # parent rp id, framed/crossOrigin, UV or UP clear, tampering, another
+      # key, duplicate keys, odd DER, a replayed counter) for its own reason.
+      shell: bento-step {0}
+      run: node scripts/test-webauthn.ts
+
+    - name: bento/id WebAuthn verifier mutants
+      # Each mutant loosens one check in a copy of webauthn.ts; test-webauthn.ts
+      # must go red on every one, after the unmutated copy passes.
+      shell: bento-step {0}
+      run: node scripts/test-webauthn-mutants.ts

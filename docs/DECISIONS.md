@@ -12543,6 +12543,40 @@ changed by another program" and brings the banner back.
 Guard: `scripts/test-slides-disk-change-browser.mjs` (the packaged document,
 real file handles through `launchQueue`).
 
+## 2026-11-08 — bento/id option G: the account is a roster of passkeys; kernel verifies their assertions offline
+
+**Decision (maintainer, 2026-11-08).** bento/id adopts "option G": a bento/id
+account is a chained roster of passkeys rather than a single extractable account
+key, and a statement can be signed by a passkey as a WebAuthn assertion whose
+challenge is the SHA-256 of the statement text. Peers verify such a signature
+offline, with WebCrypto alone. The first kernel piece is that verifier
+(`kernel/src/webauthn.ts`); roster and web-device statements and their consent
+purposes follow in later kernel changes.
+
+What the verifier settles, for every port (Swift, Kotlin, Rust, the extension,
+the directory):
+- ES256 over `authenticatorData ‖ SHA-256(clientDataJSON)`, the signature in
+  strict DER. **High-S is normalised, not refused**: about half of real
+  assertions are high-S. The low-S-only rule stays for bento's own statements.
+- clientDataJSON is parsed, never template-matched, tolerating extra keys
+  (Chromium adds one) but **refusing duplicate keys**, compared after
+  unescaping: JSON libraries differ on which duplicate wins.
+- Exact `type` (`webauthn.get`), exact challenge bytes, origin by exact text
+  from a closed list, `crossOrigin` absent or boolean false and no `topOrigin`,
+  exact rpIdHash, UP and UV both set.
+- **The rp id is `id.bento.page`** (maintainer, 2026-11-08). Passkey ceremonies
+  run on a small sign-in host under it, never on `home.bento.page`. The rp id
+  and the accepted origin list are parameters the caller pins: the fixtures
+  accept `https://signin.id.bento.page` and refuse `https://id.bento.page`,
+  `https://home.bento.page`, `https://bento.page` and every other origin. The
+  sign-in host name is not final; regenerating the fixtures for another one is
+  `scripts/gen-webauthn-vectors.mjs --origin <it>`.
+- The signature counter is checked only when the caller holds a stored count:
+  if either is nonzero the new one must be greater, else the assertion is
+  refused (the refusing branch of WebAuthn L3 §7.2). Synced passkeys report 0.
+
+Conformance: `kernel/fixtures/webauthn-v1.json` (real browser assertions plus
+every refusal), `scripts/test-webauthn.ts`, `scripts/test-webauthn-mutants.ts`.
 ## 2026-11-08 — bento/connect directory: a start that mails nothing costs nothing (server/directory)
 
 The per-address mail budget (one a minute, 3 a day, 10 a month) is spent only
@@ -12599,3 +12633,40 @@ the code the editor runs; the editor supplies only the two prompts.
   verified binding the setup flow stores, and the pin store for other people's
   keys; until those land `whoami` answers `no-identity` and `resolve` finds nothing.
   The consent and re-authentication wording is placeholder text.
+## 2026-11-08 — bento/type: an edit across paragraphs is a model edit
+
+A selection that crosses blocks, or that has an end outside every block (Chrome puts Select All's
+end on the paper itself when a table starts or ends the document), is edited in the model, never left to contentEditable. Left to the browser, deleting or typing over
+it fused the two end paragraphs into one element on screen while `input` read back only the block
+the caret landed in, so the model kept every paragraph and the next render brought them back. The
+same held for forward Delete at a block's end, which the browser joined on screen only.
+
+- **The first block keeps its identity.** The last block's remainder is joined onto it and the
+  blocks between are removed, the rule Backspace at a block's start already followed. Kind and
+  paragraph settings are the first block's. Typed or pasted text lands between the two pieces.
+- **One commit, one undo step** for delete, type-over and Enter over a range. A paste over a range
+  deletes it in the model, then takes the same road as a paste at a caret.
+- **Everything anchored by offset moves with its words**: marks, footnotes, cross-references,
+  citations, fields and comment threads. A footnote, citation or field strictly inside the range
+  goes with it; one exactly at either end stays. A thread on deleted text, or on a block the range
+  removes, is detached (orphan), and one ⌘Z re-attaches it. The old join and split carried only marks and
+  footnotes; a citation after a join was dropped, and after a split stayed on the head at an
+  offset past its end.
+- **Two cases keep the structure** and only clear the selected text: a range that touches a table
+  cell (fusing a cell with a paragraph breaks the grid), and a tracked document (the deletion is
+  recorded as struck text in each block; nothing records a removed paragraph break).
+- **No join with a cell or an atomic block** (picture, formula, contents): Backspace or Delete
+  there does nothing, as at a cell's edge in Word. Backspace onto a picture used to put the
+  paragraph's words in the picture block, where nothing renders them. Backspace at the very start
+  of the document does nothing; the browser used to delete an empty first block's element.
+- A selection boundary on a block ELEMENT counts from that block's start. Chrome's triple-click
+  ends at (next paragraph's element, 0), and the offset count, which only walked the block's
+  children, read that as the whole next paragraph: typing over a triple-clicked paragraph
+  deleted the one after it too.
+- Not covered: IME composition over a range keeps the browser's behaviour, and triple-click
+  (which Chrome extends to the start of the next paragraph) types over the paragraph break, so
+  the next paragraph joins the typed text, as it did on screen before.
+
+Measured with the randomized screen-equals-model rig (keystrokes in a real browser, every step
+compared with a render of the model, plus what each step should have done), 64 seeds × 60 steps
+in both Playwright's headless shell and system Chrome.
