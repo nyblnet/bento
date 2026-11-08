@@ -217,6 +217,13 @@ jobs:
         # range across a parent copies parents only, never its states; plural
         # and singular toasts.
         run: node scripts/test-slides-copy-slides-browser.mjs
+      - name: Agent-safe reads in Chromium
+        # read(), compact() and the Copy JSON menu items hand out the deck with
+        # its sharing keys left out (one strip function, embedded documents
+        # included); doc/serialize() stay raw; validate() reports any room key;
+        # sync.share() returns status; loadDoc and Replace from JSON keep the
+        # open deck's session and docId, also for a document with neither key.
+        run: node scripts/test-slides-agent-reads-browser.mjs
       - name: Locked elements in Chromium
         # #838: a locked backdrop no longer swallows a marquee over the items
         # above it (the unlocked control does) or a click; Layers and Alt-click

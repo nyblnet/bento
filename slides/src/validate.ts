@@ -173,18 +173,32 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
   // the invitation, and that is deliberate.
   //
   // It is also invisible. Nothing on screen and nothing in the JSON's shape says
-  // "this document grants write access to whoever holds it", so anyone handing
+  // "this document opens a live room for whoever holds it", so anyone handing
   // the file to a chat, a ticket or an agent harness is transferring a
   // capability while believing they are sharing a document.
   //
-  // Reported only when PRIVATE material is present: a reader or invite copy has
-  // `collab` and no secrets, and flagging that would be noise. Info, not a
-  // warning — carrying these keys in your own working file is correct.
-  const secrets = (['writerPriv', 'ownerPriv', 'invite'] as const)
-    .filter((k) => (doc.collab as Record<string, unknown> | undefined)?.[k])
-  if (secrets.length) {
+  // Reported whenever the deck carries ANY sharing key. The room key alone is
+  // a capability — it reads the room live (and writes to an unsigned room) —
+  // so read-only copies, invite copies and presenter files are reported too,
+  // each with what its keys grant. Info, not a warning: carrying these keys in
+  // your own working file is correct. read() / Copy document JSON leave them out.
+  const c = doc.collab as Record<string, unknown> | undefined
+  const held = c ? (['key', 'writerPriv', 'ownerPriv', 'invite', 'audience'] as const).filter((k) => c[k]) : []
+  if (c && held.length) {
+    const roomName = typeof c.room === 'string' ? (c.room.split('/d/').pop() ?? '') : ''
+    const unsigned = !!c.key && !roomName.startsWith('w')
+    const grants: string[] = []
+    if (c.ownerPriv) grants.push('the owner key (write, invite and remove members)')
+    if (c.writerPriv) grants.push('a writer key (write)')
+    if (c.invite) grants.push('an invite (join with its role)')
+    if (c.audience) grants.push('the audience ticket store (admit audiences to a show)')
+    if (c.key) grants.push(unsigned
+      ? 'the room key of an unsigned room (read every edit, and write)'
+      : c.role === 'audience'
+        ? 'a show key (watch the live show)'
+        : 'the room key (read every edit live, and what the relay has stored)')
     add({ code: 'collab-secrets-present', severity: 'info', path: 'collab',
-      message: `This deck carries live-session private keys (${secrets.join(', ')}) — anything that receives this file or its JSON can join the room and write to it. Expected in your own working file; strip it (Save → a share copy, or Stop sharing) before handing the deck to a chat, a ticket or an agent.` })
+      message: `This deck carries live-session keys (${held.join(', ')}): ${grants.join('; ')}. Anything that receives this file or its JSON holds the same access${c.role === 'reader' ? ' — a read-only copy still carries the room key' : ''}. Expected in your own working file; before handing the deck to a chat, a ticket or an agent, use window.bento.read() or Save → Copy document JSON, which leave the keys out.` })
   }
 
   const embedded = new Set((doc.fonts ?? []).map((f) => f.family.trim().toLowerCase()))

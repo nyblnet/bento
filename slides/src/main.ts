@@ -19,7 +19,8 @@ import { buildSlidePreview } from './preview'
 import { APP_VERSION, checkForUpdates, buildUpdatedFile, applyUpdate, sandboxed } from './update'
 import { i18nApi, t, applyDirection } from './i18n'
 import { parseDoc, type BentoDoc, type TextElement } from './model'
-import { compactJson } from './compact'
+import { compactDoc, compactJson } from './compact'
+import { agentCopy } from './envelope'
 import { parseDocInputReport, fitAutoHeights, restack, type LoadReport } from './compactload'
 import { guardOpenedDoc } from './restoregate'
 import type { Dropped } from './untrusted'
@@ -311,9 +312,27 @@ dismissSplash()
 // document model and serialize the full .bento.html file.
 ;(window as any).bento = {
   format: doc.format,
+  /**
+   * The LIVE document object, exactly as stored — including `collab`, the
+   * deck's sharing keys when it has a live session. For tooling that needs
+   * the whole file. An agent reading the deck uses read() instead: the same
+   * document, with the sharing keys left out.
+   */
   get doc() {
     return store.doc
   },
+  /**
+   * Agent-safe read: a detached copy of the document with the sharing keys
+   * left out (the whole `collab` block, and the envelope of every embedded
+   * document) — the same copy "Copy document JSON" puts on the clipboard.
+   * `{ compact: true }` returns the compact form (defaults omitted). Nothing
+   * an agent does needs the keys: loadDoc keeps the open deck's session.
+   */
+  read(opts?: { compact?: boolean }) {
+    const copy = agentCopy(store.doc)
+    return opts?.compact ? compactDoc(copy) : copy
+  },
+  /** The whole .bento.html file — it carries the deck's sharing keys (see doc). */
   serialize: () => {
     session.stampInto(store.doc)
     return serializeFile(store.doc)
@@ -335,11 +354,16 @@ dismissSplash()
     peers: () => session.peers(),
     flush: () => session.flush(),
     transports: () => session.transportKinds,
-    /** start an online session (mints doc.collab, connects the relay) */
+    /**
+     * Start an online session (mints doc.collab, connects the relay). Returns
+     * status only — `{ started, online }` — never the session block: the keys
+     * stay in the document, where the share copies take them from.
+     */
     share: () => {
       // same guard as editor.goLive(): an audience copy never mints a session
-      if (store.doc.collab?.role !== 'audience') void startSharing(session, store)
-      return store.doc.collab
+      const started = store.doc.collab?.role !== 'audience'
+      if (started) void startSharing(session, store)
+      return { started, online: onlineTransport()?.status ?? 'off' }
     },
     unshare: () => stopSharing(session, store),
     online: () => onlineTransport()?.status ?? 'off',
@@ -383,8 +407,10 @@ dismissSplash()
    * The document as compact JSON: every field equal to what the editor would
    * have inserted left out. The shape an agent should write; loadDoc and
    * "Replace from JSON…" take it back. The FILE is always saved full.
+   * Agent-safe like read(): the sharing keys are left out, as in "Copy
+   * compact JSON".
    */
-  compact: () => compactJson(store.doc),
+  compact: () => compactJson(agentCopy(store.doc)),
   /**
    * Report what the runtime would otherwise swallow: unknown keys, text that
    * overflows its box, elements off the canvas, effects that can never run,

@@ -243,8 +243,16 @@ ok(secretsFound(withCollab({ room: 'r1', key: 'k', writerPriv: 'X' })).length ==
   'a writer private key is reported')
 ok(secretsFound(withCollab({ room: 'r1', key: 'k', invite: { pub: 'a', priv: 'b' } })).length === 1,
   'invite delegation material is reported')
-ok(secretsFound(withCollab({ room: 'r1', key: 'k', role: 'reader' })).length === 0,
-  'a reader copy — room and read key, no private material — is NOT reported')
+ok(secretsFound(withCollab({ room: 'wss://x/d/wABC', key: 'k', role: 'reader', writerPub: 'P' })).length === 1,
+  'a read-only copy is reported — its room key reads the room live')
+ok(/read-only copy still carries the room key/.test(secretsFound(withCollab({ room: 'wss://x/d/wABC', key: 'k', role: 'reader' }))[0]?.message ?? ''),
+  'and the message says a read-only copy is not key-free')
+ok(/unsigned room/.test(secretsFound(withCollab({ room: 'wss://x/d/rLEGACY', key: 'k' }))[0]?.message ?? ''),
+  'a legacy (unsigned) room key is reported as write access')
+ok(secretsFound(withCollab({ room: 'wss://x/d/wABC', key: 'k', audience: { invite: { pub: 'a', priv: 'b', role: 'audience', sig: 's' }, key: 'show' } })).length === 1,
+  'the audience ticket store is reported')
+ok(secretsFound(withCollab({ on: false })).length === 0,
+  'a collab block with no key material is not reported')
 ok(secretsFound(clean).length === 0, 'a deck that was never shared is not reported')
 ok(validateDoc(withCollab({ room: 'r1', key: 'k', ownerPriv: 'X' }), { measure: false }).ok,
   'carrying your own room keys is never an error — it is how a working file works')

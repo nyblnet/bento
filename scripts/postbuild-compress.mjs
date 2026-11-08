@@ -315,6 +315,7 @@ const SLIDES_TOOLING = `<!--
     VERSION or later writes the document on ONE line and its pictures LAST,
     on a second line that starts "assets": (image data that elements refer
     to as "asset:<key>"). When you see that line, stop reading there.
+    The first line still holds "collab": see SHARING KEYS below.
   · Do not count on that layout: a deck saved by an older version, made by
     a converter or edited by hand may be one line with "assets" anywhere,
     and older decks may carry "data:" image sources inline. When in doubt,
@@ -323,9 +324,20 @@ const SLIDES_TOOLING = `<!--
     back unchanged when you write.
   · The base64 blocks near the end are the DEFLATE-compressed app runtime
     (open source, https://bento.page) — no user content, leave them alone.
-  · In a running file, window.bento exposes { doc, serialize(), loadDoc(json),
-    comments(), updates, i18n }. In the app UI: Save → Copy / Replace JSON.
+  · In a running file, window.bento exposes { read(), loadDoc(json), compact(),
+    validate(), comments(), doc, serialize(), updates, i18n }. READ with
+    window.bento.read(): it leaves the sharing keys out. doc and serialize()
+    are the raw file and carry them. In the app UI: Save → Copy / Replace JSON.
   · Schema: https://bento.page/schema/slides.json (= window.bento.schema()); agent index: https://bento.page/llms.txt
+
+  SHARING KEYS (copies for agents leave them out)
+  · A deck shared live carries a "collab" object inside #bento-doc. ANY key in
+    it is access to that live room — the room key alone reads it, and on older
+    rooms writes too. A read-only copy is NOT key-free: it keeps the room key.
+  · Editing this file on disk: list which collab fields exist BY NAME without
+    printing their values; read the document with collab removed; when you
+    write back, restore the original collab object exactly as it was — a file
+    without it drops out of its room.
 
   MAKE A GREAT DECK, NOT JUST A CORRECT ONE
   Bento's whole point is motion + interactivity. A wall of text slides wastes

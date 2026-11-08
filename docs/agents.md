@@ -60,42 +60,49 @@ lives in ONE plaintext block near the top:
 > ### Before you read a deck: it may carry its own keys
 >
 > If a deck has live collaboration switched on, its `#bento-doc` block contains
-> the credentials to that session — the room key, and depending on the copy, a
-> writer or owner private key. That is deliberate and it is what makes sharing
-> work without accounts: **the file is the invitation**, so opening a copy joins
-> the room.
+> a `collab` object with the credentials to that session. That is deliberate and
+> it is what makes sharing work without accounts: **the file is the
+> invitation**, so opening a copy joins the room.
 >
 > The consequence is easy to miss, because nothing about a document looks like a
 > credential. Anything that receives the file receives the room: a chat, a
-> ticket, a harness, a model provider's logs. Not because anything is broken —
-> that is simply what the file is.
+> ticket, a harness, a model provider's logs. Nothing about the authoring work
+> needs the keys, so copies for agents leave them out:
 >
-> **So, before you take a deck into your context:**
+> - **Any key in `collab` is access.** The room key alone reads the room live,
+>   including everything the relay has stored, and on older (unsigned) rooms it
+>   writes too. Private keys (`ownerPriv`, `writerPriv`, `invite`, `audience`)
+>   add writing, inviting and removing members on top.
+> - **A read-only copy is not key-free.** *Save read-only copy…* keeps the room
+>   key, so it still opens the live room for whoever holds it.
+> - **In the browser, read with `window.bento.read()`** (or
+>   `window.bento.compact()`): the document with the sharing keys left out. In
+>   the app, *Save ▾ → Copy document JSON* gives the same copy.
+>   `window.bento.doc` and `serialize()` are the raw file and carry the keys.
+>   `window.bento.validate()` reports any key as `collab-secrets-present`.
+> - **Editing a file on disk:** check which `collab` fields exist by NAME without
+>   printing their values (for example, a script that prints
+>   `Object.keys(doc.collab ?? {})` only), read the document with `collab`
+>   removed, and when you write back, restore the original `collab` object
+>   exactly as it was. A file written back without it drops out of its room.
 >
-> 1. Look for a `"collab"` key in the document. No `collab`, or a `collab` with
->    no `ownerPriv` / `writerPriv` / `invite`, and there is nothing to leak.
-> 2. If those are present, **say so before continuing.** The person may not know
->    their deck is live, and they are the only one who can decide.
-> 3. Prefer a copy that carries no keys: *Save ▾ → Save read-only copy…* or
->    *Share → Stop sharing* on a duplicate. In the browser,
->    `window.bento.validate()` reports this as `collab-secrets-present`.
->
-> Editing the JSON in place is fine and does not change any of this — the
-> exposure is in *reading* the file, not writing it. And note that removing the
-> keys after the fact does not retract them: if a shared deck has already gone
-> somewhere, the remedy is *Share → Rotate keys*, which revokes the old room.
+> If a deck with keys has already gone somewhere, the remedy is
+> *Share → Reset access…*, which revokes the old room. Removing the keys after
+> the fact does not retract them.
 
 Two ways to work with it:
 
 1. **File harness** (Claude Code, agent sandboxes): edit the JSON inside the
    `#bento-doc` block in place. Escape every `<` in the JSON as `\u003c`
    so the block can never contain a literal `</script>`. Leave everything else in the
-   file untouched.
+   file untouched, and handle `collab` as the box above says: read without it,
+   write it back exactly as it was.
 2. **Chat round-trip** (any chatbot): the user copies the JSON out via
    *Save → Copy document JSON*, you return a full replacement document,
    they paste it back via *Save → Replace from JSON…* (undoable).
-   In the browser console: `window.bento.doc` (read) /
-   `window.bento.loadDoc(json)` (write, undoable).
+   In the browser console: `window.bento.read()` (read, sharing keys left
+   out) / `window.bento.loadDoc(json)` (write, undoable; the open deck keeps
+   its own session).
 
 **Reading a deck without its pictures.** A deck saved by a current version
 of Slides keeps its picture data in the top-level `assets` map (elements say
@@ -110,8 +117,10 @@ of Slides keeps its picture data in the top-level `assets` map (elements say
 One photo makes that second line megabytes long — far more than you can read
 — so never read it: stop at the line that starts `"assets":`, or load the JSON
 with a tool and drop the key (`jq 'del(.assets)'`; in Python
-`doc.pop('assets', None)`), then put it back unchanged when you write. To add a
-picture, add one entry to `assets` and reference it as `asset:<key>`.
+`doc.pop('assets', None)`), then put it back unchanged when you write. The
+first line still holds `collab` if the deck has one, so handle it as the box
+above says. To add a picture, add one entry to `assets` and reference it as
+`asset:<key>`.
 
 Don't count on that layout in every file, though. It is how a deck is written
 from this version on; a deck last saved by an older version, produced by the
