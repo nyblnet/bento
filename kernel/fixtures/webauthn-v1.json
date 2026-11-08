@@ -1,0 +1,1698 @@
+{
+  "version": 1,
+  "about": "Conformance rows for verifying a WebAuthn assertion offline (kernel/src/webauthn.ts). Every row is verified with publicKey = keys[row.key], challenge = base64url-decode(row.challenge) (= SHA-256 of row.text), rpId and origins as below, and storedSignCount when the row has one. Match the verdict; match the reason where you can. TEST KEYS ONLY.",
+  "rpId": "id.bento.page",
+  "origins": [
+    "https://signin.id.bento.page"
+  ],
+  "keys": {
+    "real": "BD3oA_D_pq6sBmLj5JbfvYFrapaLwDdv9AkGKVYj1prsLzugEi90gX7k37V4z65Nu3Bnm-RsQIFO4K9cI6w0Nwc",
+    "realParent": "BCOrj1YPUylbrwhHg3RkCwaFdnIOiEgWBuEa2-q1JSZ0pwkh42t5hS_lIpsDzzsqZHhc19sehGV-HyuiNIWNSbI",
+    "realChild": "BEOcGHVXompG3nrJ9RCWEtDH3Tk-u1KzApVrmUdHaPqbo-BnQU0qOeZCmcWDQDg6F8u0y_Oe4I3Nm55j6Mc2tyQ",
+    "sw": "BN6SWofVB9gFBacgYovqhOt9GMgaqvGAGec71FTNc0BRryvWlxpC2FA2_MH066oP5fT1fqRkBRhSBa0C3igOodI",
+    "other": "BArG5-Q7wBSAcphZSzpgx1clgc8rFl3k4DMjbhcyjEzNhzDigcMUVryktH-6XXjkYKID33iL7o5Jcewm1nLMAPc",
+    "offCurve": "BN6SWofVB9gFBacgYovqhOt9GMgaqvGAGec71FTNc0BRryvWlxpC2FA2_MH066oP5fT1fqRkBRhSBa0C3igOodM",
+    "compressed": "At6SWofVB9gFBacgYovqhOt9GMgaqvGAGec71FTNc0BR"
+  },
+  "rows": [
+    {
+      "name": "real/get-00",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "gazRqahm_ueJWTj4Ys7XgoJ1BvnUVkARv4US3XOHUyE",
+      "text": "wdev.real.0",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAg",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZ2F6UnFhaG1fdWVKV1RqNFlzN1hnb0oxQnZuVVZrQVJ2NFVTM1hPSFV5RSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEQCIFH4KzHNzp802KmK3ETI0NIkrdl6hWr-wo6uHT8vlt39AiBKNWnUTsxZKwf3dyrt-zH1nFnGKOjbZTQLRN2W9fh6Xw"
+      },
+      "highS": false,
+      "extraKeys": false,
+      "expect": "accept"
+    },
+    {
+      "name": "real/get-01",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "A3iGen8HNH1ktvoGBbYNx8blutaA5HPGaDwXvQfx5lM",
+      "text": "wdev.real.1",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAw",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQTNpR2VuOEhOSDFrdHZvR0JiWU54OGJsdXRhQTVIUEdhRHdYdlFmeDVsTSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQDGylJWkZM6g3xsap0Cpfbo91AtkwPCmVGmXocCLCLAnAIgTsmKM3Ty5Wuv_cajDsXv6f_vZ8gpEKYfTMj-8bgqsSU"
+      },
+      "highS": false,
+      "extraKeys": false,
+      "expect": "accept"
+    },
+    {
+      "name": "real/get-02",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "VXjpOe86ETWUwRN66A9iI-gQxUDXO7ln1C0I6IXxygM",
+      "text": "wdev.real.2",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAABA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiVlhqcE9lODZFVFdVd1JONjZBOWlJLWdReFVEWE83bG4xQzBJNklYeHlnTSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEQCIE7BFX1fDyk3bbZ8PVcyLJ0xwXc0XVlGws3pp-o1UE9aAiARQ-YUJIYOU4PrcwNamDGze-0quW0DwTPXiifeWRnVBQ"
+      },
+      "highS": false,
+      "extraKeys": false,
+      "expect": "accept"
+    },
+    {
+      "name": "real/get-03",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "wC2qGn5_CjsmwjleXRaUsZoRBqWJPHzDZjWx8_8CXLM",
+      "text": "wdev.real.3",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAABQ",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoid0MycUduNV9DanNtd2psZVhSYVVzWm9SQnFXSlBIekRaald4OF84Q1hMTSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEQCIFZy8Q_AoY5VyX4WKYHm5OwErIZbMNJ94a6SKnHTbV7eAiAcg5vdiMuvo8mFs6ENEvYOQ7LvURfaM3JWI87bWdwxvg"
+      },
+      "highS": false,
+      "extraKeys": false,
+      "expect": "accept"
+    },
+    {
+      "name": "real/get-04",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "i-BC_zVA7k3BBteS5banq7Bd217RSG1q1UueK5uUb64",
+      "text": "wdev.real.4",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAABg",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiaS1CQ196VkE3azNCQnRlUzViYW5xN0JkMjE3UlNHMXExVXVlSzV1VWI2NCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEYCIQCslL5oNNufQ6GACv8aWbPRVERYrhZn40wcjwPyfm1mQAIhAM3uKtUvVUj3Nks0L2XQE7I-iM1GHh3-RyD-Qoxt9-_-"
+      },
+      "highS": true,
+      "extraKeys": false,
+      "expect": "accept"
+    },
+    {
+      "name": "real/get-05",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "zCY8_T_K8kH5WoUErJWBN_6MOEAIx8LpXreOYD_ZXQc",
+      "text": "wdev.real.5",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAABw",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiekNZOF9UX0s4a0g1V29VRXJKV0JOXzZNT0VBSXg4THBYcmVPWURfWlhRYyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIm90aGVyX2tleXNfY2FuX2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIFNlZSBodHRwczovL2dvby5nbC95YWJQZXgifQ",
+        "signature": "MEQCIECYgk9nh4_TtSids8Bz-nYKs0AjUxsIb55Fgtu4RZmoAiBicbP-aAS1ju1ck_O0iUMY-Z-jlnJkW4lmPE_J0YvrIA"
+      },
+      "highS": false,
+      "extraKeys": true,
+      "expect": "accept"
+    },
+    {
+      "name": "real/get-06",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "4M7pWTHizF03V67PLO__om6Hhs3l78N0KZEf6BqaTIc",
+      "text": "wdev.real.6",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAACA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiNE03cFdUSGl6RjAzVjY3UExPX19vbTZIaHMzbDc4TjBLWkVmNkJxYVRJYyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQDZfVX0EVYkszVeuxjjRFxfIM7KAyqEGV90KJzkd-_KlwIgIQpl2eEs0dv-b9-BjsYy5DYMrHraqbeA4lp5lL3jx1Q"
+      },
+      "highS": false,
+      "extraKeys": false,
+      "expect": "accept"
+    },
+    {
+      "name": "real/get-07",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "Xzkd0zznHI7N9IoGPg67N5cyI36ItRkszsNhpj5avjs",
+      "text": "wdev.real.7",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAACQ",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiWHprZDB6em5ISTdOOUlvR1BnNjdONWN5STM2SXRSa3N6c05ocGo1YXZqcyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEYCIQCviCXWIsohbE1_I5CJzJdnwA6qoKcRBGkoD6xUUDou6AIhAIr7IBMarAFxmJCq9FOH-QQMcdnO28bEKAOgoRRCSx4j"
+      },
+      "highS": true,
+      "extraKeys": false,
+      "expect": "accept"
+    },
+    {
+      "name": "real/get-08",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "Hvk4l2BbFQA_YXm0HqeOlcJOO42OVAocWtEdElJn3ug",
+      "text": "wdev.real.8",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAACg",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSHZrNGwyQmJGUUFfWVhtMEhxZU9sY0pPTzQyT1ZBb2NXdEVkRWxKbjN1ZyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEYCIQDVzVn3xIDTy6Czil_HVA-bl-Mi1J8qZgfev37mBSuKJwIhAJXBGT8EqxS9W5eIIWOr3KGoS0hZA2W-qmBXGX26A8oo"
+      },
+      "highS": true,
+      "extraKeys": false,
+      "expect": "accept"
+    },
+    {
+      "name": "real/get-09",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "Dy9BlHXT47w4PewWKuSaflh9C_1kwlBSbCBTzLj3Aa4",
+      "text": "wdev.real.9",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAACw",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiRHk5QmxIWFQ0N3c0UGV3V0t1U2FmbGg5Q18xa3dsQlNiQ0JUekxqM0FhNCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIDJzt1P-RqqL6vWEr7u2LtfyndbsU_3lz7nptlgjLkncAiEAnkU7eGPnrPXqJTiHqMG6yGVvahqI6VPrqveJSZ8m7g4"
+      },
+      "highS": true,
+      "extraKeys": false,
+      "expect": "accept"
+    },
+    {
+      "name": "real/get-10",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "rEJDUe39G9HlJ_PwCFwdqrkawFOVPqb4chLCPW5WcvI",
+      "text": "wdev.real.10",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAADA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoickVKRFVlMzlHOUhsSl9Qd0NGd2Rxcmthd0ZPVlBxYjRjaExDUFc1V2N2SSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIBe0SbwnDGUd6462BoQE992c0ass2bb64MuCNU3W0VrmAiEA2yiV-wRSa7Fwgv0L0jLNvo0UKcrYr3Wz_Cj3fLCRhis"
+      },
+      "highS": true,
+      "extraKeys": false,
+      "expect": "accept"
+    },
+    {
+      "name": "real/get-11",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "fY8oRcWmP2vR4DIr-BpqgBJXeHl8BtzfqGt6wtP6EjM",
+      "text": "wdev.real.11",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAADQ",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZlk4b1JjV21QMnZSNERJci1CcHFnQkpYZUhsOEJ0emZxR3Q2d3RQNkVqTSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQDica6QvYmPJIhlf3NYNS0quT-KPp7UBh7U6QIMr5gfHAIgBilv3_gC7a6ce0PezrIu2UG1izaGrc4Payb6H3ODRQI"
+      },
+      "highS": false,
+      "extraKeys": false,
+      "expect": "accept"
+    },
+    {
+      "name": "real/get-12",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "DlMuUcrjghEnsHofCJ4_9glgL1rArRhApm3GBfQX0Pk",
+      "text": "wdev.real.12",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAADg",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiRGxNdVVjcmpnaEVuc0hvZkNKNF85Z2xnTDFyQXJSaEFwbTNHQmZRWDBQayIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQDQrMubQGtCeG1i0-uIDcI3YT6esRU2lqkzqKJv6Z0fKAIgajX8Fsx4nIx-lm_HZ4DNO4n8NV89BsV5GOgLNP-AIvI"
+      },
+      "highS": false,
+      "extraKeys": false,
+      "expect": "accept"
+    },
+    {
+      "name": "real/get-13",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "5uhztN2Z6OomHxWMut8Q0q_t3KmzqVpwowWfTralYJo",
+      "text": "wdev.real.13",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAADw",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiNXVoenROMlo2T29tSHhXTXV0OFEwcV90M0ttenFWcHdvd1dmVHJhbFlKbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIDSmWvBDE-qITaNT2mm7VtuIhybY_9L0YrYQGcV0uPMWAiEAyvERLa8aIBMYeiAMpIIAk4JH_jQeU6xzCcUvKayi64g"
+      },
+      "highS": true,
+      "extraKeys": false,
+      "expect": "accept"
+    },
+    {
+      "name": "real/get-14",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "uwDx4vQELDm5Lo3BcMF1NfjmGxVIEp0GA-c2dMisK64",
+      "text": "wdev.real.14",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAEA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidXdEeDR2UUVMRG01TG8zQmNNRjFOZmptR3hWSUVwMEdBLWMyZE1pc0s2NCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEQCIEygDUQHtS869FvR0fxyW4zRtkUehDt7VU5giz7cxEW8AiBWg5Oavei0wr7UBv1_UTDN5jmgt6HGs3ZlK7WQV02nGw"
+      },
+      "highS": false,
+      "extraKeys": false,
+      "expect": "accept"
+    },
+    {
+      "name": "real/get-15",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "5753lNBCDNJ_4WioXckN7Brk4GKkrNU2zYEKmLnOATA",
+      "text": "wdev.real.15",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAEQ",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiNTc1M2xOQkNETkpfNFdpb1hja043QnJrNEdLa3JOVTJ6WUVLbUxuT0FUQSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIBFrD24VbHcIjeIXd5V8HIM-B5jTb_d5vTvyOftF02lpAiEAvHeWBoA04-Z5A40-3e0XSednPA1en_IZP6S2wekH_pw"
+      },
+      "highS": true,
+      "extraKeys": false,
+      "expect": "accept"
+    },
+    {
+      "name": "real/get-16",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "oYo3p3sgncscWtmNhN-yL3gC1ml2MNzp5-YlVBkxoL8",
+      "text": "wdev.real.16",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAEg",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoib1lvM3Azc2duY3NjV3RtTmhOLXlMM2dDMW1sMk1OenA1LVlsVkJreG9MOCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIm90aGVyX2tleXNfY2FuX2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIFNlZSBodHRwczovL2dvby5nbC95YWJQZXgifQ",
+        "signature": "MEUCIQCotfBkX4NxjYMw24FL7YvxcC07oR-z8dtdlpWp3oh82wIgCp0yijWXueijhaJKiYHHzj-myq_pMPOrID8ZYw0Hm3c"
+      },
+      "highS": false,
+      "extraKeys": true,
+      "expect": "accept"
+    },
+    {
+      "name": "real/get-17",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "ANfhr9sd-akKwspxFeRLHrQ7NYxXsbeeo2AzOFDno_s",
+      "text": "wdev.real.17",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAEw",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQU5maHI5c2QtYWtLd3NweEZlUkxIclE3Tll4WHNiZWVvMkF6T0ZEbm9fcyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEYCIQD59SocFMy16iiMZG1B61xbeST-w__DTquBIQ3Pmt_gQAIhAIQTqcAvvJMIOrZjfB90QhNeM3K--DEgohoh4CzC_nh5"
+      },
+      "highS": true,
+      "extraKeys": false,
+      "expect": "accept"
+    },
+    {
+      "name": "real/get-18",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "8G0KsTTcsAiB-WpBANrFi9FYph62qFeLQnNOZ2kRQEg",
+      "text": "wdev.real.18",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAFA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiOEcwS3NUVGNzQWlCLVdwQkFOckZpOUZZcGg2MnFGZUxRbk5PWjJrUlFFZyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIGumJhbp-_uQ2HLZ3Nh2XsJyIkwS3gpHbKGFP-oodMmjAiEA-O0QbF_owsD9lxuvdABPo953CykA0vtBrbMoQ96SyCo"
+      },
+      "highS": true,
+      "extraKeys": false,
+      "expect": "accept"
+    },
+    {
+      "name": "real/get-19",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "DS1I-9TyDF4jWvs0Y360F-4eVZUDzxb9DlxL1Z2vWt8",
+      "text": "wdev.real.19",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAFQ",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiRFMxSS05VHlERjRqV3ZzMFkzNjBGLTRlVlpVRHp4YjlEbHhMMVoydld0OCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIm90aGVyX2tleXNfY2FuX2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIFNlZSBodHRwczovL2dvby5nbC95YWJQZXgifQ",
+        "signature": "MEQCIEYOxWEMAZly_Uy9Q8Eo85tRsRPpeXxXDzdPE0H2MFf-AiAbxCDDZnBVYPol8q6A54-u4AqMEZPZCnfXikEgIjATUg"
+      },
+      "highS": false,
+      "extraKeys": true,
+      "expect": "accept"
+    },
+    {
+      "name": "real/get-20",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "JmSS1R4X1WVVC_OXbERDVjVsRsyTPl0-r8Pv-lu3Uxo",
+      "text": "wdev.real.20",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAFg",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSm1TUzFSNFgxV1ZWQ19PWGJFUkRWalZzUnN5VFBsMC1yOFB2LWx1M1V4byIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEQCIHI0aHL0GN70BdfSN_xNsAvWtzPW_l4oz9uNLPqRo3oBAiBOAFGHZdW_XOZlcwAE71JMniGgzJ8Jhx-ufp3DXiexBg"
+      },
+      "highS": false,
+      "extraKeys": false,
+      "expect": "accept"
+    },
+    {
+      "name": "real/get-21",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "HygEyj5sJNguIGckr-S0FATULkYAOnTqaJuBFsae5MI",
+      "text": "wdev.real.21",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAFw",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSHlnRXlqNXNKTmd1SUdja3ItUzBGQVRVTGtZQU9uVHFhSnVCRnNhZTVNSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIm90aGVyX2tleXNfY2FuX2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIFNlZSBodHRwczovL2dvby5nbC95YWJQZXgifQ",
+        "signature": "MEUCIQDit6_794HO7jPHNIrl80k5PQP7JEVnU3-EzwXtj5h4HgIgBlVEAmPi_yBzBGeya1F1sJb-G5NFt6aGUARZy9IkG7U"
+      },
+      "highS": false,
+      "extraKeys": true,
+      "expect": "accept"
+    },
+    {
+      "name": "real/get-22",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "ZF5m9B4Yx2MzL2fQmqcGL5jLMMJWew9WbHHZvVvtFZQ",
+      "text": "wdev.real.22",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAGA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiWkY1bTlCNFl4Mk16TDJmUW1xY0dMNWpMTU1KV2V3OVdiSEhadlZ2dEZaUSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQC24GssrRGrzCg9iGwxSkhpRFPqQDlm7o-zQPdfuWOQ4AIgUJ6JqGxaUzCOwVqbkuNVG-iy0jLdV7Ze1TSAo3Wu8_A"
+      },
+      "highS": false,
+      "extraKeys": false,
+      "expect": "accept"
+    },
+    {
+      "name": "real/get-23",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "feK0ngL_flxDtO194GinPEHwbwJeVSKkt2pxTrDeZ1s",
+      "text": "wdev.real.23",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAGQ",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZmVLMG5nTF9mbHhEdE8xOTRHaW5QRUh3YndKZVZTS2t0MnB4VHJEZVoxcyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEQCIB8JXVq3uZPFqzMR6SmFuY6AP3cYWlbw49oQZnDg3GmbAiADH7VUIo5fQhVyzswjJBP5MZj78QvTu-6wLH4TDslX3A"
+      },
+      "highS": false,
+      "extraKeys": false,
+      "expect": "accept"
+    },
+    {
+      "name": "real/high-s-made-low",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "i-BC_zVA7k3BBteS5banq7Bd217RSG1q1UueK5uUb64",
+      "text": "wdev.real.4",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAABg",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiaS1CQ196VkE3azNCQnRlUzViYW5xN0JkMjE3UlNHMXExVXVlSzV1VWI2NCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQCslL5oNNufQ6GACv8aWbPRVERYrhZn40wcjwPyfm1mQAIgMhHVKdCqtwnJtMvQmi_sTX5eLWeI-aA90ruINo5rNVM"
+      },
+      "highS": false,
+      "expect": "accept"
+    },
+    {
+      "name": "real/low-s-made-high",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "gazRqahm_ueJWTj4Ys7XgoJ1BvnUVkARv4US3XOHUyE",
+      "text": "wdev.real.0",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAg",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZ2F6UnFhaG1fdWVKV1RqNFlzN1hnb0oxQnZuVVZrQVJ2NFVTM1hPSFV5RSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIFH4KzHNzp802KmK3ETI0NIkrdl6hWr-wo6uHT8vlt39AiEAtcqWKrEzptX4CIjVEgTOCiCNNIS-PDlQ6HTtLAZqqvI"
+      },
+      "highS": true,
+      "expect": "accept"
+    },
+    {
+      "name": "real/other-statement",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "A3iGen8HNH1ktvoGBbYNx8blutaA5HPGaDwXvQfx5lM",
+      "text": "wdev.real.1",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAg",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZ2F6UnFhaG1fdWVKV1RqNFlzN1hnb0oxQnZuVVZrQVJ2NFVTM1hPSFV5RSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEQCIFH4KzHNzp802KmK3ETI0NIkrdl6hWr-wo6uHT8vlt39AiBKNWnUTsxZKwf3dyrt-zH1nFnGKOjbZTQLRN2W9fh6Xw"
+      },
+      "expect": "reject",
+      "reason": "challenge"
+    },
+    {
+      "name": "real/registration-client-data",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "AQipQPLpOhPnrPmVvSb4jwZdjGwouP1EZVl79EISbdc",
+      "text": "ros.setup",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAg",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoiQVFpcFFQTHBPaFBuclBtVnZTYjRqd1pkakd3b3VQMUVaVmw3OUVJU2JkYyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIm90aGVyX2tleXNfY2FuX2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIFNlZSBodHRwczovL2dvby5nbC95YWJQZXgifQ",
+        "signature": "MEQCIFH4KzHNzp802KmK3ETI0NIkrdl6hWr-wo6uHT8vlt39AiBKNWnUTsxZKwf3dyrt-zH1nFnGKOjbZTQLRN2W9fh6Xw"
+      },
+      "expect": "reject",
+      "reason": "type"
+    },
+    {
+      "name": "real/authenticator-data-tampered",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "gazRqahm_ueJWTj4Ys7XgoJ1BvnUVkARv4US3XOHUyE",
+      "text": "wdev.real.0",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAw",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZ2F6UnFhaG1fdWVKV1RqNFlzN1hnb0oxQnZuVVZrQVJ2NFVTM1hPSFV5RSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEQCIFH4KzHNzp802KmK3ETI0NIkrdl6hWr-wo6uHT8vlt39AiBKNWnUTsxZKwf3dyrt-zH1nFnGKOjbZTQLRN2W9fh6Xw"
+      },
+      "expect": "reject",
+      "reason": "signature"
+    },
+    {
+      "name": "real/sign-count-advances",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "feK0ngL_flxDtO194GinPEHwbwJeVSKkt2pxTrDeZ1s",
+      "text": "wdev.real.23",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAGQ",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZmVLMG5nTF9mbHhEdE8xOTRHaW5QRUh3YndKZVZTS2t0MnB4VHJEZVoxcyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEQCIB8JXVq3uZPFqzMR6SmFuY6AP3cYWlbw49oQZnDg3GmbAiADH7VUIo5fQhVyzswjJBP5MZj78QvTu-6wLH4TDslX3A"
+      },
+      "storedSignCount": 24,
+      "expect": "accept"
+    },
+    {
+      "name": "real/sign-count-replayed",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "feK0ngL_flxDtO194GinPEHwbwJeVSKkt2pxTrDeZ1s",
+      "text": "wdev.real.23",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAGQ",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZmVLMG5nTF9mbHhEdE8xOTRHaW5QRUh3YndKZVZTS2t0MnB4VHJEZVoxcyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEQCIB8JXVq3uZPFqzMR6SmFuY6AP3cYWlbw49oQZnDg3GmbAiADH7VUIo5fQhVyzswjJBP5MZj78QvTu-6wLH4TDslX3A"
+      },
+      "storedSignCount": 25,
+      "expect": "reject",
+      "reason": "sign-count"
+    },
+    {
+      "name": "real/parent-rp-id",
+      "source": "chromium-149.0.7827.55",
+      "key": "realParent",
+      "challenge": "5HEllos7cQSfvEgC0eQKceoTWd7Pq6z3CzRYgDfU_ww",
+      "text": "parent",
+      "assertion": {
+        "authenticatorData": "lXmmZyQH0vPWsh6YVhTohLFxQ7fKOn_4F9t8bX_dPhkFAAAAAg",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiNUhFbGxvczdjUVNmdkVnQzBlUUtjZW9UV2Q3UHE2ejNDelJZZ0RmVV93dyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEQCIAJmepUX6CLXfWnt5A6kFSSqGs5SOQYg38sftI10aK-rAiAz4tF0AtacQNpkNpxL_iGlZRXebmtTzbbNNHX6uZb6dg"
+      },
+      "expect": "reject",
+      "reason": "rp"
+    },
+    {
+      "name": "real/child-rp-id",
+      "source": "chromium-149.0.7827.55",
+      "key": "realChild",
+      "challenge": "3cnmaRlCVM7wGaKdNhmiwWWS5dUuGoHpiwG9UjGRSaM",
+      "text": "child",
+      "assertion": {
+        "authenticatorData": "10lWiTKNpWWaScw57M3ppkHtSgHWOaVKHj62KJx7LXQFAAAAAg",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiM2NubWFSbENWTTd3R2FLZE5obWl3V1dTNWRVdUdvSHBpd0c5VWpHUlNhTSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQCNfN9Ydw4SGjsNBnuyFHyKmZz7CeaAnVsBl6YJhEF80AIgSFbvrd4hjqAclkUdm3x7XYwLdrBN26QT9Zy50d9z6RI"
+      },
+      "expect": "reject",
+      "reason": "rp"
+    },
+    {
+      "name": "real/subdomain-origin",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "3cbisiTQ_YIWaSAiWDhpNvyc4omeIV7sYyK5X43ZbWo",
+      "text": "sub",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAGg",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiM2NiaXNpVFFfWUlXYVNBaVdEaHBOdnljNG9tZUlWN3NZeUs1WDQzWmJXbyIsIm9yaWdpbiI6Imh0dHBzOi8veC5zaWduaW4uaWQuYmVudG8ucGFnZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+        "signature": "MEUCIGQ948huyTUa3JFyztcNVHYGNJlnt_fVt6LRXUbJhwJDAiEAgkYSC54CUkf59IciunTxpVtY-kECr8wttKCQ8aWD-jc"
+      },
+      "expect": "reject",
+      "reason": "origin"
+    },
+    {
+      "name": "real/rp-host-origin",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "ACQJ1Y_Ss47BRhZQfasf0ZhnataEGlHJyT0hXTmvXpw",
+      "text": "rp-host",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAGw",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQUNRSjFZX1NzNDdCUmhaUWZhc2YwWmhuYXRhRUdsSEp5VDBoWFRtdlhwdyIsIm9yaWdpbiI6Imh0dHBzOi8vaWQuYmVudG8ucGFnZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+        "signature": "MEUCIQCQJ8kwhEswTyD0OrnBbEgfaCCEXnFPkm6QDEA2afyjtAIgasf6cKVigSSY8aRmWzMnFgwxHZHqCNTUGYIb8PHd-Hs"
+      },
+      "expect": "reject",
+      "reason": "origin"
+    },
+    {
+      "name": "real/sibling-under-rp-origin",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "fRDehVTtXKQPnQ8OD0N1tbM4rz-5bTPJsvU7Uom49P4",
+      "text": "sibling",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAHA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZlJEZWhWVHRYS1FQblE4T0QwTjF0Yk00cnotNWJUUEpzdlU3VW9tNDlQNCIsIm9yaWdpbiI6Imh0dHBzOi8veC5pZC5iZW50by5wYWdlIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+        "signature": "MEQCIFRxDCwVU6slTO2S28WZKM3mpAKO1K0RcH5t1j7FaH-3AiAXeWdvErSAURd61sSnc5yyJiQkw6_1_9lqWBB4GguhSQ"
+      },
+      "expect": "reject",
+      "reason": "origin"
+    },
+    {
+      "name": "real/framed-by-parent",
+      "source": "chromium-149.0.7827.55",
+      "key": "real",
+      "challenge": "eyepYK4ihtcffSLZpX0dBFdKXC9yqubYoFpwQhayudU",
+      "text": "framed",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAHQ",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZXllcFlLNGlodGNmZlNMWnBYMGRCRmRLWEM5eXF1YllvRnB3UWhheXVkVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6dHJ1ZSwidG9wT3JpZ2luIjoiaHR0cHM6Ly9iZW50by5wYWdlIn0",
+        "signature": "MEUCIF-gW9TvKEqPpaa5-SYQ46hyZtEMbSpz7tB0GKPtzd-9AiEAmWcuW-J5zwWthrCsA0eMtjZcUkcmNmSTkKbkM-BSxa4"
+      },
+      "expect": "reject",
+      "reason": "cross-origin"
+    },
+    {
+      "name": "sw/control",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQCkdI6T7W1YYm4qL8kV_e6tXoAH6AayEeItFP-vWWonzAIgP01xq9EV0grLL31ma0QeQurWfEM87yvxhaSULJZv1G8"
+      },
+      "expect": "accept"
+    },
+    {
+      "name": "sw/extra-keys",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIm90aGVyX2tleXNfY2FuX2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIiwienoiOlsxLHsiYSI6bnVsbH1dfQ",
+        "signature": "MEUCID1sNx3Pgxq9IONgflG-xmAp2pJmG_Z7sufDarGOmAmHAiEA2t4ZO_4mgpYlkKrydcwLYuUKm-JvOFYvIC5fUe6EuN8"
+      },
+      "expect": "accept"
+    },
+    {
+      "name": "sw/fields-in-another-order",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJvcmlnaW4iOiJodHRwczovL3NpZ25pbi5pZC5iZW50by5wYWdlIiwiY3Jvc3NPcmlnaW4iOmZhbHNlLCJjaGFsbGVuZ2UiOiJRb3ByTDJpTzREUTNHOHlWVkpieEUyeDcydHdubnFaUEE3UUs0Q25HVURvIiwidHlwZSI6IndlYmF1dGhuLmdldCJ9",
+        "signature": "MEUCIQDPa8XPMQcL_3YJ-MXOLgQtrI-p5YlXhS9LM62nMlBmEwIgPW-Mc4kPkTdwh92-kM7kw1BMlufXp_TN_zShOVnY8NI"
+      },
+      "expect": "accept"
+    },
+    {
+      "name": "sw/cross-origin-absent",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UifQ",
+        "signature": "MEYCIQDXeusIlSlPBtoKR-HBSEFef30f-wce_HdU8PVcWF07PQIhAI4fovaeZy4gbZ-HGYLyrjap1qmik20AcGraxP8tB9yd"
+      },
+      "expect": "accept"
+    },
+    {
+      "name": "sw/escaped-field-values",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG5cdTAwMmVnZXQiLCJjaGFsbGVuZ2UiOiJRb3ByTDJpTzREUTNHOHlWVkpieEUyeDcydHdubnFaUEE3UUs0Q25HVURvIiwib3JpZ2luIjoiaHR0cHM6XC8vc2lnbmluLmlkLmJlbnRvLnBhZ2UifQ",
+        "signature": "MEQCIGdgn-F9mW-TwEecFM2x4GypKAPgUzdKmILcdEQxR2IjAiAY5GU1ijHfMX3Q6siRVjvNSMBjnzJJ4ew7KeJaAyiTVA"
+      },
+      "expect": "accept"
+    },
+    {
+      "name": "sw/backup-flags",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYdAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQCsjpEFYUhqcXQJH8HPuSSirnmZ2Vr4eH1X_ot05M3V0gIgL4vsXKCIeP_vAnxTk7bkKdGs3tipZwkCSkNBfhsTXXU"
+      },
+      "expect": "accept",
+      "reason": {
+        "be": true,
+        "bs": true
+      }
+    },
+    {
+      "name": "sw/extension-data",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYaFAAAAAKA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQDWPGneLciTUUF2NkruogMg4xcSwnbQuIMompzsZ2kucAIgDP8N5j-wd0XhDZt4aDnfX11SZ3PnIGk34YamYhcga0U"
+      },
+      "expect": "accept"
+    },
+    {
+      "name": "sw/high-s",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIEQRL7-ElydevvnKgexvp7LqFmDYsfUdwZqdSBd8sO8YAiEAwG70eM7Mdye0EqIatQLVCnbMo9lpexUasU78Nrw9z7w"
+      },
+      "expect": "accept",
+      "reason": {
+        "highS": true
+      }
+    },
+    {
+      "name": "sw/low-s",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEQCIEQRL7-ElydevvnKgexvp7LqFmDYsfUdwZqdSBd8sO8YAiA_kQuGMTOI2UvtXeVK_Sr1RhpW1D2ciWpCas6MQCVVlQ"
+      },
+      "expect": "accept",
+      "reason": {
+        "highS": false
+      }
+    },
+    {
+      "name": "sw/duplicate-origin-last-wins",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vYXR0YWNrZXIuZXhhbXBsZSIsImNyb3NzT3JpZ2luIjpmYWxzZSwib3JpZ2luIjoiaHR0cHM6Ly9zaWduaW4uaWQuYmVudG8ucGFnZSJ9",
+        "signature": "MEUCIDAdS8znJf1W-84nkZyyqn7Nzu59cG-rql2JHUq7c_Y8AiEA3yNWaqugWzEMRbOKUnpXkQXzA3O7S7k905hPNdO-rE0"
+      },
+      "expect": "reject",
+      "reason": "duplicate-key"
+    },
+    {
+      "name": "sw/duplicate-origin-first-wins",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIm9yaWdpbiI6Imh0dHBzOi8vYXR0YWNrZXIuZXhhbXBsZSJ9",
+        "signature": "MEUCIQCh9Ecv4cRl7b4652sIs9BCeaDjv_rpFAupJB1hIlKuuQIgEd5jCRGbWb-uXvcovjGUrel5_0fK2rHtOV88SX7qRus"
+      },
+      "expect": "reject",
+      "reason": "duplicate-key"
+    },
+    {
+      "name": "sw/duplicate-origin-escaped",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vYXR0YWNrZXIuZXhhbXBsZSIsImNyb3NzT3JpZ2luIjpmYWxzZSwib3JcdTAwNjlnaW4iOiJodHRwczovL3NpZ25pbi5pZC5iZW50by5wYWdlIn0",
+        "signature": "MEYCIQDvf-N2kFJi1DyCoSg6ABh_234Cd_2yyAwvMSzxA8J59QIhANd6y8Az_kT-GH5LUAK6UlxtVDdnGqkcnzh_2BORFO5n"
+      },
+      "expect": "reject",
+      "reason": "duplicate-key"
+    },
+    {
+      "name": "sw/duplicate-cross-origin",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6dHJ1ZSwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+        "signature": "MEQCIDJzLc9o0VgSO6bi9F3xFx4g6xWFbyG1xfPHSiLT6VzmAiAb1KH2Qad-kIJ9Dzv3qiGVga6-mBvOfw3sbQ6QcVeW3g"
+      },
+      "expect": "reject",
+      "reason": "duplicate-key"
+    },
+    {
+      "name": "sw/duplicate-nested",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIngiOnsiYSI6MSwiYSI6Mn19",
+        "signature": "MEQCIBjiWNbETlICni4FCCpxS8Me1wBpn1nl7PO5uPtOjDoGAiAPhjOHppHHDujdu-OF7f16thhtRbVEWesPUOceGk5x_A"
+      },
+      "expect": "reject",
+      "reason": "duplicate-key"
+    },
+    {
+      "name": "sw/type-create",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEQCH09uE3QtgFSISk63u7Hopywl-fykqtEOZKc1eXjhoEcCIQDwGRv4nvLj3icUy5Ei5lBszw-i-gLShOgaiqsm4PZVlg"
+      },
+      "expect": "reject",
+      "reason": "type"
+    },
+    {
+      "name": "sw/type-missing",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJjaGFsbGVuZ2UiOiJRb3ByTDJpTzREUTNHOHlWVkpieEUyeDcydHdubnFaUEE3UUs0Q25HVURvIiwib3JpZ2luIjoiaHR0cHM6Ly9zaWduaW4uaWQuYmVudG8ucGFnZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+        "signature": "MEUCIBjE_WLTMoeV9NzIZVv43NYCY6m4BIRk5LoQE1pgXHkwAiEAuGdHYyD3jhEPeEj6IGm-M5lDXV25RoVw81nKJiWqjoM"
+      },
+      "expect": "reject",
+      "reason": "type"
+    },
+    {
+      "name": "sw/challenge-other",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidGJoMmoySkQtQjlnSmxnUFI1czgxRld0WkNfa3Eycmk4SU93ajlJUW43MCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEYCIQDnV5RUF1MKW_lomPj1T6oG9wYbgQk6-d0-_eX997rxuAIhAJd7k7cZIADQGH2Mk_1ZH97I8hvfyHGFTWLyQ8o9yPQB"
+      },
+      "expect": "reject",
+      "reason": "challenge"
+    },
+    {
+      "name": "sw/challenge-padded",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbz0iLCJvcmlnaW4iOiJodHRwczovL3NpZ25pbi5pZC5iZW50by5wYWdlIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+        "signature": "MEYCIQCkNeEIm34gUEiKyZijj92N0lGKXoC3Khg_s_OTCz2szAIhAOXNeBV0C9XdKVI10NxIQiSAvHb3OJULDbl-MT_3v10t"
+      },
+      "expect": "reject",
+      "reason": "challenge"
+    },
+    {
+      "name": "sw/challenge-truncated",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VBIiwib3JpZ2luIjoiaHR0cHM6Ly9zaWduaW4uaWQuYmVudG8ucGFnZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+        "signature": "MEUCIEwql3yXs9SKRSHR7RGd9qxnVCaqslsTY5SyHyBm6T8rAiEAyaAViCrpFQ_pjRzywVo-LAZZoYcbOhtRzsO5EwY7Trw"
+      },
+      "expect": "reject",
+      "reason": "challenge"
+    },
+    {
+      "name": "sw/challenge-text-not-hash",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiY205ekxuTjMiLCJvcmlnaW4iOiJodHRwczovL3NpZ25pbi5pZC5iZW50by5wYWdlIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+        "signature": "MEUCIQDenfx4Op2tWuS_LgU4nfw3DWTHBan8uZ1YYbQsTRrYmAIgceBbLm5a2WmKSQvL5pCIK0tsC2qk_GAkaNOU2kc5d6k"
+      },
+      "expect": "reject",
+      "reason": "challenge"
+    },
+    {
+      "name": "sw/challenge-noncanonical",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEcCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEQCIEMsUJRoKWKI9sOdSaHkR1fL2h3GQAAoAqCuC6FHUX7eAiBmLN8lR1eHjrCgUNXmhKyYGD5yDa4eHQUBitgWvdMczw"
+      },
+      "expect": "reject",
+      "reason": "challenge"
+    },
+    {
+      "name": "sw/challenge-empty",
+      "source": "software",
+      "key": "sw",
+      "challenge": "",
+      "text": null,
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiIiwib3JpZ2luIjoiaHR0cHM6Ly9zaWduaW4uaWQuYmVudG8ucGFnZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+        "signature": "MEUCIEURBfKOtpsREz2znuJ-wnonYrtvAtE-WC5_wQIuvqQMAiEAlNYGT5_NYqGOdFUYCQcV2QQgs_F_RVTbkcemkCH7iAc"
+      },
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "sw/challenge-15-bytes",
+      "source": "software",
+      "key": "sw",
+      "challenge": "xGOWflcIyrf5gIVeFAQt",
+      "text": null,
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoieEdPV2ZsY0l5cmY1Z0lWZUZBUXQiLCJvcmlnaW4iOiJodHRwczovL3NpZ25pbi5pZC5iZW50by5wYWdlIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+        "signature": "MEUCIQC2jA-xY47hOnfKCf_3vMalPgcWdKYJNeuxwlcR8CjBUwIgJZpsXfcwwBFizYUohQVegxAWUVbitIWyRhD67rKsGko"
+      },
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "sw/challenge-16-bytes",
+      "source": "software",
+      "key": "sw",
+      "challenge": "8s40H9qmdye73Ijj9_GdxQ",
+      "text": null,
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiOHM0MEg5cW1keWU3M0lqajlfR2R4USIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQDdSyxbE__-TH6CUaErV7RUiHR9D2-FCm0GGFEn1vPogQIgZjiBG7SqP6aWn3Zdv1OvyE_VlfVND03HdP-XrHhDbfs"
+      },
+      "expect": "accept"
+    },
+    {
+      "name": "sw/challenge-missing",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0Iiwib3JpZ2luIjoiaHR0cHM6Ly9zaWduaW4uaWQuYmVudG8ucGFnZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+        "signature": "MEYCIQCe0e0o-65GpP7akJzUTXVzKWPlfW2-JkQ307NcvuHg5wIhANLeDPko4bHeAoQzEFvArOYwEvzX7C0Faieo8_mO0xA4"
+      },
+      "expect": "reject",
+      "reason": "challenge"
+    },
+    {
+      "name": "sw/origin-rp-host",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vaWQuYmVudG8ucGFnZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+        "signature": "MEQCIFtAQR5kvbJPXsxhHYxcWmYbFvmKU0x0swQQSd6egoRYAiBxjfRQhxpCF1IkFRyIsWX1C9luPZAFy2grbOe5b0Pj_g"
+      },
+      "expect": "reject",
+      "reason": "origin"
+    },
+    {
+      "name": "sw/origin-sibling-under-rp",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8veC5pZC5iZW50by5wYWdlIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+        "signature": "MEUCIFvXFyE0r2ghP5Y816N2Z_h1SpyWvf9q1D9USFiFYyDIAiEA8E--cWZROYhcYke_J8yQmAN2gDoz9BOw54kazUWTmGA"
+      },
+      "expect": "reject",
+      "reason": "origin"
+    },
+    {
+      "name": "sw/origin-parent",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vYmVudG8ucGFnZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+        "signature": "MEUCIApuLtDrKOSFMKHo1Hc2JXzUFK_InRm8pGH8SaAUU8rYAiEA_AQRhqK5XAKXh22nK55w4FABkdrtcBYElZL81VIik9k"
+      },
+      "expect": "reject",
+      "reason": "origin"
+    },
+    {
+      "name": "sw/origin-sibling-host",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vaG9tZS5iZW50by5wYWdlIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+        "signature": "MEUCIQDkV-jLGHi63NeqzSRAII6ttD3xeWZKDi1LI6xaxy08LgIgCtG8psGwjzxJIu9FgfxplPF4qmNcbgIwbyUO7PkIc10"
+      },
+      "expect": "reject",
+      "reason": "origin"
+    },
+    {
+      "name": "sw/origin-subdomain",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8veC5zaWduaW4uaWQuYmVudG8ucGFnZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+        "signature": "MEUCIAI3qlJ7XzDrworViKUwWuZYemw2SDPdKTSq15HdOAmIAiEAzls3wSABIWDyybSM6T32sH_CWXX25vS2AiHeqUPfc2I"
+      },
+      "expect": "reject",
+      "reason": "origin"
+    },
+    {
+      "name": "sw/origin-foreign",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vYXR0YWNrZXIuZXhhbXBsZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+        "signature": "MEQCIH9GAtcNdDk6oXrPHv9jyrg42rJrqjkV04xJ5IQhQGllAiAJSbKz5MIhrKejxz8wM7S5W1FTKFQhSv8-RcRvCUttAw"
+      },
+      "expect": "reject",
+      "reason": "origin"
+    },
+    {
+      "name": "sw/origin-http",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHA6Ly9zaWduaW4uaWQuYmVudG8ucGFnZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+        "signature": "MEQCICQ384War1c31BqbmSQykNTIfrI0J6LIJywjtc4s_B4WAiBdw5vhXELtO0wDW6BeUKb-iOhWxSC6Usc1HFDoCq9goA"
+      },
+      "expect": "reject",
+      "reason": "origin"
+    },
+    {
+      "name": "sw/origin-trailing-slash",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UvIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+        "signature": "MEUCIAQaHfUnMn28_PPhz_iZKd7gOeAUUdL17edS2-c9e49iAiEA5gFaJDkUbaffOaMGt2JDSI874JVP5aiZ3pNV6YeEr94"
+      },
+      "expect": "reject",
+      "reason": "origin"
+    },
+    {
+      "name": "sw/origin-explicit-port",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2U6NDQzIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+        "signature": "MEQCIEJPvliD8YJRFFGZT4_SMfHIn9500i0nNQIrn6S-BtYuAiBDp0y5ROSC2lsdFh03mwf9FuCwnmc4M_1D0RDm_ed6pA"
+      },
+      "expect": "reject",
+      "reason": "origin"
+    },
+    {
+      "name": "sw/origin-uppercase",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vU0lHTklOLklELkJFTlRPLlBBR0UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIEkEgvWU-pzzUxJXjJ-Wkcvx4fN1vuTcvnihY5rE-oitAiEA_-8KHEK5DeOIsk1n-X_NKfDYBnFfpUg03jTtxl_LzSw"
+      },
+      "expect": "reject",
+      "reason": "origin"
+    },
+    {
+      "name": "sw/origin-suffix-lookalike",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UuYXR0YWNrZXIuZXhhbXBsZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+        "signature": "MEYCIQCoScE1jV2EubWfQ_9C1DvbBGrqPyauH-zA32U7k22PwAIhAIgmWC_aiYEPRxMeY_Tf3vfHiryoViUUXQrgR8TVVVLL"
+      },
+      "expect": "reject",
+      "reason": "origin"
+    },
+    {
+      "name": "sw/origin-null",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Im51bGwiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIB3qwPfnrPbmKccaV3DWNOofgU6tSoIxTPnDlKUWm6SlAiEArgBt0zECuVK6vwZUpPHJ0esmmq8CgDZC5VOkG9etH_A"
+      },
+      "expect": "reject",
+      "reason": "origin"
+    },
+    {
+      "name": "sw/origin-not-a-string",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6WyJodHRwczovL3NpZ25pbi5pZC5iZW50by5wYWdlIl0sImNyb3NzT3JpZ2luIjpmYWxzZX0",
+        "signature": "MEYCIQCgwoLvOVY7heH8y4F67BCRbEODG0i-g9ltvWow9a4NqgIhAK2Y9mtutM-SZ0A4pMX24aOfe5l8wmENVi5dyo9JpyOh"
+      },
+      "expect": "reject",
+      "reason": "origin"
+    },
+    {
+      "name": "sw/origin-missing",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+        "signature": "MEYCIQDEIgs4QjSSW-549V0ES7VIRFxjVBWMq2S0bhFUnvqnLwIhANLXtv3Jl6KhId4hXMu7SVbK9YoFcq4j8TsM47Yv0bhA"
+      },
+      "expect": "reject",
+      "reason": "origin"
+    },
+    {
+      "name": "sw/cross-origin-true",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6dHJ1ZX0",
+        "signature": "MEUCIA1P1SYuDA7oZbkGtSgonvm2qQhJSL8d98vMi4uQQlWbAiEA0CK9xdkDhlQof5bWCPEqLRBMGQ-_eQTdtIPL_0TjZ6k"
+      },
+      "expect": "reject",
+      "reason": "cross-origin"
+    },
+    {
+      "name": "sw/cross-origin-string-false",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ImZhbHNlIn0",
+        "signature": "MEYCIQChDnwTBa8NX7lbjwzKn8kUwVhBNO6fk4qr93dc-NvFSgIhAJBjn7kiidEoks6NqMH-WLmVa7bmD5KPLwByWyd_0IFP"
+      },
+      "expect": "reject",
+      "reason": "cross-origin"
+    },
+    {
+      "name": "sw/cross-origin-null",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6bnVsbH0",
+        "signature": "MEQCICoUDlQaaQV9jEabBYh5iiIyjrcs6S8Minh7h4xAJ9WsAiB2fM1kqUBstrz1-gbmbV4j5gvQ2qRJToE0v1j6e2xziA"
+      },
+      "expect": "reject",
+      "reason": "cross-origin"
+    },
+    {
+      "name": "sw/cross-origin-zero",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6MH0",
+        "signature": "MEYCIQC5ZovpTynQUQBM5OBcJhUuKJIe_R-8_aU2veUro4fAlgIhAIVzdzFHEta1SEzGZQaRSYZqtI6CHAqRZZLVQ9CqaiDj"
+      },
+      "expect": "reject",
+      "reason": "cross-origin"
+    },
+    {
+      "name": "sw/top-origin-present",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsInRvcE9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UifQ",
+        "signature": "MEQCIB_rn5LGXfWK9FoyFs1mnw_js884Io-cChhFOutXUzlvAiBKHNbIeKjqeAvXbbiiTHUOi7pV-FiGj8F8iMCZYnRlgQ"
+      },
+      "expect": "reject",
+      "reason": "cross-origin"
+    },
+    {
+      "name": "sw/rp-parent",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "lXmmZyQH0vPWsh6YVhTohLFxQ7fKOn_4F9t8bX_dPhkFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEYCIQD62GLGc46pTUbA6rMVr2c5HE2Tub_CwXV4EibiMxSgpAIhAKYK95h8y2UPEbgPyT1c7cXw6t5bVYTCY-sCmRSkI63V"
+      },
+      "expect": "reject",
+      "reason": "rp"
+    },
+    {
+      "name": "sw/rp-subdomain",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "Sanye02xph39ALkJVx-84ZOHlv6roujQY7yE6K5WjLUFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQC1Q7U9YZEAep7TOjh2cUETOfCaL1vJRyHIxridawgXTgIgH_eXI4-lTk6-8FtNKj1rDg6Vl3idTaSI6Nv919GNCO4"
+      },
+      "expect": "reject",
+      "reason": "rp"
+    },
+    {
+      "name": "sw/rp-origin-string",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "MNhEt91iWVlpJzq5cISlXrpMIC20tNM0ep4DJYaDD70FAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEYCIQD7_iXV5jUPnjuzAjYlLZzKEjouOaqp0zklg3fO56BUNwIhAN4gSx2VDK5j9DErZn-yksfzImRxjeoArK4UZsc6aJb0"
+      },
+      "expect": "reject",
+      "reason": "rp"
+    },
+    {
+      "name": "sw/up-clear",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYEAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEQCICkLdKsVw1q-NaSsE8uTLO8yJmOyDAlmU_PRrAUrs706AiA87LwV6g-i8Xf41d-DdMbbycuSlYwh682PV00BDeZQPw"
+      },
+      "expect": "reject",
+      "reason": "up"
+    },
+    {
+      "name": "sw/uv-clear",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYBAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEQCIA3Gv-KcuRub_GSvEBIR_oSUN7-DuMvrjPl_MoiIQ5AuAiBSfuaqQyWfTCQ_b4L73aDzB713ED9oP6aR7UYo2fRS1A"
+      },
+      "expect": "reject",
+      "reason": "uv"
+    },
+    {
+      "name": "sw/attested-data-flag",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYZFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEYCIQDuOWFPG4TB6vEwtZPnjYhU9Tmu11Ktie01nvaCoOhwUAIhAKUVXJH17vUBhKIC4pox2st2ZAA1hyvJROwd6pjrzG5A"
+      },
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "sw/trailing-bytes-without-ed",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAKA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEQCIFlsQoA85969DenVjFCqZzhBtJUCWCFggNjHKv-oDgWjAiBbUG5m087bv4dfJh6dz7WDytzPGJpFuQRK1Kk0znmUGw"
+      },
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "sw/ed-without-extension-bytes",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYaFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQDN-aHCMz2gjTi5uEUQHE9SPwkvc8jKe_cb_jtO2zFdtQIgZsZgp2ZjcDAYrdexYrYI95Biefil7bXOarpeIkXHhis"
+      },
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "sw/backed-up-not-eligible",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYVAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQCyrRaddgYvhfVyzKtEVgDmEOrctY7EcOYkkv_VjDxXtgIgIgzP0eXF_vNfoPdUZYSuxuuNmaRiUfCHta2ERKN5kog"
+      },
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "sw/byte-order-mark",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "77u_eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEQCIAGWWDHG1MXq0Y-h-3HEUk3tyo1wV1BiBo4AhUFSQBijAiB3cTAO3mWb384RobQcqnZ2uNBO1M9Xq7aCN4Fleb6L6Q"
+      },
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "sw/invalid-utf8",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIngiOiL_In0",
+        "signature": "MEYCIQCLPhZ-gODOJxXhT-G_AnAwR7VfAR8Lh-4wU2LwRSg_jwIhAN794GPkRunudRcE4L65NUyLIaiLFcZrSRoO2el9kbhx"
+      },
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "sw/top-level-array",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "W3sidHlwZSI6IndlYmF1dGhuLmdldCIsImNoYWxsZW5nZSI6IlFvcHJMMmlPNERRM0c4eVZWSmJ4RTJ4NzJ0d25ucVpQQTdRSzRDbkdVRG8iLCJvcmlnaW4iOiJodHRwczovL3NpZ25pbi5pZC5iZW50by5wYWdlIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfV0",
+        "signature": "MEYCIQD-ekHUruYH9cd47UMsFbBBxkzPGD9mYAC7rDmTXymQEwIhAN5a8apYkAMpW6HOh3V9GEVA9sEvsVYqHUnqM8H0rcgi"
+      },
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "sw/trailing-comma",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsfQ",
+        "signature": "MEUCIQCByR6MmQKS_pIBoZMImA8rMiUmp7i4eBKnOl3kaWu-HwIgW8gWUfHv6xugHqUvRp9-Z1Z-iLcZQY_doC9LpjZZvgc"
+      },
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "sw/lone-surrogate",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIngiOiJcdWQ4MDAifQ",
+        "signature": "MEUCIFVbuM3TpYoUU9j2VemGvEA-5KSwaxlntQMSpRX38YeMAiEAkdIuFsjMftny-qAKzbby9E8KvMFTLCpl6FVfv6XkncE"
+      },
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "sw/trailing-garbage",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9eA",
+        "signature": "MEYCIQDn-RgT628UlVaFC6zAR2xpAMmv7gCCvqickANdlXEAywIhAP2WS21ezIVnpnXzdWUFg3Ng9qUhCfjDsKFtB2OVWs54"
+      },
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "sw/control-character",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIngiOiIBIn0",
+        "signature": "MEUCIQCFp8Ais_tJV7d15vwc0znxoiu0Em5trFbEfwODnr6zcgIgJWCO5GRi4qQdSPFNic8ZWrB1aCSOkKrNFhrhFwkA4mk"
+      },
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "sw/field-padded-base64",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG/OmSKrWHs0dUt+SZYYFAAAAAA==",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQCc-CpQYeFyiLENWKlCEFxI4MloKlzCqBc4hIEF63H0YgIgR5LAncE6I_sTG61P8-x_X7BsY3TzO9Nfn-r86HsXjTs"
+      },
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "sw/authenticator-data-short",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQCc-CpQYeFyiLENWKlCEFxI4MloKlzCqBc4hIEF63H0YgIgR5LAncE6I_sTG61P8-x_X7BsY3TzO9Nfn-r86HsXjTs"
+      },
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "sw/der-non-minimal",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEYCIQB-9Sdd4LQ42A6_XGu3mvHgXwQ9H0UAE73LsXMZkRtPlQIhAIekIf5wniyrtOJBD5vjZbNDPLYXh-aTxXqeUNPnB2IV"
+      },
+      "expect": "reject",
+      "reason": "signature"
+    },
+    {
+      "name": "sw/der-trailing-byte",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEYCIQCgFCwhAkV2-Jiw-j9ay35YKVxINp3HYOgEEXn9oXOzSQIgfC8hkYd5lMU36IdhGHHvGUnbeygrUCJ1_iEH_uH7IjwA"
+      },
+      "expect": "reject",
+      "reason": "signature"
+    },
+    {
+      "name": "sw/der-sequence-length",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEYCIQCgFCwhAkV2-Jiw-j9ay35YKVxINp3HYOgEEXn9oXOzSQIgfC8hkYd5lMU36IdhGHHvGUnbeygrUCJ1_iEH_uH7Ijw"
+      },
+      "expect": "reject",
+      "reason": "signature"
+    },
+    {
+      "name": "sw/raw-not-der",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "oBQsIQJFdviYsPo_Wst-WClcSDadx2DoBBF5_aFzs0l8LyGRh3mUxTfoh2EYce8ZSdt7KCtQInX-IQf-4fsiPA"
+      },
+      "expect": "reject",
+      "reason": "signature"
+    },
+    {
+      "name": "sw/der-s-zero",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MCYCIQCgFCwhAkV2-Jiw-j9ay35YKVxINp3HYOgEEXn9oXOzSQIBAA"
+      },
+      "expect": "reject",
+      "reason": "signature"
+    },
+    {
+      "name": "sw/der-r-is-n",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQD_____AAAAAP__________vOb6racXnoTzucrC_GMlUQIgfC8hkYd5lMU36IdhGHHvGUnbeygrUCJ1_iEH_uH7Ijw"
+      },
+      "expect": "reject",
+      "reason": "signature"
+    },
+    {
+      "name": "sw/der-negative",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEQCIKAULCECRXb4mLD6P1rLflgpXEg2ncdg6AQRef2hc7NJAiB8LyGRh3mUxTfoh2EYce8ZSdt7KCtQInX-IQf-4fsiPA"
+      },
+      "expect": "reject",
+      "reason": "signature"
+    },
+    {
+      "name": "sw/der-r-s-zero",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MAYCAQACAQA"
+      },
+      "expect": "reject",
+      "reason": "signature"
+    },
+    {
+      "name": "sw/client-data-tampered",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsImV4dHJhIjoxfQ",
+        "signature": "MEUCIQCgFCwhAkV2-Jiw-j9ay35YKVxINp3HYOgEEXn9oXOzSQIgfC8hkYd5lMU36IdhGHHvGUnbeygrUCJ1_iEH_uH7Ijw"
+      },
+      "expect": "reject",
+      "reason": "signature"
+    },
+    {
+      "name": "sw/another-key",
+      "source": "software",
+      "key": "other",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQCgFCwhAkV2-Jiw-j9ay35YKVxINp3HYOgEEXn9oXOzSQIgfC8hkYd5lMU36IdhGHHvGUnbeygrUCJ1_iEH_uH7Ijw"
+      },
+      "expect": "reject",
+      "reason": "signature"
+    },
+    {
+      "name": "sw/key-off-curve",
+      "source": "software",
+      "key": "offCurve",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQCgFCwhAkV2-Jiw-j9ay35YKVxINp3HYOgEEXn9oXOzSQIgfC8hkYd5lMU36IdhGHHvGUnbeygrUCJ1_iEH_uH7Ijw"
+      },
+      "expect": "reject",
+      "reason": "key"
+    },
+    {
+      "name": "sw/key-compressed",
+      "source": "software",
+      "key": "compressed",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQCgFCwhAkV2-Jiw-j9ay35YKVxINp3HYOgEEXn9oXOzSQIgfC8hkYd5lMU36IdhGHHvGUnbeygrUCJ1_iEH_uH7Ijw"
+      },
+      "expect": "reject",
+      "reason": "key"
+    },
+    {
+      "name": "sw/sign-count-0-stored-none",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQDVOt1QDlbQ2f9uFuW7OMKYfj6O-DGFkNgWn4mJSorxWQIgGs-sv3HPaiDBCT86kc45wFbqNhfTASvJa--09QBjltg"
+      },
+      "expect": "accept"
+    },
+    {
+      "name": "sw/sign-count-0-stored-0",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEQCIEALnTzlTGfRC7k6oyKSZQmbpdBsl9gIuIdrqKm9RP2_AiAnwXQtIWdJHJEmTN5Qw_EKXbVTVQBxe8a0UHK5hJ4OvA"
+      },
+      "storedSignCount": 0,
+      "expect": "accept"
+    },
+    {
+      "name": "sw/sign-count-7-stored-0",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAABw",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIAwlev-0v5BmpJEGsGIWKhpp_H-BduJrseJvTxe8jZcDAiEAnpLMCfEw_aJBeND3Je9ofQSwXOS38Q8XJ8qVlR-dhto"
+      },
+      "storedSignCount": 0,
+      "expect": "accept"
+    },
+    {
+      "name": "sw/sign-count-5-stored-4",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAABQ",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEUCIQCXWMIOYRTf32cDsBn2sXJM7OU5I2_F0YYyHBLLI2z3BQIgUybgkx8d0UFLgalpd-QQbLVbRbjJZXAHl5Dil-KCRuo"
+      },
+      "storedSignCount": 4,
+      "expect": "accept"
+    },
+    {
+      "name": "sw/sign-count-5-stored-5",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAABQ",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEQCIBbJ51Pcc84lVkDh2Izp0jTPnGB23dks6FZVQ1Ot4tt6AiA_uf9IthvYwjPGCG19lHVG7us2XvNVfwEnTx0WhQ7HlQ"
+      },
+      "storedSignCount": 5,
+      "expect": "reject",
+      "reason": "sign-count"
+    },
+    {
+      "name": "sw/sign-count-5-stored-6",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAABQ",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEQCIExxa4ySNEP07hAnP1_jvZZCcfwgkHytk_4zNbXW6c1EAiAFwlxnKtGnYDOchLQW0GeQJ7gsCYzzLLjEK9PkltF4CA"
+      },
+      "storedSignCount": 6,
+      "expect": "reject",
+      "reason": "sign-count"
+    },
+    {
+      "name": "sw/sign-count-0-stored-3",
+      "source": "software",
+      "key": "sw",
+      "challenge": "QoprL2iO4DQ3G8yVVJbxE2x72twnnqZPA7QK4CnGUDo",
+      "text": "ros.sw",
+      "assertion": {
+        "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUW9wckwyaU80RFEzRzh5VlZKYnhFMng3MnR3bm5xWlBBN1FLNENuR1VEbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+        "signature": "MEYCIQDuY5XtaU1WCU8F41hFajd0hHaLlMViCfZgbM4NFbS54gIhAJ9zxMZKxe-5yUDYEfKtfp34Pre6Kl6WBwXbSxfyqbLv"
+      },
+      "storedSignCount": 3,
+      "expect": "reject",
+      "reason": "sign-count"
+    }
+  ]
+}
