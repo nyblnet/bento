@@ -12459,7 +12459,8 @@ neither); the Windows key store is an explicit stub that refuses everything unti
 
 ## 2026-11-08 — Slides: what the author sees when another program changed the file
 
-The slides half of the entry above. A banner names the file and offers two
+The slides half of "A file another program changed is never overwritten"
+(same date). A banner names the file and offers two
 choices; until one is made, auto-save keeps its browser recovery copy but does
 not write the file or flash "Saved", and ⌘S answers with "Not saved — … was
 changed by another program" and brings the banner back.
