@@ -12472,7 +12472,8 @@ same held for forward Delete at a block's end, which the browser joined on scree
   deletes it in the model, then takes the same road as a paste at a caret.
 - **Everything anchored by offset moves with its words**: marks, footnotes, cross-references,
   citations, fields and comment threads. A footnote, citation or field strictly inside the range
-  goes with it; one exactly at either end stays. The old join and split carried only marks and
+  goes with it; one exactly at either end stays. A thread on deleted text, or on a block the range
+  removes, is detached (orphan), and one ⌘Z re-attaches it. The old join and split carried only marks and
   footnotes; a citation after a join was dropped, and after a split stayed on the head at an
   offset past its end.
 - **Two cases keep the structure** and only clear the selected text: a range that touches a table
