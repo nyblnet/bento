@@ -21,7 +21,7 @@ export function setupSpeakerLayout(w: Window): () => void {
     const el = d.createElement('div')
     el.className = `sv-splitter sv-splitter-${vertical ? 'columns' : 'rows'}`
     el.tabIndex = 0
-    el.role = 'separator'
+    el.setAttribute('role', 'separator')
     el.setAttribute('aria-orientation', vertical ? 'vertical' : 'horizontal')
     el.setAttribute('aria-label', label)
     el.setAttribute('aria-controls', controls)
@@ -138,7 +138,10 @@ export function setupSpeakerLayout(w: Window): () => void {
     apply()
   })
   view.addEventListener('keydown', (ev) => {
-    ev.stopPropagation()
+    // Keys stay in View only while it is open, or when they would toggle it.
+    // Focus stays on the summary after closing, and the presenter's clicker
+    // keys must reach the show from there.
+    if (view.open || ev.key === ' ' || ev.key === 'Enter') ev.stopPropagation()
     if (ev.key === 'Escape') {
       view.open = false
       view.querySelector('summary')?.focus()
