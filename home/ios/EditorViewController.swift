@@ -63,6 +63,12 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
     /// read. It follows the FILE, not the path: see OriginIdentity. Empty until
     /// decided, and nothing is served or accepted for an empty host.
     private var originHost = ""
+    /// Gate 1 (bento/connect): is this document's runtime one genuine release?
+    /// Decided before the document is served. Only a GENUINE document is served
+    /// under its release's hash-pinned CSP, and only a genuine one may ever reach
+    /// identity. UNKNOWN is served as before, with no borrowed CSP.
+    private(set) var gate: Gate1.Served = .unknown("not checked")
+    var isGenuine: Bool { if case .genuine = gate { return true }; return false }
     /// While a possibly-legacy origin's storage is being checked, before the
     /// document itself loads.
     private var probing: (candidate: String, facts: OriginIdentity.Facts, timer: DispatchWorkItem)?
@@ -325,6 +331,49 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
             style: .plain, target: self, action: #selector(doneTapped))
     }
 
+    // MARK: - gate 1
+
+    /// The verdict for a document's bytes against EVERY release history held
+    /// (Gate1.verifyServedHeld): exactly one must match. Never a history picked by
+    /// a name read from the file. A fresh shell, which is what New writes, has an
+    /// empty document block and names no app at all (measured on the 1.2.10 shell).
+    static func gate(_ html: Data) -> Gate1.Served {
+        let held = ReleaseHistory.held()
+        guard !held.isEmpty else { return .unknown("no release history on this device yet") }
+        let text = Gate1.u(String(decoding: html, as: UTF8.self))
+        let (v, _) = Gate1.verifyServedHeld(text, held)
+        // A runtime no held release carries offers "check for updates". It never
+        // claims the file IS newer: files carry no version, and a tampered file
+        // looks exactly the same. (The words the person sees are the
+        // maintainer's to set; this is the reason it carries.)
+        if case .unknown = v, !held.contains(where: { Gate1.runtimeKnown(text, history: $0) }) {
+            return .unknown("matches no release this app holds: check for updates, it may be from a newer version")
+        }
+        return v
+    }
+
+    #if DEBUG
+    /// scripts/test-home-gate1-host.mjs: once the document has loaded, what gate 1
+    /// decided, the policy it was served under, and what the page's script did.
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard let path = ProcessInfo.processInfo.environment["BENTO_RIG_GATE"], probing == nil else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let self else { return }
+            // pwned: did a script gate 1 didn't account for run? previews: did the pinned
+            // remover run (it deletes every [data-bento-preview] element)?
+            // booted: did the release's own runtime come up under that policy?
+            webView.evaluateJavaScript("JSON.stringify({pwned: String(window.pwned), previews: document.querySelectorAll('[data-bento-preview]').length, booted: !!(window.bento && window.bento.doc), slides: (window.bento && window.bento.doc && window.bento.doc.slides) ? window.bento.doc.slides.length : -1})") { value, _ in
+                var o: [String: Any] = (value as? String).flatMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any] } ?? ["pwned": "unreadable"]
+                switch self.gate {
+                case .genuine(let v, _, let csp): o["verdict"] = "genuine"; o["version"] = v; o["csp"] = csp
+                case .unknown(let why): o["verdict"] = "unknown"; o["why"] = why
+                }
+                try? JSONSerialization.data(withJSONObject: o, options: [.sortedKeys]).write(to: URL(fileURLWithPath: path))
+            }
+        }
+    }
+    #endif
+
     // MARK: - serving the deck
 
     func webView(_ webView: WKWebView, start task: WKURLSchemeTask) {
@@ -347,9 +396,11 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
                                             headerFields: ["Content-Type": "text/html; charset=utf-8"])!)
             task.didReceive(body); task.didFinish(); return
         }
-        let resp = HTTPURLResponse(url: task.request.url!, statusCode: 200, httpVersion: "HTTP/1.1",
-                                   headerFields: ["Content-Type": "text/html; charset=utf-8",
-                                                  "Content-Length": String(document.html.count)])!
+        var headers = ["Content-Type": "text/html; charset=utf-8", "Content-Length": String(document.html.count)]
+        // the REAL boundary for a verified document (security §17/§18): its own
+        // scripts by hash, and nothing a frame inside it creates
+        if case .genuine(_, _, let csp) = gate { headers["Content-Security-Policy"] = csp }
+        let resp = HTTPURLResponse(url: task.request.url!, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: headers)!
         task.didReceive(resp)
         task.didReceive(document.html)
         task.didFinish()
@@ -442,6 +493,7 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
         originHint = facts.documentKey == nil ? (hint ?? facts.hint) : nil
         probing = nil
         originHost = origin
+        gate = Self.gate(document.html)
         webView.load(URLRequest(url: URL(string: "bento-tray://\(origin)/index.html")!))
     }
 
