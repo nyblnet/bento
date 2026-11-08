@@ -253,6 +253,37 @@ const alice = await person('alice@example.com', 'Alice')
 }
 
 // =====================================================================
+// a start that mails nothing costs nothing: strangers cannot spend the
+// holder's mail budget (any key, no proof, so anyone can send these)
+// =====================================================================
+{
+  now += HOUR
+  const holder = await person('hana@example.com')
+  const first = await bind(holder)
+  ok(first.c.status === 200, 'budget: the holder binds')
+  const storeOf = async (email: string) => { const k = await addressKey(email); return stores.find((m) => m.has(k))!.get(k)! }
+  const spent = async () => (((await storeOf(holder.email)).get('mail') as number[] | undefined) ?? []).length
+  const m0 = mailbox.length, b0 = await spent()
+  // more refused starts than the whole daily budget, each past the cooldown
+  // except the last, which lands one second before the holder's own
+  for (let i = 0; i < LIMITS.mailPerDay + 2; i++) {
+    now += i === LIMITS.mailPerDay + 1 ? 1000 : 2 * MIN
+    const stranger = await person(holder.email)
+    const st = await stmtFor(stranger)
+    ok((await api('POST', '/v1/bind/start', { stmt: st.text, sig: st.sig }, freshIp())).status === 202, `budget: stranger start #${i + 1} → 202`)
+  }
+  ok(mailbox.length === m0, `budget: the strangers' starts mailed nothing (${mailbox.length - m0})`)
+  ok((await spent()) === b0, `budget: and recorded no mail against the address (${(await spent()) - b0} recorded)`)
+  now += 1000
+  const ren = await stmtFor(holder, 2, await hashOf(first.s.text))
+  await api('POST', '/v1/bind/start', { stmt: ren.text, sig: ren.sig })
+  const code = mailbox.length === m0 + 1 ? mailbox[mailbox.length - 1].code : undefined
+  ok(!!code && mailbox[mailbox.length - 1].to === holder.email, "budget: the holder's own renewal start is still mailed")
+  const c = code ? await api('POST', '/v1/bind/complete', { email: holder.email, code, sig: await holder.k.sign(completionText(await hashOf(ren.text), code)) }) : null
+  ok(c?.status === 200, "budget: and that code completes the renewal")
+}
+
+// =====================================================================
 // sequence: renewal, rebound, replay
 // =====================================================================
 {

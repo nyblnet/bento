@@ -12577,3 +12577,21 @@ the directory):
 
 Conformance: `kernel/fixtures/webauthn-v1.json` (real browser assertions plus
 every refusal), `scripts/test-webauthn.ts`, `scripts/test-webauthn-mutants.ts`.
+## 2026-11-08 — bento/connect directory: a start that mails nothing costs nothing (server/directory)
+
+The per-address mail budget (one a minute, 3 a day, 10 a month) is spent only
+by a mail that is actually sent. `bind/start` needs no proof beyond a
+self-signed statement, so anyone can send one for any address with any key.
+When the budget was spent first, a stranger's refused starts (a new key over a
+live binding) used up the address's day, and the holder's own renewal code was
+then never mailed. The budget is now checked last, just before the code is
+minted.
+
+The wider rule this applies: **no cap that a stranger can fill may stop a mail
+the holder depends on.** Residual, accepted: a stranger can still spend the
+budget with starts that really are mailed (an absent or expired binding, or an
+expired one by `delete/start`). Those mails go to the holder, so the spending
+is visible, and anonymous senders cannot be told apart.
+
+Guard: `scripts/test-directory.ts` (the "budget" rows) and
+`scripts/test-directory-mutants.ts` (the budget back in front of each refusal).

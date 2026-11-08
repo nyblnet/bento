@@ -65,8 +65,13 @@ export function danglingRefs(xml: string, relsXml: string): string[] {
  *  offers to repair the file). */
 const REQUIRED = ['ppt/presProps.xml', 'ppt/viewProps.xml', 'ppt/tableStyles.xml', 'docProps/core.xml', 'docProps/app.xml']
 
-/** Everything wrong with a package, as readable lines. [] = nothing found. */
-export function packageProblems(parts: Parts): string[] {
+/**
+ * What is wrong with any OPC package, whatever it holds: part order, XML that
+ * does not parse, broken rels, r:ids with no rel, parts with no content type.
+ * Shared by the PowerPoint and Word writers (docx-write/verify.ts), so the two
+ * cannot check the wiring differently. [] = nothing found.
+ */
+export function opcProblems(parts: Parts): string[] {
   const out: string[] = []
   if ([...parts.keys()][0] !== '[Content_Types].xml') out.push('[Content_Types].xml is not the first part')
   for (const name of parts.keys()) {
@@ -94,6 +99,12 @@ export function packageProblems(parts: Parts): string[] {
     }
     for (const o of overrides) if (o && !parts.has(o.slice(1))) out.push(`content type for missing part ${o}`)
   }
+  return out
+}
+
+/** Everything wrong with a PowerPoint package, as readable lines. [] = nothing found. */
+export function packageProblems(parts: Parts): string[] {
+  const out = opcProblems(parts)
   for (const r of REQUIRED) if (!parts.has(r)) out.push(`missing ${r} (PowerPoint requires it)`)
   const nm = 'ppt/notesMasters/notesMaster1.xml'
   if (parts.has(nm)) {

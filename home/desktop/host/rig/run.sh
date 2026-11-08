@@ -187,6 +187,11 @@ scenario real 150 "$OUT/R.bento.html"
 # and reloaded in the same webview.
 cp "$OUT/real/Bento_Slides.bento.html" "$OUT/RS.bento.html"
 BENTO_RIG_MODE=realsave BENTO_RIG_LINGER_MS=200 scenario realsave 60 "$OUT/RS.bento.html"
+# B1, security §2e (B): sign through the real bridge, shim, host and agent, across the idle
+# and overall session limits (the rig plays the person and the clock). One genuine document
+# that signs, one unknown document that must not even have the agent.
+cp "$OUT/fix/A.bento.html" "$OUT/SA.bento.html"; cp "$OUT/fix/U.bento.html" "$OUT/SU.bento.html"
+BENTO_RIG_SIGN=1 scenario sign 120 "$OUT/SA.bento.html" "$OUT/SU.bento.html"
 # §19h wedge isolation: two documents each counting a heartbeat through the
 # host; rig/wedge.py stops their web processes one at a time (exactly one
 # document may freeze) and then all at once (the negative control: both freeze)
