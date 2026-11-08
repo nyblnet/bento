@@ -288,3 +288,53 @@ for, and regenerating with `--rp` / `--origin` produces rows for others.
   were made (the directory, per credential); an offline peer leaves it out.
 - `sw/` rows come from a software authenticator: the inputs a browser will not
   produce but a self-asserting client can.
+
+## `roster-v1.json`: the bento/id roster chain (option G)
+
+Reference: `kernel/src/roster.ts`. Rig: `scripts/test-roster.ts` (and
+`scripts/test-roster-mutants.ts`). Generator: `scripts/gen-roster-vectors.ts`.
+Keys are deterministic test keys (scalars from SHA-256 of a label); signatures
+are random, so match verdicts, not bytes. Not read by any host yet: a host
+adopts it with the `wdev.`/`dev2.` certificates that depend on it.
+
+Each row is a CHAIN: verify `links` with
+`verifyRosterChain(links, { directoryKeys, rpId, origins, now, pinned })`,
+taking every value except `pinned` from the top of the file. Accepted rows
+carry the `state` the chain yields: the head, every member with the time it
+joined (`since`), `createdAt`, `lastResetAt` and `sinceExact`.
+
+- **`ros.<b64u(address)>.<seq>.<prevHash|empty>.<members>.<dirNonce>.<created>`.**
+  `members` is comma-joined `kind~pub` or `kind~pub~q` tokens in strictly
+  ascending BYTE order (`pk` passkey, `ck` consent key, `rk` recovery key; `q`
+  quarantined), 1 to 16 of them, every key distinct, at most one `rk`. Sort by
+  bytes, never by locale. A head written in another order is refused, not
+  re-sorted.
+- **`rip.<sha256(ros text)>.<requestedAt>.<ripenedAt>.<0|1>.<kid>`**, signed by a
+  pinned directory key (raw r‖s, low-S, like `att.`). The two times are the
+  directory's. **Measure every wait as ripenedAt − requestedAt.** `created` in
+  the `ros.` text is the requester's clock and decides nothing:
+  `wait/requester-clock-early` and `ok/requester-clock-late` differ only in
+  which clock is 72 hours old.
+- **Who authorises a link.** Setup (seq 0) and reset (`rip.` flag 1): the
+  countersign alone, no member proof, exactly one unquarantined `pk`. Any other
+  link: an UNQUARANTINED member of the PREVIOUS head, proving it over the exact
+  `ros.` text: a WebAuthn assertion for a `pk` (webauthn-v1.json's rules, rp
+  `rpId`, origins `origins`, challenge SHA-256 of the text, NO stored sign
+  count: a peer sees links out of order), a raw low-S signature for an `rk`.
+  Exactly one proof. A `ck` signing is refused (`signer-kind`) until its
+  consent purpose is defined.
+- **One change per link**: one member added, or one removed, or the `rk`
+  replaced. A continuing member keeps its kind and its quarantine mark; a new
+  member is never quarantined.
+- **The wait is 72 hours** (exactly 72 h passes), for every member change and
+  every reset, except a member removing ITSELF while an unquarantined member
+  remains.
+- **Order:** a link's requestedAt is not before the previous link's ripenedAt.
+- **A pin.** With `pinned` (sha256 of a head you verified before), the first
+  link must be that head. Its countersign is re-checked (its times set member
+  ages); its proof and wait are not. Without a pin the chain starts at seq 0.
+- `since` is the ripenedAt of the link from which the key has been a member
+  without a break; a reset restarts everyone. From a pin past seq 0, members
+  present at the pin get the pin's ripenedAt (`sinceExact: false`): the age it
+  gives is a lower bound, the safe direction for any rule that waits on a
+  member's age.
