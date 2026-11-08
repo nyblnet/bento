@@ -144,6 +144,7 @@ export const fr: Catalog = {
   "Data story": "Récit de données",
   "Dataset": "Jeu de données",
   "Date": "Date",
+  "Date and time": "Date et heure",
   "Decimals": "Décimales",
   "Delete": "Supprimer",
   "Delete \"{name}\" and its {n} rows?": "Supprimer « {name} » et ses {n} lignes ?",

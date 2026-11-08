@@ -19,6 +19,7 @@
 
 import type { Column, ColumnType } from './model.ts'
 import { intlLocale } from './i18n.ts'
+import { readTemporal, formatTemporal, isTemporalPattern, isTimeOnlyPattern } from './datetime.ts'
 
 /**
  * Viewer-scoped, never in the document.
@@ -155,6 +156,28 @@ export function formatNumber(n: number, fmt: string): string {
   const p = readPattern(fmt)
   const shown = p.pct ? n * 100 : n
   return assemble(shown, p, p.dp ?? (shown % 1 === 0 ? 0 : 2), p.group)
+}
+
+/**
+ * A date or time under a date/time pattern — `dd mmm yyyy`, `h:mm AM/PM` — or
+ * null when the pair is not one (a number pattern, or a value that is no date).
+ *
+ * The pattern is the author's (document data); the month and day NAMES are the
+ * viewer's, exactly as the separators of a number are (this file's opening).
+ * A NUMBER is printed only under a clock-only pattern, as that many days of
+ * clock: `B1 - A1` over two times is a duration (0.0625), and a Time cell shows
+ * it as 01:30. A number under a date pattern is NOT read as Excel's serial —
+ * dash does not keep that calendar (datetime.ts).
+ */
+export function formatTemporalValue(v: unknown, fmt: unknown): string | null {
+  if (!isTemporalPattern(fmt)) return null
+  const f = String(fmt)
+  if (typeof v === 'number') {
+    if (!Number.isFinite(v) || !isTimeOnlyPattern(f) || v < 0) return null
+    return formatTemporal({ kind: 'time', days: v % 1 }, f, forNumbers())
+  }
+  const t = readTemporal(v)
+  return t ? formatTemporal(t, f, forNumbers()) : null
 }
 
 /** Format one value for display. Never mutates, never throws. */

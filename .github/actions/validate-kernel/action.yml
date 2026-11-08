@@ -561,3 +561,20 @@ runs:
       # copy passes.
       shell: bento-step {0}
       run: node scripts/test-link-mutants.ts
+
+    - name: Outside-edit guard rig
+      # kernel/src/save.ts never overwrites a file another program changed: every
+      # write through the held handle compares lastModified + size with the stamp
+      # read back after our last write (or at open). On a file system that rounds
+      # mtime: an outside edit is refused and announced, our own consecutive and
+      # concurrent writes never are, keep-mine overwrites once and tracking
+      # resumes. Nine mutants of save.ts must each turn it red; a control must not.
+      shell: bento-step {0}
+      run: node scripts/test-disk-change.ts
+
+    - name: Outside-edit guard in Chromium
+      # The same guard against real FileSystemFileHandles (origin-private file
+      # system), with a second handle as the other program: the false-positive
+      # question a fake cannot answer — our own writes, read back by the browser.
+      shell: bento-step {0}
+      run: node scripts/test-disk-change-browser.mjs

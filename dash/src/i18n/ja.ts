@@ -144,6 +144,7 @@ export const ja: Catalog = {
   "Data story": "データストーリー",
   "Dataset": "データセット",
   "Date": "日付",
+  "Date and time": "日付と時刻",
   "Decimals": "小数点以下の桁数",
   "Delete": "削除",
   "Delete \"{name}\" and its {n} rows?": "「{name}」とその {n} 行を削除しますか？",
