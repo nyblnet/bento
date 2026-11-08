@@ -870,9 +870,13 @@ export function readDiskVersion(): Promise<{ html: string; accept(): void }> {
  *  exactly as embeddedDocBlock normalises a file — what a remembered handle is
  *  checked against when it reconnects (saveFile). null without a DOM or block. */
 const bootBlock: string | null = (() => {
-  if (typeof document === 'undefined') return null
-  const el = document.getElementById(DATA_BLOCK_ID)
-  return el ? (el.textContent ?? '').replace(/\r\n/g, '\n').trim() : null
+  // Module scope: must never throw. Node rigs import this file with a stub
+  // `document` (or none), and a throw here takes the whole module down.
+  try {
+    if (typeof document === 'undefined' || typeof document.getElementById !== 'function') return null
+    const el = document.getElementById(DATA_BLOCK_ID)
+    return el ? (el.textContent ?? '').replace(/\r\n/g, '\n').trim() : null
+  } catch { return null }
 })()
 
 const hasFsAccess = () => typeof (window as any).showSaveFilePicker === 'function'
