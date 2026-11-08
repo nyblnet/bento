@@ -28,9 +28,10 @@
 // pointing at a script that no longer exists is a step that fails on every push
 // for a reason unrelated to the change that triggered it.
 
-import { readFileSync, readdirSync, existsSync } from 'node:fs'
+import { readdirSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { ciFiles, ciText } from './lib/ci-files.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const workflow = join(root, '.github/workflows/ci.yml')
@@ -44,10 +45,35 @@ function ok(cond: boolean, msg: string) {
 }
 
 if (!existsSync(workflow)) {
-  console.log('FAIL  .github/workflows/ci.yml does not exist. Nothing runs anything.')
+  console.log('FAIL  .github/workflows/ci.yml does not exist. Nothing runs the required check.')
   process.exit(1)
 }
-const ci = readFileSync(workflow, 'utf8')
+// CI is SEVERAL files now (scripts/lib/ci-files.mjs says which): ci.yml, each
+// zone's ci-<zone>.yml, and the validate-<zone> composite actions that ci.yml's
+// required `validate` job runs. Splitting it was what stopped every zone
+// appending at the same few anchors of one file. The check is unchanged —
+// does CI mention the filename — over all of it.
+const files = ciFiles(root)
+const ci = ciText(root)
+
+console.log('CI is made of')
+for (const w of files.workflows) console.log(`  ·     ${w.path}`)
+for (const a of files.usedActions) console.log(`  ·     ${a.path}`)
+console.log('')
+ok(files.workflows.length > 0 && files.usedActions.length > 0,
+  'the workflows and the validate actions are found (this check is what stops a vacuous green)')
+// An action no workflow runs is a file of steps that never execute: a rig
+// "registered" there would pass this check and never run. That is the new hole
+// a split opens, so it is closed here rather than trusted.
+for (const a of files.unusedActions) ok(false, `${a.path} is run by a workflow (nothing uses ./.github/actions/${a.name})`)
+for (const n of files.missingActions) ok(false, `./.github/actions/${n} exists (a workflow uses it)`)
+// A workflow file with no pull_request trigger never runs on a PR, so its
+// rigs never gate one. Every workflow that runs a rig must be triggered by one.
+for (const w of files.workflows) {
+  if (!/node scripts\//.test(w.text)) continue
+  ok(/^on:\s*$[\s\S]*?^\s{2}pull_request:/m.test(w.text) || /^on:.*pull_request/m.test(w.text),
+    `${w.path} runs on pull_request`)
+}
 
 // A rig is a `scripts/test-*.ts|mjs`. Library code under scripts/lib/ is not a
 // rig and is exercised by the rigs that import it.
@@ -123,9 +149,11 @@ for (const ref of [...new Set(referenced)].sort()) {
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) {
   console.log(`
-A rig that CI does not run is not coverage. Add a step for it in
-.github/workflows/ci.yml — with a comment saying what the checks are FOR, the
-way the ones around it do, because the next person reading a red build needs to
-know what broke and why it mattered enough to guard.`)
+A rig that CI does not run is not coverage. Add a step for it at the END of
+your zone's slice, .github/actions/validate-<zone>/action.yml (part of the
+required check), or as a job in .github/workflows/ci-<zone>.yml — never in
+ci.yml. Give it a comment saying what the checks are FOR, the way the ones
+around it do, because the next person reading a red build needs to know what
+broke and why it mattered enough to guard.`)
   process.exit(1)
 }

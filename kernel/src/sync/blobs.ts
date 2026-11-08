@@ -171,8 +171,20 @@ export async function decodeBlob(rawRoomKey: Uint8Array, blob: Uint8Array): Prom
 // A blob a peer sent is worth keeping: the same asset is referenced by every
 // slide that uses it, and re-fetching on each render would be absurd. Keyed by
 // the blob key, which is already content-addressed.
+//
+// The cache holds the ENCRYPTED blob (the encodeBlob layout), never plaintext.
+// IndexedDB is per-origin, and on file:// every local page shares one origin, so
+// anything written here is readable by any other local HTML file. Ciphertext is
+// useless without the room key, which lives only in the document; a hit is
+// decrypted and address-checked exactly like a fetch.
+//
+// Version 2 is the ciphertext store. Upgrading from 1 DROPS the old store,
+// which held plaintext. It also shuts the old code out: a runtime that still
+// opens version 1 gets a VersionError against this database and runs with no
+// cache at all, so it cannot write plaintext here again.
 
 const DB = 'bento-blobcache'
+const DB_VERSION = 2
 const STORE = 'blobs'
 let dbP: Promise<IDBDatabase | null> | null = null
 
@@ -181,13 +193,27 @@ function db(): Promise<IDBDatabase | null> {
   dbP = new Promise((resolve) => {
     if (typeof indexedDB === 'undefined') return resolve(null)
     let req: IDBOpenDBRequest
-    try { req = indexedDB.open(DB, 1) } catch { return resolve(null) }
-    req.onupgradeneeded = () => {
+    try { req = indexedDB.open(DB, DB_VERSION) } catch { return resolve(null) }
+    req.onupgradeneeded = (ev) => {
       const d = req.result
+      // a version-1 store holds plaintext: drop it, never migrate it
+      if (ev.oldVersion < 2 && d.objectStoreNames.contains(STORE)) d.deleteObjectStore(STORE)
       if (!d.objectStoreNames.contains(STORE)) d.createObjectStore(STORE)
     }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => resolve(null)
+    // Another tab of an older runtime may still hold a version-1 connection; the
+    // upgrade then waits until that tab closes, and older code never closes on
+    // versionchange. Don't wait with it — run uncached now. The request stays
+    // pending, so the purge above still happens once that tab goes away.
+    let settled = false
+    const done = (d: IDBDatabase | null) => { if (!settled) { settled = true; resolve(d) } else d?.close() }
+    req.onblocked = () => done(null)
+    req.onsuccess = () => {
+      const d = req.result
+      // and never be the old connection that blocks a later upgrade ourselves
+      d.onversionchange = () => d.close()
+      done(d)
+    }
+    req.onerror = () => done(null)
   })
   return dbP
 }
@@ -204,6 +230,8 @@ export async function cacheGet(key: string): Promise<Uint8Array | null> {
   })
 }
 
+/** Store ENCRYPTED bytes (encodeBlob's output) under their address. Never pass
+ *  plaintext: this store is readable by every page on the same origin. */
 export async function cachePut(key: string, bytes: Uint8Array): Promise<void> {
   const d = await db()
   if (!d) return
@@ -243,7 +271,9 @@ export async function putBlob(e: BlobEndpoint, rawRoomKey: Uint8Array, bytes: Ui
   try {
     const head = await netFetch(url(e, key), { method: 'HEAD' })
     if (head.status === 200) {
-      void cachePut(key, bytes)
+      // The cache holds ciphertext only. Encrypting here costs one AES pass and
+      // saves this tab a refetch; it runs off the return path.
+      void encodeBlob(rawRoomKey, bytes).then((enc) => cachePut(key, enc), () => {})
       return { ok: true, key, deduped: true }
     }
     if (head.status === 501) return { ok: false, reason: 'unsupported' }
@@ -260,7 +290,7 @@ export async function putBlob(e: BlobEndpoint, rawRoomKey: Uint8Array, bytes: Ui
     // until it expires — the caller must not retry in a loop.
     if (res.status === 507) return { ok: false, reason: 'room-full' }
     if (!res.ok) return { ok: false, reason: 'network' }
-    void cachePut(key, bytes)
+    void cachePut(key, body) // the encrypted bytes we just uploaded, never `bytes`
     return { ok: true, key, deduped: false }
   } catch {
     return { ok: false, reason: 'network' }
@@ -269,8 +299,9 @@ export async function putBlob(e: BlobEndpoint, rawRoomKey: Uint8Array, bytes: Ui
 
 /** Does `plain` actually hash to the address we asked for? One SHA-256 plus
  *  one HMAC over bytes we have just decrypted anyway — negligible beside the
- *  AES-GCM pass that produced them, and it runs once per fetch, not per use
- *  (the cache is keyed by the same address). */
+ *  AES-GCM pass that produced them. It runs on every fetch and on every cache
+ *  hit (a hit is ciphertext, decrypted first), not on every use: callers keep
+ *  the decrypted bytes for the session. */
 async function addressMatches(rawRoomKey: Uint8Array, key: string, plain: Uint8Array): Promise<boolean> {
   return (await blobKey(rawRoomKey, plain)) === key
 }
@@ -282,15 +313,19 @@ async function addressMatches(rawRoomKey: Uint8Array, key: string, plain: Uint8A
 export async function getBlob(e: BlobEndpoint, rawRoomKey: Uint8Array, key: string): Promise<Uint8Array | null> {
   const hit = await cacheGet(key)
   try {
-    // The hit is checked as well, so a cache written before this verification
-    // existed (or edited under us in IndexedDB) heals: falling through re-fetches
-    // and cachePut, keyed by the address, overwrites the bad entry.
+    // A hit is ciphertext: decrypt it and check its address exactly as a fetch
+    // would. Anything that fails — a wrong key, a tampered or truncated entry,
+    // a wrong-address swap — falls through to the refetch, and cachePut, keyed
+    // by the address, overwrites the bad entry, so the cache heals.
     // INSIDE the try like the post-fetch check below: addressMatches can throw
     // (measured — crypto.subtle.importKey('raw', new Uint8Array(0), HMAC) rejects
     // with DataError on an empty room key), and the contract above promises null,
     // not a rejection. session.resolveBlobs has try/finally and no catch, so a
     // throw here escapes as an unhandled rejection.
-    if (hit && await addressMatches(rawRoomKey, key, hit)) return hit
+    if (hit) {
+      const fromCache = await decodeBlob(rawRoomKey, hit)
+      if (fromCache && await addressMatches(rawRoomKey, key, fromCache)) return fromCache
+    }
     const res = await netFetch(url(e, key))
     if (!res.ok) return null
     const enc = new Uint8Array(await res.arrayBuffer())
@@ -303,7 +338,7 @@ export async function getBlob(e: BlobEndpoint, rawRoomKey: Uint8Array, key: stri
     // cachePut writes the swap to disk permanently. The address is the only
     // binding between reference and content, so verify it before both.
     if (!await addressMatches(rawRoomKey, key, plain)) return null
-    void cachePut(key, plain)
+    void cachePut(key, enc) // the ciphertext as fetched — never the decrypted bytes
     return plain
   } catch {
     return null

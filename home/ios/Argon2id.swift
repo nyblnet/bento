@@ -2,6 +2,7 @@
 // Copyright (c) 2026 The Bento authors
 
 import Foundation
+import os
 
 /// Argon2id (RFC 9106, version 0x13), which neither CryptoKit nor CommonCrypto
 /// has. It stretches a recovery code into its keys (kernel/src/recovery.ts).
@@ -28,10 +29,51 @@ enum Argon2id {
     /// security §28: p = 1, 64 MiB, t = 3, a 32-byte tag
     static let bento = Params(memoryKiB: 65536, passes: 3, parallelism: 1, tagLength: 32)
 
+    // MARK: - memory
+
+    /// Past what it was given, iOS ends the process outright (jetsam): there is
+    /// no failed allocation to catch, and Swift's allocate never returns nil. So
+    /// the memory is checked BEFORE anything is allocated, and a derivation the
+    /// process can't afford is refused cleanly.
+    static let headroom = 32 << 20
+
+    /// the blocks a derivation fills, plus headroom
+    static func memoryNeeded(_ params: Params) -> Int {
+        let p = params.parallelism
+        return 4 * p * (params.memoryKiB / (4 * p)) * 1024 + headroom
+    }
+
+    /// How much more this process may allocate before iOS ends it. nil where
+    /// there's no such limit: the simulator and the Mac.
+    static func platformAvailableMemory() -> Int? {
+        #if os(iOS) && !targetEnvironment(simulator) && !targetEnvironment(macCatalyst)
+        return Int(os_proc_available_memory())
+        #else
+        return nil
+        #endif
+    }
+
+    #if DEBUG || BENTO_WIPE_PROBE
+    /// Replaceable in DEBUG and rig builds only, so the rig can stand in a
+    /// low-memory device. A release build can't swap the reading.
+    nonisolated(unsafe) static var availableMemory: () -> Int? = platformAvailableMemory
+    #else
+    static let availableMemory: () -> Int? = platformAvailableMemory
+    #endif
+
+    /// Whether a derivation with these parameters can run now: what the UI asks
+    /// so it can say why a recovery can't go ahead.
+    static func hasMemory(for params: Params = bento) -> Bool {
+        guard let free = availableMemory() else { return true }
+        return free >= memoryNeeded(params)
+    }
+
+    /// The tag, or nil when this process can't afford the memory right now.
     static func hash(password: [UInt8], salt: [UInt8], secret: [UInt8] = [], ad: [UInt8] = [],
-                     params: Params = bento) -> [UInt8] {
+                     params: Params = bento) -> [UInt8]? {
         let p = params.parallelism, t = params.passes
         precondition(p >= 1 && t >= 1 && params.tagLength >= 4 && params.memoryKiB >= 8 * p)
+        guard hasMemory(for: params) else { return nil }
         let mPrime = 4 * p * (params.memoryKiB / (4 * p))
         let laneLen = mPrime / p, segLen = laneLen / 4
 

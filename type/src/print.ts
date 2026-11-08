@@ -23,6 +23,7 @@
 // pagination is the same computation the editor already ran.
 
 import type { Block, TypeDoc } from './model.ts';
+import { safeFontFamily, readPage } from './model.ts';
 import { blockHtml, groupBlocks, TAG } from './render.ts';
 import type { Metrics } from './paginate.ts';
 import { captionIndex, docLang, fillXrefsHtml } from './xref.ts';
@@ -58,9 +59,10 @@ const esc = (s: string) => s.replace(/[&<>"]/g, c =>
 function printCss(doc: TypeDoc): string {
   // the document's typeface, so paper matches screen — same fallback as
   // styles.css, so a file that says nothing prints exactly as it always did
-  const p = { ...doc.page,
-    __fontSize: `${doc.type?.size ?? 17}px`,
-    __fontFamily: doc.type?.family ?? '"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif',
+  // readPage: numbers only, even for a synced page that never passed parseDoc
+  const p = { ...readPage(doc.page as never),
+    __fontSize: `${cssNum(doc.type?.size, 17)}px`,
+    __fontFamily: safeFontFamily(doc.type?.family) ?? '"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif',
   };
   return `
 @page { size: ${p.width}px ${p.height}px; margin: 0; }
@@ -200,6 +202,19 @@ function bodyHtml(doc: TypeDoc, lang: string): string {
 }
 
 /**
+ * CSS for a <style> element written into an HTML STRING. A `<` there could
+ * begin `</style>` and end the element, letting the rest of the value parse as
+ * markup. CSS never needs a raw `<` — `\3c ` is the same character to the CSS
+ * parser — so every one is escaped. Belt and braces: parseDoc already keeps
+ * document values out of shapes that could carry one (model.ts readPage,
+ * safeFontFamily). Guarded by scripts/test-type-printframe-browser.mjs.
+ */
+const cssText = (css: string): string => css.replace(/</g, '\\3c ');
+
+/** A number for CSS, or the fallback: a synced value never passed parseDoc. */
+const cssNum = (v: unknown, fallback: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
+
+/**
  * Build the printable document.
  *
  * Each page holds a copy of the whole flow, shifted up by that page's start
@@ -210,7 +225,7 @@ function bodyHtml(doc: TypeDoc, lang: string): string {
  * printed pagination drifts from what was on screen.
  */
 export function buildPrintDocument(doc: TypeDoc, metrics: Metrics, opts: PrintOptions = {}): string {
-  const p = doc.page;
+  const p = readPage(doc.page as never);    // numbers only (a synced page never passed parseDoc)
   const head = opts.header ?? doc.title;
   // the DOCUMENT's language, not the reader's: a caption label is printed and
   // signed with the author's sentences, so it must not change per reader
@@ -247,8 +262,9 @@ export function buildPrintDocument(doc: TypeDoc, metrics: Metrics, opts: PrintOp
 
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'; base-uri 'none'">
 <title>${esc(doc.title)}</title>
-<style>${printCss(doc)}</style>
+<style>${cssText(printCss(doc))}</style>
 </head><body>${pages}</body></html>`;
 }
 

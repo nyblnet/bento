@@ -1,0 +1,52 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Bento ID</title>
+<link rel="icon" href="../icons/icon.svg">
+<link rel="stylesheet" href="ui.css">
+<!-- Blocking, and before the body: stamps the theme so the FIRST paint is right. -->
+<script src="theme.js"></script>
+<style>
+  /* Creating a Bento ID (id/agent.js): a passkey, then the recovery code shown once. */
+  body { max-width: 560px; margin: 48px auto; padding: 0 20px; display: flex; flex-direction: column; gap: 14px }
+  h1 { font-size: 22px; margin: 0 }
+  p { margin: 0; line-height: 1.5 }
+  .dim { color: var(--dim); font-size: 13px }
+  .step[hidden] { display: none }
+  .step { display: flex; flex-direction: column; gap: 12px }
+  label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--dim) }
+  input { font: inherit; font-size: 14px; padding: 7px 9px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink) }
+  .code { font: 600 24px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 1px; padding: 14px 16px;
+    border-radius: 8px; background: var(--hover); direction: ltr; unicode-bidi: isolate; text-align: center; user-select: all }
+  .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap }
+  .status { font-size: 13px; color: var(--dim); min-height: 1.3em }
+  .note { font-size: 13px; padding: 10px 12px; border-radius: 8px; background: var(--hover) }
+  @media print { .actions, .status, .dim, h1 { display: none } .code { background: none } }
+</style>
+<section class="step" id="start">
+  <h1 data-i18n="idSetupTitle"></h1>
+  <p data-i18n="idSetupLead"></p>
+  <p class="note" data-i18n="idSetupLight"></p>
+  <label><span data-i18n="idSetupLabel"></span><input id="label" maxlength="64" autocomplete="off"></label>
+  <p class="status" id="status" role="status"></p>
+  <div class="actions"><button class="btn primary" id="go" data-i18n="idSetupGo"></button></div>
+</section>
+<section class="step" id="code" hidden>
+  <h1 data-i18n="idCodeTitle"></h1>
+  <p data-i18n="idCodeLead"></p>
+  <div class="code" id="codeText"></div>
+  <p class="note" id="codeNote" hidden></p>
+  <label><span data-i18n="idCodeConfirm"></span><input id="confirm" autocomplete="off" spellcheck="false"></label>
+  <p class="status" id="codeStatus" role="status"></p>
+  <div class="actions"><button class="btn" id="print" data-i18n="idCodePrint"></button><button class="btn primary" id="saved" data-i18n="idCodeSaved"></button></div>
+</section>
+<section class="step" id="nocode" hidden>
+  <h1 data-i18n="idDoneTitle"></h1>
+  <p class="note" data-i18n="idNoCode"></p>
+  <div class="actions"><button class="btn primary" id="done2" data-i18n="idDone"></button></div>
+</section>
+<section class="step" id="done" hidden>
+  <h1 data-i18n="idDoneTitle"></h1>
+  <p data-i18n="idDoneLead"></p>
+  <div class="actions"><button class="btn primary" id="done1" data-i18n="idDone"></button></div>
+</section>
+<script type="module" src="setup.js"></script>

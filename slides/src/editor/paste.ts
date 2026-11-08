@@ -31,6 +31,7 @@
  */
 
 import { sanitizeHtml } from '../render'
+import { keepSpaces } from './markdown'
 
 /** The html to insert for this clipboard, or '' when the plain-text path
  *  should run instead (no html flavour, or nothing left after cleaning). */
@@ -51,9 +52,36 @@ export function clipboardToHtml(dt: DataTransfer | null | undefined): string {
       b.remove()
     }
   }
+  keepPreformatted(inert, body)
   const clean = sanitizeHtml(body.innerHTML)
   // nothing but whitespace/empty tags → let the plain path decide. Checked
   // in an inert document too: the cleaned string is parsed back there.
   const check = new DOMParser().parseFromString(clean, 'text/html').body
   return check.textContent?.trim() || check.querySelector('br, li') ? clean : ''
+}
+
+/** Text the source painted as preformatted — a `<pre>`, or an ancestor whose
+ *  inline style says `white-space: pre…` (what a terminal, an editor or a web
+ *  page's code block copies as) — keeps its spaces and line breaks. The
+ *  sanitizer drops every attribute, so the instruction would otherwise go
+ *  with it and the text would collapse to single spaces (#750). */
+function keepPreformatted(doc: Document, body: HTMLElement) {
+  const walker = doc.createTreeWalker(body, NodeFilter.SHOW_TEXT)
+  const hits: Text[] = []
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    for (let e = n.parentElement; e && e !== body; e = e.parentElement) {
+      const ws = e.style?.whiteSpace
+      if (ws) { if (ws.startsWith('pre')) hits.push(n as Text); break }
+      if (e.tagName === 'PRE') { hits.push(n as Text); break }
+    }
+  }
+  for (const node of hits) {
+    const lines = node.data.replace(/\r\n?/g, '\n').replace(/\n$/, '').split('\n')
+    const frag = doc.createDocumentFragment()
+    lines.forEach((line, i) => {
+      if (i) frag.append(doc.createElement('br'))
+      if (line) frag.append(doc.createTextNode(keepSpaces(line)))
+    })
+    node.replaceWith(frag)
+  }
 }

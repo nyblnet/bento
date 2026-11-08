@@ -643,6 +643,26 @@ export function serveAssistantPort(port) {
   })
 }
 
+// ---------------------------------------------------------------- served documents
+//
+// bento/connect W2: a document opened WITH identity runs in the extension's
+// sandbox page, so its ⌘S reaches the worker from the host page
+// (serve/serve.js), not from a file:// content script. Only that page may ask,
+// and it names the path it opened; the write then goes exactly as a file://
+// page's would (resolveAny on that path's URL), so the same grants and doors
+// apply and nothing new is reachable.
+async function serveWrite(sender, payload) {
+  const ours = sender?.id === chrome.runtime.id && typeof sender.url === 'string' && sender.url.startsWith(chrome.runtime.getURL('src/serve/serve.html'))
+  if (!ours) return { ok: false, reason: 'not the served-document host' }
+  const path = payload?.path
+  if (typeof path !== 'string' || !path.startsWith('/') || !path.endsWith('.bento.html') || path.includes('\u0000')) return { ok: false, reason: 'bad path' }
+  const as = { url: 'file://' + path.split('/').map(encodeURIComponent).join('/'), frameId: 0 }
+  const text = typeof payload?.text === 'string' ? payload.text : ''
+  const r = await write(as, text)
+  if (r?.ok) noteSaved(as, text)
+  return r
+}
+
 // ---------------------------------------------------------------- the offer
 //
 // A ⌘S that nothing covers is the moment to ask, once: the page's `claim`
@@ -817,6 +837,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       : msg?.op === 'save.status' ? saveStatus(sender, msg.url)
       : msg?.op === 'save.rebadge' ? (async () => { const tabs = await chrome.tabs.query({ url: 'file:///*.bento.html' }).catch(() => []); for (const tb of tabs) await badgeTab(tb.id, { url: tb.url, frameId: 0, tab: tb }); return { ok: true } })()
       : msg?.op === 'write' ? write(sender, msg.payload?.text ?? '').then((r) => { if (r?.ok) noteSaved(sender, msg.payload?.text ?? ''); return r })
+      : msg?.op === 'serve.write' ? serveWrite(sender, msg.payload)
       : msg?.op === 'backup' ? backup(sender, msg.payload?.text ?? '', msg.payload?.name)
       : msg?.op === 'assistant.consent' ? recordConsent(sender, msg)
       : typeof msg?.op === 'string' && msg.op.startsWith('assistant.') ? assistantOp(msg.op, sender, msg.payload)

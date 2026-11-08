@@ -81,6 +81,9 @@ export interface Mark {
 }
 
 /** The tag each mark renders as. `link` is special-cased (it carries an href). */
+/** The tag for a mark — an OWN key of TAG only: a synced mark type like
+ *  `constructor` must not read an inherited property into the markup. */
+const tagOf = (m: Mark): string => (Object.hasOwn(TAG, m.t) ? TAG[m.t as keyof typeof TAG] : 'span');
 const TAG: Record<Exclude<MarkType, 'link'>, string> = {
   b: 'strong', i: 'em', u: 'u', s: 's', code: 'code',
   // a styled span; openTag builds the style attribute itself
@@ -323,7 +326,8 @@ const ESC: Record<string, string> = {
 // immediately. Text needs & < > ; an attribute value needs the quotes as well,
 // because those are what end it.
 const esc = (s: string) => s.replace(/[&<>]/g, c => ESC[c]);
-const escAttr = (s: string) => s.replace(/[&<>"']/g, c => ESC[c]);
+/** For a double- OR single-quoted attribute value: every quote is escaped. */
+export const escAttr = (s: string) => s.replace(/[&<>"']/g, c => ESC[c]);
 
 /**
  * An href safe to put in the document's HTML.
@@ -405,13 +409,13 @@ const openTag = (m: Mark) => {
     const who = m.by ? ` data-by="${escAttr(m.by)}"` : '';
     const when = m.at ? ` data-at="${escAttr(m.at)}"` : '';
     const title = m.by ? ` title="${escAttr(m.t === 'ins' ? `Inserted by ${m.by}` : `Deleted by ${m.by}`)}"` : '';
-    return `<${TAG[m.t]} class="t-trk"${who}${when}${title}>`;
+    return `<${tagOf(m)} class="t-trk"${who}${when}${title}>`;
   }
-  if (m.t !== 'link') return `<${TAG[m.t]}>`;
+  if (m.t !== 'link') return `<${tagOf(m)}>`;
   const href = safeHref(m.href ?? '');
   return href === null ? '<a>' : `<a href="${escAttr(href)}">`;
 };
-const closeTag = (m: Mark) => m.t === 'link' ? '</a>' : `</${TAG[m.t]}>`;
+const closeTag = (m: Mark) => m.t === 'link' ? '</a>' : `</${tagOf(m)}>`;
 
 /**
  * Render text + marks as HTML.

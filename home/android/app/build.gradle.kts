@@ -75,7 +75,13 @@ android {
     }
 
     buildTypes {
+        debug {
+            manifestPlaceholders["setupExported"] = "true"
+            manifestPlaceholders["setupDev"] = "true"
+        }
         release {
+            manifestPlaceholders["setupExported"] = "false"
+            manifestPlaceholders["setupDev"] = "false"
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -83,6 +89,18 @@ android {
                 signingConfigs.getByName("release")
             else
                 signingConfigs.getByName("debug")
+        }
+        // Release as configured — R8 with optimisation and obfuscation (a DEBUGGABLE build gets neither,
+        // which is why this one is not), resource shrinking, the same rules — except that it has the
+        // setup screen's dev switch on and exported, so scripts/qa-home-android-setup.mjs can run the
+        // derivation check (SetupSelfCheck) in the real minified code. It never ships.
+        create("releaseCheck") {
+            initWith(getByName("release"))   // NB: copies release AS CONFIGURED SO FAR: this block must come after it
+            applicationIdSuffix = ".releasecheck"
+            matchingFallbacks += "release"
+            signingConfig = signingConfigs.getByName("debug")
+            manifestPlaceholders["setupExported"] = "true"
+            manifestPlaceholders["setupDev"] = "true"
         }
     }
 
@@ -136,6 +154,11 @@ dependencies {
     // EditorActivity deliberately stays off it — a full-screen WebView gains
     // nothing from Material and would only inherit the inflation requirements.
     implementation("com.google.android.material:material:1.12.0")
+
+    // Argon2id for the recovery code (security §35). Pinned exactly; Gradle
+    // dependency verification (gradle/verification-metadata.xml) fails the
+    // build if the artifact's sha256 ever differs.
+    implementation("org.bouncycastle:bcprov-jdk18on:1.86")
 
     // bento/connect (phase-1 plan A1): BiometricPrompt with a CryptoObject, so the
     // consent key signs only inside an authentication the person just gave.

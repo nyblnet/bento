@@ -954,6 +954,14 @@ export function openStoryEditor(src: StorySource): HTMLElement {
   return el
 }
 
+/** Close the story editor if it is open. True when there was one to close. */
+export function closeStoryEditor(): boolean {
+  const el = document.querySelector('.ds-editor')
+  if (!el) return false
+  el.remove()
+  return true
+}
+
 /** Wire a topbar button. Returns a detach, for symmetry with the rest of dash. */
 export function installStory(src: StorySource & { button: HTMLElement }): () => void {
   const onClick = () => { openStoryEditor(src) }

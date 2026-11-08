@@ -490,7 +490,7 @@ const from = (v: unknown[]) => (row: number) => v[row]
     'eight characters of text get a lowercase weight')
   ok(autoFitWidth(from([12345678]), col({ name: 'A', type: 'number', format: '0' }), 1) === 84,
     'and eight DIGITS get a wider one — a clipped digit is a wrong number')
-  ok(autoFitWidth(from([12345678]), col({ name: 'A', type: 'number' }), 1) === 100,
+  ok(autoFitWidth(from([12345678]), col({ name: 'A', type: 'number', format: '#,##0' }), 1) === 100,
     'while the same number GROUPED is ten glyphs, not eight — the separators need room too')
 }
 {

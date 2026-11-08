@@ -150,8 +150,9 @@ console.log('\n5 · the caller calls it')
   const panels = readFileSync(new URL('../dash/src/panels.ts', import.meta.url), 'utf8')
   ok(!/type: 'number', formula:/.test(main),
     'main.ts no longer hardcodes `type: \'number\', formula:` — the line the bug was')
-  ok(/inferComputedType\(sheet, got\.expr\)\.type/.test(main),
-    'the New-formula-column dialog types the column from the expression')
+  ok(/const inferred = inferComputedType\(sheet, got\.expr\)/.test(main) &&
+    /type: inferred\.type, \.\.\.inferred\.carry/.test(main),
+    'the New-formula-column dialog types the column from the expression, and carries money’s format')
   ok(/inferComputedType\(sheet, got\.expr, col\.id\)/.test(main),
     'and editing an existing expression re-asks the question')
   ok(/inferComputedType\(sheet, next, col\.id\)/.test(panels),
@@ -185,6 +186,41 @@ console.log('\n6 · a computed column never trips the type/storage check')
   delete stored.sheets[0].columns[1].formula
   ok(codes(parseDoc(JSON.stringify(stored)).doc).includes('type-storage-mismatch'),
     'and the SAME column without the formula is reported — the check is awake, not asleep')
+}
+
+console.log('\n7 · a number computed from Money is Money (review 3.6)')
+{
+  // `Value * 2` over a £ column arrived as a plain Number column: no £, and
+  // `8600` beside `24,800`. The column it reads is money, so the result is.
+  const sheet = sheetOf({ Value: [4300, 12400], Rate: [0.5, 0.25], Qty: [3, 4] })
+  const cols = sheet.columns as any[]
+  Object.assign(cols.find((c) => c.id === 'Value'), { type: 'money', format: '£#,##0', unit: 'GBP' })
+  Object.assign(cols.find((c) => c.id === 'Rate'), { type: 'percent' })
+  Object.assign(cols.find((c) => c.id === 'Qty'), { type: 'number' })
+
+  const dbl = inferComputedType(sheet, 'Value * 2')
+  ok(dbl.type === 'money' && dbl.why === 'money', '`Value * 2` over a Money column is Money')
+  ok(dbl.carry?.format === '£#,##0' && dbl.carry?.unit === 'GBP',
+    'and carries the money column’s format and unit, so it prints £8,600 like its source')
+  ok(inferComputedType(sheet, 'Rate * Value').type === 'money',
+    'a money column anywhere in the expression carries it — not only when it comes first')
+  ok(inferComputedType(sheet, 'value * 2').type === 'money',
+    'references resolve case-insensitively, as recalc resolves them')
+  // NEGATIVE CONTROLS — the carry must not reach columns that read no money.
+  const qty = inferComputedType(sheet, 'Qty * 2')
+  ok(qty.type === 'number' && !qty.carry, 'a number computed from a plain Number stays a plain Number')
+  ok(inferComputedType(sheet, 'IF(Value > 5000, "big", "small")').type === 'text',
+    'a TEXT result that reads money stays text — the carry applies to numeric results only')
+
+  const { retypePatch } = await import('../dash/src/computedtype.ts')
+  const col = { id: 'f', name: 'F', type: 'number', formula: 'Qty * 2' } as any
+  const before = inferComputedType(sheet, 'Qty * 2', undefined)
+  const p = retypePatch(col, before, dbl, 'Value * 2')
+  ok(p.type === 'money' && p.format === '£#,##0' && p.unit === 'GBP',
+    'editing an untouched column to read money re-types it to Money, with the format')
+  const chosen = retypePatch({ ...col, type: 'percent' }, before, dbl, 'Value * 2')
+  ok(chosen.type === undefined && chosen.format === undefined,
+    'a type chosen by hand is never overruled, and gets no format it did not ask for')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

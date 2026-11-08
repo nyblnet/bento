@@ -19,6 +19,12 @@
 //   3. the tab title (main.ts boot and the title field)
 //   4. reading a plaintext recovery snapshot back (recovery.ts)
 //   5. drop-open: a sealed window refuses to adopt a dropped workbook (dropopen.ts)
+//
+// Every SEALED page ends through the helper's close() (and would reload through
+// its reload()), never context.close(): those throw when the kernel store had to
+// refuse a plaintext read or write. The store refuses as a BACKSTOP, so without
+// this a reverted dash guard would be masked by it and every row would stay
+// green. A throw is scored as a failed check, so the summary line still prints.
 import { readFileSync } from 'node:fs'
 import { openSealed, savedFile, scanIndexedDB, sealtestShell } from './lib/sealed-boot.mjs'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
@@ -30,6 +36,14 @@ const MARKER = 'SEALRIG-7f3a91'
 const APP = 'bento/dash'
 const settle = (page) => page.waitForTimeout(3600) // autosave debounce is 2.5s
 
+// End a sealed page through the helper. Its close() throws when dash leaned on
+// the kernel store's backstop; that is a missing dash guard, so it is a FAIL.
+async function closeSealed(opened, what) {
+  let err = null
+  try { await opened.close() } catch (e) { err = e }
+  ok(!err, `SEALED ${what}: the kernel store refused no plaintext read or write${err ? ' — ' + err.message : ''}`)
+}
+
 async function retitle(page, text) {
   await page.locator('.dx-title').fill(text)
   await page.locator('.dx-title').dispatchEvent('input')
@@ -40,7 +54,8 @@ try {
   // ---- rows 1–3 on the shared test document, sealed and unsealed
   for (const sealed of [true, false]) {
     console.log(`\n${sealed ? 'SEALED' : 'unsealed control'}`)
-    const { context, page, errors } = await openSealed(browser, 'dash', { sealed })
+    const opened = await openSealed(browser, 'dash', { sealed })
+    const { page, errors } = opened
     const t0 = await page.evaluate(() => [document.title, window.bento.doc.title])
     if (sealed) ok(t0[0] === APP, `at boot the tab says only "${APP}" — got "${t0[0]}"`)
     else ok(t0[0] !== APP && t0[0].includes(t0[1]), `CONTROL: unsealed, the tab shows the workbook title at boot — "${t0[0]}"`)
@@ -67,8 +82,11 @@ try {
       const f = await savedFile(page)
       ok(!f.file.includes(MARKER), 'the saved file carries the marker nowhere — not in the body, the preview or the <title>')
       ok(/<title>bento\/dash<\/title>/.test(f.file), 'and its <title> is the neutral app name')
-      // the preview on its own: kernel's gate refuses it for a sealed body, and
-      // dash's preview builder refuses too — this check sees dash's layer alone
+      // the preview on its own. On the save path kernel's previewAllowed gate
+      // runs FIRST and never calls dash's provider for a sealed body, so this
+      // row sees the kernel layer, not dash's: disabling previewMarkup's own
+      // isBodySealed() guard leaves it green. scripts/test-dash-preview.ts
+      // drives previewMarkup directly and guards dash's layer.
       ok(!f.file.includes('data-bento-preview'), 'and it carries NO preview element at all')
     } else {
       const html = await page.evaluate(() => window.bento.serializeAuto())
@@ -77,7 +95,8 @@ try {
       ok(preview.includes(MARKER + '-cell'), 'CONTROL: unsealed, the PREVIEW itself draws the marked cell — so the sealed row can see a preview leak')
     }
     ok(errors.length === 0, `no page errors${errors.length ? ' — ' + errors.join('; ') : ''}`)
-    await context.close()
+    if (sealed) await closeSealed(opened, 'rows 1–3')
+    else await opened.context.close()
   }
 
   // ---- row 5: drop-open
@@ -86,7 +105,8 @@ try {
     (_, a, c) => a + JSON.stringify({ format: 'bento/dash', version: 1, policy: 'bento-dash-1', docId: 'dropped-1', title: 'Dropped workbook',
       sheets: [{ id: 's', kind: 'table', name: 'D', rids: [[1, 1]], nextRid: 2, columns: [{ id: 'v', name: 'V', type: 'number' }], data: { v: { enc: 'raw', v: [1] } }, steps: [] }] }).replace(/</g, '\\u003c') + c)
   for (const sealed of [true, false]) {
-    const { context, page } = await openSealed(browser, 'dash', { sealed })
+    const opened = await openSealed(browser, 'dash', { sealed })
+    const { page } = opened
     page.on('dialog', (d) => d.accept())
     await page.evaluate((html) => {
       const dt = new DataTransfer()
@@ -98,7 +118,8 @@ try {
     const refused = await page.evaluate(() => document.body.innerText.includes('encrypted workbook open'))
     if (sealed) ok(refused && title !== 'Dropped workbook', `SEALED: a dropped workbook is refused, not adopted under this document's seal (title "${title}")`)
     else ok(!refused && title === 'Dropped workbook', `CONTROL: unsealed, the dropped workbook opens (title "${title}")`)
-    await context.close()
+    if (sealed) await closeSealed(opened, 'drop-open')
+    else await opened.context.close()
   }
 
   // ---- row 4: reading a plaintext snapshot back, and purging it. Both seal
@@ -127,7 +148,7 @@ try {
     const b = await openSealed(browser, 'dash', { context: a.context, url: a.url })
     await b.page.waitForTimeout(600)
     ok(await b.page.locator('.dxr-bar').count() === 0, 'SEALED: the same workbook on the same storage does NOT offer the plaintext snapshot')
-    await b.page.close()
+    await closeSealed(b, 'read-back') // b shares a.context, so this closes only its page
     const left = stores(await scanIndexedDB(c.page, MARKER))
     ok(left.length === 0, `SEALED: after the sealed boot, none of this workbook's plaintext is kept (found in: ${left.join(', ') || 'nothing'})`)
     ok(stores(await scanIndexedDB(c.page, OTHER)).length === 2, 'the second workbook\'s snapshot and versions survive the purge')

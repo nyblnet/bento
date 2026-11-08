@@ -1,0 +1,17 @@
+{
+  "package": "@noble/hashes",
+  "version": "2.4.0",
+  "license": "MIT",
+  "integrity": "sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA==",
+  "tarball": "https://registry.npmjs.org/@noble/hashes/-/hashes-2.4.0.tgz",
+  "why": "Argon2id for the bento/connect recovery code (pure JS: no WASM, so no 'wasm-unsafe-eval'). Exact files from the npm tarball, unmodified; argon2.js and its import closure.",
+  "files": {
+    "LICENSE": "4f221aee6e072336700c408c68ab3b96a3fc09f6aebe6f48f1bd99e5ef13faec",
+    "_blake.js": "cabbff61d1f373bac45594ad758df7c42e176464ddbb94b44f5533fa977a4f56",
+    "_md.js": "60cf3010fda89e3e4d3f0e7ff1ce249e9c467f34b4fd41b6fd6101d9f69be763",
+    "_u64.js": "b09da8c07fe8187c07649494cdb7cd0bcf13df90b506a9473d19e4d5f8c2e102",
+    "argon2.js": "f39753324bdf2f484150731d24b1d71236f26bf10bedd594f7d190fcdfdefdc9",
+    "blake2.js": "03f00237bcc0b4d822a80f7c0ac22e42632c48e246c3b6da584e6452186e32f0",
+    "utils.js": "037ad49adb78168b6b699598fd33f85f7877456b1d28b4d032e2a1a16807947c"
+  }
+}

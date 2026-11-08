@@ -1,0 +1,104 @@
+# validate, home-ios slice: home/ios: the iOS host's bridge, index, release verifier, origin and docstore rigs.
+#
+# Part of the REQUIRED `validate` check. .github/workflows/ci.yml runs this
+# action as steps INSIDE that one job, on the same runner, after the slices
+# listed before it there — so what earlier slices installed and built is on
+# disk here. A failing step here fails `validate` and blocks the merge.
+#
+# Add a new rig's step to the slice of the zone that owns the rig, at the
+# end. Every `run:` needs `shell: bento-step {0}`: GitHub refuses a composite
+# step with no shell, and bento-step (scripts/ci/) fails the step if a rig
+# reports a skip CI does not allow (scripts/lib/ci-skips.mjs). A step here
+# counts as registered for scripts/test-ci-registered.ts.
+
+name: validate-home-ios
+description: validate, home-ios slice (runs inside the required validate job)
+runs:
+  using: composite
+  steps:
+    - name: home/ios bridge rig
+      # The iOS host opens ANY self-contained HTML document and treats those
+      # documents as mutually untrusted, so a page-supplied filename reaching
+      # appendingPathComponent was an arbitrary write inside the container —
+      # including over another deck the user would later open and trust.
+      # Source-shape checks; the Swift half self-skips without a toolchain.
+      shell: bento-step {0}
+      run: node scripts/test-home-bridge.ts
+
+    - name: home/ios index rig
+      # The iOS text extractor is a PORT of home/webext's, and the two are held
+      # together by nothing but agreement — so this diffs them, driving the
+      # real library.js against the compiled Swift over generated edge cases
+      # and every document in the tree. A divergence means a deck is findable
+      # by a phrase on one host and not the other, which nothing else notices.
+      # This one really runs HERE: BentoIndex.swift is Foundation-only, and the
+      # runner has Swift, so the diff happens on every push rather than only on
+      # a Mac. That is the payoff for keeping UIKit out of that file.
+      shell: bento-step {0}
+      run: node scripts/test-tray-index.mjs
+
+    - name: home/ios release verifier rig
+      # Starter decks are not bundled; a new document is FETCHED from the
+      # signed release channel and written to disk as an executable page. The
+      # signature and hash checks are what make that acceptable, so this proves
+      # the verifier REFUSES — tampered payload, tampered signature, a real
+      # signature over different bytes, no signature at all. Watching it accept
+      # the live manifest proves nothing: `return true` passes that test.
+      # Unlike the index rig above this CANNOT run here — CryptoKit is
+      # Apple-only — so it probes for that module (not for swiftc, which the
+      # runner has) and skips loudly. A Mac must run it before Releases.swift
+      # changes.
+      shell: bento-step {0}
+      run: node scripts/test-tray-releases.mjs
+
+    - name: home/ios origin identity rig
+      # Which storage origin a document runs in. It used to be a hash of the
+      # file's path, so a different file that later took the same path read
+      # the previous one's recovery copy and member key. The origin follows the
+      # file's document identifier now; this compiles the real OriginIdentity
+      # and checks every rule. CryptoKit only, so it skips off Apple platforms.
+      shell: bento-step {0}
+      run: node scripts/test-home-origin.mjs
+
+    - name: home/ios docstore rig
+      # The host's per-document store: this device's collab member private key
+      # in the Keychain, the recovery copy in an app-private file, partitioned by
+      # the document's origin. Compiles the real HostDocStore; skips off Apple.
+      shell: bento-step {0}
+      run: node scripts/test-home-docstore-ios.mjs
+
+    - name: home/ios bento/connect keys rig
+      # The agent's keys: the account key, the Secure Enclave routine and consent
+      # keys, raw low-S signatures (verified in WebCrypto), never minting over a
+      # store it could not read, and the §29 biometric-enrolment notice outbox.
+      # Apple toolchains only; skips elsewhere.
+      shell: bento-step {0}
+      run: node scripts/test-home-id-keys.mjs
+
+    - name: home/ios bento/connect statements rig
+      # The Swift statements against kernel/fixtures/identity-v1.json: verdict
+      # and reason on every row, round trips, tampering, transcripts, low-S,
+      # purposes, addresses, spendCalled and the frozen display table.
+      shell: bento-step {0}
+      run: node scripts/test-home-id-statements.mjs
+
+    - name: home/ios bento/connect agent rig
+      # sign() routing and the host-stamped consent statement (§2e (A)): what
+      # the page can name, what only the host stamps, and the verifier refusing
+      # a relay, replay, payload swap or docId swap.
+      shell: bento-step {0}
+      run: node scripts/test-home-id-agent.mjs
+
+    - name: home/ios bento/connect recovery rig
+      # Argon2id (ours: RFC 9106, Node's native one on random inputs) and every
+      # byte of kernel/fixtures/recovery-v1.json: the recovery code, derivations,
+      # both key blobs, and recovered scalars checked through CryptoKit. Apple only.
+      shell: bento-step {0}
+      run: node scripts/test-home-id-recovery.mjs
+
+    - name: home/ios Spotlight rig
+      # What the system search index holds for a document and keeping it current
+      # after a save: replaced at once, delete-before-add when sealed, and
+      # entries removed for documents a walk no longer finds. Apple only.
+      shell: bento-step {0}
+      run: node scripts/test-home-spotlight.mjs

@@ -1,0 +1,286 @@
+# validate, type slice: bento/type: install, typecheck, shell + splice gate, and the type rigs.
+#
+# Part of the REQUIRED `validate` check. .github/workflows/ci.yml runs this
+# action as steps INSIDE that one job, on the same runner, after the slices
+# listed before it there — so what earlier slices installed and built is on
+# disk here. A failing step here fails `validate` and blocks the merge.
+#
+# Add a new rig's step to the slice of the zone that owns the rig, at the
+# end. Every `run:` needs `shell: bento-step {0}`: GitHub refuses a composite
+# step with no shell, and bento-step (scripts/ci/) fails the step if a rig
+# reports a skip CI does not allow (scripts/lib/ci-skips.mjs). A step here
+# counts as registered for scripts/test-ci-registered.ts.
+
+name: validate-type
+description: validate, type slice (runs inside the required validate job)
+runs:
+  using: composite
+  steps:
+    # bento/type: the word processor. Same pipeline, same gate.
+    - name: Install (type)
+      working-directory: type
+      shell: bento-step {0}
+      run: npm ci
+
+    - name: Typecheck (type)
+      working-directory: type
+      shell: bento-step {0}
+      run: node_modules/.bin/tsc -b
+
+    - name: Build single-file shell (type)
+      working-directory: type
+      shell: bento-step {0}
+      run: npm run build:single
+
+    - name: Splice conformance gate (type)
+      shell: bento-step {0}
+      run: node scripts/shell-gate.mjs type/dist-single/Bento_Type.bento.html
+
+    - name: Type inline-formatting rig
+      # A block stores plain text + marks over character ranges, and the
+      # round trip render→read must be exact: if it is not, formatting
+      # silently mutates on every re-render, which surfaces as a signed
+      # document that stops verifying. Includes a 2,000-case fuzz — it found
+      # two bugs no hand-written case did.
+      shell: bento-step {0}
+      run: node scripts/test-type-inline.ts
+
+    - name: Type model rig
+      # The load contract (an unreadable file must never become an empty one
+      # over live data), deterministic id repair, and the rule that marks and
+      # footnote anchors move together — separating them is what put a
+      # footnote marker in the middle of a word.
+      shell: bento-step {0}
+      run: node scripts/test-type-model.ts
+
+    - name: Type store rig
+      # A typed word is ONE undo press, and a scoped snapshot really is
+      # scoped: 200 edits cost ~94KB rather than ~21.7MB.
+      shell: bento-step {0}
+      run: node scripts/test-type-store.ts
+
+    - name: Type redline rig
+      # accept(all) == what they sent back, reject(all) == what you sent.
+      # Without both, "review these changes" is a lie.
+      shell: bento-step {0}
+      run: node scripts/test-type-redline.ts
+
+    - name: Type paginated-output rig
+      # The printed page count must be the one the editor computed — if print
+      # re-paginates, "page 14 paragraph 3" stops meaning anything, which is
+      # the whole reason documents like this are exchanged as PDF. Also pins
+      # that footnotes reach the page their reference lands on, and that a
+      # document's own page size is what prints.
+      shell: bento-step {0}
+      run: node scripts/test-type-print.ts
+
+    - name: Type theme rig
+      # Static checks so a theme cannot rot: both themes define the same
+      # roles, the document surface is never themed, and no chrome rule
+      # borrows a document token — that last one shipped a select at 1.92:1
+      # against a WCAG AA floor of 4.5.
+      shell: bento-step {0}
+      run: node scripts/test-type-theme.mjs
+
+    - name: bento/dash CRDT convergence
+      # The big one: randomised concurrent edits across N replicas, asserted
+      # to converge. It has caught every ordering bug in the engine, and the
+      # two it did not catch were found by widening it.
+      shell: bento-step {0}
+      run: node scripts/test-dash-sync.ts
+
+    - name: relay protocol — one wire format, two clients
+      # dash's online.ts is a PORT of the transport slides uses (now in
+      # kernel/). The two files are separate text that nobody diffs, and ONE
+      # DEPLOYED WORKER verifies both: it pins the room id to a key and walks
+      # an owner→invite→member signature chain. If one client's idea of
+      # `inv.${pub}.${role}.${exp}` drifts, the symptom is not a red test — it
+      # is one app's users silently unable to join the other's rooms, on a
+      # relay that cannot be rolled back independently of the shells already
+      # in people's files. This diffs only what goes on the wire.
+      #
+      # Written by the bento/dash work; taken here because the kernel lift is
+      # the change it guards, and it should not land after the move it exists
+      # to check. The rig FOLLOWS the twin (kernel first, then slides) and
+      # FAILS if it finds no transport at all, rather than silently comparing
+      # two empty lists — which is how its own first version passed.
+      shell: bento-step {0}
+      run: node scripts/test-relay-protocol.ts
+
+    - name: Type blocks rig
+      # Lists and tables are runs of flat blocks assembled at render;
+      # this pins the grouping, including the level clamp that once opened a
+      # billion list elements and killed the process.
+      shell: bento-step {0}
+      run: node scripts/test-type-blocks.ts
+
+    - name: Type layout rig
+      # Paragraph spacing, indents and page setup, and that a page break
+      # is honoured by the paginator rather than merely stored.
+      shell: bento-step {0}
+      run: node scripts/test-type-layout.ts
+
+    - name: Type image rig
+      # Pictures embed or reference, and an atomic block is measured as one
+      # box so pagination cannot break a page through the middle of it.
+      shell: bento-step {0}
+      run: node scripts/test-type-image.ts
+
+    - name: Type link rig
+      # Link marks round-trip, and the href allow-list holds: a document is
+      # untrusted input, and javascript: reached the page from one once.
+      shell: bento-step {0}
+      run: node scripts/test-type-link.ts
+
+    - name: Type find rig
+      # Find and replace across blocks, including the offsets that shift
+      # when a replacement changes a block's length.
+      shell: bento-step {0}
+      run: node scripts/test-type-find.ts
+
+    - name: Type toc rig
+      # Section numbering is DERIVED, never stored, so inserting a heading
+      # renumbers everything and nothing drifts.
+      shell: bento-step {0}
+      run: node scripts/test-type-toc.ts
+
+    - name: Type xref rig
+      # Captions and cross-references are atoms at an offset, so renumbering
+      # is invisible to the redline.
+      shell: bento-step {0}
+      run: node scripts/test-type-xref.ts
+
+    - name: Type cite rig
+      # Citations and the bibliography — a citation is an atom, so
+      # restyling one is not an edit to the sentence around it.
+      shell: bento-step {0}
+      run: node scripts/test-type-cite.ts
+
+    - name: Type math rig
+      # Formulas: the TeX source is the model and inline math is a mark, so
+      # a formula survives the render→read round trip intact.
+      shell: bento-step {0}
+      run: node scripts/test-type-math.ts
+
+    - name: Type comments rig
+      # Threads keep their anchors through edits, splits and merges, and
+      # editing or deleting a message never moves the text it points at.
+      shell: bento-step {0}
+      run: node scripts/test-type-comments.ts
+
+    - name: Type track rig
+      # Tracked changes as ins/del marks: accept-all gives the text as
+      # edited, reject-all the text as it was, and display modes never touch
+      # the model.
+      shell: bento-step {0}
+      run: node scripts/test-type-track.ts
+
+    - name: Type font rig
+      # Per-selection typeface and size, and the CSS allow-list that keeps a
+      # font stack from opening a second declaration in a style attribute.
+      shell: bento-step {0}
+      run: node scripts/test-type-font.ts
+
+    - name: Type autosave rig
+      # A crash must not cost the work since the last ⌘S. Pins the content
+      # key that decides whether a snapshot disagrees with the loaded file,
+      # and that an encrypted document is NEVER snapshotted — plaintext in
+      # IndexedDB beside a file whose whole point is that it is encrypted.
+      shell: bento-step {0}
+      run: node scripts/test-type-autosave.ts
+
+    - name: Type preview rig
+      # Thumbnailers run no JavaScript, so a saved file carries a still of
+      # page one plus a parser-blocking remover. Pins the ordering (nothing
+      # paintable between host and remover), that a second save REPLACES
+      # rather than appends, and that an encrypted document gets none.
+      shell: bento-step {0}
+      run: node scripts/test-type-preview.ts
+
+    - name: Type i18n rig
+      # Eight languages in one file: every catalogue holds the same keys,
+      # every {placeholder} survives translation, no key outlives the string
+      # it came from, and the packed table matches the catalogues it was
+      # built from.
+      shell: bento-step {0}
+      run: node scripts/test-type-i18n.ts
+
+    - name: Type styles rig
+      # Named paragraph styles, and the additivity rule: a document with no
+      # doc.styles must render byte-identically to before the feature.
+      shell: bento-step {0}
+      run: node scripts/test-type-styles.ts
+
+    - name: Type move rig
+      # Reordering moves whole UNITS, so a drag can never tear a table in
+      # half or drop a paragraph between two bullets.
+      shell: bento-step {0}
+      run: node scripts/test-type-move.ts
+
+    - name: Type embed rig
+      # Embedded Bento artifacts, and the render boundary that refuses a
+      # script rather than sanitising one.
+      shell: bento-step {0}
+      run: node scripts/test-type-embed.ts
+
+    - name: Type share-copy rig
+      # A view-only copy carries the room it follows and NO private key —
+      # not the owner's, not a legacy writer key, not an invite — whatever the
+      # source document held; an editor copy writes only through its own
+      # fresh, revocable invite. Every copy is minted in type/src/share.ts.
+      shell: bento-step {0}
+      run: node scripts/test-type-share.ts
+
+    - name: Type chrome rig
+      # Where controls live: nothing in two menus, no inserts in the
+      # overflow, and every element the chrome reaches for actually exists —
+      # a null lookup there has silently broken the boot twice.
+      shell: bento-step {0}
+      run: node scripts/test-type-chrome.ts
+
+    - name: Type restore-gate rig
+      # A snapshot kept in the browser (Unsaved changes banner, Version
+      # history) is foreign input: on file:// any local page can write it.
+      # Restoring one never brings its own docId, room/keys or mode, and an
+      # honest one keeps the open file's sharing. Replace from JSON — a
+      # document the person chose — is NOT gated. Counterpart of slides'.
+      shell: bento-step {0}
+      run: node scripts/test-type-restore-gate.ts
+
+    - name: Type signature-chain rig
+      # Canonical JSON and the chained signatures over it. A canonicalization
+      # bug does not crash — it silently fails valid documents or passes
+      # tampered ones — so this pins determinism, key order by UTF-16 code
+      # unit, volatile fields at every depth, and that the signer's NAME is
+      # inside the signed text (it was once only displayed beside the tick).
+      shell: bento-step {0}
+      run: node scripts/test-type-canon.ts
+
+    - name: Type compare rig
+      # Comparing with another file is a VIEW: nothing commits, and the diff
+      # runs from that file to this one. Asserts which side is <del> and which
+      # is <ins>, because a reversed diff keeps the same change count and a
+      # count-only check cannot see it.
+      shell: bento-step {0}
+      run: node scripts/test-type-compare.ts
+
+    - name: Type hanging-punctuation rig
+      # Optical margin alignment may only PAINT. A line break is held only
+      # when each line's first and last character both stay on it — a check
+      # on first characters alone passed a real reflow.
+      shell: bento-step {0}
+      run: node scripts/test-type-micro.ts
+
+    - name: Type fields and mail-merge rig
+      # Fields are atoms resolved at render, never stored resolved. Merged
+      # letters get a fresh docId each and carry no credentials, signatures,
+      # comments or revision history from the template.
+      shell: bento-step {0}
+      run: node scripts/test-type-fields.ts
+
+    - name: Type live-cells rig
+      # A field bound to an embedded sheet by row label and column heading,
+      # so inserting, reordering or sorting rows cannot re-point a sentence
+      # at a different number.
+      shell: bento-step {0}
+      run: node scripts/test-type-live.ts

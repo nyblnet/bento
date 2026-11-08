@@ -5,7 +5,8 @@
 
 import './styles.css'
 import { anim } from './anim'
-import { configureApp, appConfig } from '../../kernel/src/app.ts'
+import { configureApp } from '../../kernel/src/app.ts'
+import { deckWindowTitle } from './wintitle'
 import { startTheme } from '../../kernel/src/theme.ts'
 import { startNetGuard } from '../../kernel/src/net.ts'
 import {
@@ -179,7 +180,7 @@ function bootWith(doc: BentoDoc, docIsFresh = false) {
  * the editor. (docs/DECISIONS.md, the broadcast entry.)
  */
 function audienceMode(doc: BentoDoc) {
-  document.title = `${doc.title} — ${appConfig().appName}`
+  document.title = deckWindowTitle(doc.title)
   if (doc.fonts?.length) injectFonts(doc)
   document.getElementById('bento-splash')?.remove()
 
@@ -238,7 +239,7 @@ function audienceMode(doc: BentoDoc) {
  * never expose the editor. Leaving the presentation lands on a minimal card.
  */
 function playerMode(doc: BentoDoc) {
-  document.title = `${doc.title} — ${appConfig().appName}`
+  document.title = deckWindowTitle(doc.title)
   if (doc.fonts?.length) injectFonts(doc)
   document.getElementById('bento-splash')?.remove()
   const card = document.createElement('div')
@@ -265,7 +266,7 @@ function playerMode(doc: BentoDoc) {
 
 function editorMode(doc: BentoDoc, docIsFresh = false) {
 
-document.title = `${doc.title} — ${appConfig().appName}`
+document.title = deckWindowTitle(doc.title)
 
 // Embedded fonts: register @font-face rules from the asset table so text
 // elements can use bundled families in the editor, presenter and thumbnails.
