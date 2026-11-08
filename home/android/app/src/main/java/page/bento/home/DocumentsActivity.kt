@@ -369,11 +369,7 @@ class DocumentsActivity : AppCompatActivity() {
     private fun checkForUpdates() {
         Thread {
             val outcomes = Releases.APPS.map { ReleaseHistory.refresh(applicationContext, it) }
-            val msg = when (ReleaseHistory.summary(outcomes)) {
-                ReleaseHistory.Outcome.UNVERIFIED -> R.string.updates_unverified
-                ReleaseHistory.Outcome.OFFLINE -> R.string.updates_offline
-                ReleaseHistory.Outcome.REACHED -> R.string.updates_checked
-            }
+            val msg = ReleaseHistory.message(outcomes)
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 notify(getString(msg))

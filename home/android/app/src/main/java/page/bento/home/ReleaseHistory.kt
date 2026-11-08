@@ -109,6 +109,13 @@ object ReleaseHistory {
         else -> Outcome.REACHED
     }
 
+    /** What "Check for updates" tells the person (maintainer's wording, 2026-11-08; iOS shows the same set). */
+    internal fun message(outcomes: List<Outcome>): Int = when (summary(outcomes)) {
+        Outcome.UNVERIFIED -> R.string.updates_unverified
+        Outcome.OFFLINE -> R.string.updates_offline
+        Outcome.REACHED -> R.string.updates_up_to_date
+    }
+
     /**
      * Gate 1 for the bytes this host is about to serve: GENUINE with a CSP only
      * when one release in a held, verified history matches every block. Tried

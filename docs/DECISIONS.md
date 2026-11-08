@@ -12346,3 +12346,22 @@ decision, 2026-11-08: detect it and do not write.
 Guards: `scripts/test-disk-change.ts` (fake handle on a 2 s-mtime file
 system, nine mutants and a control) and `scripts/test-disk-change-browser.mjs`
 (real Chromium handles).
+
+## 2026-11-08 — "Check for updates" says one of three things, the worst first
+
+The maintainer set the words the native hosts show when the person checks for
+updates (the only contact with bento.page besides a New document). The menu item
+is "Check for updates". The result is one of:
+
+- "Up to date"
+- "Couldn't reach bento.page"
+- "The reply from bento.page couldn't be verified"
+
+One check covers every app's release history, and **the worst outcome wins**: a
+reply that wouldn't verify beats an unreachable server, which beats up to date.
+A reply that verifies but isn't taken (nothing published yet, or anti-rollback
+refused it) counts as up to date: the held history stands. iOS shows the same set.
+
+Guard (Android): `ReleaseHistoryTest` checks the strings, the worst-wins rule, and
+the unverified outcome. The signature check is real, run over the frozen slides
+history and a one-byte tamper.

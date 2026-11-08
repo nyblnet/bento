@@ -62,4 +62,21 @@ class ReleaseHistoryTest {
         assertEquals(u, ReleaseHistory.summary(listOf(o, u, r)))
         assertEquals(u, ReleaseHistory.summary(listOf(u, o)))
     }
+
+    @Test fun `the person is told the maintainer's words, worst outcome first`() {
+        val xml = File("src/main/res/values/strings.xml").readText()
+        fun text(name: String) = Regex("""<string name="$name">(.*?)</string>""").find(xml)!!.groupValues[1].replace("\\'", "'")
+        val words = mapOf(
+            R.string.check_updates to ("check_updates" to "Check for updates"),
+            R.string.updates_up_to_date to ("updates_up_to_date" to "Up to date"),
+            R.string.updates_offline to ("updates_offline" to "Couldn't reach bento.page"),
+            R.string.updates_unverified to ("updates_unverified" to "The reply from bento.page couldn't be verified"),
+        )
+        for ((name, want) in words.values) assertEquals(name, want, text(name))
+        val (r, o, u) = Triple(ReleaseHistory.Outcome.REACHED, ReleaseHistory.Outcome.OFFLINE, ReleaseHistory.Outcome.UNVERIFIED)
+        assertEquals(R.string.updates_up_to_date, ReleaseHistory.message(listOf(r, r, r)))
+        assertEquals(R.string.updates_offline, ReleaseHistory.message(listOf(r, o, r)))
+        assertEquals(R.string.updates_unverified, ReleaseHistory.message(listOf(o, u, r)))
+        assertEquals(R.string.updates_unverified, ReleaseHistory.message(listOf(u, r)))
+    }
 }
