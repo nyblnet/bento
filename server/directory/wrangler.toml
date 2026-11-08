@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 # bento/id directory — id.bento.page (layer 1 of bento/id).
 # Deploy is the MAINTAINER's (needs the id.bento.page DNS and the SES account first):
 #   npx wrangler secret put DIR_KEY_JWK   # the directory's ONLINE P-256 signing key (JWK, private) — never the release key

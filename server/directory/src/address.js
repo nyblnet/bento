@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 The Bento authors
 //
 // Email addresses in the directory. The normal form is the KERNEL's
