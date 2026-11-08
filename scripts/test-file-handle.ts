@@ -243,11 +243,12 @@ const settle = () => new Promise((r) => setTimeout(r, 10))
   // Asserted at source like the ordering above (the write path needs a DOM).
   {
     const copyRet = body.indexOf("if (isCopy) return 'copied'")
-    const setHandle = body.indexOf('fileHandle = handle')
+    // holdHandle is the one retarget (it also resets the outside-edit stamp)
+    const setHandle = body.indexOf('holdHandle(handle)')
     const persistPicked = body.indexOf('void persistHandle(doc, handle)')
     ok(copyRet > 0, 'the copy path returns early with \'copied\'')
     ok(setHandle > copyRet && persistPicked > copyRet,
-      'fileHandle = handle and persistHandle(doc, handle) run ONLY after the isCopy early-return — never for a copy')
+      'holdHandle(handle) and persistHandle(doc, handle) run ONLY after the isCopy early-return — never for a copy')
   }
 }
 
