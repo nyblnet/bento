@@ -3,31 +3,22 @@
 # from file:// fetch the release channel cross-origin, so
 # Access-Control-Allow-Origin is load-bearing: never remove it. Security
 # headers come later, deliberately, not as a side effect of a host move.
-# A header set by two matching rules is JOINED with a comma, so ACAO and
-# Cache-Control appear under /* only.
+#
+# How Workers applies this file (read in wrangler 4.152.0's asset worker):
+# rules run in file order; the FIRST rule to set a
+# header replaces the asset's own value, a later matching rule APPENDS with a
+# comma, and "! Name" deletes. A path written twice keeps only its last block.
+# So every header is set under /* only, and a rule that needs a different
+# Content-Type deletes the /* one first.
+#
+# Content-Type is set here, not left to the platform: GitHub Pages sent
+# "; charset=utf-8" on every text type, production Workers sends none (local
+# wrangler dev does, so an emulator run cannot show the difference). /* covers
+# every HTML page, the rewritten forms (/, /d/, /x) and every 404, whose body
+# is always 404.html. Everything below the generated marker is written by
+# scripts/site-routing.mjs from the published tree: one rule per file that is
+# not HTML, and one per directory 301, whose empty body keeps no type.
 /*
   Access-Control-Allow-Origin: *
   Cache-Control: max-age=600
-
-/releases/:app/manifest.json
-  Content-Type: application/json; charset=utf-8
-/releases/:app/history.json
-  Content-Type: application/json; charset=utf-8
-/releases/:app/packs.json
-  Content-Type: application/json; charset=utf-8
-/releases/:app/packs/:pack
-  Content-Type: application/json; charset=utf-8
-/schema/:file
-  Content-Type: application/json; charset=utf-8
-
-/skills/bento-slides.zip
-  Content-Type: application/x-zip-compressed
-
-# Files with no extension get no Content-Type from Workers; GitHub Pages sent
-# octet-stream (LICENSE downloads rather than renders, as it always has).
-/LICENSE
-  Content-Type: application/octet-stream
-/CNAME
-  Content-Type: application/octet-stream
-/.nojekyll
-  Content-Type: application/octet-stream
+  Content-Type: text/html; charset=utf-8
