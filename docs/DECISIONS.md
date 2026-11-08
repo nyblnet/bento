@@ -12595,3 +12595,49 @@ is visible, and anonymous senders cannot be told apart.
 
 Guard: `scripts/test-directory.ts` (the "budget" rows) and
 `scripts/test-directory-mutants.ts` (the budget back in front of each refusal).
+
+## 2026-11-08 — bento/id option G: the roster chain and its ripening countersign (`ros.`, `rip.`)
+
+**Decision.** A bento/id account's authority is a chain of roster heads, and
+the kernel verifies that chain offline (`kernel/src/roster.ts`, contract
+`kernel/fixtures/roster-v1.json`). This is the second kernel piece of option G,
+after the WebAuthn assertion verifier. The device certificates that hang off a
+roster (`wdev.`, `watt.`, `wren.`, `dev2.`) are reserved prefixes for now and
+come in a later kernel change.
+
+- **`ros.<b64u(address)>.<seq>.<prevHash|empty>.<members>.<dirNonce>.<created>`**
+  names every key that may change the account: passkeys (`pk`), native consent
+  keys (`ck`), at most one recovery key (`rk`), each optionally marked
+  quarantined (`~q`). Members are written in one sorted spelling; a head in any
+  other order is refused. `dirNonce` is the directory challenge the request was
+  bound to, carried in the text so peers can see the binding.
+- **`rip.<sha256(ros text)>.<requestedAt>.<ripenedAt>.<reset 0|1>.<kid>`** is
+  the directory's countersign, issued only when a change ripens. A link without
+  one is not in force, so a change that was voided cannot be shown to an offline
+  peer as if it had taken effect.
+- **The wait is measured on the directory's clock**: ripenedAt − requestedAt ≥
+  72 hours. The requester's `created` is informative and never decides a wait.
+- **Authority.** Setup (seq 0) and a reset carry the directory's countersign
+  alone and install exactly one passkey; peers report a reset. Every other link
+  is proved over its exact text by an unquarantined member of the previous
+  head: a WebAuthn assertion for a passkey (rp `id.bento.page`, the sign-in
+  host's origin, no stored sign count since peers see links out of order), a
+  raw low-S signature for a recovery key. One change per link (one add, one
+  removal, or the recovery key replaced); quarantine marks are never changed by
+  a member. The only immediate member change is a member removing itself while
+  another unquarantined member remains.
+- **Pinning.** A peer that pinned a head verifies onward from it; the pinned
+  head's countersign is re-checked, because its times set every member's age.
+  Ages from a pin past setup are lower bounds.
+
+**Refused until defined (fail closed).** A consent key signing or co-signing a
+roster change (its consent purpose is the next kernel change), any member
+change ripened in under 72 hours other than a self-removal, and links the
+directory makes on a mailbox's authority (a void's quarantine and queued
+removal, its undo, an incident revert), which have no authority marking in
+the format yet.
+
+Guards: `scripts/test-roster.ts` (every row, each accepted row's resulting
+state written by hand, the two-clocks pair, positive controls) and
+`scripts/test-roster-mutants.ts` (each rule loosened in turn must turn the rig
+red).

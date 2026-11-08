@@ -593,3 +593,22 @@ runs:
       # must go red on every one, after the unmutated copy passes.
       shell: bento-step {0}
       run: node scripts/test-webauthn-mutants.ts
+
+    - name: bento/id roster chain
+      # kernel/src/roster.ts against kernel/fixtures/roster-v1.json: the option G
+      # roster (ros.) and the directory's ripening countersign (rip.). A change is
+      # in force only once countersigned at ripening, 72 h after the directory's
+      # own requestedAt (never the requester's clock); each link is signed by an
+      # unquarantined member of the previous head (passkey assertion via
+      # webauthn.ts, rp id.bento.page, origin the sign-in host); one change per
+      # link; setup and reset carry the directory's authority alone.
+      shell: bento-step {0}
+      run: node scripts/test-roster.ts
+
+    - name: bento/id roster chain mutants
+      # Each mutant loosens one rule in a copy of roster.ts (chain break, wrong
+      # prev, unripened link, the requester's clock for the wait, a quarantined
+      # signer, two changes in one link...); test-roster.ts must go red on every
+      # one, after the unmutated copy passes.
+      shell: bento-step {0}
+      run: node scripts/test-roster-mutants.ts
