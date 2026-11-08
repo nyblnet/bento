@@ -798,7 +798,7 @@ export function mountChart(el: ChartLike, host: HTMLElement, fromOption?: Record
     tipEl.innerHTML =
       (title ? `<b>${escapeHtml(title)}</b><br>` : '') +
       rows.map((r) =>
-        `<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${r.color};margin-right:5px"></span>` +
+        `<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${swatchColor(r.color)};margin-right:5px"></span>` +
         `${escapeHtml(r.name)}${r.value !== undefined ? `: <b>${escapeHtml(r.value)}</b>` : ''}`,
       ).join('<br>')
     tipEl.style.display = 'block'
@@ -882,4 +882,19 @@ export function mountChart(el: ChartLike, host: HTMLElement, fromOption?: Record
 }
 
 const escapeHtml = (s: string): string =>
-  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+
+/**
+ * A series colour for the tooltip swatch, which is written into a quoted
+ * `style` attribute. The option is document data, so the value is held to the
+ * characters colour notations use (the same rule as slides' cssColor and
+ * dash's preview cssColor): no quote, no `;`, no function that loads or
+ * indirects. Anything else shows as no swatch.
+ */
+const NOT_A_COLOUR = /\b(url|image-set|-webkit-image-set|image|cross-fade|element|paint|env|attr|var|expression)\s*\(/i
+export function swatchColor(v: unknown): string {
+  if (typeof v !== 'string') return 'transparent'
+  const s = v.trim()
+  if (!s || s.length > 48 || !/^[#a-zA-Z0-9(),.%\s/-]+$/.test(s) || NOT_A_COLOUR.test(s)) return 'transparent'
+  return s
+}
