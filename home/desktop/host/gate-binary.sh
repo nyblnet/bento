@@ -12,7 +12,7 @@ cd "$(dirname "$0")"
 # capability brings no rig command with it, so it has needles of its own: its identifier and
 # the loopback origin it opens. Security: never in a release host.
 needles() {
-  printf '%s\n' rig_stash rig_done rig_recreate BENTO_RIG_SHARED_PROFILE BENTO_RIG_OAC_OFF BENTO_RIG_EMBED_CERT \
+  printf '%s\n' rig_stash rig_done rig_recreate rig_session rig_skew BENTO_RIG_SHARED_PROFILE BENTO_RIG_OAC_OFF BENTO_RIG_EMBED_CERT \
     allow_tls_certificate_for_host rig-embed allow-rig '127.0.0.1:*' \
     "$("${PY:-python3}" -c "import json;print(json.load(open('../../fixtures/gate1/test-public-key.json'))['x'])")"
 }
