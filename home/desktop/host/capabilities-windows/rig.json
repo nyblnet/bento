@@ -1,0 +1,20 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "rig",
+  "description": "RIG BUILDS ONLY, Windows only (build.rs): the rig's own commands, for the same per-document origins, and bento_id, so the rigs can show the host itself refusing it (the Windows key store is a refusing stub).",
+  "local": false,
+  "windows": [
+    "doc*"
+  ],
+  "remote": {
+    "urls": [
+      "http://bento.:h([0-9a-f]{24}).localhost/"
+    ]
+  },
+  "permissions": [
+    "allow-rig-stash",
+    "allow-rig-done",
+    "allow-rig-recreate",
+    "allow-bento-id"
+  ]
+}
