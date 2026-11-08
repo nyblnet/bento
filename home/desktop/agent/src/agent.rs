@@ -83,8 +83,10 @@ impl Default for Policy {
 }
 
 /// Who is asking, as the HOST established it: after the per-webview capability
-/// check, on a verified shell, with the docId the host read from the file it
-/// opened. Not constructible from page input by design: the host builds it.
+/// check, on a verified shell. `doc_id` is the host's key for THE FILE IT OPENED
+/// (on desktop: install salt + canonical path + the file's docId, hashed), never
+/// the bare docId, which whoever wrote the file chose. Not constructible from
+/// page input by design: the host builds it.
 #[derive(Debug, Clone)]
 pub struct Caller {
     pub verified: bool,

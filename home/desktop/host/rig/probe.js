@@ -119,7 +119,7 @@
           I.raw_whoami = await raw('id.whoami', {})
           I.raw_resolve = await raw('id.resolve', { pub: 'RIG-BOB' })
           I.raw_sign = await raw('id.sign', { purpose: 'frame', payload: FRAME })
-          await waitFlag('ib.done', 60000)
+          await waitFlag('ic.done', 90000)
           I.counts = await counts()
           await inv('rig_done', { report: { ident: I } })
           return
@@ -143,6 +143,19 @@
           I.a_after_b_whoami = await ag.whoami()
           I.a_after_b_resolve = await ag.resolve({ pub: 'RIG-BOB' })
           I.counts_end = await counts()
+          await inv('rig_done', { report: { ident: I } })
+          return
+        }
+        if (window.__RIG_MODE === 'ident' && LABEL === 'doc3') {
+          // C: a copy of B carrying B's docId, opened from another folder. B is allowed; C is a
+          // different file, so the person is ASKED (and here says no), and resolve answers null.
+          await waitFlag('ib.done', 90000)
+          await answers(false)
+          I.c_before = await counts()
+          I.c_whoami = await ag.whoami()
+          I.c_counts = await counts()
+          I.c_resolve_bob = await ag.resolve({ pub: 'RIG-BOB' })
+          await inv('rig_stash', { key: 'ic.done', value: '1' })
           await inv('rig_done', { report: { ident: I } })
           return
         }
@@ -183,6 +196,11 @@
           I.s_idle = tag(await ag.sign('frame', FRAME))
           I.s_idle_counts = await counts()
           await inv('rig_stash', { key: 'ib.done', value: '1' })
+          // CONTROL for the copy: after C's no, B (the file the person allowed) keeps its yes
+          await waitFlag('ic.done', 90000)
+          I.b_after_copy_whoami = await ag.whoami()
+          I.b_after_copy_resolve = await ag.resolve({ pub: 'RIG-BOB' })
+          I.b_after_copy_counts = await counts()
           await inv('rig_done', { report: { ident: I } })
           return
         }

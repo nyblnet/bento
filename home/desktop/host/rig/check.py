@@ -557,9 +557,14 @@ elif sa and su:
 # B1 slice 2: whoami (consent per document), resolve (keys already in the room), the
 # host's re-auth prompt. Every refusal row has an accepted control in the same run.
 # Linux only: on Windows no key store is built, so these scenarios do not run there.
-ia, ib, iu = (None, None, None) if WINDOWS else (report("ident-doc0"), report("ident-doc1"), report("ident-doc2"))
-if ia and ib and iu:
-    A, B, U = ia["page"].get("ident", {}), ib["page"].get("ident", {}), iu["page"].get("ident", {})
+ia, ib, iu, ic = (None, None, None, None) if WINDOWS else (report("ident-doc0"), report("ident-doc1"), report("ident-doc2"), report("ident-doc3"))
+if ia and ib and iu and ic:
+    A, B, U, C = ia["page"].get("ident", {}), ib["page"].get("ident", {}), iu["page"].get("ident", {}), ic["page"].get("ident", {})
+    # security #918 C1: consent is per FILE the host opened, not per docId
+    ok(not C.get("error") and C.get("present") is True, f"ident: the copy is genuine and has the agent ({C.get('error')}, {C.get('present')})")
+    ok((C.get("c_counts") or {}).get("consent") == (C.get("c_before") or {}).get("consent", -9) + 1, f"ident: a COPY of B carrying B's docId, at another path, is ASKED ({C.get('c_before')} -> {C.get('c_counts')})")
+    ok(C.get("c_whoami") is None and C.get("c_resolve_bob") is None, f"ident: the copy, refused, gets null from whoami and from resolve ({C.get('c_whoami')}, {C.get('c_resolve_bob')})")
+    ok((B.get("b_after_copy_whoami") or {}).get("email") == "rig@example.org" and (B.get("b_after_copy_resolve") or {}).get("email") == "bob@example.org" and (B.get("b_after_copy_counts") or {}).get("consent") == 3, f"ident: CONTROL: the original B keeps its yes after the copy's no, with no new prompt ({B.get('b_after_copy_counts')})")
     ok(not A.get("error") and not B.get("error") and not U.get("error"), f"ident: no error in any probe ({A.get('error')}, {B.get('error')}, {U.get('error')})")
     ok(A.get("present") is True and B.get("present") is True and U.get("present") is False, "ident: A and B (genuine) have the agent, U (unknown) has none")
     ok(A.get("no_account_whoami") is None and A.get("no_account_counts", {}).get("consent") == 0, f"ident: nothing to share, so whoami is null and NOTHING is asked ({A.get('no_account_whoami')}, {A.get('no_account_counts')})")
@@ -585,10 +590,10 @@ if ia and ib and iu:
     ok(B.get("s_begin") is True and B.get("s_inside") == "ok" and n("s_inside_counts", "reauth") == 2, f"ident: CONTROL: a session opened by a verification signs, and nothing is shown ({B.get('s_inside')}, {n('s_inside_counts', 'reauth')})")
     ok(B.get("s_idle") == "reauth" and n("s_idle_counts", "reauth") == 3, f"ident: past the idle limit it is refused and told; the host re-opens nothing ({B.get('s_idle')}, {n('s_idle_counts', 'reauth')})")
     ok(U.get("raw_whoami") == "unavailable" and U.get("raw_resolve") == "unavailable" and U.get("raw_sign") == "unavailable", f"ident: the UNKNOWN document is stopped by the host even by raw IPC ({U.get('raw_whoami')}, {U.get('raw_resolve')}, {U.get('raw_sign')})")
-    ok((U.get("counts") or {}).get("consent") == 2 and (U.get("counts") or {}).get("reauth") == 3, f"ident: and it put nothing in front of the person ({U.get('counts')})")
+    ok((U.get("counts") or {}).get("consent") == 3 and (U.get("counts") or {}).get("reauth") == 3, f"ident: and it put nothing in front of the person ({U.get('counts')})")
     L = log("ident")
     cons = re.findall(r'PROMPT consent doc="([^"]*)": (.*)', L)
-    ok([d for d, _ in cons] == ["IA.bento.html", "IB.bento.html"], f"ident: the host drew exactly two consent prompts, for A then B, naming the file ({[d for d, _ in cons]})")
+    ok([d for d, _ in cons] == ["IA.bento.html", "IB.bento.html", "IB.bento.html"], f"ident: the host drew exactly three consent prompts, for A, B, then B's copy (same name, another folder) ({[d for d, _ in cons]})")
     ok(all("rig@example.org" in t and "Rig Person" in t for _, t in cons), "ident: each consent prompt shows what would be shared (name, address)")
     ok(len(re.findall(r"PROMPT reauth-refused doc=\"IB.bento.html\"", L)) == 3 and "PROMPT reauth-refused doc=\"IA" not in L and "PROMPT reauth-refused doc=\"IU" not in L, "ident: three refusal notices, all for B's own sign calls")
     ok("PROMPT reauth doc=" not in L, "ident: the host never draws a confirm-to-sign prompt (no presence prompt on Linux)")

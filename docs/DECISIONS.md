@@ -12648,9 +12648,15 @@ in both Playwright's headless shell and system Chrome.
   key on this device) it answers `no-identity` and never asks. Otherwise the
   first time a document asks, the host asks the person, showing what the
   document would see (name, address, who vouches). A yes is remembered for that
-  document across launches, keyed by a hash of its id so the file does not list
-  documents; a no is remembered until the host exits (there is no screen yet to
-  undo a permanent no, so none is stored).
+  document across launches; a no is remembered until the host exits (there is no
+  screen yet to undo a permanent no, so none is stored). **"Per document" means
+  per file the host opened**, never per docId: consent (and `resolve`) are keyed
+  on the same inputs as the document's origin, the install salt, the canonical
+  path and the docId, hashed, so the book does not list documents either. The
+  docId alone is whatever the file's author wrote: a copy of an allowed document,
+  carrying its docId, at another path, is a different document and is asked
+  again (security's review of #918 reproduced the bare-docId key answering such
+  a copy with no prompt).
 - **`resolve` answers only for a document the person has allowed, and only for
   keys this host already holds a binding for.** It never prompts (a prompt on
   `resolve` would let a document spend the person's attention) and never reaches

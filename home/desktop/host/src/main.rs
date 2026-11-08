@@ -432,7 +432,10 @@ async fn bento_id(app: tauri::AppHandle, webview: tauri::Webview, msg: String, c
             return reply(&id, Err("unavailable".into()));
         }
         let d = h.docs.iter().find(|d| d.label == label);
-        (d.and_then(|d| origin::doc_id(&d.bytes)), d.map(|d| d.name.clone()).unwrap_or_default())
+        // Consent is per FILE the host opened, never per docId (security, #918 C1): the
+        // key mixes the install salt and the canonical path in, as the origin does.
+        let key = d.and_then(|d| origin::doc_id(&d.bytes).map(|id| origin::consent_key(&h.salt, &d.path, &id)));
+        (key, d.map(|d| d.name.clone()).unwrap_or_default())
     };
     let caller = Caller { verified: true, doc_id };
     let ident = app.state::<IdentState>();

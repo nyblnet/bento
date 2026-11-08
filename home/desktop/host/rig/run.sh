@@ -206,7 +206,10 @@ if [ "$WIN" != 1 ]; then
   # already in the room, and the host's re-auth prompt. Three documents on the in-memory key:
   # A (the person says no), B (yes) and an unknown file that must reach none of it.
   cp "$OUT/fix/A.bento.html" "$OUT/IA.bento.html"; cp "$OUT/fix/B.bento.html" "$OUT/IB.bento.html"; cp "$OUT/fix/U.bento.html" "$OUT/IU.bento.html"
-  BENTO_RIG_MODE=ident scenario ident 150 "$OUT/IA.bento.html" "$OUT/IB.bento.html" "$OUT/IU.bento.html"
+  # C (security, #918 C1): a COPY of B, same bytes and so the same docId, same file name, in another
+  # folder. Consent is per file the host opened, so the copy must be asked.
+  mkdir -p "$OUT/copy"; cp "$OUT/fix/B.bento.html" "$OUT/copy/IB.bento.html"
+  BENTO_RIG_MODE=ident scenario ident 180 "$OUT/IA.bento.html" "$OUT/IB.bento.html" "$OUT/IU.bento.html" "$OUT/copy/IB.bento.html"
   # The REAL key stores, end to end through the bridge. A missing tool is a FAILURE, never a skip.
   command -v gnome-keyring-daemon >/dev/null || { echo "FAIL: gnome-keyring-daemon is not installed; the keystore rig cannot run" >&2; exit 1; }
   command -v swtpm >/dev/null && command -v swtpm_setup >/dev/null || { echo "FAIL: swtpm is not installed; the keystore-tpm rig cannot run" >&2; exit 1; }
