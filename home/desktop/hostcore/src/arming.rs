@@ -423,6 +423,39 @@ mod tests {
         }
     }
 
+    /// r4 open line: the taint set by a serve AFTER a genuine arm must reach the
+    /// NEXT load. A webview armed genuine, then an unknown serve lands (the page
+    /// fetching bytes an attacker swapped under it, while already armed). The
+    /// running page keeps its verdict — it was fixed at its start — but the next
+    /// load of the same URL must not arm genuine.
+    #[test]
+    fn an_unknown_serve_after_a_genuine_arm_taints_the_next_load() {
+        let (mut l, _) = armed(true);
+        assert!(l.armed_genuine(), "the bytes that armed were genuine");
+        l.served(false); // an unknown serve arrives AFTER the mint/arm
+        assert!(l.armed_genuine(), "the running load's verdict was fixed at its start, not revoked by a later serve");
+        l.load_started(true); // the page reloads the same URL
+        let a = l.load_finished(true).unwrap();
+        l.confirm(&a.nonce, &a.cap).unwrap();
+        assert!(!l.armed_genuine(), "the serve after the arm taints the next load");
+    }
+
+    /// And the taint, not the ANDed tally, is what carries it: an off-document
+    /// load between the unknown serve and the next document load discards the
+    /// unknown tally, and a genuine serve then puts a genuine verdict on the
+    /// books. Only the permanent taint keeps the next load unknown.
+    #[test]
+    fn the_taint_outlasts_a_tally_discarded_after_a_mint() {
+        let (mut l, _) = armed(true);
+        l.served(false); // post-arm unknown serve: sets the permanent taint
+        l.load_started(false); // an off-document load takes and drops that unknown tally
+        l.served(true); // a genuine verdict goes on the books
+        l.load_started(true);
+        let a = l.load_finished(true).unwrap();
+        l.confirm(&a.nonce, &a.cap).unwrap();
+        assert!(!l.armed_genuine(), "the tally says genuine; the taint is why this load is not");
+    }
+
     /// The tally is taken at an off-document start: those serves do not carry past it.
     #[test]
     fn an_off_document_load_takes_the_tally_with_it() {
