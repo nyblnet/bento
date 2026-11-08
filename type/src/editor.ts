@@ -119,7 +119,11 @@ export class Editor {
       if (n.nodeType === 1 && isNoteAtom(n as Element)) return;      // atoms are not characters
       for (const c of Array.from(n.childNodes)) { walk(c); if (done) return; }
     };
-    for (const c of Array.from(block.childNodes)) { walk(c); if (done) break; }
+    // From the block ITSELF: a boundary can sit on the block element (Chrome's
+    // triple-click ends at the next paragraph's element, offset 0), and a walk
+    // over its children alone never met that container and counted the whole
+    // block.
+    walk(block);
     return count;
   }
   /** The DOM point `at` characters into this block. */
