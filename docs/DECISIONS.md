@@ -12543,6 +12543,40 @@ changed by another program" and brings the banner back.
 Guard: `scripts/test-slides-disk-change-browser.mjs` (the packaged document,
 real file handles through `launchQueue`).
 
+## 2026-11-08 — bento/id option G: the account is a roster of passkeys; kernel verifies their assertions offline
+
+**Decision (maintainer, 2026-11-08).** bento/id adopts "option G": a bento/id
+account is a chained roster of passkeys rather than a single extractable account
+key, and a statement can be signed by a passkey as a WebAuthn assertion whose
+challenge is the SHA-256 of the statement text. Peers verify such a signature
+offline, with WebCrypto alone. The first kernel piece is that verifier
+(`kernel/src/webauthn.ts`); roster and web-device statements and their consent
+purposes follow in later kernel changes.
+
+What the verifier settles, for every port (Swift, Kotlin, Rust, the extension,
+the directory):
+- ES256 over `authenticatorData ‖ SHA-256(clientDataJSON)`, the signature in
+  strict DER. **High-S is normalised, not refused**: about half of real
+  assertions are high-S. The low-S-only rule stays for bento's own statements.
+- clientDataJSON is parsed, never template-matched, tolerating extra keys
+  (Chromium adds one) but **refusing duplicate keys**, compared after
+  unescaping: JSON libraries differ on which duplicate wins.
+- Exact `type` (`webauthn.get`), exact challenge bytes, origin by exact text
+  from a closed list, `crossOrigin` absent or boolean false and no `topOrigin`,
+  exact rpIdHash, UP and UV both set.
+- **The rp id is `id.bento.page`** (maintainer, 2026-11-08). Passkey ceremonies
+  run on a small sign-in host under it, never on `home.bento.page`. The rp id
+  and the accepted origin list are parameters the caller pins: the fixtures
+  accept `https://signin.id.bento.page` and refuse `https://id.bento.page`,
+  `https://home.bento.page`, `https://bento.page` and every other origin. The
+  sign-in host name is not final; regenerating the fixtures for another one is
+  `scripts/gen-webauthn-vectors.mjs --origin <it>`.
+- The signature counter is checked only when the caller holds a stored count:
+  if either is nonzero the new one must be greater, else the assertion is
+  refused (the refusing branch of WebAuthn L3 §7.2). Synced passkeys report 0.
+
+Conformance: `kernel/fixtures/webauthn-v1.json` (real browser assertions plus
+every refusal), `scripts/test-webauthn.ts`, `scripts/test-webauthn-mutants.ts`.
 ## 2026-11-08 — bento/connect directory: a start that mails nothing costs nothing (server/directory)
 
 The per-address mail budget (one a minute, 3 a day, 10 a month) is spent only
