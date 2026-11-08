@@ -15,11 +15,14 @@
  *   entry, another app's, a tampered payload, another key's signature
  * - a held copy tampered on disk, older than the bundled floor, or not its
  *   successor: the floor wins (the bytes are re-verified on every read)
+ * - "Check for updates" says one of three things, and the WORST outcome across
+ *   every app's history wins: one unverified + one fine says "couldn't be
+ *   verified" (and the alert shows exactly that outcome; pinned on source)
  *
  * Apple platforms only; skips elsewhere.
  */
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -51,6 +54,12 @@ const files = {
   otherKey: env(hist([e120, e110, e100]), other),
 }
 for (const [n, t] of Object.entries(files)) writeFileSync(join(work, `${n}.json`), t)
+// The alert is UIKit and can't be built here, so pin its source: the person is
+// shown CheckOutcome's message for ALL the results, and nothing else decides it.
+const browserSrc = process.env.BROWSER_SRC || join(ROOT, 'home/ios/DocumentBrowserViewController.swift')
+const check = (() => { const src = readFileSync(browserSrc, 'utf8'); const i = src.indexOf('func checkForUpdates('); return i < 0 ? '' : src.slice(i, src.indexOf('\n    }\n', i)) })()
+const alertPinned = /UIAlertController\(title: ReleaseHistory\.CheckOutcome\(results\)\.message, message: nil/.test(check) &&
+  !/contains\(where:|\.updated|\.unchanged|\.refused|\.failed/.test(check)
 
 const main = String.raw`
 import Foundation
@@ -99,6 +108,24 @@ try! f("changed").write(to: c.held("slides")!)
 ok(newest(ReleaseHistory.current("slides", in: c)) == "1.1.0" && ReleaseHistory.current("slides", in: c)!["releases"]!.array![1] == (try! JSON.parse(Data(String(decoding: f("v2"), as: UTF8.self).utf8)))["payload"].flatMap { try? JSON.parse(Data($0.string!.utf8)) }!["releases"]!.array![1],
    "a held copy that isn't the floor's successor (a changed entry) is ignored: the floor's own 1.0.0 stands")
 
+print("check for updates: the worst outcome across every history wins")
+typealias O = ReleaseHistory.CheckOutcome
+let fine = ReleaseHistory.Refresh.unchanged, newer = ReleaseHistory.Refresh.updated
+let offline = ReleaseHistory.Refresh.failed("The Internet connection appears to be offline.")
+let bad = ReleaseHistory.accept(f("otherKey"), app: "slides", in: s)   // a real refusal, not a hand-made one
+for (rs, want, why) in [
+  ([fine, newer], "Up to date", "every history verified"),
+  ([fine, offline], "Couldn't reach bento.page", "one unreachable + one fine"),
+  ([bad, fine], "The reply from bento.page couldn't be verified", "one history unverified + one fine"),
+  ([fine, bad], "The reply from bento.page couldn't be verified", "one fine + one unverified (order doesn't matter)"),
+  ([offline, bad, fine], "The reply from bento.page couldn't be verified", "unverified beats unreachable"),
+  ([ReleaseHistory.Refresh](), "Couldn't reach bento.page", "nothing checked is never up to date"),
+] as [([ReleaseHistory.Refresh], String, String)] {
+  let got = O(rs).message
+  ok(Array(got.unicodeScalars) == Array(want.unicodeScalars), "\(why): \"\(got)\"")
+}
+ok(CommandLine.arguments[2] == "1", "the alert's title is CheckOutcome(results).message, and checkForUpdates decides nothing itself (source pin)")
+
 print("\n\(checks - fails)/\(checks) checks passed")
 exit(fails == 0 ? 0 : 1)
 `
@@ -106,7 +133,7 @@ let code = 0
 try {
   writeFileSync(join(work, 'main.swift'), main.replace('P256Sig(sig)', 'P256.Signing.ECDSASignature(rawRepresentation: sig)').replace('import Foundation', 'import CryptoKit\nimport Foundation'))
   execFileSync('swiftc', ['-O', '-o', join(work, 'h'), ...SRC, join(work, 'main.swift')], { stdio: 'pipe' })
-  try { process.stdout.write(execFileSync(join(work, 'h'), [work])) } catch (e) { process.stdout.write(e.stdout ?? ''); code = e.status || 1 }
+  try { process.stdout.write(execFileSync(join(work, 'h'), [work, alertPinned ? '1' : '0'])) } catch (e) { process.stdout.write(e.stdout ?? ''); code = e.status || 1 }
 } catch (err) { console.error('swiftc failed:\n' + (err.stderr?.toString() ?? err.message)); code = 2 }
 finally { rmSync(work, { recursive: true, force: true }) }
 process.exit(code)

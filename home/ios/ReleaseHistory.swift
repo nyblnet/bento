@@ -70,6 +70,37 @@ enum ReleaseHistory {
 
     enum Refresh: Equatable { case updated, unchanged, refused(String), failed(String) }
 
+    /// What "Check for updates" tells the person after refreshing every app's
+    /// history. The three outcomes are the same on every host, and the WORST one
+    /// across all the histories wins: one history that didn't verify is reported
+    /// even when every other came back fine, because "up to date" would then be
+    /// a claim about a history this device is not holding.
+    enum CheckOutcome: Int, Comparable {
+        case upToDate, unreachable, unverified
+        static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
+
+        init(_ r: Refresh) {
+            switch r {
+            case .updated, .unchanged: self = .upToDate
+            case .failed: self = .unreachable     // no reply that could be judged
+            case .refused: self = .unverified     // a reply came, and it didn't verify
+            }
+        }
+
+        /// Worst wins. No result at all is never "up to date": nothing was checked.
+        init(_ results: [Refresh]) {
+            self = results.map(CheckOutcome.init).max() ?? .unreachable
+        }
+
+        var message: String {
+            switch self {
+            case .upToDate: return NSLocalizedString("Up to date", comment: "check for updates: every release history verified")
+            case .unreachable: return NSLocalizedString("Couldn't reach bento.page", comment: "check for updates: no reply")
+            case .unverified: return NSLocalizedString("The reply from bento.page couldn't be verified", comment: "check for updates: a reply failed its signature or anti-rollback check")
+            }
+        }
+    }
+
     /// Fetch the published history and keep it if it's a valid successor of
     /// what's held. Call only from something the person asked for.
     static func refresh(_ app: String, in store: Store = .app) async -> Refresh {

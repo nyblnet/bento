@@ -29,7 +29,7 @@ final class DocumentBrowserViewController: UIDocumentBrowserViewController,
             // The release history gate 1 checks documents against is refreshed only
             // when the person asks: here, or on New. Never on open or launch.
             UIBarButtonItem(image: UIImage(systemName: "ellipsis.circle"), menu: UIMenu(children: [
-                UIAction(title: "Check for updates", image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
+                UIAction(title: NSLocalizedString("Check for updates", comment: "menu item: refresh the signed release histories"), image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
                     self?.checkForUpdates()
                 },
             ])),
@@ -39,28 +39,19 @@ final class DocumentBrowserViewController: UIDocumentBrowserViewController,
     /// Refresh every app's signed release history. What's kept is only ever a
     /// valid successor of what's held (ReleaseHistory, anti-rollback).
     private func checkForUpdates() {
-        let waiting = UIAlertController(title: nil, message: "Checking for updates…", preferredStyle: .alert)
+        let waiting = UIAlertController(title: nil, message: NSLocalizedString("Checking for updates…", comment: "check for updates: in progress"),
+                                        preferredStyle: .alert)
         present(waiting, animated: true)
         Task { @MainActor in
             var results: [ReleaseHistory.Refresh] = []
             for app in Releases.apps { results.append(await ReleaseHistory.refresh(app.id)) }
             await withCheckedContinuation { done in waiting.dismiss(animated: true) { done.resume() } }
-            let message = Self.updateMessage(results)
-            let alert = UIAlertController(title: "Check for updates", message: message, preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            // The outcome IS the alert's title, with no message: the person just
+            // chose "Check for updates", so repeating it as a heading says nothing.
+            let alert = UIAlertController(title: ReleaseHistory.CheckOutcome(results).message, message: nil, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: NSLocalizedString("OK", comment: ""), style: .default))
             self.present(alert, animated: true)
         }
-    }
-
-    /// "Up to date" once any app's history came back verified; otherwise why not.
-    /// A history that doesn't verify is reported as a failed check, never kept.
-    static func updateMessage(_ results: [ReleaseHistory.Refresh]) -> String {
-        if results.contains(where: { $0 == .updated || $0 == .unchanged }) { return "Up to date." }
-        for r in results {
-            if case .refused = r { return "Couldn't check for updates: the release server sent something that didn't verify." }
-        }
-        for r in results { if case .failed(let why) = r { return "Couldn't check for updates: \(why)" } }
-        return "Couldn't check for updates."
     }
 
     @objc private func openSearch() {
