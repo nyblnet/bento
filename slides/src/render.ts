@@ -584,6 +584,16 @@ export function cssNum(v: unknown, fallback: number, max = 4096): number {
 }
 
 /**
+ * An `object-fit` keyword from the document, or the fallback. It is written
+ * into a `cssText` string, so anything but one of the keywords is not passed
+ * on. An image's fallback is `fill`, which is what a browser drew for a
+ * missing or unreadable value before; media's is `contain`, its default.
+ */
+export function cssFit(v: unknown, fallback: string): string {
+  return v === 'contain' || v === 'cover' || v === 'fill' || v === 'none' || v === 'scale-down' ? v : fallback
+}
+
+/**
  * An author font stack, reduced to what a stylesheet can hold. Rejected by
  * CHARACTER rather than by allowlist, unlike cssColor: font names are ordinary
  * words in any script (`ヒラギノ角ゴ` is a font family), so the test is for the
@@ -758,13 +768,13 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
         node.style.borderRadius = `${el.radius}px`
         img.style.cssText = cropImgStyle(el.crop)
       } else {
-        img.style.cssText = `width:100%;height:100%;object-fit:${el.fit};border-radius:${el.radius}px;display:block`
+        img.style.cssText = `width:100%;height:100%;object-fit:${cssFit(el.fit, 'fill')};border-radius:${cssNum(el.radius, 0)}px;display:block`
       }
       node.appendChild(img)
       break
     }
     case 'media': {
-      const radius = el.radius ?? 0
+      const radius = cssNum(el.radius, 0)
       if (opts.svgAsImage) {
         // thumbnails: a cheap still — poster (video) or an icon chip, never a
         // live media element.
@@ -774,7 +784,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
           const img = document.createElement('img')
           const posterSrc = assetSrc(doc, el.poster)
           if (posterSrc) img.src = posterSrc
-          img.style.cssText = `width:100%;height:100%;object-fit:${el.fit ?? 'contain'};display:block`
+          img.style.cssText = `width:100%;height:100%;object-fit:${cssFit(el.fit, 'contain')};display:block`
           still.appendChild(img)
         } else {
           still.style.color = el.kind === 'video' ? '#ffffff' : '#5e7699'
@@ -825,7 +835,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       video.playsInline = true
       video.preload = 'metadata'
       if (el.autoplay) video.dataset.autoplay = '1' // presence is the flag — see the audio case
-      video.style.cssText = `width:100%;height:100%;object-fit:${el.fit ?? 'contain'};border-radius:${radius}px;display:block;background:#0b0f14` + inert
+      video.style.cssText = `width:100%;height:100%;object-fit:${cssFit(el.fit, 'contain')};border-radius:${radius}px;display:block;background:#0b0f14` + inert
       if (!el.src) {
         const ph = document.createElement('div')
         ph.style.cssText = `width:100%;height:100%;border-radius:${radius}px;display:flex;align-items:center;justify-content:center;background:#0b0f14;color:#8fa0b6;font-size:14px`
