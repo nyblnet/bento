@@ -188,3 +188,47 @@ jobs:
           npm run build:single --prefix type
       - name: Embed pictures and footnote ids never become script in the editor or print
         run: node scripts/test-type-sinks-browser.mjs
+
+  type-reopen-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the tested standalone document
+        run: |
+          npm ci --prefix type
+          npm run build:single --prefix type
+      - name: A saved file reopens with no page error, keeps Share and rejoins its live session
+        run: node scripts/test-type-reopen-browser.mjs
+
+  type-fuzz-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the tested standalone document
+        run: |
+          npm ci --prefix type
+          npm run build:single --prefix type
+      - name: Random edits keep the screen and the document equal; known divergences are still caught
+        # The HOLDS fuzz must be clean. Each BROKEN class must still be caught:
+        # the PR that fixes one moves it into HOLDS in the same change.
+        run: node scripts/test-type-fuzz-browser.mjs

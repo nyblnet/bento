@@ -1,0 +1,48 @@
+[package]
+name = "bento-home-desktop"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "bento/home for Windows and Linux: opens a Bento document, saves it in place, and serves a verified runtime under its pinned CSP."
+publish = false
+
+[features]
+# Rigs only: trust the conformance corpus's test key (see hostcore).
+rig-test-key = ["bento-hostcore/rig-test-key"]
+# Rigs only: the §19d–§19h probe, a dead drop standing in for an attacker's
+# network, and a report sink. Never in a shipped build.
+rig = ["rig-test-key", "bento-id-agent/test-store", "dep:webview2-com", "dep:windows-core"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+# webkit2gtk: the page cache is switched off in every build (main.rs). gio, every Linux
+# build: the logind watcher (src/logind.rs), and in rig builds the rig's one throwaway
+# embed certificate trusted in the rig webview's own web context (src/rig.rs). Pinned to
+# the versions tauri's wry already resolves, so the lock gains no new crate.
+[target.'cfg(target_os = "linux")'.dependencies]
+# the real key stores: TPM where this user can open one, Secret Service otherwise
+bento-id-agent = { path = "../agent", features = ["tpm", "keyring"] }
+webkit2gtk = "=2.0.2"
+gio = "=0.18.4"
+
+# Rig builds only (feature "rig"), Windows only: the same one-certificate trust for
+# WebView2 (src/rig.rs). Pinned to the versions tauri's wry already resolves.
+[target.'cfg(windows)'.dependencies]
+webview2-com = { version = "=0.39.1", optional = true }
+windows-core = { version = "=0.62.2", optional = true }
+
+[dependencies]
+bento-hostcore = { path = "../hostcore" }
+bento-id-agent = { path = "../agent" }
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+serde_json = "1"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+
+[workspace]

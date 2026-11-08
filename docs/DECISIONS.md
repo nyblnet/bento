@@ -11896,6 +11896,90 @@ own rig run against the extension's copy.
   keyring, so the re-count is what keeps a wipe from reporting success while
   keys remain.
 
+## 2026-10-21 — bento/connect on Android: gate 1 when serving a document (A2)
+
+The Android editor serves the document's bytes itself, so before serving it
+asks gate 1 (`Gate1.kt`, a port of `kernel/src/gate1.ts`, served path only)
+whether those bytes are one genuine release's.
+
+- **The history.** Each app's signed release history
+  (`releases/<app>/history.json`) is BUNDLED in the APK at build time, from the
+  published site clone (`BENTO_SITE_DIR`, never a URL fetched at build time).
+  It is verified under the release key on first read like any fetched copy, and
+  acts as the floor: acceptHistory only moves forward from it, and a newer
+  bundle (an app update) is adopted only as such a forward move. Refreshes ride
+  ONLY on contacts the person starts: a New document, or "Check for updates"
+  in the documents screen's ⋮ menu. Opening a document never phones home
+  (vault). Reinstalling an older app resets the floor (accepted).
+  Release builds FAIL CLOSED (`checkBundledHistoriesRelease`): for every app
+  with a published manifest, a history must be bundled, verify under the
+  release key (read from `Releases.kt`, its one home), and be at least as new
+  as the manifest. Otherwise the build fails with "no published release history
+  for <app>; publish a release first". Debug builds only warn. Release builds
+  trust the release key alone (`src/release/HistoryKeys.kt`). Debug builds also
+  trust one throwaway test key, absent from the release APK's dex (checked).
+- **The decision.** The bytes are tried against EVERY held app's history, never
+  chosen from the document's `format`. A sealed document says `bento/enc` and
+  a never-saved shell says nothing, but gate 1 is about the runtime. GENUINE
+  serves every response for the document with the release's hash-pinned CSP
+  (`hostPolicy`, byte-identical to the reference). UNKNOWN is served exactly as
+  before, with no CSP, and never borrows one. The bytes and their verdict are
+  published together, so a response can't pair one file's bytes with another's
+  CSP. A save in place re-decides for the new bytes.
+- **The scanner reads start tags as the HTML tokenizer does** (`parseStartTag`,
+  mirroring the reference at #825's head). Whitespace or "/" separates
+  attributes, a quoted value ends one, a leading "=" belongs to a name, and the
+  first duplicate wins. A `<script>` tag with a "/" or a duplicate is refused
+  outright. Case is folded ASCII-only and length-preserving, never with
+  `lowercase()`, which turns 'İ' into two units and shifts every offset after
+  it. Blocks and markup come from ONE walk in document order, never a search
+  for "<script": in `<meta<style><script>…` a browser sees one tag named
+  `meta<style` and then a real script (home-ios's WebKit oracle). Raw-text
+  elements are skipped to their real end tag, and a start tag named outside
+  `[a-z][a-z0-9-]*` is UNKNOWN. End tags are read with the start tag's
+  attribute reader (`</p a="><b c='">` ends at its second ">"), and an end tag
+  carrying attributes or an odd name is UNKNOWN (#834). Every held history is
+  tried, and exactly one must match (`verifyServedHeld`, #842). Planted faults
+  confirm the corpus catches the fold, the separator, the name rule and the
+  end-tag rule.
+- **Measured against the REAL release (slides 1.2.10, its published signed
+  history, the release key).** With that history staged, the release-build
+  check passes and `assembleRelease` bundles it. On the emulator, with ONLY the
+  bundled real history held:
+  - the published fresh shell (empty document block, names no app) is GENUINE;
+  - the same file after a ⌘S save in place is GENUINE;
+  - one byte changed in the loader is UNKNOWN.
+
+  The real history only verifies under the release key, so these can't be the
+  debug test key at work. `Gate1Test` pins the same: the corpus's real release
+  key equals the key `Releases.kt` carries, and the app id is `bento-slides`,
+  never the directory name.
+- **Measured on the emulator.** A history signed with the debug key, pinning a
+  slides build and a file that build saved through ⌘S:
+  - the genuine file boots normally under the pinned CSP, and an injected
+    inline script is blocked (a CSP violation fires);
+  - the same file with one byte changed in the loader is served without a CSP,
+    and the injected script runs;
+  - the genuine file with no history held is served without a CSP.
+
+  The one refusal during the genuine boot is the loader's designed inline
+  attempt; it then boots through `blob:`.
+
+- **An oracle in Android's own WebView** (`scripts/test-home-android-gate1-oracle.mjs`,
+  security). It lifts kernel's mutant generator verbatim from
+  `test-gate1-oracle.mjs`, so the two can't drift, and runs the same fixed seed
+  plus a printed random one. A debug-only Activity gives Gate1.kt's verdict for
+  every mutant, and loads every GENUINE one in a WebView with no CSP. With the
+  glued-tag and end-tag operators (50 end-tag mutants in the last run): 500
+  mutants, Gate1.kt agreeing with the reference on all of them, and all 67
+  GENUINE files running only the loader and remover. The controls
+  confirm the oracle sees an extra script and an executing data block. It
+  needs an emulator, so CI skips it, with the reason recorded in
+  `scripts/lib/ci-skips.mjs`.
+
+Identity is not exposed yet: the verdict is held for the agent bridge (stage 4,
+after security's run of A2).
+
 ## 2026-10-24 — One svg sanitizer in kernel; an app's policy only tightens it
 
 kernel/src/svgsafe.ts holds the untrusted-svg sanitizer, lifted verbatim from
@@ -12207,3 +12291,712 @@ Two follow-ups to the link v1 entry above, both from porting it to iOS.
   their base64url text. Before this, iOS had to
   choose an encoding that no spec pinned, and two hosts choosing differently
   would never link. The `link.wire` rows are byte for byte both ways.
+
+## 2026-11-07 — bento/dash: a date is a value, stored as the ISO text it always was
+
+Dates and times on a dash sheet now compute (`=A4+1`, `=B1-A1`,
+`=TEXT(A4, "dd mmm yyyy")`). What was decided, so nobody re-derives it:
+
+- **The stored form does not change.** A date stays its canonical text in the
+  file: `YYYY-MM-DD`, `YYYY-MM-DD HH:MM[:SS]` (a space; a `T` is read, never
+  written), `HH:MM[:SS]`. The cell's date or time format says what the reader
+  sees. The formula engine reads the text as the moment (`dash/src/datetime.ts`)
+  and writes results back in the same spellings. Excel's serial numbers were
+  rejected: an older dash would have treated them as plain numbers, summing,
+  charting and printing 46085. With text, an older build shows the date, cannot
+  compute with it, and saves it back byte for byte. `test-dash-dates-oldshell.ts`
+  runs the real dash 0.2.0 and 0.3.0 code against the new values.
+- **Arithmetic follows Excel where Excel means something.** A date plus or
+  minus a number is a date. A date minus a date is a number of days. A date
+  plus a time is a datetime. A time minus a time is a number (a fraction of a
+  day, which a Time cell shows as a duration). `date + date`, `number − date`
+  and `date × n` are refused with a reason, never turned into a number. A time
+  of day reads as its fraction of a day in other arithmetic (`A1*24`).
+- **Datetimes are wall-clock, with no zone.** Adding an hour to 01:30 on a
+  spring-forward night gives 02:30.
+- **NOW() and TODAY() read the frozen instant on the viewer's clock.** The
+  instant in the file (`doc.modified`) is the same for everybody. The date and
+  time shown are local to whoever opens it, as in Excel. This replaces "a
+  saved file shows the same date to everyone": that rule printed the raw UTC
+  instant, and showed the wrong date for half the day in the Americas and Asia.
+- **Ambiguous entry is unchanged.** `3/4/2026` is still kept as text. Whether
+  to guess from the locale is a pending maintainer decision.
+- **EDATE clamps to the end of a shorter month**, as Excel does: 31 January +
+  1 month is 28 February.
+
+## 2026-11-08 — A file another program changed is never overwritten
+
+Other programs edit `.bento.html` files in place: scripts, text editors,
+coding tools. A document open with a held File System Access handle rewrote
+its file on every auto-save (2.5 s after an edit), on ⌘S and on "Update this
+file", and each of those silently replaced the other program's edit. Maintainer
+decision, 2026-11-08: detect it and do not write.
+
+- **The signal is the file's own stamp**, `lastModified` and `size` from
+  `handle.getFile()`. It is taken when the handle is adopted (drop, launch
+  queue) and read back after each of our writes; every write through the held
+  handle compares first. A moved value means the write does not happen.
+- **Compared against the value read back, never the clock.** Some file
+  systems round mtime (FAT to 2 s), so a clock-derived stamp would raise false
+  alarms on our own saves. All reads and writes of the held file run one at a
+  time in the kernel, so one of our writes is never mistaken for an outside
+  edit by the next.
+- **Once tripped, the handle stops writing** until the author chooses. The
+  kernel exposes the choice and not the UI: `onFileChangedOnDisk` (the event),
+  `fileChangedOnDisk()`, `keepMineOverDisk()` (accept the disk's stamp as the
+  baseline so the next write overwrites once, deliberately, and tracking
+  resumes) and `readDiskVersion()` (the disk text; writes stay refused until
+  its `accept()`). Each app surfaces it; slides first.
+- **A reconnected handle** (a remembered handle re-permissioned on ⌘S) has no
+  stamp from this session, so the file's `#bento-doc` must still equal the one
+  the page booted with.
+- **What it cannot see:** a host handle whose `getFile()` reports no stamp is
+  written unchecked, as before; an edit landing between our check and our write
+  is lost, as before. Writes to a file just picked (copies, exports, backups)
+  are not checked: the picker already asked. Encrypted documents and the
+  IndexedDB recovery copy are unchanged.
+
+Guards: `scripts/test-disk-change.ts` (fake handle on a 2 s-mtime file
+system, nine mutants and a control) and `scripts/test-disk-change-browser.mjs`
+(real Chromium handles).
+
+## 2026-11-08 — The bento/id directory (`server/directory/`) is AGPL-3.0-only, with a CLA
+
+Maintainer ruling, 2026-11-08. The directory service behind id.bento.page is
+licensed under the GNU Affero General Public License, version 3 only; the rest
+of the repository stays MIT.
+
+- **Why AGPL there:** the directory is a network service, not code that
+  travels inside a document. The AGPL's network clause means anyone who runs a
+  modified copy for others must offer those users its source.
+- **Scope is the directory alone.** `server/directory/` carries its own
+  `LICENSE` (the unmodified FSF text), `AGPL-3.0-only` SPDX headers on every
+  source file and in `wrangler.toml`, and a `package.json` whose only job is
+  the `license` field (plus `"type": "module"`, which its ESM sources already
+  are). The kernel modules it imports (`kernel/src/statements.ts`,
+  `address.ts` and friends) and its rig in `scripts/` stay MIT; MIT code can
+  be combined into AGPL work, and nothing MIT imports the directory except
+  that test rig.
+- **`-only`, not `-or-later`:** the repository has no GPL-family precedent,
+  and `-only` keeps the choice of any future licence version with the project
+  through the CLA rather than handing it to a licence steward in advance.
+- **CLA:** contributions to `server/directory/` need the individual CLA in
+  `server/directory/CLA.md` (adapted from the Apache ICLA v2.2), which grants
+  the project the right to relicense them. Contributions anywhere else need
+  nothing new. Until a CLA bot is installed (a maintainer account action), a
+  contributor agrees by posting the comment the CLA gives on their pull
+  request, and the reviewer checks for it before merging.
+
+Pointers: `server/directory/README.md` "Licence", `CONTRIBUTING.md` "License".
+
+## 2026-10-21 — bento/connect H2: the desktop host's trust store, origins and arming (home/desktop/host, home/desktop/hostcore)
+
+- **The security rules live in a crate with no webview** (`home/desktop/hostcore`),
+  so every one is unit-tested on any machine; the Tauri app (`home/desktop/host`)
+  only wires them to events.
+- **Trust store.** The signed `releases/<app>/history.json` files are bundled at
+  build time (`build.rs` embeds every `*history*.json` under `releases/`, or
+  `BENTO_HISTORIES_DIR`). Embedding is not trusting: each is verified against the
+  pinned release key on first read. The release key is pinned in ONE place
+  (`hostcore::trust::RELEASE_KEY`); a rotation is an app update pinning only the
+  new key. The newest verified history per app is kept in the data directory as
+  the anti-rollback floor; gate 1's `accept_history` decides every replacement,
+  and histories are refreshed only by a user action. A document is genuine only
+  if exactly one release across every app's history matches every block.
+- **Gate 1 runs at every serve, on exactly the bytes served**, and a load arms
+  from that verdict: a reload after a save, or a watchdog-recreated webview,
+  always arms from a fresh verdict on what it actually received.
+- **Arming is a two-step handshake.** A finished load of the document mints a
+  capability and a nonce, PENDING; the shim echoes the nonce and the host arms
+  only if no newer load has started. Every load start revokes. Per-load state
+  resets in the same step that mints.
+- **No Tauri capability file ships.** Page script reaches no core or plugin
+  command; the host's own two commands are gated by the per-load secret.
+- **Envelope documents (format `bento/enc`, password or identity-sealed)** take a
+  path-only origin plus an epoch that rotates when the file is replaced by
+  something the host did not write (Unix: device and inode; the Windows file ID
+  is owed with the Windows host). Never a wipe, never a prompt.
+- **Neutral title while sealed, matching the saved file's title** (§30): the
+  window title of an envelope document is the app name.
+- **The rigs are part of the host**: the `rig` feature (never shipped) adds the
+  probe, a dead drop and a report sink; `rig/check.py` asserts every row, and a
+  deliberately broken capability check fails rigs 2 and 6.
+
+
+## 2026-11-04 — bento/connect H2 on Windows: WebView2 measured on a hosted runner (home/desktop/host)
+
+Measured on GitHub's hosted `windows-latest` (WebView2 runtime 156.0.4314.50), the same rigs as
+Linux, 543 checks passing (read from the job log; each race attempt that lands adds two rows, so
+the total moves between runs). Windows Hello and a real TPM consent key are NOT measured (a hosted runner has
+neither); the Windows key store is an explicit stub that refuses everything until a real-PC session.
+
+- **Per-document origins are distinct origins on WebView2.** A document is served at
+  `http://bento.<24 hex>.localhost/` (wry's custom-protocol form on Windows). Two documents report
+  two different `location.origin`s, and with BOTH forced onto one shared profile directory
+  (`pairshared`, rig only) IndexedDB, BroadcastChannel and cookies are still separate, so the origin
+  alone separates them. The separate-profile fallback (§19e 5) is not needed, and the host still
+  gives each document its own profile directory.
+- **Tauri on Windows treats only `http://bento.localhost` as the app's own origin.** A per-document
+  origin is "remote" to it and every custom command is refused ("not allowed on origin") unless a
+  remote capability names it. **This reverses "no Tauri capability file ships" on Windows only:**
+  `capabilities-windows/documents.json` admits exactly `bento_arm` and `bento_file` to
+  `http://bento.:h([0-9a-f]{24}).localhost/` (`"local": false`), nothing from core or any plugin,
+  and both still demand the load's capability secret. The ACL is a second layer and never the
+  boundary: the capability stays the rule. The pattern is the tight form because the first glob,
+  `http://bento.*.localhost/*`, also matched `bento.evil.localhost` and `bento.a.b.c.localhost`.
+  `bento_id` is not granted, since nothing on Windows can use it until a key store exists. Linux
+  ships none, as before. `release-check.sh` asserts the compiled set exactly (`capcheck.py`). The
+  rig adds two more files (rig commands and `bento_id`; the attacker fixture's origin) that exist
+  only in rig builds, so every rig also has a build without `rig-embed.json` for one scenario:
+  the ACL that ships, refusing an embed that holds the window's own secret.
+- **Embedded frames.** A sandboxed frame (origin null) is refused by Tauri's IPC itself ("Origin
+  header is not a valid URL") even holding the window's own secret; an unsandboxed frame of another
+  origin reaches the host only if the platform ACL admits it (rig only) and is then refused by the
+  secret (no capability / capability refused), with the own-secret control accepted.
+- **`on_navigation` is main-frame only on WebView2.** wry wires it to `NavigationStarting`, never
+  `FrameNavigationStarting`, so "the policy fires for iframes" is true on WebKitGTK alone. On
+  Windows the navigation policy for FRAMES (§19e d4) rests on the document's pinned CSP and nothing
+  else. A genuine document's frame sent to plain http is refused by `frame-src` on both engines; an
+  unknown document has no CSP, so on Windows it can frame http (the rig's d4 row: the frame loaded
+  and the policy never saw it), holding no secret and refused by the ACL. The main-frame half is
+  unchanged.
+- **Origin-Agent-Cluster:** the attribute is `window.originAgentCluster`, and it is `true` on
+  WebView2 (an earlier version of this entry read a misspelt name and called it unexposed).
+  `document.domain = "<hex>.localhost"`, the document's own parent, is a silent no-op under the
+  header, and with the header at `?0` (the rig's negative control) the attribute reads false and
+  the same write takes effect, so these rows can fail. `document.domain = "localhost"` throws
+  SecurityError with or without the header, because a single label can never be set, so it says
+  nothing about the header; it is why §19f(3) holds in substance, since sibling documents share
+  only `localhost`. Cookies set with `Domain=localhost` are refused; the document's own host and
+  its `<hex>.localhost` domain are accepted and invisible to a sibling.
+- **One renderer process per document:** distinct renderer PIDs for two documents, stopping any one
+  (NtSuspendProcess) freezes exactly one document, stopping all freezes both (negative control).
+- **A cancelled navigation reports a finished load on WebView2, and its request still goes out.**
+  Measured per navigation, on a genuine and an unknown document: `http:`, `mailto:` and `blob:`
+  reach `on_navigation`, are cancelled, and each report one finished load at the document's URL
+  with no load start, so any such link in a document does it. `file:` and `data:` never reach the
+  policy and report nothing. WebKitGTK reports no finished load for any of these. The `http:`
+  request also reached the rig's server every time on WebView2, while the page stayed where it
+  was: cancelling stops the commit, not the request, so on Windows "the policy refused it" does
+  not mean "nothing was sent". For `https:` that adds no reach, since an allowed `https:` navigation
+  leaves before its bounce on both engines. Plain `http:` is reach an allowed navigation lacks: a
+  local http-only service gets a GET. An unknown document already has that, having no CSP; for a
+  genuine document it is a bare GET to a URL written in the deck.
+- **One mint per generation (all platforms).** Because of the above, WebView2 reports several
+  finished loads for one generation in ordinary use. `Load::load_finished` now mints once: a repeat while PENDING hands back the same
+  secret and nonce, and a repeat once ARMED does nothing. Without this, the order
+  pending, armed, pending left the host pending under a new secret an armed page ignores, so every
+  later call failed for the rest of the load and the handle and exports were wiped. The rig row is
+  a real save through the host after each blocked navigation and after the bounce, never page state.
+- **Shim change (all platforms):** the shim adopts a capability secret only when `bento_arm`
+  succeeds, and ignores later deliveries once armed. It is needed beside the rule above, not
+  instead of it: alone it fixes only the order pending, pending, armed.
+- **A load's verdict is every serve since the previous load start, ANDed and fixed at this load's
+  start, and the mint consumes it (all platforms).** A serve cannot be tied to a generation, because the main document is served before
+  its load start, which both engines raise at commit. So the old page still holds a live capability
+  after its reload was served, and with an overwriting verdict an unknown document could reload,
+  swap a genuine shell over its own file in that gap, fetch its own URL from the new page, and be
+  armed genuine while its unknown bytes ran (security measured this reaching the agent on
+  WebKitGTK; nothing could sign, since no store is wired). One unknown serve now makes the load
+  unknown, and a serve after the load's start counts only against the next load. The verdict is
+  fixed at the start and not at the mint because the finish is the page's to time on WebView2 (any
+  cancelled navigation reports one): a mint reading the running tally would use up the next load's
+  unknown serve, and a later serve alone would then judge that load (armed genuine in hostcore; no
+  engine has been seen producing that order). The rig scenario is security's race
+  on both engines, read from the host's own arming line (the swap landed between the two serves in
+  9 or 10 of 10 attempts on WebKitGTK and 7 or 8 of 10 on WebView2, and every one armed unknown).
+  The AND has a rig mutant on WebKitGTK: without it the old page's own fetch makes the attacker's
+  bytes arm genuine and reach the agent (measured before the taint below, which now stands behind it
+  too). The take has units only since the taint: its rig row was a saved, reloaded unknown document
+  arming genuine, which no longer happens by design. Fixing the verdict at the start has a unit and a unit mutant only, since no engine
+  has shown the order it guards. It fails closed in one way worth knowing: a page that fetched its
+  own URL while unknown makes its next load unknown too.
+- **The WebKitGTK page cache is off, because a load needs a document serve (Linux).** Going back
+  through history restored a page whole from the page cache: a load start and a finish, and no
+  serve. A serve is the verdict's only evidence and hostcore cannot tell a page's fetch from a
+  document serve, so the restored page was judged on what was fetched before it. Measured on
+  WebKitGTK with the document's `no-store` in place: an unknown document left for https (the bounce
+  makes the history), swapped a genuine shell over its file, fetched its own URL and went back, and
+  its first page came back with its unknown bytes, armed genuine and reached the agent. The shim
+  was no obstacle: the secret passes through the realm's JSON.stringify, so a page can take it,
+  fail the shim's call and echo for itself. `set_enable_page_cache(false)` now runs on every
+  webview, and the host stops if it does not hold. The same scenario now serves the document before
+  the load starts, and removing the setting turns that row red. On WebView2 the same scenario also
+  served the document and reloaded, with no setting; why is not read, so the row is what holds it.
+  This setting is the second layer, not the rule: it proves a negative about one engine build, and
+  the host does not ship the engine (distro WebKitGTK, evergreen WebView2, which has no such
+  setting). What holds without it is the taint below; a rig row turns the cache back on to show that.
+- **A load that started off the document never mints (all platforms).** Security measured a remote
+  https page reaching the agent on WebKitGTK: an unknown document swapped a genuine shell over its
+  file, fetched its own URL so a genuine verdict sat on the books, and sent the main frame to https.
+  The bounce's navigate changed what the engine reported, so that load's finish carried the
+  document's URL, the mint took the verdict, and the secret landed in the https page, whose realm
+  has the shim and Tauri's IPC. `load_started` now takes whether the URL is the document's, and if
+  it is not, the load has no verdict (the tally is still taken). WebView2 reports the https URL at
+  that finish, so the old mint was not reachable that way (measured with the verdict on the books);
+  the row runs on both engines, and the rule's mutants on WebKitGTK alone. The row's page
+  catches a delivery of its own as a control, and must catch no other.
+- **One unknown serve taints the webview, for good (all platforms).** A tainted Load never mints
+  genuine; only a new webview is a new Load. Every route found to a genuine verdict for unknown
+  bytes (the race, the reload before a finish, the restored page, the https page) begins with
+  unknown script running in this webview, and that takes an unknown serve here. So the rule needs no
+  knowledge of which serve was which, and no engine's ordering carries unknown to genuine.
+  Requiring a document serve instead cannot be built: WebKitGTK sends no Sec-Fetch on `bento://`, and
+  an XHR setting the two headers a document request has arrives identical in the handler.
+  Each of the two rules closes what the other does not, and each has a rig mutant showing it: with
+  the first removed the https page still takes the file capability; with the taint removed and the
+  page cache on, an unknown page comes back whole and arms genuine.
+- **The cost, stated: a document re-saved genuine stays unknown until it is opened again.** If an
+  unknown document writes genuine bytes over its own file and reloads, those bytes run and identity
+  stays off in that window; closing and reopening the file arms it genuine (both rig rows). It keeps
+  its file capability throughout, so it opens, edits and saves as before. The watchdog's rebuild
+  counts as a reopen, correctly, since nothing that ran survives it. **A normal user saving a
+  genuine document is not affected:** the taint needs an unknown serve, a document's bytes change
+  only by the host's own write, and a genuine runtime's save is genuine. Measured on the real 1.2.10
+  release: saved by its own serializer and reloaded in the same webview, both loads serve genuine
+  and arm genuine, and identity stays on. A document made by a release newer than the bundled
+  history is unknown before and after, with or without this rule. The residual is a FRESH webview
+  running unknown bytes with no serve, which has nothing to taint it and only a persisted service
+  worker could do. Registering the document as one is refused on both engines: WebView2 refuses it
+  for its MIME type while a real script at that origin registers (the row's control), and WebKitGTK
+  refuses the custom scheme outright, so that half has no accepted control.
+- **A document's URL includes its fragment (all platforms).** The host compared the URL exactly,
+  but a page moves its own fragment without asking: `history.pushState` is invisible on both
+  engines (bento/spaces does it on every page change), and a plain `#x` link is invisible on
+  WebView2 (no policy call, no load start, no finish). WebKitGTK does ask, and the policy refused
+  it: a genuine document's in-page link did nothing on Linux. (An unknown document's URL moved
+  anyway, with the policy's refusal in the log. The cause is the CSP, not the verdict: with the fix
+  removed the genuine document stayed at `''` and the unknown one moved to `#nl`, 4 of 4 runs, and
+  the same genuine document with its CSP header dropped moved too, 3 of 3. So on WebKitGTK refusing
+  a same-document navigation does not bind a page with no CSP; the mechanism is unread. Refusals
+  of cross-document navigations on that same page hold, and a same-document move changes no bytes
+  and starts no load, so arming is untouched.) Once the URL carries
+  a fragment, a reload's does too, and the policy refused that: measured on WebKitGTK with the fix
+  removed, the reload never happens. On WebView2 the same compare is read, not measured; the
+  fixed path is measured on both. `is_document` now takes the part before `#`, for the navigation
+  policy, the bounce and the mint: a fragment never reaches the protocol handler, so it is the same
+  bytes from the same origin. A query is still another URL. The watchdog keeps the exact compare,
+  since `own#x` is usually a same-document navigation that starts no load and it would rebuild a
+  healthy webview; so a reload from a fragment URL has no watchdog, and WebKitGTK's reload stall on
+  an unknown document is unrecovered in that one case.
+- **Windows file ID** (volume serial plus the 128-bit file ID, `GetFileInformationByHandleEx`) now
+  drives the envelope epoch; `GlobalMemoryStatusEx` answers the recovery memory check.
+
+## dash: one grid, tables inside it — replace Excel and do everything Airtable does
+
+2026-10-20, set by the maintainer; confirmed by the maintainer on 2026-11-08,
+after the work behind it was held for that confirmation. dash's direction is
+to replace Excel, and better, AND to do everything Airtable does, and better,
+as ONE product.
+
+This REFINES the 2026-08-11 two-kinds decision rather than reversing it, and
+the tension is stated here so nobody resolves it silently. The two STORAGE
+kinds stay exactly as decided (`canvas` sparse and typed by cell, `table`
+columnar and typed by column), and nothing merges their storage. What changes
+is the SURFACE: a user no longer chooses a kind before typing. Every sheet is a
+grid; a table is an object placed IN a grid (`TableSheet.placed = {on, r, c}`,
+additive; an absent `placed` means the table fills its own sheet, which is every
+Dataset that exists, so there is no migration). The old "bridge between sheets"
+becomes in place: Format as table / Convert to range.
+
+Settled with it, so later work does not contradict them:
+- `A1` into a placed table resolves in STORED row order. View sorts and filters
+  never change what `A1` means.
+- Structured references use Excel's syntax (`T[Col]`, `T[@Col]`, `T[#Totals]`),
+  so tables round-trip through .xlsx as ListObjects with calculated columns.
+- Airtable's layer is a field `kind` BESIDE a base `type` every build knows
+  (never a new `type`: measured, a new type stopped the previous build from
+  booting at all), plus per-table `tableViews`. List-valued cells (link,
+  multi, attachment) use the EXISTING `raw` encoding with array values, never a
+  new encoding, because an unknown encoding breaks old builds' read paths while
+  a raw array degrades to text. A link stores ONE side; its mirror is derived,
+  so the two sides cannot diverge under collab.
+- Lookups and rollups are field kinds with settings, as in Airtable — not
+  formula functions, since `LOOKUP` is already Excel's.
+
+Full design: `docs/dash-unified.md`.
+## 2026-11-08 — Slides: what the author sees when another program changed the file
+
+The slides half of "A file another program changed is never overwritten"
+(same date). A banner names the file and offers two
+choices; until one is made, auto-save keeps its browser recovery copy but does
+not write the file or flash "Saved", and ⌘S answers with "Not saved — … was
+changed by another program" and brings the banner back.
+
+- **"Load the version on disk"** opens the file as it is now, by the same
+  route as a dropped file (block, parse, the open-file guard), as ONE undoable
+  step. The deck as it was goes into Version history first, and the toast says
+  so only when the timeline really has it. Not for a sealed deck on either side
+  (a password now, or one the file gained): that plaintext never reaches
+  IndexedDB, and ⌘Z is the way back. The file is not rewritten after loading.
+- **The file's password wins.** A version on disk that has a password asks for
+  it (a wrong one loads nothing), and later saves are encrypted with it; one
+  whose password was removed is loaded and saved without one. An
+  identity-sealed version cannot be opened from here: the author is told to
+  open the file again.
+- **"Keep mine"** overwrites once, deliberately; the next outside edit is
+  caught again.
+
+Guard: `scripts/test-slides-disk-change-browser.mjs` (the packaged document,
+real file handles through `launchQueue`).
+
+## 2026-11-08 — bento/id option G: the account is a roster of passkeys; kernel verifies their assertions offline
+
+**Decision (maintainer, 2026-11-08).** bento/id adopts "option G": a bento/id
+account is a chained roster of passkeys rather than a single extractable account
+key, and a statement can be signed by a passkey as a WebAuthn assertion whose
+challenge is the SHA-256 of the statement text. Peers verify such a signature
+offline, with WebCrypto alone. The first kernel piece is that verifier
+(`kernel/src/webauthn.ts`); roster and web-device statements and their consent
+purposes follow in later kernel changes.
+
+What the verifier settles, for every port (Swift, Kotlin, Rust, the extension,
+the directory):
+- ES256 over `authenticatorData ‖ SHA-256(clientDataJSON)`, the signature in
+  strict DER. **High-S is normalised, not refused**: about half of real
+  assertions are high-S. The low-S-only rule stays for bento's own statements.
+- clientDataJSON is parsed, never template-matched, tolerating extra keys
+  (Chromium adds one) but **refusing duplicate keys**, compared after
+  unescaping: JSON libraries differ on which duplicate wins.
+- Exact `type` (`webauthn.get`), exact challenge bytes, origin by exact text
+  from a closed list, `crossOrigin` absent or boolean false and no `topOrigin`,
+  exact rpIdHash, UP and UV both set.
+- **The rp id is `id.bento.page`** (maintainer, 2026-11-08). Passkey ceremonies
+  run on a small sign-in host under it, never on `home.bento.page`. The rp id
+  and the accepted origin list are parameters the caller pins: the fixtures
+  accept `https://signin.id.bento.page` and refuse `https://id.bento.page`,
+  `https://home.bento.page`, `https://bento.page` and every other origin. The
+  sign-in host name is not final; regenerating the fixtures for another one is
+  `scripts/gen-webauthn-vectors.mjs --origin <it>`.
+- The signature counter is checked only when the caller holds a stored count:
+  if either is nonzero the new one must be greater, else the assertion is
+  refused (the refusing branch of WebAuthn L3 §7.2). Synced passkeys report 0.
+
+Conformance: `kernel/fixtures/webauthn-v1.json` (real browser assertions plus
+every refusal), `scripts/test-webauthn.ts`, `scripts/test-webauthn-mutants.ts`.
+## 2026-11-08 — bento/connect directory: a start that mails nothing costs nothing (server/directory)
+
+The per-address mail budget (one a minute, 3 a day, 10 a month) is spent only
+by a mail that is actually sent. `bind/start` needs no proof beyond a
+self-signed statement, so anyone can send one for any address with any key.
+When the budget was spent first, a stranger's refused starts (a new key over a
+live binding) used up the address's day, and the holder's own renewal code was
+then never mailed. The budget is now checked last, just before the code is
+minted.
+
+The wider rule this applies: **no cap that a stranger can fill may stop a mail
+the holder depends on.** Residual, accepted: a stranger can still spend the
+budget with starts that really are mailed (an absent or expired binding, or an
+expired one by `delete/start`). Those mails go to the holder, so the spending
+is visible, and anonymous senders cannot be told apart.
+
+Guard: `scripts/test-directory.ts` (the "budget" rows) and
+`scripts/test-directory-mutants.ts` (the budget back in front of each refusal).
+
+## 2026-11-08 — "Check for updates" says one of three things, the worst first
+
+The maintainer set the words the native hosts show when the person checks for
+updates (the only contact with bento.page besides a New document). The menu item
+is "Check for updates". The result is one of:
+
+- "Up to date"
+- "Couldn't reach bento.page"
+- "The reply from bento.page couldn't be verified"
+
+One check covers every app's release history, and **the worst outcome wins**: a
+reply that wouldn't verify beats an unreachable server, which beats up to date.
+A reply that verifies but isn't taken (nothing published yet, or anti-rollback
+refused it) counts as up to date: the held history stands. A check with no
+outcome at all reports "Couldn't reach bento.page", never "Up to date". iOS
+shows the same set under the same rule.
+
+Guard (Android): `ReleaseHistoryTest` checks the strings, the worst-wins rule, and
+the unverified outcome. The signature check is real, run over the frozen slides
+history and a one-byte tamper.
+## 2026-11-03 — bento/id B1 on iOS: the identity calls, answered by the host
+
+`home/ios/IdentityBridge.swift` answers `id.whoami`, `id.sign` and `id.resolve`
+for the shared bridge. It is plain Foundation and CryptoKit so a macOS rig drives
+the code the editor runs; the editor supplies only the two prompts.
+
+- **'identity' is declared per load, after gate 1.** The bridge script is
+  installed twice: with `['store']` before the document's origin is settled, and
+  again, once gate 1 has judged the bytes, with `['store', 'identity']` only for
+  a GENUINE load. An unknown document's page has no agent object. The host also
+  refuses every `id.*` message from a load that did not pass (`unavailable`), so
+  a page that forges the wire gets nothing even with a live session.
+- **Gates run in one order on every call:** genuine, then no identity
+  managed-config key present (O1 deferred, §39.4: `whoami`/`sign` answer
+  `no-identity`, `resolve` nothing; checked per call, so a key added after load
+  still stops it), then the op's own rule.
+- **`whoami` answers nothing until the person agrees for THIS document.** The
+  host's own prompt shows the real address; one prompt however many calls arrive
+  while it is up; a "no" lasts the life of the process, a "yes" is remembered per
+  document origin string. The person's own keys passed to `resolve` need the
+  same consent (they are `whoami`'s answer by another door).
+- **`sign` is purpose-locked and session-bound.** The payload's shape is checked
+  first, before any session or key. Only the routine purposes are served;
+  `invite`/`revoke` are the room owner's key, which in phase 1 lives in the
+  document, so they are `unavailable` and mint nothing. The host owns the limits
+  (1 h idle, 24 h overall, an injectable clock): a use renews the idle clock,
+  never the overall one, and a limit ENDS the session AT the limit (security's
+  ruling): one millisecond short still signs, exactly at it does not. Past either, the answer is `reauth` and it raises
+  ONE device-owner prompt (coalesced; a cancelled prompt is not raised again for
+  30 s). The bridge neither retries nor caches. A session exists only after the
+  person re-authenticates, so the first sign of a run answers `reauth`.
+- **`resolve` is local.** It answers for the person's own keys (after consent) and
+  for a binding the host already holds; an `{email}` query never leaves the page.
+- **Not wired yet:** the profile (name, address, who vouched) comes from the
+  verified binding the setup flow stores, and the pin store for other people's
+  keys; until those land `whoami` answers `no-identity` and `resolve` finds nothing.
+  The consent and re-authentication wording is placeholder text.
+## 2026-11-08 — bento/type: an edit across paragraphs is a model edit
+
+A selection that crosses blocks, or that has an end outside every block (Chrome puts Select All's
+end on the paper itself when a table starts or ends the document), is edited in the model, never left to contentEditable. Left to the browser, deleting or typing over
+it fused the two end paragraphs into one element on screen while `input` read back only the block
+the caret landed in, so the model kept every paragraph and the next render brought them back. The
+same held for forward Delete at a block's end, which the browser joined on screen only.
+
+- **The first block keeps its identity.** The last block's remainder is joined onto it and the
+  blocks between are removed, the rule Backspace at a block's start already followed. Kind and
+  paragraph settings are the first block's. Typed or pasted text lands between the two pieces.
+- **One commit, one undo step** for delete, type-over and Enter over a range. A paste over a range
+  deletes it in the model, then takes the same road as a paste at a caret.
+- **Everything anchored by offset moves with its words**: marks, footnotes, cross-references,
+  citations, fields and comment threads. A footnote, citation or field strictly inside the range
+  goes with it; one exactly at either end stays. A thread on deleted text, or on a block the range
+  removes, is detached (orphan), and one ⌘Z re-attaches it. The old join and split carried only marks and
+  footnotes; a citation after a join was dropped, and after a split stayed on the head at an
+  offset past its end.
+- **Two cases keep the structure** and only clear the selected text: a range that touches a table
+  cell (fusing a cell with a paragraph breaks the grid), and a tracked document (the deletion is
+  recorded as struck text in each block; nothing records a removed paragraph break).
+- **No join with a cell or an atomic block** (picture, formula, contents): Backspace or Delete
+  there does nothing, as at a cell's edge in Word. Backspace onto a picture used to put the
+  paragraph's words in the picture block, where nothing renders them. Backspace at the very start
+  of the document does nothing; the browser used to delete an empty first block's element.
+- A selection boundary on a block ELEMENT counts from that block's start. Chrome's triple-click
+  ends at (next paragraph's element, 0), and the offset count, which only walked the block's
+  children, read that as the whole next paragraph: typing over a triple-clicked paragraph
+  deleted the one after it too.
+- Not covered: IME composition over a range keeps the browser's behaviour, and triple-click
+  (which Chrome extends to the start of the next paragraph) types over the paragraph break, so
+  the next paragraph joins the typed text, as it did on screen before.
+
+Measured with the randomized screen-equals-model rig (keystrokes in a real browser, every step
+compared with a render of the model, plus what each step should have done), 64 seeds × 60 steps
+in both Playwright's headless shell and system Chrome.
+
+## 2026-11-03 — bento/id B1 on the Linux desktop host: a real key store, consent per document, re-auth refused without a verifier
+
+- **The key store is the machine's, never the webview's.** The Linux host holds
+  the device key in the TPM where this user can open one, in the desktop's
+  Secret Service otherwise, and in no other place. The choice is made once at
+  start, TPM first; a machine with a TPM never touches the keyring. Where there
+  is no TPM the host says so, once, the first time the identity is used: any
+  program running as the person can read that key while the keyring is unlocked.
+  Where there is a TPM the key cannot be copied off the machine, though a program
+  running as the person can still ask it to sign while they are signed in.
+- **`whoami` is consent per document.** With nothing to share (no account, or no
+  key on this device) it answers `no-identity` and never asks. Otherwise the
+  first time a document asks, the host asks the person, showing what the
+  document would see (name, address, who vouches). A yes is remembered for that
+  document across launches; a no is remembered until the host exits (there is no
+  screen yet to undo a permanent no, so none is stored). **"Per document" means
+  per file the host opened**, never per docId: consent (and `resolve`) are keyed
+  on the same inputs as the document's origin, the install salt, the canonical
+  path and the docId, hashed, so the book does not list documents either. The
+  docId alone is whatever the file's author wrote: a copy of an allowed document,
+  carrying its docId, at another path, is a different document and is asked
+  again (security's review of #918 reproduced the bare-docId key answering such
+  a copy with no prompt).
+- **`resolve` answers only for a document the person has allowed, and only for
+  keys this host already holds a binding for.** It never prompts (a prompt on
+  `resolve` would let a document spend the person's attention) and never reaches
+  the network; an unknown key and a refused document both read `null`. A key's
+  binding is pinned on first sight; a different binding for the same key reads
+  `changed` and the first stays pinned.
+- **Past the idle or overall limit the host refuses, and says why.** The
+  maintainer's ruling (2026-11-08): on Linux, where polkit cannot ask, re-auth is
+  refused with a clear message, and security keys are the only verifier for v1.
+  An AppImage, the first Linux package, cannot install a polkit action, so on
+  this host there is no polkit path at all, and the security-key verification
+  (a FIDO2 assertion with user verification, which needs a host-drawn PIN field)
+  is not wired yet. Until it is, every re-authentication on Linux is refused:
+  `sign` past the limit stays `reauth`, and the host shows an OK-only notice that
+  nothing was signed and why. A presence prompt ("confirm it's you" with a
+  button) is never offered in its place: it verified nobody, and a same-user
+  program could press it. The notice is reached only by an otherwise valid request
+  (a payload that matches its purpose, a device key present), one at a time, and
+  not shown again for a minute. The agent keeps the seam for a real verifier
+  (`Ui::reauth` answers `Verified`, `Declined` or `NoVerifier`); a verification
+  that spans a lock or a sleep opens nothing.
+- **The book is provisional under option G.** It is plain JSON in the host's
+  data directory (public data only; no key material). Option G (2026-11-08: an
+  account is a passkey roster) retires the signed `bind.` binding that the book's
+  `own` and `seen` entries were shaped around. They stay only as what `whoami`
+  and `resolve` answer from until the kernel's roster format lands; after it they
+  become a cache of verified device certificates and roster entries, never a
+  store of record. Nothing in a shipped build writes them, so a shipped host
+  answers `no-identity` and `null`. The per-document consent list is G-neutral
+  and stays. A same-user program could edit the file and make a name read
+  wrongly, though it can reach no key. No account key is stored anywhere (that
+  work is paused under G).
+- **Linux packaging: AppImage first, Flatpak later** (maintainer, 2026-11-08).
+  The host now links libsecret and libtss2, which the AppImage must carry or
+  require. A Flatpak needs `--system-talk-name=org.freedesktop.login1` for the
+  lock watcher (without it the host reads as blind, which is closed) and the
+  Secret Service portal or talk-name for the key store; neither can install a
+  polkit action, which is why the ruling above does not depend on polkit.
+
+## 2026-11-04 — bento/id on the Linux desktop host: the OS ends a signing session; what polkit can and cannot do for re-auth
+
+**Settled, in code (home/desktop/agent/src/lockgate.rs, home/desktop/host/src/logind.rs).** A
+machine locked or asleep stops signing, and a host that cannot hear the OS does not sign.
+
+- **`Session.Lock`, `LockedHint` and `PrepareForSleep(true)` each end the routine session.**
+  Nothing the OS says opens one: `Unlock` is not listened to and a wake-up does nothing. After
+  any of them the next `sign` is `reauth`.
+- **Blind means closed.** The agent opens no session until every subscription is in place and
+  `LockedHint` has been read. The bus closing, logind leaving the bus or the session going away
+  ends the session and closes it again. While closed, `sign` is `unavailable` and nobody is
+  asked: no answer could help. While locked it is `reauth`, and nobody is asked either.
+- **A verification that spans a lock opens nothing.** The agent hands out a ticket before the
+  host verifies the person. If a lock or a sleep lands meanwhile, the verification is void,
+  because it may not be from the person who is here now; the next sign asks afresh, with no
+  cooldown. Held by the agent's unit rows: the Linux host has no verifier yet (ruling below),
+  so no host prompt exists to span a lock.
+- **The OS's word does not go through the agent's mutex.** The host holds that mutex while a
+  dialog is up, so a lock would wait for the dialog. It is one atomic word that both sides share
+  and the watcher writes directly.
+- **The session is `session/auto`, resolved to its real path.** Measured on real logind (systemd
+  on Debian trixie), from a process in a user app scope, which is where a desktop launches apps:
+  `session/self` is an unknown object and `GetSessionByPID` is `NoSessionForPID`, while `auto`
+  resolves. Signals come from the real path only. The watcher's own code was run there: real
+  `Lock`, real `LockedHint` and a real logind restart all reach the gate. `PrepareForSleep` was
+  not measured on a real logind (no suspend in a container); the rig's fake carries it.
+- **`LockedHint` is read back from logind, never taken from the signal,** so a forged "unlocked"
+  changes nothing. Note that a same-user program can really clear the flag (`SetLockedHint` is
+  open to the session's owner, measured). That opens a prompt, never a session.
+- **Stated residuals.** A desktop whose locker tells logind nothing is not seen: logind's `Lock`
+  fires only for `loginctl lock-session`-style requests, and `LockedHint` only if the locker sets
+  it. The freedesktop screensaver interface is not wired yet. Sleep has no delay inhibitor, so
+  the signal may be handled just after resume instead of just before suspend. A flatpak needs
+  `--system-talk-name=org.freedesktop.login1`; without it the host reads as blind, which is closed.
+
+The sign-timeout gate is still unsigned on Linux: this is the first of the two things it needs.
+
+**Measured, not settled: polkit for re-auth.** polkit 126, real polkitd and PAM, with a `.policy`
+holding `auth_self` for one Bento action. The subject was the caller's own system bus name.
+
+| case | result |
+|---|---|
+| agent present, right password | `authorized=true challenge=false` |
+| wrong password | `authorized=false challenge=false`, PAM failure, about 2 s |
+| agent cancelled | `authorized=false challenge=false` |
+| **no agent at all** | `authorized=false challenge=true`, at once, details empty |
+| action not installed | D-Bus error `Action … is not registered` |
+| two checks in one process, `auth_self` | two password prompts, nothing retained |
+| control: the same, `auth_self_keep` | one prompt, the second check passes on a temporary authorization |
+| subject in a user app scope, agent on the session | reaches the session's agent |
+| a same-user fake agent answering without the password | both response methods refused: "Only uid 0 may invoke this method" |
+| subject is root | `authorized=true challenge=false`, nobody asked |
+| local rule returning YES | `authorized=true challenge=false`, nobody asked |
+
+So polkit gives real verification of the person where an agent runs, and the host never sees the
+password. Four limits:
+- **No agent is detectable and always fails:** `challenge=true` returned immediately, unlike a
+  wrong password or a cancel. It cannot be told from "interaction not allowed", but the host
+  always allows it.
+- **A yes earned and a yes granted look the same.** Root and a local rule answer exactly as a
+  correct password does. That is the machine's administrator speaking, and it is worth stating.
+- **A same-user program can register itself as the agent** for the host and draw a fake password
+  box. It cannot pass without the password, but it can phish it. Same exposure as the stated
+  same-user residual; polkit does not narrow it.
+- **The `.policy` must be installed in `/usr/share/polkit-1/actions`.** A .deb can. An AppImage
+  cannot without root, and a flatpak has no way to (from how those formats work, not measured), so
+  for both the action would read "not registered". A minimal system offered no other `auth_self`
+  action to borrow. Which package formats keep polkit is therefore part of the maintainer's call.
+
+**Ruled (maintainer, 2026-11-08): where polkit cannot ask, refuse with a clear message; security
+keys only for v1.** That is option 2, with option 4 narrowed to security keys. With AppImage the
+first package, polkit cannot ask anywhere this host ships, so the Linux host refuses every
+re-authentication until the security-key verifier lands (see the B1 entry above). The options as
+they were put:
+1. **Presence prompt, stated once at first use** (security's accepted shape: a downgrade of a
+   routine key only). Works everywhere. Anyone at an unlocked machine passes it.
+2. **Refuse.** No routine signing past the limit on those machines. The honest gate; it costs
+   signing on minimal desktops and on any package that cannot ship the `.policy`.
+3. **Lock the screen as the re-auth:** ask logind to lock, and open a session when the desktop's
+   own locker reports unlocked. Needs no `.policy` and no agent, only a locker. Disruptive, and
+   weaker than polkit: a same-user program can set `LockedHint` itself (measured).
+4. **Use a verifier the person already has:** the TPM PIN once it exists (host-drawn field), or a
+   security key with UV. Covers only machines that have one, so it needs 1 or 2 behind it.
+5. **The host's own password field checked through PAM.** Listed for completeness: it breaks
+   "the host never sees it", and security's ruling excludes it.
+
+**Measured, not settled: can the Linux host register a passkey?** Yes with a security key, no
+without one, and the passkey it registers cannot give consent from the native host.
+- **A security key registers.** `fido_linux::make_credential` against a virtual FIDO2 key, wrapped
+  as attestation `none`, passed the directory's own `parseRegistration` (origin
+  `bento-desktop:linux`, UP and UV set, ES256, RP `bento.page`), with wrong-challenge and
+  wrong-origin controls refused. `get_assertion` then found it. A key with a PIN set needs that
+  PIN (`PinRequired` without it).
+- **None of that is wired.** The host does not build the `fido` feature, nothing calls
+  `make_credential`, nothing builds the attestation object, and there is no host-drawn PIN field.
+  The field has the same requirements as the TPM PIN's. Packages need hidraw access and libfido2.
+- **There is no platform passkey on Linux.** Linux has no OS WebAuthn API today (credentialsd is a
+  proposal), libfido2 has no phone transport, and the webview has no WebAuthn: on WebKitGTK 2.50.6,
+  in a secure context, `PublicKeyCredential` and `navigator.credentials` are both undefined
+  (measured). A person with no security key cannot register a passkey through this host at all.
+- **A native registration is not a consent credential on its own.** `bento-desktop:linux` is
+  self-asserted, so the directory accepts it for registration and assertion and refuses it for
+  consent (`consentOrigins` holds `https://bento.page` only; measured). "Then consent by passkey"
+  on a TPM-less or PIN-less Linux machine therefore means the same security key used in a browser
+  on `https://bento.page`, not a ceremony in the host.
+## 2026-11-08 — bento/id option G: the roster chain and its ripening countersign (`ros.`, `rip.`)
+
+**Decision.** A bento/id account's authority is a chain of roster heads, and
+the kernel verifies that chain offline (`kernel/src/roster.ts`, contract
+`kernel/fixtures/roster-v1.json`). This is the second kernel piece of option G,
+after the WebAuthn assertion verifier. The device certificates that hang off a
+roster (`wdev.`, `watt.`, `wren.`, `dev2.`) are reserved prefixes for now and
+come in a later kernel change.
+
+- **`ros.<b64u(address)>.<seq>.<prevHash|empty>.<members>.<dirNonce>.<created>`**
+  names every key that may change the account: passkeys (`pk`), native consent
+  keys (`ck`), at most one recovery key (`rk`), each optionally marked
+  quarantined (`~q`). Members are written in one sorted spelling; a head in any
+  other order is refused. `dirNonce` is the directory challenge the request was
+  bound to, carried in the text so peers can see the binding.
+- **`rip.<sha256(ros text)>.<requestedAt>.<ripenedAt>.<reset 0|1>.<kid>`** is
+  the directory's countersign, issued only when a change ripens. A link without
+  one is not in force, so a change that was voided cannot be shown to an offline
+  peer as if it had taken effect.
+- **The wait is measured on the directory's clock**: ripenedAt − requestedAt ≥
+  72 hours. The requester's `created` is informative and never decides a wait.
+- **Authority.** Setup (seq 0) and a reset carry the directory's countersign
+  alone and install exactly one passkey; peers report a reset. Every other link
+  is proved over its exact text by an unquarantined member of the previous
+  head: a WebAuthn assertion for a passkey (rp `id.bento.page`, the sign-in
+  host's origin, no stored sign count since peers see links out of order), a
+  raw low-S signature for a recovery key. One change per link (one add, one
+  removal, or the recovery key replaced); quarantine marks are never changed by
+  a member. The only immediate member change is a member removing itself while
+  another unquarantined member remains.
+- **Pinning.** A peer that pinned a head verifies onward from it; the pinned
+  head's countersign is re-checked, because its times set every member's age.
+  Ages from a pin past setup are lower bounds.
+
+**Refused until defined (fail closed).** A consent key signing or co-signing a
+roster change (its consent purpose is the next kernel change), any member
+change ripened in under 72 hours other than a self-removal, and links the
+directory makes on a mailbox's authority (a void's quarantine and queued
+removal, its undo, an incident revert), which have no authority marking in
+the format yet.
+
+Guards: `scripts/test-roster.ts` (every row, each accepted row's resulting
+state written by hand, the two-clocks pair, positive controls) and
+`scripts/test-roster-mutants.ts` (each rule loosened in turn must turn the rig
+red).

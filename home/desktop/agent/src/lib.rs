@@ -11,12 +11,19 @@
 
 pub mod address;
 pub mod agent;
+pub mod book;
+pub mod calls;
+pub mod lockgate;
+pub mod select;
 pub mod b64u;
 pub mod device_list;
 pub mod webauthn;
 pub mod recovery;
 mod display_table;
 pub mod statements;
+
+#[cfg(windows)]
+pub mod windows_store;
 
 #[cfg(all(target_os = "linux", feature = "tpm"))]
 pub mod tpm_linux;
@@ -26,3 +33,6 @@ pub mod secret_linux;
 
 #[cfg(all(target_os = "linux", feature = "fido"))]
 pub mod fido_linux;
+
+#[cfg(all(target_os = "linux", any(feature = "tpm", feature = "keyring")))]
+pub mod linux_store;

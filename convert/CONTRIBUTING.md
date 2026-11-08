@@ -25,6 +25,10 @@ convert/
     text.ts shapes.ts media.ts tables.ts charts.ts   one writer per element type
     code.ts embed.ts   writers on the contract (code → text, embed → its picture)
     parts.ts           the package skeleton: presentation, masters, layouts, theme, notes
+  src/export-docx.ts   export: a bento/type document → .docx (a library for now;
+                       not yet in the CLI or on the page)
+  src/docx-write/      the Word writer: index.ts walks the blocks, parts.ts is the
+                       package skeleton, text.ts writes runs, verify.ts self-checks
   src/xmlout.ts        builds XML as plain data, escapes everything
   src/pairs.ts         the conversion table bento.page/convert offers
   page/                bento.page/convert (one page, every pair in pairs.ts)

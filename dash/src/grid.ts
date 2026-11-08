@@ -19,7 +19,8 @@
 // is only honest if changing the type is one click away, so the header carries
 // the type as a control, not a label.
 
-import { formatValue, alignFor, TYPE_LABEL, AGG_SHORT } from './format.ts'
+import { formatValue, formatTemporalValue, alignFor, TYPE_LABEL, AGG_SHORT } from './format.ts'
+import { isTemporal } from './datetime.ts'
 import type { CanvasCell, CanvasSheet, CellOverride, Column, ColumnType, Sheet, TableSheet } from './model.ts'
 import { appearanceCss } from './cellfmt.ts'
 import { readCell, type Patch, type Store } from './store.ts'
@@ -536,11 +537,14 @@ export function canvasHasFormulas(sheet: CanvasSheet): boolean {
 export function canvasShown(cell: CanvasCell | undefined, v: unknown): string {
   if (isErr(v)) return String(v)
   if (v === undefined || v === null || v === '') return ''
+  // a date or time under a date/time pattern (`dd mmm yyyy`, `h:mm AM/PM`)
+  const moment = formatTemporalValue(v, cell?.format)
+  if (moment !== null) return moment
   return formatValue(v, { type: canvasType(v), format: cell?.format })
 }
 
 export const canvasAlign = (cell: CanvasCell | undefined, v: unknown): string =>
-  cell?.align ?? (cell?.format === DATE_PATTERN && typeof v === 'string'
+  cell?.align ?? ((cell?.format === DATE_PATTERN && typeof v === 'string') || isTemporal(v)
     ? 'right'                  // a date is a quantity of days: it sits with the numbers
     : alignFor(canvasType(v)))
 

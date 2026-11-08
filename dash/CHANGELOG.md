@@ -380,6 +380,24 @@ The version that came out of watching somebody use 0.2.0.
   note from importing or exporting an Excel or CSV file — rewritten to say what
   happened and what to do, in all eight languages.
 
+- **Dates and times are values you can calculate with.** On a spreadsheet,
+  `=A4+1` is the next day, `=B1-A1` is the days between two dates,
+  `=DATE(2026,3,4)+1` works, and `=TEXT(A4, "dd mmm yyyy")` prints 04 Mar 2026;
+  all four used to say #VALUE!. Typing `2026-03-04 14:30`, `9:05` or `2:30 PM`
+  (or pasting them) stores a date and time or a time with its format, and the
+  cell's number format offers **Date and time**. A cell can show a date in any
+  Excel pattern (`d mmmm yyyy`, `h:mm AM/PM`), with month and day names in your
+  language. New: TIME, TIMEVALUE, HOUR, MINUTE, SECOND, DATEDIF, NETWORKDAYS
+  and WORKDAY; WEEKDAY takes Excel's second argument; MIN and MAX find the
+  earliest and latest date; times and datetimes sort in order. `=NOW()` and
+  `=TODAY()` show your local time — they showed the raw UTC instant, and a
+  TODAY() that was a day out for half the world. EDATE now stops at the end of
+  a shorter month (31 January + 1 month is 28 February, not 3 March). A
+  dataset's dates with a time of day keep that time through an Excel export
+  and re-import. A date is still saved as the readable text it always was, so
+  older versions of dash open these files and show the same dates. `3/4/2026`
+  is still kept as text rather than guessed.
+
 ## [0.2.0] — 2026-08-03 (tagged, not published)
 
 The first tagged version — a development milestone, never published. A workbook is one self-contained HTML file: the data, the grid,

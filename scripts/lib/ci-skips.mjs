@@ -80,7 +80,7 @@ export const ALLOWED_SKIPS = [
     when: notMac,
     why: 'the Security framework exists only on Apple platforms (see test-tray-releases)',
   },
-  ...['keys', 'statements', 'agent', 'recovery'].map((n) => ({
+  ...['keys', 'statements', 'agent', 'recovery', 'bridge'].map((n) => ({
     rig: `scripts/test-home-id-${n}.mjs`,
     line: new RegExp(`home id ${n}: SKIPPED — needs an Apple toolchain`),
     when: notMac,
@@ -91,6 +91,23 @@ export const ALLOWED_SKIPS = [
     line: /home spotlight: SKIPPED — needs an Apple toolchain/,
     when: notMac,
     why: 'the Spotlight index code is Swift against Apple frameworks, Apple platforms only (see test-tray-releases)',
+  },
+  {
+    rig: 'scripts/test-home-android-gate1-oracle.mjs',
+    line: /android gate1 oracle: SKIPPED — no Android device or emulator connected/,
+    why: "gate 1's oracle runs in Android's own WebView, which needs an emulator or device; the ubuntu runners have neither. Gate1Test (home-android-unit) still runs the whole corpus on every change",
+  },
+  {
+    rig: 'scripts/test-home-release-history.mjs',
+    line: /home release history: SKIPPED — needs an Apple toolchain/,
+    when: notMac,
+    why: 'ReleaseHistory verifies signatures with CryptoKit, Apple platforms only (see test-tray-releases)',
+  },
+  {
+    rig: 'scripts/test-home-gate1.mjs',
+    line: /home gate1: SKIPPED — needs an Apple toolchain/,
+    when: notMac,
+    why: 'the gate-1 Swift port hashes and verifies signatures with CryptoKit, Apple platforms only (see test-tray-releases)',
   },
 ]
 

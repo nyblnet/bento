@@ -561,3 +561,54 @@ runs:
       # copy passes.
       shell: bento-step {0}
       run: node scripts/test-link-mutants.ts
+
+    - name: Outside-edit guard rig
+      # kernel/src/save.ts never overwrites a file another program changed: every
+      # write through the held handle compares lastModified + size with the stamp
+      # read back after our last write (or at open). On a file system that rounds
+      # mtime: an outside edit is refused and announced, our own consecutive and
+      # concurrent writes never are, keep-mine overwrites once and tracking
+      # resumes. Nine mutants of save.ts must each turn it red; a control must not.
+      shell: bento-step {0}
+      run: node scripts/test-disk-change.ts
+
+    - name: Outside-edit guard in Chromium
+      # The same guard against real FileSystemFileHandles (origin-private file
+      # system), with a second handle as the other program: the false-positive
+      # question a fake cannot answer — our own writes, read back by the browser.
+      shell: bento-step {0}
+      run: node scripts/test-disk-change-browser.mjs
+
+    - name: bento/id WebAuthn assertion verifier
+      # kernel/src/webauthn.ts against kernel/fixtures/webauthn-v1.json: real
+      # browser assertions (high-S and low-S, Chromium's extra clientDataJSON
+      # key) verify; every refusal (other origin, sibling host, subdomain,
+      # parent rp id, framed/crossOrigin, UV or UP clear, tampering, another
+      # key, duplicate keys, odd DER, a replayed counter) for its own reason.
+      shell: bento-step {0}
+      run: node scripts/test-webauthn.ts
+
+    - name: bento/id WebAuthn verifier mutants
+      # Each mutant loosens one check in a copy of webauthn.ts; test-webauthn.ts
+      # must go red on every one, after the unmutated copy passes.
+      shell: bento-step {0}
+      run: node scripts/test-webauthn-mutants.ts
+
+    - name: bento/id roster chain
+      # kernel/src/roster.ts against kernel/fixtures/roster-v1.json: the option G
+      # roster (ros.) and the directory's ripening countersign (rip.). A change is
+      # in force only once countersigned at ripening, 72 h after the directory's
+      # own requestedAt (never the requester's clock); each link is signed by an
+      # unquarantined member of the previous head (passkey assertion via
+      # webauthn.ts, rp id.bento.page, origin the sign-in host); one change per
+      # link; setup and reset carry the directory's authority alone.
+      shell: bento-step {0}
+      run: node scripts/test-roster.ts
+
+    - name: bento/id roster chain mutants
+      # Each mutant loosens one rule in a copy of roster.ts (chain break, wrong
+      # prev, unripened link, the requester's clock for the wait, a quarantined
+      # signer, two changes in one link...); test-roster.ts must go red on every
+      # one, after the unmutated copy passes.
+      shell: bento-step {0}
+      run: node scripts/test-roster-mutants.ts

@@ -1,0 +1,55 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento authors
+//
+// The Tauri transport for home/bridge.js, shaped exactly like Android's
+// WebMessageListener object (postMessage(string) out, onmessage({data}) back),
+// so bridge.js's existing `droid` path carries it and the shared file needs no
+// edit. Runs before bridge.js, in the MAIN FRAME ONLY.
+//
+// Every call carries this load's CAPABILITY secret (security §19d). Tauri's
+// IPC has no frame identity and its invoke key is per process and readable by
+// page script, so the secret is the frame identity. The host hands it to this
+// realm alone, after a finished load of the document, with a NONCE; the shim
+// echoes the nonce, and the host arms the secret only if no newer load has
+// started meanwhile (§19e: generation-bound arming). Calls made before that
+// are queued, never sent. The secret lives in this closure.
+;(function () {
+  if (window.top !== window) return
+  let cap = null
+  let armed = false
+  const queue = []
+  const native = {
+    onmessage: null,
+    postMessage(s) { armed ? send(s) : queue.push(s) },
+  }
+  function send(s) {
+    const back = (data) => native.onmessage && native.onmessage({ data })
+    // bridge.js builds every request as {"id":N,"op":"…"…}; the identity calls
+    // are the `id.*` ops and go to the identity command, which has its own
+    // gates (genuine bytes, this webview's capability). Anchored on the prefix
+    // so a large file write is never parsed here.
+    const cmd = /^\{"id":\d+,"op":"id\./.test(s) ? 'bento_id' : 'bento_file'
+    window.__TAURI_INTERNALS__.invoke(cmd, { msg: s, cap }).then(back, (e) => {
+      let id = null
+      try { id = JSON.parse(s).id } catch (_) {}
+      back(JSON.stringify({ id, ok: false, value: String(e) }))
+    })
+  }
+  Object.defineProperty(window, '__bentoTrayNative', { value: native })
+  // Non-writable, non-configurable: page script cannot swap it to catch the
+  // secret on its way in. The secret is ADOPTED only when the host accepts it
+  // (bento_arm resolves), never before: WebView2 reports a finished load of the
+  // document's URL again for every navigation the host cancels (measured), so
+  // one load can deliver here twice. The host hands back the same secret while
+  // pending, and refuses the second echo as already armed. A secret the host
+  // refuses is dropped; once armed, later deliveries are ignored.
+  Object.defineProperty(window, '__bentoArm', { value: function (s, nonce) {
+    if (armed || typeof s !== 'string' || typeof nonce !== 'string') return
+    window.__TAURI_INTERNALS__.invoke('bento_arm', { nonce, cap: s }).then(() => {
+      if (armed) return
+      cap = s
+      armed = true
+      queue.splice(0).forEach(send)
+    }, () => {})
+  } })
+})()

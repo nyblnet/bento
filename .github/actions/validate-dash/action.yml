@@ -731,3 +731,38 @@ runs:
       # the positive control.
       shell: bento-step {0}
       run: node scripts/test-dash-share.ts
+
+    - name: dash — dates and times are values
+      # A typed or pasted date, datetime or time stores its canonical text and
+      # stamps its format; 3/4/2026 stays text. Through a real sheet
+      # recalculation: =A1+1, date − date, DATE()+1, TEXT with date patterns,
+      # WEEKDAY/EOMONTH/EDATE/DATEDIF/NETWORKDAYS/WORKDAY, MIN/MAX of dates,
+      # and the refusals (date + date, date * 2). NOW()/TODAY() pinned to
+      # zones either side of UTC and across both daylight-saving changes. A
+      # cell's own date pattern, the sort order of times, and a dataset's
+      # datetimes out to .xlsx and back.
+      shell: bento-step {0}
+      run: node scripts/test-dash-dates.ts
+
+    - name: dash — an older dash does not corrupt the new date values
+      # dash/src at dash-v0.2.0 and at the 0.3.0 main this change branched
+      # from, fetched by git and imported as they are: each opens a file with
+      # the new datetime/time values, reports no repair, saves it back
+      # unchanged; the 0.3.0 cell editor round-trips every value cell and its
+      # recalculation does not throw. A ref that cannot be fetched fails.
+      shell: bento-step {0}
+      run: node scripts/test-dash-dates-oldshell.ts
+
+    - name: dash — a table placed inside a grid
+      # Tables placed inside a grid (docs/dash-unified.md): the rectangle a
+      # table covers, which part of which table a grid cell is, and the parse
+      # repairs, each with a control that a well-formed placement survives.
+      shell: bento-step {0}
+      run: node scripts/test-dash-placement.ts
+
+    - name: dash — A1 references read a table placed on a grid
+      # A1 into a table placed on a grid reads the table (header names,
+      # values, calculated columns, totals) through the real workbook recalc,
+      # each row against an unplaced control.
+      shell: bento-step {0}
+      run: node scripts/test-dash-placed-refs.ts

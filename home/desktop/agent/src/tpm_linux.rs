@@ -51,7 +51,7 @@ use zeroize::Zeroizing;
 
 /// Asks the person for their TPM PIN, drawn by the HOST (never the page).
 /// None = they declined.
-pub type PinPrompt = Box<dyn FnMut(&Prompt) -> Option<Zeroizing<String>>>;
+pub type PinPrompt = Box<dyn FnMut(&Prompt) -> Option<Zeroizing<String>> + Send>;
 
 pub struct TpmStore {
     ctx: Context,

@@ -144,6 +144,7 @@ export const zhHans: Catalog = {
   "Data story": "数据故事",
   "Dataset": "数据集",
   "Date": "日期",
+  "Date and time": "日期和时间",
   "Decimals": "小数位数",
   "Delete": "删除",
   "Delete \"{name}\" and its {n} rows?": "删除“{name}”及其 {n} 行数据？",
