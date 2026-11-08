@@ -152,6 +152,11 @@ jobs:
         # runs no script and opens no frame or overlay, including with the
         # trigger attributes planted before the show binds its listeners.
         run: node scripts/test-slides-reveal-preview-browser.mjs
+      - name: A chart's hover tooltip in the show in Chromium
+        # One row per series: a colour swatch, the name and the value. The
+        # swatch shows a colour or nothing, and the tooltip holds only its rows;
+        # a plain colour is the control.
+        run: node scripts/test-chart-tooltip-browser.mjs
       - name: Exercise the packaged documents in Chromium
         # Real UI and serialization, offline; delayed mock writes expose save races.
         run: |
