@@ -7,7 +7,11 @@
 // 1. A deck with a picture saves (window.bento.serialize — the same path as ⌘S)
 //    as the document on one line and the picture data on the LAST line,
 //    starting "assets":; it parses back to the same document; once the picture
-//    is gone the save is a single line again (the asset is pruned).
+//    is gone the save is a single line again (the asset is pruned). An asset
+//    VALUE holding a literal </script> and <!-- is still escaped on that line
+//    (serializeBody <-escapes the whole body after the layout): the block ends
+//    where it should, the value reads back exactly, and the conformance gate
+//    passes. Mutant: drop that escape in kernel/src/save.ts and four rows fail.
 // 2. Reopening never shows a phantom Restore banner. Moving `assets` last
 //    changes the document's key order between the copy recovery keeps (the
 //    deck as it was in memory) and the file a save writes. A deck written the
@@ -67,6 +71,36 @@ ok(parsed.assets?.pic === PNG && parsed.slides?.[0]?.elements?.[0]?.src === 'ass
 await page.evaluate(() => { window.bento.doc.slides[0].elements = [] })
 const without = block(await page.evaluate(() => window.bento.serialize()))
 ok(without.split('\n').length === 1 && !('assets' in JSON.parse(without)), 'with the picture gone, the save is one line again')
+
+// An asset VALUE that spells out the end of the block. docText puts it on the
+// second line; the save must still escape it (serializeBody <-escapes the whole
+// body after the layout), or the browser's parser would end #bento-doc at it.
+const SCRIPT_END = '</scr' + 'ipt>'
+const HOSTILE = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg"><script>1' + SCRIPT_END + '<!--<script></svg>'
+await page.evaluate((h) => {
+  window.bento.doc.assets = { ...(window.bento.doc.assets ?? {}), evil: h }
+  window.bento.doc.slides[0].elements = [{ type: 'image', id: 'evil', x: 0, y: 0, w: 100, h: 100, rotation: 0, opacity: 1, src: 'asset:evil', fit: 'cover', radius: 0 }]
+}, HOSTILE)
+const hostileFile = await page.evaluate(() => window.bento.serialize())
+const hostileBlock = block(hostileFile)
+let hostileDoc = null
+try { hostileDoc = JSON.parse(hostileBlock) } catch {}
+// the same deck with a harmless value in that slot: the script-close count to match
+await page.evaluate((png) => { window.bento.doc.assets.evil = png }, PNG)
+const shellEnds = (await page.evaluate(() => window.bento.serialize())).split(SCRIPT_END).length
+await page.evaluate((h) => { window.bento.doc.assets.evil = h }, HOSTILE)
+ok(hostileDoc?.assets?.evil === HOSTILE && hostileBlock.split('\n').at(-1).startsWith('"assets":') && !hostileBlock.includes('<'),
+  'an asset value containing a literal </script> and <!-- is escaped on its line: the block ends where it should and parses back to the exact value')
+ok(hostileFile.split(SCRIPT_END).length === shellEnds, `the saved file has exactly as many script-close tags as the same deck with a plain picture (${hostileFile.split(SCRIPT_END).length - 1})`)
+const reparsed = await page.evaluate((html) => new DOMParser().parseFromString(html, 'text/html').getElementById('bento-doc')?.textContent ?? '', hostileFile)
+let reparsedDoc = null
+try { reparsedDoc = JSON.parse(reparsed) } catch {}
+ok(reparsedDoc?.assets?.evil === HOSTILE, 'a browser parsing the saved file reads the same asset value back')
+let hostileGate = null
+const hostilePath = join(mkdtempSync(join(tmpdir(), 'bento-doc-layout-')), 'hostile.bento.html')
+writeFileSync(hostilePath, hostileFile)
+try { gateShell(hostilePath) } catch (e) { hostileGate = e.message }
+ok(hostileGate === null, 'the release conformance gate passes on it', hostileGate)
 
 ok(errors.length === 0, 'no page errors', errors)
 await page.close()
