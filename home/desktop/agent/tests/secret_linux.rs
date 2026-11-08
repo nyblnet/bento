@@ -37,7 +37,7 @@ fn no_consent_key_so_aal3_is_refused() {
     let s = SecretStore::open(&profile("aal3")).unwrap();
     s.create_device_key().unwrap();
     assert!(!s.has_consent_key());
-    let mut a = Agent::new(s, Now, Policy::default());
+    let mut a = Agent::new(s, Now, Policy::default(), { let g = bento_id_agent::lockgate::LockGate::new(); g.watched(false); g });
     let caller = Caller { verified: true, doc_id: Some("d1".into()) };
     let r = a.consent(&caller, "revoke", "rev.x", &b64u::enc(&[1u8; 24]));
     assert_eq!(r.unwrap_err(), Refusal::Unavailable, "no consent key on a no-TPM machine: AAL3 refused");

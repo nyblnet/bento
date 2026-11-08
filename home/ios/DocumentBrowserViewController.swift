@@ -25,8 +25,33 @@ final class DocumentBrowserViewController: UIDocumentBrowserViewController,
         // this one searches what the documents say. See SearchViewController.
         additionalTrailingNavigationBarButtonItems = [
             UIBarButtonItem(image: UIImage(systemName: "text.magnifyingglass"),
-                            style: .plain, target: self, action: #selector(openSearch))
+                            style: .plain, target: self, action: #selector(openSearch)),
+            // The release history gate 1 checks documents against is refreshed only
+            // when the person asks: here, or on New. Never on open or launch.
+            UIBarButtonItem(image: UIImage(systemName: "ellipsis.circle"), menu: UIMenu(children: [
+                UIAction(title: NSLocalizedString("Check for updates", comment: "menu item: refresh the signed release histories"), image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
+                    self?.checkForUpdates()
+                },
+            ])),
         ]
+    }
+
+    /// Refresh every app's signed release history. What's kept is only ever a
+    /// valid successor of what's held (ReleaseHistory, anti-rollback).
+    private func checkForUpdates() {
+        let waiting = UIAlertController(title: nil, message: NSLocalizedString("Checking for updates…", comment: "check for updates: in progress"),
+                                        preferredStyle: .alert)
+        present(waiting, animated: true)
+        Task { @MainActor in
+            var results: [ReleaseHistory.Refresh] = []
+            for app in Releases.apps { results.append(await ReleaseHistory.refresh(app.id)) }
+            await withCheckedContinuation { done in waiting.dismiss(animated: true) { done.resume() } }
+            // The outcome IS the alert's title, with no message: the person just
+            // chose "Check for updates", so repeating it as a heading says nothing.
+            let alert = UIAlertController(title: ReleaseHistory.CheckOutcome(results).message, message: nil, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: NSLocalizedString("OK", comment: ""), style: .default))
+            self.present(alert, animated: true)
+        }
     }
 
     @objc private func openSearch() {
@@ -122,6 +147,9 @@ final class DocumentBrowserViewController: UIDocumentBrowserViewController,
             var bytes: Data?
             do {
                 bytes = try await Releases.seed(for: app)
+                // the person asked for the network: the one time the release
+                // history is refreshed too (never on open or launch)
+                _ = await ReleaseHistory.refresh(app.id)
             } catch {
                 failure = error.localizedDescription
                 // Offline, or the server is down. A shell cached by an earlier

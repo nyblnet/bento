@@ -69,6 +69,7 @@ import java.util.concurrent.Executors
 class EditorActivity : Activity() {
 
     companion object {
+
         const val EXTRA_URI = "page.bento.home.URI"
         private const val TAG = "BentoTray"
         private const val REQ_EXPORT = 1
@@ -93,6 +94,16 @@ class EditorActivity : Activity() {
     private var docUri: Uri? = null
     private var docName: String = "document.bento.html"
     private var bytes: ByteArray = ByteArray(0)
+
+    /**
+     * Gate 1's answer for the bytes being served (bento/connect A2), set with
+     * them. GENUINE carries the release's hash-pinned CSP, which every response
+     * for the document now sends. UNKNOWN sends none and is served exactly as
+     * before: it never borrows a release's policy. Read from WebView's IO thread.
+     */
+    private class Served(val bytes: ByteArray, val gate1: Gate1.Verdict)
+    /** The bytes and their verdict, published TOGETHER: a response can never pair one file's bytes with another's CSP. */
+    @Volatile private var served = Served(ByteArray(0), Gate1.Verdict.Unknown("not yet checked"))
 
     /**
      * Can saves land on the open document, or must every one become a Save-As?
@@ -199,12 +210,14 @@ class EditorActivity : Activity() {
             // Decoding and hashing a multi-megabyte deck belongs here, off the
             // main thread, not in the origin decision that follows.
             val facts = data?.let { factsOf(uri, it) }
+            val verdict = data?.let { ReleaseHistory.verdict(this, it) }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 if (data == null) {
                     fatal(getString(R.string.err_open))
                 } else {
                     bytes = data
+                    served = Served(data, verdict!!)
                     applySealedPrivacy(data)
                     Recents.touch(this, uri, docName)
                     chooseOrigin(facts!!) { origin ->
@@ -369,11 +382,10 @@ class EditorActivity : Activity() {
                 // iOS scheme handler. A self-contained document has no
                 // subresources by definition, and diverging here would mean a
                 // file that works on one host and not the other.
-                return WebResourceResponse(
-                    "text/html", "utf-8", 200, "OK",
-                    mapOf("Content-Length" to bytes.size.toString()),
-                    ByteArrayInputStream(bytes)
-                )
+                val now = served
+                val headers = mutableMapOf("Content-Length" to now.bytes.size.toString())
+                (now.gate1 as? Gate1.Verdict.Genuine)?.let { headers["Content-Security-Policy"] = it.csp }
+                return WebResourceResponse("text/html", "utf-8", 200, "OK", headers, ByteArrayInputStream(now.bytes))
             }
 
             override fun shouldOverrideUrlLoading(
@@ -778,9 +790,11 @@ class EditorActivity : Activity() {
             // docless document's claim tracks its new content. Computed on this
             // thread — an autosave writes megabytes every few seconds.
             val f = if (err == null) factsOf(uri, data) else null
+            val v = if (err == null) ReleaseHistory.verdict(this, data) else null
             runOnUiThread {
                 if (err == null) {
                     bytes = data
+                    served = Served(data, v!!)
                     applySealedPrivacy(data)
                     OriginIndex.record(this, f!!.uri,
                         DocumentOrigin.Claim(originHost.substringBefore('.'), f.docId, f.contentSha256))

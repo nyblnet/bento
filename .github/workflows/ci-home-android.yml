@@ -58,3 +58,12 @@ jobs:
         run: |
           ./gradlew --no-daemon -q processReleaseMainManifest
           node ../../scripts/test-home-android-manifest.mjs app/build/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml
+      - name: The releaseCheck variant compiles
+        # releaseCheck (release as configured, setup dev switch on) is built by
+        # scripts/qa-home-android-setup.mjs, which CI never runs, so a source set
+        # it does not see went unnoticed: HistoryKeys lives only in src/debug and
+        # src/release, and matchingFallbacks does not apply to source sets, so the
+        # variant failed with 'Unresolved reference HistoryKeys'. Compile needs no
+        # signing and no site clone.
+        working-directory: home/android
+        run: ./gradlew --no-daemon -q compileReleaseCheckKotlin

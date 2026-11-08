@@ -1,0 +1,18 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "documents",
+  "description": "WINDOWS ONLY (build.rs). Tauri on Windows treats only http://<protocol>.localhost as the app's own origin; a per-document origin http://bento.<24 hex>.localhost is 'remote' and is refused every custom command unless a remote capability says otherwise (measured on WebView2). This admits exactly bento_arm and bento_file to exactly those origins. Both still demand the load's capability secret, which stays the rule: this file is a second layer, never the boundary. No core or plugin permission is granted, and no bento_id: nothing on Windows can use it until a key store exists. release-check asserts this file and these commands are all that ship.",
+  "local": false,
+  "windows": [
+    "doc*"
+  ],
+  "remote": {
+    "urls": [
+      "http://bento.:h([0-9a-f]{24}).localhost/"
+    ]
+  },
+  "permissions": [
+    "allow-bento-arm",
+    "allow-bento-file"
+  ]
+}

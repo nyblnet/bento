@@ -106,7 +106,10 @@ try {
   await page.route(/^https?:/, (r) => r.abort())
   await page.goto(shellPath.href)
   await page.waitForFunction(() => window.bento?.doc)
-  const MODIFIED = '2026-10-10T12:00:00.000Z'
+  // Relative to now, never a fixed date: the app prunes recovery snapshots older than
+  // 30 days on boot (kernel autosave pruneOld), so a fixed date silently aged the planted
+  // snapshot out and the banner checks failed from a calendar date on.
+  const MODIFIED = new Date(Date.now() - 2 * 86_400_000).toISOString()
   const doc = await page.evaluate((m) => { const d = JSON.parse(JSON.stringify(window.bento.doc)); d.docId = 'rig-recovery-deck'; d.modified = m; delete d.collab; return d }, MODIFIED)
   await page.close()
   writeFileSync(deckFile, shell.slice(0, i) + JSON.stringify(doc).replace(/</g, '\\u003c') + shell.slice(j))

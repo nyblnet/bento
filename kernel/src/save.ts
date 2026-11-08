@@ -726,11 +726,181 @@ type SaveResult = 'saved' | 'saved-as' | 'copied' | 'downloaded' | 'cancelled'
 
 interface FsFileHandle {
   createWritable(): Promise<{ write(data: Blob): Promise<void>; close(): Promise<void> }>
-  getFile?(): Promise<{ text(): Promise<string> }>
+  getFile?(): Promise<{ text(): Promise<string>; lastModified?: number; size?: number }>
   name: string
 }
 
 let fileHandle: FsFileHandle | null = null
+
+// --- outside edits: never overwrite a file another program changed ----------
+//
+// Other programs edit `.bento.html` files in place — a script, a text editor, a
+// coding assistant. A document open in a browser with a held handle rewrites
+// the file on every auto-save, on ⌘S and on an in-place update, and every one
+// of those used to replace the other program's edit without a word.
+//
+// So the held file carries a STAMP — `lastModified` and `size`, as the file
+// system reports them through `getFile()` — taken when we adopt the handle and
+// read back after each of OUR writes. Before every write through the held
+// handle the stamp is read again; if either value moved, the write does not
+// happen, the handle stops writing (`fileChangedOnDisk()` is true), and every
+// `onFileChangedOnDisk` listener hears about it. The app then asks the author:
+// load the version on disk (`readDiskVersion`), or keep theirs
+// (`keepMineOverDisk`, a deliberate overwrite after which tracking resumes).
+//
+// The stamp after a write is whatever the file system says once our bytes have
+// landed, never the clock: some file systems round mtime (FAT to 2 s, others to
+// 1 s), so a clock value would raise false alarms on our own saves. All reads
+// and writes of the held file run one at a time (`heldTask`), so a second
+// write can never mistake the first one for an outside edit.
+//
+// What this cannot see: a handle whose `getFile()` reports no stamp (a host's
+// polyfill may not) is written unchecked, as before; and an edit landing in the
+// instant between our check and our write is lost as it always was. Writes to a
+// NEW file the author just picked (copies, exports, backups) are not checked —
+// the picker already asked about overwriting.
+
+interface DiskStamp { lastModified: number; size: number }
+
+/** A write through the held handle was refused because the file changed on disk. */
+export class FileChangedOnDiskError extends Error {
+  readonly fileName: string
+  constructor(fileName: string) {
+    super(`${fileName} was changed by another program since it was last read or saved`)
+    this.name = 'FileChangedOnDiskError'
+    this.fileName = fileName
+  }
+}
+
+let diskStamp: DiskStamp | null = null
+let diskConflict = false
+let heldChain: Promise<unknown> = Promise.resolve()
+const diskListeners = new Set<(info: { name: string }) => void>()
+
+const stampOf = (f: unknown): DiskStamp | null => {
+  const x = f as { lastModified?: unknown; size?: unknown } | null
+  return x && typeof x.lastModified === 'number' && typeof x.size === 'number'
+    ? { lastModified: x.lastModified, size: x.size } : null
+}
+/** The held file's stamp now. Throws when the file cannot be read (moved, deleted). */
+async function readStamp(handle: FsFileHandle): Promise<DiskStamp | null> {
+  if (typeof handle.getFile !== 'function') return null
+  return stampOf(await handle.getFile())
+}
+/** Run one read or write of the held file after every earlier one. */
+function heldTask<T>(fn: () => Promise<T>): Promise<T> {
+  const task = heldChain.then(fn)
+  heldChain = task.catch(() => {})
+  return task
+}
+/** Point in-place writes at `handle`. A new handle starts with no conflict and,
+ *  unless the file object it was just read from is given, no stamp yet. */
+function holdHandle(handle: FsFileHandle | null, file?: unknown): void {
+  fileHandle = handle
+  diskConflict = false
+  diskStamp = handle && file !== undefined ? stampOf(file) : null
+}
+/** Take the held file's stamp as it is now (after open, or after our write). */
+function stampHeld(): Promise<void> {
+  return heldTask(async () => {
+    const handle = fileHandle
+    if (!handle) return
+    const s = await readStamp(handle).catch(() => null)
+    if (fileHandle === handle) diskStamp = s
+  })
+}
+function flagConflict(handle: FsFileHandle): void {
+  diskConflict = true
+  for (const fn of [...diskListeners]) { try { fn({ name: handle.name }) } catch (e) { console.error(e) } }
+}
+/** Throw FileChangedOnDiskError unless the held file is as we last left it.
+ *  Call only inside heldTask. */
+async function verifyUnchanged(handle: FsFileHandle): Promise<void> {
+  if (diskConflict) throw new FileChangedOnDiskError(handle.name)
+  if (!diskStamp) return // nothing to compare against — see the note above
+  // A file we can no longer read (moved, deleted) has changed too.
+  const now = await readStamp(handle).catch(() => null)
+  if (now && now.lastModified === diskStamp.lastModified && now.size === diskStamp.size) return
+  flagConflict(handle)
+  throw new FileChangedOnDiskError(handle.name)
+}
+/** Write `html` through the held handle, unless the file changed on disk. */
+function writeHeld(html: string): Promise<void> {
+  return heldTask(async () => {
+    const handle = fileHandle
+    if (!handle) throw new Error('no file handle')
+    await verifyUnchanged(handle)
+    await writeHandle(handle, html)
+    const s = await readStamp(handle).catch(() => null)
+    if (fileHandle === handle) diskStamp = s
+  })
+}
+
+/** True once a write was refused because the held file changed on disk, until
+ *  the author chooses (`keepMineOverDisk` / `readDiskVersion().accept()`).
+ *  While true, every write through the held handle is refused without trying. */
+export const fileChangedOnDisk = (): boolean => diskConflict
+
+/** Hear when a write is refused because the held file changed on disk. Fires
+ *  once per detection; returns the unsubscribe. */
+export function onFileChangedOnDisk(fn: (info: { name: string }) => void): () => void {
+  diskListeners.add(fn)
+  return () => { diskListeners.delete(fn) }
+}
+
+/** Check the held file without writing — before work that should not start if
+ *  the write at its end would be refused (an in-place update's backup). Throws
+ *  FileChangedOnDiskError; a no-op without a held handle. */
+export function checkFileOnDisk(): Promise<void> {
+  return heldTask(async () => { if (fileHandle) await verifyUnchanged(fileHandle) })
+}
+
+/** "Keep mine": accept the file as it is on disk now as the baseline, so the
+ *  next write overwrites it — deliberately, once — and tracking resumes from
+ *  that write. The caller saves right after. */
+export function keepMineOverDisk(): Promise<void> {
+  return heldTask(async () => {
+    const handle = fileHandle
+    if (!handle) return
+    const s = await readStamp(handle).catch(() => null)
+    if (fileHandle !== handle) return
+    diskStamp = s
+    diskConflict = false
+  })
+}
+
+/** "Load the version on disk": the held file's text now. Writing stays refused
+ *  until the caller has actually loaded it and calls `accept()`, which takes
+ *  THAT read as the baseline (a further outside edit after it is caught too). */
+export function readDiskVersion(): Promise<{ html: string; accept(): void }> {
+  return heldTask(async () => {
+    const handle = fileHandle
+    if (!handle || typeof handle.getFile !== 'function') throw new Error('no readable file handle')
+    const file = await handle.getFile()
+    const html = await file.text()
+    return {
+      html,
+      accept: () => {
+        if (fileHandle !== handle) return
+        diskStamp = stampOf(file)
+        diskConflict = false
+      },
+    }
+  })
+}
+
+/** The open document's #bento-doc body as the page booted with it, normalised
+ *  exactly as embeddedDocBlock normalises a file — what a remembered handle is
+ *  checked against when it reconnects (saveFile). null without a DOM or block. */
+const bootBlock: string | null = (() => {
+  // Module scope: must never throw. Node rigs import this file with a stub
+  // `document` (or none), and a throw here takes the whole module down.
+  try {
+    if (typeof document === 'undefined' || typeof document.getElementById !== 'function') return null
+    const el = document.getElementById(DATA_BLOCK_ID)
+    return el ? (el.textContent ?? '').replace(/\r\n/g, '\n').trim() : null
+  } catch { return null }
+})()
 
 const hasFsAccess = () => typeof (window as any).showSaveFilePicker === 'function'
 
@@ -1006,7 +1176,16 @@ export async function saveFile(doc: KernelDoc, forcePicker = false): Promise<Sav
   // fire inside the fresh save gesture, and serializeAuto can take ~a second.
   if (hasFsAccess() && !forcePicker && !fileHandle) {
     const re = await reconnectHandle(doc)
-    if (re) fileHandle = re
+    if (re) {
+      // A reconnected handle has no stamp from this session: the page was read
+      // from disk at boot, so the file must still hold the document it booted
+      // with. If it does not, another program edited it while it was open.
+      let file: Awaited<ReturnType<NonNullable<FsFileHandle['getFile']>>> | undefined
+      let text: string | null = null
+      try { file = await re.getFile?.(); text = file ? await file.text() : null } catch { /* unreadable: no stamp */ }
+      holdHandle(re, file)
+      if (text !== null && bootBlock !== null && embeddedDocBlock(text) !== bootBlock) flagConflict(re)
+    }
   }
   const html = await serializeAuto(doc)
   if (hasFsAccess()) {
@@ -1023,11 +1202,12 @@ export async function saveFile(doc: KernelDoc, forcePicker = false): Promise<Sav
       // next ⌘S still targets the original and reopening it still reconnects.
       // Only a first in-place save retargets onto the file it just created.
       if (isCopy) return 'copied'
-      fileHandle = handle
+      holdHandle(handle)
+      await stampHeld() // the baseline is the file as OUR write left it
       void persistHandle(doc, handle)
       return 'saved-as'
     }
-    await writeHandle(fileHandle, html)
+    await writeHeld(html)
     // idempotent, and the one place the ADOPTED-handle path (a dropped file) is
     // remembered too — it only matters once you have actually saved to it.
     void persistHandle(doc, fileHandle)
@@ -1053,8 +1233,11 @@ export const currentFileName = () => fileHandle?.name ?? null
  * a handle silently redirects where ⌘S writes, which is a user gesture, never
  * something a script should do behind their back.
  */
-export function adoptFileHandle(handle: FsFileHandle): void {
-  fileHandle = handle
+export function adoptFileHandle(handle: FsFileHandle | null): void {
+  holdHandle(handle)
+  // The baseline for outside edits: the file as it is at open. Queued, so any
+  // write that follows compares against it.
+  if (handle) void stampHeld()
 }
 
 /**
@@ -1098,12 +1281,13 @@ export function consumeLaunchQueue(): void {
       // verify against; '' (a pristine shell) is a real, adoptable document.
       if (!handle || booted === null || typeof handle.getFile !== 'function') return
       try {
-        const text = await (await handle.getFile()).text()
+        const file = await handle.getFile()
+        const text = await file.text()
         // Adopt only if the file is still this document AND nothing claimed a handle
         // while we awaited getFile: a Save As / "Duplicate as new deck" during that
         // await sets its own handle, and snapping back to the launched file here
         // would have autosave overwrite the file the user just moved to.
-        if (!hasFileHandle() && embeddedDocBlock(text) === booted) adoptFileHandle(handle)
+        if (!hasFileHandle() && embeddedDocBlock(text) === booted) holdHandle(handle, file)
         // else: a different/unverifiable file, or a handle already held — leave it;
         // ⌘S falls back to the picker.
       } catch { /* unreadable handle → do not adopt */ }
@@ -1150,8 +1334,8 @@ export const hasFileHandle = () => fileHandle !== null
 
 /** Overwrite the held file with arbitrary html (the freshly updated shell). */
 export async function writeUpdatedFile(html: string): Promise<void> {
-  if (!fileHandle) throw new Error('no file handle')
-  await writeHandle(fileHandle, html)
+  // Refused with FileChangedOnDiskError when another program changed the file.
+  await writeHeld(html)
 }
 
 /**
@@ -1178,7 +1362,12 @@ export async function writeUpdatedFileAs(
   // Share/export artifacts must NOT become the ⌘S target — otherwise the next
   // save would overwrite e.g. a view-only copy with the FULL document (owner
   // keys included). Only an explicit keepHandle retargets in-place saving.
-  if (opts.keepHandle) fileHandle = handle
+  if (opts.keepHandle) {
+    holdHandle(handle)
+    await heldTask(() => writeHandle(handle, html))
+    await stampHeld()
+    return true
+  }
   await writeHandle(handle, html)
   return true
 }

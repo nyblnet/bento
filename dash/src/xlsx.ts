@@ -2254,12 +2254,15 @@ class StyleBook {
 /** The number format a column should carry in Excel. The author's own
  *  `Column.format` wins — model.ts says it is an Excel-style pattern and it is
  *  DOCUMENT data, so passing it through is both correct and free. */
-function formatFor(col: Column): string {
+function formatFor(col: Column, timed = false): string {
   if (typeof col.format === 'string' && col.format) return col.format
   switch (col.type) {
     // ISO, deliberately: `mm/dd/yyyy` renders as 4 March in half the world and
     // 3 April in the other half, and the export is what someone else opens.
-    case 'date': return 'yyyy-mm-dd'
+    // A column holding a TIME OF DAY anywhere says so in its pattern: the
+    // serial carries the time either way, but a date-only pattern hides it in
+    // Excel and makes the re-import read the column as days (and drop it).
+    case 'date': return timed ? 'yyyy-mm-dd hh:mm:ss' : 'yyyy-mm-dd'
     case 'percent': return '0.0%'
     case 'money': return moneyFormat(col.unit)
     default: return ''
@@ -2433,6 +2436,15 @@ function readFrozenPane(sheet: TableSheet): { rows: number; cols: number } {
   return { rows: num(o.rows), cols: num(o.cols) }
 }
 
+/** Does any value in a date column carry a time of day (`2026-03-04 14:30`)? */
+function columnHasTime(data: ColumnData | undefined, rows: number): boolean {
+  for (let r = 0; r < rows; r++) {
+    const v = readCell(data, r)
+    if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}[T ]\d{1,2}:\d{2}/.test(v.trim())) return true
+  }
+  return false
+}
+
 /** Rows of one sheet, and the `ListObject` part that goes beside it. */
 function writeSheet(
   sheet: TableSheet, styles: StyleBook, strings: Strings,
@@ -2446,7 +2458,8 @@ function writeSheet(
   for (const [start, count] of sheet.rids) for (let i = 0; i < count; i++) rids.push(start + i)
 
   const headStyle = styles.at('', { bold: true })
-  const colStyle = cols.map((c) => styles.at(formatFor(c)))
+  const timed = cols.map((c) => c.type === 'date' && !c.format && columnHasTime(sheet.data[c.id], rows))
+  const colStyle = cols.map((c, i) => styles.at(formatFor(c, timed[i])))
 
   const out: string[] = []
   out.push(`<row r="1">${cols.map((c, i) =>
@@ -2463,7 +2476,7 @@ function writeSheet(
       // shares the column's one, so a sheet with three bolded cells has three
       // extra styles rather than one per cell.
       const paint = paintOf(over)
-      const style = paint ? styles.at(formatFor(col), paint) : colStyle[i]
+      const style = paint ? styles.at(formatFor(col, timed[i]), paint) : colStyle[i]
 
       // A per-cell formula: dash's `f`, or the source an import could not make
       // live (`xlsxF`) — writing the latter back out is what closes the

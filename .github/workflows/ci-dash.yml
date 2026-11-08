@@ -89,6 +89,14 @@ jobs:
         # dates, 3/4/2026 stays text, the formula bar shows 100% not 1, and
         # =A11+ is refused in the cell and the bar with the reason shown.
         run: node scripts/test-dash-entryparse-browser.mjs
+      - name: Dates and times in a spreadsheet cell are values
+        # In New York time, with the real keyboard and a paste: 2026-03-04,
+        # 2026-03-04 22:30, 9:05 and 2:30 PM store canonical values with their
+        # formats and 3/4/2026 stays text; =F13+1, date differences, DATE()+1,
+        # TEXT with date patterns, WEEKDAY/EOMONTH/EDATE/DATEDIF/NETWORKDAYS
+        # paint Excel's answers; NOW() paints the local clock, never the UTC
+        # instant; the panel offers Date and time.
+        run: node scripts/test-dash-dates-browser.mjs
       - name: Release pins in Chromium
         # bento/connect K4 (security §18/§36): this build's pins come from its
         # own bytes, a real file its ⌘S saved, and it boots under them while its

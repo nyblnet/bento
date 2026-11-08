@@ -339,3 +339,11 @@ jobs:
         # of box scale + spring travel; a positive control shows the travel is
         # on screen and the spring-scale counter-scale would miss.
         run: node scripts/test-slides-math-morph-browser.mjs
+      - name: A file another program changed, in Chromium
+        # Real file handles, handed in through launchQueue: an outside edit
+        # brings up the banner and is never overwritten (auto-save and Cmd-S);
+        # Load swaps in the disk version as one undoable step with the edits in
+        # Version history and without rewriting the file; Keep mine writes once
+        # and the next outside edit is caught again; a disk version that gained
+        # a password loads only through that password and later saves keep it.
+        run: node scripts/test-slides-disk-change-browser.mjs

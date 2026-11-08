@@ -1,0 +1,24 @@
+# bento.page: the published site, served by Cloudflare Workers static assets.
+# Copied into the site root by publish-site.mjs; Workers Builds deploys it on
+# every push to bento-site main.
+#
+# NO routes and NO custom domain in this file, on purpose. The Worker is put in
+# front of bento.page by ONE route added in the Cloudflare dashboard
+# (bento.page/*). `wrangler deploy` only ever adds the routes listed here and
+# leaves others in place, so a deploy can neither attach nor detach the site:
+# cutover and rollback stay one dashboard action each. A custom_domain entry
+# here would, from a non-interactive build, replace the apex DNS records
+# without asking.
+name = "bento-site"
+compatibility_date = "2026-10-01"
+workers_dev = true
+preview_urls = true
+
+[assets]
+directory = "."
+# Only exact file paths match. The other forms GitHub Pages answered (/x for
+# x.html, /d/ for d/index.html, /d -> /d/) come from the generated _redirects.
+# The default (auto-trailing-slash) would redirect /x.html to /x, and that
+# would move the signed shell URL in every shipped manifest.
+html_handling = "none"
+not_found_handling = "404-page"

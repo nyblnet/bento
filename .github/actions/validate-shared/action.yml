@@ -126,6 +126,24 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-ci-skips.mjs
 
+    - name: bento/connect directory (two-proof bind, exact lookups, limits, tombstones)
+      # The real worker and Durable Objects against an in-memory namespace,
+      # verifying with the kernel's signed statements and running its
+      # conformance vectors end to end: a binding needs the mailed code AND
+      # the key's signature over it; email alone never changes a live
+      # binding; bind/start answers 202 whatever happens; per-address mail
+      # limits and per-IP limits hold; no raw address or IP at rest.
+      shell: bento-step {0}
+      run: node scripts/test-directory.ts
+
+    - name: bento/connect directory mutants
+      # Each mutant reopens one path (the per-address mail budget spent by a
+      # start that mails nothing) in a copy of the tree, and the directory rig
+      # must fail a row. A mutant that no longer applies, or a rig that crashes
+      # instead of counting, fails this step.
+      shell: bento-step {0}
+      run: node scripts/test-directory-mutants.ts
+
     - name: No frame is both scripted and same-origin
       # Fails on any frame a document can cause that has allow-same-origin AND
       # allow-scripts (or no sandbox at all), across every app's source and
@@ -137,3 +155,23 @@ runs:
       # computed value, extra frame) live in the rig.
       shell: bento-step {0}
       run: node scripts/test-frame-sandbox.mjs --require-built
+
+    - name: Host routing files for bento.page
+      # site-routing.mjs generates the _redirects that bento.page needs on
+      # Workers static assets (html_handling "none"): every HTML file in the
+      # published tree gets its extensionless / directory rules, or that URL
+      # 404s. Also pins the template properties the move depends on: ACAO on
+      # every path, no route or custom domain in wrangler.toml, .git and
+      # .wrangler never uploaded.
+      shell: bento-step {0}
+      run: node scripts/test-site-routing.mjs
+
+    - name: Site verifier catches every way a host can differ
+      # verify-site.mjs compares a served bento.page against the published
+      # tree and, optionally, a second host. Offline: two local servers over a
+      # tree signed with a throwaway key. The identical host must pass with the
+      # update path proven to have run; each mutant (.html redirect, a redirect
+      # hop without a CORS grant, a missing grant, an added security header, a
+      # changed byte, a cacheable 404, a tampered envelope) must fail.
+      shell: bento-step {0}
+      run: node scripts/test-verify-site.mjs

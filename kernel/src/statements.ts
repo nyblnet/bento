@@ -819,8 +819,14 @@ export const webauthnChallengeFor = (cnsText: string): Promise<string> => sha256
  *           keys were destroyed by a confirmed wipe, so its dev. cert names a key
  *           nobody holds. It arrives with per-device kx, when senders wrap to
  *           device keys (security §25b).
+ *   wdev. watt. wren. dev2. — bento/id option G's device certificates: a browser
+ *           device key certified by a passkey assertion, the directory's logged
+ *           countersign and its renewals, the renewal request, and the native
+ *           device certificate. Defined in a later kernel change.
+ * (ros. and rip., the option G roster and its ripening countersign, are defined
+ * in roster.ts: ROSTER_PREFIXES.)
  */
-export const RESERVED_PREFIXES: readonly string[] = Object.freeze(['pk', 'drev'])
+export const RESERVED_PREFIXES: readonly string[] = Object.freeze(['pk', 'drev', 'wdev', 'watt', 'wren', 'dev2'])
 
 /**
  * Prefixes taken by device linking (link.ts, link v1). None is a statement the

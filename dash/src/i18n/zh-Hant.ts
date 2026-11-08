@@ -144,6 +144,7 @@ export const zhHant: Catalog = {
   "Data story": "資料故事",
   "Dataset": "資料集",
   "Date": "日期",
+  "Date and time": "日期和時間",
   "Decimals": "小數位數",
   "Delete": "刪除",
   "Delete \"{name}\" and its {n} rows?": "要刪除「{name}」及其中的 {n} 列嗎？",
