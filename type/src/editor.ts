@@ -21,7 +21,7 @@
 import { renderBody, renderBlock, readBlock, isNoteAtom, TAG } from './render.ts';
 import { fillFields } from './fields.ts';
 import { toggleMark, activeAt, setFont, fontAcross, type MarkType, type FontAttrs } from './inline.ts';
-import { isList, uid, MAX_LIST_LEVEL, type Block, type TypeDoc } from './model.ts';
+import { isList, uid, spliceText, MAX_LIST_LEVEL, type Block, type TypeDoc } from './model.ts';
 import type { Store } from './store.ts';
 import { commentsOnEdit, commentsOnSplit, commentsOnMerge } from './comments.ts';
 import { knownAuthor } from './comments.ts';
@@ -119,7 +119,11 @@ export class Editor {
       if (n.nodeType === 1 && isNoteAtom(n as Element)) return;      // atoms are not characters
       for (const c of Array.from(n.childNodes)) { walk(c); if (done) return; }
     };
-    for (const c of Array.from(block.childNodes)) { walk(c); if (done) break; }
+    // From the block ITSELF: a boundary can sit on the block element (Chrome's
+    // triple-click ends at the next paragraph's element, offset 0), and a walk
+    // over its children alone never met that container and counted the whole
+    // block.
+    walk(block);
     return count;
   }
   /** The DOM point `at` characters into this block. */
@@ -212,6 +216,38 @@ export class Editor {
    * split is intercepted and the new block gets a fresh id here.
    */
   #beforeInput = (e: InputEvent): void => {
+    // A selection the single-block path cannot follow — one that crosses
+    // blocks, or one with an end outside every block (Select All over a
+    // document that starts or ends with a table) — is
+    // edited HERE, in the model. Left to contentEditable, the browser deletes
+    // the paragraphs between the ends and fuses the two it keeps into one
+    // element, while `input` reads back only the block the caret lands in:
+    // the screen shows one paragraph, the model still holds them all, and the
+    // next render brings back everything the user deleted.
+    const span = this.#span();
+    if (span) {
+      const kind = e.inputType;
+      const text = kind === 'insertText' || kind === 'insertReplacementText' ? e.data ?? e.dataTransfer?.getData('text/plain') ?? ''
+        : kind === 'insertFromPaste' || kind === 'insertFromDrop' ? e.dataTransfer?.getData('text/plain') ?? ''
+        : '';
+      if (kind.startsWith('delete') || kind === 'insertParagraph' || kind === 'insertLineBreak'
+          || kind === 'insertText' || kind === 'insertReplacementText') {
+        e.preventDefault();
+        this.#replaceSpan(span.a, span.b, text, kind === 'insertParagraph');
+        return;
+      }
+      if (kind === 'insertFromPaste' || kind === 'insertFromDrop') {
+        // The range goes in the model first; the pasted text then takes the
+        // same road as a paste at a caret (one block, read back by `input`), so
+        // a paste over a range behaves exactly like a paste anywhere else.
+        e.preventDefault();
+        this.#replaceSpan(span.a, span.b, '', false);
+        if (text) document.execCommand('insertText', false, text);
+        return;
+      }
+      // Anything else (composition, formatting commands) is not ours to take
+      // over yet; it keeps the browser's behaviour.
+    }
     const c = this.caret();
     if (!c) return;
     if (e.inputType === 'insertParagraph') {
@@ -229,51 +265,192 @@ export class Editor {
       this.#splitBlock(c);
       return;
     }
-    if (e.inputType === 'deleteContentBackward' && c.to === undefined && c.at === 0) {
+    if (c.to !== undefined && c.to !== c.at) return;          // a range inside one block: the browser's
+    const kind = e.inputType;
+    // Backspace at the start of a block joins it onto the one before; forward
+    // Delete at the END joins the next one onto it. Both are structural, so
+    // both are model edits: the browser's own forward join moved the text on
+    // screen and left the model with two blocks.
+    if (kind.startsWith('delete') && kind.endsWith('Backward') && c.at === 0) {
       const i = this.store.doc.body.findIndex(b => b.id === c.id);
-      if (i > 0) { e.preventDefault(); this.#mergeBack(i); }
+      // At the very start of the document there is nothing to join, and the
+      // browser's own answer was to delete an empty first block's element:
+      // gone on screen, still in the model.
+      if (i >= 0) e.preventDefault();
+      if (i > 0) this.#join(i);
       return;
     }
+    if (kind.startsWith('delete') && kind.endsWith('Forward')) {
+      const body = this.store.doc.body;
+      const i = body.findIndex(b => b.id === c.id);
+      if (i >= 0 && c.at >= body[i].text.length) {
+        e.preventDefault();                       // at the very end of the document: nothing to join
+        if (i + 1 < body.length) this.#join(i + 1);
+      }
+    }
   };
+
+  // ───────────────────────────────────────────────────── ranges across blocks
+
+  /**
+   * Both ends of the selection in model coordinates, when the single-block
+   * path cannot handle it: the ends lie in different blocks, or one of them
+   * sits outside every block.
+   * Null for a caret, or for a selection inside one block.
+   */
+  #span(): { a: { id: string; at: number }; b: { id: string; at: number } } | null {
+    const sel = getSelection();
+    if (!sel || !sel.rangeCount || sel.isCollapsed) return null;
+    const r = sel.getRangeAt(0);
+    if (!this.host.contains(r.startContainer) || !this.host.contains(r.endContainer)) return null;
+    const inA = this.#blockOf(r.startContainer), inB = this.#blockOf(r.endContainer);
+    if (inA && inA === inB) return null;
+    const a = this.#resolve(r.startContainer, r.startOffset, 'start');
+    const b = this.#resolve(r.endContainer, r.endOffset, 'end');
+    if (!a || !b) return null;
+    const body = this.store.doc.body;
+    if (body.findIndex(x => x.id === a.id) > body.findIndex(x => x.id === b.id)) return null;   // nothing selected
+    return { a, b };
+  }
+
+  /**
+   * A selection boundary as (block id, offset). Inside a block it is the
+   * caret's own reading; between blocks (Chrome puts Select All's end on the
+   * paper itself when a table starts or ends the document) it snaps to the nearest block INSIDE the selection: the start to
+   * the beginning of the next block, the end to the end of the previous one.
+   */
+  #resolve(node: Node, offset: number, side: 'start' | 'end'): { id: string; at: number } | null {
+    const own = this.#blockOf(node);
+    if (own) return { id: own.dataset.id!, at: this.#offsetIn(own, node, offset) };
+    const point = document.createRange();
+    point.setStart(node, offset);
+    const els = [...this.host.querySelectorAll<HTMLElement>('[data-id]')].filter(el => this.#blockOf(el.parentNode!) === null);
+    if (side === 'start') {
+      const el = els.find(x => point.comparePoint(x, 0) >= 0);
+      return el ? { id: el.dataset.id!, at: 0 } : null;
+    }
+    const el = els.filter(x => point.comparePoint(x, x.childNodes.length) <= 0).pop();
+    return el ? { id: el.dataset.id!, at: this.#offsetIn(el, el, el.childNodes.length) } : null;
+  }
+
+  /**
+   * Replace everything from `a` to `b` with `text` (and, for Enter, a split
+   * after it) — ONE commit, so ONE ⌘Z puts back exactly what was selected.
+   *
+   * The first block keeps its identity and the last block's remainder is
+   * joined onto it, the same rule Backspace at a block's start follows; the
+   * blocks between are removed. Two cases keep the structure instead and only
+   * clear the selected text: a range that touches a table (fusing a cell with a
+   * paragraph would break the grid) and a tracked document (the deletion is
+   * recorded as struck-through text, and a paragraph break cannot be).
+   */
+  #replaceSpan(a: { id: string; at: number }, b: { id: string; at: number }, text: string, split: boolean): void {
+    const body = this.store.doc.body;
+    const i = body.findIndex(x => x.id === a.id), j = body.findIndex(x => x.id === b.id);
+    if (i < 0 || j < 0 || j < i) return;
+    const tracked = tracking(this.store.doc);
+    const keep = tracked || body.slice(i, j + 1).some(x => x.kind === 'cell');
+    // pasted or dropped text arrives here as one line; a line break would need a split
+    const line = text.replace(/\r?\n/g, ' ');
+    let caret: Caret | null = null;
+    this.store.breakRun();
+    this.#runId = null;
+    this.store.commit(d => {
+      const by = knownAuthor() || 'Anonymous', when = new Date().toISOString();
+      const put = (k: number, next: Block) => {
+        const prev = d.body[k];
+        const out = tracked ? trackEdit(prev, next, by, when) : next;
+        d.body[k] = out;
+        commentsOnEdit(d, prev.id, prev.text, out.text);
+        return out;
+      };
+      let at: number, k: number;
+      if (keep) {
+        k = -1; at = 0;
+        for (let n = i; n <= j; n++) {
+          const blk = d.body[n];
+          if (!TEXT_KINDS.has(blk.kind)) continue;
+          const from = n === i ? Math.min(a.at, blk.text.length) : 0;
+          const to = n === j ? Math.min(b.at, blk.text.length) : blk.text.length;
+          if (to > from) put(n, spliceText(blk, from, to - from, ''));
+          if (k < 0) { k = n; at = from; }
+        }
+        if (k < 0) return;                          // nothing editable in range
+      } else {
+        // A footnote, citation or field strictly inside the selection goes with
+        // it; one exactly at either end stays (spliceKeep's rule for a split).
+        // The typed text is appended to the head BEFORE the join, so it lands
+        // after a marker that sat just before the selection and before one
+        // that sat just after it, the way it reads on screen.
+        const A = d.body[i], B = d.body[j];
+        let head = TEXT_KINDS.has(A.kind) ? spliceKeep(A, 0, Math.min(a.at, A.text.length)) : null;
+        if (line) head = { ...(head ?? { id: uid(), kind: 'para', text: '' }), text: (head?.text ?? '') + line };
+        const tail = TEXT_KINDS.has(B.kind) ? spliceKeep(B, Math.min(b.at, B.text.length), B.text.length) : null;
+        let merged: Block;
+        if (i === j && head && tail) {
+          // one block (Select All in a one-paragraph document): an edit, not a merge
+          merged = joinBlocks(head, tail);
+          commentsOnEdit(d, A.id, A.text, merged.text);
+        } else if (head && tail) {
+          commentsOnEdit(d, A.id, A.text, head.text);
+          commentsOnEdit(d, B.id, B.text, tail.text);
+          merged = joinBlocks(head, tail);
+          commentsOnMerge(d, head.id, tail.id, head.text.length);
+        } else {
+          if (head) commentsOnEdit(d, A.id, A.text, head.text);
+          if (tail) commentsOnEdit(d, B.id, B.text, tail.text);
+          merged = head ?? tail ?? { id: uid(), kind: 'para', text: '' };
+        }
+        // a thread on a block that goes is detached, as one on deleted text is
+        for (let n = i + 1; n < j; n++) commentsOnEdit(d, d.body[n].id, d.body[n].text, '');
+        at = head ? head.text.length : 0;
+        d.body.splice(i, j - i + 1, merged);
+        k = i;
+      }
+      if (keep && line) {
+        put(k, spliceText(d.body[k], at, 0, line));
+        at += line.length;
+      }
+      caret = { id: d.body[k].id, at };
+      if (split) {
+        const tailId = splitIn(d, k, at);
+        if (tailId) caret = { id: tailId, at: 0 };
+      }
+    });
+    this.render();
+    this.setCaret(caret);
+    this.onChange?.();
+  }
 
   #splitBlock(c: Caret): void {
     const i = this.store.doc.body.findIndex(b => b.id === c.id);
     if (i < 0) return;
-    const src = this.store.doc.body[i];
-    const head = spliceKeep(src, 0, c.at);
-    const tailText = src.text.slice(c.at);
-    const tail: Block = {
-      id: uid(),
-      // a heading's continuation is a paragraph — nobody wants two headings;
-      // a list item's continuation is another item at the same level, which is
-      // what makes a list feel like a list rather than a kind you re-pick
-      kind: src.kind === 'para' || src.kind === 'quote' || isList(src.kind) ? src.kind : 'para',
-      text: tailText,
-    };
-    if (isList(src.kind) && src.level) tail.level = src.level;
-    const shifted = shiftPast(src, c.at);
-    if (shifted.marks?.length) tail.marks = shifted.marks;
-    if (shifted.notes?.length) tail.notes = shifted.notes;
     this.store.breakRun();
     this.#runId = null;
-    this.store.commit(d => {
-      d.body.splice(i, 1, head, tail);
-      commentsOnSplit(d, src.id, c.at, src.text.length, tail.id);
-    });
+    let tailId: string | null = null;
+    this.store.commit(d => { tailId = splitIn(d, i, c.at); });
     this.render();
-    this.setCaret({ id: tail.id, at: 0 });
+    if (tailId) this.setCaret({ id: tailId, at: 0 });
     this.onChange?.();
   }
 
-  #mergeBack(i: number): void {
+  /**
+   * Join block `i` onto block `i - 1`: Backspace at the start of `i`, or
+   * forward Delete at the end of `i - 1`. The earlier block keeps its identity.
+   *
+   * A table cell or a block with no text (a picture, a formula, a contents
+   * list) is not joined: fusing a paragraph into a cell breaks the grid, and
+   * fusing it into a picture put its words where nothing renders them. The
+   * key does nothing there, as it does at a cell's edge in every word
+   * processor.
+   */
+  #join(i: number): void {
     const body = this.store.doc.body;
     const prev = body[i - 1], cur = body[i];
+    if (!prev || !cur) return;
+    if (prev.kind === 'cell' || cur.kind === 'cell' || !TEXT_KINDS.has(prev.kind) || !TEXT_KINDS.has(cur.kind)) return;
     const at = prev.text.length;
-    const merged: Block = { ...prev, text: prev.text + cur.text };
-    const marks = [...(prev.marks ?? []), ...(cur.marks ?? []).map(m => ({ ...m, from: m.from + at, to: m.to + at }))];
-    const notes = [...(prev.notes ?? []), ...(cur.notes ?? []).map(n => ({ ...n, at: n.at + at }))];
-    if (marks.length) merged.marks = marks; else delete merged.marks;
-    if (notes.length) merged.notes = notes; else delete merged.notes;
+    const merged = joinBlocks(prev, cur);
     this.store.breakRun();
     this.#runId = null;
     this.store.commit(d => {
@@ -553,27 +730,91 @@ export class Editor {
   }
 }
 
-/** The head of a split: text up to `at`, with marks and notes clipped to it. */
+/** Blocks whose text the caret edits; the rest (picture, formula, contents) are atoms. */
+const TEXT_KINDS: ReadonlySet<Block['kind']> = new Set<Block['kind']>(['para', 'h1', 'h2', 'h3', 'quote', 'ul', 'ol', 'cell', 'caption']);
+
+/**
+ * `cur` appended to `prev`, which keeps its identity, kind and paragraph
+ * settings. Everything anchored by offset into `cur` — marks, footnotes,
+ * cross-references, citations, fields — moves with its words. (The join this
+ * replaced carried only marks and footnotes, so Backspace before a paragraph
+ * with a citation in it dropped the citation.)
+ */
+function joinBlocks(prev: Block, cur: Block): Block {
+  const at = prev.text.length;
+  const out: Block = { ...prev, text: prev.text + cur.text };
+  const marks = [...(prev.marks ?? []), ...(cur.marks ?? []).map(m => ({ ...m, from: m.from + at, to: m.to + at }))];
+  if (marks.length) out.marks = marks; else delete out.marks;
+  for (const key of ATOM_KEYS) {
+    const list = [...(prev[key] ?? []), ...(cur[key] ?? []).map(x => ({ ...x, at: x.at + at }))];
+    if (list.length) (out as Record<string, unknown>)[key] = list; else delete out[key];
+  }
+  return out;
+}
+
+/**
+ * Split `d.body[i]` at `at`, in place, inside the caller's commit. Returns
+ * the new tail block's id.
+ */
+function splitIn(d: TypeDoc, i: number, at: number): string | null {
+  const src = d.body[i];
+  if (!src) return null;
+  const head = spliceKeep(src, 0, at);
+  const tail: Block = {
+    id: uid(),
+    // a heading's continuation is a paragraph — nobody wants two headings;
+    // a list item's continuation is another item at the same level, which is
+    // what makes a list feel like a list rather than a kind you re-pick
+    kind: src.kind === 'para' || src.kind === 'quote' || isList(src.kind) ? src.kind : 'para',
+    text: src.text.slice(at),
+  };
+  if (isList(src.kind) && src.level) tail.level = src.level;
+  Object.assign(tail, shiftPast(src, at));
+  d.body.splice(i, 1, head, tail);
+  commentsOnSplit(d, src.id, at, src.text.length, tail.id);
+  return tail.id;
+}
+
+/** Offset-anchored atoms on a block: each entry has an `at` into `text`. */
+const ATOM_KEYS = ['notes', 'refs', 'cites', 'fields'] as const;
+
+/**
+ * The text from `from` to `to`, rebased to 0, with marks clipped to it and
+ * every atom from `from` to `to` INCLUSIVE kept (an atom sits between two
+ * characters, so one at either edge belongs to this piece).
+ */
 function spliceKeep(b: Block, from: number, to: number): Block {
   const text = b.text.slice(from, to);
   const out: Block = { ...b, text };
   const marks = (b.marks ?? [])
     .map(m => ({ ...m, from: Math.max(0, m.from - from), to: Math.min(to - from, m.to - from) }))
     .filter(m => m.to > m.from);
-  const notes = (b.notes ?? []).filter(n => n.at >= from && n.at <= to).map(n => ({ ...n, at: n.at - from }));
   if (marks.length) out.marks = marks; else delete out.marks;
-  if (notes.length) out.notes = notes; else delete out.notes;
+  for (const key of ATOM_KEYS) {
+    const list = (b[key] ?? []).filter(n => n.at >= from && n.at <= to).map(n => ({ ...n, at: n.at - from }));
+    if (list.length) (out as Record<string, unknown>)[key] = list; else delete out[key];
+  }
   return out;
 }
 
-/** The tail of a split: everything from `at`, rebased to 0. */
-function shiftPast(b: Block, at: number): { marks?: Block['marks']; notes?: Block['notes'] } {
+/**
+ * The tail of a split: marks and atoms from `at`, rebased to 0. An atom
+ * exactly at the split stays with the head. (This carried only marks and
+ * footnotes; cross-references, citations and fields stayed on the head at
+ * offsets past its end.)
+ */
+function shiftPast(b: Block, at: number): Partial<Pick<Block, 'marks' | typeof ATOM_KEYS[number]>> {
   const len = b.text.length - at;
+  const out: Record<string, unknown> = {};
   const marks = (b.marks ?? [])
     .map(m => ({ ...m, from: Math.max(0, m.from - at), to: Math.min(len, m.to - at) }))
     .filter(m => m.to > m.from);
-  const notes = (b.notes ?? []).filter(n => n.at > at).map(n => ({ ...n, at: n.at - at }));
-  return { marks: marks.length ? marks : undefined, notes: notes.length ? notes : undefined };
+  if (marks.length) out.marks = marks;
+  for (const key of ATOM_KEYS) {
+    const list = (b[key] ?? []).filter(n => n.at > at).map(n => ({ ...n, at: n.at - at }));
+    if (list.length) out[key] = list;
+  }
+  return out;
 }
 
 export { TAG, renderBlock };
