@@ -18,6 +18,9 @@ pub mod recovery;
 mod display_table;
 pub mod statements;
 
+#[cfg(windows)]
+pub mod windows_store;
+
 #[cfg(all(target_os = "linux", feature = "tpm"))]
 pub mod tpm_linux;
 

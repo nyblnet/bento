@@ -12262,3 +12262,250 @@ decision, 2026-11-08: detect it and do not write.
 Guards: `scripts/test-disk-change.ts` (fake handle on a 2 s-mtime file
 system, nine mutants and a control) and `scripts/test-disk-change-browser.mjs`
 (real Chromium handles).
+
+## 2026-11-08 — The bento/id directory (`server/directory/`) is AGPL-3.0-only, with a CLA
+
+Maintainer ruling, 2026-11-08. The directory service behind id.bento.page is
+licensed under the GNU Affero General Public License, version 3 only; the rest
+of the repository stays MIT.
+
+- **Why AGPL there:** the directory is a network service, not code that
+  travels inside a document. The AGPL's network clause means anyone who runs a
+  modified copy for others must offer those users its source.
+- **Scope is the directory alone.** `server/directory/` carries its own
+  `LICENSE` (the unmodified FSF text), `AGPL-3.0-only` SPDX headers on every
+  source file and in `wrangler.toml`, and a `package.json` whose only job is
+  the `license` field (plus `"type": "module"`, which its ESM sources already
+  are). The kernel modules it imports (`kernel/src/statements.ts`,
+  `address.ts` and friends) and its rig in `scripts/` stay MIT; MIT code can
+  be combined into AGPL work, and nothing MIT imports the directory except
+  that test rig.
+- **`-only`, not `-or-later`:** the repository has no GPL-family precedent,
+  and `-only` keeps the choice of any future licence version with the project
+  through the CLA rather than handing it to a licence steward in advance.
+- **CLA:** contributions to `server/directory/` need the individual CLA in
+  `server/directory/CLA.md` (adapted from the Apache ICLA v2.2), which grants
+  the project the right to relicense them. Contributions anywhere else need
+  nothing new. Until a CLA bot is installed (a maintainer account action), a
+  contributor agrees by posting the comment the CLA gives on their pull
+  request, and the reviewer checks for it before merging.
+
+Pointers: `server/directory/README.md` "Licence", `CONTRIBUTING.md` "License".
+
+## 2026-10-21 — bento/connect H2: the desktop host's trust store, origins and arming (home/desktop/host, home/desktop/hostcore)
+
+- **The security rules live in a crate with no webview** (`home/desktop/hostcore`),
+  so every one is unit-tested on any machine; the Tauri app (`home/desktop/host`)
+  only wires them to events.
+- **Trust store.** The signed `releases/<app>/history.json` files are bundled at
+  build time (`build.rs` embeds every `*history*.json` under `releases/`, or
+  `BENTO_HISTORIES_DIR`). Embedding is not trusting: each is verified against the
+  pinned release key on first read. The release key is pinned in ONE place
+  (`hostcore::trust::RELEASE_KEY`); a rotation is an app update pinning only the
+  new key. The newest verified history per app is kept in the data directory as
+  the anti-rollback floor; gate 1's `accept_history` decides every replacement,
+  and histories are refreshed only by a user action. A document is genuine only
+  if exactly one release across every app's history matches every block.
+- **Gate 1 runs at every serve, on exactly the bytes served**, and a load arms
+  from that verdict: a reload after a save, or a watchdog-recreated webview,
+  always arms from a fresh verdict on what it actually received.
+- **Arming is a two-step handshake.** A finished load of the document mints a
+  capability and a nonce, PENDING; the shim echoes the nonce and the host arms
+  only if no newer load has started. Every load start revokes. Per-load state
+  resets in the same step that mints.
+- **No Tauri capability file ships.** Page script reaches no core or plugin
+  command; the host's own two commands are gated by the per-load secret.
+- **Envelope documents (format `bento/enc`, password or identity-sealed)** take a
+  path-only origin plus an epoch that rotates when the file is replaced by
+  something the host did not write (Unix: device and inode; the Windows file ID
+  is owed with the Windows host). Never a wipe, never a prompt.
+- **Neutral title while sealed, matching the saved file's title** (§30): the
+  window title of an envelope document is the app name.
+- **The rigs are part of the host**: the `rig` feature (never shipped) adds the
+  probe, a dead drop and a report sink; `rig/check.py` asserts every row, and a
+  deliberately broken capability check fails rigs 2 and 6.
+
+
+## 2026-11-04 — bento/connect H2 on Windows: WebView2 measured on a hosted runner (home/desktop/host)
+
+Measured on GitHub's hosted `windows-latest` (WebView2 runtime 156.0.4314.50), the same rigs as
+Linux, 543 checks passing (read from the job log; each race attempt that lands adds two rows, so
+the total moves between runs). Windows Hello and a real TPM consent key are NOT measured (a hosted runner has
+neither); the Windows key store is an explicit stub that refuses everything until a real-PC session.
+
+- **Per-document origins are distinct origins on WebView2.** A document is served at
+  `http://bento.<24 hex>.localhost/` (wry's custom-protocol form on Windows). Two documents report
+  two different `location.origin`s, and with BOTH forced onto one shared profile directory
+  (`pairshared`, rig only) IndexedDB, BroadcastChannel and cookies are still separate, so the origin
+  alone separates them. The separate-profile fallback (§19e 5) is not needed, and the host still
+  gives each document its own profile directory.
+- **Tauri on Windows treats only `http://bento.localhost` as the app's own origin.** A per-document
+  origin is "remote" to it and every custom command is refused ("not allowed on origin") unless a
+  remote capability names it. **This reverses "no Tauri capability file ships" on Windows only:**
+  `capabilities-windows/documents.json` admits exactly `bento_arm` and `bento_file` to
+  `http://bento.:h([0-9a-f]{24}).localhost/` (`"local": false`), nothing from core or any plugin,
+  and both still demand the load's capability secret. The ACL is a second layer and never the
+  boundary: the capability stays the rule. The pattern is the tight form because the first glob,
+  `http://bento.*.localhost/*`, also matched `bento.evil.localhost` and `bento.a.b.c.localhost`.
+  `bento_id` is not granted, since nothing on Windows can use it until a key store exists. Linux
+  ships none, as before. `release-check.sh` asserts the compiled set exactly (`capcheck.py`). The
+  rig adds two more files (rig commands and `bento_id`; the attacker fixture's origin) that exist
+  only in rig builds, so every rig also has a build without `rig-embed.json` for one scenario:
+  the ACL that ships, refusing an embed that holds the window's own secret.
+- **Embedded frames.** A sandboxed frame (origin null) is refused by Tauri's IPC itself ("Origin
+  header is not a valid URL") even holding the window's own secret; an unsandboxed frame of another
+  origin reaches the host only if the platform ACL admits it (rig only) and is then refused by the
+  secret (no capability / capability refused), with the own-secret control accepted.
+- **`on_navigation` is main-frame only on WebView2.** wry wires it to `NavigationStarting`, never
+  `FrameNavigationStarting`, so "the policy fires for iframes" is true on WebKitGTK alone. On
+  Windows the navigation policy for FRAMES (§19e d4) rests on the document's pinned CSP and nothing
+  else. A genuine document's frame sent to plain http is refused by `frame-src` on both engines; an
+  unknown document has no CSP, so on Windows it can frame http (the rig's d4 row: the frame loaded
+  and the policy never saw it), holding no secret and refused by the ACL. The main-frame half is
+  unchanged.
+- **Origin-Agent-Cluster:** the attribute is `window.originAgentCluster`, and it is `true` on
+  WebView2 (an earlier version of this entry read a misspelt name and called it unexposed).
+  `document.domain = "<hex>.localhost"`, the document's own parent, is a silent no-op under the
+  header, and with the header at `?0` (the rig's negative control) the attribute reads false and
+  the same write takes effect, so these rows can fail. `document.domain = "localhost"` throws
+  SecurityError with or without the header, because a single label can never be set, so it says
+  nothing about the header; it is why §19f(3) holds in substance, since sibling documents share
+  only `localhost`. Cookies set with `Domain=localhost` are refused; the document's own host and
+  its `<hex>.localhost` domain are accepted and invisible to a sibling.
+- **One renderer process per document:** distinct renderer PIDs for two documents, stopping any one
+  (NtSuspendProcess) freezes exactly one document, stopping all freezes both (negative control).
+- **A cancelled navigation reports a finished load on WebView2, and its request still goes out.**
+  Measured per navigation, on a genuine and an unknown document: `http:`, `mailto:` and `blob:`
+  reach `on_navigation`, are cancelled, and each report one finished load at the document's URL
+  with no load start, so any such link in a document does it. `file:` and `data:` never reach the
+  policy and report nothing. WebKitGTK reports no finished load for any of these. The `http:`
+  request also reached the rig's server every time on WebView2, while the page stayed where it
+  was: cancelling stops the commit, not the request, so on Windows "the policy refused it" does
+  not mean "nothing was sent". For `https:` that adds no reach, since an allowed `https:` navigation
+  leaves before its bounce on both engines. Plain `http:` is reach an allowed navigation lacks: a
+  local http-only service gets a GET. An unknown document already has that, having no CSP; for a
+  genuine document it is a bare GET to a URL written in the deck.
+- **One mint per generation (all platforms).** Because of the above, WebView2 reports several
+  finished loads for one generation in ordinary use. `Load::load_finished` now mints once: a repeat while PENDING hands back the same
+  secret and nonce, and a repeat once ARMED does nothing. Without this, the order
+  pending, armed, pending left the host pending under a new secret an armed page ignores, so every
+  later call failed for the rest of the load and the handle and exports were wiped. The rig row is
+  a real save through the host after each blocked navigation and after the bounce, never page state.
+- **Shim change (all platforms):** the shim adopts a capability secret only when `bento_arm`
+  succeeds, and ignores later deliveries once armed. It is needed beside the rule above, not
+  instead of it: alone it fixes only the order pending, pending, armed.
+- **A load's verdict is every serve since the previous load start, ANDed and fixed at this load's
+  start, and the mint consumes it (all platforms).** A serve cannot be tied to a generation, because the main document is served before
+  its load start, which both engines raise at commit. So the old page still holds a live capability
+  after its reload was served, and with an overwriting verdict an unknown document could reload,
+  swap a genuine shell over its own file in that gap, fetch its own URL from the new page, and be
+  armed genuine while its unknown bytes ran (security measured this reaching the agent on
+  WebKitGTK; nothing could sign, since no store is wired). One unknown serve now makes the load
+  unknown, and a serve after the load's start counts only against the next load. The verdict is
+  fixed at the start and not at the mint because the finish is the page's to time on WebView2 (any
+  cancelled navigation reports one): a mint reading the running tally would use up the next load's
+  unknown serve, and a later serve alone would then judge that load (armed genuine in hostcore; no
+  engine has been seen producing that order). The rig scenario is security's race
+  on both engines, read from the host's own arming line (the swap landed between the two serves in
+  9 or 10 of 10 attempts on WebKitGTK and 7 or 8 of 10 on WebView2, and every one armed unknown).
+  The AND has a rig mutant on WebKitGTK: without it the old page's own fetch makes the attacker's
+  bytes arm genuine and reach the agent (measured before the taint below, which now stands behind it
+  too). The take has units only since the taint: its rig row was a saved, reloaded unknown document
+  arming genuine, which no longer happens by design. Fixing the verdict at the start has a unit and a unit mutant only, since no engine
+  has shown the order it guards. It fails closed in one way worth knowing: a page that fetched its
+  own URL while unknown makes its next load unknown too.
+- **The WebKitGTK page cache is off, because a load needs a document serve (Linux).** Going back
+  through history restored a page whole from the page cache: a load start and a finish, and no
+  serve. A serve is the verdict's only evidence and hostcore cannot tell a page's fetch from a
+  document serve, so the restored page was judged on what was fetched before it. Measured on
+  WebKitGTK with the document's `no-store` in place: an unknown document left for https (the bounce
+  makes the history), swapped a genuine shell over its file, fetched its own URL and went back, and
+  its first page came back with its unknown bytes, armed genuine and reached the agent. The shim
+  was no obstacle: the secret passes through the realm's JSON.stringify, so a page can take it,
+  fail the shim's call and echo for itself. `set_enable_page_cache(false)` now runs on every
+  webview, and the host stops if it does not hold. The same scenario now serves the document before
+  the load starts, and removing the setting turns that row red. On WebView2 the same scenario also
+  served the document and reloaded, with no setting; why is not read, so the row is what holds it.
+  This setting is the second layer, not the rule: it proves a negative about one engine build, and
+  the host does not ship the engine (distro WebKitGTK, evergreen WebView2, which has no such
+  setting). What holds without it is the taint below; a rig row turns the cache back on to show that.
+- **A load that started off the document never mints (all platforms).** Security measured a remote
+  https page reaching the agent on WebKitGTK: an unknown document swapped a genuine shell over its
+  file, fetched its own URL so a genuine verdict sat on the books, and sent the main frame to https.
+  The bounce's navigate changed what the engine reported, so that load's finish carried the
+  document's URL, the mint took the verdict, and the secret landed in the https page, whose realm
+  has the shim and Tauri's IPC. `load_started` now takes whether the URL is the document's, and if
+  it is not, the load has no verdict (the tally is still taken). WebView2 reports the https URL at
+  that finish, so the old mint was not reachable that way (measured with the verdict on the books);
+  the row runs on both engines, and the rule's mutants on WebKitGTK alone. The row's page
+  catches a delivery of its own as a control, and must catch no other.
+- **One unknown serve taints the webview, for good (all platforms).** A tainted Load never mints
+  genuine; only a new webview is a new Load. Every route found to a genuine verdict for unknown
+  bytes (the race, the reload before a finish, the restored page, the https page) begins with
+  unknown script running in this webview, and that takes an unknown serve here. So the rule needs no
+  knowledge of which serve was which, and no engine's ordering carries unknown to genuine.
+  Requiring a document serve instead cannot be built: WebKitGTK sends no Sec-Fetch on `bento://`, and
+  an XHR setting the two headers a document request has arrives identical in the handler.
+  Each of the two rules closes what the other does not, and each has a rig mutant showing it: with
+  the first removed the https page still takes the file capability; with the taint removed and the
+  page cache on, an unknown page comes back whole and arms genuine.
+- **The cost, stated: a document re-saved genuine stays unknown until it is opened again.** If an
+  unknown document writes genuine bytes over its own file and reloads, those bytes run and identity
+  stays off in that window; closing and reopening the file arms it genuine (both rig rows). It keeps
+  its file capability throughout, so it opens, edits and saves as before. The watchdog's rebuild
+  counts as a reopen, correctly, since nothing that ran survives it. **A normal user saving a
+  genuine document is not affected:** the taint needs an unknown serve, a document's bytes change
+  only by the host's own write, and a genuine runtime's save is genuine. Measured on the real 1.2.10
+  release: saved by its own serializer and reloaded in the same webview, both loads serve genuine
+  and arm genuine, and identity stays on. A document made by a release newer than the bundled
+  history is unknown before and after, with or without this rule. The residual is a FRESH webview
+  running unknown bytes with no serve, which has nothing to taint it and only a persisted service
+  worker could do. Registering the document as one is refused on both engines: WebView2 refuses it
+  for its MIME type while a real script at that origin registers (the row's control), and WebKitGTK
+  refuses the custom scheme outright, so that half has no accepted control.
+- **A document's URL includes its fragment (all platforms).** The host compared the URL exactly,
+  but a page moves its own fragment without asking: `history.pushState` is invisible on both
+  engines (bento/spaces does it on every page change), and a plain `#x` link is invisible on
+  WebView2 (no policy call, no load start, no finish). WebKitGTK does ask, and the policy refused
+  it: a genuine document's in-page link did nothing on Linux. (An unknown document's URL moved
+  anyway, with the policy's refusal in the log. The cause is the CSP, not the verdict: with the fix
+  removed the genuine document stayed at `''` and the unknown one moved to `#nl`, 4 of 4 runs, and
+  the same genuine document with its CSP header dropped moved too, 3 of 3. So on WebKitGTK refusing
+  a same-document navigation does not bind a page with no CSP; the mechanism is unread. Refusals
+  of cross-document navigations on that same page hold, and a same-document move changes no bytes
+  and starts no load, so arming is untouched.) Once the URL carries
+  a fragment, a reload's does too, and the policy refused that: measured on WebKitGTK with the fix
+  removed, the reload never happens. On WebView2 the same compare is read, not measured; the
+  fixed path is measured on both. `is_document` now takes the part before `#`, for the navigation
+  policy, the bounce and the mint: a fragment never reaches the protocol handler, so it is the same
+  bytes from the same origin. A query is still another URL. The watchdog keeps the exact compare,
+  since `own#x` is usually a same-document navigation that starts no load and it would rebuild a
+  healthy webview; so a reload from a fragment URL has no watchdog, and WebKitGTK's reload stall on
+  an unknown document is unrecovered in that one case.
+- **Windows file ID** (volume serial plus the 128-bit file ID, `GetFileInformationByHandleEx`) now
+  drives the envelope epoch; `GlobalMemoryStatusEx` answers the recovery memory check.
+
+## 2026-11-08 — Slides: what the author sees when another program changed the file
+
+The slides half of "A file another program changed is never overwritten"
+(same date). A banner names the file and offers two
+choices; until one is made, auto-save keeps its browser recovery copy but does
+not write the file or flash "Saved", and ⌘S answers with "Not saved — … was
+changed by another program" and brings the banner back.
+
+- **"Load the version on disk"** opens the file as it is now, by the same
+  route as a dropped file (block, parse, the open-file guard), as ONE undoable
+  step. The deck as it was goes into Version history first, and the toast says
+  so only when the timeline really has it. Not for a sealed deck on either side
+  (a password now, or one the file gained): that plaintext never reaches
+  IndexedDB, and ⌘Z is the way back. The file is not rewritten after loading.
+- **The file's password wins.** A version on disk that has a password asks for
+  it (a wrong one loads nothing), and later saves are encrypted with it; one
+  whose password was removed is loaded and saved without one. An
+  identity-sealed version cannot be opened from here: the author is told to
+  open the file again.
+- **"Keep mine"** overwrites once, deliberately; the next outside edit is
+  caught again.
+
+Guard: `scripts/test-slides-disk-change-browser.mjs` (the packaged document,
+real file handles through `launchQueue`).
