@@ -12,7 +12,7 @@ cd "$(dirname "$0")"
 # capability brings no rig command with it, so it has needles of its own: its identifier and
 # the loopback origin it opens. Security: never in a release host.
 needles() {
-  printf '%s\n' rig_stash rig_done rig_recreate rig_session rig_skew BENTO_RIG_SHARED_PROFILE BENTO_RIG_OAC_OFF BENTO_RIG_EMBED_CERT \
+  printf '%s\n' rig_stash rig_done rig_recreate rig_session rig_skew rig_answers rig_provision rig_counts rig_gate rig_bus BENTO_RIG_REALSTORE BENTO_RIG_SHARED_PROFILE BENTO_RIG_OAC_OFF BENTO_RIG_EMBED_CERT \
     allow_tls_certificate_for_host rig-embed allow-rig '127.0.0.1:*' \
     "$("${PY:-python3}" -c "import json;print(json.load(open('../../fixtures/gate1/test-public-key.json'))['x'])")"
 }
@@ -25,4 +25,9 @@ if printf '%s\n' "$LIST" | grep -q '^$'; then echo "FAIL a needle is empty"; exi
 while IFS= read -r needle; do
   if grep -a -q -F -- "$needle" "$BIN"; then echo "FAIL the binary contains ${needle:0:40}…"; exit 1; fi
 done <<< "$LIST"
+# and what must be there on Linux: a build without the watcher could never sign, or (if the
+# gate were ever defaulted open) would go on signing through a lock
+if [ "$(uname -s)" = Linux ]; then
+  grep -a -q -- "org.freedesktop.login1" "$BIN" || { echo "FAIL the binary has no logind watcher"; exit 1; }
+fi
 echo "ok   the binary has no rig commands, no rig capability, no corpus test key and no test-only TLS trust"

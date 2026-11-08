@@ -91,6 +91,253 @@
       setInterval(() => inv('rig_stash', { key: LABEL + '.hb', value: String(++n) }).catch(() => {}), 300)
       return
     }
+    // B1 slice 2: whoami (consent per document), resolve (keys already in the
+    // room) and the host's re-auth prompt, through the real bridge, shim, host
+    // and agent. Mode 'ident' runs three documents on the in-memory key (A and
+    // B genuine, U unknown); 'keystore' and 'keystore-tpm' run ONE genuine
+    // document on the REAL key store (the Secret Service, or a software TPM).
+    if (window.__RIG_MODE === 'ident' || window.__RIG_MODE === 'keystore' || window.__RIG_MODE === 'keystore-tpm') {
+      const I = { label: LABEL, mode: window.__RIG_MODE }
+      const sess = (a) => inv('rig_session', { action: a })
+      const skew = (ms) => inv('rig_skew', { addMs: ms })
+      const answers = (consent) => inv('rig_answers', { consent })
+      const counts = () => inv('rig_counts', {})
+      const prov = (a) => inv('rig_provision', { action: a }).then((v) => v, (e) => 'ERR ' + e)
+      const tag = (r) => (r && r.ok ? 'ok' : r && r.reason) || String(r)
+      const MIN = 60000
+      const FRAME = 'AAAAAAAAAAAAAAAA.' + 'A'.repeat(22)
+      const b64u = (t) => Uint8Array.from(atob(t.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0))
+      const flag = (k) => inv('rig_stash', { key: k })
+      const waitFlag = async (k, ms) => { for (let t = 0; t < ms; t += 100) { if (await flag(k)) return true; await sleep(100) } return false }
+      try {
+        await until(() => window.__rigCap, 15000)
+        const d = Object.getOwnPropertyDescriptor(window, '__bentoIdentity')
+        I.present = !!d
+        const raw = (op, extra) => inv('bento_id', { msg: JSON.stringify(Object.assign({ id: 'i-' + op, op }, extra)), cap: window.__rigCap }).then((t) => { const j = JSON.parse(t); return j.ok ? 'ok' : j.value }, (e) => 'THREW ' + e)
+        if (!d) {
+          // the unknown document: no agent object, and the host stops raw IPC before any prompt
+          I.raw_whoami = await raw('id.whoami', {})
+          I.raw_resolve = await raw('id.resolve', { pub: 'RIG-BOB' })
+          I.raw_sign = await raw('id.sign', { purpose: 'frame', payload: FRAME })
+          await waitFlag('ib.done', 60000)
+          I.counts = await counts()
+          await inv('rig_done', { report: { ident: I } })
+          return
+        }
+        const ag = window.__bentoIdentity
+        if (window.__RIG_MODE === 'ident' && LABEL === 'doc0') {
+          // A: nothing to share yet, so nothing is asked
+          await answers(true)
+          I.no_account_whoami = await ag.whoami()
+          I.no_account_counts = await counts()
+          await prov('account')
+          // the person says NO for this document
+          await answers(false)
+          I.a_decline = await ag.whoami()
+          I.a_decline_again = await ag.whoami()
+          I.a_counts = await counts()
+          I.a_resolve_before = await ag.resolve({ pub: 'RIG-BOB' })
+          await inv('rig_stash', { key: 'ia.declined', value: '1' })
+          await waitFlag('ib.done', 60000)
+          // B was allowed; that is not A's yes
+          I.a_after_b_whoami = await ag.whoami()
+          I.a_after_b_resolve = await ag.resolve({ pub: 'RIG-BOB' })
+          I.counts_end = await counts()
+          await inv('rig_done', { report: { ident: I } })
+          return
+        }
+        if (window.__RIG_MODE === 'ident') {
+          // B: waits for A's no, then the person says YES for B only
+          await waitFlag('ia.declined', 60000)
+          await answers(true)
+          I.b_whoami = await ag.whoami()
+          I.b_whoami_again = await ag.whoami()
+          I.b_counts = await counts()
+          I.b_resolve_bob = await ag.resolve({ pub: 'RIG-BOB' })
+          I.b_resolve_unknown = await ag.resolve({ pub: 'RIG-NOBODY' })
+          I.b_resolve_email = await ag.resolve({ email: 'bob@example.org' })
+          I.b_resolve_own = I.b_whoami ? await ag.resolve({ pub: I.b_whoami.devicePub }) : null
+          await prov('changed')
+          I.b_resolve_changed = await ag.resolve({ pub: 'RIG-BOB' })
+          // re-auth, Linux v1 (maintainer 2026-11-08): this host has no verifier, so with no
+          // session it REFUSES and tells the person why. Nothing the person or the page can
+          // answer opens a session; only rig_session (the stand-in for a real verification) does.
+          I.s_first = tag(await ag.sign('frame', FRAME))
+          I.s_first_counts = await counts()
+          // not told again inside the cooldown
+          I.s_again = tag(await ag.sign('frame', FRAME))
+          I.s_again_counts = await counts()
+          // a bad payload never reaches the host's notice, past the cooldown or not
+          await skew(2 * MIN)
+          I.s_bad = tag(await ag.sign('frame', 'not-a-frame'))
+          I.s_bad_counts = await counts()
+          // past the cooldown: still refused, and told again
+          I.s_after_cooldown = tag(await ag.sign('frame', FRAME))
+          I.s_after_cooldown_counts = await counts()
+          // CONTROL: a session opened by a verification signs, and nothing is shown
+          I.s_begin = await sess('begin')
+          I.s_inside = tag(await ag.sign('frame', FRAME))
+          I.s_inside_counts = await counts()
+          // past the idle limit the session is gone: refused and told, never re-opened by the host
+          await skew(61 * MIN)
+          I.s_idle = tag(await ag.sign('frame', FRAME))
+          I.s_idle_counts = await counts()
+          await inv('rig_stash', { key: 'ib.done', value: '1' })
+          await inv('rig_done', { report: { ident: I } })
+          return
+        }
+        // keystore / keystore-tpm: the REAL store, end to end
+        I.c0 = await counts()
+        I.before_key_whoami = await ag.whoami()
+        await prov('account')
+        // an account with no key on this device has nothing to sign with
+        I.no_key_sign = tag(await ag.sign('frame', FRAME))
+        I.no_key_counts = await counts()
+        I.devpub = await prov('device-key')
+        await answers(true)
+        I.whoami = await ag.whoami()
+        // no session: refused, with the notice (Linux v1 has no verifier)
+        I.no_session_sign = tag(await ag.sign('frame', FRAME))
+        I.begin = await sess('begin')
+        const s1 = await ag.sign('frame', FRAME)
+        I.sign = tag(s1)
+        if (s1.ok) {
+          const key = await crypto.subtle.importKey('raw', b64u(s1.pub), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify'])
+          const ver = (msg) => crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, b64u(s1.sig), new TextEncoder().encode(msg))
+          I.sig_valid = await ver(FRAME)
+          I.sig_binds = !(await ver(FRAME + 'x'))
+          I.sign_pub = s1.pub
+        }
+        I.keyring_items = await prov('keyring-items')
+        I.counts = await counts()
+        // the timers bind the real store too
+        await skew(61 * MIN)
+        I.idle_no = tag(await ag.sign('frame', FRAME))
+        I.wipe = await prov('wipe')
+      } catch (e) { I.error = String((e && e.stack) || e) }
+      await inv('rig_done', { report: { ident: I } })
+      return
+    }
+    // Security's ruling on #893: the OS ends the session. One genuine document signs through
+    // the real bridge, shim, host and agent while rig/fakelogind.py plays the machine. Modes:
+    // 'lock' the whole run, 'lock-start' a session that was already locked at launch,
+    // 'lock-nobus' no bus at all.
+    if ((window.__RIG_MODE || '').startsWith('lock')) {
+      const K = { label: LABEL, mode: window.__RIG_MODE }
+      const sess = (a) => inv('rig_session', { action: a })
+      const gate = () => inv('rig_gate', {})
+      // Linux v1 has no verifier: the host only ever REFUSES re-auth (and says so); nothing here can
+      // answer it. A session opens through rig_session alone, the stand-in for a real verification.
+      const prompts = async () => (await inv('rig_counts', {})).reauth
+      const tag = (r) => (r && r.ok ? 'ok' : r && r.reason) || String(r)
+      const FRAME = 'AAAAAAAAAAAAAAAA.' + 'A'.repeat(22)
+      // act, then wait for the gate to move; if it never does, the row after it says so
+      const bus = async (a) => {
+        const g0 = await gate()
+        await inv('rig_bus', { action: a })
+        for (let t = 0; t < 2500 && (await gate()) === g0; t += 50) await sleep(50)
+      }
+      // for what must change nothing: the same wait, in full, so a change would be seen
+      const quiet = async (a) => { await inv('rig_bus', { action: a }); await sleep(800) }
+      const waitGate = async (want) => { for (let t = 0; t < 6000 && !(await gate()).startsWith(want); t += 100) await sleep(100); return gate() }
+      try {
+        await until(() => window.__rigCap, 15000)
+        const ag = window.__bentoIdentity
+        K.present = !!ag
+        const sign = async () => tag(await ag.sign('frame', FRAME))
+        if (window.__RIG_MODE === 'lock-nobus') {
+          await sleep(2500) // the watcher has had its attempts
+          K.gate = await gate()
+          K.begin = await sess('begin')
+          K.sign = await sign()
+          K.prompts = await prompts()
+        } else if (window.__RIG_MODE === 'lock-start') {
+          K.gate = await waitGate('Locked')
+          K.begin = await sess('begin')
+          K.sign = await sign()
+          K.prompts = await prompts()
+          await bus('hint-off')
+          K.gate_after = await gate()
+          K.sign_after = await sign()
+          K.prompts_after = await prompts()
+          K.begin_after = await sess('begin')
+          K.sign_after_begin = await sign()
+        } else {
+          K.gate0 = await waitGate('Open')
+          K.begin0 = await sess('begin')
+          K.control = await sign()
+          K.control_again = await sign()
+          // Lock: ends it, and the matching Unlock gives nothing back
+          await bus('lock')
+          K.after_lock = await sign()
+          await quiet('unlock')
+          K.after_unlock = await sign()
+          // sleep: ends it, and waking gives nothing back
+          K.begin1 = await sess('begin')
+          K.sleep_control = await sign()
+          await bus('sleep')
+          K.after_sleep = await sign()
+          await quiet('wake')
+          K.after_wake = await sign()
+          // waking is not a sleep
+          K.begin2 = await sess('begin')
+          await quiet('wake')
+          K.wake_alone = await sign()
+          // LockedHint: ends it; while it stands nothing opens and nobody is asked
+          await bus('hint-on')
+          K.gate_locked = await gate()
+          K.after_hint = await sign()
+          K.begin_locked = await sess('begin')
+          await inv('rig_skew', { addMs: 120000 }) // past the cooldown of the no's above, or a prompt could not show here
+          const p0 = await prompts()
+          K.locked_sign = await sign()
+          K.locked_prompts = (await prompts()) - p0
+          // a signal claiming "unlocked" that logind does not back up changes nothing
+          await quiet('hint-lie')
+          K.gate_after_lie = await gate()
+          // unlocked: the person can be told again (still refused: no verifier), and a verification signs
+          await bus('hint-off')
+          K.gate_unlocked = await gate()
+          const p1 = await prompts()
+          K.unlocked_sign = await sign()
+          K.unlocked_prompts = (await prompts()) - p1
+          K.begin_unlocked = await sess('begin')
+          K.unlocked_control = await sign()
+          // the same flag, announced with no value (a property invalidated, not changed)
+          await bus('hint-on-invalidated')
+          K.gate_invalidated = await gate()
+          K.after_invalidated = await sign()
+          await bus('hint-off')
+          // logind leaves the bus: closed, nobody asked, and it reopens with no session
+          K.begin3 = await sess('begin')
+          K.name_control = await sign()
+          await bus('name-drop')
+          K.gate_no_name = await gate()
+          K.begin_no_name = await sess('begin')
+          const p3 = await prompts()
+          K.no_name_sign = await sign()
+          K.no_name_prompts = (await prompts()) - p3
+          await inv('rig_bus', { action: 'name-back' })
+          K.gate_name_back = await waitGate('Open')
+          K.name_back_sign = await sign()
+          // the session goes away under the host: the same
+          K.begin4 = await sess('begin')
+          K.session_control = await sign()
+          await bus('session-gone')
+          K.gate_session_gone = await gate()
+          K.session_gone_sign = await sign()
+          await inv('rig_bus', { action: 'session-back' })
+          K.gate_session_back = await waitGate('Open')
+          K.session_back_sign = await sign()
+          K.begin5 = await sess('begin')
+          K.session_back_control = await sign()
+        }
+      } catch (e) { K.error = String((e && e.stack) || e) }
+      await inv('rig_done', { report: { lock: K } })
+      // the bus itself dies. This page dies with it, so the host reports (rig_bus)
+      if (window.__RIG_MODE === 'lock') await inv('rig_bus', { action: 'bus-down' })
+      return
+    }
     // B1 (security §2e B): the sign path through the REAL bridge, shim, host and
     // agent, across the idle and overall session limits. The genuine document
     // calls window.__bentoIdentity; the unknown one must not have it. The rig
@@ -153,6 +400,21 @@
         S.after_overall_reauth = tag(await ag.sign('frame', FRAME))
         await sess('lock')
         S.after_lock = tag(await ag.sign('frame', FRAME))
+        // a clock moved BACKWARDS ends the session, and it stays ended (the agent's session_live;
+        // saturating arithmetic alone would read it as no time at all). One minute back: the host
+        // runs on the real clock, so a step smaller than the time between two calls is swamped by it
+        // (measured: 1 ms back still signed). The agent's unit rows hold the 1 ms boundary.
+        await sess('begin')
+        S.back_control = tag(await ag.sign('frame', FRAME))
+        await skew(-MIN)
+        S.back_1min = tag(await ag.sign('frame', FRAME))
+        await skew(5 * MIN)
+        S.back_later = tag(await ag.sign('frame', FRAME))
+        // CONTROL: the same step forward keeps signing
+        await sess('begin')
+        S.fwd_control = tag(await ag.sign('frame', FRAME))
+        await skew(MIN)
+        S.fwd_1min = tag(await ag.sign('frame', FRAME))
       } catch (e) { S.error = String((e && e.stack) || e) }
       await inv('rig_done', { report: { sign: S } })
       return

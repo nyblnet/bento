@@ -12561,3 +12561,165 @@ is visible, and anonymous senders cannot be told apart.
 
 Guard: `scripts/test-directory.ts` (the "budget" rows) and
 `scripts/test-directory-mutants.ts` (the budget back in front of each refusal).
+
+## 2026-11-03 — bento/id B1 on the Linux desktop host: a real key store, consent per document, re-auth refused without a verifier
+
+- **The key store is the machine's, never the webview's.** The Linux host holds
+  the device key in the TPM where this user can open one, in the desktop's
+  Secret Service otherwise, and in no other place. The choice is made once at
+  start, TPM first; a machine with a TPM never touches the keyring. Where there
+  is no TPM the host says so, once, the first time the identity is used: any
+  program running as the person can read that key while the keyring is unlocked.
+  Where there is a TPM the key cannot be copied off the machine, though a program
+  running as the person can still ask it to sign while they are signed in.
+- **`whoami` is consent per document.** With nothing to share (no account, or no
+  key on this device) it answers `no-identity` and never asks. Otherwise the
+  first time a document asks, the host asks the person, showing what the
+  document would see (name, address, who vouches). A yes is remembered for that
+  document across launches, keyed by a hash of its id so the file does not list
+  documents; a no is remembered until the host exits (there is no screen yet to
+  undo a permanent no, so none is stored).
+- **`resolve` answers only for a document the person has allowed, and only for
+  keys this host already holds a binding for.** It never prompts (a prompt on
+  `resolve` would let a document spend the person's attention) and never reaches
+  the network; an unknown key and a refused document both read `null`. A key's
+  binding is pinned on first sight; a different binding for the same key reads
+  `changed` and the first stays pinned.
+- **Past the idle or overall limit the host refuses, and says why.** The
+  maintainer's ruling (2026-11-08): on Linux, where polkit cannot ask, re-auth is
+  refused with a clear message, and security keys are the only verifier for v1.
+  An AppImage, the first Linux package, cannot install a polkit action, so on
+  this host there is no polkit path at all, and the security-key verification
+  (a FIDO2 assertion with user verification, which needs a host-drawn PIN field)
+  is not wired yet. Until it is, every re-authentication on Linux is refused:
+  `sign` past the limit stays `reauth`, and the host shows an OK-only notice that
+  nothing was signed and why. A presence prompt ("confirm it's you" with a
+  button) is never offered in its place: it verified nobody, and a same-user
+  program could press it. The notice is reached only by an otherwise valid request
+  (a payload that matches its purpose, a device key present), one at a time, and
+  not shown again for a minute. The agent keeps the seam for a real verifier
+  (`Ui::reauth` answers `Verified`, `Declined` or `NoVerifier`); a verification
+  that spans a lock or a sleep opens nothing.
+- **The book is provisional under option G.** It is plain JSON in the host's
+  data directory (public data only; no key material). Option G (2026-11-08: an
+  account is a passkey roster) retires the signed `bind.` binding that the book's
+  `own` and `seen` entries were shaped around. They stay only as what `whoami`
+  and `resolve` answer from until the kernel's roster format lands; after it they
+  become a cache of verified device certificates and roster entries, never a
+  store of record. Nothing in a shipped build writes them, so a shipped host
+  answers `no-identity` and `null`. The per-document consent list is G-neutral
+  and stays. A same-user program could edit the file and make a name read
+  wrongly, though it can reach no key. No account key is stored anywhere (that
+  work is paused under G).
+- **Linux packaging: AppImage first, Flatpak later** (maintainer, 2026-11-08).
+  The host now links libsecret and libtss2, which the AppImage must carry or
+  require. A Flatpak needs `--system-talk-name=org.freedesktop.login1` for the
+  lock watcher (without it the host reads as blind, which is closed) and the
+  Secret Service portal or talk-name for the key store; neither can install a
+  polkit action, which is why the ruling above does not depend on polkit.
+
+## 2026-11-04 — bento/id on the Linux desktop host: the OS ends a signing session; what polkit can and cannot do for re-auth
+
+**Settled, in code (home/desktop/agent/src/lockgate.rs, home/desktop/host/src/logind.rs).** A
+machine locked or asleep stops signing, and a host that cannot hear the OS does not sign.
+
+- **`Session.Lock`, `LockedHint` and `PrepareForSleep(true)` each end the routine session.**
+  Nothing the OS says opens one: `Unlock` is not listened to and a wake-up does nothing. After
+  any of them the next `sign` is `reauth`.
+- **Blind means closed.** The agent opens no session until every subscription is in place and
+  `LockedHint` has been read. The bus closing, logind leaving the bus or the session going away
+  ends the session and closes it again. While closed, `sign` is `unavailable` and nobody is
+  asked: no answer could help. While locked it is `reauth`, and nobody is asked either.
+- **A verification that spans a lock opens nothing.** The agent hands out a ticket before the
+  host verifies the person. If a lock or a sleep lands meanwhile, the verification is void,
+  because it may not be from the person who is here now; the next sign asks afresh, with no
+  cooldown. Held by the agent's unit rows: the Linux host has no verifier yet (ruling below),
+  so no host prompt exists to span a lock.
+- **The OS's word does not go through the agent's mutex.** The host holds that mutex while a
+  dialog is up, so a lock would wait for the dialog. It is one atomic word that both sides share
+  and the watcher writes directly.
+- **The session is `session/auto`, resolved to its real path.** Measured on real logind (systemd
+  on Debian trixie), from a process in a user app scope, which is where a desktop launches apps:
+  `session/self` is an unknown object and `GetSessionByPID` is `NoSessionForPID`, while `auto`
+  resolves. Signals come from the real path only. The watcher's own code was run there: real
+  `Lock`, real `LockedHint` and a real logind restart all reach the gate. `PrepareForSleep` was
+  not measured on a real logind (no suspend in a container); the rig's fake carries it.
+- **`LockedHint` is read back from logind, never taken from the signal,** so a forged "unlocked"
+  changes nothing. Note that a same-user program can really clear the flag (`SetLockedHint` is
+  open to the session's owner, measured). That opens a prompt, never a session.
+- **Stated residuals.** A desktop whose locker tells logind nothing is not seen: logind's `Lock`
+  fires only for `loginctl lock-session`-style requests, and `LockedHint` only if the locker sets
+  it. The freedesktop screensaver interface is not wired yet. Sleep has no delay inhibitor, so
+  the signal may be handled just after resume instead of just before suspend. A flatpak needs
+  `--system-talk-name=org.freedesktop.login1`; without it the host reads as blind, which is closed.
+
+The sign-timeout gate is still unsigned on Linux: this is the first of the two things it needs.
+
+**Measured, not settled: polkit for re-auth.** polkit 126, real polkitd and PAM, with a `.policy`
+holding `auth_self` for one Bento action. The subject was the caller's own system bus name.
+
+| case | result |
+|---|---|
+| agent present, right password | `authorized=true challenge=false` |
+| wrong password | `authorized=false challenge=false`, PAM failure, about 2 s |
+| agent cancelled | `authorized=false challenge=false` |
+| **no agent at all** | `authorized=false challenge=true`, at once, details empty |
+| action not installed | D-Bus error `Action … is not registered` |
+| two checks in one process, `auth_self` | two password prompts, nothing retained |
+| control: the same, `auth_self_keep` | one prompt, the second check passes on a temporary authorization |
+| subject in a user app scope, agent on the session | reaches the session's agent |
+| a same-user fake agent answering without the password | both response methods refused: "Only uid 0 may invoke this method" |
+| subject is root | `authorized=true challenge=false`, nobody asked |
+| local rule returning YES | `authorized=true challenge=false`, nobody asked |
+
+So polkit gives real verification of the person where an agent runs, and the host never sees the
+password. Four limits:
+- **No agent is detectable and always fails:** `challenge=true` returned immediately, unlike a
+  wrong password or a cancel. It cannot be told from "interaction not allowed", but the host
+  always allows it.
+- **A yes earned and a yes granted look the same.** Root and a local rule answer exactly as a
+  correct password does. That is the machine's administrator speaking, and it is worth stating.
+- **A same-user program can register itself as the agent** for the host and draw a fake password
+  box. It cannot pass without the password, but it can phish it. Same exposure as the stated
+  same-user residual; polkit does not narrow it.
+- **The `.policy` must be installed in `/usr/share/polkit-1/actions`.** A .deb can. An AppImage
+  cannot without root, and a flatpak has no way to (from how those formats work, not measured), so
+  for both the action would read "not registered". A minimal system offered no other `auth_self`
+  action to borrow. Which package formats keep polkit is therefore part of the maintainer's call.
+
+**Ruled (maintainer, 2026-11-08): where polkit cannot ask, refuse with a clear message; security
+keys only for v1.** That is option 2, with option 4 narrowed to security keys. With AppImage the
+first package, polkit cannot ask anywhere this host ships, so the Linux host refuses every
+re-authentication until the security-key verifier lands (see the B1 entry above). The options as
+they were put:
+1. **Presence prompt, stated once at first use** (security's accepted shape: a downgrade of a
+   routine key only). Works everywhere. Anyone at an unlocked machine passes it.
+2. **Refuse.** No routine signing past the limit on those machines. The honest gate; it costs
+   signing on minimal desktops and on any package that cannot ship the `.policy`.
+3. **Lock the screen as the re-auth:** ask logind to lock, and open a session when the desktop's
+   own locker reports unlocked. Needs no `.policy` and no agent, only a locker. Disruptive, and
+   weaker than polkit: a same-user program can set `LockedHint` itself (measured).
+4. **Use a verifier the person already has:** the TPM PIN once it exists (host-drawn field), or a
+   security key with UV. Covers only machines that have one, so it needs 1 or 2 behind it.
+5. **The host's own password field checked through PAM.** Listed for completeness: it breaks
+   "the host never sees it", and security's ruling excludes it.
+
+**Measured, not settled: can the Linux host register a passkey?** Yes with a security key, no
+without one, and the passkey it registers cannot give consent from the native host.
+- **A security key registers.** `fido_linux::make_credential` against a virtual FIDO2 key, wrapped
+  as attestation `none`, passed the directory's own `parseRegistration` (origin
+  `bento-desktop:linux`, UP and UV set, ES256, RP `bento.page`), with wrong-challenge and
+  wrong-origin controls refused. `get_assertion` then found it. A key with a PIN set needs that
+  PIN (`PinRequired` without it).
+- **None of that is wired.** The host does not build the `fido` feature, nothing calls
+  `make_credential`, nothing builds the attestation object, and there is no host-drawn PIN field.
+  The field has the same requirements as the TPM PIN's. Packages need hidraw access and libfido2.
+- **There is no platform passkey on Linux.** Linux has no OS WebAuthn API today (credentialsd is a
+  proposal), libfido2 has no phone transport, and the webview has no WebAuthn: on WebKitGTK 2.50.6,
+  in a secure context, `PublicKeyCredential` and `navigator.credentials` are both undefined
+  (measured). A person with no security key cannot register a passkey through this host at all.
+- **A native registration is not a consent credential on its own.** `bento-desktop:linux` is
+  self-asserted, so the directory accepts it for registration and assertion and refuses it for
+  consent (`consentOrigins` holds `https://bento.page` only; measured). "Then consent by passkey"
+  on a TPM-less or PIN-less Linux machine therefore means the same security key used in a browser
+  on `https://bento.page`, not a ceremony in the host.
