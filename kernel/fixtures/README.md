@@ -251,3 +251,34 @@ Host port notes for link v1:
   fallback for when the lookup fails, and it never replaces the binding check.
 - Each direction key seals exactly ONE message (n2h message 2, h2n message 3).
   A retry is a new slot with a new code, never a second message under a key.
+
+## `webauthn-v1.json`: a WebAuthn assertion as a signature
+
+The rows for verifying a passkey assertion offline (reference
+`kernel/src/webauthn.ts`, rig `scripts/test-webauthn.ts`, mutants
+`scripts/test-webauthn-mutants.ts`, generator `scripts/gen-webauthn-vectors.mjs`).
+Verify each row with `publicKey = keys[row.key]`, the challenge bytes
+`base64url-decode(row.challenge)` (SHA-256 of `row.text`), the file's `rpId`
+and `origins`, and `storedSignCount` when the row has one. The rp id and origin
+list are PARAMETERS of the verifier; the file names the values it was generated
+for, and regenerating with `--rp` / `--origin` produces rows for others.
+
+- Any page on a host under the rp id can assert for it (the `real/rp-host-origin`,
+  `real/sibling-under-rp-origin` and `real/subdomain-origin` rows are real
+  browser assertions). Only the exact origin list refuses them.
+
+- `real/` and `imported/` rows are assertions produced by browsers' own WebAuthn
+  code under a CDP virtual authenticator. About half are **high-S**: normalise
+  S for this encoding (bento's own statements stay low-S only). Some carry
+  Chromium's `other_keys_can_be_added_here` key: do NOT match clientDataJSON
+  against a template, parse it.
+- **Reject duplicate keys** in clientDataJSON at any depth, compared after
+  unescaping (`"origin"` is `origin`). Your JSON library probably keeps
+  the first or the last silently; that difference is the attack.
+- Exact text equality for `type` (`webauthn.get`), `origin` (from the closed
+  list: no subdomain, parent, port, case or trailing-slash forgiveness),
+  challenge as canonical base64url of exactly the expected bytes, `crossOrigin`
+  absent or boolean `false` (never the string), and no `topOrigin` key.
+- STRICT DER: minimal integers, nothing trailing, the SEQUENCE length exact.
+- `sw/` rows come from a software authenticator: the inputs a browser will not
+  produce but a self-asserting client can.
