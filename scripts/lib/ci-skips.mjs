@@ -97,6 +97,18 @@ export const ALLOWED_SKIPS = [
     line: /android gate1 oracle: SKIPPED — no Android device or emulator connected/,
     why: "gate 1's oracle runs in Android's own WebView, which needs an emulator or device; the ubuntu runners have neither. Gate1Test (home-android-unit) still runs the whole corpus on every change",
   },
+  {
+    rig: 'scripts/test-home-release-history.mjs',
+    line: /home release history: SKIPPED — needs an Apple toolchain/,
+    when: notMac,
+    why: 'ReleaseHistory verifies signatures with CryptoKit, Apple platforms only (see test-tray-releases)',
+  },
+  {
+    rig: 'scripts/test-home-gate1.mjs',
+    line: /home gate1: SKIPPED — needs an Apple toolchain/,
+    when: notMac,
+    why: 'the gate-1 Swift port hashes and verifies signatures with CryptoKit, Apple platforms only (see test-tray-releases)',
+  },
 ]
 
 /** The rigs allowed to skip off macOS must run, unskipped, on the macOS job. */
