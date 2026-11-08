@@ -11883,6 +11883,90 @@ own rig run against the extension's copy.
   keyring, so the re-count is what keeps a wipe from reporting success while
   keys remain.
 
+## 2026-10-21 — bento/connect on Android: gate 1 when serving a document (A2)
+
+The Android editor serves the document's bytes itself, so before serving it
+asks gate 1 (`Gate1.kt`, a port of `kernel/src/gate1.ts`, served path only)
+whether those bytes are one genuine release's.
+
+- **The history.** Each app's signed release history
+  (`releases/<app>/history.json`) is BUNDLED in the APK at build time, from the
+  published site clone (`BENTO_SITE_DIR`, never a URL fetched at build time).
+  It is verified under the release key on first read like any fetched copy, and
+  acts as the floor: acceptHistory only moves forward from it, and a newer
+  bundle (an app update) is adopted only as such a forward move. Refreshes ride
+  ONLY on contacts the person starts: a New document, or "Check for updates"
+  in the documents screen's ⋮ menu. Opening a document never phones home
+  (vault). Reinstalling an older app resets the floor (accepted).
+  Release builds FAIL CLOSED (`checkBundledHistoriesRelease`): for every app
+  with a published manifest, a history must be bundled, verify under the
+  release key (read from `Releases.kt`, its one home), and be at least as new
+  as the manifest. Otherwise the build fails with "no published release history
+  for <app>; publish a release first". Debug builds only warn. Release builds
+  trust the release key alone (`src/release/HistoryKeys.kt`). Debug builds also
+  trust one throwaway test key, absent from the release APK's dex (checked).
+- **The decision.** The bytes are tried against EVERY held app's history, never
+  chosen from the document's `format`. A sealed document says `bento/enc` and
+  a never-saved shell says nothing, but gate 1 is about the runtime. GENUINE
+  serves every response for the document with the release's hash-pinned CSP
+  (`hostPolicy`, byte-identical to the reference). UNKNOWN is served exactly as
+  before, with no CSP, and never borrows one. The bytes and their verdict are
+  published together, so a response can't pair one file's bytes with another's
+  CSP. A save in place re-decides for the new bytes.
+- **The scanner reads start tags as the HTML tokenizer does** (`parseStartTag`,
+  mirroring the reference at #825's head). Whitespace or "/" separates
+  attributes, a quoted value ends one, a leading "=" belongs to a name, and the
+  first duplicate wins. A `<script>` tag with a "/" or a duplicate is refused
+  outright. Case is folded ASCII-only and length-preserving, never with
+  `lowercase()`, which turns 'İ' into two units and shifts every offset after
+  it. Blocks and markup come from ONE walk in document order, never a search
+  for "<script": in `<meta<style><script>…` a browser sees one tag named
+  `meta<style` and then a real script (home-ios's WebKit oracle). Raw-text
+  elements are skipped to their real end tag, and a start tag named outside
+  `[a-z][a-z0-9-]*` is UNKNOWN. End tags are read with the start tag's
+  attribute reader (`</p a="><b c='">` ends at its second ">"), and an end tag
+  carrying attributes or an odd name is UNKNOWN (#834). Every held history is
+  tried, and exactly one must match (`verifyServedHeld`, #842). Planted faults
+  confirm the corpus catches the fold, the separator, the name rule and the
+  end-tag rule.
+- **Measured against the REAL release (slides 1.2.10, its published signed
+  history, the release key).** With that history staged, the release-build
+  check passes and `assembleRelease` bundles it. On the emulator, with ONLY the
+  bundled real history held:
+  - the published fresh shell (empty document block, names no app) is GENUINE;
+  - the same file after a ⌘S save in place is GENUINE;
+  - one byte changed in the loader is UNKNOWN.
+
+  The real history only verifies under the release key, so these can't be the
+  debug test key at work. `Gate1Test` pins the same: the corpus's real release
+  key equals the key `Releases.kt` carries, and the app id is `bento-slides`,
+  never the directory name.
+- **Measured on the emulator.** A history signed with the debug key, pinning a
+  slides build and a file that build saved through ⌘S:
+  - the genuine file boots normally under the pinned CSP, and an injected
+    inline script is blocked (a CSP violation fires);
+  - the same file with one byte changed in the loader is served without a CSP,
+    and the injected script runs;
+  - the genuine file with no history held is served without a CSP.
+
+  The one refusal during the genuine boot is the loader's designed inline
+  attempt; it then boots through `blob:`.
+
+- **An oracle in Android's own WebView** (`scripts/test-home-android-gate1-oracle.mjs`,
+  security). It lifts kernel's mutant generator verbatim from
+  `test-gate1-oracle.mjs`, so the two can't drift, and runs the same fixed seed
+  plus a printed random one. A debug-only Activity gives Gate1.kt's verdict for
+  every mutant, and loads every GENUINE one in a WebView with no CSP. With the
+  glued-tag and end-tag operators (50 end-tag mutants in the last run): 500
+  mutants, Gate1.kt agreeing with the reference on all of them, and all 67
+  GENUINE files running only the loader and remover. The controls
+  confirm the oracle sees an extra script and an executing data block. It
+  needs an emulator, so CI skips it, with the reason recorded in
+  `scripts/lib/ci-skips.mjs`.
+
+Identity is not exposed yet: the verdict is held for the agent bridge (stage 4,
+after security's run of A2).
+
 ## 2026-10-24 — One svg sanitizer in kernel; an app's policy only tightens it
 
 kernel/src/svgsafe.ts holds the untrusted-svg sanitizer, lifted verbatim from
@@ -12596,6 +12680,63 @@ is visible, and anonymous senders cannot be told apart.
 Guard: `scripts/test-directory.ts` (the "budget" rows) and
 `scripts/test-directory-mutants.ts` (the budget back in front of each refusal).
 
+## 2026-11-08 — "Check for updates" says one of three things, the worst first
+
+The maintainer set the words the native hosts show when the person checks for
+updates (the only contact with bento.page besides a New document). The menu item
+is "Check for updates". The result is one of:
+
+- "Up to date"
+- "Couldn't reach bento.page"
+- "The reply from bento.page couldn't be verified"
+
+One check covers every app's release history, and **the worst outcome wins**: a
+reply that wouldn't verify beats an unreachable server, which beats up to date.
+A reply that verifies but isn't taken (nothing published yet, or anti-rollback
+refused it) counts as up to date: the held history stands. A check with no
+outcome at all reports "Couldn't reach bento.page", never "Up to date". iOS
+shows the same set under the same rule.
+
+Guard (Android): `ReleaseHistoryTest` checks the strings, the worst-wins rule, and
+the unverified outcome. The signature check is real, run over the frozen slides
+history and a one-byte tamper.
+## 2026-11-03 — bento/id B1 on iOS: the identity calls, answered by the host
+
+`home/ios/IdentityBridge.swift` answers `id.whoami`, `id.sign` and `id.resolve`
+for the shared bridge. It is plain Foundation and CryptoKit so a macOS rig drives
+the code the editor runs; the editor supplies only the two prompts.
+
+- **'identity' is declared per load, after gate 1.** The bridge script is
+  installed twice: with `['store']` before the document's origin is settled, and
+  again, once gate 1 has judged the bytes, with `['store', 'identity']` only for
+  a GENUINE load. An unknown document's page has no agent object. The host also
+  refuses every `id.*` message from a load that did not pass (`unavailable`), so
+  a page that forges the wire gets nothing even with a live session.
+- **Gates run in one order on every call:** genuine, then no identity
+  managed-config key present (O1 deferred, §39.4: `whoami`/`sign` answer
+  `no-identity`, `resolve` nothing; checked per call, so a key added after load
+  still stops it), then the op's own rule.
+- **`whoami` answers nothing until the person agrees for THIS document.** The
+  host's own prompt shows the real address; one prompt however many calls arrive
+  while it is up; a "no" lasts the life of the process, a "yes" is remembered per
+  document origin string. The person's own keys passed to `resolve` need the
+  same consent (they are `whoami`'s answer by another door).
+- **`sign` is purpose-locked and session-bound.** The payload's shape is checked
+  first, before any session or key. Only the routine purposes are served;
+  `invite`/`revoke` are the room owner's key, which in phase 1 lives in the
+  document, so they are `unavailable` and mint nothing. The host owns the limits
+  (1 h idle, 24 h overall, an injectable clock): a use renews the idle clock,
+  never the overall one, and a limit ENDS the session AT the limit (security's
+  ruling): one millisecond short still signs, exactly at it does not. Past either, the answer is `reauth` and it raises
+  ONE device-owner prompt (coalesced; a cancelled prompt is not raised again for
+  30 s). The bridge neither retries nor caches. A session exists only after the
+  person re-authenticates, so the first sign of a run answers `reauth`.
+- **`resolve` is local.** It answers for the person's own keys (after consent) and
+  for a binding the host already holds; an `{email}` query never leaves the page.
+- **Not wired yet:** the profile (name, address, who vouched) comes from the
+  verified binding the setup flow stores, and the pin store for other people's
+  keys; until those land `whoami` answers `no-identity` and `resolve` finds nothing.
+  The consent and re-authentication wording is placeholder text.
 ## 2026-11-08 — bento/type: an edit across paragraphs is a model edit
 
 A selection that crosses blocks, or that has an end outside every block (Chrome puts Select All's
@@ -12801,3 +12942,48 @@ without one, and the passkey it registers cannot give consent from the native ho
   consent (`consentOrigins` holds `https://bento.page` only; measured). "Then consent by passkey"
   on a TPM-less or PIN-less Linux machine therefore means the same security key used in a browser
   on `https://bento.page`, not a ceremony in the host.
+## 2026-11-08 — bento/id option G: the roster chain and its ripening countersign (`ros.`, `rip.`)
+
+**Decision.** A bento/id account's authority is a chain of roster heads, and
+the kernel verifies that chain offline (`kernel/src/roster.ts`, contract
+`kernel/fixtures/roster-v1.json`). This is the second kernel piece of option G,
+after the WebAuthn assertion verifier. The device certificates that hang off a
+roster (`wdev.`, `watt.`, `wren.`, `dev2.`) are reserved prefixes for now and
+come in a later kernel change.
+
+- **`ros.<b64u(address)>.<seq>.<prevHash|empty>.<members>.<dirNonce>.<created>`**
+  names every key that may change the account: passkeys (`pk`), native consent
+  keys (`ck`), at most one recovery key (`rk`), each optionally marked
+  quarantined (`~q`). Members are written in one sorted spelling; a head in any
+  other order is refused. `dirNonce` is the directory challenge the request was
+  bound to, carried in the text so peers can see the binding.
+- **`rip.<sha256(ros text)>.<requestedAt>.<ripenedAt>.<reset 0|1>.<kid>`** is
+  the directory's countersign, issued only when a change ripens. A link without
+  one is not in force, so a change that was voided cannot be shown to an offline
+  peer as if it had taken effect.
+- **The wait is measured on the directory's clock**: ripenedAt − requestedAt ≥
+  72 hours. The requester's `created` is informative and never decides a wait.
+- **Authority.** Setup (seq 0) and a reset carry the directory's countersign
+  alone and install exactly one passkey; peers report a reset. Every other link
+  is proved over its exact text by an unquarantined member of the previous
+  head: a WebAuthn assertion for a passkey (rp `id.bento.page`, the sign-in
+  host's origin, no stored sign count since peers see links out of order), a
+  raw low-S signature for a recovery key. One change per link (one add, one
+  removal, or the recovery key replaced); quarantine marks are never changed by
+  a member. The only immediate member change is a member removing itself while
+  another unquarantined member remains.
+- **Pinning.** A peer that pinned a head verifies onward from it; the pinned
+  head's countersign is re-checked, because its times set every member's age.
+  Ages from a pin past setup are lower bounds.
+
+**Refused until defined (fail closed).** A consent key signing or co-signing a
+roster change (its consent purpose is the next kernel change), any member
+change ripened in under 72 hours other than a self-removal, and links the
+directory makes on a mailbox's authority (a void's quarantine and queued
+removal, its undo, an incident revert), which have no authority marking in
+the format yet.
+
+Guards: `scripts/test-roster.ts` (every row, each accepted row's resulting
+state written by hand, the two-clocks pair, positive controls) and
+`scripts/test-roster-mutants.ts` (each rule loosened in turn must turn the rig
+red).
