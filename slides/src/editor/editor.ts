@@ -2731,12 +2731,13 @@ export class Editor {
     // snapshot taken as it starts, and the dot goes out only if no edit landed
     // while the bytes were on their way — the old unconditional
     // setDirty(false) here marked such an edit saved, and it never reached disk.
+    // Another program changed the file and the author has not chosen yet
+    // (showDiskChangedBanner): the kernel refuses every write, so do not try,
+    // and do not flash "Backed up" over a banner saying the file is not being
+    // saved. The snapshot above is still the backstop.
+    const refusedOnDisk = fileChangedOnDisk()
     if (hasFileHandle()) {
-      // Another program changed the file and the author has not chosen yet
-      // (showDiskChangedBanner): the kernel refuses every write, so do not try,
-      // and do not flash "Backed up" over a banner saying the file is not
-      // being saved. The snapshot above is still the backstop.
-      if (fileChangedOnDisk()) return
+      if (refusedOnDisk) return
       const out = await saveRevision(this.store, this.saveQueue,
         async (snapshot) => { await writeUpdatedFile(await serializeAuto(snapshot)); return 'saved' as const },
         () => this.session?.stampInto(this.store.doc))
