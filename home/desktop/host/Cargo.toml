@@ -11,7 +11,7 @@ publish = false
 rig-test-key = ["bento-hostcore/rig-test-key"]
 # Rigs only: the §19d–§19h probe, a dead drop standing in for an attacker's
 # network, and a report sink. Never in a shipped build.
-rig = ["rig-test-key", "dep:gio", "dep:webview2-com", "dep:windows-core"]
+rig = ["rig-test-key", "bento-id-agent/test-store", "dep:gio", "dep:webview2-com", "dep:windows-core"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
