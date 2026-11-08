@@ -712,6 +712,32 @@ export class Selection {
   }
 
   /**
+   * Shift-click a column header: the columns from the active range's anchor to
+   * `c`, every row. The anchor column stays, as it does for a shift-click on a
+   * cell, so A then shift-D is A:D and a second shift-B shrinks it to A:B.
+   */
+  extendCol(c: number): this {
+    const { col } = this.clamp(0, c)
+    this.active = {
+      anchor: { row: 0, col: this.active.anchor.col },
+      head: this.clamp(this.rows - 1, col),
+    }
+    if (!contains(this.active, this.cursor.row, this.cursor.col)) {
+      this.cursor = { row: this.clamp(this.cursor.row, 0).row, col: this.active.anchor.col }
+    }
+    this.run = null
+    return this
+  }
+
+  /** ⌘-click a column header: that whole column joins the selection. */
+  addCol(c: number): this {
+    const { col } = this.clamp(0, c)
+    this.addRange({ anchor: { row: 0, col }, head: { row: this.rows - 1, col } })
+    this.cursor = this.clamp(this.cursor.row, col)
+    return this
+  }
+
+  /**
    * ⌘-click a second block.
    *
    * The NEW range becomes the active one and the old active joins `extra`,

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// bento/id — the signed statements, a port of kernel/src/statements.ts.
+// bento/connect — the signed statements, a port of kernel/src/statements.ts.
 //
 // The family rules (from the reference, unchanged): dot-joined printable-ASCII
 // text signed over its EXACT bytes; every field is a closed dot-free token or
@@ -232,59 +232,30 @@ fn lifetime(created: u64, expires: u64, now: u64) -> Option<&'static str> {
     None
 }
 
-// --- kx placement (unruled: both slots empty) ------------------------------------
+// --- kx placement: mode C (ruled 2026-11-02, identity-design §6b) -----------------
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum KxMode {
-    Unruled,
-    A,
-    B,
-    C,
-}
-impl KxMode {
-    pub fn parse(s: &str) -> Option<KxMode> {
-        Some(match s {
-            "unruled" => KxMode::Unruled,
-            "A" => KxMode::A,
-            "B" => KxMode::B,
-            "C" => KxMode::C,
-            _ => return None,
-        })
-    }
-    /// (bind slot required, dev slot required)
-    fn slots(self) -> (bool, bool) {
-        match self {
-            KxMode::Unruled => (false, false),
-            KxMode::A => (true, false),
-            KxMode::B => (false, true),
-            KxMode::C => (true, true),
-        }
-    }
-}
-/// The mode this build runs in. The maintainer has not ruled (§6b), so both
-/// slots must be empty and nothing accepts a placement nobody chose.
-pub const KX_MODE: KxMode = KxMode::Unruled;
+/// The one kx placement: a per-device kx in every dev. AND a recovery kx in
+/// every bind., both REQUIRED. There is no other mode and no lenient path.
+pub const KX_MODE: &str = "C";
 
-/// Ok(None) = empty and allowed; Ok(Some(kx)) = present and valid; Err = refuse.
-fn kx_slot(f: &str, required: bool, others: &[&str]) -> Result<Option<String>, ()> {
-    if !required {
-        return if f.is_empty() { Ok(None) } else { Err(()) };
-    }
+/// A kx slot: required, a valid ECDH point, never equal to any signing key in
+/// the same certificate.
+fn kx_slot(f: &str, others: &[&str]) -> Result<String, ()> {
     if f.is_empty() || !is_kx_key(f) || others.contains(&f) {
         return Err(());
     }
-    Ok(Some(f.to_string()))
+    Ok(f.to_string())
 }
 
 // --- dev. ------------------------------------------------------------------------
 
-/// `dev.<devicePub>.<consentPub|empty>.<accountPub>.<kx|empty>.<b64u(label)|empty>.<created>.<expires>`
+/// `dev.<devicePub>.<consentPub|empty>.<accountPub>.<kx>.<b64u(label)|empty>.<created>.<expires>`
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeviceCert {
     pub device_pub: String,
     pub consent_pub: Option<String>,
     pub account_pub: String,
-    pub kx: Option<String>,
+    pub kx: String,
     pub label: Option<String>,
     pub created: u64,
     pub expires: u64,
@@ -296,7 +267,7 @@ pub fn build_dev(c: &DeviceCert) -> String {
         c.device_pub.clone(),
         c.consent_pub.clone().unwrap_or_default(),
         c.account_pub.clone(),
-        c.kx.clone().unwrap_or_default(),
+        c.kx.clone(),
         c.label.as_deref().filter(|l| !l.is_empty()).map(|l| b64u::enc(l.as_bytes())).unwrap_or_default(),
         c.created.to_string(),
         c.expires.to_string(),
@@ -304,7 +275,7 @@ pub fn build_dev(c: &DeviceCert) -> String {
     .join(".")
 }
 
-pub fn verify_dev(text: &str, sig: &str, now: u64, kx_mode: KxMode) -> Verdict<DeviceCert> {
+pub fn verify_dev(text: &str, sig: &str, now: u64) -> Verdict<DeviceCert> {
     let p = fields(text, "dev", 8).ok_or("grammar")?;
     let (device_pub, consent_f, account_pub, kx_f, label_f, created_f, expires_f) =
         (p[1], p[2], p[3], p[4], p[5], p[6], p[7]);
@@ -318,7 +289,7 @@ pub fn verify_dev(text: &str, sig: &str, now: u64, kx_mode: KxMode) -> Verdict<D
         }
         consent_pub = Some(consent_f.to_string());
     }
-    let kx = kx_slot(kx_f, kx_mode.slots().1, &[device_pub, account_pub, consent_f]).map_err(|_| "kx")?;
+    let kx = kx_slot(kx_f, &[device_pub, account_pub, consent_f]).map_err(|_| "kx")?;
     let mut label = None;
     if !label_f.is_empty() {
         label = Some(display_text(label_f).ok_or("label")?);
@@ -335,12 +306,12 @@ pub fn verify_dev(text: &str, sig: &str, now: u64, kx_mode: KxMode) -> Verdict<D
 
 // --- bind. -----------------------------------------------------------------------
 
-/// `bind.<b64u(address)>.<accountPub>.<kx|empty>.<b64u(name)|empty>.<seq>.<prev|empty>.<created>.<expires>`
+/// `bind.<b64u(address)>.<accountPub>.<kx>.<b64u(name)|empty>.<seq>.<prev|empty>.<created>.<expires>`
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BindCert {
     pub address: String,
     pub account_pub: String,
-    pub kx: Option<String>,
+    pub kx: String,
     pub name: Option<String>,
     pub seq: u64,
     pub prev: Option<String>,
@@ -353,7 +324,7 @@ pub fn build_bind(c: &BindCert) -> String {
         "bind".into(),
         b64u::enc(c.address.as_bytes()),
         c.account_pub.clone(),
-        c.kx.clone().unwrap_or_default(),
+        c.kx.clone(),
         c.name.as_deref().filter(|n| !n.is_empty()).map(|n| b64u::enc(n.as_bytes())).unwrap_or_default(),
         c.seq.to_string(),
         c.prev.clone().unwrap_or_default(),
@@ -363,7 +334,7 @@ pub fn build_bind(c: &BindCert) -> String {
     .join(".")
 }
 
-pub fn verify_bind(text: &str, sig: &str, now: u64, kx_mode: KxMode) -> Verdict<BindCert> {
+pub fn verify_bind(text: &str, sig: &str, now: u64) -> Verdict<BindCert> {
     let p = fields(text, "bind", 9).ok_or("grammar")?;
     let (address_f, account_pub, kx_f, name_f, seq_f, prev_f, created_f, expires_f) =
         (p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8]);
@@ -371,7 +342,7 @@ pub fn verify_bind(text: &str, sig: &str, now: u64, kx_mode: KxMode) -> Verdict<
     if !is_signing_key(account_pub) {
         return Err("key");
     }
-    let kx = kx_slot(kx_f, kx_mode.slots().0, &[account_pub]).map_err(|_| "kx")?;
+    let kx = kx_slot(kx_f, &[account_pub]).map_err(|_| "kx")?;
     let mut name = None;
     if !name_f.is_empty() {
         name = Some(display_text(name_f).ok_or("name")?);

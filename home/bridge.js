@@ -53,12 +53,13 @@
 
   // native calls back into this — directly on WebKit, via the event below on
   // Android. Kept as a global on both so there is one reply path to reason about.
-  window.__bentoNativeReply = (id, ok, value) => {
+  const reply = (id, ok, value) => {
     const p = pending.get(id)
     if (!p) return
     pending.delete(id)
     ok ? p.resolve(value) : p.reject(new Error(value || 'cancelled'))
   }
+  window.__bentoNativeReply = reply
 
   if (droid) {
     droid.onmessage = (e) => {
@@ -67,7 +68,8 @@
       // later save on this page hangs waiting for a callback that can no
       // longer arrive.
       try { r = JSON.parse(e.data) } catch (_) { return }
-      window.__bentoNativeReply(r.id, r.ok, r.value)
+      // the closure, not the global: page script can rewrite the global
+      reply(r.id, r.ok, r.value)
     }
   }
 
@@ -210,6 +212,89 @@
       },
     }
   }
+  // --------------------------------------------------------- the identity agent
+  //
+  // bento/id, B1. The document's side is kernel/src/identity.ts: it looks for
+  // `globalThis.__bentoIdentity` and takes it only if it is a non-writable,
+  // non-configurable DATA property holding a FROZEN object whose methods are
+  // closures. This builds exactly that, from the three calls of contract 1:
+  //   whoami()          -> PublicIdentity | null
+  //   sign(purpose, p)  -> { ok:true, sig, pub } | { ok:false, reason }
+  //   resolve({pub})    -> ResolvedIdentity | null
+  // (unwrap/share are phase 2: not defined, so the kernel sees them absent.)
+  //
+  // WHEN. Only if the host declared the 'identity' capability, and a host must
+  // declare it ONLY for a load whose bytes it verified (gate 1): an unverified
+  // document then has no agent object at all, which is what "no host, no
+  // change" means to the kernel. The host's own checks are still the authority;
+  // this file is the courtesy that keeps a doctored file from even seeing a
+  // door. Top frame only (a frame the document creates must not get one).
+  //
+  // THE WIRE. Requests go through the ordinary call() channel as
+  //   {id, op:'id.whoami'}
+  //   {id, op:'id.sign',    purpose, payload}      payload = the exact UTF-8 text
+  //   {id, op:'id.resolve', pub}
+  // and nothing in a request names the document, the caller or a key: the host
+  // knows who is asking from the platform (kernel/src/identity.ts rule 2). The
+  // host answers through the ordinary reply (id, ok, value):
+  //   id.whoami   ok, value = PublicIdentity | null  | !ok 'no-identity'|'declined'
+  //   id.sign     ok, value = {sig, pub}             | !ok = a SignRefusal word
+  //   id.resolve  ok, value = ResolvedIdentity | null
+  //   any other failure is 'unavailable'.
+  // Replies are RE-SHAPED here: a field of the wrong type becomes a refusal,
+  // never a half-trusted object, and an unknown refusal word is 'unavailable'.
+  // The page is the document, so this is not a security boundary against the
+  // document; it keeps a malformed host reply from reaching the kernel.
+  //
+  // NO TIMERS HERE. The idle and overall session limits (security §2e B) are
+  // the HOST's: past either, the host answers sign with reason 'reauth' until
+  // the person re-authenticates at the host. This file passes that word
+  // through, caches no success, and never retries: a retry loop here would be
+  // a loop that hammers a prompt.
+  function defineIdentity() {
+    const PURPOSES = ['frame', 'prove', 'delegate', 'show', 'invite', 'revoke']
+    const REASONS = ['declined', 'reauth', 'purpose', 'no-identity', 'unavailable']
+    const MAX_PAYLOAD = 1 << 20
+    const str = (v) => typeof v === 'string' && v.length > 0 && v.length < 4096
+    const refuse = (reason) => ({ ok: false, reason: REASONS.indexOf(reason) >= 0 ? reason : 'unavailable' })
+
+    const whoami = () => call('id.whoami', {}).then((v) => {
+      if (v && str(v.name) && str(v.email) && str(v.vouchedBy) && str(v.accountPub) && str(v.devicePub)) {
+        return { name: v.name, email: v.email, vouchedBy: v.vouchedBy, accountPub: v.accountPub, devicePub: v.devicePub }
+      }
+      return null
+    }, (e) => {
+      const m = String((e && e.message) || e)
+      if (m === 'no-identity' || m === 'declined') return null
+      throw new Error('unavailable')
+    })
+
+    const sign = (purpose, payload) => {
+      if (PURPOSES.indexOf(purpose) < 0 || typeof payload !== 'string' || payload.length > MAX_PAYLOAD) {
+        return Promise.resolve(refuse('purpose'))
+      }
+      return call('id.sign', { purpose, payload }).then((v) => (
+        v && str(v.sig) && str(v.pub) ? { ok: true, sig: v.sig, pub: v.pub } : refuse('unavailable')
+      ), (e) => refuse(String((e && e.message) || e)))
+    }
+
+    const resolve = (query) => {
+      // phase 1: a key already in the room. {email} is phase 2 and never sent.
+      if (!query || typeof query !== 'object' || !str(query.pub)) return Promise.resolve(null)
+      return call('id.resolve', { pub: query.pub }).then((v) => (
+        v && str(v.name) && str(v.email) && str(v.vouchedBy) && str(v.accountPub) &&
+          typeof v.firstSeen === 'number' && typeof v.changed === 'boolean'
+          ? { name: v.name, email: v.email, vouchedBy: v.vouchedBy, accountPub: v.accountPub, firstSeen: v.firstSeen, changed: v.changed }
+          : null
+      ), () => null)
+    }
+
+    Object.defineProperty(window, '__bentoIdentity', {
+      value: Object.freeze({ contract: 1, whoami, sign, resolve }),
+      writable: false, enumerable: false, configurable: false,
+    })
+  }
+
   // ------------------------------------------------- the per-document store
   //
   // kernel/src/docstore.ts keeps two things out of the page's own web storage
@@ -235,13 +320,35 @@
   ;(() => {
     const caps = Array.isArray(window.__bentoHostCaps) ? window.__bentoHostCaps.slice() : []
     try { delete window.__bentoHostCaps } catch (_) {}
-    if (window !== window.top || caps.indexOf('store') < 0) return
+    if (window !== window.top) return
+    if (caps.indexOf('identity') >= 0) defineIdentity()
+    // Only what this file can relay; a host naming something else adds nothing.
+    const offered = ['store', 'seal'].filter((c) => caps.indexOf(c) >= 0)
+    if (!offered.length) return
 
     const prev = window.__bentoHost && Array.isArray(window.__bentoHost.ops) ? window.__bentoHost.ops : []
-    const ops = Object.freeze(Array.from(new Set(prev.concat(['store']))))
+    const ops = Object.freeze(Array.from(new Set(prev.concat(offered))))
     Object.defineProperty(window, '__bentoHost', {
       value: Object.freeze({ ops }), writable: false, enumerable: true, configurable: false,
     })
+    const CH = '__bento_tray__'
+
+    // 'seal': the page tells the host whether the open document is sealed
+    // (password or identity), whenever that changes, so the host can keep the
+    // document out of its own surfaces (the app-switcher snapshot) before the
+    // sealed file is even saved. Fire-and-forget: {sealed: boolean}, nothing
+    // comes back. The host may only ADD protection on this signal; it never
+    // lifts protection for a file it knows is sealed because a page said so.
+    if (offered.indexOf('seal') >= 0) {
+      window.addEventListener('message', (ev) => {
+        const d = ev.data
+        if (ev.source !== window || !d || d[CH] !== true || d.dir !== 'req' || d.op !== 'seal.state') return
+        const p = d.payload || {}
+        if (typeof p.sealed !== 'boolean') return
+        call('seal.state', { sealed: p.sealed }).catch(() => {})
+      })
+    }
+    if (offered.indexOf('store') < 0) return
 
     // THE NATIVE CONTRACT, identical on every host. Requests arrive through the
     // ordinary call() channel as {id, op, name} (plus b64 for store.set). The
@@ -256,7 +363,6 @@
     //                             | 'unavailable' (the host could not do it)
     // The partition is the document's identity as the HOST derived it; nothing
     // in a request names it. scripts/test-home-docstore.mjs holds a host to this.
-    const CH = '__bento_tray__'
     const KNOWN = { 'store.get': 1, 'store.set': 1, 'store.list': 1, 'store.delete': 1 }
     // Both transports carry strings, so bytes travel as base64 — and are turned
     // back into a Uint8Array HERE, in the page's own realm, because the kernel

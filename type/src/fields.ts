@@ -407,7 +407,8 @@ export function fieldAtoms(b: Block): Map<number, string> {
     m.set(f.at,
       prev + `<span class="${FIELD_CLASS} ${UNBOUND_CLASS}" data-field="${esc(f.name)}"`
       + ` data-fkey="${esc(fkeyOf(b.id, f.at))}"`
-      + (f.pad ? ` data-pad="${f.pad}"` : '')
+      // a NUMBER, always: a synced field ref never passed readFieldRefs
+      + (typeof f.pad === 'number' && f.pad > 0 ? ` data-pad="${Math.trunc(f.pad)}"` : '')
       + ` contenteditable="false">${esc(f.name)}</span>`);
   }
   return m;

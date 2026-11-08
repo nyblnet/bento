@@ -172,7 +172,20 @@ function checkPackedSet(): { ok: boolean; msg: string } {
 const INDIRECT: Array<{ arg: string; file: string; name: string; pick: 'values' | 'items' | 'tuple1' }> = [
   { arg: 'TYPE_LABEL[tp]', file: 'format.ts', name: 'TYPE_LABEL', pick: 'values' },
   { arg: 'AGG_LABEL[v.fn] ?? String(v.fn)', file: 'pivot.ts', name: 'AGG_LABEL', pick: 'values' },
-  { arg: 'a', file: 'panels.ts', name: 'AGGS', pick: 'items' },            // AGGS.map((a) => … t(a))
+  // The Total picker and the totals menu name each aggregate in words (Sum,
+  // Average…); the footer cell labels its number with the short form.
+  { arg: 'AGG_WORD[a]', file: 'format.ts', name: 'AGG_WORD', pick: 'values' },
+  { arg: 'AGG_SHORT[spec]', file: 'format.ts', name: 'AGG_SHORT', pick: 'values' },
+  // The 3D heading. (The 2D chart's kind button says "Edit" since #815 and
+  // opens the chart editor, so it has no indirect words of its own.)
+  { arg: 'VIZ_TITLE[viz.kind]', file: 'viz3d.ts', name: 'VIZ_TITLE', pick: 'values' },
+  { arg: 'VIZ_TITLE[scene.kind]', file: 'viz3d.ts', name: 'VIZ_TITLE', pick: 'values' },
+  { arg: 'VIZ_KIND_LABEL[viz.kind]', file: 'viz3d.ts', name: 'VIZ_KIND_LABEL', pick: 'values' },
+  // Import findings name the type a value could not be read as.
+  { arg: 'TYPE_LABEL[inf.type]', file: 'format.ts', name: 'TYPE_LABEL', pick: 'values' },
+  { arg: 'TYPE_LABEL[plan.type]', file: 'format.ts', name: 'TYPE_LABEL', pick: 'values' },
+  // Why an imported workbook's defined name was refused.
+  { arg: 'NAME_REFUSED[problem]', file: 'xlsx.ts', name: 'NAME_REFUSED', pick: 'values' },
   { arg: 'SECTION_TITLE[section]', file: 'help.ts', name: 'SECTION_TITLE', pick: 'values' },
   { arg: 'r.label', file: 'help.ts', name: 'LABELS', pick: 'tuple1' },     // helpRows() carries LABELS[…][1]
   { arg: 'tip', file: 'help.ts', name: 'TIPS', pick: 'items' },
@@ -187,7 +200,6 @@ const INDIRECT: Array<{ arg: string; file: string; name: string; pick: 'values' 
   // format, so it reads the same table again — a fourth spelling of the same
   // indirection rather than a fourth table.
   { arg: 'TYPE_LABEL[type]', file: 'format.ts', name: 'TYPE_LABEL', pick: 'values' },
-  { arg: 'role', file: 'sync/people.ts', name: 'ROLE_LABEL', pick: 'values' },
 ]
 
 /**
@@ -225,14 +237,17 @@ const KEEP_ENGLISH = new Map<string, string>([
  * countable as translated because they are.
  */
 const SAME_AS_ENGLISH: Record<string, string[]> = {
-  es: ['Total', 'editor', 'General'],
-  fr: ['Auto', 'Date', 'Format', 'Orientation', 'Portrait', 'Total', 'Type'],
-  ja: ['OK'],
-  de: ['Dashboard', 'Format', 'Name', 'OK', 'Symbol', 'Text', 'Updates'],
-  it: ['Dashboard', 'File', 'Formula', 'Max', 'Min', 'OK', 'vs', 'editor'],
-  // 'Total' and 'editor' are the same word in Portuguese; 'OK' and 'vs' are
+  es: ['Total', 'Editor', 'General', 'Series'],
+  fr: ['Auto', 'Date', 'Format', 'Orientation', 'Portrait', 'Source', 'Surface', 'Total', 'Type'],
+  // Japanese and Simplified-Chinese Excel name a new sheet "Sheet2" too, and a
+  // name that matches the reader's own Excel is the whole point of the key.
+  ja: ['OK', 'Sheet{n}'],
+  'zh-Hans': ['Sheet{n}'],
+  de: ['Dashboard', 'Format', 'Live', 'Name', 'OK', 'Symbol', 'Text', 'Updates'],
+  it: ['Dashboard', 'Editor', 'File', 'Formula', 'Max', 'Min', 'OK', 'vs'],
+  // 'Total' and 'Editor' are the same word in Portuguese; 'OK' and 'vs' are
   // borrowed unchanged, as they are in the Italian list above.
-  pt: ['OK', 'Total', 'editor', 'vs'],
+  pt: ['Editor', 'OK', 'Total', 'vs'],
 }
 
 // --- sweeping the source -----------------------------------------------------

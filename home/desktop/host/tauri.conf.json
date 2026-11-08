@@ -1,0 +1,13 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Bento",
+  "version": "0.1.0",
+  "identifier": "page.bento.home",
+  "build": {},
+  "app": {
+    "windows": [],
+    "withGlobalTauri": false,
+    "security": { "csp": null }
+  },
+  "bundle": { "active": false, "icon": ["icons/icon.png", "icons/icon.ico"] }
+}

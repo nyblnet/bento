@@ -1,0 +1,41 @@
+# validate, convert slice: convert/: the standalone typecheck and the conversion engine rigs.
+#
+# Part of the REQUIRED `validate` check. .github/workflows/ci.yml runs this
+# action as steps INSIDE that one job, on the same runner, after the slices
+# listed before it there — so what earlier slices installed and built is on
+# disk here. A failing step here fails `validate` and blocks the merge.
+#
+# Add a new rig's step to the slice of the zone that owns the rig, at the
+# end. Every `run:` needs `shell: bento-step {0}`: GitHub refuses a composite
+# step with no shell, and bento-step (scripts/ci/) fails the step if a rig
+# reports a skip CI does not allow (scripts/lib/ci-skips.mjs). A step here
+# counts as registered for scripts/test-ci-registered.ts.
+
+name: validate-convert
+description: validate, convert slice (runs inside the required validate job)
+runs:
+  using: composite
+  steps:
+    - name: Typecheck convert (standalone)
+      # convert/ is a library beside the apps (the CLI and bento.page/import
+      # use it; no shell does), so no app's tsc -b reaches it. Its own flags,
+      # its own pass — the same as kernel's.
+      working-directory: slides
+      shell: bento-step {0}
+      run: node_modules/.bin/tsc -p ../convert
+
+    - name: convert engine rigs
+      # The pptx importer's resolver is where real decks' fidelity lives --
+      # 91% of colour and 71% of run properties are indirect, and every hop
+      # fails silently (a backwards clrMap still renders, just dark-on-dark).
+      # Negative controls proven against mutated implementations; load.ts is
+      # the gate that matters for import: every emitted document must pass the
+      # REAL slides parseDoc with zero validateDoc errors. The runner also
+      # covers the `bento convert` CLI (it needs the shell built above and
+      # Chrome for "it opens"; neither may skip in CI), the delivery chain
+      # behind bento.page/import (signature, pin, version floor, untrusted-
+      # input gate, zip limits, exactly two requests), the built page's CSP,
+      # and the boundary: no app imports convert/, and the engine touches no
+      # DOM global.
+      shell: bento-step {0}
+      run: node scripts/test-convert.ts

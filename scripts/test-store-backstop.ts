@@ -81,5 +81,58 @@ ok((await listVersions('doc-a')).length === 0, 'clearVersions deleted the plaint
 ok((await getRecovery('doc-b'))?.title === 'ZZ B ZZ', "another document's recovery copy survives")
 ok((await listVersions('doc-b')).length === 1, "another document's versions survive")
 
+console.log('\nthe sealed purge reaches the legacy shared database too (shipped shells write there)')
+{
+  const LEGACY = 'bento-autosave'
+  // FIRST: a browser that never had the legacy database must not gain one.
+  // indexedDB.open() creates a missing database, and the purge runs on every
+  // sealed boot (security).
+  const names = async () => (await indexedDB.databases()).map((d) => d.name)
+  await new Promise<void>((res) => { const q = indexedDB.deleteDatabase(LEGACY); q.onsuccess = q.onerror = q.onblocked = () => res() })
+  ok(!(await names()).includes(LEGACY), 'setup: no legacy database in this browser')
+  setIdentitySeal(kdoc)
+  await clearRecovery('doc-x'); await clearVersions('doc-x')
+  setIdentitySeal(null)
+  ok(!(await names()).includes(LEGACY), 'a sealed purge in a browser with no legacy database leaves none behind')
+  const openLegacy = (): Promise<IDBDatabase> => new Promise((res, rej) => {
+    const q = indexedDB.open(LEGACY, 1)
+    q.onupgradeneeded = () => {
+      const d = q.result
+      if (!d.objectStoreNames.contains('recovery')) d.createObjectStore('recovery', { keyPath: 'docId' })
+      if (!d.objectStoreNames.contains('versions')) d.createObjectStore('versions', { keyPath: 'id', autoIncrement: true }).createIndex('docId', 'docId', { unique: false })
+    }
+    q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error)
+  })
+  const run = <T,>(db: IDBDatabase, store: string, mode: IDBTransactionMode, f: (s: IDBObjectStore) => IDBRequest<T>) =>
+    new Promise<T>((res, rej) => { const r = f(db.transaction(store, mode).objectStore(store)); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error) })
+  const countIn = async (docId: string) => {
+    const db = await openLegacy()
+    const rec = await run(db, 'recovery', 'readonly', (s) => s.get(docId))
+    const ver = await run(db, 'versions', 'readonly', (s) => s.index('docId').count(IDBKeyRange.only(docId)))
+    db.close()
+    return { rec: !!rec, ver }
+  }
+  // what an OLD shell left behind: plaintext for two documents in the shared DB
+  {
+    const db = await openLegacy()
+    for (const id of ['doc-l', 'doc-other']) {
+      await run(db, 'recovery', 'readwrite', (s) => s.put({ docId: id, at: 1, title: 'ZZ OLD ZZ', json: '{}' }))
+      await run(db, 'versions', 'readwrite', (s) => s.add({ docId: id, at: 1, title: 'ZZ OLD ZZ', json: '{}' }))
+      await run(db, 'versions', 'readwrite', (s) => s.add({ docId: id, at: 2, title: 'ZZ OLD ZZ', json: '{}' }))
+    }
+    db.close()
+  }
+  ok((await countIn('doc-l')).rec && (await countIn('doc-l')).ver === 2, 'setup: an old shell left doc-l plaintext in the legacy database')
+  // unsealed, a purge leaves the legacy database alone, as before
+  await clearRecovery('doc-l'); await clearVersions('doc-l')
+  ok((await countIn('doc-l')).rec && (await countIn('doc-l')).ver === 2, 'unsealed: clearRecovery/clearVersions leave the legacy database alone')
+  setIdentitySeal(kdoc)
+  await clearRecovery('doc-l'); await clearVersions('doc-l')
+  setIdentitySeal(null)
+  const l = await countIn('doc-l'), o = await countIn('doc-other')
+  ok(!l.rec && l.ver === 0, "sealed: the purge deletes doc-l's recovery copy and versions from the legacy database")
+  ok(o.rec && o.ver === 2, "another document's legacy rows survive")
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

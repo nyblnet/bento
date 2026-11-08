@@ -72,6 +72,7 @@ const SET_ELSEWHERE: Record<string, string> = {
   '--row-h': 'grid.ts setProperty from its ROW_H constant (styles.css carries a fallback)',
   '--dp-w': 'panels.ts, the dragged panel width',
   '--dbx-cols': 'dashboard.ts, the tile grid column count',
+  '--dx-bar-bottom': 'topbar.ts, where the top bar ends — the phone menus are position: fixed under it',
   '--tray-safe-top': 'bento/tray’s WKWebView host — tray/ios/EditorViewController.swift',
   '--tray-safe-right': 'bento/tray’s WKWebView host',
   '--tray-safe-bottom': 'bento/tray’s WKWebView host',
@@ -349,7 +350,9 @@ console.log('\nthe dark palette is a block keyed off data-theme, and it mirrors 
   ok(dark.size >= 35, `the dark block carries the palette, not a fragment of it (${dark.size} tokens)`)
   for (const name of ['--bg', '--panel', '--surface', '--hover', '--line', '--line-strong',
     '--ink', '--ink-2', '--muted', '--sel', '--sel-ring', '--accent-ink', '--bar-opacity',
-    '--find-hit', '--find-cur', '--cmt', '--cmt-wash']) {
+    // --cmt / --cmt-wash left this list when comments took the accent: they are
+    // var(--accent) / var(--accent-wash) now, and THOSE are on it (or follow it)
+    '--find-hit', '--find-cur', '--accent-wash']) {
     ok(dark.has(name), `${name} has a dark value — a themed token that fell out of the transform stays light on a dark ground`)
   }
   // The reverse: a token that exists ONLY in the dark block has no light value

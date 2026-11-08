@@ -23,12 +23,16 @@
 // CONTROL: the same steps unsealed DO put the marker in the recovery and version
 // stores, show the document title in the tab, and show the notice.
 //
-// Mutations (spaces/src), each red here:
-//   main.ts autosave guard back to isEncryptionActive  → the recovery row
-//   main.ts save-path guard back to isEncryptionActive → the versions row
+// Mutations (spaces/src), each red here. The kernel store refuses plaintext
+// reads and writes while sealed (a backstop), so a reverted guard no longer
+// shows in the IndexedDB scan: it is caught by the helper's reload()/close(),
+// which throw when the store refused anything on a sealed page. reloadRow()
+// and finish() turn those throws into red rows rather than a crash.
+//   main.ts autosave guard back to isEncryptionActive  → the store-refusal rows
+//   main.ts save-path guard back to isEncryptionActive → the store-refusal row after the save
 //   tabtitle.ts tabTitle ignores the seal              → the title rows
 //   main.ts offerRecovery skips the delete             → the plaintext-left-behind scan row
-//   main.ts offerRecovery ignores the seal             → the banner row (and the scan row)
+//   main.ts offerRecovery ignores the seal             → the store-refusal rows and the scan row
 // The recovery-off notice's own guard (wireRecoveryOff encrypted:) is covered
 // by the autosave guard: a mutation of it alone stays green, by design.
 import { writeFileSync, mkdtempSync } from 'node:fs'
@@ -114,6 +118,17 @@ async function finish(o, what) {
   await o.context.close().catch(() => {})
 }
 
+/**
+ * Reload a page openSealed opened, through the helper's reload(), which THROWS
+ * on a sealed page whose store refused anything since it booted. That is a red
+ * row here, not a crash: the rows after it still run. On a refusal the page is
+ * reloaded plainly so the walk can go on.
+ */
+async function reloadRow(o, what) {
+  try { await o.reload(); ok(true, `${what}: the store refused nothing before this reload`) }
+  catch (e) { ok(false, `${what}: ${e.message}`); await o.page.reload() }
+}
+
 /** IndexedDB stores (db/store) holding the marker. */
 const stores = async (page) => scanIndexedDB(page, MARK)
 
@@ -143,10 +158,10 @@ try {
    */
   async function walk(sealed) {
     const o = await openSealed(browser, 'spaces', { sealed, doc: markedDoc })
-    const { page, context, errors, reload } = o
+    const { page, context, errors } = o
     await context.addInitScript(fsaMock)
     // reload() installs the key handoff again and re-proves the seal state
-    await reload()
+    await reloadRow(o, sealed ? 'sealed walk, first reload' : 'unsealed walk, first reload')
     await booted(page)
     const r = { sealedAfterGoto: await sealedNow(page), errors }
     r.titleBoot = await page.title()
@@ -166,7 +181,7 @@ try {
     // what a save would write now (the probe sealed; the app's own serializer unsealed)
     r.serialized = sealed ? r.saved.file : await page.evaluate(() => window.bento.serializeAuto())
     // read back across a reload, keyed by docId: a stored snapshot, a banner
-    await reload()
+    await reloadRow(o, sealed ? 'sealed walk, reload after the edits' : 'unsealed walk, reload after the edits')
     await page.waitForSelector('.sp-banner', { timeout: 5000 }).catch(() => {})
     r.banner = await page.locator('.sp-banner').count()
     r.snapshot = await page.evaluate(([name, id]) => new Promise((res) => {
@@ -323,9 +338,9 @@ try {
   /** The marked space under a host that refuses the recovery copy. */
   async function hosted(sealed) {
     const o = await openSealed(browser, 'spaces', { sealed, doc: markedDoc })
-    const { page, context, reload } = o
+    const { page, context } = o
     await context.addInitScript(refusingHost)
-    await reload()
+    await reloadRow(o, sealed ? 'sealed, hosted, reload' : 'unsealed, hosted, reload')
     await booted(page)
     const sealedAfter = await sealedNow(page)
     await rename(page, MARK + ' hosted')

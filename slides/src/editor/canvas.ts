@@ -10,8 +10,9 @@ import type { Store } from '../store'
 import { t } from '../i18n'
 import { defaultShape, internAsset, readableInk, uid, type ShapeElement, type SlideElement, type TableElement, type TextElement } from '../model'
 import { estimatedFrames, fencedElements, splitFences, toggleCodeOnSelection, type FencePart, type PartFrame } from './codefence'
-import { renderSlide, sanitizeHtml } from '../render'
-import { autoformatAtCaret, clearAutoformat, markdownToHtml, stripMarkerEscapes, undoAutoformat } from './markdown'
+import { cssColor, renderSlide, sanitizeHtml } from '../render'
+import { autoformatAtCaret, autolinkAtCaret, clearAutoformat, markdownToHtml, stripMarkerEscapes, undoAutoformat } from './markdown'
+import { enterInEmptyNested } from './typedlist'
 import { inList, shiftList, shiftListHtml, undoIndent } from './listindent'
 import { bulletsToLists } from './bullets'
 import { clipboardToHtml } from './paste'
@@ -211,7 +212,7 @@ export class SlideCanvas {
     this.selecto = new Selecto({
       container: this.scroller,
       dragContainer: this.scroller,
-      selectableTargets: ['.bento-el'],
+      selectableTargets: ['.bento-el:not([data-locked])'],
       selectByClick: true,
       selectFromInside: false,
       toggleContinueSelect: 'shift',
@@ -892,8 +893,10 @@ export class SlideCanvas {
         if (node.dataset.showOnHover !== active) node.style.display = 'none'
       }
     }
+    const lockedIds = new Set(slide.elements.filter((e) => e.locked).map((e) => e.id))
     for (const node of next.querySelectorAll<HTMLElement>('[data-el-id]')) {
       if (this.isGhost(node.dataset.elId!)) node.classList.add('bento-el-ghost-cut')
+      if (node.classList.contains('bento-el') && lockedIds.has(node.dataset.elId!)) node.dataset.locked = '1'
     }
     this.renderSetBar(sets)
     if (this.surface) this.surface.replaceWith(next)
@@ -943,14 +946,14 @@ export class SlideCanvas {
         box.style.top = `${el.y}px`
         box.style.width = `${el.w}px`
         box.style.height = `${el.h}px`
-        box.style.borderColor = peer.color
+        box.style.borderColor = cssColor(peer.color, '#888') // a peer's colour: gated
         box.style.borderWidth = `${2 * inv}px`
         if (el.rotation) box.style.transform = `rotate(${el.rotation}deg)`
         if (peer.editing === id) box.classList.add('ed-remote-editing')
         if (!tagged) {
           const tag = document.createElement('div')
           tag.className = 'ed-remote-tag'
-          tag.style.background = peer.color
+          tag.style.background = cssColor(peer.color, '#888')
           tag.textContent = peer.editing === id ? `✏️ ${peer.name}` : peer.name
           tag.style.transform = `scale(${inv})`
           tag.style.transformOrigin = 'bottom left'
@@ -1007,7 +1010,12 @@ export class SlideCanvas {
   private syncTargets() {
     // A single selected line/curve/connector is edited with endpoint handles
     // (LineEditor), not Moveable's box — grab an end and drag it.
-    const sel = this.store.selectedElements
+    const sel = this.store.selectedElements.filter((e) => !e.locked)
+    // a locked element that IS selected (via Layers / Alt-click) gets the lock
+    // marker instead of Moveable handles
+    this.surface?.querySelectorAll('.bento-lock-sel').forEach((n) => n.classList.remove('bento-lock-sel'))
+    for (const n of this.selectedNodes()) if (n.dataset.locked) n.classList.add('bento-lock-sel')
+    this.scaleHost.style.setProperty('--lock-s', String(1 / (this.scale || 1)))
     const one = sel.length === 1 && !this.editing && !this.pathEditor.active && !this.cropEditor?.active ? sel[0] : null
     // Curves get true bezier handles (BezierEditor); lines and straight polygons
     // keep endpoint/anchor handles (LineEditor).
@@ -1017,7 +1025,7 @@ export class SlideCanvas {
     else if (lineLike) { this.lineEditor.attach(one!.id); this.bezierEditor.detach() }
     else { this.lineEditor.detach(); this.bezierEditor.detach() }
     const handled = curve || lineLike
-    const targets = this.editing || this.pathEditor?.active || this.cropEditor?.active || handled ? [] : this.selectedNodes()
+    const targets = this.editing || this.pathEditor?.active || this.cropEditor?.active || handled ? [] : this.selectedNodes().filter((n) => !n.dataset.locked)
     // snap against slide bounds/center and every non-selected element
     const others = this.surface
       ? [this.surface, ...Array.from(this.surface.querySelectorAll<HTMLElement>('.bento-el'))].filter(
@@ -1336,6 +1344,7 @@ export class SlideCanvas {
       const ids = (e.selected as HTMLElement[])
         .map((n) => n.dataset.elId)
         .filter((id): id is string => !!id && !this.isGhost(id)) // a marquee never picks up a ghost
+        .filter((id) => !this.store.element(id)?.locked) // ...nor a locked element (#838)
       this.store.select(this.expandGroups(ids))
       if (e.isDragStartEnd) {
         e.inputEvent.preventDefault()
@@ -1366,7 +1375,19 @@ export class SlideCanvas {
         let released = false
         const onMouseUp = () => { released = true }
         window.addEventListener('mouseup', onMouseUp, { capture: true, once: true })
-        this.moveable.waitToChangeTarget().then(() => {
+        //
+        // ...and TWO TIMER HOPS MORE. waitToChangeTarget resolves from the first
+        // render that sees the new target, but croact then runs a second render
+        // of Moveable from a setTimeout(0) (setState), and that pass still sees
+        // the old state: it unsets every able, which nulls `state.dragInfo`
+        // under the drag just begun while the gesture carries on, so every
+        // mouse move threw "Cannot set properties of null (setting 'dist')" and
+        // the press moved nothing. A timer queued from here fires after the one
+        // already pending (measured: 0 hops = 12/12 runs throw, 1 hop = 0/12),
+        // so the replay lands once Moveable has settled; the second hop is
+        // margin for a pass that queues another. rAF would not do: it is not
+        // ordered against timers (it passed 3 runs in 4, then failed).
+        this.moveable.waitToChangeTarget().then(async () => { for (let i = 0; i < 2; i++) await new Promise<void>((r) => setTimeout(r, 0)) }).then(() => {
           window.removeEventListener('mouseup', onMouseUp, true)
           if (released) return
           this.moveable.dragStart(e.inputEvent)
@@ -1530,6 +1551,11 @@ export class SlideCanvas {
     // markdown affordances: **bold** / *italic* / `code` / ~~strike~~ / "- "
     // collapse as you type (⌘Z reverts, backslash escapes); pasted plain
     // text converts the same patterns
+    inner.addEventListener('beforeinput', (ev) => {
+      // Enter finishes a typed URL the way a space does
+      if (ev.inputType === 'insertParagraph' && enterInEmptyNested(inner)) { ev.preventDefault(); return }
+      if (ev.inputType === 'insertParagraph' || ev.inputType === 'insertLineBreak') autolinkAtCaret(false)
+    }, { signal })
     inner.addEventListener('input', () => {
       if (!autoformatAtCaret()) clearAutoformat()
     }, { signal })

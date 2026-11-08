@@ -46,18 +46,20 @@
 // trips it, and `scripts/test-dash-computedtype.ts` asserts that rather than
 // assuming it.
 
-import { isErr, recalc } from './formula.ts'
+import { dependencies, isErr, recalc } from './formula.ts'
 import { inferColumn } from './import.ts'
 import type { Column, ColumnType, TableSheet } from './model.ts'
 
 /** Why a type was chosen — for the rig, and for anything that wants to say so. */
-export type ComputedWhy = 'number' | 'bool' | 'text' | 'mixed' | 'nothing'
+export type ComputedWhy = 'number' | 'money' | 'bool' | 'text' | 'mixed' | 'nothing'
 
 export interface ComputedType {
   type: ColumnType
   why: ComputedWhy
   /** values that were real evidence: not blank, not an error */
   judged: number
+  /** what a Money result carries over from the money column it came from */
+  carry?: Pick<Column, 'format' | 'unit'>
 }
 
 const blankish = (v: unknown): boolean =>
@@ -125,5 +127,46 @@ export function inferComputedType(
     // throw over one, or the Add-column button dies mid-click.
     return { type: 'text', why: 'nothing', judged: 0 }
   }
-  return judgeComputed(values)
+  return carryMoney(sheet, expr, judgeComputed(values))
+}
+
+/**
+ * NUMBERS COMPUTED FROM MONEY ARE MONEY.
+ *
+ * `Value * 2` over a £ column used to arrive as a plain Number column: no £,
+ * and — because a plain number groups only from 10,000 up — `8600` printed
+ * beside `24,800` in the same column. Excel carries the currency format of the
+ * cell a formula references; this is that rule at column grain: a numeric
+ * result whose expression reads ANY Money column is Money, with that column's
+ * format and unit. A ratio of two money columns is the case this gets wrong
+ * (it is a plain number), and the type stays one click away in the panel.
+ */
+export function carryMoney(sheet: TableSheet, expr: string, judged: ComputedType): ComputedType {
+  if (judged.type !== 'number') return judged
+  let refs: string[]
+  try { refs = dependencies(expr) } catch { return judged }
+  const byKey = new Map<string, Column>()
+  for (const c of sheet.columns) { byKey.set(c.id.toLowerCase(), c); byKey.set(c.name.toLowerCase(), c) }
+  const money = refs.map((r) => byKey.get(r.toLowerCase())).find((c) => c?.type === 'money')
+  if (!money) return judged
+  const carry: Pick<Column, 'format' | 'unit'> = {}
+  if (typeof money.format === 'string' && money.format) carry.format = money.format
+  if (typeof money.unit === 'string' && money.unit) carry.unit = money.unit
+  return { ...judged, type: 'money', why: 'money', carry }
+}
+
+/**
+ * The patch for a formula EDIT on an existing column: re-type it, but never
+ * overrule a person. The type moves only while it still matches what the OLD
+ * expression produced (nobody has chosen one by hand), and a re-type to Money
+ * brings the money column's format and unit only where this column has none.
+ */
+export function retypePatch(
+  col: Column, before: ComputedType, after: ComputedType, formula: string,
+): Partial<Column> {
+  if (!(col.type === before.type && after.type !== col.type)) return { formula }
+  const patch: Partial<Column> = { formula, type: after.type }
+  if (after.carry?.format && !col.format) patch.format = after.carry.format
+  if (after.carry?.unit && !col.unit) patch.unit = after.carry.unit
+  return patch
 }

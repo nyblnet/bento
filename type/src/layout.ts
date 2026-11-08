@@ -468,14 +468,27 @@ export function pageVars(page: PageSpec): Record<string, string> {
  * only the margin would leave the padding behind and add 10px to whatever the
  * author asked for.
  */
+/**
+ * Values a style may carry into CSS — checked HERE, where they are written,
+ * not only in parseDoc: a collaborator's synced op never passes parseDoc, and
+ * a string like `0;background:url(…)` needs no `<` to inject a declaration
+ * (into the editor, print and the preview saved in every file).
+ */
+export const cssAlign = (v: unknown): string | null =>
+  v === 'left' || v === 'center' || v === 'right' || v === 'justify' ? v : null;
+export const cssLen = (v: unknown, lo: number, hi: number): number | null =>
+  typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi ? v : null;
+
 export function blockStyle(b: Block): string {
   const p = propsOf(b);
   const out: string[] = [];
-  if (p.align) out.push(`text-align:${p.align}`);
-  if (p.lh !== undefined) out.push(`line-height:${p.lh}`);
-  if (p.sb !== undefined) out.push(`margin-top:${p.sb}px`, 'padding-top:0');
-  if (p.sa !== undefined) out.push(`margin-bottom:${p.sa}px`);
-  if (p.ind !== undefined) out.push(`text-indent:${p.ind}px`);
+  const align = cssAlign(p.align), lh = cssLen(p.lh, 0.5, 4);
+  const sb = cssLen(p.sb, 0, 2000), sa = cssLen(p.sa, 0, 2000), ind = cssLen(p.ind, -2000, 2000);
+  if (align) out.push(`text-align:${align}`);
+  if (lh !== null) out.push(`line-height:${lh}`);
+  if (sb !== null) out.push(`margin-top:${sb}px`, 'padding-top:0');
+  if (sa !== null) out.push(`margin-bottom:${sa}px`);
+  if (ind !== null) out.push(`text-indent:${ind}px`);
   return out.join(';');
 }
 

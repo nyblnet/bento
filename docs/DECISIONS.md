@@ -11340,6 +11340,92 @@ shell it serves (gate 1, A2).
 Still for a real phone: TEE and StrongBox residency (the emulator reports
 software keys), and the API 26–29 consent path, which allows biometrics only.
 
+## 2026-10-20 — spaces top bar: Reading view → floating button, Properties out (⋯ and ]), Graph → page-list header, Search stays — maintainer, 2026-10-20
+
+The maintainer ruled that bento/spaces' top bar should come closer to slides'
+(slides is the chrome reference). This supersedes the line in the
+2026-09-26 entry that made Graph "a bar button beside Reading view".
+
+- **Reading view is a floating pill**, shaped as slides' Slideshow pill
+  (`.ed-present-pill`: surface fill, hairline, 999px radius, the same soft
+  shadow, 600 weight, `--chrome` on hover) and placed in slides' corner:
+  bottom-END, 14px in, by a logical inset so RTL mirrors it. It hangs off the
+  page's own end edge (a zero-width box between the page and the properties
+  panel), so it moves with the panel instead of covering it. It is the way out
+  of reading view as well as in, so it stays there while reading. A sealed
+  reading copy has no pill, as it had no bar button.
+- **Properties left the bar.** Where the panel is a column, its chevron is
+  docked flush to the window edge when shut (the 5px-strip problem that once
+  justified a bar button no longer exists), and `]` toggles it. Folded, ⋯
+  keeps the Properties row.
+- **Graph is on the page list's header**, beside ＋ ▾. It is a view of the
+  tree, and it stays there in reading view. `bento.graph()` is unchanged.
+- **Search stays in the bar.** ⋯ no longer lists Reading view or Graph.
+
+test-spaces-chrome reads the pill's values from slides' stylesheet and holds
+the computed pill to them at 1440 and 390. It presses each new home with
+trusted input, and its before/after command walk maps each moved command to
+its new home rather than dropping it.
+
+## 2026-10-18 — Android: no recents snapshot while a sealed document is open
+
+While the open document is password-protected or identity-sealed, the Android
+editor turns off its app-switcher snapshot (`setRecentsScreenshotEnabled(false)`,
+API 33+), so the recents card is blank. The decision comes from the bytes the
+host opened or last wrote (`DocumentIndex.isEncrypted`), so it switches on at
+the save that encrypts the file and back off at the save that removes the
+password. The page can also say so first, over the bridge (`seal` capability,
+`seal.state {sealed}`, fire-and-forget), the moment a password is set and
+before any save lands. It can only ADD blanking: recents stays blank while
+the file OR the page says sealed. It comes back only when the file was
+written unsealed AND the page says unsealed (security). Below API 33 the only tool is `FLAG_SECURE`, which also blocks
+screenshots, so it is not set by default there; it can come later as an
+opt-in setting. Measured on the emulator (API 36), with recents opened from
+Home so the stored snapshot is what shows: a sealed document's card is blank;
+the same file on a build without this change shows its screen; an unsealed
+document's card still shows its content. With the page signal (sent here
+through the same postMessage channel the kernel will use): an unsealed file
+whose page says sealed is blank; a sealed file whose page says unsealed is
+still blank; an unsealed file whose page says unsealed again shows content.
+## 2026-10-18 — bento/connect on Android: the recovery code and key blobs (Recovery.kt)
+
+The Android port of `kernel/src/recovery.ts` (K2b). It reproduces every byte of
+`kernel/fixtures/recovery-v1.json`, which `RecoveryTest` re-reads on every run.
+The directory's pepper layer is server code and is not ported.
+
+- **Argon2id is Bouncy Castle's** (`bcprov-jdk18on` 1.86, security §35),
+  pinned exactly. Gradle dependency verification
+  (`home/android/gradle/verification-metadata.xml`, sha256) now covers every
+  dependency of the Android build. A wrong checksum fails the build (checked:
+  a zeroed sha256 fails on `bcprov-jdk18on-1.86.jar`). The recorded sha256
+  matches the jar fetched independently from Maven Central, whose published
+  sha1 also matches. Changing any dependency now means regenerating the file
+  (`./gradlew --write-verification-metadata sha256 testDebugUnitTest
+  assembleDebug assembleRelease bundleRelease`).
+- **Correctness:**
+  - the RFC 9106 §5.3 row;
+  - every fixture derivation, code, parse, blob and scalar row;
+  - a randomized cross-check against Node's native Argon2id on every run
+    (`crypto.argon2Sync`; CI's Android job now sets up Node, and the check
+    never skips);
+  - the v1.0 mutant (Argon2 without the v1.3 XOR) fails the RFC row.
+
+  The reference-area off-by-one mutant can't be applied to a library we don't
+  patch. The fixture's full-parameter rows exercise that code path instead.
+- **Memory.** Argon2's blocks come from a pool that zeroes each block as it is
+  handed back and keeps none. A probe reads every block back as zero, and a
+  control pool that doesn't wipe is caught by the same probe. This is best
+  effort: the garbage collector may already have copied a block before it was
+  cleared.
+- **Low memory fails CLOSED, decided BEFORE allocating.** Measured on an
+  emulator with a 48 MiB app heap: catching `OutOfMemoryError` alone did NOT
+  hold. Filling the heap made the runtime's own threads throw it and the
+  process died. So `argon2id` first checks the heap left against the
+  blocks' real cost (1040 bytes per 1 KiB block, measured) plus 16 MiB, and
+  refuses ("recovery is unavailable on this device") without allocating. On
+  48 MiB it refuses in milliseconds and the app stays up. On the normal
+  192 MiB heap the full 64 MiB, t = 3 derivation takes 0.7–2.3 s on the
+  emulator, and matches Node byte for byte. The parameters are never weakened.
 ## 2026-10-18 — bento/spaces: which checks ask isBodySealed, and the tab title while sealed
 
 Every plaintext-to-disk guard in spaces asks `isBodySealed()` (a password OR the
@@ -11401,10 +11487,982 @@ and not deduplicated: the host can only ADD blanking, so a missed `true` is the
 only failure and a redundant post costs nothing. Hosts that don't declare
 `'seal'` are sent nothing.
 
+## 2026-10-18 — CI is split by zone; `validate` stays one required job
+
+`.github/workflows/ci.yml` held every CI step, and every zone added its rig at
+the same few places: the end of its section of `validate`, or after the last
+job. So nearly every open PR conflicted with whichever PR merged before it. The
+file is now split by zone, and nothing about merging changes:
+
+- **The required check is still `validate`, and it is still ONE job.** Its
+  steps live in composite actions, one per zone
+  (`.github/actions/validate-<zone>/action.yml`). `ci.yml` runs them in order
+  on the same runner. Each app's slice builds its own shell, and the convert,
+  kernel, home and shared slices run after all four apps, so every step has at
+  least what was installed and built before it ran in the old order. Composite
+  actions were chosen over reusable workflows because reusable workflows would
+  make each zone a separate job. That would rename checks, rebuild every shell
+  once per job, and turn `validate` into an aggregator, where a skipped
+  dependency reads as success.
+- **Jobs outside `validate` live in `.github/workflows/ci-<zone>.yml`**, with
+  their job ids unchanged (the job id is the check name). Like before, they
+  are not required checks.
+- **Where a new rig goes:** at the end of your own zone's slice, or as a job in
+  your zone's `ci-<zone>.yml`. Never in `ci.yml`, which changes only when a
+  slice is added. Composite steps must say `shell:` on every `run:`.
+- `scripts/test-ci-registered.ts` and `test-spaces.mjs --manifest` read all of
+  it through `scripts/lib/ci-files.mjs`. An action counts only if a workflow
+  runs it, and the rig fails on an action nobody uses or a rig-running workflow
+  with no `pull_request` trigger. Those are the two silent holes a split opens.
+
+What this costs: in the Actions UI, a failing `validate` names the zone slice.
+To find the failing step inside it, open that slice's log.
+
+
+## 2026-10-18 — Under CI, a rig that skips fails its step
+
+A rig that can't run what it needs prints a skip line and exits 0, so its step
+went green. Three rigs had skipped in every CI run since they were written:
+encrypted-title (the #742 guard for shipped slides), type preview and type
+font. All three print "skipped: jsdom is not installed", and CI never
+installed jsdom.
+
+- `validate` installs a pinned jsdom at the repo root, as test tooling (it
+  never ships in a document). All three rigs now run.
+- Every rig step runs under `scripts/ci/bento-step`: the `shell:` of every
+  validate slice step, and the default shell of the `ci-<zone>.yml` jobs.
+  It runs the script as `shell: bash` would, then fails the step on any
+  output line that reads as a skip. The one exception is
+  `ci-home-android.yml`, where Gradle prints SKIPPED as a task outcome.
+- **The allowlist** (`ALLOWED_SKIPS` in `scripts/lib/ci-skips.mjs`) names the
+  rig, the exact line and the reason. It holds the dash xlsx/zip interop
+  checks, which need LibreOffice or a real Excel-made workbook, and, on Linux
+  only, the three home/ios Swift rigs, which need Apple frameworks and run for
+  real on a macOS job. An allowed line counts only in its own rig's step.
+- `scripts/test-ci-skips.mjs` is the positive control. It checks the detector
+  against the exact lines from a real main run, and runs the wrapper end to
+  end, including the encrypted-title rig with jsdom hidden, which must turn the
+  step red. It also checks that every allowlist entry's rig still prints its
+  line, and that every rig step in every CI file runs through the wrapper.
+
+## 2026-10-20 — dash: the shell takes slides' chrome (Share popover, measured bar, live language)
+
+Dash's bar, Save menu and sharing now follow slides and spaces, per the rule
+that slides is the chrome reference. Four things a later session could undo
+by accident:
+
+- **Sharing is a popover, and connecting needs eligibility.** The one-click
+  "Start live session" chip is gone; dash/src/shareui.ts is spaces' Share
+  panel. Nothing connects until Go live (or a live copy is sent). A workbook
+  that arrives SHARED — saved with its session on, an invite, a view-only copy
+  — rejoins its room on open through `SyncSession.shareEligible()`, which is
+  what slides and spaces do. Before this, dash never joined on open, so a copy
+  sent to someone stayed offline. A fresh workbook or template still never
+  connects: the keys are minted a beat after boot, so only the eligibility
+  test stands between the first edit and the relay.
+- **Copies for someone else go through the kernel copy table.**
+  dash/src/docclass.ts is dash's field map (exhaustive over DashDoc's declared
+  keys, enforced by tsc); dash/src/share.ts builds the reading copy ('package'),
+  the invite ('invite') and the view-only copy ('reader') with it, so a
+  top-level field this build does not declare is dropped from all three.
+- **The bar is fitted by measuring, not by breakpoints.** dash/src/topbar.ts
+  ports slides' fitTopbar and fold. Below the fold the BAR scrolls, never the
+  document, and the ＋/⋯ menus are position: fixed under it. Widgets parked in
+  ⋯ (Share, 🌐, Data) render inline (CLAUDE.md hard-won 9 and 10).
+- **The language switches live by translating in place.** Slides rebuilds its
+  editor. Dash builds its app once from one template, so re-running boot would
+  mint a second store and sync session, and a reload of a file:// page drops
+  unsaved work. Instead the visible strings are mapped back to their
+  English-as-key source under the old locale and re-translated. Interpolated
+  strings are re-rendered by their owners.
+
+Comments take the accent colour. The violet `--cmt` was dash's own and read as
+a third accent next to amber and the selection blue; slides' comment pins are
+amber.
+
+## 2026-10-20 — dash: a column header click selects; sorting is a command
+
+In dash a click on a column header (dataset name or spreadsheet letter) selects
+the column, shift extends, ⌘/Ctrl adds, and it never sorts. Excel, Sheets,
+Numbers and Airtable all do this, and the old click-to-sort left the selection
+on its screen rectangle, which after the sort held different records. Sorting
+lives in the header's ▾ menu and the right-click menu. Double-clicking a
+dataset column's name renames it in place. A sort or filter now carries the
+selection by ROW identity: whole columns stay whole, single-row ranges move
+with their row, and a taller block collapses to the cursor cell (its rows no
+longer sit together). Point mode inserts a dataset reference in the FILE's
+row and column numbering (`tableCellSource`), not the sorted view's.
+
+## 2026-10-20 — bento/dash: what typing into a spreadsheet cell stores, and text in arithmetic
+
+Typing into a spreadsheet cell (and pasting text into one) goes through
+`cellprops.ts coerceInput`. It was written and tested earlier but never wired:
+grid.ts kept a narrower reader, so `15%` and `$5` were stored as TEXT. The rules
+are in cellprops.ts's header. Two of them changed here:
+
+- **Unambiguous dates are read from typing.** ISO (`2026-03-04`) and a named
+  month (`Mar 4 2026`, `4 March 2026`) store the canonical `YYYY-MM-DD` string
+  and stamp the Date format. A slash date stays text from typing even when the
+  day is over 12. Otherwise `13/2/2026` would be a date and `12/2/2026` one row
+  up would be text. In a cell already formatted Date, every unambiguous spelling
+  is read, as before. The refusal of `3/4/2026` is unchanged.
+- **One digit reader.** `import.ts readEntryNumber` reads typed entry, the
+  formula engine's text coercion, and (through the same digit shapes)
+  `inferColumn`. A field that fits only one decimal convention reads that way
+  for everyone (`3,50` is 3.5). A field that fits both (`1,234`) follows the
+  viewer's locale when typed, because the typist meant something by it. The
+  formula engine always uses '.', import's own tie-break, because a computed
+  value is document data and must not depend on who opens the file.
+
+**Text in arithmetic follows Excel** (formula.ts, the block above `num`). A
+range or reference given to an aggregate counts only its numbers: text, even
+numeric-looking text, and booleans are skipped. This includes the step
+engine's open-coded fast path, which test-dash-steps.ts keeps bit-identical. A
+value written directly as an argument is coerced, and #VALUE! if it is not a
+number (COUNT just doesn't count it). Direct arithmetic coerces text only when
+the whole string reads as a typed number (`"15%"` is 0.15, `"(5)"` is -5).
+Anything else is #VALUE!; the old code read whatever digits were left after
+stripping symbols. Aggregates take every argument (`SUM(1,2,3)` was 1), and
+`%` is a postfix operator (`=10*15%` was 150).
+
+**A cell formula that does not parse is refused at entry**, in the cell editor
+and in the formula bar (`cellFormulaProblem` → `formula.ts syntaxProblem`). It
+is never refused on evaluation: formulas already in a file evaluate as
+leniently as before, because refusing them would put a blank where an answer
+was. The formula bar shows a value cell's ENTERED form (`cellprops.ts
+enteredForm`): `100%`, `$300.50`, or `'15%` for text that would otherwise be
+read back as a number. Re-entering what the bar shows always stores the same
+value again.
+
+Guarded by scripts/test-dash-entryparse.ts and
+scripts/test-dash-entryparse-browser.mjs.
+
+## 2026-10-20 — dash: a pivot opens as a sheet; the chart is edited in the panel
+
+A pivot sheet now OPENS where the grid was (its tab works), and the properties
+panel becomes its field editor — Excel's PivotTable Fields layout. Which pivot
+is up is view state, like which tab is up; the grid stays on its last sheet
+underneath, and `isOpenable` still means "the grid can show it" (tabs.ts takes a
+separate `SheetViews` hook for kinds another owner draws). The pivot's own
+filters are stored in model.ts's `StoredFilter` spelling (`isOneOf` as a
+`values` array, never a Set); a Filters-area field with no `pred` means
+"(All)". A grouping field sits in one of Filters/Columns/Rows; Values may repeat
+a column but not a column-and-function.
+
+The 2D chart is edited in the properties panel while it is selected (clicking
+the plot or Edit), as a slides chart is. New `ChartBinding` fields are additive:
+`title`, `legend`, `colors` (keyed by column id, never position) and
+`allowLine`. A line whose category column has no order (text, enum, bool) is
+drawn as bars unless `allowLine` is set, and the refusal is made in
+`optionFor`, so the panel, a story and a dashboard all refuse alike. The value
+axis takes its label pattern from the series columns only when they all share
+one format; percent axes are scaled by 100.
+
+3D is hidden behind a per-viewer developer flag
+(`localStorage['bento-dash-dev-3d'] = 'on'`), never in the document; viz3d.ts
+stays.
+
+Escape does not leave a pivot: it is a sheet now, and as in Excel you leave a
+sheet by its tab. #808's Escape-closes-Pivot existed for the Pivot side panel
+(review 4.8), which this removes; Escape still closes the Story panel.
+
+## 2026-10-20 — dash: the grid owns Tab only inside itself; F6 walks regions; slides' focus ring
+
+dash's document key handler took every key from every target that was not a
+text field, so Tab moved the grid's cursor from anywhere — the top bar, panel
+and sheet tabs could not be reached by keyboard — and Enter on a focused button
+moved the cursor instead of pressing it. Now: off the grid, Tab is always the
+browser's, and on a focused control Enter, Space and the navigation keys are
+the control's; other keys (a letter typed after clicking a toolbar button, ⌘Z)
+still reach the grid. Inside the grid Tab stays "next cell" (the data-entry
+run every spreadsheet keeps), and at the sheet's first or last column it hands
+the key back to the browser so the grid is not a keyboard trap. F6 / ⇧F6 move
+between top bar, formula bar, grid, panel and sheet tabs, Excel's key for it.
+Focus rings move from --blue to --accent-ink, the token slides' buttons and
+every field already use, with a zero-specificity floor for any reachable
+control that has no ring of its own. This supersedes the --blue choice recorded
+in dash's styles.css comment.
+
+Also settled the same day: a stored `bento-lang` is validated before `Intl`
+sees it (dash/src/i18n.ts `intlLocale`), because the key is shared across every
+file on the origin and a bad value used to stop boot.
+
+## 2026-10-21 — bento/connect K4: release pins and the signed release history
+
+A host that SERVES a document (iOS, Android, desktop, the hosted runtime)
+decides "genuine runtime" by hashing the file's code blocks and serving it under
+a hash-pinned script CSP (security §18). K4 publishes what that needs, per
+release, signed with the release key:
+- **Pins, in the manifest (additively: shipped shells read only
+  app/version/sha256/url):** `pins = { v: 1, blocks: { bento-rt, bento-rt-css,
+  loader, remover }, scriptSrc: [loader, remover] }`. Blocks are sha256 hex of
+  each code block's text; `scriptSrc` is the CSP form. They're derived from the
+  release's OWN bytes: the built shell, and a file it saved through its real ⌘S
+  fallback (`scripts/derive-pins.mjs`). The remover exists only in saved files,
+  and one app's scripting API returns JSON, not a file.
+- **A signed, cumulative history:** `releases/<app>/history.json`, the release
+  envelope over `{ app, v: 1, releases: [{ version, sha256, at, pins }] }`,
+  newest first. It's append-only: a release must be newer than everything held,
+  and a held entry never changes. The first history is backfilled from every
+  earlier release with a signed manifest, each shell checked against its own
+  manifest's sha256 first. For slides that's 66 versions, 0.7.0 to 1.2.9.
+  Earlier shells have no compressed runtime blocks, so they're unknown to hosts.
+- **The host rules (scripts/lib/release-history.mjs, security §36):**
+  - a file matches a release only if ONE entry matches EVERY block, with
+    exactly one block per id. A partial or ambiguous match is UNKNOWN:
+    restricted mode or an update offer, never a borrowed pinned CSP.
+  - a host keeps the newest history it has verified and refuses one that lacks
+    a held entry or rolls its newest version back. (With a well-formed history
+    the second check is implied by the first, and is kept as defence in depth.)
+- **The signing gate:** `release.mjs` refuses to sign on any pins mismatch, on
+  any executable inline script in a saved file other than the pinned loader and
+  remover, and on any CSP refusal while the release is driven under its pins,
+  except the loader's two designed fallbacks (an inline script, then `new
+  Function`). Those are matched on directive AND on a line inside the pinned
+  loader's span: matching on the source file alone excused an injected script.
+  There's no unchecked path. CI runs the same check on every PR's build of all
+  four apps, and the required `validate` job's release rehearsal runs the whole
+  pipeline.
+- **Refusal COLUMNS aren't reliable across Chrome versions.** Chrome Headless
+  Shell 149, Playwright's bundled browser and the one CI runs, reports a script
+  injected right after the loader's `</script>` at column 0, a position INSIDE
+  the loader's span. Chrome 155 reports its real column. So on CI's browser the
+  line-and-column rule alone would excuse that script, and the ONCE-EACH CAP
+  (at most one inline and one eval refusal excused) is what catches it. The cap
+  is the real guard and the column a refinement (security, measured). Rigs
+  identify an injected refusal by its line, with its column matching or 0, and
+  run under the bundled browser as well as system Chrome.
+- **The verdict is a GRAMMAR, not a list of cases (security, 2026-10-21).** A
+  `<script>` is inert only if its type is exactly one of the data types Bento
+  writes (`application/bento+json`, `application/bento+lang`,
+  `bento/deflate-b64`, `bento/deflate-b86`). Everything else is executable,
+  including no type, any JavaScript type, `module`, an unknown type, a
+  differently cased data type, and any `src=`. An executable script must then
+  be exactly the pinned loader or remover by hash. A file carrying `<iframe>`,
+  `<object>`, `<embed>`, `<base>`, a `<meta>` refresh or CSP, an `on*=`
+  attribute, a comment or `<style>` holding a `<script>`, or a data block
+  containing `<` is UNKNOWN. Bento's data blocks never contain `<`: the JSON is
+  escaped and the b64/b86 alphabets exclude it. Every genuine build of the four
+  apps, a real deck with a live embed and an svg diagram, and all 66 backfilled
+  slides releases pass it unchanged. Agreement between the hosts' scanners
+  (Rust, Swift, Kotlin, JS) is K5's shared corpus.
+- **No style pins in phase 1 (security §36a).** The policy is
+  `script-src <pins> blob:; style-src 'unsafe-inline'`. A document's own svg
+  `<style>` (an svg element's `css`, sanitized and scoped) can't be pinned per
+  release: measured, the pinned style policy refused it, which breaks every
+  user diagram with hover or animation. Style injection gives no route to
+  Bento's secrets: keys and the document JSON live in script text, which CSS
+  selectors can't read, and document CSS is sanitized and scoped. So pinning
+  would only remove what the svg element provides on purpose. The style control
+  is the SANITIZER, whose rig covers the obfuscated url() forms with a browser
+  fetch check. The route to style pins later is moving svg CSS into constructed
+  stylesheets (a slides change); collecting the hashes from the browser's own
+  CSP engine under a report-only policy was measured to work.
+## 2026-10-20 — calendar span renamed Agenda (gantt keeps Timeline); calendars prefer Due — maintainer, 2026-10-20
+
+Two rulings on the bento/spaces calendar layout, made by the maintainer.
+
+- **The calendar's second shape is "Agenda" on screen.** It was "Timeline",
+  the word the gantt layout also uses, so the view head could show two
+  different pictures under one name. Only the words changed: the span button
+  reads "Agenda" and its tooltip "Show an agenda"; the gantt layout keeps
+  "Timeline" everywhere (layout button, Insert menu, "Show as a timeline").
+- **The stored value stays `span: "timeline"`.** Files written since the
+  calendar shipped carry it, the format is additive, and renaming the value
+  would open every one of those views as a month grid. Do not "tidy" it to
+  `"agenda"`; a reader that wants the new name gets it from the label, never
+  from the file. `CAL_SPANS` in `spaces/src/calendar.ts` says so beside it.
+- **A calendar prefers Due.** The date a page sits on is: its journal date;
+  else `due`, when the schema declares it as a date field and the page carries
+  a real ISO value; else the other date fields in schema order; else "No
+  date". A task with both a Start and a Due belongs on the day it is due —
+  that is what a calendar of work is opened to answer. `DEFAULT_FIELDS` is
+  NOT reordered: the property strip still shows Start before Due. The order
+  lives in one function, `dateOrderOf`, which both `dateOf` and the hint above
+  the grid read, so the sentence cannot drift from the behaviour.
+
+## 2026-10-20 — Designs: system font stacks or embedded fonts, never web fonts — maintainer, 2026-10-20
+
+Fonts in a bento/spaces design are system font stacks (`FONT_STACKS`) or fonts
+an author embeds in the file (`asset:`). No bundled or downloaded web fonts —
+maintainer, 2026-10-20. This is already how `spaces/src/designs.ts` validates
+fonts: `validFont` accepts a `FONT_STACKS` name, or an `asset:` key that
+resolves to a `data:` font in the document's own assets, and drops anything
+else to the base design's font. It is recorded so that a later change does not
+add a web-font fetch.
+
+## 2026-10-21 — bento/connect K5: one gate-1 verifier, and the corpus every host runs
+
+`kernel/src/gate1.ts` is the ONE gate-1 implementation for every JavaScript
+host (the extension, the hosted runtime) and for the release tooling. The K4
+scripts import its scanner, grammar and host rules rather than carrying copies.
+It hashes with WebCrypto, so it runs in a page, a worker, an extension and node.
+- **`verifyServed(html, history)`** is the PRIMARY path, for a host that serves
+  the bytes it verified (security §17). ONE release must match EVERY block
+  under the grammar (§36 and the 2026-10-21 ruling). The answer carries the CSP
+  to serve under (`hostPolicy`). Unknown never borrows a release's CSP.
+- **`verifyStrict(html, expected)`** is the file:// fallback: vault's strict
+  verifier, signed off in security §15. The final whole-string compare, bound
+  at both ends, is the load-bearing part. Its expectation comes from a genuine
+  saved file of the release (`strictExpectedFrom`). A signed skeleton waits for
+  canonical save, and a file:// result is never grounds for identity (§16).
+- **`home/fixtures/gate1/`** is the conformance corpus: a synthetic app's signed
+  history (with a test key), served rows, the 16 strict tamper rows plus two
+  genuine saves, anti-rollback rows, and an ambiguous-history row. Every row
+  DECLARES its verdict, and the generator refuses to write the corpus if the
+  reference disagrees, so the answers are the rules, not what the JS happens to
+  do. Native hosts (Swift, Kotlin, Rust) port gate 1 and must pass every row.
+  Encodings are stated per field: block pins are sha256 HEX of the block text,
+  `scriptSrc` is `'sha256-'` + BASE64, and the entry `sha256` is HEX of the
+  shell file.
+## 2026-10-21 — bento/connect in the extension: Argon2id is @noble/hashes, and the recovery code is generated from kernel
+
+**Argon2id is `@noble/hashes` 2.4.0, vendored, not hash-wasm.** The recovery
+code is stretched with Argon2id, which WebCrypto lacks, so the extension
+vendors one. hash-wasm was the first choice, but its Argon2id takes no
+associated data, so it can't run the RFC 9106 §5.3 test vector, which has
+some. Security requires that vector. Noble's `argon2idAsync` runs it, equals
+Node's native Argon2id at Bento's parameters, and is pure JavaScript, so the
+extension needs no `'wasm-unsafe-eval'` anywhere. It takes about a second per
+derivation at 64 MiB, which is fine for a code used at setup and recovery.
+
+The files are copied unmodified from the npm tarball, each pinned by sha256 in
+`home/webext/src/id/vendor/noble-hashes/VENDOR.json`. `scripts/test-webext-id.ts`
+recomputes the hashes on every run, then checks RFC 9106, every
+`recovery-v1.json` derivation, and a randomized cross-check against Node's
+native Argon2id. It proves by probe that the 64 MiB block array reads zero
+afterwards. A derivation that can't allocate that memory reports "recovery
+unavailable on this device" and never retries with weaker parameters.
+
+**The recovery code and the key blobs are generated from kernel too.**
+`kernel/src/recovery.ts` now covers everything the extension's hand-written
+`id/blob.js` and `id/recovery.js` did, plus the recovery wrap. So it is
+type-stripped into `id/gen/` like the statements, and the hand-written
+modules are gone: one implementation, held to `recovery-v1.json` by kernel's
+own rig run against the extension's copy.
+
+## 2026-10-18 — bento/connect: the desktop agent's security-key ceremony, and one rule for C libraries (home/desktop/agent)
+
+- **One authenticator stack per platform.**
+  - **Linux** uses the distribution's **libfido2** (Yubico, BSD-2-Clause,
+    minimum 1.12). **Windows** will use only the platform WebAuthn API
+    (`webauthn.dll`), which covers security keys, Windows Hello and phone
+    hybrid: non-admin apps can't reach CTAP-HID keys directly there. libfido2 is
+    never shipped on Windows.
+  - **The PRF → CTAP hmac-secret transform**, SHA-256("WebAuthn PRF" ‖ 0x00 ‖
+    input), is applied exactly once. On Linux the agent applies it before
+    libfido2. On Windows the raw input goes to `webauthn.dll`'s PRF path, which
+    applies it itself. Applying it twice still gives deterministic output, but
+    it never matches what the same key gives on the web.
+- **The desktop's clientDataJSON origin** is exactly `bento-desktop:linux` or
+  `bento-desktop:windows`, never `https://bento.page`. A native app
+  self-asserts its origin; on the web the browser vouches for it, which is where
+  phishing resistance comes from. The fields are type, challenge, origin and
+  crossOrigin, in spec order, with CCDToString escaping and no topOrigin.
+- **C libraries are the distribution's, behind a thin in-tree FFI.** That
+  applies to libfido2 and to the keyring. The keyring moved from the
+  secret-service crate to libsecret, which removed a zbus tree carrying three
+  RustSec "unmaintained" notices. There are no binding crates, no bundled
+  copies and no OpenSSL crate in the shipped graph. Any future bundled build
+  must say so and pin and checksum its source.
+- **Supply chain (`supply-chain-check.sh`).** cargo-deny runs over the shipped
+  graph: a permissive-only licence allow-list, RustSec advisories and
+  crates.io-only sources. A second check proves the test-only authenticator is
+  absent from that graph. Each has a positive control: an LGPL crate, and the
+  testkit as a normal dependency, must both be refused.
+- **The test authenticator is Google's OpenSK** (Apache-2.0, pinned commit and
+  nightly), in a separate test-only crate with our own MIT uhid adapter. An
+  AGPL alternative was rejected even for tests.
+- **The PRF interop rig.** One virtual key and one credential, with an
+  independent WebAuthn client (Yubico python-fido2, BSD-2, hash-pinned) that
+  applies the PRF transform itself, as a browser does. The agent's output must
+  be byte-equal to it. Two mutant builds, double-hash and raw-input-hash, must
+  each fail ON THAT COMPARISON, not by failing to build or to reach the key.
+- **The no-TPM store's wipe** re-counts every item, locked or not, after
+  clearing. Measured: libsecret's clear silently skips items in a locked
+  keyring, so the re-count is what keeps a wipe from reporting success while
+  keys remain.
+
+## 2026-10-24 — One svg sanitizer in kernel; an app's policy only tightens it
+
+kernel/src/svgsafe.ts holds the untrusted-svg sanitizer, lifted verbatim from
+slides' renderer, so there is one implementation to audit instead of one per app.
+Type asked for this, at security's suggestion; slides agreed and named the
+couplings below.
+
+- **Slides' behaviour is the default.** Every policy option refuses more: a tag,
+  an attribute, `data-*`, remote hrefs, or escapes and foreign schemes in a
+  value. No option can add a name to a list. scripts/test-svgsafe-policy-browser.mjs
+  holds that: each option removes what the default keeps, and nothing an option
+  keeps was refused by the default.
+- **`scopeStyle` is required, and it only scopes.** There is no safe default
+  scope for a kept `<style>`, so a caller either passes its scoping (slides:
+  `css => scopeCss(css, scope)`) or `null`, which refuses `<style>` elements and
+  `style` attributes. The walk runs sanitizeSvgCss itself and hands the hook
+  the result, so an app passing `css => css` keeps a sanitized sheet, never a
+  raw one. Without that, this hook would be the one option able to loosen
+  (security's condition on #847).
+- **What stays in the app** is what isn't security: how it parses input into an
+  inert document, and scopeCss (hard-won detail #7).
+- **One decoder.** slides' colour gate reads values through the kernel's
+  `cssDecodeIdentEscapes`, the same function the svg-css path uses. Two copies
+  could disagree about what an escaped `u\72l(` says. Measured: making the
+  kernel's decoder a no-op turns the egress rig red at the chart colour sinks.
+- **render.ts re-exports** SVG_TAGS, svgAttrAllowed, svgHrefAllowed,
+  svgUrlRefsAllowed and sanitizeSvgCss, so callers and rigs keep importing them
+  from the renderer.
+
+## 2026-11-02 — bento/connect: directory requests (dreq.), the rotation vouch (rot.), and op-specific consent
+
+Three additions to `kernel/src/statements.ts`, with vectors in
+`kernel/fixtures/identity-v1.json`. They are what the directory needs before
+key rotation, freezing and passkey management can be switched on.
+- **`dreq.<op>.<b64u(address)>.<bindHash>.<challenge>.<arg>`** is every
+  agent-signed request that only the directory verifies, in one layout with a
+  CLOSED op set: `contest`, `freeze`, `status`, `cred-add`, `cred-del`,
+  `rc-enrol`. It is bound to a single-use challenge the directory issued, spent
+  before anything else is checked, rather than to a timestamp, so there is no
+  replay window at all. Each op fixes its arg exactly (empty for freeze and
+  status; otherwise a SHA-256 the directory RECOMPUTES from what it holds, never
+  reads from the request). `cred-add` hashes the exact registration bytes,
+  `sha256(attestationObject ‖ sha256(clientDataJSON))`, not the credential id,
+  so the key under an id cannot be swapped in transit. The inner hash fixes the
+  tail at 32 bytes, so the split between the two parts is bound: under a bare
+  concatenation, moving one byte across the boundary gave the same arg, and
+  safety rested on every directory and host decoding CBOR and JSON strictly.
+  It is WebAuthn's own `authenticatorData ‖ clientDataHash` shape. The signer is the account key of the
+  binding the directory currently serves as authoritative, which during a
+  pending rotation is the OLD one, so a pending key signs no request. While
+  frozen only `status` is accepted; `contest` only while pending; the three
+  credential and recovery ops only while active.
+- **Consent for `cred-add`, `cred-del` and `rc-enrol` names the op.** Those
+  three change who can recover the account, so each also needs a `cns.`, with
+  purposes of the same names whose families are `dreq.cred-add.`,
+  `dreq.cred-del.` and `dreq.rc-enrol.`. Never a bare `dreq.`: the family is a
+  prefix check, so a bare family would let one consent authorise any op.
+  Freeze, contest and status need no consent: they remove power or only read.
+- **`rot.<sha256(next bind)>.<sha256(live bind)>`, signed by the OLD account
+  key, is the rotation vouch**, replacing "the old key also signs the new
+  `bind.` bytes". A signature's meaning belongs in its own bytes, so nothing an
+  account key signs about its own binding can be replayed as a vouch. It
+  carries no challenge, because a client checks it OFFLINE against the binding
+  it pinned. `verifyRotation` requires: next self-signed and in date, same
+  address, seq + 1, next.prev = sha256(pinned), the rot. naming exactly those
+  two hashes in that order, the rot. signed by the pinned key, and next
+  CREATED within the pinned binding's lifetime (± the 5-minute skew), else
+  `stale-vouch`. A key's authority to vouch ends when its binding does:
+  otherwise a key leaked after expiry (a retired device), with a directory
+  serving the chain, turns a pinner's "key changed" warning into a silent
+  follow. The pinned binding is never checked against the current time, so a
+  legitimate chain still verifies after its old binding expires; legitimate
+  rotations always pass, because the directory starts one only from a live
+  binding.
+- **A rotation resolved by the recovery code has no `rot.`**, and pinners warn.
+  That is intended: the old key was reported lost or contested, and no
+  directory-asserted marker may soften the warning.
+- **The new rows are in their own fixture sections** (`dreq`, `rot`,
+  `dreqConsent`), not in `statements`, because host runners dispatch
+  `statements` rows by type and refuse an unknown one. Each host adopts them in
+  its own change.
+
+## 2026-11-02 — bento/connect: kx placement is mode C (a per-device kx and a recovery kx, both required)
+
+The maintainer ruled identity-design §6b: **mode C.** Every `dev.` carries
+that device's own key-agreement key (ECDH P-256) and every `bind.` carries the
+account's RECOVERY kx. This replaces the 2026-10-18 holding rule, under which
+both slots had to stay empty until the ruling.
+
+- **Both slots are REQUIRED, and there is no other mode.** An empty slot is
+  refused with `kx`, as is a value that is not an uncompressed P-256 point or
+  that repeats a signing key of the same certificate. The kernel's mode table
+  (`unruled`/A/B/C) and every host's copy of it are gone, not set to C: a
+  switch that still accepted an empty slot or a 32-byte blob would be a
+  lenient path one call away. `KX_MODE` stays as a constant, `'C'`, for the
+  rigs to assert.
+- **The account blob is exactly 64 bytes**: the account scalar ‖ the recovery
+  kx scalar. Both blobs (PRF and recovery code) carry the same plaintext, and
+  each scalar must be in 1..n−1 and match its directory-signed public half: the
+  account key and the binding's kx slot. A 32-byte account-only plaintext is
+  refused with `length` after it decrypts, never read as a partial key set.
+  `blobs.*.wrongLength` in recovery-v1.json carries 32-, 63-, 65- and 96-byte
+  blobs sealed under the right key and aad, so every host proves it refuses on
+  length rather than failing to decrypt.
+- **A device's own kx never leaves it**; only the recovery kx's scalar travels,
+  in the blobs. The light tier (the extension) generates its device kx
+  non-extractable and re-imports the recovery kx non-extractable after sealing
+  the blobs, as it already did for the account key.
+- **Enrolments made before this ruling are discarded, never migrated.** They
+  have no kx and 32-byte blobs, and nothing under mode C accepts either. The
+  extension's stored identity record moves to v2; a v1 record (or one with no
+  version) reads as none and is deleted, and setup starts again. No upgrade
+  path exists by design: every such enrolment is a test enrolment.
+- **identity-v1.json and recovery-v1.json are regenerated.** identity-v1 drops
+  `kxModeDefault` and every per-row `kxMode` for a top-level `kxMode: "C"`, and
+  every accepted `dev.` and `bind.` fills its slot. recovery-v1's `scalars`
+  rows are now 64-byte plaintexts checked against both public halves. The
+  Swift, Kotlin, Rust and extension ports and their rigs change in the same
+  PR, so no host runs against vectors it cannot pass.
+- **Security's conditions for C (§26c) bind the sharing work that uses the
+  recovery kx, not this format change:** "unwrap once and drop" bounds only a
+  device compromised after the drop; the recovery kx is exactly as safe as the
+  blobs, so blob compromise exposes all history until the next rotation;
+  removing a device as lost or stolen always rotates the recovery kx; history
+  for a new device comes from an existing device re-wrapping to its kx
+  whenever one is reachable, and from the recovery kx only when none is; and
+  the organisation option is pure B (no recovery kx), with escrow elsewhere.
+  Senders wrap to every device kx AND the recovery kx, never the recovery kx
+  alone.
+- **Guarded by mutants.** `scripts/test-kx-mode-mutants.ts` reintroduces ten
+  lenient paths into a copy of kernel/src (an empty slot read as no kx, no
+  point check, a kx equal to a signing key, either certificate ignoring its
+  slot, a 32-byte blob beside a 64-byte one, any length of at least 64, the kx
+  scalar never matched, a missing kx public half skipping the match, a seal
+  without a kx) and requires test-statements or test-recovery to fail on each,
+  after the unmutated copy passes both.
+
+## 2026-11-03 — Android: Bento ID setup (home/android)
+
+Setup is built and reachable only from a dev build (debug, or the minified `releaseCheck`). What it settles, so a
+later change does not undo it by accident:
+
+- **The setup screen has no entry point in a release build.** `SetupActivity` is
+  not exported and nothing launches it, and a release build pins no directory key
+  (the keys are not minted), so the flow refuses before it asks for anything. A
+  dev build exports it and takes the directory URL and a test key from the
+  launching intent. Release behaviour is unchanged until the strings are ruled on
+  and the directory is live.
+- **The account's scalars rest under a Keystore AES key that needs the person for
+  every use.** The account signing key and the two kx keys must move between
+  devices, so they cannot be Keystore keys. They are generated in memory, sealed
+  under an AES-256-GCM key with the consent key's authentication parameters
+  (BiometricPrompt; the device PIN as well from API 30; it survives a new
+  fingerprint), and zeroed. The portable copy is the recovery blob, not this
+  file. Nothing secret reaches disk before the last step, and a process death
+  before then restarts setup.
+- **Order, and what each step refuses.** The memory Argon2id needs and the
+  derivation self-check are checked BEFORE an email is bound; the directory's
+  attestation is checked against a pinned key, by exact kid, and anything but
+  `active` stops setup; the typed recovery code is checked against the one shown,
+  and a device short of memory is reported as that, never as a wrong code. A
+  managed device (any identity managed-config key present) does no identity
+  operation.
+- **The recovery code is enrolled at setup** with an account-signed
+  `dreq.rc-enrol.` over the exact enrolment body, plus the consent key's `cns.`
+  (two fingerprint prompts in all: consent, then sealing). A device with no consent
+  key (API 26–29, no biometric enrolled) finishes setup with the recovery code
+  NOT registered and says so; it is never shown as registered.
+- **The derivation self-check is a known answer** (kernel's recovery-v1
+  `derivations` row) run before binding. The release-APK check builds the
+  minified `releaseCheck` variant, which is release as configured (full R8 optimisation and obfuscation) plus the
+  dev switch, and runs it on a device; its positive control is a build whose R8 rules break
+  a function the check covers, which must read FAIL.
+- **Not ported:** the display `name` and device `label` fields are emitted empty
+  until the Unicode display filter has an Android port. Certificates live a year.
+
+## 2026-11-03 — bento/connect B1: the identity calls in `home/bridge.js` (whoami, sign, resolve)
+
+- **One shared object, built from a declared capability.** A host that has
+  verified the document's bytes (gate 1) declares `window.__bentoHostCaps =
+  ['identity']` ahead of `bridge.js`. The bridge then defines `__bentoIdentity`
+  exactly as `kernel/src/identity.ts` requires: a non-writable, non-configurable
+  data property holding a frozen object of closures with `contract: 1` and the
+  three phase-1 calls. A host that does not declare it, and any subframe, gets no
+  object, so the kernel does what it did before identity existed. `unwrap` and
+  `share` (phase 2) are not defined.
+- **The wire** is the ordinary `call()` channel: `{id, op:'id.whoami'}`,
+  `{id, op:'id.sign', purpose, payload}`, `{id, op:'id.resolve', pub}`. Nothing
+  names the document or a caller; the host knows who is asking. Replies are
+  `(id, ok, value)`; a refusal word is the K1 `SignRefusal`. The bridge re-shapes
+  every reply: a wrong-typed field is a refusal or `null`, an unknown word is
+  `unavailable`, and an `{email}` lookup (phase 2) is answered `null` without
+  leaving the page.
+- **The session limits are the host's, not the bridge's.** Past the idle or
+  overall limit (security §2e B) the host answers `sign` with `reauth` until the
+  person re-authenticates AT THE HOST. The bridge passes the word through, caches
+  nothing and never retries. On desktop the limit is the agent's, and the rig
+  drives the real agent across both limits.
+- **A replaced reply hook cannot redirect replies.** The Android-style transport
+  now calls its reply function directly instead of through `window.__bentoNativeReply`,
+  which page script can overwrite.
+- **Each host routes the `id.*` ops to its own agent and keeps its own gates**
+  (on desktop: this webview's capability, then genuine bytes). No host ships a key
+  store yet, so a host with no account answers `no-identity` (`whoami`, `sign`)
+  and `null` (`resolve`).
+## 2026-11-03 — bento/connect: device linking is one protocol, link v1, with kernel vectors
+
+Linking hands a new device (N) the account key and the recovery kx from a
+device that holds them (H). iOS and Android had designed two different
+pairings; this replaces both with one protocol every pair of hosts runs, and
+fixes its bytes in `kernel/src/link.ts` with a `link` section in
+`kernel/fixtures/identity-v1.json` (security §39.1, which accepted the design
+with seven conditions).
+
+- **The link code is a recovery code in every byte**: 80 random bits, printed
+  `XXXX-XXXX-XXXX-XXXX-C`, parsed by the same forgiving reader. The displayer
+  shows it as a QR and as text; typing it is the no-camera path, not a second
+  protocol. HKDF over the code's 10 bytes (empty salt, infos
+  `bento/id/link/v1/{id,tok,salt}`) gives the slot id, its bearer token (the
+  directory stores the token's SHA-256) and a 32-byte salt that is never sent.
+- **The code is in the key salt.** The displayer writes `lnk0.<E_D>.<H|N>`, the
+  scanner `lnk1.<E_S>`; both compute the transcript
+  t = b64u(SHA-256("lnkt.v1." ‖ id ‖ "." ‖ E_D ‖ "." ‖ E_S ‖ "." ‖ roleD)) and,
+  from the ECDH x-coordinate Z with that salt, `h2n`, `n2h` and the SAS key
+  (infos `bento/id/link/v1/{h2n,n2h,sas}.` ‖ t). The directory relays both
+  ephemerals but never sees the code, so it can derive no key, and an
+  ephemeral it substitutes changes the SAS. A reflected ephemeral (E_S = E_D)
+  gets no transcript.
+- **The SAS is 6 digits that N shows and the person types into H**, never a
+  "do these match?" tap. It is the first 4 bytes of the SAS key, big-endian,
+  mod 10^6, zero-padded. One attempt per slot.
+- **Roles are checked, not trusted.** The scanner proceeds only if exactly one
+  side holds an account. (Hosts must also never start the H side from an
+  `id.bento.page/l#` link; that is UI, not bytes.)
+- **Every sealed message is AES-256-GCM with AAD = `lnka.v1.<t>.<n>`**, the
+  transcript and the message number, on the wire as iv ‖ ciphertext ‖ tag.
+  Each key seals one message in one direction (n2h seals 2, h2n seals 3), and
+  the module picks the key from the number, never the caller.
+- **msg2, N's offer**: `lnk2.<devicePub>.<consentPub|empty>.<kx>.<label|empty>.<platform>.<popDevice>.<popConsent|empty>`.
+  The kx is N's own (mode C). Each key proves possession by signing
+  `lnkp.v1.<t>`; a consent PoP is present exactly when a consent key is.
+- **msg3, H's completion**: `lnk3` and seven lines (H's `dev.` + sig, a `cns.`
+  with purpose `link` and audience `dir` over N's `dev.` text + sig, N's `dev.`
+  + sig, and SEALED = the 64-byte account blob plaintext under h2n). The
+  directory releases it only through `verifyLinkRelease`: the challenge is
+  spent first (every refusal before the spend is `grammar`), the binding must
+  be `active`, H's `dev.` and N's `dev.` must both name the binding's account
+  key, and the consent must verify under H's certified consent key. A
+  light-tier H consents by WebAuthn instead, which this message does not
+  carry. One completion per slot is the directory's rule, not these bytes.
+- **N checks what it was given** (`openFinal`): its `dev.` must name exactly
+  the devicePub, consentPub and kx it offered and the account key of the
+  binding served under a pinned directory key, and both released scalars must
+  match that binding.
+- **No new signed statement family.** `dev.` and `cns.` purpose `link` already
+  existed. The link texts take the prefixes `lnk0`–`lnk3`, `lnkt`, `lnkp` and
+  `lnka` (`LINK_PREFIXES`), which no statement family may use. The `link`
+  section is a new top-level section, so host runners that do not know it yet
+  keep passing until they adopt it.
+- **Guarded by mutants.** `scripts/test-link.ts` recomputes every
+  deterministic row byte for byte and checks every verdict;
+  `scripts/test-link-mutants.ts` reintroduces fifteen lenient paths into a copy
+  of `link.ts` and requires the rig to fail on each.
+## 2026-11-03 — link v1: SEALED carries the account key and the address, and the slot wire is fixed
+
+Two follow-ups to the link v1 entry above, both from porting it to iOS.
+
+- **msg3's SEALED is the 32-byte account scalar and the address, and nothing
+  else.** The first cut sealed the 64-byte recovery blob (account ‖ recovery kx), which handed
+  every newly linked device the recovery kx. That contradicts security §26c.4:
+  the recovery kx is touched as rarely as possible, and when an existing device
+  is reachable the new device's history comes from that device re-wrapping to
+  the new device's own kx, never from unwrapping the recovery kx. Linking always
+  has H present, so it never needs it. H therefore never needs the recovery kx
+  to link a device.
+- **The address travels inside SEALED**: the plaintext is the scalar, then the
+  address in UTF-8, in normal form (it re-normalises to itself under
+  `kernel/src/address.ts`) and at most 254 bytes. A new device otherwise has no
+  way to learn which account it is joining except by a person typing it, and
+  the address must not ride in the QR or the code. So SEALED's length is a
+  bounded range, `SEALED_MIN_LEN` to `SEALED_MAX_LEN` (constants of their own,
+  not derived from the recovery blob's length), and the directory's release
+  check and N's parse refuse anything outside it as `grammar`.
+- **N takes the account key from the binding for THAT address.** `openFinal`
+  requires normal form, then looks the address up and verifies the answer
+  itself: the binding must be for exactly that address, attested `active` under
+  a pinned directory key, and its accountPub must be the received scalar's
+  public key (`unpackAccountScalar`). Its recovery kx plays no part. So H cannot
+  name an address the scalar does not belong to, and the directory cannot answer
+  with some other address's binding. N looks nothing up until SEALED has opened.
+- **N asks before it stores.** `openFinal` returns the address and the binding's
+  name; the host shows `Link this device to <address> (<name>)?` and declining
+  aborts and deletes the slot. A typed address is only a fallback for a failed
+  lookup. This supersedes any host flow that asks for the address up front.
+- **The old 64-byte payload stays in the vectors**, so a host still sealing those
+  bytes fails loudly rather than half-working. Its length is now in range and the
+  directory sees only ciphertext, so the release check passes it and N refuses
+  it, as `address`. A 32-byte scalar that is not the binding's account key
+  (another account's, and the binding's own recovery kx scalar) is `key-mismatch`.
+- **How each message travels on the slot is now part of the contract**
+  (`encodeSlotMsg` / `decodeSlotMsg`): msg0 and msg1 as canonical unpadded
+  base64url of their UTF-8 text, msg2 as its sealed wire unchanged, msg3 as its
+  text unchanged. Decoding refuses padding, set trailing bits, text that is not
+  UTF-8, a byte-order mark (the decoder would otherwise swallow it, giving one
+  text two wires), a msg0 or msg1 sent raw instead of encoded, a message under
+  the wrong number, a msg2 shorter than an iv and a tag, and anything over 4096
+  bytes once decoded. The limit is always on the decoded message, and the
+  directory must count it the same way: for msg2, the sealed bytes rather than
+  their base64url text. Before this, iOS had to
+  choose an encoding that no spec pinned, and two hosts choosing differently
+  would never link. The `link.wire` rows are byte for byte both ways.
+
+## 2026-11-07 — bento/dash: a date is a value, stored as the ISO text it always was
+
+Dates and times on a dash sheet now compute (`=A4+1`, `=B1-A1`,
+`=TEXT(A4, "dd mmm yyyy")`). What was decided, so nobody re-derives it:
+
+- **The stored form does not change.** A date stays its canonical text in the
+  file: `YYYY-MM-DD`, `YYYY-MM-DD HH:MM[:SS]` (a space; a `T` is read, never
+  written), `HH:MM[:SS]`. The cell's date or time format says what the reader
+  sees. The formula engine reads the text as the moment (`dash/src/datetime.ts`)
+  and writes results back in the same spellings. Excel's serial numbers were
+  rejected: an older dash would have treated them as plain numbers, summing,
+  charting and printing 46085. With text, an older build shows the date, cannot
+  compute with it, and saves it back byte for byte. `test-dash-dates-oldshell.ts`
+  runs the real dash 0.2.0 and 0.3.0 code against the new values.
+- **Arithmetic follows Excel where Excel means something.** A date plus or
+  minus a number is a date. A date minus a date is a number of days. A date
+  plus a time is a datetime. A time minus a time is a number (a fraction of a
+  day, which a Time cell shows as a duration). `date + date`, `number − date`
+  and `date × n` are refused with a reason, never turned into a number. A time
+  of day reads as its fraction of a day in other arithmetic (`A1*24`).
+- **Datetimes are wall-clock, with no zone.** Adding an hour to 01:30 on a
+  spring-forward night gives 02:30.
+- **NOW() and TODAY() read the frozen instant on the viewer's clock.** The
+  instant in the file (`doc.modified`) is the same for everybody. The date and
+  time shown are local to whoever opens it, as in Excel. This replaces "a
+  saved file shows the same date to everyone": that rule printed the raw UTC
+  instant, and showed the wrong date for half the day in the Americas and Asia.
+- **Ambiguous entry is unchanged.** `3/4/2026` is still kept as text. Whether
+  to guess from the locale is a pending maintainer decision.
+- **EDATE clamps to the end of a shorter month**, as Excel does: 31 January +
+  1 month is 28 February.
+
+## 2026-11-08 — A file another program changed is never overwritten
+
+Other programs edit `.bento.html` files in place: scripts, text editors,
+coding tools. A document open with a held File System Access handle rewrote
+its file on every auto-save (2.5 s after an edit), on ⌘S and on "Update this
+file", and each of those silently replaced the other program's edit. Maintainer
+decision, 2026-11-08: detect it and do not write.
+
+- **The signal is the file's own stamp**, `lastModified` and `size` from
+  `handle.getFile()`. It is taken when the handle is adopted (drop, launch
+  queue) and read back after each of our writes; every write through the held
+  handle compares first. A moved value means the write does not happen.
+- **Compared against the value read back, never the clock.** Some file
+  systems round mtime (FAT to 2 s), so a clock-derived stamp would raise false
+  alarms on our own saves. All reads and writes of the held file run one at a
+  time in the kernel, so one of our writes is never mistaken for an outside
+  edit by the next.
+- **Once tripped, the handle stops writing** until the author chooses. The
+  kernel exposes the choice and not the UI: `onFileChangedOnDisk` (the event),
+  `fileChangedOnDisk()`, `keepMineOverDisk()` (accept the disk's stamp as the
+  baseline so the next write overwrites once, deliberately, and tracking
+  resumes) and `readDiskVersion()` (the disk text; writes stay refused until
+  its `accept()`). Each app surfaces it; slides first.
+- **A reconnected handle** (a remembered handle re-permissioned on ⌘S) has no
+  stamp from this session, so the file's `#bento-doc` must still equal the one
+  the page booted with.
+- **What it cannot see:** a host handle whose `getFile()` reports no stamp is
+  written unchecked, as before; an edit landing between our check and our write
+  is lost, as before. Writes to a file just picked (copies, exports, backups)
+  are not checked: the picker already asked. Encrypted documents and the
+  IndexedDB recovery copy are unchanged.
+
+Guards: `scripts/test-disk-change.ts` (fake handle on a 2 s-mtime file
+system, nine mutants and a control) and `scripts/test-disk-change-browser.mjs`
+(real Chromium handles).
+
+
+## 2026-10-21 — bento/connect H2: the desktop host's trust store, origins and arming (home/desktop/host, home/desktop/hostcore)
+
+- **The security rules live in a crate with no webview** (`home/desktop/hostcore`),
+  so every one is unit-tested on any machine; the Tauri app (`home/desktop/host`)
+  only wires them to events.
+- **Trust store.** The signed `releases/<app>/history.json` files are bundled at
+  build time (`build.rs` embeds every `*history*.json` under `releases/`, or
+  `BENTO_HISTORIES_DIR`). Embedding is not trusting: each is verified against the
+  pinned release key on first read. The release key is pinned in ONE place
+  (`hostcore::trust::RELEASE_KEY`); a rotation is an app update pinning only the
+  new key. The newest verified history per app is kept in the data directory as
+  the anti-rollback floor; gate 1's `accept_history` decides every replacement,
+  and histories are refreshed only by a user action. A document is genuine only
+  if exactly one release across every app's history matches every block.
+- **Gate 1 runs at every serve, on exactly the bytes served**, and a load arms
+  from that verdict: a reload after a save, or a watchdog-recreated webview,
+  always arms from a fresh verdict on what it actually received.
+- **Arming is a two-step handshake.** A finished load of the document mints a
+  capability and a nonce, PENDING; the shim echoes the nonce and the host arms
+  only if no newer load has started. Every load start revokes. Per-load state
+  resets in the same step that mints.
+- **No Tauri capability file ships.** Page script reaches no core or plugin
+  command; the host's own two commands are gated by the per-load secret.
+- **Envelope documents (format `bento/enc`, password or identity-sealed)** take a
+  path-only origin plus an epoch that rotates when the file is replaced by
+  something the host did not write (Unix: device and inode; the Windows file ID
+  is owed with the Windows host). Never a wipe, never a prompt.
+- **Neutral title while sealed, matching the saved file's title** (§30): the
+  window title of an envelope document is the app name.
+- **The rigs are part of the host**: the `rig` feature (never shipped) adds the
+  probe, a dead drop and a report sink; `rig/check.py` asserts every row, and a
+  deliberately broken capability check fails rigs 2 and 6.
+
+
+## 2026-11-04 — bento/connect H2 on Windows: WebView2 measured on a hosted runner (home/desktop/host)
+
+Measured on GitHub's hosted `windows-latest` (WebView2 runtime 156.0.4314.50), the same rigs as
+Linux, 543 checks passing (read from the job log; each race attempt that lands adds two rows, so
+the total moves between runs). Windows Hello and a real TPM consent key are NOT measured (a hosted runner has
+neither); the Windows key store is an explicit stub that refuses everything until a real-PC session.
+
+- **Per-document origins are distinct origins on WebView2.** A document is served at
+  `http://bento.<24 hex>.localhost/` (wry's custom-protocol form on Windows). Two documents report
+  two different `location.origin`s, and with BOTH forced onto one shared profile directory
+  (`pairshared`, rig only) IndexedDB, BroadcastChannel and cookies are still separate, so the origin
+  alone separates them. The separate-profile fallback (§19e 5) is not needed, and the host still
+  gives each document its own profile directory.
+- **Tauri on Windows treats only `http://bento.localhost` as the app's own origin.** A per-document
+  origin is "remote" to it and every custom command is refused ("not allowed on origin") unless a
+  remote capability names it. **This reverses "no Tauri capability file ships" on Windows only:**
+  `capabilities-windows/documents.json` admits exactly `bento_arm` and `bento_file` to
+  `http://bento.:h([0-9a-f]{24}).localhost/` (`"local": false`), nothing from core or any plugin,
+  and both still demand the load's capability secret. The ACL is a second layer and never the
+  boundary: the capability stays the rule. The pattern is the tight form because the first glob,
+  `http://bento.*.localhost/*`, also matched `bento.evil.localhost` and `bento.a.b.c.localhost`.
+  `bento_id` is not granted, since nothing on Windows can use it until a key store exists. Linux
+  ships none, as before. `release-check.sh` asserts the compiled set exactly (`capcheck.py`). The
+  rig adds two more files (rig commands and `bento_id`; the attacker fixture's origin) that exist
+  only in rig builds, so every rig also has a build without `rig-embed.json` for one scenario:
+  the ACL that ships, refusing an embed that holds the window's own secret.
+- **Embedded frames.** A sandboxed frame (origin null) is refused by Tauri's IPC itself ("Origin
+  header is not a valid URL") even holding the window's own secret; an unsandboxed frame of another
+  origin reaches the host only if the platform ACL admits it (rig only) and is then refused by the
+  secret (no capability / capability refused), with the own-secret control accepted.
+- **`on_navigation` is main-frame only on WebView2.** wry wires it to `NavigationStarting`, never
+  `FrameNavigationStarting`, so "the policy fires for iframes" is true on WebKitGTK alone. On
+  Windows the navigation policy for FRAMES (§19e d4) rests on the document's pinned CSP and nothing
+  else. A genuine document's frame sent to plain http is refused by `frame-src` on both engines; an
+  unknown document has no CSP, so on Windows it can frame http (the rig's d4 row: the frame loaded
+  and the policy never saw it), holding no secret and refused by the ACL. The main-frame half is
+  unchanged.
+- **Origin-Agent-Cluster:** the attribute is `window.originAgentCluster`, and it is `true` on
+  WebView2 (an earlier version of this entry read a misspelt name and called it unexposed).
+  `document.domain = "<hex>.localhost"`, the document's own parent, is a silent no-op under the
+  header, and with the header at `?0` (the rig's negative control) the attribute reads false and
+  the same write takes effect, so these rows can fail. `document.domain = "localhost"` throws
+  SecurityError with or without the header, because a single label can never be set, so it says
+  nothing about the header; it is why §19f(3) holds in substance, since sibling documents share
+  only `localhost`. Cookies set with `Domain=localhost` are refused; the document's own host and
+  its `<hex>.localhost` domain are accepted and invisible to a sibling.
+- **One renderer process per document:** distinct renderer PIDs for two documents, stopping any one
+  (NtSuspendProcess) freezes exactly one document, stopping all freezes both (negative control).
+- **A cancelled navigation reports a finished load on WebView2, and its request still goes out.**
+  Measured per navigation, on a genuine and an unknown document: `http:`, `mailto:` and `blob:`
+  reach `on_navigation`, are cancelled, and each report one finished load at the document's URL
+  with no load start, so any such link in a document does it. `file:` and `data:` never reach the
+  policy and report nothing. WebKitGTK reports no finished load for any of these. The `http:`
+  request also reached the rig's server every time on WebView2, while the page stayed where it
+  was: cancelling stops the commit, not the request, so on Windows "the policy refused it" does
+  not mean "nothing was sent". For `https:` that adds no reach, since an allowed `https:` navigation
+  leaves before its bounce on both engines. Plain `http:` is reach an allowed navigation lacks: a
+  local http-only service gets a GET. An unknown document already has that, having no CSP; for a
+  genuine document it is a bare GET to a URL written in the deck.
+- **One mint per generation (all platforms).** Because of the above, WebView2 reports several
+  finished loads for one generation in ordinary use. `Load::load_finished` now mints once: a repeat while PENDING hands back the same
+  secret and nonce, and a repeat once ARMED does nothing. Without this, the order
+  pending, armed, pending left the host pending under a new secret an armed page ignores, so every
+  later call failed for the rest of the load and the handle and exports were wiped. The rig row is
+  a real save through the host after each blocked navigation and after the bounce, never page state.
+- **Shim change (all platforms):** the shim adopts a capability secret only when `bento_arm`
+  succeeds, and ignores later deliveries once armed. It is needed beside the rule above, not
+  instead of it: alone it fixes only the order pending, pending, armed.
+- **A load's verdict is every serve since the previous load start, ANDed and fixed at this load's
+  start, and the mint consumes it (all platforms).** A serve cannot be tied to a generation, because the main document is served before
+  its load start, which both engines raise at commit. So the old page still holds a live capability
+  after its reload was served, and with an overwriting verdict an unknown document could reload,
+  swap a genuine shell over its own file in that gap, fetch its own URL from the new page, and be
+  armed genuine while its unknown bytes ran (security measured this reaching the agent on
+  WebKitGTK; nothing could sign, since no store is wired). One unknown serve now makes the load
+  unknown, and a serve after the load's start counts only against the next load. The verdict is
+  fixed at the start and not at the mint because the finish is the page's to time on WebView2 (any
+  cancelled navigation reports one): a mint reading the running tally would use up the next load's
+  unknown serve, and a later serve alone would then judge that load (armed genuine in hostcore; no
+  engine has been seen producing that order). The rig scenario is security's race
+  on both engines, read from the host's own arming line (the swap landed between the two serves in
+  9 or 10 of 10 attempts on WebKitGTK and 7 or 8 of 10 on WebView2, and every one armed unknown).
+  The AND has a rig mutant on WebKitGTK: without it the old page's own fetch makes the attacker's
+  bytes arm genuine and reach the agent (measured before the taint below, which now stands behind it
+  too). The take has units only since the taint: its rig row was a saved, reloaded unknown document
+  arming genuine, which no longer happens by design. Fixing the verdict at the start has a unit and a unit mutant only, since no engine
+  has shown the order it guards. It fails closed in one way worth knowing: a page that fetched its
+  own URL while unknown makes its next load unknown too.
+- **The WebKitGTK page cache is off, because a load needs a document serve (Linux).** Going back
+  through history restored a page whole from the page cache: a load start and a finish, and no
+  serve. A serve is the verdict's only evidence and hostcore cannot tell a page's fetch from a
+  document serve, so the restored page was judged on what was fetched before it. Measured on
+  WebKitGTK with the document's `no-store` in place: an unknown document left for https (the bounce
+  makes the history), swapped a genuine shell over its file, fetched its own URL and went back, and
+  its first page came back with its unknown bytes, armed genuine and reached the agent. The shim
+  was no obstacle: the secret passes through the realm's JSON.stringify, so a page can take it,
+  fail the shim's call and echo for itself. `set_enable_page_cache(false)` now runs on every
+  webview, and the host stops if it does not hold. The same scenario now serves the document before
+  the load starts, and removing the setting turns that row red. On WebView2 the same scenario also
+  served the document and reloaded, with no setting; why is not read, so the row is what holds it.
+  This setting is the second layer, not the rule: it proves a negative about one engine build, and
+  the host does not ship the engine (distro WebKitGTK, evergreen WebView2, which has no such
+  setting). What holds without it is the taint below; a rig row turns the cache back on to show that.
+- **A load that started off the document never mints (all platforms).** Security measured a remote
+  https page reaching the agent on WebKitGTK: an unknown document swapped a genuine shell over its
+  file, fetched its own URL so a genuine verdict sat on the books, and sent the main frame to https.
+  The bounce's navigate changed what the engine reported, so that load's finish carried the
+  document's URL, the mint took the verdict, and the secret landed in the https page, whose realm
+  has the shim and Tauri's IPC. `load_started` now takes whether the URL is the document's, and if
+  it is not, the load has no verdict (the tally is still taken). WebView2 reports the https URL at
+  that finish, so the old mint was not reachable that way (measured with the verdict on the books);
+  the row runs on both engines, and the rule's mutants on WebKitGTK alone. The row's page
+  catches a delivery of its own as a control, and must catch no other.
+- **One unknown serve taints the webview, for good (all platforms).** A tainted Load never mints
+  genuine; only a new webview is a new Load. Every route found to a genuine verdict for unknown
+  bytes (the race, the reload before a finish, the restored page, the https page) begins with
+  unknown script running in this webview, and that takes an unknown serve here. So the rule needs no
+  knowledge of which serve was which, and no engine's ordering carries unknown to genuine.
+  Requiring a document serve instead cannot be built: WebKitGTK sends no Sec-Fetch on `bento://`, and
+  an XHR setting the two headers a document request has arrives identical in the handler.
+  Each of the two rules closes what the other does not, and each has a rig mutant showing it: with
+  the first removed the https page still takes the file capability; with the taint removed and the
+  page cache on, an unknown page comes back whole and arms genuine.
+- **The cost, stated: a document re-saved genuine stays unknown until it is opened again.** If an
+  unknown document writes genuine bytes over its own file and reloads, those bytes run and identity
+  stays off in that window; closing and reopening the file arms it genuine (both rig rows). It keeps
+  its file capability throughout, so it opens, edits and saves as before. The watchdog's rebuild
+  counts as a reopen, correctly, since nothing that ran survives it. **A normal user saving a
+  genuine document is not affected:** the taint needs an unknown serve, a document's bytes change
+  only by the host's own write, and a genuine runtime's save is genuine. Measured on the real 1.2.10
+  release: saved by its own serializer and reloaded in the same webview, both loads serve genuine
+  and arm genuine, and identity stays on. A document made by a release newer than the bundled
+  history is unknown before and after, with or without this rule. The residual is a FRESH webview
+  running unknown bytes with no serve, which has nothing to taint it and only a persisted service
+  worker could do. Registering the document as one is refused on both engines: WebView2 refuses it
+  for its MIME type while a real script at that origin registers (the row's control), and WebKitGTK
+  refuses the custom scheme outright, so that half has no accepted control.
+- **A document's URL includes its fragment (all platforms).** The host compared the URL exactly,
+  but a page moves its own fragment without asking: `history.pushState` is invisible on both
+  engines (bento/spaces does it on every page change), and a plain `#x` link is invisible on
+  WebView2 (no policy call, no load start, no finish). WebKitGTK does ask, and the policy refused
+  it: a genuine document's in-page link did nothing on Linux. (An unknown document's URL moved
+  anyway, with the policy's refusal in the log. The cause is the CSP, not the verdict: with the fix
+  removed the genuine document stayed at `''` and the unknown one moved to `#nl`, 4 of 4 runs, and
+  the same genuine document with its CSP header dropped moved too, 3 of 3. So on WebKitGTK refusing
+  a same-document navigation does not bind a page with no CSP; the mechanism is unread. Refusals
+  of cross-document navigations on that same page hold, and a same-document move changes no bytes
+  and starts no load, so arming is untouched.) Once the URL carries
+  a fragment, a reload's does too, and the policy refused that: measured on WebKitGTK with the fix
+  removed, the reload never happens. On WebView2 the same compare is read, not measured; the
+  fixed path is measured on both. `is_document` now takes the part before `#`, for the navigation
+  policy, the bounce and the mint: a fragment never reaches the protocol handler, so it is the same
+  bytes from the same origin. A query is still another URL. The watchdog keeps the exact compare,
+  since `own#x` is usually a same-document navigation that starts no load and it would rebuild a
+  healthy webview; so a reload from a fragment URL has no watchdog, and WebKitGTK's reload stall on
+  an unknown document is unrecovered in that one case.
+- **Windows file ID** (volume serial plus the 128-bit file ID, `GetFileInformationByHandleEx`) now
+  drives the envelope epoch; `GlobalMemoryStatusEx` answers the recovery memory check.
+
 ## dash: one grid, tables inside it — replace Excel and do everything Airtable does
 
-2026-10-20, set by the maintainer. dash's direction is to replace Excel, and
-better, AND to do everything Airtable does, and better, as ONE product.
+2026-10-20, set by the maintainer; confirmed by the maintainer on 2026-11-08,
+after the work behind it was held for that confirmation. dash's direction is
+to replace Excel, and better, AND to do everything Airtable does, and better,
+as ONE product.
 
 This REFINES the 2026-08-11 two-kinds decision rather than reversing it, and
 the tension is stated here so nobody resolves it silently. The two STORAGE

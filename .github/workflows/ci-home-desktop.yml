@@ -1,0 +1,210 @@
+# CI, home-desktop: this zone's own jobs — validate, never release (see ci.yml's header).
+#
+# These jobs are NOT the required check. Only `validate` (ci.yml) gates a
+# merge; a job here reports beside it, exactly as it did when it lived in
+# ci.yml. Keep each job's id unchanged — the id IS the check name.
+#
+# Each job checks out and builds what it needs for itself. Add this zone's
+# new jobs here, at the end; never in ci.yml.
+
+name: CI (home-desktop)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  # The same rule as ci.yml, whose comment explains it: PR runs collapse onto
+  # the tip, every commit on main keeps its own run.
+  group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  home-desktop-agent:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Desktop agent against the bento/id vectors
+        # home/desktop/agent is the Windows/Linux identity agent core. Its
+        # statements port must reach every verdict AND reason in
+        # kernel/fixtures/identity-v1.json (re-read every run, never pinned), plus
+        # builder round-trips, three tamperings per accepted row, spendCalled
+        # on every cns row, and the frozen display table. A missing fixture
+        # fails; it never skips.
+        working-directory: home/desktop/agent
+        run: cargo test
+      - name: Desktop host security core (trust store, origins, arming)
+        # home/desktop/hostcore: the bundled signed histories verify against the
+        # pinned key only (the corpus test key is refused without the rig
+        # feature) and the newest becomes the anti-rollback floor; per-document
+        # origins (96-bit, host-side docId, envelopes path-only with a change
+        # detector); and the per-load capability's arming rules (§19d/§19e).
+        working-directory: home/desktop/hostcore
+        run: cargo test
+      - name: Desktop host rigs on WebKitGTK (security §19d–§19h, rig 8)
+        # The host built with the rig feature against the gate-1 corpus history,
+        # two multi-window scenarios under a virtual display: capability per
+        # load and per webview (key-only and peer-capability embeds refused, an
+        # own-capability control accepted), generation-bound arming, the
+        # navigation bounce, the pinned CSP (and a no-CSP control), Tauri core
+        # commands refused, save in place re-verified, one web process per
+        # document, and no cross-document BroadcastChannel or IndexedDB with a
+        # same-document control. Blocked navigations leave a document armed and
+        # saving, a live embed navigating touches nothing, and security's race
+        # (an unknown document swapping a genuine shell under its own reload)
+        # never arms genuine. A timeout or a missing report fails.
+        working-directory: home/desktop/host
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev libxdo-dev xvfb xauth dbus-x11 >/dev/null
+          dbus-run-session -- xvfb-run -a ./rig/run.sh "$RUNNER_TEMP/h2-rig"
+      - name: Desktop host release check (the bundled history is the current published one)
+        # Fetches each published app's signed history, manifest and shell from
+        # bento.page; verifies them with the PINNED RELEASE KEY ONLY; requires
+        # the history's newest release to be the published manifest's (same
+        # sha256, same pins); the shell reads genuine, a one-byte change
+        # unknown; then builds the host without the rig feature and asserts no
+        # rig command and no corpus test key is in the binary.
+        working-directory: home/desktop/host
+        run: ./release-check.sh
+      - name: Desktop gate 1 against the conformance corpus
+        # home/desktop/gate1 is the desktop host's Rust port of kernel/src/gate1.ts
+        # (bento/connect K5): is this file's runtime a genuine Bento release? It
+        # must reach every declared verdict in home/fixtures/gate1/ (served,
+        # ambiguous, strict file:// and anti-rollback rows), read from the
+        # corpus each run. The signed history must verify and a one-byte change
+        # to it must not. A corpus file without a row fails.
+        working-directory: home/desktop/gate1
+        run: cargo test
+      - name: Desktop agent TPM rigs (two software TPMs)
+        # The Linux key store against a real TPM 2.0 (swtpm): the routine key
+        # signs inside the TPM; the consent key and the sealed account key need
+        # the PIN on every use (a wrong PIN is the TPM's own AUTH_FAIL); the key
+        # files are useless on a SECOND TPM (cannot be copied off the machine);
+        # and a second connection without the PIN gets neither, while the
+        # routine key stays usable, which is the stated desktop residual.
+        working-directory: home/desktop/agent
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libtss2-dev swtpm swtpm-tools >/dev/null
+          ./tpm-rig.sh
+      - name: Desktop agent no-TPM keyring rigs (gnome-keyring)
+        # On a Linux machine without a usable TPM the agent falls back to the
+        # Secret Service. Against a real gnome-keyring in a D-Bus session: the
+        # routine key signs and verifies; there is no consent key, so consent is
+        # refused (AAL3 routed elsewhere); wipe removes the keys; and the stated
+        # exposure is asserted: a second connection reads the account key with
+        # no prompt once the keyring is unlocked.
+        working-directory: home/desktop/agent
+        run: |
+          sudo apt-get install -y -qq gnome-keyring dbus libsecret-1-dev >/dev/null
+          ./keyring-rig.sh
+      - name: Desktop agent supply chain (cargo-deny, test-only crates absent)
+        # The SHIPPED agent's graph: a permissive-only licence allow-list,
+        # RustSec advisories, crates.io-only sources; and the test-only virtual
+        # authenticator (agent-testkit / OpenSK) must not be in it. Each check
+        # has a positive control (an LGPL crate, the testkit as a normal
+        # dependency) that must be refused.
+        working-directory: home/desktop/agent
+        run: |
+          cargo install -q cargo-deny --locked --version 0.18.9
+          ./supply-chain-check.sh
+      - name: Desktop agent PRF interop rig (virtual security key)
+        # One virtual FIDO2 key (Google OpenSK, Apache-2.0, test-only, over
+        # uhid), an independent WebAuthn client (Yubico python-fido2, BSD-2,
+        # hash-pinned) and the agent's libfido2 layer must produce the SAME PRF
+        # output for the same credential; two mutant builds (double hash, raw
+        # input hash) must each fail that comparison.
+        working-directory: home/desktop/agent
+        run: |
+          sudo apt-get install -y -qq libfido2-dev python3-cryptography python3-venv >/dev/null
+          # uhid (the virtual key's transport) moves between the runner kernels'
+          # packages: in linux-modules-extra on 6.17 Azure kernels, in the base
+          # linux-modules (always installed) on 7.0. Install -extra only when the
+          # running kernel has one; the rig's `modprobe uhid` still fails loudly
+          # if the module is missing.
+          if apt-cache show "linux-modules-extra-$(uname -r)" >/dev/null 2>&1; then
+            sudo apt-get install -y -qq "linux-modules-extra-$(uname -r)" >/dev/null
+          fi
+          # python-fido2 1.2.0, hash-pinned, in a venv: the rig runs Python
+          # isolated (-I), which ignores a user-site install. The venv sees
+          # apt's cryptography (system site) but always installs its own pinned
+          # fido2 (--ignore-installed), whatever else is on the machine.
+          printf 'fido2==1.2.0 --hash=sha256:f7c8ee62e359aa980a45773f9493965bb29ede1b237a9218169dbfe60c80e130\n' > "$RUNNER_TEMP/fido2-req.txt"
+          python3 -m venv --system-site-packages "$RUNNER_TEMP/rigvenv"
+          "$RUNNER_TEMP/rigvenv/bin/python" -m pip install --ignore-installed --no-deps --require-hashes -r "$RUNNER_TEMP/fido2-req.txt"
+          export BENTO_RIG_PYTHON="$RUNNER_TEMP/rigvenv/bin/python"
+          rustup toolchain install nightly-2026-06-03 --profile minimal
+          ./fido-rig.sh
+
+  home-desktop-windows:
+    # The WebView2 half, on GitHub's HOSTED windows-latest runner (maintainer, 2026-11-03):
+    # the same host rigs as the Linux job, run under WebView2. Windows Hello and a real
+    # TPM-backed consent key cannot be measured on a hosted runner; they are measured later in
+    # one manual session on a real PC, and the Windows key store is an explicit refusing stub
+    # until then. Every step FAILS rather than skips: a rig that cannot run is a red job.
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: WebView2 runtime (installed, and its version printed)
+        # The rig needs the Evergreen runtime. The image may carry it; if not, install it
+        # from Microsoft's bootstrapper. No runtime after that is a failure, never a skip.
+        shell: pwsh
+        working-directory: home/desktop/host
+        run: |
+          $v = & powershell -NoProfile -ExecutionPolicy Bypass -File rig/wv2version.ps1 2>$null
+          if (-not $v) {
+            Invoke-WebRequest 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile "$env:RUNNER_TEMP\wv2setup.exe"
+            Start-Process "$env:RUNNER_TEMP\wv2setup.exe" -ArgumentList '/silent','/install' -Wait
+            $v = & powershell -NoProfile -ExecutionPolicy Bypass -File rig/wv2version.ps1
+          }
+          if (-not $v) { throw 'no WebView2 runtime' }
+          "WebView2 runtime version: $v"
+          (Get-CimInstance Win32_OperatingSystem).Caption + ' ' + (Get-CimInstance Win32_OperatingSystem).Version
+      - name: Desktop crates on Windows (agent, host security core, gate 1)
+        # The same unit tests as the Linux job, built for Windows: file_id (the Windows file ID),
+        # GlobalMemoryStatusEx, and the refusing Windows key store run here.
+        run: |
+          for d in agent hostcore gate1; do
+            ( cd home/desktop/$d && cargo test 2>&1 | tee "$RUNNER_TEMP/cargo-$d.log" )
+            grep -E '^test result' "$RUNNER_TEMP/cargo-$d.log"
+          done
+      - name: Desktop host rigs on WebView2 (security §19d–§19h, rig 8)
+        # rig/run.sh on Windows: the same scenarios and assertions as the WebKitGTK job, plus a
+        # shared-profile pair (the per-document origin alone separates documents), the parent-Domain
+        # cookie case, Origin-Agent-Cluster with a ?0 negative control, the capability's origin pattern
+        # in the running ACL, and a second build without rig-embed.json, so one scenario meets the
+        # ACL that ships. A timeout or a missing report fails.
+        working-directory: home/desktop/host
+        run: |
+          set -o pipefail
+          ./rig/run.sh "$RUNNER_TEMP/h2-rig" 2>&1 | tee "$RUNNER_TEMP/h2-rig.log"
+          tr -d '\r' < "$RUNNER_TEMP/h2-rig.log" > "$RUNNER_TEMP/h2-rig-clean.log"
+          grep -E '^WebView2 runtime:' "$RUNNER_TEMP/h2-rig-clean.log"
+          grep -E '^[0-9]+ ok, 0 failed$' "$RUNNER_TEMP/h2-rig-clean.log"
+          if grep -E '^FAIL' "$RUNNER_TEMP/h2-rig-clean.log"; then exit 1; fi
+      - name: Desktop host release check (the bundled history is the current published one)
+        working-directory: home/desktop/host
+        run: ./release-check.sh
+      - name: Rig host logs (printed so a failure can be read without the artifact)
+        if: always()
+        run: |
+          for f in "$RUNNER_TEMP"/h2-rig/*.log; do echo "=== $f"; tr -d '\r' < "$f" | head -c 6000; done
+      - name: Rig output (kept for the measurements)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: home-desktop-windows-rig
+          path: |
+            ${{ runner.temp }}/h2-rig/*.json
+            ${{ runner.temp }}/h2-rig/*.log
+          if-no-files-found: warn

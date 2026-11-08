@@ -95,8 +95,14 @@ ok(one('AVERAGEIF(r,">1",v)', { r: [1, 2, 3], v: [10, 20, 30] }, 3) === 25, 'AVE
 ok(FUNCTIONS.length >= 45, `the library covers ${FUNCTIONS.length} functions`)
 
 // ------------------------------------------------------------- volatiles
-ok(one('TODAY()') === '2026-08-03',
-  'TODAY() is FROZEN from the context — a saved file shows the same date to everyone')
+{
+  // The INSTANT is frozen in the file; the DATE is that instant on the viewer's
+  // clock (test-dash-dates.ts pins zones on both sides of UTC).
+  const at = new Date('2026-08-03T00:00:00.000Z')
+  const local = `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')}`
+  ok(one('TODAY()') === local,
+    'TODAY() is FROZEN from the context — the saved instant, read on the viewer’s own clock')
+}
 
 // -------------------------------------------------------------- bracketed
 ok(one('[Unit Price] * 2', { 'Unit Price': [21] }, 1) === 42,

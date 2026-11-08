@@ -24,10 +24,13 @@
 //      sealed boot on the same storage shows no Restore banner, lists nothing
 //      in version history, and deletes it; another document's snapshot
 //      survives; control: an unsealed reboot DOES offer it back.
-// Mutations (each rebuilt, build exit checked): the autosave guard on
-// isEncryptionActive() → 1 red; the ⌘S checkpoint guard on it → the ⌘S row
-// red; the sealed boot skipping the delete → 4's delete row red; no sealed
-// branch at boot (the banner offered) → 4's banner and delete rows red.
+// The kernel store now refuses plaintext while sealed (a BACKSTOP), so IndexedDB
+// stays clean even with one of slides' guards reverted. Every sealed page
+// therefore ends with the helper's close(), which fails on any refused read or
+// write: slides' own guard has to stop the call first.
+// Mutations (each rebuilt, build:sealtest exit checked): the autosave guard on
+// isEncryptionActive(), the ⌘S checkpoint guard on it, the sealed boot skipping
+// the delete, and no sealed branch at boot (the banner offered) each go red.
 import { openSealed, savedFile, scanIndexedDB } from './lib/sealed-boot.mjs'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
@@ -38,6 +41,19 @@ function ok(cond, msg) {
   if (!cond) { failures++; console.log(`  FAIL  ${msg}`) } else console.log(`  ok    ${msg}`)
 }
 const MARK = 'ZZSEALEDGUARD' + Date.now()
+
+// End a SEALED page through the helper's close(), never context.close(): it
+// throws if the kernel store's backstop had to refuse a plaintext read or write.
+// The backstop keeps IndexedDB clean even when slides' own guard is missing, so
+// the scans alone would pass with a guard reverted; this row is what fails then.
+async function closes(sealed, what) {
+  try {
+    await sealed.close()
+    ok(true, `${what}: the kernel store refused nothing (slides' own guards stopped every plaintext read and write)`)
+  } catch (e) {
+    ok(false, `${what}: ${String(e.message || e).split('\n')[0]}`)
+  }
+}
 
 // an edit: the marker into the title and the first text box, then past the
 // 2.5s autosave debounce
@@ -63,7 +79,8 @@ const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH,
 try {
   console.log('sealed by identity (no password)\n')
   {
-    const { page, context, errors } = await openSealed(browser, 'slides')
+    const sealed = await openSealed(browser, 'slides')
+    const { page, errors } = sealed
     await page.evaluate(() => { try { localStorage.setItem('bento-slideshow-started', '1') } catch {} })
     await edit(page)
     ok(await page.evaluate((m) => window.bento.doc.title === m, MARK), 'the edit landed in the live deck (the scans below are real)')
@@ -88,7 +105,7 @@ try {
     ok(/Encrypt with password/.test(menu) && !/Change password|Remove password/.test(menu),
       'the password items follow the password, not the seal: "Encrypt with password…" is offered, "Change"/"Remove password" are not')
     ok(errors.length === 0, `no page error${errors.length ? ' — ' + errors[0] : ''}`)
-    await context.close()
+    await closes(sealed, 'the sealed edit, autosave and ⌘S')
   }
 
   console.log('\nunsealed control (same shell, no key handed over)\n')
@@ -157,6 +174,9 @@ try {
     const leftB = await scanIndexedDB(s.page, MB)
     ok(leftB.length > 0, `another document's snapshot survives (${leftB.join(', ') || 'GONE'})`)
     ok(s.errors.length === 0, `no page error${s.errors.length ? ' — ' + s.errors[0] : ''}`)
+    // the sealed boot's purge and the empty history must come from slides'
+    // own checks: a refused getRecovery/listVersions READ fails here too
+    await closes(s, 'the sealed boot of A, its purge and its version history')
     await a.context.close()
   }
 } finally {

@@ -533,11 +533,13 @@ H('a read-only live viewer still materialises a relay-offloaded image (not via c
     }
     (globalThis as unknown as { indexedDB: unknown }).indexedDB = idbMod?.indexedDB;
   }
-  const { blobKey, cachePut, bytesToDataUri } = await import('../kernel/src/sync/blobs.ts');
+  const { blobKey, cachePut, encodeBlob, bytesToDataUri } = await import('../kernel/src/sync/blobs.ts');
   const rawKey = new Uint8Array(32).fill(7);
   const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3, 4]);
   const key = await blobKey(rawKey, bytes);
-  await cachePut(key, bytes); await settle(30); // prime the cache (let the IDB write commit) a same-machine peer would have written
+  // prime the cache as a same-machine peer would have written it — the cache
+  // holds CIPHERTEXT (scripts/test-blobcache.ts) — and let the IDB write commit
+  await cachePut(key, await encodeBlob(rawKey, bytes)); await settle(30);
   const doc = newDoc();
   doc.docId = `ro-${Math.random().toString(36).slice(2, 10)}`;
   (doc as unknown as { blobs: Record<string, { key: string; mime: string }> }).blobs = { hero: { key, mime: 'image/png' } };
@@ -737,6 +739,27 @@ const freshShared = () => {
   ok(r.readonly === true, 'redo keeps the live read-only mode');
   ok(r.title === 'a real edit', 'redo re-applied the content edit');
   sess.stop?.();
+}
+
+// A deck's FIRST save must carry its CRDT state, even though a never-saved deck
+// isn't share-eligible yet (enableSharing runs after the stamp). Without it, a
+// colleague's offline edit on that file is LOST to the author's older edits:
+// test-sync.ts measures the engine side; this pins that stampInto writes it.
+H("a never-shared deck's FIRST save carries its sync state");
+{
+  const doc = newDoc(); doc.docId = `first-${Math.random().toString(36).slice(2, 8)}`;
+  delete (doc as { collab?: unknown }).collab // as a brand-new deck arrives: no credentials yet
+  const st = new Store(doc);
+  const ss = new SyncSession(st);
+  await settle(); // credentials are minted asynchronously at creation
+  ok(!!(st.doc as { collab?: unknown }).collab, 'setup: the session minted credentials for the new deck')
+  ok(!(ss as unknown as { shareEligible: () => boolean }).shareEligible(), 'setup: not yet share-eligible (never saved, never shared): the case under test')
+  st.commit(() => { st.doc.title = 'first draft'; });
+  await settle();
+  const saved = JSON.parse(JSON.stringify(st.doc));
+  (ss as unknown as { stampInto: (d: unknown) => void }).stampInto(saved);
+  ss.stop?.();
+  ok(saved.collab?.sync?.v === SYNC_V, 'the first save is stamped with the CRDT state (collab.sync, current SYNC_V)')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

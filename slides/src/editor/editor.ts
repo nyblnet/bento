@@ -15,7 +15,7 @@ import { THEME_CHOICES, setTheme, themeChoice } from '../../../kernel/src/theme.
 import type { InPlaceOutcome } from '../update'
 import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, compareVersions, offlineEnabled, sandboxed, setAutoCheck, setOffline } from '../update'
 import { CHART_PRESETS } from '../charts'
-import { renderSlide, renderThumbnail } from '../render'
+import { cssColor, renderSlide, renderThumbnail } from '../render'
 import { openExportImagesDialog } from './exportimages'
 import { paletteSignature, resolveThemeRefs } from '../palette'
 import { SlideCanvas } from './canvas'
@@ -32,7 +32,9 @@ import { noteSavedFromWeb } from './returngate'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, onRecoveryOff, pruneOld, putRecovery, recoveryLooksOlder, type Snapshot } from '../autosave'
 import { insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
 import { estimatedFrames, fencedElements, splitFences } from './codefence'
-import { openSpeakerWindow, speakerIdleBody } from '../screens'
+import { keepSpaces } from './markdown'
+import { openSpeakerWindow, speakerIdleBody, speakerWindow } from '../screens'
+import { neutralWindowTitle, speakerWindowTitle, titleSealed } from '../wintitle'
 import { routeAllConnectors } from '../connectors'
 import { ICONS } from '../icons'
 import { t, setLocale, locale, localeChoices, LOCALE_CHOICES, applyDirection, isRtl } from '../i18n'
@@ -154,6 +156,8 @@ export class Editor {
   /** Name of a deck opened by DROP when no writable handle came with it. */
   private openedAs?: string
   private thumbTimer = 0
+  /** The slide the list last scrolled into view (highlightSidebar). */
+  private thumbRevealed = -1
   private presenting = false
   private updatesB!: HTMLElement
   private avatarsBox!: HTMLElement
@@ -278,7 +282,7 @@ export class Editor {
     for (const peer of peers.slice(0, MAX)) {
       const chip = document.createElement('button')
       chip.className = 'ed-avatar'
-      chip.style.background = peer.color
+      chip.style.background = cssColor(peer.color, '#888') // a peer's colour: gated
       chip.textContent = (peer.name || '?').trim().charAt(0).toUpperCase() || '?'
       const idx = this.store.doc.slides.findIndex((s) => s.id === peer.slide)
       chip.title =
@@ -480,6 +484,11 @@ export class Editor {
     // main area
     const main = div('ed-main')
     this.sidebar = div('ed-sidebar')
+    // a link in a thumbnail's text is a picture of a link, not a control: a
+    // click selects the slide and never navigates the editor away
+    this.sidebar.addEventListener('click', (ev) => {
+      if ((ev.target as HTMLElement).closest('a[href]')) ev.preventDefault()
+    }, true)
     const canvasWrap = div('ed-canvas-wrap')
     // presenting lives in ONE split pill beside the zoom control: the main
     // half starts the fullscreen show; its menu holds tab-fill and speaker view.
@@ -981,6 +990,7 @@ export class Editor {
           t('Stop encrypting this file — the next save writes it as plain, readable JSON again.'),
           () => {
             setEncryptionPassword(null)
+            this.syncWindowTitle() // the deck title may return to the tab
             this.toast(t('Password removed — the next save writes an unencrypted file'))
             void this.save(false)
           })
@@ -1272,6 +1282,7 @@ export class Editor {
     const pass = await this.promptPassword()
     if (pass === null) return
     setEncryptionPassword(pass)
+    this.syncWindowTitle() // the deck title leaves the tab now, not at the next save
     // Purge any plaintext snapshots already written to IndexedDB before encryption
     // was enabled — otherwise up to MAX_VERSIONS version snapshots + a recovery copy
     // (full plaintext JSON, incl. collab keys) would linger ~30 days, defeating the
@@ -1464,7 +1475,7 @@ export class Editor {
         row.className = 'ed-share-peer'
         const dot = document.createElement('span')
         dot.className = 'dot'
-        dot.style.background = peer.color
+        dot.style.background = cssColor(peer.color, '#888')
         const who = document.createElement('span')
         who.className = 'who'
         who.textContent = peer.editing ? `${peer.name} ✏️` : peer.name
@@ -1915,9 +1926,15 @@ export class Editor {
       if (slide.hidden) item.classList.add('ed-thumb-hidden')
       this.sidebar.appendChild(item)
     })
-    this.sidebar.appendChild(this.insertGap(slides.length))
+    const endGap = this.insertGap(slides.length)
+    this.sidebar.appendChild(endGap)
     const add = btn(ICONS.plus, t('New slide'), () => this.openLayoutPicker(add))
     add.classList.add('ed-add-slide')
+    // the list's end is a drop target too (#761): the last gap and the New-slide
+    // button both land the dragged slides after the final one. The gap sits
+    // after every parent's states, so it never splits a parent from its states.
+    this.wireEndDrop(endGap)
+    this.wireEndDrop(add)
     add.title = t('New slide from a layout')
     this.sidebar.appendChild(add)
     this.sidebar.scrollTop = scroll
@@ -2073,6 +2090,22 @@ export class Editor {
     })
   }
 
+  private wireEndDrop(target: HTMLElement) {
+    const isSlideDrag = (ev: DragEvent) => !!ev.dataTransfer?.types.includes('text/bento-slide')
+    target.addEventListener('dragover', (ev) => {
+      if (!isSlideDrag(ev)) return
+      ev.preventDefault()
+      target.classList.add('drop')
+    })
+    target.addEventListener('dragleave', () => target.classList.remove('drop'))
+    target.addEventListener('drop', (ev) => {
+      if (!isSlideDrag(ev)) return
+      ev.preventDefault()
+      target.classList.remove('drop')
+      this.dropSlides(ev.dataTransfer!.getData('text/bento-slide'), this.store.doc.slides.length)
+    })
+  }
+
   /** Move the dragged units (a JSON list of parent indices, or one index
    *  from an older payload) as a block to sit where `index` is; one commit. */
   private dropSlides(payload: string, index: number) {
@@ -2103,7 +2136,17 @@ export class Editor {
       n.classList.toggle('selected', selected.has(idx))
       if (isActive) active = n
     })
-    active?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    // Bring the current slide into view only when it CHANGED. This also runs
+    // for a selection change and after a rebuild, with the current slide where
+    // it was — and a click on a thumb clears the selection BEFORE it moves the
+    // current slide, so revealing then scrolled the list to the slide being
+    // LEFT (often off-screen), and the click landed with a different thumb
+    // under the pointer. Keyboard and show navigation still reveal: they
+    // change the current slide.
+    if (active && this.store.currentIndex !== this.thumbRevealed) {
+      active.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    }
+    if (active) this.thumbRevealed = this.store.currentIndex
   }
 
   private scheduleThumbs() {
@@ -2378,7 +2421,7 @@ export class Editor {
    *  can be placed on a second screen before presenting — present mode adopts it. */
   openSpeakerView() {
     const w = openSpeakerWindow(
-      `${this.store.doc.title} — ${t('Speaker view')}`,
+      speakerWindowTitle(this.store.doc.title),
       speakerIdleBody(this.store.doc.title, t('Notes, controls and slide thumbnails appear here when you start presenting. Drag this window to your second display.')),
     )
     if (!w) this.toast(t('Couldn’t open the speaker view — allow pop-ups for this site.'))
@@ -2522,7 +2565,7 @@ export class Editor {
         this.toast(made.length === 1 ? t('Pasted 1 item') : t('Pasted {n} items', { n: made.length }))
         return true
       }
-      const esc = text.trim().slice(0, 4000).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
+      const esc = text.replace(/^\s*\n/, '').trimEnd().slice(0, 4000).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').split('\n').map(keepSpaces).join('<br>')
       const el = defaultText({ html: esc, color: readableInk(this.store.slide.background), x: Math.round(width / 2 - 300), y: 260, w: 600 })
       this.store.commit(() => this.store.slide.elements.push(el))
       this.store.select([el.id])
@@ -2824,9 +2867,16 @@ export class Editor {
     const named = file && fileBase(file) !== this.store.doc.title
     // Two segments, never three: a tab is narrow, and once a file name is
     // shown the app name is the least informative thing competing for it.
-    document.title = named
-      ? `${this.store.doc.title} — ${file}`
-      : `${this.store.doc.title} — ${appConfig().appName}`
+    // While the body is sealed the deck title stays out of the tab: browsers
+    // keep tab titles in their history (wintitle.ts). The open speaker window
+    // follows, so adding or removing a password retitles both at once.
+    document.title = titleSealed()
+      ? neutralWindowTitle(file ?? null)
+      : named
+        ? `${this.store.doc.title} — ${file}`
+        : `${this.store.doc.title} — ${appConfig().appName}`
+    const sw = speakerWindow()
+    if (sw) sw.document.title = speakerWindowTitle(this.store.doc.title)
     if (!this.fileChip) return
     // out of the bar only until there IS a file; after that the chip keeps its
     // slot and goes quiet when it would repeat the title (styles.css, #546)
@@ -3182,27 +3232,52 @@ export class Editor {
       this.syncWindowTitle()
       // staged language packs are in the bytes now — stop calling them pending
       markFileSaved()
-      // record a recovery baseline + a version checkpoint at each manual save
-      if (!isBodySealed()) { void putRecovery(this.store.doc); void addVersion(this.store.doc); this.lastVersionAt = Date.now() }
-      // Saving is the opt-in: a named, saved deck is "live by default" from
-      // now on (the recipient of a copy already joins on open). Connect this
-      // session too so author and recipient meet without another click.
-      this.session?.enableSharing()
-      this.tryJoin()
-      // A save from the WEB changes what this page is: the deck now lives in a
-      // file, and this URL will hand out a fresh starter next time. Said here,
-      // persistently, so the next visit is not a surprise — and deliberately
-      // NOT as a block, because this tab keeps working and keeps writing.
-      noteSavedFromWeb(currentFileName() ?? suggestedFileName(this.store.doc), {
-        fsAccess: canWriteInPlace(), canWrite: hostCan('write'),
-      })
+      // The save wrote everything there was, so a pending auto-save would only
+      // write it again. Cancelled ONLY here, after a save that left nothing
+      // unsaved: a cancelled or failed save returns above with the timer still
+      // running (it is the edit's crash-recovery copy), and an edit made while
+      // the bytes were on their way keeps the deck dirty and keeps its timer.
+      if (!this.store.dirty) {
+        clearTimeout(this.autosaveTimer)
+        this.autosaveTimer = 0
+      }
       this.toast(result === 'downloaded'
         ? t('This browser can’t rewrite files in place — a fresh copy went to Downloads')
         : t('Saved'))
+      // Saving is the opt-in: a named, saved deck is "live by default" from
+      // now on (the recipient of a copy already joins on open). Connect this
+      // session too so author and recipient meet without another click.
+      if (sharingOn(this.store)) {
+        this.session?.enableSharing()
+        this.tryJoin()
+      }
+      // The recovery baseline, the version checkpoint and the web note run when
+      // the page is idle, so the toast and the next paint are not held behind
+      // two IndexedDB writes (a large deck stalled the compositor on Wayland).
+      // The seal is asked when they run, not now: a deck sealed meanwhile
+      // writes nothing.
+      const doc = this.store.doc
+      Editor.whenIdle(() => {
+        // record a recovery baseline + a version checkpoint at each manual save
+        if (!isBodySealed()) { void putRecovery(doc); void addVersion(doc); this.lastVersionAt = Date.now() }
+        // A save from the WEB changes what this page is: the deck now lives in a
+        // file, and this URL will hand out a fresh starter next time. Said here,
+        // persistently, so the next visit is not a surprise — and deliberately
+        // NOT as a block, because this tab keeps working and keeps writing.
+        noteSavedFromWeb(currentFileName() ?? suggestedFileName(doc), {
+          fsAccess: canWriteInPlace(), canWrite: hostCan('write'),
+        })
+      }, 200)
     } catch (err) {
       console.error(err)
       this.toast(t('Save failed — see console'))
     }
+  }
+
+  /** Run `task` when the page is idle, and at most `timeout` ms later. */
+  private static whenIdle(task: () => void, timeout: number) {
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(() => task(), { timeout })
+    else setTimeout(task, 0)
   }
 
   // --- keyboard ------------------------------------------------------------------
@@ -3255,6 +3330,13 @@ export class Editor {
         this.canvas.toggleCommentMode()
         return
       }
+      // ⌘L / Ctrl+L locks the selection (#838). Only with something selected:
+      // otherwise the browser keeps its address-bar shortcut. (inField returned above.)
+      if (mod && !ev.shiftKey && !ev.altKey && ev.key.toLowerCase() === 'l' && this.store.selection.length && !this.store.readOnly) {
+        ev.preventDefault()
+        this.panel.lock(this.store.selectedElements)
+        return
+      }
       if (mod && ev.key.toLowerCase() === 'g') {
         ev.preventDefault()
         const els = this.store.selectedElements
@@ -3284,7 +3366,9 @@ export class Editor {
         ev.preventDefault()
         if (!this.store.selection.length || this.store.readOnly) return
         this.copySelection()
-        const ids = [...this.store.selection]
+        // a locked element is not moved off the slide either (#838)
+        const ids = this.store.selectedElements.filter((e) => !e.locked).map((e) => e.id)
+        if (!ids.length) return
         this.store.select([])
         this.canvas.setGhost({ slideId: this.store.slide.id, ids })
         return
@@ -3335,6 +3419,7 @@ export class Editor {
         const dy = ev.key === 'ArrowUp' ? -step : ev.key === 'ArrowDown' ? step : 0
         this.store.commit(() => {
           for (const el of this.store.selectedElements) {
+            if (el.locked) continue
             el.x += dx
             el.y += dy
           }
@@ -3379,12 +3464,9 @@ export class Editor {
 
   /** Remove the selected elements. Shared by ⌫ and the context menu. */
   private deleteSelection() {
-    if (!this.store.selection.length) return
-    const ids = new Set(this.store.selection)
-    this.store.commit(() => {
-      this.store.slide.elements = this.store.slide.elements.filter((e) => !ids.has(e.id))
-    })
-    this.store.select([])
+    // a locked element is never deleted from the canvas (#838): unlock it
+    // first. Like arrow nudges, a mixed selection acts on the unlocked part.
+    this.panel.deleteEls(this.store.selectedElements)
   }
 
   /** Selected slides + parents in deck order. */
@@ -3560,6 +3642,7 @@ export class Editor {
       { label: t('Copy'), hint: '⌘C', run: () => this.copySelection() },
       { label: t('Duplicate'), hint: '⌘D', run: () => this.duplicateSelection() },
       'sep',
+      { label: els.every((x) => x.locked) ? t('Unlock') : t('Lock'), hint: '⌘L', run: () => this.panel.lock(els) },
       { label: t('Bring to front'), run: () => this.panel.reorder(els, 'front') },
       { label: t('Send to back'), run: () => this.panel.reorder(els, 'back') },
       'sep',

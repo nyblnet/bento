@@ -66,6 +66,30 @@
   background: var(--err-bg);
 }
 
+/* The formula bar refusing a formula that does not parse — the same look. */
+.dx-fx-input.dv-refused {
+  box-shadow: inset 0 0 0 2px var(--err-ink);
+  background: var(--err-bg);
+}
+
+/* WHY it was refused, under the editor. Fixed on the body for the same
+   reason as the list menu below: a cell clips. Pointer-transparent, so it
+   never steals the click that moves on. */
+.dg-refuse-tip {
+  position: fixed;
+  z-index: 60;
+  max-width: 340px;
+  padding: 5px 9px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--err-ink);
+  background: var(--surface);
+  border: 1px solid var(--err-ink);
+  border-radius: var(--dp-radius);
+  box-shadow: var(--shadow-pop);
+  pointer-events: none;
+}
+
 /* ————— the list menu —————
    `position:fixed` on the body: the grid's cells clip, so a menu inside one is
    a menu with two entries and a scrollbar. The geometry is the repo's floating

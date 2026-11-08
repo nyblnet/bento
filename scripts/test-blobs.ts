@@ -22,10 +22,10 @@
 // HMAC(roomKey, sha256(plaintext)), so recomputing it over what arrived proves
 // the bytes are the bytes that were asked for. This rig pins that check.
 //
-// The IndexedDB half of the same check (a cache hit is re-verified, so an entry
-// poisoned by a build that predates this is re-fetched rather than trusted) is
-// the same three lines against the same helper, and is not reachable from node
-// — there is no indexedDB here, so cacheGet always misses.
+// The IndexedDB half of the same check (a cache hit is decrypted and
+// re-verified, so a poisoned or tampered entry is re-fetched rather than
+// trusted) runs against fake-indexeddb in scripts/test-blobcache.ts. This rig
+// has no indexedDB, so cacheGet always misses here.
 
 import { blobKey, encodeBlob, getBlob, type BlobEndpoint } from '../slides/src/sync/blobs.ts'
 

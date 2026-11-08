@@ -1,7 +1,8 @@
 # One grid, tables inside it
 
-Direction set by the maintainer, 2026-10-20: **dash replaces Excel, and better,
-and does everything Airtable does, and better.** This document is the shape
+Direction set by the maintainer, 2026-10-20, and confirmed by the maintainer
+on 2026-11-08: **dash replaces Excel, and better, and does everything Airtable
+does, and better.** This document is the shape
 that makes that one product rather than two. It refines
 `docs/dash-sheet-kinds.md` (2026-08-11); read that first.
 

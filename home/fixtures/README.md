@@ -1,5 +1,8 @@
 # home/fixtures — the document-indexing contract
 
+(The gate-1 conformance corpus, for deciding whether a file's runtime is a
+genuine Bento release, is a separate contract in [`gate1/`](gate1/README.md).)
+
 Every bento/tray host answers the same questions about a file it did not write:
 is this one of ours, what is it called, which app is it, is it encrypted, what
 does its first page look like, and what words does it contain.
