@@ -80,7 +80,7 @@ export const ALLOWED_SKIPS = [
     when: notMac,
     why: 'the Security framework exists only on Apple platforms (see test-tray-releases)',
   },
-  ...['keys', 'statements', 'agent', 'recovery'].map((n) => ({
+  ...['keys', 'statements', 'agent', 'recovery', 'bridge'].map((n) => ({
     rig: `scripts/test-home-id-${n}.mjs`,
     line: new RegExp(`home id ${n}: SKIPPED — needs an Apple toolchain`),
     when: notMac,

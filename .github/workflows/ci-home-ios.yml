@@ -47,6 +47,7 @@ jobs:
             test-home-id-statements.mjs
             test-home-id-agent.mjs
             test-home-id-recovery.mjs
+            test-home-id-bridge.mjs
             test-home-spotlight.mjs
             test-home-gate1.mjs
             test-home-release-history.mjs

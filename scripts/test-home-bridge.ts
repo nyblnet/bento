@@ -179,8 +179,11 @@ ok(exportCopy.includes('hasPrefix(') && exportCopy.includes('safeFileName(name)'
 // the partition is the document's own origin, never a value the page sent: a
 // page that could name a partition could read another document's member key.
 {
-  ok(/__bentoHostCaps = \['store'\];[^]*?caps \+ src/.test(swift),
-    'the host declares its store capability ahead of the injected bridge')
+  // the caps come from IdentityBridgeHost.hostCaps (rig: test-home-id-bridge), which always has 'store'
+  ok(/__bentoHostCaps = \[\\\(list\)\];\\n" \+ src/.test(swift) && /hostCaps\(genuine: isGenuine\)/.test(swift),
+    'the host declares its capabilities ahead of the injected bridge')
+  ok(/genuine \? \["store", "identity"\] : \["store"\]/.test(readFileSync(new URL('../home/ios/IdentityBridge.swift', import.meta.url), 'utf8')),
+    "every load declares 'store'; only a genuine one also declares 'identity'")
   const store = slice(swift, 'private func handleStore(')
   ok(/let partition = originHost/.test(store) && !/m\["partition"\]|m\["origin"\]|m\["host"\]/.test(store),
     "the store partition is this document's origin, never a value from the page")
