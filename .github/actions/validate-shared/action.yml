@@ -136,6 +136,14 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-directory.ts
 
+    - name: bento/connect directory mutants
+      # Each mutant reopens one path (the per-address mail budget spent by a
+      # start that mails nothing) in a copy of the tree, and the directory rig
+      # must fail a row. A mutant that no longer applies, or a rig that crashes
+      # instead of counting, fails this step.
+      shell: bento-step {0}
+      run: node scripts/test-directory-mutants.ts
+
     - name: No frame is both scripted and same-origin
       # Fails on any frame a document can cause that has allow-same-origin AND
       # allow-scripts (or no sandbox at all), across every app's source and

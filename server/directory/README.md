@@ -54,6 +54,9 @@ now. For a live one it answers as usual and mails nothing. Accepted for phase
 **Limits:**
 - a code lives 20 minutes and allows 5 attempts
 - per address: one mail a minute, 3 a day, 10 a month (the mail-bombing control)
+  The budget is spent only by a mail that is actually sent: a refused start
+  (anyone can send one, for any key) costs nothing, so strangers cannot use up
+  the holder's mail and keep their next code from arriving.
 - per IP and hour: start 20, complete 60, lookup 300, delete 20
 
 ## Status
