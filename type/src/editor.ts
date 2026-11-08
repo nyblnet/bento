@@ -217,7 +217,8 @@ export class Editor {
    */
   #beforeInput = (e: InputEvent): void => {
     // A selection the single-block path cannot follow — one that crosses
-    // blocks, or (after Select All) starts or ends outside any block — is
+    // blocks, or one with an end outside every block (Select All over a
+    // document that starts or ends with a table) — is
     // edited HERE, in the model. Left to contentEditable, the browser deletes
     // the paragraphs between the ends and fuses the two it keeps into one
     // element, while `input` reads back only the block the caret lands in:
@@ -294,7 +295,7 @@ export class Editor {
   /**
    * Both ends of the selection in model coordinates, when the single-block
    * path cannot handle it: the ends lie in different blocks, or one of them
-   * sits outside every block (Select All puts it on the paper itself).
+   * sits outside every block.
    * Null for a caret, or for a selection inside one block.
    */
   #span(): { a: { id: string; at: number }; b: { id: string; at: number } } | null {
@@ -314,8 +315,8 @@ export class Editor {
 
   /**
    * A selection boundary as (block id, offset). Inside a block it is the
-   * caret's own reading; between blocks (on the paper, a list or a table
-   * wrapper) it snaps to the nearest block INSIDE the selection: the start to
+   * caret's own reading; between blocks (Chrome puts Select All's end on the
+   * paper itself when a table starts or ends the document) it snaps to the nearest block INSIDE the selection: the start to
    * the beginning of the next block, the end to the end of the previous one.
    */
   #resolve(node: Node, offset: number, side: 'start' | 'end'): { id: string; at: number } | null {

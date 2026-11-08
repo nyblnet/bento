@@ -12459,8 +12459,8 @@ neither); the Windows key store is an explicit stub that refuses everything unti
 
 ## 2026-11-08 — bento/type: an edit across paragraphs is a model edit
 
-A selection that crosses blocks (or that Select All anchors on the paper, outside any block) is
-edited in the model, never left to contentEditable. Left to the browser, deleting or typing over
+A selection that crosses blocks, or that has an end outside every block (Chrome puts Select All's
+end on the paper itself when a table starts or ends the document), is edited in the model, never left to contentEditable. Left to the browser, deleting or typing over
 it fused the two end paragraphs into one element on screen while `input` read back only the block
 the caret landed in, so the model kept every paragraph and the next render brought them back. The
 same held for forward Delete at a block's end, which the browser joined on screen only.
@@ -12482,8 +12482,13 @@ same held for forward Delete at a block's end, which the browser joined on scree
   there does nothing, as at a cell's edge in Word. Backspace onto a picture used to put the
   paragraph's words in the picture block, where nothing renders them. Backspace at the very start
   of the document does nothing; the browser used to delete an empty first block's element.
+- A selection boundary on a block ELEMENT counts from that block's start. Chrome's triple-click
+  ends at (next paragraph's element, 0), and the offset count, which only walked the block's
+  children, read that as the whole next paragraph: typing over a triple-clicked paragraph
+  deleted the one after it too.
 - Not covered: IME composition over a range keeps the browser's behaviour, and triple-click
-  (which Chrome extends to the start of the next paragraph) types over the paragraph break too.
+  (which Chrome extends to the start of the next paragraph) types over the paragraph break, so
+  the next paragraph joins the typed text, as it did on screen before.
 
 Measured with the randomized screen-equals-model rig (keystrokes in a real browser, every step
 compared with a render of the model, plus what each step should have done), 64 seeds × 60 steps
