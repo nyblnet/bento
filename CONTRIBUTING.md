@@ -185,3 +185,12 @@ Security issues are different: please **do not** open a public issue. Follow
 
 By contributing, you agree that your contributions are licensed under the
 project's [MIT License](LICENSE).
+
+**`server/directory/` is the exception.** The bento/id directory service is
+licensed under the [AGPL-3.0-only](server/directory/LICENSE). Contributions to
+it are made under that licence, and they also need a signed contributor
+licence agreement:
+[server/directory/CLA.md](server/directory/CLA.md), which also says how to
+agree. It grants the project the right to relicense those contributions. A
+pull request that changes `server/directory/` waits until its author has
+agreed; nothing else in the repository needs it.
