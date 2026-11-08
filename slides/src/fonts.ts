@@ -5,6 +5,7 @@
 
 import type { BentoDoc } from './model.ts'
 import { FRAUNCES_900, INSTRUMENT_VAR } from './fontdata.ts'
+import { sanitizeFonts } from './untrusted.ts'
 
 /**
  * Faces the SHELL carries (fontdata.ts, compiled into every build). A font
@@ -97,7 +98,9 @@ const injected = new WeakMap<HTMLStyleElement, string[]>()
 /** Refresh on every document event, including removal/undo. Only font changes
  * touch the stylesheet, so unrelated edits never restart font loading. */
 export function injectFonts(doc: BentoDoc) {
-  const faces = (doc.fonts ?? []).map(f => ({
+  // weight and style are written into the rule as they are, so every entry is
+  // held to the font rule first, wherever the document came from
+  const faces = (sanitizeFonts(doc.fonts) as NonNullable<BentoDoc['fonts']>).map(f => ({
     family: f.family, src: embeddedFontSrc(resolveFontSrc(doc, f.asset)),
     weight: f.weight ?? 'normal', style: f.style ?? 'normal',
   }))

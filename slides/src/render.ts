@@ -12,6 +12,7 @@ import { resolveMathHtml } from './maths/delimiters.ts'
 import { renderCodeInto } from './code'
 import { formatDate } from './datefmt'
 import { cropImgStyle, isIdentityCrop } from './crop'
+import { SLIDE_CHECKS } from './untrusted'
 // the shared svg sanitizer (kernel/src/svgsafe.ts, lifted from here): names
 // re-exported so callers and rigs keep importing them from the renderer, and
 // cssDecodeIdentEscapes is the SAME decoder the colour gate below reads with
@@ -982,6 +983,11 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
   return node
 }
 
+/** A slide background the colour rule accepts (a colour or a gradient), or none. */
+export function slideBackground(v: unknown): string {
+  return typeof v === 'string' && v !== '' && SLIDE_CHECKS.background(v) !== undefined ? v : ''
+}
+
 /** Render a full slide surface (background + elements) at model coordinates. */
 export function renderSlide(slide: Slide, doc: BentoDoc, opts: RenderOpts = {}): HTMLElement {
   const surface = document.createElement('div')
@@ -989,7 +995,9 @@ export function renderSlide(slide: Slide, doc: BentoDoc, opts: RenderOpts = {}):
   surface.dataset.slideId = slide.id
   surface.style.width = `${doc.size.width}px`
   surface.style.height = `${doc.size.height}px`
-  surface.style.background = slide.background
+  // the colour rule a slide background is held to on open and on paste, applied
+  // again where it is drawn
+  surface.style.background = slideBackground(slide.background)
   const fields = opts.fields ?? fieldContext(doc, slide)
   for (const el of slide.elements) surface.appendChild(renderElement(el, doc, { ...opts, fields }))
   return surface

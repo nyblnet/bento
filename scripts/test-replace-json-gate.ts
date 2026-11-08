@@ -119,7 +119,7 @@ function drawAndMount(doc){
   // hand, NOT through injectFonts, because injectFonts is now itself the guard;
   // a used family with an external src, and the last-wins src of a style
   // breakout, must both reach the server here.
-  const rawDoc = craft('raw'); const rs = renderSlide(rawDoc.slides[0], rawDoc)
+  const rawDoc = craft('raw'); const rs = document.createElement('div'); rs.style.background = rawDoc.slides[0].background
   rs.style.width = '400px'; rs.style.height = '225px'; document.body.appendChild(rs); void rs.offsetHeight
   const face = document.createElement('style')
   face.textContent =
