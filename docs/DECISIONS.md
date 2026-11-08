@@ -12456,3 +12456,35 @@ neither); the Windows key store is an explicit stub that refuses everything unti
   an unknown document is unrecovered in that one case.
 - **Windows file ID** (volume serial plus the 128-bit file ID, `GetFileInformationByHandleEx`) now
   drives the envelope epoch; `GlobalMemoryStatusEx` answers the recovery memory check.
+
+## 2026-11-08 — bento/type: an edit across paragraphs is a model edit
+
+A selection that crosses blocks (or that Select All anchors on the paper, outside any block) is
+edited in the model, never left to contentEditable. Left to the browser, deleting or typing over
+it fused the two end paragraphs into one element on screen while `input` read back only the block
+the caret landed in, so the model kept every paragraph and the next render brought them back. The
+same held for forward Delete at a block's end, which the browser joined on screen only.
+
+- **The first block keeps its identity.** The last block's remainder is joined onto it and the
+  blocks between are removed, the rule Backspace at a block's start already followed. Kind and
+  paragraph settings are the first block's. Typed or pasted text lands between the two pieces.
+- **One commit, one undo step** for delete, type-over and Enter over a range. A paste over a range
+  deletes it in the model, then takes the same road as a paste at a caret.
+- **Everything anchored by offset moves with its words**: marks, footnotes, cross-references,
+  citations, fields and comment threads. A footnote, citation or field strictly inside the range
+  goes with it; one exactly at either end stays. The old join and split carried only marks and
+  footnotes; a citation after a join was dropped, and after a split stayed on the head at an
+  offset past its end.
+- **Two cases keep the structure** and only clear the selected text: a range that touches a table
+  cell (fusing a cell with a paragraph breaks the grid), and a tracked document (the deletion is
+  recorded as struck text in each block; nothing records a removed paragraph break).
+- **No join with a cell or an atomic block** (picture, formula, contents): Backspace or Delete
+  there does nothing, as at a cell's edge in Word. Backspace onto a picture used to put the
+  paragraph's words in the picture block, where nothing renders them. Backspace at the very start
+  of the document does nothing; the browser used to delete an empty first block's element.
+- Not covered: IME composition over a range keeps the browser's behaviour, and triple-click
+  (which Chrome extends to the start of the next paragraph) types over the paragraph break too.
+
+Measured with the randomized screen-equals-model rig (keystrokes in a real browser, every step
+compared with a render of the model, plus what each step should have done), 64 seeds × 60 steps
+in both Playwright's headless shell and system Chrome.
