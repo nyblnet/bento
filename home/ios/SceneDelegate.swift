@@ -31,6 +31,12 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         if let path = ProcessInfo.processInfo.environment["BENTO_RIG_OPEN"] {
             DispatchQueue.main.async { [weak self] in self?.open(URL(fileURLWithPath: path)) }
         }
+        // scripts/test-home-stage0-probes.mjs: open the Stage 0 sign-session probe, logging to this file
+        if ProcessInfo.processInfo.environment["BENTO_RIG_STAGE0"] != nil {
+            DispatchQueue.main.async {
+                w.rootViewController?.present(UINavigationController(rootViewController: Stage0SignProbeViewController()), animated: false)
+            }
+        }
         #endif
     }
 
