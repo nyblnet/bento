@@ -230,3 +230,14 @@ runs:
       # and the notice no longer links to it.
       shell: bento-step {0}
       run: node scripts/test-id-pages.mjs
+
+    - name: bento/id sign-in host (worker, page rules, hosting check)
+      # server/signin/: exactly four files, each with a strict CSP,
+      # frame-ancestors 'none', nosniff and no COOP, and every other path a
+      # 404 with the same headers; the page script posts only to a literal
+      # https://home.bento.page and reads nothing from its URL; the hosting
+      # check the deploy runs passes on the real worker and fails on each
+      # mutant (a header dropped or loosened, COOP that cuts the opener, a
+      # /.well-known/webauthn served).
+      shell: bento-step {0}
+      run: node scripts/test-signin-host.mjs
