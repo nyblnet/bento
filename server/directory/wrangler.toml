@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # bento/id directory — id.bento.page (layer 1 of bento/id).
 # Deploy is the MAINTAINER's (needs the id.bento.page DNS and the SES account first):
-#   npx wrangler secret put DIR_KEY_JWK   # the directory's ONLINE P-256 signing key (JWK, private) — never the release key
+#   npx wrangler secret put DIR_KEY_JWK   # the directory's ONLINE P-256 signing key (JWK, private), for the countersign once it lands — never the release key
 #   npx wrangler secret put CHALLENGE_KEY # 32+ random characters: seals the single-use roster challenges
 #   npx wrangler deploy
 # Local:
@@ -20,10 +20,6 @@ DIR_PUBKEYS = "[]"
 MAILER = "ses"
 
 [[durable_objects.bindings]]
-name = "ADDRESS"
-class_name = "Address"
-
-[[durable_objects.bindings]]
 name = "LEDGER"
 class_name = "Ledger"
 
@@ -31,9 +27,12 @@ class_name = "Ledger"
 name = "ROSTER"
 class_name = "Roster"
 
+# Never deployed, so the migrations were rewritten rather than extended: the
+# first design's Address object (typed-code bindings) is gone, and v1 no longer
+# creates it. Once anything is deployed, migrations only ever grow.
 [[migrations]]
 tag = "v1"
-new_sqlite_classes = ["Address", "Ledger"]
+new_sqlite_classes = ["Ledger"]
 
 [[migrations]]
 tag = "v2"
