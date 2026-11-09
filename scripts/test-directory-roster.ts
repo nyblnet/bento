@@ -31,7 +31,7 @@
 import worker, { Roster } from '../server/directory/src/worker.js'
 import { Address, Ledger } from '../server/directory/src/worker.js'
 import { addressKey } from '../server/directory/src/address.js'
-import { PASSKEY, passkeyOrigins, verifyRegistration, verifyMemberAssertion } from '../server/directory/src/passkey.js'
+import { PASSKEY, passkeyOrigins, readCbor, verifyRegistration, verifyMemberAssertion } from '../server/directory/src/passkey.js'
 import { fingerprint, ROSTER_LIMITS } from '../server/directory/src/roster.js'
 import { b64uDec, b64uEnc, sha256b64u } from '../kernel/src/statements.ts'
 import { buildRos, parseRos, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, ROSTER_WAIT_MS, type Member } from '../kernel/src/roster.ts'
@@ -66,8 +66,9 @@ function namespace(Klass: new (state: unknown, env: unknown) => Obj) {
             async get(k: string) { return structuredClone(store.get(k)) },
             async put(k: string, v: unknown) { store.set(k, structuredClone(v)) },
             async delete(k: string | string[]) { for (const x of [].concat(k as never)) store.delete(x) },
-            async list(o?: { prefix?: string }) {
-              return new Map([...store].filter(([k]) => !o?.prefix || k.startsWith(o.prefix)).sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, v]) => [k, structuredClone(v)]))
+            async list(o?: { prefix?: string; limit?: number }) {
+              const all = [...store].filter(([k]) => !o?.prefix || k.startsWith(o.prefix)).sort(([a], [b]) => (a < b ? -1 : 1))
+              return new Map(all.slice(0, o?.limit ?? all.length).map(([k, v]) => [k, structuredClone(v)]))
             },
             async setAlarm(t: number) { rec.alarm = t },
           },
@@ -85,9 +86,10 @@ function namespace(Klass: new (state: unknown, env: unknown) => Obj) {
 // ---------- env + mail capture ----------
 type Mail = { to: string; subject: string; body: string; kind: string; code?: string }
 const mailbox: Mail[] = []
+let mailDown = false
 const env: Record<string, unknown> = {
   DIR_KID: 'dir-1', CHALLENGE_KEY: 'k'.repeat(48),
-  MAILER: { send: (m: Mail) => { mailbox.push(m) } },
+  MAILER: { send: (m: Mail) => { if (mailDown) throw new Error('mailer down'); mailbox.push(m) } },
 }
 const ROSTER = namespace(Roster as never)
 env.ROSTER = ROSTER
@@ -132,7 +134,7 @@ function rawToDer(raw: Uint8Array) {
 }
 const cdjOf = (o: Record<string, unknown>) => b64uEnc(te.encode(JSON.stringify(o)))
 
-type RegOpts = { origin?: string; rpId?: string; flags?: number; alg?: number; type?: string; cross?: unknown; top?: string; cdj?: string; extraCoseKey?: boolean; trailing?: boolean; noAt?: boolean }
+type RegOpts = { origin?: string; rpId?: string; flags?: number; alg?: number; type?: string; cross?: unknown; top?: string; cdj?: string; extraCoseKey?: boolean; trailing?: boolean; noAt?: boolean; dupAlg?: boolean }
 type GetOpts = { origin?: string; rpId?: string; flags?: number; count?: number }
 class Authn {
   pub = ''; credId = new Uint8Array(32); count = 0; kp!: CryptoKeyPair
@@ -149,7 +151,8 @@ class Authn {
     const x = raw.slice(1, 33), y = raw.slice(33)
     const alg = o.alg ?? -7
     const algBytes = alg === -7 ? new Uint8Array([0x26]) : alg === -8 ? new Uint8Array([0x27]) : new Uint8Array([0x39, 0x01, 0x00]) // -257
-    const cose = cat(new Uint8Array([o.extraCoseKey ? 0xa6 : 0xa5, 0x01, 0x02, 0x03]), algBytes, new Uint8Array([0x20, 0x01, 0x21, 0x58, 0x20]), x,
+    // dupAlg: label 3 twice, RS256 first and ES256 last, so a reader that keeps the last value sees a good key
+    const cose = cat(new Uint8Array([o.extraCoseKey || o.dupAlg ? 0xa6 : 0xa5, 0x01, 0x02]), o.dupAlg ? new Uint8Array([0x03, 0x39, 0x01, 0x00]) : new Uint8Array(0), new Uint8Array([0x03]), algBytes, new Uint8Array([0x20, 0x01, 0x21, 0x58, 0x20]), x,
       new Uint8Array([0x22, 0x58, 0x20]), y, o.extraCoseKey ? new Uint8Array([0x04, 0x01]) : new Uint8Array(0))
     const flags = o.flags ?? (0x45)
     const cnt = new Uint8Array([0, 0, 0, this.count])
@@ -191,6 +194,7 @@ async function current(email: string) {
 type ReqOpts = {
   add?: Authn; remove?: string; members?: Member[]; signer?: Authn; credId?: string; rq?: string; created?: number
   seq?: number; prev?: string; reg?: unknown; regOpts?: RegOpts; get?: GetOpts; origin?: string | null; ch?: string; noAssertion?: boolean; sameNonceAs?: string
+  address?: string
 }
 async function request(email: string, signer: Authn, o: ReqOpts) {
   const c = await current(email)
@@ -201,7 +205,7 @@ async function request(email: string, signer: Authn, o: ReqOpts) {
     if (o.add) members = [...members, { kind: 'pk', pub: o.add.pub, quarantined: false }]
     if (o.remove) members = members.filter((m) => m.pub !== o.remove)
   }
-  const ros = buildRos({ address: email, seq: o.seq ?? c.head.seq + 1, prev: o.prev ?? await sha256b64u(c.text), members, dirNonce: ch, created: o.created ?? now })
+  const ros = buildRos({ address: o.address ?? email, seq: o.seq ?? c.head.seq + 1, prev: o.prev ?? await sha256b64u(c.text), members, dirNonce: ch, created: o.created ?? now })
   const assertion = o.noAssertion ? undefined : await signer.assert(ros, o.get)
   const reg = o.reg !== undefined ? o.reg : o.add ? await o.add.register(b64uDec(ch)!, o.regOpts) : undefined
   const r = await seen('request', api('POST', '/v1/roster/request', { email, ros, credId: o.credId ?? signer.cid, assertion, reg, rq: o.rq }, { origin: o.origin }))
@@ -276,6 +280,17 @@ ok(Object.isFrozen(PASSKEY) && Object.isFrozen(PASSKEY.origins), 'the constant i
   await want({ trailing: true }, 'grammar', 'trailing byte after the key')
   await want({ noAt: true }, 'grammar', 'no attested credential')
   await want({ flags: 0x55 }, 'grammar', 'BS without BE')
+  // X1: a COSE key naming its algorithm twice (RS256, then ES256): refused, never read as the last value
+  await want({ dupAlg: true }, 'grammar', 'COSE key with the alg label twice')
+  {
+    let threw = false
+    try { readCbor(new Uint8Array([0xa2, 0x01, 0x01, 0x01, 0x02]), 0) } catch { threw = true }
+    ok(threw, 'the CBOR reader refuses a map with a repeated key')
+    ok((readCbor(new Uint8Array([0xa2, 0x01, 0x01, 0x02, 0x02]), 0)[0] as Map<number, number>).get(2) === 2, 'control: the same map with distinct keys reads')
+  }
+  // X13: the origin is matched exactly, never by prefix
+  for (const o of [`${S}:8443`, `${S}.attacker.example`, `${S}/`, `${S}x`])
+    await want({ origin: o }, 'origin', `origin ${o} (a prefix of it is the sign-in host)`)
   const dup = `{"type":"webauthn.create","challenge":"${b64uEnc(ch)}","origin":"https://home.bento.page","crossOrigin":false,"origin":"${S}"}`
   await want({ cdj: b64uEnc(te.encode(dup)) }, 'duplicate-key', 'duplicate origin (JSON.parse would keep the S one)')
   ok(!(await verifyRegistration(await a.register(ch), new Uint8Array(8))).ok, 'a challenge shorter than 16 bytes is refused')
@@ -358,6 +373,18 @@ const A1 = await Authn.make()
   ok((await setup(bob, B1, { token: t, ch: ch3 })).status === 200, 'bob sets up with a fresh challenge')
   const again = await setup(bob, await Authn.make(), { token: t, ch: ch3 })
   ok(again.status === 400 && again.j.error === 'nonce', 'the same challenge again is refused (spent before anything else)')
+}
+{
+  // X31: a setup token is good for its life and no longer
+  const tess = 'tess@example.com'
+  const old = (await setupToken(tess))!
+  now += ROSTER_LIMITS.setupTtlMs + 1
+  const late = await setup(tess, await Authn.make(), { token: old })
+  ok(late.status === 400 && late.j.error === 'token', 'a setup token past its life is refused (token)')
+  ok((await head(tess)).status === 404, 'nothing was stored by it')
+  const fresh = (await setupToken(tess))!
+  now += ROSTER_LIMITS.setupTtlMs - MIN
+  ok((await setup(tess, await Authn.make(), { token: fresh })).status === 200, 'control: a token a minute short of its life sets up')
 }
 
 // =====================================================================
@@ -468,6 +495,9 @@ let addAt = 0
   ok(stale.status === 409 && stale.j.error === 'stale', 'a request on the wrong seq: refused (stale)')
   const stale2 = await request(alice, A1, { remove: A3.pub, prev: await sha256b64u('nope') })
   ok(stale2.status === 409 && stale2.j.error === 'stale', 'a request on the wrong prev: refused (stale)')
+  // X22: a ros. naming another address, chained on this head and signed by a member: refused
+  const elsewhere = await request(alice, A1, { remove: A3.pub, address: 'bob@example.com' })
+  ok(elsewhere.status === 400 && elsewhere.j.error === 'address', 'a request whose ros. names another address: refused (address)')
   const otherAddr = await request(alice, A1, { remove: A3.pub })
   ok(otherAddr.status === 202, 'control: A1 removing A3 (not itself) is queued, not immediate')
   ok((await current(alice)).head?.members.some((m) => m.pub === A3.pub), 'A3 is still a member while its removal waits')
@@ -561,6 +591,11 @@ let addAt = 0
   ok(all.every((e) => typeof e.at === 'number' && typeof e.os === 'string' && typeof e.co === 'string'), 'every entry has a time, the request Origin and the ceremony origin')
   ok(all.filter((e) => e.k === 'request' || e.k === 'setup').every((e) => e.os === S && e.co === S), 'requests from the sign-in host are logged with os and co = the sign-in host')
   ok(all.some((e) => e.k === 'request' && e.rq === 'https://home.bento.page' && e.at === addAt), 'the opener the sign-in host reported is logged (rq)')
+  // the lever acts on the exact key: every entry names it in full (65-byte point), never a fingerprint
+  ok(all.every((e) => typeof e.pub === 'string' && b64uDec(e.pub as string)?.length === 65 && !('fp' in e)), 'every entry logs the full public key it is about')
+  const reqAt = all.find((e) => e.k === 'request' && e.at === addAt)
+  ok(reqAt?.pub === A2.pub && reqAt?.by === A1.pub, 'the queued add logs the added key and the asking key in full')
+  ok(all.find((e) => e.k === 'setup')?.pub === A1.pub && all.filter((e) => e.k === 'ripen').every((e) => b64uDec(e.by as string)?.length === 65), 'setup and ripening entries carry full keys')
   const win = (await doOp(alice, 'logQuery', { from: addAt, to: addAt })).j.entries as Record<string, unknown>[]
   ok(win.length === 2 && win.every((e) => e.at === addAt), 'a window query returns exactly the entries inside it')
   // an off-page caller's Origin is logged as sent (it over-includes, never under-includes)
@@ -606,6 +641,111 @@ let addAt = 0
   ok(roster.length === 4 && roster.every((m) => m.body.includes('The passkeys on this account') && m.body.includes(fps[0])), 'every roster mail carries the roster section')
   ok(roster.filter((m) => /waiting|now in effect/.test(m.body)).every((m) => fps.every((f) => m.body.includes(f))), 'the queued and ripening mails list both passkeys')
   ok(mailbox.every((m) => !m.body.includes('<') && m.kind === 'roster'), 'roster mail is plain fixed wording')
+}
+
+// =====================================================================
+// 10b. D1: a change waits only once its waiting notice was sent
+// =====================================================================
+{
+  now += HOUR
+  const mel = 'mel@example.com', M1 = await Authn.make(), M2 = await Authn.make(), M3 = await Authn.make()
+  ok((await setup(mel, M1)).status === 200, 'mel sets up')
+  const n0 = mailsTo(mel).length
+  mailDown = true
+  const r = await request(mel, M1, { add: M2 })
+  mailDown = false
+  ok(r.status === 503 && r.j.error === 'mail', `mailer down: the request fails (503 mail), never a 202 (got ${r.status} ${JSON.stringify(r.j)})`)
+  const c = await current(mel)
+  ok(c.head?.seq === 0 && c.pending === null, 'nothing is queued')
+  ok(!(await rosterObj(mel)).store.has('pend'), 'no waiting change is stored')
+  ok(!((await doOp(mel, 'logQuery', { from: 0, to: now })).j.entries as Record<string, unknown>[]).some((e) => e.k === 'request'), 'no request is logged')
+  now += ROSTER_WAIT_MS + MIN
+  const o = await rosterObj(mel)
+  if (o.obj.alarm) await o.obj.alarm()
+  ok((await current(mel)).head?.seq === 0 && !(await current(mel)).head?.members.some((m) => m.pub === M2.pub), 'at +72 h the change is not in force: it was never queued')
+  ok(mailsTo(mel).length === n0, 'and no "now in effect" mail went out')
+  // control: with the mailer back, the same change queues and its notice goes out
+  const r2 = await request(mel, M1, { add: M2 })
+  ok(r2.status === 202 && mailsTo(mel).some((m) => /waiting/.test(m.subject)), 'control: mailer up, the change queues (202) and its waiting mail is sent')
+  ok(((await rosterObj(mel)).store.get('pend') as { mailed?: boolean } | undefined)?.mailed === true, 'the queued change is marked as notified')
+  now += ROSTER_WAIT_MS
+  ok((await current(mel)).head?.members.some((m) => m.pub === M2.pub), 'control: and it takes effect at +72 h')
+
+  // a change whose object stopped between holding the slot and hearing from the mailer
+  now += HOUR
+  ok((await request(mel, M1, { add: M3 })).status === 202, 'M1 asks to add M3')
+  const asked = now
+  await plant(mel, (st) => { const p = st.get('pend') as Record<string, unknown>; st.set('pend', { ...p, mailed: false }) })
+  ok((await current(mel)).pending === null, 'an unconfirmed change is not shown as waiting')
+  ok((await request(mel, M2, { remove: M1.pub })).status === 409, 'it still holds the slot while it may be mid-send (pending)')
+  now = asked + ROSTER_WAIT_MS + MIN
+  const o2 = await rosterObj(mel)
+  if (o2.obj.alarm) await o2.obj.alarm()
+  ok(!(await current(mel)).head?.members.some((m) => m.pub === M3.pub), 'an unconfirmed change never takes effect, by alarm or by read')
+  ok(!(await rosterObj(mel)).store.has('pend'), 'and it is dropped once it is stale, freeing the slot')
+  ok((await request(mel, M1, { add: M3 })).status === 202, 'control: a new request then queues')
+}
+
+// =====================================================================
+// 10c. D2: spent challenges are one key each, and stay bounded
+// =====================================================================
+{
+  const nina = 'nina@example.com' // never set up: spending needs no account
+  const store = (await rosterObj(nina)).store
+  const spentKeys = () => [...store.keys()].filter((k) => k.startsWith('spent:')).length
+  const stranger = async () => {
+    const c = await challenge(nina)
+    const r = await api('POST', '/v1/roster/request', { email: nina, ros: `ros.x.1.y.z.${c}.0` })
+    return { c, r }
+  }
+  // positive control: with the clock still, every spend is recorded, each under its own key
+  for (let i = 0; i < 200; i++) await stranger()
+  ok(spentKeys() === 200, `200 stranger spends at one instant leave 200 spent keys (${spentKeys()})`)
+  ok(!store.has('spent'), 'no single growing spent value exists')
+  const { c: early } = await stranger()
+  // a sustained stranger load, one spend a second for an hour
+  let maxKeys = 0, steadyMax = 0, maxValue = 0
+  for (let i = 0; i < 3600; i++) {
+    now += 1000
+    const { r } = await stranger()
+    if (i === 290) {
+      // the earliest challenge, swept or not, can never be spent twice in its life
+      const again = await api('POST', '/v1/roster/request', { email: nina, ros: `ros.x.1.y.z.${early}.0` })
+      ok(again.status === 400 && again.j.error === 'nonce', 'a challenge spent 4m50s ago is still refused as spent')
+    }
+    if (i === 0) ok(r.status === 404, 'a stranger\'s spend on an address with no roster answers 404 (after spending)')
+    maxKeys = Math.max(maxKeys, spentKeys())
+    if (i >= 700) steadyMax = Math.max(steadyMax, spentKeys()) // the burst above has drained by then
+    for (const v of store.values()) maxValue = Math.max(maxValue, JSON.stringify(v).length)
+  }
+  // what may be held: the spends of the last 10 minutes (one a second), plus a backlog that drains
+  const window = ROSTER_LIMITS.spentKeepMs / 1000 + 1
+  ok(steadyMax <= window, `3600 spends over an hour: once steady, never more than the last 10 minutes' ${window} (most: ${steadyMax})`)
+  ok(maxKeys <= window + 201, `and at the worst, the 201-spend burst on top of that window (most: ${maxKeys})`)
+  ok(spentKeys() <= ROSTER_LIMITS.spentKeepMs / 1000 + 1, `and at the end only the last ${ROSTER_LIMITS.spentKeepMs / MIN} minutes' are held (${spentKeys()})`)
+  ok(maxValue < 64, `no stored value grows with the load (largest ${maxValue} bytes of JSON)`)
+}
+
+// =====================================================================
+// 10d. D3: an unexpected failure still answers JSON with the full header set
+// =====================================================================
+{
+  const call = async (e: Record<string, unknown>, method: string, path: string, body?: unknown) => {
+    try {
+      const r = await worker.fetch(new Request('https://id.bento.page' + path, { method, body: body === undefined ? undefined : JSON.stringify(body), headers: { 'cf-connecting-ip': freshIp(), origin: S } }), e as never)
+      const text = await r.text()
+      responses.push({ what: `D3 ${path}`, status: r.status, h: r.headers, text })
+      return { status: r.status, text }
+    } catch (x) { return { status: -1, text: String(x) } }
+  }
+  const noKey = await call({ ...env, CHALLENGE_KEY: undefined }, 'POST', '/v1/roster/challenge', { email: 'x@example.com' })
+  ok(noKey.status === 500 && JSON.parse(noKey.text || '{}').error === 'internal', `CHALLENGE_KEY unset: 500 JSON, not an escaped exception (got ${noKey.status} ${noKey.text.slice(0, 60)})`)
+  ok(!noKey.text.includes('CHALLENGE_KEY'), 'the error answer names no internals')
+  const broken = { idFromName: (n: string) => n, get: () => ({ fetch: async () => { throw new Error('storage unavailable') } }) }
+  const st = await call({ ...env, ROSTER: broken }, 'GET', '/v1/roster?e=x@example.com')
+  ok(st.status === 500, `a storage failure: 500 JSON (got ${st.status})`)
+  const ctl = await call(env, 'POST', '/v1/roster/challenge', { email: 'x@example.com' })
+  ok(ctl.status === 200, 'control: the same challenge call with the key set answers 200')
 }
 
 // =====================================================================
