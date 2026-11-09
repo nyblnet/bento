@@ -19,6 +19,9 @@
 // over it, so neither half works alone.
 
 import { addressKey, normalize } from './address.js'
+import { issueChallenge, openChallenge } from './challenge.js'
+import { deliver } from './mail.js'
+import { Roster } from './roster.js'
 import {
   attest, buildCmp, buildDel, hashOf, importDirKey, tombstone as tombText, verifyBind, verifyCmp, verifyDel,
 } from './statements.js'
@@ -41,7 +44,7 @@ export const LIMITS = {
   mailCooldownMs: 60_000,
   mailPerDay: 3, // per ADDRESS: the mail-bombing control
   mailPerMonth: 10,
-  ip: { start: 20, complete: 60, lookup: 300, delete: 20 }, // per IP per hour
+  ip: { start: 20, complete: 60, lookup: 300, delete: 20, challenge: 120, request: 60 }, // per IP per hour
 }
 const DAY = 86_400_000
 const CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ' // no 0/O, 1/I/L
@@ -52,10 +55,20 @@ const BASE = {
   'x-content-type-options': 'nosniff',
   'x-robots-tag': 'noindex, nofollow',
   'referrer-policy': 'no-referrer',
-  // Callers are the bento/home agents (extension, apps) and the deletion page.
-  // Nothing here is authorised by origin or cookies: every write is a
-  // signature or a mailed code, so any origin may call.
+  // Callers are the bento/home agents (extension, apps), the sign-in host and
+  // the deletion page. Nothing here is authorised by origin or cookies: every
+  // write is a signature, a passkey assertion or a mailed secret, so any origin
+  // may call.
   'access-control-allow-origin': '*',
+  // id.bento.page is the passkeys' relying party and never runs a ceremony.
+  // The Permissions-Policy stops WebAuthn create and get on any page it
+  // serves; it does NOT stop the WebAuthn Signal API (measured), so nothing
+  // here may run script either: every answer is JSON, and the CSP below makes
+  // any document it could be read as inert and unframeable. Only the void
+  // page, when it comes, runs script, under its own CSP.
+  'permissions-policy': 'publickey-credentials-get=(), publickey-credentials-create=()',
+  'content-security-policy': "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+  'x-frame-options': 'DENY',
 }
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: BASE })
 /** A DO answer passed through; a deletion becomes 204 with no body (a 204 may not carry one). */
@@ -92,13 +105,7 @@ export async function sendCode(env, to, code, fp, kind) {
     'Bento will never ask for this code anywhere else. If you did not ask for it, ignore this email.',
     'The code expires in 20 minutes.',
   ].join('\n')
-  if (env.MAILER && typeof env.MAILER.send === 'function') return env.MAILER.send({ to, subject, body, code }) // the rig's seam
-  if (env.MAILER === 'log' && env.DEV === '1') {
-    console.log(JSON.stringify({ devmail: { to, subject, body } })) // local development only
-    return
-  }
-  if (env.MAILER === 'ses') throw new Error('SES sending is not wired yet (needs the maintainer\'s SES account, M4)')
-  throw new Error('no mailer configured')
+  return deliver(env, { to, subject, body, code, kind })
 }
 
 // --- routes ----------------------------------------------------------------------
@@ -109,6 +116,9 @@ async function ledger(env, ip, kind) {
   return r.ok
 }
 
+async function rosterStub(env, email) {
+  return env.ROSTER.get(env.ROSTER.idFromName(await addressKey(email)))
+}
 async function addressStub(env, email) {
   const key = await addressKey(email)
   return env.ADDRESS.get(env.ADDRESS.idFromName(key))
@@ -146,6 +156,17 @@ export default {
       return json(r.status, r.body)
     }
 
+    if (p === '/v1/roster' && req.method === 'GET') {
+      // the roster head and any waiting change, for the sign-in host to build a request on
+      const email = normalize(url.searchParams.get('e') ?? '')
+      if (!email) return json(400, { error: 'bad-address' })
+      if (!(await ledger(env, ip, 'lookup'))) return json(429, { error: 'rate-limited' })
+      const r = await call(await rosterStub(env, email), 'head', {})
+      return json(r.status, r.body)
+    }
+
+    // Nothing else is served for GET: in particular no /.well-known/webauthn,
+    // which would let the origins it lists use these passkeys.
     if (req.method !== 'POST') return json(404, { error: 'not-found' })
     const b = await body(req)
     if (!b) return json(400, { error: 'bad-request' })
@@ -200,9 +221,47 @@ export default {
       return relay(r)
     }
 
+    // --- the passkey roster (option G) ---
+    const origin = req.headers.get('origin') || ''
+
+    if (p === '/v1/roster/challenge') {
+      const email = normalize(b.email ?? '')
+      if (!email) return json(400, { error: 'bad-address' })
+      if (!(await ledger(env, ip, 'challenge'))) return json(429, { error: 'rate-limited' })
+      return json(200, { challenge: await issueChallenge(env.CHALLENGE_KEY, 'roster', await addressKey(email), Date.now()) })
+    }
+
+    if (p === '/v1/roster/setup') {
+      // completes a setup from its mailed token; the mail itself comes with the setup links
+      const email = normalize(b.email ?? '')
+      if (!email || typeof b.token !== 'string' || typeof b.dirNonce !== 'string') return json(400, { error: 'invalid' })
+      if (!(await ledger(env, ip, 'complete'))) return json(429, { error: 'rate-limited' })
+      const c = await openChallenge(env.CHALLENGE_KEY, 'roster', await addressKey(email), b.dirNonce, Date.now())
+      if (!c) return json(400, { error: 'nonce' })
+      const r = await call(await rosterStub(env, email), 'setup', {
+        address: email, token: b.token, dirNonce: b.dirNonce, reg: b.reg, nonce: c.nonce, issued: c.issued, os: origin,
+      })
+      return json(r.status, r.body)
+    }
+
+    if (p === '/v1/roster/request') {
+      const email = normalize(b.email ?? '')
+      if (!email || typeof b.ros !== 'string') return json(400, { error: 'invalid' })
+      if (!(await ledger(env, ip, 'request'))) return json(429, { error: 'rate-limited' })
+      const dirNonce = b.ros.split('.')[5]
+      const c = await openChallenge(env.CHALLENGE_KEY, 'roster', await addressKey(email), dirNonce, Date.now())
+      if (!c) return json(400, { error: 'nonce' })
+      const r = await call(await rosterStub(env, email), 'request', {
+        ros: b.ros, credId: b.credId, assertion: b.assertion, reg: b.reg, rq: b.rq, nonce: c.nonce, issued: c.issued, os: origin,
+      })
+      return json(r.status, r.body)
+    }
+
     return json(404, { error: 'not-found' })
   },
 }
+
+export { Roster }
 
 // --- one Durable Object per ADDRESS ------------------------------------------------
 // Storage: `cur` (the live binding: exact statement text, holder signature,

@@ -32,8 +32,19 @@ final class DocumentBrowserViewController: UIDocumentBrowserViewController,
                 UIAction(title: NSLocalizedString("Check for updates", comment: "menu item: refresh the signed release histories"), image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
                     self?.checkForUpdates()
                 },
-            ])),
+            ] + stage0Probes)),
         ]
+    }
+
+    /// Device probes for a person's Stage 0 sitting: DEBUG builds only (see Stage0SignProbe.swift).
+    private var stage0Probes: [UIMenuElement] {
+        #if DEBUG
+        return [UIAction(title: "Stage 0: sign session (C1)", image: UIImage(systemName: "stopwatch")) { [weak self] _ in
+            self?.present(UINavigationController(rootViewController: Stage0SignProbeViewController()), animated: true)
+        }]
+        #else
+        return []
+        #endif
     }
 
     /// Refresh every app's signed release history. What's kept is only ever a
