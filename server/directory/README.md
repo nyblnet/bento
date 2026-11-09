@@ -27,7 +27,7 @@ linked to the next.
 
 | route | answer |
 |---|---|
-| `/v1/bind/start`, `/v1/bind/complete`, `/v1/lookup`, `/v1/delete`, `/v1/delete/start`, `/v1/delete/complete` | retired: **410** `{error: "gone"}` for any method and body; nothing is read, mailed or stored |
+| `/v1/bind/start`, `/v1/bind/complete`, `/v1/lookup`, `/v1/delete`, `/v1/delete/start`, `/v1/delete/complete` | retired: **410** `{error: "gone"}` for any method (a preflight included) and body; nothing is read, mailed or stored |
 | `GET /v1/keys` | the directory's public keys, for diagnosis (clients trust the list in the signed release) |
 
 The roster's routes and the sign-in host's are below.
@@ -120,7 +120,10 @@ Under option G a bento/id account is a **roster of passkeys** (the kernel's
   the budget lives 20 minutes). Its life is what limits mail beyond the
   budget: a stranger asking as often as they like costs the address at most
   the day's 3 plus one, about 4 setup mails a day, and the address always has
-  a live link. A link the mailer refused is withdrawn and holds nothing back.
+  a live link. A link whose mail is still going out (younger than the
+  mailer's 30-second timeout plus 5 seconds) holds the next back as a mailed
+  one would, so a burst of starts during a slow send mails one link, not one
+  each. A link the mailer refused is withdrawn and holds nothing back.
   Per IP: 10 setup starts an hour. `setup/start` answers the same bytes
   (`202 {"ok":true}`) whatever happened.
 - **No other mail ever reads a stranger-fillable budget.** `src/mail.js`

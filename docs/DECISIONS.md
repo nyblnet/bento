@@ -13359,12 +13359,24 @@ scripts/test-dash-attrs-browser.mjs (live edit, saved file, frozen file).
   stranger with a handful of addresses could get our mail paused, and with it
   every roster and recovery mail. The life of the beyond-budget link is the
   only limit on such mail, so it now sets the cap: the day's 3 plus one, about
-  4 a day however often anyone asks, and still never a moment without a live
-  link. The longer life is a longer window for a link that leaks, which the
-  fragment-only link and the setup notice already address; a reset covers a
-  setup someone else completed.
-- **Every route of the first design answers 410**: the typed-code bind
-  routes (already retired), and now `/v1/lookup`, the signed `/v1/delete` and
+  4 a day for requests that arrive one after another, and still never a
+  moment without a live link. Requests that arrive together, while a link's
+  mail is still going out, are held by the next rule. The longer life is a
+  longer window for a link that leaks, which the fragment-only link and the
+  setup notice already address; a reset covers a setup someone else
+  completed.
+- **A link whose mail is still going out holds the next one back.** A token
+  is marked mailed only once the mailer answers, and on a Durable Object
+  other requests run while the mail is being sent, so every start that
+  arrived in that window mailed its own day-long link: ten at once meant ten
+  mails, and a burst could be repeated each day. Each token now
+  records when it was minted, and while one is younger than the mailer's
+  timeout plus 5 seconds it holds the next link back as a mailed one would.
+  Older than that and still unconfirmed, it can only be a send that died, so
+  it holds nothing (an unconfirmed link must never hold a mail back for
+  good). A burst now mails one link.
+- **Every route of the first design answers 410**, a preflight included:
+  the typed-code bind routes (already retired), and now `/v1/lookup`, the signed `/v1/delete` and
   the typed-code `/v1/delete/start` and `/v1/delete/complete`. The deletion
   mail asked the person to type a code from an email on `id.bento.page`,
   which contradicts the promise in every other mail that Bento never asks
@@ -13373,7 +13385,10 @@ scripts/test-dash-attrs-browser.mjs (live edit, saved file, frozen file).
   that held bindings, the removal-code mail kind and its budget are gone.
   The directory was never deployed, so its migrations were rewritten rather
   than extended; from the first deploy on they only grow. Account deletion
-  returns as a mailed link to the sign-in host or a member's assertion.
+  returns as a mailed link to the sign-in host or a member's assertion. The
+  web deletion page built for those routes (`bento.page/id/delete`, never
+  published) is retired with its rig, and the privacy notice no longer
+  points to it.
 - **What follows a waiting notice's send touches the stored change only if
   it is still that request's.** A send can outlive the 10 minutes after which
   an unconfirmed change is dropped, and a later request can then queue its
@@ -13387,13 +13402,17 @@ scripts/test-dash-attrs-browser.mjs (live edit, saved file, frozen file).
   alone kept those keys for good. Each spend now makes sure an alarm will
   come when its key may go; the alarm is shared with the 72-hour ripening, so
   scheduling only ever brings it forward and each run sets it for the
-  earliest thing still to come.
+  earliest thing still to come, so a spend due sooner brings an alarm set for
+  a 72-hour ripening forward.
 
 `setup/start` answers the same bytes in every state, and that, the web
 routes' CORS on a failure, the enrol route's per-IP limit and both link lives
 are now rows. Guards: `scripts/test-directory.ts` (each retired route, every
 method, 410 with nothing mailed or stored), `scripts/test-directory-roster.ts`
 (31 days of a stranger every 10 minutes and 3 days once a minute: at most 4
-mails in any 24 hours with no gap; hung sends that deliver or fail after a
+mails in any 24 hours with no gap; bursts of 10 and 30 starts during a slow
+send, one link each, under a harness that keeps a Durable Object's input
+gate; hung sends that deliver or fail after a
 later change queued, or after the change was removed; a never-answering
-mailer; the alarm sweep) and `scripts/test-directory-mutants.ts`.
+mailer; the alarm sweep) and `scripts/test-directory-mutants.ts`, now in its
+own CI job.

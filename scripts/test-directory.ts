@@ -12,7 +12,8 @@
 //   · the address normal form is the kernel's, and storage names are a
 //     domain-separated hash of it;
 //   · every route of the first design (typed-code `bind.`, the signed and
-//     typed-code deletions, the lookup) answers 410 for any method and body,
+//     typed-code deletions, the lookup) answers 410 for any method (a
+//     preflight included) and body,
 //     with the full header set, mailing nothing and storing nothing (G13);
 //   · the object that held those bindings and its removal-code mail are gone;
 //   · per-IP limits hold on the roster read; nothing raw is stored.
@@ -122,9 +123,9 @@ for (const [i, want] of N) ok(normalize(i) === want, `normalize(${JSON.stringify
   }
   const m0 = mailbox.length, k0 = keysAtRest()
   for (const path of WANT) {
-    for (const method of ['GET', 'POST', 'PUT']) {
+    for (const method of ['GET', 'POST', 'PUT', 'OPTIONS']) {
       const q = path === '/v1/lookup' ? `${path}?e=${e}` : path
-      const r = await api(method, q, method === 'GET' ? undefined : bodies[path] ?? {})
+      const r = await api(method, q, method === 'GET' || method === 'OPTIONS' ? undefined : bodies[path] ?? {})
       ok(r.status === 410 && r.j.error === 'gone', `${method} ${q} → 410 gone (got ${r.status})`)
       ok(r.h.get('content-type') === 'application/json' && r.h.get('x-content-type-options') === 'nosniff' && r.h.get('x-frame-options') === 'DENY' &&
         /default-src 'none'/.test(r.h.get('content-security-policy') ?? '') && /publickey-credentials-get=\(\)/.test(r.h.get('permissions-policy') ?? '') &&
@@ -136,6 +137,7 @@ for (const [i, want] of N) ok(normalize(i) === want, `normalize(${JSON.stringify
   // control: the same harness serves a live route, so the 410s above are the routes' own
   const c = await api('POST', '/v1/roster/challenge', { email: e })
   ok(c.status === 200 && typeof c.j.challenge === 'string', 'control: a live route answers 200 in the same harness')
+  ok((await api('OPTIONS', '/v1/roster/request')).status === 204, 'control: a preflight on a live route still answers 204')
   ok((await api('GET', '/v1/lookupx')).status === 404 && (await api('POST', '/v1/delete/startx', {})).status === 404, 'control: a near miss of a retired path is an ordinary 404')
 
   // the object that held bindings, and its mail, are gone

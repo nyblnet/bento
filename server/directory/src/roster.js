@@ -42,7 +42,7 @@
 import { b64uDec, b64uEnc, sha256b64u } from '../../../kernel/src/statements.ts'
 import { buildRos, parseRos, ROSTER_WAIT_MS } from '../../../kernel/src/roster.ts'
 import { PASSKEY, verifyMemberAssertion, verifyRegistration } from './passkey.js'
-import { deliver } from './mail.js'
+import { deliver, MAIL_TIMEOUT_MS } from './mail.js'
 import { setupLink } from './links.js'
 
 const MIN = 60_000, DAY = 86_400_000
@@ -65,6 +65,12 @@ export const ROSTER_LIMITS = {
   originMax: 200,
   /** how long a spent directory challenge is remembered (its life is CHALLENGE_TTL_MS, 5 minutes) */
   spentKeepMs: 10 * MIN,
+  /**
+   * a link whose mail is still in flight: younger than the mailer's timeout,
+   * plus a margin. While one is, it holds the next link back as a mailed one
+   * would (S1″); once older, it can only be a send that never confirmed
+   */
+  setupInFlightMs: MAIL_TIMEOUT_MS + 5_000,
   /** at most this many expired spent challenges are swept by each new spend */
   spentSweep: 32,
   /** a change whose waiting notice was never confirmed sent is dropped after this (the object stopped mid-send) */
@@ -324,13 +330,20 @@ export class Roster {
       // day, not 20 minutes (S1′): it is the only thing that limits how often
       // a link goes beyond the budget, so a stranger who keeps asking gets the
       // owner one extra mail a day, never one every 20 minutes.
+      // S1″: a link whose mail is still going out counts too. On a Durable
+      // Object other requests run while the mail is sent, and a token is marked
+      // mailed only once the mailer answers, so without this every start in
+      // that window mailed its own day-long link. One that never confirmed
+      // stops counting once it is older than the mailer could take, so a send
+      // that died can never hold a link back for good.
       const spent = await this.spendSetupBudget(now)
-      if (!spent && live.some((t) => t.mailed)) return out(202, { mailed: false })
+      const holds = (t) => t.mailed || now - (t.at ?? 0) < ROSTER_LIMITS.setupInFlightMs
+      if (!spent && live.some(holds)) return out(202, { mailed: false })
       const token = b64uEnc(crypto.getRandomValues(new Uint8Array(32)))
       const h = await sha256hex(`bento-dir/1/setup\n${token}`)
       const exp = now + (spent ? ROSTER_LIMITS.setupTtlMs : ROSTER_LIMITS.setupBeyondTtlMs)
       // a new token never replaces an older live one: a stranger's start must not kill the owner's link
-      await s.put('setupTok', [...live, { h, exp, mailed: false }])
+      await s.put('setupTok', [...live, { h, exp, at: now, mailed: false }])
       const sent = await mailSetupLink(this.env, a.address, token, now, exp)
       const after = ((await s.get('setupTok')) || []).filter((t) => t.exp > now)
       // a link that never went out is withdrawn, so it can never hold a later mail back

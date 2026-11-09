@@ -50,6 +50,7 @@ import { fingerprint, ROSTER_LIMITS } from '../server/directory/src/roster.js'
 import { b64uDec, b64uEnc, sha256b64u } from '../kernel/src/statements.ts'
 import { buildRos, parseRos, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, ROSTER_WAIT_MS, type Member } from '../kernel/src/roster.ts'
 import { readFileSync, readdirSync } from 'node:fs'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -63,10 +64,32 @@ Date.now = () => now
 const MIN = 60_000, HOUR = 60 * MIN, DAY = 24 * HOUR
 
 // ---------- in-memory Durable Object namespaces ----------
+// A Durable Object's INPUT GATE: one event at a time, and the gate opens only
+// while the object waits on outgoing I/O (here, the mailer). Without it, every
+// concurrent request would read storage before any of them wrote, which the
+// runtime never allows, and races the runtime does allow (a request arriving
+// during a slow send) would look the same as ones it prevents.
+class Gate {
+  busy = false; q: (() => void)[] = []
+  async enter() { if (!this.busy) { this.busy = true; return } await new Promise<void>((r) => this.q.push(r)) }
+  leave() { const n = this.q.shift(); if (n) n(); else this.busy = false }
+}
+const inObject = new AsyncLocalStorage<Gate>()
+/** Run outgoing I/O with the current object's gate open, as the runtime does. */
+async function outgoing<T>(f: () => T | Promise<T>): Promise<T> {
+  const g = inObject.getStore()
+  if (!g) return f()
+  g.leave()
+  try { return await f() } finally { await g.enter() }
+}
+async function gated<T>(g: Gate, f: () => Promise<T>): Promise<T> {
+  await g.enter()
+  try { return await inObject.run(g, f) } finally { g.leave() }
+}
 type Obj = { fetch(r: Request): Promise<Response>; alarm?(): Promise<void> }
 const allStores: Map<string, unknown>[] = []
 function namespace(Klass: new (state: unknown, env: unknown) => Obj) {
-  const objs = new Map<string, { obj: Obj; store: Map<string, unknown>; alarm: number | null }>()
+  const objs = new Map<string, { obj: Obj; store: Map<string, unknown>; alarm: number | null; gate: Gate }>()
   const ns = {
     objs,
     idFromName: (n: string) => n,
@@ -74,7 +97,7 @@ function namespace(Klass: new (state: unknown, env: unknown) => Obj) {
       if (!objs.has(id)) {
         const store = new Map<string, unknown>()
         allStores.push(store)
-        const rec = { obj: null as unknown as Obj, store, alarm: null as number | null }
+        const rec = { obj: null as unknown as Obj, store, alarm: null as number | null, gate: new Gate() }
         const state = {
           storage: {
             async get(k: string) { return structuredClone(store.get(k)) },
@@ -88,7 +111,11 @@ function namespace(Klass: new (state: unknown, env: unknown) => Obj) {
             async getAlarm() { return rec.alarm },
           },
         }
-        rec.obj = new Klass(state, env)
+        const inner = new Klass(state, env)
+        rec.obj = {
+          fetch: (r: Request) => gated(rec.gate, () => inner.fetch(r)),
+          alarm: inner.alarm ? () => gated(rec.gate, () => inner.alarm!()) : undefined,
+        }
         objs.set(id, rec)
       }
       const { obj } = objs.get(id)!
@@ -106,7 +133,7 @@ let mailDown = false
 let mailHook: ((m: Mail) => Promise<void> | void) | null = null
 const env: Record<string, unknown> = {
   DIR_KID: 'dir-1', CHALLENGE_KEY: 'k'.repeat(48),
-  MAILER: { send: (m: Mail) => { if (mailHook) return mailHook(m); if (mailDown) throw new Error('mailer down'); mailbox.push(m) } },
+  MAILER: { send: (m: Mail) => outgoing(() => { if (mailHook) return mailHook(m); if (mailDown) throw new Error('mailer down'); mailbox.push(m) }) },
 }
 const ROSTER = namespace(Roster as never)
 env.ROSTER = ROSTER
@@ -897,6 +924,24 @@ let addAt = 0
   ok(keys() === 0, `run when due, it sweeps every one of them (${keys()} left)`)
   ok(o.alarm === null, 'and with nothing left to come, sets no further alarm')
 }
+{
+  // Z13: a spend due sooner brings an alarm set for a 72-hour ripening forward
+  now += HOUR
+  const kit = 'kit@example.com', K1 = await Authn.make(), K2 = await Authn.make()
+  await setup(kit, K1)
+  const o = await rosterObj(kit)
+  ok((await request(kit, K1, { add: K2 })).status === 202, 'kit queues a change')
+  const ripens = now + ROSTER_WAIT_MS
+  for (let i = 0; i < 10 && o.alarm !== null && o.alarm < ripens; i++) { now = Math.max(now, o.alarm); await fire(o) }
+  ok(o.alarm === ripens, 'once its spent keys are swept, the alarm sits at the ripening, 72 hours out')
+  now += HOUR
+  const c = await challenge(kit)
+  await api('POST', '/v1/roster/request', { email: kit, ros: `ros.x.1.y.z.${c}.0` }) // a stranger's spend
+  ok(o.alarm !== null && o.alarm > now && o.alarm <= now + ROSTER_LIMITS.spentKeepMs, `a stranger's spend then brings it forward to its own sweep (${o.alarm === null ? 'none' : (o.alarm - now) / MIN + ' min'})`)
+  now = o.alarm ?? now
+  await fire(o)
+  ok(![...o.store.keys()].some((k) => k.startsWith('spent:')) && o.alarm === ripens && (await current(kit)).head?.seq === 0, 'which sweeps it and puts the ripening back, nothing ripened early')
+}
 
 // =====================================================================
 // 10d. D3: an unexpected failure still answers JSON with the full header set
@@ -1102,8 +1147,12 @@ let addAt = 0
   const xan = 'xan@example.com'
   for (let i = 0; i < ROSTER_LIMITS.mailPerDay; i++) { await setupToken(xan); now += 2 * MIN }
   now += ROSTER_LIMITS.setupTtlMs // every mailed link has run out; the day's budget is still full
-  await plant(xan, (st) => st.set('setupTok', [{ h: 'unsent', exp: now + ROSTER_LIMITS.setupTtlMs, mailed: false }]))
-  ok(!!(await setupToken(xan)), 'budget full, only an unconfirmed link live: a link is still mailed')
+  // S1″: a young unconfirmed link may still be on its way, so it holds the next one back; once older than the mailer could take, it holds nothing
+  ok(ROSTER_LIMITS.setupInFlightMs === MAIL_TIMEOUT_MS + 5000, `a link counts as in flight for the mailer's timeout plus 5 s (${ROSTER_LIMITS.setupInFlightMs} ms)`)
+  await plant(xan, (st) => st.set('setupTok', [{ h: 'unsent', exp: now + ROSTER_LIMITS.setupTtlMs, at: now - ROSTER_LIMITS.setupInFlightMs + 1000, mailed: false }]))
+  ok(!(await setupToken(xan)), 'budget full, an unconfirmed link a second inside its flight window: held back (it may still arrive)')
+  await plant(xan, (st) => st.set('setupTok', [{ h: 'unsent', exp: now + ROSTER_LIMITS.setupTtlMs, at: now - ROSTER_LIMITS.setupInFlightMs, mailed: false }]))
+  ok(!!(await setupToken(xan)), 'budget full, only an unconfirmed link past its flight window live: a link is still mailed')
   ok(!(await setupToken(xan)), 'control: straight after, with that mailed link live, the budget holds the next one back')
 
   // the per-IP limit on the route
@@ -1113,6 +1162,53 @@ let addAt = 0
   for (let i = 0; i <= LIMITS.ip.setup; i++) st.add((await api('POST', '/v1/roster/setup/start', { email: `ip${i}@example.org` }, { ip })).status)
   ok(st.size === 1 && st.has(202), `setup start answers 202 even past the per-IP limit (${[...st]})`)
   ok(mailbox.length - n3 === LIMITS.ip.setup, `but only ${LIMITS.ip.setup} links go out from one IP in an hour (${mailbox.length - n3})`)
+}
+
+// =====================================================================
+// 10f′. S1″: starts that arrive while a link's mail is still going out
+// =====================================================================
+{
+  // a slow mailer: every send waits until the burst is released, as on a real
+  // object where other requests run while the mail goes out
+  let gate!: () => void
+  const slow = () => { const g = new Promise<void>((r) => { gate = r }); mailHook = async (m) => { await g; mailbox.push(m) }; return () => { mailHook = null; gate() } }
+  const burst = async (to: string, n: number, ip?: () => string) => {
+    const before = mailbox.length
+    const release = slow()
+    const all = Array.from({ length: n }, () => api('POST', '/v1/roster/setup/start', { email: to }, { ip: ip?.() }))
+    for (let i = 0; i < 50; i++) await new Promise((r) => setImmediate(r)) // let every start reach the object
+    release()
+    const rs = await Promise.all(all)
+    return { mails: mailbox.slice(before).filter((x) => x.to === to && x.kind === 'setup').length, rs }
+  }
+  now += HOUR
+  const b1 = await burst('bea@example.com', 10)
+  ok(b1.mails === 1 && b1.rs.every((r) => r.status === 202 && r.text === '{"ok":true}'), `10 starts at once, budget open, slow mailer: 1 mail (${b1.mails}), all answered 202 alike`)
+  // budget full and the links run out: the burst lands on the beyond-budget path, which mails a day-long link
+  const cyd = 'cyd@example.com'
+  for (let i = 0; i < ROSTER_LIMITS.mailPerDay; i++) { await setupToken(cyd); now += 2 * MIN }
+  now += ROSTER_LIMITS.setupTtlMs
+  const b2 = await burst(cyd, 10)
+  ok(b2.mails === 1, `10 starts at once beyond the budget: 1 day-long link, not 10 (${b2.mails})`)
+  const live = (((await rosterObj(cyd)).store.get('setupTok') as { mailed: boolean; exp: number }[] | undefined) ?? []).filter((t) => t.exp > now)
+  ok(live.length === 1 && live[0].mailed && live[0].exp === now + ROSTER_LIMITS.setupBeyondTtlMs, `and exactly one live token, mailed, for 24 hours (${live.length})`)
+  now += MIN
+  const b3 = await burst(cyd, 30)
+  ok(b3.mails === 0, `a second burst while that link is live: no mail (${b3.mails})`)
+  const dax = 'dax@example.com'
+  for (let i = 0; i < ROSTER_LIMITS.mailPerDay; i++) { await setupToken(dax); now += 2 * MIN }
+  now += ROSTER_LIMITS.setupTtlMs
+  const b4 = await burst(dax, 30, () => freshIp())
+  ok(b4.mails === 1, `30 starts at once from 30 IPs beyond the budget: 1 mail (${b4.mails})`)
+  // control: a burst whose one send fails leaves nothing that holds, so the next start is mailed
+  const eli = 'eli@example.com'
+  mailDown = true
+  const before = mailbox.length
+  const failing = Array.from({ length: 10 }, () => api('POST', '/v1/roster/setup/start', { email: eli }))
+  await Promise.all(failing)
+  mailDown = false
+  ok(mailbox.length === before && !((((await rosterObj(eli)).store.get('setupTok') as unknown[] | undefined) ?? []).length), 'a burst whose send fails: nothing mailed and no token left')
+  ok(!!(await setupToken(eli)), 'control: the next start is mailed')
 }
 
 // =====================================================================

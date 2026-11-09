@@ -146,7 +146,8 @@ runs:
       # change that never waits without its waiting mail, spent challenges
       # that stay bounded, setup links that complete only on the sign-in host,
       # a setup budget that never leaves an address without a live link and
-      # mails it at most ~4 links a day however often a stranger asks, pinned
+      # mails it at most ~4 links a day however often a stranger asks (one
+      # link for a burst of starts during a slow send, too), pinned
       # link lives, a setup/start answer that is the same bytes in every
       # state, post-send writes that touch only the request's own change, a
       # mailer timeout, an alarm that sweeps spent challenges, mail
@@ -216,3 +217,11 @@ runs:
       # P1 boots; a missing shell fails, it does not pass quietly.
       shell: bento-step {0}
       run: node scripts/test-stage0-probes.mjs
+
+    - name: bento/id privacy notice build rules
+      # A publishing build refuses any page still carrying a __PLACEHOLDER__,
+      # escapes every fact and loads nothing external. The web deletion page
+      # it used to build (a typed code against routes now retired) is gone,
+      # and the notice no longer links to it.
+      shell: bento-step {0}
+      run: node scripts/test-id-pages.mjs

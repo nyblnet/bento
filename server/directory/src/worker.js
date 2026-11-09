@@ -86,7 +86,7 @@ async function body(req) {
 
 /**
  * The first design's routes, retired under G13 (see the top of this file):
- * 410 for any method and body, before anything is read.
+ * 410 for any method (OPTIONS too) and body, before anything is read.
  */
 export const RETIRED = Object.freeze([
   '/v1/bind/start', '/v1/bind/complete', '/v1/lookup', '/v1/delete', '/v1/delete/start', '/v1/delete/complete',
@@ -112,6 +112,8 @@ export default {
 
 async function route(req, env) {
   const url = new URL(req.url)
+  // before anything else, a preflight included: a retired route answers nothing but 410
+  if (RETIRED.includes(url.pathname)) return json(410, { error: 'gone' })
   if (req.method === 'OPTIONS') {
     const web = url.pathname.startsWith(WEB_ROUTES.prefix)
     return new Response(null, {
@@ -121,7 +123,6 @@ async function route(req, env) {
   }
   const ip = req.headers.get('cf-connecting-ip') || '0.0.0.0'
   const p = url.pathname
-  if (RETIRED.includes(p)) return json(410, { error: 'gone' })
 
   if (p === '/v1/keys' && req.method === 'GET') {
     return json(200, { keys: JSON.parse(env.DIR_PUBKEYS || '[]') })
