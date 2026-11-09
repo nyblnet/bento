@@ -6865,6 +6865,108 @@
       "reason": "evidence"
     },
     {
+      "name": "x/pinned-q-signer-swapped",
+      "about": "the pinned q(rk1) link's voided.signer (a field the cause does not cover) rewritten to pk2; the removal takes pk2: its proof does not verify, so no target",
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4~q.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800594000000",
+          "rip": "rip.7QffnDwoE_uQSlIWbTTyOZY78hJRANL-E5CjpHEEcSE.1800594000000.1800594000000.q.rF2quKx3yiHNkEcdmieG8F1vSDCaH4Y6pxJwfqYBzUc.dir-1",
+          "ripSig": "C7pTGzQw4O7yBfHAUYbQh1JOt2yb_PdTzSw9CJnvFwBYGYNzhLwQkL5lwuNX28DMlVDggyOZffjrwxT0-ZZm8A",
+          "voided": {
+            "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q,pk~BNww6PpA6fWHG7mI3eB0l2nICkO5ma8mGBJT88ecQqCRlNiH93AA6uhWo-HbfW3nMGX8XhVfsIPCA-F4Mt_zUnM,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc.1800594000000",
+            "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+            "sig": "I-VPGyZnABop7bGNQHuAqzwbiVTmR5hqmymwQ-71_lg9xjOZC3tqL9tEPWnrDh4gndXMMcs5hTzxVQxPJJTVuQ"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.5.7QffnDwoE_uQSlIWbTTyOZY78hJRANL-E5CjpHEEcSE.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4~q.BgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgY.1800594000000",
+          "rip": "rip.V5IfyQetsokg8A1TU4DMMWdnJRsK_OajhQMydXTilZ8.1800594000000.1800853200000.x.7QffnDwoE_uQSlIWbTTyOZY78hJRANL-E5CjpHEEcSE.dir-1",
+          "ripSig": "I8StxiXUAJ-OCi6KoQXkMwj_potEj5pHLbZqHKVZsWMGQK2D6MgoGL1Jp7b9Fdi1oAm0ypOkiUaNVkbMYNloNQ"
+        }
+      ],
+      "pinned": "7QffnDwoE_uQSlIWbTTyOZY78hJRANL-E5CjpHEEcSE",
+      "expect": "reject",
+      "reason": "evidence"
+    },
+    {
+      "name": "x/pinned-evidence-other-request",
+      "about": "the pinned q(rk1) link carries a well-formed request by pk2 for the same head and seq, not the one its cause names; the removal takes pk2",
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4~q.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800594000000",
+          "rip": "rip.7QffnDwoE_uQSlIWbTTyOZY78hJRANL-E5CjpHEEcSE.1800594000000.1800594000000.q.rF2quKx3yiHNkEcdmieG8F1vSDCaH4Y6pxJwfqYBzUc.dir-1",
+          "ripSig": "C7pTGzQw4O7yBfHAUYbQh1JOt2yb_PdTzSw9CJnvFwBYGYNzhLwQkL5lwuNX28DMlVDggyOZffjrwxT0-ZZm8A",
+          "voided": {
+            "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BKLEQm07MRWeDe6feMrtDDG1WtH8cbw4wpa5JoT58G0i_1Z5BZK21qLaPwvq1wib1HSWA6QlHO87p05IYUvr-TE,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc.1800594000000",
+            "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+            "assertion": {
+              "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+              "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZEY5RUpSRm9PZVRVSlJDWnhyVGJTSlExUHpPSEVjNXBlOEM1WUcyM0d2SSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+              "signature": "MEQCICUuYg1y1ItIKQ67dzQYGKW1bQPpt5OjZ2IQo1MdwkzNAiARvQ2cKicTJCuG9XNdPQV4AqaopKWTAl-yNqTRq3kaPg"
+            }
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.5.7QffnDwoE_uQSlIWbTTyOZY78hJRANL-E5CjpHEEcSE.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4~q.BgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgY.1800594000000",
+          "rip": "rip.V5IfyQetsokg8A1TU4DMMWdnJRsK_OajhQMydXTilZ8.1800594000000.1800853200000.x.7QffnDwoE_uQSlIWbTTyOZY78hJRANL-E5CjpHEEcSE.dir-1",
+          "ripSig": "I8StxiXUAJ-OCi6KoQXkMwj_potEj5pHLbZqHKVZsWMGQK2D6MgoGL1Jp7b9Fdi1oAm0ypOkiUaNVkbMYNloNQ"
+        }
+      ],
+      "pinned": "7QffnDwoE_uQSlIWbTTyOZY78hJRANL-E5CjpHEEcSE",
+      "expect": "reject",
+      "reason": "evidence"
+    },
+    {
+      "name": "u/pinned-l-clears-stale-mark",
+      "about": "from a pin of l(rk1), with honest evidence, the undo clears the stale pk2",
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4~q.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800579600000",
+          "rip": "rip.Zde11fmPg40GISIS6qOcZ9kysggWmI6BXNunhNm4DM8.1800579600000.1800579600000.l.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.dir-1",
+          "ripSig": "oHbeSz13WIhYtMr67O8-NHFXxVAsZmga8u5uf7NuEeov3C-3o4LQK5zG_xB_YIgsUyV_2JQjMtKS3QQUBR5XsA",
+          "cited": {
+            "prevRos": "ros.YWxpY2VAZXhhbXBsZS5jb20.1.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ.AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI.1800003600000",
+            "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.2.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM.1800288000000",
+            "rip": "rip.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.1800288000000.1800547200000.m..dir-1",
+            "ripSig": "1K56FKHM79_nfxLPo9FU6h97l_EApHbOy8cQAj9GLppMc92yoErInhicAhOTfA_AASebFatuha69MEkIc4Rm-A"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.5.Zde11fmPg40GISIS6qOcZ9kysggWmI6BXNunhNm4DM8.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4~q.BgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgY.1800583200000",
+          "rip": "rip.N0bUFAG0p4iA3goVboilpW5NX1U6ErLka_WRHhqNP-Q.1800583200000.1800583200000.u.Zde11fmPg40GISIS6qOcZ9kysggWmI6BXNunhNm4DM8.dir-1",
+          "ripSig": "JWZQlX3XAJXN0iXpZDGfwCEceQc4b3bxw3WnZx_fsktp2cS1zyTVR40XuB18ORcHCtk_GZVOSvjCgSFUnhEfWg"
+        }
+      ],
+      "pinned": "Zde11fmPg40GISIS6qOcZ9kysggWmI6BXNunhNm4DM8",
+      "expect": "reject",
+      "reason": "target"
+    },
+    {
+      "name": "u/pinned-l-prevros-swapped",
+      "about": "the pinned l(rk1) link's cited.prevRos (a field the cause does not cover) swapped so the cited diff 'adds' pk2; the undo clears pk2: the prevRos does not chain, so no target",
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4~q.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800579600000",
+          "rip": "rip.Zde11fmPg40GISIS6qOcZ9kysggWmI6BXNunhNm4DM8.1800579600000.1800579600000.l.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.dir-1",
+          "ripSig": "oHbeSz13WIhYtMr67O8-NHFXxVAsZmga8u5uf7NuEeov3C-3o4LQK5zG_xB_YIgsUyV_2JQjMtKS3QQUBR5XsA",
+          "cited": {
+            "prevRos": "ros.YWxpY2VAZXhhbXBsZS5jb20.1.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.ZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGQ.1800000000000",
+            "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.2.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM.1800288000000",
+            "rip": "rip.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.1800288000000.1800547200000.m..dir-1",
+            "ripSig": "1K56FKHM79_nfxLPo9FU6h97l_EApHbOy8cQAj9GLppMc92yoErInhicAhOTfA_AASebFatuha69MEkIc4Rm-A"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.5.Zde11fmPg40GISIS6qOcZ9kysggWmI6BXNunhNm4DM8.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4~q.BgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgY.1800583200000",
+          "rip": "rip.N0bUFAG0p4iA3goVboilpW5NX1U6ErLka_WRHhqNP-Q.1800583200000.1800583200000.u.Zde11fmPg40GISIS6qOcZ9kysggWmI6BXNunhNm4DM8.dir-1",
+          "ripSig": "JWZQlX3XAJXN0iXpZDGfwCEceQc4b3bxw3WnZx_fsktp2cS1zyTVR40XuB18ORcHCtk_GZVOSvjCgSFUnhEfWg"
+        }
+      ],
+      "pinned": "Zde11fmPg40GISIS6qOcZ9kysggWmI6BXNunhNm4DM8",
+      "expect": "reject",
+      "reason": "evidence"
+    },
+    {
       "name": "x/pinned-q-without-evidence",
       "about": "from a pin of the quarantine link stored WITHOUT its voided request: the removal cannot be placed (refetch the link whole)",
       "links": [

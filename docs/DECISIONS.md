@@ -13204,10 +13204,15 @@ the member that the `q` or `l` link just before it marked: its TARGET.
   member its cited change added. Each is bound to the link by the link's cause
   hash, so `x` and `u` need no new field.
 - When the `q` or `l` link is the PINNED head, its target is read from the
-  evidence it carries, after the cause check (the pinned countersign is
-  re-verified, so the evidence cannot be swapped). A pinned link without its
-  evidence, or with evidence that does not match its cause, refuses a
-  following `x` or `u` (`evidence`): the host refetches the link. **So a host
+  evidence it carries, and that evidence is re-checked. The pinned
+  countersign covers only the cause hash, while a refetched link's evidence
+  may come from the very party this rule guards against. So a `q`'s voided
+  request must match the cause, be for this address and seq, and its
+  signer's proof over it must verify (the signer field is not covered by the
+  cause). An `l`'s cited change must match the cause, and its previous head
+  must chain to it (the previous head is not covered by the cause either)
+  with exactly one member added. A pinned link without such evidence refuses
+  a following `x` or `u` (`evidence`), and the host refetches the link. **So a host
   stores a pinned head WHOLE, its voided request or cited change included.**
 - Two `q` links in a row stay legal, and so does a member change after a `q`.
   A mark left behind that way is never lifted or removed by the directory's

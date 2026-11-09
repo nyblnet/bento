@@ -580,6 +580,26 @@ const afterQ = { pk1: mem('pk', 'pk1', T), pk2q: mem('pk', 'pk2', T + 73 * H, tr
       swapped, 'evidence', await sha256b64u(c[4].ros))
   }
   {
+    // C4′: from a pin, every part of the evidence that names the target is re-bound, not just the cause
+    const c = await fromB3(QS, Q2, { members: [['pk', 'pk1'], ['rk', 'rk1', 'q']], req: T + 165 * H, rip: T + 237 * H, auth: 'x' })
+    const swapped = [{ ...c[4], voided: { ...c[4].voided!, signer: pubOf('pk2') } }, c[5]]
+    reject('x/pinned-q-signer-swapped', "the pinned q(rk1) link's voided.signer (a field the cause does not cover) rewritten to pk2; the removal takes pk2: its proof does not verify, so no target",
+      swapped, 'evidence', await sha256b64u(c[4].ros))
+    // a well-formed voided request by pk2 for the same head, but not the one the cause names
+    const other = await fromB3(QS, { ...Q2, voided: { members: [['pk', 'pk1'], ['pk', 'pk2', 'q'], ['pk', 'pk3'], ['rk', 'rk1']], signer: 'pk2' } })
+    reject('x/pinned-evidence-other-request', 'the pinned q(rk1) link carries a well-formed request by pk2 for the same head and seq, not the one its cause names; the removal takes pk2',
+      [{ ...c[4], voided: other[4].voided }, c[5]], 'evidence', await sha256b64u(c[4].ros))
+    // q(pk2), then l(rk1) citing L1→L2 (which added rk1); pin the l link; the undo clears the stale pk2
+    const LQ: Spec = { members: [['pk', 'pk1'], ['pk', 'pk2', 'q'], ['rk', 'rk1', 'q']], req: T + 161 * H, rip: T + 161 * H, auth: 'l', cited: cite(2) }
+    const UQ: Spec = { members: [['pk', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1', 'q']], req: T + 162 * H, rip: T + 162 * H, auth: 'u' }
+    const lq = await fromB3(QS, LQ, UQ)
+    reject('u/pinned-l-clears-stale-mark', 'from a pin of l(rk1), with honest evidence, the undo clears the stale pk2', lq.slice(4), 'target', await sha256b64u(lq[4].ros))
+    const forged = buildRos({ address: ADDRESS, seq: 1, prev: await sha256b64u(lq[0].ros),
+      members: [['pk', 'pk1'], ['rk', 'rk1']].map(([k, l]) => ({ kind: k as MemberKind, pub: pubOf(l), quarantined: false })), dirNonce: nonce(99), created: T })
+    reject('u/pinned-l-prevros-swapped', "the pinned l(rk1) link's cited.prevRos (a field the cause does not cover) swapped so the cited diff 'adds' pk2; the undo clears pk2: the prevRos does not chain, so no target",
+      [{ ...lq[4], cited: { ...lq[4].cited!, prevRos: forged } }, lq[5]], 'evidence', await sha256b64u(lq[4].ros))
+  }
+  {
     const qx = await fromB3(QS, XS)
     const bare = { ...qx[3] }; delete bare.voided
     reject('x/pinned-q-without-evidence', 'from a pin of the quarantine link stored WITHOUT its voided request: the removal cannot be placed (refetch the link whole)',

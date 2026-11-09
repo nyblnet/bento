@@ -115,6 +115,8 @@ const REQUIRED: Array<[string, string]> = [
   ['ok/pinned-q-then-x-target', 'accept'], ['x/pinned-evidence-cause-wrong', 'evidence'], ['x/pinned-q-without-evidence', 'evidence'],
   ['ok/pinned-l-then-u', 'accept'], ['u/pinned-l-without-evidence', 'evidence'], ['u/pinned-l-evidence-cause-wrong', 'evidence'],
   ['ok/q-then-l-then-u', 'accept'], ['x/pinned-target-not-quarantined', 'target'],
+  // C4′: the pinned link's evidence is re-bound (security's P10, P11c)
+  ['x/pinned-q-signer-swapped', 'evidence'], ['x/pinned-evidence-other-request', 'evidence'], ['u/pinned-l-clears-stale-mark', 'target'], ['u/pinned-l-prevros-swapped', 'evidence'],
 ]
 for (const [n, want] of REQUIRED) {
   const r = byName.get(n)
