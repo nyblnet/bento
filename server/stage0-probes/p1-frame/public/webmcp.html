@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Probe P1 WebMCP</title>
+<link rel="stylesheet" href="/probe.css">
+<script src="/probe-common.js"></script>
+<script src="/frame-url.js"></script>
+<script src="/webmcp.js" defer></script>
+</head>
+<body>
+<main>
+<span class="tag">stage-0 measurement probe · P1 WebMCP page</span>
+<h1>Which page tools can an agent see?</h1>
+<p>Sitting C2. In Chrome with <code>chrome://flags/#enable-webmcp-testing</code>
+turned on, this page registers one tool, <code>probe_top_tool</code>, on the top
+page, and the sandboxed frame below tries to register <code>probe_frame_tool</code>
+inside it. Neither tool does anything but return a fixed sentence.</p>
+<ol>
+<li>Check the two lines under "Registered".</li>
+<li>Ask Claude in Chrome: "List the tools this page offers."</li>
+<li>Paste or type what it listed into the box, then Copy results.</li>
+</ol>
+<h2>Registered</h2>
+<pre id="observed">Waiting for the frame…</pre>
+<iframe id="mcp-frame" class="doc" style="height:80px;min-height:0" sandbox="allow-scripts" title="frame"></iframe>
+<div class="results">
+  <label>What the agent listed <input type="text" id="notes" style="width:100%"></label>
+  <div class="row" style="margin-top:8px"><button id="copy" class="primary">Copy results</button> <span id="copy-status" class="muted"></span></div>
+  <textarea id="result" rows="3" readonly hidden></textarea>
+</div>
+<p><a href="/">Back to the main probe</a></p>
+</main>
+</body>
+</html>

@@ -1,0 +1,31 @@
+# Stage-0 probe P1. Served by both deployments of this folder (the top Worker
+# and the frame Pages project); each path has its own rule, and no CSP is set
+# by a splat (Cloudflare would merge two policies into one header).
+# The top page's script-src carries frame.js's hash: a srcdoc frame INHERITS
+# the top page's CSP, so the "worker-served frame" mode needs it here too.
+# scripts/test-stage0-probes.mjs fails if this hash and frame.js disagree.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Cache-Control: no-cache
+
+/
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-BpOhIouOlJUCBiVUpUZDeqhBF17GKiIxarI5tC12nY8=' blob:; style-src 'self' 'unsafe-inline' data: blob:; img-src 'self' data: blob:; font-src data: blob:; media-src data: blob:; connect-src 'self'; worker-src 'self'; frame-src https: http://localhost:* http://127.0.0.1:*; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'
+  Cross-Origin-Opener-Policy: same-origin-allow-popups
+  Origin-Agent-Cluster: ?1
+
+/storage
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-src https: http://localhost:* http://127.0.0.1:*; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'
+
+/webmcp
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-src https: http://localhost:* http://127.0.0.1:*; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'
+
+/frame
+  Content-Security-Policy: default-src 'none'; script-src 'self' blob:; style-src 'unsafe-inline' blob: data:; img-src data: blob:; font-src data: blob:; media-src data: blob:; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'
+
+/storage-frame
+  Content-Security-Policy: default-src 'self'; script-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'
+
+/sw-install
+  Content-Security-Policy: default-src 'self'; script-src 'self'; worker-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'
