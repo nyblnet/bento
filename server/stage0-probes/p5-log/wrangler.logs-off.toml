@@ -1,0 +1,15 @@
+# Stage-0 probe P5 (log canary), config 3 of 3: logs OFF, the setting the
+# planned connector relies on. Pass means nothing of the
+# canary appears, not even the Worker's own control line.
+#   npx wrangler@4.152.0 deploy -c wrangler.logs-off.toml
+name = "bento-log-probe"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[observability]
+enabled = false
+
+[observability.logs]
+enabled = false
+invocation_logs = false
