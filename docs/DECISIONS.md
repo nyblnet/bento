@@ -14,6 +14,19 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-11-06 — Speaker layout choices stay in the editor session
+
+The existing speaker panes resize through two keyboard-accessible dividers.
+View can hide the current preview, next preview and thumbnail rail to give
+notes the whole content area. Proportions and visibility live in memory in
+`slides/src/speakerlayout.ts`, surviving popup/show restarts within this editor
+but never entering document JSON, sync or saved files. Previews retain the
+deck's aspect ratio and fit their panes; long notes still scroll when needed.
+
+Notes can also be hidden from View. The remaining preview fills its available
+pane; hiding both side panes removes their column and divider. Visibility
+remains independently reversible, including when all content panes are hidden.
+
 ## 2026-10-18 — Native hosts keep a document's recovery copy and member key outside the page
 
 **Decision.** The native hosts provide the per-document store that

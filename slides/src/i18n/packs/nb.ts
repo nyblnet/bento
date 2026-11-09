@@ -23,6 +23,11 @@ import type { Catalog } from '../../i18n'
 export const label = 'Norsk bokmål'
 
 export const strings: Catalog = {
+  "View": "Visning",
+  "Current slide": "Gjeldende lysbilde",
+  "Slide thumbnails": "Lysbildeminiatyrer",
+  "Resize slide previews": "Endre størrelsen på lysbildeforhåndsvisninger",
+  "Resize next slide and notes": "Endre størrelsen på neste lysbilde og notater",
   "Insert — text, shapes, images, media, tables, charts": "Sett inn — tekst, former, bilder, medier, tabeller, diagrammer",
   "More actions": "Flere handlinger",
   "Slides — show or hide the slide list": "Lysbilder — vis eller skjul lysbildelisten",

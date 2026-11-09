@@ -296,6 +296,10 @@ jobs:
         # A click on a link in the popup's current, next, rail or grid previews
         # never navigates the popup that holds the presenter's notes.
         run: node scripts/test-slides-speaker-links-browser.mjs
+      - name: Speaker layout in Chromium
+        # Resize both dividers with real mouse and keyboard input, hide/restore
+        # previews and thumbnails, and keep notes readable on small windows.
+        run: node scripts/test-slides-speaker-layout-browser.mjs
       - name: Paste keeps spaces in Chromium
         # #750: real paste events keep runs of spaces (plain text, <pre> and
         # white-space: pre html), columns line up in a monospace box, ordinary

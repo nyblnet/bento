@@ -4,6 +4,11 @@
 import type { Catalog } from '../i18n'
 
 export const de: Catalog = {
+  "View": "Ansicht",
+  "Current slide": "Aktuelle Folie",
+  "Slide thumbnails": "Folienminiaturen",
+  "Resize slide previews": "Folienvorschauen vergrößern oder verkleinern",
+  "Resize next slide and notes": "Nächste Folie und Notizen vergrößern oder verkleinern",
   "This text box is already bold": "Dieses Textfeld ist bereits fett",
   "Italic": "Kursiv",
   "Underline": "Unterstrichen",

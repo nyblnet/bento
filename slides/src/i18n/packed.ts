@@ -15,6 +15,11 @@ export const PACKED_LOCALES = ["ja","zh-Hans","zh-Hant","es","fr","de","it","pt"
 
 /** English source string -> translations, positional by PACKED_LOCALES. */
 export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
+  "View": ["表示","视图","檢視","Vista","Affichage","Ansicht","Vista","Exibir"],
+  "Current slide": ["現在のスライド","当前幻灯片","目前投影片","Diapositiva actual","Diapositive actuelle","Aktuelle Folie","Diapositiva attuale","Slide atual"],
+  "Slide thumbnails": ["スライドのサムネイル","幻灯片缩略图","投影片縮圖","Miniaturas de diapositivas","Miniatures des diapositives","Folienminiaturen","Miniature delle diapositive","Miniaturas dos slides"],
+  "Resize slide previews": ["スライドプレビューのサイズを変更","调整幻灯片预览大小","調整投影片預覽大小","Redimensionar las vistas previas","Redimensionner les aperçus des diapositives","Folienvorschauen vergrößern oder verkleinern","Ridimensiona le anteprime delle diapositive","Redimensionar prévias dos slides"],
+  "Resize next slide and notes": ["次のスライドとノートのサイズを変更","调整下一张幻灯片和备注大小","調整下一張投影片與備忘稿大小","Redimensionar la siguiente diapositiva y las notas","Redimensionner la diapositive suivante et les notes","Nächste Folie und Notizen vergrößern oder verkleinern","Ridimensiona la diapositiva successiva e le note","Redimensionar próximo slide e anotações"],
   "This text box is already bold": ["このテキストボックスはすでにボールドです","此文本框已是粗体","此文字方塊已是粗體","Este cuadro de texto ya está en negrita","Cette zone de texte est déjà en gras","Dieses Textfeld ist bereits fett","Questa casella di testo è già in grassetto","Esta caixa de texto já está em negrito"],
   "Italic": ["斜体","斜体","斜體","Cursiva","Italique","Kursiv","Corsivo","Itálico"],
   "Underline": ["下線","下划线","底線","Subrayado","Souligné","Unterstrichen","Sottolineato","Sublinhado"],

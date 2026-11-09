@@ -17,6 +17,11 @@ import type { Catalog } from '../../i18n'
 export const label = 'Nederlands'
 
 export const strings: Catalog = {
+  "View": "Weergave",
+  "Current slide": "Huidige dia",
+  "Slide thumbnails": "Diaminiaturen",
+  "Resize slide previews": "Grootte van diavoorbeelden aanpassen",
+  "Resize next slide and notes": "Grootte van volgende dia en notities aanpassen",
   "Insert — text, shapes, images, media, tables, charts": "Invoegen — tekst, vormen, afbeeldingen, media, tabellen, grafieken",
   "More actions": "Meer acties",
   "Slides — show or hide the slide list": "Dia's — dialijst tonen of verbergen",
