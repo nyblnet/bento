@@ -1,0 +1,7 @@
+{
+  "name": "bento-id-signin",
+  "private": true,
+  "description": "The bento/id sign-in host: the only web origin that runs passkey ceremonies for id.bento.page",
+  "license": "MIT",
+  "type": "module"
+}
