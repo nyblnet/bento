@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Probe P2 install</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon-192.png">
+<link rel="stylesheet" href="/probe.css">
+<script src="/probe-common.js"></script>
+<script src="/app.js" defer></script>
+</head>
+<body>
+<main>
+<span class="tag">stage-0 measurement probe · P2 install</span>
+<h1>Open, edit and save a file as an installed app</h1>
+<p>Sittings A5, E2, E3 and G2. This page opens an HTML file <b>on this
+device</b>, adds one comment line to it and writes it back. Nothing is
+uploaded; the page talks to no server but its own host. <b>Use a throwaway copy
+of a deck</b>: the edit appends <code>&lt;!-- stage-0 probe P2 edit … --&gt;</code>
+to the end of the file.</p>
+<p class="muted" id="where"></p>
+
+<div class="box">
+  <div class="row">
+    <button id="open" class="primary">Open a file</button>
+    <button id="save">Edit and save</button>
+    <button id="reconnect" hidden>Reconnect the stored file</button>
+    <button id="share" hidden>Share / Save to Files</button>
+    <button id="forget">Forget the stored file</button>
+    <input type="file" id="file" accept=".html,.htm,text/html" hidden>
+  </div>
+  <pre id="observed">Nothing opened yet.</pre>
+</div>
+
+<details class="box" open>
+<summary><b>Steps</b></summary>
+<p><b>A5 (Mac Chrome) / G2 (Windows):</b> 1. Open a file, Edit and save. 2. Reload: note the
+permission prompt's choices, pick "Allow on every visit". 3. Install the app
+(address bar → Install) and repeat 1–2 inside it. 4. Finder (Explorer) →
+right-click the deck → Open With: is "Probe P2" listed? Open with it, Edit and
+save, then check the file on disk changed (the comment is at its end; Finder's
+Date Modified changes). Screenshot each prompt.</p>
+<p><b>E2 (Android):</b> 1. Open a file (which picker?), Edit and save; is the file in Files
+changed? 2. Reload: does the stored file reconnect, and with what prompt? 3. Install
+(menu → Install app). Files → long-press the deck → Open with / Share: is the
+app offered? Open it there, Edit and save.</p>
+<p><b>E3 (Android, offline share):</b> with the app installed and opened once online, turn on
+aeroplane mode, then Files → share the deck to the app. The page notes whether
+the shared file arrived while offline.</p>
+</details>
+
+<div class="box">
+  <table>
+    <tr><td>Permission prompt: its wording and choices</td><td><input type="text" id="m-prompt" style="width:100%"></td></tr>
+    <tr><td>Listed in Open With / Open with / Share</td><td><select id="m-openwith"><option>-</option><option>yes</option><option>no</option></select></td></tr>
+    <tr><td>File on disk changed after saving</td><td><select id="m-disk"><option>-</option><option>yes</option><option>no</option></select></td></tr>
+  </table>
+</div>
+
+<div class="results">
+  <label>Notes (optional) <input type="text" id="notes" style="width:100%"></label>
+  <div class="row" style="margin-top:8px"><button id="copy" class="primary">Copy results</button> <span id="copy-status" class="muted"></span></div>
+  <textarea id="result" rows="4" readonly hidden></textarea>
+</div>
+</main>
+</body>
+</html>

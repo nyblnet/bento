@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- The ONE capability this probe needs, and the reason it needs a paid
+       developer team: a personal (free) team cannot sign Associated Domains.
+       The domain is the rp id (BENTO_PROBE_RP_ID), and that host must serve
+       /.well-known/apple-app-site-association listing
+       "<TEAMID>.<bundle id>" under webcredentials.apps. -->
+  <key>com.apple.developer.associated-domains</key>
+  <array>
+    <string>webcredentials:$(BENTO_PROBE_RP_ID)</string>
+  </array>
+</dict>
+</plist>

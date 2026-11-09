@@ -25,6 +25,22 @@ defaults:
     shell: bash scripts/ci/bento-step {0}
 
 jobs:
+  share-directory-mutants:
+    # Each mutant reopens one path (a retired route served again; a loosened
+    # roster, passkey, mail or header rule) in a copy of the tree, and the
+    # directory rigs must fail a row. A mutant that no longer applies, or a
+    # rig that crashes instead of counting, fails this job. Its own job: at
+    # ~7 s a mutant on a runner it outgrew validate's 20 minutes.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: bento/connect directory mutants
+        run: node scripts/test-directory-mutants.ts
+
   share-signin-browser:
     runs-on: ubuntu-latest
     timeout-minutes: 20

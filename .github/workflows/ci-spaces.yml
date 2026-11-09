@@ -74,19 +74,14 @@ jobs:
         # that refuses the recovery copy gets the notice once, held to read;
         # pt and de show slides' words. Planted in bento-spaces-autosave.
         run: node scripts/test-spaces-recovery-browser.mjs
-      - name: bento/id privacy notice and web deletion page (build rules + Chromium)
-        # A publishing build refuses any page still carrying a __PLACEHOLDER__;
-        # the deletion page's CSP pins its exact inline script and style and
-        # lets it reach only the directory. In Chromium with the API mocked:
-        # the start → code → done flow, its refusals, and that it never says
-        # whether an address exists.
-        run: node scripts/test-id-pages-browser.mjs
-      - name: bento.page passkey association files never publish a placeholder
+      - name: id.bento.page passkey association files never publish a placeholder
         # scripts/well-known.mjs fills /.well-known/apple-app-site-association
-        # and assetlinks.json from site-src/well-known/ once the Apple team id
-        # and the Play signing fingerprint exist. It writes only what it was
-        # given, refuses a malformed value, and never emits a placeholder: the
-        # platforms cache these files, so a wrong one is worse than none.
+        # and assetlinks.json from site-src/id-host/well-known/ for the rp,
+        # id.bento.page, once the Apple team id and the Play signing
+        # fingerprint exist. It writes only what it was given, refuses a
+        # malformed value, never emits a placeholder (the platforms cache these
+        # files, so a wrong one is worse than none) and never writes into the
+        # bento.page site. A control copy passes; seven mutants must fail.
         run: node scripts/test-well-known.ts
       - name: Release pins in Chromium
         # bento/connect K4 (security §18/§36): this build's pins come from its

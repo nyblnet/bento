@@ -1,85 +1,56 @@
 # bento/id directory (`id.bento.page`)
 
 Layer 1 of bento/id. It answers one question: *does this key belong to this
-mailbox?* It holds **holder-published bindings**: an account key, a separate
-key-agreement key, and an email address. Each binding is made with **two
-proofs**:
+mailbox?* Under option G an address's account is a **roster of passkeys**
+(see "The passkey roster" below).
 
-1. a signature by the account key over the binding statement, and
-2. a code mailed to the address, entered in the holder's own agent (bento/home)
-   and **signed by that same key**.
-
-Why a code and not a link: an attacker can start a binding of their own key to
-someone else's address. If clicking a mailed link completed it, the victim's
-click, or their mail provider's link scanner, would bind the attacker's key.
-With the code entered and signed in the holder's agent, neither half works
-alone.
+**The first design is retired.** It bound one account key to an address with
+a typed code mailed to the address and entered, signed, in bento/home
+(`bind.`), served the binding at `/v1/lookup`, and removed it with a
+holder-signed `del.` or another typed code. Under option G every mailed
+confirmation is a link that completes only on the sign-in host (G13), so a
+typed code on this host contradicts it, and with no way to make a binding the
+lookup and deletions had nothing to serve. Every one of those routes answers
+**410**, and the object that held bindings is gone. The directory was never
+deployed, so nothing was migrated. Account deletion returns as a mailed link
+to the sign-in host or a member's assertion.
 
 ## What it never holds
 
 No private key, no document, no access list, no share, no "who looked up
 whom". Storage is one Durable Object per address, **named by a hash of the
-address**, and nothing lists or iterates them. The address exists once,
-inside the signed statement the directory serves; no other copy is kept.
-Per-IP limits key on a daily-salted HMAC, so no raw IP is stored and one
-day's hashes can't be linked to the next.
+address**, and nothing lists or iterates them. Per-IP limits key on a
+daily-salted HMAC, so no raw IP is stored and one day's hashes can't be
+linked to the next.
 
 ## Routes
 
-| route | proof | answer |
-|---|---|---|
-| `POST /v1/bind/start` `{stmt, sig}` | the holder's signature over `bind.…` | **always 202** once the statement is valid, whether or not a code was mailed (no existence or limit oracle) |
-| `POST /v1/bind/complete` `{email, code, sig}` | the code + the key's signature over `cmp.…` | 200 with the statement and a signed `att.…`, or a uniform 400 |
-| `GET /v1/lookup?e=` | none | 200 (statement + fresh attestation + chain), 410 (signed tombstone) or 404 (never existed *or* expired: the same answer). Exact address only |
-| `POST /v1/delete` `{email, ts, sig}` | the key's signature over `del.…`, ±5 min | 204, leaving a signed `tomb.…` |
-| `POST /v1/delete/start`, `/complete` | a mailed code, for an EXPIRED binding only | 202, then 204 |
+| route | answer |
+|---|---|
+| `/v1/bind/start`, `/v1/bind/complete`, `/v1/lookup`, `/v1/delete`, `/v1/delete/start`, `/v1/delete/complete` | retired: **410** `{error: "gone"}` for any method (a preflight included) and body; nothing is read, mailed or stored |
+| `GET /v1/keys` | the directory's public keys, for diagnosis (clients trust the list in the signed release) |
 
-**Email never changes a LIVE binding on its own** (security §25). While a
-binding is live, a new key proven by email alone is refused (start mails
-nothing), and so is a mailed-code delete. A live binding changes only by its
-holder: a renewal, or a holder-signed delete. The 72-hour contestable
-rotation, which is how a person who has lost every device moves on, arrives
-with the rotation states. Email alone may bind an address that is absent,
-expired or deleted; a new key over an expired one is flagged `rebound`, so
-pinners warn.
+The roster's routes and the sign-in host's are below.
 
-**Until the rotation states land, a live binding's key cannot change at
-all**, and a person who has lost every device cannot remove a live binding:
-it stays until it expires (13 months at most). That includes the web
-deletion page (bento.page/id/delete), which removes EXPIRED bindings only for
-now. For a live one it answers as usual and mails nothing. Accepted for phase
-1 by security; the 72-hour contestable path lifts it.
-| `GET /v1/keys` | none | the directory's public keys, for diagnosis (clients trust the list in the signed release) |
-
-**Limits:**
-- a code lives 20 minutes and allows 5 attempts
-- per address: one mail a minute, 3 a day, 10 a month (the mail-bombing control)
-  The budget is spent only by a mail that is actually sent: a refused start
-  (anyone can send one, for any key) costs nothing, so strangers cannot use up
-  the holder's mail and keep their next code from arriving.
-- per IP and hour: start 20, complete 60, lookup 300, delete 20
+Every answer, an unexpected failure included, is JSON with the full header
+set: an exception is caught at the top and answered as a 500
+`{error: "internal"}` that names nothing inside.
 
 ## Status
 
-The statement formats (`bind.`, `cmp.`, `del.`, `att.`, `tomb.`) and the
-address normal form are the KERNEL's (`kernel/src/statements.ts`,
-`kernel/src/address.ts`), so the directory and every agent verify with one
-implementation. `src/statements.js` and `src/address.js` only add what is the
-directory's own: its online signing key and the storage name. The rig runs
-kernel's conformance vectors (`kernel/fixtures/identity-v1.json`) end to end
-through the Worker, and checks every answer with kernel's client verifiers.
-
-Every `bind.` must carry the account's recovery key-agreement key in its `kx`
-slot (kx placement mode C, kernel's `KX_MODE`): an empty slot, a value that is
-not an uncompressed P-256 point, and one equal to the account key are refused.
+The `ros.` roster format and the address normal form are the KERNEL's
+(`kernel/src/roster.ts`, `kernel/src/address.ts`), so the directory and every
+agent verify with one implementation. `src/address.js` only adds the storage
+name. The rig runs kernel's address vectors
+(`kernel/fixtures/identity-v1.json`) through the directory's normal form.
 
 Phase 1 accepts **ASCII addresses only** (recommended, pending the
 maintainer's decision on international addresses): the platforms disagree on
-internationalised domains, so one address could otherwise bind as one mailbox
-and be looked up as another.
+internationalised domains, so one address could otherwise mean one mailbox on
+one host and another elsewhere.
 
 **Not here yet:**
-- the chained key rotation with its pending and frozen states
+- the ripening countersign `rip.`, and the online key it is signed with
 - the passkey key-blob store and the access-ledger blob
 - the SES mailer
 
@@ -90,20 +61,23 @@ SPF/DKIM/DMARC on a dedicated sending subdomain, all first. Then:
 
 ```sh
 cd server/directory
-npx wrangler secret put DIR_KEY_JWK   # the directory's ONLINE signing key; never the release key
+npx wrangler secret put CHALLENGE_KEY # 32+ random characters: seals the single-use challenges
 npx wrangler deploy
 ```
+
+(`DIR_KEY_JWK`, the directory's online signing key, joins with the countersign;
+nothing signs with it yet.)
 
 ## Testing
 
 ```sh
-node scripts/test-directory.ts
+node scripts/test-directory.ts          # the retired routes, the address normal form, limits
+node scripts/test-directory-roster.ts   # the passkey roster, setup links, mail, headers
+node scripts/test-directory-mutants.ts  # each rule loosened in turn must turn a rig red
 ```
 
-It drives the real worker and Durable Object classes against an in-memory
-namespace and a hand-moved clock: both proofs, the attack a link would allow,
-exact lookups, the 202 rule, per-address and per-IP limits, sequence and
-rebound, signed tombstones, expiry, and nothing identifying at rest.
+Both rigs drive the real worker and Durable Object classes against an
+in-memory namespace and a hand-moved clock.
 
 ## Licence
 
@@ -113,3 +87,121 @@ the repository is MIT. It runs as a network service, so anyone who offers a
 modified copy to users over a network must offer those users its source.
 Contributions to it need the contributor licence agreement in
 [CLA.md](CLA.md); see [CONTRIBUTING.md](../../CONTRIBUTING.md#license).
+
+## The passkey roster (option G)
+
+Under option G a bento/id account is a **roster of passkeys** (the kernel's
+`ros.` chain, `kernel/src/roster.ts`); no account private key exists anywhere.
+`src/roster.js` keeps each address's roster in its own Durable Object
+(`Roster`, named by the same address hash) and enforces the directory's half:
+
+- **One constant** (`src/passkey.js` `PASSKEY`): rp `id.bento.page`, and the
+  only accepted origin is the sign-in host `https://signin.id.bento.page`. Not
+  `https://id.bento.page`, `https://home.bento.page` or `https://bento.page`.
+  Native origins join as each is measured; none is listed yet.
+- **Registration** is checked here (strict client data, exact challenge and
+  origin, never cross-origin, exact rp hash, UP+UV, ES256 P-256 only; the
+  directory relies on no attestation). **Assertions** go through the kernel
+  verifier with the credential's stored signature counter.
+- **A change** is asked for by an unquarantined passkey member over the exact
+  new `ros.` text, which names a single-use directory challenge. One member
+  added or removed; an added passkey brings its registration over the same
+  challenge. It waits **72 hours on the directory's clock**; one change at a
+  time. A member removing itself is immediate only while another
+  unquarantined passkey stays.
+- **Setup** needs a 256-bit single-use setup token, with no attempt counter.
+  The token arrives in a **mailed link** (`src/links.js`, below) that opens on
+  the sign-in host; it completes only there, in the browser that opens it,
+  when that browser makes a passkey.
+- **The setup budget** (one link a minute, 3 a day, 10 in 31 days per
+  address) can be filled by anyone, so it may hold a link back **only while a
+  link it already mailed is still live**. With the budget full and no live
+  link, one link goes anyway, and that link lives **24 hours** (a link inside
+  the budget lives 20 minutes). Its life is what limits mail beyond the
+  budget: a stranger asking as often as they like costs the address at most
+  the day's 3 plus one, about 4 setup mails a day, and the address always has
+  a live link. A link whose mail is still going out (younger than the
+  mailer's 30-second timeout plus 5 seconds) holds the next back as a mailed
+  one would, so a burst of starts during a slow send mails one link, not one
+  each. A link the mailer refused is withdrawn and holds nothing back.
+  Per IP: 10 setup starts an hour. `setup/start` answers the same bytes
+  (`202 {"ok":true}`) whatever happened.
+- **No other mail ever reads a stranger-fillable budget.** `src/mail.js`
+  `MAIL_KINDS` classes every kind of mail: setup links alone may be
+  budgeted; roster, reset, void and freeze mail never are. Sending an
+  undeclared kind throws, and the rig checks that the budget is read in one
+  function per object, called from one place.
+- **Log**: every enrolment and change, with the FULL public key it is about
+  (and the full key that asked), the request `Origin`, the ceremony origin,
+  the opener the sign-in host reports, and the time. The incident lever acts
+  on the exact key, so the log never stands in a fingerprint for it.
+- **Mail**: every roster mail names the change in words, to the second, with
+  the host class, and lists the whole roster. No budget a stranger can fill
+  holds one back.
+- **The waiting notice gates the wait.** That mail is how the person stops a
+  change, so a change waits to take effect only once the mailer has accepted
+  its notice. With the mailer down the request fails (503 `{error: "mail"}`)
+  and nothing is queued. A change whose object stopped between holding the
+  slot and hearing from the mailer never takes effect, and frees the slot
+  after 10 minutes. A send counts as failed after 30 seconds, and what
+  follows it (marking the change sent, or clearing it after a failure)
+  touches the stored change only if it is still that request's: a change
+  that was dropped or replaced meanwhile is never brought back (409
+  `{error: "superseded"}`).
+- **Spent challenges** are one storage key each (`spent:<issued>:<nonce>`),
+  kept 10 minutes and swept a few at a time by later spends, and by the
+  object's alarm once nobody spends. Anyone can spend a challenge without an
+  account, so one growing value would let a stranger fill it to the storage
+  limit and break every request on the address.
+
+| route | proof | answer |
+|---|---|---|
+| `POST /v1/roster/setup/start` `{email}` | none | **always 202**; mails a setup link if the address has no roster and the setup budget allows (see above) |
+| `POST /v1/roster/challenge` `{email}` | none | a sealed single-use challenge for that address (5 minutes) |
+| `GET /v1/roster?e=` | none | the head `ros.` text and any waiting change, or 404 |
+| `POST /v1/roster/setup` `{email, token, dirNonce, reg}` | the setup token + a registration over `dirNonce` | 200 with `ros.0` |
+| `POST /v1/roster/request` `{email, ros, credId, assertion, reg?, rq?}` | a member's assertion over `ros` (+ the new passkey's registration for an add) | 202 queued, or 200 for an immediate self-removal |
+
+**Not built yet**: the ripening countersign `rip.` (so no route serves a
+roster a peer can verify), the void page, the reset and its link, consent-key
+and recovery-key members, account deletion, and the incident lever across
+addresses.
+
+### Mailed links: the contract with the sign-in host
+
+`src/links.js` is the only place a link is built, and the sign-in host
+(`server/signin/`) must read exactly this format:
+
+    <SIGNIN_ORIGIN>/setup#v=1&e=<address, percent-encoded>&t=<token>
+
+- `SIGNIN_ORIGIN` is the sign-in host (`src/passkey.js`). Never
+  `id.bento.page`, which serves no page that reads a link.
+- Everything is in the fragment, which no browser sends to a server: a mail
+  scanner that fetches the link gets the bare page, cannot make a passkey,
+  and never sees the token. No route anywhere completes on a GET.
+- `v` is `1`; `e` is the normalised address; `t` is 32 bytes, base64url
+  without padding (43 characters). Any other key, a missing or repeated one,
+  a query string or another path: refuse (`parseSetupLink` is the reference).
+- The page clears the fragment from the address bar first, then, once the
+  person makes a passkey over a fresh `POST /v1/roster/challenge` for `e`,
+  sends `POST /v1/roster/setup {email: e, token: t, dirNonce, reg}`.
+
+### The sign-in host's routes (`/v1/web/*`)
+
+The browser-key enrolment, matching `server/signin/public/directory-client.js`.
+These answer CORS to the sign-in host only (never `*`), with `Vary: Origin`;
+every other header is as above.
+
+| route | answer |
+|---|---|
+| `POST /v1/web/challenge` (any body) | 200 `{nonce}`: a sealed single-use challenge for the web audience, which no roster route accepts |
+| `POST /v1/web/enrol` `{text, rq, assertion}` (60 an hour per IP) | 400 for a malformed request (`text` must be a `wdev.` text, `rq` must be `https://home.bento.page`, `assertion` must carry base64url `id`, `authenticatorData`, `clientDataJSON`, `signature` and an optional `userHandle`); otherwise **501** until the kernel defines the `wdev.` statement. Nothing is stored or countersigned yet. |
+
+**What id.bento.page answers**: JSON with `nosniff`, a Permissions-Policy that
+turns off WebAuthn create and get, a CSP with `default-src 'none'` and
+`frame-ancestors 'none'`, and `X-Frame-Options: DENY`, on every response. It
+serves no `/.well-known/webauthn`. The Permissions-Policy does not cover the
+WebAuthn Signal API, so no page here may run script, except the void page
+when it comes, under its own CSP.
+
+Rigs: see Testing above.
