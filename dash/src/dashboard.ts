@@ -690,6 +690,19 @@ const esc = (s: unknown): string =>
   String(s).replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
 
+/** A tile's grid coordinate or span: a whole number ≥ `min`, else `min`. */
+const cell = (v: unknown, min: number): number =>
+  typeof v === 'number' && Number.isFinite(v) ? Math.max(min, Math.min(1000, Math.floor(v))) : min
+
+/**
+ * A tile's place on the dashboard grid, for its `style="…"`. The layout numbers
+ * come from the file, so each is a whole number or the default — never what the
+ * file wrote (`tile.x + 1` on a string is a string, concatenated into markup).
+ */
+const tileStyle = (tile: { x?: unknown; y?: unknown; w?: unknown; h?: unknown }): string =>
+  `grid-column:${cell(tile.x, 0) + 1}/span ${cell(tile.w, 1)};` +
+  `grid-row:${cell(tile.y, 0) + 1}/span ${cell(tile.h, 1)}`
+
 const CW = 400
 const CH = 210
 const PAD = { l: 46, r: 10, t: 14, b: 26 }
@@ -1067,8 +1080,7 @@ export class Dashboard {
     const rows = sheet ? rowsForTile(sheet, sheetGet(sheet, computed), filters) : null
     const td = deriveTile(doc, tile, rows, computed)
 
-    const style = `grid-column:${tile.x + 1}/span ${Math.max(1, tile.w)};` +
-      `grid-row:${tile.y + 1}/span ${Math.max(1, tile.h)}`
+    const style = tileStyle(tile)
     const head = tile.title
       ? `<div class="dbx-head"><span class="dbx-title">${esc(tile.title)}</span>` +
         (filters.length ? `<span class="dbx-filtered" title="${esc(t('This tile is filtered by another tile'))}">▼</span>` : '') +
@@ -1162,4 +1174,4 @@ const EMPTY_TEXT: Record<EmptyReason, () => string> = {
   'unknown-kind': () => t('This tile needs a newer version of dash.'),
 }
 
-export const _internals = { esc, short, clip, chartSvg, cartesianSvg, pieSvg, CW, CH }
+export const _internals = { esc, short, clip, chartSvg, cartesianSvg, pieSvg, tileStyle, CW, CH }

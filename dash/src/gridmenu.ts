@@ -53,7 +53,9 @@ const COLUMN_TYPES: ColumnType[] = ['text', 'number', 'money', 'percent', 'date'
 
 /** Local, because gridmenu.ts must not import main.ts — see the note above. */
 function esc(s: string): string {
+  // quotes too, so it is safe in an attribute as well as in text
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 }
 
 /**

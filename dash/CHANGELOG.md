@@ -397,6 +397,12 @@ The version that came out of watching somebody use 0.2.0.
   and re-import. A date is still saved as the readable text it always was, so
   older versions of dash open these files and show the same dates. `3/4/2026`
   is still kept as text rather than guessed.
+- **A workbook's own values reach the page only as values.** A column width
+  that is not a number opens at the default width, a column id that could not
+  sit in the page is renamed with its data, cells and totals moving with it,
+  and row numbers that are not whole numbers are renumbered — the file still
+  opens and no column is lost. A dashboard tile's position and a story step's
+  caption are drawn the same way.
 
 ## [0.2.0] — 2026-08-03 (tagged, not published)
 
