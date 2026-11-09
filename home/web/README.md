@@ -22,10 +22,23 @@ Stage 1 is **open and present, nothing kept**:
 - Download gives back exactly the bytes that verified. Nothing else is written.
 
 There is no storage (the frame is an opaque origin and the page keeps nothing),
-no file handle, no service worker, no identity and no relay. The only network is
-the signed release channel: the histories bundled into the build are used
-first, and the channel is asked only when a file does not verify against them,
-or when the person asks for the read-only view.
+no file handle, no service worker, no identity and no relay.
+
+What "only verified code" and "no network" cover, exactly:
+
+- **The library** talks only to the signed release channel: the histories
+  bundled into the build are used first, and the channel is asked only when a
+  file does not verify against them, or when the person asks for the read-only
+  view.
+- **The document** in the frame runs only its verified release's code, but its
+  own content may still load `https:` images, media and embeds, exactly as it
+  does opened from disk. Its scripts can reach only the release channel.
+- **There is no security floor yet.** A file whose release has a known script
+  bug runs that release, bug included, inside the opaque frame, where it has no
+  storage, keys or handles to reach. A signed mark for such releases is a
+  stage-2 gate.
+- **A live document is shown as it was last saved.** Its session does not
+  connect here, and the page says so.
 
 Editing with saves, recents, offline and identity are later stages.
 
@@ -36,8 +49,10 @@ Editing with saves, recents, offline and identity are later stages.
 | the library, `home.bento.page` | `index.html` only | hash-pinned scripts and style, Trusted Types, `connect-src` the release channel, `frame-src` the frame site, `frame-ancestors 'none'` |
 | the frame site (the maintainer's to choose) | `frame.html` only | a header CSP whose `sandbox` directive makes it opaque whoever loads it, `frame-ancestors` the library, `worker-src 'none'`, one hash-pinned script plus `blob:` |
 
-The frame's trusted script refuses to boot unless it is opaque, framed, and
-handed the file by the library's origin. It turns exactly the executable
+The frame's trusted script refuses to boot unless it is opaque, framed, under a
+script policy (the header's: if `Function('')` runs, the header was lost, and
+the library's sandbox attribute alone would leave a document's markup
+handlers free), and handed the file by the library's origin. It turns exactly the executable
 elements gate 1 reported into `blob:` scripts and writes the document in; any
 other inline script stays inline and the CSP refuses it. The frame has no
 `allow-downloads`: every download goes through the library. The session is a
@@ -46,7 +61,8 @@ pings it over that port, and a frame that navigated away (nothing answers) is
 closed.
 
 The frame site must serve the headers in `dist/frame/_headers` and nothing
-else: no other path, never a service worker. The library must serve
+else: no other path, never a service worker. The rule covers `/frame` as well
+as `/frame.html`, because some hosts serve a page without its extension. The library must serve
 `dist/library/_headers`. Both files are Cloudflare's format, one rule per exact
 path, so no header is ever appended to another (two CSP headers are two
 policies, both enforced).
@@ -74,7 +90,7 @@ the frame page at most 4 KB (`scripts/test-home-web.mjs`).
 | rig | what |
 |---|---|
 | `scripts/test-home-web.mjs` | the library and frame in a real browser (`BENTO_BROWSER=chromium\|webkit\|firefox`): verification, network allow-list, frame-page standalone refusals, downloads, navigation |
-| `scripts/test-home-web-mutants.mjs` | eleven mutants, each red on the row that guards it |
+| `scripts/test-home-web-mutants.mjs` | fourteen mutants, each red on the row that guards it |
 | `scripts/test-shell-standalone.mjs` | every app shell points to bento.page and never depends on it |
 
 Chromium runs in the required `validate` check; WebKit, Firefox and the mutants
@@ -88,5 +104,5 @@ in `ci-home.yml` (`home-web-engines`).
 - A security floor in the release history (a signed mark on releases with known
   script bugs): stage 1 runs any release in the history, with no storage, keys
   or handles to reach.
-- The relay: a live document opens as a plain document; its live session does
-  not connect here.
+- The relay: a live document opens as it was last saved, and the page says it
+  is not live here.

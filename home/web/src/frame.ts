@@ -69,6 +69,11 @@ declare const __LIBRARY_ORIGIN__: string
   // Opaque or nothing: a lost header must not leave document code running on
   // the frame site's real origin, which every library user shares.
   if (win.origin !== 'null') { refuse('(not sandboxed)'); return }
+  // Opaque is not enough: the library's sandbox ATTRIBUTE makes this frame
+  // opaque even when the header was lost (a host redirect or a rewritten
+  // path), and then no script policy stands between a document's markup and
+  // script. The header's policy refuses Function(); if it runs, there is none.
+  try { Function('')(); refuse('(no script policy)'); return } catch { /* a policy is in force */ }
   if (PARENT === win) { refuse('(not framed)'); return }
 
   let done = false
