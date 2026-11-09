@@ -13,6 +13,11 @@ import type { Catalog } from '../../i18n'
 export const label = '한국어'
 
 export const strings: Catalog = {
+  "View": "보기",
+  "Current slide": "현재 슬라이드",
+  "Slide thumbnails": "슬라이드 미리보기 이미지",
+  "Resize slide previews": "슬라이드 미리보기 크기 조절",
+  "Resize next slide and notes": "다음 슬라이드와 노트 크기 조절",
   "Insert — text, shapes, images, media, tables, charts": "삽입 — 텍스트, 도형, 이미지, 미디어, 표, 차트",
   "More actions": "추가 작업",
   "Slides — show or hide the slide list": "슬라이드 — 슬라이드 목록 표시 또는 숨기기",

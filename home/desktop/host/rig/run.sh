@@ -52,7 +52,7 @@ ROGUE_PID=$!
 # plain http, the same fixture: the d4 row's frame, which must never load in a genuine document
 $PY rig/embedsrv.py "$OUT/embedsrv" - - "$HPORT" >/dev/null 2>"$OUT/plain-server.log" &
 PLAIN_PID=$!
-trap 'kill $EMBED_PID $ROGUE_PID $PLAIN_PID 2>/dev/null' EXIT
+trap 'kill $EMBED_PID $ROGUE_PID $PLAIN_PID ${FAKE_LOGIND_PID:-} ${FAKE_BUS_PID:-} 2>/dev/null' EXIT
 export BENTO_RIG_EMBED_URL="https://127.0.0.1:$PORT/embed.html"
 export BENTO_RIG_ROGUE_URL="https://127.0.0.1:$RPORT/embed.html"
 export BENTO_RIG_EMBED_CERT="$OUT/embed.crt"
@@ -79,16 +79,24 @@ BIN=target/debug/bento-home-desktop
 [ "$WIN" = 1 ] && BIN=$BIN.exe
 # The Windows capability pattern under Tauri's own matcher.
 BENTO_HISTORIES_DIR="$OUT/hist" cargo test -q --features rig --test capabilities >"$OUT/capabilities-test.txt" 2>&1; echo "$?" >"$OUT/capabilities-test.exit"
+# Nothing signs unless something is listening for a lock: a fake logind for every scenario.
+# rig/lock-rig.sh is where it is driven; here it just stands still, unlocked.
+if [ "$WIN" != 1 ]; then
+  . rig/fakebus.sh
+  mkdir -p "$OUT/bus"; fakebus_start "$OUT/bus"
+fi
 # POSITIVE CONTROL for the release gate: the binary just built has the test-only TLS trust
 # in it, so the same check release-check.sh runs on a shipped build MUST fail here.
 if ./gate-binary.sh "$BIN" >"$OUT/gate-control.txt" 2>&1; then echo "gate-control PASSED a rig build" >>"$OUT/gate-control.txt"; echo 1 >"$OUT/gate-control.exit"; else echo 0 >"$OUT/gate-control.exit"; fi
 # And per needle: a file holding only that needle is refused, and a file holding none passes.
 # A needle that stopped matching (a regex, a typo) would otherwise hide behind the others.
 : > "$OUT/gate-needles.txt"
-printf 'nothing to see\n' > "$OUT/gate-clean.bin"
+# On Linux the gate also demands the logind watcher, so every control file carries its name.
+LOGIND=org.freedesktop.login1
+printf 'nothing to see %s\n' "$LOGIND" > "$OUT/gate-clean.bin"
 if ./gate-binary.sh "$OUT/gate-clean.bin" >/dev/null 2>&1; then echo "clean passes" >> "$OUT/gate-needles.txt"; else echo "clean REFUSED" >> "$OUT/gate-needles.txt"; fi
 ./gate-binary.sh --needles | tr -d '\r' | while IFS= read -r n; do
-  printf 'xx%sxx\n' "$n" > "$OUT/gate-one.bin"
+  printf 'xx%sxx %s\n' "$n" "$LOGIND" > "$OUT/gate-one.bin"
   if ./gate-binary.sh "$OUT/gate-one.bin" >/dev/null 2>&1; then echo "MISSED ${n:0:24}" >> "$OUT/gate-needles.txt"; else echo "caught ${n:0:24}" >> "$OUT/gate-needles.txt"; fi
 done
 # What the rig build really compiled in (Windows: the rig capabilities too), and capcheck's positive control.
@@ -192,6 +200,29 @@ BENTO_RIG_MODE=realsave BENTO_RIG_LINGER_MS=200 scenario realsave 60 "$OUT/RS.be
 # that signs, one unknown document that must not even have the agent.
 cp "$OUT/fix/A.bento.html" "$OUT/SA.bento.html"; cp "$OUT/fix/U.bento.html" "$OUT/SU.bento.html"
 BENTO_RIG_SIGN=1 scenario sign 120 "$OUT/SA.bento.html" "$OUT/SU.bento.html"
+# Linux only: Windows builds no key store yet (its stub refuses every call).
+if [ "$WIN" != 1 ]; then
+  # B1 slice 2 (security §2e B, §26.3): whoami with consent per document, resolve of keys
+  # already in the room, and the host's re-auth prompt. Three documents on the in-memory key:
+  # A (the person says no), B (yes) and an unknown file that must reach none of it.
+  cp "$OUT/fix/A.bento.html" "$OUT/IA.bento.html"; cp "$OUT/fix/B.bento.html" "$OUT/IB.bento.html"; cp "$OUT/fix/U.bento.html" "$OUT/IU.bento.html"
+  # C (security, #918 C1): a COPY of B, same bytes and so the same docId, same file name, in another
+  # folder. Consent is per file the host opened, so the copy must be asked.
+  mkdir -p "$OUT/copy"; cp "$OUT/fix/B.bento.html" "$OUT/copy/IB.bento.html"
+  BENTO_RIG_MODE=ident scenario ident 180 "$OUT/IA.bento.html" "$OUT/IB.bento.html" "$OUT/IU.bento.html" "$OUT/copy/IB.bento.html"
+  # The REAL key stores, end to end through the bridge. A missing tool is a FAILURE, never a skip.
+  command -v gnome-keyring-daemon >/dev/null || { echo "FAIL: gnome-keyring-daemon is not installed; the keystore rig cannot run" >&2; exit 1; }
+  command -v swtpm >/dev/null && command -v swtpm_setup >/dev/null || { echo "FAIL: swtpm is not installed; the keystore-tpm rig cannot run" >&2; exit 1; }
+  echo -n "rig-login-password" | gnome-keyring-daemon --unlock --components=secrets >/dev/null
+  cp "$OUT/fix/A.bento.html" "$OUT/KS.bento.html"; cp "$OUT/fix/A.bento.html" "$OUT/KT.bento.html"
+  # no TPM here (the device is named and absent): the Secret Service, with its exposure stated
+  BENTO_RIG_MODE=keystore BENTO_RIG_REALSTORE=1 BENTO_RIG_TPM_DEVICE=/nonexistent/tpmrm0 scenario keystore 120 "$OUT/KS.bento.html"
+  # a TPM present (a software TPM): the key is made inside it and the keyring is never touched
+  TD=$(mktemp -d); swtpm_setup --tpm2 --tpmstate "$TD" --create-ek-cert --create-platform-cert --overwrite >/dev/null 2>&1 || true
+  swtpm socket --tpm2 --tpmstate dir="$TD" --server type=tcp,port=2321 --ctrl type=tcp,port=2322 --flags not-need-init,startup-clear --daemon --pid file="$TD/pid"
+  BENTO_RIG_MODE=keystore-tpm BENTO_RIG_REALSTORE=1 BENTO_RIG_TPM_TCTI="swtpm:host=127.0.0.1,port=2321" scenario keystoretpm 120 "$OUT/KT.bento.html"
+  kill "$(cat "$TD/pid" 2>/dev/null)" 2>/dev/null
+fi
 # §19h wedge isolation: two documents each counting a heartbeat through the
 # host; rig/wedge.py stops their web processes one at a time (exactly one
 # document may freeze) and then all at once (the negative control: both freeze)

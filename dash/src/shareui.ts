@@ -33,6 +33,7 @@ import { sharingOn, onlineTransport, joinFromDoc, startSharing, stopSharing, rot
 import { offlineEnabled } from '../../kernel/src/net.ts'
 import { canWrite, fingerprint, isOwner, isReaderCopy, type ShareKind } from './share.ts'
 import { lsGet, lsSet } from '../../kernel/src/storage.ts'
+import { safeColor } from './color.ts'
 
 export interface ShareUiHost {
   store: Store
@@ -214,7 +215,8 @@ export class ShareUi {
         item.type = 'button'
         item.className = 'dx-pitem'
         const d = el('span', 'dx-pdot', initial(p.name))
-        d.style.background = p.color
+        // a peer's presence colour arrives over the wire: a colour or nothing
+        d.style.background = safeColor(p.color) ?? ''
         item.append(d, el('span', 'dx-pname', p.name))
         const sheet = doc.sheets.find((s) => s.id === p.sheet)
         const where = [this.roleLabel(p.role), sheet ? sheet.name : ''].filter(Boolean).join(' · ')

@@ -179,7 +179,13 @@ const privateFields = collabFields.filter((f, i) => /Priv$/.test(f) || f === 'in
 ok(collabFields.includes('key') && privateFields.length >= 4 && privateFields.includes('audience'),
   `model.ts declares ${collabFields.length} collab fields, ${privateFields.length} of them private (${privateFields.join(', ')})`)
 
-const stripper = body('stripCollabSecrets')
+// The stripper lives in slides/src/envelope.ts (shared by the editor's exports
+// and window.bento's agent reads); the editor imports it.
+const ENVELOPE = 'slides/src/envelope.ts'
+const stripper = bodies(read(ENVELOPE)).get('stripCollabSecrets') ?? ''
+ok(stripper.length > 0, `${ENVELOPE} defines stripCollabSecrets()`)
+ok(/import \{[^}]*\bstripCollabSecrets\b[^}]*\} from '\.\.\/envelope'/.test(editorSrc),
+  'editor.ts strips through the shared stripCollabSecrets (envelope.ts), not a copy of its own')
 for (const f of privateFields) {
   ok(new RegExp(`delete doc\\.collab\\.${f}\\b`).test(stripper),
     `stripCollabSecrets drops ${f} from a copy that keeps the room`)

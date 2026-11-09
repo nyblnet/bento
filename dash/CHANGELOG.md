@@ -397,6 +397,11 @@ The version that came out of watching somebody use 0.2.0.
   and re-import. A date is still saved as the readable text it always was, so
   older versions of dash open these files and show the same dates. `3/4/2026`
   is still kept as text rather than guessed.
+- **Colours from a workbook draw only as colours.** A conditional format's
+  colours (colour scales, data bars, a rule's fill and text colour) and a
+  chart's series colours are checked before they are drawn: a value that is
+  not a colour is left out (a data bar keeps its default colour, a dashboard
+  series draws grey) instead of being written into the page as it was.
 
 ## [0.2.0] — 2026-08-03 (tagged, not published)
 

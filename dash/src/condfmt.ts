@@ -54,6 +54,7 @@
 // was sized for. Every reduction here is a loop.
 
 import { evaluate, isErr, type Cell, type EvalCtx, type Vec } from './formula.ts'
+import { safeColor } from './color.ts'
 
 // --- styles ------------------------------------------------------------------
 
@@ -253,8 +254,10 @@ const toSrgb = (x: number): number => {
 export function mixColors(a: string, b: string, t: number): string {
   const ca = parseColor(a)
   const cb = parseColor(b)
-  // Unparseable: snap, do not invent. See parseColor.
-  if (!ca || !cb) return t < 0.5 ? a : b
+  // Unparseable: snap, do not invent. See parseColor. A stop we cannot parse
+  // is passed through only if it is still a colour (a name, `var(--x)`); one
+  // that is not a colour at all comes back as no colour, never as itself.
+  if (!ca || !cb) return safeColor(t < 0.5 ? a : b) ?? ''
   if (t <= 0) return formatColor(ca)
   if (t >= 1) return formatColor(cb)
   const ch = (x: number, y: number): number => toSrgb(toLinear(x) + (toLinear(y) - toLinear(x)) * t)
@@ -360,6 +363,46 @@ export function dataBarWidths(values: unknown[], opts: BarOpts = {}): BarWidth[]
     const x = clamp(n, lo, hi)
     return { pct: clamp((Math.abs(x) / span) * 100, 0, 100), negative: x < 0, axis }
   })
+}
+
+// --- painting ----------------------------------------------------------------
+
+const pctOf = (n: unknown): number =>
+  typeof n === 'number' && Number.isFinite(n) ? clamp(n, 0, 100) : 0
+
+/**
+ * The inline CSS a conditional format puts on a grid cell, `;`-prefixed to fit
+ * the grid's `st +=` paint loop (cellfmt.ts `appearanceCss` is the same shape).
+ *
+ * The colours here came out of a RULE, and a rule is document data: a stop,
+ * a style's `bg`, a `color` the file said. They go into a `style="…"` attribute
+ * built as a string, so each one passes color.ts `safeColor` or is not drawn.
+ */
+export function condCellCss(cf: CellStyle | null | undefined): string {
+  if (!cf) return ''
+  let st = ''
+  const bg = safeColor(cf.bg)
+  if (bg) st += `;background:${bg}`
+  const fg = safeColor(cf.color)
+  if (fg) st += `;color:${fg}`
+  if (cf.bold) st += ';font-weight:600'
+  return st
+}
+
+/**
+ * A data bar's markup, or '' for a cell without one. Negatives run LEFT of the
+ * shared axis. The bar's colour is the rule's — document data — so it passes
+ * `safeColor`; a bar whose colour is not a colour draws in the stylesheet's
+ * default rather than in whatever the file wrote.
+ */
+export function dataBarHtml(cf: CellStyle | null | undefined): string {
+  const bar = cf?.bar
+  if (!bar || typeof bar !== 'object') return ''
+  const pct = pctOf(bar.pct)
+  const axis = pctOf((bar as { axis?: number }).axis)
+  const left = bar.negative ? Math.max(0, axis) - pct : axis
+  const col = safeColor(bar.color)
+  return `<span class="dg-bar" style="left:${left}%;width:${pct}%${col ? `;background:${col}` : ''}"></span>`
 }
 
 // --- predicates --------------------------------------------------------------

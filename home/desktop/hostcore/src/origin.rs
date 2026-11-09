@@ -66,6 +66,24 @@ pub fn origin_host(salt: &[u8], canonical: &Path, doc_id: Option<&str>, epoch: u
     format!("{}.localhost", hex(&h.finalize()[..12]))
 }
 
+/// The key the identity agent remembers a document's consent (and answers its
+/// `resolve`) under. "Per document" means PER FILE THE HOST OPENED: the same
+/// inputs as the origin (install salt, canonical path, docId), so a copy of a
+/// consented document carrying its docId, at another path, is a different
+/// document and is asked again (security, #918 C1). The docId alone is chosen
+/// by whoever wrote the file, so it can never be the key. No epoch: a save by
+/// another program does not withdraw a yes the person gave to this file.
+pub fn consent_key(salt: &[u8], canonical: &Path, doc_id: &str) -> String {
+    let mut h = Sha256::new();
+    h.update(b"bento-home-consent-v1\0");
+    h.update(salt);
+    h.update(b"\0");
+    h.update(canonical.to_string_lossy().as_bytes());
+    h.update(b"\0");
+    h.update(doc_id.as_bytes());
+    hex(&h.finalize())
+}
+
 /// The file's instance identity: what changes when the file is REPLACED.
 /// Unix: device and inode. Windows: the volume serial number and the 128-bit
 /// file ID (NTFS/ReFS; the 64-bit index of GetFileInformationByHandle where the
@@ -190,6 +208,17 @@ pub fn install_salt(data_dir: &Path) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn consent_is_keyed_per_file_not_per_doc_id() {
+        let (a, b) = (Path::new("/home/p/team-deck.bento.html"), Path::new("/home/p/Downloads/evil.bento.html"));
+        let k = consent_key(b"salt", a, "X");
+        assert_eq!(k, consent_key(b"salt", a, "X"), "control: the same file is the same key");
+        assert_ne!(k, consent_key(b"salt", b, "X"), "a copy carrying the same docId at another path");
+        assert_ne!(k, consent_key(b"salt", a, "Y"), "another docId at the same path");
+        assert_ne!(k, consent_key(b"other", a, "X"), "another install");
+        assert_ne!(k, "X");
+    }
 
     fn deck(json: &str) -> Vec<u8> {
         format!("<!doctype html><title>t</title><script type=\"application/bento+json\" id=\"bento-doc\">{json}</script>").into_bytes()

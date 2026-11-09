@@ -22,6 +22,11 @@ import type { Catalog } from '../../i18n'
 export const label = 'Bahasa Melayu'
 
 export const strings: Catalog = {
+  "View": "Paparan",
+  "Current slide": "Slaid semasa",
+  "Slide thumbnails": "Lakaran kenit slaid",
+  "Resize slide previews": "Ubah saiz pratonton slaid",
+  "Resize next slide and notes": "Ubah saiz slaid seterusnya dan nota",
   "Insert — text, shapes, images, media, tables, charts": "Sisip — teks, bentuk, imej, media, jadual, carta",
   "More actions": "Tindakan lain",
   "Slides — show or hide the slide list": "Slaid — tunjuk atau sembunyikan senarai slaid",

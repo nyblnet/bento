@@ -55,10 +55,16 @@ jobs:
         # saving, a live embed navigating touches nothing, and security's race
         # (an unknown document swapping a genuine shell under its own reload)
         # never arms genuine. A timeout or a missing report fails.
+        # B1 slice 2 rows run in the same pass: whoami with consent per document,
+        # resolve of keys already held, re-auth refused with a notice (Linux v1 has no
+        # verifier; not shown again inside the cooldown), a clock moved backwards
+        # ending the signing session, and the REAL key stores through the
+        # bridge: the Secret Service (TPM device absent, exposure stated once) and a
+        # software TPM (key made inside it, the keyring never touched).
         working-directory: home/desktop/host
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev libxdo-dev xvfb xauth dbus-x11 >/dev/null
+          sudo apt-get install -y -qq libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev libxdo-dev xvfb xauth dbus-x11 libtss2-dev libsecret-1-dev gnome-keyring swtpm swtpm-tools python3-gi gir1.2-glib-2.0 >/dev/null
           dbus-run-session -- xvfb-run -a ./rig/run.sh "$RUNNER_TEMP/h2-rig"
       - name: Desktop host release check (the bundled history is the current published one)
         # Fetches each published app's signed history, manifest and shell from
@@ -208,3 +214,23 @@ jobs:
             ${{ runner.temp }}/h2-rig/*.json
             ${{ runner.temp }}/h2-rig/*.log
           if-no-files-found: warn
+
+  home-desktop-lock:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - name: Desktop host lock rig and its mutants (security's ruling on #893)
+        # A machine locked or asleep stops signing, and a host that cannot hear
+        # logind does not sign at all. The real host, a genuine document, a fake
+        # logind on a private system bus (reached exactly as a shipped host
+        # reaches the real one): Lock, LockedHint, PrepareForSleep, logind or the
+        # session or the bus going away, a session already locked at launch, no
+        # bus at all. Then every place the OS's word reaches the agent is removed
+        # in turn, and each must fail on its own row.
+        working-directory: home/desktop/host
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev libxdo-dev xvfb xauth dbus-x11 libtss2-dev libsecret-1-dev python3-gi gir1.2-glib-2.0 >/dev/null
+          dbus-run-session -- xvfb-run -a ./rig/lock-rig.sh "$RUNNER_TEMP/lock-rig"
+          dbus-run-session -- xvfb-run -a python3 rig/lock-mutants.py "$RUNNER_TEMP/lock-mutants"

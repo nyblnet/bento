@@ -20,6 +20,11 @@ import type { Catalog } from '../../i18n'
 export const label = 'Polski'
 
 export const strings: Catalog = {
+  "View": "Widok",
+  "Current slide": "Bieżący slajd",
+  "Slide thumbnails": "Miniatury slajdów",
+  "Resize slide previews": "Zmień rozmiar podglądów slajdów",
+  "Resize next slide and notes": "Zmień rozmiar następnego slajdu i notatek",
   "Insert — text, shapes, images, media, tables, charts": "Wstaw — tekst, kształty, obrazy, multimedia, tabele, wykresy",
   "More actions": "Więcej działań",
   "Slides — show or hide the slide list": "Slajdy — pokaż lub ukryj listę slajdów",

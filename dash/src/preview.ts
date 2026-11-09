@@ -55,6 +55,7 @@ import { hiddenSet } from './rowcol.ts'
 import { colToLetters } from './a1.ts'
 import { recalc, isErr, type Vec } from './formula.ts'
 import { FORMAT } from './model.ts'
+import { safeColor } from './color.ts'
 import type {
   CanvasSheet, Column, ColumnType, DashDoc, Sheet, TableSheet,
 } from './model.ts'
@@ -149,12 +150,7 @@ const esc = (s: string): string =>
  * "cleaned" — a colour we do not recognise is not worth guessing at.
  */
 export function cssColor(v: unknown, fallback: string): string {
-  if (typeof v !== 'string') return fallback
-  const s = v.trim()
-  if (!s || s.length > 32) return fallback
-  if (!/^[#a-zA-Z0-9(),.%\s/-]+$/.test(s)) return fallback
-  if (/url|expression|@|\\/i.test(s)) return fallback
-  return s
+  return safeColor(v) ?? fallback
 }
 
 // --- reading the sheet -------------------------------------------------------

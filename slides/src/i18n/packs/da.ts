@@ -21,6 +21,11 @@ import type { Catalog } from '../../i18n'
 export const label = 'Dansk'
 
 export const strings: Catalog = {
+  "View": "Visning",
+  "Current slide": "Aktuelt dias",
+  "Slide thumbnails": "Diasminiaturer",
+  "Resize slide previews": "Tilpas størrelsen på diasvisninger",
+  "Resize next slide and notes": "Tilpas størrelsen på næste dias og noter",
   "Insert — text, shapes, images, media, tables, charts": "Indsæt — tekst, former, billeder, medier, tabeller, diagrammer",
   "More actions": "Flere handlinger",
   "Slides — show or hide the slide list": "Slides — vis eller skjul slidelisten",

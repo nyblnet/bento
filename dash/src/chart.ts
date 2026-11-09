@@ -47,6 +47,7 @@ import { isErr } from './formula.ts'
 import { readCell } from './store.ts'
 import { readPattern } from './format.ts'
 import { t } from './i18n.ts'
+import { safeColor } from './color.ts'
 
 export interface ChartBinding {
   /** category axis — usually a text column */
@@ -294,7 +295,10 @@ export function optionFor(
   const showLegend = bind.legend ?? series.length > 1
   // Colours are matched to SERIES, by column id — never by position: removing
   // the first series must not repaint the second in the first one's colour.
-  const colors = bind.series.map((id, i) => bind.colors?.[id] ?? palette[i % palette.length])
+  // A binding's colours are document data and every surface draws them as
+  // markup (the dashboard's SVG, charts-lite's tooltip), so one that is not a
+  // colour falls back to the palette here, at the one place the option is built.
+  const colors = bind.series.map((id, i) => safeColor(bind.colors?.[id]) ?? palette[i % palette.length])
   const option: Record<string, unknown> = {
     ...base,
     color: colors,

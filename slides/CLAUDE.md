@@ -362,6 +362,12 @@ anim, charts, i18n, sync), shared by every app.
   refreshes highlight/counter/button-state cheaply on every slidechange; the
   expensive current/next re-render only in `updateSpeaker`. Reveal's notes plugin
   is NOT used (it reloads the URL in an iframe → boots a whole second editor).
+  **Layout (`src/speakerlayout.ts`)**: two dividers resize current versus side,
+  and next versus notes, with pointer capture and keyboard arrows/Home/End.
+  View toggles the two previews, notes and thumbnail rail; a single visible
+  content pane fills the content area. Choices live in module memory across
+  shows, never in the document or sync. Previews fit their panes using size containers and
+  preserve aspect ratio. Tear down the observer/listener on exit or pagehide.
   **Two-window lifecycle (`src/screens.ts`)**: the speaker window OUTLIVES a
   present session. The editor opens it (its own user gesture) via the FAB beside
   the present buttons, or `editor.openSpeakerView()`; present mode ADOPTS the
@@ -649,7 +655,10 @@ anim, charts, i18n, sync), shared by every app.
   1MB+ files). Save → "Copy document JSON" / "Replace from JSON…"
   (store.replaceDoc, undoable); `window.bento.loadDoc(json)` for scripts; the
   shell carries a Tooling-note comment pointing AIs at #bento-doc + the API.
-  Agent harnesses edit files in place; chat AIs round-trip the JSON.
+  Agent harnesses edit files in place; chat AIs round-trip the JSON. A plain
+  save writes the document on ONE line and, when it has pictures, `"assets":`
+  LAST on its OWN line (kernel `docText`), so an agent can stop before the
+  base64 — the Tooling note says so. No assets = exactly JSON.stringify(doc).
 
 ## Commands
 

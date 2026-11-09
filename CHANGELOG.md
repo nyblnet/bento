@@ -11,6 +11,11 @@ pre-1.0.
 
 ## [Unreleased]
 
+## [1.2.13] — 2026-11-09
+
+- **Security: update this file. This release closes issues reported to us and
+  found in our own review.** What they were is described here once people have
+  had time to update.
 - **Typing `- ` or `* ` starts a real list straight away.** It used to type a
   bullet character that only became a list once you clicked out of the box, so
   Enter could not continue it. Now Enter starts the next bullet at the same
@@ -28,6 +33,26 @@ pre-1.0.
   saves your deck over the file once, on purpose, and watching resumes. Before,
   auto-save silently replaced the other program's changes, or, once refused,
   stopped with nothing but "Save failed".
+- **More room for speaker notes.** Drag the dividers between the current
+  slide, next slide and notes, or focus a divider and use the arrow keys.
+  The speaker view's View menu can hide either preview, speaker notes or the
+  thumbnail strip. Show just the panes you need; notes or a single preview
+  can fill the content area. Choices last while the editor stays open. Thanks
+  to @msakowski.
+- **A deck's pictures are saved on their own line, after the rest of the
+  deck.** Inside the file, the deck used to be one long line with any picture
+  data somewhere in the middle of it, so a coding assistant reading the file
+  could not take in the slides without also wading through megabytes of
+  images. Now the slides come first, and the pictures follow last on a line of
+  their own; the note at the top of the file tells assistants to stop there.
+  Older versions of Bento open these files exactly as before. Thanks to
+  @steventhebrave.
+
+- **`window.bento.read()`: a read for agents and scripts.** It returns the deck
+  without its live-sharing keys, the same copy *Save ▾ → Copy document JSON*
+  gives; `read({ compact: true })` gives the compact form. `compact()` now leaves
+  the keys out too, and `validate()` names any sharing key a deck carries,
+  read-only copies included, with what each one grants.
 
 ## [1.2.12] — 2026-11-02
 

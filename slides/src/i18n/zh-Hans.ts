@@ -4,6 +4,11 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
+  "View": "视图",
+  "Current slide": "当前幻灯片",
+  "Slide thumbnails": "幻灯片缩略图",
+  "Resize slide previews": "调整幻灯片预览大小",
+  "Resize next slide and notes": "调整下一张幻灯片和备注大小",
   "This text box is already bold": "此文本框已是粗体",
   "Italic": "斜体",
   "Underline": "下划线",
@@ -601,6 +606,8 @@ export const zhHans: Catalog = {
   "Go live": "开始直播",
   "Invite to edit…": "邀请编辑…",
   "Key-verified identity": "密钥验证的身份",
+  "Claimed key": "声明的密钥",
+  "This key is only claimed, so it cannot be removed here. To cut off a device you cannot confirm, use “Reset access…”.": "此密钥仅为声明，无法在此移除。要切断无法确认的设备，请使用“重置访问权限…”。",
   "Keywords": "关键词",
   "Last slide": "最后一张幻灯片",
   "Mints brand-new keys. Every previously sent copy stops syncing for good; share fresh copies afterwards.": "铸造全新密钥。之前发送的所有副本将永久停止同步；此后请分享新副本。",

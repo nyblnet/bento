@@ -6,7 +6,7 @@
  * sync state) and its identity (`docId`). An embed's `doc` is another deck's
  * JSON, and that deck's envelope must never ride inside this one — not on the
  * way in (the shape gate, untrusted.ts) and not on the way out (every export
- * that keeps the room, editor.ts stripCollabSecrets). One rule, both
+ * that keeps the room, stripCollabSecrets below). One rule, both
  * boundaries, so they cannot drift; the export-secrets rig runs both.
  *
  * Node-importable on purpose (type-only imports): the rig drives it directly,
@@ -103,4 +103,55 @@ export function stripEmbeddedEnvelopes(doc: BentoDoc): number {
   walk(doc.slides)
   walk(doc.layouts)
   return n
+}
+
+/**
+ * Take the live session out of a copy that is about to leave this machine.
+ * Every copy that leaves without its session goes through THIS function: the
+ * editor's exports (Copy document JSON, packages, templates) and the agent
+ * reads on window.bento (read(), compact()) alike.
+ * ONE list, in one place: every field under `collab` is a bearer capability,
+ * so a hand-out that forgets one of them grants the recipient write access to
+ * the room, the power to revoke its members, or the ability to decrypt every
+ * frame and blob the relay has ever stored — and the file looks completely
+ * ordinary afterwards. Divergent per-export copies of this list are how one
+ * export path ends up leaking what the other three strip.
+ *
+ * The default is to drop the block outright (sealed packages, templates, the
+ * JSON on the clipboard: none of them may join anything). `keepRoom` is for
+ * the copies that are MEANT to follow the session — they keep the room, the
+ * symmetric read key and the public keys, and lose only the private halves.
+ */
+export function stripCollabSecrets(doc: BentoDoc, opts: { keepRoom?: boolean } = {}) {
+  // Embedded documents first, whether or not this copy keeps a session of
+  // its own: an embed's `doc` is another deck's JSON and carries that deck's
+  // envelope (collab + docId) if the file was authored with it in place. The
+  // shape gate strips it on the way IN for pasted content; this strips it on
+  // the way OUT for every copy — the same rule (envelope.ts).
+  stripEmbeddedEnvelopes(doc)
+  if (!doc.collab) return
+  if (!opts.keepRoom) {
+    delete doc.collab
+    return
+  }
+  delete doc.collab.writerPriv // the muzzle — no write capability travels
+  delete doc.collab.ownerPriv // v2: neither the owner key…
+  delete doc.collab.invite //    …nor any invite (delegation) material
+  // …nor the audience ticket store: presenter-only. It holds the show key
+  // (worthless to a reader, who sees everything anyway) AND the audience
+  // invite's private half, which would let a reader mint audience tickets the
+  // presenter never issued. Stripped like the other private halves.
+  delete doc.collab.audience
+}
+
+/**
+ * A detached copy of the document for an agent or a tool to read: the session
+ * left out by stripCollabSecrets (the same function, so the same rule), the
+ * content and identity kept. Agent reads never need the session — loadDoc
+ * and "Replace from JSON…" keep the open deck's own.
+ */
+export function agentCopy(doc: BentoDoc): BentoDoc {
+  const copy = JSON.parse(JSON.stringify(doc)) as BentoDoc
+  stripCollabSecrets(copy)
+  return copy
 }

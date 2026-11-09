@@ -45,6 +45,11 @@ import type { Catalog } from '../../i18n'
 export const label = 'Türkmen'
 
 export const strings: Catalog = {
+  "View": "Görnüş",
+  "Current slide": "Häzirki slaýd",
+  "Slide thumbnails": "Slaýdlaryň kiçi suratlary",
+  "Resize slide previews": "Slaýdlaryň deslapky görnüşleriniň ölçegini üýtget",
+  "Resize next slide and notes": "Indiki slaýdyň we bellikleriň ölçegini üýtget",
   "Insert — text, shapes, images, media, tables, charts": "Goş — tekst, şekiller, suratlar, media, tablisalar, diagrammalar",
   "More actions": "Başga amallar",
   "Slides — show or hide the slide list": "Slaýdlar — slaýd sanawyny görkez ýa-da gizle",

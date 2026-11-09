@@ -14,6 +14,19 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-11-06 — Speaker layout choices stay in the editor session
+
+The existing speaker panes resize through two keyboard-accessible dividers.
+View can hide the current preview, next preview and thumbnail rail to give
+notes the whole content area. Proportions and visibility live in memory in
+`slides/src/speakerlayout.ts`, surviving popup/show restarts within this editor
+but never entering document JSON, sync or saved files. Previews retain the
+deck's aspect ratio and fit their panes; long notes still scroll when needed.
+
+Notes can also be hidden from View. The remaining preview fills its available
+pane; hiding both side panes removes their column and divider. Visibility
+remains independently reversible, including when all content panes are hidden.
+
 ## 2026-10-18 — Native hosts keep a document's recovery copy and member key outside the page
 
 **Decision.** The native hosts provide the per-document store that
@@ -12774,3 +12787,272 @@ same held for forward Delete at a block's end, which the browser joined on scree
 Measured with the randomized screen-equals-model rig (keystrokes in a real browser, every step
 compared with a render of the model, plus what each step should have done), 64 seeds × 60 steps
 in both Playwright's headless shell and system Chrome.
+
+## 2026-11-03 — bento/id B1 on the Linux desktop host: a real key store, consent per document, re-auth refused without a verifier
+
+- **The key store is the machine's, never the webview's.** The Linux host holds
+  the device key in the TPM where this user can open one, in the desktop's
+  Secret Service otherwise, and in no other place. The choice is made once at
+  start, TPM first; a machine with a TPM never touches the keyring. Where there
+  is no TPM the host says so, once, the first time the identity is used: any
+  program running as the person can read that key while the keyring is unlocked.
+  Where there is a TPM the key cannot be copied off the machine, though a program
+  running as the person can still ask it to sign while they are signed in.
+- **`whoami` is consent per document.** With nothing to share (no account, or no
+  key on this device) it answers `no-identity` and never asks. Otherwise the
+  first time a document asks, the host asks the person, showing what the
+  document would see (name, address, who vouches). A yes is remembered for that
+  document across launches; a no is remembered until the host exits (there is no
+  screen yet to undo a permanent no, so none is stored). **"Per document" means
+  per file the host opened**, never per docId: consent (and `resolve`) are keyed
+  on the same inputs as the document's origin, the install salt, the canonical
+  path and the docId, hashed, so the book does not list documents either. The
+  docId alone is whatever the file's author wrote: a copy of an allowed document,
+  carrying its docId, at another path, is a different document and is asked
+  again (security's review of #918 reproduced the bare-docId key answering such
+  a copy with no prompt).
+- **`resolve` answers only for a document the person has allowed, and only for
+  keys this host already holds a binding for.** It never prompts (a prompt on
+  `resolve` would let a document spend the person's attention) and never reaches
+  the network; an unknown key and a refused document both read `null`. A key's
+  binding is pinned on first sight; a different binding for the same key reads
+  `changed` and the first stays pinned.
+- **Past the idle or overall limit the host refuses, and says why.** The
+  maintainer's ruling (2026-11-08): on Linux, where polkit cannot ask, re-auth is
+  refused with a clear message, and security keys are the only verifier for v1.
+  An AppImage, the first Linux package, cannot install a polkit action, so on
+  this host there is no polkit path at all, and the security-key verification
+  (a FIDO2 assertion with user verification, which needs a host-drawn PIN field)
+  is not wired yet. Until it is, every re-authentication on Linux is refused:
+  `sign` past the limit stays `reauth`, and the host shows an OK-only notice that
+  nothing was signed and why. A presence prompt ("confirm it's you" with a
+  button) is never offered in its place: it verified nobody, and a same-user
+  program could press it. The notice is reached only by an otherwise valid request
+  (a payload that matches its purpose, a device key present), one at a time, and
+  not shown again for a minute. The agent keeps the seam for a real verifier
+  (`Ui::reauth` answers `Verified`, `Declined` or `NoVerifier`); a verification
+  that spans a lock or a sleep opens nothing.
+- **The book is provisional under option G.** It is plain JSON in the host's
+  data directory (public data only; no key material). Option G (2026-11-08: an
+  account is a passkey roster) retires the signed `bind.` binding that the book's
+  `own` and `seen` entries were shaped around. They stay only as what `whoami`
+  and `resolve` answer from until the kernel's roster format lands; after it they
+  become a cache of verified device certificates and roster entries, never a
+  store of record. Nothing in a shipped build writes them, so a shipped host
+  answers `no-identity` and `null`. The per-document consent list is G-neutral
+  and stays. A same-user program could edit the file and make a name read
+  wrongly, though it can reach no key. No account key is stored anywhere (that
+  work is paused under G).
+- **Linux packaging: AppImage first, Flatpak later** (maintainer, 2026-11-08).
+  The host now links libsecret and libtss2, which the AppImage must carry or
+  require. A Flatpak needs `--system-talk-name=org.freedesktop.login1` for the
+  lock watcher (without it the host reads as blind, which is closed) and the
+  Secret Service portal or talk-name for the key store; neither can install a
+  polkit action, which is why the ruling above does not depend on polkit.
+
+## 2026-11-04 — bento/id on the Linux desktop host: the OS ends a signing session; what polkit can and cannot do for re-auth
+
+**Settled, in code (home/desktop/agent/src/lockgate.rs, home/desktop/host/src/logind.rs).** A
+machine locked or asleep stops signing, and a host that cannot hear the OS does not sign.
+
+- **`Session.Lock`, `LockedHint` and `PrepareForSleep(true)` each end the routine session.**
+  Nothing the OS says opens one: `Unlock` is not listened to and a wake-up does nothing. After
+  any of them the next `sign` is `reauth`.
+- **Blind means closed.** The agent opens no session until every subscription is in place and
+  `LockedHint` has been read. The bus closing, logind leaving the bus or the session going away
+  ends the session and closes it again. While closed, `sign` is `unavailable` and nobody is
+  asked: no answer could help. While locked it is `reauth`, and nobody is asked either.
+- **A verification that spans a lock opens nothing.** The agent hands out a ticket before the
+  host verifies the person. If a lock or a sleep lands meanwhile, the verification is void,
+  because it may not be from the person who is here now; the next sign asks afresh, with no
+  cooldown. Held by the agent's unit rows: the Linux host has no verifier yet (ruling below),
+  so no host prompt exists to span a lock.
+- **The OS's word does not go through the agent's mutex.** The host holds that mutex while a
+  dialog is up, so a lock would wait for the dialog. It is one atomic word that both sides share
+  and the watcher writes directly.
+- **The session is `session/auto`, resolved to its real path.** Measured on real logind (systemd
+  on Debian trixie), from a process in a user app scope, which is where a desktop launches apps:
+  `session/self` is an unknown object and `GetSessionByPID` is `NoSessionForPID`, while `auto`
+  resolves. Signals come from the real path only. The watcher's own code was run there: real
+  `Lock`, real `LockedHint` and a real logind restart all reach the gate. `PrepareForSleep` was
+  not measured on a real logind (no suspend in a container); the rig's fake carries it.
+- **`LockedHint` is read back from logind, never taken from the signal,** so a forged "unlocked"
+  changes nothing. Note that a same-user program can really clear the flag (`SetLockedHint` is
+  open to the session's owner, measured). That opens a prompt, never a session.
+- **Stated residuals.** A desktop whose locker tells logind nothing is not seen: logind's `Lock`
+  fires only for `loginctl lock-session`-style requests, and `LockedHint` only if the locker sets
+  it. The freedesktop screensaver interface is not wired yet. Sleep has no delay inhibitor, so
+  the signal may be handled just after resume instead of just before suspend. A flatpak needs
+  `--system-talk-name=org.freedesktop.login1`; without it the host reads as blind, which is closed.
+
+The sign-timeout gate is still unsigned on Linux: this is the first of the two things it needs.
+
+**Measured, not settled: polkit for re-auth.** polkit 126, real polkitd and PAM, with a `.policy`
+holding `auth_self` for one Bento action. The subject was the caller's own system bus name.
+
+| case | result |
+|---|---|
+| agent present, right password | `authorized=true challenge=false` |
+| wrong password | `authorized=false challenge=false`, PAM failure, about 2 s |
+| agent cancelled | `authorized=false challenge=false` |
+| **no agent at all** | `authorized=false challenge=true`, at once, details empty |
+| action not installed | D-Bus error `Action … is not registered` |
+| two checks in one process, `auth_self` | two password prompts, nothing retained |
+| control: the same, `auth_self_keep` | one prompt, the second check passes on a temporary authorization |
+| subject in a user app scope, agent on the session | reaches the session's agent |
+| a same-user fake agent answering without the password | both response methods refused: "Only uid 0 may invoke this method" |
+| subject is root | `authorized=true challenge=false`, nobody asked |
+| local rule returning YES | `authorized=true challenge=false`, nobody asked |
+
+So polkit gives real verification of the person where an agent runs, and the host never sees the
+password. Four limits:
+- **No agent is detectable and always fails:** `challenge=true` returned immediately, unlike a
+  wrong password or a cancel. It cannot be told from "interaction not allowed", but the host
+  always allows it.
+- **A yes earned and a yes granted look the same.** Root and a local rule answer exactly as a
+  correct password does. That is the machine's administrator speaking, and it is worth stating.
+- **A same-user program can register itself as the agent** for the host and draw a fake password
+  box. It cannot pass without the password, but it can phish it. Same exposure as the stated
+  same-user residual; polkit does not narrow it.
+- **The `.policy` must be installed in `/usr/share/polkit-1/actions`.** A .deb can. An AppImage
+  cannot without root, and a flatpak has no way to (from how those formats work, not measured), so
+  for both the action would read "not registered". A minimal system offered no other `auth_self`
+  action to borrow. Which package formats keep polkit is therefore part of the maintainer's call.
+
+**Ruled (maintainer, 2026-11-08): where polkit cannot ask, refuse with a clear message; security
+keys only for v1.** That is option 2, with option 4 narrowed to security keys. With AppImage the
+first package, polkit cannot ask anywhere this host ships, so the Linux host refuses every
+re-authentication until the security-key verifier lands (see the B1 entry above). The options as
+they were put:
+1. **Presence prompt, stated once at first use** (security's accepted shape: a downgrade of a
+   routine key only). Works everywhere. Anyone at an unlocked machine passes it.
+2. **Refuse.** No routine signing past the limit on those machines. The honest gate; it costs
+   signing on minimal desktops and on any package that cannot ship the `.policy`.
+3. **Lock the screen as the re-auth:** ask logind to lock, and open a session when the desktop's
+   own locker reports unlocked. Needs no `.policy` and no agent, only a locker. Disruptive, and
+   weaker than polkit: a same-user program can set `LockedHint` itself (measured).
+4. **Use a verifier the person already has:** the TPM PIN once it exists (host-drawn field), or a
+   security key with UV. Covers only machines that have one, so it needs 1 or 2 behind it.
+5. **The host's own password field checked through PAM.** Listed for completeness: it breaks
+   "the host never sees it", and security's ruling excludes it.
+
+**Measured, not settled: can the Linux host register a passkey?** Yes with a security key, no
+without one, and the passkey it registers cannot give consent from the native host.
+- **A security key registers.** `fido_linux::make_credential` against a virtual FIDO2 key, wrapped
+  as attestation `none`, passed the directory's own `parseRegistration` (origin
+  `bento-desktop:linux`, UP and UV set, ES256, RP `bento.page`), with wrong-challenge and
+  wrong-origin controls refused. `get_assertion` then found it. A key with a PIN set needs that
+  PIN (`PinRequired` without it).
+- **None of that is wired.** The host does not build the `fido` feature, nothing calls
+  `make_credential`, nothing builds the attestation object, and there is no host-drawn PIN field.
+  The field has the same requirements as the TPM PIN's. Packages need hidraw access and libfido2.
+- **There is no platform passkey on Linux.** Linux has no OS WebAuthn API today (credentialsd is a
+  proposal), libfido2 has no phone transport, and the webview has no WebAuthn: on WebKitGTK 2.50.6,
+  in a secure context, `PublicKeyCredential` and `navigator.credentials` are both undefined
+  (measured). A person with no security key cannot register a passkey through this host at all.
+- **A native registration is not a consent credential on its own.** `bento-desktop:linux` is
+  self-asserted, so the directory accepts it for registration and assertion and refuses it for
+  consent (`consentOrigins` holds `https://bento.page` only; measured). "Then consent by passkey"
+  on a TPM-less or PIN-less Linux machine therefore means the same security key used in a browser
+  on `https://bento.page`, not a ceremony in the host.
+## 2026-11-08 — bento/id option G: the roster chain and its ripening countersign (`ros.`, `rip.`)
+
+**Decision.** A bento/id account's authority is a chain of roster heads, and
+the kernel verifies that chain offline (`kernel/src/roster.ts`, contract
+`kernel/fixtures/roster-v1.json`). This is the second kernel piece of option G,
+after the WebAuthn assertion verifier. The device certificates that hang off a
+roster (`wdev.`, `watt.`, `wren.`, `dev2.`) are reserved prefixes for now and
+come in a later kernel change.
+
+- **`ros.<b64u(address)>.<seq>.<prevHash|empty>.<members>.<dirNonce>.<created>`**
+  names every key that may change the account: passkeys (`pk`), native consent
+  keys (`ck`), at most one recovery key (`rk`), each optionally marked
+  quarantined (`~q`). Members are written in one sorted spelling; a head in any
+  other order is refused. `dirNonce` is the directory challenge the request was
+  bound to, carried in the text so peers can see the binding.
+- **`rip.<sha256(ros text)>.<requestedAt>.<ripenedAt>.<reset 0|1>.<kid>`** is
+  the directory's countersign, issued only when a change ripens. A link without
+  one is not in force, so a change that was voided cannot be shown to an offline
+  peer as if it had taken effect.
+- **The wait is measured on the directory's clock**: ripenedAt − requestedAt ≥
+  72 hours. The requester's `created` is informative and never decides a wait.
+- **Authority.** Setup (seq 0) and a reset carry the directory's countersign
+  alone and install exactly one passkey; peers report a reset. Every other link
+  is proved over its exact text by an unquarantined member of the previous
+  head: a WebAuthn assertion for a passkey (rp `id.bento.page`, the sign-in
+  host's origin, no stored sign count since peers see links out of order), a
+  raw low-S signature for a recovery key. One change per link (one add, one
+  removal, or the recovery key replaced); quarantine marks are never changed by
+  a member. The only immediate member change is a member removing itself while
+  another unquarantined member remains.
+- **Pinning.** A peer that pinned a head verifies onward from it; the pinned
+  head's countersign is re-checked, because its times set every member's age.
+  Ages from a pin past setup are lower bounds.
+
+**Refused until defined (fail closed).** A consent key signing or co-signing a
+roster change (its consent purpose is the next kernel change), any member
+change ripened in under 72 hours other than a self-removal, and links the
+directory makes on a mailbox's authority (a void's quarantine and queued
+removal, its undo, an incident revert), which have no authority marking in
+the format yet.
+
+Guards: `scripts/test-roster.ts` (every row, each accepted row's resulting
+state written by hand, the two-clocks pair, positive controls) and
+`scripts/test-roster-mutants.ts` (each rule loosened in turn must turn the rig
+red).
+
+## 2026-11-04 — A saved document writes its picture data last, on its own line
+
+The `#bento-doc` block was one line of JSON, and `assets` (data URIs) sat in it
+wherever the key happened to fall. One 4K photo made that line megabytes of
+base64 mixed in with the slides. An agent reading the file line by line —
+which is what the Tooling note invites, and it meets the note first — cannot
+stop partway through a line, so it got either a truncated document or the
+whole picture. Measured on a three-slide deck with a 2.5 MB stand-in for one
+4K photo: 15,000 chars of document and 2.5 million of base64 on one line.
+
+- **The layout.** A plain save (`serializeWith`, the plain branch of
+  `encodeDocBody`) now writes `docText(doc)`: compact JSON of everything but
+  `assets`, then a line break, then `"assets":{…}}` — `assets` always the last
+  key. The Tooling note and docs/agents.md tell agents to stop before the line
+  that starts `"assets":`, or to load the JSON and drop the key.
+- **Nothing else changes.** The line break is JSON whitespace: every parser,
+  every older shell and the frozen updaters' splice (§2 asks only for
+  plaintext JSON with `<` escaped) read the same document, and an older shell
+  re-saving it writes one line again. A document without `assets` is exactly
+  `JSON.stringify(doc)`, byte for byte, in every app. Encrypted and sealed
+  bodies are ciphertext and are not laid out.
+- **A writer convention, not a guarantee about every file.** Only a file
+  saved by this version on has the layout. A file last written by an older
+  shell, by the PowerPoint converter or by hand is one line with `assets`
+  wherever it fell, older slides decks can carry inline `data:` sources, and
+  bento/type keeps pictures inline in its document (no top-level `assets`).
+  So the Tooling notes and docs/agents.md say when to expect the second line
+  and to load the JSON with a tool whenever it is not there.
+- **Why not more.** Moving pictures into their own `application/bento+*`
+  blocks would give the same benefit with more machinery and a file older
+  shells cannot read; linking them as files beside the deck would end the
+  one-file promise.
+
+Rig: scripts/test-doc-layout.ts (the layout, the real write path through
+`encodeDocBody`, and a pin that no plain save path stringifies the document
+on its own).
+
+## 2026-11-09 — bento/dash: a document colour passes one check before it is drawn
+
+Every colour a dash workbook carries (conditional-format stops, rule fills and
+text colours, data bars, chart series, a peer's presence colour) is author
+data, and most of the places that paint one build markup as a string. So each
+paint site takes it through `dash/src/color.ts` `safeColor`: an allowlist of
+the characters colour notations use (hex, names, `rgb()`/`hsl()`, `var(--x)`),
+no `url`, `expression`, `@` or backslash, at most 32 characters. A value that
+fails is not drawn — never cleaned or guessed at — and the caller paints its
+own default. It is the rule preview.ts and print.ts already applied, now in one
+place. Escaping the quote alone is not enough inside a `style` attribute: `;`
+and `url(` still reach the CSS.
+New paint sites for document colours call `safeColor`, or set the property
+through the DOM with a value that has passed it.
+
+Rigs: scripts/test-dash-colours.ts (each paint function with a real colour as
+control and non-colours that must draw nothing) and
+scripts/test-dash-colours-browser.mjs (the built grid, hovered).

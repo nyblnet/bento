@@ -7,7 +7,7 @@
 - [Agent authoring guide](https://bento.page/agents.md): how to write and edit a deck, with copy-paste snippets and the compact input form (omit defaults, they are filled on load)
 - [Document schema](https://bento.page/schema/slides.json): JSON Schema 2020-12 for the `#bento-doc` JSON, generated from the app's own validation tables; version-pinned copies live beside it (`slides-<version>.json`)
 - [Platform invariants](https://raw.githubusercontent.com/nyblnet/bento/main/docs/PLATFORM.md): what every Bento file promises (splice contract, additivity, identity)
-- [The app](https://bento.page/slides): opens with the starter deck; `window.bento` exposes `doc`, `serialize()`, `loadDoc(json)`, `validate()`, `measure()`, `schema()`, `comments()`
+- [The app](https://bento.page/slides): opens with the starter deck; `window.bento` exposes `read()` (the document, sharing keys left out: the read call for agents), `loadDoc(json)`, `compact()`, `validate()`, `measure()`, `schema()`, `comments()`, and the raw `doc` / `serialize()`, which carry the deck's sharing keys
 
 ## Optional
 

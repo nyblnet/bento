@@ -25,7 +25,8 @@ You edit **that block only**, in place. Escape every `<` in the JSON as
 file (the compressed runtime) untouched. In a chat context instead, the user
 copies the JSON out (*Save ▾ → Copy document JSON*) and pastes your
 replacement back (*Save ▾ → Replace from JSON…*); `window.bento.loadDoc(json)`
-does it from the console.
+does it from the console, and `window.bento.read()` reads the document with its
+sharing keys left out (`window.bento.doc` is the raw object and carries them).
 
 ## Starting from nothing
 
@@ -64,18 +65,22 @@ looked at is not finished.
 
 ## Workflow
 
-1. **Find the document.** Locate the `#bento-doc` block; parse its JSON. Note
+1. **Find the document.** Locate the `#bento-doc` block; parse its JSON
+   (with `collab` handled as below). Note
    `doc.size` (canonical 1280×720), `doc.theme`, existing element `id`s, and
    whether `doc.template`/`doc.readonly` are set.
 
-   **Check `doc.collab` first.** If it carries `ownerPriv`, `writerPriv` or
-   `invite`, this deck's live-session keys are in the file you are about to read
-   — and anything that receives the file or its JSON can join that session and
-   write to it. That is by design: the file is the invitation. **Tell the user
-   before you continue**, because only they can decide, and they may not know
-   the deck is shared. Offer the alternative: a read-only copy, or *Share → Stop
-   sharing* on a duplicate. If it has already gone somewhere, the remedy is
-   *Share → Rotate keys* — removing the keys afterwards does not retract them.
+   **Handle `doc.collab` without reading it.** A deck shared live carries a
+   `collab` object, and ANY key in it is access to that live room: the room key
+   alone reads every edit (and writes, on older unsigned rooms); private keys
+   add writing and member control. A read-only copy is NOT key-free; it keeps
+   the room key. So, one rule for a file on disk: check which `collab` fields
+   exist by NAME without printing their values (e.g. print only
+   `Object.keys(doc.collab ?? {})`), read the document with `collab` removed,
+   and when you write back, restore the original `collab` object exactly as it
+   was (a file without it drops out of its room). If keys are present, tell the
+   user the deck is shared live. If it has already gone somewhere, the remedy
+   is *Share → Reset access…*; removing the keys afterwards does not retract them.
 2. **Read the source material the user gave you** and classify each piece —
    is it a stat? a table? a process? a definition to expand? a photo?
 3. **Map material → feature (do NOT default to bullet text).** This is the

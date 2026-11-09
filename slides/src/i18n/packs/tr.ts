@@ -20,6 +20,11 @@ import type { Catalog } from '../../i18n'
 export const label = 'Türkçe'
 
 export const strings: Catalog = {
+  "View": "Görünüm",
+  "Current slide": "Geçerli slayt",
+  "Slide thumbnails": "Slayt küçük resimleri",
+  "Resize slide previews": "Slayt önizlemelerini yeniden boyutlandır",
+  "Resize next slide and notes": "Sonraki slaytı ve notları yeniden boyutlandır",
   "Insert — text, shapes, images, media, tables, charts": "Ekle — metin, şekiller, görseller, medya, tablolar, grafikler",
   "More actions": "Diğer eylemler",
   "Slides — show or hide the slide list": "Slaytlar — slayt listesini göster veya gizle",

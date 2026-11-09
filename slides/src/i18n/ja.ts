@@ -4,6 +4,11 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "View": "表示",
+  "Current slide": "現在のスライド",
+  "Slide thumbnails": "スライドのサムネイル",
+  "Resize slide previews": "スライドプレビューのサイズを変更",
+  "Resize next slide and notes": "次のスライドとノートのサイズを変更",
   "This text box is already bold": "このテキストボックスはすでにボールドです",
   "Italic": "斜体",
   "Underline": "下線",
@@ -601,6 +606,8 @@ export const ja: Catalog = {
   "Go live": "ライブ開始",
   "Invite to edit…": "編集に招待…",
   "Key-verified identity": "鍵で検証済みのアイデンティティ",
+  "Claimed key": "申告された鍵",
+  "This key is only claimed, so it cannot be removed here. To cut off a device you cannot confirm, use “Reset access…”.": "この鍵は申告されたものにすぎないため、ここでは削除できません。確認できない端末を遮断するには「アクセスをリセット…」を使ってください。",
   "Keywords": "キーワード",
   "Last slide": "最後のスライド",
   "Mints brand-new keys. Every previously sent copy stops syncing for good; share fresh copies afterwards.": "まったく新しい鍵を発行します。これまでに送ったコピーは永久に同期しなくなります。以後は新しいコピーを共有してください。",

@@ -4,6 +4,11 @@
 import type { Catalog } from '../i18n'
 
 export const de: Catalog = {
+  "View": "Ansicht",
+  "Current slide": "Aktuelle Folie",
+  "Slide thumbnails": "Folienminiaturen",
+  "Resize slide previews": "Folienvorschauen vergrößern oder verkleinern",
+  "Resize next slide and notes": "Nächste Folie und Notizen vergrößern oder verkleinern",
   "This text box is already bold": "Dieses Textfeld ist bereits fett",
   "Italic": "Kursiv",
   "Underline": "Unterstrichen",
@@ -601,6 +606,8 @@ export const de: Catalog = {
   "Go live": "Live gehen",
   "Invite to edit…": "Zum Bearbeiten einladen…",
   "Key-verified identity": "Schlüssel-verifizierte Identität",
+  "Claimed key": "Angegebener Schlüssel",
+  "This key is only claimed, so it cannot be removed here. To cut off a device you cannot confirm, use “Reset access…”.": "Dieser Schlüssel ist nur angegeben und kann hier nicht entfernt werden. Um ein nicht bestätigtes Gerät auszusperren, nutze „Zugriff zurücksetzen…“.",
   "Keywords": "Schlagwörter",
   "Last slide": "Letzte Folie",
   "Mints brand-new keys. Every previously sent copy stops syncing for good; share fresh copies afterwards.": "Erzeugt brandneue Schlüssel. Jede bereits gesendete Kopie synchronisiert endgültig nicht mehr; teile danach frische Kopien.",

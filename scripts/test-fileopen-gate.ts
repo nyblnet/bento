@@ -110,9 +110,10 @@ function drawAndMount(doc){
 }
 ;(async () => {
   // POSITIVE controls — prove the BROWSER fetches these, independent of the code
-  // under test. slide.background via renderSlide (not a guard). The @font-face
-  // faces are written by hand (NOT injectFonts, which Option A may make a guard).
-  const raw = parseDoc(craft('raw')); const rs = renderSlide(raw.slides[0], raw)
+  // under test. slide.background is written by hand (renderSlide holds it to
+  // the colour rule). The @font-face faces are written by hand too (NOT
+  // injectFonts, which Option A may make a guard).
+  const raw = parseDoc(craft('raw')); const rs = document.createElement('div'); rs.style.background = raw.slides[0].background
   rs.style.width='400px'; rs.style.height='225px'; document.body.appendChild(rs); void rs.offsetHeight
   const face = document.createElement('style')
   face.textContent =
