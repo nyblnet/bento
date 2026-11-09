@@ -1,0 +1,15 @@
+# Stage-0 probe P1, the FRAME site. The same static files as the top page, on
+# Cloudflare Pages, so the frame is a different SITE from the top page:
+# pages.dev and workers.dev are separate Public Suffix List entries, so
+# bento-probe-frame.pages.dev and bento-probe-top.<you>.workers.dev are
+# cross-site. Two Workers on one account would NOT be: both would sit under
+# the same <you>.workers.dev site (the list has workers.dev, not *.workers.dev).
+#
+# Deploy from this folder (the first line once, to create the project):
+#   npx wrangler@4.152.0 pages project create bento-probe-frame --production-branch main
+#   npx wrangler@4.152.0 pages deploy --branch main
+# If the name is taken, pick another and open the top page with
+#   ?frame=https://<that-name>.pages.dev/frame
+name = "bento-probe-frame"
+compatibility_date = "2026-09-01"
+pages_build_output_dir = "../public"

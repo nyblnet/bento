@@ -1,0 +1,7 @@
+# Stage-0 probe P5 (log canary), config 1 of 3: NO observability block, i.e.
+# what a Worker gets when its config says nothing. Deploy from this folder:
+#   npx wrangler@4.152.0 deploy -c wrangler.default.toml
+name = "bento-log-probe"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
