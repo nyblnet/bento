@@ -98,11 +98,13 @@
 // q, l, x and u carry no member proof of their own.
 //
 // The TARGET of a q link is voided.signer; of an l link, the one member the
-// cited change added. Each is bound to the link by its cause hash, so x and u
-// need no field of their own. When the q or l link is the PINNED head, its
+// cited change added. The cause hash names the evidence; a q's signer is bound
+// by its proof over the voided text, an l's addition by the cited chain. So x
+// and u need no field of their own. When the q or l link is the PINNED head, its
 // target is read from the evidence it carries, after the cause check (its rip.
-// is re-verified at the pin, so the evidence cannot be swapped); a pinned q or l
-// link stored without its evidence refuses a following x or u (`evidence`):
+// covers only the cause, so the pinned link's evidence is re-checked: a q's
+// voided proof, address and seq, an l's cited chain and its one addition); a
+// pinned q or l link stored without such evidence refuses a following x or u (`evidence`):
 // hosts store a pinned link WHOLE, voided or cited included. A stale mark (one
 // set by an earlier q or l) is never lifted or removed by the directory's word;
 // only a member's own 72 h change removes it.
@@ -378,14 +380,23 @@ function diffOf(before: Member[], after: Member[]) {
 const onlyMarked = (d: ReturnType<typeof diffOf>, pub: string) =>
   d.added.length === 0 && d.removed.length === 0 && d.cleared.length === 0 && d.marked.length === 1 && d.marked[0].pub === pub
 
-/** The member a q or l link marked, read from the evidence it carries, when
- *  that evidence matches the link's cause; null otherwise. For a PINNED head,
- *  whose own checks ran when it was pinned. */
-async function pinnedTarget(l: RosterLink, rip: Ripening): Promise<string | null> {
+/** The member a q or l link marked, read from the evidence it carries; null
+ *  when that evidence does not prove it. For a PINNED head. The countersign
+ *  covers only the cause hash, and the evidence may have been refetched from
+ *  the very party the target rule guards against, so every part of it that
+ *  names the target is re-bound here: a q's signer by its proof over the
+ *  voided text, an l's previous head by the cited head's prev hash. */
+async function pinnedTarget(l: RosterLink, rip: Ripening, head: RosterHead, opts: ChainOpts): Promise<string | null> {
   if (rip.auth === 'q') {
     const v = l.voided
     if (!v || typeof v !== 'object' || !str(v.ros) || !str(v.signer)) return null
-    return rip.cause === (await sha256b64u(v.ros)) ? v.signer : null
+    if (rip.cause !== (await sha256b64u(v.ros))) return null
+    const vh = await parseRos(v.ros)
+    if (!vh.ok || vh.value.address !== head.address || vh.value.seq !== head.seq) return null
+    // the signer is not covered by the cause: bind it by its proof over the voided text
+    const asker = head.members.find((m) => m.pub === v.signer)
+    if (!asker || !(await memberProof(asker, v, v.ros, opts)).ok) return null
+    return asker.pub
   }
   if (rip.auth === 'l') {
     const c = l.cited
@@ -393,8 +404,11 @@ async function pinnedTarget(l: RosterLink, rip: Ripening): Promise<string | null
     if (rip.cause !== (await sha256b64u(c.ros))) return null
     const ch = await parseRos(c.ros), cp = await parseRos(c.prevRos)
     if (!ch.ok || !cp.ok) return null
+    // prevRos is not covered by the cause: bind it through the cited head's prev hash
+    if (ch.value.prev !== (await sha256b64u(c.prevRos))) return null
     const cd = diffOf(cp.value.members, ch.value.members)
-    return cd.added.length === 1 ? cd.added[0].pub : null
+    if (cd.added.length !== 1 || cd.removed.length + cd.marked.length + cd.cleared.length !== 0 || cd.kindChanged) return null
+    return cd.added[0].pub
   }
   return null
 }
@@ -441,7 +455,7 @@ async function chain(links: readonly RosterLink[], opts: ChainOpts): Promise<Ver
         else sinceExact = false
         if (rip.auth === 'r') lastResetAt = rip.ripenedAt
         since = new Map(head.members.map((m) => [m.pub, rip.ripenedAt]))
-        target = await pinnedTarget(l, rip)
+        target = await pinnedTarget(l, rip, head, opts)
       } else {
         if (head.seq !== 0) return no('anchor')
         if (rip.auth !== 'm') return no('auth')

@@ -358,9 +358,12 @@ joined (`since`), `createdAt`, `lastResetAt` and `sinceExact`.
     TARGET, and that member keeps its `since`.
   - **The target** of a `q` link is `voided.signer`; of an `l` link, the one
     member its cited change added. When that link is the PINNED head, read the
-    target from the evidence it carries after checking its cause hash; a pinned
-    link without its evidence, or whose evidence does not match its cause,
-    refuses the following `x`/`u` with `evidence`. Store a pinned head whole.
+    target from the evidence it carries, re-checked: the cause hash, and for `q`
+    the voided request's address and seq and its signer's proof over it, for
+    `l` the cited previous head chaining to the cited head with exactly one
+    addition (the cause covers neither the signer nor the previous head:
+    `x/pinned-q-signer-swapped`, `u/pinned-l-prevros-swapped`). Otherwise the
+    following `x`/`u` is refused with `evidence`. Store a pinned head whole.
     A stale mark (from an earlier `q`/`l`) is never removed or cleared by `x`/`u`
     (`x/removes-stale-mark`, `u/clears-stale-mark`, `x/pinned-removes-stale-mark`).
   - Evidence says what its word claims: a voided request is for this address
