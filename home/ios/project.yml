@@ -12,7 +12,11 @@ targets:
     platform: iOS
     sources:
       - path: .
-        excludes: [project.yml, "release-history/**"]
+        # Stage0/ is a separate project for the passkey origin probe (its own
+        # project.yml); nothing in it is ever part of this app. The generated
+        # project is excluded too: without that, running xcodegen a second time
+        # copied BentoTray.xcodeproj (team id included) into the app bundle.
+        excludes: [project.yml, "release-history/**", "Stage0/**", "*.xcodeproj"]
       # Each app's signed release history, as a FOLDER in the bundle
       # (release-history/<app>.json), which ReleaseHistory reads as its floor.
       - path: release-history

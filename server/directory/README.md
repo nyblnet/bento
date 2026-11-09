@@ -113,3 +113,53 @@ the repository is MIT. It runs as a network service, so anyone who offers a
 modified copy to users over a network must offer those users its source.
 Contributions to it need the contributor licence agreement in
 [CLA.md](CLA.md); see [CONTRIBUTING.md](../../CONTRIBUTING.md#license).
+
+## The passkey roster (option G)
+
+Under option G a bento/id account is a **roster of passkeys** (the kernel's
+`ros.` chain, `kernel/src/roster.ts`); no account private key exists anywhere.
+`src/roster.js` keeps each address's roster in its own Durable Object
+(`Roster`, named by the same address hash) and enforces the directory's half:
+
+- **One constant** (`src/passkey.js` `PASSKEY`): rp `id.bento.page`, and the
+  only accepted origin is the sign-in host `https://signin.id.bento.page`. Not
+  `https://id.bento.page`, `https://home.bento.page` or `https://bento.page`.
+  Native origins join as each is measured; none is listed yet.
+- **Registration** is checked here (strict client data, exact challenge and
+  origin, never cross-origin, exact rp hash, UP+UV, ES256 P-256 only; the
+  directory relies on no attestation). **Assertions** go through the kernel
+  verifier with the credential's stored signature counter.
+- **A change** is asked for by an unquarantined passkey member over the exact
+  new `ros.` text, which names a single-use directory challenge. One member
+  added or removed; an added passkey brings its registration over the same
+  challenge. It waits **72 hours on the directory's clock**; one change at a
+  time. A member removing itself is immediate only while another
+  unquarantined passkey stays.
+- **Setup** needs a 256-bit single-use setup token, with no attempt counter.
+- **Log**: every enrolment and change, with the request `Origin`, the ceremony
+  origin, the opener the sign-in host reports, and the time.
+- **Mail**: every roster mail names the change in words, to the second, with
+  the host class, and lists the whole roster. No budget a stranger can fill
+  holds one back.
+
+| route | proof | answer |
+|---|---|---|
+| `POST /v1/roster/challenge` `{email}` | none | a sealed single-use challenge for that address (5 minutes) |
+| `GET /v1/roster?e=` | none | the head `ros.` text and any waiting change, or 404 |
+| `POST /v1/roster/setup` `{email, token, dirNonce, reg}` | the setup token + a registration over `dirNonce` | 200 with `ros.0` |
+| `POST /v1/roster/request` `{email, ros, credId, assertion, reg?, rq?}` | a member's assertion over `ros` (+ the new passkey's registration for an add) | 202 queued, or 200 for an immediate self-removal |
+
+**Not built yet**: the ripening countersign `rip.` (so no route serves a
+roster a peer can verify), the setup-start route and its mailed link, the
+void page, the reset, consent-key and recovery-key members, account deletion,
+and the incident lever across addresses.
+
+**What id.bento.page answers**: JSON with `nosniff`, a Permissions-Policy that
+turns off WebAuthn create and get, a CSP with `default-src 'none'` and
+`frame-ancestors 'none'`, and `X-Frame-Options: DENY`, on every response. It
+serves no `/.well-known/webauthn`. The Permissions-Policy does not cover the
+WebAuthn Signal API, so no page here may run script, except the void page
+when it comes, under its own CSP.
+
+Rigs: `node scripts/test-directory-roster.ts`, and the mutants in
+`scripts/test-directory-mutants.ts`.

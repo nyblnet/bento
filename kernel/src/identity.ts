@@ -19,6 +19,11 @@
 //     host identifies the calling document from what the platform reports (the
 //     file path, the opened URL), never from the page, and exposes this object
 //     only to a verified, signed Bento shell (gate 1).
+//   - PER DOCUMENT MEANS PER FILE THE HOST OPENED. Wherever this contract says
+//     "per document" (consent, resolve answers), the host keys it on inputs the
+//     document cannot choose: its own install salt, the canonical path of the
+//     file it opened, and the docId, together. Never the bare docId, which any
+//     copy of a file carries and any file can claim.
 //   - NO HOST, NO CHANGE. `identityAgent()` returns null wherever there is no
 //     agent — a bare file:// tab, an older host, a doctored file — and every
 //     caller then does exactly what it did before identity existed.
@@ -109,7 +114,8 @@ export type ShareRole = 'reader' | 'editor' | 'owner'
 export interface IdentityAgent {
   readonly contract: number
   /** The person using this document, or null when no identity is set up or
-   *  they declined to use it here (consent is per document). */
+   *  they declined to use it here (consent is per document: per file the
+   *  host opened, as above). */
   whoami(): Promise<PublicIdentity | null>
   /** Sign `payload` (the exact UTF-8 text) for `purpose` with this device's key.
    *  A host method that throws reaches the caller as a REJECTED promise: callers
