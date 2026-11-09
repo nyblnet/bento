@@ -636,3 +636,11 @@ runs:
       # one, after the unmutated copy passes.
       shell: bento-step {0}
       run: node scripts/test-roster-mutants.ts
+
+    - name: bento/id roster fixture is current
+      # The generator, with --check, writes nothing and fails when
+      # roster-v2.json is not what it would write (a row added, removed or
+      # changed). Signatures are random, so rows are compared with their
+      # signatures blanked; an unchanged row keeps its committed bytes.
+      shell: bento-step {0}
+      run: node scripts/gen-roster-vectors.ts --check
