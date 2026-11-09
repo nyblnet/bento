@@ -107,7 +107,7 @@ function mutant(r, n) {
     h = h.replace(pick(['</body>', '</head>']), (m) => shut + m)
   }
   // foreign content: inside <svg> or <math>, <style>, <title> and <textarea> hold
-  // TAGS, not text, and <img> breaks out of them (security, #931 F1). A scanner
+  // TAGS, not text, and <img> breaks out of them. A scanner
   // that reads them as text sees no handler here; a browser runs it. The
   // text-only payloads are the genuine direction: "<" that starts no markup.
   if (r() < 0.25) {
