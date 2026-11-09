@@ -13416,3 +13416,56 @@ gate; hung sends that deliver or fail after a
 later change queued, or after the change was removed; a never-answering
 mailer; the alarm sweep) and `scripts/test-directory-mutants.ts`, now in its
 own CI job.
+
+## 2026-11-09 — bento/id option G: device certificates made by a passkey (`wdev.`, `dev2.`, `watt.`, `wren.`)
+
+**Decision.** `kernel/src/devices.ts` defines the device certificates of
+option G; `kernel/fixtures/device-v1.json` is the contract.
+
+- **`wdev.`** certifies a browser key (fresh and non-extractable, made per
+  ceremony): `wdev.<devicePub>.<kx>.<b64u(address)>.<rosHash>.<b64u(label)|empty>.<via>.<ceremonyAt>.<dirNonce>`.
+  **`dev2.`** certifies a native device key: the same fields plus the
+  device's hardware consent key after `devicePub` (empty where there is none).
+  K2's `dev.` named an account key, and option G has no account key, so
+  `dev2.` takes `wdev.`'s fields rather than `dev.`'s.
+- **Only a passkey assertion certifies, for now.** The text's `via` is
+  `passkey`. A native consent co-signature (`cns`, route D, purpose `web-add`)
+  and a ripe consent key's own signature (`ck`, purpose `roster`) are both
+  parsed and refused until those purposes are defined (fail closed).
+- **`watt.`** is the directory's logged countersign, and a certificate is in
+  force only beside a current one. A `watt.` lives at most 24 hours. It never
+  reaches past 7 days after the certificate's ORIGINAL ceremony: a renewal is
+  a new `watt.` over the same certificate text, so peers always cap from the
+  original. It is logged no earlier than the ceremony.
+- **Which roster head a certificate may name** (security's ruling): the head
+  H it names must be one the verifier has placed in a verified chain; a fork,
+  or a head older than the pin, is refused. The signer must be an
+  unquarantined passkey of H AND of the current head, with no break in its
+  membership since H. A removal, a quarantine, a re-add or a reset kills the
+  certificate at every peer holding the new head; an undo revives it. The
+  ceremony is no earlier than H. Requiring the current head exactly would kill
+  every browser certificate at every roster change, the directory's own
+  quarantines and undos included; allowing any head the signer was ever in
+  would let a removed passkey's certificates survive. To place H, the roster
+  verifier now returns every head of the links it was given.
+- **The directory owns `ceremonyAt`.** It is the directory's challenge time,
+  and the directory refuses a `wdev.` whose `ceremonyAt` differs, because the
+  7-day cap reads it. A peer cannot check this; it can check that the `watt.`
+  was logged no earlier.
+- **The tier (G1).** Anything authorised by a passkey alone is shown as
+  "(passkey sign-in)": every `wdev.`, and every `dev2.` until its own consent
+  key has been an unquarantined `ck` member for 72 hours. The age is read from
+  the roster's `since`. From a pin that age is a lower bound, so a pinned
+  verifier says "passkey" more often, never less. One label covers every
+  passkey-only device, because a page can mint a passkey-only `dev2.` too.
+- **`wren.`**, the device key's request for a fresh `watt.`, is checked by the
+  directory only. The kernel ships its parser and signature check, so the
+  directory and every port read one spelling.
+- Labels are at most 40 characters (the sign-in host's limit). `statements.ts`
+  still lists the four prefixes as reserved. Taking them off that list changes
+  a file the browser extension carries a generated copy of, so that move waits
+  for the change in which hosts adopt these certificates.
+
+Guards: `scripts/test-devices.ts` (every row with its reason and tier,
+positive controls, chains from `roster-v2.json`'s builders) and
+`scripts/test-devices-mutants.ts`; `gen-device-vectors.ts --check` in CI.
