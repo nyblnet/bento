@@ -35,10 +35,16 @@ import { parseStrictJson, verifyAssertion, statementChallenge } from '../../../k
  * It changes only by a reviewed change to this file, and the rig pins it
  * against the kernel's ROSTER_RP_ID and ROSTER_WEB_ORIGINS.
  */
+/**
+ * The sign-in host. Mailed links open on it (links.js), and the /v1/web/*
+ * routes answer CORS to it alone. It is written here once and listed below.
+ */
+export const SIGNIN_ORIGIN = 'https://signin.id.bento.page'
+
 export const PASSKEY = Object.freeze({
   rpId: 'id.bento.page',
   origins: Object.freeze({
-    'https://signin.id.bento.page': 'browser',
+    [SIGNIN_ORIGIN]: 'browser',
   }),
 })
 

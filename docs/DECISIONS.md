@@ -13338,3 +13338,69 @@ the rig was blind to: a repeated CBOR map key, an origin matched by prefix, a
 request naming another address, and an expired setup token), and
 `scripts/test-directory-mutants.ts` (39 mutants, each loosening one rule, every
 one failing a row).
+
+## 2026-11-09 — bento/id directory: setup by mailed link, and which mail a stranger can hold back
+
+The directory now mails the setup token itself, as a link
+(`POST /v1/roster/setup/start`, `server/directory/src/links.js`).
+
+- **A setup link completes only on the sign-in host, in the browser that
+  opens it.** It points at the sign-in host and carries everything in the
+  fragment (`<sign-in host>/setup#v=1&e=<address>&t=<token>`), which no
+  browser sends to a server. Opening it does nothing: the page asks the
+  person to make a passkey, and only that registration, sent with the token,
+  sets the account up. A mail scanner that fetches the link gets the bare
+  page, cannot make a passkey, and never sees the token, and no route
+  completes anything on a GET. `links.js` is the format's single definition
+  and the sign-in host's contract.
+- **The setup budget holds a link back only while a link it mailed is still
+  live.** Anyone can ask for a setup link for any address, so they can fill
+  that address's budget (3 a day, 10 in 31 days). If a full budget simply
+  refused, ten stranger requests would leave the address unable to set up for
+  weeks with no working link in its inbox. Now, with the budget full and no
+  live link, one link goes anyway, at most one per link life (20 minutes),
+  and a link the mailer refused is withdrawn so it holds nothing back. The
+  route is also limited to 10 starts per IP an hour, and always answers 202.
+- **No mail that reports or stops a change, or recovers an account, ever
+  reads a budget a stranger can fill.** That covers roster mail and, before
+  they exist, reset, void and freeze mail: a stranger who could hold back a
+  reset mail could keep a hostile setup in place indefinitely. Every kind of
+  mail is declared in one table with its class, sending an undeclared kind
+  throws, and the rig checks that each budget is read in one function called
+  from one place.
+- **The sign-in host's routes exist.** `POST /v1/web/challenge` answers a
+  challenge sealed for the web audience (no roster route accepts it);
+  `POST /v1/web/enrol` validates its request (a `wdev.` text, bento/home as
+  the opener, a well-formed assertion) and answers 501 until the kernel
+  defines the `wdev.` statement, storing and countersigning nothing. Both
+  answer CORS to the sign-in host alone, never `*`.
+
+Guards: `scripts/test-directory-roster.ts` (the link format and what does not
+complete it, 31 days of stranger requests with a live link at every moment,
+the per-IP limit, the mail-kind table and where budgets are read, the web
+routes' validation and CORS) and `scripts/test-directory-mutants.ts`.
+## 2026-11-09 — bento/dash: document strings reach markup at both ends checked
+
+Dash builds much of its markup as strings, and a workbook is untrusted input.
+Every value from the document that lands in an attribute is held twice:
+
+- **On open, parseDoc repairs it.** `Column.w` that is not a finite number
+  becomes 130, and one out of range is clamped to 10–4000 (`colW`). A column id
+  that fails `isSafeId` (a quote, angle bracket, ampersand, backtick, backslash
+  or control character, empty, or over 128 characters) is re-minted like a
+  missing id, and its `data`, `cells` and `totals` keys move with it. A row-id
+  run that is not two whole numbers gets a fresh start past every other run;
+  its count is the number it reads as, or 0. Each is reported as a repair, and
+  no column is ever dropped. A frozen file is never rewritten, as before.
+- **At the paint site, it is escaped or coerced anyway**, because a frozen file
+  and a live edit never pass through parseDoc: the grid reads widths only
+  through `colW`, escapes every column id it writes into `data-*` attributes
+  (and `CSS.escape`s it in selectors), and writes row ids as numbers. A
+  dashboard tile's layout goes through `tileStyle` (whole numbers or the
+  default). The `esc` helpers in story.ts, main.ts and gridmenu.ts now escape
+  quotes as well, since they also fill attributes (a story step's id and
+  caption among them).
+
+New markup that carries a document string escapes it with a helper that covers
+quotes, or sets it through the DOM. Rigs: scripts/test-dash-attrs.ts and
+scripts/test-dash-attrs-browser.mjs (live edit, saved file, frozen file).

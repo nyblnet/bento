@@ -781,3 +781,12 @@ runs:
       # resolves what has no address to an error IFERROR can catch.
       shell: bento-step {0}
       run: node scripts/test-dash-structured.ts
+
+    - name: dash — document strings reach markup only as values
+      # parseDoc repairs a column width that is not a number, a column id that
+      # cannot sit in markup (its data, cells and totals move with it) and
+      # row-id runs that are not whole numbers, never dropping a column and
+      # never touching a frozen file; dashboard tile layout and story-step
+      # escaping hold at the paint site. Every row has a control.
+      shell: bento-step {0}
+      run: node scripts/test-dash-attrs.ts

@@ -131,6 +131,20 @@ Under option G a bento/id account is a **roster of passkeys** (the kernel's
   time. A member removing itself is immediate only while another
   unquarantined passkey stays.
 - **Setup** needs a 256-bit single-use setup token, with no attempt counter.
+  The token arrives in a **mailed link** (`src/links.js`, below) that opens on
+  the sign-in host; it completes only there, in the browser that opens it,
+  when that browser makes a passkey.
+- **The setup budget** (one link a minute, 3 a day, 10 in 31 days per
+  address) can be filled by anyone, so it may hold a link back **only while a
+  link it already mailed is still live**. With the budget full and no live
+  link, one link goes anyway: at most one per link life (20 minutes). A link
+  the mailer refused is withdrawn and holds nothing back. Per IP: 10 setup
+  starts an hour.
+- **No other mail ever reads a stranger-fillable budget.** `src/mail.js`
+  `MAIL_KINDS` classes every kind of mail: setup links and removal codes may
+  be budgeted; roster, reset, void and freeze mail never are. Sending an
+  undeclared kind throws, and the rig checks that the budget is read in one
+  function per object, called from one place.
 - **Log**: every enrolment and change, with the FULL public key it is about
   (and the full key that asked), the request `Origin`, the ceremony origin,
   the opener the sign-in host reports, and the time. The incident lever acts
@@ -151,15 +165,46 @@ Under option G a bento/id account is a **roster of passkeys** (the kernel's
 
 | route | proof | answer |
 |---|---|---|
+| `POST /v1/roster/setup/start` `{email}` | none | **always 202**; mails a setup link if the address has no roster and the setup budget allows (see above) |
 | `POST /v1/roster/challenge` `{email}` | none | a sealed single-use challenge for that address (5 minutes) |
 | `GET /v1/roster?e=` | none | the head `ros.` text and any waiting change, or 404 |
 | `POST /v1/roster/setup` `{email, token, dirNonce, reg}` | the setup token + a registration over `dirNonce` | 200 with `ros.0` |
 | `POST /v1/roster/request` `{email, ros, credId, assertion, reg?, rq?}` | a member's assertion over `ros` (+ the new passkey's registration for an add) | 202 queued, or 200 for an immediate self-removal |
 
 **Not built yet**: the ripening countersign `rip.` (so no route serves a
-roster a peer can verify), the setup-start route and its mailed link, the
-void page, the reset, consent-key and recovery-key members, account deletion,
-and the incident lever across addresses.
+roster a peer can verify), the void page, the reset and its link, consent-key
+and recovery-key members, account deletion, and the incident lever across
+addresses.
+
+### Mailed links: the contract with the sign-in host
+
+`src/links.js` is the only place a link is built, and the sign-in host
+(`server/signin/`) must read exactly this format:
+
+    <SIGNIN_ORIGIN>/setup#v=1&e=<address, percent-encoded>&t=<token>
+
+- `SIGNIN_ORIGIN` is the sign-in host (`src/passkey.js`). Never
+  `id.bento.page`, which serves no page that reads a link.
+- Everything is in the fragment, which no browser sends to a server: a mail
+  scanner that fetches the link gets the bare page, cannot make a passkey,
+  and never sees the token. No route anywhere completes on a GET.
+- `v` is `1`; `e` is the normalised address; `t` is 32 bytes, base64url
+  without padding (43 characters). Any other key, a missing or repeated one,
+  a query string or another path: refuse (`parseSetupLink` is the reference).
+- The page clears the fragment from the address bar first, then, once the
+  person makes a passkey over a fresh `POST /v1/roster/challenge` for `e`,
+  sends `POST /v1/roster/setup {email: e, token: t, dirNonce, reg}`.
+
+### The sign-in host's routes (`/v1/web/*`)
+
+The browser-key enrolment, matching `server/signin/public/directory-client.js`.
+These answer CORS to the sign-in host only (never `*`), with `Vary: Origin`;
+every other header is as above.
+
+| route | answer |
+|---|---|
+| `POST /v1/web/challenge` (any body) | 200 `{nonce}`: a sealed single-use challenge for the web audience, which no roster route accepts |
+| `POST /v1/web/enrol` `{text, rq, assertion}` | 400 for a malformed request (`text` must be a `wdev.` text, `rq` must be `https://home.bento.page`, `assertion` must carry base64url `id`, `authenticatorData`, `clientDataJSON`, `signature` and an optional `userHandle`); otherwise **501** until the kernel defines the `wdev.` statement. Nothing is stored or countersigned yet. |
 
 **What id.bento.page answers**: JSON with `nosniff`, a Permissions-Policy that
 turns off WebAuthn create and get, a CSP with `default-src 'none'` and

@@ -31,7 +31,14 @@
 import worker, { Roster } from '../server/directory/src/worker.js'
 import { Address, Ledger } from '../server/directory/src/worker.js'
 import { addressKey } from '../server/directory/src/address.js'
-import { PASSKEY, passkeyOrigins, readCbor, verifyRegistration, verifyMemberAssertion } from '../server/directory/src/passkey.js'
+import { PASSKEY, SIGNIN_ORIGIN, passkeyOrigins, readCbor, verifyRegistration, verifyMemberAssertion } from '../server/directory/src/passkey.js'
+import { parseSetupLink, setupLink, SIGNIN_PATHS } from '../server/directory/src/links.js'
+import { MAIL_KINDS, deliver } from '../server/directory/src/mail.js'
+import * as workerModule from '../server/directory/src/worker.js'
+import { WEB_ROUTES } from '../server/directory/src/seam.js'
+const { LIMITS } = workerModule
+import { openChallenge } from '../server/directory/src/challenge.js'
+import { existsSync } from 'node:fs'
 import { fingerprint, ROSTER_LIMITS } from '../server/directory/src/roster.js'
 import { b64uDec, b64uEnc, sha256b64u } from '../kernel/src/statements.ts'
 import { buildRos, parseRos, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, ROSTER_WAIT_MS, type Member } from '../kernel/src/roster.ts'
@@ -178,7 +185,16 @@ async function challenge(email: string) {
   const r = await seen('challenge', api('POST', '/v1/roster/challenge', { email }))
   return r.j.challenge as string
 }
-async function setupToken(email: string) { return (await doOp(email, 'setupStart')).j.token as string | null }
+/** Ask for a setup link through the route and read the token out of the mailed link (null: nothing was mailed). */
+async function setupToken(email: string, ip?: string) {
+  const n = mailbox.length
+  const r = await seen('setup-start', api('POST', '/v1/roster/setup/start', { email }, { ip }))
+  if (r.status !== 202) return null
+  const m = mailbox.slice(n).find((x) => x.to === email && x.kind === 'setup')
+  const urls = m?.body.match(/https?:\/\/\S+/g) ?? []
+  const l = urls.length === 1 ? parseSetupLink(urls[0]) : null
+  return l && l.address === email ? l.token : null
+}
 async function setup(email: string, a: Authn, o: { token?: string; reg?: RegOpts; origin?: string | null; ch?: string } = {}) {
   const token = o.token ?? (await setupToken(email))!
   const ch = o.ch ?? await challenge(email)
@@ -640,7 +656,7 @@ let addAt = 0
   const roster = mailsTo(ivy).filter((m) => m.kind === 'roster')
   ok(roster.length === 4 && roster.every((m) => m.body.includes('The passkeys on this account') && m.body.includes(fps[0])), 'every roster mail carries the roster section')
   ok(roster.filter((m) => /waiting|now in effect/.test(m.body)).every((m) => fps.every((f) => m.body.includes(f))), 'the queued and ripening mails list both passkeys')
-  ok(mailbox.every((m) => !m.body.includes('<') && m.kind === 'roster'), 'roster mail is plain fixed wording')
+  ok(mailbox.every((m) => !m.body.includes('<') && (m.kind === 'roster' || m.kind === 'setup')), 'roster and setup mail is plain fixed wording')
 }
 
 // =====================================================================
@@ -746,6 +762,223 @@ let addAt = 0
   ok(st.status === 500, `a storage failure: 500 JSON (got ${st.status})`)
   const ctl = await call(env, 'POST', '/v1/roster/challenge', { email: 'x@example.com' })
   ok(ctl.status === 200, 'control: the same challenge call with the key set answers 200')
+}
+
+// =====================================================================
+// 10e. setup links (G13): mailed, fragment-only, completed only by a passkey
+// =====================================================================
+{
+  now += HOUR
+  const uma = 'uma@example.com'
+  const n0 = mailbox.length
+  const r = await seen('setup-start', api('POST', '/v1/roster/setup/start', { email: 'Uma@Example.com' }))
+  ok(r.status === 202 && r.j.ok === true, 'setup start → 202')
+  const m = mailbox.slice(n0).find((x) => x.to === uma) ?? NOMAIL
+  ok(m.kind === 'setup' && /Set up your bento\/id account/.test(m.subject), 'a setup link is mailed to the normalised address')
+  const urls = m.body.match(/https?:\/\/\S+/g) ?? []
+  ok(urls.length === 1, `the mail carries exactly one link (${urls.length})`)
+  const link = urls[0] ?? ''
+  const u = (() => { try { return new URL(link) } catch { return null } })()
+  ok(u?.origin === SIGNIN_ORIGIN && u?.pathname === SIGNIN_PATHS.setup && u?.search === '', 'the link opens /setup on the sign-in host, with no query')
+  const l = parseSetupLink(link)
+  ok(!!l && l.address === uma && b64uDec(l.token)?.length === 32, 'its fragment carries v=1, the address and a 256-bit token')
+  ok(!!l && !link.split('#')[0].includes(l.token) && new URLSearchParams(u?.hash.slice(1)).get('v') === '1', 'the token is only in the fragment, which no browser sends to a server')
+  ok(!/Your code|enter (it|the code)/i.test(m.body) && /Bento will never ask you to type or paste anything/.test(m.body), 'the mail has no code to type')
+  ok(/changes nothing by itself/.test(m.body) && /make a passkey/.test(m.body), 'the mail says opening the link alone does nothing')
+  ok(!urls.some((x) => { try { return new URL(x).origin === 'https://id.bento.page' } catch { return false } }), 'no link points at id.bento.page')
+  // a link scanner, or anyone, fetching anything with the token: nothing completes
+  const tok = l?.token ?? ''
+  for (const path of ['/setup', `/setup?t=${tok}`, `/v1/roster/setup?email=${uma}&token=${tok}`, `/v1/roster/setup/start?email=${uma}`]) {
+    const g = await seen(`GET ${path}`, api('GET', path))
+    ok(g.status === 404, `GET ${path.replace(tok, '<token>')} on the directory → 404`)
+  }
+  ok((await head(uma)).status === 404, 'nothing was set up by fetching')
+  const U1 = await Authn.make()
+  ok((await setup(uma, U1, { token: tok })).status === 200, 'control: the mailed token, with a passkey made on the sign-in host, sets up')
+  // X35: an address that is set up gets no setup link (the reset is its own change)
+  const n1 = mailbox.length
+  const again = await seen('setup-start', api('POST', '/v1/roster/setup/start', { email: uma }))
+  ok(again.status === 202 && again.j.ok === true && !mailbox.slice(n1).some((x) => x.kind === 'setup'), 'setup start on a set-up address: 202 and no link')
+  ok((await api('POST', '/v1/roster/setup/start', { email: 'not an address' })).status === 400, 'a malformed address → 400')
+
+  // the link format both sides read (links.js is the contract with the sign-in host)
+  const good = setupLink(uma, tok)
+  ok(JSON.stringify(parseSetupLink(good)) === JSON.stringify({ address: uma, token: tok }), 'control: setupLink and parseSetupLink round-trip')
+  const bad: [string, string][] = [
+    ['another origin', good.replace(SIGNIN_ORIGIN, 'https://id.bento.page')],
+    ['another path', good.replace('/setup#', '/setupx#')],
+    ['a query', good.replace('#', '?x=1#')],
+    ['the token in the query', `${SIGNIN_ORIGIN}/setup?t=${tok}#v=1&e=${encodeURIComponent(uma)}`],
+    ['an extra key', good + '&x=1'],
+    ['a repeated key', good + '&t=' + tok],
+    ['version 2', good.replace('v=1', 'v=2')],
+    ['a short token', good.replace(tok, tok.slice(1))],
+    ['no address', good.replace(/e=[^&]*&/, '')],
+  ]
+  for (const [what, x] of bad) ok(parseSetupLink(x) === null, `a link with ${what} is refused`)
+  const awkward = 'a.b+tag@example.com'
+  ok(parseSetupLink(setupLink(awkward, tok))?.address === awkward, 'an address with + and . survives the fragment')
+}
+
+// =====================================================================
+// 10f. S1: the budget never leaves an address refused with no live link
+// =====================================================================
+{
+  // a stranger asks for a setup link every 10 minutes for 31 days
+  now += HOUR
+  const vic = 'vic@example.com'
+  let mails = 0, gaps = 0
+  const steps = 31 * 144
+  for (let i = 0; i < steps; i++) {
+    now += 10 * MIN
+    const n = mailbox.length
+    await api('POST', '/v1/roster/setup/start', { email: vic })
+    if (mailbox.slice(n).some((x) => x.to === vic && x.kind === 'setup')) mails++
+    const live = (((await rosterObj(vic)).store.get('setupTok') as { exp: number; mailed: boolean }[] | undefined) ?? []).filter((t) => t.exp > now && t.mailed)
+    if (!live.length) gaps++
+  }
+  ok(gaps === 0, `31 days of stranger starts every 10 minutes: never a moment without a live mailed link (${gaps} gaps)`)
+  const perLife = Math.ceil(steps * 10 * MIN / ROSTER_LIMITS.setupTtlMs)
+  ok(mails <= perLife + ROSTER_LIMITS.mailPerMonth && mails >= perLife / 2, `and at most one mail per link life beyond the budget (${mails} mails, ${perLife} link lives)`)
+  // the owner's latest link works at the end of it
+  const vt = (await setupToken(vic)) ?? (() => {
+    const last = [...mailbox].reverse().find((x) => x.to === vic && x.kind === 'setup')
+    return parseSetupLink(last?.body.match(/https?:\/\/\S+/)?.[0] ?? '')?.token ?? null
+  })()
+  ok(!!vt && (await setup(vic, await Authn.make(), { token: vt })).status === 200, 'control: the latest mailed link still sets up')
+
+  // a link that never went out never holds the next one back
+  const wil = 'wil@example.com'
+  mailDown = true
+  const n2 = mailbox.length
+  await api('POST', '/v1/roster/setup/start', { email: wil })
+  mailDown = false
+  ok(mailbox.length === n2 && !((((await rosterObj(wil)).store.get('setupTok') as unknown[] | undefined) ?? []).length), 'mailer down: no link mailed, and its token withdrawn')
+  ok(!!(await setupToken(wil)), 'a start straight after (inside the cooldown) is mailed: the unsent link holds nothing back')
+
+  // a link whose object stopped mid-send (never confirmed mailed) holds nothing back either
+  const xan = 'xan@example.com'
+  for (let i = 0; i < ROSTER_LIMITS.mailPerDay; i++) { await setupToken(xan); now += 2 * MIN }
+  now += ROSTER_LIMITS.setupTtlMs // every mailed link has run out; the day's budget is still full
+  await plant(xan, (st) => st.set('setupTok', [{ h: 'unsent', exp: now + ROSTER_LIMITS.setupTtlMs, mailed: false }]))
+  ok(!!(await setupToken(xan)), 'budget full, only an unconfirmed link live: a link is still mailed')
+  ok(!(await setupToken(xan)), 'control: straight after, with that mailed link live, the budget holds the next one back')
+
+  // the per-IP limit on the route
+  const ip = freshIp()
+  const n3 = mailbox.length
+  const st = new Set<number>()
+  for (let i = 0; i <= LIMITS.ip.setup; i++) st.add((await api('POST', '/v1/roster/setup/start', { email: `ip${i}@example.org` }, { ip })).status)
+  ok(st.size === 1 && st.has(202), `setup start answers 202 even past the per-IP limit (${[...st]})`)
+  ok(mailbox.length - n3 === LIMITS.ip.setup, `but only ${LIMITS.ip.setup} links go out from one IP in an hour (${mailbox.length - n3})`)
+}
+
+// =====================================================================
+// 10g. S2: reset, void, freeze and roster mail never read a stranger-fillable budget
+// =====================================================================
+{
+  ok(JSON.stringify(MAIL_KINDS) === JSON.stringify({ setup: 'budget', delete: 'budget', roster: 'never', reset: 'never', void: 'never', freeze: 'never' }),
+    'the mail kinds and their budget classes are exactly as ruled (reset, void, freeze and roster: never)')
+  let threw = false
+  try { await deliver(env, { to: 'x@example.com', subject: 's', body: 'b', kind: 'notice' }) } catch { threw = true }
+  ok(threw, 'an undeclared mail kind is refused: every new kind must be classed here first')
+  let sent = false
+  try { await deliver(env, { to: 'x@example.com', subject: 's', body: 'b', kind: 'reset' }); sent = true } catch { /* */ }
+  ok(sent, 'control: a declared kind is delivered')
+  mailbox.pop()
+  // where budgets are read: one function per object, called from one place each
+  const src = (f: string) => readFileSync(join(root, 'server/directory/src', f), 'utf8')
+  const io = /\b(?:get|put|delete)\(\s*\[?\s*'mail'/g
+  const only = (file: string, fn: string, op: string, nextOp: string) => {
+    const t = src(file)
+    const indent = fn.match(/^ */)![0]
+    const a = t.indexOf(fn), z = a < 0 ? -1 : t.indexOf(`\n${indent}}\n`, a)
+    const hits = [...t.matchAll(io)].map((x) => x.index ?? 0)
+    ok(a >= 0 && hits.length > 0 && hits.every((i) => i > a && i < z), `${file}: the budget is read and written only inside ${fn.trim().split('(')[0]} (${hits.length} places)`)
+    const name = fn.trim().replace(/^async /, '').replace(/^const /, '').split(/[ (=]/)[0]
+    const calls = [...t.matchAll(new RegExp(`\\b${name}\\(`, 'g'))].map((x) => x.index ?? 0).filter((i) => i < a || i > z)
+    const o = t.indexOf(op), e = t.indexOf(nextOp, o + 1)
+    ok(calls.length === 1 && calls[0] > o && calls[0] < e, `${file}: ${name} is called once, from ${op.trim()} (${calls.length} calls)`)
+  }
+  only('roster.js', '  async spendSetupBudget(now) {', "if (a.op === 'setupStart')", "if (a.op === 'setup')")
+  only('worker.js', '    const mayMail = async () => {', "if (a.op === 'deleteStart')", "if (a.op === 'deleteComplete')")
+  for (const f of readdirSync(join(root, 'server/directory/src')).filter((x) => x !== 'roster.js' && x !== 'worker.js'))
+    ok(![...src(f).matchAll(io)].length, `${f}: reads no mail budget`)
+  // every kind the sources send is declared
+  const kinds = new Set(readdirSync(join(root, 'server/directory/src')).flatMap((f) => [...src(f).matchAll(/deliver\([^)]*kind: '([a-z]+)'/g)].map((x) => x[1])))
+  ok([...kinds].length >= 3 && [...kinds].every((k) => Object.hasOwn(MAIL_KINDS, k)), `every mail kind the sources send is declared (${[...kinds].join(', ')})`)
+}
+
+// =====================================================================
+// 10h. the sign-in host's routes (/v1/web/*): CORS to it alone, real validation
+// =====================================================================
+{
+  const W = async (method: string, path: string, raw?: string, o: { origin?: string | null; ip?: string } = {}) => {
+    const headers: Record<string, string> = { 'content-type': 'text/plain;charset=UTF-8', 'cf-connecting-ip': o.ip ?? freshIp() }
+    if (o.origin !== null) headers.origin = o.origin ?? S
+    const r = await worker.fetch(new Request('https://id.bento.page' + path, { method, body: raw, headers }), env as never)
+    const text = await r.text()
+    responses.push({ what: `web ${method} ${path}`, status: r.status, h: r.headers, text })
+    let j: Record<string, unknown> = {}
+    try { j = JSON.parse(text) } catch { /* */ }
+    return { status: r.status, j, h: r.headers }
+  }
+  ok(WEB_ROUTES.prefix === '/v1/web/' && WEB_ROUTES.challenge.startsWith(WEB_ROUTES.prefix) && WEB_ROUTES.enrol.startsWith(WEB_ROUTES.prefix), 'the web routes live under /v1/web/')
+  // the Workers runtime refuses to start a main module with any other kind of export (measured on wrangler dev)
+  const badExports = Object.entries(workerModule).filter(([, v]) => v === null || (typeof v !== 'function' && typeof v !== 'object'))
+  ok(badExports.length === 0, `every export of worker.js is a class, a handler or an object (not: ${badExports.map(([k]) => k).join(', ') || 'none'})`)
+  const pre = await W('OPTIONS', '/v1/web/enrol')
+  ok(pre.status === 204 && pre.h.get('access-control-allow-origin') === SIGNIN_ORIGIN && pre.h.get('access-control-allow-methods') === 'POST, OPTIONS', 'preflight: CORS to the sign-in host only, POST')
+  const ch = await W('POST', '/v1/web/challenge', '{}')
+  const nonce = ch.j.nonce as string
+  ok(ch.status === 200 && typeof nonce === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(nonce), `challenge → 200 { nonce } in the shape the sign-in host checks (${ch.status})`)
+  ok(ch.h.get('access-control-allow-origin') === SIGNIN_ORIGIN && /Origin/.test(ch.h.get('vary') ?? ''), 'challenge: CORS to the sign-in host, Vary: Origin')
+  ok((await W('POST', '/v1/web/challenge')).status === 200, 'challenge with no body → 200 (the body is not read)')
+  ok(!!(await openChallenge(env.CHALLENGE_KEY as string, 'web', 'web', nonce, now)), 'the nonce is a sealed web challenge')
+  ok(!(await openChallenge(env.CHALLENGE_KEY as string, 'roster', await addressKey('x@example.com'), nonce, now)), 'and is no roster challenge')
+  const xs = await setup('xia@example.com', await Authn.make(), { ch: nonce })
+  ok(xs.status === 400 && xs.j.error === 'nonce', 'a web nonce is refused by roster setup (nonce)')
+  const A = { id: 'AAAA', userHandle: null, authenticatorData: 'AAAA', clientDataJSON: 'AAAA', signature: 'AAAA' }
+  const enrol = (b: unknown, o?: { origin?: string | null }) => W('POST', '/v1/web/enrol', JSON.stringify(b), o)
+  const okBody = { text: `wdev.W.kx.bA.${nonce}`, rq: 'https://home.bento.page', assertion: A }
+  const e0 = await enrol(okBody)
+  ok(e0.status === 501 && e0.j.error === 'not-implemented', `a well-formed enrol → 501 until the kernel defines wdev. (got ${e0.status} ${JSON.stringify(e0.j)})`)
+  ok(e0.h.get('access-control-allow-origin') === SIGNIN_ORIGIN, 'enrol: CORS to the sign-in host')
+  const cases: [string, unknown, string][] = [
+    ['no text', { ...okBody, text: undefined }, 'text'],
+    ['a text that is not wdev.', { ...okBody, text: 'ros.x' }, 'text'],
+    ['an over-long text', { ...okBody, text: 'wdev.' + 'x'.repeat(3000) }, 'text'],
+    ['no rq', { ...okBody, rq: undefined }, 'rq'],
+    ['an empty rq', { ...okBody, rq: '' }, 'rq'],
+    ['another opener', { ...okBody, rq: 'https://attacker.example' }, 'rq'],
+    ['the sign-in host as its own opener', { ...okBody, rq: SIGNIN_ORIGIN }, 'rq'],
+    ['no assertion', { ...okBody, assertion: undefined }, 'assertion'],
+    ['an array assertion', { ...okBody, assertion: [A] }, 'assertion'],
+    ['no signature', { ...okBody, assertion: { ...A, signature: undefined } }, 'assertion'],
+    ['a non-base64url field', { ...okBody, assertion: { ...A, clientDataJSON: 'a+b/c=' } }, 'assertion'],
+    ['an over-long field', { ...okBody, assertion: { ...A, authenticatorData: 'A'.repeat(5000) } }, 'assertion'],
+    ['a numeric userHandle', { ...okBody, assertion: { ...A, userHandle: 7 } }, 'assertion'],
+  ]
+  for (const [what, b, err] of cases) {
+    const r = await enrol(b)
+    ok(r.status === 400 && r.j.error === err, `enrol with ${what} → 400 ${err} (got ${r.status} ${r.j.error})`)
+  }
+  ok((await W('POST', '/v1/web/enrol', 'not json')).j.error === 'bad-request', 'enrol with a body that is not JSON → 400')
+  ok((await enrol({ ...okBody, assertion: { ...A, userHandle: 'AAAA' } })).status === 501, 'control: a userHandle string is accepted')
+  ok((await W('POST', '/v1/web/nope', '{}')).status === 404 && (await W('GET', '/v1/web/challenge')).status === 404, 'other web paths and GET → 404')
+  const ip = freshIp()
+  let last = 0
+  for (let i = 0; i <= LIMITS.ip.challenge; i++) last = (await W('POST', '/v1/web/challenge', '{}', { ip })).status
+  ok(last === 429, `web challenge #${LIMITS.ip.challenge + 1} from one IP in an hour → 429`)
+  const webs = responses.filter((x) => x.what.startsWith('web '))
+  ok(webs.length > 20 && webs.every((x) => x.h.get('access-control-allow-origin') === SIGNIN_ORIGIN), `every web answer (${webs.length}) has CORS for the sign-in host only, never *`)
+  ok(responses.filter((x) => !x.what.startsWith('web ') && !x.what.includes('/v1/web/')).every((x) => x.h.get('access-control-allow-origin') === '*'), 'every other answer keeps CORS *')
+  // the sign-in host's copy of the seam, when it is in this tree
+  const seam = join(root, 'server/signin/public/directory-client.js')
+  if (existsSync(seam)) {
+    const t = readFileSync(seam, 'utf8')
+    ok(t.includes("challenge: '/v1/web/challenge'") && t.includes("enrol: '/v1/web/enrol'"), 'the sign-in host\'s seam names the same two routes')
+  } else console.log('note: server/signin is not in this tree; the seam cross-check runs once it is')
 }
 
 // =====================================================================
