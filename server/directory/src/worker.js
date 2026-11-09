@@ -2,7 +2,7 @@
 // Copyright (c) 2026 The Bento authors
 //
 // bento/id directory — id.bento.page. It holds each address's passkey roster
-// (roster.js, option G) and answers exact-address lookups.
+// (roster.js, option G).
 //
 // It never holds a private key, a document, an access list, a share, or a
 // "who looked up whom" log. No listing exists anywhere: storage is one Durable
@@ -10,45 +10,26 @@
 // them.
 //
 // The first design bound an account key to an address with a TYPED code mailed
-// to the address (`bind.`, /v1/bind/start and /v1/bind/complete). Option G
-// replaces it: an account is a roster of passkeys, and every mailed
-// confirmation is a link that completes only on the sign-in host (G13). A typed
-// code on the same host contradicts that, so both bind routes now answer 410
-// and nothing can make a new `bind.` binding. The Address object below still
-// answers lookups and deletions for any binding that exists.
+// to the address (`bind.`, /v1/bind/start and /v1/bind/complete), and removed
+// one with a holder-signed `del.` or another typed code (/v1/delete,
+// /v1/delete/start, /v1/delete/complete), with /v1/lookup serving the binding.
+// Option G replaces all of it: an account is a roster of passkeys, and every
+// mailed confirmation is a link that completes only on the sign-in host (G13).
+// A typed code on the same host contradicts that, and nothing could make a
+// binding for the others to serve, so every one of those routes answers 410
+// and the object that held bindings is gone. Account deletion comes back as a
+// mailed link to the sign-in host or a member's assertion.
 
 import { addressKey, normalize } from './address.js'
 import { issueChallenge, openChallenge } from './challenge.js'
-import { deliver } from './mail.js'
 import { Roster, REQUESTERS } from './roster.js'
 import { SIGNIN_ORIGIN } from './passkey.js'
 import { WEB_ROUTES } from './seam.js'
-import {
-  attest, buildDel, importDirKey, tombstone as tombText, verifyBind, verifyDel,
-} from './statements.js'
-
-/** A bind. statement's fields, or null. `at` is the time it is judged at: now
- *  for a new submission; for one the directory already accepted, the time it
- *  accepted it (that re-check is integrity, not freshness; expiry is checked
- *  separately, so an expired binding can still be read in order to delete it). */
-async function readBind(text, sig, at) {
-  const v = await verifyBind(text, sig, { now: at })
-  return v.ok ? v.value : null
-}
-
-const sha256hex = async (text) =>
-  [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, '0')).join('')
 
 export const LIMITS = {
-  codeTtlMs: 20 * 60_000,
-  codeAttempts: 5,
-  mailCooldownMs: 60_000,
-  mailPerDay: 3, // per ADDRESS: the mail-bombing control
-  mailPerMonth: 10,
-  ip: { start: 20, complete: 60, lookup: 300, delete: 20, challenge: 120, request: 60, setup: 10, enrol: 60 }, // per IP per hour
+  ip: { complete: 60, lookup: 300, challenge: 120, request: 60, setup: 10, enrol: 60 }, // per IP per hour
 }
 const DAY = 86_400_000
-const CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ' // no 0/O, 1/I/L
 
 const BASE = {
   'content-type': 'application/json',
@@ -56,8 +37,8 @@ const BASE = {
   'x-content-type-options': 'nosniff',
   'x-robots-tag': 'noindex, nofollow',
   'referrer-policy': 'no-referrer',
-  // Callers are the bento/home agents (extension, apps), the sign-in host and
-  // the deletion page. Nothing here is authorised by origin or cookies: every
+  // Callers are the bento/home agents (extension, apps) and the sign-in host.
+  // Nothing here is authorised by origin or cookies: every
   // write is a signature, a passkey assertion or a mailed secret, so any origin
   // may call.
   'access-control-allow-origin': '*',
@@ -79,38 +60,6 @@ const BASE = {
 const WEB = { ...BASE, 'access-control-allow-origin': SIGNIN_ORIGIN, vary: 'Origin' }
 const headersFor = (path) => (path.startsWith(WEB_ROUTES.prefix) ? WEB : BASE)
 const json = (status, body, headers = BASE) => new Response(JSON.stringify(body), { status, headers })
-/** A DO answer passed through; a deletion becomes 204 with no body (a 204 may not carry one). */
-const relay = (r) => (r.status === 200 && r.body.deleted === true ? new Response(null, { status: 204, headers: BASE }) : json(r.status, r.body))
-
-export function mintCode() {
-  const r = crypto.getRandomValues(new Uint8Array(8))
-  let s = ''
-  for (const b of r) s += CODE_ALPHABET[b % 31] // 256 % 31 = 8: a bias under 0.4%, acceptable for a 20-minute, 5-try code
-  return s
-}
-const codeOk = (c) => typeof c === 'string' && c.length === 8 && [...c].every((ch) => CODE_ALPHABET.includes(ch))
-
-/** Constant-time compare of two equal-length hex strings. */
-function same(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false
-  let d = 0
-  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  return d === 0
-}
-
-// --- mail ----------------------------------------------------------------------
-// The mail carries the code and fixed wording, never user-supplied text, so
-// the directory can never be used to deliver someone else's words.
-export async function sendCode(env, to, code) {
-  const body = [
-    `Your code: ${code}`,
-    '',
-    'Enter it on the bento/id account-deletion page to remove this address from the directory.',
-    'Bento will never ask for this code anywhere else. If you did not ask for it, ignore this email.',
-    'The code expires in 20 minutes.',
-  ].join('\n')
-  return deliver(env, { to, subject: 'Your bento/id removal code', body, code, kind: 'delete' })
-}
 
 // --- routes ----------------------------------------------------------------------
 
@@ -123,21 +72,25 @@ async function ledger(env, ip, kind) {
 async function rosterStub(env, email) {
   return env.ROSTER.get(env.ROSTER.idFromName(await addressKey(email)))
 }
-async function addressStub(env, email) {
-  const key = await addressKey(email)
-  return env.ADDRESS.get(env.ADDRESS.idFromName(key))
-}
 const call = async (stub, op, args) => {
   const r = await stub.fetch('https://address/op', { method: 'POST', body: JSON.stringify({ op, ...args }) })
   return { status: r.status, body: await r.json() }
 }
 
+/** setup/start's one answer, whatever happened (it is frozen: nothing may add to it). */
+const SETUP_STARTED = Object.freeze({ ok: true })
+
 async function body(req) {
   try { const j = await req.json(); return j && typeof j === 'object' ? j : null } catch { return null }
 }
 
-/** The typed-code `bind.` routes, retired under G13 (see the top of this file). */
-export const RETIRED = Object.freeze(['/v1/bind/start', '/v1/bind/complete'])
+/**
+ * The first design's routes, retired under G13 (see the top of this file):
+ * 410 for any method (OPTIONS too) and body, before anything is read.
+ */
+export const RETIRED = Object.freeze([
+  '/v1/bind/start', '/v1/bind/complete', '/v1/lookup', '/v1/delete', '/v1/delete/start', '/v1/delete/complete',
+])
 
 export default {
   /**
@@ -159,6 +112,8 @@ export default {
 
 async function route(req, env) {
   const url = new URL(req.url)
+  // before anything else, a preflight included: a retired route answers nothing but 410
+  if (RETIRED.includes(url.pathname)) return json(410, { error: 'gone' })
   if (req.method === 'OPTIONS') {
     const web = url.pathname.startsWith(WEB_ROUTES.prefix)
     return new Response(null, {
@@ -168,18 +123,9 @@ async function route(req, env) {
   }
   const ip = req.headers.get('cf-connecting-ip') || '0.0.0.0'
   const p = url.pathname
-  if (RETIRED.includes(p)) return json(410, { error: 'gone' })
 
   if (p === '/v1/keys' && req.method === 'GET') {
     return json(200, { keys: JSON.parse(env.DIR_PUBKEYS || '[]') })
-  }
-
-  if (p === '/v1/lookup' && req.method === 'GET') {
-    const email = normalize(url.searchParams.get('e') ?? '')
-    if (!email) return json(400, { error: 'bad-address' })
-    if (!(await ledger(env, ip, 'lookup'))) return json(429, { error: 'rate-limited' })
-    const r = await call(await addressStub(env, email), 'lookup', {})
-    return json(r.status, r.body)
   }
 
   if (p === '/v1/roster' && req.method === 'GET') {
@@ -200,33 +146,6 @@ async function route(req, env) {
   const b = await body(req)
   if (!b) return json(400, { error: 'bad-request' })
 
-  if (p === '/v1/delete') {
-    const email = normalize(b.email ?? '')
-    if (!email || typeof b.sig !== 'string') return json(400, { error: 'invalid' })
-    if (!(await ledger(env, ip, 'delete'))) return json(429, { error: 'rate-limited' })
-    const r = await call(await addressStub(env, email), 'delete', { ts: b.ts, sig: b.sig })
-    return relay(r)
-  }
-
-  if (p === '/v1/delete/start') {
-    const email = normalize(b.email ?? '')
-    if (!email) return json(400, { error: 'bad-address' })
-    if (!(await ledger(env, ip, 'start'))) return json(202, { ok: true })
-    const r = await call(await addressStub(env, email), 'deleteStart', {})
-    if (r.body.mail) {
-      try { await sendCode(env, email, r.body.mail.code) } catch (e) { console.log(`mail failed: ${e.message}`) }
-    }
-    return json(202, { ok: true })
-  }
-
-  if (p === '/v1/delete/complete') {
-    const email = normalize(b.email ?? '')
-    if (!email || !codeOk(b.code)) return json(400, { error: 'invalid' })
-    if (!(await ledger(env, ip, 'complete'))) return json(429, { error: 'rate-limited' })
-    const r = await call(await addressStub(env, email), 'deleteComplete', { code: b.code })
-    return relay(r)
-  }
-
   // --- the passkey roster (option G) ---
   const origin = req.headers.get('origin') || ''
 
@@ -238,14 +157,15 @@ async function route(req, env) {
   }
 
   if (p === '/v1/roster/setup/start') {
-    // Mails the address a setup link (links.js). ALWAYS 202 once the address
-    // is well formed: the answer never says whether the address has an account,
-    // was mailed, or hit a limit.
+    // Mails the address a setup link (links.js). ALWAYS the same 202 once the
+    // address is well formed: the answer never says whether the address has an
+    // account, was mailed, or hit a limit, so the object's answer is never
+    // passed on (the rig compares the bytes across every state).
     const email = normalize(b.email ?? '')
     if (!email) return json(400, { error: 'bad-address' })
-    if (!(await ledger(env, ip, 'setup'))) return json(202, { ok: true })
+    if (!(await ledger(env, ip, 'setup'))) return json(202, SETUP_STARTED)
     await call(await rosterStub(env, email), 'setupStart', { address: email })
-    return json(202, { ok: true })
+    return json(202, SETUP_STARTED)
   }
 
   if (p === '/v1/roster/setup') {
@@ -317,95 +237,6 @@ async function web(req, env, ip, p) {
 }
 
 export { Roster }
-
-// --- one Durable Object per ADDRESS ------------------------------------------------
-// Storage: `cur` (a binding: exact statement text, holder signature), `chain`
-// (hashes of every earlier binding for this address), `pend` (a pending
-// removal code), `mail` (send times, for the per-address limits), `tomb` (a
-// deletion). Nothing can make a new binding since the bind routes were retired;
-// this object answers lookups and removals for the ones that exist.
-
-export class Address {
-  constructor(state, env) { this.state = state; this.env = env }
-
-  async fetch(req) {
-    const a = await req.json()
-    const now = Date.now()
-    const s = this.state.storage
-    const out = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
-
-    // may we mail this address now? (per-address limits; recorded only when a mail is actually sent)
-    const mayMail = async () => {
-      const times = ((await s.get('mail')) || []).filter((t) => now - t < 31 * DAY)
-      if (times.length && now - times[times.length - 1] < LIMITS.mailCooldownMs) return false
-      if (times.filter((t) => now - t < DAY).length >= LIMITS.mailPerDay) return false
-      if (times.length >= LIMITS.mailPerMonth) return false
-      await s.put('mail', [...times, now])
-      return true
-    }
-    const pending = async (kind) => {
-      const p = await s.get('pend')
-      if (!p || p.kind !== kind || p.expires <= now || p.attempts >= LIMITS.codeAttempts) return null
-      return p
-    }
-    const codeHash = (code) => sha256hex(`bento-dir/1/code\n${code}`)
-    const fail = async (p) => { p.attempts++; await s.put('pend', p); return out(400, { error: 'invalid' }) }
-
-    if (a.op === 'lookup') {
-      const cur = await s.get('cur')
-      if (cur && cur.b.expires > now) {
-        // a FRESH issuedAt on every answer, so a client can tell a replayed old answer by age
-        const dirKey = await importDirKey(this.env.DIR_KEY_JWK)
-        const att = await attest(dirKey, this.env.DIR_KID, cur.h, cur.verifiedAt, now)
-        return out(200, { binding: cur.stmt, sig: cur.sig, attestation: att.text, attestationSig: att.sig, chain: (await s.get('chain')) || [], rebound: !!cur.rebound })
-      }
-      const tomb = await s.get('tomb')
-      if (tomb) return out(410, { error: 'deleted', tombstone: tomb })
-      return out(404, { error: 'not-found' }) // never existed, or expired: the same answer
-    }
-
-    const tombstone = async (by) => {
-      const cur = await s.get('cur')
-      await s.delete(['cur', 'pend'])
-      if (!cur) return // nothing was bound: nothing to record
-      const dirKey = await importDirKey(this.env.DIR_KEY_JWK)
-      await s.put('tomb', await tombText(dirKey, this.env.DIR_KID, cur.h, cur.b.seq, now, by))
-    }
-
-    if (a.op === 'delete') {
-      const cur = await s.get('cur')
-      const b = cur && (await readBind(cur.stmt, cur.sig, cur.verifiedAt)) // the address, read from the statement itself
-      if (!b || !Number.isSafeInteger(a.ts)) return out(400, { error: 'invalid' })
-      if (!(await verifyDel(buildDel(b.address, a.ts), a.sig, { accountPub: b.accountPub, now })).ok) return out(400, { error: 'invalid' })
-      await tombstone('holder')
-      return out(200, { deleted: true })
-    }
-
-    if (a.op === 'deleteStart') {
-      // only an address with something to delete is mailed; the HTTP answer is 202 either way
-      // only an EXPIRED binding can be removed by mailbox alone: a live one is
-      // removed by its holder (del.), or, once rotation lands, by the 72-hour
-      // contestable path. Email never decides alone (security §25).
-      const cur = await s.get('cur')
-      if (!cur || cur.b.expires > now || !(await mayMail())) return out(202, { mail: null })
-      const code = mintCode()
-      await s.put('pend', { kind: 'delete', codeHash: await codeHash(code), expires: now + LIMITS.codeTtlMs, attempts: 0 })
-      return out(202, { mail: { code } })
-    }
-
-    if (a.op === 'deleteComplete') {
-      const p = await pending('delete')
-      if (!p) return out(400, { error: 'invalid' })
-      if (!same(await codeHash(a.code), p.codeHash)) return fail(p)
-      const cur = await s.get('cur')
-      if (cur && cur.b.expires > now) return fail(p) // renewed since the code was mailed
-      await tombstone('mailbox')
-      return out(200, { deleted: true })
-    }
-
-    return out(400, { error: 'bad-op' })
-  }
-}
 
 // --- the per-IP ledger ----------------------------------------------------------------
 // Keys on HMAC(daySalt, ip); the salt is minted in storage per UTC day and

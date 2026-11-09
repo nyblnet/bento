@@ -26,8 +26,8 @@ defaults:
 
 jobs:
   share-directory-mutants:
-    # Each mutant reopens one path (the retired bind routes served again; a
-    # loosened roster, passkey, mail or header rule) in a copy of the tree, and the
+    # Each mutant reopens one path (a retired route served again; a loosened
+    # roster, passkey, mail or header rule) in a copy of the tree, and the
     # directory rigs must fail a row. A mutant that no longer applies, or a
     # rig that crashes instead of counting, fails this job. Its own job: at
     # ~7 s a mutant on a runner it outgrew validate's 20 minutes.
