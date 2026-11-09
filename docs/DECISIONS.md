@@ -13057,6 +13057,51 @@ Rigs: scripts/test-dash-colours.ts (each paint function with a real colour as
 control and non-colours that must draw nothing) and
 scripts/test-dash-colours-browser.mjs (the built grid, hovered).
 
+## 2026-11-09 — bento/id option G: the countersign names the directory's authority (`rip.` auth word and cause)
+
+**Decision.** The roster countersign's `0|1` reset flag is replaced by an
+authority word and a cause:
+`rip.<sha256(ros text)>.<requestedAt>.<ripenedAt>.<auth>.<cause|empty>.<kid>`.
+The contract moves to `kernel/fixtures/roster-v2.json`; version 1 is retired
+before any host read it (its `rip.` texts no longer parse).
+
+- `m` a member's change (and the setup head), `r` a reset: cause empty, rules
+  unchanged.
+- `q` a void that quarantines the member that asked. Immediate. The link
+  carries the voided request (its `ros.` text, signer and proof); the cause is
+  that text's hash. The request must name this link's previous head, its signer
+  must be an unquarantined member of that head, and its proof must verify. The
+  only change is that signer gaining `~q`, and another unquarantined member
+  must remain. So the directory can quarantine only a member that really asked
+  for something.
+- `l` the incident lever's revert. Immediate. The link carries the ripened
+  change it reverts (previous `ros.`, `ros.`, `rip.` and signature); the cause
+  is that change's hash. The cited change must be countersigned by a pinned
+  key, belong to this address, chain to its previous head and add exactly one
+  member; that member, never the requester, is the one quarantined.
+- `x` removal of a quarantined member: follows a `q` or `l` link, cites its
+  head, is requested at the moment it ripened, waits 72 hours, and removes
+  exactly one quarantined member.
+- `u` undo: follows a `q` or `l` link, cites its head, is immediate, and
+  clears exactly one quarantine mark; the member keeps the time it joined.
+
+**Why words, not one flag read off the diff.** The word states what the
+directory claims to be doing, so a diff that does not match is refused rather
+than reinterpreted, a peer can say which act changed an account, and the
+quarantine and the revert need different evidence. The directory gains no
+power to ADD a member: no word adds one, so a member is added only by a member's
+signed change, by setup, or by a reset, all as before.
+
+Also settled in the same change: a member removed and added again counts its
+age from the second addition (the consent-key ripeness rule reads that age); a
+reset's prevHash is checked like any link's; a change requested at exactly the
+previous ripening is allowed; peers keep no stored sign count along a chain;
+with two pinned directory keys, the kid picks the key.
+
+Guards: `scripts/test-roster.ts` (every row with its reason, accepted rows'
+state written by hand, positive controls) and `scripts/test-roster-mutants.ts`
+(each rule loosened in turn must turn the rig red, after the unmutated copy
+passes).
 ## 2026-11-09 — bento/home Android: device probes are separate debug-only apps with their own package
 
 Measuring what Android reports for a passkey (the `clientDataJSON` origin a
@@ -13147,6 +13192,286 @@ Guards: `scripts/test-directory-roster.ts` (the real worker and Durable Object
 on a hand clock, with real browser registrations and the kernel's real
 assertions) and `scripts/test-directory-mutants.ts` (each rule loosened in turn
 must fail a row).
+
+## 2026-11-09 — bento/home in your browser, stage 1: a web host that runs only verified code (`home/web/`)
+
+bento/home gets a fourth host, a web page (to be served at home.bento.page),
+built in stages. Stage 1 opens and presents, and keeps nothing:
+
+- **Only verified code runs, and only the release it claims.** A picked or dropped file is read on the device
+  (never uploaded), and its code is checked with kernel gate 1
+  (`verifyServedHeld`) against the signed release histories, verified with the
+  release key. A file that matches exactly one release runs in THAT release,
+  its own shell, never a silent upgrade. A file that matches none (tampered, a
+  fork, newer than the history) never runs; on the person's request its
+  document opens read-only in the newest signed release of its app, fetched
+  through the signed manifest and its pin and verified against the history in
+  turn.
+- **The document runs in a sandboxed frame on a separate site.** The frame
+  page's header CSP carries `sandbox`, so it is an opaque origin whoever loads
+  it, names the library in `frame-ancestors`, refuses workers, and pins its one
+  script by hash plus `blob:` for the verified blocks it writes. Its script
+  refuses to boot unless it is opaque, framed, and handed the file by the
+  library's origin, and under a script policy: the library's sandbox attribute
+  alone would make the frame opaque even if a host dropped the header, so the
+  script also refuses when `Function('')` runs. The frame has no `allow-downloads`: every download goes
+  through the library, which in stage 1 gives back only the bytes that
+  verified. The session is a `MessagePort`; a frame that navigates away (it no
+  longer answers a ping on that port) is closed. The frame site serves that one
+  page and nothing else, ever (no service worker). Its domain is a build input
+  (`--frame-origin`); choosing it, and its DNS, are the maintainer's.
+- **Nothing kept; the library talks only to the release channel.** No storage,
+  file handles, service worker, identity or relay in stage 1. The histories are
+  bundled into the build; the channel is asked only when a file does not verify
+  against them, or for the read-only view. That is the library: the document's
+  own content may still load `https:` images, media and embeds, as it does from
+  disk, and a live document is shown as it was last saved, not live.
+- **No security floor yet.** A file in a release with a known script bug runs
+  that release, bug included, inside the opaque frame with no storage, keys or
+  handles to reach. A signed security mark in the history is a stage-2 gate.
+- **The release key is in network-served code.** PLATFORM §6 compiles the key
+  into every file and never reads it from the network. That still holds for
+  files. A session in this page trusts the key in the page bento.page served on
+  that visit, so the page itself is a code-trust root for the files opened in
+  it: opt-in, kept small (budgets in the rig), and stated.
+- **Supersedes, for the web, 2026-08-02 "bento/home is closed".** What changed
+  since: kernel has a per-document store a host can answer (DocStore), a shell
+  boots in an opaque origin, and this host runs a verified signed shell rather
+  than the file's own code unverified. That entry's "a per-document origin, or
+  not at all" is answered by the opaque frame: each document gets a unique
+  origin with no storage, so nothing pools.
+- **Reuse, not copies.** Verification is kernel `gate1.ts`; the signature check
+  is the extension's mirror of the kernel's (`home/webext/src/release.js`,
+  already pinned to the kernel key). Saving (a per-document store over the
+  frame's port) needs a kernel transport and comes in a later stage.
+
+Rigs: `scripts/test-home-web.mjs` (Chromium, WebKit, Firefox),
+`scripts/test-home-web-mutants.mjs` (each mutant red on its own row),
+`scripts/test-shell-standalone.mjs` (every app shell points to bento.page and
+never depends on it). Details: `home/web/README.md`.
+## 2026-11-09 — bento/id option G: a removal or undo names exactly the member the quarantine marked
+
+**Decision.** This replaces "removes exactly one quarantined member" and
+"clears exactly one quarantine mark" in the earlier entry today on the
+authority word. An `x` link must remove, and a `u` link must clear, exactly
+the member that the `q` or `l` link just before it marked: its TARGET.
+
+- A `q` link's target is its voided request's signer; an `l` link's is the one
+  member its cited change added. Each is bound to the link by the link's cause
+  hash, so `x` and `u` need no new field.
+- When the `q` or `l` link is the PINNED head, its target is read from the
+  evidence it carries, and that evidence is re-checked. The pinned
+  countersign covers only the cause hash, while a refetched link's evidence
+  may come from the very party this rule guards against. So a `q`'s voided
+  request must match the cause, be for this address and seq, and its
+  signer's proof over it must verify (the signer field is not covered by the
+  cause). An `l`'s cited change must match the cause, and its previous head
+  must chain to it (the previous head is not covered by the cause either)
+  with exactly one member added. A pinned link without such evidence refuses
+  a following `x` or `u` (`evidence`), and the host refetches the link. **So a host
+  stores a pinned head WHOLE, its voided request or cited change included.**
+- Two `q` links in a row stay legal, and so does a member change after a `q`.
+  A mark left behind that way is never lifted or removed by the directory's
+  word; only a member's own 72-hour change removes it.
+
+**Why.** Before this, after `q` on one member and then `q` on another, an undo
+could clear the FIRST mark, and a removal could take it, at once and from a
+pin as well. A buggy directory, or anyone holding its countersigning key (an
+`l` on anyone, then a `u` on an older mark), could then lift an old quarantine
+without the 72 hours and without showing a reset, and two ports could
+disagree about which member a removal meant. Security's ruling on the change
+that added the authority word set this condition.
+
+Also in the same change, evidence must say what its word claims: the change
+an `l` cites must be countersigned under the word `m` and change no member's
+kind, and the request a `q` voids must be for this address at the next seq.
+The rows went into `roster-v2.json` in place, because no port has copied it
+yet; once one has, a change like this is a new version.
+
+Guards: `scripts/test-roster.ts` and `scripts/test-roster-mutants.ts` (the
+target rule's mutants: the target from the diff ignored, the pin's evidence
+ignored, the pin's evidence read without the cause check, a pin without
+evidence tolerated).
+## 2026-11-09 — bento/id directory: a change waits only once its notice is sent; the typed-code bind routes are retired
+
+Hardening of the passkey roster store (`server/directory/`) before anything
+there is deployed, from security's review of the roster store.
+
+- **The waiting notice gates the 72-hour wait.** The "a change is waiting"
+  mail is the person's only way to learn of a change in time to stop it. If
+  the mailer was down, the change used to be queued anyway and take effect 72
+  hours later, so the first notice the person had was "now in effect". Now the
+  change holds its slot marked as unsent, the notice goes out, and only a
+  notice the mailer accepted lets it wait; otherwise the request fails with
+  503 and nothing is queued. A change still marked unsent (its object stopped
+  mid-send) never takes effect and frees the slot after 10 minutes. The
+  person may then have a notice for a change that never happens, which is the
+  safe side.
+- **Spent challenges are one storage key each.** A request spends its
+  directory challenge before anything else, and that needs no account, so
+  anyone can do it as often as the per-IP limits allow. The spent set was one
+  stored value that grew with every stranger's request, toward the platform's
+  per-value limit, past which every request on that address would fail. Each
+  spent challenge is now its own key, `spent:<issued>:<nonce>`, kept 10
+  minutes (twice a challenge's life) and swept a few at a time by later
+  spends. The rig holds a sustained hour of one spend a second at the last
+  10 minutes' worth.
+- **An unexpected failure answers like everything else.** The worker catches
+  any exception at the top and answers 500 `{error: "internal"}` with the full
+  header set, instead of letting the platform serve its own error page on the
+  passkeys' relying-party host.
+- **The log names keys in full.** Enrolment and change entries carry the
+  whole public key concerned and the whole key that asked, not an 8-hex
+  fingerprint: the incident lever must act on the exact key, and 32 bits can
+  collide. Mail still shows fingerprints, for people.
+- **The typed-code `bind.` routes are retired.** `POST /v1/bind/start` and
+  `/v1/bind/complete` answer 410 for any method and body, and the Address
+  object's code for making a binding is gone. Under option G every mailed
+  confirmation is a link that completes only on the sign-in host, so a typed
+  code on the same host contradicted it. Lookups and deletions still answer
+  for any binding that exists; the removal-code routes (`/v1/delete/start`,
+  `/complete`, for expired bindings only) are unchanged here.
+
+Guards: `scripts/test-directory.ts`, `scripts/test-directory-roster.ts` (rows
+for each rule above, including the four that security's extra mutants showed
+the rig was blind to: a repeated CBOR map key, an origin matched by prefix, a
+request naming another address, and an expired setup token), and
+`scripts/test-directory-mutants.ts` (39 mutants, each loosening one rule, every
+one failing a row).
+
+## 2026-11-09 — bento/id directory: setup by mailed link, and which mail a stranger can hold back
+
+The directory now mails the setup token itself, as a link
+(`POST /v1/roster/setup/start`, `server/directory/src/links.js`).
+
+- **A setup link completes only on the sign-in host, in the browser that
+  opens it.** It points at the sign-in host and carries everything in the
+  fragment (`<sign-in host>/setup#v=1&e=<address>&t=<token>`), which no
+  browser sends to a server. Opening it does nothing: the page asks the
+  person to make a passkey, and only that registration, sent with the token,
+  sets the account up. A mail scanner that fetches the link gets the bare
+  page, cannot make a passkey, and never sees the token, and no route
+  completes anything on a GET. `links.js` is the format's single definition
+  and the sign-in host's contract.
+- **The setup budget holds a link back only while a link it mailed is still
+  live.** Anyone can ask for a setup link for any address, so they can fill
+  that address's budget (3 a day, 10 in 31 days). If a full budget simply
+  refused, ten stranger requests would leave the address unable to set up for
+  weeks with no working link in its inbox. Now, with the budget full and no
+  live link, one link goes anyway, at most one per link life (20 minutes),
+  and a link the mailer refused is withdrawn so it holds nothing back. The
+  route is also limited to 10 starts per IP an hour, and always answers 202.
+- **No mail that reports or stops a change, or recovers an account, ever
+  reads a budget a stranger can fill.** That covers roster mail and, before
+  they exist, reset, void and freeze mail: a stranger who could hold back a
+  reset mail could keep a hostile setup in place indefinitely. Every kind of
+  mail is declared in one table with its class, sending an undeclared kind
+  throws, and the rig checks that each budget is read in one function called
+  from one place.
+- **The sign-in host's routes exist.** `POST /v1/web/challenge` answers a
+  challenge sealed for the web audience (no roster route accepts it);
+  `POST /v1/web/enrol` validates its request (a `wdev.` text, bento/home as
+  the opener, a well-formed assertion) and answers 501 until the kernel
+  defines the `wdev.` statement, storing and countersigning nothing. Both
+  answer CORS to the sign-in host alone, never `*`.
+
+Guards: `scripts/test-directory-roster.ts` (the link format and what does not
+complete it, 31 days of stranger requests with a live link at every moment,
+the per-IP limit, the mail-kind table and where budgets are read, the web
+routes' validation and CORS) and `scripts/test-directory-mutants.ts`.
+## 2026-11-09 — bento/dash: document strings reach markup at both ends checked
+
+Dash builds much of its markup as strings, and a workbook is untrusted input.
+Every value from the document that lands in an attribute is held twice:
+
+- **On open, parseDoc repairs it.** `Column.w` that is not a finite number
+  becomes 130, and one out of range is clamped to 10–4000 (`colW`). A column id
+  that fails `isSafeId` (a quote, angle bracket, ampersand, backtick, backslash
+  or control character, empty, or over 128 characters) is re-minted like a
+  missing id, and its `data`, `cells` and `totals` keys move with it. A row-id
+  run that is not two whole numbers gets a fresh start past every other run;
+  its count is the number it reads as, or 0. Each is reported as a repair, and
+  no column is ever dropped. A frozen file is never rewritten, as before.
+- **At the paint site, it is escaped or coerced anyway**, because a frozen file
+  and a live edit never pass through parseDoc: the grid reads widths only
+  through `colW`, escapes every column id it writes into `data-*` attributes
+  (and `CSS.escape`s it in selectors), and writes row ids as numbers. A
+  dashboard tile's layout goes through `tileStyle` (whole numbers or the
+  default). The `esc` helpers in story.ts, main.ts and gridmenu.ts now escape
+  quotes as well, since they also fill attributes (a story step's id and
+  caption among them).
+
+New markup that carries a document string escapes it with a helper that covers
+quotes, or sets it through the DOM. Rigs: scripts/test-dash-attrs.ts and
+scripts/test-dash-attrs-browser.mjs (live edit, saved file, frozen file).
+
+## 2026-11-09 — bento/id directory: before its first deploy, a day-long link beyond the budget, the first design's routes retired, and post-send writes that check
+
+- **A setup link mailed beyond the budget lives 24 hours** (one inside the
+  budget still lives 20 minutes). This revises the entry above, where a link
+  beyond the budget could go once per 20-minute link life. That kept a live
+  link in the inbox at every moment, but it let a stranger asking every 10
+  minutes send the address about 72 setup mails a day, and at that volume one
+  stranger with a handful of addresses could get our mail paused, and with it
+  every roster and recovery mail. The life of the beyond-budget link is the
+  only limit on such mail, so it now sets the cap: the day's 3 plus one, about
+  4 a day for requests that arrive one after another, and still never a
+  moment without a live link. Requests that arrive together, while a link's
+  mail is still going out, are held by the next rule. The longer life is a
+  longer window for a link that leaks, which the fragment-only link and the
+  setup notice already address; a reset covers a setup someone else
+  completed.
+- **A link whose mail is still going out holds the next one back.** A token
+  is marked mailed only once the mailer answers, and on a Durable Object
+  other requests run while the mail is being sent, so every start that
+  arrived in that window mailed its own day-long link: ten at once meant ten
+  mails, and a burst could be repeated each day. Each token now
+  records when it was minted, and while one is younger than the mailer's
+  timeout plus 5 seconds it holds the next link back as a mailed one would.
+  Older than that and still unconfirmed, it can only be a send that died, so
+  it holds nothing (an unconfirmed link must never hold a mail back for
+  good). A burst now mails one link.
+- **Every route of the first design answers 410**, a preflight included:
+  the typed-code bind routes (already retired), and now `/v1/lookup`, the signed `/v1/delete` and
+  the typed-code `/v1/delete/start` and `/v1/delete/complete`. The deletion
+  mail asked the person to type a code from an email on `id.bento.page`,
+  which contradicts the promise in every other mail that Bento never asks
+  for that; and with no route left that could make a binding, the lookup and
+  deletions could only ever serve bindings that cannot exist. The object
+  that held bindings, the removal-code mail kind and its budget are gone.
+  The directory was never deployed, so its migrations were rewritten rather
+  than extended; from the first deploy on they only grow. Account deletion
+  returns as a mailed link to the sign-in host or a member's assertion. The
+  web deletion page built for those routes (`bento.page/id/delete`, never
+  published) is retired with its rig, and the privacy notice no longer
+  points to it.
+- **What follows a waiting notice's send touches the stored change only if
+  it is still that request's.** A send can outlive the 10 minutes after which
+  an unconfirmed change is dropped, and a later request can then queue its
+  own; once the void page exists, a void can also land mid-send. The success
+  write (marking the change notified) and the failure clean-up (deleting it)
+  now both check that the stored change is still this request's unsent one;
+  otherwise the request answers 409 `superseded` and nothing is written. The
+  mailer call also times out after 30 seconds.
+- **The object's alarm sweeps spent challenges.** Later spends already swept
+  a few each, but an address strangers spent challenges on and then left
+  alone kept those keys for good. Each spend now makes sure an alarm will
+  come when its key may go; the alarm is shared with the 72-hour ripening, so
+  scheduling only ever brings it forward and each run sets it for the
+  earliest thing still to come, so a spend due sooner brings an alarm set for
+  a 72-hour ripening forward.
+
+`setup/start` answers the same bytes in every state, and that, the web
+routes' CORS on a failure, the enrol route's per-IP limit and both link lives
+are now rows. Guards: `scripts/test-directory.ts` (each retired route, every
+method, 410 with nothing mailed or stored), `scripts/test-directory-roster.ts`
+(31 days of a stranger every 10 minutes and 3 days once a minute: at most 4
+mails in any 24 hours with no gap; bursts of 10 and 30 starts during a slow
+send, one link each, under a harness that keeps a Durable Object's input
+gate; hung sends that deliver or fail after a
+later change queued, or after the change was removed; a never-answering
+mailer; the alarm sweep) and `scripts/test-directory-mutants.ts`, now in its
+own CI job.
 
 ## 2026-11-09 — Gate 1: `<style>`, `<title>` and `<textarea>` hold no markup, in any context
 

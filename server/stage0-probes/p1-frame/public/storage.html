@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Probe P1 storage</title>
+<link rel="stylesheet" href="/probe.css">
+<script src="/probe-common.js"></script>
+<script src="/frame-url.js"></script>
+<script src="/storage.js" defer></script>
+</head>
+<body>
+<main>
+<span class="tag">stage-0 measurement probe · P1 third-party storage</span>
+<h1>What can a framed site store?</h1>
+<p>Sitting A3 (Safari). The frame below is the frame site, embedded by this
+page, so it is a <b>third party</b> here. It is a real origin (not sandboxed),
+because the question is what a framed real origin gets. Each press writes a
+timestamp into four kinds of storage and reads back what the last press left.</p>
+<ol>
+<li>Press <b>Run the four checks</b> and read the four lines.</li>
+<li>Copy results.</li>
+<li>Optional: quit Safari completely (⌘Q), reopen this page, press again. The
+"previous" values show whether anything survived the quit.</li>
+</ol>
+<p><button id="run" class="primary">Run the four checks</button></p>
+<pre id="observed">Not run yet.</pre>
+<iframe id="store-frame" class="doc" style="height:60px;min-height:0" title="frame site"></iframe>
+<div class="results">
+  <label>Notes (optional) <input type="text" id="notes" style="width:100%"></label>
+  <div class="row" style="margin-top:8px"><button id="copy" class="primary">Copy results</button> <span id="copy-status" class="muted"></span></div>
+  <textarea id="result" rows="3" readonly hidden></textarea>
+</div>
+<p><a href="/">Back to the main probe</a></p>
+</main>
+</body>
+</html>

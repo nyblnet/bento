@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 // bento/id option G: the roster chain verifier (kernel/src/roster.ts) against
-// kernel/fixtures/roster-v1.json.
+// kernel/fixtures/roster-v2.json.
 //
 //   node scripts/test-roster.ts   [ROSTER_FIXTURE=<file>]
 //
@@ -29,7 +29,7 @@ function ok(cond: boolean, msg: string) {
 }
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const F = JSON.parse(readFileSync(process.env.ROSTER_FIXTURE || join(root, 'kernel/fixtures/roster-v1.json'), 'utf8'))
+const F = JSON.parse(readFileSync(process.env.ROSTER_FIXTURE || join(root, 'kernel/fixtures/roster-v2.json'), 'utf8'))
 type St = { seq: number; ripenedAt: number; members: Array<{ kind: string; key: string; quarantined: boolean; since: number }>; createdAt: number | null; lastResetAt: number | null; sinceExact: boolean }
 type Row = { name: string; links: RosterLink[]; pinned?: string; expect: 'accept' | 'reject'; reason?: string; state?: St }
 const rows: Row[] = F.rows
@@ -41,6 +41,7 @@ async function run(r: Row, extra: Record<string, unknown> = {}) {
 
 console.log(`fixture: rp id ${F.rpId}, origins ${JSON.stringify(F.origins)}, ${rows.length} rows`)
 ok(F.rpId === ROSTER_RP_ID && JSON.stringify(F.origins) === JSON.stringify(ROSTER_WEB_ORIGINS), 'fixture names the pinned rp id (id.bento.page) and origin list (the sign-in host)')
+ok(F.version === 2, 'fixture version 2 (the rip. authority word; version 1 is retired)')
 ok(F.waitMs === ROSTER_WAIT_MS && ROSTER_WAIT_MS === 72 * 3_600_000, 'the wait is 72 hours, in the fixture and the code')
 
 console.log('\nevery row reaches its verdict for its reason')
@@ -78,7 +79,7 @@ const REQUIRED: Array<[string, string]> = [
   ['wait/remove-other-at-once', 'unripe'], ['wait/reset-short', 'unripe'], ['wait/last-live-member-leaves-at-once', 'unripe'],
   ['rip/over-other-text', 'rip-mismatch'], ['rip/unknown-kid', 'unknown-kid'], ['rip/wrong-key', 'rip-signature'], ['rip/high-s', 'rip-signature'],
   ['rip/ripened-before-requested', 'rip-grammar'], ['rip/missing', 'rip-grammar'], ['rip/future', 'not-yet-valid'],
-  ['setup/reset-flag', 'reset'], ['setup/two-members', 'setup-members'], ['setup/consent-key', 'setup-members'], ['setup/quarantined', 'setup-members'],
+  ['setup/auth-reset', 'auth'], ['setup/auth-quarantine', 'auth'], ['setup/two-members', 'setup-members'], ['setup/consent-key', 'setup-members'], ['setup/quarantined', 'setup-members'],
   ['setup/with-proof', 'proof'], ['reset/with-proof', 'proof'], ['reset/two-members', 'reset-members'], ['reset/recovery-key', 'reset-members'],
   ['signer/missing', 'proof'], ['signer/not-a-member', 'signer'], ['signer/adds-itself', 'signer'], ['signer/quarantined', 'quarantined'],
   ['signer/consent-key', 'signer-kind'], ['proof/passkey-raw-signature', 'proof'], ['proof/recovery-key-assertion', 'proof'], ['proof/recovery-key-both', 'proof'],
@@ -90,6 +91,32 @@ const REQUIRED: Array<[string, string]> = [
   ['quarantine/lifted', 'quarantine'], ['quarantine/added', 'quarantine'], ['quarantine/new-member-quarantined', 'quarantine'],
   ['change/none', 'no-change'], ['change/two-additions', 'multi-change'], ['change/two-removals', 'multi-change'], ['change/passkey-swapped', 'multi-change'],
   ['grammar/nonce-short', 'grammar'], ['grammar/address-not-normal', 'address'], ['grammar/prev-on-setup', 'prev'],
+  // security's rows from the review of the first roster change
+  ['since/readded-age-restarts', 'accept'], ['chain/reset-prev-wrong', 'chain'], ['order/requested-at-previous-ripening', 'accept'],
+  ['assertion/sign-counts-not-tracked', 'accept'], ['chain/link-from-other-account', 'address'], ['rip/second-kid', 'accept'], ['rip/other-pinned-kid', 'rip-signature'],
+  // the authority word
+  ['rip/auth-unknown', 'rip-grammar'], ['rip/reset-flag-old-form', 'rip-grammar'], ['rip/cause-on-member-change', 'rip-grammar'], ['rip/cause-not-a-hash', 'rip-grammar'],
+  ['ok/q-quarantine', 'accept'], ['ok/q-voided-by-recovery-key', 'accept'], ['ok/q-then-x', 'accept'], ['ok/q-then-u', 'accept'], ['ok/pinned-q-then-x', 'accept'],
+  ['q/no-voided-request', 'voided'], ['q/cause-wrong', 'cause'], ['q/voided-prev-wrong', 'voided-prev'], ['q/voided-signer-not-member', 'voided-signer'],
+  ['q/voided-bad-proof', 'voided-assertion-signature'], ['q/voided-other-origin', 'voided-assertion-origin'], ['q/voided-quarantined-signer', 'voided-quarantined'],
+  ['q/voided-consent-key', 'voided-signer-kind'], ['q/wrong-target', 'target'], ['q/also-removes', 'target'], ['q/also-adds', 'target'], ['q/kind-changed', 'members'],
+  ['q/last-live', 'last-live'], ['q/with-member-proof', 'proof'], ['q/carries-cited', 'proof'], ['m/carries-voided', 'proof'],
+  ['x/after-member-change', 'auth'], ['x/cause-wrong', 'cause'], ['x/short', 'unripe'], ['x/requested-later', 'order'], ['x/removes-unquarantined', 'target'],
+  ['x/adds', 'target'], ['x/with-member-proof', 'proof'], ['x/carries-voided', 'proof'], ['u/carries-cited', 'proof'],
+  ['u/after-member-change', 'auth'], ['u/after-removal', 'auth'], ['u/adds-member', 'target'], ['u/clears-and-removes', 'target'], ['u/cause-wrong', 'cause'],
+  ['ok/l-revert', 'accept'], ['ok/l-then-x', 'accept'], ['ok/l-then-u', 'accept'], ['l/no-cited', 'cited'], ['l/cause-wrong', 'cause'],
+  ['l/cited-not-countersigned', 'cited-rip-signature'], ['l/cited-other-account', 'cited-address'], ['l/cited-not-chained', 'cited-chain'],
+  ['l/cited-removal', 'cited-change'], ['l/cited-setup', 'cited-chain'], ['l/wrong-target', 'target'], ['l/also-removes', 'target'], ['l/carries-voided', 'proof'],
+  // security's rows from the review of the authority word (#925): C1′, the nits, the x/u target rule (C4)
+  ['l/cited-unknown-kid', 'cited-unknown-kid'], ['l/cited-future', 'cited-not-yet-valid'], ['l/cited-adds-and-marks', 'cited-change'],
+  ['l/cited-ros-other-account', 'cited-address'], ['x/also-clears', 'target'], ['x/also-marks', 'target'], ['u/also-marks', 'target'], ['u/signed-by-quarantined', 'proof'],
+  ['l/cited-kind-changed', 'cited-change'], ['l/cited-not-member-change', 'cited-auth'], ['q/voided-other-address', 'voided-address'], ['q/voided-seq-wrong', 'voided-seq'],
+  ['ok/q-then-q-then-x', 'accept'], ['u/clears-stale-mark', 'target'], ['x/removes-stale-mark', 'target'], ['x/pinned-removes-stale-mark', 'target'],
+  ['ok/pinned-q-then-x-target', 'accept'], ['x/pinned-evidence-cause-wrong', 'evidence'], ['x/pinned-q-without-evidence', 'evidence'],
+  ['ok/pinned-l-then-u', 'accept'], ['u/pinned-l-without-evidence', 'evidence'], ['u/pinned-l-evidence-cause-wrong', 'evidence'],
+  ['ok/q-then-l-then-u', 'accept'], ['x/pinned-target-not-quarantined', 'target'],
+  // C4′: the pinned link's evidence is re-bound (security's P10, P11c)
+  ['x/pinned-q-signer-swapped', 'evidence'], ['x/pinned-evidence-other-request', 'evidence'], ['u/pinned-l-clears-stale-mark', 'target'], ['u/pinned-l-prevros-swapped', 'evidence'],
 ]
 for (const [n, want] of REQUIRED) {
   const r = byName.get(n)
@@ -119,6 +146,16 @@ console.log('\npositive controls: a refusal flips when only its cause changes')
   const pin = byName.get('chain/pin-mismatch')!
   const v3 = await run(pin, { pinned: undefined })
   ok(!v3.ok && v3.reason === 'anchor', 'chain/pin-mismatch without its pin is refused as unanchored, not as a pin mismatch')
+  const vo = byName.get('q/voided-other-origin')!
+  const v5 = await run(vo, { origins: [...F.origins, 'https://home.bento.page'] })
+  ok(v5.ok, "q/voided-other-origin verifies once the caller lists the library's origin (the voided request is checked against the caller's list)")
+  const other = byName.get('rip/other-pinned-kid')!, twin = byName.get('rip/second-kid')!
+  const kidOf = (r: Row) => r.links[1].rip.split('.').pop()
+  ok(kidOf(other) === 'dir-1' && kidOf(twin) === 'dir-2' && other.links[1].ros === twin.links[1].ros,
+    "rip/other-pinned-kid and its accepted twin rip/second-kid differ in the kid named (same head, same signing key dir-2)")
+  const nc = byName.get('l/cited-not-countersigned')!
+  const v7 = await run(nc, { directoryKeys: { ...F.directoryKeys, 'dir-1': F.unpinnedDirectoryKey } })
+  ok(!v7.ok && v7.reason === 'rip-signature', 'l/cited-not-countersigned: with the forger pinned instead, the cited link passes and the chain itself fails (the refusal was the citation)')
   const midway = byName.get('ok/pinned-midway')!
   const v4 = await verifyRosterChain(midway.links, { directoryKeys: F.directoryKeys, rpId: F.rpId, origins: F.origins, now: F.now })
   ok(!v4.ok && v4.reason === 'anchor', 'ok/pinned-midway WITHOUT the pin is refused (anchor): a mid-chain head is never trusted on its own')

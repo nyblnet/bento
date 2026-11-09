@@ -1,0 +1,25 @@
+/* SPDX-License-Identifier: MIT */
+/* Stage-0 probes: one plain look for every probe page (copied into each). */
+:root { color-scheme: light dark; --bg: #fbfaf7; --fg: #1e2a3a; --muted: #5b6573; --line: #d9d6cf; --accent: #b4532a; --ok: #2e7d4f; --bad: #b3261e; }
+@media (prefers-color-scheme: dark) { :root { --bg: #14181f; --fg: #eceae4; --muted: #a3aab5; --line: #343a45; --accent: #f08a5d; --ok: #6fcf97; --bad: #ff8a80; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 980px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 22px; margin: 8px 0 4px; }
+h2 { font-size: 17px; margin: 22px 0 6px; }
+p, li { max-width: 72ch; }
+.tag { display: inline-block; font-size: 12px; padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); }
+.box { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 12px 0; }
+.muted { color: var(--muted); }
+.ok { color: var(--ok); } .bad { color: var(--bad); }
+button, select, input[type=text] { font: inherit; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: inherit; min-height: 36px; }
+button { cursor: pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+textarea { width: 100%; font: 13px/1.4 ui-monospace, Menlo, monospace; background: transparent; color: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+code, pre { font: 13px/1.4 ui-monospace, Menlo, monospace; }
+pre { white-space: pre-wrap; word-break: break-all; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+table { border-collapse: collapse; width: 100%; }
+td, th { border-top: 1px solid var(--line); padding: 6px 4px; text-align: left; vertical-align: top; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+iframe.doc { width: 100%; height: 70vh; min-height: 360px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.results { position: sticky; bottom: 0; background: var(--bg); border-top: 1px solid var(--line); padding: 10px 0; }

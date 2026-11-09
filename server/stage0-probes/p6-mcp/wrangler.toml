@@ -1,0 +1,15 @@
+# Stage-0 probe P6 (slow MCP server). Deploy from this folder:
+#   npx wrangler@4.152.0 deploy
+# It lands on https://bento-mcp-probe.<your-subdomain>.workers.dev; the
+# connector URL is that address + /mcp. Logs off: it records nothing.
+name = "bento-mcp-probe"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[observability]
+enabled = false
+
+[observability.logs]
+enabled = false
+invocation_logs = false
