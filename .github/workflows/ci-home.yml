@@ -77,3 +77,5 @@ jobs:
         run: BENTO_BROWSER=firefox node scripts/test-home-web.mjs
       - name: home/web mutants
         run: node scripts/test-home-web-mutants.mjs
+      - name: home/web production-build mutants
+        run: node scripts/test-home-web-build-mutants.mjs

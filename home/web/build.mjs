@@ -4,7 +4,7 @@
 //
 // Build bento/home in your browser (stage 1): two static sites.
 //
-//   node home/web/build.mjs --frame-origin https://<frame site> [options]
+//   node home/web/build.mjs --frame-origin https://<frame site> --history <file>... [options]
 //
 //   --out <dir>              default home/web/dist
 //   --library-origin <url>   where the library is served (default https://home.bento.page)
@@ -12,12 +12,22 @@
 //                            from the library. Required; there is no default,
 //                            because the domain is the maintainer's to choose.
 //   --release-base <url>     the signed release channel (default https://bento.page/releases/)
-//   --history <file>         a signed release history to bundle (repeatable).
-//                            Default: the frozen slides 1.2.10 history in
-//                            home/fixtures/gate1, which is only right for
-//                            development: a release passes the published ones.
-//   --key <jwk.json>         TEST SEAM: verify with this public key instead of
-//                            the release key. Rigs only; never for a release.
+//   --history <file>         a signed release history to bundle (repeatable;
+//                            one per app). REQUIRED: a release passes the
+//                            published one of every published app
+//                            (scripts/release.mjs --home-web does).
+//   --dev                    a DEVELOPMENT build. Only with it may --history be
+//                            left out (the frozen slides 1.2.10 history in
+//                            home/fixtures/gate1 is bundled instead), --key be
+//                            passed, or BENTO_HOME_WEB_MUTANT apply. Without
+//                            it each of those REFUSES the build.
+//   --key <jwk.json>         TEST SEAM, --dev only: verify with this public key
+//                            instead of the release key. Rigs only.
+//
+// Every bundled history must verify against the key the build carries, be for
+// an app the library knows, and be the only one for its app; otherwise the
+// build refuses (the library would refuse it at runtime anyway, and every file
+// of that app with it).
 //
 // Output:
 //   <out>/library/index.html + _headers   the library (home.bento.page)
@@ -63,11 +73,19 @@ const site = (o) => { const h = new URL(o).hostname; return /^[\d.]+$/.test(h) |
 if (site(frameOrigin) === site(libraryOrigin)) die(`the frame (${frameOrigin}) must be on a different site from the library (${libraryOrigin})`)
 const releaseBase = (() => { const u = opt('release-base', 'https://bento.page/releases/'); try { new URL(u) } catch { die(`--release-base is not a URL: ${u}`) } return u.endsWith('/') ? u : u + '/' })()
 const SIGNED_BASE = 'https://bento.page/releases/'
+// A production build (no --dev) carries the release key and the published
+// histories, and nothing else: each development seam below refuses it.
+const dev = args.includes('--dev')
+const devOnly = (what) => { if (!dev) die(`${what}: refused in a production build (a development build passes --dev)`) }
+if (process.env.BENTO_HOME_WEB_MUTANT) devOnly('BENTO_HOME_WEB_MUTANT is set')
+if (opt('key')) devOnly('--key replaces the release key')
 const histories = many('history')
 if (!histories.length) {
+  devOnly('no --history: a production build bundles the published history of every published app')
   histories.push(path.join(root, 'home/fixtures/gate1/real/slides-1.2.10/history.json'))
   console.warn('home/web build: bundling the frozen slides 1.2.10 history (development only; a release passes --history)')
 }
+if (histories.some((h) => !h || h.startsWith('--'))) die('--history needs a file')
 const historyTexts = histories.map((f) => fs.readFileSync(f, 'utf8'))
 for (const [i, t] of historyTexts.entries()) {
   const e = JSON.parse(t)
@@ -77,13 +95,29 @@ let key = null
 const keyFile = opt('key')
 if (keyFile) {
   key = JSON.parse(fs.readFileSync(keyFile, 'utf8'))
-  console.warn('home/web build: TEST KEY build: not for release')
+  console.warn('home/web build: TEST KEY build (--dev): not for release')
 } else {
   // the release key, as home/webext/src/release.js (pinned to kernel's) exports it
   const src = fs.readFileSync(path.join(root, 'home/webext/src/release.js'), 'utf8')
   const m = /export const RELEASE_KEY = (\{[\s\S]*?\n\})/.exec(src)
   if (!m) die('could not read RELEASE_KEY from home/webext/src/release.js')
   key = Function(`return (${m[1]})`)()
+}
+
+// Each history must be one the library will take: the runtime's own check
+// (signature against this build's key, well formed, an app it knows), and one
+// per app.
+{
+  const { Histories } = await import('./src/verify.ts')
+  const hs = new Histories(key, releaseBase, () => Promise.reject(new Error('offline')))
+  const seen = new Set()
+  for (const [i, t] of historyTexts.entries()) {
+    const why = await hs.take(t)
+    if (why) die(`${histories[i]}: the library would refuse this history (${why})`)
+    const app = JSON.parse(JSON.parse(t).payload).app
+    if (seen.has(app)) die(`${histories[i]}: a second history for ${app} (one per app)`)
+    seen.add(app)
+  }
 }
 
 // --- bundle ---------------------------------------------------------------
@@ -228,7 +262,7 @@ fs.writeFileSync(path.join(out, 'frame/_headers'),
 
 const historyBytes = historyTexts.reduce((n, t) => n + Buffer.byteLength(JSON.stringify(t)), 0)
 const info = {
-  libraryOrigin, frameOrigin, releaseBase, testKey: !!keyFile, mutant: mutant ? mutant.from : null,
+  libraryOrigin, frameOrigin, releaseBase, dev, testKey: !!keyFile, mutant: mutant ? mutant.from : null,
   histories: histories.map((h) => path.relative(root, h)),
   bytes: {
     library: Buffer.byteLength(libHtml),

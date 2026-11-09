@@ -1,0 +1,74 @@
+#!/usr/bin/env node
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento authors
+/**
+ * Mutants for scripts/test-home-web-build.mjs: each removes one refusal, and
+ * the rig must go red ON THE ROW THAT GUARDS IT. Each runs in a COPY of the
+ * files the rig reads (never the checkout), and a mutant whose text is not
+ * found exactly once fails the run, so a mutant can never quietly stop being
+ * applied. The rehearsal section is skipped in the copy (no mutant here
+ * touches it; the plain rig runs it).
+ *
+ *   node scripts/test-home-web-build-mutants.mjs [name…]
+ */
+import { spawnSync } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const B = 'home/web/build.mjs', R = 'scripts/home-web-release.mjs'
+
+const MUTANTS = [
+  { name: 'no-history-warns', file: B, from: "  devOnly('no --history: a production build bundles the published history of every published app')\n", to: '',
+    expect: 'no --history: refused' },
+  { name: 'key-allowed', file: B, from: "if (opt('key')) devOnly('--key replaces the release key')\n", to: '',
+    expect: '--key (a test key): refused' },
+  { name: 'mutant-allowed', file: B, from: "if (process.env.BENTO_HOME_WEB_MUTANT) devOnly('BENTO_HOME_WEB_MUTANT is set')\n", to: '',
+    expect: 'BENTO_HOME_WEB_MUTANT set: refused' },
+  { name: 'dev-always', file: B, from: "const dev = args.includes('--dev')", to: 'const dev = true',
+    expect: 'no --history: refused' },
+  { name: 'histories-unchecked', file: B, from: '    if (why) die(', to: '    if (false) die(',
+    expect: 'another key than the release key: refused' },
+  { name: 'two-per-app', file: B, from: '    if (seen.has(app)) die(', to: '    if (false) die(',
+    expect: 'two histories for the same app: refused' },
+  { name: 'frame-origin-optional', file: R, from: '  if (!frameOrigin || frameOrigin.startsWith', to: '  if (false && frameOrigin.startsWith',
+    expect: '--home-web without --frame-origin' },
+  { name: 'out-inside-site', file: R, from: "  if (rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))) {", to: '  if (false) {',
+    expect: 'home/web output inside the site' },
+  { name: 'any-key-production', file: R, from: '    if (!same && !dev) {', to: '    if (false) {',
+    expect: 'not the release key, without --home-web-dev' },
+  { name: 'stray-flags-ignored', file: R, from: "    if (frameOrigin || dev || outArg) throw", to: '    if (false) throw',
+    expect: '--frame-origin without --home-web' },
+  { name: 'unpublished-skipped', file: R, from: '    if (!existsSync(history)) throw new Error(', to: '    if (!existsSync(history)) continue; (',
+    expect: 'a published app without a history: refused' },
+]
+
+const only = process.argv.slice(2)
+const esbuild = path.join(ROOT, 'slides/node_modules/.bin/esbuild')
+let killed = 0, ran = 0
+for (const m of MUTANTS.filter((x) => !only.length || only.includes(x.name))) {
+  ran++
+  const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'bento-hwb-mutant-'))
+  try {
+    for (const d of ['scripts', 'home/web', 'home/webext/src', 'home/fixtures/gate1', 'kernel/src', 'convert/src']) {
+      fs.cpSync(path.join(ROOT, d), path.join(copy, d), { recursive: true, filter: (s) => !s.includes('node_modules') && !s.includes(`${path.sep}dist`) })
+    }
+    fs.mkdirSync(path.join(copy, 'slides'), { recursive: true })
+    fs.cpSync(path.join(ROOT, 'slides/package.json'), path.join(copy, 'slides/package.json'))
+    const f = path.join(copy, m.file)
+    const text = fs.readFileSync(f, 'utf8')
+    const n = text.split(m.from).length - 1
+    if (n !== 1) { console.log(`  FAIL  ${m.name}: "${m.from.trim()}" occurs ${n} times in ${m.file} (exactly one required)`); continue }
+    fs.writeFileSync(f, text.replace(m.from, () => m.to))
+    const r = spawnSync(process.execPath, [path.join(copy, 'scripts/test-home-web-build.mjs')],
+      { encoding: 'utf8', env: { ...process.env, ESBUILD: process.env.ESBUILD || esbuild, BENTO_HWB_NO_REHEARSAL: '1' } })
+    const fails = r.stdout.split('\n').filter((l) => l.startsWith('  FAIL'))
+    const onRow = fails.some((l) => l.includes(m.expect))
+    if (r.status !== 0 && onRow) { killed++; console.log(`  ok    ${m.name}: red on its row ("${m.expect}"; ${fails.length} red)`) }
+    else console.log(`  FAIL  ${m.name}: SURVIVED or red elsewhere (exit ${r.status}; red rows: ${fails.map((l) => l.slice(8, 70)).join(' | ') || 'none'})${r.status && !fails.length ? '\n' + r.stderr.slice(-600) : ''}`)
+  } finally { fs.rmSync(copy, { recursive: true, force: true }) }
+}
+console.log(`\n${killed}/${ran} mutants killed`)
+process.exit(killed === ran && ran > 0 ? 0 : 1)

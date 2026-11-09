@@ -70,7 +70,7 @@ policies, both enforced).
 ## Build and run locally
 
 ```sh
-node home/web/build.mjs --library-origin http://127.0.0.1:5310 \
+node home/web/build.mjs --dev --library-origin http://127.0.0.1:5310 \
   --frame-origin http://localhost:5311 --release-base http://127.0.0.1:5312/releases/
 node home/web/serve.mjs --library 5310 --frame 5311 --release-port 5312
 # open http://127.0.0.1:5310/
@@ -78,9 +78,21 @@ node home/web/serve.mjs --library 5310 --frame 5311 --release-port 5312
 
 `127.0.0.1` and `localhost` are different sites, as the two production domains
 are. `--frame-origin` has no default: the frame domain and its DNS are the
-maintainer's. `--history` bundles a signed history (repeatable); without it the
-build bundles the frozen slides 1.2.10 history from `home/fixtures/gate1`, which
-is right for development only. `--key` is a test seam for the rigs.
+maintainer's. `--history` bundles a signed history (repeatable, one per app).
+
+A build without `--dev` is a production build, and it refuses, rather than
+warns about, every development seam: no `--history` (a release passes the
+published history of every published app), `--key` (a test key), and the
+mutant hook. It also refuses any history the library would refuse at runtime:
+one the release key does not verify, a tampered one, or a second one for the
+same app. With `--dev` (as above) the build may bundle the frozen slides 1.2.10
+history from `home/fixtures/gate1` and take `--key`, for local runs and rigs.
+
+A release builds it with `node scripts/release.mjs --home-web --frame-origin
+<url>`: the histories the release leaves in the site, for every app it
+publishes, into `<site>.home-web/` (outside the site, so nothing deploys it).
+Without `--home-web` a release does not touch home/web. `--frame-origin` has no
+default there either; a rehearsal with a throwaway key adds `--home-web-dev`.
 
 Budgets: the library page without the histories it bundles is at most 32 KB,
 the frame page at most 4 KB (`scripts/test-home-web.mjs`).
@@ -91,10 +103,12 @@ the frame page at most 4 KB (`scripts/test-home-web.mjs`).
 |---|---|
 | `scripts/test-home-web.mjs` | the library and frame in a real browser (`BENTO_BROWSER=chromium\|webkit\|firefox`): verification, network allow-list, frame-page standalone refusals, downloads, navigation |
 | `scripts/test-home-web-mutants.mjs` | fourteen mutants, each red on the row that guards it |
+| `scripts/test-home-web-build.mjs` | production-build refusals, the release's `--home-web` options and history choice, a rehearsal release with `--home-web` |
+| `scripts/test-home-web-build-mutants.mjs` | eleven mutants of those refusals, each red on its row |
 | `scripts/test-shell-standalone.mjs` | every app shell points to bento.page and never depends on it |
 
-Chromium runs in the required `validate` check; WebKit, Firefox and the mutants
-in `ci-home.yml` (`home-web-engines`).
+Chromium and the build rig run in the required `validate` check; WebKit,
+Firefox and both mutant rigs in `ci-home.yml` (`home-web-engines`).
 
 ## Not in stage 1
 

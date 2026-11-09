@@ -13472,3 +13472,31 @@ gate; hung sends that deliver or fail after a
 later change queued, or after the change was removed; a never-answering
 mailer; the alarm sweep) and `scripts/test-directory-mutants.ts`, now in its
 own CI job.
+
+## 2026-11-09 — bento/home in your browser: a production build refuses development seams; a release builds it only when asked
+
+`home/web/build.mjs` used to warn and carry on when no `--history` was given
+(bundling the frozen slides 1.2.10 history) or when `--key` swapped in a test
+key. A production build now REFUSES each of those, and the mutant hook too;
+they work only behind an explicit `--dev`, which the rigs and the local
+instructions pass. Every build also refuses a history the library would refuse
+at runtime (not verified by the key it carries, tampered, an unknown app, or a
+second one for the same app), so a library page can never ship with a history
+that silently makes every file of an app unverifiable.
+
+`scripts/release.mjs` builds home/web only with `--home-web`, and then needs
+`--frame-origin`: the frame site is a separate domain that does not exist yet
+and is the maintainer's to choose, so there is no default. It bundles the
+`history.json` of every app the staged site publishes (an app with a signed
+manifest; a published app without a history is refused, never skipped), into
+`<site>.home-web/`, outside the mirrored site: nothing deploys it. Every
+refusal happens before anything is built or signed, including a signing key
+that is not the release key (a rehearsal passes `--home-web-dev`). Without
+`--home-web` a release is unchanged: a rehearsal slides release before and
+after this change produced the same 69 files (signed payloads and masked
+timestamps compared) and the same log.
+
+Guards: `scripts/test-home-web-build.mjs` (each refusal beside the release
+build as its positive control, the release options and history choice, and a
+rehearsal release with `--home-web` that bundles exactly the history it signed)
+and `scripts/test-home-web-build-mutants.mjs` (eleven, each red on its row).

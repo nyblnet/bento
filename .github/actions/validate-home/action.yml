@@ -111,3 +111,16 @@ runs:
       # reaches the payload.
       shell: bento-step {0}
       run: node scripts/test-shell-standalone.mjs
+
+    - name: bento/home in your browser, production build and release wiring
+      # home/web/build.mjs without --dev refuses, instead of warning about, each
+      # development seam: no --history, --key (a test key), the mutant hook, and
+      # any history the library would refuse (another key, tampered, two for one
+      # app); the good release build is the positive control. release.mjs
+      # --home-web refuses before building or signing anything without
+      # --frame-origin, with output inside the site, or with a non-release key
+      # unless --home-web-dev; and a rehearsal release with it bundles exactly
+      # the history it signed, with nothing of home/web in the site. Mutants run
+      # in ci-home.yml (home-web-engines).
+      shell: bento-step {0}
+      run: node scripts/test-home-web-build.mjs

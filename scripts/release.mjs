@@ -5,6 +5,7 @@
 // the complete static site for bento.page into ./site/.
 //
 //   node scripts/release.mjs [--app slides|spaces|dash] [--no-build] [--key path] [--out dir]
+//                            [--home-web --frame-origin <url> [--home-web-out dir] [--home-web-dev]]
 //
 // ONE RELEASE BUILDS ONE APP, and `site/` is mirrored authoritatively — so the
 // site is SEEDED from the published tree first and this build overwrites only
@@ -42,6 +43,8 @@ import { fileURLToPath } from 'node:url'
 import { spliceDoc } from './guestbook-deck.mjs'
 import { gateShell } from './shell-gate.mjs'
 import { APPS, RELEASE_MARKER, tagFor } from './apps.mjs'
+import { homeWebOptions, publishedHistories, homeWebBuildArgs } from './home-web-release.mjs'
+import { releasePublicKey } from './sign-payload.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const args = process.argv.slice(2)
@@ -80,6 +83,19 @@ const shellSrc = join(root, `${app.dir}/dist-single/${app.shell}`)
 // point of the rig is that it exercises this script rather than a second copy
 // of its steps, and the first thing this script does is rmSync the tree.)
 const site = opt('out', join(root, 'site'))
+
+// bento/home in the browser (home/web), OPT-IN: --home-web builds it from the
+// histories this release leaves in the site, for every published app, into a
+// directory OUTSIDE the site (nothing deploys it). It needs the maintainer's
+// --frame-origin, which has no default. Every refusal happens here, before
+// anything is built or signed (scripts/home-web-release.mjs).
+let homeWeb = null
+try {
+  homeWeb = homeWebOptions({ args, opt, site, keyPath: opt('key', null), releaseKey: releasePublicKey })
+} catch (e) {
+  console.error(`✗ ${e.message}`)
+  process.exit(1)
+}
 
 /** The live tree, resolved exactly as publish-site.mjs resolves it. */
 const published = process.env.BENTO_SITE_DIR
@@ -492,6 +508,19 @@ writeFileSync(
   join(site, RELEASE_MARKER),
   JSON.stringify({ app: appKey, appId: app.appId, version, at: new Date().toISOString() }, null, 2) + '\n',
 )
+
+// bento/home in the browser: built from the histories the site now holds (this
+// release's, plus every published app's from the seed), only when asked.
+if (homeWeb) {
+  const histories = publishedHistories(site, APPS)
+  let devKeyFile = null
+  if (homeWeb.devKey) {
+    devKeyFile = join(pinsDir, 'home-web-test-key.json')
+    writeFileSync(devKeyFile, JSON.stringify(homeWeb.devKey))
+  }
+  console.log(`• home/web: ${homeWeb.dev ? 'DEVELOPMENT ' : ''}build with ${histories.map((h) => h.appId).join(', ')} histories, frame ${homeWeb.frameOrigin} → ${homeWeb.out} (not deployed)`)
+  execFileSync('node', homeWebBuildArgs({ root, opts: homeWeb, histories, devKeyFile }), { stdio: 'inherit' })
+}
 
 console.log(`\nSite assembled for ${app.appId} v${version}:`)
 execFileSync('find', [site, '-type', 'f'], { stdio: 'inherit' })
