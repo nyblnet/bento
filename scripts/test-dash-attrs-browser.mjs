@@ -44,6 +44,8 @@ const GOOD = { id: 'amount', w: 180, rid: 7 }
 /** A small sheet carrying the given id / width / row-id start, with totals. */
 const sheetWith = (v) => ({
   id: 'zq-sheet', name: 'Probe', kind: 'table', steps: [],
+  // both columns frozen, so the second one's sticky `left:` adds up the first one's width
+  frozen: { rows: 0, cols: 2 },
   rids: [[v.rid, 3]],
   columns: [
     { id: v.id, name: 'Amount', type: 'number', w: v.w },
