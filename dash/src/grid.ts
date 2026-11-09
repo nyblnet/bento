@@ -23,6 +23,7 @@ import { formatValue, formatTemporalValue, alignFor, TYPE_LABEL, AGG_SHORT } fro
 import { isTemporal } from './datetime.ts'
 import type { CanvasCell, CanvasSheet, CellOverride, Column, ColumnType, Sheet, TableSheet } from './model.ts'
 import { appearanceCss } from './cellfmt.ts'
+import { colW } from './model.ts'
 import { readCell, type Patch, type Store } from './store.ts'
 import { recalc, isErr, type Vec } from './formula.ts'
 import {
@@ -1005,7 +1006,7 @@ export class Grid {
     const vis = cols(this.sheet)
     for (let i = 0; i < n && i < vis.length; i++) {
       out.push(left)
-      left += vis[i].w ?? 130
+      left += colW(vis[i])
     }
     return out
   }
@@ -1047,7 +1048,7 @@ export class Grid {
       const on = this.colLit(ci) ? ' dg-h-on' : ''
       return `<div class="dg-cell dg-h${filtered ? ' dg-filtered' : ''}${on}${fz.cls}" ` +
         `role="columnheader" aria-colindex="${ariaColIndex(ci)}" tabindex="-1"${sortAttr}${label} ` +
-        `style="${fz.st}width:${c.w ?? 130}px" data-col="${c.id}" data-ci="${ci}">` +
+        `style="${fz.st}width:${colW(c)}px" data-col="${esc(c.id)}" data-ci="${ci}">` +
         // TWO LINES, because one could not hold them: the letter, the name,
         // the type control, the filter arrow and the resize grip were sharing
         // 130px and the NAME lost — every column read "A R", "B O", "C :".
@@ -1060,7 +1061,7 @@ export class Grid {
         // being one click away is what makes import's refusal to guess honest.
         `<span class="dg-hstrip">` +
         `<span class="dg-letter" title="${esc(t('Select column'))}">${colToLetters(ci)}</span>` +
-        `<button class="dg-type" data-retype="${c.id}" title="${esc(t('{type} — click to change').replace('{type}', t(TYPE_LABEL[c.type])))}">${esc(t(TYPE_LABEL[c.type]))}</button>` +
+        `<button class="dg-type" data-retype="${esc(c.id)}" title="${esc(t('{type} — click to change').replace('{type}', t(TYPE_LABEL[c.type])))}">${esc(t(TYPE_LABEL[c.type]))}</button>` +
         `</span>` +
         `<span class="dg-hmain">` +
         `<span class="dg-name" title="${esc(c.formula ? `= ${c.formula}` : c.name)}">${esc(c.name)}${arrow}</span>` +
@@ -1068,9 +1069,9 @@ export class Grid {
         ((c.failed ?? 0) + this.mistypedCount(c) > 0
           ? `<span class="dg-warn" title="${esc(t('{n} value(s) could not be read as {type}').replace('{n}', String((c.failed ?? 0) + this.mistypedCount(c))).replace('{type}', t(TYPE_LABEL[c.type])))}">!</span>`
           : '') +
-        `<span class="dg-filter" data-filter="${c.id}" title="${esc(t('Filter and sort this column'))}">▾</span>` +
+        `<span class="dg-filter" data-filter="${esc(c.id)}" title="${esc(t('Filter and sort this column'))}">▾</span>` +
         `</span>` +
-        `<span class="dg-grip" data-grip="${c.id}" title="${esc(t('Drag to resize, double-click to fit the widest value'))}"></span>` +
+        `<span class="dg-grip" data-grip="${esc(c.id)}" title="${esc(t('Drag to resize, double-click to fit the widest value'))}"></span>` +
         `</div>`
     }).join('')}${this.headerAppender()}`
   }
@@ -1157,10 +1158,10 @@ export class Grid {
       const spec = s.totals?.[c.id]
       const fz = this.freeze(ci)
       const aria = ` role="gridcell" aria-colindex="${ariaColIndex(ci)}" tabindex="-1"`
-      const w = `${fz.st}width:${c.w ?? 130}px`
+      const w = `${fz.st}width:${colW(c)}px`
       if (!spec) {
         if (!offer || !canTotal(c.type)) return `<div class="dg-cell${fz.cls}"${aria} style="${w}"></div>`
-        return `<div class="dg-cell dg-tot dg-tot-add${fz.cls}"${aria} data-tcol="${c.id}" ` +
+        return `<div class="dg-cell dg-tot dg-tot-add${fz.cls}"${aria} data-tcol="${esc(c.id)}" ` +
           `title="${esc(t('Add a total to this column'))}" ` +
           `style="${w};text-align:${alignFor(c.type)}"><span class="dg-agg-add">${esc(t('Total'))}</span></div>`
       }
@@ -1186,7 +1187,7 @@ export class Grid {
       // it is one click from the number now.
       const shown = out === null ? NO_TOTAL : spec === 'count' ? fmtNum(out) : formatValue(out, c)
       return `<div class="dg-cell${fz.cls}${filtered ? ' dg-part' : ''}${this.store.readOnly ? '' : ' dg-tot'}"${aria} ` +
-        `${this.store.readOnly ? '' : `data-tcol="${c.id}" title="${esc(hint)}" `}` +
+        `${this.store.readOnly ? '' : `data-tcol="${esc(c.id)}" title="${esc(hint)}" `}` +
         `style="${w};text-align:${alignFor(c.type)}">` +
         `<span class="dg-agg">${esc(label)}</span> ${esc(shown)}</div>`
     }).join('')}`
@@ -1512,7 +1513,7 @@ export class Grid {
       const r = dataRow(s, rid)
       const box = this.sel.bounds()
       const rowSelected = i >= box.top && i <= box.bottom
-      body.push(`<div class="dg-row" role="row" aria-rowindex="${ariaRowIndex(i)}" data-rid="${rid}" data-row="${i}" style="top:${i * ROW_H}px">` +
+      body.push(`<div class="dg-row" role="row" aria-rowindex="${ariaRowIndex(i)}" data-rid="${Number(rid)}" data-row="${i}" style="top:${i * ROW_H}px">` +
         `<div class="dg-cell dg-gutter${rowSelected ? ' dg-gutter-on' : ''}" role="rowheader" aria-colindex="1" data-rowhead="${i}">${i + 1}</div>` +
         cols(s).map((c, ci) => {
           const over = s.cells?.[`${c.id}:${rid}`]
@@ -1527,7 +1528,7 @@ export class Grid {
           const inSel = this.sel.ranges().some((rg) => contains(rg, i, ci))
           const isCursor = this.sel.cursor.row === i && this.sel.cursor.col === ci
           const cf = this.styles.get(c.id)?.[r] ?? null
-          let st = `width:${c.w ?? 130}px;text-align:${alignFor(c.type)}`
+          let st = `width:${colW(c)}px;text-align:${alignFor(c.type)}`
           // Conditional-format colours are document data: condCellCss and
           // dataBarHtml pass each one through color.ts before it is drawn.
           st += condCellCss(cf)
@@ -1570,7 +1571,7 @@ export class Grid {
             // Tab presses to get past the grid, and Tab already means "next
             // cell" inside it (select.ts owns that key).
             `tabindex="${isCursor ? 0 : -1}" ` +
-            `data-col="${c.id}" data-ci="${ci}" style="${fz.st}${st}">${bar}<span class="dg-v">${esc(shown)}</span>${dvArrow}</div>`
+            `data-col="${esc(c.id)}" data-ci="${ci}" style="${fz.st}${st}">${bar}<span class="dg-v">${esc(shown)}</span>${dvArrow}</div>`
         }).join('') + '</div>')
     }
     this.paintEmptyGrid(gridN * ROW_H)
@@ -1684,7 +1685,7 @@ export class Grid {
         return `<div class="dg-cell dg-add-cell${inSel ? ' dg-sel' : ''}${isCursor ? ' dg-cursor' : ''}${fz.cls}" ` +
           `role="gridcell" aria-colindex="${ariaColIndex(ci)}" aria-selected="${inSel}" ` +
           `tabindex="${isCursor ? 0 : -1}" aria-label="${esc(t('Add a row'))}" ` +
-          `data-col="${c.id}" data-ci="${ci}" style="${fz.st}width:${c.w ?? 130}px"></div>`
+          `data-col="${esc(c.id)}" data-ci="${ci}" style="${fz.st}width:${colW(c)}px"></div>`
       }).join('') + '</div>'
   }
 
@@ -1756,7 +1757,7 @@ export class Grid {
     let x = GUTTER_W
     stops.push(`transparent 0 ${x - 1}px`, `${line} ${x - 1}px ${x}px`)
     for (const c of vis) {
-      const w = c.w ?? 130
+      const w = colW(c)
       stops.push(`transparent ${x}px ${x + w - 1}px`, `${line} ${x + w - 1}px ${x + w}px`)
       x += w
     }
@@ -2053,7 +2054,7 @@ export class Grid {
   private datasetRect(b: Box): { left: number; top: number; width: number; height: number } | null {
     const vis = cols(this.sheet)
     if (!vis.length) return null
-    const w = (i: number) => vis[i]?.w ?? 130
+    const w = (i: number) => colW(vis[i])
     let left = GUTTER_W
     for (let i = 0; i < b.left; i++) left += w(i)
     let width = 0
@@ -2592,11 +2593,11 @@ export class Grid {
     const vis = cols(this.sheet)
     const lefts = this.frozenLefts()
     const frozenEnd = lefts.length
-      ? lefts[lefts.length - 1] + (vis[lefts.length - 1]?.w ?? 130)
+      ? lefts[lefts.length - 1] + colW(vis[lefts.length - 1])
       : 0
     let x = GUTTER_W
-    for (let i = 0; i < col; i++) x += vis[i]?.w ?? 130
-    const w = vis[col]?.w ?? 130
+    for (let i = 0; i < col; i++) x += colW(vis[i])
+    const w = colW(vis[col])
     const vw = this.scroller.clientWidth
     if (x < this.scroller.scrollLeft + frozenEnd) {
       this.scroller.scrollLeft = Math.max(0, x - frozenEnd)
@@ -2639,7 +2640,7 @@ export class Grid {
     const b = this.sel.bounds()
     const vis = cols(this.sheet)
     if (!vis.length) return ''
-    const w = (i: number) => vis[i]?.w ?? 130
+    const w = (i: number) => colW(vis[i])
     let left = GUTTER_W
     for (let i = 0; i < b.left; i++) left += w(i)
     let width = 0
@@ -3482,14 +3483,14 @@ export class Grid {
         e.preventDefault(); e.stopPropagation()
         const col = this.sheet.columns.find((c) => c.id === id)!
         const startX = e.clientX
-        const startW = col.w ?? 130
+        const startW = colW(col)
         const cell = el.parentElement as HTMLElement
         const move = (m: MouseEvent) => {
           // live width during the drag, committed once on release — a commit
           // per mousemove would be one undo entry per pixel
           const w = Math.max(48, Math.round(startW + m.clientX - startX))
           cell.style.width = `${w}px`
-          this.table.querySelectorAll<HTMLElement>(`.dg-cell[data-col="${id}"]`)
+          this.table.querySelectorAll<HTMLElement>(`.dg-cell[data-col="${CSS.escape(id)}"]`)
             .forEach((c) => { c.style.width = `${w}px` })
         }
         const up = (m: MouseEvent) => {
@@ -3732,7 +3733,7 @@ export class Grid {
    */
   private renameColumnInPlace(colId: string): void {
     if (this.store.readOnly || this.canvas) return
-    const cell = this.head.querySelector<HTMLElement>(`.dg-h[data-col="${colId}"]`)
+    const cell = this.head.querySelector<HTMLElement>(`.dg-h[data-col="${CSS.escape(colId)}"]`)
     const label = cell?.querySelector<HTMLElement>('.dg-name')
     const col = this.sheet.columns.find((c) => c.id === colId)
     if (!cell || !label || !col) return

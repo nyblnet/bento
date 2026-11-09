@@ -66,6 +66,13 @@ jobs:
         # Sheet3; Tab walks top bar → grid → panel → tabs with the ring, F6
         # walks regions, Tab leaves the grid at its last column.
         run: node scripts/test-dash-firstrun-browser.mjs
+      - name: A column's width and id reach the grid only as values
+        # A sheet whose column width, column id and row ids are not what they
+        # should be arrives by a live commit, in a saved file and in a frozen
+        # file; every cell is hovered: no handler attribute, nothing runs,
+        # nothing reaches the network, the width is the default. Controls with
+        # ordinary values keep their 180px width and values.
+        run: node scripts/test-dash-attrs-browser.mjs
       - name: Every dash field wears the suite's one field look
         # Slides' rig, ported: every text field, select and textarea on 17
         # surfaces, light and dark, has the 1px --line border, --field fill,

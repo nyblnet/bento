@@ -28,6 +28,8 @@
 // - Every roster mail lists the WHOLE roster, states the change in words with
 //   the second and the host class, and is never held back by a budget that a
 //   stranger can fill (only setup-token mail spends that budget).
+// - A change waits only once its "waiting" notice was accepted by the mailer:
+//   that notice is how the person stops it. Mailer down, nothing is queued.
 //
 // NOT HERE YET (each a later change): the directory's ripening countersign
 // (`rip.`), which waits for the kernel's authority word; the void page and its
@@ -53,6 +55,12 @@ export const ROSTER_LIMITS = {
   mailPerMonth: 10,
   /** the longest Origin header kept in the log */
   originMax: 200,
+  /** how long a spent directory challenge is remembered (its life is CHALLENGE_TTL_MS, 5 minutes) */
+  spentKeepMs: 10 * MIN,
+  /** at most this many expired spent challenges are swept by each new spend */
+  spentSweep: 32,
+  /** a change whose waiting notice was never confirmed sent is dropped after this (the object stopped mid-send) */
+  unsentDropMs: 10 * MIN,
 }
 
 /** The openers the sign-in host may report (it reads them from the message event). */
@@ -93,10 +101,15 @@ async function rosterLines(members, records, pendingAdd) {
   return out
 }
 
-/** Every roster notice goes out here, whatever any mail budget says (G10). */
+/**
+ * Every roster notice goes out here, whatever any mail budget says (G10).
+ * True when the mailer accepted it. Only the waiting notice acts on a false:
+ * it is the person's way to stop the change, so a change whose notice was not
+ * sent never waits to take effect (security's D1).
+ */
 async function notify(env, to, subject, lines) {
   const body = [...lines, '', 'Bento will never ask you to type or paste anything from this email.'].join('\n')
-  try { await deliver(env, { to, subject, body, kind: 'roster' }) } catch (e) { console.log(`roster mail failed: ${e.message}`) }
+  try { await deliver(env, { to, subject, body, kind: 'roster' }); return true } catch (e) { console.log(`roster mail failed: ${e.message}`); return false }
 }
 
 // --- the object ------------------------------------------------------------------
@@ -108,14 +121,26 @@ export class Roster {
     const s = this.state.storage
     await this.ripen(Date.now())
     const p = await s.get('pend')
-    if (p) await s.setAlarm(p.ripensAt)
+    if (p && p.mailed === true) await s.setAlarm(p.ripensAt)
   }
 
-  /** The waiting change, in force once its 72 hours are up. */
+  /**
+   * The waiting change, in force once its 72 hours are up, and ONLY if its
+   * waiting notice was confirmed sent. A change still marked unsent is one
+   * whose object stopped between holding the slot and hearing from the
+   * mailer: it never takes effect, and after a while it is dropped so the
+   * slot frees (the person may have had the notice; a change that then never
+   * happens is the safe side).
+   */
   async ripen(now) {
     const s = this.state.storage
     const p = await s.get('pend')
-    if (!p || now < p.ripensAt) return
+    if (!p) return
+    if (p.mailed !== true) {
+      if (now - p.requestedAt >= ROSTER_LIMITS.unsentDropMs) await s.delete('pend')
+      return
+    }
+    if (now < p.ripensAt) return
     await this.apply(p, now, 'ripen')
   }
 
@@ -152,7 +177,7 @@ export class Roster {
     await s.put('head', head)
     await s.delete('pend')
     const fp = await fingerprint(p.change.pub)
-    await this.log({ k, at: now, seq: head.seq, op: p.change.op, fp, by: await fingerprint(p.signer), os: p.os, rq: p.rq, co: p.co })
+    await this.log({ k, at: now, seq: head.seq, op: p.change.op, pub: p.change.pub, by: p.signer, os: p.os, rq: p.rq, co: p.co })
 
     const records = await this.records(head.members)
     const what = p.change.op === 'add' ? `the passkey ${fp} was added` : p.signer === p.change.pub ? `the passkey ${fp} removed itself` : `the passkey ${fp} was removed`
@@ -172,13 +197,23 @@ export class Roster {
     const s = this.state.storage
     const out = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 
-    /** Spend a directory challenge: FIRST, before any other check, so every attempt consumes it. */
+    /**
+     * Spend a directory challenge: FIRST, before any other check, so every
+     * attempt consumes it. Spending needs no account, so anyone can do it as
+     * often as the per-IP limits allow: each spent challenge is its OWN key,
+     * `spent:<issued>:<nonce>` (never one growing value, which a stranger could
+     * fill to the storage limit and so break every request on the address,
+     * security's D2), and each spend sweeps a few of the oldest that are past
+     * their keep. The keys sort by issue time, so the oldest come first.
+     */
     const spend = async () => {
-      if (typeof a.nonce !== 'string' || !Number.isSafeInteger(a.issued)) return false
-      const list = ((await s.get('spent')) || []).filter((x) => x.exp > now)
-      if (list.some((x) => x.n === a.nonce)) { await s.put('spent', list); return false }
-      list.push({ n: a.nonce, exp: a.issued + 10 * MIN })
-      await s.put('spent', list)
+      if (typeof a.nonce !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(a.nonce) || !Number.isSafeInteger(a.issued) || a.issued < 0) return false
+      const key = `spent:${String(a.issued).padStart(16, '0')}:${a.nonce}`
+      if (await s.get(key)) return false
+      await s.put(key, 1)
+      const oldest = await s.list({ prefix: 'spent:', limit: ROSTER_LIMITS.spentSweep })
+      const dead = [...oldest.keys()].filter((k) => Number(k.slice(6, 22)) + ROSTER_LIMITS.spentKeepMs <= now)
+      if (dead.length) await s.delete(dead)
       return true
     }
     const origin = typeof a.os === 'string' ? a.os.slice(0, ROSTER_LIMITS.originMax) : ''
@@ -190,7 +225,7 @@ export class Roster {
       const p = await s.get('pend')
       return out(200, {
         ros: head.ros, seq: head.seq,
-        pending: p ? { ros: p.ros, requestedAt: p.requestedAt, ripensAt: p.ripensAt } : null,
+        pending: p && p.mailed === true ? { ros: p.ros, requestedAt: p.requestedAt, ripensAt: p.ripensAt } : null,
       })
     }
 
@@ -232,9 +267,8 @@ export class Roster {
       await s.put(`pk:${reg.value.pub}`, { credId: reg.value.credId, signCount: reg.value.signCount, addedAt: now, how })
       await s.put(`cid:${reg.value.credId}`, reg.value.pub)
       await s.delete('setupTok')
-      const fp = await fingerprint(reg.value.pub)
-      await this.log({ k: 'reg', at: now, seq: 0, fp, os: origin, rq: '', co: reg.value.origin })
-      await this.log({ k: 'setup', at: now, seq: 0, fp, os: origin, rq: '', co: reg.value.origin })
+      await this.log({ k: 'reg', at: now, seq: 0, pub: reg.value.pub, os: origin, rq: '', co: reg.value.origin })
+      await this.log({ k: 'setup', at: now, seq: 0, pub: reg.value.pub, os: origin, rq: '', co: reg.value.origin })
       // the setup notice never spends the address's mail budget, and nothing can hold it back
       await notify(this.env, a.address, 'Your bento/id account was set up', [
         `At ${when(now)} a bento/id account was set up for this address ${HOW[hostClass(reg.value.origin)]}.`,
@@ -301,7 +335,6 @@ export class Roster {
         how: hostClass(v.value.origin),
       }
       const by = await fingerprint(signer.pub)
-      if (reg) await this.log({ k: 'reg', at: now, seq: next.seq, fp: await fingerprint(change.pub), by, os: origin, rq: p.rq, co: reg.origin })
 
       // a member removing itself, with another live passkey left: at once
       const selfRemoval = change.op === 'remove' && change.pub === signer.pub &&
@@ -311,14 +344,17 @@ export class Roster {
         return out(200, { ros: a.ros, inForce: true })
       }
 
-      await s.put('pend', p)
-      await s.setAlarm(p.ripensAt)
-      await this.log({ k: 'request', at: now, seq: next.seq, op: change.op, fp: await fingerprint(change.pub), by, os: origin, rq: p.rq, co: p.co })
+      // The waiting notice is the person's way to stop this change, so the change
+      // holds the slot first (marked unsent: it can neither ripen nor be joined
+      // by another change), then the notice goes out, and only a notice the
+      // mailer accepted lets the change wait to take effect. If the mailer
+      // refuses, nothing is queued and the request fails (security's D1).
+      await s.put('pend', { ...p, mailed: false })
       const records = await this.records(cur.members)
       const rec2 = records[signer.pub]
       const what = change.op === 'add' ? `add the passkey ${await fingerprint(change.pub)}`
         : change.pub === signer.pub ? `remove the passkey ${by}, which asked for it` : `remove the passkey ${await fingerprint(change.pub)}`
-      await notify(this.env, next.address, 'A change to your bento/id passkeys is waiting', [
+      const sent = await notify(this.env, next.address, 'A change to your bento/id passkeys is waiting', [
         `At ${when(now)} a change to this bento/id account was asked for ${HOW[p.how]}: ${what}.`,
         `It was asked for by the passkey ${by}${rec2 ? `, added ${when(rec2.addedAt)} ${HOW[rec2.how] ?? ''}`.trimEnd() : ''}.`,
         `It takes effect at ${when(p.ripensAt)}, 72 hours after it was asked for.`,
@@ -326,6 +362,14 @@ export class Roster {
         'The passkeys on this account once it takes effect:',
         ...(await rosterLines(next.members, records, change.op === 'add' ? change.pub : null)),
       ])
+      if (!sent) {
+        await s.delete('pend')
+        return out(503, { error: 'mail' })
+      }
+      await s.put('pend', { ...p, mailed: true })
+      await s.setAlarm(p.ripensAt)
+      if (reg) await this.log({ k: 'reg', at: now, seq: next.seq, pub: change.pub, by: signer.pub, os: origin, rq: p.rq, co: reg.origin })
+      await this.log({ k: 'request', at: now, seq: next.seq, op: change.op, pub: change.pub, by: signer.pub, os: origin, rq: p.rq, co: p.co })
       return out(202, { ros: a.ros, requestedAt: now, ripensAt: p.ripensAt })
     }
 

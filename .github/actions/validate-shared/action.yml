@@ -126,13 +126,13 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-ci-skips.mjs
 
-    - name: bento/connect directory (two-proof bind, exact lookups, limits, tombstones)
+    - name: bento/connect directory (retired bind routes, exact lookups, limits, tombstones)
       # The real worker and Durable Objects against an in-memory namespace,
-      # verifying with the kernel's signed statements and running its
-      # conformance vectors end to end: a binding needs the mailed code AND
-      # the key's signature over it; email alone never changes a live
-      # binding; bind/start answers 202 whatever happens; per-address mail
-      # limits and per-IP limits hold; no raw address or IP at rest.
+      # verifying with the kernel's signed statements: the typed-code bind
+      # routes answer 410 and do nothing; lookups are exact; a mailed-code
+      # delete never removes a live binding; delete/start answers 202 whatever
+      # happens; per-address mail limits and per-IP limits hold; no raw
+      # address or IP at rest.
       shell: bento-step {0}
       run: node scripts/test-directory.ts
 
@@ -142,8 +142,10 @@ runs:
       # one accepted origin, registration and assertion checks, setup tokens a
       # stranger cannot spend, one change at a time waiting 72 h on the
       # directory's clock, self-removal, the per-credential signature counter,
-      # the log, roster mail that no stranger-fillable budget holds back, and
-      # the headers every id.bento.page answer carries.
+      # the log, roster mail that no stranger-fillable budget holds back, a
+      # change that never waits without its waiting mail, spent challenges
+      # that stay bounded, and the headers every id.bento.page answer carries
+      # (an unexpected failure included).
       shell: bento-step {0}
       run: node scripts/test-directory-roster.ts
 

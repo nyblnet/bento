@@ -402,6 +402,12 @@ The version that came out of watching somebody use 0.2.0.
   chart's series colours are checked before they are drawn: a value that is
   not a colour is left out (a data bar keeps its default colour, a dashboard
   series draws grey) instead of being written into the page as it was.
+- **A workbook's own values reach the page only as values.** A column width
+  that is not a number opens at the default width, a column id that could not
+  sit in the page is renamed with its data, cells and totals moving with it,
+  and row numbers that are not whole numbers are renumbered — the file still
+  opens and no column is lost. A dashboard tile's position and a story step's
+  caption are drawn the same way.
 
 ## [0.2.0] — 2026-08-03 (tagged, not published)
 
