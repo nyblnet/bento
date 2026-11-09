@@ -289,13 +289,15 @@ for, and regenerating with `--rp` / `--origin` produces rows for others.
 - `sw/` rows come from a software authenticator: the inputs a browser will not
   produce but a self-asserting client can.
 
-## `roster-v1.json`: the bento/id roster chain (option G)
+## `roster-v2.json`: the bento/id roster chain (option G)
 
 Reference: `kernel/src/roster.ts`. Rig: `scripts/test-roster.ts` (and
 `scripts/test-roster-mutants.ts`). Generator: `scripts/gen-roster-vectors.ts`.
 Keys are deterministic test keys (scalars from SHA-256 of a label); signatures
 are random, so match verdicts, not bytes. Not read by any host yet: a host
 adopts it with the `wdev.`/`dev2.` certificates that depend on it.
+Version 1 (a `0|1` reset flag in `rip.`) is retired before any host read it:
+its `rip.` texts no longer parse, so port version 2.
 
 Each row is a CHAIN: verify `links` with
 `verifyRosterChain(links, { directoryKeys, rpId, origins, now, pinned })`,
@@ -309,13 +311,16 @@ joined (`since`), `createdAt`, `lastResetAt` and `sinceExact`.
   quarantined), 1 to 16 of them, every key distinct, at most one `rk`. Sort by
   bytes, never by locale. A head written in another order is refused, not
   re-sorted.
-- **`rip.<sha256(ros text)>.<requestedAt>.<ripenedAt>.<0|1>.<kid>`**, signed by a
-  pinned directory key (raw r‖s, low-S, like `att.`). The two times are the
+- **`rip.<sha256(ros text)>.<requestedAt>.<ripenedAt>.<auth>.<cause|empty>.<kid>`**,
+  signed by a pinned directory key (raw r‖s, low-S, like `att.`). `auth` is one
+  of `m` (member change, and setup) `r` (reset) `q` (quarantine on a void) `l`
+  (lever revert) `x` (removal of a quarantined member) `u` (undo); `cause` is
+  empty for `m` and `r` and a sha256 (base64url) for the rest. The two times are the
   directory's. **Measure every wait as ripenedAt − requestedAt.** `created` in
   the `ros.` text is the requester's clock and decides nothing:
   `wait/requester-clock-early` and `ok/requester-clock-late` differ only in
   which clock is 72 hours old.
-- **Who authorises a link.** Setup (seq 0) and reset (`rip.` flag 1): the
+- **Who authorises a link.** Setup (seq 0, `m`) and reset (`r`): the
   countersign alone, no member proof, exactly one unquarantined `pk`. Any other
   link: an UNQUARANTINED member of the PREVIOUS head, proving it over the exact
   `ros.` text: a WebAuthn assertion for a `pk` (webauthn-v1.json's rules, rp
@@ -329,12 +334,36 @@ joined (`since`), `createdAt`, `lastResetAt` and `sinceExact`.
 - **The wait is 72 hours** (exactly 72 h passes), for every member change and
   every reset, except a member removing ITSELF while an unquarantined member
   remains.
-- **Order:** a link's requestedAt is not before the previous link's ripenedAt.
+- **Order:** a link's requestedAt is not before the previous link's ripenedAt
+  (equal is allowed: `order/requested-at-previous-ripening`).
+- **The directory's acts (`q` `l` `x` `u`)** carry no member proof of their own,
+  never add a member, and never change a kind.
+  - `q`: immediate. The link carries `voided: {ros, signer, assertion|sig}`;
+    `cause` = sha256(voided.ros); the voided `ros.` names THIS link's previous
+    head as its prevHash; its signer is an unquarantined member of that head and
+    its proof verifies over voided.ros (same rules as a member link; reasons are
+    prefixed `voided-`); the only change is that signer gaining `~q`; at least
+    one unquarantined member remains (`last-live`).
+  - `l`: immediate. The link carries `cited: {prevRos, ros, rip, ripSig}`;
+    `cause` = sha256(cited.ros); the cited `rip.` verifies over cited.ros under
+    a pinned kid; cited.ros is for this address and its prevHash is
+    sha256(cited.prevRos); cited.prevRos → cited.ros is exactly one member
+    added; this link's only change is that member gaining `~q`.
+  - `x`: the previous link is `q` or `l`; `cause` = sha256 of the previous
+    head; requestedAt EQUALS the previous ripenedAt (queued in the same step);
+    the wait is 72 h; the only change is one `~q` member removed.
+  - `u`: the previous link is `q` or `l`; `cause` = sha256 of the previous
+    head; immediate; the only change is one `~q` mark cleared, and that member
+    keeps its `since`.
+- **Do not track sign counts** along a chain (`assertion/sign-counts-not-tracked`).
+- **The kid picks the key**: with two pinned kids, a countersign under one kid
+  made by the other's key is refused (`rip/other-pinned-kid`).
 - **A pin.** With `pinned` (sha256 of a head you verified before), the first
   link must be that head. Its countersign is re-checked (its times set member
   ages); its proof and wait are not. Without a pin the chain starts at seq 0.
 - `since` is the ripenedAt of the link from which the key has been a member
-  without a break; a reset restarts everyone. From a pin past seq 0, members
+  without a break; a reset restarts everyone, and a member removed and added
+  again restarts at the second addition (`since/readded-age-restarts`). From a pin past seq 0, members
   present at the pin get the pin's ripenedAt (`sinceExact: false`): the age it
   gives is a lower bound, the safe direction for any rule that waits on a
   member's age.
