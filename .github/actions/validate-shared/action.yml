@@ -126,13 +126,13 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-ci-skips.mjs
 
-    - name: bento/connect directory (retired bind routes, exact lookups, limits, tombstones)
-      # The real worker and Durable Objects against an in-memory namespace,
-      # verifying with the kernel's signed statements: the typed-code bind
-      # routes answer 410 and do nothing; lookups are exact; a mailed-code
-      # delete never removes a live binding; delete/start answers 202 whatever
-      # happens; per-address mail limits and per-IP limits hold; no raw
-      # address or IP at rest.
+    - name: bento/connect directory (retired routes, address normal form, limits)
+      # The real worker against in-memory Durable Objects: every route of the
+      # first design (typed-code bind, the signed and typed-code deletions,
+      # the lookup) answers 410 with the full header set and mails and stores
+      # nothing; the object that held those bindings and its removal-code mail
+      # are gone; the address normal form is the kernel's; per-IP limits hold;
+      # no raw address or IP at rest.
       shell: bento-step {0}
       run: node scripts/test-directory.ts
 
@@ -145,7 +145,11 @@ runs:
       # the log, roster mail that no stranger-fillable budget holds back, a
       # change that never waits without its waiting mail, spent challenges
       # that stay bounded, setup links that complete only on the sign-in host,
-      # a setup budget that never leaves an address without a live link, mail
+      # a setup budget that never leaves an address without a live link and
+      # mails it at most ~4 links a day however often a stranger asks, pinned
+      # link lives, a setup/start answer that is the same bytes in every
+      # state, post-send writes that touch only the request's own change, a
+      # mailer timeout, an alarm that sweeps spent challenges, mail
       # kinds that may never be held back, the sign-in host's routes (CORS to
       # it alone), and the headers every id.bento.page answer carries (an
       # unexpected failure included).
@@ -153,8 +157,8 @@ runs:
       run: node scripts/test-directory-roster.ts
 
     - name: bento/connect directory mutants
-      # Each mutant reopens one path (the per-address mail budget spent by a
-      # start that mails nothing; a loosened roster, passkey or header rule) in
+      # Each mutant reopens one path (a retired route served again; a loosened
+      # roster, passkey, mail or header rule) in
       # a copy of the tree, and the directory rigs must fail a row. A mutant that no longer applies, or a rig that crashes
       # instead of counting, fails this step.
       shell: bento-step {0}

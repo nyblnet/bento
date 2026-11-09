@@ -48,8 +48,15 @@ import { setupLink } from './links.js'
 const MIN = 60_000, DAY = 86_400_000
 
 export const ROSTER_LIMITS = {
-  /** a setup token's life */
+  /** a setup token's life, for a link the budget allowed */
   setupTtlMs: 20 * MIN,
+  /**
+   * the life of a link mailed BEYOND the budget (S1′). Such a link goes only
+   * when the budget is full and no mailed link is live, so its life is what
+   * caps that mail: one a day, about four a day to an address in all, however
+   * often a stranger asks
+   */
+  setupBeyondTtlMs: DAY,
   /** the per-address budget for setup-link mail, which a stranger can spend (spendSetupBudget) */
   mailCooldownMs: 60_000,
   mailPerDay: 3,
@@ -83,6 +90,9 @@ function same(a, b) {
   for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i)
   return d === 0
 }
+
+/** When a `spent:<issued16>:<nonce>` key may go. */
+const spentUntil = (k) => Number(k.slice(6, 22)) + ROSTER_LIMITS.spentKeepMs
 
 const when = (t) => new Date(t).toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC')
 const HOW = { setup: 'at setup', browser: 'from a browser', app: 'from an app' }
@@ -118,7 +128,7 @@ async function notify(env, to, subject, lines) {
  * time and the link, whose fragment carries the address it was mailed to and
  * the token. True when the mailer accepted it.
  */
-async function mailSetupLink(env, to, token, now) {
+async function mailSetupLink(env, to, token, now, exp) {
   const body = [
     `At ${when(now)} someone asked to set up a bento/id account for this address.`,
     '',
@@ -126,7 +136,7 @@ async function mailSetupLink(env, to, token, now) {
     '',
     setupLink(to, token),
     '',
-    `The link works once, until ${when(now + ROSTER_LIMITS.setupTtlMs)}.`,
+    `The link works once, until ${when(exp)}.`,
     'Opening it changes nothing by itself: the account is set up only when you make a passkey on the page it opens.',
     'If you did not ask for this, ignore this email.',
     'Bento will never ask you to type or paste anything from this email.',
@@ -139,11 +149,40 @@ async function mailSetupLink(env, to, token, now) {
 export class Roster {
   constructor(state, env) { this.state = state; this.env = env }
 
+  /**
+   * One alarm, two users: a waiting change's ripening, and sweeping spent
+   * challenges once nobody is spending (a stranger's spends on an address that
+   * then goes quiet would otherwise stay stored for good). Each run does what is
+   * due and sets the alarm for the earliest thing still to come.
+   */
   async alarm() {
     const s = this.state.storage
-    await this.ripen(Date.now())
+    const now = Date.now()
+    await this.ripen(now)
+    await this.sweepSpent(now)
+    const next = []
     const p = await s.get('pend')
-    if (p && p.mailed === true) await s.setAlarm(p.ripensAt)
+    if (p && p.mailed === true) next.push(p.ripensAt)
+    for (const k of (await s.list({ prefix: 'spent:', limit: 1 })).keys()) next.push(spentUntil(k))
+    if (next.length) await s.setAlarm(Math.max(Math.min(...next), now + 1000)) // never a past time: it would fire in a loop
+  }
+
+  /** Bring the alarm forward to `t` if it is set later or not at all; never push it back. */
+  async schedule(t) {
+    const s = this.state.storage
+    const at = await s.getAlarm()
+    if (at === null || at === undefined || at > t) await s.setAlarm(t)
+  }
+
+  /** Delete every spent challenge past its keep, oldest first (the keys sort by issue time). */
+  async sweepSpent(now) {
+    const s = this.state.storage
+    for (;;) {
+      const keys = [...(await s.list({ prefix: 'spent:', limit: 128 })).keys()]
+      const dead = keys.filter((k) => spentUntil(k) <= now)
+      if (dead.length) await s.delete(dead)
+      if (dead.length < keys.length || keys.length < 128) return
+    }
   }
 
   /**
@@ -242,7 +281,9 @@ export class Roster {
      * `spent:<issued>:<nonce>` (never one growing value, which a stranger could
      * fill to the storage limit and so break every request on the address,
      * security's D2), and each spend sweeps a few of the oldest that are past
-     * their keep. The keys sort by issue time, so the oldest come first.
+     * their keep. The keys sort by issue time, so the oldest come first. Each
+     * spend also makes sure the alarm will come for its key, so an address
+     * nobody touches again still ends up holding none.
      */
     const spend = async () => {
       if (typeof a.nonce !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(a.nonce) || !Number.isSafeInteger(a.issued) || a.issued < 0) return false
@@ -250,8 +291,9 @@ export class Roster {
       if (await s.get(key)) return false
       await s.put(key, 1)
       const oldest = await s.list({ prefix: 'spent:', limit: ROSTER_LIMITS.spentSweep })
-      const dead = [...oldest.keys()].filter((k) => Number(k.slice(6, 22)) + ROSTER_LIMITS.spentKeepMs <= now)
+      const dead = [...oldest.keys()].filter((k) => spentUntil(k) <= now)
       if (dead.length) await s.delete(dead)
+      await this.schedule(spentUntil(key)) // and the alarm sweeps whatever later spends leave behind
       return true
     }
     const origin = typeof a.os === 'string' ? a.os.slice(0, ROSTER_LIMITS.originMax) : ''
@@ -278,15 +320,18 @@ export class Roster {
       // mailed is still live. Otherwise strangers who fill it would leave the
       // address refused for weeks with no working link in its inbox. With the
       // budget full and no live link, one mail goes anyway, and its token is
-      // then the live link that holds the next ones back: at most one such
-      // mail per token life.
+      // then the live link that holds the next ones back. Such a link lives a
+      // day, not 20 minutes (S1′): it is the only thing that limits how often
+      // a link goes beyond the budget, so a stranger who keeps asking gets the
+      // owner one extra mail a day, never one every 20 minutes.
       const spent = await this.spendSetupBudget(now)
       if (!spent && live.some((t) => t.mailed)) return out(202, { mailed: false })
       const token = b64uEnc(crypto.getRandomValues(new Uint8Array(32)))
       const h = await sha256hex(`bento-dir/1/setup\n${token}`)
+      const exp = now + (spent ? ROSTER_LIMITS.setupTtlMs : ROSTER_LIMITS.setupBeyondTtlMs)
       // a new token never replaces an older live one: a stranger's start must not kill the owner's link
-      await s.put('setupTok', [...live, { h, exp: now + ROSTER_LIMITS.setupTtlMs, mailed: false }])
-      const sent = await mailSetupLink(this.env, a.address, token, now)
+      await s.put('setupTok', [...live, { h, exp, mailed: false }])
+      const sent = await mailSetupLink(this.env, a.address, token, now, exp)
       const after = ((await s.get('setupTok')) || []).filter((t) => t.exp > now)
       // a link that never went out is withdrawn, so it can never hold a later mail back
       await s.put('setupTok', sent ? after.map((t) => (t.h === h ? { ...t, mailed: true } : t)) : after.filter((t) => t.h !== h))
@@ -397,6 +442,15 @@ export class Roster {
       // mailer accepted lets the change wait to take effect. If the mailer
       // refuses, nothing is queued and the request fails (security's D1).
       await s.put('pend', { ...p, mailed: false })
+      // The notice can take a while (up to the mailer's timeout), and the slot
+      // is not held against the rest of the world meanwhile: a send that outlives
+      // unsentDropMs lets a later request drop this change and queue its own,
+      // and a void will be able to land mid-send. So what happens after the send
+      // touches the stored change ONLY if it is still this one, unsent (D1a).
+      const ours = async () => {
+        const q = await s.get('pend')
+        return !!q && q.mailed === false && q.ros === p.ros && q.requestedAt === p.requestedAt
+      }
       const records = await this.records(cur.members)
       const rec2 = records[signer.pub]
       const what = change.op === 'add' ? `add the passkey ${await fingerprint(change.pub)}`
@@ -410,11 +464,14 @@ export class Roster {
         ...(await rosterLines(next.members, records, change.op === 'add' ? change.pub : null)),
       ])
       if (!sent) {
-        await s.delete('pend')
+        if (await ours()) await s.delete('pend')
         return out(503, { error: 'mail' })
       }
+      // replaced or dropped while the notice was out: it is not queued (the
+      // person got a notice for a change that will not happen: the safe side)
+      if (!(await ours())) return out(409, { error: 'superseded' })
       await s.put('pend', { ...p, mailed: true })
-      await s.setAlarm(p.ripensAt)
+      await this.schedule(p.ripensAt)
       if (reg) await this.log({ k: 'reg', at: now, seq: next.seq, pub: change.pub, by: signer.pub, os: origin, rq: p.rq, co: reg.origin })
       await this.log({ k: 'request', at: now, seq: next.seq, op: change.op, pub: change.pub, by: signer.pub, os: origin, rq: p.rq, co: p.co })
       return out(202, { ros: a.ros, requestedAt: now, ripensAt: p.ripensAt })
