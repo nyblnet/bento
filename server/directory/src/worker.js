@@ -20,7 +20,9 @@
 import { addressKey, normalize } from './address.js'
 import { issueChallenge, openChallenge } from './challenge.js'
 import { deliver } from './mail.js'
-import { Roster } from './roster.js'
+import { Roster, REQUESTERS } from './roster.js'
+import { SIGNIN_ORIGIN } from './passkey.js'
+import { WEB_ROUTES } from './seam.js'
 import {
   attest, buildDel, importDirKey, tombstone as tombText, verifyBind, verifyDel,
 } from './statements.js'
@@ -43,7 +45,7 @@ export const LIMITS = {
   mailCooldownMs: 60_000,
   mailPerDay: 3, // per ADDRESS: the mail-bombing control
   mailPerMonth: 10,
-  ip: { start: 20, complete: 60, lookup: 300, delete: 20, challenge: 120, request: 60 }, // per IP per hour
+  ip: { start: 20, complete: 60, lookup: 300, delete: 20, challenge: 120, request: 60, setup: 10, enrol: 60 }, // per IP per hour
 }
 const DAY = 86_400_000
 const CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ' // no 0/O, 1/I/L
@@ -69,7 +71,14 @@ const BASE = {
   'content-security-policy': "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
   'x-frame-options': 'DENY',
 }
-const json = (status, body) => new Response(JSON.stringify(body), { status, headers: BASE })
+/**
+ * The /v1/web/* routes are the sign-in host's (server/signin): a browser page
+ * on that origin calls them, so they answer CORS to that origin alone, never
+ * `*`. Every other header is the same.
+ */
+const WEB = { ...BASE, 'access-control-allow-origin': SIGNIN_ORIGIN, vary: 'Origin' }
+const headersFor = (path) => (path.startsWith(WEB_ROUTES.prefix) ? WEB : BASE)
+const json = (status, body, headers = BASE) => new Response(JSON.stringify(body), { status, headers })
 /** A DO answer passed through; a deletion becomes 204 with no body (a 204 may not carry one). */
 const relay = (r) => (r.status === 200 && r.body.deleted === true ? new Response(null, { status: 204, headers: BASE }) : json(r.status, r.body))
 
@@ -141,7 +150,9 @@ export default {
       return await route(req, env)
     } catch (e) {
       console.log(`directory error: ${e && e.message}`)
-      return json(500, { error: 'internal' })
+      let path = ''
+      try { path = new URL(req.url).pathname } catch { /* the base headers */ }
+      return json(500, { error: 'internal' }, headersFor(path))
     }
   },
 }
@@ -149,9 +160,10 @@ export default {
 async function route(req, env) {
   const url = new URL(req.url)
   if (req.method === 'OPTIONS') {
+    const web = url.pathname.startsWith(WEB_ROUTES.prefix)
     return new Response(null, {
       status: 204,
-      headers: { ...BASE, 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type', 'access-control-max-age': '86400' },
+      headers: { ...headersFor(url.pathname), 'access-control-allow-methods': web ? 'POST, OPTIONS' : 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type', 'access-control-max-age': '86400' },
     })
   }
   const ip = req.headers.get('cf-connecting-ip') || '0.0.0.0'
@@ -180,8 +192,11 @@ async function route(req, env) {
   }
 
   // Nothing else is served for GET: in particular no /.well-known/webauthn,
-  // which would let the origins it lists use these passkeys.
-  if (req.method !== 'POST') return json(404, { error: 'not-found' })
+  // which would let the origins it lists use these passkeys, and no route
+  // that reads a mailed link (links complete only on the sign-in host).
+  if (req.method !== 'POST') return json(404, { error: 'not-found' }, headersFor(p))
+
+  if (p.startsWith(WEB_ROUTES.prefix)) return web(req, env, ip, p)
   const b = await body(req)
   if (!b) return json(400, { error: 'bad-request' })
 
@@ -222,6 +237,17 @@ async function route(req, env) {
     return json(200, { challenge: await issueChallenge(env.CHALLENGE_KEY, 'roster', await addressKey(email), Date.now()) })
   }
 
+  if (p === '/v1/roster/setup/start') {
+    // Mails the address a setup link (links.js). ALWAYS 202 once the address
+    // is well formed: the answer never says whether the address has an account,
+    // was mailed, or hit a limit.
+    const email = normalize(b.email ?? '')
+    if (!email) return json(400, { error: 'bad-address' })
+    if (!(await ledger(env, ip, 'setup'))) return json(202, { ok: true })
+    await call(await rosterStub(env, email), 'setupStart', { address: email })
+    return json(202, { ok: true })
+  }
+
   if (p === '/v1/roster/setup') {
     // completes a setup from its mailed token; the mail itself comes with the setup links
     const email = normalize(b.email ?? '')
@@ -249,6 +275,45 @@ async function route(req, env) {
   }
 
   return json(404, { error: 'not-found' })
+}
+
+// --- the sign-in host's routes ---------------------------------------------------
+// The browser-key enrolment (#927's seam, server/signin/public/directory-client.js):
+//   POST /v1/web/challenge  (any body)                  → 200 { nonce }
+//   POST /v1/web/enrol      { text, rq, assertion }     → 200 { ok, wdev, watt }
+// The text a passkey signs to certify a browser key is the kernel's `wdev.`
+// statement, which is not defined yet. Until it is, enrol checks everything it
+// can without that layout and answers 501: nothing is countersigned, stored or
+// logged.
+
+/** A challenge for the web audience: never valid for a roster request, and the reverse. */
+const WEB_AUDIENCE = 'web'
+const B64U = /^[A-Za-z0-9_-]+$/
+const TEXT_MAX = 2048
+const FIELD_MAX = 4096
+
+async function web(req, env, ip, p) {
+  const H = headersFor(p)
+  if (p === WEB_ROUTES.challenge) {
+    // the sign-in host posts {} as text/plain (a simple request); the body is not read
+    if (!(await ledger(env, ip, 'challenge'))) return json(429, { error: 'rate-limited' }, H)
+    return json(200, { nonce: await issueChallenge(env.CHALLENGE_KEY, WEB_AUDIENCE, WEB_AUDIENCE, Date.now()) }, H)
+  }
+  if (p === WEB_ROUTES.enrol) {
+    const b = await body(req)
+    if (!b) return json(400, { error: 'bad-request' }, H)
+    if (typeof b.text !== 'string' || !b.text.startsWith('wdev.') || b.text.length > TEXT_MAX) return json(400, { error: 'text' }, H)
+    // the opener the sign-in host read from the message event: only bento/home may ask
+    if (!REQUESTERS.includes(b.rq)) return json(400, { error: 'rq' }, H)
+    const as = b.assertion
+    const field = (v) => typeof v === 'string' && v.length > 0 && v.length <= FIELD_MAX && B64U.test(v)
+    if (!as || typeof as !== 'object' || Array.isArray(as) ||
+      !['id', 'authenticatorData', 'clientDataJSON', 'signature'].every((k) => field(as[k])) ||
+      !(as.userHandle === null || as.userHandle === undefined || field(as.userHandle))) return json(400, { error: 'assertion' }, H)
+    if (!(await ledger(env, ip, 'enrol'))) return json(429, { error: 'rate-limited' }, H)
+    return json(501, { error: 'not-implemented', reason: 'the kernel wdev. statement is not defined yet' }, H)
+  }
+  return json(404, { error: 'not-found' }, H)
 }
 
 export { Roster }
