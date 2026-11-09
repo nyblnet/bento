@@ -1,0 +1,7 @@
+{
+  "name": "bento-stage0-probes",
+  "private": true,
+  "description": "Stage-0 measurement probes. Not product code; never deployed on bento.page.",
+  "license": "MIT",
+  "type": "module"
+}

@@ -1,0 +1,16 @@
+# Stage-0 probe P1, the TOP page (a stand-in for the library).
+# Static files only (../public), no Worker code. Deploy from this folder:
+#   npx wrangler@4.152.0 deploy
+# It lands on https://bento-probe-top.<your-subdomain>.workers.dev.
+# Never give it a bento.page route or custom domain.
+name = "bento-probe-top"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[assets]
+directory = "../public"
+html_handling = "auto-trailing-slash"
+not_found_handling = "none"
+
+[observability]
+enabled = false
