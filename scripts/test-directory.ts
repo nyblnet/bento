@@ -8,19 +8,22 @@
 // Drives the REAL worker and its Durable Object classes against an in-memory
 // namespace and a hand-moved clock, so the assertions are about the service's
 // actual control flow. What it must prove:
-//   · a binding needs BOTH proofs — the mailed code AND a signature by the
-//     binding's own key over it — so an attacker who starts a binding of THEIR
-//     key to a victim's address can't finish it, and neither can the victim;
+//   · the typed-code `bind.` routes are retired: 410 for any request, a valid
+//     statement included, with no mail and nothing stored (G13);
 //   · lookups are exact-address only, signed, and say nothing about addresses
 //     that don't exist (404 for never-existed and expired alike);
-//   · bind/start answers 202 whatever happens (no existence or limit oracle);
-//   · per-address mail limits stop mail-bombing; per-IP limits are enforced;
+//   · delete/start answers 202 whatever happens (no existence or limit oracle);
+//   · per-address mail limits stop mail-bombing, and a start that mails
+//     nothing spends nothing; per-IP limits are enforced;
 //   · deletion (holder-signed, or by mailed code) leaves a SIGNED tombstone;
 //   · no raw address or IP is ever written to storage.
+//
+// Nothing can make a binding through the API any more, so the rig PLANTS them
+// in the Address object's storage, in the shape the retired route stored.
 
-import worker, { Address, Ledger, LIMITS } from '../server/directory/src/worker.js'
+import worker, { Address, Ledger, LIMITS, RETIRED } from '../server/directory/src/worker.js'
 import { addressKey, normalize } from '../server/directory/src/address.js'
-import { b64uEnc, buildBind, buildCmp, buildDel, sha256b64u as hashOf, signStatement, verifyAtt, verifyTomb } from '../kernel/src/statements.ts'
+import { b64uEnc, buildBind, buildDel, sha256b64u as hashOf, signStatement, verifyAtt, verifyBind, verifyTomb } from '../kernel/src/statements.ts'
 import { readFileSync } from 'node:fs'
 
 let fails = 0, passes = 0
@@ -75,7 +78,6 @@ async function kxPub() {
 // the old field names, onto the kernel's builders
 const bindText = (b: { email: string; key: string; kx?: string | null; name?: string; seq: number; prev?: string; created: number; expires: number }) =>
   buildBind({ address: b.email, accountPub: b.key, kx: b.kx ?? null, name: b.name ?? null, seq: b.seq, prev: b.prev ?? null, created: b.created, expires: b.expires })
-const completionText = buildCmp
 const deleteText = buildDel
 const dir = await signer()
 const dirJwk = JSON.stringify(await crypto.subtle.exportKey('jwk', dir.kp.privateKey))
@@ -116,16 +118,24 @@ async function stmtFor(p: Awaited<ReturnType<typeof person>>, seq = 1, prev?: st
   const text = bindText({ email: p.email, key: p.k.pub, kx: p.kx, name: p.name, seq, prev, created: now, expires: Math.floor(now + life) })
   return { text, sig: await p.k.sign(text) }
 }
-async function bind(p: Awaited<ReturnType<typeof person>>, seq = 1, prev?: string) {
-  return bindFor(p, seq, prev)
+const storeOf = async (email: string) => {
+  const k = await addressKey(email)
+  ;(env.ADDRESS as { get(id: string): unknown }).get(k)
+  return stores.find((m) => m.has(k))!.get(k)!
 }
-async function bindFor(p: Awaited<ReturnType<typeof person>>, seq = 1, prev?: string, life?: number) {
+/** A binding as the retired bind route stored it: the statement must pass the kernel verifier. */
+async function bindFor(p: Awaited<ReturnType<typeof person>>, seq = 1, prev?: string, life?: number, o: { rebound?: boolean } = {}) {
   const s = await stmtFor(p, seq, prev, life)
-  const st = await api('POST', '/v1/bind/start', { stmt: s.text, sig: s.sig })
-  const code = codeFor(p.email)!
-  const c = await api('POST', '/v1/bind/complete', { email: p.email, code, sig: await p.k.sign(completionText(await hashOf(s.text), code)) })
-  return { st, c, s }
+  const v = await verifyBind(s.text, s.sig, { now })
+  if (!v.ok) throw new Error(`rig: planted statement does not verify (${v.reason})`)
+  const st = await storeOf(p.email)
+  const old = st.get('cur') as { h: string } | undefined
+  if (old) st.set('chain', [...((st.get('chain') as string[] | undefined) ?? []), old.h])
+  st.set('cur', { stmt: s.text, sig: s.sig, h: await hashOf(s.text), b: { key: p.k.pub, seq, expires: v.value.expires }, verifiedAt: now, rebound: !!o.rebound })
+  st.delete('tomb')
+  return { s }
 }
+const bind = (p: Awaited<ReturnType<typeof person>>, seq = 1, prev?: string) => bindFor(p, seq, prev)
 
 // =====================================================================
 // address normalisation (provisional; kernel owns the reference + vectors)
@@ -143,183 +153,127 @@ ok(await addressKey('alice@example.com') === '123c19c9631499522f93afd25daf131a98
 for (const [i, want] of N) ok(normalize(i) === want, `normalize(${JSON.stringify(i).slice(0, 40)}) → ${want}`)
 
 // =====================================================================
-// the happy path
+// the retired bind. routes: 410, whatever is sent, and nothing happens
+// =====================================================================
+{
+  ok(JSON.stringify(RETIRED) === JSON.stringify(['/v1/bind/start', '/v1/bind/complete']), 'both typed-code bind routes are listed as retired')
+  const p = await person('rita@example.com')
+  const s = await stmtFor(p)
+  // control: the statement is one the retired route would have accepted and mailed a code for
+  ok((await verifyBind(s.text, s.sig, { now })).ok, 'control: the statement sent below passes the kernel verifier')
+  const m0 = mailbox.length
+  const bodies: [string, unknown][] = [
+    ['/v1/bind/start', { stmt: s.text, sig: s.sig }],
+    ['/v1/bind/complete', { email: p.email, code: 'ABCDEFGH', sig: await p.k.sign(s.text) }],
+  ]
+  for (const [path, body] of bodies) {
+    for (const method of ['POST', 'GET']) {
+      const r = await api(method, path, method === 'POST' ? body : undefined, freshIp())
+      ok(r.status === 410 && r.j.error === 'gone', `${method} ${path} → 410 gone (got ${r.status})`)
+      ok(r.h.get('content-type') === 'application/json' && r.h.get('x-content-type-options') === 'nosniff' && r.h.get('x-frame-options') === 'DENY' &&
+        /default-src 'none'/.test(r.h.get('content-security-policy') ?? '') && /publickey-credentials-get=\(\)/.test(r.h.get('permissions-policy') ?? ''),
+      `${method} ${path}: the full header set`)
+    }
+  }
+  ok(mailbox.length === m0, 'the retired routes mailed nothing')
+  ok(![...(await storeOf(p.email)).keys()].length, 'and stored nothing for the address')
+  ok((await api('GET', '/v1/lookup?e=rita@example.com')).status === 404, 'and nothing is published')
+}
+
+// =====================================================================
+// lookup
 // =====================================================================
 const alice = await person('alice@example.com', 'Alice')
 {
-  const { st, c, s } = await bind(alice)
-  ok(st.status === 202, 'bind/start → 202')
-  ok(mailbox.length === 1 && mailbox[0].to === 'alice@example.com', 'one code mailed to the address')
-  ok(!mailbox[0].body.includes('Alice'), 'the mail carries no user-supplied text (not the display name)')
-  ok(c.status === 200 && c.j.binding === s.text, `bind/complete → 200 with the exact statement (${c.status})`)
-  const att = String(c.j.attestation)
-  ok(await verifyDirAtt(att, String(c.j.attestationSig), s.text), 'attestation passes the kernel client verifier (verifyAtt)')
-  ok(att === `att.${await hashOf(s.text)}.${now}.${now}.dir-1.active`, `attestation names this exact text, state active (${att.slice(0, 30)}…)`)
-}
-{
+  const { s } = await bind(alice)
+  const verifiedAt = now
   now += HOUR
   const r = await api('GET', '/v1/lookup?e=ALICE@example.com')
-  ok(r.status === 200, 'lookup by exact address (case-insensitive) → 200')
-  const f = String(r.j.attestation).split('.')
+  ok(r.status === 200 && r.j.binding === s.text, 'lookup by exact address (case-insensitive) → 200 with the exact statement')
+  const att = String(r.j.attestation)
+  ok(att === `att.${await hashOf(s.text)}.${verifiedAt}.${now}.dir-1.active`, `the attestation names this exact text, state active (${att.slice(0, 30)}…)`)
+  const f = att.split('.')
   ok(f[3] === String(now) && Number(f[2]) === now - HOUR, 'lookup re-issues the attestation: fresh issuedAt, original verifiedAt')
-  ok(await verifyDirAtt(String(r.j.attestation), String(r.j.attestationSig), String(r.j.binding)), 'lookup attestation passes verifyAtt')
+  ok(await verifyDirAtt(att, String(r.j.attestationSig), String(r.j.binding)), 'lookup attestation passes verifyAtt')
   ok(r.h.get('access-control-allow-origin') === '*' && r.h.get('x-robots-tag')?.includes('noindex') && !r.h.get('set-cookie'), 'headers: CORS *, noindex, no cookie')
   ok((await api('GET', '/v1/lookup?e=nobody@example.com')).status === 404, 'unknown address → 404')
   ok((await api('GET', '/v1/lookup?e=alice@')).status === 400, 'malformed address → 400')
   ok((await api('GET', '/v1/lookup?e=alice%40example.co')).status === 404, 'no prefix or fuzzy match')
+  ok(r.j.rebound === false && Array.isArray(r.j.chain) && (r.j.chain as string[]).length === 0, 'a first binding: not rebound, empty chain')
+  // a planted second binding with a different key: lookup carries rebound and the chain
+  const ivan = await person('ivan@example.com')
+  const iv1 = await bindFor(ivan, 1, undefined, 10 * MIN)
+  now += 11 * MIN
+  await bindFor(await person('ivan@example.com'), 2, await hashOf(iv1.s.text), undefined, { rebound: true })
+  const il = await api('GET', '/v1/lookup?e=ivan@example.com')
+  ok(il.j.rebound === true && (il.j.chain as string[]).length === 1 && (il.j.chain as string[])[0] === await hashOf(iv1.s.text), 'lookup carries rebound and the chain of earlier hashes')
 }
 
 // =====================================================================
-// TWO PROOFS: the attack a link would allow
+// removal codes: attempts, expiry
 // =====================================================================
-{
-  const victim = await person('victim@example.com')
-  const attacker = await person('victim@example.com') // the attacker's key, the victim's address
-  const s = await stmtFor(attacker)
-  ok((await api('POST', '/v1/bind/start', { stmt: s.text, sig: s.sig })).status === 202, 'attacker can START a binding of their key to the victim')
-  const code = codeFor('victim@example.com')!
-  const h = await hashOf(s.text)
-  // the victim has the code but not the attacker's key: signing with their own key fails
-  ok((await api('POST', '/v1/bind/complete', { email: victim.email, code, sig: await victim.k.sign(completionText(h, code)) })).status === 400, 'victim (code, wrong key) cannot complete it')
-  // the attacker has the key but not the code
-  ok((await api('POST', '/v1/bind/complete', { email: attacker.email, code: 'ABCDEFGH', sig: await attacker.k.sign(completionText(h, 'ABCDEFGH')) })).status === 400, 'attacker (key, no code) cannot complete it')
-  ok((await api('GET', '/v1/lookup?e=victim@example.com')).status === 404, 'nothing was published')
+/** a binding that has run out (still held, so it can be removed by mailbox) */
+async function expired(email: string) {
+  const p = await person(email)
+  await bindFor(p, 1, undefined, 10 * MIN)
+  now += 11 * MIN
+  return p
 }
-
-// =====================================================================
-// refusals at start
-// =====================================================================
 {
-  const p = await person('carol@example.com')
-  const sameKx = bindText({ email: p.email, key: p.k.pub, kx: p.k.pub, seq: 1, created: now, expires: now + MONTH })
-  ok((await api('POST', '/v1/bind/start', { stmt: sameKx, sig: await p.k.sign(sameKx) })).status === 400, 'kx == signing key → refused')
-  const kxEmpty = bindText({ email: p.email, key: p.k.pub, kx: null, seq: 1, created: now, expires: now + MONTH })
-  ok((await api('POST', '/v1/bind/start', { stmt: kxEmpty, sig: await p.k.sign(kxEmpty) })).status === 400, 'an EMPTY kx slot → refused (mode C requires the recovery kx)')
-  const kxOk = bindText({ email: 'kxctl@example.com', key: p.k.pub, kx: await kxPub(), seq: 1, created: now, expires: now + MONTH })
-  ok((await api('POST', '/v1/bind/start', { stmt: kxOk, sig: await p.k.sign(kxOk) }, freshIp())).status === 202, 'CONTROL: the same statement with its kx filled → accepted')
-  const g0 = await stmtFor(p)
-  const raw = new Uint8Array(await crypto.subtle.sign(SIG, p.k.kp.privateKey, new TextEncoder().encode(g0.text)))
-  const N_ = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n
-  const sv = raw.subarray(32).reduce((x, v) => (x << 8n) | BigInt(v), 0n)
-  const hi = sv > N_ >> 1n ? sv : N_ - sv // force the high-S twin of the same signature
-  const hiSig = new Uint8Array(64); hiSig.set(raw.subarray(0, 32))
-  for (let i = 31, x = hi; i >= 0; i--, x >>= 8n) hiSig[32 + i] = Number(x & 0xffn)
-  ok((await api('POST', '/v1/bind/start', { stmt: g0.text, sig: b64uEnc(hiSig) })).status === 400, 'a high-S signature (the malleable twin) → refused')
-  const long = await stmtFor(p, 1, undefined, 14 * MONTH)
-  ok((await api('POST', '/v1/bind/start', { stmt: long.text, sig: long.sig })).status === 400, 'lifetime over 13 months → refused')
-  const good = await stmtFor(p)
-  ok((await api('POST', '/v1/bind/start', { stmt: good.text, sig: (await (await signer()).sign(good.text)) })).status === 400, 'statement signed by another key → refused')
-  const upper = bindText({ email: 'Carol@Example.com', key: p.k.pub, kx: p.kx, seq: 1, created: now, expires: now + MONTH })
-  ok((await api('POST', '/v1/bind/start', { stmt: upper, sig: await p.k.sign(upper) })).status === 400, 'a statement must carry the NORMALISED address')
-  ok(!mailbox.some((m) => m.to.startsWith('carol')), 'no mail for any refused statement')
-}
-
-// =====================================================================
-// codes: attempts, expiry
-// =====================================================================
-{
-  const p = await person('dave@example.com')
-  const s = await stmtFor(p)
-  await api('POST', '/v1/bind/start', { stmt: s.text, sig: s.sig })
+  const p = await expired('dave@example.com')
+  ok((await api('POST', '/v1/delete/start', { email: p.email })).status === 202, 'delete/start on an expired binding → 202')
   const code = codeFor(p.email)!
-  const h = await hashOf(s.text)
-  for (let i = 0; i < LIMITS.codeAttempts; i++) await api('POST', '/v1/bind/complete', { email: p.email, code: 'ZZZZZZZZ', sig: await p.k.sign(completionText(h, 'ZZZZZZZZ')) })
-  ok((await api('POST', '/v1/bind/complete', { email: p.email, code, sig: await p.k.sign(completionText(h, code)) })).status === 400, `after ${LIMITS.codeAttempts} wrong tries the right code is dead too`)
+  ok(!!code && /^[2-9A-HJ-NP-Z]{8}$/.test(code), 'a removal code is mailed')
+  for (let i = 0; i < LIMITS.codeAttempts; i++) await api('POST', '/v1/delete/complete', { email: p.email, code: 'ZZZZZZZZ' })
+  ok((await api('POST', '/v1/delete/complete', { email: p.email, code })).status === 400, `after ${LIMITS.codeAttempts} wrong tries the right code is dead too`)
   now += 2 * MIN
-  await api('POST', '/v1/bind/start', { stmt: s.text, sig: s.sig })
+  await api('POST', '/v1/delete/start', { email: p.email })
   const code2 = codeFor(p.email)!
+  ok(code2 !== code, 'a second start mails a fresh code')
   now += LIMITS.codeTtlMs + 1
-  ok((await api('POST', '/v1/bind/complete', { email: p.email, code: code2, sig: await p.k.sign(completionText(h, code2)) })).status === 400, 'an expired code fails')
+  ok((await api('POST', '/v1/delete/complete', { email: p.email, code: code2 })).status === 400, 'an expired code fails')
+  ok((await api('POST', '/v1/delete/complete', { email: p.email, code: 'bad' })).status === 400, 'a malformed code → 400')
 }
 
 // =====================================================================
 // per-address mail limits (mail-bombing) — and start still says 202
 // =====================================================================
 {
-  const p = await person('erin@example.com')
-  const s = await stmtFor(p)
+  const p = await expired('erin@example.com')
   const before = mailbox.length
   for (let i = 0; i < 6; i++) {
-    const r = await api('POST', '/v1/bind/start', { stmt: s.text, sig: s.sig }, freshIp())
+    const r = await api('POST', '/v1/delete/start', { email: p.email }, freshIp())
     ok(r.status === 202, `start #${i + 1} → 202 regardless`)
     now += 10 * 1000 // inside the cooldown for the first few
   }
   ok(mailbox.length - before === 1, `cooldown: only ONE mail inside a minute (${mailbox.length - before})`)
-  for (let i = 0; i < 5; i++) { now += 2 * MIN; await api('POST', '/v1/bind/start', { stmt: s.text, sig: s.sig }, freshIp()) }
+  for (let i = 0; i < 5; i++) { now += 2 * MIN; await api('POST', '/v1/delete/start', { email: p.email }, freshIp()) }
   ok(mailbox.length - before === LIMITS.mailPerDay, `at most ${LIMITS.mailPerDay} mails a day to one address (${mailbox.length - before})`)
   now += DAY + MIN
-  await api('POST', '/v1/bind/start', { stmt: s.text, sig: s.sig }, freshIp())
+  await api('POST', '/v1/delete/start', { email: p.email }, freshIp())
   ok(mailbox.length - before === LIMITS.mailPerDay + 1, 'the next day the address can be mailed again')
 }
 
 // =====================================================================
-// a start that mails nothing costs nothing: strangers cannot spend the
-// holder's mail budget (any key, no proof, so anyone can send these)
+// a start that mails nothing costs nothing: anyone can send delete/start for
+// any address, so its refusals must not spend the holder's mail budget
 // =====================================================================
 {
   now += HOUR
   const holder = await person('hana@example.com')
-  const first = await bind(holder)
-  ok(first.c.status === 200, 'budget: the holder binds')
-  const storeOf = async (email: string) => { const k = await addressKey(email); return stores.find((m) => m.has(k))!.get(k)! }
+  await bindFor(holder, 1, undefined, 2 * HOUR)
   const spent = async () => (((await storeOf(holder.email)).get('mail') as number[] | undefined) ?? []).length
   const m0 = mailbox.length, b0 = await spent()
-  // more refused starts than the whole daily budget, each past the cooldown
-  // except the last, which lands one second before the holder's own
+  // more refused starts (the binding is LIVE: email never removes it) than the whole daily budget
   for (let i = 0; i < LIMITS.mailPerDay + 2; i++) {
-    now += i === LIMITS.mailPerDay + 1 ? 1000 : 2 * MIN
-    const stranger = await person(holder.email)
-    const st = await stmtFor(stranger)
-    ok((await api('POST', '/v1/bind/start', { stmt: st.text, sig: st.sig }, freshIp())).status === 202, `budget: stranger start #${i + 1} → 202`)
+    now += 2 * MIN
+    ok((await api('POST', '/v1/delete/start', { email: holder.email }, freshIp())).status === 202, `budget: stranger start #${i + 1} on a live binding → 202`)
   }
-  ok(mailbox.length === m0, `budget: the strangers' starts mailed nothing (${mailbox.length - m0})`)
+  ok(mailbox.length === m0, `budget: the refused starts mailed nothing (${mailbox.length - m0})`)
   ok((await spent()) === b0, `budget: and recorded no mail against the address (${(await spent()) - b0} recorded)`)
-  now += 1000
-  const ren = await stmtFor(holder, 2, await hashOf(first.s.text))
-  await api('POST', '/v1/bind/start', { stmt: ren.text, sig: ren.sig })
-  const code = mailbox.length === m0 + 1 ? mailbox[mailbox.length - 1].code : undefined
-  ok(!!code && mailbox[mailbox.length - 1].to === holder.email, "budget: the holder's own renewal start is still mailed")
-  const c = code ? await api('POST', '/v1/bind/complete', { email: holder.email, code, sig: await holder.k.sign(completionText(await hashOf(ren.text), code)) }) : null
-  ok(c?.status === 200, "budget: and that code completes the renewal")
-}
-
-// =====================================================================
-// sequence: renewal, rebound, replay
-// =====================================================================
-{
-  now += 2 * MIN
-  const first = await api('GET', '/v1/lookup?e=alice@example.com')
-  const h1 = await hashOf(String(first.j.binding))
-  // a stale seq-1 statement can't overwrite the live binding
-  const replay = await stmtFor(alice)
-  await api('POST', '/v1/bind/start', { stmt: replay.text, sig: replay.sig }); now += 2 * MIN
-  const rc = codeFor(alice.email)!
-  ok((await api('POST', '/v1/bind/complete', { email: alice.email, code: rc, sig: await alice.k.sign(completionText(await hashOf(replay.text), rc)) })).status === 400, 'seq 1 while a binding is live → refused')
-  // renewal: same key, seq 2, prev = hash of the live text
-  now += 2 * MIN
-  const ren = await bind(alice, 2, h1)
-  ok(ren.c.status === 200 && ren.c.j.rebound === false, 'renewal (same key, seq+1, prev) → accepted, not rebound')
-  // a NEW key over the LIVE binding, proven by email alone: refused (security §25:
-  // a live binding moves only through the 72-hour contestable rotation)
-  now += 2 * MIN
-  const alice2 = await person('alice@example.com')
-  const rbs = await stmtFor(alice2, 3, await hashOf(ren.s.text))
-  const m0 = mailbox.length
-  ok((await api('POST', '/v1/bind/start', { stmt: rbs.text, sig: rbs.sig })).status === 202 && mailbox.length === m0, 'a new key over a LIVE binding: start → 202 and NO mail')
-  ok((await api('POST', '/v1/bind/complete', { email: alice.email, code: 'ABCDEFGH', sig: await alice2.k.sign(completionText(await hashOf(rbs.text), 'ABCDEFGH')) })).status === 400, '…and nothing to complete')
-  const still = await api('GET', '/v1/lookup?e=alice@example.com')
-  ok(still.status === 200 && String(still.j.binding) === ren.s.text && still.j.rebound === false, 'the live binding keeps its key, not rebound')
-
-  // control: a new key over an EXPIRED binding, by email → accepted, flagged rebound
-  const ivan = await person('ivan@example.com')
-  const iv1 = await bindFor(ivan, 1, undefined, 10 * MIN)
-  ok(iv1.c.status === 200, 'a short-lived binding')
-  now += 11 * MIN
-  const ivan2 = await person('ivan@example.com')
-  const iv2 = await bindFor(ivan2, 2, await hashOf(iv1.s.text))
-  ok(iv2.c.status === 200 && iv2.c.j.rebound === true, 'a new key over an EXPIRED binding, by email → accepted and flagged rebound (pinners warn)')
-  const il = await api('GET', '/v1/lookup?e=ivan@example.com')
-  ok(il.j.rebound === true && (il.j.chain as string[]).length === 1, 'lookup carries rebound and the chain of earlier hashes')
+  now += 2 * HOUR // the binding runs out
+  await api('POST', '/v1/delete/start', { email: holder.email })
+  ok(mailbox.length === m0 + 1 && mailbox[mailbox.length - 1].to === holder.email, "budget: the holder's own removal start, once it may be mailed, is still mailed")
 }
 
 // =====================================================================
@@ -353,29 +307,11 @@ const alice = await person('alice@example.com', 'Alice')
   ok(!!code && mailbox[mailbox.length - 1].to === jo.email && /remove this address/.test(mailbox[mailbox.length - 1].body), 'the removal mail is sent, and says what it is for')
   ok((await api('POST', '/v1/delete/complete', { email: jo.email, code })).status === 204, 'delete by mailbox: the code → 204')
   ok(String(((await api('GET', '/v1/lookup?e=jo@example.com')).j.tombstone as { text: string }).text).split('.')[4] === 'mailbox', 'tombstone says by mailbox')
-  ok(jo1.c.status === 200, 'the expired control had been bound')
-  // a tombstoned address binds again by email (a fresh seq 1)
-  now += 2 * MIN
-  const jo2 = await person('jo@example.com')
-  ok((await bind(jo2)).c.status === 200, 'a TOMBSTONED address binds again by email (seq 1)')
-  // the complete-time re-checks guard a race the API can't produce today (one
-  // pending slot per address), so drive it in storage: the binding goes LIVE
-  // between the mail and the code
-  const storeOf = async (email: string) => { const k = await addressKey(email); return stores.find((m) => m.has(k))!.get(k)! }
+  ok(jo1.s.text.startsWith('bind.'), 'the expired control had been bound')
   const goLive = async (email: string) => {
     const st = await storeOf(email); const cur = st.get('cur') as { b: { expires: number } }
     cur.b.expires = now + DAY; st.set('cur', cur)
   }
-  const kim = await person('kim@example.com')
-  const k1 = await bindFor(kim, 1, undefined, 10 * MIN)
-  now += 11 * MIN
-  const kim2 = await person('kim@example.com')
-  const ks = await stmtFor(kim2, 2, await hashOf(k1.s.text)) // chained correctly: only the key check stands in the way
-  await api('POST', '/v1/bind/start', { stmt: ks.text, sig: ks.sig })
-  const kc = codeFor(kim.email)!
-  await goLive(kim.email)
-  ok((await api('POST', '/v1/bind/complete', { email: kim.email, code: kc, sig: await kim2.k.sign(completionText(await hashOf(ks.text), kc)) })).status === 400, 'race: the binding went live after the mail → the email-only new key is refused at complete')
-  ok(((await storeOf(kim.email)).get('cur') as { b: { key: string } }).b.key === kim.k.pub, '…and the live key is unchanged')
   const lee = await person('lee@example.com')
   await bindFor(lee, 1, undefined, 10 * MIN)
   now += 11 * MIN
@@ -412,16 +348,15 @@ const alice = await person('alice@example.com', 'Alice')
 }
 
 {
-  // bind/start past the per-IP limit: still 202 (the limit is not an oracle), but no mail
+  // delete/start past the per-IP limit: still 202 (the limit is not an oracle), but no mail
   const ip = freshIp()
+  const ps = []
+  for (let i = 0; i <= LIMITS.ip.start; i++) { const p = await person(`ip${i}@example.net`); await bindFor(p, 1, undefined, 10 * MIN); ps.push(p) }
+  now += 11 * MIN
   const before = mailbox.length
-  let statuses = new Set<number>()
-  for (let i = 0; i <= LIMITS.ip.start; i++) {
-    const p = await person(`ip${i}@example.net`)
-    const s = await stmtFor(p)
-    statuses.add((await api('POST', '/v1/bind/start', { stmt: s.text, sig: s.sig }, ip)).status)
-  }
-  ok(statuses.size === 1 && statuses.has(202), `bind/start answers 202 even past the per-IP limit (${[...statuses]})`)
+  const statuses = new Set<number>()
+  for (const p of ps) statuses.add((await api('POST', '/v1/delete/start', { email: p.email }, ip)).status)
+  ok(statuses.size === 1 && statuses.has(202), `delete/start answers 202 even past the per-IP limit (${[...statuses]})`)
   ok(mailbox.length - before === LIMITS.ip.start, `but only ${LIMITS.ip.start} mails went out from one IP (${mailbox.length - before})`)
 }
 
@@ -447,20 +382,18 @@ for (const r of V.addresses) {
   ok(normalize(r.input) === want, `vector address ${JSON.stringify(r.input).slice(0, 40)} → ${want ?? r.reason}`)
 }
 {
+  // the bind vectors are the kernel's (its own rig runs them); here only the
+  // ones a planted binding relies on: every accept vector verifies as planted
   const saved = now
-  let n = 0
   now = V.now
   ok(V.kxMode === 'C', `the vectors are mode C (${V.kxMode})`)
-  ok(!V.statements.some((x: { kxMode?: string }) => 'kxMode' in x), 'no per-row kx modes remain in the vectors')
-  for (const v of V.statements.filter((x: { type: string }) => x.type === 'bind')) {
+  let n = 0
+  for (const v of V.statements.filter((x: { type: string; expect: string }) => x.type === 'bind')) {
     n++
-    const r = await api('POST', '/v1/bind/start', { stmt: v.text, sig: v.sig }, freshIp())
-    ok(r.status === (v.expect === 'accept' ? 202 : 400), `vector ${v.name} → ${r.status}`)
+    ok((await verifyBind(v.text, v.sig, { now })).ok === (v.expect === 'accept'), `vector ${v.name}`)
   }
   ok(n >= 30, `the bind vectors actually ran (${n})`)
-  ok(V.statements.some((x: { type: string; name: string }) => x.type === 'bind' && /kx slot empty/.test(x.name)), 'the empty-kx reject vector is among them')
   now = saved
-  mailbox.length = 0
 }
 
 console.log(`${passes} passed, ${fails} failed`)

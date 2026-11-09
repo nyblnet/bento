@@ -1,19 +1,16 @@
 # bento/id directory (`id.bento.page`)
 
 Layer 1 of bento/id. It answers one question: *does this key belong to this
-mailbox?* It holds **holder-published bindings**: an account key, a separate
-key-agreement key, and an email address. Each binding is made with **two
-proofs**:
+mailbox?* Under option G an address's account is a **roster of passkeys**
+(see "The passkey roster" below).
 
-1. a signature by the account key over the binding statement, and
-2. a code mailed to the address, entered in the holder's own agent (bento/home)
-   and **signed by that same key**.
-
-Why a code and not a link: an attacker can start a binding of their own key to
-someone else's address. If clicking a mailed link completed it, the victim's
-click, or their mail provider's link scanner, would bind the attacker's key.
-With the code entered and signed in the holder's agent, neither half works
-alone.
+**The first design is retired.** It bound one account key to an address with
+a typed code mailed to the address and entered, signed, in bento/home
+(`bind.`, `POST /v1/bind/start` and `/complete`). Under option G every mailed
+confirmation is a link that completes only on the sign-in host (G13), so a
+typed code on this host contradicts it: both bind routes answer **410** and
+nothing can make a new `bind.` binding. Lookups and deletions below still
+answer for any binding that exists.
 
 ## What it never holds
 
@@ -28,20 +25,14 @@ day's hashes can't be linked to the next.
 
 | route | proof | answer |
 |---|---|---|
-| `POST /v1/bind/start` `{stmt, sig}` | the holder's signature over `bind.…` | **always 202** once the statement is valid, whether or not a code was mailed (no existence or limit oracle) |
-| `POST /v1/bind/complete` `{email, code, sig}` | the code + the key's signature over `cmp.…` | 200 with the statement and a signed `att.…`, or a uniform 400 |
+| `/v1/bind/start`, `/v1/bind/complete` | retired | **410** `{error: "gone"}`, for any method and body; nothing is mailed or stored |
 | `GET /v1/lookup?e=` | none | 200 (statement + fresh attestation + chain), 410 (signed tombstone) or 404 (never existed *or* expired: the same answer). Exact address only |
 | `POST /v1/delete` `{email, ts, sig}` | the key's signature over `del.…`, ±5 min | 204, leaving a signed `tomb.…` |
 | `POST /v1/delete/start`, `/complete` | a mailed code, for an EXPIRED binding only | 202, then 204 |
 
-**Email never changes a LIVE binding on its own** (security §25). While a
-binding is live, a new key proven by email alone is refused (start mails
-nothing), and so is a mailed-code delete. A live binding changes only by its
-holder: a renewal, or a holder-signed delete. The 72-hour contestable
-rotation, which is how a person who has lost every device moves on, arrives
-with the rotation states. Email alone may bind an address that is absent,
-expired or deleted; a new key over an expired one is flagged `rebound`, so
-pinners warn.
+**Email never changes a LIVE binding on its own** (security §25): a
+mailed-code delete of a live binding mails nothing and removes nothing. A
+live binding is removed by a holder-signed delete.
 
 **Until the rotation states land, a live binding's key cannot change at
 all**, and a person who has lost every device cannot remove a live binding:
@@ -55,9 +46,13 @@ now. For a live one it answers as usual and mails nothing. Accepted for phase
 - a code lives 20 minutes and allows 5 attempts
 - per address: one mail a minute, 3 a day, 10 a month (the mail-bombing control)
   The budget is spent only by a mail that is actually sent: a refused start
-  (anyone can send one, for any key) costs nothing, so strangers cannot use up
-  the holder's mail and keep their next code from arriving.
-- per IP and hour: start 20, complete 60, lookup 300, delete 20
+  (anyone can send one, for any address) costs nothing, so strangers cannot use
+  up the holder's mail and keep their next code from arriving.
+- per IP and hour: delete start 20, complete 60, lookup 300, delete 20
+
+Every answer, an unexpected failure included, is JSON with the full header
+set: an exception is caught at the top and answered as a 500
+`{error: "internal"}` that names nothing inside.
 
 ## Status
 
@@ -136,11 +131,23 @@ Under option G a bento/id account is a **roster of passkeys** (the kernel's
   time. A member removing itself is immediate only while another
   unquarantined passkey stays.
 - **Setup** needs a 256-bit single-use setup token, with no attempt counter.
-- **Log**: every enrolment and change, with the request `Origin`, the ceremony
-  origin, the opener the sign-in host reports, and the time.
+- **Log**: every enrolment and change, with the FULL public key it is about
+  (and the full key that asked), the request `Origin`, the ceremony origin,
+  the opener the sign-in host reports, and the time. The incident lever acts
+  on the exact key, so the log never stands in a fingerprint for it.
 - **Mail**: every roster mail names the change in words, to the second, with
   the host class, and lists the whole roster. No budget a stranger can fill
   holds one back.
+- **The waiting notice gates the wait.** That mail is how the person stops a
+  change, so a change waits to take effect only once the mailer has accepted
+  its notice. With the mailer down the request fails (503 `{error: "mail"}`)
+  and nothing is queued. A change whose object stopped between holding the
+  slot and hearing from the mailer never takes effect, and frees the slot
+  after 10 minutes.
+- **Spent challenges** are one storage key each (`spent:<issued>:<nonce>`),
+  kept 10 minutes and swept a few at a time by later spends. Anyone can spend
+  a challenge without an account, so one growing value would let a stranger
+  fill it to the storage limit and break every request on the address.
 
 | route | proof | answer |
 |---|---|---|
@@ -161,5 +168,6 @@ serves no `/.well-known/webauthn`. The Permissions-Policy does not cover the
 WebAuthn Signal API, so no page here may run script, except the void page
 when it comes, under its own CSP.
 
-Rigs: `node scripts/test-directory-roster.ts`, and the mutants in
+Rigs: `node scripts/test-directory.ts` (lookups, deletion, the retired
+routes), `node scripts/test-directory-roster.ts`, and the mutants in
 `scripts/test-directory-mutants.ts`.

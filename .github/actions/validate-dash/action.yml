@@ -775,6 +775,13 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-dash-colours.ts
 
+    - name: dash — structured references and Excel error literals
+      # Excel's table syntax (Sales[Amount], Sales[@Qty], Sales[#Totals]) gives
+      # the same answers placed and unplaced, follows a moved table, and
+      # resolves what has no address to an error IFERROR can catch.
+      shell: bento-step {0}
+      run: node scripts/test-dash-structured.ts
+
     - name: dash — document strings reach markup only as values
       # parseDoc repairs a column width that is not a number, a column id that
       # cannot sit in markup (its data, cells and totals move with it) and
