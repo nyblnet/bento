@@ -136,10 +136,21 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-directory.ts
 
+    - name: bento/id directory passkey roster (rp id.bento.page, 72 h queue, mail, headers)
+      # The real worker and Roster Durable Object on a hand clock, with real
+      # browser registrations and the kernel's real assertions: the rp and the
+      # one accepted origin, registration and assertion checks, setup tokens a
+      # stranger cannot spend, one change at a time waiting 72 h on the
+      # directory's clock, self-removal, the per-credential signature counter,
+      # the log, roster mail that no stranger-fillable budget holds back, and
+      # the headers every id.bento.page answer carries.
+      shell: bento-step {0}
+      run: node scripts/test-directory-roster.ts
+
     - name: bento/connect directory mutants
       # Each mutant reopens one path (the per-address mail budget spent by a
-      # start that mails nothing) in a copy of the tree, and the directory rig
-      # must fail a row. A mutant that no longer applies, or a rig that crashes
+      # start that mails nothing; a loosened roster, passkey or header rule) in
+      # a copy of the tree, and the directory rigs must fail a row. A mutant that no longer applies, or a rig that crashes
       # instead of counting, fails this step.
       shell: bento-step {0}
       run: node scripts/test-directory-mutants.ts
@@ -175,3 +186,19 @@ runs:
       # changed byte, a cacheable 404, a tampered envelope) must fail.
       shell: bento-step {0}
       run: node scripts/test-verify-site.mjs
+
+    - name: Hosting rules around the passkey relying party (id.bento.page)
+      # check-id-hosting.mjs asserts what the rp's hosts may serve: no
+      # /.well-known/webauthn on id.bento.page or the sign-in host, a CSP and
+      # no framing on their HTML, nosniff and a WebAuthn-off
+      # Permissions-Policy on id.bento.page, no COOP same-origin on the
+      # sign-in host or home.bento.page, nothing else under id.bento.page, no
+      # passkey association on bento.page. The rig drives its gatherer and
+      # rules over a fake network: a conforming world passes, each of 21
+      # mutants fails exactly its row. Then the repo rows for real: the
+      # bento.page sources carry no association file. --live is for after a
+      # deploy, by hand.
+      shell: bento-step {0}
+      run: |
+        node scripts/test-check-id-hosting.mjs
+        node scripts/check-id-hosting.mjs

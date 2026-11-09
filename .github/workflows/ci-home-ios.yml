@@ -88,3 +88,12 @@ jobs:
           set -o pipefail
           node scripts/test-home-gate1-host.mjs | tee "$RUNNER_TEMP/rig.out"
           if grep -q 'SKIPPED' "$RUNNER_TEMP/rig.out"; then echo "::error::gate 1 host skipped on macOS"; exit 1; fi
+      - name: Stage 0 device probes (a skip fails)
+        # The DEBUG-only sign-session probe is in the Debug app and absent from
+        # the Release app (with a positive control); the passkey origin probe is
+        # its own project; the app needs no entitlement; the probe runs on a simulator.
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/test-home-stage0-probes.mjs | tee "$RUNNER_TEMP/rig.out"
+          if grep -q 'SKIPPED' "$RUNNER_TEMP/rig.out"; then echo "::error::stage 0 probes skipped on macOS"; exit 1; fi

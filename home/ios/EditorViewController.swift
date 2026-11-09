@@ -364,7 +364,7 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
             // wired, whoami says there is no identity.
             profile: { nil },
             askConsent: { [weak self] p, done in self?.promptWhoami(p, done) ?? done(false) },
-            askReauth: { [weak self] done in self?.promptReauth(done) ?? done(false) })
+            askReauth: { done in Self.promptReauth(done) })
     }
 
     // PLACEHOLDER wording (maintainer to confirm before this ships).
@@ -380,7 +380,8 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
 
     /// The device-owner check that opens a routine session. The call that raised
     /// it has already been answered 'reauth'; the next one finds the session.
-    private func promptReauth(_ done: @escaping (Bool) -> Void) {
+    /// Static so the DEBUG-only Stage 0 probe raises exactly this prompt.
+    static func promptReauth(_ done: @escaping (Bool) -> Void) {
         let c = LAContext()
         var err: NSError?
         guard c.canEvaluatePolicy(.deviceOwnerAuthentication, error: &err) else { return done(false) }
