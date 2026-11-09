@@ -2198,6 +2198,17 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   font-size: 12px;
 }
 .ed-share-peer .kick:hover { background: rgba(160, 50, 60, 0.12); }
+.ed-share-peer .kick-unproven {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: help;
+}
 /* Live button status dot: always present — grey when dormant (not sharing),
    amber+pulsing while connecting, green when live. The dot makes the on/off
    state legible at a glance instead of the button looking inert. */

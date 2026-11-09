@@ -106,6 +106,11 @@ export function cachedMemberPub(docId: string): string | undefined {
   return (memberCache.get(docId) ?? unstored.get(docId))?.pub
 }
 
+/** The same identity with its private half, for signing presence key proofs. */
+export function cachedMemberIdentity(docId: string): { pub: string; priv: string } | undefined {
+  return memberCache.get(docId) ?? unstored.get(docId)
+}
+
 /** This device's member identity for a doc — minted once, NEVER in the file
  *  (the file travels; a device key must not).
  *
@@ -350,6 +355,8 @@ export class OnlineTransport implements Transport {
       /** an audience socket was closed by the relay (4001 end/grace, 4002
        *  not-live, 4003 show-full, 1008 revoked) */
       onShowClosed?: (code: number) => void
+      /** a key was revoked in this room (the relay's note, or our own revoke) */
+      onRevoked?: (pub: string) => void
     },
     private auth?: AuthSpec,
   ) {
@@ -701,6 +708,7 @@ export class OnlineTransport implements Transport {
     // the owner revoked a key; if it's OURS, stand down for good (the relay
     // refuses our reconnects anyway — don't retry into a wall of 403s)
     if (env.ctl === 'revoked') {
+      if (typeof env.p === 'string' && env.p) this.hooks.onRevoked?.(env.p)
       if (env.p && env.p === this.myPub) {
         console.info('[bento-sync] this copy’s access was revoked by the owner')
         this.close()
@@ -990,6 +998,7 @@ export class OnlineTransport implements Transport {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false
     const g = await signText(ownerPriv, `rev.${pub}`)
     this.ws.send(JSON.stringify({ ctl: 'revoke', p: pub, o: ownerPub, g }))
+    this.hooks.onRevoked?.(pub)
     return true
   }
 }
@@ -1068,6 +1077,7 @@ export function joinFromDoc(session: SyncSession, store: Store): OnlineTransport
       onShowCheckpoint: () => session.showCheckpoint(),
       onShowCount: (n) => session.showCount(n),
       onShowClosed: (code) => session.showClosed(code),
+      onRevoked: (pub) => session.noteRevoked(pub),
     }, auth)
     return active
   })

@@ -9,6 +9,7 @@
 //   node scripts/build-qr-page.mjs [outFile]   (default: site/q/index.html)
 
 import { deflateRawSync } from 'node:zlib'
+import { createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -57,7 +58,11 @@ svg = svg.replace(/<\?xml[^>]*\?>/, '')
 let html = readFileSync(join(root, 'site-src/q.html'), 'utf8')
 html = html.replace('__QR_SVG__', svg)
 html = html.replace('__PAYLOAD__', payload)
-if (/__(QR_SVG|PAYLOAD)__/.test(html)) throw new Error('placeholder not replaced')
+// the page's policy runs exactly its one inline script: hash it as served
+const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)]
+if (scripts.length !== 1) throw new Error(`expected one inline script, found ${scripts.length}`)
+html = html.replace('__SCRIPT_HASH__', 'sha256-' + createHash('sha256').update(scripts[0][1]).digest('base64'))
+if (/__(QR_SVG|PAYLOAD|SCRIPT_HASH)__/.test(html)) throw new Error('placeholder not replaced')
 mkdirSync(dirname(out), { recursive: true })
 writeFileSync(out, html)
 console.log(`qr page → ${out} (${Math.round(html.length / 1024)} KB)`)

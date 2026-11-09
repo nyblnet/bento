@@ -45,7 +45,7 @@ import { appConfig } from '../../../kernel/src/app.ts'
 import { disconnectOnline, joinFromDoc, mintCollab, mintInvite, mintRoomKey, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
 import { readerCopy, inviteCopy } from '../share'
 import { projectDoc, projectOp, type AudienceTicket } from '../audience'
-import { stripEmbeddedEnvelopes } from '../envelope'
+import { stripCollabSecrets } from '../envelope'
 import { compactJson } from '../compact'
 import { parseDocInputReport } from '../compactload'
 import { gateRestored, guardOpenedDoc } from '../restoregate'
@@ -1479,8 +1479,11 @@ export class Editor {
         const who = document.createElement('span')
         who.className = 'who'
         who.textContent = peer.editing ? `${peer.name} ✏️` : peer.name
-        // a pub-carrying peer's name is bound to its signing key, not just typed
-        if (peer.pub) who.title = t('Key-verified identity') + ` · ${fp(peer.pub)}`
+        // a peer's key reads as verified only where the session has proven it
+        // for this actor (v2 rooms); a legacy room has no per-key identity, so
+        // it shows no key at all
+        const keyOk = !!(peer.pub && cme?.v === 2 && this.session?.keyProven(peer.actor, peer.pub))
+        if (peer.pub && cme?.v === 2) who.title = (keyOk ? t('Key-verified identity') : t('Claimed key')) + ` · ${fp(peer.pub)}`
         const where = document.createElement('span')
         where.className = 'where'
         const idx = this.store.doc.slides.findIndex((s) => s.id === peer.slide)
@@ -1490,7 +1493,14 @@ export class Editor {
         row.addEventListener('click', () => {
           if (idx >= 0) this.store.goTo(idx)
         })
-        if (iAmOwner && peer.pub && peer.pub !== cme!.owner) {
+        if (iAmOwner && peer.pub && peer.pub !== cme!.owner && !keyOk) {
+          const unproven = document.createElement('span')
+          unproven.className = 'kick-unproven'
+          unproven.textContent = '?'
+          unproven.title = t('This key is only claimed, so it cannot be removed here. To cut off a device you cannot confirm, use “Reset access…”.')
+          row.appendChild(unproven)
+        }
+        if (iAmOwner && peer.pub && peer.pub !== cme!.owner && keyOk) {
           const kick = document.createElement('span')
           kick.className = 'kick'
           kick.textContent = '✕'
@@ -4351,42 +4361,6 @@ function releaseNotes(notes: string): HTMLElement {
     box.appendChild(item)
   }
   return box
-}
-
-/**
- * Take the live session out of a copy that is about to leave this machine.
- * ONE list, in one place: every field under `collab` is a bearer capability,
- * so a hand-out that forgets one of them grants the recipient write access to
- * the room, the power to revoke its members, or the ability to decrypt every
- * frame and blob the relay has ever stored — and the file looks completely
- * ordinary afterwards. Divergent per-export copies of this list are how one
- * export path ends up leaking what the other three strip.
- *
- * The default is to drop the block outright (sealed packages, templates, the
- * JSON on the clipboard: none of them may join anything). `keepRoom` is for
- * the copies that are MEANT to follow the session — they keep the room, the
- * symmetric read key and the public keys, and lose only the private halves.
- */
-function stripCollabSecrets(doc: import('../model').BentoDoc, opts: { keepRoom?: boolean } = {}) {
-  // Embedded documents first, whether or not this copy keeps a session of
-  // its own: an embed's `doc` is another deck's JSON and carries that deck's
-  // envelope (collab + docId) if the file was authored with it in place. The
-  // shape gate strips it on the way IN for pasted content; this strips it on
-  // the way OUT for every copy — the same rule (envelope.ts).
-  stripEmbeddedEnvelopes(doc)
-  if (!doc.collab) return
-  if (!opts.keepRoom) {
-    delete doc.collab
-    return
-  }
-  delete doc.collab.writerPriv // the muzzle — no write capability travels
-  delete doc.collab.ownerPriv // v2: neither the owner key…
-  delete doc.collab.invite //    …nor any invite (delegation) material
-  // …nor the audience ticket store: presenter-only. It holds the show key
-  // (worthless to a reader, who sees everything anyway) AND the audience
-  // invite's private half, which would let a reader mint audience tickets the
-  // presenter never issued. Stripped like the other private halves.
-  delete doc.collab.audience
 }
 
 /** Deep-clone an element with a fresh id (same-slide duplicates must not share ids). */

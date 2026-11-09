@@ -11,6 +11,11 @@ pre-1.0.
 
 ## [Unreleased]
 
+## [1.2.13] — 2026-11-09
+
+- **Security: update this file. This release closes issues reported to us and
+  found in our own review.** What they were is described here once people have
+  had time to update.
 - **Typing `- ` or `* ` starts a real list straight away.** It used to type a
   bullet character that only became a list once you clicked out of the box, so
   Enter could not continue it. Now Enter starts the next bullet at the same
@@ -42,6 +47,12 @@ pre-1.0.
   their own; the note at the top of the file tells assistants to stop there.
   Older versions of Bento open these files exactly as before. Thanks to
   @steventhebrave.
+
+- **`window.bento.read()`: a read for agents and scripts.** It returns the deck
+  without its live-sharing keys, the same copy *Save ▾ → Copy document JSON*
+  gives; `read({ compact: true })` gives the compact form. `compact()` now leaves
+  the keys out too, and `validate()` names any sharing key a deck carries,
+  read-only copies included, with what each one grants.
 
 ## [1.2.12] — 2026-11-02
 

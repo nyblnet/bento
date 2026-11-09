@@ -33,7 +33,8 @@ import {
 // every consumer meets them through the session.
 export type { BlobRef, CollabCreds, SyncDoc }
 import { putBlob, getBlob, dataUriToBytes, bytesToDataUri, encodedSize, MAX_BLOB } from './blobs.ts'
-import { mintCollab, cachedMemberPub } from './online.ts'
+import { mintCollab, cachedMemberPub, cachedMemberIdentity, importSignKey } from './online.ts'
+import { KeyProofs, signProof, roomIdOf, type KeyProof } from './keyproof.ts'
 import { lsGet, lsJson } from '../storage.ts'
 import { copy } from '../documentvalue.ts'
 
@@ -169,9 +170,11 @@ export interface PresenceInfo {
   sel: string[]
   /** element id currently being text-edited (in-text presence) */
   editing?: string
-  /** v2 fine-grained: the key this copy signs with — key-bound identity */
+  /** v2 fine-grained: the key this copy signs with, as received: ask
+   *  SyncSession.keyProven(actor, pub) before treating it as this peer's key. */
   pub?: string
-  /** capability of this copy, derived locally from its collab material */
+  /** capability of this copy, derived by the SENDER from its collab material.
+   *  A claim as received; nothing in the kernel derives anything from it. */
   role?: 'owner' | 'editor' | 'viewer'
   /** the tab is backgrounded (document.hidden) — the UI can dim the avatar
    *  instead of treating a throttled beat as a departure. Presence only; never
@@ -184,10 +187,10 @@ export interface Peer extends PresenceInfo {
   at: number
 }
 
-interface HelloFrame { t: 'hello'; a: string; vv: Record<string, number>; p: PresenceInfo }
+interface HelloFrame { t: 'hello'; a: string; vv: Record<string, number>; p: PresenceInfo; kp?: KeyProof }
 interface OpsFrame { t: 'ops'; a: string; ops: Op[] }
 interface NeedFrame { t: 'need'; a: string; vv: Record<string, number> }
-interface PresFrame { t: 'p'; a: string; p: PresenceInfo }
+interface PresFrame { t: 'p'; a: string; p: PresenceInfo; kp?: KeyProof }
 interface ByeFrame { t: 'bye'; a: string }
 /** state-based fork merge: a rejoining offline-edited copy announces itself */
 interface SnapFrame {
@@ -370,6 +373,16 @@ export class SyncSession {
   private log: Op[] = []
   private transports: Transport[] = []
   private peersMap = new Map<string, Peer>()
+  /** presence key proof: per-actor verification state (keyproof.ts) */
+  private proofs = new KeyProofs()
+  /** bumped per document, so a beat judged for the previous one is discarded */
+  private proofGen = 0
+  /** outgoing presence, in order, behind any proof still being signed */
+  private presQueue: Promise<void> = Promise.resolve()
+  private presPending = 0
+  /** the last proof timestamp this actor sent; strictly increasing */
+  private lastProofT = 0
+  private signKeys = new Map<string, Promise<CryptoKey | null>>()
   private applying = false
   private diffTimer: number | null = null
   private heartbeat: number | null = null
@@ -469,6 +482,8 @@ export class SyncSession {
     this.shadow = JSON.stringify(doc)
     this.log = []
     this.peersMap.clear()
+    this.proofs.reset()
+    this.proofGen++
     this.emitPeers()
     for (const tr of this.transports) tr.close()
     this.transports = [new BroadcastTransport(this.docId, (f) => this.onFrame(f))]
@@ -495,7 +510,7 @@ export class SyncSession {
     this.makeExtraTransports.push(mk)
     const tr = mk(this.docId, (f) => this.onFrame(f))
     this.transports.push(tr)
-    this.broadcast({ t: 'hello', a: this.actor, vv: this.state.vv, p: this.presence() })
+    this.sendPresence({ t: 'hello', a: this.actor, vv: this.state.vv, p: this.presence() })
     return tr
   }
 
@@ -705,11 +720,11 @@ export class SyncSession {
     switch (f.t) {
       case 'hello': {
         const newcomer = !this.peersMap.has(f.a)
-        this.touchPeer(f.a, f.p)
+        this.notePresence(f.a, f.p, f.kp)
         // answer so the newcomer learns us + catch them up from our log,
         // AND tell them our vv so ops they minted before connecting (which
         // nothing else would push) flow back to us — need→ops terminates
-        this.send({ t: 'p', a: this.actor, p: this.presence() })
+        this.pushPresence()
         this.send({ t: 'need', a: this.actor, vv: this.state.vv })
         const missing = this.state.missingFor(this.log, f.vv)
         if (missing.length) this.send({ t: 'ops', a: this.actor, ops: missing })
@@ -734,15 +749,22 @@ export class SyncSession {
         break
       }
       case 'p':
-        this.touchPeer(f.a, f.p)
+        this.notePresence(f.a, f.p, f.kp)
         break
       case 'snap':
         this.applySnapshot(f.doc, f.state)
         break
-      case 'bye':
-        this.peersMap.delete(f.a)
-        this.emitPeers()
+      case 'bye': {
+        // behind any beat from this actor still being judged, or it would return
+        const gen = this.proofGen
+        void this.proofs.queue(f.a, () => {
+          if (gen !== this.proofGen) return
+          this.proofs.drop(f.a)
+          this.peersMap.delete(f.a)
+          this.emitPeers()
+        })
         break
+      }
     }
   }
 
@@ -843,11 +865,84 @@ export class SyncSession {
   }
 
   private pushPresence() {
-    this.send({ t: 'p', a: this.actor, p: this.presence() })
+    this.sendPresence({ t: 'p', a: this.actor, p: this.presence() })
+  }
+
+  /** The key this copy can prove, when it names one in presence. */
+  private proofSigner(): { pub: string; priv: string } | null {
+    const c = this.store.doc.collab
+    if (!c || c.role === 'reader') return null
+    if (c.v === 2 && c.owner && c.ownerPriv) return { pub: c.owner, priv: c.ownerPriv }
+    if (c.v === 2 && c.invite) return cachedMemberIdentity(this.store.doc.docId) ?? null
+    if (c.writerPub && c.writerPriv) return { pub: c.writerPub, priv: c.writerPriv }
+    return null
+  }
+
+  private signKey(priv: string): Promise<CryptoKey | null> {
+    let k = this.signKeys.get(priv)
+    if (!k) {
+      k = importSignKey(priv).catch(() => null)
+      this.signKeys.set(priv, k)
+    }
+    return k
+  }
+
+  /**
+   * Send a presence frame, with a key proof when this copy holds the key its
+   * presence names. Frames stay in order: one still being signed holds back
+   * the ones after it. A copy with nothing to prove sends at once, as before.
+   */
+  private sendPresence(frame: HelloFrame | PresFrame) {
+    const s = frame.p.pub ? this.proofSigner() : null
+    const room = roomIdOf(this.store.doc.collab?.room)
+    const signable = !!s && s.pub === frame.p.pub && !!room
+    if (!signable && this.presPending === 0) { this.send(frame); return }
+    const gen = this.proofGen
+    this.presPending++
+    this.presQueue = this.presQueue.then(async () => {
+      let out: HelloFrame | PresFrame = frame
+      try {
+        const key = signable ? await this.signKey(s!.priv) : null
+        if (key) {
+          const t = Math.max(Date.now(), this.lastProofT + 1)
+          this.lastProofT = t
+          out = { ...frame, kp: await signProof(key, room!, this.actor, s!.pub, t) }
+        }
+      } catch { /* unsigned: still presence, just not proven */ }
+      if (gen === this.proofGen) this.send(out)
+    }).finally(() => { this.presPending-- })
+  }
+
+  /** An incoming beat: judged for its key proof, then recorded, in arrival order. */
+  private notePresence(actor: string, p: PresenceInfo, kp: unknown) {
+    if (!p || typeof p !== 'object') return
+    const gen = this.proofGen
+    const room = roomIdOf(this.store.doc.collab?.room)
+    void this.proofs.accept(actor, room, p.pub, kp, () => {
+      if (gen === this.proofGen) this.touchPeer(actor, p)
+    })
+  }
+
+  /**
+   * Has `actor` proven, in this session, that it holds the key `pub`? True only
+   * while that actor is present, its latest beat named `pub` with a valid, fresh
+   * key proof, and no revocation of `pub` has been seen. The presence `pub` and
+   * `role` fields alone never make this true.
+   */
+  keyProven(actor: string, pub: string): boolean {
+    return this.peersMap.has(actor) && this.proofs.proven(actor, pub)
+  }
+
+  /** A revocation of `pub` was seen (the relay's note, or this copy's own). */
+  noteRevoked(pub: string) {
+    this.proofs.revoke(pub)
+    this.emitPeers()
   }
 
   private touchPeer(actor: string, p: PresenceInfo) {
-    this.peersMap.set(actor, { ...p, actor, at: Date.now() })
+    // a key proof belongs on the frame, never in the peer record an app reads
+    const { kp: _kp, ...rest } = p as PresenceInfo & { kp?: unknown }
+    this.peersMap.set(actor, { ...rest, actor, at: Date.now() })
     this.emitPeers()
   }
 
@@ -857,6 +952,7 @@ export class SyncSession {
     for (const [a, p] of this.peersMap) {
       if (p.at < cut) {
         this.peersMap.delete(a)
+        this.proofs.drop(a)
         changed = true
       }
     }
@@ -1102,7 +1198,7 @@ export class SyncSession {
 
   /** re-announce (an online transport reconnected) */
   hello() {
-    this.broadcast({ t: 'hello', a: this.actor, vv: this.state.vv, p: this.presence() })
+    this.sendPresence({ t: 'hello', a: this.actor, vv: this.state.vv, p: this.presence() })
     if (this.forkPending) {
       // rejoining offline fork: our contributions live in doc values +
       // restored registers, not ops — a state snapshot is how they travel

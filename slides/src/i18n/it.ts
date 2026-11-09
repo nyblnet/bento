@@ -606,6 +606,8 @@ export const it: Catalog = {
   "Go live": "Vai live",
   "Invite to edit…": "Invita a modificare…",
   "Key-verified identity": "Identità verificata da chiave",
+  "Claimed key": "Chiave dichiarata",
+  "This key is only claimed, so it cannot be removed here. To cut off a device you cannot confirm, use “Reset access…”.": "Questa chiave è solo dichiarata, quindi non può essere rimossa da qui. Per escludere un dispositivo che non puoi confermare, usa «Reimposta accesso…».",
   "Keywords": "Parole chiave",
   "Last slide": "Ultima diapositiva",
   "Mints brand-new keys. Every previously sent copy stops syncing for good; share fresh copies afterwards.": "Genera chiavi nuove di zecca. Ogni copia già inviata smette per sempre di sincronizzarsi; condividi poi copie nuove.",
