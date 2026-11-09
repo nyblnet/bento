@@ -91,7 +91,7 @@ runtime (the shipped shell is DEFLATE-compressed, see the v0.7.0 note above; the
 |---|---|---|---|
 | 1 | Head chrome | 0.7 KB | doctype, metas, favicon, title |
 | 2 | NOTICE comment | 2 KB | bundled-library license notices |
-| 3 | **`#bento-doc` data block** | **0 → *n* MB** | **the document** — JSON, `<` escaped; assets are data URIs, so image-heavy decks dominate the file |
+| 3 | **`#bento-doc` data block** | **0 → *n* MB** | **the document** — JSON, `<` escaped; assets are data URIs, so image-heavy decks dominate the file — written LAST, on their own line (`docText`), so a reader can stop before them |
 | 4 | Runtime JS | ~560 KB | app (~120 KB) + Reveal.js + Moveable/Selecto family + charts-lite (in-house SVG charts, replaced ECharts in v0.7.0) |
 | 5 | Runtime CSS | 62 KB | editor + present + print styles |
 | 6 | Splash CSS + body mounts | 2 KB | splash `<style>`/`<div>`, `#app` mount |
@@ -151,7 +151,7 @@ sequenceDiagram
     Note over Browser: editor mounts, DOM mutates freely —<br/>the pristine clone still holds the original bytes
 
     Browser->>Save: ⌘S / Save button
-    Save->>Save: clone pristine → swap #bento-doc content<br/>with JSON.stringify(doc), "<" → "\u003c"
+    Save->>Save: clone pristine → swap #bento-doc content<br/>with docText(doc), "<" → "\u003c"
     Save->>Save: sync <title> · sanity-check script-close count
     alt File System Access API (Chromium)
         Save->>Disk: rewrite the SAME file in place (persistent handle)

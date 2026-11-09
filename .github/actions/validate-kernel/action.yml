@@ -89,6 +89,14 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-body-seal.ts
 
+    - name: Saved document layout — picture data last, on its own line
+      # docText: a plain save writes the document, then `"assets":` LAST on its
+      # own line, so an agent reading line by line can stop before the base64.
+      # No assets = exactly JSON.stringify (every app's output unchanged);
+      # encrypted bodies untouched; no plain save path stringifies on its own.
+      shell: bento-step {0}
+      run: node scripts/test-doc-layout.ts
+
     - name: release history — append-only, anti-rollback, every block or unknown
       # bento/connect K4 (security §36): the signed release history only grows;
       # a host refuses a history that lacks an entry it holds or rolls its

@@ -34,6 +34,14 @@ pre-1.0.
   thumbnail strip. Show just the panes you need; notes or a single preview
   can fill the content area. Choices last while the editor stays open. Thanks
   to @msakowski.
+- **A deck's pictures are saved on their own line, after the rest of the
+  deck.** Inside the file, the deck used to be one long line with any picture
+  data somewhere in the middle of it, so a coding assistant reading the file
+  could not take in the slides without also wading through megabytes of
+  images. Now the slides come first, and the pictures follow last on a line of
+  their own; the note at the top of the file tells assistants to stop there.
+  Older versions of Bento open these files exactly as before. Thanks to
+  @steventhebrave.
 
 ## [1.2.12] — 2026-11-02
 

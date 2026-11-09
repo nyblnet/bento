@@ -97,6 +97,31 @@ Two ways to work with it:
    In the browser console: `window.bento.doc` (read) /
    `window.bento.loadDoc(json)` (write, undoable).
 
+**Reading a deck without its pictures.** A deck saved by a current version
+of Slides keeps its picture data in the top-level `assets` map (elements say
+`"src": "asset:<key>"`) and writes that map LAST, on its OWN line. Inside the
+`#bento-doc` block:
+
+```
+{"$schema":…,"format":"bento/slides",…,"slides":[…],
+"assets":{"a-3f2a":"data:image/jpeg;base64,/9j/4AAQ…"}}
+```
+
+One photo makes that second line megabytes long — far more than you can read
+— so never read it: stop at the line that starts `"assets":`, or load the JSON
+with a tool and drop the key (`jq 'del(.assets)'`; in Python
+`doc.pop('assets', None)`), then put it back unchanged when you write. To add a
+picture, add one entry to `assets` and reference it as `asset:<key>`.
+
+Don't count on that layout in every file, though. It is how a deck is written
+from this version on; a deck last saved by an older version, produced by the
+PowerPoint converter, or edited by hand may be a single line with `assets`
+wherever the key fell, and older decks can carry a picture inline as a `data:`
+`src`. Other Bento apps differ too: Type keeps a picture inline in its
+document. If the block is not laid out as above, load the JSON with a tool and
+set the picture data aside (`assets`, and any long `data:` string) rather than
+reading the block as text.
+
 ---
 
 ## Make a GREAT deck, not just a correct one

@@ -249,6 +249,11 @@ jobs:
         # during a write stays dirty, writes never overlap, the dot goes out
         # only when the deck on screen is the one on disk.
         run: node scripts/test-slides-save-browser.mjs
+      - name: Saved document layout in Chromium
+        # A deck with a picture saves as the document on one line and the
+        # picture data LAST on its own line ("assets":…) — so an agent can stop
+        # before it; without pictures, one line, as before.
+        run: node scripts/test-slides-doc-layout-browser.mjs
       - name: Recovery-off notice in Chromium
         # Under a per-document store host that refuses the recovery copy, the
         # save status says crash recovery is off (approved wording), once, held

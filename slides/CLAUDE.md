@@ -655,7 +655,10 @@ anim, charts, i18n, sync), shared by every app.
   1MB+ files). Save → "Copy document JSON" / "Replace from JSON…"
   (store.replaceDoc, undoable); `window.bento.loadDoc(json)` for scripts; the
   shell carries a Tooling-note comment pointing AIs at #bento-doc + the API.
-  Agent harnesses edit files in place; chat AIs round-trip the JSON.
+  Agent harnesses edit files in place; chat AIs round-trip the JSON. A plain
+  save writes the document on ONE line and, when it has pictures, `"assets":`
+  LAST on its OWN line (kernel `docText`), so an agent can stop before the
+  base64 — the Tooling note says so. No assets = exactly JSON.stringify(doc).
 
 ## Commands
 

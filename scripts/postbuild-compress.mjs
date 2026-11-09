@@ -311,6 +311,16 @@ const SLIDES_TOOLING = `<!--
   · The document is the ONE script block of type "application/bento+json",
     id "bento-doc", below — plain readable JSON. Edit THAT block in place;
     never regenerate the whole file. Escape every "<" in the JSON as \\u003c.
+  · Pictures can make that block megabytes long. A deck SAVED BY THIS
+    VERSION or later writes the document on ONE line and its pictures LAST,
+    on a second line that starts "assets": (image data that elements refer
+    to as "asset:<key>"). When you see that line, stop reading there.
+  · Do not count on that layout: a deck saved by an older version, made by
+    a converter or edited by hand may be one line with "assets" anywhere,
+    and older decks may carry "data:" image sources inline. When in doubt,
+    load the JSON with a tool and set the data aside (jq 'del(.assets)', and
+    skip long "data:" strings) instead of reading the block as text. Put it
+    back unchanged when you write.
   · The base64 blocks near the end are the DEFLATE-compressed app runtime
     (open source, https://bento.page) — no user content, leave them alone.
   · In a running file, window.bento exposes { doc, serialize(), loadDoc(json),
@@ -361,6 +371,16 @@ const GENERIC_TOOLING = `<!--
   · The document is the ONE script block of type "application/bento+json",
     id "bento-doc", below — plain readable JSON. Edit THAT block in place;
     never regenerate the whole file. Escape every "<" in the JSON as \\u003c.
+  · Embedded pictures and files can make that block megabytes long. Where
+    an app keeps them in a top-level "assets" map, a file SAVED BY THIS
+    VERSION or later writes the document on ONE line and "assets" LAST, on
+    a second line that starts "assets": — stop reading at that line.
+  · Do not count on that layout: some apps keep a picture inline, as a long
+    "data:" string inside the document (bento/type does), and a file saved
+    by an older version, made by a converter or edited by hand may be one
+    line throughout. When in doubt, load the JSON with a tool and set the
+    data aside ("assets" and long "data:" strings) instead of reading the
+    block as text. Put it back unchanged when you write.
   · The base64 blocks near the end are the DEFLATE-compressed app runtime
     (open source, https://bento.page) — no user content, leave them alone.
   · In a running file, window.bento exposes { doc, serialize(), loadDoc(json) }.
