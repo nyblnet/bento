@@ -13057,6 +13057,51 @@ Rigs: scripts/test-dash-colours.ts (each paint function with a real colour as
 control and non-colours that must draw nothing) and
 scripts/test-dash-colours-browser.mjs (the built grid, hovered).
 
+## 2026-11-09 — bento/id option G: the countersign names the directory's authority (`rip.` auth word and cause)
+
+**Decision.** The roster countersign's `0|1` reset flag is replaced by an
+authority word and a cause:
+`rip.<sha256(ros text)>.<requestedAt>.<ripenedAt>.<auth>.<cause|empty>.<kid>`.
+The contract moves to `kernel/fixtures/roster-v2.json`; version 1 is retired
+before any host read it (its `rip.` texts no longer parse).
+
+- `m` a member's change (and the setup head), `r` a reset: cause empty, rules
+  unchanged.
+- `q` a void that quarantines the member that asked. Immediate. The link
+  carries the voided request (its `ros.` text, signer and proof); the cause is
+  that text's hash. The request must name this link's previous head, its signer
+  must be an unquarantined member of that head, and its proof must verify. The
+  only change is that signer gaining `~q`, and another unquarantined member
+  must remain. So the directory can quarantine only a member that really asked
+  for something.
+- `l` the incident lever's revert. Immediate. The link carries the ripened
+  change it reverts (previous `ros.`, `ros.`, `rip.` and signature); the cause
+  is that change's hash. The cited change must be countersigned by a pinned
+  key, belong to this address, chain to its previous head and add exactly one
+  member; that member, never the requester, is the one quarantined.
+- `x` removal of a quarantined member: follows a `q` or `l` link, cites its
+  head, is requested at the moment it ripened, waits 72 hours, and removes
+  exactly one quarantined member.
+- `u` undo: follows a `q` or `l` link, cites its head, is immediate, and
+  clears exactly one quarantine mark; the member keeps the time it joined.
+
+**Why words, not one flag read off the diff.** The word states what the
+directory claims to be doing, so a diff that does not match is refused rather
+than reinterpreted, a peer can say which act changed an account, and the
+quarantine and the revert need different evidence. The directory gains no
+power to ADD a member: no word adds one, so a member is added only by a member's
+signed change, by setup, or by a reset, all as before.
+
+Also settled in the same change: a member removed and added again counts its
+age from the second addition (the consent-key ripeness rule reads that age); a
+reset's prevHash is checked like any link's; a change requested at exactly the
+previous ripening is allowed; peers keep no stored sign count along a chain;
+with two pinned directory keys, the kid picks the key.
+
+Guards: `scripts/test-roster.ts` (every row with its reason, accepted rows'
+state written by hand, positive controls) and `scripts/test-roster-mutants.ts`
+(each rule loosened in turn must turn the rig red, after the unmutated copy
+passes).
 ## 2026-11-09 — bento/home Android: device probes are separate debug-only apps with their own package
 
 Measuring what Android reports for a passkey (the `clientDataJSON` origin a
