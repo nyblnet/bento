@@ -29,6 +29,8 @@ const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH,
 try {
   // the starter workbook, as the shell boots it
   const ctx0 = await browser.newContext()
+  await ctx0.route('**/*', (route) => (/^(file|data|blob):/.test(route.request().url()) ? route.continue() : route.abort()))
+  await ctx0.routeWebSocket(/.*/, (ws) => ws.close())
   const p0 = await ctx0.newPage()
   await p0.goto('file://' + SHELL)
   await p0.waitForFunction(() => window.bento?.doc && document.querySelector('.dg-cell'))
@@ -42,7 +44,12 @@ try {
 
   const shell = readFileSync(SHELL, 'utf8')
   const open = async (name, colour) => {
+    // Its own docId and NO collab block: the starter carries live
+    // credentials, and files sharing them are one room on the relay — the
+    // runs would merge into each other, and a rig must not reach the network.
     const d = structuredClone(doc)
+    delete d.collab
+    d.docId = `zq-colours-${name}`
     d.sheets[si].condfmt = {
       [col.id]: [
         { kind: 'colorScale', colors: [colour, '#00ff00'] },
@@ -57,6 +64,7 @@ try {
     writeFileSync(f, out)
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
     const fetched = []
+    await ctx.routeWebSocket(/.*/, (ws) => { fetched.push('WS ' + ws.url()); ws.close() })
     await ctx.route('**/*', (route) => {
       const u = route.request().url()
       if (u.startsWith('file:') || u.startsWith('data:') || u.startsWith('blob:')) return route.continue()
