@@ -1,0 +1,77 @@
+{
+ "version": 1,
+ "about": "Real passkey REGISTRATIONS (navigator.credentials.create on https://signin.id.bento.page under a CDP virtual authenticator, rp id.bento.page except the parent-rp rows), as the directory receives them: {clientDataJSON, authenticatorData}. A row with `text` was created over challenge = SHA-256(text); the others over the challenge their own client data names. TEST KEYS ONLY.",
+ "rpId": "id.bento.page",
+ "rows": [
+  {
+   "name": "real/bundled/setup",
+   "source": "chromium-156.0.8078.4",
+   "text": "setup.alice",
+   "expect": "accept",
+   "pub": "BBOgBEqKpjUkyAOxaZXVMiUMO6dYBk3Ko7B_8JrBpIj81WAgVGbnUDNYFkyxBWK1XBmJz6Gc3iPJRIg0_T6xbBs",
+   "credId": "bd8MbsZcFO7uTo0leKwveWt9dPIxp_Ceajc5uYTJmns",
+   "reg": {
+    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoiTEtFNy1PYUNyTTFqMElVWll3SVJlalh0UEdRM3pLYm5hUEZScHJmWUhxTSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+    "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYZFAAAAAQECAwQFBgcIAQIDBAUGBwgAIG3fDG7GXBTu7k6NJXisL3lrfXTyMafwnmo3ObmEyZp7pQECAyYgASFYIBOgBEqKpjUkyAOxaZXVMiUMO6dYBk3Ko7B_8JrBpIj8Ilgg1WAgVGbnUDNYFkyxBWK1XBmJz6Gc3iPJRIg0_T6xbBs"
+   }
+  },
+  {
+   "name": "real/bundled/second",
+   "source": "chromium-156.0.8078.4",
+   "expect": "accept",
+   "pub": "BMOwqpuK7eLHw5Sa62RUJnA6u9ypKmkyumyyEcRhSV0zR6uB07pfaGHpJzUTQqdII-DNBgbjTFstb55rkAAw72o",
+   "credId": "WjmCR0QmFD1aKnkzOf0wkHDjjA5G3CViDnYNe8uDKdY",
+   "challengeFromClientData": true,
+   "reg": {
+    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoiMlBQRXZoTVF6MHBDeGZrRkYzcV96dF9pQXRJdTJLQ2VIbE9RdTVWb0hQcyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+    "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYZFAAAAAQECAwQFBgcIAQIDBAUGBwgAIFo5gkdEJhQ9Wip5Mzn9MJBw44wORtwlYg52DXvLgynWpQECAyYgASFYIMOwqpuK7eLHw5Sa62RUJnA6u9ypKmkyumyyEcRhSV0zIlggR6uB07pfaGHpJzUTQqdII-DNBgbjTFstb55rkAAw72o"
+   }
+  },
+  {
+   "name": "real/bundled/parent-rp",
+   "source": "chromium-156.0.8078.4",
+   "expect": "reject",
+   "reason": "rp",
+   "challengeFromClientData": true,
+   "reg": {
+    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoiZnY5QmFXdXlGMDJQVUN1b2w3dDJkbjBYQUN4bmxOTEhzbHZ2ZEx6VTcxbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+    "authenticatorData": "lXmmZyQH0vPWsh6YVhTohLFxQ7fKOn_4F9t8bX_dPhlFAAAAAQECAwQFBgcIAQIDBAUGBwgAIIETjfrL7NK4Oha-24FGOoTjtM-gmnzK0XnPW0Xo06wFpQECAyYgASFYIIy1kaqhb4oeKxF0uE4Fm5lR1rde-ly33myhMDTVdMPaIlggNP0j5cNnq4POsKg39NlFlUMpKpon-SZC_aGUBXFdTWI"
+   }
+  },
+  {
+   "name": "real/chrome/setup",
+   "source": "chrome-157.0.8103.38",
+   "text": "setup.alice",
+   "expect": "accept",
+   "pub": "BGvpTh84hfjUs58cM8-Kq_wyHHIiQO9U2rwKRBrcc5JLP8tDOLxs9uv3Zh83dGMAoGZgT17prjE92lfWiy2jroA",
+   "credId": "3Fz-Jxc40H3Xl2aw7MEhSBlqdkTIa1o1s8sSlgzxf9o",
+   "reg": {
+    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoiTEtFNy1PYUNyTTFqMElVWll3SVJlalh0UEdRM3pLYm5hUEZScHJmWUhxTSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2UsIm90aGVyX2tleXNfY2FuX2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIFNlZSBodHRwczovL2dvby5nbC95YWJQZXgifQ",
+    "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYZFAAAAAQECAwQFBgcIAQIDBAUGBwgAINxc_icXONB915dmsOzBIUgZanZEyGtaNbPLEpYM8X_apQECAyYgASFYIGvpTh84hfjUs58cM8-Kq_wyHHIiQO9U2rwKRBrcc5JLIlggP8tDOLxs9uv3Zh83dGMAoGZgT17prjE92lfWiy2jroA"
+   }
+  },
+  {
+   "name": "real/chrome/second",
+   "source": "chrome-157.0.8103.38",
+   "expect": "accept",
+   "pub": "BPHI1Z-lwdsrZFG0NrTOeXNM6GoZzcbyFip-qcB3oYdxxtvI8iY1UKzV64mhew7NcrchpBF3LwXAsiNXsL0k06w",
+   "credId": "VXdHHP9Ge1zKQkdF2sGS_t0SEbHiy_A44PXoOzVkkwQ",
+   "challengeFromClientData": true,
+   "reg": {
+    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoiMlBQRXZoTVF6MHBDeGZrRkYzcV96dF9pQXRJdTJLQ2VIbE9RdTVWb0hQcyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+    "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYZFAAAAAQECAwQFBgcIAQIDBAUGBwgAIFV3Rxz_RntcykJHRdrBkv7dEhGx4svwOOD16Ds1ZJMEpQECAyYgASFYIPHI1Z-lwdsrZFG0NrTOeXNM6GoZzcbyFip-qcB3oYdxIlggxtvI8iY1UKzV64mhew7NcrchpBF3LwXAsiNXsL0k06w"
+   }
+  },
+  {
+   "name": "real/chrome/parent-rp",
+   "source": "chrome-157.0.8103.38",
+   "expect": "reject",
+   "reason": "rp",
+   "challengeFromClientData": true,
+   "reg": {
+    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoiZnY5QmFXdXlGMDJQVUN1b2w3dDJkbjBYQUN4bmxOTEhzbHZ2ZEx6VTcxbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+    "authenticatorData": "lXmmZyQH0vPWsh6YVhTohLFxQ7fKOn_4F9t8bX_dPhlFAAAAAQECAwQFBgcIAQIDBAUGBwgAIPZHCWBh8VV9r0r4GsKB8askf33fFc8mUzDJYftb6MdvpQECAyYgASFYIA-TLciI-Eif7WwC9OI302LaruboOnJZgQTtiFycdGIwIlggi2NL80dctGsvoTJdaNaPPchwzOxy_iq0mSlghpmk-Ic"
+   }
+  }
+ ]
+}
