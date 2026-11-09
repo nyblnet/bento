@@ -13057,6 +13057,29 @@ Rigs: scripts/test-dash-colours.ts (each paint function with a real colour as
 control and non-colours that must draw nothing) and
 scripts/test-dash-colours-browser.mjs (the built grid, hovered).
 
+## 2026-11-09 — bento/home Android: device probes are separate debug-only apps with their own package
+
+Measuring what Android reports for a passkey (the `clientDataJSON` origin a
+native app gets, `android:apk-key-hash:…`) needs an app the relying party's
+`assetlinks.json` admits. That probe lives in `home/android/originprobe`, a
+second application in the Gradle project, not in `:app`'s debug source set:
+
+- **Its own package (`page.bento.probe.origin`).** The statement the rp serves
+  for it names the probe's package and the builder's DEBUG key. Had the probe
+  been a debug activity of `:app`, the statement would have had to name
+  `page.bento.home` with a debug key, admitting any debug build of the real
+  app to the rp's passkeys. A separate package keeps that statement useless
+  to everything but the probe.
+- **No release variant, and nothing in `:app` depends on it.** Credential
+  Manager (`androidx.credentials`) is the probe's dependency only. CI checks
+  it every run: `:app`'s release runtime classpath names neither the module
+  nor Credential Manager, and the R8 release dex carries none of the probe's
+  marks, with the probe's own APK as the control that must show all of them.
+- **Android 14 and up.** Credential Manager is part of the platform there, so
+  the probe needs no Play services client library.
+
+Rig: scripts/test-home-android-probe-excluded.mjs (CI: ci-home-android.yml);
+unit tests in originprobe/src/test.
 ## 2026-11-09 — bento/id directory: the passkey roster store (option G), before its countersign
 
 **Decision.** The directory (`server/directory/`, id.bento.page) keeps each
