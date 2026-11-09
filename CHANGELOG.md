@@ -28,6 +28,12 @@ pre-1.0.
   saves your deck over the file once, on purpose, and watching resumes. Before,
   auto-save silently replaced the other program's changes, or, once refused,
   stopped with nothing but "Save failed".
+- **More room for speaker notes.** Drag the dividers between the current
+  slide, next slide and notes, or focus a divider and use the arrow keys.
+  The speaker view's View menu can hide either preview, speaker notes or the
+  thumbnail strip. Show just the panes you need; notes or a single preview
+  can fill the content area. Choices last while the editor stays open. Thanks
+  to @msakowski.
 
 ## [1.2.12] — 2026-11-02
 

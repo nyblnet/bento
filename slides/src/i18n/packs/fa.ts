@@ -25,6 +25,11 @@ import type { Catalog } from '../../i18n'
 export const label = 'فارسی'
 
 export const strings: Catalog = {
+  "View": "نما",
+  "Current slide": "اسلاید فعلی",
+  "Slide thumbnails": "تصاویر بندانگشتی اسلایدها",
+  "Resize slide previews": "تغییر اندازهٔ پیش‌نمایش اسلایدها",
+  "Resize next slide and notes": "تغییر اندازهٔ اسلاید بعدی و یادداشت‌ها",
   "Insert — text, shapes, images, media, tables, charts": "درج — متن، شکل، تصویر، رسانه، جدول، نمودار",
   "More actions": "اقدامات بیشتر",
   "Slides — show or hide the slide list": "اسلایدها — نمایش یا پنهان کردن فهرست اسلایدها",

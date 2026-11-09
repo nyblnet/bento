@@ -22,6 +22,11 @@ import type { Catalog } from '../../i18n'
 export const label = 'עברית'
 
 export const strings: Catalog = {
+  "View": "תצוגה",
+  "Current slide": "השקופית הנוכחית",
+  "Slide thumbnails": "תמונות ממוזערות של שקופיות",
+  "Resize slide previews": "שינוי גודל התצוגות המקדימות",
+  "Resize next slide and notes": "שינוי גודל השקופית הבאה וההערות",
   "Insert — text, shapes, images, media, tables, charts": "הוספה — טקסט, צורות, תמונות, מדיה, טבלאות, תרשימים",
   "More actions": "פעולות נוספות",
   "Slides — show or hide the slide list": "שקופיות — הצג או הסתר את רשימת השקופיות",

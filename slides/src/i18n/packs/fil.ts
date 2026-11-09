@@ -38,6 +38,11 @@ import type { Catalog } from '../../i18n'
 export const label = 'Filipino'
 
 export const strings: Catalog = {
+  "View": "View",
+  "Current slide": "Kasalukuyang slide",
+  "Slide thumbnails": "Mga thumbnail ng slide",
+  "Resize slide previews": "Baguhin ang laki ng mga preview ng slide",
+  "Resize next slide and notes": "Baguhin ang laki ng susunod na slide at mga tala",
   "Insert — text, shapes, images, media, tables, charts": "Ipasok — teksto, hugis, larawan, midya, talahanayan, tsart",
   "More actions": "Iba pang aksyon",
   "Slides — show or hide the slide list": "Mga slide — ipakita o itago ang listahan ng slide",

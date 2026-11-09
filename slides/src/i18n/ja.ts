@@ -4,6 +4,11 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "View": "表示",
+  "Current slide": "現在のスライド",
+  "Slide thumbnails": "スライドのサムネイル",
+  "Resize slide previews": "スライドプレビューのサイズを変更",
+  "Resize next slide and notes": "次のスライドとノートのサイズを変更",
   "This text box is already bold": "このテキストボックスはすでにボールドです",
   "Italic": "斜体",
   "Underline": "下線",

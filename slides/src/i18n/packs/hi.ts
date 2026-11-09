@@ -29,6 +29,11 @@ import type { Catalog } from '../../i18n'
 export const label = 'हिन्दी'
 
 export const strings: Catalog = {
+  "View": "दृश्य",
+  "Current slide": "वर्तमान स्लाइड",
+  "Slide thumbnails": "स्लाइड थंबनेल",
+  "Resize slide previews": "स्लाइड पूर्वावलोकन का आकार बदलें",
+  "Resize next slide and notes": "अगली स्लाइड और नोट्स का आकार बदलें",
   "Insert — text, shapes, images, media, tables, charts": "सम्मिलित करें — टेक्स्ट, आकृतियाँ, चित्र, मीडिया, तालिकाएँ, चार्ट",
   "More actions": "अधिक क्रियाएँ",
   "Slides — show or hide the slide list": "स्लाइड — स्लाइड सूची दिखाएँ या छिपाएँ",
