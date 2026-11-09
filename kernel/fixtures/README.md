@@ -418,10 +418,10 @@ accepted row.
   to place it); `ceremonyAt ≥ H.ripenedAt`; the signer is an unquarantined `pk`
   of H AND of the current head; and its current `since` ≤ H.ripenedAt (else
   `signer-break`: removed and re-added, or across a reset).
-- **The tier.** `passkey` ("(passkey sign-in)") for every `wdev.`, and for a
-  `dev2.` unless its consentPub is an unquarantined `ck` member of the current
-  roster with `now − since ≥ 72 h` (exactly 72 h is native). From a pin `since`
-  is a lower bound on the age, so a pinned verifier says passkey more often,
-  never less (`tier/ck-from-pin` beside `tier/ck-exact`).
+- **The tier.** Every certificate in this file is `passkey` ("(passkey sign-in)").
+  A `dev2.`'s consentPub is a claim until that consent key signs the certificate,
+  so a consent key's age on the roster never promotes one by itself
+  (`tier/ck-ripe-exactly-72h`, `sec/tier-consent-key-not-proven`). Native tier
+  arrives with the consent key's own signature, in a later version.
 - **`wren.<devicePub>.<b64u(address)>.<challenge>`** (`wren` rows): the device
   key's raw low-S signature over the text. Only the directory checks it.

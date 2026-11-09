@@ -13453,11 +13453,15 @@ option G; `kernel/fixtures/device-v1.json` is the contract.
   7-day cap reads it. A peer cannot check this; it can check that the `watt.`
   was logged no earlier.
 - **The tier (G1).** Anything authorised by a passkey alone is shown as
-  "(passkey sign-in)": every `wdev.`, and every `dev2.` until its own consent
-  key has been an unquarantined `ck` member for 72 hours. The age is read from
-  the roster's `since`. From a pin that age is a lower bound, so a pinned
-  verifier says "passkey" more often, never less. One label covers every
-  passkey-only device, because a page can mint a passkey-only `dev2.` too.
+  "(passkey sign-in)", and today that is every certificate. A `dev2.`'s
+  consent key is a CLAIM written by whatever page ran the passkey prompt: one
+  assertion could name the victim's ripe consent key on a certificate for the
+  attacker's own device key (security's review). So a consent key's 72 hours
+  on the roster never promote a certificate by themselves. Native tier will
+  need the consent key's own signature over the `dev2.` text, under a purpose
+  no other consent signature can be replayed as; it arrives with that purpose.
+  One label covers every passkey-only device, because a page can mint a
+  passkey-only `dev2.` too.
 - **`wren.`**, the device key's request for a fresh `watt.`, is checked by the
   directory only. The kernel ships its parser and signature check, so the
   directory and every port read one spelling.

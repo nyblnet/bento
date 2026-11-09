@@ -59,7 +59,6 @@ async function chain(name: string, specs: Spec[], pinAt?: number) {
   ros[name] = links.map((l) => l.ros)
   chains[name] = pinAt === undefined ? { links } : { links: links.slice(pinAt), pinned: await sha256b64u(links[pinAt].ros) }
 }
-const cite = (c: Link[], i: number) => ({ prevRos: c[i - 1].ros, ros: c[i].ros, rip: c[i].rip, ripSig: c[i].ripSig })
 
 await chain('base', [S0, S1, S2, S3])
 await chain('removed', [S0, S1, S2, S3, { members: [['pk', 'pk1'], ['rk', 'rk1'], ['ck', 'ck1']], req: T + 240 * H, rip: T + 240 * H, signer: 'pk2' }])
@@ -70,18 +69,9 @@ await chain('quarantined', [...B3, QS])
 await chain('undone', [...B3, QS, US])
 await chain('pinned-l2', [S0, S1, S2, S3], 2)
 await chain('fork', [S0, { ...S1, dirNonce: nonce(40) }])
-// consent-key ripeness
-const RM_CK: Spec = { members: [['pk', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1']], req: T + 240 * H, rip: T + 312 * H, signer: 'pk1' }
-const READD_CK: Spec = { members: [['pk', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1'], ['ck', 'ck1']], req: T + 320 * H, rip: T + 392 * H, signer: 'pk1' }
-await chain('ck-readded', [S0, S1, S2, S3, RM_CK, READD_CK])
-{
-  const base = await chainOf([S0, S1, S2, S3])
-  await chain('ck-quarantined', [S0, S1, S2, S3,
-    { members: [['pk', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1'], ['ck', 'ck1', 'q']], req: T + 300 * H, rip: T + 300 * H, auth: 'l', cited: cite(base, 3) }])
-}
+// a consent key 73 hours a member (it never signs here: the tier stays passkey)
 const PK2_LEAVES: Spec = { members: [['pk', 'pk1'], ['rk', 'rk1'], ['ck', 'ck1']], req: T + 240 * H, rip: T + 240 * H, signer: 'pk2' }
 await chain('ck-exact', [S0, S1, S2, S3, PK2_LEAVES])
-await chain('ck-pinned', [S0, S1, S2, S3, PK2_LEAVES], 4)
 
 // --- certificates -------------------------------------------------------------------
 
@@ -213,23 +203,34 @@ await reject('dev2/consent-is-device-key', 'the consent key repeats the device k
 await reject('dev2/kx-is-consent-key', 'the kx repeats the consent key', { kind: 'dev2', chain: 'base', head: 3, ceremonyAt: C, kx: K.ck1.pub }, 'kx')
 
 // the tier (G1) --------------------------------------------------------------------------------
-// ck1 joined at L3 (T+232h). A dev2. made by pk1 for the device whose consent key is ck1.
+// ck1 joined at L3 (T+232h). A dev2. made by pk1 for the device whose consent key is ck1. Every passkey-made
+// certificate is (passkey sign-in): the consentPub is a claim until the consent key signs it (security's F1 on
+// #937), so a ripe ck never promotes one by its age. The age rows (72 h, 72 h − 1 s, re-added, quarantined, from a
+// pin) arrive with the consent key's own signature, in the change that defines it.
 const TC = T + 300 * H
-await accept('tier/ck-ripe-exactly-72h', 'the consent key has been a member exactly 72 hours: native',
-  { kind: 'dev2', chain: 'base', head: 3, ceremonyAt: TC }, 'native', T + 304 * H)
-await accept('tier/ck-72h-less-1s', '72 hours less one second: still (passkey sign-in)',
-  { kind: 'dev2', chain: 'base', head: 3, ceremonyAt: TC }, 'passkey', T + 304 * H - SEC)
-await accept('tier/ck-readded', 'the consent key was removed and added again 18 hours ago: its age restarts, so (passkey sign-in)',
-  { kind: 'dev2', chain: 'ck-readded', head: 5, ceremonyAt: T + 400 * H }, 'passkey', T + 410 * H)
-await accept('tier/ck-quarantined', 'the consent key has been a member 168 hours but is quarantined (the lever reverted its addition)',
-  { kind: 'dev2', chain: 'ck-quarantined', head: 4, ceremonyAt: T + 390 * H }, 'passkey', T + 400 * H)
-await accept('tier/ck-exact', 'unpinned: the consent key joined 73 hours ago: native', { kind: 'dev2', chain: 'ck-exact', head: 4, ceremonyAt: T + 300 * H }, 'native', T + 305 * H)
-await accept('tier/ck-from-pin', 'the same roster from a pin of the head after the consent key joined: its age is a lower bound (65 h), so (passkey sign-in)',
-  { kind: 'dev2', chain: 'ck-pinned', head: 4, ceremonyAt: T + 300 * H }, 'passkey', T + 305 * H)
+await accept('tier/ck-ripe-exactly-72h', 'the consent key has been a member exactly 72 hours, but it never signed: still (passkey sign-in)',
+  { kind: 'dev2', chain: 'base', head: 3, ceremonyAt: TC }, 'passkey', T + 304 * H)
+await accept('tier/ck-exact', 'the consent key joined 73 hours ago, but never signed: (passkey sign-in)', { kind: 'dev2', chain: 'ck-exact', head: 4, ceremonyAt: T + 300 * H }, 'passkey', T + 305 * H)
 await accept('tier/no-consent-key', 'a dev2. with no consent key is (passkey sign-in)', { kind: 'dev2', chain: 'base', head: 3, ceremonyAt: TC, consent: null }, 'passkey', T + 304 * H)
 await accept('tier/consent-key-not-member', 'a dev2. whose consent key is not on the roster', { kind: 'dev2', chain: 'base', head: 3, ceremonyAt: TC, consent: 'ck2' }, 'passkey', T + 304 * H)
 await accept('tier/consent-key-is-a-passkey', 'a dev2. naming a roster PASSKEY as its consent key', { kind: 'dev2', chain: 'base', head: 3, ceremonyAt: TC, consent: 'pk2' }, 'passkey', T + 304 * H)
 await accept('tier/wdev-never-native', 'a wdev. on a roster with a ripe consent key is still (passkey sign-in)', { chain: 'base', head: 3, ceremonyAt: TC }, 'passkey', T + 304 * H)
+
+// --- security's rows (#937 review) ---------------------------------------------------------------
+// F1: a page with ONE passkey prompt mints a dev2. for ITS OWN device key, naming the victim's ripe consent key
+await accept('sec/tier-consent-key-not-proven', 'a passkey-made dev2. for another device key, naming a ripe consent key it never proved it holds: (passkey sign-in)',
+  { kind: 'dev2', chain: 'base', head: 3, ceremonyAt: TC, devicePub: W2.pub, label: 'attacker' }, 'passkey', T + 304 * H)
+await accept('sec/tier-ck-absent-old-ceremony', 'consent key not on the roster, ceremony 100 h ago (a renewed watt.): (passkey sign-in)',
+  { kind: 'dev2', chain: 'base', head: 3, ceremonyAt: TC, consent: 'ck2', watt: { loggedAt: TC + 99 * H, expires: TC + 110 * H } }, 'passkey', TC + 100 * H)
+await reject('sec/renewal-past-original-cap', 'a renewal logged 6.5 days after the ceremony running 24 h: past the original cap',
+  { chain: 'base', head: 3, ceremonyAt: TC, watt: { loggedAt: TC + 156 * H, expires: TC + 180 * H } }, 'watt-cap', TC + 157 * H)
+await reject('sec/watt-logged-1s-before-ceremony', 'a watt. logged one second before the ceremony',
+  { chain: 'base', head: 3, ceremonyAt: C, watt: { loggedAt: C - 1000, expires: C + 20 * H } }, 'watt-order')
+await reject('sec/head-from-fork-signer-current', 'the named head is the fork\'s L1 (pk2 is a member of both); not placeable',
+  { chain: 'base', head: 1, rosHash: await sha256b64u(ros.fork[1]), signer: 'pk2', ceremonyAt: C }, 'roster-head')
+await reject('sec/head-is-voided-request', 'the named head is the request the q link voided (pk1 is in it and current): not a head',
+  { chain: 'quarantined', head: 3, rosHash: await sha256b64u(chains.quarantined.links[3].voided!.ros), ceremonyAt: C }, 'roster-head')
+await reject('sec/watt-expires-now', 'now is exactly the watt.\'s expiry', { chain: 'base', head: 3, ceremonyAt: C, watt: { loggedAt: C, expires: C + 3 * H } }, 'expired', C + 3 * H)
 
 // --- wren. (the directory's check) ----------------------------------------------------------
 type WrenRow = { name: string; about: string; text: string; sig: string; expect: 'accept' | 'reject'; reason?: string }
