@@ -176,6 +176,22 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-verify-site.mjs
 
+    - name: Hosting rules around the passkey relying party (id.bento.page)
+      # check-id-hosting.mjs asserts what the rp's hosts may serve: no
+      # /.well-known/webauthn on id.bento.page or the sign-in host, a CSP and
+      # no framing on their HTML, nosniff and a WebAuthn-off
+      # Permissions-Policy on id.bento.page, no COOP same-origin on the
+      # sign-in host or home.bento.page, nothing else under id.bento.page, no
+      # passkey association on bento.page. The rig drives its gatherer and
+      # rules over a fake network: a conforming world passes, each of 21
+      # mutants fails exactly its row. Then the repo rows for real: the
+      # bento.page sources carry no association file. --live is for after a
+      # deploy, by hand.
+      shell: bento-step {0}
+      run: |
+        node scripts/test-check-id-hosting.mjs
+        node scripts/check-id-hosting.mjs
+
     - name: Stage-0 measurement probes load and copy their results
       # server/stage0-probes: P1 (frame), P2 (install), P3 (keep), P5 (log
       # canary), P6 (slow MCP), in Chromium. Each page's Copy results line has
