@@ -624,13 +624,16 @@ runs:
       run: node scripts/test-sync-keyproof-mutants.ts
 
     - name: bento/id roster chain
-      # kernel/src/roster.ts against kernel/fixtures/roster-v1.json: the option G
+      # kernel/src/roster.ts against kernel/fixtures/roster-v2.json: the option G
       # roster (ros.) and the directory's ripening countersign (rip.). A change is
       # in force only once countersigned at ripening, 72 h after the directory's
       # own requestedAt (never the requester's clock); each link is signed by an
       # unquarantined member of the previous head (passkey assertion via
       # webauthn.ts, rp id.bento.page, origin the sign-in host); one change per
-      # link; setup and reset carry the directory's authority alone.
+      # link; setup and reset carry the directory's authority alone; the
+      # directory's acts on the mailbox's authority (q quarantine on a void, l
+      # lever revert, x removal, u undo) each cite what authorises them and can
+      # never add a member.
       shell: bento-step {0}
       run: node scripts/test-roster.ts
 
@@ -641,3 +644,11 @@ runs:
       # one, after the unmutated copy passes.
       shell: bento-step {0}
       run: node scripts/test-roster-mutants.ts
+
+    - name: bento/id roster fixture is current
+      # The generator, with --check, writes nothing and fails when
+      # roster-v2.json is not what it would write (a row added, removed or
+      # changed). Signatures are random, so rows are compared with their
+      # signatures blanked; an unchanged row keeps its committed bytes.
+      shell: bento-step {0}
+      run: node scripts/gen-roster-vectors.ts --check

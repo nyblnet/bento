@@ -1,0 +1,2 @@
+# a mutant build copies src/ beside itself so relative imports resolve (build.mjs)
+.mutant-src-*/

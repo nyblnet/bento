@@ -3,13 +3,14 @@
 Thin native hosts that run **any self-contained HTML document** and let it
 **save itself in place**, on platforms where a browser will not.
 
-Three of them, under `home/<platform>/`:
+Under `home/<platform>/`:
 
 | | what it hosts | why it exists |
 |---|---|---|
 | `ios/` | UIDocument + WKWebView | every iOS browser is WebKit, and none ship the File System Access API |
 | `android/` | Storage Access Framework + WebView | Chrome on Android has no File System Access API either |
 | `webext/` | a directory grant, in the browser | `file://` pages get no persistent handle |
+| `web/` | a web page that runs a file's VERIFIED signed shell in a sandboxed frame (stage 1: view and present) | a browser with neither the extension nor an app, see `web/README.md` |
 
 Bento decks are the reason they exist, but nothing in the Swift or the Kotlin is
 Bento-specific — neither ever parses the document, both are couriers. Any

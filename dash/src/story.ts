@@ -625,8 +625,11 @@ const clampDuration = (v: unknown): number => {
   return Math.min(MAX_DURATION, Math.max(0.05, n))
 }
 
+// Quotes too: a step's id and caption are document data and land in
+// attributes (`data-id="…"`, `value="…"`).
 const esc = (s: string): string =>
   String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 
 /**
  * Present the story full screen.
@@ -991,3 +994,6 @@ export function installStory(src: StorySource & { button: HTMLElement }): () => 
 //    truthful.
 //  * LINE AND SCATTER STEPS CUT when a filter changes the categories. See
 //    `canMorph`.
+
+/** For the rigs. */
+export const _internals = { esc }

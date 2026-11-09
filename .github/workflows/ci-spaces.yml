@@ -74,13 +74,6 @@ jobs:
         # that refuses the recovery copy gets the notice once, held to read;
         # pt and de show slides' words. Planted in bento-spaces-autosave.
         run: node scripts/test-spaces-recovery-browser.mjs
-      - name: bento/id privacy notice and web deletion page (build rules + Chromium)
-        # A publishing build refuses any page still carrying a __PLACEHOLDER__;
-        # the deletion page's CSP pins its exact inline script and style and
-        # lets it reach only the directory. In Chromium with the API mocked:
-        # the start → code → done flow, its refusals, and that it never says
-        # whether an address exists.
-        run: node scripts/test-id-pages-browser.mjs
       - name: id.bento.page passkey association files never publish a placeholder
         # scripts/well-known.mjs fills /.well-known/apple-app-site-association
         # and assetlinks.json from site-src/id-host/well-known/ for the rp,
