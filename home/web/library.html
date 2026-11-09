@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--LIBRARY_CSP-->
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<title>bento/home</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='2' width='28' height='28' rx='6' fill='%2316273E'/%3E%3Crect x='6' y='6' width='6' height='20' rx='2' fill='%235E7699'/%3E%3Crect x='14' y='6' width='12' height='9' rx='2' fill='%23FF9E8A'/%3E%3Crect x='14' y='17' width='12' height='9' rx='2' fill='%23F0EBE0'/%3E%3C/svg%3E">
+<style>
+  :root { --bg: #F5F3EE; --ink: #16273E; --muted: #5E7699; --line: #D9D4C7; --accent: #FF9E8A; --card: #FFFFFF; color-scheme: light dark }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0D1B2E; --ink: #F2F0EA; --muted: #9DB0CC; --line: #2A3B55; --card: #16273E } }
+  * { box-sizing: border-box }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif }
+  main { max-width: 560px; margin: 0 auto; padding: 12vh 16px 32px }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.01em }
+  h1 b { color: var(--muted); font-weight: 600 }
+  .lede { color: var(--muted); margin: 0 0 28px }
+  .drop { display: block; border: 2px dashed var(--line); border-radius: 14px; padding: 36px 20px; text-align: center; background: var(--card); cursor: pointer }
+  body.dragging .drop { border-color: var(--accent) }
+  .drop input { position: absolute; width: 1px; height: 1px; opacity: 0 }
+  .drop strong { display: inline-block; background: var(--ink); color: var(--bg); border-radius: 999px; padding: 10px 20px; font-weight: 600 }
+  .drop span { display: block; margin-top: 10px; color: var(--muted); font-size: 14px }
+  .drop:focus-within strong { outline: 3px solid var(--accent); outline-offset: 2px }
+  .status { min-height: 1.5em; color: var(--muted); font-size: 14px; margin: 12px 0 0 }
+  .problem { margin-top: 16px; padding: 14px 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--card) }
+  .problem p { margin: 0 0 10px }
+  .fine { color: var(--muted); font-size: 13px; margin-top: 28px }
+  button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px; padding: 6px 14px; cursor: pointer }
+  button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px }
+  .bar { display: none; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--card); min-height: 52px }
+  .bar .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0 }
+  .bar .label { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; min-width: 0 }
+  .notice { margin: 0; padding: 8px 12px; font-size: 14px; background: #FFF1D6; color: #16273E; border-bottom: 1px solid var(--line) }
+  #stage { display: none; flex: 1 1 auto; min-height: 0 }
+  iframe.doc { border: 0; width: 100%; height: 100%; display: block; background: #fff }
+  body.viewing { display: flex; flex-direction: column }
+  body.viewing main { display: none }
+  body.viewing .bar { display: flex }
+  body.viewing #stage { display: block }
+</style>
+</head>
+<body>
+<header class="bar">
+  <span class="name" id="doc-name"></span>
+  <span class="label" id="doc-label"></span>
+  <button id="download" type="button" hidden>Download</button>
+  <button id="close" type="button">Close</button>
+</header>
+<p class="notice" id="notice" hidden></p>
+<div id="stage"></div>
+<main>
+  <h1>bento<b>/home</b></h1>
+  <p class="lede">Open a Bento document to view or present it. The file stays on your device: nothing is uploaded and nothing is kept.</p>
+  <label class="drop">
+    <input id="file" type="file" accept=".html,.htm,text/html">
+    <strong>Choose a file</strong>
+    <span>or drop a .bento.html file anywhere on this page</span>
+  </label>
+  <p class="status" id="status" aria-live="polite"></p>
+  <div class="problem" id="problem-box" hidden>
+    <p id="problem"></p>
+    <button id="readonly" type="button" hidden></button>
+  </div>
+  <p class="fine">Only the code of signed Bento releases runs here, each document in its own sandbox. Saving changes is not available on this page yet: to edit, open the file in your browser directly or in the Bento app.</p>
+</main>
+<!--LIBRARY_SCRIPT-->
+</body>
+</html>

@@ -87,3 +87,27 @@ runs:
       # skips here (scripts/lib/ci-skips.mjs); run it locally against one.
       shell: bento-step {0}
       run: node scripts/test-home-android-gate1-oracle.mjs
+
+    - name: bento/home in your browser (stage 1), Chromium
+      # home/web: a static library page that verifies a file's code against the
+      # signed release history (kernel gate 1) and runs only that verified shell,
+      # in a sandboxed frame on a separate site. Builds it against local origins
+      # and drives it with the frozen slides 1.2.10 release: a file runs only in
+      # its own verified release; tampered, forked and newer-than-held files never
+      # run; the channel refresh takes only a correctly signed append-only history;
+      # every request is on the allow-list with a planted request seen from each
+      # source; the frame page refuses to boot outside the library; the frame
+      # cannot download; a frame that navigates away is closed. WebKit, Firefox
+      # and the mutants run in ci-home.yml (home-web-engines).
+      shell: bento-step {0}
+      run: node scripts/test-home-web.mjs
+
+    - name: shells point to bento.page, never depend on it
+      # Every app shell built above, and the frozen 1.2.10 release: every
+      # bento.page address, including inside the compressed runtime, is on an
+      # allow-list (release channel, relay, directory, hint links); no navigation
+      # sink takes one; nothing tests the page's host; and each shell boots from
+      # file:// with every request refused. Planted controls prove the scan
+      # reaches the payload.
+      shell: bento-step {0}
+      run: node scripts/test-shell-standalone.mjs

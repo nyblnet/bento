@@ -13056,3 +13056,51 @@ through the DOM with a value that has passed it.
 Rigs: scripts/test-dash-colours.ts (each paint function with a real colour as
 control and non-colours that must draw nothing) and
 scripts/test-dash-colours-browser.mjs (the built grid, hovered).
+
+## 2026-11-09 — bento/home in your browser, stage 1: a web host that runs only verified code (`home/web/`)
+
+bento/home gets a fourth host, a web page (to be served at home.bento.page),
+built in stages. Stage 1 opens and presents, and keeps nothing:
+
+- **Only verified code runs.** A picked or dropped file is read on the device
+  (never uploaded), and its code is checked with kernel gate 1
+  (`verifyServedHeld`) against the signed release histories, verified with the
+  release key. A file that matches exactly one release runs in THAT release,
+  its own shell, never a silent upgrade. A file that matches none (tampered, a
+  fork, newer than the history) never runs; on the person's request its
+  document opens read-only in the newest signed release of its app, fetched
+  through the signed manifest and its pin and verified against the history in
+  turn.
+- **The document runs in a sandboxed frame on a separate site.** The frame
+  page's header CSP carries `sandbox`, so it is an opaque origin whoever loads
+  it, names the library in `frame-ancestors`, refuses workers, and pins its one
+  script by hash plus `blob:` for the verified blocks it writes. Its script
+  refuses to boot unless it is opaque, framed, and handed the file by the
+  library's origin. The frame has no `allow-downloads`: every download goes
+  through the library, which in stage 1 gives back only the bytes that
+  verified. The session is a `MessagePort`; a frame that navigates away (it no
+  longer answers a ping on that port) is closed. The frame site serves that one
+  page and nothing else, ever (no service worker). Its domain is a build input
+  (`--frame-origin`); choosing it, and its DNS, are the maintainer's.
+- **Nothing kept, almost no network.** No storage, file handles, service
+  worker, identity or relay in stage 1. The histories are bundled into the
+  build; the release channel is asked only when a file does not verify against
+  them, or for the read-only view.
+- **The release key is in network-served code.** PLATFORM §6 compiles the key
+  into every file and never reads it from the network. That still holds for
+  files. A session in this page trusts the key in the page bento.page served on
+  that visit, so the page itself is a code-trust root for the files opened in
+  it: opt-in, kept small (budgets in the rig), and stated.
+- **Supersedes, for the web, 2026-08-02 "bento/home is closed".** What changed
+  since: kernel has a per-document store a host can answer (DocStore), a shell
+  boots in an opaque origin, and this host runs a verified signed shell rather
+  than the file's own code unverified.
+- **Reuse, not copies.** Verification is kernel `gate1.ts`; the signature check
+  is the extension's mirror of the kernel's (`home/webext/src/release.js`,
+  already pinned to the kernel key). Saving (a per-document store over the
+  frame's port) needs a kernel transport and comes in a later stage.
+
+Rigs: `scripts/test-home-web.mjs` (Chromium, WebKit, Firefox),
+`scripts/test-home-web-mutants.mjs` (eleven mutants, each red on its own row),
+`scripts/test-shell-standalone.mjs` (every app shell points to bento.page and
+never depends on it). Details: `home/web/README.md`.
