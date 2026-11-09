@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 // Mutation check for the directory (server/directory/src): the mail-budget
-// rule (a start that mails nothing costs nothing), and the passkey roster store
-// (the rp and origin constant, registration checks, the 72-hour queue, one
-// change at a time, self-removal, the signature counter, setup tokens, roster
-// mail, and the headers id.bento.page sends).
+// rule (a start that mails nothing costs nothing), the retired bind routes, the
+// top-level error answer, and the passkey roster store (the rp and origin
+// constant, registration checks, the 72-hour queue, one change at a time,
+// self-removal, the signature counter, setup tokens, the waiting notice that
+// gates a change, spent challenges, the log, roster mail, and the headers
+// id.bento.page sends).
 //
 //   node scripts/test-directory-mutants.ts
 //
@@ -30,19 +32,16 @@ const ok = (c: boolean, m: string) => { checks++; if (!c) { failures++; console.
 type Edit = { from: string; to: string }
 /** `also`: further edits in the same file, for a rule held at two doors */
 type Mutant = Edit & { name: string; file: 'worker.js' | 'roster.js' | 'passkey.js'; also?: Edit[] }
-/** the budget's one place in `start`: last, just before the code is minted */
-const MAY_MAIL_LAST = "      if (!(await mayMail())) return out(202, { mail: null })\n      const code = mintCode()\n      await s.put('pend', { kind: 'bind',"
-const MAIL_REMOVED = "      const code = mintCode()\n      await s.put('pend', { kind: 'bind',"
 const MUTANTS: Mutant[] = [
-  { name: 'start: budget spent first (before any refusal)', file: 'worker.js',
-    from: MAY_MAIL_LAST, to: MAIL_REMOVED,
-    also: [{ from: "    if (a.op === 'start') {\n", to: "    if (a.op === 'start') {\n      if (!(await mayMail())) return out(202, { mail: null })\n" }] },
-  { name: 'start: budget spent before the live-key refusal', file: 'worker.js',
-    from: MAY_MAIL_LAST, to: MAIL_REMOVED,
-    also: [{ from: "      const live = await s.get('cur')\n      if (live && live.b.expires > now && live.b.key !== b.accountPub)",
-      to: "      if (!(await mayMail())) return out(202, { mail: null })\n      const live = await s.get('cur')\n      if (live && live.b.expires > now && live.b.key !== b.accountPub)" }] },
-  { name: 'start: budget never spent', file: 'worker.js',
-    from: MAY_MAIL_LAST, to: MAIL_REMOVED },
+  // --- the Address object: removal codes, the retired bind routes ---
+  { name: 'delete start: budget spent before the live-binding refusal', file: 'worker.js',
+    from: "      if (!cur || cur.b.expires > now || !(await mayMail())) return out(202, { mail: null })",
+    to: "      if (!(await mayMail()) || !cur || cur.b.expires > now) return out(202, { mail: null })" },
+  { name: 'retired bind routes served again (fall through)', file: 'worker.js',
+    from: "  if (RETIRED.includes(p)) return json(410, { error: 'gone' })\n", to: '' },
+  { name: 'D3: no top-level catch', file: 'worker.js',
+    from: "    try {\n      return await route(req, env)\n    } catch (e) {\n      console.log(`directory error: ${e && e.message}`)\n      return json(500, { error: 'internal' })\n    }",
+    to: '    return await route(req, env)' },
 
   // --- the passkey roster ---
   ...['https://bento.page', 'https://home.bento.page', 'https://id.bento.page'].map((o): Mutant => ({
@@ -70,7 +69,29 @@ const MUTANTS: Mutant[] = [
     from: "        if (w ? w.quarantined !== m.quarantined : m.quarantined) return out(400, { error: 'quarantine' })\n", to: '' },
   { name: 'request: an add and a removal in one', file: 'roster.js', from: 'if (added.length + removed.length !== 1)', to: 'if (added.length + removed.length === 0)' },
   { name: 'request: any opener accepted', file: 'roster.js', from: "      if (a.rq !== undefined && a.rq !== '' && !REQUESTERS.includes(a.rq)) return out(400, { error: 'rq' })\n", to: '' },
-  { name: 'challenge: never recorded as spent', file: 'roster.js', from: '      list.push({ n: a.nonce, exp: a.issued + 10 * MIN })\n', to: '' },
+  { name: 'challenge: never recorded as spent', file: 'roster.js', from: '      await s.put(key, 1)\n', to: '' },
+  { name: 'D2: spent challenges never swept', file: 'roster.js', from: '      if (dead.length) await s.delete(dead)\n', to: '' },
+  { name: 'D2: spent challenges kept in one growing value', file: 'roster.js',
+    from: "      const key = `spent:${String(a.issued).padStart(16, '0')}:${a.nonce}`\n      if (await s.get(key)) return false\n      await s.put(key, 1)\n      const oldest = await s.list({ prefix: 'spent:', limit: ROSTER_LIMITS.spentSweep })\n      const dead = [...oldest.keys()].filter((k) => Number(k.slice(6, 22)) + ROSTER_LIMITS.spentKeepMs <= now)\n      if (dead.length) await s.delete(dead)\n",
+    to: "      const list = ((await s.get('spent')) || []).filter((x) => x.exp > now)\n      if (list.some((x) => x.n === a.nonce)) return false\n      list.push({ n: a.nonce, exp: a.issued + ROSTER_LIMITS.spentKeepMs })\n      await s.put('spent', list)\n" },
+  { name: 'D1: the waiting mail\'s failure ignored (202 anyway)', file: 'roster.js',
+    from: "      if (!sent) {\n        await s.delete('pend')\n        return out(503, { error: 'mail' })\n      }\n", to: '' },
+  { name: 'D1: an unnotified change ripens', file: 'roster.js',
+    from: "    if (p.mailed !== true) {\n      if (now - p.requestedAt >= ROSTER_LIMITS.unsentDropMs) await s.delete('pend')\n      return\n    }\n", to: '' },
+  { name: 'D1: an unnotified change never frees its slot', file: 'roster.js',
+    from: "      if (now - p.requestedAt >= ROSTER_LIMITS.unsentDropMs) await s.delete('pend')\n", to: '' },
+  { name: 'log: the 8-hex fingerprint instead of the full key', file: 'roster.js',
+    from: "      await this.log({ k: 'request', at: now, seq: next.seq, op: change.op, pub: change.pub, by: signer.pub,",
+    to: "      await this.log({ k: 'request', at: now, seq: next.seq, op: change.op, fp: await fingerprint(change.pub), pub: undefined, by: signer.pub," },
+  // security's C1 (#926 X1, X13, X22, X31)
+  { name: 'X1 CBOR: a repeated map key allowed', file: 'passkey.js', from: "        if (out.has(key)) throw new Bad()\n", to: '' },
+  { name: 'X13 registration: origin matched by prefix', file: 'passkey.js',
+    from: "!Object.hasOwn(PASSKEY.origins, origin)", to: "!Object.keys(PASSKEY.origins).some((o) => origin.startsWith(o))" },
+  { name: 'X22 request: the address not checked', file: 'roster.js',
+    from: "      if (next.address !== before.value.address) return out(400, { error: 'address' })\n", to: '' },
+  { name: 'X31 setup: expired tokens accepted', file: 'roster.js',
+    from: "      const live = ((await s.get('setupTok')) || []).filter((t) => t.exp > now)\n      // no attempt",
+    to: "      const live = ((await s.get('setupTok')) || [])\n      // no attempt" },
   { name: 'setup: wrong tokens counted and the tokens burned at 5', file: 'roster.js',
     from: "      if (!live.some((t) => same(t.h, h))) return out(400, { error: 'token' })",
     to: "      if (!live.some((t) => same(t.h, h))) { const n = ((await s.get('tokFail')) || 0) + 1; await s.put('tokFail', n); if (n >= 5) await s.delete('setupTok'); return out(400, { error: 'token' }) }" },
@@ -79,14 +100,14 @@ const MUTANTS: Mutant[] = [
     from: "      await notify(this.env, a.address, 'Your bento/id account was set up', [",
     to: "      await s.put('mail', [...((await s.get('mail')) || []), now])\n      await notify(this.env, a.address, 'Your bento/id account was set up', [" },
   { name: 'mail: a full stranger budget holds back the queued-change mail', file: 'roster.js',
-    from: "      await notify(this.env, next.address, 'A change to your bento/id passkeys is waiting', [",
-    to: "      if (((await s.get('mail')) || []).length < ROSTER_LIMITS.mailPerDay) await notify(this.env, next.address, 'A change to your bento/id passkeys is waiting', [" },
+    from: "      const sent = await notify(this.env, next.address, 'A change to your bento/id passkeys is waiting', [",
+    to: "      const sent = ((await s.get('mail')) || []).length >= ROSTER_LIMITS.mailPerDay || await notify(this.env, next.address, 'A change to your bento/id passkeys is waiting', [" },
   { name: 'mail: the roster is left out', file: 'roster.js', from: '  const out = []\n  for (const m of members) {', to: '  const out = []\n  for (const m of []) {' },
   { name: 'headers: no Permissions-Policy', file: 'worker.js', from: "  'permissions-policy': 'publickey-credentials-get=(), publickey-credentials-create=()',\n", to: '' },
   { name: 'headers: no CSP', file: 'worker.js', from: "  'content-security-policy': \"default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\",\n", to: '' },
   { name: 'headers: /.well-known/webauthn served', file: 'worker.js',
-    from: "    if (req.method !== 'POST') return json(404, { error: 'not-found' })",
-    to: "    if (p === '/.well-known/webauthn') return json(200, { origins: ['https://home.bento.page'] })\n    if (req.method !== 'POST') return json(404, { error: 'not-found' })" },
+    from: "  if (req.method !== 'POST') return json(404, { error: 'not-found' })",
+    to: "  if (p === '/.well-known/webauthn') return json(200, { origins: ['https://home.bento.page'] })\n  if (req.method !== 'POST') return json(404, { error: 'not-found' })" },
 ]
 
 function tree(): string {

@@ -15,7 +15,7 @@
 //
 // The family rules are statements.ts's: dot-joined printable ASCII, signed over
 // the exact bytes, strict field counts, empty fields only where allowed, epoch
-// milliseconds, the version in the prefix. kernel/fixtures/roster-v1.json is
+// milliseconds, the version in the prefix. kernel/fixtures/roster-v2.json is
 // the conformance contract.
 //
 // --- ros. --------------------------------------------------------------------
@@ -75,7 +75,8 @@
 //                    except a member removing ITSELF while another unquarantined
 //                    member remains.
 //   quarantine (q)   immediate. The link carries the VOIDED request (its ros.
-//                    text, signer and proof). That request names this link's
+//                    text, signer and proof). That request is for this address,
+//                    one seq on from the previous head, names this link's
 //                    previous head as its own previous, its signer is an
 //                    unquarantined member of that head, and its proof verifies;
 //                    the only change is that signer gaining ~q, and another
@@ -83,16 +84,30 @@
 //                    quarantine a member that really asked for something.
 //   revert (l)       immediate. The link carries the CITED change (previous
 //                    ros., ros., rip. and its signature): countersigned by a
-//                    pinned kid, for this address, chained (sha256 of the
-//                    previous text is the cited head's prevHash), and exactly one
-//                    member added. The only change here is that member gaining
-//                    ~q. Self-contained, so it verifies from any pin.
+//                    pinned kid under the word m, for this address, chained
+//                    (sha256 of the previous text is the cited head's prevHash),
+//                    and exactly one member added, nothing else (no kind
+//                    change). The only change here is that member gaining ~q.
+//                    Self-contained, so it verifies from any pin.
 //   removal (x)      after the 72 h wait, requested at the moment the previous
-//                    q or l link ripened: exactly one quarantined member removed,
-//                    nothing else.
+//                    q or l link ripened: exactly one member removed, nothing
+//                    else, and it is THE member that link marked (its TARGET).
 //   undo (u)         immediate, right after a q or l link: exactly one ~q mark
-//                    cleared, nothing else. The member keeps its `since`.
+//                    cleared, nothing else, and it is that link's target. The
+//                    member keeps its `since`.
 // q, l, x and u carry no member proof of their own.
+//
+// The TARGET of a q link is voided.signer; of an l link, the one member the
+// cited change added. The cause hash names the evidence; a q's signer is bound
+// by its proof over the voided text, an l's addition by the cited chain. So x
+// and u need no field of their own. When the q or l link is the PINNED head, its
+// target is read from the evidence it carries, after the cause check (its rip.
+// covers only the cause, so the pinned link's evidence is re-checked: a q's
+// voided proof, address and seq, an l's cited chain and its one addition); a
+// pinned q or l link stored without such evidence refuses a following x or u (`evidence`):
+// hosts store a pinned link WHOLE, voided or cited included. A stale mark (one
+// set by an earlier q or l) is never lifted or removed by the directory's word;
+// only a member's own 72 h change removes it.
 //
 // NOT HERE YET, and refused until defined (fail closed):
 //   - a consent-key (ck) signature or co-sign (the `roster` consent purpose,
@@ -353,6 +368,39 @@ function diffOf(before: Member[], after: Member[]) {
 const onlyMarked = (d: ReturnType<typeof diffOf>, pub: string) =>
   d.added.length === 0 && d.removed.length === 0 && d.cleared.length === 0 && d.marked.length === 1 && d.marked[0].pub === pub
 
+/** The member a q or l link marked, read from the evidence it carries; null
+ *  when that evidence does not prove it. For a PINNED head. The countersign
+ *  covers only the cause hash, and the evidence may have been refetched from
+ *  the very party the target rule guards against, so every part of it that
+ *  names the target is re-bound here: a q's signer by its proof over the
+ *  voided text, an l's previous head by the cited head's prev hash. */
+async function pinnedTarget(l: RosterLink, rip: Ripening, head: RosterHead, opts: ChainOpts): Promise<string | null> {
+  if (rip.auth === 'q') {
+    const v = l.voided
+    if (!v || typeof v !== 'object' || !str(v.ros) || !str(v.signer)) return null
+    if (rip.cause !== (await sha256b64u(v.ros))) return null
+    const vh = await parseRos(v.ros)
+    if (!vh.ok || vh.value.address !== head.address || vh.value.seq !== head.seq) return null
+    // the signer is not covered by the cause: bind it by its proof over the voided text
+    const asker = head.members.find((m) => m.pub === v.signer)
+    if (!asker || !(await memberProof(asker, v, v.ros, opts)).ok) return null
+    return asker.pub
+  }
+  if (rip.auth === 'l') {
+    const c = l.cited
+    if (!c || typeof c !== 'object' || !str(c.prevRos) || !str(c.ros)) return null
+    if (rip.cause !== (await sha256b64u(c.ros))) return null
+    const ch = await parseRos(c.ros), cp = await parseRos(c.prevRos)
+    if (!ch.ok || !cp.ok) return null
+    // prevRos is not covered by the cause: bind it through the cited head's prev hash
+    if (ch.value.prev !== (await sha256b64u(c.prevRos))) return null
+    const cd = diffOf(cp.value.members, ch.value.members)
+    if (cd.added.length !== 1 || cd.removed.length + cd.marked.length + cd.cleared.length !== 0 || cd.kindChanged) return null
+    return cd.added[0].pub
+  }
+  return null
+}
+
 /**
  * Verify a roster chain offline. Never throws. The first failing link decides
  * the reason. A passkey assertion is checked WITHOUT a stored sign count: a peer
@@ -372,6 +420,8 @@ async function chain(links: readonly RosterLink[], opts: ChainOpts): Promise<Ver
   let createdAt: number | null = null
   let lastResetAt: number | null = null
   let sinceExact = true
+  /** the member the previous link marked, when it was a q or l link (x and u must name it) */
+  let target: string | null = null
 
   for (let i = 0; i < links.length; i++) {
     const l = links[i]
@@ -392,6 +442,7 @@ async function chain(links: readonly RosterLink[], opts: ChainOpts): Promise<Ver
         else sinceExact = false
         if (rip.auth === 'r') lastResetAt = rip.ripenedAt
         since = new Map(head.members.map((m) => [m.pub, rip.ripenedAt]))
+        target = await pinnedTarget(l, rip, head, opts)
       } else {
         if (head.seq !== 0) return no('anchor')
         if (rip.auth !== 'm') return no('auth')
@@ -410,6 +461,8 @@ async function chain(links: readonly RosterLink[], opts: ChainOpts): Promise<Ver
     // one change at a time: nothing is requested before the previous change is in force
     if (rip.requestedAt < prev.rip.ripenedAt) return no('order')
     const waited = rip.ripenedAt - rip.requestedAt
+    const marked = target
+    target = null
 
     if (rip.auth === 'r') {
       if (hasProof(l) || carries(l)) return no('proof')
@@ -433,6 +486,8 @@ async function chain(links: readonly RosterLink[], opts: ChainOpts): Promise<Ver
         if (rip.cause !== (await sha256b64u(v.ros))) return no('cause')
         const vh = await parseRos(v.ros)
         if (!vh.ok) return no('voided')
+        if (vh.value.address !== head.address) return no('voided-address')
+        if (vh.value.seq !== prev.head.seq + 1) return no('voided-seq')
         if (vh.value.prev !== prev.hash) return no('voided-prev')   // asked against this link's previous head
         const asker = prev.head.members.find((m) => m.pub === v.signer)
         if (!asker) return no('voided-signer')
@@ -441,6 +496,7 @@ async function chain(links: readonly RosterLink[], opts: ChainOpts): Promise<Ver
         if (!pr.ok) return no(`voided-${pr.reason}`)
         if (!onlyMarked(d, asker.pub)) return no('target')
         if (!head.members.some((m) => !m.quarantined)) return no('last-live')
+        target = asker.pub
       } else if (rip.auth === 'l') {
         if (l.voided !== undefined) return no('proof')
         const c = l.cited
@@ -448,24 +504,31 @@ async function chain(links: readonly RosterLink[], opts: ChainOpts): Promise<Ver
         if (rip.cause !== (await sha256b64u(c.ros))) return no('cause')
         const cr = await verifyRip(c.rip, c.ripSig, { rosText: c.ros, directoryKeys: opts.directoryKeys, now: opts.now })
         if (!cr.ok) return no(`cited-${cr.reason}`)
+        if (cr.value.auth !== 'm') return no('cited-auth')   // a member's change, never a directory act
         const ch = await parseRos(c.ros), cp = await parseRos(c.prevRos)
         if (!ch.ok || !cp.ok) return no('cited')
         if (ch.value.address !== head.address) return no('cited-address')
         if (ch.value.prev !== (await sha256b64u(c.prevRos))) return no('cited-chain')
         const cd = diffOf(cp.value.members, ch.value.members)
         if (cd.added.length !== 1 || cd.removed.length + cd.marked.length + cd.cleared.length !== 0) return no('cited-change')
+        if (cd.kindChanged) return no('cited-change')
         if (!onlyMarked(d, cd.added[0].pub)) return no('target')
+        target = cd.added[0].pub
       } else {
         // x and u answer the q or l link just before, and cite it
         if (carries(l)) return no('proof')
         if (prev.rip.auth !== 'q' && prev.rip.auth !== 'l') return no('auth')
         if (rip.cause !== prev.hash) return no('cause')
+        // the member that link marked: from its diff, or from a pinned link's evidence
+        if (marked === null) return no('evidence')
         if (rip.auth === 'x') {
           if (rip.requestedAt !== prev.rip.ripenedAt) return no('order')   // queued in the same step
           if (d.added.length + d.marked.length + d.cleared.length !== 0 || d.removed.length !== 1 || !d.removed[0].quarantined) return no('target')
+          if (d.removed[0].pub !== marked) return no('target')
           if (waited < ROSTER_WAIT_MS) return no('unripe')
         } else {
           if (d.added.length + d.removed.length + d.marked.length !== 0 || d.cleared.length !== 1) return no('target')
+          if (d.cleared[0].pub !== marked) return no('target')
         }
       }
       const kept = new Map<string, number>()

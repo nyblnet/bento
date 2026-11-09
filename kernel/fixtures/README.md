@@ -351,10 +351,24 @@ joined (`since`), `createdAt`, `lastResetAt` and `sinceExact`.
     added; this link's only change is that member gaining `~q`.
   - `x`: the previous link is `q` or `l`; `cause` = sha256 of the previous
     head; requestedAt EQUALS the previous ripenedAt (queued in the same step);
-    the wait is 72 h; the only change is one `~q` member removed.
+    the wait is 72 h; the only change is one `~q` member removed, and it is
+    that link's TARGET (below).
   - `u`: the previous link is `q` or `l`; `cause` = sha256 of the previous
-    head; immediate; the only change is one `~q` mark cleared, and that member
-    keeps its `since`.
+    head; immediate; the only change is one `~q` mark cleared, that link's
+    TARGET, and that member keeps its `since`.
+  - **The target** of a `q` link is `voided.signer`; of an `l` link, the one
+    member its cited change added. When that link is the PINNED head, read the
+    target from the evidence it carries, re-checked: the cause hash, and for `q`
+    the voided request's address and seq and its signer's proof over it, for
+    `l` the cited previous head chaining to the cited head with exactly one
+    addition (the cause covers neither the signer nor the previous head:
+    `x/pinned-q-signer-swapped`, `u/pinned-l-prevros-swapped`). Otherwise the
+    following `x`/`u` is refused with `evidence`. Store a pinned head whole.
+    A stale mark (from an earlier `q`/`l`) is never removed or cleared by `x`/`u`
+    (`x/removes-stale-mark`, `u/clears-stale-mark`, `x/pinned-removes-stale-mark`).
+  - Evidence says what its word claims: a voided request is for this address
+    at the previous seq + 1 (`voided-address`, `voided-seq`); a cited change
+    was countersigned under `m` (`cited-auth`) and changes no member's kind.
 - **Do not track sign counts** along a chain (`assertion/sign-counts-not-tracked`).
 - **The kid picks the key**: with two pinned kids, a countersign under one kid
   made by the other's key is refused (`rip/other-pinned-kid`).

@@ -1,0 +1,17 @@
+# Stage-0 probe P3 (keep). Static files only (./public), no Worker code.
+# Kept deployed for the whole week of sitting F: do not rename or delete it
+# until the last check-in, or every browser's key is "lost" by our hand.
+# Deploy from this folder:
+#   npx wrangler@4.152.0 deploy
+# It lands on https://bento-probe-keep.<your-subdomain>.workers.dev.
+name = "bento-probe-keep"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[assets]
+directory = "./public"
+html_handling = "auto-trailing-slash"
+not_found_handling = "none"
+
+[observability]
+enabled = false

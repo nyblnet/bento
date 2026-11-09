@@ -1,0 +1,15 @@
+# Stage-0 probe P5 (log canary), config 2 of 3: Workers Logs ON, every
+# request sampled (what the dashboard's "enable logs" switch sets).
+#   npx wrangler@4.152.0 deploy
+name = "bento-log-probe"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+invocation_logs = true

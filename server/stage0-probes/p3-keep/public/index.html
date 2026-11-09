@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Probe P3 keep</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="stylesheet" href="/probe.css">
+<script src="/probe-common.js"></script>
+<script src="/keep.js" defer></script>
+</head>
+<body>
+<main>
+<span class="tag">stage-0 measurement probe · P3 keep</span>
+<h1>Does a key kept in this browser survive?</h1>
+<p>Sittings A6, D2, E4 and F (the week). <b>Make keys</b> creates two keys
+that can never be exported (a P-256 signing key and a P-256 key-agreement key)
+and keeps them in this browser's storage for this site. The page never makes a
+key on its own: when the keys are gone it says <b>no key</b>. Nothing is sent
+anywhere; the fingerprint is computed here.</p>
+
+<div class="box">
+  <p id="state" style="font-size:18px">Reading…</p>
+  <div class="row">
+    <button id="make" class="primary">Make keys</button>
+    <button id="persist">Ask to keep (persist)</button>
+    <button id="delete">Delete my key</button>
+  </div>
+  <pre id="observed"></pre>
+</div>
+
+<details class="box" open>
+<summary><b>Steps</b></summary>
+<p><b>Start (A6, D2, E4):</b> in each browser, as a tab, press <b>Make keys</b> and
+<b>Ask to keep</b>, then Copy results. Then the installed form: Safari → File →
+Add to Dock (Mac), Share → Add to Home Screen (iPhone), menu → Install app
+(Android Chrome); open it from there and do the same. Firefox: note whether it
+asked you.</p>
+<p><b>Check-ins (F):</b> open this page in the same browser and mode and Copy
+results. Do not press Make keys. Day 3 (Chrome only): after the check-in, clear
+History only, reopen, Copy results again. Last, as the positive control: press
+<b>Delete my key</b>, reload; it must say "no key".</p>
+</details>
+
+<h2>Visit log (this browser, this site)</h2>
+<pre id="visits">-</pre>
+
+<div class="results">
+  <label>Notes (optional, e.g. "day 3 after clearing history") <input type="text" id="notes" style="width:100%"></label>
+  <div class="row" style="margin-top:8px"><button id="copy" class="primary">Copy results</button> <span id="copy-status" class="muted"></span></div>
+  <textarea id="result" rows="3" readonly hidden></textarea>
+</div>
+</main>
+</body>
+</html>
