@@ -50,8 +50,10 @@ const sheetWith = (v) => ({
   columns: [
     { id: v.id, name: 'Amount', type: 'number', w: v.w },
     { id: 'other', name: 'Other', type: 'number', w: 120 },
+    // no total: its footer cell is the "add a total" offer, its own markup
+    { id: `${v.id}-spare`, name: 'Spare', type: 'number', w: v.w },
   ],
-  data: { [v.id]: { enc: 'raw', v: [4111, 4222, 4333] }, other: { enc: 'raw', v: [1, 2, 3] } },
+  data: { [v.id]: { enc: 'raw', v: [4111, 4222, 4333] }, other: { enc: 'raw', v: [1, 2, 3] }, [`${v.id}-spare`]: { enc: 'raw', v: [5, 6, 7] } },
   totals: { [v.id]: 'sum', other: 'sum' },
 })
 
