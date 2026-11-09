@@ -294,6 +294,15 @@ export interface RosterMember extends Member {
   since: number
 }
 
+/** One head of a verified chain, as a device certificate names it (devices.ts). */
+export interface PlacedHead {
+  /** sha256 of the ros. text */
+  hash: string
+  seq: number
+  ripenedAt: number
+  members: Member[]
+}
+
 export interface RosterState {
   address: string
   seq: number
@@ -309,6 +318,9 @@ export interface RosterState {
   /** false when the chain started from a pin past seq 0: members present at the
    *  pin carry the pin's ripenedAt as `since`, a LOWER bound on their age */
   sinceExact: boolean
+  /** every head of the links given, in chain order (the first is the pin or the
+   *  setup head): the heads a device certificate may name */
+  heads: PlacedHead[]
 }
 
 export interface ChainOpts {
@@ -408,6 +420,7 @@ async function chain(links: readonly RosterLink[], opts: ChainOpts): Promise<Ver
   let sinceExact = true
   /** the member the previous link marked, when it was a q or l link (x and u must name it) */
   let target: string | null = null
+  const heads: PlacedHead[] = []
 
   for (let i = 0; i < links.length; i++) {
     const l = links[i]
@@ -437,7 +450,7 @@ async function chain(links: readonly RosterLink[], opts: ChainOpts): Promise<Ver
         createdAt = rip.ripenedAt
         since = new Map(head.members.map((m) => [m.pub, rip.ripenedAt]))
       }
-      prev = { head, hash, rip }
+      prev = { head, hash, rip }; heads.push({ hash, seq: head.seq, ripenedAt: rip.ripenedAt, members: head.members })
       continue
     }
 
@@ -456,7 +469,7 @@ async function chain(links: readonly RosterLink[], opts: ChainOpts): Promise<Ver
       if (waited < ROSTER_WAIT_MS) return no('unripe')
       lastResetAt = rip.ripenedAt
       since = new Map(head.members.map((m) => [m.pub, rip.ripenedAt]))
-      prev = { head, hash, rip }
+      prev = { head, hash, rip }; heads.push({ hash, seq: head.seq, ripenedAt: rip.ripenedAt, members: head.members })
       continue
     }
 
@@ -520,7 +533,7 @@ async function chain(links: readonly RosterLink[], opts: ChainOpts): Promise<Ver
       const kept = new Map<string, number>()
       for (const m of head.members) kept.set(m.pub, since.get(m.pub)!)
       since = kept
-      prev = { head, hash, rip }
+      prev = { head, hash, rip }; heads.push({ hash, seq: head.seq, ripenedAt: rip.ripenedAt, members: head.members })
       continue
     }
 
@@ -551,13 +564,13 @@ async function chain(links: readonly RosterLink[], opts: ChainOpts): Promise<Ver
     const next = new Map<string, number>()
     for (const m of head.members) next.set(m.pub, since.get(m.pub) ?? rip.ripenedAt)
     since = next
-    prev = { head, hash, rip }
+    prev = { head, hash, rip }; heads.push({ hash, seq: head.seq, ripenedAt: rip.ripenedAt, members: head.members })
   }
 
   const p = prev!
   return { ok: true, value: {
     address: p.head.address, seq: p.head.seq, headHash: p.hash, ripenedAt: p.rip.ripenedAt,
     members: p.head.members.map((m) => ({ ...m, since: since.get(m.pub)! })),
-    createdAt, lastResetAt, sinceExact,
+    createdAt, lastResetAt, sinceExact, heads,
   } }
 }
