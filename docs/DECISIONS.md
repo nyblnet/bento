@@ -13124,3 +13124,50 @@ Guards: `scripts/test-directory-roster.ts` (the real worker and Durable Object
 on a hand clock, with real browser registrations and the kernel's real
 assertions) and `scripts/test-directory-mutants.ts` (each rule loosened in turn
 must fail a row).
+
+## 2026-11-09 — bento/id directory: a change waits only once its notice is sent; the typed-code bind routes are retired
+
+Hardening of the passkey roster store (`server/directory/`) before anything
+there is deployed, from security's review of the roster store.
+
+- **The waiting notice gates the 72-hour wait.** The "a change is waiting"
+  mail is the person's only way to learn of a change in time to stop it. If
+  the mailer was down, the change used to be queued anyway and take effect 72
+  hours later, so the first notice the person had was "now in effect". Now the
+  change holds its slot marked as unsent, the notice goes out, and only a
+  notice the mailer accepted lets it wait; otherwise the request fails with
+  503 and nothing is queued. A change still marked unsent (its object stopped
+  mid-send) never takes effect and frees the slot after 10 minutes. The
+  person may then have a notice for a change that never happens, which is the
+  safe side.
+- **Spent challenges are one storage key each.** A request spends its
+  directory challenge before anything else, and that needs no account, so
+  anyone can do it as often as the per-IP limits allow. The spent set was one
+  stored value that grew with every stranger's request, toward the platform's
+  per-value limit, past which every request on that address would fail. Each
+  spent challenge is now its own key, `spent:<issued>:<nonce>`, kept 10
+  minutes (twice a challenge's life) and swept a few at a time by later
+  spends. The rig holds a sustained hour of one spend a second at the last
+  10 minutes' worth.
+- **An unexpected failure answers like everything else.** The worker catches
+  any exception at the top and answers 500 `{error: "internal"}` with the full
+  header set, instead of letting the platform serve its own error page on the
+  passkeys' relying-party host.
+- **The log names keys in full.** Enrolment and change entries carry the
+  whole public key concerned and the whole key that asked, not an 8-hex
+  fingerprint: the incident lever must act on the exact key, and 32 bits can
+  collide. Mail still shows fingerprints, for people.
+- **The typed-code `bind.` routes are retired.** `POST /v1/bind/start` and
+  `/v1/bind/complete` answer 410 for any method and body, and the Address
+  object's code for making a binding is gone. Under option G every mailed
+  confirmation is a link that completes only on the sign-in host, so a typed
+  code on the same host contradicted it. Lookups and deletions still answer
+  for any binding that exists; the removal-code routes (`/v1/delete/start`,
+  `/complete`, for expired bindings only) are unchanged here.
+
+Guards: `scripts/test-directory.ts`, `scripts/test-directory-roster.ts` (rows
+for each rule above, including the four that security's extra mutants showed
+the rig was blind to: a repeated CBOR map key, an origin matched by prefix, a
+request naming another address, and an expired setup token), and
+`scripts/test-directory-mutants.ts` (39 mutants, each loosening one rule, every
+one failing a row).
