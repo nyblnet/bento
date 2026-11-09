@@ -13416,3 +13416,81 @@ gate; hung sends that deliver or fail after a
 later change queued, or after the change was removed; a never-answering
 mailer; the alarm sweep) and `scripts/test-directory-mutants.ts`, now in its
 own CI job.
+
+## 2026-11-09 — bento/id directory: the void page, the reset, and the countersign on every link
+
+The directory now issues its countersign (`rip.`) and has the two things
+that make the 72-hour wait mean something: a way to stop a change, and a way
+back in for someone who has lost every passkey. Nothing is deployed.
+
+- **Every link is countersigned when it takes effect, never at request.**
+  The setup head at once, a member's change at ripening, under the kernel's
+  authority words: `m` (setup, member change), `q` (a void that suspends the
+  passkey that asked; cause = the voided request's hash, and the link carries
+  that request with its assertion), `x` (that passkey's removal, requested at
+  the moment of the suspension, 72 hours), `u` (undo of the suspension; cause
+  = the suspension head) and `r` (a reset). The countersign is made before
+  anything is stored, so a missing key (`DIR_KEY_JWK`) stores nothing. The rig
+  runs the stored chain through the kernel's own chain verifier after every
+  kind of link.
+- **The void link.** Every waiting notice carries a link to the void page,
+  `https://id.bento.page/void#v=1&e=<address>&t=<token>&k=<kind>`: a 256-bit
+  single-use token in the fragment, stored only as a hash, with **no count of
+  wrong guesses** (security's G3: a counter would let a stranger who knows the
+  address burn the owner's link; per-IP limits are the only brake). `k` only
+  picks the buttons the page shows; the directory decides from its own record
+  what the token may do, and refuses a choice the link does not offer without
+  spending the token.
+- **Two buttons for a member's change (G4 as amended).** *Cancel this change*
+  drops it at once (a mailer outage never stands in the way) and stops the
+  passkey that asked from asking for another change for 72 hours (G4b); it
+  still signs in. *Cancel, and remove the passkey that asked for it* suspends
+  that passkey at once and queues its removal in the same step; the removal's
+  own notice carries an undo link (G4a), and because that link is the way back
+  the notice must be accepted by the mailer before anything changes. Remove
+  is offered only while another live member would remain (G4c), both in the
+  link and on the directory. The mail names the passkey that asked by its
+  short name and age and says which button to pick. A reset's link offers
+  Cancel only; a queued removal's offers undo only.
+- **The void page** is the one HTML page `id.bento.page` serves (`/void`,
+  with `/void.js` and `/void.css`). It is fixed text; opening it sends nothing
+  and takes the token out of the address bar; only a button press POSTs
+  `/v1/void`. Its headers copy the freeze page security ran (R10) and add to
+  it: script, style and fetch from its own origin only, nothing inline, no
+  framing, no referrer, no caching, WebAuthn off by Permissions-Policy, and
+  Trusted Types with no policy. It calls no WebAuthn and no Signal API.
+- **The reset (G5).** Anyone can ask for a reset link to be mailed to an
+  address that has an account (`/v1/roster/reset/start`, the same 202 in every
+  state, like setup). No budget holds a reset mail back (S2); only a reset
+  link already mailed and still live, or still being mailed, does, and a reset
+  link lives a day, so a stranger can have at most one sent a day. The link
+  completes on the sign-in host by making a new passkey (`/v1/roster/reset`),
+  and the reset then waits 72 hours like any change, with its own void link.
+  It preempts whatever change is waiting (that change's link stops working);
+  while it waits, no other change and no second reset can be queued. When it
+  takes effect the roster is that one new passkey, under the word `r`, and the
+  old passkeys' records go.
+- **Who may stop a reset.** The link in its notice always can. A member may
+  stop it with a passkey only once the account is 14 days old, counted from
+  its setup (a reset does not restart the count); in the first 14 days no
+  member may, so whoever set an account up without the mailbox cannot keep
+  the address. The route (`/v1/roster/reset/void`) enforces the age, the
+  member and its suspension, and then refuses at the last step: what the
+  passkey signs to stop a reset is a kernel statement that does not exist
+  yet, and until it does this fails closed. The head route reports
+  `createdAt` and `newAccount` (younger than 14 days).
+
+Not here yet: the passkey signature that stops a reset (kernel), the route
+that serves the chain to peers, the "seven more days of notices" after a
+reset takes effect, and account deletion. Guards: `scripts/test-directory-roster.ts`
+(the countersign through the kernel's chain verifier after `m`, `q`, `u`, `x`
+and `r` links; twelve stranger guesses then the real token; the per-IP limit;
+the cooldown to the hour; Remove with the mailer down; the undo; Remove
+withheld from a lone member; reset links with the setup budget full, during a
+slow send and after expiry; preemption; the 14-day boundary to the second;
+the page's headers through the hosting check's own rules),
+`scripts/test-directory-void-page.mjs` (the page in a real browser, with
+WebSockets closed: three GETs and no POST on opening, the fragment gone from
+the history entry, each button, an injected script blocked with a positive
+control, framing refused, Trusted Types, an address full of markup shown as
+text; a mutant per rule) and `scripts/test-directory-mutants.ts`.

@@ -21,8 +21,8 @@
 export const MAIL_KINDS = Object.freeze({
   setup: 'budget', // a setup link (roster.js)
   roster: 'never', // a roster change: set up, waiting, in effect
-  reset: 'never', // the reset (not built)
-  void: 'never', // the void page's confirmations (not built)
+  reset: 'never', // a reset link, and a reset's own notices (roster.js)
+  void: 'never', // what the void page did: cancelled, suspended and queued for removal, put back (roster.js)
   freeze: 'never', // a freeze (not built)
 })
 
