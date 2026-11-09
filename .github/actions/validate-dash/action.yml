@@ -766,3 +766,11 @@ runs:
       # each row against an unplaced control.
       shell: bento-step {0}
       run: node scripts/test-dash-placed-refs.ts
+
+    - name: dash — a colour from the document draws only as a colour
+      # Each paint path (conditional-format fill and text colour, colour-scale
+      # stops, data bars, chart binding colours, dashboard tile SVG and legend)
+      # draws a real colour as given and draws nothing of a value that is not a
+      # colour: no quote, no declaration, no url(). Every row has a control.
+      shell: bento-step {0}
+      run: node scripts/test-dash-colours.ts

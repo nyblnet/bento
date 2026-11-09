@@ -56,6 +56,7 @@ import {
 } from './filter.ts'
 import { formatValue } from './format.ts'
 import { t } from './i18n.ts'
+import { safeColor } from './color.ts'
 import type { Column, DashDoc, Sheet, TableSheet, View } from './model.ts'
 import { readCell, type Store } from './store.ts'
 
@@ -690,6 +691,16 @@ const esc = (s: unknown): string =>
   String(s).replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
 
+/**
+ * Series `i`'s colour, as it is drawn. The colours came out of the chart
+ * option, and the option out of the document, so they reach this file's SVG
+ * `fill="…"` and the legend's `style="…"` as author data: a colour that is not a
+ * colour (color.ts) draws grey here, never as itself. `esc` alone would stop a
+ * quote and not a `;` or a `url(` inside the style.
+ */
+const tileColor = (td: { colors: unknown[] }, i: number): string =>
+  safeColor(td.colors[i % Math.max(1, td.colors.length)]) ?? '#888'
+
 const CW = 400
 const CH = 210
 const PAD = { l: 46, r: 10, t: 14, b: 26 }
@@ -819,7 +830,7 @@ function cartesianSvg(
 
   if (line) {
     td.series.forEach((s, si) => {
-      const color = td.colors[si % Math.max(1, td.colors.length)] ?? '#888'
+      const color = tileColor(td, si)
       let run: string[] = []
       const flush = (): void => {
         if (run.length > 1) parts.push(`<polyline class="dbx-line" points="${run.join(' ')}" stroke="${esc(color)}"/>`)
@@ -842,7 +853,7 @@ function cartesianSvg(
     const inner = band * 0.72
     const bw = inner / Math.max(1, td.series.length)
     td.series.forEach((s, si) => {
-      const color = td.colors[si % Math.max(1, td.colors.length)] ?? '#888'
+      const color = tileColor(td, si)
       s.data.forEach((v, i) => {
         if (v === null) return
         const x = PAD.l + i * band + (band - inner) / 2 + si * bw
@@ -882,7 +893,7 @@ function pieSvg(
   const parts: string[] = []
   let a = -Math.PI / 2
   slices.forEach((s, i) => {
-    const color = td.colors[i % Math.max(1, td.colors.length)] ?? '#888'
+    const color = tileColor(td, i)
     const sweep = (s.v / total) * Math.PI * 2
     const cls = `dbx-slice${dim && !on.has(s.cat) ? ' dbx-dim' : ''}${on.has(s.cat) ? ' dbx-slice-on' : ''}`
     if (slices.length === 1) {
@@ -904,7 +915,7 @@ function pieSvg(
   })
 
   slices.slice(0, 7).forEach((s, i) => {
-    const color = td.colors[i % Math.max(1, td.colors.length)] ?? '#888'
+    const color = tileColor(td, i)
     const y = 26 + i * 22
     parts.push(
       `<g class="dbx-key${dim && !on.has(s.cat) ? ' dbx-dim' : ''}" ${pickAttr(pick, s.cat)}>` +
@@ -923,7 +934,7 @@ function chartSvg(
   if (!body) return `<div class="dbx-empty">${esc(t('Nothing numeric to plot for this selection.'))}</div>`
   const legend = td.chart !== 'pie' && td.series.length > 1
     ? `<div class="dbx-legend">${td.series.map((s, i) =>
-      `<span><i style="background:${esc(td.colors[i % Math.max(1, td.colors.length)] ?? '#888')}"></i>${esc(s.name)}</span>`).join('')}</div>`
+      `<span><i style="background:${esc(tileColor(td, i))}"></i>${esc(s.name)}</span>`).join('')}</div>`
     : ''
   return `${legend}<svg class="dbx-svg" viewBox="0 0 ${CW} ${CH}" preserveAspectRatio="xMidYMid meet" role="img">${body}</svg>`
 }
