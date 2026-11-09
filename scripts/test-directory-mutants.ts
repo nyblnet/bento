@@ -31,7 +31,7 @@ const ok = (c: boolean, m: string) => { checks++; if (!c) { failures++; console.
 
 type Edit = { from: string; to: string }
 /** `also`: further edits in the same file, for a rule held at two doors */
-type Mutant = Edit & { name: string; file: 'worker.js' | 'roster.js' | 'passkey.js'; also?: Edit[] }
+type Mutant = Edit & { name: string; file: 'worker.js' | 'roster.js' | 'passkey.js' | 'links.js' | 'mail.js'; also?: Edit[] }
 const MUTANTS: Mutant[] = [
   // --- the Address object: removal codes, the retired bind routes ---
   { name: 'delete start: budget spent before the live-binding refusal', file: 'worker.js',
@@ -40,13 +40,13 @@ const MUTANTS: Mutant[] = [
   { name: 'retired bind routes served again (fall through)', file: 'worker.js',
     from: "  if (RETIRED.includes(p)) return json(410, { error: 'gone' })\n", to: '' },
   { name: 'D3: no top-level catch', file: 'worker.js',
-    from: "    try {\n      return await route(req, env)\n    } catch (e) {\n      console.log(`directory error: ${e && e.message}`)\n      return json(500, { error: 'internal' })\n    }",
+    from: "    try {\n      return await route(req, env)\n    } catch (e) {\n      console.log(`directory error: ${e && e.message}`)\n      let path = ''\n      try { path = new URL(req.url).pathname } catch { /* the base headers */ }\n      return json(500, { error: 'internal' }, headersFor(path))\n    }",
     to: '    return await route(req, env)' },
 
   // --- the passkey roster ---
   ...['https://bento.page', 'https://home.bento.page', 'https://id.bento.page'].map((o): Mutant => ({
     name: `origins: ${o} accepted`, file: 'passkey.js',
-    from: "    'https://signin.id.bento.page': 'browser',\n", to: `    'https://signin.id.bento.page': 'browser',\n    '${o}': 'browser',\n` })),
+    from: "    [SIGNIN_ORIGIN]: 'browser',\n", to: `    [SIGNIN_ORIGIN]: 'browser',\n    '${o}': 'browser',\n` })),
   { name: 'rp id: the parent bento.page', file: 'passkey.js', from: "  rpId: 'id.bento.page',", to: "  rpId: 'bento.page'," },
   { name: 'registration: any algorithm', file: 'passkey.js', from: "  if (key.get(3) !== ES256) return no('alg')\n", to: '' },
   { name: 'registration: UV not required', file: 'passkey.js', from: "  if (!(flags & FLAG_UV)) return no('uv')\n  if (!(flags & FLAG_AT))", to: "  if (!(flags & FLAG_AT))" },
@@ -83,6 +83,37 @@ const MUTANTS: Mutant[] = [
   { name: 'log: the 8-hex fingerprint instead of the full key', file: 'roster.js',
     from: "      await this.log({ k: 'request', at: now, seq: next.seq, op: change.op, pub: change.pub, by: signer.pub,",
     to: "      await this.log({ k: 'request', at: now, seq: next.seq, op: change.op, fp: await fingerprint(change.pub), pub: undefined, by: signer.pub," },
+  // setup links (G13), S1, S2
+  { name: 'X35 setup start: mails a link while a roster exists', file: 'roster.js',
+    from: "      if (await s.get('head')) return out(202, { mailed: false }) // taken", to: '      // taken' },
+  { name: 'S1: a full budget holds the mail back with no live link', file: 'roster.js',
+    from: "      if (!spent && live.some((t) => t.mailed)) return out(202, { mailed: false })", to: "      if (!spent) return out(202, { mailed: false })" },
+  { name: 'S1: an unsent link counts as live', file: 'roster.js',
+    from: "      if (!spent && live.some((t) => t.mailed)) return out(202, { mailed: false })", to: "      if (!spent && live.length) return out(202, { mailed: false })" },
+  { name: 'S1: an unsent link is not withdrawn', file: 'roster.js', from: ' : after.filter((t) => t.h !== h))', to: ' : after)' },
+  { name: 'setup start: no per-IP limit', file: 'worker.js', from: "    if (!(await ledger(env, ip, 'setup'))) return json(202, { ok: true })\n", to: '' },
+  { name: 'link: the token in the query', file: 'links.js',
+    from: "  return `${SIGNIN_ORIGIN}${SIGNIN_PATHS.setup}#${f.toString()}`", to: "  return `${SIGNIN_ORIGIN}${SIGNIN_PATHS.setup}?${f.toString()}`" },
+  { name: 'link: pointed at the directory', file: 'links.js',
+    from: "  return `${SIGNIN_ORIGIN}${SIGNIN_PATHS.setup}#${f.toString()}`", to: "  return `https://id.bento.page${SIGNIN_PATHS.setup}#${f.toString()}`" },
+  { name: 'link: parse accepts an extra key', file: 'links.js', from: 'if (keys.length !== 3 || ', to: 'if (' },
+  { name: 'S2: the queued-change mail reads the setup budget', file: 'roster.js',
+    from: "      const sent = await notify(this.env, next.address, 'A change to your bento/id passkeys is waiting', [",
+    to: "      const sent = (await this.spendSetupBudget(now), true) && await notify(this.env, next.address, 'A change to your bento/id passkeys is waiting', [" },
+  { name: 'S2: reset mail classed as budgeted', file: 'mail.js', from: "  reset: 'never',", to: "  reset: 'budget'," },
+  { name: 'S2: an undeclared mail kind delivered', file: 'mail.js',
+    from: "  if (!msg || !Object.hasOwn(MAIL_KINDS, msg.kind)) throw new Error(`undeclared mail kind: ${msg && msg.kind}`)\n", to: '' },
+  // the sign-in host's routes
+  { name: 'worker.js exports a string (the runtime refuses to start)', file: 'worker.js',
+    from: "export const RETIRED = Object.freeze(['/v1/bind/start', '/v1/bind/complete'])", to: "export const RETIRED = Object.freeze(['/v1/bind/start', '/v1/bind/complete'])\nexport const WEB_PREFIX = '/v1/web/'" },
+  { name: 'web: CORS * on the web routes', file: 'worker.js',
+    from: "const WEB = { ...BASE, 'access-control-allow-origin': SIGNIN_ORIGIN, vary: 'Origin' }", to: 'const WEB = BASE' },
+  { name: 'web: any opener accepted', file: 'worker.js', from: "  if (!REQUESTERS.includes(b.rq)) return json(400, { error: 'rq' }, H)\n", to: '' },
+  { name: 'web: any text accepted', file: 'worker.js', from: "typeof b.text !== 'string' || !b.text.startsWith('wdev.') || b.text.length > TEXT_MAX", to: "typeof b.text !== 'string'" },
+  { name: 'web: assertion fields not checked', file: 'worker.js',
+    from: "!['id', 'authenticatorData', 'clientDataJSON', 'signature'].every((k) => field(as[k]))", to: 'false' },
+  { name: 'web: the challenge shares the roster audience and scope', file: 'worker.js',
+    from: "const WEB_AUDIENCE = 'web'", to: "const WEB_AUDIENCE = 'roster'" },
   // security's C1 (#926 X1, X13, X22, X31)
   { name: 'X1 CBOR: a repeated map key allowed', file: 'passkey.js', from: "        if (out.has(key)) throw new Bad()\n", to: '' },
   { name: 'X13 registration: origin matched by prefix', file: 'passkey.js',
@@ -106,8 +137,8 @@ const MUTANTS: Mutant[] = [
   { name: 'headers: no Permissions-Policy', file: 'worker.js', from: "  'permissions-policy': 'publickey-credentials-get=(), publickey-credentials-create=()',\n", to: '' },
   { name: 'headers: no CSP', file: 'worker.js', from: "  'content-security-policy': \"default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\",\n", to: '' },
   { name: 'headers: /.well-known/webauthn served', file: 'worker.js',
-    from: "  if (req.method !== 'POST') return json(404, { error: 'not-found' })",
-    to: "  if (p === '/.well-known/webauthn') return json(200, { origins: ['https://home.bento.page'] })\n  if (req.method !== 'POST') return json(404, { error: 'not-found' })" },
+    from: "  if (req.method !== 'POST') return json(404, { error: 'not-found' }, headersFor(p))",
+    to: "  if (p === '/.well-known/webauthn') return json(200, { origins: ['https://home.bento.page'] })\n  if (req.method !== 'POST') return json(404, { error: 'not-found' }, headersFor(p))" },
 ]
 
 function tree(): string {
