@@ -1,0 +1,40 @@
+# Stage 0 passkey origin probe (P7): an iOS app that registers and asserts a
+# passkey for one relying party and shows clientDataJSON exactly as the
+# platform produced it, so a person can read the `origin` Apple reports for a
+# native app. Its own project, never part of BentoTray:
+#
+#   cd home/ios/Stage0 && BENTO_TEAM_ID=ABCDE12345 xcodegen
+#   open Stage0Probes.xcodeproj      # then Run on the iPhone
+#
+# It needs a PAID developer team: the Associated Domains entitlement
+# (webcredentials) can't be signed by a free personal team, and the rp host
+# must serve an apple-app-site-association naming "<TEAMID>.<bundle id>".
+name: Stage0Probes
+options:
+  bundleIdPrefix: page.bento
+  deploymentTarget:
+    iOS: "16.0"
+targets:
+  PasskeyOriginProbe:
+    type: application
+    platform: iOS
+    sources:
+      - path: Passkey
+        excludes: [Info.plist, Passkey.entitlements]
+    settings:
+      base:
+        INFOPLIST_FILE: Passkey/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Passkey/Passkey.entitlements
+        # The relying party. id.bento.page is the real rp; the stage 0 test
+        # domain's rp host works the same way (change it here or in Xcode's
+        # build settings). It is expanded into both the entitlement and the app.
+        BENTO_PROBE_RP_ID: id.bento.page
+        # The id the rp's apple-app-site-association lists. page.bento.home is
+        # the app's own id, so the origin measured is the one the real app gets.
+        # Installing this replaces a bento/home build with the same id on the
+        # phone; the two never need to be installed at once.
+        PRODUCT_BUNDLE_IDENTIFIER: page.bento.home
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ${BENTO_TEAM_ID}
