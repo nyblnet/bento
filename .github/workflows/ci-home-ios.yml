@@ -64,7 +64,9 @@ jobs:
     # iOS writes to disk shows nothing of a sealed document. The rig reads back
     # the snapshots iOS itself wrote; a skip fails here too.
     runs-on: macos-latest
-    timeout-minutes: 30
+    # 40, not 30: the snapshot rig may background each case up to three times
+    # (a minute's wait each) before it fails as "iOS wrote no snapshot".
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

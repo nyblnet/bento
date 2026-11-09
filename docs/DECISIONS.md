@@ -13193,6 +13193,62 @@ on a hand clock, with real browser registrations and the kernel's real
 assertions) and `scripts/test-directory-mutants.ts` (each rule loosened in turn
 must fail a row).
 
+## 2026-11-09 — bento/home in your browser, stage 1: a web host that runs only verified code (`home/web/`)
+
+bento/home gets a fourth host, a web page (to be served at home.bento.page),
+built in stages. Stage 1 opens and presents, and keeps nothing:
+
+- **Only verified code runs, and only the release it claims.** A picked or dropped file is read on the device
+  (never uploaded), and its code is checked with kernel gate 1
+  (`verifyServedHeld`) against the signed release histories, verified with the
+  release key. A file that matches exactly one release runs in THAT release,
+  its own shell, never a silent upgrade. A file that matches none (tampered, a
+  fork, newer than the history) never runs; on the person's request its
+  document opens read-only in the newest signed release of its app, fetched
+  through the signed manifest and its pin and verified against the history in
+  turn.
+- **The document runs in a sandboxed frame on a separate site.** The frame
+  page's header CSP carries `sandbox`, so it is an opaque origin whoever loads
+  it, names the library in `frame-ancestors`, refuses workers, and pins its one
+  script by hash plus `blob:` for the verified blocks it writes. Its script
+  refuses to boot unless it is opaque, framed, and handed the file by the
+  library's origin, and under a script policy: the library's sandbox attribute
+  alone would make the frame opaque even if a host dropped the header, so the
+  script also refuses when `Function('')` runs. The frame has no `allow-downloads`: every download goes
+  through the library, which in stage 1 gives back only the bytes that
+  verified. The session is a `MessagePort`; a frame that navigates away (it no
+  longer answers a ping on that port) is closed. The frame site serves that one
+  page and nothing else, ever (no service worker). Its domain is a build input
+  (`--frame-origin`); choosing it, and its DNS, are the maintainer's.
+- **Nothing kept; the library talks only to the release channel.** No storage,
+  file handles, service worker, identity or relay in stage 1. The histories are
+  bundled into the build; the channel is asked only when a file does not verify
+  against them, or for the read-only view. That is the library: the document's
+  own content may still load `https:` images, media and embeds, as it does from
+  disk, and a live document is shown as it was last saved, not live.
+- **No security floor yet.** A file in a release with a known script bug runs
+  that release, bug included, inside the opaque frame with no storage, keys or
+  handles to reach. A signed security mark in the history is a stage-2 gate.
+- **The release key is in network-served code.** PLATFORM §6 compiles the key
+  into every file and never reads it from the network. That still holds for
+  files. A session in this page trusts the key in the page bento.page served on
+  that visit, so the page itself is a code-trust root for the files opened in
+  it: opt-in, kept small (budgets in the rig), and stated.
+- **Supersedes, for the web, 2026-08-02 "bento/home is closed".** What changed
+  since: kernel has a per-document store a host can answer (DocStore), a shell
+  boots in an opaque origin, and this host runs a verified signed shell rather
+  than the file's own code unverified. That entry's "a per-document origin, or
+  not at all" is answered by the opaque frame: each document gets a unique
+  origin with no storage, so nothing pools.
+- **Reuse, not copies.** Verification is kernel `gate1.ts`; the signature check
+  is the extension's mirror of the kernel's (`home/webext/src/release.js`,
+  already pinned to the kernel key). Saving (a per-document store over the
+  frame's port) needs a kernel transport and comes in a later stage.
+
+Rigs: `scripts/test-home-web.mjs` (Chromium, WebKit, Firefox),
+`scripts/test-home-web-mutants.mjs` (each mutant red on its own row),
+`scripts/test-shell-standalone.mjs` (every app shell points to bento.page and
+never depends on it). Details: `home/web/README.md`.
 ## 2026-11-09 — bento/id option G: a removal or undo names exactly the member the quarantine marked
 
 **Decision.** This replaces "removes exactly one quarantined member" and

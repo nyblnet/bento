@@ -51,3 +51,29 @@ jobs:
           npm run build:single --prefix slides
       - name: Origin probe in WebKit
         run: node scripts/test-home-origin-probe.mjs
+
+  home-web-engines:
+    # bento/home in your browser (home/web) in the two engines the required
+    # validate job does not run (WebKit, Firefox), and its mutants in Chromium:
+    # each mutant breaks one rule and must turn the rig red on the row that
+    # guards it.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install esbuild (slides' dev dependencies)
+        run: npm ci --prefix slides
+      - name: Install browser test runtime
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium webkit firefox
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: home/web in WebKit
+        run: BENTO_BROWSER=webkit node scripts/test-home-web.mjs
+      - name: home/web in Firefox
+        run: BENTO_BROWSER=firefox node scripts/test-home-web.mjs
+      - name: home/web mutants
+        run: node scripts/test-home-web-mutants.mjs
