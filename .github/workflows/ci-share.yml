@@ -1,0 +1,42 @@
+# CI, share: this zone's own jobs — validate, never release (see ci.yml's header).
+#
+# These jobs are NOT the required check. Only `validate` (ci.yml) gates a
+# merge; a job here reports beside it. Keep each job's id unchanged — the id
+# IS the check name. Add this zone's new jobs here, at the end; never in ci.yml.
+
+name: CI (share)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  # The same rule as ci.yml, whose comment explains it: PR runs collapse onto
+  # the tip, every commit on main keeps its own run.
+  group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+defaults:
+  run:
+    # Every step fails if a rig in it reports a skip CI does not allow
+    # (scripts/lib/ci-skips.mjs). No job here sets a working-directory, which
+    # this relative path relies on.
+    shell: bash scripts/ci/bento-step {0}
+
+jobs:
+  share-directory-mutants:
+    # Each mutant reopens one path (the retired bind routes served again; a
+    # loosened roster, passkey, mail or header rule) in a copy of the tree, and the
+    # directory rigs must fail a row. A mutant that no longer applies, or a
+    # rig that crashes instead of counting, fails this job. Its own job: at
+    # ~7 s a mutant on a runner it outgrew validate's 20 minutes.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: bento/connect directory mutants
+        run: node scripts/test-directory-mutants.ts
