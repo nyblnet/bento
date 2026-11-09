@@ -4,8 +4,8 @@
 // The ONE seam between the sign-in host and the bento/id directory.
 //
 // Everything the sign-in host knows about the directory's API is in this file:
-// the origin, the two routes it calls, the request and answer shapes, and the
-// text a passkey signs to certify a browser key. The directory's roster API is
+// the origin, the two routes it calls, the request and answer shapes, the
+// text a passkey signs to certify a browser key, and the challenge over it. The directory's roster API is
 // being built separately; when it lands, this file is the only one that
 // changes. The shapes below are PROVISIONAL and say so: the statement layout in
 // particular belongs to the kernel (`wdev.` is reserved in
@@ -65,6 +65,11 @@ export async function enrolChallenge() {
  */
 export function wdevText({ W, kx, label, nonce }) {
   return 'wdev.' + W + '.' + kx + '.' + b64u(new TextEncoder().encode(label)) + '.' + nonce
+}
+
+/** The WebAuthn challenge a statement is signed under: SHA-256 of its exact UTF-8 text. */
+export async function challengeFor(text) {
+  return new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))
 }
 
 /** Hands the assertion to the directory; answers the two statements to return. */

@@ -20,21 +20,25 @@
 //     default-src 'none'; scripts only from 'self' or by hash (no inline, no
 //     eval, no wildcard, no data:/blob:); frame-ancestors 'none'. Plus
 //     X-Frame-Options DENY and nosniff.
-//   - no Cross-Origin-Opener-Policy that severs the opener: the sign-in host
-//     sends none (or unsafe-none), and bento/home at most same-origin-allow-popups.
-//     `same-origin` on either side kills the popup protocol.
+//   - no COOP on the sign-in host (none, or unsafe-none); bento/home at most
+//     same-origin-allow-popups. Measured in Chromium: same-origin-allow-popups
+//     ON THE POPUP severs its opener exactly as same-origin does.
 //   - no /.well-known/webauthn on the sign-in host or on the rp host: a file on
 //     the rp host listing another origin lets that origin use, and wipe, the
 //     passkeys.
-//   - nothing but the four files is served, and no other name exists under the
-//     sign-in host or the rp host (no DNS wildcard): every name under the rp
-//     can use its passkeys.
+//   - nothing but the four files is served, and there is no WILDCARD name under
+//     the sign-in host or the rp host: every name under the rp can use, and
+//     wipe, its passkeys. DNS cannot list explicit names (no zone transfer), so
+//     this check sees wildcards only; the deploy steps (README) also list the
+//     zone's records under id.bento.page from the DNS provider, by hand.
 import { Resolver } from 'node:dns/promises'
 import { randomBytes } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
 
 export const SIGNIN_ORIGIN = 'https://signin.id.bento.page'
 export const RP_ORIGIN = 'https://id.bento.page'
+/** The one origin the sign-in page may connect to: the directory. */
+export const CONNECT = ['https://id.bento.page']
 
 /** Problems with a CSP value, as sentences; [] when it meets the rule. */
 export function cspProblems(value) {
@@ -57,6 +61,9 @@ export function cspProblems(value) {
   for (const n of ['script-src-elem', 'script-src-attr', 'worker-src', 'child-src', 'frame-src', 'object-src']) {
     for (const t of dirs.get(n) || []) if (t !== "'none'" && t !== "'self'") out.push(`${n} allows ${t}`)
   }
+  const connect = dirs.get('connect-src')
+  if (connect && JSON.stringify(connect) !== JSON.stringify(CONNECT)) out.push(`connect-src is not exactly ${CONNECT.join(' ')}`)
+  for (const t of dirs.get('style-src') || []) if (t !== "'self'" && t !== "'none'") out.push(`style-src allows ${t}`)
   const fa = dirs.get('frame-ancestors')
   if (!fa || fa.length !== 1 || fa[0] !== "'none'") out.push("frame-ancestors is not exactly 'none'")
   for (const [n, tokens] of dirs) {
@@ -118,7 +125,7 @@ export async function checkHosting({ origin = SIGNIN_ORIGIN, rpOrigin = RP_ORIGI
     row((r.headers.get('x-frame-options') || '').toUpperCase() === 'DENY', `${name}: X-Frame-Options DENY`)
     row((r.headers.get('x-content-type-options') || '').toLowerCase() === 'nosniff', `${name}: nosniff`)
     const coop = coopValue(r.headers.get('cross-origin-opener-policy'))
-    row(coop === '' || coop === 'unsafe-none', `${name}: no Cross-Origin-Opener-Policy that severs the opener${coop ? ` (sends ${coop})` : ''}`)
+    row(coop === '' || coop === 'unsafe-none', `${name}: no Cross-Origin-Opener-Policy (none, or unsafe-none)${coop ? ` (sends ${coop})` : ''}`)
     if (!local) row(/max-age=\d+/.test(r.headers.get('strict-transport-security') || ''), `${name}: Strict-Transport-Security`)
     if (path === '/' && method === 'GET') row(type.startsWith('text/html'), `${name}: is the HTML page (the positive control for the HTML rows)`)
   }
@@ -153,7 +160,7 @@ export async function checkHosting({ origin = SIGNIN_ORIGIN, rpOrigin = RP_ORIGI
     for (const parent of [new URL(origin).hostname, new URL(rpOrigin && rpOrigin !== 'none' ? rpOrigin : RP_ORIGIN).hostname]) {
       const probe = `zz-${randomBytes(6).toString('hex')}.${parent}`
       const found = await exists(probe)
-      row(!found, `no name exists under ${parent} (${probe}: ${found || 'not found'})`)
+      row(!found, `no wildcard name under ${parent} (a random label, ${probe}: ${found || 'not found'})`)
     }
   }
   return rows
@@ -171,6 +178,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   })
   for (const r of rows) console.log(`  ${r.ok ? 'ok  ' : 'FAIL'}  ${r.row}`)
   if (!opt('--home')) console.log('  note  bento/home not checked; pass --home <origin> once it is hosted')
+  if (!local) console.log('  note  by hand, every deploy: list the zone\'s records under id.bento.page in the DNS provider; only id.bento.page and the sign-in host may exist (DNS cannot list explicit names, so the rows above see wildcards only)')
   const bad = rows.filter((r) => !r.ok).length
   console.log(`\n${rows.length - bad}/${rows.length} hosting rows passed`)
   if (bad) process.exit(1)

@@ -58,8 +58,14 @@ export default {
     const path = new URL(request.url).pathname
     const file = Object.hasOwn(FILES, path) ? FILES[path] : null
     if (!file) return answer(404, 'Not found\n', 'text/plain; charset=utf-8', head)
-    const asset = await env.ASSETS.fetch(new Request(new URL(file[0], request.url), { method: 'GET' }))
-    if (!asset.ok) return answer(404, 'Not found\n', 'text/plain; charset=utf-8', head)
-    return answer(200, await asset.arrayBuffer(), file[1], head)
+    // A failing binding still answers with the header set, never the
+    // platform's own error page.
+    try {
+      const asset = await env.ASSETS.fetch(new Request(new URL(file[0], request.url), { method: 'GET' }))
+      if (!asset.ok) return answer(404, 'Not found\n', 'text/plain; charset=utf-8', head)
+      return answer(200, await asset.arrayBuffer(), file[1], head)
+    } catch {
+      return answer(500, 'Server error\n', 'text/plain; charset=utf-8', head)
+    }
   },
 }

@@ -27,14 +27,16 @@
 //   - The consent screen never says the key belongs to this browser: this page
 //     cannot know that, only that bento/home sent it.
 
-import { b64u, enrolChallenge, submitEnrol, wdevText } from './directory-client.js'
+import { b64u, challengeFor, enrolChallenge, submitEnrol, wdevText } from './directory-client.js'
 
 const HOME = 'https://home.bento.page'
 const RP_ID = 'id.bento.page'
 const MAX_LABEL = 40
-// Control characters, bidi controls and invisible separators: a label the
-// person cannot read as written is refused, not cleaned.
-const BAD_LABEL = /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u115f\u1160\u180e\u200b-\u200f\u2028-\u202e\u2060-\u206f\u3164\ufe00-\ufe0f\ufeff\uffa0\ufff0-\ufffb]/u
+// Control and format characters (bidi controls included), private-use,
+// unassigned and lone-surrogate code points, line and paragraph separators,
+// everything Unicode marks default-ignorable, and the braille blank: a label
+// the person cannot read as written is refused, not cleaned.
+const BAD_LABEL = /[\p{Cc}\p{Cf}\p{Co}\p{Cn}\p{Cs}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}\u2800]/u
 const POINT = /^[A-Za-z0-9_-]{87}$/ // 65 bytes, base64url, no padding
 const ACCOUNT_KEY = 'bento-id-account'
 
@@ -96,6 +98,7 @@ async function fingerprint(W) {
 }
 
 let taken = false
+let voided = false
 let request = null
 let busy = false
 
@@ -104,31 +107,36 @@ async function onMessage(e) {
   if (e.source !== window.opener || e.source === null) return
   if (taken) {
     // A second message voids the first request too: the person must never
-    // approve one request while the opener is busy sending another.
-    if (!busy) { request = null; show('refused', 'one-request-per-window') }
+    // approve one request while the opener is busy sending another. The
+    // first may still be inside an await below (WebKit delivers the second
+    // message there), so it checks `voided` after every await.
+    if (!busy) { voided = true; request = null; show('refused', 'one-request-per-window') }
     return
   }
   taken = true
   if (e.origin !== HOME) return show('refused', 'wrong-origin')
   const r = await checkRequest(e.data)
+  if (voided) return
   if (typeof r === 'string') return show('refused', r)
+  const fp = await fingerprint(r.W)
+  if (voided) return
   request = { ...r, rq: e.origin }
   $('who').textContent = e.origin
   const account = savedAccount()
   $('account').textContent = account || 'the account of the passkey you choose'
   $('label').textContent = r.label
-  $('fp').textContent = await fingerprint(r.W)
+  $('fp').textContent = fp
   show('consent')
 }
 
 async function approve() {
-  if (!request || busy) return
+  if (!request || busy || voided) return
   busy = true
   show('working')
   try {
     const nonce = await enrolChallenge()
     const text = wdevText({ W: request.W, kx: request.kx, label: request.label, nonce })
-    const challenge = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))
+    const challenge = await challengeFor(text)
     const cred = await navigator.credentials.get({
       publicKey: { rpId: RP_ID, challenge, userVerification: 'required', allowCredentials: [], timeout: 120000 },
     })

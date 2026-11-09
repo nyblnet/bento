@@ -13073,7 +13073,9 @@ host in a popup. The rules, each pinned by a browser row with a mutant that
 breaks it:
 - **One request shape, from one sender.** A message is accepted only when its
   origin is `https://home.bento.page` and its source is the window that opened
-  the popup; one per window (a second one voids the first); and it is exactly
+  the popup; one per window (a second one voids the first, even one that
+  arrives while the first is still being checked, as WebKit delivers it); and
+  it is exactly
   `{t:'enrol', W, kx, label}`. Nothing else is ever done because the opener
   asked: no roster change, no deletion, no Signal API call. Account changes
   start only from the host's own pages, by the person. Measured: with the
@@ -13093,21 +13095,25 @@ breaks it:
 
 Headers, on every response including 404s: a CSP of `default-src 'none'`,
 scripts and styles from `'self'` only, connections to the directory only, and
-`frame-ancestors 'none'` (with `X-Frame-Options: DENY`). **No
-`Cross-Origin-Opener-Policy` at all**: measured in Chromium and Chrome,
-`same-origin-allow-popups` on the popup itself cuts `window.opener` exactly as
-`same-origin` does, so "not same-origin" is not a strong enough rule for this
-host. bento/home may send at most `same-origin-allow-popups`. Playwright's
+`frame-ancestors 'none'` (with `X-Frame-Options: DENY`). **No COOP on the
+sign-in host; bento/home at most `same-origin-allow-popups`.** Measured in
+Chromium and Chrome, `same-origin-allow-popups` on the popup itself cuts
+`window.opener` exactly as `same-origin` does, so "not same-origin" is not a
+strong enough rule for this host. Playwright's
 WebKit kept the opener under every value; Safari on a device is still to be
 checked. No `/.well-known/webauthn`, on this host or on `id.bento.page`.
 
 `server/signin/check-hosting.mjs` checks all of this against the live host
-after every deploy, including that no other name resolves under the host or
-the rp. Deploying is the maintainer's. The directory API the host calls sits
-behind one module (`public/directory-client.js`), provisional until the
+after every deploy, including that there is no wildcard name under the host or
+the rp. DNS cannot list explicit names, and every name under the rp can use
+and wipe its passkeys, so each deploy also lists the zone's records under
+`id.bento.page` in the DNS provider, by hand. Deploying is the maintainer's.
+The directory API the host calls sits behind one module (`public/directory-client.js`), provisional until the
 directory's roster routes and the kernel's `wdev.` statement are defined.
 
 Rigs: scripts/test-signin-host.mjs (the worker, the page rules, the hosting
 check with a mutant per rule), scripts/test-signin-host-browser.mjs (the
-protocol in Playwright's headless shell and Google Chrome) and
-scripts/test-signin-host-coop.mjs (COOP in Chromium, Chrome and WebKit).
+protocol in Playwright's headless shell and Google Chrome),
+scripts/test-signin-host-engines.mjs (the rows that need no passkey, in
+WebKit too) and scripts/test-signin-host-coop.mjs (COOP in Chromium, Chrome and
+WebKit).

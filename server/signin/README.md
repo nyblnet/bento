@@ -27,13 +27,16 @@ S     → home  { t: 'enrolled', wdev, watt }        (or { t: 'cancelled' } / { 
 ```
 
 `W` and `kx` are raw uncompressed P-256 points in base64url; `label` is 1–40
-characters with no control, bidi or invisible characters.
+characters, none of them a control or format character (bidi controls
+included), private-use, unassigned, a line or paragraph separator,
+default-ignorable, or the braille blank.
 
 ## The rules (each has a rig row and a mutant that breaks it)
 
 1. A request is accepted only when `event.origin === 'https://home.bento.page'`
    **and** `event.source === window.opener`; one request per window (a second
-   message voids the first); and it is exactly `{t:'enrol', W, kx, label}`.
+   message voids the first, also when it arrives while the first is still
+   being checked); and it is exactly `{t:'enrol', W, kx, label}`.
 2. Every reply goes to the literal origin `https://home.bento.page`, never `'*'`
    and never a value from a message or the URL.
 3. Nothing is read from the page's own URL.
@@ -52,7 +55,7 @@ characters with no control, bidi or invisible characters.
 
 - `Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://id.bento.page; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`
 - `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`
-- **No `Cross-Origin-Opener-Policy`.** Measured in Chromium and Chrome:
+- **No COOP on the sign-in host; bento/home at most `same-origin-allow-popups`.** Measured in Chromium and Chrome:
   `same-origin` **and** `same-origin-allow-popups` on this page both cut
   `window.opener`, and the protocol dies. bento/home may send at most
   `same-origin-allow-popups`. (`scripts/test-signin-host-coop.mjs`.)
@@ -82,14 +85,22 @@ cd server/signin
 npx wrangler deploy
 node check-hosting.mjs                                   # every deploy, against the live host
 node check-hosting.mjs --home https://home.bento.page    # once bento/home is hosted
+# then list the zone's records under id.bento.page in the DNS provider (below)
 ```
 
 `check-hosting.mjs` reads headers and DNS and changes nothing. It checks a
 strict CSP, `X-Frame-Options` and `nosniff` on every response; no COOP that
 cuts the opener (here: none or `unsafe-none`; on bento/home: at most
 `same-origin-allow-popups`); no `/.well-known/webauthn` on this host or on
-`id.bento.page`; only the four paths; and that no other name resolves under
+`id.bento.page`; only the four paths; and that there is no wildcard name under
 `signin.id.bento.page` or `id.bento.page`. It exits non-zero on any failure.
+
+**By hand, every deploy:** DNS cannot list explicit names (there is no zone
+transfer), so the check above catches a wildcard but not, say, a forgotten
+`test.id.bento.page`. Every name under `id.bento.page` can use, and wipe, the
+passkeys. So the maintainer also lists the zone's records under
+`id.bento.page` in the DNS provider (its dashboard or API) and confirms that
+only `id.bento.page` and the sign-in host exist.
 
 ## Local
 
@@ -109,6 +120,9 @@ process instead.
 - `node scripts/test-signin-host-browser.mjs [--chrome]`: the popup protocol,
   the consent screen, framing, COOP and the rp rows, in Playwright's headless
   shell and in Google Chrome, every WebSocket blocked, a mutant per rule.
+- `node scripts/test-signin-host-engines.mjs [--chrome]`: the rows that need
+  no passkey in every engine, WebKit included: back-to-back requests, the
+  refusals, every label case, and the consent screen's claims.
 - `node scripts/test-signin-host-coop.mjs [--chrome]`: which COOP values keep
   the protocol alive, in Chromium, Chrome and WebKit.
 

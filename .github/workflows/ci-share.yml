@@ -51,6 +51,14 @@ jobs:
         run: node scripts/test-signin-host-browser.mjs
       - name: Sign-in host popup protocol, Google Chrome
         run: node scripts/test-signin-host-browser.mjs --chrome
+      - name: Sign-in host protocol rows in every engine (headless shell, WebKit, Chrome)
+        # The rows that need no passkey, in WebKit too (every iOS browser's
+        # engine): two requests posted back to back end refused (WebKit
+        # delivers the second inside the first's await), a foreign opener,
+        # noopener, any other shape and a request in the URL are refused,
+        # invisible labels are refused and real names in any script shown,
+        # and the consent screen keeps its disclaimer; a mutant per row.
+        run: node scripts/test-signin-host-engines.mjs --chrome
       - name: Which COOP values keep the sign-in popup working (Chromium, Chrome, WebKit)
         # Every value the hosting check allows works in every engine; every
         # value it refuses severs the opener in at least one. Same-origin-allow-

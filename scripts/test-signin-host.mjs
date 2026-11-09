@@ -71,6 +71,9 @@ try {
     const r = await req('/', m)
     ok(r.status === 405 && sameHeaders(r), `${m} /: 405 with every fixed header`)
   }
+  const worker = (await import('../server/signin/src/worker.js')).default
+  const boom = await worker.fetch(new Request('https://signin.id.bento.page/'), { ASSETS: { fetch() { throw new Error('binding down') } } })
+  ok(boom.status === 500 && sameHeaders(boom), 'a throwing assets binding: 500 with every fixed header (never the platform error page)')
   const head = await req('/', 'HEAD')
   ok(head.status === 200 && (await head.text()) === '' && sameHeaders(head), 'HEAD /: 200, no body, every fixed header')
 
@@ -95,6 +98,14 @@ try {
     'the source check is e.source !== window.opener': (c) => /if \(e\.source !== window\.opener/.test(c),
     'the request is exactly the keys W,kx,label,t': (c) => /Object\.keys\(m\)\.sort\(\)\.join\(','\) !== 'W,kx,label,t'/.test(c),
     'rq is event.origin': (c) => /request = \{ \.\.\.r, rq: e\.origin \}/.test(c),
+    'every await in onMessage is followed by a voided check': (c) => {
+      const body = (c.match(/async function onMessage\(e\) \{\n([\s\S]*?)\n\}\n/) || [])[1]
+      if (!body) return false
+      const lines = body.split('\n')
+      const awaits = lines.map((l, i) => [l, i]).filter(([l]) => /\bawait\b/.test(l))
+      return awaits.length >= 2 && awaits.every(([, i]) => lines[i + 1] === '  if (voided) return')
+    },
+    'the statement challenge is computed in directory-client.js': (c) => /export async function challengeFor\(text\)/.test(c) && /const challenge = await challengeFor\(text\)/.test(c),
   }
   for (const [name, f] of Object.entries(lint)) ok(f(code), `page script: ${name}`)
   // each lint, against a source that breaks it
@@ -109,6 +120,8 @@ try {
     'the source check is e.source !== window.opener': code.replace('if (e.source !== window.opener', 'if (false'),
     'the request is exactly the keys W,kx,label,t': code.replace("!== 'W,kx,label,t'", "=== ''"),
     'rq is event.origin': code.replace('request = { ...r, rq: e.origin }', 'request = { ...r, rq: e.data.rq }'),
+    'every await in onMessage is followed by a voided check': code.replace('  const fp = await fingerprint(r.W)\n  if (voided) return\n', '  const fp = await fingerprint(r.W)\n'),
+    'the statement challenge is computed in directory-client.js': code.replace('const challenge = await challengeFor(text)', "const challenge = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))"),
   }
   for (const [name, src] of Object.entries(bad)) ok(src !== code && !lint[name](src), `MUTANT ${name}: the lint fails`)
   ok(!rules['no inline script (every <script> has a src)'](html.replace('</head>', '<script>alert(1)</script></head>')), 'MUTANT inline script: the lint fails')
@@ -186,8 +199,28 @@ try {
     [CSP + "; frame-ancestors https://home.bento.page", false],
     [CSP.replace("default-src 'none'", "default-src 'self'"), false],
     [CSP + "; script-src-attr 'unsafe-inline'", false],
+    [CSP.replace('connect-src https://id.bento.page', 'connect-src https://evil.example'), false],
+    [CSP.replace('connect-src https://id.bento.page', 'connect-src https://id.bento.page https://evil.example'), false],
+    [CSP.replace("style-src 'self'", "style-src 'self' https://fonts.example"), false],
     ['', false],
   ]) ok((cspProblems(v).length === 0) === good, `${good ? 'accepts' : 'refuses'}: ${v.slice(0, 90) || '(none)'}${cspProblems(v).length ? ' — ' + cspProblems(v)[0] : ''}`)
+
+  console.log('\nthe DNS rows see wildcards (and only wildcards: explicit names need the zone listing by hand)')
+  const zone = (names, wildcard) => {
+    const has = (n) => names.includes(n) || (wildcard && wildcard.some((w) => n.endsWith('.' + w)))
+    const ans = async (n) => { if (has(n)) return ['192.0.2.1']; const e = new Error('nx'); e.code = 'ENOTFOUND'; throw e }
+    return { resolve4: ans, resolve6: ans, resolveCname: async (n) => { const e = new Error('nodata'); e.code = 'ENODATA'; throw e } }
+  }
+  const dnsRows = async (resolver) => (await checkHosting({ origin: 'https://signin.id.bento.page', rpOrigin: 'none', fetchImpl: async () => { throw new Error('offline') }, resolver }))
+    .filter((r) => /no wildcard name under/.test(r.row))
+  let d = await dnsRows(zone(['id.bento.page', 'signin.id.bento.page']))
+  ok(d.length === 2 && d.every((r) => r.ok), `a zone with only the two names passes both rows (${d.map((r) => r.row).join(' | ')})`)
+  d = await dnsRows(zone([], ['id.bento.page']))
+  ok(d.length === 2 && d.every((r) => !r.ok), 'MUTANT a wildcard under id.bento.page: both rows fail')
+  d = await dnsRows(zone([], ['signin.id.bento.page']))
+  ok(d.length === 2 && !d[0].ok && d[1].ok, 'MUTANT a wildcard under the sign-in host: its row fails')
+  d = await dnsRows(zone(['x.id.bento.page', 'x.signin.id.bento.page']))
+  ok(d.length === 2 && d.every((r) => r.ok), 'recorded: explicit extra names pass these rows, which is why the deploy lists the zone by hand')
 } finally {
   rmSync(tmp, { recursive: true, force: true })
 }

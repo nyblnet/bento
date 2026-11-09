@@ -64,8 +64,6 @@ const MUTANTS = {
   'noopener': [['public/signin.js', "  if (!window.opener) return show('refused', 'no-opener')\n", '']],
   // G12d: COOP same-origin on the sign-in host.
   'coop': [['src/worker.js', "  'x-frame-options': 'DENY',\n", "  'x-frame-options': 'DENY',\n  'cross-origin-opener-policy': 'same-origin',\n"]],
-  // G12g: the consent screen claims the key is this browser's.
-  'claims-browser': [['public/index.html', 'This page cannot check which device holds the key bento/home sent.', 'This key belongs to this browser.']],
 }
 const tmp = mkdtempSync(join(tmpdir(), 'signin-mutants-'))
 let tagN = 0
@@ -227,7 +225,7 @@ try {
   ok(consent.includes(HOME), 'it names the opener by its real origin')
   ok(consent.includes('Name chosen by bento/home') && consent.includes('Chrome on MacBook'), 'it shows the label as chosen by bento/home')
   ok(/Approve only if you just asked bento\/home to sign in/.test(consent), 'it says approve only if you just asked bento/home to sign in')
-  ok(!/(this|your) (browser|device)('s)? key|key (is|belongs to) (this|your) (browser|device)|belongs to this browser/i.test(consent), 'it never claims the key is this browser\'s')
+  ok(consent.includes('This page cannot check which device holds the key bento/home sent.'), 'it says it cannot check which device holds the key (the claim rows are in the engines rig)')
   await approve(pop)
   ok((await state(pop))[0] === 'done', 'the sign-in host finished')
   const got = (await msgs()).find((m) => m.data?.t === 'enrolled')
@@ -387,27 +385,8 @@ try {
   r = await framed('framed', HOME)
   ok(['refused', 'waiting', 'consent', 'loading'].includes(r.st), `MUTANT framed: the sign-in host renders inside bento/home (${r.st})`)
 
-  // ---- labels -------------------------------------------------------------------
-  console.log('\nG12a  labels')
-  for (const [label, want] of [['Chrome on MacBook', 'consent'], ['Alice’s MacBook — verified by Bento', 'consent'], ['日本語のラベル', 'consent'],
-    ['MacBook\u202egnp.exe', 'refused'], ['x'.repeat(41), 'refused'], ['line\nbreak', 'refused'], ['zero\u200bwidth', 'refused'], ['', 'refused'], ['tab\there', 'refused']]) {
-    await reset(); const k = await keys()
-    const p = await openFrom(HOME); await send(p, enrolMsg(k, label))
-    const st = await state(p)
-    ok(st[0] === want, `label ${JSON.stringify(label).slice(0, 44)}: ${st[0]}${st[1] ? ' ' + st[1] : ''}`)
-    if (want === 'consent') ok((await p.locator('#label').innerText()) === label, '  shown exactly as sent, as text')
-  }
-
-  // ---- G12g: the consent screen's words ------------------------------------------
-  console.log('\nG12g  what the consent screen claims')
-  const claims = async (mutant) => {
-    await reset(mutant); const k = await keys()
-    const p = await openFrom(HOME); await send(p, enrolMsg(k))
-    return p.locator('[data-for=consent]').innerText()
-  }
-  const NOT_THIS_BROWSER = (t) => !/(this|your) (browser|device)('s)? key|key (is|belongs to) (this|your) (browser|device)|belongs to this browser/i.test(t)
-  ok(NOT_THIS_BROWSER(await claims()), 'the honest screen never says the key is this browser\'s')
-  ok(!NOT_THIS_BROWSER(await claims('claims-browser')), 'MUTANT claims-browser: the row sees the claim')
+  // Labels and the consent screen's claims run in every engine, WebKit
+  // included: scripts/test-signin-host-engines.mjs.
 
   // ---- H1: a hostile bento/home, the sign-in host honest ------------------------------
   console.log('\nH1  a hostile bento/home substitutes a key it also holds')
