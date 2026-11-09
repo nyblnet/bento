@@ -124,6 +124,8 @@ object Gate1 {
     private val TAG_NAME_OK = Regex("^[a-z][a-z0-9-]*\\z")
     /** Elements whose content is TEXT to a browser, never tags, up to their real end tag. */
     private val RAW_TEXT = setOf("script", "style", "textarea", "title")
+    /** A "<" that could start markup in foreign content: before an ASCII letter, "!", "/" or "?". */
+    private val MARKUP_START = Regex("<[a-zA-Z!/?]")
     private val LETTER_TAG = Regex("^<[a-zA-Z]")
 
     /** Where a raw-text element really ends: "</name" then whitespace, "/" or ">". -1 if never. */
@@ -191,7 +193,10 @@ object Gate1 {
             if (name in RAW_TEXT) {
                 val close = rawTextEnd(lower, name, tag.end)
                 if (close < 0) { problems += "an unterminated <$name>"; break }
-                if (name != "script" && lower.substring(tag.end, close).contains("<script")) problems += "a <$name> holds a <script>"
+                // Text only in HTML: inside <svg> or <math> these hold TAGS (<title> is
+                // an integration point, <img> breaks out of <style>), and a token walk
+                // can't tell the context. Refuse any "<" that could start markup.
+                if (name != "script" && MARKUP_START.containsMatchIn(html.substring(tag.end, close))) problems += "a <$name> holds markup, which is a tag inside <svg> or <math>"
                 if (parseEndTag(html, close) == null) { problems += "an unterminated </$name>"; break }
                 if (name == "textarea" || name == "title") { i = close; continue }
                 blocks += Block(name, html.substring(i, tag.end), html.substring(tag.end, close),

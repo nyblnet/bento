@@ -135,8 +135,29 @@ const served: Served[] = [
   // a walk that ends raw text at any "</name", or doesn't know "<!-->", would
   // wrongly refuse these, and no unknown row could tell
   { name: 'empty-comment-in-paragraph', html: body('<p><!--></p><p>after</p>'), verdict: 'genuine', release: '1.0.0', why: '"<!-->" ends at once: the paragraph after it is markup, not comment' },
-  { name: 'style-false-close', html: body('<style>a{}</stylex><b onclick=x></style>'), verdict: 'genuine', release: '1.0.0', why: '"</stylex>" doesn\'t end the style: the <b onclick> is style TEXT, not an element' },
-  { name: 'title-false-close', html: body('<title>t</titlex><b onclick=x></title>'), verdict: 'genuine', release: '1.0.0', why: '"</titlex>" doesn\'t end the title: the <b onclick> is title TEXT' },
+  // "</stylex>" doesn't end a style, but these are refused all the same: inside
+  // <svg> the <b onclick> would be a real element (see the foreign-content rows)
+  { name: 'style-false-close', html: body('<style>a{}</stylex><b onclick=x></style>'), verdict: 'unknown', why: '"</stylex>" doesn\'t end the style, and the <b onclick> is style text in HTML, but an element inside <svg>: markup in a <style> is refused' },
+  { name: 'title-false-close', html: body('<title>t</titlex><b onclick=x></title>'), verdict: 'unknown', why: '"</titlex>" doesn\'t end the title, and the <b onclick> is title text in HTML, but an element inside <svg>: markup in a <title> is refused' },
+  // foreign content: inside <svg> or <math>, <style>, <title> and <textarea> are
+  // NOT text. The tokenizer reads tags in them, <title> is an HTML integration
+  // point, and <img>, <meta>, <iframe>... break out of a <style>. A token walk
+  // can't tell which context it is in, so any "<" before a letter, "!", "/" or
+  // "?" in those three is refused in every context; any other "<" is text.
+  { name: 'svg-title-iframe', html: body('<svg width="0" height="0"><title><iframe src="https://evil.example/"></iframe></title></svg>'), verdict: 'unknown', why: 'inside <svg>, <title> holds HTML: the <iframe> is real and loads' },
+  { name: 'svg-title-img-onerror', html: body('<svg width="0" height="0"><title><img src="x" onerror="evil()"></title></svg>'), verdict: 'unknown', why: 'inside <svg>, <title> holds HTML: the <img onerror> is real' },
+  { name: 'svg-style-meta-refresh', html: body('<svg><style><meta http-equiv="refresh" content="0;url=https://evil.example/"></style></svg>'), verdict: 'unknown', why: 'inside <svg>, <meta> breaks out of <style>: a real refresh' },
+  { name: 'svg-style-img-onerror', html: body('<svg><style><img src="x" onerror="evil()"></style></svg>'), verdict: 'unknown', why: 'inside <svg>, <img> breaks out of <style>: a real handler' },
+  { name: 'svg-style-embed', html: body('<svg><style><embed src="https://evil.example/"></style></svg>'), verdict: 'unknown', why: 'inside <svg>, <embed> breaks out of <style>' },
+  { name: 'svg-style-uppercase-img', html: body('<svg><style><IMG src="x" onerror="evil()"></style></svg>'), verdict: 'unknown', why: 'tag names fold case: <IMG> breaks out of <style> inside <svg> too' },
+  { name: 'math-textarea-img', html: body('<math><textarea><img src="x" onerror="evil()"></textarea></math>'), verdict: 'unknown', why: 'inside <math>, <textarea> holds tags: <img> breaks out' },
+  { name: 'svg-style-comment', html: body('<svg><style><!--x--></style></svg>'), verdict: 'unknown', why: '"<!" in a <style>: a comment or CDATA inside <svg>' },
+  { name: 'svg-style-end-tag', html: body('<svg><style>a{}</p></style></svg>'), verdict: 'unknown', why: '"</" and a letter in a <style>: an end tag inside <svg>' },
+  { name: 'title-processing-instruction', html: g.replace('<title>A deck</title>', '<title>A <?x?> deck</title>'), verdict: 'unknown', why: '"<?" in a <title>: a bogus comment inside <svg>' },
+  { name: 'title-tag-outside-svg', html: g.replace('<title>A deck</title>', '<title>A <b>deck</b></title>'), verdict: 'unknown', why: 'markup in a <title> is refused even where it is text: the walk does not track <svg> context, and Bento escapes "<" in a title' },
+  { name: 'style-lt-not-markup', html: g.replace('<style>body{margin:0}</style>', '<style>body{margin:0}/* a < b, <3, <= */</style>'), verdict: 'genuine', release: '1.0.0', why: 'a "<" before a space, a digit or "=" starts no markup in any context: still text' },
+  { name: 'title-lt-not-markup', html: g.replace('<title>A deck</title>', '<title>A < B <3</title>'), verdict: 'genuine', release: '1.0.0', why: 'a "<" before a space or a digit starts no markup in any context' },
+  { name: 'svg-title-text', html: body('<svg width="0" height="0"><title>A chart</title><style>.a{fill:red}</style></svg>'), verdict: 'genuine', release: '1.0.0', why: 'an <svg> whose <title> and <style> hold only text' },
   // the case fold must not change length (home-desktop): toLowerCase() makes 'İ' two units
   { name: 'case-fold-breakout', html: body('<p>' + 'İ'.repeat(20) + `</p><style>a{}</style><${S}>window.pwned=1</${S}>`), verdict: 'unknown', why: 'a length-changing case fold would skip this script entirely' },
   { name: 'genuine-length-changing-text', html: file(r1, { title: 'İstanbul ı ß ﬃ Σ', doc: '{"format":"bento/test","title":"İstanbul ı ß ﬃ ΣΑΣ İİİİ"}', preview: '<p>İİİİ ß ﬃ Σ</p>' }), verdict: 'genuine', release: '1.0.0', why: "a genuine document in Turkish (and ß, ﬃ, Σ) is still genuine" },

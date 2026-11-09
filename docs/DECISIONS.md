@@ -13056,3 +13056,37 @@ through the DOM with a value that has passed it.
 Rigs: scripts/test-dash-colours.ts (each paint function with a real colour as
 control and non-colours that must draw nothing) and
 scripts/test-dash-colours-browser.mjs (the built grid, hovered).
+
+## 2026-11-09 — Gate 1: `<style>`, `<title>` and `<textarea>` hold no markup, in any context
+
+Gate 1 (`kernel/src/gate1.ts`) reads `<style>`, `<title>` and `<textarea>` as
+text up to their end tag, as HTML does. Inside `<svg>` or `<math>` they are
+foreign content instead: the tokenizer reads tags in them, `<title>` is an HTML
+integration point, and `<img>`, `<meta>`, `<iframe>`, `<embed>` and the other
+breakout tags leave a `<style>`. So `<svg><title><iframe src=…>` passed as
+genuine while a browser loaded the frame (measured in Chromium and WebKit, both
+for that file and for an `<img onerror>` inside `<svg><style>`).
+
+The rule: in those three elements, a `<` before an ASCII letter, `!`, `/` or
+`?` refuses the file, wherever the element sits. A `<` before anything else is
+text in every context and stays allowed.
+
+- **Why refuse rather than track the context.** Knowing whether a tag sits in
+  foreign content takes the tree builder (integration points, the breakout
+  list, `<font>` with attributes, foster parenting in tables), and every host
+  ports gate 1 to its own language. A one-line rule is the same in all five,
+  and it refuses only what Bento never writes: a title is serialized with `<`
+  escaped, and no released stylesheet holds a `<`. Every one of the 70 slides
+  releases in the published history (0.7.0 to 1.2.13) still verifies as
+  genuine, with the same verdicts as before on every shell published to
+  bento.page.
+- **What it replaces.** These elements were checked only for `<script`. Two
+  corpus rows that relied on HTML's reading, `<style>a{}</stylex><b onclick=x>`
+  and its `<title>` twin, are now refused: inside `<svg>`, `<b onclick>` is a
+  real element.
+
+The Swift, Kotlin and Rust ports and the extension's generated copy carry the
+same rule. Rigs: `scripts/test-gate1.ts` (corpus rows for each breakout and for
+`<!`, `</`, `<?`, upper case, plus genuine rows with a `<` that starts no
+markup), `scripts/test-gate1-mutants.ts`, and `scripts/test-gate1-oracle.mjs`,
+which now wraps its payloads in foreign content and runs them in both engines.
