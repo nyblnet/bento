@@ -13192,3 +13192,42 @@ Guards: `scripts/test-directory-roster.ts` (the real worker and Durable Object
 on a hand clock, with real browser registrations and the kernel's real
 assertions) and `scripts/test-directory-mutants.ts` (each rule loosened in turn
 must fail a row).
+
+## 2026-11-09 — bento/id option G: a removal or undo names exactly the member the quarantine marked
+
+**Decision.** This replaces "removes exactly one quarantined member" and
+"clears exactly one quarantine mark" in the earlier entry today on the
+authority word. An `x` link must remove, and a `u` link must clear, exactly
+the member that the `q` or `l` link just before it marked: its TARGET.
+
+- A `q` link's target is its voided request's signer; an `l` link's is the one
+  member its cited change added. Each is bound to the link by the link's cause
+  hash, so `x` and `u` need no new field.
+- When the `q` or `l` link is the PINNED head, its target is read from the
+  evidence it carries, after the cause check (the pinned countersign is
+  re-verified, so the evidence cannot be swapped). A pinned link without its
+  evidence, or with evidence that does not match its cause, refuses a
+  following `x` or `u` (`evidence`): the host refetches the link. **So a host
+  stores a pinned head WHOLE, its voided request or cited change included.**
+- Two `q` links in a row stay legal, and so does a member change after a `q`.
+  A mark left behind that way is never lifted or removed by the directory's
+  word; only a member's own 72-hour change removes it.
+
+**Why.** Before this, after `q` on one member and then `q` on another, an undo
+could clear the FIRST mark, and a removal could take it, at once and from a
+pin as well. A buggy directory, or anyone holding its countersigning key (an
+`l` on anyone, then a `u` on an older mark), could then lift an old quarantine
+without the 72 hours and without showing a reset, and two ports could
+disagree about which member a removal meant. Security's ruling on the change
+that added the authority word set this condition.
+
+Also in the same change, evidence must say what its word claims: the change
+an `l` cites must be countersigned under the word `m` and change no member's
+kind, and the request a `q` voids must be for this address at the next seq.
+The rows went into `roster-v2.json` in place, because no port has copied it
+yet; once one has, a change like this is a new version.
+
+Guards: `scripts/test-roster.ts` and `scripts/test-roster-mutants.ts` (the
+target rule's mutants: the target from the diff ignored, the pin's evidence
+ignored, the pin's evidence read without the cause check, a pin without
+evidence tolerated).

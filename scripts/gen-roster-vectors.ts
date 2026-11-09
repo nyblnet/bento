@@ -6,18 +6,22 @@
 // option G roster chain (kernel/src/roster.ts): ros. heads, the directory's rip.
 // countersign, and the member proofs (passkey assertions, recovery-key signatures).
 //
-//   node scripts/gen-roster-vectors.ts [--out <file>]
+//   node scripts/gen-roster-vectors.ts [--out <file>] [--check]
 //
 // Keys are DETERMINISTIC (scalars from SHA-256 of a label), so a key keeps its
-// public point across regenerations. ECDSA signatures are random, so a
-// regeneration changes signature bytes, never verdicts. Passkey assertions come
+// public point across regenerations. ECDSA signatures are random, so a row is
+// compared with the committed one with its signatures blanked: a row that is
+// unchanged but for them KEEPS its committed bytes, so adding a row leaves every
+// other row's bytes alone. --check writes nothing: it exits 1 when the file on
+// disk is not what this generator would write (a row added, removed or
+// changed), and names the rows. Passkey assertions come
 // from a software authenticator here; real browser assertions are the contract
 // of webauthn-v1.json, which roster.ts reuses unchanged.
 //
 // Every accepted row also carries the state the chain must yield, written by
 // hand below (not read back from the verifier).
 
-import { writeFileSync } from 'node:fs'
+import { writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { b64uEnc, sha256b64u, signStatement } from '../kernel/src/statements.ts'
@@ -27,6 +31,7 @@ import { buildRos, buildRip, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, type MemberKind, 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const outArg = process.argv.indexOf('--out')
 const OUT = outArg > 0 ? process.argv[outArg + 1] : join(root, 'kernel/fixtures/roster-v2.json')
+const CHECK = process.argv.includes('--check')
 
 const te = new TextEncoder()
 const sha = async (b: Uint8Array | string) => new Uint8Array(await crypto.subtle.digest('SHA-256', (typeof b === 'string' ? te.encode(b) : b) as BufferSource))
@@ -109,7 +114,7 @@ interface Spec {
   // the authority word (default m, or r with reset) and its cause ('prev' = sha256 of the previous head)
   auth?: Authority; cause?: string | 'prev' | null
   // auth q: the request the void cancelled, built against the previous head unless prev is given
-  voided?: { members: M[]; signer: string; proof?: 'assertion' | 'sig'; assert?: AssertOpts & { by?: string }; prev?: string | null }
+  voided?: { members: M[]; signer: string; proof?: 'assertion' | 'sig'; assert?: AssertOpts & { by?: string }; prev?: string | null; address?: string; seq?: number }
   // auth l: the cited ripened change, as built links
   cited?: { prevRos: string; ros: string; rip: string; ripSig: string }
 }
@@ -127,7 +132,7 @@ async function link(s: Spec, prev: { text: string; seq: number } | null, i: numb
   let voided: Link['voided']
   if (s.voided) {
     const v = s.voided
-    const vros = buildRos({ address: s.address ?? ADDRESS, seq, prev: v.prev !== undefined ? v.prev : prevHash,
+    const vros = buildRos({ address: v.address ?? s.address ?? ADDRESS, seq: v.seq ?? seq, prev: v.prev !== undefined ? v.prev : prevHash,
       members: v.members.map(([kind, l, q]) => ({ kind, pub: pubOf(l), quarantined: q === 'q' })), dirNonce: nonce(i + 50), created: s.req })
     voided = { ros: vros, signer: pubOf(v.signer) }
     if ((v.proof ?? (v.signer.startsWith('pk') ? 'assertion' : 'sig')) === 'assertion') voided.assertion = await assertion(v.assert?.by ?? v.signer, vros, v.assert)
@@ -511,6 +516,98 @@ const afterQ = { pk1: mem('pk', 'pk1', T), pk2q: mem('pk', 'pk2', T + 73 * H, tr
   reject('l/carries-voided', 'a revert carries the cited change only', await fromB3({ ...LS, voided: VOIDED }), 'proof')
 }
 
+// --- security's rows from the review of the authority word (#925): C1′, the x/u target rule (C4), nits -------
+{
+  const base = await upTo(3)
+  const cite = (i: number, c: Link[] = base) => ({ prevRos: c[i - 1].ros, ros: c[i].ros, rip: c[i].rip, ripSig: c[i].ripSig })
+  const LS: Spec = { members: [['pk', 'pk1'], ['pk', 'pk2', 'q'], ['rk', 'rk1']], req: T + 160 * H, rip: T + 160 * H, auth: 'l', cited: cite(1) }
+  const withCited = (cited: Spec['cited'], members?: M[]): Spec => ({ ...LS, cited, ...(members ? { members } : {}) })
+
+  // C1′: the cited change is genuine, ripe and for this account, and says only "one member added"
+  const unk = await chainOf([S0, { ...S1, kid: 'dir-9', ripBy: 'dirOther' }])
+  reject('l/cited-unknown-kid', 'the cited change is countersigned under a kid nobody pinned', await fromB3(withCited(cite(1, unk))), 'cited-unknown-kid')
+  const fut = await chainOf([S0, { ...S1, req: NOW, rip: NOW + 72 * H }])
+  reject('l/cited-future', 'the cited change ripens after now', await fromB3(withCited(cite(1, fut))), 'cited-not-yet-valid')
+  const am = await chainOf([{ seq: 7, prev: await sha256b64u('x'), members: [['pk', 'pk1']], req: T, rip: T },
+    { members: [['pk', 'pk1', 'q'], ['pk', 'pk2']], req: T + H, rip: T + 73 * H }])
+  reject('l/cited-adds-and-marks', 'the cited change adds a member and also marks another', await fromB3(withCited(cite(1, am))), 'cited-change')
+  {
+    const bros = await chainOf([{ ...S1, seq: 1, address: 'bob@example.com', prev: await sha256b64u(base[0].ros) }])
+    reject('l/cited-ros-other-account', "the cited ros. names bob, though its previous head is alice's (the address is read from the cited head)",
+      await fromB3(withCited({ prevRos: base[0].ros, ros: bros[0].ros, rip: bros[0].rip, ripSig: bros[0].ripSig })), 'cited-address')
+  }
+  const kc = await chainOf([{ seq: 7, prev: await sha256b64u('y'), members: [['pk', 'pk1'], ['rk', 'rk1']], req: T, rip: T },
+    { members: [['ck', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1']], req: T + H, rip: T + 73 * H }])
+  reject('l/cited-kind-changed', 'the cited change adds pk2 and also changes a continuing member\'s kind', await fromB3(withCited(cite(1, kc))), 'cited-change')
+  const cu = await chainOf([S0, { ...S1, signer: undefined, auth: 'u', cause: 'prev' }])
+  reject('l/cited-not-member-change', 'the cited link was countersigned under the word u, not m: only a member\'s change is reverted',
+    await fromB3(withCited(cite(1, cu))), 'cited-auth')
+
+  // nits: the voided request is for this account and the next seq
+  reject('q/voided-other-address', 'the voided request names another address (with the right previous hash)',
+    await fromB3({ ...QS, voided: { ...VOIDED, address: 'bob@example.com' } }), 'voided-address')
+  reject('q/voided-seq-wrong', 'the voided request names a seq other than the previous head\'s + 1 (with the right previous hash)',
+    await fromB3({ ...QS, voided: { ...VOIDED, seq: 4 } }), 'voided-seq')
+
+  // the second quarantine: after q(pk2), rk1's request is voided too, so two marks stand
+  const Q2: Spec = { members: [['pk', 'pk1'], ['pk', 'pk2', 'q'], ['rk', 'rk1', 'q']], req: T + 165 * H, rip: T + 165 * H, auth: 'q',
+    voided: { members: [['pk', 'pk1'], ['pk', 'pk2', 'q'], ['pk', 'pk4'], ['rk', 'rk1']], signer: 'rk1' } }
+  const X2: Spec = { members: [['pk', 'pk1'], ['pk', 'pk2', 'q']], req: T + 165 * H, rip: T + 237 * H, auth: 'x' }
+
+  // C1′: x and u change their target and nothing else
+  reject('x/also-clears', 'the removal of the target also lifts another (stale) quarantine', await fromB3(QS, Q2, { ...X2, members: [['pk', 'pk1'], ['pk', 'pk2']] }), 'target')
+  reject('x/also-marks', 'a removal that also quarantines another member', await fromB3(QS, { ...XS, members: [['pk', 'pk1', 'q'], ['rk', 'rk1']] }), 'target')
+  reject('u/also-marks', 'an undo that also quarantines another member', await fromB3(QS, { ...US, members: [['pk', 'pk1', 'q'], ['pk', 'pk2'], ['rk', 'rk1']] }), 'target')
+  reject('u/signed-by-quarantined', 'the quarantined member signs its own undo (a directory act carries no member proof)', await fromB3(QS, { ...US, signer: 'pk2' }), 'proof')
+
+  // C4: x removes, and u clears, exactly the member the previous q or l marked
+  accept('ok/q-then-q-then-x', 'two quarantines in a row are legal; the removal takes the LATEST one\'s target, the older mark stands',
+    await fromB3(QS, Q2, X2), { seq: 5, ripenedAt: T + 237 * H, members: [afterQ.pk1, afterQ.pk2q], createdAt: T, lastResetAt: null, sinceExact: true })
+  reject('u/clears-stale-mark', 'q(pk2), q(rk1), then an undo clears pk2: not the member the previous link marked',
+    await fromB3(QS, Q2, { members: [['pk', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1', 'q']], req: T + 170 * H, rip: T + 170 * H, auth: 'u' }), 'target')
+  reject('x/removes-stale-mark', 'q(pk2), q(rk1), then a removal takes pk2: not the member the previous link marked',
+    await fromB3(QS, Q2, { members: [['pk', 'pk1'], ['rk', 'rk1', 'q']], req: T + 165 * H, rip: T + 237 * H, auth: 'x' }), 'target')
+  {
+    const c = await fromB3(QS, Q2, { members: [['pk', 'pk1'], ['rk', 'rk1', 'q']], req: T + 165 * H, rip: T + 237 * H, auth: 'x' })
+    reject('x/pinned-removes-stale-mark', 'from a pin of q(rk1): the removal takes pk2; the pinned link\'s evidence names rk1', c.slice(4), 'target', await sha256b64u(c[4].ros))
+    const ok = await fromB3(QS, Q2, X2)
+    accept('ok/pinned-q-then-x-target', 'from a pin of q(rk1): the removal of rk1, the target its evidence names',
+      ok.slice(4), { seq: 5, ripenedAt: T + 237 * H, members: [mem('pk', 'pk1', T + 165 * H), mem('pk', 'pk2', T + 165 * H, true)], createdAt: null, lastResetAt: null, sinceExact: false },
+      await sha256b64u(ok[4].ros))
+    // the pinned q(rk1) link carries q(pk2)'s voided request instead of its own: the cause does not match
+    const swapped = [{ ...c[4], voided: ok[3].voided }, c[5]]
+    reject('x/pinned-evidence-cause-wrong', 'the pinned q(rk1) link carries ANOTHER voided request (naming pk2), and the removal takes pk2: evidence not matching the cause names no target',
+      swapped, 'evidence', await sha256b64u(c[4].ros))
+  }
+  {
+    const qx = await fromB3(QS, XS)
+    const bare = { ...qx[3] }; delete bare.voided
+    reject('x/pinned-q-without-evidence', 'from a pin of the quarantine link stored WITHOUT its voided request: the removal cannot be placed (refetch the link whole)',
+      [bare, qx[4]], 'evidence', await sha256b64u(qx[3].ros))
+    const lu = await fromB3(LS, US)
+    accept('ok/pinned-l-then-u', 'from a pin of the revert link: its target comes from the cited change it carries, so the undo may follow',
+      lu.slice(3), { seq: 4, ripenedAt: T + 170 * H, members: [mem('pk', 'pk1', T + 160 * H), mem('pk', 'pk2', T + 160 * H), mem('rk', 'rk1', T + 160 * H)], createdAt: null, lastResetAt: null, sinceExact: false },
+      await sha256b64u(lu[3].ros))
+    const lbare = { ...lu[3] }; delete lbare.cited
+    reject('u/pinned-l-without-evidence', 'from a pin of the revert link stored WITHOUT its cited change: the undo cannot be placed',
+      [lbare, lu[4]], 'evidence', await sha256b64u(lu[3].ros))
+    // a pinned l whose cited change adds a DIFFERENT member than the one marked: the undo of pk2 has no target
+    const lwrong = { ...lu[3], cited: cite(2) }
+    // q(pk2) stands; then the lever reverts L2 (which added rk1): the undo must clear rk1, the l link's target, not the stale pk2
+    accept('ok/q-then-l-then-u', 'a stale mark stands (pk2) when the lever marks rk1; the undo clears rk1, the revert\'s target',
+      await fromB3(QS, { members: [['pk', 'pk1'], ['pk', 'pk2', 'q'], ['rk', 'rk1', 'q']], req: T + 165 * H, rip: T + 165 * H, auth: 'l', cited: cite(2) },
+        { members: [['pk', 'pk1'], ['pk', 'pk2', 'q'], ['rk', 'rk1']], req: T + 170 * H, rip: T + 170 * H, auth: 'u' }),
+      { seq: 5, ripenedAt: T + 170 * H, members: [afterQ.pk1, afterQ.pk2q, afterQ.rk1], createdAt: T, lastResetAt: null, sinceExact: true })
+    // a pinned q link whose head does NOT mark the member its evidence names (a link no verifier would have pinned,
+    // countersigned by the directory key): the removal of that unquarantined member is still refused
+    const qbad = await fromB3({ ...QS, members: [['pk', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1', 'q']] }, { ...XS, members: [['pk', 'pk1'], ['rk', 'rk1', 'q']] })
+    reject('x/pinned-target-not-quarantined', 'a pinned q link names pk2 as its target but its head left pk2 unmarked: the removal of pk2 is refused',
+      qbad.slice(3), 'target', await sha256b64u(qbad[3].ros))
+    reject('u/pinned-l-evidence-cause-wrong', 'the pinned revert link carries another cited change (L2 added rk1), so its cause does not match',
+      [lwrong, lu[4]], 'evidence', await sha256b64u(lu[3].ros))
+  }
+}
+
 // ---------------------------------------------------------------------------------------------
 
 const keys: Record<string, string> = {}
@@ -528,5 +625,20 @@ const out = {
   keys,
   rows,
 }
-writeFileSync(OUT, JSON.stringify(out, null, 2) + '\n')
-console.log(`wrote ${OUT}: ${rows.length} rows (${rows.filter((r) => r.expect === 'accept').length} accept)`)
+// keep the committed bytes of every row that differs only in its (random) signatures
+const SIGS = new Set(['ripSig', 'sig', 'signature'])
+const masked = (v: unknown) => JSON.stringify(v, (k, x) => (SIGS.has(k) ? '' : x))
+const before = existsSync(OUT) ? JSON.parse(readFileSync(OUT, 'utf8')) : null
+const old = new Map<string, Row>((before?.rows ?? []).map((r: Row) => [r.name, r]))
+out.rows = rows.map((r) => { const o = old.get(r.name); return o && masked(o) === masked(r) ? o : r })
+const text = JSON.stringify(out, null, 2) + '\n'
+if (CHECK) {
+  const changed = out.rows.filter((r) => old.get(r.name) !== r).map((r) => r.name)
+  const gone = [...old.keys()].filter((n) => !rows.some((r) => r.name === n))
+  const same = before !== null && text === readFileSync(OUT, 'utf8')
+  if (!same) console.log(`${OUT} is stale: ${changed.length} rows new or changed${changed.length ? ` (${changed.join(', ')})` : ''}, ${gone.length} removed${gone.length ? ` (${gone.join(', ')})` : ''}${changed.length + gone.length ? '' : ', top-level fields differ'}`)
+  else console.log(`${OUT} is current: ${rows.length} rows`)
+  process.exit(same ? 0 : 1)
+}
+writeFileSync(OUT, text)
+console.log(`wrote ${OUT}: ${rows.length} rows (${rows.filter((r) => r.expect === 'accept').length} accept, ${rows.filter((r) => old.get(r.name) === out.rows[rows.indexOf(r)]).length} kept byte for byte)`)

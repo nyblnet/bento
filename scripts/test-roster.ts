@@ -107,6 +107,14 @@ const REQUIRED: Array<[string, string]> = [
   ['ok/l-revert', 'accept'], ['ok/l-then-x', 'accept'], ['ok/l-then-u', 'accept'], ['l/no-cited', 'cited'], ['l/cause-wrong', 'cause'],
   ['l/cited-not-countersigned', 'cited-rip-signature'], ['l/cited-other-account', 'cited-address'], ['l/cited-not-chained', 'cited-chain'],
   ['l/cited-removal', 'cited-change'], ['l/cited-setup', 'cited-chain'], ['l/wrong-target', 'target'], ['l/also-removes', 'target'], ['l/carries-voided', 'proof'],
+  // security's rows from the review of the authority word (#925): C1′, the nits, the x/u target rule (C4)
+  ['l/cited-unknown-kid', 'cited-unknown-kid'], ['l/cited-future', 'cited-not-yet-valid'], ['l/cited-adds-and-marks', 'cited-change'],
+  ['l/cited-ros-other-account', 'cited-address'], ['x/also-clears', 'target'], ['x/also-marks', 'target'], ['u/also-marks', 'target'], ['u/signed-by-quarantined', 'proof'],
+  ['l/cited-kind-changed', 'cited-change'], ['l/cited-not-member-change', 'cited-auth'], ['q/voided-other-address', 'voided-address'], ['q/voided-seq-wrong', 'voided-seq'],
+  ['ok/q-then-q-then-x', 'accept'], ['u/clears-stale-mark', 'target'], ['x/removes-stale-mark', 'target'], ['x/pinned-removes-stale-mark', 'target'],
+  ['ok/pinned-q-then-x-target', 'accept'], ['x/pinned-evidence-cause-wrong', 'evidence'], ['x/pinned-q-without-evidence', 'evidence'],
+  ['ok/pinned-l-then-u', 'accept'], ['u/pinned-l-without-evidence', 'evidence'], ['u/pinned-l-evidence-cause-wrong', 'evidence'],
+  ['ok/q-then-l-then-u', 'accept'], ['x/pinned-target-not-quarantined', 'target'],
 ]
 for (const [n, want] of REQUIRED) {
   const r = byName.get(n)
