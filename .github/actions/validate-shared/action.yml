@@ -191,15 +191,20 @@ runs:
 
     - name: Hosting rules around the passkey relying party (id.bento.page)
       # check-id-hosting.mjs asserts what the rp's hosts may serve: no
-      # /.well-known/webauthn on id.bento.page or the sign-in host, a CSP and
-      # no framing on their HTML, nosniff and a WebAuthn-off
-      # Permissions-Policy on id.bento.page, no COOP same-origin on the
-      # sign-in host or home.bento.page, nothing else under id.bento.page, no
-      # passkey association on bento.page. The rig drives its gatherer and
-      # rules over a fake network: a conforming world passes, each of 21
-      # mutants fails exactly its row. Then the repo rows for real: the
-      # bento.page sources carry no association file. --live is for after a
-      # deploy, by hand.
+      # /.well-known/webauthn on id.bento.page or the sign-in host; a CSP of
+      # default-src 'none' on every HTML response from id.bento.page (script on the void page
+      # only); JSON API responses, nosniff and a WebAuthn-off
+      # Permissions-Policy there; frame-ancestors 'none' on the rp, the
+      # sign-in host and bento/home; no COOP on the sign-in host (not even
+      # same-origin-allow-popups), at most that on bento/home; no wildcard
+      # name under id.bento.page, and (--zone) no explicit one in the zone's
+      # listing; no passkey association on bento.page. The rules live in
+      # scripts/lib/id-hosting-rules.mjs, shared with the sign-in host's own
+      # check. The rig drives the gatherer and rules over a fake network: a
+      # conforming world passes, each of 37 host mutants and 8 zone-listing
+      # mutants fails exactly its row, and the CLI's --zone sets the exit
+      # code. Then the repo rows for real: the bento.page sources carry no
+      # association file. --live --zone is for after a deploy, by hand.
       shell: bento-step {0}
       run: |
         node scripts/test-check-id-hosting.mjs

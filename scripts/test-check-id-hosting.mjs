@@ -12,19 +12,31 @@
 //   · CONTROL: a world that hosts everything correctly passes every row, and
 //     every row that must look at something did look (checked > 0).
 //   · LEGITIMATE VARIANTS that must also pass: home on COOP
-//     same-origin-allow-popups, an apex that answers 200 HTML for any path.
+//     same-origin-allow-popups, the sign-in host on COOP unsafe-none, a strict
+//     CSP joined with a looser second policy, an apex that answers 200 HTML
+//     for any path.
 //   · MUTANTS: each plants one hosting defect, and must fail EXACTLY its row
 //     (every other row still passes, so a row can't be failing for luck);
 //     a missing CSP is named for both rows it breaks.
 //   · LIVE: a host that never answers fails 'reachable' unless allowed, and a
 //     vacuous row does not pass silently.
+//   · ZONE: zone listings (BIND export, provider JSON) with only the rp and
+//     the sign-in host pass; an explicit extra name, a wildcard, a DNAME, an
+//     unlisted delegation and another zone's listing each fail zone-names. An
+//     explicit name PASSES the DNS row (it sees wildcards only, the reason the
+//     listing exists) and fails the zone row. A live run with no listing fails.
 //   · REPO: the real tree passes the repo rows, with files actually scanned,
 //     and fixture trees with an association on the apex fail them.
+//   · SHARED RULES: the functions in scripts/lib/id-hosting-rules.mjs, row by
+//     row, so a caller that imports them gets the same answers.
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { DEFAULT_HOSTS, ROWS, evaluate, gather, repoRows, scanApexTree } from './check-id-hosting.mjs'
+import { DEFAULT_HOSTS, ROWS, evaluate, gather, repoRows, scanApexTree, zoneRows } from './check-id-hosting.mjs'
+import { coopProblem, framingProblem, parseZoneListing, rpHtmlCspProblem, webauthnFileServed, zoneProblems } from './lib/id-hosting-rules.mjs'
 
 let failures = 0, checks = 0
 function ok(cond, msg) {
@@ -37,6 +49,9 @@ const JSON_H = { 'content-type': 'application/json', 'x-content-type-options': '
 const PP = { 'permissions-policy': 'publickey-credentials-get=(), publickey-credentials-create=()' }
 const R10 = "default-src 'none'; script-src 'self'; frame-ancestors 'none'"
 const HTML_H = { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': R10, 'x-frame-options': 'DENY' }
+// The directory's own header set: no script at all, unframeable
+const NO_SCRIPT = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+const HOME_H = { 'content-type': 'text/html', 'content-security-policy': "frame-ancestors 'none'" }
 
 /** A conforming world: url → {status, headers, body}; anything else is a 404 of the host's kind. */
 function goodWorld() {
@@ -48,7 +63,7 @@ function goodWorld() {
   w.set(`https://${H.rp}/.well-known/apple-app-site-association`, rpJson(200, { webcredentials: { apps: ['AB12CD34EF.page.bento.home'] } }))
   w.set(`https://${H.rp}/.well-known/assetlinks.json`, rpJson(200, [{ relation: ['delegate_permission/common.get_login_creds'] }]))
   w.set(`https://${H.signin}/`, { status: 200, headers: HTML_H, body: '<!doctype html><title>Sign in</title>' })
-  w.set(`https://${H.home}/`, { status: 200, headers: { 'content-type': 'text/html' }, body: '<!doctype html>' })
+  w.set(`https://${H.home}/`, { status: 200, headers: HOME_H, body: '<!doctype html>' })
   const fallback = (url) => {
     const host = new URL(url).host
     if (host === H.rp) return rpJson(404, { error: 'not-found' })
@@ -75,8 +90,9 @@ function fakeNet(world, seen) {
 
 async function run(world, opts = {}) {
   const seen = []
-  const obs = await gather(H, { ...fakeNet(world, seen), label: 'abc123', extraPaths: [{ role: 'rp', path: '/void' }] })
-  return { rows: evaluate(obs, { live: true, ...opts }), seen, obs }
+  const voidPath = opts.voidPath === undefined ? '/void' : opts.voidPath
+  const obs = await gather(H, { ...fakeNet(world, seen), label: 'abc123', voidPath })
+  return { rows: evaluate(obs, { live: true, voidPath, ...opts }), seen, obs }
 }
 const failed = (rows) => rows.filter((r) => r.fails.length).map((r) => r.id)
 
@@ -85,12 +101,12 @@ console.log('control: a conforming world')
 {
   const { rows, seen, obs } = await run(goodWorld())
   ok(failed(rows).length === 0, `every row passes (failed: ${failed(rows).join(', ') || 'none'})`)
-  for (const id of ['rp-no-webauthn', 'signin-no-webauthn', 'rp-html-csp', 'rp-nosniff', 'rp-permissions', 'no-framing', 'no-coop-same-origin', 'only-signin-under-rp', 'apex-no-association', 'reachable']) {
+  for (const id of [...ROWS.map((x) => x.id), 'reachable']) {
     const r = rows.find((x) => x.id === id)
     ok(r && r.checked > 0, `${id} looked at something (${r?.checked})`)
   }
   ok(seen.length >= 14 && seen.every((s) => s.redirect === 'manual'), `gatherer: ${seen.length} fetches, every one with redirect "manual" (a followed redirect would hide a 3xx)`)
-  for (const u of [`https://${H.rp}/.well-known/webauthn`, `https://${H.signin}/.well-known/webauthn`, `https://${H.apex}/.well-known/apple-app-site-association`, `https://${H.apex}/.well-known/assetlinks.json`, `https://${H.home}/`, `https://${H.rp}/void`, `https://${H.rp}/bento-probe-abc123`])
+  for (const u of [`https://${H.rp}/.well-known/webauthn`, `https://${H.signin}/.well-known/webauthn`, `https://${H.apex}/.well-known/apple-app-site-association`, `https://${H.apex}/.well-known/assetlinks.json`, `https://${H.home}/`, `https://${H.rp}/void`, `https://${H.rp}/bento-probe-abc123`, `https://${H.rp}/v1/bento-probe-abc123`, `https://${H.rp}/v1/keys`])
     ok(seen.some((s) => s.url === u), `gatherer asked ${u}`)
   const labels = obs.filter((o) => o.role === 'label').map((o) => o.host)
   ok(labels.includes(`xabc123.${H.rp}`) && labels.includes(`www.${H.rp}`) && labels.includes(`xabc123.${H.signin}`), `gatherer resolved ${labels.join(', ')}`)
@@ -102,8 +118,18 @@ console.log('control: a conforming world')
 console.log('variants that must pass')
 {
   const g = goodWorld()
-  g.w.set(`https://${H.home}/`, { status: 200, headers: { 'content-type': 'text/html', 'cross-origin-opener-policy': 'same-origin-allow-popups' }, body: '' })
+  g.w.set(`https://${H.home}/`, { status: 200, headers: { ...HOME_H, 'cross-origin-opener-policy': 'same-origin-allow-popups' }, body: '' })
   ok(failed((await run(g)).rows).length === 0, 'home on COOP same-origin-allow-popups passes')
+}
+{
+  const g = goodWorld()
+  g.w.set(`https://${H.signin}/`, { status: 200, headers: { ...HTML_H, 'cross-origin-opener-policy': 'unsafe-none' }, body: '' })
+  ok(failed((await run(g)).rows).length === 0, 'the sign-in host on COOP unsafe-none passes')
+}
+{
+  const g = goodWorld()
+  g.w.set(`https://${H.rp}/void`, { status: 200, headers: { 'content-type': 'text/html', 'content-security-policy': `default-src *; script-src * 'unsafe-inline', ${R10}`, 'x-frame-options': 'DENY', 'x-content-type-options': 'nosniff', ...PP }, body: '' })
+  ok(failed((await run(g)).rows).length === 0, "a strict void-page policy beside a loose one passes (every policy is enforced)")
 }
 {
   const g = goodWorld()
@@ -119,23 +145,39 @@ const MUTANTS = [
   ['rp redirects /.well-known/webauthn', 'rp-no-webauthn', (g) => g.w.set(`https://${H.rp}/.well-known/webauthn`, { status: 302, headers: { ...rpJsonOk, location: 'https://bento.page/x' }, body: '' })],
   ['sign-in host serves /.well-known/webauthn', 'signin-no-webauthn', (g) => g.w.set(`https://${H.signin}/.well-known/webauthn`, { status: 200, headers: { 'content-type': 'application/json' }, body: '{"origins":[]}' })],
   ['rp void page without a CSP (so no frame-ancestors either)', ['rp-html-csp', 'no-framing'], (g) => g.w.set(`https://${H.rp}/void`, { status: 200, headers: { 'content-type': 'text/html', 'x-frame-options': 'DENY', ...PP }, body: '<p>' })],
-  ['rp 404 page in HTML without a CSP', 'rp-html-csp', (g) => { const f = g.fallback; g.fallback = (u) => (new URL(u).host === H.rp ? { status: 404, headers: { 'content-type': 'text/html', ...PP, 'content-security-policy': "frame-ancestors 'none'; default-src 'self'; script-src 'self' 'unsafe-inline'", 'x-frame-options': 'DENY' }, body: '<p>' } : f(u)) }],
+  ['rp 404 page in HTML with a script-running CSP (API 404s are HTML too)', ['rp-html-csp', 'rp-api-json'], (g) => { const f = g.fallback; g.fallback = (u) => (new URL(u).host === H.rp ? { status: 404, headers: { 'content-type': 'text/html', ...PP, 'content-security-policy': "frame-ancestors 'none'; default-src 'self'; script-src 'self' 'unsafe-inline'", 'x-frame-options': 'DENY' }, body: '<p>' } : f(u)) }],
   ['rp JSON without nosniff', 'rp-nosniff', (g) => g.w.set(`https://${H.rp}/v1/keys`, { status: 200, headers: { 'content-type': 'application/json', ...PP }, body: '{}' })],
   ['rp response without Permissions-Policy', 'rp-permissions', (g) => g.w.set(`https://${H.rp}/v1/keys`, { status: 200, headers: JSON_H, body: '{}' })],
   ['rp Permissions-Policy that leaves create on', 'rp-permissions', (g) => g.w.set(`https://${H.rp}/v1/keys`, { status: 200, headers: { ...JSON_H, 'permissions-policy': 'publickey-credentials-get=()' }, body: '{}' })],
   ['sign-in host without frame-ancestors', 'no-framing', (g) => g.w.set(`https://${H.signin}/`, { status: 200, headers: { ...HTML_H, 'content-security-policy': "default-src 'none'; script-src 'self'" }, body: '' })],
   ['sign-in host frame-ancestors self', 'no-framing', (g) => g.w.set(`https://${H.signin}/`, { status: 200, headers: { ...HTML_H, 'content-security-policy': "default-src 'none'; frame-ancestors 'self'" }, body: '' })],
   ['rp void page without X-Frame-Options', 'no-framing', (g) => g.w.set(`https://${H.rp}/void`, { status: 200, headers: { 'content-type': 'text/html', 'content-security-policy': R10, 'x-content-type-options': 'nosniff', ...PP }, body: '' })],
-  ['sign-in host on COOP same-origin', 'no-coop-same-origin', (g) => g.w.set(`https://${H.signin}/`, { status: 200, headers: { ...HTML_H, 'cross-origin-opener-policy': 'same-origin' }, body: '' })],
-  ['home on COOP same-origin with a report-to', 'no-coop-same-origin', (g) => g.w.set(`https://${H.home}/`, { status: 200, headers: { 'content-type': 'text/html', 'cross-origin-opener-policy': 'same-origin; report-to="coop"' }, body: '' })],
-  ['a wildcard under id.bento.page', 'only-signin-under-rp', (g) => g.resolves.add(`*.${H.rp}`)],
-  ['www.id.bento.page resolves', 'only-signin-under-rp', (g) => g.resolves.add(`www.${H.rp}`)],
-  ['a wildcard under the sign-in host', 'only-signin-under-rp', (g) => g.resolves.add(`*.${H.signin}`)],
+  ['sign-in host on COOP same-origin', 'signin-no-coop', (g) => g.w.set(`https://${H.signin}/`, { status: 200, headers: { ...HTML_H, 'cross-origin-opener-policy': 'same-origin' }, body: '' })],
+  ['sign-in host on COOP same-origin-allow-popups (cuts its opener too)', 'signin-no-coop', (g) => g.w.set(`https://${H.signin}/`, { status: 200, headers: { ...HTML_H, 'cross-origin-opener-policy': 'same-origin-allow-popups' }, body: '' })],
+  ['sign-in host 404 on COOP same-origin-allow-popups', 'signin-no-coop', (g) => { const f = g.fallback; g.fallback = (u) => (new URL(u).host === H.signin ? { status: 404, headers: { ...HTML_H, 'cross-origin-opener-policy': 'Same-Origin-Allow-Popups' }, body: '' } : f(u)) }],
+  ['home on COOP same-origin with a report-to', 'home-coop', (g) => g.w.set(`https://${H.home}/`, { status: 200, headers: { ...HOME_H, 'cross-origin-opener-policy': 'same-origin; report-to="coop"' }, body: '' })],
+  ['home on COOP noopener-allow-popups', 'home-coop', (g) => g.w.set(`https://${H.home}/`, { status: 200, headers: { ...HOME_H, 'cross-origin-opener-policy': 'noopener-allow-popups' }, body: '' })],
+  ['home without frame-ancestors', 'no-framing', (g) => g.w.set(`https://${H.home}/`, { status: 200, headers: { 'content-type': 'text/html' }, body: '' })],
+  ["home with frame-ancestors 'self'", 'no-framing', (g) => g.w.set(`https://${H.home}/`, { status: 200, headers: { 'content-type': 'text/html', 'content-security-policy': "frame-ancestors 'self'" }, body: '' })],
+  ['sign-in host on X-Frame-Options SAMEORIGIN', 'no-framing', (g) => g.w.set(`https://${H.signin}/`, { status: 200, headers: { ...HTML_H, 'x-frame-options': 'SAMEORIGIN' }, body: '' })],
+  ["void page script-src 'self' 'unsafe-inline'", 'rp-html-csp', (g) => g.w.set(`https://${H.rp}/void`, { status: 200, headers: { 'content-type': 'text/html', 'content-security-policy': "default-src 'none'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'", 'x-frame-options': 'DENY', ...PP }, body: '' })],
+  ['void page script by hash (inline, which the void page may not run)', 'rp-html-csp', (g) => g.w.set(`https://${H.rp}/void`, { status: 200, headers: { 'content-type': 'text/html', 'content-security-policy': "default-src 'none'; script-src 'self' 'sha256-AAAA'; frame-ancestors 'none'", 'x-frame-options': 'DENY', ...PP }, body: '' })],
+  ["void page default-src 'self'", 'rp-html-csp', (g) => g.w.set(`https://${H.rp}/void`, { status: 200, headers: { 'content-type': 'text/html', 'content-security-policy': "default-src 'self'; script-src 'self'; frame-ancestors 'none'", 'x-frame-options': 'DENY', ...PP }, body: '' })],
+  ['void page script-src-attr opens inline handlers', 'rp-html-csp', (g) => g.w.set(`https://${H.rp}/void`, { status: 200, headers: { 'content-type': 'text/html', 'content-security-policy': `${R10}; script-src-attr 'unsafe-inline'`, 'x-frame-options': 'DENY', ...PP }, body: '' })],
+  ['void page CSP only report-only', ['rp-html-csp', 'no-framing'], (g) => g.w.set(`https://${H.rp}/void`, { status: 200, headers: { 'content-type': 'text/html', 'content-security-policy-report-only': R10, 'x-frame-options': 'DENY', ...PP }, body: '' })],
+  ['the named void page answers JSON 404 (gone)', 'rp-html-csp', (g) => g.w.delete(`https://${H.rp}/void`)],
+  ["another rp HTML page with script-src 'self' (only the void page may run script)", 'rp-html-csp', (g) => g.w.set(`https://${H.rp}/`, { status: 200, headers: { 'content-type': 'text/html', 'content-security-policy': R10, 'x-frame-options': 'DENY', ...PP }, body: '' })],
+  ['rp API answers text/plain', 'rp-api-json', (g) => g.w.set(`https://${H.rp}/v1/keys`, { status: 200, headers: { 'content-type': 'text/plain', 'x-content-type-options': 'nosniff', ...PP }, body: '{}' })],
+  ['rp unknown API path answers HTML (with the strict CSP)', 'rp-api-json', (g) => g.w.set(`https://${H.rp}/v1/bento-probe-abc123`, { status: 404, headers: { 'content-type': 'text/html', 'content-security-policy': NO_SCRIPT, 'x-frame-options': 'DENY', ...PP }, body: '<p>' })],
+  ['a wildcard under id.bento.page', 'no-wildcard-under-rp', (g) => g.resolves.add(`*.${H.rp}`)],
+  ['www.id.bento.page resolves', 'no-wildcard-under-rp', (g) => g.resolves.add(`www.${H.rp}`)],
+  ['a wildcard under the sign-in host', 'no-wildcard-under-rp', (g) => g.resolves.add(`*.${H.signin}`)],
   ['apex serves AASA webcredentials', 'apex-no-association', (g) => g.w.set(`https://${H.apex}/.well-known/apple-app-site-association`, { status: 200, headers: { 'content-type': 'application/json' }, body: '{"webcredentials":{"apps":["X.page.bento.home"]}}' })],
   ['apex serves assetlinks get_login_creds', 'apex-no-association', (g) => g.w.set(`https://${H.apex}/.well-known/assetlinks.json`, { status: 200, headers: { 'content-type': 'application/json' }, body: '[{"relation":["delegate_permission/common.get_login_creds"]}]' })],
   ['apex serves a webauthn origins list', 'apex-no-association', (g) => g.w.set(`https://${H.apex}/.well-known/webauthn`, { status: 200, headers: { 'content-type': 'application/json' }, body: '{"origins": ["https://x.example"]}' })],
   ['apex redirects the AASA to the rp', 'apex-no-association', (g) => g.w.set(`https://${H.apex}/.well-known/apple-app-site-association`, { status: 301, headers: { location: `https://${H.rp}/.well-known/apple-app-site-association` }, body: '' })],
-  ['the sign-in host never answers', 'reachable', (g) => g.down.add(H.signin)],
+  ['the sign-in host never answers (its COOP row refuses to pass on nothing)', ['reachable', 'signin-no-coop'], (g) => g.down.add(H.signin)],
+  ['bento/home never answers', ['reachable', 'home-coop'], (g) => g.down.add(H.home)],
 ]
 for (const [name, row, plant] of MUTANTS) {
   const g = goodWorld()
@@ -160,8 +202,123 @@ console.log('live')
   ok(r2.notes.some((n) => n.includes(H.rp)), 'the allowance is reported, not silent')
 }
 {
+  const g = goodWorld(); g.down.add(H.signin); g.down.add(H.home)
+  const f = failed((await run(g, { allowUnreachable: ['signin', 'home'] })).rows)
+  ok(f.length === 0, `sign-in host and home down but allowed (not deployed yet) → no row fails (${f.join(', ') || 'none'})`)
+}
+{
+  const g = goodWorld()
+  const { rows } = await run(g, { voidPath: null })
+  ok(failed(rows).length === 0 && rows.find((r) => r.id === 'rp-html-csp').checked === 0, 'no void page named and none probed → rp-html-csp has nothing to look at and may pass (the directory serves no HTML today)')
+}
+{
   const notLive = evaluate([], {})
   ok(failed(notLive).includes('rp-no-webauthn') && failed(notLive).includes('apex-no-association'), 'no observations → rows that must look at something fail')
+}
+
+// ---- zone listing ---------------------------------------------------------------------
+console.log('zone')
+const BIND_OK = `;; Domain:     bento.page.
+$ORIGIN bento.page.
+@	3600	IN	SOA	ns1.example. hostmaster.example. (
+		2026110901 10000 2400 604800 3600 )
+bento.page.	1	IN	A	192.0.2.1 ; cf_tags=cf-proxied:true
+id.bento.page.	1	IN	A	192.0.2.2
+id	1	IN	AAAA	2001:db8::2
+signin.id.bento.page.	1	IN	CNAME	bento-id-signin.example.
+_acme-challenge.id.bento.page.	300	IN	TXT	"a;b"
+id.bento.page.	300	IN	CAA	0 issue "letsencrypt.org"
+home.bento.page.	1	IN	CNAME	home.example.
+`
+const zoneFail = (listings) => zoneRows(listings, { live: true }).filter((r) => r.fails.length).map((r) => r.id)
+{
+  const recs = parseZoneListing(BIND_OK)
+  ok(recs.length === 8 && recs.some((r) => r.name === 'id.bento.page' && r.type === 'AAAA') && recs.some((r) => r.name === 'bento.page' && r.type === 'SOA'), `BIND export parsed: 8 records, a relative name joined to $ORIGIN, a multi-line SOA (${recs.map((r) => r.name + ' ' + r.type).join(', ')})`)
+  const z = zoneRows([{ label: 'bind', text: BIND_OK }], { live: true })
+  ok(zoneFail([{ label: 'bind', text: BIND_OK }]).length === 0 && z.find((r) => r.id === 'zone-names').checked === 5, `a listing with only the rp and the sign-in host (and inert TXT/CAA) passes, 5 records under the rp looked at (${z.map((r) => r.fails.join('; ')).join('') || 'clean'})`)
+  const api = JSON.stringify({ result: [{ name: 'id.bento.page', type: 'A' }, { name: 'signin.id.bento.page', type: 'AAAA' }, { name: 'bento.page', type: 'A' }] })
+  ok(zoneFail([{ label: 'api', text: api }]).length === 0, 'provider API JSON ({result: [...]}) with only the rp and the sign-in host passes')
+}
+const ZONE_MUTANTS = [
+  ['an explicit test.id.bento.page A', 'test.id.bento.page.\t1\tIN\tA\t192.0.2.9'],
+  ['an explicit x.signin.id.bento.page CNAME', 'x.signin.id.bento.page.\t1\tIN\tCNAME\televsewhere.example.'],
+  ['a wildcard *.id.bento.page A', '*.id.bento.page.\t1\tIN\tA\t192.0.2.9'],
+  ['a relative www.id under $ORIGIN', 'www.id\t1\tIN\tCNAME\tbento.page.'],
+  ['a DNAME on the sign-in host', 'signin.id.bento.page.\t1\tIN\tDNAME\televsewhere.example.'],
+  ['an HTTPS record on an extra name', 'api.id.bento.page.\t1\tIN\tHTTPS\t1 . alpn=h2'],
+  ['an unknown type on an extra name', 'odd.id.bento.page.\t1\tIN\tTYPE65534\t\\# 0'],
+  ['a delegated id.bento.page whose zone is not listed', 'id.bento.page.\t1\tIN\tNS\tns.example.'],
+]
+for (const [name, line] of ZONE_MUTANTS) {
+  const f = zoneFail([{ label: 'bind', text: `${BIND_OK}${line}\n` }])
+  ok(f.length === 1 && f[0] === 'zone-names', `${name} → fails zone-names only (failed: ${f.join(', ') || 'nothing'})`)
+}
+{
+  const parent = `${BIND_OK}id.bento.page.\t1\tIN\tNS\tns.example.\n`
+  const child = 'id.bento.page. 3600 IN SOA ns.example. h.example. 1 2 3 4 5\nid.bento.page. 3600 IN NS ns.example.\nsignin.id.bento.page. 1 IN A 192.0.2.3\n'
+  ok(zoneFail([{ label: 'parent', text: parent }, { label: 'child', text: child }]).length === 0, "a delegated id.bento.page passes once its own zone's listing is given too")
+  const childBad = `${child}stage.id.bento.page. 1 IN A 192.0.2.4\n`
+  ok(zoneFail([{ label: 'parent', text: parent }, { label: 'child', text: childBad }]).join() === 'zone-names', 'and an extra name inside the delegated zone fails it')
+}
+{
+  const other = 'example.org. 1 IN A 192.0.2.1\nwww.example.org. 1 IN A 192.0.2.1\n'
+  ok(zoneFail([{ label: 'other', text: other }]).join() === 'zone-names', "another zone's listing (nothing for id.bento.page) fails rather than pass on nothing")
+  ok(zoneFail([{ label: 'junk', text: 'this is not a zone\n' }]).join() === 'zone-names', 'an unreadable listing fails')
+  ok(zoneFail([]).join() === 'zone-listing', 'a live run with no --zone fails zone-listing')
+  ok(zoneRows([], { live: false }).length === 0, 'a repo run with no --zone adds no zone rows')
+}
+{
+  // C4 in one picture: an explicit name passes the DNS row and fails the zone row
+  const g = goodWorld(); g.resolves.add(`test.${H.rp}`)
+  const dns = failed((await run(g)).rows)
+  const zone = zoneFail([{ label: 'bind', text: `${BIND_OK}test.id.bento.page. 1 IN A 192.0.2.9\n` }])
+  ok(dns.length === 0 && zone.join() === 'zone-names', `an explicit test.id.bento.page: the DNS rows pass (${dns.join(', ') || 'none failed'}), the zone row fails (${zone.join(', ')})`)
+}
+
+{
+  // the command line, as the deploy steps run it: --zone reaches main() and sets the exit code
+  const d = mkdtempSync(join(tmpdir(), 'idzone-'))
+  const good = join(d, 'good.zone'), bad = join(d, 'bad.zone')
+  writeFileSync(good, BIND_OK)
+  writeFileSync(bad, `${BIND_OK}test.id.bento.page.\t1\tIN\tA\t192.0.2.9\n`)
+  const cli = fileURLToPath(new URL('./check-id-hosting.mjs', import.meta.url))
+  const g = spawnSync(process.execPath, [cli, '--zone', good], { encoding: 'utf8' })
+  ok(g.status === 0 && /ok +zone-names/.test(g.stdout), `CLI --zone with a clean listing exits 0 and prints the zone row (exit ${g.status})`)
+  const b = spawnSync(process.execPath, [cli, '--zone', bad], { encoding: 'utf8' })
+  ok(b.status === 1 && /FAIL +zone-names/.test(b.stdout) && b.stdout.includes('test.id.bento.page'), `CLI --zone with an extra name exits 1 and names it (exit ${b.status})`)
+  rmSync(d, { recursive: true, force: true })
+}
+
+// ---- shared rules, called directly -----------------------------------------------------
+console.log('shared rules')
+{
+  const R10v = "default-src 'none'; script-src 'self'"
+  const cases = [
+    [coopProblem('signin', undefined), false, 'signin, no COOP'],
+    [coopProblem('signin', 'unsafe-none'), false, 'signin, unsafe-none'],
+    [!!coopProblem('signin', 'same-origin-allow-popups'), true, 'signin, same-origin-allow-popups'],
+    [!!coopProblem('signin', 'same-origin'), true, 'signin, same-origin'],
+    [coopProblem('home', 'same-origin-allow-popups; report-to="x"'), false, 'home, same-origin-allow-popups with a report-to'],
+    [!!coopProblem('home', 'same-origin'), true, 'home, same-origin'],
+    [rpHtmlCspProblem(R10v, { isVoid: true }), false, 'void, R10'],
+    [!!rpHtmlCspProblem(R10v), true, 'non-void, R10 (script allowed)'],
+    [rpHtmlCspProblem(NO_SCRIPT), false, "non-void, default-src 'none' and nothing else"],
+    [!!rpHtmlCspProblem("default-src 'none'; script-src-elem 'self'"), true, 'non-void, script-src-elem opens script'],
+    [!!rpHtmlCspProblem("script-src 'self'", { isVoid: true }), true, 'void, no default-src'],
+    [!!rpHtmlCspProblem("default-src 'none'; script-src 'self' https://cdn.example", { isVoid: true }), true, 'void, script from another host'],
+    [!!rpHtmlCspProblem("default-src 'none'; script-src 'self' 'nonce-abc'", { isVoid: true }), true, 'void, nonce'],
+    [!!rpHtmlCspProblem("default-src 'none'; script-src 'self' 'unsafe-eval'", { isVoid: true }), true, 'void, eval'],
+    [!!rpHtmlCspProblem(''), true, 'no CSP'],
+    [framingProblem("frame-ancestors 'none'", 'DENY'), false, "frame-ancestors 'none' + DENY"],
+    [framingProblem("frame-ancestors 'none'", undefined, { requireXfo: false }), false, "home: frame-ancestors 'none' alone"],
+    [!!framingProblem("frame-ancestors 'none'", undefined), true, 'XFO required and absent'],
+    [!!framingProblem("frame-ancestors 'none' https://x.example", 'DENY'), true, 'frame-ancestors with a host'],
+    [webauthnFileServed(404), false, 'webauthn 404'],
+    [webauthnFileServed(301), true, 'webauthn redirect'],
+  ]
+  for (const [got, want, name] of cases) ok(got === want, `${name} → ${want ? 'a problem' : 'holds'}`)
+  ok(zoneProblems([{ name: 'id.bento.page', type: 'A' }, { name: 'x.id.bento.page', type: 'TXT' }]).fails.length === 0, 'zoneProblems: an inert TXT on another name holds')
+  ok(zoneProblems([{ name: 'id.bento.page', type: 'A' }, { name: 'x.id.bento.page', type: 'CNAME' }]).fails.length === 1, 'zoneProblems: a CNAME on another name fails')
 }
 
 // ---- repo rows ----------------------------------------------------------------------
