@@ -53,6 +53,12 @@ jobs:
         # through Region unless asked, puts £ on its axis and undoes its title;
         # 3D sits behind a dev flag; the filter checklist shows £4,300.
         run: node scripts/test-dash-pivotchart-browser.mjs
+      - name: A colour from the document draws only as a colour
+        # The built grid opens conditional formats whose colours are a real
+        # colour (paints the scale, the text and the bars) and then values that
+        # are not colours; every cell is hovered: no handler attribute, nothing
+        # runs, nothing is fetched, and the bars still draw.
+        run: node scripts/test-dash-colours-browser.mjs
       - name: dash first run — boot, audit locale, formula dialog, keyboard
         # A stored x-pseudo or malformed language tag still boots; swept
         # strings (Total, SUM/AVG, chart kind, xlsx/CSV notices) answer to the

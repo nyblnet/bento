@@ -106,6 +106,7 @@ import { hiddenSet, readFrozen } from './rowcol.ts'
 import { colToLetters } from './a1.ts'
 import { recalc, isErr, type Vec } from './formula.ts'
 import { evaluateRules, type CellStyle } from './condfmt.ts'
+import { safeColor } from './color.ts'
 import {
   aggregate, NO_TOTAL, canvasAlign, canvasKey, canvasShown, canvasUsed, viewStatusText,
   type TotalSpec,
@@ -436,16 +437,10 @@ const esc = (s: string): string =>
  * A colour safe to put in a `style` attribute. preview.ts's `cssColor`, and the
  * same reason: conditional-format and cell colours are author data, an
  * attribute is CSS, and `;` and `}` are what matter there rather than `<`.
- * Re-stated rather than imported so print carries no dependency on the
- * thumbnail's byte budgeting.
+ * The rule itself lives in color.ts, which depends on nothing.
  */
 export function styleColor(v: unknown): string | null {
-  if (typeof v !== 'string') return null
-  const s = v.trim()
-  if (!s || s.length > 32) return null
-  if (!/^[#a-zA-Z0-9(),.%\s/-]+$/.test(s)) return null
-  if (/url|expression|@|\\/i.test(s)) return null
-  return s
+  return safeColor(v)
 }
 
 const AGG_LABEL: Record<string, string> = {

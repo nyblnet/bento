@@ -31,7 +31,7 @@ import {
   fillCells, type Box, type FillCell, type FillMode, type Range,
 } from './select.ts'
 import { buildOrder, type ColumnFilter } from './filter.ts'
-import { evaluateRules, type CellStyle } from './condfmt.ts'
+import { evaluateRules, condCellCss, dataBarHtml, type CellStyle } from './condfmt.ts'
 import { colToLetters, formatRef, parseRef } from './a1.ts'
 import { acceptsRef, refText, type Pos } from './pointref.ts'
 import { t } from './i18n.ts'
@@ -1529,18 +1529,16 @@ export class Grid {
           const isCursor = this.sel.cursor.row === i && this.sel.cursor.col === ci
           const cf = this.styles.get(c.id)?.[r] ?? null
           let st = `width:${colW(c)}px;text-align:${alignFor(c.type)}`
-          if (cf?.bg) st += `;background:${cf.bg}`
-          if (cf?.color) st += `;color:${cf.color}`
-          if (cf?.bold) st += ';font-weight:600'
+          // Conditional-format colours are document data: condCellCss and
+          // dataBarHtml pass each one through color.ts before it is drawn.
+          st += condCellCss(cf)
           // The cell's OWN appearance, LAST so it wins the tie — a hand-set
           // colour is a decision and a conditional format is a rule, and the
           // reader who bolded this cell should see it bold. Additive: an
           // override that sets nothing emits nothing, so a conditional
           // format's background survives untouched.
           st += appearanceCss(over)
-          const bar = cf?.bar
-            ? `<span class="dg-bar" style="left:${bar0(cf)}%;width:${cf.bar.pct}%;background:${cf.bar.color}"></span>`
-            : ''
+          const bar = dataBarHtml(cf)
           const shown = isErr(v) ? String(v) : formatValue(v, c)
           const fz = this.freeze(ci)
           // Find's marks. Every match is tinted, the current one is filled: a
@@ -4190,10 +4188,6 @@ export function datasetEntered(v: unknown, col: Pick<Column, 'type' | 'format'>)
   }
   return String(v)
 }
-
-/** Where a data bar starts, as a percentage — negatives run left of the axis. */
-const bar0 = (cf: CellStyle): number =>
-  cf.bar ? (cf.bar.negative ? Math.max(0, (cf.bar as { axis?: number }).axis ?? 0) - cf.bar.pct : (cf.bar as { axis?: number }).axis ?? 0) : 0
 
 const fmtNum = (n: number): string =>
   new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(n)

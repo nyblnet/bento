@@ -13038,6 +13038,25 @@ Rig: scripts/test-doc-layout.ts (the layout, the real write path through
 `encodeDocBody`, and a pin that no plain save path stringifies the document
 on its own).
 
+## 2026-11-09 — bento/dash: a document colour passes one check before it is drawn
+
+Every colour a dash workbook carries (conditional-format stops, rule fills and
+text colours, data bars, chart series, a peer's presence colour) is author
+data, and most of the places that paint one build markup as a string. So each
+paint site takes it through `dash/src/color.ts` `safeColor`: an allowlist of
+the characters colour notations use (hex, names, `rgb()`/`hsl()`, `var(--x)`),
+no `url`, `expression`, `@` or backslash, at most 32 characters. A value that
+fails is not drawn — never cleaned or guessed at — and the caller paints its
+own default. It is the rule preview.ts and print.ts already applied, now in one
+place. Escaping the quote alone is not enough inside a `style` attribute: `;`
+and `url(` still reach the CSS.
+New paint sites for document colours call `safeColor`, or set the property
+through the DOM with a value that has passed it.
+
+Rigs: scripts/test-dash-colours.ts (each paint function with a real colour as
+control and non-colours that must draw nothing) and
+scripts/test-dash-colours-browser.mjs (the built grid, hovered).
+
 ## 2026-11-09 — bento/dash: document strings reach markup at both ends checked
 
 Dash builds much of its markup as strings, and a workbook is untrusted input.
