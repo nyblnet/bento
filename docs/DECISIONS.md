@@ -13348,3 +13348,52 @@ Every value from the document that lands in an attribute is held twice:
 New markup that carries a document string escapes it with a helper that covers
 quotes, or sets it through the DOM. Rigs: scripts/test-dash-attrs.ts and
 scripts/test-dash-attrs-browser.mjs (live edit, saved file, frozen file).
+
+## 2026-11-09 — bento/id directory: before its first deploy, a day-long link beyond the budget, the first design's routes retired, and post-send writes that check
+
+- **A setup link mailed beyond the budget lives 24 hours** (one inside the
+  budget still lives 20 minutes). This revises the entry above, where a link
+  beyond the budget could go once per 20-minute link life. That kept a live
+  link in the inbox at every moment, but it let a stranger asking every 10
+  minutes send the address about 72 setup mails a day, and at that volume one
+  stranger with a handful of addresses could get our mail paused, and with it
+  every roster and recovery mail. The life of the beyond-budget link is the
+  only limit on such mail, so it now sets the cap: the day's 3 plus one, about
+  4 a day however often anyone asks, and still never a moment without a live
+  link. The longer life is a longer window for a link that leaks, which the
+  fragment-only link and the setup notice already address; a reset covers a
+  setup someone else completed.
+- **Every route of the first design answers 410**: the typed-code bind
+  routes (already retired), and now `/v1/lookup`, the signed `/v1/delete` and
+  the typed-code `/v1/delete/start` and `/v1/delete/complete`. The deletion
+  mail asked the person to type a code from an email on `id.bento.page`,
+  which contradicts the promise in every other mail that Bento never asks
+  for that; and with no route left that could make a binding, the lookup and
+  deletions could only ever serve bindings that cannot exist. The object
+  that held bindings, the removal-code mail kind and its budget are gone.
+  The directory was never deployed, so its migrations were rewritten rather
+  than extended; from the first deploy on they only grow. Account deletion
+  returns as a mailed link to the sign-in host or a member's assertion.
+- **What follows a waiting notice's send touches the stored change only if
+  it is still that request's.** A send can outlive the 10 minutes after which
+  an unconfirmed change is dropped, and a later request can then queue its
+  own; once the void page exists, a void can also land mid-send. The success
+  write (marking the change notified) and the failure clean-up (deleting it)
+  now both check that the stored change is still this request's unsent one;
+  otherwise the request answers 409 `superseded` and nothing is written. The
+  mailer call also times out after 30 seconds.
+- **The object's alarm sweeps spent challenges.** Later spends already swept
+  a few each, but an address strangers spent challenges on and then left
+  alone kept those keys for good. Each spend now makes sure an alarm will
+  come when its key may go; the alarm is shared with the 72-hour ripening, so
+  scheduling only ever brings it forward and each run sets it for the
+  earliest thing still to come.
+
+`setup/start` answers the same bytes in every state, and that, the web
+routes' CORS on a failure, the enrol route's per-IP limit and both link lives
+are now rows. Guards: `scripts/test-directory.ts` (each retired route, every
+method, 410 with nothing mailed or stored), `scripts/test-directory-roster.ts`
+(31 days of a stranger every 10 minutes and 3 days once a minute: at most 4
+mails in any 24 hours with no gap; hung sends that deliver or fail after a
+later change queued, or after the change was removed; a never-answering
+mailer; the alarm sweep) and `scripts/test-directory-mutants.ts`.
