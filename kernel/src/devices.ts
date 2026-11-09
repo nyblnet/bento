@@ -95,14 +95,17 @@
 //
 // --- the tier (G1) ----------------------------------------------------------------
 //
-// Anything authorised by a passkey alone is shown as "(passkey sign-in)":
-// every wdev., and a passkey-made dev2. UNTIL its consent key has been an
-// unquarantined `ck` member of the current roster for at least 72 hours (read
-// from RosterState.members[].since: exact from setup, and from a pin a lower
-// bound on the age, so a pinned verifier can only say passkey more often).
-// Then a dev2. is shown at native tier. One label for every passkey-only
-// device on every host: a page can mint a passkey-only dev2. as well, so a
-// peer must not be shown a difference that does not exist.
+// Anything authorised by a passkey alone is shown as "(passkey sign-in)". That
+// is EVERY certificate this module accepts today. A dev2.'s consentPub is a
+// CLAIM written by whatever page ran the passkey prompt: one assertion can
+// name the victim's ripe consent key on a certificate for the attacker's own
+// device key (security's finding F1 on #937). So the consent key's age on the
+// roster never promotes a certificate by itself. Native tier will need the
+// consent key's OWN signature over the dev2. text, under a purpose no other
+// consent signature can be replayed as (the `roster` purpose, the next kernel
+// change); then a ripe ck (72 h a member) makes it native. One label for every
+// passkey-only device on every host, because a page can mint a passkey-only
+// dev2. as well.
 
 import { isNormalAddress } from './address.ts'
 import { b64uDec, b64uEnc, sha256b64u, isSigningKey, isKxKey, verifyStatementSig, displayText, SKEW_MS, type Verdict } from './statements.ts'
@@ -118,7 +121,8 @@ const HOUR = 3_600_000
 export const WATT_MAX_MS = 24 * HOUR
 /** No watt. reaches past 7 days after the certificate's original ceremony. */
 export const CEREMONY_CAP_MS = 7 * 24 * HOUR
-/** A consent key ripens, for the tier, after 72 hours of membership. */
+/** A consent key ripens, for the tier, after 72 hours of membership (read once
+ *  the consent key's own signature exists; see tierOf). */
 export const CK_RIPE_MS = ROSTER_WAIT_MS
 /** The longest label a device certificate carries (the sign-in host's limit). */
 export const MAX_LABEL = 40
@@ -285,7 +289,8 @@ export interface DeviceOpts {
 
 export interface VerifiedDevice {
   cert: DeviceCert
-  /** passkey: shown "(passkey sign-in)"; native: a dev2. whose consent key is ripe */
+  /** passkey: shown "(passkey sign-in)". native: not reachable until the
+   *  consent key's own signature is defined (tierOf) */
   tier: Tier
   watt: Watt
   /** ripenedAt of the head the certificate names */
@@ -344,15 +349,13 @@ async function device(proof: DeviceProof, opts: DeviceOpts): Promise<Verdict<Ver
   if (watt.loggedAt > opts.now + SKEW_MS) return no('not-yet-valid')
   if (opts.now >= watt.expires) return no('expired')
 
-  return { ok: true, value: { cert, tier: tierOf(cert, ro, opts.now), watt, headRipenedAt: H.ripenedAt } }
+  return { ok: true, value: { cert, tier: tierOf(cert), watt, headRipenedAt: H.ripenedAt } }
 }
 
-/** G1: native only for a dev2. whose consent key has been an unquarantined ck
- *  member of the current roster for 72 hours; every other passkey-made
- *  certificate is "(passkey sign-in)". */
-export function tierOf(cert: DeviceCert, roster: RosterState, now: number): Tier {
-  if (cert.kind !== 'dev2' || cert.consentPub === null) return 'passkey'
-  const ck = roster.members.find((m) => m.pub === cert.consentPub)
-  if (!ck || ck.kind !== 'ck' || ck.quarantined) return 'passkey'
-  return now - ck.since >= CK_RIPE_MS ? 'native' : 'passkey'
+/** G1: every certificate a passkey made is "(passkey sign-in)". A consentPub
+ *  that names a ripe ck member proves nothing until that ck has signed this
+ *  certificate (security, F1 on #937), so the roster is not read here: native
+ *  arrives with the consent key's own signature, never with its age alone. */
+export function tierOf(_cert: DeviceCert): Tier {
+  return 'passkey'
 }

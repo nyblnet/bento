@@ -22,7 +22,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 let failures = 0, checks = 0
 const ok = (c: boolean, m: string) => { checks++; if (!c) { failures++; console.log(`  FAIL  ${m}`) } else console.log(`  ok    ${m}`) }
 
-type Mutant = { name: string; from: string; to: string; file?: string }
+type Mutant = { name: string; from: string; to: string; file?: string; and?: Array<[string, string]> }
 const del = (name: string, from: string, file?: string): Mutant => ({ name, from, to: '', file })
 const MUTANTS: Mutant[] = [
   // the head rule (security's ruling on #925, item 5)
@@ -68,13 +68,17 @@ const MUTANTS: Mutant[] = [
   { name: 'the address need not be normal', from: "  const address = freeText(addressF)\n  if (address === null || !isNormalAddress(address)) return no('address')\n  if (!isHash(rosHash))",
     to: "  const address = freeText(addressF)\n  if (address === null) return no('address')\n  if (!isHash(rosHash))" },
   { name: 'the directory nonce is not checked', from: '  if (ceremonyAt === null || !isNonce(dirNonce)) return no', to: '  if (ceremonyAt === null) return no' },
-  // the tier (G1)
-  { name: 'a wdev. may be native', from: "  if (cert.kind !== 'dev2' || cert.consentPub === null) return 'passkey'\n", to: "  if (cert.consentPub === null && cert.kind === 'dev2') return 'passkey'\n" },
-  { name: 'a quarantined consent key counts', from: "  if (!ck || ck.kind !== 'ck' || ck.quarantined) return 'passkey'\n", to: "  if (!ck || ck.kind !== 'ck') return 'passkey'\n" },
-  { name: 'any member kind counts as a consent key', from: "  if (!ck || ck.kind !== 'ck' || ck.quarantined) return 'passkey'\n", to: "  if (!ck || ck.quarantined) return 'passkey'\n" },
-  { name: 'exactly 72 h is not enough (off by one)', from: "  return now - ck.since >= CK_RIPE_MS ? 'native' : 'passkey'\n", to: "  return now - ck.since > CK_RIPE_MS ? 'native' : 'passkey'\n" },
-  { name: 'the consent key ripens at 71 h', from: 'export const CK_RIPE_MS = ROSTER_WAIT_MS\n', to: 'export const CK_RIPE_MS = ROSTER_WAIT_MS - 3_600_000\n' },
-  { name: 'any consent key on the roster makes a dev2. native (not the one it names)', from: '  const ck = roster.members.find((m) => m.pub === cert.consentPub)\n', to: "  const ck = roster.members.find((m) => m.kind === 'ck')\n" },
+  // the tier (G1): native would need the consent key's own signature (security's F1 on #937)
+  { name: "F1 a dev2. naming a ripe ck member is native (the consent key's age, never its signature)",
+    from: "export function tierOf(_cert: DeviceCert): Tier {\n  return 'passkey'\n}",
+    to: "export function tierOf(cert: DeviceCert, roster?: RosterState, now = 0): Tier {\n  const ck = roster?.members.find((m) => m.pub === cert.consentPub)\n  return cert.kind === 'dev2' && ck && ck.kind === 'ck' && !ck.quarantined && now - ck.since >= CK_RIPE_MS ? 'native' : 'passkey'\n}",
+    and: [['tier: tierOf(cert),', 'tier: tierOf(cert, ro, opts.now),']] },
+  { name: 'D7 a dev2. counts native once its ceremony is 72 h old',
+    from: "export function tierOf(_cert: DeviceCert): Tier {\n  return 'passkey'\n}",
+    to: "export function tierOf(cert: DeviceCert, now = 0): Tier {\n  return cert.kind === 'dev2' && cert.consentPub !== null && now - cert.ceremonyAt >= CK_RIPE_MS ? 'native' : 'passkey'\n}",
+    and: [['tier: tierOf(cert),', 'tier: tierOf(cert, opts.now),']] },
+  { name: 'D12 the quarantine\'s voided request is placed as a head', file: 'roster.ts', from: '        const asker = prev.head.members.find((m) => m.pub === v.signer)\n',
+    to: '        heads.push({ hash: rip.cause!, seq: vh.value.seq, ripenedAt: rip.ripenedAt, members: vh.value.members })\n        const asker = prev.head.members.find((m) => m.pub === v.signer)\n' },
   // wren.
   del('the renewal signature is not verified', "  if (!str(sig) || !(await verifyStatementSig(devicePub, sig, text))) return no('signature')\n"),
   { name: 'the renewal challenge is not checked', from: "  if (!isNonce(challenge)) return no('grammar')\n", to: '' },
@@ -115,7 +119,13 @@ for (const m of MUTANTS) {
   const n = src.split(m.from).length - 1
   ok(n === 1, `applies exactly once: ${m.name} (found ${n})`)
   if (n === 1) {
-    writeFileSync(p, src.replace(m.from, () => m.to))
+    let out = src.replace(m.from, () => m.to)
+    for (const [f, t] of m.and ?? []) {
+      const k = out.split(f).length - 1
+      ok(k === 1, `  extra edit applies exactly once: ${m.name} (found ${k})`)
+      out = out.replace(f, () => t)
+    }
+    writeFileSync(p, out)
     const r = run(d)
     ok(r.status !== 0 && r.fails > 0, `killed: ${m.name} — ${r.status === 0 ? 'green' : `${r.fails} FAIL`}`)
   }

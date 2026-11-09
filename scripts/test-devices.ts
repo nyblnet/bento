@@ -104,9 +104,12 @@ const REQUIRED: Array<[string, string]> = [
   ['wdev/address-not-normal', 'address'], ['wdev/extra-field', 'grammar'], ['wdev/nonce-short', 'grammar'],
   ['dev2/via-ck', 'via'], ['dev2/consent-is-device-key', 'consent-key'], ['dev2/kx-is-consent-key', 'kx'],
   // the tier (G1)
-  ['tier/ck-ripe-exactly-72h', 'native'], ['tier/ck-72h-less-1s', 'passkey'], ['tier/ck-readded', 'passkey'], ['tier/ck-quarantined', 'passkey'],
-  ['tier/ck-exact', 'native'], ['tier/ck-from-pin', 'passkey'], ['tier/no-consent-key', 'passkey'], ['tier/consent-key-not-member', 'passkey'],
+  ['tier/ck-ripe-exactly-72h', 'passkey'], ['tier/ck-exact', 'passkey'], ['tier/no-consent-key', 'passkey'], ['tier/consent-key-not-member', 'passkey'],
   ['tier/consent-key-is-a-passkey', 'passkey'], ['tier/wdev-never-native', 'passkey'],
+  // security's rows from the review of #937 (F1 and the rest)
+  ['sec/tier-consent-key-not-proven', 'passkey'], ['sec/tier-ck-absent-old-ceremony', 'passkey'], ['sec/renewal-past-original-cap', 'watt-cap'],
+  ['sec/watt-logged-1s-before-ceremony', 'watt-order'], ['sec/head-from-fork-signer-current', 'roster-head'], ['sec/head-is-voided-request', 'roster-head'],
+  ['sec/watt-expires-now', 'expired'],
 ]
 for (const [n, want] of REQUIRED) {
   const r = byName.get(n)
@@ -128,11 +131,17 @@ console.log('\npositive controls: a refusal flips when only its cause changes')
   ok((await run(lib, { origins: [...F.origins, 'https://home.bento.page'] })).ok, 'assertion/origin-library verifies once the caller lists https://home.bento.page (the closed list decides)')
   const exp = byName.get('watt/expired')!
   ok((await run(exp, { now: F.now - 1 })).ok, 'watt/expired verifies one millisecond earlier')
-  const t72 = byName.get('tier/ck-72h-less-1s')!, tn = byName.get('tier/ck-ripe-exactly-72h')!
-  ok(t72.proof.cert === tn.proof.cert && t72.chain === tn.chain && tn.now! - t72.now! === 1000, 'tier/ck-72h-less-1s and tier/ck-ripe-exactly-72h differ only in now, by one second')
-  const pin = byName.get('tier/ck-from-pin')!, exact = byName.get('tier/ck-exact')!
-  ok(pin.now === exact.now && F.chains['ck-pinned'].links.at(-1).ros === F.chains['ck-exact'].links.at(-1).ros,
-    'tier/ck-from-pin and tier/ck-exact name the same roster at the same now; only the pin differs')
+  // F1: the ripe ck in tier/ck-ripe-exactly-72h really is ripe, so its passkey tier is the rule, not the data
+  const ripe = byName.get('tier/ck-ripe-exactly-72h')!
+  const rr = await roster(ripe.chain, ripe.now!)
+  const rc = await parseDeviceCert(ripe.proof.cert)
+  const ck = rr.ok && rc.ok ? rr.value.members.find((m) => m.pub === rc.value.consentPub) : undefined
+  ok(!!ck && ck.kind === 'ck' && !ck.quarantined && ripe.now! - ck.since === CK_RIPE_MS,
+    'tier/ck-ripe-exactly-72h names an unquarantined ck member exactly 72 h old: the age alone does not promote it')
+  const forged = byName.get('sec/tier-consent-key-not-proven')!
+  const fc = await parseDeviceCert(forged.proof.cert)
+  ok(fc.ok && rc.ok && fc.value.consentPub === rc.value.consentPub && fc.value.devicePub !== rc.value.devicePub,
+    "sec/tier-consent-key-not-proven names the same ripe consent key for ANOTHER device key")
 }
 
 console.log('\ncaller parameters are required, never defaulted; junk is a refusal, not a throw')
@@ -160,13 +169,10 @@ console.log('\nthe exported pieces hold on their own (the directory calls them w
   const p = await parseDeviceCert(bad.proof.cert)
   ok(!p.ok && p.reason === 'address', 'parseDeviceCert refuses an address not in normal form (address), before any roster compares it')
   const wd = await parseDeviceCert(byName.get('ok/wdev')!.proof.cert)
-  const ripe = byName.get('tier/ck-ripe-exactly-72h')!
-  const ro = await roster(ripe.chain, ripe.now!)
-  const ck1 = (await parseDeviceCert(ripe.proof.cert))
-  if (wd.ok && ro.ok && ck1.ok) {
-    ok(tierOf(ck1.value, ro.value, ripe.now!) === 'native', 'control: tierOf says native for the dev2. with the ripe consent key')
-    ok(tierOf({ ...wd.value, consentPub: ck1.value.consentPub }, ro.value, ripe.now!) === 'passkey',
-      'tierOf: a wdev. is never native, even handed the same ripe consent key')
+  const ck1 = await parseDeviceCert(byName.get('tier/ck-ripe-exactly-72h')!.proof.cert)
+  if (wd.ok && ck1.ok) {
+    ok(tierOf(ck1.value) === 'passkey', 'tierOf: a passkey-made dev2. naming a ripe consent key is (passkey sign-in)')
+    ok(tierOf({ ...wd.value, consentPub: ck1.value.consentPub }) === 'passkey', 'tierOf: a wdev. is never native, even handed a ripe consent key')
   } else ok(false, 'tierOf inputs parse')
 }
 
