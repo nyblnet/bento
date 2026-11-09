@@ -13057,6 +13057,97 @@ Rigs: scripts/test-dash-colours.ts (each paint function with a real colour as
 control and non-colours that must draw nothing) and
 scripts/test-dash-colours-browser.mjs (the built grid, hovered).
 
+## 2026-11-09 — bento/home Android: device probes are separate debug-only apps with their own package
+
+Measuring what Android reports for a passkey (the `clientDataJSON` origin a
+native app gets, `android:apk-key-hash:…`) needs an app the relying party's
+`assetlinks.json` admits. That probe lives in `home/android/originprobe`, a
+second application in the Gradle project, not in `:app`'s debug source set:
+
+- **Its own package (`page.bento.probe.origin`).** The statement the rp serves
+  for it names the probe's package and the builder's DEBUG key. Had the probe
+  been a debug activity of `:app`, the statement would have had to name
+  `page.bento.home` with a debug key, admitting any debug build of the real
+  app to the rp's passkeys. A separate package keeps that statement useless
+  to everything but the probe.
+- **No release variant, and nothing in `:app` depends on it.** Credential
+  Manager (`androidx.credentials`) is the probe's dependency only. CI checks
+  it every run: `:app`'s release runtime classpath names neither the module
+  nor Credential Manager, and the R8 release dex carries none of the probe's
+  marks, with the probe's own APK as the control that must show all of them.
+- **Android 14 and up.** Credential Manager is part of the platform there, so
+  the probe needs no Play services client library.
+
+Rig: scripts/test-home-android-probe-excluded.mjs (CI: ci-home-android.yml);
+unit tests in originprobe/src/test.
+## 2026-11-09 — bento/id directory: the passkey roster store (option G), before its countersign
+
+**Decision.** The directory (`server/directory/`, id.bento.page) keeps each
+address's passkey roster in its own Durable Object (`Roster`, `src/roster.js`)
+and enforces the directory's half of option G's rules. It does not yet issue
+the ripening countersign (`rip.`): that waits for the kernel's authority word
+on the countersign, so until then no route serves a roster a peer could
+verify. Each ripened link is stored with its directory times so the
+countersign can be issued for every one later.
+
+- **One constant for the relying party.** `src/passkey.js` `PASSKEY`: rp
+  `id.bento.page`; the only accepted web origin is
+  `https://signin.id.bento.page`, the sign-in host. `https://id.bento.page`
+  (the directory never runs a ceremony), `https://home.bento.page` and
+  `https://bento.page` are not accepted, nor any other name under them. Native
+  origins join the list as each is measured on a device; none is listed yet,
+  so a native ceremony is refused. The rig pins the constant to the kernel's
+  `ROSTER_RP_ID` / `ROSTER_WEB_ORIGINS`, and no other directory source may
+  name the rp or an origin.
+- **Registration is checked by the directory** (the kernel verifies assertions
+  only): strict client data with duplicate keys refused, type
+  `webauthn.create`, the exact directory challenge, an accepted origin, never
+  cross-origin, the exact rp hash, UP and UV, and an ES256 P-256 key. The
+  directory asks for attestation "none" and relies on no attestation
+  signature, so it reads `{clientDataJSON, authenticatorData}` and nothing
+  else.
+- **Assertions** go through the kernel verifier with that credential's stored
+  signature counter: the directory sees one credential's assertions in the
+  order they were made, so it is the caller that passes the counter.
+- **Changes.** A change is asked for by an unquarantined passkey member, by an
+  assertion over the exact new `ros.` text, which names a single-use directory
+  challenge (sealed, bound to the address, spent before any other check). One
+  member added or removed per request; an added passkey brings its own
+  registration over that same challenge. The change waits 72 hours from
+  `requestedAt` on the directory's clock; the requester's `created` is never
+  read. While one change waits, every other request is refused, a self-removal
+  included. A member removing itself takes effect at once only while another
+  unquarantined passkey stays on the roster; otherwise it waits like any other
+  change. Consent-key and recovery-key members are refused until their rules
+  exist.
+- **Setup** takes a 256-bit, single-use setup token and a registration. There
+  is no attempt counter: wrong guesses never spend the real token, and a second
+  setup start adds a token rather than replacing the first.
+- **Log.** Every enrolment and change is logged with the request's `Origin`
+  header, the origin the ceremony ran on, the opener the sign-in host reports,
+  and the time, so an incident window can be queried per address.
+- **Mail.** Every roster mail states the change in words, to the second and
+  with the host class, and lists the whole roster. Roster mail never spends,
+  and is never held back by, the per-address budget that a stranger can fill;
+  only setup-token mail spends that budget.
+- **What id.bento.page answers.** Every response is JSON with `nosniff`, sends
+  `Permissions-Policy: publickey-credentials-get=(), publickey-credentials-create=()`,
+  a CSP with `default-src 'none'` and `frame-ancestors 'none'`, and
+  `X-Frame-Options: DENY`. `/.well-known/webauthn` is not served. The
+  Permissions-Policy does not cover the WebAuthn Signal API, so no page on
+  this host may run script; the one exception will be the void page, under
+  its own CSP.
+
+**Still to come**, each its own change: the countersign at ripening; the void
+page and its two choices (with quarantine, undo and a request cooldown); the
+reset; setup and reset links in mail (the setup-start route); consent-key and
+recovery-key members; account deletion; the incident lever across addresses.
+
+Guards: `scripts/test-directory-roster.ts` (the real worker and Durable Object
+on a hand clock, with real browser registrations and the kernel's real
+assertions) and `scripts/test-directory-mutants.ts` (each rule loosened in turn
+must fail a row).
+
 ## 2026-11-09 — bento/dash: document strings reach markup at both ends checked
 
 Dash builds much of its markup as strings, and a workbook is untrusted input.

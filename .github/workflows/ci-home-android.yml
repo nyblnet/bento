@@ -67,3 +67,18 @@ jobs:
         # signing and no site clone.
         working-directory: home/android
         run: ./gradlew --no-daemon -q compileReleaseCheckKotlin
+      - name: The passkey origin probe stays out of the release app
+        # home/android/originprobe is a debug-only app of its own (package
+        # page.bento.probe.origin) that measures the origin Android reports for
+        # a passkey. :app's release classpath must not name it or Credential
+        # Manager, and the R8 release dex must carry none of its marks; the
+        # probe's own APK is the positive control. minifyReleaseWithR8 needs no
+        # signing and no site clone. Its unit tests run in the step above
+        # (testDebugUnitTest covers every module).
+        working-directory: home/android
+        run: |
+          ./gradlew --no-daemon -q :app:dependencies --configuration releaseRuntimeClasspath > "$RUNNER_TEMP/release-deps.txt"
+          ./gradlew --no-daemon -q :app:minifyReleaseWithR8 :originprobe:assembleDebug
+          node ../../scripts/test-home-android-probe-excluded.mjs --deps "$RUNNER_TEMP/release-deps.txt" \
+            --dex app/build/intermediates/dex/release/minifyReleaseWithR8 \
+            --control originprobe/build/outputs/apk/debug/originprobe-debug.apk

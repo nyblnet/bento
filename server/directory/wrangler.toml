@@ -2,9 +2,10 @@
 # bento/id directory — id.bento.page (layer 1 of bento/id).
 # Deploy is the MAINTAINER's (needs the id.bento.page DNS and the SES account first):
 #   npx wrangler secret put DIR_KEY_JWK   # the directory's ONLINE P-256 signing key (JWK, private) — never the release key
+#   npx wrangler secret put CHALLENGE_KEY # 32+ random characters: seals the single-use roster challenges
 #   npx wrangler deploy
 # Local:
-#   npx wrangler dev --var DEV:1 --var MAILER:log --var DIR_KID:dev-1 --var DIR_KEY_JWK:"$(cat dev-key.jwk)"
+#   npx wrangler dev --var DEV:1 --var MAILER:log --var DIR_KID:dev-1 --var DIR_KEY_JWK:"$(cat dev-key.jwk)" --var CHALLENGE_KEY:"$(openssl rand -hex 32)"
 name = "bento-id-directory"
 main = "src/worker.js"
 compatibility_date = "2026-07-01"
@@ -26,6 +27,14 @@ class_name = "Address"
 name = "LEDGER"
 class_name = "Ledger"
 
+[[durable_objects.bindings]]
+name = "ROSTER"
+class_name = "Roster"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Address", "Ledger"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Roster"]
