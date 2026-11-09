@@ -33,8 +33,8 @@
 //
 // NOT HERE YET (each a later change): the directory's ripening countersign
 // (`rip.`), which waits for the kernel's authority word; the void page and its
-// two buttons (quarantine, undo, cooldown); the reset; setup and reset links
-// in mail; consent-key and recovery-key members; account deletion. This
+// two buttons (quarantine, undo, cooldown); the reset and its link;
+// consent-key and recovery-key members; account deletion. This
 // object records each ripened link with its directory times so the countersign
 // can be issued for every one of them later; until then nothing here is a
 // countersign and no route serves one.
@@ -43,13 +43,14 @@ import { b64uDec, b64uEnc, sha256b64u } from '../../../kernel/src/statements.ts'
 import { buildRos, parseRos, ROSTER_WAIT_MS } from '../../../kernel/src/roster.ts'
 import { PASSKEY, verifyMemberAssertion, verifyRegistration } from './passkey.js'
 import { deliver } from './mail.js'
+import { setupLink } from './links.js'
 
 const MIN = 60_000, DAY = 86_400_000
 
 export const ROSTER_LIMITS = {
   /** a setup token's life */
   setupTtlMs: 20 * MIN,
-  /** the per-address budget for setup-token mail, which a stranger can spend */
+  /** the per-address budget for setup-link mail, which a stranger can spend (spendSetupBudget) */
   mailCooldownMs: 60_000,
   mailPerDay: 3,
   mailPerMonth: 10,
@@ -112,6 +113,27 @@ async function notify(env, to, subject, lines) {
   try { await deliver(env, { to, subject, body, kind: 'roster' }); return true } catch (e) { console.log(`roster mail failed: ${e.message}`); return false }
 }
 
+/**
+ * The setup link (links.js). Fixed wording; the only variable parts are the
+ * time and the link, whose fragment carries the address it was mailed to and
+ * the token. True when the mailer accepted it.
+ */
+async function mailSetupLink(env, to, token, now) {
+  const body = [
+    `At ${when(now)} someone asked to set up a bento/id account for this address.`,
+    '',
+    'To set it up, open this link in the browser where you want your first passkey:',
+    '',
+    setupLink(to, token),
+    '',
+    `The link works once, until ${when(now + ROSTER_LIMITS.setupTtlMs)}.`,
+    'Opening it changes nothing by itself: the account is set up only when you make a passkey on the page it opens.',
+    'If you did not ask for this, ignore this email.',
+    'Bento will never ask you to type or paste anything from this email.',
+  ].join('\n')
+  try { await deliver(env, { to, subject: 'Set up your bento/id account', body, kind: 'setup' }); return true } catch (e) { console.log(`setup mail failed: ${e.message}`); return false }
+}
+
 // --- the object ------------------------------------------------------------------
 
 export class Roster {
@@ -142,6 +164,22 @@ export class Roster {
     }
     if (now < p.ripensAt) return
     await this.apply(p, now, 'ripen')
+  }
+
+  /**
+   * The per-address budget for setup-link mail: one a minute, 3 a day, 10 in
+   * 31 days. Anyone can spend it, so it is the ONLY place in this object that
+   * reads the stored send times, and only setupStart calls it (the rig checks
+   * both). Records a send and answers true when one is allowed.
+   */
+  async spendSetupBudget(now) {
+    const s = this.state.storage
+    const times = ((await s.get('mail')) || []).filter((t) => now - t < 31 * DAY)
+    if (times.length && now - times[times.length - 1] < ROSTER_LIMITS.mailCooldownMs) return false
+    if (times.filter((t) => now - t < DAY).length >= ROSTER_LIMITS.mailPerDay) return false
+    if (times.length >= ROSTER_LIMITS.mailPerMonth) return false
+    await s.put('mail', [...times, now])
+    return true
   }
 
   async records(members) {
@@ -230,20 +268,29 @@ export class Roster {
     }
 
     if (a.op === 'setupStart') {
-      // Anyone can ask, for any address, so this is the one budget a stranger
-      // can fill: it is spent LAST, only when a token is minted, and nothing but
-      // setup-token mail ever reads it.
-      if (await s.get('head')) return out(202, { token: null }) // taken: a reset is a later change
-      const times = ((await s.get('mail')) || []).filter((t) => now - t < 31 * DAY)
-      if (times.length && now - times[times.length - 1] < ROSTER_LIMITS.mailCooldownMs) return out(202, { token: null })
-      if (times.filter((t) => now - t < DAY).length >= ROSTER_LIMITS.mailPerDay) return out(202, { token: null })
-      if (times.length >= ROSTER_LIMITS.mailPerMonth) return out(202, { token: null })
-      await s.put('mail', [...times, now])
-      const token = b64uEnc(crypto.getRandomValues(new Uint8Array(32)))
-      // a new token never replaces an older live one: a stranger's start must not kill the owner's link
+      // Anyone can ask, for any address. A link goes to the address itself, so
+      // a stranger's start mails the owner a REAL link and gains nothing; the
+      // budget only limits how often.
+      if (typeof a.address !== 'string' || !a.address) return out(400, { error: 'invalid' })
+      if (await s.get('head')) return out(202, { mailed: false }) // taken: a reset is a later change
       const live = ((await s.get('setupTok')) || []).filter((t) => t.exp > now)
-      await s.put('setupTok', [...live, { h: await sha256hex(`bento-dir/1/setup\n${token}`), exp: now + ROSTER_LIMITS.setupTtlMs }])
-      return out(202, { token })
+      // S1: the budget may hold a setup mail back ONLY while a link it already
+      // mailed is still live. Otherwise strangers who fill it would leave the
+      // address refused for weeks with no working link in its inbox. With the
+      // budget full and no live link, one mail goes anyway, and its token is
+      // then the live link that holds the next ones back: at most one such
+      // mail per token life.
+      const spent = await this.spendSetupBudget(now)
+      if (!spent && live.some((t) => t.mailed)) return out(202, { mailed: false })
+      const token = b64uEnc(crypto.getRandomValues(new Uint8Array(32)))
+      const h = await sha256hex(`bento-dir/1/setup\n${token}`)
+      // a new token never replaces an older live one: a stranger's start must not kill the owner's link
+      await s.put('setupTok', [...live, { h, exp: now + ROSTER_LIMITS.setupTtlMs, mailed: false }])
+      const sent = await mailSetupLink(this.env, a.address, token, now)
+      const after = ((await s.get('setupTok')) || []).filter((t) => t.exp > now)
+      // a link that never went out is withdrawn, so it can never hold a later mail back
+      await s.put('setupTok', sent ? after.map((t) => (t.h === h ? { ...t, mailed: true } : t)) : after.filter((t) => t.h !== h))
+      return out(202, { mailed: sent })
     }
 
     if (a.op === 'setup') {
