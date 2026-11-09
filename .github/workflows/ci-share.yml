@@ -1,0 +1,59 @@
+# CI, share: this zone's own jobs — validate, never release (see ci.yml's header).
+#
+# These jobs are NOT the required check. Only `validate` (ci.yml) gates a
+# merge; a job here reports beside it. Keep each job's id unchanged — the id
+# IS the check name. Add this zone's new jobs here, at the end; never in ci.yml.
+
+name: CI (share)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  # The same rule as ci.yml, whose comment explains it: PR runs collapse onto
+  # the tip, every commit on main keeps its own run.
+  group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+defaults:
+  run:
+    # Every step fails if a rig in it reports a skip CI does not allow
+    # (scripts/lib/ci-skips.mjs). No job here sets a working-directory, which
+    # this relative path relies on.
+    shell: bash scripts/ci/bento-step {0}
+
+jobs:
+  share-signin-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        # WebKit for the COOP rows; Google Chrome comes with the runner image.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium webkit
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Sign-in host popup protocol, Playwright headless shell
+        # The real worker and page at https://signin.id.bento.page, routed in
+        # process, a CDP virtual authenticator, a directory stub verifying with
+        # kernel/src/webauthn.ts, every WebSocket closed. bento/home's request
+        # round-trips; a foreign opener, a reply after the opener navigated
+        # away, noopener, any request but the one enrol shape, a Signal API
+        # request, a request in the URL, COOP same-origin and framing are each
+        # refused, and each rule has a mutant under which its row goes red.
+        run: node scripts/test-signin-host-browser.mjs
+      - name: Sign-in host popup protocol, Google Chrome
+        run: node scripts/test-signin-host-browser.mjs --chrome
+      - name: Which COOP values keep the sign-in popup working (Chromium, Chrome, WebKit)
+        # Every value the hosting check allows works in every engine; every
+        # value it refuses severs the opener in at least one. Same-origin-allow-
+        # popups ON THE POPUP severs it in Chromium, which is why the sign-in
+        # host sends no COOP at all.
+        run: node scripts/test-signin-host-coop.mjs --chrome

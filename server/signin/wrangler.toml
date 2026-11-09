@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: MIT
+# The bento/id sign-in host (working name signin.id.bento.page): the only web
+# origin that runs passkey ceremonies for the rp id.bento.page. See README.md.
+#
+# Deploy is the MAINTAINER's, with credentials that can change nothing else
+# (not bento.page, not bento/home, not the directory). Never from CI.
+#   npx wrangler deploy
+#   node check-hosting.mjs               # then, every time, against the live host
+name = "bento-id-signin"
+main = "src/worker.js"
+compatibility_date = "2026-07-01"
+
+# No *.workers.dev name and no preview URLs: the host is reached at one name.
+workers_dev = false
+preview_urls = false
+
+routes = [{ pattern = "signin.id.bento.page", custom_domain = true }]
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+# Every request goes through the worker, so every response carries its headers.
+run_worker_first = true
+html_handling = "none"
+not_found_handling = "none"

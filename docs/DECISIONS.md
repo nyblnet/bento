@@ -13056,3 +13056,58 @@ through the DOM with a value that has passed it.
 Rigs: scripts/test-dash-colours.ts (each paint function with a real colour as
 control and non-colours that must draw nothing) and
 scripts/test-dash-colours-browser.mjs (the built grid, hovered).
+
+## 2026-11-09 — bento/id: the sign-in host is its own small deploy, and answers one request (server/signin)
+
+Passkeys for bento/id belong to the rp `id.bento.page`, and the directory on
+that name never runs a ceremony. The only web page that does is a separate
+sign-in host (working name `signin.id.bento.page`): four static files served
+by a small worker, with no document code and no directory key. It lives in
+`server/signin/`, not in the site tree or the directory, because it must
+deploy alone with credentials that can change nothing else (not bento.page,
+not bento/home, not the directory). Whoever can serve content under the rp
+can use and wipe its passkeys, so this host is kept as small as possible.
+
+bento/home cannot use those passkeys (the browser refuses), so it opens the
+host in a popup. The rules, each pinned by a browser row with a mutant that
+breaks it:
+- **One request shape, from one sender.** A message is accepted only when its
+  origin is `https://home.bento.page` and its source is the window that opened
+  the popup; one per window (a second one voids the first); and it is exactly
+  `{t:'enrol', W, kx, label}`. Nothing else is ever done because the opener
+  asked: no roster change, no deletion, no Signal API call. Account changes
+  start only from the host's own pages, by the person. Measured: with the
+  allowlist removed, an opener's "add this key" was signed and reached the
+  directory; with a Signal call allowed, the passkey was deleted with no prompt.
+- **Replies go to the literal origin `https://home.bento.page`**, never `'*'`:
+  measured, with `'*'` an opener that had navigated to another site received
+  the signed result.
+- **Nothing is read from the page's URL**, and a popup opened without an
+  opener refuses.
+- **The opener origin shown and logged is the message event's origin**, never
+  a field of the request.
+- **The consent screen never says the key is this browser's.** It cannot know
+  that: an honest and a hostile bento/home produce screens that differ only in
+  the key fingerprint. It names the asking origin and tells the person to
+  approve only if they just asked bento/home to sign in.
+
+Headers, on every response including 404s: a CSP of `default-src 'none'`,
+scripts and styles from `'self'` only, connections to the directory only, and
+`frame-ancestors 'none'` (with `X-Frame-Options: DENY`). **No
+`Cross-Origin-Opener-Policy` at all**: measured in Chromium and Chrome,
+`same-origin-allow-popups` on the popup itself cuts `window.opener` exactly as
+`same-origin` does, so "not same-origin" is not a strong enough rule for this
+host. bento/home may send at most `same-origin-allow-popups`. Playwright's
+WebKit kept the opener under every value; Safari on a device is still to be
+checked. No `/.well-known/webauthn`, on this host or on `id.bento.page`.
+
+`server/signin/check-hosting.mjs` checks all of this against the live host
+after every deploy, including that no other name resolves under the host or
+the rp. Deploying is the maintainer's. The directory API the host calls sits
+behind one module (`public/directory-client.js`), provisional until the
+directory's roster routes and the kernel's `wdev.` statement are defined.
+
+Rigs: scripts/test-signin-host.mjs (the worker, the page rules, the hosting
+check with a mutant per rule), scripts/test-signin-host-browser.mjs (the
+protocol in Playwright's headless shell and Google Chrome) and
+scripts/test-signin-host-coop.mjs (COOP in Chromium, Chrome and WebKit).
