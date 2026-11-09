@@ -696,7 +696,7 @@ export const docBudget = (canWriteInPlace: boolean): number =>
 // --- Parsing -------------------------------------------------------------
 
 export interface Repair {
-  what: 'sheet-id' | 'column-id' | 'duplicate-id' | 'missing-id' | 'doc-id' | 'placement'
+  what: 'sheet-id' | 'column-id' | 'column-width' | 'row-ids' | 'duplicate-id' | 'missing-id' | 'doc-id' | 'placement'
   id: string
   became: string
 }
@@ -737,6 +737,71 @@ export type ParseResult =
   | { ok: false; err: 'empty' }
   | { ok: false; err: 'unreadable'; detail: string }
   | { ok: false; err: 'json' | 'format' | 'shape'; detail: string; found?: string }
+
+/** A column's width when the file gives none, or gives one that is not a number. */
+export const COL_W = 130
+/** The widths a file may ask for. The panel's minimum is 10; nothing real is wider than 4000. */
+export const COL_W_MIN = 10
+export const COL_W_MAX = 4000
+
+/**
+ * A column's width as it is drawn, in px: ALWAYS a finite number.
+ *
+ * `Column.w` is `number` in the type and anything at all in a file — and the
+ * grid writes it into `style="width:…px"` and adds it up into the frozen
+ * columns' `left:`. A string there is a string concatenated into markup, so
+ * every reader of a width goes through here (parseDoc also repairs it, but a
+ * frozen file is never repaired, and the store can be handed any object).
+ */
+export function colW(c: { w?: unknown } | null | undefined): number {
+  const w = c?.w
+  if (typeof w !== 'number' || !Number.isFinite(w)) return COL_W
+  return Math.min(COL_W_MAX, Math.max(COL_W_MIN, w))
+}
+
+/**
+ * An id that can sit in an HTML attribute or text as it is: no quote, no
+ * angle bracket, no ampersand, no backtick or backslash, no control character,
+ * at most 128 characters. Every id dash mints passes, and so does every id an
+ * import slugs from a header; an id that fails is treated as MISSING by
+ * parseDoc and re-minted, its data moving with it. Markup that carries ids
+ * escapes them as well — this is the second lock, not the only one.
+ */
+export function isSafeId(v: unknown): v is string {
+  return typeof v === 'string' && v.length > 0 && v.length <= 128 &&
+    !/["'<>&`\\\u0000-\u001f\u007f]/.test(v)
+}
+
+const isRunInt = (n: unknown): n is number => typeof n === 'number' && Number.isSafeInteger(n) && n >= 0
+
+/**
+ * Row-id runs as whole numbers. Every reader computes a row id as
+ * `start + offset`, and a STRING start makes that a string concatenation that
+ * lands in `data-rid="…"`. A run whose start is not a whole number gets a fresh
+ * one past every other run (ids stay unique; the rows and their positional data
+ * stay where they are); a count that is not one becomes the nearest whole
+ * number it reads as, or 0.
+ */
+function repairRids(raw: unknown, sheetId: string, repairs: Repair[]): Array<[number, number]> {
+  if (!Array.isArray(raw)) return []
+  let next = 0
+  for (const run of raw) {
+    if (Array.isArray(run) && isRunInt(run[0]) && isRunInt(run[1])) next = Math.max(next, run[0] + run[1])
+  }
+  let bad = false
+  const out = raw.map((run): [number, number] => {
+    const r = Array.isArray(run) ? run : []
+    if (isRunInt(r[0]) && isRunInt(r[1])) return run as [number, number]
+    bad = true
+    const n = Number(r[1])
+    const count = Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), Number.MAX_SAFE_INTEGER) : 0
+    const start = isRunInt(r[0]) ? r[0] : next
+    next = Math.max(next, start + count)
+    return [start, count]
+  })
+  if (bad) repairs.push({ what: 'row-ids', id: sheetId, became: '' })
+  return out
+}
 
 let idSeq = 0
 /** Deterministic within a parse, so two readers of one file repair identically. */
@@ -863,9 +928,25 @@ export function parseDoc(json: string): ParseResult {
       ? (s.columns as unknown[]).map((c) => {
         if (!isObj(c)) return c as unknown as Column
         const was = typeof c.id === 'string' ? c.id : ''
-        const now = claimIn(colIds, c.id, 'col')
+        // An id that could not sit in markup as it is goes the way of a
+        // missing one: re-minted, and its data follows it (`renamed` below).
+        // Not in a frozen file, which is never rewritten — the grid escapes
+        // every id it writes, so that file still draws safely.
+        let now: string
+        if (!frozen && was && !isSafeId(was)) {
+          now = mintId('col', 'col')
+          colIds.add(now)
+          repairs.push({ what: 'column-id', id: was, became: now })
+        } else {
+          now = claimIn(colIds, c.id, 'col')
+        }
         if (was && now !== was) renamed.set(was, now)
-        return { ...c, id: now } as unknown as Column
+        // A width that is not a finite number in range becomes one. The column
+        // itself is never dropped: a bad width is a layout fact, not a reason
+        // to lose data.
+        const fixW = !frozen && 'w' in c && c.w !== colW(c)
+        if (fixW) repairs.push({ what: 'column-width', id: now, became: String(colW(c)) })
+        return { ...c, id: now, ...(fixW ? { w: colW(c) } : {}) } as unknown as Column
       })
       : []
 
@@ -882,7 +963,7 @@ export function parseDoc(json: string): ParseResult {
       ...s,
       id,
       kind: 'table',
-      rids: Array.isArray(s.rids) ? s.rids : [],
+      rids: frozen ? (Array.isArray(s.rids) ? s.rids : []) : repairRids(s.rids, id, repairs),
       columns,
       data: remap<ColumnData>(s.data, (k) => renamed.get(k) ?? k),
       // `cells` is keyed "<colId>:<rid>" — only the column half moves.

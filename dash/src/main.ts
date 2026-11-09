@@ -2672,7 +2672,9 @@ function exportCsv(store: Store, sheet: TableSheet): void {
 // the splash still up and nothing in the console (the boot try/catch swallows
 // it into the dark card). A declaration hoists, so the landmine is gone.
 function esc(s: string): string {
+  // quotes too: this also fills attributes (`title="…"`)
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 }
 
 // referenced so the budget constants are not tree-shaken out of the bundle,

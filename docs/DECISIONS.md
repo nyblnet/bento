@@ -13282,3 +13282,29 @@ the rig was blind to: a repeated CBOR map key, an origin matched by prefix, a
 request naming another address, and an expired setup token), and
 `scripts/test-directory-mutants.ts` (39 mutants, each loosening one rule, every
 one failing a row).
+
+## 2026-11-09 — bento/dash: document strings reach markup at both ends checked
+
+Dash builds much of its markup as strings, and a workbook is untrusted input.
+Every value from the document that lands in an attribute is held twice:
+
+- **On open, parseDoc repairs it.** `Column.w` that is not a finite number
+  becomes 130, and one out of range is clamped to 10–4000 (`colW`). A column id
+  that fails `isSafeId` (a quote, angle bracket, ampersand, backtick, backslash
+  or control character, empty, or over 128 characters) is re-minted like a
+  missing id, and its `data`, `cells` and `totals` keys move with it. A row-id
+  run that is not two whole numbers gets a fresh start past every other run;
+  its count is the number it reads as, or 0. Each is reported as a repair, and
+  no column is ever dropped. A frozen file is never rewritten, as before.
+- **At the paint site, it is escaped or coerced anyway**, because a frozen file
+  and a live edit never pass through parseDoc: the grid reads widths only
+  through `colW`, escapes every column id it writes into `data-*` attributes
+  (and `CSS.escape`s it in selectors), and writes row ids as numbers. A
+  dashboard tile's layout goes through `tileStyle` (whole numbers or the
+  default). The `esc` helpers in story.ts, main.ts and gridmenu.ts now escape
+  quotes as well, since they also fill attributes (a story step's id and
+  caption among them).
+
+New markup that carries a document string escapes it with a helper that covers
+quotes, or sets it through the DOM. Rigs: scripts/test-dash-attrs.ts and
+scripts/test-dash-attrs-browser.mjs (live edit, saved file, frozen file).
