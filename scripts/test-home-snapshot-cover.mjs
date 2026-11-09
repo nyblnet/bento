@@ -19,7 +19,15 @@
  * The sealed file is red on screen too, so "no red" can only come from the cover.
  * With the cover disabled, this measured 93% red.
  *
+ * iOS writes the snapshot when it gets round to it: in CI a backgrounding has
+ * come back with none within 30 s, twice running. So a
+ * case only counts snapshots newer than its own backgrounding, waits for them
+ * with a bounded poll, and brings the app back and backgrounds it again (a
+ * bounded number of times) when none came. If still none came, the case fails
+ * saying so: no snapshot proves nothing either way.
+ *
  * Needs Xcode and an iOS simulator; skips elsewhere. Takes a few minutes.
+ * BENTO_SIM_UDID picks the simulator (default: the first available iPhone).
  */
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync, rmSync, readdirSync, statSync, existsSync, mkdirSync } from 'node:fs'
@@ -39,7 +47,8 @@ const ok = (c, m) => { checks++; if (!c) failures++; console.log(`  ${c ? 'ok  '
 
 // an iPhone simulator: the first available one, booted
 const devices = JSON.parse(run('xcrun', ['simctl', 'list', 'devices', 'available', '-j'])).devices
-const phone = Object.entries(devices).filter(([rt]) => rt.includes('iOS')).flatMap(([, ds]) => ds).find((d) => d.name.startsWith('iPhone'))
+const phones = Object.entries(devices).filter(([rt]) => rt.includes('iOS')).flatMap(([, ds]) => ds)
+const phone = process.env.BENTO_SIM_UDID ? phones.find((d) => d.udid === process.env.BENTO_SIM_UDID) : phones.find((d) => d.name.startsWith('iPhone'))
 if (!phone) { console.error('no available iPhone simulator'); process.exit(2) }
 const DEV = phone.udid
 console.log(`simulator: ${phone.name} (${DEV})`)
@@ -114,49 +123,84 @@ function untilOnScreen(tag) {
   return red
 }
 
-/** Wait (up to 30 s) until iOS has written its snapshots and they've stopped
- *  changing: a cold runner can take a while, and a half-written file would be
- *  read as something it isn't. */
+const SNAPSHOT_WAIT_S = 60      // per backgrounding
+const BACKGROUND_TRIES = 3      // backgroundings per case before it fails as "no snapshot"
+
+/** Wait (up to SNAPSHOT_WAIT_S) until iOS has written snapshots newer than
+ *  `since` and they've stopped changing: a cold runner can take a while, and a
+ *  half-written file would be read as something it isn't. [] if none came. */
 function untilSnapshotsWritten(since) {
   let last = ''
-  for (let i = 0; i < 15; i++) {
+  const deadline = Date.now() + SNAPSHOT_WAIT_S * 1000
+  while (Date.now() < deadline) {
     sleep(2)
     const files = sceneSnapshots(since)
-    const sig = files.map((f) => `${f}:${statSync(f).size}`).sort().join('|')
+    const sig = files.map((f) => `${f}:${statSync(f).size}:${statSync(f).mtimeMs}`).sort().join('|')
     if (files.length && sig === last) return files
     last = sig
   }
   return sceneSnapshots(since)
 }
 
-/** Open, wait for the document to show, send the app to the background, and
- *  read the snapshots iOS writes. If iOS wrote none, the whole cycle runs once
- *  more before anything is judged: no snapshot proves nothing either way. */
-function background(path) {
-  for (let attempt = 1; ; attempt++) {
-    try { run('xcrun', ['simctl', 'terminate', DEV, BUNDLE]) } catch {}
-    rmSync(join(DATA, 'Library/SplashBoard'), { recursive: true, force: true })
-    const since = Date.now()
-    run('xcrun', ['simctl', 'launch', DEV, BUNDLE], { env: { ...process.env, SIMCTL_CHILD_BENTO_RIG_OPEN: path } })
-    const onScreen = untilOnScreen(since)
-    run('xcrun', ['simctl', 'launch', DEV, 'com.apple.Preferences'])
-    const files = untilSnapshotsWritten(since)
-    if (files.length || attempt === 2) return { onScreen, snapshots: redOf(files), attempt }
-    console.log('  (iOS wrote no snapshot yet: once more)')
-  }
+/** what is under Library/SplashBoard, for the failure message */
+function splashBoardListing() {
+  const root = join(DATA, 'Library/SplashBoard'), out = []
+  const walk = (d) => { for (const e of readdirSync(d, { withFileTypes: true })) {
+    const p = join(d, e.name)
+    if (e.isDirectory()) walk(p); else out.push(`${p.slice(root.length + 1)} @${new Date(statSync(p).mtimeMs).toISOString()}`)
+  } }
+  if (existsSync(root)) walk(root)
+  return out.length ? out.join('\n      ') : '(empty or missing)'
 }
+
+/** Open, wait for the document to show, send the app to the background, and
+ *  read the snapshots iOS writes after that backgrounding. If none come, bring
+ *  the app back, wait for the document again, and background it again, up to
+ *  BACKGROUND_TRIES times. Every snapshot written after the first backgrounding
+ *  is returned, so a sealed case is judged on all of them. */
+function background(path) {
+  try { run('xcrun', ['simctl', 'terminate', DEV, BUNDLE]) } catch {}
+  // Library/SplashBoard is no longer deleted between cases. The mtime filter
+  // already keeps earlier files out, and deleting the folder under iOS's
+  // snapshot writer is a suspect: in CI the control (the one case that deleted
+  // an existing folder) twice came back with no snapshot, the sealed case never.
+  run('xcrun', ['simctl', 'launch', DEV, BUNDLE], { env: { ...process.env, SIMCTL_CHILD_BENTO_RIG_OPEN: path } })
+  let onScreen = untilOnScreen(`${Date.now()}`)
+  let firstSince = 0
+  for (let attempt = 1; attempt <= BACKGROUND_TRIES; attempt++) {
+    if (attempt > 1) {
+      console.log(`  (iOS wrote no snapshot within ${SNAPSHOT_WAIT_S} s: back to the foreground, then background ${attempt} of ${BACKGROUND_TRIES})`)
+      run('xcrun', ['simctl', 'launch', DEV, BUNDLE])  // the running app comes back with its document
+      onScreen = Math.min(onScreen, untilOnScreen(`${Date.now()}`))
+    }
+    const since = Date.now() - 1  // newer than THIS backgrounding: nothing an earlier run left behind
+    if (!firstSince) firstSince = since
+    run('xcrun', ['simctl', 'launch', DEV, 'com.apple.Preferences'])
+    if (untilSnapshotsWritten(since).length) {
+      sleep(2)  // a second scene snapshot can trail the first
+      return { onScreen, snapshots: redOf(sceneSnapshots(firstSince)), attempt }
+    }
+  }
+  console.log(`  (after ${BACKGROUND_TRIES} backgroundings, Library/SplashBoard holds:\n      ${splashBoardListing()})`)
+  return { onScreen, snapshots: [], attempt: BACKGROUND_TRIES }
+}
+
+const pct = (rs) => rs.map((r) => (r * 100).toFixed(1) + '%').join(', ')
+const none = `iOS wrote no snapshot after ${BACKGROUND_TRIES} backgroundings of ${SNAPSHOT_WAIT_S} s each, so nothing was measured`
 
 try {
   const sealedPath = doc('sealed', 'bento/enc'), plainPath = doc('plain', 'bento/slides')
   console.log('a sealed document:')
   const s = background(sealedPath)
   ok(s.onScreen > 0.5, `it is on screen while open (${(s.onScreen * 100).toFixed(0)}% red), so a clean snapshot can only come from the cover`)
-  ok(s.snapshots.length > 0, `iOS wrote app-switcher snapshots (${s.snapshots.length}${s.attempt > 1 ? ', on the second try' : ''})`)
-  ok(s.snapshots.length > 0 && s.snapshots.every((r) => r === 0), `none of them shows the document (${s.snapshots.map((r) => (r * 100).toFixed(1) + '%').join(', ')} red)`)
+  ok(s.snapshots.length > 0, s.snapshots.length ? `iOS wrote app-switcher snapshots (${s.snapshots.length}${s.attempt > 1 ? `, after backgrounding ${s.attempt}` : ''})` : none)
+  ok(s.snapshots.length > 0 && s.snapshots.every((r) => r === 0), s.snapshots.length ? `none of them shows the document (${pct(s.snapshots)} red)` : `none of them shows the document: ${none}`)
   console.log('the control, an unsealed document:')
   const p = background(plainPath)
   ok(p.onScreen > 0.5, `it is on screen while open (${(p.onScreen * 100).toFixed(0)}% red)`)
-  ok(p.snapshots.some((r) => r > 0.5), `its snapshot shows it (${p.snapshots.map((r) => (r * 100).toFixed(1) + '%').join(', ')} red), so the measurement sees content when it is there`)
+  ok(p.snapshots.some((r) => r > 0.5), p.snapshots.length
+    ? `its snapshot shows it (${pct(p.snapshots)} red${p.attempt > 1 ? `, after backgrounding ${p.attempt}` : ''}), so the measurement sees content when it is there`
+    : `its snapshot shows it: ${none}`)
   console.log('back in the foreground:')
   run('xcrun', ['simctl', 'terminate', DEV, BUNDLE])
   run('xcrun', ['simctl', 'launch', DEV, BUNDLE], { env: { ...process.env, SIMCTL_CHILD_BENTO_RIG_OPEN: sealedPath } })
