@@ -114,7 +114,7 @@ ok(dataBarHtml(null) === '' && dataBarHtml({ bg: '#fff' }) === '', 'dataBarHtml:
 
 // --- 4. rules out of the file, through evaluation, into the CSS ------------------
 // The path the grid actually takes: document rule → evaluateRules → condCellCss
-// / dataBarHtml. A colour-scale stop that is not a colour is the reported case.
+// / dataBarHtml, starting with a colour-scale stop.
 const VALS = [10, 20, 30, 40, 50]
 const paint = (rules: Rule[]): string[] => evaluateRules(rules, VALS).map((s) => condCellCss(s) + dataBarHtml(s))
 {
