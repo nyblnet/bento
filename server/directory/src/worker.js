@@ -9,6 +9,9 @@
 // Object per address, named by a hash of the address, and nothing iterates
 // them.
 //
+// It serves ONE page, the void page (voidpage.js), which a mailed void link
+// opens: everything else is JSON.
+//
 // The first design bound an account key to an address with a TYPED code mailed
 // to the address (`bind.`, /v1/bind/start and /v1/bind/complete), and removed
 // one with a holder-signed `del.` or another typed code (/v1/delete,
@@ -25,9 +28,10 @@ import { issueChallenge, openChallenge } from './challenge.js'
 import { Roster, REQUESTERS } from './roster.js'
 import { SIGNIN_ORIGIN } from './passkey.js'
 import { WEB_ROUTES } from './seam.js'
+import { PAGE_HEADERS, VOID_CSS, VOID_HTML, VOID_JS, VOID_PATHS } from './voidpage.js'
 
 export const LIMITS = {
-  ip: { complete: 60, lookup: 300, challenge: 120, request: 60, setup: 10, enrol: 60 }, // per IP per hour
+  ip: { complete: 60, lookup: 300, challenge: 120, request: 60, setup: 10, enrol: 60, void: 60, reset: 10 }, // per IP per hour
 }
 const DAY = 86_400_000
 
@@ -47,7 +51,7 @@ const BASE = {
   // serves; it does NOT stop the WebAuthn Signal API (measured), so nothing
   // here may run script either: every answer is JSON, and the CSP below makes
   // any document it could be read as inert and unframeable. Only the void
-  // page, when it comes, runs script, under its own CSP.
+  // page runs script, under its own CSP (voidpage.js PAGE_HEADERS).
   'permissions-policy': 'publickey-credentials-get=(), publickey-credentials-create=()',
   'content-security-policy': "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
   'x-frame-options': 'DENY',
@@ -60,6 +64,14 @@ const BASE = {
 const WEB = { ...BASE, 'access-control-allow-origin': SIGNIN_ORIGIN, vary: 'Origin' }
 const headersFor = (path) => (path.startsWith(WEB_ROUTES.prefix) ? WEB : BASE)
 const json = (status, body, headers = BASE) => new Response(JSON.stringify(body), { status, headers })
+const page = (text, type) => new Response(text, { status: 200, headers: { ...PAGE_HEADERS, 'content-type': type } })
+/** The void page's three files, for GET (and HEAD) only. */
+const PAGE_FILES = Object.freeze({
+  [VOID_PATHS.page]: [VOID_HTML, 'text/html; charset=utf-8'],
+  [VOID_PATHS.script]: [VOID_JS, 'text/javascript; charset=utf-8'],
+  [VOID_PATHS.style]: [VOID_CSS, 'text/css; charset=utf-8'],
+})
+const TOKEN = /^[A-Za-z0-9_-]{43}$/
 
 // --- routes ----------------------------------------------------------------------
 
@@ -137,6 +149,13 @@ async function route(req, env) {
     return json(r.status, r.body)
   }
 
+  // The void page: the same fixed bytes for every GET, whatever the query or
+  // fragment. Reading it changes nothing (a mail scanner may fetch it).
+  if ((req.method === 'GET' || req.method === 'HEAD') && Object.hasOwn(PAGE_FILES, p)) {
+    const [text, type] = PAGE_FILES[p]
+    return page(req.method === 'HEAD' ? null : text, type)
+  }
+
   // Nothing else is served for GET: in particular no /.well-known/webauthn,
   // which would let the origins it lists use these passkeys, and no route
   // that reads a mailed link (links complete only on the sign-in host).
@@ -191,6 +210,52 @@ async function route(req, env) {
     const r = await call(await rosterStub(env, email), 'request', {
       ros: b.ros, credId: b.credId, assertion: b.assertion, reg: b.reg, rq: b.rq, nonce: c.nonce, issued: c.issued, os: origin,
     })
+    return json(r.status, r.body)
+  }
+
+  if (p === '/v1/void') {
+    // The void page's button (G3, G4). The token is the authority; it is
+    // checked in the address's object, which keeps no count of wrong ones.
+    // Per-IP limits are the only brake, and they never touch the real token.
+    const email = normalize(b.email ?? '')
+    if (!email || typeof b.token !== 'string' || !TOKEN.test(b.token) || typeof b.choice !== 'string') return json(400, { error: 'invalid' })
+    if (!(await ledger(env, ip, 'void'))) return json(429, { error: 'rate-limited' })
+    const r = await call(await rosterStub(env, email), 'void', { token: b.token, choice: b.choice, os: origin })
+    return json(r.status, r.body)
+  }
+
+  if (p === '/v1/roster/reset/start') {
+    // Mails a reset link to an address that has an account (G5). The same 202
+    // in every state, as setup/start: it never says whether the address has an
+    // account or was mailed. No budget holds a reset mail back (S2).
+    const email = normalize(b.email ?? '')
+    if (!email) return json(400, { error: 'bad-address' })
+    if (!(await ledger(env, ip, 'reset'))) return json(202, SETUP_STARTED)
+    await call(await rosterStub(env, email), 'resetStart', { address: email })
+    return json(202, SETUP_STARTED)
+  }
+
+  if (p === '/v1/roster/reset') {
+    // completes a reset from its mailed token with a new passkey; the reset then waits 72 hours
+    const email = normalize(b.email ?? '')
+    if (!email || typeof b.token !== 'string' || typeof b.dirNonce !== 'string') return json(400, { error: 'invalid' })
+    if (!(await ledger(env, ip, 'complete'))) return json(429, { error: 'rate-limited' })
+    const c = await openChallenge(env.CHALLENGE_KEY, 'roster', await addressKey(email), b.dirNonce, Date.now())
+    if (!c) return json(400, { error: 'nonce' })
+    const r = await call(await rosterStub(env, email), 'reset', {
+      address: email, token: b.token, dirNonce: b.dirNonce, reg: b.reg, nonce: c.nonce, issued: c.issued, os: origin,
+    })
+    return json(r.status, r.body)
+  }
+
+  if (p === '/v1/roster/reset/void') {
+    // a member stopping a reset with its passkey (G5): refused at the last step until the kernel defines what it signs
+    const email = normalize(b.email ?? '')
+    if (!email || typeof b.dirNonce !== 'string') return json(400, { error: 'invalid' })
+    if (!(await ledger(env, ip, 'request'))) return json(429, { error: 'rate-limited' })
+    const c = await openChallenge(env.CHALLENGE_KEY, 'roster', await addressKey(email), b.dirNonce, Date.now())
+    if (!c) return json(400, { error: 'nonce' })
+    const r = await call(await rosterStub(env, email), 'resetVoid', { credId: b.credId, assertion: b.assertion, nonce: c.nonce, issued: c.issued, os: origin })
     return json(r.status, r.body)
   }
 
