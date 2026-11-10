@@ -87,8 +87,8 @@ const tampered = (() => {
   const at = rt.start + Math.floor(rt.text.length / 2)
   return deck.slice(0, at) + (deck[at] === 'A' ? 'B' : 'A') + deck.slice(at + 1)
 })()
-// a gate-1-GENUINE deck whose own markup carries a handler (svg <title> is foreign
-// content to a browser, raw text to the scanner): only the frame's script policy stops it
+// a deck whose own markup carries a handler inside an svg <title> (foreign content to a
+// browser, raw text to an older scanner): gate 1 refuses markup in a <title>, so it never runs
 const HANDLER_PROBE = 'bento-home-web-handler'
 const hostile = (probeUrl) => deck.replace('<body>', () => `<body><svg width="0" height="0"><title><img src="x" onerror="fetch('${probeUrl}')"></title></svg>`)
 const bom = '\ufeff' + deck
@@ -149,7 +149,7 @@ fs.writeFileSync(F('hostile'), hostile(HANDLER_URL))
   const hs = new Histories(RELEASE_KEY, A.releaseBase, fetch)
   await hs.take(JSON.stringify(realHistory))
   const v = await judge(fs.readFileSync(F('hostile'), 'utf8'), hs.list())
-  ok(v.verdict === 'genuine', `fixture: the deck with a markup handler in an svg <title> is gate-1 genuine (${v.verdict}), so only the frame's policy stands in its way`)
+  ok(v.verdict === 'unknown', `fixture: the deck with a markup handler in an svg <title> is gate-1 unknown (${v.verdict}): gate 1 refuses markup in a <title>`)
 }
 const B = await build('b', ['--key', path.join(work, 'test-key.json'), '--history', path.join(work, 'history-test.json')])
 ok(!A.info.testKey && B.info.testKey, 'build A carries the release key, build B the throwaway test key')
@@ -440,16 +440,25 @@ section('[B2/T9] the frame page only boots inside the library')
 // ===== [B2] the frame header lost, under the REAL library =========================================
 section('[B2] a frame page that lost its header boots nothing, even framed by the library')
 {
-  // positive control: with the header, the deck boots and its markup handler is refused by the policy
+  // the deck with a markup handler in an svg <title> is refused by gate 1: never framed, handler never runs
   let ctx = await context()
   let page = await ctx.newPage()
   let mark = A.seen.length
   await page.goto(A.library + '/')
-  await open(page, 'hostile')
-  const up = await booted(page)
+  const h = await open(page, 'hostile')
   await new Promise((r) => setTimeout(r, 1500))
-  ok(!!up, 'positive control: with its header, the deck with a markup handler boots')
-  ok(!A.seen.slice(mark).some((r) => r.url === HANDLER_URL), 'with its header, the markup handler does not run (the frame policy refuses it)')
+  ok(!!h && !h.viewing && h.frames === 0, 'the deck with a markup handler in an svg <title> never runs (gate 1 refuses it)')
+  ok(frameRequests(A, mark).length === 0, 'the deck with a markup handler: the frame page is never even fetched')
+  ok(!A.seen.slice(mark).some((r) => r.url === HANDLER_URL), 'the deck with a markup handler: its handler never runs')
+  await ctx.close()
+
+  // positive control: with the header, the plain deck boots
+  ctx = await context()
+  page = await ctx.newPage()
+  await page.goto(A.library + '/')
+  await open(page, 'deck')
+  const up = await booted(page)
+  ok(!!up, 'positive control: with its header, the deck boots')
   await ctx.close()
 
   // the same page bytes WITHOUT the header, framed by the library with its sandbox attribute
@@ -457,14 +466,12 @@ section('[B2] a frame page that lost its header boots nothing, even framed by th
   const body = fs.readFileSync(path.join(A.out, 'frame/frame.html'), 'utf8')
   await ctx.route(A.frame + '/frame.html', (r) => r.fulfill({ contentType: 'text/html', body }))
   page = await ctx.newPage()
-  mark = A.seen.length
   await page.goto(A.library + '/')
-  await open(page, 'hostile')
+  await open(page, 'deck')
   const state = await until(async () => { const f = docFrame(page); return f ? f.evaluate(() => document.documentElement.getAttribute('data-bento-frame') ?? (window.bento ? 'booted' : null)) : null }, 10000)
   await new Promise((r) => setTimeout(r, 2000))
   const ran = await docFrame(page)?.evaluate(() => !!window.bento).catch(() => false)
   ok(state === 'refused' && !ran, `without its header, framed by the library, the frame refuses and nothing boots (${state})`)
-  ok(!A.seen.slice(mark).some((r) => r.url === HANDLER_URL), 'without its header, the markup handler never runs')
   await ctx.close()
 }
 

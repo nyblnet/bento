@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Sign in · bento/id</title>
+<link rel="stylesheet" href="/signin.css">
+<script type="module" src="/signin.js"></script>
+</head>
+<body data-state="loading">
+<main>
+  <p class="brand">bento/id</p>
+
+  <section data-for="loading">
+    <p>Loading…</p>
+  </section>
+
+  <section data-for="waiting" hidden>
+    <h1>Waiting for bento/home</h1>
+    <p>This window signs bento/home in with your passkey. It is waiting for bento/home to say what it needs.</p>
+  </section>
+
+  <section data-for="consent" hidden>
+    <h1>Sign in bento/home?</h1>
+    <dl>
+      <dt>Asked by</dt>
+      <dd><code id="who"></code></dd>
+      <dt>Account</dt>
+      <dd id="account"></dd>
+      <dt>Name chosen by bento/home</dt>
+      <dd>“<span id="label"></span>”</dd>
+      <dt>Key fingerprint</dt>
+      <dd><code id="fp"></code></dd>
+    </dl>
+    <p class="warn">Approve only if you just asked bento/home to sign in. This page cannot check which device holds the key bento/home sent.</p>
+    <div class="actions">
+      <button id="approve" type="button" class="primary">Sign in with passkey</button>
+      <button id="cancel" type="button">Cancel</button>
+    </div>
+  </section>
+
+  <section data-for="working" hidden>
+    <h1>Signing in…</h1>
+    <p>Follow your browser’s passkey prompt.</p>
+  </section>
+
+  <section data-for="done" hidden>
+    <h1>Signed in</h1>
+    <p>bento/home is signed in. This window closes by itself.</p>
+  </section>
+
+  <section data-for="cancelled" hidden>
+    <h1>Cancelled</h1>
+    <p>Nothing was signed in. You can close this window.</p>
+    <button type="button" data-close>Close</button>
+  </section>
+
+  <section data-for="failed" hidden>
+    <h1>Not signed in</h1>
+    <p>The sign-in did not finish. Close this window and try again from bento/home.</p>
+    <button type="button" data-close>Close</button>
+  </section>
+
+  <section data-for="refused" hidden>
+    <h1>Nothing to sign in</h1>
+    <p>This window only answers bento/home, once, when bento/home opened it. Close it and start again from bento/home.</p>
+    <button type="button" data-close>Close</button>
+  </section>
+</main>
+</body>
+</html>

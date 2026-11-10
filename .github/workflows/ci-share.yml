@@ -40,3 +40,44 @@ jobs:
           node-version: 24
       - name: bento/connect directory mutants
         run: node scripts/test-directory-mutants.ts
+
+  share-signin-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        # WebKit for the COOP rows; Google Chrome comes with the runner image.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium webkit
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Sign-in host popup protocol, Playwright headless shell
+        # The real worker and page at https://signin.id.bento.page, routed in
+        # process, a CDP virtual authenticator, a directory stub verifying with
+        # kernel/src/webauthn.ts, every WebSocket closed. bento/home's request
+        # round-trips; a foreign opener, a reply after the opener navigated
+        # away, noopener, any request but the one enrol shape, a Signal API
+        # request, a request in the URL, COOP same-origin and framing are each
+        # refused, and each rule has a mutant under which its row goes red.
+        run: node scripts/test-signin-host-browser.mjs
+      - name: Sign-in host popup protocol, Google Chrome
+        run: node scripts/test-signin-host-browser.mjs --chrome
+      - name: Sign-in host protocol rows in every engine (headless shell, WebKit, Chrome)
+        # The rows that need no passkey, in WebKit too (every iOS browser's
+        # engine): two requests posted back to back end refused (WebKit
+        # delivers the second inside the first's await), a foreign opener,
+        # noopener, any other shape and a request in the URL are refused,
+        # invisible labels are refused and real names in any script shown,
+        # and the consent screen keeps its disclaimer; a mutant per row.
+        run: node scripts/test-signin-host-engines.mjs --chrome
+      - name: Which COOP values keep the sign-in popup working (Chromium, Chrome, WebKit)
+        # Every value the hosting check allows works in every engine; every
+        # value it refuses severs the opener in at least one. Same-origin-allow-
+        # popups ON THE POPUP severs it in Chromium, which is why the sign-in
+        # host sends no COOP at all.
+        run: node scripts/test-signin-host-coop.mjs --chrome
