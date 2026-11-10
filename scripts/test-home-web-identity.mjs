@@ -30,10 +30,10 @@ import { fileURLToPath } from 'node:url'
 import { siteHandler } from '../server/signin/local.mjs'
 import { parseHeaders } from '../home/web/serve.mjs'
 import { directoryStub, HOME, SIGNIN as S } from './lib/id-web-directory-stub.mjs'
-import { K, chainOf, ADDRESS, T, H as HOUR } from './lib/roster-build.ts'
+import { K, chainOf, ADDRESS, T, H as HOUR, assertion as softAssertion } from './lib/roster-build.ts'
 import { verifyRosterChain, ROSTER_RP_ID, ROSTER_WEB_ORIGINS } from '../kernel/src/roster.ts'
-import { verifyDevice, CEREMONY_CAP_MS } from '../kernel/src/devices.ts'
-import { b64uEnc, sha256b64u } from '../kernel/src/statements.ts'
+import { verifyDevice, CEREMONY_CAP_MS, buildDeviceCert, buildWren } from '../kernel/src/devices.ts'
+import { b64uEnc, sha256b64u, signStatement } from '../kernel/src/statements.ts'
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
@@ -127,8 +127,12 @@ async function session(dist, { sEdit = null, account = ADDRESS } = {}) {
   st.setTime = async (t) => { st.base = t; st.setAt = Date.now(); await ctx.clock.setSystemTime(t) }
   st.dir = directoryStub({ accounts, credentials, key: { kid: 'dir-1', key: K.dir1.key }, now: st.now })
   const s = await signinSite(sEdit)
-  const libRules = parseHeaders(readFileSync(join(dist, 'library/_headers'), 'utf8'))
-  const libHtml = readFileSync(join(dist, 'library/index.html'))
+  // the library build served; a row may switch it (st.serve) to load what another build left behind
+  st.serve = (d) => {
+    st.libRules = parseHeaders(readFileSync(join(d, 'library/_headers'), 'utf8'))
+    st.libHtml = readFileSync(join(d, 'library/index.html'))
+  }
+  st.serve(dist)
 
   await ctx.routeWebSocket(/.*/, (ws) => { sockets.push(ws.url()); ws.close() })
   await ctx.route('**/*', (route) => { refused.push(route.request().url()); return route.abort() })
@@ -136,8 +140,8 @@ async function session(dist, { sEdit = null, account = ADDRESS } = {}) {
     const p = new URL(route.request().url()).pathname
     if (p !== '/' && p !== '/index.html') return route.fulfill({ status: 404, body: '' })
     const headers = { 'content-type': 'text/html; charset=utf-8' }
-    for (const r of libRules) if (r.pattern === p) for (const [k, v] of r.headers) headers[k.toLowerCase()] = v
-    return route.fulfill({ status: 200, headers, body: libHtml })
+    for (const r of st.libRules) if (r.pattern === p) for (const [k, v] of r.headers) headers[k.toLowerCase()] = v
+    return route.fulfill({ status: 200, headers, body: st.libHtml })
   })
   await ctx.route(`${S}/**`, async (route) => {
     const res = await s(new Request(route.request().url(), { method: route.request().method() }))
@@ -242,6 +246,72 @@ const held = (st) => st.page.evaluate(() => new Promise((res) => {
 }))
 
 const homeWa = (st) => st.wa.filter((x) => x.origin === HOME)
+
+// ---- the build that plants exportable keys, and the agent in node ----------------------------
+let planting = null
+const plantingBuild = () => (planting ??= build('planting', MUTANTS['keys-extractable'][1]))
+
+const ESBUILD = process.env.ESBUILD || join(ROOT, 'slides/node_modules/.bin/esbuild')
+let agentN = 0
+/** home/web/src/identity.ts, with `edits` applied in a copy beside the real src (so its kernel imports resolve), bundled for node. */
+async function agentModule(edits) {
+  const copy = join(ROOT, `home/web/.identity-node-${process.pid}-${++agentN}`)
+  cpSync(join(ROOT, 'home/web/src'), copy, { recursive: true })
+  try {
+    for (const e of edits ?? []) {
+      const f = join(copy, e.file), t = readFileSync(f, 'utf8')
+      if (t.split(e.from).length !== 2) throw new Error(`edit does not apply once in ${e.file}: ${e.from}`)
+      writeFileSync(f, t.replace(e.from, () => e.to))
+    }
+    const out = join(tmp, `agent-${agentN}.mjs`)
+    const r = spawnSync(ESBUILD, [join(copy, 'identity.ts'), '--bundle', '--format=esm', '--platform=neutral', '--log-level=error',
+      `--define:__DIRECTORY_KEYS__=${JSON.stringify(PINNED)}`, `--outfile=${out}`], { encoding: 'utf8' })
+    if (r.status !== 0) throw new Error(`esbuild: ${r.stderr}`)
+    return await import(out)
+  } finally { rmSync(copy, { recursive: true, force: true }) }
+}
+
+// a directory and a clock of its own, for the node rows
+let raceClock = T0 + HOUR
+const raceDir = directoryStub({ accounts, credentials, key: { kid: 'dir-1', key: K.dir1.key }, now: () => raceClock })
+const call = async (path, origin, body) => { const r = await raceDir.handle({ method: 'POST', path, origin, body: JSON.stringify(body) }); return { status: r.status, body: JSON.parse(r.body) } }
+const rawPub = async (k) => b64uEnc(new Uint8Array(await crypto.subtle.exportKey('raw', k)))
+/** A held record as a finished ceremony leaves it: enrolled through the stub's sign-in routes, its proof fetched by a check-in. */
+async function heldRecord() {
+  const W = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign'])
+  const kx = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits'])
+  const Wpub = await rawPub(W.publicKey), kxPub = await rawPub(kx.publicKey)
+  const ch = (await call('/v1/web/challenge', S, { address: ADDRESS })).body
+  const text = buildDeviceCert({ kind: 'wdev', devicePub: Wpub, consentPub: null, kx: kxPub, address: ADDRESS, rosHash: ch.rosHash, label: 'Chrome on macOS', via: 'passkey', ceremonyAt: ch.at, dirNonce: ch.nonce })
+  const a = await softAssertion('pk1', text, { origin: S })
+  const e = await call('/v1/web/enrol', S, { text, rq: HOME, assertion: { id: CRED.toString('base64url'), ...a } })
+  if (e.status !== 200) throw new Error('enrol ' + JSON.stringify(e.body))
+  const nonce = (await call('/v1/home/challenge', HOME, { address: ADDRESS })).body.nonce
+  const wren = buildWren({ devicePub: Wpub, address: ADDRESS, challenge: nonce })
+  const p = (await call('/v1/home/checkin', HOME, { wren, sig: await signStatement(W.privateKey, wren) })).body
+  let from = 0
+  for (let i = 0; i < p.roster.length; i++) if ((await sha256b64u(p.roster[i].ros)) === ch.rosHash) from = i
+  return { v: 1, address: ADDRESS, label: 'Chrome on macOS', W, kx, Wpub, kxPub, cert: text, signer: p.signer, assertion: p.assertion,
+    watt: p.watt, wattSig: p.wattSig, ceremonyAt: ch.at, expires: raceClock + 24 * HOUR, roster: p.roster.slice(from), pin: ch.rosHash }
+}
+/** An agent holding a fresh record, an in-memory store, and a network that fires `fire.hook` as the check-in answer is handed back. */
+async function raceSetup(Agent) {
+  raceClock = T0 + HOUR
+  let rec = { held: null, last: null }
+  const store = { rec: () => rec, get: async () => rec, put: async (h) => { rec = { held: h, last: null } }, end: async (l) => { rec = { held: null, last: l } } }
+  const h0 = await heldRecord()
+  await store.put(h0)
+  raceClock += HOUR   // so the check-in's countersign differs from the held one
+  const fire = { hook: null }
+  const net = async (url, init) => {
+    const u = new URL(url), r = await raceDir.handle({ method: 'POST', path: u.pathname, origin: HOME, body: init.body })
+    if (u.pathname === '/v1/home/checkin' && fire.hook) { const f = fire.hook; fire.hook = null; setImmediate(f) }
+    return new Response(r.body, { status: r.status })
+  }
+  const agent = new Agent(store, net, () => raceClock)
+  if ((await agent.load()).kind !== 'signed-in') throw new Error('the seeded record does not load')
+  return { agent, store, h0, fire }
+}
 
 // ---- the rows -------------------------------------------------------------------------------
 // Each returns [[condition, message], ...]; a row holds when all of them do.
@@ -473,6 +543,49 @@ const ROWS = {
     return [[c.box.state === 'none' && /^roster-/.test(c.box.reason) && !h.held, `refused, nothing kept (${c.box.reason})`]]
   },
 
+  async 'a key a build left exportable is dropped on load'(dist) {
+    // another build of the library (a hostile deploy, or a bug) made the keys exportable and signed in;
+    // the build under test then loads what it left in IndexedDB
+    const st = await session(plantingBuild())
+    const c = await ceremony(st)
+    const planted = (await held(st)).held
+    st.serve(dist)
+    const b = await reload(st)
+    const h = await held(st)
+    await close(st)
+    return [
+      [c.box.state === 'signed-in' && planted?.W.ext === true && planted?.W.pkcs8 === 'exported',
+        `positive control: the other build signed in with a key that exports (${c.box.state}, ${planted?.W.pkcs8})`],
+      [b.state === 'ended' && b.why === 'invalid' && !h.held && h.last?.why === 'invalid', `dropped on load: "${b.text}"`],
+    ]
+  },
+
+  async 'a check-in in flight never writes back a sign-in that was signed out or replaced'(dist, edits) {
+    // node: the agent from home/web/src (with the mutant's edits, if any) against the stub; the event lands
+    // while checkIn awaits its verify, after the network answered
+    const { Agent } = await agentModule(edits)
+    const out = []
+    for (const variant of ['control', 'sign-out', 'newer record']) {
+      const n = { right: 0, wrong: 0 }
+      for (let i = 0; i < 5; i++) {
+        const { agent, store, h0, fire } = await raceSetup(Agent)
+        const h1 = variant === 'newer record' ? await heldRecord(raceDir) : null
+        if (variant === 'sign-out') fire.hook = () => { void agent.signOut() }
+        // what signIn's last step does
+        if (variant === 'newer record') fire.hook = () => { void store.put(h1).then(() => { agent['held'] = h1 }) }
+        await agent.checkIn()
+        await sleep(30)
+        const rec = store.rec().held, mem = agent['held']
+        const right = variant === 'control' ? rec?.Wpub === h0.Wpub && mem?.Wpub === h0.Wpub && rec.watt !== h0.watt
+          : variant === 'sign-out' ? !rec && !mem
+          : rec?.Wpub === h1.Wpub && mem === h1
+        right ? n.right++ : n.wrong++
+      }
+      out.push([n.wrong === 0, `${variant}${variant === 'control' ? ' (nothing lands: the check-in writes its renewal)' : ' lands mid check-in: ' + (variant === 'sign-out' ? 'nothing comes back' : 'the newer record stays')} (${n.right}/5)`])
+    }
+    return out
+  },
+
   async 'the policy: the release channel and the directory only, Trusted Types required'(dist) {
     const info = JSON.parse(readFileSync(join(dist, 'build.json'), 'utf8'))
     const hdr = readFileSync(join(dist, 'library/_headers'), 'utf8')
@@ -525,13 +638,17 @@ const MUTANTS = {
     A('identity.ts', "      if (expect !== null && cert.address !== expect) return no('account')\n", '')]],
   'not-ours': ['a certificate is accepted only for the keys the library sent', [
     A('identity.ts', "      if (cert.devicePub !== k.Wpub || cert.kx !== k.kxPub || cert.label !== label) return no('not-ours')\n", '')]],
+  'keys-unchecked': ['a key a build left exportable is dropped on load', [
+    A('identity.ts', "    if (!ok(h.W, 'ECDSA', 'sign') || !ok(h.kx, 'ECDH', 'deriveBits')) return false\n", '')]],
+  'write-back-after-verify': ['a check-in in flight never writes back a sign-in that was signed out or replaced', [
+    A('identity.ts', '    if (this.held !== h) return this.status()\n    if (!v.ok)', '    if (!v.ok)')]],
   'connect-any': ['the policy: the release channel and the directory only, Trusted Types required', 'dist',
     (t) => t.replace('connect-src https://bento.page/releases/ https://id.bento.page', 'connect-src *')],
 }
 
-const rowHolds = async (name, dist) => {
+const rowHolds = async (name, dist, edits = null) => {
   let r
-  try { r = await ROWS[name](dist) } catch (e) { r = [[false, `crashed: ${e.message.split('\n')[0]}`]] }
+  try { r = await ROWS[name](dist, edits) } catch (e) { r = [[false, `crashed: ${e.message.split('\n')[0]}`]] }
   return r
 }
 
@@ -551,7 +668,7 @@ try {
       const [row, edits, edit] = MUTANTS[m]
       if (!ROWS[row]) { ok(false, `MUTANT ${m}: names no row (${row})`); continue }
       const dist = edits === 'dist' ? distMutant(honest, `m-${m}`, edit) : build(`m-${m}`, edits)
-      const r = await rowHolds(row, dist)
+      const r = await rowHolds(row, dist, edits === 'dist' ? null : edits)
       const red = r.filter(([c]) => !c).map(([, msg]) => msg)
       ok(red.length > 0, `MUTANT ${m}: red on "${row}"${red.length ? ` (${red[0]})` : ''}`)
     }

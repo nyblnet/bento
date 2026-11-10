@@ -24,7 +24,11 @@
 //       verifies (kernel verifyAssertion: rp id.bento.page, origins exactly the
 //       sign-in host). Then it logs { os: the request's Origin, rq, devicePub },
 //       stores the certificate with its signer and assertion, and answers a
-//       watt.: loggedAt now, expires min(now + 24 h, ceremonyAt + 7 days).
+//       watt.: loggedAt now, expires min(now + 24 h, ceremonyAt + 7 days), and
+//       ob = 1 exactly when the enrolment was made at bento/home's request
+//       (the logged rq is https://home.bento.page, as the sign-in host
+//       reported it). Every web enrolment's Origin is the sign-in host, so ob
+//       is never read from Origin. No verifier decides anything on ob.
 //
 // bento/home's routes (CORS to https://home.bento.page alone; Origin must be it):
 //
@@ -87,7 +91,7 @@ export function directoryStub({ accounts, credentials, key, now }) {
   const watt = async (c, signer = key) => {
     const t = now()
     const expires = hostile.watt48h ? t + 2 * WATT_MAX_MS : Math.min(t + WATT_MAX_MS, c.ceremonyAt + CEREMONY_CAP_MS)
-    const text = buildWatt({ certHash: await sha256b64u(c.cert), ob: 1, loggedAt: t, expires, kid: signer.kid })
+    const text = buildWatt({ certHash: await sha256b64u(c.cert), ob: c.rq === HOME ? 1 : 0, loggedAt: t, expires, kid: signer.kid })
     return { text, sig: await signStatement(signer.key, text) }
   }
 
@@ -127,7 +131,7 @@ export function directoryStub({ accounts, credentials, key, now }) {
       const assertion = { authenticatorData: a.authenticatorData, clientDataJSON: a.clientDataJSON, signature: a.signature }
       const v = await verifyAssertion(assertion, { publicKey: signer, challenge: await statementChallenge(b.text), rpId: 'id.bento.page', origins: [SIGNIN] })
       if (!v.ok) return out(403, { error: 'assertion' })
-      const rec = { cert: b.text, signer, assertion, ceremonyAt: c.ceremonyAt, address: c.address }
+      const rec = { cert: b.text, signer, assertion, ceremonyAt: c.ceremonyAt, address: c.address, rq: b.rq }
       certs.set(c.devicePub, rec)
       log.push({ k: 'enrol', os: origin, rq: b.rq, W: c.devicePub, kx: c.kx, label: c.label, address: c.address, at: now() })
       return out(200, { ok: true, wdev: b.text, watt: (await watt(rec)).text })

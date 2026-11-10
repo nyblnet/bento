@@ -13724,6 +13724,9 @@ and a development build until the directory's keys are pinned for release.
   The roster chain and the certificate with its countersign are checked by the
   kernel's verifiers (`verifyRosterChain`, `verifyDevice`) under directory keys
   pinned in the build; a key list from the network is never used.
+- **A check-in never writes back what it no longer holds.** If the person
+  signs out, or a new ceremony replaces the keys, while a check-in is being
+  verified, its renewal is dropped: on a shared computer, Sign out must stick.
 - **24 hours, renewed; 7 days, then "Confirm it's you".** A check-in signed by
   `W` (`wren.`) renews the countersign on load and every hour. A day before the
   7-day cap the page asks the person to confirm it's them, which is a new

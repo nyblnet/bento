@@ -102,8 +102,8 @@ in `ci-home.yml` (`home-web-engines`).
 
 `build.mjs --identity --directory-keys <json>` adds the bento/id agent
 (`src/identity.ts`, `src/identity-ui.ts`, `identity.html`). Without the flag
-nothing of it is in the page, and the build is byte-identical to one without
-this code. It stays a development build until the directory's keys are pinned
+nothing of it is in the page, and every file it serves is byte-identical to
+a build without this code. It stays a development build until the directory's keys are pinned
 for release and the directory and the sign-in host are deployed.
 
 - **No WebAuthn here.** The passkeys belong to rp `id.bento.page`, which this
@@ -122,6 +122,8 @@ for release and the directory and the sign-in host are deployed.
   chain (`verifyRosterChain`) and the certificate with its countersign
   (`verifyDevice`) are checked by the kernel under the directory keys the build
   pins, never keys the network offers.
+- **Sign out sticks.** A check-in that finishes after a sign-out, or after a
+  new ceremony replaced the keys, writes nothing back.
 - **24 hours, 7 days.** A check-in signed by `W` (`wren.`) renews the 24-hour
   countersign on load and every hour, until 7 days after the ceremony. A day
   before that the line asks "Confirm it's you": a new ceremony, new keys.

@@ -279,11 +279,14 @@ export class Agent {
     const a = r.answer
     if (!a) return this.status()
     const v = await this.verify(h.cert, a, a.roster, h.pin)
+    // a sign-out or a new ceremony while the verify ran: what it replaced is never written back
+    if (this.held !== h) return this.status()
     if (!v.ok) { await this.end(h.address, 'invalid'); return this.status() }
     const next: Held = { ...h, watt: a.watt, wattSig: a.wattSig, signer: a.signer, assertion: a.assertion,
       expires: v.value.watt.expires, roster: a.roster }
-    await this.store.put(next)
+    // in memory first: a sign-out during the write then deletes after it (IndexedDB runs them in order)
     this.held = next
+    await this.store.put(next)
     return this.status()
   }
 
