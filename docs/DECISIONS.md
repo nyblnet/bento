@@ -13622,3 +13622,59 @@ protocol in Playwright's headless shell and Google Chrome),
 scripts/test-signin-host-engines.mjs (the rows that need no passkey, in
 WebKit too) and scripts/test-signin-host-coop.mjs (COOP in Chromium, Chrome and
 WebKit).
+
+## 2026-11-10 — The DocStore over a sandboxed frame's port: possession of the port is the capability
+
+A document that bento/home in a browser runs in its opaque sandboxed frame
+(home/web) gets its per-document store (docstore.ts: the crash-recovery copy and
+the member key) from the library, over a **second `MessagePort` the library
+transfers in the boot handshake** (`kernel/src/docstoreport.ts`). The frame
+offers it once, as `window.__bentoDocStore.take()`; `docStore()` prefers it to
+the window protocol the extension and native hosts speak.
+
+- **The port is the only channel.** An opaque frame's messages all come from
+  origin `null`, and its WindowProxy survives the frame navigating itself, so
+  neither the origin nor the source window can identify a session. The host
+  created the channel and handed one end to the frame it served: holding that
+  end is the capability. The protocol never reads an origin and never posts to
+  a window (a source check in the rig, with a mutant).
+- **Every rule is the host's**, because after the document is written the
+  frame's realm, the frame's own script included, is the document's: a closed
+  op list (`get`, `set`, `list`, `delete`) and name list (`recovery`,
+  `memberkey`), an exact key set per op, request ids that only rise, bytes only
+  as a plain `Uint8Array` over a buffer about its own size, a cap per name and
+  per open (a document filling the host origin's quota would starve every
+  other entry, since browsers evict an origin at once), caps on requests in
+  flight and on the rate. Anything else is dropped unanswered and counted; past
+  a limit of drops the session closes. A value over its cap is a well-formed
+  request and is answered `too-large`, so the document stops retrying.
+- **The partition is an entry the host mints per open**, never the docId: a
+  file can claim any docId. The session is also bound to the docId the host
+  read from the file it verified, and a record is returned only to a session
+  bound to the docId it was written under; a file with no readable docId (an
+  encrypted body) gets `unavailable`. Nothing in a message can name an entry
+  or a docId: such a field makes the message malformed.
+- **Closing an open closes its port**, so a port the document stashed or handed
+  to a popup is answered nothing afterwards, and the next open is a new channel
+  and a new entry.
+- **The channel never writes files.** Saving stays on the host's save path,
+  where the host re-splices the document's data into the shell it verified.
+- **Backward compatible.** A shell built before this never reads
+  `__bentoDocStore`, so under the library it behaves exactly as in stage 1, and
+  `__bentoHost` is not defined there (a shell that saw `ops` with `store` would
+  speak the window protocol to nobody and wait out its timeouts). The splice
+  contract is untouched: nothing here is in the file.
+
+For now the library keeps the store in its page memory for the open and drops
+it at close. Stage 2's per-entry recovery cache in the library's own storage,
+cleared when a write-back succeeds, is a `StoreBackend` for the same
+`serveDocStore`.
+
+Rigs: scripts/test-docstore-port.ts (the protocol over real channels: schema,
+ids, caps, binding, teardown, flow, the client) with
+scripts/test-docstore-port-mutants.ts (19 mutants, each red on the row that
+guards its rule); scripts/test-home-web.mjs's [S7] rows against the real library
+and frame in Chromium, WebKit and Firefox, including a hostile document that
+tries other docIds, forged ops, oversized values, a second take and its port
+stashed in a popup after close, with four more mutants in
+scripts/test-home-web-mutants.mjs.

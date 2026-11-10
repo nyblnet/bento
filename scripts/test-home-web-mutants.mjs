@@ -94,6 +94,27 @@ const MUTANTS = [
     src: { file: 'verify.ts', from: 'ignoreBOM: true', to: 'ignoreBOM: false' },
     expect: 'a file starting with a byte-order mark boots and downloads byte for byte',
   },
+  {
+    name: 'store-unbound', why: '[S7] the library binds the store to no verified docId',
+    src: { file: 'library.ts', from: 'docId: docIdOf(html), backend: memory', to: 'docId: null, backend: memory' },
+    expect: "[S7] positive control: the kernel's client stores, reads, lists and deletes through the library",
+  },
+  {
+    name: 'store-take-twice', why: '[S7] the frame hands the store port to every caller',
+    src: { file: 'frame.ts', from: 'const p = store; store = null; return p', to: 'return store' },
+    expect: '[S7] the port is taken once',
+  },
+  {
+    name: 'store-outlives-close', why: '[S7] closing a document leaves its store session answering',
+    src: { file: 'library.ts', from: '  session.store?.close()\n', to: '' },
+    expect: '[S7] port reuse: after the library closed that open, the stashed port is answered nothing',
+  },
+  {
+    name: 'store-entry-by-docid', why: '[S7] the library keys the entry by the docId and keeps it past close',
+    src: [{ file: 'library.ts', from: "entry: mintEntry(), store: null }", to: "entry: String(docIdOf(html)), store: null }" },
+      { file: 'library.ts', from: '  memory.dropEntry(session.entry)\n', to: '' }],
+    expect: '[S7] the same file, so the same docId, opened again: a new entry that holds nothing of the last open',
+  },
 ]
 
 const only = process.argv.slice(2)

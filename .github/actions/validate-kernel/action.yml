@@ -283,6 +283,21 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-docstore.ts
 
+    - name: DocStore over the frame's MessagePort
+      # The store a document in a host's sandboxed frame (bento/home in a
+      # browser) speaks over the port the host transferred at boot: a closed
+      # op and name list, exact keys, rising ids, size and rate caps, the
+      # partition the host's entry and never the docId, and a closed session
+      # answering nothing. Malformed messages are dropped and counted.
+      shell: bento-step {0}
+      run: node scripts/test-docstore-port.ts
+
+    - name: DocStore port mutants
+      # Each mutant loosens one rule in a copy of kernel/src; the rig must go
+      # red on the row that guards it, after the unmutated copy passes.
+      shell: bento-step {0}
+      run: node scripts/test-docstore-port-mutants.ts
+
     - name: Guarded storage rig
       # localStorage's absence is hostile: reading the PROPERTY throws, so
       # `if (localStorage)` is itself the crash and one bare read at module

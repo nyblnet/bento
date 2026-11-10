@@ -32,6 +32,7 @@
 //
 // BENTO_HOME_WEB_MUTANT='{"file":"verify.ts","from":"…","to":"…"}' builds a
 // mutant for the mutant rig: the build fails unless `from` occurs exactly once.
+// An array of such edits is one mutant made of several.
 
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -98,11 +99,14 @@ if (mutant) {
   const copy = path.join(here, `.mutant-src-${process.pid}`)
   fs.rmSync(copy, { recursive: true, force: true })
   fs.cpSync(srcDir, copy, { recursive: true })
-  const f = path.join(copy, mutant.file)
-  const text = fs.readFileSync(f, 'utf8')
-  const n = text.split(mutant.from).length - 1
-  if (n !== 1) { fs.rmSync(copy, { recursive: true, force: true }); die(`mutant: "${mutant.from}" occurs ${n} times in ${mutant.file} (exactly one required)`) }
-  fs.writeFileSync(f, text.replace(mutant.from, () => mutant.to))
+  // one edit, or several (an array) that together break one rule
+  for (const m of Array.isArray(mutant) ? mutant : [mutant]) {
+    const f = path.join(copy, m.file)
+    const text = fs.readFileSync(f, 'utf8')
+    const n = text.split(m.from).length - 1
+    if (n !== 1) { fs.rmSync(copy, { recursive: true, force: true }); die(`mutant: "${m.from}" occurs ${n} times in ${m.file} (exactly one required)`) }
+    fs.writeFileSync(f, text.replace(m.from, () => m.to))
+  }
   srcDir = copy
   process.on('exit', () => fs.rmSync(copy, { recursive: true, force: true }))
 }
@@ -228,7 +232,7 @@ fs.writeFileSync(path.join(out, 'frame/_headers'),
 
 const historyBytes = historyTexts.reduce((n, t) => n + Buffer.byteLength(JSON.stringify(t)), 0)
 const info = {
-  libraryOrigin, frameOrigin, releaseBase, testKey: !!keyFile, mutant: mutant ? mutant.from : null,
+  libraryOrigin, frameOrigin, releaseBase, testKey: !!keyFile, mutant: mutant ? [].concat(mutant).map((m) => m.from).join(' + ') : null,
   histories: histories.map((h) => path.relative(root, h)),
   bytes: {
     library: Buffer.byteLength(libHtml),
