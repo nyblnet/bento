@@ -26,7 +26,19 @@
 //     nothing a stranger can fill holds one back;
 //   · every answer from id.bento.page is JSON with nosniff, blocks WebAuthn by
 //     Permissions-Policy, carries a CSP, and /.well-known/webauthn is not served;
-//   · no countersign (`rip.`) is issued yet;
+//   · every link in the chain carries the directory's countersign (`rip.`),
+//     issued when it takes effect, never at request, under the authority word
+//     for the act (m, q, x, u, r), and the kernel's verifier accepts the chain;
+//   · the void (G3, G4, G4a-c): every waiting notice carries a void link, a
+//     256-bit token in the fragment that no count of wrong guesses can burn;
+//     Cancel drops the change and stops its requester asking for 72 hours;
+//     Remove suspends the requester and queues its removal, whose own notice
+//     can undo it; Remove is never offered to the only live member; a reset
+//     offers Cancel only; the void page is the one HTML answer, under its own
+//     headers;
+//   · the reset (G5): a mailed link no budget holds back, a new passkey, 72
+//     hours, preempting whatever waits; no member may stop it in the account's
+//     first 14 days; "new account" for 14 days;
 //   · a setup link mailed beyond the budget lives a day, so a stranger who
 //     keeps asking costs the owner at most the day's budget plus one link a
 //     day, with never a moment without a live link (S1′); the link lives are
@@ -38,8 +50,9 @@
 import worker, { Roster } from '../server/directory/src/worker.js'
 import { Ledger } from '../server/directory/src/worker.js'
 import { addressKey } from '../server/directory/src/address.js'
-import { PASSKEY, SIGNIN_ORIGIN, passkeyOrigins, readCbor, verifyRegistration, verifyMemberAssertion } from '../server/directory/src/passkey.js'
-import { parseSetupLink, setupLink, SIGNIN_PATHS } from '../server/directory/src/links.js'
+import { DIRECTORY_ORIGIN, PASSKEY, SIGNIN_ORIGIN, passkeyOrigins, readCbor, verifyRegistration, verifyMemberAssertion } from '../server/directory/src/passkey.js'
+import { parseResetLink, parseSetupLink, parseVoidLink, setupLink, SIGNIN_PATHS } from '../server/directory/src/links.js'
+import { evaluate } from './check-id-hosting.mjs'
 import { MAIL_KINDS, MAIL_TIMEOUT_MS, deliver } from '../server/directory/src/mail.js'
 import * as workerModule from '../server/directory/src/worker.js'
 import { WEB_ROUTES } from '../server/directory/src/seam.js'
@@ -48,7 +61,7 @@ import { openChallenge } from '../server/directory/src/challenge.js'
 import { existsSync } from 'node:fs'
 import { fingerprint, ROSTER_LIMITS } from '../server/directory/src/roster.js'
 import { b64uDec, b64uEnc, sha256b64u } from '../kernel/src/statements.ts'
-import { buildRos, parseRos, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, ROSTER_WAIT_MS, type Member } from '../kernel/src/roster.ts'
+import { buildRos, parseRos, verifyRip, verifyRosterChain, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, ROSTER_WAIT_MS, type Member, type RosterLink } from '../kernel/src/roster.ts'
 import { readFileSync, readdirSync } from 'node:fs'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { join, dirname } from 'node:path'
@@ -131,8 +144,11 @@ const mailbox: Mail[] = []
 let mailDown = false
 /** when set, the next send goes here instead (a hung or late mailer) */
 let mailHook: ((m: Mail) => Promise<void> | void) | null = null
+// the directory's online countersign key (dir-1), and its public half as a peer would pin it
+const dirKp = (await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])) as CryptoKeyPair
+const DIR_PUB = b64uEnc(new Uint8Array(await crypto.subtle.exportKey('raw', dirKp.publicKey)))
 const env: Record<string, unknown> = {
-  DIR_KID: 'dir-1', CHALLENGE_KEY: 'k'.repeat(48),
+  DIR_KID: 'dir-1', CHALLENGE_KEY: 'k'.repeat(48), DIR_KEY_JWK: JSON.stringify(await crypto.subtle.exportKey('jwk', dirKp.privateKey)),
   MAILER: { send: (m: Mail) => outgoing(() => { if (mailHook) return mailHook(m); if (mailDown) throw new Error('mailer down'); mailbox.push(m) }) },
 }
 const ROSTER = namespace(Roster as never)
@@ -286,6 +302,19 @@ async function plant(email: string, mutate: (store: Map<string, unknown>) => voi
 /** Run an object's alarm as the platform does: the alarm is cleared, then the handler may set the next one. */
 async function fire(o: { obj: Obj; alarm: number | null }) { o.alarm = null; await o.obj.alarm!() }
 const when = (t: number) => new Date(t).toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC')
+const DIR_KEYS = { 'dir-1': DIR_PUB }
+/** The stored chain as a peer would get it, through the kernel's verifier. */
+async function chainOf(email: string) {
+  const store = (await rosterObj(email)).store
+  const links = [...store.entries()].filter(([k]) => k.startsWith('link:')).sort(([a], [b]) => (a < b ? -1 : 1)).map(([, v]) => {
+    const l = v as Record<string, unknown>
+    const out: Record<string, unknown> = { ros: l.ros, rip: l.rip, ripSig: l.ripSig }
+    if (l.kind === 'member') { out.signer = l.signer; out.assertion = l.assertion }
+    if (l.voided) out.voided = l.voided
+    return out as unknown as RosterLink
+  })
+  return verifyRosterChain(links, { directoryKeys: DIR_KEYS, rpId: ROSTER_RP_ID, origins: [...ROSTER_WEB_ORIGINS], now })
+}
 
 // =====================================================================
 // 1. THE constant: rp id.bento.page; S the only web origin; matches the kernel
@@ -492,12 +521,20 @@ let addAt = 0
   const m2 = (lastMail(alice) ?? NOMAIL)
   ok(m2 && /changed/.test(m2.subject) && /now in effect/.test(m2.body) && m2.body.includes(await fingerprint(A1.pub)) && m2.body.includes(await fingerprint(A2.pub)),
     'ripening mail lists the whole roster')
-  // the stored link carries the directory's times, and no countersign exists yet
+  // the stored link carries the directory's times and its countersign, issued at ripening (G2)
   const store = (await rosterObj(alice)).store
   const link = store.get('link:00000001') as Record<string, unknown>
   ok(link && link.requestedAt === addAt && link.ripenedAt === addAt + ROSTER_WAIT_MS && link.ros === r.ros, 'link 1 stored with requestedAt and ripenedAt on the directory clock')
-  ok(![...store.keys()].some((k) => /rip/.test(k)) && ![...store.values()].some((v) => JSON.stringify(v).includes('"rip.')), 'no rip. countersign is stored')
-  ok(!responses.some((x) => x.text.includes('rip.')), 'no answer carries a rip. countersign')
+  const rip1 = await verifyRip(String(link?.rip), String(link?.ripSig), { rosText: r.ros, directoryKeys: DIR_KEYS, now })
+  ok(rip1.ok && rip1.value.auth === 'm' && rip1.value.cause === null && rip1.value.requestedAt === addAt && rip1.value.ripenedAt === addAt + ROSTER_WAIT_MS && rip1.value.kid === 'dir-1',
+    `link 1's rip. is the directory's, word m, with the directory's two times (got ${rip1.ok ? `${rip1.value.auth} ${rip1.value.requestedAt - addAt}` : rip1.reason})`)
+  const rip0 = store.get('link:00000000') as Record<string, unknown>
+  const v0 = await verifyRip(String(rip0?.rip), String(rip0?.ripSig), { rosText: String(rip0?.ros), directoryKeys: DIR_KEYS, now })
+  ok(v0.ok && v0.value.auth === 'm' && v0.value.requestedAt === v0.value.ripenedAt, 'the setup head is countersigned at once, word m')
+  const ch = await chainOf(alice)
+  ok(ch.ok && ch.value.seq === 1 && ch.value.members.some((m) => m.pub === A2.pub), `the kernel's chain verifier accepts the directory's chain (${ch.ok ? 'ok' : ch.reason})`)
+  // G2: nothing a request answers, and no waiting change, carries a countersign
+  ok(!responses.some((x) => x.what === 'request' && x.text.includes('rip.')), 'no request answer carries a rip. countersign')
 }
 {
   // the alarm path ripens too
@@ -1325,6 +1362,367 @@ let addAt = 0
 }
 
 // =====================================================================
+// 10b. SD2: the void (G3, G4, G4a-c) and the reset (G5)
+// =====================================================================
+/** The one void link in a mail, or null. */
+function voidIn(m: Mail | undefined) {
+  const urls = m?.body.match(/https?:\/\/\S+/g) ?? []
+  const all = urls.map((u) => parseVoidLink(u)).filter(Boolean)
+  return all.length === 1 && urls.filter((u) => u.includes('/void')).length === 1 ? all[0]! : null
+}
+async function voidPost(email: string, token: string, choice: string, o: { ip?: string } = {}) {
+  return seen('void', api('POST', '/v1/void', { email, token, choice }, o))
+}
+const linkAt = async (email: string, seq: number) => (await rosterObj(email)).store.get(`link:${String(seq).padStart(8, '0')}`) as Record<string, unknown> | undefined
+const pendOf = async (email: string) => (await rosterObj(email)).store.get('pend') as Record<string, unknown> | undefined
+const ripOf = async (l: Record<string, unknown> | undefined) => verifyRip(String(l?.rip), String(l?.ripSig), { rosText: String(l?.ros), directoryKeys: DIR_KEYS, now })
+/** A fresh account with two passkeys (the second ripened), ready for a staged change. */
+async function twoKeys(email: string) {
+  const a = await Authn.make(), b = await Authn.make()
+  const su = await setup(email, a)
+  const rq = await request(email, a, { add: b })
+  if (su.status !== 200 || rq.status !== 202) console.log(`twoKeys(${email}): setup ${su.status} ${JSON.stringify(su.j)}, add ${rq.status} ${JSON.stringify(rq.j)}`)
+  now += ROSTER_WAIT_MS
+  await current(email)
+  return [a, b] as const
+}
+async function resetToken(email: string, ip?: string) {
+  const n = mailbox.length
+  const r = await seen('reset-start', api('POST', '/v1/roster/reset/start', { email }, { ip }))
+  const m = mailbox.slice(n).find((x) => x.to === email && x.kind === 'reset')
+  const urls = m?.body.match(/https?:\/\/\S+/g) ?? []
+  const l = urls.length === 1 ? parseResetLink(urls[0]) : null
+  return { r, token: l && l.address === email ? l.token : null, mail: m }
+}
+async function reset(email: string, a: Authn, token: string, o: { ch?: string; reg?: RegOpts } = {}) {
+  const ch = o.ch ?? await challenge(email)
+  const reg = await a.register(b64uDec(ch) ?? new Uint8Array(32), o.reg)
+  return seen('reset', api('POST', '/v1/roster/reset', { email, token, dirNonce: ch, reg }))
+}
+{
+  // --- the void link in every waiting notice (G3) ---
+  now += DAY
+  const gus = 'sd2-gus@example.com'
+  const [G1, G2] = await twoKeys(gus)
+  const G3 = await Authn.make()
+  mailbox.length = 0
+  const q1 = await request(gus, G1, { add: G3 })
+  ok(q1.status === 202, `gus: G1 asks to add G3 (got ${q1.status} ${JSON.stringify(q1.j)})`)
+  const wm = lastMail(gus)
+  const vl = voidIn(wm)
+  ok(vl !== null && vl.address === gus && b64uDec(vl.token)?.length === 32 && vl.kind === 'c',
+    `the waiting notice carries one void link on the directory, a 256-bit token in the fragment, both buttons (got ${vl ? vl.kind : 'none'})`)
+  ok(!!wm && wm.body.includes(`${DIRECTORY_ORIGIN}/void#`) && !/\/void\?/.test(wm.body), 'the void link is on id.bento.page/void and carries its token in the fragment only')
+  ok(!!wm && wm.body.includes('choose Cancel') && wm.body.includes('Choose Remove only if you do not recognise the passkey that asked'), 'the waiting notice says which button to pick (G4c)')
+  ok(!!wm && wm.body.includes(`asked for by the passkey ${await fingerprint(G1.pub)}, added`), 'the waiting notice names the passkey that asked, with its age')
+  ok(!JSON.stringify([...(await rosterObj(gus)).store.values()]).includes(vl?.token ?? 'x'), 'the void token itself is never stored (only its hash)')
+  // R1-burn: wrong guesses from twelve addresses, malformed ones too, spend nothing
+  for (let i = 0; i < 12; i++) {
+    const r = await voidPost(gus, b64uEnc(crypto.getRandomValues(new Uint8Array(32))), 'cancel')
+    ok(r.status === 400 && r.j.error === 'invalid', `stranger void guess ${i + 1}: refused (invalid)`)
+  }
+  ok((await voidPost(gus, 'short', 'cancel')).status === 400 && (await voidPost(gus, (vl?.token ?? ''), 'burn')).status === 400, 'a malformed token or choice: refused')
+  ok((await pendOf(gus))?.voidTok !== undefined, 'after twelve wrong guesses the change and its token still wait')
+  // a choice the link does not offer is refused WITHOUT spending the token
+  const undoOnChange = await voidPost(gus, (vl?.token ?? ''), 'undo')
+  ok(undoOnChange.status === 400 && undoOnChange.j.error === 'choice', 'undo on a change\'s link: refused (choice)')
+  // per-IP limit: the 61st void from one address is refused; the real token still works from another
+  const vip = freshIp()
+  const vs: number[] = []
+  for (let i = 0; i <= LIMITS.ip.void; i++) vs.push((await voidPost(gus, b64uEnc(crypto.getRandomValues(new Uint8Array(32))), 'cancel', { ip: vip })).status)
+  ok(LIMITS.ip.void === 60 && vs.slice(0, -1).every((x) => x === 400) && vs[vs.length - 1] === 429, `void #${LIMITS.ip.void + 1} from one IP in an hour → 429 (last ${vs[vs.length - 1]})`)
+
+  // --- Cancel (G4b) ---
+  mailDown = true // a cancel never waits on the mailer
+  const c = await voidPost(gus, (vl?.token ?? ''), 'cancel')
+  mailDown = false
+  ok(c.status === 200 && c.j.done === 'cancelled' && c.j.until === now + 72 * HOUR, `Cancel with the real token after 12 wrong guesses and the mailer down: 200, cooldown until +72 h (got ${c.status} ${JSON.stringify(c.j)})`)
+  const after = await current(gus)
+  ok(after.pending === null && after.head?.seq === 1 && !after.head?.members.some((m) => m.pub === G3.pub), 'the change is gone and the head is unchanged')
+  ok((await voidPost(gus, (vl?.token ?? ''), 'cancel')).j.error === 'invalid', 'the same link again: refused (single use)')
+  const G4 = await Authn.make()
+  const cool = await request(gus, G1, { add: G4 })
+  ok(cool.status === 403 && cool.j.error === 'cooldown', `the passkey that asked cannot ask again (cooldown) (got ${cool.status} ${cool.j.error})`)
+  ok((await request(gus, G1, { remove: G1.pub })).j.error === 'cooldown', 'not even to remove itself')
+  now += 71 * HOUR
+  ok((await request(gus, G1, { add: G4 })).j.error === 'cooldown', 'still refused at +71 h')
+  now += HOUR
+  const free = await request(gus, G1, { add: G4 })
+  ok(free.status === 202, `at +72 h it may ask again (got ${free.status} ${free.j.error})`)
+  const cm = mailsTo(gus).find((m) => m.kind === 'void')
+  ok(!cm, 'with the mailer down the cancel notice was lost, and the cancel stood anyway')
+  // another member is not held back by G1's cooldown
+  const fv = voidIn(lastMail(gus))
+  ok((await voidPost(gus, (fv?.token ?? ''), 'cancel')).status === 200, 'cancel that one too')
+  const g2asks = await request(gus, G2, { add: G4 })
+  ok(g2asks.status === 202, 'another member may ask while the first is cooling down')
+  const cm2 = mailsTo(gus).filter((m) => m.kind === 'void').pop()
+  ok(!!cm2 && /cancelled/.test(cm2.subject) && cm2.body.includes(await fingerprint(G1.pub)) && cm2.body.includes(await fingerprint(G2.pub)) && cm2.body.includes('cannot ask for another change to this account until'),
+    'the cancel notice names the passkey that asked, its cooldown, and the whole roster')
+  // a void after the change took effect: refused
+  const late = voidIn(lastMail(gus))
+  now += ROSTER_WAIT_MS
+  const lv = await voidPost(gus, (late?.token ?? ''), 'cancel')
+  ok(lv.status === 400 && lv.j.error === 'invalid' && (await current(gus)).head?.members.some((m) => m.pub === G4.pub), 'a void after the change took effect: refused, the change stands')
+}
+{
+  // --- Remove: suspend (q) at once, removal (x) queued, undo (u) from its own mail (G4, G4a) ---
+  now += DAY
+  const hal = 'sd2-hal@example.com'
+  const [H1, H2] = await twoKeys(hal)
+  const HA = await Authn.make()
+  mailbox.length = 0
+  const asked = await request(hal, H2, { add: HA })
+  const vl = voidIn(lastMail(hal))
+  ok(asked.status === 202 && vl?.kind === 'c', 'hal: H2 asks to add HA; its link offers Remove')
+  const before = await current(hal)
+  // the removal's notice carries the way back, so with no mailer nothing changes
+  mailDown = true
+  const down = await voidPost(hal, (vl?.token ?? ''), 'remove')
+  mailDown = false
+  const still = await current(hal)
+  ok(down.status === 503 && still.head?.seq === before.head?.seq && (await pendOf(hal))?.kind === 'member', 'Remove with the mailer down: 503, nothing changed, the change still waits')
+  const t0 = now
+  const rm = await voidPost(hal, (vl?.token ?? ''), 'remove')
+  ok(rm.status === 200 && rm.j.done === 'suspended' && rm.j.removesAt === t0 + ROSTER_WAIT_MS, `Remove, retried: 200, removal at +72 h (got ${rm.status} ${JSON.stringify(rm.j)})`)
+  const qh = await current(hal)
+  const h2 = qh.head?.members.find((m) => m.pub === H2.pub)
+  ok(qh.head?.seq === (before.head?.seq ?? 0) + 1 && h2?.quarantined === true && !qh.head?.members.some((m) => m.pub === HA.pub) && qh.head?.members.find((m) => m.pub === H1.pub)?.quarantined === false,
+    'at once: the head marks H2 ~q, HA was never added, H1 is untouched')
+  const ql = await linkAt(hal, (qh.head?.seq ?? -9))
+  const qr = await ripOf(ql)
+  ok(qr.ok && qr.value.auth === 'q' && qr.value.cause === await sha256b64u(asked.ros) && qr.value.requestedAt === t0 && qr.value.ripenedAt === t0,
+    `the suspension's rip. is word q, cause = the voided request's hash, immediate (got ${qr.ok ? `${qr.value.auth}` : qr.reason})`)
+  const vd = ql?.voided as Record<string, unknown> | undefined
+  ok(vd?.ros === asked.ros && vd?.signer === H2.pub && !!vd?.assertion, 'the q link carries the voided request with its signer and assertion')
+  const chq = await chainOf(hal)
+  ok(chq.ok && chq.value.members.find((m) => m.pub === H2.pub)?.quarantined === true, `the kernel accepts the chain with the q link (${chq.ok ? 'ok' : chq.reason})`)
+  const xp = await pendOf(hal)
+  ok(xp?.kind === 'removal' && xp?.ripensAt === t0 + ROSTER_WAIT_MS && xp?.requestedAt === t0 && (await current(hal)).pending?.kind === 'removal', 'the removal of H2 is queued in the same step, requested at the suspension\'s time')
+  // the suspended passkey can ask for nothing; nobody can ask while the removal waits
+  const qa = await request(hal, H2, { remove: H1.pub })
+  ok(qa.status === 409 && qa.j.error === 'pending', 'the suspended passkey cannot ask while its removal waits (pending; section 8 shows a ~q member refused as quarantined)')
+  ok((await request(hal, H1, { add: await Authn.make() })).j.error === 'pending', 'while the removal waits, another change is refused (pending)')
+  ok((await voidPost(hal, (vl?.token ?? ''), 'cancel')).j.error === 'invalid', 'the change\'s link is spent: its suspended requester holds no way to stop its own removal')
+  const sm = mailsTo(hal).filter((m) => m.kind === 'void').pop()
+  const ul = voidIn(sm)
+  ok(!!sm && /suspended/.test(sm.subject) && ul?.kind === 'u' && sm.body.includes(await fingerprint(H2.pub)) && sm.body.includes(`removed from this account at ${when(t0 + ROSTER_WAIT_MS)}`),
+    'the removal\'s own notice names the passkey, when it goes, and carries an undo link (G4a)')
+  ok(!!sm && !sm.body.includes(await fingerprint(HA.pub)), 'and lists the roster once it is removed (no HA)')
+  // the undo link offers undo only
+  ok((await voidPost(hal, (ul?.token ?? ''), 'cancel')).j.error === 'choice' && (await voidPost(hal, (ul?.token ?? ''), 'remove')).j.error === 'choice', 'the undo link refuses cancel and remove (choice)')
+  // G4a: undo
+  now += 5 * HOUR
+  const t1 = now
+  const un = await voidPost(hal, (ul?.token ?? ''), 'undo')
+  ok(un.status === 200 && un.j.done === 'restored', 'undo: 200')
+  const uh = await current(hal)
+  ok(uh.pending === null && uh.head?.members.find((m) => m.pub === H2.pub)?.quarantined === false && uh.head?.seq === (qh.head?.seq ?? -9) + 1, 'H2 is back, unmarked, and its removal is gone')
+  const urip = await ripOf(await linkAt(hal, (uh.head?.seq ?? -9)))
+  ok(urip.ok && urip.value.auth === 'u' && urip.value.cause === await sha256b64u(qh.text) && urip.value.ripenedAt === t1, `the undo's rip. is word u, cause = the q head's hash (got ${urip.ok ? urip.value.auth : urip.reason})`)
+  const chu = await chainOf(hal)
+  ok(chu.ok && chu.value.members.every((m) => !m.quarantined), `the kernel accepts the chain through q and u (${chu.ok ? 'ok' : chu.reason})`)
+  ok((await voidPost(hal, (ul?.token ?? ''), 'undo')).j.error === 'invalid', 'the undo link works once')
+  ok((await request(hal, H2, { add: HA })).status === 202, 'H2 may ask again at once (Remove sets no cooldown; undo restores it fully)')
+  ok((lastMail(hal)?.subject ?? '') !== '' && mailsTo(hal).some((m) => m.kind === 'void' && /put back/.test(m.subject)), 'the undo is mailed')
+
+  // the removal ripens if nobody undoes it (x)
+  const yl = voidIn(lastMail(hal))
+  const t2 = now
+  ok((await voidPost(hal, (yl?.token ?? ''), 'remove')).status === 200, 'H2 asks again; Remove this time')
+  const q2 = await current(hal)
+  now = t2 + ROSTER_WAIT_MS - 1000
+  ok((await current(hal)).head?.members.some((m) => m.pub === H2.pub), 'a second before 72 h, H2 is still on the roster (suspended)')
+  now = t2 + ROSTER_WAIT_MS
+  await fire(await rosterObj(hal))
+  const xh = await current(hal)
+  ok(!xh.head?.members.some((m) => m.pub === H2.pub) && xh.pending === null && xh.head?.seq === (q2.head?.seq ?? -9) + 1, 'at 72 h the alarm removes H2')
+  const xr = await ripOf(await linkAt(hal, (xh.head?.seq ?? -9)))
+  ok(xr.ok && xr.value.auth === 'x' && xr.value.cause === await sha256b64u(q2.text) && xr.value.requestedAt === t2 && xr.value.ripenedAt === t2 + ROSTER_WAIT_MS,
+    `the removal's rip. is word x, cause = the q head, requested at the suspension (got ${xr.ok ? `${xr.value.auth} ${xr.value.requestedAt - t2}` : xr.reason})`)
+  const chx = await chainOf(hal)
+  ok(chx.ok && chx.value.members.length === 1 && chx.value.members[0]?.pub === H1.pub, `the kernel accepts the chain through q and x (${chx.ok ? 'ok' : chx.reason})`)
+  ok(!(await rosterObj(hal)).store.has(`pk:${H2.pub}`), 'H2\'s credential record is gone')
+}
+{
+  // --- Remove hidden when the requester is the only live member (G4c) ---
+  now += DAY
+  const ida = 'sd2-ida@example.com', I1 = await Authn.make(), I2 = await Authn.make()
+  await setup(ida, I1)
+  mailbox.length = 0
+  await request(ida, I1, { add: I2 })
+  const wm = lastMail(ida)
+  const vl = voidIn(wm)
+  ok(vl?.kind === 'o' && !!wm && wm.body.includes('one choice, Cancel') && !wm.body.includes('Choose Remove'), `with one passkey, the link offers Cancel only (got ${vl?.kind})`)
+  // an edited link (k=c) shows the button; the directory refuses it, and the token survives
+  const forced = await voidPost(ida, (vl?.token ?? ''), 'remove')
+  ok(forced.status === 400 && forced.j.error === 'choice' && (await current(ida)).head?.members[0]?.quarantined === false, 'Remove on that token: refused (choice); nothing suspended')
+  ok((await voidPost(ida, (vl?.token ?? ''), 'cancel')).status === 200, 'its Cancel still works')
+}
+{
+  // --- the reset: start (S1, S2) ---
+  now += DAY
+  const jo = 'sd2-jo@example.com', J1 = await Authn.make(), J2 = await Authn.make()
+  const nobody = 'nobody-reset@example.com'
+  mailbox.length = 0
+  const n0 = await resetToken(nobody)
+  ok(n0.r.status === 202 && n0.token === null && mailsTo(nobody).length === 0, 'reset/start for an address with no account: 202, nothing mailed')
+  await setup(jo, J1)
+  const setAt = now
+  // S2: the stranger-fillable setup budget is full; the reset mail goes anyway
+  await plant(jo, (st) => st.set('mail', Array.from({ length: ROSTER_LIMITS.mailPerMonth }, (_, i) => now - i * 1000)))
+  const r1 = await resetToken(jo)
+  ok(r1.r.status === 202 && r1.r.text === n0.r.text, 'reset/start answers the same bytes for an account as for none')
+  ok(r1.token !== null && b64uDec(r1.token ?? '')?.length === 32 && r1.mail?.kind === 'reset', 'with the setup budget full, the reset link still goes, a 256-bit token, mail kind reset (S2)')
+  ok(!!r1.mail && r1.mail.body.includes(`${SIGNIN_ORIGIN}${SIGNIN_PATHS.reset}#`) && r1.mail.body.includes(`until ${when(now + ROSTER_LIMITS.resetTtlMs)}`), 'the link opens on the sign-in host\'s /reset, with its expiry')
+  // S1: while that link is live, a stranger's starts mail nothing more
+  for (let i = 0; i < 5; i++) await resetToken(jo)
+  ok(mailsTo(jo).filter((m) => m.kind === 'reset').length === 1, 'five more starts while the link lives: no more mail')
+  // S1″: a link still being mailed holds the next back too
+  const kim = 'sd2-kim@example.com'
+  await setup(kim, await Authn.make())
+  const h = hangNext()
+  const p1 = api('POST', '/v1/roster/reset/start', { email: kim })
+  ok(await reached(h), 'the first reset start is in its send')
+  await api('POST', '/v1/roster/reset/start', { email: kim })
+  h.release(true)
+  await p1
+  ok(mailsTo(kim).filter((m) => m.kind === 'reset').length === 1, 'a start during that send mails nothing (one link per burst)')
+  now += ROSTER_LIMITS.resetTtlMs + 1000
+  const r2 = await resetToken(jo)
+  ok(r2.token !== null, 'once the link has expired, a start mails a new one')
+  ok((await reset(jo, J2, (r1.token ?? ''))).j.error === 'token', 'the expired link no longer completes')
+
+  // --- the reset: complete, preempt, notices ---
+  const J3 = await Authn.make()
+  await request(jo, J1, { add: J3 })
+  const prev = voidIn(lastMail(jo))
+  ok((await current(jo)).pending?.kind === 'member', 'a member change waits on jo')
+  for (let i = 0; i < 6; i++) ok((await reset(jo, J2, b64uEnc(crypto.getRandomValues(new Uint8Array(32))))).j.error === 'token', `stranger reset guess ${i + 1}: refused (token)`)
+  ok((await reset(jo, J2, (r2.token ?? ''), { reg: { origin: 'https://home.bento.page' } })).j.error === 'origin', 'a reset registration from home.bento.page: refused (origin)')
+  mailDown = true
+  const rdown = await reset(jo, J2, (r2.token ?? ''))
+  mailDown = false
+  ok(rdown.status === 503 && (await current(jo)).pending?.kind === 'member', 'reset with the mailer down: 503, nothing queued, the member change still waits (D1)')
+  const ra = now
+  mailbox.length = 0
+  const rs = await reset(jo, J2, (r2.token ?? ''))
+  ok(rs.status === 202 && rs.j.ripensAt === ra + ROSTER_WAIT_MS, `reset with the real token after six guesses: 202, in force at +72 h (got ${rs.status} ${JSON.stringify(rs.j)})`)
+  const rp = await current(jo)
+  ok(rp.pending?.kind === 'reset' && rp.head?.seq === 0 && rp.head?.members[0]?.pub === J1.pub, 'the reset waits; the head is unchanged')
+  ok((await voidPost(jo, (prev?.token ?? ''), 'cancel')).j.error === 'invalid', 'the reset preempted the member change: its link is dead (G5)')
+  const rm = lastMail(jo)
+  const rvl = voidIn(rm)
+  ok(!!rm && rm.kind === 'reset' && /reset/.test(rm.subject) && rvl?.kind === 'r', 'the reset notice carries a void link offering Cancel only')
+  ok(!!rm && rm.body.includes(when(ra)) && rm.body.includes('from a browser') && rm.body.includes(await fingerprint(J2.pub)) && rm.body.includes(await fingerprint(J1.pub)) && rm.body.includes('A change that was waiting is cancelled by this reset.'),
+    'it states the reset in words, to the second, with the host class, the new passkey and the whole roster it removes')
+  ok(!!rm && rm.body.includes('less than 14 days ago') && rm.body.includes(when(setAt)), 'it says a member cannot stop it (the account is new)')
+  ok((await request(jo, J1, { add: J3 })).j.error === 'pending', 'while the reset waits, a member change is refused (pending)')
+  const r3 = await resetToken(jo)
+  ok(r3.token === null, 'a reset under way ends every reset link')
+  // the reset's void link: Cancel only, and Cancel sets no cooldown
+  ok((await voidPost(jo, (rvl?.token ?? ''), 'remove')).j.error === 'choice' && (await voidPost(jo, (rvl?.token ?? ''), 'undo')).j.error === 'choice', 'the reset\'s link refuses remove and undo (choice)')
+  const rc = await voidPost(jo, (rvl?.token ?? ''), 'cancel')
+  ok(rc.status === 200 && rc.j.until === null && (await current(jo)).pending === null && (await current(jo)).head?.members[0]?.pub === J1.pub, 'Cancel stops the reset; nothing changed')
+  ok(mailsTo(jo).some((m) => m.kind === 'void' && /reset/.test(m.subject) && /stopped/.test(m.subject)), 'the stop is mailed')
+
+  // --- the reset ripens (r) ---
+  now += ROSTER_LIMITS.resetTtlMs + 1000
+  const r4 = await resetToken(jo)
+  const J4 = await Authn.make()
+  const rb = now
+  ok((await reset(jo, J4, (r4.token ?? ''))).status === 202, 'a second reset')
+  const second = await resetToken(jo)
+  ok(second.token === null, 'no reset link goes while one waits')
+  now = rb + ROSTER_WAIT_MS - 1000
+  ok((await current(jo)).head?.seq === 0, 'a second before 72 h the reset is not in force')
+  now = rb + ROSTER_WAIT_MS
+  await fire(await rosterObj(jo))
+  const rh = await current(jo)
+  ok(rh.head?.seq === 1 && rh.head.members.length === 1 && rh.head.members[0]?.pub === J4.pub && rh.pending === null, 'at 72 h the alarm makes the new passkey the only member')
+  const rr = await ripOf(await linkAt(jo, 1))
+  ok(rr.ok && rr.value.auth === 'r' && rr.value.cause === null && rr.value.requestedAt === rb && rr.value.ripenedAt === rb + ROSTER_WAIT_MS, `the reset's rip. is word r with the directory's times (got ${rr.ok ? rr.value.auth : rr.reason})`)
+  const chr = await chainOf(jo)
+  ok(chr.ok && chr.value.lastResetAt === rb + ROSTER_WAIT_MS && chr.value.createdAt === setAt, `the kernel accepts the chain and sees the reset (${chr.ok ? 'ok' : chr.reason})`)
+  ok(!(await rosterObj(jo)).store.has(`pk:${J1.pub}`) && (await request(jo, J1, { add: J3 })).j.error === 'signer', 'the old passkey is gone and cannot ask')
+  const after = await request(jo, J4, { add: J3 })
+  ok(after.status === 202, 'the new passkey can')
+  const done = mailsTo(jo).find((m) => /was reset/.test(m.subject))
+  ok(!!done && done.body.includes(await fingerprint(J4.pub)) && !done.body.includes(`passkey ${await fingerprint(J1.pub)},`), 'the reset is mailed with the roster it leaves')
+  const hd = await head(jo)
+  ok(hd.j.createdAt === setAt, 'the account\'s age still counts from its setup')
+}
+{
+  // --- G5: who may stop a reset, and "new account" ---
+  now += DAY
+  const kai = 'sd2-kai@example.com'
+  const [K1, K2] = await twoKeys(kai)
+  const setAt = (await head(kai)).j.createdAt as number
+  ok((await head(kai)).j.newAccount === true, 'a 3-day-old account is a new account')
+  const rvoid = async (who: Authn, credId?: string) => {
+    const ch = await challenge(kai)
+    return seen('reset-void', api('POST', '/v1/roster/reset/void', { email: kai, credId: credId ?? who.cid, assertion: {}, dirNonce: ch }))
+  }
+  ok((await rvoid(K1)).j.error === 'no-reset', 'no reset waiting: refused (no-reset)')
+  const t = await resetToken(kai)
+  const KR = await Authn.make()
+  ok((await reset(kai, KR, (t.token ?? ''))).status === 202, 'a reset of a young account waits')
+  const young = await rvoid(K1)
+  ok(young.status === 403 && young.j.error === 'new-account', `a member cannot stop it in the first 14 days (got ${young.status} ${young.j.error})`)
+  // the account turns 14 days old while the reset waits: from then a member may (the passkey's signature is the kernel's next layout)
+  const rv = voidIn(lastMail(kai))
+  await voidPost(kai, (rv?.token ?? ''), 'cancel')
+  now = setAt + ROSTER_LIMITS.newAccountMs - 1000
+  ok((await head(kai)).j.newAccount === true, 'a second short of 14 days it is still new')
+  const t2 = await resetToken(kai)
+  ok((await reset(kai, await Authn.make(), (t2.token ?? ''))).status === 202, 'another reset')
+  ok((await rvoid(K1)).j.error === 'new-account', 'still refused a second short of 14 days')
+  now = setAt + ROSTER_LIMITS.newAccountMs
+  ok((await head(kai)).j.newAccount === false, 'at 14 days the account is no longer new')
+  const older = await rvoid(K1)
+  ok(older.status === 501 && older.j.error === 'not-implemented', `at 14 days a member gets past the age rule to the signature step (got ${older.status} ${older.j.error})`)
+  ok((await rvoid(K1, 'bm90LWEtbWVtYmVy')).j.error === 'signer', 'a credential that is not a member: refused (signer)')
+  await plant(kai, (st) => {
+    const hd = st.get('head') as { members: Member[] } | undefined
+    if (hd) st.set('head', { ...hd, members: hd.members.map((m) => (m.pub === K2.pub ? { ...m, quarantined: true } : m)) })
+  })
+  ok((await rvoid(K2)).j.error === 'quarantined', 'a suspended member: refused (quarantined)')
+  ok((await pendOf(kai))?.kind === 'reset', 'none of those touched the waiting reset')
+  ok(ROSTER_LIMITS.newAccountMs === 14 * DAY && ROSTER_LIMITS.voidCooldownMs === 72 * HOUR && ROSTER_LIMITS.resetTtlMs === DAY, 'pinned: new account 14 days, cooldown 72 h, reset link a day')
+}
+{
+  // --- the void page: the one HTML answer, under its own headers ---
+  const pages = ['/void', '/void.js', '/void.css']
+  const snap = JSON.stringify(allStores.map((st) => [...st.entries()]))
+  const got = await Promise.all(pages.map((p) => api('GET', p)))
+  const types = ['text/html; charset=utf-8', 'text/javascript; charset=utf-8', 'text/css; charset=utf-8']
+  got.forEach((r, i) => ok(r.status === 200 && r.h.get('content-type') === types[i], `GET ${pages[i]}: 200 ${types[i]}`))
+  for (const [i, r] of got.entries()) {
+    const csp = r.h.get('content-security-policy') ?? ''
+    const d = (n: string) => csp.split(';').map((x) => x.trim()).find((x) => x.startsWith(n + ' '))
+    ok(d('default-src') === "default-src 'none'" && d('script-src') === "script-src 'self'" && d('style-src') === "style-src 'self'" && d('connect-src') === "connect-src 'self'" &&
+      d('frame-ancestors') === "frame-ancestors 'none'" && d('base-uri') === "base-uri 'none'" && d('form-action') === "form-action 'none'" && !/unsafe/.test(csp) &&
+      d('require-trusted-types-for') === "require-trusted-types-for 'script'",
+    `${pages[i]}: CSP self-only script and style, nothing inline, no framing, Trusted Types (${csp})`)
+    ok(r.h.get('x-frame-options') === 'DENY' && r.h.get('x-content-type-options') === 'nosniff' && r.h.get('referrer-policy') === 'no-referrer' && r.h.get('cache-control') === 'no-store' &&
+      /publickey-credentials-get=\(\)/.test(r.h.get('permissions-policy') ?? '') && /publickey-credentials-create=\(\)/.test(r.h.get('permissions-policy') ?? '') && r.h.get('access-control-allow-origin') === null,
+    `${pages[i]}: DENY, nosniff, no referrer, no cache, WebAuthn off, no CORS`)
+  }
+  const q = await api('GET', '/void?e=x&t=y#z')
+  ok(q.text === got[0].text, 'a query changes nothing in the page')
+  ok(JSON.stringify(allStores.map((st) => [...st.entries()])) === snap, 'fetching the page stores nothing (a mail scanner\'s GET changes nothing)')
+  ok((await api('POST', '/void', {})).h.get('content-type') === 'application/json' && (await api('GET', '/void/')).status === 404 && (await api('GET', '/void.html')).status === 404, 'nothing else under /void is a page')
+  const js = got[1].text, html = got[0].text
+  ok(!/navigator\.credentials|PublicKeyCredential|innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(|Function\(|localStorage|indexedDB/.test(js + html), 'the page calls no WebAuthn, Signal API, HTML sink, eval or storage')
+  ok(!/<script>|<style>|\son[a-z]+=|style="/i.test(html) && (html.match(/<script /g) ?? []).length === 1, 'the HTML has no inline script, style or handler; one script, from this origin')
+  // the hosting check's own rules, over these answers
+  const obs = got.map((r, i) => ({ role: 'rp', path: pages[i], url: `${DIRECTORY_ORIGIN}${pages[i]}`, status: r.status, headers: Object.fromEntries(r.h.entries()), body: r.text }))
+  const ev = evaluate(obs as never) as { id: string; fails: string[] }[]
+  const rows = ev.filter((x) => ['rp-html-csp', 'no-framing', 'rp-permissions', 'rp-nosniff'].includes(x.id))
+  ok(rows.length === 4 && rows.every((x) => x.fails.length === 0), `check-id-hosting's rp rows pass on the void page (${rows.map((x) => `${x.id}:${x.fails.length}`).join(' ')})`)
+}
+
+// =====================================================================
 // 11. G9′.6a: what id.bento.page answers
 // =====================================================================
 {
@@ -1349,8 +1747,11 @@ let addAt = 0
   }
   ok(responses.length > 100 && bad.length === 0, `every one of ${responses.length} answers: JSON, nosniff, WebAuthn blocked, CSP without script, DENY${bad.length ? ' — ' + bad.slice(0, 5).join('; ') : ''}`)
   const dir = join(root, 'server/directory/src')
-  const html = readdirSync(dir).filter((f) => /text\/html|<script|<html/i.test(readFileSync(join(dir, f), 'utf8')))
-  ok(html.length === 0, `no directory source serves HTML yet (found in: ${html.join(', ') || 'none'})`)
+  // the void page is the one HTML the directory has: its markup lives in voidpage.js alone, and worker.js serves it at /void only
+  const html = readdirSync(dir).filter((f) => /<script|<html/i.test(readFileSync(join(dir, f), 'utf8')))
+  const types = readdirSync(dir).filter((f) => /text\/html/i.test(readFileSync(join(dir, f), 'utf8')))
+  ok(html.join() === 'voidpage.js' && types.every((f) => f === 'worker.js' || f === 'voidpage.js'),
+    `the only HTML in the directory's sources is the void page (markup in: ${html.join(', ') || 'none'}; text/html in: ${types.join(', ')})`)
 }
 
 // =====================================================================
