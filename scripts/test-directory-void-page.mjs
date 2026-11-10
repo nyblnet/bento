@@ -22,6 +22,10 @@
 //   · the page's CSP stops injected inline script (positive control: the same
 //     injection runs once the CSP is gone), it cannot be framed, Trusted Types
 //     are enforced, and an address full of markup is shown as text.
+//   · a link whose life ended says how (too late, with when; already used; a
+//     reset cancelled it), an unknown link never says "Nothing changed", a
+//     link another press holds says wait, and C3's restored removal and
+//     re-timed reset are shown.
 //
 // Each rule has a MUTANT: a copy of the directory with one edit to the page,
 // under which a row must go red. A mutant whose edit no longer applies fails.
@@ -59,6 +63,16 @@ const MUTANTS = {
   'remove-always': [["    $('remove').hidden = kind !== 'c'\n", "    $('remove').hidden = false\n"]],
   // the page says "cancelled" whatever the directory answered
   'trust-nothing': [["    if (r && r.ok && j.done === 'cancelled') {", "    if (j.done === 'cancelled' || true) {"]],
+  // F2: a link that came too late shown as unknown
+  'late-as-unknown': [["    if (j.error === 'late' && typeof j.at === 'number') { $('late-text').textContent = late(j); return show('late') }\n", '']],
+  // F2: the unknown view says nothing changed
+  'unknown-nothing-changed': [['The latest email about your bento/id passkeys lists them as they are now.</p>', 'Nothing changed.</p>']],
+  // F1: busy shown as unknown
+  'busy-as-unknown': [["    if (j.error === 'busy') return again(", "    if (false) return again("]],
+  // C6: the old advice
+  'hint-benign': [['your passkey was used for something you did not intend. Choose Cancel: it is always safe.', 'the usual cause is a page that used your own passkey: choose Cancel.']],
+  // C3: the restored removal not mentioned
+  'no-back': [["      if (typeof j.removesAt === 'number') { $('back-at').textContent = at(j.removesAt); $('back').hidden = false }\n", '']],
 }
 const tmp = mkdtempSync(join(tmpdir(), 'void-page-'))
 async function directory(mutant) {
@@ -128,7 +142,9 @@ async function plant(w, kind) {
   const token = b64u(crypto.getRandomValues(new Uint8Array(32)))
   const now = Date.now()
   const A = await pubKey(), B = await pubKey(), N = await pubKey()
-  const members = kind === 'o' ? [pk(A)] : kind === 'u' ? [pk(A), pk(B, true)] : [pk(A), pk(B)]
+  const rp = kind === 'rp' // a reset waiting over a removal it set aside (C3); `token` is the reset's, `undo` the removal's
+  if (rp) kind = 'r'
+  const members = kind === 'o' ? [pk(A)] : kind === 'u' || rp ? [pk(A), pk(B, true)] : [pk(A), pk(B)]
   const ros = buildRos({ address: email, seq: 0, prev: null, members, dirNonce: b64u(crypto.getRandomValues(new Uint8Array(16))), created: now })
   const hash = await sha256b64u(ros)
   const nextMembers = kind === 'r' ? [pk(N)] : kind === 'u' ? [pk(A)] : [...members, pk(N)]
@@ -145,8 +161,20 @@ async function plant(w, kind) {
   const store = w.env.ROSTER.objs.get(await addressKey(email)).store
   store.set('head', { ros, hash, seq: 0, members, ripenedAt: now, createdAt: now })
   for (const m of members) store.set(`pk:${m.pub}`, { credId: b64u(new TextEncoder().encode(m.pub.slice(0, 8))), signCount: 0, addedAt: now, how: 'setup' })
+  const undo = b64u(crypto.getRandomValues(new Uint8Array(32)))
+  if (rp) {
+    const x = buildRos({ address: email, seq: 1, prev: hash, members: [pk(A)], dirNonce: b64u(crypto.getRandomValues(new Uint8Array(16))), created: now })
+    pend.parked = { kind: 'removal', ros: x, hash: await sha256b64u(x), change: { op: 'remove', pub: B }, cause: hash, requestedAt: now, ripensAt: now + 72 * 3_600_000, mailed: true, voidTok: await sha256hex(`bento-dir/1/void\n${undo}`), voidKind: 'u' }
+  }
   store.set('pend', pend)
-  return { email, token, store }
+  return { email, token, undo, store }
+}
+/** A link whose life ended `why` (F2): no change waits, the directory remembers the token's hash. */
+async function plantEnded(w, why, by) {
+  const p = await plant(w, 'c')
+  p.store.delete('pend')
+  p.store.set('ended', [{ h: await sha256hex(`bento-dir/1/void\n${p.token}`), why, at: Date.parse('2026-11-09T09:00:00Z'), ...(by ? { by } : {}) }])
+  return p
 }
 const linkOf = (p, kind = p.kind ?? 'c') => {
   const f = new URLSearchParams()
@@ -212,6 +240,8 @@ async function rows(mod, loud) {
     say(!page.url().includes('#') && !page.url().includes(p.token), `the token is out of the address bar (${page.url()})`)
     say(p.store.get('pend')?.voidTok !== undefined, 'opening changed nothing')
     say(await visible(page, '#change') && await visible(page, '#remove') && await visible(page, '#hint-c') && !(await visible(page, '#hint-o')), 'a member change link (k=c) shows Cancel and Remove, with the advice on which to pick')
+    const hint = await page.locator('#hint-c').textContent()
+    say(hint.includes('your passkey was used for something you did not intend. Choose Cancel: it is always safe.') && !hint.includes('usual cause'), 'the advice never calls an unasked change benign (C6)')
     say(await page.locator('[data-address]').first().textContent() === p.email, 'the page names the address')
     // Cancel: one POST, and the page reports what the directory did
     await page.click('#cancel')
@@ -226,7 +256,8 @@ async function rows(mod, loud) {
     await settle(again)
     await again.click('#cancel')
     await again.locator('#used').waitFor({ timeout: 3000 }).catch(() => {})
-    say(await visible(again, '#used'), 'the same link opened again: "This link no longer works"')
+    say(await visible(again, '#used') && (await again.locator('#used-at').textContent()).length > 0 && !/Nothing changed/.test(await again.locator('#used').textContent()),
+      'the same link opened again: "already used", with when, and never "Nothing changed"')
     // the history entry no longer holds the token: reloading it finds no link
     const ph = await fresh(c, linkOf(p))
     await ph.reload()
@@ -332,6 +363,47 @@ async function rows(mod, loud) {
     let shown = false
     try { shown = !!f && await f.locator('#cancel').isVisible({ timeout: 300 }) } catch { shown = false }
     say(!shown && !seen.some((r) => r.path === '/void.js'), 'framed by another origin: the page does not load (no script fetched, no button)')
+    await c.close()
+  })
+  // 7. F2: a link whose life ended says how; a busy link says wait; C3's extra sentences
+  await block('block 7', async () => {
+    const { c } = await ctx(w)
+    const press = async (p, kind, id) => {
+      const pg = await fresh(c, linkOf(p, kind))
+      await pg.click(id)
+      await pg.waitForFunction(() => document.querySelector('[data-view]:not([hidden])')?.id !== 'change' && document.querySelector('[data-view]:not([hidden])')?.id !== 'undo' && document.querySelector('[data-view]:not([hidden])')?.id !== 'reset' || document.getElementById('msg').textContent !== '', null, { timeout: 3000 }).catch(() => {})
+      return pg
+    }
+    const lateC = await plantEnded(w, 'late')
+    const pl = await press(lateC, 'c', '#cancel')
+    const lt = await pl.locator('#late').textContent()
+    say(await visible(pl, '#late') && /took effect at/.test(lt) && lt.includes('Your bento/id passkeys changed') && !/Nothing changed/.test(lt), `Cancel after the change took effect: "Too late", when, and where the passkeys are listed (${lt.trim().slice(0, 80)})`)
+    const lateU = await plantEnded(w, 'late', 'reset')
+    const pu = await press(lateU, 'u', '#undo-btn')
+    const ut = await pu.locator('#late').textContent()
+    say(await visible(pu, '#late') && /was reset at/.test(ut) && ut.includes('Your bento/id account was reset'), 'an undo after a reset took effect: "Too late", the account was reset')
+    const pre = await plantEnded(w, 'preempted')
+    const pp = await press(pre, 'c', '#cancel')
+    say(await visible(pp, '#preempted') && (await pp.locator('#preempted-at').textContent()).length > 0, 'a change a reset cancelled: the page says a reset cancelled it')
+    const gone = await plant(w, 'c')
+    gone.store.delete('pend')
+    const pg = await press(gone, 'c', '#cancel')
+    say(await visible(pg, '#unknown') && !/Nothing changed/.test(await pg.locator('#unknown').textContent()), 'a link the directory does not know: "no longer works", never "Nothing changed"')
+    // busy: another press holds the roster
+    const busy = await plant(w, 'c')
+    busy.store.set('hold', { id: 'x', what: 'remove', until: Date.now() + 60_000 })
+    const pb = await press(busy, 'c', '#cancel')
+    say(/another tab or window/.test(await pb.locator('#msg').textContent()) && !(await pb.locator('#cancel').isDisabled()) && busy.store.get('pend')?.voidTok !== undefined,
+      'while another press holds the roster: the page says wait and try again, the buttons come back, nothing was spent')
+    // C3: stopping a reset puts the removal it set aside back; undoing that removal re-times the reset
+    const rp1 = await plant(w, 'rp')
+    const pr = await press(rp1, 'r', '#cancel-reset')
+    say(await visible(pr, '#cancelled') && await visible(pr, '#back') && (await pr.locator('#back-at').textContent()).length > 0 && rp1.store.get('pend')?.kind === 'removal',
+      'stopping a reset that set a removal aside: the page says the removal waits again, and until when')
+    const rp2 = await plant(w, 'rp')
+    const pv = await press({ ...rp2, token: rp2.undo }, 'u', '#undo-btn')
+    say(await visible(pv, '#restored') && await visible(pv, '#reset-again') && rp2.store.get('pend')?.kind === 'reset',
+      'the set-aside removal\'s undo while the reset waits: the passkey is back, and the page says when the reset now takes effect')
     await c.close()
   })
   return failures - before
