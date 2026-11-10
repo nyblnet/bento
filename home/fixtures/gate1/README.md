@@ -86,7 +86,8 @@ Two parsing rules the reference got wrong once, so state them exactly:
   name runs to whitespace, `/` or `>`, so `<meta<style>` is ONE tag, and any
   name outside `[a-z][a-z0-9-]*` is refused. `script`, `style`, `textarea` and
   `title` hold text up to their real end tag: `</name` followed by whitespace,
-  `/` or `>`. `<!-->` and `<!--->` are whole comments; `</>` is ignored.
+  `/` or `>`. (`</stylex>` inside a `<style>` is text, not its end, and is
+  refused anyway as markup: see rule 3.) `<!-->` and `<!--->` are whole comments; `</>` is ignored.
 - **Read END tags like start tags.** The tokenizer parses attributes in end tags,
   quoted values included, so `</p a="><b c='">` ends at its second `>`.
   Skipping to the first `>` hides the script after it. An end tag carrying any
@@ -115,7 +116,13 @@ A file is a release's only if ONE history entry matches EVERY block:
    - `<iframe>`, `<object>`, `<embed>`, `<base>`;
    - a `<meta http-equiv>` refresh or CSP;
    - any `on*=` attribute;
-   - a comment or `<style>` holding `<script`;
+   - a comment holding `<script`;
+   - a `<style>`, `<title>` or `<textarea>` holding `<` before an ASCII
+     letter, `!`, `/` or `?`, wherever it sits. Inside `<svg>` or `<math>`
+     these three hold tags, not text (`<title>` is an HTML integration point,
+     `<img>` and `<iframe>` break out of `<style>`), and a token walk can't
+     tell which context it is in. A `<` before anything else is text
+     everywhere and is allowed;
    - a data block containing `<`. Bento's never do: the JSON is escaped and the
      b64/b86 alphabets exclude it.
 4. **No match, a partial match, or two matching entries:** UNKNOWN.
@@ -133,6 +140,8 @@ differently:
 - `</script >`;
 - tabs and newlines inside a tag;
 - a script inside a comment, `<textarea>`, `<title>` or `<style>`;
+- foreign content: `<svg><title><iframe>`, `<svg><style><img onerror>`,
+  `<math><textarea><img>`, and `<!`, `</`, `<?` in those elements;
 - glued tags (`<meta<style>`), empty comments, and false end tags (`</stylex>`);
 - attributes, quoted `>` included, on an end tag.
 

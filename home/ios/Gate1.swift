@@ -45,6 +45,15 @@ enum Gate1 {
     /// the i flag without u: only ASCII letters fold
     static func fold(_ c: UInt16) -> UInt16 { (c >= 0x41 && c <= 0x5A) ? c + 32 : c }
     static func isLetter(_ c: UInt16) -> Bool { (c >= 0x41 && c <= 0x5A) || (c >= 0x61 && c <= 0x7A) }
+    /// A "<" that could start markup in foreign content: before an ASCII letter, "!", "/" or "?".
+    static func markupStart(_ t: S) -> Bool {
+        var k = 0
+        while k + 1 < t.count {
+            if t[k] == 0x3C, isLetter(t[k + 1]) || t[k + 1] == 0x21 || t[k + 1] == 0x2F || t[k + 1] == 0x3F { return true }
+            k += 1
+        }
+        return false
+    }
     static func isDigit(_ c: UInt16) -> Bool { c >= 0x30 && c <= 0x39 }
 
     /// does `h` hold `word` (lowercase ASCII) at `at`, case-insensitively?
@@ -287,7 +296,10 @@ enum Gate1 {
             if rawText.contains(name) {
                 let close = rawTextEnd(lower, tag.name, tag.end)
                 if close < 0 { problems.append("an unterminated <\(name)>"); break }
-                if name != "script", includes(slice(lower, tag.end, close), u("<script")) { problems.append("a <\(name)> holds a <script>") }
+                // Text only in HTML: inside <svg> or <math> these hold TAGS (<title> is
+                // an integration point, <img> breaks out of <style>), and a token walk
+                // can't tell the context. Refuse any "<" that could start markup.
+                if name != "script", markupStart(slice(html, tag.end, close)) { problems.append("a <\(name)> holds markup, which is a tag inside <svg> or <math>") }
                 if name == "textarea" || name == "title" { i = close; continue }
                 guard let et = parseEndTag(html, close) else { problems.append("an unterminated </\(name)>"); break }
                 blocks.append(Block(tag: name, attrs: slice(html, i, tag.end), text: slice(html, tag.end, close),
