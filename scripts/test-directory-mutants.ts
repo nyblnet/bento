@@ -24,13 +24,15 @@ import { spawnSync } from 'node:child_process'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const RIGS = ['test-directory.ts', 'test-directory-roster.ts']
+/** scripts the rigs import (the roster rig runs the hosting check's rules over the void page) */
+const RIG_IMPORTS = ['check-id-hosting.mjs']
 const TREE = ['kernel/src', 'kernel/fixtures', 'server/directory/src', 'server/directory/fixtures', 'server/directory/wrangler.toml']
 let failures = 0, checks = 0
 const ok = (c: boolean, m: string) => { checks++; if (!c) { failures++; console.log(`  FAIL  ${m}`) } else console.log(`  ok    ${m}`) }
 
 type Edit = { from: string; to: string }
 /** `also`: further edits in the same file, for a rule held at two doors */
-type Mutant = Edit & { name: string; file: 'worker.js' | 'roster.js' | 'passkey.js' | 'links.js' | 'mail.js'; also?: Edit[] }
+type Mutant = Edit & { name: string; file: 'worker.js' | 'roster.js' | 'passkey.js' | 'links.js' | 'mail.js' | 'voidpage.js'; also?: Edit[] }
 const MUTANTS: Mutant[] = [
   // --- the first design's routes, retired ---
   { name: 'retired routes served again (fall through)', file: 'worker.js',
@@ -128,7 +130,7 @@ const MUTANTS: Mutant[] = [
     from: "  return `${SIGNIN_ORIGIN}${SIGNIN_PATHS.setup}#${f.toString()}`", to: "  return `${SIGNIN_ORIGIN}${SIGNIN_PATHS.setup}?${f.toString()}`" },
   { name: 'link: pointed at the directory', file: 'links.js',
     from: "  return `${SIGNIN_ORIGIN}${SIGNIN_PATHS.setup}#${f.toString()}`", to: "  return `https://id.bento.page${SIGNIN_PATHS.setup}#${f.toString()}`" },
-  { name: 'link: parse accepts an extra key', file: 'links.js', from: 'if (keys.length !== 3 || ', to: 'if (' },
+  { name: 'link: parse accepts an extra key', file: 'links.js', from: 'if (keys.length !== names.length || ', to: 'if (' },
   { name: 'S2: the queued-change mail reads the setup budget', file: 'roster.js',
     from: "      const sent = await notify(this.env, next.address, 'A change to your bento/id passkeys is waiting', [",
     to: "      const sent = (await this.spendSetupBudget(now), true) && await notify(this.env, next.address, 'A change to your bento/id passkeys is waiting', [" },
@@ -174,13 +176,119 @@ const MUTANTS: Mutant[] = [
   { name: 'headers: /.well-known/webauthn served', file: 'worker.js',
     from: "  if (req.method !== 'POST') return json(404, { error: 'not-found' }, headersFor(p))",
     to: "  if (p === '/.well-known/webauthn') return json(200, { origins: ['https://home.bento.page'] })\n  if (req.method !== 'POST') return json(404, { error: 'not-found' }, headersFor(p))" },
+
+  // --- SD2: the countersign (G2, the authority words) ---
+  { name: 'rip: the setup head countersigned as a reset', file: 'roster.js',
+    from: "      await this.link(ros, { auth: 'm', requestedAt: now, now, kind: 'setup' })", to: "      await this.link(ros, { auth: 'r', requestedAt: now, now, kind: 'setup' })" },
+  { name: 'rip: a member change ripens under the reset word', file: 'roster.js',
+    from: "      head = await this.link(p.ros, { auth: 'm', requestedAt: p.requestedAt, now, kind: 'member',", to: "      head = await this.link(p.ros, { auth: 'r', requestedAt: p.requestedAt, now, kind: 'member'," },
+  { name: 'rip: requestedAt is the ripening time', file: 'roster.js',
+    from: "    const { rip, ripSig } = await countersign(this.env, { rosHash: hash, requestedAt, ripenedAt: now, auth, cause })",
+    to: "    const { rip, ripSig } = await countersign(this.env, { rosHash: hash, requestedAt: now, ripenedAt: now, auth, cause })" },
+  { name: 'rip: no countersign stored with the link', file: 'roster.js',
+    from: '    await s.put(`link:${String(head.seq).padStart(8, \'0\')}`, { ros, rip, ripSig, kind, requestedAt, ripenedAt: now, ...extra })',
+    to: '    await s.put(`link:${String(head.seq).padStart(8, \'0\')}`, { ros, kind, requestedAt, ripenedAt: now, ...extra })' },
+
+  // --- SD2: the void (G3, G4, G4a-c) ---
+  { name: 'G3 void: wrong tokens counted and the change burned at 5', file: 'roster.js',
+    from: "      if (!p || typeof p.voidTok !== 'string' || !same(p.voidTok, th)) return out(400, { error: 'invalid' })",
+    to: "      if (!p || typeof p.voidTok !== 'string' || !same(p.voidTok, th)) { const n = ((await s.get('voidFail')) || 0) + 1; await s.put('voidFail', n); if (n >= 5 && p) await s.put('pend', { ...p, voidTok: 'burned' }); return out(400, { error: 'invalid' }) }" },
+  { name: 'G3 void: no per-IP limit', file: 'worker.js', from: "    if (!(await ledger(env, ip, 'void'))) return json(429, { error: 'rate-limited' })\n", to: '' },
+  { name: 'G3 void: a wrong choice spends the token', file: 'roster.js',
+    from: "      if (!choices.includes(a.choice)) return out(400, { error: 'choice' })",
+    to: "      if (!choices.includes(a.choice)) { await s.put('pend', { ...p, voidTok: 'spent' }); return out(400, { error: 'choice' }) }" },
+  { name: 'G3 void: a change already in effect can still be voided', file: 'roster.js',
+    from: "      await this.ripen(now) // a change already in effect can no longer be stopped\n", to: '' },
+  { name: 'G3 link: the void token in the query', file: 'links.js',
+    from: '  return `${DIRECTORY_ORIGIN}${VOID_PATH}#${f.toString()}`', to: '  return `${DIRECTORY_ORIGIN}${VOID_PATH}?${f.toString()}`' },
+  { name: 'G3 link: the void link on the sign-in host', file: 'links.js',
+    from: '  return `${DIRECTORY_ORIGIN}${VOID_PATH}#${f.toString()}`', to: '  return `${SIGNIN_ORIGIN}${VOID_PATH}#${f.toString()}`' },
+  { name: 'G3 mail: the waiting notice carries no void link', file: 'roster.js',
+    from: "        '',\n        ...voidLines(next.address, vt.token, vk, p.ripensAt),\n", to: '' },
+  { name: 'G4b cancel: no cooldown', file: 'roster.js', from: "        if (until) await s.put(`cool:${p.signer}`, until)\n", to: '' },
+  { name: 'G4b request: the cooldown not read', file: 'roster.js', from: "      if (coolUntil && coolUntil > now) return out(403, { error: 'cooldown', until: coolUntil })\n", to: '' },
+  { name: 'G4b: the cooldown is an hour', file: 'roster.js', from: '  voidCooldownMs: 72 * 60 * MIN,', to: '  voidCooldownMs: 60 * MIN,' },
+  { name: 'G4b: a reset\'s cancel sets a cooldown too', file: 'roster.js',
+    from: "        const until = kind === 'member' ? now + ROSTER_LIMITS.voidCooldownMs : null", to: '        const until = now + ROSTER_LIMITS.voidCooldownMs' },
+  { name: 'G4 cancel: waits on the mailer', file: 'roster.js',
+    from: "        await s.delete('pend')\n        const until = kind === 'member'",
+    to: "        if (!(await notify(this.env, address, 'x', [], 'void'))) return out(503, { error: 'mail' })\n        await s.delete('pend')\n        const until = kind === 'member'" },
+  { name: 'G4 remove: suspends without queuing the removal', file: 'roster.js',
+    from: "      await this.schedule(removesAt)\n", to: "      await s.delete('pend')\n" },
+  { name: 'G4 remove: the suspension under the member word', file: 'roster.js',
+    from: "      await this.link(qRos, { auth: 'q', cause: p.hash,", to: "      await this.link(qRos, { auth: 'm', cause: p.hash," },
+  { name: 'G4 remove: the suspension cites the head, not the voided request', file: 'roster.js',
+    from: "      await this.link(qRos, { auth: 'q', cause: p.hash,", to: "      await this.link(qRos, { auth: 'q', cause: cur.hash," },
+  { name: 'G4 remove: the voided request left out of the link', file: 'roster.js',
+    from: "        extra: { voided: { ros: p.ros, signer: target, assertion: p.assertion } } })", to: '        })' },
+  { name: 'G4 remove: acts though its notice was not sent', file: 'roster.js',
+    from: "      if (!sent) return out(503, { error: 'mail' })\n      // the mail took a while", to: '      // the mail took a while' },
+  { name: 'G4 remove: the removal requested at ripening, not at the suspension', file: 'roster.js',
+    from: "      head = await this.link(p.ros, { auth: 'x', cause: p.cause, requestedAt: p.requestedAt, now, kind: 'removal' })",
+    to: "      head = await this.link(p.ros, { auth: 'x', cause: p.cause, requestedAt: now, now, kind: 'removal' })" },
+  { name: 'G4 remove: the removal waits an hour', file: 'roster.js', from: '      const removesAt = now + ROSTER_WAIT_MS', to: '      const removesAt = now + 60 * MIN' },
+  { name: 'G4a: the removal notice carries no undo link', file: 'roster.js',
+    from: "        '',\n        ...voidLines(address, ut.token, 'u', removesAt),\n", to: '' },
+  { name: 'G4a undo: the removal still ripens', file: 'roster.js',
+    from: "        const head = await this.link(uRos, { auth: 'u', cause: cur.hash, requestedAt: now, now, kind: 'undo' })\n        await s.delete('pend')\n",
+    to: "        const head = await this.link(uRos, { auth: 'u', cause: cur.hash, requestedAt: now, now, kind: 'undo' })\n" },
+  { name: 'G4a undo: under the member word', file: 'roster.js',
+    from: "await this.link(uRos, { auth: 'u', cause: cur.hash,", to: "await this.link(uRos, { auth: 'm', cause: cur.hash," },
+  { name: 'G4c: Remove offered to the only live member', file: 'roster.js',
+    from: "      const vk = cur.members.some((m) => !m.quarantined && m.pub !== signer.pub) ? 'c' : 'o'", to: "      const vk = 'c'",
+    also: [{ from: "      if (!cur.members.some((m) => !m.quarantined && m.pub !== target)) return out(400, { error: 'choice' }) // never lock the person out (G4c)\n", to: '' }] },
+  { name: 'G4c: the waiting notice does not say which to pick', file: 'roster.js',
+    from: "      ? ['The page offers two choices. If you did not ask for this, the usual cause is a page that used your own passkey: choose Cancel. Choose Remove only if you do not recognise the passkey that asked.']",
+    to: "      ? ['The page offers two choices.']" },
+  { name: 'G4c: a reset\'s link offers Remove', file: 'roster.js',
+    from: "      const choices = kind === 'reset' ? ['cancel'] :", to: "      const choices = kind === 'reset' ? ['cancel', 'remove'] :" },
+
+  // --- SD2: the reset (G5) ---
+  { name: 'G5 reset: does not preempt a waiting change', file: 'roster.js',
+    from: "      if (waiting && waiting.kind === 'reset') return out(409, { error: 'pending' })", to: "      if (waiting) return out(409, { error: 'pending' })" },
+  { name: 'G5 reset: a member may stop it in the first 14 days', file: 'roster.js',
+    from: "      if (now - (await this.createdAt(cur)) < ROSTER_LIMITS.newAccountMs) return out(403, { error: 'new-account' })\n", to: '' },
+  { name: 'G5 reset: a suspended member may stop it', file: 'roster.js', from: "      if (who.quarantined) return out(403, { error: 'quarantined' })\n", to: '' },
+  { name: 'G5: the new-account window is a day', file: 'roster.js', from: '  newAccountMs: 14 * DAY,', to: '  newAccountMs: DAY,' },
+  { name: 'G5: the account\'s age restarts at a reset', file: 'roster.js',
+    from: "createdAt: prev?.createdAt ?? now }", to: "createdAt: auth === 'r' ? now : prev?.createdAt ?? now }" },
+  { name: 'G5 reset: under the member word', file: 'roster.js',
+    from: "      head = await this.link(p.ros, { auth: 'r', requestedAt: p.requestedAt, now, kind: 'reset' })", to: "      head = await this.link(p.ros, { auth: 'm', requestedAt: p.requestedAt, now, kind: 'reset' })" },
+  { name: 'G5 reset: the old members\' credentials kept', file: 'roster.js',
+    from: "        await s.delete([`pk:${m.pub}`, `cool:${m.pub}`, ...(r ? [`cid:${r.credId}`] : [])])\n      }", to: '      }' },
+  { name: 'G5 reset: queued though its notice was not sent', file: 'roster.js',
+    from: "      if (!sent) return out(503, { error: 'mail' }) // no notice, no reset", to: '      // no notice, no reset' },
+  { name: 'G5 reset: wrong tokens counted and the links burned at 5', file: 'roster.js',
+    from: "      if (!rlive.some((t) => same(t.h, rh))) return out(400, { error: 'token' })",
+    to: "      if (!rlive.some((t) => same(t.h, rh))) { const n = ((await s.get('rsFail')) || 0) + 1; await s.put('rsFail', n); if (n >= 5) await s.delete('resetTok'); return out(400, { error: 'token' }) }" },
+  { name: 'G5 reset: the reset notice carries no void link', file: 'roster.js',
+    from: "        '',\n        ...voidLines(a.address, vt.token, 'r', resetAt),\n", to: '' },
+  { name: 'G5 reset notice: does not say the account is too new for its passkeys', file: 'roster.js',
+    from: "        ...(young ? [`This account was set up less than 14 days ago", to: "        ...(false ? [`This account was set up less than 14 days ago" },
+  { name: 'S2 reset start: reads the setup budget', file: 'roster.js',
+    from: "      if (rlive.some(resetHolds)) return out(202, { mailed: false })", to: "      if (rlive.some(resetHolds) || !(await this.spendSetupBudget(now))) return out(202, { mailed: false })" },
+  { name: 'S1 reset start: a live link holds nothing back', file: 'roster.js',
+    from: "      if (rlive.some(resetHolds)) return out(202, { mailed: false })\n", to: '' },
+  { name: 'S1″ reset start: a link still being mailed holds nothing back', file: 'roster.js',
+    from: '      const resetHolds = (t) => t.mailed || now - (t.at ?? 0) < ROSTER_LIMITS.setupInFlightMs', to: '      const resetHolds = (t) => t.mailed' },
+  { name: 'reset start: answers differently for an account', file: 'worker.js',
+    from: "    await call(await rosterStub(env, email), 'resetStart', { address: email })\n    return json(202, SETUP_STARTED)",
+    to: "    const r = await call(await rosterStub(env, email), 'resetStart', { address: email })\n    return json(202, { ...SETUP_STARTED, ...r.body })" },
+  { name: 'reset start: the link lives 31 days', file: 'roster.js', from: '  resetTtlMs: DAY,', to: '  resetTtlMs: 31 * DAY,' },
+
+  // --- SD2: the void page (its own headers; the browser rig has the rest) ---
+  { name: 'page: inline script allowed', file: 'voidpage.js', from: `  "script-src 'self'",`, to: `  "script-src 'self' 'unsafe-inline'",` },
+  { name: 'page: framing allowed', file: 'voidpage.js', from: `  "frame-ancestors 'none'",\n`, to: '', also: [{ from: "  'x-frame-options': 'DENY',\n", to: '' }] },
+  { name: 'page: WebAuthn not turned off', file: 'voidpage.js', from: "  'permissions-policy': 'publickey-credentials-get=(), publickey-credentials-create=()',\n", to: '' },
+  { name: 'page: cached', file: 'voidpage.js', from: "  'cache-control': 'no-store',\n", to: "  'cache-control': 'max-age=3600',\n" },
+  { name: 'page: Trusted Types not required', file: 'voidpage.js', from: `  "require-trusted-types-for 'script'",\n`, to: '' },
 ]
 
 function tree(): string {
   const d = mkdtempSync(join(tmpdir(), 'directory-mutant-'))
   for (const p of TREE) cpSync(join(root, p), join(d, p), { recursive: true })
   mkdirSync(join(d, 'scripts'))
-  for (const f of RIGS) cpSync(join(root, 'scripts', f), join(d, 'scripts', f))
+  for (const f of [...RIGS, ...RIG_IMPORTS]) cpSync(join(root, 'scripts', f), join(d, 'scripts', f))
   return d
 }
 /** Run the rigs in a tree; a rig with no count line crashed, and proves nothing. */
