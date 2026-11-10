@@ -12,7 +12,9 @@
  *
  * Cases:
  *   died   the rig's own browser process is killed under a pending evaluate
- *          (the CI failure: "Target page, context or browser has been closed")
+ *   page   the page's target goes away under a pending evaluate while the
+ *          browser stays connected: what CI's WebKit actually did when its web
+ *          process crashed ("Target page, context or browser has been closed")
  *   stall  an evaluate that never resolves
  *   clean  a normal run that closes its browser (positive control: the guard
  *          neither fires on an expected close nor holds the process open)
@@ -30,9 +32,10 @@ if (process.env.BENTO_GUARD_CASE) {
   const pw = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
   const browser = await pw[process.env.BENTO_BROWSER || 'chromium'].launch()
   const guard = guardBrowser(browser, { rig: 'guard rig', stallMs: 2000 })
-  guard.section('the case')
-  const page = await (await browser.newContext()).newPage()
+  const ctx = await browser.newContext()
+  const page = await ctx.newPage()
   await page.goto('data:text/html,<p>guard')
+  guard.section('the case') // armed after setup: a slow first page load is not what the 2s budget measures
   guard.progress('page up')
   const which = process.env.BENTO_GUARD_CASE
   if (which === 'died') {
@@ -45,6 +48,10 @@ if (process.env.BENTO_GUARD_CASE) {
     setTimeout(() => process.kill(-launched[0], 'SIGKILL'), 300)
     await page.evaluate(() => new Promise((r) => setTimeout(r, 30000)))
     console.log('UNREACHED: evaluate returned after its browser died')
+  } else if (which === 'page') {
+    setTimeout(() => { ctx.close().catch(() => {}) }, 300) // out from under the pending call; the browser lives on
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 30000)))
+    console.log('UNREACHED: evaluate returned after its page went away')
   } else if (which === 'stall') {
     await page.evaluate(() => new Promise(() => {}))
     console.log('UNREACHED: a never-resolving evaluate returned')
@@ -68,6 +75,12 @@ console.log(`browser guard, in ${process.env.BENTO_BROWSER || 'chromium'}:`)
   const r = run('died')
   ok(r.status === BROWSER_DIED && /FAIL {2}guard rig: the browser process went away mid-rig/.test(r.out) && /after the row "page up"/.test(r.out) && !/UNREACHED/.test(r.out),
     `a browser killed under a pending call fails the rig as the BROWSER dying, naming the last row (exit ${r.status})`)
+  if (r.status !== BROWSER_DIED) console.log(r.out.split('\n').slice(-8).map((l) => '        ' + l).join('\n'))
+}
+{
+  const r = run('page')
+  ok(r.status === BROWSER_DIED && /a page the rig still held went away .*still connected/.test(r.out) && /after the row "page up"/.test(r.out) && !/UNREACHED/.test(r.out),
+    `a page that goes away under a pending call, the browser still connected (the CI crash), fails as the browser, not a row (exit ${r.status})`)
   if (r.status !== BROWSER_DIED) console.log(r.out.split('\n').slice(-8).map((l) => '        ' + l).join('\n'))
 }
 {

@@ -9,6 +9,10 @@
  *    in that row. The guard names it instead, exits with BROWSER_DIED, and
  *    points at the browser's own last words: run the rig with
  *    DEBUG=pw:browser and its stderr and exit signal are in the log above.
+ *    The browser process need NOT die for this: on CI's WebKit a crash in the
+ *    page's web process left the browser connected and closed only the page,
+ *    ~30s later, with that same message. So the guard goes by the message
+ *    (a target the rig still held went away) as well as by the disconnect.
  *
  * 2. A rig never hangs the job. `page.evaluate` has no timeout, so a wedged
  *    page holds the rig forever (a Firefox run once sat 28 minutes until the
@@ -27,6 +31,7 @@
  */
 export const BROWSER_DIED = 75
 export const TIMED_OUT = 124
+const TARGET_GONE = /Target page, context or browser has been closed|Target crashed/
 
 export function guardBrowser(browser, { rig, stallMs = 90000, print = (m) => console.log(m) } = {}) {
   let closing = false
@@ -42,7 +47,9 @@ export function guardBrowser(browser, { rig, stallMs = 90000, print = (m) => con
   browser.on('disconnected', () => { if (!closing) died('the browser process went away mid-rig (crashed or was killed)') })
   // The call that was waiting on the dead browser rejects too; whichever comes first wins.
   const onError = (e) => {
-    if (!closing && !browser.isConnected()) died(`the browser process went away mid-rig (${String(e?.message ?? e).split('\n')[0]})`)
+    const first = String(e?.message ?? e).split('\n')[0]
+    if (!closing && !browser.isConnected()) died(`the browser process went away mid-rig (${first})`)
+    if (!closing && TARGET_GONE.test(first)) died(`a page the rig still held went away (its web process crashed or was killed; the browser is ${browser.isConnected() ? 'still connected' : 'gone'}): ${first}`)
     // anything else fails exactly as it would have without the guard
     console.error(e?.stack ?? e)
     process.exit(1)

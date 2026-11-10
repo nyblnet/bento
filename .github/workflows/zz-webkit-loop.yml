@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -54,5 +54,6 @@ jobs:
               if [ $st -ne 0 ]; then grep -E "FAIL|segfault|process did exit|<kill>" "$log" | cut -c1-300 | tail -6; sudo dmesg | grep segfault | tail -2; fi
             done
           done
-          for v in baseline lp128 softpipe skiacpu; do echo "AB RESULT shard ${{ matrix.shard }} $v: pass=${pass[$v]:-0} fail=${fail[$v]:-0}"; done
+          cpu=$(grep -m1 'model name' /proc/cpuinfo | sed 's/.*: //'); a512=$(grep -m1 -wo avx512f /proc/cpuinfo)
+          for v in baseline lp128 softpipe skiacpu; do echo "AB RESULT [$cpu ${a512:-no-avx512}] shard ${{ matrix.shard }} $v: pass=${pass[$v]:-0} fail=${fail[$v]:-0}"; done
           exit 0
