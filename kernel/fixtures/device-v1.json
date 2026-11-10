@@ -1,0 +1,1682 @@
+{
+  "version": 1,
+  "about": "Conformance rows for bento/id option G device certificates (kernel/src/devices.ts): wdev. and dev2. certified by a passkey assertion, the directory's watt. countersign, the head rule and the tier (G1). For each row, verify chains[row.chain] with verifyRosterChain (roster-v2.json's rules) at now = row.now ?? now, then verifyDevice(row.proof, { roster, directoryKeys, rpId, origins, now }). Match the verdict, the reason where you can, and for accepted rows the tier. wren rows: verifyWren(text, sig). TEST KEYS ONLY.",
+  "rpId": "id.bento.page",
+  "origins": [
+    "https://signin.id.bento.page"
+  ],
+  "now": 1807200000000,
+  "directoryKeys": {
+    "dir-1": "BIogg-MkF-pjxElE5VMA1T3psLGllTQQWmSxslugqeIozeS-GrimOONBzLqX5Nhg1BMgWPXRSrBgO7OeujIkKZ0",
+    "dir-2": "BASLGZqLHYaDTlaruptWuThUp_cItNAUZYpPnRuqpV8z9RzU8Lfem9xdW0eqZ2VQlzSKW3q0r-ZOFe5HBgvwRUo"
+  },
+  "chains": {
+    "base": {
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.0..pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk.AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE.1800000000000",
+          "rip": "rip.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.1800000000000.1800000000000.m..dir-1",
+          "ripSig": "XTvZBE4rGXLbPyByc7wPm_N4ArCu5iODmIX2MhMUn-FtVJh-2SGfbvaKSLznnr9BmxqTYKZVUT0BwzZ-8NDzdA"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.1.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ.AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI.1800003600000",
+          "rip": "rip.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.1800003600000.1800262800000.m..dir-1",
+          "ripSig": "1PnJ_72R3qOfGvYrS7FSwgRVS8-dyzuSBV7v8pVAkcxibh7QZG_KYrWjhG1AzsuueM3GvZHA01ac5iX0e59IvQ",
+          "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSy1ncm5nVEFtN0pqUGRrVlNvTEpRdlVqSWZ3dEZKOExISDFPLTFBOEJnMCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEYCIQCenW8S-ILpNUKIiZKsF13QHAG3ByajmWEpYtzag24NTAIhAL5kpXzOVQgh6I-B0FpF6-Vn-8yt2K1vOhVBhD0cRNuP"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.2.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM.1800288000000",
+          "rip": "rip.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.1800288000000.1800547200000.m..dir-1",
+          "ripSig": "Q1KWKFeJ429ITTyHjcB7qAFjaEmpAZ28ZsNln91uycMbEPw0fJkjiu72SF0Aur3bAs7JnNDhAKZPcLCnWFjKBQ",
+          "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicmJEYTBSNjhLWncxS0VFOHFlUWQ0VEFxYVJ0MUVEbEpqYmVSSEdnaEtQVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEQCIF5Zx0Aa38mo7Old-bO4DL7ijpqsSQbnM1-3ZeHZ2qB-AiAKmkJzoC-sOCUH_Jtp1KGf3x75yH5mmNi5Q-8ejRKRqA"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.3.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ.1800576000000",
+          "rip": "rip.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.1800576000000.1800835200000.m..dir-1",
+          "ripSig": "xrSBV8TOzvSCtTXxovJsW30anyN-asKmd7Ny4IFzbK5QVUQVQ1WEJ-ejfvsdHVTc6i8FCs5doZTKefWZ1ZsPHA",
+          "signer": "BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4",
+          "sig": "vnf_O5xGeRBWcaiOY0utVY15fgNGi6yvV3BSVkqm38EaAqoO2rf7geM_8VDh3AEdfIcQnhdrQpZg6cTdBI7Ayw"
+        }
+      ]
+    },
+    "removed": {
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.0..pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk.AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE.1800000000000",
+          "rip": "rip.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.1800000000000.1800000000000.m..dir-1",
+          "ripSig": "SF2FHdA3jH32TgBPVK4fIoRMPLouQ2Zgdkoazg3UGVIjFNAO0rZ4qHauZ_EAvcZ64ay1Dbo8cv-yhzmacFcIlA"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.1.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ.AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI.1800003600000",
+          "rip": "rip.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.1800003600000.1800262800000.m..dir-1",
+          "ripSig": "NeEM05h7PmHvg2J6DeSO4d6NtHuOXwxNoNFXomiqCMJCVUp6132pKfSPbm57Tn8z62Pk4LLM5TnvO4cwxKFiMQ",
+          "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSy1ncm5nVEFtN0pqUGRrVlNvTEpRdlVqSWZ3dEZKOExISDFPLTFBOEJnMCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCICDeyv2pbiSwJ_wFMGXkuDS2ILgWHIIaHWSv9r6dF4CTAiEAiYcUoRN2s-BJf8zhckX2F7hhNdUcexdYk79Bw7XL9jI"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.2.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM.1800288000000",
+          "rip": "rip.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.1800288000000.1800547200000.m..dir-1",
+          "ripSig": "EsSvGNehvWOq_PzjBXgWafme_PmwVf7_pQJxb8uF__NK4NPLKU-J4-U8Z26ll31uPSWYtlcJGnyBoxQbfhsFaQ",
+          "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicmJEYTBSNjhLWncxS0VFOHFlUWQ0VEFxYVJ0MUVEbEpqYmVSSEdnaEtQVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCIQCRevVIxxo0xfw3J5SiStnKxV2FzUiMIa_ouZ2Hy_fceAIgV_zmLxzKnAxaQUdLNjeum4xNHglStd8gEFwqKcxfe20"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.3.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ.1800576000000",
+          "rip": "rip.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.1800576000000.1800835200000.m..dir-1",
+          "ripSig": "lqY4tRQPL4H4pgZIcqFvmZqoPzO29k_L3jAiB_adeip3wRqRambLCeBi3_wXHV4nN03Sct5kzq3DjTTtf4IeBw",
+          "signer": "BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4",
+          "sig": "Z_1SnCOzT9jm8mPqfp-4YRsgb05PHhWAh43SPQiI0OYAEEdsZ5b2RszSJ2dhkki1Q5fp7Mu9gkHvL0niAJtjLQ"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+          "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+          "ripSig": "p4mSrElmYCTL-Dvh43EV1DfT2AIo7U2VXJjqqjodam8cdzfgGGZ_Uwp3S8WG2qJcdf9IHtlMugDnUm1IwL4hsQ",
+          "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCIQDMue2Pgt7yGhqDRN26c8gEXgM-p3n2yLSclanKfQGjYwIgasYAITzR0oNvK5Gdk6ai5yf1Z3gqF3wteHjHnNGtu-I"
+          }
+        }
+      ]
+    },
+    "readded": {
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.0..pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk.AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE.1800000000000",
+          "rip": "rip.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.1800000000000.1800000000000.m..dir-1",
+          "ripSig": "HxDYWH9n1TUR_WThiFLRTT6M5l-kXrlQX71X3WdEdtV4KtbGUeQhMd6La8svhvKMrWNL2bluXhBXlMdO6ICZnw"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.1.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ.AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI.1800003600000",
+          "rip": "rip.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.1800003600000.1800262800000.m..dir-1",
+          "ripSig": "MUh9PeuXsURWsP977dWh6oLbh07t2z7Ulq-KccAX-6JBKpLHXp9QZ8nVfenJfuaLONzBfvPnRSu_kTNswbRkPA",
+          "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSy1ncm5nVEFtN0pqUGRrVlNvTEpRdlVqSWZ3dEZKOExISDFPLTFBOEJnMCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCICW89l5wRArIy28hvMDDH8kB86obkflcmqK0nTfTikXqAiEAwIH8w5LqcCwYdefI-TIzq1nGRCwpb0NaLBiQq9fJXxQ"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.2.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk.AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM.1800288000000",
+          "rip": "rip.GxdepsrEBwBHGEcj817qUrQ0rSXYyDyQAHNJ9U76dmg.1800288000000.1800547200000.m..dir-1",
+          "ripSig": "Ji1p_19W4lKvNF20hW6tnUJRPZYAgPzFA230kDBXAbIArsoix7dPRbrG5g9n1GI__0QjRwp442gU4NHZ2lSE1g",
+          "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiR3hkZXBzckVCd0JIR0VjajgxN3FVclEwclNYWXlEeVFBSE5KOVU3NmRtZyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCIQD2tBU6MNXbSZvDl5yUmHGQZ6m_1BZtjnBS2Qnv_D6vbwIgXj9NA0wTXnGwi4znhQ7lDsZXW5nl9qBcKeu-fBxEoLg"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.3.GxdepsrEBwBHGEcj817qUrQ0rSXYyDyQAHNJ9U76dmg.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ.BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ.1800576000000",
+          "rip": "rip.WxMWFTnrU9KSTuzHHHvn32GGRssz45Pzs72OZZvH1qg.1800576000000.1800835200000.m..dir-1",
+          "ripSig": "nIVFeLJhehguaAhjr5NaqqKWoYr1K0JtWRQ7_yRPGt8Iy0qblyu3okOIy7rGixBV7Ahyl6EEJlnZ7qhrH0Gqjw",
+          "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiV3hNV0ZUbnJVOUtTVHV6SEhIdm4zMkdHUnNzejQ1UHpzNzJPWlp2SDFxZyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCIQCa8KzilfH0wgMuFcilbb-rQ-FyL-G_7wg_-uhz4aDYIQIgKkD8mCoSOqLNxOVNzf9p7MRKRT4q2F6E9NMpcUXy_Ho"
+          }
+        }
+      ]
+    },
+    "reset-same-key": {
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.0..pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk.AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE.1800000000000",
+          "rip": "rip.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.1800000000000.1800000000000.m..dir-1",
+          "ripSig": "zJ5PQN8fZ-f4rZgD7lztAXK497cYu30a-Xvg9_hpLrdfs3pu08YrYL0tCM5DS1ZcoyP5ElNmNyiheuR0Vl_RrA"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.1.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ.AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI.1800003600000",
+          "rip": "rip.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.1800003600000.1800262800000.m..dir-1",
+          "ripSig": "OlsD7G6TKMkcPgCdHLUczhr9sXWffcxgLL65ShJ8ovxvo06MoWV0L8hjbyob8wKDjIKmMB0w8zsk1ULzjMrgCQ",
+          "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSy1ncm5nVEFtN0pqUGRrVlNvTEpRdlVqSWZ3dEZKOExISDFPLTFBOEJnMCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCIQDFjQc6OH90gacXNTSBnVkLHNXkm7IjaAIRMEm5kMPe_AIgD5IMc5pUlF8WdlPnz9Dgr0cBzEwplyi2pYvVuZ5lj3s"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.2.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM.1800288000000",
+          "rip": "rip.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.1800288000000.1800547200000.m..dir-1",
+          "ripSig": "chI4F_ufdxwB1c7QeRLtH7STlaePT8nSg1hcZ3EkxRFwHMGtUM9eEkp7jKWBUABDD0j1ifbJup2yCzgsS9b8gA",
+          "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicmJEYTBSNjhLWncxS0VFOHFlUWQ0VEFxYVJ0MUVEbEpqYmVSSEdnaEtQVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEYCIQCeP3sCvRL1lRi0JvB99uuyNWuUO3h2aIBEMGH9oEwRCAIhAJcDmpA8NgACszg5xTcnuavHThJSFv7nCW96xVrPzj46"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.3.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk.BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ.1800576000000",
+          "rip": "rip.ymva3X3w2m-DR0CLBE4nwNIZn30RcFtIhXEZjKRaM9U.1800576000000.1800835200000.r..dir-1",
+          "ripSig": "uRkWr0Yzxzss1D-DBcrl7loergjuZllWXmC2g59qmeoKrHht-H5B5ZmIbWFPDIIuLbxYTFdNbyD0LVcFK7BuLw"
+        }
+      ]
+    },
+    "quarantined": {
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.0..pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk.AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE.1800000000000",
+          "rip": "rip.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.1800000000000.1800000000000.m..dir-1",
+          "ripSig": "vdV5EVXs35SjP9AmMNz0pCxc4p56Km-_N06-P3awKOpnuXQlA35Nw_3etjxpfHfE7cE9bFnSEy4qTukBx5vjnA"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.1.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ.AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI.1800003600000",
+          "rip": "rip.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.1800003600000.1800262800000.m..dir-1",
+          "ripSig": "1cGCm0OY-dSLY9wDaRLtCK3dNo3yknwuaCHImQzukbBTszHzhtPc7xFsfBMishIxAUaR3aKGJL9lOcy51dHcQA",
+          "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSy1ncm5nVEFtN0pqUGRrVlNvTEpRdlVqSWZ3dEZKOExISDFPLTFBOEJnMCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCIQDaL-rJqV1OVrleinI-DNPqS8L8C4cucYdrbzQNYRjWVgIgIOChTcPxDlPA9gggFGt17rQnS7QOpWxU4ZXRNywcMjY"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.2.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM.1800288000000",
+          "rip": "rip.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.1800288000000.1800547200000.m..dir-1",
+          "ripSig": "neUTAcs1zNfhDO9e6gcv6BsRSAigUIeWJ8nLfWAa0LoShf-Pe7clpbMfP9sKULaZfaUmu6nuLjHijQccCz5GtA",
+          "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicmJEYTBSNjhLWncxS0VFOHFlUWQ0VEFxYVJ0MUVEbEpqYmVSSEdnaEtQVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCIQDP9ODHsGScizuostgI_qOQP91j2EEDCGZ_KNWHIIFwzQIgQlVx9EAqqIdfJ8hJWZwfQPiiruMuDM6WPChORcoUPGc"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.3.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ.1800576000000",
+          "rip": "rip.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.1800576000000.1800576000000.q.a_2Y2ZGX6j3X6KeH5x0z7R_E8YuMukjWoxck1NAt-Nk.dir-1",
+          "ripSig": "MJJSzndJ0Mqr2ZCmzlBPwbjar7VGw71BxNF499smpWxT0t_8ousKlUipsePi0c68gFbkhcs1MT5MCN2bJrAjJQ",
+          "voided": {
+            "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.3.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BKLEQm07MRWeDe6feMrtDDG1WtH8cbw4wpa5JoT58G0i_1Z5BZK21qLaPwvq1wib1HSWA6QlHO87p05IYUvr-TE,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY.1800576000000",
+            "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+            "assertion": {
+              "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+              "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiYV8yWTJaR1g2ajNYNktlSDV4MHo3Ul9FOFl1TXVraldveGNrMU5BdC1OayIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+              "signature": "MEUCIA8oWCFl7Gj8PTUK2Ni7hOJxvvE95aAJ54Z5attXs_QEAiEAmk9-x0oFW8Vw6lgoHbkDmsZNVKeqgTzOI04qqqV8KQ0"
+            }
+          }
+        }
+      ]
+    },
+    "undone": {
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.0..pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk.AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE.1800000000000",
+          "rip": "rip.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.1800000000000.1800000000000.m..dir-1",
+          "ripSig": "UyH1YbOZx4j1epDrv4jhAf5KjlbUUEuTTWulZgw9Hs41_sZYeyoPiW4b9ZtpMPYjhG82abfv-7JcRYs-76U0xw"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.1.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ.AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI.1800003600000",
+          "rip": "rip.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.1800003600000.1800262800000.m..dir-1",
+          "ripSig": "q0SmAQdKw-t0KtVAzm3AIX8115MAq44CyeTUgAG4zFhm04RRb1c5CwgDbvU2hPVPMBEEGh3hrXkiDXIu0INDkA",
+          "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSy1ncm5nVEFtN0pqUGRrVlNvTEpRdlVqSWZ3dEZKOExISDFPLTFBOEJnMCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCIEsFdDb94B3bZuaZWofAXwOFMJmNtk6byiel4QinfX4EAiEA7zY3CFnW0nmD8CCeLd72os_A1mH2dpm0hEUCRIjH9zc"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.2.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM.1800288000000",
+          "rip": "rip.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.1800288000000.1800547200000.m..dir-1",
+          "ripSig": "rOTPVd4Wd4YMFojVMDY4aNH3WWKfrVlmIU-17WvaGttM7hyHWQ-Eoo7QeBi4024fKHB_ihNjbgeWpjRLZO-udA",
+          "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicmJEYTBSNjhLWncxS0VFOHFlUWQ0VEFxYVJ0MUVEbEpqYmVSSEdnaEtQVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEYCIQCZ7zWn0NkL1fKD1TBXkv93wMv-86lb6bjjbLGbVh7RBgIhAK_Qy1q_8Zvxp_Ov9miYYZWrd-uVwkV1W8bwxwUKmSb7"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.3.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ.1800576000000",
+          "rip": "rip.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.1800576000000.1800576000000.q.a_2Y2ZGX6j3X6KeH5x0z7R_E8YuMukjWoxck1NAt-Nk.dir-1",
+          "ripSig": "KPYNFnoD4AlODiuKLupPA9cg4VSCn68waWZ62sfZK0pHYVWIOzlaqEePCt9qzLemIHKuxX9SHWI9l6_lJtUgvw",
+          "voided": {
+            "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.3.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BKLEQm07MRWeDe6feMrtDDG1WtH8cbw4wpa5JoT58G0i_1Z5BZK21qLaPwvq1wib1HSWA6QlHO87p05IYUvr-TE,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY.1800576000000",
+            "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+            "assertion": {
+              "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+              "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiYV8yWTJaR1g2ajNYNktlSDV4MHo3Ul9FOFl1TXVraldveGNrMU5BdC1OayIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+              "signature": "MEUCIQDctgg5Nkf7qCzUWr24v2W0c46A3x8d8QOqbKO-13HYFwIgWu7ABCdvQES-EM_ZGRAKjiLcBtf6-awq9HmUjPUEzGg"
+            }
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800612000000",
+          "rip": "rip.rOqtR9ciNJS50HBcXCzOvzDQz4eGsBqADxDjx3_tKPY.1800612000000.1800612000000.u.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.dir-1",
+          "ripSig": "6IHBBQSfpya1_7J5qUytKtYsdqcbZvm_k4tlcuXkxL4m5LR4_QR5sVr1FnAfIbmBPDOrPP9xxeY_TDI5BTQGwQ"
+        }
+      ]
+    },
+    "pinned-l2": {
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.2.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM.1800288000000",
+          "rip": "rip.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.1800288000000.1800547200000.m..dir-1",
+          "ripSig": "jj5U0rjyH771uGiU4YbDk3CGC-rC8KhJ_Pr1I46sdlsAanN3Knhqlsol_q8fj9O6_0_Bm9x-YRDT2i6rLiKQAA",
+          "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicmJEYTBSNjhLWncxS0VFOHFlUWQ0VEFxYVJ0MUVEbEpqYmVSSEdnaEtQVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEYCIQDhR1PmrQP0nGv0P76qYOdzNtyRxzk3joDzpzIJVMvScwIhAL3-SZ7Q3adXU81ZA2VZHuAkUcULRb7LvTK7UaN168O8"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.3.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ.1800576000000",
+          "rip": "rip.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.1800576000000.1800835200000.m..dir-1",
+          "ripSig": "llqRYlw1uP_JS5gp7vcRI_Y0NdwrZ2eIl1H4iI_DRjs8voxm-KdMDnJyvVsPx5vtcYu41tiw-KMEhw4IwzdmgQ",
+          "signer": "BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4",
+          "sig": "0YDoazsDLj2WZvhbVmVialt40EOXlquAJ29xh1ELcMA76ceYPfYPmGs9Hpgk9j3xTsYlQDAKjwK4aVYnp6JbQA"
+        }
+      ],
+      "pinned": "rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU"
+    },
+    "fork": {
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.0..pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk.AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE.1800000000000",
+          "rip": "rip.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.1800000000000.1800000000000.m..dir-1",
+          "ripSig": "IbYsJ4es4Icvmy9t1s_UdNyV5knX0mADziCelYLPYVxCIhYag_RI5qNSGWoAFZ7hlrEMO82n3jNdDMiNUKVrew"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.1.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ.KSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSk.1800003600000",
+          "rip": "rip.dPAMHKjK01msYEGgTuhoRONciyegg68uNrNuzUUykcc.1800003600000.1800262800000.m..dir-1",
+          "ripSig": "6O3FIb2Z2gzdfrY_iyhTq_15lTwaOidpEJoJKqKplLxULdNl22VCIA4zLKuERCJkFKbxFfS8mZGK6SqdRXptig",
+          "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZFBBTUhLakswMW1zWUVHZ1R1aG9ST05jaXllZ2c2OHVOck51elVVeWtjYyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCIQCFnyOzgc1MZ55zE5NCJ23iyHdoGriyn3halVSTkXveKgIgMlpF1fASyadJoFWsuzP1yKfpr8dLb4bl-Hzi2OEBflE"
+          }
+        }
+      ]
+    },
+    "ck-exact": {
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.0..pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk.AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE.1800000000000",
+          "rip": "rip.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.1800000000000.1800000000000.m..dir-1",
+          "ripSig": "DKRhdCX66RFCX2LyBpXkSH8M3i0nXBcTRfloIs-ulopli7fIyT5fLD--Ady9XaUTT5PRG6-1pqntTJuBrkHrlQ"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.1.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ.AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI.1800003600000",
+          "rip": "rip.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.1800003600000.1800262800000.m..dir-1",
+          "ripSig": "ILumQl0AAig_WFWPdM4SlSfdNqPJRamRb9D6dzLtWYFSCBrgwA5GgFgDuRJFwTPi_d714nvKeERwSfY7EL3eUQ",
+          "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSy1ncm5nVEFtN0pqUGRrVlNvTEpRdlVqSWZ3dEZKOExISDFPLTFBOEJnMCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEQCIFQgjyiJyI5-ZIL3lHcIBZ6KjRxxRBFUSwmAraQ71cV5AiBMjEuJne1bewjUrHheclhY4Ed4kypP-ap8LANMBXddHA"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.2.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM.1800288000000",
+          "rip": "rip.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.1800288000000.1800547200000.m..dir-1",
+          "ripSig": "R6VzPqTGdcg8RVVySAsyutvdOcuck9b5bIHcGZ7j4scZDWeNswx6LZHfpzOs0XIWGwlj3nIwFIn-IX9fr64qYw",
+          "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicmJEYTBSNjhLWncxS0VFOHFlUWQ0VEFxYVJ0MUVEbEpqYmVSSEdnaEtQVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCIQCR_V3vXa2ixZiiBzBKkWhEd-KLBl1W_vlOJ6HezUKwZAIgMOX-yh3SfK21UHoKc5cJj6Kyv_r24YJZ5BS9H9AQZ88"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.3.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ.1800576000000",
+          "rip": "rip.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.1800576000000.1800835200000.m..dir-1",
+          "ripSig": "xl-TaiakLf7QluLh59KPDRMobiRBtamQly4vPr6mZDBQFi6_ymba2gdA4GahkTvBvNd0NR6QfawqTgAs6VU1aQ",
+          "signer": "BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4",
+          "sig": "oXoypV2p7uMn1sBuBp2bClYJ6QL2Zw241eYxk_NxVW8-J2UXnBuZNhaBLxnGQyGh5qcSr-ebmInx05qHmm4R6Q"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+          "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+          "ripSig": "msGYfG3vODLHyyxh5_bwt8nMf-8YkdnqXmKZF8Yfwb5ZoZh9F-v6R_LWpm1ZzDJyxVvEUOJVg-bainVx1nSkZA",
+          "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCIQC8ZKQ6m8SPxA7sZEG0-1Dqg4-vzlD19z_DiZjQce51_QIgBYeK6hVkxs7nFfgfjojiFbUmn_FRcNfAE4tKr0ldJg4"
+          }
+        }
+      ]
+    }
+  },
+  "rows": [
+    {
+      "name": "ok/wdev",
+      "about": "a browser key certified by pk1 naming the current head, with its first watt.",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2xKLV95YUo2NUJqTGxPTUxIY2NFWkh6VjJYbktQM1ZGTk1ZaEZtX2l6WSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEQCIHYxr9ssss05hajkPHy8dCA_6Ax7Y-y0h5wsowsyDYQSAiBkR1hSY7IKF1Rj61yI0annmVbkGcOZHNMI6OhtNbaFgg"
+        },
+        "watt": "watt.slJ-_yaJ65BjLlOMLHccEZHzV2XnKP3VFNMYhFm_izY.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "hfuB3WtG_E3yTRJ-u0m0t2zydUerrmiv2xjbYxdix4gOcE7z9XZ75ZC17ZtRB8P-xCijdZ4GF-bYmWxvs8vjIg"
+      },
+      "expect": "accept",
+      "tier": "passkey"
+    },
+    {
+      "name": "ok/wdev-older-head",
+      "about": "naming an earlier head the signer is still in with no break: later roster changes do not kill it",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiVFBOUW1mLVc5UW5kUVhTa3hiLXd3ODJSbVF1SGY3Yjg1Zlphdi1LeW1ZVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFiU1hR0sW92DUXUrIDWGov_6M2gjDm1gWgQh5FBJgsmAiEAxuxs1T-QCh3BdQrFlyh80L2IeJvfkpcmty3N7GA1v1Y"
+        },
+        "watt": "watt.TPNQmf-W9QndQXSkxb-ww82RmQuHf7b85fZav-KymYU.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "k0PcNLioTXqlYmiYfDcsSxrZBs97n0i0AFV6BP33OB0anw9yUEWPQBnJGTVSbJawHw4OCgzX4Onn1TQC-5Hm2w"
+      },
+      "expect": "accept",
+      "tier": "passkey"
+    },
+    {
+      "name": "ok/wdev-signer-joined-at-head",
+      "about": "pk2 joined AT the head it names (its since equals that head's ripenedAt)",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiVFBOUW1mLVc5UW5kUVhTa3hiLXd3ODJSbVF1SGY3Yjg1Zlphdi1LeW1ZVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIHBXkHEEA9HtSZXlp2PTKgUTBDVgsF_J5hvm-D3hOTxAAiEA1LIKVMC6mksP0CFK3pfZy0QFVxNkb57Pkl1vIRJmtwk"
+        },
+        "watt": "watt.TPNQmf-W9QndQXSkxb-ww82RmQuHf7b85fZav-KymYU.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "XiXhY7PNSPBOIL1AzUrf6WTsSvdQqtBpSEjpYk2ASKwGmr-6rDwkHCy_Lapj-B2_M6pA8UVEwDxUv47wv1NqPA"
+      },
+      "expect": "accept",
+      "tier": "passkey"
+    },
+    {
+      "name": "ok/wdev-no-label",
+      "about": "the label is optional",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4..passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicmVZS2d1aU13ZXI0ZjcwU3kzaHB0LThJaDhlUnJsTnQ0bzFhaHBKWnVjOCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIQDOnIx5MwVHkxDzVCbV3_J8HuUbPSAPcIX7nhFlNnu3DwIgL2h6a2ppAGNMZ9zRa3gdmpiVEKbDvJ4DkM6BVgRGp7I"
+        },
+        "watt": "watt.reYKguiMwer4f70Sy3hpt-8Ih8eRrlNt4o1ahpJZuc8.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "9Ft5JKNOxET51mpbGttX0TafMUFAes7L0AobakocRt8salQYi0qlNvMeaBPOhDSuUhLiE8LD-0yuDCYKNa60Vg"
+      },
+      "expect": "accept",
+      "tier": "passkey"
+    },
+    {
+      "name": "ok/wdev-label-40",
+      "about": "a 40-character label",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eA.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2ZCejZVWk1JQmlmcENfeWJFaGJqZ25pRUVnVkQ1a1o5WHJ6am9CNTUtNCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQCYNyiYn5ew0d2bj8BpF5o3Kw34BG7r3XGAmEBsbcR1QwIhAMcrHEb0fEn6s6r1vYMIM1c-ZB0kGxt9dF2F2rbdn10A"
+        },
+        "watt": "watt.KfBz6UZMIBifpC_ybEhbjgniEEgVD5kZ9XrzjoB55-4.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "niu1_AKW5eR0GNy4gcKYX8dV4CwqnBhiLpWhCgmSYpJBgw-kLeh-a7qW6ROhwd6Cq1QUHNlLzVgWkWYyg458Vg"
+      },
+      "expect": "accept",
+      "tier": "passkey"
+    },
+    {
+      "name": "ok/watt-24h-exactly",
+      "about": "a watt. of exactly 24 hours",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2xKLV95YUo2NUJqTGxPTUxIY2NFWkh6VjJYbktQM1ZGTk1ZaEZtX2l6WSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIEig7rgUIHjZNlTNHSOLEZPyVP9QDjXGPLv3hWNI4KayAiEA57hIUe5gkMTpJNIdfB9hbQh7HxOm-y_hRM_Ec1CpSMA"
+        },
+        "watt": "watt.slJ-_yaJ65BjLlOMLHccEZHzV2XnKP3VFNMYhFm_izY.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "7loyCKmFJrJma7CwzseLJKMezLeoW8Nry97D_aNwThRSt-9rrrd9g-c8q48f2Zg_l-CzHKybCode9bBlX-B8Uw"
+      },
+      "expect": "accept",
+      "tier": "passkey"
+    },
+    {
+      "name": "ok/watt-ob-0",
+      "about": "ob 0 (the request did not come from bento/home): informative only",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2xKLV95YUo2NUJqTGxPTUxIY2NFWkh6VjJYbktQM1ZGTk1ZaEZtX2l6WSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQDprgKqV9cFxo6DYrYBfmp6wVFITrLzmj2ZRjT6mmnfmgIhAK8qA_E5K9guMe_FKw-uiTcpHKPKtQBoyVWlJZ3Vuf2U"
+        },
+        "watt": "watt.slJ-_yaJ65BjLlOMLHccEZHzV2XnKP3VFNMYhFm_izY.0.1807192800000.1807279200000.dir-1",
+        "wattSig": "XATLmCE-1FHqtwssJWVT5Kj_Hr1-vcq7qjKe8_0vjYxVbDfzFWEztKESQNw5tepQPujCk26NUbnLGBDUezunGg"
+      },
+      "expect": "accept",
+      "tier": "passkey"
+    },
+    {
+      "name": "ok/watt-second-kid",
+      "about": "countersigned by the second pinned directory key",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2xKLV95YUo2NUJqTGxPTUxIY2NFWkh6VjJYbktQM1ZGTk1ZaEZtX2l6WSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQCdLitoqradVXLewCDkB90XLn_1bVefvE4uSza_DjCxSgIhAMa3bgAzY2UMzsL8TC8vbRI95D6DoMtHFSUllT5JsAt0"
+        },
+        "watt": "watt.slJ-_yaJ65BjLlOMLHccEZHzV2XnKP3VFNMYhFm_izY.1.1807192800000.1807279200000.dir-2",
+        "wattSig": "r6qWAaWpCS-qMClqUc93JxX2wFq49Ku-kDOPUTjAv9BqmsWC9OgQPTAf2CUsN6pdZKO1rl4ugVY27faFVh6O1w"
+      },
+      "expect": "accept",
+      "tier": "passkey"
+    },
+    {
+      "name": "ok/watt-renewal-at-cap",
+      "about": "a renewal 6.5 days after the ceremony: a new watt. over the same certificate, expiring exactly 7 days after the ORIGINAL ceremony",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1806638400000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZDZJdzZ3T2F0d0EyN19hWjVFcHhDVE85YnZyQUlCRzJXQjJaWmdtczB4ayIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEQCIGQ11SJ4D-sBSkQORdU_46jsG6KwFl1GtHi1gLSYjN5SAiAZmAzvozBYuMYn_RdkTcEzEqMXo6hb2tQbzlXZpbpp2g"
+        },
+        "watt": "watt.d6Iw6wOatwA27_aZ5EpxCTO9bvrAIBG2WB2ZZgms0xk.1.1807196400000.1807243200000.dir-1",
+        "wattSig": "L65uUiZItELUDxT2XI5d0M2alMRHWcT6BmgvAHzhtQY9WT9b9jqbL2aEJ4PoalElbmlJV9VgFwjibgG8Ff-8cA"
+      },
+      "expect": "accept",
+      "tier": "passkey"
+    },
+    {
+      "name": "watt/past-cap",
+      "about": "a renewal whose expiry reaches one millisecond past 7 days after the original ceremony",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1806638400000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZDZJdzZ3T2F0d0EyN19hWjVFcHhDVE85YnZyQUlCRzJXQjJaWmdtczB4ayIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQDJd1-7X6GeW3NeIHjGwVowXK2Iqg4WtBgYErDzlXfr1gIhAPBm1lgF5OKVROY-W7jKmGdbpmVkI2w2hCyAMYCLG9FR"
+        },
+        "watt": "watt.d6Iw6wOatwA27_aZ5EpxCTO9bvrAIBG2WB2ZZgms0xk.1.1807196400000.1807243200001.dir-1",
+        "wattSig": "O3wKn1eR591dZw6lvvCLlgR94Ufy0xK7L9HFRyF9yk1EfLWGH3TLN6R0F5JaxLWcNE9JLbjBt6zB8CoBr4ww6A"
+      },
+      "expect": "reject",
+      "reason": "watt-cap"
+    },
+    {
+      "name": "watt/original-expired",
+      "about": "the same certificate with only its ORIGINAL watt., long expired",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1806638400000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZDZJdzZ3T2F0d0EyN19hWjVFcHhDVE85YnZyQUlCRzJXQjJaWmdtczB4ayIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEQCIFtzLmSPRJJGn2fK6SOXYkgrCnafNRnGru2tqrNKXajkAiB8afHQlj-2igLbjhFtiX2-89Ug-LvqE6aqyMmJsMvhmw"
+        },
+        "watt": "watt.d6Iw6wOatwA27_aZ5EpxCTO9bvrAIBG2WB2ZZgms0xk.1.1806638400000.1806724800000.dir-1",
+        "wattSig": "bxTTLghA4e2HbLZv09AIw7lb7AWzqkWEDkMGFsGIhjZDLrMaKvbMp9pONMEBjiapMNKopYWzzkfR0a3-i85kEQ"
+      },
+      "expect": "reject",
+      "reason": "expired"
+    },
+    {
+      "name": "ok/undo-revives",
+      "about": "pk2 quarantined then undone: its certificate naming a head before the quarantine verifies again",
+      "chain": "undone",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiVFBOUW1mLVc5UW5kUVhTa3hiLXd3ODJSbVF1SGY3Yjg1Zlphdi1LeW1ZVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIQCCggVhxoRftC0mJywbMN0QFTErf5EWI_O8WPlEhrBkWQIgZB-cQAa1SDiriwNAVO-_4ts36LrtBXefEZfpDH8d8wo"
+        },
+        "watt": "watt.TPNQmf-W9QndQXSkxb-ww82RmQuHf7b85fZav-KymYU.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "8yZbNRHp7RpNUi6pN9at_xrmIWPBZfo4Tj4z56HVbH5f-mfRzg9Ko9A1vKlrF4XXxMNh5WounoZieud83RWDJw"
+      },
+      "expect": "accept",
+      "tier": "passkey"
+    },
+    {
+      "name": "ok/pinned-head",
+      "about": "from a pin of L2, a certificate naming L2 itself (since is the pin's ripenedAt)",
+      "chain": "pinned-l2",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUnRFam9uakRsbjhiT1lqaExQZlI4djNfVU5fVVpYYkd0eGtiVWwxTjhPcyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQDtzaPRwRhkx4aUAtKxXw_3cntB8Pu-VO7ECAjtFNxP6wIhAODyOBSh_r3seD1faUgTp74s5kSeEI9CSBjKvuOznAgT"
+        },
+        "watt": "watt.RtEjonjDln8bOYjhLPfR8v3_UN_UZXbGtxkbUl1N8Os.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "rQ8E47aLkJYYM-u_nNy5F_Vqp0qwHqoXP-RI2xKZE8pwxKOtCy6Zw8Bo6SvRHKKjbuZvQAIsvINdUJbrmpLCJA"
+      },
+      "expect": "accept",
+      "tier": "passkey"
+    },
+    {
+      "name": "ok/readded-names-readd-head",
+      "about": "pk2 removed and added again: a certificate naming the head that re-added it",
+      "chain": "readded",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.WxMWFTnrU9KSTuzHHHvn32GGRssz45Pzs72OZZvH1qg.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiX3JrSUo5ZkZHb0MtWXNsRkwwWU9LemNzc0diU25taWtqTENvcC1tNmtETSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFXw_NtBO797go5gRL5dVqbMcQ_Gu7nXVZZWpdLxLcxoAiEAyAvJTCs20_7kp4sTTTIojqLNhK0qIJVkT1lNgn-sQuw"
+        },
+        "watt": "watt._rkIJ9fFGoC-YslFL0YOKzcssGbSnmikjLCop-m6kDM.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "AFM4ow9p25v7d-a7G_5f90e9I3p3LVaggno4eWKzPLMBwqIdYqMYPVEKBanN6R3e6F2mmHywXv3_1XMwCZlF8w"
+      },
+      "expect": "accept",
+      "tier": "passkey"
+    },
+    {
+      "name": "ok/after-reset",
+      "about": "a certificate naming the reset head, by the passkey the reset installed",
+      "chain": "reset-same-key",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.ymva3X3w2m-DR0CLBE4nwNIZn30RcFtIhXEZjKRaM9U.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiR0tDTEYzVWl0cnNncUtkUzdndkpqZ25XbjByOHN1ckhPTkw4aVpXcWZiUSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQDE12gqAteo7g8j0GeL3XELG3ZW-Uhf8IoMILsmykCwtwIhAOsMbfZXW9LYYym1TojdzXCv4OZDlFhzGkQiyg8EFZn-"
+        },
+        "watt": "watt.GKCLF3UitrsgqKdS7gvJjgnWn0r8surHONL8iZWqfbQ.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "yXczKLNgLTWh1-SLYXYVVX_Dz8WXyhRT-sns-72bQVBPeE5hZoMZ14BK_XfevRmZatbumgAxq2B5_Q623dnQpA"
+      },
+      "expect": "accept",
+      "tier": "passkey"
+    },
+    {
+      "name": "head/signer-removed",
+      "about": "pk2 removed itself after the head the certificate names",
+      "chain": "removed",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiVFBOUW1mLVc5UW5kUVhTa3hiLXd3ODJSbVF1SGY3Yjg1Zlphdi1LeW1ZVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIHRS54Fd0ogJBJ_kF4-u9wHlDyOBsR7y5Tjins42x7rcAiEA-L3TIB8XoiNh8hFWjap6NyqdY5DSGv4f92bp5_IbOiU"
+        },
+        "watt": "watt.TPNQmf-W9QndQXSkxb-ww82RmQuHf7b85fZav-KymYU.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "ZfKvhvOFk8kyikcHjIXBD4AT2jQsiUGwoVx6smI3EvBXjmavQG_ZU-vkHKYrxGuoSK3prjxxRajuCia5T5V_jQ"
+      },
+      "expect": "reject",
+      "reason": "signer-removed"
+    },
+    {
+      "name": "head/removed-and-readded",
+      "about": "pk2 removed and added again; the certificate names a head before the removal",
+      "chain": "readded",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiVFBOUW1mLVc5UW5kUVhTa3hiLXd3ODJSbVF1SGY3Yjg1Zlphdi1LeW1ZVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEQCICsWUssua7bcsTap31Zr7F7KnNXuZNZBDS2uGGh5NOdvAiAux6v7_2mvC-04ktq1a5vHP4ig6w8UzkmIXMdrVFlyaA"
+        },
+        "watt": "watt.TPNQmf-W9QndQXSkxb-ww82RmQuHf7b85fZav-KymYU.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "cq0jLowJBfnrkHJMphe4gAm500oG-nt0J9Gi1Qx7ntooGb9kdLkHs85T7UAVZswzWunioGs80rdP3MaEav5sfQ"
+      },
+      "expect": "reject",
+      "reason": "signer-break"
+    },
+    {
+      "name": "head/before-reset",
+      "about": "a reset installed pk1 again; the certificate names a head before the reset",
+      "chain": "reset-same-key",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiVFBOUW1mLVc5UW5kUVhTa3hiLXd3ODJSbVF1SGY3Yjg1Zlphdi1LeW1ZVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEQCIFA2VSDInApv_f0LjX4bY_bVOAjxX5RyN513sAi2GC39AiAj8dA5cq0lnI36P-FfHHcD2dX9dcYTzPJKRF5tUZ7l7w"
+        },
+        "watt": "watt.TPNQmf-W9QndQXSkxb-ww82RmQuHf7b85fZav-KymYU.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "3IOaX0BePbCy75q__7V6Q7oAGjxtymUp3tp15P_4QAYJNVZ9Kqf0eRBQTGtwmZAOEGoxxDEH1i2mPepUlLIUjA"
+      },
+      "expect": "reject",
+      "reason": "signer-break"
+    },
+    {
+      "name": "head/signer-quarantined-now",
+      "about": "pk2 is quarantined in the current head",
+      "chain": "quarantined",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiVFBOUW1mLVc5UW5kUVhTa3hiLXd3ODJSbVF1SGY3Yjg1Zlphdi1LeW1ZVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQCltzVJO66a3jCAPpJTAdIK4smYyyl7DPiZfsQxq3EMCgIhAMn_e3g0NIN8VkPbj6-ixKxSWZdxOokVN4Hw5AUkNiXl"
+        },
+        "watt": "watt.TPNQmf-W9QndQXSkxb-ww82RmQuHf7b85fZav-KymYU.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "llWcsKe5ZA-97PrgvnQ2_6jBaQ1-FJJNM7xdUSnzsGdkZU9n34E4k_a7e5RwpblcFWuniu99F8Pv0DWLzN3vHg"
+      },
+      "expect": "reject",
+      "reason": "signer-quarantined"
+    },
+    {
+      "name": "head/signer-quarantined-in-head",
+      "about": "pk2 was quarantined IN the head the certificate names, and is clear now",
+      "chain": "undone",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiMlIwTVNmYzRiMWZNbTJGcGlkaTZNWXh0bFRBNjd0TGpNaUtUVW5lU2pZYyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCICNHi_VkdNvYIlguMpMAFcKSEJp8YTLr-Dh2ecs_DwzPAiEAytVRxRcrJn15y8yMDYF61-J-06IJLnaJO4OtrkagPMI"
+        },
+        "watt": "watt.2R0MSfc4b1fMm2Fpidi6MYxtlTA67tLjMiKTUneSjYc.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "fJYGL4g5ROS6zh9z8BljyB8dP60sBvbNrGYCIOrJnnN5RK0NZ131pP-xgngS5JYQiX0YFX8pZyhfSixrG-MctQ"
+      },
+      "expect": "reject",
+      "reason": "signer-quarantined"
+    },
+    {
+      "name": "head/fork",
+      "about": "the certificate names a fork head (another genuine L1) the verified chain does not contain",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.dPAMHKjK01msYEGgTuhoRONciyegg68uNrNuzUUykcc.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiOGx3Q2dQSEhURkc2WXlaX0RxaHhVcEdja29HTnUtMGFnQ05pUDJZb0hNNCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIBByx54NrOH1PXoJujq-aS5qw9R4FmhGX7lwMZdLYgpdAiEAx-K-MXrHdGLep5qH3aMblf8v4kI2iWjzAraFt-f32wY"
+        },
+        "watt": "watt.8lwCgPHHTFG6YyZ_DqhxUpGckoGNu-0agCNiP2YoHM4.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "MHURffi45s0EFhQVONIphNq60NBZnadLywoMLlF69bgHUDfTv7FNi4p2M0aQ_7LElSw9wpOULEVrz6J9tBjkuQ"
+      },
+      "expect": "reject",
+      "reason": "roster-head"
+    },
+    {
+      "name": "head/older-than-pin",
+      "about": "from a pin of L2, a certificate naming L1: unplaceable, the device makes a new ceremony",
+      "chain": "pinned-l2",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiVFBOUW1mLVc5UW5kUVhTa3hiLXd3ODJSbVF1SGY3Yjg1Zlphdi1LeW1ZVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQDnQpyEY0QFMtN_eqxcZilenseIwpqU-DZM3XXFR_j6UgIhAMYt2UgDNM2Q64r1xJ5_nbqSq6SP8Z3qpWb7hcUT3QlU"
+        },
+        "watt": "watt.TPNQmf-W9QndQXSkxb-ww82RmQuHf7b85fZav-KymYU.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "hc2LuIq288SnlX50CBnv73lYc3GD-k-_c3lJ_D6tSrQIyIBySUGu5jgpIXyU4q9UlSx3LzAjg4BamQQPwOZt_A"
+      },
+      "expect": "reject",
+      "reason": "roster-head"
+    },
+    {
+      "name": "head/signer-joined-after",
+      "about": "pk2 is a member now but was not in the head named (L0)",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicENrRGxRVG5leExEcTcyVG1zbVFISEdCWi1qZEhLZVRRSXZMeVpqd1ZoRSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQDwq6w4WpaF6cWofcyI5qys2MlnPUDIrc0GUU4cAw__bwIhALpHEsSGr2p2eDGxcIZ3jHeMhdyRMe7_RzLPhA-zGqIo"
+        },
+        "watt": "watt.pCkDlQTnexLDq72TmsmQHHGBZ-jdHKeTQIvLyZjwVhE.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "IbHlr9tVQv3s4WtEtbZQI8CSsvV5yNrGU-92WTJa-RlwLeI5f4KwM__SiOzXOfjUgeEjKAKb89HpsFyarsIQ8A"
+      },
+      "expect": "reject",
+      "reason": "signer"
+    },
+    {
+      "name": "head/ceremony-before-head",
+      "about": "ceremonyAt one millisecond before the named head ripened",
+      "chain": "base",
+      "now": 1800864000000,
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1800835199999.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiM0pSbDQxX3dFbFpGNGtGajJaZ3poYXpwb1oxeUR1QUlra1pMTlJHVDh0RSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEQCIG9rklv8aBORt1tMm8qi2AnFTNvNvEj0yXzJ2_65w5vaAiB97ltHzR36Jy8qHxO5p3foAD2TGe8hk4Tp33k_SbpDzA"
+        },
+        "watt": "watt.3JRl41_wElZF4kFj2ZgzhazpoZ1yDuAIkkZLNRGT8tE.1.1800835199999.1800921599999.dir-1",
+        "wattSig": "4xXDhC4OaW3E4Egzo1KR6ubCnEJiuYHp-BTimIsIGec021mNo-ooxnd8csKjSJA-wmCDc_nN_EBkt-TU4Is-ig"
+      },
+      "expect": "reject",
+      "reason": "ceremony"
+    },
+    {
+      "name": "ok/ceremony-at-head",
+      "about": "ceremonyAt equal to the named head's ripenedAt",
+      "chain": "base",
+      "now": 1800864000000,
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1800835200000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiR3ZGV2hLN2xIN0JTb0ZoREFTTEQ4aV82b2tDU1VvdzNOQXpPWWppUDVCOCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEQCIGeXi8REnksVQT2JMb4JORxrlEFoLN_zpZzpu6KdjA4OAiADmOSMBnVP0l_4vDpzRkV-1Pe6HvHb4ZQHB0ukgSL2DQ"
+        },
+        "watt": "watt.GvFWhK7lH7BSoFhDASLD8i_6okCSUow3NAzOYjiP5B8.1.1800835200000.1800921600000.dir-1",
+        "wattSig": "Ruo1omxBTbleJFpZkv4pe8licSLtfIWKh806ecB3g2VJvMhdiV9lJewFtVtVPjxz5z8mqRBlHU6NzjbdI0xWVQ"
+      },
+      "expect": "accept",
+      "tier": "passkey"
+    },
+    {
+      "name": "head/recovery-key-signer",
+      "about": "a recovery key as the signer (passkeys only)",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2xKLV95YUo2NUJqTGxPTUxIY2NFWkh6VjJYbktQM1ZGTk1ZaEZtX2l6WSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQDltTqEwvnw_dn_6mKdmSQNFGacPJCNeZG1ICHuGt3_5gIhAK-ATAUII-HigO2J1DNrwTDk_5tKRtc8QSO5jOIoJipr"
+        },
+        "watt": "watt.slJ-_yaJ65BjLlOMLHccEZHzV2XnKP3VFNMYhFm_izY.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "3MmUPrli4isl7w2zbaSdqPY9l0eCvrAuWIdvKxizLH8wGK6SBQ8jFHVXcpVmh2nTRhonQoCLBkPca51O99xiYw"
+      },
+      "expect": "reject",
+      "reason": "signer-kind"
+    },
+    {
+      "name": "head/consent-key-signer",
+      "about": "a consent key as the signer (its purpose is the next kernel change)",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2xKLV95YUo2NUJqTGxPTUxIY2NFWkh6VjJYbktQM1ZGTk1ZaEZtX2l6WSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIGTousqnpcaLazl5Ur2Oatbp4CirMTuiqTP7FAKhqgxLAiEAhtQ9yBloRPT-McGHvkk7PcvoWhRWnaxoFT7dp5mZUkw"
+        },
+        "watt": "watt.slJ-_yaJ65BjLlOMLHccEZHzV2XnKP3VFNMYhFm_izY.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "ZNafnJ-bhBw3u92Nt7ya0LzOmek_Z25kFktmSJFB55hrwW4cfn6-oCizVbRPdwCp6NGhw_lwOJ-ZaIsqVPdf3w"
+      },
+      "expect": "reject",
+      "reason": "signer-kind"
+    },
+    {
+      "name": "head/signer-not-member",
+      "about": "a passkey that was never a member",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BNww6PpA6fWHG7mI3eB0l2nICkO5ma8mGBJT88ecQqCRlNiH93AA6uhWo-HbfW3nMGX8XhVfsIPCA-F4Mt_zUnM",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2xKLV95YUo2NUJqTGxPTUxIY2NFWkh6VjJYbktQM1ZGTk1ZaEZtX2l6WSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQDLrPdQT3J2iHkdSYLFwu8eqw3zYSsH4GeP6i6YSdU7UwIhAPQqGPP5_1gE0Z5smzmgQ6qFcJkU2WzzrsAOHJ3hlmhu"
+        },
+        "watt": "watt.slJ-_yaJ65BjLlOMLHccEZHzV2XnKP3VFNMYhFm_izY.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "xleCiWqrM3DUEn0saunLzXjz7_JmVsZGQXBcp9gZ0G5DOA8q-xIwhDa5OEIthZo6jmdbbUQqBWnma1PJf3PEcw"
+      },
+      "expect": "reject",
+      "reason": "signer"
+    },
+    {
+      "name": "head/other-address",
+      "about": "the certificate names another address",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.Ym9iQGV4YW1wbGUuY29t.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidld5UWd2WVFvdklDZDBnS3J3Y1o2aTRZOFZWTkVqUGZsdDhqOXlLQUlfOCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEQCIF_mApmG-W5zhojwWhDN66KMY4pMsoWixXGxcdRjPNNJAiBJozh6KadqAFOf_DwvgdjaJqQ-geaHS3RsgKha1r0GsQ"
+        },
+        "watt": "watt.vWyQgvYQovICd0gKrwcZ6i4Y8VVNEjPflt8j9yKAI_8.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "ZSMOlAhwTvh9ZUT6mmwtUCLKFXWVskiI2GTKpfMcqBkimGwZ1iF39Ri2M2rBRBarx2XwNopSymlo-oCqHazGZg"
+      },
+      "expect": "reject",
+      "reason": "address"
+    },
+    {
+      "name": "head/ceremony-future",
+      "about": "ceremonyAt more than the skew allowance after now",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807200360000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2FZZUZzdW10LVpiM1JSOUhiVUYtOTIwRGM2ZHhUeG1vejBLYS04M2x1YyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIQDVj4tMDoRmzA1tDAs_4uLv_-FPgve8ada-ZVEhsizLwgIgWDu3hvG5Gtc2D7yNDrd8nySA_KMzVVOGUVtx5hjo6iE"
+        },
+        "watt": "watt.KaYeFsumt-Zb3RR9HbUF-920Dc6dxTxmoz0Ka-83luc.1.1807200360000.1807286760000.dir-1",
+        "wattSig": "yjZfolngNgiSK8-ZIL1YilOAkKqmSu_2L2RDg2jhwtoOQQGKUk97pFrigo62FMxCMpaEuBAVBlh5FMsRqQ7vwQ"
+      },
+      "expect": "reject",
+      "reason": "not-yet-valid"
+    },
+    {
+      "name": "assertion/other-text",
+      "about": "the assertion covers another statement",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUGlVTjFjZF9URW1HOU5Jc1RuejhCOUR3MEVwWWxiTWl6b1poaG1rVEVNayIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIQCB1-SC2yyJ3uZVywsH0PrfxSjkZLWgWh3yAxtZBu-_5wIgKqyQfKshVprrGiDg52pqmjOan7zIU-cIeMmrrgfA6wI"
+        },
+        "watt": "watt.slJ-_yaJ65BjLlOMLHccEZHzV2XnKP3VFNMYhFm_izY.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "-o_-_VIePzvuPSXZTQwYqOunTAMIU7ke0wZjYsDgMLkavFPit4RREac9Mfffk_rDFUpwAuKQOsVlPLhhcdiXsQ"
+      },
+      "expect": "reject",
+      "reason": "assertion-challenge"
+    },
+    {
+      "name": "assertion/origin-library",
+      "about": "asserted from https://home.bento.page (the library cannot use the passkeys)",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2xKLV95YUo2NUJqTGxPTUxIY2NFWkh6VjJYbktQM1ZGTk1ZaEZtX2l6WSIsIm9yaWdpbiI6Imh0dHBzOi8vaG9tZS5iZW50by5wYWdlIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+          "signature": "MEUCIFJuFYOyZAymce0YuXVa0wIvHkWDd56K7xkEzNz6VoReAiEA_EW7LBxgeqMGcmkS1G3s_nXUSVrwvmERk9PBd7mEpBY"
+        },
+        "watt": "watt.slJ-_yaJ65BjLlOMLHccEZHzV2XnKP3VFNMYhFm_izY.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "lhVQ5zf3gBj_Fo6CikXL6YjHc_UORSQaia1mQc7Ba_0aJJ2r9fSgdgVg8902OGy2wlbaZZHZrhi7tX5hI4GCTQ"
+      },
+      "expect": "reject",
+      "reason": "assertion-origin"
+    },
+    {
+      "name": "assertion/rp-parent",
+      "about": "asserted for the parent rp bento.page",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "lXmmZyQH0vPWsh6YVhTohLFxQ7fKOn_4F9t8bX_dPhkFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2xKLV95YUo2NUJqTGxPTUxIY2NFWkh6VjJYbktQM1ZGTk1ZaEZtX2l6WSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIQCxDXD8uaU2uERhf0FaY4BO33E7JphnEizHSxfah-CRYAIgMNjAsn8Q6Xo7iO044Yjkyy7Qo3h-suoCTd897_d29V8"
+        },
+        "watt": "watt.slJ-_yaJ65BjLlOMLHccEZHzV2XnKP3VFNMYhFm_izY.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "EEmG3cq7mkbDv9GcY0YqT7IrgqtylAkPjaWiUhghqA5ig02L3EQrEL_XsP6rnG_TVBOAezzqJT3m1a8rFuTrdw"
+      },
+      "expect": "reject",
+      "reason": "assertion-rp"
+    },
+    {
+      "name": "assertion/uv-clear",
+      "about": "user verification flag clear",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYBAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2xKLV95YUo2NUJqTGxPTUxIY2NFWkh6VjJYbktQM1ZGTk1ZaEZtX2l6WSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQDrao5BLZWyj65PLK3PGr5FtFMbirpKrflDq2p8pgE53wIhAOL1Fpt7jwHBGaPibp9Eg7LU6Hneh1LyDX1SsBcqr1fl"
+        },
+        "watt": "watt.slJ-_yaJ65BjLlOMLHccEZHzV2XnKP3VFNMYhFm_izY.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "x9QfqLqDzCak3LnkN6Z2eu2p0pmnKyDeu_e77oPVRJIMorTbnIQQ6Af1sFi4e3Haq6L3E9PNj2XE0KXJ7O555w"
+      },
+      "expect": "reject",
+      "reason": "assertion-uv"
+    },
+    {
+      "name": "assertion/other-key",
+      "about": "the assertion is by pk2 while pk1 is named",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2xKLV95YUo2NUJqTGxPTUxIY2NFWkh6VjJYbktQM1ZGTk1ZaEZtX2l6WSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFNS0EAHUZIWurFV-M9OItUwayBiUcBDqmmq42N8COJJAiEAxLdazuRn4EKUDKzjCN4yDS7j_dbqAgQPK3hahtS1JRc"
+        },
+        "watt": "watt.slJ-_yaJ65BjLlOMLHccEZHzV2XnKP3VFNMYhFm_izY.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "a4XQ7csUGcJw42NqX9JnWDpKhoNhUS9h6AvB5Tj8VCUqE8VVj4BYjsvHbTWWGoBi2JqAqCSM9hx2qM5foGjCMA"
+      },
+      "expect": "reject",
+      "reason": "assertion-signature"
+    },
+    {
+      "name": "watt/longer-than-24h",
+      "about": "a watt. of 24 hours and one millisecond",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2xKLV95YUo2NUJqTGxPTUxIY2NFWkh6VjJYbktQM1ZGTk1ZaEZtX2l6WSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQCfabc3p3xt45iEVS6rXOVdLFJLLm-9O05fb1HEI_RjhQIhAMp_1KyNSHXTw1Ny2Ovg1rkIEgZ0_c2ODE7UP0WI4U7R"
+        },
+        "watt": "watt.slJ-_yaJ65BjLlOMLHccEZHzV2XnKP3VFNMYhFm_izY.1.1807192800000.1807279200001.dir-1",
+        "wattSig": "MUymqpZskY3MglHHCR2usZmVnB-L6HJxg-aSr9TWM-M1f4tdA7X3n7pNFZpA1pH_KfPejZqIAwlc1RCxqP4XJw"
+      },
+      "expect": "reject",
+      "reason": "watt-lifetime"
+    },
+    {
+      "name": "watt/empty-life",
+      "about": "expires equal to loggedAt",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2xKLV95YUo2NUJqTGxPTUxIY2NFWkh6VjJYbktQM1ZGTk1ZaEZtX2l6WSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIQDY24qEgjlzzwswZ6_C1Ls85EXHwanaTdm-glXPwg_WuwIgTHhneCR0icCe2gxTPjrGrd-29mdxNRQhbAVtIZKXD6w"
+        },
+        "watt": "watt.slJ-_yaJ65BjLlOMLHccEZHzV2XnKP3VFNMYhFm_izY.1.1807192800000.1807192800000.dir-1",
+        "wattSig": "4qY1oguQv-7ZLhkKaX6vJz5qkYN2ue1MlFzlk6K_ncRHeFRSYC9b2LC3P7jIuX5OyC5i4gxsTuXhuU7TkALuKg"
+      },
+      "expect": "reject",
+      "reason": "watt-lifetime"
+    },
+    {
+      "name": "watt/logged-before-ceremony",
+      "about": "loggedAt one millisecond before the ceremony (a forward-dated ceremonyAt would stretch the cap)",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2xKLV95YUo2NUJqTGxPTUxIY2NFWkh6VjJYbktQM1ZGTk1ZaEZtX2l6WSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIACTmfchifWjgzvcpTaq7pQmLIk045ynbsPVCjP2B-jmAiEA3tANnDZO9IirW_ZL80_X1P86SQuumEwiaqrRu1fAUvo"
+        },
+        "watt": "watt.slJ-_yaJ65BjLlOMLHccEZHzV2XnKP3VFNMYhFm_izY.1.1807192799999.1807264800000.dir-1",
+        "wattSig": "b99qeqA_BDk2ZjOvDlBv4IX1CjGumQG7AZNtCfG_DMNuZvPzMsKkkwHvt-xb9IygJ79sVmJ8Svi8KAKk62WE0w"
+      },
+      "expect": "reject",
+      "reason": "watt-order"
+    },
+    {
+      "name": "watt/other-certificate",
+      "about": "the watt. names another certificate's hash",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2xKLV95YUo2NUJqTGxPTUxIY2NFWkh6VjJYbktQM1ZGTk1ZaEZtX2l6WSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQDfw8BLQt5ngOc3okQveyohCpQqb4lSQv-ktB44PmtLawIhAPRFybuffHy8RLT2jhnfiD0UH6L9dNXmftMc_fDjTkdi"
+        },
+        "watt": "watt.4NfnFCe06c12JXL2mTpr0CzpIEJM1qeMWfmJOfO6dSU.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "61WhGk7RqNzQB85eChdj7-TCQLdnkpFfrSyKbUXM_0Vl_YLnFseEm8QRf65pz7CKZIX_319RK-C6NXZjyvH1NQ"
+      },
+      "expect": "reject",
+      "reason": "watt-mismatch"
+    },
+    {
+      "name": "watt/unknown-kid",
+      "about": "countersigned under a kid nobody pinned",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2xKLV95YUo2NUJqTGxPTUxIY2NFWkh6VjJYbktQM1ZGTk1ZaEZtX2l6WSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEQCID9YFF5Bh3HtwIdgQ-ZMIWklABSCRglKH_31K-_kbNCyAiBAgpnYgaYHH5OcyEWT3aJ75lt3LTcjKwspoFYQqKntpw"
+        },
+        "watt": "watt.slJ-_yaJ65BjLlOMLHccEZHzV2XnKP3VFNMYhFm_izY.1.1807192800000.1807279200000.dir-9",
+        "wattSig": "T5v7EVa2hO3aU6BLBu46MTEsjFGJhfscnYd75tH5l-R5BRZqqVKhi9F6lzHVBVpkwbOZ_ZZj2EHd5mOxks_Zsw"
+      },
+      "expect": "reject",
+      "reason": "watt-unknown-kid"
+    },
+    {
+      "name": "watt/wrong-key",
+      "about": "countersigned by another key under the pinned kid",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2xKLV95YUo2NUJqTGxPTUxIY2NFWkh6VjJYbktQM1ZGTk1ZaEZtX2l6WSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQCnRKfElpM7ZdbHpXZJ_I_LtKJBkLlWl1tTm03NiJDrKAIhAMdkHKgwfSi7qfVHS350qpFdgxI2IpOEgD8PRoTiZ9Xk"
+        },
+        "watt": "watt.slJ-_yaJ65BjLlOMLHccEZHzV2XnKP3VFNMYhFm_izY.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "sq_nvbgwaiUQjwMKp78mwntAQmC6ARtArdBcGQpCO_45eDmz9_uvL-VJmMJHyXRB0m2tZ3VeK8XjcGwbF0xl0w"
+      },
+      "expect": "reject",
+      "reason": "watt-signature"
+    },
+    {
+      "name": "watt/other-pinned-kid",
+      "about": "signed by dir-2's key, naming kid dir-1: the kid picks the key",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2xKLV95YUo2NUJqTGxPTUxIY2NFWkh6VjJYbktQM1ZGTk1ZaEZtX2l6WSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCID4aVtCPXXtMUnoC9MRpk657hOG_Jz0AI_tTVXmG_Z3-AiEAoqxbGt8PcwUWbWUpO6UHOZgM7LLr5Ln1GKEX6QzQFGU"
+        },
+        "watt": "watt.slJ-_yaJ65BjLlOMLHccEZHzV2XnKP3VFNMYhFm_izY.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "gVtl2eD390vKTcoD3vXpVY9wbKlk7BWVOnnMiL0DqZ8qqIDcy17m6YyJhgJkGJ5gaZYwDvf62M5TpzC4zMcGjA"
+      },
+      "expect": "reject",
+      "reason": "watt-signature"
+    },
+    {
+      "name": "watt/high-s",
+      "about": "the countersign in high-S form",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2xKLV95YUo2NUJqTGxPTUxIY2NFWkh6VjJYbktQM1ZGTk1ZaEZtX2l6WSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCICOolq3r66omzFx9Beqcqlj_pJMWOtCiOZCN-T0UFlTKAiEA54XsW0_gSqaQp753tCxqGt-2tikETcv_MerlRAHUClQ"
+        },
+        "watt": "watt.slJ-_yaJ65BjLlOMLHccEZHzV2XnKP3VFNMYhFm_izY.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "j92ksmbykXNI3icdWhfxS959p-dYCb8FoW_5Ygxml7P2XEv5A7-Btr3o38d1aXPq9PEzMLbrv-IQ2kh9c2-cUw"
+      },
+      "expect": "reject",
+      "reason": "watt-signature"
+    },
+    {
+      "name": "watt/expired",
+      "about": "now equals expires",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2xKLV95YUo2NUJqTGxPTUxIY2NFWkh6VjJYbktQM1ZGTk1ZaEZtX2l6WSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEQCIG709cONcMIHUS3vjQpsD1lmiQXuGUdXFNxRSfKqyYVjAiAuOuzsz6FE-iEuwG3tsXrgYEicyPEi7gZNsqqxgCXCbQ"
+        },
+        "watt": "watt.slJ-_yaJ65BjLlOMLHccEZHzV2XnKP3VFNMYhFm_izY.1.1807192800000.1807200000000.dir-1",
+        "wattSig": "o3Or8heUE1-EIZLPhPZwpFB1DL9VXhjgf7vb2O_2kHd0Fs94HMfiRNSqoaiARlqRX14bACXmjXZsGeNL6DyGhQ"
+      },
+      "expect": "reject",
+      "reason": "expired"
+    },
+    {
+      "name": "watt/logged-in-future",
+      "about": "loggedAt more than the skew allowance after now",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2xKLV95YUo2NUJqTGxPTUxIY2NFWkh6VjJYbktQM1ZGTk1ZaEZtX2l6WSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQDnBi1D8juD_WPyL-Fce1T1L214GPo1HBKQJ6CQHKsU2gIhAJ9gezlgzo1kgUkGioZ-VSlKAtWcPmHxm1v4tGktYpHG"
+        },
+        "watt": "watt.slJ-_yaJ65BjLlOMLHccEZHzV2XnKP3VFNMYhFm_izY.1.1807200360000.1807236000000.dir-1",
+        "wattSig": "Bg8rkeRXfEzK8_lqU1HxaiIJ1b-e_oTcAoC6F0Lpcp0pStmwyn9rrOnSTieEnCzftXE-ssYzGdQGA6Qne_upxg"
+      },
+      "expect": "reject",
+      "reason": "not-yet-valid"
+    },
+    {
+      "name": "watt/ob-not-a-bit",
+      "about": "ob is 0 or 1",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2xKLV95YUo2NUJqTGxPTUxIY2NFWkh6VjJYbktQM1ZGTk1ZaEZtX2l6WSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIQCnAhWQoxXJWzr2csKBQ8QzRfDyKghyPrt4LQQ__qvSdQIgZMlUuWxz9FMA4WYu8-O4co1gjoJQ7bDlS9d5PzYQA5Q"
+        },
+        "watt": "watt.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA.2.1807192800000.1807196400000.dir-1",
+        "wattSig": "CLnnZCPZnRujchbQcTX3lmo3GiqwiWLQ8veSGAbYSwQ0lk2qEML5ftS_4V13tVMUjreDp-pbk2XrsXZ8B_MdcQ"
+      },
+      "expect": "reject",
+      "reason": "watt-grammar"
+    },
+    {
+      "name": "wdev/via-cns",
+      "about": "route D (a native consent co-signature, purpose web-add) is not defined yet",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.cns.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoid2t6Q3pJcDMwRDJLWHJoLTNMSjVCbl9CbWhYdXVaTWNoUnVua2h1NDktUSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIQCx80TlBtoDFN_1h-yqqN-LPzL2kwNzUbCXV0qBHw9mPgIgCBJk4FgWdLr2NUa6Pl7MhGIVmAty97XMRj4cnjdWvLw"
+        },
+        "watt": "watt.wkzCzIp30D2KXrh-3LJ5Bn_BmhXuuZMchRunkhu49-Q.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "woukJBpYdmu_XWxbIRKDY9K9eDDidJv9qJIxX7apjlBLvNtS9oatn2YE7UN5AxK0Evnrk7LrlRIh1O6UCsWRpw"
+      },
+      "expect": "reject",
+      "reason": "via"
+    },
+    {
+      "name": "wdev/via-unknown",
+      "about": "via is passkey or cns",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.pk.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiVnBOT2V2cmxBNkEtSndpX3VwQ1BXQUkxSnZWcGl4UDI3VV92NXNiWmRyayIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQD-kxOaC9CZDjN7nNA87a9I6pdpBBZMt6XWWlvdpMpeUAIhAKGSAcJQ3Iii88h65aRn9HH5v_tW44N8tI6ViznkkPHo"
+        },
+        "watt": "watt.VpNOevrlA6A-Jwi_upCPWAI1JvVpixP27U_v5sbZdrk.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "oqD-QWIJ8Q8Py3U-MhAEBP9E-w62EfRdrVrFy6910iJjhhdwQGJtLt_Tk4KTc7qaPOc9-K_Jtr0eS_1-DGfLUw"
+      },
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "wdev/kx-is-device-key",
+      "about": "the kx repeats the device key",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2hZNUE4eTZpVzdUZW1uYTRDeFEzWE1neVZOdmp3MkhvalI2Yko3cUY4VSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIHh43QsJ-WG0mtLaKnIgE6_AvmHQQmZHw_LMvW2zAANVAiEAyIqUusXUMSXOWZQOqIvKwO4lIxcnJj5xvJd9s6fxUjc"
+        },
+        "watt": "watt.shY5A8y6iW7Temna4CxQ3XMgyVNvjw2HojR6bJ7qF8U.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "wjjy460TebnLRCJI_9EUkzKtg9CDgXu4h-zHcKlJGaBbjAeqRcnxtSwhCfKUWe5hZ-wE9c93_GJ2DbmbyMVI9g"
+      },
+      "expect": "reject",
+      "reason": "kx"
+    },
+    {
+      "name": "wdev/label-41",
+      "about": "a 41-character label",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHg.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoia21zS1RlNlNVZFU1V25DaWMwUjZLUzlKckFzcVR6NzVZY0tqWDhoMnNvRSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIEbjnizbRQ1Z0AApYqCnP6NRrFt0dSwoll1DWqRohHD2AiEA43wfAYm1FZSXk3oahnBAEe3ZwADrx1gqXTnp46_j6cY"
+        },
+        "watt": "watt.kmsKTe6SUdU5WnCic0R6KS9JrAsqTz75YcKjX8h2soE.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "qQ2AbZowuOQcaC2aX5hV1DRs0QQKIoum9DZGWGPAwgto8Aw-GGP8IPCwQINgZIqzga0pnTejDTKN5efNNooHZg"
+      },
+      "expect": "reject",
+      "reason": "label"
+    },
+    {
+      "name": "wdev/label-bidi",
+      "about": "a label with a bidi override",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.U2FmYXJp4oCuZXZpbA.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiOHNMd2prQ1EtRHFEQ2Y4M0g4N0I0cWotXzE1U1FaNEd2eFR6eVJHQ1p0MCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIF3YJLNyzbFX89FtnFINpxCINtmybMRht-sNbK8c4YeyAiEAiNEOhoodICB40pbbqTLQuEIzllQzqBH9Oi8VooGccCA"
+        },
+        "watt": "watt.8sLwjkCQ-DqDCf83H87B4qj-_15SQZ4GvxTzyRGCZt0.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "cyzyT5EmM8xzjJT3R8PhS_5ztF65DK_HB7k3lNSHtI5IRhHymVaut4Yg7gwXyGG8NiGCqhlJW8rngFpMcOIIjQ"
+      },
+      "expect": "reject",
+      "reason": "label"
+    },
+    {
+      "name": "wdev/address-not-normal",
+      "about": "the address is in normal form",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.QWxpY2VARXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiY2JiM2tqYklxbGhzNXUyY0wwaDRaNVdkM2ZNSFIxSmlLZ2NXbDQ4MUtkRSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQDOEK5hr28jwJakcy9bAI-CjdpG7YT7L3lh_A2J2tDbVwIhAK7322g8NdnkRbh4rc2BrsP-m6Y3aCI38sP3vZICcj7i"
+        },
+        "watt": "watt.cbb3kjbIqlhs5u2cL0h4Z5Wd3fMHR1JiKgcWl481KdE.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "C5foKTEFG3POzD6o1prGDR26qkWJFz1a5RH5bzsUysVTMJErKhNvNed1BvEY2_a1Whu0TvEDSISeDEC_Q1wdWg"
+      },
+      "expect": "reject",
+      "reason": "address"
+    },
+    {
+      "name": "wdev/extra-field",
+      "about": "an extra field",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4..passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s.x",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiX0xMTnVHNFFJdlZ1eGZVRW83VkRfajVpeFRXcnprTWNoRGlJR29VU0RnZyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEQCIF53upZPDEDuX-QJ3f3SXvr0GXoOYe7zMrRh9axm5XThAiAjb1UZf2IkicYCQPaJ7Hx7psphLbpNZwoLuEMLg1tzBw"
+        },
+        "watt": "watt._LLNuG4QIvVuxfUEo7VD_j5ixTWrzkMchDiIGoUSDgg.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "MF2Ierj7Rn9GONcquQv4er8nwciA2hWjK2WbvWM_NfoO4JpJz_8Bds_jNFrLqExxnIXkGT7v5ru4DW3VbgOI5g"
+      },
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "wdev/nonce-short",
+      "about": "the directory nonce is 16 to 64 bytes",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4..passkey.1807192800000.AAAAAAAAAAAAAAAAAAAA",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicFpEU1FDNXB2ZktYNDI3azJvaXF6Uy05YW1Dam15bUFwakQtSGtJZjRjMCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIQDqhDjysAsBHuXaEySc0jhqBtEz0kefHtR7kJwAhSmtdQIgWtb99idStD6zvfDoIuwmFydpQoVdYM6Ac4ydI0tjTXg"
+        },
+        "watt": "watt.pZDSQC5pvfKX427k2oiqzS-9amCjmymApjD-HkIf4c0.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "GBRSolUBmBjtHOkJyOWBRjLBdlPrE3TxWM22TjrQRkVEMjRYVIR1BrWozoohX1Wu9e9wrA01UqthNrk-DCUf_g"
+      },
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "dev2/via-ck",
+      "about": "a dev2. signed by a consent key (the roster purpose is the next kernel change)",
+      "chain": "base",
+      "proof": {
+        "cert": "dev2.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.ck.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQThPS2tIXzdjNzdrTGMxbGVia0lFVmpRX1BPZ2M1UHRqNFZJek96Wk5YOCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIH8-qEgW_1s37Tyt319gU7cMCg6XGav7K8bbWJ6DERRgAiEAt4Ak8Fqz2kU2uxPI6YJc8uI3Ut2VkAChLf7u6gCb_kw"
+        },
+        "watt": "watt.A8OKkH_7c77kLc1lebkIEVjQ_POgc5Ptj4VIzOzZNX8.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "54UMSClRIgnp03sdwhKTMadc6jDlrgdrmyQoQeCjnY4uS06kCkQCMzCswkGSiGtEiL8eWEWyCHwastxEoTarmw"
+      },
+      "expect": "reject",
+      "reason": "via"
+    },
+    {
+      "name": "dev2/consent-is-device-key",
+      "about": "the consent key repeats the device key",
+      "chain": "base",
+      "proof": {
+        "cert": "dev2.BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0.BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQjdsSGV1emtmMVJMS1g0bnlvSnFaRHcxa2M2eHNhaDF1MUFib2EyU2NJUSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQC2USsfbftxcu3vq0zpTNjNhP6tbKPMjGVw-gp3JxMv6AIhAL0gGdzH7vxwYgrgoWEHWe1kYyQ08vQ-suOoku_3vt4S"
+        },
+        "watt": "watt.B7lHeuzkf1RLKX4nyoJqZDw1kc6xsah1u1Aboa2ScIQ.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "KuGpp_6heZkkgFfxIU5paxqZ9AUrAexY_pgFlrQTRhtPE3uE_yKYJ-WY84FVnXudUr8Y0RmhTm8dzxyePfRP2Q"
+      },
+      "expect": "reject",
+      "reason": "consent-key"
+    },
+    {
+      "name": "dev2/kx-is-consent-key",
+      "about": "the kx repeats the consent key",
+      "chain": "base",
+      "proof": {
+        "cert": "dev2.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0.BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiczg3ODE0blZtcW5QQ09NSG1qZG9pQzhIcG5LdGh2UUMxenZDYkEzYWhvcyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIGmZ38pDIbObpyC1scHXQv4k0QEpIWiqstD4kquFZqexAiEAncPR_O8GbSYIM_wTHjfIuMo8YQHmfgD2JSMBtAX5abk"
+        },
+        "watt": "watt.s87814nVmqnPCOMHmjdoiC8HpnKthvQC1zvCbA3ahos.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "WsQde4UIy5b8Px5ATpxiFw7qmT5Z-QOcHvwi7ehKs_9urrYdkd45cBNXrWtu0xBlvs5HdO_6-ef5xsYvlGUJfw"
+      },
+      "expect": "reject",
+      "reason": "kx"
+    },
+    {
+      "name": "tier/ck-ripe-exactly-72h",
+      "about": "the consent key has been a member exactly 72 hours, but it never signed: still (passkey sign-in)",
+      "chain": "base",
+      "now": 1801094400000,
+      "proof": {
+        "cert": "dev2.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1801080000000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUHdfaXZ3YS1RSFVjbWs1RXJaalhSYUJoUGFXRlo2YXU3ZTdqMWlxTWJuNCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQCmDiMamR0IK28QyhGC6sdXY2-Sl30sb4Uizp9Blz0jXwIhAO34AIgSVDc0zrA0PmmWf6XtLi9G-lnzgRDb1x-VxTaY"
+        },
+        "watt": "watt.Pw_ivwa-QHUcmk5ErZjXRaBhPaWFZ6au7e7j1iqMbn4.1.1801080000000.1801166400000.dir-1",
+        "wattSig": "RnHfs5wjfR4x3fYLGxHn8ECuzlyJD0AJ_u3_DJ8TdTUpSBdYdYmfc3YMGI4F2ql1lLBYR19AyCgU1wlnZUeKNw"
+      },
+      "expect": "accept",
+      "tier": "passkey"
+    },
+    {
+      "name": "tier/ck-exact",
+      "about": "the consent key joined 73 hours ago, but never signed: (passkey sign-in)",
+      "chain": "ck-exact",
+      "now": 1801098000000,
+      "proof": {
+        "cert": "dev2.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1801080000000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicnU2RHc4THNQbHZIZ0VxamFfeDRzN0w0YTczNDBESGlPSHMxY0hVMjJmdyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIQDeST4yYwnlkEeBhDYd58VKAkyFhOcSanRWUOtHrlx7DgIgAvyePcLcmHMWijEf7oSwnawq1Bu7G35BLIVCwqFstMQ"
+        },
+        "watt": "watt.ru6Dw8LsPlvHgEqja_x4s7L4a7340DHiOHs1cHU22fw.1.1801080000000.1801166400000.dir-1",
+        "wattSig": "VPCqbCqA-NZhI1s3leiV1MRqSdQM_lV-rZh8A0STeXMr0suwqAvje4MVVM4SU-jBq8d2ucE-om1u5vzSyKkUDw"
+      },
+      "expect": "accept",
+      "tier": "passkey"
+    },
+    {
+      "name": "tier/no-consent-key",
+      "about": "a dev2. with no consent key is (passkey sign-in)",
+      "chain": "base",
+      "now": 1801094400000,
+      "proof": {
+        "cert": "dev2.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI..BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1801080000000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiTllpd2pNZ01WOXRwbTRmdGlTNk05ZHRyTk1oLTJOSERfZXVzWlpFcGpKQSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIQC3q2v9s3bFr7adXev81dHIoXbJ2VmppSP9SNwlCKgOPQIgC5TiutXS0QoSdQur8QKkBcUicN_xrWZHtaYeZGuf59s"
+        },
+        "watt": "watt.NYiwjMgMV9tpm4ftiS6M9dtrNMh-2NHD_eusZZEpjJA.1.1801080000000.1801166400000.dir-1",
+        "wattSig": "EGu1IGETxnUv0NLo3CBV7ZTAr3DfZnu2ki6lojcpxMVSEHZFED9KVCcZdwhlntar26CtHs3qHVL0ar5NQ28B4Q"
+      },
+      "expect": "accept",
+      "tier": "passkey"
+    },
+    {
+      "name": "tier/consent-key-not-member",
+      "about": "a dev2. whose consent key is not on the roster",
+      "chain": "base",
+      "now": 1801094400000,
+      "proof": {
+        "cert": "dev2.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BKpn1iZ_akSeoKB_CdCo-X2362koZLHnetZuIlFjJuptom6T2XSaKsjyHMh-8BDeyt44m97G49JhAWs-BkVloTc.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1801080000000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2VoVl9WaW9qSjVOTVgxc29VN2NfS1g5dmZFdm9RNTFDdy1VNnNVR3ZRSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIAP3QovsNHjZixZ2k7U0HA1jrK542ixpIxiPIQcd65bcAiEAvxp4mwW-63XtV5yMiT6bqR92GFIK3H4qYqxtn9aPXpw"
+        },
+        "watt": "watt.sehV_ViojJ5NMX1soU7c_KX9vfEvoQ51Cw-U6sUGvQI.1.1801080000000.1801166400000.dir-1",
+        "wattSig": "CGQP6ts95xXPVNavhTvVN-B4dql9JWIafl-S1-CskBt4eV1qyJu-l7OrT0BDGAeputrrZWBlfq1_8OO8eqCkmA"
+      },
+      "expect": "accept",
+      "tier": "passkey"
+    },
+    {
+      "name": "tier/consent-key-is-a-passkey",
+      "about": "a dev2. naming a roster PASSKEY as its consent key",
+      "chain": "base",
+      "now": 1801094400000,
+      "proof": {
+        "cert": "dev2.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1801080000000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiV3VxYW5vU1JQMkZXR3lkRlppV3VaSzhWcEY5dHJheGJzODlwVjVVSzNsbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQCcHYxU8kSYBvvGlYfKt8IuQSYzLUdxIZk3uCa71GfR_QIhAL3DR7T3CA9p4G8G03m0IGVCNacGd0yD7wsSLoTOGoqM"
+        },
+        "watt": "watt.WuqanoSRP2FWGydFZiWuZK8VpF9traxbs89pV5UK3lo.1.1801080000000.1801166400000.dir-1",
+        "wattSig": "nee09Nxp9M5h53D_4_Q11bF0SNpvfWMm9xvb4zwc67sfYP3CpmNpx8eRxvZN-Pkja375stB8ite0M3lUo0E5TA"
+      },
+      "expect": "accept",
+      "tier": "passkey"
+    },
+    {
+      "name": "tier/wdev-never-native",
+      "about": "a wdev. on a roster with a ripe consent key is still (passkey sign-in)",
+      "chain": "base",
+      "now": 1801094400000,
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1801080000000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoibnctVU1MemZkWmF6d1RxTTR1S3ZvMWdTVTFpRGFkbEZqd1BPakstdC1EbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIQDP-xPP1nx0idPeGaL4oRNdF1hE77bQDkv6b786LmAvBgIgPOYmht64Gjw2xm4_2NQZlVaa420y618hj_0fcWkGyd0"
+        },
+        "watt": "watt.nw-UMLzfdZazwTqM4uKvo1gSU1iDadlFjwPOjK-t-Do.1.1801080000000.1801166400000.dir-1",
+        "wattSig": "m2HcoowG1TORcEIvnxA5gPwEQO8d6Hnf2Fz1uW4nwHVcsZVwoyU2fKH_cJVgUAP5bC_RQcKxvoXhEsXzLpJKhQ"
+      },
+      "expect": "accept",
+      "tier": "passkey"
+    },
+    {
+      "name": "sec/tier-consent-key-not-proven",
+      "about": "a passkey-made dev2. for another device key, naming a ripe consent key it never proved it holds: (passkey sign-in)",
+      "chain": "base",
+      "now": 1801094400000,
+      "proof": {
+        "cert": "dev2.BLT05LZRJ3GfeSapMvZspSKWUz_-L4aJHf7xoxKyK7JLQsK-OPz7ta5yc92cgNQ4l6LyPL74o-wXT7bqrMdAjR4.BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.YXR0YWNrZXI.passkey.1801080000000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUmU3TENSd3lGdTFzLWF0cTlud21vNzNSR0lqMDI5OEtvSFN6cDVIYTRXYyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQDegdhKJRrd4nFAqnBUf5fih2Q_ws7WbAwlBnofgxIAFwIhALpZ-5nW5Keqx_X6ZXp8qfKarX6HapldF5E-GPdYit3l"
+        },
+        "watt": "watt.Re7LCRwyFu1s-atq9nwmo73RGIj0298KoHSzp5Ha4Wc.1.1801080000000.1801166400000.dir-1",
+        "wattSig": "o6Wqi-GRXOTkO6NsngQdinnV8HcAPNFYfXhHWqYPTVxg_TvwNcMH51HrJOkaAEnlVRam1FWTV3klo3w40fUwKA"
+      },
+      "expect": "accept",
+      "tier": "passkey"
+    },
+    {
+      "name": "sec/tier-ck-absent-old-ceremony",
+      "about": "consent key not on the roster, ceremony 100 h ago (a renewed watt.): (passkey sign-in)",
+      "chain": "base",
+      "now": 1801440000000,
+      "proof": {
+        "cert": "dev2.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BKpn1iZ_akSeoKB_CdCo-X2362koZLHnetZuIlFjJuptom6T2XSaKsjyHMh-8BDeyt44m97G49JhAWs-BkVloTc.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1801080000000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2VoVl9WaW9qSjVOTVgxc29VN2NfS1g5dmZFdm9RNTFDdy1VNnNVR3ZRSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQDqt3M_64uDvbu0hfFfrAS3thDptFiALj2qWQYNBihUdAIhAJOfyYRvicQXL3zijchDDf3zJnRj8xORiBe07wDbPov9"
+        },
+        "watt": "watt.sehV_ViojJ5NMX1soU7c_KX9vfEvoQ51Cw-U6sUGvQI.1.1801436400000.1801476000000.dir-1",
+        "wattSig": "vqT8x6sVkEdcj65AJHnOj0whfdEdMTy6cTNtLs8zMZ87kqG00VomQ3GIDOZTsfb_6lsDD9_Xys1OMvc5O_4wgw"
+      },
+      "expect": "accept",
+      "tier": "passkey"
+    },
+    {
+      "name": "sec/renewal-past-original-cap",
+      "about": "a renewal logged 6.5 days after the ceremony running 24 h: past the original cap",
+      "chain": "base",
+      "now": 1801645200000,
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1801080000000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoibnctVU1MemZkWmF6d1RxTTR1S3ZvMWdTVTFpRGFkbEZqd1BPakstdC1EbyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIQCA3Wz9ksd5rD3szwjqo3N-cCiajsizEaectRLpiSduEwIgD0_pr4fPvTNz-b8_M9JQEJT70iOlRdKnrxvLty4X8U4"
+        },
+        "watt": "watt.nw-UMLzfdZazwTqM4uKvo1gSU1iDadlFjwPOjK-t-Do.1.1801641600000.1801728000000.dir-1",
+        "wattSig": "C9pg_MmrVpZtVS0bzN7OmRUoBRd6kyR5AC62vAqfdBsOOM3PEwDjcKkr2LJQXM5F3ylm40s2yuY-5VsdTo5G4Q"
+      },
+      "expect": "reject",
+      "reason": "watt-cap"
+    },
+    {
+      "name": "sec/watt-logged-1s-before-ceremony",
+      "about": "a watt. logged one second before the ceremony",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2xKLV95YUo2NUJqTGxPTUxIY2NFWkh6VjJYbktQM1ZGTk1ZaEZtX2l6WSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEQCIFtruCWt66FkA15hecfrQsohgZXHxZCKKUxBKbqfpdsTAiB0bbed8DwrwFwuOpS82qrR6d5KcKUmRUnizJfW1kFmcA"
+        },
+        "watt": "watt.slJ-_yaJ65BjLlOMLHccEZHzV2XnKP3VFNMYhFm_izY.1.1807192799000.1807264800000.dir-1",
+        "wattSig": "9sROhiBcPK9Uh3LZdLMJNwpm3USwvlqRlfhmQJ7_WfprXfperwaBX0NE15aC7lkbnKwo5Nuf3qob9wmbyfxmTA"
+      },
+      "expect": "reject",
+      "reason": "watt-order"
+    },
+    {
+      "name": "sec/head-from-fork-signer-current",
+      "about": "the named head is the fork's L1 (pk2 is a member of both); not placeable",
+      "chain": "base",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.dPAMHKjK01msYEGgTuhoRONciyegg68uNrNuzUUykcc.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiOGx3Q2dQSEhURkc2WXlaX0RxaHhVcEdja29HTnUtMGFnQ05pUDJZb0hNNCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIQDaf-Be3vpYNCrZZ9jbQau5wtac80WGiLDUJGzN_--nbAIgUSmz0pnE29wnDWfuZo5uCjLrfqBoUYbNkhayaXVVRRI"
+        },
+        "watt": "watt.8lwCgPHHTFG6YyZ_DqhxUpGckoGNu-0agCNiP2YoHM4.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "0dDG5omW_FI5v0P1WDeIeTCVsBSX_Gb_WiJr4e_ncnV99GWdnwCkHZVf9rQDn9RSBeC-C4WDJFX57REz4zD1xQ"
+      },
+      "expect": "reject",
+      "reason": "roster-head"
+    },
+    {
+      "name": "sec/head-is-voided-request",
+      "about": "the named head is the request the q link voided (pk1 is in it and current): not a head",
+      "chain": "quarantined",
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.a_2Y2ZGX6j3X6KeH5x0z7R_E8YuMukjWoxck1NAt-Nk.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiMG9iZkZBeDg2VnlXQlBPcjRkeTB2aE03aVJIcF82RlpEU3Q3bnk4OVlOQSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQCmZYiPmN5iFQFRfqUeTzx_Y7rrGrlYzvuqRee5u7puFwIhAKctqDl0fn63NasKo7xcUoKS0BniRv0RIW73_0Iujr6N"
+        },
+        "watt": "watt.0obfFAx86VyWBPOr4dy0vhM7iRHp_6FZDSt7ny89YNA.1.1807192800000.1807279200000.dir-1",
+        "wattSig": "4-Mkwi9kw1CA_itrwAZDFwfwWBseGcnZX4FV-keBK1wmE7pQoFzL5GfQahcpq7h7uEhwbuztkmAUDtmUYJBNRw"
+      },
+      "expect": "reject",
+      "reason": "roster-head"
+    },
+    {
+      "name": "sec/watt-expires-now",
+      "about": "now is exactly the watt.'s expiry",
+      "chain": "base",
+      "now": 1807203600000,
+      "proof": {
+        "cert": "wdev.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BHvJK-aEJY_YcfEBEO7m318XxmQYIC6cndYGOSBjOyL_oSemRKzrLd0sT3lhLdCRn3nfhNyQAtp3rPgtI7L5r1o.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.RmlyZWZveCBvbiB0aGlzIE1hYw.passkey.1807192800000.W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s",
+        "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2xKLV95YUo2NUJqTGxPTUxIY2NFWkh6VjJYbktQM1ZGTk1ZaEZtX2l6WSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEQCIFSG6i46f_OKZgAK_gksSZra1v1-f8laRw19lpE402SnAiAvhx-snY9JHMUbsYEfDppHbq-jvDLtcLYJrAbjI0zlWQ"
+        },
+        "watt": "watt.slJ-_yaJ65BjLlOMLHccEZHzV2XnKP3VFNMYhFm_izY.1.1807192800000.1807203600000.dir-1",
+        "wattSig": "ZoXPaTKwCOabyTxmifLEQM1lHJDeFAbjC9MlJyOlJXogTYxqiinsLxQV2qjdK9NXlVsTQTMROPjwhvRHBKulRw"
+      },
+      "expect": "reject",
+      "reason": "expired"
+    }
+  ],
+  "wren": [
+    {
+      "name": "ok/wren",
+      "about": "the device key asks for a fresh watt.",
+      "text": "wren.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.YWxpY2VAZXhhbXBsZS5jb20.XFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFw",
+      "sig": "yiCUsxeurhZdELcNGbnnM3pESk39jIsrjXbNO2tjT9MNy1oToY3a98dI1n-mwyxv9B9FTqXuMqIX6_fy8fxmhA",
+      "expect": "accept"
+    },
+    {
+      "name": "wren/other-key",
+      "about": "signed by another device key",
+      "text": "wren.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.YWxpY2VAZXhhbXBsZS5jb20.XFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFw",
+      "sig": "qJLhW64ZEkFJGa-A-aVxUElcbmePisiXEfMdJqpq6hhlfB2JzSFC9K64LD0kbq2K0AD45JzpQyzwmQl6IbL_jA",
+      "expect": "reject",
+      "reason": "signature"
+    },
+    {
+      "name": "wren/high-s",
+      "about": "the signature in high-S form",
+      "text": "wren.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.YWxpY2VAZXhhbXBsZS5jb20.XFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFw",
+      "sig": "DM4dATFUIZSyB8Ydt_4Q7RmWUGebhP4ptZssNrie0UmHk6b2sm-CcZyZpDA6bemkZ_jN3amYq6lu7bTu_drCFQ",
+      "expect": "reject",
+      "reason": "signature"
+    },
+    {
+      "name": "wren/challenge-short",
+      "about": "the challenge is 16 to 64 bytes",
+      "text": "wren.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.YWxpY2VAZXhhbXBsZS5jb20.AAAAAAAAAAAAAAAAAAAA",
+      "sig": "DD0E9fr5DIz89pTG89DWVROqpfj5rDEbiejJTE7ZkZwq8U8PFWtAWJzbO7YcogldMcGsCi18CiQjFSkvtJ4MhQ",
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "wren/address-not-normal",
+      "about": "the address is in normal form",
+      "text": "wren.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.QWxpY2VARXhhbXBsZS5jb20.XFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFw",
+      "sig": "kZyOonDPjJTCwVMaccVSwCDZdi3jv80CSvbDpctRyakquVvSkC2T0kAf39G23GRrVqaqhad9wLiAhsvEmmPC5g",
+      "expect": "reject",
+      "reason": "address"
+    }
+  ]
+}
