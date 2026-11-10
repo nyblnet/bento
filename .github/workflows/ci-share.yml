@@ -81,3 +81,39 @@ jobs:
         # popups ON THE POPUP severs it in Chromium, which is why the sign-in
         # host sends no COOP at all.
         run: node scripts/test-signin-host-coop.mjs --chrome
+
+  share-home-identity:
+    # bento/home's bento/id agent (home/web/src/identity.ts), in the real
+    # library built with --identity and the real sign-in host, routed in
+    # process: a CDP virtual authenticator holds the passkey, the directory is
+    # scripts/lib/id-web-directory-stub.mjs (the contract the directory's
+    # routes must match, built on the kernel), and every WebSocket is closed.
+    # The library runs no WebAuthn and never calls the Signal API; W and kx are
+    # non-extractable and fresh at every ceremony; everything is verified with
+    # the kernel's verifiers under the pinned directory keys; a check-in signed
+    # by W renews the 24-hour countersign; "Confirm it's you" a day before the
+    # 7-day cap; incident records and revocations end the sign-in; only the
+    # sign-in host's own window is heard; the policy allows the release channel
+    # and the directory and requires Trusted Types. Each rule has a mutant that
+    # turns its row red.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install the bundler and the browser test runtime
+        # esbuild from slides' lockfile (home/web/build.mjs uses it); Playwright pinned
+        # outside app packages, as in share-signin-browser.
+        run: |
+          npm ci --prefix slides
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: bento/id agent in bento/home, Playwright headless shell
+        run: node scripts/test-home-web-identity.mjs
+      - name: bento/id agent in bento/home, Google Chrome
+        run: node scripts/test-home-web-identity.mjs --chrome
+      - name: bento/id agent mutants, each red on its row
+        run: node scripts/test-home-web-identity.mjs --mutants

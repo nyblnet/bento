@@ -22,7 +22,7 @@ directory, and posts the directory's answer back.
 home  → S     window.open('https://signin.id.bento.page/')
 S     → home  { t: 'ready' }                       targetOrigin 'https://home.bento.page'
 home  → S     { t: 'enrol', W, kx, label }         exactly these four keys
-S     → id    POST /v1/web/challenge, then /v1/web/enrol { text, rq, assertion }
+S     → id    POST /v1/web/challenge { address }, then /v1/web/enrol { text, rq, assertion }
 S     → home  { t: 'enrolled', wdev, watt }        (or { t: 'cancelled' } / { t: 'failed' })
 ```
 
@@ -46,8 +46,10 @@ default-ignorable, or the braille blank.
    changes start only from this host's own pages, by the person (those pages
    are not built yet).
 6. `rq`, the opener origin the directory logs, is `event.origin`.
-7. The consent screen shows the opener's origin, the account if this host has
-   one saved, and the label marked as chosen by bento/home. It says to approve
+7. The consent screen shows the opener's origin, the account this host has
+   saved (from its own storage, never from the request: the certificate names
+   the account, so with none saved the page asks for nothing and says so), and
+   the label marked as chosen by bento/home. It says to approve
    only if you just asked bento/home to sign in, and it never claims the key is
    this browser's: the page cannot know that.
 
@@ -66,11 +68,19 @@ default-ignorable, or the braille blank.
 
 `public/directory-client.js` is the only file that knows the directory's API:
 its origin, the two routes, the request and answer shapes, and the text the
-passkey signs. All of it is **provisional** until the directory's roster API
-and the kernel's `wdev.` statement layout land; when they do, that file
-changes and nothing else. The directory must allow CORS from this origin on
-those two routes. Bodies are JSON sent as `text/plain`, so there is no
-preflight.
+passkey signs, which is the kernel's `wdev.` (`kernel/src/devices.ts`; the
+rig compares it with the kernel's own builder):
+
+| route | request | answer |
+|---|---|---|
+| `POST /v1/web/challenge` | `{address}` | `{nonce, at, rosHash}`: a single-use challenge bound to the account, the directory's time for it (the certificate's ceremony time, from which its 7-day cap counts), and the hash of the account's current roster head |
+| `POST /v1/web/enrol` | `{text, rq, assertion}` | `{ok: true, wdev, watt}`, where `wdev` is exactly `text` |
+
+The directory must allow CORS from this origin on those two routes. Bodies
+are JSON sent as `text/plain`, so there is no preflight.
+`scripts/lib/id-web-directory-stub.mjs` states every check the directory
+makes, in order, and the rigs run against it until the directory's routes
+exist.
 
 ## Deploy (the maintainer's, never CI)
 

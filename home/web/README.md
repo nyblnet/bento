@@ -22,7 +22,7 @@ Stage 1 is **open and present, nothing kept**:
 - Download gives back exactly the bytes that verified. Nothing else is written.
 
 There is no storage (the frame is an opaque origin and the page keeps nothing),
-no file handle, no service worker, no identity and no relay.
+no file handle, no service worker, no identity (unless built with `--identity`, below) and no relay.
 
 What "only verified code" and "no network" cover, exactly:
 
@@ -40,7 +40,8 @@ What "only verified code" and "no network" cover, exactly:
 - **A live document is shown as it was last saved.** Its session does not
   connect here, and the page says so.
 
-Editing with saves, recents, offline and identity are later stages.
+Editing with saves, recents and offline are later stages. Identity is built
+(below) but is off in the build unless asked for.
 
 ## Two sites
 
@@ -91,10 +92,57 @@ the frame page at most 4 KB (`scripts/test-home-web.mjs`).
 |---|---|
 | `scripts/test-home-web.mjs` | the library and frame in a real browser (`BENTO_BROWSER=chromium\|webkit\|firefox`): verification, network allow-list, frame-page standalone refusals, downloads, navigation |
 | `scripts/test-home-web-mutants.mjs` | fourteen mutants, each red on the row that guards it |
+| `scripts/test-home-web-identity.mjs` | the bento/id agent with the real sign-in host and a CDP virtual authenticator; `--mutants`: one per rule |
 | `scripts/test-shell-standalone.mjs` | every app shell points to bento.page and never depends on it |
 
 Chromium runs in the required `validate` check; WebKit, Firefox and the mutants
 in `ci-home.yml` (`home-web-engines`).
+
+## bento/id in the library (`--identity`, development only)
+
+`build.mjs --identity --directory-keys <json>` adds the bento/id agent
+(`src/identity.ts`, `src/identity-ui.ts`, `identity.html`). Without the flag
+nothing of it is in the page, and the build is byte-identical to one without
+this code. It stays a development build until the directory's keys are pinned
+for release and the directory and the sign-in host are deployed.
+
+- **No WebAuthn here.** The passkeys belong to rp `id.bento.page`, which this
+  origin cannot use. Every ceremony runs on the sign-in host
+  (`server/signin`): the library opens it in a popup, inside the person's
+  click, and sends exactly `{t:'enrol', W, kx, label}` to its literal origin;
+  it hears only that window at that origin, and the host answers
+  `{t:'enrolled', wdev, watt}`. The library never calls the WebAuthn Signal
+  API, with any list.
+- **Keys.** `W` (ECDSA P-256, sign) and `kx` (ECDH P-256, deriveBits) are
+  made non-extractable, fresh at every ceremony, and kept as `CryptoKey`s in
+  this origin's IndexedDB (`bento-id`). A held key that can be exported is
+  dropped. No account key, no PRF, no key blob, no code.
+- **Verified, never believed.** The certificate must be for exactly the keys
+  and label sent, and "Confirm it's you" never switches accounts. The roster
+  chain (`verifyRosterChain`) and the certificate with its countersign
+  (`verifyDevice`) are checked by the kernel under the directory keys the build
+  pins, never keys the network offers.
+- **24 hours, 7 days.** A check-in signed by `W` (`wren.`) renews the 24-hour
+  countersign on load and every hour, until 7 days after the ceremony. A day
+  before that the line asks "Confirm it's you": a new ceremony, new keys.
+- **Incidents and revocations.** An incident record covering this key's
+  ceremony (or one that cannot be read, or still open), or the directory
+  saying the key is revoked, deletes the keys; only a new ceremony signs the
+  browser in again.
+- **Policy.** `connect-src` adds the directory (`https://id.bento.page`) and
+  nothing else; Trusted Types stay required with no policy; the line is text
+  only.
+
+bento/home's routes on the directory (CORS to `https://home.bento.page` alone):
+
+| route | request | answer |
+|---|---|---|
+| `POST /v1/home/challenge` | `{address}` | `{nonce}` |
+| `POST /v1/home/checkin` | `{wren, sig, pin?}` | `{watt, wattSig, signer, assertion, roster, incidents}`, or 403 `{error: 'revoked' \| 'cap' \| 'unknown', incidents}` |
+
+`scripts/lib/id-web-directory-stub.mjs` is the full contract, with every check
+in order. `scripts/test-home-web-identity.mjs` drives the real library and the
+real sign-in host against it (`--chrome`, and `--mutants`: a mutant per rule).
 
 ## Not in stage 1
 
