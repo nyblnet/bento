@@ -114,6 +114,14 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-gate1.ts
 
+    - name: gate 1 raw-text rule mutants
+      # <style>, <title> and <textarea> hold tags inside <svg> or <math>, so
+      # gate 1 refuses "<" before a letter, "!", "/" or "?" in them. Each
+      # mutant loosens or widens that rule in a copy of gate1.ts, and
+      # test-gate1.ts must go red on every one, after the unmutated copy passes.
+      shell: bento-step {0}
+      run: node scripts/test-gate1-mutants.ts
+
     - name: Language pack verification rig
       # Packs come off the network, so the signature + hash-pin chain is the
       # only thing between a hostile channel and the strings in the UI.
