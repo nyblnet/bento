@@ -1,5 +1,6 @@
-# TEMPORARY: loops the WebKit rigs to catch the "browser has been closed"
-# flake with its evidence (WebKit stderr and exit signal, memory, kernel log).
+# TEMPORARY: A/B of WebKit's llvmpipe crash on some runner hosts. Each runner
+# logs its CPU, then alternates the origin probe under four environments; on a
+# host where the baseline crashes (the positive control), a mitigation must not.
 # Removed before this PR leaves draft.
 name: WebKit loop (temporary)
 
@@ -12,9 +13,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04]
-        shard: [1, 2, 3, 4]
-    runs-on: ${{ matrix.os }}
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
@@ -23,34 +23,36 @@ jobs:
           node-version: 24
       - name: Install
         run: |
-          cat /etc/os-release | head -2; nproc; free -m
+          echo "CPU: $(grep -m1 'model name' /proc/cpuinfo) | avx512: $(grep -m1 -o 'avx512[a-z_0-9]*' /proc/cpuinfo | sort -u | tr '\n' ' ' ) | flags: $(grep -m1 -wo 'avx512f\|avx2\|avx512vl\|avx512bw' /proc/cpuinfo | sort -u | tr '\n' ' ')"
+          dpkg -l | grep -E 'libgl1-mesa-dri|mesa-libgallium|libllvm' | awk '{print $2, $3}'
           npm ci --prefix slides
           npm run build:single --prefix slides > /dev/null
           npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
           "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps webkit > /dev/null
           echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
-      - name: Loop
+          dpkg -l | grep -E 'libgl1-mesa-dri|mesa-libgallium|libllvm' | awk '{print $2, $3}'
+      - name: A/B
         run: |
           set +e
           mkdir -p "$RUNNER_TEMP/loop"
-          ( while true; do echo "$(date -u +%T) $(free -m | awk '/Mem:/{print "used="$3" avail="$7}') $(ps -eo rss,comm --sort=-rss | head -4 | tail -3 | tr '\n' ' ')"; sleep 2; done ) > "$RUNNER_TEMP/loop/mem.log" &
-          MEM=$!
-          pass=0; fail=0
-          for i in 1 2 3 4 5 6; do
-            for rig in test-home-web.mjs test-home-origin-probe.mjs; do
-              log="$RUNNER_TEMP/loop/$i-$rig.log"
-              DEBUG=pw:browser BENTO_BROWSER=webkit timeout 300 node scripts/$rig > "$log" 2>&1
+          declare -A pass fail
+          for i in 1 2 3; do
+            for v in baseline lp128 softpipe skiacpu; do
+              case $v in
+                baseline) envs="" ;;
+                lp128) envs="LP_NATIVE_VECTOR_WIDTH=128" ;;
+                softpipe) envs="GALLIUM_DRIVER=softpipe" ;;
+                skiacpu) envs="WEBKIT_SKIA_ENABLE_CPU_RENDERING=1" ;;
+              esac
+              log="$RUNNER_TEMP/loop/$i-$v.log"
+              before=$(sudo dmesg | grep -c 'segfault')
+              env $envs DEBUG=pw:browser BENTO_BROWSER=webkit timeout 300 node scripts/test-home-origin-probe.mjs > "$log" 2>&1
               st=$?
-              if [ $st -eq 0 ]; then pass=$((pass+1)); echo "iter $i $rig: pass ($(tail -1 "$log"))"
-              else fail=$((fail+1)); echo "::warning::iter $i $rig: FAIL status $st"
-                echo "----- $rig iteration $i (status $st), last 60 lines"; tail -60 "$log" | cut -c1-400
-                echo "----- memory around it"; tail -40 "$RUNNER_TEMP/loop/mem.log"
-                echo "----- kernel log"; sudo dmesg -T | tail -40
-              fi
+              segv=$(( $(sudo dmesg | grep -c 'segfault') - before ))
+              if [ $st -eq 0 ]; then pass[$v]=$(( ${pass[$v]:-0} + 1 )); else fail[$v]=$(( ${fail[$v]:-0} + 1 )); fi
+              echo "iter $i $v: status $st, new segfaults $segv, $(tail -1 "$log")"
+              if [ $st -ne 0 ]; then grep -E "FAIL|segfault|process did exit|<kill>" "$log" | cut -c1-300 | tail -6; sudo dmesg | grep segfault | tail -2; fi
             done
           done
-          kill $MEM
-          echo "LOOP RESULT ${{ matrix.os }} shard ${{ matrix.shard }}: pass=$pass fail=$fail"
-          ls /var/crash 2>/dev/null; coredumpctl list 2>/dev/null | tail -5
-          grep -h "pw:browser.*\[err\]" "$RUNNER_TEMP"/loop/*.log | sed 's/^[^ ]* //; s/pid=[0-9]*//' | sort | uniq -c | sort -rn | head -20
+          for v in baseline lp128 softpipe skiacpu; do echo "AB RESULT shard ${{ matrix.shard }} $v: pass=${pass[$v]:-0} fail=${fail[$v]:-0}"; done
           exit 0
