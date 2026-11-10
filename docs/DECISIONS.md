@@ -13639,14 +13639,25 @@ that silently makes every file of an app unverifiable.
 and is the maintainer's to choose, so there is no default. It bundles the
 `history.json` of every app the staged site publishes (an app with a signed
 manifest; a published app without a history is refused, never skipped), into
-`<site>.home-web/`, outside the mirrored site: nothing deploys it. Every
-refusal happens before anything is built or signed, including a signing key
-that is not the release key (a rehearsal passes `--home-web-dev`). Without
+`<site>.home-web/`, outside the mirrored site: nothing deploys it. The
+options are refused before anything is built: no `--frame-origin`, output
+inside the site, a signing key that is not the release key (a rehearsal passes
+`--home-web-dev`), `BENTO_HOME_WEB_MUTANT` in the environment, and a missing
+esbuild. The published histories are checked once the site is seeded and
+still before anything is signed: a published app with no history, or a
+history the build would refuse, stops the release with nothing signed. The one
+check that can only run after signing is on the history this release signs,
+and it holds whenever the signing key is the release key. The output is
+emptied at the start of every `--home-web` run, so a failed run never leaves
+an earlier (development or test-key) build where the release's belongs.
+Without
 `--home-web` a release is unchanged: a rehearsal slides release before and
 after this change produced the same 69 files (signed payloads and masked
 timestamps compared) and the same log.
 
 Guards: `scripts/test-home-web-build.mjs` (each refusal beside the release
-build as its positive control, the release options and history choice, and a
-rehearsal release with `--home-web` that bundles exactly the history it signed)
-and `scripts/test-home-web-build-mutants.mjs` (eleven, each red on its row).
+build as its positive control; the release refusals, each run checked to have
+signed nothing; the history choice; and a rehearsal release with `--home-web`
+that bundles exactly the history it signed and the seeded one) and
+`scripts/test-home-web-build-mutants.mjs` (each refusal removed, red on its
+row).

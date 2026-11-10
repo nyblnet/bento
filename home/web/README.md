@@ -93,6 +93,9 @@ A release builds it with `node scripts/release.mjs --home-web --frame-origin
 publishes, into `<site>.home-web/` (outside the site, so nothing deploys it).
 Without `--home-web` a release does not touch home/web. `--frame-origin` has no
 default there either; a rehearsal with a throwaway key adds `--home-web-dev`.
+The published histories are checked (`build.mjs --check`, which writes
+nothing) before the release signs anything, and the output is emptied first,
+so a failed run never leaves an earlier build in it.
 
 Budgets: the library page without the histories it bundles is at most 32 KB,
 the frame page at most 4 KB (`scripts/test-home-web.mjs`).
@@ -104,7 +107,7 @@ the frame page at most 4 KB (`scripts/test-home-web.mjs`).
 | `scripts/test-home-web.mjs` | the library and frame in a real browser (`BENTO_BROWSER=chromium\|webkit\|firefox`): verification, network allow-list, frame-page standalone refusals, downloads, navigation |
 | `scripts/test-home-web-mutants.mjs` | fourteen mutants, each red on the row that guards it |
 | `scripts/test-home-web-build.mjs` | production-build refusals, the release's `--home-web` options and history choice, a rehearsal release with `--home-web` |
-| `scripts/test-home-web-build-mutants.mjs` | eleven mutants of those refusals, each red on its row |
+| `scripts/test-home-web-build-mutants.mjs` | mutants of those refusals, each red on its row |
 | `scripts/test-shell-standalone.mjs` | every app shell points to bento.page and never depends on it |
 
 Chromium and the build rig run in the required `validate` check; WebKit,

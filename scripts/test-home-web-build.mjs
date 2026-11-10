@@ -13,20 +13,25 @@
  *    tampered, a second one for the same app). Each refusal differs from the
  *    positive control (the good release build, which succeeds) by that one
  *    input, and writes nothing. With --dev the seams still work.
- * 2. scripts/release.mjs --home-web refuses, before building or signing
- *    anything: without --frame-origin, with home/web output inside the site,
- *    and with a signing key that is not the release key unless --home-web-dev.
- *    The history choice (every published app, refusing one without a history)
- *    is checked on staged trees.
- * 3. A rehearsal release (throwaway key, the slides shell already built) with
- *    --home-web --home-web-dev: the home/web build bundles the history the
- *    release just signed, and nothing of it lands in the site.
+ * 2. scripts/release.mjs --home-web refuses before building anything: without
+ *    --frame-origin, with home/web output inside the site (a child named
+ *    `..hw` included), with a signing key that is not the release key unless
+ *    --home-web-dev, with BENTO_HOME_WEB_MUTANT set, and without esbuild. Once
+ *    the site is seeded, and still before anything is signed, it refuses a
+ *    published app with no history and a published history the build would
+ *    refuse. Each such run signs nothing and leaves no earlier home/web build
+ *    in the output. The history choice is also checked on staged trees.
+ * 3. A rehearsal release (throwaway key, the slides shell already built, a
+ *    seeded published spaces history) with --home-web --home-web-dev: the
+ *    home/web build bundles the history the release just signed and the seeded
+ *    one, the stale build planted in its output is gone, and nothing of it
+ *    lands in the site.
  *
  * Needs esbuild (npm ci --prefix slides), a built slides shell, and Playwright
  * and Chromium for the rehearsal's pins gate (derive-pins.mjs).
  */
 import { execFileSync, spawnSync } from 'node:child_process'
-import { generateKeyPairSync, webcrypto } from 'node:crypto'
+import { createPrivateKey, generateKeyPairSync, sign as nodeSign, webcrypto } from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -104,21 +109,39 @@ const keyFile = (name, pub) => {
 }
 const THROWAWAY = keyFile('throwaway-key.json')
 const LOOKS_LIKE_RELEASE = keyFile('release-public-only.json', releasePublicKey()) // the release key's PUBLIC half; never used to sign
-function release(extra, outName) {
+function release(extra, outName, { published = null, env = {} } = {}) {
   const site = path.join(work, outName)
   const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts/release.mjs'), '--app', 'slides', '--no-build', '--out', site, '--allow-missing-published', ...extra],
-    { encoding: 'utf8', env: { ...process.env, BENTO_SITE_DIR: path.join(work, 'no-such-published-tree') } })
+    { encoding: 'utf8', env: { ...process.env, BENTO_HOME_WEB_MUTANT: '', BENTO_SITE_DIR: published ?? path.join(work, 'no-such-published-tree'), ...env } })
   return { ...r, site, touched: fs.existsSync(site) }
+}
+/** What a release signs: if none of these exist, nothing was signed. */
+const SIGNED = ['releases/slides/manifest.json', 'releases/slides/history.json', 'releases/slides/packs.json']
+const signedIn = (site) => SIGNED.filter((f) => fs.existsSync(path.join(site, f)))
+/** A published tree to seed from: `files` maps a path to its text. */
+const publishedTree = (name, files) => {
+  const dir = path.join(work, name)
+  for (const [f, t] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), t) }
+  return dir
+}
+/** An output holding an earlier development, test-key build. */
+const staleOut = (name) => {
+  const out = path.join(work, name)
+  fs.mkdirSync(path.join(out, 'library'), { recursive: true })
+  fs.writeFileSync(path.join(out, 'library/index.html'), 'STALE TEST-KEY BUILD')
+  fs.writeFileSync(path.join(out, 'build.json'), JSON.stringify({ dev: true, testKey: true }))
+  return out
 }
 for (const [extra, pattern, msg] of [
   [['--key', THROWAWAY, '--home-web'], /--frame-origin/, '--home-web without --frame-origin'],
   [['--key', THROWAWAY, '--home-web', '--frame-origin', '--home-web-dev'], /--frame-origin/, '--home-web whose --frame-origin is followed by another flag'],
   [['--key', THROWAWAY, '--frame-origin', FRAME], /only mean something with --home-web/, '--frame-origin without --home-web'],
   [['--key', THROWAWAY, '--home-web', '--home-web-dev', '--frame-origin', FRAME, '--home-web-out', 'INSIDE'], /inside the site/, 'home/web output inside the site (which is mirrored to bento.page)'],
+  [['--key', THROWAWAY, '--home-web', '--home-web-dev', '--frame-origin', FRAME, '--home-web-out', 'DOTDOT'], /inside the site/, 'home/web output in a child of the site named ..hw'],
   [['--key', THROWAWAY, '--home-web', '--frame-origin', FRAME], /not the release key/, 'a signing key that is not the release key, without --home-web-dev'],
 ]) {
   const site = `site-${++n}`
-  const args = extra.map((a) => (a === 'INSIDE' ? path.join(work, site, 'home-web') : a))
+  const args = extra.map((a) => (a === 'INSIDE' ? path.join(work, site, 'home-web') : a === 'DOTDOT' ? path.join(work, site, '..hw') : a))
   const r = release(args, site)
   ok(r.status !== 0 && !r.touched && pattern.test(r.stderr), `${msg}: refused before the site is touched (exit ${r.status}: ${r.stderr.trim().split('\n').pop()?.slice(0, 120)})`)
 }
@@ -134,6 +157,41 @@ for (const [extra, pattern, msg] of [
   const reh = call(['--home-web', '--home-web-dev', '--frame-origin', FRAME], THROWAWAY)
   ok(reh && reh.dev === true && reh.devKey?.x === JSON.parse(fs.readFileSync(THROWAWAY, 'utf8')).public.x && !('d' in reh.devKey),
     'a rehearsal key with --home-web-dev: a development build carrying only the PUBLIC half')
+}
+
+section('release.mjs --home-web: refusals after seeding, before anything is signed')
+// The throwaway key signs a spaces history here, so the rehearsal can seed a
+// published app its development build will take.
+const throwPriv = createPrivateKey({ key: JSON.parse(fs.readFileSync(THROWAWAY, 'utf8')).private, format: 'jwk' })
+const signThrowaway = (payload) => JSON.stringify({ payload, sig: nodeSign('sha256', Buffer.from(payload), { key: throwPriv, dsaEncoding: 'ieee-p1363' }).toString('base64') })
+const SPACES_HISTORY = signThrowaway(JSON.stringify({ ...JSON.parse(realHistory.payload), app: 'bento-spaces' }))
+const REHEARSE = ['--key', THROWAWAY, '--home-web', '--home-web-dev', '--frame-origin', FRAME]
+for (const [name, published, env, pattern, msg] of [
+  ['seed-no-history', { 'releases/spaces/manifest.json': '{}' }, {}, /bento-spaces is published .* no releases\/spaces\/history\.json/,
+    'a published app (spaces) with a manifest and no history'],
+  ['seed-bad-history', { 'releases/spaces/manifest.json': '{}', 'releases/spaces/history.json': JSON.stringify(realHistory) }, {}, /published history would be refused/,
+    'a published history the build would refuse (not signed by the build\'s key)'],
+  ['mutant-env', null, { BENTO_HOME_WEB_MUTANT: JSON.stringify({ file: 'verify.ts', from: 'x', to: 'y' }) }, /BENTO_HOME_WEB_MUTANT/,
+    'BENTO_HOME_WEB_MUTANT in the environment (even for a development build)'],
+  ['no-esbuild', null, { ESBUILD: path.join(work, 'no-such-esbuild') }, /esbuild/, 'esbuild missing'],
+]) {
+  const out = staleOut(`${name}.home-web`)
+  const r = release([...REHEARSE, '--home-web-out', out], `site-${name}`, { published: published && publishedTree(`published-${name}`, published), env })
+  const signed = signedIn(r.site)
+  ok(r.status !== 0 && pattern.test(r.stderr) && signed.length === 0,
+    `${msg}: refused, nothing signed (exit ${r.status}; signed: ${signed.join(', ') || 'none'}: ${r.stderr.trim().split('\n').pop()?.slice(0, 110)})`)
+  if (name === 'seed-no-history') ok(!fs.existsSync(out), 'a failed --home-web run leaves no earlier (development, test-key) build in its output')
+}
+{
+  // positive control for the seeded check: the same command takes a good history and writes nothing
+  const out = path.join(work, 'check-only')
+  const hist = W('spaces-history.json', SPACES_HISTORY)
+  const r = spawnSync(process.execPath, [path.join(ROOT, 'home/web/build.mjs'), '--check', '--out', out, '--frame-origin', FRAME, '--dev', '--key', W('throwaway-pub.json', JSON.stringify(JSON.parse(fs.readFileSync(THROWAWAY, 'utf8')).public)), '--history', hist],
+    { encoding: 'utf8', env: { ...process.env, BENTO_HOME_WEB_MUTANT: '' } })
+  ok(r.status === 0 && !fs.existsSync(out), `positive control: build.mjs --check takes a history its key signed, and writes nothing (exit ${r.status})`)
+  const bad = spawnSync(process.execPath, [path.join(ROOT, 'home/web/build.mjs'), '--check', '--out', out, '--frame-origin', FRAME, '--history', hist],
+    { encoding: 'utf8', env: { ...process.env, BENTO_HOME_WEB_MUTANT: '' } })
+  ok(bad.status !== 0 && /would refuse this history/.test(bad.stderr) && !fs.existsSync(out), '--check refuses the same history under the release key, and writes nothing')
 }
 
 section('which histories: every published app')
@@ -152,6 +210,10 @@ section('which histories: every published app')
   ok(/bento-spaces is published .* no releases\/spaces\/history\.json/.test(thrown(stage('pub-c', ['releases/slides/manifest.json', 'releases/slides/history.json', 'releases/spaces/manifest.json']))),
     'a published app without a history: refused, never skipped')
   ok(/publishes no app/.test(thrown(stage('pub-d', ['releases/tray/manifest.json']))), 'a site publishing none of our apps: refused')
+  const firstRelease = stage('pub-e', ['releases/slides/manifest.json', 'releases/spaces/manifest.json', 'releases/spaces/history.json'])
+  ok(publishedHistories(firstRelease, APPS, 'slides').map((x) => x.appId).join() === 'bento-spaces' && /bento-slides is published/.test(thrown(firstRelease)),
+    'before signing, the app being released may lack its history (its first); once signed it may not')
+  ok(publishedHistories(stage('pub-f', []), APPS, 'slides').length === 0, 'before signing, a site that publishes nothing yet: nothing to check, not refused')
 }
 
 // --- 3. a rehearsal release with --home-web ------------------------------------------
@@ -160,16 +222,19 @@ if (process.env.BENTO_HWB_NO_REHEARSAL) console.log('  note  rehearsal not run: 
 else {
   const shell = path.join(ROOT, `slides/dist-single/${APPS.slides.shell}`)
   if (!fs.existsSync(shell)) { console.error(`no built slides shell at ${shell}: cd slides && npm run build:single`); process.exit(1) }
-  const hw = path.join(work, 'rehearsal.home-web')
-  const r = release(['--key', THROWAWAY, '--home-web', '--home-web-dev', '--frame-origin', FRAME, '--home-web-out', hw], 'rehearsal')
+  const hw = staleOut('rehearsal.home-web')
+  const seed = publishedTree('published-rehearsal', { 'releases/spaces/manifest.json': '{}', 'releases/spaces/history.json': SPACES_HISTORY })
+  const r = release([...REHEARSE, '--home-web-out', hw], 'rehearsal', { published: seed })
   if (r.status !== 0) console.log(r.stdout.split('\n').slice(-15).join('\n') + '\n' + r.stderr)
   ok(r.status === 0, `the rehearsal release with --home-web succeeds (exit ${r.status})`)
   const info = fs.existsSync(path.join(hw, 'build.json')) ? JSON.parse(fs.readFileSync(path.join(hw, 'build.json'), 'utf8')) : {}
   const signed = path.join(r.site, 'releases/slides/history.json')
   ok(info.frameOrigin === FRAME && info.dev === true && info.testKey === true, 'home/web was built for the given frame origin, marked as a development, test-key build')
-  ok(JSON.stringify(info.histories) === JSON.stringify([path.relative(ROOT, signed)]), `it bundled the history this release signed, and only that (${info.histories})`)
+  ok(JSON.stringify(info.histories) === JSON.stringify([path.relative(ROOT, signed), path.relative(ROOT, path.join(r.site, 'releases/spaces/history.json'))]),
+    `it bundled the history this release signed and the seeded spaces one, and only those (${info.histories})`)
   const library = fs.existsSync(path.join(hw, 'library/index.html')) ? fs.readFileSync(path.join(hw, 'library/index.html'), 'utf8') : ''
-  ok(fs.existsSync(signed) && library.includes(JSON.parse(fs.readFileSync(signed, 'utf8')).sig), 'the library page carries that signed history byte for byte')
+  ok(fs.existsSync(signed) && library.includes(JSON.parse(fs.readFileSync(signed, 'utf8')).sig) && library.includes(JSON.parse(SPACES_HISTORY).sig) && !library.includes('STALE'),
+    'the library page carries both signed histories byte for byte, and nothing of the stale build planted in its output')
   const siteFiles = fs.existsSync(r.site) ? execFileSync('find', [r.site, '-type', 'f'], { encoding: 'utf8' }).trim().split('\n').map((f) => path.relative(r.site, f)) : []
   ok(siteFiles.length > 10 && !siteFiles.some((f) => /(^|\/)(frame\.html|_headers|build\.json)$/.test(f) || f.includes('home-web') || f.startsWith('library/')),
     `nothing of home/web is in the site (${siteFiles.length} files): nothing deploys it`)

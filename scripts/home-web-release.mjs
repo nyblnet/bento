@@ -10,7 +10,7 @@
 // Without --home-web a release does exactly what it did before.
 
 import { existsSync, readFileSync } from 'node:fs'
-import { join, relative, resolve, isAbsolute } from 'node:path'
+import { join, relative, resolve, isAbsolute, sep } from 'node:path'
 
 /**
  * Read release.mjs's home/web options. Returns null when --home-web is absent.
@@ -44,8 +44,7 @@ export function homeWebOptions({ args, opt, site, keyPath, releaseKey }) {
     throw new Error('--home-web needs --frame-origin <url>: the frame site is a separate domain, and it is the maintainer\'s to choose (there is no default)')
   }
   const out = resolve(outArg ?? `${site}.home-web`)
-  const rel = relative(resolve(site), out)
-  if (rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))) {
+  if (!outside(site, out)) {
     throw new Error(`--home-web-out ${out} is inside the site, and the site is mirrored to bento.page: put it anywhere else`)
   }
   let devKey = null
@@ -61,27 +60,40 @@ export function homeWebOptions({ args, opt, site, keyPath, releaseKey }) {
   return { frameOrigin, out, dev, devKey }
 }
 
+/** Is `p` outside `dir`? A child named `..hw` is inside: only `..` itself, `..<sep>…` or another root is out. */
+export function outside(dir, p) {
+  const rel = relative(resolve(dir), resolve(p))
+  return rel === '..' || rel.startsWith('..' + sep) || isAbsolute(rel)
+}
+
 /**
  * The history of every app the staged site PUBLISHES: an app is published when
  * its signed manifest is in the site. A published app without a history is
  * refused, never skipped: the library would then run none of its files.
+ *
+ * `pending` (an app key) is the app being released: before it is signed its
+ * history may not exist yet (its first release), so it is taken when present
+ * and never refused; and an empty list is then allowed. release.mjs calls it
+ * so on the SEEDED tree before signing, and plainly once the release is signed.
  */
-export function publishedHistories(site, apps) {
+export function publishedHistories(site, apps, pending = null) {
   const out = []
   for (const app of Object.values(apps)) {
     const dir = join(site, `releases/${app.dir}`)
     if (!existsSync(join(dir, 'manifest.json'))) continue
     const history = join(dir, 'history.json')
+    if (!existsSync(history) && pending && apps[pending] === app) continue
     if (!existsSync(history)) throw new Error(`${app.appId} is published (releases/${app.dir}/manifest.json) but has no releases/${app.dir}/history.json`)
     out.push({ appId: app.appId, file: history })
   }
-  if (!out.length) throw new Error('the site publishes no app, so there is no history to build home/web with')
+  if (!out.length && !pending) throw new Error('the site publishes no app, so there is no history to build home/web with')
   return out
 }
 
-/** The home/web/build.mjs arguments for a release. */
-export function homeWebBuildArgs({ root, opts, histories, devKeyFile }) {
+/** The home/web/build.mjs arguments for a release (`check`: run its checks only, write nothing). */
+export function homeWebBuildArgs({ root, opts, histories, devKeyFile, check = false }) {
   const a = [join(root, 'home/web/build.mjs'), '--out', opts.out, '--frame-origin', opts.frameOrigin]
+  if (check) a.push('--check')
   for (const h of histories) a.push('--history', h.file)
   if (opts.dev) a.push('--dev')
   if (devKeyFile) a.push('--key', devKeyFile)

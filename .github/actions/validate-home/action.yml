@@ -117,10 +117,12 @@ runs:
       # development seam: no --history, --key (a test key), the mutant hook, and
       # any history the library would refuse (another key, tampered, two for one
       # app); the good release build is the positive control. release.mjs
-      # --home-web refuses before building or signing anything without
-      # --frame-origin, with output inside the site, or with a non-release key
-      # unless --home-web-dev; and a rehearsal release with it bundles exactly
-      # the history it signed, with nothing of home/web in the site. Mutants run
-      # in ci-home.yml (home-web-engines).
+      # --home-web refuses with nothing signed: no --frame-origin, output inside
+      # the site, a non-release key without --home-web-dev, the mutant hook, no
+      # esbuild, and (once seeded) a published app without a history or with
+      # one the build would refuse; a failed run leaves no earlier build in its
+      # output. A rehearsal release bundles exactly the histories it signed and
+      # seeded, with nothing of home/web in the site. Mutants run in ci-home.yml
+      # (home-web-engines).
       shell: bento-step {0}
       run: node scripts/test-home-web-build.mjs

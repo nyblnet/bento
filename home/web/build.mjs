@@ -23,6 +23,7 @@
 //                            it each of those REFUSES the build.
 //   --key <jwk.json>         TEST SEAM, --dev only: verify with this public key
 //                            instead of the release key. Rigs only.
+//   --check                  run every check below and stop: nothing is written.
 //
 // Every bundled history must verify against the key the build carries, be for
 // an app the library knows, and be the only one for its app; otherwise the
@@ -120,9 +121,17 @@ if (keyFile) {
   }
 }
 
-// --- bundle ---------------------------------------------------------------
 const esbuild = process.env.ESBUILD || path.join(root, 'slides/node_modules/.bin/esbuild')
 if (!fs.existsSync(esbuild)) die(`esbuild not found at ${esbuild} (npm ci --prefix slides, or set ESBUILD)`)
+
+// --check: every refusal above, and nothing written. release.mjs runs it on the
+// histories already published before it signs anything.
+if (args.includes('--check')) {
+  console.log(`home/web build: check passed (${histories.length} histor${histories.length === 1 ? 'y' : 'ies'}${dev ? ', development' : ''})`)
+  process.exit(0)
+}
+
+// --- bundle ---------------------------------------------------------------
 
 const mutant = process.env.BENTO_HOME_WEB_MUTANT ? JSON.parse(process.env.BENTO_HOME_WEB_MUTANT) : null
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bento-home-web-'))
