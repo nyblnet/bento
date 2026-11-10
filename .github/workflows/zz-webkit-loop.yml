@@ -1,0 +1,56 @@
+# TEMPORARY: loops the WebKit rigs to catch the "browser has been closed"
+# flake with its evidence (WebKit stderr and exit signal, memory, kernel log).
+# Removed before this PR leaves draft.
+name: WebKit loop (temporary)
+
+on:
+  pull_request:
+
+jobs:
+  loop:
+    if: github.head_ref == 'ops-webkit-crash'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04]
+        shard: [1, 2, 3, 4]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install
+        run: |
+          cat /etc/os-release | head -2; nproc; free -m
+          npm ci --prefix slides
+          npm run build:single --prefix slides > /dev/null
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps webkit > /dev/null
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Loop
+        run: |
+          set +e
+          mkdir -p "$RUNNER_TEMP/loop"
+          ( while true; do echo "$(date -u +%T) $(free -m | awk '/Mem:/{print "used="$3" avail="$7}') $(ps -eo rss,comm --sort=-rss | head -4 | tail -3 | tr '\n' ' ')"; sleep 2; done ) > "$RUNNER_TEMP/loop/mem.log" &
+          MEM=$!
+          pass=0; fail=0
+          for i in 1 2 3 4 5 6; do
+            for rig in test-home-web.mjs test-home-origin-probe.mjs; do
+              log="$RUNNER_TEMP/loop/$i-$rig.log"
+              DEBUG=pw:browser BENTO_BROWSER=webkit timeout 300 node scripts/$rig > "$log" 2>&1
+              st=$?
+              if [ $st -eq 0 ]; then pass=$((pass+1)); echo "iter $i $rig: pass ($(tail -1 "$log"))"
+              else fail=$((fail+1)); echo "::warning::iter $i $rig: FAIL status $st"
+                echo "----- $rig iteration $i (status $st), last 60 lines"; tail -60 "$log" | cut -c1-400
+                echo "----- memory around it"; tail -40 "$RUNNER_TEMP/loop/mem.log"
+                echo "----- kernel log"; sudo dmesg -T | tail -40
+              fi
+            done
+          done
+          kill $MEM
+          echo "LOOP RESULT ${{ matrix.os }} shard ${{ matrix.shard }}: pass=$pass fail=$fail"
+          ls /var/crash 2>/dev/null; coredumpctl list 2>/dev/null | tail -5
+          grep -h "pw:browser.*\[err\]" "$RUNNER_TEMP"/loop/*.log | sed 's/^[^ ]* //; s/pid=[0-9]*//' | sort | uniq -c | sort -rn | head -20
+          exit 0
