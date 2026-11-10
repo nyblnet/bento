@@ -13193,6 +13193,62 @@ on a hand clock, with real browser registrations and the kernel's real
 assertions) and `scripts/test-directory-mutants.ts` (each rule loosened in turn
 must fail a row).
 
+## 2026-11-09 — bento/home in your browser, stage 1: a web host that runs only verified code (`home/web/`)
+
+bento/home gets a fourth host, a web page (to be served at home.bento.page),
+built in stages. Stage 1 opens and presents, and keeps nothing:
+
+- **Only verified code runs, and only the release it claims.** A picked or dropped file is read on the device
+  (never uploaded), and its code is checked with kernel gate 1
+  (`verifyServedHeld`) against the signed release histories, verified with the
+  release key. A file that matches exactly one release runs in THAT release,
+  its own shell, never a silent upgrade. A file that matches none (tampered, a
+  fork, newer than the history) never runs; on the person's request its
+  document opens read-only in the newest signed release of its app, fetched
+  through the signed manifest and its pin and verified against the history in
+  turn.
+- **The document runs in a sandboxed frame on a separate site.** The frame
+  page's header CSP carries `sandbox`, so it is an opaque origin whoever loads
+  it, names the library in `frame-ancestors`, refuses workers, and pins its one
+  script by hash plus `blob:` for the verified blocks it writes. Its script
+  refuses to boot unless it is opaque, framed, and handed the file by the
+  library's origin, and under a script policy: the library's sandbox attribute
+  alone would make the frame opaque even if a host dropped the header, so the
+  script also refuses when `Function('')` runs. The frame has no `allow-downloads`: every download goes
+  through the library, which in stage 1 gives back only the bytes that
+  verified. The session is a `MessagePort`; a frame that navigates away (it no
+  longer answers a ping on that port) is closed. The frame site serves that one
+  page and nothing else, ever (no service worker). Its domain is a build input
+  (`--frame-origin`); choosing it, and its DNS, are the maintainer's.
+- **Nothing kept; the library talks only to the release channel.** No storage,
+  file handles, service worker, identity or relay in stage 1. The histories are
+  bundled into the build; the channel is asked only when a file does not verify
+  against them, or for the read-only view. That is the library: the document's
+  own content may still load `https:` images, media and embeds, as it does from
+  disk, and a live document is shown as it was last saved, not live.
+- **No security floor yet.** A file in a release with a known script bug runs
+  that release, bug included, inside the opaque frame with no storage, keys or
+  handles to reach. A signed security mark in the history is a stage-2 gate.
+- **The release key is in network-served code.** PLATFORM §6 compiles the key
+  into every file and never reads it from the network. That still holds for
+  files. A session in this page trusts the key in the page bento.page served on
+  that visit, so the page itself is a code-trust root for the files opened in
+  it: opt-in, kept small (budgets in the rig), and stated.
+- **Supersedes, for the web, 2026-08-02 "bento/home is closed".** What changed
+  since: kernel has a per-document store a host can answer (DocStore), a shell
+  boots in an opaque origin, and this host runs a verified signed shell rather
+  than the file's own code unverified. That entry's "a per-document origin, or
+  not at all" is answered by the opaque frame: each document gets a unique
+  origin with no storage, so nothing pools.
+- **Reuse, not copies.** Verification is kernel `gate1.ts`; the signature check
+  is the extension's mirror of the kernel's (`home/webext/src/release.js`,
+  already pinned to the kernel key). Saving (a per-document store over the
+  frame's port) needs a kernel transport and comes in a later stage.
+
+Rigs: `scripts/test-home-web.mjs` (Chromium, WebKit, Firefox),
+`scripts/test-home-web-mutants.mjs` (each mutant red on its own row),
+`scripts/test-shell-standalone.mjs` (every app shell points to bento.page and
+never depends on it). Details: `home/web/README.md`.
 ## 2026-11-09 — bento/id option G: a removal or undo names exactly the member the quarantine marked
 
 **Decision.** This replaces "removes exactly one quarantined member" and
@@ -13473,3 +13529,63 @@ option G; `kernel/fixtures/device-v1.json` is the contract.
 Guards: `scripts/test-devices.ts` (every row with its reason and tier,
 positive controls, chains from `roster-v2.json`'s builders) and
 `scripts/test-devices-mutants.ts`; `gen-device-vectors.ts --check` in CI.
+## 2026-11-09 — bento/id: the sign-in host is its own small deploy, and answers one request (server/signin)
+
+Passkeys for bento/id belong to the rp `id.bento.page`, and the directory on
+that name never runs a ceremony. The only web page that does is a separate
+sign-in host (working name `signin.id.bento.page`): four static files served
+by a small worker, with no document code and no directory key. It lives in
+`server/signin/`, not in the site tree or the directory, because it must
+deploy alone with credentials that can change nothing else (not bento.page,
+not bento/home, not the directory). Whoever can serve content under the rp
+can use and wipe its passkeys, so this host is kept as small as possible.
+
+bento/home cannot use those passkeys (the browser refuses), so it opens the
+host in a popup. The rules, each pinned by a browser row with a mutant that
+breaks it:
+- **One request shape, from one sender.** A message is accepted only when its
+  origin is `https://home.bento.page` and its source is the window that opened
+  the popup; one per window (a second one voids the first, even one that
+  arrives while the first is still being checked, as WebKit delivers it); and
+  it is exactly
+  `{t:'enrol', W, kx, label}`. Nothing else is ever done because the opener
+  asked: no roster change, no deletion, no Signal API call. Account changes
+  start only from the host's own pages, by the person. Measured: with the
+  allowlist removed, an opener's "add this key" was signed and reached the
+  directory; with a Signal call allowed, the passkey was deleted with no prompt.
+- **Replies go to the literal origin `https://home.bento.page`**, never `'*'`:
+  measured, with `'*'` an opener that had navigated to another site received
+  the signed result.
+- **Nothing is read from the page's URL**, and a popup opened without an
+  opener refuses.
+- **The opener origin shown and logged is the message event's origin**, never
+  a field of the request.
+- **The consent screen never says the key is this browser's.** It cannot know
+  that: an honest and a hostile bento/home produce screens that differ only in
+  the key fingerprint. It names the asking origin and tells the person to
+  approve only if they just asked bento/home to sign in.
+
+Headers, on every response including 404s: a CSP of `default-src 'none'`,
+scripts and styles from `'self'` only, connections to the directory only, and
+`frame-ancestors 'none'` (with `X-Frame-Options: DENY`). **No COOP on the
+sign-in host; bento/home at most `same-origin-allow-popups`.** Measured in
+Chromium and Chrome, `same-origin-allow-popups` on the popup itself cuts
+`window.opener` exactly as `same-origin` does, so "not same-origin" is not a
+strong enough rule for this host. Playwright's
+WebKit kept the opener under every value; Safari on a device is still to be
+checked. No `/.well-known/webauthn`, on this host or on `id.bento.page`.
+
+`server/signin/check-hosting.mjs` checks all of this against the live host
+after every deploy, including that there is no wildcard name under the host or
+the rp. DNS cannot list explicit names, and every name under the rp can use
+and wipe its passkeys, so each deploy also lists the zone's records under
+`id.bento.page` in the DNS provider, by hand. Deploying is the maintainer's.
+The directory API the host calls sits behind one module (`public/directory-client.js`), provisional until the
+directory's roster routes and the kernel's `wdev.` statement are defined.
+
+Rigs: scripts/test-signin-host.mjs (the worker, the page rules, the hosting
+check with a mutant per rule), scripts/test-signin-host-browser.mjs (the
+protocol in Playwright's headless shell and Google Chrome),
+scripts/test-signin-host-engines.mjs (the rows that need no passkey, in
+WebKit too) and scripts/test-signin-host-coop.mjs (COOP in Chromium, Chrome and
+WebKit).
