@@ -77,10 +77,17 @@ const onStoreEvent = (e: { kind: string }) => {
 }
 const mintEntry = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('')
 
-/** The docId of a file this page verified, or null (an encrypted body, or none). */
+/**
+ * The docId of a file this page verified, or null. Only a body in a known
+ * PLAINTEXT app format has one: an allowlist of the apps' formats, never "not
+ * bento/enc", because an encrypted envelope may carry any extra field
+ * (the shell's envelope parser ignores them), a docId included, and an
+ * encrypted document never gets a store here.
+ */
 function docIdOf(html: string): string | null {
   const d = extractDoc(html)
   if (!('text' in d)) return null
+  if (!APPS.some((a) => a.format === d.format)) return null
   try {
     const id = (JSON.parse(d.text) as { docId?: unknown }).docId
     return typeof id === 'string' && id.length > 0 && id.length <= 200 ? id : null

@@ -115,6 +115,11 @@ const MUTANTS = [
       { file: 'library.ts', from: '  memory.dropEntry(session.entry)\n', to: '' }],
     expect: '[S7] the same file, so the same docId, opened again: a new entry that holds nothing of the last open',
   },
+  {
+    name: 'store-for-envelopes', why: '[S7] the store is bound to a docId read from any JSON, an encrypted envelope included',
+    src: { file: 'library.ts', from: '  if (!APPS.some((a) => a.format === d.format)) return null\n', to: '' },
+    expect: '[S7] an encrypted file whose envelope also carries a docId answers unavailable',
+  },
 ]
 
 const only = process.argv.slice(2)

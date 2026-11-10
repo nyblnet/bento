@@ -37,7 +37,8 @@
  *   [S7] the document's store over its port (kernel/src/docstoreport.ts): the
  *        released 1.2.10 shell never speaks on it (stage 1 behaviour); the
  *        kernel's own client, loaded into the frame as a later shell would carry
- *        it, round-trips through the real library; each open is a new entry; a
+ *        it, round-trips through the real library; each open is a new entry; an
+ *        encrypted file (even one whose envelope carries a docId) gets no store; a
  *        HOSTILE document (other docIds, forged ops, oversized values, a second
  *        take, its port stashed in a popup and used after close) gets nothing.
  *   [T7] byte budgets.
@@ -98,7 +99,11 @@ const tampered = (() => {
 const HANDLER_PROBE = 'bento-home-web-handler'
 const hostile = (probeUrl) => deck.replace('<body>', () => `<body><svg width="0" height="0"><title><img src="x" onerror="fetch('${probeUrl}')"></title></svg>`)
 const bom = '\ufeff' + deck
-const files = { deck, futureDeck, forkDeck, tampered, bom }
+// a password envelope in the 1.2.10 shell, carrying an extra docId (the shell's envelope parser ignores extra fields)
+const b64r = (n) => Buffer.from(webcrypto.getRandomValues(new Uint8Array(n))).toString('base64')
+const envelope = (extra) => JSON.stringify({ format: 'bento/enc', v: 1, it: 300000, salt: b64r(16), iv: b64r(12), data: b64r(64), ...extra })
+const encDocId = spliceDoc(shell1210, envelope({ docId: 'enc-claims-an-id' }))
+const files = { deck, futureDeck, forkDeck, tampered, bom, encDocId }
 for (const [k, v] of Object.entries(files)) fs.writeFileSync(path.join(work, `${k}.bento.html`), v)
 if (!deck.includes('<body>')) throw new Error('the 1.2.10 shell has no plain <body> tag to plant into')
 const F = (k) => path.join(work, `${k}.bento.html`)
@@ -567,6 +572,22 @@ section("[S7] the document's store: the port the library hands the frame, and no
     reopen = await fr.evaluate(async () => { const ds = window.__bentoKernelStore.docStore(); return { list: await ds.list(), key: await ds.get('memberkey') } }).catch((e) => ({ error: String(e?.message ?? e).slice(0, 160) }))
   }
   ok(!!reopen && JSON.stringify(reopen.list) === '[]' && reopen.key === null, `[S7] the same file, so the same docId, opened again: a new entry that holds nothing of the last open (${JSON.stringify(reopen)})`)
+
+  // an encrypted file never gets a store, even when its envelope carries a docId
+  await page.click('#close')
+  await open(page, 'encDocId')
+  const encFrame = await until(async () => { const f = docFrame(page); return f && (await f.evaluate(() => typeof window.__bentoDocStore === 'object')) ? f : null })
+  let enc = null
+  if (encFrame) {
+    await loadKernel(encFrame).catch(() => {})
+    enc = await encFrame.evaluate(async () => {
+      const ds = window.__bentoKernelStore.docStore()
+      const set = await ds.set('memberkey', new TextEncoder().encode('plaintext key beside ciphertext'))
+      const got = await ds.get('memberkey').then((b) => (b ? 'bytes' : 'null'), (e) => String(e.message || e))
+      return { set, got }
+    }).catch((e) => ({ error: String(e?.message ?? e).slice(0, 160) }))
+  }
+  ok(enc?.set === 'refused' && /unavailable/.test(enc?.got ?? ''), `[S7] an encrypted file whose envelope also carries a docId answers unavailable: no store (${JSON.stringify(enc)})`)
 
   // the hostile document: it speaks to the port by hand
   await page.click('#close')

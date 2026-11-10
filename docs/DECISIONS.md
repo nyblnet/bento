@@ -13642,17 +13642,20 @@ the window protocol the extension and native hosts speak.
   frame's realm, the frame's own script included, is the document's: a closed
   op list (`get`, `set`, `list`, `delete`) and name list (`recovery`,
   `memberkey`), an exact key set per op, request ids that only rise, bytes only
-  as a plain `Uint8Array` over a buffer about its own size, a cap per name and
-  per open (a document filling the host origin's quota would starve every
-  other entry, since browsers evict an origin at once), caps on requests in
+  as a plain `Uint8Array` over a buffer about its own size, a cap per name (and
+  per open, which binds only once there are more names; a persistent store
+  still needs a cap across all entries, since browsers evict an origin at
+  once), caps on requests in
   flight and on the rate. Anything else is dropped unanswered and counted; past
   a limit of drops the session closes. A value over its cap is a well-formed
   request and is answered `too-large`, so the document stops retrying.
 - **The partition is an entry the host mints per open**, never the docId: a
   file can claim any docId. The session is also bound to the docId the host
   read from the file it verified, and a record is returned only to a session
-  bound to the docId it was written under; a file with no readable docId (an
-  encrypted body) gets `unavailable`. Nothing in a message can name an entry
+  bound to the docId it was written under. Only a body in one of the apps'
+  plaintext formats has a docId for this (an allowlist, never "not
+  `bento/enc`"): an encrypted envelope may carry any extra field, a docId
+  included, and still gets `unavailable`. Nothing in a message can name an entry
   or a docId: such a field makes the message malformed.
 - **Closing an open closes its port**, so a port the document stashed or handed
   to a popup is answered nothing afterwards, and the next open is a new channel

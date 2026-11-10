@@ -83,14 +83,17 @@ the library answers `get`, `set`, `list` and `delete` on it.
   capability.
 - **The library enforces everything**, because the document owns the frame's
   realm: a closed op and name list, an exact key set per op, rising request
-  ids, bytes only as a plain `Uint8Array`, a cap per name and per open, a cap
-  on requests in flight and on the rate. Anything else is dropped unanswered
+  ids, bytes only as a plain `Uint8Array`, a cap per name (and per open, which
+  binds only once there are more names), a cap on requests in flight and on
+  the rate. Anything else is dropped unanswered
   and counted (the root element's `data-bento-store` is `served refused
   dropped`, for the rigs); too many drops close the store.
 - **Each open is a new entry**, minted by the library, and the store is bound
   to the docId of the file it verified: nothing in a message names either. A
-  file claiming another document's docId gets a fresh, empty entry. An
-  encrypted file has no readable docId, so its store answers `unavailable`.
+  file claiming another document's docId gets a fresh, empty entry. Only a
+  body in one of the apps' plaintext formats has a docId here (an allowlist):
+  an encrypted file's store answers `unavailable`, even when its envelope
+  carries a docId field.
 - **Closing the document closes its store**: a port the document stashed (in a
   popup, say) is answered nothing afterwards.
 - **Files are not written on this channel.** Saving stays the library's (and
@@ -100,7 +103,22 @@ the library answers `get`, `set`, `list` and `delete` on it.
 
 Not yet: keeping the store past the open. Stage 2's per-entry recovery cache in
 the library's own storage, cleared when a write-back succeeds, plugs into the
-same `serveDocStore` through its `StoreBackend`.
+same `serveDocStore` through its `StoreBackend`. Before it does, two things the
+in-memory store cannot show must hold, each with a rig row and a mutant:
+
+- **A write in flight at close does not survive the clear (S2-a).** With a
+  backend that awaits (as IndexedDB does), a `set` posted before the document
+  closes can land after the entry was dropped, and the same race hits the clear
+  after a write-back. The host re-checks that the session is open after every
+  backend await, and the drop or clear runs only after in-flight requests have
+  settled.
+- **A session cannot overwrite a record written under another docId (S2-b).**
+  The docId check guards reads today, not writes: a second session on the same
+  entry with a different docId reads `null` but its `set` replaces the record.
+  A persistent per-file entry would make that a way to destroy a device's
+  member key by opening a different file under the same entry. Records are
+  keyed by entry AND docId, or `set` refuses when the held record's docId
+  differs.
 
 ## Build and run locally
 
@@ -125,7 +143,7 @@ the frame page at most 4 KB (`scripts/test-home-web.mjs`).
 | rig | what |
 |---|---|
 | `scripts/test-home-web.mjs` | the library and frame in a real browser (`BENTO_BROWSER=chromium\|webkit\|firefox`): verification, network allow-list, frame-page standalone refusals, downloads, navigation |
-| `scripts/test-home-web-mutants.mjs` | eighteen mutants, each red on the row that guards it |
+| `scripts/test-home-web-mutants.mjs` | nineteen mutants, each red on the row that guards it |
 | `scripts/test-shell-standalone.mjs` | every app shell points to bento.page and never depends on it |
 
 Chromium runs in the required `validate` check; WebKit, Firefox and the mutants
