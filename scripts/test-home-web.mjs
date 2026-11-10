@@ -52,10 +52,13 @@ const { spliceDoc } = await import(path.join(ROOT, 'home/web/src/verify.ts'))
 const { scanBlocks, executableScripts } = await import(path.join(ROOT, 'kernel/src/gate1.ts'))
 const pw = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
+const { guardBrowser } = await import(path.join(ROOT, 'scripts/lib/browser-guard.mjs'))
+
 let checks = 0, failures = 0
-const ok = (c, m) => { checks++; if (!c) failures++; console.log(`  ${c ? 'ok  ' : 'FAIL'}  ${m}`) }
-const note = (m) => console.log(`  note  ${m}`)
-const section = (m) => console.log(`\n=== ${m}`)
+let guard = null // set once the browser is up: a dead browser or a stalled row fails loudly
+const ok = (c, m) => { checks++; if (!c) failures++; console.log(`  ${c ? 'ok  ' : 'FAIL'}  ${m}`); guard?.progress(m) }
+const note = (m) => { console.log(`  note  ${m}`); guard?.progress(m) }
+const section = (m) => { console.log(`\n=== ${m}`); guard?.section(m) }
 
 const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bento-home-web-'))
 process.on('exit', () => fs.rmSync(work, { recursive: true, force: true }))
@@ -164,6 +167,7 @@ ok(refused(['--library-origin', 'https://home.bento.page', '--frame-origin', 'ht
 
 // --- browser -------------------------------------------------------------------
 const browser = await pw[ENGINE].launch()
+guard = guardBrowser(browser, { rig: `home/web (${ENGINE})` })
 const recorded = []
 const sockets = []
 async function context() {
@@ -500,7 +504,7 @@ section("the library's frame-src keeps a document's navigation off the network; 
   await ctx.close()
 }
 
-await browser.close()
+await guard.close()
 await A.s.close(); await B.s.close()
 console.log(`\n${checks - failures}/${checks} checks passed (${ENGINE})`)
 process.exit(failures ? 1 : 0)

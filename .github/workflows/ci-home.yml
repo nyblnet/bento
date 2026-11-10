@@ -50,7 +50,10 @@ jobs:
           npm ci --prefix slides
           npm run build:single --prefix slides
       - name: Origin probe in WebKit
-        run: node scripts/test-home-origin-probe.mjs
+        # about a minute; the rig's own guard fails a stalled call in 2 minutes,
+        # and this bounds anything the guard cannot see
+        timeout-minutes: 6
+        run: DEBUG=pw:browser node scripts/test-home-origin-probe.mjs
 
   home-web-engines:
     # bento/home in your browser (home/web) in the two engines the required
@@ -71,9 +74,15 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
           "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium webkit firefox
           echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      # Each engine run takes about a minute. The rig's guard fails a stalled
+      # call within 90s; the step timeout bounds anything it cannot see.
+      # DEBUG=pw:browser puts the browser's own stderr and exit signal in the
+      # log, which is the only evidence when a browser dies mid-rig.
       - name: home/web in WebKit
-        run: BENTO_BROWSER=webkit node scripts/test-home-web.mjs
+        timeout-minutes: 6
+        run: DEBUG=pw:browser BENTO_BROWSER=webkit node scripts/test-home-web.mjs
       - name: home/web in Firefox
-        run: BENTO_BROWSER=firefox node scripts/test-home-web.mjs
+        timeout-minutes: 6
+        run: DEBUG=pw:browser BENTO_BROWSER=firefox node scripts/test-home-web.mjs
       - name: home/web mutants
         run: node scripts/test-home-web-mutants.mjs
