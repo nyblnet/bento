@@ -114,6 +114,14 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-gate1.ts
 
+    - name: gate 1 raw-text rule mutants
+      # <style>, <title> and <textarea> hold tags inside <svg> or <math>, so
+      # gate 1 refuses "<" before a letter, "!", "/" or "?" in them. Each
+      # mutant loosens or widens that rule in a copy of gate1.ts, and
+      # test-gate1.ts must go red on every one, after the unmutated copy passes.
+      shell: bento-step {0}
+      run: node scripts/test-gate1-mutants.ts
+
     - name: Language pack verification rig
       # Packs come off the network, so the signature + hash-pin chain is the
       # only thing between a hostile channel and the strings in the UI.
@@ -644,3 +652,25 @@ runs:
       # signatures blanked; an unchanged row keeps its committed bytes.
       shell: bento-step {0}
       run: node scripts/gen-roster-vectors.ts --check
+
+    - name: bento/id device certificates
+      # kernel/src/devices.ts against kernel/fixtures/device-v1.json: wdev. and
+      # dev2. certified by a passkey assertion, the directory's watt. (24 h, 7-day
+      # cap from the original ceremony), the head rule (the signer is an
+      # unquarantined passkey of the named head AND of the current one, with no
+      # break since), and the tier: passkey-only until the device's consent key
+      # has been a member 72 h.
+      shell: bento-step {0}
+      run: node scripts/test-devices.ts
+
+    - name: bento/id device certificate mutants
+      # Each mutant loosens one rule in a copy of devices.ts (or the heads
+      # roster.ts gives it); test-devices.ts must go red on every one, after the
+      # unmutated copy passes.
+      shell: bento-step {0}
+      run: node scripts/test-devices-mutants.ts
+
+    - name: bento/id device fixture is current
+      # As for roster-v2.json: --check writes nothing and fails on a stale file.
+      shell: bento-step {0}
+      run: node scripts/gen-device-vectors.ts --check

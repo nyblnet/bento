@@ -381,3 +381,47 @@ joined (`since`), `createdAt`, `lastResetAt` and `sinceExact`.
   present at the pin get the pin's ripenedAt (`sinceExact: false`): the age it
   gives is a lower bound, the safe direction for any rule that waits on a
   member's age.
+- **`heads`.** The state also lists every head of the links given, in chain
+  order, with its hash, seq, ripenedAt and members: the heads a device
+  certificate may name (`device-v1.json`). The pinned head is the first.
+
+## `device-v1.json`: bento/id device certificates (option G)
+
+Reference: `kernel/src/devices.ts`. Rig: `scripts/test-devices.ts` (and
+`scripts/test-devices-mutants.ts`). Generator: `scripts/gen-device-vectors.ts`
+(same deterministic keys and chains as `roster-v2.json`; signatures random, so
+match verdicts, not bytes). Not read by any host yet.
+
+Each row names a roster chain in `chains`. Verify it with `verifyRosterChain`
+(roster-v2.json's rules) at `now` = the row's `now`, or the file's; then verify
+the row's `proof` (`{cert, signer, assertion, watt, wattSig}`) against that
+roster. Match the verdict, the reason where you can, and the `tier` of every
+accepted row.
+
+- **`wdev.<devicePub>.<kx>.<b64u(address)>.<rosHash>.<b64u(label)|empty>.<via>.<ceremonyAt>.<dirNonce>`**:
+  a browser key. **`dev2.<devicePub>.<consentPub|empty>.<kx>.<b64u(address)>.<rosHash>.<b64u(label)|empty>.<via>.<ceremonyAt>.<dirNonce>`**:
+  a native device key and its hardware consent key. Keys are raw P-256 points; the
+  kx is a valid ECDH point equal to neither signing key, and the consent key is not
+  the device key. The label is display text (statements' rules) of at most 40
+  characters. `via` is `passkey` (an assertion by a roster passkey over the exact
+  text: webauthn-v1.json's rules, rp `rpId`, origins `origins`, no stored sign
+  count). `cns` (wdev.) and `ck` (dev2.) parse but are REFUSED (`via`) until their
+  consent purposes are defined.
+- **`watt.<sha256(certificate text)>.<ob>.<loggedAt>.<expires>.<kid>`**, signed by
+  a pinned directory key (raw r‖s, low-S; the kid picks the key). `ob` is `0` or
+  `1`. `0 < expires − loggedAt ≤ 24 h`; `expires ≤ ceremonyAt + 7 days`, from
+  the certificate's ORIGINAL ceremony (a renewal is a new `watt.` over the same
+  certificate text); `loggedAt ≥ ceremonyAt`; not logged in the future (5 min
+  skew); not expired (`now < expires`).
+- **The head rule**, with H the head `rosHash` names: H is one of the roster's
+  `heads` (else `roster-head`: a fork, or older than the pin; verify further back
+  to place it); `ceremonyAt ≥ H.ripenedAt`; the signer is an unquarantined `pk`
+  of H AND of the current head; and its current `since` ≤ H.ripenedAt (else
+  `signer-break`: removed and re-added, or across a reset).
+- **The tier.** Every certificate in this file is `passkey` ("(passkey sign-in)").
+  A `dev2.`'s consentPub is a claim until that consent key signs the certificate,
+  so a consent key's age on the roster never promotes one by itself
+  (`tier/ck-ripe-exactly-72h`, `sec/tier-consent-key-not-proven`). Native tier
+  arrives with the consent key's own signature, in a later version.
+- **`wren.<devicePub>.<b64u(address)>.<challenge>`** (`wren` rows): the device
+  key's raw low-S signature over the text. Only the directory checks it.

@@ -201,6 +201,11 @@ fn plain_tag_name(n: &str) -> bool {
 
 /// Where a raw-text element really ends: "</name" followed by whitespace, "/",
 /// ">" or the end of the file. "</scriptx>" is text, not its end.
+/// A "<" that could start markup in foreign content: before an ASCII letter, "!", "/" or "?".
+fn markup_start(text: &[u8]) -> bool {
+    text.windows(2).any(|w| w[0] == b'<' && (w[1].is_ascii_alphabetic() || matches!(w[1], b'!' | b'/' | b'?')))
+}
+
 fn raw_text_end(lower: &str, name: &str, from: usize) -> Option<usize> {
     let needle = format!("</{name}");
     let mut at = from;
@@ -263,7 +268,10 @@ fn walk(html: &str) -> (Vec<Block<'_>>, Vec<String>) {
         }
         if let Some(raw) = RAW_TEXT.iter().find(|r| **r == name) {
             let Some(close) = raw_text_end(&lower, raw, tag.end) else { problems.push(format!("an unterminated <{name}>")); break };
-            if *raw != "script" && lower[tag.end..close].contains("<script") { problems.push(format!("a <{name}> holds a <script>")) }
+            // Text only in HTML: inside <svg> or <math> these hold TAGS (<title> is
+            // an integration point, <img> breaks out of <style>), and a token walk
+            // can't tell the context. Refuse any "<" that could start markup.
+            if *raw != "script" && markup_start(&html.as_bytes()[tag.end..close]) { problems.push(format!("a <{name}> holds markup, which is a tag inside <svg> or <math>")) }
             if *raw == "script" || *raw == "style" {
                 let Some(et) = parse_end_tag(html, close) else { problems.push(format!("an unterminated </{name}>")); break };
                 let tagname: &'static str = if *raw == "script" { "script" } else { "style" };

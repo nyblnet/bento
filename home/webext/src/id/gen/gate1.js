@@ -213,9 +213,18 @@ function walk(html        )       {
     if (RAW_TEXT.includes(name)) {
       const close = rawTextEnd(lower, name, tag.end)
       if (close < 0) { problems.push(`an unterminated <${name}>`); break }
-      // inert to a browser, but a scanner that doesn't treat these as text
-      // would count it: refuse, so every host's scanner reaches the same verdict
-      if (name !== 'script' && lower.slice(tag.end, close).includes('<script')) problems.push(`a <${name}> holds a <script>`)
+      // Text only in HTML. Inside <svg> or <math> the same three elements are
+      // FOREIGN content: the tokenizer reads tags there, <title> is an HTML
+      // integration point, and <img>, <meta>, <iframe>... break out of <style>.
+      // So `<svg><title><iframe src=…>` loads a page that a text reading never
+      // sees. Telling which context a tag sits in needs the whole tree builder
+      // (integration points, breakout tags, foster parenting), not a token
+      // walk, so refuse in EVERY context any "<" that could start markup: one
+      // before a letter, "!", "/" or "?". That covers "<script" too. Bento
+      // writes none there (a title is serialized with "<" escaped, and its
+      // stylesheets hold no "<"), and a "<" before anything else ("a < b",
+      // "<3") is text in every context.
+      if (name !== 'script' && /<[a-zA-Z!/?]/.test(html.slice(tag.end, close))) problems.push(`a <${name}> holds markup, which is a tag inside <svg> or <math>`)
       if (name === 'textarea' || name === 'title') { i = close; continue }
       const et = parseEndTag(html, close)
       if (!et) { problems.push(`an unterminated </${name}>`); break }
@@ -260,7 +269,9 @@ export const executableScripts = (blocks         )          => blocks.filter((b)
  * - <iframe>, <object>, <embed> or <base>;
  * - a <meta> refresh or CSP;
  * - any on*= attribute;
- * - a comment or <style> holding a <script>;
+ * - a comment holding a <script>;
+ * - a <style>, <title> or <textarea> holding "<" before a letter, "!", "/"
+ *   or "?" (markup, once the element sits inside <svg> or <math>);
  * - a data block containing "<".
  * Bento's data never contains "<": the JSON and language packs escape it, and
  * the b64/b86 alphabets exclude it. That also closes the "<!--<script"

@@ -305,15 +305,86 @@
     },
     {
       "case": "served/style-false-close.html",
-      "verdict": "genuine",
-      "release": "1.0.0",
-      "why": "\"</stylex>\" doesn't end the style: the <b onclick> is style TEXT, not an element"
+      "verdict": "unknown",
+      "why": "\"</stylex>\" doesn't end the style, and the <b onclick> is style text in HTML, but an element inside <svg>: markup in a <style> is refused"
     },
     {
       "case": "served/title-false-close.html",
+      "verdict": "unknown",
+      "why": "\"</titlex>\" doesn't end the title, and the <b onclick> is title text in HTML, but an element inside <svg>: markup in a <title> is refused"
+    },
+    {
+      "case": "served/svg-title-iframe.html",
+      "verdict": "unknown",
+      "why": "inside <svg>, <title> holds HTML: the <iframe> is real and loads"
+    },
+    {
+      "case": "served/svg-title-img-onerror.html",
+      "verdict": "unknown",
+      "why": "inside <svg>, <title> holds HTML: the <img onerror> is real"
+    },
+    {
+      "case": "served/svg-style-meta-refresh.html",
+      "verdict": "unknown",
+      "why": "inside <svg>, <meta> breaks out of <style>: a real refresh"
+    },
+    {
+      "case": "served/svg-style-img-onerror.html",
+      "verdict": "unknown",
+      "why": "inside <svg>, <img> breaks out of <style>: a real handler"
+    },
+    {
+      "case": "served/svg-style-embed.html",
+      "verdict": "unknown",
+      "why": "inside <svg>, <embed> breaks out of <style>"
+    },
+    {
+      "case": "served/svg-style-uppercase-img.html",
+      "verdict": "unknown",
+      "why": "tag names fold case: <IMG> breaks out of <style> inside <svg> too"
+    },
+    {
+      "case": "served/math-textarea-img.html",
+      "verdict": "unknown",
+      "why": "inside <math>, <textarea> holds tags: <img> breaks out"
+    },
+    {
+      "case": "served/svg-style-comment.html",
+      "verdict": "unknown",
+      "why": "\"<!\" in a <style>: a comment or CDATA inside <svg>"
+    },
+    {
+      "case": "served/svg-style-end-tag.html",
+      "verdict": "unknown",
+      "why": "\"</\" and a letter in a <style>: an end tag inside <svg>"
+    },
+    {
+      "case": "served/title-processing-instruction.html",
+      "verdict": "unknown",
+      "why": "\"<?\" in a <title>: a bogus comment inside <svg>"
+    },
+    {
+      "case": "served/title-tag-outside-svg.html",
+      "verdict": "unknown",
+      "why": "markup in a <title> is refused even where it is text: the walk does not track <svg> context, and Bento escapes \"<\" in a title"
+    },
+    {
+      "case": "served/style-lt-not-markup.html",
       "verdict": "genuine",
       "release": "1.0.0",
-      "why": "\"</titlex>\" doesn't end the title: the <b onclick> is title TEXT"
+      "why": "a \"<\" before a space, a digit or \"=\" starts no markup in any context: still text"
+    },
+    {
+      "case": "served/title-lt-not-markup.html",
+      "verdict": "genuine",
+      "release": "1.0.0",
+      "why": "a \"<\" before a space or a digit starts no markup in any context"
+    },
+    {
+      "case": "served/svg-title-text.html",
+      "verdict": "genuine",
+      "release": "1.0.0",
+      "why": "an <svg> whose <title> and <style> hold only text"
     },
     {
       "case": "served/case-fold-breakout.html",
