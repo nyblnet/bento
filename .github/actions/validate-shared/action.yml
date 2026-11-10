@@ -153,7 +153,13 @@ runs:
       # mailer timeout, an alarm that sweeps spent challenges, mail
       # kinds that may never be held back, the sign-in host's routes (CORS to
       # it alone), and the headers every id.bento.page answer carries (an
-      # unexpected failure included).
+      # unexpected failure included). The void and the reset (SD2): the
+      # countersign on every link, under the kernel's authority word, through
+      # the kernel's chain verifier; void links no wrong guess can burn;
+      # Cancel and its 72 h cooldown, Remove (suspend now, removal in 72 h)
+      # and its undo; Remove never offered to the only live member; the reset
+      # link no budget holds back, its 72 h wait, preemption, and no member
+      # stopping it in an account's first 14 days; the void page's headers.
       shell: bento-step {0}
       run: node scripts/test-directory-roster.ts
 
