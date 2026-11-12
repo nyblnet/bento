@@ -25,11 +25,11 @@ const worker = (await import('../server/sync-worker/src/worker.js')).default as 
   fetch(req: unknown, env: unknown): Promise<{ status: number; headers: { get(k: string): string | null }; text(): Promise<string> }>
 }
 
-function env(put: () => Promise<unknown>) {
+function env(put: () => Promise<unknown>, authz = 200) {
   return {
     ROOM: {
       idFromName: (n: string) => n,
-      get: () => ({ fetch: async () => new Response(JSON.stringify({ reserved: 1 }), { status: 200 }) }),
+      get: () => ({ fetch: async () => new Response(JSON.stringify(authz === 200 ? { reserved: 1 } : { error: 'room-blobs-full' }), { status: authz }) }),
     },
     BLOBS: { head: async () => null, put, get: async () => null },
   }
@@ -41,9 +41,9 @@ const putReq = () => ({
   headers: { get: (k: string) => (k.toLowerCase() === 'content-length' ? '1000' : null) },
 })
 
-async function call(put: () => Promise<unknown>) {
+async function call(put: () => Promise<unknown>, authz = 200) {
   try {
-    return { res: await worker.fetch(putReq(), env(put)), threw: null as unknown }
+    return { res: await worker.fetch(putReq(), env(put, authz)), threw: null as unknown }
   } catch (e) {
     return { res: null, threw: e }
   }
@@ -63,6 +63,19 @@ console.log('blob PUT failures become statuses, not exceptions…')
   const lost = await call(async () => { throw new Error('Network connection lost.') })
   ok(!lost.threw, `an upload cut off mid-body does not escape as an exception (${String(lost.threw ?? '')})`)
   ok(lost.res?.status === 503, `it answers 503 (${lost.res?.status})`)
+}
+
+console.log('a refusal is returned as itself, and nothing is written…')
+{
+  // The catch must never turn a denial into something else, and a denied PUT
+  // must never reach the bucket. These pass on the code before the catch too:
+  // they pin that the catch did not change them.
+  let puts = 0
+  const put = async () => { puts++; return {} }
+  const denied = await call(put, 403)
+  ok(denied.res?.status === 403 && puts === 0, `authz 403 answers 403 and nothing is stored (${denied.res?.status}, ${puts} puts)`)
+  const full = await call(put, 507)
+  ok(full.res?.status === 507 && puts === 0, `a full room answers 507 and nothing is stored (${full.res?.status}, ${puts} puts)`)
 }
 
 finish('relay blob errors')

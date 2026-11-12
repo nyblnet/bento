@@ -645,6 +645,89 @@ H('blob offload: one PUT per asset while edits keep flushing; failures back off;
     ok(relay.st.puts === 1, `the waiting pass uploads once ready (${relay.st.puts})`);
     sess.stop?.();
   }
+  // Rooms with their own behaviour, for the reconnect cases: 'hang' never
+  // answers a PUT unless the request is aborted, '507' is a full room.
+  function roomRelay(modes: Record<string, 'ok' | 'hang' | '507'>) {
+    const puts: Record<string, number> = {};
+    const live = { now: 0, max: 0 };   // PUTs whose request is still open
+    const prev = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL, init: RequestInit = {}) => {
+      const room = new URL(String(input)).pathname.split('/')[2];
+      if (init.method === 'HEAD') return new Response(null, { status: 404 });
+      if (init.method !== 'PUT') return new Response(null, { status: 404 });
+      puts[room] = (puts[room] ?? 0) + 1;
+      if (modes[room] === '507') return new Response('{"error":"room-blobs-full"}', { status: 507 });
+      if (modes[room] === 'hang') {
+        live.now++; live.max = Math.max(live.max, live.now);
+        return new Promise<Response>((_, reject) => {
+          init.signal?.addEventListener('abort', () => { live.now--; reject(new DOMException('aborted', 'AbortError')); }, { once: true });
+        });
+      }
+      return new Response('{"stored":1}', { status: 200 });
+    }) as typeof fetch;
+    return { puts, live, restore: () => { globalThis.fetch = prev; } };
+  }
+  const roomTransport = (room: string) => () => ({ kind: 'fake', send() {}, close() {}, writeReady: () => Promise.resolve(),
+    blobCreds: () => ({ base: 'http://relay.test', room, tok: 'tok_0123456789', rawKey }) } as never);
+  // 4. a PUT that never answers must not hold the single-flight latch for good
+  {
+    const relay = roomRelay({ roomA: 'hang', roomB: 'ok' });
+    const doc = newDoc();
+    doc.docId = `offload-hang-${Math.random().toString(36).slice(2, 10)}`;
+    const store = new Store(doc);
+    const sess = new SyncSession(store);
+    (sess as unknown as { offloadPutTimeoutMs: number }).offloadPutTimeoutMs = 300;
+    const trA = sess.addTransport(roomTransport('roomA'));
+    store.commit(() => { (store.doc as unknown as { assets: Record<string, string> }).assets = { hero: big }; });
+    await settle(200);
+    ok(relay.puts.roomA === 1, `positive control: the upload to room A was sent and hangs (${relay.puts.roomA ?? 0})`);
+    sess.removeTransport(trA);              // the reconnect: a working room B replaces A
+    sess.addTransport(roomTransport('roomB'));
+    await editBurst(store, 10, 100);        // 1 s of edits; A's PUT is aborted at 300 ms
+    await settle(300);
+    relay.restore();
+    ok((relay.puts.roomB ?? 0) === 1, `after A's PUT is aborted, the asset uploads to room B (${relay.puts.roomB ?? 0} PUTs to B)`);
+    ok(!!(store.doc as unknown as { blobs?: Record<string, unknown> }).blobs?.hero, 'and its reference lands');
+    sess.stop?.();
+  }
+  // 4b. giving up on a hung PUT must END it: a timer that only stopped waiting
+  //     would let the retry (after the 5 s hold) write the same key while the
+  //     first request is still open, which is the concurrent write again
+  {
+    const relay = roomRelay({ roomA: 'hang' });
+    const doc = newDoc();
+    doc.docId = `offload-abort-${Math.random().toString(36).slice(2, 10)}`;
+    const store = new Store(doc);
+    const sess = new SyncSession(store);
+    (sess as unknown as { offloadPutTimeoutMs: number }).offloadPutTimeoutMs = 300;
+    sess.addTransport(roomTransport('roomA'));
+    store.commit(() => { (store.doc as unknown as { assets: Record<string, string> }).assets = { hero: big }; });
+    await settle(5600);                     // timeout 0.3 s + the 5 s hold
+    await editBurst(store, 1, 400);         // the retry
+    relay.restore();
+    ok(relay.puts.roomA === 2, `positive control: the hold expired and the asset was retried (${relay.puts.roomA ?? 0} PUTs)`);
+    ok(relay.live.max === 1, `the retry starts only after the hung PUT was aborted (max ${relay.live.max} open at once)`);
+    sess.stop?.();
+  }
+  // 5. a hold earned in one room does not delay the next room
+  {
+    const relay = roomRelay({ roomA: '507', roomB: 'ok' });
+    const doc = newDoc();
+    doc.docId = `offload-room-${Math.random().toString(36).slice(2, 10)}`;
+    const store = new Store(doc);
+    const sess = new SyncSession(store);
+    const trA = sess.addTransport(roomTransport('roomA'));
+    store.commit(() => { (store.doc as unknown as { assets: Record<string, string> }).assets = { hero: big }; });
+    await settle(200);
+    ok(relay.puts.roomA === 1, `positive control: room A refused it as full (${relay.puts.roomA ?? 0})`);
+    sess.removeTransport(trA);              // rotation: a fresh room
+    sess.addTransport(roomTransport('roomB'));
+    await editBurst(store, 3, 100);
+    await settle(200);
+    relay.restore();
+    ok((relay.puts.roomB ?? 0) === 1, `the new room gets the upload at once, not after room A's 5 min hold (${relay.puts.roomB ?? 0})`);
+    sess.stop?.();
+  }
 }
 
 // The shared doc-fields lists (kernel/src/docfields.ts) that every app imports:
