@@ -58,7 +58,6 @@ jobs:
         # WebKit's Mesa llvmpipe segfaulted on a few runner hosts (2026-11);
         # only the kernel log names the thread. Diagnostic only, never a verdict.
         if: failure()
-        shell: bash
         run: sudo dmesg -T | grep -iE 'segfault|oom|killed process' | tail -20 || echo "no segfault or OOM in the kernel log"
 
   home-web-engines:
@@ -96,5 +95,4 @@ jobs:
         # WebKit's Mesa llvmpipe segfaulted on a few runner hosts (2026-11);
         # only the kernel log names the thread. Diagnostic only, never a verdict.
         if: failure()
-        shell: bash
         run: sudo dmesg -T | grep -iE 'segfault|oom|killed process' | tail -20 || echo "no segfault or OOM in the kernel log"
