@@ -41,6 +41,13 @@ import { parseStrictJson, verifyAssertion, statementChallenge } from '../../../k
  */
 export const SIGNIN_ORIGIN = 'https://signin.id.bento.page'
 
+/**
+ * The directory's own origin, the relying party's host. It serves JSON and
+ * exactly one page, the void page a mailed void link opens (voidpage.js), and
+ * it is never a ceremony origin: it is NOT in the list below.
+ */
+export const DIRECTORY_ORIGIN = 'https://id.bento.page'
+
 export const PASSKEY = Object.freeze({
   rpId: 'id.bento.page',
   origins: Object.freeze({
