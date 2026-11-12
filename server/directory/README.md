@@ -166,7 +166,7 @@ Under option G a bento/id account is a **roster of passkeys** (the kernel's
 | `POST /v1/roster/setup` `{email, token, dirNonce, reg}` | the setup token + a registration over `dirNonce` | 200 with `ros.0` |
 | `POST /v1/roster/request` `{email, ros, credId, assertion, reg?, rq?}` | a member's assertion over `ros` (+ the new passkey's registration for an add) | 202 queued, or 200 for an immediate self-removal; 403 `cooldown` for 72 h after its last change was cancelled |
 | `GET /void`, `/void.js`, `/void.css` | none | the void page (below): fixed bytes, nothing read or changed |
-| `POST /v1/void` `{email, token, choice}` (60 an hour per IP) | the void token | `choice` `cancel`, `remove` or `undo`, as the token allows: 200 `{done}`; 400 `invalid` (wrong, used or spent token), 400 `choice` (not offered; the token is kept), 503 `mail` (Remove whose notice could not be sent: nothing changed) |
+| `POST /v1/void` `{email, token, choice}` (60 an hour per IP) | the void token | `choice` `cancel`, `remove` or `undo`, as the token allows: 200 `{done}`; 409 `late` `{at, by?}` (what it was for took effect; `by: 'reset'` when a reset did), 409 `used` `{at}`, 409 `preempted` `{at}` (a reset cancelled the change), 409 `busy` (another press or a reset holds the roster: try again), 400 `invalid` (a token the directory does not know), 400 `choice` (not offered; the token is kept), 503 `mail` (Remove whose notice could not be sent: nothing changed) |
 | `POST /v1/roster/reset/start` `{email}` (10 an hour per IP) | none | **always 202**; mails a reset link if the address has a roster, no reset waits, and no reset link is live |
 | `POST /v1/roster/reset` `{email, token, dirNonce, reg}` | the reset token + a registration over `dirNonce` | 202: the reset waits 72 h, preempting any waiting change |
 | `POST /v1/roster/reset/void` `{email, credId, assertion, dirNonce}` | a member's passkey | 409 `no-reset`, 403 `new-account` (first 14 days), 400 `signer`, 403 `quarantined`; otherwise **501** until the kernel defines what the passkey signs |
@@ -187,10 +187,27 @@ hours; the removal's own notice carries a link that puts it back). A reset
 offers Cancel only. A cancel never waits on the mailer; a Remove waits for
 its notice, since that carries the undo.
 
+**The hold.** A Remove and a reset send their mail BEFORE they act, so first
+they hold the roster, for the mailer's timeout and a margin: while the hold
+is on, the waiting change cannot take effect, and another press, a reset or a
+member's request is refused (`busy`, or `pending`) before any mail of its own
+goes. So every mail states an act that then happens. A mailer refusal takes
+the hold off. A send that outlives its hold (the object stopped) acts only if
+nothing changed meanwhile and no one else holds the roster.
+
+**Ended links.** The directory remembers the last 16 void links whose life
+ended, by their token's hash, and says how: `late` (with the time it took
+effect), `used`, or `preempted`. The page never says "Nothing changed" when it
+cannot know.
+
 **The reset (G5).** For someone who has lost every passkey: a mailed link
 (no budget holds it back; a live one holds the next back, and it lives a
 day) completes on the sign-in host with a new passkey, then waits 72 hours
-and preempts whatever change waits. It can be stopped from its own notice's
+and preempts whatever change waits. A waiting member change is cancelled for
+good; a waiting removal of a suspended passkey is only set aside: its undo
+link keeps working (the reset then starts its 72 hours again, since the chain
+takes no link asked for before the one before it took effect), and if the
+reset is stopped the removal waits again at its own time. It can be stopped from its own notice's
 link; by a member's passkey only once the account is 14 days old (from its
 setup; not built past the age rule yet). When it takes effect the roster is
 that one passkey. `GET /v1/roster` reports `createdAt` and `newAccount`.

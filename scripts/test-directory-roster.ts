@@ -46,6 +46,16 @@
 //   · what happens after a waiting notice's send touches the stored change
 //     only if it is still that request's (D1a), and the mailer has a timeout;
 //   · spent challenges are swept by the alarm once nobody spends.
+//   · F1: a Remove or a reset holds the roster before its mail goes, so the
+//     mail is always true: the change cannot ripen under it and every other
+//     void, reset or request is refused before mailing (security's P1-P8 as
+//     rows); a send that outlives its hold acts only if nothing moved and the
+//     hold is still its own; the reset link is single use;
+//   · F2: an ended void link answers late / used / preempted, from a bounded
+//     list of hashes;
+//   · C3: a reset sets a waiting removal aside; its undo works while the reset
+//     waits (the reset is asked again, so the chain verifies), and a stopped
+//     reset puts the removal back at its own time.
 
 import worker, { Roster } from '../server/directory/src/worker.js'
 import { Ledger } from '../server/directory/src/worker.js'
@@ -1413,7 +1423,8 @@ async function reset(email: string, a: Authn, token: string, o: { ch?: string; r
   ok(vl !== null && vl.address === gus && b64uDec(vl.token)?.length === 32 && vl.kind === 'c',
     `the waiting notice carries one void link on the directory, a 256-bit token in the fragment, both buttons (got ${vl ? vl.kind : 'none'})`)
   ok(!!wm && wm.body.includes(`${DIRECTORY_ORIGIN}/void#`) && !/\/void\?/.test(wm.body), 'the void link is on id.bento.page/void and carries its token in the fragment only')
-  ok(!!wm && wm.body.includes('choose Cancel') && wm.body.includes('Choose Remove only if you do not recognise the passkey that asked'), 'the waiting notice says which button to pick (G4c)')
+  ok(!!wm && wm.body.includes('your passkey was used for something you did not intend. Choose Cancel: it is always safe.') && wm.body.includes('Choose Remove only if you do not recognise the passkey that asked (named above)') && !wm.body.includes('usual cause'),
+    'the waiting notice says which button to pick, and never calls an unasked change benign (G4c, C6)')
   ok(!!wm && wm.body.includes(`asked for by the passkey ${await fingerprint(G1.pub)}, added`), 'the waiting notice names the passkey that asked, with its age')
   ok(!JSON.stringify([...(await rosterObj(gus)).store.values()]).includes(vl?.token ?? 'x'), 'the void token itself is never stored (only its hash)')
   // R1-burn: wrong guesses from twelve addresses, malformed ones too, spend nothing
@@ -1439,7 +1450,8 @@ async function reset(email: string, a: Authn, token: string, o: { ch?: string; r
   ok(c.status === 200 && c.j.done === 'cancelled' && c.j.until === now + 72 * HOUR, `Cancel with the real token after 12 wrong guesses and the mailer down: 200, cooldown until +72 h (got ${c.status} ${JSON.stringify(c.j)})`)
   const after = await current(gus)
   ok(after.pending === null && after.head?.seq === 1 && !after.head?.members.some((m) => m.pub === G3.pub), 'the change is gone and the head is unchanged')
-  ok((await voidPost(gus, (vl?.token ?? ''), 'cancel')).j.error === 'invalid', 'the same link again: refused (single use)')
+  const usedAgain = await voidPost(gus, (vl?.token ?? ''), 'cancel')
+  ok(usedAgain.status === 409 && usedAgain.j.error === 'used' && usedAgain.j.at === now, `the same link again: refused, and it says it was used, when (F2) (got ${usedAgain.status} ${JSON.stringify(usedAgain.j)})`)
   const G4 = await Authn.make()
   const cool = await request(gus, G1, { add: G4 })
   ok(cool.status === 403 && cool.j.error === 'cooldown', `the passkey that asked cannot ask again (cooldown) (got ${cool.status} ${cool.j.error})`)
@@ -1463,7 +1475,7 @@ async function reset(email: string, a: Authn, token: string, o: { ch?: string; r
   const late = voidIn(lastMail(gus))
   now += ROSTER_WAIT_MS
   const lv = await voidPost(gus, (late?.token ?? ''), 'cancel')
-  ok(lv.status === 400 && lv.j.error === 'invalid' && (await current(gus)).head?.members.some((m) => m.pub === G4.pub), 'a void after the change took effect: refused, the change stands')
+  ok(lv.status === 409 && lv.j.error === 'late' && lv.j.at === now && (await current(gus)).head?.members.some((m) => m.pub === G4.pub), `a void after the change took effect: refused as too late, with when; the change stands (F2) (got ${lv.status} ${JSON.stringify(lv.j)})`)
 }
 {
   // --- Remove: suspend (q) at once, removal (x) queued, undo (u) from its own mail (G4, G4a) ---
@@ -1503,7 +1515,7 @@ async function reset(email: string, a: Authn, token: string, o: { ch?: string; r
   const qa = await request(hal, H2, { remove: H1.pub })
   ok(qa.status === 409 && qa.j.error === 'pending', 'the suspended passkey cannot ask while its removal waits (pending; section 8 shows a ~q member refused as quarantined)')
   ok((await request(hal, H1, { add: await Authn.make() })).j.error === 'pending', 'while the removal waits, another change is refused (pending)')
-  ok((await voidPost(hal, (vl?.token ?? ''), 'cancel')).j.error === 'invalid', 'the change\'s link is spent: its suspended requester holds no way to stop its own removal')
+  ok((await voidPost(hal, (vl?.token ?? ''), 'cancel')).j.error === 'used', 'the change\'s link is spent (used): its suspended requester holds no way to stop its own removal')
   const sm = mailsTo(hal).filter((m) => m.kind === 'void').pop()
   const ul = voidIn(sm)
   ok(!!sm && /suspended/.test(sm.subject) && ul?.kind === 'u' && sm.body.includes(await fingerprint(H2.pub)) && sm.body.includes(`removed from this account at ${when(t0 + ROSTER_WAIT_MS)}`),
@@ -1522,7 +1534,7 @@ async function reset(email: string, a: Authn, token: string, o: { ch?: string; r
   ok(urip.ok && urip.value.auth === 'u' && urip.value.cause === await sha256b64u(qh.text) && urip.value.ripenedAt === t1, `the undo's rip. is word u, cause = the q head's hash (got ${urip.ok ? urip.value.auth : urip.reason})`)
   const chu = await chainOf(hal)
   ok(chu.ok && chu.value.members.every((m) => !m.quarantined), `the kernel accepts the chain through q and u (${chu.ok ? 'ok' : chu.reason})`)
-  ok((await voidPost(hal, (ul?.token ?? ''), 'undo')).j.error === 'invalid', 'the undo link works once')
+  ok((await voidPost(hal, (ul?.token ?? ''), 'undo')).j.error === 'used', 'the undo link works once (used)')
   ok((await request(hal, H2, { add: HA })).status === 202, 'H2 may ask again at once (Remove sets no cooldown; undo restores it fully)')
   ok((lastMail(hal)?.subject ?? '') !== '' && mailsTo(hal).some((m) => m.kind === 'void' && /put back/.test(m.subject)), 'the undo is mailed')
 
@@ -1554,6 +1566,7 @@ async function reset(email: string, a: Authn, token: string, o: { ch?: string; r
   const wm = lastMail(ida)
   const vl = voidIn(wm)
   ok(vl?.kind === 'o' && !!wm && wm.body.includes('one choice, Cancel') && !wm.body.includes('Choose Remove'), `with one passkey, the link offers Cancel only (got ${vl?.kind})`)
+  ok(!!wm && wm.body.includes('would leave the account with no usable passkey (only a reset gets back in)') && !wm.body.includes('lock you out'), 'and says what removing it would do in words true for whoever holds it (C6)')
   // an edited link (k=c) shows the button; the directory refuses it, and the token survives
   const forced = await voidPost(ida, (vl?.token ?? ''), 'remove')
   ok(forced.status === 400 && forced.j.error === 'choice' && (await current(ida)).head?.members[0]?.quarantined === false, 'Remove on that token: refused (choice); nothing suspended')
@@ -1595,6 +1608,7 @@ async function reset(email: string, a: Authn, token: string, o: { ch?: string; r
 
   // --- the reset: complete, preempt, notices ---
   const J3 = await Authn.make()
+  const preAt = now
   await request(jo, J1, { add: J3 })
   const prev = voidIn(lastMail(jo))
   ok((await current(jo)).pending?.kind === 'member', 'a member change waits on jo')
@@ -1610,7 +1624,8 @@ async function reset(email: string, a: Authn, token: string, o: { ch?: string; r
   ok(rs.status === 202 && rs.j.ripensAt === ra + ROSTER_WAIT_MS, `reset with the real token after six guesses: 202, in force at +72 h (got ${rs.status} ${JSON.stringify(rs.j)})`)
   const rp = await current(jo)
   ok(rp.pending?.kind === 'reset' && rp.head?.seq === 0 && rp.head?.members[0]?.pub === J1.pub, 'the reset waits; the head is unchanged')
-  ok((await voidPost(jo, (prev?.token ?? ''), 'cancel')).j.error === 'invalid', 'the reset preempted the member change: its link is dead (G5)')
+  const pre = await voidPost(jo, (prev?.token ?? ''), 'cancel')
+  ok(pre.status === 409 && pre.j.error === 'preempted' && pre.j.at === ra, `the reset preempted the member change: its link is dead, and says a reset cancelled it (G5, F2) (got ${pre.status} ${JSON.stringify(pre.j)})`)
   const rm = lastMail(jo)
   const rvl = voidIn(rm)
   ok(!!rm && rm.kind === 'reset' && /reset/.test(rm.subject) && rvl?.kind === 'r', 'the reset notice carries a void link offering Cancel only')
@@ -1624,7 +1639,11 @@ async function reset(email: string, a: Authn, token: string, o: { ch?: string; r
   ok((await voidPost(jo, (rvl?.token ?? ''), 'remove')).j.error === 'choice' && (await voidPost(jo, (rvl?.token ?? ''), 'undo')).j.error === 'choice', 'the reset\'s link refuses remove and undo (choice)')
   const rc = await voidPost(jo, (rvl?.token ?? ''), 'cancel')
   ok(rc.status === 200 && rc.j.until === null && (await current(jo)).pending === null && (await current(jo)).head?.members[0]?.pub === J1.pub, 'Cancel stops the reset; nothing changed')
-  ok(mailsTo(jo).some((m) => m.kind === 'void' && /reset/.test(m.subject) && /stopped/.test(m.subject)), 'the stop is mailed')
+  const stopM = mailsTo(jo).find((m) => m.kind === 'void' && /reset/.test(m.subject) && /stopped/.test(m.subject))
+  ok(!!stopM, 'the stop is mailed')
+  ok(!!stopM && stopM.body.includes(`The change that was waiting when the reset was asked for, asked for at ${when(preAt)}, stays cancelled. Ask for it again if you still want it.`),
+    'the stop mail says the change the reset cancelled stays cancelled (ruling 1)')
+  ok(!!rm && rm.body.includes('Stopping the reset does not bring it back.') && !rm.body.includes('your passkeys stay as they are'), 'the reset notice says stopping it does not bring the cancelled change back')
 
   // --- the reset ripens (r) ---
   now += ROSTER_LIMITS.resetTtlMs + 1000
@@ -1632,6 +1651,7 @@ async function reset(email: string, a: Authn, token: string, o: { ch?: string; r
   const J4 = await Authn.make()
   const rb = now
   ok((await reset(jo, J4, (r4.token ?? ''))).status === 202, 'a second reset')
+  ok(lastMail(jo)?.body.includes('Stopping it changes nothing else: your passkeys stay as they are.') === true, 'with nothing waiting, the reset notice says stopping it changes nothing else')
   const second = await resetToken(jo)
   ok(second.token === null, 'no reset link goes while one waits')
   now = rb + ROSTER_WAIT_MS - 1000
@@ -1657,7 +1677,7 @@ async function reset(email: string, a: Authn, token: string, o: { ch?: string; r
   now += DAY
   const kai = 'sd2-kai@example.com'
   const [K1, K2] = await twoKeys(kai)
-  const setAt = (await head(kai)).j.createdAt as number
+  const setAt = Number((await head(kai)).j.createdAt ?? now) // never NaN into the clock
   ok((await head(kai)).j.newAccount === true, 'a 3-day-old account is a new account')
   const rvoid = async (who: Authn, credId?: string) => {
     const ch = await challenge(kai)
@@ -1689,6 +1709,446 @@ async function reset(email: string, a: Authn, token: string, o: { ch?: string; r
   ok((await rvoid(K2)).j.error === 'quarantined', 'a suspended member: refused (quarantined)')
   ok((await pendOf(kai))?.kind === 'reset', 'none of those touched the waiting reset')
   ok(ROSTER_LIMITS.newAccountMs === 14 * DAY && ROSTER_LIMITS.voidCooldownMs === 72 * HOUR && ROSTER_LIMITS.resetTtlMs === DAY, 'pinned: new account 14 days, cooldown 72 h, reset link a day')
+}
+// ---------------------------------------------------------------------
+// F1: the HOLD. A Remove or a reset holds the roster BEFORE its mail goes, so
+// the mail never states an act that then fails to happen (security's P1-P8).
+// ---------------------------------------------------------------------
+/** Every send hangs until its own release, in arrival order, until `stop()`. */
+function hangEach() {
+  const calls: { m: Mail; release: (ok: boolean) => void }[] = []
+  mailHook = (m) => new Promise<void>((res, rej) => {
+    calls.push({ m, release: (good) => { if (good) { mailbox.push(m); res() } else rej(new Error('mailer failed late')) } })
+  })
+  const has = async (n: number) => { for (let i = 0; i < 200 && calls.length < n; i++) await new Promise((r) => setTimeout(r, 10)); return calls.length >= n }
+  return { calls, has, stop: () => { mailHook = null } }
+}
+/** The waiting change's time, never NaN (a mutant that stops every change must fail rows, not poison the clock). */
+const ripensOf = async (e: string) => Number((await pendOf(e))?.ripensAt ?? now + ROSTER_WAIT_MS)
+const quarantinedIn = (c: Awaited<ReturnType<typeof current>>, pub: string) => c.head?.members.find((m) => m.pub === pub)?.quarantined
+{
+  // P1: Remove pressed 5 s before the change ripens; its mail outlasts the deadline; the alarm fires meanwhile
+  now += DAY
+  const e = 'sd2c-p1@example.com'
+  const [, A2] = await twoKeys(e)
+  const X = await Authn.make()
+  await request(e, A2, { add: X })
+  const v = voidIn(lastMail(e))
+  const rp = await ripensOf(e)
+  now = rp - 5000
+  const n0 = mailbox.length
+  const h = hangNext()
+  const pr = voidPost(e, v?.token ?? '', 'remove')
+  ok(await reached(h), 'P1: the Remove is in its send, 5 s before the change ripens')
+  const hold = (await rosterObj(e)).store.get('hold') as { until: number } | undefined
+  ok(!!hold && hold.until === now + ROSTER_LIMITS.holdMs && ROSTER_LIMITS.holdMs === MAIL_TIMEOUT_MS + 5000, 'P1: the roster is held before the mail goes, for the mailer\'s timeout and a margin')
+  now = rp
+  const o = await rosterObj(e)
+  await fire(o)
+  ok((await pendOf(e))?.kind === 'member' && o.alarm === hold?.until, `P1: at the deadline the alarm leaves the held change waiting, and comes back when the hold ends (got ${o.alarm === null ? 'no alarm' : `${o.alarm - now} ms on`})`)
+  h.release(true)
+  const r = await pr
+  const c = await current(e)
+  const sent = mailbox.slice(n0)
+  ok(r.status === 200 && r.j.done === 'suspended', `P1: the Remove pressed before the deadline acts (got ${r.status} ${JSON.stringify(r.j)})`)
+  ok(!c.head?.members.some((m) => m.pub === X.pub) && quarantinedIn(c, A2.pub) === true && c.pending?.kind === 'removal', 'P1: X was never added; A2 is suspended and its removal waits')
+  ok(sent.length === 1 && /suspended/.test(sent[0]?.subject ?? ''), `P1: one mail, and what it says happened (${sent.map((m) => m.subject).join(' | ')})`)
+  ok((await rosterObj(e)).store.get('hold') === undefined, 'P1: the hold is off once the Remove is done')
+  ok((await voidPost(e, voidIn(sent[0])?.token ?? '', 'undo')).j.done === 'restored', 'P1: the undo link in that mail works')
+  const ch = await chainOf(e)
+  ok(ch.ok, `P1: the kernel accepts the chain (${ch.ok ? 'ok' : ch.reason})`)
+}
+{
+  // P2: two Remove presses on one token (two tabs, a retry)
+  now += DAY
+  const e = 'sd2c-p2@example.com'
+  const [, B2] = await twoKeys(e)
+  await request(e, B2, { add: await Authn.make() })
+  const v = voidIn(lastMail(e))
+  const n0 = mailbox.length
+  const h = hangNext()
+  const p1 = voidPost(e, v?.token ?? '', 'remove')
+  await reached(h)
+  const r2 = await voidPost(e, v?.token ?? '', 'remove')
+  const mid = mailbox.length
+  h.release(true)
+  const r1 = await p1
+  const sm = mailbox.slice(n0).filter((m) => /suspended/.test(m.subject))
+  ok(r2.status === 409 && r2.j.error === 'busy' && mid === n0, `P2: a second Remove while the first one's mail goes: refused (busy) before any mail (got ${r2.status} ${JSON.stringify(r2.j)})`)
+  ok(r1.status === 200 && sm.length === 1, `P2: the first acts, and one 'suspended' mail goes (${sm.length})`)
+  ok((await voidPost(e, voidIn(sm[0])?.token ?? '', 'undo')).j.done === 'restored', 'P2: that mail\'s undo link is the one that works')
+}
+{
+  // P3: Cancel while a Remove's mail goes (two buttons, two tabs)
+  now += DAY
+  const e = 'sd2c-p3@example.com'
+  const [, C2] = await twoKeys(e)
+  await request(e, C2, { add: await Authn.make() })
+  const v = voidIn(lastMail(e))
+  const n0 = mailbox.length
+  const h = hangNext()
+  const p1 = voidPost(e, v?.token ?? '', 'remove')
+  await reached(h)
+  const rc = await voidPost(e, v?.token ?? '', 'cancel')
+  h.release(true)
+  const r1 = await p1
+  const c = await current(e)
+  const subj = mailbox.slice(n0).map((m) => m.subject)
+  ok(rc.status === 409 && rc.j.error === 'busy', `P3: Cancel while the Remove's mail goes: refused (busy) (got ${rc.status} ${JSON.stringify(rc.j)})`)
+  ok(r1.status === 200 && quarantinedIn(c, C2.pub) === true && subj.length === 1 && /suspended/.test(subj[0] ?? ''), `P3: the Remove stands, and its mail is the only one (${subj.join(' | ')})`)
+  ok((await voidPost(e, v?.token ?? '', 'cancel')).j.error === 'used', 'P3: Cancel pressed again: the link says it was used')
+}
+{
+  // a member's request while a reset's mail goes, with nothing else waiting
+  now += DAY
+  const e = 'sd2c-mq@example.com'
+  const [M1] = await twoKeys(e)
+  const t = await resetToken(e)
+  const h = hangNext()
+  const pr = reset(e, await Authn.make(), t.token ?? '')
+  ok(await reached(h), 'a reset is in its send, with nothing else waiting')
+  const n0 = mailbox.length
+  const q = await request(e, M1, { add: await Authn.make() })
+  ok(q.status === 409 && q.j.error === 'pending' && mailbox.length === n0, `a member asks meanwhile: refused (pending), no mail (got ${q.status} ${JSON.stringify(q.j)})`)
+  h.release(true)
+  ok((await pr).status === 202 && (await pendOf(e))?.kind === 'reset', 'the reset is queued')
+}
+{
+  // P7: a reset completed 5 s before a member change ripens; the change would ripen during the reset's notice
+  now += DAY
+  const e = 'sd2c-p7@example.com'
+  const [F1] = await twoKeys(e)
+  const X = await Authn.make()
+  await request(e, F1, { add: X })
+  const mv = voidIn(lastMail(e))
+  const rp = await ripensOf(e)
+  now = rp - 5000
+  const t = await resetToken(e)
+  const n0 = mailbox.length
+  const h = hangNext()
+  const pr = reset(e, await Authn.make(), t.token ?? '')
+  ok(await reached(h), 'P7: the reset is in its send, 5 s before the member change ripens')
+  now = rp
+  await fire(await rosterObj(e))
+  ok((await pendOf(e))?.kind === 'member', 'P7: at the deadline the held change does not take effect')
+  h.release(true)
+  const r = await pr
+  const c = await current(e)
+  const sent = mailbox.slice(n0)
+  ok(r.status === 202 && c.pending?.kind === 'reset' && !c.head?.members.some((m) => m.pub === X.pub), `P7: the reset is queued, and the change it cancelled never took effect (got ${r.status} ${JSON.stringify(r.j).slice(0, 60)})`)
+  ok(sent.length === 1 && /reset/.test(sent[0]?.subject ?? '') && (sent[0]?.body ?? '').includes('A change that was waiting is cancelled by this reset.'), `P7: one mail, and it is true (${sent.map((m) => m.subject).join(' | ')})`)
+  const pv = await voidPost(e, mv?.token ?? '', 'cancel')
+  ok(pv.status === 409 && pv.j.error === 'preempted', `P7: the cancelled change's link says a reset cancelled it (got ${pv.status} ${JSON.stringify(pv.j)})`)
+  ok((await chainOf(e)).ok, 'P7: the kernel accepts the chain')
+}
+{
+  // P8: two reset completions with one link at once (two browsers)
+  now += DAY
+  const e = 'sd2c-p8@example.com'
+  await twoKeys(e)
+  const t = await resetToken(e)
+  const n0 = mailbox.length
+  const h = hangNext()
+  const K1 = await Authn.make(), K2 = await Authn.make()
+  const p1 = reset(e, K1, t.token ?? '')
+  await reached(h)
+  const r2 = await reset(e, K2, t.token ?? '')
+  h.release(true)
+  const r1 = await p1
+  const waiting = mailbox.slice(n0).filter((m) => /waiting/.test(m.subject))
+  ok(r2.status === 409 && r2.j.error === 'busy', `P8: a second completion while the first one's mail goes: refused (busy) (got ${r2.status} ${JSON.stringify(r2.j).slice(0, 60)})`)
+  ok(r1.status === 202 && (await pendOf(e) as { change?: { pub?: string } } | undefined)?.change?.pub === K1.pub && waiting.length === 1, `P8: the first is queued, and one 'reset waiting' mail goes (${waiting.length})`)
+}
+{
+  // F1b, line 820: the reset link is single use, even once its reset was stopped
+  now += DAY
+  const e = 'sd2c-once@example.com'
+  await twoKeys(e)
+  const t = await resetToken(e)
+  ok((await reset(e, await Authn.make(), t.token ?? '')).status === 202, 'a reset is queued from its link')
+  ok((await voidPost(e, voidIn(lastMail(e))?.token ?? '', 'cancel')).j.done === 'cancelled', 'and stopped from its own void link')
+  const again = await reset(e, await Authn.make(), t.token ?? '')
+  ok(again.status === 400 && again.j.error === 'token', `the same reset link cannot complete a second reset (got ${again.status} ${JSON.stringify(again.j).slice(0, 60)})`)
+}
+{
+  // F1b, line 734: a Remove whose send outlived its hold (the object stalled), the change in effect meanwhile
+  now += DAY
+  const e = 'sd2c-r734@example.com'
+  const [, A2] = await twoKeys(e)
+  const X = await Authn.make()
+  await request(e, A2, { add: X })
+  const v = voidIn(lastMail(e))
+  const rp = await ripensOf(e)
+  now = rp - 5000
+  const before = await current(e)
+  const h = hangNext()
+  const pr = voidPost(e, v?.token ?? '', 'remove')
+  await reached(h)
+  now = rp - 5000 + ROSTER_LIMITS.holdMs // the hold has lapsed and the deadline is past
+  await fire(await rosterObj(e))
+  h.release(true)
+  const r = await pr
+  const c = await current(e)
+  ok(r.status === 409 && r.j.error === 'late' && r.j.at === now, `the stalled Remove, after the change took effect: refused as too late (got ${r.status} ${JSON.stringify(r.j)})`)
+  ok(c.head?.seq === (before.head?.seq ?? -9) + 1 && c.head?.members.some((m) => m.pub === X.pub) && quarantinedIn(c, A2.pub) === false && c.pending === null,
+    'nothing was suspended over the change that took effect')
+  const ch = await chainOf(e)
+  ok(ch.ok, `the kernel accepts the chain (${ch.ok ? 'ok' : ch.reason})`)
+}
+{
+  // F1b, line 813: a reset whose send outlived its hold, a member change in effect meanwhile
+  now += DAY
+  const e = 'sd2c-r813@example.com'
+  const [F1] = await twoKeys(e)
+  const X = await Authn.make()
+  await request(e, F1, { add: X })
+  const rp = await ripensOf(e)
+  now = rp - 5000
+  const t = await resetToken(e)
+  const h = hangNext()
+  const pr = reset(e, await Authn.make(), t.token ?? '')
+  await reached(h)
+  now = rp - 5000 + ROSTER_LIMITS.holdMs
+  await fire(await rosterObj(e))
+  h.release(true)
+  const r = await pr
+  const c = await current(e)
+  ok(r.status === 409 && r.j.error === 'superseded' && c.pending === null && c.head?.members.some((m) => m.pub === X.pub), `the stalled reset, over a head that moved: nothing queued (got ${r.status} ${JSON.stringify(r.j).slice(0, 60)})`)
+  ok((await chainOf(e)).ok, 'the kernel accepts the chain')
+  ok((await reset(e, await Authn.make(), t.token ?? '')).status === 202, 'the reset that did not happen did not spend its link')
+}
+{
+  // whose hold: a Remove stalls past its hold; a reset takes the roster and is in its send when the Remove's ends
+  now += DAY
+  const e = 'sd2c-own1@example.com'
+  const [, A2] = await twoKeys(e)
+  await request(e, A2, { add: await Authn.make() })
+  const v = voidIn(lastMail(e))
+  const t = await resetToken(e)
+  const hq = hangEach()
+  const prm = voidPost(e, v?.token ?? '', 'remove')
+  ok(await hq.has(1), 'a Remove is in its send')
+  now += ROSTER_LIMITS.holdMs
+  const prr = reset(e, await Authn.make(), t.token ?? '')
+  ok(await hq.has(2), 'its hold lapses; a reset takes the roster and is in its own send')
+  hq.calls[0]?.release(true)
+  const rm = await prm
+  ok(rm.status === 409 && rm.j.error === 'busy' && (await current(e)).head?.members.every((m) => !m.quarantined), `the stalled Remove finds the hold is another's: refused (busy), nothing suspended (got ${rm.status} ${JSON.stringify(rm.j)})`)
+  hq.calls[1]?.release(true)
+  hq.stop()
+  const rr = await prr
+  ok(rr.status === 202 && (await pendOf(e))?.kind === 'reset', `the reset that holds the roster is queued (got ${rr.status})`)
+  ok((await chainOf(e)).ok, 'the kernel accepts the chain')
+}
+{
+  // whose hold, the other way: a reset stalls past its hold; a Remove takes the roster
+  now += DAY
+  const e = 'sd2c-own2@example.com'
+  const [, A2] = await twoKeys(e)
+  await request(e, A2, { add: await Authn.make() })
+  const v = voidIn(lastMail(e))
+  const t = await resetToken(e)
+  const hq = hangEach()
+  const prr = reset(e, await Authn.make(), t.token ?? '')
+  ok(await hq.has(1), 'a reset is in its send')
+  now += ROSTER_LIMITS.holdMs
+  const prm = voidPost(e, v?.token ?? '', 'remove')
+  ok(await hq.has(2), 'its hold lapses; a Remove takes the roster and is in its own send')
+  hq.calls[0]?.release(true)
+  const rr = await prr
+  ok(rr.status === 409 && rr.j.error === 'busy' && (await pendOf(e))?.kind === 'member', `the stalled reset finds the hold is another's: refused (busy), nothing queued (got ${rr.status} ${JSON.stringify(rr.j).slice(0, 60)})`)
+  hq.calls[1]?.release(true)
+  hq.stop()
+  const rm = await prm
+  ok(rm.status === 200 && quarantinedIn(await current(e), A2.pub) === true, `the Remove that holds the roster acts (got ${rm.status})`)
+  ok((await chainOf(e)).ok, 'the kernel accepts the chain')
+}
+{
+  // whose hold, once more: a stalled Remove whose change took effect leaves alone the hold a reset now has
+  now += DAY
+  const e = 'sd2c-own3@example.com'
+  const [, A2] = await twoKeys(e)
+  await request(e, A2, { add: await Authn.make() })
+  const v = voidIn(lastMail(e))
+  const rp = await ripensOf(e)
+  now = rp - 5000
+  const t = await resetToken(e)
+  const hq = hangEach()
+  const prm = voidPost(e, v?.token ?? '', 'remove')
+  ok(await hq.has(1), 'a Remove is in its send, 5 s before the change ripens')
+  now = rp - 5000 + ROSTER_LIMITS.holdMs
+  const fired = fire(await rosterObj(e))
+  ok(await hq.has(2), 'its hold lapses, and the change takes effect')
+  hq.calls[1]?.release(true) // the change's own "in effect" mail
+  await fired
+  const prr = reset(e, await Authn.make(), t.token ?? '')
+  ok(await hq.has(3), 'a reset takes the roster and is in its send')
+  hq.calls[0]?.release(true)
+  const rm = await prm
+  ok(rm.status === 409 && rm.j.error === 'late', `the stalled Remove: too late (got ${rm.status} ${JSON.stringify(rm.j)})`)
+  hq.calls[2]?.release(true)
+  hq.stop()
+  const rr = await prr
+  ok(rr.status === 202 && (await pendOf(e))?.kind === 'reset', `the reset, whose hold the Remove left alone, is queued (got ${rr.status} ${JSON.stringify(rr.j).slice(0, 60)})`)
+}
+
+// ---------------------------------------------------------------------
+// F2: a link whose life ended says how: too late, used, or cancelled by a reset
+// ---------------------------------------------------------------------
+for (const d of [-1, 0]) {
+  // P5: Cancel a millisecond before the deadline, and at it, before the alarm has run
+  now += DAY
+  const e = `sd2c-p5${d}@example.com`
+  const [D1] = await twoKeys(e)
+  const X = await Authn.make()
+  await request(e, D1, { add: X })
+  const v = voidIn(lastMail(e))
+  const rp = await ripensOf(e)
+  now = rp + d
+  const r = await voidPost(e, v?.token ?? '', 'cancel')
+  const inForce = (await current(e)).head?.members.some((m) => m.pub === X.pub)
+  if (d < 0) ok(r.j.done === 'cancelled' && !inForce, 'P5: Cancel a millisecond before the deadline: cancelled')
+  else ok(r.status === 409 && r.j.error === 'late' && r.j.at === rp && inForce === true, `P5: Cancel at the deadline: too late, with the time it took effect (got ${r.status} ${JSON.stringify(r.j)})`)
+}
+{
+  // P10: undo after the removal took effect
+  now += DAY
+  const e = 'sd2c-p10@example.com'
+  const [, H2] = await twoKeys(e)
+  await request(e, H2, { add: await Authn.make() })
+  await voidPost(e, voidIn(lastMail(e))?.token ?? '', 'remove')
+  const u = voidIn(mailsTo(e).filter((m) => /suspended/.test(m.subject)).pop())
+  const ra = now + ROSTER_WAIT_MS
+  now = ra
+  const r = await voidPost(e, u?.token ?? '', 'undo')
+  ok(r.status === 409 && r.j.error === 'late' && r.j.at === ra && r.j.by === undefined, `P10: undo at +72 h: too late, with the time the removal took effect (got ${r.status} ${JSON.stringify(r.j)})`)
+}
+{
+  // the directory remembers a bounded number of ended links, by hash only
+  now += DAY
+  const e = 'sd2c-keep@example.com'
+  const [K1] = await twoKeys(e)
+  await plant(e, (st) => st.set('ended', Array.from({ length: ROSTER_LIMITS.endedKeep }, (_, i) => ({ h: `old${i}`, why: 'used', at: i }))))
+  await request(e, K1, { add: await Authn.make() })
+  const v = voidIn(lastMail(e))
+  await voidPost(e, v?.token ?? '', 'cancel')
+  const list = ((await rosterObj(e)).store.get('ended') ?? []) as { h: string }[]
+  ok(ROSTER_LIMITS.endedKeep === 16 && list.length === 16 && list[0]?.h === 'old1' && (await voidPost(e, v?.token ?? '', 'cancel')).j.error === 'used',
+    `the directory remembers the last 16 ended links and no more (${list.length})`)
+  ok(!JSON.stringify(list).includes(v?.token ?? 'x'), 'an ended link is remembered by its hash, never its token')
+}
+
+// ---------------------------------------------------------------------
+// C3: G4a survives a reset. The removal's undo link keeps working while a
+// reset waits, and a stopped reset puts the removal back with its undo link.
+// ---------------------------------------------------------------------
+/** P4's start: the person's own P1, an attacker's A already a member, 15 days on; a wrong Remove suspends P1. */
+async function p4start(e: string) {
+  const P1 = await Authn.make(), A = await Authn.make()
+  await setup(e, P1)
+  await request(e, P1, { add: A })
+  now += ROSTER_WAIT_MS
+  await current(e)
+  now += 15 * DAY
+  await request(e, P1, { add: await Authn.make() }) // a hostile page stages "add B" with the person's own passkey
+  const rm = await voidPost(e, voidIn(lastMail(e))?.token ?? '', 'remove')
+  const undo = voidIn(mailsTo(e).filter((m) => /suspended/.test(m.subject)).pop())
+  return { P1, A, rm, undo, removesAt: Number(rm.j.removesAt ?? now + ROSTER_WAIT_MS) }
+}
+async function p4reset(e: string) {
+  const t = await resetToken(e)
+  const RK = await Authn.make()
+  const r = await reset(e, RK, t.token ?? '')
+  return { RK, r, mail: lastMail(e) }
+}
+{
+  // P4 as security wrote it: the undo after the reset, then the reset cancelled
+  now += DAY
+  const e = 'sd2c-p4@example.com'
+  const { P1, A, rm, undo } = await p4start(e)
+  ok(rm.j.done === 'suspended', 'P4: the wrong Remove suspends the person\'s own P1 (the attacker\'s A is a member)')
+  const { r, mail } = await p4reset(e)
+  ok(r.status === 202 && typeof ((await pendOf(e))?.parked as { voidTok?: string } | undefined)?.voidTok === 'string', 'P4: a reset while the removal waits sets the removal aside')
+  ok(!!mail && mail.body.includes('which was waiting, is set aside while this reset waits. The link that puts that passkey back still works') && !mail.body.includes('is cancelled by this reset'),
+    'P4: the reset notice says so, and that the undo link still works')
+  now += HOUR
+  const tu = now
+  const un = await voidPost(e, undo?.token ?? '', 'undo')
+  const c1 = await current(e)
+  ok(un.status === 200 && un.j.done === 'restored' && un.j.resetAt === tu + ROSTER_WAIT_MS, `P4: the undo link works while the reset waits (got ${un.status} ${JSON.stringify(un.j)})`)
+  ok(quarantinedIn(c1, P1.pub) === false && c1.pending?.kind === 'reset' && c1.pending.requestedAt === tu && c1.pending.ripensAt === tu + ROSTER_WAIT_MS,
+    'P4: P1 is back at once; the reset carries on, asked again on the new head, so its 72 hours start again')
+  const um = mailsTo(e).filter((m) => /put back/.test(m.subject)).pop()
+  ok(!!um && um.body.includes(`The reset of this account that is waiting now takes effect at ${when(tu + ROSTER_WAIT_MS)}`), 'P4: the undo mail says when the reset now takes effect')
+  const rc = await voidPost(e, voidIn(mail)?.token ?? '', 'cancel')
+  const c2 = await current(e)
+  ok(rc.j.done === 'cancelled' && c2.pending === null && quarantinedIn(c2, P1.pub) === false && c2.head?.members.some((m) => m.pub === A.pub), 'P4: the reset is cancelled from its link: P1 stays restored')
+  ok((await request(e, P1, { remove: A.pub })).status === 202, 'P4: and P1 can ask for A\'s removal')
+  const ch = await chainOf(e)
+  ok(ch.ok, `P4: the kernel accepts the chain through q and u (${ch.ok ? 'ok' : ch.reason})`)
+}
+{
+  // P4, the reset taking effect after the undo: the chain runs q, u, r
+  now += DAY
+  const e = 'sd2c-p4r@example.com'
+  const { undo } = await p4start(e)
+  const { RK } = await p4reset(e)
+  now += HOUR
+  await voidPost(e, undo?.token ?? '', 'undo')
+  now = await ripensOf(e)
+  await fire(await rosterObj(e))
+  const c = await current(e)
+  ok(c.head?.members.length === 1 && c.head.members[0]?.pub === RK.pub && c.pending === null, 'P4r: the reset, asked again at the undo, takes effect at its new time')
+  const ch = await chainOf(e)
+  ok(ch.ok, `P4r: the kernel accepts the chain through q, u and r (${ch.ok ? 'ok' : ch.reason})`)
+}
+{
+  // P4b: the reset is stopped first: the removal waits again, at its own time, with its own undo link
+  now += DAY
+  const e = 'sd2c-p4b@example.com'
+  const { P1, undo, removesAt } = await p4start(e)
+  const { mail } = await p4reset(e)
+  now += HOUR
+  const rc = await voidPost(e, voidIn(mail)?.token ?? '', 'cancel')
+  const p = await pendOf(e)
+  ok(rc.j.done === 'cancelled' && rc.j.removesAt === removesAt && p?.kind === 'removal' && p?.ripensAt === removesAt,
+    `P4b: stopping the reset puts the removal back, at its own time (got ${JSON.stringify(rc.j)}, ${String(p?.kind)})`)
+  const sm = mailsTo(e).filter((m) => /stopped/.test(m.subject)).pop()
+  ok(!!sm && sm.body.includes('which the reset had set aside, is waiting again: it takes effect at ' + when(removesAt)), 'P4b: the stop mail says the removal waits again, and until when its link puts the passkey back')
+  const un = await voidPost(e, undo?.token ?? '', 'undo')
+  const c = await current(e)
+  ok(un.j.done === 'restored' && quarantinedIn(c, P1.pub) === false && c.pending === null, `P4b: the original undo link puts P1 back (got ${JSON.stringify(un.j)})`)
+  const ch = await chainOf(e)
+  ok(ch.ok, `P4b: the kernel accepts the chain (${ch.ok ? 'ok' : ch.reason})`)
+}
+{
+  // P4c: the reset is stopped after the removal's own time: the removal takes effect at once
+  now += DAY
+  const e = 'sd2c-p4c@example.com'
+  const { P1, removesAt } = await p4start(e)
+  now += 2 * HOUR // the reset waits past the removal's own time
+  const { mail } = await p4reset(e)
+  now = removesAt + HOUR
+  const rc = await voidPost(e, voidIn(mail)?.token ?? '', 'cancel')
+  ok(rc.j.done === 'cancelled' && rc.j.removesAt === now, `P4c: stopped after the removal's time: the removal is due at once (got ${JSON.stringify(rc.j)})`)
+  await fire(await rosterObj(e))
+  const c = await current(e)
+  ok(!c.head?.members.some((m) => m.pub === P1.pub) && c.pending === null, 'P4c: the alarm removes P1')
+  const ch = await chainOf(e)
+  ok(ch.ok, `P4c: the kernel accepts the chain through q and x (${ch.ok ? 'ok' : ch.reason})`)
+}
+{
+  // the reset takes effect while a removal is set aside: the undo link says too late, by the reset
+  now += DAY
+  const e = 'sd2c-p4l@example.com'
+  const { undo } = await p4start(e)
+  await p4reset(e)
+  const ra = await ripensOf(e)
+  now = ra
+  await fire(await rosterObj(e))
+  const r = await voidPost(e, undo?.token ?? '', 'undo')
+  ok(r.status === 409 && r.j.error === 'late' && r.j.by === 'reset' && r.j.at === ra, `the set-aside removal's undo after the reset took effect: too late, by the reset (got ${r.status} ${JSON.stringify(r.j)})`)
+  ok((await chainOf(e)).ok, 'the kernel accepts the chain through q and r')
 }
 {
   // --- the void page: the one HTML answer, under its own headers ---

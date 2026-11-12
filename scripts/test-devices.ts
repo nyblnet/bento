@@ -15,12 +15,13 @@
 import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { verifyRosterChain, ROSTER_PREFIXES, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, type RosterLink } from '../kernel/src/roster.ts'
+import { verifyRosterChain, parseRos, parseRip, ROSTER_PREFIXES, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, type RosterLink } from '../kernel/src/roster.ts'
 import {
-  verifyDevice, verifyWren, parseDeviceCert, tierOf, buildDeviceCert, parseWatt, buildWatt,
+  verifyDevice, verifyWren, verifyWret, verifyInc, insideIncident, parseDeviceCert, tierOf, buildDeviceCert, parseWatt, buildWatt,
   DEVICE_PREFIXES, WATT_MAX_MS, CEREMONY_CAP_MS, CK_RIPE_MS, MAX_LABEL, type DeviceProof,
 } from '../kernel/src/devices.ts'
-import { RESERVED_PREFIXES, LINK_PREFIXES } from '../kernel/src/statements.ts'
+import { RESERVED_PREFIXES, LINK_PREFIXES, b64uDec, verifyCoSign } from '../kernel/src/statements.ts'
+import { openFinalG, verifyLinkReleaseG, parseFinalG, encodeSlotMsg, decodeSlotMsg, type LinkKeys } from '../kernel/src/link.ts'
 
 let failures = 0, checks = 0
 function ok(cond: boolean, msg: string) {
@@ -37,7 +38,7 @@ const H = 3_600_000
 
 async function roster(chainName: string, now: number, extra: Record<string, unknown> = {}) {
   const c: Chain = F.chains[chainName]
-  return verifyRosterChain(c.links, { directoryKeys: F.directoryKeys, rpId: F.rpId, origins: F.origins, now,
+  return verifyRosterChain(c.links, { directoryKeys: F.directoryKeys, rpId: F.rpId, origins: F.origins, now, consentRp: F.consentRp,
     ...(c.pinned !== undefined ? { pinned: c.pinned } : {}), ...extra })
 }
 async function run(r: Row, extra: Record<string, unknown> = {}, chainExtra: Record<string, unknown> = {}) {
@@ -45,7 +46,7 @@ async function run(r: Row, extra: Record<string, unknown> = {}, chainExtra: Reco
     const now = (extra.now as number | undefined) ?? r.now ?? F.now
     const ro = await roster(r.chain, now, chainExtra)
     if (!ro.ok) return { ok: false as const, reason: `chain: ${ro.reason}` }
-    return await verifyDevice(r.proof, { roster: ro.value, directoryKeys: F.directoryKeys, rpId: F.rpId, origins: F.origins, now, ...extra })
+    return await verifyDevice(r.proof, { roster: ro.value, directoryKeys: F.directoryKeys, rpId: F.rpId, origins: F.origins, consentRp: F.consentRp, now, ...extra })
   } catch (e) { return { ok: false as const, reason: `threw: ${(e as Error).message}` } }
 }
 
@@ -100,9 +101,9 @@ const REQUIRED: Array<[string, string]> = [
   ['watt/wrong-key', 'watt-signature'], ['watt/other-pinned-kid', 'watt-signature'], ['watt/high-s', 'watt-signature'], ['watt/expired', 'expired'],
   ['watt/logged-in-future', 'not-yet-valid'], ['watt/ob-not-a-bit', 'watt-grammar'],
   // grammar
-  ['wdev/via-cns', 'via'], ['wdev/via-unknown', 'grammar'], ['wdev/kx-is-device-key', 'kx'], ['wdev/label-41', 'label'], ['wdev/label-bidi', 'label'],
+  ['wdev/via-cns-with-assertion', 'proof'], ['wdev/via-unknown', 'grammar'], ['wdev/kx-is-device-key', 'kx'], ['wdev/label-41', 'label'], ['wdev/label-bidi', 'label'],
   ['wdev/address-not-normal', 'address'], ['wdev/extra-field', 'grammar'], ['wdev/nonce-short', 'grammar'],
-  ['dev2/via-ck', 'via'], ['dev2/consent-is-device-key', 'consent-key'], ['dev2/kx-is-consent-key', 'kx'],
+  ['dev2/via-ck-with-assertion', 'proof'], ['dev2/consent-is-device-key', 'consent-key'], ['dev2/kx-is-consent-key', 'kx'],
   // the tier (G1)
   ['tier/ck-ripe-exactly-72h', 'passkey'], ['tier/ck-exact', 'passkey'], ['tier/no-consent-key', 'passkey'], ['tier/consent-key-not-member', 'passkey'],
   ['tier/consent-key-is-a-passkey', 'passkey'], ['tier/wdev-never-native', 'passkey'],
@@ -110,6 +111,19 @@ const REQUIRED: Array<[string, string]> = [
   ['sec/tier-consent-key-not-proven', 'passkey'], ['sec/tier-ck-absent-old-ceremony', 'passkey'], ['sec/renewal-past-original-cap', 'watt-cap'],
   ['sec/watt-logged-1s-before-ceremony', 'watt-order'], ['sec/head-from-fork-signer-current', 'roster-head'], ['sec/head-is-voided-request', 'roster-head'],
   ['sec/watt-expires-now', 'expired'],
+  // mb: the mailbox state in watt. (org-identity §3a, shape (a))
+  ['ok/watt-mb-lapsed', 'passkey'], ['ok/watt-mb-at-logged', 'passkey'], ['watt/mb-after-logged', 'watt-grammar'], ['watt/mb-leading-zero', 'watt-grammar'],
+  ['watt/mb-empty', 'watt-grammar'], ['watt/six-fields', 'watt-grammar'],
+  // KG3: a ripe consent key's co-sign (native dev2., route D wdev.); the F1 rows' signed twins
+  ['ok/dev2-by-ck', 'native'], ['tier/ck-signed-exactly-72h', 'native'], ['ck/unripe-one-second', 'signer-unripe'], ['ck/readded-age-restarts', 'signer-unripe'],
+  ['ck/quarantined', 'signer-quarantined'], ['ck/pinned-age-lower-bound', 'signer-unripe'], ['ok/ck-pinned-ripe', 'native'], ['ck/not-member', 'signer'],
+  ['ck/passkey-signer', 'signer-kind'], ['ck/both-proofs', 'proof'], ['passkey/with-consent', 'proof'], ['passkey/both-proofs', 'proof'],
+  ['ck/cns-other-text', 'consent-transcript'], ['ck/cns-purpose-web-add', 'consent-purpose'], ['ck/cns-purpose-link', 'consent-purpose'],
+  ['ck/cns-expired-at-ceremony', 'consent-expired'], ['ck/cns-long-life', 'consent-lifetime'], ['ck/cns-other-challenge', 'consent-transcript'],
+  ['ck/cns-wrong-key', 'consent-signature'], ['ck/cns-other-rp', 'consent-rp'],
+  // org-identity §5.4 item 2: native still needs a current 24 h watt.
+  ['ck/native-watt-expired', 'expired'], ['ck/native-watt-over-24h', 'watt-lifetime'], ['ck/native-watt-past-cap', 'watt-cap'],
+  ['ok/wdev-route-d', 'passkey'], ['wdev/route-d-unripe', 'signer-unripe'], ['wdev/route-d-purpose-roster', 'consent-purpose'], ['wdev/route-d-passkey-signer', 'signer-kind'],
 ]
 for (const [n, want] of REQUIRED) {
   const r = byName.get(n)
@@ -144,6 +158,110 @@ console.log('\npositive controls: a refusal flips when only its cause changes')
     "sec/tier-consent-key-not-proven names the same ripe consent key for ANOTHER device key")
 }
 
+console.log('\nconsent keys: positive controls')
+{
+  const ripe = byName.get('tier/ck-signed-exactly-72h')!, short = byName.get('ck/unripe-one-second')!
+  const cer = async (r: Row) => { const c = await parseDeviceCert(r.proof.cert); return c.ok ? c.value.ceremonyAt : NaN }
+  ok((await cer(ripe)) - (await cer(short)) === 1000, 'ck/unripe-one-second is one second of ceremonyAt short of tier/ck-signed-exactly-72h')
+  const n = byName.get('ok/dev2-by-ck')!
+  const nr = await run(n, { consentRp: undefined })
+  ok(!nr.ok && nr.reason === 'grammar', 'ok/dev2-by-ck without consentRp: a caller error (grammar), never defaulted')
+  const vr = await run(n, { consentRp: 'vault-acme' })
+  ok(!vr.ok && vr.reason === 'consent-rp', 'ok/dev2-by-ck with another consentRp: consent-rp')
+  ok((await run(byName.get('ok/wdev')!, { consentRp: undefined })).ok, 'a passkey-made certificate needs no consentRp')
+  const sp = byName.get('sec/tier-consent-key-not-proven')!
+  const spc = await parseDeviceCert(sp.proof.cert)
+  ok(spc.ok && spc.value.via === 'passkey', 'F1 stays closed: the forged dev2. is via passkey, so it is passkey tier whatever consent key it names')
+  const late = byName.get('ck/native-watt-expired')!
+  ok((await run(late, { now: (late.now ?? F.now) - 1 })).ok, 'ck/native-watt-expired verifies native one millisecond earlier: only the watt. expired')
+}
+
+console.log('\nmb: the mailbox state rides in watt.')
+{
+  const lapsed = byName.get('ok/watt-mb-lapsed')!
+  const v = await run(lapsed)
+  const w = parseWatt(lapsed.proof.watt)
+  ok(v.ok && w.ok && v.value.watt.mb === w.value.loggedAt - 24 * H && v.value.watt.mb > 0, 'ok/watt-mb-lapsed: the verified watt. carries the lapse time')
+  const plain = await run(byName.get('ok/wdev')!)
+  ok(plain.ok && plain.value.watt.mb === 0, 'ok/wdev: mb 0 (confirmed)')
+}
+
+console.log('\nwret. (the directory\'s check: an old key retires itself at a new ceremony)')
+for (const w of F.wret) {
+  const v = await verifyWret(w.text, w.sig)
+  const got = v.ok ? 'accept' : `reject (${v.reason})`
+  const want = w.expect === 'accept' ? 'accept' : `reject (${w.reason})`
+  ok(got === want, `${w.name}: ${got}${got === want ? '' : `, want ${want}`}`)
+}
+ok(['ok/wret', 'wret/signed-by-new-key', 'wret/same-key', 'wret/nonce-short', 'wret/address-not-normal', 'wret/high-s', 'wret/as-wren'].every((n) => F.wret.some((w: { name: string }) => w.name === n)), 'the wret. rows exist')
+
+console.log('\ninc. (the directory\'s incident record)')
+for (const r of F.inc) {
+  const v = await verifyInc(r.text, r.sig, { directoryKeys: F.directoryKeys, now: r.now ?? F.now })
+  const got = v.ok ? 'accept' : `reject (${v.reason})`
+  const want = r.expect === 'accept' ? 'accept' : `reject (${r.reason})`
+  ok(got === want, `${r.name}: ${got}${got === want ? '' : `, want ${want}`}`)
+  if (v.ok) for (const [at, inside] of r.inside ?? []) ok(insideIncident(at, v.value) === inside, `${r.name}: ${at} ${inside ? 'inside' : 'outside'} the window`)
+}
+ok(['ok/inc-closed', 'ok/inc-open', 'inc/empty-window', 'inc/issued-before-from', 'inc/future', 'inc/unknown-kid', 'inc/other-pinned-kid'].every((n) => F.inc.some((w: { name: string }) => w.name === n)), 'the inc. rows exist')
+
+console.log('\nreserved prefixes are refused as statements today (org-identity §5.4 item 4)')
+ok(['mgd', 'vch', 'ojn', 'dvc'].every((p) => F.reserved.some((r: { prefix: string }) => r.prefix === p)), 'a row for each of mgd. vch. ojn. dvc.')
+for (const { prefix, text } of F.reserved) {
+  const refusals = [
+    !(await parseDeviceCert(text)).ok, !parseWatt(text).ok, !(await verifyWren(text, 'A'.repeat(86))).ok, !(await verifyWret(text, 'A'.repeat(86))).ok,
+    !(await verifyInc(text, 'A'.repeat(86), { directoryKeys: F.directoryKeys, now: F.now })).ok, !(await parseRos(text)).ok, !parseRip(text).ok,
+    !(await verifyCoSign(text, 'A'.repeat(86), { consentPub: F.chains.base.links[0].ros, rp: 'bento', purpose: 'roster', payloadText: 'ros.x', challenge: 'x', at: null })).ok,
+  ]
+  ok(refusals.every(Boolean) && RESERVED_PREFIXES.includes(prefix) && text.startsWith(prefix + '.'), `${prefix}. is refused by every verifier and stays reserved`)
+}
+
+console.log('\nthe link final under option G (link.ts)')
+type FinalRow = { name: string; t: string; h2n: string; offer: never; final: Record<string, string>; edit?: { line: number; value: string }; expect: string; reason?: string
+  watt?: string; wattSig?: string; release?: { challenge: string; spent?: boolean; expect: string; reason?: string } }
+const finalText = (r: FinalRow) => {
+  const l = ['lnkg', r.final.dev2, r.final.ck, r.final.cns, r.final.cnsSig, r.final.seal]
+  if (r.edit) l[r.edit.line] = r.edit.value
+  return l.join('\n')
+}
+const baseRoster = await roster('base', F.now)
+for (const r of F.linkFinal as FinalRow[]) {
+  const keys = { h2n: b64uDec(r.h2n)! } as LinkKeys
+  let v
+  try { v = await openFinalG(finalText(r), { keys, t: r.t, offer: r.offer, consentRp: F.consentRp }) } catch (e) { v = { ok: false as const, reason: `threw: ${(e as Error).message}` } }
+  const got = v.ok ? 'accept' : `reject (${v.reason})`
+  const want = r.expect === 'accept' ? 'accept' : `reject (${r.reason})`
+  ok(got === want, `${r.name}: N ${got}${got === want ? '' : `, want ${want}`}`)
+  if (r.release && baseRoster.ok) {
+    const now = Number(r.final.dev2.split('.')[8]) + 60_000
+    const ro = await roster('base', now)
+    const rv = ro.ok ? await verifyLinkReleaseG(finalText(r), { roster: ro.value, challenge: r.release.challenge, consentRp: F.consentRp, now, spend: () => !r.release!.spent }) : ro
+    const rg = rv.ok ? 'accept' : `reject (${rv.reason})`
+    const rw = r.release.expect === 'accept' ? 'accept' : `reject (${r.release.reason})`
+    ok(rg === rw, `${r.name}: directory ${rg}${rg === rw ? '' : `, want ${rw}`}`)
+  }
+  if (r.watt) {
+    const now = Number(r.final.dev2.split('.')[8]) + 60_000
+    const ro = await roster('base', now)
+    const dv = ro.ok ? await verifyDevice({ cert: r.final.dev2, signer: r.final.ck, consent: { cns: r.final.cns, sig: r.final.cnsSig }, watt: r.watt, wattSig: r.wattSig! },
+      { roster: ro.value, directoryKeys: F.directoryKeys, rpId: F.rpId, origins: F.origins, consentRp: F.consentRp, now }) : ro
+    ok(dv.ok && dv.value.tier === 'native', `${r.name}: with the directory's watt. the certificate verifies native`)
+  }
+}
+{
+  const names = new Set((F.linkFinal as FinalRow[]).map((r) => r.name))
+  ok(['ok/final-g', 'final-g/release-unripe', 'final-g/release-other-challenge', 'final-g/release-spent', 'final-g/release-old-head', 'final-g/release-ck-not-member',
+    'final-g/other-keys', 'final-g/line-swapped', 'final-g/device-mismatch', 'final-g/consent-mismatch', 'final-g/kx-mismatch', 'final-g/via-passkey', 'final-g/ck-is-n',
+    'final-g/cns-web-add', 'final-g/cns-wrong-key', 'final-g/v1-label', 'final-g/seal-long', 'final-g/extra-line'].every((n) => names.has(n)), 'the link final rows exist')
+  const okRow = (F.linkFinal as FinalRow[]).find((r) => r.name === 'ok/final-g')!
+  ok(parseFinalG(finalText(okRow)) !== null && b64uDec(okRow.final.seal)!.length === 60, 'the G final parses and its seal is 60 bytes')
+  const dec = decodeSlotMsg(3, encodeSlotMsg(3, finalText(okRow)))
+  ok(dec.ok && dec.value === finalText(okRow), 'the G final travels as msg3 on the slot unchanged (the transport is link v1\'s)')
+  ok(!decodeSlotMsg(3, 'lnkx\n' + finalText(okRow).slice(5)).ok, 'msg3 under any other label is still refused on the slot')
+  ok(LINK_PREFIXES.includes('lnkg') && LINK_PREFIXES.includes('lnkgs') && LINK_PREFIXES.includes('lnk3') && LINK_PREFIXES.includes('lnka'),
+    'the G final takes new labels (lnkg, lnkgs); v1\'s lnk3 and lnka stay')
+}
+
 console.log('\ncaller parameters are required, never defaulted; junk is a refusal, not a throw')
 {
   const r = byName.get('ok/wdev')!
@@ -157,7 +275,7 @@ console.log('\ncaller parameters are required, never defaulted; junk is a refusa
   const ro = await roster(r.chain, F.now)
   if (ro.ok) {
     const v = await verifyDevice({ ...r.proof, assertion: undefined } as never, { roster: ro.value, directoryKeys: F.directoryKeys, rpId: F.rpId, origins: F.origins, now: F.now })
-    ok(!v.ok && v.reason === 'grammar', 'a proof without its assertion is grammar')
+    ok(!v.ok && v.reason === 'proof', 'a passkey proof without its assertion is refused (proof)')
     const noDir = await verifyDevice(r.proof, { roster: ro.value, directoryKeys: {}, rpId: F.rpId, origins: F.origins, now: F.now })
     ok(!noDir.ok && noDir.reason === 'watt-unknown-kid', 'no pinned directory key: watt-unknown-kid')
   }
@@ -172,6 +290,7 @@ console.log('\nthe exported pieces hold on their own (the directory calls them w
   const ck1 = await parseDeviceCert(byName.get('tier/ck-ripe-exactly-72h')!.proof.cert)
   if (wd.ok && ck1.ok) {
     ok(tierOf(ck1.value) === 'passkey', 'tierOf: a passkey-made dev2. naming a ripe consent key is (passkey sign-in)')
+    ok(tierOf({ ...ck1.value, via: 'ck' }) === 'native' && tierOf({ ...wd.value, via: 'cns' }) === 'passkey', 'tierOf: native is a dev2. via ck; a wdev. via cns stays a browser')
     ok(tierOf({ ...wd.value, consentPub: ck1.value.consentPub }) === 'passkey', 'tierOf: a wdev. is never native, even handed a ripe consent key')
   } else ok(false, 'tierOf inputs parse')
 }
@@ -201,7 +320,7 @@ console.log('\nthe roster gives every head it verified')
 }
 
 console.log('\nprefixes')
-ok(DEVICE_PREFIXES.length === 4 && ['wdev', 'dev2', 'watt', 'wren'].every((p) => DEVICE_PREFIXES.includes(p)), 'devices.ts defines wdev. dev2. watt. wren.')
+ok(DEVICE_PREFIXES.length === 6 && ['wdev', 'dev2', 'watt', 'wren', 'wret', 'inc'].every((p) => DEVICE_PREFIXES.includes(p)), 'devices.ts defines wdev. dev2. watt. wren. wret. inc.')
 ok(DEVICE_PREFIXES.every((p) => RESERVED_PREFIXES.includes(p)), 'statements.ts still reserves them, so no other family takes them')
 ok(DEVICE_PREFIXES.every((p) => !ROSTER_PREFIXES.includes(p) && !LINK_PREFIXES.includes(p)), 'no collision with ros. rip. or a link prefix')
 
