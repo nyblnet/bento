@@ -94,8 +94,8 @@ const ROWS: Row[] = [
   // C3: the account's own display name cannot draw a tick either; the wider list
   ['a verified name cannot carry a tick',
     (m) => { const s = st(m, bind({ name: 'Alice \u2713 via bigcorp.com' })); return s.kind === 'verified' && s.name === 'Alice via bigcorp.com' }],
-  ['\u221A \u{1F5F9} \u237B \u{10102} are stripped as ticks',
-    (m) => m.claimedName('A\u221A B\u{1F5F9} C\u237B D\u{10102}') === 'A B C D'],
+  ['\u221A \u{1F5F9} \u237B \u{10102} and \u{1FBB1} are stripped as ticks',
+    (m) => m.claimedName('A\u221A B\u{1F5F9} C\u237B D\u{10102} E\u{1FBB1}') === 'A B C D E'],
   // C4: a throwing answer is a failure, not "checking…" for ever
   ['an answer whose field read throws -> failed',
     (m) => st(m, { get name() { throw new Error('boom') }, vouchedBy: 'id.bento.page', changed: false }).kind === 'failed' &&
@@ -112,6 +112,8 @@ const ROWS: Row[] = [
     (m) => m.cleanText('a\u061Cb\u00ADc\u034Fd\u{E0041}e\uE000f\u0378g\u2028h\u2029i', 80) === 'abcdefghi'],
   ['Hangul fillers leave (they render as blank space)',
     (m) => m.cleanText('Bob\u3164\u3164\u115F\u1160\uFFA0x', 80) === 'Bobx'],
+  ['the Braille blank leaves (it renders as blank space)',
+    (m) => m.cleanText('Bob\u2800\u2800x', 80) === 'Bobx'],
   ['ordinary letters, CJK, emoji and accents stay',
     (m) => m.cleanText('Zoë 山田 \u{1F600} José', 80) === 'Zoë 山田 \u{1F600} José'],
   ['a typed name cannot carry a tick', (m) => m.claimedName('Mallory ✓ via id.bento.page ✔') === 'Mallory via id.bento.page'],
@@ -145,9 +147,9 @@ const MUTANTS: [string, string, string][] = [
   ['ticks kept in verified names', 'const name = claimedName(a.name)', 'const name = cleanText(a.name, NAME_MAX)'],
   ['a throwing answer escapes', "try { return decide(r, now) } catch { return { kind: 'failed' } }", 'return decide(r, now)'],
   ['managedBy matched as a substring', 'domRe !== null && domRe.test(q)', "dom.length > 0 && q.toLowerCase().includes(dom)"],
-  ['invisible list down to controls', '[\\p{Cc}\\p{Cf}\\p{Co}\\p{Cn}\\p{Zl}\\p{Zp}\\p{Default_Ignorable_Code_Point}\\u115F\\u1160\\u3164\\uFFA0]', '[\\p{Cc}]'],
-  ['default-ignorables and Hangul fillers kept', '\\p{Default_Ignorable_Code_Point}\\u115F\\u1160\\u3164\\uFFA0]', ']'],
-  ['new tick marks kept', '\\u221A\\u237B\\u{1F5F8}\\u{1F5F9}\\u{10102}]', '\\u{1F5F8}]'],
+  ['invisible list down to controls', '[\\p{Cc}\\p{Cf}\\p{Co}\\p{Cn}\\p{Zl}\\p{Zp}\\p{Default_Ignorable_Code_Point}\\u115F\\u1160\\u3164\\uFFA0\\u2800]', '[\\p{Cc}]'],
+  ['default-ignorables and Hangul fillers kept', '\\p{Default_Ignorable_Code_Point}\\u115F\\u1160\\u3164\\uFFA0\\u2800]', ']'],
+  ['new tick marks kept', '\\u221A\\u237B\\u{1F5F8}\\u{1F5F9}\\u{10102}\\u{1FBB1}]', '\\u{1F5F8}]'],
   ['ticks kept in typed names', "cleanText(s.replace(TICKS, ''), NAME_MAX)", 'cleanText(s, NAME_MAX)'],
 ]
 

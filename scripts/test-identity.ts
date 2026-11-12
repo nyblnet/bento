@@ -176,7 +176,8 @@ console.log('\nonce found, the agent cannot be reassigned')
 // behind the localStorage flag bento-people-vouch, off by default. It is pinned
 // by STRUCTURE, not by a text match, after comments are removed: every static
 // import/export-from (multi-line too) and every dynamic import() of identity in
-// every app is found; vouch.ts's import line is exact; `identityAgent` is named
+// every app is found (any of .ts .js .mjs .cjs .mts .cts, or none), and no file
+// but identity.ts names the __bentoIdentity global; vouch.ts's import line is exact; `identityAgent` is named
 // exactly twice there (the import and the one gated call); vouchAgent and
 // vouchEnabled are exactly the gated call and the flag read; lsGet is the
 // kernel's storage read, not redefined. Then the pin is run on in-memory copies
@@ -199,17 +200,23 @@ console.log('\ncontract only: nothing calls it yet, except the flag-gated People
   }
   for (const d of ['kernel/src', 'slides/src', 'spaces/src', 'type/src', 'dash/src']) walk(join(root, d))
 
-  // comments out (block + line, not inside strings: good enough for a pin over our own code)
+  // comments out (block + line). KNOWN LIMIT: this is not string-aware, so code
+  // placed between a '/*' string literal and a '*/' string literal is stripped as
+  // if it were a comment and escapes the pin. Accepted: it is our own code, a
+  // reviewer sees it, and a string-aware parser is not worth its weight here.
   const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`\\])\/\/[^\n]*/g, '$1')
   const pin = (fs: Map<string, string>): string[] => {
     const bad: string[] = []
-    const re = /\b(import|export)\s*(type\s)?[^;'"]*?\bfrom\s*['"][^'"]*\/identity(\.ts)?['"]|\bimport\s*\(\s*['"][^'"]*\/identity(\.ts)?['"]/g
+    // TypeScript and Vite resolve identity.js (and .mjs/.cjs/.mts/.cts) to identity.ts
+    const re = /\b(import|export)\s*(type\s)?[^;'"]*?\bfrom\s*['"][^'"]*\/identity(\.[cm]?[jt]s)?['"]|\bimport\s*\(\s*['"][^'"]*\/identity(\.[cm]?[jt]s)?['"]/g
     for (const [rel, text] of fs) {
       for (const m of strip(text).matchAll(re)) {
         if (m[2]) continue
         if (rel === GATED && m[0] === GATED_IMPORT) continue
         bad.push(`${rel}: ${m[0].replace(/\s+/g, ' ').slice(0, 80)}`)
       }
+      // the agent's global, reached without identity.ts at all
+      if (/__bentoIdentity/.test(strip(text))) bad.push(`${rel}: names __bentoIdentity`)
     }
     const g = strip(fs.get(GATED) ?? '')
     const need = (c: boolean, why: string) => { if (!c) bad.push(`${GATED}: ${why}`) }
@@ -239,6 +246,8 @@ console.log('\ncontract only: nothing calls it yet, except the flag-gated People
     ['a dynamic import elsewhere', [[E, EDIT_ANCHOR, "export const __leak = async () => (await import('../../../kernel/src/identity.ts')).identityAgent()\n" + EDIT_ANCHOR]]],
     ['a single-line import elsewhere', [[E, EDIT_ANCHOR, "import { identityAgent as rawId } from '../../../kernel/src/identity.ts'\nexport const __leak = () => rawId()\n" + EDIT_ANCHOR]]],
     ['a shadowed lsGet', [[V, "import { lsGet } from '../../../kernel/src/storage.ts'", "const lsGet = (_k: string) => 'on'"]]],
+    ['an import of identity.js (resolved to identity.ts)', [[E, EDIT_ANCHOR, "import { identityAgent as rawId } from '../../../kernel/src/identity.js'\nexport const __leak = () => rawId()\n" + EDIT_ANCHOR]]],
+    ['the global called directly', [[E, EDIT_ANCHOR, "export const __leak = () => (globalThis as any).__bentoIdentity?.resolve({ pub: 'x' })\n" + EDIT_ANCHOR]]],
     ['an export * of identity', [[V, "export type { VouchState } from './vouchstate'", "export type { VouchState } from './vouchstate'\nexport * from '../../../kernel/src/identity.ts'"]]],
   ]
   for (const [name, edits] of MUTANTS) {

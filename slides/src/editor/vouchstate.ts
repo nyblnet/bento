@@ -65,10 +65,11 @@ export const VIA_MAX = 80
 // zero-width, soft hyphen, tag characters), private use (Co), unassigned (Cn),
 // line and paragraph separators, every default-ignorable code point, and the
 // Hangul fillers, letters that render as blank space (default-ignorable
-// already; listed so the intent survives a change to that property).
-const INVISIBLE = /[\p{Cc}\p{Cf}\p{Co}\p{Cn}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}\u115F\u1160\u3164\uFFA0]/gu
+// already; listed so the intent survives a change to that property), and the
+// Braille blank, which renders blank too.
+const INVISIBLE = /[\p{Cc}\p{Cf}\p{Co}\p{Cn}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}\u115F\u1160\u3164\uFFA0\u2800]/gu
 // tick-like marks (escaped, so they survive editing): no name, typed or verified, may draw its own
-const TICKS = /[\u2713\u2714\u2705\u2611\u2612\u2757\u221A\u237B\u{1F5F8}\u{1F5F9}\u{10102}]/gu
+const TICKS = /[\u2713\u2714\u2705\u2611\u2612\u2757\u221A\u237B\u{1F5F8}\u{1F5F9}\u{10102}\u{1FBB1}]/gu
 
 const tidy = (s: string) => s.replace(INVISIBLE, '').replace(/\s+/g, ' ').trim()
 

@@ -13739,7 +13739,8 @@ text; a mutant per rule) and `scripts/test-directory-mutants.ts`.
 - **What a name cannot do.** A name, whether typed in this session or the
   account's own display name, loses every tick-like mark, and every control,
   format, private-use, unassigned, separator and default-ignorable character
-  (by Unicode category, plus the Hangul fillers that render as blank space).
+  (by Unicode category, plus the Hangul fillers and the Braille blank, which
+  render as blank space).
   The name sits in its own direction-isolated span that alone takes the
   ellipsis, so a long or right-to-left name, or one that reads like a voucher,
   cannot push the real mark or the tags out of sight: they wrap below it. An
@@ -13748,9 +13749,14 @@ text; a mutant per rule) and `scripts/test-directory-mutants.ts`.
 - The People panel is one source for the tier: `tier` on the answer. The agent
   is to stop writing tier text into `vouchedBy`.
 - `scripts/test-identity.ts` pins that no app calls the identity agent except
-  this panel, behind its flag: comments removed, every static, multi-line and
-  dynamic import of identity in every app found, and the panel's call and flag
-  read pinned by shape, with twelve widening mutants that must turn it red.
+  this panel, behind its flag: comments removed; static, multi-line and dynamic
+  imports of identity in every app, under any of the extensions the bundler
+  resolves to it; no file but identity.ts naming the `__bentoIdentity` global;
+  and the panel's call and flag read pinned by shape, with fourteen widening
+  mutants that must turn it red. It is a pin over our own code, not a parser:
+  its comment strip is not string-aware, so code placed between a `'/*'` and a
+  `'*/'` string literal would escape it. That limit is accepted and stated in
+  the rig.
 - Guarded by `scripts/test-slides-people-tiers.ts` (rows over the decision
   module, with twenty-one mutants that must each turn a row red) and
   `scripts/test-slides-people-tiers-browser.mjs` (the packaged editor, real
