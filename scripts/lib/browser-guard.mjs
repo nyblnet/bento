@@ -29,6 +29,8 @@
  *
  * Neither path can read as a pass: both exit non-zero before any summary line.
  */
+import fs from 'node:fs'
+
 export const BROWSER_DIED = 75
 export const TIMED_OUT = 124
 const TARGET_GONE = /Target page, context or browser has been closed|Target crashed/
@@ -42,6 +44,7 @@ export function guardBrowser(browser, { rig, stallMs = 90000, print = (m) => con
   const died = (why) => {
     print(`\n  FAIL  ${rig}: ${why}, in "${current}" after the row "${last}", at ${((Date.now() - t0) / 1000).toFixed(1)}s.`)
     print('        This is the BROWSER failing, not a row. Its stderr and exit signal are above when run with DEBUG=pw:browser.')
+    print(`        host: ${host()}`)
     process.exit(BROWSER_DIED)
   }
   browser.on('disconnected', () => { if (!closing) died('the browser process went away mid-rig (crashed or was killed)') })
@@ -68,4 +71,13 @@ export function guardBrowser(browser, { rig, stallMs = 90000, print = (m) => con
     progress(row) { last = String(row).slice(0, 100); arm() },
     async close() { closing = true; clearTimeout(timer); await browser.close() },
   }
+}
+
+/** The host, for telling a crash that follows a machine from one that follows the code. On
+ *  CI (2026-11) WebKit's Mesa llvmpipe segfaulted on every run on a few runner hosts and on
+ *  none of ~40 others; the kernel log (dmesg) names the faulting thread. */
+function host() {
+  let cpu = 'unknown cpu'
+  try { cpu = (/^model name\s*:\s*(.*)$/m.exec(fs.readFileSync('/proc/cpuinfo', 'utf8')) || [])[1] || cpu } catch {}
+  return `${process.platform} ${process.arch}, ${cpu}`
 }

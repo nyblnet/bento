@@ -54,6 +54,12 @@ jobs:
         # and this bounds anything the guard cannot see
         timeout-minutes: 6
         run: DEBUG=pw:browser node scripts/test-home-origin-probe.mjs
+      - name: On failure, the kernel's word on crashed browser threads
+        # WebKit's Mesa llvmpipe segfaulted on a few runner hosts (2026-11);
+        # only the kernel log names the thread. Diagnostic only, never a verdict.
+        if: failure()
+        shell: bash
+        run: sudo dmesg -T | grep -iE 'segfault|oom|killed process' | tail -20 || echo "no segfault or OOM in the kernel log"
 
   home-web-engines:
     # bento/home in your browser (home/web) in the two engines the required
@@ -86,3 +92,9 @@ jobs:
         run: DEBUG=pw:browser BENTO_BROWSER=firefox node scripts/test-home-web.mjs
       - name: home/web mutants
         run: node scripts/test-home-web-mutants.mjs
+      - name: On failure, the kernel's word on crashed browser threads
+        # WebKit's Mesa llvmpipe segfaulted on a few runner hosts (2026-11);
+        # only the kernel log names the thread. Diagnostic only, never a verdict.
+        if: failure()
+        shell: bash
+        run: sudo dmesg -T | grep -iE 'segfault|oom|killed process' | tail -20 || echo "no segfault or OOM in the kernel log"
