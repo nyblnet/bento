@@ -77,3 +77,7 @@ jobs:
         run: BENTO_BROWSER=firefox node scripts/test-home-web.mjs
       - name: home/web mutants
         run: node scripts/test-home-web-mutants.mjs
+      - name: Build the slides shell (a build mutant that lets a refused release go on must reach signing)
+        run: npm run build:single --prefix slides
+      - name: home/web production-build mutants
+        run: node scripts/test-home-web-build-mutants.mjs

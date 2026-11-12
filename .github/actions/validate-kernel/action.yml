@@ -123,11 +123,13 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-gate1.ts
 
-    - name: gate 1 raw-text rule mutants
+    - name: gate 1 raw-text and comment rule mutants
       # <style>, <title> and <textarea> hold tags inside <svg> or <math>, so
-      # gate 1 refuses "<" before a letter, "!", "/" or "?" in them. Each
-      # mutant loosens or widens that rule in a copy of gate1.ts, and
-      # test-gate1.ts must go red on every one, after the unmutated copy passes.
+      # gate 1 refuses "<" before a letter, "!", "/" or "?" in them; comments
+      # end at "-->" or "--!>"; xmp, noembed, noframes, noscript, plaintext
+      # and CDATA are refused. Each mutant loosens or widens one rule in a
+      # copy of gate1.ts, and test-gate1.ts must go red on every one, after
+      # the unmutated copy passes.
       shell: bento-step {0}
       run: node scripts/test-gate1-mutants.ts
 
@@ -689,3 +691,11 @@ runs:
       # As for roster-v2.json: --check writes nothing and fails on a stale file.
       shell: bento-step {0}
       run: node scripts/gen-device-vectors.ts --check
+
+    - name: relay blob routes answer storage failures with a status
+      # R2 refusing concurrent writes to one key, or an upload cut off
+      # mid-body, used to escape the blob route as an uncaught exception
+      # (Cloudflare 1101, scriptThrewException). Each must now be a 429 or
+      # 503 with retry-after and CORS, so the client can back off.
+      shell: bento-step {0}
+      run: node scripts/test-relay-blob-errors.ts

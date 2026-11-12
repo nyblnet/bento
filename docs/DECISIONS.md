@@ -13506,6 +13506,7 @@ same rule. Rigs: `scripts/test-gate1.ts` (corpus rows for each breakout and for
 `<!`, `</`, `<?`, upper case, plus genuine rows with a `<` that starts no
 markup), `scripts/test-gate1-mutants.ts`, and `scripts/test-gate1-oracle.mjs`,
 which now wraps its payloads in foreign content and runs them in both engines.
+
 ## 2026-11-09 — bento/id option G: device certificates made by a passkey (`wdev.`, `dev2.`, `watt.`, `wren.`)
 
 **Decision.** `kernel/src/devices.ts` defines the device certificates of
@@ -13623,6 +13624,32 @@ scripts/test-signin-host-engines.mjs (the rows that need no passkey, in
 WebKit too) and scripts/test-signin-host-coop.mjs (COOP in Chromium, Chrome and
 WebKit).
 
+## 2026-11-09 — Gate 1 reads comments the way browsers do
+
+Gate 1 ended a comment at the next `-->`. A browser also ends one at `--!>`,
+and in some places a `<!--` starts no comment at all: inside `<xmp>`,
+`<noembed>`, `<noframes>` and `<noscript>` (raw text while scripting is on),
+after `<plaintext>`, and after a `<![CDATA[` inside `<svg>` or `<math>`, which
+runs to `]]>` rather than to the first `>`. Where gate 1 and the browser
+disagree about what is comment, markup gate 1 reports absent can be present.
+
+- A comment ends at `-->` or `--!>`, whichever comes first.
+- `<xmp>`, `<noembed>`, `<noframes>`, `<noscript>` and `<plaintext>` are
+  refused, and so is any `<!` that is neither a comment nor the doctype.
+  Bento writes none of them: none appears in any of the 100 shells published
+  to bento.page, nor in saved decks.
+- **Comment text is not refused for holding markup.** Every slides shell since
+  0.7.0 carries a tooling comment with `<parent-id>`-style placeholders, so
+  that rule would turn every release unknown. It is not needed either: once
+  the comment's end and the places where a comment can start agree with the
+  browser, its text is inert. Comments are still checked for `<script`, as
+  before.
+
+All 70 slides releases in the published history still verify as genuine,
+and every published shell gets the same verdict as before. The Swift, Kotlin
+and Rust ports and the extension's generated copy carry the same rules. Rigs:
+`scripts/test-gate1.ts`, `scripts/test-gate1-mutants.ts` (a mutant per rule)
+and `scripts/test-gate1-oracle.mjs` (Chromium and WebKit).
 ## 2026-11-09 — bento/id directory: the void page, the reset, and the countersign on every link
 
 The directory now issues its countersign (`rip.`) and has the two things
@@ -13807,3 +13834,132 @@ signed home that launch-1 peers would read before any host ships `watt.`.
 `consentRp` (`bento`): without it any link or certificate a consent key signs
 is refused as a caller error, and nothing else changes. A directory that builds
 `watt.` passes `mb`. Native hosts port these rows from the same fixtures.
+
+## 2026-11-09 — bento/id directory: hold before the mail, say how a link ended, keep the undo through a reset
+
+Security's review of the void page and the reset set three conditions before
+the directory deploys. These are their answers. Nothing is deployed.
+
+- **A mail never states an act that then fails to happen.** A Remove (from a
+  void link) and a reset send their notice BEFORE they act, because that notice
+  carries the way back. They now put a HOLD on the roster first, for the
+  mailer's timeout plus a margin. While it is on, the waiting change cannot
+  take effect (the alarm skips it and comes back when the hold ends), and a
+  second press of a void link, a reset or a member's request is refused before
+  any mail of its own goes (`busy`, or `pending` for a member). A refused send
+  takes the hold off. Before, a Remove pressed seconds before the deadline
+  could mail "your passkey was suspended" while the change it meant to stop
+  took effect, two presses could mail two undo links of which only one worked,
+  and a reset could mail "a change that was waiting is cancelled" for a change
+  that had just taken effect. A send that outlives its hold (the object
+  stopped mid-send) acts only if nothing changed meanwhile and no one else
+  holds the roster; the hold's owner is checked by id.
+- **A void link whose life ended says how.** The directory remembers the last
+  16 ended void links by their token's hash and answers `late` (what it was
+  for took effect, with the time; `by: 'reset'` when a reset did), `used`, or
+  `preempted` (a reset cancelled the change). The token is 256 bits, so this
+  tells no one but its holder anything. The void page says it plainly ("Too
+  late: this change took effect at ...", naming the email that lists the
+  passkeys now) and never says "Nothing changed" where it cannot know: a lost
+  answer, an unknown link and a used link no longer claim it.
+- **The undo survives a reset (G4a).** A reset no longer cancels a waiting
+  removal of a suspended passkey; it sets it aside. Its undo link keeps
+  working while the reset waits: the passkey comes back at once, and the reset
+  carries on, asked again on the new head, so its 72 hours start again (the
+  kernel's chain takes no link asked for before the link before it took
+  effect; the undo mail gives the new time). If the reset is stopped, the
+  removal waits again at its own time with its own undo link, and takes effect
+  at once if that time has passed. Any other waiting change a reset cancels
+  stays cancelled when the reset is stopped (security's ruling: stopping never
+  applies anything), and the stop mail now says so.
+- **The reset link is single use**, including after its reset was queued and
+  then stopped (a row now pins it).
+- **Wording** (drafts for the maintainer): the waiting notice and the page no
+  longer call an unasked change "usually a page that used your own passkey";
+  the notice for a lone passkey says removing it "would leave the account with
+  no usable passkey (only a reset gets back in)".
+
+Not here (they wait for a kernel statement layout): a member stopping a reset
+with a passkey, and judging the account's age at the reset's request time.
+Guards: `scripts/test-directory-roster.ts` (security's races as rows: Remove
+pressed before the deadline with the alarm firing during its send, two
+Removes, Cancel during a Remove, a reset completed during a change's last
+seconds, two resets on one link, a member request during a reset's send;
+sends that outlive their hold, each way round; Cancel at the deadline and an
+undo after the removal answer `late`; the undo through a reset, the reset
+taking effect after it, a stopped reset restoring the removal before and
+after its time), `scripts/test-directory-void-page.mjs` (the new views in a
+real browser) and `scripts/test-directory-mutants.ts` (a mutant per rule).
+## 2026-11-12 — bento/id: the privacy notice describes option G, and a text-only deletion page returns
+
+The draft privacy notice (`site-src/id-privacy.html`, built to
+`bento.page/id/privacy`) still described the first design: exact-address
+lookups, a 13-month expiry, emailed one-time codes and encrypted recovery
+data. It now describes what option G keeps: the passkey list and every
+countersigned version of it (public to anyone who knows the address), the
+setup and reset links (secrets kept only as hashes), the void link's hash
+kept only while its change waits, the roster listed in every mail, the
+record of changes kept for the life of the account, and the per-IP
+fingerprints. Parts that are not running yet (browser sign-ins with 24-hour
+certificates inside a 7-day cap, the yearly one-click mailbox confirmation
+whose lapse removes only the label, the sign-in host's saved address, and
+account deletion) are marked `data-planned`, and the build refuses a planned
+part that does not open with its visible "Planned" label.
+
+The web deletion page retired on 2026-11-09 returns as **text only**
+(`site-src/id-delete.html`, built to `bento.page/id/delete`): the app stores
+ask for a way to request deletion without the app, and the retired page was
+withdrawn for its typed code, not for existing. It explains the queued
+deletion (a passkey, or an emailed link when every passkey is lost; 72 hours;
+a link that stops it) and points to the sign-in host's deletion page, whose
+address is a fact the build takes (`DELETE_URL`, https on bento.page only).
+Both pages are refused for any script, form, input, button, frame, event
+handler or external resource, and for any `__PLACEHOLDER__` left: the
+controller, contact, legal basis, processors, rights, children, what stays
+after a deletion, and how long setup send times are kept are the
+maintainer's, and the pages are not published. Guard:
+`scripts/test-id-pages.mjs`.
+
+## 2026-11-09 — bento/home in your browser: a production build refuses development seams; a release builds it only when asked
+
+`home/web/build.mjs` used to warn and carry on when no `--history` was given
+(bundling the frozen slides 1.2.10 history) or when `--key` swapped in a test
+key. A production build now REFUSES each of those, and the mutant hook too;
+they work only behind an explicit `--dev`, which the rigs and the local
+instructions pass. Every build also refuses a history the library would refuse
+at runtime (not verified by the key it carries, tampered, an unknown app, or a
+second one for the same app), so a library page can never ship with a history
+that silently makes every file of an app unverifiable.
+
+`scripts/release.mjs` builds home/web only with `--home-web`, and then needs
+`--frame-origin`: the frame site is a separate domain that does not exist yet
+and is the maintainer's to choose, so there is no default. It bundles the
+`history.json` of every app the staged site publishes (an app with a signed
+manifest; a published app without a history is refused, never skipped), into
+`<site>.home-web/`, outside the mirrored site: nothing deploys it. Every
+refusal below comes before anything is signed. The option refusals come first
+and leave the output as it was: no `--frame-origin`; an output inside the site
+or containing it, or inside the published tree the next release copies in or
+containing it (compared by folder identity, device and inode, so a symlink, a
+case variant or the macOS `/System/Volumes/Data` firmlink cannot hide one in
+the other, and an output path through a symlink to nothing is refused, since
+its target could appear later); and an output that holds anything but an earlier home/web build
+(one whose `build.json` carries the build's own fields). Then the output is emptied, so
+every later refusal leaves no earlier (development or test-key) build behind:
+a signing key that is not the release key (a rehearsal passes
+`--home-web-dev`), `BENTO_HOME_WEB_MUTANT` in the environment, a missing
+esbuild, and, once the site is seeded, a published app with no history or a
+history the build would refuse. The one check on an input that can only run
+after signing is on the history this release signs, and it holds whenever the
+signing key is the release key. Without
+`--home-web` a release is unchanged: a rehearsal slides release before and
+after this change produced the same 69 files (signed payloads and masked
+timestamps compared) and the same log.
+
+Guards: `scripts/test-home-web-build.mjs` (each refusal beside the release
+build as its positive control; the release refusals, each run checked to have
+signed nothing; the history choice; and a rehearsal release with `--home-web`
+that bundles exactly the history it signed and the seeded one) and
+`scripts/test-home-web-build-mutants.mjs` (each refusal removed, red on its
+row), and `scripts/test-home-web-out.mjs` (where the output may go, the
+firmlink row and its mutant on macOS).

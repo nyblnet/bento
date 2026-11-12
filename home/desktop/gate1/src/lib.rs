@@ -234,10 +234,12 @@ fn walk(html: &str) -> (Vec<Block<'_>>, Vec<String>) {
             // "<!-->" and "<!--->" are whole (empty) comments to a browser
             if html[i..].starts_with("<!-->") { i += 5; continue }
             if html[i..].starts_with("<!--->") { i += 6; continue }
-            let end = find_from(html, "-->", i + 4);
+            // a comment ends at "-->" or "--!>", whichever comes first
+            let (dash, bang) = (find_from(html, "-->", i + 4), find_from(html, "--!>", i + 4));
+            let end = match (dash, bang) { (Some(d), Some(x)) => Some(d.min(x)), (d, x) => d.or(x) };
             if lower[i + 4..end.unwrap_or(html.len())].contains("<script") { problems.push("a comment holds a <script>".into()) }
             let Some(end) = end else { problems.push("an unterminated comment".into()); break };
-            i = end + 3;
+            i = end + if Some(end) == bang { 4 } else { 3 };
             continue;
         }
         if b.get(i + 1) == Some(&b'/') && b.get(i + 2).is_some_and(|c| c.is_ascii_alphabetic()) {
@@ -250,6 +252,8 @@ fn walk(html: &str) -> (Vec<Block<'_>>, Vec<String>) {
             continue;
         }
         if html[i..].starts_with("</>") { i += 3; continue } // ignored entirely
+        // "<![CDATA[" ends differently inside <svg>: Bento writes no "<!" but comments and the doctype
+        if b.get(i + 1) == Some(&b'!') && !lower[i..].starts_with("<!doctype") { problems.push("a \"<!\" that is neither a comment nor the doctype".into()) }
         if matches!(b.get(i + 1), Some(b'/' | b'!' | b'?')) {
             // a doctype or a bogus comment: it ends at the first ">", quotes or not
             let Some(end) = find_from(html, ">", i + 2) else { problems.push("an unterminated tag".into()); break };
@@ -261,6 +265,8 @@ fn walk(html: &str) -> (Vec<Block<'_>>, Vec<String>) {
         let name = tag.name.clone();
         if !plain_tag_name(&name) { problems.push(format!("a start tag named {}", serde_json::to_string(&name).unwrap_or_default())) }
         if ["iframe", "object", "embed", "base"].contains(&name.as_str()) { problems.push(format!("a <{name}>")) }
+        // raw text to a browser, so "<!--" in them starts no comment: Bento writes none
+        if ["xmp", "noembed", "noframes", "noscript", "plaintext"].contains(&name.as_str()) { problems.push(format!("a <{name}>")) }
         if name == "meta" && tag.get("http-equiv").is_some_and(meta_kind) { problems.push("a <meta> refresh or CSP".into()) }
         if tag.attrs.iter().any(|(n, _)| n.starts_with("on")) { problems.push(format!("an on*= attribute on <{name}>")) }
         if name == "script" && (tag.duplicate || tag.slash) {
