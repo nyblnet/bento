@@ -16,16 +16,39 @@
 // that moves the code turns this rig red rather than letting it pass vacuously, and
 // a rig that crashes prints no count, which is not a kill.
 
-import { cpSync, mkdtempSync, readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs'
+import { join, dirname, relative, resolve, sep } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const RIGS = ['test-directory.ts', 'test-directory-roster.ts']
-/** scripts the rigs import (the roster rig runs the hosting check's rules over the void page) */
-const RIG_IMPORTS = ['check-id-hosting.mjs']
+/**
+ * Every file under scripts/ the rigs reach through relative imports (the roster
+ * rig runs the hosting check, which imports scripts/lib/), found by walking the
+ * import graph so a new import cannot leave the copy short. Imports outside
+ * scripts/ are TREE's.
+ */
+function scriptImports(entries: string[]): string[] {
+  const scripts = join(root, 'scripts')
+  const seen = new Set<string>()
+  const walk = (rel: string) => {
+    if (seen.has(rel)) return
+    seen.add(rel)
+    const file = join(scripts, rel)
+    const src = readFileSync(file, 'utf8')
+    for (const m of src.matchAll(/(?:\bfrom\s*|\bimport\s*\(?\s*)['"](\.{1,2}\/[^'"]+)['"]/g)) {
+      const target = resolve(dirname(file), m[1])
+      if (!target.startsWith(scripts + sep)) continue
+      if (!existsSync(target)) throw new Error(`${rel} imports ${m[1]}, which does not exist`)
+      walk(relative(scripts, target))
+    }
+  }
+  for (const e of entries) walk(e)
+  return [...seen].filter((f) => !entries.includes(f))
+}
+const RIG_IMPORTS = scriptImports(RIGS)
 const TREE = ['kernel/src', 'kernel/fixtures', 'server/directory/src', 'server/directory/fixtures', 'server/directory/wrangler.toml']
 let failures = 0, checks = 0
 const ok = (c: boolean, m: string) => { checks++; if (!c) { failures++; console.log(`  FAIL  ${m}`) } else console.log(`  ok    ${m}`) }
@@ -348,8 +371,7 @@ const MUTANTS: Mutant[] = [
 function tree(): string {
   const d = mkdtempSync(join(tmpdir(), 'directory-mutant-'))
   for (const p of TREE) cpSync(join(root, p), join(d, p), { recursive: true })
-  mkdirSync(join(d, 'scripts'))
-  for (const f of [...RIGS, ...RIG_IMPORTS]) cpSync(join(root, 'scripts', f), join(d, 'scripts', f))
+  for (const f of [...RIGS, ...RIG_IMPORTS]) { mkdirSync(dirname(join(d, 'scripts', f)), { recursive: true }); cpSync(join(root, 'scripts', f), join(d, 'scripts', f)) }
   return d
 }
 /** Run the rigs in a tree; a rig with no count line crashed, and proves nothing. */
@@ -364,6 +386,7 @@ function run(d: string) {
 }
 
 console.log('positive control: the unmutated copy passes the rig')
+ok(RIG_IMPORTS.includes('check-id-hosting.mjs') && RIG_IMPORTS.includes(join('lib', 'id-hosting-rules.mjs')), `the copy carries the rigs' script imports, found by walking them (${RIG_IMPORTS.join(', ')})`)
 {
   const d = tree()
   for (const r of run(d)) ok(r.failed === 0 && (r.passed ?? 0) > 0, `${r.f}: ${r.passed} passed, ${r.failed} failed`)
