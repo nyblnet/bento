@@ -13728,6 +13728,36 @@ the history entry, each button, an injected script blocked with a positive
 control, framing refused, Trusted Types, an address full of markup shown as
 text; a mutant per rule) and `scripts/test-directory-mutants.ts`.
 
+## 2026-11-12 — bento/id: the privacy notice describes option G, and a text-only deletion page returns
+
+The draft privacy notice (`site-src/id-privacy.html`, built to
+`bento.page/id/privacy`) still described the first design: exact-address
+lookups, a 13-month expiry, emailed one-time codes and encrypted recovery
+data. It now describes what option G keeps: the passkey list and every
+countersigned version of it (public to anyone who knows the address), the
+setup and reset links (secrets kept only as hashes), the void link's hash
+kept only while its change waits, the roster listed in every mail, the
+record of changes kept for the life of the account, and the per-IP
+fingerprints. Parts that are not running yet (browser sign-ins with 24-hour
+certificates inside a 7-day cap, the yearly one-click mailbox confirmation
+whose lapse removes only the label, the sign-in host's saved address, and
+account deletion) are marked `data-planned`, and the build refuses a planned
+part that does not open with its visible "Planned" label.
+
+The web deletion page retired on 2026-11-09 returns as **text only**
+(`site-src/id-delete.html`, built to `bento.page/id/delete`): the app stores
+ask for a way to request deletion without the app, and the retired page was
+withdrawn for its typed code, not for existing. It explains the queued
+deletion (a passkey, or an emailed link when every passkey is lost; 72 hours;
+a link that stops it) and points to the sign-in host's deletion page, whose
+address is a fact the build takes (`DELETE_URL`, https on bento.page only).
+Both pages are refused for any script, form, input, button, frame, event
+handler or external resource, and for any `__PLACEHOLDER__` left: the
+controller, contact, legal basis, processors, rights, children, what stays
+after a deletion, and how long setup send times are kept are the
+maintainer's, and the pages are not published. Guard:
+`scripts/test-id-pages.mjs`.
+
 ## 2026-11-09 — bento/home in your browser: a production build refuses development seams; a release builds it only when asked
 
 `home/web/build.mjs` used to warn and carry on when no `--history` was given
