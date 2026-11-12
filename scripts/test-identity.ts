@@ -172,6 +172,7 @@ console.log('\nonce found, the agent cannot be reassigned')
 // import (`import type`) brings no code, so it does not count: statements.ts
 // uses the SignPurpose type to check payloads.
 console.log('\ncontract only: nothing calls it yet')
+const GATED = 'slides/src/editor/vouch.ts'
 {
   const root = join(dirname(fileURLToPath(import.meta.url)), '..')
   const hits: string[] = []
@@ -180,12 +181,21 @@ console.log('\ncontract only: nothing calls it yet')
       if (f === 'node_modules' || f.startsWith('.') || f === 'dist' || f === 'dist-single') continue
       const p = join(dir, f)
       if (statSync(p).isDirectory()) walk(p)
-      else if (/\.(ts|tsx|js|mjs)$/.test(f) && p !== join(root, 'kernel/src/identity.ts') &&
+      else if (/\.(ts|tsx|js|mjs)$/.test(f) && p !== join(root, 'kernel/src/identity.ts') && p !== join(root, GATED) &&
         /^import(?!\s+type\b)[^\n]*from ['"][^'"]*\/identity(\.ts)?['"]/m.test(readFileSync(p, 'utf8'))) hits.push(p.slice(root.length + 1))
     }
   }
   for (const d of ['kernel/src', 'slides/src', 'spaces/src', 'type/src', 'dash/src']) walk(join(root, d))
   ok(hits.length === 0, `no runtime module imports kernel/src/identity.ts for its code (${hits.join(', ') || 'none'})`)
+  // The one exception: slides' People panel (bento/id P1), whose only call is
+  // behind the localStorage flag bento-people-vouch, off by default. Pinned to
+  // exactly that shape, so the contract stays free of behaviour change with
+  // the flag off.
+  const gated = readFileSync(join(root, GATED), 'utf8')
+  const calls = gated.match(/\bidentityAgent\(/g) ?? []
+  ok(calls.length === 1 && /return vouchEnabled\(\) \? identityAgent\(\) : null/.test(gated) &&
+    /lsGet\('bento-people-vouch'\) === 'on'/.test(gated),
+  `${GATED} calls the agent once, only behind the bento-people-vouch flag`)
 }
 
 // The real path, last: identityAgent() over globalThis, with its capture-once
