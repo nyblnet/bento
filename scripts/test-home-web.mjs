@@ -198,7 +198,8 @@ async function open(page, key) {
   return until(async () => { const u = await ui(page); return u.viewing || u.problem ? u : null }, 20000)
 }
 const frameRequests = (X, from) => X.seen.slice(from).filter((r) => r.url.startsWith(X.frame))
-const releaseRequests = (X, from) => X.seen.slice(from).filter((r) => r.url.startsWith(X.releaseBase.replace(/\/releases\/$/, '')))
+// what a file costs on the channel: not the once-per-load kill-switch status, which is the page's, not the file's
+const releaseRequests = (X, from) => X.seen.slice(from).filter((r) => r.url.startsWith(X.releaseBase.replace(/\/releases\/$/, '')) && r.url !== X.releaseBase + 'home/status.json')
 
 // ===== [T4] build A: the release key =====================================================
 section('[T4] a file runs only in its own verified release (build A, release key)')
@@ -385,8 +386,10 @@ section('[T2] nothing goes anywhere but the library, the frame page and the rele
   await ctx.close()
 
   const mine = recorded.slice(recFrom).filter((r) => r.url !== 'about:blank')
+  // the library's own files: the page, and what its worker precaches (stage 3)
+  const libFiles = ['/', '/sw.js', ...(A.info.offline?.precache ?? []).map((p) => p.path)].map((p) => A.library + p)
   const allowed = (r) => (r.method === 'GET' && (
-    r.url === A.library + '/' || r.url === A.frame + '/frame.html' || r.url.startsWith(A.releaseBase))) ||
+    libFiles.includes(r.url) || r.url === A.frame + '/frame.html' || r.url.startsWith(A.releaseBase))) ||
     r.url.startsWith('blob:') || r.url.startsWith('data:') || r.url === 'about:blank'
   const stray = mine.filter((r) => !allowed(r))
   ok(stray.length === 0, `every request the browser made is on the allow-list (${mine.length} recorded${stray.length ? '; stray: ' + stray.slice(0, 3).map((r) => r.method + ' ' + r.url).join(', ') : ''})`)

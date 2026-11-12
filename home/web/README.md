@@ -21,15 +21,17 @@ Stage 1 is **open and present, nothing kept**:
   signed release of its app;
 - Download gives back exactly the bytes that verified. Nothing else is written.
 
-There is no storage (the frame is an opaque origin and the page keeps nothing),
-no file handle, no service worker, no identity and no relay.
+There is no document storage (the frame is an opaque origin and the page keeps
+no document), no file handle, no identity and no relay. Since stage 3 the
+library has a service worker for its OWN files, so a returning visit opens
+offline, a signed kill switch, and a web app manifest (below).
 
 What "only verified code" and "no network" cover, exactly:
 
-- **The library** talks only to the signed release channel: the histories
-  bundled into the build are used first, and the channel is asked only when a
-  file does not verify against them, or when the person asks for the read-only
-  view.
+- **The library** talks only to the signed release channel: once per load for
+  the kill-switch status, and otherwise only when a file does not verify
+  against the histories bundled into the build, or when the person asks for
+  the read-only view. Its worker fetches only the library's own files.
 - **The document** in the frame runs only its verified release's code, but its
   own content may still load `https:` images, media and embeds, exactly as it
   does opened from disk. Its scripts can reach only the release channel.
@@ -83,7 +85,71 @@ build bundles the frozen slides 1.2.10 history from `home/fixtures/gate1`, which
 is right for development only. `--key` is a test seam for the rigs.
 
 Budgets: the library page without the histories it bundles is at most 32 KB,
-the frame page at most 4 KB (`scripts/test-home-web.mjs`).
+the frame page at most 4 KB (`scripts/test-home-web.mjs`), the worker at most
+3 KB (`scripts/test-home-web-offline.mjs`).
+
+## Stage 3: offline, the kill switch, install
+
+**The worker** (`src/sw.ts`, built by `offline.mjs` to `/sw.js`) runs on the
+library origin only. The frame site keeps `worker-src 'none'` and is never
+controlled by it; the frame's policy and sandbox are unchanged.
+
+- It precaches exactly the build's own files (`/`, the manifest, two icons),
+  each checked against the sha256 the build compiled into the script; one
+  mismatch and nothing is cached. The cache is named for the content hash of
+  those files, and activating a new worker deletes every other cache.
+- Network first: online, every listed path comes from the server as if there
+  were no worker; the cache answers only when the network fails. Every other
+  request (the release channel, the frame, any other path) is left alone and
+  never cached. It has no message listener: nothing a page says can add a URL,
+  bytes or code. No `importScripts`, `eval` or dynamic import; it is served
+  with its own `default-src 'none'; connect-src 'self'` policy and
+  `Cache-Control: no-cache`, and registered with `updateViaCache: 'none'`.
+- The library's CSP names that one script (`worker-src <origin>/sw.js`), and
+  its Trusted Types policy (`bento-sw`, the only one allowed) passes only that
+  URL to `register()`.
+- **Offline, a returning visit opens the library, not yet a document.** The
+  frame page lives on another site, which this worker cannot serve, so a
+  document opened offline gets a message saying it needs a connection, and
+  nothing is left open. Running documents offline needs a decision on how the
+  frame is delivered offline; it is not in this stage.
+
+**The kill switch.** Every load fetches `<release base>home/status.json`, a
+small manifest signed with the release key (`scripts/sign-home-status.mjs`
+makes it):
+
+```json
+{ "app": "bento-home-status", "seq": 7, "at": "…", "withdrawn": ["<build>", …] }
+```
+
+`<build>` is the hex sha256 of the library's one script: `build.mjs` prints it
+and writes it to `build.json` (`offline.build`); the served CSP's `script-src`
+hash is the same digest in base64. No file opens until the check answers.
+
+| the status | the library |
+|---|---|
+| unreachable, or 404 (offline; nothing published) | carries on: a returning visit must open offline |
+| signed, for `bento-home-status`, `seq` not below the highest this browser has seen, this build not listed | carries on, registers its worker |
+| lists this build | **stops**: unregisters every worker on its origin, deletes every cache, closes the open document and shows a fixed message |
+| anything else that came back (a bad signature, another payload, an older `seq`) | **fails closed**: the same as withdrawn |
+
+Beside its worker's cache, the library keeps one number: the highest `seq`
+seen (`localStorage`), so a replayed older status cannot un-withdraw a build. The
+message is fixed text: nothing from the manifest is shown. The next online load
+comes from the server, whatever it serves then.
+
+What it cannot do: stop a build that does not run this check. A hostile deploy
+ships its own code and can register its own worker at a path of its choosing.
+That needs the host to answer any request carrying `Service-Worker: script`
+with a cleaning worker, and a reset page sending `Clear-Site-Data`: header
+routing that static `_headers` cannot express, so it waits for the hosting
+move.
+
+**Install.** `manifest.webmanifest` (name, `start_url` and `scope` `/`,
+standalone, 192 and 512 px icons), linked from the page and allowed by an exact
+`manifest-src`. Browsers that offer install (Chromium; Safari's Add to Dock and
+Home Screen) can install bento/home. File handling and share targets are not
+in it yet.
 
 ## Rigs
 
@@ -91,10 +157,11 @@ the frame page at most 4 KB (`scripts/test-home-web.mjs`).
 |---|---|
 | `scripts/test-home-web.mjs` | the library and frame in a real browser (`BENTO_BROWSER=chromium\|webkit\|firefox`): verification, network allow-list, frame-page standalone refusals, downloads, navigation |
 | `scripts/test-home-web-mutants.mjs` | fourteen mutants, each red on the row that guards it |
+| `scripts/test-home-web-offline.mjs` | stage 3: the worker, offline, updates, the kill-switch drill, the status failing closed, install, the network allow-list; `--mutants` runs its own mutants |
 | `scripts/test-shell-standalone.mjs` | every app shell points to bento.page and never depends on it |
 
 Chromium runs in the required `validate` check; WebKit, Firefox and the mutants
-in `ci-home.yml` (`home-web-engines`).
+in `ci-home.yml` (`home-web-engines`, `home-web-offline-engines`).
 
 ## Not in stage 1
 

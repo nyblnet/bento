@@ -10,11 +10,15 @@
 // and never puts document markup in its own DOM: the file name and the
 // verdict are the only things from a file it shows, as text.
 //
-// Nothing is kept: no storage, no file handles, no service worker, no
-// identity. The only network this page uses is the signed release channel,
-// and only when a file does not verify against the histories the build
-// carries (or when the person asks to see an unverifiable file read-only).
+// Nothing is kept: no storage, no file handles, no identity. The only
+// network this page uses is the signed release channel: once per load, to ask
+// whether this build has been withdrawn (offline.ts), and otherwise only when
+// a file does not verify against the histories the build carries (or when the
+// person asks to see an unverifiable file read-only). A service worker keeps
+// the library's own files, never a document, so a returning visit opens
+// offline (offline.ts, sw.ts).
 
+import { startOffline } from './offline.ts'
 import { Histories, judge, judgeWithRefresh, decodeExact, extractDoc, spliceDoc, newestShell, APPS, MAX_BYTES, type Jwk, type PlanStep } from './verify.ts'
 
 declare const __FRAME_URL__: string
@@ -44,6 +48,21 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const show = (id: string, on: boolean) => { $(id).hidden = !on }
 const say = (id: string, text: string) => { $(id).textContent = text }
 
+/**
+ * The kill switch answers before any file opens. When this build is withdrawn
+ * (or the answer cannot be trusted) the page stops, with a fixed message.
+ */
+const ready = startOffline({
+  releaseBase: RELEASE_BASE, key: KEY,
+  onStop: (why) => {
+    closeDocument()
+    say('withdrawn-text', why === 'withdrawn'
+      ? 'This version of bento/home has been withdrawn. It has stopped, and removed itself from this browser. Reload to get the current version. Your files were not changed.'
+      : 'bento/home could not confirm that this version is still safe to use, so it has stopped, and removed itself from this browser. Reload to try again. Your files were not changed.')
+    document.body.classList.add('stopped')
+  },
+})
+
 /** A file name as shown: no control, bidi or invisible format characters (they can reorder what the person reads). */
 export const shownName = (name: string): string =>
   name.replace(/[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g, '').slice(0, 200) || 'document'
@@ -58,6 +77,9 @@ export function safeName(name: string): string {
 interface Session { frame: HTMLIFrameElement; port: MessagePort | null; pong: number; onReady: (e: MessageEvent) => void }
 /** How long a frame has to answer a ping after a load. */
 const PING_MS = 5000
+/** How long the frame page has to say it is ready, once it has loaded (or at all). */
+const READY_AFTER_LOAD_MS = 2000
+const READY_MS = 20000
 let session: Session | null = null
 
 function closeDocument() {
@@ -100,8 +122,18 @@ function serve(html: string, plan: PlanStep[], name: string, label: string, opts
   // document served, and it is closed. Load counts differ by engine; a ping
   // over the port does not.
   let ping = 0
+  // Before the handshake, a frame page that never says it is ready did not
+  // load (offline: the frame site is not this page's to cache) or refused.
+  const notReady = () => {
+    if (session !== s || s.port) return
+    fail(navigator.onLine
+      ? 'This document could not start: the page that runs it did not answer. Check your connection and try again.'
+      : 'You are offline. Opening a document here needs a connection for now: the page that runs it could not be reached. Your file was not changed.')
+  }
+  setTimeout(notReady, READY_MS)
   frame.addEventListener('load', () => {
-    if (session !== s || !s.port) return
+    if (session !== s) return
+    if (!s.port) { setTimeout(notReady, READY_AFTER_LOAD_MS); return }
     const n = ++ping
     s.port.postMessage({ kind: 'ping', n })
     setTimeout(() => {
@@ -173,6 +205,7 @@ async function openFile(file: File) {
   show('problem-box', false)
   if (file.size > MAX_BYTES) return fail('This file is too large to open here.')
   say('status', 'Checking…')
+  if (!(await ready)) return // withdrawn: the page has stopped
   const html = decodeExact(await file.arrayBuffer())
   if (html === null) { say('status', ''); return fail('This is not a Bento document (it is not UTF-8 text).') }
   await bundled
@@ -217,6 +250,7 @@ function pick() {
 
 $('file').addEventListener('change', pick)
 $('close').addEventListener('click', closeDocument)
+$('reload').addEventListener('click', () => location.reload())
 addEventListener('dragover', (e) => { e.preventDefault(); document.body.classList.add('dragging') })
 addEventListener('dragleave', () => document.body.classList.remove('dragging'))
 addEventListener('drop', (e) => {

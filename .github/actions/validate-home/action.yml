@@ -111,3 +111,16 @@ runs:
       # reaches the payload.
       shell: bento-step {0}
       run: node scripts/test-shell-standalone.mjs
+
+    - name: bento/home in your browser (stage 3) offline worker, kill switch, install, Chromium
+      # The library's service worker (library origin only) caches exactly the
+      # build's files, each checked against its pin, under a cache named for the
+      # build's content hash; it answers only when the network fails and keeps
+      # no document. A returning visit opens offline; a document opened offline
+      # says it needs a connection. The kill switch: a signed status that lists
+      # this build stops the page, unregisters the worker and deletes its
+      # caches, and the next load is clean; a bad signature, another payload or
+      # a replayed older status fails closed. The manifest makes it installable.
+      # WebKit, Firefox and the mutants run in ci-home.yml (home-web-offline-engines).
+      shell: bento-step {0}
+      run: node scripts/test-home-web-offline.mjs
