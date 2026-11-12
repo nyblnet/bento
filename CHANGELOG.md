@@ -11,6 +11,12 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Large pictures in a live deck upload once.** While you kept editing, a
+  picture still on its way to the sync server was sent again after every
+  change, several copies at once, and the server turned most of them away. A
+  deck now uploads each picture once, waits a little longer after each failed
+  try, and waits until the connection is ready before starting.
+
 ## [1.2.13] — 2026-11-09
 
 - **Security: update this file. This release closes issues reported to us and

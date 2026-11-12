@@ -109,6 +109,12 @@ export const ALLOWED_SKIPS = [
     when: notMac,
     why: 'the gate-1 Swift port hashes and verifies signatures with CryptoKit, Apple platforms only (see test-tray-releases)',
   },
+  {
+    rig: 'scripts/test-home-web-out.mjs',
+    line: /home-web out: SKIPPED — the \/System\/Volumes\/Data firmlink exists only on macOS/,
+    when: notMac,
+    why: 'the firmlink that realpath does not map back exists only on macOS; the other containment rows (symlink, ..hw, case, published tree) still gate here, and the macOS home-ios job runs the firmlink row and its mutant',
+  },
 ]
 
 /** The rigs allowed to skip off macOS must run, unskipped, on the macOS job. */

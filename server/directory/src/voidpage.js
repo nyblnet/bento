@@ -69,7 +69,7 @@ export const VOID_HTML = `<!doctype html>
 <section id="change" data-view hidden>
 <h1>Stop this change?</h1>
 <p>A change to the passkeys on the bento/id account for <strong data-address></strong> is waiting. The email that brought you here says what it is.</p>
-<p id="hint-c" hidden>If you did not ask for this, the usual cause is a page that used your own passkey: choose Cancel. Choose Remove only if you do not recognise the passkey that asked.</p>
+<p id="hint-c" hidden>If you did not ask for this, your passkey was used for something you did not intend. Choose Cancel: it is always safe. Choose Remove only if you do not recognise the passkey that asked (the email names it).</p>
 <p id="hint-o" hidden>If you did not ask for this, choose Cancel.</p>
 <p class="buttons"><button id="cancel" type="button">Cancel this change</button>
 <button id="remove" type="button" class="danger" hidden>Cancel, and remove the passkey that asked for it</button></p>
@@ -88,6 +88,7 @@ export const VOID_HTML = `<!doctype html>
 <section id="cancelled" data-view hidden>
 <h1>Cancelled</h1>
 <p>Nothing changed. <span id="cool"></span></p>
+<p id="back" hidden>The removal of the suspended passkey, which the reset had set aside, is waiting again: it takes effect at <span id="back-at"></span>. The link in the email that said it was suspended can still put it back until then.</p>
 </section>
 <section id="suspended" data-view hidden>
 <h1>Cancelled, and the passkey is suspended</h1>
@@ -96,10 +97,23 @@ export const VOID_HTML = `<!doctype html>
 <section id="restored" data-view hidden>
 <h1>The passkey is back</h1>
 <p>It can be used again, and it will not be removed.</p>
+<p id="reset-again" hidden>The reset that is waiting now takes effect at <span id="reset-at"></span>: putting the passkey back starts its 72 hours again. The link in the email about the reset still stops it.</p>
+</section>
+<section id="late" data-view hidden>
+<h1>Too late</h1>
+<p id="late-text"></p>
 </section>
 <section id="used" data-view hidden>
+<h1>This link was already used</h1>
+<p>It was used at <span id="used-at"></span>. The email sent then says what it did.</p>
+</section>
+<section id="preempted" data-view hidden>
+<h1>A reset cancelled this change</h1>
+<p>A reset of this account was asked for at <span id="preempted-at"></span>, and it cancelled this change. The email “A reset of your bento/id account is waiting” says more.</p>
+</section>
+<section id="unknown" data-view hidden>
 <h1>This link no longer works</h1>
-<p>It was already used, or what it was for has already taken effect or been stopped. Nothing changed.</p>
+<p>It may have been used already, or the change it was for may have been stopped or replaced. The latest email about your bento/id passkeys lists them as they are now.</p>
 </section>
 <section id="bad" data-view hidden>
 <h1>This link is incomplete</h1>
@@ -145,6 +159,12 @@ export const VOID_JS = `(() => {
     $('remove').hidden = kind !== 'c'
   }
   const buttons = () => document.querySelectorAll('button')
+  const at = (t) => new Date(t).toLocaleString()
+  const late = (j) => j.by === 'reset'
+    ? 'This account was reset at ' + at(j.at) + '. The email “Your bento/id account was reset” lists its passkeys now.'
+    : kind === 'r' ? 'The reset took effect at ' + at(j.at) + '. The email “Your bento/id account was reset” lists its passkeys now.'
+      : kind === 'u' ? 'The passkey was removed at ' + at(j.at) + '. The email “Your bento/id passkeys changed” lists the passkeys now.'
+        : 'This change took effect at ' + at(j.at) + '. The email “Your bento/id passkeys changed” lists the passkeys now.'
   let busy = false
   async function send(choice) {
     if (busy) return
@@ -158,16 +178,26 @@ export const VOID_JS = `(() => {
     } catch { /* shown below */ }
     const again = (t) => { say(t); busy = false; for (const b of buttons()) b.disabled = false }
     if (r && r.ok && j.done === 'cancelled') {
-      $('cool').textContent = j.until ? 'The passkey that asked for it can still sign in, but cannot ask for another change until ' + new Date(j.until).toLocaleString() + '.' : ''
+      $('cool').textContent = j.until ? 'The passkey that asked for it can still sign in, but cannot ask for another change until ' + at(j.until) + '.' : ''
+      if (typeof j.removesAt === 'number') { $('back-at').textContent = at(j.removesAt); $('back').hidden = false }
       return show('cancelled')
     }
-    if (r && r.ok && j.done === 'suspended') { $('removes').textContent = new Date(j.removesAt).toLocaleString(); return show('suspended') }
-    if (r && r.ok && j.done === 'restored') return show('restored')
-    if (!r) return again('Could not reach bento/id. Check your connection and try again. Nothing changed.')
+    if (r && r.ok && j.done === 'suspended') { $('removes').textContent = at(j.removesAt); return show('suspended') }
+    if (r && r.ok && j.done === 'restored') {
+      if (typeof j.resetAt === 'number') { $('reset-at').textContent = at(j.resetAt); $('reset-again').hidden = false }
+      return show('restored')
+    }
+    // the request may have arrived, so the page cannot say nothing changed
+    if (!r) return again('Could not reach bento/id, or its answer was lost. Press the button again: if it already worked, this page will say so.')
+    if (j.error === 'busy') return again('This link is being used in another tab or window right now. Wait a moment, then press the button again.')
     if (r.status === 503) return again('We could not send the email that confirms this, so nothing changed. Try again in a few minutes, or choose Cancel.')
     if (r.status === 429) return again('Too many tries from this network. Try again later. Nothing changed.')
     if (j.error === 'choice') return again('That choice is not offered for this link. Nothing changed.')
-    show('used')
+    // a link whose life has ended: the directory says how, and the page says it plainly
+    if (j.error === 'late' && typeof j.at === 'number') { $('late-text').textContent = late(j); return show('late') }
+    if (j.error === 'used' && typeof j.at === 'number') { $('used-at').textContent = at(j.at); return show('used') }
+    if (j.error === 'preempted' && typeof j.at === 'number') { $('preempted-at').textContent = at(j.at); return show('preempted') }
+    show('unknown')
   }
   $('cancel').addEventListener('click', () => send('cancel'))
   $('remove').addEventListener('click', () => send('remove'))

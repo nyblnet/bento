@@ -25,10 +25,11 @@ import { writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { b64uEnc, sha256b64u } from '../kernel/src/statements.ts'
-import { buildRos, ROSTER_WEB_ORIGINS, type MemberKind } from '../kernel/src/roster.ts'
+import { buildRos, buildVrs, ROSTER_WEB_ORIGINS, NEW_ACCOUNT_MS, type MemberKind } from '../kernel/src/roster.ts'
+import { signStatement } from '../kernel/src/statements.ts'
 import {
-  ADDRESS, DIRECTORY_KEYS, H, K, LABELS, N, NOW, OFF_CURVE, ORIGIN, RP, T, assertion, be32, big, chainOf, ecdsa, highS, link, minInt, nonce, pubOf, rawToDer, sha, te, unb,
-  type Spec, type M, type Link,
+  ADDRESS, CONSENT_RP, DIRECTORY_KEYS, H, K, LABELS, N, NOW, OFF_CURVE, ORIGIN, RP, T, assertion, be32, big, chainOf, cosign, ecdsa, highS, link, minInt, nonce, pubOf, rawToDer, sha, te, unb,
+  type Spec, type M, type Link, type CnsOpts,
 } from './lib/roster-build.ts'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -204,8 +205,8 @@ reject('signer/missing', 'a member change with no signer', await upTo(1, { ...S1
 reject('signer/missing-with-assertion', 'an assertion but no signer named', await upTo(1, { ...S1, signer: undefined, proof: 'assertion' }), 'proof')
 reject('signer/not-a-member', 'pk3 is not in the previous roster', await upTo(1, { ...S1, members: [['pk', 'pk1'], ['pk', 'pk3']], signer: 'pk3' }), 'signer')
 reject('signer/adds-itself', 'pk2 asks to add pk2: it is not a member of the PREVIOUS head', await upTo(1, { ...S1, signer: 'pk2' }), 'signer')
-reject('signer/consent-key', 'a consent key signing alone (its purpose is not defined yet)',
-  await upTo(4, { members: [['ck', 'ck1'], ['pk', 'pk1'], ['pk', 'pk2'], ['pk', 'pk3'], ['rk', 'rk1']], req: T + 240 * H, rip: T + 312 * H, signer: 'ck1', proof: 'sig' }), 'signer-kind')
+reject('signer/consent-key', 'a consent key signing with a bare signature over the ros. text: a ck signs only a cns. (purpose roster)',
+  await upTo(4, { members: [['ck', 'ck1'], ['pk', 'pk1'], ['pk', 'pk2'], ['pk', 'pk3'], ['rk', 'rk1']], req: T + 240 * H, rip: T + 312 * H, signer: 'ck1', proof: 'sig' }), 'proof')
 reject('proof/passkey-raw-signature', 'a passkey must sign by assertion, not a raw signature', await upTo(1, { ...S1, proof: 'sig' }), 'proof')
 reject('proof/passkey-both', 'one proof only', await upTo(1, { ...S1, proof: 'both' }), 'proof')
 reject('proof/recovery-key-assertion', 'a recovery key signs raw, not by assertion', await upTo(3, { ...S3, proof: 'assertion' }), 'proof')
@@ -319,9 +320,9 @@ const afterQ = { pk1: mem('pk', 'pk1', T), pk2q: mem('pk', 'pk2', T + 73 * H, tr
   reject('q/also-adds', 'the quarantine also adds the key the voided request asked for', await fromB3({ ...QS, members: [['pk', 'pk1'], ['pk', 'pk2', 'q'], ['pk', 'pk3'], ['rk', 'rk1']] }), 'target')
   reject('q/with-member-proof', 'a directory act carries no member proof of its own', await fromB3({ ...QS, signer: 'pk1' }), 'proof')
   reject('q/carries-cited', 'a quarantine carries the voided request only', await fromB3({ ...QS, cited: { prevRos: 'a', ros: 'b', rip: 'c', ripSig: 'd' } }), 'proof')
-  reject('q/voided-consent-key', 'a voided request signed by a consent key (its purpose is not defined yet)',
+  reject('q/voided-consent-key', 'a voided request signed by a consent key with a bare signature, not a cns.',
     await chainOf([...BASE.slice(0, 4), { members: [['ck', 'ck1', 'q'], ['pk', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1']], req: T + 240 * H, rip: T + 240 * H, auth: 'q',
-      voided: { members: [['ck', 'ck1'], ['pk', 'pk1'], ['pk', 'pk2'], ['pk', 'pk3'], ['rk', 'rk1']], signer: 'ck1' } }]), 'voided-signer-kind')
+      voided: { members: [['ck', 'ck1'], ['pk', 'pk1'], ['pk', 'pk2'], ['pk', 'pk3'], ['rk', 'rk1']], signer: 'ck1', proof: 'sig' } }]), 'voided-proof')
   {
     const tok = (k: string, l: string, q = '') => `${k}~${pubOf(l)}${q}`
     const raw = [tok('ck', 'pk2', '~q'), tok('pk', 'pk1'), tok('rk', 'rk1')].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)).join(',')
@@ -490,6 +491,158 @@ const afterQ = { pk1: mem('pk', 'pk1', T), pk2q: mem('pk', 'pk2', T + 73 * H, tr
   }
 }
 
+// --- consent keys (KG3): a ck as the requester, and the co-sign that skips the wait ----------
+//
+// B4 = L0..L3: ck1 joined at L3 (ripened T+232h), so it is ripe from T+304h on.
+{
+  const B4 = BASE.slice(0, 4)
+  const on = (...more: Spec[]) => chainOf([...B4, ...more])
+  const PLUS_PK3: M[] = [['ck', 'ck1'], ['pk', 'pk1'], ['pk', 'pk2'], ['pk', 'pk3'], ['rk', 'rk1']]
+  const atL3 = { pk1: mem('pk', 'pk1', T), pk2: mem('pk', 'pk2', T + 73 * H), rk1: mem('rk', 'rk1', T + 152 * H), ck1: mem('ck', 'ck1', T + 232 * H) }
+  const st = (seq: number, at: number, extra: ReturnType<typeof mem>[], base = [atL3.pk1, atL3.pk2, atL3.rk1, atL3.ck1]) =>
+    ({ seq, ripenedAt: at, members: [...base, ...extra], createdAt: T, lastResetAt: null, sinceExact: true })
+  const ck = (req: number, rip: number, more: Partial<Spec> = {}): Spec => ({ members: PLUS_PK3, req, rip, signer: 'ck1', ...more })
+  const co = (req: number, rip: number, more: Partial<Spec> = {}): Spec => ({ members: PLUS_PK3, req, rip, signer: 'pk1', co: { signer: 'ck1' }, ...more })
+  const R4 = T + 304 * H   // ck1 exactly 72 h a member
+
+  // the ck as the requester
+  accept('ok/ck-requests-with-wait', 'an unripe consent key (8 h a member) asks to add pk3; the change waits 72 h like any other',
+    await on(ck(T + 240 * H, T + 312 * H)), st(4, T + 312 * H, [mem('pk', 'pk3', T + 312 * H)]))
+  reject('ck/unripe-at-once', 'the same unripe consent key, ripened at once: the wait is not skipped', await on(ck(T + 240 * H, T + 240 * H)), 'unripe')
+  accept('ok/ck-ripe-at-once', 'a consent key exactly 72 h a member (at the directory\'s requestedAt) asks: no wait',
+    await on(ck(R4, R4)), st(4, R4, [mem('pk', 'pk3', R4)]))
+  reject('ck/ripe-one-second-short', 'the consent key is 72 h less one second a member at the request: the wait applies', await on(ck(R4 - 1000, R4 - 1000)), 'unripe')
+  reject('ck/cns-and-assertion', 'a ck proof is its cns. alone, never with an assertion', await on(ck(R4, R4, { proof: 'cns+assertion' })), 'proof')
+  reject('ck/cns-expired', 'the cns. expired at the directory\'s requestedAt', await on(ck(R4, R4, { cns: { exp: R4 } })), 'consent-expired')
+  reject('ck/cns-long-life', 'the cns. lives longer than 5 minutes plus the skew from the request', await on(ck(R4, R4, { cns: { life: 10 * 60_000 + 1 } })), 'consent-lifetime')
+  reject('ck/cns-other-purpose', 'the cns. carries purpose web-add (a browser approval), not roster', await on(ck(R4, R4, { cns: { purpose: 'web-add' } })), 'consent-purpose')
+  reject('ck/cns-link-purpose', 'the cns. carries K2\'s purpose link', await on(ck(R4, R4, { cns: { purpose: 'link' } })), 'consent-purpose')
+  reject('ck/cns-reserved-purpose', 'the cns. carries the reserved purpose grant', await on(ck(R4, R4, { cns: { purpose: 'grant' } })), 'consent-reserved-purpose')
+  reject('ck/cns-other-rp', 'the cns. names another rp', await on(ck(R4, R4, { cns: { rp: 'vault-acme' } })), 'consent-rp')
+  reject('ck/cns-other-text', 'the cns. covers another ros. text', await on(ck(R4, R4, { cns: { over: 'ros.another' } })), 'consent-transcript')
+  reject('ck/cns-other-audience', 'the cns. was made for a room, not the directory', await on(ck(R4, R4, { cns: { audience: 'room:w' + 'A'.repeat(43) } })), 'consent-transcript')
+  reject('ck/cns-other-challenge', 'the cns. is bound to another challenge than the head\'s dirNonce', await on(ck(R4, R4, { cns: { challenge: nonce(77) } })), 'consent-transcript')
+  reject('ck/cns-doc-scoped', 'the cns. names a document', await on(ck(R4, R4, { cns: { docId: 'doc-1' } })), 'consent-grammar')
+  reject('ck/cns-wrong-key', 'the cns. is signed by ck2 while ck1 asks', await on(ck(R4, R4, { cns: { by: 'ck2' } })), 'consent-signature')
+  reject('ck/cns-high-s', 'the cns. signature in high-S form', await on(ck(R4, R4, { cns: { highS: true } })), 'consent-signature')
+
+  // the co-sign (security's ruling on #917, item 4)
+  accept('ok/cosign-skips-wait', 'pk1 asks to add pk3 and ripe ck1 co-signs: in force at once',
+    await on(co(T + 310 * H, T + 310 * H)), st(4, T + 310 * H, [mem('pk', 'pk3', T + 310 * H)]))
+  accept('ok/cosign-exactly-72h', 'the co-signer is exactly 72 h a member at the request', await on(co(R4, R4)), st(4, R4, [mem('pk', 'pk3', R4)]))
+  accept('ok/cosign-rk-requester', 'the recovery key asks and ripe ck1 co-signs: at once', await on(co(R4, R4, { signer: 'rk1' })), st(4, R4, [mem('pk', 'pk3', R4)]))
+  reject('cosign/unripe', 'the co-signer is 68 h a member', await on(co(T + 300 * H, T + 300 * H)), 'cosign-unripe')
+  reject('cosign/one-second-short', 'the co-signer is 72 h less one second a member', await on(co(R4 - 1000, R4 - 1000)), 'cosign-unripe')
+  reject('cosign/age-from-requester-clock', 'the requester\'s created says 168 h after ck1 joined, the directory\'s requestedAt only 68 h: the age is the directory\'s',
+    await on(co(T + 300 * H, T + 300 * H, { created: T + 400 * H })), 'cosign-unripe')
+  reject('cosign/by-passkey', 'a passkey cannot co-sign (a browser never skips the wait)', await on(co(R4, R4, { co: { signer: 'pk2' } })), 'cosign-kind')
+  reject('cosign/by-recovery-key', 'a recovery key cannot co-sign', await on(co(R4, R4, { co: { signer: 'rk1' } })), 'cosign-kind')
+  reject('cosign/by-requester', 'the requesting ck co-signs its own request', await on(co(R4, R4, { signer: 'ck1' })), 'cosign')
+  reject('cosign/not-member', 'ck2 is not on the roster', await on(co(R4, R4, { co: { signer: 'ck2' } })), 'cosign-signer')
+  reject('cosign/adds-itself', 'the change adds ck2, and ck2 co-signs it: not a member of the PREVIOUS head',
+    await on(co(R4, R4, { members: [['ck', 'ck1'], ['ck', 'ck2'], ['pk', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1']], co: { signer: 'ck2' } })), 'cosign-signer')
+  reject('cosign/quarantined', 'ck1 was quarantined (its own request voided) before it co-signs',
+    await on({ members: [['ck', 'ck1', 'q'], ['pk', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1']], req: T + 240 * H, rip: T + 240 * H, auth: 'q',
+      voided: { members: PLUS_PK3, signer: 'ck1' } },
+    { members: [['ck', 'ck1', 'q'], ['pk', 'pk1'], ['pk', 'pk2'], ['pk', 'pk3'], ['rk', 'rk1']], req: T + 310 * H, rip: T + 310 * H, signer: 'pk1', co: { signer: 'ck1' } }), 'cosign-quarantined')
+  reject('cosign/other-text', 'the co-sign covers another ros. text', await on(co(R4, R4, { co: { signer: 'ck1', over: 'ros.another' } })), 'cosign-consent-transcript')
+  reject('cosign/expired', 'the co-sign expired at the request', await on(co(R4, R4, { co: { signer: 'ck1', exp: R4 } })), 'cosign-consent-expired')
+  reject('cosign/wrong-key', 'the co-sign names ck1 but ck2 signed it', await on(co(R4, R4, { co: { signer: 'ck1', by: 'ck2' } })), 'cosign-consent-signature')
+  reject('cosign/other-purpose', 'the co-sign carries purpose web-add', await on(co(R4, R4, { co: { signer: 'ck1', purpose: 'web-add' } })), 'cosign-consent-purpose')
+  reject('cosign/on-reset', 'a reset carries no member proof, a co-sign included',
+    await on({ members: [['pk', 'pk3']], req: T + 240 * H, rip: T + 312 * H, reset: true, co: { signer: 'ck1' } }), 'proof')
+  reject('cosign/on-quarantine', 'a directory act carries no co-sign',
+    await on({ members: [['ck', 'ck1'], ['pk', 'pk1'], ['pk', 'pk2', 'q'], ['rk', 'rk1']], req: T + 310 * H, rip: T + 310 * H, auth: 'q',
+      voided: { members: PLUS_PK3, signer: 'pk2' }, co: { signer: 'ck1' } }), 'proof')
+  {
+    // from a pin of L4 (T+240h), ck1's since is the pin's ripenedAt: a lower bound on its age, so the check only refuses more
+    const c = await chainOf([...BASE.slice(0, 5), { members: [['ck', 'ck1'], ['pk', 'pk1'], ['pk', 'pk3'], ['rk', 'rk1']], req: T + 310 * H, rip: T + 310 * H, signer: 'pk1', co: { signer: 'ck1' } }])
+    reject('cosign/pinned-age-lower-bound', 'from a pin of L4, ck1 counts as a member since T+240h: at T+310h it is not ripe (truly it is, since T+304h)',
+      c.slice(4), 'cosign-unripe', await sha256b64u(c[4].ros))
+    const d = await chainOf([...BASE.slice(0, 5), { members: [['ck', 'ck1'], ['pk', 'pk1'], ['pk', 'pk3'], ['rk', 'rk1']], req: T + 312 * H, rip: T + 312 * H, signer: 'pk1', co: { signer: 'ck1' } }])
+    accept('ok/cosign-pinned-ripe', 'from the same pin, at T+312h (72 h after the pin): ripe', d.slice(4),
+      { seq: 5, ripenedAt: T + 312 * H, members: [mem('ck', 'ck1', T + 240 * H), mem('pk', 'pk1', T + 240 * H), mem('pk', 'pk3', T + 312 * H), mem('rk', 'rk1', T + 240 * H)],
+        createdAt: null, lastResetAt: null, sinceExact: false }, await sha256b64u(d[4].ros))
+  }
+  reject('cosign/readded-age-restarts', 'ck1 removed and added again 8 h before it co-signs: its age restarts at the re-add',
+    await on({ members: [['pk', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1']], req: T + 240 * H, rip: T + 312 * H, signer: 'pk1' },
+      { members: [['ck', 'ck1'], ['pk', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1']], req: T + 320 * H, rip: T + 392 * H, signer: 'pk1' },
+      { members: PLUS_PK3, req: T + 400 * H, rip: T + 400 * H, signer: 'pk1', co: { signer: 'ck1' } }), 'cosign-unripe')
+
+  // a consent key's request as a quarantine's evidence
+  accept('ok/q-voided-by-consent-key', 'ck1 asked (by its cns.), the mailbox voided it and quarantined ck1',
+    await on({ members: [['ck', 'ck1', 'q'], ['pk', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1']], req: T + 240 * H, rip: T + 240 * H, auth: 'q', voided: { members: PLUS_PK3, signer: 'ck1' } }),
+    st(4, T + 240 * H, [mem('ck', 'ck1', T + 232 * H, true)], [atL3.pk1, atL3.pk2, atL3.rk1]))
+  accept('ok/q-voided-ck-cns-old', 'the voided request\'s cns. is long expired: evidence of who asked has no time check',
+    await on({ members: [['ck', 'ck1', 'q'], ['pk', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1']], req: T + 240 * H, rip: T + 240 * H, auth: 'q',
+      voided: { members: PLUS_PK3, signer: 'ck1', cns: { exp: T + 1 * H } } }),
+    st(4, T + 240 * H, [mem('ck', 'ck1', T + 232 * H, true)], [atL3.pk1, atL3.pk2, atL3.rk1]))
+  reject('q/voided-ck-cns-other-text', 'the voided request\'s cns. covers another text', await on({ members: [['ck', 'ck1', 'q'], ['pk', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1']],
+    req: T + 240 * H, rip: T + 240 * H, auth: 'q', voided: { members: PLUS_PK3, signer: 'ck1', cns: { over: 'ros.another' } } }), 'voided-consent-transcript')
+}
+
+// --- vrs.: a member stops a reset (the directory's check; security's C4/C5 on #944) ---------
+//
+// The account was set up at T. L4 (T+240h) is the head the reset would replace: pk1, rk1, ck1.
+type StopRow = { name: string; about: string; links: Link[]; pinned?: string; resetRos: string; resetRequestedAt: number; challenge: string
+  now: number; text: string; signer: string; proof: { assertion?: unknown; sig?: string; cns?: string }; spent?: boolean; expect: 'accept' | 'reject'; reason?: string }
+const resetStops: StopRow[] = []
+{
+  const L = await chainOf(BASE.slice(0, 5))
+  const DAY14 = T + NEW_ACCOUNT_MS
+  const resetOf = async (on: string, o: { members?: M[]; seq?: number; prev?: string } = {}) => buildRos({ address: ADDRESS, seq: o.seq ?? 5, prev: o.prev ?? await sha256b64u(on),
+    members: (o.members ?? [['pk', 'pk3']]).map(([k, l]) => ({ kind: k, pub: pubOf(l), quarantined: false })), dirNonce: nonce(60), created: DAY14 })
+  const RESET = await resetOf(L[4].ros)
+  const CH = nonce(61)
+  type StopSpec = { name: string; about: string; links?: Link[]; pinned?: string; resetRos?: string; resetRequestedAt?: number; now?: number; signer?: string
+    vrs?: { address?: string; reset?: string; nonce?: string }; text?: string; proof?: 'assertion' | 'sig' | 'cns'; over?: string; sigBy?: string; cns?: CnsOpts; spent?: boolean; reason?: string }
+  const stop = async (x: StopSpec) => {
+    const resetRos = x.resetRos ?? RESET
+    const text = x.text ?? buildVrs({ address: x.vrs?.address ?? ADDRESS, resetHash: x.vrs?.reset ?? await sha256b64u(resetRos), dirNonce: x.vrs?.nonce ?? CH })
+    const signer = x.signer ?? 'pk1'
+    const now = x.now ?? DAY14 + 4 * H
+    const kind = x.proof ?? (signer.startsWith('pk') ? 'assertion' : signer.startsWith('ck') ? 'cns' : 'sig')
+    const proof: StopRow['proof'] = {}
+    if (kind === 'assertion') proof.assertion = await assertion(signer, x.over ?? text)
+    else if (kind === 'sig') proof.sig = await signStatement(K[x.sigBy ?? signer].key, x.over ?? text)
+    else { const c = await cosign(signer, text, CH, now, x.cns); proof.cns = c.cns; proof.sig = c.sig }
+    resetStops.push({ name: x.name, about: x.about, links: x.links ?? L, ...(x.pinned ? { pinned: x.pinned } : {}), resetRos, resetRequestedAt: x.resetRequestedAt ?? DAY14,
+      challenge: CH, now, text, signer: pubOf(signer), proof, ...(x.spent ? { spent: true } : {}), expect: x.reason ? 'reject' : 'accept', ...(x.reason ? { reason: x.reason } : {}) })
+  }
+  await stop({ name: 'ok/stop-by-passkey', about: 'the reset was requested exactly 14 days after setup; pk1 stops it' })
+  await stop({ name: 'ok/stop-by-recovery-key', about: 'the recovery key stops it (a raw signature)', signer: 'rk1' })
+  await stop({ name: 'ok/stop-by-consent-key', about: 'the consent key stops it (a roster cns. over the vrs. text, alive now)', signer: 'ck1' })
+  await stop({ name: 'stop/new-account', about: 'the reset was requested one second before day 14', resetRequestedAt: DAY14 - 1000, reason: 'new-account' })
+  await stop({ name: 'stop/age-at-request-not-at-stop', about: 'requested on day 12.5, stopped on day 16.7: the age is judged when the reset was REQUESTED (security C4 on #944)',
+    resetRequestedAt: T + 300 * H, now: T + 400 * H, reason: 'new-account' })
+  await stop({ name: 'stop/pinned-age-unknown', about: 'a chain read from a pin has no creation time: the stop is refused (the directory holds the whole chain)',
+    links: L.slice(4), pinned: await sha256b64u(L[4].ros), reason: 'age-unknown' })
+  await stop({ name: 'stop/signer-not-member', about: 'pk4 is not on the roster', signer: 'pk4', reason: 'signer' })
+  {
+    const q = await chainOf([...BASE.slice(0, 4), { members: [['ck', 'ck1', 'q'], ['pk', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1']], req: T + 240 * H, rip: T + 240 * H, auth: 'q',
+      voided: { members: [['ck', 'ck1'], ['pk', 'pk1'], ['pk', 'pk2'], ['pk', 'pk3'], ['rk', 'rk1']], signer: 'ck1' } }])
+    await stop({ name: 'stop/signer-quarantined', about: 'ck1 is quarantined', links: q, resetRos: await resetOf(q[4].ros), signer: 'ck1', reason: 'quarantined' })
+  }
+  await stop({ name: 'stop/other-reset', about: 'the vrs. names another reset request', vrs: { reset: await sha256b64u(await resetOf(L[4].ros, { members: [['pk', 'pk4']] })) }, reason: 'reset-mismatch' })
+  {
+    const offHead = await resetOf(L[3].ros, { seq: 4 })
+    await stop({ name: 'stop/reset-not-on-head', about: 'the reset request names an earlier head as its previous', resetRos: offHead, reason: 'reset' })
+    const two = await resetOf(L[4].ros, { members: [['pk', 'pk3'], ['pk', 'pk4']] })
+    await stop({ name: 'stop/reset-two-members', about: 'what it stops is not a reset (two members)', resetRos: two, reason: 'reset' })
+  }
+  await stop({ name: 'stop/requested-before-head', about: 'the reset was requested before the head it replaces ripened', resetRequestedAt: T + 240 * H - 1, reason: 'order' })
+  await stop({ name: 'stop/other-address', about: 'the vrs. names another account', vrs: { address: 'bob@example.com' }, reason: 'address' })
+  await stop({ name: 'stop/other-challenge', about: 'the vrs. carries another challenge than the one issued', vrs: { nonce: nonce(62) }, reason: 'challenge' })
+  await stop({ name: 'stop/spent', about: 'the challenge was already spent', spent: true, reason: 'replay' })
+  await stop({ name: 'stop/assertion-other-text', about: 'the assertion covers another text', over: 'vrs.another', reason: 'assertion-challenge' })
+  await stop({ name: 'stop/rk-wrong-key', about: 'the recovery-key signature is by another key', signer: 'rk1', sigBy: 'rk2', reason: 'signature' })
+  await stop({ name: 'stop/ck-cns-expired', about: 'the consent key\'s cns. expired before now', signer: 'ck1', cns: { exp: DAY14 + 4 * H }, reason: 'consent-expired' })
+  await stop({ name: 'stop/ck-cns-web-add', about: 'the consent key\'s cns. carries purpose web-add', signer: 'ck1', cns: { purpose: 'web-add' }, reason: 'consent-purpose' })
+  await stop({ name: 'stop/passkey-raw-signature', about: 'a passkey stops by assertion only', proof: 'sig', reason: 'proof' })
+  await stop({ name: 'stop/extra-field', about: 'an extra field', text: buildVrs({ address: ADDRESS, resetHash: await sha256b64u(RESET), dirNonce: CH }) + '.x', reason: 'grammar' })
+  await stop({ name: 'stop/address-not-normal', about: 'the address is in normal form', vrs: { address: 'Alice@Example.com' }, reason: 'grammar' })
+}
+
 // ---------------------------------------------------------------------------------------------
 
 const keys: Record<string, string> = {}
@@ -504,8 +657,12 @@ const out = {
   directoryKeys: DIRECTORY_KEYS,
   // signs rip/unknown-kid under kid dir-9; for a positive control only, never pinned
   unpinnedDirectoryKey: K.dirOther.pub,
+  // the rp a consent key's cns. names (verifyRosterChain's consentRp)
+  consentRp: CONSENT_RP,
   keys,
   rows,
+  // vrs.: verifyResetStop(text, signer, proof, { roster (this row's chain), resetRos, resetRequestedAt, challenge, spend: () => !spent, rpId, origins, consentRp, now })
+  resetStops,
 }
 // keep the committed bytes of every row that differs only in its (random) signatures
 const SIGS = new Set(['ripSig', 'sig', 'signature'])
@@ -513,6 +670,8 @@ const masked = (v: unknown) => JSON.stringify(v, (k, x) => (SIGS.has(k) ? '' : x
 const before = existsSync(OUT) ? JSON.parse(readFileSync(OUT, 'utf8')) : null
 const old = new Map<string, Row>((before?.rows ?? []).map((r: Row) => [r.name, r]))
 out.rows = rows.map((r) => { const o = old.get(r.name); return o && masked(o) === masked(r) ? o : r })
+const oldStops = new Map<string, StopRow>((before?.resetStops ?? []).map((r: StopRow) => [r.name, r]))
+out.resetStops = resetStops.map((r) => { const o = oldStops.get(r.name); return o && masked(o) === masked(r) ? o : r })
 const text = JSON.stringify(out, null, 2) + '\n'
 if (CHECK) {
   const changed = out.rows.filter((r) => old.get(r.name) !== r).map((r) => r.name)
