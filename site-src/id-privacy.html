@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>bento/id privacy notice — bento.page</title>
-<meta name="description" content="What the bento/id directory at id.bento.page stores, what it never stores, who processes it, how long it is kept, and how to delete it.">
+<meta name="description" content="What bento/id keeps about your account, the mail it sends, how long each record is kept, and how to delete your account.">
 <link rel="canonical" href="https://bento.page/id/privacy">
 <meta name="theme-color" content="#0D1B2E">
 <style>
@@ -17,7 +17,10 @@ h1{color:var(--white);font-family:Fraunces,Georgia,serif;font-size:clamp(30px,5v
 h2{color:var(--white);font-size:19px;margin:32px 0 8px}
 p,li{margin:0 0 10px}
 ul{padding-left:20px}
+code{font-size:.92em;color:var(--white)}
 .meta{color:var(--dim);font-size:14px;margin-bottom:24px}
+.planned{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--ink);background:var(--peach);border-radius:4px;padding:0 6px;margin-right:6px}
+.wrap{overflow-x:auto}
 table{border-collapse:collapse;width:100%;font-size:15px;margin:8px 0 12px}
 th,td{text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:8px 6px}
 th{color:var(--white);font-weight:600}
@@ -28,64 +31,228 @@ th{color:var(--white);font-weight:600}
 <h1>bento/id privacy notice</h1>
 <p class="meta">Effective __EFFECTIVE_DATE__ · Controller: __CONTROLLER__ · Contact: <a href="mailto:__CONTACT_EMAIL__">__CONTACT_EMAIL__</a></p>
 
-<p>bento/id lets people find your Bento key from your email address, so they
-can share documents with you and see that a collaborator is really you. It is
-run by a small directory service at <b>id.bento.page</b>. This notice covers
-that service. Bento documents themselves are files you keep; we never host
-them in bento/id.</p>
-
-<h2>What the directory stores</h2>
-<table>
-<tr><th>What</th><th>Why</th><th>How long</th></tr>
-<tr><td>Your email address</td><td>So people who already know it can look up your key. Lookups match an exact address only; there is no search and no list.</td><td>Until you delete it, or 13 months after you last confirmed it, whichever comes first</td></tr>
-<tr><td>Your public account key and public key-agreement key</td><td>So others can check your signatures and encrypt to you. These are public by design; the private halves never leave your devices.</td><td>As above</td></tr>
-<tr><td>A display name, if you chose to give one</td><td>Shown next to your address, marked as self-chosen and unverified</td><td>As above</td></tr>
-<tr><td>Dates: when you published, confirmed or changed your key, and the history of key changes (as fingerprints)</td><td>So collaborators can tell a routine key change from a suspicious one</td><td>As above</td></tr>
-<tr><td>A record that an address was deleted, holding a fingerprint of the last published statement, never the address in readable form</td><td>So people who had your key can see it was withdrawn</td><td>__TOMBSTONE_RETENTION__</td></tr>
-<tr><td>Encrypted recovery data, if you set up passkey recovery (when that feature is available)</td><td>So you can add a new device with your passkey. It is encrypted with a key only your passkey can produce; we cannot open it</td><td>Until you remove that passkey or delete your account</td></tr>
-</table>
-
-<h2>What it never stores</h2>
+<p>bento/id lets the people you work with check that a document or an edit
+really came from you. Your account is your email address and a list of
+<b>passkeys</b> on your own devices. There is no password, and no secret of
+yours is kept on our side.</p>
+<p>Three services take part, and this notice covers all three:</p>
 <ul>
-<li>Your documents, or anything inside them.</li>
-<li>Your private keys.</li>
-<li>Who you share with, or a list of your contacts.</li>
-<li>Who looked up your address. Lookups are not logged against you.</li>
+<li><b>id.bento.page</b>, the directory. It keeps your account's list of
+passkeys and sends the email described below.</li>
+<li><b>signin.id.bento.page</b>, the sign-in page. It is where you create
+and use your passkeys.</li>
+<li><b>home.bento.page</b>, bento/home in a browser, which can sign in with
+bento/id.</li>
+</ul>
+<p>Bento documents are files you keep. bento/id never stores them or
+anything inside them.</p>
+<p>Items marked <span class="planned">Planned</span> describe parts that are
+not running yet. They are here so you know what is coming, and this notice
+will be updated before any of them starts.</p>
+
+<h2>Your account: a list of passkeys</h2>
+<p>A passkey is made by your device, or by your password manager. Its
+private part never leaves it. For each passkey on your account, the
+directory keeps:</p>
+<ul>
+<li>its public key, and the identifier your device gave it;</li>
+<li>a counter your device increases each time the passkey is used, which
+helps us notice a copied passkey;</li>
+<li>when it was added, and whether that was at setup, from a browser or
+from an app.</li>
+</ul>
+<p>The directory also keeps <b>every version of the list</b>: your address,
+the public key of each passkey on it, and when the version was made. When a
+change takes effect, the directory signs that version with its own key; we
+call this its countersignature. When one of your passkeys asked for the
+change, the passkey's signed request is kept with that version. Each version
+points to the one before it. That chain is how anyone can check that the
+list they see now is the one that grew from your setup.</p>
+<p><b>This list is public.</b> Anyone who knows your address can ask the
+directory whether it has an account, and read the current list: the
+passkeys' public keys, when the list last changed, and whether a change is
+waiting. Nobody can browse or search the directory. Without your exact
+address there is nothing to find.</p>
+<p><b>How long:</b> the current list, and every earlier version, for as long
+as the account exists. This includes earlier versions that name passkeys you
+have since removed. When a passkey is removed, its identifier, counter and
+added date are deleted at once.</p>
+
+<h2>Setting up, by emailed link</h2>
+<p>To set up an account you ask for a setup link, and the directory emails
+it to your address. You open it, and make a passkey on the sign-in page. You
+never type or paste a code: no bento/id email ever asks you to.</p>
+<ul>
+<li>The secret in the link sits in the part of the address that browsers do
+not send to any server. We keep only a one-way hash of it.</li>
+<li>A link works for 20 minutes, or for 24 hours when it was sent beyond the
+usual limit (below). It stops working once it is used. The hashes go when
+the account is set up.</li>
+<li>Anyone can ask for a setup link for any address, but it always goes to
+that address, and only up to one a minute, three a day and ten in 31 days.
+To apply these limits we keep the times the last setup links were sent to
+an address, and the hashes of links that expired unused, even when no
+account was ever made: __SETUP_TIMES_RETENTION__</li>
 </ul>
 
-<h2>Verification codes and email</h2>
-<p>To publish or remove an address we email it a one-time code. The code
-expires after 20 minutes and is stored only as a hash. Email is sent through
-<b>Amazon Web Services (Amazon SES), in the European Union</b>, which acts as
-our processor. Like any email sender, it sees the address and the time a
-message is sent. Messages contain only the code and fixed wording, with no
-tracking.</p>
+<h2>The email we send you</h2>
+<p>Every change to your account is mailed to its address. That includes the
+setup, a change that is waiting, a change that took effect, a cancelled
+change, a suspended passkey, and a reset. <b>Each of these emails lists
+every passkey on the account</b>, by a short fingerprint, with when and how
+it was added. That way an addition you did not make can't hide among
+the others.</p>
+<p>The emails are fixed wording. They contain no tracking images and no
+tracked links. Their only links are the ones described here, and every link
+opens a page that does nothing until you press a button on it.</p>
+
+<h2>A change waits 72 hours, and you can stop it</h2>
+<p>Adding or removing a passkey takes effect 72 hours after it is asked
+for, by the directory's clock. The email saying it is waiting carries a link
+with two choices. <b>Cancel this change</b> is always available. The second,
+<b>Cancel, and remove the passkey that asked for it</b>, is offered only
+when another passkey would remain. A passkey removing itself takes effect at
+once, as long as another passkey remains.</p>
+<ul>
+<li>The secret in that link is like the setup link's. We keep only its hash,
+and keep it only while the change is waiting. It is deleted when the change
+takes effect or is stopped.</li>
+<li>If you cancel, the passkey that asked cannot ask for another change for
+72 hours. We keep that end time with the passkey.</li>
+<li>If you remove the passkey that asked, it is suspended at once. It is
+removed 72 hours later. The email that tells you so carries a link that puts
+it back. That link's hash is kept only until the removal takes effect.</li>
+</ul>
+
+<h2>If you lose every passkey: the reset</h2>
+<p>You can ask for a reset link to be emailed to your address. On the
+sign-in page you make a new passkey. The reset then waits 72 hours, and its
+email carries a link that stops it. It replaces any change that was waiting.
+When it takes effect, the new passkey is the only one on the account, and
+the earlier versions of the list stay in the chain (above). In an account's
+first 14 days only that emailed link can stop a reset. After that, one of
+the account's passkeys will also be able to stop it.
+<span class="planned">Planned</span> Stopping a reset with a passkey is not
+running yet.</p>
+<p>A reset link works for 24 hours, and one is sent at most while no other
+is live. We keep only its hash. It is deleted when a reset starts. An
+expired one can stay until the next reset link is asked for.</p>
+
+<h2>The record of changes</h2>
+<p>The directory keeps a record of every setup, every passkey added, and
+every change asked for, cancelled, suspended, put back, replaced by a reset
+or taken effect. Each entry holds:</p>
+<ul>
+<li>what happened, and when;</li>
+<li>which passkey it was about, and which passkey asked for it (their public
+keys);</li>
+<li>the web address the request came from, and the address of the page
+where the passkey was used;</li>
+<li>which page asked the sign-in page to act, when it was bento/home. That
+page is the only one allowed to ask.</li>
+</ul>
+<p>It holds no IP address and no document. It exists so that, if one of our
+own services were ever misused, we could find the changes it made and
+offer you a way to undo them. It is not public.
+<b>How long:</b> for the life of the account.</p>
+
+<h2 data-planned><span class="planned">Planned</span> Signing in bento/home in a browser</h2>
+<p data-planned><span class="planned">Planned</span> bento/home in a browser
+makes two keys of its own, which cannot be copied out of that browser, and
+keeps them in that browser's storage for home.bento.page, with your address
+and its certificate. To sign it in, you approve with one of your passkeys on
+the sign-in page. The directory then records the sign-in (in the record
+above) and issues a certificate that is valid for <b>24 hours</b>. bento/home
+renews it while you use it, but never beyond <b>7 days</b> after you
+approved. After that you approve again, and fresh keys are made. Signing out
+deletes the keys from that browser. A later option will sign out every
+browser at once.</p>
+
+<h2>What the sign-in page keeps in your browser</h2>
+<p>The sign-in page sets no cookies. It keeps one item in your browser's
+storage for signin.id.bento.page: your account's address, under the name
+<code>bento-id-account</code>, so that it asks the directory about the
+right account. It stays in that browser until you clear the site's data.
+<span class="planned">Planned</span> The pages that save it are not running
+yet.</p>
+
+<h2 data-planned><span class="planned">Planned</span> Confirming your address once a year</h2>
+<p data-planned><span class="planned">Planned</span> The ✓ that others see
+beside your name includes “email verified by Bento”. To keep that true,
+once a year we will email you one link. It opens a page with one button,
+and nothing to type and no sign-in. We plan to send it 30 days before the
+anniversary of your last confirmation, with one reminder 7 days before.
+Completing any emailed link also counts as a confirmation: a setup, or a
+reset. The page also has a button, “This isn't mine”, for someone who now
+holds a reused address.</p>
+<p data-planned><span class="planned">Planned</span> If an organisation has
+proved to us that it controls your address's domain, its administrators can
+ask us to check an address on that domain again. We then email one
+confirmation link to that address, and nothing else happens. If it is not
+confirmed within 7 days, the label lapses.</p>
+<p data-planned><span class="planned">Planned</span> <b>A lapse changes
+only the label.</b> Others see “unconfirmed since” and a date, instead of
+the full ✓. Your account, its passkeys, its browser sign-ins and your
+documents keep working, and nothing is cancelled or suspended. Confirming
+later restores the label at once. For this we keep the date of your last
+confirmation, when the next link is due, the date of any lapse, and for an
+organisation's request, when it was made, which organisation made it and a
+one-way hash identifying the administrator. Each email sent and each answer
+is added to the record of changes. All of this is kept for the life of the
+account.</p>
 
 <h2>Network information</h2>
-<p>To stop abuse we limit how often one network can ask for codes or
-lookups. For this we keep a one-way, daily-changing fingerprint of your IP
-address, and a counter, for at most a day. We do not store IP addresses
-themselves.</p>
+<p>To stop abuse, the directory limits how often one network can ask it for
+anything. It keeps, per hour, a counter under a one-way fingerprint of the
+IP address. The fingerprint is made with a secret that changes every day,
+so one day's fingerprints cannot be matched to the next day's. The counters
+and that day's secret are deleted a minute after the day ends (UTC), or at
+the latest a day and a minute after it ends. IP addresses themselves are not
+stored.</p>
+<p>Each request to change an account carries a one-time challenge from the
+directory. Challenges are not stored. A used one is remembered for 10
+minutes, so it cannot be used again.</p>
+
+<h2>What bento/id never stores</h2>
+<ul>
+<li>Your documents, or anything inside them.</li>
+<li>Any private key: neither your passkeys' nor bento/home's.</li>
+<li>A password. There isn't one.</li>
+<li>Who you share with, or a list of your contacts.</li>
+<li>Who looked up which address.</li>
+<li>Any code for you to type.</li>
+</ul>
+
+<h2>Who processes it</h2>
+<p>__PROCESSORS__</p>
+
+<h2>Deleting your account</h2>
+<p><span class="planned">Planned</span> Deleting an account is not running
+yet. It will work like any other change: you ask on the sign-in page with
+one of your passkeys, or by an emailed link if you have lost them. The
+deletion then waits 72 hours, and its email carries a link that stops it.
+Once it takes effect: __DELETION_RETENTION__</p>
+<p>You can also read how to delete your account, without any app, at
+<a href="/id/delete">bento.page/id/delete</a>, or write to
+<a href="mailto:__CONTACT_EMAIL__">__CONTACT_EMAIL__</a>.</p>
 
 <h2>Legal basis</h2>
 <p>__LEGAL_BASIS__</p>
 
 <h2>Your choices and rights</h2>
 <ul>
-<li><b>Delete:</b> from bento/home on any of your devices. Deletion is
-immediate.</li>
-<li><b>See what we hold:</b> your published entry is exactly what anyone who
-knows your address can look up. For anything else, write to
-<a href="mailto:__CONTACT_EMAIL__">__CONTACT_EMAIL__</a>.</li>
-<li><b>Correct:</b> publish a new entry from bento/home; the old one is
-replaced.</li>
+<li><b>See what we hold:</b> your list of passkeys is what anyone with your
+address can read. For anything else, including the record of changes, write
+to <a href="mailto:__CONTACT_EMAIL__">__CONTACT_EMAIL__</a>.</li>
+<li><b>Change it:</b> add or remove passkeys from the sign-in page.</li>
+<li><b>Delete it:</b> see above.</li>
 <li>__RIGHTS_JURISDICTION__</li>
 </ul>
 
 <h2>Children</h2>
 <p>__CHILDREN__</p>
 
-<h2>Changes</h2>
+<h2>Changes to this notice</h2>
 <p>If this notice changes, the new version will be posted here with a new
 effective date.</p>
 </main>
