@@ -297,12 +297,11 @@ async function heldRecord() {
 /** An agent holding a fresh record, an in-memory store, and a network that fires `fire.hook` as the check-in answer is handed back. */
 async function raceSetup(Agent) {
   raceClock = T0 + HOUR
-  let rec = { held: null, last: null }
-  const store = { rec: () => rec, get: async () => rec, put: async (h) => { rec = { held: h, last: null } }, end: async (l) => { rec = { held: null, last: l } } }
+  const fire = { hook: null, onPut: null, failPut: false }
+  const store = memoryStore(fire)
   const h0 = await heldRecord()
   await store.put(h0)
   raceClock += HOUR   // so the check-in's countersign differs from the held one
-  const fire = { hook: null }
   const net = async (url, init) => {
     const u = new URL(url), r = await raceDir.handle({ method: 'POST', path: u.pathname, origin: HOME, body: init.body })
     if (u.pathname === '/v1/home/checkin' && fire.hook) { const f = fire.hook; fire.hook = null; setImmediate(f) }
@@ -310,7 +309,31 @@ async function raceSetup(Agent) {
   }
   const agent = new Agent(store, net, () => raceClock)
   if ((await agent.load()).kind !== 'signed-in') throw new Error('the seeded record does not load')
-  return { agent, store, h0, fire }
+  return { agent, store, h0, fire, net }
+}
+/**
+ * The library's store as IndexedDB behaves: a write lands when it is asked
+ * for (its transaction is queued first) but is reported a moment later, so
+ * whatever runs in between sees the write done and the writer still waiting.
+ * A write that names `expect` happens only over the record with that Wpub.
+ */
+function memoryStore(fire) {
+  let rec = { held: null, last: null }
+  const later = (v) => new Promise((r) => setTimeout(() => r(v), 5))
+  const mine = (expect) => expect === undefined || rec.held?.Wpub === expect
+  return {
+    rec: () => rec,
+    get: async () => rec,
+    put: (h, expect) => {
+      if (fire.failPut) return Promise.reject(new DOMException('quota', 'QuotaExceededError'))
+      const ok = mine(expect)
+      if (ok) rec = { held: h, last: null }
+      const f = fire.onPut; fire.onPut = null
+      if (f) f()
+      return later(ok)
+    },
+    end: (l, expect) => { const ok = mine(expect); if (ok) rec = { held: null, last: l }; return later(ok) },
+  }
 }
 
 // ---- the rows -------------------------------------------------------------------------------
@@ -565,7 +588,7 @@ const ROWS = {
     // while checkIn awaits its verify, after the network answered
     const { Agent } = await agentModule(edits)
     const out = []
-    for (const variant of ['control', 'sign-out', 'newer record']) {
+    for (const variant of ['control', 'sign-out', 'newer record', 'sign-out in the write']) {
       const n = { right: 0, wrong: 0 }
       for (let i = 0; i < 5; i++) {
         const { agent, store, h0, fire } = await raceSetup(Agent)
@@ -573,17 +596,57 @@ const ROWS = {
         if (variant === 'sign-out') fire.hook = () => { void agent.signOut() }
         // what signIn's last step does
         if (variant === 'newer record') fire.hook = () => { void store.put(h1).then(() => { agent['held'] = h1 }) }
+        // lands after the renewal is written and before the write is reported
+        if (variant === 'sign-out in the write') fire.onPut = () => { void agent.signOut() }
         await agent.checkIn()
         await sleep(30)
         const rec = store.rec().held, mem = agent['held']
         const right = variant === 'control' ? rec?.Wpub === h0.Wpub && mem?.Wpub === h0.Wpub && rec.watt !== h0.watt
-          : variant === 'sign-out' ? !rec && !mem
+          : variant === 'sign-out' || variant === 'sign-out in the write' ? !rec && !mem
           : rec?.Wpub === h1.Wpub && mem === h1
         right ? n.right++ : n.wrong++
       }
-      out.push([n.wrong === 0, `${variant}${variant === 'control' ? ' (nothing lands: the check-in writes its renewal)' : ' lands mid check-in: ' + (variant === 'sign-out' ? 'nothing comes back' : 'the newer record stays')} (${n.right}/5)`])
+      out.push([n.wrong === 0, `${variant}${variant === 'control' ? ' (nothing lands: the check-in writes its renewal)' : (variant === 'sign-out in the write' ? ' (the renewal written, not yet reported): ' : ' lands mid check-in: ') + (variant === 'newer record' ? 'the newer record stays' : 'nothing comes back')} (${n.right}/5)`])
     }
     return out
+  },
+
+  async 'two tabs: a check-in writes only over the record it renewed'(dist, edits) {
+    // node: two agents on one store, as two tabs of the library share IndexedDB
+    const { Agent } = await agentModule(edits)
+    const out = []
+    for (const variant of ['B signs out', 'B signs in anew', 'B signs in anew, A\'s old key is revoked']) {
+      const n = { right: 0, wrong: 0 }
+      for (let i = 0; i < 3; i++) {
+        const { agent: A, store, h0, net } = await raceSetup(Agent)
+        const B = new Agent(store, net, () => raceClock)
+        await B.load()
+        let h1 = null
+        if (variant === 'B signs out') await B.signOut()
+        else {
+          h1 = await heldRecord()
+          await store.put(h1)                     // what a ceremony in tab B writes
+          await B.load()
+          if (variant.endsWith('revoked')) raceDir.revoked.add(h0.Wpub)
+        }
+        const s = await A.checkIn()
+        const rec = store.rec().held
+        const right = variant === 'B signs out' ? !rec && s.kind === 'none' && !A['held']
+          : rec?.Wpub === h1.Wpub && A['held']?.Wpub === h1.Wpub
+        right ? n.right++ : n.wrong++
+      }
+      out.push([n.wrong === 0, `${variant}, then A checks in: ${variant === 'B signs out' ? 'nothing comes back, A shows signed out' : "B's sign-in stays, and A takes it"} (${n.right}/3)`])
+    }
+    return out
+  },
+
+  async 'a store that fails never stops the check-in'(dist, edits) {
+    const { Agent } = await agentModule(edits)
+    const { agent, fire } = await raceSetup(Agent)
+    fire.failPut = true
+    let s, err = null
+    try { s = await agent.checkIn() } catch (e) { err = e.name }
+    return [[err === null && s?.kind === 'signed-in', `checkIn resolves, still signed in (${err ?? s?.kind})`]]
   },
 
   async 'the policy: the release channel and the directory only, Trusted Types required'(dist) {
@@ -629,9 +692,9 @@ const MUTANTS = {
   'no-check-in-on-load': ['the countersign is renewed by a check-in signed by W', [
     A('identity-ui.ts', '  render(await agent.load())\n  render(await agent.checkIn())\n', '  render(await agent.load())\n')]],
   'incident-ignored': ['an incident record covering the ceremony ends the sign-in; an earlier one does not', [
-    A('identity.ts', "    if (r.incidents.some((i) => covers(i, h.ceremonyAt))) { await this.end(h.address, 'incident'); return this.status() }\n", '')]],
+    A('identity.ts', "    if (r.incidents.some((i) => covers(i, h.ceremonyAt))) return (await this.end(h.address, 'incident', h.Wpub)) ? this.status() : this.load()\n", '')]],
   'revoked-ignored': ['a key the directory revoked ends the sign-in', [
-    A('identity.ts', "      if (r.refused === 'revoked' || r.refused === 'unknown') await this.end(h.address, 'revoked')\n", '')]],
+    A('identity.ts', "      if (r.refused === 'revoked' || r.refused === 'unknown') return (await this.end(h.address, 'revoked', h.Wpub)) ? this.status() : this.load()\n", '')]],
   'reply-any-origin': ['only the sign-in host, in the window the library opened, is heard', [
     A('identity.ts', '      if (e.source !== win || e.origin !== SIGNIN_ORIGIN) return', '      if (e.source !== win) return')]],
   'account-switch': ["\"Confirm it's you\" never switches accounts", [
@@ -640,8 +703,20 @@ const MUTANTS = {
     A('identity.ts', "      if (cert.devicePub !== k.Wpub || cert.kx !== k.kxPub || cert.label !== label) return no('not-ours')\n", '')]],
   'keys-unchecked': ['a key a build left exportable is dropped on load', [
     A('identity.ts', "    if (!ok(h.W, 'ECDSA', 'sign') || !ok(h.kx, 'ECDH', 'deriveBits')) return false\n", '')]],
+  // The re-check after the verify and the conditional write each close this window alone (the second also covers
+  // other tabs), so the mutant removes both: the row must see the race itself.
   'write-back-after-verify': ['a check-in in flight never writes back a sign-in that was signed out or replaced', [
-    A('identity.ts', '    if (this.held !== h) return this.status()\n    if (!v.ok)', '    if (!v.ok)')]],
+    A('identity.ts', '    if (this.held !== h) return this.status()\n    if (!v.ok)', '    if (!v.ok)'),
+    A('identity.ts', 'await this.store.put(next, h.Wpub)', 'await this.store.put(next)')]],
+  'held-after-put': ['a check-in in flight never writes back a sign-in that was signed out or replaced', [
+    A('identity.ts', '    this.held = next\n    // only over the record this check-in renewed: another tab\'s sign-out or new sign-in stands\n    if (!(await this.store.put(next, h.Wpub)) && this.held === next) return this.load()\n',
+      '    if (!(await this.store.put(next, h.Wpub))) return this.load()\n    this.held = next\n')]],
+  'put-unconditional': ['two tabs: a check-in writes only over the record it renewed', [
+    A('identity.ts', 'await this.store.put(next, h.Wpub)', 'await this.store.put(next)')]],
+  'end-unconditional': ['two tabs: a check-in writes only over the record it renewed', [
+    A('identity.ts', '    if (await this.store.end(this.last, expect)) return true\n', '    if (await this.store.end(this.last)) return true\n')]],
+  'store-errors-escape': ['a store that fails never stops the check-in', [
+    A('identity.ts', '    try { return await this.checkInOnce() } catch { return this.status() }', '    return this.checkInOnce()')]],
   'connect-any': ['the policy: the release channel and the directory only, Trusted Types required', 'dist',
     (t) => t.replace('connect-src https://bento.page/releases/ https://id.bento.page', 'connect-src *')],
 }

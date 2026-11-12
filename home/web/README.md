@@ -122,8 +122,11 @@ for release and the directory and the sign-in host are deployed.
   chain (`verifyRosterChain`) and the certificate with its countersign
   (`verifyDevice`) are checked by the kernel under the directory keys the build
   pins, never keys the network offers.
-- **Sign out sticks.** A check-in that finishes after a sign-out, or after a
-  new ceremony replaced the keys, writes nothing back.
+- **Sign out sticks, in every tab.** Tabs share the store, so a check-in
+  writes only over the record it renewed, checked and written in one
+  transaction: after a sign-out or a new sign-in (in this tab or another) it
+  writes nothing back and takes what the store holds. A store that fails does
+  not stop the hourly check-in.
 - **24 hours, 7 days.** A check-in signed by `W` (`wren.`) renews the 24-hour
   countersign on load and every hour, until 7 days after the ceremony. A day
   before that the line asks "Confirm it's you": a new ceremony, new keys.

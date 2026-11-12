@@ -96,10 +96,17 @@ export type Ended = 'expired' | 'revoked' | 'incident' | 'invalid'
 /** Remembered after a sign-in ends, so "Confirm it's you" knows whose sign-in it was. */
 export interface Last { v: 1; address: string; why: Ended }
 
+/**
+ * Every tab of the library shares this store. A write that follows a check-in
+ * names the record it was made from (`expect`, its Wpub): it happens only if
+ * that record is still the one stored, checked and written in ONE transaction,
+ * and answers false otherwise. Without `expect` (a ceremony's result, a
+ * person's Sign out) it writes whatever is there.
+ */
 export interface Store {
   get(): Promise<{ held: Held | null; last: Last | null }>
-  put(held: Held): Promise<void>
-  end(last: Last | null): Promise<void>
+  put(held: Held, expect?: string): Promise<boolean>
+  end(last: Last | null, expect?: string): Promise<boolean>
 }
 
 export type Status =
@@ -216,7 +223,7 @@ export class Agent {
     if (held) {
       const v = (await keysSound(held)) ? await this.verify(held.cert, held, held.roster, held.pin) : no('keys')
       if (v.ok || v.reason === 'device-expired') this.held = held      // expired: a check-in may still renew it
-      else await this.end(held.address, 'invalid')
+      else if (!(await this.end(held.address, 'invalid', held.Wpub))) return this.load()   // another tab replaced it meanwhile
     }
     return this.status()
   }
@@ -228,10 +235,13 @@ export class Agent {
     await this.store.end(null)
   }
 
-  private async end(address: string, why: Ended) {
+  /** End the sign-in whose key is `expect`. False when the stored record is no longer that one: nothing written. */
+  private async end(address: string, why: Ended, expect: string): Promise<boolean> {
     this.held = null
     this.last = { v: 1, address, why }
-    await this.store.end(this.last)
+    if (await this.store.end(this.last, expect)) return true
+    this.last = null
+    return false
   }
 
   /** The kernel's verdict on a certificate, its countersign and the roster it names. */
@@ -262,17 +272,28 @@ export class Agent {
 
   /**
    * Renew the countersign, read the incident records, and re-check the roster.
-   * Called on load and every hour. A network failure changes nothing.
+   * Called on load and every hour. A network failure changes nothing, and
+   * neither does a store that fails: the page keeps running and checks in
+   * again on the hour.
    */
   async checkIn(): Promise<Status> {
+    try { return await this.checkInOnce() } catch { return this.status() }
+  }
+
+  /**
+   * Another tab may have signed out, or signed in anew, since this one loaded:
+   * every write here is made only over the record this check-in started from,
+   * and when that record is gone this tab takes what the store now holds.
+   */
+  private async checkInOnce(): Promise<Status> {
     const h = this.held
     if (!h || this.busy) return this.status()
     const r = await this.checkinWith(h.address, h.W.privateKey, h.Wpub, h.pin)
     if (this.held !== h) return this.status()                  // a ceremony or sign-out replaced it meanwhile
     if ('net' in r) return this.status()
-    if (r.incidents.some((i) => covers(i, h.ceremonyAt))) { await this.end(h.address, 'incident'); return this.status() }
+    if (r.incidents.some((i) => covers(i, h.ceremonyAt))) return (await this.end(h.address, 'incident', h.Wpub)) ? this.status() : this.load()
     if ('refused' in r) {
-      if (r.refused === 'revoked' || r.refused === 'unknown') await this.end(h.address, 'revoked')
+      if (r.refused === 'revoked' || r.refused === 'unknown') return (await this.end(h.address, 'revoked', h.Wpub)) ? this.status() : this.load()
       // 'cap' and anything else: the countersign held runs out on its own
       return this.status()
     }
@@ -281,12 +302,13 @@ export class Agent {
     const v = await this.verify(h.cert, a, a.roster, h.pin)
     // a sign-out or a new ceremony while the verify ran: what it replaced is never written back
     if (this.held !== h) return this.status()
-    if (!v.ok) { await this.end(h.address, 'invalid'); return this.status() }
+    if (!v.ok) return (await this.end(h.address, 'invalid', h.Wpub)) ? this.status() : this.load()
     const next: Held = { ...h, watt: a.watt, wattSig: a.wattSig, signer: a.signer, assertion: a.assertion,
       expires: v.value.watt.expires, roster: a.roster }
     // in memory first: a sign-out during the write then deletes after it (IndexedDB runs them in order)
     this.held = next
-    await this.store.put(next)
+    // only over the record this check-in renewed: another tab's sign-out or new sign-in stands
+    if (!(await this.store.put(next, h.Wpub)) && this.held === next) return this.load()
     return this.status()
   }
 
@@ -419,6 +441,26 @@ function tx<T>(db: IDBDatabase, mode: IDBTransactionMode, f: (s: IDBObjectStore)
   })
 }
 
+/** One readwrite transaction: `write` runs only if the stored record's Wpub is `expect` (always when it is undefined). */
+async function swap(expect: string | undefined, write: (s: IDBObjectStore) => void): Promise<boolean> {
+  const db = await open()
+  try {
+    return await new Promise<boolean>((resolve, reject) => {
+      const t = db.transaction(STORE, 'readwrite')
+      const s = t.objectStore(STORE)
+      let done = true
+      if (expect === undefined) write(s)
+      else {
+        const g = s.get('held')
+        g.onsuccess = () => { if ((g.result as Held | undefined)?.Wpub === expect) write(s); else done = false }
+      }
+      t.oncomplete = () => resolve(done)
+      t.onerror = () => reject(t.error)
+      t.onabort = () => reject(t.error)
+    })
+  } finally { db.close() }
+}
+
 /** The agent's store: one record for the sign-in held, one for the sign-in that ended. CryptoKeys are stored as keys, never as bytes. */
 export const indexedStore: Store = {
   async get() {
@@ -430,14 +472,10 @@ export const indexedStore: Store = {
       return { held: held && held.v === 1 ? held : null, last: last && last.v === 1 && str(last.address) ? last : null }
     } catch { return { held: null, last: null } }
   },
-  async put(held) {
-    const db = await open()
-    await tx(db, 'readwrite', (s) => { s.put(held, 'held'); s.delete('last') })
-    db.close()
+  put(held, expect) {
+    return swap(expect, (s) => { s.put(held, 'held'); s.delete('last') })
   },
-  async end(last) {
-    const db = await open()
-    await tx(db, 'readwrite', (s) => { s.delete('held'); if (last) s.put(last, 'last'); else s.delete('last') })
-    db.close()
+  end(last, expect) {
+    return swap(expect, (s) => { s.delete('held'); if (last) s.put(last, 'last'); else s.delete('last') })
   },
 }
