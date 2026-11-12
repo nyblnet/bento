@@ -30,9 +30,10 @@ jobs:
     # roster, passkey, mail or header rule) in a copy of the tree, and the
     # directory rigs must fail a row. A mutant that no longer applies, or a
     # rig that crashes instead of counting, fails this job. Its own job: at
-    # ~7 s a mutant on a runner it outgrew validate's 20 minutes.
+    # ~7 s a mutant on a runner it outgrew validate's 20 minutes; the rigs of
+    # one mutant now run side by side, and 210 mutants still need headroom.
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

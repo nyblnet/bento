@@ -20,7 +20,7 @@ import { cpSync, mkdtempSync, readFileSync, writeFileSync, rmSync, mkdirSync } f
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const RIGS = ['test-directory.ts', 'test-directory-roster.ts', 'test-directory-browsers.ts']
@@ -416,10 +416,26 @@ function tree(): string {
   for (const f of [...RIGS, ...RIG_IMPORTS]) cpSync(join(root, 'scripts', f), join(d, 'scripts', f))
   return d
 }
-/** Run the rigs in a tree; a rig with no count line crashed, and proves nothing. */
-function run(d: string) {
-  return RIGS.map((f) => {
-    const r = spawnSync(process.execPath, [join(d, 'scripts', f)], { encoding: 'utf8', timeout: 120_000 })
+/** One rig in a tree, to its end or 120 s (then killed: no count line, so a crash). */
+function rig(d: string, f: string): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    const c = spawn(process.execPath, [join(d, 'scripts', f)])
+    let stdout = '', stderr = ''
+    c.stdout.on('data', (x) => { stdout += x })
+    c.stderr.on('data', (x) => { stderr += x })
+    const t = setTimeout(() => c.kill('SIGKILL'), 120_000)
+    c.on('close', () => { clearTimeout(t); resolve({ stdout, stderr }) })
+  })
+}
+/**
+ * Run the rigs in a tree, side by side (each its own process and copy of the
+ * clock, so they cannot disturb each other: the job outgrew 30 minutes run one
+ * after another). A rig with no count line crashed, and proves nothing.
+ */
+async function run(d: string) {
+  const rs = await Promise.all(RIGS.map((f) => rig(d, f)))
+  return RIGS.map((f, i) => {
+    const r = rs[i]
     const m = /^(\d+) passed, (\d+) failed$/m.exec(r.stdout)
     // a crash proves nothing, so say where it happened
     if (!m) console.log(`        ${f} crashed: ${(r.stderr || '').split('\n').filter((l) => /Error|at file:/.test(l)).slice(0, 2).join(' | ').slice(0, 300)}`)
@@ -430,7 +446,7 @@ function run(d: string) {
 console.log('positive control: the unmutated copy passes the rig')
 {
   const d = tree()
-  for (const r of run(d)) ok(r.failed === 0 && (r.passed ?? 0) > 0, `${r.f}: ${r.passed} passed, ${r.failed} failed`)
+  for (const r of await run(d)) ok(r.failed === 0 && (r.passed ?? 0) > 0, `${r.f}: ${r.passed} passed, ${r.failed} failed`)
   rmSync(d, { recursive: true, force: true })
 }
 
@@ -447,7 +463,7 @@ for (const m of chosen) {
   ok(n === 1, `applies exactly once: ${m.name} (found ${ns.join(', ')})`)
   if (n === 1) {
     writeFileSync(p, edits.reduce((t, e) => t.replace(e.from, () => e.to), src))
-    const rs = run(d)
+    const rs = await run(d)
     ok(rs.every((r) => r.failed !== null) && rs.some((r) => r.failed! > 0), `killed: ${m.name} (${rs.map((r) => `${r.f} ${r.failed === null ? 'CRASHED' : `${r.failed} failed`}`).join(', ')})`)
   }
   rmSync(d, { recursive: true, force: true })
