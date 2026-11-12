@@ -13731,17 +13731,24 @@ bento/home agent was built against.
   and on every event-log entry, kept for the life of the account; nothing
   decides on it, and the incident lever filters by it. Log entries keep the
   full public key, not a fingerprint, so the lever acts on the exact key.
-- **Signing out everywhere is a time.** Every browser certificate made at or
-  before it stops renewing, and a ceremony whose challenge was issued by then
-  cannot finish after it, so a sign-in already under way cannot undo it.
+- **Signing out everywhere is a time: the moment it is accepted**, not the
+  time in the text the passkey signed (both are logged). Every browser
+  certificate made by then stops renewing and the status route says
+  `revoked`, and a ceremony whose challenge was issued by then cannot finish
+  after it, so a sign-in already under way cannot undo it. A countersign
+  already issued stays valid for up to 24 hours at a peer that does not ask
+  the status route, and the mail says so.
   Apps' certificates are untouched. The route checks everything and then
   answers 501 until the kernel defines the statement a passkey signs for it.
 - **A passkey sign-in on the sign-in host** finds the account from the
   passkey's 48-byte user handle (its first 32 bytes are the account's storage
   name), but the handle only routes the request: membership is the account's
-  own record. Its challenge is spent in that account's object, so a request
-  too malformed to name an account leaves its challenge unspent. It logs and
-  mails nothing.
+  own record. Its challenge is spent in that account's object, once per
+  account rather than once for everyone (an assertion verifies only under its
+  own account); a handle naming no account is refused before anything is
+  written. A signature counter is stored only over the value the assertion
+  was checked against, so two assertions with one counter never both pass.
+  It logs and mails nothing.
 - **Incident records** come from a deploy variable and ride on every
   check-in and status answer. A list that does not read is an error, never a
   shorter list.

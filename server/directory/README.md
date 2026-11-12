@@ -241,8 +241,8 @@ Bodies are JSON, sent as text/plain.
 | `POST /v1/home/checkin` `{wren, sig, pin?}` (120 an hour per IP) | 200 `{watt, wattSig, signer, assertion, roster, incidents}` (the roster as kernel RosterLink objects from the pinned head, or from setup); 403 `{error: unknown \| revoked \| cap, incidents}`; 400 `wren`, `nonce` |
 | `POST /v1/web/signin/challenge` `{}` (120 an hour per IP) | 200 `{nonce}`: a sign-in challenge, 5 minutes |
 | `POST /v1/web/signin` `{nonce, assertion}` (60 an hour per IP) | 200 `{address}`: the account a discoverable passkey belongs to, named by the first 32 bytes of its 48-byte user handle; 400 `nonce`, `assertion`, `assertion-<reason>`; 403 `not-member`, `quarantined`. Nothing is logged or mailed; the passkey's counter is stored |
-| `POST /v1/web/signout/challenge` `{address}` | 200 `{nonce, at}`; 404 for an address with no account (a per-IP lookup) |
-| `POST /v1/web/signout` `{text, assertion}` (60 an hour per IP) | `text` is `wout.<b64u(address)>.<at>.<nonce>` (the sign-in host's provisional layout). 400 `text`, `nonce` (spent first; `at` must be the challenge's), `assertion`, `assertion-<reason>`; 403 `not-member`, `quarantined`; then **501** until the kernel defines the statement |
+| `POST /v1/web/signout/challenge` `{address}` | 404 for an address with no account (a per-IP lookup); otherwise **501** until the kernel defines the statement, so the sign-in host never asks for a passkey for nothing. Then 200 `{nonce, at}` |
+| `POST /v1/web/signout` `{text, assertion}` (60 an hour per IP) | `text` is `wout.<b64u(address)>.<at>.<nonce>` (the sign-in host's provisional layout). 400 `text`, `nonce` (spent first; `at` must be the challenge's), `assertion`, `assertion-<reason>`; 403 `not-member`, `quarantined`; then **501** until the kernel defines the statement; then 200 `{ok, at, signedAt}` |
 | `GET /v1/device/status?e=<address>&c=<sha256 of the certificate>` (CORS `*`) | 200 `{state: ok \| revoked \| cap \| unknown, incidents}` |
 
 - A browser challenge is sealed for its audience (enrolment or renewal) and
@@ -264,9 +264,16 @@ Bodies are JSON, sent as text/plain.
   countersign and on every event-log entry; nothing decides on it.
 - `incidents` comes from the `INCIDENTS` variable, `[{id, from, to}]`; a list
   that does not read answers 500 and countersigns nothing.
-- Signing out everywhere is a time: every browser certificate made at or
-  before it is refused (403 `revoked`), and a ceremony whose challenge was
-  issued by then cannot finish. It is logged (`signout-all`) and mailed to
+- Signing out everywhere is a time, the moment the sign-out is accepted (not
+  the time in the signed text; both are logged): every browser certificate
+  made by then is refused (403 `revoked`, and the status route says
+  `revoked` at once), and a ceremony whose challenge was issued by then
+  cannot finish. A countersign already issued stays valid at peers that do
+  not check the status route, for up to 24 hours.
+- A sign-in challenge is spent in the object of the account the passkey's
+  user handle names (once per account); a handle naming no account is
+  refused before anything is written. A passkey's signature counter is
+  stored only over the value its assertion was checked against. It is logged (`signout-all`) and mailed to
   the address (roster mail, never held back). The route runs every check and
   then answers 501 until the kernel defines what the passkey signs.
 - Not here yet: the sign-out statement itself (a kernel layout), a `dev2.`

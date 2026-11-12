@@ -553,7 +553,7 @@ await request(cara, C1, { add: C2 })
 now += ROSTER_WAIT_MS
 const CB = await Browser.make()
 const ce = await enrol(cara, CB, C2)
-const ceremony = ce.ch.at
+const ceremony = ce.ch.at ?? now // never NaN into the clock, whatever a mutant did to the enrolment
 ok(ce.status === 200, `cara's second passkey enrols a browser (${err(ce)})`)
 {
   now += HOUR
