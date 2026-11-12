@@ -8,7 +8,7 @@
 //   node scripts/check-id-hosting.mjs --site DIR      # + a staged bento.page tree
 //   node scripts/check-id-hosting.mjs --zone FILE     # + the zone's records under the rp
 //   node scripts/check-id-hosting.mjs --live --zone FILE [--zone FILE2]
-//                                     [--signin HOST] [--void /PATH] [--path ROLE:/p ...]
+//                                     [--signin HOST] [--void /PATH (default /void)] [--path ROLE:/p ...]
 //                                     [--allow-unreachable ROLE,ROLE]
 //
 // The relying party is id.bento.page (the directory host). Exactly one web
@@ -26,7 +26,8 @@
 //   signin-no-webauthn   neither does the sign-in host
 //   rp-html-csp          every HTML response from id.bento.page has a CSP of
 //                        default-src 'none' and no script; the void page alone
-//                        (--void) may load script from 'self' (no inline)
+//                        (/void, the directory's; --void PATH overrides) may
+//                        load script from 'self' (no inline)
 //   rp-api-json          every API response (/v1/, /.well-known/) from
 //                        id.bento.page is JSON
 //   rp-nosniff           every non-HTML response from id.bento.page is nosniff
@@ -74,7 +75,7 @@ import { dirname, join, relative } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { randomBytes } from 'node:crypto'
 import {
-  APEX, HOME, NO_WILDCARD, RP, SIGNIN, ZONE_LISTING_STEP,
+  APEX, HOME, NO_WILDCARD, RP, SIGNIN, VOID_PATH, ZONE_LISTING_STEP,
   coopProblem, framingProblem, parseZoneListing, rpHtmlCspProblem, webauthnFileServed, zoneProblems,
 } from './lib/id-hosting-rules.mjs'
 
@@ -88,7 +89,7 @@ const ASSOC_CONTENT = /"webcredentials"|get_login_creds|"origins"\s*:/
 // ---- gathering -------------------------------------------------------------
 
 /** The probes for a set of hosts: [{role, url}] fetched, [{role, host}] resolved only. */
-export function probes(hosts, { extraPaths = [], voidPath = null, label = randomBytes(6).toString('hex') } = {}) {
+export function probes(hosts, { extraPaths = [], voidPath = VOID_PATH, label = randomBytes(6).toString('hex') } = {}) {
   const miss = `/bento-probe-${label}`
   const fetches = [
     ...['/', '/.well-known/webauthn', '/.well-known/apple-app-site-association', '/.well-known/assetlinks.json', '/v1/keys', `/v1/bento-probe-${label}`, miss].map((p) => ({ role: 'rp', path: p })),
@@ -138,8 +139,8 @@ const answered = (o) => typeof o.status === 'number'
 const where = (o) => `${o.url}${answered(o) ? ` (${o.status})` : o.error ? ` (${o.error})` : ''}`
 const at = (problem, o) => problem && `${problem} on ${where(o)}`
 
-/** The rows, for a void page path (or none: then no page on the rp may run script). */
-export function rows({ voidPath = null } = {}) {
+/** The rows, for a void page path (default the directory's /void; null: no page on the rp may run script). */
+export function rows({ voidPath = VOID_PATH } = {}) {
   return [
     {
       id: 'rp-no-webauthn', title: 'id.bento.page serves no /.well-known/webauthn',
@@ -213,7 +214,7 @@ export function rows({ voidPath = null } = {}) {
 export const ROWS = rows()
 
 /** Evaluate observations. Returns [{id, title, checked, fails[]}] plus the reachable row in live mode. */
-export function evaluate(obs, { live = false, allowUnreachable = [], hosts = DEFAULT_HOSTS, voidPath = null } = {}) {
+export function evaluate(obs, { live = false, allowUnreachable = [], hosts = DEFAULT_HOSTS, voidPath = VOID_PATH } = {}) {
   const out = rows({ voidPath }).map((r) => {
     const sel = obs.filter(r.pick)
     const fails = sel.map(r.bad).filter(Boolean)
@@ -333,7 +334,7 @@ async function main(argv) {
   if (live) {
     const extraPaths = all('--path').map((s) => { const [role, ...p] = s.split(':'); return { role, path: p.join(':') } })
     for (const e of extraPaths) if (!hosts[e.role] || !e.path.startsWith('/')) throw new Error(`--path wants ROLE:/path with ROLE one of ${Object.keys(hosts).join(', ')}`)
-    const voidPath = arg('--void') || null
+    const voidPath = arg('--void') || VOID_PATH
     if (voidPath && !voidPath.startsWith('/')) throw new Error('--void wants the void page\'s path, /...')
     const allowUnreachable = (arg('--allow-unreachable') || '').split(',').filter(Boolean)
     const obs = await gather(hosts, { extraPaths, voidPath })

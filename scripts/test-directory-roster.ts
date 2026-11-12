@@ -51,8 +51,9 @@ import worker, { Roster } from '../server/directory/src/worker.js'
 import { Ledger } from '../server/directory/src/worker.js'
 import { addressKey } from '../server/directory/src/address.js'
 import { DIRECTORY_ORIGIN, PASSKEY, SIGNIN_ORIGIN, passkeyOrigins, readCbor, verifyRegistration, verifyMemberAssertion } from '../server/directory/src/passkey.js'
-import { parseResetLink, parseSetupLink, parseVoidLink, setupLink, SIGNIN_PATHS } from '../server/directory/src/links.js'
+import { parseResetLink, parseSetupLink, parseVoidLink, setupLink, SIGNIN_PATHS, VOID_PATH } from '../server/directory/src/links.js'
 import { evaluate } from './check-id-hosting.mjs'
+import { VOID_PATH as HOSTING_VOID_PATH } from './lib/id-hosting-rules.mjs'
 import { MAIL_KINDS, MAIL_TIMEOUT_MS, deliver } from '../server/directory/src/mail.js'
 import * as workerModule from '../server/directory/src/worker.js'
 import { WEB_ROUTES } from '../server/directory/src/seam.js'
@@ -1717,7 +1718,8 @@ async function reset(email: string, a: Authn, token: string, o: { ch?: string; r
   ok(!/<script>|<style>|\son[a-z]+=|style="/i.test(html) && (html.match(/<script /g) ?? []).length === 1, 'the HTML has no inline script, style or handler; one script, from this origin')
   // the hosting check's own rules, over these answers
   const obs = got.map((r, i) => ({ role: 'rp', path: pages[i], url: `${DIRECTORY_ORIGIN}${pages[i]}`, status: r.status, headers: Object.fromEntries(r.h.entries()), body: r.text }))
-  const ev = evaluate(obs as never) as { id: string; fails: string[] }[]
+  ok(HOSTING_VOID_PATH === VOID_PATH, `the hosting check's void page is the directory's (${HOSTING_VOID_PATH} = ${VOID_PATH})`)
+  const ev = evaluate(obs as never, { voidPath: VOID_PATH } as never) as { id: string; fails: string[] }[]
   const rows = ev.filter((x) => ['rp-html-csp', 'no-framing', 'rp-permissions', 'rp-nosniff'].includes(x.id))
   ok(rows.length === 4 && rows.every((x) => x.fails.length === 0), `check-id-hosting's rp rows pass on the void page (${rows.map((x) => `${x.id}:${x.fails.length}`).join(' ')})`)
 }

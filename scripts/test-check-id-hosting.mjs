@@ -110,6 +110,13 @@ console.log('control: a conforming world')
     ok(seen.some((s) => s.url === u), `gatherer asked ${u}`)
   const labels = obs.filter((o) => o.role === 'label').map((o) => o.host)
   ok(labels.includes(`xabc123.${H.rp}`) && labels.includes(`www.${H.rp}`) && labels.includes(`xabc123.${H.signin}`), `gatherer resolved ${labels.join(', ')}`)
+  {
+    // with no void path given, gather and evaluate default to the directory's /void
+    const seen2 = []
+    const o2 = await gather(H, { ...fakeNet(goodWorld(), seen2), label: 'abc123' })
+    const r2 = evaluate(o2, { live: true })
+    ok(seen2.some((s) => s.url === `https://${H.rp}/void`) && failed(r2).length === 0 && r2.find((r) => r.id === 'rp-html-csp').checked > 0, 'by default the void page is /void: probed, and allowed its script-src self')
+  }
   const v = obs.find((o) => o.url === `https://${H.rp}/void`)
   ok(v?.headers['content-security-policy'] === R10 && v?.headers['x-frame-options'] === 'DENY', 'gatherer keeps headers, keyed lowercase')
 }

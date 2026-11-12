@@ -14,6 +14,8 @@ export const RP = 'id.bento.page'
 export const SIGNIN = `signin.${RP}`
 export const HOME = 'home.bento.page'
 export const APEX = 'bento.page'
+/** The directory's void page: the one page on the rp host that runs script (server/directory/src/links.js VOID_PATH). */
+export const VOID_PATH = '/void'
 
 // ---- Cross-Origin-Opener-Policy ----------------------------------------------
 //
