@@ -946,5 +946,53 @@
   "menuOpenWithId": {
     "message": "Buka dengan Bento ID",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home tidak menyajikan rilis Bento"
+  },
+  "twMismatchBody": {
+    "message": "Kode yang dikirim home.bento.page ke browser ini tidak cocok dengan rilis mana pun yang ditandatangani Bento. Tutup tab itu dan jangan buka dokumen di sana. Klik untuk detailnya."
+  },
+  "twOldTitle": {
+    "message": "bento/home menyajikan rilis yang lebih lama"
+  },
+  "twOldBody": {
+    "message": "Kode yang dikirim home.bento.page ke browser ini adalah rilis Bento asli, tetapi bukan yang terbaru."
+  },
+  "twListTitle": {
+    "message": "Daftar rilis bento/home tidak asli"
+  },
+  "twListBody": {
+    "message": "bento.page mengirim daftar rilis yang tidak ditandatangani Bento, jadi home.bento.page tidak dapat diperiksa. Klik untuk detailnya."
+  },
+  "twBadgeTitle": {
+    "message": "bento/home tidak cocok dengan rilis yang ditandatangani"
+  },
+  "twPageTitle": {
+    "message": "Pemeriksaan kode bento/home"
+  },
+  "twPageLead": {
+    "message": "Ekstensi ini membandingkan kode yang dikirim home.bento.page ke browser Anda dengan rilis yang ditandatangani Bento menggunakan kunci rilis offline-nya. Ekstensi ini hanya melapor: tidak ada yang diubah atau diblokir."
+  },
+  "twPageDo": {
+    "message": "Tutup tab bento/home, dan jangan buka, edit, atau simpan dokumen di sana sampai hal ini dijelaskan. Pemeriksaan ini tidak mengubah file di disk Anda."
+  },
+  "twPageReport": {
+    "message": "Laporkan secara pribadi, dengan detail di bawah:"
+  },
+  "twPageReportLink": {
+    "message": "Laporkan ke Bento"
+  },
+  "twPageCopy": {
+    "message": "Salin detail"
+  },
+  "twPageCopied": {
+    "message": "Disalin"
+  },
+  "twPageRecent": {
+    "message": "Pemeriksaan terbaru"
+  },
+  "twPageNone": {
+    "message": "Belum ada pemeriksaan yang tercatat."
   }
 }

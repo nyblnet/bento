@@ -946,5 +946,53 @@
   "menuOpenWithId": {
     "message": "Mở bằng Bento ID",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home không cung cấp một bản phát hành của Bento"
+  },
+  "twMismatchBody": {
+    "message": "Mã mà home.bento.page gửi tới trình duyệt này không khớp với bản phát hành nào do Bento ký. Hãy đóng thẻ đó và đừng mở tài liệu ở đó. Nhấp để xem chi tiết."
+  },
+  "twOldTitle": {
+    "message": "bento/home đang cung cấp một bản phát hành cũ hơn"
+  },
+  "twOldBody": {
+    "message": "Mã mà home.bento.page gửi tới trình duyệt này là bản phát hành Bento thật, nhưng không phải bản mới nhất."
+  },
+  "twListTitle": {
+    "message": "Danh sách bản phát hành của bento/home không phải hàng thật"
+  },
+  "twListBody": {
+    "message": "bento.page đã gửi một danh sách bản phát hành không do Bento ký, nên không thể kiểm tra home.bento.page. Nhấp để xem chi tiết."
+  },
+  "twBadgeTitle": {
+    "message": "bento/home không khớp với bản phát hành đã ký"
+  },
+  "twPageTitle": {
+    "message": "Kiểm tra mã của bento/home"
+  },
+  "twPageLead": {
+    "message": "Tiện ích này so sánh mã mà home.bento.page gửi tới trình duyệt của bạn với các bản phát hành Bento ký bằng khóa phát hành ngoại tuyến. Tiện ích chỉ báo cáo: không thay đổi hay chặn bất cứ thứ gì."
+  },
+  "twPageDo": {
+    "message": "Hãy đóng thẻ bento/home và đừng mở, sửa hay lưu tài liệu ở đó cho đến khi chuyện này được giải thích. Việc kiểm tra không thay đổi tệp trên ổ đĩa của bạn."
+  },
+  "twPageReport": {
+    "message": "Vui lòng báo cáo riêng tư, kèm chi tiết bên dưới:"
+  },
+  "twPageReportLink": {
+    "message": "Báo cho Bento"
+  },
+  "twPageCopy": {
+    "message": "Sao chép chi tiết"
+  },
+  "twPageCopied": {
+    "message": "Đã sao chép"
+  },
+  "twPageRecent": {
+    "message": "Các lần kiểm tra gần đây"
+  },
+  "twPageNone": {
+    "message": "Chưa có lần kiểm tra nào được ghi lại."
   }
 }

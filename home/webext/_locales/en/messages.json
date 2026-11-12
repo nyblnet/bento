@@ -1154,5 +1154,69 @@
   "menuOpenWithId": {
     "message": "Open with Bento ID",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home is not serving a Bento release",
+    "description": "REVIEW: the tripwire's security warning. Keep bento/home, home.bento.page and bento.page exactly as written."
+  },
+  "twMismatchBody": {
+    "message": "The code home.bento.page sent this browser matches no release signed by Bento. Close that tab and don't open documents there. Click for details.",
+    "description": "REVIEW: the tripwire's security warning. Keep bento/home, home.bento.page and bento.page exactly as written."
+  },
+  "twOldTitle": {
+    "message": "bento/home is serving an older release",
+    "description": "REVIEW: the tripwire's security warning. Keep bento/home, home.bento.page and bento.page exactly as written."
+  },
+  "twOldBody": {
+    "message": "The code home.bento.page sent this browser is a genuine Bento release, but not the newest one.",
+    "description": "REVIEW: the tripwire's security warning. Keep bento/home, home.bento.page and bento.page exactly as written."
+  },
+  "twListTitle": {
+    "message": "The bento/home release list is not genuine",
+    "description": "REVIEW: the tripwire's security warning. Keep bento/home, home.bento.page and bento.page exactly as written."
+  },
+  "twListBody": {
+    "message": "bento.page sent a release list that is not signed by Bento, so home.bento.page cannot be checked. Click for details.",
+    "description": "REVIEW: the tripwire's security warning. Keep bento/home, home.bento.page and bento.page exactly as written."
+  },
+  "twBadgeTitle": {
+    "message": "bento/home did not match a signed release",
+    "description": "REVIEW: the tripwire's security warning. Keep bento/home, home.bento.page and bento.page exactly as written."
+  },
+  "twPageTitle": {
+    "message": "bento/home code check",
+    "description": "REVIEW: the tripwire's security warning. Keep bento/home, home.bento.page and bento.page exactly as written."
+  },
+  "twPageLead": {
+    "message": "This extension compares the code home.bento.page sends your browser with the releases Bento signs with its offline release key. It only reports: it has not changed or blocked anything.",
+    "description": "REVIEW: the tripwire's security warning. Keep bento/home, home.bento.page and bento.page exactly as written."
+  },
+  "twPageDo": {
+    "message": "Close the bento/home tab, and don't open, edit or save documents there until this is explained. The check does not change files on your disk.",
+    "description": "REVIEW: the tripwire's security warning. Keep bento/home, home.bento.page and bento.page exactly as written."
+  },
+  "twPageReport": {
+    "message": "Please report it privately, with the details below:",
+    "description": "REVIEW: the tripwire's security warning. Keep bento/home, home.bento.page and bento.page exactly as written."
+  },
+  "twPageReportLink": {
+    "message": "Report to Bento",
+    "description": "REVIEW: the tripwire's security warning. Keep bento/home, home.bento.page and bento.page exactly as written."
+  },
+  "twPageCopy": {
+    "message": "Copy details",
+    "description": "REVIEW: the tripwire's security warning. Keep bento/home, home.bento.page and bento.page exactly as written."
+  },
+  "twPageCopied": {
+    "message": "Copied",
+    "description": "REVIEW: the tripwire's security warning. Keep bento/home, home.bento.page and bento.page exactly as written."
+  },
+  "twPageRecent": {
+    "message": "Recent checks",
+    "description": "REVIEW: the tripwire's security warning. Keep bento/home, home.bento.page and bento.page exactly as written."
+  },
+  "twPageNone": {
+    "message": "No checks recorded yet.",
+    "description": "REVIEW: the tripwire's security warning. Keep bento/home, home.bento.page and bento.page exactly as written."
   }
 }

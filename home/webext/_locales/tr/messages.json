@@ -946,5 +946,53 @@
   "menuOpenWithId": {
     "message": "Bento ID ile aç",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home bir Bento sürümü sunmuyor"
+  },
+  "twMismatchBody": {
+    "message": "home.bento.page'in bu tarayıcıya gönderdiği kod, Bento'nun imzaladığı hiçbir sürümle eşleşmiyor. O sekmeyi kapatın ve orada belge açmayın. Ayrıntılar için tıklayın."
+  },
+  "twOldTitle": {
+    "message": "bento/home daha eski bir sürüm sunuyor"
+  },
+  "twOldBody": {
+    "message": "home.bento.page'in bu tarayıcıya gönderdiği kod gerçek bir Bento sürümü, ancak en yenisi değil."
+  },
+  "twListTitle": {
+    "message": "bento/home sürüm listesi gerçek değil"
+  },
+  "twListBody": {
+    "message": "bento.page, Bento tarafından imzalanmamış bir sürüm listesi gönderdi; bu yüzden home.bento.page denetlenemiyor. Ayrıntılar için tıklayın."
+  },
+  "twBadgeTitle": {
+    "message": "bento/home imzalı bir sürümle eşleşmedi"
+  },
+  "twPageTitle": {
+    "message": "bento/home kod denetimi"
+  },
+  "twPageLead": {
+    "message": "Bu uzantı, home.bento.page'in tarayıcınıza gönderdiği kodu Bento'nun çevrimdışı sürüm anahtarıyla imzaladığı sürümlerle karşılaştırır. Yalnızca bildirir: hiçbir şeyi değiştirmedi veya engellemedi."
+  },
+  "twPageDo": {
+    "message": "bento/home sekmesini kapatın ve bu durum açıklanana kadar orada belge açmayın, düzenlemeyin veya kaydetmeyin. Denetim, diskinizdeki dosyaları değiştirmez."
+  },
+  "twPageReport": {
+    "message": "Lütfen aşağıdaki ayrıntılarla gizli olarak bildirin:"
+  },
+  "twPageReportLink": {
+    "message": "Bento'ya bildir"
+  },
+  "twPageCopy": {
+    "message": "Ayrıntıları kopyala"
+  },
+  "twPageCopied": {
+    "message": "Kopyalandı"
+  },
+  "twPageRecent": {
+    "message": "Son denetimler"
+  },
+  "twPageNone": {
+    "message": "Henüz kaydedilmiş denetim yok."
   }
 }

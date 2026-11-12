@@ -44,6 +44,7 @@ import * as docstore from './store.js'
 import { resolveFileGrant, dropFileGrant, declined, downloadsDir, downloadsRelative, writeViaDownloads, downloadsUnusable, setDownloadsUnusable, defaultDeps as defaultFileGrantDeps } from './filegrant.js'
 import { recentOpened } from './db.js'
 import * as saveas from './saveas.js'
+import { tripwireObserve, installTripwire } from './tripwire.js'
 
 /** Same-named files the extension knows at OTHER paths: opened documents and the library's last scan. */
 async function knownTwins(path) {
@@ -846,6 +847,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       : msg?.op === 'saveas.answered' ? Promise.resolve(saveasAnswered(sender, msg))
       : msg?.op === 'saveas.drop' ? saveas.drop(topPath(sender), msg.payload, saveasDeps(sender))
       : typeof msg?.op === 'string' && msg.op.startsWith('store.') ? storeOp(msg.op, sender, msg.payload)
+      : msg?.op === 'tripwire.observe' ? tripwireObserve(sender, msg.payload)
       : Promise.resolve({ ok: false, reason: 'unknown op' })
     run.then((r) => {
       sendResponse(r)
@@ -857,6 +859,10 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
     }, (e) => sendResponse({ ok: false, reason: String(e?.message || e) }))
     return true // async response
   })
+
+  // The tripwire (tripwire.js): its webRequest and notification listeners must
+  // be registered here, at the top level, or an evicted worker misses them.
+  installTripwire()
 
   chrome.runtime.onConnect.addListener((port) => {
     if (port.name === PORT) serveAssistantPort(port)

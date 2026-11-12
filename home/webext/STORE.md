@@ -84,10 +84,21 @@ entry point, and one relays to the extension, which is the only part that
 touches the filesystem.
 ```
 
-**Why no host permissions**
+**`webRequest` and the host permission for `https://home.bento.page/*`** (draft: the maintainer's to approve before submission)
 
 ```
-The extension makes no network requests and needs no access to any website.
+bento/home also runs as a web page at home.bento.page. On that one site the
+extension checks that the code the browser received matches a release Bento
+signed with its offline release key, and warns if it does not. It reads the
+page's response headers (webRequest, observing only: nothing is blocked or
+changed) and the page's own scripts and cache, on home.bento.page only. Nothing
+is sent anywhere; the signed release list is fetched from bento.page.
+```
+
+**Why no other host permissions**
+
+```
+Apart from home.bento.page (above), the extension needs no access to any website.
 ```
 
 ## Data usage disclosures

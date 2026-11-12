@@ -13727,3 +13727,55 @@ WebSockets closed: three GETs and no POST on opening, the fragment gone from
 the history entry, each button, an injected script blocked with a positive
 control, framing refused, Trusted Types, an address full of markup shown as
 text; a mutant per rule) and `scripts/test-directory-mutants.ts`.
+
+## 2026-11-12 — The bento/home tripwire lives in the extension, checked against a list signed with the release key
+
+bento/home in the browser runs code a server chooses, and a page cannot pin
+its own code. The extension now checks it from outside on every visit to
+`home.bento.page` (and the frame site, once its domain is named): it compares
+what the browser received with a list of releases signed with the **release
+key**, the one key every shipped shell already trusts, and warns loudly on a
+mismatch. It never repairs anything: no reload, no cache cleared, no worker
+unregistered. A tripwire that fixes things also hides them.
+
+- **The list.** `https://bento.page/releases/home-web/served.json`, on the
+  release channel and not on the site it describes. A signed envelope like the
+  app manifests (`{payload, sig}`, ECDSA P-256 over the payload string),
+  typed `bento/home-web/served`, version 1, so no other signed artifact can
+  stand in for it, nor it for them. A `serial` that only goes up (an older
+  list is refused, a different list with the same serial is announced), and
+  the newest releases first, so bytes from an older release are "outdated", not
+  "tampered". Each release lists every file both sites serve at every path,
+  with its sha256, its length, the `<script>` elements of each document in
+  order (inline ones by the hash of their text as the browser parses it), each
+  document's Content-Security-Policy header, and the paths registered as
+  service workers. Written by `scripts/lib/home-web-served.mjs`, signed by
+  `scripts/sign-home-web-served.mjs`, which verifies the held list before
+  building on it and refuses a development or test-key build.
+- **Order of a release:** sign and publish the list with the site, then deploy
+  the library and frame. A deploy the list does not yet hold warns every
+  extension; an older release still served is recorded, and announced quietly
+  only after 72 hours.
+- **What the extension observes.** The parse (each script's text read before
+  the page's code runs, from a `document_start` content script in the isolated
+  world), the bytes from the HTTP cache (the navigation's own response; this
+  fetch does not pass through the page's service worker, measured), the
+  navigation's decoded size, the CSP header (`webRequest`, observing only),
+  and under a worker its registrations and its Cache Storage, hashed.
+- **What it cannot see**, stated where people will read it (the extension's
+  README): a deploy served only to people without the extension; anything
+  before the visit's parse ends (it bounds how long a bad deploy goes unseen,
+  it prevents nothing); a hostile worker that changes only page text while the
+  network serves the honest worker again; the frame page until its domain is
+  named in the extension.
+- **A declared host permission for one origin.** Web access in the extension
+  is otherwise optional and asked per origin; the tripwire's single origin is
+  declared, because a tripwire that has to be switched on is one most people
+  never have. Its one content script carries no bridge and relays nothing.
+
+Guards: `scripts/test-webext-tripwire.ts` (configuration pins, writer against
+reader, the judge, the signing script's refusals),
+`scripts/test-webext-tripwire-browser.mjs` (the unpacked extension in Chromium
+against a local home/web build, with and without a service worker, sockets
+closed) and `scripts/test-webext-tripwire-mutants.mjs` (one mutant per rule,
+each red on the row that guards it).

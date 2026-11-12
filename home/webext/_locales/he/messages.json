@@ -946,5 +946,53 @@
   "menuOpenWithId": {
     "message": "פתיחה עם Bento ID",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home לא מגיש גרסה של Bento"
+  },
+  "twMismatchBody": {
+    "message": "הקוד ש-home.bento.page שלח לדפדפן הזה לא תואם אף גרסה ש-Bento חתם עליה. סגרו את הכרטיסייה ואל תפתחו בה מסמכים. לחצו לפרטים."
+  },
+  "twOldTitle": {
+    "message": "bento/home מגיש גרסה ישנה יותר"
+  },
+  "twOldBody": {
+    "message": "הקוד ש-home.bento.page שלח לדפדפן הזה הוא גרסה אמיתית של Bento, אבל לא החדשה ביותר."
+  },
+  "twListTitle": {
+    "message": "רשימת הגרסאות של bento/home אינה אמיתית"
+  },
+  "twListBody": {
+    "message": "bento.page שלח רשימת גרסאות שאינה חתומה על ידי Bento, ולכן אי אפשר לבדוק את home.bento.page. לחצו לפרטים."
+  },
+  "twBadgeTitle": {
+    "message": "bento/home לא תאם גרסה חתומה"
+  },
+  "twPageTitle": {
+    "message": "בדיקת הקוד של bento/home"
+  },
+  "twPageLead": {
+    "message": "התוסף הזה משווה את הקוד ש-home.bento.page שולח לדפדפן שלכם לגרסאות ש-Bento חותם עליהן במפתח ההפצה הלא מקוון שלו. הוא רק מדווח: הוא לא שינה ולא חסם דבר."
+  },
+  "twPageDo": {
+    "message": "סגרו את הכרטיסייה של bento/home, ואל תפתחו, תערכו או תשמרו בה מסמכים עד שהעניין יוסבר. הבדיקה לא משנה קבצים בדיסק שלכם."
+  },
+  "twPageReport": {
+    "message": "נא לדווח על כך באופן פרטי, עם הפרטים שלמטה:"
+  },
+  "twPageReportLink": {
+    "message": "דיווח ל-Bento"
+  },
+  "twPageCopy": {
+    "message": "העתקת הפרטים"
+  },
+  "twPageCopied": {
+    "message": "הועתק"
+  },
+  "twPageRecent": {
+    "message": "בדיקות אחרונות"
+  },
+  "twPageNone": {
+    "message": "עדיין לא נרשמו בדיקות."
   }
 }

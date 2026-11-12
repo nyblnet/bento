@@ -979,5 +979,53 @@
   "menuOpenWithId": {
     "message": "Mit Bento ID öffnen",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home liefert keine Bento-Version aus"
+  },
+  "twMismatchBody": {
+    "message": "Der Code, den home.bento.page an diesen Browser gesendet hat, passt zu keiner von Bento signierten Version. Schließen Sie den Tab und öffnen Sie dort keine Dokumente. Klicken Sie für Details."
+  },
+  "twOldTitle": {
+    "message": "bento/home liefert eine ältere Version aus"
+  },
+  "twOldBody": {
+    "message": "Der Code, den home.bento.page an diesen Browser gesendet hat, ist eine echte Bento-Version, aber nicht die neueste."
+  },
+  "twListTitle": {
+    "message": "Die Versionsliste von bento/home ist nicht echt"
+  },
+  "twListBody": {
+    "message": "bento.page hat eine Versionsliste gesendet, die nicht von Bento signiert ist. Deshalb kann home.bento.page nicht geprüft werden. Klicken Sie für Details."
+  },
+  "twBadgeTitle": {
+    "message": "bento/home passt zu keiner signierten Version"
+  },
+  "twPageTitle": {
+    "message": "bento/home: Code-Prüfung"
+  },
+  "twPageLead": {
+    "message": "Diese Erweiterung vergleicht den Code, den home.bento.page an Ihren Browser sendet, mit den Versionen, die Bento mit seinem Offline-Release-Schlüssel signiert. Sie meldet nur: Sie hat nichts verändert oder blockiert."
+  },
+  "twPageDo": {
+    "message": "Schließen Sie den Tab mit bento/home und öffnen, bearbeiten oder speichern Sie dort keine Dokumente, bis das geklärt ist. Die Prüfung verändert keine Dateien auf Ihrem Datenträger."
+  },
+  "twPageReport": {
+    "message": "Bitte melden Sie es vertraulich, mit den Details unten:"
+  },
+  "twPageReportLink": {
+    "message": "An Bento melden"
+  },
+  "twPageCopy": {
+    "message": "Details kopieren"
+  },
+  "twPageCopied": {
+    "message": "Kopiert"
+  },
+  "twPageRecent": {
+    "message": "Letzte Prüfungen"
+  },
+  "twPageNone": {
+    "message": "Noch keine Prüfungen aufgezeichnet."
   }
 }

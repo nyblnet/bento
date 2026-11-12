@@ -946,5 +946,53 @@
   "menuOpenWithId": {
     "message": "Bento ID से खोलें",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home कोई Bento रिलीज़ नहीं दे रहा है"
+  },
+  "twMismatchBody": {
+    "message": "home.bento.page ने इस ब्राउज़र को जो कोड भेजा, वह Bento द्वारा साइन की गई किसी भी रिलीज़ से मेल नहीं खाता। वह टैब बंद करें और वहाँ दस्तावेज़ न खोलें। विवरण के लिए क्लिक करें।"
+  },
+  "twOldTitle": {
+    "message": "bento/home एक पुरानी रिलीज़ दे रहा है"
+  },
+  "twOldBody": {
+    "message": "home.bento.page ने इस ब्राउज़र को जो कोड भेजा, वह असली Bento रिलीज़ है, लेकिन सबसे नई नहीं।"
+  },
+  "twListTitle": {
+    "message": "bento/home की रिलीज़ सूची असली नहीं है"
+  },
+  "twListBody": {
+    "message": "bento.page ने ऐसी रिलीज़ सूची भेजी जिस पर Bento का हस्ताक्षर नहीं है, इसलिए home.bento.page की जाँच नहीं हो सकती। विवरण के लिए क्लिक करें।"
+  },
+  "twBadgeTitle": {
+    "message": "bento/home किसी साइन की गई रिलीज़ से मेल नहीं खाया"
+  },
+  "twPageTitle": {
+    "message": "bento/home कोड जाँच"
+  },
+  "twPageLead": {
+    "message": "यह एक्सटेंशन home.bento.page द्वारा आपके ब्राउज़र को भेजे गए कोड की तुलना उन रिलीज़ से करता है जिन्हें Bento अपनी ऑफ़लाइन रिलीज़ कुंजी से साइन करता है। यह केवल रिपोर्ट करता है: इसने कुछ भी बदला या ब्लॉक नहीं किया है।"
+  },
+  "twPageDo": {
+    "message": "bento/home टैब बंद करें, और जब तक इसकी वजह साफ़ न हो, वहाँ दस्तावेज़ न खोलें, न संपादित करें, न सहेजें। यह जाँच आपकी डिस्क की फ़ाइलें नहीं बदलती।"
+  },
+  "twPageReport": {
+    "message": "कृपया नीचे दिए गए विवरण के साथ इसे निजी तौर पर रिपोर्ट करें:"
+  },
+  "twPageReportLink": {
+    "message": "Bento को रिपोर्ट करें"
+  },
+  "twPageCopy": {
+    "message": "विवरण कॉपी करें"
+  },
+  "twPageCopied": {
+    "message": "कॉपी हो गया"
+  },
+  "twPageRecent": {
+    "message": "हाल की जाँचें"
+  },
+  "twPageNone": {
+    "message": "अभी तक कोई जाँच दर्ज नहीं हुई है।"
   }
 }

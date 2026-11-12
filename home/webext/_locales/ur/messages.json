@@ -946,5 +946,53 @@
   "menuOpenWithId": {
     "message": "Bento ID کے ساتھ کھولیں",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home کوئی Bento ریلیز پیش نہیں کر رہا"
+  },
+  "twMismatchBody": {
+    "message": "home.bento.page نے اس براؤزر کو جو کوڈ بھیجا وہ Bento کی دستخط شدہ کسی بھی ریلیز سے میل نہیں کھاتا۔ وہ ٹیب بند کریں اور وہاں دستاویزات نہ کھولیں۔ تفصیلات کے لیے کلک کریں۔"
+  },
+  "twOldTitle": {
+    "message": "bento/home ایک پرانی ریلیز پیش کر رہا ہے"
+  },
+  "twOldBody": {
+    "message": "home.bento.page نے اس براؤزر کو جو کوڈ بھیجا وہ اصلی Bento ریلیز ہے، مگر سب سے نئی نہیں۔"
+  },
+  "twListTitle": {
+    "message": "bento/home کی ریلیز فہرست اصلی نہیں ہے"
+  },
+  "twListBody": {
+    "message": "bento.page نے ایسی ریلیز فہرست بھیجی جس پر Bento کے دستخط نہیں ہیں، اس لیے home.bento.page کی جانچ نہیں ہو سکتی۔ تفصیلات کے لیے کلک کریں۔"
+  },
+  "twBadgeTitle": {
+    "message": "bento/home کسی دستخط شدہ ریلیز سے میل نہیں کھایا"
+  },
+  "twPageTitle": {
+    "message": "bento/home کوڈ کی جانچ"
+  },
+  "twPageLead": {
+    "message": "یہ ایکسٹینشن home.bento.page کی جانب سے آپ کے براؤزر کو بھیجے گئے کوڈ کا موازنہ اُن ریلیزوں سے کرتی ہے جن پر Bento اپنی آف لائن ریلیز کلید سے دستخط کرتا ہے۔ یہ صرف اطلاع دیتی ہے: اس نے کچھ بھی تبدیل یا بلاک نہیں کیا۔"
+  },
+  "twPageDo": {
+    "message": "bento/home کا ٹیب بند کریں، اور جب تک اس کی وضاحت نہ ہو جائے وہاں دستاویزات نہ کھولیں، نہ ترمیم کریں اور نہ محفوظ کریں۔ یہ جانچ آپ کی ڈسک کی فائلیں تبدیل نہیں کرتی۔"
+  },
+  "twPageReport": {
+    "message": "براہ کرم نیچے دی گئی تفصیلات کے ساتھ اس کی نجی طور پر اطلاع دیں:"
+  },
+  "twPageReportLink": {
+    "message": "Bento کو اطلاع دیں"
+  },
+  "twPageCopy": {
+    "message": "تفصیلات کاپی کریں"
+  },
+  "twPageCopied": {
+    "message": "کاپی ہو گیا"
+  },
+  "twPageRecent": {
+    "message": "حالیہ جانچیں"
+  },
+  "twPageNone": {
+    "message": "ابھی تک کوئی جانچ ریکارڈ نہیں ہوئی۔"
   }
 }

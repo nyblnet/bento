@@ -946,5 +946,53 @@
   "menuOpenWithId": {
     "message": "الفتح باستخدام Bento ID",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home لا يقدّم إصدارًا من Bento"
+  },
+  "twMismatchBody": {
+    "message": "الشيفرة التي أرسلها home.bento.page إلى هذا المتصفح لا تطابق أي إصدار وقّعه Bento. أغلق تلك العلامة ولا تفتح مستندات فيها. انقر لعرض التفاصيل."
+  },
+  "twOldTitle": {
+    "message": "bento/home يقدّم إصدارًا أقدم"
+  },
+  "twOldBody": {
+    "message": "الشيفرة التي أرسلها home.bento.page إلى هذا المتصفح إصدار أصلي من Bento، لكنه ليس الأحدث."
+  },
+  "twListTitle": {
+    "message": "قائمة إصدارات bento/home ليست أصلية"
+  },
+  "twListBody": {
+    "message": "أرسل bento.page قائمة إصدارات غير موقّعة من Bento، لذا لا يمكن التحقق من home.bento.page. انقر لعرض التفاصيل."
+  },
+  "twBadgeTitle": {
+    "message": "لم يطابق bento/home أي إصدار موقّع"
+  },
+  "twPageTitle": {
+    "message": "فحص شيفرة bento/home"
+  },
+  "twPageLead": {
+    "message": "تقارن هذه الإضافة الشيفرة التي يرسلها home.bento.page إلى متصفحك بالإصدارات التي يوقّعها Bento بمفتاح الإصدار غير المتصل. إنها تبلّغ فقط: لم تغيّر شيئًا ولم تحظر شيئًا."
+  },
+  "twPageDo": {
+    "message": "أغلق علامة bento/home، ولا تفتح المستندات فيها أو تعدّلها أو تحفظها حتى يتضح السبب. لا يغيّر هذا الفحص الملفات الموجودة على قرصك."
+  },
+  "twPageReport": {
+    "message": "يُرجى الإبلاغ عن ذلك بشكل خاص، مع التفاصيل أدناه:"
+  },
+  "twPageReportLink": {
+    "message": "الإبلاغ إلى Bento"
+  },
+  "twPageCopy": {
+    "message": "نسخ التفاصيل"
+  },
+  "twPageCopied": {
+    "message": "تم النسخ"
+  },
+  "twPageRecent": {
+    "message": "عمليات الفحص الأخيرة"
+  },
+  "twPageNone": {
+    "message": "لم تُسجَّل أي عملية فحص بعد."
   }
 }

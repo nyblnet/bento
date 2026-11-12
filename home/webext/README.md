@@ -351,6 +351,63 @@ rather than covering every local HTML file.
 Expected: it saves with no dialog. Today, without the extension, that first ⌘S
 asks where to put the file.
 
+## The tripwire: checking the code bento/home serves
+
+bento/home in the browser (`home.bento.page`, and its frame site) runs code a
+server chooses, and no web page can pin its own code. The extension can check
+it from outside. On every visit it compares what the browser received with a
+list of releases signed with Bento's offline **release key** (the key every
+shipped shell trusts), and on a mismatch it warns loudly (a report tab, a
+notification that stays until dismissed, a red badge on the tab) and records
+the check. It never reloads the page, clears a cache or unregisters a worker:
+it reports, nothing else.
+
+**What it observes** (MV3 has no API for a response body in Chrome; only the
+debugger protocol has one, behind a banner):
+
+| what | how | where |
+|---|---|---|
+| the parse | a content script in the isolated world from `document_start` reads each `<script>`'s text as the parser inserts it, before the page's code runs; a script whose text later changes other than by the parser appending is flagged; handlers, `javascript:` URLs, frames, `<base>` and non-CSP `<meta http-equiv>` are flagged | library and frame |
+| the bytes | the content script's `fetch(location, {cache: 'only-if-cached'})`: the navigation's own response from the HTTP cache, with no new request a server could answer differently. Measured: it does not pass through the page's service worker | library (the frame is opaque) |
+| the size | the navigation timing's `decodedBodySize`, whoever served the page | library and frame |
+| the CSP header | `webRequest.onHeadersReceived` (observing, never blocking) for the navigation; under a service worker, which webRequest does not see, the cached response's header | library and frame |
+| workers | every registration's script URL must be a worker a release lists; its bytes, fetched now with `no-store`, must be that file | library |
+| the worker's cache | every Cache Storage entry, hashed, must be a file some release lists | library |
+
+**The list** is `https://bento.page/releases/home-web/served.json`, on the
+release channel rather than on the site it describes: a signed envelope like
+the app manifests, typed `bento/home-web/served`, with a `serial` that only goes
+up, and the newest releases first (`src/tripwire-judge.js` documents the
+payload; `scripts/lib/home-web-served.mjs` writes it;
+`scripts/sign-home-web-served.mjs` signs it). Bytes that match an older
+release in the list are recorded as **outdated**, and announced (quietly) only
+once the newest release is more than 72 hours old. A list with a bad signature,
+the wrong type, or a reused serial is announced loudly; an older list than the
+one held is refused. Before warning about a page the extension fetches the
+list again, so a release deployed after its last fetch does not warn.
+
+**What it cannot see:**
+
+- a deploy served only to people **without** the extension, or only to
+  requests it can tell apart from a browser's (the worker-bytes fetch is an
+  ordinary request, so a targeting server can answer it honestly);
+- **timing**: it checks on each visit, after the page has parsed. Code that
+  ran on that visit has already run; the tripwire bounds how long a bad deploy
+  goes unnoticed, it does not prevent it;
+- under a **service worker**, a hostile worker that changes only page TEXT
+  (no script, no handler, the same length) while the network again serves the
+  honest worker script: the parse, the size, the cache and the worker URL all
+  match;
+- anything on a site it does not watch: until the frame site's domain is
+  chosen and named in `src/tripwire-config.js` and `manifest.json`, the frame
+  page is not checked;
+- Firefox and Safari: the extension is Chromium-only.
+
+The rigs: `scripts/test-webext-tripwire.ts` (no browser),
+`scripts/test-webext-tripwire-browser.mjs` (the unpacked extension in
+Chromium, with a fixture worker) and `scripts/test-webext-tripwire-mutants.mjs`
+(a mutant per rule, each red on its row).
+
 ## What is unverified
 
 Everything below needs the extension actually loaded — none of it is testable

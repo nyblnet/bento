@@ -946,5 +946,53 @@
   "menuOpenWithId": {
     "message": "Avaa Bento ID:llä",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home ei tarjoa Bento-julkaisua"
+  },
+  "twMismatchBody": {
+    "message": "Koodi, jonka home.bento.page lähetti tälle selaimelle, ei vastaa mitään Benton allekirjoittamaa julkaisua. Sulje välilehti äläkä avaa siellä asiakirjoja. Napsauta nähdäksesi tiedot."
+  },
+  "twOldTitle": {
+    "message": "bento/home tarjoaa vanhempaa julkaisua"
+  },
+  "twOldBody": {
+    "message": "Koodi, jonka home.bento.page lähetti tälle selaimelle, on aito Bento-julkaisu, mutta ei uusin."
+  },
+  "twListTitle": {
+    "message": "bento/homen julkaisuluettelo ei ole aito"
+  },
+  "twListBody": {
+    "message": "bento.page lähetti julkaisuluettelon, jota Bento ei ole allekirjoittanut, joten home.bento.pagea ei voi tarkistaa. Napsauta nähdäksesi tiedot."
+  },
+  "twBadgeTitle": {
+    "message": "bento/home ei vastaa allekirjoitettua julkaisua"
+  },
+  "twPageTitle": {
+    "message": "bento/home: koodin tarkistus"
+  },
+  "twPageLead": {
+    "message": "Tämä laajennus vertaa koodia, jonka home.bento.page lähettää selaimellesi, julkaisuihin, jotka Bento allekirjoittaa offline-julkaisuavaimellaan. Se vain ilmoittaa: se ei ole muuttanut tai estänyt mitään."
+  },
+  "twPageDo": {
+    "message": "Sulje bento/home-välilehti äläkä avaa, muokkaa tai tallenna siellä asiakirjoja ennen kuin asia on selvitetty. Tarkistus ei muuta levylläsi olevia tiedostoja."
+  },
+  "twPageReport": {
+    "message": "Ilmoita asiasta luottamuksellisesti alla olevien tietojen kanssa:"
+  },
+  "twPageReportLink": {
+    "message": "Ilmoita Bentolle"
+  },
+  "twPageCopy": {
+    "message": "Kopioi tiedot"
+  },
+  "twPageCopied": {
+    "message": "Kopioitu"
+  },
+  "twPageRecent": {
+    "message": "Viimeisimmät tarkistukset"
+  },
+  "twPageNone": {
+    "message": "Tarkistuksia ei ole vielä tallennettu."
   }
 }

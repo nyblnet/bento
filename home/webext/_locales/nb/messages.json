@@ -946,5 +946,53 @@
   "menuOpenWithId": {
     "message": "Åpne med Bento ID",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home leverer ikke en Bento-utgivelse"
+  },
+  "twMismatchBody": {
+    "message": "Koden home.bento.page sendte til denne nettleseren, stemmer ikke med noen utgivelse signert av Bento. Lukk fanen, og ikke åpne dokumenter der. Klikk for detaljer."
+  },
+  "twOldTitle": {
+    "message": "bento/home leverer en eldre utgivelse"
+  },
+  "twOldBody": {
+    "message": "Koden home.bento.page sendte til denne nettleseren, er en ekte Bento-utgivelse, men ikke den nyeste."
+  },
+  "twListTitle": {
+    "message": "Utgivelseslisten for bento/home er ikke ekte"
+  },
+  "twListBody": {
+    "message": "bento.page sendte en utgivelsesliste som ikke er signert av Bento, så home.bento.page kan ikke kontrolleres. Klikk for detaljer."
+  },
+  "twBadgeTitle": {
+    "message": "bento/home stemmer ikke med en signert utgivelse"
+  },
+  "twPageTitle": {
+    "message": "Kodekontroll av bento/home"
+  },
+  "twPageLead": {
+    "message": "Denne utvidelsen sammenligner koden home.bento.page sender til nettleseren din, med utgivelsene Bento signerer med sin frakoblede utgivelsesnøkkel. Den bare rapporterer: Den har ikke endret eller blokkert noe."
+  },
+  "twPageDo": {
+    "message": "Lukk fanen med bento/home, og ikke åpne, rediger eller lagre dokumenter der før dette er forklart. Kontrollen endrer ikke filer på disken din."
+  },
+  "twPageReport": {
+    "message": "Rapporter det fortrolig, med detaljene nedenfor:"
+  },
+  "twPageReportLink": {
+    "message": "Rapporter til Bento"
+  },
+  "twPageCopy": {
+    "message": "Kopier detaljer"
+  },
+  "twPageCopied": {
+    "message": "Kopiert"
+  },
+  "twPageRecent": {
+    "message": "Siste kontroller"
+  },
+  "twPageNone": {
+    "message": "Ingen kontroller registrert ennå."
   }
 }

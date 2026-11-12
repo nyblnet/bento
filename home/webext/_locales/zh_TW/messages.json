@@ -979,5 +979,53 @@
   "menuOpenWithId": {
     "message": "使用 Bento ID 開啟",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home 提供的不是 Bento 發行版本"
+  },
+  "twMismatchBody": {
+    "message": "home.bento.page 傳送給此瀏覽器的程式碼與 Bento 簽署的任何發行版本都不相符。請關閉該分頁，不要在其中開啟文件。按一下以查看詳細資料。"
+  },
+  "twOldTitle": {
+    "message": "bento/home 正在提供較舊的發行版本"
+  },
+  "twOldBody": {
+    "message": "home.bento.page 傳送給此瀏覽器的程式碼是真正的 Bento 發行版本，但不是最新版本。"
+  },
+  "twListTitle": {
+    "message": "bento/home 的發行版本清單不是真的"
+  },
+  "twListBody": {
+    "message": "bento.page 傳送的發行版本清單沒有 Bento 的簽署，因此無法檢查 home.bento.page。按一下以查看詳細資料。"
+  },
+  "twBadgeTitle": {
+    "message": "bento/home 與已簽署的發行版本不相符"
+  },
+  "twPageTitle": {
+    "message": "bento/home 程式碼檢查"
+  },
+  "twPageLead": {
+    "message": "此擴充功能會將 home.bento.page 傳送給瀏覽器的程式碼，與 Bento 以離線發行金鑰簽署的發行版本進行比對。它只負責回報：沒有變更或封鎖任何內容。"
+  },
+  "twPageDo": {
+    "message": "請關閉 bento/home 分頁，在查明原因之前不要在其中開啟、編輯或儲存文件。此檢查不會變更你磁碟上的檔案。"
+  },
+  "twPageReport": {
+    "message": "請附上以下詳細資料，私下回報："
+  },
+  "twPageReportLink": {
+    "message": "回報給 Bento"
+  },
+  "twPageCopy": {
+    "message": "複製詳細資料"
+  },
+  "twPageCopied": {
+    "message": "已複製"
+  },
+  "twPageRecent": {
+    "message": "最近的檢查"
+  },
+  "twPageNone": {
+    "message": "尚無檢查記錄。"
   }
 }
