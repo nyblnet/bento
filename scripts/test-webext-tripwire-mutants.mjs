@@ -83,15 +83,19 @@ if (control.status !== 0) {
   process.exit(1)
 }
 console.log(`  ok    ${control.stdout.trim().split('\n').at(-1)}`)
-let failures = 0
-for (const m of MUTANTS) {
+let failures = 0, ran = 0
+const PICK = process.env.TW_ONLY_MUTANT // a substring of a mutant's name, to re-run one
+for (const m of MUTANTS.filter((x) => !PICK || x.name.includes(PICK))) {
+  ran++
   const r = run({ TW_ROWS: m.row, TW_MUTANT: JSON.stringify(m.edits ?? { file: m.file, from: m.from, to: m.to }) })
   const applied = /mutant applied to/.test(r.stdout)
   const red = r.status === 1 && /FAIL/.test(r.stdout)
   const okay = applied && red
   if (!okay) failures++
   const fail = r.stdout.split('\n').find((l) => /FAIL/.test(l))?.trim() ?? ''
-  console.log(`  ${okay ? 'ok  ' : 'FAIL'}  ${m.name} → row ${m.row} ${!applied ? 'NOT APPLIED' : red ? 'red' : 'GREEN'}${fail ? `: ${fail.slice(5, 120)}` : ''}${r.status === 2 ? ` (${r.stderr.trim().split('\n').at(-1)})` : ''}`)
+  console.log(`  ${okay ? 'ok  ' : 'FAIL'}  ${m.name} → row ${m.row} ${!applied ? 'NOT APPLIED' : red ? 'red' : 'GREEN'}${fail ? `: ${fail.slice(5, 120)}` : ''}`)
+  // a run that is neither red nor clean says why (a crash or a timeout is not a pass, and not a red row either)
+  if (!okay) console.log(`        exit ${r.status} ${r.signal ?? ''} ${r.error?.message ?? ''} | ${(r.stdout + r.stderr).trim().split('\n').slice(-4).join(' | ').slice(0, 400)}`)
 }
-console.log(`\n${MUTANTS.length - failures}/${MUTANTS.length} mutants red on their row`)
+console.log(`\n${ran - failures}/${ran} mutants red on their row`)
 process.exit(failures ? 1 : 0)

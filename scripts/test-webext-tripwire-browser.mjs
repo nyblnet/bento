@@ -659,8 +659,13 @@ if (SW_ROWS.some(row)) {
     await p.evaluate(async (bad) => { const c = await caches.open('bento-home-v1'); const r = await c.match('/'); await c.put('/', new Response(bad, { headers: r.headers })) }, bad)
     await p.close()
     await page.goto('about:blank')
+    // count main-frame navigations: a reload the extension caused is one more than the visit's own,
+    // whenever it lands (a marker alone can be set on the reloaded page)
+    let navs = 0
+    const onNav = (f) => { if (f === page.mainFrame()) navs++ }
+    page.on('framenavigated', onNav)
     const v = await visit(page, `${LIB}/`, { marker: 'still here' })
-    const shown = await page.evaluate(() => document.body.innerText.includes('Choose a filf'))
+    const shown = await page.evaluate(() => document.body.innerText.includes('Choose a filf')).catch(() => false)
     ok(v.lib?.page.viaWorker && shown, 'the worker served the poisoned page')
     ok(v.lib?.verdict === 'mismatch' && rules(v.lib) === 'cache', `mismatch on cache (got ${v.lib?.verdict} ${rules(v.lib)})`)
     ok(v.lib?.observed.bytes && !rules(v.lib).includes('bytes'), 'MEASURED: the content script\'s only-if-cached fetch does not pass through the page\'s worker; it read the HTTP cache\'s honest copy')
@@ -670,7 +675,8 @@ if (SW_ROWS.some(row)) {
       marker: window.__twMarker, regs: (await navigator.serviceWorker.getRegistrations()).length,
       cached: (await (await caches.open('bento-home-v1')).match('/').then((r) => r.text())).includes('Choose a filf'),
     })).catch((e) => ({ error: String(e?.message ?? e).slice(0, 80) }))
-    ok(after.marker === 'still here' && after.regs === 1 && after.cached, `nothing was "fixed": the page was not reloaded, the worker is registered, the poisoned entry is still cached (${JSON.stringify(after)})`)
+    page.off('framenavigated', onNav)
+    ok(navs === 1 && after.marker === 'still here' && after.regs === 1 && after.cached, `nothing was "fixed": the page was not reloaded (${navs} navigation(s)), the worker is registered, the poisoned entry is still cached (${JSON.stringify(after)})`)
     await noWorkers()
   }
   if (row('sw-navigation-only')) {
