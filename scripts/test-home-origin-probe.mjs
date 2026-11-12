@@ -26,9 +26,9 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const PROBE = readFileSync(process.env.ORIGIN_PROBE || join(ROOT, 'home/ios/OriginProbe.js'), 'utf8')
 const pw = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const engine = pw[process.env.BENTO_BROWSER || 'webkit']
-const browser = await engine.launch()
 // a dead browser or a call that never returns fails loudly, never as a row (scripts/lib/browser-guard.mjs)
-const { guardBrowser } = await import(join(ROOT, 'scripts/lib/browser-guard.mjs'))
+const { guardBrowser, apiLogger } = await import(join(ROOT, 'scripts/lib/browser-guard.mjs'))
+const browser = await engine.launch({ logger: apiLogger })
 const guard = guardBrowser(browser, { rig: `origin probe (${process.env.BENTO_BROWSER || 'webkit'})`, stallMs: 120000 })
 guard.section('origin probe')
 

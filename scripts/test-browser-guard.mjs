@@ -25,12 +25,12 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const { BROWSER_DIED, TIMED_OUT, guardBrowser } = await import(path.join(ROOT, 'scripts/lib/browser-guard.mjs'))
+const { BROWSER_DIED, TIMED_OUT, guardBrowser, apiLogger } = await import(path.join(ROOT, 'scripts/lib/browser-guard.mjs'))
 
 if (process.env.BENTO_GUARD_CASE) {
   // ---- child: one case ----
   const pw = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
-  const browser = await pw[process.env.BENTO_BROWSER || 'chromium'].launch()
+  const browser = await pw[process.env.BENTO_BROWSER || 'chromium'].launch({ logger: apiLogger })
   const guard = guardBrowser(browser, { rig: 'guard rig', stallMs: 2000 })
   const ctx = await browser.newContext()
   const page = await ctx.newPage()
@@ -85,8 +85,8 @@ console.log(`browser guard, in ${process.env.BENTO_BROWSER || 'chromium'}:`)
 }
 {
   const r = run('stall')
-  ok(r.status === TIMED_OUT && /TIMEOUT: nothing reported for 2s in "the case" after the row "page up"/.test(r.out) && !r.timedOut,
-    `a call that never returns fails within its stall budget, naming section and row (exit ${r.status})`)
+  ok(r.status === TIMED_OUT && /TIMEOUT: nothing reported for 2s in "the case" after the row "page up"/.test(r.out) && /calls still in flight:\s+\S+ => page\.evaluate started/.test(r.out) && !r.timedOut,
+    `a call that never returns fails within its stall budget, naming section, row and the call in flight (exit ${r.status})`)
   if (r.status !== TIMED_OUT) console.log(r.out.split('\n').slice(-8).map((l) => '        ' + l).join('\n'))
 }
 {

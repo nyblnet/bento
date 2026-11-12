@@ -22,6 +22,7 @@
  *    section: a mutant run that waits out its polling loops still reaches the
  *    row it must turn red, while a call that never returns is caught.
  *
+ *   const browser = await pw.webkit.launch({ logger: apiLogger })  // so a stall names its call
  *   const guard = guardBrowser(browser, { rig: 'home/web (webkit)', stallMs: 90000 })
  *   guard.section('[T4] …')   // the section in progress (re-arms the deadline)
  *   guard.progress('row …')   // a row was reported (re-arms the deadline)
@@ -35,6 +36,29 @@ export const BROWSER_DIED = 75
 export const TIMED_OUT = 124
 const TARGET_GONE = /Target page, context or browser has been closed|Target crashed/
 
+// Playwright's client-side API log ("=> page.evaluate started", "<= … succeeded"): pass it as
+// the launch `logger` and a stall or a dead target prints the calls that were still in flight.
+const api = []
+export const apiLogger = {
+  isEnabled: (name) => name === 'api',
+  log: (name, severity, message) => { api.push(`${new Date().toISOString().slice(11, 23)} ${message}`); if (api.length > 400) api.splice(0, 200) },
+}
+function inFlight() {
+  const open = []
+  for (const l of api) {
+    const m = / (=>|<=) (\S+) (started|succeeded|failed)/.exec(l)
+    if (!m) continue
+    if (m[1] === '=>') open.push(l)
+    else { const i = open.findLastIndex((o) => o.includes(`=> ${m[2]} started`)); if (i >= 0) open.splice(i, 1) }
+  }
+  return open.slice(-6)
+}
+const printInFlight = (print) => {
+  if (!api.length) return
+  const open = inFlight()
+  print(`        calls still in flight: ${open.length ? '\n          ' + open.join('\n          ') : 'none'}`)
+}
+
 export function guardBrowser(browser, { rig, stallMs = 90000, print = (m) => console.log(m) } = {}) {
   let closing = false
   let current = '(before the first section)'
@@ -45,6 +69,7 @@ export function guardBrowser(browser, { rig, stallMs = 90000, print = (m) => con
     print(`\n  FAIL  ${rig}: ${why}, in "${current}" after the row "${last}", at ${((Date.now() - t0) / 1000).toFixed(1)}s.`)
     print('        This is the BROWSER failing, not a row. Its stderr and exit signal are above when run with DEBUG=pw:browser.')
     print(`        host: ${host()}`)
+    printInFlight(print)
     process.exit(BROWSER_DIED)
   }
   browser.on('disconnected', () => { if (!closing) died('the browser process went away mid-rig (crashed or was killed)') })
@@ -63,6 +88,7 @@ export function guardBrowser(browser, { rig, stallMs = 90000, print = (m) => con
     clearTimeout(timer)
     timer = setTimeout(() => {
       print(`\n  FAIL  ${rig}: TIMEOUT: nothing reported for ${stallMs / 1000}s in "${current}" after the row "${last}" (a call into the browser never returned).`)
+      printInFlight(print)
       process.exit(TIMED_OUT)
     }, stallMs)
   }

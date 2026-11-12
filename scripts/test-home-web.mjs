@@ -52,7 +52,7 @@ const { spliceDoc } = await import(path.join(ROOT, 'home/web/src/verify.ts'))
 const { scanBlocks, executableScripts } = await import(path.join(ROOT, 'kernel/src/gate1.ts'))
 const pw = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
-const { guardBrowser } = await import(path.join(ROOT, 'scripts/lib/browser-guard.mjs'))
+const { guardBrowser, apiLogger } = await import(path.join(ROOT, 'scripts/lib/browser-guard.mjs'))
 
 let checks = 0, failures = 0
 let guard = null // set once the browser is up: a dead browser or a stalled row fails loudly
@@ -166,7 +166,7 @@ ok(refused(['--library-origin', 'http://127.0.0.1:1']), 'the build refuses to ru
 ok(refused(['--library-origin', 'https://home.bento.page', '--frame-origin', 'https://run.bento.page']), 'the build refuses a frame origin on the library\'s site')
 
 // --- browser -------------------------------------------------------------------
-const browser = await pw[ENGINE].launch()
+const browser = await pw[ENGINE].launch({ logger: apiLogger })
 guard = guardBrowser(browser, { rig: `home/web (${ENGINE})` })
 const recorded = []
 const sockets = []
