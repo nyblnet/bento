@@ -348,10 +348,11 @@ try {
     const want = X.info.offline.precache.map((p) => [p.path, p.sha256])
     ok(JSON.stringify(entries.sort()) === JSON.stringify(want.sort()), 'the cache holds the build\'s files, each byte for byte its pin')
 
-    // network first: with the worker in control, an online load still comes from the server
-    await page.reload()
+    // network first: with the worker in control, an online load still comes from the server.
+    // (goto, not reload: Playwright Firefox's reload of a worker-controlled page never sees "load", CI-measured)
+    await page.goto(O.library + '/')
     const mark = seen.length
-    await page.reload()
+    await page.goto(O.library + '/')
     await settled(page)
     const ctl = await page.evaluate(() => !!navigator.serviceWorker.controller)
     ok(ctl && served(mark, '/').length >= 1, `online, the library comes from the server even with the worker in control (controlled ${ctl}, GET / seen ${served(mark, '/').length})`)
