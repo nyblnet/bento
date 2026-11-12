@@ -1,0 +1,136 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento authors
+//
+// "Who vouched" for a collaborator, as data: what the People panel may say
+// about a person, decided from the identity agent's answer. No DOM, no imports
+// at run time, so scripts/test-slides-people-tiers.ts runs it under plain node.
+// The painting is vouch.ts.
+//
+// The agent (kernel/src/identity.ts `resolve`) verified everything it reports:
+// the roster chain (roster.ts verifyRosterChain), the device certificate and
+// its countersign (devices.ts verifyDevice), and the directory's status. This
+// file only turns that report into labels, and it never claims more than the
+// report says. Every field below that is MISSING reads as the weaker claim:
+//
+//   tier            'native' drops "(passkey sign-in)"; anything else keeps it
+//                   (G1: every certificate a passkey made is shown that way)
+//   accountSince    "new account" until 14 days after it; missing = new
+//   rosterChangedAt "account changed on <date>" for 7 days after it
+//   resetAt         a reset by the directory: "account changed on <date>"
+//   revoked         no ✓ at all: "this sign-in was revoked"; 'incident' (the
+//                   post-compromise lever) also flags the row for the owner
+//   managedBy       which part of vouchedBy the 80-character cut drops first
+//
+// These fields are OPTIONAL ADDITIONS within contract 1. The contract as it
+// stands carries none of them, so until a host supplies them a verified row
+// reads "(passkey sign-in)" and "new account": an under-claim, never an
+// over-claim.
+
+export type Tier = 'passkey' | 'native'
+
+export type VouchState =
+  | { kind: 'checking' }
+  | {
+      kind: 'verified'
+      name: string
+      /** vouchedBy, cleaned and cut to VIA_MAX */
+      via: string
+      tier: Tier
+      newAccount: boolean
+      /** when the account last changed, if the panel should say so */
+      changedOn: number | null
+    }
+  | { kind: 'changed'; name: string; via: string }
+  | { kind: 'revoked'; incident: boolean }
+  | { kind: 'unverified' }
+  | { kind: 'unproven' }
+  | { kind: 'failed' }
+
+const DAY = 86_400_000
+/** "new account" is shown for this long after setup (G5). */
+export const NEW_ACCOUNT_MS = 14 * DAY
+/** "account changed on <date>" is shown for this long after a roster change. */
+export const CHANGED_SHOWN_MS = 7 * DAY
+/** The longest name and vouchedBy the panel shows. */
+export const NAME_MAX = 80
+export const VIA_MAX = 80
+
+// control chars, zero-width and bidi marks: nothing the agent returns may reorder or hide text
+const INVISIBLE = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁠-⁤⁦-⁩﻿]/g
+// tick-like marks: a typed name must not be able to draw its own
+const TICKS = /[✓✔✅☑☒❗\u{1F5F8}]/gu
+
+const tidy = (s: string) => s.replace(INVISIBLE, '').replace(/\s+/g, ' ').trim()
+
+/** Agent-supplied text made safe to show: no invisible or bidi characters, bounded. */
+export function cleanText(s: unknown, max: number): string {
+  if (typeof s !== 'string') return ''
+  const c = tidy(s)
+  return c.length > max ? c.slice(0, max - 1) + '…' : c
+}
+
+/** A name somebody TYPED, with any tick marks removed so it can't pose as a ✓. */
+export function claimedName(s: string): string {
+  return cleanText(s.replace(TICKS, ''), NAME_MAX)
+}
+
+/**
+ * vouchedBy within `max` characters. The agent writes the voucher first and
+ * then its qualifiers, comma-separated: "id.bento.page, managed by example.com,
+ * unconfirmed since 3 Mar 2027". When that does not fit, "managed by" goes
+ * first (it says who can take the account away; "unconfirmed" says the address
+ * may no longer be theirs, which matters more), then any other middle
+ * qualifier, and the LAST qualifier is kept whole while the voucher is
+ * shortened. Only when even that cannot fit is the end cut.
+ */
+export function cutVia(raw: unknown, managedBy?: unknown, max = VIA_MAX): string {
+  if (typeof raw !== 'string') return ''
+  const full = tidy(raw)
+  if (full.length <= max) return full
+  const parts = full.split(', ')
+  const head = parts[0]
+  let quals = parts.slice(1)
+  const dom = typeof managedBy === 'string' ? tidy(managedBy).toLowerCase() : ''
+  const isManaged = (q: string) => /^managed by\b/i.test(q) || (dom.length > 0 && q.toLowerCase().includes(dom))
+  const fits = (h: string, qs: string[]) => [h, ...qs].join(', ').length <= max
+  if (quals.length && !fits(head, quals)) quals = quals.filter((q) => !isManaged(q))
+  while (quals.length > 1 && !fits(head, quals)) quals.splice(quals.length - 2, 1)
+  if (fits(head, quals)) return [head, ...quals].join(', ')
+  if (quals.length === 1) {
+    const room = max - quals[0].length - 2 // ", "
+    if (room >= 8) return `${head.slice(0, room - 1)}…, ${quals[0]}`
+  }
+  return cleanText([head, ...quals].join(', '), max)
+}
+
+const isTime = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v > 0
+
+/**
+ * Validate an agent answer: anything malformed is a failure, never a ✓.
+ * `now` is this device's clock (the windows are display windows; the agent
+ * already enforced every validity rule on the directory's clock).
+ */
+export function stateFromAnswer(r: unknown, now: number): VouchState {
+  if (r === null) return { kind: 'unverified' }
+  if (!r || typeof r !== 'object') return { kind: 'failed' }
+  const a = r as Record<string, unknown>
+  // revocation outranks everything: a revoked sign-in never shows a ✓
+  const rv = a.revoked
+  if (rv !== undefined && rv !== false) {
+    if (rv === true || rv === 'signout') return { kind: 'revoked', incident: false }
+    if (rv === 'incident') return { kind: 'revoked', incident: true }
+    return { kind: 'failed' }
+  }
+  const name = cleanText(a.name, NAME_MAX)
+  const via = cutVia(a.vouchedBy, a.managedBy)
+  if (!name || !via || typeof a.changed !== 'boolean') return { kind: 'failed' }
+  if (a.changed) return { kind: 'changed', name, via }
+  const tier: Tier = a.tier === 'native' ? 'native' : 'passkey'
+  const since = a.accountSince
+  const newAccount = !isTime(since) || now - since < NEW_ACCOUNT_MS
+  let changedOn: number | null = null
+  if (isTime(a.resetAt)) changedOn = a.resetAt
+  if (isTime(a.rosterChangedAt) && now - a.rosterChangedAt < CHANGED_SHOWN_MS &&
+    (changedOn === null || a.rosterChangedAt > changedOn)) changedOn = a.rosterChangedAt
+  return { kind: 'verified', name, via, tier, newAccount, changedOn }
+}

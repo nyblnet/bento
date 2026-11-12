@@ -13700,3 +13700,43 @@ WebSockets closed: three GETs and no POST on opening, the fragment gone from
 the history entry, each button, an injected script blocked with a positive
 control, framing refused, Trusted Types, an address full of markup shown as
 text; a mutant per rule) and `scripts/test-directory-mutants.ts`.
+
+## 2026-11-12 — The People panel's identity tiers (bento/id under the roster design; flag off)
+
+- **Built, flag off.** slides' People panel can say who vouched for a
+  collaborator, from the identity agent's `resolve({ pub })`
+  (`kernel/src/identity.ts`). It runs only when localStorage
+  `bento-people-vouch` is `on` AND the host exposes an agent, and it looks a
+  key up only when `session.keyProven(actor, pub)` says the peer proved it (a
+  presence `pub` is a claim; asking about a claimed key would let a reader
+  wear someone else's ✓). This replaces the earlier flag-off "who vouched"
+  draft, which predated both the session's key proof and the roster design.
+- **What a verified row says.** `✓ via <vouchedBy>`, then "(passkey sign-in)"
+  for every certificate a passkey alone made (the kernel's G1 tier, `tierOf`,
+  which deliberately does not promote on a consent key's age), "new account"
+  for 14 days after setup, and "account changed on <date>" for 7 days after a
+  roster change or after a reset by the directory. A revoked sign-in gets no ✓
+  at all ("this sign-in was revoked"); one revoked by the incident lever also
+  puts a flag on the row for the room OWNER, beside the remove control, because
+  what that key did in the deck may not have been its owner. A changed binding
+  stays "⚠ changed" with no ✓.
+- **A missing field is the weaker claim.** The labels come from optional
+  fields on the answer, additions within contract 1 that hosts do not send
+  yet: `tier` ('native' drops "(passkey sign-in)"; anything else keeps it),
+  `accountSince` (missing or malformed reads as a new account),
+  `rosterChangedAt`, `resetAt`, `revoked` (`true` | 'signout' | 'incident';
+  any other value is "couldn't check", never a ✓) and `managedBy`. So until a
+  host supplies them, every verified row reads "(passkey sign-in)" and "new
+  account": an under-claim, never an over-claim.
+- **vouchedBy's 80-character cut keeps "unconfirmed".** The agent appends its
+  own qualifiers to `vouchedBy` (", unconfirmed since <date>", later
+  ", managed by <domain>") and localises them. When the whole line does not fit
+  in 80 characters, the panel drops the "managed by" segment first (found by
+  its English wording or by the domain in `managedBy`, so a localised segment
+  is found too), then other middle qualifiers, keeps the last qualifier whole
+  while shortening the voucher, and cuts the end only when nothing else fits.
+- Guarded by `scripts/test-slides-people-tiers.ts` (rows over the decision
+  module, with thirteen mutants that must each turn a row red) and
+  `scripts/test-slides-people-tiers-browser.mjs` (the packaged editor, real
+  key proofs, network and WebSockets closed, with an owner-flag and a proof
+  mutant).
