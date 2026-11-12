@@ -94,7 +94,7 @@ const MUTANTS: Mutant[] = [
   { name: 'SD3 checkin: a web challenge accepted', file: 'browsers.js', from: "    if (a.aud !== 'home') return out(400, { error: 'nonce' }) // an enrolment's challenge, used up here\n", to: '' },
   { name: 'SD3 checkin: the wren. signature not checked', file: 'browsers.js', from: "    if (!v.ok) return json(400, { error: 'wren' })", to: "    if (!v.ok && v.reason !== 'signature') return json(400, { error: 'wren' })" },
   { name: 'SD3 checkin: past the cap renewed', file: 'browsers.js', from: "  if (now >= rec.ceremonyAt + CEREMONY_CAP_MS) return 'cap'\n", to: '' },
-  { name: 'SD3 checkin: a revoked key renewed', file: 'browsers.js', from: "  if (rec.revokedAt) return 'revoked'\n", to: '' },
+  { name: 'SD3 checkin: a revoked key renewed', file: 'browsers.js', from: "  if (rec.revokedAt || (out !== undefined && rec.ceremonyAt <= out)) return 'revoked'\n", to: '' },
   // a removed passkey is refused at two doors (not a member of the head; no record): loosen both
   { name: 'SD3 checkin: a removed passkey\'s certificate renewed', file: 'browsers.js', from: "  if (!m || m.kind !== 'pk' || m.quarantined) return 'revoked'", to: "  if (m && m.quarantined) return 'revoked'",
     also: [{ from: "  if (!pk || pk.addedAt > rec.ceremonyAt) return 'revoked'", to: "  if (pk && pk.addedAt > rec.ceremonyAt) return 'revoked'" }] },
