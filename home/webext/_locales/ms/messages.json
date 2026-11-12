@@ -994,5 +994,20 @@
   },
   "twPageNone": {
     "message": "Belum ada semakan direkodkan."
+  },
+  "twPageNotFound": {
+    "message": "Semakan itu tiada dalam rekod."
+  },
+  "twPageListNone": {
+    "message": "Belum ada senarai keluaran yang ditandatangani: home.bento.page belum pernah disemak."
+  },
+  "twPageListHeld": {
+    "message": "Menyemak dengan senarai keluaran #$1, diambil $2."
+  },
+  "twNeverTitle": {
+    "message": "bento/home belum disemak"
+  },
+  "twNeverBody": {
+    "message": "Sambungan ini tidak dapat mengambil senarai keluaran Bento yang ditandatangani selama 3 hari, jadi kod yang dihantar oleh home.bento.page belum disemak."
   }
 }

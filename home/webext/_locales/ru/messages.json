@@ -994,5 +994,20 @@
   },
   "twPageNone": {
     "message": "Проверок пока нет."
+  },
+  "twPageNotFound": {
+    "message": "Этой проверки нет в журнале."
+  },
+  "twPageListNone": {
+    "message": "Подписанного списка выпусков пока нет: home.bento.page ещё ни разу не проверялся."
+  },
+  "twPageListHeld": {
+    "message": "Проверка по списку выпусков № $1, получен $2."
+  },
+  "twNeverTitle": {
+    "message": "bento/home не проверялся"
+  },
+  "twNeverBody": {
+    "message": "Это расширение уже 3 дня не может получить подписанный список выпусков Bento, поэтому код, который отправляет home.bento.page, не проверялся."
   }
 }

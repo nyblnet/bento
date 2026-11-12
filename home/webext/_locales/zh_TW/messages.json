@@ -1027,5 +1027,20 @@
   },
   "twPageNone": {
     "message": "尚無檢查記錄。"
+  },
+  "twPageNotFound": {
+    "message": "記錄中沒有這次檢查。"
+  },
+  "twPageListNone": {
+    "message": "還沒有已簽署的發行版本清單：從未檢查過 home.bento.page。"
+  },
+  "twPageListHeld": {
+    "message": "正在以發行版本清單 #$1（取得於 $2）進行檢查。"
+  },
+  "twNeverTitle": {
+    "message": "bento/home 未經檢查"
+  },
+  "twNeverBody": {
+    "message": "此擴充功能已有 3 天無法取得 Bento 簽署的發行版本清單，因此 home.bento.page 傳送的程式碼未經檢查。"
   }
 }

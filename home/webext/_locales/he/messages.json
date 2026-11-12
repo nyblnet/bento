@@ -994,5 +994,20 @@
   },
   "twPageNone": {
     "message": "עדיין לא נרשמו בדיקות."
+  },
+  "twPageNotFound": {
+    "message": "הבדיקה הזו לא נמצאת ברישום."
+  },
+  "twPageListNone": {
+    "message": "עדיין אין רשימת גרסאות חתומה: home.bento.page מעולם לא נבדק."
+  },
+  "twPageListHeld": {
+    "message": "הבדיקה מול רשימת הגרסאות מס' $1, שנטענה ב-$2."
+  },
+  "twNeverTitle": {
+    "message": "bento/home לא נבדק"
+  },
+  "twNeverBody": {
+    "message": "התוסף הזה לא הצליח לטעון את רשימת הגרסאות החתומה של Bento במשך 3 ימים, ולכן הקוד ש-home.bento.page שולח לא נבדק."
   }
 }

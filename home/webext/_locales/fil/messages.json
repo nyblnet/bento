@@ -994,5 +994,20 @@
   },
   "twPageNone": {
     "message": "Wala pang naitalang pagsusuri."
+  },
+  "twPageNotFound": {
+    "message": "Wala sa talaan ang pagsusuring iyon."
+  },
+  "twPageListNone": {
+    "message": "Wala pang pinirmahang listahan ng release: hindi pa kailanman nasuri ang home.bento.page."
+  },
+  "twPageListHeld": {
+    "message": "Sinusuri gamit ang listahan ng release #$1, kinuha noong $2."
+  },
+  "twNeverTitle": {
+    "message": "Hindi pa nasusuri ang bento/home"
+  },
+  "twNeverBody": {
+    "message": "Hindi makuha ng extension na ito ang pinirmahang listahan ng release ng Bento sa loob ng 3 araw, kaya hindi pa nasusuri ang code na ipinapadala ng home.bento.page."
   }
 }

@@ -16,7 +16,12 @@ localize()
 document.title = t('twPageTitle')
 const log = (await chrome.storage.local.get(LOG_KEY))[LOG_KEY] ?? []
 const want = new URLSearchParams(location.search).get('id')
-const ev = (want && log.find((e) => e.id === want)) || log[0] || null
+// a check asked for by id is that check or "not found", never another one
+const ev = want ? (log.find((e) => e.id === want) ?? null) : (log[0] ?? null)
+$('notfound').hidden = !(want && !ev)
+// whether anything has been checked at all (no list held means nothing has)
+const held = (await chrome.storage.local.get('tripwireList')).tripwireList
+$('liststatus').textContent = held?.serial ? t('twPageListHeld', held.serial, new Date(held.fetchedAt ?? 0).toLocaleString()) : t('twPageListNone')
 
 if (ev) {
   const listBad = ev.list?.status === 'invalid' || ev.list?.status === 'conflict'

@@ -994,5 +994,20 @@
   },
   "twPageNone": {
     "message": "Henüz kaydedilmiş denetim yok."
+  },
+  "twPageNotFound": {
+    "message": "Bu denetim kayıtlarda yok."
+  },
+  "twPageListNone": {
+    "message": "Henüz imzalı sürüm listesi yok: home.bento.page hiç denetlenmedi."
+  },
+  "twPageListHeld": {
+    "message": "$1 numaralı sürüm listesiyle denetleniyor; $2 tarihinde alındı."
+  },
+  "twNeverTitle": {
+    "message": "bento/home denetlenmedi"
+  },
+  "twNeverBody": {
+    "message": "Bu uzantı 3 gündür Bento'nun imzalı sürüm listesini alamıyor; bu yüzden home.bento.page'in gönderdiği kod denetlenmedi."
   }
 }

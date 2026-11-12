@@ -994,5 +994,20 @@
   },
   "twPageNone": {
     "message": "Inga kontroller registrerade än."
+  },
+  "twPageNotFound": {
+    "message": "Den kontrollen finns inte i loggen."
+  },
+  "twPageListNone": {
+    "message": "Ingen signerad versionslista än: home.bento.page har aldrig kontrollerats."
+  },
+  "twPageListHeld": {
+    "message": "Kontrolleras mot versionslista nr $1, hämtad $2."
+  },
+  "twNeverTitle": {
+    "message": "bento/home har inte kontrollerats"
+  },
+  "twNeverBody": {
+    "message": "Det här tillägget har inte kunnat hämta Bentos signerade versionslista på 3 dagar, så koden som home.bento.page skickar har inte kontrollerats."
   }
 }

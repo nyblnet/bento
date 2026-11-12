@@ -994,5 +994,20 @@
   },
   "twPageNone": {
     "message": "Ingen kontroller registrert ennå."
+  },
+  "twPageNotFound": {
+    "message": "Den kontrollen finnes ikke i oversikten."
+  },
+  "twPageListNone": {
+    "message": "Ingen signert utgivelsesliste ennå: home.bento.page har aldri blitt kontrollert."
+  },
+  "twPageListHeld": {
+    "message": "Kontrolleres mot utgivelsesliste nr. $1, hentet $2."
+  },
+  "twNeverTitle": {
+    "message": "bento/home er ikke kontrollert"
+  },
+  "twNeverBody": {
+    "message": "Denne utvidelsen har ikke klart å hente Bentos signerte utgivelsesliste på 3 dager, så koden home.bento.page sender, er ikke kontrollert."
   }
 }

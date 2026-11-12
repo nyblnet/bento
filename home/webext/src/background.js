@@ -44,7 +44,7 @@ import * as docstore from './store.js'
 import { resolveFileGrant, dropFileGrant, declined, downloadsDir, downloadsRelative, writeViaDownloads, downloadsUnusable, setDownloadsUnusable, defaultDeps as defaultFileGrantDeps } from './filegrant.js'
 import { recentOpened } from './db.js'
 import * as saveas from './saveas.js'
-import { tripwireObserve, installTripwire } from './tripwire.js'
+import { tripwireObserve, tripwireEarly, installTripwire } from './tripwire.js'
 
 /** Same-named files the extension knows at OTHER paths: opened documents and the library's last scan. */
 async function knownTwins(path) {
@@ -848,6 +848,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       : msg?.op === 'saveas.drop' ? saveas.drop(topPath(sender), msg.payload, saveasDeps(sender))
       : typeof msg?.op === 'string' && msg.op.startsWith('store.') ? storeOp(msg.op, sender, msg.payload)
       : msg?.op === 'tripwire.observe' ? tripwireObserve(sender, msg.payload)
+      : msg?.op === 'tripwire.early' ? tripwireEarly(sender, msg.payload)
       : Promise.resolve({ ok: false, reason: 'unknown op' })
     run.then((r) => {
       sendResponse(r)

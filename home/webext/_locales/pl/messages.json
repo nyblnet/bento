@@ -994,5 +994,20 @@
   },
   "twPageNone": {
     "message": "Nie zapisano jeszcze żadnych sprawdzeń."
+  },
+  "twPageNotFound": {
+    "message": "Tego sprawdzenia nie ma w zapisie."
+  },
+  "twPageListNone": {
+    "message": "Brak podpisanej listy wydań: home.bento.page nigdy nie zostało sprawdzone."
+  },
+  "twPageListHeld": {
+    "message": "Sprawdzanie według listy wydań nr $1, pobranej $2."
+  },
+  "twNeverTitle": {
+    "message": "bento/home nie zostało sprawdzone"
+  },
+  "twNeverBody": {
+    "message": "To rozszerzenie od 3 dni nie może pobrać podpisanej listy wydań Bento, więc kod wysyłany przez home.bento.page nie został sprawdzony."
   }
 }

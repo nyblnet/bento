@@ -1218,5 +1218,25 @@
   "twPageNone": {
     "message": "No checks recorded yet.",
     "description": "REVIEW: the tripwire's security warning. Keep bento/home, home.bento.page and bento.page exactly as written."
+  },
+  "twPageNotFound": {
+    "message": "That check is not in the record.",
+    "description": "REVIEW: the tripwire's status and security warning. Keep bento/home, home.bento.page and Bento exactly as written."
+  },
+  "twPageListNone": {
+    "message": "No signed release list yet: home.bento.page has never been checked.",
+    "description": "REVIEW: the tripwire's status and security warning. Keep bento/home, home.bento.page and Bento exactly as written."
+  },
+  "twPageListHeld": {
+    "message": "Checking against release list #$1, fetched $2.",
+    "description": "REVIEW: the tripwire's status and security warning. Keep bento/home, home.bento.page and Bento exactly as written. $1 is a number, $2 a date and time."
+  },
+  "twNeverTitle": {
+    "message": "bento/home has not been checked",
+    "description": "REVIEW: the tripwire's status and security warning. Keep bento/home, home.bento.page and Bento exactly as written."
+  },
+  "twNeverBody": {
+    "message": "This extension has not been able to fetch Bento's signed release list for 3 days, so the code home.bento.page sends has not been checked.",
+    "description": "REVIEW: the tripwire's status and security warning. Keep bento/home, home.bento.page and Bento exactly as written."
   }
 }

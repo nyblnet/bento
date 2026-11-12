@@ -13763,11 +13763,12 @@ unregistered. A tripwire that fixes things also hides them.
   navigation's decoded size, the CSP header (`webRequest`, observing only),
   and under a worker its registrations and its Cache Storage, hashed.
 - **What it cannot see**, stated where people will read it (the extension's
-  README): a deploy served only to people without the extension; anything
-  before the visit's parse ends (it bounds how long a bad deploy goes unseen,
-  it prevents nothing); a hostile worker that changes only page text while the
-  network serves the honest worker again; the frame page until its domain is
-  named in the extension.
+  README; corrected after review, entry below): a deploy served only to people
+  without the extension; anything before the report (the hostile code has run
+  by then; the tripwire records, it prevents nothing); response headers a
+  service worker changes; a hostile worker that changes only page text while
+  the network serves the honest worker again; the frame page's bytes; the
+  frame page at all until its domain is named in the extension.
 - **A declared host permission for one origin.** Web access in the extension
   is otherwise optional and asked per origin; the tripwire's single origin is
   declared, because a tripwire that has to be switched on is one most people
@@ -13779,3 +13780,39 @@ reader, the judge, the signing script's refusals),
 against a local home/web build, with and without a service worker, sockets
 closed) and `scripts/test-webext-tripwire-mutants.mjs` (one mutant per rule,
 each red on the row that guards it).
+
+## 2026-11-12 — The bento/home tripwire, after its security review: early reports, no silent passes, no flood
+
+The review of the tripwire (entry above) broke it by running. What changed:
+
+- **A page cannot stop the check by leaving.** The content script also reports
+  from INSIDE its observer callback, each time a script is first seen, so that
+  message leaves before the script runs. An early report that no full report
+  follows within 10 seconds is judged on its own: a script no release lists,
+  or any flag, is a mismatch. A `blob:` or `about:` document of the library
+  origin (which the library never makes) is observed and is a mismatch.
+- **Nothing unobserved passes.** On the library without a worker, bytes that
+  cannot be read from the HTTP cache are a mismatch (the honest library is
+  sent `no-cache`, which Chrome stores); a size of 0 or an unfinished parse
+  is never a pass, on either site. Every wait in the content script is bounded.
+- **No one else can make it shout.** The library is judged only as a
+  top-level page, the frame page only in a frame. A page with no script and no
+  flag at a path no release serves is recorded quietly. Loud warnings come once
+  per origin per browser session; the badge and the record every time.
+- **The record holds every check.** All storage writes go through one chain;
+  observations are capped, going over a cap is a mismatch, and an event too big
+  to store is stored compact. The report page shows the check it was opened
+  for, or says it is not on record.
+- **Shadow roots are markup**, declarative or attached.
+- **The format, before its first signing:** a release may be `withdrawn: true`,
+  and serving it is a loud mismatch rather than a quiet "outdated"; a payload
+  carrying `app` is refused. The signer needs the published list (or
+  `--first`) and, for a release, a build for `https://home.bento.page`.
+- **"Never checked" is said:** after three days without a list, a quiet
+  notification, and the report page always names the list in use.
+- **Stated as limits:** the hostile code has run before anything is reported;
+  a worker can change response headers without the tripwire seeing; the frame
+  page's bytes are never observed; a rolled-back list is only recorded.
+
+Guards: the rows and mutants in `scripts/test-webext-tripwire-browser.mjs`,
+`scripts/test-webext-tripwire-mutants.mjs` and `scripts/test-webext-tripwire.ts`.

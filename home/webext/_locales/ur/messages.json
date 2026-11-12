@@ -994,5 +994,20 @@
   },
   "twPageNone": {
     "message": "ابھی تک کوئی جانچ ریکارڈ نہیں ہوئی۔"
+  },
+  "twPageNotFound": {
+    "message": "وہ جانچ ریکارڈ میں نہیں ہے۔"
+  },
+  "twPageListNone": {
+    "message": "ابھی کوئی دستخط شدہ ریلیز فہرست نہیں: home.bento.page کی کبھی جانچ نہیں ہوئی۔"
+  },
+  "twPageListHeld": {
+    "message": "ریلیز فہرست #$1 سے جانچ ہو رہی ہے، جو $2 کو حاصل کی گئی۔"
+  },
+  "twNeverTitle": {
+    "message": "bento/home کی جانچ نہیں ہوئی"
+  },
+  "twNeverBody": {
+    "message": "یہ ایکسٹینشن 3 دن سے Bento کی دستخط شدہ ریلیز فہرست حاصل نہیں کر سکی، اس لیے home.bento.page کے بھیجے گئے کوڈ کی جانچ نہیں ہوئی۔"
   }
 }

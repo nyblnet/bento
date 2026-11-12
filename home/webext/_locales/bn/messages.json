@@ -994,5 +994,20 @@
   },
   "twPageNone": {
     "message": "এখনও কোনো যাচাই রেকর্ড হয়নি।"
+  },
+  "twPageNotFound": {
+    "message": "ওই যাচাইটি রেকর্ডে নেই।"
+  },
+  "twPageListNone": {
+    "message": "এখনও কোনো স্বাক্ষরিত রিলিজ তালিকা নেই: home.bento.page কখনও যাচাই হয়নি।"
+  },
+  "twPageListHeld": {
+    "message": "রিলিজ তালিকা #$1 দিয়ে যাচাই হচ্ছে, যা $2-এ আনা হয়েছে।"
+  },
+  "twNeverTitle": {
+    "message": "bento/home যাচাই হয়নি"
+  },
+  "twNeverBody": {
+    "message": "এই এক্সটেনশন ৩ দিন ধরে Bento-র স্বাক্ষরিত রিলিজ তালিকা আনতে পারেনি, তাই home.bento.page যে কোড পাঠায় তা যাচাই হয়নি।"
   }
 }

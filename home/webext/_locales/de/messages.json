@@ -1027,5 +1027,20 @@
   },
   "twPageNone": {
     "message": "Noch keine Prüfungen aufgezeichnet."
+  },
+  "twPageNotFound": {
+    "message": "Diese Prüfung ist nicht aufgezeichnet."
+  },
+  "twPageListNone": {
+    "message": "Noch keine signierte Versionsliste: home.bento.page wurde noch nie geprüft."
+  },
+  "twPageListHeld": {
+    "message": "Geprüft wird mit Versionsliste Nr. $1, abgerufen am $2."
+  },
+  "twNeverTitle": {
+    "message": "bento/home wurde nicht geprüft"
+  },
+  "twNeverBody": {
+    "message": "Diese Erweiterung konnte die signierte Versionsliste von Bento seit 3 Tagen nicht abrufen. Der Code, den home.bento.page sendet, wurde deshalb nicht geprüft."
   }
 }

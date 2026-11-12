@@ -1027,5 +1027,20 @@
   },
   "twPageNone": {
     "message": "Nenhuma verificação registrada ainda."
+  },
+  "twPageNotFound": {
+    "message": "Essa verificação não está no registro."
+  },
+  "twPageListNone": {
+    "message": "Ainda não há lista de versões assinada: home.bento.page nunca foi verificado."
+  },
+  "twPageListHeld": {
+    "message": "Verificando com a lista de versões nº $1, obtida em $2."
+  },
+  "twNeverTitle": {
+    "message": "bento/home não foi verificado"
+  },
+  "twNeverBody": {
+    "message": "Esta extensão não consegue obter a lista de versões assinada do Bento há 3 dias, então o código que home.bento.page envia não foi verificado."
   }
 }

@@ -27,11 +27,15 @@
 //     at: '<ISO time it was signed>',
 //     releases: [ <newest first, at least one> {
 //       at: '<ISO>',
+//       withdrawn?: true,                // a known-bad release: serving it is a mismatch
 //       workers: ['/sw.js', …],          // library paths that are service workers
 //       origins: { '<origin>': { role: 'library' | 'frame',
 //         files: { '<path>': { sha256, bytes, kind: 'document' | 'asset',
 //                              scripts?: [{ sha256 } | { src: '<path>' }],  // documents
 //                              csp?: '<the Content-Security-Policy header>' } } } } } ] }
+//
+// A payload carrying `app` is refused, whatever else it holds: every other
+// artifact the release key signs carries `app`, and this one never does.
 //
 // Every rule below has a name, and the browser rig has a row that only that
 // rule catches, with a mutant that turns it off (scripts/test-webext-tripwire-mutants.mjs).
@@ -56,12 +60,14 @@ const isIso = (s) => typeof s === 'string' && !Number.isNaN(Date.parse(s))
 export function servedProblem(p) {
   if (!isObj(p)) return 'not an object'
   if (p.type !== SERVED_TYPE) return `type is not ${SERVED_TYPE}`
+  if ('app' in p) return 'carries app (an app artifact, not a release list)'
   if (p.v !== SERVED_V) return `version ${p.v} is not ${SERVED_V}`
   if (!Number.isSafeInteger(p.serial) || p.serial < 1) return 'serial is not a positive integer'
   if (!isIso(p.at)) return 'at is not a time'
   if (!Array.isArray(p.releases) || !p.releases.length) return 'no releases'
   for (const [i, r] of p.releases.entries()) {
     if (!isObj(r) || !isIso(r.at)) return `release ${i} has no time`
+    if (r.withdrawn !== undefined && r.withdrawn !== true) return `release ${i} withdrawn is not true`
     if (!Array.isArray(r.workers) || !r.workers.every(isPath)) return `release ${i} workers are not paths`
     if (!isObj(r.origins) || !Object.keys(r.origins).length) return `release ${i} has no origins`
     for (const [o, site] of Object.entries(r.origins)) {
@@ -199,28 +205,78 @@ export function cacheFailures(obs, list, origin) {
 }
 
 /**
+ * What a library or frame observation must have to be judged at all (security
+ * ruling C2). The honest library sends Cache-Control: no-cache, which Chrome
+ * stores, so without a worker a missing cached copy is itself evidence; a size
+ * of 0 or a parse that never finished is never a pass.
+ */
+export function observationFailures(obs) {
+  const out = []
+  if (obs.role === 'library' && !obs.viaWorker && !obs.bytes) out.push({ rule: 'bytes-unread' })
+  if (!(obs.size > 0)) out.push({ rule: 'size-unread' })
+  if (obs.complete === false) out.push({ rule: 'incomplete' })
+  return out
+}
+
+const pathOf = (url) => { try { return new URL(url).pathname || '/' } catch { return null } }
+
+/** Is this path one some release serves on this origin? */
+export function listedPath(list, origin, url) {
+  const p = pathOf(url)
+  return p != null && list.releases.some((r) => r.origins[origin]?.files[p] !== undefined)
+}
+
+/**
  * The verdict for one observed page.
  *
  *   'ok'         the newest release, in every observed value
  *   'outdated'   an older release in the list, exactly; `notify` once the
  *                newest release is more than GRACE_MS old
- *   'mismatch'   no release in the list: the loud one
+ *   'unlisted'   a page with no script and no flag at a path no release
+ *                serves (a host's 404): recorded quietly (ruling C3)
+ *   'mismatch'   no release in the list, a withdrawn release, or an
+ *                observation that is missing what it must have: the loud one
  *
  * `failures` are against the newest release (or the global rules).
  */
 export function judge(obs, list, origin, now = Date.now()) {
-  const global = [...markupFailures(obs), ...workerFailures(obs, list, origin), ...cacheFailures(obs, list, origin)]
+  if (!obs.scripts?.length && !obs.flags?.length && !listedPath(list, origin, obs.url)) {
+    return { verdict: 'unlisted', release: -1, failures: [] }
+  }
+  const global = [...markupFailures(obs), ...observationFailures(obs), ...workerFailures(obs, list, origin), ...cacheFailures(obs, list, origin)]
   const perRelease = list.releases.map((r) => documentFailures(obs, r, origin))
   const index = perRelease.findIndex((f) => f.length === 0)
   if (global.length || index < 0) {
     return { verdict: 'mismatch', release: index, failures: [...global, ...(index < 0 ? perRelease[0] : [])] }
   }
+  if (list.releases[index].withdrawn) return { verdict: 'mismatch', release: index, failures: [{ rule: 'withdrawn', at: list.releases[index].at }] }
   if (index === 0) return { verdict: 'ok', release: 0, failures: [] }
   const newest = Date.parse(list.releases[0].at)
   return { verdict: 'outdated', release: index, failures: [], notify: now - newest > GRACE_MS }
 }
 
-/** Which observations were actually made, for the record (an unobserved value is not a pass). */
+/**
+ * An EARLY report with no full report after it (the page left, or never
+ * finished): what the parse had shown when the last script was seen. Every
+ * script must be one some release that is not withdrawn lists for a document
+ * on this origin, and no flag may be raised; otherwise it is a mismatch.
+ * Clean but unfinished is 'incomplete', recorded quietly.
+ */
+export function judgeEarly(obs, list, origin) {
+  const fail = [...markupFailures(obs)]
+  const inline = new Set(), srcs = new Set()
+  for (const r of list.releases) {
+    if (r.withdrawn) continue
+    for (const f of Object.values(r.origins[origin]?.files ?? {})) {
+      for (const s of f.scripts ?? []) s.sha256 ? inline.add(s.sha256) : srcs.add(s.src)
+    }
+  }
+  const strange = (obs.scripts ?? []).filter((s) => (s.src != null ? !srcs.has(s.src) : !inline.has(s.sha256)))
+  if (strange.length) fail.push({ rule: 'scripts', got: strange })
+  return fail.length ? { verdict: 'mismatch', release: -1, failures: fail } : { verdict: 'incomplete', release: -1, failures: [] }
+}
+
+/** Which observations were actually made, for the record. A value that was not observed is NOT a pass where the page must have it (observationFailures). */
 export function observed(obs) {
   return {
     bytes: !!obs.bytes, size: obs.size > 0, scripts: Array.isArray(obs.scripts), csp: obs.csp != null,

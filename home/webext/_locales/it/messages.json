@@ -1027,5 +1027,20 @@
   },
   "twPageNone": {
     "message": "Nessun controllo registrato finora."
+  },
+  "twPageNotFound": {
+    "message": "Quel controllo non è nella cronologia."
+  },
+  "twPageListNone": {
+    "message": "Nessun elenco delle versioni firmato: home.bento.page non è mai stato controllato."
+  },
+  "twPageListHeld": {
+    "message": "Controllo con l'elenco delle versioni n. $1, scaricato il $2."
+  },
+  "twNeverTitle": {
+    "message": "bento/home non è stato controllato"
+  },
+  "twNeverBody": {
+    "message": "Da 3 giorni questa estensione non riesce a scaricare l'elenco delle versioni firmato da Bento, quindi il codice inviato da home.bento.page non è stato controllato."
   }
 }

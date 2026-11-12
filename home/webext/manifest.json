@@ -52,12 +52,13 @@
       "matches": [
         "https://home.bento.page/*"
       ],
-      "all_frames": true,
+      "all_frames": false,
       "js": [
         "src/tripwire-observe.js"
       ],
       "world": "ISOLATED",
-      "run_at": "document_start"
+      "run_at": "document_start",
+      "match_origin_as_fallback": true
     }
   ],
   "icons": {

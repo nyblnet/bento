@@ -994,5 +994,20 @@
   },
   "twPageNone": {
     "message": "अभी तक कोई जाँच दर्ज नहीं हुई है।"
+  },
+  "twPageNotFound": {
+    "message": "वह जाँच रिकॉर्ड में नहीं है।"
+  },
+  "twPageListNone": {
+    "message": "अभी कोई साइन की हुई रिलीज़ सूची नहीं है: home.bento.page की कभी जाँच नहीं हुई।"
+  },
+  "twPageListHeld": {
+    "message": "रिलीज़ सूची #$1 से जाँच हो रही है, जो $2 को ली गई।"
+  },
+  "twNeverTitle": {
+    "message": "bento/home की जाँच नहीं हुई है"
+  },
+  "twNeverBody": {
+    "message": "यह एक्सटेंशन 3 दिनों से Bento की साइन की हुई रिलीज़ सूची नहीं ला पाया है, इसलिए home.bento.page द्वारा भेजे गए कोड की जाँच नहीं हुई है।"
   }
 }

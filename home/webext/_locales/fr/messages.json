@@ -1027,5 +1027,20 @@
   },
   "twPageNone": {
     "message": "Aucune vérification enregistrée pour l'instant."
+  },
+  "twPageNotFound": {
+    "message": "Cette vérification ne figure pas dans l'historique."
+  },
+  "twPageListNone": {
+    "message": "Pas encore de liste de versions signée : home.bento.page n'a jamais été vérifié."
+  },
+  "twPageListHeld": {
+    "message": "Vérification avec la liste de versions n° $1, récupérée le $2."
+  },
+  "twNeverTitle": {
+    "message": "bento/home n'a pas été vérifié"
+  },
+  "twNeverBody": {
+    "message": "Cette extension n'a pas pu récupérer la liste de versions signée de Bento depuis 3 jours : le code envoyé par home.bento.page n'a donc pas été vérifié."
   }
 }

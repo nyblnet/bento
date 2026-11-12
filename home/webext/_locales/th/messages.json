@@ -994,5 +994,20 @@
   },
   "twPageNone": {
     "message": "ยังไม่มีการบันทึกการตรวจสอบ"
+  },
+  "twPageNotFound": {
+    "message": "ไม่มีการตรวจสอบนั้นในบันทึก"
+  },
+  "twPageListNone": {
+    "message": "ยังไม่มีรายการรุ่นที่ลงนาม: ยังไม่เคยตรวจสอบ home.bento.page"
+  },
+  "twPageListHeld": {
+    "message": "กำลังตรวจสอบกับรายการรุ่น #$1 ซึ่งดึงมาเมื่อ $2"
+  },
+  "twNeverTitle": {
+    "message": "ยังไม่ได้ตรวจสอบ bento/home"
+  },
+  "twNeverBody": {
+    "message": "ส่วนขยายนี้ดึงรายการรุ่นที่ Bento ลงนามไม่ได้มา 3 วันแล้ว จึงยังไม่ได้ตรวจสอบโค้ดที่ home.bento.page ส่งมา"
   }
 }

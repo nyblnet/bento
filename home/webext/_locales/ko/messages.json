@@ -994,5 +994,20 @@
   },
   "twPageNone": {
     "message": "아직 기록된 확인이 없습니다."
+  },
+  "twPageNotFound": {
+    "message": "그 확인 기록이 없습니다."
+  },
+  "twPageListNone": {
+    "message": "아직 서명된 릴리스 목록이 없습니다. home.bento.page는 한 번도 확인되지 않았습니다."
+  },
+  "twPageListHeld": {
+    "message": "릴리스 목록 #$1($2에 가져옴)과 비교하고 있습니다."
+  },
+  "twNeverTitle": {
+    "message": "bento/home이 확인되지 않았습니다"
+  },
+  "twNeverBody": {
+    "message": "이 확장 프로그램이 3일 동안 Bento의 서명된 릴리스 목록을 가져오지 못해서 home.bento.page가 보내는 코드를 확인하지 못했습니다."
   }
 }

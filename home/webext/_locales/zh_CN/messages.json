@@ -1027,5 +1027,20 @@
   },
   "twPageNone": {
     "message": "尚无检查记录。"
+  },
+  "twPageNotFound": {
+    "message": "记录中没有这次检查。"
+  },
+  "twPageListNone": {
+    "message": "还没有已签名的发布版本列表：从未检查过 home.bento.page。"
+  },
+  "twPageListHeld": {
+    "message": "正在用发布版本列表 #$1（获取于 $2）进行检查。"
+  },
+  "twNeverTitle": {
+    "message": "bento/home 未经检查"
+  },
+  "twNeverBody": {
+    "message": "此扩展程序已有 3 天无法获取 Bento 签名的发布版本列表，因此 home.bento.page 发送的代码未经检查。"
   }
 }

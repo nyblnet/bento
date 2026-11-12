@@ -994,5 +994,20 @@
   },
   "twPageNone": {
     "message": "Tarkistuksia ei ole vielä tallennettu."
+  },
+  "twPageNotFound": {
+    "message": "Tätä tarkistusta ei ole tallennettu."
+  },
+  "twPageListNone": {
+    "message": "Allekirjoitettua julkaisuluetteloa ei vielä ole: home.bento.pagea ei ole koskaan tarkistettu."
+  },
+  "twPageListHeld": {
+    "message": "Tarkistetaan julkaisuluetteloa nro $1 vasten, haettu $2."
+  },
+  "twNeverTitle": {
+    "message": "bento/homea ei ole tarkistettu"
+  },
+  "twNeverBody": {
+    "message": "Tämä laajennus ei ole saanut haettua Benton allekirjoittamaa julkaisuluetteloa 3 päivään, joten home.bento.pagen lähettämää koodia ei ole tarkistettu."
   }
 }

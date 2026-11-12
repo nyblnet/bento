@@ -124,14 +124,21 @@ export async function describeBuild(out, at = new Date().toISOString()) {
  * caller), or null for the first. The serial only goes up; releases are newest
  * first and the oldest fall off after KEEP.
  */
-export function nextServed(held, release, at = new Date().toISOString()) {
+export function nextServed(held, release, at = new Date().toISOString(), { withdraw = [] } = {}) {
   if (held && (held.type !== SERVED_TYPE || held.v !== SERVED_V || !Number.isSafeInteger(held.serial))) {
     throw new Error('the held release list is not a v1 bento/home list')
+  }
+  const older = (held ? held.releases : []).map((r) => ({ ...r }))
+  // R1: a release with a known hole is WITHDRAWN: still listed, so serving it is a loud mismatch, not a quiet "outdated"
+  for (const w of withdraw) {
+    const hit = older.filter((r) => r.at === w)
+    if (hit.length !== 1) throw new Error(`--withdraw ${w}: the held list has ${hit.length} releases signed at that time (exactly one required)`)
+    hit[0].withdrawn = true
   }
   return {
     type: SERVED_TYPE, v: SERVED_V,
     serial: held ? held.serial + 1 : 1,
     at,
-    releases: [release, ...(held ? held.releases : [])].slice(0, KEEP),
+    releases: [release, ...older].slice(0, KEEP),
   }
 }

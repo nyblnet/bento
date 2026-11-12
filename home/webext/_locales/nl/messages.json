@@ -994,5 +994,20 @@
   },
   "twPageNone": {
     "message": "Nog geen controles vastgelegd."
+  },
+  "twPageNotFound": {
+    "message": "Die controle staat niet in het overzicht."
+  },
+  "twPageListNone": {
+    "message": "Nog geen ondertekende releaselijst: home.bento.page is nog nooit gecontroleerd."
+  },
+  "twPageListHeld": {
+    "message": "Gecontroleerd met releaselijst nr. $1, opgehaald op $2."
+  },
+  "twNeverTitle": {
+    "message": "bento/home is niet gecontroleerd"
+  },
+  "twNeverBody": {
+    "message": "Deze extensie kan de ondertekende releaselijst van Bento al 3 dagen niet ophalen, dus de code die home.bento.page stuurt is niet gecontroleerd."
   }
 }

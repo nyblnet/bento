@@ -994,5 +994,20 @@
   },
   "twPageNone": {
     "message": "هنوز بررسی‌ای ثبت نشده است."
+  },
+  "twPageNotFound": {
+    "message": "این بررسی در سابقه نیست."
+  },
+  "twPageListNone": {
+    "message": "هنوز فهرست نسخه‌ی امضاشده‌ای نیست: home.bento.page هرگز بررسی نشده است."
+  },
+  "twPageListHeld": {
+    "message": "بررسی با فهرست نسخه‌های شماره‌ی $1، دریافت‌شده در $2."
+  },
+  "twNeverTitle": {
+    "message": "bento/home بررسی نشده است"
+  },
+  "twNeverBody": {
+    "message": "این افزونه ۳ روز است که نمی‌تواند فهرست نسخه‌های امضاشده‌ی Bento را دریافت کند، بنابراین کدی که home.bento.page می‌فرستد بررسی نشده است."
   }
 }

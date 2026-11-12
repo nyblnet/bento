@@ -994,5 +994,20 @@
   },
   "twPageNone": {
     "message": "لم تُسجَّل أي عملية فحص بعد."
+  },
+  "twPageNotFound": {
+    "message": "هذا الفحص غير موجود في السجل."
+  },
+  "twPageListNone": {
+    "message": "لا توجد قائمة إصدارات موقّعة بعد: لم يُفحص home.bento.page قط."
+  },
+  "twPageListHeld": {
+    "message": "يجري الفحص مقابل قائمة الإصدارات رقم $1، التي جُلبت في $2."
+  },
+  "twNeverTitle": {
+    "message": "لم يُفحص bento/home"
+  },
+  "twNeverBody": {
+    "message": "لم تتمكن هذه الإضافة من جلب قائمة إصدارات Bento الموقّعة منذ 3 أيام، لذا لم تُفحص الشيفرة التي يرسلها home.bento.page."
   }
 }

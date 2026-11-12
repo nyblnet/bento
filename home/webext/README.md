@@ -367,37 +367,65 @@ debugger protocol has one, behind a banner):
 
 | what | how | where |
 |---|---|---|
-| the parse | a content script in the isolated world from `document_start` reads each `<script>`'s text as the parser inserts it, before the page's code runs; a script whose text later changes other than by the parser appending is flagged; handlers, `javascript:` URLs, frames, `<base>` and non-CSP `<meta http-equiv>` are flagged | library and frame |
-| the bytes | the content script's `fetch(location, {cache: 'only-if-cached'})`: the navigation's own response from the HTTP cache, with no new request a server could answer differently. Measured: it does not pass through the page's service worker | library (the frame is opaque) |
-| the size | the navigation timing's `decodedBodySize`, whoever served the page | library and frame |
-| the CSP header | `webRequest.onHeadersReceived` (observing, never blocking) for the navigation; under a service worker, which webRequest does not see, the cached response's header | library and frame |
+| the parse | a content script in the isolated world from `document_start` reads each `<script>`'s text as the parser inserts it, before the page's code runs; a script whose text later changes other than by the parser appending is flagged; handlers, `javascript:` URLs, frames, `<base>`, shadow roots (declarative or attached) and non-CSP `<meta http-equiv>` are flagged | library and frame |
+| an early report | sent from inside the observer callback each time a script is first seen or grows, so it leaves BEFORE that script runs; if no full report follows within 10 s (the page navigated away, or never finished), the early report is judged on its own: a script no release lists, or any flag, is a mismatch | library and frame |
+| the bytes | the content script's `fetch(location, {cache: 'only-if-cached'})`: the navigation's own response from the HTTP cache, with no new request a server could answer differently. Measured: it does not pass through the page's service worker. The honest library is sent `no-cache`, which Chrome stores, so on the library without a worker, bytes that cannot be read are a mismatch | library (the frame is opaque) |
+| the size | the navigation timing's `decodedBodySize`, whoever served the page; 0 is a mismatch, as is a parse that never finished | library and frame |
+| the CSP header | `webRequest.onHeadersReceived` (observing, never blocking) for the navigation; under a service worker, which webRequest does not see, the HTTP cache's copy of the header | library and frame |
 | workers | every registration's script URL must be a worker a release lists; its bytes, fetched now with `no-store`, must be that file | library |
 | the worker's cache | every Cache Storage entry, hashed, must be a file some release lists | library |
 
+The library is judged only as a top-level page (it is never framed), and in a
+`blob:` or `about:` document of its origin, which it never makes; the frame
+page only in a frame. A page with no script and no flag at a path no release
+serves (a host's 404) is recorded quietly. Observations are capped (scripts,
+flags, cache entries, string lengths); going over a cap is a mismatch. Every
+write to the record goes through one chain, so concurrent pages cannot lose
+each other's checks.
+
 **The list** is `https://bento.page/releases/home-web/served.json`, on the
 release channel rather than on the site it describes: a signed envelope like
-the app manifests, typed `bento/home-web/served`, with a `serial` that only goes
-up, and the newest releases first (`src/tripwire-judge.js` documents the
-payload; `scripts/lib/home-web-served.mjs` writes it;
-`scripts/sign-home-web-served.mjs` signs it). Bytes that match an older
-release in the list are recorded as **outdated**, and announced (quietly) only
-once the newest release is more than 72 hours old. A list with a bad signature,
-the wrong type, or a reused serial is announced loudly; an older list than the
-one held is refused. Before warning about a page the extension fetches the
-list again, so a release deployed after its last fetch does not warn.
+the app manifests, typed `bento/home-web/served`, refused if it carries `app`,
+with a `serial` that only goes up, and the newest releases first
+(`src/tripwire-judge.js` documents the payload; `scripts/lib/home-web-served.mjs`
+writes it; `scripts/sign-home-web-served.mjs` signs it, and needs the published
+list, or `--first` for the very first one). Bytes that match an older release
+are recorded as **outdated**, and announced (quietly) only once the newest
+release is more than 72 hours old; a release marked **withdrawn**
+(`--withdraw`) is a loud mismatch. A list with a bad signature, the wrong
+type, or a reused serial is announced loudly; an older list than the one held
+is refused. Before warning about a page the extension fetches the list again,
+so a release deployed after its last fetch does not warn.
 
-**What it cannot see:**
+Loud warnings (a report tab, a notification that stays) come once per origin
+per browser session; the badge and the record come every time. If no list can
+be fetched for three days, a quiet notification says nothing is being checked,
+and the report page always says which list checks run against, or that
+home.bento.page has never been checked.
+
+**What it cannot see, or says only quietly:**
 
 - a deploy served only to people **without** the extension, or only to
   requests it can tell apart from a browser's (the worker-bytes fetch is an
   ordinary request, so a targeting server can answer it honestly);
-- **timing**: it checks on each visit, after the page has parsed. Code that
-  ran on that visit has already run; the tripwire bounds how long a bad deploy
-  goes unnoticed, it does not prevent it;
-- under a **service worker**, a hostile worker that changes only page TEXT
-  (no script, no handler, the same length) while the network again serves the
-  honest worker script: the parse, the size, the cache and the worker URL all
-  match;
+- **the code runs first.** The tripwire reports what was parsed; a hostile
+  script has run by then. The early report means leaving the page does not
+  stop the record, but nothing is prevented;
+- under a **service worker**: response headers the worker changes (the CSP is
+  read from the HTTP cache, not from the worker's answer), and a change to page
+  TEXT only (no script, no handler, the same length) while the network again
+  serves the honest worker script;
+- the **frame page's bytes**: it is an opaque origin, so its scripts, markup,
+  size and CSP header are checked, and a same-length change to its text is not;
+- a **rolled-back** list is refused but only recorded; a fresh install that
+  cannot fetch a list checks nothing, said quietly after three days;
+- after the first loud warning for an origin in a session, a second, different
+  finding there gets the badge and the record, not another tab;
+- an honest visit closed while a script was still arriving can leave an early
+  report that looks like a mismatch;
+- `blob:`/`about:` documents are observed from Chrome 119
+  (`match_origin_as_fallback`); before that the early report still records the
+  script that made one;
 - anything on a site it does not watch: until the frame site's domain is
   chosen and named in `src/tripwire-config.js` and `manifest.json`, the frame
   page is not checked;

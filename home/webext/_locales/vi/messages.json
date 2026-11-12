@@ -994,5 +994,20 @@
   },
   "twPageNone": {
     "message": "Chưa có lần kiểm tra nào được ghi lại."
+  },
+  "twPageNotFound": {
+    "message": "Lần kiểm tra đó không có trong bản ghi."
+  },
+  "twPageListNone": {
+    "message": "Chưa có danh sách bản phát hành đã ký: home.bento.page chưa từng được kiểm tra."
+  },
+  "twPageListHeld": {
+    "message": "Đang kiểm tra theo danh sách bản phát hành số $1, lấy lúc $2."
+  },
+  "twNeverTitle": {
+    "message": "bento/home chưa được kiểm tra"
+  },
+  "twNeverBody": {
+    "message": "Tiện ích này đã 3 ngày không lấy được danh sách bản phát hành do Bento ký, nên mã home.bento.page gửi chưa được kiểm tra."
   }
 }

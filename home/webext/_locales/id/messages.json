@@ -994,5 +994,20 @@
   },
   "twPageNone": {
     "message": "Belum ada pemeriksaan yang tercatat."
+  },
+  "twPageNotFound": {
+    "message": "Pemeriksaan itu tidak ada dalam catatan."
+  },
+  "twPageListNone": {
+    "message": "Belum ada daftar rilis yang ditandatangani: home.bento.page belum pernah diperiksa."
+  },
+  "twPageListHeld": {
+    "message": "Memeriksa dengan daftar rilis #$1, diambil $2."
+  },
+  "twNeverTitle": {
+    "message": "bento/home belum diperiksa"
+  },
+  "twNeverBody": {
+    "message": "Ekstensi ini tidak dapat mengambil daftar rilis Bento yang ditandatangani selama 3 hari, jadi kode yang dikirim home.bento.page belum diperiksa."
   }
 }

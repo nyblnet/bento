@@ -1027,5 +1027,20 @@
   },
   "twPageNone": {
     "message": "Aún no hay comprobaciones registradas."
+  },
+  "twPageNotFound": {
+    "message": "Esa comprobación no está en el registro."
+  },
+  "twPageListNone": {
+    "message": "Aún no hay lista de versiones firmada: home.bento.page nunca se ha comprobado."
+  },
+  "twPageListHeld": {
+    "message": "Comprobando con la lista de versiones n.º $1, obtenida el $2."
+  },
+  "twNeverTitle": {
+    "message": "bento/home no se ha comprobado"
+  },
+  "twNeverBody": {
+    "message": "Esta extensión no ha podido obtener la lista de versiones firmada de Bento durante 3 días, así que el código que envía home.bento.page no se ha comprobado."
   }
 }

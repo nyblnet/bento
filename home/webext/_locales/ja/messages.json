@@ -1027,5 +1027,20 @@
   },
   "twPageNone": {
     "message": "まだ確認の記録はありません。"
+  },
+  "twPageNotFound": {
+    "message": "その確認は記録にありません。"
+  },
+  "twPageListNone": {
+    "message": "署名済みのリリース一覧がまだありません。home.bento.page は一度も確認されていません。"
+  },
+  "twPageListHeld": {
+    "message": "リリース一覧 #$1（$2 に取得）と照合しています。"
+  },
+  "twNeverTitle": {
+    "message": "bento/home は確認されていません"
+  },
+  "twNeverBody": {
+    "message": "この拡張機能は 3 日間 Bento の署名済みリリース一覧を取得できていないため、home.bento.page が送るコードは確認されていません。"
   }
 }
