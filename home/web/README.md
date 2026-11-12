@@ -94,8 +94,10 @@ publishes, into `<site>.home-web/` (outside the site, so nothing deploys it).
 Without `--home-web` a release does not touch home/web. `--frame-origin` has no
 default there either; a rehearsal with a throwaway key adds `--home-web-dev`.
 The published histories are checked (`build.mjs --check`, which writes
-nothing) before the release signs anything, and the output is emptied first,
-so a failed run never leaves an earlier build in it.
+nothing) before the release signs anything. The output must be outside the
+site, must not contain it, and must be new, empty or an earlier home/web build;
+it is emptied before the other checks, so a run refused after that point leaves
+no earlier build in it.
 
 Budgets: the library page without the histories it bundles is at most 32 KB,
 the frame page at most 4 KB (`scripts/test-home-web.mjs`).

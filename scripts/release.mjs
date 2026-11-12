@@ -43,7 +43,7 @@ import { fileURLToPath } from 'node:url'
 import { spliceDoc } from './guestbook-deck.mjs'
 import { gateShell } from './shell-gate.mjs'
 import { APPS, RELEASE_MARKER, tagFor } from './apps.mjs'
-import { homeWebOptions, publishedHistories, homeWebBuildArgs } from './home-web-release.mjs'
+import { homeWebOptions, homeWebKey, prepareHomeWebOut, publishedHistories, homeWebBuildArgs } from './home-web-release.mjs'
 import { releasePublicKey } from './sign-payload.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
@@ -87,17 +87,22 @@ const site = opt('out', join(root, 'site'))
 // bento/home in the browser (home/web), OPT-IN: --home-web builds it from the
 // histories this release leaves in the site, for every published app, into a
 // directory OUTSIDE the site (nothing deploys it). It needs the maintainer's
-// --frame-origin, which has no default. The option refusals happen here,
-// before anything is built; the published histories are checked once the site
-// is seeded, still before anything is signed (scripts/home-web-release.mjs).
-// The one check left for after signing is the history this release signs: it
-// verifies whenever the signing key is the release key, which a --key run
-// checks here.
+// --frame-origin, which has no default (scripts/home-web-release.mjs).
+//
+// Order matters. The option refusals come first and leave everything as it
+// was. Then the output is made safe and emptied (an earlier development or
+// test-key build never survives a later refusal), and the key, the mutant hook
+// and esbuild are checked; the published histories are checked once the site
+// is seeded. All of that is before anything is signed. The one check on an
+// input left for after signing is the history this release signs, which
+// verifies whenever the signing key is the release key (checked here).
 let homeWeb = null
 let homeWebKeyFile = null
 try {
-  homeWeb = homeWebOptions({ args, opt, site, keyPath: opt('key', null), releaseKey: releasePublicKey })
+  homeWeb = homeWebOptions({ args, opt, site })
   if (homeWeb) {
+    prepareHomeWebOut({ site, out: homeWeb.out })
+    homeWeb.devKey = homeWebKey({ keyPath: opt('key', null), releaseKey: releasePublicKey, dev: homeWeb.dev })
     // home/web/build.mjs's own refusals, up front: a release never builds a mutant
     if (process.env.BENTO_HOME_WEB_MUTANT) throw new Error('BENTO_HOME_WEB_MUTANT is set: a release never builds a home/web mutant')
     const esbuild = process.env.ESBUILD || join(root, 'slides/node_modules/.bin/esbuild')
@@ -107,14 +112,9 @@ try {
   console.error(`✗ ${e.message}`)
   process.exit(1)
 }
-if (homeWeb) {
-  // An earlier build in the output (a development or test-key one, say) must
-  // never survive a run that fails: the output holds this run's build or nothing.
-  rmSync(homeWeb.out, { recursive: true, force: true })
-  if (homeWeb.devKey) {
-    homeWebKeyFile = join(mkdtempSync(join(tmpdir(), 'bento-home-web-key-')), 'test-key.json')
-    writeFileSync(homeWebKeyFile, JSON.stringify(homeWeb.devKey))
-  }
+if (homeWeb?.devKey) {
+  homeWebKeyFile = join(mkdtempSync(join(tmpdir(), 'bento-home-web-key-')), 'test-key.json')
+  writeFileSync(homeWebKeyFile, JSON.stringify(homeWeb.devKey))
 }
 
 /** The live tree, resolved exactly as publish-site.mjs resolves it. */

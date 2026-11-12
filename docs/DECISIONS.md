@@ -13744,18 +13744,19 @@ that silently makes every file of an app unverifiable.
 and is the maintainer's to choose, so there is no default. It bundles the
 `history.json` of every app the staged site publishes (an app with a signed
 manifest; a published app without a history is refused, never skipped), into
-`<site>.home-web/`, outside the mirrored site: nothing deploys it. The
-options are refused before anything is built: no `--frame-origin`, output
-inside the site, a signing key that is not the release key (a rehearsal passes
-`--home-web-dev`), `BENTO_HOME_WEB_MUTANT` in the environment, and a missing
-esbuild. The published histories are checked once the site is seeded and
-still before anything is signed: a published app with no history, or a
-history the build would refuse, stops the release with nothing signed. The one
-check that can only run after signing is on the history this release signs,
-and it holds whenever the signing key is the release key. The output is
-emptied at the start of every `--home-web` run, so a failed run never leaves
-an earlier (development or test-key) build where the release's belongs.
-Without
+`<site>.home-web/`, outside the mirrored site: nothing deploys it. Every
+refusal below comes before anything is signed. The option refusals come first
+and leave the output as it was: no `--frame-origin`, an output inside the site
+or one that contains the site (compared as the file system resolves them, so
+a symlink or a case variant cannot hide one in the other), and an output that
+holds anything but an earlier home/web build. Then the output is emptied, so
+every later refusal leaves no earlier (development or test-key) build behind:
+a signing key that is not the release key (a rehearsal passes
+`--home-web-dev`), `BENTO_HOME_WEB_MUTANT` in the environment, a missing
+esbuild, and, once the site is seeded, a published app with no history or a
+history the build would refuse. The one check on an input that can only run
+after signing is on the history this release signs, and it holds whenever the
+signing key is the release key. Without
 `--home-web` a release is unchanged: a rehearsal slides release before and
 after this change produced the same 69 files (signed payloads and masked
 timestamps compared) and the same log.

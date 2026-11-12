@@ -37,7 +37,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { APPS } from './apps.mjs'
-import { homeWebOptions, publishedHistories } from './home-web-release.mjs'
+import { homeWebKey, homeWebOptions, publishedHistories } from './home-web-release.mjs'
 import { releasePublicKey } from './sign-payload.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -136,18 +136,57 @@ for (const [extra, pattern, msg] of [
   [['--key', THROWAWAY, '--home-web'], /--frame-origin/, '--home-web without --frame-origin'],
   [['--key', THROWAWAY, '--home-web', '--frame-origin', '--home-web-dev'], /--frame-origin/, '--home-web whose --frame-origin is followed by another flag'],
   [['--key', THROWAWAY, '--frame-origin', FRAME], /only mean something with --home-web/, '--frame-origin without --home-web'],
-  [['--key', THROWAWAY, '--home-web', '--home-web-dev', '--frame-origin', FRAME, '--home-web-out', 'INSIDE'], /inside the site/, 'home/web output inside the site (which is mirrored to bento.page)'],
-  [['--key', THROWAWAY, '--home-web', '--home-web-dev', '--frame-origin', FRAME, '--home-web-out', 'DOTDOT'], /inside the site/, 'home/web output in a child of the site named ..hw'],
-  [['--key', THROWAWAY, '--home-web', '--frame-origin', FRAME], /not the release key/, 'a signing key that is not the release key, without --home-web-dev'],
 ]) {
   const site = `site-${++n}`
-  const args = extra.map((a) => (a === 'INSIDE' ? path.join(work, site, 'home-web') : a === 'DOTDOT' ? path.join(work, site, '..hw') : a))
-  const r = release(args, site)
+  const r = release(extra, site)
   ok(r.status !== 0 && !r.touched && pattern.test(r.stderr), `${msg}: refused before the site is touched (exit ${r.status}: ${r.stderr.trim().split('\n').pop()?.slice(0, 120)})`)
+}
+
+section('release.mjs --home-web: where the output may go (nothing signed, nothing of it removed)')
+{
+  // each row: [message, refusal pattern, (site) => { site?, out, keep }] where `keep` must survive
+  const canary = (dir, extra = {}) => { fs.mkdirSync(dir, { recursive: true }); const f = path.join(dir, 'CANARY'); fs.writeFileSync(f, 'keep me'); for (const [k, v] of Object.entries(extra)) fs.writeFileSync(path.join(dir, k), v); return f }
+  for (const [msg, pattern, setup] of [
+    ['home/web output inside the site (which is mirrored to bento.page)', /inside the site/, (site) => ({ out: path.join(site, 'home-web') })],
+    ['home/web output in a child of the site named ..hw', /inside the site/, (site) => ({ out: path.join(site, '..hw') })],
+    ['home/web output reaching into the site through a symlink', /inside the site/, (site) => {
+      fs.mkdirSync(site, { recursive: true })
+      const keep = canary(site)
+      const via = path.join(work, `elsewhere-${n}`); fs.mkdirSync(via, { recursive: true }); fs.symlinkSync(site, path.join(via, 'link'))
+      return { out: path.join(via, 'link', 'hw'), keep }
+    }],
+    ['home/web output that contains the site (an earlier build there too)', /contains the site/, (site) => {
+      const anc = path.dirname(site)
+      return { out: anc, keep: canary(anc, { 'build.json': '{}' }) }
+    }],
+    ['home/web output holding something other than an earlier build', /holds something other/, () => {
+      const out = path.join(work, `not-a-build-${n}`)
+      return { out, keep: canary(out) }
+    }],
+  ]) {
+    const name = `out-${++n}`
+    const site = path.join(work, name, 'site')
+    const { out, keep } = setup(site)
+    const r = release([...['--key', THROWAWAY, '--home-web', '--home-web-dev', '--frame-origin', FRAME], '--home-web-out', out], path.relative(work, site))
+    const signed = signedIn(site)
+    ok(r.status !== 0 && pattern.test(r.stderr) && !signed.length && (!keep || fs.existsSync(keep)) && !fs.existsSync(path.join(out, 'library')),
+      `${msg}: refused, nothing signed, nothing written there${keep ? ', and what it held survives' : ''} (exit ${r.status}: ${r.stderr.trim().split('\n').pop()?.slice(0, 110)})`)
+  }
+}
+
+section('release.mjs --home-web: refusals before signing that empty the output first')
+{
+  const out = staleOut('key.home-web')
+  const r = release(['--key', THROWAWAY, '--home-web', '--frame-origin', FRAME, '--home-web-out', out], 'site-key')
+  ok(r.status !== 0 && /not the release key/.test(r.stderr) && !signedIn(r.site).length, `a signing key that is not the release key, without --home-web-dev: refused, nothing signed (exit ${r.status})`)
+  ok(!fs.existsSync(out), 'the non-release-key refusal leaves no earlier (development, test-key) build in its output')
 }
 {
   const opt = (args) => (name, d) => { const i = args.indexOf(`--${name}`); return i >= 0 && args[i + 1] ? args[i + 1] : d }
-  const call = (args, keyPath) => homeWebOptions({ args, opt: opt(args), site: path.join(work, 'site'), keyPath, releaseKey: releasePublicKey })
+  const call = (args, keyPath) => {
+    const o = homeWebOptions({ args, opt: opt(args), site: path.join(work, 'site') })
+    return o && { ...o, devKey: homeWebKey({ keyPath, releaseKey: releasePublicKey, dev: o.dev }) }
+  }
   ok(call(['--app', 'slides']) === null, 'without --home-web, no home/web build (the release is unchanged)')
   const prod = call(['--home-web', '--frame-origin', FRAME], LOOKS_LIKE_RELEASE)
   ok(prod && prod.dev === false && prod.devKey === null && prod.out === path.join(work, 'site.home-web'),
@@ -180,7 +219,7 @@ for (const [name, published, env, pattern, msg] of [
   const signed = signedIn(r.site)
   ok(r.status !== 0 && pattern.test(r.stderr) && signed.length === 0,
     `${msg}: refused, nothing signed (exit ${r.status}; signed: ${signed.join(', ') || 'none'}: ${r.stderr.trim().split('\n').pop()?.slice(0, 110)})`)
-  if (name === 'seed-no-history') ok(!fs.existsSync(out), 'a failed --home-web run leaves no earlier (development, test-key) build in its output')
+  ok(!fs.existsSync(out), `${msg}: leaves no earlier (development, test-key) build in its output`)
 }
 {
   // positive control for the seeded check: the same command takes a good history and writes nothing
