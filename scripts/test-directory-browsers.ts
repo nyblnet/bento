@@ -207,7 +207,7 @@ class Authn {
     const cnt = new Uint8Array([0, 0, 0, this.count])
     const att = o.noAt ? new Uint8Array(0) : cat(new Uint8Array(16), new Uint8Array([0, this.credId.length]), this.credId, cose)
     const ad = cat(await sha256(te.encode(o.rpId ?? 'id.bento.page')), new Uint8Array([o.noAt ? flags & ~0x40 : flags]), cnt, att, o.trailing ? new Uint8Array([0]) : new Uint8Array(0))
-    const cd: Record<string, unknown> = { type: o.type ?? 'webauthn.create', challenge: b64uEnc(challenge), origin: o.origin ?? S }
+    const cd: Record<string, unknown> = { type: o.type ?? 'webauthn.create', challenge: b64uEnc(challenge ?? new Uint8Array(16)), origin: o.origin ?? S }
     cd.crossOrigin = o.cross ?? false
     if (o.top) cd.topOrigin = o.top
     return { clientDataJSON: o.cdj ?? cdjOf(cd), authenticatorData: b64uEnc(ad) }
@@ -297,7 +297,9 @@ type R = Awaited<ReturnType<typeof api>>
 async function raw(method: string, path: string, body: string | undefined, origin: string | null, ip?: string): Promise<R> {
   const headers: Record<string, string> = { 'content-type': 'text/plain;charset=UTF-8', 'cf-connecting-ip': ip ?? freshIp() }
   if (origin !== null) headers.origin = origin
-  const r = await worker.fetch(new Request('https://id.bento.page' + path, { method, body, headers }), env as never)
+  let r: Response
+  // an exception that escapes the worker is a refused row, never a crashed rig
+  try { r = await worker.fetch(new Request('https://id.bento.page' + path, { method, body, headers }), env as never) } catch { return { status: -1, j: {}, h: new Headers(), text: '' } }
   const text = await r.text()
   let j: Record<string, unknown> = {}
   try { j = JSON.parse(text) } catch { /* empty */ }
@@ -341,7 +343,7 @@ async function checkin(address: string, b: Browser, o: { nonce?: string; pin?: s
   const w = await b.wren(o.wrenAddress ?? address, nonce, o.key)
   return { ...(await raw('POST', HOME_ROUTES.checkin, JSON.stringify({ ...w, ...(o.pin !== undefined ? { pin: o.pin } : {}) }), o.origin === undefined ? H : o.origin)), nonce }
 }
-const logOf = async (email: string) => (await doOp(email, 'logQuery', { from: 0, to: now })).j.entries as Record<string, unknown>[]
+const logOf = async (email: string) => ((await doOp(email, 'logQuery', { from: 0, to: now })).j.entries ?? []) as Record<string, unknown>[]
 const storeOf = async (email: string) => (await rosterObj(email)).store
 const err = (r: { status: number; j: Record<string, unknown> }) => `${r.status} ${r.j.error ?? ''}`
 
@@ -353,7 +355,7 @@ ok(!passkeyOrigins().includes(HOME_ORIGIN), 'bento/home is never a ceremony orig
 ok(BROWSER_LIMITS.challengeTtlMs === 60_000 && WATT_MAX_MS === 24 * HOUR && CEREMONY_CAP_MS === 7 * DAY, 'a browser challenge lives 60 s; a countersign 24 h; the cap is 7 days (X4)')
 const ana = 'ana@example.com', A1 = await Authn.make()
 ok((await setup(ana, A1)).status === 200, 'ana is set up with one passkey')
-const anaHead = async () => (await storeOf(ana)).get('head') as { hash: string; seq: number; ros: string }
+const anaHead = async () => ((await storeOf(ana)).get('head') ?? { hash: '', seq: -1, ros: '' }) as { hash: string; seq: number; ros: string }
 
 // =====================================================================
 // 1. the challenge routes
@@ -371,6 +373,14 @@ const anaHead = async () => (await storeOf(ana)).get('head') as { hash: string; 
   ok((await webCh(ana, { origin: H })).j.error === 'origin' && (await webCh(ana, { origin: null })).j.error === 'origin' && (await webCh(ana, { origin: 'https://attacker.example' })).status === 403,
     'web challenge from bento/home, another page or no Origin → 403 origin')
   ok((await homeCh(ana, { origin: S })).j.error === 'origin' && (await homeCh(ana, { origin: null })).status === 403, 'home challenge from the sign-in host or no Origin → 403 origin')
+  // the audiences are apart from the roster's: a browser challenge is no roster challenge
+  const wn = (await webCh(ana)).j.nonce as string
+  const rr = await request(ana, A1, { add: await Authn.make(), ch: wn })
+  ok(rr.status === 400 && rr.j.error === 'nonce', `a sign-in host challenge in a roster request → 400 nonce (${err(rr)})`)
+  const rc = (await api('POST', '/v1/roster/challenge', { email: ana })).j.challenge as string
+  const head0 = await anaHead()
+  const rb = await enrol(ana, await Browser.make(), A1, { ch: { nonce: rc, at: Number(new DataView(b64uDec(rc)!.buffer).getBigUint64(0)), rosHash: head0.hash } })
+  ok(rb.status === 400 && rb.j.error === 'nonce', `a roster challenge in a wdev. → 400 nonce (${err(rb)})`)
   ok((await raw('POST', WEB_ROUTES.challenge, '{"address":"bad"}', S)).j.error === 'bad-address' && (await raw('POST', WEB_ROUTES.challenge, 'nope', S)).j.error === 'bad-request', 'a bad address or body → 400')
   // nothing is stored when one is issued
   const before = JSON.stringify([...(await storeOf(ana)).entries()])
@@ -409,7 +419,7 @@ let anaWatt = ''
   const reuse = await enrol(ana, await Browser.make(), A1, { ch: e.ch })
   ok(reuse.status === 400 && reuse.j.error === 'nonce', `the same challenge again (a new key) → 400 nonce (${err(reuse)})`)
   const log = (await logOf(ana)).filter((x) => x.k === 'wdev')
-  ok(log.length === 1 && log[0].pub === B1.pub && log[0].by === A1.pub && log[0].os === S && log[0].rq === H && log[0].co === S && log[0].ob === 1 && log[0].at === now,
+  ok(log.length === 1 && log[0]?.pub === B1.pub && log[0]?.by === A1.pub && log[0]?.os === S && log[0]?.rq === H && log[0]?.co === S && log[0]?.ob === 1 && log[0]?.at === now,
     'the enrolment is logged: the device key and the passkey in full, the Origin, the opener, the ceremony origin, ob 1, the time')
   const again = await enrol(ana, B1, A1)
   ok(again.status === 409 && again.j.error === 'device-known', `a device key enrols once (a fresh key per ceremony) → 409 device-known (${err(again)})`)
@@ -496,7 +506,7 @@ let anaWatt = ''
   const s2 = await enrol(ana, B, stranger, { credId: A1.cid })
   ok(s2.status === 403 && s2.j.error === 'assertion', `a stranger's assertion under a member's credential id → 403 assertion (${err(s2)})`)
   // a suspended passkey (planted, as the void page's Remove leaves it) certifies nothing
-  const hd = (await storeOf(ana)).get('head') as { members: Member[] }
+  const hd = ((await storeOf(ana)).get('head') ?? { members: [] }) as { members: Member[] }
   await plant(ana, (st) => { const x = st.get('head') as Record<string, unknown>; st.set('head', { ...x, members: hd.members.map((m) => ({ ...m, quarantined: true })) }) })
   const sq = await enrol(ana, B, A1)
   await plant(ana, (st) => { const x = st.get('head') as Record<string, unknown>; st.set('head', { ...x, members: hd.members }) })
@@ -552,15 +562,15 @@ ok(ce.status === 200, `cara's second passkey enrols a browser (${err(ce)})`)
   ok(w.ok && w.value.loggedAt === now && w.value.expires === now + WATT_MAX_MS && w.value.ob === 1 && w.value.certHash === await sha256b64u(ce.text), 'a fresh countersign over the SAME certificate, logged now, 24 h')
   ok(JSON.stringify(r.j.incidents) === '[]', 'no incident records published')
   const ch = await verifyRosterChain(r.j.roster as RosterLink[], { directoryKeys: DIR_KEYS, rpId: ROSTER_RP_ID, origins: [...ROSTER_WEB_ORIGINS], now })
-  ok(ch.ok && (r.j.roster as unknown[]).length === 2, `the roster from setup verifies with the kernel (${ch.ok ? 'ok' : ch.reason})`)
+  ok(ch.ok && (r.j.roster as unknown[] | undefined)?.length === 2, `the roster from setup verifies with the kernel (${ch.ok ? 'ok' : ch.reason})`)
   const v = ch.ok ? await verifyDevice({ cert: ce.text, signer: r.j.signer as string, assertion: r.j.assertion as never, watt: r.j.watt as string, wattSig: r.j.wattSig as string },
     { roster: ch.value, directoryKeys: DIR_KEYS, rpId: ROSTER_RP_ID, origins: [...ROSTER_WEB_ORIGINS], now }) : null
   ok(v?.ok && v.value.tier === 'passkey' && r.j.signer === C2.pub, `the kernel's verifyDevice accepts the certificate with what the check-in returned (${v ? (v.ok ? 'ok' : v.reason) : 'no chain'})`)
-  const headHash = (await (await storeOf(cara)).get('head') as { hash: string }).hash
+  const headHash = ((await (await storeOf(cara)).get('head')) as { hash: string } | undefined)?.hash ?? ''
   const pinned = await checkin(cara, CB, { pin: headHash })
-  ok(pinned.status === 200 && (pinned.j.roster as RosterLink[]).length === 1 && await sha256b64u((pinned.j.roster as RosterLink[])[0].ros) === headHash, 'pinned at the head: the roster starts at it')
+  ok(pinned.status === 200 && (pinned.j.roster as RosterLink[] | undefined)?.length === 1 && await sha256b64u((pinned.j.roster as RosterLink[])[0]?.ros ?? '') === headHash, 'pinned at the head: the roster starts at it')
   const other = await checkin(cara, CB, { pin: await sha256b64u('ros.elsewhere') })
-  ok(other.status === 200 && (other.j.roster as unknown[]).length === 2, 'a pin that is not a head of this account: the roster from setup')
+  ok(other.status === 200 && (other.j.roster as unknown[] | undefined)?.length === 2, 'a pin that is not a head of this account: the roster from setup')
   const again = await raw('POST', HOME_ROUTES.checkin, JSON.stringify(await CB.wren(cara, r.nonce)), H)
   ok(again.status === 400 && again.j.error === 'nonce', `the same challenge again → 400 nonce (${err(again)})`)
   const hn = (await homeCh(cara)).j.nonce as string
@@ -613,7 +623,7 @@ ok(ce.status === 200, `cara's second passkey enrols a browser (${err(ce)})`)
   ok(r.status === 403 && r.j.error === 'revoked', `a certificate whose passkey was removed → 403 revoked (${err(r)})`)
   ok((await api('GET', `${STATUS_ROUTE}?e=${dee}&c=${hash}`)).j.state === 'revoked', 'status: revoked')
   // suspended (planted, as the void page's Remove leaves it)
-  const h = (await storeOf(dee)).get('head') as { members: Member[] }
+  const h = ((await storeOf(dee)).get('head') ?? { members: [] }) as { members: Member[] }
   await plant(dee, (st) => { const x = st.get('head') as Record<string, unknown>; st.set('head', { ...x, members: h.members.map((m) => ({ ...m, quarantined: true })) }) })
   const q = await checkin(dee, DB1)
   ok(q.status === 403 && q.j.error === 'revoked', `a certificate whose passkey is suspended → 403 revoked (${err(q)})`)
@@ -621,7 +631,7 @@ ok(ce.status === 200, `cara's second passkey enrols a browser (${err(ce)})`)
   ok((await checkin(dee, DB1)).status === 200, 'control: put back, it renews')
   // re-added since the ceremony: the old certificate stays dead
   now += 1
-  await plant(dee, (st) => { const x = st.get(`pk:${D1.pub}`) as Record<string, unknown>; st.set(`pk:${D1.pub}`, { ...x, addedAt: now }) })
+  await plant(dee, (st) => { const x = st.get(`pk:${D1.pub}`) as Record<string, unknown> | undefined; if (x) st.set(`pk:${D1.pub}`, { ...x, addedAt: now }) })
   const re = await checkin(dee, DB1)
   ok(re.status === 403 && re.j.error === 'revoked', `a passkey (re)added after the ceremony → 403 revoked (${err(re)})`)
 }

@@ -1341,6 +1341,11 @@ let addAt = 0
   for (let i = 0; i <= LIMITS.ip.enrol; i++) es.push((await W('POST', '/v1/web/enrol', JSON.stringify(okBody), { ip: eip })).status)
   ok(LIMITS.ip.enrol === 60 && es.slice(0, -1).every((x) => x === 400) && es[es.length - 1] === 429, `enrol #${LIMITS.ip.enrol + 1} from one IP in an hour → 429, the ${LIMITS.ip.enrol} before it 400 (last ${es[es.length - 1]})`)
   ok((await enrol(okBody)).status === 400, 'control: from another IP the same enrol is read (400)')
+  // a text that is no wdev. is refused before the count, so it never spends the IP's enrolments
+  const mip = freshIp()
+  for (let i = 0; i <= LIMITS.ip.enrol; i++) await W('POST', '/v1/web/enrol', JSON.stringify({ ...okBody, text: 'ros.x' }), { ip: mip })
+  const after = await W('POST', '/v1/web/enrol', JSON.stringify(okBody), { ip: mip })
+  ok(after.status === 400 && after.j.error === 'text', `after ${LIMITS.ip.enrol + 1} malformed enrols an IP's well-formed one is still read (${after.status} ${after.j.error})`)
   const webs = responses.filter((x) => x.what.startsWith('web '))
   ok(webs.length > 20 && webs.every((x) => x.h.get('access-control-allow-origin') === SIGNIN_ORIGIN), `every web answer (${webs.length}) has CORS for the sign-in host only, never *`)
   // a path that is no route (GET /setup) answers with no CORS at all (security's nit on #948)
