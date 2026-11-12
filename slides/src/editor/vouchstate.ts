@@ -53,6 +53,8 @@ export const NEW_ACCOUNT_MS = 14 * DAY
 export const CHANGED_SHOWN_MS = 7 * DAY
 /** The longest name and vouchedBy the panel shows. */
 export const NAME_MAX = 80
+// The kernel's identity.ts gains VOUCHED_BY_MAX = 80 (the agent's side of the
+// same cut); import it here once that lands, so the two cannot drift.
 export const VIA_MAX = 80
 
 // control chars, zero-width and bidi marks: nothing the agent returns may reorder or hide text

@@ -21,8 +21,9 @@
 //   6. a viewer who is not the owner sees no flag; flag off, or no agent -> the
 //      row is exactly what it was and the agent is never asked
 // RIG_MUTANT=owner rebuilds with the flag never given a row; RIG_MUTANT=proof
-// rebuilds with every named key treated as proven. Either must go red. The rig
-// edits slides/src/editor/editor.ts, runs build:single, and restores the file.
+// rebuilds with every named key treated as proven; RIG_MUTANT=cut rebuilds with
+// vouchedBy cut as a plain 80-character prefix. Each must go red. The rig edits
+// one file under slides/src/editor, runs build:single, and restores the file.
 import { readFileSync, writeFileSync, mkdtempSync, realpathSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
@@ -37,14 +38,16 @@ function ok(cond, msg) {
 }
 
 const MUTANTS = {
-  owner: ['ownerRow: iAmOwner ? row : null', 'ownerRow: null'],
-  proof: ['decoratePeer(who, peer.name, peer.pub, keyOk, vouchAgent,', 'decoratePeer(who, peer.name, peer.pub, true, vouchAgent,'],
+  owner: ['editor.ts', 'ownerRow: iAmOwner ? row : null', 'ownerRow: null'],
+  proof: ['editor.ts', 'decoratePeer(who, peer.name, peer.pub, keyOk, vouchAgent,', 'decoratePeer(who, peer.name, peer.pub, true, vouchAgent,'],
+  // the shell's 80-character cut as a plain prefix cut: "unconfirmed since" is lost
+  cut: ['vouchstate.ts', 'if (full.length <= max) return full', 'if (full.length > 0) return cleanText(full, max)'],
 }
 const mutant = process.env.RIG_MUTANT
 if (mutant) {
-  const [from, to] = MUTANTS[mutant] || []
+  const [fileName, from, to] = MUTANTS[mutant] || []
   if (!from) { console.log(`  FAIL  unknown mutant ${mutant}`); process.exit(1) }
-  const src = new URL('../slides/src/editor/editor.ts', import.meta.url)
+  const src = new URL(`../slides/src/editor/${fileName}`, import.meta.url)
   const orig = readFileSync(src, 'utf8')
   if (orig.split(from).length !== 2) { console.log(`  FAIL  mutant ${mutant}: needle not found exactly once`); process.exit(1) }
   writeFileSync(src, orig.replace(from, to))
@@ -199,6 +202,7 @@ try {
     const lee = byText(rs, 'Lee Long')
     ok(lee?.mark === '✓ via id.bento.page, unconfirmed since 3 Mar 2027', 'long vouchedBy: "managed by" dropped, "unconfirmed since" kept')
     ok(lee && lee.mark.length - '✓ via '.length <= 80, 'long vouchedBy: within 80 characters')
+    ok(lee?.mark.endsWith(', unconfirmed since 3 Mar 2027') && !lee.mark.includes('…'), 'long vouchedBy: "unconfirmed since <date>" is shown intact at the cut, not truncated')
 
     const eve = rs.find((r) => r.text.startsWith('Eve'))
     const calls = await s.p.evaluate(() => window.__calls.slice())
