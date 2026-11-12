@@ -13727,3 +13727,77 @@ WebSockets closed: three GETs and no POST on opening, the fragment gone from
 the history entry, each button, an injected script blocked with a positive
 control, framing refused, Trusted Types, an address full of markup shown as
 text; a mutant per rule) and `scripts/test-directory-mutants.ts`.
+
+## 2026-11-12 — bento/id: the privacy notice describes option G, and a text-only deletion page returns
+
+The draft privacy notice (`site-src/id-privacy.html`, built to
+`bento.page/id/privacy`) still described the first design: exact-address
+lookups, a 13-month expiry, emailed one-time codes and encrypted recovery
+data. It now describes what option G keeps: the passkey list and every
+countersigned version of it (public to anyone who knows the address), the
+setup and reset links (secrets kept only as hashes), the void link's hash
+kept only while its change waits, the roster listed in every mail, the
+record of changes kept for the life of the account, and the per-IP
+fingerprints. Parts that are not running yet (browser sign-ins with 24-hour
+certificates inside a 7-day cap, the yearly one-click mailbox confirmation
+whose lapse removes only the label, the sign-in host's saved address, and
+account deletion) are marked `data-planned`, and the build refuses a planned
+part that does not open with its visible "Planned" label.
+
+The web deletion page retired on 2026-11-09 returns as **text only**
+(`site-src/id-delete.html`, built to `bento.page/id/delete`): the app stores
+ask for a way to request deletion without the app, and the retired page was
+withdrawn for its typed code, not for existing. It explains the queued
+deletion (a passkey, or an emailed link when every passkey is lost; 72 hours;
+a link that stops it) and points to the sign-in host's deletion page, whose
+address is a fact the build takes (`DELETE_URL`, https on bento.page only).
+Both pages are refused for any script, form, input, button, frame, event
+handler or external resource, and for any `__PLACEHOLDER__` left: the
+controller, contact, legal basis, processors, rights, children, what stays
+after a deletion, and how long setup send times are kept are the
+maintainer's, and the pages are not published. Guard:
+`scripts/test-id-pages.mjs`.
+
+## 2026-11-09 — bento/home in your browser: a production build refuses development seams; a release builds it only when asked
+
+`home/web/build.mjs` used to warn and carry on when no `--history` was given
+(bundling the frozen slides 1.2.10 history) or when `--key` swapped in a test
+key. A production build now REFUSES each of those, and the mutant hook too;
+they work only behind an explicit `--dev`, which the rigs and the local
+instructions pass. Every build also refuses a history the library would refuse
+at runtime (not verified by the key it carries, tampered, an unknown app, or a
+second one for the same app), so a library page can never ship with a history
+that silently makes every file of an app unverifiable.
+
+`scripts/release.mjs` builds home/web only with `--home-web`, and then needs
+`--frame-origin`: the frame site is a separate domain that does not exist yet
+and is the maintainer's to choose, so there is no default. It bundles the
+`history.json` of every app the staged site publishes (an app with a signed
+manifest; a published app without a history is refused, never skipped), into
+`<site>.home-web/`, outside the mirrored site: nothing deploys it. Every
+refusal below comes before anything is signed. The option refusals come first
+and leave the output as it was: no `--frame-origin`; an output inside the site
+or containing it, or inside the published tree the next release copies in or
+containing it (compared by folder identity, device and inode, so a symlink, a
+case variant or the macOS `/System/Volumes/Data` firmlink cannot hide one in
+the other, and an output path through a symlink to nothing is refused, since
+its target could appear later); and an output that holds anything but an earlier home/web build
+(one whose `build.json` carries the build's own fields). Then the output is emptied, so
+every later refusal leaves no earlier (development or test-key) build behind:
+a signing key that is not the release key (a rehearsal passes
+`--home-web-dev`), `BENTO_HOME_WEB_MUTANT` in the environment, a missing
+esbuild, and, once the site is seeded, a published app with no history or a
+history the build would refuse. The one check on an input that can only run
+after signing is on the history this release signs, and it holds whenever the
+signing key is the release key. Without
+`--home-web` a release is unchanged: a rehearsal slides release before and
+after this change produced the same 69 files (signed payloads and masked
+timestamps compared) and the same log.
+
+Guards: `scripts/test-home-web-build.mjs` (each refusal beside the release
+build as its positive control; the release refusals, each run checked to have
+signed nothing; the history choice; and a rehearsal release with `--home-web`
+that bundles exactly the history it signed and the seeded one) and
+`scripts/test-home-web-build-mutants.mjs` (each refusal removed, red on its
+row), and `scripts/test-home-web-out.mjs` (where the output may go, the
+firmlink row and its mutant on macOS).
