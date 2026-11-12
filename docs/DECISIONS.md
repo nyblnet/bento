@@ -13715,7 +13715,8 @@ text; a mutant per rule) and `scripts/test-directory-mutants.ts`.
   for every certificate a passkey alone made (the kernel's G1 tier, `tierOf`,
   which deliberately does not promote on a consent key's age), "new account"
   for 14 days after setup, and "account changed on <date>" for 7 days after a
-  roster change or after a reset by the directory. A revoked sign-in gets no ✓
+  roster change, or for 30 days after a reset by the directory (maintainer,
+  2026-11-12). A revoked sign-in gets no ✓
   at all ("this sign-in was revoked"); one revoked by the incident lever also
   puts a flag on the row for the room OWNER, beside the remove control, because
   what that key did in the deck may not have been its owner. A changed binding
@@ -13736,7 +13737,7 @@ text; a mutant per rule) and `scripts/test-directory-mutants.ts`.
   is found too), then other middle qualifiers, keeps the last qualifier whole
   while shortening the voucher, and cuts the end only when nothing else fits.
 - Guarded by `scripts/test-slides-people-tiers.ts` (rows over the decision
-  module, with thirteen mutants that must each turn a row red) and
+  module, with fifteen mutants that must each turn a row red) and
   `scripts/test-slides-people-tiers-browser.mjs` (the packaged editor, real
   key proofs, network and WebSockets closed, with an owner-flag and a proof
   mutant).

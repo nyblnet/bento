@@ -6,7 +6,7 @@
 //
 // Rows over slides/src/editor/vouchstate.ts, the decision behind every label:
 // "(passkey sign-in)", "new account" (14 days), "account changed on <date>"
-// (7 days, or a reset), "this sign-in was revoked" (no ✓; an incident flags the
+// (7 days; 30 after a reset), "this sign-in was revoked" (no ✓; an incident flags the
 // row), and vouchedBy's 80-character cut, which drops "managed by" before it
 // drops "unconfirmed since". A MISSING field always reads as the weaker claim.
 //
@@ -20,6 +20,7 @@ import { pathToFileURL } from 'node:url'
 
 const SRC = new URL('../slides/src/editor/vouchstate.ts', import.meta.url)
 const DAY = 86_400_000
+const HOUR = 3_600_000
 const NOW = Date.UTC(2026, 10, 12, 12)
 
 type Mod = typeof import('../slides/src/editor/vouchstate.ts')
@@ -55,8 +56,12 @@ const ROWS: Row[] = [
     (m) => st(m, bind({ accountSince: NOW - 99 * DAY, rosterChangedAt: NOW - 6 * DAY })).changedOn === NOW - 6 * DAY],
   ['roster changed 8 days ago -> not shown',
     (m) => st(m, bind({ accountSince: NOW - 99 * DAY, rosterChangedAt: NOW - 8 * DAY })).changedOn === null],
-  ['a reset is shown whatever its age',
-    (m) => st(m, bind({ accountSince: NOW - 999 * DAY, resetAt: NOW - 400 * DAY })).changedOn === NOW - 400 * DAY],
+  ['a reset 29 d 23 h ago -> "account changed on" that day',
+    (m) => st(m, bind({ accountSince: NOW - 999 * DAY, resetAt: NOW - 30 * DAY + HOUR })).changedOn === NOW - 30 * DAY + HOUR],
+  ['a reset exactly 30 d ago -> not shown',
+    (m) => st(m, bind({ accountSince: NOW - 999 * DAY, resetAt: NOW - 30 * DAY })).changedOn === null],
+  ['a reset 20 days ago is shown (30, not 7)',
+    (m) => st(m, bind({ accountSince: NOW - 999 * DAY, resetAt: NOW - 20 * DAY })).changedOn === NOW - 20 * DAY],
   ['a recent change after an old reset shows the recent date',
     (m) => st(m, bind({ resetAt: NOW - 400 * DAY, rosterChangedAt: NOW - 2 * DAY })).changedOn === NOW - 2 * DAY],
 
@@ -106,7 +111,9 @@ const MUTANTS: [string, string, string][] = [
   ['missing accountSince reads as old', '!isTime(since) || now - since', 'isTime(since) && now - since'],
   ['new-account window 7 days', 'now - since < NEW_ACCOUNT_MS', 'now - since < CHANGED_SHOWN_MS'],
   ['changed window unbounded', 'now - a.rosterChangedAt < CHANGED_SHOWN_MS &&', ''],
-  ['reset ignored', 'if (isTime(a.resetAt)) changedOn = a.resetAt', 'if (false) changedOn = a.resetAt'],
+  ['reset ignored', 'if (isTime(a.resetAt) && now - a.resetAt', 'if (false && now - a.resetAt'],
+  ['reset shown at any age', 'now - a.resetAt < RESET_SHOWN_MS', 'now - a.resetAt < Infinity'],
+  ['reset window 7 days', 'now - a.resetAt < RESET_SHOWN_MS', 'now - a.resetAt < CHANGED_SHOWN_MS'],
   ['changed binding ticked', "if (a.changed) return { kind: 'changed', name, via }", "if (false) return { kind: 'changed', name, via }"],
   ['managed-by not dropped first', 'if (quals.length && !fits(head, quals)) quals = quals.filter', 'if (false) quals = quals.filter'],
   ['last qualifier dropped', 'quals.splice(quals.length - 2, 1)', 'quals.splice(quals.length - 1, 1)'],

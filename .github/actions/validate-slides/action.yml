@@ -617,8 +617,8 @@ runs:
       # bento/id P1 under option G: what the People panel may say from an
       # identity agent's answer. "(passkey sign-in)" and "new account" whenever
       # the answer does not prove otherwise, "account changed on <date>" for 7
-      # days or after a reset, a revoked sign-in never ticked, and vouchedBy's
+      # days (30 after a reset), a revoked sign-in never ticked, and vouchedBy's
       # 80-character cut dropping "managed by" before "unconfirmed since".
-      # Thirteen mutants of the decision module must each turn a row red.
+      # Fifteen mutants of the decision module must each turn a row red.
       shell: bento-step {0}
       run: node scripts/test-slides-people-tiers.ts

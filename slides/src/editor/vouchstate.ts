@@ -16,7 +16,8 @@
 //                   (G1: every certificate a passkey made is shown that way)
 //   accountSince    "new account" until 14 days after it; missing = new
 //   rosterChangedAt "account changed on <date>" for 7 days after it
-//   resetAt         a reset by the directory: "account changed on <date>"
+//   resetAt         a reset by the directory: "account changed on <date>" for
+//                   30 days after it
 //   revoked         no ✓ at all: "this sign-in was revoked"; 'incident' (the
 //                   post-compromise lever) also flags the row for the owner
 //   managedBy       which part of vouchedBy the 80-character cut drops first
@@ -51,6 +52,8 @@ const DAY = 86_400_000
 export const NEW_ACCOUNT_MS = 14 * DAY
 /** "account changed on <date>" is shown for this long after a roster change. */
 export const CHANGED_SHOWN_MS = 7 * DAY
+/** ... and this long after a reset by the directory (maintainer, 2026-11-12). */
+export const RESET_SHOWN_MS = 30 * DAY
 /** The longest name and vouchedBy the panel shows. */
 export const NAME_MAX = 80
 // The kernel's identity.ts gains VOUCHED_BY_MAX = 80 (the agent's side of the
@@ -131,7 +134,7 @@ export function stateFromAnswer(r: unknown, now: number): VouchState {
   const since = a.accountSince
   const newAccount = !isTime(since) || now - since < NEW_ACCOUNT_MS
   let changedOn: number | null = null
-  if (isTime(a.resetAt)) changedOn = a.resetAt
+  if (isTime(a.resetAt) && now - a.resetAt < RESET_SHOWN_MS) changedOn = a.resetAt
   if (isTime(a.rosterChangedAt) && now - a.rosterChangedAt < CHANGED_SHOWN_MS &&
     (changedOn === null || a.rosterChangedAt > changedOn)) changedOn = a.rosterChangedAt
   return { kind: 'verified', name, via, tier, newAccount, changedOn }

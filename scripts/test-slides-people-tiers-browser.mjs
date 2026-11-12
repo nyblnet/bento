@@ -164,7 +164,9 @@ async function seat(s, peers) {
   }, { peers, DAY, LONG_DOM })
   await s.p.waitForTimeout(600)
   await s.ensureOpen()
-  await s.p.waitForSelector('.ed-share-peers .ed-share-peer', { timeout: 5000 })
+  // presence, not Playwright's visibility check: the panel rebuilds its rows on
+  // every peer beat, and a row replaced mid-check timed the selector out (1 run in 4)
+  await s.p.waitForFunction((n) => document.querySelectorAll('.ed-share-peers .ed-share-peer').length >= n, peers.length, { timeout: 10000 })
   await s.p.waitForTimeout(400)
 }
 const byText = (rs, t) => rs.find((r) => r.text.includes(t))
