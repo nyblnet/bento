@@ -81,3 +81,30 @@ jobs:
         # popups ON THE POPUP severs it in Chromium, which is why the sign-in
         # host sends no COOP at all.
         run: node scripts/test-signin-host-coop.mjs --chrome
+
+  share-directory-void-page:
+    # The void page (server/directory/src/voidpage.js) in a real browser: the
+    # REAL worker and Roster object routed in at https://id.bento.page, every
+    # WebSocket closed. Opening a link sends nothing and drops the token from
+    # the address bar; the buttons follow the link; Cancel, Remove and Undo do
+    # what they say; the CSP stops injected script (with a positive control),
+    # the page cannot be framed, Trusted Types hold. Each rule has a mutant
+    # under which a row must go red.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        # Google Chrome comes with the runner image.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: bento/id void page, Playwright headless shell
+        run: node scripts/test-directory-void-page.mjs
+      - name: bento/id void page, Google Chrome
+        run: node scripts/test-directory-void-page.mjs --chrome

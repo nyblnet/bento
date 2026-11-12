@@ -50,7 +50,8 @@ internationalised domains, so one address could otherwise mean one mailbox on
 one host and another elsewhere.
 
 **Not here yet:**
-- the ripening countersign `rip.`, and the online key it is signed with
+- the route that serves a roster chain to peers (every link is countersigned
+  and stored; nothing serves the chain yet)
 - the passkey key-blob store and the access-ledger blob
 - the SES mailer
 
@@ -62,18 +63,20 @@ SPF/DKIM/DMARC on a dedicated sending subdomain, all first. Then:
 ```sh
 cd server/directory
 npx wrangler secret put CHALLENGE_KEY # 32+ random characters: seals the single-use challenges
+npx wrangler secret put DIR_KEY_JWK   # the directory's ONLINE P-256 signing key (private JWK): the countersign; DIR_KID names it
 npx wrangler deploy
 ```
 
-(`DIR_KEY_JWK`, the directory's online signing key, joins with the countersign;
-nothing signs with it yet.)
+Without `DIR_KEY_JWK` nothing can be set up or take effect: every link is
+countersigned before it is stored, so a missing key stores nothing.
 
 ## Testing
 
 ```sh
 node scripts/test-directory.ts          # the retired routes, the address normal form, limits
-node scripts/test-directory-roster.ts   # the passkey roster, setup links, mail, headers
+node scripts/test-directory-roster.ts   # the passkey roster, setup links, the void, the reset, mail, headers
 node scripts/test-directory-mutants.ts  # each rule loosened in turn must turn a rig red
+node scripts/test-directory-void-page.mjs [--chrome]  # the void page in a real browser (Playwright; PLAYWRIGHT_MODULE)
 ```
 
 Both rigs drive the real worker and Durable Object classes against an
@@ -160,12 +163,40 @@ Under option G a bento/id account is a **roster of passkeys** (the kernel's
 | `POST /v1/roster/challenge` `{email}` | none | a sealed single-use challenge for that address (5 minutes) |
 | `GET /v1/roster?e=` | none | the head `ros.` text and any waiting change, or 404 |
 | `POST /v1/roster/setup` `{email, token, dirNonce, reg}` | the setup token + a registration over `dirNonce` | 200 with `ros.0` |
-| `POST /v1/roster/request` `{email, ros, credId, assertion, reg?, rq?}` | a member's assertion over `ros` (+ the new passkey's registration for an add) | 202 queued, or 200 for an immediate self-removal |
+| `POST /v1/roster/request` `{email, ros, credId, assertion, reg?, rq?}` | a member's assertion over `ros` (+ the new passkey's registration for an add) | 202 queued, or 200 for an immediate self-removal; 403 `cooldown` for 72 h after its last change was cancelled |
+| `GET /void`, `/void.js`, `/void.css` | none | the void page (below): fixed bytes, nothing read or changed |
+| `POST /v1/void` `{email, token, choice}` (60 an hour per IP) | the void token | `choice` `cancel`, `remove` or `undo`, as the token allows: 200 `{done}`; 400 `invalid` (wrong, used or spent token), 400 `choice` (not offered; the token is kept), 503 `mail` (Remove whose notice could not be sent: nothing changed) |
+| `POST /v1/roster/reset/start` `{email}` (10 an hour per IP) | none | **always 202**; mails a reset link if the address has a roster, no reset waits, and no reset link is live |
+| `POST /v1/roster/reset` `{email, token, dirNonce, reg}` | the reset token + a registration over `dirNonce` | 202: the reset waits 72 h, preempting any waiting change |
+| `POST /v1/roster/reset/void` `{email, credId, assertion, dirNonce}` | a member's passkey | 409 `no-reset`, 403 `new-account` (first 14 days), 400 `signer`, 403 `quarantined`; otherwise **501** until the kernel defines what the passkey signs |
 
-**Not built yet**: the ripening countersign `rip.` (so no route serves a
-roster a peer can verify), the void page, the reset and its link, consent-key
-and recovery-key members, account deletion, and the incident lever across
-addresses.
+**The countersign.** Every link is countersigned (`rip.`, the kernel's
+format) with the online key when it takes effect, never at request: the
+setup head at once, a member's change at 72 hours, under the authority word
+for the act (`m` member change and setup, `q` suspension on a void, `x` the
+suspended passkey's removal, `u` its undo, `r` a reset).
+
+**The void (G3, G4).** Every waiting notice carries a void link to the void
+page, a 256-bit single-use token in the fragment with no count of wrong
+guesses. For a member's change the page offers *Cancel this change* (the
+change is dropped; the passkey that asked cannot ask again for 72 hours) and,
+while another live member would remain, *Cancel, and remove the passkey that
+asked for it* (that passkey is suspended at once and its removal waits 72
+hours; the removal's own notice carries a link that puts it back). A reset
+offers Cancel only. A cancel never waits on the mailer; a Remove waits for
+its notice, since that carries the undo.
+
+**The reset (G5).** For someone who has lost every passkey: a mailed link
+(no budget holds it back; a live one holds the next back, and it lives a
+day) completes on the sign-in host with a new passkey, then waits 72 hours
+and preempts whatever change waits. It can be stopped from its own notice's
+link; by a member's passkey only once the account is 14 days old (from its
+setup; not built past the age rule yet). When it takes effect the roster is
+that one passkey. `GET /v1/roster` reports `createdAt` and `newAccount`.
+
+**Not built yet**: the passkey signature that stops a reset, the chain route,
+consent-key and recovery-key members, account deletion, and the incident
+lever across addresses.
 
 ### Mailed links: the contract with the sign-in host
 
@@ -173,6 +204,11 @@ addresses.
 (`server/signin/`) must read exactly this format:
 
     <SIGNIN_ORIGIN>/setup#v=1&e=<address, percent-encoded>&t=<token>
+    <SIGNIN_ORIGIN>/reset#v=1&e=<address, percent-encoded>&t=<token>
+
+(and the void link, `https://id.bento.page/void#v=1&e=…&t=…&k=c|o|r|u`, the
+one link that opens on the directory itself: the void page runs no ceremony.
+`k` picks the buttons it shows; the directory decides what the token may do.)
 
 - `SIGNIN_ORIGIN` is the sign-in host (`src/passkey.js`). Never
   `id.bento.page`, which serves no page that reads a link.
@@ -202,6 +238,10 @@ turns off WebAuthn create and get, a CSP with `default-src 'none'` and
 `frame-ancestors 'none'`, and `X-Frame-Options: DENY`, on every response. It
 serves no `/.well-known/webauthn`. The Permissions-Policy does not cover the
 WebAuthn Signal API, so no page here may run script, except the void page
-when it comes, under its own CSP.
+(`src/voidpage.js`), under its own headers: script, style and fetch from its
+own origin only, nothing inline, `frame-ancestors 'none'` and DENY, no
+referrer, no caching, the same Permissions-Policy, and Trusted Types with no
+policy. It is fixed text, sends nothing until a button is pressed, takes the
+token out of the address bar first, and calls no WebAuthn or Signal API.
 
 Rigs: see Testing above.
