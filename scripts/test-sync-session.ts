@@ -562,6 +562,174 @@ H('a read-only live viewer still materialises a relay-offloaded image (not via c
   sess.stop?.();
 }
 
+// Blob offload, one upload per asset. flush() runs offloadAssets after every
+// local edit; before the single-flight latch, each flush that landed while a
+// big asset's PUT was in flight HEAD-checked it (404, not stored yet) and PUT it
+// AGAIN, so one picture became concurrent writes to one R2 key. R2 refuses
+// those and the live relay answered with 500s (bursts of hundreds a minute,
+// relay analytics 2026-11). A failed upload was also retried on every edit.
+H('blob offload: one PUT per asset while edits keep flushing; failures back off; waits for the write ticket');
+{
+  const rawKey = new Uint8Array(32).fill(9);
+  const big = 'data:image/png;base64,' + Buffer.from(new Uint8Array(90 * 1024).map((_, i) => (i * 31) & 0xff)).toString('base64');
+  type Mode = 'ok' | 'fail';
+  function fakeRelay(mode: Mode, putMs = 400) {
+    const stored = new Set<string>();
+    const st = { puts: 0, heads: 0, inFlight: 0, maxInFlight: 0 };
+    const prev = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL, init: RequestInit = {}) => {
+      const key = new URL(String(input)).pathname.split('/').pop()!;
+      if (init.method === 'HEAD') { st.heads++; return new Response(null, { status: stored.has(key) ? 200 : 404 }); }
+      if (init.method === 'PUT') {
+        st.puts++; st.inFlight++; st.maxInFlight = Math.max(st.maxInFlight, st.inFlight);
+        await new Promise(r => setTimeout(r, putMs));
+        st.inFlight--;
+        if (mode === 'fail') return new Response('error code: 1101', { status: 500 });
+        stored.add(key);
+        return new Response('{"stored":1}', { status: 200 });
+      }
+      return new Response(null, { status: 404 });
+    }) as typeof fetch;
+    return { st, restore: () => { globalThis.fetch = prev; } };
+  }
+  function mk(ready: Promise<void> = Promise.resolve()) {
+    const doc = newDoc();
+    doc.docId = `offload-${Math.random().toString(36).slice(2, 10)}`;
+    const store = new Store(doc);
+    const sess = new SyncSession(store);
+    sess.addTransport(() => ({ kind: 'fake', send() {}, close() {}, writeReady: () => ready,
+      blobCreds: () => ({ base: 'http://relay.test', room: 'r', tok: 'tok_0123456789', rawKey }) } as never));
+    return { store, sess };
+  }
+  const editBurst = async (store: AnyStore, n: number, gap = 100) => {
+    for (let i = 0; i < n; i++) { store.commit(() => { store.doc.title = `edit ${i} ${Math.random()}`; }); await settle(gap); }
+  };
+
+  // 1. edits keep flushing while the upload is in flight
+  {
+    const relay = fakeRelay('ok', 600);
+    const { store, sess } = mk();
+    store.commit(() => { (store.doc as unknown as { assets: Record<string, string> }).assets = { hero: big }; });
+    await editBurst(store, 8);           // ~8 flushes inside the 600 ms PUT
+    await settle(900);
+    relay.restore();
+    ok(relay.st.puts === 1, `one PUT for one asset despite 8 flushes during the upload (${relay.st.puts})`);
+    ok(relay.st.maxInFlight === 1, `never two uploads of the same asset at once (max ${relay.st.maxInFlight})`);
+    const ref = (store.doc as unknown as { blobs?: Record<string, { key: string }> }).blobs?.hero;
+    ok(!!ref?.key, 'the reference still lands once the upload succeeds');
+    sess.stop?.();
+  }
+  // 2. a failing upload is not re-sent by every following edit
+  {
+    const relay = fakeRelay('fail', 50);
+    const { store, sess } = mk();
+    store.commit(() => { (store.doc as unknown as { assets: Record<string, string> }).assets = { hero: big }; });
+    await settle(300);
+    ok(relay.st.puts === 1, `positive control: the first attempt was made (${relay.st.puts})`);
+    await editBurst(store, 10, 150);     // 1.5 s of edits, inside the 5 s hold
+    relay.restore();
+    ok(relay.st.puts === 1, `a failed upload waits out its backoff instead of retrying per edit (${relay.st.puts} PUTs)`);
+    sess.stop?.();
+  }
+  // 3. no upload before the socket can write (else the room token goes out and a ticket-latched room 403s)
+  {
+    const relay = fakeRelay('ok', 50);
+    let open!: () => void;
+    const { store, sess } = mk(new Promise<void>(r => { open = r; }));
+    store.commit(() => { (store.doc as unknown as { assets: Record<string, string> }).assets = { hero: big }; });
+    await editBurst(store, 3);
+    ok(relay.st.puts === 0 && relay.st.heads === 0, `nothing is sent before writeReady (${relay.st.heads} HEAD, ${relay.st.puts} PUT)`);
+    open();
+    await settle(400);
+    relay.restore();
+    ok(relay.st.puts === 1, `the waiting pass uploads once ready (${relay.st.puts})`);
+    sess.stop?.();
+  }
+  // Rooms with their own behaviour, for the reconnect cases: 'hang' never
+  // answers a PUT unless the request is aborted, '507' is a full room.
+  function roomRelay(modes: Record<string, 'ok' | 'hang' | '507'>) {
+    const puts: Record<string, number> = {};
+    const live = { now: 0, max: 0 };   // PUTs whose request is still open
+    const prev = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL, init: RequestInit = {}) => {
+      const room = new URL(String(input)).pathname.split('/')[2];
+      if (init.method === 'HEAD') return new Response(null, { status: 404 });
+      if (init.method !== 'PUT') return new Response(null, { status: 404 });
+      puts[room] = (puts[room] ?? 0) + 1;
+      if (modes[room] === '507') return new Response('{"error":"room-blobs-full"}', { status: 507 });
+      if (modes[room] === 'hang') {
+        live.now++; live.max = Math.max(live.max, live.now);
+        return new Promise<Response>((_, reject) => {
+          init.signal?.addEventListener('abort', () => { live.now--; reject(new DOMException('aborted', 'AbortError')); }, { once: true });
+        });
+      }
+      return new Response('{"stored":1}', { status: 200 });
+    }) as typeof fetch;
+    return { puts, live, restore: () => { globalThis.fetch = prev; } };
+  }
+  const roomTransport = (room: string) => () => ({ kind: 'fake', send() {}, close() {}, writeReady: () => Promise.resolve(),
+    blobCreds: () => ({ base: 'http://relay.test', room, tok: 'tok_0123456789', rawKey }) } as never);
+  // 4. a PUT that never answers must not hold the single-flight latch for good
+  {
+    const relay = roomRelay({ roomA: 'hang', roomB: 'ok' });
+    const doc = newDoc();
+    doc.docId = `offload-hang-${Math.random().toString(36).slice(2, 10)}`;
+    const store = new Store(doc);
+    const sess = new SyncSession(store);
+    (sess as unknown as { offloadPutTimeoutMs: number }).offloadPutTimeoutMs = 300;
+    const trA = sess.addTransport(roomTransport('roomA'));
+    store.commit(() => { (store.doc as unknown as { assets: Record<string, string> }).assets = { hero: big }; });
+    await settle(200);
+    ok(relay.puts.roomA === 1, `positive control: the upload to room A was sent and hangs (${relay.puts.roomA ?? 0})`);
+    sess.removeTransport(trA);              // the reconnect: a working room B replaces A
+    sess.addTransport(roomTransport('roomB'));
+    await editBurst(store, 10, 100);        // 1 s of edits; A's PUT is aborted at 300 ms
+    await settle(300);
+    relay.restore();
+    ok((relay.puts.roomB ?? 0) === 1, `after A's PUT is aborted, the asset uploads to room B (${relay.puts.roomB ?? 0} PUTs to B)`);
+    ok(!!(store.doc as unknown as { blobs?: Record<string, unknown> }).blobs?.hero, 'and its reference lands');
+    sess.stop?.();
+  }
+  // 4b. giving up on a hung PUT must END it: a timer that only stopped waiting
+  //     would let the retry (after the 5 s hold) write the same key while the
+  //     first request is still open, which is the concurrent write again
+  {
+    const relay = roomRelay({ roomA: 'hang' });
+    const doc = newDoc();
+    doc.docId = `offload-abort-${Math.random().toString(36).slice(2, 10)}`;
+    const store = new Store(doc);
+    const sess = new SyncSession(store);
+    (sess as unknown as { offloadPutTimeoutMs: number }).offloadPutTimeoutMs = 300;
+    sess.addTransport(roomTransport('roomA'));
+    store.commit(() => { (store.doc as unknown as { assets: Record<string, string> }).assets = { hero: big }; });
+    await settle(5600);                     // timeout 0.3 s + the 5 s hold
+    await editBurst(store, 1, 400);         // the retry
+    relay.restore();
+    ok(relay.puts.roomA === 2, `positive control: the hold expired and the asset was retried (${relay.puts.roomA ?? 0} PUTs)`);
+    ok(relay.live.max === 1, `the retry starts only after the hung PUT was aborted (max ${relay.live.max} open at once)`);
+    sess.stop?.();
+  }
+  // 5. a hold earned in one room does not delay the next room
+  {
+    const relay = roomRelay({ roomA: '507', roomB: 'ok' });
+    const doc = newDoc();
+    doc.docId = `offload-room-${Math.random().toString(36).slice(2, 10)}`;
+    const store = new Store(doc);
+    const sess = new SyncSession(store);
+    const trA = sess.addTransport(roomTransport('roomA'));
+    store.commit(() => { (store.doc as unknown as { assets: Record<string, string> }).assets = { hero: big }; });
+    await settle(200);
+    ok(relay.puts.roomA === 1, `positive control: room A refused it as full (${relay.puts.roomA ?? 0})`);
+    sess.removeTransport(trA);              // rotation: a fresh room
+    sess.addTransport(roomTransport('roomB'));
+    await editBurst(store, 3, 100);
+    await settle(200);
+    relay.restore();
+    ok((relay.puts.roomB ?? 0) === 1, `the new room gets the upload at once, not after room A's 5 min hold (${relay.puts.roomB ?? 0})`);
+    sess.stop?.();
+  }
+}
+
 // The shared doc-fields lists (kernel/src/docfields.ts) that every app imports:
 // identity kept live on restore, and the capability/secret projections — proven
 // here so the one module the apps depend on has the behaviour pinned centrally.
