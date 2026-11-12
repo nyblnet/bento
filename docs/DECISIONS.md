@@ -13506,6 +13506,7 @@ same rule. Rigs: `scripts/test-gate1.ts` (corpus rows for each breakout and for
 `<!`, `</`, `<?`, upper case, plus genuine rows with a `<` that starts no
 markup), `scripts/test-gate1-mutants.ts`, and `scripts/test-gate1-oracle.mjs`,
 which now wraps its payloads in foreign content and runs them in both engines.
+
 ## 2026-11-09 — bento/id option G: device certificates made by a passkey (`wdev.`, `dev2.`, `watt.`, `wren.`)
 
 **Decision.** `kernel/src/devices.ts` defines the device certificates of
@@ -13623,6 +13624,32 @@ scripts/test-signin-host-engines.mjs (the rows that need no passkey, in
 WebKit too) and scripts/test-signin-host-coop.mjs (COOP in Chromium, Chrome and
 WebKit).
 
+## 2026-11-09 — Gate 1 reads comments the way browsers do
+
+Gate 1 ended a comment at the next `-->`. A browser also ends one at `--!>`,
+and in some places a `<!--` starts no comment at all: inside `<xmp>`,
+`<noembed>`, `<noframes>` and `<noscript>` (raw text while scripting is on),
+after `<plaintext>`, and after a `<![CDATA[` inside `<svg>` or `<math>`, which
+runs to `]]>` rather than to the first `>`. Where gate 1 and the browser
+disagree about what is comment, markup gate 1 reports absent can be present.
+
+- A comment ends at `-->` or `--!>`, whichever comes first.
+- `<xmp>`, `<noembed>`, `<noframes>`, `<noscript>` and `<plaintext>` are
+  refused, and so is any `<!` that is neither a comment nor the doctype.
+  Bento writes none of them: none appears in any of the 100 shells published
+  to bento.page, nor in saved decks.
+- **Comment text is not refused for holding markup.** Every slides shell since
+  0.7.0 carries a tooling comment with `<parent-id>`-style placeholders, so
+  that rule would turn every release unknown. It is not needed either: once
+  the comment's end and the places where a comment can start agree with the
+  browser, its text is inert. Comments are still checked for `<script`, as
+  before.
+
+All 70 slides releases in the published history still verify as genuine,
+and every published shell gets the same verdict as before. The Swift, Kotlin
+and Rust ports and the extension's generated copy carry the same rules. Rigs:
+`scripts/test-gate1.ts`, `scripts/test-gate1-mutants.ts` (a mutant per rule)
+and `scripts/test-gate1-oracle.mjs` (Chromium and WebKit).
 ## 2026-11-09 — bento/id directory: the void page, the reset, and the countersign on every link
 
 The directory now issues its countersign (`rip.`) and has the two things
@@ -13700,6 +13727,36 @@ WebSockets closed: three GETs and no POST on opening, the fragment gone from
 the history entry, each button, an injected script blocked with a positive
 control, framing refused, Trusted Types, an address full of markup shown as
 text; a mutant per rule) and `scripts/test-directory-mutants.ts`.
+
+## 2026-11-12 — bento/id: the privacy notice describes option G, and a text-only deletion page returns
+
+The draft privacy notice (`site-src/id-privacy.html`, built to
+`bento.page/id/privacy`) still described the first design: exact-address
+lookups, a 13-month expiry, emailed one-time codes and encrypted recovery
+data. It now describes what option G keeps: the passkey list and every
+countersigned version of it (public to anyone who knows the address), the
+setup and reset links (secrets kept only as hashes), the void link's hash
+kept only while its change waits, the roster listed in every mail, the
+record of changes kept for the life of the account, and the per-IP
+fingerprints. Parts that are not running yet (browser sign-ins with 24-hour
+certificates inside a 7-day cap, the yearly one-click mailbox confirmation
+whose lapse removes only the label, the sign-in host's saved address, and
+account deletion) are marked `data-planned`, and the build refuses a planned
+part that does not open with its visible "Planned" label.
+
+The web deletion page retired on 2026-11-09 returns as **text only**
+(`site-src/id-delete.html`, built to `bento.page/id/delete`): the app stores
+ask for a way to request deletion without the app, and the retired page was
+withdrawn for its typed code, not for existing. It explains the queued
+deletion (a passkey, or an emailed link when every passkey is lost; 72 hours;
+a link that stops it) and points to the sign-in host's deletion page, whose
+address is a fact the build takes (`DELETE_URL`, https on bento.page only).
+Both pages are refused for any script, form, input, button, frame, event
+handler or external resource, and for any `__PLACEHOLDER__` left: the
+controller, contact, legal basis, processors, rights, children, what stays
+after a deletion, and how long setup send times are kept are the
+maintainer's, and the pages are not published. Guard:
+`scripts/test-id-pages.mjs`.
 
 ## 2026-11-12 — bento/id: the sign-in host's own pages (setup and reset links, sign in, sign out everywhere)
 
