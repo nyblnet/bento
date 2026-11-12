@@ -48,8 +48,10 @@ const link = readLink()
 let busy = false
 let made = null
 
-const SETUP_FAIL = { 400: 'link-used', 409: 'exists', 429: 'busy', 503: 'directory' }
-const RESET_FAIL = { 400: 'link-used', 404: 'no-account', 409: 'pending', 429: 'busy', 503: 'mail' }
+const SETUP_FAIL = { 409: 'exists', 429: 'busy' }
+const RESET_FAIL = { 404: 'no-account', 409: 'pending', 429: 'busy', 503: 'mail' }
+/** Why the directory refused a link: its token (used, old or wrong), the passkey, or anything else. */
+const why = (r, table) => r.body.error === 'token' ? 'link-used' : r.body.error === 'superseded' ? 'pending' : r.status === 400 && r.body.error !== 'nonce' ? 'passkey' : table[r.status] || 'directory'
 
 async function makePasskey() {
   if (busy || !link) return
@@ -58,13 +60,11 @@ async function makePasskey() {
   try {
     const r = await completeLink(KIND, link.address, link.token)
     if (KIND === 'setup') {
-      if (r.status !== 200) throw new Refused(r.body.error === 'nonce' ? 'directory' : SETUP_FAIL[r.status] || 'directory')
+      if (r.status !== 200) throw new Refused(why(r, SETUP_FAIL))
       made = r.credId
       show('confirm')
     } else {
-      if (r.status !== 202 || !Number.isSafeInteger(r.body.ripensAt)) {
-        throw new Refused(r.body.error === 'superseded' ? 'pending' : r.body.error === 'nonce' ? 'directory' : RESET_FAIL[r.status] || 'directory')
-      }
+      if (r.status !== 202 || !Number.isSafeInteger(r.body.ripensAt)) throw new Refused(why(r, RESET_FAIL))
       $('ripens').textContent = when(r.body.ripensAt)
       show('waiting')
     }

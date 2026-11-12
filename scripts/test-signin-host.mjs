@@ -274,7 +274,7 @@ try {
         const calls = all(f).match(/\bsignInHere\(/g) || []
         return calls.length === 3 && /await signInHere\(\{ allow: made, expect: link\.address \}\)/.test(f.link) && /await signInHere\(\)\n/.test(f.account)
       },
-      'a setup reaches the confirmation only on a 200 from the setup route': (f) => /if \(r\.status !== 200\) throw new Refused\([^\n]*\n\s*made = r\.credId\n/.test(f.link) && (f.link.match(/made = r\.credId/g) || []).length === 1 && /let made = null\n/.test(f.link) && (f.link.match(/\bmade = /g) || []).length === 2,
+      'a setup reaches the confirmation only on a 200 from the setup route': (f) => /if \(r\.status !== 200\) throw new Refused\(why\(r, SETUP_FAIL\)\)\n\s*made = r\.credId\n/.test(f.link) && (f.link.match(/made = r\.credId/g) || []).length === 1 && /let made = null\n/.test(f.link) && (f.link.match(/\bmade = /g) || []).length === 2,
       'the account pages answer no message and post none': (f) => !/addEventListener\(\s*['"]message|onmessage|postMessage|\bopener\b|BroadcastChannel|MessageChannel/.test(all(f)),
       'no Signal API, eval, Function or HTML sink': (f) => !/\bsignal(AllAcceptedCredentials|UnknownCredential|CurrentUserDetails)\b|PublicKeyCredential\s*\[|\beval\(|new Function|innerHTML|outerHTML|insertAdjacentHTML|document\.write/.test(all(f)),
       'create: rp id.bento.page, ES256 only, a discoverable key, user verification required, no attestation': (f) => {
