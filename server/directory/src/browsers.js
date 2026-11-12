@@ -182,12 +182,13 @@ export async function browserRoute(req, env, ip, p, k) {
     // both answer 404 for an address with no account: the per-IP lookup budget
     if (!(await ledger(ip, 'lookup'))) return json(429, { error: 'rate-limited' })
     const scope = await addressKey(email)
-    // one IP's challenges for one address; never a limit shared by every caller
-    if (!(await ledger(`${ip}\n${scope}`, 'challengeAddr'))) return json(429, { error: 'rate-limited' })
+    // one IP's challenges for one address, enrolments and renewals counted apart
+    // (many tabs renewing never use up a new sign-in); never a limit shared by every caller
+    const web = p === WEB_ROUTES.challenge
+    if (!(await ledger(`${ip}\n${scope}`, web ? 'challengeAddr' : 'challengeAddrHome'))) return json(429, { error: 'rate-limited' })
     const r = await roster(email, 'browserHead', {})
     if (r.status !== 200) return json(r.status, r.body)
     const at = Date.now()
-    const web = p === WEB_ROUTES.challenge
     const nonce = await issueChallenge(env.CHALLENGE_KEY, web ? 'web' : 'home', scope, at)
     return json(200, web ? { nonce, at, rosHash: r.body.rosHash } : { nonce })
   }
@@ -245,6 +246,7 @@ export async function browserRoute(req, env, ip, p, k) {
     if (!(await ledger(ip, 'enrol'))) return json(429, { error: 'rate-limited' })
     const c = await parseDeviceCert(b.text)
     if (!c.ok || c.value.kind !== 'wdev' || c.value.via !== 'passkey') return json(400, { error: 'text' })
+    incidentsOf(env) // before the challenge is opened: an unreadable list countersigns nothing, and leaves the challenge
     const ch = await openBrowser(env, await addressKey(c.value.address), c.value.dirNonce, Date.now())
     if (!ch) return json(400, { error: 'nonce' })
     const r = await roster(c.value.address, 'browserEnrol', {
@@ -257,13 +259,16 @@ export async function browserRoute(req, env, ip, p, k) {
   if (p === HOME_ROUTES.checkin) {
     if (typeof b.wren !== 'string' || typeof b.sig !== 'string' || b.wren.length > TEXT_MAX || b.sig.length > FIELD_MAX ||
       !(b.pin === undefined || (typeof b.pin === 'string' && b.pin.length <= 64))) return json(400, { error: 'bad-request' })
-    if (!(await ledger(ip, 'checkin'))) return json(429, { error: 'rate-limited' })
     const incidents = incidentsOf(env) // first: an unreadable list countersigns nothing
     // signed by the device key it names; checked before the challenge is spent
     // (only the browser that asked knows it, so a refused signature leaves it)
     const v = await verifyWren(b.wren, b.sig)
     if (!v.ok) return json(400, { error: 'wren' })
-    const ch = await openBrowser(env, await addressKey(v.value.address), v.value.challenge, Date.now())
+    const scope = await addressKey(v.value.address)
+    // counted only once the device key's signature verifies, per IP per address:
+    // junk from someone on the owner's network never uses up the owner's renewals
+    if (!(await ledger(`${ip}\n${scope}`, 'checkin'))) return json(429, { error: 'rate-limited' })
+    const ch = await openBrowser(env, scope, v.value.challenge, Date.now())
     if (!ch) return json(400, { error: 'nonce' })
     const r = await roster(v.value.address, 'browserCheckin', { devicePub: v.value.devicePub, pin: b.pin, nonce: ch.nonce, issued: ch.issued, aud: ch.aud })
     return json(r.status, r.status === 200 || r.status === 403 ? { ...r.body, incidents } : r.body)
@@ -310,8 +315,9 @@ async function countersign(env, { certHash, ob, ceremonyAt, now }) {
  * are up) or ok.
  */
 async function standing(s, rec, now) {
-  const out = await s.get('signoutAt')
-  if (rec.revokedAt || (out !== undefined && rec.ceremonyAt <= out)) return 'revoked'
+  // a sign-out marks every certificate it covers (signOutAll), and refuses any
+  // ceremony begun before it, so the mark is the whole record of it
+  if (rec.revokedAt) return 'revoked'
   const head = await s.get('head')
   const m = head?.members.find((x) => x.pub === rec.signer)
   if (!m || m.kind !== 'pk' || m.quarantined) return 'revoked'
@@ -370,7 +376,7 @@ async function signOutAll(obj, head, { signedAt, now, by, origin, co }, h) {
   await s.put('signoutAt', Math.max(at, (await s.get('signoutAt')) ?? 0))
   let n = 0
   for (const [key, rec] of await s.list({ prefix: 'wd:' })) {
-    if (rec.revokedAt || rec.ceremonyAt > at) continue
+    if (rec.revokedAt) continue // the cut-off is now: every certificate the address holds was made by then
     await s.put(key, { ...rec, revokedAt: now })
     n++
   }

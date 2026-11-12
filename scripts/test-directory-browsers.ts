@@ -340,10 +340,10 @@ async function enrol(address: string, b: Browser, a: Authn, o: EnrolOpts = {}) {
   const r = await raw('POST', WEB_ROUTES.enrol, JSON.stringify(body), o.origin === undefined ? S : o.origin, o.ip)
   return { ...r, text, ch }
 }
-async function checkin(address: string, b: Browser, o: { nonce?: string; pin?: string; key?: CryptoKey; origin?: string | null; wrenAddress?: string } = {}) {
+async function checkin(address: string, b: Browser, o: { nonce?: string; pin?: string; key?: CryptoKey; origin?: string | null; wrenAddress?: string; ip?: string } = {}) {
   const nonce = o.nonce ?? (await homeCh(address)).j.nonce as string
   const w = await b.wren(o.wrenAddress ?? address, nonce, o.key)
-  return { ...(await raw('POST', HOME_ROUTES.checkin, JSON.stringify({ ...w, ...(o.pin !== undefined ? { pin: o.pin } : {}) }), o.origin === undefined ? H : o.origin)), nonce }
+  return { ...(await raw('POST', HOME_ROUTES.checkin, JSON.stringify({ ...w, ...(o.pin !== undefined ? { pin: o.pin } : {}) }), o.origin === undefined ? H : o.origin, o.ip)), nonce }
 }
 const logOf = async (email: string) => ((await doOp(email, 'logQuery', { from: 0, to: now })).j.entries ?? []) as Record<string, unknown>[]
 const storeOf = async (email: string) => (await rosterObj(email)).store
@@ -399,8 +399,13 @@ const anaHead = async () => ((await storeOf(ana)).get('head') ?? { hash: '', seq
 }
 {
   const ip = freshIp(), st: number[] = []
-  for (let i = 0; i <= LIMITS.ip.challengeAddr; i++) st.push((i % 2 ? await homeCh(ana, { ip }) : await webCh(ana, { ip })).status)
-  ok(LIMITS.ip.challengeAddr === 20 && st.slice(0, -1).every((x) => x === 200) && st[st.length - 1] === 429, `challenge #${LIMITS.ip.challengeAddr + 1} for one address from one IP → 429 (last ${st[st.length - 1]})`)
+  for (let i = 0; i <= LIMITS.ip.challengeAddr; i++) st.push((await webCh(ana, { ip })).status)
+  ok(LIMITS.ip.challengeAddr === 20 && st.slice(0, -1).every((x) => x === 200) && st[st.length - 1] === 429, `enrolment challenge #${LIMITS.ip.challengeAddr + 1} for one address from one IP → 429 (last ${st[st.length - 1]})`)
+  // renewals are counted apart: many tabs renewing never use up a new sign-in, nor the reverse
+  const hs: number[] = []
+  for (let i = 0; i <= LIMITS.ip.challengeAddrHome; i++) hs.push((await homeCh(ana, { ip })).status)
+  ok(LIMITS.ip.challengeAddrHome === 20 && hs.slice(0, -1).every((x) => x === 200) && hs[hs.length - 1] === 429,
+    `with the enrolment count used up, that IP still gets ${LIMITS.ip.challengeAddrHome} renewal challenges, then 429 (last ${hs[hs.length - 1]})`)
   ok((await webCh('nobody@example.com', { ip })).status === 404, 'the same IP may still ask about another address')
   ok((await webCh(ana)).status === 200 && (await homeCh(ana)).status === 200, 'and that IP\'s flood leaves every other caller\'s challenges for the address alone (no shared count)')
 }
@@ -663,13 +668,17 @@ ok(ce.status === 200, `cara's second passkey enrols a browser (${err(ce)})`)
   ok((await enrol(eve, nb, E1)).status === 200 && (await checkin(eve, nb)).status === 200, 'a browser signed in afterwards renews')
   // the cut-off is when the sign-out is ACCEPTED, not the time it was signed (security's D3 on #953)
   const signedAt = now - 1
-  now += 60_000
+  now += 30_000
+  const between = await chOf(eve) // a ceremony begun after the signing, before the acceptance
+  now += 30_000
   const nbHash = (await storeOf(eve)).get(`wd:${nb.pub}`) as { certHash?: string } | undefined
   const late2 = await doOp(eve, 'browserRevokeAll', { by: E1.pub, os: S, signedAt })
   ok(late2.j.revoked === 1 && late2.j.at === now && late2.j.signedAt === signedAt && (await checkin(eve, nb)).j.error === 'revoked',
     `a certificate made between the signing and the acceptance is cut off too (${JSON.stringify(late2.j)})`)
   const lg = (await logOf(eve)).filter((x) => x.k === 'signout-all').pop()
   ok(lg?.signedAt === signedAt && lg?.at === now, 'the log names both: signed at, applied at')
+  const btw = await enrol(eve, await Browser.make(), E1, { ch: between })
+  ok(btw.status === 403 && btw.j.error === 'revoked', `a ceremony begun between the signing and the acceptance cannot finish after it (${err(btw)})`)
   // W1: the status route says so at once, for peers that check it
   const st1 = await api('GET', `${STATUS_ROUTE}?e=${eve}&c=${nbHash?.certHash ?? 'x'}`)
   ok(st1.j.state === 'revoked', `status: revoked as soon as the sign-out is accepted (${st1.j.state})`)
@@ -900,6 +909,52 @@ async function signout(a: Authn, address: string, o: GetOpts & { ch?: { nonce: s
   }
   env.INCIDENTS = undefined
   ok((await checkin(fay, FB)).j.incidents !== undefined, 'INCIDENTS unset reads as none')
+  // C1 (security on #957): enrolment reads the list too, before its challenge is opened
+  const FB2 = await Browser.make()
+  const ech = await chOf(fay)
+  env.INCIDENTS = 'nope'
+  const bad = await enrol(fay, FB2, F1, { ch: ech })
+  env.INCIDENTS = undefined
+  ok(bad.status === 500 && !('watt' in bad.j) && !(await storeOf(fay)).has(`wd:${FB2.pub}`), `INCIDENTS unreadable: enrol 500, nothing countersigned or stored (${err(bad)})`)
+  const after = await enrol(fay, FB2, F1, { ch: ech })
+  ok(after.status === 200, `and the challenge is left: the same enrolment, the list readable again → 200 (${err(after)})`)
+}
+
+// =====================================================================
+// 5b. per-IP counts that never starve the owner (security's D3 and N3 on #957)
+// =====================================================================
+{
+  const kai = 'kai@example.com', K1 = await Authn.make(), KB = await Browser.make()
+  await setup(kai, K1)
+  ok((await enrol(kai, KB, K1)).status === 200, 'kai has a browser')
+  // junk check-ins (well formed, signed by the wrong key) from the owner's network count for nothing
+  const ip = freshIp(), junk: number[] = []
+  for (let i = 0; i <= LIMITS.ip.checkin; i++) junk.push((await checkin(kai, KB, { key: (await Browser.make()).W.privateKey, ip })).status)
+  ok(junk.every((x) => x === 400), `${junk.length} check-ins with a bad signature from one IP: each 400 wren`)
+  const mine = await checkin(kai, KB, { ip })
+  ok(mine.status === 200, `the owner's valid check-in from that IP still → 200 (${err(mine)})`)
+  // valid check-ins are counted per IP per address
+  const ip2 = freshIp(), good: number[] = []
+  for (let i = 0; i < LIMITS.ip.checkin; i++) good.push((await checkin(kai, KB, { ip: ip2 })).status)
+  const over = await checkin(kai, KB, { ip: ip2 })
+  ok(LIMITS.ip.checkin === 120 && good.every((x) => x === 200) && over.status === 429, `check-in #${LIMITS.ip.checkin + 1} for one address from one IP → 429 (${err(over)})`)
+  // N3: the status route spends the per-IP lookup budget
+  const ip3 = freshIp()
+  for (let i = 0; i < LIMITS.ip.lookup; i++) await api('GET', `/v1/roster?e=n${i}@example.com`, undefined, { ip: ip3 })
+  ok((await api('GET', `${STATUS_ROUTE}?e=${kai}&c=${await sha256b64u('x')}`, undefined, { ip: ip3 })).status === 429, 'the status route spends the per-IP lookup budget')
+  // N3: the enrolment's counter, too, is stored only over the one its assertion was checked against
+  const sp = crypto.subtle as unknown as { verify: (...x: unknown[]) => Promise<boolean> }
+  const orig = sp.verify.bind(crypto.subtle)
+  let once = true
+  sp.verify = async (...x: unknown[]) => {
+    if (once) { once = false; await plant(kai, (st) => { const r = st.get(`pk:${K1.pub}`) as Record<string, unknown> | undefined; if (r) st.set(`pk:${K1.pub}`, { ...r, signCount: 40 }) }) }
+    return orig(...x)
+  }
+  const KB2 = await Browser.make()
+  let race
+  try { race = await enrol(kai, KB2, K1, { get: { count: 40 } }) } finally { sp.verify = orig }
+  ok(race.status === 403 && race.j.error === 'assertion' && !(await storeOf(kai)).has(`wd:${KB2.pub}`), `another assertion with the same counter landing while an enrolment is checked → 403 assertion, nothing stored (${err(race)})`)
+  ok((await enrol(kai, KB2, K1, { get: { count: 41 } })).status === 200, 'control: the next counter enrols')
 }
 
 // =====================================================================

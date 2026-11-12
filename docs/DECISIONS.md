@@ -13771,7 +13771,9 @@ bento/home agent was built against.
   is issued, so a stranger who asks for many fills nothing and pushes out
   nobody's. Asking costs a per-IP lookup, the same budget as `GET
   /v1/roster` (both answer 404 for an address with no account), and one of 20
-  an hour from that IP for that address. There is deliberately no count shared
+  an hour from that IP for that address, enrolments and renewals counted
+  apart. A check-in is counted per IP per address only once its signature
+  verifies, so junk from the owner's own network cannot use up its renewals. There is deliberately no count shared
   by every caller of an address: a stranger could fill it and stop the
   owner's browsers renewing.
 - **The head is the latest ripened one.** A change still waiting is never a

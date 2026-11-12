@@ -238,7 +238,7 @@ Bodies are JSON, sent as text/plain.
 | `POST /v1/web/challenge` `{address}` | 200 `{nonce, at, rosHash}`: a challenge for an enrolment, the directory's time for it (the ceremony time), and the hash of the latest ripened roster head; 404 for an address with no account |
 | `POST /v1/web/enrol` `{text, rq, assertion}` (60 an hour per IP) | 200 `{ok, wdev, watt}`; 400 `text`, `rq`, `assertion`, `nonce`, `ceremony`, `head`; 403 `signer`, `assertion`; 409 `device-known` |
 | `POST /v1/home/challenge` `{address}` | 200 `{nonce}`: a challenge for a renewal; 404 for an address with no account |
-| `POST /v1/home/checkin` `{wren, sig, pin?}` (120 an hour per IP) | 200 `{watt, wattSig, signer, assertion, roster, incidents}` (the roster as kernel RosterLink objects from the pinned head, or from setup); 403 `{error: unknown \| revoked \| cap, incidents}`; 400 `wren`, `nonce` |
+| `POST /v1/home/checkin` `{wren, sig, pin?}` (120 an hour per IP per address, once the signature verifies) | 200 `{watt, wattSig, signer, assertion, roster, incidents}` (the roster as kernel RosterLink objects from the pinned head, or from setup); 403 `{error: unknown \| revoked \| cap, incidents}`; 400 `wren`, `nonce` |
 | `POST /v1/web/signin/challenge` `{}` (120 an hour per IP) | 200 `{nonce}`: a sign-in challenge, 5 minutes |
 | `POST /v1/web/signin` `{nonce, assertion}` (60 an hour per IP) | 200 `{address}`: the account a discoverable passkey belongs to, named by the first 32 bytes of its 48-byte user handle; 400 `nonce`, `assertion`, `assertion-<reason>`; 403 `not-member`, `quarantined`. Nothing is logged or mailed; the passkey's counter is stored |
 | `POST /v1/web/signout/challenge` `{address}` | 404 for an address with no account (a per-IP lookup); otherwise **501** until the kernel defines the statement, so the sign-in host never asks for a passkey for nothing. Then 200 `{nonce, at}` |
@@ -251,7 +251,14 @@ Bodies are JSON, sent as text/plain.
   route each use it up. Nothing is stored when one is issued.
 - Asking for one costs a per-IP lookup (the budget `GET /v1/roster` uses; both
   answer 404 for an address with no account) and one of 20 an hour from that
-  IP for that address. No count is shared by every caller.
+  IP for that address, enrolments and renewals counted apart. No count is
+  shared by every caller.
+- A check-in is counted (120 an hour per IP per address) only once its
+  signature verifies, so junk from the owner's network never uses up the
+  owner's renewals.
+- An unreadable `INCIDENTS` list answers 500 at enrolment and check-in alike,
+  before the challenge is opened: nothing is countersigned and the challenge
+  is left.
 - An enrolment must name the challenge's own time, the latest ripened head,
   bento/home as the page that asked, an unquarantined passkey member, an
   assertion from the sign-in host with a forward-moving counter, and a device
@@ -269,13 +276,14 @@ Bodies are JSON, sent as text/plain.
   made by then is refused (403 `revoked`, and the status route says
   `revoked` at once), and a ceremony whose challenge was issued by then
   cannot finish. A countersign already issued stays valid at peers that do
-  not check the status route, for up to 24 hours.
+  not check the status route, for up to 24 hours. It is logged
+  (`signout-all`) and mailed to the address (roster mail, never held back).
+  The route runs every check and then answers 501 until the kernel defines
+  what the passkey signs.
 - A sign-in challenge is spent in the object of the account the passkey's
   user handle names (once per account); a handle naming no account is
   refused before anything is written. A passkey's signature counter is
-  stored only over the value its assertion was checked against. It is logged (`signout-all`) and mailed to
-  the address (roster mail, never held back). The route runs every check and
-  then answers 501 until the kernel defines what the passkey signs.
+  stored only over the value its assertion was checked against.
 - Not here yet: the sign-out statement itself (a kernel layout), a `dev2.`
   made by a passkey alone, retiring the old key at a new ceremony, and mail
   for a new browser.
