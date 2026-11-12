@@ -81,6 +81,20 @@ jobs:
         # popups ON THE POPUP severs it in Chromium, which is why the sign-in
         # host sends no COOP at all.
         run: node scripts/test-signin-host-coop.mjs --chrome
+      - name: Sign-in host's own pages, Playwright headless shell
+        # /setup, /reset and /account: the REAL directory worker and Roster
+        # object for the routes it has, the contract stub for the sign-in and
+        # sign-out routes it does not have yet, a CDP virtual authenticator.
+        # Opening a mailed link sends nothing and drops the token from the
+        # address bar; a setup is stored only after a sign-in with the new
+        # passkey names the link's address; a reset stores nothing and never
+        # overwrites an older passkey; sign out everywhere needs a member's
+        # passkey; no page answers a message; a mutant per rule.
+        run: node scripts/test-signin-host-pages.mjs
+      - name: Sign-in host's own pages, Google Chrome
+        run: node scripts/test-signin-host-pages.mjs --chrome
+      - name: Sign-in host's own pages, WebKit (the rows that need no passkey)
+        run: node scripts/test-signin-host-pages.mjs --webkit
 
   share-directory-void-page:
     # The void page (server/directory/src/voidpage.js) in a real browser: the

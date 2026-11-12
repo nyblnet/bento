@@ -177,6 +177,10 @@ try {
       "  '/signin.css': ['/signin.css', 'text/css; charset=utf-8'],\n  '/.well-known/webauthn': ['/signin.css', 'application/json'],\n"]],
     'an extra page served': [[W, "  '/signin.css': ['/signin.css', 'text/css; charset=utf-8'],\n",
       "  '/signin.css': ['/signin.css', 'text/css; charset=utf-8'],\n  '/enrol': ['/index.html', 'text/html; charset=utf-8'],\n"]],
+    'Trusted Types not enforced': [[W, `  "require-trusted-types-for 'script'",\n`, '']],
+    'a Trusted Types policy allowed': [[W, `  "trusted-types 'none'",`, `  "trusted-types default",`]],
+    'an account page served without its CSP': [[W, "      return answer(200, await asset.arrayBuffer(), file[1], head)",
+      "      if (file[0] === '/account.html') return new Response(await asset.arrayBuffer(), { headers: { 'content-type': file[1] } })\n      return answer(200, await asset.arrayBuffer(), file[1], head)"]],
   }
   for (const [name, edits] of Object.entries(MUTANTS)) {
     const dir = copyWith(edits)
@@ -202,6 +206,9 @@ try {
     [CSP.replace('connect-src https://id.bento.page', 'connect-src https://evil.example'), false],
     [CSP.replace('connect-src https://id.bento.page', 'connect-src https://id.bento.page https://evil.example'), false],
     [CSP.replace("style-src 'self'", "style-src 'self' https://fonts.example"), false],
+    [CSP.replace("; require-trusted-types-for 'script'", ''), false],
+    [CSP.replace("trusted-types 'none'", 'trusted-types bento'), false],
+    [CSP.replace("; trusted-types 'none'", ''), false],
     ['', false],
   ]) ok((cspProblems(v).length === 0) === good, `${good ? 'accepts' : 'refuses'}: ${v.slice(0, 90) || '(none)'}${cspProblems(v).length ? ' — ' + cspProblems(v)[0] : ''}`)
 
@@ -221,6 +228,104 @@ try {
   ok(d.length === 2 && !d[0].ok && d[1].ok, 'MUTANT a wildcard under the sign-in host: its row fails')
   d = await dnsRows(zone(['x.id.bento.page', 'x.signin.id.bento.page']))
   ok(d.length === 2 && d.every((r) => r.ok), 'recorded: explicit extra names pass these rows, which is why the deploy lists the zone by hand')
+
+  // ---- 4. the host's own pages: /setup, /reset, /account ------------------------------
+  console.log('\nthe account pages (setup and reset links, sign in, sign out everywhere)')
+  {
+    const read = (f) => readFileSync(join(ROOT, 'public', f), 'utf8')
+    const strip = (c) => c.replace(/^\s*\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')
+    const pages = ['setup.html', 'reset.html', 'account.html']
+    for (const f of pages) {
+      const h = read(f)
+      for (const [name, rule] of Object.entries(rules)) ok(rule(h), `${f}: ${name}`)
+      ok(/<script type="module" src="\/(link|account)\.js"><\/script>/.test(h), `${f}: loads its one module script from this host`)
+    }
+    const files = { link: strip(read('link.js')), account: strip(read('account.js')), client: strip(read('account-client.js')) }
+    const all = (f) => Object.values(f).join('\n')
+    const fnBody = (c, name) => (c.match(new RegExp(`(?:async )?function ${name}\\([^)]*\\) \\{\\n([\\s\\S]*?)\\n\\}\\n`)) || [])[1] || null
+    const URLREAD = /\blocation\b|URLSearchParams|document\.URL|documentURI|document\.referrer|window\.name/
+    const htmls = pages.map(read).join('\n')
+    const L = {
+      // G12c and the 948 ruling: nothing but the documented fragment, and only on the link pages
+      'the only URL read is readLink() on the link pages; account.js and account-client.js read none': (f) => {
+        const rl = fnBody(f.link, 'readLink')
+        return !!rl && !URLREAD.test(f.account) && !URLREAD.test(f.client) && !URLREAD.test(f.link.replace(rl, ''))
+      },
+      'readLink takes the fragment out of the address bar before it reads it': (f) => {
+        const rl = fnBody(f.link, 'readLink') || ''
+        const i = rl.indexOf('history.replaceState(null, \'\', location.pathname)'), j = rl.indexOf('new URLSearchParams(')
+        return i >= 0 && j > i
+      },
+      'readLink takes exactly v, e and t, once each, v=1, a 43-character token, and no query': (f) => {
+        const rl = fnBody(f.link, 'readLink') || ''
+        return /if \(query\) return null/.test(rl) && /keys\.length !== 3 \|\| new Set\(keys\)\.size !== 3 \|\| !\['v', 'e', 't'\]\.every/.test(rl) &&
+          /f\.get\('v'\) !== '1'/.test(rl) && /\^\[A-Za-z0-9_-\]\{43\}\$/.test(rl)
+      },
+      // security-ruling-948: only an account the person proved on this host
+      'bento-id-account is written once, in signInHere(), with the directory\'s answer after the expect check': (f) => {
+        const c = all(f)
+        const sib = fnBody(f.client, 'signInHere') || ''
+        const writes = (c.match(/localStorage\.(setItem|removeItem|clear)\(|localStorage\[|localStorage\.[a-zA-Z]+\s*=/g) || []).length
+        const w = sib.indexOf('localStorage.setItem(ACCOUNT_KEY, a.address)'), e = sib.indexOf("if (expect !== undefined && a.address !== expect) throw new Refused('other-account')")
+        const v = sib.indexOf("if (r.status !== 200) throw"), p = sib.indexOf('await post(ROUTES.signin,')
+        return writes === 1 && /export const ACCOUNT_KEY = 'bento-id-account'\n/.test(f.client) && w > e && e > v && v > p && p > 0
+      },
+      'signInHere is called only from the setup confirmation and the account page\'s sign-in': (f) => {
+        const calls = all(f).match(/\bsignInHere\(/g) || []
+        return calls.length === 3 && /await signInHere\(\{ allow: made, expect: link\.address \}\)/.test(f.link) && /await signInHere\(\)\n/.test(f.account)
+      },
+      'a setup reaches the confirmation only on a 200 from the setup route': (f) => /if \(r\.status !== 200\) throw new Refused\([^\n]*\n\s*made = r\.credId\n/.test(f.link) && (f.link.match(/made = r\.credId/g) || []).length === 1 && /let made = null\n/.test(f.link) && (f.link.match(/\bmade = /g) || []).length === 2,
+      'the account pages answer no message and post none': (f) => !/addEventListener\(\s*['"]message|onmessage|postMessage|\bopener\b|BroadcastChannel|MessageChannel/.test(all(f)),
+      'no Signal API, eval, Function or HTML sink': (f) => !/\bsignal(AllAcceptedCredentials|UnknownCredential|CurrentUserDetails)\b|PublicKeyCredential\s*\[|\beval\(|new Function|innerHTML|outerHTML|insertAdjacentHTML|document\.write/.test(all(f)),
+      'create: rp id.bento.page, ES256 only, a discoverable key, user verification required, no attestation': (f) => {
+        const c = fnBody(f.client, 'completeLink') || ''
+        return /rp: \{ id: RP_ID, name: 'bento\/id' \}/.test(c) && /pubKeyCredParams: \[\{ type: 'public-key', alg: -7 \}\]/.test(c) &&
+          /residentKey: 'required', requireResidentKey: true, userVerification: 'required'/.test(c) && /attestation: 'none'/.test(c) &&
+          /export const RP_ID = 'id\.bento\.page'\n/.test(f.client) && (all(f).match(/credentials\.create\(/g) || []).length === 1
+      },
+      'the user handle is the account\'s storage name plus 16 random bytes': (f) => {
+        const u = fnBody(f.client, 'userHandle') || ''
+        return /'bento-dir\/1\/addr\\n' \+ address/.test(u) && /new Uint8Array\(48\)/.test(u) && /crypto\.getRandomValues\(new Uint8Array\(16\)\), 32\)/.test(u)
+      },
+      'every get and create asks for user verification': (f) => (all(f).match(/userVerification: 'required'/g) || []).length === 3 && !/userVerification: '(preferred|discouraged)'/.test(all(f)),
+      'a raw challenge is a 40-byte sealed one, never 32 (a statement hash)': (f) => /const SEALED = \/\^\[A-Za-z0-9_-\]\{54\}\$\/\n/.test(f.client) && (f.client.match(/!SEALED\.test\(/g) || []).length === 3,
+    }
+    const XL = {
+      'X7: no page makes, shows or asks for a code (the X3 sentence alone mentions one)': (h, f) => {
+        const x3 = /install the Bento app and make a recovery code\./
+        const rest = h.replace(/<p class="note" id="x3">[^<]*<\/p>/, '')
+        const inputs = [...h.matchAll(/<input\b[^>]*>/g)].map((m) => m[0])
+        return x3.test(h) && !/\bcode\b/i.test(rest.replace(/<\/?code>/g, '')) && inputs.every((i) => /type="email"/.test(i)) &&
+          !/<textarea|contenteditable/i.test(h) && !/recovery|\bcode\b/i.test(all(f).replace(/charCodeAt|fromCharCode/g, ''))
+      },
+      'X3: the setup page states what a browser-only account loses': (h) => h.includes('Documents shared with you are opened by keys kept in this browser.') && /<body data-link="setup"[\s\S]*id="x3"/.test(h),
+    }
+    for (const [name, f] of Object.entries(L)) ok(f(files), `account pages: ${name}`)
+    for (const [name, f] of Object.entries(XL)) ok(f(htmls, files), `account pages: ${name}`)
+    const mod = (key, from, to) => { const c = { ...files }; if (!c[key].includes(from)) throw new Error(`lint mutant: ${from.slice(0, 50)} not in ${key}`); c[key] = c[key].replace(from, () => to); return c }
+    const BADL = {
+      'the only URL read is readLink() on the link pages; account.js and account-client.js read none': mod('account', 'function home() {', "function home() {\n  if (new URLSearchParams(location.hash.slice(1)).get('a')) $('account').textContent = 'x'"),
+      'readLink takes the fragment out of the address bar before it reads it': mod('link', "  history.replaceState(null, '', location.pathname)\n", ''),
+      'readLink takes exactly v, e and t, once each, v=1, a 43-character token, and no query': mod('link', '  if (query) return null\n', ''),
+      'bento-id-account is written once, in signInHere(), with the directory\'s answer after the expect check': mod('link', 'const link = readLink()', "const link = readLink()\ntry { localStorage.setItem('bento-id-account', link.address) } catch {}"),
+      'signInHere is called only from the setup confirmation and the account page\'s sign-in': mod('link', "      $('ripens').textContent = when(r.body.ripensAt)", "      await signInHere({ expect: link.address })\n      $('ripens').textContent = when(r.body.ripensAt)"),
+      'a setup reaches the confirmation only on a 200 from the setup route': mod('link', '      made = r.credId\n', '      made = r.credId\n      made = r.credId\n'),
+      'the account pages answer no message and post none': mod('account', 'function start() {', "function start() {\n  addEventListener('message', (e) => { if (e.data && e.data.t === 'sign-out-everywhere') signOutAll() })"),
+      'no Signal API, eval, Function or HTML sink': mod('account', "  $('account').textContent = account", "  $('account').innerHTML = account"),
+      'create: rp id.bento.page, ES256 only, a discoverable key, user verification required, no attestation': mod('client', "      pubKeyCredParams: [{ type: 'public-key', alg: -7 }],", "      pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],"),
+      'the user handle is the account\'s storage name plus 16 random bytes': mod('client', '  out.set(crypto.getRandomValues(new Uint8Array(16)), 32)\n', ''),
+      'every get and create asks for user verification': mod('client', "    publicKey: { rpId: RP_ID, challenge: await challengeFor(text), userVerification: 'required',", "    publicKey: { rpId: RP_ID, challenge: await challengeFor(text), userVerification: 'preferred',"),
+      'a raw challenge is a 40-byte sealed one, never 32 (a statement hash)': mod('client', 'const SEALED = /^[A-Za-z0-9_-]{54}$/', 'const SEALED = /^[A-Za-z0-9_-]{43,54}$/'),
+    }
+    for (const [name, src] of Object.entries(BADL)) ok(!L[name](src), `MUTANT ${name}: the lint fails`)
+    ok(!XL['X7: no page makes, shows or asks for a code (the X3 sentence alone mentions one)'](htmls.replace('<section data-for="done" hidden>', '<section data-for="done" hidden>\n    <p>Your recovery code: <code id="code"></code></p>'), files), 'MUTANT a recovery code shown after setup: the lint fails')
+    ok(!XL['X7: no page makes, shows or asks for a code (the X3 sentence alone mentions one)'](htmls.replace('<input id="reset-email" type="email"', '<input id="reset-code" type="text"'), files), 'MUTANT a typed code box: the lint fails')
+    ok(!XL['X3: the setup page states what a browser-only account loses'](htmls.replace(/<p class="note" id="x3">[^<]*<\/p>/, ''), files), 'MUTANT the X3 sentence dropped: the lint fails')
+    for (const f of ['link.js', 'account.js', 'account-client.js', ...pages]) {
+      const t = read(f)
+      ok(![...t].some((ch) => /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(ch) && ch !== '\n'), `${f}: no invisible or control characters in the source`)
+    }
+  }
 } finally {
   rmSync(tmp, { recursive: true, force: true })
 }
