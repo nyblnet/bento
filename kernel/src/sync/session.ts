@@ -329,6 +329,15 @@ const HEARTBEAT_MS = 5000
 // gone within 75 s (and instantly on `bye`); backgrounded peers also send
 // `away` so the UI can dim rather than wait.
 const PEER_TTL_MS = 75000
+/** Blob offload backoff for one asset after a failed upload: 5 s, doubling,
+ *  capped at 5 min. Without it every edit re-sent a failing upload. */
+const OFFLOAD_HOLD_MS = 5000
+const OFFLOAD_HOLD_MAX_MS = 5 * 60_000
+/** How long an offload pass waits for the socket's `ready` (write ticket). */
+const OFFLOAD_READY_WAIT_MS = 10_000
+/** One upload's ceiling before it is aborted (see offloadPass). */
+const OFFLOAD_PUT_TIMEOUT_MS = 120_000
+type BlobCredsT = { base: string; room: string; tok: string; rawKey: Uint8Array }
 
 /** Offload once the inline assets TOTAL runs past this, even if no single one is
  *  over BLOB_INLINE_MAX — the "fifty 50 KB icons" deck whose sum overflows a
@@ -558,6 +567,38 @@ export class SyncSession {
    * resolve from it with no relay involved at all.
    */
   private async offloadAssets() {
+    // ONE PASS AT A TIME. flush() calls this after every local edit — every
+    // 90 ms during a drag — and a pass awaits a whole upload. Without the latch,
+    // each flush that landed while a large asset's PUT was still in flight
+    // HEAD-checked it (404: not stored yet) and PUT it again, so one picture
+    // became a burst of concurrent writes to ONE object key. R2 refuses
+    // concurrent writes to a key, and the relay answered each refusal with a
+    // 500. A flush during a pass asks for one more pass when this one ends.
+    if (this.offloading) { this.offloadAgain = true; return }
+    this.offloading = true
+    try {
+      do {
+        this.offloadAgain = false
+        await this.offloadPass()
+      } while (this.offloadAgain)
+    } finally {
+      this.offloading = false
+    }
+  }
+
+  private offloading = false
+  private offloadAgain = false
+  /** Per asset key: not before `at`, after `n` failures. A failed upload used
+   *  to be retried on the very next edit, indefinitely. */
+  private offloadHold = new Map<string, { at: number; n: number }>()
+  /** the room the holds above were earned in */
+  private offloadRoom: string | null = null
+  /** How long one upload (HEAD + PUT) may take before it is aborted. Generous:
+   *  an 8 MB asset on a slow link must still finish. An instance field so a rig
+   *  can shorten it. */
+  offloadPutTimeoutMs = OFFLOAD_PUT_TIMEOUT_MS
+
+  private async offloadPass() {
     const doc = this.store.doc
     const assets = doc.assets ?? {}
     const entries = Object.entries(assets)
@@ -565,7 +606,27 @@ export class SyncSession {
       .map(([k, v]) => ({ key: k, len: (v as string).length, offloadable: dataUriToBytes(v as string) !== null }))
     const picks = assetsToOffload(entries, BLOB_INLINE_MAX, INLINE_TOTAL_MAX)
     if (!picks.size) return
-    const creds = this.blobCreds()
+    const src = this.blobSource()
+    // An upload sent before the socket finished `ready` goes out with the room
+    // token instead of the write ticket, and a ticket-latched room 403s it.
+    // Bounded: a relay that never answers must not wedge the latch above.
+    if (src?.tr.writeReady) {
+      const ready = await Promise.race([
+        src.tr.writeReady().then(() => true),
+        new Promise<boolean>((r) => setTimeout(() => r(false), OFFLOAD_READY_WAIT_MS)),
+      ])
+      if (!ready) return // the next edit tries again
+    }
+    // Credentials from the transport that became ready, not whichever one
+    // blobCreds() finds now: a transport swapped during the wait would hand
+    // over a room token that is not yet allowed to write.
+    const creds = src ? ((src.tr as { blobCreds?: () => BlobCredsT | null }).blobCreds?.() ?? null) : null
+    // A different room (rotation, rejoin) starts every asset afresh: a hold
+    // earned against the old room says nothing about the new one.
+    if (creds && creds.room !== this.offloadRoom) {
+      this.offloadHold.clear()
+      this.offloadRoom = creds.room
+    }
     for (const k of picks) {
       const parsed = dataUriToBytes(assets[k] as string)
       if (!parsed) continue // offloadable was true, but be defensive
@@ -574,15 +635,33 @@ export class SyncSession {
         continue
       }
       if (!creds) continue // no relay yet; retry on the next edit
+      const hold = this.offloadHold.get(k)
+      if (hold && Date.now() < hold.at) continue
+      // ABORTED, not merely raced: a PUT that never answers (a half-open socket
+      // after sleep or a network change) would otherwise hold the single-flight
+      // latch for the rest of the session, and a timer that only stopped
+      // waiting would free the latch with the old PUT still in flight, which is
+      // the concurrent same-key write all over again. Aborting ends the request
+      // and lands in the 'network' backoff below.
+      const ac = new AbortController()
+      const timer = setTimeout(() => ac.abort(), this.offloadPutTimeoutMs)
       const res = await putBlob(
-        { base: creds.base, room: creds.room, tok: creds.tok }, creds.rawKey, parsed.bytes,
-      )
+        { base: creds.base, room: creds.room, tok: creds.tok }, creds.rawKey, parsed.bytes, ac.signal,
+      ).finally(() => clearTimeout(timer))
       if (!res.ok) {
         // 'unsupported' = relay has no blob storage. Not an error: small assets
         // still inline, and same-origin tabs resolve from the local cache.
         if (res.reason !== 'unsupported') this.notify(`blob-${res.reason}`, k)
+        // Back off this asset: doubling from 5 s to 5 min. 'room-full' and
+        // 'too-large' are permanent for the room, so they wait the longest.
+        const n = (hold?.n ?? 0) + 1
+        const wait = res.reason === 'room-full' || res.reason === 'too-large'
+          ? OFFLOAD_HOLD_MAX_MS
+          : Math.min(OFFLOAD_HOLD_MS * 2 ** (n - 1), OFFLOAD_HOLD_MAX_MS)
+        this.offloadHold.set(k, { at: Date.now() + wait, n })
         continue
       }
+      this.offloadHold.delete(k)
       this.store.commit(() => {
         const d = this.store.doc
         ;(d.blobs ??= {})[k] = { key: res.key, mime: parsed.mime, size: parsed.bytes.length }
@@ -642,11 +721,15 @@ export class SyncSession {
    *  on rejoin, so even a correctly-assigned hook goes stale. Asking the live
    *  transport list each time cannot drift. */
   private blobCreds(): { base: string; room: string; tok: string; rawKey: Uint8Array } | null {
+    return this.blobSource()?.creds ?? null
+  }
+  /** The transport that can reach a relay, with its credentials right now. */
+  private blobSource(): { tr: Transport; creds: { base: string; room: string; tok: string; rawKey: Uint8Array } } | null {
     for (const tr of this.transports) {
       const f = (tr as { blobCreds?: () => { base: string; room: string; tok: string; rawKey: Uint8Array } | null }).blobCreds
       if (typeof f !== 'function') continue
       const c = f.call(tr)
-      if (c) return c
+      if (c) return { tr, creds: c }
     }
     return null
   }

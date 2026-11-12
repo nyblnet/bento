@@ -265,11 +265,13 @@ export type PutResult =
  * 'unsupported' means the relay has no blob storage configured (501) — the
  * caller should fall back to inlining, NOT treat it as an error.
  */
-export async function putBlob(e: BlobEndpoint, rawRoomKey: Uint8Array, bytes: Uint8Array): Promise<PutResult> {
+/** `signal` aborts both requests; an aborted upload reads as 'network', so
+ *  the caller's failure path (backoff) handles a relay that never answers. */
+export async function putBlob(e: BlobEndpoint, rawRoomKey: Uint8Array, bytes: Uint8Array, signal?: AbortSignal): Promise<PutResult> {
   if (encodedSize(bytes.length) > MAX_BLOB) return { ok: false, reason: 'too-large' }
   const key = await blobKey(rawRoomKey, bytes)
   try {
-    const head = await netFetch(url(e, key), { method: 'HEAD' })
+    const head = await netFetch(url(e, key), { method: 'HEAD', signal })
     if (head.status === 200) {
       // The cache holds ciphertext only. Encrypting here costs one AES pass and
       // saves this tab a refetch; it runs off the return path.
@@ -280,7 +282,7 @@ export async function putBlob(e: BlobEndpoint, rawRoomKey: Uint8Array, bytes: Ui
     if (head.status === 403) return { ok: false, reason: 'forbidden' }
     const body = await encodeBlob(rawRoomKey, bytes)
     const res = await netFetch(url(e, key), {
-      method: 'PUT', body: body as BodyInit,
+      method: 'PUT', body: body as BodyInit, signal,
       headers: { 'content-type': 'application/octet-stream' },
     })
     if (res.status === 501) return { ok: false, reason: 'unsupported' }
