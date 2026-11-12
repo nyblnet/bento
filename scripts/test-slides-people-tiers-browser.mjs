@@ -101,8 +101,9 @@ async function open({ flag, agent }) {
   const ensureOpen = async () => { if (!(await panelOpen())) await toggle() }
   const closePanel = async () => { if (await panelOpen()) await toggle() }
   await ensureOpen()
-  const gl = p.getByRole('button', { name: /Go live/ })
-  if (await gl.count()) await gl.click({ timeout: 5000 })
+  // a DOM click: the panel rebuilds as the session starts, and Playwright's
+  // actionability wait on a button being replaced timed out (1 run in 6)
+  await p.evaluate(() => [...document.querySelectorAll('.ed-share-pop button')].find((b) => /Go live/.test(b.getAttribute('aria-label') || b.textContent))?.click())
   await p.waitForTimeout(500)
   await closePanel()
 
