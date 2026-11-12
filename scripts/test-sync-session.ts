@@ -562,6 +562,91 @@ H('a read-only live viewer still materialises a relay-offloaded image (not via c
   sess.stop?.();
 }
 
+// Blob offload, one upload per asset. flush() runs offloadAssets after every
+// local edit; before the single-flight latch, each flush that landed while a
+// big asset's PUT was in flight HEAD-checked it (404, not stored yet) and PUT it
+// AGAIN, so one picture became concurrent writes to one R2 key. R2 refuses
+// those and the live relay answered with 500s (bursts of hundreds a minute,
+// relay analytics 2026-11). A failed upload was also retried on every edit.
+H('blob offload: one PUT per asset while edits keep flushing; failures back off; waits for the write ticket');
+{
+  const rawKey = new Uint8Array(32).fill(9);
+  const big = 'data:image/png;base64,' + Buffer.from(new Uint8Array(90 * 1024).map((_, i) => (i * 31) & 0xff)).toString('base64');
+  type Mode = 'ok' | 'fail';
+  function fakeRelay(mode: Mode, putMs = 400) {
+    const stored = new Set<string>();
+    const st = { puts: 0, heads: 0, inFlight: 0, maxInFlight: 0 };
+    const prev = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL, init: RequestInit = {}) => {
+      const key = new URL(String(input)).pathname.split('/').pop()!;
+      if (init.method === 'HEAD') { st.heads++; return new Response(null, { status: stored.has(key) ? 200 : 404 }); }
+      if (init.method === 'PUT') {
+        st.puts++; st.inFlight++; st.maxInFlight = Math.max(st.maxInFlight, st.inFlight);
+        await new Promise(r => setTimeout(r, putMs));
+        st.inFlight--;
+        if (mode === 'fail') return new Response('error code: 1101', { status: 500 });
+        stored.add(key);
+        return new Response('{"stored":1}', { status: 200 });
+      }
+      return new Response(null, { status: 404 });
+    }) as typeof fetch;
+    return { st, restore: () => { globalThis.fetch = prev; } };
+  }
+  function mk(ready: Promise<void> = Promise.resolve()) {
+    const doc = newDoc();
+    doc.docId = `offload-${Math.random().toString(36).slice(2, 10)}`;
+    const store = new Store(doc);
+    const sess = new SyncSession(store);
+    sess.addTransport(() => ({ kind: 'fake', send() {}, close() {}, writeReady: () => ready,
+      blobCreds: () => ({ base: 'http://relay.test', room: 'r', tok: 'tok_0123456789', rawKey }) } as never));
+    return { store, sess };
+  }
+  const editBurst = async (store: AnyStore, n: number, gap = 100) => {
+    for (let i = 0; i < n; i++) { store.commit(() => { store.doc.title = `edit ${i} ${Math.random()}`; }); await settle(gap); }
+  };
+
+  // 1. edits keep flushing while the upload is in flight
+  {
+    const relay = fakeRelay('ok', 600);
+    const { store, sess } = mk();
+    store.commit(() => { (store.doc as unknown as { assets: Record<string, string> }).assets = { hero: big }; });
+    await editBurst(store, 8);           // ~8 flushes inside the 600 ms PUT
+    await settle(900);
+    relay.restore();
+    ok(relay.st.puts === 1, `one PUT for one asset despite 8 flushes during the upload (${relay.st.puts})`);
+    ok(relay.st.maxInFlight === 1, `never two uploads of the same asset at once (max ${relay.st.maxInFlight})`);
+    const ref = (store.doc as unknown as { blobs?: Record<string, { key: string }> }).blobs?.hero;
+    ok(!!ref?.key, 'the reference still lands once the upload succeeds');
+    sess.stop?.();
+  }
+  // 2. a failing upload is not re-sent by every following edit
+  {
+    const relay = fakeRelay('fail', 50);
+    const { store, sess } = mk();
+    store.commit(() => { (store.doc as unknown as { assets: Record<string, string> }).assets = { hero: big }; });
+    await settle(300);
+    ok(relay.st.puts === 1, `positive control: the first attempt was made (${relay.st.puts})`);
+    await editBurst(store, 10, 150);     // 1.5 s of edits, inside the 5 s hold
+    relay.restore();
+    ok(relay.st.puts === 1, `a failed upload waits out its backoff instead of retrying per edit (${relay.st.puts} PUTs)`);
+    sess.stop?.();
+  }
+  // 3. no upload before the socket can write (else the room token goes out and a ticket-latched room 403s)
+  {
+    const relay = fakeRelay('ok', 50);
+    let open!: () => void;
+    const { store, sess } = mk(new Promise<void>(r => { open = r; }));
+    store.commit(() => { (store.doc as unknown as { assets: Record<string, string> }).assets = { hero: big }; });
+    await editBurst(store, 3);
+    ok(relay.st.puts === 0 && relay.st.heads === 0, `nothing is sent before writeReady (${relay.st.heads} HEAD, ${relay.st.puts} PUT)`);
+    open();
+    await settle(400);
+    relay.restore();
+    ok(relay.st.puts === 1, `the waiting pass uploads once ready (${relay.st.puts})`);
+    sess.stop?.();
+  }
+}
+
 // The shared doc-fields lists (kernel/src/docfields.ts) that every app imports:
 // identity kept live on restore, and the capability/secret projections — proven
 // here so the one module the apps depend on has the behaviour pinned centrally.
