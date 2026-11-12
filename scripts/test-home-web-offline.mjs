@@ -14,14 +14,19 @@
  * different build id), deploys X, and later "deploys" Y into the same directory
  * while the servers run. Sockets are refused for the whole run.
  *
- * Offline: Chromium and Firefox go offline with context.setOffline (the servers
- * stay up, so a request that reached them would be seen). In WebKit,
- * Playwright's setOffline refuses a navigation before the page's service
- * worker sees it (measured: with the servers really down the same worker
- * serves the page), so WebKit's offline rows close the servers instead, and
- * the setOffline behaviour is recorded as a note each run.
+ * Offline: context.setOffline, and where an engine's emulation does not hold,
+ * the servers are closed as well (all measured). Chromium: setOffline alone
+ * (the servers stay up, so a request that got out would be seen). Firefox:
+ * setOffline does not cover the worker's own fetch (CI: the worker's
+ * network-first request reached the server), so the servers close too.
+ * WebKit: setOffline refuses a worker-controlled navigation before the worker
+ * sees it, so its rows close the servers instead, and that behaviour is
+ * recorded as a note each run. Chromium's setOffline misses the cross-site
+ * frame, so the document row closes the servers in every engine.
  *
- * A browser that crashes or disconnects fails the run; it never passes.
+ * A browser that crashes or disconnects fails the run; it never passes. Every
+ * page call has a time limit, and a watchdog fails a run that hangs, naming
+ * the section it was in.
  *
  * Sections (BENTO_HW3_ONLY=a,b runs some; the mutant runner uses it):
  *   build    the built files: worker shape and budget, CSPs, headers [T7]
@@ -147,13 +152,22 @@ const pw = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 let checks = 0, failures = 0
 const ok = (c, m) => { checks++; if (!c) failures++; console.log(`  ${c ? 'ok  ' : 'FAIL'}  ${m}`) }
 const note = (m) => console.log(`  note  ${m}`)
-const section = (m) => console.log(`\n=== ${m}`)
+const section = (m) => { current = /^\[(\w+)\]/.exec(m)?.[1] ?? m; console.log(`\n=== ${m}`) }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+/** A promise with a time limit: a hang becomes an error, which a row reports. */
+const limit = (p, ms, what) => Promise.race([p, sleep(ms).then(() => { throw new Error(`timed out after ${ms} ms: ${what}`) })])
 async function until(fn, ms = 20000) {
   const end = Date.now() + ms
-  while (Date.now() < end) { try { const v = await fn(); if (v) return v } catch {} await sleep(150) }
+  while (Date.now() < end) { try { const v = await limit(fn(), 10000, 'a polled check'); if (v) return v } catch {} await sleep(150) }
   return null
 }
+let current = 'setup'
+const WATCHDOG_MS = 10 * 60 * 1000
+setTimeout(() => {
+  console.log(`  FAIL  the run hung in [${current}] for ${WATCHDOG_MS / 60000} minutes`)
+  console.log(`\n${checks - failures}/${checks + 1} checks passed — the run hung: this run is not a pass`)
+  process.exit(1)
+}, WATCHDOG_MS).unref()
 const hex = (b) => createHash('sha256').update(b).digest('hex')
 
 const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bento-home-web-offline-'))
@@ -285,7 +299,7 @@ async function settled(page, ms = 20000) {
   }), ms)
   return lib(page)
 }
-const lib = (page) => page.evaluate(async () => {
+const lib = (page) => limit(page.evaluate(async () => {
   const regs = await navigator.serviceWorker.getRegistrations()
   return {
     status: document.documentElement.getAttribute('data-bento-status'), sw: document.documentElement.getAttribute('data-bento-sw'),
@@ -295,7 +309,7 @@ const lib = (page) => page.evaluate(async () => {
     stopText: document.getElementById('withdrawn')?.offsetParent ? document.getElementById('withdrawn-text').textContent : '',
     picker: !!document.getElementById('file')?.offsetParent,
   }
-})
+}), 10000, 'reading the library state')
 /** Wait until the worker has activated and holds `cache`. */
 const cached = (page, cache, ms = 15000) => until(() => page.evaluate(async (c) => {
   const k = await caches.keys()
@@ -313,9 +327,10 @@ async function open(page) {
 const booted = (page) => until(async () => { const f = docFrame(page); return f && (await f.evaluate(() => !!(window.bento && window.bento.doc))) ? f : null })
 const served = (from, p) => seen.slice(from).filter((r) => r.url === O.library + p)
 const frameFetches = (from) => seen.slice(from).filter((r) => r.url.startsWith(O.frame))
-/** Offline: setOffline (servers up, so a request that got out would be seen), or in WebKit the servers down. */
-async function offline(ctx) { if (ENGINE === 'webkit') await down(); else await ctx.setOffline(true) }
-async function online(ctx) { if (ENGINE === 'webkit') await up(); else await ctx.setOffline(false) }
+/** Offline, per engine (see the header): setOffline where it holds, the servers closed where it does not. */
+const SERVERS_UP_OFFLINE = ENGINE === 'chromium'
+async function offline(ctx) { if (ENGINE !== 'webkit') await ctx.setOffline(true); if (!SERVERS_UP_OFFLINE) await down() }
+async function online(ctx) { if (!SERVERS_UP_OFFLINE) await up(); if (ENGINE !== 'webkit') await ctx.setOffline(false) }
 /** Every cached entry's text, to look for document content. */
 const cacheText = (page) => page.evaluate(async () => {
   let t = ''
@@ -377,7 +392,7 @@ try {
     const control = await probe.evaluate(() => navigator.serviceWorker.register('/probe-sw.js', { scope: '/probe-scope/' }).then(async (r) => { await r.unregister(); return 'registered' }, (e) => e.name))
     ok(control === 'registered', `positive control: a page on the library origin WITHOUT the library's policy can register that script (${control})`)
     ok(other !== 'registered', `the library page cannot register any other worker script (${other})`)
-    await ctx.close()
+    await limit(ctx.close(), 15000, 'closing a context')
   }
 
   // --- [offline] a returning visit offline ---------------------------------------------------------
@@ -396,11 +411,12 @@ try {
     const fresh = await page.evaluate(() => window.__before === undefined).catch(() => false)
     const s = fresh ? await settled(page) : null
     ok(nav === 200 && fresh && s?.status === 'unreachable' && s?.picker, `offline, a returning visit opens the library from the worker's cache (${nav}; status ${s?.status})`)
-    ok(served(mark, '/').length === 0, 'offline, nothing reached the server (the page came from the cache)')
+    if (SERVERS_UP_OFFLINE) ok(served(mark, '/').length === 0, 'offline, nothing reached the server (the page came from the cache)')
+    else note(`${ENGINE}: offline with the servers closed, so the worker's cache is the only thing that could have served the page`)
     const csp = await page.evaluate(async () => (await caches.match('/'))?.headers.get('content-security-policy') ?? null).catch(() => null)
     const headerCsp = /^\/\n(?:.*\n)*?\s+Content-Security-Policy: (.*)$/m.exec(fs.readFileSync(path.join(X.out, 'library/_headers'), 'utf8'))?.[1]
     ok(!!csp && csp === headerCsp, 'the cached page keeps its header CSP (frame-ancestors and all)')
-    if (ENGINE !== 'webkit') {
+    if (SERVERS_UP_OFFLINE) {
       // record whether the engine's offline emulation reaches the cross-site frame (Chromium's does not: measured)
       const fm = seen.length
       await page.setInputFiles('#file', DECK)
@@ -415,7 +431,7 @@ try {
     const u = await until(async () => { const v = await ui(page); return v.problem ? v : null }, 30000)
     const up1 = !!(await docFrame(page)?.evaluate(() => !!window.bento).catch(() => false))
     ok(!!u && !u.viewing && u.frames === 0 && !up1 && /needs a connection|Check your connection/.test(u.problem), `offline, opening a document says it needs a connection, and nothing is left open (${(u?.problem ?? 'nothing shown').slice(0, 90)})`)
-    if (ENGINE !== 'webkit') await up()
+    if (SERVERS_UP_OFFLINE) await up()
     await online(ctx)
     if (ENGINE === 'webkit') {
       // record what Playwright's setOffline does to a worker-controlled navigation in WebKit
@@ -428,7 +444,7 @@ try {
     await settled(page)
     await open(page)
     ok(!!(await booted(page)), 'positive control: back online, the same deck opens and boots')
-    await ctx.close()
+    await limit(ctx.close(), 15000, 'closing a context')
   }
 
   // --- [update] a new deploy, and a precache that is not the build's ---------------------------------
@@ -445,9 +461,9 @@ try {
     await page.goto(O.library + '/')
     const s = await settled(page)
     const swapped = await until(() => page.evaluate(async (n) => { const k = await caches.keys(); return k.length === 1 && k[0] === n }, Y.info.offline.cache), 15000)
-    const left = await page.evaluate(() => caches.keys())
+    const left = await limit(page.evaluate(() => caches.keys()), 10000, 'listing caches').catch((e) => [String(e)])
     ok(s.build === Y.info.offline.build && !!swapped, `after a new deploy, only the new build's cache is left (${left.map((k) => k.slice(0, 22)).join(', ')})`)
-    await ctx.close()
+    await limit(ctx.close(), 15000, 'closing a context')
 
     deploy(Y, { tamperPage: true })
     ctx = await context()
@@ -455,10 +471,10 @@ try {
     await page.goto(O.library + '/')
     await settled(page)
     await sleep(3000)
-    const t = await lib(page)
-    const active = await page.evaluate(async () => !!(await navigator.serviceWorker.getRegistration())?.active)
-    ok(t.caches.length === 0 && !active, `a library whose page is not the bytes its worker pins caches nothing (caches ${t.caches.length}, active worker ${active})`)
-    await ctx.close()
+    const t = await lib(page).catch((e) => ({ caches: [String(e)] }))
+    const active = await limit(page.evaluate(async () => !!(await navigator.serviceWorker.getRegistration())?.active), 10000, 'reading the registration').catch((e) => String(e))
+    ok(t.caches.length === 0 && active === false, `a library whose page is not the bytes its worker pins caches nothing (caches ${JSON.stringify(t.caches)}, active worker ${active})`)
+    await limit(ctx.close(), 15000, 'closing a context')
     deploy(X)
   }
 
@@ -503,7 +519,7 @@ try {
     ok(!!clean && (await lib(page)).regs.length === 1, 'and only Y\'s worker and cache are installed')
     await open(page)
     ok(!!(await booted(page)), 'and documents open again')
-    await ctx.close()
+    await limit(ctx.close(), 15000, 'closing a context')
 
     // a file dropped before a slow status answers never runs in a withdrawn build
     deploy(X)
@@ -518,7 +534,7 @@ try {
     await sleep(1500)
     ok(s2.status === 'withdrawn' && (await ui(p2)).frames === 0 && frameFetches(mark).length === 0,
       `a file dropped before a slow status answers never runs in a withdrawn build (${s2.status}, frame fetched ${frameFetches(mark).length})`)
-    await ctx2.close()
+    await limit(ctx2.close(), 15000, 'closing a context')
     files.delete(STATUS)
   }
 
@@ -540,7 +556,7 @@ try {
       files.set(STATUS, body)
       await page.goto(O.library + '/')
       const s = await settled(page)
-      if (own) await ctx.close(); else await page.close()
+      if (own) await limit(ctx.close(), 15000, 'closing a context'); else await page.close()
       return s
     }
     const signed = JSON.parse(status(['--seq', '20']))
@@ -563,7 +579,7 @@ try {
     ok(s.status === 'current' && s.sw === 'registered', `positive control: a signed status that does not list this build lets it run (${s.status})`)
     s = await visit(status(['--seq', '40']), ctx)
     ok(s.status === 'refused', `an older status than one this browser has seen fails closed (${s.status})`)
-    await ctx.close()
+    await limit(ctx.close(), 15000, 'closing a context')
     // a status the server cannot give (500) is no answer: the library carries on
     s = await visit(null)
     ok(s.status === 'unreachable' && !s.stopped, `no status published (404) is no answer: the library carries on (${s.status})`)
@@ -599,7 +615,7 @@ try {
       const ie = await cdp.send('Page.getInstallabilityErrors').catch((e) => ({ installabilityErrors: [{ errorId: String(e) }] }))
       ok(!ie.installabilityErrors?.length, `Chromium finds the library installable (${JSON.stringify(ie.installabilityErrors)})`)
     } else note(`${ENGINE}: installability is Chromium's to report (CDP); the manifest rows above are the engine-neutral check`)
-    await ctx.close()
+    await limit(ctx.close(), 15000, 'closing a context')
   }
 
   // --- [network] -----------------------------------------------------------------------------------------
@@ -618,7 +634,7 @@ try {
     await sock.evaluate(() => { try { new WebSocket('ws://127.0.0.1:9/bento-hw3-probe') } catch {} })
     await until(() => sockets.includes('ws://127.0.0.1:9/bento-hw3-probe'), 5000)
     ok(sockets.includes('ws://127.0.0.1:9/bento-hw3-probe'), 'positive control: a socket opened by a page in this context is recorded')
-    await ctx.close()
+    await limit(ctx.close(), 15000, 'closing a context')
     const allowed = (r) => (r.method === 'GET' && (LIB_PATHS.some((p) => r.url === O.library + p) || r.url === O.frame + '/frame.html' || r.url.startsWith(O.releaseBase))) ||
       /^(blob|data|about):/.test(r.url)
     const stray = recorded.filter((r) => !allowed(r))

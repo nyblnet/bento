@@ -97,9 +97,16 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
           "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium webkit firefox
           echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      # each engine and the mutants report on their own: one failing does not
+      # skip the others (the job still fails), and a hang ends its step, not the job
       - name: home/web stage 3 in WebKit
+        timeout-minutes: 8
         run: BENTO_BROWSER=webkit node scripts/test-home-web-offline.mjs
       - name: home/web stage 3 in Firefox
+        if: ${{ !cancelled() }}
+        timeout-minutes: 8
         run: BENTO_BROWSER=firefox node scripts/test-home-web-offline.mjs
       - name: home/web stage 3 mutants
+        if: ${{ !cancelled() }}
+        timeout-minutes: 12
         run: node scripts/test-home-web-offline.mjs --mutants
