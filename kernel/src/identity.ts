@@ -36,6 +36,16 @@ export const IDENTITY_CONTRACT = 1
 /** The global the host defines, before the runtime boots, on a verified shell. */
 export const IDENTITY_GLOBAL = '__bentoIdentity'
 
+/**
+ * The longest `vouchedBy` a document shows: shells cut the text there. An agent
+ * appends its qualifiers to vouchedBy ("(passkey sign-in)", ", unconfirmed
+ * since <date>" when the account's mailbox lapsed, from the watt.'s `mb`), so
+ * it keeps them short and, when it must shorten, drops an organisation's
+ * "managed by" before it drops "unconfirmed": a frozen shell renders whatever
+ * fits, and a lapsed address must never read as confirmed.
+ */
+export const VOUCHED_BY_MAX = 80
+
 /** Who is using this document, as vouched for. Public fields only. */
 export interface PublicIdentity {
   /** display name, as the binding states it */

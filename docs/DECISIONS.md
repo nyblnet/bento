@@ -13728,6 +13728,112 @@ the history entry, each button, an injected script blocked with a positive
 control, framing refused, Trusted Types, an address full of markup shown as
 text; a mutant per rule) and `scripts/test-directory-mutants.ts`.
 
+## 2026-11-10 — bento/id option G: consent keys sign (`roster`, `web-add`), `rk`, the link final, and room left for organisations
+
+**Decision.** The third kernel change of option G. Contracts:
+`roster-v2.json`, `device-v1.json` and `recovery-v1.json` (new rows and
+sections; nothing a host reads today changes meaning).
+
+- **Two consent purposes.** A native consent key (`ck`) signs a `cns.` with
+  purpose `roster` (payload families `ros.`, `dev2.`, `vrs.`: the texts that
+  change who speaks for the account) or `web-add` (`wdev.`: a phone approves a
+  browser). Peers check a co-sign OFFLINE with `verifyCoSign`: the purpose is
+  the one the caller names, the audience is `dir`, the challenge is the
+  dirNonce inside the payload, the co-sign was alive at the directory's own
+  time for the act (a link's requestedAt, a certificate's ceremonyAt) for at
+  most 5 minutes plus the clock skew, and the rp is the caller's parameter.
+  The directory still checks the same text live, spending the challenge.
+- **The roster.** A ck of the previous head may ask for a member change (its
+  cns. is the proof), and any member's change may carry a co-sign from
+  ANOTHER ck of the previous head. A ck is RIPE when it has been a member 72
+  hours at the directory's requestedAt, measured from its `since` in the
+  verified chain (a pin's since is later, so the check only refuses more);
+  the requester's clock never counts. A change signed or co-signed by a ripe
+  ck needs no wait. A co-sign that does not count (unripe, quarantined, a
+  passkey, not a member of the previous head, the requester itself, on a
+  directory act) refuses the link rather than being ignored. These are the
+  mutants security asked for when it ruled the roster.
+- **Native tier is a consent key's signature, never its age.** A `dev2.` via
+  `ck` is a ripe ck's `roster` co-sign over the whole certificate text,
+  devicePub included, and is the only native-tier certificate. A
+  passkey-made `dev2.` stays "(passkey sign-in)" whatever consent key it
+  names, as ruled on #937. A device whose own consent key ripens makes a new
+  certificate that its ck co-signs. A `wdev.` via `cns` (route D) stays a
+  browser. **Every certificate, native included, still needs a current 24 h
+  `watt.`**, so disabling an account, removing a device and the incident lever
+  reach native devices within a day. The 7-day ceremony cap also still applies
+  to native certificates; relaxing it for ck-signed ones would be a new ruling.
+- **`rk`, the recovery key.** The recovery code derives a P-256 key whose
+  public half is a roster member. Because that public half is published, the
+  Argon2id salt is per account (SHA-256 of a label and the address in normal
+  form, first 16 bytes): one guess list cannot be tried against every account
+  at once. The scalar comes from HKDF candidates with a one-byte counter,
+  taking the first in 1..n−1 (rejection sampling, never mod n). A refusal is
+  about 2^-32 per derivation, so the counter rule is pinned in the fixture over
+  given candidates rather than left to luck. Argon2id's parameters and the
+  code are K2b's, unchanged.
+- **The link final under option G** (`link.ts`). Steps 1 to 6 of link v1 (the
+  code, the slot, the transcript, the keys, the SAS, N's offer) are unchanged.
+  In place of the SEALED account scalar, H's ripe consent key co-signs a
+  `dev2.` for N, and msg3 is a new message, `lnkg`: the dev2., H's ck, its
+  cns. and signature, and a seal under h2n with a new AAD (`lnkgs.v1.<t>`) over
+  the hash of those lines. Nothing in it is secret; the seal is what the SAS
+  buys, so the directory cannot swap the certificate. v1's SEALED bytes are
+  untouched, and a v1 final and a G final can never be read as each other.
+  The directory's release check (`verifyLinkReleaseG`) requires the ck to be a
+  ripe member of the current head and the dev2. to carry the challenge it
+  issued. Adding N's own consent key to the roster is an ordinary roster
+  change H's ripe ck signs.
+- **`vrs.`, a member stops a reset**:
+  `vrs.<b64u(address)>.<sha256(reset ros. text)>.<dirNonce>`, signed by an
+  unquarantined member of the head the reset would replace (a passkey
+  assertion, a recovery-key signature, or a ck's roster cns.), over a
+  single-use challenge the directory spends first. The account's 14-day "new"
+  window is judged at the reset's REQUEST time, not when the stop arrives, so
+  a reset begun in an account's first days cannot be stopped later by a key a
+  hostile setup planted. A chain read from a pin has no creation time, and the
+  stop is refused. Peers never see a `vrs.`.
+- **The mailbox state rides in `watt.`**:
+  `watt.<certHash>.<ob>.<mb>.<loggedAt>.<expires>.<kid>`, `mb` = `0` while the
+  address is confirmed, else the time it went unconfirmed (no later than
+  loggedAt). A lapsed mailbox qualifies only the address ("unconfirmed since
+  <date>"), never the account. Inside the countersign every certificate
+  already needs, the person presenting the proof cannot drop it, and agents
+  need no absence rule. The six-field `watt.` merged with the device
+  certificates shipped in no release (no tag contains it) and is now refused.
+- **`ob` after the sign-in host.** Every web ceremony now runs on the sign-in
+  host, so a browser's Origin header no longer separates bento/home's
+  requests. `ob` is 1 when the directory logged the ceremony as made for
+  bento/home (the opener the sign-in host reports) and 0 for a native host.
+  It stays informative: no peer acts on it, and the lever reads the
+  directory's log.
+- **`wret.`, old-key retirement**:
+  `wret.<oldDevicePub>.<newDevicePub>.<b64u(address)>.<dirNonce>`, signed by the
+  OLD browser key at a new ceremony; the directory then refuses further
+  renewals of the old key. A copy of a browser key is cut off by the next honest
+  ceremony, not only by its 7-day cap. Directory-only.
+- **`inc.`, the incident record**: `inc.<id>.<from>.<to|empty>.<issuedAt>.<kid>`,
+  directory-signed, so apps can flag room statements signed inside an incident
+  window (from inclusive, to exclusive; empty `to` while still open). A record
+  revokes nothing by itself.
+- **Room for organisations.** `mgd.`, `vch.`, `ojn.` and `dvc.` are reserved,
+  and every verifier refuses them today. No authority word was added to
+  `rip.`. Consent and roster verifiers take the rp, the origins and the
+  directory keys from the caller, and look a kid up only in the one key map
+  they are given.
+
+**Why.** Security's ruling on the roster asked that the co-sign ride in the
+link as a `roster` cns. over the exact text, with the five mutants above; its
+ruling on device certificates made native tier wait for the consent key's own
+signature (F1); R9 made the rk salt per account and asked for the counter rule
+in the fixtures; its ruling on the directory's reset (C4/C5) asked for the
+member's stop with the age judged at request time. The mailbox state needed a
+signed home that launch-1 peers would read before any host ships `watt.`.
+
+**Ports and callers.** `verifyRosterChain` and `verifyDevice` take an optional
+`consentRp` (`bento`): without it any link or certificate a consent key signs
+is refused as a caller error, and nothing else changes. A directory that builds
+`watt.` passes `mb`. Native hosts port these rows from the same fixtures.
 
 ## 2026-11-09 — bento/id directory: hold before the mail, say how a link ended, keep the undo through a reset
 
