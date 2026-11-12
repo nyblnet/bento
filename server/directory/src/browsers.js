@@ -238,7 +238,8 @@ async function countersign(env, { certHash, ob, ceremonyAt, now }) {
  * are up) or ok.
  */
 async function standing(s, rec, now) {
-  if (rec.revokedAt) return 'revoked'
+  const out = await s.get('signoutAt')
+  if (rec.revokedAt || (out !== undefined && rec.ceremonyAt <= out)) return 'revoked'
   const head = await s.get('head')
   const m = head?.members.find((x) => x.pub === rec.signer)
   if (!m || m.kind !== 'pk' || m.quarantined) return 'revoked'
@@ -290,6 +291,9 @@ export async function browserOp(obj, a, now, h) {
   if (a.op === 'browserEnrol') {
     if (!(await spend())) return out(400, { error: 'nonce' })
     if (a.aud !== 'web') return out(400, { error: 'nonce' }) // a renewal's challenge, used up here
+    // a ceremony begun before a sign-out everywhere cannot finish after it
+    const so = await s.get('signoutAt')
+    if (so !== undefined && a.issued <= so) return out(403, { error: 'revoked' })
     const p = await parseDeviceCert(a.text)
     if (!p.ok || p.value.kind !== 'wdev' || p.value.via !== 'passkey') return out(400, { error: 'text' })
     const c = p.value
@@ -345,12 +349,15 @@ export async function browserOp(obj, a, now, h) {
 
   if (a.op === 'browserRevokeAll') {
     // sign out everywhere in browsers (and the incident lever, for one address):
-    // every certificate the address holds stops renewing at once
+    // every certificate made at or before `at` stops renewing at once, and a
+    // ceremony whose challenge was issued by then can no longer finish
     const head = await s.get('head')
     if (!head) return out(404, { error: 'not-found' })
+    const at = Number.isSafeInteger(a.at) && a.at > 0 && a.at <= now ? a.at : now
+    await s.put('signoutAt', Math.max(at, (await s.get('signoutAt')) ?? 0))
     let n = 0
     for (const [key, rec] of await s.list({ prefix: 'wd:' })) {
-      if (rec.revokedAt) continue
+      if (rec.revokedAt || rec.ceremonyAt > at) continue
       await s.put(key, { ...rec, revokedAt: now })
       n++
     }

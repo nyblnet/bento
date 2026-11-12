@@ -13731,6 +13731,9 @@ bento/home agent was built against.
   and on every event-log entry, kept for the life of the account; nothing
   decides on it, and the incident lever filters by it. Log entries keep the
   full public key, not a fingerprint, so the lever acts on the exact key.
+- **Signing out everywhere is a time.** Every browser certificate made at or
+  before it stops renewing, and a ceremony whose challenge was issued by then
+  cannot finish after it, so a sign-in already under way cannot undo it.
 - **Incident records** come from a deploy variable and ride on every
   check-in and status answer. A list that does not read is an error, never a
   shorter list.

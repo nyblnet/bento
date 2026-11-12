@@ -260,6 +260,9 @@ Bodies are JSON, sent as text/plain.
   countersign and on every event-log entry; nothing decides on it.
 - `incidents` comes from the `INCIDENTS` variable, `[{id, from, to}]`; a list
   that does not read answers 500 and countersigns nothing.
+- Signing out everywhere is a time: every browser certificate made at or
+  before it is refused (403 `revoked`), and a ceremony whose challenge was
+  issued by then cannot finish.
 - Not here yet: the route a member signs to sign out everywhere (the revoking
   itself is built; what the passkey signs is a kernel statement), a `dev2.`
   made by a passkey alone, retiring the old key at a new ceremony, and mail

@@ -646,8 +646,16 @@ ok(ce.status === 200, `cara's second passkey enrols a browser (${err(ce)})`)
   ok(rs.every((r) => r.status === 403 && r.j.error === 'revoked'), `each renewal then → 403 revoked (${rs.map(err).join(', ')})`)
   const log = (await logOf(eve)).find((x) => x.k === 'signout')
   ok(log?.n === 2 && log.pub === E1.pub && log.ob === 0, 'logged: who, how many, ob 0')
+  // a ceremony whose challenge was issued before the sign-out cannot finish after it
+  const early = await chOf(eve)
+  await doOp(eve, 'browserRevokeAll', { by: E1.pub, os: S })
+  const late = await enrol(eve, await Browser.make(), E1, { ch: early })
+  ok(late.status === 403 && late.j.error === 'revoked', `a ceremony begun before a sign-out, finished after it → 403 revoked (${err(late)})`)
+  now += 1
   const nb = await Browser.make()
   ok((await enrol(eve, nb, E1)).status === 200 && (await checkin(eve, nb)).status === 200, 'a browser signed in afterwards renews')
+  // the sign-out is a time: a certificate made after it is untouched by it
+  ok((await api('GET', `${STATUS_ROUTE}?e=${eve}&c=${await sha256b64u('x')}`)).j.state === 'unknown', 'control: status for a certificate never made is unknown')
 }
 
 // =====================================================================
