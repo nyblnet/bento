@@ -114,11 +114,13 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-gate1.ts
 
-    - name: gate 1 raw-text rule mutants
+    - name: gate 1 raw-text and comment rule mutants
       # <style>, <title> and <textarea> hold tags inside <svg> or <math>, so
-      # gate 1 refuses "<" before a letter, "!", "/" or "?" in them. Each
-      # mutant loosens or widens that rule in a copy of gate1.ts, and
-      # test-gate1.ts must go red on every one, after the unmutated copy passes.
+      # gate 1 refuses "<" before a letter, "!", "/" or "?" in them; comments
+      # end at "-->" or "--!>"; xmp, noembed, noframes, noscript, plaintext
+      # and CDATA are refused. Each mutant loosens or widens one rule in a
+      # copy of gate1.ts, and test-gate1.ts must go red on every one, after
+      # the unmutated copy passes.
       shell: bento-step {0}
       run: node scripts/test-gate1-mutants.ts
 

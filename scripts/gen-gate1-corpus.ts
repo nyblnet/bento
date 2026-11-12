@@ -158,6 +158,21 @@ const served: Served[] = [
   { name: 'style-lt-not-markup', html: g.replace('<style>body{margin:0}</style>', '<style>body{margin:0}/* a < b, <3, <= */</style>'), verdict: 'genuine', release: '1.0.0', why: 'a "<" before a space, a digit or "=" starts no markup in any context: still text' },
   { name: 'title-lt-not-markup', html: g.replace('<title>A deck</title>', '<title>A < B <3</title>'), verdict: 'genuine', release: '1.0.0', why: 'a "<" before a space or a digit starts no markup in any context' },
   { name: 'svg-title-text', html: body('<svg width="0" height="0"><title>A chart</title><style>.a{fill:red}</style></svg>'), verdict: 'genuine', release: '1.0.0', why: 'an <svg> whose <title> and <style> hold only text' },
+  // comments end as the tokenizer ends them: at "-->" or "--!>", whichever is
+  // first. And where a "<!--" starts no comment (raw text, CDATA), refuse the
+  // container: Bento writes none of them
+  { name: 'comment-bang-end-iframe', html: body('<!-- a --!><iframe src="https://evil.example/"></iframe><!-- b -->'), verdict: 'unknown', why: '"--!>" ends a comment: the <iframe> after it is real' },
+  { name: 'comment-bang-end-text', html: body('<!-- a --!><p>after</p>'), verdict: 'genuine', release: '1.0.0', why: '"--!>" ends a comment: the paragraph after it is markup, and harmless' },
+  { name: 'comment-bang-not-end', html: body('<!-- a --! b --><p>after</p>'), verdict: 'genuine', release: '1.0.0', why: '"--!" without ">" does not end a comment' },
+  { name: 'xmp-comment-iframe', html: body('<xmp><!--</xmp><iframe src="https://evil.example/"></iframe>--></xmp>'), verdict: 'unknown', why: '<xmp> is raw text: its "<!--" starts no comment, and the <iframe> is real' },
+  { name: 'noembed-comment-iframe', html: body('<noembed><!--</noembed><iframe src="https://evil.example/"></iframe>--></noembed>'), verdict: 'unknown', why: '<noembed> is raw text' },
+  { name: 'noframes-comment-iframe', html: body('<noframes><!--</noframes><iframe src="https://evil.example/"></iframe>--></noframes>'), verdict: 'unknown', why: '<noframes> is raw text' },
+  { name: 'noscript-comment-iframe', html: body('<noscript><!--</noscript><iframe src="https://evil.example/"></iframe>--></noscript>'), verdict: 'unknown', why: '<noscript> is raw text when scripting is on' },
+  { name: 'noscript-alone', html: body('<noscript><p>x</p></noscript>'), verdict: 'unknown', why: 'Bento writes no <noscript>: refused outright' },
+  { name: 'plaintext', html: body('<plaintext>x'), verdict: 'unknown', why: 'Bento writes no <plaintext>: everything after it is text' },
+  { name: 'svg-cdata-comment', html: body('<svg><![CDATA[><!--]]><p><iframe src="https://evil.example/"></iframe>--></svg>'), verdict: 'unknown', why: 'CDATA inside <svg> ends at "]]>", not at the first ">": the "<!--" after it is not a comment' },
+  { name: 'cdata-in-html', html: body('<![CDATA[x]]>'), verdict: 'unknown', why: 'a "<!" that is neither a comment nor the doctype' },
+  { name: 'doctype-lower-case', html: g.replace('<!DOCTYPE html>', '<!doctype html>'), verdict: 'genuine', release: '1.0.0', why: 'the doctype in any case' },
   // the case fold must not change length (home-desktop): toLowerCase() makes 'İ' two units
   { name: 'case-fold-breakout', html: body('<p>' + 'İ'.repeat(20) + `</p><style>a{}</style><${S}>window.pwned=1</${S}>`), verdict: 'unknown', why: 'a length-changing case fold would skip this script entirely' },
   { name: 'genuine-length-changing-text', html: file(r1, { title: 'İstanbul ı ß ﬃ Σ', doc: '{"format":"bento/test","title":"İstanbul ı ß ﬃ ΣΑΣ İİİİ"}', preview: '<p>İİİİ ß ﬃ Σ</p>' }), verdict: 'genuine', release: '1.0.0', why: "a genuine document in Turkish (and ß, ﬃ, Σ) is still genuine" },
