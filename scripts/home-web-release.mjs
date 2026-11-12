@@ -10,7 +10,7 @@
 // Without --home-web a release does exactly what it did before.
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs'
-import { basename, dirname, join, relative, resolve, isAbsolute, sep } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 
 /**
  * Read release.mjs's home/web options. Returns null when --home-web is absent.
@@ -43,37 +43,60 @@ export function homeWebOptions({ args, opt, site }) {
   return { frameOrigin, out: resolve(outArg ?? `${site}.home-web`), dev, devKey: null }
 }
 
-/** Is `p` outside `dir`? A child named `..hw` is inside: only `..` itself, `..<sep>…` or another root is out. */
-export function outside(dir, p) {
-  const rel = relative(resolve(dir), resolve(p))
-  return rel === '..' || rel.startsWith('..' + sep) || isAbsolute(rel)
+/** A folder's identity on disk: device and inode, whatever path text reaches it. */
+const id = (p) => { const st = statSync(p); return `${st.dev}:${st.ino}` }
+
+/**
+ * Is `p` the folder `dir` or anywhere under it? Decided by identity, not path
+ * text: from `p` (or its nearest existing ancestor) up to the root, each
+ * folder's device and inode is compared with `dir`'s. So no spelling reaches
+ * into `dir` unseen: not a symlink, a case variant on a case-insensitive disk,
+ * a macOS firmlink (/System/Volumes/Data/…), nor a child named `..hw`.
+ * False when `dir` does not exist.
+ */
+export function within(p, dir) {
+  if (!existsSync(dir)) return false
+  const target = id(dir)
+  let cur = resolve(p)
+  while (!existsSync(cur)) cur = dirname(cur)
+  for (;;) {
+    if (id(cur) === target) return true
+    const here = realpathSync.native(cur)
+    const up = dirname(here)
+    if (up === here) return false
+    cur = up
+  }
 }
 
-/** A path as the file system resolves it: symlinks followed, and on a case-insensitive disk the stored case. The parent must exist. */
-export const real = (p) => (existsSync(p) ? realpathSync.native(p) : join(realpathSync.native(dirname(p)), basename(p)))
+/** Does `dir` hold an earlier home/web build? Its build.json must parse and carry the build's own keys. */
+export function holdsEarlierBuild(dir) {
+  try {
+    const j = JSON.parse(readFileSync(join(dir, 'build.json'), 'utf8'))
+    return !!j && typeof j === 'object' && ['frameOrigin', 'libraryOrigin', 'dev', 'testKey', 'histories'].every((k) => k in j)
+  } catch { return false }
+}
 
 /**
  * Make the home/web output safe to build into, before anything else is
- * written or signed. The site and the output's parent are created first, so
- * the two are compared as the file system resolves them (a symlink, or a case
- * variant on a case-insensitive disk, cannot hide one inside the other).
- * Refused: an output inside the site, an output that contains the site, and an
- * output holding anything but an earlier home/web build (a build.json). An
- * earlier build is removed, so a run that fails later never leaves one behind.
+ * written or signed. Nothing is created but the site folder itself (so the
+ * site can be compared; release.mjs recreates it anyway). Refused, with the
+ * output left as it was: an output inside the site or containing it, an output
+ * inside the PUBLISHED tree the next release seeds from (or containing it),
+ * and an output holding anything but an earlier home/web build. An earlier
+ * build is removed, so a run that fails later never leaves one behind.
  */
-export function prepareHomeWebOut({ site, out }) {
+export function prepareHomeWebOut({ site, out, published = null }) {
   mkdirSync(site, { recursive: true })
-  mkdirSync(dirname(out), { recursive: true })
-  const s = real(site), o = real(out)
-  if (!outside(s, o)) throw new Error(`--home-web-out ${out} is inside the site (${s}), and the site is mirrored to bento.page: put it anywhere else`)
-  if (!outside(o, s)) throw new Error(`--home-web-out ${out} contains the site (${s}): it is emptied before every build, so it must be a folder of its own`)
-  if (!existsSync(o)) return
-  if (!statSync(o).isDirectory()) throw new Error(`--home-web-out ${out} is not a folder`)
-  const held = readdirSync(o)
-  if (held.length && !held.includes('build.json')) {
-    throw new Error(`--home-web-out ${out} holds something other than an earlier home/web build (no build.json): it would be emptied, so pick an empty or new folder`)
+  if (within(out, site)) throw new Error(`--home-web-out ${out} is inside the site (${site}), and the site is mirrored to bento.page: put it anywhere else`)
+  if (within(site, out)) throw new Error(`--home-web-out ${out} contains the site (${site}): it is emptied before every build, so it must be a folder of its own`)
+  if (published && within(out, published)) throw new Error(`--home-web-out ${out} is inside the published tree (${published}), which the next release copies into the site: put it anywhere else`)
+  if (published && within(published, out)) throw new Error(`--home-web-out ${out} contains the published tree (${published}): it is emptied before every build, so it must be a folder of its own`)
+  if (!existsSync(out)) return
+  if (!statSync(out).isDirectory()) throw new Error(`--home-web-out ${out} is not a folder`)
+  if (readdirSync(out).length && !holdsEarlierBuild(out)) {
+    throw new Error(`--home-web-out ${out} holds something other than an earlier home/web build (no build.json of one): it would be emptied, so pick an empty or new folder`)
   }
-  rmSync(o, { recursive: true, force: true })
+  rmSync(out, { recursive: true, force: true })
 }
 
 /**

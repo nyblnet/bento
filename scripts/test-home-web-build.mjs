@@ -124,12 +124,13 @@ const publishedTree = (name, files) => {
   for (const [f, t] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), t) }
   return dir
 }
+const EARLIER_BUILD = { libraryOrigin: 'https://home.bento.page', frameOrigin: FRAME, dev: true, testKey: true, histories: [] }
 /** An output holding an earlier development, test-key build. */
 const staleOut = (name) => {
   const out = path.join(work, name)
   fs.mkdirSync(path.join(out, 'library'), { recursive: true })
   fs.writeFileSync(path.join(out, 'library/index.html'), 'STALE TEST-KEY BUILD')
-  fs.writeFileSync(path.join(out, 'build.json'), JSON.stringify({ dev: true, testKey: true }))
+  fs.writeFileSync(path.join(out, 'build.json'), JSON.stringify(EARLIER_BUILD))
   return out
 }
 for (const [extra, pattern, msg] of [
@@ -157,17 +158,30 @@ section('release.mjs --home-web: where the output may go (nothing signed, nothin
     }],
     ['home/web output that contains the site (an earlier build there too)', /contains the site/, (site) => {
       const anc = path.dirname(site)
-      return { out: anc, keep: canary(anc, { 'build.json': '{}' }) }
+      return { out: anc, keep: canary(anc, { 'build.json': JSON.stringify(EARLIER_BUILD) }) }
     }],
     ['home/web output holding something other than an earlier build', /holds something other/, () => {
       const out = path.join(work, `not-a-build-${n}`)
       return { out, keep: canary(out) }
     }],
+    ['home/web output whose build.json is not a build\'s', /holds something other/, () => {
+      const out = path.join(work, `fake-build-${n}`)
+      return { out, keep: canary(out, { 'build.json': '{}' }) }
+    }],
+    ['home/web output inside the published tree (the next release would copy it into the site)', /inside the published tree/, (site, pub) => {
+      return { out: path.join(pub, 'hw'), keep: canary(pub) }
+    }],
+    ['home/web output that contains the published tree', /contains the published tree/, (site, pub) => {
+      const out = path.dirname(pub)
+      return { out, keep: canary(out, { 'build.json': JSON.stringify(EARLIER_BUILD) }) }
+    }],
   ]) {
     const name = `out-${++n}`
     const site = path.join(work, name, 'site')
-    const { out, keep } = setup(site)
-    const r = release([...['--key', THROWAWAY, '--home-web', '--home-web-dev', '--frame-origin', FRAME], '--home-web-out', out], path.relative(work, site))
+    const pub = path.join(work, `pubhome-${n}`, 'published')
+    fs.mkdirSync(pub, { recursive: true })
+    const { out, keep } = setup(site, pub)
+    const r = release([...['--key', THROWAWAY, '--home-web', '--home-web-dev', '--frame-origin', FRAME], '--home-web-out', out], path.relative(work, site), { published: pub })
     const signed = signedIn(site)
     ok(r.status !== 0 && pattern.test(r.stderr) && !signed.length && (!keep || fs.existsSync(keep)) && !fs.existsSync(path.join(out, 'library')),
       `${msg}: refused, nothing signed, nothing written there${keep ? ', and what it held survives' : ''} (exit ${r.status}: ${r.stderr.trim().split('\n').pop()?.slice(0, 110)})`)

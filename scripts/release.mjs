@@ -84,15 +84,21 @@ const shellSrc = join(root, `${app.dir}/dist-single/${app.shell}`)
 // of its steps, and the first thing this script does is rmSync the tree.)
 const site = opt('out', join(root, 'site'))
 
+/** The live tree, resolved exactly as publish-site.mjs resolves it. */
+const published = process.env.BENTO_SITE_DIR
+  ? resolve(process.env.BENTO_SITE_DIR)
+  : resolve(root, '..', 'bento-site')
+
 // bento/home in the browser (home/web), OPT-IN: --home-web builds it from the
 // histories this release leaves in the site, for every published app, into a
 // directory OUTSIDE the site (nothing deploys it). It needs the maintainer's
 // --frame-origin, which has no default (scripts/home-web-release.mjs).
 //
-// Order matters. The option refusals come first and leave everything as it
-// was. Then the output is made safe and emptied (an earlier development or
-// test-key build never survives a later refusal), and the key, the mutant hook
-// and esbuild are checked; the published histories are checked once the site
+// Order matters. The option refusals come first. Then the output is checked
+// (never inside or around the site or the published tree; only the site
+// folder itself may be created by then) and emptied, so an earlier development
+// or test-key build never survives a later refusal; then the key, the mutant
+// hook and esbuild are checked; the published histories are checked once the site
 // is seeded. All of that is before anything is signed. The one check on an
 // input left for after signing is the history this release signs, which
 // verifies whenever the signing key is the release key (checked here).
@@ -101,7 +107,7 @@ let homeWebKeyFile = null
 try {
   homeWeb = homeWebOptions({ args, opt, site })
   if (homeWeb) {
-    prepareHomeWebOut({ site, out: homeWeb.out })
+    prepareHomeWebOut({ site, out: homeWeb.out, published })
     homeWeb.devKey = homeWebKey({ keyPath: opt('key', null), releaseKey: releasePublicKey, dev: homeWeb.dev })
     // home/web/build.mjs's own refusals, up front: a release never builds a mutant
     if (process.env.BENTO_HOME_WEB_MUTANT) throw new Error('BENTO_HOME_WEB_MUTANT is set: a release never builds a home/web mutant')
@@ -116,11 +122,6 @@ if (homeWeb?.devKey) {
   homeWebKeyFile = join(mkdtempSync(join(tmpdir(), 'bento-home-web-key-')), 'test-key.json')
   writeFileSync(homeWebKeyFile, JSON.stringify(homeWeb.devKey))
 }
-
-/** The live tree, resolved exactly as publish-site.mjs resolves it. */
-const published = process.env.BENTO_SITE_DIR
-  ? resolve(process.env.BENTO_SITE_DIR)
-  : resolve(root, '..', 'bento-site')
 
 // `--print-notes` shows exactly what this release would sign into the manifest,
 // then exits. Nothing is built, staged, wiped or signed.

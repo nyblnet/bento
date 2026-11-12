@@ -13746,10 +13746,12 @@ and is the maintainer's to choose, so there is no default. It bundles the
 manifest; a published app without a history is refused, never skipped), into
 `<site>.home-web/`, outside the mirrored site: nothing deploys it. Every
 refusal below comes before anything is signed. The option refusals come first
-and leave the output as it was: no `--frame-origin`, an output inside the site
-or one that contains the site (compared as the file system resolves them, so
-a symlink or a case variant cannot hide one in the other), and an output that
-holds anything but an earlier home/web build. Then the output is emptied, so
+and leave the output as it was: no `--frame-origin`; an output inside the site
+or containing it, or inside the published tree the next release copies in or
+containing it (compared by folder identity, device and inode, so a symlink, a
+case variant or the macOS `/System/Volumes/Data` firmlink cannot hide one in
+the other); and an output that holds anything but an earlier home/web build
+(one whose `build.json` carries the build's own fields). Then the output is emptied, so
 every later refusal leaves no earlier (development or test-key) build behind:
 a signing key that is not the release key (a rehearsal passes
 `--home-web-dev`), `BENTO_HOME_WEB_MUTANT` in the environment, a missing
@@ -13766,4 +13768,5 @@ build as its positive control; the release refusals, each run checked to have
 signed nothing; the history choice; and a rehearsal release with `--home-web`
 that bundles exactly the history it signed and the seeded one) and
 `scripts/test-home-web-build-mutants.mjs` (each refusal removed, red on its
-row).
+row), and `scripts/test-home-web-out.mjs` (where the output may go, the
+firmlink row and its mutant on macOS).
