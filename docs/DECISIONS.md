@@ -13506,6 +13506,7 @@ same rule. Rigs: `scripts/test-gate1.ts` (corpus rows for each breakout and for
 `<!`, `</`, `<?`, upper case, plus genuine rows with a `<` that starts no
 markup), `scripts/test-gate1-mutants.ts`, and `scripts/test-gate1-oracle.mjs`,
 which now wraps its payloads in foreign content and runs them in both engines.
+
 ## 2026-11-09 — bento/id option G: device certificates made by a passkey (`wdev.`, `dev2.`, `watt.`, `wren.`)
 
 **Decision.** `kernel/src/devices.ts` defines the device certificates of
@@ -13623,6 +13624,32 @@ scripts/test-signin-host-engines.mjs (the rows that need no passkey, in
 WebKit too) and scripts/test-signin-host-coop.mjs (COOP in Chromium, Chrome and
 WebKit).
 
+## 2026-11-09 — Gate 1 reads comments the way browsers do
+
+Gate 1 ended a comment at the next `-->`. A browser also ends one at `--!>`,
+and in some places a `<!--` starts no comment at all: inside `<xmp>`,
+`<noembed>`, `<noframes>` and `<noscript>` (raw text while scripting is on),
+after `<plaintext>`, and after a `<![CDATA[` inside `<svg>` or `<math>`, which
+runs to `]]>` rather than to the first `>`. Where gate 1 and the browser
+disagree about what is comment, markup gate 1 reports absent can be present.
+
+- A comment ends at `-->` or `--!>`, whichever comes first.
+- `<xmp>`, `<noembed>`, `<noframes>`, `<noscript>` and `<plaintext>` are
+  refused, and so is any `<!` that is neither a comment nor the doctype.
+  Bento writes none of them: none appears in any of the 100 shells published
+  to bento.page, nor in saved decks.
+- **Comment text is not refused for holding markup.** Every slides shell since
+  0.7.0 carries a tooling comment with `<parent-id>`-style placeholders, so
+  that rule would turn every release unknown. It is not needed either: once
+  the comment's end and the places where a comment can start agree with the
+  browser, its text is inert. Comments are still checked for `<script`, as
+  before.
+
+All 70 slides releases in the published history still verify as genuine,
+and every published shell gets the same verdict as before. The Swift, Kotlin
+and Rust ports and the extension's generated copy carry the same rules. Rigs:
+`scripts/test-gate1.ts`, `scripts/test-gate1-mutants.ts` (a mutant per rule)
+and `scripts/test-gate1-oracle.mjs` (Chromium and WebKit).
 ## 2026-11-09 — bento/id directory: the void page, the reset, and the countersign on every link
 
 The directory now issues its countersign (`rip.`) and has the two things

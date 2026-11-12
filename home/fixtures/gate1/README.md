@@ -87,7 +87,8 @@ Two parsing rules the reference got wrong once, so state them exactly:
   name outside `[a-z][a-z0-9-]*` is refused. `script`, `style`, `textarea` and
   `title` hold text up to their real end tag: `</name` followed by whitespace,
   `/` or `>`. (`</stylex>` inside a `<style>` is text, not its end, and is
-  refused anyway as markup: see rule 3.) `<!-->` and `<!--->` are whole comments; `</>` is ignored.
+  refused anyway as markup: see rule 3.) `<!-->` and `<!--->` are whole comments; any other comment ends at
+  `-->` or `--!>`, whichever comes first; `</>` is ignored.
 - **Read END tags like start tags.** The tokenizer parses attributes in end tags,
   quoted values included, so `</p a="><b c='">` ends at its second `>`.
   Skipping to the first `>` hides the script after it. An end tag carrying any
@@ -114,6 +115,11 @@ A file is a release's only if ONE history entry matches EVERY block:
    `module` in any case, an unknown type, and any `src=`.
 3. **No foreign markup**, anywhere outside a script or style element's own text:
    - `<iframe>`, `<object>`, `<embed>`, `<base>`;
+   - `<xmp>`, `<noembed>`, `<noframes>`, `<noscript>`, `<plaintext>`: a
+     browser reads their content as text, so a `<!--` in them starts no
+     comment;
+   - a `<!` that is neither a comment nor the doctype (`<![CDATA[` ends at
+     `]]>` inside `<svg>`, at the first `>` elsewhere);
    - a `<meta http-equiv>` refresh or CSP;
    - any `on*=` attribute;
    - a comment holding `<script`;

@@ -387,6 +387,69 @@
       "why": "an <svg> whose <title> and <style> hold only text"
     },
     {
+      "case": "served/comment-bang-end-iframe.html",
+      "verdict": "unknown",
+      "why": "\"--!>\" ends a comment: the <iframe> after it is real"
+    },
+    {
+      "case": "served/comment-bang-end-text.html",
+      "verdict": "genuine",
+      "release": "1.0.0",
+      "why": "\"--!>\" ends a comment: the paragraph after it is markup, and harmless"
+    },
+    {
+      "case": "served/comment-bang-not-end.html",
+      "verdict": "genuine",
+      "release": "1.0.0",
+      "why": "\"--!\" without \">\" does not end a comment"
+    },
+    {
+      "case": "served/xmp-comment-iframe.html",
+      "verdict": "unknown",
+      "why": "<xmp> is raw text: its \"<!--\" starts no comment, and the <iframe> is real"
+    },
+    {
+      "case": "served/noembed-comment-iframe.html",
+      "verdict": "unknown",
+      "why": "<noembed> is raw text"
+    },
+    {
+      "case": "served/noframes-comment-iframe.html",
+      "verdict": "unknown",
+      "why": "<noframes> is raw text"
+    },
+    {
+      "case": "served/noscript-comment-iframe.html",
+      "verdict": "unknown",
+      "why": "<noscript> is raw text when scripting is on"
+    },
+    {
+      "case": "served/noscript-alone.html",
+      "verdict": "unknown",
+      "why": "Bento writes no <noscript>: refused outright"
+    },
+    {
+      "case": "served/plaintext.html",
+      "verdict": "unknown",
+      "why": "Bento writes no <plaintext>: everything after it is text"
+    },
+    {
+      "case": "served/svg-cdata-comment.html",
+      "verdict": "unknown",
+      "why": "CDATA inside <svg> ends at \"]]>\", not at the first \">\": the \"<!--\" after it is not a comment"
+    },
+    {
+      "case": "served/cdata-in-html.html",
+      "verdict": "unknown",
+      "why": "a \"<!\" that is neither a comment nor the doctype"
+    },
+    {
+      "case": "served/doctype-lower-case.html",
+      "verdict": "genuine",
+      "release": "1.0.0",
+      "why": "the doctype in any case"
+    },
+    {
       "case": "served/case-fold-breakout.html",
       "verdict": "unknown",
       "why": "a length-changing case fold would skip this script entirely"
