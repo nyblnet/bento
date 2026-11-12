@@ -73,7 +73,11 @@ const MUTANTS = [
   { name: 'never checked is never said (R3)', row: 'never-checked', file: W, from: 'if (now - since > NEVER_MS) event.warned.push(', to: 'if (false) event.warned.push(' },
 ]
 
-const run = (env) => spawnSync(process.execPath, [RIG], { env: { ...process.env, ...env }, encoding: 'utf8', timeout: 600000 })
+// A run that never reached the browser (a local port taken between freePorts and listen) is
+// run again, at most twice: it judged nothing, so it is neither red nor green.
+const run1 = (env) => spawnSync(process.execPath, [RIG], { env: { ...process.env, ...env }, encoding: 'utf8', timeout: 600000 })
+const started = (r) => /^extension \S+ v/m.test(r.stdout)
+const run = (env) => { let r = run1(env); for (let i = 0; i < 2 && !started(r); i++) { console.log('  note  the rig did not start (retrying): ' + (r.stdout + r.stderr).trim().split('\n').slice(-2).join(' | ').slice(0, 160)); r = run1(env) } return r }
 const rows = [...new Set(MUTANTS.map((m) => m.row))]
 console.log(`control: rows ${rows.join(', ')} unmutated`)
 const control = run({ TW_ROWS: rows.join(',') })
