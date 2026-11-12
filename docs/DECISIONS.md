@@ -13728,6 +13728,62 @@ the history entry, each button, an injected script blocked with a positive
 control, framing refused, Trusted Types, an address full of markup shown as
 text; a mutant per rule) and `scripts/test-directory-mutants.ts`.
 
+
+## 2026-11-09 — bento/id directory: hold before the mail, say how a link ended, keep the undo through a reset
+
+Security's review of the void page and the reset set three conditions before
+the directory deploys. These are their answers. Nothing is deployed.
+
+- **A mail never states an act that then fails to happen.** A Remove (from a
+  void link) and a reset send their notice BEFORE they act, because that notice
+  carries the way back. They now put a HOLD on the roster first, for the
+  mailer's timeout plus a margin. While it is on, the waiting change cannot
+  take effect (the alarm skips it and comes back when the hold ends), and a
+  second press of a void link, a reset or a member's request is refused before
+  any mail of its own goes (`busy`, or `pending` for a member). A refused send
+  takes the hold off. Before, a Remove pressed seconds before the deadline
+  could mail "your passkey was suspended" while the change it meant to stop
+  took effect, two presses could mail two undo links of which only one worked,
+  and a reset could mail "a change that was waiting is cancelled" for a change
+  that had just taken effect. A send that outlives its hold (the object
+  stopped mid-send) acts only if nothing changed meanwhile and no one else
+  holds the roster; the hold's owner is checked by id.
+- **A void link whose life ended says how.** The directory remembers the last
+  16 ended void links by their token's hash and answers `late` (what it was
+  for took effect, with the time; `by: 'reset'` when a reset did), `used`, or
+  `preempted` (a reset cancelled the change). The token is 256 bits, so this
+  tells no one but its holder anything. The void page says it plainly ("Too
+  late: this change took effect at ...", naming the email that lists the
+  passkeys now) and never says "Nothing changed" where it cannot know: a lost
+  answer, an unknown link and a used link no longer claim it.
+- **The undo survives a reset (G4a).** A reset no longer cancels a waiting
+  removal of a suspended passkey; it sets it aside. Its undo link keeps
+  working while the reset waits: the passkey comes back at once, and the reset
+  carries on, asked again on the new head, so its 72 hours start again (the
+  kernel's chain takes no link asked for before the link before it took
+  effect; the undo mail gives the new time). If the reset is stopped, the
+  removal waits again at its own time with its own undo link, and takes effect
+  at once if that time has passed. Any other waiting change a reset cancels
+  stays cancelled when the reset is stopped (security's ruling: stopping never
+  applies anything), and the stop mail now says so.
+- **The reset link is single use**, including after its reset was queued and
+  then stopped (a row now pins it).
+- **Wording** (drafts for the maintainer): the waiting notice and the page no
+  longer call an unasked change "usually a page that used your own passkey";
+  the notice for a lone passkey says removing it "would leave the account with
+  no usable passkey (only a reset gets back in)".
+
+Not here (they wait for a kernel statement layout): a member stopping a reset
+with a passkey, and judging the account's age at the reset's request time.
+Guards: `scripts/test-directory-roster.ts` (security's races as rows: Remove
+pressed before the deadline with the alarm firing during its send, two
+Removes, Cancel during a Remove, a reset completed during a change's last
+seconds, two resets on one link, a member request during a reset's send;
+sends that outlive their hold, each way round; Cancel at the deadline and an
+undo after the removal answer `late`; the undo through a reset, the reset
+taking effect after it, a stopped reset restoring the removal before and
+after its time), `scripts/test-directory-void-page.mjs` (the new views in a
+real browser) and `scripts/test-directory-mutants.ts` (a mutant per rule).
 ## 2026-11-12 — bento/id: the privacy notice describes option G, and a text-only deletion page returns
 
 The draft privacy notice (`site-src/id-privacy.html`, built to
