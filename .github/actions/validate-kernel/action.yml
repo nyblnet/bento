@@ -676,3 +676,11 @@ runs:
       # As for roster-v2.json: --check writes nothing and fails on a stale file.
       shell: bento-step {0}
       run: node scripts/gen-device-vectors.ts --check
+
+    - name: relay blob routes answer storage failures with a status
+      # R2 refusing concurrent writes to one key, or an upload cut off
+      # mid-body, used to escape the blob route as an uncaught exception
+      # (Cloudflare 1101, scriptThrewException). Each must now be a 429 or
+      # 503 with retry-after and CORS, so the client can back off.
+      shell: bento-step {0}
+      run: node scripts/test-relay-blob-errors.ts

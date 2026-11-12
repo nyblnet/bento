@@ -51,6 +51,7 @@ jobs:
             test-home-spotlight.mjs
             test-home-gate1.mjs
             test-home-release-history.mjs
+            test-home-web-out.mjs
           )
           for rig in "${rigs[@]}"; do
             echo "::group::$rig"
