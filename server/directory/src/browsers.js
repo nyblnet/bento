@@ -265,11 +265,14 @@ export async function browserRoute(req, env, ip, p, k) {
     const v = await verifyWren(b.wren, b.sig)
     if (!v.ok) return json(400, { error: 'wren' })
     const scope = await addressKey(v.value.address)
-    // counted only once the device key's signature verifies, per IP per address:
-    // junk from someone on the owner's network never uses up the owner's renewals
-    if (!(await ledger(`${ip}\n${scope}`, 'checkin'))) return json(429, { error: 'rate-limited' })
+    // Opening the seal stores and spends nothing. Anyone can make a wren. that
+    // verifies (its key is its own), so only a check-in carrying a challenge
+    // the directory issued for this address is counted, per IP per address: a
+    // check-in without one, from someone on the owner's network, never uses up
+    // the owner's renewals, and never writes a count at all
     const ch = await openBrowser(env, scope, v.value.challenge, Date.now())
     if (!ch) return json(400, { error: 'nonce' })
+    if (!(await ledger(`${ip}\n${scope}`, 'checkin'))) return json(429, { error: 'rate-limited' })
     const r = await roster(v.value.address, 'browserCheckin', { devicePub: v.value.devicePub, pin: b.pin, nonce: ch.nonce, issued: ch.issued, aud: ch.aud })
     return json(r.status, r.status === 200 || r.status === 403 ? { ...r.body, incidents } : r.body)
   }

@@ -13817,7 +13817,9 @@ bento/home agent was built against.
   /v1/roster` (both answer 404 for an address with no account), and one of 20
   an hour from that IP for that address, enrolments and renewals counted
   apart. A check-in is counted per IP per address only once its signature
-  verifies, so junk from the owner's own network cannot use up its renewals. There is deliberately no count shared
+  verifies and it carries a challenge the directory issued for that address
+  (anyone can sign a `wren.` with a key of their own), so a check-in without
+  one, from the owner's own network, cannot use up its renewals. There is deliberately no count shared
   by every caller of an address: a stranger could fill it and stop the
   owner's browsers renewing.
 - **The head is the latest ripened one.** A change still waiting is never a

@@ -931,6 +931,14 @@ async function signout(a: Authn, address: string, o: GetOpts & { ch?: { nonce: s
   const ip = freshIp(), junk: number[] = []
   for (let i = 0; i <= LIMITS.ip.checkin; i++) junk.push((await checkin(kai, KB, { key: (await Browser.make()).W.privateKey, ip })).status)
   ok(junk.every((x) => x === 400), `${junk.length} check-ins with a bad signature from one IP: each 400 wren`)
+  // C2: a wren. verifies under the key it names, so anyone can sign one: check-ins naming the owner's
+  // address with a challenge the directory never issued count for nothing either, and write no count
+  const forged: number[] = []
+  const ledgerSize = () => [...(env.LEDGER as { objs: Map<string, { store: Map<string, unknown> }> }).objs.values()].reduce((n, o) => n + o.store.size, 0)
+  const l0 = ledgerSize()
+  for (let i = 0; i <= LIMITS.ip.checkin; i++) forged.push((await checkin(kai, await Browser.make(), { nonce: b64uEnc(crypto.getRandomValues(new Uint8Array(40))), ip })).status)
+  ok(forged.every((x) => x === 400), `${forged.length} self-signed check-ins without a challenge the directory issued, from one IP: each 400 nonce`)
+  ok(ledgerSize() === l0, `and they wrote no per-IP count anywhere (${ledgerSize() - l0} keys)`)
   const mine = await checkin(kai, KB, { ip })
   ok(mine.status === 200, `the owner's valid check-in from that IP still → 200 (${err(mine)})`)
   // valid check-ins are counted per IP per address

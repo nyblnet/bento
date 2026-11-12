@@ -238,7 +238,7 @@ Bodies are JSON, sent as text/plain.
 | `POST /v1/web/challenge` `{address}` | 200 `{nonce, at, rosHash}`: a challenge for an enrolment, the directory's time for it (the ceremony time), and the hash of the latest ripened roster head; 404 for an address with no account |
 | `POST /v1/web/enrol` `{text, rq, assertion}` (60 an hour per IP) | 200 `{ok, wdev, watt}`; 400 `text`, `rq`, `assertion`, `nonce`, `ceremony`, `head`; 403 `signer`, `assertion`; 409 `device-known` |
 | `POST /v1/home/challenge` `{address}` | 200 `{nonce}`: a challenge for a renewal; 404 for an address with no account |
-| `POST /v1/home/checkin` `{wren, sig, pin?}` (120 an hour per IP per address, once the signature verifies) | 200 `{watt, wattSig, signer, assertion, roster, incidents}` (the roster as kernel RosterLink objects from the pinned head, or from setup); 403 `{error: unknown \| revoked \| cap, incidents}`; 400 `wren`, `nonce` |
+| `POST /v1/home/checkin` `{wren, sig, pin?}` (120 an hour per IP per address, once the signature verifies and the challenge is the directory's) | 200 `{watt, wattSig, signer, assertion, roster, incidents}` (the roster as kernel RosterLink objects from the pinned head, or from setup); 403 `{error: unknown \| revoked \| cap, incidents}`; 400 `wren`, `nonce` |
 | `POST /v1/web/signin/challenge` `{}` (120 an hour per IP) | 200 `{nonce}`: a sign-in challenge, 5 minutes |
 | `POST /v1/web/signin` `{nonce, assertion}` (60 an hour per IP) | 200 `{address}`: the account a discoverable passkey belongs to, named by the first 32 bytes of its 48-byte user handle; 400 `nonce`, `assertion`, `assertion-<reason>`; 403 `not-member`, `quarantined`. Nothing is logged or mailed; the passkey's counter is stored |
 | `POST /v1/web/signout/challenge` `{address}` | 404 for an address with no account (a per-IP lookup); otherwise **501** until the kernel defines the statement, so the sign-in host never asks for a passkey for nothing. Then 200 `{nonce, at}` |
@@ -254,8 +254,10 @@ Bodies are JSON, sent as text/plain.
   IP for that address, enrolments and renewals counted apart. No count is
   shared by every caller.
 - A check-in is counted (120 an hour per IP per address) only once its
-  signature verifies, so junk from the owner's network never uses up the
-  owner's renewals.
+  signature verifies and it carries a challenge the directory issued for that
+  address. A `wren.` verifies under the key it names, so anyone can make one:
+  a check-in without such a challenge, from the owner's network, never uses
+  up the owner's renewals and writes no count.
 - An unreadable `INCIDENTS` list answers 500 at enrolment and check-in alike,
   before the challenge is opened: nothing is countersigned and the challenge
   is left.
