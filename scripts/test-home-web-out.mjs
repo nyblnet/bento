@@ -42,6 +42,12 @@ ok(within(path.join(work, 'SITE', 'hw'), site) === caseInsensitive, `a case vari
 ok(!within(path.join(work, 'site.home-web'), site) && !within(path.join(work, 'sitex', 'hw'), site), 'positive control: the <site>.home-web sibling and a look-alike name are outside')
 ok(within(site, work) && !within(work, site), 'containment runs one way: the parent holds the site, not the reverse')
 ok(!within(path.join(work, 'x'), path.join(work, 'no-such-folder')), 'nothing is inside a folder that does not exist')
+{
+  const fresh = mk('dg', 'site')
+  fs.symlinkSync(path.join(fresh, 'releases'), path.join(work, 'dg', 'dl'))
+  ok(/symlink to nothing/.test(throws(() => within(path.join(work, 'dg', 'dl', 'hw'), fresh))), 'a path through a symlink to a folder that does not exist yet (inside the site) is refused')
+  ok(!within(path.join(work, 'dg', 'site.home-web'), fresh), 'positive control: a new sibling beside it is still outside')
+}
 
 const FIRMLINK = '/System/Volumes/Data'
 if (process.platform === 'darwin' && fs.existsSync(FIRMLINK)) {

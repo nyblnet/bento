@@ -9,7 +9,7 @@
 // it: the frame site does not exist yet, and deploying is the maintainer's.
 // Without --home-web a release does exactly what it did before.
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 
 /**
@@ -51,14 +51,20 @@ const id = (p) => { const st = statSync(p); return `${st.dev}:${st.ino}` }
  * text: from `p` (or its nearest existing ancestor) up to the root, each
  * folder's device and inode is compared with `dir`'s. So no spelling reaches
  * into `dir` unseen: not a symlink, a case variant on a case-insensitive disk,
- * a macOS firmlink (/System/Volumes/Data/…), nor a child named `..hw`.
- * False when `dir` does not exist.
+ * a macOS firmlink (/System/Volumes/Data/…), nor a child named `..hw`. A
+ * symlink to nothing on the way is refused outright (throws): where it points
+ * may only be created later. False when `dir` does not exist.
  */
 export function within(p, dir) {
   if (!existsSync(dir)) return false
   const target = id(dir)
   let cur = resolve(p)
-  while (!existsSync(cur)) cur = dirname(cur)
+  while (!existsSync(cur)) {
+    // missing to existsSync but found by lstat: a symlink to nothing, which a
+    // later step could create anywhere (inside the site, say), so refuse it
+    try { lstatSync(cur) } catch { cur = dirname(cur); continue }
+    throw new Error(`${p} runs through a symlink to nothing (${cur}): it could later reach anywhere, so it is refused`)
+  }
   for (;;) {
     if (id(cur) === target) return true
     const here = realpathSync.native(cur)

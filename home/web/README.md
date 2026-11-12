@@ -96,7 +96,8 @@ default there either; a rehearsal with a throwaway key adds `--home-web-dev`.
 The published histories are checked (`build.mjs --check`, which writes
 nothing) before the release signs anything. The output must be outside the
 site and the published tree and contain neither (checked by folder identity,
-so no symlink, case variant or firmlink gets round it), and must be new, empty
+so no symlink, case variant or firmlink gets round it, and a path through a
+symlink to nothing is refused), and must be new, empty
 or an earlier home/web build;
 it is emptied before the other checks, so a run refused after that point leaves
 no earlier build in it.

@@ -156,6 +156,10 @@ section('release.mjs --home-web: where the output may go (nothing signed, nothin
       const via = path.join(work, `elsewhere-${n}`); fs.mkdirSync(via, { recursive: true }); fs.symlinkSync(site, path.join(via, 'link'))
       return { out: path.join(via, 'link', 'hw'), keep }
     }],
+    ['home/web output through a symlink to a folder of the fresh site that does not exist yet', /symlink to nothing/, (site) => {
+      const via = path.join(path.dirname(site), 'dg'); fs.mkdirSync(via, { recursive: true }); fs.symlinkSync(path.join(site, 'releases'), path.join(via, 'dl'))
+      return { out: path.join(via, 'dl', 'hw') }
+    }],
     ['home/web output that contains the site (an earlier build there too)', /contains the site/, (site) => {
       const anc = path.dirname(site)
       return { out: anc, keep: canary(anc, { 'build.json': JSON.stringify(EARLIER_BUILD) }) }

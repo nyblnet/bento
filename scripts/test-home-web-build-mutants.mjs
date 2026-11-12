@@ -47,6 +47,8 @@ const MUTANTS = [
     expect: 'home/web output that contains the published tree' },
   { name: 'published-not-passed', file: REL, from: '    prepareHomeWebOut({ site, out: homeWeb.out, published })', to: '    prepareHomeWebOut({ site, out: homeWeb.out })',
     expect: 'home/web output inside the published tree' },
+  { name: 'dangling-link-walked-past', file: R, from: '    throw new Error(`${p} runs through a symlink to nothing', to: '    cur = dirname(cur); continue; throw new Error(`${p} runs through a symlink to nothing',
+    expect: 'through a symlink to a folder of the fresh site that does not exist yet' },
   { name: 'any-folder-emptied', file: R, from: '  if (readdirSync(out).length && !holdsEarlierBuild(out)) {', to: '  if (false) {',
     expect: 'home/web output holding something other than an earlier build' },
   { name: 'earlier-build-by-name', file: R, from: "    const j = JSON.parse(readFileSync(join(dir, 'build.json'), 'utf8'))", to: "    const j = JSON.parse(readFileSync(join(dir, 'build.json'), 'utf8')); return true",

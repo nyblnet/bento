@@ -13780,7 +13780,8 @@ and leave the output as it was: no `--frame-origin`; an output inside the site
 or containing it, or inside the published tree the next release copies in or
 containing it (compared by folder identity, device and inode, so a symlink, a
 case variant or the macOS `/System/Volumes/Data` firmlink cannot hide one in
-the other); and an output that holds anything but an earlier home/web build
+the other, and an output path through a symlink to nothing is refused, since
+its target could appear later); and an output that holds anything but an earlier home/web build
 (one whose `build.json` carries the build's own fields). Then the output is emptied, so
 every later refusal leaves no earlier (development or test-key) build behind:
 a signing key that is not the release key (a rehearsal passes
