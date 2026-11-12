@@ -30,9 +30,16 @@
 //     mailed or changed but the passkey's signature counter.
 //   POST /v1/web/signout/challenge {address} → 200 {nonce, at}; 404 no account
 //   POST /v1/web/signout {text, assertion}: text = wout.<b64u(address)>.<at>.<nonce>
-//     → 501 once every check has passed, until the kernel defines that
-//     statement (the layout here is the sign-in host's provisional one). Then
-//     it signs every browser out as of `at` (below).
+//     → 200 {ok, at, signedAt}. Both answer 501 until the kernel defines that
+//     statement (the layout here is the sign-in host's provisional one); the
+//     sign-out route still runs every check first. It signs every browser out
+//     as of the moment it is ACCEPTED (`at`), not the time in the signed text
+//     (`signedAt`), so a sign-in that finished between the two is caught too.
+//   A sign-in challenge has no account when it is issued, so it is spent in
+//   the object of the account the passkey's user handle names: once per
+//   account, not once for everyone (an assertion verifies only under its own
+//   account). A handle naming no account is refused before anything is
+//   written, so a stranger's 32 bytes never create storage.
 // Anyone's (CORS *), for a peer holding a certificate:
 //   GET /v1/device/status?e=<address>&c=<sha256 of the certificate text>
 //     → 200 {state: ok | revoked | cap | unknown, incidents}
@@ -208,6 +215,8 @@ export async function browserRoute(req, env, ip, p, k) {
     if (!(await ledger(ip, 'lookup'))) return json(429, { error: 'rate-limited' })
     const r = await roster(email, 'browserHead', {})
     if (r.status !== 200) return json(r.status, r.body)
+    // until the statement exists, refuse here, before the sign-in host asks for a passkey for nothing (security's W3 on #953)
+    if (!WOUT_DEFINED) return json(501, { error: 'not-implemented', reason: 'the kernel sign-out statement is not defined yet' })
     const at = Date.now()
     return json(200, { nonce: await issueChallenge(env.CHALLENGE_KEY, 'signout', await addressKey(email), at), at })
   }
@@ -325,6 +334,19 @@ async function chainFrom(s, pin) {
   return links.slice(from)
 }
 
+/**
+ * Store a passkey's new signature counter, only if the stored one is still
+ * the one the assertion was checked against: two assertions with the same
+ * counter, checked side by side, can never both be accepted (security's D6 on
+ * #953). False when another got there first.
+ */
+async function storeCount(s, pub, before, count) {
+  const rec = await s.get(`pk:${pub}`)
+  if (!rec || rec.signCount !== before) return false
+  await s.put(`pk:${pub}`, { ...rec, signCount: count })
+  return true
+}
+
 /** The credential `credId` as a live, unsuspended passkey member of `head`, with its record; or the refusal. */
 async function liveMember(s, head, credId) {
   const pub = head && typeof credId === 'string' ? await s.get(`cid:${credId}`) : undefined
@@ -342,8 +364,9 @@ async function liveMember(s, head, credId) {
  * a browser's and is untouched. Logged, and the address is told (roster mail,
  * which no budget holds back). Returns how many certificates it revoked.
  */
-async function signOutAll(obj, head, { at, now, by, origin, co }, h) {
+async function signOutAll(obj, head, { signedAt, now, by, origin, co }, h) {
   const s = obj.state.storage
+  const at = now // the cut-off is when the sign-out is accepted (security's D3 on #953)
   await s.put('signoutAt', Math.max(at, (await s.get('signoutAt')) ?? 0))
   let n = 0
   for (const [key, rec] of await s.list({ prefix: 'wd:' })) {
@@ -351,10 +374,11 @@ async function signOutAll(obj, head, { at, now, by, origin, co }, h) {
     await s.put(key, { ...rec, revokedAt: now })
     n++
   }
-  await obj.log({ k: 'signout-all', at: now, upTo: at, seq: head.seq, pub: by, by, os: origin, rq: '', co, n })
+  await obj.log({ k: 'signout-all', at: now, signedAt: signedAt ?? now, seq: head.seq, pub: by, by, os: origin, rq: '', co, n })
   const address = (await parseRos(head.ros)).value.address
   await h.notify(address, 'Every browser was signed out of your bento/id account', [
     `At ${when(now)} every browser signed in to this bento/id account was signed out${by ? `, by the passkey ${await h.fingerprint(by)}` : ''}.`,
+    'From now on no browser can renew its sign-in. Anything a browser already signed can still be accepted for up to 24 hours.',
     'Each browser can sign in again with one of your passkeys. Apps on your devices are not affected.',
   ])
   return n
@@ -416,7 +440,7 @@ export async function browserOp(obj, a, now, h) {
     const ob = a.rq === HOME_ORIGIN ? 1 : 0
     // the countersign first: without the key nothing is stored, the counter included
     const w = await countersign(obj.env, { certHash, ob, ceremonyAt: c.ceremonyAt, now })
-    if (rec) await s.put(`pk:${pub}`, { ...rec, signCount: v.value.signCount })
+    if (!rec || !(await storeCount(s, pub, rec.signCount, v.value.signCount))) return out(403, { error: 'assertion' })
     await s.put(`wd:${c.devicePub}`, { certHash, signer: pub, assertion, ceremonyAt: c.ceremonyAt, rq: a.rq, ob, loggedAt: now, renewedAt: now, revokedAt: null })
     await s.put(`wh:${certHash}`, c.devicePub)
     await obj.log({ k: 'wdev', at: now, seq: head.seq, pub: c.devicePub, by: pub, os: h.origin, rq: a.rq, co: SIGNIN_ORIGIN })
@@ -449,11 +473,13 @@ export async function browserOp(obj, a, now, h) {
     // what a member's sign-out does once its statement exists (browserSignout), and the incident lever for one address
     const head = await s.get('head')
     if (!head) return out(404, { error: 'not-found' })
-    const at = Number.isSafeInteger(a.at) && a.at > 0 && a.at <= now ? a.at : now
-    return out(200, { at, revoked: await signOutAll(obj, head, { at, now, by: typeof a.by === 'string' ? a.by : '', origin: h.origin, co: '' }, h) })
+    const signedAt = Number.isSafeInteger(a.signedAt) && a.signedAt > 0 ? a.signedAt : now
+    return out(200, { at: now, signedAt, revoked: await signOutAll(obj, head, { signedAt, now, by: typeof a.by === 'string' ? a.by : '', origin: h.origin, co: '' }, h) })
   }
 
   if (a.op === 'browserSignin') {
+    // a handle naming no account: refused before anything is written (no storage for a stranger's 32 bytes)
+    if (!(await s.get('head'))) return out(403, { error: 'not-member' })
     // the challenge is spent first, in the object the user handle names
     if (!(await spend())) return out(400, { error: 'nonce' })
     const as = a.assertion
@@ -466,7 +492,7 @@ export async function browserOp(obj, a, now, h) {
       publicKey: who.pub, challenge: b64uDec(a.challenge) ?? new Uint8Array(0), rpId: PASSKEY.rpId, origins: [SIGNIN_ORIGIN], storedSignCount: who.rec.signCount,
     })
     if (!v.ok) return out(400, { error: `assertion-${v.reason}` })
-    await s.put(`pk:${who.pub}`, { ...who.rec, signCount: v.value.signCount })
+    if (!(await storeCount(s, who.pub, who.rec.signCount, v.value.signCount))) return out(400, { error: 'assertion-sign-count' })
     return out(200, { address: (await parseRos(head.ros)).value.address })
   }
 
@@ -484,10 +510,10 @@ export async function browserOp(obj, a, now, h) {
       publicKey: who.pub, challenge: await statementChallenge(a.text), rpId: PASSKEY.rpId, origins: [SIGNIN_ORIGIN], storedSignCount: who.rec.signCount,
     })
     if (!v.ok) return out(400, { error: `assertion-${v.reason}` })
-    await s.put(`pk:${who.pub}`, { ...who.rec, signCount: v.value.signCount })
+    if (!(await storeCount(s, who.pub, who.rec.signCount, v.value.signCount))) return out(400, { error: 'assertion-sign-count' })
     if (!WOUT_DEFINED) return out(501, { error: 'not-implemented', reason: 'the kernel sign-out statement is not defined yet' })
-    await signOutAll(obj, head, { at: a.at, now, by: who.pub, origin: h.origin, co: SIGNIN_ORIGIN }, h)
-    return out(200, { ok: true, at: a.at })
+    await signOutAll(obj, head, { signedAt: a.at, now, by: who.pub, origin: h.origin, co: SIGNIN_ORIGIN }, h)
+    return out(200, { ok: true, at: now, signedAt: a.at })
   }
 
   return out(400, { error: 'bad-op' })

@@ -31,6 +31,8 @@
 import worker, { Roster, Ledger } from '../server/directory/src/worker.js'
 import * as workerModule from '../server/directory/src/worker.js'
 import { addressKey } from '../server/directory/src/address.js'
+import { issueChallenge } from '../server/directory/src/challenge.js'
+import { parseResetLink } from '../server/directory/src/links.js'
 import { HOME_ORIGIN, SIGNIN_ORIGIN, passkeyOrigins } from '../server/directory/src/passkey.js'
 import { parseSetupLink } from '../server/directory/src/links.js'
 import { REQUESTERS } from '../server/directory/src/roster.js'
@@ -645,9 +647,11 @@ ok(ce.status === 200, `cara's second passkey enrols a browser (${err(ce)})`)
   const rs = await Promise.all(EB.map((b) => checkin(eve, b)))
   ok(rs.every((r) => r.status === 403 && r.j.error === 'revoked'), `each renewal then → 403 revoked (${rs.map(err).join(', ')})`)
   const log = (await logOf(eve)).find((x) => x.k === 'signout-all')
-  ok(log?.n === 2 && log.pub === E1.pub && log.by === E1.pub && log.ob === 0 && log.upTo === now, 'logged as signout-all: who, how many, as of when, ob 0')
+  ok(log?.n === 2 && log.pub === E1.pub && log.by === E1.pub && log.ob === 0 && log.at === now && log.signedAt === now, 'logged as signout-all: who, how many, signed and applied when, ob 0')
+  const st0 = await api('GET', `${STATUS_ROUTE}?e=${eve}&c=${await sha256b64u(buildDeviceCert({ kind: 'wdev', devicePub: EB[0].pub, consentPub: null, kx: EB[0].kx, address: eve, rosHash: '', label: null, via: 'passkey', ceremonyAt: 0, dirNonce: '' }))}`)
+  ok(st0.status === 200, 'status answers for an address that signed out')
   const m = lastMail(eve) ?? NOMAIL
-  ok(m.kind === 'roster' && m.subject === 'Every browser was signed out of your bento/id account' && m.body.includes(await fingerprintOf(E1.pub)) && /Apps on your devices are not affected/.test(m.body),
+  ok(m.kind === 'roster' && m.subject === 'Every browser was signed out of your bento/id account' && m.body.includes(await fingerprintOf(E1.pub)) && /Apps on your devices are not affected/.test(m.body) && /can still be accepted for up to 24 hours/.test(m.body),
     `the address is told, by roster mail, naming the passkey (${m.subject})`)
   // a ceremony whose challenge was issued before the sign-out cannot finish after it
   const early = await chOf(eve)
@@ -657,10 +661,21 @@ ok(ce.status === 200, `cara's second passkey enrols a browser (${err(ce)})`)
   now += 1
   const nb = await Browser.make()
   ok((await enrol(eve, nb, E1)).status === 200 && (await checkin(eve, nb)).status === 200, 'a browser signed in afterwards renews')
-  // the sign-out is a time: a certificate made after it is untouched by it
+  // the cut-off is when the sign-out is ACCEPTED, not the time it was signed (security's D3 on #953)
+  const signedAt = now - 1
+  now += 60_000
+  const nbHash = (await storeOf(eve)).get(`wd:${nb.pub}`) as { certHash?: string } | undefined
+  const late2 = await doOp(eve, 'browserRevokeAll', { by: E1.pub, os: S, signedAt })
+  ok(late2.j.revoked === 1 && late2.j.at === now && late2.j.signedAt === signedAt && (await checkin(eve, nb)).j.error === 'revoked',
+    `a certificate made between the signing and the acceptance is cut off too (${JSON.stringify(late2.j)})`)
+  const lg = (await logOf(eve)).filter((x) => x.k === 'signout-all').pop()
+  ok(lg?.signedAt === signedAt && lg?.at === now, 'the log names both: signed at, applied at')
+  // W1: the status route says so at once, for peers that check it
+  const st1 = await api('GET', `${STATUS_ROUTE}?e=${eve}&c=${nbHash?.certHash ?? 'x'}`)
+  ok(st1.j.state === 'revoked', `status: revoked as soon as the sign-out is accepted (${st1.j.state})`)
   now += 1
-  const past = await doOp(eve, 'browserRevokeAll', { by: E1.pub, os: S, at: now - 2 })
-  ok(past.j.revoked === 0 && (await checkin(eve, nb)).status === 200, 'a sign-out as of a time before a certificate leaves it renewing')
+  const nb2 = await Browser.make()
+  ok((await enrol(eve, nb2, E1)).status === 200 && (await checkin(eve, nb2)).status === 200, 'a browser signed in after the cut-off renews')
   ok((await api('GET', `${STATUS_ROUTE}?e=${eve}&c=${await sha256b64u('x')}`)).j.state === 'unknown', 'control: status for a certificate never made is unknown')
 }
 
@@ -686,9 +701,11 @@ async function signin(a: Authn, address: string, o: GetOpts & { nonce?: string; 
   const as = await assertRaw(a, o.over ?? b64uDec(nonce ?? '') ?? new Uint8Array(16), { ...o, handle: o.handle === undefined ? await handleFor(address) : o.handle })
   return { ...(await raw('POST', WEB_ROUTES.signin, JSON.stringify({ nonce, assertion: as }), S)), nonce }
 }
+/** The route answers 501 until the kernel's statement exists, so the rows mint the challenge it would issue. */
+const mintSignout = async (address: string) => ({ nonce: await issueChallenge(env.CHALLENGE_KEY as string, 'signout', await addressKey(address), now), at: now })
 const woutText = (address: string, at: number, nonce: string) => ['wout', b64uEnc(te.encode(address)), String(at), nonce].join('.')
 async function signout(a: Authn, address: string, o: GetOpts & { ch?: { nonce: string; at: number }; text?: string; signText?: string } = {}) {
-  const ch = o.ch ?? (await raw('POST', WEB_ROUTES.signoutChallenge, JSON.stringify({ address }), S)).j as unknown as { nonce: string; at: number }
+  const ch = o.ch ?? await mintSignout(address)
   const text = o.text ?? woutText(address, ch.at, ch.nonce)
   const as = { id: a.cid, ...(await a.assert(o.signText ?? text, o)) }
   return { ...(await raw('POST', WEB_ROUTES.signout, JSON.stringify({ text, assertion: as }), S)), ch, text }
@@ -725,7 +742,7 @@ async function signout(a: Authn, address: string, o: GetOpts & { ch?: { nonce: s
   const wn = (await webCh(hal)).j.nonce as string
   const xa = await signin(H1, hal, { nonce: wn, count: 8 })
   ok(xa.status === 400 && xa.j.error === 'nonce', `a sign-in host enrolment challenge used to sign in → 400 nonce (${err(xa)})`)
-  const so = (await raw('POST', WEB_ROUTES.signoutChallenge, JSON.stringify({ address: hal }), S)).j.nonce as string
+  const so = (await mintSignout(hal)).nonce
   const xb = await signin(H1, hal, { nonce: so, count: 8 })
   ok(xb.status === 400 && xb.j.error === 'nonce', `a sign-out challenge used to sign in → 400 nonce (${err(xb)})`)
   const h47 = await signin(H1, hal, { handle: (await handleFor(hal)).subarray(0, 47), count: 8 })
@@ -749,7 +766,7 @@ async function signout(a: Authn, address: string, o: GetOpts & { ch?: { nonce: s
 
   // sign out everywhere: every check runs, then 501 until the kernel defines the statement
   const sc = await raw('POST', WEB_ROUTES.signoutChallenge, JSON.stringify({ address: hal }), S)
-  ok(sc.status === 200 && typeof sc.j.nonce === 'string' && sc.j.at === now && Object.keys(sc.j).length === 2, `sign-out challenge → 200 {nonce, at} (${err(sc)})`)
+  ok(sc.status === 501 && sc.j.error === 'not-implemented', `sign-out challenge → 501 until the kernel defines the statement, before any passkey prompt (${err(sc)})`)
   ok((await raw('POST', WEB_ROUTES.signoutChallenge, JSON.stringify({ address: 'nobody@example.com' }), S)).status === 404, 'sign-out challenge for no account → 404')
   {
     const ip = freshIp()
@@ -763,12 +780,12 @@ async function signout(a: Authn, address: string, o: GetOpts & { ch?: { nonce: s
   ok(((await storeOf(hal)).get(`pk:${H2.pub}`) as { signCount?: number } | undefined)?.signCount === 1, 'its passkey\'s counter is stored')
   const r1 = await signout(H2, hal, { ch: s1.ch, count: 2 })
   ok(r1.status === 400 && r1.j.error === 'nonce', `the same challenge again → 400 nonce (${err(r1)})`)
-  const ch2 = (await raw('POST', WEB_ROUTES.signoutChallenge, JSON.stringify({ address: hal }), S)).j as unknown as { nonce: string; at: number }
+  const ch2 = await mintSignout(hal)
   const r2 = await signout(H2, hal, { ch: { ...ch2, at: ch2.at - 1 }, count: 3 })
   ok(r2.status === 400 && r2.j.error === 'nonce', `a text whose time is not the challenge's → 400 nonce (${err(r2)})`)
   const r3 = await signout(H2, hal, { ch: ch2, count: 4 })
   ok(r3.status === 400 && r3.j.error === 'nonce', `then the right text → 400 nonce: the mismatch spent it (${err(r3)})`)
-  const anaCh = (await raw('POST', WEB_ROUTES.signoutChallenge, JSON.stringify({ address: ana }), S)).j as unknown as { nonce: string; at: number }
+  const anaCh = await mintSignout(ana)
   const r4 = await signout(H2, hal, { ch: anaCh, count: 5 })
   ok(r4.status === 400 && r4.j.error === 'nonce', `another address's challenge → 400 nonce (${err(r4)})`)
   const sn = (await signinCh()).j.nonce as string
@@ -791,6 +808,71 @@ async function signout(a: Authn, address: string, o: GetOpts & { ch?: { nonce: s
   ok(q1.status === 403 && q1.j.error === 'quarantined' && q2.status === 403 && q2.j.error === 'quarantined', `a suspended passkey: sign-out and sign-in → 403 quarantined (${err(q1)}, ${err(q2)})`)
   ok((await signout(H2, hal, { count: 10 })).status === 501, 'control: put back, it reaches the last step again')
   ok((await raw('POST', WEB_ROUTES.signout, JSON.stringify({ text: woutText(hal, now, 'x'), assertion: {} }), H)).j.error === 'origin', 'a sign-out from bento/home → 403 origin')
+
+  // D1: each purpose's challenge is refused at every other door
+  const head = ((await storeOf(hal)).get('head') ?? { hash: '' }) as { hash: string }
+  const sgn = (await signinCh()).j.nonce as string
+  const d1 = await enrol(hal, await Browser.make(), H1, { ch: { nonce: sgn, at: now, rosHash: head.hash }, count: 20 })
+  ok(d1.status === 400 && d1.j.error === 'nonce', `a sign-in challenge in a wdev. → 400 nonce (${err(d1)})`)
+  const sot = await mintSignout(hal)
+  const d2 = await enrol(hal, await Browser.make(), H1, { ch: { ...sot, rosHash: head.hash }, count: 20 })
+  ok(d2.status === 400 && d2.j.error === 'nonce', `a sign-out challenge in a wdev. → 400 nonce (${err(d2)})`)
+  const d3 = await checkin(hal, HB, { nonce: (await mintSignout(hal)).nonce })
+  ok(d3.status === 400 && d3.j.error === 'nonce', `a sign-out challenge in a wren. → 400 nonce (${err(d3)})`)
+  const rc = (await api('POST', '/v1/roster/challenge', { email: hal })).j.challenge as string
+  const d4 = await signin(H1, hal, { nonce: rc, count: 20 })
+  ok(d4.status === 400 && d4.j.error === 'nonce', `a roster challenge used to sign in → 400 nonce (${err(d4)})`)
+  const d5 = await signout(H2, hal, { ch: { nonce: rc, at: Number(new DataView(b64uDec(rc)!.buffer).getBigUint64(0)) }, count: 20 })
+  ok(d5.status === 400 && d5.j.error === 'nonce', `a roster challenge in a sign-out → 400 nonce (${err(d5)})`)
+  const wch = await chOf(hal)
+  const d6 = await signout(H2, hal, { ch: { nonce: wch.nonce, at: wch.at }, count: 21 })
+  ok(d6.status === 400 && d6.j.error === 'nonce', `a sign-in host enrolment challenge in a sign-out → 400 nonce (${err(d6)})`)
+  const d7 = await request(hal, H1, { remove: H2.pub, ch: (await mintSignout(hal)).nonce, get: { count: 21 } })
+  ok(d7.status === 400 && d7.j.error === 'nonce', `a sign-out challenge in a roster request → 400 nonce (${err(d7)})`)
+
+  // D2: a handle naming no account writes nothing anywhere
+  const ghost = 'ghost@example.com'
+  const g = await signin(H1, ghost, { count: 22 })
+  const gs = ROSTER.objs.get(await addressKey(ghost))?.store
+  ok(g.status === 403 && g.j.error === 'not-member' && (gs?.size ?? 0) === 0, `a user handle naming no account → 403 not-member, and no storage made for it (${err(g)}, ${gs?.size})`)
+
+  // D5: the sign-in challenge is limited per IP
+  {
+    const ip = freshIp(), st: number[] = []
+    for (let i = 0; i <= LIMITS.ip.challenge; i++) st.push((await raw('POST', WEB_ROUTES.signinChallenge, '{}', S, ip)).status)
+    ok(st.slice(0, -1).every((x) => x === 200) && st[st.length - 1] === 429, `sign-in challenge #${LIMITS.ip.challenge + 1} from one IP → 429`)
+  }
+
+  // D6: the counter is stored only over the one the assertion was checked against
+  {
+    const sp = crypto.subtle as unknown as { verify: (...x: unknown[]) => Promise<boolean> }
+    const orig = sp.verify.bind(crypto.subtle)
+    let once = true
+    sp.verify = async (...x: unknown[]) => {
+      if (once) { once = false; await plant(hal, (st) => { const r = st.get(`pk:${H1.pub}`) as Record<string, unknown> | undefined; if (r) st.set(`pk:${H1.pub}`, { ...r, signCount: 30 }) }) }
+      return orig(...x)
+    }
+    let race
+    try { race = await signin(H1, hal, { count: 30 }) } finally { sp.verify = orig }
+    ok(race.status === 400 && race.j.error === 'assertion-sign-count', `another assertion with the same counter landing while this one is checked → 400 assertion-sign-count (${err(race)})`)
+    ok((await signin(H1, hal, { count: 31 })).status === 200, 'control: the next counter signs in')
+  }
+}
+
+// D7: a passkey that a waiting reset would add cannot sign in
+{
+  const ivy = 'ivy@example.com', I1 = await Authn.make(), R1 = await Authn.make()
+  await setup(ivy, I1)
+  const n0 = mailbox.length
+  await api('POST', '/v1/roster/reset/start', { email: ivy })
+  const link = mailbox.slice(n0).find((x) => x.to === ivy && x.kind === 'reset')?.body.match(/https?:\/\/\S+/)?.[0] ?? ''
+  const tok = parseResetLink(link)?.token ?? ''
+  const ch = (await api('POST', '/v1/roster/challenge', { email: ivy })).j.challenge as string
+  const rr = await api('POST', '/v1/roster/reset', { email: ivy, token: tok, dirNonce: ch, reg: await R1.register(b64uDec(ch ?? '') ?? new Uint8Array(16)) })
+  ok(rr.status === 202, `ivy's reset waits (${rr.status})`)
+  const r = await signin(R1, ivy)
+  ok(r.status === 403 && r.j.error === 'not-member', `the waiting reset's new passkey cannot sign in → 403 not-member (${err(r)})`)
+  ok((await signin(I1, ivy)).status === 200, 'control: the current passkey can')
 }
 
 // =====================================================================
