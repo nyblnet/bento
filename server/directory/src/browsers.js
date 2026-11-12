@@ -22,6 +22,17 @@
 //   POST /v1/home/checkin {wren, sig, pin?}
 //     → 200 {watt, wattSig, signer, assertion, roster, incidents}
 //     → 403 {error: unknown | revoked | cap, incidents}
+// The sign-in host's own pages (CORS to it alone, its Origin required):
+//   POST /v1/web/signin/challenge {} → 200 {nonce}: audience signin, 5 minutes
+//   POST /v1/web/signin {nonce, assertion} → 200 {address}: the account a
+//     discoverable passkey belongs to, named by the first 32 bytes of its
+//     48-byte user handle (the account's storage name). Nothing is logged,
+//     mailed or changed but the passkey's signature counter.
+//   POST /v1/web/signout/challenge {address} → 200 {nonce, at}; 404 no account
+//   POST /v1/web/signout {text, assertion}: text = wout.<b64u(address)>.<at>.<nonce>
+//     → 501 once every check has passed, until the kernel defines that
+//     statement (the layout here is the sign-in host's provisional one). Then
+//     it signs every browser out as of `at` (below).
 // Anyone's (CORS *), for a peer holding a certificate:
 //   GET /v1/device/status?e=<address>&c=<sha256 of the certificate text>
 //     → 200 {state: ok | revoked | cap | unknown, incidents}
@@ -72,7 +83,8 @@
 // mail for a new browser; the incident lever itself.
 
 import { parseDeviceCert, buildWatt, verifyWren, CEREMONY_CAP_MS, WATT_MAX_MS } from '../../../kernel/src/devices.ts'
-import { sha256b64u, signStatement } from '../../../kernel/src/statements.ts'
+import { b64uDec, sha256b64u, signStatement } from '../../../kernel/src/statements.ts'
+import { parseRos } from '../../../kernel/src/roster.ts'
 import { verifyAssertion, statementChallenge } from '../../../kernel/src/webauthn.ts'
 import { HOME_ORIGIN, PASSKEY, SIGNIN_ORIGIN } from './passkey.js'
 import { issueChallenge, openChallenge } from './challenge.js'
@@ -94,6 +106,10 @@ export const BROWSER_LIMITS = Object.freeze({
 
 /** The two audiences a browser challenge is sealed for. */
 const AUDIENCES = Object.freeze(['web', 'home'])
+/** The sign-in host's own challenges: a passkey sign-in (no account yet: sealed for everyone) and a sign-out (sealed for the address). 5 minutes, like a roster challenge. */
+const SIGNIN_SCOPE = 'signin'
+/** The sign-out statement is the kernel's to define; until it does, the route refuses at the last step. */
+const WOUT_DEFINED = false
 
 /** The origin a browser route answers CORS to, or null for a route of anyone's. */
 export function browserOrigin(path) {
@@ -132,6 +148,13 @@ const B64U = /^[A-Za-z0-9_-]+$/
 const TEXT_MAX = 2048
 const FIELD_MAX = 4096
 const field = (v) => typeof v === 'string' && v.length > 0 && v.length <= FIELD_MAX && B64U.test(v)
+const hexOf = (b) => [...b].map((x) => x.toString(16).padStart(2, '0')).join('')
+const ASSERTION_KEYS = Object.freeze(['authenticatorData', 'clientDataJSON', 'id', 'signature', 'userHandle'])
+/** An assertion as the sign-in host sends it: these keys only, base64url fields, the user handle optional. */
+const assertionShape = (a) => !!a && typeof a === 'object' && !Array.isArray(a) && Object.keys(a).every((f) => ASSERTION_KEYS.includes(f)) &&
+  ['id', 'authenticatorData', 'clientDataJSON', 'signature'].every((f) => field(a[f])) &&
+  (a.userHandle === undefined || a.userHandle === null || field(a.userHandle))
+const when = (t) => new Date(t).toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC')
 
 /**
  * The browser routes, from the worker. `k` carries the worker's helpers:
@@ -160,6 +183,46 @@ export async function browserRoute(req, env, ip, p, k) {
     const web = p === WEB_ROUTES.challenge
     const nonce = await issueChallenge(env.CHALLENGE_KEY, web ? 'web' : 'home', scope, at)
     return json(200, web ? { nonce, at, rosHash: r.body.rosHash } : { nonce })
+  }
+
+  if (p === WEB_ROUTES.signinChallenge) {
+    if (!(await ledger(ip, 'challenge'))) return json(429, { error: 'rate-limited' })
+    return json(200, { nonce: await issueChallenge(env.CHALLENGE_KEY, 'signin', SIGNIN_SCOPE, Date.now()) })
+  }
+
+  if (p === WEB_ROUTES.signin) {
+    if (!(await ledger(ip, 'complete'))) return json(429, { error: 'rate-limited' })
+    const c = await openChallenge(env.CHALLENGE_KEY, 'signin', SIGNIN_SCOPE, b.nonce, Date.now())
+    if (!c) return json(400, { error: 'nonce' })
+    const as = b.assertion
+    const h = as && typeof as === 'object' && field(as.userHandle) ? b64uDec(as.userHandle) : null
+    // the handle only ROUTES the request (its first 32 bytes are the account's storage name): membership is the account's own record
+    if (!h || h.length !== 48) return json(400, { error: 'assertion' })
+    const r = await roster(null, 'browserSignin', { assertion: as, nonce: c.nonce, issued: c.issued, challenge: b.nonce }, hexOf(h.subarray(0, 32)))
+    return json(r.status, r.body)
+  }
+
+  if (p === WEB_ROUTES.signoutChallenge) {
+    const email = normalize(b.address)
+    if (!email) return json(400, { error: 'bad-address' })
+    if (!(await ledger(ip, 'lookup'))) return json(429, { error: 'rate-limited' })
+    const r = await roster(email, 'browserHead', {})
+    if (r.status !== 200) return json(r.status, r.body)
+    const at = Date.now()
+    return json(200, { nonce: await issueChallenge(env.CHALLENGE_KEY, 'signout', await addressKey(email), at), at })
+  }
+
+  if (p === WEB_ROUTES.signout) {
+    const parts = typeof b.text === 'string' && b.text.length <= TEXT_MAX ? b.text.split('.') : []
+    const raw = parts.length === 4 && parts[0] === 'wout' && /^[1-9][0-9]{0,15}$/.test(parts[2]) ? b64uDec(parts[1]) : null
+    let address = null
+    try { address = raw ? new TextDecoder('utf-8', { fatal: true }).decode(raw) : null } catch { /* refused below */ }
+    if (!address || normalize(address) !== address) return json(400, { error: 'text' })
+    if (!(await ledger(ip, 'request'))) return json(429, { error: 'rate-limited' })
+    const c = await openChallenge(env.CHALLENGE_KEY, 'signout', await addressKey(address), parts[3], Date.now())
+    if (!c) return json(400, { error: 'nonce' })
+    const r = await roster(address, 'browserSignout', { text: b.text, at: Number(parts[2]), assertion: b.assertion, nonce: c.nonce, issued: c.issued, os: req.headers.get('origin') })
+    return json(r.status, r.body)
   }
 
   if (p === WEB_ROUTES.enrol) {
@@ -214,7 +277,7 @@ export async function deviceStatus(env, ip, url, k) {
 
 // --- in the address's object (roster.js hands these ops here) ---------------------
 
-export const BROWSER_OPS = Object.freeze(['browserHead', 'browserEnrol', 'browserCheckin', 'browserStatus', 'browserRevokeAll'])
+export const BROWSER_OPS = Object.freeze(['browserHead', 'browserEnrol', 'browserCheckin', 'browserStatus', 'browserRevokeAll', 'browserSignin', 'browserSignout'])
 
 let signer = null
 /**
@@ -260,6 +323,41 @@ async function chainFrom(s, pin) {
   let from = 0
   if (typeof pin === 'string') for (let i = 0; i < links.length; i++) if ((await sha256b64u(links[i].ros)) === pin) from = i
   return links.slice(from)
+}
+
+/** The credential `credId` as a live, unsuspended passkey member of `head`, with its record; or the refusal. */
+async function liveMember(s, head, credId) {
+  const pub = head && typeof credId === 'string' ? await s.get(`cid:${credId}`) : undefined
+  const m = pub ? head.members.find((x) => x.pub === pub) : undefined
+  const rec = pub ? await s.get(`pk:${pub}`) : undefined
+  if (!m || m.kind !== 'pk' || !rec) return { error: 'not-member' }
+  if (m.quarantined) return { error: 'quarantined' }
+  return { pub, rec }
+}
+
+/**
+ * Sign every browser out as of `at`: each browser certificate made at or
+ * before it stops renewing at once, and a ceremony whose challenge was issued
+ * by then can no longer finish. A device certificate of an app (dev2.) is not
+ * a browser's and is untouched. Logged, and the address is told (roster mail,
+ * which no budget holds back). Returns how many certificates it revoked.
+ */
+async function signOutAll(obj, head, { at, now, by, origin, co }, h) {
+  const s = obj.state.storage
+  await s.put('signoutAt', Math.max(at, (await s.get('signoutAt')) ?? 0))
+  let n = 0
+  for (const [key, rec] of await s.list({ prefix: 'wd:' })) {
+    if (rec.revokedAt || rec.ceremonyAt > at) continue
+    await s.put(key, { ...rec, revokedAt: now })
+    n++
+  }
+  await obj.log({ k: 'signout-all', at: now, upTo: at, seq: head.seq, pub: by, by, os: origin, rq: '', co, n })
+  const address = (await parseRos(head.ros)).value.address
+  await h.notify(address, 'Every browser was signed out of your bento/id account', [
+    `At ${when(now)} every browser signed in to this bento/id account was signed out${by ? `, by the passkey ${await h.fingerprint(by)}` : ''}.`,
+    'Each browser can sign in again with one of your passkeys. Apps on your devices are not affected.',
+  ])
+  return n
 }
 
 /** Delete the certificates past their 7 days and the keep after it (their log entries stay). */
@@ -348,21 +446,48 @@ export async function browserOp(obj, a, now, h) {
   }
 
   if (a.op === 'browserRevokeAll') {
-    // sign out everywhere in browsers (and the incident lever, for one address):
-    // every certificate made at or before `at` stops renewing at once, and a
-    // ceremony whose challenge was issued by then can no longer finish
+    // what a member's sign-out does once its statement exists (browserSignout), and the incident lever for one address
     const head = await s.get('head')
     if (!head) return out(404, { error: 'not-found' })
     const at = Number.isSafeInteger(a.at) && a.at > 0 && a.at <= now ? a.at : now
-    await s.put('signoutAt', Math.max(at, (await s.get('signoutAt')) ?? 0))
-    let n = 0
-    for (const [key, rec] of await s.list({ prefix: 'wd:' })) {
-      if (rec.revokedAt || rec.ceremonyAt > at) continue
-      await s.put(key, { ...rec, revokedAt: now })
-      n++
-    }
-    await obj.log({ k: 'signout', at: now, seq: head.seq, pub: typeof a.by === 'string' ? a.by : '', os: h.origin, rq: '', co: '', n })
-    return out(200, { revoked: n })
+    return out(200, { at, revoked: await signOutAll(obj, head, { at, now, by: typeof a.by === 'string' ? a.by : '', origin: h.origin, co: '' }, h) })
+  }
+
+  if (a.op === 'browserSignin') {
+    // the challenge is spent first, in the object the user handle names
+    if (!(await spend())) return out(400, { error: 'nonce' })
+    const as = a.assertion
+    if (!assertionShape(as)) return out(400, { error: 'assertion' })
+    await obj.ripen(now)
+    const head = await s.get('head')
+    const who = await liveMember(s, head, as.id)
+    if (who.error) return out(403, { error: who.error })
+    const v = await verifyAssertion({ authenticatorData: as.authenticatorData, clientDataJSON: as.clientDataJSON, signature: as.signature }, {
+      publicKey: who.pub, challenge: b64uDec(a.challenge) ?? new Uint8Array(0), rpId: PASSKEY.rpId, origins: [SIGNIN_ORIGIN], storedSignCount: who.rec.signCount,
+    })
+    if (!v.ok) return out(400, { error: `assertion-${v.reason}` })
+    await s.put(`pk:${who.pub}`, { ...who.rec, signCount: v.value.signCount })
+    return out(200, { address: (await parseRos(head.ros)).value.address })
+  }
+
+  if (a.op === 'browserSignout') {
+    if (!(await spend())) return out(400, { error: 'nonce' })
+    if (a.at !== a.issued) return out(400, { error: 'nonce' }) // the text's time is the challenge's
+    await obj.ripen(now)
+    const head = await s.get('head')
+    if (!head) return out(404, { error: 'not-found' })
+    const as = a.assertion
+    if (!assertionShape(as)) return out(400, { error: 'assertion' })
+    const who = await liveMember(s, head, as.id)
+    if (who.error) return out(403, { error: who.error })
+    const v = await verifyAssertion({ authenticatorData: as.authenticatorData, clientDataJSON: as.clientDataJSON, signature: as.signature }, {
+      publicKey: who.pub, challenge: await statementChallenge(a.text), rpId: PASSKEY.rpId, origins: [SIGNIN_ORIGIN], storedSignCount: who.rec.signCount,
+    })
+    if (!v.ok) return out(400, { error: `assertion-${v.reason}` })
+    await s.put(`pk:${who.pub}`, { ...who.rec, signCount: v.value.signCount })
+    if (!WOUT_DEFINED) return out(501, { error: 'not-implemented', reason: 'the kernel sign-out statement is not defined yet' })
+    await signOutAll(obj, head, { at: a.at, now, by: who.pub, origin: h.origin, co: SIGNIN_ORIGIN }, h)
+    return out(200, { ok: true, at: a.at })
   }
 
   return out(400, { error: 'bad-op' })

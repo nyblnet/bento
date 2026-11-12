@@ -239,6 +239,10 @@ Bodies are JSON, sent as text/plain.
 | `POST /v1/web/enrol` `{text, rq, assertion}` (60 an hour per IP) | 200 `{ok, wdev, watt}`; 400 `text`, `rq`, `assertion`, `nonce`, `ceremony`, `head`; 403 `signer`, `assertion`; 409 `device-known` |
 | `POST /v1/home/challenge` `{address}` | 200 `{nonce}`: a challenge for a renewal; 404 for an address with no account |
 | `POST /v1/home/checkin` `{wren, sig, pin?}` (120 an hour per IP) | 200 `{watt, wattSig, signer, assertion, roster, incidents}` (the roster as kernel RosterLink objects from the pinned head, or from setup); 403 `{error: unknown \| revoked \| cap, incidents}`; 400 `wren`, `nonce` |
+| `POST /v1/web/signin/challenge` `{}` (120 an hour per IP) | 200 `{nonce}`: a sign-in challenge, 5 minutes |
+| `POST /v1/web/signin` `{nonce, assertion}` (60 an hour per IP) | 200 `{address}`: the account a discoverable passkey belongs to, named by the first 32 bytes of its 48-byte user handle; 400 `nonce`, `assertion`, `assertion-<reason>`; 403 `not-member`, `quarantined`. Nothing is logged or mailed; the passkey's counter is stored |
+| `POST /v1/web/signout/challenge` `{address}` | 200 `{nonce, at}`; 404 for an address with no account (a per-IP lookup) |
+| `POST /v1/web/signout` `{text, assertion}` (60 an hour per IP) | `text` is `wout.<b64u(address)>.<at>.<nonce>` (the sign-in host's provisional layout). 400 `text`, `nonce` (spent first; `at` must be the challenge's), `assertion`, `assertion-<reason>`; 403 `not-member`, `quarantined`; then **501** until the kernel defines the statement |
 | `GET /v1/device/status?e=<address>&c=<sha256 of the certificate>` (CORS `*`) | 200 `{state: ok \| revoked \| cap \| unknown, incidents}` |
 
 - A browser challenge is sealed for its audience (enrolment or renewal) and
@@ -262,9 +266,10 @@ Bodies are JSON, sent as text/plain.
   that does not read answers 500 and countersigns nothing.
 - Signing out everywhere is a time: every browser certificate made at or
   before it is refused (403 `revoked`), and a ceremony whose challenge was
-  issued by then cannot finish.
-- Not here yet: the route a member signs to sign out everywhere (the revoking
-  itself is built; what the passkey signs is a kernel statement), a `dev2.`
+  issued by then cannot finish. It is logged (`signout-all`) and mailed to
+  the address (roster mail, never held back). The route runs every check and
+  then answers 501 until the kernel defines what the passkey signs.
+- Not here yet: the sign-out statement itself (a kernel layout), a `dev2.`
   made by a passkey alone, retiring the old key at a new ceremony, and mail
   for a new browser.
 

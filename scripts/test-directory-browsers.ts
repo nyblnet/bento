@@ -644,8 +644,11 @@ ok(ce.status === 200, `cara's second passkey enrols a browser (${err(ce)})`)
   ok(out.status === 200 && out.j.revoked === 2, `sign out everywhere in browsers: both certificates revoked (${JSON.stringify(out.j)})`)
   const rs = await Promise.all(EB.map((b) => checkin(eve, b)))
   ok(rs.every((r) => r.status === 403 && r.j.error === 'revoked'), `each renewal then → 403 revoked (${rs.map(err).join(', ')})`)
-  const log = (await logOf(eve)).find((x) => x.k === 'signout')
-  ok(log?.n === 2 && log.pub === E1.pub && log.ob === 0, 'logged: who, how many, ob 0')
+  const log = (await logOf(eve)).find((x) => x.k === 'signout-all')
+  ok(log?.n === 2 && log.pub === E1.pub && log.by === E1.pub && log.ob === 0 && log.upTo === now, 'logged as signout-all: who, how many, as of when, ob 0')
+  const m = lastMail(eve) ?? NOMAIL
+  ok(m.kind === 'roster' && m.subject === 'Every browser was signed out of your bento/id account' && m.body.includes(await fingerprintOf(E1.pub)) && /Apps on your devices are not affected/.test(m.body),
+    `the address is told, by roster mail, naming the passkey (${m.subject})`)
   // a ceremony whose challenge was issued before the sign-out cannot finish after it
   const early = await chOf(eve)
   await doOp(eve, 'browserRevokeAll', { by: E1.pub, os: S })
@@ -655,7 +658,139 @@ ok(ce.status === 200, `cara's second passkey enrols a browser (${err(ce)})`)
   const nb = await Browser.make()
   ok((await enrol(eve, nb, E1)).status === 200 && (await checkin(eve, nb)).status === 200, 'a browser signed in afterwards renews')
   // the sign-out is a time: a certificate made after it is untouched by it
+  now += 1
+  const past = await doOp(eve, 'browserRevokeAll', { by: E1.pub, os: S, at: now - 2 })
+  ok(past.j.revoked === 0 && (await checkin(eve, nb)).status === 200, 'a sign-out as of a time before a certificate leaves it renewing')
   ok((await api('GET', `${STATUS_ROUTE}?e=${eve}&c=${await sha256b64u('x')}`)).j.state === 'unknown', 'control: status for a certificate never made is unknown')
+}
+
+// =====================================================================
+// 4b. the sign-in host's own pages: passkey sign-in, and sign out everywhere
+// =====================================================================
+/** An assertion over RAW challenge bytes (a sign-in), with a user handle. */
+async function assertRaw(a: Authn, bytes: Uint8Array, o: GetOpts & { handle?: Uint8Array | null } = {}) {
+  if (o.count !== undefined) a.count = o.count
+  const c = a.count
+  const ad = cat(await sha256(te.encode(o.rpId ?? 'id.bento.page')), new Uint8Array([o.flags ?? 0x05, (c >>> 24) & 255, (c >>> 16) & 255, (c >>> 8) & 255, c & 255]))
+  const cdj = te.encode(JSON.stringify({ type: 'webauthn.get', challenge: b64uEnc(bytes), origin: o.origin ?? S, crossOrigin: false }))
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, a.kp.privateKey, cat(ad, await sha256(cdj)) as BufferSource))
+  const out: Record<string, unknown> = { id: a.cid, authenticatorData: b64uEnc(ad), clientDataJSON: b64uEnc(cdj), signature: b64uEnc(rawToDer(sig)) }
+  if (o.handle !== null) out.userHandle = b64uEnc(o.handle ?? new Uint8Array(48))
+  return out
+}
+const handleFor = async (address: string, len = 48) => { const h = new Uint8Array(len); h.set(b64uDec(b64uEnc(Uint8Array.from((await addressKey(address)).match(/../g)!.map((x) => parseInt(x, 16)))))!.subarray(0, Math.min(32, len))); return h }
+async function fingerprintOf(pub: string) { return [...new Uint8Array(await crypto.subtle.digest('SHA-256', b64uDec(pub)! as BufferSource))].map((x) => x.toString(16).padStart(2, '0')).join('').slice(0, 8) }
+const signinCh = async (o: { origin?: string | null } = {}) => raw('POST', WEB_ROUTES.signinChallenge, '{}', o.origin === undefined ? S : o.origin)
+async function signin(a: Authn, address: string, o: GetOpts & { nonce?: string; handle?: Uint8Array | null; over?: Uint8Array } = {}) {
+  const nonce = o.nonce ?? (await signinCh()).j.nonce as string
+  const as = await assertRaw(a, o.over ?? b64uDec(nonce ?? '') ?? new Uint8Array(16), { ...o, handle: o.handle === undefined ? await handleFor(address) : o.handle })
+  return { ...(await raw('POST', WEB_ROUTES.signin, JSON.stringify({ nonce, assertion: as }), S)), nonce }
+}
+const woutText = (address: string, at: number, nonce: string) => ['wout', b64uEnc(te.encode(address)), String(at), nonce].join('.')
+async function signout(a: Authn, address: string, o: GetOpts & { ch?: { nonce: string; at: number }; text?: string; signText?: string } = {}) {
+  const ch = o.ch ?? (await raw('POST', WEB_ROUTES.signoutChallenge, JSON.stringify({ address }), S)).j as unknown as { nonce: string; at: number }
+  const text = o.text ?? woutText(address, ch.at, ch.nonce)
+  const as = { id: a.cid, ...(await a.assert(o.signText ?? text, o)) }
+  return { ...(await raw('POST', WEB_ROUTES.signout, JSON.stringify({ text, assertion: as }), S)), ch, text }
+}
+{
+  const hal = 'hal@example.com', H1 = await Authn.make(), H2 = await Authn.make()
+  await setup(hal, H1)
+  await request(hal, H1, { add: H2 })
+  now += ROSTER_WAIT_MS
+  await chOf(hal) // ripen
+  const HB = await Browser.make()
+  ok((await enrol(hal, HB, H1)).status === 200, 'hal has two passkeys and a browser')
+  const m0 = mailbox.length, l0 = (await logOf(hal)).length
+
+  // sign-in
+  const c = await signinCh()
+  ok(c.status === 200 && b64uDec(c.j.nonce as string)?.length === 40 && Object.keys(c.j).length === 1 && c.h.get('access-control-allow-origin') === SIGNIN_ORIGIN, 'sign-in challenge → 200 {nonce}: 40 bytes, CORS to the sign-in host')
+  ok((await signinCh({ origin: H })).j.error === 'origin' && (await signinCh({ origin: null })).status === 403, 'sign-in challenge from another page or none → 403 origin')
+  const ok1 = await signin(H1, hal, { nonce: c.j.nonce as string, count: 3 })
+  ok(ok1.status === 200 && ok1.j.address === hal && Object.keys(ok1.j).length === 1, `sign-in → 200 {address} (${err(ok1)})`)
+  ok(((await storeOf(hal)).get(`pk:${H1.pub}`) as { signCount?: number } | undefined)?.signCount === 3, 'the passkey\'s signature counter is stored')
+  const again = await signin(H1, hal, { nonce: c.j.nonce as string, count: 4 })
+  ok(again.status === 400 && again.j.error === 'nonce', `the same challenge again → 400 nonce (${err(again)})`)
+  const back = await signin(H1, hal, { count: 2 })
+  ok(back.status === 400 && back.j.error === 'assertion-sign-count', `a counter that goes back → 400 assertion-sign-count (${err(back)})`)
+  H1.count = 5
+  const c5 = (await signinCh()).j.nonce as string
+  now += 5 * MIN + 1
+  const late = await signin(H1, hal, { nonce: c5, count: 6 })
+  ok(late.status === 400 && late.j.error === 'nonce', `a sign-in challenge 5 min + 1 ms old → 400 nonce (${err(late)})`)
+  const c6 = (await signinCh()).j.nonce as string
+  now += 5 * MIN
+  ok((await signin(H1, hal, { nonce: c6, count: 7 })).status === 200, 'control: at exactly 5 minutes it is still good')
+  const wn = (await webCh(hal)).j.nonce as string
+  const xa = await signin(H1, hal, { nonce: wn, count: 8 })
+  ok(xa.status === 400 && xa.j.error === 'nonce', `a sign-in host enrolment challenge used to sign in → 400 nonce (${err(xa)})`)
+  const so = (await raw('POST', WEB_ROUTES.signoutChallenge, JSON.stringify({ address: hal }), S)).j.nonce as string
+  const xb = await signin(H1, hal, { nonce: so, count: 8 })
+  ok(xb.status === 400 && xb.j.error === 'nonce', `a sign-out challenge used to sign in → 400 nonce (${err(xb)})`)
+  const h47 = await signin(H1, hal, { handle: (await handleFor(hal)).subarray(0, 47), count: 8 })
+  ok(h47.status === 400 && h47.j.error === 'assertion', `a user handle of 47 bytes → 400 assertion (${err(h47)})`)
+  const h0 = await signin(H1, hal, { handle: null, count: 8 })
+  ok(h0.status === 400 && h0.j.error === 'assertion', `no user handle → 400 assertion (${err(h0)})`)
+  const other = await signin(H1, ana, { count: 8 })
+  ok(other.status === 403 && other.j.error === 'not-member', `a handle naming another account → 403 not-member (${err(other)})`)
+  const stranger = await signin(await Authn.make(), hal)
+  ok(stranger.status === 403 && stranger.j.error === 'not-member', `a passkey that is not a member → 403 not-member (${err(stranger)})`)
+  const bn = (await signinCh()).j.nonce as string
+  const bad = await signin(H1, hal, { nonce: bn, over: crypto.getRandomValues(new Uint8Array(40)), count: 9 })
+  ok(bad.status === 400 && /^assertion-/.test(bad.j.error as string), `an assertion over other bytes → 400 assertion-… (${err(bad)})`)
+  const burnt = await signin(H1, hal, { nonce: bn, count: 10 })
+  ok(burnt.status === 400 && burnt.j.error === 'nonce', `then the right one on that challenge → 400 nonce: the failure spent it (${err(burnt)})`)
+  const ho = await signin(H1, hal, { origin: H, count: 11 })
+  ok(ho.status === 400 && ho.j.error === 'assertion-origin', `an assertion made on bento/home → 400 assertion-origin (${err(ho)})`)
+  const uv = await signin(H1, hal, { flags: 0x01, count: 12 })
+  ok(uv.status === 400 && uv.j.error === 'assertion-uv', `no user verification → 400 assertion-uv (${err(uv)})`)
+  ok(mailbox.length === m0 && (await logOf(hal)).length === l0, 'signing in logged and mailed nothing')
+
+  // sign out everywhere: every check runs, then 501 until the kernel defines the statement
+  const sc = await raw('POST', WEB_ROUTES.signoutChallenge, JSON.stringify({ address: hal }), S)
+  ok(sc.status === 200 && typeof sc.j.nonce === 'string' && sc.j.at === now && Object.keys(sc.j).length === 2, `sign-out challenge → 200 {nonce, at} (${err(sc)})`)
+  ok((await raw('POST', WEB_ROUTES.signoutChallenge, JSON.stringify({ address: 'nobody@example.com' }), S)).status === 404, 'sign-out challenge for no account → 404')
+  {
+    const ip = freshIp()
+    for (let i = 0; i < LIMITS.ip.lookup; i++) await api('GET', `/v1/roster?e=n${i}@example.com`, undefined, { ip })
+    ok((await raw('POST', WEB_ROUTES.signoutChallenge, JSON.stringify({ address: hal }), S, ip)).status === 429, 'the sign-out challenge spends the per-IP lookup budget')
+  }
+  H2.count = 1
+  const s1 = await signout(H2, hal, { count: 1 })
+  ok(s1.status === 501 && s1.j.error === 'not-implemented', `a sign-out that passes every check → 501 until the kernel defines its statement (${err(s1)})`)
+  ok((await checkin(hal, HB)).status === 200 && !(await storeOf(hal)).has('signoutAt'), 'and nothing was revoked')
+  ok(((await storeOf(hal)).get(`pk:${H2.pub}`) as { signCount?: number } | undefined)?.signCount === 1, 'its passkey\'s counter is stored')
+  const r1 = await signout(H2, hal, { ch: s1.ch, count: 2 })
+  ok(r1.status === 400 && r1.j.error === 'nonce', `the same challenge again → 400 nonce (${err(r1)})`)
+  const ch2 = (await raw('POST', WEB_ROUTES.signoutChallenge, JSON.stringify({ address: hal }), S)).j as unknown as { nonce: string; at: number }
+  const r2 = await signout(H2, hal, { ch: { ...ch2, at: ch2.at - 1 }, count: 3 })
+  ok(r2.status === 400 && r2.j.error === 'nonce', `a text whose time is not the challenge's → 400 nonce (${err(r2)})`)
+  const r3 = await signout(H2, hal, { ch: ch2, count: 4 })
+  ok(r3.status === 400 && r3.j.error === 'nonce', `then the right text → 400 nonce: the mismatch spent it (${err(r3)})`)
+  const anaCh = (await raw('POST', WEB_ROUTES.signoutChallenge, JSON.stringify({ address: ana }), S)).j as unknown as { nonce: string; at: number }
+  const r4 = await signout(H2, hal, { ch: anaCh, count: 5 })
+  ok(r4.status === 400 && r4.j.error === 'nonce', `another address's challenge → 400 nonce (${err(r4)})`)
+  const sn = (await signinCh()).j.nonce as string
+  const r5 = await signout(H2, hal, { ch: { nonce: sn, at: now }, count: 6 })
+  ok(r5.status === 400 && r5.j.error === 'nonce', `a sign-in challenge in a sign-out → 400 nonce (${err(r5)})`)
+  for (const [what, t] of [['three fields', `wout.${b64uEnc(te.encode(hal))}.${now}`], ['a time with a leading zero', `wout.${b64uEnc(te.encode(hal))}.0${now}.x`],
+    ['an address not in normal form', woutText('Hal@Example.com', now, 'x')], ['another prefix', `wdev.${b64uEnc(te.encode(hal))}.${now}.x`]] as const) {
+    const r = await raw('POST', WEB_ROUTES.signout, JSON.stringify({ text: t, assertion: {} }), S)
+    ok(r.status === 400 && r.j.error === 'text', `a sign-out text with ${what} → 400 text (${err(r)})`)
+  }
+  const nm = await signout(await Authn.make(), hal)
+  ok(nm.status === 403 && nm.j.error === 'not-member', `a sign-out by a passkey that is not a member → 403 not-member (${err(nm)})`)
+  const ov = await signout(H2, hal, { signText: 'wout.other', count: 7 })
+  ok(ov.status === 400 && /^assertion-/.test(ov.j.error as string), `an assertion over another text → 400 assertion-… (${err(ov)})`)
+  const hd = ((await storeOf(hal)).get('head') ?? { members: [] }) as { members: Member[] }
+  await plant(hal, (st) => { const x = st.get('head') as Record<string, unknown>; st.set('head', { ...x, members: hd.members.map((m) => (m.pub === H2.pub ? { ...m, quarantined: true } : m)) }) })
+  const q1 = await signout(H2, hal, { count: 8 })
+  const q2 = await signin(H2, hal, { count: 9 })
+  await plant(hal, (st) => { const x = st.get('head') as Record<string, unknown>; st.set('head', { ...x, members: hd.members }) })
+  ok(q1.status === 403 && q1.j.error === 'quarantined' && q2.status === 403 && q2.j.error === 'quarantined', `a suspended passkey: sign-out and sign-in → 403 quarantined (${err(q1)}, ${err(q2)})`)
+  ok((await signout(H2, hal, { count: 10 })).status === 501, 'control: put back, it reaches the last step again')
+  ok((await raw('POST', WEB_ROUTES.signout, JSON.stringify({ text: woutText(hal, now, 'x'), assertion: {} }), H)).j.error === 'origin', 'a sign-out from bento/home → 403 origin')
 }
 
 // =====================================================================

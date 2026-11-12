@@ -13734,14 +13734,22 @@ bento/home agent was built against.
 - **Signing out everywhere is a time.** Every browser certificate made at or
   before it stops renewing, and a ceremony whose challenge was issued by then
   cannot finish after it, so a sign-in already under way cannot undo it.
+  Apps' certificates are untouched. The route checks everything and then
+  answers 501 until the kernel defines the statement a passkey signs for it.
+- **A passkey sign-in on the sign-in host** finds the account from the
+  passkey's 48-byte user handle (its first 32 bytes are the account's storage
+  name), but the handle only routes the request: membership is the account's
+  own record. Its challenge is spent in that account's object, so a request
+  too malformed to name an account leaves its challenge unspent. It logs and
+  mails nothing.
 - **Incident records** come from a deploy variable and ride on every
   check-in and status answer. A list that does not read is an error, never a
   shorter list.
 - **CORS** is per route: the sign-in host's routes answer only it, bento/home's
   only it, the rest `*`, and a path that is no route answers with none.
 
-Not here yet: the request a member signs to sign out everywhere (the revoking
-is built; the statement is the kernel's), a `dev2.` made by a passkey alone,
+Not here yet: the statement a member signs to sign out everywhere (the
+kernel's), a `dev2.` made by a passkey alone,
 retiring the old key at a new ceremony, and mail for a new browser. Guards:
 `scripts/test-directory-browsers.ts` (the kernel's `verifyDevice` over what a
 check-in returns; each challenge rule with its control) and

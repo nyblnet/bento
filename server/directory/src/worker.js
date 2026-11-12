@@ -155,7 +155,8 @@ async function route(req, env) {
   const k = {
     json: (status, b) => json(status, b, headersFor(p)),
     ledger: (key, kind) => ledger(env, key, kind),
-    roster: async (email, op, args) => call(await rosterStub(env, email), op, args),
+    // by address, or (the passkey sign-in) by the storage name a user handle carries
+    roster: async (email, op, args, key) => call(key ? env.ROSTER.get(env.ROSTER.idFromName(key)) : await rosterStub(env, email), op, args),
     body,
   }
 

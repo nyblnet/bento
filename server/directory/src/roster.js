@@ -459,7 +459,7 @@ export class Roster {
     }
     const origin = typeof a.os === 'string' ? a.os.slice(0, ROSTER_LIMITS.originMax) : ''
     // the browser certificates (browsers.js): the same object, its own ops
-    if (BROWSER_OPS.includes(a.op)) return browserOp(this, a, now, { spend, out, origin })
+    if (BROWSER_OPS.includes(a.op)) return browserOp(this, a, now, { spend, out, origin, fingerprint, notify: (to, subject, lines) => notify(this.env, to, subject, lines) })
 
     if (a.op === 'head') {
       await this.ripen(now)

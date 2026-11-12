@@ -13,6 +13,14 @@ export const WEB_ROUTES = Object.freeze({
   challenge: '/v1/web/challenge',
   /** POST {text, rq, assertion} → 200 {ok, wdev, watt} */
   enrol: '/v1/web/enrol',
+  /** POST {} → 200 {nonce}: a sign-in challenge, for the sign-in host's own pages */
+  signinChallenge: '/v1/web/signin/challenge',
+  /** POST {nonce, assertion} → 200 {address}: which account a discoverable passkey belongs to */
+  signin: '/v1/web/signin',
+  /** POST {address} → 200 {nonce, at}; 404 for an address with no account */
+  signoutChallenge: '/v1/web/signout/challenge',
+  /** POST {text, assertion} → 501 until the kernel defines the sign-out statement (wout.) */
+  signout: '/v1/web/signout',
 })
 
 export const HOME_ROUTES = Object.freeze({
