@@ -488,16 +488,16 @@ if (row('framed')) {
 }
 
 if (row('concurrent')) {
-  section('concurrent: eight honest library tabs at once  (rule: one chain for every storage write)')
+  section('concurrent: sixteen honest library tabs at once  (rule: one chain for every storage write)')
   await fresh()
   await visit(page, `${LIB}/`)
   const t0 = Date.now()
-  const tabs = await Promise.all([...Array(8)].map(() => ctx.newPage()))
+  const tabs = await Promise.all([...Array(16)].map(() => ctx.newPage()))
   await Promise.all(tabs.map((p, i) => p.goto(`${LIB}/?r=${i}`)))
-  await until(async () => (await since(t0)).length >= 8, 15000)
+  await until(async () => (await since(t0)).length >= 16, 20000)
   await sleep(1500)
   const evs = await since(t0)
-  ok(evs.length === 8 && evs.every((e) => e.verdict === 'ok'), `every one recorded (${evs.length}/8: ${evs.map((e) => e.verdict)})`)
+  ok(evs.length === 16 && evs.every((e) => e.verdict === 'ok'), `every one recorded (${evs.length}/16: ${evs.map((e) => e.verdict)})`)
   for (const p of tabs) await p.close()
 }
 
