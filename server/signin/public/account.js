@@ -27,6 +27,7 @@ const FAILED = {
   'no-account': 'There is no bento/id account for that address any more.',
   'network': 'bento/id could not be reached. Nothing changed. Try again.',
   'busy': 'Too many tries from here. Wait a while, then try again.',
+  'not-implemented': 'Signing every browser out is not available yet. Nothing changed.',
 }
 
 function fail(e) {

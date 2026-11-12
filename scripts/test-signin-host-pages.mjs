@@ -63,6 +63,8 @@ const MUTANTS = {
   'markup': [['public/link.js', '  for (const el of document.querySelectorAll(\'[data-address]\')) el.textContent = link.address\n', '  for (const el of document.querySelectorAll(\'[data-address]\')) el.insertAdjacentHTML(\'beforeend\', link.address)\n']],
   // Trusted Types off
   'no-tt': [['src/worker.js', `  "require-trusted-types-for 'script'",\n`, '']],
+  // the 501 the directory answers until it can sign browsers out, taken for any other refusal (after a passkey prompt for nothing)
+  'no-501': [['public/account-client.js', "  if (c.status === 501) throw new Refused('not-implemented')\n", '']],
   // framing allowed
   'framed': [['src/worker.js', '  "frame-ancestors \'none\'",\n', ''], ['src/worker.js', "  'x-frame-options': 'DENY',\n", '']],
 }
@@ -185,6 +187,7 @@ await ctx.route(`${DIR}/**`, async (route) => {
     let [status, out] = (await W.stub.handle(u.pathname, { origin, body })) || [404, { error: 'not-found' }]
     if (twist === 'short-nonce' && u.pathname === '/v1/web/signin/challenge') out = { nonce: Buffer.alloc(32, 1).toString('base64url') }
     if (twist === 'other-address' && u.pathname === '/v1/web/signin' && status === 200) out = { address: 'mallory@example.com' }
+    if (twist === 'not-yet' && u.pathname === '/v1/web/signout/challenge') { status = 501; out = { error: 'not-implemented' } }
     return route.fulfill({ status, headers: cors, body: JSON.stringify(out) })
   }
   const res = await W.handler(new Request(r.url(), { method: r.method(), headers: { ...(origin ? { origin } : {}), 'content-type': 'text/plain' }, body: ['GET', 'HEAD'].includes(r.method()) ? undefined : r.postData() || '' }))
@@ -271,6 +274,7 @@ try {
   ok(r.href === `${S}/setup`, `the token is out of the address bar and the history entry (${r.href})`)
   ok(r.text.includes(r.email) && r.st === null, 'the address is shown, and nothing is stored')
   ok(r.text.includes('Documents shared with you are opened by keys kept in this browser.'), 'X3: the setup page states what a browser-only account loses')
+  ok(r.text.includes(`You are making a passkey for ${r.email}. Only continue if that is your email address and you asked for this link just now.`), 'the address is the decision: continue only if it is yours (account fixation)')
   ok(!/recovery code:|write (this|it) down|\b[A-Z0-9]{4}(-[A-Z0-9]{4}){3,}\b/i.test(r.text), 'X7: the page shows no code')
   r = await openLink('keep-fragment')
   ok(r.href !== `${S}/setup`, `MUTANT keep-fragment: the token stays in the address bar (${r.href.slice(0, 60)})`)
@@ -501,6 +505,23 @@ try {
       `the directory verified the member's assertion over wout. and revoked every browser key (${s}, ${JSON.stringify(W.stub.log.map((x) => [x.address, x.by.slice(0, 8)]))})`)
     ok(W.stub.log[0].os === S && W.mails.some((x) => x.to === gina && /signed out/i.test(x.subject)), 'the request came from the sign-in host, and the address is mailed')
     ok((await stored(p)) === gina, 'this host stays signed in (it holds no browser key)')
+
+    console.log('\n4   while the directory cannot sign browsers out yet (501), the page says so before any passkey prompt')
+    const notYet = async (mutant) => {
+      await reset(mutant); const p = await fresh(); const e = addr('ivy')
+      await setUp(p, e)
+      await p.goto(`${S}/account`); await settled(p)
+      await click(p, '#signout-ask', ['loading', 'signed-in'])
+      twist = 'not-yet'
+      const before = (await calls(p)).get
+      const s = await click(p, '#signout', ['loading', 'confirm-signout', 'working'])
+      return { s, gets: (await calls(p)).get - before, text: await p.locator('#failed-text').textContent(), log: W.stub.log.length }
+    }
+    r = await notYet()
+    ok(r.s[0] === 'failed' && r.s[1] === 'not-implemented' && r.gets === 0 && r.log === 0 && r.text === 'Signing every browser out is not available yet. Nothing changed.',
+      `"not available yet", no passkey prompt, nothing revoked (${r.s}, ${r.gets} get, "${r.text}")`)
+    r = await notYet('no-501')
+    ok(r.s[1] !== 'not-implemented' || r.text !== 'Signing every browser out is not available yet. Nothing changed.', `MUTANT no-501: the page answers a generic refusal (${r.s}, "${r.text}")`)
 
     console.log('\n4   a passkey that is not a member signs nobody out')
     await reset(); p = await fresh()

@@ -13773,8 +13773,12 @@ from the popup bento/home opens, which keeps its one request shape.
   and a reset stores nothing, because its passkey is not on the account until
   the reset takes effect.
 - **A link page reads only its fragment**, in the directory's format (exactly
-  `v`, `e`, `t`), removes it from the address bar and history first, and sends
-  nothing until the person presses the button. The account page reads nothing
+  `v`, `e`, `t`), takes it out of the address bar and the tab's own history
+  entry first, and sends nothing until the person presses the button. The
+  browser's own history still records the full link (measured in Chrome's
+  History database), so a link that was opened but not used stays usable from
+  there until it is used or expires: 20 minutes for a setup link, a day for a
+  reset link. The account page reads nothing
   from its URL. None of these pages answers a message.
 - **The passkey's user handle names the account's storage**: SHA-256 of the
   address under the directory's storage label, then 16 random bytes. A

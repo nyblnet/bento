@@ -67,7 +67,9 @@ The rules (`public/account-client.js`; each has a rig row and a mutant):
    only, in the directory's link format (`server/directory/src/links.js`):
    exactly `v`, `e` and `t`, once each, `v=1`, a 43-character token, an ASCII
    address, and no query string. It is taken out of the address bar and the
-   history entry before it is read. Opening a link sends nothing.
+   history entry before it is read (the browser's own history still records the
+   link, so an opened, unused link stays usable from there until it expires).
+   Opening a link sends nothing.
 2. **`bento-id-account` is written in one place**, `signInHere()`, with the
    address the directory answered after verifying a passkey assertion made on
    this page. A setup is confirmed that way, with the passkey it just made,
@@ -105,7 +107,9 @@ is their contract, check by check, which the rigs run against:
 | `POST /v1/web/signout` | `{text, assertion}` | `{ok: true, at}`; every browser certificate of the account is revoked |
 
 The `wout.` text (`wout.<b64u(address)>.<at>.<nonce>`) is **provisional**:
-the kernel defines the layout, and until it does the directory answers 501.
+the kernel defines the layout, and until it does the directory answers 501 at
+`/v1/web/signout/challenge`, before any passkey prompt; the page then says
+signing every browser out is not available yet.
 
 ## Phone approves this browser (route D): designed, not built
 

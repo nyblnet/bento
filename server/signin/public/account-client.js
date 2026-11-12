@@ -47,7 +47,7 @@ export const ROUTES = Object.freeze({
   signinChallenge: '/v1/web/signin/challenge',
   /** POST {nonce, assertion} → 200 {address}: the account whose live passkey made the assertion. */
   signin: '/v1/web/signin',
-  /** POST {address} → 200 {nonce, at}: a challenge bound to that account. */
+  /** POST {address} → 200 {nonce, at}: a challenge bound to that account; 501 until the directory can sign browsers out. */
   signoutChallenge: '/v1/web/signout/challenge',
   /** POST {text, assertion} → 200 {ok: true, at}: every browser key of the account is revoked. */
   signout: '/v1/web/signout',
@@ -197,6 +197,8 @@ export function woutText({ address, at, nonce }) {
 /** Sign out everywhere: a member's assertion over `wout.` for the account this host is signed in to. */
 export async function signOutEverywhere(address) {
   const c = await post(ROUTES.signoutChallenge, { address })
+  // the directory answers 501 here, before any passkey prompt, until it can sign browsers out
+  if (c.status === 501) throw new Refused('not-implemented')
   const { nonce, at } = c.body
   if (c.status !== 200 || typeof nonce !== 'string' || !SEALED.test(nonce) || !Number.isSafeInteger(at) || at <= 0) {
     throw new Refused(c.status === 404 ? 'no-account' : 'directory')

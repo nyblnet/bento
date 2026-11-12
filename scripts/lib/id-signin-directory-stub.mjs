@@ -43,9 +43,12 @@
 //
 //   POST /v1/web/signout/challenge {address}             → 200 {nonce, at}
 //     no account → 404 (the roster lookup already says this; same per-IP limit)
+//     UNTIL the kernel defines the signed text, this route answers 501
+//     {error: 'not-implemented'}, so the page stops before any passkey prompt
+//     (the stub's `notYet` option)
 //   POST /v1/web/signout           {text, assertion}     → 200 {ok: true, at}
 //     text = wout.<b64u(address)>.<at>.<nonce>   (PROVISIONAL: the kernel's layout replaces it;
-//                                                  until then the directory answers 501)
+//                                                  until then the challenge route answers 501)
 //     1. parse the text (exactly four fields) → else 400 text
 //     2. spend the nonce: audience 'signout', the text's account, at equal to
 //        the challenge's → else 400 nonce
@@ -82,7 +85,7 @@ const B64U = /^[A-Za-z0-9_-]+$/
  * reads the directory's own record for an account (the rig backs it with the
  * real Roster object's storage).
  */
-export function signinDirectory({ accounts, now = () => Date.now(), mail = () => {} }) {
+export function signinDirectory({ accounts, now = () => Date.now(), mail = () => {}, notYet = false }) {
   const nonces = new Map()
   const log = []
   const revoked = new Map() // address → at
@@ -138,6 +141,7 @@ export function signinDirectory({ accounts, now = () => Date.now(), mail = () =>
     }
 
     if (path === '/v1/web/signout/challenge') {
+      if (notYet) return [501, { error: 'not-implemented' }]
       if (typeof b.address !== 'string') return [400, { error: 'bad-address' }]
       const key = await keyOf(b.address)
       if (!(await accounts(key))) return [404, { error: 'not-found' }]

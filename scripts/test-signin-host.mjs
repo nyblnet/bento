@@ -240,8 +240,12 @@ try {
       for (const [name, rule] of Object.entries(rules)) ok(rule(h), `${f}: ${name}`)
       ok(/<script type="module" src="\/(link|account)\.js"><\/script>/.test(h), `${f}: loads its one module script from this host`)
     }
-    const files = { link: strip(read('link.js')), account: strip(read('account.js')), client: strip(read('account-client.js')) }
-    const all = (f) => Object.values(f).join('\n')
+    // `rest` is EVERY other script this host serves (the popup's signin.js and directory-client.js included):
+    // the one-write rule is host-wide, so its lint reads them all (security-ruling-953 C1)
+    const restFiles = readdirSync(join(ROOT, 'public')).filter((x) => x.endsWith('.js') && !['link.js', 'account.js', 'account-client.js'].includes(x)).sort()
+    const files = { link: strip(read('link.js')), account: strip(read('account.js')), client: strip(read('account-client.js')), rest: restFiles.map((x) => strip(read(x))).join('\n') }
+    ok(restFiles.includes('signin.js') && restFiles.includes('directory-client.js'), `the host-wide lint also reads ${restFiles.join(', ')}`)
+    const all = (f) => [f.link, f.account, f.client].join('\n')
     const fnBody = (c, name) => (c.match(new RegExp(`(?:async )?function ${name}\\([^)]*\\) \\{\\n([\\s\\S]*?)\\n\\}\\n`)) || [])[1] || null
     const URLREAD = /\blocation\b|URLSearchParams|document\.URL|documentURI|document\.referrer|window\.name/
     const htmls = pages.map(read).join('\n')
@@ -263,12 +267,18 @@ try {
       },
       // security-ruling-948: only an account the person proved on this host
       'bento-id-account is written once, in signInHere(), with the directory\'s answer after the expect check': (f) => {
-        const c = all(f)
+        // every script the host serves: each `localStorage` token is one of two reads or the one write (so an alias,
+        // `const s = localStorage`, is a fourth token), and the key's name is written only where ACCOUNT_KEY is defined
+        const c = all(f) + '\n' + f.rest
         const sib = fnBody(f.client, 'signInHere') || ''
-        const writes = (c.match(/localStorage\.(setItem|removeItem|clear)\(|localStorage\[|localStorage\.[a-zA-Z]+\s*=/g) || []).length
+        const tokens = (c.match(/localStorage/g) || []).length
+        const reads = (c.match(/localStorage\.getItem\(ACCOUNT_KEY\)/g) || []).length
+        const writes = (c.match(/localStorage\.setItem\(ACCOUNT_KEY, a\.address\)/g) || []).length
+        const names = (c.match(/bento-id-account/g) || []).length
         const w = sib.indexOf('localStorage.setItem(ACCOUNT_KEY, a.address)'), e = sib.indexOf("if (expect !== undefined && a.address !== expect) throw new Refused('other-account')")
         const v = sib.indexOf("if (r.status !== 200) throw"), p = sib.indexOf('await post(ROUTES.signin,')
-        return writes === 1 && /export const ACCOUNT_KEY = 'bento-id-account'\n/.test(f.client) && w > e && e > v && v > p && p > 0
+        return tokens === 3 && reads === 2 && writes === 1 && names === 2 &&
+          /export const ACCOUNT_KEY = 'bento-id-account'\n/.test(f.client) && /const ACCOUNT_KEY = 'bento-id-account'\n/.test(f.rest) && w > e && e > v && v > p && p > 0
       },
       'signInHere is called only from the setup confirmation and the account page\'s sign-in': (f) => {
         const calls = all(f).match(/\bsignInHere\(/g) || []
@@ -318,6 +328,14 @@ try {
       'a raw challenge is a 40-byte sealed one, never 32 (a statement hash)': mod('client', 'const SEALED = /^[A-Za-z0-9_-]{54}$/', 'const SEALED = /^[A-Za-z0-9_-]{43,54}$/'),
     }
     for (const [name, src] of Object.entries(BADL)) ok(!L[name](src), `MUTANT ${name}: the lint fails`)
+    // C1 of security-ruling-953: writes from the popup, the page that answers messages, and through an alias
+    const ONE = 'bento-id-account is written once, in signInHere(), with the directory\'s answer after the expect check'
+    for (const [what, src] of [
+      ['m2: the popup stores bento/home\'s label as the account', mod('rest', '  busy = true\n  show(\'working\')\n', "  busy = true\n  localStorage.setItem(ACCOUNT_KEY, request.label)\n  show('working')\n")],
+      ['the popup stores the account under the literal key', mod('rest', '  busy = true\n  show(\'working\')\n', "  busy = true\n  try { window['local' + 'Storage'].setItem('bento-id-account', request.label) } catch {}\n  show('working')\n")],
+      ['a write through an alias', mod('client', 'export function savedAccount() {', 'const store = localStorage\nexport function remember(x) { store.setItem(ACCOUNT_KEY, x) }\nexport function savedAccount() {')],
+      ['the directory client writes the account', mod('rest', 'export const DIRECTORY =', "try { localStorage.setItem(ACCOUNT_KEY, 'x') } catch {}\nexport const DIRECTORY =")],
+    ]) ok(!L[ONE](src), `MUTANT ${what}: the lint fails`)
     ok(!XL['X7: no page makes, shows or asks for a code (the X3 sentence alone mentions one)'](htmls.replace('<section data-for="done" hidden>', '<section data-for="done" hidden>\n    <p>Your recovery code: <code id="code"></code></p>'), files), 'MUTANT a recovery code shown after setup: the lint fails')
     ok(!XL['X7: no page makes, shows or asks for a code (the X3 sentence alone mentions one)'](htmls.replace('<input id="reset-email" type="email"', '<input id="reset-code" type="text"'), files), 'MUTANT a typed code box: the lint fails')
     ok(!XL['X3: the setup page states what a browser-only account loses'](htmls.replace(/<p class="note" id="x3">[^<]*<\/p>/, ''), files), 'MUTANT the X3 sentence dropped: the lint fails')
