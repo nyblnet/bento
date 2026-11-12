@@ -13736,8 +13736,23 @@ text; a mutant per rule) and `scripts/test-directory-mutants.ts`.
   its English wording or by the domain in `managedBy`, so a localised segment
   is found too), then other middle qualifiers, keeps the last qualifier whole
   while shortening the voucher, and cuts the end only when nothing else fits.
+- **What a name cannot do.** A name, whether typed in this session or the
+  account's own display name, loses every tick-like mark, and every control,
+  format, private-use, unassigned, separator and default-ignorable character
+  (by Unicode category, plus the Hangul fillers that render as blank space).
+  The name sits in its own direction-isolated span that alone takes the
+  ellipsis, so a long or right-to-left name, or one that reads like a voucher,
+  cannot push the real mark or the tags out of sight: they wrap below it. An
+  answer whose fields throw when read is "couldn't check". `managedBy` counts
+  only as a whole domain on word boundaries.
+- The People panel is one source for the tier: `tier` on the answer. The agent
+  is to stop writing tier text into `vouchedBy`.
+- `scripts/test-identity.ts` pins that no app calls the identity agent except
+  this panel, behind its flag: comments removed, every static, multi-line and
+  dynamic import of identity in every app found, and the panel's call and flag
+  read pinned by shape, with twelve widening mutants that must turn it red.
 - Guarded by `scripts/test-slides-people-tiers.ts` (rows over the decision
-  module, with fifteen mutants that must each turn a row red) and
+  module, with twenty-one mutants that must each turn a row red) and
   `scripts/test-slides-people-tiers-browser.mjs` (the packaged editor, real
-  key proofs, network and WebSockets closed, with an owner-flag and a proof
-  mutant).
+  key proofs, network and WebSockets closed, positions measured with
+  getBoundingClientRect, with owner-flag, proof, cut and layout mutants).

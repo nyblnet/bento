@@ -119,7 +119,15 @@ export function paintVouch(who: HTMLElement, claimed: string, state: VouchState,
   const label = (txt: string) => { mark.textContent = txt }
   const tips: string[] = []
   const shown = (state.kind === 'verified' || state.kind === 'changed') ? state.name : claimed
-  who.textContent = o.editing ? `${shown} ✏️` : shown // also clears any earlier mark
+  // The name sits in its own direction-isolated span that alone takes the
+  // ellipsis, so no name (long, right-to-left, or one that reads like a voucher)
+  // can push the mark or the tags out of sight: they wrap below it instead.
+  const nameEl = document.createElement('span')
+  nameEl.className = 'vouch-name'
+  nameEl.dir = 'auto'
+  nameEl.textContent = o.editing ? `${shown} ✏️` : shown
+  who.classList.add('vouched')
+  who.replaceChildren(nameEl) // also clears any earlier mark
   switch (state.kind) {
     case 'checking': label(t('checking…')); break
     case 'verified':
@@ -159,8 +167,7 @@ export function paintVouch(who: HTMLElement, claimed: string, state: VouchState,
       break
   }
   mark.title = tips.join('\n')
-  who.append(' ', mark)
-  for (const s of tags) who.append(' ', s)
+  who.append(mark, ...tags)
   // the room owner's flag: a key revoked by the incident lever may have acted
   // here without its owner. One chip on the row, beside the remove control.
   const row = o.ownerRow

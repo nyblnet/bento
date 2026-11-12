@@ -619,6 +619,6 @@ runs:
       # the answer does not prove otherwise, "account changed on <date>" for 7
       # days (30 after a reset), a revoked sign-in never ticked, and vouchedBy's
       # 80-character cut dropping "managed by" before "unconfirmed since".
-      # Fifteen mutants of the decision module must each turn a row red.
+      # Twenty-one mutants of the decision module must each turn a row red.
       shell: bento-step {0}
       run: node scripts/test-slides-people-tiers.ts

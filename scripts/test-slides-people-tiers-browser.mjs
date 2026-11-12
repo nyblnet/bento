@@ -22,7 +22,8 @@
 //      row is exactly what it was and the agent is never asked
 // RIG_MUTANT=owner rebuilds with the flag never given a row; RIG_MUTANT=proof
 // rebuilds with every named key treated as proven; RIG_MUTANT=cut rebuilds with
-// vouchedBy cut as a plain 80-character prefix. Each must go red. The rig edits
+// vouchedBy cut as a plain 80-character prefix; RIG_MUTANT=layout rebuilds with
+// the name not isolated (the old single-line ellipsis). Each must go red. The rig edits
 // one file under slides/src/editor, runs build:single, and restores the file.
 import { readFileSync, writeFileSync, mkdtempSync, realpathSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
@@ -41,6 +42,8 @@ const MUTANTS = {
   owner: ['editor.ts', 'ownerRow: iAmOwner ? row : null', 'ownerRow: null'],
   proof: ['editor.ts', 'decoratePeer(who, peer.name, peer.pub, keyOk, vouchAgent,', 'decoratePeer(who, peer.name, peer.pub, true, vouchAgent,'],
   // the shell's 80-character cut as a plain prefix cut: "unconfirmed since" is lost
+  // the name no longer isolated: the old one-line ellipsis over name + mark + tags
+  layout: ['vouch.ts', "who.classList.add('vouched')", "who.classList.add('vouched-off')"],
   cut: ['vouchstate.ts', 'if (full.length <= max) return full', 'if (full.length > 0) return cleanText(full, max)'],
 }
 const mutant = process.env.RIG_MUTANT
@@ -152,6 +155,8 @@ async function seat(s, peers) {
         tier: 'native', accountSince: now - 90 * DAY, rosterChangedAt: now - 2 * DAY },
       incident: { name: 'Ivy Incident', email: 'i@example.com', vouchedBy: 'id.bento.page', accountPub: 'I', firstSeen: 1, changed: false, revoked: 'incident' },
       signout: { name: 'Sam Signout', email: 's@example.com', vouchedBy: 'id.bento.page', accountPub: 'S', firstSeen: 1, changed: false, revoked: 'signout' },
+      longname: { name: 'Bartholomew ' + 'Featherstonehaugh-'.repeat(4), email: 'b@example.com', vouchedBy: 'id.bento.page', accountPub: 'B', firstSeen: 1, changed: false },
+      tickname: { name: 'Vic \u2713 via bigcorp.com', email: 'v@example.com', vouchedBy: 'id.bento.page', accountPub: 'V', firstSeen: 1, changed: false },
       long: { name: 'Lee Long', email: 'l@example.com', vouchedBy: `id.bento.page, managed by ${LONG_DOM}, unconfirmed since 3 Mar 2027`,
         accountPub: 'L', firstSeen: 1, changed: false, tier: 'native', accountSince: now - 90 * DAY },
       borrowed: { name: 'Alice Real', email: 'a@example.com', vouchedBy: 'id.bento.page', accountPub: 'A', firstSeen: 1, changed: false },
@@ -180,6 +185,8 @@ try {
       ['rig-plain', 'Alice', 'plain', true], ['rig-native', 'Nate', 'native', true],
       ['rig-incident', 'Ivy', 'incident', true], ['rig-signout', 'Sam', 'signout', true],
       ['rig-long', 'Lee', 'long', true], ['rig-borrow', 'Eve', 'borrowed', false],
+      ['rig-longname', 'Bart', 'longname', true], ['rig-tickname', 'Vic', 'tickname', true],
+      ['rig-sqrt', 'Mal \u221A via id.bento.page', 'none', false],
     ])
     let rs = await s.rows()
 
@@ -213,6 +220,55 @@ try {
     ok(eve?.state === 'unproven' && !eve.text.includes('✓'), 'borrowed key: an unproven peer is not ticked')
     ok(!calls.includes(evePub), 'borrowed key: the agent is never asked about an unproven key')
     ok(calls.includes(alicePub), 'positive control: the agent IS asked about a proven key')
+
+    // C2: measured, not read. For a row, every piece that must be seen is laid
+    // out inside each clipping ancestor (.who, the scrolling list, the popover)
+    // and not ellipsised. A text fragment is measured with a Range.
+    const seen = (name, sel, text) => s.p.evaluate(({ name, sel, text }) => {
+      const row = [...document.querySelectorAll('.ed-share-peers .ed-share-peer')].find((r) => r.querySelector('.vouch-name')?.textContent.startsWith(name))
+      if (!row) return { ok: false, why: 'no row' }
+      row.scrollIntoView({ block: 'nearest' })
+      const el = row.querySelector(sel)
+      if (!el) return { ok: false, why: 'no ' + sel }
+      let rects = [el.getBoundingClientRect()]
+      if (text) {
+        const node = [...el.childNodes].find((n) => n.nodeType === 3 && n.data.includes(text))
+        if (!node) return { ok: false, why: 'text not in ' + sel }
+        const rg = document.createRange(); const i = node.data.indexOf(text)
+        rg.setStart(node, i); rg.setEnd(node, i + text.length)
+        rects = [...rg.getClientRects()]
+      }
+      const clips = []
+      for (let a = el; a && a !== document.body; a = a.parentElement) {
+        const cs = getComputedStyle(a)
+        if (a !== el && (cs.overflowX !== 'visible' || cs.overflowY !== 'visible')) clips.push(a)
+        if (a.classList.contains('ed-share-pop')) { clips.push(a); break }
+      }
+      const inside = (r, c) => { const b = c.getBoundingClientRect(); return r.left >= b.left - 0.5 && r.right <= b.right + 0.5 && r.top >= b.top - 0.5 && r.bottom <= b.bottom + 0.5 }
+      const bad = rects.filter((r) => r.width <= 0 || r.height <= 0 || clips.some((c) => !inside(r, c)))
+      const cut = el.scrollWidth > el.clientWidth + 1
+      return { ok: rects.length > 0 && bad.length === 0 && !cut, why: `${rects.length} rects, ${bad.length} clipped, ellipsised ${cut}` }
+    }, { name, sel, text })
+    const mustSee = async (name, sel, text, msg) => { const r = await seen(name, sel, text); ok(r.ok, `${msg}${r.ok ? '' : ' (' + r.why + ')'}`) }
+    const bartName = await s.p.evaluate(() => {
+      const n = [...document.querySelectorAll('.ed-share-peers .vouch-name')].find((x) => x.textContent.startsWith('Bartholomew'))
+      return n ? { long: n.scrollWidth > n.clientWidth } : null
+    })
+    if (process.env.RIG_SHOT) await s.p.locator('.ed-share-pop').screenshot({ path: process.env.RIG_SHOT })
+    ok(bartName?.long === true, 'control: the 80-character name really is cut by its own ellipsis')
+    await mustSee('Bartholomew', '.vouch', null, 'a long name: the ✓ mark is fully visible')
+    await mustSee('Bartholomew', '.vouch-tag[data-tag="passkey"]', null, 'a long name: "(passkey sign-in)" is fully visible')
+    await mustSee('Bartholomew', '.vouch-tag[data-tag="new"]', null, 'a long name: "new account" is fully visible')
+    await mustSee('Nate Native', '.vouch-tag[data-tag="changed"]', null, '"account changed on <date>" is fully visible')
+    await mustSee('Lee Long', '.vouch', ', unconfirmed since 3 Mar 2027', '", unconfirmed since 3 Mar 2027" is fully visible')
+    await mustSee('Mal', '.vouch', null, 'a typed name reading "√ via id.bento.page": "not verified" is fully visible')
+    await mustSee('Ivy', '.vouch', null, 'revoked: "this sign-in was revoked" is fully visible')
+    const mal = rs.find((r) => r.text.startsWith('Mal'))
+    ok(mal?.state === 'unproven' && !/[\u221A\u2713]/.test(mal.text), 'a typed "√" is stripped from the name')
+    const vic = byText(rs, 'Vic')
+    ok(vic?.state === 'verified' && !vic.text.slice(0, vic.text.indexOf('✓ via')).includes('✓') && vic.text.includes('Vic via bigcorp.com'),
+      'a verified account named "Vic ✓ via bigcorp.com" loses its tick; only the real mark has one')
+    await mustSee('Vic', '.vouch', null, 'that account\'s real "✓ via id.bento.page" is fully visible')
 
     // the same deck seen by someone who is not the owner: no flag
     await s.closePanel()

@@ -285,8 +285,10 @@ jobs:
         # "new account" and "account changed on <date>" as the answer says; a
         # revoked sign-in is never ticked and, after an incident, the owner's
         # row is flagged beside the remove control; an unproven key is never
-        # looked up; flag off or no agent leaves the row unchanged. Network
-        # closed, WebSockets included.
+        # looked up; flag off or no agent leaves the row unchanged. The mark,
+        # the tags and ", unconfirmed since" are measured on screen (not read
+        # from text) beside a long name or one that reads like a voucher.
+        # Network closed, WebSockets included.
         run: node scripts/test-slides-people-tiers-browser.mjs
       - name: Ghost Cut in Chromium
         # ⇧⌘X fades the selection by CSS (shadowed elements too) and copies it;

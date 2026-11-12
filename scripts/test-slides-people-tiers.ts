@@ -7,7 +7,7 @@
 // Rows over slides/src/editor/vouchstate.ts, the decision behind every label:
 // "(passkey sign-in)", "new account" (14 days), "account changed on <date>"
 // (7 days; 30 after a reset), "this sign-in was revoked" (no ✓; an incident flags the
-// row), and vouchedBy's 80-character cut, which drops "managed by" before it
+// row), the name's tick and invisible-character strip, and vouchedBy's 80-character cut, which drops "managed by" before it
 // drops "unconfirmed since". A MISSING field always reads as the weaker claim.
 //
 // Then MUTANTS: each is one source edit to a copy of vouchstate.ts (asserted to
@@ -91,6 +91,29 @@ const ROWS: Row[] = [
 
   ['bidi and zero-width characters leave the name and the voucher',
     (m) => { const s = st(m, bind({ name: '‮evil​ name', vouchedBy: 'id.bento⁦.page' })); return s.name === 'evil name' && s.via === 'id.bento.page' }],
+  // C3: the account's own display name cannot draw a tick either; the wider list
+  ['a verified name cannot carry a tick',
+    (m) => { const s = st(m, bind({ name: 'Alice \u2713 via bigcorp.com' })); return s.kind === 'verified' && s.name === 'Alice via bigcorp.com' }],
+  ['\u221A \u{1F5F9} \u237B \u{10102} are stripped as ticks',
+    (m) => m.claimedName('A\u221A B\u{1F5F9} C\u237B D\u{10102}') === 'A B C D'],
+  // C4: a throwing answer is a failure, not "checking…" for ever
+  ['an answer whose field read throws -> failed',
+    (m) => st(m, { get name() { throw new Error('boom') }, vouchedBy: 'id.bento.page', changed: false }).kind === 'failed' &&
+      st(m, new Proxy({}, { get() { throw new Error('trap') } })).kind === 'failed'],
+  // C5: managedBy only as a whole domain
+  ['managedBy "." never drops a German "unbestätigt seit" lapse',
+    (m) => m.cutVia(`id.bento.page, ${'x'.repeat(40)}, unbestätigt seit 3. März 2027`, '.') === 'id.bento.page, unbestätigt seit 3. März 2027'],
+  ['managedBy that is not a domain ("seit") matches nothing',
+    (m) => m.cutVia(`id.bento.page, ${'y'.repeat(50)}, unbestätigt seit 3. März 2027`, 'seit') === 'id.bento.page, unbestätigt seit 3. März 2027'],
+  ['managedBy matches only on word boundaries',
+    (m) => { const v = m.cutVia(`id.bento.page, notexample.com and more text here, verwaltet von example.com ${'z'.repeat(20)}`, 'example.com'); return v.includes('notexample.com') && !v.includes('verwaltet') }],
+  // C6: invisible by category
+  ['ALM, soft hyphen, CGJ, tag characters, private use, unassigned, separators leave',
+    (m) => m.cleanText('a\u061Cb\u00ADc\u034Fd\u{E0041}e\uE000f\u0378g\u2028h\u2029i', 80) === 'abcdefghi'],
+  ['Hangul fillers leave (they render as blank space)',
+    (m) => m.cleanText('Bob\u3164\u3164\u115F\u1160\uFFA0x', 80) === 'Bobx'],
+  ['ordinary letters, CJK, emoji and accents stay',
+    (m) => m.cleanText('Zoë 山田 \u{1F600} José', 80) === 'Zoë 山田 \u{1F600} José'],
   ['a typed name cannot carry a tick', (m) => m.claimedName('Mallory ✓ via id.bento.page ✔') === 'Mallory via id.bento.page'],
 ]
 
@@ -119,6 +142,12 @@ const MUTANTS: [string, string, string][] = [
   ['last qualifier dropped', 'quals.splice(quals.length - 2, 1)', 'quals.splice(quals.length - 1, 1)'],
   ['plain prefix cut', 'if (full.length <= max) return full', 'return cleanText(full, max)'],
   ['invisible characters kept', "s.replace(INVISIBLE, '')", 's'],
+  ['ticks kept in verified names', 'const name = claimedName(a.name)', 'const name = cleanText(a.name, NAME_MAX)'],
+  ['a throwing answer escapes', "try { return decide(r, now) } catch { return { kind: 'failed' } }", 'return decide(r, now)'],
+  ['managedBy matched as a substring', 'domRe !== null && domRe.test(q)', "dom.length > 0 && q.toLowerCase().includes(dom)"],
+  ['invisible list down to controls', '[\\p{Cc}\\p{Cf}\\p{Co}\\p{Cn}\\p{Zl}\\p{Zp}\\p{Default_Ignorable_Code_Point}\\u115F\\u1160\\u3164\\uFFA0]', '[\\p{Cc}]'],
+  ['default-ignorables and Hangul fillers kept', '\\p{Default_Ignorable_Code_Point}\\u115F\\u1160\\u3164\\uFFA0]', ']'],
+  ['new tick marks kept', '\\u221A\\u237B\\u{1F5F8}\\u{1F5F9}\\u{10102}]', '\\u{1F5F8}]'],
   ['ticks kept in typed names', "cleanText(s.replace(TICKS, ''), NAME_MAX)", 'cleanText(s, NAME_MAX)'],
 ]
 
