@@ -75,6 +75,7 @@ countersigned before it is stored, so a missing key stores nothing.
 ```sh
 node scripts/test-directory.ts          # the retired routes, the address normal form, limits
 node scripts/test-directory-roster.ts   # the passkey roster, setup links, the void, the reset, mail, headers
+node scripts/test-directory-browsers.ts # browser certificates: challenges, enrolment, renewal, the 7-day cap, revocation
 node scripts/test-directory-mutants.ts  # each rule loosened in turn must turn a rig red
 node scripts/test-directory-void-page.mjs [--chrome]  # the void page in a real browser (Playwright; PLAYWRIGHT_MODULE)
 ```
@@ -222,16 +223,49 @@ one link that opens on the directory itself: the void page runs no ceremony.
   person makes a passkey over a fresh `POST /v1/roster/challenge` for `e`,
   sends `POST /v1/roster/setup {email: e, token: t, dirNonce, reg}`.
 
-### The sign-in host's routes (`/v1/web/*`)
+### Browser certificates (`/v1/web/*`, `/v1/home/*`, `src/browsers.js`)
 
-The browser-key enrolment, matching `server/signin/public/directory-client.js`.
-These answer CORS to the sign-in host only (never `*`), with `Vary: Origin`;
-every other header is as above.
+A browser's device key is certified by a roster passkey on the sign-in host
+(the kernel's `wdev.`, `kernel/src/devices.ts`) and kept in force by the
+directory's countersign (`watt.`): 24 hours at most, never past 7 days after
+the ceremony. The `/v1/web/*` routes answer CORS to the sign-in host only and
+the `/v1/home/*` routes to bento/home only (never `*`, with `Vary: Origin`);
+each requires that Origin and refuses any other, or none, with 403 `origin`.
+Bodies are JSON, sent as text/plain.
 
 | route | answer |
 |---|---|
-| `POST /v1/web/challenge` (any body) | 200 `{nonce}`: a sealed single-use challenge for the web audience, which no roster route accepts |
-| `POST /v1/web/enrol` `{text, rq, assertion}` (60 an hour per IP) | 400 for a malformed request (`text` must be a `wdev.` text, `rq` must be `https://home.bento.page`, `assertion` must carry base64url `id`, `authenticatorData`, `clientDataJSON`, `signature` and an optional `userHandle`); otherwise **501** until the kernel defines the `wdev.` statement. Nothing is stored or countersigned yet. |
+| `POST /v1/web/challenge` `{address}` | 200 `{nonce, at, rosHash}`: a challenge for an enrolment, the directory's time for it (the ceremony time), and the hash of the latest ripened roster head; 404 for an address with no account |
+| `POST /v1/web/enrol` `{text, rq, assertion}` (60 an hour per IP) | 200 `{ok, wdev, watt}`; 400 `text`, `rq`, `assertion`, `nonce`, `ceremony`, `head`; 403 `signer`, `assertion`; 409 `device-known` |
+| `POST /v1/home/challenge` `{address}` | 200 `{nonce}`: a challenge for a renewal; 404 for an address with no account |
+| `POST /v1/home/checkin` `{wren, sig, pin?}` (120 an hour per IP) | 200 `{watt, wattSig, signer, assertion, roster, incidents}` (the roster as kernel RosterLink objects from the pinned head, or from setup); 403 `{error: unknown \| revoked \| cap, incidents}`; 400 `wren`, `nonce` |
+| `GET /v1/device/status?e=<address>&c=<sha256 of the certificate>` (CORS `*`) | 200 `{state: ok \| revoked \| cap \| unknown, incidents}` |
+
+- A browser challenge is sealed for its audience (enrolment or renewal) and
+  its address and lives 60 seconds. The address's object spends it before any
+  other check, so reuse, a failed assertion and a challenge used at the other
+  route each use it up. Nothing is stored when one is issued.
+- Asking for one costs a per-IP lookup (the budget `GET /v1/roster` uses; both
+  answer 404 for an address with no account) and one of 20 an hour from that
+  IP for that address. No count is shared by every caller.
+- An enrolment must name the challenge's own time, the latest ripened head,
+  bento/home as the page that asked, an unquarantined passkey member, an
+  assertion from the sign-in host with a forward-moving counter, and a device
+  key never enrolled before.
+- A renewal's `wren.` signature is checked before its challenge is spent (only
+  the browser that asked knows it). It is refused for an unknown key, a revoked
+  one (signed out everywhere, or its passkey removed, suspended or added again
+  since the ceremony), and from 7 days after the ceremony.
+- `ob` is 1 when bento/home asked (the `rq` the sign-in host reports), in the
+  countersign and on every event-log entry; nothing decides on it.
+- `incidents` comes from the `INCIDENTS` variable, `[{id, from, to}]`; a list
+  that does not read answers 500 and countersigns nothing.
+- Not here yet: the route a member signs to sign out everywhere (the revoking
+  itself is built; what the passkey signs is a kernel statement), a `dev2.`
+  made by a passkey alone, retiring the old key at a new ceremony, and mail
+  for a new browser.
+
+A path that is no route answers 404 with no CORS at all.
 
 **What id.bento.page answers**: JSON with `nosniff`, a Permissions-Policy that
 turns off WebAuthn create and get, a CSP with `default-src 'none'` and

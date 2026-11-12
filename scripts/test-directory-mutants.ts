@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const RIGS = ['test-directory.ts', 'test-directory-roster.ts']
+const RIGS = ['test-directory.ts', 'test-directory-roster.ts', 'test-directory-browsers.ts']
 /** scripts the rigs import (the roster rig runs the hosting check's rules over the void page) */
 const RIG_IMPORTS = ['check-id-hosting.mjs']
 const TREE = ['kernel/src', 'kernel/fixtures', 'server/directory/src', 'server/directory/fixtures', 'server/directory/wrangler.toml']
@@ -32,7 +32,7 @@ const ok = (c: boolean, m: string) => { checks++; if (!c) { failures++; console.
 
 type Edit = { from: string; to: string }
 /** `also`: further edits in the same file, for a rule held at two doors */
-type Mutant = Edit & { name: string; file: 'worker.js' | 'roster.js' | 'passkey.js' | 'links.js' | 'mail.js' | 'voidpage.js'; also?: Edit[] }
+type Mutant = Edit & { name: string; file: 'worker.js' | 'roster.js' | 'passkey.js' | 'links.js' | 'mail.js' | 'voidpage.js' | 'browsers.js' | 'challenge.js'; also?: Edit[] }
 const MUTANTS: Mutant[] = [
   // --- the first design's routes, retired ---
   { name: 'retired routes served again (fall through)', file: 'worker.js',
@@ -44,6 +44,74 @@ const MUTANTS: Mutant[] = [
   { name: 'D3: no top-level catch', file: 'worker.js',
     from: "    try {\n      return await route(req, env)\n    } catch (e) {\n      console.log(`directory error: ${e && e.message}`)\n      let path = ''\n      try { path = new URL(req.url).pathname } catch { /* the base headers */ }\n      return json(500, { error: 'internal' }, headersFor(path))\n    }",
     to: '    return await route(req, env)' },
+
+  // --- SD3: browser certificates (browsers.js; rows in test-directory-browsers.ts) ---
+  { name: 'SD3 challenge: a browser challenge lives 5 minutes', file: 'browsers.js', from: '  challengeTtlMs: 60_000,', to: '  challengeTtlMs: 5 * 60_000,' },
+  { name: 'SD3 challenge: the ttl argument ignored', file: 'challenge.js', from: 'now - issued > ttl) return null', to: 'now - issued > CHALLENGE_TTL_MS) return null' },
+  { name: 'SD3 challenge: sealed for no address', file: 'browsers.js',
+    from: "    const nonce = await issueChallenge(env.CHALLENGE_KEY, web ? 'web' : 'home', scope, at)", to: "    const nonce = await issueChallenge(env.CHALLENGE_KEY, web ? 'web' : 'home', 'browser', at)",
+    also: [{ from: '    const c = await openChallenge(env.CHALLENGE_KEY, aud, scope, challenge, now, BROWSER_LIMITS.challengeTtlMs)', to: "    const c = await openChallenge(env.CHALLENGE_KEY, aud, 'browser', challenge, now, BROWSER_LIMITS.challengeTtlMs)" }] },
+  { name: 'SD3 challenge: no per-IP lookup charge (the 404 oracle)', file: 'browsers.js', from: "    if (!(await ledger(ip, 'lookup'))) return json(429, { error: 'rate-limited' })\n    const scope", to: '    const scope' },
+  { name: 'SD3 challenge: no per-address limit', file: 'browsers.js', from: "    if (!(await ledger(`${ip}\\n${scope}`, 'challengeAddr'))) return json(429, { error: 'rate-limited' })\n", to: '' },
+  { name: 'SD3 challenge: the per-address limit shared by every caller', file: 'browsers.js', from: "ledger(`${ip}\\n${scope}`, 'challengeAddr')", to: "ledger(scope, 'challengeAddr')" },
+  { name: 'SD3 challenge: the head read without ripening', file: 'browsers.js',
+    from: "    await obj.ripen(now)\n    const head = await s.get('head')\n    if (!head) return out(404, { error: 'not-found' })\n    return out(200, { rosHash: head.hash })",
+    to: "    const head = await s.get('head')\n    if (!head) return out(404, { error: 'not-found' })\n    return out(200, { rosHash: head.hash })" },
+  { name: 'SD3 challenge: no Origin required', file: 'browsers.js', from: "  if (req.headers.get('origin') !== browserOrigin(p)) return json(403, { error: 'origin' })\n", to: '' },
+  { name: 'SD3 enrol: the challenge not spent', file: 'browsers.js',
+    from: "  if (a.op === 'browserEnrol') {\n    if (!(await spend())) return out(400, { error: 'nonce' })\n", to: "  if (a.op === 'browserEnrol') {\n" },
+  { name: 'SD3 enrol: spent only once the assertion verified', file: 'browsers.js',
+    from: "  if (a.op === 'browserEnrol') {\n    if (!(await spend())) return out(400, { error: 'nonce' })\n", to: "  if (a.op === 'browserEnrol') {\n",
+    also: [{ from: "    if (!v.ok) return out(403, { error: 'assertion' })\n    const certHash", to: "    if (!v.ok) return out(403, { error: 'assertion' })\n    if (!(await spend())) return out(400, { error: 'nonce' })\n    const certHash" }] },
+  { name: 'SD3 enrol: a home challenge accepted', file: 'browsers.js', from: "    if (a.aud !== 'web') return out(400, { error: 'nonce' }) // a renewal's challenge, used up here\n", to: '' },
+  { name: 'SD3 enrol: the other audience refused before it is spent', file: 'browsers.js',
+    from: "    if (!(await spend())) return out(400, { error: 'nonce' })\n    if (a.aud !== 'web') return out(400, { error: 'nonce' }) // a renewal's challenge, used up here\n",
+    to: "    if (a.aud !== 'web') return out(400, { error: 'nonce' })\n    if (!(await spend())) return out(400, { error: 'nonce' })\n" },
+  { name: 'SD3 checkin: the other audience refused before it is spent', file: 'browsers.js',
+    from: "    if (!(await spend())) return out(400, { error: 'nonce' })\n    if (a.aud !== 'home') return out(400, { error: 'nonce' }) // an enrolment's challenge, used up here\n",
+    to: "    if (a.aud !== 'home') return out(400, { error: 'nonce' })\n    if (!(await spend())) return out(400, { error: 'nonce' })\n" },
+  { name: 'SD3 enrol: any ceremony time', file: 'browsers.js', from: "    if (c.ceremonyAt !== a.issued) return out(400, { error: 'ceremony' })\n", to: '' },
+  { name: 'SD3 enrol: any head', file: 'browsers.js', from: "    if (c.rosHash !== head.hash) return out(400, { error: 'head' })\n", to: '' },
+  { name: 'SD3 enrol: any opener', file: 'browsers.js', from: "    if (b.rq !== HOME_ORIGIN) return json(400, { error: 'rq' })\n", to: '' },
+  { name: 'SD3 enrol: a quarantined passkey may certify', file: 'browsers.js', from: "    if (!m || m.kind !== 'pk' || m.quarantined) return out(403, { error: 'signer' })", to: "    if (!m || m.kind !== 'pk') return out(403, { error: 'signer' })" },
+  { name: 'SD3 enrol: the assertion not verified', file: 'browsers.js', from: "    if (!v.ok) return out(403, { error: 'assertion' })\n", to: '' },
+  { name: 'SD3 enrol: every listed passkey origin accepted', file: 'browsers.js', from: 'rpId: PASSKEY.rpId, origins: [SIGNIN_ORIGIN],', to: "rpId: PASSKEY.rpId, origins: [SIGNIN_ORIGIN, HOME_ORIGIN]," },
+  { name: 'SD3 enrol: no stored signature counter', file: 'browsers.js', from: 'storedSignCount: rec?.signCount,', to: 'storedSignCount: undefined,' },
+  { name: 'SD3 enrol: a device key enrols twice', file: 'browsers.js', from: "    if (await s.get(`wd:${c.devicePub}`)) return out(409, { error: 'device-known' }) // a fresh key per ceremony\n", to: '' },
+  { name: 'SD3 enrol: the counter stored before the countersign', file: 'browsers.js',
+    from: "    const w = await countersign(obj.env, { certHash, ob, ceremonyAt: c.ceremonyAt, now })\n    if (rec) await s.put(`pk:${pub}`, { ...rec, signCount: v.value.signCount })\n",
+    to: "    if (rec) await s.put(`pk:${pub}`, { ...rec, signCount: v.value.signCount })\n    const w = await countersign(obj.env, { certHash, ob, ceremonyAt: c.ceremonyAt, now })\n" },
+  { name: 'SD3 enrol: a dev2. accepted', file: 'browsers.js', from: "    if (!c.ok || c.value.kind !== 'wdev' || c.value.via !== 'passkey') return json(400, { error: 'text' })", to: "    if (!c.ok || c.value.via !== 'passkey') return json(400, { error: 'text' })",
+    also: [{ from: "    if (!p.ok || p.value.kind !== 'wdev' || p.value.via !== 'passkey') return out(400, { error: 'text' })", to: "    if (!p.ok || p.value.via !== 'passkey') return out(400, { error: 'text' })" },
+      { from: "    if (typeof b.text !== 'string' || !b.text.startsWith('wdev.') || b.text.length > TEXT_MAX)", to: "    if (typeof b.text !== 'string' || b.text.length > TEXT_MAX)" }] },
+  { name: 'SD3 enrol: not logged', file: 'browsers.js', from: "    await obj.log({ k: 'wdev',", to: "    if (0) await obj.log({ k: 'wdev'," },
+  { name: 'SD3 watt: 48 hours', file: 'browsers.js', from: 'Math.min(now + WATT_MAX_MS, ceremonyAt + CEREMONY_CAP_MS)', to: 'Math.min(now + 2 * WATT_MAX_MS, ceremonyAt + CEREMONY_CAP_MS)' },
+  { name: 'SD3 watt: past the 7-day cap', file: 'browsers.js', from: 'Math.min(now + WATT_MAX_MS, ceremonyAt + CEREMONY_CAP_MS)', to: 'now + WATT_MAX_MS' },
+  { name: 'SD3 watt: ob read from the Origin', file: 'browsers.js', from: '    const ob = a.rq === HOME_ORIGIN ? 1 : 0\n', to: '    const ob = h.origin === HOME_ORIGIN ? 1 : 0\n' },
+  { name: 'SD3 log: ob never set', file: 'roster.js', from: "{ ...entry, ob: entry.rq === HOME_ORIGIN ? 1 : 0 }", to: 'entry' },
+  { name: 'SD3 checkin: the challenge not spent', file: 'browsers.js',
+    from: "  if (a.op === 'browserCheckin') {\n    if (!(await spend())) return out(400, { error: 'nonce' })\n", to: "  if (a.op === 'browserCheckin') {\n" },
+  { name: 'SD3 checkin: a web challenge accepted', file: 'browsers.js', from: "    if (a.aud !== 'home') return out(400, { error: 'nonce' }) // an enrolment's challenge, used up here\n", to: '' },
+  { name: 'SD3 checkin: the wren. signature not checked', file: 'browsers.js', from: "    if (!v.ok) return json(400, { error: 'wren' })", to: "    if (!v.ok && v.reason !== 'signature') return json(400, { error: 'wren' })" },
+  { name: 'SD3 checkin: past the cap renewed', file: 'browsers.js', from: "  if (now >= rec.ceremonyAt + CEREMONY_CAP_MS) return 'cap'\n", to: '' },
+  { name: 'SD3 checkin: a revoked key renewed', file: 'browsers.js', from: "  if (rec.revokedAt) return 'revoked'\n", to: '' },
+  // a removed passkey is refused at two doors (not a member of the head; no record): loosen both
+  { name: 'SD3 checkin: a removed passkey\'s certificate renewed', file: 'browsers.js', from: "  if (!m || m.kind !== 'pk' || m.quarantined) return 'revoked'", to: "  if (m && m.quarantined) return 'revoked'",
+    also: [{ from: "  if (!pk || pk.addedAt > rec.ceremonyAt) return 'revoked'", to: "  if (pk && pk.addedAt > rec.ceremonyAt) return 'revoked'" }] },
+  { name: 'SD3 checkin: a suspended passkey\'s certificate renewed', file: 'browsers.js', from: "  if (!m || m.kind !== 'pk' || m.quarantined) return 'revoked'", to: "  if (!m || m.kind !== 'pk') return 'revoked'" },
+  { name: 'SD3 checkin: a passkey re-added since the ceremony', file: 'browsers.js', from: '  if (!pk || pk.addedAt > rec.ceremonyAt) return \'revoked\'', to: "  if (!pk) return 'revoked'" },
+  { name: 'SD3 checkin: the pin ignored', file: 'browsers.js', from: '  return links.slice(from)', to: '  return links' },
+  { name: 'SD3 checkin: no incident records', file: 'browsers.js', from: "r.status === 200 || r.status === 403 ? { ...r.body, incidents } : r.body)", to: "r.status === 200 || r.status === 403 ? { ...r.body, incidents: [] } : r.body)" },
+  { name: 'SD3 incidents: a record that does not read is skipped', file: 'browsers.js', from: "    if (!ok) throw new Error('INCIDENTS holds a record that does not read')\n", to: '' },
+  { name: 'SD3 incidents: read after the challenge is spent', file: 'browsers.js',
+    from: "    const incidents = incidentsOf(env) // first: an unreadable list countersigns nothing\n", to: '',
+    also: [{ from: "    return json(r.status, r.status === 200 || r.status === 403 ? { ...r.body, incidents } : r.body)\n  }\n\n  return json(404", to: "    const incidents = incidentsOf(env)\n    return json(r.status, r.status === 200 || r.status === 403 ? { ...r.body, incidents } : r.body)\n  }\n\n  return json(404" }] },
+  { name: 'SD3 revoke: sign out everywhere marks nothing', file: 'browsers.js', from: '      await s.put(key, { ...rec, revokedAt: now })\n', to: '' },
+  { name: 'SD3 sweep: certificates never deleted', file: 'browsers.js', from: '  if (dead.length) await s.delete(dead)\n}', to: '}' },
+  { name: 'SD3 status: always ok', file: 'browsers.js', from: "    return out(200, { state: await standing(s, rec, now) })", to: "    return out(200, { state: 'ok' })" },
+  { name: 'SD3 CORS: home routes answer *', file: 'browsers.js', from: '  if (path.startsWith(HOME_ROUTES.prefix)) return HOME_ORIGIN\n', to: '' },
+  { name: 'SD3 CORS: a path that is no route answers *', file: 'worker.js', from: "PUBLIC.includes(path) ? ANY : BASE", to: 'ANY' },
+  { name: 'SD3 CORS: a preflight on no route answers 204', file: 'worker.js', from: "    if (h === BASE) return json(404, { error: 'not-found' }, BASE) // no route, no CORS\n", to: '' },
 
   // --- the passkey roster ---
   ...['https://bento.page', 'https://home.bento.page', 'https://id.bento.page'].map((o): Mutant => ({

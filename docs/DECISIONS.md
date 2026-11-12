@@ -13700,3 +13700,46 @@ WebSockets closed: three GETs and no POST on opening, the fragment gone from
 the history entry, each button, an injected script blocked with a positive
 control, framing refused, Trusted Types, an address full of markup shown as
 text; a mutant per rule) and `scripts/test-directory-mutants.ts`.
+
+## 2026-11-12 — bento/id directory: browser certificates, renewals and the event log's `ob`
+
+The directory now countersigns browser certificates (`server/directory/src/browsers.js`):
+the routes the sign-in host and bento/home call, matching the contract the
+bento/home agent was built against.
+
+- **Challenges.** A browser challenge is sealed for its audience (an
+  enrolment or a renewal) and for the address, and lives 60 seconds. It is
+  spent in the address's object before any other check, so reuse, a failed
+  assertion and the other audience all use it up. Nothing is stored when one
+  is issued, so a stranger who asks for many fills nothing and pushes out
+  nobody's. Asking costs a per-IP lookup, the same budget as `GET
+  /v1/roster` (both answer 404 for an address with no account), and one of 20
+  an hour from that IP for that address. There is deliberately no count shared
+  by every caller of an address: a stranger could fill it and stop the
+  owner's browsers renewing.
+- **The head is the latest ripened one.** A change still waiting is never a
+  head, and a change that is due takes effect before the challenge is
+  answered, so a queued change never makes sign-ins fail.
+- **A fresh key per ceremony.** A device key enrols once.
+- **The countersign** lives 24 hours and never past 7 days after the
+  ceremony. A renewal is refused for a key that is unknown, revoked (signed
+  out everywhere, or its passkey removed, suspended or added again since), or
+  past the 7 days.
+- **`ob` means "asked for at bento/home's request"**: the opener the sign-in
+  host reports is bento/home. It is never read from the request's Origin
+  (every web enrolment's Origin is the sign-in host). It is in the countersign
+  and on every event-log entry, kept for the life of the account; nothing
+  decides on it, and the incident lever filters by it. Log entries keep the
+  full public key, not a fingerprint, so the lever acts on the exact key.
+- **Incident records** come from a deploy variable and ride on every
+  check-in and status answer. A list that does not read is an error, never a
+  shorter list.
+- **CORS** is per route: the sign-in host's routes answer only it, bento/home's
+  only it, the rest `*`, and a path that is no route answers with none.
+
+Not here yet: the request a member signs to sign out everywhere (the revoking
+is built; the statement is the kernel's), a `dev2.` made by a passkey alone,
+retiring the old key at a new ceremony, and mail for a new browser. Guards:
+`scripts/test-directory-browsers.ts` (the kernel's `verifyDevice` over what a
+check-in returns; each challenge rule with its control) and
+`scripts/test-directory-mutants.ts`.

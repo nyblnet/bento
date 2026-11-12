@@ -163,6 +163,20 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-directory-roster.ts
 
+    - name: bento/id directory browser certificates (SD3)
+      # The real worker and Roster object through the sign-in host's and
+      # bento/home's routes: browser challenges sealed per audience and
+      # address, 60 s, spent before any other check (reuse, a failed
+      # assertion, the other audience), never stored at issue, a per-IP
+      # lookup charge and a per-IP-per-address limit no other caller shares;
+      # the latest ripened head; enrolment checks and a fresh key per
+      # ceremony; the 24 h countersign capped 7 days after the ceremony, with
+      # ob for bento/home's requests, accepted by the kernel's verifyDevice;
+      # renewals refused for unknown, revoked and capped keys; incident
+      # records; the status route; ob on every log entry; CORS per route.
+      shell: bento-step {0}
+      run: node scripts/test-directory-browsers.ts
+
     - name: No frame is both scripted and same-origin
       # Fails on any frame a document can cause that has allow-same-origin AND
       # allow-scripts (or no sandbox at all), across every app's source and

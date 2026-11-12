@@ -25,13 +25,17 @@
 
 import { addressKey, normalize } from './address.js'
 import { issueChallenge, openChallenge } from './challenge.js'
-import { Roster, REQUESTERS } from './roster.js'
-import { SIGNIN_ORIGIN } from './passkey.js'
-import { WEB_ROUTES } from './seam.js'
+import { Roster } from './roster.js'
+import { HOME_ORIGIN, SIGNIN_ORIGIN } from './passkey.js'
+import { STATUS_ROUTE } from './seam.js'
+import { browserOrigin, browserRoute, deviceStatus } from './browsers.js'
 import { PAGE_HEADERS, VOID_CSS, VOID_HTML, VOID_JS, VOID_PATHS } from './voidpage.js'
 
 export const LIMITS = {
-  ip: { complete: 60, lookup: 300, challenge: 120, request: 60, setup: 10, enrol: 60, void: 60, reset: 10 }, // per IP per hour
+  // per IP per hour. challengeAddr is per IP per hour FOR ONE ADDRESS (a
+  // browser challenge, browsers.js): never a count shared by every caller,
+  // which a stranger could fill to starve the owner's browsers
+  ip: { complete: 60, lookup: 300, challenge: 120, request: 60, setup: 10, enrol: 60, void: 60, reset: 10, checkin: 120, challengeAddr: 20 },
 }
 const DAY = 86_400_000
 
@@ -41,11 +45,6 @@ const BASE = {
   'x-content-type-options': 'nosniff',
   'x-robots-tag': 'noindex, nofollow',
   'referrer-policy': 'no-referrer',
-  // Callers are the bento/home agents (extension, apps) and the sign-in host.
-  // Nothing here is authorised by origin or cookies: every
-  // write is a signature, a passkey assertion or a mailed secret, so any origin
-  // may call.
-  'access-control-allow-origin': '*',
   // id.bento.page is the passkeys' relying party and never runs a ceremony.
   // The Permissions-Policy stops WebAuthn create and get on any page it
   // serves; it does NOT stop the WebAuthn Signal API (measured), so nothing
@@ -57,13 +56,22 @@ const BASE = {
   'x-frame-options': 'DENY',
 }
 /**
- * The /v1/web/* routes are the sign-in host's (server/signin): a browser page
- * on that origin calls them, so they answer CORS to that origin alone, never
- * `*`. Every other header is the same.
+ * CORS. The routes below that are not a browser page's answer `*`: their
+ * callers are the bento/home agents (extension, apps) and the sign-in host,
+ * and nothing here is authorised by origin or cookies (every write is a
+ * signature, a passkey assertion or a mailed secret), so any origin may call.
+ * The /v1/web/* routes are the sign-in host's and the /v1/home/* routes
+ * bento/home's (browsers.js): each answers CORS to that origin alone, never
+ * `*`. A path that is no route answers with no CORS at all.
  */
-const WEB = { ...BASE, 'access-control-allow-origin': SIGNIN_ORIGIN, vary: 'Origin' }
-const headersFor = (path) => (path.startsWith(WEB_ROUTES.prefix) ? WEB : BASE)
-const json = (status, body, headers = BASE) => new Response(JSON.stringify(body), { status, headers })
+const ANY = { ...BASE, 'access-control-allow-origin': '*' }
+const only = (origin) => Object.freeze({ ...BASE, 'access-control-allow-origin': origin, vary: 'Origin' })
+const WEB = only(SIGNIN_ORIGIN), HOME = only(HOME_ORIGIN)
+const headersFor = (path) => {
+  const o = browserOrigin(path)
+  return o === SIGNIN_ORIGIN ? WEB : o === HOME_ORIGIN ? HOME : PUBLIC.includes(path) ? ANY : BASE
+}
+const json = (status, body, headers = ANY) => new Response(JSON.stringify(body), { status, headers })
 const page = (text, type) => new Response(text, { status: 200, headers: { ...PAGE_HEADERS, 'content-type': type } })
 /** The void page's three files, for GET (and HEAD) only. */
 const PAGE_FILES = Object.freeze({
@@ -103,6 +111,11 @@ async function body(req) {
 export const RETIRED = Object.freeze([
   '/v1/bind/start', '/v1/bind/complete', '/v1/lookup', '/v1/delete', '/v1/delete/start', '/v1/delete/complete',
 ])
+/** Every route anyone's page may call (CORS `*`): the ones below, and the retired ones' 410. */
+const PUBLIC = Object.freeze([
+  '/v1/keys', '/v1/roster', '/v1/roster/challenge', '/v1/roster/setup/start', '/v1/roster/setup', '/v1/roster/request', '/v1/void',
+  '/v1/roster/reset/start', '/v1/roster/reset', '/v1/roster/reset/void', STATUS_ROUTE, ...RETIRED,
+])
 
 export default {
   /**
@@ -127,14 +140,26 @@ async function route(req, env) {
   // before anything else, a preflight included: a retired route answers nothing but 410
   if (RETIRED.includes(url.pathname)) return json(410, { error: 'gone' })
   if (req.method === 'OPTIONS') {
-    const web = url.pathname.startsWith(WEB_ROUTES.prefix)
+    const h = headersFor(url.pathname)
+    if (h === BASE) return json(404, { error: 'not-found' }, BASE) // no route, no CORS
+    const browser = browserOrigin(url.pathname) !== null
     return new Response(null, {
       status: 204,
-      headers: { ...headersFor(url.pathname), 'access-control-allow-methods': web ? 'POST, OPTIONS' : 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type', 'access-control-max-age': '86400' },
+      headers: { ...h, 'access-control-allow-methods': browser ? 'POST, OPTIONS' : 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type', 'access-control-max-age': '86400' },
     })
   }
   const ip = req.headers.get('cf-connecting-ip') || '0.0.0.0'
   const p = url.pathname
+
+  // the browser routes' helpers (browsers.js)
+  const k = {
+    json: (status, b) => json(status, b, headersFor(p)),
+    ledger: (key, kind) => ledger(env, key, kind),
+    roster: async (email, op, args) => call(await rosterStub(env, email), op, args),
+    body,
+  }
+
+  if (p === STATUS_ROUTE && req.method === 'GET') return deviceStatus(env, ip, url, k)
 
   if (p === '/v1/keys' && req.method === 'GET') {
     return json(200, { keys: JSON.parse(env.DIR_PUBKEYS || '[]') })
@@ -161,9 +186,9 @@ async function route(req, env) {
   // that reads a mailed link (links complete only on the sign-in host).
   if (req.method !== 'POST') return json(404, { error: 'not-found' }, headersFor(p))
 
-  if (p.startsWith(WEB_ROUTES.prefix)) return web(req, env, ip, p)
+  if (browserOrigin(p) !== null) return browserRoute(req, env, ip, p, k)
   const b = await body(req)
-  if (!b) return json(400, { error: 'bad-request' })
+  if (!b) return json(400, { error: 'bad-request' }, headersFor(p))
 
   // --- the passkey roster (option G) ---
   const origin = req.headers.get('origin') || ''
@@ -259,46 +284,7 @@ async function route(req, env) {
     return json(r.status, r.body)
   }
 
-  return json(404, { error: 'not-found' })
-}
-
-// --- the sign-in host's routes ---------------------------------------------------
-// The browser-key enrolment (#927's seam, server/signin/public/directory-client.js):
-//   POST /v1/web/challenge  (any body)                  → 200 { nonce }
-//   POST /v1/web/enrol      { text, rq, assertion }     → 200 { ok, wdev, watt }
-// The text a passkey signs to certify a browser key is the kernel's `wdev.`
-// statement, which is not defined yet. Until it is, enrol checks everything it
-// can without that layout and answers 501: nothing is countersigned, stored or
-// logged.
-
-/** A challenge for the web audience: never valid for a roster request, and the reverse. */
-const WEB_AUDIENCE = 'web'
-const B64U = /^[A-Za-z0-9_-]+$/
-const TEXT_MAX = 2048
-const FIELD_MAX = 4096
-
-async function web(req, env, ip, p) {
-  const H = headersFor(p)
-  if (p === WEB_ROUTES.challenge) {
-    // the sign-in host posts {} as text/plain (a simple request); the body is not read
-    if (!(await ledger(env, ip, 'challenge'))) return json(429, { error: 'rate-limited' }, H)
-    return json(200, { nonce: await issueChallenge(env.CHALLENGE_KEY, WEB_AUDIENCE, WEB_AUDIENCE, Date.now()) }, H)
-  }
-  if (p === WEB_ROUTES.enrol) {
-    const b = await body(req)
-    if (!b) return json(400, { error: 'bad-request' }, H)
-    if (typeof b.text !== 'string' || !b.text.startsWith('wdev.') || b.text.length > TEXT_MAX) return json(400, { error: 'text' }, H)
-    // the opener the sign-in host read from the message event: only bento/home may ask
-    if (!REQUESTERS.includes(b.rq)) return json(400, { error: 'rq' }, H)
-    const as = b.assertion
-    const field = (v) => typeof v === 'string' && v.length > 0 && v.length <= FIELD_MAX && B64U.test(v)
-    if (!as || typeof as !== 'object' || Array.isArray(as) ||
-      !['id', 'authenticatorData', 'clientDataJSON', 'signature'].every((k) => field(as[k])) ||
-      !(as.userHandle === null || as.userHandle === undefined || field(as.userHandle))) return json(400, { error: 'assertion' }, H)
-    if (!(await ledger(env, ip, 'enrol'))) return json(429, { error: 'rate-limited' }, H)
-    return json(501, { error: 'not-implemented', reason: 'the kernel wdev. statement is not defined yet' }, H)
-  }
-  return json(404, { error: 'not-found' }, H)
+  return json(404, { error: 'not-found' }, headersFor(p))
 }
 
 export { Roster }

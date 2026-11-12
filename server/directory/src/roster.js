@@ -65,7 +65,8 @@
 
 import { b64uDec, b64uEnc, sha256b64u, signStatement } from '../../../kernel/src/statements.ts'
 import { buildRip, buildRos, parseRos, ROSTER_WAIT_MS } from '../../../kernel/src/roster.ts'
-import { PASSKEY, verifyMemberAssertion, verifyRegistration } from './passkey.js'
+import { HOME_ORIGIN, PASSKEY, verifyMemberAssertion, verifyRegistration } from './passkey.js'
+import { BROWSER_OPS, browserOp } from './browsers.js'
 import { deliver, MAIL_TIMEOUT_MS } from './mail.js'
 import { resetLink, setupLink, voidLink } from './links.js'
 
@@ -112,7 +113,7 @@ export const ROSTER_LIMITS = {
 }
 
 /** The openers the sign-in host may report (it reads them from the message event). */
-export const REQUESTERS = Object.freeze(['https://home.bento.page'])
+export const REQUESTERS = Object.freeze([HOME_ORIGIN])
 
 const te = new TextEncoder()
 const hex = (b) => [...b].map((x) => x.toString(16).padStart(2, '0')).join('')
@@ -347,11 +348,17 @@ export class Roster {
     return cur.createdAt ?? (await this.state.storage.get('link:00000000'))?.ripenedAt ?? cur.ripenedAt
   }
 
+  /**
+   * The event log, kept for the life of the account. Every entry carries `ob`:
+   * 1 when the act was asked for at bento/home's request (`rq`, the opener the
+   * sign-in host reported, is bento/home), else 0. It is the incident lever's
+   * filter; nothing decides on it.
+   */
   async log(entry) {
     const s = this.state.storage
     const n = ((await s.get('logN')) || 0) + 1
     await s.put('logN', n)
-    await s.put(`log:${String(n).padStart(8, '0')}`, entry)
+    await s.put(`log:${String(n).padStart(8, '0')}`, { ...entry, ob: entry.rq === HOME_ORIGIN ? 1 : 0 })
   }
 
   /** Make a change the head. `p` is a waiting (or immediate) change. */
@@ -451,6 +458,8 @@ export class Roster {
       return true
     }
     const origin = typeof a.os === 'string' ? a.os.slice(0, ROSTER_LIMITS.originMax) : ''
+    // the browser certificates (browsers.js): the same object, its own ops
+    if (BROWSER_OPS.includes(a.op)) return browserOp(this, a, now, { spend, out, origin })
 
     if (a.op === 'head') {
       await this.ripen(now)

@@ -1002,7 +1002,7 @@ let addAt = 0
   ok(ctl.status === 200, 'control: the same challenge call with the key set answers 200')
   // Y26: a failure on a web route keeps the sign-in host's CORS, never `*`
   let web500: Response | null = null
-  try { web500 = await worker.fetch(new Request('https://id.bento.page/v1/web/challenge', { method: 'POST', body: '{}', headers: { 'cf-connecting-ip': freshIp(), origin: S } }), { ...env, CHALLENGE_KEY: undefined } as never) } catch { /* an escaped exception: the row fails */ }
+  try { web500 = await worker.fetch(new Request('https://id.bento.page/v1/web/challenge', { method: 'POST', body: JSON.stringify({ address: alice }), headers: { 'cf-connecting-ip': freshIp(), origin: S } }), { ...env, CHALLENGE_KEY: undefined } as never) } catch { /* an escaped exception: the row fails */ }
   ok(web500?.status === 500 && web500.headers.get('access-control-allow-origin') === SIGNIN_ORIGIN && /Origin/.test(web500.headers.get('vary') ?? ''),
     `a 500 on a web route answers CORS for the sign-in host only (${web500?.status}, ${web500?.headers.get('access-control-allow-origin')})`)
   ok(noKey.status === 500 && responses.find((x) => x.what === 'D3 /v1/roster/challenge' && x.status === 500)?.h.get('access-control-allow-origin') === '*', 'control: a 500 on any other route keeps *')
@@ -1303,23 +1303,18 @@ let addAt = 0
   ok(badExports.length === 0, `every export of worker.js is a class, a handler or an object (not: ${badExports.map(([k]) => k).join(', ') || 'none'})`)
   const pre = await W('OPTIONS', '/v1/web/enrol')
   ok(pre.status === 204 && pre.h.get('access-control-allow-origin') === SIGNIN_ORIGIN && pre.h.get('access-control-allow-methods') === 'POST, OPTIONS', 'preflight: CORS to the sign-in host only, POST')
-  const ch = await W('POST', '/v1/web/challenge', '{}')
-  const nonce = ch.j.nonce as string
-  ok(ch.status === 200 && typeof nonce === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(nonce), `challenge → 200 { nonce } in the shape the sign-in host checks (${ch.status})`)
-  ok(ch.h.get('access-control-allow-origin') === SIGNIN_ORIGIN && /Origin/.test(ch.h.get('vary') ?? ''), 'challenge: CORS to the sign-in host, Vary: Origin')
-  ok((await W('POST', '/v1/web/challenge')).status === 200, 'challenge with no body → 200 (the body is not read)')
-  ok(!!(await openChallenge(env.CHALLENGE_KEY as string, 'web', 'web', nonce, now)), 'the nonce is a sealed web challenge')
-  ok(!(await openChallenge(env.CHALLENGE_KEY as string, 'roster', await addressKey('x@example.com'), nonce, now)), 'and is no roster challenge')
-  const xs = await setup('xia@example.com', await Authn.make(), { ch: nonce })
-  ok(xs.status === 400 && xs.j.error === 'nonce', 'a web nonce is refused by roster setup (nonce)')
+  // the challenge and enrolment themselves (nonces, audiences, the countersign) are test-directory-browsers.ts's
+  ok((await W('POST', '/v1/web/challenge', '{}')).j.error === 'bad-address', 'challenge with no address → 400 bad-address')
+  ok((await W('POST', '/v1/web/challenge', JSON.stringify({ address: alice }), { origin: null })).j.error === 'origin', 'challenge with no Origin → 403 origin')
   const A = { id: 'AAAA', userHandle: null, authenticatorData: 'AAAA', clientDataJSON: 'AAAA', signature: 'AAAA' }
   const enrol = (b: unknown, o?: { origin?: string | null }) => W('POST', '/v1/web/enrol', JSON.stringify(b), o)
-  const okBody = { text: `wdev.W.kx.bA.${nonce}`, rq: 'https://home.bento.page', assertion: A }
+  const okBody = { text: 'wdev.W.kx.bA', rq: 'https://home.bento.page', assertion: A }
   const e0 = await enrol(okBody)
-  ok(e0.status === 501 && e0.j.error === 'not-implemented', `a well-formed enrol → 501 until the kernel defines wdev. (got ${e0.status} ${JSON.stringify(e0.j)})`)
+  ok(e0.status === 400 && e0.j.error === 'text', `an enrol whose text is no wdev. statement → 400 text (got ${e0.status} ${JSON.stringify(e0.j)})`)
   ok(e0.h.get('access-control-allow-origin') === SIGNIN_ORIGIN, 'enrol: CORS to the sign-in host')
   const cases: [string, unknown, string][] = [
     ['no text', { ...okBody, text: undefined }, 'text'],
+    ['no Origin', okBody, 'origin'],
     ['a text that is not wdev.', { ...okBody, text: 'ros.x' }, 'text'],
     ['an over-long text', { ...okBody, text: 'wdev.' + 'x'.repeat(3000) }, 'text'],
     ['no rq', { ...okBody, rq: undefined }, 'rq'],
@@ -1334,25 +1329,25 @@ let addAt = 0
     ['a numeric userHandle', { ...okBody, assertion: { ...A, userHandle: 7 } }, 'assertion'],
   ]
   for (const [what, b, err] of cases) {
-    const r = await enrol(b)
-    ok(r.status === 400 && r.j.error === err, `enrol with ${what} → 400 ${err} (got ${r.status} ${r.j.error})`)
+    const r = await enrol(b, err === 'origin' ? { origin: null } : undefined)
+    ok(r.status === (err === 'origin' ? 403 : 400) && r.j.error === err, `enrol with ${what} → ${err} (got ${r.status} ${r.j.error})`)
   }
   ok((await W('POST', '/v1/web/enrol', 'not json')).j.error === 'bad-request', 'enrol with a body that is not JSON → 400')
-  ok((await enrol({ ...okBody, assertion: { ...A, userHandle: 'AAAA' } })).status === 501, 'control: a userHandle string is accepted')
+  ok((await enrol({ ...okBody, assertion: { ...A, userHandle: 'AAAA' } })).j.error === 'text', 'control: a userHandle string passes the shape checks')
   ok((await W('POST', '/v1/web/nope', '{}')).status === 404 && (await W('GET', '/v1/web/challenge')).status === 404, 'other web paths and GET → 404')
-  const ip = freshIp()
-  let last = 0
-  for (let i = 0; i <= LIMITS.ip.challenge; i++) last = (await W('POST', '/v1/web/challenge', '{}', { ip })).status
-  ok(last === 429, `web challenge #${LIMITS.ip.challenge + 1} from one IP in an hour → 429`)
-  // Y31: enrol is limited per IP too (well-formed enrols count; a malformed one is refused before the count)
+  // Y31: enrol is limited per IP (well-formed enrols count; a malformed one is refused before the count)
   const eip = freshIp()
   const es: number[] = []
   for (let i = 0; i <= LIMITS.ip.enrol; i++) es.push((await W('POST', '/v1/web/enrol', JSON.stringify(okBody), { ip: eip })).status)
-  ok(LIMITS.ip.enrol === 60 && es.slice(0, -1).every((x) => x === 501) && es[es.length - 1] === 429, `enrol #${LIMITS.ip.enrol + 1} from one IP in an hour → 429, the ${LIMITS.ip.enrol} before it 501 (last ${es[es.length - 1]})`)
-  ok((await enrol(okBody)).status === 501, 'control: from another IP the same enrol answers 501')
+  ok(LIMITS.ip.enrol === 60 && es.slice(0, -1).every((x) => x === 400) && es[es.length - 1] === 429, `enrol #${LIMITS.ip.enrol + 1} from one IP in an hour → 429, the ${LIMITS.ip.enrol} before it 400 (last ${es[es.length - 1]})`)
+  ok((await enrol(okBody)).status === 400, 'control: from another IP the same enrol is read (400)')
   const webs = responses.filter((x) => x.what.startsWith('web '))
   ok(webs.length > 20 && webs.every((x) => x.h.get('access-control-allow-origin') === SIGNIN_ORIGIN), `every web answer (${webs.length}) has CORS for the sign-in host only, never *`)
-  ok(responses.filter((x) => !x.what.startsWith('web ') && !x.what.includes('/v1/web/')).every((x) => x.h.get('access-control-allow-origin') === '*'), 'every other answer keeps CORS *')
+  // a path that is no route (GET /setup) answers with no CORS at all (security's nit on #948)
+  const noRoute = (x: { what: string }) => /^GET \/setup(\?|$)/.test(x.what)
+  ok(responses.filter(noRoute).length === 2 && responses.filter(noRoute).every((x) => x.h.get('access-control-allow-origin') === null), 'a path that is no route answers with no CORS')
+  const notStar = responses.filter((x) => !x.what.startsWith('web ') && !x.what.includes('/v1/web/') && !noRoute(x) && x.h.get('access-control-allow-origin') !== '*')
+  ok(notStar.length === 0, `every other answer keeps CORS * (not: ${notStar.map((x) => x.what).join(', ') || 'none'})`)
   // the sign-in host's copy of the seam, when it is in this tree
   const seam = join(root, 'server/signin/public/directory-client.js')
   if (existsSync(seam)) {
