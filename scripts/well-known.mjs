@@ -35,8 +35,10 @@
 //   · Apple's CDN fetches the AASA for the devices; confirm it has picked the
 //     file up at https://app-site-association.cdn-apple.com/a/v1/id.bento.page
 //     before relying on it.
-//   · scripts/check-id-hosting.mjs --live checks the hosting rules around
-//     them (no /.well-known/webauthn on the rp host, nothing on the apex).
+//   · scripts/check-id-hosting.mjs --live --zone <export> checks the hosting
+//     rules around them (no /.well-known/webauthn on the rp host, nothing on
+//     the apex). The --zone file is the DNS provider's export of the zone:
+//     DNS alone sees only a wildcard name, never an explicit one.
 
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
