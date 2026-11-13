@@ -81,6 +81,15 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-recovery.ts
 
+    - name: identity rk (option G recovery key) mutants
+      # rk, the recovery key under option G: Argon2id salted PER ACCOUNT, then
+      # HKDF candidates with rejection sampling whose counter is one byte. Each
+      # mutant changes one rule (a shared salt, the counter as a digit, mod-n
+      # reduction, n or 0 accepted...) in a copy of recovery.ts;
+      # test-recovery.ts must go red on every one, after the unmutated copy passes.
+      shell: bento-step {0}
+      run: node scripts/test-rk-mutants.ts
+
     - name: identity seal — one "body is sealed" predicate
       # bento/id §E: every plaintext-to-disk guard asks isBodySealed(), not
       # "is there a password". The identity-sealed body is a genuine bento/enc
@@ -635,7 +644,10 @@ runs:
       # link; setup and reset carry the directory's authority alone; the
       # directory's acts on the mailbox's authority (q quarantine on a void, l
       # lever revert, x removal, u undo) each cite what authorises them and can
-      # never add a member.
+      # never add a member. A native consent key (ck) signs by a cns. purpose
+      # roster; a RIPE ck (72 h a member at the directory's requestedAt) signs or
+      # co-signs a change that then needs no wait. vrs. rows: a member stops a
+      # reset, judged by the account's age at the reset's request time.
       shell: bento-step {0}
       run: node scripts/test-roster.ts
 
@@ -660,8 +672,11 @@ runs:
       # dev2. certified by a passkey assertion, the directory's watt. (24 h, 7-day
       # cap from the original ceremony), the head rule (the signer is an
       # unquarantined passkey of the named head AND of the current one, with no
-      # break since), and the tier: passkey-only until the device's consent key
-      # has been a member 72 h.
+      # break since), and the tier: native only for a dev2. a ripe consent key
+      # co-signed (cns. purpose roster); a wdev. a phone approved (purpose
+      # web-add) stays a browser. watt. carries the mailbox state (mb). Also
+      # wret. (old-key retirement), inc. (incident records), the reserved
+      # organisation prefixes, and link.ts's final under option G.
       shell: bento-step {0}
       run: node scripts/test-devices.ts
 
