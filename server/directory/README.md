@@ -288,6 +288,9 @@ Bodies are JSON, sent as text/plain.
   since the ceremony), and from 7 days after the ceremony.
 - `ob` is 1 when bento/home asked (the `rq` the sign-in host reports), in the
   countersign and on every event-log entry; nothing decides on it.
+- `mb` in the countersign is the account's mailbox state: 0 while the address
+  is confirmed, which is every account today (the address is proved at setup,
+  and nothing yet asks for it again), else the time it went unconfirmed.
 - `incidents` comes from the `INCIDENTS` variable, `[{id, from, to}]`; a list
   that does not read answers 500 and countersigns nothing.
 - Signing out everywhere is a time, the moment the sign-out is accepted (not

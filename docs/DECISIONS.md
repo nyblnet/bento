@@ -14016,6 +14016,10 @@ bento/home agent was built against.
   written. A signature counter is stored only over the value the assertion
   was checked against, so two assertions with one counter never both pass.
   It logs and mails nothing.
+- **`mb`** (the countersign's mailbox state, from #949) is 0 while the
+  address is confirmed. Every account is confirmed today: the address is
+  proved at setup and nothing asks for it again until the mailbox re-proof is
+  built, which will store the time it went unconfirmed.
 - **Incident records** come from a deploy variable and ride on every
   check-in and status answer. A list that does not read is an error, never a
   shorter list.

@@ -302,13 +302,25 @@ let signer = null
  * online key, good for 24 hours and never past 7 days after the ceremony.
  * Throws when the key is not configured, before anything is stored.
  */
-async function countersign(env, { certHash, ob, ceremonyAt, now }) {
+/**
+ * The account's MAILBOX state, as the countersign carries it (`mb`): 0 while
+ * the address is confirmed, else when it went unconfirmed. Every account is
+ * confirmed today: the address is proved at setup and nothing yet asks it to
+ * be proved again (the mailbox re-proof is its own change, and will store the
+ * time here).
+ */
+async function mailbox(s) {
+  const since = await s.get('mbUnconfirmedSince')
+  return Number.isSafeInteger(since) && since > 0 ? since : 0
+}
+
+async function countersign(env, { certHash, ob, mb, ceremonyAt, now }) {
   if (typeof env.DIR_KEY_JWK !== 'string' || typeof env.DIR_KID !== 'string') throw new Error('DIR_KEY_JWK and DIR_KID are not configured')
   if (!signer || signer.jwk !== env.DIR_KEY_JWK) {
     signer = { jwk: env.DIR_KEY_JWK, key: await crypto.subtle.importKey('jwk', JSON.parse(env.DIR_KEY_JWK), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']) }
   }
   const expires = Math.min(now + WATT_MAX_MS, ceremonyAt + CEREMONY_CAP_MS)
-  const text = buildWatt({ certHash, ob, loggedAt: now, expires, kid: env.DIR_KID })
+  const text = buildWatt({ certHash, ob, mb: Math.min(mb, now), loggedAt: now, expires, kid: env.DIR_KID })
   return { text, sig: await signStatement(signer.key, text) }
 }
 
@@ -448,7 +460,7 @@ export async function browserOp(obj, a, now, h) {
     const certHash = await sha256b64u(a.text)
     const ob = a.rq === HOME_ORIGIN ? 1 : 0
     // the countersign first: without the key nothing is stored, the counter included
-    const w = await countersign(obj.env, { certHash, ob, ceremonyAt: c.ceremonyAt, now })
+    const w = await countersign(obj.env, { certHash, ob, mb: await mailbox(s), ceremonyAt: c.ceremonyAt, now })
     if (!rec || !(await storeCount(s, pub, rec.signCount, v.value.signCount))) return out(403, { error: 'assertion' })
     await s.put(`wd:${c.devicePub}`, { certHash, signer: pub, assertion, ceremonyAt: c.ceremonyAt, rq: a.rq, ob, loggedAt: now, renewedAt: now, revokedAt: null })
     await s.put(`wh:${certHash}`, c.devicePub)
@@ -465,7 +477,7 @@ export async function browserOp(obj, a, now, h) {
     await obj.ripen(now)
     const st = await standing(s, rec, now)
     if (st !== 'ok') return out(403, { error: st })
-    const w = await countersign(obj.env, { certHash: rec.certHash, ob: rec.ob, ceremonyAt: rec.ceremonyAt, now })
+    const w = await countersign(obj.env, { certHash: rec.certHash, ob: rec.ob, mb: await mailbox(s), ceremonyAt: rec.ceremonyAt, now })
     await s.put(`wd:${a.devicePub}`, { ...rec, renewedAt: now })
     return out(200, { watt: w.text, wattSig: w.sig, signer: rec.signer, assertion: rec.assertion, roster: await chainFrom(s, a.pin) })
   }

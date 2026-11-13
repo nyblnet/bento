@@ -420,8 +420,8 @@ let anaWatt = ''
   ok(e.status === 200 && e.j.ok === true && e.j.wdev === e.text && typeof e.j.watt === 'string' && Object.keys(e.j).length === 3, `enrol → 200 {ok, wdev: the text, watt} (${err(e)})`)
   ok(e.h.get('access-control-allow-origin') === SIGNIN_ORIGIN, 'enrol: CORS to the sign-in host')
   const w = parseWatt(e.j.watt as string)
-  ok(w.ok && w.value.certHash === await sha256b64u(e.text) && w.value.ob === 1 && w.value.loggedAt === now && w.value.expires === now + WATT_MAX_MS && w.value.kid === 'dir-1',
-    `the countersign: this certificate, ob 1 (bento/home asked), logged now, 24 h, kid dir-1 (${e.j.watt})`)
+  ok(w.ok && w.value.certHash === await sha256b64u(e.text) && w.value.ob === 1 && w.value.mb === 0 && w.value.loggedAt === now && w.value.expires === now + WATT_MAX_MS && w.value.kid === 'dir-1',
+    `the countersign: this certificate, ob 1 (bento/home asked), mb 0 (the address is confirmed), logged now, 24 h, kid dir-1 (${e.j.watt})`)
   anaWatt = e.j.watt as string
   const reuse = await enrol(ana, await Browser.make(), A1, { ch: e.ch })
   ok(reuse.status === 400 && reuse.j.error === 'nonce', `the same challenge again (a new key) → 400 nonce (${err(reuse)})`)
@@ -574,6 +574,16 @@ ok(ce.status === 200, `cara's second passkey enrols a browser (${err(ce)})`)
     { roster: ch.value, directoryKeys: DIR_KEYS, rpId: ROSTER_RP_ID, origins: [...ROSTER_WEB_ORIGINS], now }) : null
   ok(v?.ok && v.value.tier === 'passkey' && r.j.signer === C2.pub, `the kernel's verifyDevice accepts the certificate with what the check-in returned (${v ? (v.ok ? 'ok' : v.reason) : 'no chain'})`)
   const headHash = ((await (await storeOf(cara)).get('head')) as { hash: string } | undefined)?.hash ?? ''
+  // mb: once the address goes unconfirmed (the mailbox re-proof, not built), the countersign says since when, and peers still accept it
+  await plant(cara, (st) => st.set('mbUnconfirmedSince', now - HOUR))
+  const um = await checkin(cara, CB)
+  await plant(cara, (st) => st.delete('mbUnconfirmedSince'))
+  const umw = parseWatt(um.j.watt as string)
+  const umv = ch.ok && um.status === 200 ? await verifyDevice({ cert: ce.text, signer: um.j.signer as string, assertion: um.j.assertion as never, watt: um.j.watt as string, wattSig: um.j.wattSig as string },
+    { roster: ch.value, directoryKeys: DIR_KEYS, rpId: ROSTER_RP_ID, origins: [...ROSTER_WEB_ORIGINS], now }) : null
+  ok(umw.ok && umw.value.mb === now - HOUR && umv?.ok, `an unconfirmed address: the countersign carries mb = when, and verifyDevice accepts it (${umw.ok ? umw.value.mb : 'no watt'}, ${umv ? (umv.ok ? 'ok' : umv.reason) : 'none'})`)
+  const cw = parseWatt((await checkin(cara, CB)).j.watt as string)
+  ok(cw.ok && cw.value.mb === 0, 'confirmed again: mb 0')
   const pinned = await checkin(cara, CB, { pin: headHash })
   ok(pinned.status === 200 && (pinned.j.roster as RosterLink[] | undefined)?.length === 1 && await sha256b64u((pinned.j.roster as RosterLink[])[0]?.ros ?? '') === headHash, 'pinned at the head: the roster starts at it')
   const other = await checkin(cara, CB, { pin: await sha256b64u('ros.elsewhere') })
