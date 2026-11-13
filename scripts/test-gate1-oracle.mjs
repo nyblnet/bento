@@ -14,7 +14,8 @@
 //   - edits to the real blocks' tags;
 //   - length-changing characters (İ ß ﬃ Σ);
 //   - wrappers (comments, <style>, <textarea>, <title>);
-//   - foreign content: <style>, <title>, <textarea> inside <svg> or <math>.
+//   - foreign content: <style>, <title>, <textarea> inside <svg> or <math>;
+//   - comments: "--!>" endings, "<!--" inside raw-text elements and CDATA.
 // For every mutant gate1 calls GENUINE, load it in the browser with NO CSP and
 // record what ran: the loader and remover push to a log, every candidate pushes
 // its own name, and any data block that executes throws (its text isn't
@@ -117,6 +118,14 @@ function mutant(r, n) {
     const fc = `<${pick(['svg', 'math'])}>${pick(['', '<g>', '<mi>'])}<${el}>${payload}</${el}></${pick(['svg', 'math'])}>`
     h = h.replace(pick(['</body>', '<div data-bento-preview="1">']), (m) => fc + m)
   }
+  // comments, read as the tokenizer reads them: "--!>" ends one, and in raw-text
+  // elements or CDATA a "<!--" starts none
+  if (r() < 0.15) {
+    const run = `<img src=x onerror="window.__ran.push('${name}')">`
+    const t = pick(['xmp', 'noembed', 'noframes', 'noscript'])
+    const wrap = pick([`<!-- a --!>${run}<!-- b -->`, `<!-- a --! b -->${run}`, `<${t}><!--</${t}>${run}--></${t}>`, `<svg><![CDATA[><!--]]>${run}--></svg>`, '<!-- a --!><p>after</p>'])
+    h = h.replace(pick(['</body>', '<div data-bento-preview="1">']), (m) => wrap + m)
+  }
   // the loader's own text behind a src=: the browser runs the src and ignores it
   if (r() < 0.1) h = h.replace(`<${S}>${LOADER}`, `<${S}${sep()}src=${q('data:text/javascript,' + encodeURIComponent(body))}>${LOADER}`)
   // or edit a real block's tag the ways scanners split
@@ -176,6 +185,7 @@ try {
   for (const r of await whatRanEverywhere(genuine().replace('</body>', `<${S}>window.__ran.push('extra')</${S}></body>`))) ok(r.ran.includes('extra'), `${r.engine}: an extra script is SEEN running`)
   for (const r of await whatRanEverywhere(genuine().replace('type="bento/deflate-b86" id="bento-rt"', 'id="bento-rt"'))) ok(r.errors > 0, `${r.engine}: a data block that executes is SEEN (its text throws)`)
   for (const r of await whatRanEverywhere(genuine().replace('</body>', `<svg><title><img src=x onerror="window.__ran.push('foreign')"></title></svg></body>`))) ok(r.ran.includes('foreign'), `${r.engine}: a handler inside <svg><title> is SEEN running`)
+  for (const r of await whatRanEverywhere(genuine().replace('</body>', `<!-- a --!><img src=x onerror="window.__ran.push('bang')"><!-- b --></body>`))) ok(r.ran.includes('bang'), `${r.engine}: a handler after "--!>" is SEEN running`)
   ok((await verifyServed(genuine(), history)).verdict === 'genuine', 'gate1 calls the genuine file genuine')
 
   const runs = [[FIXED_SEED, CASES, 'fixed seed'], [Math.floor(Math.random() * 2 ** 31), RANDOM, 'random seed']]

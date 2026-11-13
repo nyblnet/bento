@@ -9,7 +9,7 @@
 // comma). Optionally a release channel from a directory (or set in memory by
 // a rig), with Access-Control-Allow-Origin: * as bento.page sends it.
 //
-//   node home/web/build.mjs --library-origin http://127.0.0.1:5310 \
+//   node home/web/build.mjs --dev --library-origin http://127.0.0.1:5310 \
 //        --frame-origin http://localhost:5311 --release-base http://127.0.0.1:5312/releases/
 //   node home/web/serve.mjs --dist home/web/dist --library 5310 --frame 5311 [--releases <dir> --release-port 5312]
 //
