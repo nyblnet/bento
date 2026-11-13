@@ -13728,6 +13728,169 @@ the history entry, each button, an injected script blocked with a positive
 control, framing refused, Trusted Types, an address full of markup shown as
 text; a mutant per rule) and `scripts/test-directory-mutants.ts`.
 
+## 2026-11-10 — bento/id option G: consent keys sign (`roster`, `web-add`), `rk`, the link final, and room left for organisations
+
+**Decision.** The third kernel change of option G. Contracts:
+`roster-v2.json`, `device-v1.json` and `recovery-v1.json` (new rows and
+sections; nothing a host reads today changes meaning).
+
+- **Two consent purposes.** A native consent key (`ck`) signs a `cns.` with
+  purpose `roster` (payload families `ros.`, `dev2.`, `vrs.`: the texts that
+  change who speaks for the account) or `web-add` (`wdev.`: a phone approves a
+  browser). Peers check a co-sign OFFLINE with `verifyCoSign`: the purpose is
+  the one the caller names, the audience is `dir`, the challenge is the
+  dirNonce inside the payload, the co-sign was alive at the directory's own
+  time for the act (a link's requestedAt, a certificate's ceremonyAt) for at
+  most 5 minutes plus the clock skew, and the rp is the caller's parameter.
+  The directory still checks the same text live, spending the challenge.
+- **The roster.** A ck of the previous head may ask for a member change (its
+  cns. is the proof), and any member's change may carry a co-sign from
+  ANOTHER ck of the previous head. A ck is RIPE when it has been a member 72
+  hours at the directory's requestedAt, measured from its `since` in the
+  verified chain (a pin's since is later, so the check only refuses more);
+  the requester's clock never counts. A change signed or co-signed by a ripe
+  ck needs no wait. A co-sign that does not count (unripe, quarantined, a
+  passkey, not a member of the previous head, the requester itself, on a
+  directory act) refuses the link rather than being ignored. These are the
+  mutants security asked for when it ruled the roster.
+- **Native tier is a consent key's signature, never its age.** A `dev2.` via
+  `ck` is a ripe ck's `roster` co-sign over the whole certificate text,
+  devicePub included, and is the only native-tier certificate. A
+  passkey-made `dev2.` stays "(passkey sign-in)" whatever consent key it
+  names, as ruled on #937. A device whose own consent key ripens makes a new
+  certificate that its ck co-signs. A `wdev.` via `cns` (route D) stays a
+  browser. **Every certificate, native included, still needs a current 24 h
+  `watt.`**, so disabling an account, removing a device and the incident lever
+  reach native devices within a day. The 7-day ceremony cap also still applies
+  to native certificates; relaxing it for ck-signed ones would be a new ruling.
+- **`rk`, the recovery key.** The recovery code derives a P-256 key whose
+  public half is a roster member. Because that public half is published, the
+  Argon2id salt is per account (SHA-256 of a label and the address in normal
+  form, first 16 bytes): one guess list cannot be tried against every account
+  at once. The scalar comes from HKDF candidates with a one-byte counter,
+  taking the first in 1..n−1 (rejection sampling, never mod n). A refusal is
+  about 2^-32 per derivation, so the counter rule is pinned in the fixture over
+  given candidates rather than left to luck. Argon2id's parameters and the
+  code are K2b's, unchanged.
+- **The link final under option G** (`link.ts`). Steps 1 to 6 of link v1 (the
+  code, the slot, the transcript, the keys, the SAS, N's offer) are unchanged.
+  In place of the SEALED account scalar, H's ripe consent key co-signs a
+  `dev2.` for N, and msg3 is a new message, `lnkg`: the dev2., H's ck, its
+  cns. and signature, and a seal under h2n with a new AAD (`lnkgs.v1.<t>`) over
+  the hash of those lines. Nothing in it is secret; the seal is what the SAS
+  buys, so the directory cannot swap the certificate. v1's SEALED bytes are
+  untouched, and a v1 final and a G final can never be read as each other.
+  The directory's release check (`verifyLinkReleaseG`) requires the ck to be a
+  ripe member of the current head and the dev2. to carry the challenge it
+  issued. Adding N's own consent key to the roster is an ordinary roster
+  change H's ripe ck signs.
+- **`vrs.`, a member stops a reset**:
+  `vrs.<b64u(address)>.<sha256(reset ros. text)>.<dirNonce>`, signed by an
+  unquarantined member of the head the reset would replace (a passkey
+  assertion, a recovery-key signature, or a ck's roster cns.), over a
+  single-use challenge the directory spends first. The account's 14-day "new"
+  window is judged at the reset's REQUEST time, not when the stop arrives, so
+  a reset begun in an account's first days cannot be stopped later by a key a
+  hostile setup planted. A chain read from a pin has no creation time, and the
+  stop is refused. Peers never see a `vrs.`.
+- **The mailbox state rides in `watt.`**:
+  `watt.<certHash>.<ob>.<mb>.<loggedAt>.<expires>.<kid>`, `mb` = `0` while the
+  address is confirmed, else the time it went unconfirmed (no later than
+  loggedAt). A lapsed mailbox qualifies only the address ("unconfirmed since
+  <date>"), never the account. Inside the countersign every certificate
+  already needs, the person presenting the proof cannot drop it, and agents
+  need no absence rule. The six-field `watt.` merged with the device
+  certificates shipped in no release (no tag contains it) and is now refused.
+- **`ob` after the sign-in host.** Every web ceremony now runs on the sign-in
+  host, so a browser's Origin header no longer separates bento/home's
+  requests. `ob` is 1 when the directory logged the ceremony as made for
+  bento/home (the opener the sign-in host reports) and 0 for a native host.
+  It stays informative: no peer acts on it, and the lever reads the
+  directory's log.
+- **`wret.`, old-key retirement**:
+  `wret.<oldDevicePub>.<newDevicePub>.<b64u(address)>.<dirNonce>`, signed by the
+  OLD browser key at a new ceremony; the directory then refuses further
+  renewals of the old key. A copy of a browser key is cut off by the next honest
+  ceremony, not only by its 7-day cap. Directory-only.
+- **`inc.`, the incident record**: `inc.<id>.<from>.<to|empty>.<issuedAt>.<kid>`,
+  directory-signed, so apps can flag room statements signed inside an incident
+  window (from inclusive, to exclusive; empty `to` while still open). A record
+  revokes nothing by itself.
+- **Room for organisations.** `mgd.`, `vch.`, `ojn.` and `dvc.` are reserved,
+  and every verifier refuses them today. No authority word was added to
+  `rip.`. Consent and roster verifiers take the rp, the origins and the
+  directory keys from the caller, and look a kid up only in the one key map
+  they are given.
+
+**Why.** Security's ruling on the roster asked that the co-sign ride in the
+link as a `roster` cns. over the exact text, with the five mutants above; its
+ruling on device certificates made native tier wait for the consent key's own
+signature (F1); R9 made the rk salt per account and asked for the counter rule
+in the fixtures; its ruling on the directory's reset (C4/C5) asked for the
+member's stop with the age judged at request time. The mailbox state needed a
+signed home that launch-1 peers would read before any host ships `watt.`.
+
+**Ports and callers.** `verifyRosterChain` and `verifyDevice` take an optional
+`consentRp` (`bento`): without it any link or certificate a consent key signs
+is refused as a caller error, and nothing else changes. A directory that builds
+`watt.` passes `mb`. Native hosts port these rows from the same fixtures.
+
+## 2026-11-09 — bento/id directory: hold before the mail, say how a link ended, keep the undo through a reset
+
+Security's review of the void page and the reset set three conditions before
+the directory deploys. These are their answers. Nothing is deployed.
+
+- **A mail never states an act that then fails to happen.** A Remove (from a
+  void link) and a reset send their notice BEFORE they act, because that notice
+  carries the way back. They now put a HOLD on the roster first, for the
+  mailer's timeout plus a margin. While it is on, the waiting change cannot
+  take effect (the alarm skips it and comes back when the hold ends), and a
+  second press of a void link, a reset or a member's request is refused before
+  any mail of its own goes (`busy`, or `pending` for a member). A refused send
+  takes the hold off. Before, a Remove pressed seconds before the deadline
+  could mail "your passkey was suspended" while the change it meant to stop
+  took effect, two presses could mail two undo links of which only one worked,
+  and a reset could mail "a change that was waiting is cancelled" for a change
+  that had just taken effect. A send that outlives its hold (the object
+  stopped mid-send) acts only if nothing changed meanwhile and no one else
+  holds the roster; the hold's owner is checked by id.
+- **A void link whose life ended says how.** The directory remembers the last
+  16 ended void links by their token's hash and answers `late` (what it was
+  for took effect, with the time; `by: 'reset'` when a reset did), `used`, or
+  `preempted` (a reset cancelled the change). The token is 256 bits, so this
+  tells no one but its holder anything. The void page says it plainly ("Too
+  late: this change took effect at ...", naming the email that lists the
+  passkeys now) and never says "Nothing changed" where it cannot know: a lost
+  answer, an unknown link and a used link no longer claim it.
+- **The undo survives a reset (G4a).** A reset no longer cancels a waiting
+  removal of a suspended passkey; it sets it aside. Its undo link keeps
+  working while the reset waits: the passkey comes back at once, and the reset
+  carries on, asked again on the new head, so its 72 hours start again (the
+  kernel's chain takes no link asked for before the link before it took
+  effect; the undo mail gives the new time). If the reset is stopped, the
+  removal waits again at its own time with its own undo link, and takes effect
+  at once if that time has passed. Any other waiting change a reset cancels
+  stays cancelled when the reset is stopped (security's ruling: stopping never
+  applies anything), and the stop mail now says so.
+- **The reset link is single use**, including after its reset was queued and
+  then stopped (a row now pins it).
+- **Wording** (drafts for the maintainer): the waiting notice and the page no
+  longer call an unasked change "usually a page that used your own passkey";
+  the notice for a lone passkey says removing it "would leave the account with
+  no usable passkey (only a reset gets back in)".
+
+Not here (they wait for a kernel statement layout): a member stopping a reset
+with a passkey, and judging the account's age at the reset's request time.
+Guards: `scripts/test-directory-roster.ts` (security's races as rows: Remove
+pressed before the deadline with the alarm firing during its send, two
+Removes, Cancel during a Remove, a reset completed during a change's last
+seconds, two resets on one link, a member request during a reset's send;
+sends that outlive their hold, each way round; Cancel at the deadline and an
+undo after the removal answer `late`; the undo through a reset, the reset
+taking effect after it, a stopped reset restoring the removal before and
+after its time), `scripts/test-directory-void-page.mjs` (the new views in a
+real browser) and `scripts/test-directory-mutants.ts` (a mutant per rule).
+
 ## 2026-11-10 — The DocStore over a sandboxed frame's port: possession of the port is the capability
 
 A document that bento/home in a browser runs in its opaque sandboxed frame
@@ -13816,3 +13979,47 @@ controller, contact, legal basis, processors, rights, children, what stays
 after a deletion, and how long setup send times are kept are the
 maintainer's, and the pages are not published. Guard:
 `scripts/test-id-pages.mjs`.
+
+## 2026-11-09 — bento/home in your browser: a production build refuses development seams; a release builds it only when asked
+
+`home/web/build.mjs` used to warn and carry on when no `--history` was given
+(bundling the frozen slides 1.2.10 history) or when `--key` swapped in a test
+key. A production build now REFUSES each of those, and the mutant hook too;
+they work only behind an explicit `--dev`, which the rigs and the local
+instructions pass. Every build also refuses a history the library would refuse
+at runtime (not verified by the key it carries, tampered, an unknown app, or a
+second one for the same app), so a library page can never ship with a history
+that silently makes every file of an app unverifiable.
+
+`scripts/release.mjs` builds home/web only with `--home-web`, and then needs
+`--frame-origin`: the frame site is a separate domain that does not exist yet
+and is the maintainer's to choose, so there is no default. It bundles the
+`history.json` of every app the staged site publishes (an app with a signed
+manifest; a published app without a history is refused, never skipped), into
+`<site>.home-web/`, outside the mirrored site: nothing deploys it. Every
+refusal below comes before anything is signed. The option refusals come first
+and leave the output as it was: no `--frame-origin`; an output inside the site
+or containing it, or inside the published tree the next release copies in or
+containing it (compared by folder identity, device and inode, so a symlink, a
+case variant or the macOS `/System/Volumes/Data` firmlink cannot hide one in
+the other, and an output path through a symlink to nothing is refused, since
+its target could appear later); and an output that holds anything but an earlier home/web build
+(one whose `build.json` carries the build's own fields). Then the output is emptied, so
+every later refusal leaves no earlier (development or test-key) build behind:
+a signing key that is not the release key (a rehearsal passes
+`--home-web-dev`), `BENTO_HOME_WEB_MUTANT` in the environment, a missing
+esbuild, and, once the site is seeded, a published app with no history or a
+history the build would refuse. The one check on an input that can only run
+after signing is on the history this release signs, and it holds whenever the
+signing key is the release key. Without
+`--home-web` a release is unchanged: a rehearsal slides release before and
+after this change produced the same 69 files (signed payloads and masked
+timestamps compared) and the same log.
+
+Guards: `scripts/test-home-web-build.mjs` (each refusal beside the release
+build as its positive control; the release refusals, each run checked to have
+signed nothing; the history choice; and a rehearsal release with `--home-web`
+that bundles exactly the history it signed and the seeded one) and
+`scripts/test-home-web-build-mutants.mjs` (each refusal removed, red on its
+row), and `scripts/test-home-web-out.mjs` (where the output may go, the
+firmlink row and its mutant on macOS).

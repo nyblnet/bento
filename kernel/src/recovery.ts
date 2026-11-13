@@ -18,6 +18,7 @@
 // kernel ships no WASM. Everything else here is WebCrypto (HKDF, AES-GCM, HMAC).
 
 import { b64uEnc, b64uDec, sha256b64u, type Verdict } from './statements.ts'
+import { isNormalAddress } from './address.ts'
 
 // --- parameters (security §28) -------------------------------------------------
 
@@ -134,6 +135,84 @@ export async function prfKek(prfOutput: Uint8Array, salt: Uint8Array): Promise<U
 
 function checkLen(b: Uint8Array, n: number, what: string) {
   if (!(b instanceof Uint8Array) || b.length !== n) throw new Error(`${what} must be ${n} bytes`)
+}
+
+// --- rk: the recovery KEY under option G (bento/id, KG3) --------------------------
+//
+// Under option G the recovery code opens nothing: it DERIVES a P-256 key `rk`
+// whose public half is a roster member (roster.ts), and a recovery is a roster
+// change that rk signs (queued 72 h like any other). Because that public half
+// is published in the roster, anyone can grind the code against it, so the
+// derivation is salted PER ACCOUNT (security's R9): one guess list cannot be
+// tried against every account at once.
+//
+//   salt     = first 16 bytes of SHA-256( UTF-8("bento/id/rk-salt/v1") ‖ 0x00 ‖ UTF-8(address) )
+//              with the address in normal form (address.ts)
+//   ikm      = Argon2id(code bytes, salt)                (ARGON2's parameters, K2b's)
+//   d        = the first candidate in 1..n−1, where candidate c (c = 0, 1, … 255) is
+//              HKDF-SHA-256(ikm, empty salt, info = UTF-8("bento/id/rk/v1") ‖ one byte c),
+//              read as a 32-byte big-endian integer
+//   rk       = d·G
+//
+// The rejection sampling (rather than reducing mod n) keeps the scalar exactly
+// uniform. A candidate is refused about once in 2^32 derivations, so no real
+// code will exercise it; the counter rule is therefore pinned on its own, over
+// given ikm and given candidates (rkCandidate, rkPick), in the fixture.
+
+/** The per-account Argon2id salt for rk (16 bytes). `address` must be in normal form. */
+export async function rkSalt(address: string): Promise<Uint8Array> {
+  if (typeof address !== 'string' || !isNormalAddress(address)) throw new Error('rk salt: the address must be in normal form')
+  const label = te.encode('bento/id/rk-salt/v1'), a = te.encode(address)
+  const msg = new Uint8Array(label.length + 1 + a.length)
+  msg.set(label); msg[label.length] = 0; msg.set(a, label.length + 1)
+  return new Uint8Array(await crypto.subtle.digest('SHA-256', msg as BufferSource)).slice(0, SALT_LEN)
+}
+
+/** The most candidates rkScalar tries before giving up (never reached in practice). */
+export const RK_MAX_TRIES = 256
+
+/** Candidate `c` (0..255): HKDF-SHA-256(ikm, empty salt, "bento/id/rk/v1" ‖ c). */
+export async function rkCandidate(ikm: Uint8Array, c: number): Promise<Uint8Array> {
+  checkLen(ikm, 32, 'ikm')
+  if (!Number.isInteger(c) || c < 0 || c >= RK_MAX_TRIES) throw new Error('rk counter is one byte')
+  const label = te.encode('bento/id/rk/v1')
+  const info = new Uint8Array(label.length + 1)
+  info.set(label); info[label.length] = c
+  const k = await crypto.subtle.importKey('raw', ikm as BufferSource, 'HKDF', false, ['deriveBits'])
+  return new Uint8Array(await crypto.subtle.deriveBits(
+    { name: 'HKDF', hash: 'SHA-256', salt: EMPTY as BufferSource, info: info as BufferSource }, k, 256))
+}
+
+/** The counter rule over a candidate sequence: the index of the first candidate
+ *  that is a valid scalar (1 ≤ d < n, 32 bytes big-endian), or −1. */
+export function rkPick(candidates: readonly Uint8Array[]): number {
+  for (let i = 0; i < candidates.length && i < RK_MAX_TRIES; i++) {
+    const c = candidates[i]
+    if (!(c instanceof Uint8Array) || c.length !== 32) return -1
+    const d = toBig(c)
+    if (d >= 1n && d < N) return i
+  }
+  return -1
+}
+
+/** rk's private scalar from Argon2id's output: rejection sampling over the candidates. */
+export async function rkScalarFromIkm(ikm: Uint8Array): Promise<{ scalar: Uint8Array; counter: number }> {
+  for (let c = 0; c < RK_MAX_TRIES; c++) {
+    const cand = await rkCandidate(ikm, c)
+    if (rkPick([cand]) === 0) return { scalar: cand, counter: c }
+  }
+  throw new Error('rk: no candidate in range')   // probability about 2^-8192
+}
+
+/** rk from the recovery code and the account's address: its private scalar, its
+ *  public half (what the roster names) and the counter that produced it. */
+export async function deriveRk(code: Uint8Array, address: string, argon2: Argon2id):
+  Promise<{ scalar: Uint8Array; pub: string; counter: number }> {
+  checkLen(code, CODE_BYTES, 'code')
+  const ikm = await argon2(code, await rkSalt(address))
+  checkLen(ikm, 32, 'Argon2id output')
+  const { scalar, counter } = await rkScalarFromIkm(ikm)
+  return { scalar, pub: publicOf(toBig(scalar)), counter }
 }
 
 // --- the blob plaintext: raw private scalars, checked on import ------------------
