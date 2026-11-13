@@ -50,6 +50,15 @@
 //     link). Offered only while another live member would remain (G4c).
 // A reset offers cancel only; a queued removal offers undo only.
 //
+// THE HOLD (F1). A Remove and a reset send their notice before they act,
+// because it carries the way back, so they hold the roster first: while the
+// hold is on, the waiting change cannot take effect and every other void,
+// reset or member request is refused before its own mail goes. Every mail then
+// states an act that happens. A void link whose life ended answers how
+// (`late`, `used`, `preempted`), never just "unknown" (F2). A reset sets a
+// waiting removal ASIDE rather than cancelling it: its undo keeps working, and
+// a stopped reset puts it back (G4a survives a reset).
+//
 // THE RESET (G5). Anyone can ask for a reset link to be mailed to an address
 // that has an account; it completes on the sign-in host by making a NEW
 // passkey there, and then waits 72 hours like any change, with its own void
@@ -109,6 +118,17 @@ export const ROSTER_LIMITS = {
    * caps how often a stranger can have one sent, at one a day
    */
   resetTtlMs: DAY,
+  /**
+   * F1: the HOLD a void's Remove or a reset puts on the roster BEFORE its mail
+   * goes, so the mail can never state an act that then fails to happen. While
+   * it is on, the waiting change cannot take effect, and a second void, a
+   * reset or a member's request is refused before any mail of its own goes.
+   * It outlives the mailer's timeout, so a send always ends inside it; it
+   * lapses by itself only when the object stopped mid-send
+   */
+  holdMs: MAIL_TIMEOUT_MS + 5_000,
+  /** F2: how many ended void links the directory remembers, to answer "too late" or "already used" for them */
+  endedKeep: 16,
 }
 
 /** The openers the sign-in host may report (it reads them from the message event). */
@@ -199,7 +219,7 @@ async function named(pub, rec) {
  * The void link's lines in a waiting notice. `kind` is the link's (links.js
  * VOID_KINDS); the wording says which choice to pick (G4c).
  */
-function voidLines(to, token, kind, exp) {
+function voidLines(to, token, kind, exp, rNote) {
   const link = voidLink(to, token, kind)
   if (kind === 'u') {
     return ['If you removed the wrong passkey, open this link to put it back:', '', link, '',
@@ -207,12 +227,12 @@ function voidLines(to, token, kind, exp) {
   }
   if (kind === 'r') {
     return ['If you did not ask for this reset, open this link to stop it:', '', link, '',
-      `It works once, until ${when(exp)}. Stopping it changes nothing else: your passkeys stay as they are.`]
+      `It works once, until ${when(exp)}.`, ...(rNote ?? [])]
   }
   return ['If you did not ask for this, open this link to stop it:', '', link, '',
     ...(kind === 'c'
-      ? ['The page offers two choices. If you did not ask for this, the usual cause is a page that used your own passkey: choose Cancel. Choose Remove only if you do not recognise the passkey that asked.']
-      : ['The page offers one choice, Cancel: the passkey that asked is the only one on this account that can still be used, so removing it would lock you out.']),
+      ? ['The page offers two choices. If you did not ask for this, your passkey was used for something you did not intend. Choose Cancel: it is always safe. Choose Remove only if you do not recognise the passkey that asked (named above).']
+      : ['The page offers one choice, Cancel: the passkey that asked is the only one on this account that can still be used, so removing it would leave the account with no usable passkey (only a reset gets back in).']),
     `It works once, until ${when(exp)}.`]
 }
 
@@ -277,7 +297,9 @@ export class Roster {
     await this.sweepSpent(now)
     const next = []
     const p = await s.get('pend')
-    if (p && p.mailed === true) next.push(p.ripensAt)
+    // a held change comes due again once the hold is off (released early, a later run of ripen does it)
+    const h = await this.held(now)
+    if (p && p.mailed === true) next.push(Math.max(p.ripensAt, h ? h.until : 0))
     for (const k of (await s.list({ prefix: 'spent:', limit: 1 })).keys()) next.push(spentUntil(k))
     if (next.length) await s.setAlarm(Math.max(Math.min(...next), now + 1000)) // never a past time: it would fire in a loop
   }
@@ -317,7 +339,51 @@ export class Roster {
       return
     }
     if (now < p.ripensAt) return
+    // F1: a Remove or a reset pressed before the deadline holds the change while
+    // its mail goes; the change must not take effect under it
+    if (await this.held(now)) return
     await this.apply(p, now, 'ripen')
+  }
+
+  // --- the hold (F1) ---------------------------------------------------------------
+
+  /** The hold, while it is on. */
+  async held(now) {
+    const h = await this.state.storage.get('hold')
+    return h && h.until > now ? h : null
+  }
+  /** Put the hold on; returns its id, which only its taker may release. */
+  async takeHold(now, what) {
+    const id = ownNonce()
+    await this.state.storage.put('hold', { id, what, until: now + ROSTER_LIMITS.holdMs })
+    return id
+  }
+  /** Take the hold off, if it is still the one `id` took. */
+  async dropHold(id) {
+    const h = await this.state.storage.get('hold')
+    if (h && h.id === id) await this.state.storage.delete('hold')
+  }
+
+  // --- ended void links (F2) -------------------------------------------------------
+
+  /**
+   * Remember how a void link's life ended, by its token's hash: `late` (what it
+   * was for took effect; `by` 'reset' when a reset did), `used` (a press of it
+   * acted) or `preempted` (a reset cancelled its change). The token is 256 bits,
+   * so answering with this tells nobody but its holder anything. The last
+   * endedKeep are kept.
+   */
+  async ended(h, why, at, by = null) {
+    if (typeof h !== 'string') return
+    const s = this.state.storage
+    const list = ((await s.get('ended')) || []).filter((e) => e.h !== h)
+    list.push({ h, why, at, ...(by ? { by } : {}) })
+    await s.put('ended', list.slice(-ROSTER_LIMITS.endedKeep))
+  }
+  /** The answer for a token whose link has ended, or null when the directory does not know it. */
+  async endedAnswer(th) {
+    const e = ((await this.state.storage.get('ended')) || []).find((x) => same(x.h, th))
+    return e ? { error: e.why, at: e.at, ...(e.by ? { by: e.by } : {}) } : null
   }
 
   /**
@@ -405,6 +471,11 @@ export class Roster {
       }
     }
     await s.delete('pend')
+    // F2: a void link pressed from now on answers "too late", not "unknown"
+    if (k === 'ripen') {
+      await this.ended(p.voidTok, 'late', now)
+      if (p.parked) await this.ended(p.parked.voidTok, 'late', now, 'reset')
+    }
     const fp = await fingerprint(p.change.pub)
     await this.log({ k, at: now, seq: head.seq, op: kind === 'reset' ? 'reset' : p.change.op, pub: p.change.pub, by: p.signer ?? '', os: p.os ?? '', rq: p.rq ?? '', co: p.co ?? '' })
 
@@ -544,6 +615,8 @@ export class Roster {
       if (next.address !== before.value.address) return out(400, { error: 'address' })
       if (next.seq !== cur.seq + 1 || next.prev !== cur.hash) return out(409, { error: 'stale' })
       if (await s.get('pend')) return out(409, { error: 'pending' })
+      // a reset's notice is going out (F1): nothing may be queued under it
+      if (await this.held(now)) return out(409, { error: 'pending' })
       if (a.rq !== undefined && a.rq !== '' && !REQUESTERS.includes(a.rq)) return out(400, { error: 'rq' })
 
       // the member who asked
@@ -658,11 +731,20 @@ export class Roster {
       await this.ripen(now) // a change already in effect can no longer be stopped
       const p = await s.get('pend')
       const th = await tokenHash('void', a.token)
-      if (!p || typeof p.voidTok !== 'string' || !same(p.voidTok, th)) return out(400, { error: 'invalid' })
-      const kind = p.kind ?? 'member'
+      // C3: while a reset waits, the removal it set aside keeps its undo link
+      const parked = p && p.kind === 'reset' && p.parked && typeof p.parked.voidTok === 'string' && same(p.parked.voidTok, th) ? p.parked : null
+      if (!parked && (!p || typeof p.voidTok !== 'string' || !same(p.voidTok, th))) {
+        // F2: a link whose life has ended says how (too late, already used, or
+        // cancelled by a reset), so the page never has to guess
+        const e = await this.endedAnswer(th)
+        return e ? out(409, e) : out(400, { error: 'invalid' })
+      }
+      const kind = parked ? 'removal' : p.kind ?? 'member'
       const choices = kind === 'reset' ? ['cancel'] : kind === 'removal' ? ['undo'] : p.voidKind === 'c' ? ['cancel', 'remove'] : ['cancel']
       // a choice the link does not offer is refused WITHOUT spending the token
       if (!choices.includes(a.choice)) return out(400, { error: 'choice' })
+      // F1: another press's mail is going out, and what it says must stay true
+      if (await this.held(now)) return out(409, { error: 'busy' })
       const cur = await s.get('head')
       const address = (await parseRos(cur.ros)).value.address
       const records = await this.records(cur.members)
@@ -671,6 +753,13 @@ export class Roster {
         // the change is dropped at once; the mail that says so is best effort,
         // so a mailer outage never stands between the person and a cancel
         await s.delete('pend')
+        // C3: a stopped reset puts back the removal it set aside, with its own time and undo link
+        const back = kind === 'reset' && p.parked ? p.parked : null
+        if (back) {
+          await s.put('pend', back)
+          await this.schedule(back.ripensAt)
+        }
+        await this.ended(p.voidTok, 'used', now)
         const until = kind === 'member' ? now + ROSTER_LIMITS.voidCooldownMs : null
         if (until) await s.put(`cool:${p.signer}`, until)
         await this.log({ k: 'void', at: now, seq: cur.seq + 1, op: kind === 'reset' ? 'reset' : p.change.op, pub: p.change.pub, by: p.signer ?? '', choice: 'cancel', os: origin })
@@ -679,29 +768,47 @@ export class Roster {
             ? `At ${when(now)} the link in an email stopped the reset asked for at ${when(p.requestedAt)}. Nothing changed.`
             : `At ${when(now)} the link in an email cancelled the change asked for at ${when(p.requestedAt)} by ${await named(p.signer, records[p.signer])}. Nothing changed.`,
           ...(until ? [`That passkey can still be used to sign in, but it cannot ask for another change to this account until ${when(until)}.`] : []),
+          ...(kind === 'reset' && p.preempted ? [`The change that was waiting when the reset was asked for, asked for at ${when(p.preempted.requestedAt)}, stays cancelled. Ask for it again if you still want it.`] : []),
+          ...(back ? [`The removal of the suspended ${await named(back.change.pub, records[back.change.pub])}, which the reset had set aside, is waiting again: it takes effect at ${when(Math.max(back.ripensAt, now))}. The link in the email that said it was suspended can still put it back until then.`] : []),
           '',
           'The passkeys on this account:',
           ...(await rosterLines(cur.members, records, null)),
         ], 'void')
-        return out(200, { done: 'cancelled', until })
+        return out(200, { done: 'cancelled', until, ...(back ? { removesAt: Math.max(back.ripensAt, now) } : {}) })
       }
 
       if (a.choice === 'undo') {
         // G4a: the suspended passkey is put back (a u link right after the q
         // link), and its queued removal is dropped
-        const target = p.change.pub
+        const r = parked ?? p
+        const target = r.change.pub
         const back = cur.members.map((m) => (m.pub === target ? { ...m, quarantined: false } : m))
         const uRos = buildRos({ address, seq: cur.seq + 1, prev: cur.hash, members: back, dirNonce: ownNonce(), created: now })
         const head = await this.link(uRos, { auth: 'u', cause: cur.hash, requestedAt: now, now, kind: 'undo' })
-        await s.delete('pend')
+        await this.ended(r.voidTok, 'used', now)
+        let resetAt = null
+        if (parked) {
+          // C3: the reset waiting over this removal carries on, re-asked on the
+          // new head. The kernel takes no link asked for before the one before it
+          // took effect, so its 72 hours start again now; its own link still stops it.
+          const was = (await parseRos(p.ros)).value
+          const ros = buildRos({ address, seq: head.seq + 1, prev: head.hash, members: was.members, dirNonce: was.dirNonce, created: now })
+          resetAt = now + ROSTER_WAIT_MS
+          const { parked: _set, ...reset } = p
+          await s.put('pend', { ...reset, ros, hash: await sha256b64u(ros), requestedAt: now, ripensAt: resetAt })
+          await this.schedule(resetAt)
+        } else {
+          await s.delete('pend')
+        }
         await this.log({ k: 'undo', at: now, seq: head.seq, pub: target, os: origin })
         await notify(this.env, address, 'A passkey on your bento/id account was put back', [
           `At ${when(now)} the link in an email put back ${await named(target, records[target])}. It is no longer suspended and will not be removed.`,
+          ...(resetAt ? [`The reset of this account that is waiting now takes effect at ${when(resetAt)}: putting the passkey back starts its 72 hours again. The link in the email about the reset still stops it.`] : []),
           '',
           'The passkeys on this account now:',
           ...(await rosterLines(head.members, records, null)),
         ], 'void')
-        return out(200, { done: 'restored' })
+        return out(200, { done: 'restored', ...(resetAt ? { resetAt } : {}) })
       }
 
       // "Cancel, and remove the passkey that asked for it" (G4): the change is
@@ -709,6 +816,8 @@ export class Roster {
       // is queued in the same step (x, 72 hours). The removal's own notice
       // carries the undo link (G4a), so it must go out BEFORE anything changes:
       // if the mailer refuses, nothing changes and the page says to try again.
+      // F1: the roster is HELD while that notice goes, so what it says stays
+      // true: the change cannot take effect, and no other void or reset can act.
       const target = p.signer
       if (!cur.members.some((m) => !m.quarantined && m.pub !== target)) return out(400, { error: 'choice' }) // never lock the person out (G4c)
       const marked = cur.members.map((m) => (m.pub === target ? { ...m, quarantined: true } : m))
@@ -718,6 +827,7 @@ export class Roster {
       const xRos = buildRos({ address, seq: cur.seq + 2, prev: qHash, members: left, dirNonce: ownNonce(), created: now })
       const removesAt = now + ROSTER_WAIT_MS
       const ut = await mintToken('void')
+      const hold = await this.takeHold(now, 'remove')
       const sent = await notify(this.env, address, 'A passkey on your bento/id account was suspended', [
         `At ${when(now)} the link in an email cancelled the change asked for at ${when(p.requestedAt)}, and suspended ${await named(target, records[target])}, which asked for it.`,
         `That passkey can no longer be used. It will be removed from this account at ${when(removesAt)}.`,
@@ -727,11 +837,18 @@ export class Roster {
         '',
         ...voidLines(address, ut.token, 'u', removesAt),
       ], 'void')
-      if (!sent) return out(503, { error: 'mail' })
-      // the mail took a while: act only if the change the page stopped is still the one waiting, on the same head
+      if (!sent) {
+        await this.dropHold(hold)
+        return out(503, { error: 'mail' })
+      }
+      // the hold covers a send the mailer's timeout ends; past it (the object
+      // stalled), act only if the change the page stopped is still the one
+      // waiting, on the same head, and no other press holds the roster now
       const still = await s.get('pend')
       const atHead = await s.get('head')
-      if (!still || still.voidTok !== p.voidTok || atHead.hash !== cur.hash) return out(409, { error: 'superseded' })
+      const mine = (await s.get('hold'))?.id === hold
+      if (!still || still.voidTok !== p.voidTok || atHead.hash !== cur.hash) { await this.dropHold(hold); return out(409, (await this.endedAnswer(th)) ?? { error: 'superseded' }) }
+      if (!mine) return out(409, { error: 'busy' })
       await this.link(qRos, { auth: 'q', cause: p.hash, requestedAt: now, now, kind: 'quarantine',
         extra: { voided: { ros: p.ros, signer: target, assertion: p.assertion } } })
       // the removal is requested at the moment the suspension takes effect (the kernel's x rule)
@@ -739,6 +856,8 @@ export class Roster {
         kind: 'removal', ros: xRos, hash: await sha256b64u(xRos), change: { op: 'remove', pub: target }, cause: qHash,
         requestedAt: now, ripensAt: removesAt, mailed: true, voidTok: ut.h, voidKind: 'u',
       })
+      await this.ended(p.voidTok, 'used', now)
+      await this.dropHold(hold)
       await this.schedule(removesAt)
       await this.log({ k: 'void', at: now, seq: cur.seq + 1, op: p.change.op, pub: p.change.pub, by: target, choice: 'remove', os: origin })
       await this.log({ k: 'quarantine', at: now, seq: cur.seq + 1, pub: target, os: origin })
@@ -780,6 +899,8 @@ export class Roster {
       if (!rlive.some((t) => same(t.h, rh))) return out(400, { error: 'token' })
       const waiting = await s.get('pend')
       if (waiting && waiting.kind === 'reset') return out(409, { error: 'pending' }) // one reset at a time; its own link stops it
+      // F1: another reset's or a Remove's mail is going out; this one's must not contradict it
+      if (await this.held(now)) return out(409, { error: 'busy' })
       const reg = await verifyRegistration(a.reg, b64uDec(a.dirNonce ?? '') ?? new Uint8Array(0))
       if (!reg.ok) return out(400, { error: reg.reason }) // the token stays good
       if (await s.get(`cid:${reg.value.credId}`)) return out(400, { error: 'registration-credential' })
@@ -795,29 +916,49 @@ export class Roster {
       const vt = await mintToken('void')
       const records = await this.records(cur.members)
       const how = hostClass(reg.value.origin)
+      // C3: a waiting REMOVAL is set aside, not cancelled: its undo link keeps
+      // working, and if the reset is stopped the removal waits again. Any other
+      // waiting change is cancelled for good (a stopped reset never applies one).
+      const setAside = waiting && waiting.kind === 'removal' ? waiting : null
+      // F1: the roster is held while the notice goes, so what it says stays true
+      const hold = await this.takeHold(now, 'reset')
       const sent = await notify(this.env, a.address, 'A reset of your bento/id account is waiting', [
         `At ${when(now)} a reset of this bento/id account was asked for ${HOW[how]}, with a link mailed to this address.`,
         `It takes effect at ${when(resetAt)}, 72 hours after it was asked for. Then every passkey on this account is removed, and its only passkey is the new one, ${await fingerprint(reg.value.pub)}, made at the reset.`,
-        ...(waiting ? ['A change that was waiting is cancelled by this reset.'] : []),
+        ...(setAside
+          ? [`The removal of the suspended ${await named(setAside.change.pub, records[setAside.change.pub])}, which was waiting, is set aside while this reset waits. The link that puts that passkey back still works, and if this reset is stopped, the removal waits again.`]
+          : waiting ? ['A change that was waiting is cancelled by this reset. Stopping the reset does not bring it back.'] : []),
         ...(young ? [`This account was set up less than 14 days ago, at ${when(createdAt)}, so its passkeys cannot stop this reset: only the link below can.`] : []),
         '',
         'The passkeys on this account now, which the reset removes:',
         ...(await rosterLines(cur.members, records, null)),
         '',
-        ...voidLines(a.address, vt.token, 'r', resetAt),
+        ...voidLines(a.address, vt.token, 'r', resetAt, waiting ? [] : ['Stopping it changes nothing else: your passkeys stay as they are.']),
       ], 'reset')
-      if (!sent) return out(503, { error: 'mail' }) // no notice, no reset: the notice is how it is stopped (D1)
-      // the notice took a while: queue only on the same head, and never over a reset queued meanwhile
+      if (!sent) {
+        await this.dropHold(hold)
+        return out(503, { error: 'mail' }) // no notice, no reset: the notice is how it is stopped (D1)
+      }
+      // the hold covers a send the mailer's timeout ends; past it (the object
+      // stalled), queue only over the same waiting change, on the same head,
+      // while no other press holds the roster
       const there = await s.get('pend')
       const atHead = await s.get('head')
-      if ((there && there.kind === 'reset') || atHead.hash !== cur.hash) return out(409, { error: 'superseded' })
-      if (there) await this.log({ k: 'preempted', at: now, seq: cur.seq + 1, op: there.change.op, pub: there.change.pub, by: there.signer ?? '', os: origin })
+      if ((there?.voidTok ?? null) !== (waiting?.voidTok ?? null) || atHead.hash !== cur.hash) { await this.dropHold(hold); return out(409, { error: 'superseded' }) }
+      if ((await s.get('hold'))?.id !== hold) return out(409, { error: 'busy' })
+      if (there && !setAside) {
+        await this.log({ k: 'preempted', at: now, seq: cur.seq + 1, op: there.change.op, pub: there.change.pub, by: there.signer ?? '', os: origin })
+        await this.ended(there.voidTok, 'preempted', now)
+      }
+      if (setAside) await this.log({ k: 'set-aside', at: now, seq: cur.seq + 1, op: 'remove', pub: setAside.change.pub, os: origin })
       await s.put('pend', {
         kind: 'reset', ros, hash: await sha256b64u(ros), change: { op: 'reset', pub: reg.value.pub },
         reg: { credId: reg.value.credId, signCount: reg.value.signCount, origin: reg.value.origin },
         requestedAt: now, ripensAt: resetAt, mailed: true, voidTok: vt.h, voidKind: 'r', os: origin, rq: '', co: reg.value.origin, how,
+        ...(setAside ? { parked: setAside } : there ? { preempted: { requestedAt: there.requestedAt } } : {}),
       })
-      await s.delete('resetTok') // a reset under way ends every reset link
+      await s.delete('resetTok') // a reset under way ends every reset link: each is single use
+      await this.dropHold(hold)
       await this.schedule(resetAt)
       await this.log({ k: 'reg', at: now, seq: cur.seq + 1, pub: reg.value.pub, os: origin, rq: '', co: reg.value.origin })
       await this.log({ k: 'reset-request', at: now, seq: cur.seq + 1, pub: reg.value.pub, os: origin, rq: '', co: reg.value.origin })

@@ -21,8 +21,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 let failures = 0, checks = 0
 const ok = (c: boolean, m: string) => { checks++; if (!c) { failures++; console.log(`  FAIL  ${m}`) } else console.log(`  ok    ${m}`) }
 
-type Mutant = { name: string; from: string; to: string; and?: Array<[string, string]> }
-const del = (name: string, from: string): Mutant => ({ name, from, to: '' })
+type Mutant = { name: string; from: string; to: string; file?: string; and?: Array<[string, string]> }
+const del = (name: string, from: string, file?: string): Mutant => ({ name, from, to: '', file })
 const MUTANTS: Mutant[] = [
   // the chain
   del('the prevHash link is not checked (chain break)', "    if (head.prev !== prev.hash) return no('chain')\n"),
@@ -35,8 +35,49 @@ const MUTANTS: Mutant[] = [
     to: '    const r = i === 0 && opts.pinned !== undefined ? parseRip(l.rip) : await verifyRip(l.rip, l.ripSig, { rosText: l.ros, directoryKeys: opts.directoryKeys, now: opts.now })\n' },
   // the wait (G2: directory time, ripened only)
   { name: "the wait is measured from the REQUESTER's created", from: '    const waited = rip.ripenedAt - rip.requestedAt\n', to: '    const waited = rip.ripenedAt - head.created\n' },
-  del('an unripened member change is accepted', "    if (!selfRemoval && waited < ROSTER_WAIT_MS) return no('unripe')\n"),
-  { name: 'exactly 72 h is not enough (off by one)', from: "    if (!selfRemoval && waited < ROSTER_WAIT_MS) return no('unripe')\n", to: "    if (!selfRemoval && waited <= ROSTER_WAIT_MS) return no('unripe')\n" },
+  del('an unripened member change is accepted', "    if (!selfRemoval && !waived && waited < ROSTER_WAIT_MS) return no('unripe')\n"),
+  { name: 'exactly 72 h is not enough (off by one)', from: "    if (!selfRemoval && !waived && waited < ROSTER_WAIT_MS) return no('unripe')\n", to: "    if (!selfRemoval && !waived && waited <= ROSTER_WAIT_MS) return no('unripe')\n" },
+  // KG3: a consent key as the requester, and the co-sign (security's ruling on #917, item 4)
+  del("a ck's cns. is not verified", "    if (!c.ok) return no(`consent-${c.reason}`)\n"),
+  { name: "a ck's cns. is checked with no time (as evidence is)", from: '    const pr = await memberProof(signer, l, l.ros, head.dirNonce, rip.requestedAt, opts)\n', to: '    const pr = await memberProof(signer, l, l.ros, head.dirNonce, null, opts)\n' },
+  { name: 'a ck may also carry an assertion', from: "    if (!str(p.cns) || !str(p.sig) || p.assertion !== undefined) return no('proof')\n", to: "    if (!str(p.cns) || !str(p.sig)) return no('proof')\n" },
+  { name: 'a ck requester skips the wait whether ripe or not', from: "    const waived = coSigned || (signer.kind === 'ck' && ripe(signer.pub))\n", to: "    const waived = coSigned || signer.kind === 'ck'\n" },
+  { name: 'ripeness is measured from the REQUESTER\'s created', from: ' return t !== undefined && rip.requestedAt - t >= ROSTER_WAIT_MS }\n', to: ' return t !== undefined && head.created - t >= ROSTER_WAIT_MS }\n' },
+  { name: 'ripe at exactly 72 h is refused (off by one)', from: ' return t !== undefined && rip.requestedAt - t >= ROSTER_WAIT_MS }\n', to: ' return t !== undefined && rip.requestedAt - t > ROSTER_WAIT_MS }\n' },
+  del('an unripe co-signer counts', "      if (!ripe(co.pub)) return no('cosign-unripe')\n"),
+  del('a quarantined co-signer counts', "      if (co.quarantined) return no('cosign-quarantined')\n"),
+  del('a passkey (or recovery key) may co-sign', "      if (co.kind !== 'ck') return no('cosign-kind')\n"),
+  { name: 'the co-signer is looked up in the NEW head, not the previous one', from: '      const co = prev.head.members.find((m) => m.pub === c.signer)\n', to: '      const co = head.members.find((m) => m.pub === c.signer)\n' },
+  del('the requester may co-sign its own request', "      if (c.signer === signer.pub) return no('cosign')\n"),
+  del("the co-sign's cns. is not verified", "      if (!cp.ok) return no(cp.reason === 'grammar' ? 'grammar' : `cosign-${cp.reason}`)   // grammar: no consent rp from the caller\n".replace('consent rp', 'consentRp')),
+  { name: 'a co-sign rides on a directory act (q l x u r)', from: "const hasProof = (l: RosterLink) => l.signer !== undefined || l.assertion !== undefined || l.sig !== undefined ||\n  l.cns !== undefined || l.cosign !== undefined",
+    to: "const hasProof = (l: RosterLink) => l.signer !== undefined || l.assertion !== undefined || l.sig !== undefined ||\n  l.cns !== undefined" },
+  // statements.ts verifyCoSign, read through the roster
+  { name: 'verifyCoSign: any purpose', file: 'statements.ts', from: "  if (purposeF !== opts.purpose) return no('purpose')\n", to: '' },
+  { name: 'verifyCoSign: the transcript is not checked (another text, audience or challenge)', file: 'statements.ts',
+    from: "  const expected = await consentTranscript('dir', opts.challenge, opts.payloadText)\n  if (expected === null || transcript !== expected) return no('transcript')\n", to: '' },
+  { name: 'verifyCoSign: an expired co-sign counts', file: 'statements.ts', from: "    if (exp <= opts.at) return no('expired')\n", to: '' },
+  { name: 'verifyCoSign: no life limit', file: 'statements.ts', from: "    if (exp - opts.at > CONSENT_MAX_TTL_MS + SKEW_MS) return no('lifetime')\n", to: '' },
+  { name: 'verifyCoSign: the rp is not compared', file: 'statements.ts', from: "  if (typeof opts.rp !== 'string' || rp !== opts.rp) return no('rp')\n", to: '' },
+  { name: 'verifyCoSign: the signature is not verified', file: 'statements.ts', from: "  if (!(await verifyStatementSig(opts.consentPub, sig, text))) return no('signature')\n  return { ok: true, value: { rp, purpose, docId: null, transcript, exp } }\n",
+    to: "  return { ok: true, value: { rp, purpose, docId: null, transcript, exp } }\n" },
+  { name: 'verifyCoSign: a document-scoped co-sign counts', file: 'statements.ts', from: '  if (exp === null || docIdF !== \'\') return no(\'grammar\')\n', to: "  if (exp === null) return no('grammar')\n" },
+  { name: 'verifyCoSign: reserved purposes are only grammar', file: 'statements.ts', from: "  if (RESERVED_PURPOSES.has(purposeF)) return no('reserved-purpose')\n  if (!Object.hasOwn(CONSENT_FAMILY, purposeF)) return no('grammar')\n  const exp = ms(expF)\n  if (exp === null || docIdF",
+    to: "  if (!Object.hasOwn(CONSENT_FAMILY, purposeF)) return no('grammar')\n  const exp = ms(expF)\n  if (exp === null || docIdF" },
+  // vrs.: a member stops a reset (C4/C5 on #944)
+  { name: "C4: the account's age is judged at the stop, not at the reset's request", from: '  if (opts.resetRequestedAt - ro.createdAt < NEW_ACCOUNT_MS) return no(\'new-account\')\n',
+    to: "  if (opts.now - ro.createdAt < NEW_ACCOUNT_MS) return no('new-account')\n" },
+  del('a stop is allowed in the first 14 days', "  if (opts.resetRequestedAt - ro.createdAt < NEW_ACCOUNT_MS) return no('new-account')\n"),
+  { name: 'new for 13 days', from: 'export const NEW_ACCOUNT_MS = 14 * 24 * 3_600_000\n', to: 'export const NEW_ACCOUNT_MS = 13 * 24 * 3_600_000\n' },
+  { name: 'an unknown age (a pin) counts as old', from: "  if (ro.createdAt === null) return no('age-unknown')\n", to: '' },
+  del('a quarantined member may stop a reset', "  if (m.quarantined) return no('quarantined')\n  const pr = await memberProof(m, proof, text, dirNonce, opts.now, opts)\n".replace("  const pr = await memberProof(m, proof, text, dirNonce, opts.now, opts)\n", '')),
+  { name: "the stop's proof is not verified", from: '  const pr = await memberProof(m, proof, text, dirNonce, opts.now, opts)\n  if (!pr.ok) return pr\n', to: '' },
+  del('the vrs. may name another reset', "  if (resetHash !== (await sha256b64u(opts.resetRos))) return no('reset-mismatch')\n"),
+  { name: 'what it stops need not be a reset of this head', from: "  if (!rh.ok || rh.value.address !== ro.address || rh.value.seq !== ro.seq + 1 || rh.value.prev !== ro.headHash ||\n    !soleLivePk(rh.value.members)) return no('reset')\n", to: '' },
+  del('the vrs. challenge is not compared', "  if (dirNonce !== opts.challenge) return no('challenge')\n"),
+  del('the challenge is not spent', "  if (!opts.spend(opts.challenge)) return no('replay')\n"),
+  del('a reset requested before the head ripened may be stopped', "  if (opts.resetRequestedAt < ro.ripenedAt) return no('order')\n"),
+  del('the vrs. may name another account', "  if (address !== ro.address) return no('address')\n"),
   { name: 'the wait is 71 hours', from: 'export const ROSTER_WAIT_MS = 72 * 3_600_000\n', to: 'export const ROSTER_WAIT_MS = 71 * 3_600_000\n' },
   { name: 'a reset need not wait', from: "      if (!soleLivePk(head.members)) return no('reset-members')\n      if (waited < ROSTER_WAIT_MS) return no('unripe')\n",
     to: "      if (!soleLivePk(head.members)) return no('reset-members')\n" },
@@ -62,11 +103,12 @@ const MUTANTS: Mutant[] = [
   del('a quarantined member may sign', "    if (signer.quarantined) return no('quarantined')\n"),
   del('a member change may lack a signer', "    if (typeof l.signer !== 'string') return no('proof')\n"),
   del('the passkey assertion is not verified', "    if (!a.ok) return no(`assertion-${a.reason}`)\n"),
-  { name: 'the member proof covers the countersign, not the head', from: '    const pr = await memberProof(signer, l, l.ros, opts)\n', to: '    const pr = await memberProof(signer, l, l.rip, opts)\n' },
-  { name: 'a passkey may carry two proofs', from: "    if (p.assertion === undefined || p.sig !== undefined) return no('proof')\n", to: "    if (p.assertion === undefined) return no('proof')\n" },
+  { name: 'the member proof covers the countersign, not the head', from: '    const pr = await memberProof(signer, l, l.ros, head.dirNonce, rip.requestedAt, opts)\n', to: '    const pr = await memberProof(signer, l, l.rip, head.dirNonce, rip.requestedAt, opts)\n' },
+  { name: 'a passkey may carry two proofs', from: "    if (p.assertion === undefined || p.sig !== undefined || p.cns !== undefined) return no('proof')\n", to: "    if (p.assertion === undefined) return no('proof')\n" },
   del('the recovery-key signature is not verified', "    if (!(await verifyStatementSig(signer.pub, p.sig, text))) return no('signature')\n"),
-  { name: 'a recovery key may sign by assertion', from: "    if (!str(p.sig) || p.assertion !== undefined) return no('proof')\n", to: "    if (!str(p.sig)) return no('proof')\n" },
-  { name: 'a consent key may sign alone', from: "  } else return no('signer-kind')", to: "  } else if (!(await verifyStatementSig(signer.pub, p.sig ?? '', text))) return no('signature')" },
+  { name: 'a recovery key may sign by assertion', from: "    if (!str(p.sig) || p.assertion !== undefined || p.cns !== undefined) return no('proof')\n", to: "    if (!str(p.sig)) return no('proof')\n" },
+  { name: 'a consent key may sign by a bare signature over the text (no cns.)', from: "    if (!str(p.cns) || !str(p.sig) || p.assertion !== undefined) return no('proof')\n",
+    to: "    if (!p.cns && str(p.sig) && await verifyStatementSig(signer.pub, p.sig, text)) return { ok: true }\n    if (!str(p.cns) || !str(p.sig) || p.assertion !== undefined) return no('proof')\n" },
   // security's mutants from the review of the first roster change (C1)
   { name: 'X5 the countersign kid is ignored: any pinned key verifies',
     from: "  if (!Object.hasOwn(opts.directoryKeys, r.value.kid)) return no('unknown-kid')\n  if (!(await verifyStatementSig(opts.directoryKeys[r.value.kid], sig, text))) return no('rip-signature')\n",
@@ -132,7 +174,7 @@ const MUTANTS: Mutant[] = [
   { name: 'C4 a pin without its evidence falls back to any quarantined member', from: '        target = await pinnedTarget(l, rip, head, opts)\n',
     to: '        target = (await pinnedTarget(l, rip, head, opts)) ?? head.members.find((m) => m.quarantined)?.pub ?? null\n' },
   del("C4 a pinned q link's evidence is read without the cause check", "    if (rip.cause !== (await sha256b64u(v.ros))) return null\n"),
-  { name: "C4′ a pinned q link's signer is read without its proof", from: '    if (!asker || !(await memberProof(asker, v, v.ros, opts)).ok) return null\n', to: '    if (!asker) return null\n' },
+  { name: "C4′ a pinned q link's signer is read without its proof", from: '    if (!asker || !(await memberProof(asker, v, v.ros, vh.value.dirNonce, null, opts)).ok) return null\n', to: '    if (!asker) return null\n' },
   del("C4′ a pinned l link's prevRos is read without the chain check", "    if (ch.value.prev !== (await sha256b64u(c.prevRos))) return null\n"),
   del("C4 a pinned l link's evidence is read without the cause check", "    if (rip.cause !== (await sha256b64u(c.ros))) return null\n"),
   { name: 'C4 a q link records no target (in-run)', from: '        target = asker.pub\n', to: "        target = prev.head.members.find((m) => m.quarantined)?.pub ?? asker.pub\n" },
@@ -187,7 +229,7 @@ console.log('positive control: the unmutated copy passes the rig')
 console.log(`\n${MUTANTS.length} mutants, each one loosened rule: every one must turn the rig red`)
 for (const m of MUTANTS) {
   const d = tree()
-  const p = join(d, 'kernel/src/roster.ts')
+  const p = join(d, 'kernel/src', m.file ?? 'roster.ts')
   const src = readFileSync(p, 'utf8')
   const n = src.split(m.from).length - 1
   ok(n === 1, `applies exactly once: ${m.name} (found ${n})`)
