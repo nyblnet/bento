@@ -33,7 +33,8 @@ jobs:
     # ~7 s a mutant on a runner it outgrew validate's 20 minutes. Three
     # shards side by side: at 160 mutants and ~11 s each (the kernel's
     # option-G verifiers made each rig run slower) one job no longer fits
-    # 30 minutes; each shard runs every third mutant and its own positive control.
+    # 30 minutes; each shard runs every third mutant and its own positive control,
+    # and within a shard one mutant's three rigs run side by side.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:

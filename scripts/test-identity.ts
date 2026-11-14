@@ -171,21 +171,102 @@ console.log('\nonce found, the agent cannot be reassigned')
 // behaviour change until the bridge (B1) and the apps add callers. A type-only
 // import (`import type`) brings no code, so it does not count: statements.ts
 // uses the SignPurpose type to check payloads.
-console.log('\ncontract only: nothing calls it yet')
+//
+// The one exception is slides' People panel (bento/id P1), whose only call is
+// behind the localStorage flag bento-people-vouch, off by default. It is pinned
+// by STRUCTURE, not by a text match, after comments are removed: every static
+// import/export-from (multi-line too) and every dynamic import() of identity in
+// every app is found (any of .ts .js .mjs .cjs .mts .cts, or none), and no file
+// but identity.ts names the __bentoIdentity global; vouch.ts's import line is exact,
+// and so is vouchstate.ts's, which takes the VOUCHED_BY_MAX constant and nothing else; `identityAgent` is named
+// exactly twice there (the import and the one gated call); vouchAgent and
+// vouchEnabled are exactly the gated call and the flag read; lsGet is the
+// kernel's storage read, not redefined. Then the pin is run on in-memory copies
+// with widening mutants (a re-export, an alias, a second call site, the flag
+// forced on or read in a comment, a shadowed lsGet, a multi-line or dynamic
+// import elsewhere), each of which must turn it red.
+console.log('\ncontract only: nothing calls it yet, except the flag-gated People panel')
 {
+  const GATED = 'slides/src/editor/vouch.ts'
+  const GATED_IMPORT = "import { identityAgent, type IdentityAgent } from '../../../kernel/src/identity.ts'"
+  // the panel's decision module takes the shared 80-character cut, a constant, and nothing else
+  const CONST_ONLY = 'slides/src/editor/vouchstate.ts'
+  const CONST_IMPORT = "import { VOUCHED_BY_MAX } from '../../../kernel/src/identity.ts'"
   const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-  const hits: string[] = []
+  const files = new Map<string, string>()
   const walk = (dir: string) => {
     for (const f of readdirSync(dir)) {
       if (f === 'node_modules' || f.startsWith('.') || f === 'dist' || f === 'dist-single') continue
       const p = join(dir, f)
       if (statSync(p).isDirectory()) walk(p)
-      else if (/\.(ts|tsx|js|mjs)$/.test(f) && p !== join(root, 'kernel/src/identity.ts') &&
-        /^import(?!\s+type\b)[^\n]*from ['"][^'"]*\/identity(\.ts)?['"]/m.test(readFileSync(p, 'utf8'))) hits.push(p.slice(root.length + 1))
+      else if (/\.(ts|tsx|js|mjs)$/.test(f) && p !== join(root, 'kernel/src/identity.ts')) files.set(p.slice(root.length + 1), readFileSync(p, 'utf8'))
     }
   }
   for (const d of ['kernel/src', 'slides/src', 'spaces/src', 'type/src', 'dash/src']) walk(join(root, d))
-  ok(hits.length === 0, `no runtime module imports kernel/src/identity.ts for its code (${hits.join(', ') || 'none'})`)
+
+  // comments out (block + line). KNOWN LIMIT: this is not string-aware, so code
+  // placed between a '/*' string literal and a '*/' string literal is stripped as
+  // if it were a comment and escapes the pin. Accepted: it is our own code, a
+  // reviewer sees it, and a string-aware parser is not worth its weight here.
+  const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`\\])\/\/[^\n]*/g, '$1')
+  const pin = (fs: Map<string, string>): string[] => {
+    const bad: string[] = []
+    // TypeScript and Vite resolve identity.js (and .mjs/.cjs/.mts/.cts) to identity.ts
+    const re = /\b(import|export)\s*(type\s)?[^;'"]*?\bfrom\s*['"][^'"]*\/identity(\.[cm]?[jt]s)?['"]|\bimport\s*\(\s*['"][^'"]*\/identity(\.[cm]?[jt]s)?['"]/g
+    for (const [rel, text] of fs) {
+      for (const m of strip(text).matchAll(re)) {
+        if (m[2]) continue
+        if (rel === GATED && m[0] === GATED_IMPORT) continue
+        if (rel === CONST_ONLY && m[0] === CONST_IMPORT) continue
+        bad.push(`${rel}: ${m[0].replace(/\s+/g, ' ').slice(0, 80)}`)
+      }
+      // the agent's global, reached without identity.ts at all
+      if (/__bentoIdentity/.test(strip(text))) bad.push(`${rel}: names __bentoIdentity`)
+    }
+    const g = strip(fs.get(GATED) ?? '')
+    const need = (c: boolean, why: string) => { if (!c) bad.push(`${GATED}: ${why}`) }
+    need((g.match(/\bidentityAgent\b/g) || []).length === 2, 'identityAgent named exactly twice (the import and the one gated call)')
+    need(/export function vouchAgent\(\): IdentityAgent \| null \{\s*return vouchEnabled\(\) \? identityAgent\(\) : null\s*\}/.test(g), 'vouchAgent is exactly the gated call')
+    need(/export function vouchEnabled\(\): boolean \{\s*try \{ return lsGet\('bento-people-vouch'\) === 'on' \} catch \{ return false \}\s*\}/.test(g), 'vouchEnabled is exactly the flag read')
+    need((g.match(/\bvouchEnabled\b/g) || []).length === 2 && (g.match(/\blsGet\b/g) || []).length === 2, 'vouchEnabled and lsGet are not redefined or reused')
+    need(g.includes("import { lsGet } from '../../../kernel/src/storage.ts'"), 'lsGet is the kernel storage read')
+    return bad
+  }
+  const base = pin(files)
+  ok(base.length === 0, `no runtime module imports identity.ts except the flag-gated ${GATED} and ${CONST_ONLY}'s VOUCHED_BY_MAX (${base.join('; ') || 'none'})`)
+
+  const V = GATED, E = 'slides/src/editor/editor.ts', C = CONST_ONLY
+  const EDIT_ANCHOR = "import { decoratePeer, vouchAgent as vouchPeopleAgent } from './vouch'"
+  const MUTANTS: [string, [string, string, string][]][] = [
+    ['an ungated call', [[V, 'return vouchEnabled() ? identityAgent() : null', 'return identityAgent()']]],
+    ['a re-export used from editor.ts', [[V, "export type { VouchState } from './vouchstate'", "export type { VouchState } from './vouchstate'\nexport { identityAgent }"],
+      [E, EDIT_ANCHOR, "import { decoratePeer, vouchAgent as vouchPeopleAgent, identityAgent as rawAgent } from './vouch'\nexport const __leak = () => rawAgent()"]]],
+    ['an aliased second call', [[V, 'const cache = new Map', 'const ia = identityAgent\nexport const anyAgent = () => ia()\nconst cache = new Map']]],
+    ['the flag read moved into a comment', [[V, "try { return lsGet('bento-people-vouch') === 'on' } catch { return false }", "return true // was: lsGet('bento-people-vouch') === 'on'"]]],
+    ['the flag forced on', [[V, "lsGet('bento-people-vouch') === 'on' }", "lsGet('bento-people-vouch') === 'on' || true }"]]],
+    ['a second call with a space', [[V, 'const cache = new Map', 'export const anyAgent = () => identityAgent ()\nconst cache = new Map']]],
+    ['the test detector called directly', [[V, 'import { identityAgent, type IdentityAgent }', 'import { identityAgent, detectIdentityAgentForTest, type IdentityAgent }'],
+      [V, 'const cache = new Map', 'export const anyAgent = () => detectIdentityAgentForTest(globalThis)\nconst cache = new Map']]],
+    ['a multi-line import elsewhere', [[E, EDIT_ANCHOR, "import {\n  identityAgent as rawId,\n} from '../../../kernel/src/identity.ts'\nexport const __leak = () => rawId()\n" + EDIT_ANCHOR]]],
+    ['a dynamic import elsewhere', [[E, EDIT_ANCHOR, "export const __leak = async () => (await import('../../../kernel/src/identity.ts')).identityAgent()\n" + EDIT_ANCHOR]]],
+    ['a single-line import elsewhere', [[E, EDIT_ANCHOR, "import { identityAgent as rawId } from '../../../kernel/src/identity.ts'\nexport const __leak = () => rawId()\n" + EDIT_ANCHOR]]],
+    ['a shadowed lsGet', [[V, "import { lsGet } from '../../../kernel/src/storage.ts'", "const lsGet = (_k: string) => 'on'"]]],
+    ['an import of identity.js (resolved to identity.ts)', [[E, EDIT_ANCHOR, "import { identityAgent as rawId } from '../../../kernel/src/identity.js'\nexport const __leak = () => rawId()\n" + EDIT_ANCHOR]]],
+    ['the global called directly', [[E, EDIT_ANCHOR, "export const __leak = () => (globalThis as any).__bentoIdentity?.resolve({ pub: 'x' })\n" + EDIT_ANCHOR]]],
+    ['the decision module importing the agent beside the constant', [[C, CONST_IMPORT, "import { VOUCHED_BY_MAX, identityAgent } from '../../../kernel/src/identity.ts'\nexport const __leak = () => identityAgent()"]]],
+    ['the decision module importing a second binding', [[C, CONST_IMPORT, CONST_IMPORT + "\nimport { detectIdentityAgentForTest } from '../../../kernel/src/identity.ts'"]]],
+    ['an export * of identity', [[V, "export type { VouchState } from './vouchstate'", "export type { VouchState } from './vouchstate'\nexport * from '../../../kernel/src/identity.ts'"]]],
+  ]
+  for (const [name, edits] of MUTANTS) {
+    const fs = new Map(files)
+    let applied = true
+    for (const [f, from, to] of edits) {
+      const text = fs.get(f) ?? ''
+      if (text.split(from).length !== 2) { applied = false; break }
+      fs.set(f, text.replace(from, to))
+    }
+    ok(applied && pin(fs).length > 0, `pin mutant goes red: ${name}${applied ? '' : ' (needle not found exactly once)'}`)
+  }
 }
 
 // The real path, last: identityAgent() over globalThis, with its capture-once

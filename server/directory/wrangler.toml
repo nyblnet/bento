@@ -18,6 +18,10 @@ DIR_KID = "dir-1"
 # (diagnosis only: clients trust the list shipped in the signed release).
 DIR_PUBKEYS = "[]"
 MAILER = "ses"
+# The published incident records, [{"id","from","to"}] (ms; "to" null while
+# open): every browser check-in and status answer carries them, and bento/home
+# drops a key made inside one. A list that does not read answers 500.
+INCIDENTS = "[]"
 
 [[durable_objects.bindings]]
 name = "LEDGER"
