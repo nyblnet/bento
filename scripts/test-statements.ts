@@ -213,6 +213,34 @@ for (const p of ['cred-add', 'cred-del', 'rc-enrol'])
   ok((F.dreqConsent as Row[]).some((r) => r.expect === 'accept' && r.text.split('.')[2] === p), `cns: an accept row for purpose ${p}`)
 ok((F.dreqConsent as Row[]).filter((r) => r.reason === 'payload-family').length >= 3, 'cns: a consent for one dreq. op never authorises another (payload-family rows)')
 
+console.log(`\nconsentG: the directory's LIVE check of option G's consent purposes (${F.consentG.rows.length}; security-ruling-949 C1)`)
+{
+  const G = F.consentG as { consentPub: string; rows: Row[] }
+  for (const r of G.rows) {
+    let calls = 0
+    const v = await verifyConsent(r.text, r.sig, { consentPub: G.consentPub, rp: r.rp as string, audience: r.audience as string, challenge: r.challenge as string,
+      payloadText: r.payloadText as string, docId: (r.docId as string | null) ?? null, now: (r.now as number) ?? F.now, spend: () => { calls++; return !r.challengeSpent } })
+    const got = v.ok ? 'accept' : `reject:${v.reason}`
+    const want = r.expect === 'accept' ? 'accept' : `reject:${r.reason}`
+    ok(got === want, `${r.name} → ${want}${got === want ? '' : ` (got ${got})`}`)
+    ok((calls > 0) === r.spendCalled, `${r.name}: the challenge was ${r.spendCalled ? '' : 'NOT '}consumed`)
+    if (v.ok) ok(buildConsent(v.value as never) === r.text, `${r.name}: the builder reproduces the exact text`)
+  }
+  const byName = new Map(G.rows.map((r) => [r.name, r]))
+  const fam = (purpose: string, prefix: string) => G.rows.find((r) => r.text.split('.')[2] === purpose && (r.payloadText as string).startsWith(prefix + '.') && !r.docId && !r.challengeSpent)
+  for (const f of ['ros', 'dev2', 'vrs', 'wout', 'adel']) {
+    ok(fam('roster', f)?.expect === 'accept', `roster covers ${f}. (an accept row)`)
+    ok(fam('web-add', f)?.reason === 'payload-family', `web-add never covers ${f}. (payload-family)`)
+  }
+  ok(fam('web-add', 'wdev')?.expect === 'accept' && fam('roster', 'wdev')?.reason === 'payload-family', 'web-add covers wdev. and roster does not')
+  ok(['family/roster-over-wret', 'family/roster-over-rip', 'family/roster-over-k2-dev', 'family/link-over-dev2', 'roster/doc-scoped', 'web-add/doc-scoped',
+    'roster/expired', 'roster/long-life', 'roster/other-key', 'web-add/spent'].every((n) => byName.has(n)), 'the consentG refusal rows exist')
+  // positive control: the family rows differ from their accept twin only in the purpose (same key, payload, challenge, time)
+  const twin = byName.get('family/web-add-over-dev2')!, honest = byName.get('ok/roster-over-dev2')!
+  ok(twin.payloadText === honest.payloadText && twin.text.replace('.web-add.', '.roster.') === honest.text, 'family/web-add-over-dev2 is ok/roster-over-dev2 with only the purpose changed')
+  ok(G.consentPub !== F.keys.consent, 'consentG signs with its own deterministic key, not the statements section\'s random one')
+}
+
 console.log('\nderivations: the consent transcript and the WebAuthn challenge')
 for (const t of F.transcripts) {
   const got = await consentTranscript(t.audience, t.challenge, t.payload)

@@ -37,14 +37,27 @@ export const IDENTITY_CONTRACT = 1
 export const IDENTITY_GLOBAL = '__bentoIdentity'
 
 /**
- * The longest `vouchedBy` a document shows: shells cut the text there. An agent
- * appends its qualifiers to vouchedBy ("(passkey sign-in)", ", unconfirmed
- * since <date>" when the account's mailbox lapsed, from the watt.'s `mb`), so
- * it keeps them short and, when it must shorten, drops an organisation's
- * "managed by" before it drops "unconfirmed": a frozen shell renders whatever
- * fits, and a lapsed address must never read as confirmed.
+ * The longest `vouchedBy` a document shows: shells cut the text there.
+ *
+ * vouchedBy is the VOUCHER ALONE ('id.bento.page', an organisation's domain, a
+ * vault id), never a qualifier. Everything that qualifies it travels as its own
+ * field of ResolvedIdentity (`tier`, `unconfirmedSince`, `managedBy`, ...), and
+ * the document composes the words. One source per fact: an agent that wrote
+ * "(passkey sign-in)" into vouchedBy while the document drew its own tag from
+ * `tier` would show two tiers that disagree the day a certificate is native,
+ * and a lapse found by parsing text can be dropped or forged by the text
+ * around it. `isVoucher` is the shape an agent sends and a document accepts.
  */
 export const VOUCHED_BY_MAX = 80
+
+const VOUCHER_RE = /^[a-z0-9](?:[a-z0-9.:-]*[a-z0-9])?$/
+
+/** Is `v` a bare voucher: lower-case letters, digits, `.`, `-` and `:`, at most
+ *  VOUCHED_BY_MAX characters, no spaces, commas or parentheses (so no
+ *  qualifier text can ride in it)? A document shows "not verified" otherwise. */
+export function isVoucher(v: unknown): v is string {
+  return typeof v === 'string' && v.length <= VOUCHED_BY_MAX && VOUCHER_RE.test(v)
+}
 
 /** Who is using this document, as vouched for. Public fields only. */
 export interface PublicIdentity {
@@ -106,16 +119,50 @@ export type SignResult =
 /** Look up a person by a key already in the room, or (phase 2) by address. */
 export type ResolveQuery = { pub: string } | { email: string }
 
-/** A public binding the agent found and checked. */
+/** A public binding the agent found and checked.
+ *
+ * The fields after `changed` are OPTIONAL ADDITIONS within contract 1, for
+ * option G (bento/id). The agent fills them from what it verified (the roster
+ * chain, roster.ts; the device certificate and its watt., devices.ts; the
+ * directory's status). A document reads a MISSING field as the weaker claim,
+ * so a host that does not send them under-claims, never over-claims. Times are
+ * epoch ms on the directory's clock. */
 export interface ResolvedIdentity {
   name: string
   email: string
+  /** the voucher alone (isVoucher): never a tier, a lapse or "managed by" */
   vouchedBy: string
   accountPub: string
   /** when this agent first saw this binding (epoch ms) — trust on first use */
   firstSeen: number
   /** true if the binding differs from the one this agent saw before */
   changed: boolean
+  /** G1, devices.ts tierOf: 'native' only for a dev2. a ripe consent key
+   *  co-signed; every other certificate is 'passkey' ("passkey sign-in").
+   *  The ONLY source of the tier: vouchedBy never carries it. Missing = passkey. */
+  tier?: 'passkey' | 'native'
+  /** ripenedAt of the roster's setup head (RosterState.createdAt). Missing =
+   *  a new account (the document's "new account" window, G5) */
+  accountSince?: number
+  /** ripenedAt of the latest link that changed the members or their
+   *  quarantine marks, a reset excepted */
+  rosterChangedAt?: number
+  /** ripenedAt of the latest reset (RosterState.lastResetAt) */
+  resetAt?: number
+  /** this sign-in no longer stands: 'signout' a member signed every browser out
+   *  (wout., roster.ts), 'incident' the directory's lever. Present and not false
+   *  = no ✓ at all. Missing or false = not revoked */
+  revoked?: false | 'signout' | 'incident'
+  /** the organisation's domain that manages the account (org identity, later) */
+  managedBy?: string
+  /** the watt.'s `mb` when it is not 0: since when the address is unconfirmed.
+   *  The address part of the ✓ is qualified ("unconfirmed since <date>"); the
+   *  account is not. This is the one field whose absence is NOT the weaker
+   *  claim (missing = confirmed), so the rule is the agent's: an agent that
+   *  verified a watt. (every agent that resolves an option G identity) sends
+   *  it whenever mb ≠ 0. device-v1.json gives every accepted row its expected
+   *  `mb`, so a port that drops it fails its rows. */
+  unconfirmedSince?: number
 }
 
 /** Roles a person can be given in a document (phase 2). */

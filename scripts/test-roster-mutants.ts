@@ -202,6 +202,39 @@ const MUTANTS: Mutant[] = [
   { name: 'a reset keeps the old ages', from: '      lastResetAt = rip.ripenedAt\n      since = new Map(head.members.map((m) => [m.pub, rip.ripenedAt]))\n', to: '      lastResetAt = rip.ripenedAt\n' },
   del('a reset is not reported', '      lastResetAt = rip.ripenedAt\n'),
   del('a pin past setup still claims exact ages', '        else sinceExact = false\n'),
+  // security-ruling-949 C2: a change ripened later than it was asked is judged at requestedAt
+  { name: 'R1 a consent key\'s ripeness is measured at ripenedAt', from: '    const ripe = (pub: string) => { const t = since.get(pub); return t !== undefined && rip.requestedAt - t >= ROSTER_WAIT_MS }\n',
+    to: '    const ripe = (pub: string) => { const t = since.get(pub); return t !== undefined && rip.ripenedAt - t >= ROSTER_WAIT_MS }\n' },
+  { name: 'R3 the co-sign is timed against ripenedAt', from: '      const cp = await memberProof(co, { cns: c.cns, sig: c.sig }, l.ros, head.dirNonce, rip.requestedAt, opts)\n',
+    to: '      const cp = await memberProof(co, { cns: c.cns, sig: c.sig }, l.ros, head.dirNonce, rip.ripenedAt, opts)\n' },
+  { name: 'the requesting consent key\'s cns. is timed against ripenedAt', from: '    const pr = await memberProof(signer, l, l.ros, head.dirNonce, rip.requestedAt, opts)\n',
+    to: '    const pr = await memberProof(signer, l, l.ros, head.dirNonce, rip.ripenedAt, opts)\n' },
+  // wout.
+  { name: 'wout. may name an address not in normal form (security-ruling-953 D8)', from: "  const [, addressF, atF, dirNonce] = p\n  const address = freeText(addressF)\n  if (address === null || !isNormalAddress(address)) return no('grammar')\n",
+    to: "  const [, addressF, atF, dirNonce] = p\n  const address = freeText(addressF)\n  if (address === null) return no('grammar')\n" },
+  del('wout. at need not be the challenge time', "  if (at !== opts.challengeAt) return no('at')\n"),
+  { name: 'wout. challenge is not compared', from: "  if (dirNonce !== opts.challenge) return no('challenge')\n  if (at !== opts.challengeAt)", to: "  if (at !== opts.challengeAt)" },
+  { name: 'wout. does not spend the challenge', from: "  if (!opts.spend(opts.challenge)) return no('replay')\n  if (dirNonce !== opts.challenge) return no('challenge')\n  if (at !==", to: "  if (dirNonce !== opts.challenge) return no('challenge')\n  if (at !==" },
+  { name: 'wout. may name another account', from: "  if (at !== opts.challengeAt) return no('at')\n  if (address !== ro.address) return no('address')\n", to: "  if (at !== opts.challengeAt) return no('at')\n" },
+  { name: 'a quarantined member signs every browser out', from: "  if (m.quarantined) return no('quarantined')\n  const pr = await memberProof(m, proof, text, dirNonce, opts.now, opts)\n  if (!pr.ok) return pr\n  return { ok: true, value: { address, at, dirNonce } }",
+    to: "  const pr = await memberProof(m, proof, text, dirNonce, opts.now, opts)\n  if (!pr.ok) return pr\n  return { ok: true, value: { address, at, dirNonce } }" },
+  { name: 'wout. proof is not verified', from: "  if (!pr.ok) return pr\n  return { ok: true, value: { address, at, dirNonce } }", to: "  return { ok: true, value: { address, at, dirNonce } }" },
+  // adel.
+  del('adel. may name a head that is not the current one', "  if (headHash !== ro.headHash) return no('roster-head')\n"),
+  { name: 'adel. challenge is not compared', from: "  if (dirNonce !== opts.challenge) return no('challenge')\n  if (address !== ro.address) return no('address')\n  if (headHash", to: "  if (address !== ro.address) return no('address')\n  if (headHash" },
+  { name: 'adel. may name an address not in normal form', from: "  const [, addressF, headHash, dirNonce] = p\n  const address = freeText(addressF)\n  if (address === null || !isNormalAddress(address)) return no('grammar')\n",
+    to: "  const [, addressF, headHash, dirNonce] = p\n  const address = freeText(addressF)\n  if (address === null) return no('grammar')\n" },
+  { name: 'a quarantined member asks to delete the account', from: "  if (m.quarantined) return no('quarantined')\n  const pr = await memberProof(m, proof, text, dirNonce, opts.now, opts)\n  if (!pr.ok) return pr\n  return { ok: true, value: { address, headHash, dirNonce } }",
+    to: "  const pr = await memberProof(m, proof, text, dirNonce, opts.now, opts)\n  if (!pr.ok) return pr\n  return { ok: true, value: { address, headHash, dirNonce } }" },
+  { name: 'adel. proof is not verified', from: "  if (!pr.ok) return pr\n  return { ok: true, value: { address, headHash, dirNonce } }", to: "  return { ok: true, value: { address, headHash, dirNonce } }" },
+  { name: 'a deletion waits 24 h', from: 'export const DELETE_WAIT_MS = ROSTER_WAIT_MS\n', to: 'export const DELETE_WAIT_MS = 24 * 3_600_000\n' },
+  { name: 'the roster consent purpose no longer covers wout. and adel.', file: 'statements.ts', from: "roster: ['ros.', 'dev2.', 'vrs.', 'wout.', 'adel.'],", to: "roster: ['ros.', 'dev2.', 'vrs.']," },
+  // the passkey user handle
+  { name: 'the user-handle label has no line feed', from: "export const USER_HANDLE_LABEL = 'bento-dir/1/addr\\n'\n", to: "export const USER_HANDLE_LABEL = 'bento-dir/1/addr'\n" },
+  { name: 'the user handle hashes the address as typed', from: "  if (typeof address !== 'string' || !isNormalAddress(address)) return null\n  return new Uint8Array", to: "  if (typeof address !== 'string') return null\n  return new Uint8Array" },
+  { name: 'a handle of any length over 32 bytes routes', from: '  if (!(handle instanceof Uint8Array) || handle.length !== USER_HANDLE_BYTES) return null\n', to: '  if (!(handle instanceof Uint8Array) || handle.length < 32) return null\n' },
+  del('the tail may be any length', '  if (!(tail instanceof Uint8Array) || tail.length !== USER_HANDLE_TAIL) return null\n'),
+  { name: 'a handle routes by its last 32 bytes', from: '  return handle.slice(0, USER_HANDLE_BYTES - USER_HANDLE_TAIL)\n', to: '  return handle.slice(USER_HANDLE_TAIL)\n' },
 ]
 
 function tree(): string {

@@ -4,6 +4,11 @@
 // Generates kernel/fixtures/identity-v1.json — the bento/id conformance vectors.
 //
 //   node scripts/gen-identity-vectors.ts
+//   node scripts/gen-identity-vectors.ts --only consentG [--check]
+//
+// The second form rebuilds only the consentG section (its key is deterministic)
+// and splices it into the committed file, every other byte kept; --check writes
+// nothing and fails when that section is stale (CI runs it).
 //
 // Every host's statement code (Swift, Kotlin, Rust, the extension's JS and the
 // directory) must reach the same verdict as the kernel reference on every row.
@@ -11,7 +16,7 @@
 // random (ECDSA), so regenerating changes the file; that is fine — the rig checks
 // verdicts, not bytes. Regenerate only when the rules change, and commit the result.
 
-import { writeFileSync, mkdirSync } from 'node:fs'
+import { writeFileSync, mkdirSync, readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -25,6 +30,7 @@ import {
   linkSlot, linkTokHash, formatLinkCode, linkTranscript, linkKeys, sasDigits, sasMatches, buildMsg0, buildMsg1,
   linkPopText, buildOffer, sealLinkMsg, linkAad, buildFinal, linkSealedPlaintext, encodeSlotMsg, decodeSlotMsg, MAX_SLOT_MSG, type LinkKeys, type LinkRole, type LinkOffer, type LinkFinal,
 } from '../kernel/src/link.ts'
+import { ecdsa } from './lib/roster-build.ts'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const OUT = join(root, 'kernel/fixtures/identity-v1.json')
@@ -877,6 +883,89 @@ const link: Record<string, unknown> = {}
   link.wire = wire
 }
 
+// --- consentG: the LIVE check of option G's two consent purposes (security-ruling-949 C1) ---------
+//
+// The directory checks a consent key's cns. LIVE with verifyConsent (it spends the challenge); peers
+// check the same text offline with verifyCoSign (roster-v2.json, device-v1.json). These rows pin the
+// payload family each purpose covers. A section of its own, so a host's statements runner, whose
+// purpose set is closed, keeps passing until it adopts them. Its consent key is DETERMINISTIC (its own
+// label), so the section can be regenerated alone: `--only consentG` splices it into the committed file.
+const consentKey = await ecdsa('identity/consent-g')
+const consentG: { about: string; consentPub: string; rows: Record<string, unknown>[] } = {
+  about: 'verifyConsent(text, sig, { consentPub, rp, audience, challenge, payloadText, docId, now, spend }) for purposes roster and web-add. ' +
+    'roster covers ros. dev2. vrs. wout. adel.; web-add covers wdev. only. Every row parses, so every row spends its challenge (spendCalled). ' +
+    'challengeSpent: the verifier\'s challenge book has already seen it.',
+  consentPub: consentKey.pub,
+  rows: [],
+}
+{
+  const other = await ecdsa('identity/consent-g-other')
+  const a = enc('alice@example.com'), h = 'A'.repeat(43), n = b64uEnc(new Uint8Array(32).fill(9)), pt = consentKey.pub
+  // one text of each family, shaped like the real one (verifyConsent reads only the family and the exact bytes)
+  const P: Record<string, string> = {
+    ros: `ros.${a}.4.${h}.ck~${pt},pk~${pt}.${n}.${NOW}`,
+    dev2: `dev2.${pt}.${pt}.${pt}.${a}.${h}..ck.${NOW}.${n}`,
+    vrs: `vrs.${a}.${h}.${n}`,
+    wout: `wout.${a}.${NOW}.${n}`,
+    adel: `adel.${a}.${h}.${n}`,
+    wdev: `wdev.${pt}.${pt}.${a}.${h}..cns.${NOW}.${n}`,
+    wret: `wret.${pt}.${pt}.${a}.${n}`,
+    rip: `rip.${h}.${NOW}.${NOW}.m..dir-1`,
+    dev: `dev.${pt}.${pt}.${pt}.${enc('Pixel')}.${NOW}.${NOW + DAY}`,
+  }
+  const g = async (name: string, purpose: string, payload: string, o: { reason?: string; docId?: string; exp?: number; spent?: boolean; by?: typeof other } = {}) => {
+    const docId = o.docId ?? null
+    const text = buildConsent({ rp: 'bento', purpose: purpose as never, docId, transcript: (await consentTranscript('dir', CHALLENGE, payload))!, exp: o.exp ?? NOW + 60_000 })
+    consentG.rows.push({ name, rp: 'bento', audience: 'dir', challenge: CHALLENGE, docId: null, payloadText: payload, text, sig: await sign(o.by ?? consentKey, text),
+      ...(o.spent ? { challengeSpent: true } : {}), spendCalled: true, expect: o.reason ? 'reject' : 'accept', ...(o.reason ? { reason: o.reason } : {}) })
+  }
+  for (const f of ['ros', 'dev2', 'vrs', 'wout', 'adel']) await g(`ok/roster-over-${f}`, 'roster', P[f])
+  await g('ok/web-add-over-wdev', 'web-add', P.wdev)
+  // payload-family: S2 and S3, and every other cross
+  await g('family/roster-over-wdev', 'roster', P.wdev, { reason: 'payload-family' })
+  for (const f of ['ros', 'dev2', 'vrs', 'wout', 'adel']) await g(`family/web-add-over-${f}`, 'web-add', P[f], { reason: 'payload-family' })
+  await g('family/roster-over-wret', 'roster', P.wret, { reason: 'payload-family' })
+  await g('family/roster-over-rip', 'roster', P.rip, { reason: 'payload-family' })
+  await g('family/roster-over-k2-dev', 'roster', P.dev, { reason: 'payload-family' })
+  await g('family/link-over-dev2', 'link', P.dev2, { reason: 'payload-family' })
+  await g('family/web-add-over-wret', 'web-add', P.wret, { reason: 'payload-family' })
+  // the rest of verifyConsent, under the new purposes
+  await g('roster/doc-scoped', 'roster', P.ros, { docId: 'doc-1', reason: 'docid' })
+  await g('web-add/doc-scoped', 'web-add', P.wdev, { docId: 'doc-1', reason: 'docid' })
+  await g('roster/expired', 'roster', P.ros, { exp: NOW, reason: 'expired' })
+  await g('roster/long-life', 'roster', P.ros, { exp: NOW + CONSENT_MAX_TTL_MS + 1, reason: 'lifetime' })
+  await g('roster/other-key', 'roster', P.ros, { by: other, reason: 'signature' })
+  await g('web-add/spent', 'web-add', P.wdev, { spent: true, reason: 'replay' })
+}
+
+const ONLY = process.argv.includes('--only') ? process.argv[process.argv.indexOf('--only') + 1] : null
+if (ONLY !== null) {
+  // splice one deterministic section into the committed file, keeping every other byte; a row that differs only
+  // in its (random) signature keeps its committed bytes, and --check writes nothing and fails on a stale section
+  if (ONLY !== 'consentG') throw new Error(`--only takes consentG (the one section with deterministic keys), not ${ONLY}`)
+  const committedText = readFileSync(OUT, 'utf8')
+  const committed = JSON.parse(committedText) as Record<string, unknown>
+  const was = committed.consentG as typeof consentG | undefined
+  const old = new Map((was?.rows ?? []).map((r) => [r.name as string, r]))
+  const masked = (v: unknown) => JSON.stringify(v, (k, x) => (k === 'sig' ? '' : x))
+  const section = { ...consentG, rows: consentG.rows.map((r) => { const o = old.get(r.name as string); return o && masked(o) === masked(r) ? o : r }) }
+  const spliced: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(committed)) {
+    if (k === 'consentG') continue
+    spliced[k] = v
+    if (k === 'dreqConsent') spliced.consentG = section
+  }
+  const text = JSON.stringify(spliced, null, 2) + '\n'
+  if (process.argv.includes('--check')) {
+    const same = text === committedText
+    console.log(same ? `${OUT}: consentG is current (${section.rows.length} rows)` : `${OUT}: consentG is stale`)
+    process.exit(same ? 0 : 1)
+  }
+  writeFileSync(OUT, text)
+  console.log(`spliced consentG into ${OUT}: ${section.rows.length} rows`)
+  process.exit(0)
+}
+
 const fixture = {
   version: 1,
   note: 'bento/id conformance vectors. TEST KEYS ONLY — never use them for anything real. ' +
@@ -890,6 +979,7 @@ const fixture = {
   dreq: dreqRows,
   rot: rotRows,
   dreqConsent: dreqConsentRows,
+  consentG,
   link,
   transcripts,
   webauthn,

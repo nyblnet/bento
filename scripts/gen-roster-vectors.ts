@@ -25,7 +25,7 @@ import { writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { b64uEnc, sha256b64u } from '../kernel/src/statements.ts'
-import { buildRos, buildVrs, ROSTER_WEB_ORIGINS, NEW_ACCOUNT_MS, type MemberKind } from '../kernel/src/roster.ts'
+import { buildRos, buildVrs, buildWout, buildAdel, buildUserHandle, ROSTER_WEB_ORIGINS, NEW_ACCOUNT_MS, DELETE_WAIT_MS, USER_HANDLE_LABEL, type MemberKind } from '../kernel/src/roster.ts'
 import { signStatement } from '../kernel/src/statements.ts'
 import {
   ADDRESS, CONSENT_RP, DIRECTORY_KEYS, H, K, LABELS, N, NOW, OFF_CURVE, ORIGIN, RP, T, assertion, be32, big, chainOf, cosign, ecdsa, highS, link, minInt, nonce, pubOf, rawToDer, sha, te, unb,
@@ -569,6 +569,16 @@ const afterQ = { pk1: mem('pk', 'pk1', T), pk2q: mem('pk', 'pk2', T + 73 * H, tr
       { members: [['ck', 'ck1'], ['pk', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1']], req: T + 320 * H, rip: T + 392 * H, signer: 'pk1' },
       { members: PLUS_PK3, req: T + 400 * H, rip: T + 400 * H, signer: 'pk1', co: { signer: 'ck1' } }), 'cosign-unripe')
 
+  // security-ruling-949 C2: the directory may ripen a change LATER than it was asked (ripenedAt > requestedAt).
+  // Ripeness and the co-sign's life are both measured at requestedAt, never at ripenedAt.
+  reject('cosign/unripe-at-request-ripe-at-ripening', 'ck1 is 71 h a member at requestedAt and 73 h at ripenedAt, 2 h later: the co-sign does not count',
+    await on(co(T + 303 * H, T + 305 * H)), 'cosign-unripe')
+  reject('ck/unripe-at-request-ripe-at-ripening', 'ck1 asks at 71 h a member, ripened 2 h later at 73 h: the 72 h wait applies', await on(ck(T + 303 * H, T + 305 * H)), 'unripe')
+  accept('ok/cosign-ripened-late', 'the co-sign is alive at requestedAt and long expired at ripenedAt, one hour later: it counts',
+    await on(co(R4, R4 + H)), st(4, R4 + H, [mem('pk', 'pk3', R4 + H)]))
+  accept('ok/ck-ripened-late', 'ck1 asks, ripe at requestedAt; its cns. is long expired at ripenedAt, one hour later: no wait',
+    await on(ck(R4, R4 + H)), st(4, R4 + H, [mem('pk', 'pk3', R4 + H)]))
+
   // a consent key's request as a quarantine's evidence
   accept('ok/q-voided-by-consent-key', 'ck1 asked (by its cns.), the mailbox voided it and quarantined ck1',
     await on({ members: [['ck', 'ck1', 'q'], ['pk', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1']], req: T + 240 * H, rip: T + 240 * H, auth: 'q', voided: { members: PLUS_PK3, signer: 'ck1' } }),
@@ -643,6 +653,96 @@ const resetStops: StopRow[] = []
   await stop({ name: 'stop/address-not-normal', about: 'the address is in normal form', vrs: { address: 'Alice@Example.com' }, reason: 'grammar' })
 }
 
+// --- wout. and adel.: a member signs every browser out, or asks to delete the account (the directory's checks) ---
+//
+// As for resetStops: L4 (T+240h) is the account's head: pk1, rk1, ck1 (pk2 left at L4).
+type ActRow = { name: string; about: string; links: Link[]; challenge: string; challengeAt?: number; now: number; text: string; signer: string
+  proof: { assertion?: unknown; sig?: string; cns?: string }; spent?: boolean; expect: 'accept' | 'reject'; reason?: string }
+const signOuts: ActRow[] = [], deletions: ActRow[] = []
+{
+  const L = await chainOf(BASE.slice(0, 5))
+  const Q = await chainOf([...BASE.slice(0, 4), { members: [['ck', 'ck1', 'q'], ['pk', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1']], req: T + 240 * H, rip: T + 240 * H, auth: 'q',
+    voided: { members: [['ck', 'ck1'], ['pk', 'pk1'], ['pk', 'pk2'], ['pk', 'pk3'], ['rk', 'rk1']], signer: 'ck1' } }])
+  const NOW_ACT = T + 400 * H
+  type ActSpec = { name: string; about: string; links?: Link[]; signer?: string; text?: string; proof?: 'assertion' | 'sig' | 'cns'; over?: string; sigBy?: string
+    cns?: CnsOpts; spent?: boolean; reason?: string; challengeAt?: number }
+  const act = async (into: ActRow[], text: string, challenge: string, x: ActSpec, challengeAt?: number) => {
+    const signer = x.signer ?? 'pk1'
+    const kind = x.proof ?? (signer.startsWith('pk') ? 'assertion' : signer.startsWith('ck') ? 'cns' : 'sig')
+    const proof: ActRow['proof'] = {}
+    if (kind === 'assertion') proof.assertion = await assertion(signer, x.over ?? text)
+    else if (kind === 'sig') proof.sig = await signStatement(K[x.sigBy ?? signer].key, x.over ?? text)
+    else { const c = await cosign(signer, text, challenge, NOW_ACT, x.cns); proof.cns = c.cns; proof.sig = c.sig }
+    into.push({ name: x.name, about: x.about, links: x.links ?? L, challenge, ...(challengeAt !== undefined ? { challengeAt: x.challengeAt ?? challengeAt } : {}), now: NOW_ACT,
+      text, signer: pubOf(signer), proof, ...(x.spent ? { spent: true } : {}), expect: x.reason ? 'reject' : 'accept', ...(x.reason ? { reason: x.reason } : {}) })
+  }
+
+  // wout.: `at` is the time the directory issued the challenge
+  const CH = nonce(63), AT = NOW_ACT - 2 * 60_000
+  const wout = (o: { address?: string; at?: number; nonce?: string } = {}) => buildWout({ address: o.address ?? ADDRESS, at: o.at ?? AT, dirNonce: o.nonce ?? CH })
+  const so = (x: ActSpec) => act(signOuts, x.text ?? wout(), CH, x, AT)
+  await so({ name: 'ok/wout-by-passkey', about: 'pk1 signs every browser out (an assertion over the wout. text)' })
+  await so({ name: 'ok/wout-by-recovery-key', about: 'the recovery key signs every browser out (a raw signature)', signer: 'rk1' })
+  await so({ name: 'ok/wout-by-consent-key', about: 'the consent key signs every browser out from its app (a roster cns., alive now)', signer: 'ck1' })
+  await so({ name: 'wout/signer-not-member', about: 'pk4 is not on the roster', signer: 'pk4', reason: 'signer' })
+  await so({ name: 'wout/signer-removed', about: 'pk2 left the roster at the current head', signer: 'pk2', reason: 'signer' })
+  await so({ name: 'wout/signer-quarantined', about: 'ck1 is quarantined', links: Q, signer: 'ck1', reason: 'quarantined' })
+  await so({ name: 'wout/other-address', about: 'the wout. names another account', text: wout({ address: 'bob@example.com' }), reason: 'address' })
+  await so({ name: 'wout/address-not-normal', about: 'the address is in normal form, the one the account name hashes (security-ruling-953 D8)', text: wout({ address: 'Alice@Example.com' }), reason: 'grammar' })
+  await so({ name: 'wout/other-challenge', about: 'the wout. carries another challenge than the one issued', text: wout({ nonce: nonce(65) }), reason: 'challenge' })
+  await so({ name: 'wout/at-not-challenge-time', about: 'the wout. says another time than the challenge was issued at', text: wout({ at: AT + 1000 }), reason: 'at' })
+  await so({ name: 'wout/spent', about: 'the challenge was already spent', spent: true, reason: 'replay' })
+  await so({ name: 'wout/assertion-other-text', about: 'the assertion covers another text', over: 'wout.another', reason: 'assertion-challenge' })
+  await so({ name: 'wout/assertion-over-adel', about: 'an assertion made for a deletion request is not a sign-out', over: buildAdel({ address: ADDRESS, headHash: await sha256b64u(L[4].ros), dirNonce: CH }), reason: 'assertion-challenge' })
+  await so({ name: 'wout/rk-wrong-key', about: 'the recovery-key signature is by another key', signer: 'rk1', sigBy: 'rk2', reason: 'signature' })
+  await so({ name: 'wout/ck-cns-web-add', about: 'the consent key\'s cns. carries purpose web-add', signer: 'ck1', cns: { purpose: 'web-add' }, reason: 'consent-purpose' })
+  await so({ name: 'wout/passkey-raw-signature', about: 'a passkey signs by assertion only', proof: 'sig', reason: 'proof' })
+  await so({ name: 'wout/extra-field', about: 'an extra field', text: wout() + '.x', reason: 'grammar' })
+  await so({ name: 'wout/at-zero', about: 'at is a positive time', text: `wout.${b64uEnc(te.encode(ADDRESS))}.0.${CH}`, reason: 'grammar' })
+  await so({ name: 'wout/nonce-short', about: 'the challenge is 16 to 64 bytes', text: wout({ nonce: b64uEnc(new Uint8Array(15)) }), reason: 'grammar' })
+
+  // adel.: names the head it was asked against, which must be the current one
+  const CD = nonce(64), HEAD = await sha256b64u(L[4].ros)
+  const adel = (o: { address?: string; head?: string; nonce?: string } = {}) => buildAdel({ address: o.address ?? ADDRESS, headHash: o.head ?? HEAD, dirNonce: o.nonce ?? CD })
+  const de = (x: ActSpec) => act(deletions, x.text ?? adel(), CD, x)
+  await de({ name: 'ok/adel-by-passkey', about: 'pk1 asks to delete the account (queued 72 h, with a void link to the address)' })
+  await de({ name: 'ok/adel-by-recovery-key', about: 'the recovery key asks (a raw signature)', signer: 'rk1' })
+  await de({ name: 'ok/adel-by-consent-key', about: 'the consent key asks from its app (a roster cns., alive now)', signer: 'ck1' })
+  await de({ name: 'adel/old-head', about: 'the request names an earlier head: the roster changed under it', text: adel({ head: await sha256b64u(L[3].ros) }), reason: 'roster-head' })
+  await de({ name: 'adel/signer-not-member', about: 'pk4 is not on the roster', signer: 'pk4', reason: 'signer' })
+  await de({ name: 'adel/signer-removed', about: 'pk2 left the roster at the current head', signer: 'pk2', reason: 'signer' })
+  await de({ name: 'adel/signer-quarantined', about: 'ck1 is quarantined', links: Q, signer: 'ck1', text: adel({ head: await sha256b64u(Q[4].ros) }), reason: 'quarantined' })
+  await de({ name: 'adel/other-address', about: 'the request names another account', text: adel({ address: 'bob@example.com' }), reason: 'address' })
+  await de({ name: 'adel/address-not-normal', about: 'the address is in normal form', text: adel({ address: 'Alice@Example.com' }), reason: 'grammar' })
+  await de({ name: 'adel/other-challenge', about: 'the request carries another challenge than the one issued', text: adel({ nonce: nonce(66) }), reason: 'challenge' })
+  await de({ name: 'adel/spent', about: 'the challenge was already spent', spent: true, reason: 'replay' })
+  await de({ name: 'adel/assertion-other-text', about: 'the assertion covers another text', over: 'adel.another', reason: 'assertion-challenge' })
+  await de({ name: 'adel/assertion-over-wout', about: 'an assertion made for a sign-out is not a deletion request', over: buildWout({ address: ADDRESS, at: AT, dirNonce: CD }), reason: 'assertion-challenge' })
+  await de({ name: 'adel/ck-cns-web-add', about: 'the consent key\'s cns. carries purpose web-add', signer: 'ck1', cns: { purpose: 'web-add' }, reason: 'consent-purpose' })
+  await de({ name: 'adel/passkey-raw-signature', about: 'a passkey signs by assertion only', proof: 'sig', reason: 'proof' })
+  await de({ name: 'adel/extra-field', about: 'an extra field', text: adel() + '.x', reason: 'grammar' })
+  await de({ name: 'adel/head-not-a-hash', about: 'the head is a sha256, base64url', text: adel({ head: 'B'.repeat(43) }), reason: 'grammar' })
+  await de({ name: 'adel/vrs-text', about: 'a vrs. text is not a deletion request', text: buildVrs({ address: ADDRESS, resetHash: HEAD, dirNonce: CD }), reason: 'grammar' })
+}
+
+// --- the passkey user handle: SHA-256(label ‖ address in normal form) ‖ 16 random bytes -------------------------
+//
+// The sign-in host makes every passkey with this user.id, and a native host making a passkey for the same rp id
+// must too, or its passkeys cannot sign in there. Deterministic: the tails stand in for the 16 random bytes.
+const hex = (b: Uint8Array) => Buffer.from(b).toString('hex')
+const userHandles: { label: string; bytes: number; rows: Array<Record<string, unknown>> } = { label: USER_HANDLE_LABEL, bytes: 48, rows: [] }
+{
+  for (const [name, address, fill] of [['ok/alice', ADDRESS, 0xa5], ['ok/alice-other-passkey', ADDRESS, 0x5a], ['ok/plus-tag', 'bob+bento@example.org', 0x01]] as const) {
+    const tail = new Uint8Array(16).fill(fill)
+    const h = await buildUserHandle(address, tail)
+    if (!h) throw new Error(name)
+    userHandles.rows.push({ name, address, tailHex: hex(tail), handle: b64uEnc(h), accountHex: hex(h.slice(0, 32)) })
+  }
+  // a host never hashes an address that is not in normal form (it would name another account's storage)
+  for (const [name, address] of [['refuse/upper-case', 'Alice@Example.com'], ['refuse/spaces', ' alice@example.com'], ['refuse/not-an-address', 'alice']] as const)
+    userHandles.rows.push({ name, address, tailHex: hex(new Uint8Array(16)), handle: null })
+}
+
 // ---------------------------------------------------------------------------------------------
 
 const keys: Record<string, string> = {}
@@ -663,6 +763,15 @@ const out = {
   rows,
   // vrs.: verifyResetStop(text, signer, proof, { roster (this row's chain), resetRos, resetRequestedAt, challenge, spend: () => !spent, rpId, origins, consentRp, now })
   resetStops,
+  // wout.: verifyWout(text, signer, proof, { roster (this row's chain at now), challenge, challengeAt, spend: () => !spent, rpId, origins, consentRp, now })
+  signOuts,
+  // adel.: verifyAdel(text, signer, proof, { roster (this row's chain at now), challenge, spend: () => !spent, rpId, origins, consentRp, now }); accepted = queued
+  // for deleteWaitMs on the directory's clock, carried out only if not voided and the head is still the one it names
+  deleteWaitMs: DELETE_WAIT_MS,
+  deletions,
+  // the passkey user handle: label, then for each row SHA-256(label ‖ address) ‖ tail = handle (null: refuse to hash a non-normal address);
+  // a returned handle routes by its first 32 bytes (accountHex) and is exactly 48 bytes
+  userHandles,
 }
 // keep the committed bytes of every row that differs only in its (random) signatures
 const SIGS = new Set(['ripSig', 'sig', 'signature'])
@@ -672,6 +781,10 @@ const old = new Map<string, Row>((before?.rows ?? []).map((r: Row) => [r.name, r
 out.rows = rows.map((r) => { const o = old.get(r.name); return o && masked(o) === masked(r) ? o : r })
 const oldStops = new Map<string, StopRow>((before?.resetStops ?? []).map((r: StopRow) => [r.name, r]))
 out.resetStops = resetStops.map((r) => { const o = oldStops.get(r.name); return o && masked(o) === masked(r) ? o : r })
+for (const k of ['signOuts', 'deletions'] as const) {
+  const was = new Map<string, ActRow>((before?.[k] ?? []).map((r: ActRow) => [r.name, r]))
+  out[k] = out[k].map((r) => { const o = was.get(r.name); return o && masked(o) === masked(r) ? o : r })
+}
 const text = JSON.stringify(out, null, 2) + '\n'
 if (CHECK) {
   const changed = out.rows.filter((r) => old.get(r.name) !== r).map((r) => r.name)

@@ -13963,3 +13963,90 @@ that bundles exactly the history it signed and the seeded one) and
 `scripts/test-home-web-build-mutants.mjs` (each refusal removed, red on its
 row), and `scripts/test-home-web-out.mjs` (where the output may go, the
 firmlink row and its mutant on macOS).
+
+## 2026-11-14 — bento/id option G: one source for the tier, retirement without a successor, sign-out and deletion texts, the passkey user handle
+
+**Decision.** The fourth kernel change of option G. It closes the conditions
+security left on the third (#949) and settles what the directory and the
+sign-in host were waiting on. Contracts: `identity-v1.json`, `roster-v2.json`,
+`device-v1.json` (new rows and sections; no row a host reads today changes
+verdict) and `recovery-v1.json` (unchanged, now checked in CI).
+
+- **The rows ports copy before they port option G's consent keys.** A new
+  `consentG` section in `identity-v1.json` pins the directory's LIVE check of
+  the two purposes: `roster` covers `ros.`, `dev2.`, `vrs.`, `wout.` and
+  `adel.`, `web-add` covers `wdev.` only, and every cross is refused
+  (`payload-family`). It is a section of its own because host statement
+  runners have a closed purpose set. Roster rows where the directory ripened a
+  change later than it was asked pin that a consent key's ripeness and its
+  co-sign's life are both measured at `requestedAt`, never at `ripenedAt`. The
+  link release check gains rows for a quarantined co-signer, a passkey named as
+  the co-signer, exactly 72 hours (inclusive) and the co-signer being N's own
+  key. Every accepted device row states the `mb` its `watt.` carries, so a port
+  that drops the mailbox state fails rows instead of passing them all.
+  `gen-recovery-vectors.ts` and the `consentG` section gain `--check`, run in
+  CI.
+- **`vouchedBy` is the voucher alone.** It names who vouched
+  (`id.bento.page`, an organisation's domain, a vault id) and nothing else
+  (`isVoucher`). The tier, the mailbox lapse and the managing organisation
+  each travel as their own optional field of `ResolvedIdentity` (`tier`,
+  `unconfirmedSince`, `managedBy`), beside `accountSince`, `rosterChangedAt`,
+  `resetAt` and `revoked`, and the document composes the words. Before this,
+  the agent was told to write "(passkey sign-in)" and ", unconfirmed since
+  <date>" into vouchedBy while the People panel drew its own tag from `tier`:
+  two sources for one fact, which disagree the day a certificate is native,
+  and a lapse found by parsing text can be cut or imitated by the text around
+  it. Every new field reads as the weaker claim when it is missing, except
+  `unconfirmedSince`, whose absence means confirmed; so that one is the
+  agent's rule: an agent that verified a `watt.` sends it whenever `mb` is not
+  0, and the per-row `mb` is how a port is held to it. No released shell
+  renders vouchedBy, so nothing frozen depends on the old form.
+- **A browser key can retire itself without a successor.** `wret.` takes an
+  EMPTY new key: the old key W signs its own retirement over a challenge the
+  directory issued for it, with no passkey prompt and no new ceremony, and the
+  directory refuses every later renewal of W. The alternative was a host rule
+  (keep a suspect W, sign-only, until the next ceremony), and it is worse on
+  every count. The bound security asked for is that a copy of W dies at most
+  24 hours after the honest browser acts. With the rule, the honest browser
+  can only act at its next ceremony, which may be days away, and must keep
+  storing a key it has stopped trusting. A library whose storage was cleared
+  cannot act at all, so the copy lives to the 7-day cap plus 24 hours. With the
+  empty form the library retires W the moment it stops trusting or keeping it
+  (before deleting it, on finding it extractable, at a local sign-out), so
+  the copy dies within 24 hours of that. A thief holding W can retire it
+  too, which only takes away renewals of a key it stole; the honest browser
+  signs in again with a passkey.
+- **Two member texts the directory checks**, each signed by an unquarantined
+  member of the current head (a passkey's assertion, the recovery key's
+  signature, or a consent key's `roster` co-sign) over a single-use directory
+  challenge, which is spent as soon as the text parses (every refusal before
+  that is `grammar`):
+  `wout.<b64u(address)>.<at>.<dirNonce>` signs every browser out, where `at` is
+  the challenge's issue time and the address must already be in normal form;
+  `adel.<b64u(address)>.<headHash>.<dirNonce>` asks to delete the account and
+  names the head it was asked against. A sign-out has no wait (it only takes
+  power away). The directory cuts off every `wdev.` whose ceremony is at or
+  before the moment it ACCEPTS the sign-out, logs that time beside the signed
+  `at`, and leaves `dev2.` alone. A browser key's last `watt.` still holds at
+  peers for up to 24 hours. A deletion is queued for 72 hours like any change,
+  with a void link mailed to the address. It is carried out only if it was not
+  voided and the head is still the one it names, so a reset in between voids
+  it. Voiding it quarantines nobody, since a quarantine's evidence is a
+  `ros.` text. The way to delete without a passkey is the directory's mailed
+  link, which needs no statement.
+- **The passkey user handle is a kernel layout.** `user.id` =
+  SHA-256(`bento-dir/1/addr` ‖ LF ‖ the address in normal form) ‖ 16 random
+  bytes, 48 bytes. The first 32 bytes are the account's storage name at the
+  directory and route a discoverable sign-in; the random tail keeps a new
+  passkey from overwriting an older one on the same authenticator. Native
+  hosts that make passkeys for `id.bento.page` must use it, or their passkeys
+  cannot sign in on the sign-in host. The handle is not covered by the
+  assertion's signature, so it only routes and never decides membership.
+
+Guards: `scripts/test-statements.ts` (`consentG`), `scripts/test-roster.ts`
+(the two clocks, `wout.`, `adel.`, the user handle recomputed with
+`node:crypto`), `scripts/test-devices.ts` (`mb` on every accepted row,
+retirement without a successor, the release rows),
+`scripts/test-identity.ts` (`isVoucher`, the `ResolvedIdentity` fields), and
+the mutant rigs `test-roster-mutants.ts` and `test-devices-mutants.ts` (the
+latter also mutates the consent families against `test-statements.ts`).
