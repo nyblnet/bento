@@ -14177,6 +14177,74 @@ Guards: the rows and mutants in `scripts/test-webext-tripwire-browser.mjs`,
 `scripts/test-webext-tripwire-mutants.mjs`, `scripts/test-webext-tripwire.ts`,
 `scripts/test-home-web-build.mjs` and `scripts/test-home-web-build-mutants.mjs`.
 
+## 2026-11-12 — bento/id directory: browser certificates, renewals and the event log's `ob`
+
+The directory now countersigns browser certificates (`server/directory/src/browsers.js`):
+the routes the sign-in host and bento/home call, matching the contract the
+bento/home agent was built against.
+
+- **Challenges.** A browser challenge is sealed for its audience (an
+  enrolment or a renewal) and for the address, and lives 60 seconds. It is
+  spent in the address's object before any other check, so reuse, a failed
+  assertion and the other audience all use it up. Nothing is stored when one
+  is issued, so a stranger who asks for many fills nothing and pushes out
+  nobody's. Asking costs a per-IP lookup, the same budget as `GET
+  /v1/roster` (both answer 404 for an address with no account), and one of 20
+  an hour from that IP for that address, enrolments and renewals counted
+  apart. A check-in is counted per IP per address only once its signature
+  verifies and it carries a challenge the directory issued for that address
+  (anyone can sign a `wren.` with a key of their own), so a check-in without
+  one, from the owner's own network, cannot use up its renewals. There is deliberately no count shared
+  by every caller of an address: a stranger could fill it and stop the
+  owner's browsers renewing.
+- **The head is the latest ripened one.** A change still waiting is never a
+  head, and a change that is due takes effect before the challenge is
+  answered, so a queued change never makes sign-ins fail.
+- **A fresh key per ceremony.** A device key enrols once.
+- **The countersign** lives 24 hours and never past 7 days after the
+  ceremony. A renewal is refused for a key that is unknown, revoked (signed
+  out everywhere, or its passkey removed, suspended or added again since), or
+  past the 7 days.
+- **`ob` means "asked for at bento/home's request"**: the opener the sign-in
+  host reports is bento/home. It is never read from the request's Origin
+  (every web enrolment's Origin is the sign-in host). It is in the countersign
+  and on every event-log entry, kept for the life of the account; nothing
+  decides on it, and the incident lever filters by it. Log entries keep the
+  full public key, not a fingerprint, so the lever acts on the exact key.
+- **Signing out everywhere is a time: the moment it is accepted**, not the
+  time in the text the passkey signed (both are logged). Every browser
+  certificate made by then stops renewing and the status route says
+  `revoked`, and a ceremony whose challenge was issued by then cannot finish
+  after it, so a sign-in already under way cannot undo it. A countersign
+  already issued stays valid for up to 24 hours at a peer that does not ask
+  the status route, and the mail says so.
+  Apps' certificates are untouched. The route checks everything and then
+  answers 501 until the kernel defines the statement a passkey signs for it.
+- **A passkey sign-in on the sign-in host** finds the account from the
+  passkey's 48-byte user handle (its first 32 bytes are the account's storage
+  name), but the handle only routes the request: membership is the account's
+  own record. Its challenge is spent in that account's object, once per
+  account rather than once for everyone (an assertion verifies only under its
+  own account); a handle naming no account is refused before anything is
+  written. A signature counter is stored only over the value the assertion
+  was checked against, so two assertions with one counter never both pass.
+  It logs and mails nothing.
+- **`mb`** (the countersign's mailbox state, from #949) is 0 while the
+  address is confirmed. Every account is confirmed today: the address is
+  proved at setup and nothing asks for it again until the mailbox re-proof is
+  built, which will store the time it went unconfirmed.
+- **Incident records** come from a deploy variable and ride on every
+  check-in and status answer. A list that does not read is an error, never a
+  shorter list.
+- **CORS** is per route: the sign-in host's routes answer only it, bento/home's
+  only it, the rest `*`, and a path that is no route answers with none.
+
+Not here yet: the statement a member signs to sign out everywhere (the
+kernel's), a `dev2.` made by a passkey alone,
+retiring the old key at a new ceremony, and mail for a new browser. Guards:
+`scripts/test-directory-browsers.ts` (the kernel's `verifyDevice` over what a
+check-in returns; each challenge rule with its control) and
+`scripts/test-directory-mutants.ts`.
 ## 2026-11-10 — bento/id in bento/home: the browser's agent runs no WebAuthn, and keeps only keys it cannot export
 
 bento/home in the browser (`home/web`) gains its bento/id agent
@@ -14230,6 +14298,94 @@ Rigs: scripts/test-home-web-identity.mjs (the real library and sign-in host, a
 CDP virtual authenticator, every WebSocket closed; headless shell and Google
 Chrome; `--mutants`, one per rule).
 
+## 2026-11-14 — `validate` is two parallel jobs and an aggregator (reverses part of 2026-10-18)
+
+The one `validate` job reached 18–20 minutes and was being cancelled at its
+20-minute limit with no failing step, which blocked merges. Its work now runs as
+two jobs in parallel, and the required check is a third job that reads their
+results:
+
+- **`validate-builds`** runs every slice that builds an app or reads a built
+  shell, in the old order: slides, spaces, dash, type, convert, home-ios, home,
+  home-webext, shared.
+- **`validate-kernel`** runs the kernel slice alone. It is the longest slice
+  (about seven minutes) and needs no app build, only slides' toolchain, jsdom
+  and the pinned browser. Nothing is built on its runner, so a kernel rig that
+  starts reading a built shell must move or build it itself.
+- **`validate`** (the name branch protection requires, unchanged) needs both
+  and runs with `if: always()`. It passes only when both results are
+  `success`. The 2026-10-18 entry rejected an aggregator because a job skipped
+  after a failed dependency reports "skipped", which a required check accepts
+  as passing. `always()` closes that hole: the job always runs, and a failed,
+  cancelled or skipped half fails it.
+
+The rest of 2026-10-18 stands: composite actions per zone, a new rig at the end
+of its zone's slice, other jobs in `ci-<zone>.yml`, and `ci.yml` changes only
+when a slice is added or moved between the two jobs.
+## 2026-11-12 — The People panel's identity tiers (bento/id under the roster design; flag off)
+
+- **Built, flag off.** slides' People panel can say who vouched for a
+  collaborator, from the identity agent's `resolve({ pub })`
+  (`kernel/src/identity.ts`). It runs only when localStorage
+  `bento-people-vouch` is `on` AND the host exposes an agent, and it looks a
+  key up only when `session.keyProven(actor, pub)` says the peer proved it (a
+  presence `pub` is a claim; asking about a claimed key would let a reader
+  wear someone else's ✓). This replaces the earlier flag-off "who vouched"
+  draft, which predated both the session's key proof and the roster design.
+- **What a verified row says.** `✓ via <vouchedBy>`, then "(passkey sign-in)"
+  for every certificate a passkey alone made (the kernel's G1 tier, `tierOf`,
+  which deliberately does not promote on a consent key's age), "new account"
+  for 14 days after setup, and "account changed on <date>" for 7 days after a
+  roster change, or for 30 days after a reset by the directory (maintainer,
+  2026-11-12). A revoked sign-in gets no ✓
+  at all ("this sign-in was revoked"); one revoked by the incident lever also
+  puts a flag on the row for the room OWNER, beside the remove control, because
+  what that key did in the deck may not have been its owner. A changed binding
+  stays "⚠ changed" with no ✓.
+- **A missing field is the weaker claim.** The labels come from optional
+  fields on the answer, additions within contract 1 that hosts do not send
+  yet: `tier` ('native' drops "(passkey sign-in)"; anything else keeps it),
+  `accountSince` (missing or malformed reads as a new account),
+  `rosterChangedAt`, `resetAt`, `revoked` (`true` | 'signout' | 'incident';
+  any other value is "couldn't check", never a ✓) and `managedBy`. So until a
+  host supplies them, every verified row reads "(passkey sign-in)" and "new
+  account": an under-claim, never an over-claim.
+- **vouchedBy's 80-character cut keeps "unconfirmed".** The 80 is the kernel's
+  `VOUCHED_BY_MAX`, imported, so the agent's side and the panel's cannot drift;
+  the panel's decision module imports that constant and nothing else from
+  identity.ts. The agent appends its
+  own qualifiers to `vouchedBy` (", unconfirmed since <date>", later
+  ", managed by <domain>") and localises them. When the whole line does not fit
+  in 80 characters, the panel drops the "managed by" segment first (found by
+  its English wording or by the domain in `managedBy`, so a localised segment
+  is found too), then other middle qualifiers, keeps the last qualifier whole
+  while shortening the voucher, and cuts the end only when nothing else fits.
+- **What a name cannot do.** A name, whether typed in this session or the
+  account's own display name, loses every tick-like mark, and every control,
+  format, private-use, unassigned, separator and default-ignorable character
+  (by Unicode category, plus the Hangul fillers and the Braille blank, which
+  render as blank space).
+  The name sits in its own direction-isolated span that alone takes the
+  ellipsis, so a long or right-to-left name, or one that reads like a voucher,
+  cannot push the real mark or the tags out of sight: they wrap below it. An
+  answer whose fields throw when read is "couldn't check". `managedBy` counts
+  only as a whole domain on word boundaries.
+- The People panel is one source for the tier: `tier` on the answer. The agent
+  is to stop writing tier text into `vouchedBy`.
+- `scripts/test-identity.ts` pins that no app calls the identity agent except
+  this panel, behind its flag: comments removed; static, multi-line and dynamic
+  imports of identity in every app, under any of the extensions the bundler
+  resolves to it; no file but identity.ts naming the `__bentoIdentity` global;
+  and the panel's call and flag read pinned by shape, with fourteen widening
+  mutants that must turn it red. It is a pin over our own code, not a parser:
+  its comment strip is not string-aware, so code placed between a `'/*'` and a
+  `'*/'` string literal would escape it. That limit is accepted and stated in
+  the rig.
+- Guarded by `scripts/test-slides-people-tiers.ts` (rows over the decision
+  module, with twenty-one mutants that must each turn a row red) and
+  `scripts/test-slides-people-tiers-browser.mjs` (the packaged editor, real
+  key proofs, network and WebSockets closed, positions measured with
+  getBoundingClientRect, with owner-flag, proof, cut and layout mutants).
 ## 2026-11-14 — The bento/home tripwire: a link from another site is not a warning
 
 MEASURED: a navigation another site started (a link, a popup) is cached under

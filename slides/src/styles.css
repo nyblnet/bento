@@ -2209,6 +2209,49 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   font-size: 12px;
   cursor: help;
 }
+/* bento/id "who vouched" (vouch.ts, flag off by default): the mark and its
+   tier tags ride inside .who, so the row's one-line ellipsis still applies and
+   the full wording is in the tooltips. The incident flag sits with ✕. */
+/* a decorated name wraps: the name keeps one line and its ellipsis, the mark
+   and tags never shrink out of view and fall to the next line instead. The
+   selector outranks the compact topbar's ".ed-menu button > span" display
+   rule, which would otherwise make .who inline again inside the menu. */
+.ed-share-peers .ed-share-peer > span.who.vouched {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 6px;
+  white-space: normal;
+}
+.ed-share-peer .vouch-name {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  unicode-bidi: isolate;
+}
+.ed-share-peer .vouch,
+.ed-share-peer .vouch-tag { color: var(--muted); font-size: 11.5px; flex: none; max-width: 100%; overflow-wrap: anywhere; }
+.ed-share-peer .vouch[data-vouch='verified'] { color: #1f8a4c; }
+.ed-share-peer .vouch[data-vouch='changed'],
+.ed-share-peer .vouch[data-vouch='revoked'] { color: #b26a00; }
+.ed-share-peer .vouch-flag {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  border-radius: 5px;
+  color: #b26a00;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: help;
+}
+:root[data-theme='dark'] .ed-share-peer .vouch[data-vouch='verified'] { color: #5fd08a; }
+:root[data-theme='dark'] .ed-share-peer .vouch[data-vouch='changed'],
+:root[data-theme='dark'] .ed-share-peer .vouch[data-vouch='revoked'],
+:root[data-theme='dark'] .ed-share-peer .vouch-flag { color: #f0b860; }
 /* Live button status dot: always present — grey when dormant (not sharing),
    amber+pulsing while connecting, green when live. The dot makes the on/off
    state legible at a glance instead of the button looking inert. */

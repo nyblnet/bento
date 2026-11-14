@@ -1,9 +1,11 @@
 # validate, kernel slice: kernel/ and the sync relay: the shared machinery every app depends on (anim, field classes, restore, identity, UI primitives, storage, save, offline, the CRDT and the sync session).
 #
 # Part of the REQUIRED `validate` check. .github/workflows/ci.yml runs this
-# action as steps INSIDE that one job, on the same runner, after the slices
-# listed before it there — so what earlier slices installed and built is on
-# disk here. A failing step here fails `validate` and blocks the merge.
+# action ALONE in its own job, validate-kernel, in parallel with the job that
+# runs every other slice — so NO app is built on this runner: only slides'
+# npm install, jsdom and the pinned browser are on disk here. A rig that needs
+# a built shell belongs in another slice. A failing step here fails `validate`
+# and blocks the merge.
 #
 # Add a new rig's step to the slice of the zone that owns the rig, at the
 # end. Every `run:` needs `shell: bento-step {0}`: GitHub refuses a composite

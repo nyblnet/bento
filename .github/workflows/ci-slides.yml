@@ -279,6 +279,17 @@ jobs:
         # only where the session has seen it proven; an unproven key reads
         # "Claimed key" and points at Reset access; a legacy room shows neither.
         run: node scripts/test-slides-people-keyproof-browser.mjs
+      - name: People panel identity tiers in Chromium
+        # bento/id P1, flag off by default. With the flag on and a test agent,
+        # peers that prove their keys get "✓ via ...", "(passkey sign-in)",
+        # "new account" and "account changed on <date>" as the answer says; a
+        # revoked sign-in is never ticked and, after an incident, the owner's
+        # row is flagged beside the remove control; an unproven key is never
+        # looked up; flag off or no agent leaves the row unchanged. The mark,
+        # the tags and ", unconfirmed since" are measured on screen (not read
+        # from text) beside a long name or one that reads like a voucher.
+        # Network closed, WebSockets included.
+        run: node scripts/test-slides-people-tiers-browser.mjs
       - name: Share on a phone in Chromium
         # At 390 and 320px, with Share folded into ⋯ and a collaborator whose
         # name is 74 characters, the Share panel opens as a section of the ⋯
