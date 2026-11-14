@@ -247,3 +247,10 @@ runs:
       # /.well-known/webauthn served).
       shell: bento-step {0}
       run: node scripts/test-signin-host.mjs
+
+    - name: Browser rigs fail loudly when the browser dies or a call stalls
+      # scripts/lib/browser-guard.mjs: a browser killed under a pending call
+      # exits 75 naming the browser, not a row; a call that never returns
+      # exits 124 within the stall budget; a clean close stays quiet.
+      shell: bento-step {0}
+      run: node scripts/test-browser-guard.mjs

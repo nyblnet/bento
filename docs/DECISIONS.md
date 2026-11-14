@@ -14150,3 +14150,67 @@ results:
 The rest of 2026-10-18 stands: composite actions per zone, a new rig at the end
 of its zone's slice, other jobs in `ci-<zone>.yml`, and `ci.yml` changes only
 when a slice is added or moved between the two jobs.
+## 2026-11-12 — The People panel's identity tiers (bento/id under the roster design; flag off)
+
+- **Built, flag off.** slides' People panel can say who vouched for a
+  collaborator, from the identity agent's `resolve({ pub })`
+  (`kernel/src/identity.ts`). It runs only when localStorage
+  `bento-people-vouch` is `on` AND the host exposes an agent, and it looks a
+  key up only when `session.keyProven(actor, pub)` says the peer proved it (a
+  presence `pub` is a claim; asking about a claimed key would let a reader
+  wear someone else's ✓). This replaces the earlier flag-off "who vouched"
+  draft, which predated both the session's key proof and the roster design.
+- **What a verified row says.** `✓ via <vouchedBy>`, then "(passkey sign-in)"
+  for every certificate a passkey alone made (the kernel's G1 tier, `tierOf`,
+  which deliberately does not promote on a consent key's age), "new account"
+  for 14 days after setup, and "account changed on <date>" for 7 days after a
+  roster change, or for 30 days after a reset by the directory (maintainer,
+  2026-11-12). A revoked sign-in gets no ✓
+  at all ("this sign-in was revoked"); one revoked by the incident lever also
+  puts a flag on the row for the room OWNER, beside the remove control, because
+  what that key did in the deck may not have been its owner. A changed binding
+  stays "⚠ changed" with no ✓.
+- **A missing field is the weaker claim.** The labels come from optional
+  fields on the answer, additions within contract 1 that hosts do not send
+  yet: `tier` ('native' drops "(passkey sign-in)"; anything else keeps it),
+  `accountSince` (missing or malformed reads as a new account),
+  `rosterChangedAt`, `resetAt`, `revoked` (`true` | 'signout' | 'incident';
+  any other value is "couldn't check", never a ✓) and `managedBy`. So until a
+  host supplies them, every verified row reads "(passkey sign-in)" and "new
+  account": an under-claim, never an over-claim.
+- **vouchedBy's 80-character cut keeps "unconfirmed".** The 80 is the kernel's
+  `VOUCHED_BY_MAX`, imported, so the agent's side and the panel's cannot drift;
+  the panel's decision module imports that constant and nothing else from
+  identity.ts. The agent appends its
+  own qualifiers to `vouchedBy` (", unconfirmed since <date>", later
+  ", managed by <domain>") and localises them. When the whole line does not fit
+  in 80 characters, the panel drops the "managed by" segment first (found by
+  its English wording or by the domain in `managedBy`, so a localised segment
+  is found too), then other middle qualifiers, keeps the last qualifier whole
+  while shortening the voucher, and cuts the end only when nothing else fits.
+- **What a name cannot do.** A name, whether typed in this session or the
+  account's own display name, loses every tick-like mark, and every control,
+  format, private-use, unassigned, separator and default-ignorable character
+  (by Unicode category, plus the Hangul fillers and the Braille blank, which
+  render as blank space).
+  The name sits in its own direction-isolated span that alone takes the
+  ellipsis, so a long or right-to-left name, or one that reads like a voucher,
+  cannot push the real mark or the tags out of sight: they wrap below it. An
+  answer whose fields throw when read is "couldn't check". `managedBy` counts
+  only as a whole domain on word boundaries.
+- The People panel is one source for the tier: `tier` on the answer. The agent
+  is to stop writing tier text into `vouchedBy`.
+- `scripts/test-identity.ts` pins that no app calls the identity agent except
+  this panel, behind its flag: comments removed; static, multi-line and dynamic
+  imports of identity in every app, under any of the extensions the bundler
+  resolves to it; no file but identity.ts naming the `__bentoIdentity` global;
+  and the panel's call and flag read pinned by shape, with fourteen widening
+  mutants that must turn it red. It is a pin over our own code, not a parser:
+  its comment strip is not string-aware, so code placed between a `'/*'` and a
+  `'*/'` string literal would escape it. That limit is accepted and stated in
+  the rig.
+- Guarded by `scripts/test-slides-people-tiers.ts` (rows over the decision
+  module, with twenty-one mutants that must each turn a row red) and
+  `scripts/test-slides-people-tiers-browser.mjs` (the packaged editor, real
+  key proofs, network and WebSockets closed, positions measured with
+  getBoundingClientRect, with owner-flag, proof, cut and layout mutants).
