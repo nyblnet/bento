@@ -446,7 +446,7 @@ if (row('no-store')) {
   await fresh({ lib: both(variant(libDoc, 'Choose a file', 'Choose a filf', { 'cache-control': 'no-store' })) })
   const v = await visit(page, `${LIB}/`)
   ok(!v.lib?.observed.bytes, 'the bytes could not be read (nothing cached)')
-  ok(v.lib?.verdict === 'mismatch' && rules(v.lib) === 'bytes-unread', `unread bytes on the library are a mismatch, not a pass (${v.lib?.verdict} ${rules(v.lib)})`)
+  ok(v.lib?.verdict === 'mismatch' && rules(v.lib).split(',').includes('bytes-unread'), `unread bytes on the library are a mismatch, not a pass (${v.lib?.verdict} ${rules(v.lib)})`)
 }
 
 if (row('held-open')) {
@@ -586,6 +586,25 @@ if (row('about-popup')) {
   ok(ev?.verdict === 'mismatch' && ev.origin === LIB && ev.page.flags.some((f) => f.startsWith('document:about')), `the about: document is on record as a mismatch of the library origin (${ev?.verdict} ${ev?.origin} ${ev?.page?.flags})`)
   if (pop) await pop.close().catch(() => {})
 }
+for (const [name, bad] of [['cross-site-link', false], ['cross-site-no-store', true]]) {
+  if (!row(name)) continue
+  section(`${name}: the library reached by a link on another site${bad ? ', one byte changed and sent no-store' : ''}  (rules: a cross-site navigation's bytes are not judged; its Cache-Control header is)`)
+  await fresh(bad ? { lib: both(variant(libDoc, 'Choose a file', 'Choose a filf', { 'cache-control': 'no-store' })) } : {})
+  if (!bad) {
+    // a stale entry in the cache first: another release's page, visited directly
+    for (const p of ['/', '/index.html']) state.lib.set(p, releaseB.get('/index.html'))
+    await visit(page, `${LIB}/`)
+    for (const p of ['/', '/index.html']) state.lib.set(p, honest.lib.get(p))
+  }
+  state.frame.set('/opener', { body: Buffer.from(`<!doctype html><a id=l href="${LIB}/">link</a>`), headers: { 'content-type': 'text/html' } })
+  await page.goto(`${FRM}/opener`)
+  const t0 = Date.now()
+  await page.click('#l')
+  const ev = await until(async () => (await since(t0)).find((e) => e.url === `${LIB}/` && !e.early), 20000)
+  if (!bad) ok(ev?.verdict === 'ok' && ev.page.crossSite && !ev.observed.bytes && (ev.warned ?? []).length === 0, `honest, reached from another site: ok, quietly; its bytes are not judged, an older cached page notwithstanding (${ev?.verdict} ${rules(ev)} crossSite ${ev?.page?.crossSite})`)
+  else ok(ev?.verdict === 'mismatch' && rules(ev).split(',').includes('cache-control'), `no-store, reached from another site: a mismatch on its Cache-Control header (${ev?.verdict} ${rules(ev)})`)
+}
+
 // --- rows with a service worker ---------------------------------------------------
 const SW_ROWS = ['shadow-root', 'shadow-root-removed', 'sw-honest', 'sw-script-bytes', 'sw-custom-path', 'sw-cache-extra', 'sw-cache-poisoned', 'sw-navigation-only', 'sw-markup', 'sw-size', 'script-rewrite']
 async function withWorker(script, { scope = '/', url = '/sw.js' } = {}) {

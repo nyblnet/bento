@@ -48,7 +48,7 @@ const MUTANTS = [
   { name: 'no early report (C1)', row: 'held-then-leave', file: O, from: "chrome.runtime.sendMessage({ op: 'tripwire.early', payload })", to: "chrome.runtime.sendMessage({ op: 'tripwire.none', payload })" },
   { name: 'unsettled early reports never judged (C1)', row: 'held-then-leave', file: W, from: 'for (const p of due) {', to: 'for (const p of []) {' },
   { name: 'a blob: document of the library origin not flagged (C1)', row: 'blob-escape', file: O, from: "if (!/^https?:$/.test(location.protocol)) { flag(", to: 'if (false) { flag(' },
-  { name: 'unread bytes pass (C2)', row: 'no-store', file: J, from: "if (obs.role === 'library' && !obs.viaWorker && !obs.bytes) out.push", to: 'if (false) out.push' },
+  { name: 'unread bytes pass (C2)', row: 'no-store', file: J, from: "if (obs.role === 'library' && !obs.viaWorker && !obs.bytes && !obs.crossSite) out.push", to: 'if (false) out.push' },
   { name: 'an unfinished parse passes (C2)', row: 'held-open', file: J, from: "if (obs.complete === false) out.push", to: 'if (false) out.push' },
   { name: 'size 0 passes (C2)', row: 'held-open', file: J, from: "if (!(obs.size > 0)) out.push", to: 'if (false) out.push' },
   { name: 'a script-free unlisted page is loud (C3)', row: 'unlisted-404', file: J, from: 'if (!obs.scripts?.length && !obs.flags?.length && !listedPath(list, origin, obs.url)) {', to: 'if (false) {' },
@@ -71,6 +71,10 @@ const MUTANTS = [
   // security re-check, N2 and N3
   { name: 'about: senders judged by their URL (N2)', row: 'about-popup', file: W, from: "if (scheme === 'about:' || scheme === 'blob:') origin = sender.origin", to: '' },
   { name: 'only the live document checked for shadow roots (N3)', row: 'shadow-root-removed', file: O, from: "for (const el of [...document.querySelectorAll('*'), ...walked]) if (shadowOf(el))", to: "for (const el of document.querySelectorAll('*')) if (shadowOf(el))" },
+  // a navigation another site started
+  { name: 'a cross-site navigation must have readable bytes', row: 'cross-site-link', file: J, from: "&& !obs.crossSite) out.push({ rule: 'bytes-unread' })", to: ") out.push({ rule: 'bytes-unread' })" },
+  { name: 'a cross-site navigation judged on stale cached bytes', row: 'cross-site-link', file: W, from: "role === 'library' && !crossSite && HEX.test(obs.bytes?.sha256 ?? '')", to: "role === 'library' && HEX.test(obs.bytes?.sha256 ?? '')" },
+  { name: 'Cache-Control not pinned', row: 'cross-site-no-store', file: J, from: 'if (obs.cacheControl != null && e.cacheControl !== undefined && join(obs.cacheControl) !== e.cacheControl) f.push', to: 'if (false) f.push' },
   { name: 'a withdrawn release is quiet (R1)', row: 'withdrawn', file: J, from: 'if (list.releases[index].withdrawn) return', to: 'if (false) return' },
   { name: 'a list carrying app is taken (R2)', row: 'carries-app', file: J, from: "if ('app' in p) return", to: 'if (false) return' },
   { name: 'never checked is never said (R3)', row: 'never-checked', file: W, from: 'if (now - since > NEVER_MS) event.warned.push(', to: 'if (false) event.warned.push(' },

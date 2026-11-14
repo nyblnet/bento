@@ -109,6 +109,8 @@ export async function describeBuild(out, at = new Date().toISOString()) {
         if (doc) e.scripts = await documentScripts(bytes.toString('utf8'), origin + p)
         const csp = headerFor(rules, p, 'content-security-policy')
         if (csp !== undefined) e.csp = csp
+        const cc = headerFor(rules, p, 'cache-control')
+        if (cc !== undefined && doc) e.cacheControl = cc
         files[p] = e
       }
     }

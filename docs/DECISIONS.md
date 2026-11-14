@@ -14229,3 +14229,19 @@ directory serves them.
 Rigs: scripts/test-home-web-identity.mjs (the real library and sign-in host, a
 CDP virtual authenticator, every WebSocket closed; headless shell and Google
 Chrome; `--mutants`, one per rule).
+
+## 2026-11-14 — The bento/home tripwire: a link from another site is not a warning
+
+MEASURED: a navigation another site started (a link, a popup) is cached under
+a key the tripwire's content-script fetch cannot reach, and that fetch may
+return an older page of the same address instead. With the rule that unread
+bytes on the library are a mismatch (entry above), every link to
+home.bento.page from another site was a loud "unverified" warning, and a stale
+page could be judged in place of the one shown. Now the extension records each
+library navigation's Sec-Fetch-Site (webRequest, observing only). For a
+cross-site navigation the bytes are not judged, and the Cache-Control header it
+got is pinned in the release list like the CSP, so a `no-store` answer cannot
+hide a change. Stated as a limit: a change to page text only, reached from
+another site, is not seen. Guards: rows `cross-site-link` and
+`cross-site-no-store` in `scripts/test-webext-tripwire-browser.mjs`, with a
+mutant each.

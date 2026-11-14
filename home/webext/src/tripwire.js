@@ -95,7 +95,25 @@ function onHeaders(d) {
   try { origin = new URL(d.url).origin } catch { return }
   if (!roleOf(origin)) return
   const csp = (d.responseHeaders ?? []).filter((h) => h.name.toLowerCase() === 'content-security-policy').map((h) => cut(h.value ?? ''))
-  void chrome.storage.session.set({ [`${HEADERS_PREFIX}${d.tabId}:${d.frameId}`]: { url: noHash(d.url), at: d.timeStamp, status: d.statusCode, csp } })
+  const cacheControl = (d.responseHeaders ?? []).filter((h) => h.name.toLowerCase() === 'cache-control').map((h) => cut(h.value ?? ''))
+  void chrome.storage.session.set({ [`${HEADERS_PREFIX}${d.tabId}:${d.frameId}`]: { url: noHash(d.url), at: d.timeStamp, status: d.statusCode, csp, cacheControl } })
+}
+
+/**
+ * Who started the navigation (its Sec-Fetch-Site). MEASURED: a navigation
+ * another site started (a link, a popup) is cached under a key the content
+ * script's own fetch cannot reach, so its bytes are never readable there, and
+ * that fetch may return an OLDER page instead. That alone must not read as
+ * tampering, nor may the stale page be judged. Observing only.
+ */
+const REQUEST_PREFIX = 'twq:'
+function onRequest(d) {
+  if (d.type !== 'main_frame') return
+  let origin
+  try { origin = new URL(d.url).origin } catch { return }
+  if (roleOf(origin) !== 'library') return
+  const site = (d.requestHeaders ?? []).find((h) => h.name.toLowerCase() === 'sec-fetch-site')?.value ?? null
+  void chrome.storage.session.set({ [`${REQUEST_PREFIX}${d.tabId}:${d.frameId}`]: { url: noHash(d.url), at: d.timeStamp, site: site == null ? null : cut(site) } })
 }
 
 /** The held list (re-verified), or null. */
@@ -279,6 +297,10 @@ export async function tripwireObserve(sender, obs, net = (u, o) => fetch(u, o)) 
   const h = (await chrome.storage.session.get(hk))[hk]
   const fresh = h && h.url === url && h.at >= obs.timeOrigin - 1000 && h.at <= obs.timeOrigin + 120000
   if (h) await chrome.storage.session.remove(hk)
+  const qk = `${REQUEST_PREFIX}${sender.tab?.id}:${sender.frameId}`
+  const q = (await chrome.storage.session.get(qk))[qk]
+  const crossSite = !!q && q.url === url && q.at >= obs.timeOrigin - 1000 && q.at <= obs.timeOrigin + 120000 && q.site === 'cross-site'
+  if (q) await chrome.storage.session.remove(qk)
   const flags = capFlags(obs.flags)
   const scripts = capScripts(obs.scripts, flags)
   const cacheIn = role === 'library' && Array.isArray(obs.cache) ? obs.cache : null
@@ -287,9 +309,11 @@ export async function tripwireObserve(sender, obs, net = (u, o) => fetch(u, o)) 
   if (workersIn && workersIn.length > MAX_WORKERS) flags.push('over-cap:workers')
   const page = {
     role, url, timeOrigin: Number(obs.timeOrigin) || 0, size: Number(obs.size) || 0, scripts, flags,
-    bytes: role === 'library' && HEX.test(obs.bytes?.sha256 ?? '') ? { sha256: obs.bytes.sha256 } : null,
-    csp: fresh ? h.csp : role === 'library' && obs.bytes ? (obs.bytes.csp == null ? [] : [cut(obs.bytes.csp)]) : null,
-    cspFrom: fresh ? 'navigation' : role === 'library' && obs.bytes ? 'cache' : null,
+    // a cross-site navigation's own response is not what the content script read (an older one may be)
+    bytes: role === 'library' && !crossSite && HEX.test(obs.bytes?.sha256 ?? '') ? { sha256: obs.bytes.sha256 } : null,
+    csp: fresh ? h.csp : role === 'library' && obs.bytes && !crossSite ? (obs.bytes.csp == null ? [] : [cut(obs.bytes.csp)]) : null,
+    cspFrom: fresh ? 'navigation' : role === 'library' && obs.bytes && !crossSite ? 'cache' : null,
+    cacheControl: fresh && Array.isArray(h.cacheControl) ? h.cacheControl : null, crossSite,
     workers: workersIn ? [] : null,
     cache: cacheIn ? cacheIn.slice(0, MAX_CACHE).map((c) => ({ url: cut(c.url), sha256: cut(c.sha256) })) : null,
     viaWorker: !!obs.viaWorker, complete: obs.complete === true, errors: Array.isArray(obs.errors) ? obs.errors.slice(0, 10).map(cut) : [],
@@ -329,6 +353,7 @@ export async function tripwireObserve(sender, obs, net = (u, o) => fetch(u, o)) 
 export function installTripwire() {
   if (typeof chrome === 'undefined') return
   chrome.webRequest?.onHeadersReceived.addListener(onHeaders, { urls: patterns(), types: ['main_frame', 'sub_frame'] }, ['responseHeaders', 'extraHeaders'])
+  chrome.webRequest?.onSendHeaders.addListener(onRequest, { urls: patterns(), types: ['main_frame'] }, ['requestHeaders', 'extraHeaders'])
   chrome.notifications?.onClicked?.addListener((id) => {
     if (!id.startsWith(NOTE_PREFIX)) return
     void chrome.tabs.create({ url: chrome.runtime.getURL(`src/tripwire.html?id=${encodeURIComponent(id.slice(NOTE_PREFIX.length))}`) })

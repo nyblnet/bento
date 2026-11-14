@@ -369,7 +369,7 @@ debugger protocol has one, behind a banner):
 |---|---|---|
 | the parse | a content script in the isolated world from `document_start` reads each `<script>`'s text as the parser inserts it, before the page's code runs; a script whose text later changes other than by the parser appending is flagged; handlers, `javascript:` URLs, frames, `<base>` and non-CSP `<meta http-equiv>` are flagged; a shadow root (declarative or attached) is flagged when the observer next looks, and at report time on every element it ever walked, even one the page removed. The markup INSIDE a shadow root is not seen | library and frame |
 | an early report | sent from inside the observer callback each time a script is first seen or grows, so it leaves BEFORE that script runs; if no full report follows within 10 s (the page navigated away, or never finished), the early report is judged on its own: a script no release lists, or any flag, is a mismatch. It is sent only when the observer has something to say, so a page that runs code before any script or flag reaches it leaves no early report | library and frame |
-| the bytes | the content script's `fetch(location, {cache: 'only-if-cached'})`: the navigation's own response from the HTTP cache, with no new request a server could answer differently. Measured: it does not pass through the page's service worker. The honest library is sent `no-cache`, which Chrome stores, so on the library without a worker, bytes that cannot be read are a mismatch | library (the frame is opaque) |
+| the bytes | the content script's `fetch(location, {cache: 'only-if-cached'})`: the navigation's own response from the HTTP cache, with no new request a server could answer differently. Measured: a navigation ANOTHER SITE started (a link, a popup) is cached under a key this fetch cannot reach, and it may read an older page instead; for those (Sec-Fetch-Site, from webRequest) the bytes are not judged and the navigation's Cache-Control header is, so `no-store` cannot hide a change. Measured: it does not pass through the page's service worker. The honest library is sent `no-cache`, which Chrome stores, so on the library without a worker, bytes that cannot be read are a mismatch | library (the frame is opaque) |
 | the size | the navigation timing's `decodedBodySize`, whoever served the page; 0 is a mismatch, as is a report sent after 30 s without the parse ending (`complete: false`). `complete: true` means only that the page left the `loading` state in time: a visit cut short also reports it, with a partial size | library and frame |
 | the CSP header | `webRequest.onHeadersReceived` (observing, never blocking) for the navigation; under a service worker, which webRequest does not see, the HTTP cache's copy of the header | library and frame |
 | workers | every registration's script URL must be a worker a release lists; its bytes, fetched now with `no-store`, must be that file | library |
@@ -419,6 +419,8 @@ home.bento.page has never been checked.
   sent `no-store` there is no cached copy and no CSP check at all), and a change to page
   TEXT only (no script, no handler, the same length) while the network again
   serves the honest worker script;
+- a navigation **another site started**: its bytes cannot be read (above), so a
+  change to page text only, reached that way, is not seen;
 - the **frame page's bytes**: it is an opaque origin, so its scripts, markup,
   size and CSP header are checked, and a same-length change to its text is not;
 - a **rolled-back** list is refused but only recorded; a fresh install that

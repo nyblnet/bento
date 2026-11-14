@@ -32,7 +32,8 @@
 //       origins: { '<origin>': { role: 'library' | 'frame',
 //         files: { '<path>': { sha256, bytes, kind: 'document' | 'asset',
 //                              scripts?: [{ sha256 } | { src: '<path>' }],  // documents
-//                              csp?: '<the Content-Security-Policy header>' } } } } } ] }
+//                              csp?: '<the Content-Security-Policy header>',
+//                              cacheControl?: '<the Cache-Control header>' } } } } } ] }
 //
 // A payload carrying `app` is refused, whatever else it holds: every other
 // artifact the release key signs carries `app`, and this one never does.
@@ -85,6 +86,7 @@ export function servedProblem(p) {
           for (const s of f.scripts) if (!isObj(s) || !(HEX.test(s.sha256 ?? '') || isPath(s.src))) return `release ${i}: ${path} has a bad script entry`
         }
         if (f.csp !== undefined && typeof f.csp !== 'string') return `release ${i}: ${path} csp is not a string`
+        if (f.cacheControl !== undefined && typeof f.cacheControl !== 'string') return `release ${i}: ${path} cacheControl is not a string`
       }
     }
   }
@@ -165,6 +167,7 @@ export function documentFailures(obs, rel, origin) {
     if (obs.size > 0 && obs.size !== e.bytes) f.push({ rule: 'size', path, want: e.bytes, got: obs.size })
     if (!scriptsMatch(obs.scripts, e.scripts, site.files)) f.push({ rule: 'scripts', path, want: e.scripts, got: obs.scripts })
     if (obs.csp != null && join(obs.csp) !== (e.csp ?? '')) f.push({ rule: 'csp', path, want: e.csp ?? '', got: join(obs.csp) })
+    if (obs.cacheControl != null && e.cacheControl !== undefined && join(obs.cacheControl) !== e.cacheControl) f.push({ rule: 'cache-control', path, want: e.cacheControl, got: join(obs.cacheControl) })
     if (!f.length) return []
     if (!best || f.length < best.length) best = f
   }
@@ -212,7 +215,9 @@ export function cacheFailures(obs, list, origin) {
  */
 export function observationFailures(obs) {
   const out = []
-  if (obs.role === 'library' && !obs.viaWorker && !obs.bytes) out.push({ rule: 'bytes-unread' })
+  // a navigation another site started is cached where the content script cannot read it (measured):
+  // then the bytes are not asked for, and the Cache-Control header the navigation got is (documentFailures)
+  if (obs.role === 'library' && !obs.viaWorker && !obs.bytes && !obs.crossSite) out.push({ rule: 'bytes-unread' })
   if (!(obs.size > 0)) out.push({ rule: 'size-unread' })
   if (obs.complete === false) out.push({ rule: 'incomplete' })
   // the library's caches and worker registrations are always readable (empty, in stage 1): unread is no pass

@@ -68,7 +68,7 @@ const libHtml = `<!doctype html><meta http-equiv="Content-Security-Policy" conte
 fs.writeFileSync(path.join(build, 'library/index.html'), libHtml)
 fs.writeFileSync(path.join(build, 'library/extra.js'), 'void 0')
 fs.writeFileSync(path.join(build, 'library/sw.js'), '// worker')
-fs.writeFileSync(path.join(build, 'library/_headers'), "/\n  Content-Security-Policy: default-src 'none'\n/index.html\n  Content-Security-Policy: default-src 'none'\n")
+fs.writeFileSync(path.join(build, 'library/_headers'), "/\n  Content-Security-Policy: default-src 'none'\n  Cache-Control: no-cache\n/index.html\n  Content-Security-Policy: default-src 'none'\n  Cache-Control: no-cache\n")
 fs.writeFileSync(path.join(build, 'frame/frame.html'), '<!doctype html><script>frame()</script>')
 fs.writeFileSync(path.join(build, 'frame/_headers'), '/frame.html\n  Content-Security-Policy: sandbox allow-scripts\n/frame\n  Content-Security-Policy: sandbox allow-scripts\n')
 const info = { libraryOrigin: 'https://home.bento.page', frameOrigin: 'https://frame.example', testKey: false, mutant: null, serviceWorkers: ['/sw.js'] }
@@ -154,6 +154,8 @@ ok(v({ ...honestObs(), bytes: null, viaWorker: true }).verdict === 'ok', 'under 
 ok(rulesOf(v({ ...honestObs(), cache: null })) === 'cache-unread', 'on the library, an unread cache is a mismatch (it is always readable)')
 ok(rulesOf(v({ ...honestObs(), workers: null })) === 'workers-unread', 'on the library, an unread worker list is a mismatch')
 ok(rulesOf(v({ ...honestObs(), size: 0 })) === 'size-unread', 'C2: size 0 is never a pass')
+ok(v({ ...honestObs(), bytes: null, crossSite: true }).verdict === 'ok', 'a navigation another site started: unread bytes are not a failure (they cannot be read)')
+ok(lib.files['/'].cacheControl === 'no-cache' && rulesOf(v({ ...honestObs(), cacheControl: ['no-store'] })) === 'cache-control' && v({ ...honestObs(), cacheControl: ['no-cache'] }).verdict === 'ok', 'the Cache-Control header the navigation got is pinned (the release lists its _headers value)')
 ok(rulesOf(v({ ...honestObs(), complete: false })) === 'incomplete', 'C2: an unfinished parse is never a pass')
 ok(v({ ...honestObs(), url: `${L}/nope?a`, scripts: [], bytes: null, size: 40 }).verdict === 'unlisted', 'C3: a script-free page at a path no release serves is recorded quietly')
 ok(v({ ...honestObs(), url: `${L}/nope?a`, scripts: [], flags: ['handler:img.onerror'] }).verdict === 'mismatch', 'C3: ... unless it carries a flag')
