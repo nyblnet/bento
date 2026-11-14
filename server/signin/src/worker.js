@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// The sign-in host's worker: serves four static files from the assets binding,
+// The sign-in host's worker: serves its static files from the assets binding,
 // each with the same fixed header set, and nothing else. It runs first for
 // every request (wrangler.toml: run_worker_first), so no file reaches a
 // browser without these headers, including the 404.
@@ -9,8 +9,9 @@
 // What the headers must and must not be is checked by check-hosting.mjs, which
 // the deploy runs against the live host:
 //   - a strict CSP on EVERY response: default-src 'none', scripts from 'self'
-//     only (no inline, no eval), connections only to the directory, and
-//     frame-ancestors 'none' (with X-Frame-Options DENY for older engines);
+//     only (no inline, no eval), connections only to the directory,
+//     frame-ancestors 'none' (with X-Frame-Options DENY for older engines), and
+//     Trusted Types with no policy, so no HTML sink takes a string;
 //   - NO Cross-Origin-Opener-Policy. This page is a popup that answers its
 //     opener, bento/home; `same-origin` here (or on bento/home; it may send at
 //     most `same-origin-allow-popups`) severs the opener and kills the protocol.
@@ -26,6 +27,8 @@ export const CSP = [
   "base-uri 'none'",
   "form-action 'none'",
   "frame-ancestors 'none'",
+  "require-trusted-types-for 'script'",
+  "trusted-types 'none'",
 ].join('; ')
 
 export const HEADERS = Object.freeze({
@@ -45,6 +48,13 @@ export const FILES = Object.freeze({
   '/signin.js': ['/signin.js', 'text/javascript; charset=utf-8'],
   '/directory-client.js': ['/directory-client.js', 'text/javascript; charset=utf-8'],
   '/signin.css': ['/signin.css', 'text/css; charset=utf-8'],
+  // the host's own pages: a mailed setup or reset link (G13), and the account page
+  '/setup': ['/setup.html', 'text/html; charset=utf-8'],
+  '/reset': ['/reset.html', 'text/html; charset=utf-8'],
+  '/account': ['/account.html', 'text/html; charset=utf-8'],
+  '/link.js': ['/link.js', 'text/javascript; charset=utf-8'],
+  '/account.js': ['/account.js', 'text/javascript; charset=utf-8'],
+  '/account-client.js': ['/account-client.js', 'text/javascript; charset=utf-8'],
 })
 
 const answer = (status, body, type, head) =>

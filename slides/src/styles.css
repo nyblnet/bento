@@ -2363,6 +2363,14 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   margin-block: 3px;
   padding-inline: 6px;
 }
+/* ...but never wider than the screen. The rule above lifts the Share popover's
+   290px cap, and on a phone (max-width: 700px, below) a dropdown opened from ⋯
+   is `position: fixed` again and sized to its content, so one collaborator with
+   a long name made it hundreds of pixels wider than the screen: the People list
+   and every share action sat off the left edge, out of reach. Bounded by the
+   viewport, the name takes its own ellipsis instead. The selector has to outrank
+   the rule above (0,4,0), which a plain `.ed-topbar .ed-share-pop` does not. */
+.ed-topbar.ed-bar-fold .ed-menu .ed-menu.ed-share-pop { max-width: calc(100vw - 16px); }
 
 /* --- phones proper: viewport-scoped chrome that is about TOUCH and small
    screens, not about whether the bar fits, so it stays a media query */
@@ -2448,6 +2456,11 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
     inset-inline-end: max(6px, env(safe-area-inset-right), var(--tray-safe-right, 0px));
     inset-inline-start: auto;
   }
+  /* ...but only the menus hanging off the BAR. A widget folded into ⋯ (Share,
+     Language) opens its popover as a section of the ⋯ list (the fold rule
+     above): the rule just above matched it too and floated it, transparent,
+     beside ⋯ with the two interleaved. */
+  .ed-topbar.ed-bar-fold .ed-menu .ed-dropdown.open > .ed-menu { position: static; }
 }
 
 /* panel collapse chevrons live ON the resizer strips, not in the topbar */

@@ -9,6 +9,7 @@
 // id.bento.page sends).
 //
 //   node scripts/test-directory-mutants.ts [name filter]
+//   node scripts/test-directory-mutants.ts --shard 2/3   # every third mutant, from the second (CI runs the shards side by side)
 //
 // Each mutant below reopens one path into a COPY of the tree, and the directory
 // rig must then report a failed row. The unmutated copy must pass first
@@ -539,9 +540,15 @@ ok(RIG_IMPORTS.includes('check-id-hosting.mjs') && RIG_IMPORTS.includes(join('li
   rmSync(d, { recursive: true, force: true })
 }
 
-const only = process.argv[2]
-const chosen = only ? MUTANTS.filter((m) => m.name.includes(only)) : MUTANTS
-console.log(`\n${chosen.length} mutants: every one must fail a row`)
+// --shard k/n runs the mutants whose index is k-1 modulo n, so n shards together run every one exactly once
+const args = process.argv.slice(2)
+const si = args.indexOf('--shard')
+const shard = si >= 0 ? /^([1-9][0-9]*)\/([1-9][0-9]*)$/.exec(args[si + 1] ?? '') : null
+if (si >= 0 && (!shard || Number(shard[1]) > Number(shard[2]))) { console.log(`--shard wants k/n with 1 <= k <= n, not ${args[si + 1]}`); process.exit(1) }
+const only = args.filter((a, i) => i !== si && i !== si + 1)[0]
+const named = only ? MUTANTS.filter((m) => m.name.includes(only)) : MUTANTS
+const chosen = shard ? named.filter((_, i) => i % Number(shard[2]) === Number(shard[1]) - 1) : named
+console.log(`\n${chosen.length} mutants${shard ? ` (shard ${shard[1]} of ${shard[2]}, of ${named.length})` : ''}: every one must fail a row`)
 for (const m of chosen) {
   const d = tree()
   const p = join(d, 'server/directory/src', m.file)
