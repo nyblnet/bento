@@ -636,7 +636,7 @@ if (SW_ROWS.some(row)) {
     await withWorker(SW_HONEST)
     await withWorker('// a worker at a custom path\n', { url: '/x/sw2.js', scope: '/x/' })
     const v = await visit(page, `${LIB}/`)
-    ok(v.lib?.verdict === 'mismatch' && rules(v.lib) === 'worker', `mismatch on worker only (got ${v.lib?.verdict} ${rules(v.lib)})`)
+    ok(v.lib?.verdict === 'mismatch' && rules(v.lib) === 'worker', `mismatch on worker only (got ${v.lib?.verdict} ${rules(v.lib)}); via worker ${v.lib?.page.viaWorker}, ${v.lib?.page.workers?.length} workers, ${v.lib?.page.cache?.length} cached, errors ${JSON.stringify(v.lib?.page.errors)})`)
     await noWorkers()
   }
   if (row('sw-cache-extra')) {
@@ -667,7 +667,7 @@ if (SW_ROWS.some(row)) {
     const v = await visit(page, `${LIB}/`, { marker: 'still here' })
     const shown = await page.evaluate(() => document.body.innerText.includes('Choose a filf')).catch(() => false)
     ok(v.lib?.page.viaWorker && shown, 'the worker served the poisoned page')
-    ok(v.lib?.verdict === 'mismatch' && rules(v.lib) === 'cache', `mismatch on cache (got ${v.lib?.verdict} ${rules(v.lib)})`)
+    ok(v.lib?.verdict === 'mismatch' && rules(v.lib) === 'cache', `mismatch on cache (got ${v.lib?.verdict} ${rules(v.lib)}); via worker ${v.lib?.page.viaWorker}, ${v.lib?.page.workers?.length} workers, ${v.lib?.page.cache?.length} cached, errors ${JSON.stringify(v.lib?.page.errors)})`)
     ok(v.lib?.observed.bytes && !rules(v.lib).includes('bytes'), 'MEASURED: the content script\'s only-if-cached fetch does not pass through the page\'s worker; it read the HTTP cache\'s honest copy')
     await new Promise((r) => setTimeout(r, 1500))
     // a reload destroys the context mid-check: that is a FAIL row, never a crash (ruling C7)

@@ -215,9 +215,9 @@ export function observationFailures(obs) {
   if (obs.role === 'library' && !obs.viaWorker && !obs.bytes) out.push({ rule: 'bytes-unread' })
   if (!(obs.size > 0)) out.push({ rule: 'size-unread' })
   if (obs.complete === false) out.push({ rule: 'incomplete' })
-  // under a worker, what it serves from must have been read: an unread cache or worker list is no pass
-  if (obs.role === 'library' && obs.viaWorker && !Array.isArray(obs.cache)) out.push({ rule: 'cache-unread' })
-  if (obs.role === 'library' && obs.viaWorker && !Array.isArray(obs.workers)) out.push({ rule: 'workers-unread' })
+  // the library's caches and worker registrations are always readable (empty, in stage 1): unread is no pass
+  if (obs.role === 'library' && !Array.isArray(obs.cache)) out.push({ rule: 'cache-unread' })
+  if (obs.role === 'library' && !Array.isArray(obs.workers)) out.push({ rule: 'workers-unread' })
   return out
 }
 
