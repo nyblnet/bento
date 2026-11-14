@@ -31,19 +31,20 @@ if (process.env.BENTO_GUARD_CASE) {
   // ---- child: one case ----
   const pw = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
   const browser = await pw[process.env.BENTO_BROWSER || 'chromium'].launch({ logger: apiLogger })
-  const guard = guardBrowser(browser, { rig: 'guard rig', stallMs: 2000 })
+  // the browser this process launched: its own direct child (Playwright spawns it detached, so it
+  // leads its own process group). Recorded by parent pid, never matched by name, and found BEFORE
+  // the stall budget is armed: a slow `ps` on a busy machine must not read as a stall.
+  const kids = execFileSync('ps', ['-A', '-o', 'pid=,ppid=']).toString().trim().split('\n')
+    .map((l) => l.trim().split(/\s+/).map(Number)).filter(([, ppid]) => ppid === process.pid).map(([pid]) => pid)
+  const launched = kids.filter((pid) => { try { process.kill(pid, 0); return true } catch { return false } })
+  const guard = guardBrowser(browser, { rig: 'guard rig', stallMs: 5000 })
   const ctx = await browser.newContext()
   const page = await ctx.newPage()
   await page.goto('data:text/html,<p>guard')
-  guard.section('the case') // armed after setup: a slow first page load is not what the 2s budget measures
+  guard.section('the case') // armed after setup: a slow first page load is not what the budget measures
   guard.progress('page up')
   const which = process.env.BENTO_GUARD_CASE
   if (which === 'died') {
-    // the browser this process launched: its own direct child (Playwright spawns it detached,
-    // so it leads its own process group). Recorded by parent pid, never matched by name.
-    const kids = execFileSync('ps', ['-A', '-o', 'pid=,ppid=']).toString().trim().split('\n')
-      .map((l) => l.trim().split(/\s+/).map(Number)).filter(([, ppid]) => ppid === process.pid).map(([pid]) => pid)
-    const launched = kids.filter((pid) => { try { process.kill(pid, 0); return true } catch { return false } })
     if (launched.length !== 1) { console.log(`expected one browser child, found ${launched.length}`); process.exit(3) }
     setTimeout(() => process.kill(-launched[0], 'SIGKILL'), 300)
     await page.evaluate(() => new Promise((r) => setTimeout(r, 30000)))
@@ -85,7 +86,7 @@ console.log(`browser guard, in ${process.env.BENTO_BROWSER || 'chromium'}:`)
 }
 {
   const r = run('stall')
-  ok(r.status === TIMED_OUT && /TIMEOUT: nothing reported for 2s in "the case" after the row "page up"/.test(r.out) && /calls still in flight:\s+\S+ => page\.evaluate started/.test(r.out) && !r.timedOut,
+  ok(r.status === TIMED_OUT && /TIMEOUT: nothing reported for 5s in "the case" after the row "page up"/.test(r.out) && /calls still in flight:\s+\S+ => page\.evaluate started/.test(r.out) && !r.timedOut,
     `a call that never returns fails within its stall budget, naming section, row and the call in flight (exit ${r.status})`)
   if (r.status !== TIMED_OUT) console.log(r.out.split('\n').slice(-8).map((l) => '        ' + l).join('\n'))
 }
