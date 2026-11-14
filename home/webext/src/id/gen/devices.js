@@ -93,16 +93,25 @@
 //
 // --- wret. ---------------------------------------------------------------------
 //
-//   wret.<oldDevicePub>.<newDevicePub>.<b64u(address)>.<dirNonce>
+//   wret.<oldDevicePub>.<newDevicePub|empty>.<b64u(address)>.<dirNonce>
 //
-// Old-key retirement at a new ceremony. When a browser that still holds its
-// old key W makes a new ceremony for a fresh key W′, W signs this (raw r‖s,
-// low-S) naming W′ and the new ceremony's dirNonce; the directory accepts the
-// new wdev. and RETIRES W (no further renewals). A copy of W taken earlier is
-// then cut off by the next honest ceremony, not only by its 7-day cap
-// (security's R2 bound). The two keys differ; the nonce binds it to exactly
-// one ceremony, so a retirement cannot be replayed into another. Peers never
-// verify it.
+// Old-key retirement. Signed by the OLD key W (raw r‖s, low-S); the directory
+// RETIRES W (no further renewals), so a copy of W taken earlier dies when its
+// current watt. expires, at most 24 h later (security's R2 bound). Two forms:
+//   - at a new ceremony, naming the fresh key W′ and the new ceremony's
+//     dirNonce: the directory accepts the new wdev. and retires W. The two
+//     keys differ.
+//   - WITHOUT a successor (newDevicePub empty), over a single-use directory
+//     challenge: the library retires W on its own, with no passkey prompt and
+//     no new ceremony. It signs this whenever it stops trusting or stops
+//     keeping W: before it deletes the key, when the key turns out
+//     extractable, at a local sign-out. Without this form a library that
+//     drops W before its next ceremony can never retire it, and a copy lives
+//     to the 7-day cap plus 24 h.
+// The nonce binds the text to exactly one ceremony or challenge, so a
+// retirement cannot be replayed. Anyone holding W can retire it, a thief
+// included: that only takes away W's renewals, and the honest browser signs in
+// again with a passkey. Peers never verify it.
 //
 // --- inc. ----------------------------------------------------------------------
 //
@@ -421,22 +430,25 @@ export function tierOf(cert            )       {
 
 // --- wret. -----------------------------------------------------------------------------
 
-                                                                                                 
+/** newPub null: a retirement without a successor. */
+                                                                                                        
 
 export function buildWret(r            )         {
-  return ['wret', r.oldPub, r.newPub, b64uEnc(te.encode(r.address)), r.dirNonce].join('.')
+  return ['wret', r.oldPub, r.newPub ?? '', b64uEnc(te.encode(r.address)), r.dirNonce].join('.')
 }
 
-/** For the DIRECTORY, at a new ceremony: the OLD key retires itself in favour of
- *  the new one. The directory still checks dirNonce is the new ceremony's own,
- *  that newPub is the new wdev.'s devicePub, and that oldPub is a key it logged
- *  for this address. */
+/** For the DIRECTORY: the OLD key retires itself. With a newPub (at a new
+ *  ceremony) the directory still checks dirNonce is that ceremony's own and
+ *  newPub is the new wdev.'s devicePub; with none, dirNonce is a challenge it
+ *  issued for a retirement. Either way it checks the nonce is unspent and that
+ *  oldPub is a key it logged for this address. */
 export async function verifyWret(text        , sig        )                               {
   const p = fields(text, 'wret', 5)
   if (!p) return no('grammar')
-  const [, oldPub, newPub, addressF, dirNonce] = p
-  if (!(await isSigningKey(oldPub)) || !(await isSigningKey(newPub))) return no('key')
-  if (oldPub === newPub) return no('key')
+  const [, oldPub, newF, addressF, dirNonce] = p
+  if (!(await isSigningKey(oldPub))) return no('key')
+  const newPub = newF === '' ? null : newF
+  if (newPub !== null && (!(await isSigningKey(newPub)) || oldPub === newPub)) return no('key')
   const address = freeText(addressF)
   if (address === null || !isNormalAddress(address)) return no('address')
   if (!isNonce(dirNonce)) return no('grammar')

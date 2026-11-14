@@ -699,8 +699,9 @@ runs:
 
     - name: bento/id device certificate mutants
       # Each mutant loosens one rule in a copy of devices.ts (or the heads
-      # roster.ts gives it); test-devices.ts must go red on every one, after the
-      # unmutated copy passes.
+      # roster.ts gives it, link.ts's release check, statements.ts's consent
+      # families); test-devices.ts (test-statements.ts for the families) must
+      # go red on every one, after the unmutated copy passes both.
       shell: bento-step {0}
       run: node scripts/test-devices-mutants.ts
 
@@ -708,6 +709,18 @@ runs:
       # As for roster-v2.json: --check writes nothing and fails on a stale file.
       shell: bento-step {0}
       run: node scripts/gen-device-vectors.ts --check
+
+    - name: bento/id recovery fixture is current
+      # Every value in recovery-v1.json is deterministic, so --check compares
+      # the whole file byte for byte and fails on any difference.
+      shell: bento-step {0}
+      run: node scripts/gen-recovery-vectors.ts --check
+
+    - name: bento/id live consent rows (consentG) are current
+      # The one identity-v1.json section with deterministic keys: --check
+      # rebuilds it alone and fails when the committed section is stale.
+      shell: bento-step {0}
+      run: node scripts/gen-identity-vectors.ts --only consentG --check
 
     - name: relay blob routes answer storage failures with a status
       # R2 refusing concurrent writes to one key, or an upload cut off

@@ -32,7 +32,7 @@ function ok(cond: boolean, msg: string) {
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const F = JSON.parse(readFileSync(process.env.DEVICE_FIXTURE || join(root, 'kernel/fixtures/device-v1.json'), 'utf8'))
 type Chain = { links: RosterLink[]; pinned?: string }
-type Row = { name: string; chain: string; now?: number; proof: DeviceProof; expect: 'accept' | 'reject'; reason?: string; tier?: string }
+type Row = { name: string; chain: string; now?: number; proof: DeviceProof; expect: 'accept' | 'reject'; reason?: string; tier?: string; mb?: number }
 const rows: Row[] = F.rows
 const H = 3_600_000
 
@@ -71,7 +71,11 @@ for (const r of rows) {
   const want = r.expect === 'accept' ? 'accept' : `reject (${r.reason})`
   ok(got === want, `${r.name}: ${got}${got === want ? '' : `, want ${want}`}`)
   if (v.ok) ok(v.value.tier === r.tier, `${r.name}: tier ${r.tier}${v.value.tier === r.tier ? '' : `, got ${v.value.tier}`}`)
+  // the mailbox state the verified watt. carries (a port that drops mb fails here, not only on the mb rows)
+  if (v.ok) ok(v.value.watt.mb === r.mb, `${r.name}: mb ${r.mb}${v.value.watt.mb === r.mb ? '' : `, got ${v.value.watt.mb}`}`)
 }
+ok(rows.every((r) => r.expect !== 'accept' || (Number.isSafeInteger(r.mb) && r.mb! >= 0)), 'every accepted row states the mb its watt. carries')
+ok(rows.some((r) => r.expect === 'accept' && r.mb! > 0) && rows.some((r) => r.expect === 'accept' && r.mb === 0), 'accepted rows carry both a lapsed mb and mb 0')
 
 console.log('\nwren. (the directory\'s renewal request)')
 for (const w of F.wren) {
@@ -186,14 +190,17 @@ console.log('\nmb: the mailbox state rides in watt.')
   ok(plain.ok && plain.value.watt.mb === 0, 'ok/wdev: mb 0 (confirmed)')
 }
 
-console.log('\nwret. (the directory\'s check: an old key retires itself at a new ceremony)')
+console.log('\nwret. (the directory\'s check: an old key retires itself, at a new ceremony or with no successor)')
 for (const w of F.wret) {
   const v = await verifyWret(w.text, w.sig)
   const got = v.ok ? 'accept' : `reject (${v.reason})`
   const want = w.expect === 'accept' ? 'accept' : `reject (${w.reason})`
   ok(got === want, `${w.name}: ${got}${got === want ? '' : `, want ${want}`}`)
+  if (v.ok) ok(v.value.newPub === w.newPub, `${w.name}: successor ${w.newPub === null ? 'none' : 'named'}${v.value.newPub === w.newPub ? '' : `, got ${v.value.newPub}`}`)
 }
-ok(['ok/wret', 'wret/signed-by-new-key', 'wret/same-key', 'wret/nonce-short', 'wret/address-not-normal', 'wret/high-s', 'wret/as-wren'].every((n) => F.wret.some((w: { name: string }) => w.name === n)), 'the wret. rows exist')
+ok(['ok/wret', 'ok/wret-no-successor', 'wret/signed-by-new-key', 'wret/same-key', 'wret/nonce-short', 'wret/address-not-normal', 'wret/high-s', 'wret/as-wren',
+  'wret/no-successor-other-key', 'wret/no-successor-nonce-short', 'wret/new-not-a-key', 'wret/old-empty'].every((n) => F.wret.some((w: { name: string }) => w.name === n)), 'the wret. rows exist')
+ok(F.wret.every((w: { expect: string; newPub?: unknown }) => w.expect !== 'accept' || w.newPub === null || typeof w.newPub === 'string'), 'every accepted wret. row states its successor (null: none)')
 
 console.log('\ninc. (the directory\'s incident record)')
 for (const r of F.inc) {
@@ -218,7 +225,7 @@ for (const { prefix, text } of F.reserved) {
 
 console.log('\nthe link final under option G (link.ts)')
 type FinalRow = { name: string; t: string; h2n: string; offer: never; final: Record<string, string>; edit?: { line: number; value: string }; expect: string; reason?: string
-  watt?: string; wattSig?: string; release?: { challenge: string; spent?: boolean; expect: string; reason?: string } }
+  watt?: string; wattSig?: string; release?: { challenge: string; spent?: boolean; chain?: string; expect: string; reason?: string } }
 const finalText = (r: FinalRow) => {
   const l = ['lnkg', r.final.dev2, r.final.ck, r.final.cns, r.final.cnsSig, r.final.seal]
   if (r.edit) l[r.edit.line] = r.edit.value
@@ -234,7 +241,7 @@ for (const r of F.linkFinal as FinalRow[]) {
   ok(got === want, `${r.name}: N ${got}${got === want ? '' : `, want ${want}`}`)
   if (r.release && baseRoster.ok) {
     const now = Number(r.final.dev2.split('.')[8]) + 60_000
-    const ro = await roster('base', now)
+    const ro = await roster(r.release.chain ?? 'base', now)
     const rv = ro.ok ? await verifyLinkReleaseG(finalText(r), { roster: ro.value, challenge: r.release.challenge, consentRp: F.consentRp, now, spend: () => !r.release!.spent }) : ro
     const rg = rv.ok ? 'accept' : `reject (${rv.reason})`
     const rw = r.release.expect === 'accept' ? 'accept' : `reject (${r.release.reason})`
@@ -252,7 +259,14 @@ for (const r of F.linkFinal as FinalRow[]) {
   const names = new Set((F.linkFinal as FinalRow[]).map((r) => r.name))
   ok(['ok/final-g', 'final-g/release-unripe', 'final-g/release-other-challenge', 'final-g/release-spent', 'final-g/release-old-head', 'final-g/release-ck-not-member',
     'final-g/other-keys', 'final-g/line-swapped', 'final-g/device-mismatch', 'final-g/consent-mismatch', 'final-g/kx-mismatch', 'final-g/via-passkey', 'final-g/ck-is-n',
-    'final-g/cns-web-add', 'final-g/cns-wrong-key', 'final-g/v1-label', 'final-g/seal-long', 'final-g/extra-line'].every((n) => names.has(n)), 'the link final rows exist')
+    'final-g/cns-web-add', 'final-g/cns-wrong-key', 'final-g/v1-label', 'final-g/seal-long', 'final-g/extra-line',
+    'final-g/release-quarantined', 'final-g/release-by-passkey', 'final-g/release-exactly-72h', 'final-g/release-one-second-short', 'final-g/release-ck-is-n'].every((n) => names.has(n)), 'the link final rows exist')
+  // C3 positive controls: each release refusal is decided by the rule it names, not an earlier one
+  const rel = (n: string) => (F.linkFinal as FinalRow[]).find((r) => r.name === n)!
+  const cer = (r: FinalRow) => Number(r.final.dev2.split('.')[8])
+  ok(cer(rel('final-g/release-exactly-72h')) - cer(rel('final-g/release-one-second-short')) === 1000, 'release-one-second-short is one second of ceremonyAt short of release-exactly-72h')
+  ok(rel('final-g/release-by-passkey').expect === 'accept' && rel('final-g/release-quarantined').expect === 'accept',
+    'N opens the passkey-signed and the quarantined co-sign alike: only the directory, which holds the roster, can refuse them')
   const okRow = (F.linkFinal as FinalRow[]).find((r) => r.name === 'ok/final-g')!
   ok(parseFinalG(finalText(okRow)) !== null && b64uDec(okRow.final.seal)!.length === 60, 'the G final parses and its seal is 60 bytes')
   const dec = decodeSlotMsg(3, encodeSlotMsg(3, finalText(okRow)))

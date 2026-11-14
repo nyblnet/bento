@@ -18,7 +18,8 @@ random, so a regeneration changes bytes but not verdicts.
 §2f, signed by security §28). Unlike the statement vectors, every value in it is
 DETERMINISTIC (fixed codes, salts and IVs), so a host must reproduce the exact
 bytes end to end. Reference: `kernel/src/recovery.ts`. Rig:
-`scripts/test-recovery.ts`. Generator: `scripts/gen-recovery-vectors.ts`.
+`scripts/test-recovery.ts`. Generator: `scripts/gen-recovery-vectors.ts`
+(`--check`, in CI, fails unless the committed file is byte for byte what it writes).
 
 - **Argon2id first.** Check your Argon2id against the `rfc9106` row (RFC 9106
   §5.3, with its own parameters) before trusting it. Then use OUR parameters:
@@ -105,7 +106,19 @@ bytes end to end. Reference: `kernel/src/recovery.ts`. Rig:
 - `dreqConsent`: `cns` rows for the three op-specific purposes (`cred-add`,
   `cred-del`, `rc-enrol`), verified exactly like the `cns` rows in `statements`.
 
-These three sections are separate from `statements` so a host runner that
+- `consentG`: the directory's LIVE check (`verifyConsent`, which spends the
+  challenge) of option G's two consent purposes, with the section's own
+  `consentPub`. `roster` covers `ros.`, `dev2.`, `vrs.`, `wout.` and `adel.`;
+  `web-add` covers `wdev.` only. Every cross is `payload-family`: roster over a
+  `wdev.`, web-add over any roster text, either over a `wret.` or a `rip.`, and
+  K2's `link` over a `dev2.`. Every row parses, so every row carries
+  `spendCalled: true`. Peers check the same texts offline with `verifyCoSign`
+  (roster-v2.json, device-v1.json); this section is what the directory, and a
+  host that ports it, must agree on. Its key is deterministic, so
+  `gen-identity-vectors.ts --only consentG` rebuilds the section alone and
+  `--check` (CI) fails when it is stale.
+
+These sections are separate from `statements` so a host runner that
 refuses an unknown row type keeps passing until it adopts them.
 
 ## Notes for native implementers
@@ -399,7 +412,12 @@ joined (`since`), `createdAt`, `lastResetAt` and `sinceExact`.
   `requestedAt − since ≥ 72 h` (since from this chain; a pin's since is a lower
   bound). A change signed or co-signed by a ripe ck needs no wait; an unripe
   co-signer is refused (`cosign-unripe`), never ignored. The cns. must be alive
-  at `requestedAt`, for at most 5 min plus the skew. Pass `consentRp` (the
+  at `requestedAt`, for at most 5 min plus the skew. **Both are measured at
+  requestedAt, never at ripenedAt**, even when the directory ripened the change
+  later: a ck 71 h a member at requestedAt and 73 h at ripenedAt is unripe
+  (`cosign/unripe-at-request-ripe-at-ripening`, `ck/unripe-at-request-ripe-at-ripening`),
+  and a cns. alive at requestedAt but expired at ripenedAt counts
+  (`ok/cosign-ripened-late`, `ok/ck-ripened-late`). Pass `consentRp` (the
   file's) to `verifyRosterChain`; without it any link a ck signs is `grammar`.
   A voided request's cns. (q evidence) has no time check.
 - **`resetStops`: `vrs.<b64u(address)>.<sha256(reset ros. text)>.<dirNonce>`**,
@@ -410,6 +428,32 @@ joined (`since`), `createdAt`, `lastResetAt` and `sinceExact`.
   the account was under 14 days old when the reset was REQUESTED
   (`new-account`), and when the chain came from a pin (`age-unknown`). The
   challenge is spent first: every refusal before it is `grammar`.
+- **`signOuts`: `wout.<b64u(address)>.<at>.<dirNonce>`**, a member signing
+  every browser out (the directory's check, `verifyWout`). The signer is an
+  unquarantined member of the current head and proves as for `vrs.` (pk
+  assertion, rk raw signature, ck `roster` cns. alive now). `at` is the time
+  the directory issued the challenge (`challengeAt`; else `at`). The address
+  must already be in normal form: anything else is `grammar` (it must hash to
+  the account name below). No wait. The directory revokes every `wdev.` whose
+  ceremony is at or before the moment it ACCEPTS the sign-out, logs both times,
+  and never touches a `dev2.`.
+- **`deletions`: `adel.<b64u(address)>.<headHash>.<dirNonce>`**, a member
+  asking to delete the account (`verifyAdel`). Same signer rules; `headHash`
+  must be the current head (`roster-head`). Accepting it QUEUES the deletion
+  for `deleteWaitMs` (72 h) on the directory's clock, mails the address a link
+  that voids it, and carries it out only if it was not voided and the head is
+  still `headHash`. The way without a passkey is the directory's emailed link,
+  which no statement carries. What a void does to the signer, and how a reset
+  request treats a waiting deletion, are the directory's and still open.
+- **`userHandles`: the passkey user handle.** `user.id` = SHA-256(`label` ‖
+  the address in normal form) ‖ 16 random bytes, 48 bytes; `label` is
+  `bento-dir/1/addr` and a line feed. Every host that makes a passkey for
+  `rpId` uses it, or its passkeys cannot sign in on the sign-in host. The
+  first 32 bytes (`accountHex`) are the account's storage name and ROUTE a
+  discoverable sign-in; the handle is not signed, so it never decides
+  membership. Rows give `tailHex` (standing in for the random bytes) and the
+  `handle`; a `null` handle means: never hash an address that is not in normal
+  form. A returned handle that is not exactly 48 bytes routes nowhere.
 - **`heads`.** The state also lists every head of the links given, in chain
   order, with its hash, seq, ripenedAt and members: the heads a device
   certificate may name (`device-v1.json`). The pinned head is the first.
@@ -452,7 +496,9 @@ accepted row.
   bento/home). `mb` is the mailbox state: `0` while the address is confirmed, else
   the time it went unconfirmed, `≤ loggedAt` (else `watt-grammar`). A
   certificate stays valid with a lapsed mailbox; an agent qualifies the address
-  ("unconfirmed since <date>"). The six-field `watt.` without `mb` is refused. `0 < expires − loggedAt ≤ 24 h`; `expires ≤ ceremonyAt + 7 days`, from
+  ("unconfirmed since <date>"). The six-field `watt.` without `mb` is refused.
+  Every accepted row states the `mb` its watt. carries: assert the value your
+  verifier returns, not only the verdict. `0 < expires − loggedAt ≤ 24 h`; `expires ≤ ceremonyAt + 7 days`, from
   the certificate's ORIGINAL ceremony (a renewal is a new `watt.` over the same
   certificate text); `loggedAt ≥ ceremonyAt`; not logged in the future (5 min
   skew); not expired (`now < expires`).
@@ -470,9 +516,13 @@ accepted row.
   `watt.` (`ck/native-watt-*`).
 - **`wren.<devicePub>.<b64u(address)>.<challenge>`** (`wren` rows): the device
   key's raw low-S signature over the text. Only the directory checks it.
-- **`wret.<oldDevicePub>.<newDevicePub>.<b64u(address)>.<dirNonce>`** (`wret`
-  rows): an old browser key retiring itself at a new ceremony, signed by the OLD
-  key; the two keys differ. Only the directory checks it.
+- **`wret.<oldDevicePub>.<newDevicePub|empty>.<b64u(address)>.<dirNonce>`**
+  (`wret` rows): an old browser key retiring itself, signed by the OLD key. With
+  a newDevicePub it is part of a new ceremony and the two keys differ; EMPTY is a
+  retirement without a successor, over a challenge the directory issued for it
+  (`ok/wret-no-successor`): the library signs it whenever it stops trusting or
+  keeping its key. Accepted rows state `newPub` (null: none). Only the directory
+  checks it; it then refuses every renewal of the old key.
 - **`inc.<id>.<from>.<to|empty>.<issuedAt>.<kid>`** (`inc` rows): the
   directory's incident record. `id` is `[a-z0-9-]{1,64}`; `to` empty while open,
   else `> from`; `issuedAt ≥ from` and not in the future; a pinned kid. `inside`
@@ -484,5 +534,10 @@ accepted row.
   replaces one line, or appends a seventh). The seal is `b64u(iv ‖ AES-256-GCM
   under h2n, AAD "lnkgs.v1." ‖ t, of SHA-256(the first five lines joined by "\n")
   ‖ tag)`, exactly 60 bytes. N: `openFinalG` with `h2n`, `t`, `offer`. A
-  `release` row is the directory's `verifyLinkReleaseG` against `chains.base`. A
-  row with `watt` also verifies as a device proof at native tier.
+  `release` row is the directory's `verifyLinkReleaseG` against
+  `chains[release.chain ?? 'base']`: H's co-signer must be a ck (`signer-kind`),
+  unquarantined (`signer-quarantined`), ripe at ceremonyAt with 72 h inclusive
+  (`release-exactly-72h`, `release-one-second-short`), and not N's own key
+  (`ck-is-n`). N opens a passkey's or a quarantined ck's co-sign (it does not
+  hold the roster); only the directory can refuse those. A row with `watt` also
+  verifies as a device proof at native tier.
