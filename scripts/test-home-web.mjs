@@ -179,7 +179,9 @@ async function context() {
 const docFrame = (page) => page.frames().find((f) => f.parentFrame() === page.mainFrame())
 async function until(fn, ms = 20000) {
   const end = Date.now() + ms
-  while (Date.now() < end) { try { const v = await fn(); if (v) return v } catch {} await new Promise((r) => setTimeout(r, 150)) }
+  // each check has its own limit: a call into a frame the library removes meanwhile can hang (Firefox)
+  const limit = (p) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('check timed out')), 10000))])
+  while (Date.now() < end) { try { const v = await limit(fn()); if (v) return v } catch {} await new Promise((r) => setTimeout(r, 150)) }
   return null
 }
 const booted = (page) => until(async () => { const f = docFrame(page); return f && (await f.evaluate(() => !!(window.bento && window.bento.doc))) ? f : null })
@@ -473,7 +475,7 @@ section('[B2] a frame page that lost its header boots nothing, even framed by th
   await open(page, 'deck')
   const state = await until(async () => { const f = docFrame(page); return f ? f.evaluate(() => document.documentElement.getAttribute('data-bento-frame') ?? (window.bento ? 'booted' : null)) : null }, 10000)
   await new Promise((r) => setTimeout(r, 2000))
-  const ran = await docFrame(page)?.evaluate(() => !!window.bento).catch(() => false)
+  const ran = await Promise.race([docFrame(page)?.evaluate(() => !!window.bento), new Promise((r) => setTimeout(() => r(false), 10000))]).catch(() => false)
   ok(state === 'refused' && !ran, `without its header, framed by the library, the frame refuses and nothing boots (${state})`)
   await ctx.close()
 }

@@ -13998,8 +13998,11 @@ manifest. What it does not gain matters as much:
   answer (a returning visit must open offline). Anything else that comes back
   and cannot be trusted (a bad signature, a payload for another app, a `seq`
   below the highest this browser has seen) fails closed, exactly as a
-  withdrawal. This is the one request the library makes on every load, and it
-  goes only to the signed release channel.
+  withdrawal. A browser remembers the builds it has seen withdrawn, so a copy
+  served again from any cache (Firefox serves the page from its HTTP cache
+  offline) stops on load even when the status cannot be fetched. This is the
+  one request the library makes on every load, and it goes only to the signed
+  release channel.
 - **What the kill switch cannot reach:** a build that does not run the check.
   A hostile deploy can register its own worker at any path; clearing that
   needs the host to answer `Service-Worker: script` requests with a cleaning

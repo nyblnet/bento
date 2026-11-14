@@ -42,6 +42,8 @@ import type { Jwk } from './verify.ts'
 export const SW_PATH = '/sw.js'
 /** The newest status seq this browser has taken. Not document data: one number. */
 const SEQ_KEY = 'bento-home-status-seq'
+/** Builds this browser has seen withdrawn: a copy served again from any cache stops without asking the network. */
+const GONE_KEY = 'bento-home-withdrawn'
 const STATUS_APP = 'bento-home-status'
 const STATUS_MS = 8000
 
@@ -62,6 +64,12 @@ function seenSeq(): number {
 }
 function keepSeq(n: number) {
   try { localStorage.setItem(SEQ_KEY, String(n)) } catch { /* storage refused: the check still ran */ }
+}
+function goneList(): string[] {
+  try { const v = JSON.parse(localStorage.getItem(GONE_KEY) ?? '[]'); return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [] } catch { return [] }
+}
+function keepGone(build: string) {
+  try { localStorage.setItem(GONE_KEY, JSON.stringify([build, ...goneList().filter((b) => b !== build)].slice(0, 64))) } catch { /* storage refused */ }
 }
 
 /** Judge a status envelope for this build. Exported for node rigs. */
@@ -109,20 +117,23 @@ export function startOffline(opts: { releaseBase: string; key: Jwk; onStop: (sta
     mark('data-bento-build', build)
     let status: Status = 'unreachable'
     let raw: string | null = null
-    try {
+    // seen withdrawn before: stop now, whatever served this copy (an HTTP cache offline, a stale edge)
+    if (goneList().includes(build)) status = 'withdrawn'
+    else try {
       const ac = new AbortController()
       const t = setTimeout(() => ac.abort(), STATUS_MS)
       const r = await fetch(`${opts.releaseBase}home/status.json`, { cache: 'no-store', credentials: 'omit', redirect: 'error', signal: ac.signal })
       if (r.ok) raw = await r.text()
       clearTimeout(t)
     } catch { raw = null }
-    if (raw !== null) {
+    if (raw !== null && status !== 'withdrawn') {
       const v = await judgeStatus(raw, opts.key, build, seenSeq())
       status = v.status
       if (v.seq && status !== 'refused') keepSeq(v.seq)
       if (v.why) console.warn('[bento/home] status refused:', v.why)
     }
     if (status === 'withdrawn' || status === 'refused') {
+      if (status === 'withdrawn') keepGone(build)
       opts.onStop(status)
       await cleanUp()
       mark('data-bento-status', status)

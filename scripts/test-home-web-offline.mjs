@@ -93,6 +93,9 @@ const MUTANTS = [
   { name: 'kill-keeps-caches', why: 'withdrawing leaves the caches', only: 'kill',
     src: { file: 'offline.ts', from: '  try { for (const k of await caches.keys()) await caches.delete(k) } catch { /* no caches API */ }\n', to: '' },
     expect: 'the withdrawn build\'s caches are deleted' },
+  { name: 'kill-forgotten', why: 'a withdrawn build served again while the status cannot be fetched carries on', only: 'kill',
+    src: { file: 'offline.ts', from: "    if (goneList().includes(build)) status = 'withdrawn'\n    else try {", to: '    try {' },
+    expect: 'a withdrawn build served again while its status cannot be fetched still stops' },
   { name: 'open-before-check', why: 'a file opens before the kill switch has answered', only: 'kill',
     src: { file: 'library.ts', from: '  if (!(await ready)) return // withdrawn: the page has stopped\n', to: '' },
     expect: 'a file dropped before a slow status answers never runs in a withdrawn build' },
@@ -233,7 +236,7 @@ ok(X.info.offline.build !== Y.info.offline.build && X.info.offline.cache !== Y.i
 const SITE = path.join(work, 'site')
 fs.cpSync(path.join(X.out, 'frame'), path.join(SITE, 'frame'), { recursive: true })
 // probe files on the library origin, outside the build (no rule in _headers, so no CSP)
-const PROBE_HTML = '<!doctype html><title>probe</title><p>probe</p>'
+const PROBE_HTML = '<!doctype html><title>probe</title><link rel="icon" href="data:,"><p>probe</p>'
 const PROBE_SW = "self.addEventListener('fetch', () => {})"
 function deploy(B, { tamperPage = false } = {}) {
   const lib = path.join(SITE, 'library')
@@ -501,11 +504,19 @@ try {
     await page.setInputFiles('#file', DECK).catch(() => {})
     await sleep(2500)
     ok((await ui(page)).frames === 0 && frameFetches(mark).length === 0, 'nothing opens in a withdrawn build (the frame page is never fetched)')
-    // the withdrawn build is gone from this browser: offline, nothing serves it
+    // the same build served again (a stale edge, a CDN) while the status cannot be fetched: it remembers, and stops
+    files.delete(STATUS)
+    await page.goto(O.library + '/')
+    s = await settled(page)
+    ok(s.status === 'withdrawn' && s.stopped && s.regs.length === 0 && s.caches.length === 0,
+      `a withdrawn build served again while its status cannot be fetched still stops (${s.status}, workers ${s.regs.length})`)
+    files.set(STATUS, status(['--seq', '5', '--withdraw', X.info.offline.build]))
+    // offline: no worker serves it; a browser that serves it anyway from its HTTP cache (Firefox does) gets a copy that stops
     await offline(ctx)
     const gone = await page.goto(O.library + '/').then((r) => `served ${r?.status()}`, () => 'nothing')
-    const still = await page.evaluate(() => document.documentElement.getAttribute('data-bento-build')).catch(() => null)
-    ok(gone === 'nothing' || still !== X.info.offline.build, `offline after the kill, the withdrawn build is not served from anywhere (${gone})`)
+    const after = gone === 'nothing' ? null : await settled(page, 10000).catch(() => null)
+    ok(gone === 'nothing' || (after?.status === 'withdrawn' && after.regs.length === 0),
+      `offline after the kill, the withdrawn build does not run: ${gone === 'nothing' ? 'nothing serves it' : `a cached copy (${gone}) stopped itself (${after?.status})`}`)
     await online(ctx)
     // the next load: the fixed deploy
     deploy(Y)

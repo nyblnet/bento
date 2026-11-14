@@ -153,8 +153,11 @@ hash is the same digest in base64. No file opens until the check answers.
 | lists this build | **stops**: unregisters every worker on its origin, deletes every cache, closes the open document and shows a fixed message |
 | anything else that came back (a bad signature, another payload, an older `seq`) | **fails closed**: the same as withdrawn |
 
-Beside its worker's cache, the library keeps one number: the highest `seq`
-seen (`localStorage`), so a replayed older status cannot un-withdraw a build. The
+Beside its worker's cache, the library keeps two small things in
+`localStorage`: the highest `seq` seen, so a replayed older status cannot
+un-withdraw a build, and the builds it has seen withdrawn, so a copy served
+again from any cache (Firefox offline serves the page from its HTTP cache; a
+stale edge could too) stops on load without asking the network. The
 message is fixed text: nothing from the manifest is shown. The next online load
 comes from the server, whatever it serves then.
 
