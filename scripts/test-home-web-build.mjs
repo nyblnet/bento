@@ -10,7 +10,9 @@
  * 1. home/web/build.mjs without --dev refuses every development seam: no
  *    --history (the frozen fixture fallback), --key (a test key),
  *    BENTO_HOME_WEB_MUTANT, and a history the library would refuse (wrong key,
- *    tampered, a second one for the same app). Each refusal differs from the
+ *    tampered, a second one for the same app), and the bento/id agent
+ *    (--identity, --directory-keys: its directory keys are not pinned for
+ *    release). Each refusal differs from the
  *    positive control (the good release build, which succeeds) by that one
  *    input, and writes nothing. With --dev the seams still work.
  * 2. scripts/release.mjs --home-web refuses before building anything: without
@@ -89,6 +91,12 @@ refusal(build(['--history', TEST_HISTORY]), /would refuse this history/, 'a hist
 refusal(build(['--history', TAMPERED_HISTORY]), /would refuse this history/, 'a history whose payload was changed after signing: refused')
 refusal(build(['--history', REAL_HISTORY, '--history', REAL_HISTORY]), /one per app/, 'two histories for the same app: refused')
 refusal(build(['--history']), /--history needs a file/, '--history without a file: refused')
+// the bento/id agent: a well-formed keys file, so the refusal is the production rule, not the file
+const DIR_KEYS = W('directory-keys.json', JSON.stringify({ 'dir-1': Buffer.from(await webcrypto.subtle.exportKey('raw', kp.publicKey)).toString('base64url') }))
+refusal(build(['--history', REAL_HISTORY, '--identity', '--directory-keys', DIR_KEYS]), /--identity[^\n]*refused in a production build/,
+  '--identity (the bento/id agent, directory keys not pinned for release): refused without --dev')
+refusal(build(['--history', REAL_HISTORY, '--directory-keys', DIR_KEYS]), /--directory-keys[^\n]*refused in a production build/,
+  '--directory-keys alone: refused without --dev')
 
 section('home/web/build.mjs: a development build (--dev)')
 {
@@ -99,6 +107,10 @@ section('home/web/build.mjs: a development build (--dev)')
   ok(k.status === 0 && k.info?.dev === true && k.info?.testKey === true, `--dev --key with a history that key signed builds, marked testKey (exit ${k.status})`)
   refusal(build(['--dev', '--key', TEST_KEY, '--history', REAL_HISTORY]), /would refuse this history/,
     '--dev --key still refuses a history that key cannot verify')
+  const id = build(['--dev', '--identity', '--directory-keys', DIR_KEYS])
+  ok(id.status === 0 && id.info?.dev === true && id.info?.identity === true && /connect-src \S+ https:\/\/id\.bento\.page;/.test(id.info?.libraryPolicy ?? ''),
+    `--dev --identity builds the bento/id agent, and only its policy reaches the directory (exit ${id.status})`)
+  ok(good.info?.identity === false && !/id\.bento\.page/.test(good.info?.libraryPolicy ?? 'x'), 'positive control: the release build has no identity and no directory in its policy')
 }
 
 // --- 2. release.mjs: the options, and which histories ----------------------------------
