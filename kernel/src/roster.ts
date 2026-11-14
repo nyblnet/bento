@@ -109,20 +109,51 @@
 // set by an earlier q or l) is never lifted or removed by the directory's word;
 // only a member's own 72 h change removes it.
 //
-// NOT HERE YET, and refused until defined (fail closed):
-//   - a consent-key (ck) signature or co-sign (the `roster` consent purpose,
-//     the next kernel change). Until then a ck-signed link is refused, and so is
-//     any member link that ripened in under 72 h other than a self-removal.
+// --- consent keys (ck): the `roster` consent purpose -------------------------
+//
+// A native host's hardware consent key signs a `cns.` (statements.ts) with
+// purpose `roster`, audience `dir`, challenge = the head's dirNonce, over the
+// exact ros. text: the link carries it as `cns` with its signature `sig`.
+// Checked offline by verifyCoSign, against the directory's clock: the co-sign
+// was alive at the link's requestedAt, for at most its 5-minute life.
+//
+//   as the requester   a ck that is an unquarantined member of the previous
+//                      head may ask for a member change, like a pk or an rk.
+//   as the co-signer   a link asked for by any member may also carry `cosign`:
+//                      another ck's cns. over the same ros. text. The co-signer
+//                      is an unquarantined ck of the PREVIOUS head, never the
+//                      requester itself, and must be RIPE.
+//   ripe               a member for at least 72 h at the link's requestedAt,
+//                      measured from its `since` in THIS verified chain (a pin
+//                      gives a later since, so it only refuses more), never
+//                      from any requester's clock.
+// A change signed or co-signed by a ripe ck needs no 72 h wait: that is the
+// whole point of a native device. A browser can never co-sign (a pk is not a
+// ck), and a co-sign that does not count is a refusal, never ignored.
+//
+// --- vrs. — a member stops a reset (the directory checks it; peers never see one)
+//
+//   vrs.<b64u(address)>.<sha256(reset ros. text)>.<dirNonce>
+//
+// Signed by an unquarantined member of the head the reset would replace (an
+// assertion for a pk, a raw signature for an rk, a `roster` co-sign for a ck),
+// over a single-use directory challenge. Accepted only when the account was at
+// least 14 days old when the reset was REQUESTED (G5, judged at request time so
+// a reset begun in an account's first 14 days cannot be stopped by a passkey a
+// hostile setup planted; security's C4 on #944).
 
 import { isNormalAddress } from './address.ts'
-import { b64uDec, b64uEnc, sha256b64u, isSigningKey, verifyStatementSig, SKEW_MS, type Verdict } from './statements.ts'
+import { b64uDec, b64uEnc, sha256b64u, isSigningKey, verifyStatementSig, verifyCoSign, SKEW_MS, type Verdict } from './statements.ts'
 import { verifyAssertion, statementChallenge, type Assertion } from './webauthn.ts'
 
 /** Prefixes this module defines. */
-export const ROSTER_PREFIXES: readonly string[] = Object.freeze(['ros', 'rip'])
+export const ROSTER_PREFIXES: readonly string[] = Object.freeze(['ros', 'rip', 'vrs'])
 
 /** The wait between a member's request and its ripening, on the directory's clock. */
 export const ROSTER_WAIT_MS = 72 * 3_600_000
+/** An account is "new" for this long after setup: no member may stop a reset
+ *  REQUESTED in that window (G5). */
+export const NEW_ACCOUNT_MS = 14 * 24 * 3_600_000
 export const MAX_MEMBERS = 16
 /** A chain longer than this is refused outright (a peer re-pins as it goes). */
 export const MAX_CHAIN = 1024
@@ -283,10 +314,15 @@ export interface RosterLink {
   signer?: string
   /** the signer's WebAuthn assertion over the ros. text, when it is a pk */
   assertion?: Assertion
-  /** the signer's raw low-S signature over the ros. text, when it is an rk */
+  /** the signer's raw low-S signature: over the ros. text when it is an rk,
+   *  over `cns` when it is a ck */
   sig?: string
+  /** a ck signer's cns. text (purpose roster, over the ros. text) */
+  cns?: string
+  /** a ripe consent key's co-sign of a member change: skips the 72 h wait */
+  cosign?: { signer: string; cns: string; sig: string }
   /** auth q only: the request the void cancelled, with its member proof */
-  voided?: { ros: string; signer: string; assertion?: Assertion; sig?: string }
+  voided?: { ros: string; signer: string; assertion?: Assertion; sig?: string; cns?: string }
   /** auth l only: the ripened change whose added member is quarantined */
   cited?: { prevRos: string; ros: string; rip: string; ripSig: string }
 }
@@ -338,24 +374,39 @@ export interface ChainOpts {
    *  times) but its member proof and wait are not, and its own predecessor is
    *  not needed. Without it, links[0] must be the setup head (seq 0). */
   pinned?: string
+  /** the rp a consent key's cns. names (`bento`). Needed only for a link a ck
+   *  signs or co-signs; without it such a link is refused (grammar). */
+  consentRp?: string
 }
 
-const hasProof = (l: RosterLink) => l.signer !== undefined || l.assertion !== undefined || l.sig !== undefined
+const hasProof = (l: RosterLink) => l.signer !== undefined || l.assertion !== undefined || l.sig !== undefined ||
+  l.cns !== undefined || l.cosign !== undefined
 const carries = (l: RosterLink) => l.voided !== undefined || l.cited !== undefined
 const soleLivePk = (list: Member[]) => list.length === 1 && list[0].kind === 'pk' && !list[0].quarantined
 const str = (v: unknown): v is string => typeof v === 'string'
 
-/** A member's proof over `text`: an assertion for a pk, a raw low-S signature for an rk. */
-async function memberProof(signer: Member, p: { assertion?: Assertion; sig?: string }, text: string, opts: ChainOpts): Promise<{ ok: true } | { ok: false; reason: string }> {
+type Proof = { assertion?: Assertion; sig?: string; cns?: string }
+type ProofOpts = { rpId: string; origins: readonly string[]; consentRp?: string }
+
+/** A member's proof over `text`: an assertion for a pk, a raw low-S signature
+ *  for an rk, a `roster` co-sign (cns. + its signature) for a ck. `nonce` is the
+ *  directory nonce inside `text`; `at` the directory's clock for a ck's cns.
+ *  (null: evidence only, no time check). */
+export async function memberProof(signer: Member, p: Proof, text: string, nonce: string, at: number | null, opts: ProofOpts): Promise<{ ok: true } | { ok: false; reason: string }> {
   if (signer.kind === 'pk') {
-    if (p.assertion === undefined || p.sig !== undefined) return no('proof')
+    if (p.assertion === undefined || p.sig !== undefined || p.cns !== undefined) return no('proof')
     const a = await verifyAssertion(p.assertion, { publicKey: signer.pub, challenge: await statementChallenge(text),
       rpId: opts.rpId, origins: opts.origins })
     if (!a.ok) return no(`assertion-${a.reason}`)
   } else if (signer.kind === 'rk') {
-    if (!str(p.sig) || p.assertion !== undefined) return no('proof')
+    if (!str(p.sig) || p.assertion !== undefined || p.cns !== undefined) return no('proof')
     if (!(await verifyStatementSig(signer.pub, p.sig, text))) return no('signature')
-  } else return no('signer-kind')   // ck: the `roster` consent purpose is not defined yet
+  } else if (signer.kind === 'ck') {
+    if (!str(p.cns) || !str(p.sig) || p.assertion !== undefined) return no('proof')
+    if (typeof opts.consentRp !== 'string' || opts.consentRp === '') return no('grammar')
+    const c = await verifyCoSign(p.cns, p.sig, { consentPub: signer.pub, rp: opts.consentRp, purpose: 'roster', payloadText: text, challenge: nonce, at })
+    if (!c.ok) return no(`consent-${c.reason}`)
+  } else return no('signer-kind')
   return { ok: true }
 }
 
@@ -395,7 +446,7 @@ async function pinnedTarget(l: RosterLink, rip: Ripening, head: RosterHead, opts
     if (!vh.ok || vh.value.address !== head.address || vh.value.seq !== head.seq) return null
     // the signer is not covered by the cause: bind it by its proof over the voided text
     const asker = head.members.find((m) => m.pub === v.signer)
-    if (!asker || !(await memberProof(asker, v, v.ros, opts)).ok) return null
+    if (!asker || !(await memberProof(asker, v, v.ros, vh.value.dirNonce, null, opts)).ok) return null
     return asker.pub
   }
   if (rip.auth === 'l') {
@@ -505,7 +556,7 @@ async function chain(links: readonly RosterLink[], opts: ChainOpts): Promise<Ver
         const asker = prev.head.members.find((m) => m.pub === v.signer)
         if (!asker) return no('voided-signer')
         if (asker.quarantined) return no('voided-quarantined')
-        const pr = await memberProof(asker, v, v.ros, opts)
+        const pr = await memberProof(asker, v, v.ros, vh.value.dirNonce, null, opts)
         if (!pr.ok) return no(`voided-${pr.reason}`)
         if (!onlyMarked(d, asker.pub)) return no('target')
         if (!head.members.some((m) => !m.quarantined)) return no('last-live')
@@ -557,8 +608,25 @@ async function chain(links: readonly RosterLink[], opts: ChainOpts): Promise<Ver
     const signer = prev.head.members.find((m) => m.pub === l.signer)
     if (!signer) return no('signer')
     if (signer.quarantined) return no('quarantined')
-    const pr = await memberProof(signer, l, l.ros, opts)
+    const pr = await memberProof(signer, l, l.ros, head.dirNonce, rip.requestedAt, opts)
     if (!pr.ok) return pr
+    // a consent key is ripe once it has been a member 72 h at the request, on this chain's since
+    const ripe = (pub: string) => { const t = since.get(pub); return t !== undefined && rip.requestedAt - t >= ROSTER_WAIT_MS }
+    let coSigned = false
+    if (l.cosign !== undefined) {
+      const c = l.cosign
+      if (!c || typeof c !== 'object' || !str(c.signer) || !str(c.cns) || !str(c.sig)) return no('cosign')
+      if (c.signer === signer.pub) return no('cosign')
+      const co = prev.head.members.find((m) => m.pub === c.signer)
+      if (!co) return no('cosign-signer')
+      if (co.kind !== 'ck') return no('cosign-kind')
+      if (co.quarantined) return no('cosign-quarantined')
+      if (!ripe(co.pub)) return no('cosign-unripe')
+      const cp = await memberProof(co, { cns: c.cns, sig: c.sig }, l.ros, head.dirNonce, rip.requestedAt, opts)
+      if (!cp.ok) return no(cp.reason === 'grammar' ? 'grammar' : `cosign-${cp.reason}`)   // grammar: no consentRp from the caller
+      coSigned = true
+    }
+    const waived = coSigned || (signer.kind === 'ck' && ripe(signer.pub))
 
     const before = new Map(prev.head.members.map((m) => [m.pub, m]))
     const after = new Map(head.members.map((m) => [m.pub, m]))
@@ -573,7 +641,7 @@ async function chain(links: readonly RosterLink[], opts: ChainOpts): Promise<Ver
     if (added.length > 1 || removed.length > 1) return no('multi-change')
     if (added.length === 1 && removed.length === 1 && !(added[0].kind === 'rk' && removed[0].kind === 'rk')) return no('multi-change')
     const selfRemoval = added.length === 0 && removed[0].pub === signer.pub && head.members.some((m) => !m.quarantined)
-    if (!selfRemoval && waited < ROSTER_WAIT_MS) return no('unripe')
+    if (!selfRemoval && !waived && waited < ROSTER_WAIT_MS) return no('unripe')
 
     const next = new Map<string, number>()
     for (const m of head.members) next.set(m.pub, since.get(m.pub) ?? rip.ripenedAt)
@@ -587,4 +655,75 @@ async function chain(links: readonly RosterLink[], opts: ChainOpts): Promise<Ver
     members: p.head.members.map((m) => ({ ...m, since: since.get(m.pub)! })),
     createdAt, lastResetAt, sinceExact, heads,
   } }
+}
+
+// --- vrs. — a member stops a reset ---------------------------------------------------
+
+export interface ResetStop { address: string; resetHash: string; dirNonce: string }
+
+export function buildVrs(v: ResetStop): string {
+  return ['vrs', b64uEnc(te.encode(v.address)), v.resetHash, v.dirNonce].join('.')
+}
+
+export interface ResetStopOpts {
+  /** the verified roster: its head is the head the reset would replace */
+  roster: RosterState
+  /** the reset request's ros. text, as the directory holds it */
+  resetRos: string
+  /** when the directory took the reset request (its clock) */
+  resetRequestedAt: number
+  /** the challenge the directory issued to this session */
+  challenge: string
+  /** spends the challenge; false if it was spent or has expired. Called once the
+   *  text parses, before anything else: every refusal before it is `grammar` */
+  spend: (challenge: string) => boolean
+  rpId: string
+  origins: readonly string[]
+  /** the rp a consent key's cns. names; needed only when a ck stops the reset */
+  consentRp?: string
+  /** the directory's clock now (a ck's co-sign must be alive) */
+  now: number
+}
+
+/**
+ * For the DIRECTORY: may this member stop this reset? The proof is the member's,
+ * over the exact vrs. text: `assertion` for a pk, `sig` for an rk, `cns` + `sig`
+ * for a ck. The account's age is judged at the reset's REQUEST time; an account
+ * created less than 14 days before the request cannot have it stopped by a member
+ * (only by the mailbox's own void link). A chain read from a pin has no creation
+ * time, so its age is unknown and the stop is refused: the directory holds the
+ * whole chain. Never throws.
+ */
+export async function verifyResetStop(text: string, signer: string, proof: Proof, opts: ResetStopOpts): Promise<Verdict<ResetStop>> {
+  try { return await resetStop(text, signer, proof, opts) } catch { return no('grammar') }
+}
+
+async function resetStop(text: string, signerPub: string, proof: Proof, opts: ResetStopOpts): Promise<Verdict<ResetStop>> {
+  const p = fields(text, 'vrs', 4)
+  if (!p) return no('grammar')
+  const [, addressF, resetHash, dirNonce] = p
+  const address = freeText(addressF)
+  if (address === null || !isNormalAddress(address)) return no('grammar')
+  if (!isHash(resetHash) || !isNonce(dirNonce)) return no('grammar')
+  const ro = opts.roster
+  if (!ro || !Array.isArray(ro.members) || !str(signerPub) || !proof || typeof proof !== 'object' || !str(opts.resetRos) ||
+    !Number.isSafeInteger(opts.resetRequestedAt) || !Number.isSafeInteger(opts.now) || !str(opts.challenge) || typeof opts.spend !== 'function') return no('grammar')
+  if (!opts.spend(opts.challenge)) return no('replay')
+  if (dirNonce !== opts.challenge) return no('challenge')
+  if (address !== ro.address) return no('address')
+  if (resetHash !== (await sha256b64u(opts.resetRos))) return no('reset-mismatch')
+  // the reset names this roster's head as its previous, and installs one passkey
+  const rh = await parseRos(opts.resetRos)
+  if (!rh.ok || rh.value.address !== ro.address || rh.value.seq !== ro.seq + 1 || rh.value.prev !== ro.headHash ||
+    !soleLivePk(rh.value.members)) return no('reset')
+  if (opts.resetRequestedAt < ro.ripenedAt) return no('order')
+  // G5, judged when the reset was REQUESTED
+  if (ro.createdAt === null) return no('age-unknown')
+  if (opts.resetRequestedAt - ro.createdAt < NEW_ACCOUNT_MS) return no('new-account')
+  const m = ro.members.find((x) => x.pub === signerPub)
+  if (!m) return no('signer')
+  if (m.quarantined) return no('quarantined')
+  const pr = await memberProof(m, proof, text, dirNonce, opts.now, opts)
+  if (!pr.ok) return pr
+  return { ok: true, value: { address, resetHash, dirNonce } }
 }

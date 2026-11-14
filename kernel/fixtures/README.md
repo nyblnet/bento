@@ -37,6 +37,16 @@ bytes end to end. Reference: `kernel/src/recovery.ts`. Rig:
   forgives case, spaces and hyphens, and reads O as 0 and I/L as 1. U is valid
   ONLY as the check symbol. Argon2id takes the 10 decoded BYTES, never the
   string.
+- **`rk`, the recovery KEY under option G** (section `rk`). The code derives a
+  P-256 key whose public half is a roster member. The Argon2id salt is PER
+  ACCOUNT: the first 16 bytes of SHA-256(`bento/id/rk-salt/v1` ‖ 0x00 ‖ the
+  address in normal form) (`salts`). Then candidate `c` = HKDF-SHA-256(ikm,
+  empty salt, info `bento/id/rk/v1` ‖ ONE BYTE `c`) (`candidates`: counters 0, 1,
+  2, 255), and the scalar is the first candidate, read big-endian, with
+  1 ≤ d < n. Never reduce mod n. `pick` pins that counter rule over given
+  candidates (0, n and all-ones are refused; n − 1 is taken; nothing in range
+  gives −1), because a real refusal happens about once in 2^32. `derive` rows
+  run the whole path; the same code at two addresses gives two keys.
 - **HKDF salt "empty" means zero-length** (equivalent to 32 zero bytes). AES-GCM
   ciphertexts are `ciphertext ‖ 16-byte tag` with a 12-byte IV.
 - **Blob plaintext is exactly 64 bytes**: the account scalar ‖ the RECOVERY kx
@@ -381,6 +391,25 @@ joined (`since`), `createdAt`, `lastResetAt` and `sinceExact`.
   present at the pin get the pin's ripenedAt (`sinceExact: false`): the age it
   gives is a lower bound, the safe direction for any rule that waits on a
   member's age.
+- **Consent keys (`ck`).** A ck signs a member change by a `cns.` (statements'
+  family) with purpose `roster`, audience `dir`, challenge = the head's
+  dirNonce, over the exact ros. text: the link carries `cns` and `sig`. A link
+  asked by any member may also carry `cosign: {signer, cns, sig}` from ANOTHER
+  ck of the PREVIOUS head, unquarantined. A ck is RIPE when
+  `requestedAt − since ≥ 72 h` (since from this chain; a pin's since is a lower
+  bound). A change signed or co-signed by a ripe ck needs no wait; an unripe
+  co-signer is refused (`cosign-unripe`), never ignored. The cns. must be alive
+  at `requestedAt`, for at most 5 min plus the skew. Pass `consentRp` (the
+  file's) to `verifyRosterChain`; without it any link a ck signs is `grammar`.
+  A voided request's cns. (q evidence) has no time check.
+- **`resetStops`: `vrs.<b64u(address)>.<sha256(reset ros. text)>.<dirNonce>`**,
+  a member stopping a reset (the directory's check, `verifyResetStop`). The
+  member is unquarantined on the head the reset would replace, and proves by
+  an assertion (pk), a raw signature (rk) or a roster `cns.` alive now (ck). The
+  reset names that head as its previous and installs one passkey. Refused while
+  the account was under 14 days old when the reset was REQUESTED
+  (`new-account`), and when the chain came from a pin (`age-unknown`). The
+  challenge is spent first: every refusal before it is `grammar`.
 - **`heads`.** The state also lists every head of the links given, in chain
   order, with its hash, seq, ripenedAt and members: the heads a device
   certificate may name (`device-v1.json`). The pinned head is the first.
@@ -394,8 +423,9 @@ match verdicts, not bytes). Not read by any host yet.
 
 Each row names a roster chain in `chains`. Verify it with `verifyRosterChain`
 (roster-v2.json's rules) at `now` = the row's `now`, or the file's; then verify
-the row's `proof` (`{cert, signer, assertion, watt, wattSig}`) against that
-roster. Match the verdict, the reason where you can, and the `tier` of every
+the row's `proof` (`{cert, signer, assertion | consent, watt, wattSig}`) against
+that roster, with `consentRp` (the file's) as the rp a consent key's `cns.` must
+name. Match the verdict, the reason where you can, and the `tier` of every
 accepted row.
 
 - **`wdev.<devicePub>.<kx>.<b64u(address)>.<rosHash>.<b64u(label)|empty>.<via>.<ceremonyAt>.<dirNonce>`**:
@@ -405,11 +435,24 @@ accepted row.
   the device key. The label is display text (statements' rules) of at most 40
   characters. `via` is `passkey` (an assertion by a roster passkey over the exact
   text: webauthn-v1.json's rules, rp `rpId`, origins `origins`, no stored sign
-  count). `cns` (wdev.) and `ck` (dev2.) parse but are REFUSED (`via`) until their
-  consent purposes are defined.
-- **`watt.<sha256(certificate text)>.<ob>.<loggedAt>.<expires>.<kid>`**, signed by
+  count). `cns` (wdev., route D: a phone approves a browser) and `ck` (dev2.) are a
+  consent key's co-sign instead: the proof carries `consent: {cns, sig}` and no
+  assertion (exactly one proof, else `proof`). The signer is then an
+  unquarantined `ck` under the same head rule, RIPE (`ceremonyAt − since ≥ 72 h`,
+  its `since` from the verified chain, else `signer-unripe`), and its `cns.` is
+  `cns.<rp>.<purpose>..<transcript>.<exp>` with purpose `web-add` for a wdev. and
+  `roster` for a dev2., the transcript over audience `dir`, challenge = the
+  certificate's dirNonce and the exact certificate text, and
+  `ceremonyAt < exp ≤ ceremonyAt + 5 min + 5 min skew`. Refusals are
+  `consent-<reason>` (`purpose`, `rp`, `transcript`, `expired`, `lifetime`,
+  `signature`, `grammar`, `reserved-purpose`).
+- **`watt.<sha256(certificate text)>.<ob>.<mb>.<loggedAt>.<expires>.<kid>`**, signed by
   a pinned directory key (raw r‖s, low-S; the kid picks the key). `ob` is `0` or
-  `1`. `0 < expires − loggedAt ≤ 24 h`; `expires ≤ ceremonyAt + 7 days`, from
+  `1` (informative: 1 when the directory logged the ceremony as made for
+  bento/home). `mb` is the mailbox state: `0` while the address is confirmed, else
+  the time it went unconfirmed, `≤ loggedAt` (else `watt-grammar`). A
+  certificate stays valid with a lapsed mailbox; an agent qualifies the address
+  ("unconfirmed since <date>"). The six-field `watt.` without `mb` is refused. `0 < expires − loggedAt ≤ 24 h`; `expires ≤ ceremonyAt + 7 days`, from
   the certificate's ORIGINAL ceremony (a renewal is a new `watt.` over the same
   certificate text); `loggedAt ≥ ceremonyAt`; not logged in the future (5 min
   skew); not expired (`now < expires`).
@@ -418,10 +461,28 @@ accepted row.
   to place it); `ceremonyAt ≥ H.ripenedAt`; the signer is an unquarantined `pk`
   of H AND of the current head; and its current `since` ≤ H.ripenedAt (else
   `signer-break`: removed and re-added, or across a reset).
-- **The tier.** Every certificate in this file is `passkey` ("(passkey sign-in)").
-  A `dev2.`'s consentPub is a claim until that consent key signs the certificate,
-  so a consent key's age on the roster never promotes one by itself
-  (`tier/ck-ripe-exactly-72h`, `sec/tier-consent-key-not-proven`). Native tier
-  arrives with the consent key's own signature, in a later version.
+- **The tier.** `native` only for a `dev2.` via `ck` (a ripe consent key's
+  co-sign over the whole text). Everything else is `passkey` ("(passkey
+  sign-in)"): every passkey-made certificate, and a wdev. via `cns`. A
+  passkey-made `dev2.`'s consentPub is a claim, so a consent key's age on the
+  roster never promotes it (`tier/ck-ripe-exactly-72h`,
+  `sec/tier-consent-key-not-proven`). Native still needs a current 24 h
+  `watt.` (`ck/native-watt-*`).
 - **`wren.<devicePub>.<b64u(address)>.<challenge>`** (`wren` rows): the device
   key's raw low-S signature over the text. Only the directory checks it.
+- **`wret.<oldDevicePub>.<newDevicePub>.<b64u(address)>.<dirNonce>`** (`wret`
+  rows): an old browser key retiring itself at a new ceremony, signed by the OLD
+  key; the two keys differ. Only the directory checks it.
+- **`inc.<id>.<from>.<to|empty>.<issuedAt>.<kid>`** (`inc` rows): the
+  directory's incident record. `id` is `[a-z0-9-]{1,64}`; `to` empty while open,
+  else `> from`; `issuedAt ≥ from` and not in the future; a pinned kid. `inside`
+  pairs check `insideIncident(at, record)`: from inclusive, to exclusive.
+- **`reserved`**: one text for each of `mgd.`, `vch.`, `ojn.`, `dvc.`, which every
+  verifier refuses today and `RESERVED_PREFIXES` lists.
+- **`linkFinal`**: link.ts's final message under option G. The lines are `lnkg`,
+  the dev2., H's consent key, its `cns.`, the signature and the seal (`edit`
+  replaces one line, or appends a seventh). The seal is `b64u(iv ‖ AES-256-GCM
+  under h2n, AAD "lnkgs.v1." ‖ t, of SHA-256(the first five lines joined by "\n")
+  ‖ tag)`, exactly 60 bytes. N: `openFinalG` with `h2n`, `t`, `offer`. A
+  `release` row is the directory's `verifyLinkReleaseG` against `chains.base`. A
+  row with `watt` also verifies as a device proof at native tier.

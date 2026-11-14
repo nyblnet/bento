@@ -706,16 +706,29 @@ export async function verifyDreq(text        , sig        , opts
  * until defined. (Distinct from identity.ts SignPurpose, which is about routine
  * signing with the device key.)
  */
-                                                                                                                      
+                                                                                                                                             
 /**
  * The family is a PREFIX check on the payload, so the three directory-request
  * purposes name their OP, never bare `dreq.`: a consent for adding a passkey
  * must not authorise removing one, or enrolling a recovery verifier.
+ *
+ * Option G's two purposes (bento/id, KG3), signed by a native consent key (ck)
+ * that is a roster member:
+ *   roster   the texts that change who speaks for the account: a roster head
+ *            (`ros.`, as the requester or as the co-signer that skips the 72 h
+ *            wait), a native device certificate (`dev2.`, which a ripe ck makes
+ *            native tier), and a member's stop of a reset (`vrs.`)
+ *   web-add  a browser device certificate (`wdev.`), approved from a phone
+ *            (route D)
+ * A signature never moves between them: the transcript hashes the exact
+ * payload, and the purpose names the family it may cover.
  */
-const CONSENT_FAMILY                                 = {
-  invite: 'inv.', revoke: 'rev.', link: 'dev.', rotate: 'bind.', unbind: 'del.',
-  'cred-add': 'dreq.cred-add.', 'cred-del': 'dreq.cred-del.', 'rc-enrol': 'dreq.rc-enrol.',
+const CONSENT_FAMILY                                            = {
+  invite: ['inv.'], revoke: ['rev.'], link: ['dev.'], rotate: ['bind.'], unbind: ['del.'],
+  'cred-add': ['dreq.cred-add.'], 'cred-del': ['dreq.cred-del.'], 'rc-enrol': ['dreq.rc-enrol.'],
+  roster: ['ros.', 'dev2.', 'vrs.'], 'web-add': ['wdev.'],
 }
+const ofFamily = (purpose                , payload        ) => CONSENT_FAMILY[purpose].some((f) => payload.startsWith(f))
 const RESERVED_PURPOSES = new Set(['grant', 'role'])
 /** Purposes about one document carry its docId; account-scoped ones carry none. */
 const DOC_SCOPED = new Set                (['invite', 'revoke'])
@@ -789,7 +802,7 @@ export async function verifyConsent(text        , sig        , opts
   if (exp === null) return no('grammar')
   if (rp !== opts.rp) return no('rp')
   // the payload must be of the family this purpose authorises
-  if (!opts.payloadText.startsWith(CONSENT_FAMILY[purpose])) return no('payload-family')
+  if (!ofFamily(purpose, opts.payloadText)) return no('payload-family')
   // document-scoped purposes name the document; account-scoped ones name none
   if (DOC_SCOPED.has(purpose)) {
     if (!DOCID_RE.test(docIdF) || docIdF !== opts.docId) return no('docid')
@@ -800,6 +813,64 @@ export async function verifyConsent(text        , sig        , opts
   if (exp - opts.now > CONSENT_MAX_TTL_MS) return no('lifetime')
   if (!(await verifyStatementSig(opts.consentPub, sig, text))) return no('signature')
   return { ok: true, value: { rp, purpose, docId: docIdF || null, transcript, exp } }
+}
+
+/** Option G's consent purposes: the only ones a co-sign may carry. */
+                                                
+
+/**
+ * A consent key's co-sign under option G, checked OFFLINE: by a peer reading a
+ * roster link or a device certificate, long after the directory spent the
+ * challenge. The directory itself checks the same text LIVE with verifyConsent
+ * (which spends the challenge); this is what is left for everyone else, with
+ * nothing taken from the co-sign itself:
+ *   - the purpose is the one the CALLER names (`roster` or `web-add`), and the
+ *     payload is of its family;
+ *   - the audience is `dir` and the challenge is the directory nonce written
+ *     INSIDE the payload (ros., wdev., dev2. and vrs. all carry one; the caller
+ *     passes the one it parsed), so the transcript binds the co-sign to the
+ *     exact text and the ceremony;
+ *   - no docId (account-scoped);
+ *   - `at` is the directory's clock for the moment it checked the co-sign live
+ *     (a link's requestedAt, a certificate's ceremonyAt): the co-sign must not
+ *     have expired by then, and its life from then is at most
+ *     CONSENT_MAX_TTL_MS plus the clock skew. `at` null skips the time check:
+ *     only for a voided request a quarantine carries as evidence, which never
+ *     ripened and is read only to show who asked;
+ *   - the signature by `consentPub`, whose membership and ripeness the caller
+ *     checks against the roster (a key is not a consent key by being named).
+ * `rp` is the caller's parameter, never a literal here.
+ */
+export async function verifyCoSign(text        , sig        , opts   
+                    
+            
+                        
+                     
+                                                 
+                   
+                   
+ )                            {
+  const p = fields(text, 'cns', 6)
+  if (!p) return no('grammar')
+  const [, rp, purposeF, docIdF, transcript, expF] = p
+  if (!RP_RE.test(rp) || !isHash(transcript)) return no('grammar')
+  if (RESERVED_PURPOSES.has(purposeF)) return no('reserved-purpose')
+  if (!Object.hasOwn(CONSENT_FAMILY, purposeF)) return no('grammar')
+  const exp = ms(expF)
+  if (exp === null || docIdF !== '') return no('grammar')
+  if (typeof opts.rp !== 'string' || rp !== opts.rp) return no('rp')
+  if (purposeF !== opts.purpose) return no('purpose')
+  const purpose = purposeF                 
+  if (typeof opts.payloadText !== 'string' || !ofFamily(purpose, opts.payloadText)) return no('payload-family')
+  const expected = await consentTranscript('dir', opts.challenge, opts.payloadText)
+  if (expected === null || transcript !== expected) return no('transcript')
+  if (opts.at !== null) {
+    if (!Number.isSafeInteger(opts.at)) return no('grammar')
+    if (exp <= opts.at) return no('expired')
+    if (exp - opts.at > CONSENT_MAX_TTL_MS + SKEW_MS) return no('lifetime')
+  }
+  if (!(await verifyStatementSig(opts.consentPub, sig, text))) return no('signature')
+  return { ok: true, value: { rp, purpose, docId: null, transcript, exp } }
 }
 
 /**
@@ -823,19 +894,29 @@ export const webauthnChallengeFor = (cnsText        )                  => sha256
  *   wdev. watt. wren. dev2. — bento/id option G's device certificates: a browser
  *           device key certified by a passkey assertion, the directory's logged
  *           countersign and its renewals, the renewal request, and the native
- *           device certificate. Defined in a later kernel change.
+ *           device certificate. Defined in devices.ts; still listed here so
+ *           nothing else takes them until the hosts adopt them.
+ *   wret. inc. — the old browser key's retirement at a new ceremony, and the
+ *           directory's incident record. Defined in devices.ts, listed here
+ *           for the same reason.
+ *   mgd. vch. ojn. dvc. — organisation identity, not defined yet: a managed
+ *           account's directory statement, the record that an organisation's
+ *           sign-in vouched for an act, a member's request to join a managed
+ *           domain, and a sovereign directory's device statement. Reserved so
+ *           a launch-1 verifier refuses them today and no family takes them.
  * (ros. and rip., the option G roster and its ripening countersign, are defined
  * in roster.ts: ROSTER_PREFIXES.)
  */
-export const RESERVED_PREFIXES                    = Object.freeze(['pk', 'drev', 'wdev', 'watt', 'wren', 'dev2'])
+export const RESERVED_PREFIXES                    = Object.freeze(['pk', 'drev', 'wdev', 'watt', 'wren', 'dev2', 'wret', 'inc', 'mgd', 'vch', 'ojn', 'dvc'])
 
 /**
  * Prefixes taken by device linking (link.ts, link v1). None is a statement the
  * account key signs, but each is a byte layout every agent must agree on, so no
  * statement family may ever take one: lnk0–lnk3 are the four slot messages,
- * lnkt the transcript, lnkp the proof of possession, lnka the AEAD's AAD.
+ * lnkt the transcript, lnkp the proof of possession, lnka the AEAD's AAD;
+ * under option G, lnkg the final (a co-sign, not a scalar) and lnkgs its seal's AAD.
  */
-export const LINK_PREFIXES                    = Object.freeze(['lnk0', 'lnk1', 'lnk2', 'lnk3', 'lnkt', 'lnkp', 'lnka'])
+export const LINK_PREFIXES                    = Object.freeze(['lnk0', 'lnk1', 'lnk2', 'lnk3', 'lnkt', 'lnkp', 'lnka', 'lnkg', 'lnkgs'])
 
 // --- routine signing: what payload each SignPurpose (identity.ts) may sign ----
 

@@ -5,6 +5,7 @@
 // the complete static site for bento.page into ./site/.
 //
 //   node scripts/release.mjs [--app slides|spaces|dash] [--no-build] [--key path] [--out dir]
+//                            [--home-web --frame-origin <url> [--home-web-out dir] [--home-web-dev]]
 //
 // ONE RELEASE BUILDS ONE APP, and `site/` is mirrored authoritatively — so the
 // site is SEEDED from the published tree first and this build overwrites only
@@ -42,6 +43,8 @@ import { fileURLToPath } from 'node:url'
 import { spliceDoc } from './guestbook-deck.mjs'
 import { gateShell } from './shell-gate.mjs'
 import { APPS, RELEASE_MARKER, tagFor } from './apps.mjs'
+import { homeWebOptions, homeWebKey, prepareHomeWebOut, publishedHistories, homeWebBuildArgs } from './home-web-release.mjs'
+import { releasePublicKey } from './sign-payload.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const args = process.argv.slice(2)
@@ -85,6 +88,40 @@ const site = opt('out', join(root, 'site'))
 const published = process.env.BENTO_SITE_DIR
   ? resolve(process.env.BENTO_SITE_DIR)
   : resolve(root, '..', 'bento-site')
+
+// bento/home in the browser (home/web), OPT-IN: --home-web builds it from the
+// histories this release leaves in the site, for every published app, into a
+// directory OUTSIDE the site (nothing deploys it). It needs the maintainer's
+// --frame-origin, which has no default (scripts/home-web-release.mjs).
+//
+// Order matters. The option refusals come first. Then the output is checked
+// (never inside or around the site or the published tree; only the site
+// folder itself may be created by then) and emptied, so an earlier development
+// or test-key build never survives a later refusal; then the key, the mutant
+// hook and esbuild are checked; the published histories are checked once the site
+// is seeded. All of that is before anything is signed. The one check on an
+// input left for after signing is the history this release signs, which
+// verifies whenever the signing key is the release key (checked here).
+let homeWeb = null
+let homeWebKeyFile = null
+try {
+  homeWeb = homeWebOptions({ args, opt, site })
+  if (homeWeb) {
+    prepareHomeWebOut({ site, out: homeWeb.out, published })
+    homeWeb.devKey = homeWebKey({ keyPath: opt('key', null), releaseKey: releasePublicKey, dev: homeWeb.dev })
+    // home/web/build.mjs's own refusals, up front: a release never builds a mutant
+    if (process.env.BENTO_HOME_WEB_MUTANT) throw new Error('BENTO_HOME_WEB_MUTANT is set: a release never builds a home/web mutant')
+    const esbuild = process.env.ESBUILD || join(root, 'slides/node_modules/.bin/esbuild')
+    if (!existsSync(esbuild)) throw new Error(`home/web needs esbuild, not found at ${esbuild} (npm ci --prefix slides, or set ESBUILD)`)
+  }
+} catch (e) {
+  console.error(`✗ ${e.message}`)
+  process.exit(1)
+}
+if (homeWeb?.devKey) {
+  homeWebKeyFile = join(mkdtempSync(join(tmpdir(), 'bento-home-web-key-')), 'test-key.json')
+  writeFileSync(homeWebKeyFile, JSON.stringify(homeWeb.devKey))
+}
 
 // `--print-notes` shows exactly what this release would sign into the manifest,
 // then exits. Nothing is built, staged, wiped or signed.
@@ -164,6 +201,23 @@ if (app.agents && existsSync(join(root, app.agents))) {
     join(site, `${app.dir}/agents.md`),
     readFileSync(join(root, app.agents), 'utf8').replace(/__APP_VERSION__/g, version),
   )
+}
+
+// bento/home in the browser: every published app's history, as seeded, must be
+// one the home/web build will take (published apps each have one, each
+// verifies against the key the build carries), checked BEFORE signing. The app
+// being released may have none yet; its new history is checked by the build.
+if (homeWeb) {
+  let seeded
+  try { seeded = publishedHistories(site, APPS, appKey) } catch (e) { console.error(`✗ home/web: ${e.message}`); process.exit(1) }
+  if (seeded.length) {
+    try {
+      execFileSync('node', homeWebBuildArgs({ root, opts: homeWeb, histories: seeded, devKeyFile: homeWebKeyFile, check: true }), { stdio: 'inherit' })
+    } catch {
+      console.error('✗ home/web: a published history would be refused (above); nothing has been signed')
+      process.exit(1)
+    }
+  }
 }
 
 // CONFORMANCE GATE — old updaters are frozen code; every release must
@@ -492,6 +546,15 @@ writeFileSync(
   join(site, RELEASE_MARKER),
   JSON.stringify({ app: appKey, appId: app.appId, version, at: new Date().toISOString() }, null, 2) + '\n',
 )
+
+// bento/home in the browser: built from the histories the site now holds (this
+// release's, plus every published app's from the seed), only when asked.
+if (homeWeb) {
+  const histories = publishedHistories(site, APPS)
+  const devKeyFile = homeWebKeyFile
+  console.log(`• home/web: ${homeWeb.dev ? 'DEVELOPMENT ' : ''}build with ${histories.map((h) => h.appId).join(', ')} histories, frame ${homeWeb.frameOrigin} → ${homeWeb.out} (not deployed)`)
+  execFileSync('node', homeWebBuildArgs({ root, opts: homeWeb, histories, devKeyFile }), { stdio: 'inherit' })
+}
 
 console.log(`\nSite assembled for ${app.appId} v${version}:`)
 execFileSync('find', [site, '-type', 'f'], { stdio: 'inherit' })

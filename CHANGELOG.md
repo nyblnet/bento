@@ -11,6 +11,11 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Large pictures in a live deck upload once.** While you kept editing, a
+  picture still on its way to the sync server was sent again after every
+  change, several copies at once, and the server turned most of them away. A
+  deck now uploads each picture once, waits a little longer after each failed
+  try, and waits until the connection is ready before starting.
 - **On a phone, Share stays on the screen.** With Share folded into the ⋯ menu,
   its panel floated beside the menu, see-through and overlapping it, and a
   collaborator with a long name could push it past the left edge of the screen,

@@ -54,14 +54,24 @@
 // one-completion-per-slot rule and the notifications are the directory's; the
 // rule that an id.bento.page/l# link never starts the H side is each host's UI.
 //
+// UNDER OPTION G (bento/id, KG3) step 7 and msg3 change; steps 1-6, the slot,
+// the transcript, the keys and the SAS do not. There is no account scalar to
+// hand over: H's ripe consent key CO-SIGNS a dev2. for N instead (cns. purpose
+// `roster`, which makes N native at once), and msg3 is the G FINAL, a new label
+// (`lnkg`, sealed with AAD `lnkgs.v1.<t>`), so a v1 SEALED payload and a G final
+// can never be read as each other. v1's SEALED bytes below are untouched and no
+// G host emits them. See "the final under option G" at the end of this file.
+//
 // Every AES-GCM message carries AAD = `lnka.v1.<t>.<n>`: the transcript and the
 // message number. Each key seals exactly one message number in one direction
 // (n2h seals 2, h2n seals 3), chosen here from the number, never by the caller.
 
 import {
-  b64uEnc, b64uDec, sha256b64u, isSigningKey, isKxKey, verifyStatementSig, verifyDev, verifyConsent,
-  displayText, parseBind, verifyBind, verifyAtt,                                                             
+  b64uEnc, b64uDec, sha256b64u, isSigningKey, isKxKey, verifyStatementSig, verifyDev, verifyConsent, verifyCoSign,
+  displayText, parseBind, verifyBind, verifyAtt, SKEW_MS,                                                             
 } from './statements.js'
+import { parseDeviceCert, CK_RIPE_MS,                             } from './devices.js'
+                                              
 import { isNormalAddress } from './address.js'
 import { formatRecoveryCode, parseRecoveryCode, unpackAccountScalar, CODE_BYTES } from './recovery.js'
 
@@ -524,7 +534,7 @@ export function encodeSlotMsg(n           , msg        )         {
  * base64url only (no padding, zero trailing bits; a raw `lnk0.` text is
  * refused), strict UTF-8, and the decoded text must carry its own prefix.
  * msg2: canonical base64url of at least an iv and a tag. msg3: text starting
- * `lnk3` and a line feed. Every message is at most MAX_SLOT_MSG bytes once
+ * `lnk3` (or option G's `lnkg`) and a line feed. Every message is at most MAX_SLOT_MSG bytes once
  * decoded, which for msg2 means the sealed bytes, not their text. The parsers (parseMsg0,
  * parseMsg1, openOffer, verifyLinkRelease, openFinal) still check what this
  * returns; this only fixes how the bytes travel.
@@ -549,6 +559,146 @@ function decodable(n           , text        )          {
   if (te.encode(text).length > MAX_SLOT_MSG) return false
   if (n === 0) return text.startsWith('lnk0.')
   if (n === 1) return text.startsWith('lnk1.')
-  if (n === 3) return text.startsWith('lnk3\n')
+  if (n === 3) return text.startsWith('lnk3\n') || text.startsWith('lnkg\n')   // v1's final, or option G's
   return false
+}
+
+// --- the final under option G (msg3, H → N): a co-sign, not a scalar ----------------------
+//
+//   lnkg
+//   <dev2. text>   N's certificate: N's devicePub, consentPub and kx as offered in
+//                  msg2, via `ck`, the head H's consent key is a member of, and the
+//                  directory's ceremonyAt and dirNonce (H asked for the challenge)
+//   <ck>           H's consent key (raw point, base64url): the co-signer
+//   <cns.>         H's ck's cns., purpose `roster`, audience `dir`, challenge = the
+//                  dev2.'s dirNonce, over the exact dev2. text
+//   <cns sig>      its raw low-S signature
+//   <seal>         b64u( iv (12) ‖ AES-256-GCM under h2n, AAD UTF-8("lnkgs.v1." ‖ t),
+//                  of SHA-256(UTF-8 of the five lines above joined by "\n") ‖ tag (16) ),
+//                  exactly 60 bytes
+//
+// Nothing here is secret (the directory sees all of it, and countersigns the
+// dev2. with a watt.). The seal is what the SAS buys: N knows these exact lines
+// came from the H whose code it scanned, so the directory cannot swap in a
+// certificate for another key or another account. N then confirms the address
+// (it is in the dev2.) with the person, and checks the whole certificate with
+// verifyDevice once the directory's watt. and roster chain arrive. Adding N's
+// own consent key to the roster is a separate roster change, which H's ripe ck
+// may sign or co-sign (roster.ts).
+
+/** The AAD the G final's seal carries. */
+export const linkGAad = (t        )         => `lnkgs.v1.${t}`
+/** The seal is always this long: iv, a SHA-256 digest, the tag. */
+export const LINK_G_SEAL_LEN = 12 + 32 + 16
+
+                                                                                                   
+
+const finalGBody = (f                          ) => ['lnkg', f.dev2, f.ck, f.cns, f.cnsSig].join('\n')
+
+/** H builds the G final: the four lines, then the seal over them under h2n. The
+ *  iv is fresh random bytes in an agent. */
+export async function buildFinalG(f                          , keys          , t        , iv            )                  {
+  if (iv.length !== 12) throw new Error('the iv is 12 bytes')
+  const body = finalGBody(f)
+  if (!parseFinalG(`${body}\n${b64uEnc(new Uint8Array(LINK_G_SEAL_LEN))}`)) throw new Error('not a G final')
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', te.encode(body)                ))
+  const k = await crypto.subtle.importKey('raw', keys.h2n                , 'AES-GCM', false, ['encrypt'])
+  const ct = new Uint8Array(await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: iv                , additionalData: te.encode(linkGAad(t))                , tagLength: 128 }, k, digest                ))
+  const out = new Uint8Array(12 + ct.length)
+  out.set(iv); out.set(ct, 12)
+  return `${body}\n${b64uEnc(out)}`
+}
+
+/** The G final's lines, or null: six lines, `lnkg` first, printable ASCII, the
+ *  ck a key-sized field, the signature 64 bytes and the seal exactly 60. */
+export function parseFinalG(text         )                    {
+  if (typeof text !== 'string' || text.length > MAX_SLOT_MSG) return null
+  const l = text.split('\n')
+  if (l.length !== 6 || l[0] !== 'lnkg' || !l.every(printable)) return null
+  const [, dev2, ck, cns, cnsSig, seal] = l
+  if (b64uDec(ck)?.length !== 65 || !isSig(cnsSig) || b64uDec(seal)?.length !== LINK_G_SEAL_LEN) return null
+  return { dev2, ck, cns, cnsSig, seal }
+}
+
+/**
+ * N's check of the G final before it shows anything (the G form of openFinal).
+ * `offer` is exactly what N sent in msg2. The seal must open under h2n with
+ * the G AAD and equal the hash of the five lines; the dev2. must parse, be via
+ * `ck`, and name exactly N's devicePub, consentPub and kx; H's ck must not be
+ * one of N's own keys; and its cns. must verify (purpose roster, over the dev2.,
+ * bound to its dirNonce, alive at its ceremonyAt). Whether H's ck is a RIPE
+ * member is the roster's to say: verifyDevice, with the watt. and the chain,
+ * before N stores anything. Any refusal: abort and delete the slot.
+ */
+export async function openFinalG(text        , opts                                                                    ) 
+                                                                                  {
+  const f = parseFinalG(text)
+  if (!f) return no('grammar')
+  const b = b64uDec(f.seal) 
+  let digest            
+  try {
+    const k = await crypto.subtle.importKey('raw', opts.keys.h2n                , 'AES-GCM', false, ['decrypt'])
+    digest = new Uint8Array(await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: b.subarray(0, 12)                , additionalData: te.encode(linkGAad(opts.t))                , tagLength: 128 },
+      k, b.subarray(12)                ))
+  } catch { return no('decrypt') }
+  const want = new Uint8Array(await crypto.subtle.digest('SHA-256', te.encode(finalGBody(f))                ))
+  if (digest.length !== 32 || !digest.every((x, i) => x === want[i])) return no('seal')
+  const c = await parseDeviceCert(f.dev2)
+  if (!c.ok) return no(`dev-${c.reason}`)
+  const cert = c.value
+  if (cert.kind !== 'dev2') return no('dev-kind')
+  if (cert.via !== 'ck') return no('via')
+  if (cert.devicePub !== opts.offer.devicePub) return no('device-mismatch')
+  if (cert.consentPub !== opts.offer.consentPub) return no('consent-mismatch')
+  if (cert.kx !== opts.offer.kx) return no('kx-mismatch')
+  if (f.ck === cert.devicePub || f.ck === cert.consentPub) return no('ck-is-n')
+  const v = await verifyCoSign(f.cns, f.cnsSig, { consentPub: f.ck, rp: opts.consentRp, purpose: 'roster', payloadText: f.dev2,
+    challenge: cert.dirNonce, at: cert.ceremonyAt })
+  if (!v.ok) return no(`cns-${v.reason}`)
+  return { ok: true, value: { cert, dev2: f.dev2, ck: f.ck, address: cert.address } }
+}
+
+/**
+ * The DIRECTORY's check before it releases a G final to N and countersigns the
+ * dev2. with a watt. It brings the account's verified roster, the challenge it
+ * issued to H's session (which must be the dev2.'s dirNonce and its ceremonyAt
+ * its own challenge time), and `spend` (called once the final parses; every
+ * refusal before it is `grammar`). H's ck must be an unquarantined ck member of
+ * the CURRENT head, ripe (72 h a member at ceremonyAt), and its cns. must
+ * verify live (verifyConsent: audience `dir`, this challenge, purpose roster).
+ * The seal is N's to check: the directory does not hold h2n.
+ */
+export async function verifyLinkReleaseG(text        , opts   
+                     
+                   
+                   
+             
+                                       
+ )                                                                 {
+  const f = parseFinalG(text)
+  if (!f || !fields(f.cns, 'cns', 6)) return no('grammar')
+  const ro = opts.roster
+  if (!ro || !Array.isArray(ro.members) || !Number.isSafeInteger(opts.now)) return no('grammar')
+  if (!opts.spend(opts.challenge)) return no('replay')
+  const c = await parseDeviceCert(f.dev2)
+  if (!c.ok) return no(`dev-${c.reason}`)
+  const cert = c.value
+  if (cert.kind !== 'dev2' || cert.via !== 'ck') return no('via')
+  if (cert.dirNonce !== opts.challenge) return no('challenge')
+  if (cert.address !== ro.address) return no('address')
+  if (cert.rosHash !== ro.headHash) return no('roster-head')
+  if (cert.ceremonyAt > opts.now + SKEW_MS) return no('not-yet-valid')
+  const m = ro.members.find((x) => x.pub === f.ck)
+  if (!m) return no('signer')
+  if (m.kind !== 'ck') return no('signer-kind')
+  if (m.quarantined) return no('signer-quarantined')
+  if (cert.ceremonyAt - m.since < CK_RIPE_MS) return no('signer-unripe')
+  if (f.ck === cert.devicePub || f.ck === cert.consentPub) return no('ck-is-n')
+  const v = await verifyConsent(f.cns, f.cnsSig, { consentPub: f.ck, rp: opts.consentRp, audience: 'dir', challenge: opts.challenge,
+    payloadText: f.dev2, docId: null, now: opts.now, spend: () => true })   // spent above
+  if (!v.ok) return no(`cns-${v.reason}`)
+  if (v.value.purpose !== 'roster') return no('cns-purpose')
+  return { ok: true, value: { cert, dev2: f.dev2, ck: f.ck } }
 }
