@@ -14397,7 +14397,13 @@ page could be judged in place of the one shown. Now the extension records each
 library navigation's Sec-Fetch-Site (webRequest, observing only). For a
 cross-site navigation the bytes are not judged, and the Cache-Control header it
 got is pinned in the release list like the CSP, so a `no-store` answer cannot
-hide a change. Stated as a limit: a change to page text only, reached from
-another site, is not seen. Guards: rows `cross-site-link` and
+hide a change. Stated as a limit: on a navigation another site started (a
+link or a popup from outside bento.page, including from a `file://` document
+or a popup a document opens), a same-length change the parse does not flag is
+not seen. Until the element sequence lands (a follow-up, before the first list
+is signed) that includes added elements; after it, text and attribute values.
+The server can tell these visits apart by their Sec-Fetch-Site, so it can serve
+such a change to them alone. Scripts, handlers and the other flags are still
+caught on them. Guards: rows `cross-site-link` and
 `cross-site-no-store` in `scripts/test-webext-tripwire-browser.mjs`, with a
 mutant each.

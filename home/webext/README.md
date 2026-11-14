@@ -419,8 +419,14 @@ home.bento.page has never been checked.
   sent `no-store` there is no cached copy and no CSP check at all), and a change to page
   TEXT only (no script, no handler, the same length) while the network again
   serves the honest worker script;
-- a navigation **another site started**: its bytes cannot be read (above), so a
-  change to page text only, reached that way, is not seen;
+- a navigation **another site started** (a link or a popup from outside
+  bento.page, including from a `file://` document or a popup a document
+  opens): its bytes cannot be read (above), so a same-length change that the
+  parse does not flag is not seen. Until the element sequence lands, that
+  includes ADDED ELEMENTS (a link, an image, a label); after it, text and
+  attribute values. The server can tell these visits apart (Sec-Fetch-Site),
+  so it can serve such a change to them alone; scripts, handlers and the other
+  flags are still caught on them;
 - the **frame page's bytes**: it is an opaque origin, so its scripts, markup,
   size and CSP header are checked, and a same-length change to its text is not;
 - a **rolled-back** list is refused but only recorded; a fresh install that
