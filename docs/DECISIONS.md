@@ -14194,6 +14194,30 @@ Rigs: scripts/test-home-web-identity.mjs (the real library and sign-in host, a
 CDP virtual authenticator, every WebSocket closed; headless shell and Google
 Chrome; `--mutants`, one per rule).
 
+## 2026-11-14 — `validate` is two parallel jobs and an aggregator (reverses part of 2026-10-18)
+
+The one `validate` job reached 18–20 minutes and was being cancelled at its
+20-minute limit with no failing step, which blocked merges. Its work now runs as
+two jobs in parallel, and the required check is a third job that reads their
+results:
+
+- **`validate-builds`** runs every slice that builds an app or reads a built
+  shell, in the old order: slides, spaces, dash, type, convert, home-ios, home,
+  home-webext, shared.
+- **`validate-kernel`** runs the kernel slice alone. It is the longest slice
+  (about seven minutes) and needs no app build, only slides' toolchain, jsdom
+  and the pinned browser. Nothing is built on its runner, so a kernel rig that
+  starts reading a built shell must move or build it itself.
+- **`validate`** (the name branch protection requires, unchanged) needs both
+  and runs with `if: always()`. It passes only when both results are
+  `success`. The 2026-10-18 entry rejected an aggregator because a job skipped
+  after a failed dependency reports "skipped", which a required check accepts
+  as passing. `always()` closes that hole: the job always runs, and a failed,
+  cancelled or skipped half fails it.
+
+The rest of 2026-10-18 stands: composite actions per zone, a new rig at the end
+of its zone's slice, other jobs in `ci-<zone>.yml`, and `ci.yml` changes only
+when a slice is added or moved between the two jobs.
 ## 2026-11-12 — The People panel's identity tiers (bento/id under the roster design; flag off)
 
 - **Built, flag off.** slides' People panel can say who vouched for a
