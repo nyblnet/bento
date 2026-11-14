@@ -17,10 +17,13 @@
 // Values are opaque bytes. With no such host, every caller keeps the storage
 // it always used, unchanged.
 //
-// Wire: the page-world request/response protocol the extension's relay speaks
+// Wire (extension and native hosts): the page-world request/response protocol the extension's relay speaks
 // (home/webext/src/relay.js) — `{__bento_tray__, dir:'req', id, op, payload}`
 // answered by `{dir:'res', id, result}`, ops store.get / set / list / delete,
-// bytes as Uint8Array.
+// bytes as Uint8Array. Under a host that framed the document, the wire is a
+// MessagePort instead: docstoreport.ts.
+
+import { PortBackend, isPortLike } from './docstoreport.ts'
 
 export type DocStoreName = 'recovery' | 'memberkey'
 
@@ -134,10 +137,24 @@ let cached: DocStore | null | undefined
 
 /** The host's DocStore for this page, or null when there is none — in which
  *  case the caller uses the storage it always did. Decided once per page: the
- *  host announces its capabilities (`window.__bentoHost.ops`) before the
- *  document's runtime boots. */
+ *  host announces its capabilities before the document's runtime boots.
+ *
+ *  Two hosts, two transports. A host that framed this document (bento/home in
+ *  a browser) defines `window.__bentoDocStore` whose `take()` hands over, once,
+ *  the MessagePort it transferred at boot: the store speaks over that port and
+ *  nothing else (docstoreport.ts). Otherwise a host that announces
+ *  `window.__bentoHost.ops` including 'store' (the extension, native hosts) is
+ *  spoken to by postMessage on this window. A document saved before the port
+ *  existed never reads `__bentoDocStore`, so under the framing host it keeps
+ *  the storage it always had. */
 export function docStore(): DocStore | null {
   if (cached !== undefined) return cached
+  const offer = (globalThis as { __bentoDocStore?: { take?: unknown } }).__bentoDocStore
+  if (offer && typeof offer.take === 'function') {
+    let port: unknown = null
+    try { port = (offer.take as () => unknown)() } catch { /* nothing offered */ }
+    if (isPortLike(port)) return (cached = new PortBackend(port))
+  }
   const host = (globalThis as { __bentoHost?: { ops?: readonly string[] } }).__bentoHost
   const can = typeof window !== 'undefined' && typeof window.postMessage === 'function' &&
     Array.isArray(host?.ops) && host.ops.includes('store')
