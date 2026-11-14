@@ -290,6 +290,14 @@ jobs:
         # from text) beside a long name or one that reads like a voucher.
         # Network closed, WebSockets included.
         run: node scripts/test-slides-people-tiers-browser.mjs
+      - name: Share on a phone in Chromium
+        # At 390 and 320px, with Share folded into ⋯ and a collaborator whose
+        # name is 74 characters, the Share panel opens as a section of the ⋯
+        # list, wholly inside the viewport, the name cut by its own ellipsis,
+        # and every share action on screen and taking the tap (measured with
+        # getBoundingClientRect and elementFromPoint). Network closed,
+        # WebSockets included.
+        run: node scripts/test-slides-share-pop-phone-browser.mjs
       - name: Ghost Cut in Chromium
         # ⇧⌘X fades the selection by CSS (shadowed elements too) and copies it;
         # a ghost is never selected and the pointer passes through it; Esc

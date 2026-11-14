@@ -30,16 +30,23 @@ jobs:
     # roster, passkey, mail or header rule) in a copy of the tree, and the
     # directory rigs must fail a row. A mutant that no longer applies, or a
     # rig that crashes instead of counting, fails this job. Its own job: at
-    # ~7 s a mutant on a runner it outgrew validate's 20 minutes.
+    # ~7 s a mutant on a runner it outgrew validate's 20 minutes. Three
+    # shards side by side: at 160 mutants and ~11 s each (the kernel's
+    # option-G verifiers made each rig run slower) one job no longer fits
+    # 30 minutes; each shard runs every third mutant and its own positive control.
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
       - name: bento/connect directory mutants
-        run: node scripts/test-directory-mutants.ts
+        run: node scripts/test-directory-mutants.ts --shard ${{ matrix.shard }}/3
 
   share-signin-browser:
     runs-on: ubuntu-latest
@@ -81,6 +88,20 @@ jobs:
         # popups ON THE POPUP severs it in Chromium, which is why the sign-in
         # host sends no COOP at all.
         run: node scripts/test-signin-host-coop.mjs --chrome
+      - name: Sign-in host's own pages, Playwright headless shell
+        # /setup, /reset and /account: the REAL directory worker and Roster
+        # object for the routes it has, the contract stub for the sign-in and
+        # sign-out routes it does not have yet, a CDP virtual authenticator.
+        # Opening a mailed link sends nothing and drops the token from the
+        # address bar; a setup is stored only after a sign-in with the new
+        # passkey names the link's address; a reset stores nothing and never
+        # overwrites an older passkey; sign out everywhere needs a member's
+        # passkey; no page answers a message; a mutant per rule.
+        run: node scripts/test-signin-host-pages.mjs
+      - name: Sign-in host's own pages, Google Chrome
+        run: node scripts/test-signin-host-pages.mjs --chrome
+      - name: Sign-in host's own pages, WebKit (the rows that need no passkey)
+        run: node scripts/test-signin-host-pages.mjs --webkit
 
   share-directory-void-page:
     # The void page (server/directory/src/voidpage.js) in a real browser: the
@@ -108,3 +129,39 @@ jobs:
         run: node scripts/test-directory-void-page.mjs
       - name: bento/id void page, Google Chrome
         run: node scripts/test-directory-void-page.mjs --chrome
+
+  share-home-identity:
+    # bento/home's bento/id agent (home/web/src/identity.ts), in the real
+    # library built with --identity and the real sign-in host, routed in
+    # process: a CDP virtual authenticator holds the passkey, the directory is
+    # scripts/lib/id-web-directory-stub.mjs (the contract the directory's
+    # routes must match, built on the kernel), and every WebSocket is closed.
+    # The library runs no WebAuthn and never calls the Signal API; W and kx are
+    # non-extractable and fresh at every ceremony; everything is verified with
+    # the kernel's verifiers under the pinned directory keys; a check-in signed
+    # by W renews the 24-hour countersign; "Confirm it's you" a day before the
+    # 7-day cap; incident records and revocations end the sign-in; only the
+    # sign-in host's own window is heard; the policy allows the release channel
+    # and the directory and requires Trusted Types. Each rule has a mutant that
+    # turns its row red.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install the bundler and the browser test runtime
+        # esbuild from slides' lockfile (home/web/build.mjs uses it); Playwright pinned
+        # outside app packages, as in share-signin-browser.
+        run: |
+          npm ci --prefix slides
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: bento/id agent in bento/home, Playwright headless shell
+        run: node scripts/test-home-web-identity.mjs
+      - name: bento/id agent in bento/home, Google Chrome
+        run: node scripts/test-home-web-identity.mjs --chrome
+      - name: bento/id agent mutants, each red on its row
+        run: node scripts/test-home-web-identity.mjs --mutants

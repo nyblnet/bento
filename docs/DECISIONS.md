@@ -13890,6 +13890,66 @@ undo after the removal answer `late`; the undo through a reset, the reset
 taking effect after it, a stopped reset restoring the removal before and
 after its time), `scripts/test-directory-void-page.mjs` (the new views in a
 real browser) and `scripts/test-directory-mutants.ts` (a mutant per rule).
+
+## 2026-11-10 — The DocStore over a sandboxed frame's port: possession of the port is the capability
+
+A document that bento/home in a browser runs in its opaque sandboxed frame
+(home/web) gets its per-document store (docstore.ts: the crash-recovery copy and
+the member key) from the library, over a **second `MessagePort` the library
+transfers in the boot handshake** (`kernel/src/docstoreport.ts`). The frame
+offers it once, as `window.__bentoDocStore.take()`; `docStore()` prefers it to
+the window protocol the extension and native hosts speak.
+
+- **The port is the only channel.** An opaque frame's messages all come from
+  origin `null`, and its WindowProxy survives the frame navigating itself, so
+  neither the origin nor the source window can identify a session. The host
+  created the channel and handed one end to the frame it served: holding that
+  end is the capability. The protocol never reads an origin and never posts to
+  a window (a source check in the rig, with a mutant).
+- **Every rule is the host's**, because after the document is written the
+  frame's realm, the frame's own script included, is the document's: a closed
+  op list (`get`, `set`, `list`, `delete`) and name list (`recovery`,
+  `memberkey`), an exact key set per op, request ids that only rise, bytes only
+  as a plain `Uint8Array` over a buffer about its own size, a cap per name (and
+  per open, which binds only once there are more names; a persistent store
+  still needs a cap across all entries, since browsers evict an origin at
+  once), caps on requests in
+  flight and on the rate. Anything else is dropped unanswered and counted; past
+  a limit of drops the session closes. A value over its cap is a well-formed
+  request and is answered `too-large`, so the document stops retrying.
+- **The partition is an entry the host mints per open**, never the docId: a
+  file can claim any docId. The session is also bound to the docId the host
+  read from the file it verified, and a record is returned only to a session
+  bound to the docId it was written under. Only a body in one of the apps'
+  plaintext formats has a docId for this (an allowlist, never "not
+  `bento/enc`"): an encrypted envelope may carry any extra field, a docId
+  included, and still gets `unavailable`. Nothing in a message can name an entry
+  or a docId: such a field makes the message malformed.
+- **Closing an open closes its port**, so a port the document stashed or handed
+  to a popup is answered nothing afterwards, and the next open is a new channel
+  and a new entry.
+- **The channel never writes files.** Saving stays on the host's save path,
+  where the host re-splices the document's data into the shell it verified.
+- **Backward compatible.** A shell built before this never reads
+  `__bentoDocStore`, so under the library it behaves exactly as in stage 1, and
+  `__bentoHost` is not defined there (a shell that saw `ops` with `store` would
+  speak the window protocol to nobody and wait out its timeouts). The splice
+  contract is untouched: nothing here is in the file.
+
+For now the library keeps the store in its page memory for the open and drops
+it at close. Stage 2's per-entry recovery cache in the library's own storage,
+cleared when a write-back succeeds, is a `StoreBackend` for the same
+`serveDocStore`.
+
+Rigs: scripts/test-docstore-port.ts (the protocol over real channels: schema,
+ids, caps, binding, teardown, flow, the client) with
+scripts/test-docstore-port-mutants.ts (19 mutants, each red on the row that
+guards its rule); scripts/test-home-web.mjs's [S7] rows against the real library
+and frame in Chromium, WebKit and Firefox, including a hostile document that
+tries other docIds, forged ops, oversized values, a second take and its port
+stashed in a popup after close, and an encrypted envelope claiming a docId,
+with five more mutants in
+scripts/test-home-web-mutants.mjs.
 ## 2026-11-12 — bento/id: the privacy notice describes option G, and a text-only deletion page returns
 
 The draft privacy notice (`site-src/id-privacy.html`, built to
@@ -13920,6 +13980,55 @@ after a deletion, and how long setup send times are kept are the
 maintainer's, and the pages are not published. Guard:
 `scripts/test-id-pages.mjs`.
 
+## 2026-11-12 — bento/id: the sign-in host's own pages (setup and reset links, sign in, sign out everywhere)
+
+The sign-in host (`server/signin`) gains the pages where account changes start:
+`/setup` and `/reset` (the mailed links), and `/account`. They are separate
+from the popup bento/home opens, which keeps its one request shape.
+
+- **Only an account the person proved here is remembered.** The host stores
+  which account it is signed in to (`bento-id-account`) in one function, with
+  the address the directory answered after verifying a passkey assertion made
+  on the host. A setup link is completed with a new passkey and then confirmed
+  by one sign-in with that passkey; the directory's answer must be the link's
+  address. Nothing is stored from a URL, a message, a typed address or a link,
+  and a reset stores nothing, because its passkey is not on the account until
+  the reset takes effect.
+- **A link page reads only its fragment**, in the directory's format (exactly
+  `v`, `e`, `t`), takes it out of the address bar and the tab's own history
+  entry first, and sends nothing until the person presses the button. The
+  browser's own history still records the full link (measured in Chrome's
+  History database), so a link that was opened but not used stays usable from
+  there until it is used or expires: 20 minutes for a setup link, a day for a
+  reset link. The account page reads nothing
+  from its URL. None of these pages answers a message.
+- **The passkey's user handle names the account's storage**: SHA-256 of the
+  address under the directory's storage label, then 16 random bytes. A
+  discoverable sign-in finds the account by it; the random tail means a new
+  passkey (a reset) never overwrites an older one on the same authenticator.
+  Native hosts making passkeys for this rp must use the same layout.
+- **A raw challenge is always the directory's sealed 40-byte one**, never 32
+  bytes, so a sign-in assertion can never be taken for a signed statement.
+- **Sign out everywhere** is a member's passkey assertion over a text naming
+  the account, asked on the host's own page after a confirmation; the directory
+  then refuses every browser certificate of that account made before it. It
+  takes power away only, so it has no wait. The directory's sign-in and
+  sign-out routes do not exist yet: their contract is the stub the rigs run,
+  and the signed text is provisional until the kernel defines it.
+- **No recovery code on the web**: no page makes, shows or asks for one. The
+  setup page says what a browser-only account loses.
+- **Trusted Types** with no policy are now part of the host's CSP and of the
+  hosting check.
+- **Phone approves this browser (route D)** runs no ceremony, so it is not a
+  page of this host: bento/home shows a code, the person types it into the
+  app, and the app's consent key approves. It waits for the kernel's consent
+  purposes.
+
+Guards: `scripts/test-signin-host.mjs` (the page rules as lints, each with a
+failing source; the hosting check refusing a CSP without Trusted Types),
+`scripts/test-signin-host-pages.mjs` (the real directory worker and object and
+the contract stub, a virtual authenticator in the headless shell and Chrome,
+the no-passkey rows in WebKit; a mutant per rule).
 ## 2026-11-09 — bento/home in your browser: a production build refuses development seams; a release builds it only when asked
 
 `home/web/build.mjs` used to warn and carry on when no `--history` was given
@@ -13963,6 +14072,59 @@ that bundles exactly the history it signed and the seeded one) and
 `scripts/test-home-web-build-mutants.mjs` (each refusal removed, red on its
 row), and `scripts/test-home-web-out.mjs` (where the output may go, the
 firmlink row and its mutant on macOS).
+
+## 2026-11-10 — bento/id in bento/home: the browser's agent runs no WebAuthn, and keeps only keys it cannot export
+
+bento/home in the browser (`home/web`) gains its bento/id agent
+(`home/web/src/identity.ts`), off in the build unless `--identity` is given,
+and a development build until the directory's keys are pinned for release: a
+production build (without `--dev`) refuses `--identity` and `--directory-keys`.
+
+- **No WebAuthn in bento/home.** The passkeys belong to rp `id.bento.page`,
+  which `home.bento.page` cannot use, so every ceremony runs on the sign-in
+  host. The library opens it inside the person's click, sends exactly
+  `{t:'enrol', W, kx, label}` to its literal origin, and listens only to that
+  window at that origin. It never calls the WebAuthn Signal API, with any list:
+  a partial list can hide or delete a person's passkeys with no prompt.
+- **Keys the page cannot export, fresh at every ceremony.** `W` (ECDSA P-256)
+  and `kx` (ECDH P-256) are generated non-extractable and kept as `CryptoKey`s
+  in IndexedDB. A held key that can be exported is dropped. Non-extractable
+  does not prove a stored key was never copied (a hostile build can import a
+  copy as non-extractable); what bounds a copy is that each ceremony makes new
+  keys and a certificate lives at most 7 days.
+- **Verified, never believed.** The certificate must be for exactly the keys
+  and label the library sent, and "Confirm it's you" never switches accounts.
+  The roster chain and the certificate with its countersign are checked by the
+  kernel's verifiers (`verifyRosterChain`, `verifyDevice`) under directory keys
+  pinned in the build; a key list from the network is never used.
+- **A check-in never writes back what it no longer holds.** Every tab of the
+  library shares one store, so a check-in writes only over the record it
+  renewed, checked and written in one IndexedDB transaction. If the person
+  signs out, or signs in anew, in this tab or another while a check-in runs,
+  the renewal is dropped and the tab takes what the store holds: on a shared
+  computer, Sign out must stick. Another tab may show the old state until its
+  next check-in, but never writes it back.
+- **24 hours, renewed; 7 days, then "Confirm it's you".** A check-in signed by
+  `W` (`wren.`) renews the countersign on load and every hour. A day before the
+  7-day cap the page asks the person to confirm it's them, which is a new
+  ceremony with new keys.
+- **Incident records and revocations end the sign-in here.** A record that
+  covers the key's ceremony, is still open, or cannot be read deletes the keys
+  (failing closed costs one "Confirm it's you"). Until the kernel defines a
+  signed incident statement, the record arrives in the directory's check-in
+  answer, which can only make the agent drop its keys.
+
+The sign-in host's directory seam now writes the kernel's `wdev.` exactly: the
+challenge it asks for names the account (from the host's own storage, never
+the request) and answers the directory's time and the current roster head.
+With no account saved, the host asks for nothing. The directory routes both
+sides call, with every check in order, are stated in
+`scripts/lib/id-web-directory-stub.mjs`, which the rigs run against until the
+directory serves them.
+
+Rigs: scripts/test-home-web-identity.mjs (the real library and sign-in host, a
+CDP virtual authenticator, every WebSocket closed; headless shell and Google
+Chrome; `--mutants`, one per rule).
 
 ## 2026-11-12 — The People panel's identity tiers (bento/id under the roster design; flag off)
 
