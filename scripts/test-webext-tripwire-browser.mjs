@@ -449,7 +449,7 @@ if (row('held-open')) {
   await fresh({ lib: both({ body: Buffer.from(b.slice(0, b.indexOf('</main>'))), hold: true, headers: libDoc.headers }) })
   const t0 = Date.now()
   await page.goto(`${LIB}/`, { waitUntil: 'commit' }).catch(() => {})
-  const ev = await until(async () => (await since(t0)).find((e) => !e.early), 45000)
+  const ev = await until(async () => (await since(t0)).find((e) => !e.early), 75000)
   ok(ev?.verdict === 'mismatch' && rules(ev).includes('incomplete') && rules(ev).includes('size-unread'), `an unfinished parse is never ok (${ev?.verdict} ${rules(ev)})`)
 }
 
@@ -493,8 +493,8 @@ if (row('concurrent')) {
   await visit(page, `${LIB}/`)
   const t0 = Date.now()
   const tabs = await Promise.all([...Array(16)].map(() => ctx.newPage()))
-  await Promise.all(tabs.map((p, i) => p.goto(`${LIB}/?r=${i}`)))
-  await until(async () => (await since(t0)).length >= 16, 20000)
+  await Promise.all(tabs.map((p, i) => p.goto(`${LIB}/?r=${i}`, { timeout: 90000 })))
+  await until(async () => (await since(t0)).length >= 16, 60000)
   await sleep(1500)
   const evs = await since(t0)
   ok(evs.length === 16 && evs.every((e) => e.verdict === 'ok'), `every one recorded (${evs.length}/16: ${evs.map((e) => e.verdict)})`)

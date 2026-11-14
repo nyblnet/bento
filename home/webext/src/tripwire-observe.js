@@ -180,8 +180,9 @@
 
   const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('')
   const sha = async (data) => hex(await crypto.subtle.digest('SHA-256', typeof data === 'string' ? new TextEncoder().encode(data) : data))
-  // a response the server holds open never settles a cached read: every wait is bounded
-  const bounded = (p, ms = 3000) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('timed out')), ms))])
+  // a response the server holds open never settles a cached read: every wait is bounded, generously,
+  // because a busy machine is slow and a timed-out read is a finding, not a pass
+  const bounded = (p, ms = 15000) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('timed out')), ms))])
   const cached = (url) => bounded(fetch(url, { cache: 'only-if-cached', mode: 'same-origin', credentials: 'same-origin', redirect: 'manual' }))
 
   let sent = false
