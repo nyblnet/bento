@@ -13963,3 +13963,58 @@ that bundles exactly the history it signed and the seeded one) and
 `scripts/test-home-web-build-mutants.mjs` (each refusal removed, red on its
 row), and `scripts/test-home-web-out.mjs` (where the output may go, the
 firmlink row and its mutant on macOS).
+## 2026-11-12 — bento/home in your browser, stage 3: an offline worker for the library only, a signed kill switch, install
+
+The library (`home/web/`) gains a service worker, a kill switch and a web app
+manifest. What it does not gain matters as much:
+
+- **The worker is the library's, never the frame's.** It runs on the library
+  origin, precaches exactly the build's own files (the page, the manifest, two
+  icons), each checked against a sha256 compiled into the script, all or
+  nothing, under a cache named for their content hash; activating a new worker
+  deletes every other cache. It answers only those paths, network first, and
+  only when the network fails; everything else passes untouched and is never
+  cached. It takes nothing from pages (no message listener), has no
+  `importScripts`, `eval` or dynamic import, and is served with its own
+  `default-src 'none'` policy and `no-cache`, registered with
+  `updateViaCache: 'none'`. The library's CSP names that one script URL, and its
+  one Trusted Types policy passes only that URL. The frame site keeps
+  `worker-src 'none'`; its policy and sandbox are unchanged.
+- **A worker is not a pin.** Network first means the server's current build
+  always wins online, so the worker adds offline and nothing else: it does not
+  bind the library to a signed hash, and a compromised host can still replace
+  it. The library stays the code-trust root the stage-1 entry names.
+- **Offline is the library's, not yet the document's.** The frame page is on
+  another site, which the library's worker cannot serve, so a document opened
+  offline is told it needs a connection. Opening documents offline needs a
+  decision on delivering the frame offline, which would change how its policy
+  arrives; that is not taken here.
+- **The kill switch is a signed status, checked on every load.**
+  `releases/home/status.json`, signed with the release key
+  (`scripts/sign-home-status.mjs`), lists withdrawn builds by the sha256 of the
+  library's script. A listed build stops before any file opens: it unregisters
+  every worker on its origin, deletes every cache and shows a fixed message;
+  the next online load comes from the server. Unreachable or absent is no
+  answer (a returning visit must open offline). Anything else that comes back
+  and cannot be trusted (a bad signature, a payload for another app, a `seq`
+  below the highest this browser has seen) fails closed, exactly as a
+  withdrawal. A browser remembers the builds it has seen withdrawn, so a copy
+  served again from any cache (Firefox serves the page from its HTTP cache
+  offline) stops on load even when the status cannot be fetched. This is the
+  one request the library makes on every load, and it goes only to the signed
+  release channel.
+- **What the kill switch cannot reach:** a build that does not run the check.
+  A hostile deploy can register its own worker at any path; clearing that
+  needs the host to answer `Service-Worker: script` requests with a cleaning
+  worker and to serve a `Clear-Site-Data` reset page, which static `_headers`
+  cannot do. It waits for the hosting move.
+- **Install** is a manifest (start and scope `/`, standalone, 192 and 512 px
+  icons) allowed by an exact `manifest-src`. No file handlers or share target
+  yet.
+
+Rigs: `scripts/test-home-web-offline.mjs` (Chromium, WebKit, Firefox; offline
+by `context.setOffline`, with the servers closed where an engine's emulation
+does not hold: WebKit's for worker-controlled navigations, Chromium's for the
+cross-site frame, both measured), its `--mutants` (each red on its own row, in
+a run that completed), and the drill row: withdraw a build, then the next load
+is clean. Details: `home/web/README.md`.

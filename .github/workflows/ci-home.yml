@@ -81,3 +81,36 @@ jobs:
         run: npm run build:single --prefix slides
       - name: home/web production-build mutants
         run: node scripts/test-home-web-build-mutants.mjs
+
+  home-web-offline-engines:
+    # bento/home in your browser, stage 3 (offline worker, kill switch,
+    # install) in the two engines the required validate job does not run, and
+    # its mutants in Chromium: each breaks one rule and must turn the rig red on
+    # the row that guards it, in a run that completed (a crash is not a kill).
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install esbuild (slides' dev dependencies)
+        run: npm ci --prefix slides
+      - name: Install browser test runtime
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium webkit firefox
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      # each engine and the mutants report on their own: one failing does not
+      # skip the others (the job still fails), and a hang ends its step, not the job
+      - name: home/web stage 3 in WebKit
+        timeout-minutes: 8
+        run: BENTO_BROWSER=webkit node scripts/test-home-web-offline.mjs
+      - name: home/web stage 3 in Firefox
+        if: ${{ !cancelled() }}
+        timeout-minutes: 8
+        run: BENTO_BROWSER=firefox node scripts/test-home-web-offline.mjs
+      - name: home/web stage 3 mutants
+        if: ${{ !cancelled() }}
+        timeout-minutes: 12
+        run: node scripts/test-home-web-offline.mjs --mutants

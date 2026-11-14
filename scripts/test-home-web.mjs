@@ -179,7 +179,9 @@ async function context() {
 const docFrame = (page) => page.frames().find((f) => f.parentFrame() === page.mainFrame())
 async function until(fn, ms = 20000) {
   const end = Date.now() + ms
-  while (Date.now() < end) { try { const v = await fn(); if (v) return v } catch {} await new Promise((r) => setTimeout(r, 150)) }
+  // each check has its own limit: a call into a frame the library removes meanwhile can hang (Firefox)
+  const limit = (p) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('check timed out')), 10000))])
+  while (Date.now() < end) { try { const v = await limit(fn()); if (v) return v } catch {} await new Promise((r) => setTimeout(r, 150)) }
   return null
 }
 const booted = (page) => until(async () => { const f = docFrame(page); return f && (await f.evaluate(() => !!(window.bento && window.bento.doc))) ? f : null })
@@ -198,7 +200,8 @@ async function open(page, key) {
   return until(async () => { const u = await ui(page); return u.viewing || u.problem ? u : null }, 20000)
 }
 const frameRequests = (X, from) => X.seen.slice(from).filter((r) => r.url.startsWith(X.frame))
-const releaseRequests = (X, from) => X.seen.slice(from).filter((r) => r.url.startsWith(X.releaseBase.replace(/\/releases\/$/, '')))
+// what a file costs on the channel: not the once-per-load kill-switch status, which is the page's, not the file's
+const releaseRequests = (X, from) => X.seen.slice(from).filter((r) => r.url.startsWith(X.releaseBase.replace(/\/releases\/$/, '')) && r.url !== X.releaseBase + 'home/status.json')
 
 // ===== [T4] build A: the release key =====================================================
 section('[T4] a file runs only in its own verified release (build A, release key)')
@@ -385,8 +388,10 @@ section('[T2] nothing goes anywhere but the library, the frame page and the rele
   await ctx.close()
 
   const mine = recorded.slice(recFrom).filter((r) => r.url !== 'about:blank')
+  // the library's own files: the page, and what its worker precaches (stage 3)
+  const libFiles = ['/', '/sw.js', ...(A.info.offline?.precache ?? []).map((p) => p.path)].map((p) => A.library + p)
   const allowed = (r) => (r.method === 'GET' && (
-    r.url === A.library + '/' || r.url === A.frame + '/frame.html' || r.url.startsWith(A.releaseBase))) ||
+    libFiles.includes(r.url) || r.url === A.frame + '/frame.html' || r.url.startsWith(A.releaseBase))) ||
     r.url.startsWith('blob:') || r.url.startsWith('data:') || r.url === 'about:blank'
   const stray = mine.filter((r) => !allowed(r))
   ok(stray.length === 0, `every request the browser made is on the allow-list (${mine.length} recorded${stray.length ? '; stray: ' + stray.slice(0, 3).map((r) => r.method + ' ' + r.url).join(', ') : ''})`)
@@ -470,7 +475,7 @@ section('[B2] a frame page that lost its header boots nothing, even framed by th
   await open(page, 'deck')
   const state = await until(async () => { const f = docFrame(page); return f ? f.evaluate(() => document.documentElement.getAttribute('data-bento-frame') ?? (window.bento ? 'booted' : null)) : null }, 10000)
   await new Promise((r) => setTimeout(r, 2000))
-  const ran = await docFrame(page)?.evaluate(() => !!window.bento).catch(() => false)
+  const ran = await Promise.race([docFrame(page)?.evaluate(() => !!window.bento), new Promise((r) => setTimeout(() => r(false), 10000))]).catch(() => false)
   ok(state === 'refused' && !ran, `without its header, framed by the library, the frame refuses and nothing boots (${state})`)
   await ctx.close()
 }

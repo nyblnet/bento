@@ -6,6 +6,7 @@
 <!--LIBRARY_CSP-->
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex">
+<link rel="manifest" href="/manifest.webmanifest">
 <title>bento/home</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='2' width='28' height='28' rx='6' fill='%2316273E'/%3E%3Crect x='6' y='6' width='6' height='20' rx='2' fill='%235E7699'/%3E%3Crect x='14' y='6' width='12' height='9' rx='2' fill='%23FF9E8A'/%3E%3Crect x='14' y='17' width='12' height='9' rx='2' fill='%23F0EBE0'/%3E%3C/svg%3E">
 <style>
@@ -39,6 +40,9 @@
   body.viewing main { display: none }
   body.viewing .bar { display: flex }
   body.viewing #stage { display: block }
+  .stopped-box { display: none; max-width: 560px; margin: 0 auto; padding: 12vh 16px 32px }
+  body.stopped .bar, body.stopped #notice, body.stopped #stage, body.stopped main { display: none }
+  body.stopped .stopped-box { display: block }
 </style>
 </head>
 <body>
@@ -65,6 +69,11 @@
   </div>
   <p class="fine">Only the code of signed Bento releases runs here, each document in its own sandbox. Saving changes is not available on this page yet: to edit, open the file in your browser directly or in the Bento app.</p>
 </main>
+<section class="stopped-box" id="withdrawn">
+  <h1>bento<b>/home</b></h1>
+  <p class="problem" id="withdrawn-text"></p>
+  <p><button id="reload" type="button">Reload</button></p>
+</section>
 <!--LIBRARY_SCRIPT-->
 </body>
 </html>
