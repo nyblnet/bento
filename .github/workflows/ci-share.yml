@@ -30,16 +30,23 @@ jobs:
     # roster, passkey, mail or header rule) in a copy of the tree, and the
     # directory rigs must fail a row. A mutant that no longer applies, or a
     # rig that crashes instead of counting, fails this job. Its own job: at
-    # ~7 s a mutant on a runner it outgrew validate's 20 minutes.
+    # ~7 s a mutant on a runner it outgrew validate's 20 minutes. Three
+    # shards side by side: at 160 mutants and ~11 s each (the kernel's
+    # option-G verifiers made each rig run slower) one job no longer fits
+    # 30 minutes; each shard runs every third mutant and its own positive control.
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
       - name: bento/connect directory mutants
-        run: node scripts/test-directory-mutants.ts
+        run: node scripts/test-directory-mutants.ts --shard ${{ matrix.shard }}/3
 
   share-signin-browser:
     runs-on: ubuntu-latest
