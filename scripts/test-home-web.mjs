@@ -34,6 +34,13 @@
  *   [B3] the frame cannot download; the library's Download gives the verified
  *        bytes.
  *   [B4] a frame that navigates itself away is closed.
+ *   [S7] the document's store over its port (kernel/src/docstoreport.ts): the
+ *        released 1.2.10 shell never speaks on it (stage 1 behaviour); the
+ *        kernel's own client, loaded into the frame as a later shell would carry
+ *        it, round-trips through the real library; each open is a new entry; an
+ *        encrypted file (even one whose envelope carries a docId) gets no store; a
+ *        HOSTILE document (other docIds, forged ops, oversized values, a second
+ *        take, its port stashed in a popup and used after close) gets nothing.
  *   [T7] byte budgets.
  * Mutants: scripts/test-home-web-mutants.mjs (BENTO_HOME_WEB_MUTANT for source,
  * BENTO_HOME_WEB_DIST_MUTANT for built files).
@@ -92,7 +99,11 @@ const tampered = (() => {
 const HANDLER_PROBE = 'bento-home-web-handler'
 const hostile = (probeUrl) => deck.replace('<body>', () => `<body><svg width="0" height="0"><title><img src="x" onerror="fetch('${probeUrl}')"></title></svg>`)
 const bom = '\ufeff' + deck
-const files = { deck, futureDeck, forkDeck, tampered, bom }
+// a password envelope in the 1.2.10 shell, carrying an extra docId (the shell's envelope parser ignores extra fields)
+const b64r = (n) => Buffer.from(webcrypto.getRandomValues(new Uint8Array(n))).toString('base64')
+const envelope = (extra) => JSON.stringify({ format: 'bento/enc', v: 1, it: 300000, salt: b64r(16), iv: b64r(12), data: b64r(64), ...extra })
+const encDocId = spliceDoc(shell1210, envelope({ docId: 'enc-claims-an-id' }))
+const files = { deck, futureDeck, forkDeck, tampered, bom, encDocId }
 for (const [k, v] of Object.entries(files)) fs.writeFileSync(path.join(work, `${k}.bento.html`), v)
 if (!deck.includes('<body>')) throw new Error('the 1.2.10 shell has no plain <body> tag to plant into')
 const F = (k) => path.join(work, `${k}.bento.html`)
@@ -222,7 +233,7 @@ section('[T4] a file runs only in its own verified release (build A, release key
     ok(inside.origin === 'null', `the document runs in an opaque origin (${inside.origin})`)
     ok(inside.title === CANARY, 'the document is the file\'s own (its canary title)')
     ok(inside.ls !== 'open' && inside.idb !== 'open', `the document has no storage (localStorage: ${inside.ls}, indexedDB: ${inside.idb})`)
-    ok(inside.identity === 'undefined' && inside.host === 'undefined', 'no identity agent and no host store are offered to the document')
+    ok(inside.identity === 'undefined' && inside.host === 'undefined', 'no identity agent and no window-protocol host (__bentoHost) are offered to the document')
     note(`loader path ${inside.path}; service worker API present: ${inside.sw}`)
   }
   await new Promise((r) => setTimeout(r, 6000))
@@ -497,6 +508,176 @@ section("the library's frame-src keeps a document's navigation off the network; 
   const d = await dl
   const bytes = d ? fs.readFileSync(await d.path()) : null
   ok(!!up && !!bytes && bytes.equals(Buffer.from(bom)), `a file starting with a byte-order mark boots and downloads byte for byte (${bytes?.length} of ${Buffer.byteLength(bom)})`)
+  await ctx.close()
+}
+
+// ===== [S7] the document's store, over its port ======================================================
+section("[S7] the document's store: the port the library hands the frame, and nothing else")
+{
+  // the kernel's client as a shell built from this tree carries it, loaded into the
+  // booted frame the way the shell loads its own code (a blob: script, which the CSP allows)
+  const esbuild = process.env.ESBUILD || path.join(ROOT, 'slides/node_modules/.bin/esbuild')
+  const kernelJs = execFileSync(esbuild, [path.join(ROOT, 'kernel/src/docstore.ts'), '--bundle', '--format=iife', '--global-name=__bentoKernelStore', '--platform=browser', '--target=es2022', '--log-level=error'], { encoding: 'utf8' })
+  const loadKernel = (fr) => fr.evaluate((code) => new Promise((res, rej) => {
+    const el = document.createElement('script')
+    el.src = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }))
+    el.onload = () => res(true)
+    el.onerror = () => rej(new Error('the kernel bundle did not load'))
+    document.head.appendChild(el)
+  }), kernelJs)
+  const counts = async (page) => { const v = await page.evaluate(() => document.documentElement.getAttribute('data-bento-store')); const [served, refused, dropped] = (v ?? '0 0 0').split(' ').map(Number); return { served, refused, dropped } }
+
+  const ctx = await context()
+  const page = await ctx.newPage()
+  await page.goto(A.library + '/')
+  await open(page, 'deck')
+  let fr = await booted(page)
+  const offered = fr ? await fr.evaluate(() => ({ store: typeof window.__bentoDocStore, host: typeof window.__bentoHost })) : null
+  ok(offered?.store === 'object' && offered?.host === 'undefined', `[S7] the frame offers the store as __bentoDocStore, and no __bentoHost (${JSON.stringify(offered)})`)
+  await new Promise((r) => setTimeout(r, 3000))
+  let c = await counts(page)
+  ok(!!fr && c.served + c.refused + c.dropped === 0, `[S7] backward compatible: the released 1.2.10 shell never speaks on the port (${JSON.stringify(c)})`)
+
+  // positive control: the kernel's client, through docStore(), against the real library
+  let rt = null
+  if (fr) {
+    await loadKernel(fr).catch(() => {})
+    rt = await fr.evaluate(async () => {
+      const K = window.__bentoKernelStore
+      const ds = K.docStore()
+      if (!ds) return { error: 'docStore() is null' }
+      const set = await ds.set('memberkey', new TextEncoder().encode('member-key-1'))
+      const got = await ds.get('memberkey')
+      const json = await K.setJSON(ds, 'recovery', { docId: 'x', at: 1 })
+      const list = await ds.list()
+      const del = await ds.delete('recovery')
+      const after = await ds.list()
+      const again = window.__bentoDocStore.take()
+      return { set, got: got ? new TextDecoder().decode(got) : null, local: got instanceof Uint8Array, json, list, del, after, again: again === null }
+    }).catch((e) => ({ error: String(e?.message ?? e).slice(0, 160) }))
+  }
+  c = await counts(page)
+  ok(rt?.set === 'stored' && rt.got === 'member-key-1' && rt.local && rt.json === 'stored' && JSON.stringify(rt.list) === '["recovery","memberkey"]' && rt.del === true && JSON.stringify(rt.after) === '["memberkey"]',
+    `[S7] positive control: the kernel's client stores, reads, lists and deletes through the library (${JSON.stringify(rt)})`)
+  ok(rt?.again === true, '[S7] the port is taken once: a second take() gets nothing')
+  ok(c.served === 6 && c.dropped === 0, `[S7] the library served each request and dropped none (${JSON.stringify(c)})`)
+
+  // every open is a new entry: the same file (so the same docId) opened again sees nothing of the last open
+  await page.click('#close')
+  await open(page, 'deck')
+  fr = await booted(page)
+  let reopen = null
+  if (fr) {
+    await loadKernel(fr).catch(() => {})
+    reopen = await fr.evaluate(async () => { const ds = window.__bentoKernelStore.docStore(); return { list: await ds.list(), key: await ds.get('memberkey') } }).catch((e) => ({ error: String(e?.message ?? e).slice(0, 160) }))
+  }
+  ok(!!reopen && JSON.stringify(reopen.list) === '[]' && reopen.key === null, `[S7] the same file, so the same docId, opened again: a new entry that holds nothing of the last open (${JSON.stringify(reopen)})`)
+
+  // an encrypted file never gets a store, even when its envelope carries a docId
+  await page.click('#close')
+  await open(page, 'encDocId')
+  const encFrame = await until(async () => { const f = docFrame(page); return f && (await f.evaluate(() => typeof window.__bentoDocStore === 'object')) ? f : null })
+  let enc = null
+  if (encFrame) {
+    await loadKernel(encFrame).catch(() => {})
+    enc = await encFrame.evaluate(async () => {
+      const ds = window.__bentoKernelStore.docStore()
+      const set = await ds.set('memberkey', new TextEncoder().encode('plaintext key beside ciphertext'))
+      const got = await ds.get('memberkey').then((b) => (b ? 'bytes' : 'null'), (e) => String(e.message || e))
+      return { set, got }
+    }).catch((e) => ({ error: String(e?.message ?? e).slice(0, 160) }))
+  }
+  ok(enc?.set === 'refused' && /unavailable/.test(enc?.got ?? ''), `[S7] an encrypted file whose envelope also carries a docId answers unavailable: no store (${JSON.stringify(enc)})`)
+
+  // the hostile document: it speaks to the port by hand
+  await page.click('#close')
+  await open(page, 'deck')
+  fr = await booted(page)
+  const before = await counts(page)
+  const hostile = fr ? await fr.evaluate(async () => {
+    const port = window.__bentoDocStore.take()
+    window.__stash = port
+    const answers = []
+    port.onmessage = (e) => answers.push(e.data)
+    const send = (m, transfer) => port.postMessage(m, transfer ?? [])
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+    const R = (id, op, x = {}) => ({ t: 'bento-store', v: 1, id, op, ...x })
+    const enc = (s) => new TextEncoder().encode(s)
+    // positive control
+    send(R(1, 'set', { name: 'memberkey', bytes: enc('hostile-own') }))
+    send(R(2, 'get', { name: 'memberkey' }))
+    await wait(300)
+    const control = answers.splice(0).map((a) => ({ id: a.id, ok: a.ok, bytes: a.bytes ? new TextDecoder().decode(a.bytes) : a.bytes }))
+    // other docIds, entries and partitions
+    send(R(3, 'get', { name: 'memberkey', docId: 'victim-doc' }))
+    send(R(4, 'list', { entry: 'victim-entry' }))
+    send(R(5, 'get', { name: 'bento-member-victim-doc' }))
+    // forged ops: the extension's wire, a file write, a save, an unknown op, a stale id
+    send({ __bento_tray__: true, dir: 'req', id: 6, op: 'store.get', payload: { name: 'memberkey' } })
+    send(R(7, 'write', { name: 'recovery', bytes: enc('<html>trojan</html>') }))
+    send(R(8, 'save', { html: '<html>trojan</html>' }))
+    send(R(9, 'clear'))
+    send(R(2, 'get', { name: 'memberkey' }))
+    send('x')
+    await wait(500)
+    const forged = answers.splice(0)
+    // oversized: a value over its cap is refused; a small view over a big buffer is dropped
+    send(R(20, 'set', { name: 'memberkey', bytes: new Uint8Array(16 * 1024 + 1) }))
+    send(R(21, 'set', { name: 'recovery', bytes: new Uint8Array(33 * 1024 * 1024) }))
+    send(R(22, 'set', { name: 'memberkey', bytes: new Uint8Array(new ArrayBuffer(1024 * 1024), 0, 8) }))
+    send(R(23, 'get', { name: 'memberkey' }))
+    await wait(1500)
+    const sized = answers.splice(0).map((a) => ({ id: a.id, ok: a.ok, reason: a.reason, bytes: a.bytes ? new TextDecoder().decode(a.bytes) : a.bytes }))
+    return { control, forged: forged.length, sized }
+  }).catch((e) => ({ error: String(e?.message ?? e).slice(0, 160) })) : null
+  const after = await counts(page)
+  ok(JSON.stringify(hostile?.control) === '[{"id":1,"ok":true},{"id":2,"ok":true,"bytes":"hostile-own"}]', `[S7] hostile: positive control, its own entry answers it (${JSON.stringify(hostile?.control)})`)
+  // nine forged messages, plus the view over a big buffer below: ten drops
+  ok(hostile?.forged === 0 && after.dropped - before.dropped === 10, `[S7] hostile: another docId, an entry, a foreign name, the window wire, a write, a save, an unknown op, a reused id and junk are each dropped, none answered (${hostile?.forged} answered, ${after.dropped - before.dropped} of 10 dropped with the buffer view)`)
+  const sz = hostile?.sized ?? []
+  ok(sz.length === 3 && sz[0]?.reason === 'too-large' && sz[1]?.reason === 'too-large' && sz[2]?.id === 23 && sz[2]?.bytes === 'hostile-own',
+    `[S7] hostile: oversized values are refused, a view over a big buffer is dropped, and what it held is unchanged (${JSON.stringify(sz)})`)
+
+  // port reuse: the document hands its port to a popup it opens, then the library closes it
+  const popupP = ctx.waitForEvent('page', { timeout: 8000 }).catch(() => null)
+  await fr?.evaluate(() => {
+    const b = document.createElement('button')
+    b.id = 'bento-rig-popup'
+    b.textContent = 'popup'
+    b.style.cssText = 'position:fixed;left:0;top:0;z-index:2147483647;width:80px;height:40px'
+    b.addEventListener('click', () => { window.__popup = window.open('about:blank') })
+    document.body.appendChild(b)
+  })
+  await fr?.click('#bento-rig-popup', { timeout: 5000 }).catch(() => {})
+  const popup = await popupP
+  if (!popup) {
+    note(`[S7] port reuse: a popup did not open from the sandboxed frame in ${ENGINE}; the stale-port case is covered by the node rig's [teardown] rows`)
+  } else {
+    await popup.evaluate(() => { window.addEventListener('message', (e) => { if (e.ports && e.ports[0]) { window.__p = e.ports[0]; window.__answers = []; window.__p.onmessage = (m) => window.__answers.push(m.data) } }) })
+    await fr.evaluate(() => { window.__popup.postMessage('port', '*', [window.__stash]) })
+    const moved = await until(() => popup.evaluate(() => !!window.__p), 5000)
+    // while the document is open, the moved port still speaks for it (the same entry, nothing more)
+    await popup.evaluate(() => window.__p.postMessage({ t: 'bento-store', v: 1, id: 30, op: 'list' }))
+    const live = await until(() => popup.evaluate(() => window.__answers.length === 1 && window.__answers[0].ok), 5000)
+    ok(!!moved && !!live, `[S7] port reuse: the document can hand its port to a popup, which speaks only as that same open (${!!moved}, ${!!live})`)
+    const mid = await counts(page)
+    await page.click('#close')
+    await open(page, 'deck')
+    const next = await booted(page)
+    await popup.evaluate(() => {
+      window.__answers = []
+      window.__p.postMessage({ t: 'bento-store', v: 1, id: 31, op: 'get', name: 'memberkey' })
+      window.__p.postMessage({ t: 'bento-store', v: 1, id: 32, op: 'set', name: 'memberkey', bytes: new TextEncoder().encode('stale write') })
+    }).catch(() => {})
+    await new Promise((r) => setTimeout(r, 1500))
+    const staleAnswers = await popup.evaluate(() => window.__answers.length).catch(() => -1)
+    const end = await counts(page)
+    ok(staleAnswers === 0 && end.served === mid.served, `[S7] port reuse: after the library closed that open, the stashed port is answered nothing (${staleAnswers} answers, served ${mid.served} -> ${end.served})`)
+    let fresh = null
+    if (next) { await loadKernel(next).catch(() => {}); fresh = await next.evaluate(async () => { const ds = window.__bentoKernelStore.docStore(); return { list: await ds.list(), key: await ds.get('memberkey') } }).catch((e) => ({ error: String(e?.message ?? e).slice(0, 160) })) }
+    ok(!!fresh && JSON.stringify(fresh.list) === '[]' && fresh.key === null, `[S7] port reuse: the next open is a new channel and entry: neither the stale write nor the hostile open's value reaches it (${JSON.stringify(fresh)})`)
+    await popup.close().catch(() => {})
+  }
   await ctx.close()
 }
 
