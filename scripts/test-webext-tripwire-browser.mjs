@@ -228,17 +228,21 @@ const closeExtras = async (keep) => { for (const p of ctx.pages()) if (p !== kee
 async function visit(page, url, { open = false, marker = null } = {}) {
   const t0 = Date.now()
   await page.goto(url)
+  // the event is THIS navigation's: matched by the page's own time origin, never by when it was
+  // recorded (a page opened earlier in the row can be judged after this one starts)
+  const origin0 = await page.evaluate(() => performance.timeOrigin).catch(() => null)
   // set BEFORE the verdict exists, so a reload the extension caused would erase it
   if (marker) await page.evaluate((m) => { window.__twMarker = m }, marker).catch(() => {})
   if (open) await page.setInputFiles('#file', DECK)
-  const want = open ? 2 : 1
-  const events = await until(async () => {
-    const evs = (await store.log()).filter((e) => Date.parse(e.at) >= t0 - 50)
-    return evs.length >= want ? evs : null
+  const mine = (e) => e.role === 'library' && !e.early && Math.abs((e.page?.timeOrigin ?? 0) - origin0) < 1
+  const frameOf = (e) => e.role === 'frame' && Date.parse(e.at) >= t0 - 50
+  await until(async () => {
+    const log = await store.log()
+    return log.some(mine) && (!open || log.some(frameOf))
   }, 40000)
   await new Promise((r) => setTimeout(r, 300))
-  const evs = (await store.log()).filter((e) => Date.parse(e.at) >= t0 - 50)
-  return { lib: evs.find((e) => e.role === 'library'), frame: evs.find((e) => e.role === 'frame'), all: events ? evs : [] }
+  const log = await store.log()
+  return { lib: log.find(mine), frame: log.find(frameOf), all: log.filter((e) => Date.parse(e.at) >= t0 - 50) }
 }
 const rules = (e) => (e?.failures ?? []).map((f) => f.rule).sort().join(',')
 const row = (name) => !ONLY || ONLY.has(name)
@@ -582,16 +586,17 @@ async function withWorker(script, { scope = '/', url = '/sw.js' } = {}) {
   await reg.close()
   return okReg
 }
+/** A registration the row depends on must have happened: say so, rather than judge a page without it. */
+function needWorker(r) { if (r !== true) ok(false, `the rig could not set up its worker: ${r}`) }
 async function noWorkers() {
-  // no page may stay controlled, or the next register() resurrects this registration (no install, no precache)
+  // Cleared through the DevTools protocol, never from a page: a page on the library origin is a
+  // navigation the old worker answers, and that navigation's update check can start an install
+  // whose precache lands in the NEXT row's cache (seen: a poisoned entry overwritten mid-row).
   await page.goto('about:blank')
-  const p = await ctx.newPage()
-  await p.goto(`${LIB}/`)
-  await p.evaluate(async () => {
-    for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister()
-    for (const k of await caches.keys()) await caches.delete(k)
-  })
-  await p.close()
+  const cdp = await ctx.newCDPSession(page)
+  await cdp.send('Storage.clearDataForOrigin', { origin: LIB, storageTypes: 'service_workers,cache_storage' })
+  await cdp.detach()
+  await sleep(300)
 }
 /** A worker that answers NAVIGATIONS with the cached page edited by `pairs` ([from, to], each exactly once) and everything else honestly from the cache. */
 const hostileWorker = (pairs, headerEdit = '') => SW_HONEST.replace("e.respondWith(caches.match(e.request, { ignoreSearch: true }).then((r) => r || fetch(e.request)))",
@@ -624,7 +629,7 @@ if (SW_ROWS.some(row)) {
   if (row('sw-script-bytes')) {
     section('sw-script-bytes: the network now serves a different /sw.js  (rule: worker-bytes)')
     await fresh()
-    await withWorker(SW_HONEST)
+    needWorker(await withWorker(SW_HONEST))
     state.lib.set('/sw.js', { body: Buffer.from(SW_HONEST + '// changed\n'), headers: { 'content-type': 'text/javascript' } })
     const v = await visit(page, `${LIB}/`)
     ok(v.lib?.verdict === 'mismatch' && rules(v.lib).split(',').every((r) => r === 'worker-bytes') && rules(v.lib), `mismatch on worker-bytes only (got ${v.lib?.verdict} ${rules(v.lib)})`)
@@ -633,8 +638,13 @@ if (SW_ROWS.some(row)) {
   if (row('sw-custom-path')) {
     section('sw-custom-path: a second worker registered at a path no release lists  (rule: worker)')
     await fresh()
-    await withWorker(SW_HONEST)
-    await withWorker('// a worker at a custom path\n', { url: '/x/sw2.js', scope: '/x/' })
+    needWorker(await withWorker(SW_HONEST))
+    needWorker(await withWorker('// a worker at a custom path\n', { url: '/x/sw2.js', scope: '/x/' }))
+    // the rig's own setup, checked before the visit: both registrations exist
+    const check = await ctx.newPage(); await check.goto(`${LIB}/`)
+    const regs = await until(async () => { const n = await check.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).map((r) => r.scope)); return n.length === 2 ? n : null }, 10000)
+    await check.close()
+    needWorker(regs ? true : 'the custom-path registration is not there before the visit')
     const v = await visit(page, `${LIB}/`)
     ok(v.lib?.verdict === 'mismatch' && rules(v.lib) === 'worker', `mismatch on worker only (got ${v.lib?.verdict} ${rules(v.lib)}); via worker ${v.lib?.page.viaWorker}, ${v.lib?.page.workers?.length} workers, ${v.lib?.page.cache?.length} cached, errors ${JSON.stringify(v.lib?.page.errors)})`)
     await noWorkers()
@@ -642,7 +652,7 @@ if (SW_ROWS.some(row)) {
   if (row('sw-cache-extra')) {
     section('sw-cache-extra: an entry no release lists, waiting in the worker\'s cache  (rule: cache)')
     await fresh()
-    await withWorker(SW_HONEST)
+    needWorker(await withWorker(SW_HONEST))
     const p = await ctx.newPage(); await p.goto(`${LIB}/`)
     await p.evaluate(async () => (await caches.open('bento-home-v1')).put('/later.js', new Response('/* waiting */')))
     await p.close()
@@ -653,7 +663,7 @@ if (SW_ROWS.some(row)) {
   if (row('sw-cache-poisoned')) {
     section('sw-cache-poisoned: one byte of the cached library page changed; the worker serves it  (rule: cache; nothing repaired)')
     await fresh()
-    await withWorker(SW_HONEST)
+    needWorker(await withWorker(SW_HONEST))
     const p = await ctx.newPage(); await p.goto(`${LIB}/`)
     const bad = variant(libDoc, 'Choose a file', 'Choose a filf').body.toString('utf8')
     await p.evaluate(async (bad) => { const c = await caches.open('bento-home-v1'); const r = await c.match('/'); await c.put('/', new Response(bad, { headers: r.headers })) }, bad)
@@ -667,7 +677,7 @@ if (SW_ROWS.some(row)) {
     const v = await visit(page, `${LIB}/`, { marker: 'still here' })
     const shown = await page.evaluate(() => document.body.innerText.includes('Choose a filf')).catch(() => false)
     ok(v.lib?.page.viaWorker && shown, 'the worker served the poisoned page')
-    ok(v.lib?.verdict === 'mismatch' && rules(v.lib) === 'cache', `mismatch on cache (got ${v.lib?.verdict} ${rules(v.lib)}); via worker ${v.lib?.page.viaWorker}, ${v.lib?.page.workers?.length} workers, ${v.lib?.page.cache?.length} cached, errors ${JSON.stringify(v.lib?.page.errors)})`)
+    ok(v.lib?.verdict === 'mismatch' && rules(v.lib) === 'cache', `mismatch on cache (got ${v.lib?.verdict} ${rules(v.lib)}); cached ${JSON.stringify(v.lib?.page.cache?.map((c) => `${c.url.slice(-12)}:${c.sha256.slice(0, 8)}`))}; via worker ${v.lib?.page.viaWorker}, ${v.lib?.page.workers?.length} workers, ${v.lib?.page.cache?.length} cached, errors ${JSON.stringify(v.lib?.page.errors)})`)
     ok(v.lib?.observed.bytes && !rules(v.lib).includes('bytes'), 'MEASURED: the content script\'s only-if-cached fetch does not pass through the page\'s worker; it read the HTTP cache\'s honest copy')
     await new Promise((r) => setTimeout(r, 1500))
     // a reload destroys the context mid-check: that is a FAIL row, never a crash (ruling C7)
@@ -685,7 +695,7 @@ if (SW_ROWS.some(row)) {
     const t = libDoc.body.toString('utf8')
     const at = t.indexOf('<script>') + '<script>'.length + 40
     const from = t.slice(at - 20, at + 20), to = t.slice(at - 20, at) + (t[at] === 'a' ? 'b' : 'a') + t.slice(at + 1, at + 20)
-    await withWorker(hostileWorker([[from, to]]))
+    needWorker(await withWorker(hostileWorker([[from, to]])))
     state.lib.set('/sw.js', { body: Buffer.from(SW_HONEST), headers: { 'content-type': 'text/javascript' } })
     const v = await visit(page, `${LIB}/`)
     ok(v.lib?.page.viaWorker === true, 'answered by the hostile worker')
@@ -697,7 +707,7 @@ if (SW_ROWS.some(row)) {
     await fresh()
     const from = 'Only the code of signed Bento releases runs here,'
     const to = '<img src=x onerror="1">'.padEnd(from.length, ' ')
-    await withWorker(hostileWorker([[from, to]]))
+    needWorker(await withWorker(hostileWorker([[from, to]])))
     state.lib.set('/sw.js', { body: Buffer.from(SW_HONEST), headers: { 'content-type': 'text/javascript' } })
     const v = await visit(page, `${LIB}/`)
     ok(v.lib?.verdict === 'mismatch' && rules(v.lib) === 'markup', `mismatch on markup only (got ${v.lib?.verdict} ${rules(v.lib)})`)
@@ -706,7 +716,7 @@ if (SW_ROWS.some(row)) {
   if (row('sw-size')) {
     section('sw-size: a hostile worker adds text to the page (no script, no handler)  (rule: size)')
     await fresh()
-    await withWorker(hostileWorker([['Choose a file', 'Choose a file to send us']]))
+    needWorker(await withWorker(hostileWorker([['Choose a file', 'Choose a file to send us']])))
     state.lib.set('/sw.js', { body: Buffer.from(SW_HONEST), headers: { 'content-type': 'text/javascript' } })
     const v = await visit(page, `${LIB}/`)
     ok(v.lib?.verdict === 'mismatch' && rules(v.lib) === 'size', `mismatch on size only (got ${v.lib?.verdict} ${rules(v.lib)})`)
@@ -729,7 +739,7 @@ if (SW_ROWS.some(row)) {
     // holds the honest page and its honest CSP header.
     const meta = /<meta http-equiv="Content-Security-Policy" content="[^"]*">/.exec(t)[0]
     const sw = hostileWorker([[honestJs, hostileJs], [meta, ' '.repeat(meta.length)]], `h.set('content-security-policy', "script-src 'unsafe-inline'; connect-src 'self'")`)
-    await withWorker(sw)
+    needWorker(await withWorker(sw))
     state.lib.set('/sw.js', { body: Buffer.from(SW_HONEST), headers: { 'content-type': 'text/javascript' } })
     const v = await visit(page, `${LIB}/`)
     const ran = await page.evaluate((h) => document.querySelector('script')?.textContent === h, honestJs)
@@ -746,7 +756,7 @@ if (row('shadow-root')) {
   const LONG = 'Only the code of signed Bento releases runs here, each document in its own sandbox. Saving changes is not available on this page yet: to edit, open the file in your browser directly or in the Bento app.'
   const meta = /<meta http-equiv="Content-Security-Policy" content="[^"]*">/.exec(t)[0]
   const inj = '<div><template shadowrootmode="open"><img src=x onerror="document.title=\'DSD\'"><script>window.__dsd=1<\/script></template></div>'
-  await withWorker(hostileWorker([[LONG, inj.padEnd(LONG.length, ' ')], [meta, ' '.repeat(meta.length)]], `h.set('content-security-policy', "script-src 'unsafe-inline'")`))
+  needWorker(await withWorker(hostileWorker([[LONG, inj.padEnd(LONG.length, ' ')], [meta, ' '.repeat(meta.length)]], `h.set('content-security-policy', "script-src 'unsafe-inline'")`)))
   state.lib.set('/sw.js', { body: Buffer.from(SW_HONEST), headers: { 'content-type': 'text/javascript' } })
   const v = await visit(page, `${LIB}/`)
   const ran = await page.evaluate(() => document.title === 'DSD').catch(() => false)

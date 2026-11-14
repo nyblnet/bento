@@ -241,7 +241,7 @@ export async function tripwireEarly(sender, obs) {
   const pending = {
     at: Date.now(), url: cut(noHash(sender.url)), origin: who.origin, role: who.role,
     tabId: sender.tab?.id ?? null, tabIndex: sender.tab?.index ?? 0,
-    obs: { role: who.role, url: cut(noHash(sender.url)), scripts: capScripts(obs.scripts, flags), flags },
+    obs: { role: who.role, url: cut(noHash(sender.url)), timeOrigin: Number(obs.timeOrigin) || 0, scripts: capScripts(obs.scripts, flags), flags },
   }
   const key = docKey(sender, obs)
   await serial(async () => {
@@ -280,7 +280,7 @@ export async function tripwireObserve(sender, obs, net = (u, o) => fetch(u, o)) 
   const workersIn = role === 'library' && Array.isArray(obs.workers) ? obs.workers : null
   if (workersIn && workersIn.length > MAX_WORKERS) flags.push('over-cap:workers')
   const page = {
-    role, url, size: Number(obs.size) || 0, scripts, flags,
+    role, url, timeOrigin: Number(obs.timeOrigin) || 0, size: Number(obs.size) || 0, scripts, flags,
     bytes: role === 'library' && HEX.test(obs.bytes?.sha256 ?? '') ? { sha256: obs.bytes.sha256 } : null,
     csp: fresh ? h.csp : role === 'library' && obs.bytes ? (obs.bytes.csp == null ? [] : [cut(obs.bytes.csp)]) : null,
     cspFrom: fresh ? 'navigation' : role === 'library' && obs.bytes ? 'cache' : null,
