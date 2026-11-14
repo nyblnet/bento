@@ -42,9 +42,10 @@ export async function issueChallenge(secret, audience, scope, now) {
  * Open a challenge: sealed by us, for this audience and scope, and within its
  * lifetime? Returns { nonce, issued } (the nonce is the spent-set key) or null.
  * It does NOT spend the challenge: the Durable Object does that first, inside
- * its own serialisation.
+ * its own serialisation. `ttl` is the challenge's life: CHALLENGE_TTL_MS for a
+ * roster challenge, a minute for a browser's (browsers.js).
  */
-export async function openChallenge(secret, audience, scope, challenge, now) {
+export async function openChallenge(secret, audience, scope, challenge, now, ttl = CHALLENGE_TTL_MS) {
   if (typeof challenge !== 'string') return null
   const b = b64uDec(challenge)
   if (!b || b.length !== 40) return null
@@ -54,6 +55,6 @@ export async function openChallenge(secret, audience, scope, challenge, now) {
   let d = 0
   for (let i = 0; i < 16; i++) d |= want[i] ^ b[24 + i]
   if (d !== 0) return null
-  if (issued > now + SKEW_MS || now - issued > CHALLENGE_TTL_MS) return null
+  if (issued > now + SKEW_MS || now - issued > ttl) return null
   return { nonce: b64uEnc(nonce), issued }
 }

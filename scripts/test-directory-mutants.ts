@@ -21,10 +21,10 @@ import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync, m
 import { join, dirname, relative, resolve, sep } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const RIGS = ['test-directory.ts', 'test-directory-roster.ts']
+const RIGS = ['test-directory.ts', 'test-directory-roster.ts', 'test-directory-browsers.ts']
 /**
  * Every file under scripts/ the rigs reach through relative imports (the roster
  * rig runs the hosting check, which imports scripts/lib/), found by walking the
@@ -56,7 +56,7 @@ const ok = (c: boolean, m: string) => { checks++; if (!c) { failures++; console.
 
 type Edit = { from: string; to: string }
 /** `also`: further edits in the same file, for a rule held at two doors */
-type Mutant = Edit & { name: string; file: 'worker.js' | 'roster.js' | 'passkey.js' | 'links.js' | 'mail.js' | 'voidpage.js'; also?: Edit[] }
+type Mutant = Edit & { name: string; file: 'worker.js' | 'roster.js' | 'passkey.js' | 'links.js' | 'mail.js' | 'voidpage.js' | 'browsers.js' | 'challenge.js'; also?: Edit[] }
 const MUTANTS: Mutant[] = [
   // --- the first design's routes, retired ---
   { name: 'retired routes served again (fall through)', file: 'worker.js',
@@ -68,6 +68,136 @@ const MUTANTS: Mutant[] = [
   { name: 'D3: no top-level catch', file: 'worker.js',
     from: "    try {\n      return await route(req, env)\n    } catch (e) {\n      console.log(`directory error: ${e && e.message}`)\n      let path = ''\n      try { path = new URL(req.url).pathname } catch { /* the base headers */ }\n      return json(500, { error: 'internal' }, headersFor(path))\n    }",
     to: '    return await route(req, env)' },
+
+  // --- SD3: browser certificates (browsers.js; rows in test-directory-browsers.ts) ---
+  { name: 'SD3 challenge: a browser challenge lives 5 minutes', file: 'browsers.js', from: '  challengeTtlMs: 60_000,', to: '  challengeTtlMs: 5 * 60_000,' },
+  { name: 'SD3 challenge: the ttl argument ignored', file: 'challenge.js', from: 'now - issued > ttl) return null', to: 'now - issued > CHALLENGE_TTL_MS) return null' },
+  { name: 'SD3 challenge: sealed for no address', file: 'browsers.js',
+    from: "    const nonce = await issueChallenge(env.CHALLENGE_KEY, web ? 'web' : 'home', scope, at)", to: "    const nonce = await issueChallenge(env.CHALLENGE_KEY, web ? 'web' : 'home', 'browser', at)",
+    also: [{ from: '    const c = await openChallenge(env.CHALLENGE_KEY, aud, scope, challenge, now, BROWSER_LIMITS.challengeTtlMs)', to: "    const c = await openChallenge(env.CHALLENGE_KEY, aud, 'browser', challenge, now, BROWSER_LIMITS.challengeTtlMs)" }] },
+  { name: 'SD3 challenge: no per-IP lookup charge (the 404 oracle)', file: 'browsers.js', from: "    if (!(await ledger(ip, 'lookup'))) return json(429, { error: 'rate-limited' })\n    const scope", to: '    const scope' },
+  { name: 'SD3 challenge: no per-address limit', file: 'browsers.js', from: "    if (!(await ledger(`${ip}\\n${scope}`, web ? 'challengeAddr' : 'challengeAddrHome'))) return json(429, { error: 'rate-limited' })\n", to: '' },
+  { name: 'SD3 challenge: the per-address limit shared by every caller', file: 'browsers.js', from: "ledger(`${ip}\\n${scope}`, web ? 'challengeAddr' : 'challengeAddrHome')", to: "ledger(scope, web ? 'challengeAddr' : 'challengeAddrHome')" },
+  { name: 'D3 (#957): enrolment and renewal challenges share one count', file: 'browsers.js', from: "web ? 'challengeAddr' : 'challengeAddrHome')", to: "'challengeAddr')" },
+  { name: 'D3 (#957): check-ins not counted', file: 'browsers.js', from: "    if (!(await ledger(`${ip}\\n${scope}`, 'checkin'))) return json(429, { error: 'rate-limited' })\n", to: '' },
+  { name: 'D3 (#957): check-ins counted per IP before the signature', file: 'browsers.js',
+    from: "    const incidents = incidentsOf(env) // first: an unreadable list countersigns nothing\n", to: "    if (!(await ledger(ip, 'checkin'))) return json(429, { error: 'rate-limited' })\n    const incidents = incidentsOf(env)\n",
+    also: [{ from: "    if (!(await ledger(`${ip}\\n${scope}`, 'checkin'))) return json(429, { error: 'rate-limited' })\n", to: '' }] },
+  { name: 'C2 (#957): check-ins counted before the challenge is opened', file: 'browsers.js',
+    from: "    const ch = await openBrowser(env, scope, v.value.challenge, Date.now())\n    if (!ch) return json(400, { error: 'nonce' })\n    if (!(await ledger(`${ip}\\n${scope}`, 'checkin'))) return json(429, { error: 'rate-limited' })\n",
+    to: "    if (!(await ledger(`${ip}\\n${scope}`, 'checkin'))) return json(429, { error: 'rate-limited' })\n    const ch = await openBrowser(env, scope, v.value.challenge, Date.now())\n    if (!ch) return json(400, { error: 'nonce' })\n" },
+  { name: 'mb: the countersign always says confirmed', file: 'browsers.js', from: '  return Number.isSafeInteger(since) && since > 0 ? since : 0', to: '  return 0' },
+  { name: 'mb: the countersign always says unconfirmed', file: 'browsers.js', from: 'mb: Math.min(mb, now), loggedAt: now', to: 'mb: now, loggedAt: now' },
+  { name: 'C1 (#957): enrolment never reads the incident list', file: 'browsers.js', from: "    incidentsOf(env) // before the challenge is opened", to: "    // before the challenge is opened" },
+  { name: 'N3 (#957): the status route not charged per IP', file: 'browsers.js',
+    from: "  if (!email || !/^[A-Za-z0-9_-]{43}$/.test(c)) return json(400, { error: 'invalid' })\n  if (!(await ledger(ip, 'lookup'))) return json(429, { error: 'rate-limited' })\n",
+    to: "  if (!email || !/^[A-Za-z0-9_-]{43}$/.test(c)) return json(400, { error: 'invalid' })\n" },
+  { name: 'SD3 challenge: the head read without ripening', file: 'browsers.js',
+    from: "    await obj.ripen(now)\n    const head = await s.get('head')\n    if (!head) return out(404, { error: 'not-found' })\n    return out(200, { rosHash: head.hash })",
+    to: "    const head = await s.get('head')\n    if (!head) return out(404, { error: 'not-found' })\n    return out(200, { rosHash: head.hash })" },
+  { name: 'SD3 challenge: no Origin required', file: 'browsers.js', from: "  if (req.headers.get('origin') !== browserOrigin(p)) return json(403, { error: 'origin' })\n", to: '' },
+  { name: 'SD3 enrol: the challenge not spent', file: 'browsers.js',
+    from: "  if (a.op === 'browserEnrol') {\n    if (!(await spend())) return out(400, { error: 'nonce' })\n", to: "  if (a.op === 'browserEnrol') {\n" },
+  { name: 'SD3 enrol: spent only once the assertion verified', file: 'browsers.js',
+    from: "  if (a.op === 'browserEnrol') {\n    if (!(await spend())) return out(400, { error: 'nonce' })\n", to: "  if (a.op === 'browserEnrol') {\n",
+    also: [{ from: "    if (!v.ok) return out(403, { error: 'assertion' })\n    const certHash", to: "    if (!v.ok) return out(403, { error: 'assertion' })\n    if (!(await spend())) return out(400, { error: 'nonce' })\n    const certHash" }] },
+  { name: 'SD3 enrol: a home challenge accepted', file: 'browsers.js', from: "    if (a.aud !== 'web') return out(400, { error: 'nonce' }) // a renewal's challenge, used up here\n", to: '' },
+  { name: 'SD3 enrol: the other audience refused before it is spent', file: 'browsers.js',
+    from: "    if (!(await spend())) return out(400, { error: 'nonce' })\n    if (a.aud !== 'web') return out(400, { error: 'nonce' }) // a renewal's challenge, used up here\n",
+    to: "    if (a.aud !== 'web') return out(400, { error: 'nonce' })\n    if (!(await spend())) return out(400, { error: 'nonce' })\n" },
+  { name: 'SD3 checkin: the other audience refused before it is spent', file: 'browsers.js',
+    from: "    if (!(await spend())) return out(400, { error: 'nonce' })\n    if (a.aud !== 'home') return out(400, { error: 'nonce' }) // an enrolment's challenge, used up here\n",
+    to: "    if (a.aud !== 'home') return out(400, { error: 'nonce' })\n    if (!(await spend())) return out(400, { error: 'nonce' })\n" },
+  { name: 'SD3 enrol: any ceremony time', file: 'browsers.js', from: "    if (c.ceremonyAt !== a.issued) return out(400, { error: 'ceremony' })\n", to: '' },
+  { name: 'SD3 enrol: any head', file: 'browsers.js', from: "    if (c.rosHash !== head.hash) return out(400, { error: 'head' })\n", to: '' },
+  { name: 'SD3 enrol: any opener', file: 'browsers.js', from: "    if (b.rq !== HOME_ORIGIN) return json(400, { error: 'rq' })\n", to: '' },
+  { name: 'SD3 enrol: a quarantined passkey may certify', file: 'browsers.js', from: "    if (!m || m.kind !== 'pk' || m.quarantined) return out(403, { error: 'signer' })", to: "    if (!m || m.kind !== 'pk') return out(403, { error: 'signer' })" },
+  { name: 'SD3 enrol: the assertion not verified', file: 'browsers.js', from: "    if (!v.ok) return out(403, { error: 'assertion' })\n", to: '' },
+  { name: 'SD3 enrol: every listed passkey origin accepted', file: 'browsers.js', from: 'rpId: PASSKEY.rpId, origins: [SIGNIN_ORIGIN], storedSignCount: rec?.signCount,', to: 'rpId: PASSKEY.rpId, origins: [SIGNIN_ORIGIN, HOME_ORIGIN], storedSignCount: rec?.signCount,' },
+  { name: 'SD3 enrol: no stored signature counter', file: 'browsers.js', from: 'storedSignCount: rec?.signCount,', to: 'storedSignCount: undefined,' },
+  { name: 'SD3 enrol: a device key enrols twice', file: 'browsers.js', from: "    if (await s.get(`wd:${c.devicePub}`)) return out(409, { error: 'device-known' }) // a fresh key per ceremony\n", to: '' },
+  { name: 'SD3 enrol: the counter stored before the countersign', file: 'browsers.js',
+    from: "    const w = await countersign(obj.env, { certHash, ob, mb: await mailbox(s), ceremonyAt: c.ceremonyAt, now })\n    if (!rec || !(await storeCount(s, pub, rec.signCount, v.value.signCount))) return out(403, { error: 'assertion' })\n",
+    to: "    if (!rec || !(await storeCount(s, pub, rec.signCount, v.value.signCount))) return out(403, { error: 'assertion' })\n    const w = await countersign(obj.env, { certHash, ob, mb: await mailbox(s), ceremonyAt: c.ceremonyAt, now })\n" },
+  { name: 'SD3 enrol: a dev2. accepted', file: 'browsers.js', from: "    if (!c.ok || c.value.kind !== 'wdev' || c.value.via !== 'passkey') return json(400, { error: 'text' })", to: "    if (!c.ok || c.value.via !== 'passkey') return json(400, { error: 'text' })",
+    also: [{ from: "    if (!p.ok || p.value.kind !== 'wdev' || p.value.via !== 'passkey') return out(400, { error: 'text' })", to: "    if (!p.ok || p.value.via !== 'passkey') return out(400, { error: 'text' })" },
+      { from: "    if (typeof b.text !== 'string' || !b.text.startsWith('wdev.') || b.text.length > TEXT_MAX)", to: "    if (typeof b.text !== 'string' || b.text.length > TEXT_MAX)" }] },
+  { name: 'SD3 enrol: not logged', file: 'browsers.js', from: "    await obj.log({ k: 'wdev',", to: "    if (0) await obj.log({ k: 'wdev'," },
+  { name: 'SD3 watt: 48 hours', file: 'browsers.js', from: 'Math.min(now + WATT_MAX_MS, ceremonyAt + CEREMONY_CAP_MS)', to: 'Math.min(now + 2 * WATT_MAX_MS, ceremonyAt + CEREMONY_CAP_MS)' },
+  { name: 'SD3 watt: past the 7-day cap', file: 'browsers.js', from: 'Math.min(now + WATT_MAX_MS, ceremonyAt + CEREMONY_CAP_MS)', to: 'now + WATT_MAX_MS' },
+  { name: 'SD3 watt: ob read from the Origin', file: 'browsers.js', from: '    const ob = a.rq === HOME_ORIGIN ? 1 : 0\n', to: '    const ob = h.origin === HOME_ORIGIN ? 1 : 0\n' },
+  { name: 'SD3 log: ob never set', file: 'roster.js', from: "{ ...entry, ob: entry.rq === HOME_ORIGIN ? 1 : 0 }", to: 'entry' },
+  { name: 'SD3 checkin: the challenge not spent', file: 'browsers.js',
+    from: "  if (a.op === 'browserCheckin') {\n    if (!(await spend())) return out(400, { error: 'nonce' })\n", to: "  if (a.op === 'browserCheckin') {\n" },
+  { name: 'SD3 checkin: a web challenge accepted', file: 'browsers.js', from: "    if (a.aud !== 'home') return out(400, { error: 'nonce' }) // an enrolment's challenge, used up here\n", to: '' },
+  { name: 'SD3 checkin: the wren. signature not checked', file: 'browsers.js', from: "    if (!v.ok) return json(400, { error: 'wren' })", to: "    if (!v.ok && v.reason !== 'signature') return json(400, { error: 'wren' })" },
+  { name: 'SD3 checkin: past the cap renewed', file: 'browsers.js', from: "  if (now >= rec.ceremonyAt + CEREMONY_CAP_MS) return 'cap'\n", to: '' },
+  { name: 'SD3 checkin: a revoked key renewed', file: 'browsers.js', from: "  if (rec.revokedAt) return 'revoked'\n", to: '' },
+  // a removed passkey is refused at two doors (not a member of the head; no record): loosen both
+  { name: 'SD3 checkin: a removed passkey\'s certificate renewed', file: 'browsers.js', from: "  if (!m || m.kind !== 'pk' || m.quarantined) return 'revoked'", to: "  if (m && m.quarantined) return 'revoked'",
+    also: [{ from: "  if (!pk || pk.addedAt > rec.ceremonyAt) return 'revoked'", to: "  if (pk && pk.addedAt > rec.ceremonyAt) return 'revoked'" }] },
+  { name: 'SD3 checkin: a suspended passkey\'s certificate renewed', file: 'browsers.js', from: "  if (!m || m.kind !== 'pk' || m.quarantined) return 'revoked'", to: "  if (!m || m.kind !== 'pk') return 'revoked'" },
+  { name: 'SD3 checkin: a passkey re-added since the ceremony', file: 'browsers.js', from: '  if (!pk || pk.addedAt > rec.ceremonyAt) return \'revoked\'', to: "  if (!pk) return 'revoked'" },
+  { name: 'SD3 checkin: the pin ignored', file: 'browsers.js', from: '  return links.slice(from)', to: '  return links' },
+  { name: 'SD3 checkin: no incident records', file: 'browsers.js', from: "r.status === 200 || r.status === 403 ? { ...r.body, incidents } : r.body)", to: "r.status === 200 || r.status === 403 ? { ...r.body, incidents: [] } : r.body)" },
+  { name: 'SD3 incidents: a record that does not read is skipped', file: 'browsers.js', from: "    if (!ok) throw new Error('INCIDENTS holds a record that does not read')\n", to: '' },
+  { name: 'SD3 incidents: read after the challenge is spent', file: 'browsers.js',
+    from: "    const incidents = incidentsOf(env) // first: an unreadable list countersigns nothing\n", to: '',
+    also: [{ from: "    return json(r.status, r.status === 200 || r.status === 403 ? { ...r.body, incidents } : r.body)\n  }\n\n  return json(404", to: "    const incidents = incidentsOf(env)\n    return json(r.status, r.status === 200 || r.status === 403 ? { ...r.body, incidents } : r.body)\n  }\n\n  return json(404" }] },
+  { name: 'SD3 revoke: sign out everywhere marks nothing', file: 'browsers.js', from: '    await s.put(key, { ...rec, revokedAt: now })\n', to: '',
+    also: [{ from: "  await s.put('signoutAt', Math.max(at, (await s.get('signoutAt')) ?? 0))\n", to: '' }] },
+  { name: 'SD3 revoke: a ceremony begun before the sign-out finishes after it', file: 'browsers.js',
+    from: "    if (so !== undefined && a.issued <= so) return out(403, { error: 'revoked' })\n", to: '' },
+  { name: 'SD3 sweep: certificates never deleted', file: 'browsers.js', from: '  if (dead.length) await s.delete(dead)\n}', to: '}' },
+  { name: 'SD3 status: always ok', file: 'browsers.js', from: "    return out(200, { state: await standing(s, rec, now) })", to: "    return out(200, { state: 'ok' })" },
+  { name: 'SD3 CORS: home routes answer *', file: 'browsers.js', from: '  if (path.startsWith(HOME_ROUTES.prefix)) return HOME_ORIGIN\n', to: '' },
+  { name: 'SD3 CORS: a path that is no route answers *', file: 'worker.js', from: "PUBLIC.includes(path) ? ANY : BASE", to: 'ANY' },
+  { name: 'SD3 CORS: a preflight on no route answers 204', file: 'worker.js', from: "    if (h === BASE) return json(404, { error: 'not-found' }, BASE) // no route, no CORS\n", to: '' },
+
+  // --- the sign-in host's own pages: sign-in and sign out everywhere (browsers.js) ---
+  { name: 'signin: no Origin required', file: 'browsers.js', from: "  if (req.headers.get('origin') !== browserOrigin(p)) return json(403, { error: 'origin' })\n", to: "  if (p !== WEB_ROUTES.signinChallenge && req.headers.get('origin') !== browserOrigin(p)) return json(403, { error: 'origin' })\n" },
+  { name: 'signin: the challenge not spent', file: 'browsers.js',
+    from: "    // the challenge is spent first, in the object the user handle names\n    if (!(await spend())) return out(400, { error: 'nonce' })\n", to: '' },
+  { name: 'signin: spent only once the assertion verified', file: 'browsers.js',
+    from: "    // the challenge is spent first, in the object the user handle names\n    if (!(await spend())) return out(400, { error: 'nonce' })\n", to: '',
+    also: [{ from: "    if (!(await storeCount(s, who.pub, who.rec.signCount, v.value.signCount))) return out(400, { error: 'assertion-sign-count' })\n    return out(200, { address:", to: "    if (!(await spend())) return out(400, { error: 'nonce' })\n    if (!(await storeCount(s, who.pub, who.rec.signCount, v.value.signCount))) return out(400, { error: 'assertion-sign-count' })\n    return out(200, { address:" }] },
+  { name: 'signin: the challenge lives a day', file: 'browsers.js', from: "openChallenge(env.CHALLENGE_KEY, 'signin', SIGNIN_SCOPE, b.nonce, Date.now())", to: "openChallenge(env.CHALLENGE_KEY, 'signin', SIGNIN_SCOPE, b.nonce, Date.now(), 86_400_000)" },
+  { name: 'challenge: the seal names no audience', file: 'challenge.js', from: '`${LABEL}\\n${audience}\\n${scope}', to: '`${LABEL}\\n${scope}' },
+  { name: 'signin: any user handle length', file: 'browsers.js', from: "    if (!h || h.length !== 48) return json(400, { error: 'assertion' })", to: "    if (!h || h.length < 32) return json(400, { error: 'assertion' })" },
+  { name: 'signin: a suspended passkey signs in (and signs out)', file: 'browsers.js', from: "  if (m.quarantined) return { error: 'quarantined' }\n", to: '' },
+  // (a credential the account stores is always on its head: a removal and a reset delete it, so the one door is the whole line)
+  { name: 'signin: no membership check', file: 'browsers.js', from: "  if (!m || m.kind !== 'pk' || !rec) return { error: 'not-member' }\n", to: '' },
+  { name: 'signin: the counter not stored', file: 'browsers.js', from: "    if (!(await storeCount(s, who.pub, who.rec.signCount, v.value.signCount))) return out(400, { error: 'assertion-sign-count' })\n    return out(200, { address:", to: "    return out(200, { address:" },
+  { name: 'D6: the counter stored over whatever is there', file: 'browsers.js', from: "  if (!rec || rec.signCount !== before) return false", to: '  if (!rec) return false' },
+  { name: 'D2: a handle naming no account spends (and so stores) first', file: 'browsers.js',
+    from: "    if (!(await s.get('head'))) return out(403, { error: 'not-member' })\n    // the challenge is spent first, in the object the user handle names\n    if (!(await spend())) return out(400, { error: 'nonce' })\n",
+    to: "    // the challenge is spent first, in the object the user handle names\n    if (!(await spend())) return out(400, { error: 'nonce' })\n    if (!(await s.get('head'))) return out(403, { error: 'not-member' })\n" },
+  { name: 'D3: the cut-off at the signed time', file: 'browsers.js', from: '  const at = now // the cut-off', to: '  const at = signedAt ?? now // the cut-off' },
+  { name: 'D5: the sign-in challenge not limited per IP', file: 'browsers.js', from: "  if (p === WEB_ROUTES.signinChallenge) {\n    if (!(await ledger(ip, 'challenge'))) return json(429, { error: 'rate-limited' })\n", to: "  if (p === WEB_ROUTES.signinChallenge) {\n" },
+  { name: 'W3: the sign-out challenge issued before the statement exists', file: 'browsers.js', from: "    if (!WOUT_DEFINED) return json(501, { error: 'not-implemented', reason: 'the kernel sign-out statement is not defined yet' })\n", to: '' },
+  { name: 'D1: the sign-out challenge opened as an enrolment\'s', file: 'browsers.js', from: "    const c = await openChallenge(env.CHALLENGE_KEY, 'signout', await addressKey(address), parts[3], Date.now())", to: "    const c = await openChallenge(env.CHALLENGE_KEY, 'web', await addressKey(address), parts[3], Date.now())" },
+  { name: 'W1: the sign-out mail promises too much', file: 'browsers.js', from: "    'From now on no browser can renew its sign-in. Anything a browser already signed can still be accepted for up to 24 hours.',\n", to: '' },
+  { name: 'signin: no stored counter', file: 'browsers.js', from: "rpId: PASSKEY.rpId, origins: [SIGNIN_ORIGIN], storedSignCount: who.rec.signCount,\n    })\n    if (!v.ok) return out(400, { error: `assertion-${v.reason}` })\n    if (!(await storeCount(s, who.pub, who.rec.signCount, v.value.signCount))) return out(400, { error: 'assertion-sign-count' })\n    return out(200",
+    to: "rpId: PASSKEY.rpId, origins: [SIGNIN_ORIGIN], storedSignCount: undefined,\n    })\n    if (!v.ok) return out(400, { error: `assertion-${v.reason}` })\n    if (!(await storeCount(s, who.pub, who.rec.signCount, v.value.signCount))) return out(400, { error: 'assertion-sign-count' })\n    return out(200" },
+  { name: 'signin: bento/home a ceremony origin', file: 'browsers.js', from: "challenge: b64uDec(a.challenge) ?? new Uint8Array(0), rpId: PASSKEY.rpId, origins: [SIGNIN_ORIGIN],", to: "challenge: b64uDec(a.challenge) ?? new Uint8Array(0), rpId: PASSKEY.rpId, origins: [SIGNIN_ORIGIN, HOME_ORIGIN]," },
+  { name: 'signin: logs the sign-in', file: 'browsers.js', from: "    return out(200, { address: (await parseRos(head.ros)).value.address })", to: "    await obj.log({ k: 'signin', at: now, pub: who.pub })\n    return out(200, { address: (await parseRos(head.ros)).value.address })" },
+  { name: 'signout: no per-IP lookup charge on its challenge', file: 'browsers.js',
+    from: "    if (!(await ledger(ip, 'lookup'))) return json(429, { error: 'rate-limited' })\n    const r = await roster(email, 'browserHead', {})\n    if (r.status !== 200) return json(r.status, r.body)\n    // until the statement exists",
+    to: "    const r = await roster(email, 'browserHead', {})\n    if (r.status !== 200) return json(r.status, r.body)\n    // until the statement exists" },
+  { name: 'signout: the challenge not spent', file: 'browsers.js',
+    from: "  if (a.op === 'browserSignout') {\n    if (!(await spend())) return out(400, { error: 'nonce' })\n", to: "  if (a.op === 'browserSignout') {\n" },
+  { name: 'signout: any time in the text', file: 'browsers.js', from: "    if (a.at !== a.issued) return out(400, { error: 'nonce' }) // the text's time is the challenge's\n", to: '' },
+  { name: 'signout: the time checked before the challenge is spent', file: 'browsers.js',
+    from: "    if (!(await spend())) return out(400, { error: 'nonce' })\n    if (a.at !== a.issued) return out(400, { error: 'nonce' }) // the text's time is the challenge's\n",
+    to: "    if (a.at !== a.issued) return out(400, { error: 'nonce' })\n    if (!(await spend())) return out(400, { error: 'nonce' })\n" },
+  { name: 'signout: an address not in normal form', file: 'browsers.js', from: "    if (!address || normalize(address) !== address) return json(400, { error: 'text' })", to: "    if (!address) return json(400, { error: 'text' })" },
+  { name: 'signout: a leading zero in the time', file: 'browsers.js', from: "/^[1-9][0-9]{0,15}$/.test(parts[2])", to: "/^[0-9]{1,16}$/.test(parts[2])" },
+  { name: 'signout: acts before the kernel defines its statement', file: 'browsers.js', from: 'const WOUT_DEFINED = false', to: 'const WOUT_DEFINED = true' },
+  { name: 'signout: the assertion over the raw challenge', file: 'browsers.js', from: "      publicKey: who.pub, challenge: await statementChallenge(a.text),", to: "      publicKey: who.pub, challenge: b64uDec(a.text.split('.')[3]) ?? new Uint8Array(0)," },
+  { name: 'signout: no mail', file: 'browsers.js', from: "  await h.notify(address, 'Every browser was signed out of your bento/id account', [", to: "  if (0) await h.notify(address, 'Every browser was signed out of your bento/id account', [" },
+  { name: 'N3 (#957): the enrolment counter stored over whatever is there', file: 'browsers.js',
+    from: "    if (!rec || !(await storeCount(s, pub, rec.signCount, v.value.signCount))) return out(403, { error: 'assertion' })\n    await s.put(`wd:",
+    to: "    if (rec) await s.put(`pk:${pub}`, { ...rec, signCount: v.value.signCount })\n    await s.put(`wd:" },
 
   // --- the passkey roster ---
   ...['https://bento.page', 'https://home.bento.page', 'https://id.bento.page'].map((o): Mutant => ({
@@ -166,15 +296,15 @@ const MUTANTS: Mutant[] = [
     from: 'export const RETIRED = Object.freeze([\n', to: "export const WEB_PREFIX = '/v1/web/'\nexport const RETIRED = Object.freeze([\n" },
   { name: 'Y26: a web-route 500 answers *', file: 'worker.js',
     from: "      return json(500, { error: 'internal' }, headersFor(path))", to: "      return json(500, { error: 'internal' })" },
-  { name: 'Y31: enrol not limited per IP', file: 'worker.js', from: "    if (!(await ledger(env, ip, 'enrol'))) return json(429, { error: 'rate-limited' }, H)\n", to: '' },
-  { name: 'web: CORS * on the web routes', file: 'worker.js',
-    from: "const WEB = { ...BASE, 'access-control-allow-origin': SIGNIN_ORIGIN, vary: 'Origin' }", to: 'const WEB = BASE' },
-  { name: 'web: any opener accepted', file: 'worker.js', from: "  if (!REQUESTERS.includes(b.rq)) return json(400, { error: 'rq' }, H)\n", to: '' },
-  { name: 'web: any text accepted', file: 'worker.js', from: "typeof b.text !== 'string' || !b.text.startsWith('wdev.') || b.text.length > TEXT_MAX", to: "typeof b.text !== 'string'" },
-  { name: 'web: assertion fields not checked', file: 'worker.js',
-    from: "!['id', 'authenticatorData', 'clientDataJSON', 'signature'].every((k) => field(as[k]))", to: 'false' },
-  { name: 'web: the challenge shares the roster audience and scope', file: 'worker.js',
-    from: "const WEB_AUDIENCE = 'web'", to: "const WEB_AUDIENCE = 'roster'" },
+  { name: 'Y31: enrol not limited per IP', file: 'browsers.js', from: "    if (!(await ledger(ip, 'enrol'))) return json(429, { error: 'rate-limited' })\n", to: '' },
+  { name: 'web: CORS * on the web routes', file: 'worker.js', from: 'const WEB = only(SIGNIN_ORIGIN), HOME', to: 'const WEB = ANY, HOME' },
+  { name: 'web: any text accepted before the count', file: 'browsers.js', from: "typeof b.text !== 'string' || !b.text.startsWith('wdev.') || b.text.length > TEXT_MAX", to: "typeof b.text !== 'string'" },
+  { name: 'web: assertion fields not checked', file: 'browsers.js',
+    from: "!['id', 'authenticatorData', 'clientDataJSON', 'signature'].every((f) => field(as[f]))", to: 'false' },
+  { name: 'web: the challenge shares the roster audience', file: 'browsers.js',
+    from: "issueChallenge(env.CHALLENGE_KEY, web ? 'web' : 'home', scope, at)", to: "issueChallenge(env.CHALLENGE_KEY, web ? 'roster' : 'home', scope, at)",
+    also: [{ from: "const AUDIENCES = Object.freeze(['web', 'home'])", to: "const AUDIENCES = Object.freeze(['roster', 'home'])" },
+      { from: "    if (a.aud !== 'web') return out(400, { error: 'nonce' }) // a renewal's", to: "    if (a.aud !== 'roster') return out(400, { error: 'nonce' }) // a renewal's" }] },
   // security's C1 (#926 X1, X13, X22, X31)
   { name: 'X1 CBOR: a repeated map key allowed', file: 'passkey.js', from: "        if (out.has(key)) throw new Bad()\n", to: '' },
   { name: 'X13 registration: origin matched by prefix', file: 'passkey.js',
@@ -375,10 +505,26 @@ function tree(): string {
   for (const f of [...RIGS, ...RIG_IMPORTS]) { mkdirSync(dirname(join(d, 'scripts', f)), { recursive: true }); cpSync(join(root, 'scripts', f), join(d, 'scripts', f)) }
   return d
 }
-/** Run the rigs in a tree; a rig with no count line crashed, and proves nothing. */
-function run(d: string) {
-  return RIGS.map((f) => {
-    const r = spawnSync(process.execPath, [join(d, 'scripts', f)], { encoding: 'utf8', timeout: 120_000 })
+/** One rig in a tree, to its end or 120 s (then killed: no count line, so a crash). */
+function rig(d: string, f: string): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    const c = spawn(process.execPath, [join(d, 'scripts', f)])
+    let stdout = '', stderr = ''
+    c.stdout.on('data', (x) => { stdout += x })
+    c.stderr.on('data', (x) => { stderr += x })
+    const t = setTimeout(() => c.kill('SIGKILL'), 120_000)
+    c.on('close', () => { clearTimeout(t); resolve({ stdout, stderr }) })
+  })
+}
+/**
+ * Run the rigs in a tree, side by side (each its own process and copy of the
+ * clock, so they cannot disturb each other: the job outgrew 30 minutes run one
+ * after another). A rig with no count line crashed, and proves nothing.
+ */
+async function run(d: string) {
+  const rs = await Promise.all(RIGS.map((f) => rig(d, f)))
+  return RIGS.map((f, i) => {
+    const r = rs[i]
     const m = /^(\d+) passed, (\d+) failed$/m.exec(r.stdout)
     // a crash proves nothing, so say where it happened
     if (!m) console.log(`        ${f} crashed: ${(r.stderr || '').split('\n').filter((l) => /Error|at file:/.test(l)).slice(0, 2).join(' | ').slice(0, 300)}`)
@@ -390,7 +536,7 @@ console.log('positive control: the unmutated copy passes the rig')
 ok(RIG_IMPORTS.includes('check-id-hosting.mjs') && RIG_IMPORTS.includes(join('lib', 'id-hosting-rules.mjs')), `the copy carries the rigs' script imports, found by walking them (${RIG_IMPORTS.join(', ')})`)
 {
   const d = tree()
-  for (const r of run(d)) ok(r.failed === 0 && (r.passed ?? 0) > 0, `${r.f}: ${r.passed} passed, ${r.failed} failed`)
+  for (const r of await run(d)) ok(r.failed === 0 && (r.passed ?? 0) > 0, `${r.f}: ${r.passed} passed, ${r.failed} failed`)
   rmSync(d, { recursive: true, force: true })
 }
 
@@ -413,7 +559,7 @@ for (const m of chosen) {
   ok(n === 1, `applies exactly once: ${m.name} (found ${ns.join(', ')})`)
   if (n === 1) {
     writeFileSync(p, edits.reduce((t, e) => t.replace(e.from, () => e.to), src))
-    const rs = run(d)
+    const rs = await run(d)
     ok(rs.every((r) => r.failed !== null) && rs.some((r) => r.failed! > 0), `killed: ${m.name} (${rs.map((r) => `${r.f} ${r.failed === null ? 'CRASHED' : `${r.failed} failed`}`).join(', ')})`)
   }
   rmSync(d, { recursive: true, force: true })

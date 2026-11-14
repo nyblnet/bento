@@ -14073,6 +14073,74 @@ that bundles exactly the history it signed and the seeded one) and
 row), and `scripts/test-home-web-out.mjs` (where the output may go, the
 firmlink row and its mutant on macOS).
 
+## 2026-11-12 — bento/id directory: browser certificates, renewals and the event log's `ob`
+
+The directory now countersigns browser certificates (`server/directory/src/browsers.js`):
+the routes the sign-in host and bento/home call, matching the contract the
+bento/home agent was built against.
+
+- **Challenges.** A browser challenge is sealed for its audience (an
+  enrolment or a renewal) and for the address, and lives 60 seconds. It is
+  spent in the address's object before any other check, so reuse, a failed
+  assertion and the other audience all use it up. Nothing is stored when one
+  is issued, so a stranger who asks for many fills nothing and pushes out
+  nobody's. Asking costs a per-IP lookup, the same budget as `GET
+  /v1/roster` (both answer 404 for an address with no account), and one of 20
+  an hour from that IP for that address, enrolments and renewals counted
+  apart. A check-in is counted per IP per address only once its signature
+  verifies and it carries a challenge the directory issued for that address
+  (anyone can sign a `wren.` with a key of their own), so a check-in without
+  one, from the owner's own network, cannot use up its renewals. There is deliberately no count shared
+  by every caller of an address: a stranger could fill it and stop the
+  owner's browsers renewing.
+- **The head is the latest ripened one.** A change still waiting is never a
+  head, and a change that is due takes effect before the challenge is
+  answered, so a queued change never makes sign-ins fail.
+- **A fresh key per ceremony.** A device key enrols once.
+- **The countersign** lives 24 hours and never past 7 days after the
+  ceremony. A renewal is refused for a key that is unknown, revoked (signed
+  out everywhere, or its passkey removed, suspended or added again since), or
+  past the 7 days.
+- **`ob` means "asked for at bento/home's request"**: the opener the sign-in
+  host reports is bento/home. It is never read from the request's Origin
+  (every web enrolment's Origin is the sign-in host). It is in the countersign
+  and on every event-log entry, kept for the life of the account; nothing
+  decides on it, and the incident lever filters by it. Log entries keep the
+  full public key, not a fingerprint, so the lever acts on the exact key.
+- **Signing out everywhere is a time: the moment it is accepted**, not the
+  time in the text the passkey signed (both are logged). Every browser
+  certificate made by then stops renewing and the status route says
+  `revoked`, and a ceremony whose challenge was issued by then cannot finish
+  after it, so a sign-in already under way cannot undo it. A countersign
+  already issued stays valid for up to 24 hours at a peer that does not ask
+  the status route, and the mail says so.
+  Apps' certificates are untouched. The route checks everything and then
+  answers 501 until the kernel defines the statement a passkey signs for it.
+- **A passkey sign-in on the sign-in host** finds the account from the
+  passkey's 48-byte user handle (its first 32 bytes are the account's storage
+  name), but the handle only routes the request: membership is the account's
+  own record. Its challenge is spent in that account's object, once per
+  account rather than once for everyone (an assertion verifies only under its
+  own account); a handle naming no account is refused before anything is
+  written. A signature counter is stored only over the value the assertion
+  was checked against, so two assertions with one counter never both pass.
+  It logs and mails nothing.
+- **`mb`** (the countersign's mailbox state, from #949) is 0 while the
+  address is confirmed. Every account is confirmed today: the address is
+  proved at setup and nothing asks for it again until the mailbox re-proof is
+  built, which will store the time it went unconfirmed.
+- **Incident records** come from a deploy variable and ride on every
+  check-in and status answer. A list that does not read is an error, never a
+  shorter list.
+- **CORS** is per route: the sign-in host's routes answer only it, bento/home's
+  only it, the rest `*`, and a path that is no route answers with none.
+
+Not here yet: the statement a member signs to sign out everywhere (the
+kernel's), a `dev2.` made by a passkey alone,
+retiring the old key at a new ceremony, and mail for a new browser. Guards:
+`scripts/test-directory-browsers.ts` (the kernel's `verifyDevice` over what a
+check-in returns; each challenge rule with its control) and
+`scripts/test-directory-mutants.ts`.
 ## 2026-11-10 — bento/id in bento/home: the browser's agent runs no WebAuthn, and keeps only keys it cannot export
 
 bento/home in the browser (`home/web`) gains its bento/id agent
