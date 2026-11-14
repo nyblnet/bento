@@ -431,5 +431,130 @@
       "expect": "reject",
       "reason": "length"
     }
-  ]
+  ],
+  "rk": {
+    "note": "salt = SHA-256(\"bento/id/rk-salt/v1\" ‖ 0x00 ‖ address)[0..16]; ikm = Argon2id(code, salt); candidate c = HKDF-SHA-256(ikm, empty salt, \"bento/id/rk/v1\" ‖ byte c); the scalar is the first candidate in 1..n−1 (big-endian), counter c = 0, 1, … 255. rk = d·G.",
+    "maxTries": 256,
+    "salts": [
+      {
+        "address": "alice@example.com",
+        "salt": "f21053e7e80555359c69b796e9ba3ced"
+      },
+      {
+        "address": "bob@example.com",
+        "salt": "f456e8e7bb4fa22abd2bff8e56171292"
+      },
+      {
+        "address": "a@b.co",
+        "salt": "d35003192ac26de8da06ca1e54a3bfd1"
+      },
+      {
+        "address": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx@example.com",
+        "salt": "8d573b3fd3cabbf1989f0c242e434fc1"
+      }
+    ],
+    "candidates": {
+      "ikm": "333a41484f565d646b727980878e959ca3aab1b8bfc6cdd4dbe2e9f0f7fe050c",
+      "rows": [
+        {
+          "counter": 0,
+          "candidate": "39bbc7f61cca90bf03668e367c85fef25dec259706bd3180db7297e41f9133b8"
+        },
+        {
+          "counter": 1,
+          "candidate": "adf9d3fa5a716a3ae14d05989717a5f50bcfa0cb3609943ee887740fc4fbe2a9"
+        },
+        {
+          "counter": 2,
+          "candidate": "345d77cee4dd713d09389df2031c08bf5c41cd012e57b8c2d107fc8c90adf783"
+        },
+        {
+          "counter": 255,
+          "candidate": "1fa97d18249b3edc168a9197d929774edec9cb2a46b73fc6fadfd8c278ed6d8a"
+        }
+      ]
+    },
+    "pick": [
+      {
+        "name": "the first candidate in range",
+        "candidates": [
+          "0000000000000000000000000000000000000000000000000000000000003039"
+        ],
+        "index": 0
+      },
+      {
+        "name": "zero is refused, the next is taken",
+        "candidates": [
+          "0000000000000000000000000000000000000000000000000000000000000000",
+          "0000000000000000000000000000000000000000000000000000000000000001"
+        ],
+        "index": 1
+      },
+      {
+        "name": "n itself is refused",
+        "candidates": [
+          "ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551",
+          "ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632550"
+        ],
+        "index": 1
+      },
+      {
+        "name": "all ones (above n) is refused",
+        "candidates": [
+          "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551",
+          "0000000000000000000000000000000000000000000000000000000000000007"
+        ],
+        "index": 2
+      },
+      {
+        "name": "n − 1 and 1 are the edges in range",
+        "candidates": [
+          "ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632550"
+        ],
+        "index": 0
+      },
+      {
+        "name": "no candidate in range",
+        "candidates": [
+          "0000000000000000000000000000000000000000000000000000000000000000",
+          "ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551",
+          "ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632552"
+        ],
+        "index": -1
+      }
+    ],
+    "derive": [
+      {
+        "code": "02F0-39BR-0D55-617F-*",
+        "bytes": "009e01a578034a5304ef",
+        "address": "alice@example.com",
+        "salt": "f21053e7e80555359c69b796e9ba3ced",
+        "ikm": "0ba3d0212b7eaf411609be4b4b78653237a00a81708a2057beb5c06d55f3851e",
+        "counter": 0,
+        "scalar": "3c76e13182fa0ebdef6ada33b5e37356a819e06094526640febf67cf755af64d",
+        "pub": "BKsfFPYJrbMtj1gGoSYwj7SDlcpq5ZmKt15bN5bB-TTb5oI1gVIadXvq_0kZ7UaYzGCex_0a8v-TXpIALCABu7I"
+      },
+      {
+        "code": "02F0-39BR-0D55-617F-*",
+        "bytes": "009e01a578034a5304ef",
+        "address": "bob@example.com",
+        "salt": "f456e8e7bb4fa22abd2bff8e56171292",
+        "ikm": "9d9c10732365b39a648915a5cceda79eda6ce94449d2f6172b90cbce368f2ed9",
+        "counter": 0,
+        "scalar": "91fe08e31ca194dcfd5bc82899dbaabb6e25c670749238905e297c19f4905e84",
+        "pub": "BLekoLe-rLJT71lDXCyvSV0SxTIt1HFb4EjqloPjEV_J1ymCElxI9tX8nFdmEkr8EB0P2W6dTHvqt6LW-TV8Gv0"
+      },
+      {
+        "code": "P4BK-GNQJ-7BXW-TF50-F",
+        "bytes": "b1173856f23afbcd3ca0",
+        "address": "alice@example.com",
+        "salt": "f21053e7e80555359c69b796e9ba3ced",
+        "ikm": "b8a1a3895edf35ff7f0a4ec8a3753ca5700362ffe14a2166ac1fd0d6921ac608",
+        "counter": 0,
+        "scalar": "e463d6fc2c581af53256574793755476582593f0cd99ca9742c50a4ed92ce6e1",
+        "pub": "BAhnSzV6S9jwch_NoElzDYanWJpD111SAWePVZh5ThA5g0nzQV6jh3W6_rtpKdVKPqYKJ9oPieYsdZ3PLmUnqXY"
+      }
+    ]
+  }
 }

@@ -171,7 +171,17 @@ export default {
       // bytes are ciphertext, and there are no cookies or credentials to ride
       // along on a fetch the relay never treats as authenticated by origin.
       if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
-      const res = await blob(req, env, b[1], b[2])
+      // R2 and the body stream can throw: R2 refuses concurrent writes to one
+      // key, and an upload whose client goes away mid-body ends in "Network
+      // connection lost". Uncaught, either became an opaque 1101 page and a
+      // scriptThrewException — about 1.6k PUTs a day on the live relay. Answer
+      // with a status the client can back off on instead.
+      let res
+      try {
+        res = await blob(req, env, b[1], b[2])
+      } catch (e) {
+        res = blobFailure(e)
+      }
       const h = new Headers(res.headers)
       for (const [k, v] of Object.entries(CORS)) h.set(k, v)
       return new Response(res.body, { status: res.status, headers: h })
@@ -216,6 +226,20 @@ export default {
  *  R2 is OPTIONAL. Without the binding these routes answer 501 and clients
  *  keep inlining small assets, so a self-hoster who hasn't set up a bucket
  *  still has a working relay. */
+/** A blob route that threw. 429 for R2's same-key write limit (error 10058,
+ *  "Reduce your concurrent request rate for the same object"), 503 for
+ *  anything else; both carry retry-after. The quota a failed PUT reserved stays
+ *  charged to its key, and a retry of the same key is admitted without a second
+ *  charge (the authz dedupe), so nothing is lost by the client trying again. */
+function blobFailure(e) {
+  const msg = String((e && e.message) || e)
+  const busy = /10058|concurrent request rate/i.test(msg)
+  return new Response(JSON.stringify({ error: busy ? 'blob-busy' : 'blob-failed' }), {
+    status: busy ? 429 : 503,
+    headers: { 'content-type': 'application/json', 'retry-after': busy ? '2' : '5' },
+  })
+}
+
 async function blob(req, env, room, key) {
   if (!env.BLOBS) {
     return new Response('blob storage not configured on this relay', { status: 501 })

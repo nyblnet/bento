@@ -178,10 +178,13 @@ function walk(html        )       {
       // "<!-->" and "<!--->" are whole (empty) comments to a browser
       if (html.startsWith('<!-->', i)) { i += 5; continue }
       if (html.startsWith('<!--->', i)) { i += 6; continue }
-      const end = html.indexOf('-->', i + 4)
+      // a comment ends at "-->" or at "--!>", whichever comes first, as the
+      // tokenizer ends it
+      const dash = html.indexOf('-->', i + 4), bang = html.indexOf('--!>', i + 4)
+      const end = dash < 0 ? bang : bang < 0 ? dash : Math.min(dash, bang)
       if (lower.slice(i + 4, end < 0 ? html.length : end).includes('<script')) problems.push('a comment holds a <script>')
       if (end < 0) { problems.push('an unterminated comment'); break }
-      i = end + 3; continue
+      i = end + (end === bang ? 4 : 3); continue
     }
     if (html[i + 1] === '/' && /[a-zA-Z]/.test(html[i + 2] ?? '')) {
       // an end tag: tokenized with the start tag's attribute rules (see parseEndTag)
@@ -193,6 +196,10 @@ function walk(html        )       {
       i = et.end; continue
     }
     if (html.startsWith('</>', i)) { i += 3; continue } // ignored entirely
+    // "<![CDATA[" is a bogus comment in HTML but CDATA inside <svg> or <math>,
+    // where it ends at "]]>": the same bytes end in two places. Bento writes
+    // no "<!" but comments and the doctype.
+    if (html[i + 1] === '!' && !lower.startsWith('<!doctype', i)) problems.push('a "<!" that is neither a comment nor the doctype')
     if (html[i + 1] === '/' || html[i + 1] === '!' || html[i + 1] === '?') {
       // a doctype or a bogus comment: it ends at the first ">", quotes or not
       const end = html.indexOf('>', i + 2)
@@ -207,6 +214,9 @@ function walk(html        )       {
     // non-ASCII letter) is a tag a scanner and a browser may read differently.
     if (!TAG_NAME.test(name)) problems.push(`a start tag named ${JSON.stringify(name)}`)
     if (['iframe', 'object', 'embed', 'base'].includes(name)) problems.push(`a <${name}>`)
+    // raw text to a browser (noscript too, with scripting on), so a "<!--" in
+    // them starts no comment: Bento writes none of these
+    if (['xmp', 'noembed', 'noframes', 'noscript', 'plaintext'].includes(name)) problems.push(`a <${name}>`)
     if (name === 'meta' && /^\s*(refresh|content-security-policy)\s*$/i.test(tag.attrs.get('http-equiv') ?? '')) problems.push('a <meta> refresh or CSP')
     if ([...tag.attrs.keys()].some((n) => n.startsWith('on'))) problems.push(`an on*= attribute on <${name}>`)
     if (name === 'script' && (tag.duplicate || tag.slash)) problems.push(`a <script> start tag with a ${tag.duplicate ? 'duplicate attribute' : '"/" between attributes'} (Bento writes neither)`)
@@ -267,6 +277,8 @@ export const executableScripts = (blocks         )          => blocks.filter((b)
  * Markup a genuine Bento file never carries, anywhere outside a script or style
  * element's own text:
  * - <iframe>, <object>, <embed> or <base>;
+ * - <xmp>, <noembed>, <noframes>, <noscript> or <plaintext> (raw text);
+ * - a "<!" that is neither a comment nor the doctype (CDATA in <svg>);
  * - a <meta> refresh or CSP;
  * - any on*= attribute;
  * - a comment holding a <script>;

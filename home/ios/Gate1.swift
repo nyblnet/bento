@@ -262,10 +262,12 @@ enum Gate1 {
                 // "<!-->" and "<!--->" are whole (empty) comments to a browser
                 if at(html, i, u("<!-->")) { i += 5; continue }
                 if at(html, i, u("<!--->")) { i += 6; continue }
-                let end = indexOf(html, u("-->"), i + 4)
+                // a comment ends at "-->" or "--!>", whichever comes first
+                let dash = indexOf(html, u("-->"), i + 4), bang = indexOf(html, u("--!>"), i + 4)
+                let end = dash < 0 ? bang : bang < 0 ? dash : min(dash, bang)
                 if includes(slice(lower, i + 4, end < 0 ? html.count : end), u("<script")) { problems.append("a comment holds a <script>") }
                 if end < 0 { problems.append("an unterminated comment"); break }
-                i = end + 3; continue
+                i = end + (end == bang ? 4 : 3); continue
             }
             let c1: UInt16? = i + 1 < html.count ? html[i + 1] : nil
             if c1 == 0x2F, i + 2 < html.count, isLetter(html[i + 2]) {
@@ -277,6 +279,8 @@ enum Gate1 {
                 i = et.end; continue
             }
             if at(html, i, u("</>")) { i += 3; continue }   // ignored entirely
+            // "<![CDATA[" ends differently inside <svg>: Bento writes no "<!" but comments and the doctype
+            if c1 == 0x21, !at(lower, i, u("<!doctype")) { problems.append("a \"<!\" that is neither a comment nor the doctype") }
             if c1 == 0x2F || c1 == 0x21 || c1 == 0x3F {
                 // a doctype or a bogus comment: it ends at the first ">", quotes or not
                 let end = indexOf(html, u(">"), i + 2)
@@ -288,6 +292,8 @@ enum Gate1 {
             let name = str(tag.name)
             if !plainTagName(tag.name) { problems.append("a start tag named \(jsonString(tag.name))") }
             if ["iframe", "object", "embed", "base"].contains(name) { problems.append("a <\(name)>") }
+            // raw text to a browser, so "<!--" in them starts no comment: Bento writes none
+            if ["xmp", "noembed", "noframes", "noscript", "plaintext"].contains(name) { problems.append("a <\(name)>") }
             if name == "meta", refreshOrCSP(tag.attrs.first { $0.0 == u("http-equiv") }?.1 ?? []) { problems.append("a <meta> refresh or CSP") }
             if tag.attrs.contains(where: { $0.0.starts(with: u("on")) }) { problems.append("an on*= attribute on <\(name)>") }
             if name == "script", tag.duplicate || tag.slash {

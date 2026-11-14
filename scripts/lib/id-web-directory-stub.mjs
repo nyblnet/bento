@@ -29,6 +29,10 @@
 //       (the logged rq is https://home.bento.page, as the sign-in host
 //       reported it). Every web enrolment's Origin is the sign-in host, so ob
 //       is never read from Origin. No verifier decides anything on ob.
+//       mb is the account's mailbox state at that moment: 0 while the address
+//       is confirmed, else the time it went unconfirmed (≤ loggedAt). Read
+//       from the account, never defaulted: here `mailbox` (address → mb),
+//       where an account not listed is confirmed.
 //
 // bento/home's routes (CORS to https://home.bento.page alone; Origin must be it):
 //
@@ -70,6 +74,7 @@ export function directoryStub({ accounts, credentials, key, now }) {
   const nonces = new Map()
   const certs = new Map()          // devicePub → { cert, signer, assertion, ceremonyAt, address }
   const revoked = new Set()
+  const mailbox = new Map()        // address → mb: absent = confirmed (0), else when it went unconfirmed
   const incidents = []
   const log = []
   const hostile = {}               // { watt48h, rogue: { kid, key, links } }
@@ -91,7 +96,7 @@ export function directoryStub({ accounts, credentials, key, now }) {
   const watt = async (c, signer = key) => {
     const t = now()
     const expires = hostile.watt48h ? t + 2 * WATT_MAX_MS : Math.min(t + WATT_MAX_MS, c.ceremonyAt + CEREMONY_CAP_MS)
-    const text = buildWatt({ certHash: await sha256b64u(c.cert), ob: c.rq === HOME ? 1 : 0, loggedAt: t, expires, kid: signer.kid })
+    const text = buildWatt({ certHash: await sha256b64u(c.cert), ob: c.rq === HOME ? 1 : 0, mb: mailbox.get(c.address) ?? 0, loggedAt: t, expires, kid: signer.kid })
     return { text, sig: await signStatement(signer.key, text) }
   }
 
@@ -157,5 +162,5 @@ export function directoryStub({ accounts, credentials, key, now }) {
     return out(404, { error: 'not-found' })
   }
 
-  return { handle, certs, revoked, incidents, log, hostile, nonces }
+  return { handle, certs, revoked, incidents, log, hostile, nonces, mailbox }
 }

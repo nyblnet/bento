@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url'
 import {
   ARGON2, formatRecoveryCode, parseRecoveryCode, recoveryWrapKey, recoveryVerifier, prfKek,
   sealPrfBlob, sealRecoveryInner, pepperKeys, pepperVerifierTag, pepperSeal, publicKeyOf, PRF_INPUT, prfHmacSecretSalt, type Argon2id,
+  rkSalt, rkCandidate, rkPick, deriveRk, RK_MAX_TRIES,
 } from '../kernel/src/recovery.ts'
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'kernel/fixtures/recovery-v1.json')
@@ -191,6 +192,36 @@ const scalars = [
   { name: 'empty plaintext', pt: '', accountPub: account.pub, kxPub: kx.pub, expect: 'reject', reason: 'length' },
 ]
 
+// --- rk: the recovery KEY under option G (KG3; security's R9) ---------------------------------
+const NB = (x: bigint) => Uint8Array.from(Buffer.from(x.toString(16).padStart(64, '0'), 'hex'))
+const rkIkm = bytes(32, (i) => 0x33 + 7 * i)
+const rk = {
+  note: 'salt = SHA-256("bento/id/rk-salt/v1" ‖ 0x00 ‖ address)[0..16]; ikm = Argon2id(code, salt); candidate c = HKDF-SHA-256(ikm, empty salt, "bento/id/rk/v1" ‖ byte c); ' +
+    'the scalar is the first candidate in 1..n−1 (big-endian), counter c = 0, 1, … 255. rk = d·G.',
+  maxTries: RK_MAX_TRIES,
+  salts: await Promise.all(['alice@example.com', 'bob@example.com', 'a@b.co', 'x'.repeat(64) + '@example.com'].map(async (address) => ({ address, salt: hex(await rkSalt(address)) }))),
+  // the HKDF counter as a byte: candidates 0, 1, 2 and 255 for one ikm
+  candidates: { ikm: hex(rkIkm), rows: await Promise.all([0, 1, 2, 255].map(async (c) => ({ counter: c, candidate: hex(await rkCandidate(rkIkm, c)) }))) },
+  // the counter rule over GIVEN candidates (a real refusal is about 2^-32, so it is pinned here, not by luck)
+  pick: [
+    { name: 'the first candidate in range', candidates: [hex(NB(12345n))], index: 0 },
+    { name: 'zero is refused, the next is taken', candidates: [hex(NB(0n)), hex(NB(1n))], index: 1 },
+    { name: 'n itself is refused', candidates: [hex(NB(N)), hex(NB(N - 1n))], index: 1 },
+    { name: 'all ones (above n) is refused', candidates: [hex(NB((1n << 256n) - 1n)), hex(NB(N)), hex(NB(7n))], index: 2 },
+    { name: 'n − 1 and 1 are the edges in range', candidates: [hex(NB(N - 1n))], index: 0 },
+    { name: 'no candidate in range', candidates: [hex(NB(0n)), hex(NB(N)), hex(NB(N + 1n))], index: -1 },
+  ],
+  derive: [] as Record<string, unknown>[],
+}
+for (const [code, address] of [[codes[0], 'alice@example.com'], [codes[0], 'bob@example.com'], [codes[1], 'alice@example.com']] as const) {
+  const c = Uint8Array.from(Buffer.from((code as { bytes: string }).bytes, 'hex'))
+  const salt = await rkSalt(address)
+  const ikm = await argon2(c, salt)
+  const d = await deriveRk(c, address, argon2)
+  rk.derive.push({ code: (code as { printed: string }).printed, bytes: hex(c), address, salt: hex(salt), ikm: hex(ikm), counter: d.counter, scalar: hex(d.scalar), pub: d.pub })
+}
+for (const r of rk.pick) if (rkPick(r.candidates.map((h) => Uint8Array.from(Buffer.from(h, 'hex')))) !== r.index) throw new Error(`rk pick row disagrees: ${r.name}`)
+
 // sanity: the reference agrees with every refusal row it is about to publish
 {
   const { unpackScalars, openPrfBlob, openRecoveryInner } = await import('../kernel/src/recovery.ts')
@@ -224,6 +255,7 @@ const fixture = {
   prf,
   blobs,
   scalars,
+  rk,
 }
 writeFileSync(OUT, JSON.stringify(fixture, null, 2) + '\n')
 console.log(`wrote ${OUT}: ${codes.length} codes, ${parse.length} parse rows, ${scalars.length} scalar rows`)

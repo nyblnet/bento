@@ -76,7 +76,7 @@ const keysFile = join(tmp, 'directory-keys.json')
 writeFileSync(keysFile, JSON.stringify(PINNED))
 function build(name, edits) {
   const out = join(tmp, name)
-  const r = spawnSync(process.execPath, [join(ROOT, 'home/web/build.mjs'), '--identity', '--directory-keys', keysFile,
+  const r = spawnSync(process.execPath, [join(ROOT, 'home/web/build.mjs'), '--dev', '--identity', '--directory-keys', keysFile,
     '--frame-origin', 'https://frame.example', '--out', out], { encoding: 'utf8', env: { ...process.env, ...(edits ? { BENTO_HOME_WEB_MUTANT: JSON.stringify(edits) } : {}) } })
   if (r.status !== 0) throw new Error(`build ${name} failed: ${r.stderr}`)
   return out

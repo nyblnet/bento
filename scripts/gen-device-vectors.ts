@@ -19,10 +19,11 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { b64uEnc, sha256b64u, signStatement } from '../kernel/src/statements.ts'
 import { ROSTER_WEB_ORIGINS } from '../kernel/src/roster.ts'
-import { buildDeviceCert, buildWatt, buildWren, type CertKind } from '../kernel/src/devices.ts'
+import { buildDeviceCert, buildWatt, buildWren, buildWret, buildInc, type CertKind } from '../kernel/src/devices.ts'
+import { linkKeysFromShared, linkTranscript, buildFinalG, type LinkOffer } from '../kernel/src/link.ts'
 import {
-  ADDRESS, DIRECTORY_KEYS, H, K, NOW, RP, T, assertion, chainOf, ecdsa, highS, nonce, pubOf,
-  type AssertOpts, type Link, type Spec,
+  ADDRESS, CONSENT_RP, DIRECTORY_KEYS, H, K, NOW, RP, T, assertion, chainOf, cosign, ecdsa, highS, nonce, pubOf,
+  type AssertOpts, type CnsOpts, type Link, type Spec,
 } from './lib/roster-build.ts'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -72,10 +73,16 @@ await chain('fork', [S0, { ...S1, dirNonce: nonce(40) }])
 // a consent key 73 hours a member (it never signs here: the tier stays passkey)
 const PK2_LEAVES: Spec = { members: [['pk', 'pk1'], ['rk', 'rk1'], ['ck', 'ck1']], req: T + 240 * H, rip: T + 240 * H, signer: 'pk2' }
 await chain('ck-exact', [S0, S1, S2, S3, PK2_LEAVES])
+// consent keys that certify (KG3): ck1 removed and added again; ck1 quarantined; a pin past ck1's join
+await chain('ck-readded', [S0, S1, S2, S3, { members: [['pk', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1']], req: T + 240 * H, rip: T + 312 * H, signer: 'pk1' },
+  { members: [['pk', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1'], ['ck', 'ck1']], req: T + 320 * H, rip: T + 392 * H, signer: 'pk1' }])
+await chain('ck-quarantined', [S0, S1, S2, S3, { members: [['pk', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1'], ['ck', 'ck1', 'q']], req: T + 240 * H, rip: T + 240 * H, auth: 'q',
+  voided: { members: [['pk', 'pk1'], ['pk', 'pk2'], ['pk', 'pk3'], ['rk', 'rk1'], ['ck', 'ck1']], signer: 'ck1' } }])
+await chain('ck-pinned', [S0, S1, S2, S3, PK2_LEAVES], 4)
 
 // --- certificates -------------------------------------------------------------------
 
-type WattSpec = { loggedAt?: number; expires?: number; ob?: 0 | 1; kid?: string; by?: string; highS?: boolean; over?: string; raw?: string }
+type WattSpec = { loggedAt?: number; expires?: number; ob?: 0 | 1; mb?: number; kid?: string; by?: string; highS?: boolean; over?: string; raw?: string }
 interface CertSpec {
   kind?: CertKind
   chain: string
@@ -91,9 +98,11 @@ interface CertSpec {
   rosHash?: string
   rawCert?: string
   assert?: AssertOpts & { by?: string }
+  cns?: CnsOpts                       // via cns / ck: the co-sign (honest by default)
+  shape?: 'assertion' | 'consent' | 'both'   // which proof travels (default: the one via names)
   watt?: WattSpec
 }
-type Proof = { cert: string; signer: string; assertion: Awaited<ReturnType<typeof assertion>>; watt: string; wattSig: string }
+type Proof = { cert: string; signer: string; assertion?: Awaited<ReturnType<typeof assertion>>; consent?: { cns: string; sig: string }; watt: string; wattSig: string }
 
 async function proof(s: CertSpec): Promise<Proof> {
   const kind = s.kind ?? 'wdev'
@@ -105,10 +114,14 @@ async function proof(s: CertSpec): Promise<Proof> {
   const signer = s.signer ?? 'pk1'
   const w = s.watt ?? {}
   const loggedAt = w.loggedAt ?? s.ceremonyAt
-  const watt = w.raw ?? buildWatt({ certHash: await sha256b64u(w.over ?? cert), ob: w.ob ?? 1, loggedAt, expires: w.expires ?? loggedAt + 24 * H, kid: w.kid ?? 'dir-1' })
+  const watt = w.raw ?? buildWatt({ certHash: await sha256b64u(w.over ?? cert), ob: w.ob ?? 1, mb: w.mb ?? 0, loggedAt, expires: w.expires ?? loggedAt + 24 * H, kid: w.kid ?? 'dir-1' })
   let wattSig = await signStatement(K[w.by ?? 'dir1'].key, watt)
   if (w.highS) wattSig = highS(wattSig)
-  return { cert, signer: pubOf(signer), assertion: await assertion(s.assert?.by ?? signer, cert, s.assert), watt, wattSig }
+  const shape = s.shape ?? ((s.via ?? 'passkey') === 'passkey' ? 'assertion' : 'consent')
+  const out: Proof = { cert, signer: pubOf(signer), watt, wattSig }
+  if (shape !== 'consent') out.assertion = await assertion(s.assert?.by ?? signer, cert, s.assert)
+  if (shape !== 'assertion') out.consent = await cosign(signer, cert, nonce(90), s.ceremonyAt, { purpose: kind === 'wdev' ? 'web-add' : 'roster', ...s.cns })
+  return out
 }
 
 type Row = { name: string; about: string; chain: string; now?: number; proof: Proof; expect: 'accept' | 'reject'; reason?: string; tier?: 'passkey' | 'native' }
@@ -183,10 +196,18 @@ await reject('watt/other-pinned-kid', 'signed by dir-2\'s key, naming kid dir-1:
 await reject('watt/high-s', 'the countersign in high-S form', { chain: 'base', head: 3, ceremonyAt: C, watt: { highS: true } }, 'watt-signature')
 await reject('watt/expired', 'now equals expires', { chain: 'base', head: 3, ceremonyAt: C, watt: { loggedAt: C, expires: NOW } }, 'expired')
 await reject('watt/logged-in-future', 'loggedAt more than the skew allowance after now', { chain: 'base', head: 3, ceremonyAt: C, watt: { loggedAt: NOW + 6 * MIN, expires: NOW + 10 * H } }, 'not-yet-valid')
-await reject('watt/ob-not-a-bit', 'ob is 0 or 1', { chain: 'base', head: 3, ceremonyAt: C, watt: { raw: `watt.${'A'.repeat(43)}.2.${C}.${C + H}.dir-1` } }, 'watt-grammar')
+await reject('watt/ob-not-a-bit', 'ob is 0 or 1', { chain: 'base', head: 3, ceremonyAt: C, watt: { raw: `watt.${'A'.repeat(43)}.2.0.${C}.${C + H}.dir-1` } }, 'watt-grammar')
+// mb: the mailbox state (org-identity §3a, shape (a))
+await accept('ok/watt-mb-lapsed', 'the mailbox went unconfirmed a day before the watt.: the certificate stands, the address is qualified',
+  { chain: 'base', head: 3, ceremonyAt: C, watt: { mb: C - 24 * H } }, 'passkey')
+await accept('ok/watt-mb-at-logged', 'mb equal to loggedAt', { chain: 'base', head: 3, ceremonyAt: C, watt: { mb: C } }, 'passkey')
+await reject('watt/mb-after-logged', 'mb one millisecond after loggedAt', { chain: 'base', head: 3, ceremonyAt: C, watt: { mb: C + 1 } }, 'watt-grammar')
+await reject('watt/mb-leading-zero', 'mb is 0 or a canonical integer', { chain: 'base', head: 3, ceremonyAt: C, watt: { raw: `watt.${'A'.repeat(43)}.1.01.${C}.${C + H}.dir-1` } }, 'watt-grammar')
+await reject('watt/mb-empty', 'mb is never empty', { chain: 'base', head: 3, ceremonyAt: C, watt: { raw: `watt.${'A'.repeat(43)}.1..${C}.${C + H}.dir-1` } }, 'watt-grammar')
+await reject('watt/six-fields', 'the six-field watt. merged in #941 (no mb) is refused', { chain: 'base', head: 3, ceremonyAt: C, watt: { raw: `watt.${'A'.repeat(43)}.1.${C}.${C + H}.dir-1` } }, 'watt-grammar')
 
 // the certificate's grammar -------------------------------------------------------------------
-await reject('wdev/via-cns', 'route D (a native consent co-signature, purpose web-add) is not defined yet', { chain: 'base', head: 3, ceremonyAt: C, via: 'cns' }, 'via')
+await reject('wdev/via-cns-with-assertion', 'via cns carries the co-sign, not a passkey assertion', { chain: 'base', head: 3, ceremonyAt: C, via: 'cns', signer: 'ck1', shape: 'assertion' }, 'proof')
 await reject('wdev/via-unknown', 'via is passkey or cns', { chain: 'base', head: 3, ceremonyAt: C, via: 'pk' }, 'grammar')
 await reject('wdev/kx-is-device-key', 'the kx repeats the device key', { chain: 'base', head: 3, ceremonyAt: C, kx: W.pub }, 'kx')
 await reject('wdev/label-41', 'a 41-character label', { chain: 'base', head: 3, ceremonyAt: C, label: 'x'.repeat(41) }, 'label')
@@ -198,7 +219,7 @@ await reject('wdev/address-not-normal', 'the address is in normal form', { chain
   await reject('wdev/nonce-short', 'the directory nonce is 16 to 64 bytes', { chain: 'base', head: 3, ceremonyAt: C,
     rawCert: ok.slice(0, ok.lastIndexOf('.') + 1) + b64uEnc(new Uint8Array(15)) }, 'grammar')
 }
-await reject('dev2/via-ck', 'a dev2. signed by a consent key (the roster purpose is the next kernel change)', { kind: 'dev2', chain: 'base', head: 3, ceremonyAt: C, via: 'ck' }, 'via')
+await reject('dev2/via-ck-with-assertion', 'via ck carries the co-sign, not a passkey assertion', { kind: 'dev2', chain: 'base', head: 3, ceremonyAt: C, via: 'ck', signer: 'ck1', shape: 'assertion' }, 'proof')
 await reject('dev2/consent-is-device-key', 'the consent key repeats the device key', { kind: 'dev2', chain: 'base', head: 3, ceremonyAt: C, devicePub: K.ck1.pub }, 'consent-key')
 await reject('dev2/kx-is-consent-key', 'the kx repeats the consent key', { kind: 'dev2', chain: 'base', head: 3, ceremonyAt: C, kx: K.ck1.pub }, 'kx')
 
@@ -232,6 +253,43 @@ await reject('sec/head-is-voided-request', 'the named head is the request the q 
   { chain: 'quarantined', head: 3, rosHash: await sha256b64u(chains.quarantined.links[3].voided!.ros), ceremonyAt: C }, 'roster-head')
 await reject('sec/watt-expires-now', 'now is exactly the watt.\'s expiry', { chain: 'base', head: 3, ceremonyAt: C, watt: { loggedAt: C, expires: C + 3 * H } }, 'expired', C + 3 * H)
 
+// --- consent keys certify (KG3): dev2. via ck is native; wdev. via cns is route D --------------
+// ck1 joined at L3 (T+232h): ripe from T+304h. The new device's own consent key is ck2 (a claim).
+{
+  const C2 = T + 310 * H, N2 = T + 312 * H, R4 = T + 304 * H
+  const byCk = (more: Partial<CertSpec> = {}): CertSpec => ({ kind: 'dev2', chain: 'base', head: 3, ceremonyAt: C2, via: 'ck', signer: 'ck1', consent: 'ck2', ...more })
+  const route = (more: Partial<CertSpec> = {}): CertSpec => ({ chain: 'base', head: 3, ceremonyAt: C2, via: 'cns', signer: 'ck1', ...more })
+  await accept('ok/dev2-by-ck', 'a dev2. co-signed by a ripe consent key (purpose roster): native', byCk(), 'native', N2)
+  await accept('tier/ck-signed-exactly-72h', 'the co-signing consent key is exactly 72 h a member at ceremonyAt: native', byCk({ ceremonyAt: R4 }), 'native', R4 + 2 * H)
+  await reject('ck/unripe-one-second', 'the co-signing consent key is 72 h less one second a member at ceremonyAt', byCk({ ceremonyAt: R4 - 1000 }), 'signer-unripe', R4 + 2 * H)
+  await reject('ck/readded-age-restarts', 'ck1 removed and added again: it names the re-add head, 10 h later, unripe', byCk({ chain: 'ck-readded', head: 5, ceremonyAt: T + 402 * H }), 'signer-unripe', T + 404 * H)
+  await reject('ck/quarantined', 'ck1 is quarantined in the head it names', byCk({ chain: 'ck-quarantined', head: 4, ceremonyAt: T + 310 * H }), 'signer-quarantined', N2)
+  await reject('ck/pinned-age-lower-bound', 'from a pin of L4 (T+240h) ck1 counts as a member since then: unripe at T+310h', byCk({ chain: 'ck-pinned', head: 4 }), 'signer-unripe', N2)
+  await accept('ok/ck-pinned-ripe', 'from the same pin, 72 h after it: native', byCk({ chain: 'ck-pinned', head: 4, ceremonyAt: T + 312 * H }), 'native', T + 314 * H)
+  await reject('ck/not-member', 'ck2 co-signs but is not on the roster', byCk({ signer: 'ck2', consent: null }), 'signer', N2)
+  await reject('ck/passkey-signer', 'via ck, but the signer named is a passkey', byCk({ signer: 'pk1' }), 'signer-kind', N2)
+  await reject('ck/both-proofs', 'a co-sign and an assertion: one proof only', byCk({ shape: 'both' }), 'proof', N2)
+  await reject('passkey/with-consent', 'via passkey with a co-sign instead of the assertion', { chain: 'base', head: 3, ceremonyAt: C2, shape: 'consent' }, 'proof', N2)
+  await reject('passkey/both-proofs', 'via passkey with an assertion and a co-sign', { chain: 'base', head: 3, ceremonyAt: C2, shape: 'both' }, 'proof', N2)
+  await reject('ck/cns-other-text', 'the co-sign covers another certificate (for another device key)', byCk({ cns: { over: 'dev2.another' } }), 'consent-transcript', N2)
+  await reject('ck/cns-purpose-web-add', 'a dev2. co-sign under purpose web-add', byCk({ cns: { purpose: 'web-add' } }), 'consent-purpose', N2)
+  await reject('ck/cns-purpose-link', 'a dev2. co-sign under K2\'s purpose link', byCk({ cns: { purpose: 'link' } }), 'consent-purpose', N2)
+  await reject('ck/cns-expired-at-ceremony', 'the co-sign expired at ceremonyAt', byCk({ cns: { exp: C2 } }), 'consent-expired', N2)
+  await reject('ck/cns-long-life', 'the co-sign lives over 5 minutes plus the skew past ceremonyAt', byCk({ cns: { life: 10 * 60_000 + 1 } }), 'consent-lifetime', N2)
+  await reject('ck/cns-other-challenge', 'the co-sign is bound to another challenge than the certificate\'s dirNonce', byCk({ cns: { challenge: nonce(91) } }), 'consent-transcript', N2)
+  await reject('ck/cns-wrong-key', 'ck1 named, ck2 signed', byCk({ cns: { by: 'ck2' } }), 'consent-signature', N2)
+  await reject('ck/cns-other-rp', 'the co-sign names another rp', byCk({ cns: { rp: 'vault-acme' } }), 'consent-rp', N2)
+  // item 2 of org-identity §5.4: a native certificate still stands only beside a current 24 h watt.
+  await reject('ck/native-watt-expired', 'a native dev2. whose watt. expired', byCk({ watt: { loggedAt: C2, expires: C2 + H } }), 'expired', C2 + H)
+  await reject('ck/native-watt-over-24h', 'a native dev2. with a watt. of 24 h and one millisecond', byCk({ watt: { loggedAt: C2, expires: C2 + 24 * H + 1 } }), 'watt-lifetime', N2)
+  await reject('ck/native-watt-past-cap', 'a native dev2. renewed past 7 days after its ceremony', byCk({ watt: { loggedAt: C2 + 160 * H, expires: C2 + 169 * H } }), 'watt-cap', C2 + 161 * H)
+  // route D: a phone approves this browser
+  await accept('ok/wdev-route-d', 'a wdev. co-signed by a ripe consent key (purpose web-add): still a browser, (passkey sign-in)', route(), 'passkey', N2)
+  await reject('wdev/route-d-unripe', 'route D by a consent key 68 h a member', route({ ceremonyAt: T + 300 * H }), 'signer-unripe', N2)
+  await reject('wdev/route-d-purpose-roster', 'a wdev. co-sign under purpose roster', route({ cns: { purpose: 'roster' } }), 'consent-purpose', N2)
+  await reject('wdev/route-d-passkey-signer', 'via cns but a passkey named', route({ signer: 'pk1' }), 'signer-kind', N2)
+}
+
 // --- wren. (the directory's check) ----------------------------------------------------------
 type WrenRow = { name: string; about: string; text: string; sig: string; expect: 'accept' | 'reject'; reason?: string }
 const wren: WrenRow[] = []
@@ -246,6 +304,107 @@ const wren: WrenRow[] = []
   wren.push({ name: 'wren/address-not-normal', about: 'the address is in normal form', text: addr, sig: await signStatement(W.key, addr), expect: 'reject', reason: 'address' })
 }
 
+// --- wret. (the directory's check at a new ceremony: the old key retires itself) -----------------
+const wret: WrenRow[] = []
+{
+  const text = buildWret({ oldPub: W.pub, newPub: W2.pub, address: ADDRESS, dirNonce: nonce(92) })
+  wret.push({ name: 'ok/wret', about: 'the old browser key W retires itself in favour of W2 at the new ceremony', text, sig: await signStatement(W.key, text), expect: 'accept' })
+  wret.push({ name: 'wret/signed-by-new-key', about: 'signed by the NEW key: only the old key can retire itself', text, sig: await signStatement(W2.key, text), expect: 'reject', reason: 'signature' })
+  wret.push({ name: 'wret/high-s', about: 'the signature in high-S form', text, sig: highS(await signStatement(W.key, text)), expect: 'reject', reason: 'signature' })
+  const same = buildWret({ oldPub: W.pub, newPub: W.pub, address: ADDRESS, dirNonce: nonce(92) })
+  wret.push({ name: 'wret/same-key', about: 'a key cannot retire itself in favour of itself', text: same, sig: await signStatement(W.key, same), expect: 'reject', reason: 'key' })
+  const short = buildWret({ oldPub: W.pub, newPub: W2.pub, address: ADDRESS, dirNonce: b64uEnc(new Uint8Array(15)) })
+  wret.push({ name: 'wret/nonce-short', about: 'the directory nonce is 16 to 64 bytes', text: short, sig: await signStatement(W.key, short), expect: 'reject', reason: 'grammar' })
+  const addr = buildWret({ oldPub: W.pub, newPub: W2.pub, address: 'Alice@Example.com', dirNonce: nonce(92) })
+  wret.push({ name: 'wret/address-not-normal', about: 'the address is in normal form', text: addr, sig: await signStatement(W.key, addr), expect: 'reject', reason: 'address' })
+  wret.push({ name: 'wret/as-wren', about: 'a wren. text is not a retirement', text: buildWren({ devicePub: W.pub, address: ADDRESS, challenge: nonce(92) }), sig: await signStatement(W.key, buildWren({ devicePub: W.pub, address: ADDRESS, challenge: nonce(92) })), expect: 'reject', reason: 'grammar' })
+}
+
+// --- inc. (the directory's incident record) ----------------------------------------------------
+type IncRow = { name: string; about: string; text: string; sig: string; now?: number; expect: 'accept' | 'reject'; reason?: string; inside?: Array<[number, boolean]> }
+const inc: IncRow[] = []
+{
+  const F0 = NOW - 48 * H, F1 = NOW - 24 * H
+  const one = async (name: string, about: string, t: string, by = 'dir1', more: Partial<IncRow> = {}) =>
+    inc.push({ name, about, text: t, sig: await signStatement(K[by].key, t), expect: more.reason ? 'reject' : 'accept', ...more })
+  await one('ok/inc-closed', 'a closed window: from inclusive, to exclusive', buildInc({ id: '2027-03-incident-1', from: F0, to: F1, issuedAt: NOW - H, kid: 'dir-1' }), 'dir1',
+    { inside: [[F0 - 1, false], [F0, true], [F1 - 1, true], [F1, false]] })
+  await one('ok/inc-open', 'an open window (to empty): still going', buildInc({ id: 'open-1', from: F0, to: null, issuedAt: NOW - H, kid: 'dir-1' }), 'dir1',
+    { inside: [[F0 - 1, false], [F0, true], [NOW + 1000 * H, true]] })
+  await one('ok/inc-second-kid', 'signed by the second pinned key', buildInc({ id: 'k2', from: F0, to: F1, issuedAt: NOW - H, kid: 'dir-2' }), 'dir2')
+  await one('inc/empty-window', 'to equal to from', buildInc({ id: 'x', from: F0, to: F0, issuedAt: NOW - H, kid: 'dir-1' }), 'dir1', { reason: 'grammar' })
+  await one('inc/issued-before-from', 'issued before the window opens', buildInc({ id: 'x', from: F0, to: F1, issuedAt: F0 - 1, kid: 'dir-1' }), 'dir1', { reason: 'grammar' })
+  await one('inc/id-upper', 'the id is [a-z0-9-]{1,64}', buildInc({ id: 'Incident', from: F0, to: F1, issuedAt: NOW - H, kid: 'dir-1' }), 'dir1', { reason: 'grammar' })
+  await one('inc/future', 'issued more than the skew after now', buildInc({ id: 'x', from: F0, to: null, issuedAt: NOW + 6 * 60_000, kid: 'dir-1' }), 'dir1', { reason: 'not-yet-valid' })
+  await one('inc/unknown-kid', 'a kid nobody pinned', buildInc({ id: 'x', from: F0, to: F1, issuedAt: NOW - H, kid: 'dir-9' }), 'dirOther', { reason: 'unknown-kid' })
+  await one('inc/other-pinned-kid', 'dir-2\'s key, naming dir-1', buildInc({ id: 'x', from: F0, to: F1, issuedAt: NOW - H, kid: 'dir-1' }), 'dir2', { reason: 'signature' })
+  await one('inc/extra-field', 'an extra field', buildInc({ id: 'x', from: F0, to: F1, issuedAt: NOW - H, kid: 'dir-1' }) + '.x', 'dir1', { reason: 'grammar' })
+}
+
+// --- reserved prefixes: refused as statements today (org-identity §5.4 item 4) ------------------
+// Each text is shaped like a plausible statement under the reserved prefix; every verifier refuses it.
+const reserved = ['mgd', 'vch', 'ojn', 'dvc'].map((prefix) => ({ prefix, text: `${prefix}.${b64uEnc(new TextEncoder().encode(ADDRESS))}.${'A'.repeat(43)}.${T}.${T + H}.dir-1` }))
+
+// --- the link final under option G (link.ts lnkg): H's ripe ck co-signs N's dev2. --------------------
+type FinalRow = { name: string; about: string; t: string; h2n: string; offer: LinkOffer; final: { dev2: string; ck: string; cns: string; cnsSig: string; seal: string } | null
+  edit?: { line: number; value: string }; expect: 'accept' | 'reject'; reason?: string; watt?: string; wattSig?: string; release?: { challenge: string; spent?: boolean; expect: 'accept' | 'reject'; reason?: string } }
+const linkFinal: FinalRow[] = []
+{
+  const NDEV = await ecdsa('device/n1'), NCK = await ecdsa('device/nck'), NKX = await ecdsa('device/nkx')
+  const enc = new TextEncoder()
+  const shaB = async (l: string) => new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(l)))
+  const eD = (await ecdsa('device/eD')).pub, eS = (await ecdsa('device/eS')).pub
+  const t = (await linkTranscript(b64uEnc(await shaB('slot')), eD, eS, 'H'))!
+  const keys = await linkKeysFromShared(await shaB('bento/id/test/link-g/z'), await shaB('bento/id/test/link-g/salt'), t)
+  const otherKeys = await linkKeysFromShared(await shaB('bento/id/test/link-g/z2'), await shaB('bento/id/test/link-g/salt'), t)
+  const IV = new Uint8Array(12).fill(7)
+  const offer: LinkOffer = { devicePub: NDEV.pub, consentPub: NCK.pub, kx: NKX.pub, label: 'Pixel', platform: 'android' }
+  const CG = T + 310 * H
+  const head = await sha256b64u(ros.base[3])
+  const dev2Of = (o: Partial<{ devicePub: string; consentPub: string | null; kx: string; via: string; rosHash: string; ceremonyAt: number }> = {}) => buildDeviceCert({ kind: 'dev2',
+    devicePub: o.devicePub ?? NDEV.pub, consentPub: o.consentPub === undefined ? NCK.pub : o.consentPub, kx: o.kx ?? NKX.pub, address: ADDRESS, rosHash: o.rosHash ?? head,
+    label: 'Pixel', via: o.via ?? 'ck', ceremonyAt: o.ceremonyAt ?? CG, dirNonce: nonce(93) })
+  type G = { name: string; about: string; dev2?: string; ck?: string; by?: string; cns?: CnsOpts; keys?: typeof keys; edit?: (lines: string[]) => { line: number; value: string }; reason?: string
+    release?: FinalRow['release']; watt?: boolean }
+  const g = async (x: G) => {
+    const dev2 = x.dev2 ?? dev2Of()
+    const ckLabel = x.by ?? 'ck1'
+    const ck = x.ck ?? pubOf(ckLabel)
+    const c = await cosign(ckLabel, dev2, nonce(93), Number(dev2.split('.')[8]), x.cns)
+    const text = await buildFinalG({ dev2, ck, cns: c.cns, cnsSig: c.sig }, x.keys ?? keys, t, IV)
+    const l = text.split('\n')
+    const row: FinalRow = { name: x.name, about: x.about, t, h2n: b64uEnc(keys.h2n), offer, final: { dev2: l[1], ck: l[2], cns: l[3], cnsSig: l[4], seal: l[5] },
+      expect: x.reason ? 'reject' : 'accept', ...(x.reason ? { reason: x.reason } : {}) }
+    if (x.edit) row.edit = x.edit(l)
+    if (x.release) row.release = x.release
+    if (x.watt) { row.watt = buildWatt({ certHash: await sha256b64u(dev2), ob: 0, mb: 0, loggedAt: CG, expires: CG + 24 * H, kid: 'dir-1' }); row.wattSig = await signStatement(K.dir1.key, row.watt) }
+    linkFinal.push(row)
+  }
+  await g({ name: 'ok/final-g', about: 'H\'s ripe ck1 co-signs N\'s dev2.: N opens it, and with the directory\'s watt. it verifies native', watt: true,
+    release: { challenge: nonce(93), expect: 'accept' } })
+  await g({ name: 'final-g/release-unripe', about: 'the directory refuses a co-sign by a consent key 68 h a member', dev2: dev2Of({ ceremonyAt: T + 300 * H }),
+    release: { challenge: nonce(93), expect: 'reject', reason: 'signer-unripe' } })
+  await g({ name: 'final-g/release-other-challenge', about: 'the dev2. names another challenge than the one the directory issued to H',
+    release: { challenge: nonce(94), expect: 'reject', reason: 'challenge' } })
+  await g({ name: 'final-g/release-spent', about: 'the challenge was already spent', release: { challenge: nonce(93), spent: true, expect: 'reject', reason: 'replay' } })
+  await g({ name: 'final-g/release-old-head', about: 'the dev2. names a head other than the current one', dev2: dev2Of({ rosHash: await sha256b64u(ros.base[2]) }),
+    release: { challenge: nonce(93), expect: 'reject', reason: 'roster-head' } })
+  await g({ name: 'final-g/release-ck-not-member', about: 'ck2 co-signs; it is not on the roster', by: 'ck2', release: { challenge: nonce(93), expect: 'reject', reason: 'signer' } })
+  await g({ name: 'final-g/other-keys', about: 'sealed under another h2n (not the SAS-confirmed session)', keys: otherKeys, reason: 'decrypt' })
+  await g({ name: 'final-g/line-swapped', about: 'the directory swaps the dev2. line for one naming another device key (seal no longer matches)',
+    edit: (l) => ({ line: 1, value: l[1].replace(NDEV.pub, W.pub) }), reason: 'seal' })
+  await g({ name: 'final-g/device-mismatch', about: 'H sealed honestly a dev2. for another device key', dev2: dev2Of({ devicePub: W.pub }), reason: 'device-mismatch' })
+  await g({ name: 'final-g/consent-mismatch', about: 'the dev2. names another consent key than N offered', dev2: dev2Of({ consentPub: null }), reason: 'consent-mismatch' })
+  await g({ name: 'final-g/kx-mismatch', about: 'the dev2. names another kx', dev2: dev2Of({ kx: KX.pub }), reason: 'kx-mismatch' })
+  await g({ name: 'final-g/via-passkey', about: 'the dev2. says via passkey: the G final carries a co-sign', dev2: dev2Of({ via: 'passkey' }), reason: 'via' })
+  await g({ name: 'final-g/ck-is-n', about: 'the co-signer is N\'s own consent key', ck: NCK.pub, by: 'ck1', reason: 'ck-is-n' })
+  await g({ name: 'final-g/cns-web-add', about: 'the co-sign carries purpose web-add', cns: { purpose: 'web-add' }, reason: 'cns-purpose' })
+  await g({ name: 'final-g/cns-wrong-key', about: 'ck1 named, ck2 signed', cns: { by: 'ck2' }, reason: 'cns-signature' })
+  await g({ name: 'final-g/v1-label', about: 'the same lines under v1\'s lnk3 label', edit: () => ({ line: 0, value: 'lnk3' }), reason: 'grammar' })
+  await g({ name: 'final-g/seal-long', about: 'a seal of 61 bytes', edit: () => ({ line: 5, value: b64uEnc(new Uint8Array(61)) }), reason: 'grammar' })
+  await g({ name: 'final-g/extra-line', about: 'a seventh line', edit: () => ({ line: 6, value: 'x' }), reason: 'grammar' })
+}
+
 // ---------------------------------------------------------------------------------------------
 
 const out = {
@@ -256,11 +415,21 @@ const out = {
   now: NOW,
   directoryKeys: DIRECTORY_KEYS,
   chains,
+  // the rp a consent key's cns. names (DeviceOpts.consentRp)
+  consentRp: CONSENT_RP,
   rows,
   wren,
+  // wret rows: verifyWret(text, sig). inc rows: verifyInc(text, sig, { directoryKeys, now: row.now ?? now }); `inside` pairs are insideIncident(at, record)
+  wret,
+  inc,
+  // every verifier refuses each: parseDeviceCert, parseWatt, verifyWren, verifyWret, verifyInc, parseRos, parseRip (and RESERVED_PREFIXES lists the prefix)
+  reserved,
+  // the link final under option G (link.ts): openFinalG(the lines lnkg, dev2, ck, cns, cnsSig, seal joined by \n, with `edit` applied: line i set to value, { keys: { h2n }, t, offer, consentRp }); release rows:
+  // verifyLinkReleaseG(text, { roster: chains.base at now, challenge, spend: () => !spent, consentRp, now }); a `watt` row also passes verifyDevice as native
+  linkFinal,
 }
 
-const SIGS = new Set(['ripSig', 'sig', 'signature', 'wattSig'])
+const SIGS = new Set(['ripSig', 'sig', 'signature', 'wattSig', 'cnsSig', 'seal'])
 const masked = (v: unknown) => JSON.stringify(v, (k, x) => (SIGS.has(k) ? '' : x))
 const before = existsSync(OUT) ? JSON.parse(readFileSync(OUT, 'utf8')) : null
 const keep = <T extends { name: string }>(fresh: T[], committed: T[] | undefined) => {
@@ -270,10 +439,15 @@ const keep = <T extends { name: string }>(fresh: T[], committed: T[] | undefined
 for (const [n, c] of Object.entries(chains)) { const o = before?.chains?.[n]; if (o && masked(o) === masked(c)) chains[n] = o }
 out.rows = keep(rows, before?.rows)
 out.wren = keep(wren, before?.wren)
+out.wret = keep(wret, before?.wret)
+out.inc = keep(inc, before?.inc)
+out.linkFinal = keep(linkFinal, before?.linkFinal)
 const text = JSON.stringify(out, null, 2) + '\n'
 if (CHECK) {
   const same = before !== null && text === readFileSync(OUT, 'utf8')
-  const changed = [...out.rows, ...out.wren].filter((r) => ![...(before?.rows ?? []), ...(before?.wren ?? [])].includes(r)).map((r) => r.name)
+  const all = [...out.rows, ...out.wren, ...out.wret, ...out.inc, ...out.linkFinal]
+  const was = [...(before?.rows ?? []), ...(before?.wren ?? []), ...(before?.wret ?? []), ...(before?.inc ?? []), ...(before?.linkFinal ?? [])]
+  const changed = all.filter((r) => !was.includes(r)).map((r) => r.name)
   console.log(same ? `${OUT} is current: ${rows.length} rows, ${wren.length} wren rows` : `${OUT} is stale: ${changed.length} rows new or changed${changed.length ? ` (${changed.join(', ')})` : ''}`)
   process.exit(same ? 0 : 1)
 }
