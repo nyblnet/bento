@@ -227,7 +227,8 @@ const closeExtras = async (keep) => { for (const p of ctx.pages()) if (p !== kee
 /** Visit the library (and, with `open`, a deck so the frame loads); return this visit's events. */
 async function visit(page, url, { open = false, marker = null } = {}) {
   const t0 = Date.now()
-  await page.goto(url)
+  // a page that never finishes loading is a row's finding, not a rig crash
+  await page.goto(url, { timeout: 60000 }).catch((e) => note(`navigation to ${url.slice(0, 60)} did not finish: ${String(e?.message ?? e).split('\n')[0].slice(0, 80)}`))
   // the event is THIS navigation's: matched by the page's own time origin, never by when it was
   // recorded (a page opened earlier in the row can be judged after this one starts)
   const origin0 = await page.evaluate(() => performance.timeOrigin).catch(() => null)
