@@ -253,8 +253,13 @@ const plantingBuild = () => (planting ??= build('planting', MUTANTS['keys-extrac
 
 const ESBUILD = process.env.ESBUILD || join(ROOT, 'slides/node_modules/.bin/esbuild')
 let agentN = 0
-/** home/web/src/identity.ts, with `edits` applied in a copy beside the real src (so its kernel imports resolve), bundled for node. */
-async function agentModule(edits) {
+/**
+ * home/web/src/identity.ts, with `edits` applied in a copy beside the real src
+ * (so its kernel imports resolve), bundled: for node (esm), or for a page
+ * (an iife exposing the agent, the real IndexedDB store, and the kernel
+ * builders a page needs to make a held record, as `window.B`).
+ */
+function bundleAgent(edits, page) {
   const copy = join(ROOT, `home/web/.identity-node-${process.pid}-${++agentN}`)
   cpSync(join(ROOT, 'home/web/src'), copy, { recursive: true })
   try {
@@ -263,13 +268,72 @@ async function agentModule(edits) {
       if (t.split(e.from).length !== 2) throw new Error(`edit does not apply once in ${e.file}: ${e.from}`)
       writeFileSync(f, t.replace(e.from, () => e.to))
     }
-    const out = join(tmp, `agent-${agentN}.mjs`)
-    const r = spawnSync(ESBUILD, [join(copy, 'identity.ts'), '--bundle', '--format=esm', '--platform=neutral', '--log-level=error',
-      `--define:__DIRECTORY_KEYS__=${JSON.stringify(PINNED)}`, `--outfile=${out}`], { encoding: 'utf8' })
+    let entry = join(copy, 'identity.ts')
+    if (page) {
+      entry = join(copy, 'rig-page-entry.ts')
+      writeFileSync(entry, `export { Agent, indexedStore } from './identity.ts'
+export { buildDeviceCert, buildWren } from '../../../kernel/src/devices.ts'
+export { b64uEnc, signStatement, sha256b64u } from '../../../kernel/src/statements.ts'\n`)
+    }
+    const out = join(tmp, `agent-${agentN}.${page ? 'js' : 'mjs'}`)
+    const r = spawnSync(ESBUILD, [entry, '--bundle', `--format=${page ? 'iife' : 'esm'}`, ...(page ? ['--global-name=B'] : ['--platform=neutral']),
+      '--log-level=error', `--define:__DIRECTORY_KEYS__=${JSON.stringify(PINNED)}`, `--outfile=${out}`], { encoding: 'utf8' })
     if (r.status !== 0) throw new Error(`esbuild: ${r.stderr}`)
-    return await import(out)
+    return out
   } finally { rmSync(copy, { recursive: true, force: true }) }
 }
+const agentModule = async (edits) => import(bundleAgent(edits, false))
+
+// ---- the real store: two pages of one browser context share its IndexedDB ------------------
+// In each page: the agent, the real indexedStore, and helpers that make a held
+// record through the stub (window.seed) and read the store back.
+const PAGE_HELPERS = `
+window.CLOCK = 0
+window.net = async (url, init) => { const r = await window.__dir(new URL(url).pathname, ${JSON.stringify(HOME)}, init.body); return new Response(r.body, { status: r.status }) }
+const raw = async (k) => B.b64uEnc(new Uint8Array(await crypto.subtle.exportKey('raw', k)))
+window.seed = async () => {
+  const W = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign'])
+  const kx = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits'])
+  const Wpub = await raw(W.publicKey), kxPub = await raw(kx.publicKey)
+  const ch = JSON.parse((await window.__dir('/v1/web/challenge', ${JSON.stringify(S)}, JSON.stringify({ address: ${JSON.stringify(ADDRESS)} }))).body)
+  const text = B.buildDeviceCert({ kind: 'wdev', devicePub: Wpub, consentPub: null, kx: kxPub, address: ${JSON.stringify(ADDRESS)}, rosHash: ch.rosHash, label: 'Chrome on macOS', via: 'passkey', ceremonyAt: ch.at, dirNonce: ch.nonce })
+  const a = await window.__assert(text)
+  const e = await window.__dir('/v1/web/enrol', ${JSON.stringify(S)}, JSON.stringify({ text, rq: ${JSON.stringify(HOME)}, assertion: { id: ${JSON.stringify(CRED.toString('base64url'))}, ...a } }))
+  if (e.status !== 200) throw new Error('enrol ' + e.body)
+  const nonce = JSON.parse((await window.__dir('/v1/home/challenge', ${JSON.stringify(HOME)}, JSON.stringify({ address: ${JSON.stringify(ADDRESS)} }))).body).nonce
+  const wren = B.buildWren({ devicePub: Wpub, address: ${JSON.stringify(ADDRESS)}, challenge: nonce })
+  const p = JSON.parse((await window.__dir('/v1/home/checkin', ${JSON.stringify(HOME)}, JSON.stringify({ wren, sig: await B.signStatement(W.privateKey, wren) }))).body)
+  let from = 0
+  for (let i = 0; i < p.roster.length; i++) if ((await B.sha256b64u(p.roster[i].ros)) === ch.rosHash) from = i
+  // what a ceremony writes: unconditionally
+  await B.indexedStore.put({ v: 1, address: ${JSON.stringify(ADDRESS)}, label: 'Chrome on macOS', W, kx, Wpub, kxPub, cert: text, signer: p.signer,
+    assertion: p.assertion, watt: p.watt, wattSig: p.wattSig, ceremonyAt: ch.at, expires: window.CLOCK + 24 * 3600e3, roster: p.roster.slice(from), pin: ch.rosHash })
+  return Wpub
+}
+window.stored = async () => { const r = await B.indexedStore.get(); return { W: r.held ? r.held.Wpub : null, last: r.last ? r.last.why : null } }
+window.newAgent = async (store) => { window.agent = new B.Agent(store || B.indexedStore, window.net, () => window.CLOCK); return (await window.agent.load()).kind }
+window.mem = () => window.agent.held ? window.agent.held.Wpub : null
+`
+/** One browser context, two pages (two tabs of the library), the agent bundled with `edits`. */
+async function twoTabs(edits) {
+  const src = readFileSync(bundleAgent(edits, true), 'utf8')
+  const ctx = await browser.newContext()
+  await ctx.routeWebSocket(/.*/, (ws) => { sockets.push(ws.url()); ws.close() })
+  await ctx.route('**/*', (route) => { refused.push(route.request().url()); return route.abort() })
+  await ctx.route(HOME + '/', (route) => route.fulfill({ status: 200, headers: { 'content-type': 'text/html' }, body: '<!doctype html><title>tab</title>' }))
+  await ctx.exposeFunction('__dir', async (path, origin, body) => { const r = await raceDir.handle({ method: 'POST', path, origin, body }); return { status: r.status, body: r.body } })
+  await ctx.exposeFunction('__assert', (text) => softAssertion('pk1', text, { origin: S }))
+  const tab = async () => {
+    const p = await ctx.newPage()
+    await p.goto(HOME + '/')
+    await p.addScriptTag({ content: src })
+    await p.addScriptTag({ content: PAGE_HELPERS })
+    await p.evaluate((c) => { window.CLOCK = c }, raceClock)
+    return p
+  }
+  return { ctx, a: await tab(), b: await tab() }
+}
+
 
 // a directory and a clock of its own, for the node rows
 let raceClock = T0 + HOUR
@@ -649,6 +713,55 @@ const ROWS = {
     return [[err === null && s?.kind === 'signed-in', `checkIn resolves, still signed in (${err ?? s?.kind})`]]
   },
 
+  async "two tabs on the browser's real IndexedDB: only the record a write was made from is replaced"(dist, edits) {
+    // the shipped store (indexedStore: the read and the write in one transaction), not a model of it
+    const out = []
+    const at = async (tabs, t) => { raceClock = t; for (const p of [tabs.a, tabs.b]) await p.evaluate((c) => { window.CLOCK = c }, t) }
+    for (const variant of ['B signs out', 'B signs in anew', "A's load ends a bad record as B signs in"]) {
+      const n = { right: 0, wrong: 0 }
+      let seen = ''
+      for (let i = 0; i < 2; i++) {
+        const tabs = await twoTabs(edits)
+        const { a, b } = tabs
+        await at(tabs, T0 + HOUR)
+        let wB = null, r
+        if (variant === "A's load ends a bad record as B signs in") {
+          // A reads a record that fails its check; B's new sign-in lands between A's read and A's end
+          await a.evaluate(async () => { await window.seed(); const S = B.indexedStore, g = await S.get(); await S.put({ ...g.held, cert: g.held.cert + 'x' }) })
+          await at(tabs, T0 + 2 * HOUR)
+          await a.exposeFunction('__bSeed', () => b.evaluate(() => window.seed()))
+          r = await a.evaluate(async () => {
+            const S = B.indexedStore
+            let first = true
+            const store = { put: S.put, end: S.end, get: async () => { const g = await S.get(); if (first) { first = false; window.wB = await window.__bSeed() } return g } }
+            const k = await window.newAgent(store)
+            const st = await window.stored()
+            return { status: k, mem: window.mem(), W: st.W, last: st.last, wB: window.wB }
+          })
+          wB = r.wB
+        } else {
+          await a.evaluate(() => window.seed())
+          await at(tabs, T0 + 2 * HOUR)
+          await a.evaluate(() => window.newAgent()); await b.evaluate(() => window.newAgent())
+          if (variant === 'B signs out') await b.evaluate(() => window.agent.signOut())
+          else wB = await b.evaluate(async () => { const w = await window.seed(); await window.newAgent(); return w })
+          r = await a.evaluate(async () => {
+            const s = await window.agent.checkIn()
+            const st = await window.stored()
+            return { status: s.kind, mem: window.mem(), W: st.W, last: st.last }
+          })
+        }
+        const right = variant === 'B signs out' ? r.W === null && r.mem === null && r.status === 'none'
+          : r.W === wB && r.mem === wB && r.status === 'signed-in' && r.last === null
+        right ? n.right++ : n.wrong++
+        seen = `A ${r.status}, store ${r.W === null ? 'empty' : r.W === wB ? "B's" : 'another key'}`
+        await tabs.ctx.close()
+      }
+      out.push([n.wrong === 0, `${variant}: ${variant === 'B signs out' ? 'the store stays empty and A shows signed out' : "B's sign-in stays and A takes it"} (${n.right}/2; last: ${seen})`])
+    }
+    return out
+  },
+
   async 'the policy: the release channel and the directory only, Trusted Types required'(dist) {
     const info = JSON.parse(readFileSync(join(dist, 'build.json'), 'utf8'))
     const hdr = readFileSync(join(dist, 'library/_headers'), 'utf8')
@@ -717,6 +830,13 @@ const MUTANTS = {
     A('identity.ts', '    if (await this.store.end(this.last, expect)) return true\n', '    if (await this.store.end(this.last)) return true\n')]],
   'store-errors-escape': ['a store that fails never stops the check-in', [
     A('identity.ts', '    try { return await this.checkInOnce() } catch { return this.status() }', '    return this.checkInOnce()')]],
+  // the shipped store's one-transaction write (C5): each mutant is red only on real IndexedDB
+  'swap-ignores-expect': ["two tabs on the browser's real IndexedDB: only the record a write was made from is replaced", [
+    A('identity.ts', '        g.onsuccess = () => { if ((g.result as Held | undefined)?.Wpub === expect) write(s); else done = false }\n', '        g.onsuccess = () => { write(s) }\n')]],
+  'swap-says-ok': ["two tabs on the browser's real IndexedDB: only the record a write was made from is replaced", [
+    A('identity.ts', '        g.onsuccess = () => { if ((g.result as Held | undefined)?.Wpub === expect) write(s); else done = false }\n', '        g.onsuccess = () => { if ((g.result as Held | undefined)?.Wpub === expect) write(s) }\n')]],
+  'load-end-no-expect': ["two tabs on the browser's real IndexedDB: only the record a write was made from is replaced", [
+    A('identity.ts', "else if (!(await this.end(held.address, 'invalid', held.Wpub))) return this.load()", "else if (!(await this.end(held.address, 'invalid', undefined as any))) return this.load()")]],
   'connect-any': ['the policy: the release channel and the directory only, Trusted Types required', 'dist',
     (t) => t.replace('connect-src https://bento.page/releases/ https://id.bento.page', 'connect-src *')],
 }

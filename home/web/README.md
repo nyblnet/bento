@@ -203,8 +203,9 @@ build (without `--dev`) refuses `--identity` and `--directory-keys`.
 - **Sign out sticks, in every tab.** Tabs share the store, so a check-in
   writes only over the record it renewed, checked and written in one
   transaction: after a sign-out or a new sign-in (in this tab or another) it
-  writes nothing back and takes what the store holds. A store that fails does
-  not stop the hourly check-in.
+  writes nothing back and takes what the store holds. Another tab may still
+  show the old state until its next check-in, but it never writes it back. A
+  store that fails does not stop the hourly check-in.
 - **24 hours, 7 days.** A check-in signed by `W` (`wren.`) renews the 24-hour
   countersign on load and every hour, until 7 days after the ceremony. A day
   before that the line asks "Confirm it's you": a new ceremony, new keys.

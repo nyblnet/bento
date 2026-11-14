@@ -441,7 +441,14 @@ function tx<T>(db: IDBDatabase, mode: IDBTransactionMode, f: (s: IDBObjectStore)
   })
 }
 
-/** One readwrite transaction: `write` runs only if the stored record's Wpub is `expect` (always when it is undefined). */
+/**
+ * One readwrite transaction: `write` runs only if the stored record's Wpub is
+ * `expect` (always when it is undefined). The read and the write MUST share it.
+ * IndexedDB runs readwrite transactions on a store one at a time, so nothing
+ * another tab does can land between this read and this write. Split into a read
+ * and a later write, another tab's sign-out could land in the gap, and the write
+ * would bring the signed-out sign-in back. It answers true only when it wrote.
+ */
 async function swap(expect: string | undefined, write: (s: IDBObjectStore) => void): Promise<boolean> {
   const db = await open()
   try {
