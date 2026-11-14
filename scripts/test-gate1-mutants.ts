@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
-// Mutation check for gate 1's raw-text rule (kernel/src/gate1.ts).
+// Mutation check for gate 1's raw-text and comment rules (kernel/src/gate1.ts).
 //
 //   node scripts/test-gate1-mutants.ts
 //
 // <style>, <title> and <textarea> are text in HTML but hold TAGS inside <svg>
 // or <math>, so gate 1 refuses any "<" in them that could start markup: one
-// before a letter, "!", "/" or "?". Each mutant below loosens or widens that
-// rule in a COPY of kernel/src/gate1.ts, and test-gate1.ts (the corpus in
+// before a letter, "!", "/" or "?". Comments end at "-->" or "--!>", whichever
+// comes first, and the places where "<!--" starts no comment (xmp, noembed,
+// noframes, noscript, plaintext, CDATA) are refused. Each mutant below loosens
+// or widens one rule in a COPY of kernel/src/gate1.ts, and test-gate1.ts (the corpus in
 // home/fixtures/gate1) must then fail. The unmutated copy must pass first
 // (positive control), and every mutant must apply to exactly one place, so a
 // refactor that moves the code makes this rig fail rather than pass vacuously.
@@ -37,6 +39,13 @@ const MUTANTS: Mutant[] = [
   { name: '<style> is not checked', from: WHICH, to: "if (name !== 'script' && name !== 'style' && /<" },
   // the other direction: a "<" that starts no markup is text everywhere
   { name: 'every "<" is refused, markup or not', from: RULE, to: RULE.replace('/<[a-zA-Z!/?]/', '/</') },
+  // comments end as the tokenizer ends them, and nothing that makes "<!--" text passes
+  { name: 'a comment ends only at "-->"', from: "const end = dash < 0 ? bang : bang < 0 ? dash : Math.min(dash, bang)", to: 'const end = dash' },
+  { name: '"<![CDATA[" and other "<!" pass', from: "if (html[i + 1] === '!' && !lower.startsWith('<!doctype', i)) problems.push", to: "if (false) problems.push" },
+  ...['xmp', 'noembed', 'noframes', 'noscript', 'plaintext'].map((t) => ({
+    name: `<${t}> passes`, from: "['xmp', 'noembed', 'noframes', 'noscript', 'plaintext'].includes(name)",
+    to: `['xmp', 'noembed', 'noframes', 'noscript', 'plaintext'].filter((t) => t !== '${t}').includes(name)`,
+  })),
 ]
 
 function tree(): string {

@@ -111,3 +111,30 @@ runs:
       # reaches the payload.
       shell: bento-step {0}
       run: node scripts/test-shell-standalone.mjs
+
+    - name: bento/home in your browser, production build and release wiring
+      # home/web/build.mjs without --dev refuses, instead of warning about, each
+      # development seam: no --history, --key (a test key), the mutant hook, and
+      # any history the library would refuse (another key, tampered, two for one
+      # app); the good release build is the positive control. release.mjs
+      # --home-web refuses with nothing signed: no --frame-origin, output inside
+      # the site, a non-release key without --home-web-dev, the mutant hook, no
+      # esbuild, and (once seeded) a published app without a history or with
+      # one the build would refuse; a failed run leaves no earlier build in its
+      # output. A rehearsal release bundles exactly the histories it signed and
+      # seeded, with nothing of home/web in the site. Mutants run in ci-home.yml
+      # (home-web-engines).
+      shell: bento-step {0}
+      run: node scripts/test-home-web-build.mjs
+
+    - name: bento/home in your browser, where a release may put the home/web build
+      # release.mjs --home-web empties its output before building, and the
+      # output must never be inside or around the site (mirrored to bento.page)
+      # or the published tree the next release copies in. Containment is by
+      # folder identity (device and inode), so a symlink, a case variant, a
+      # `..hw` child or the macOS /System/Volumes/Data firmlink cannot hide one
+      # folder in another. The firmlink row exists only on macOS: here it
+      # prints an allowed skip, and the macOS job in ci-home-ios.yml runs it,
+      # with its mutant beside it.
+      shell: bento-step {0}
+      run: node scripts/test-home-web-out.mjs

@@ -17,7 +17,7 @@ import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  verifyRosterChain, parseRos, buildRos, ROSTER_PREFIXES, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, ROSTER_WAIT_MS,
+  verifyRosterChain, verifyResetStop, parseRos, buildRos, buildVrs, ROSTER_PREFIXES, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, ROSTER_WAIT_MS, NEW_ACCOUNT_MS,
   type RosterLink, type RosterHead,
 } from '../kernel/src/roster.ts'
 import { RESERVED_PREFIXES, LINK_PREFIXES, b64uEnc } from '../kernel/src/statements.ts'
@@ -33,7 +33,7 @@ const F = JSON.parse(readFileSync(process.env.ROSTER_FIXTURE || join(root, 'kern
 type St = { seq: number; ripenedAt: number; members: Array<{ kind: string; key: string; quarantined: boolean; since: number }>; createdAt: number | null; lastResetAt: number | null; sinceExact: boolean }
 type Row = { name: string; links: RosterLink[]; pinned?: string; expect: 'accept' | 'reject'; reason?: string; state?: St }
 const rows: Row[] = F.rows
-const opts = (r: Row, extra: Record<string, unknown> = {}) => ({ directoryKeys: F.directoryKeys, rpId: F.rpId, origins: F.origins, now: F.now,
+const opts = (r: Row, extra: Record<string, unknown> = {}) => ({ directoryKeys: F.directoryKeys, rpId: F.rpId, origins: F.origins, now: F.now, consentRp: F.consentRp,
   ...(r.pinned !== undefined ? { pinned: r.pinned } : {}), ...extra })
 async function run(r: Row, extra: Record<string, unknown> = {}) {
   try { return await verifyRosterChain(r.links, opts(r, extra)) } catch (e) { return { ok: false as const, reason: `threw: ${(e as Error).message}` } }
@@ -82,7 +82,7 @@ const REQUIRED: Array<[string, string]> = [
   ['setup/auth-reset', 'auth'], ['setup/auth-quarantine', 'auth'], ['setup/two-members', 'setup-members'], ['setup/consent-key', 'setup-members'], ['setup/quarantined', 'setup-members'],
   ['setup/with-proof', 'proof'], ['reset/with-proof', 'proof'], ['reset/two-members', 'reset-members'], ['reset/recovery-key', 'reset-members'],
   ['signer/missing', 'proof'], ['signer/not-a-member', 'signer'], ['signer/adds-itself', 'signer'], ['signer/quarantined', 'quarantined'],
-  ['signer/consent-key', 'signer-kind'], ['proof/passkey-raw-signature', 'proof'], ['proof/recovery-key-assertion', 'proof'], ['proof/recovery-key-both', 'proof'],
+  ['signer/consent-key', 'proof'], ['proof/passkey-raw-signature', 'proof'], ['proof/recovery-key-assertion', 'proof'], ['proof/recovery-key-both', 'proof'],
   ['rk/wrong-signature', 'signature'], ['rk/high-s', 'signature'],
   ['assertion/other-text', 'assertion-challenge'], ['assertion/origin-rp-host', 'assertion-origin'], ['assertion/origin-library', 'assertion-origin'],
   ['assertion/rp-parent', 'assertion-rp'], ['assertion/uv-clear', 'assertion-uv'], ['assertion/other-key', 'assertion-signature'],
@@ -99,7 +99,7 @@ const REQUIRED: Array<[string, string]> = [
   ['ok/q-quarantine', 'accept'], ['ok/q-voided-by-recovery-key', 'accept'], ['ok/q-then-x', 'accept'], ['ok/q-then-u', 'accept'], ['ok/pinned-q-then-x', 'accept'],
   ['q/no-voided-request', 'voided'], ['q/cause-wrong', 'cause'], ['q/voided-prev-wrong', 'voided-prev'], ['q/voided-signer-not-member', 'voided-signer'],
   ['q/voided-bad-proof', 'voided-assertion-signature'], ['q/voided-other-origin', 'voided-assertion-origin'], ['q/voided-quarantined-signer', 'voided-quarantined'],
-  ['q/voided-consent-key', 'voided-signer-kind'], ['q/wrong-target', 'target'], ['q/also-removes', 'target'], ['q/also-adds', 'target'], ['q/kind-changed', 'members'],
+  ['q/voided-consent-key', 'voided-proof'], ['q/wrong-target', 'target'], ['q/also-removes', 'target'], ['q/also-adds', 'target'], ['q/kind-changed', 'members'],
   ['q/last-live', 'last-live'], ['q/with-member-proof', 'proof'], ['q/carries-cited', 'proof'], ['m/carries-voided', 'proof'],
   ['x/after-member-change', 'auth'], ['x/cause-wrong', 'cause'], ['x/short', 'unripe'], ['x/requested-later', 'order'], ['x/removes-unquarantined', 'target'],
   ['x/adds', 'target'], ['x/with-member-proof', 'proof'], ['x/carries-voided', 'proof'], ['u/carries-cited', 'proof'],
@@ -117,6 +117,19 @@ const REQUIRED: Array<[string, string]> = [
   ['ok/q-then-l-then-u', 'accept'], ['x/pinned-target-not-quarantined', 'target'],
   // C4′: the pinned link's evidence is re-bound (security's P10, P11c)
   ['x/pinned-q-signer-swapped', 'evidence'], ['x/pinned-evidence-other-request', 'evidence'], ['u/pinned-l-clears-stale-mark', 'target'], ['u/pinned-l-prevros-swapped', 'evidence'],
+  // KG3: a consent key as the requester (cns. purpose roster) and the co-sign that skips the wait (security's ruling on #917, item 4)
+  ['ok/ck-requests-with-wait', 'accept'], ['ck/unripe-at-once', 'unripe'], ['ok/ck-ripe-at-once', 'accept'], ['ck/ripe-one-second-short', 'unripe'],
+  ['ck/cns-and-assertion', 'proof'], ['ck/cns-expired', 'consent-expired'], ['ck/cns-long-life', 'consent-lifetime'], ['ck/cns-other-purpose', 'consent-purpose'],
+  ['ck/cns-link-purpose', 'consent-purpose'], ['ck/cns-reserved-purpose', 'consent-reserved-purpose'], ['ck/cns-other-rp', 'consent-rp'],
+  ['ck/cns-other-text', 'consent-transcript'], ['ck/cns-other-audience', 'consent-transcript'], ['ck/cns-other-challenge', 'consent-transcript'],
+  ['ck/cns-doc-scoped', 'consent-grammar'], ['ck/cns-wrong-key', 'consent-signature'], ['ck/cns-high-s', 'consent-signature'],
+  ['ok/cosign-skips-wait', 'accept'], ['ok/cosign-exactly-72h', 'accept'], ['ok/cosign-rk-requester', 'accept'], ['cosign/unripe', 'cosign-unripe'],
+  ['cosign/one-second-short', 'cosign-unripe'], ['cosign/age-from-requester-clock', 'cosign-unripe'], ['cosign/by-passkey', 'cosign-kind'],
+  ['cosign/by-recovery-key', 'cosign-kind'], ['cosign/by-requester', 'cosign'], ['cosign/not-member', 'cosign-signer'], ['cosign/adds-itself', 'cosign-signer'],
+  ['cosign/quarantined', 'cosign-quarantined'], ['cosign/other-text', 'cosign-consent-transcript'], ['cosign/expired', 'cosign-consent-expired'],
+  ['cosign/wrong-key', 'cosign-consent-signature'], ['cosign/other-purpose', 'cosign-consent-purpose'], ['cosign/on-reset', 'proof'], ['cosign/on-quarantine', 'proof'],
+  ['cosign/pinned-age-lower-bound', 'cosign-unripe'], ['ok/cosign-pinned-ripe', 'accept'], ['cosign/readded-age-restarts', 'cosign-unripe'],
+  ['ok/q-voided-by-consent-key', 'accept'], ['ok/q-voided-ck-cns-old', 'accept'], ['q/voided-ck-cns-other-text', 'voided-consent-transcript'],
 ]
 for (const [n, want] of REQUIRED) {
   const r = byName.get(n)
@@ -161,6 +174,73 @@ console.log('\npositive controls: a refusal flips when only its cause changes')
   ok(!v4.ok && v4.reason === 'anchor', 'ok/pinned-midway WITHOUT the pin is refused (anchor): a mid-chain head is never trusted on its own')
 }
 
+console.log('\nconsent keys: positive controls')
+{
+  const ripe = byName.get('ok/ck-ripe-at-once')!, short = byName.get('ck/ripe-one-second-short')!
+  const reqOf = (r: Row) => Number(r.links[r.links.length - 1].rip.split('.')[2])
+  ok(reqOf(ripe) - reqOf(short) === 1000, 'ck/ripe-one-second-short differs from ok/ck-ripe-at-once by one second of the directory\'s requestedAt')
+  for (const n of ['ok/ck-ripe-at-once', 'ok/cosign-skips-wait']) {
+    const v = await run(byName.get(n)!, { consentRp: undefined })
+    ok(!v.ok && v.reason === 'grammar', `${n} without the caller's consentRp: refused as a caller error (grammar), never defaulted`)
+    const w = await run(byName.get(n)!, { consentRp: 'vault-acme' })
+    ok(!w.ok && /consent-rp$/.test(w.reason), `${n} with another consentRp: consent-rp (the rp is the caller's)`)
+  }
+  const plain = byName.get('ok/full-chain')!
+  ok((await run(plain, { consentRp: undefined })).ok, 'a chain no consent key signs needs no consentRp (existing callers keep working)')
+  const age = byName.get('cosign/age-from-requester-clock')!
+  const tail = age.links[age.links.length - 1]
+  ok(Number(tail.ros.split('.')[6]) - (Number(F.rows.find((r: Row) => r.name === 'ok/full-chain').links[3].rip.split('.')[3])) >= ROSTER_WAIT_MS,
+    'cosign/age-from-requester-clock: by the requester\'s created the co-signer would be ripe')
+}
+
+console.log('\nvrs.: a member stops a reset (the directory\'s check)')
+type StopRow = { name: string; links: RosterLink[]; pinned?: string; resetRos: string; resetRequestedAt: number; challenge: string; now: number; text: string; signer: string
+  proof: Record<string, unknown>; spent?: boolean; expect: 'accept' | 'reject'; reason?: string }
+const stops: StopRow[] = F.resetStops
+async function runStop(r: StopRow, extra: Record<string, unknown> = {}) {
+  try {
+    const ro = await verifyRosterChain(r.links, { directoryKeys: F.directoryKeys, rpId: F.rpId, origins: F.origins, consentRp: F.consentRp, now: r.now, ...(r.pinned ? { pinned: r.pinned } : {}) })
+    if (!ro.ok) return { ok: false as const, reason: `chain: ${ro.reason}` }
+    return await verifyResetStop(r.text, r.signer, r.proof as never, { roster: ro.value, resetRos: r.resetRos, resetRequestedAt: r.resetRequestedAt, challenge: r.challenge,
+      spend: () => !r.spent, rpId: F.rpId, origins: F.origins, consentRp: F.consentRp, now: r.now, ...extra })
+  } catch (e) { return { ok: false as const, reason: `threw: ${(e as Error).message}` } }
+}
+for (const r of stops) {
+  const v = await runStop(r)
+  const got = v.ok ? 'accept' : `reject (${v.reason})`
+  const want = r.expect === 'accept' ? 'accept' : `reject (${r.reason})`
+  ok(got === want, `${r.name}: ${got}${got === want ? '' : `, want ${want}`}`)
+}
+{
+  const sb = new Map(stops.map((r) => [r.name, r]))
+  const REQ_STOP: Array<[string, string]> = [['ok/stop-by-passkey', 'accept'], ['ok/stop-by-recovery-key', 'accept'], ['ok/stop-by-consent-key', 'accept'],
+    ['stop/new-account', 'new-account'], ['stop/age-at-request-not-at-stop', 'new-account'], ['stop/pinned-age-unknown', 'age-unknown'], ['stop/signer-not-member', 'signer'],
+    ['stop/signer-quarantined', 'quarantined'], ['stop/other-reset', 'reset-mismatch'], ['stop/reset-not-on-head', 'reset'], ['stop/reset-two-members', 'reset'],
+    ['stop/requested-before-head', 'order'], ['stop/other-address', 'address'], ['stop/other-challenge', 'challenge'], ['stop/spent', 'replay'],
+    ['stop/assertion-other-text', 'assertion-challenge'], ['stop/rk-wrong-key', 'signature'], ['stop/ck-cns-expired', 'consent-expired'],
+    ['stop/ck-cns-web-add', 'consent-purpose'], ['stop/passkey-raw-signature', 'proof'], ['stop/extra-field', 'grammar'], ['stop/address-not-normal', 'grammar']]
+  for (const [n, want] of REQ_STOP) {
+    const r = sb.get(n)
+    ok(!!r && (want === 'accept' ? r.expect === 'accept' : r.expect === 'reject' && r.reason === want), `required vrs. row ${n} (${want})`)
+  }
+  const ok14 = sb.get('ok/stop-by-passkey')!, c4 = sb.get('stop/age-at-request-not-at-stop')!
+  const created = Number(ok14.links[0].rip.split('.')[3])
+  ok(ok14.resetRequestedAt - created === NEW_ACCOUNT_MS && NEW_ACCOUNT_MS === 14 * 24 * 3_600_000, 'ok/stop-by-passkey: the reset was requested exactly 14 days after setup')
+  ok(c4.resetRequestedAt - created < NEW_ACCOUNT_MS && c4.now - created >= NEW_ACCOUNT_MS,
+    'stop/age-at-request-not-at-stop: under 14 days at the request, over 14 days at the stop (C4: the request time decides)')
+  const v = await runStop(c4, { resetRequestedAt: created + NEW_ACCOUNT_MS })
+  ok(v.ok, 'positive control: the same stop with the request at day 14 is accepted (only the request time was young)')
+  const sp = sb.get('stop/spent')!
+  ok((await runStop({ ...sp, spent: false })).ok, 'positive control: stop/spent is accepted with an unspent challenge')
+  let spentBefore = 0
+  const g = await runStop(sb.get('stop/extra-field')!, { spend: () => { spentBefore++; return true } })
+  ok(!g.ok && g.reason === 'grammar' && spentBefore === 0, 'a vrs. that does not parse never spends the challenge')
+  const ck = sb.get('ok/stop-by-consent-key')!
+  const nr = await runStop(ck, { consentRp: undefined })
+  ok(!nr.ok && nr.reason === 'grammar', 'a consent key\'s stop without consentRp is a caller error')
+  ok(buildVrs({ address: 'alice@example.com', resetHash: ok14.text.split('.')[2], dirNonce: ok14.challenge }) === ok14.text, 'buildVrs writes the one spelling')
+}
+
 console.log('\ncaller parameters are required, never defaulted')
 {
   const r = byName.get('ok/full-chain')!
@@ -197,9 +277,10 @@ console.log('\nthe builder writes the one spelling')
 console.log('\nprefixes')
 {
   const K1K2 = ['bind', 'dev', 'rot', 'att', 'tomb', 'del', 'cmp', 'dreq', 'cns', 'cnst', 'inv', 'rev', 'dlg', 'prove']
-  ok(ROSTER_PREFIXES.length === 2 && ROSTER_PREFIXES.includes('ros') && ROSTER_PREFIXES.includes('rip'), 'roster.ts defines ros. and rip.')
+  ok(ROSTER_PREFIXES.length === 3 && ['ros', 'rip', 'vrs'].every((p) => ROSTER_PREFIXES.includes(p)), 'roster.ts defines ros. rip. vrs.')
   ok(ROSTER_PREFIXES.every((p) => !RESERVED_PREFIXES.includes(p) && !LINK_PREFIXES.includes(p) && !K1K2.includes(p)),
-    'ros. and rip. collide with no existing family, reserved prefix or link prefix')
+    'ros. rip. vrs. collide with no existing family, reserved prefix or link prefix')
+  ok(['mgd', 'vch', 'ojn', 'dvc'].every((p) => RESERVED_PREFIXES.includes(p)), 'the organisation prefixes mgd. vch. ojn. dvc. are reserved (org-identity §5.4 item 4)')
   ok(['wdev', 'watt', 'wren', 'dev2'].every((p) => RESERVED_PREFIXES.includes(p)), 'wdev. watt. wren. dev2. are reserved for the device certificates')
   ok(RESERVED_PREFIXES.includes('pk') && RESERVED_PREFIXES.includes('drev'), 'pk. and drev. stay reserved')
   ok(RESERVED_PREFIXES.every((p) => !LINK_PREFIXES.includes(p) && !K1K2.includes(p)), 'no reserved prefix collides with a defined family')

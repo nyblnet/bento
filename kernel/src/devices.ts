@@ -36,8 +36,8 @@
 //   label       display text (statements.ts rules), at most 40 characters,
 //               chosen by the page that asked; optional
 //   via         `passkey`: an assertion by a roster passkey over this text.
-//               `cns`: a native consent co-signature (route D). Its purpose
-//               (`web-add`) is not defined yet, so it is REFUSED (fail closed)
+//               `cns`: a native consent key's co-sign, purpose `web-add`
+//               (route D: a phone approves this browser)
 //   ceremonyAt  the directory's challenge time for this ceremony. The 7-day
 //               cap counts from it, so the directory refuses a wdev. whose
 //               ceremonyAt is not its own challenge time
@@ -49,16 +49,33 @@
 //
 // wdev.'s fields plus the device's hardware consent key (empty where the
 // device has none). via is `passkey` (an assertion over this text) or `ck` (a
-// ripe consent key's signature): the `roster` consent purpose that defines a
-// ck's signature is the next kernel change, so `ck` is REFUSED until then.
+// ripe consent key's co-sign, purpose `roster`, over this text).
+//
+// A co-sign (via cns or ck) travels as `consent: { cns, sig }` in place of the
+// assertion. Its signer is an unquarantined `ck` member under the same head
+// rule as a passkey, and RIPE: a member for at least 72 h at ceremonyAt (its
+// `since` in the verified chain). The cns. is the statements.ts family's:
+// audience `dir`, challenge = this certificate's dirNonce, alive at ceremonyAt
+// for at most its 5-minute life (verifyCoSign).
 //
 // --- watt. ---------------------------------------------------------------------
 //
-//   watt.<sha256(certificate text)>.<ob>.<loggedAt>.<expires>.<kid>
+//   watt.<sha256(certificate text)>.<ob>.<mb>.<loggedAt>.<expires>.<kid>
 //
-// Signed by the directory key `kid` (raw r‖s, low-S). ob is 0 or 1: the
-// request's Origin was bento/home's (informative; the lever reads its log,
-// never this field). loggedAt and expires are the directory's clock:
+// Signed by the directory key `kid` (raw r‖s, low-S). ob is 0 or 1: 1 when
+// the directory logged the ceremony (or renewal) as made FOR bento/home, i.e.
+// the sign-in host reported bento/home as its opener (`rq`), or a renewal came
+// from a key first enrolled that way; 0 for a native host's ceremony. Since
+// every web ceremony runs on the sign-in host (web-identity-tier §0a), a
+// browser's Origin header no longer tells bento/home apart, so ob mirrors the
+// log's `rq`, which is trustworthy only while the sign-in host is honest.
+// Informative only: no peer acts on it, and the lever reads the directory's
+// log, never this field. mb is the account's MAILBOX state: `0` while the address
+// is confirmed, else the time (epoch ms, ≤ loggedAt) it went unconfirmed. A
+// lapsed mailbox qualifies only the address part of the ✓ ("unconfirmed since
+// <date>"), never the account; it rides inside the countersign every
+// certificate already needs, so the person presenting the proof cannot drop it.
+// loggedAt and expires are the directory's clock:
 //   - 0 < expires − loggedAt ≤ 24 h
 //   - expires ≤ ceremonyAt + 7 days, counted from the certificate's ORIGINAL
 //     ceremony: a renewal is a NEW watt. over the SAME certificate text, so a
@@ -72,6 +89,31 @@
 // Signed by the device key itself (raw r‖s, low-S) over a single-use directory
 // challenge. The directory answers it with a fresh watt. while the 7-day cap
 // allows. Peers never verify it.
+//
+// --- wret. ---------------------------------------------------------------------
+//
+//   wret.<oldDevicePub>.<newDevicePub>.<b64u(address)>.<dirNonce>
+//
+// Old-key retirement at a new ceremony. When a browser that still holds its
+// old key W makes a new ceremony for a fresh key W′, W signs this (raw r‖s,
+// low-S) naming W′ and the new ceremony's dirNonce; the directory accepts the
+// new wdev. and RETIRES W (no further renewals). A copy of W taken earlier is
+// then cut off by the next honest ceremony, not only by its 7-day cap
+// (security's R2 bound). The two keys differ; the nonce binds it to exactly
+// one ceremony, so a retirement cannot be replayed into another. Peers never
+// verify it.
+//
+// --- inc. ----------------------------------------------------------------------
+//
+//   inc.<id>.<from>.<to|empty>.<issuedAt>.<kid>
+//
+// The directory's incident record (web-identity-tier §3.7, lever step 4),
+// signed by `kid` like watt. id is [a-z0-9-]{1,64}; from and to are the
+// window (epoch ms, to empty while it is still open, else to > from);
+// issuedAt ≥ from, not in the future. Apps use it to flag room statements
+// signed inside the window ("signed during a security incident: keep or
+// revoke?"). A record never revokes anything by itself: the lever's
+// revocations reach peers through watt. expiry.
 //
 // --- the head rule (security's ruling on #925, item 5) ----------------------------
 //
@@ -95,34 +137,31 @@
 //
 // --- the tier (G1) ----------------------------------------------------------------
 //
-// Anything authorised by a passkey alone is shown as "(passkey sign-in)". That
-// is EVERY certificate this module accepts today. A dev2.'s consentPub is a
-// CLAIM written by whatever page ran the passkey prompt: one assertion can
-// name the victim's ripe consent key on a certificate for the attacker's own
-// device key (security's finding F1 on #937). So the consent key's age on the
-// roster never promotes a certificate by itself. Native tier will need the
-// consent key's OWN signature over the dev2. text, under a purpose no other
-// consent signature can be replayed as (the `roster` purpose, the next kernel
-// change); then a ripe ck (72 h a member) makes it native. One label for every
-// passkey-only device on every host, because a page can mint a passkey-only
-// dev2. as well.
+// Native tier is a dev2. via `ck`: a ripe consent key's OWN co-sign over the
+// whole certificate text (devicePub included), purpose `roster`. Everything
+// else is "(passkey sign-in)": every passkey-made certificate, and every wdev.
+// (a browser, even one a phone approved). A passkey-made dev2.'s consentPub is
+// a CLAIM written by whatever page ran the prompt (security's F1 on #937), so a
+// consent key's age on the roster never promotes a certificate: only its
+// signature does. A device whose own consent key ripens makes a NEW dev2. that
+// its ck co-signs. Native tier still needs a current watt.: the 24 h countersign
+// is what lets disable, remove-a-device and the lever reach a native device.
 
 import { isNormalAddress } from './address.ts'
-import { b64uDec, b64uEnc, sha256b64u, isSigningKey, isKxKey, verifyStatementSig, displayText, SKEW_MS, type Verdict } from './statements.ts'
+import { b64uDec, b64uEnc, sha256b64u, isSigningKey, isKxKey, verifyStatementSig, verifyCoSign, displayText, SKEW_MS, type Verdict } from './statements.ts'
 import { verifyAssertion, statementChallenge, type Assertion } from './webauthn.ts'
 import { ROSTER_WAIT_MS, type RosterState } from './roster.ts'
 
 /** Prefixes this module defines. (statements.ts still lists them as reserved,
  *  so nothing else takes them.) */
-export const DEVICE_PREFIXES: readonly string[] = Object.freeze(['wdev', 'dev2', 'watt', 'wren'])
+export const DEVICE_PREFIXES: readonly string[] = Object.freeze(['wdev', 'dev2', 'watt', 'wren', 'wret', 'inc'])
 
 const HOUR = 3_600_000
 /** A watt. lives at most 24 hours. */
 export const WATT_MAX_MS = 24 * HOUR
 /** No watt. reaches past 7 days after the certificate's original ceremony. */
 export const CEREMONY_CAP_MS = 7 * 24 * HOUR
-/** A consent key ripens, for the tier, after 72 hours of membership (read once
- *  the consent key's own signature exists; see tierOf). */
+/** A consent key may certify a device (via cns or ck) after 72 hours of membership. */
 export const CK_RIPE_MS = ROSTER_WAIT_MS
 /** The longest label a device certificate carries (the sign-in host's limit). */
 export const MAX_LABEL = 40
@@ -171,7 +210,7 @@ export interface DeviceCert {
   address: string
   rosHash: string
   label: string | null
-  /** wdev.: passkey | cns; dev2.: passkey | ck. Only `passkey` is defined. */
+  /** wdev.: passkey | cns; dev2.: passkey | ck */
   via: string
   ceremonyAt: number
   dirNonce: string
@@ -221,23 +260,27 @@ export async function parseDeviceCert(text: string): Promise<Verdict<DeviceCert>
 export interface Watt {
   certHash: string
   ob: 0 | 1
+  /** 0 while the mailbox is confirmed, else when it went unconfirmed (≤ loggedAt) */
+  mb: number
   loggedAt: number
   expires: number
   kid: string
 }
 
 export function buildWatt(w: Watt): string {
-  return ['watt', w.certHash, w.ob, w.loggedAt, w.expires, w.kid].join('.')
+  return ['watt', w.certHash, w.ob, w.mb, w.loggedAt, w.expires, w.kid].join('.')
 }
 
 export function parseWatt(text: string): Verdict<Watt> {
-  const p = fields(text, 'watt', 6)
+  const p = fields(text, 'watt', 7)
   if (!p) return no('watt-grammar')
-  const [, certHash, obF, loggedF, expiresF, kid] = p
+  const [, certHash, obF, mbF, loggedF, expiresF, kid] = p
   if (!isHash(certHash) || (obF !== '0' && obF !== '1') || !KID_RE.test(kid)) return no('watt-grammar')
   const loggedAt = ms(loggedF), expires = ms(expiresF)
   if (loggedAt === null || expires === null) return no('watt-grammar')
-  return { ok: true, value: { certHash, ob: obF === '1' ? 1 : 0, loggedAt, expires, kid } }
+  const mb = mbF === '0' ? 0 : ms(mbF)
+  if (mb === null || mb > loggedAt) return no('watt-grammar')
+  return { ok: true, value: { certHash, ob: obF === '1' ? 1 : 0, mb, loggedAt, expires, kid } }
 }
 
 // --- wren. ---------------------------------------------------------------------------
@@ -268,10 +311,12 @@ export async function verifyWren(text: string, sig: string): Promise<Verdict<Ren
 export interface DeviceProof {
   /** the wdev. or dev2. text */
   cert: string
-  /** the passkey that asserted (its pub) */
+  /** the member that certified it (its pub): a passkey, or a consent key */
   signer: string
-  /** its WebAuthn assertion over the certificate text */
-  assertion: Assertion
+  /** via passkey: its WebAuthn assertion over the certificate text */
+  assertion?: Assertion
+  /** via cns / ck: the consent key's cns. over the certificate text, and its signature */
+  consent?: { cns: string; sig: string }
   /** the directory's current countersign, and its signature */
   watt: string
   wattSig: string
@@ -284,13 +329,14 @@ export interface DeviceOpts {
   directoryKeys: Readonly<Record<string, string>>
   rpId: string
   origins: readonly string[]
+  /** the rp a consent key's cns. names (`bento`); needed only via cns / ck */
+  consentRp?: string
   now: number
 }
 
 export interface VerifiedDevice {
   cert: DeviceCert
-  /** passkey: shown "(passkey sign-in)". native: not reachable until the
-   *  consent key's own signature is defined (tierOf) */
+  /** passkey: shown "(passkey sign-in)". native: a dev2. a ripe consent key co-signed */
   tier: Tier
   watt: Watt
   /** ripenedAt of the head the certificate names */
@@ -306,7 +352,7 @@ export async function verifyDevice(proof: DeviceProof, opts: DeviceOpts): Promis
 }
 
 async function device(proof: DeviceProof, opts: DeviceOpts): Promise<Verdict<VerifiedDevice>> {
-  if (!proof || typeof proof !== 'object' || !str(proof.cert) || !str(proof.signer) || !proof.assertion ||
+  if (!proof || typeof proof !== 'object' || !str(proof.cert) || !str(proof.signer) ||
     !str(proof.watt) || !str(proof.wattSig)) return no('grammar')
   const ro = opts.roster
   if (!ro || !Array.isArray(ro.heads) || !Array.isArray(ro.members) || typeof opts.rpId !== 'string' || opts.rpId === '' ||
@@ -315,7 +361,10 @@ async function device(proof: DeviceProof, opts: DeviceOpts): Promise<Verdict<Ver
   const c = await parseDeviceCert(proof.cert)
   if (!c.ok) return c
   const cert = c.value
-  if (cert.via !== 'passkey') return no('via')   // cns (web-add) and ck (roster) are the next kernel change
+  const byKey = cert.via !== 'passkey'   // cns (wdev., web-add) or ck (dev2., roster)
+  // exactly one proof, the one via names
+  if (byKey ? (proof.assertion !== undefined || !proof.consent || typeof proof.consent !== 'object' ||
+      !str(proof.consent.cns) || !str(proof.consent.sig)) : (!proof.assertion || proof.consent !== undefined)) return no('proof')
   if (cert.address !== ro.address) return no('address')
 
   // the head rule
@@ -324,16 +373,25 @@ async function device(proof: DeviceProof, opts: DeviceOpts): Promise<Verdict<Ver
   if (cert.ceremonyAt < H.ripenedAt) return no('ceremony')
   const inH = H.members.find((m) => m.pub === proof.signer)
   if (!inH) return no('signer')
-  if (inH.kind !== 'pk') return no('signer-kind')
+  if (inH.kind !== (byKey ? 'ck' : 'pk')) return no('signer-kind')
   if (inH.quarantined) return no('signer-quarantined')
   const cur = ro.members.find((m) => m.pub === proof.signer)
   if (!cur) return no('signer-removed')
   if (cur.quarantined) return no('signer-quarantined')
   if (cur.since > H.ripenedAt) return no('signer-break')
 
-  const a = await verifyAssertion(proof.assertion, { publicKey: proof.signer, challenge: await statementChallenge(proof.cert),
-    rpId: opts.rpId, origins: opts.origins })
-  if (!a.ok) return no(`assertion-${a.reason}`)
+  if (byKey) {
+    // a consent key certifies only once ripe: 72 h a member at the ceremony, on the directory's clock
+    if (cert.ceremonyAt - cur.since < CK_RIPE_MS) return no('signer-unripe')
+    if (typeof opts.consentRp !== 'string' || opts.consentRp === '') return no('grammar')
+    const c = await verifyCoSign(proof.consent!.cns, proof.consent!.sig, { consentPub: proof.signer, rp: opts.consentRp,
+      purpose: cert.kind === 'wdev' ? 'web-add' : 'roster', payloadText: proof.cert, challenge: cert.dirNonce, at: cert.ceremonyAt })
+    if (!c.ok) return no(`consent-${c.reason}`)
+  } else {
+    const a = await verifyAssertion(proof.assertion!, { publicKey: proof.signer, challenge: await statementChallenge(proof.cert),
+      rpId: opts.rpId, origins: opts.origins })
+    if (!a.ok) return no(`assertion-${a.reason}`)
+  }
 
   // the directory's logged countersign
   const w = parseWatt(proof.watt)
@@ -352,10 +410,67 @@ async function device(proof: DeviceProof, opts: DeviceOpts): Promise<Verdict<Ver
   return { ok: true, value: { cert, tier: tierOf(cert), watt, headRipenedAt: H.ripenedAt } }
 }
 
-/** G1: every certificate a passkey made is "(passkey sign-in)". A consentPub
- *  that names a ripe ck member proves nothing until that ck has signed this
- *  certificate (security, F1 on #937), so the roster is not read here: native
- *  arrives with the consent key's own signature, never with its age alone. */
-export function tierOf(_cert: DeviceCert): Tier {
-  return 'passkey'
+/** G1: native only for a dev2. a ripe consent key co-signed (verifyDevice has
+ *  checked the co-sign and the ripeness before this is read). A consentPub that
+ *  names a ripe ck proves nothing (security, F1 on #937), so the roster is not
+ *  read here: native arrives with a consent key's signature, never its age. */
+export function tierOf(cert: DeviceCert): Tier {
+  return cert.kind === 'dev2' && cert.via === 'ck' ? 'native' : 'passkey'
 }
+
+// --- wret. -----------------------------------------------------------------------------
+
+export interface Retirement { oldPub: string; newPub: string; address: string; dirNonce: string }
+
+export function buildWret(r: Retirement): string {
+  return ['wret', r.oldPub, r.newPub, b64uEnc(te.encode(r.address)), r.dirNonce].join('.')
+}
+
+/** For the DIRECTORY, at a new ceremony: the OLD key retires itself in favour of
+ *  the new one. The directory still checks dirNonce is the new ceremony's own,
+ *  that newPub is the new wdev.'s devicePub, and that oldPub is a key it logged
+ *  for this address. */
+export async function verifyWret(text: string, sig: string): Promise<Verdict<Retirement>> {
+  const p = fields(text, 'wret', 5)
+  if (!p) return no('grammar')
+  const [, oldPub, newPub, addressF, dirNonce] = p
+  if (!(await isSigningKey(oldPub)) || !(await isSigningKey(newPub))) return no('key')
+  if (oldPub === newPub) return no('key')
+  const address = freeText(addressF)
+  if (address === null || !isNormalAddress(address)) return no('address')
+  if (!isNonce(dirNonce)) return no('grammar')
+  if (!str(sig) || !(await verifyStatementSig(oldPub, sig, text))) return no('signature')
+  return { ok: true, value: { oldPub, newPub, address, dirNonce } }
+}
+
+// --- inc. ------------------------------------------------------------------------------
+
+export interface Incident { id: string; from: number; to: number | null; issuedAt: number; kid: string }
+
+const INC_ID_RE = /^[a-z0-9-]{1,64}$/
+
+export function buildInc(i: Incident): string {
+  return ['inc', i.id, i.from, i.to ?? '', i.issuedAt, i.kid].join('.')
+}
+
+/** An incident record, by a pinned directory key, not issued in the future. */
+export async function verifyInc(text: string, sig: string, opts: { directoryKeys: Readonly<Record<string, string>>; now: number }):
+  Promise<Verdict<Incident>> {
+  const p = fields(text, 'inc', 6)
+  if (!p) return no('grammar')
+  const [, id, fromF, toF, issuedF, kid] = p
+  if (!INC_ID_RE.test(id) || !KID_RE.test(kid)) return no('grammar')
+  const from = ms(fromF), issuedAt = ms(issuedF)
+  const to = toF === '' ? null : ms(toF)
+  if (from === null || issuedAt === null || (toF !== '' && to === null)) return no('grammar')
+  if (to !== null && to <= from) return no('grammar')
+  if (issuedAt < from) return no('grammar')
+  if (!Number.isSafeInteger(opts.now) || !opts.directoryKeys) return no('grammar')
+  if (issuedAt > opts.now + SKEW_MS) return no('not-yet-valid')
+  if (!Object.hasOwn(opts.directoryKeys, kid)) return no('unknown-kid')
+  if (!str(sig) || !(await verifyStatementSig(opts.directoryKeys[kid], sig, text))) return no('signature')
+  return { ok: true, value: { id, from, to, issuedAt, kid } }
+}
+
+/** Was something signed at `at` inside the incident's window? from inclusive, to exclusive; an open window has no end. */
+export const insideIncident = (at: number, i: Incident): boolean => at >= i.from && (i.to === null || at < i.to)

@@ -7,7 +7,7 @@
 // scripts/gen-device-vectors.ts (device-v1.json), so both fixtures name the
 // same keys and the same chains.
 
-import { b64uEnc, sha256b64u, signStatement } from '../../kernel/src/statements.ts'
+import { b64uEnc, sha256b64u, signStatement, buildConsent, consentTranscript } from '../../kernel/src/statements.ts'
 import { publicKeyOf } from '../../kernel/src/recovery.ts'
 import { buildRos, buildRip, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, type MemberKind, type Authority } from '../../kernel/src/roster.ts'
 
@@ -72,6 +72,21 @@ export const T = 1_800_000_000_000
 export const NOW = T + 2000 * H
 export const nonce = (i: number) => b64uEnc(new Uint8Array(32).fill(i + 1))
 
+// --- a consent key's co-sign (cns., statements.ts) ----------------------------------
+
+export const CONSENT_RP = 'bento'
+/** How a test cns. departs from the honest one. */
+export type CnsOpts = { by?: string; purpose?: string; rp?: string; audience?: string; challenge?: string; over?: string; exp?: number; life?: number; docId?: string; highS?: boolean }
+/** A consent key `label`'s cns. over `payload` (audience dir, challenge `nonce`), alive `life` ms from `at`, and its signature. */
+export async function cosign(label: string, payload: string, nonce: string, at: number, o: CnsOpts = {}) {
+  const transcript = await consentTranscript(o.audience ?? 'dir', o.challenge ?? nonce, o.over ?? payload)
+  if (transcript === null) throw new Error('cns transcript')
+  const cns = buildConsent({ rp: o.rp ?? CONSENT_RP, purpose: (o.purpose ?? 'roster') as never, docId: o.docId ?? null, transcript, exp: o.exp ?? at + (o.life ?? 2 * 60_000) })
+  let sig = await signStatement(K[o.by ?? label].key, cns)
+  if (o.highS) sig = highS(sig)
+  return { cns, sig }
+}
+
 export type M = [MemberKind, string] | [MemberKind, string, 'q']
 export interface Spec {
   members: M[]
@@ -79,7 +94,9 @@ export interface Spec {
   rip: number
   reset?: boolean
   signer?: string                     // label
-  proof?: 'assertion' | 'sig' | 'both' | 'none'
+  proof?: 'assertion' | 'sig' | 'both' | 'none' | 'cns' | 'cns+assertion'
+  cns?: CnsOpts                       // a ck signer's cns. (default: honest, alive 2 min from req)
+  co?: { signer: string } & CnsOpts   // a co-sign by another consent key
   assert?: AssertOpts & { by?: string }
   sigHighS?: boolean
   sigBy?: string                      // label signing the rk sig instead of the signer
@@ -92,13 +109,16 @@ export interface Spec {
   // the authority word (default m, or r with reset) and its cause ('prev' = sha256 of the previous head)
   auth?: Authority; cause?: string | 'prev' | null
   // auth q: the request the void cancelled, built against the previous head unless prev is given
-  voided?: { members: M[]; signer: string; proof?: 'assertion' | 'sig'; assert?: AssertOpts & { by?: string }; prev?: string | null; address?: string; seq?: number }
+  voided?: { members: M[]; signer: string; proof?: 'assertion' | 'sig' | 'cns'; cns?: CnsOpts; assert?: AssertOpts & { by?: string }; prev?: string | null; address?: string; seq?: number }
   // auth l: the cited ripened change, as built links
   cited?: { prevRos: string; ros: string; rip: string; ripSig: string }
 }
 export type Assn = Awaited<ReturnType<typeof assertion>>
-export type Link = { ros: string; rip: string; ripSig: string; signer?: string; assertion?: Assn; sig?: string
-  voided?: { ros: string; signer: string; assertion?: Assn; sig?: string }; cited?: { prevRos: string; ros: string; rip: string; ripSig: string } }
+export type Link = { ros: string; rip: string; ripSig: string; signer?: string; assertion?: Assn; sig?: string; cns?: string
+  cosign?: { signer: string; cns: string; sig: string }
+  voided?: { ros: string; signer: string; assertion?: Assn; sig?: string; cns?: string }; cited?: { prevRos: string; ros: string; rip: string; ripSig: string } }
+const defaultProof = (signer: string) => (signer.startsWith('rk') ? 'sig' : signer.startsWith('ck') ? 'cns' : 'assertion')
+const nonceOf = (ros: string) => ros.split('.')[5]
 
 export async function link(s: Spec, prev: { text: string; seq: number } | null, i: number): Promise<Link> {
   const seq = s.seq ?? (prev ? prev.seq + 1 : 0)
@@ -113,7 +133,9 @@ export async function link(s: Spec, prev: { text: string; seq: number } | null, 
     const vros = buildRos({ address: v.address ?? s.address ?? ADDRESS, seq: v.seq ?? seq, prev: v.prev !== undefined ? v.prev : prevHash,
       members: v.members.map(([kind, l, q]) => ({ kind, pub: pubOf(l), quarantined: q === 'q' })), dirNonce: nonce(i + 50), created: s.req })
     voided = { ros: vros, signer: pubOf(v.signer) }
-    if ((v.proof ?? (v.signer.startsWith('pk') ? 'assertion' : 'sig')) === 'assertion') voided.assertion = await assertion(v.assert?.by ?? v.signer, vros, v.assert)
+    const vp = v.proof ?? defaultProof(v.signer)
+    if (vp === 'assertion') voided.assertion = await assertion(v.assert?.by ?? v.signer, vros, v.assert)
+    else if (vp === 'cns') { const c = await cosign(v.signer, vros, nonceOf(vros), s.req, v.cns); voided.cns = c.cns; voided.sig = c.sig }
     else voided.sig = await signStatement(K[v.signer].key, vros)
   }
   const auth: Authority = s.auth ?? (s.reset ? 'r' : 'm')
@@ -130,8 +152,9 @@ export async function link(s: Spec, prev: { text: string; seq: number } | null, 
   if (s.cited) l.cited = s.cited
   if (s.signer) {
     l.signer = pubOf(s.signer)
-    const kind = s.proof ?? (s.signer.startsWith('rk') ? 'sig' : 'assertion')
-    if (kind === 'assertion' || kind === 'both') l.assertion = await assertion(s.assert?.by ?? s.signer, ros, s.assert)
+    const kind = s.proof ?? defaultProof(s.signer)
+    if (kind === 'cns' || kind === 'cns+assertion') { const c = await cosign(s.signer, ros, nonceOf(ros), s.req, s.cns); l.cns = c.cns; l.sig = c.sig }
+    if (kind === 'assertion' || kind === 'both' || kind === 'cns+assertion') l.assertion = await assertion(s.assert?.by ?? s.signer, ros, s.assert)
     if (kind === 'sig' || kind === 'both') {
       l.sig = await signStatement(K[s.sigBy ?? s.signer].key, ros)
       if (s.sigHighS) l.sig = highS(l.sig)
@@ -139,6 +162,7 @@ export async function link(s: Spec, prev: { text: string; seq: number } | null, 
   } else if (s.proof === 'assertion') {
     l.assertion = await assertion('pk1', ros)
   }
+  if (s.co) { const c = await cosign(s.co.signer, ros, nonceOf(ros), s.req, s.co); l.cosign = { signer: pubOf(s.co.signer), ...c } }
   return l
 }
 export async function chainOf(specs: Spec[], start: { text: string; seq: number } | null = null): Promise<Link[]> {

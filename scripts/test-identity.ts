@@ -24,7 +24,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  identityAgent, detectIdentityAgentForTest as detect, IDENTITY_CONTRACT, IDENTITY_GLOBAL,
+  identityAgent, detectIdentityAgentForTest as detect, IDENTITY_CONTRACT, IDENTITY_GLOBAL, VOUCHED_BY_MAX,
 } from '../kernel/src/identity.ts'
 
 let failures = 0
@@ -279,6 +279,24 @@ console.log('\nthe real globalThis path')
   ok(identityAgent() === a, 'the same captured agent on every later call')
   const r = await a!.sign('frame', '3.x')
   ok(r.ok === true && r.sig === 'REAL', 'it signs through the host that defined it')
+}
+
+console.log('\nvouchedBy carries the mailbox lapse inside the shell\'s cut (org-identity, the K1 row)')
+{
+  // the agent's own words; the shell renders `✓ via ${vouchedBy.slice(0, VOUCHED_BY_MAX)}` and reads no other field
+  const cut = (v: string) => v.slice(0, VOUCHED_BY_MAX)
+  const forms = [
+    'id.bento.page, unconfirmed since 3 Mar 2027',
+    'id.bento.page (passkey sign-in), unconfirmed since 31 Dec 2027',
+    'id.bento.page (passkey sign-in, browser), unconfirmed since 30 Sept 2027',
+  ]
+  ok(VOUCHED_BY_MAX === 80, 'the cut is 80 characters (what shells render)')
+  for (const v of forms) ok(v.length <= VOUCHED_BY_MAX && cut(v).endsWith(v.slice(v.indexOf(', unconfirmed'))), `fits whole: "${v}"`)
+  // a long managed form: the agent drops "managed by" first, never the lapse
+  const managed = 'id.bento.page, managed by engineering-department.example-corporation.co.uk, unconfirmed since 31 Dec 2027'
+  ok(managed.length > VOUCHED_BY_MAX && !cut(managed).includes('unconfirmed'), 'control: left as is, a long managed form loses the lapse at the cut')
+  const dropped = managed.replace(/, managed by [^,]+/, '')
+  ok(dropped.length <= VOUCHED_BY_MAX && cut(dropped).includes('unconfirmed since 31 Dec 2027'), 'with "managed by" dropped first, the lapse survives the cut')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
