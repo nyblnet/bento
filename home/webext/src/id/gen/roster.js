@@ -142,19 +142,66 @@
 // least 14 days old when the reset was REQUESTED (G5, judged at request time so
 // a reset begun in an account's first 14 days cannot be stopped by a passkey a
 // hostile setup planted; security's C4 on #944).
+//
+// --- wout. — a member signs every browser out (the directory checks it)
+//
+//   wout.<b64u(address)>.<at>.<dirNonce>
+//
+// Signed by an unquarantined member of the current head (as for vrs.: an
+// assertion for a pk, a raw signature for an rk, a `roster` co-sign for a ck)
+// over a single-use directory challenge; `at` is the time the directory issued
+// that challenge, so the text says when the person asked. No wait: it only
+// takes power away. The directory then refuses every browser certificate
+// (wdev.) of the account whose ceremony is at or before the moment it ACCEPTS
+// the sign-out (renewals and check-ins answer revoked), and every enrolment
+// whose challenge was issued before then; it logs both times (signed `at`,
+// applied) and answers the applied one. Native certificates (dev2.) are not
+// touched. A browser key's last watt. stays valid for up to 24 h at peers.
+//
+// --- adel. — a member asks to delete the account (the directory checks it)
+//
+//   adel.<b64u(address)>.<headHash>.<dirNonce>
+//
+// Signed by an unquarantined member of the head `headHash` names, which must be
+// the current head, over a single-use directory challenge. The directory QUEUES
+// it like any change (requestedAt on its clock; a second change is refused
+// while it waits), mails the address a link that voids it, and carries it out
+// DELETE_WAIT_MS (72 h) later, and only if it was not voided and the account's
+// head is still `headHash`. The way without a passkey is the directory's
+// emailed link alone, which no statement carries. OPEN for the directory's
+// deletion route, not settled here (security's review of this layout, D-A1 to
+// D-A3): what a void does to the signer (a stolen member key must not be able
+// to re-file the moment its request is voided, which would hold the queue and
+// block the owner's removal of that key), and how a reset interacts with a
+// waiting deletion (only a reset that RIPENS first changes the head; a reset
+// request must drop the deletion, never set it aside to be revived).
+//
+// --- the passkey user handle (sign-in host and native hosts alike)
+//
+//   user.id = SHA-256("bento-dir/1/addr\n" ‖ address in normal form) ‖ 16 random bytes
+//
+// 48 bytes. The first 32 are the account's storage name at the directory: a
+// discoverable sign-in returns the handle, and that is how the directory finds
+// the account. The random tail makes every passkey's handle distinct, so a new
+// passkey (a reset) never overwrites an older one on the same authenticator.
+// The handle only ROUTES: it is not covered by the assertion's signature, so
+// membership is decided by the credential the account stores, never by it.
+// Every host that makes a passkey for ROSTER_RP_ID uses this layout.
 
 import { isNormalAddress } from './address.js'
 import { b64uDec, b64uEnc, sha256b64u, isSigningKey, verifyStatementSig, verifyCoSign, SKEW_MS,              } from './statements.js'
 import { verifyAssertion, statementChallenge,                } from './webauthn.js'
 
 /** Prefixes this module defines. */
-export const ROSTER_PREFIXES                    = Object.freeze(['ros', 'rip', 'vrs'])
+export const ROSTER_PREFIXES                    = Object.freeze(['ros', 'rip', 'vrs', 'wout', 'adel'])
 
 /** The wait between a member's request and its ripening, on the directory's clock. */
 export const ROSTER_WAIT_MS = 72 * 3_600_000
 /** An account is "new" for this long after setup: no member may stop a reset
  *  REQUESTED in that window (G5). */
 export const NEW_ACCOUNT_MS = 14 * 24 * 3_600_000
+/** A queued account deletion is carried out this long after the request. */
+export const DELETE_WAIT_MS = ROSTER_WAIT_MS
 export const MAX_MEMBERS = 16
 /** A chain longer than this is refused outright (a peer re-pins as it goes). */
 export const MAX_CHAIN = 1024
@@ -727,4 +774,147 @@ async function resetStop(text        , signerPub        , proof       , opts    
   const pr = await memberProof(m, proof, text, dirNonce, opts.now, opts)
   if (!pr.ok) return pr
   return { ok: true, value: { address, resetHash, dirNonce } }
+}
+
+// --- wout. — a member signs every browser out ------------------------------------------
+
+                                                                          
+
+export function buildWout(w         )         {
+  return ['wout', b64uEnc(te.encode(w.address)), w.at, w.dirNonce].join('.')
+}
+
+                              
+                                                                           
+                     
+                                                                                    
+                   
+                     
+                                                                                 
+                                                                                
+                                       
+              
+                            
+                                                                       
+                    
+                                                                 
+             
+ 
+
+/**
+ * For the DIRECTORY: may this member sign every browser of the account out? The
+ * proof is the member's over the exact wout. text (memberProof). The address
+ * must be in normal form, the one the account's storage name hashes. Never throws.
+ */
+export async function verifyWout(text        , signer        , proof       , opts             )                            {
+  try { return await signOut(text, signer, proof, opts) } catch { return no('grammar') }
+}
+
+async function signOut(text        , signerPub        , proof       , opts             )                            {
+  const p = fields(text, 'wout', 4)
+  if (!p) return no('grammar')
+  const [, addressF, atF, dirNonce] = p
+  const address = freeText(addressF)
+  if (address === null || !isNormalAddress(address)) return no('grammar')
+  const at = ms(atF)
+  if (at === null || !isNonce(dirNonce)) return no('grammar')
+  const ro = opts.roster
+  if (!ro || !Array.isArray(ro.members) || !str(signerPub) || !proof || typeof proof !== 'object' || !str(opts.challenge) ||
+    !Number.isSafeInteger(opts.challengeAt) || !Number.isSafeInteger(opts.now) || typeof opts.spend !== 'function') return no('grammar')
+  if (!opts.spend(opts.challenge)) return no('replay')
+  if (dirNonce !== opts.challenge) return no('challenge')
+  if (at !== opts.challengeAt) return no('at')
+  if (address !== ro.address) return no('address')
+  const m = ro.members.find((x) => x.pub === signerPub)
+  if (!m) return no('signer')
+  if (m.quarantined) return no('quarantined')
+  const pr = await memberProof(m, proof, text, dirNonce, opts.now, opts)
+  if (!pr.ok) return pr
+  return { ok: true, value: { address, at, dirNonce } }
+}
+
+// --- adel. — a member asks to delete the account ---------------------------------------
+
+                                                                                        
+
+export function buildAdel(d                 )         {
+  return ['adel', b64uEnc(te.encode(d.address)), d.headHash, d.dirNonce].join('.')
+}
+
+                               
+                                                                           
+                     
+                                                            
+                   
+                                              
+                                       
+              
+                            
+                    
+             
+ 
+
+/**
+ * For the DIRECTORY: may this member ask for the account's deletion? Accepting
+ * it QUEUES the deletion (DELETE_WAIT_MS, a void link to the address); the
+ * directory carries it out only if the head is then still `headHash`. Never throws.
+ */
+export async function verifyAdel(text        , signer        , proof       , opts              )                                    {
+  try { return await deletion(text, signer, proof, opts) } catch { return no('grammar') }
+}
+
+async function deletion(text        , signerPub        , proof       , opts              )                                    {
+  const p = fields(text, 'adel', 4)
+  if (!p) return no('grammar')
+  const [, addressF, headHash, dirNonce] = p
+  const address = freeText(addressF)
+  if (address === null || !isNormalAddress(address)) return no('grammar')
+  if (!isHash(headHash) || !isNonce(dirNonce)) return no('grammar')
+  const ro = opts.roster
+  if (!ro || !Array.isArray(ro.members) || !str(signerPub) || !proof || typeof proof !== 'object' || !str(opts.challenge) ||
+    !Number.isSafeInteger(opts.now) || typeof opts.spend !== 'function') return no('grammar')
+  if (!opts.spend(opts.challenge)) return no('replay')
+  if (dirNonce !== opts.challenge) return no('challenge')
+  if (address !== ro.address) return no('address')
+  if (headHash !== ro.headHash) return no('roster-head')
+  const m = ro.members.find((x) => x.pub === signerPub)
+  if (!m) return no('signer')
+  if (m.quarantined) return no('quarantined')
+  const pr = await memberProof(m, proof, text, dirNonce, opts.now, opts)
+  if (!pr.ok) return pr
+  return { ok: true, value: { address, headHash, dirNonce } }
+}
+
+// --- the passkey user handle -------------------------------------------------------------
+
+/** What the account's storage name hashes, before the address. */
+export const USER_HANDLE_LABEL = 'bento-dir/1/addr\n'
+/** user.id: the 32-byte account name, then 16 random bytes. */
+export const USER_HANDLE_BYTES = 48
+const USER_HANDLE_TAIL = 16
+
+/** SHA-256(USER_HANDLE_LABEL ‖ address): the account's storage name, the first
+ *  32 bytes of every passkey's user handle. Null unless the address is in normal form. */
+export async function accountNameOf(address        )                             {
+  if (typeof address !== 'string' || !isNormalAddress(address)) return null
+  return new Uint8Array(await crypto.subtle.digest('SHA-256', te.encode(USER_HANDLE_LABEL + address)                ))
+}
+
+/** The user handle a host gives a new passkey: the account name ‖ `tail`, which
+ *  the host draws fresh (16 random bytes) for each passkey. Null on a bad input. */
+export async function buildUserHandle(address        , tail            )                             {
+  if (!(tail instanceof Uint8Array) || tail.length !== USER_HANDLE_TAIL) return null
+  const name = await accountNameOf(address)
+  if (!name) return null
+  const out = new Uint8Array(USER_HANDLE_BYTES)
+  out.set(name, 0)
+  out.set(tail, name.length)
+  return out
+}
+
+/** The account name a returned user handle routes to: its first 32 bytes, or
+ *  null unless it is exactly 48 bytes. It only routes; it proves nothing. */
+export function userHandleAccount(handle            )                    {
+  if (!(handle instanceof Uint8Array) || handle.length !== USER_HANDLE_BYTES) return null
+  return handle.slice(0, USER_HANDLE_BYTES - USER_HANDLE_TAIL)
 }

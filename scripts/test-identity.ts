@@ -24,7 +24,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  identityAgent, detectIdentityAgentForTest as detect, IDENTITY_CONTRACT, IDENTITY_GLOBAL, VOUCHED_BY_MAX,
+  identityAgent, detectIdentityAgentForTest as detect, IDENTITY_CONTRACT, IDENTITY_GLOBAL, VOUCHED_BY_MAX, isVoucher,
 } from '../kernel/src/identity.ts'
 
 let failures = 0
@@ -288,22 +288,24 @@ console.log('\nthe real globalThis path')
   ok(r.ok === true && r.sig === 'REAL', 'it signs through the host that defined it')
 }
 
-console.log('\nvouchedBy carries the mailbox lapse inside the shell\'s cut (org-identity, the K1 row)')
+console.log('\nvouchedBy is the voucher alone: every qualifier is its own field (security-ruling-951 C5, C7)')
 {
-  // the agent's own words; the shell renders `✓ via ${vouchedBy.slice(0, VOUCHED_BY_MAX)}` and reads no other field
-  const cut = (v: string) => v.slice(0, VOUCHED_BY_MAX)
-  const forms = [
-    'id.bento.page, unconfirmed since 3 Mar 2027',
-    'id.bento.page (passkey sign-in), unconfirmed since 31 Dec 2027',
-    'id.bento.page (passkey sign-in, browser), unconfirmed since 30 Sept 2027',
-  ]
   ok(VOUCHED_BY_MAX === 80, 'the cut is 80 characters (what shells render)')
-  for (const v of forms) ok(v.length <= VOUCHED_BY_MAX && cut(v).endsWith(v.slice(v.indexOf(', unconfirmed'))), `fits whole: "${v}"`)
-  // a long managed form: the agent drops "managed by" first, never the lapse
-  const managed = 'id.bento.page, managed by engineering-department.example-corporation.co.uk, unconfirmed since 31 Dec 2027'
-  ok(managed.length > VOUCHED_BY_MAX && !cut(managed).includes('unconfirmed'), 'control: left as is, a long managed form loses the lapse at the cut')
-  const dropped = managed.replace(/, managed by [^,]+/, '')
-  ok(dropped.length <= VOUCHED_BY_MAX && cut(dropped).includes('unconfirmed since 31 Dec 2027'), 'with "managed by" dropped first, the lapse survives the cut')
+  // what an agent sends, and a document accepts
+  for (const v of ['id.bento.page', 'example.com', 'engineering.example-corporation.co.uk', 'vault-acme', 'a'.repeat(80)])
+    ok(isVoucher(v), `a voucher: "${v.length > 40 ? v.slice(0, 20) + '…' : v}"`)
+  // the forms #949's design wrote into vouchedBy: the tier, the lapse and "managed by" travel as fields now
+  for (const v of ['id.bento.page (passkey sign-in)', 'id.bento.page, unconfirmed since 3 Mar 2027', 'id.bento.page (passkey sign-in), unconfirmed since 31 Dec 2027',
+    'id.bento.page, managed by example.com', 'id.bento.page ✓', 'Id.Bento.Page', 'id.bento.page.', '.id.bento.page', '', ' id.bento.page', 'a'.repeat(81)])
+    ok(!isVoucher(v), `not a voucher: "${v.length > 40 ? v.slice(0, 40) + '…' : v}"`)
+  ok(!isVoucher(null) && !isVoucher(42) && !isVoucher(['id.bento.page']), 'a non-string is not a voucher')
+  // ResolvedIdentity names each qualifier as its own optional field (one source per fact; ID3 and slides' People panel read them)
+  const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'kernel/src/identity.ts'), 'utf8')
+  const body = src.slice(src.indexOf('export interface ResolvedIdentity {'), src.indexOf('}', src.indexOf('export interface ResolvedIdentity {')))
+  for (const [f, t] of [['tier', "'passkey' | 'native'"], ['accountSince', 'number'], ['rosterChangedAt', 'number'], ['resetAt', 'number'],
+    ['revoked', "false | 'signout' | 'incident'"], ['managedBy', 'string'], ['unconfirmedSince', 'number']] as const)
+    ok(body.includes(`\n  ${f}?: ${t}\n`), `ResolvedIdentity.${f}?: ${t}`)
+  ok(!/passkey sign-in\)", ", unconfirmed/.test(src), 'identity.ts no longer tells agents to write qualifiers into vouchedBy')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

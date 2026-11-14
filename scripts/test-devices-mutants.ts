@@ -22,7 +22,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 let failures = 0, checks = 0
 const ok = (c: boolean, m: string) => { checks++; if (!c) { failures++; console.log(`  FAIL  ${m}`) } else console.log(`  ok    ${m}`) }
 
-type Mutant = { name: string; from: string; to: string; file?: string; and?: Array<[string, string]> }
+// `rig`: the rig that must turn red (default test-devices.ts; statements.ts's consent families are read by test-statements.ts)
+type Mutant = { name: string; from: string; to: string; file?: string; and?: Array<[string, string]>; rig?: string }
 const del = (name: string, from: string, file?: string): Mutant => ({ name, from, to: '', file })
 const MUTANTS: Mutant[] = [
   // the head rule (security's ruling on #925, item 5)
@@ -92,12 +93,17 @@ const MUTANTS: Mutant[] = [
   { name: 'a wdev. via cns is native too', from: "  return cert.kind === 'dev2' && cert.via === 'ck' ? 'native' : 'passkey'\n", to: "  return cert.via !== 'passkey' ? 'native' : 'passkey'\n" },
   // mb (the mailbox state)
   { name: 'mb may follow loggedAt', from: '  if (mb === null || mb > loggedAt) return no', to: '  if (mb === null) return no' },
+  { name: 'the verified watt. reports mb 0 whatever it carries', from: "  return { ok: true, value: { certHash, ob: obF === '1' ? 1 : 0, mb, loggedAt,", to: "  return { ok: true, value: { certHash, ob: obF === '1' ? 1 : 0, mb: 0, loggedAt," },
   { name: 'mb may be empty', from: "  const mb = mbF === '0' ? 0 : ms(mbF)\n", to: "  const mb = mbF === '0' || mbF === '' ? 0 : ms(mbF)\n" },
   { name: 'the six-field watt. is still read (mb absent = confirmed)', from: "  const p = fields(text, 'watt', 7)\n  if (!p) return no('watt-grammar')\n  const [, certHash, obF, mbF, loggedF, expiresF, kid] = p\n",
     to: "  const p7 = fields(text, 'watt', 7), p6 = fields(text, 'watt', 6)\n  const p = p7 ?? (p6 ? [p6[0], p6[1], p6[2], '0', p6[3], p6[4], p6[5]] : null)\n  if (!p) return no('watt-grammar')\n  const [, certHash, obF, mbF, loggedF, expiresF, kid] = p\n" },
   // wret.
   { name: 'the new key may sign the retirement', from: "  if (!str(sig) || !(await verifyStatementSig(oldPub, sig, text))) return no('signature')\n", to: "  if (!str(sig) || !(await verifyStatementSig(newPub, sig, text))) return no('signature')\n" },
-  del('a key may retire itself in favour of itself', "  if (oldPub === newPub) return no('key')\n"),
+  { name: 'a key may retire itself in favour of itself', from: " || oldPub === newPub)) return no('key')\n", to: ")) return no('key')\n" },
+  // R2: retirement without a successor
+  { name: 'a retirement must name a successor (no empty newPub)', from: "  const newPub = newF === '' ? null : newF\n", to: "  if (newF === '') return no('key')\n  const newPub = newF\n" },
+  { name: 'an empty OLD key is read as no key at all', from: "  if (!(await isSigningKey(oldPub))) return no('key')\n  const newPub", to: "  const newPub" },
+  { name: 'any newPub that is not a key means no successor', from: "  const newPub = newF === '' ? null : newF\n", to: "  const newPub = (await isSigningKey(newF)) ? newF : null\n" },
   { name: 'the retirement nonce is not checked', from: "  if (!isNonce(dirNonce)) return no('grammar')\n  if (!str(sig) || !(await verifyStatementSig(oldPub", to: "  if (!str(sig) || !(await verifyStatementSig(oldPub" },
   // inc.
   del('an incident may end where it starts', "  if (to !== null && to <= from) return no('grammar')\n"),
@@ -119,6 +125,15 @@ const MUTANTS: Mutant[] = [
   { name: 'the directory releases for an older head', file: 'link.ts', from: "  if (cert.rosHash !== ro.headHash) return no('roster-head')\n", to: '' },
   { name: 'the directory does not spend the challenge', file: 'link.ts', from: "  if (!opts.spend(opts.challenge)) return no('replay')\n  const c = await parseDeviceCert(f.dev2)\n", to: "  const c = await parseDeviceCert(f.dev2)\n" },
   { name: 'the directory takes a non-member co-signer', file: 'link.ts', from: "  if (!m) return no('signer')\n  if (m.kind !== 'ck') return no('signer-kind')\n", to: "  if (!m) return { ok: true, value: { cert, dev2: f.dev2, ck: f.ck } }\n  if (m.kind !== 'ck') return no('signer-kind')\n" },
+  // security-ruling-949 C3: the release rules no row reached before
+  { name: 'L1 the directory releases a quarantined consent key\'s co-sign', file: 'link.ts', from: "  if (m.quarantined) return no('signer-quarantined')\n  if (cert.ceremonyAt - m.since < CK_RIPE_MS)", to: "  if (cert.ceremonyAt - m.since < CK_RIPE_MS)" },
+  { name: 'L10 the directory releases a co-sign by any member kind', file: 'link.ts', from: "  if (m.kind !== 'ck') return no('signer-kind')\n  if (m.quarantined) return no('signer-quarantined')\n  if (cert.ceremonyAt", to: "  if (m.quarantined) return no('signer-quarantined')\n  if (cert.ceremonyAt" },
+  { name: 'L11 the directory refuses a consent key exactly 72 h a member', file: 'link.ts', from: "  if (cert.ceremonyAt - m.since < CK_RIPE_MS) return no('signer-unripe')\n  if (f.ck === cert.devicePub", to: "  if (cert.ceremonyAt - m.since <= CK_RIPE_MS) return no('signer-unripe')\n  if (f.ck === cert.devicePub" },
+  { name: 'the directory releases a co-sign by N\'s own consent key', file: 'link.ts', from: "  if (f.ck === cert.devicePub || f.ck === cert.consentPub) return no('ck-is-n')\n  const v = await verifyConsent(", to: "  const v = await verifyConsent(" },
+  // security-ruling-949 C1: the live consent families (identity-v1.json consentG, read by test-statements.ts)
+  { name: 'S2 the roster purpose also covers wdev.', file: 'statements.ts', rig: 'test-statements.ts', from: "roster: ['ros.', 'dev2.', 'vrs.', 'wout.', 'adel.'],", to: "roster: ['ros.', 'dev2.', 'vrs.', 'wout.', 'adel.', 'wdev.']," },
+  { name: 'S3 the web-add purpose also covers dev2.', file: 'statements.ts', rig: 'test-statements.ts', from: "'web-add': ['wdev.'],", to: "'web-add': ['wdev.', 'dev2.']," },
+  { name: 'the roster purpose no longer covers wout. and adel.', file: 'statements.ts', rig: 'test-statements.ts', from: "roster: ['ros.', 'dev2.', 'vrs.', 'wout.', 'adel.'],", to: "roster: ['ros.', 'dev2.', 'vrs.']," },
   // wren.
   del('the renewal signature is not verified', "  if (!str(sig) || !(await verifyStatementSig(devicePub, sig, text))) return no('signature')\n"),
   { name: 'the renewal challenge is not checked', from: "  if (!isNonce(challenge)) return no('grammar')\n", to: '' },
@@ -135,10 +150,11 @@ function tree() {
   cpSync(join(root, 'kernel/fixtures'), join(d, 'kernel/fixtures'), { recursive: true })
   mkdirSync(join(d, 'scripts'))
   cpSync(join(root, 'scripts/test-devices.ts'), join(d, 'scripts/test-devices.ts'))
+  cpSync(join(root, 'scripts/test-statements.ts'), join(d, 'scripts/test-statements.ts'))
   return d
 }
-function run(d: string) {
-  const r = spawnSync(process.execPath, [join(d, 'scripts/test-devices.ts')], { encoding: 'utf8' })
+function run(d: string, rig = 'test-devices.ts') {
+  const r = spawnSync(process.execPath, [join(d, 'scripts', rig)], { encoding: 'utf8' })
   const tail = (r.stdout.match(/\d+\/\d+ checks passed/g) ?? []).pop() ?? `(no count; exit ${r.status})`
   return { status: r.status, tail, fails: (r.stdout.match(/^ {2}FAIL/gm) ?? []).length }
 }
@@ -148,6 +164,8 @@ console.log('positive control: the unmutated copy passes the rig')
   const d = tree()
   const r = run(d)
   ok(r.status === 0 && r.fails === 0, `test-devices.ts: ${r.tail}`)
+  const st = run(d, 'test-statements.ts')
+  ok(st.status === 0 && st.fails === 0, `test-statements.ts: ${st.tail}`)
   rmSync(d, { recursive: true, force: true })
 }
 
@@ -166,7 +184,7 @@ for (const m of MUTANTS) {
       out = out.replace(f, () => t)
     }
     writeFileSync(p, out)
-    const r = run(d)
+    const r = run(d, m.rig)
     ok(r.status !== 0 && r.fails > 0, `killed: ${m.name} — ${r.status === 0 ? 'green' : `${r.fails} FAIL`}`)
   }
   rmSync(d, { recursive: true, force: true })
