@@ -17,8 +17,17 @@
 //     ones by the sha256 of their text as the browser's tokenizer reads it,
 //     external ones by path), and the Content-Security-Policy header its
 //     _headers rule sends;
+//   - for each HTML document, its ELEMENT SEQUENCE: the tag names of the
+//     elements the parser inserts, in document order, without html, head and
+//     body (which the parser may imply) and without what a <template> holds
+//     (never inserted into the document): what the extension's observer sees
+//     before the page's own code runs, so a parse that stops matching a
+//     listed document is caught as it happens;
 //   - the paths registered as service workers (build.json `serviceWorkers`;
-//     none in stage 1).
+//     none in stage 1);
+//   - and, beside the list, the text of every inline script at
+//     scripts/<sha256>.js, so the extension can tell an honest script cut
+//     short (a visit closed mid-load) from any other.
 
 import { createHash } from 'node:crypto'
 import fs from 'node:fs'
@@ -60,6 +69,49 @@ function headerFor(rules, p, name) {
  * parser does before tokenizing. Script data has no character references.
  */
 const asParsed = (text) => text.replace(/\r\n?/g, '\n').replace(/\0/g, '�')
+
+const RAW_TEXT = new Set(['script', 'style', 'textarea', 'title', 'xmp', 'iframe', 'noembed', 'noframes', 'noscript', 'plaintext'])
+const IMPLIED = new Set(['html', 'head', 'body'])
+
+/**
+ * The element sequence of one HTML document, as tripwire-observe.js records
+ * it. A start-tag scanner, not a full tree builder: it is exact for documents
+ * whose markup is explicit (Bento's are, and the browser rig's honest rows
+ * check the two agree), and a document it would get wrong is one no release
+ * should ship.
+ */
+export function documentElements(html) {
+  const out = []
+  let i = 0, template = 0
+  const lower = html.toLowerCase()
+  while (i < html.length) {
+    const lt = html.indexOf('<', i)
+    if (lt < 0) break
+    if (html.startsWith('<!--', lt)) { const e = html.indexOf('-->', lt + 4); i = e < 0 ? html.length : e + 3; continue }
+    if (html[lt + 1] === '!' || html[lt + 1] === '?') { const e = html.indexOf('>', lt); i = e < 0 ? html.length : e + 1; continue }
+    const end = html[lt + 1] === '/'
+    const m = /^[a-zA-Z][^\s/>]*/.exec(html.slice(lt + (end ? 2 : 1), lt + 64))
+    if (!m) { i = lt + 1; continue }
+    const name = m[0].toLowerCase()
+    // the end of the tag, past quoted attribute values
+    let j = lt + 1 + (end ? 1 : 0) + m[0].length, q = null
+    for (; j < html.length; j++) { const c = html[j]; if (q) { if (c === q) q = null } else if (c === '"' || c === "'") q = c; else if (c === '>') break }
+    i = j + 1
+    if (end) { if (name === 'template' && template) template--; continue }
+    if (!template && !IMPLIED.has(name)) out.push(name)
+    if (name === 'template') template++
+    if (RAW_TEXT.has(name)) { const e = lower.indexOf(`</${name}`, i); i = e < 0 ? html.length : e }
+  }
+  return out
+}
+
+/** Every inline script's text, as parsed, by its sha256 (written beside the list, scripts/<sha256>.js). */
+export async function inlineScriptTexts(html) {
+  const { scanBlocks } = await import(path.join(root, 'kernel/src/gate1.ts'))
+  const out = new Map()
+  for (const b of scanBlocks(html)) if (b.tag === 'script' && b.src === null) { const t = asParsed(b.text); out.set(sha(Buffer.from(t, 'utf8')), t) }
+  return out
+}
 
 /** The scripts of one HTML document served at `url`, in document order (as tripwire-observe.js reports them). */
 export async function documentScripts(html, url) {
@@ -106,9 +158,14 @@ export async function describeBuild(out, at = new Date().toISOString()) {
       const doc = /\.html?$/.test(f.path)
       for (const p of [f.path, ...(aliases[f.path] ?? [])]) {
         const e = { sha256: sha(bytes), bytes: bytes.length, kind: doc ? 'document' : 'asset' }
-        if (doc) e.scripts = await documentScripts(bytes.toString('utf8'), origin + p)
+        if (doc) {
+          e.scripts = await documentScripts(bytes.toString('utf8'), origin + p)
+          e.elements = documentElements(bytes.toString('utf8'))
+        }
         const csp = headerFor(rules, p, 'content-security-policy')
         if (csp !== undefined) e.csp = csp
+        const cc = headerFor(rules, p, 'cache-control')
+        if (cc !== undefined && doc) e.cacheControl = cc
         files[p] = e
       }
     }
@@ -117,6 +174,18 @@ export async function describeBuild(out, at = new Date().toISOString()) {
   const workers = Array.isArray(info.serviceWorkers) ? info.serviceWorkers : []
   for (const w of workers) if (!origins[info.libraryOrigin].files[w]) throw new Error(`build.json names a service worker the library does not serve: ${w}`)
   return { at, workers, origins }
+}
+
+/** The text of every inline script of every document a build serves, by sha256. */
+export async function buildScriptTexts(out) {
+  const texts = new Map()
+  for (const role of ['library', 'frame']) {
+    for (const f of servedPaths(path.join(out, role))) {
+      if (!/\.html?$/.test(f.path)) continue
+      for (const [k, v] of await inlineScriptTexts(fs.readFileSync(f.abs, 'utf8'))) texts.set(k, v)
+    }
+  }
+  return texts
 }
 
 /**

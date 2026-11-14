@@ -6,6 +6,7 @@
 // extension's tripwire checks home.bento.page and the frame site against.
 //
 //   node scripts/sign-home-web-served.mjs --build <home/web out dir> \
+//   (writes the list, and scripts/<sha256>.js beside it for each inline script)
 //     --out <site>/releases/home-web/served.json \
 //     (--held <published>/releases/home-web/served.json | --first) \
 //     [--withdraw <release time>]... [--key ~/.bento/release-key.json]
@@ -36,7 +37,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { defaultKeyPath, envelopeJson, releasePublicKey, signPayload, verifyEnvelope } from './sign-payload.mjs'
-import { describeBuild, nextServed } from './lib/home-web-served.mjs'
+import { buildScriptTexts, describeBuild, nextServed } from './lib/home-web-served.mjs'
 
 const args = process.argv.slice(2)
 const opt = (name) => { const i = args.lastIndexOf(`--${name}`); return i >= 0 ? args[i + 1] : undefined }
@@ -73,6 +74,10 @@ let list
 try { list = nextServed(held, release, undefined, { withdraw }) } catch (e) { die(e.message) }
 const envelope = signPayload(JSON.stringify(list), keyPath)
 mkdirSync(dirname(out), { recursive: true })
+// the inline scripts' text, beside the list (the extension fetches one only to
+// check an honest script cut short; each is pinned by its name, the sha256)
+mkdirSync(join(dirname(out), 'scripts'), { recursive: true })
+for (const [k, text] of await buildScriptTexts(build)) writeFileSync(join(dirname(out), 'scripts', `${k}.js`), text)
 writeFileSync(out, envelopeJson(envelope))
 const files = Object.values(release.origins).reduce((n, o) => n + Object.keys(o.files).length, 0)
 console.log(`Signed the bento/home release list #${list.serial}: ${list.releases.length} release(s), newest with ${files} served paths over ${Object.keys(release.origins).join(' and ')} → ${out}`)

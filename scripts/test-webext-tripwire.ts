@@ -68,7 +68,7 @@ const libHtml = `<!doctype html><meta http-equiv="Content-Security-Policy" conte
 fs.writeFileSync(path.join(build, 'library/index.html'), libHtml)
 fs.writeFileSync(path.join(build, 'library/extra.js'), 'void 0')
 fs.writeFileSync(path.join(build, 'library/sw.js'), '// worker')
-fs.writeFileSync(path.join(build, 'library/_headers'), "/\n  Content-Security-Policy: default-src 'none'\n/index.html\n  Content-Security-Policy: default-src 'none'\n")
+fs.writeFileSync(path.join(build, 'library/_headers'), "/\n  Content-Security-Policy: default-src 'none'\n  Cache-Control: no-cache\n/index.html\n  Content-Security-Policy: default-src 'none'\n  Cache-Control: no-cache\n")
 fs.writeFileSync(path.join(build, 'frame/frame.html'), '<!doctype html><script>frame()</script>')
 fs.writeFileSync(path.join(build, 'frame/_headers'), '/frame.html\n  Content-Security-Policy: sandbox allow-scripts\n/frame\n  Content-Security-Policy: sandbox allow-scripts\n')
 const info = { libraryOrigin: 'https://home.bento.page', frameOrigin: 'https://frame.example', testKey: false, mutant: null, serviceWorkers: ['/sw.js'] }
@@ -164,11 +164,38 @@ ok(J.servedProblem(wd) === null && rulesOf(v(honestObs(), wd)) === 'withdrawn', 
 ok(J.servedProblem({ ...list1, releases: [{ ...list1.releases[0], withdrawn: false }] }) !== null, 'R1: withdrawn is true or absent')
 // early reports (C1)
 const ev = (o: any, list: any = list1) => J.judgeEarly({ role: 'library', ...o }, list, L)
-ok(ev({ scripts: [{ sha256: lib.files['/'].scripts[0].sha256 }], flags: [] }).verdict === 'incomplete', 'C1: an early report of listed scripts only, never settled, is incomplete (quiet)')
+const E3 = lib.files['/'].elements.slice(0, 3)
+ok(JSON.stringify(lib.files['/'].elements) === JSON.stringify(['meta', 'p', 'script', 'script']), `N1: the element sequence of a document, as listed (${lib.files['/'].elements})`)
+ok(ev({ scripts: [{ sha256: lib.files['/'].scripts[0].sha256 }], flags: [], elements: E3 }).verdict === 'incomplete', 'C1: an early report that is the clean start of a listed document, never settled, is incomplete (quiet)')
+ok(rulesOf(ev({ scripts: [], flags: [], elements: ['div', 'p'] })) === 'elements', 'N1: an early report whose parse is not the start of any listed document is a mismatch on elements')
+ok(ev({ scripts: [], flags: [], elements: [] }).verdict === 'incomplete', 'N1: "visit started" alone is incomplete, quietly')
 ok(ev({ scripts: [{ sha256: 'a'.repeat(64) }], flags: [] }).verdict === 'mismatch', 'C1: an early report with a script no release lists is a mismatch')
 ok(ev({ scripts: [], flags: ['document:blob:'] }).verdict === 'mismatch', 'C1: a flag in an early report is a mismatch')
 ok(ev({ scripts: [{ src: '/evil.js' }], flags: [] }).verdict === 'mismatch', 'C1: an unlisted external script too')
-ok(ev({ scripts: [{ sha256: lib.files['/'].scripts[0].sha256 }], flags: [] }, wd).verdict === 'mismatch', 'C1: scripts only a withdrawn release lists are not listed')
+ok(ev({ scripts: [{ sha256: lib.files['/'].scripts[0].sha256 }], flags: [], elements: E3 }, wd).verdict === 'mismatch', 'C1: scripts only a withdrawn release lists are not listed')
+// N4: a script cut short is clean only as an exact, strictly shorter prefix of the published text
+const libText = libJs.replace(/\r\n?/g, '\n')
+const shaLib = lib.files['/'].scripts[0].sha256
+const ok1 = (h: string, t: string) => h === shaLib && libText.startsWith(t) && t.length < libText.length
+const partialObs = (text: string) => ({ scripts: [{ sha256: 'b'.repeat(64) }], flags: [], elements: E3, partial: { index: 0, text } })
+ok(ev(partialObs(libText.slice(0, 10)), list1).verdict === 'mismatch', 'N4: without the published text, a script cut short is not clean')
+ok(J.judgeEarly({ role: 'library', ...partialObs(libText.slice(0, 10)) }, list1, L, ok1).verdict === 'incomplete', 'N4: an honest script cut short (an exact prefix) is clean')
+ok(J.judgeEarly({ role: 'library', ...partialObs(libText.slice(0, 10) + 'X') }, list1, L, ok1).verdict === 'mismatch', 'N4: a prefix plus anything else is not')
+ok(J.judgeEarly({ role: 'library', ...partialObs(libText.slice(0, 10)), elements: [...E3, 'div'] }, list1, L, ok1).verdict === 'mismatch', 'N4: a script followed by more of the page was not cut short')
+// N4: the full report of a visit cut short
+const ab = { ...honestObs(), aborted: true, complete: true, size: 10, bytes: null, scripts: [], elements: ['meta', 'p'] }
+ok(v(ab).verdict === 'incomplete', 'N4: a visit cut short that is the clean start of a listed document is incomplete, quietly')
+ok(v({ ...ab, aborted: false }).verdict === 'mismatch', 'N4: ... the same report not cut short is a mismatch')
+ok(v({ ...ab, flags: ['handler:img.onerror'] }).verdict === 'mismatch', 'N4: ... and cut short with a flag is a mismatch')
+ok(v({ ...ab, elements: ['meta', 'div'] }).verdict === 'mismatch', 'N4: ... and cut short off the listed sequence is a mismatch')
+// N1 in the full report
+ok(rulesOf(v({ ...honestObs(), elements: ['meta', 'p', 'script', 'script', 'img'] })) === 'elements', 'N1: a full report whose sequence is not a listed document\'s is a mismatch on elements')
+ok(v({ ...honestObs(), elements: lib.files['/'].elements }).verdict === 'ok', 'N1: the listed sequence is ok')
+// N4: classes
+ok(J.classOf([{ rule: 'bytes-unread' }, { rule: 'size-unread' }]) === 'unverified' && J.classOf([{ rule: 'bytes-unread' }, { rule: 'scripts' }]) === 'tampered' && J.classOf([{ rule: 'elements' }]) === 'tampered', 'N4: a finding is unverified only if every failure says "could not tell"')
+// cross-site navigations: bytes not asked for; Cache-Control is
+ok(v({ ...honestObs(), bytes: null, crossSite: true }).verdict === 'ok', 'a navigation another site started: unread bytes are not a failure')
+ok(lib.files['/'].cacheControl === 'no-cache' && rulesOf(v({ ...honestObs(), cacheControl: ['no-store'] })) === 'cache-control' && v({ ...honestObs(), cacheControl: ['no-cache'] }).verdict === 'ok', 'the Cache-Control header the navigation got is pinned (the release lists its _headers value)')
 ok(rulesOf(v({ ...honestObs(), bytes: { sha256: 'f'.repeat(64) } })) === 'bytes', 'bytes')
 ok(rulesOf(v({ ...honestObs(), size: 1 })) === 'size', 'size')
 ok(rulesOf(v({ ...honestObs(), scripts: [honestObs().scripts[0]] })) === 'scripts', 'scripts: one missing')
@@ -222,6 +249,10 @@ const r1 = runS('--build', build, '--out', out, '--key', throwaway, '--dev', '--
 ok(r1.status === 0 && fs.existsSync(out), `a rehearsal signs with a throwaway key (${r1.stderr.trim().split('\n').at(-1) ?? ''})`)
 const pubForJudge = { kty: pubJwk.kty, crv: pubJwk.crv, x: pubJwk.x, y: pubJwk.y }
 const a1 = await J.acceptServed(null, fs.readFileSync(out, 'utf8'), pubForJudge)
+const scriptsDir = path.join(path.dirname(out), 'scripts')
+const written = fs.existsSync(scriptsDir) ? fs.readdirSync(scriptsDir) : []
+ok(written.length >= 2 && written.every((f) => sha(fs.readFileSync(path.join(scriptsDir, f), 'utf8')) + '.js' === f), `N4: the signer writes every inline script's text beside the list, named by its sha256 (${written.length})`)
+ok(written.includes(`${lib.files['/'].scripts[0].sha256}.js`), 'N4: including the library\'s')
 ok(a1.status === 'ok' && a1.list.serial === 1, 'the extension\'s reader verifies what the script signed (serial 1)')
 const r2 = runS('--build', build, '--out', out, '--key', throwaway, '--dev', '--held', out)
 const a2 = await J.acceptServed(a1.held, fs.readFileSync(out, 'utf8'), pubForJudge)

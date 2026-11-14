@@ -368,8 +368,9 @@ debugger protocol has one, behind a banner):
 | what | how | where |
 |---|---|---|
 | the parse | a content script in the isolated world from `document_start` reads each `<script>`'s text as the parser inserts it, before the page's code runs; a script whose text later changes other than by the parser appending is flagged; handlers, `javascript:` URLs, frames, `<base>` and non-CSP `<meta http-equiv>` are flagged; a shadow root (declarative or attached) is flagged when the observer next looks, and at report time on every element it ever walked, even one the page removed. The markup INSIDE a shadow root is not seen | library and frame |
-| an early report | sent from inside the observer callback each time a script is first seen or grows, so it leaves BEFORE that script runs; if no full report follows within 10 s (the page navigated away, or never finished), the early report is judged on its own: a script no release lists, or any flag, is a mismatch. It is sent only when the observer has something to say, so a page that runs code before any script or flag reaches it leaves no early report | library and frame |
-| the bytes | the content script's `fetch(location, {cache: 'only-if-cached'})`: the navigation's own response from the HTTP cache, with no new request a server could answer differently. Measured: it does not pass through the page's service worker. The honest library is sent `no-cache`, which Chrome stores, so on the library without a worker, bytes that cannot be read are a mismatch | library (the frame is opaque) |
+| the element sequence | the tag names of the elements the parser inserts, in order (without html, head and body), which the release list carries for each document: the full report must match one exactly, and every early report carries what is new, so a parse that stops being the start of a listed document is on record as it happens | library and frame |
+| an early report | one as the visit starts, then from inside the observer callback each time an element or script is first seen or a script grows, so it leaves BEFORE that script runs; if no full report follows within 10 s (the page navigated away, or never finished), the early report is judged on its own: a script no release lists, or any flag, is a mismatch. A clean start of a listed document left that way (a visit closed mid-load) is 'incomplete', recorded quietly | library and frame |
+| the bytes | the content script's `fetch(location, {cache: 'only-if-cached'})`: the navigation's own response from the HTTP cache, with no new request a server could answer differently. Measured: a navigation ANOTHER SITE started (a link, a popup) is cached under a key this fetch cannot reach, and it may read an older page instead; for those (Sec-Fetch-Site, from webRequest) the bytes are not judged and the navigation's Cache-Control header is, so `no-store` cannot hide a change. Measured: it does not pass through the page's service worker. The honest library is sent `no-cache`, which Chrome stores, so on the library without a worker, bytes that cannot be read are a mismatch | library (the frame is opaque) |
 | the size | the navigation timing's `decodedBodySize`, whoever served the page; 0 is a mismatch, as is a report sent after 30 s without the parse ending (`complete: false`). `complete: true` means only that the page left the `loading` state in time: a visit cut short also reports it, with a partial size | library and frame |
 | the CSP header | `webRequest.onHeadersReceived` (observing, never blocking) for the navigation; under a service worker, which webRequest does not see, the HTTP cache's copy of the header | library and frame |
 | workers | every registration's script URL must be a worker a release lists; its bytes, fetched now with `no-store`, must be that file | library |
@@ -412,8 +413,14 @@ home.bento.page has never been checked.
   script has run by then, and nothing is prevented. A page that leaves after
   a script or flag the observer saw is still on record (the early report);
 - **a script inside a declarative shadow root** runs before the observer can
-  see it (attaching the root changes nothing it watches), so such a script can
-  run and leave the page with nothing recorded;
+  see it (attaching the root changes nothing it watches). The visit is still on
+  record: a parse that stopped being a listed document's start is a mismatch,
+  and a shadow root attached since the observer last looked is flagged as the
+  page leaves; one that stays is flagged by the full report;
+- a visit cut short that is the clean start of a listed document is recorded
+  quietly, so a change to page TEXT only, in a visit cut short, is not seen;
+- a navigation another site started: its bytes cannot be read (above), so a
+  change to page text only, reached that way, is not seen;
 - under a **service worker**: response headers the worker changes (the CSP is
   read from the HTTP cache, not from the worker's answer, and when the network
   sent `no-store` there is no cached copy and no CSP check at all), and a change to page
@@ -423,10 +430,11 @@ home.bento.page has never been checked.
   size and CSP header are checked, and a same-length change to its text is not;
 - a **rolled-back** list is refused but only recorded; a fresh install that
   cannot fetch a list checks nothing, said quietly after three days;
-- after the first loud warning for an origin in a session, a second, different
-  finding there gets the badge and the record, not another tab;
-- an honest visit closed while a script was still arriving can leave a report
-  that looks like a mismatch, and spend that session's one loud warning;
+- loud warnings come once per CLASS per origin per session: "unverified" (the
+  bytes, the size or a cache could not be read, the parse never ended) and
+  "tampered" (anything else), so a finding of the first kind never silences
+  one of the second; a second finding of the same class gets the badge and the
+  record, not another tab;
 - `blob:`/`about:` documents are observed from Chrome 119
   (`match_origin_as_fallback`); before that the early report still records the
   script that made one;

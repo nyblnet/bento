@@ -32,7 +32,9 @@
 //       origins: { '<origin>': { role: 'library' | 'frame',
 //         files: { '<path>': { sha256, bytes, kind: 'document' | 'asset',
 //                              scripts?: [{ sha256 } | { src: '<path>' }],  // documents
-//                              csp?: '<the Content-Security-Policy header>' } } } } } ] }
+//                              elements?: ['meta', 'title', …],            // documents: tag names in parse order
+//                              csp?: '<the Content-Security-Policy header>',
+//                              cacheControl?: '<the Cache-Control header>' } } } } } ] }
 //
 // A payload carrying `app` is refused, whatever else it holds: every other
 // artifact the release key signs carries `app`, and this one never does.
@@ -82,9 +84,11 @@ export function servedProblem(p) {
         if (f.kind !== 'document' && f.kind !== 'asset') return `release ${i}: ${path} has no kind`
         if (f.kind === 'document') {
           if (!Array.isArray(f.scripts)) return `release ${i}: ${path} lists no scripts`
+          if (!Array.isArray(f.elements) || !f.elements.every((x) => typeof x === 'string')) return `release ${i}: ${path} lists no element sequence`
           for (const s of f.scripts) if (!isObj(s) || !(HEX.test(s.sha256 ?? '') || isPath(s.src))) return `release ${i}: ${path} has a bad script entry`
         }
         if (f.csp !== undefined && typeof f.csp !== 'string') return `release ${i}: ${path} csp is not a string`
+        if (f.cacheControl !== undefined && typeof f.cacheControl !== 'string') return `release ${i}: ${path} cacheControl is not a string`
       }
     }
   }
@@ -136,6 +140,45 @@ export async function acceptServed(held, raw, jwk = RELEASE_KEY) {
 
 const join = (v) => (v == null ? null : Array.isArray(v) ? v.join(', ') : String(v))
 
+const sameList = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((x, i) => x === b[i])
+const isPrefix = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length <= b.length && a.every((x, i) => x === b[i])
+const sameScript = (seen, want) => (want.sha256 ? !seen.src && seen.sha256 === want.sha256 : seen.src === want.src)
+
+/** The rules that say "could not tell" rather than "this is not a release" (N4: they never share a warning with the others). */
+export const UNVERIFIED_RULES = new Set(['bytes-unread', 'size-unread', 'incomplete', 'cache-unread', 'workers-unread'])
+/** 'unverified' when every failure is one of those, else 'tampered'. Loud warnings are once per class per origin per session. */
+export const classOf = (failures) => (failures.length && failures.every((f) => UNVERIFIED_RULES.has(f.rule)) ? 'unverified' : 'tampered')
+
+/**
+ * Is what the page showed so far the START of a listed document (a release
+ * that is not withdrawn), with nothing else in it? The elements a prefix of
+ * its sequence, every script one of its scripts in order, no flag. The last
+ * script may be cut short only if it is the last thing parsed and its text is
+ * an exact prefix of the listed script's (`partialOk(sha256, text)`, checked
+ * by the caller against the text published beside the list): an honest IIFE
+ * cut short is a syntax error if it ever runs, never someone else's code.
+ */
+export function cleanPrefix(obs, list, origin, partialOk = () => false) {
+  if ((obs.flags ?? []).length || !Array.isArray(obs.elements)) return false
+  const scripts = obs.scripts ?? []
+  for (const r of list.releases) {
+    if (r.withdrawn) continue
+    const site = r.origins[origin]
+    if (!site || site.role !== obs.role) continue
+    for (const d of Object.values(site.files)) {
+      if (d.kind !== 'document' || !isPrefix(obs.elements, d.elements) || scripts.length > d.scripts.length) continue
+      if (obs.csp != null && (Array.isArray(obs.csp) ? obs.csp.join(', ') : obs.csp) !== (d.csp ?? '')) continue
+      const ok = scripts.every((sc, i) => {
+        if (sameScript(sc, d.scripts[i])) return true
+        const last = i === scripts.length - 1 && obs.elements.at(-1) === 'script'
+        return last && !!d.scripts[i].sha256 && obs.partial?.index === i && partialOk(d.scripts[i].sha256, obs.partial.text)
+      })
+      if (ok) return true
+    }
+  }
+  return false
+}
+
 /** The scripts the page parsed, against a document entry's list (inline by hash, external by path and bytes). */
 export function scriptsMatch(seen, want, files) {
   if (!Array.isArray(seen) || seen.length !== want.length) return false
@@ -164,7 +207,9 @@ export function documentFailures(obs, rel, origin) {
     if (obs.bytes && obs.bytes.sha256 !== e.sha256) f.push({ rule: 'bytes', path, want: e.sha256, got: obs.bytes.sha256 })
     if (obs.size > 0 && obs.size !== e.bytes) f.push({ rule: 'size', path, want: e.bytes, got: obs.size })
     if (!scriptsMatch(obs.scripts, e.scripts, site.files)) f.push({ rule: 'scripts', path, want: e.scripts, got: obs.scripts })
+    if (Array.isArray(obs.elements) && !sameList(obs.elements, e.elements)) f.push({ rule: 'elements', path, got: obs.elements.length })
     if (obs.csp != null && join(obs.csp) !== (e.csp ?? '')) f.push({ rule: 'csp', path, want: e.csp ?? '', got: join(obs.csp) })
+    if (obs.cacheControl != null && e.cacheControl !== undefined && join(obs.cacheControl) !== e.cacheControl) f.push({ rule: 'cache-control', path, want: e.cacheControl, got: join(obs.cacheControl) })
     if (!f.length) return []
     if (!best || f.length < best.length) best = f
   }
@@ -212,7 +257,9 @@ export function cacheFailures(obs, list, origin) {
  */
 export function observationFailures(obs) {
   const out = []
-  if (obs.role === 'library' && !obs.viaWorker && !obs.bytes) out.push({ rule: 'bytes-unread' })
+  // a navigation another site started is cached where the content script cannot read it (measured):
+  // then the bytes are not asked for, and the Cache-Control header the navigation got is (documentFailures)
+  if (obs.role === 'library' && !obs.viaWorker && !obs.bytes && !obs.crossSite) out.push({ rule: 'bytes-unread' })
   if (!(obs.size > 0)) out.push({ rule: 'size-unread' })
   if (obs.complete === false) out.push({ rule: 'incomplete' })
   // the library's caches and worker registrations are always readable (empty, in stage 1): unread is no pass
@@ -242,10 +289,13 @@ export function listedPath(list, origin, url) {
  *
  * `failures` are against the newest release (or the global rules).
  */
-export function judge(obs, list, origin, now = Date.now()) {
+export function judge(obs, list, origin, now = Date.now(), partialOk = () => false) {
   if (!obs.scripts?.length && !obs.flags?.length && !listedPath(list, origin, obs.url)) {
     return { verdict: 'unlisted', release: -1, failures: [] }
   }
+  // a visit cut short (closed, stopped, or a response that never ended) that is still the clean
+  // start of a listed document says nothing either way: recorded quietly (N4)
+  if (obs.aborted && cleanPrefix(obs, list, origin, partialOk)) return { verdict: 'incomplete', release: -1, failures: [], aborted: true }
   const global = [...markupFailures(obs), ...observationFailures(obs), ...workerFailures(obs, list, origin), ...cacheFailures(obs, list, origin)]
   const perRelease = list.releases.map((r) => documentFailures(obs, r, origin))
   const index = perRelease.findIndex((f) => f.length === 0)
@@ -260,23 +310,21 @@ export function judge(obs, list, origin, now = Date.now()) {
 
 /**
  * An EARLY report with no full report after it (the page left, or never
- * finished): what the parse had shown when the last script was seen. Every
- * script must be one some release that is not withdrawn lists for a document
- * on this origin, and no flag may be raised; otherwise it is a mismatch.
- * Clean but unfinished is 'incomplete', recorded quietly.
+ * finished): what the parse had shown so far, the elements included (N1). A
+ * clean prefix of a listed document is 'incomplete', recorded quietly;
+ * anything else is a mismatch.
  */
-export function judgeEarly(obs, list, origin) {
+export function judgeEarly(obs, list, origin, partialOk = () => false) {
+  if (cleanPrefix(obs, list, origin, partialOk)) return { verdict: 'incomplete', release: -1, failures: [] }
   const fail = [...markupFailures(obs)]
-  const inline = new Set(), srcs = new Set()
-  for (const r of list.releases) {
-    if (r.withdrawn) continue
-    for (const f of Object.values(r.origins[origin]?.files ?? {})) {
-      for (const s of f.scripts ?? []) s.sha256 ? inline.add(s.sha256) : srcs.add(s.src)
-    }
-  }
-  const strange = (obs.scripts ?? []).filter((s) => (s.src != null ? !srcs.has(s.src) : !inline.has(s.sha256)))
+  const docs = list.releases.filter((r) => !r.withdrawn).flatMap((r) => Object.values(r.origins[origin]?.files ?? {}).filter((d) => d.kind === 'document'))
+  if (!docs.some((d) => isPrefix(obs.elements ?? [], d.elements))) fail.push({ rule: 'elements', got: (obs.elements ?? []).length })
+  const inline = new Set(docs.flatMap((d) => d.scripts.filter((x) => x.sha256).map((x) => x.sha256)))
+  const srcs = new Set(docs.flatMap((d) => d.scripts.filter((x) => x.src).map((x) => x.src)))
+  const strange = (obs.scripts ?? []).filter((x) => (x.src != null ? !srcs.has(x.src) : !inline.has(x.sha256)))
   if (strange.length) fail.push({ rule: 'scripts', got: strange })
-  return fail.length ? { verdict: 'mismatch', release: -1, failures: fail } : { verdict: 'incomplete', release: -1, failures: [] }
+  if (!fail.length) fail.push({ rule: 'elements', why: 'no listed document starts this way' })
+  return { verdict: 'mismatch', release: -1, failures: fail }
 }
 
 /** Which observations were actually made, for the record. A value that was not observed is NOT a pass where the page must have it (observationFailures). */

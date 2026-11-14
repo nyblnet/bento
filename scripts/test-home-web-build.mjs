@@ -293,7 +293,7 @@ else {
   ok(fs.existsSync(signed) && library.includes(JSON.parse(fs.readFileSync(signed, 'utf8')).sig) && library.includes(JSON.parse(SPACES_HISTORY).sig) && !library.includes('STALE'),
     'the library page carries both signed histories byte for byte, and nothing of the stale build planted in its output')
   const siteFiles = fs.existsSync(r.site) ? execFileSync('find', [r.site, '-type', 'f'], { encoding: 'utf8' }).trim().split('\n').map((f) => path.relative(r.site, f)) : []
-  ok(siteFiles.length > 10 && !siteFiles.some((f) => f !== 'releases/home-web/served.json' && (/(^|\/)(frame\.html|_headers|build\.json)$/.test(f) || f.includes('home-web') || f.startsWith('library/'))),
+  ok(siteFiles.length > 10 && !siteFiles.some((f) => f !== 'releases/home-web/served.json' && !/^releases\/home-web\/scripts\/[0-9a-f]{64}\.js$/.test(f) && (/(^|\/)(frame\.html|_headers|build\.json)$/.test(f) || f.includes('home-web') || f.startsWith('library/'))),
     `nothing of home/web is in the site but its signed release list (${siteFiles.length} files): nothing deploys it`)
 
   // the tripwire's release list, signed into the site with the release (sign-home-web-served.mjs)
@@ -305,6 +305,11 @@ else {
     'the first release list is in the site, signed by the release\'s key: serial 1, the library as built')
   const built = fs.readFileSync(path.join(hw, 'library/index.html'))
   ok(l1?.releases[0].origins['https://home.bento.page'].files['/'].sha256 === createHash('sha256').update(built).digest('hex'), 'and it pins the library page this release built')
+  const libEntry = l1?.releases[0].origins['https://home.bento.page'].files['/']
+  ok(Array.isArray(libEntry?.elements) && libEntry.elements.length > 5 && libEntry.cacheControl === 'no-cache', `it carries the page's element sequence and its Cache-Control header (${libEntry?.elements?.length} elements, ${libEntry?.cacheControl})`)
+  const inline = libEntry?.scripts.find((x) => x.sha256)?.sha256
+  const published = inline && path.join(r.site, `releases/home-web/scripts/${inline}.js`)
+  ok(published && fs.existsSync(published) && createHash('sha256').update(fs.readFileSync(published, 'utf8'), 'utf8').digest('hex') === inline, 'and the library script\'s text is published beside the list, named by its sha256')
   // the next release builds on the published list
   const seed2 = publishedTree('published-rehearsal-2', { 'releases/spaces/manifest.json': '{}', 'releases/spaces/history.json': SPACES_HISTORY, 'releases/home-web/served.json': fs.readFileSync(listFile, 'utf8') })
   const r2 = release([...REHEARSE, '--home-web-out', staleOut('rehearsal-2.home-web')], 'rehearsal-2', { published: seed2 })

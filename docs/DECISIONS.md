@@ -14067,3 +14067,43 @@ The review of the tripwire (entry above) broke it by running. What changed:
 Guards: the rows and mutants in `scripts/test-webext-tripwire-browser.mjs`,
 `scripts/test-webext-tripwire-mutants.mjs`, `scripts/test-webext-tripwire.ts`,
 `scripts/test-home-web-build.mjs` and `scripts/test-home-web-build-mutants.mjs`.
+
+## 2026-11-14 — The bento/home tripwire sees the parse as it happens, and a visit cut short is not a tamper warning
+
+Two gaps the security re-check found in the tripwire (entries above), and one it led to:
+
+- **The element sequence.** The release list now carries, for each document,
+  the tag names of the elements the parser inserts, in order (without html,
+  head and body, which the parser may imply, and without what a `<template>`
+  holds). The content script sends an early report as the visit starts, and
+  one each time an element or a script is first seen, carrying what is new. A
+  parse that stops being the start of a listed document is a mismatch, whether
+  or not the page goes on to finish: a script hidden in a declarative shadow
+  root runs before the observer can see it, but the elements before it were
+  already reported. The full report's sequence must match a listed document
+  exactly, and a shadow root attached since the observer last looked is
+  flagged as the page leaves.
+- **A visit cut short.** A report sent after the page was left, after the
+  parse never ended, or with a response that never did, is marked so. If what
+  it shows is the clean start of a listed document, it is 'incomplete',
+  recorded quietly. A script cut short counts as clean only when its text is an
+  exact, strictly shorter prefix of the listed script's: each release publishes
+  its inline scripts' text beside the list (`scripts/<sha256>.js`), fetched
+  only for this check. An honest script cut short is a syntax error if it ever
+  runs, never someone else's code.
+- **Warnings by class.** The one loud warning per origin per session is now
+  one per class: "unverified" (bytes, size or a cache unread, a parse that
+  never ended) and "tampered" (everything else), so a finding of the first
+  kind, which a third party can cause, never silences one of the second.
+- **A navigation another site started.** MEASURED: such a navigation (a link
+  or a popup from another site) is cached under a key the content script's
+  fetch cannot reach, and that fetch may return an older page. Every inbound
+  link was therefore an "unverified" warning. For those (Sec-Fetch-Site,
+  observed with webRequest) the bytes are not judged, and the Cache-Control
+  header the navigation got is pinned like the CSP, so a `no-store` answer
+  cannot hide a change. Stated as a limit: a change to page text only, reached
+  from another site, is not seen.
+
+Guards: the rows and mutants in `scripts/test-webext-tripwire-browser.mjs`,
+`scripts/test-webext-tripwire-mutants.mjs`, `scripts/test-webext-tripwire.ts`
+and `scripts/test-home-web-build.mjs`.

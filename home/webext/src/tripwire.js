@@ -27,7 +27,7 @@
 // link to or frame must not be able to open tabs at will.
 
 import { t } from './i18n.js'
-import { acceptServed, verifyServed, judge, judgeEarly, observed, REFRESH_MS } from './tripwire-judge.js'
+import { acceptServed, verifyServed, judge, judgeEarly, observed, classOf, REFRESH_MS } from './tripwire-judge.js'
 import { KEY, LIBRARY_ORIGIN, FRAME_ORIGINS, LIST_URL } from './tripwire-config.js'
 
 export const LOG_KEY = 'tripwireLog'
@@ -42,7 +42,7 @@ export const ORPHAN_MS = 10000
 /** How long the list may be unreachable before the person is told nothing is being checked. */
 export const NEVER_MS = 3 * 24 * 3600 * 1000
 // caps, again here: the content script is ours, but its numbers are the page's doing
-const MAX_SCRIPTS = 64, MAX_FLAGS = 64, MAX_CACHE = 200, MAX_WORKERS = 16, MAX_STR = 512
+const MAX_SCRIPTS = 64, MAX_FLAGS = 64, MAX_CACHE = 200, MAX_WORKERS = 16, MAX_STR = 512, MAX_ELEMENTS = 4096, MAX_TEXT = 4 * 1024 * 1024
 
 const roleOf = (origin) => (origin === LIBRARY_ORIGIN ? 'library' : FRAME_ORIGINS.includes(origin) ? 'frame' : null)
 const patterns = () => [LIBRARY_ORIGIN, ...FRAME_ORIGINS].map((o) => `${o}/*`)
@@ -51,6 +51,40 @@ const sha = async (buf) => hex(await crypto.subtle.digest('SHA-256', buf))
 const noHash = (u) => String(u).split('#')[0]
 const cut = (x) => String(x).slice(0, MAX_STR)
 const HEX = /^[0-9a-f]{64}$/
+
+/** Element tag names, bounded; going over the bound is a flag. */
+function capElements(list, flags) {
+  const src = Array.isArray(list) ? list : []
+  if (src.length > MAX_ELEMENTS) flags.push('over-cap:elements')
+  return src.slice(0, MAX_ELEMENTS).map((x) => String(x).slice(0, 64))
+}
+
+/**
+ * The published text of a listed inline script, fetched only to check a script
+ * cut short (N4). Pinned by its name: a text whose sha256 is not its name is
+ * not used. Kept for the worker's lifetime.
+ */
+const scriptTexts = new Map()
+async function listedScriptText(net, sha256) {
+  if (scriptTexts.has(sha256)) return scriptTexts.get(sha256)
+  let text = null
+  try {
+    const r = await net(new URL(`scripts/${sha256}.js`, LIST_URL).href, { cache: 'no-store', credentials: 'omit' })
+    if (r.ok) { const t = await r.text(); if (await sha(new TextEncoder().encode(t)) === sha256) text = t }
+  } catch { /* unread: no partial passes */ }
+  if (text != null) scriptTexts.set(sha256, text)
+  return text
+}
+/** partialOk for the judge: is `partial` an exact, strictly shorter prefix of a listed script it could be? */
+async function partialChecker(net, obs, list, origin) {
+  const ok = new Set()
+  const p = obs.partial
+  if (!p || typeof p.text !== 'string' || !Number.isSafeInteger(p.index)) return () => false
+  const shas = new Set()
+  for (const r of list.releases) for (const d of Object.values(r.origins[origin]?.files ?? {})) { const x = d.scripts?.[p.index]; if (x?.sha256) shas.add(x.sha256) }
+  for (const h of shas) { const t = await listedScriptText(net, h); if (t != null && p.text.length < t.length && t.startsWith(p.text)) ok.add(h) }
+  return (h, text) => ok.has(h) && text === p.text
+}
 
 /** One chain for every storage read-modify-write. */
 let chain = Promise.resolve()
@@ -95,7 +129,24 @@ function onHeaders(d) {
   try { origin = new URL(d.url).origin } catch { return }
   if (!roleOf(origin)) return
   const csp = (d.responseHeaders ?? []).filter((h) => h.name.toLowerCase() === 'content-security-policy').map((h) => cut(h.value ?? ''))
-  void chrome.storage.session.set({ [`${HEADERS_PREFIX}${d.tabId}:${d.frameId}`]: { url: noHash(d.url), at: d.timeStamp, status: d.statusCode, csp } })
+  const cacheControl = (d.responseHeaders ?? []).filter((h) => h.name.toLowerCase() === 'cache-control').map((h) => cut(h.value ?? ''))
+  void chrome.storage.session.set({ [`${HEADERS_PREFIX}${d.tabId}:${d.frameId}`]: { url: noHash(d.url), at: d.timeStamp, status: d.statusCode, csp, cacheControl } })
+}
+
+/**
+ * Who started the navigation (its Sec-Fetch-Site). MEASURED: a navigation
+ * another site started (a link, a popup) is cached under a key the content
+ * script's own fetch cannot reach, so its bytes are never readable; that alone
+ * must not read as tampering. Observing only.
+ */
+const REQUEST_PREFIX = 'twq:'
+function onRequest(d) {
+  if (d.type !== 'main_frame') return
+  let origin
+  try { origin = new URL(d.url).origin } catch { return }
+  if (roleOf(origin) !== 'library') return
+  const site = (d.requestHeaders ?? []).find((h) => h.name.toLowerCase() === 'sec-fetch-site')?.value ?? null
+  void chrome.storage.session.set({ [`${REQUEST_PREFIX}${d.tabId}:${d.frameId}`]: { url: noHash(d.url), at: d.timeStamp, site: site == null ? null : cut(site) } })
 }
 
 /** The held list (re-verified), or null. */
@@ -195,7 +246,10 @@ async function settle(event, tab, refresh, v, now) {
   if (refresh?.status === 'invalid' || refresh?.status === 'conflict') {
     event.warned.push(...await warn({ ...event, failures: [{ rule: `list-${refresh.status}` }] }, tab, 'invalid', 'list'))
   }
-  if (v?.verdict === 'mismatch') event.warned.push(...await warn(event, tab, 'mismatch', `loud:${event.origin}`))
+  // once per CLASS per origin per session (N4): a finding that only says "could not tell" never
+  // silences one that says "this is not a release"
+  event.class = v?.verdict === 'mismatch' ? classOf(event.failures) : null
+  if (v?.verdict === 'mismatch') event.warned.push(...await warn(event, tab, 'mismatch', `loud:${event.class}:${event.origin}`))
   else if (v?.verdict === 'outdated' && v.notify) event.warned.push(...await warn(event, tab, 'outdated', `old:${event.origin}`))
   if (!v) await noteUnchecked(event, tab, now)
   else await serial(() => chrome.storage.local.remove(UNCHECKED_KEY))
@@ -224,13 +278,15 @@ export async function sweepOrphans(net = (u, o) => fetch(u, o), now = Date.now()
   })
   for (const p of due) {
     const { current, refresh } = await listFor(net, now)
-    const v = current ? judgeEarly(p.obs, current.list, p.origin) : null
+    const obsE = { ...p.obs, partial: p.tail ? { index: p.tail.index, text: p.tail.text } : null }
+    const v = current ? judgeEarly(obsE, current.list, p.origin, await partialChecker(net, obsE, current.list, p.origin)) : null
     const event = {
       id: newId(now), at: new Date(now).toISOString(), url: p.url, origin: p.origin, role: p.role, early: true,
       verdict: v ? v.verdict : 'unchecked', release: null, failures: v?.failures ?? [],
       serial: current?.list.serial ?? null, listAt: current?.list.at ?? null,
       list: refresh ? { status: refresh.status, why: refresh.why } : { status: 'held' },
-      observed: { scripts: true, flags: true, bytes: false, size: false, csp: false, workers: false, cache: false }, page: p.obs,
+      observed: { scripts: true, flags: true, elements: true, bytes: false, size: false, csp: false, workers: false, cache: false },
+      page: { ...p.obs, partial: obsE.partial ? { index: obsE.partial.index, length: obsE.partial.text.length } : null },
     }
     let tab = null
     try { tab = p.tabId != null ? await chrome.tabs.get(p.tabId) : null } catch { /* closed */ }
@@ -243,15 +299,28 @@ export async function sweepOrphans(net = (u, o) => fetch(u, o), now = Date.now()
 export async function tripwireEarly(sender, obs) {
   const who = senderRole(sender)
   if (!who || !obs || obs.v !== 1) return { ok: false, reason: 'not watched' }
-  const flags = capFlags(obs.flags)
-  const pending = {
-    at: Date.now(), url: cut(noHash(sender.url)), origin: who.origin, role: who.role,
-    tabId: sender.tab?.id ?? null, tabIndex: sender.tab?.index ?? 0,
-    obs: { role: who.role, url: cut(noHash(sender.url)), timeOrigin: Number(obs.timeOrigin) || 0, scripts: capScripts(obs.scripts, flags), flags },
-  }
   const key = docKey(sender, obs)
   await serial(async () => {
     if ((await chrome.storage.session.get(`${key}:done`))[`${key}:done`]) return // the full report came first
+    const prev = (await chrome.storage.session.get(key))[key]
+    const flags = capFlags(obs.flags)
+    // the element sequence arrives in pieces, in order: each report carries what is new
+    let elements = prev?.obs.elements ?? []
+    const delta = Array.isArray(obs.elements) ? obs.elements : []
+    if (Number(obs.elementsFrom) !== elements.length) flags.push('early-gap')
+    elements = capElements([...elements, ...delta], flags)
+    // and the last script's text, while it may still be arriving
+    let tail = prev?.tail ?? null
+    const tn = obs.tail
+    if (tn && Number.isSafeInteger(tn.index) && typeof tn.text === 'string') {
+      const base = tail && tail.index === tn.index && tail.text.length === tn.from ? tail.text : (tn.from === 0 ? '' : null)
+      tail = base == null || base.length + tn.text.length > MAX_TEXT ? null : { index: tn.index, text: base + tn.text }
+    }
+    const pending = {
+      at: Date.now(), url: cut(noHash(sender.url)), origin: who.origin, role: who.role,
+      tabId: sender.tab?.id ?? null, tabIndex: sender.tab?.index ?? 0, tail,
+      obs: { role: who.role, url: cut(noHash(sender.url)), timeOrigin: Number(obs.timeOrigin) || 0, scripts: capScripts(obs.scripts, flags), flags: [...new Set([...(prev?.obs.flags ?? []), ...flags])], elements },
+    }
     await chrome.storage.session.set({ [key]: pending })
   })
   setTimeout(() => { void sweepOrphans().catch(() => {}) }, ORPHAN_MS + 500)
@@ -279,6 +348,10 @@ export async function tripwireObserve(sender, obs, net = (u, o) => fetch(u, o)) 
   const h = (await chrome.storage.session.get(hk))[hk]
   const fresh = h && h.url === url && h.at >= obs.timeOrigin - 1000 && h.at <= obs.timeOrigin + 120000
   if (h) await chrome.storage.session.remove(hk)
+  const qk = `${REQUEST_PREFIX}${sender.tab?.id}:${sender.frameId}`
+  const q = (await chrome.storage.session.get(qk))[qk]
+  const crossSite = !!q && q.url === url && q.at >= obs.timeOrigin - 1000 && q.at <= obs.timeOrigin + 120000 && q.site === 'cross-site'
+  if (q) await chrome.storage.session.remove(qk)
   const flags = capFlags(obs.flags)
   const scripts = capScripts(obs.scripts, flags)
   const cacheIn = role === 'library' && Array.isArray(obs.cache) ? obs.cache : null
@@ -287,9 +360,13 @@ export async function tripwireObserve(sender, obs, net = (u, o) => fetch(u, o)) 
   if (workersIn && workersIn.length > MAX_WORKERS) flags.push('over-cap:workers')
   const page = {
     role, url, timeOrigin: Number(obs.timeOrigin) || 0, size: Number(obs.size) || 0, scripts, flags,
-    bytes: role === 'library' && HEX.test(obs.bytes?.sha256 ?? '') ? { sha256: obs.bytes.sha256 } : null,
-    csp: fresh ? h.csp : role === 'library' && obs.bytes ? (obs.bytes.csp == null ? [] : [cut(obs.bytes.csp)]) : null,
+    elements: capElements(obs.elements, flags), aborted: obs.aborted === true,
+    partial: obs.partial && Number.isSafeInteger(obs.partial.index) && typeof obs.partial.text === 'string' && obs.partial.text.length <= MAX_TEXT ? { index: obs.partial.index, text: obs.partial.text } : null,
+    // a cross-site navigation's own response is not what the content script read (another, older one may be)
+    bytes: role === 'library' && !crossSite && HEX.test(obs.bytes?.sha256 ?? '') ? { sha256: obs.bytes.sha256 } : null,
+    csp: fresh ? h.csp : role === 'library' && obs.bytes && !crossSite ? (obs.bytes.csp == null ? [] : [cut(obs.bytes.csp)]) : null,
     cspFrom: fresh ? 'navigation' : role === 'library' && obs.bytes ? 'cache' : null,
+    cacheControl: fresh && Array.isArray(h.cacheControl) ? h.cacheControl : null, crossSite,
     workers: workersIn ? [] : null,
     cache: cacheIn ? cacheIn.slice(0, MAX_CACHE).map((c) => ({ url: cut(c.url), sha256: cut(c.sha256) })) : null,
     viaWorker: !!obs.viaWorker, complete: obs.complete === true, errors: Array.isArray(obs.errors) ? obs.errors.slice(0, 10).map(cut) : [],
@@ -307,11 +384,11 @@ export async function tripwireObserve(sender, obs, net = (u, o) => fetch(u, o)) 
   }
 
   let { current, refresh } = await listFor(net, now)
-  let v = current ? judge(page, current.list, origin, now) : null
+  let v = current ? judge(page, current.list, origin, now, await partialChecker(net, page, current.list, origin)) : null
   // a mismatch, or an older release, is checked against a fresh list before anyone is told
   if (current && v.verdict !== 'ok' && v.verdict !== 'unlisted' && !refresh) {
     refresh = await refreshList(net, current)
-    if (refresh.status === 'ok') { current = await heldList(); v = judge(page, current.list, origin, now) }
+    if (refresh.status === 'ok') { current = await heldList(); v = judge(page, current.list, origin, now, await partialChecker(net, page, current.list, origin)) }
   }
 
   const event = {
@@ -319,7 +396,7 @@ export async function tripwireObserve(sender, obs, net = (u, o) => fetch(u, o)) 
     url, origin, role, verdict: v ? v.verdict : 'unchecked', release: v?.release ?? null, failures: v?.failures ?? [],
     serial: current?.list.serial ?? null, listAt: current?.list.at ?? null,
     list: refresh ? { status: refresh.status, why: refresh.why } : { status: 'held' },
-    observed: observed(page), page,
+    observed: observed(page), page: { ...page, partial: page.partial ? { index: page.partial.index, length: page.partial.text.length } : null },
   }
   await settle(event, sender.tab, refresh, v, now)
   return { ok: true, verdict: event.verdict, id: event.id }
@@ -329,6 +406,7 @@ export async function tripwireObserve(sender, obs, net = (u, o) => fetch(u, o)) 
 export function installTripwire() {
   if (typeof chrome === 'undefined') return
   chrome.webRequest?.onHeadersReceived.addListener(onHeaders, { urls: patterns(), types: ['main_frame', 'sub_frame'] }, ['responseHeaders', 'extraHeaders'])
+  chrome.webRequest?.onSendHeaders.addListener(onRequest, { urls: patterns(), types: ['main_frame'] }, ['requestHeaders', 'extraHeaders'])
   chrome.notifications?.onClicked?.addListener((id) => {
     if (!id.startsWith(NOTE_PREFIX)) return
     void chrome.tabs.create({ url: chrome.runtime.getURL(`src/tripwire.html?id=${encodeURIComponent(id.slice(NOTE_PREFIX.length))}`) })

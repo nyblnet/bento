@@ -57,7 +57,14 @@
 
   const WAIT_MS = 30000 // a page that never finishes parsing is judged on what it parsed
   // caps: an observation is bounded, and going over a cap is itself a finding
-  const MAX_SCRIPTS = 64, MAX_FLAGS = 64, MAX_CACHE = 200, MAX_STR = 512
+  const MAX_SCRIPTS = 64, MAX_FLAGS = 64, MAX_CACHE = 200, MAX_STR = 512, MAX_ELEMENTS = 4096, MAX_TEXT = 4 * 1024 * 1024
+  // N1: the ELEMENT SEQUENCE, tag names in the order the parser inserted them (without html, head and
+  // body, which it may imply). Every early report carries what is new since the last, so the extension
+  // sees the parse stop matching a listed document as it happens, whatever comes next.
+  const IMPLIED = new Set(['html', 'head', 'body'])
+  const elements = []
+  const inSeq = new WeakSet()
+  let elementsSent = 0
   const seen = [] // script entries in insertion order
   const byEl = new Map()
   const flags = new Set()
@@ -145,17 +152,39 @@
       if (p && p.nodeType === 1 && p.localName === 'script') noteScript(p)
       return
     }
-    noteElement(node); recent.add(node); walked.push(node)
-    for (const el of node.querySelectorAll('*')) { noteElement(el); recent.add(el); walked.push(el) }
+    noteElement(node); recent.add(node); walked.push(node); sequence(node)
+    for (const el of node.querySelectorAll('*')) { noteElement(el); recent.add(el); walked.push(el); sequence(el) }
   }
+  function sequence(el) {
+    if (inSeq.has(el) || IMPLIED.has(el.localName)) return
+    inSeq.add(el)
+    if (elements.length >= MAX_ELEMENTS) { flag('over-cap:elements'); return }
+    elements.push(el.localName)
+    dirty = true
+  }
+  // The last script, while it is the last thing parsed, may still be arriving: its text goes to the
+  // extension as it grows, so a visit cut short mid-script can be told from a script that ran.
+  let tailIndex = -1, tailSent = 0
+  function tail() {
+    const e = seen.at(-1)
+    if (!e || e.src != null || elements.at(-1) !== 'script' || e.el !== lastScriptEl()) return null
+    const i = seen.length - 1
+    if (i !== tailIndex) { tailIndex = i; tailSent = 0 }
+    if (e.text.length > MAX_TEXT || e.text.length === tailSent) return null
+    const t = { index: i, from: tailSent, text: e.text.slice(tailSent) }
+    tailSent = e.text.length
+    return t
+  }
+  const lastScriptEl = () => { const all = document.getElementsByTagName('script'); return all[all.length - 1] }
   const scriptList = () => seen.map((e) => (e.src != null ? { src: cut(e.src) } : { sha256: sha256Sync(e.text), length: e.text.length }))
   let lastEarly = ''
   function early() {
     // leaves now, inside the observer callback, before the script just seen can run
-    const payload = { v: 1, url: location.href.split('#')[0], timeOrigin: performance.timeOrigin, scripts: scriptList(), flags: [...flags] }
+    const payload = { v: 1, url: location.href.split('#')[0], timeOrigin: performance.timeOrigin, scripts: scriptList(), flags: [...flags], elements: elements.slice(elementsSent), elementsFrom: elementsSent, tail: tail() }
     const key = JSON.stringify(payload)
     if (key === lastEarly) return
     lastEarly = key
+    elementsSent = elements.length
     try { chrome.runtime.sendMessage({ op: 'tripwire.early', payload }).catch(() => {}) } catch { /* the extension is reloading */ }
   }
   function onRecords(records) {
@@ -179,6 +208,16 @@
   const mo = new MutationObserver(onRecords)
   mo.observe(document, { childList: true, subtree: true, characterData: true, attributes: true })
   if (document.documentElement) walk(document.documentElement)
+  // "visit started": a record exists whatever the page does next, even if nothing reaches the observer
+  early()
+  // A visit that ends early (closed, navigated away) is marked as such; and a shadow root attached
+  // since the last look is flagged on the way out, while the message can still leave.
+  let left = false
+  addEventListener('pagehide', () => {
+    left = true
+    for (const el of walked) if (shadowOf(el)) { flag('shadow-root'); break }
+    early()
+  }, { capture: true })
   // a document the honest library never makes: blob:, about:, data: on its origin
   if (!/^https?:$/.test(location.protocol)) { flag(`document:${location.protocol}`); early() }
 
@@ -211,8 +250,13 @@
       } else scripts.push({ sha256: await sha(e.text) })
     }
     const nav = performance.getEntriesByType('navigation')[0]
+    // N4: cut short = the page was left, the parse never ended, or the response never did
+    const aborted = left || !complete || (nav ? nav.responseEnd === 0 : false)
+    const lastEl = seen.at(-1)
+    const partial = aborted && lastEl && lastEl.src == null && elements.at(-1) === 'script' && lastEl.text.length <= MAX_TEXT
+      ? { index: seen.length - 1, text: lastEl.text } : null
     const out = {
-      v: 1, complete, url: location.href.split('#')[0], timeOrigin: performance.timeOrigin,
+      v: 1, complete, aborted, partial, elements: elements.slice(), url: location.href.split('#')[0], timeOrigin: performance.timeOrigin,
       size: nav?.decodedBodySize ?? 0, status: nav?.responseStatus ?? 0, viaWorker: (nav?.workerStart ?? 0) > 0,
       scripts, flags: [...flags], bytes: null, workers: null, cache: null, errors,
     }
