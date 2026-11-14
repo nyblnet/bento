@@ -946,5 +946,68 @@
   "menuOpenWithId": {
     "message": "เปิดด้วย Bento ID",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home ไม่ได้ให้บริการรุ่นของ Bento"
+  },
+  "twMismatchBody": {
+    "message": "โค้ดที่ home.bento.page ส่งมายังเบราว์เซอร์นี้ไม่ตรงกับรุ่นใดที่ Bento ลงนามไว้ ปิดแท็บนั้นและอย่าเปิดเอกสารที่นั่น คลิกเพื่อดูรายละเอียด"
+  },
+  "twOldTitle": {
+    "message": "bento/home กำลังให้บริการรุ่นที่เก่ากว่า"
+  },
+  "twOldBody": {
+    "message": "โค้ดที่ home.bento.page ส่งมายังเบราว์เซอร์นี้เป็นรุ่นของ Bento ของจริง แต่ไม่ใช่รุ่นล่าสุด"
+  },
+  "twListTitle": {
+    "message": "รายการรุ่นของ bento/home ไม่ใช่ของจริง"
+  },
+  "twListBody": {
+    "message": "bento.page ส่งรายการรุ่นที่ไม่ได้ลงนามโดย Bento จึงตรวจสอบ home.bento.page ไม่ได้ คลิกเพื่อดูรายละเอียด"
+  },
+  "twBadgeTitle": {
+    "message": "bento/home ไม่ตรงกับรุ่นที่ลงนามแล้ว"
+  },
+  "twPageTitle": {
+    "message": "การตรวจสอบโค้ดของ bento/home"
+  },
+  "twPageLead": {
+    "message": "ส่วนขยายนี้เปรียบเทียบโค้ดที่ home.bento.page ส่งมายังเบราว์เซอร์ของคุณกับรุ่นที่ Bento ลงนามด้วยคีย์เผยแพร่แบบออฟไลน์ ส่วนขยายนี้เพียงรายงานเท่านั้น: ไม่ได้เปลี่ยนแปลงหรือบล็อกสิ่งใด"
+  },
+  "twPageDo": {
+    "message": "ปิดแท็บ bento/home และอย่าเปิด แก้ไข หรือบันทึกเอกสารที่นั่นจนกว่าจะทราบสาเหตุ การตรวจสอบนี้ไม่เปลี่ยนแปลงไฟล์ในดิสก์ของคุณ"
+  },
+  "twPageReport": {
+    "message": "โปรดรายงานแบบส่วนตัว พร้อมรายละเอียดด้านล่าง:"
+  },
+  "twPageReportLink": {
+    "message": "รายงานไปยัง Bento"
+  },
+  "twPageCopy": {
+    "message": "คัดลอกรายละเอียด"
+  },
+  "twPageCopied": {
+    "message": "คัดลอกแล้ว"
+  },
+  "twPageRecent": {
+    "message": "การตรวจสอบล่าสุด"
+  },
+  "twPageNone": {
+    "message": "ยังไม่มีการบันทึกการตรวจสอบ"
+  },
+  "twPageNotFound": {
+    "message": "ไม่มีการตรวจสอบนั้นในบันทึก"
+  },
+  "twPageListNone": {
+    "message": "ยังไม่มีรายการรุ่นที่ลงนาม: ยังไม่เคยตรวจสอบ home.bento.page"
+  },
+  "twPageListHeld": {
+    "message": "กำลังตรวจสอบกับรายการรุ่น #$1 ซึ่งดึงมาเมื่อ $2"
+  },
+  "twNeverTitle": {
+    "message": "ยังไม่ได้ตรวจสอบ bento/home"
+  },
+  "twNeverBody": {
+    "message": "ส่วนขยายนี้ดึงรายการรุ่นที่ Bento ลงนามไม่ได้มา 3 วันแล้ว จึงยังไม่ได้ตรวจสอบโค้ดที่ home.bento.page ส่งมา"
   }
 }

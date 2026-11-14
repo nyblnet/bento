@@ -946,5 +946,68 @@
   "menuOpenWithId": {
     "message": "Openen met Bento ID",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home levert geen Bento-release"
+  },
+  "twMismatchBody": {
+    "message": "De code die home.bento.page naar deze browser stuurde, komt met geen enkele door Bento ondertekende release overeen. Sluit dat tabblad en open daar geen documenten. Klik voor details."
+  },
+  "twOldTitle": {
+    "message": "bento/home levert een oudere release"
+  },
+  "twOldBody": {
+    "message": "De code die home.bento.page naar deze browser stuurde, is een echte Bento-release, maar niet de nieuwste."
+  },
+  "twListTitle": {
+    "message": "De releaselijst van bento/home is niet echt"
+  },
+  "twListBody": {
+    "message": "bento.page stuurde een releaselijst die niet door Bento is ondertekend, dus home.bento.page kan niet worden gecontroleerd. Klik voor details."
+  },
+  "twBadgeTitle": {
+    "message": "bento/home komt niet overeen met een ondertekende release"
+  },
+  "twPageTitle": {
+    "message": "Codecontrole van bento/home"
+  },
+  "twPageLead": {
+    "message": "Deze extensie vergelijkt de code die home.bento.page naar je browser stuurt met de releases die Bento ondertekent met zijn offline releasesleutel. Ze meldt alleen: ze heeft niets veranderd of geblokkeerd."
+  },
+  "twPageDo": {
+    "message": "Sluit het tabblad van bento/home en open, bewerk of bewaar daar geen documenten totdat dit is opgehelderd. De controle verandert geen bestanden op je schijf."
+  },
+  "twPageReport": {
+    "message": "Meld het vertrouwelijk, met de details hieronder:"
+  },
+  "twPageReportLink": {
+    "message": "Melden bij Bento"
+  },
+  "twPageCopy": {
+    "message": "Details kopiëren"
+  },
+  "twPageCopied": {
+    "message": "Gekopieerd"
+  },
+  "twPageRecent": {
+    "message": "Recente controles"
+  },
+  "twPageNone": {
+    "message": "Nog geen controles vastgelegd."
+  },
+  "twPageNotFound": {
+    "message": "Die controle staat niet in het overzicht."
+  },
+  "twPageListNone": {
+    "message": "Nog geen ondertekende releaselijst: home.bento.page is nog nooit gecontroleerd."
+  },
+  "twPageListHeld": {
+    "message": "Gecontroleerd met releaselijst nr. $1, opgehaald op $2."
+  },
+  "twNeverTitle": {
+    "message": "bento/home is niet gecontroleerd"
+  },
+  "twNeverBody": {
+    "message": "Deze extensie kan de ondertekende releaselijst van Bento al 3 dagen niet ophalen, dus de code die home.bento.page stuurt is niet gecontroleerd."
   }
 }

@@ -946,5 +946,68 @@
   "menuOpenWithId": {
     "message": "باز کردن با Bento ID",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home نسخه‌ای از Bento ارائه نمی‌کند"
+  },
+  "twMismatchBody": {
+    "message": "کدی که home.bento.page برای این مرورگر فرستاد با هیچ نسخه‌ای که Bento امضا کرده مطابقت ندارد. آن زبانه را ببندید و در آن سند باز نکنید. برای جزئیات کلیک کنید."
+  },
+  "twOldTitle": {
+    "message": "bento/home نسخه‌ای قدیمی‌تر ارائه می‌کند"
+  },
+  "twOldBody": {
+    "message": "کدی که home.bento.page برای این مرورگر فرستاد نسخه‌ای اصل از Bento است، اما جدیدترین نسخه نیست."
+  },
+  "twListTitle": {
+    "message": "فهرست نسخه‌های bento/home اصل نیست"
+  },
+  "twListBody": {
+    "message": "bento.page فهرست نسخه‌ای فرستاد که امضای Bento را ندارد، بنابراین نمی‌توان home.bento.page را بررسی کرد. برای جزئیات کلیک کنید."
+  },
+  "twBadgeTitle": {
+    "message": "bento/home با هیچ نسخه‌ی امضاشده‌ای مطابقت نداشت"
+  },
+  "twPageTitle": {
+    "message": "بررسی کد bento/home"
+  },
+  "twPageLead": {
+    "message": "این افزونه کدی را که home.bento.page برای مرورگر شما می‌فرستد با نسخه‌هایی مقایسه می‌کند که Bento با کلید انتشار آفلاین خود امضا می‌کند. فقط گزارش می‌دهد: چیزی را تغییر نداده یا مسدود نکرده است."
+  },
+  "twPageDo": {
+    "message": "زبانه‌ی bento/home را ببندید و تا روشن شدن موضوع، در آن سندی باز، ویرایش یا ذخیره نکنید. این بررسی فایل‌های روی دیسک شما را تغییر نمی‌دهد."
+  },
+  "twPageReport": {
+    "message": "لطفاً آن را به‌صورت خصوصی، همراه با جزئیات زیر گزارش دهید:"
+  },
+  "twPageReportLink": {
+    "message": "گزارش به Bento"
+  },
+  "twPageCopy": {
+    "message": "کپی جزئیات"
+  },
+  "twPageCopied": {
+    "message": "کپی شد"
+  },
+  "twPageRecent": {
+    "message": "بررسی‌های اخیر"
+  },
+  "twPageNone": {
+    "message": "هنوز بررسی‌ای ثبت نشده است."
+  },
+  "twPageNotFound": {
+    "message": "این بررسی در سابقه نیست."
+  },
+  "twPageListNone": {
+    "message": "هنوز فهرست نسخه‌ی امضاشده‌ای نیست: home.bento.page هرگز بررسی نشده است."
+  },
+  "twPageListHeld": {
+    "message": "بررسی با فهرست نسخه‌های شماره‌ی $1، دریافت‌شده در $2."
+  },
+  "twNeverTitle": {
+    "message": "bento/home بررسی نشده است"
+  },
+  "twNeverBody": {
+    "message": "این افزونه ۳ روز است که نمی‌تواند فهرست نسخه‌های امضاشده‌ی Bento را دریافت کند، بنابراین کدی که home.bento.page می‌فرستد بررسی نشده است."
   }
 }

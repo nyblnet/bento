@@ -176,3 +176,14 @@ runs:
       # every one of those is silent in a browser and loud here.
       shell: bento-step {0}
       run: node scripts/test-webext-assistant.ts
+
+    - name: WebExtension tripwire rig
+      # The bento/home tripwire without a browser: the shipped origins, list
+      # URL and key (the RELEASE key) and the manifest grants that match them;
+      # the release list a release writes (scripts/lib/home-web-served.mjs,
+      # sign-home-web-served.mjs) against the list the extension reads; the
+      # judge's rules on hand-made observations. Throwaway keys only. The
+      # browser half, with a mutant per rule, is the webext-tripwire job in
+      # ci-home.yml.
+      shell: bento-step {0}
+      run: node scripts/test-webext-tripwire.ts

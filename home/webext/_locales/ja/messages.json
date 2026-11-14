@@ -979,5 +979,68 @@
   "menuOpenWithId": {
     "message": "Bento ID で開く",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home が Bento のリリースを配信していません"
+  },
+  "twMismatchBody": {
+    "message": "home.bento.page がこのブラウザに送ったコードは、Bento が署名したどのリリースとも一致しません。そのタブを閉じ、そこでドキュメントを開かないでください。クリックすると詳細を表示します。"
+  },
+  "twOldTitle": {
+    "message": "bento/home が古いリリースを配信しています"
+  },
+  "twOldBody": {
+    "message": "home.bento.page がこのブラウザに送ったコードは本物の Bento のリリースですが、最新ではありません。"
+  },
+  "twListTitle": {
+    "message": "bento/home のリリース一覧が本物ではありません"
+  },
+  "twListBody": {
+    "message": "bento.page が Bento の署名のないリリース一覧を送ったため、home.bento.page を確認できません。クリックすると詳細を表示します。"
+  },
+  "twBadgeTitle": {
+    "message": "bento/home が署名済みのリリースと一致しませんでした"
+  },
+  "twPageTitle": {
+    "message": "bento/home のコード確認"
+  },
+  "twPageLead": {
+    "message": "この拡張機能は、home.bento.page がブラウザに送るコードを、Bento がオフラインのリリース鍵で署名したリリースと照合します。報告するだけで、何も変更・ブロックしていません。"
+  },
+  "twPageDo": {
+    "message": "bento/home のタブを閉じ、原因がわかるまでそこでドキュメントを開いたり編集・保存したりしないでください。この確認によってディスク上のファイルが変わることはありません。"
+  },
+  "twPageReport": {
+    "message": "以下の詳細を添えて、非公開で報告してください:"
+  },
+  "twPageReportLink": {
+    "message": "Bento に報告"
+  },
+  "twPageCopy": {
+    "message": "詳細をコピー"
+  },
+  "twPageCopied": {
+    "message": "コピーしました"
+  },
+  "twPageRecent": {
+    "message": "最近の確認"
+  },
+  "twPageNone": {
+    "message": "まだ確認の記録はありません。"
+  },
+  "twPageNotFound": {
+    "message": "その確認は記録にありません。"
+  },
+  "twPageListNone": {
+    "message": "署名済みのリリース一覧がまだありません。home.bento.page は一度も確認されていません。"
+  },
+  "twPageListHeld": {
+    "message": "リリース一覧 #$1（$2 に取得）と照合しています。"
+  },
+  "twNeverTitle": {
+    "message": "bento/home は確認されていません"
+  },
+  "twNeverBody": {
+    "message": "この拡張機能は 3 日間 Bento の署名済みリリース一覧を取得できていないため、home.bento.page が送るコードは確認されていません。"
   }
 }

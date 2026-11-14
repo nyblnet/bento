@@ -5,7 +5,7 @@
 // the complete static site for bento.page into ./site/.
 //
 //   node scripts/release.mjs [--app slides|spaces|dash] [--no-build] [--key path] [--out dir]
-//                            [--home-web --frame-origin <url> [--home-web-out dir] [--home-web-dev]]
+//                            [--home-web --frame-origin <url> [--home-web-out dir] [--home-web-dev] [--home-web-first]]
 //
 // ONE RELEASE BUILDS ONE APP, and `site/` is mirrored authoritatively — so the
 // site is SEEDED from the published tree first and this build overwrites only
@@ -43,7 +43,7 @@ import { fileURLToPath } from 'node:url'
 import { spliceDoc } from './guestbook-deck.mjs'
 import { gateShell } from './shell-gate.mjs'
 import { APPS, RELEASE_MARKER, tagFor } from './apps.mjs'
-import { homeWebOptions, homeWebKey, prepareHomeWebOut, publishedHistories, homeWebBuildArgs } from './home-web-release.mjs'
+import { homeWebOptions, homeWebKey, prepareHomeWebOut, publishedHistories, homeWebBuildArgs, servedListCheck, servedListArgs } from './home-web-release.mjs'
 import { releasePublicKey } from './sign-payload.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
@@ -218,6 +218,8 @@ if (homeWeb) {
       process.exit(1)
     }
   }
+  // the tripwire's release list: the published one to build on (or --home-web-first), before signing
+  try { servedListCheck({ site, opts: homeWeb, releaseKey: releasePublicKey }) } catch (e) { console.error(`✗ home/web: ${e.message}; nothing has been signed`); process.exit(1) }
 }
 
 // CONFORMANCE GATE — old updaters are frozen code; every release must
@@ -554,6 +556,10 @@ if (homeWeb) {
   const devKeyFile = homeWebKeyFile
   console.log(`• home/web: ${homeWeb.dev ? 'DEVELOPMENT ' : ''}build with ${histories.map((h) => h.appId).join(', ')} histories, frame ${homeWeb.frameOrigin} → ${homeWeb.out} (not deployed)`)
   execFileSync('node', homeWebBuildArgs({ root, opts: homeWeb, histories, devKeyFile }), { stdio: 'inherit' })
+  // the list the bento/home extension's tripwire checks home.bento.page against, signed
+  // into the site: publish the site (and so the list) BEFORE deploying this build
+  console.log(`• home/web: signing the bento/home release list${homeWeb.first ? ' (the first)' : ''} → releases/home-web/served.json`)
+  execFileSync('node', servedListArgs({ root, site, opts: homeWeb, keyPath: opt('key', null) }), { stdio: 'inherit' })
 }
 
 console.log(`\nSite assembled for ${app.appId} v${version}:`)
@@ -561,5 +567,6 @@ execFileSync('find', [site, '-type', 'f'], { stdio: 'inherit' })
 console.log(
   `\nNext (docs/RELEASING.md):\n` +
   `  git push origin ${tagFor(app, version)}      # the GitHub release is created FOR the tag\n` +
-  `  node scripts/publish-site.mjs "release ${tagFor(app, version)}"`,
+  `  node scripts/publish-site.mjs "release ${tagFor(app, version)}"` +
+  (homeWeb ? `\n  # then, and only then, deploy ${homeWeb.out} (the site now carries its release list)` : ''),
 )

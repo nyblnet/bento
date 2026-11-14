@@ -946,5 +946,68 @@
   "menuOpenWithId": {
     "message": "Buksan gamit ang Bento ID",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "Hindi naghahatid ang bento/home ng release ng Bento"
+  },
+  "twMismatchBody": {
+    "message": "Ang code na ipinadala ng home.bento.page sa browser na ito ay hindi tumutugma sa anumang release na pinirmahan ng Bento. Isara ang tab na iyon at huwag magbukas ng mga dokumento roon. I-click para sa mga detalye."
+  },
+  "twOldTitle": {
+    "message": "Naghahatid ang bento/home ng mas lumang release"
+  },
+  "twOldBody": {
+    "message": "Ang code na ipinadala ng home.bento.page sa browser na ito ay tunay na release ng Bento, pero hindi ang pinakabago."
+  },
+  "twListTitle": {
+    "message": "Hindi tunay ang listahan ng release ng bento/home"
+  },
+  "twListBody": {
+    "message": "Nagpadala ang bento.page ng listahan ng release na hindi pinirmahan ng Bento, kaya hindi masusuri ang home.bento.page. I-click para sa mga detalye."
+  },
+  "twBadgeTitle": {
+    "message": "Hindi tumugma ang bento/home sa isang pinirmahang release"
+  },
+  "twPageTitle": {
+    "message": "Pagsusuri ng code ng bento/home"
+  },
+  "twPageLead": {
+    "message": "Inihahambing ng extension na ito ang code na ipinapadala ng home.bento.page sa iyong browser sa mga release na pinipirmahan ng Bento gamit ang offline na release key nito. Nag-uulat lang ito: wala itong binago o hinarangan."
+  },
+  "twPageDo": {
+    "message": "Isara ang tab ng bento/home, at huwag magbukas, mag-edit o mag-save ng mga dokumento roon hangga't hindi ito naipapaliwanag. Hindi binabago ng pagsusuri ang mga file sa iyong disk."
+  },
+  "twPageReport": {
+    "message": "Pakiulat ito nang pribado, kasama ang mga detalye sa ibaba:"
+  },
+  "twPageReportLink": {
+    "message": "Iulat sa Bento"
+  },
+  "twPageCopy": {
+    "message": "Kopyahin ang mga detalye"
+  },
+  "twPageCopied": {
+    "message": "Nakopya na"
+  },
+  "twPageRecent": {
+    "message": "Mga kamakailang pagsusuri"
+  },
+  "twPageNone": {
+    "message": "Wala pang naitalang pagsusuri."
+  },
+  "twPageNotFound": {
+    "message": "Wala sa talaan ang pagsusuring iyon."
+  },
+  "twPageListNone": {
+    "message": "Wala pang pinirmahang listahan ng release: hindi pa kailanman nasuri ang home.bento.page."
+  },
+  "twPageListHeld": {
+    "message": "Sinusuri gamit ang listahan ng release #$1, kinuha noong $2."
+  },
+  "twNeverTitle": {
+    "message": "Hindi pa nasusuri ang bento/home"
+  },
+  "twNeverBody": {
+    "message": "Hindi makuha ng extension na ito ang pinirmahang listahan ng release ng Bento sa loob ng 3 araw, kaya hindi pa nasusuri ang code na ipinapadala ng home.bento.page."
   }
 }
