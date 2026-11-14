@@ -50,7 +50,7 @@
 //
 // BENTO_HOME_WEB_MUTANT='{"file":"verify.ts","from":"…","to":"…"}' builds a
 // mutant for the mutant rig: the build fails unless `from` occurs exactly once.
-// An array of such edits applies them in order, each held to the same rule.
+// An array of such edits is one mutant made of several.
 
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -165,6 +165,7 @@ if (mutant) {
   const copy = path.join(here, `.mutant-src-${process.pid}`)
   fs.rmSync(copy, { recursive: true, force: true })
   fs.cpSync(srcDir, copy, { recursive: true })
+  // one edit, or several (an array) that together break one rule
   for (const m of Array.isArray(mutant) ? mutant : [mutant]) {
     const f = path.join(copy, m.file)
     const text = fs.readFileSync(f, 'utf8')
@@ -304,7 +305,7 @@ fs.writeFileSync(path.join(out, 'frame/_headers'),
 
 const historyBytes = historyTexts.reduce((n, t) => n + Buffer.byteLength(JSON.stringify(t)), 0)
 const info = {
-  libraryOrigin, frameOrigin, releaseBase, dev, testKey: !!keyFile, mutant: mutant ? [mutant].flat().map((m) => m.from).join(' | ') : null, identity,
+  libraryOrigin, frameOrigin, releaseBase, dev, testKey: !!keyFile, mutant: mutant ? [].concat(mutant).map((m) => m.from).join(' + ') : null, identity,
   histories: histories.map((h) => path.relative(root, h)),
   bytes: {
     library: Buffer.byteLength(libHtml),

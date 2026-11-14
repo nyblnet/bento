@@ -21,8 +21,12 @@ Stage 1 is **open and present, nothing kept**:
   signed release of its app;
 - Download gives back exactly the bytes that verified. Nothing else is written.
 
-There is no storage (the frame is an opaque origin and the page keeps nothing),
-no file handle, no service worker, no identity (unless built with `--identity`, below) and no relay.
+There is no storage of the browser's (the frame is an opaque origin), no file
+handle, no service worker, no identity (unless built with `--identity`, below)
+and no relay. The document gets one store
+for side data (its crash-recovery copy and member key), answered by the page
+over a port, kept in the page's memory while the document is open and dropped
+when it closes: see "The document's store" below.
 
 What "only verified code" and "no network" cover, exactly:
 
@@ -68,6 +72,56 @@ as `/frame.html`, because some hosts serve a page without its extension. The lib
 path, so no header is ever appended to another (two CSP headers are two
 policies, both enforced).
 
+## The document's store
+
+`kernel/src/docstore.ts` keeps a document's crash-recovery copy and member key
+in its host when there is one. Here the host is the library, and the channel is
+a second `MessagePort` in the handshake (`kernel/src/docstoreport.ts`): the
+frame offers it to the document once, as `window.__bentoDocStore.take()`, and
+the library answers `get`, `set`, `list` and `delete` on it.
+
+- **The port is the only channel.** Nothing reads a message's origin (the frame
+  is opaque) and nothing is posted to a window: holding the port is the
+  capability.
+- **The library enforces everything**, because the document owns the frame's
+  realm: a closed op and name list, an exact key set per op, rising request
+  ids, bytes only as a plain `Uint8Array`, a cap per name (and per open, which
+  binds only once there are more names), a cap on requests in flight and on
+  the rate. Anything else is dropped unanswered
+  and counted (the root element's `data-bento-store` is `served refused
+  dropped`, for the rigs); too many drops close the store.
+- **Each open is a new entry**, minted by the library, and the store is bound
+  to the docId of the file it verified: nothing in a message names either. A
+  file claiming another document's docId gets a fresh, empty entry. Only a
+  body in one of the apps' plaintext formats has a docId here (an allowlist):
+  an encrypted file's store answers `unavailable`, even when its envelope
+  carries a docId field.
+- **Closing the document closes its store**: a port the document stashed (in a
+  popup, say) is answered nothing afterwards.
+- **Files are not written on this channel.** Saving stays the library's (and
+  will re-splice the document's data into the shell it verified).
+- **A release that predates the port never reads it** and behaves as in stage
+  1. Only shells built with this kernel use it.
+
+Not yet: keeping the store past the open. Stage 2's per-entry recovery cache in
+the library's own storage, cleared when a write-back succeeds, plugs into the
+same `serveDocStore` through its `StoreBackend`. Before it does, two things the
+in-memory store cannot show must hold, each with a rig row and a mutant:
+
+- **A write in flight at close does not survive the clear (S2-a).** With a
+  backend that awaits (as IndexedDB does), a `set` posted before the document
+  closes can land after the entry was dropped, and the same race hits the clear
+  after a write-back. The host re-checks that the session is open after every
+  backend await, and the drop or clear runs only after in-flight requests have
+  settled.
+- **A session cannot overwrite a record written under another docId (S2-b).**
+  The docId check guards reads today, not writes: a second session on the same
+  entry with a different docId reads `null` but its `set` replaces the record.
+  A persistent per-file entry would make that a way to destroy a device's
+  member key by opening a different file under the same entry. Records are
+  keyed by entry AND docId, or `set` refuses when the held record's docId
+  differs.
+
 ## Build and run locally
 
 ```sh
@@ -111,7 +165,7 @@ the frame page at most 4 KB (`scripts/test-home-web.mjs`).
 | rig | what |
 |---|---|
 | `scripts/test-home-web.mjs` | the library and frame in a real browser (`BENTO_BROWSER=chromium\|webkit\|firefox`): verification, network allow-list, frame-page standalone refusals, downloads, navigation |
-| `scripts/test-home-web-mutants.mjs` | fourteen mutants, each red on the row that guards it |
+| `scripts/test-home-web-mutants.mjs` | nineteen mutants, each red on the row that guards it |
 | `scripts/test-home-web-build.mjs` | production-build refusals, the release's `--home-web` options and history choice, a rehearsal release with `--home-web` |
 | `scripts/test-home-web-build-mutants.mjs` | mutants of those refusals, each red on its row |
 | `scripts/test-home-web-out.mjs` | where a release may put the build: identity containment, the macOS firmlink row and its mutant |
@@ -175,9 +229,9 @@ real sign-in host against it (`--chrome`, and `--mutants`: a mutant per rule).
 
 ## Not in stage 1
 
-- Saving. ⌘S in the document is declined and the library says so. Editing with
-  write-back needs a per-document store over the frame's port, a kernel
-  transport.
+- Saving. ⌘S in the document is declined and the library says so. The
+  per-document store over the frame's port exists (above); write-back with a
+  re-splice into the verified shell is next.
 - A security floor in the release history (a signed mark on releases with known
   script bugs): stage 1 runs any release in the history, with no storage, keys
   or handles to reach.

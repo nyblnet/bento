@@ -30,16 +30,23 @@ jobs:
     # roster, passkey, mail or header rule) in a copy of the tree, and the
     # directory rigs must fail a row. A mutant that no longer applies, or a
     # rig that crashes instead of counting, fails this job. Its own job: at
-    # ~7 s a mutant on a runner it outgrew validate's 20 minutes.
+    # ~7 s a mutant on a runner it outgrew validate's 20 minutes. Three
+    # shards side by side: at 160 mutants and ~11 s each (the kernel's
+    # option-G verifiers made each rig run slower) one job no longer fits
+    # 30 minutes; each shard runs every third mutant and its own positive control.
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
       - name: bento/connect directory mutants
-        run: node scripts/test-directory-mutants.ts
+        run: node scripts/test-directory-mutants.ts --shard ${{ matrix.shard }}/3
 
   share-signin-browser:
     runs-on: ubuntu-latest
@@ -81,6 +88,20 @@ jobs:
         # popups ON THE POPUP severs it in Chromium, which is why the sign-in
         # host sends no COOP at all.
         run: node scripts/test-signin-host-coop.mjs --chrome
+      - name: Sign-in host's own pages, Playwright headless shell
+        # /setup, /reset and /account: the REAL directory worker and Roster
+        # object for the routes it has, the contract stub for the sign-in and
+        # sign-out routes it does not have yet, a CDP virtual authenticator.
+        # Opening a mailed link sends nothing and drops the token from the
+        # address bar; a setup is stored only after a sign-in with the new
+        # passkey names the link's address; a reset stores nothing and never
+        # overwrites an older passkey; sign out everywhere needs a member's
+        # passkey; no page answers a message; a mutant per rule.
+        run: node scripts/test-signin-host-pages.mjs
+      - name: Sign-in host's own pages, Google Chrome
+        run: node scripts/test-signin-host-pages.mjs --chrome
+      - name: Sign-in host's own pages, WebKit (the rows that need no passkey)
+        run: node scripts/test-signin-host-pages.mjs --webkit
 
   share-directory-void-page:
     # The void page (server/directory/src/voidpage.js) in a real browser: the

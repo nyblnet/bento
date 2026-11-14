@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Reset bento/id</title>
+<link rel="stylesheet" href="/signin.css">
+<script type="module" src="/link.js"></script>
+</head>
+<body data-link="reset" data-state="loading">
+<main>
+  <p class="brand">bento/id</p>
+
+  <section data-for="loading">
+    <p>Loading…</p>
+  </section>
+
+  <section data-for="ready" hidden>
+    <h1>Reset bento/id</h1>
+    <p>Make a new passkey for <strong data-address></strong>. In 72 hours it replaces every passkey on the account.</p>
+    <p class="warn">Until then your old passkeys keep working, and anyone with them, or with this email, can cancel the reset.</p>
+    <div class="actions">
+      <button id="make" type="button" class="primary">Make a new passkey</button>
+    </div>
+  </section>
+
+  <section data-for="working" hidden>
+    <h1>Working…</h1>
+    <p>Follow your browser’s passkey prompt.</p>
+  </section>
+
+  <section data-for="waiting" hidden>
+    <h1>Your reset is waiting</h1>
+    <p>It takes effect at <strong id="ripens"></strong>. Then the new passkey is the only one on <strong data-address></strong>, and you can sign in with it here.</p>
+    <p>An email about the reset is on its way to that address, with a link that cancels it.</p>
+    <button type="button" data-close>Close</button>
+  </section>
+
+  <section data-for="failed" hidden>
+    <h1>Not reset</h1>
+    <p>Nothing changed. If this link was used already or is more than a day old, ask for a new one.</p>
+    <div class="actions">
+      <button id="retry" type="button">Try again</button>
+      <button type="button" data-close>Close</button>
+    </div>
+  </section>
+
+  <section data-for="refused" hidden>
+    <h1>This link doesn’t work</h1>
+    <p>It is not a complete bento/id reset link. Open the link from the email exactly as it came, and never paste it into a page.</p>
+    <button type="button" data-close>Close</button>
+  </section>
+</main>
+</body>
+</html>
