@@ -38,11 +38,16 @@ main {
 }
 .brand { margin: 0 0 16px; font-weight: 600; color: var(--muted); }
 h1 { font-size: 20px; margin: 0 0 12px; }
+h2 { font-size: 17px; margin: 0 0 8px; }
 section { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
 dl { margin: 0 0 12px; }
 dt { color: var(--muted); font-size: 13px; margin-top: 8px; }
 dd { margin: 0; overflow-wrap: anywhere; }
 code { font: 14px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.note { color: var(--muted); font-size: 14px; }
+label { display: block; margin: 12px 0 4px; }
+input[type=email] { font: inherit; width: 100%; min-height: 44px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--fg); }
+section + section { margin-top: 12px; }
 .warn { background: var(--warn-bg); color: var(--warn-fg); border-radius: 6px; padding: 8px 10px; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 button {
