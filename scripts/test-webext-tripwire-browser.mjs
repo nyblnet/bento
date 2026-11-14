@@ -145,7 +145,8 @@ const serve = (key) => http.createServer((req, res) => {
   const f = state[key].get(p) ?? (key === 'lib' ? state.fallback : null)
   if (!f) { res.writeHead(404).end(); return }
   res.writeHead(f.status ?? 200, f.headers)
-  if (f.hold) { res.write(f.body); HELD.push(res) } else res.end(f.body)
+  // `split: [byte, ms]` sends the body up to `byte`, waits, then the rest (a slow link)
+  if (f.split) { const [i, ms] = f.split; res.write(f.body.subarray(0, i)); setTimeout(() => { try { if (f.hold) { res.write(f.body.subarray(i)); HELD.push(res) } else res.end(f.body.subarray(i)) } catch {} }, ms) } else if (f.hold) { res.write(f.body); HELD.push(res) } else res.end(f.body)
 })
 const servers = [[serve('lib'), pl], [serve('frame'), pf], [serve('chan'), pr]]
 for (const [s, port] of servers) await new Promise((r) => s.listen(port, '127.0.0.1', r))
@@ -568,8 +569,25 @@ if (row('carries-app')) {
   ok(v.lib?.list.status === 'invalid' && v.lib?.verdict === 'unchecked', `refused as invalid (${v.lib?.list.status}, ${v.lib?.verdict})`)
 }
 
+
+if (row('about-popup')) {
+  section('about-popup: a hostile script writes code into an about:blank popup of the library origin  (rule: about: documents are judged by the origin they run in)')
+  const js = "document.addEventListener('click',function(){var w=window.open('about:blank');w.document.write('<p>hostile popup<script>fetch(\"/popup-evil\")<'+'/script>');w.document.close()})"
+  await fresh({ lib: both(hostileScriptPage(js)) })
+  const h0 = state.hits.length
+  const t0 = Date.now()
+  await page.goto(`${LIB}/`)
+  await sleep(500)
+  const popP = ctx.waitForEvent('page', { timeout: 5000 }).catch(() => null)
+  await page.mouse.click(50, 200)
+  const pop = await popP
+  const ev = await until(async () => (await since(t0)).find((e) => e.url.startsWith('about:')), 15000)
+  ok(!!pop && state.hits.slice(h0).includes('lib /popup-evil'), 'the popup ran the hostile code (the attack is real)')
+  ok(ev?.verdict === 'mismatch' && ev.origin === LIB && ev.page.flags.some((f) => f.startsWith('document:about')), `the about: document is on record as a mismatch of the library origin (${ev?.verdict} ${ev?.origin} ${ev?.page?.flags})`)
+  if (pop) await pop.close().catch(() => {})
+}
 // --- rows with a service worker ---------------------------------------------------
-const SW_ROWS = ['shadow-root', 'sw-honest', 'sw-script-bytes', 'sw-custom-path', 'sw-cache-extra', 'sw-cache-poisoned', 'sw-navigation-only', 'sw-markup', 'sw-size', 'script-rewrite']
+const SW_ROWS = ['shadow-root', 'shadow-root-removed', 'sw-honest', 'sw-script-bytes', 'sw-custom-path', 'sw-cache-extra', 'sw-cache-poisoned', 'sw-navigation-only', 'sw-markup', 'sw-size', 'script-rewrite']
 async function withWorker(script, { scope = '/', url = '/sw.js' } = {}) {
   // the stage-1 library's CSP refuses workers; the rig registers through a page with CSP bypassed
   await page.goto('about:blank')
@@ -763,6 +781,43 @@ if (row('shadow-root')) {
   const ran = await page.evaluate(() => document.title === 'DSD').catch(() => false)
   ok(ran, 'the hidden handler ran (the attack is real)')
   ok(v.lib?.verdict === 'mismatch' && rules(v.lib) === 'markup' && v.lib.page.flags.includes('shadow-root'), `a shadow root is markup (${v.lib?.verdict} ${rules(v.lib)} ${v.lib?.page.flags})`)
+  await noWorkers()
+}
+
+if (row('shadow-root-removed')) {
+  section('shadow-root-removed: a hostile worker streams a declarative shadow root whose script removes its own host, same length  (rule: every element walked is checked for a shadow root)')
+  await fresh()
+  const t = libDoc.body.toString('utf8')
+  const LONG = 'Only the code of signed Bento releases runs here, each document in its own sandbox. Saving changes is not available on this page yet: to edit, open the file in your browser directly or in the Bento app.'
+  const meta = /<meta http-equiv="Content-Security-Policy" content="[^"]*">/.exec(t)[0]
+  const style = /<style>([\s\S]*?)<\/style>/.exec(t)[1]
+  const SPLIT = '<template shadowrootmode'
+  const inj = '<div id="h">' + '<p>'.repeat(300) + '<template shadowrootmode="open"><script>fetch("/evil-ran-dsdw");window.__evil=1;document.getElementById("h").remove()<\/script></template></div>'
+  const room = LONG.length + style.length
+  if (inj.length > room) throw new Error('the injection does not fit')
+  const pairs = [[style, ''], [LONG, inj.padEnd(room, ' ')], [meta, ' '.repeat(meta.length)]]
+  const sw = SW_HONEST.replace("e.respondWith(caches.match(e.request, { ignoreSearch: true }).then((r) => r || fetch(e.request)))",
+    `if (e.request.mode === 'navigate') {
+    e.respondWith(caches.match('/').then(async (r) => {
+      let t = await r.text()
+      for (const [a, b] of ${JSON.stringify(pairs)}) t = t.replace(a, () => b)
+      const h = new Headers(r.headers)
+      h.set('content-security-policy', "script-src 'unsafe-inline'; connect-src 'self'")
+      const i = t.indexOf(${JSON.stringify(SPLIT)})
+      const enc = new TextEncoder()
+      const s = new ReadableStream({ async start(c) { c.enqueue(enc.encode(t.slice(0, i))); await new Promise((z) => setTimeout(z, 800)); c.enqueue(enc.encode(t.slice(i))); c.close() } })
+      return new Response(s, { headers: h })
+    }))
+    return
+  }
+  e.respondWith(caches.match(e.request, { ignoreSearch: true }).then((r) => r || fetch(e.request)))`)
+  needWorker(await withWorker(sw))
+  state.lib.set('/sw.js', { body: Buffer.from(SW_HONEST), headers: { 'content-type': 'text/javascript' } })
+  const h0 = state.hits.length
+  const v = await visit(page, `${LIB}/`)
+  const ran = state.hits.slice(h0).includes('lib /evil-ran-dsdw') || await page.evaluate(() => !!window.__evil).catch(() => false)
+  ok(ran && v.lib?.page.viaWorker, 'the hidden script ran under the worker and removed its host (the attack is real)')
+  ok(v.lib?.verdict === 'mismatch' && v.lib.page.flags.includes('shadow-root'), `a removed shadow host is still flagged (${v.lib?.verdict} ${rules(v.lib)} ${v.lib?.page.flags})`)
   await noWorkers()
 }
 

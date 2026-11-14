@@ -68,6 +68,9 @@ const MUTANTS = [
     { file: O, from: "    if (shadowOf(el)) flag('shadow-root')\n", to: '\n' },
     { file: O, from: "for (const el of recent) if (shadowOf(el)) flag('shadow-root')", to: '' },
     { file: O, from: "if (shadowOf(el)) { flag('shadow-root'); break }", to: 'if (false) break' }] },
+  // security re-check, N2 and N3
+  { name: 'about: senders judged by their URL (N2)', row: 'about-popup', file: W, from: "if (scheme === 'about:' || scheme === 'blob:') origin = sender.origin", to: '' },
+  { name: 'only the live document checked for shadow roots (N3)', row: 'shadow-root-removed', file: O, from: "for (const el of [...document.querySelectorAll('*'), ...walked]) if (shadowOf(el))", to: "for (const el of document.querySelectorAll('*')) if (shadowOf(el))" },
   { name: 'a withdrawn release is quiet (R1)', row: 'withdrawn', file: J, from: 'if (list.releases[index].withdrawn) return', to: 'if (false) return' },
   { name: 'a list carrying app is taken (R2)', row: 'carries-app', file: J, from: "if ('app' in p) return", to: 'if (false) return' },
   { name: 'never checked is never said (R3)', row: 'never-checked', file: W, from: 'if (now - since > NEVER_MS) event.warned.push(', to: 'if (false) event.warned.push(' },

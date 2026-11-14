@@ -5,9 +5,11 @@
 // pages, in the ISOLATED world, from document_start. It observes; it changes
 // nothing in the page. It reports TWICE: an early report from inside the
 // MutationObserver callback each time a script is first seen or grows, or a
-// flag is raised (that message leaves BEFORE the script runs, so a script that
-// navigates away, to a blob: document say, cannot stop it), and a full report
-// once the parse ends. The extension judges both (tripwire.js,
+// flag is raised (that message leaves BEFORE the script runs, so a script the
+// observer saw cannot stop the record by navigating away, to a blob: document
+// say), and a full report once the page leaves the loading state. NOT covered:
+// a script inside a declarative shadow root runs before the observer can see
+// it (attaching the root changes nothing the observer watches). The extension judges both (tripwire.js,
 // tripwire-judge.js); an early report with no full report after it is judged
 // on its own.
 //
@@ -134,6 +136,8 @@
     }
   }
   const recent = new Set() // elements added lately: a declarative shadow root is attached after its host is inserted
+  // every element the observer ever walked, so a host the page removes is still checked at report time
+  const walked = []
   function walk(node) {
     if (node.nodeType !== 1) {
       // text arriving inside a script the parser is still reading
@@ -141,8 +145,8 @@
       if (p && p.nodeType === 1 && p.localName === 'script') noteScript(p)
       return
     }
-    noteElement(node); recent.add(node)
-    for (const el of node.querySelectorAll('*')) { noteElement(el); recent.add(el) }
+    noteElement(node); recent.add(node); walked.push(node)
+    for (const el of node.querySelectorAll('*')) { noteElement(el); recent.add(el); walked.push(el) }
   }
   const scriptList = () => seen.map((e) => (e.src != null ? { src: cut(e.src) } : { sha256: sha256Sync(e.text), length: e.text.length }))
   let lastEarly = ''
@@ -191,8 +195,8 @@
     sent = true
     onRecords(mo.takeRecords())
     mo.disconnect()
-    // the parse is over: any shadow root anywhere
-    for (const el of document.querySelectorAll('*')) if (shadowOf(el)) { flag('shadow-root'); break }
+    // any shadow root on the page now, or on any element the observer ever walked (a host may be gone)
+    for (const el of [...document.querySelectorAll('*'), ...walked]) if (shadowOf(el)) { flag('shadow-root'); break }
     const errors = []
     const scripts = []
     for (const e of seen) {

@@ -14020,16 +14020,22 @@ each red on the row that guards it).
 
 The review of the tripwire (entry above) broke it by running. What changed:
 
-- **A page cannot stop the check by leaving.** The content script also reports
-  from INSIDE its observer callback, each time a script is first seen, so that
-  message leaves before the script runs. An early report that no full report
-  follows within 10 seconds is judged on its own: a script no release lists,
-  or any flag, is a mismatch. A `blob:` or `about:` document of the library
-  origin (which the library never makes) is observed and is a mismatch.
+- **A page that leaves after a script it showed is still on record.** The
+  content script also reports from INSIDE its observer callback, each time a
+  script is first seen, so that message leaves before the script runs. An
+  early report that no full report follows within 10 seconds is judged on its
+  own: a script no release lists, or any flag, is a mismatch. A `blob:` or
+  `about:` document of the library origin (which the library never makes) is
+  observed, judged by the origin the browser says it runs in, and is a
+  mismatch. Not covered: a script inside a declarative shadow root runs before
+  the observer can see it, and can leave with nothing recorded.
 - **Nothing unobserved passes.** On the library without a worker, bytes that
   cannot be read from the HTTP cache are a mismatch (the honest library is
-  sent `no-cache`, which Chrome stores); a size of 0 or an unfinished parse
-  is never a pass, on either site. Every wait in the content script is bounded.
+  sent `no-cache`, which Chrome stores); a size of 0, or a report sent after
+  30 seconds without the parse ending, is never a pass, on either site
+  (`complete: true` means only that the page left the loading state in time;
+  a visit cut short reports it too). Every wait in the content script is
+  bounded.
 - **No one else can make it shout.** The library is judged only as a
   top-level page, the frame page only in a frame. A page with no script and no
   flag at a path no release serves is recorded quietly. Loud warnings come once
@@ -14038,7 +14044,7 @@ The review of the tripwire (entry above) broke it by running. What changed:
   observations are capped, going over a cap is a mismatch, and an event too big
   to store is stored compact. The report page shows the check it was opened
   for, or says it is not on record.
-- **Shadow roots are markup**, declarative or attached.
+- **Shadow roots are markup**, declarative or attached: flagged when the observer next looks, and at report time on every element it ever walked, even one the page removed. What is inside one is not seen.
 - **The format, before its first signing:** a release may be `withdrawn: true`,
   and serving it is a loud mismatch rather than a quiet "outdated"; a payload
   carrying `app` is refused. The signer needs the published list (or
@@ -14046,14 +14052,17 @@ The review of the tripwire (entry above) broke it by running. What changed:
 - **"Never checked" is said:** after three days without a list, a quiet
   notification, and the report page always names the list in use.
 - **Stated as limits:** the hostile code has run before anything is reported;
-  a worker can change response headers without the tripwire seeing; the frame
+  a worker can change response headers without the tripwire seeing, and with
+  a `no-store` network answer under a worker there is no CSP check at all; the frame
   page's bytes are never observed; a rolled-back list is only recorded.
 
 - **A release signs the list.** `release.mjs --home-web` signs it into the
   site (`releases/home-web/served.json`) after building home/web, on top of
   the published list; `--home-web-first` only for the very first. A missing
   list without it, `--home-web-first` over a published list, and a development
-  build with the release key are refused before anything is signed.
+  build with the release key are refused before anything is signed, and so is
+  a published list that does not verify against the key the release signs
+  with, or is not a v1 bento/home list.
 
 Guards: the rows and mutants in `scripts/test-webext-tripwire-browser.mjs`,
 `scripts/test-webext-tripwire-mutants.mjs`, `scripts/test-webext-tripwire.ts`,

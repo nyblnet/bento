@@ -81,7 +81,11 @@ const MUTANTS = [
     expect: '--home-web-first over a published list' },
   { name: 'served-dev-release-key', file: R, from: '  if (opts.dev && !opts.devKey) throw', to: '  if (false) throw',
     expect: '--home-web-dev with the release key' },
-  { name: 'served-checked-after-signing', file: REL, from: '  try { servedListCheck({ site, opts: homeWeb }) }', to: '  try { }',
+  { name: 'served-held-unverified', file: R, from: '    try { list = verifyEnvelope(readFileSync(file, \'utf8\'), opts.devKey ?? releaseKey()) } catch (e) {', to: '    try { list = JSON.parse(JSON.parse(readFileSync(file, \'utf8\')).payload ?? \'null\') } catch (e) {',
+    expect: 'a published list signed by another key' },
+  { name: 'served-held-any-shape', file: R, from: "    if (list?.type !== 'bento/home-web/served' || list.v !== 1", to: "    if (false && list.v !== 1",
+    expect: 'a published list of another type' },
+  { name: 'served-checked-after-signing', file: REL, from: '  try { servedListCheck({ site, opts: homeWeb, releaseKey: releasePublicKey }) }', to: '  try { }',
     expect: 'no published list and no --home-web-first' },
 ]
 

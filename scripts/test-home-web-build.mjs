@@ -318,6 +318,19 @@ section('release.mjs --home-web: the release list, before anything is signed')
   const a = release([...REHEARSE, '--home-web-out', staleOut('nolist.home-web')], 'site-nolist', { published: seedNoList })
   ok(a.status !== 0 && /--home-web-first/.test(a.stderr) && !signedIn(a.site).length, `no published list and no --home-web-first: refused, nothing signed (exit ${a.status})`)
   const seedList = publishedTree('published-haslist', { 'releases/spaces/manifest.json': '{}', 'releases/spaces/history.json': SPACES_HISTORY, 'releases/home-web/served.json': '{}' })
+  // the held list is verified before signing too (security re-check N5): junk, another key, another type
+  const listPayload = (extra = {}) => JSON.stringify({ type: 'bento/home-web/served', v: 1, serial: 3, at: '2026-11-01T00:00:00.000Z', releases: [], ...extra })
+  const otherPriv = generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey
+  const signOther = (payload) => JSON.stringify({ payload, sig: nodeSign('sha256', Buffer.from(payload), { key: otherPriv, dsaEncoding: 'ieee-p1363' }).toString('base64') })
+  for (const [n, [label, list, pattern]] of [
+    ['a published list that is junk ({})', '{}', /does not verify/],
+    ['a published list signed by another key', signOther(listPayload()), /does not verify/],
+    ['a published list of another type', signThrowaway(listPayload({ type: 'bento/other' })), /not a v1 bento\/home list/],
+  ].entries()) {
+    const seed = publishedTree(`published-list-${n}`, { 'releases/spaces/manifest.json': '{}', 'releases/spaces/history.json': SPACES_HISTORY, 'releases/home-web/served.json': list })
+    const r = release([...REHEARSE, '--home-web-out', staleOut(`list-${n}.home-web`)], `site-list-${n}`, { published: seed })
+    ok(r.status !== 0 && pattern.test(r.stderr) && !signedIn(r.site).length, `${label}: refused with a reason, nothing signed (exit ${r.status}: ${r.stderr.trim().split('\n').pop()?.slice(0, 100)})`)
+  }
   const b = release([...REHEARSE, '--home-web-first', '--home-web-out', staleOut('haslist.home-web')], 'site-haslist', { published: seedList })
   ok(b.status !== 0 && /already published/.test(b.stderr) && !signedIn(b.site).length, `--home-web-first over a published list: refused, nothing signed (exit ${b.status})`)
   // a published tree holding no app, so no seeded history stands in the way of the check this row is about

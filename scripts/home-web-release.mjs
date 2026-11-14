@@ -11,6 +11,10 @@
 
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
+import { verifyEnvelope } from './sign-payload.mjs'
+
+/** The only library origin a release builds for (and lists). */
+export const LIBRARY_ORIGIN = 'https://home.bento.page'
 
 /**
  * Read release.mjs's home/web options. Returns null when --home-web is absent.
@@ -43,7 +47,7 @@ export function homeWebOptions({ args, opt, site }) {
     throw new Error('--home-web needs --frame-origin <url>: the frame site is a separate domain, and it is the maintainer\'s to choose (there is no default)')
   }
   if (outArg !== null && outArg.startsWith('--')) throw new Error('--home-web-out needs a folder')
-  return { frameOrigin, out: resolve(outArg ?? `${site}.home-web`), dev, first, devKey: null }
+  return { frameOrigin, libraryOrigin: LIBRARY_ORIGIN, out: resolve(outArg ?? `${site}.home-web`), dev, first, devKey: null }
 }
 
 /** A folder's identity on disk: device and inode, whatever path text reaches it. */
@@ -152,6 +156,7 @@ export function publishedHistories(site, apps, pending = null) {
 /** The home/web/build.mjs arguments for a release (`check`: run its checks only, write nothing). */
 export function homeWebBuildArgs({ root, opts, histories, devKeyFile, check = false }) {
   const a = [join(root, 'home/web/build.mjs'), '--out', opts.out, '--frame-origin', opts.frameOrigin]
+  if (opts.libraryOrigin) a.push('--library-origin', opts.libraryOrigin)
   if (check) a.push('--check')
   for (const h of histories) a.push('--history', h.file)
   if (opts.dev) a.push('--dev')
@@ -170,16 +175,31 @@ export function homeWebBuildArgs({ root, opts, histories, devKeyFile, check = fa
 export const servedListPath = (site) => join(site, 'releases/home-web/served.json')
 
 /**
- * Before anything is signed, on the SEEDED site: the published list must be
- * there to build on, unless this is the very first (--home-web-first), and
- * --home-web-first must not start over a list that exists. A development
- * build's list is signed with a throwaway key only.
+ * Before anything is signed, on the SEEDED site, every refusal the list's
+ * signer (sign-home-web-served.mjs) would make after signing: the published
+ * list must be there to build on (unless this is the very first,
+ * --home-web-first, which must not start over a list that exists), it must
+ * verify against the key the release signs with (the release key, or a
+ * rehearsal's throwaway key) and be a v1 bento/home list, a release lists only
+ * https://home.bento.page, and a development build's list is signed with a
+ * throwaway key only. `releaseKey()` returns the release public key.
  */
-export function servedListCheck({ site, opts }) {
-  const held = existsSync(servedListPath(site))
+export function servedListCheck({ site, opts, releaseKey }) {
+  const file = servedListPath(site)
+  const held = existsSync(file)
   if (!held && !opts.first) throw new Error('no bento/home release list is published (releases/home-web/served.json): every extension would refuse a new one as a rollback. The very first passes --home-web-first')
   if (held && opts.first) throw new Error('a bento/home release list is already published: --home-web-first would start it over, and every extension would refuse it as a rollback')
   if (opts.dev && !opts.devKey) throw new Error('--home-web-dev signs the bento/home release list with a throwaway key only: pass --key <throwaway key>')
+  if (!opts.dev && opts.libraryOrigin !== LIBRARY_ORIGIN) throw new Error(`a release lists only ${LIBRARY_ORIGIN} as the library origin, not ${opts.libraryOrigin}`)
+  if (held) {
+    let list
+    try { list = verifyEnvelope(readFileSync(file, 'utf8'), opts.devKey ?? releaseKey()) } catch (e) {
+      throw new Error(`the published bento/home release list (releases/home-web/served.json) does not verify against the key this release signs with (${e.message}): find out why before releasing; starting it over would be a rollback for every extension`)
+    }
+    if (list?.type !== 'bento/home-web/served' || list.v !== 1 || !Number.isSafeInteger(list.serial) || !Array.isArray(list.releases)) {
+      throw new Error('the published bento/home release list (releases/home-web/served.json) is signed but is not a v1 bento/home list')
+    }
+  }
 }
 
 /** The sign-home-web-served.mjs arguments for a release. */

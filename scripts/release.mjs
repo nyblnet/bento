@@ -219,7 +219,7 @@ if (homeWeb) {
     }
   }
   // the tripwire's release list: the published one to build on (or --home-web-first), before signing
-  try { servedListCheck({ site, opts: homeWeb }) } catch (e) { console.error(`✗ home/web: ${e.message}; nothing has been signed`); process.exit(1) }
+  try { servedListCheck({ site, opts: homeWeb, releaseKey: releasePublicKey }) } catch (e) { console.error(`✗ home/web: ${e.message}; nothing has been signed`); process.exit(1) }
 }
 
 // CONFORMANCE GATE — old updaters are frozen code; every release must

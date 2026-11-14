@@ -13,7 +13,9 @@
 // `tripwire.observe` is the full report, which settles it. A pending early
 // report that no full report settles within ORPHAN_MS (the page navigated
 // away, to a blob: document say, or never finished) is judged on its own
-// (judgeEarly): a page cannot stop the check by leaving.
+// (judgeEarly), so a page that leaves after a script the observer saw is still
+// on record. A script hidden in a declarative shadow root can run before any
+// early report exists; that gap is stated, not closed, here.
 //
 // No state between messages (background.js rule 1): headers and pending
 // reports wait in storage.session, the list and the record in storage.local.
@@ -56,8 +58,12 @@ const serial = (fn) => { const r = chain.then(fn, fn); chain = r.then(() => {}, 
 
 /** The sender's role, or null. The library is judged only as a top-level page, the frame page only in a frame. */
 function senderRole(sender) {
-  let origin
-  try { origin = new URL(sender?.url).origin } catch { return null }
+  let origin, scheme
+  try { const u = new URL(sender?.url); origin = u.origin; scheme = u.protocol } catch { return null }
+  // An about: (or blob:) document has no origin in its URL ("about:blank" parses to "null"); the
+  // browser's sender.origin is the one it really runs in, the library's for a popup the library
+  // opened. The frame page keeps its URL: it is an opaque origin by design (sender.origin "null").
+  if (scheme === 'about:' || scheme === 'blob:') origin = sender.origin
   const role = roleOf(origin)
   if (!role || sender.id !== chrome.runtime.id) return null
   // the library is a top-level page (frame-ancestors 'none'); the frame page only ever runs framed
