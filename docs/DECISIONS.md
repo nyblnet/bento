@@ -13980,6 +13980,55 @@ after a deletion, and how long setup send times are kept are the
 maintainer's, and the pages are not published. Guard:
 `scripts/test-id-pages.mjs`.
 
+## 2026-11-12 — bento/id: the sign-in host's own pages (setup and reset links, sign in, sign out everywhere)
+
+The sign-in host (`server/signin`) gains the pages where account changes start:
+`/setup` and `/reset` (the mailed links), and `/account`. They are separate
+from the popup bento/home opens, which keeps its one request shape.
+
+- **Only an account the person proved here is remembered.** The host stores
+  which account it is signed in to (`bento-id-account`) in one function, with
+  the address the directory answered after verifying a passkey assertion made
+  on the host. A setup link is completed with a new passkey and then confirmed
+  by one sign-in with that passkey; the directory's answer must be the link's
+  address. Nothing is stored from a URL, a message, a typed address or a link,
+  and a reset stores nothing, because its passkey is not on the account until
+  the reset takes effect.
+- **A link page reads only its fragment**, in the directory's format (exactly
+  `v`, `e`, `t`), takes it out of the address bar and the tab's own history
+  entry first, and sends nothing until the person presses the button. The
+  browser's own history still records the full link (measured in Chrome's
+  History database), so a link that was opened but not used stays usable from
+  there until it is used or expires: 20 minutes for a setup link, a day for a
+  reset link. The account page reads nothing
+  from its URL. None of these pages answers a message.
+- **The passkey's user handle names the account's storage**: SHA-256 of the
+  address under the directory's storage label, then 16 random bytes. A
+  discoverable sign-in finds the account by it; the random tail means a new
+  passkey (a reset) never overwrites an older one on the same authenticator.
+  Native hosts making passkeys for this rp must use the same layout.
+- **A raw challenge is always the directory's sealed 40-byte one**, never 32
+  bytes, so a sign-in assertion can never be taken for a signed statement.
+- **Sign out everywhere** is a member's passkey assertion over a text naming
+  the account, asked on the host's own page after a confirmation; the directory
+  then refuses every browser certificate of that account made before it. It
+  takes power away only, so it has no wait. The directory's sign-in and
+  sign-out routes do not exist yet: their contract is the stub the rigs run,
+  and the signed text is provisional until the kernel defines it.
+- **No recovery code on the web**: no page makes, shows or asks for one. The
+  setup page says what a browser-only account loses.
+- **Trusted Types** with no policy are now part of the host's CSP and of the
+  hosting check.
+- **Phone approves this browser (route D)** runs no ceremony, so it is not a
+  page of this host: bento/home shows a code, the person types it into the
+  app, and the app's consent key approves. It waits for the kernel's consent
+  purposes.
+
+Guards: `scripts/test-signin-host.mjs` (the page rules as lints, each with a
+failing source; the hosting check refusing a CSP without Trusted Types),
+`scripts/test-signin-host-pages.mjs` (the real directory worker and object and
+the contract stub, a virtual authenticator in the headless shell and Chrome,
+the no-passkey rows in WebKit; a mutant per rule).
 ## 2026-11-09 — bento/home in your browser: a production build refuses development seams; a release builds it only when asked
 
 `home/web/build.mjs` used to warn and carry on when no `--history` was given
