@@ -97,7 +97,8 @@ try {
     "the origin check is e.origin !== HOME": (c) => /if \(e\.origin !== HOME\) return show\('refused', 'wrong-origin'\)/.test(c),
     'the source check is e.source !== window.opener': (c) => /if \(e\.source !== window\.opener/.test(c),
     'the request is exactly the keys W,kx,label,t': (c) => /Object\.keys\(m\)\.sort\(\)\.join\(','\) !== 'W,kx,label,t'/.test(c),
-    'rq is event.origin': (c) => /request = \{ \.\.\.r, rq: e\.origin \}/.test(c),
+    'rq is event.origin': (c) => /request = \{ \.\.\.r, rq: e\.origin, account \}/.test(c),
+    "the account is the host's own, never the request's": (c) => /const account = savedAccount\(\)\n  if \(!account\) return show\('no-account'\)/.test(c) && !/e\.data\.account|m\.account|r\.account/.test(c),
     'every await in onMessage is followed by a voided check': (c) => {
       const body = (c.match(/async function onMessage\(e\) \{\n([\s\S]*?)\n\}\n/) || [])[1]
       if (!body) return false
@@ -119,13 +120,38 @@ try {
     "the origin check is e.origin !== HOME": code.replace("if (e.origin !== HOME) return show('refused', 'wrong-origin')", ''),
     'the source check is e.source !== window.opener': code.replace('if (e.source !== window.opener', 'if (false'),
     'the request is exactly the keys W,kx,label,t': code.replace("!== 'W,kx,label,t'", "=== ''"),
-    'rq is event.origin': code.replace('request = { ...r, rq: e.origin }', 'request = { ...r, rq: e.data.rq }'),
+    'rq is event.origin': code.replace('request = { ...r, rq: e.origin, account }', 'request = { ...r, rq: e.data.rq, account }'),
+    "the account is the host's own, never the request's": code.replace('request = { ...r, rq: e.origin, account }', 'request = { ...r, rq: e.origin, account: e.data.account || account }'),
     'every await in onMessage is followed by a voided check': code.replace('  const fp = await fingerprint(r.W)\n  if (voided) return\n', '  const fp = await fingerprint(r.W)\n'),
     'the statement challenge is computed in directory-client.js': code.replace('const challenge = await challengeFor(text)', "const challenge = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))"),
   }
   for (const [name, src] of Object.entries(bad)) ok(src !== code && !lint[name](src), `MUTANT ${name}: the lint fails`)
   ok(!rules['no inline script (every <script> has a src)'](html.replace('</head>', '<script>alert(1)</script></head>')), 'MUTANT inline script: the lint fails')
   ok(!rules['no inline handler or style attribute'](html.replace('<main>', '<main onclick="x()">')), 'MUTANT inline handler: the lint fails')
+
+  // ---- 2b. the statement the passkey signs is the kernel's wdev. -------------------
+  console.log('\nthe wdev. text is the kernel\'s')
+  {
+    const { wdevText } = await import('../server/signin/public/directory-client.js')
+    const { buildDeviceCert, parseDeviceCert } = await import('../kernel/src/devices.ts')
+    const raw = async (alg, use) => Buffer.from(await crypto.subtle.exportKey('raw', (await crypto.subtle.generateKey(alg, true, use)).publicKey)).toString('base64url')
+    const W = await raw({ name: 'ECDSA', namedCurve: 'P-256' }, ['sign']), kx = await raw({ name: 'ECDH', namedCurve: 'P-256' }, ['deriveBits'])
+    const rosHash = Buffer.alloc(32, 7).toString('base64url'), nonce = Buffer.alloc(24, 9).toString('base64url')
+    const same = async (wdev, label, what) => {
+      const f = { W, kx, address: 'alice@example.com', rosHash, label, at: 1_800_000_000_000, nonce }
+      const text = wdev(f)
+      const kernel = buildDeviceCert({ kind: 'wdev', devicePub: W, consentPub: null, kx, address: f.address, rosHash, label: label || null, via: 'passkey', ceremonyAt: f.at, dirNonce: nonce })
+      return { equal: text === kernel, parses: (await parseDeviceCert(text)).ok, what }
+    }
+    for (const label of ['Chrome on MacBook', 'Ліза’s 💻', '']) {
+      const r = await same(wdevText, label)
+      ok(r.equal && r.parses, `wdevText equals kernel buildDeviceCert and parses (label ${JSON.stringify(label)})`)
+    }
+    // the provisional layout #927 shipped with: the row must see the difference
+    const old = ({ W, kx, label, nonce }) => 'wdev.' + W + '.' + kx + '.' + Buffer.from(label).toString('base64url') + '.' + nonce
+    const m = await same(old, 'Chrome on MacBook')
+    ok(!m.equal && !m.parses, 'MUTANT the provisional layout: not the kernel\'s, and the kernel refuses it')
+  }
 
   // ---- 3. the hosting check ------------------------------------------------------
   console.log('\nthe hosting check, against the real worker')
