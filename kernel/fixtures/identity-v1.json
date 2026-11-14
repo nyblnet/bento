@@ -1858,6 +1858,7 @@
   "consentG": {
     "about": "verifyConsent(text, sig, { consentPub, rp, audience, challenge, payloadText, docId, now, spend }) for purposes roster and web-add. roster covers ros. dev2. vrs. wout. adel.; web-add covers wdev. only. Every row parses, so every row spends its challenge (spendCalled). challengeSpent: the verifier's challenge book has already seen it.",
     "consentPub": "BObEq09mbfzOKESGk0Qy8BJphIt3xpHWLZaHeJ9rklUh_kr3aGgsj56a-HmWvEhYXGyondgjoElXSYVcMr2ExlI",
+    "otherConsentPub": "BOvLhZWHqgHIh1G1FMr1XvRson3dYSBuaMds1MpxXJa7PJmJ_YVnNopYuUfJDU12qPEWJCj_Auj_qt_qIk5RlWo",
     "rows": [
       {
         "name": "ok/roster-over-ros",

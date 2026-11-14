@@ -443,7 +443,8 @@ joined (`since`), `createdAt`, `lastResetAt` and `sinceExact`.
   for `deleteWaitMs` (72 h) on the directory's clock, mails the address a link
   that voids it, and carries it out only if it was not voided and the head is
   still `headHash`. The way without a passkey is the directory's emailed link,
-  which no statement carries.
+  which no statement carries. What a void does to the signer, and how a reset
+  request treats a waiting deletion, are the directory's and still open.
 - **`userHandles`: the passkey user handle.** `user.id` = SHA-256(`label` ‖
   the address in normal form) ‖ 16 random bytes, 48 bytes; `label` is
   `bento-dir/1/addr` and a line feed. Every host that makes a passkey for

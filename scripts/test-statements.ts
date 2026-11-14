@@ -239,6 +239,13 @@ console.log(`\nconsentG: the directory's LIVE check of option G's consent purpos
   const twin = byName.get('family/web-add-over-dev2')!, honest = byName.get('ok/roster-over-dev2')!
   ok(twin.payloadText === honest.payloadText && twin.text.replace('.web-add.', '.roster.') === honest.text, 'family/web-add-over-dev2 is ok/roster-over-dev2 with only the purpose changed')
   ok(G.consentPub !== F.keys.consent, 'consentG signs with its own deterministic key, not the statements section\'s random one')
+  // every committed signature is a real one: verifyConsent checks the signature LAST, so a corrupted signature on a
+  // reject row would otherwise pass this rig and --check (which masks sig) unnoticed (security-ruling-962)
+  const G2 = F.consentG as { consentPub: string; otherConsentPub: string; rows: Row[] }
+  for (const r of G2.rows) {
+    const by = r.name === 'roster/other-key' ? G2.otherConsentPub : G2.consentPub
+    ok(await verifyStatementSig(by, r.sig, r.text), `${r.name}: its signature verifies under ${r.name === 'roster/other-key' ? 'the other key' : 'consentPub'}`)
+  }
 }
 
 console.log('\nderivations: the consent transcript and the WebAuthn challenge')

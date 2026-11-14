@@ -166,10 +166,14 @@
 // it like any change (requestedAt on its clock; a second change is refused
 // while it waits), mails the address a link that voids it, and carries it out
 // DELETE_WAIT_MS (72 h) later, and only if it was not voided and the account's
-// head is still `headHash`: a reset or any other ripened link in between voids
-// it. Voiding it cancels it; it quarantines nobody (a q link's evidence is a
-// ros. text). The way without a passkey is the directory's emailed link alone,
-// which no statement carries.
+// head is still `headHash`. The way without a passkey is the directory's
+// emailed link alone, which no statement carries. OPEN for the directory's
+// deletion route, not settled here (security's review of this layout, D-A1 to
+// D-A3): what a void does to the signer (a stolen member key must not be able
+// to re-file the moment its request is voided, which would hold the queue and
+// block the owner's removal of that key), and how a reset interacts with a
+// waiting deletion (only a reset that RIPENS first changes the head; a reset
+// request must drop the deletion, never set it aside to be revived).
 //
 // --- the passkey user handle (sign-in host and native hosts alike)
 //

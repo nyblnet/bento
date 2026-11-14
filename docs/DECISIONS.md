@@ -13996,11 +13996,17 @@ verdict) and `recovery-v1.json` (unchanged, now checked in CI).
   <date>" into vouchedBy while the People panel drew its own tag from `tier`:
   two sources for one fact, which disagree the day a certificate is native,
   and a lapse found by parsing text can be cut or imitated by the text around
-  it. Every new field reads as the weaker claim when it is missing, except
-  `unconfirmedSince`, whose absence means confirmed; so that one is the
-  agent's rule: an agent that verified a `watt.` sends it whenever `mb` is not
-  0, and the per-row `mb` is how a port is held to it. No released shell
-  renders vouchedBy, so nothing frozen depends on the old form.
+  it. Absence is not always the weaker claim: a missing `tier` or
+  `accountSince` under-claims (passkey tier, a new account), but a missing
+  `revoked`, `resetAt`, `rosterChangedAt` or `unconfirmedSince` over-claims
+  (not revoked, no recent change, address confirmed). So an agent sends every
+  field that applies, and every relay between the agent and the document
+  (home/bridge.js, each native host's bridge, the extension) must pass all of
+  them through with their types checked; a relay that copies only the
+  original six fields turns a revoked sign-in or a lapsed address into a
+  plain ✓. The per-row `mb` in device-v1.json pins how a `watt.` is parsed,
+  not that an agent reports it; an agent-level row is still to come. No
+  released shell renders vouchedBy, so nothing frozen depends on the old form.
 - **A browser key can retire itself without a successor.** `wret.` takes an
   EMPTY new key: the old key W signs its own retirement over a challenge the
   directory issued for it, with no passkey prompt and no new ceremony, and the
@@ -14030,10 +14036,17 @@ verdict) and `recovery-v1.json` (unchanged, now checked in CI).
   `at`, and leaves `dev2.` alone. A browser key's last `watt.` still holds at
   peers for up to 24 hours. A deletion is queued for 72 hours like any change,
   with a void link mailed to the address. It is carried out only if it was not
-  voided and the head is still the one it names, so a reset in between voids
-  it. Voiding it quarantines nobody, since a quarantine's evidence is a
-  `ros.` text. The way to delete without a passkey is the directory's mailed
-  link, which needs no statement.
+  voided and the head is still the one it names. The way to delete without a
+  passkey is the directory's mailed link, which needs no statement. Two rules
+  are OPEN for the directory's deletion route and not settled here
+  (security's review of #962, D-A1 and D-A2). First, what a void does to the
+  signer: if a void only cancels, a stolen member key re-files the moment its
+  request is voided, the one-change queue stays occupied, and the owner can
+  never remove that key. Second, how a reset meets a waiting deletion: only a
+  reset that ripens first changes the head, so the head check alone does not
+  stop a deletion once a reset is merely requested; the reset request must
+  drop the deletion, never set it aside to be revived if the reset is
+  stopped.
 - **The passkey user handle is a kernel layout.** `user.id` =
   SHA-256(`bento-dir/1/addr` ‖ LF ‖ the address in normal form) ‖ 16 random
   bytes, 48 bytes. The first 32 bytes are the account's storage name at the

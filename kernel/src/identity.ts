@@ -124,9 +124,19 @@ export type ResolveQuery = { pub: string } | { email: string }
  * The fields after `changed` are OPTIONAL ADDITIONS within contract 1, for
  * option G (bento/id). The agent fills them from what it verified (the roster
  * chain, roster.ts; the device certificate and its watt., devices.ts; the
- * directory's status). A document reads a MISSING field as the weaker claim,
- * so a host that does not send them under-claims, never over-claims. Times are
- * epoch ms on the directory's clock. */
+ * directory's status). Times are epoch ms on the directory's clock.
+ *
+ * Absence is NOT always the weaker claim. `tier` and `accountSince` read
+ * weaker when missing (passkey tier, a new account). `revoked` (missing = not
+ * revoked), `resetAt` and `rosterChangedAt` (missing = no recent change) and
+ * `unconfirmedSince` (missing = confirmed) read STRONGER when missing. So:
+ *   - an agent sends every one of them that applies, every time;
+ *   - EVERY relay between the agent and the document (home/bridge.js, each
+ *     native host's bridge, the extension) passes all of them through with
+ *     their types checked. A relay that copies only the original six fields
+ *     turns a revoked sign-in or a lapsed address into a plain ✓.
+ * device-v1.json's per-row `mb` pins how a watt.'s mb is PARSED; that the
+ * agent turns it into `unconfirmedSince` is the agent's rule, not yet a row. */
 export interface ResolvedIdentity {
   name: string
   email: string
@@ -157,11 +167,8 @@ export interface ResolvedIdentity {
   managedBy?: string
   /** the watt.'s `mb` when it is not 0: since when the address is unconfirmed.
    *  The address part of the ✓ is qualified ("unconfirmed since <date>"); the
-   *  account is not. This is the one field whose absence is NOT the weaker
-   *  claim (missing = confirmed), so the rule is the agent's: an agent that
-   *  verified a watt. (every agent that resolves an option G identity) sends
-   *  it whenever mb ≠ 0. device-v1.json gives every accepted row its expected
-   *  `mb`, so a port that drops it fails its rows. */
+   *  account is not. Missing = confirmed (a stronger claim, see above): an
+   *  agent that verified a watt. sends it whenever mb ≠ 0. */
   unconfirmedSince?: number
 }
 

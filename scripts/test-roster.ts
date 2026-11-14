@@ -295,11 +295,11 @@ for (const [kind, list] of [['wout', F.signOuts], ['adel', F.deletions]] as cons
     ['wout/signer-not-member', 'signer'], ['wout/signer-removed', 'signer'], ['wout/signer-quarantined', 'quarantined'], ['wout/other-address', 'address'],
     ['wout/address-not-normal', 'grammar'], ['wout/other-challenge', 'challenge'], ['wout/at-not-challenge-time', 'at'], ['wout/spent', 'replay'],
     ['wout/assertion-other-text', 'assertion-challenge'], ['wout/assertion-over-adel', 'assertion-challenge'], ['wout/rk-wrong-key', 'signature'],
-    ['wout/ck-cns-web-add', 'consent-purpose'], ['wout/passkey-raw-signature', 'proof'], ['wout/extra-field', 'grammar'], ['wout/at-zero', 'grammar'], ['wout/nonce-short', 'grammar']]
+    ['wout/ck-cns-web-add', 'consent-purpose'], ['wout/ck-cns-expired', 'consent-expired'], ['wout/at-before-challenge-time', 'at'], ['wout/passkey-raw-signature', 'proof'], ['wout/extra-field', 'grammar'], ['wout/at-zero', 'grammar'], ['wout/nonce-short', 'grammar']]
   const REQ_DEL: Array<[string, string]> = [['ok/adel-by-passkey', 'accept'], ['ok/adel-by-recovery-key', 'accept'], ['ok/adel-by-consent-key', 'accept'],
     ['adel/old-head', 'roster-head'], ['adel/signer-not-member', 'signer'], ['adel/signer-removed', 'signer'], ['adel/signer-quarantined', 'quarantined'],
     ['adel/other-address', 'address'], ['adel/address-not-normal', 'grammar'], ['adel/other-challenge', 'challenge'], ['adel/spent', 'replay'],
-    ['adel/assertion-other-text', 'assertion-challenge'], ['adel/assertion-over-wout', 'assertion-challenge'], ['adel/ck-cns-web-add', 'consent-purpose'],
+    ['adel/assertion-other-text', 'assertion-challenge'], ['adel/assertion-over-wout', 'assertion-challenge'], ['adel/ck-cns-web-add', 'consent-purpose'], ['adel/ck-cns-expired', 'consent-expired'],
     ['adel/passkey-raw-signature', 'proof'], ['adel/extra-field', 'grammar'], ['adel/head-not-a-hash', 'grammar'], ['adel/vrs-text', 'grammar']]
   for (const [m, req] of [[so, REQ_OUT], [de, REQ_DEL]] as const)
     for (const [n, want] of req) { const r = m.get(n); ok(!!r && (want === 'accept' ? r.expect === 'accept' : r.reason === want), `required row ${n} (${want})`) }
@@ -316,6 +316,15 @@ for (const [kind, list] of [['wout', F.signOuts], ['adel', F.deletions]] as cons
   ok(buildWout({ address: 'alice@example.com', at: w.challengeAt!, dirNonce: w.challenge }) === w.text, 'buildWout writes the one spelling')
   const d = de.get('ok/adel-by-passkey')!
   ok((await runAct('adel', { ...de.get('adel/spent')!, spent: false })).ok, 'positive control: adel/spent is accepted with an unspent challenge')
+  for (const n of ['adel/address-not-normal', 'adel/extra-field', 'adel/head-not-a-hash', 'adel/vrs-text']) {
+    let spentAdel = 0
+    const ga = await runAct('adel', de.get(n)!, { spend: () => { spentAdel++; return true } })
+    ok(!ga.ok && ga.reason === 'grammar' && spentAdel === 0, `${n}: a malformed adel. never spends the challenge (it is grammar)`)
+  }
+  for (const [m, n] of [[so, 'wout/ck-cns-expired'], [de, 'adel/ck-cns-expired']] as const) {
+    const r = m.get(n)!
+    ok(Number(r.proof.cns!.toString().split('.')[5]) <= r.now, `${n}: the co-sign expired at or before now (only its time refuses it)`)
+  }
   ok(buildAdel({ address: 'alice@example.com', headHash: d.text.split('.')[2], dirNonce: d.challenge }) === d.text, 'buildAdel writes the one spelling')
   const head = d.links[d.links.length - 1].ros
   ok(d.text.split('.')[2] === b64uEnc(new Uint8Array(createHash('sha256').update(head).digest())), 'ok/adel-by-passkey names the current head (sha256 of its ros. text)')

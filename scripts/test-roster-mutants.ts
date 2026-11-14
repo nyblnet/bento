@@ -219,6 +219,11 @@ const MUTANTS: Mutant[] = [
   { name: 'a quarantined member signs every browser out', from: "  if (m.quarantined) return no('quarantined')\n  const pr = await memberProof(m, proof, text, dirNonce, opts.now, opts)\n  if (!pr.ok) return pr\n  return { ok: true, value: { address, at, dirNonce } }",
     to: "  const pr = await memberProof(m, proof, text, dirNonce, opts.now, opts)\n  if (!pr.ok) return pr\n  return { ok: true, value: { address, at, dirNonce } }" },
   { name: 'wout. proof is not verified', from: "  if (!pr.ok) return pr\n  return { ok: true, value: { address, at, dirNonce } }", to: "  return { ok: true, value: { address, at, dirNonce } }" },
+  // security-ruling-962: C3 (the co-sign over wout./adel. is timed) and its nits
+  { name: 'wout. co-sign is not timed (m1)', from: "  const pr = await memberProof(m, proof, text, dirNonce, opts.now, opts)\n  if (!pr.ok) return pr\n  return { ok: true, value: { address, at, dirNonce } }", to: "  const pr = await memberProof(m, proof, text, dirNonce, null, opts)\n  if (!pr.ok) return pr\n  return { ok: true, value: { address, at, dirNonce } }" },
+  { name: 'adel. co-sign is not timed (m2)', from: "  const pr = await memberProof(m, proof, text, dirNonce, opts.now, opts)\n  if (!pr.ok) return pr\n  return { ok: true, value: { address, headHash, dirNonce } }", to: "  const pr = await memberProof(m, proof, text, dirNonce, null, opts)\n  if (!pr.ok) return pr\n  return { ok: true, value: { address, headHash, dirNonce } }" },
+  { name: 'adel. spends before its grammar is checked (m3)', from: "  const [, addressF, headHash, dirNonce] = p\n", to: "  const [, addressF, headHash, dirNonce] = p\n  if (opts && typeof opts.spend === 'function') opts.spend(opts.challenge)\n" },
+  { name: 'wout. at may be earlier than the challenge (m7)', from: "  if (at !== opts.challengeAt) return no('at')\n", to: "  if (at > opts.challengeAt) return no('at')\n" },
   // adel.
   del('adel. may name a head that is not the current one', "  if (headHash !== ro.headHash) return no('roster-head')\n"),
   { name: 'adel. challenge is not compared', from: "  if (dirNonce !== opts.challenge) return no('challenge')\n  if (address !== ro.address) return no('address')\n  if (headHash", to: "  if (address !== ro.address) return no('address')\n  if (headHash" },

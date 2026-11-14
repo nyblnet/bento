@@ -891,15 +891,18 @@ const link: Record<string, unknown> = {}
 // purpose set is closed, keeps passing until it adopts them. Its consent key is DETERMINISTIC (its own
 // label), so the section can be regenerated alone: `--only consentG` splices it into the committed file.
 const consentKey = await ecdsa('identity/consent-g')
-const consentG: { about: string; consentPub: string; rows: Record<string, unknown>[] } = {
+const consentOther = await ecdsa('identity/consent-g-other')
+const consentG: { about: string; consentPub: string; otherConsentPub: string; rows: Record<string, unknown>[] } = {
   about: 'verifyConsent(text, sig, { consentPub, rp, audience, challenge, payloadText, docId, now, spend }) for purposes roster and web-add. ' +
     'roster covers ros. dev2. vrs. wout. adel.; web-add covers wdev. only. Every row parses, so every row spends its challenge (spendCalled). ' +
     'challengeSpent: the verifier\'s challenge book has already seen it.',
   consentPub: consentKey.pub,
+  // signs roster/other-key, the one row whose signature is meant not to verify under consentPub
+  otherConsentPub: consentOther.pub,
   rows: [],
 }
 {
-  const other = await ecdsa('identity/consent-g-other')
+  const other = consentOther
   const a = enc('alice@example.com'), h = 'A'.repeat(43), n = b64uEnc(new Uint8Array(32).fill(9)), pt = consentKey.pub
   // one text of each family, shaped like the real one (verifyConsent reads only the family and the exact bytes)
   const P: Record<string, string> = {
