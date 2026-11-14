@@ -73,6 +73,7 @@ const ROWS: Row[] = [
   ['revoked false -> verified as normal', (m) => st(m, bind({ revoked: false })).kind === 'verified'],
 
   // vouchedBy and the 80-character cut
+  ['the cut is the kernel\'s VOUCHED_BY_MAX, 80', (m) => m.VIA_MAX === 80],
   ['a short vouchedBy is kept whole', (m) => st(m, bind({ vouchedBy: `id.bento.page, ${UNCONF}` })).via === `id.bento.page, ${UNCONF}`],
   ['over 80: "managed by" goes, "unconfirmed" stays',
     (m) => m.cutVia(`id.bento.page, managed by ${LONG_DOM}, ${UNCONF}`) === `id.bento.page, ${UNCONF}`],
@@ -158,9 +159,14 @@ const dir = realpathSync(mkdtempSync(join(tmpdir(), 'people-tiers-')))
 try {
   const orig = readFileSync(SRC, 'utf8')
   let n = 0
+  // the copy lives in a scratch dir, so its one import (the kernel's
+  // VOUCHED_BY_MAX) is pointed back at the real file
+  const KERNEL_ID = new URL('../kernel/src/identity.ts', import.meta.url).href
   const load = async (text: string): Promise<Mod> => {
     const f = join(dir, `vouchstate-${n++}.ts`)
-    writeFileSync(f, text)
+    const rel = "'../../../kernel/src/identity.ts'"
+    if (text.split(rel).length !== 2) throw new Error('vouchstate.ts: expected exactly one kernel identity import')
+    writeFileSync(f, text.replace(rel, `'${KERNEL_ID}'`))
     return import(pathToFileURL(f).href) as Promise<Mod>
   }
   const base = run(await load(orig))

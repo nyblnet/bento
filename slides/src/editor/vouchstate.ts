@@ -2,9 +2,11 @@
 // Copyright (c) 2026 The Bento authors
 //
 // "Who vouched" for a collaborator, as data: what the People panel may say
-// about a person, decided from the identity agent's answer. No DOM, no imports
-// at run time, so scripts/test-slides-people-tiers.ts runs it under plain node.
-// The painting is vouch.ts.
+// about a person, decided from the identity agent's answer. No DOM; its one
+// import is the kernel's VOUCHED_BY_MAX constant (never the agent: the identity
+// import pin in scripts/test-identity.ts allows exactly that line here), so
+// scripts/test-slides-people-tiers.ts runs it under plain node. The painting is
+// vouch.ts.
 //
 // The agent (kernel/src/identity.ts `resolve`) verified everything it reports:
 // the roster chain (roster.ts verifyRosterChain), the device certificate and
@@ -26,6 +28,8 @@
 // stands carries none of them, so until a host supplies them a verified row
 // reads "(passkey sign-in)" and "new account": an under-claim, never an
 // over-claim.
+
+import { VOUCHED_BY_MAX } from '../../../kernel/src/identity.ts'
 
 export type Tier = 'passkey' | 'native'
 
@@ -56,9 +60,8 @@ export const CHANGED_SHOWN_MS = 7 * DAY
 export const RESET_SHOWN_MS = 30 * DAY
 /** The longest name and vouchedBy the panel shows. */
 export const NAME_MAX = 80
-// The kernel's identity.ts gains VOUCHED_BY_MAX = 80 (the agent's side of the
-// same cut); import it here once that lands, so the two cannot drift.
-export const VIA_MAX = 80
+// the agent's side of the same cut is the kernel's: one number, so the two cannot drift
+export const VIA_MAX = VOUCHED_BY_MAX
 
 // Nothing shown may reorder, hide or blank out text: by Unicode category, not a
 // list of known characters. Controls (Cc), format characters (Cf: bidi marks,

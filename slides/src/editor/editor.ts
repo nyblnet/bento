@@ -1487,11 +1487,6 @@ export class Editor {
         // it shows no key at all
         const keyOk = !!(peer.pub && cme?.v === 2 && this.session?.keyProven(peer.actor, peer.pub))
         if (peer.pub && cme?.v === 2) who.title = (keyOk ? t('Key-verified identity') : t('Claimed key')) + ` · ${fp(peer.pub)}`
-        // who vouched for this person: asked only about a key the session proved
-        if (vouchAgent) {
-          decoratePeer(who, peer.name, peer.pub, keyOk, vouchAgent,
-            { t, locale: locale(), editing: !!peer.editing, ownerRow: iAmOwner ? row : null })
-        }
         const where = document.createElement('span')
         where.className = 'where'
         const idx = this.store.doc.slides.findIndex((s) => s.id === peer.slide)
@@ -1521,6 +1516,13 @@ export class Editor {
             this.toast(ok ? t('{name} was removed', { name: peer.name }) : t('Couldn’t reach the live session'))
           })
           row.appendChild(kick)
+        }
+        // who vouched for this person: asked only about a key the session
+        // proved. Once the row is whole, so an incident flag painted from the
+        // cache lands beside ✕ and not ahead of the dot.
+        if (vouchAgent) {
+          decoratePeer(who, peer.name, peer.pub, keyOk, vouchAgent,
+            { t, locale: locale(), editing: !!peer.editing, ownerRow: iAmOwner ? row : null })
         }
         list.appendChild(row)
       }

@@ -129,6 +129,14 @@ async function open({ flag, agent }) {
       },
     }
   }, info)
+  // the editor's first frame gives the wire version. If "Go live" was clicked
+  // while the panel was still rendering, nothing is sent: click it again
+  for (let i = 0; i < 15 && !(await p.evaluate(() => window.__pv !== undefined)); i++) {
+    await ensureOpen()
+    await p.evaluate(() => [...document.querySelectorAll('.ed-share-pop button')].find((b) => /Go live/.test(b.getAttribute('aria-label') || b.textContent))?.click())
+    await p.waitForTimeout(1000)
+  }
+  await closePanel()
   await p.waitForFunction(() => window.__pv !== undefined, null, { timeout: 8000 })
   const rows = () => p.evaluate(() => [...document.querySelectorAll('.ed-share-peers .ed-share-peer')].map((r) => {
     const who = r.querySelector('.who'); const v = who.querySelector('.vouch')
@@ -162,16 +170,27 @@ async function seat(s, peers) {
         accountPub: 'L', firstSeen: 1, changed: false, tier: 'native', accountSince: now - 90 * DAY },
       borrowed: { name: 'Alice Real', email: 'a@example.com', vouchedBy: 'id.bento.page', accountPub: 'A', firstSeen: 1, changed: false },
     }
-    for (const [actor, name, kind, proven] of peers) {
+    for (const [actor, , kind] of peers) {
       const k = window.__k[actor]
       if (window.__answers && answer[kind]) window.__answers[k.pub] = answer[kind]
-      await window.__peer.beat(actor, name, k.pub, proven ? k.key : null)
     }
+    // a peer beats again, as a real one does every few seconds; a beat can be
+    // missed while the session is still starting
+    window.__rebeat = async () => {
+      for (const [actor, name, , proven] of peers) { const k = window.__k[actor]; await window.__peer.beat(actor, name, k.pub, proven ? k.key : null) }
+    }
+    await window.__rebeat()
   }, { peers, DAY, LONG_DOM })
   await s.p.waitForTimeout(600)
   await s.ensureOpen()
   // presence, not Playwright's visibility check: the panel rebuilds its rows on
   // every peer beat, and a row replaced mid-check timed the selector out (1 run in 4)
+  const seated = (n) => s.p.evaluate((n) => document.querySelectorAll('.ed-share-peers .ed-share-peer').length >= n, n)
+  for (let i = 0; i < 10 && !(await seated(peers.length)); i++) {
+    await s.p.evaluate(() => window.__rebeat())
+    await s.p.waitForTimeout(1000)
+    await s.ensureOpen()
+  }
   await s.p.waitForFunction((n) => document.querySelectorAll('.ed-share-peers .ed-share-peer').length >= n, peers.length, { timeout: 10000 })
   await s.p.waitForTimeout(400)
 }
@@ -270,6 +289,14 @@ try {
     ok(vic?.state === 'verified' && !vic.text.slice(0, vic.text.indexOf('✓ via')).includes('✓') && vic.text.includes('Vic via bigcorp.com'),
       'a verified account named "Vic ✓ via bigcorp.com" loses its tick; only the real mark has one')
     await mustSee('Vic', '.vouch', null, 'that account\'s real "✓ via id.bento.page" is fully visible')
+
+    // reopened, the rows paint from the cache in the same tick they are built:
+    // the flag must still sit beside ✕ (it once landed ahead of the dot)
+    await s.closePanel()
+    await s.ensureOpen()
+    await s.p.waitForTimeout(200)
+    const ivyCached = (await s.rows()).find((r) => r.text.startsWith('Ivy'))
+    ok(!!ivyCached?.flag && ivyCached.flagBeforeKick, 'reopened from the cache: the incident flag still sits beside ✕')
 
     // the same deck seen by someone who is not the owner: no flag
     await s.closePanel()

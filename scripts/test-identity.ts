@@ -177,7 +177,8 @@ console.log('\nonce found, the agent cannot be reassigned')
 // by STRUCTURE, not by a text match, after comments are removed: every static
 // import/export-from (multi-line too) and every dynamic import() of identity in
 // every app is found (any of .ts .js .mjs .cjs .mts .cts, or none), and no file
-// but identity.ts names the __bentoIdentity global; vouch.ts's import line is exact; `identityAgent` is named
+// but identity.ts names the __bentoIdentity global; vouch.ts's import line is exact,
+// and so is vouchstate.ts's, which takes the VOUCHED_BY_MAX constant and nothing else; `identityAgent` is named
 // exactly twice there (the import and the one gated call); vouchAgent and
 // vouchEnabled are exactly the gated call and the flag read; lsGet is the
 // kernel's storage read, not redefined. Then the pin is run on in-memory copies
@@ -188,6 +189,9 @@ console.log('\ncontract only: nothing calls it yet, except the flag-gated People
 {
   const GATED = 'slides/src/editor/vouch.ts'
   const GATED_IMPORT = "import { identityAgent, type IdentityAgent } from '../../../kernel/src/identity.ts'"
+  // the panel's decision module takes the shared 80-character cut, a constant, and nothing else
+  const CONST_ONLY = 'slides/src/editor/vouchstate.ts'
+  const CONST_IMPORT = "import { VOUCHED_BY_MAX } from '../../../kernel/src/identity.ts'"
   const root = join(dirname(fileURLToPath(import.meta.url)), '..')
   const files = new Map<string, string>()
   const walk = (dir: string) => {
@@ -213,6 +217,7 @@ console.log('\ncontract only: nothing calls it yet, except the flag-gated People
       for (const m of strip(text).matchAll(re)) {
         if (m[2]) continue
         if (rel === GATED && m[0] === GATED_IMPORT) continue
+        if (rel === CONST_ONLY && m[0] === CONST_IMPORT) continue
         bad.push(`${rel}: ${m[0].replace(/\s+/g, ' ').slice(0, 80)}`)
       }
       // the agent's global, reached without identity.ts at all
@@ -228,9 +233,9 @@ console.log('\ncontract only: nothing calls it yet, except the flag-gated People
     return bad
   }
   const base = pin(files)
-  ok(base.length === 0, `no runtime module imports identity.ts except the flag-gated ${GATED} (${base.join('; ') || 'none'})`)
+  ok(base.length === 0, `no runtime module imports identity.ts except the flag-gated ${GATED} and ${CONST_ONLY}'s VOUCHED_BY_MAX (${base.join('; ') || 'none'})`)
 
-  const V = GATED, E = 'slides/src/editor/editor.ts'
+  const V = GATED, E = 'slides/src/editor/editor.ts', C = CONST_ONLY
   const EDIT_ANCHOR = "import { decoratePeer, vouchAgent as vouchPeopleAgent } from './vouch'"
   const MUTANTS: [string, [string, string, string][]][] = [
     ['an ungated call', [[V, 'return vouchEnabled() ? identityAgent() : null', 'return identityAgent()']]],
@@ -248,6 +253,8 @@ console.log('\ncontract only: nothing calls it yet, except the flag-gated People
     ['a shadowed lsGet', [[V, "import { lsGet } from '../../../kernel/src/storage.ts'", "const lsGet = (_k: string) => 'on'"]]],
     ['an import of identity.js (resolved to identity.ts)', [[E, EDIT_ANCHOR, "import { identityAgent as rawId } from '../../../kernel/src/identity.js'\nexport const __leak = () => rawId()\n" + EDIT_ANCHOR]]],
     ['the global called directly', [[E, EDIT_ANCHOR, "export const __leak = () => (globalThis as any).__bentoIdentity?.resolve({ pub: 'x' })\n" + EDIT_ANCHOR]]],
+    ['the decision module importing the agent beside the constant', [[C, CONST_IMPORT, "import { VOUCHED_BY_MAX, identityAgent } from '../../../kernel/src/identity.ts'\nexport const __leak = () => identityAgent()"]]],
+    ['the decision module importing a second binding', [[C, CONST_IMPORT, CONST_IMPORT + "\nimport { detectIdentityAgentForTest } from '../../../kernel/src/identity.ts'"]]],
     ['an export * of identity', [[V, "export type { VouchState } from './vouchstate'", "export type { VouchState } from './vouchstate'\nexport * from '../../../kernel/src/identity.ts'"]]],
   ]
   for (const [name, edits] of MUTANTS) {
