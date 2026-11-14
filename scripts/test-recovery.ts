@@ -14,7 +14,7 @@
 // every refusal: a wrong PRF, a wrong credential, a blob bound to another
 // account, a scalar out of range or not matching the signed public half.
 
-import { argon2 as nodeArgon2 } from 'node:crypto'
+import { argon2 as nodeArgon2, hkdfSync, createHash, createECDH } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -22,6 +22,7 @@ import {
   ARGON2, formatRecoveryCode, parseRecoveryCode, recoveryWrapKey, recoveryVerifier, prfKek,
   sealPrfBlob, openPrfBlob, sealRecoveryInner, openRecoveryInner, unpackScalars, BLOB_LEN,
   pepperKeys, pepperVerifierTag, pepperSeal, pepperOpen, publicKeyOf, PRF_INPUT, prfHmacSecretSalt, type Argon2id,
+  rkSalt, rkCandidate, rkPick, rkScalarFromIkm, deriveRk, RK_MAX_TRIES,
 } from '../kernel/src/recovery.ts'
 
 let failures = 0
@@ -220,6 +221,44 @@ console.log('\nthe recovered scalar never reaches the variable-time path')
   for (const bad of ['publicOf', 'publicKeyOf', 'add', 'dbl', 'inv', 'toBig']) ok(!r.has(bad), `${bad} is unreachable from unpackScalars`)
   // non-vacuous: the graph sees these edges where they exist
   ok(reach('publicKeyOf').has('dbl') && reach('openPrfBlob').has('scalarMatches'), 'the call graph sees real edges (publicKeyOf → dbl, openPrfBlob → scalarMatches)')
+}
+
+console.log('\nrk: the recovery key under option G (salted per account, rejection sampling)')
+{
+  const RK = F.rk
+  ok(!!RK && RK.maxTries === 256 && RK_MAX_TRIES === 256, 'the counter is one byte: at most 256 candidates')
+  // an independent recomputation (node:crypto, not the kernel's code) of every published byte
+  const indepSalt = (a: string) => createHash('sha256').update(Buffer.concat([Buffer.from('bento/id/rk-salt/v1'), Buffer.from([0]), Buffer.from(a)])).digest().subarray(0, 16).toString('hex')
+  const indepCand = (ikm: Uint8Array, c: number) => Buffer.from(hkdfSync('sha256', ikm, Buffer.alloc(0), Buffer.concat([Buffer.from('bento/id/rk/v1'), Buffer.from([c])]), 32)).toString('hex')
+  for (const r of RK.salts) {
+    ok(hex(await rkSalt(r.address)) === r.salt && indepSalt(r.address) === r.salt, `rk salt for ${r.address.length > 30 ? r.address.slice(0, 12) + '…' : r.address}`)
+  }
+  ok(new Set(RK.salts.map((r: { salt: string }) => r.salt)).size === RK.salts.length, 'every address has its own salt (R9: no shared guess list)')
+  let threw = false
+  try { await rkSalt('Alice@Example.com') } catch { threw = true }
+  ok(threw, 'rk salt refuses an address not in normal form')
+  const ikm = unhex(RK.candidates.ikm)
+  for (const c of RK.candidates.rows) {
+    ok(hex(await rkCandidate(ikm, c.counter)) === c.candidate && indepCand(ikm, c.counter) === c.candidate, `candidate ${c.counter}: HKDF info "bento/id/rk/v1" ‖ byte ${c.counter}`)
+  }
+  ok(new Set(RK.candidates.rows.map((c: { candidate: string }) => c.candidate)).size === RK.candidates.rows.length, 'each counter gives a different candidate')
+  for (const r of RK.pick) ok(rkPick(r.candidates.map(unhex)) === r.index, `counter rule: ${r.name} → ${r.index}`)
+  for (const r of RK.derive) {
+    const d = await deriveRk(unhex(r.bytes), r.address, argon2)
+    const ik = await argon2(unhex(r.bytes), unhex(r.salt))
+    const fromIkm = await rkScalarFromIkm(ik)
+    const e = createECDH('prime256v1'); e.setPrivateKey(Buffer.from(r.scalar, 'hex'))
+    ok(hex(ik) === r.ikm && d.counter === r.counter && hex(d.scalar) === r.scalar && hex(fromIkm.scalar) === r.scalar && d.pub === r.pub &&
+      e.getPublicKey().toString('base64url') === r.pub && publicKeyOf(d.scalar) === r.pub, `rk for ${r.code} at ${r.address}: ikm, counter ${r.counter}, scalar, public half (checked by node's ECDH too)`)
+    ok(parseRecoveryCode(r.code).ok, `${r.code} is a valid printed code`)
+  }
+  const [a, b, c] = RK.derive
+  ok(a.bytes === b.bytes && a.address !== b.address && a.pub !== b.pub, 'the same code at two addresses gives two different rk (per-account salt)')
+  ok(a.address === c.address && a.bytes !== c.bytes && a.pub !== c.pub, 'two codes at one address give two different rk')
+  // the counter rule is the one deriveRk uses: a candidate source that refuses the first two picks the third
+  const N_ = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n
+  const be = (x: bigint) => unhex(x.toString(16).padStart(64, '0'))
+  ok(rkPick([be(N_), be(0n), be(5n)]) === 2 && rkPick([be(N_ - 1n)]) === 0 && rkPick([]) === -1, 'rkPick: n and 0 refused, n − 1 accepted, nothing → −1')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

@@ -126,7 +126,7 @@ async function build(name, extra) {
   const out = path.join(work, name)
   const o = { library: `http://127.0.0.1:${pl}`, frame: `http://localhost:${pf}`, releaseBase: `http://127.0.0.1:${pr}/releases/` }
   execFileSync(process.execPath, [path.join(ROOT, 'home/web/build.mjs'), '--out', out, '--library-origin', o.library, '--frame-origin', o.frame,
-    '--release-base', o.releaseBase, ...extra], { stdio: ['ignore', 'ignore', 'inherit'] })
+    '--release-base', o.releaseBase, '--dev', ...extra], { stdio: ['ignore', 'ignore', 'inherit'] })
   for (const m of distMutants) {
     const f = path.join(out, m.file)
     const t = fs.readFileSync(f, 'utf8')

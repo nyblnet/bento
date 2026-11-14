@@ -160,10 +160,13 @@ object Gate1 {
             if (html.startsWith("<!--", i)) {
                 if (html.startsWith("<!-->", i)) { i += 5; continue }
                 if (html.startsWith("<!--->", i)) { i += 6; continue }
-                val end = html.indexOf("-->", i + 4)
+                // a comment ends at "-->" or "--!>", whichever comes first
+                val dash = html.indexOf("-->", i + 4)
+                val bang = html.indexOf("--!>", i + 4)
+                val end = if (dash < 0) bang else if (bang < 0) dash else minOf(dash, bang)
                 if (lower.substring(i + 4, if (end < 0) html.length else end).contains("<script")) problems += "a comment holds a <script>"
                 if (end < 0) { problems += "an unterminated comment"; break }
-                i = end + 3; continue
+                i = end + (if (end == bang) 4 else 3); continue
             }
             val next = if (i + 1 < html.length) html[i + 1] else null
             if (next == '/' && i + 2 < html.length && html[i + 2].let { it in 'a'..'z' || it in 'A'..'Z' }) {
@@ -175,6 +178,8 @@ object Gate1 {
                 i = et.end; continue
             }
             if (html.startsWith("</>", i)) { i += 3; continue }
+            // "<![CDATA[" ends differently inside <svg>: Bento writes no "<!" but comments and the doctype
+            if (next == '!' && !lower.startsWith("<!doctype", i)) problems += "a \"<!\" that is neither a comment nor the doctype"
             if (next == '/' || next == '!' || next == '?') {
                 val end = html.indexOf('>', i + 2)
                 if (end < 0) { problems += "an unterminated tag"; break }
@@ -186,6 +191,8 @@ object Gate1 {
             val name = tag.name
             if (!TAG_NAME_OK.matches(name)) problems += "a start tag named ${HistoryJson.write(name)}"
             if (name in setOf("iframe", "object", "embed", "base")) problems += "a <$name>"
+            // raw text to a browser, so "<!--" in them starts no comment: Bento writes none
+            if (name in setOf("xmp", "noembed", "noframes", "noscript", "plaintext")) problems += "a <$name>"
             if (name == "meta" && META_BAD.containsMatchIn(tag.attrs["http-equiv"] ?: "")) problems += "a <meta> refresh or CSP"
             if (tag.attrs.keys.any { it.startsWith("on") }) problems += "an on*= attribute on <$name>"
             if (name == "script" && (tag.duplicate || tag.slash))
