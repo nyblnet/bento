@@ -18,15 +18,15 @@
 // Each row is a rule a measurement showed load-bearing:
 //   - every response, and so every HTML response, carries a strict CSP:
 //     default-src 'none'; scripts only from 'self' or by hash (no inline, no
-//     eval, no wildcard, no data:/blob:); frame-ancestors 'none'. Plus
-//     X-Frame-Options DENY and nosniff.
+//     eval, no wildcard, no data:/blob:); frame-ancestors 'none'; Trusted
+//     Types enforced with no policy. Plus X-Frame-Options DENY and nosniff.
 //   - no COOP on the sign-in host (none, or unsafe-none); bento/home at most
 //     same-origin-allow-popups. Measured in Chromium: same-origin-allow-popups
 //     ON THE POPUP severs its opener exactly as same-origin does.
 //   - no /.well-known/webauthn on the sign-in host or on the rp host: a file on
 //     the rp host listing another origin lets that origin use, and wipe, the
 //     passkeys.
-//   - nothing but the four files is served, and there is no WILDCARD name under
+//   - nothing but the host's own files is served, and there is no WILDCARD name under
 //     the sign-in host or the rp host: every name under the rp can use, and
 //     wipe, its passkeys. DNS cannot list explicit names (no zone transfer), so
 //     this check sees wildcards only; the deploy steps (README) also list the
@@ -64,6 +64,10 @@ export function cspProblems(value) {
   const connect = dirs.get('connect-src')
   if (connect && JSON.stringify(connect) !== JSON.stringify(CONNECT)) out.push(`connect-src is not exactly ${CONNECT.join(' ')}`)
   for (const t of dirs.get('style-src') || []) if (t !== "'self'" && t !== "'none'") out.push(`style-src allows ${t}`)
+  const rtt = dirs.get('require-trusted-types-for')
+  if (!rtt || rtt.length !== 1 || rtt[0] !== "'script'") out.push("require-trusted-types-for is not exactly 'script'")
+  const tt = dirs.get('trusted-types')
+  if (!tt || tt.length !== 1 || tt[0] !== "'none'") out.push("trusted-types is not exactly 'none' (no policy)")
   const fa = dirs.get('frame-ancestors')
   if (!fa || fa.length !== 1 || fa[0] !== "'none'") out.push("frame-ancestors is not exactly 'none'")
   for (const [n, tokens] of dirs) {
@@ -86,6 +90,15 @@ const PROBES = [
   ['GET', '/signin.js', 200],
   ['GET', '/directory-client.js', 200],
   ['GET', '/signin.css', 200],
+  ['GET', '/setup', 200],
+  ['GET', '/reset', 200],
+  ['GET', '/account', 200],
+  ['GET', '/link.js', 200],
+  ['GET', '/account.js', 200],
+  ['GET', '/account-client.js', 200],
+  ['GET', '/setup.html', 404],
+  ['GET', '/account/', 404],
+  ['POST', '/setup', 405],
   ['GET', '/index.html', 404],
   ['GET', '/.well-known/webauthn', 404],
   ['GET', '/.well-known/', 404],

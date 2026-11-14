@@ -24,6 +24,13 @@
 //   --key <jwk.json>         TEST SEAM, --dev only: verify with this public key
 //                            instead of the release key. Rigs only.
 //   --check                  run every check below and stop: nothing is written.
+//   --identity               --dev only: add the bento/id agent (src/identity.ts):
+//                            the library then also talks to the directory and
+//                            opens the sign-in host. Refused in a production
+//                            build until the directory's keys are pinned for
+//                            release. It needs
+//   --directory-keys <json>  --dev only: the directory's public keys, {"<kid>":
+//                            "<raw P-256 point, base64url>"}, pinned into the build.
 //
 // Every bundled history must verify against the key the build carries, be for
 // an app the library knows, and be the only one for its app; otherwise the
@@ -43,6 +50,7 @@
 //
 // BENTO_HOME_WEB_MUTANT='{"file":"verify.ts","from":"…","to":"…"}' builds a
 // mutant for the mutant rig: the build fails unless `from` occurs exactly once.
+// An array of such edits is one mutant made of several.
 
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -121,6 +129,22 @@ if (keyFile) {
   }
 }
 
+// --- identity (bento/id): --dev only until the directory's keys are pinned --------
+const identity = args.includes('--identity')
+const DIRECTORY_ORIGIN = 'https://id.bento.page'
+let directoryKeys = null
+if (identity) devOnly('--identity adds the bento/id agent, whose directory keys are not pinned for release')
+if (opt('directory-keys')) devOnly('--directory-keys pins directory keys that are not the released ones')
+if (identity) {
+  const f = opt('directory-keys')
+  if (!f) die('--identity needs --directory-keys <json> (the directory keys the build pins)')
+  directoryKeys = JSON.parse(fs.readFileSync(f, 'utf8'))
+  const ok = directoryKeys && typeof directoryKeys === 'object' && !Array.isArray(directoryKeys) && Object.keys(directoryKeys).length > 0 &&
+    Object.entries(directoryKeys).every(([k, v]) => /^[a-z0-9][a-z0-9-]{0,62}$/.test(k) && typeof v === 'string' && /^[A-Za-z0-9_-]{87}$/.test(v))
+  if (!ok) die(`${f} is not {"<kid>": "<raw P-256 point, base64url>"}`)
+  console.warn('home/web build: IDENTITY build (bento/id agent, --dev): development only until the directory keys are pinned for release')
+} else if (opt('directory-keys')) die('--directory-keys needs --identity')
+
 const esbuild = process.env.ESBUILD || path.join(root, 'slides/node_modules/.bin/esbuild')
 if (!fs.existsSync(esbuild)) die(`esbuild not found at ${esbuild} (npm ci --prefix slides, or set ESBUILD)`)
 
@@ -141,11 +165,14 @@ if (mutant) {
   const copy = path.join(here, `.mutant-src-${process.pid}`)
   fs.rmSync(copy, { recursive: true, force: true })
   fs.cpSync(srcDir, copy, { recursive: true })
-  const f = path.join(copy, mutant.file)
-  const text = fs.readFileSync(f, 'utf8')
-  const n = text.split(mutant.from).length - 1
-  if (n !== 1) { fs.rmSync(copy, { recursive: true, force: true }); die(`mutant: "${mutant.from}" occurs ${n} times in ${mutant.file} (exactly one required)`) }
-  fs.writeFileSync(f, text.replace(mutant.from, () => mutant.to))
+  // one edit, or several (an array) that together break one rule
+  for (const m of Array.isArray(mutant) ? mutant : [mutant]) {
+    const f = path.join(copy, m.file)
+    const text = fs.readFileSync(f, 'utf8')
+    const n = text.split(m.from).length - 1
+    if (n !== 1) { fs.rmSync(copy, { recursive: true, force: true }); die(`mutant: "${m.from}" occurs ${n} times in ${m.file} (exactly one required)`) }
+    fs.writeFileSync(f, text.replace(m.from, () => m.to))
+  }
   srcDir = copy
   process.on('exit', () => fs.rmSync(copy, { recursive: true, force: true }))
 }
@@ -175,13 +202,20 @@ function bundle(entry, extra = {}) {
   js = js.replace(/<\/(script)/gi, '<\\/$1').replace(/<(!--|script)/gi, '\\x3C$1')
   return js.trim()
 }
-const libJs = bundle('library.ts', { __RELEASE_KEY__: key, __HISTORIES__: historyTexts })
+const libJs = bundle(identity ? 'main-identity.ts' : 'library.ts', { __RELEASE_KEY__: key, __HISTORIES__: historyTexts, ...(identity ? { __DIRECTORY_KEYS__: directoryKeys } : {}) })
 const frameJs = bundle('frame.ts')
 fs.rmSync(tmp, { recursive: true, force: true })
 
 // --- pages ------------------------------------------------------------------
 const sha = (s) => `'sha256-${createHash('sha256').update(s, 'utf8').digest('base64')}'`
 let libHtml = fs.readFileSync(path.join(here, 'library.html'), 'utf8')
+{
+  // the identity line and its style, or nothing at all
+  const frag = identity ? fs.readFileSync(path.join(here, 'identity.html'), 'utf8') : ''
+  const css = /<style>([\s\S]*?)<\/style>/.exec(frag)?.[1] ?? ''
+  libHtml = libHtml.replace('<!--IDENTITY-->\n', () => frag.replace(/<style>[\s\S]*?<\/style>\n?/, ''))
+    .replace('</style>', () => css.replace(/^\n/, '') + '</style>')
+}
 const style = /<style>([\s\S]*?)<\/style>/.exec(libHtml)?.[1]
 if (style === undefined) die('library.html has no <style>')
 
@@ -190,7 +224,7 @@ const libraryPolicy = [
   `script-src ${sha(libJs)}`,
   `style-src ${sha(style)}`,
   'img-src data:',
-  `connect-src ${releaseBase}`,
+  `connect-src ${releaseBase}${identity ? ' ' + DIRECTORY_ORIGIN : ''}`,
   `frame-src ${frameOrigin}`,
   "object-src 'none'",
   "base-uri 'none'",
@@ -271,7 +305,7 @@ fs.writeFileSync(path.join(out, 'frame/_headers'),
 
 const historyBytes = historyTexts.reduce((n, t) => n + Buffer.byteLength(JSON.stringify(t)), 0)
 const info = {
-  libraryOrigin, frameOrigin, releaseBase, dev, testKey: !!keyFile, mutant: mutant ? mutant.from : null,
+  libraryOrigin, frameOrigin, releaseBase, dev, testKey: !!keyFile, mutant: mutant ? [].concat(mutant).map((m) => m.from).join(' + ') : null, identity,
   histories: histories.map((h) => path.relative(root, h)),
   bytes: {
     library: Buffer.byteLength(libHtml),

@@ -51,8 +51,8 @@ const MUTANTS = {
   'any-request': [
     ['public/signin.js', "  if (Object.keys(m).sort().join(',') !== 'W,kx,label,t') return 'not-a-request'\n  if (m.t !== 'enrol') return 'not-a-request'\n",
       "  if (m.t !== 'enrol') return { ...m, W: '', kx: '', label: String(m.t) }\n"],
-    ['public/signin.js', '    const text = wdevText({ W: request.W, kx: request.kx, label: request.label, nonce })',
-      "    const text = request.t ? 'ros.' + request.t + '.' + b64u(new TextEncoder().encode(JSON.stringify(request))) + '.' + nonce : wdevText({ W: request.W, kx: request.kx, label: request.label, nonce })"],
+    ['public/signin.js', '    const text = wdevText({ W: request.W, kx: request.kx, address: request.account, rosHash: ch.rosHash, label: request.label, at: ch.at, nonce: ch.nonce })',
+      "    const text = request.t ? 'ros.' + request.t + '.' + b64u(new TextEncoder().encode(JSON.stringify(request))) + '.' + ch.nonce : wdevText({ W: request.W, kx: request.kx, address: request.account, rosHash: ch.rosHash, label: request.label, at: ch.at, nonce: ch.nonce })"],
   ],
   // Signal API on the opener's say-so.
   'signal': [['public/signin.js', "  if (Object.keys(m).sort().join(',') !== 'W,kx,label,t') return 'not-a-request'\n",
@@ -118,7 +118,10 @@ window.probe = async () => {
 
 const sockets = [], refused = []
 let handler = null, homeHeaders = {}, probeOrigins = new Set()
-const dirLog = []
+const dirLog = [], challenged = []
+// The account the sign-in host keeps in its own storage (its setup and sign-in
+// pages write it): the certificate names it, so without one nothing is asked.
+const ACCOUNT = 'alice@example.com'
 const ctx = await browser.newContext()
 await ctx.routeWebSocket(/.*/, (ws) => { sockets.push(ws.url()); ws.close() })
 // Registered first, so it runs last: anything not routed below is refused and recorded.
@@ -142,7 +145,10 @@ await ctx.route(`${DIR}/**`, async (route) => {
   const r = route.request(), u = new URL(r.url())
   const cors = { 'access-control-allow-origin': S, 'content-type': 'application/json' }
   if (r.method() !== 'POST') return route.fulfill({ status: 404, body: '' })
-  if (u.pathname === '/v1/web/challenge') return route.fulfill({ headers: cors, body: JSON.stringify({ nonce: b64u(crypto.getRandomValues(new Uint8Array(24))) }) })
+  if (u.pathname === '/v1/web/challenge') {
+    challenged.push(JSON.parse(r.postData() || 'null')?.address)
+    return route.fulfill({ headers: cors, body: JSON.stringify({ nonce: b64u(crypto.getRandomValues(new Uint8Array(24))), at: Date.now(), rosHash: b64u(crypto.getRandomValues(new Uint8Array(32))) }) })
+  }
   if (u.pathname === '/v1/web/enrol') {
     const b = JSON.parse(r.postData())
     const v = await verifyAssertion(b.assertion, { publicKey: PK_PUB, challenge: await statementChallenge(b.text), rpId: 'id.bento.page', origins: [S] })
@@ -209,12 +215,23 @@ const openFrom = async (origin, url, feat) => {
 const send = async (p, m) => { await page.evaluate((x) => HM.send(x), m); await settled(p, ['loading', 'waiting']) }
 const approve = async (p) => { await p.click('#approve', { timeout: 3000 }); await settled(p, ['loading', 'waiting', 'consent', 'working']) }
 const enrolMsg = (k, label = 'Chrome on MacBook') => ({ t: 'enrol', W: k.Wpub, kx: k.kxPub, label })
+// The sign-in host's own storage, as its pages leave it (page.evaluate is not bound by the page's CSP).
+const setAccount = async (a) => {
+  const p = await ctx.newPage()
+  await p.goto(S + '/')
+  await p.evaluate((x) => { if (x) localStorage.setItem('bento-id-account', x); else localStorage.removeItem('bento-id-account') }, a)
+  await p.close()
+  const i = popups.findIndex((x) => x.p === p)
+  if (i >= 0) popups.splice(i, 1)
+}
+handler = await site(null)
+await setAccount(ACCOUNT)
 
 try {
   // ---- P1: the round trip, the positive control for every row below ----------
   console.log('\nP1  bento/home asks, the person approves, the directory logs it')
   await reset()
-  let k = await keys()
+  let k = await keys(), s0
   let pop = await openFrom(HOME)
   ok((await state(pop))[0] === 'waiting', 'the sign-in host waits for bento/home')
   const ready = (await msgs()).filter((m) => m.data?.t === 'ready')
@@ -232,8 +249,20 @@ try {
   ok(!!got && got.origin === S && got.fromPopup && got.data.wdev.split('.')[1] === k.Wpub, 'bento/home received enrolled, from the sign-in host, for its own key')
   ok(dirLog.length === 1 && dirLog[0].os === S && dirLog[0].rq === HOME && dirLog[0].verify === 'ok' && dirLog[0].W === k.Wpub,
     `the directory saw Origin ${S}, rq ${HOME}, and the kernel verifier accepted the assertion (${JSON.stringify(dirLog)})`)
+  ok(challenged.length === 1 && challenged[0] === ACCOUNT && consent.includes(ACCOUNT),
+    `the account comes from the sign-in host's own storage: shown, and the challenge is asked for it (${JSON.stringify(challenged)})`)
   await until(async () => pop.isClosed(), 3000)
   ok(pop.isClosed(), 'the window closed itself')
+
+  console.log('\nP1  no account kept on the sign-in host')
+  await reset(); challenged.length = 0
+  await setAccount(null)
+  pop = await openFrom(HOME)
+  await send(pop, enrolMsg(await keys()))
+  s0 = await state(pop)
+  ok(s0[0] === 'no-account' && !(await pop.locator('#approve').isVisible()) && challenged.length === 0 && dirLog.length === 0,
+    `nothing is shown to approve and nothing is asked of the directory (${s0})`)
+  await setAccount(ACCOUNT)
 
   // ---- P2: a foreign opener ---------------------------------------------------
   const foreign = async (mutant) => {
