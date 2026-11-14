@@ -14049,5 +14049,12 @@ The review of the tripwire (entry above) broke it by running. What changed:
   a worker can change response headers without the tripwire seeing; the frame
   page's bytes are never observed; a rolled-back list is only recorded.
 
+- **A release signs the list.** `release.mjs --home-web` signs it into the
+  site (`releases/home-web/served.json`) after building home/web, on top of
+  the published list; `--home-web-first` only for the very first. A missing
+  list without it, `--home-web-first` over a published list, and a development
+  build with the release key are refused before anything is signed.
+
 Guards: the rows and mutants in `scripts/test-webext-tripwire-browser.mjs`,
-`scripts/test-webext-tripwire-mutants.mjs` and `scripts/test-webext-tripwire.ts`.
+`scripts/test-webext-tripwire-mutants.mjs`, `scripts/test-webext-tripwire.ts`,
+`scripts/test-home-web-build.mjs` and `scripts/test-home-web-build-mutants.mjs`.

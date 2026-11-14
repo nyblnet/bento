@@ -26,21 +26,24 @@ import { dirname, join, resolve } from 'node:path'
  *   --home-web-dev           a development build (rehearsals with a throwaway
  *                            key); without it, a signing key other than the
  *                            release key is refused (homeWebKey)
+ *   --home-web-first         the very first bento/home release list: there is
+ *                            no published one to build on (servedListCheck)
  */
 export function homeWebOptions({ args, opt, site }) {
   const asked = args.includes('--home-web')
   const frameOrigin = opt('frame-origin', null)
   const dev = args.includes('--home-web-dev')
   const outArg = opt('home-web-out', null)
+  const first = args.includes('--home-web-first')
   if (!asked) {
-    if (frameOrigin || dev || outArg) throw new Error('--frame-origin, --home-web-dev and --home-web-out only mean something with --home-web')
+    if (frameOrigin || dev || outArg || first) throw new Error('--frame-origin, --home-web-dev, --home-web-out and --home-web-first only mean something with --home-web')
     return null
   }
   if (!frameOrigin || frameOrigin.startsWith('--')) {
     throw new Error('--home-web needs --frame-origin <url>: the frame site is a separate domain, and it is the maintainer\'s to choose (there is no default)')
   }
   if (outArg !== null && outArg.startsWith('--')) throw new Error('--home-web-out needs a folder')
-  return { frameOrigin, out: resolve(outArg ?? `${site}.home-web`), dev, devKey: null }
+  return { frameOrigin, out: resolve(outArg ?? `${site}.home-web`), dev, first, devKey: null }
 }
 
 /** A folder's identity on disk: device and inode, whatever path text reaches it. */
@@ -153,5 +156,38 @@ export function homeWebBuildArgs({ root, opts, histories, devKeyFile, check = fa
   for (const h of histories) a.push('--history', h.file)
   if (opts.dev) a.push('--dev')
   if (devKeyFile) a.push('--key', devKeyFile)
+  return a
+}
+
+// --- the tripwire's release list ----------------------------------------------------
+//
+// Every --home-web release also signs the list the bento/home extension's
+// tripwire checks home.bento.page against (scripts/sign-home-web-served.mjs),
+// into the SITE, so it is published on the release channel with the release
+// and before anyone deploys the library it describes.
+
+/** Where the list lives in a site (and so at https://bento.page/releases/home-web/served.json). */
+export const servedListPath = (site) => join(site, 'releases/home-web/served.json')
+
+/**
+ * Before anything is signed, on the SEEDED site: the published list must be
+ * there to build on, unless this is the very first (--home-web-first), and
+ * --home-web-first must not start over a list that exists. A development
+ * build's list is signed with a throwaway key only.
+ */
+export function servedListCheck({ site, opts }) {
+  const held = existsSync(servedListPath(site))
+  if (!held && !opts.first) throw new Error('no bento/home release list is published (releases/home-web/served.json): every extension would refuse a new one as a rollback. The very first passes --home-web-first')
+  if (held && opts.first) throw new Error('a bento/home release list is already published: --home-web-first would start it over, and every extension would refuse it as a rollback')
+  if (opts.dev && !opts.devKey) throw new Error('--home-web-dev signs the bento/home release list with a throwaway key only: pass --key <throwaway key>')
+}
+
+/** The sign-home-web-served.mjs arguments for a release. */
+export function servedListArgs({ root, site, opts, keyPath }) {
+  const out = servedListPath(site)
+  const a = [join(root, 'scripts/sign-home-web-served.mjs'), '--build', opts.out, '--out', out]
+  a.push(...(opts.first ? ['--first'] : ['--held', out]))
+  if (keyPath) a.push('--key', keyPath)
+  if (opts.dev) a.push('--dev')
   return a
 }

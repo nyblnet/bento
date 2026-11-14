@@ -93,6 +93,13 @@ A release builds it with `node scripts/release.mjs --home-web --frame-origin
 publishes, into `<site>.home-web/` (outside the site, so nothing deploys it).
 Without `--home-web` a release does not touch home/web. `--frame-origin` has no
 default there either; a rehearsal with a throwaway key adds `--home-web-dev`.
+The same release signs the bento/home release list the browser extension's
+tripwire checks this build against (`scripts/sign-home-web-served.mjs`) into
+the site, at `releases/home-web/served.json`, building on the published one;
+the very first release passes `--home-web-first`, and a missing list without
+it (or `--home-web-first` over a published one) is refused before anything is
+signed. Publish the site, and so the list, BEFORE deploying the build: a
+deploy the list does not yet hold warns every extension.
 The published histories are checked (`build.mjs --check`, which writes
 nothing) before the release signs anything. The output must be outside the
 site and the published tree and contain neither (checked by folder identity,

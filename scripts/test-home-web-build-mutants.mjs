@@ -70,10 +70,19 @@ const MUTANTS = [
     expect: 'esbuild missing: refused, nothing signed' },
   { name: 'any-key-production', file: R, from: '  if (!same && !dev) {', to: '  if (false) {',
     expect: 'not the release key, without --home-web-dev' },
-  { name: 'stray-flags-ignored', file: R, from: "    if (frameOrigin || dev || outArg) throw", to: '    if (false) throw',
+  { name: 'stray-flags-ignored', file: R, from: "    if (frameOrigin || dev || outArg || first) throw", to: '    if (false) throw',
     expect: '--frame-origin without --home-web' },
   { name: 'unpublished-skipped', file: R, from: '    if (!existsSync(history)) throw new Error(', to: '    if (!existsSync(history)) continue; (',
     expect: 'a published app without a history: refused' },
+  // the tripwire's release list (sign-home-web-served.mjs), signed into the site by every --home-web release
+  { name: 'served-no-list-allowed', file: R, from: '  if (!held && !opts.first) throw', to: '  if (false) throw',
+    expect: 'no published list and no --home-web-first' },
+  { name: 'served-first-over-held', file: R, from: '  if (held && opts.first) throw', to: '  if (false) throw',
+    expect: '--home-web-first over a published list' },
+  { name: 'served-dev-release-key', file: R, from: '  if (opts.dev && !opts.devKey) throw', to: '  if (false) throw',
+    expect: '--home-web-dev with the release key' },
+  { name: 'served-checked-after-signing', file: REL, from: '  try { servedListCheck({ site, opts: homeWeb }) }', to: '  try { }',
+    expect: 'no published list and no --home-web-first' },
 ]
 
 const only = process.argv.slice(2)
