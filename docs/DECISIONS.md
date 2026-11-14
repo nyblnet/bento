@@ -14172,3 +14172,55 @@ retirement without a successor, the release rows),
 `scripts/test-identity.ts` (`isVoucher`, the `ResolvedIdentity` fields), and
 the mutant rigs `test-roster-mutants.ts` and `test-devices-mutants.ts` (the
 latter also mutates the consent families against `test-statements.ts`).
+## 2026-11-10 — bento/id in bento/home: the browser's agent runs no WebAuthn, and keeps only keys it cannot export
+
+bento/home in the browser (`home/web`) gains its bento/id agent
+(`home/web/src/identity.ts`), off in the build unless `--identity` is given,
+and a development build until the directory's keys are pinned for release: a
+production build (without `--dev`) refuses `--identity` and `--directory-keys`.
+
+- **No WebAuthn in bento/home.** The passkeys belong to rp `id.bento.page`,
+  which `home.bento.page` cannot use, so every ceremony runs on the sign-in
+  host. The library opens it inside the person's click, sends exactly
+  `{t:'enrol', W, kx, label}` to its literal origin, and listens only to that
+  window at that origin. It never calls the WebAuthn Signal API, with any list:
+  a partial list can hide or delete a person's passkeys with no prompt.
+- **Keys the page cannot export, fresh at every ceremony.** `W` (ECDSA P-256)
+  and `kx` (ECDH P-256) are generated non-extractable and kept as `CryptoKey`s
+  in IndexedDB. A held key that can be exported is dropped. Non-extractable
+  does not prove a stored key was never copied (a hostile build can import a
+  copy as non-extractable); what bounds a copy is that each ceremony makes new
+  keys and a certificate lives at most 7 days.
+- **Verified, never believed.** The certificate must be for exactly the keys
+  and label the library sent, and "Confirm it's you" never switches accounts.
+  The roster chain and the certificate with its countersign are checked by the
+  kernel's verifiers (`verifyRosterChain`, `verifyDevice`) under directory keys
+  pinned in the build; a key list from the network is never used.
+- **A check-in never writes back what it no longer holds.** Every tab of the
+  library shares one store, so a check-in writes only over the record it
+  renewed, checked and written in one IndexedDB transaction. If the person
+  signs out, or signs in anew, in this tab or another while a check-in runs,
+  the renewal is dropped and the tab takes what the store holds: on a shared
+  computer, Sign out must stick. Another tab may show the old state until its
+  next check-in, but never writes it back.
+- **24 hours, renewed; 7 days, then "Confirm it's you".** A check-in signed by
+  `W` (`wren.`) renews the countersign on load and every hour. A day before the
+  7-day cap the page asks the person to confirm it's them, which is a new
+  ceremony with new keys.
+- **Incident records and revocations end the sign-in here.** A record that
+  covers the key's ceremony, is still open, or cannot be read deletes the keys
+  (failing closed costs one "Confirm it's you"). Until the kernel defines a
+  signed incident statement, the record arrives in the directory's check-in
+  answer, which can only make the agent drop its keys.
+
+The sign-in host's directory seam now writes the kernel's `wdev.` exactly: the
+challenge it asks for names the account (from the host's own storage, never
+the request) and answers the directory's time and the current roster head.
+With no account saved, the host asks for nothing. The directory routes both
+sides call, with every check in order, are stated in
+`scripts/lib/id-web-directory-stub.mjs`, which the rigs run against until the
+directory serves them.
+
+Rigs: scripts/test-home-web-identity.mjs (the real library and sign-in host, a
+CDP virtual authenticator, every WebSocket closed; headless shell and Google
+Chrome; `--mutants`, one per rule).
