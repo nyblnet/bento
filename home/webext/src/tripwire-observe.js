@@ -210,14 +210,9 @@
   if (document.documentElement) walk(document.documentElement)
   // "visit started": a record exists whatever the page does next, even if nothing reaches the observer
   early()
-  // A visit that ends early (closed, navigated away) is marked as such; and a shadow root attached
-  // since the last look is flagged on the way out, while the message can still leave.
+  // A visit that ends early (closed, navigated away) is marked as such, and says what it had.
   let left = false
-  addEventListener('pagehide', () => {
-    left = true
-    for (const el of walked) if (shadowOf(el)) { flag('shadow-root'); break }
-    early()
-  }, { capture: true })
+  addEventListener('pagehide', () => { left = true; early() }, { capture: true })
   // a document the honest library never makes: blob:, about:, data: on its origin
   if (!/^https?:$/.test(location.protocol)) { flag(`document:${location.protocol}`); early() }
 

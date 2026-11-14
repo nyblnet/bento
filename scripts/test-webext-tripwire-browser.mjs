@@ -622,12 +622,12 @@ if (row('dsd-leave')) {
 }
 
 if (row('dsd-leave-prefix')) {
-  section('dsd-leave-prefix: the honest library\'s own start, then a declarative shadow root on <main> whose script leaves  (rule: a visit started is on record; a shadow root is flagged on the way out)')
+  section('dsd-leave-prefix: the honest library\'s own start, then a declarative shadow root on <main> whose script leaves  (rule: a shadow root is flagged as the parse goes on)')
   const t = libDoc.body.toString('utf8')
   const at = t.indexOf('<main>') + '<main>'.length
   // the meta CSP stays an element (the start must match the honest one), with a policy that lets the script run
   const head = t.slice(0, at).replace(/(<meta http-equiv="Content-Security-Policy" content=")[^"]*(">)/, (_, a, b) => `${a}script-src 'unsafe-inline'${b}`)
-  const tail = "<template shadowrootmode=\"open\"><script>fetch('/evil-ran-dsdp');location.replace('/index.html')<\/script></template></main>"
+  const tail = "<template shadowrootmode=\"open\"><script>fetch('/evil-ran-dsdp');location.replace('/index.html')<\/script>"
   await fresh({ lib: { '/': { body: Buffer.from(head + tail), headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'content-security-policy': CSP_EVIL }, hold: true, split: [Buffer.byteLength(head), 800] } } })
   const h0 = state.hits.length
   const t0 = Date.now()
@@ -637,7 +637,7 @@ if (row('dsd-leave-prefix')) {
   const hostile = evs.find((e) => e.early && e.url === `${LIB}/`)
   ok(state.hits.slice(h0).includes('lib /evil-ran-dsdp'), 'the hidden script ran and left (the attack is real)')
   ok(!!hostile, `the visit is on record (${hostile?.verdict} ${rules(hostile)} flags ${hostile?.page?.flags})`)
-  ok(hostile?.verdict === 'mismatch' && hostile.page.flags.includes('shadow-root'), `as a mismatch: the shadow root was flagged as the page left (${hostile?.verdict} ${hostile?.page?.flags})`)
+  ok(hostile?.verdict === 'mismatch' && hostile.page.flags.includes('shadow-root'), `as a mismatch: the shadow root was flagged (${hostile?.verdict} ${hostile?.page?.flags})`)
 }
 
 if (row('visit-started')) {

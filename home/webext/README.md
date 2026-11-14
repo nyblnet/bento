@@ -415,8 +415,8 @@ home.bento.page has never been checked.
 - **a script inside a declarative shadow root** runs before the observer can
   see it (attaching the root changes nothing it watches). The visit is still on
   record: a parse that stopped being a listed document's start is a mismatch,
-  and a shadow root attached since the observer last looked is flagged as the
-  page leaves; one that stays is flagged by the full report;
+  and a shadow root is flagged by the next look the parse gives the observer
+  (measured in every shape the rig tries) and again by the full report;
 - a visit cut short that is the clean start of a listed document is recorded
   quietly, so a change to page TEXT only, in a visit cut short, is not seen;
 - a navigation another site started: its bytes cannot be read (above), so a

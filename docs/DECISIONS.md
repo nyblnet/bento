@@ -14081,8 +14081,7 @@ Two gaps the security re-check found in the tripwire (entries above), and one it
   or not the page goes on to finish: a script hidden in a declarative shadow
   root runs before the observer can see it, but the elements before it were
   already reported. The full report's sequence must match a listed document
-  exactly, and a shadow root attached since the observer last looked is
-  flagged as the page leaves.
+  exactly. A report also leaves as the page is left (pagehide), marked so.
 - **A visit cut short.** A report sent after the page was left, after the
   parse never ended, or with a response that never did, is marked so. If what
   it shows is the clean start of a listed document, it is 'incomplete',

@@ -67,8 +67,7 @@ const MUTANTS = [
     { file: O, from: "if (name === 'template' && (el.hasAttribute('shadowrootmode') || el.hasAttribute('shadowroot'))) flag('shadow-root')", to: '' },
     { file: O, from: "    if (shadowOf(el)) flag('shadow-root')\n", to: '\n' },
     { file: O, from: "for (const el of recent) if (shadowOf(el)) flag('shadow-root')", to: '' },
-    { file: O, from: "for (const el of [...document.querySelectorAll('*'), ...walked]) if (shadowOf(el)) { flag('shadow-root'); break }", to: '' },
-    { file: O, from: "for (const el of walked) if (shadowOf(el)) { flag('shadow-root'); break }", to: '' }] },
+    { file: O, from: "for (const el of [...document.querySelectorAll('*'), ...walked]) if (shadowOf(el)) { flag('shadow-root'); break }", to: '' }] },
   // security re-check, N2 and N3
   { name: 'about: senders judged by their URL (N2)', row: 'about-popup', file: W, from: "if (scheme === 'about:' || scheme === 'blob:') origin = sender.origin", to: '' },
   { name: 'only the live document checked for shadow roots (N3)', row: 'shadow-root-removed', file: O, from: "for (const el of [...document.querySelectorAll('*'), ...walked]) if (shadowOf(el))", to: "for (const el of document.querySelectorAll('*')) if (shadowOf(el))" },
@@ -76,7 +75,10 @@ const MUTANTS = [
   { name: 'an early parse off the listed sequence is clean (N1)', row: 'dsd-leave', file: J, from: "if (d.kind !== 'document' || !isPrefix(obs.elements, d.elements) ||", to: "if (d.kind !== 'document' ||" },
   { name: 'early reports carry no elements (N1)', row: 'dsd-leave', file: O, from: 'elements: elements.slice(elementsSent), elementsFrom: elementsSent', to: 'elements: [], elementsFrom: 0' },
   { name: 'no "visit started" report (N1)', row: 'visit-started', file: O, from: '  early()\n  // A visit that ends early', to: '  // A visit that ends early' },
-  { name: 'no shadow-root check on the way out (N1)', row: 'dsd-leave-prefix', file: O, from: "    for (const el of walked) if (shadowOf(el)) { flag('shadow-root'); break }\n    early()", to: '    early()' },
+  { name: 'a shadow root not flagged as the parse goes on (N1)', row: 'dsd-leave-prefix', edits: [
+    { file: O, from: "if (name === 'template' && (el.hasAttribute('shadowrootmode') || el.hasAttribute('shadowroot'))) flag('shadow-root')", to: '' },
+    { file: O, from: "    if (shadowOf(el)) flag('shadow-root')\n", to: '\n' },
+    { file: O, from: "for (const el of recent) if (shadowOf(el)) flag('shadow-root')", to: '' }] },
   { name: 'the full report\'s sequence not judged (N1)', row: 'sw-element', file: J, from: 'if (Array.isArray(obs.elements) && !sameList(obs.elements, e.elements)) f.push', to: 'if (false) f.push' },
   // N4: visits cut short, and warnings by class
   { name: 'nothing is ever cut short (N4)', row: 'held-open', file: O, from: 'const aborted = left || !complete || (nav ? nav.responseEnd === 0 : false)', to: 'const aborted = false' },
