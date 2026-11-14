@@ -57,7 +57,21 @@ if (process.platform === 'darwin' && fs.existsSync(FIRMLINK)) {
   const src = fs.readFileSync(path.join(HERE, 'home-web-release.mjs'), 'utf8')
   const from = 'const id = (p) => { const st = statSync(p); return `${st.dev}:${st.ino}` }'
   ok(src.split(from).length === 2, 'mutant: the identity function is found exactly once')
-  const copy = path.join(work, 'mutant-home-web-release.mjs')
+  // the mutant lives in a copy of scripts/ holding home-web-release.mjs and everything it imports by a
+  // relative path, walked (not listed), so a new import never breaks the copy
+  const mdir = path.join(work, 'mutant-scripts')
+  const walkImports = (rel, seen = new Set()) => {
+    if (seen.has(rel)) return seen
+    seen.add(rel)
+    const text = fs.readFileSync(path.join(HERE, rel), 'utf8')
+    for (const m of text.matchAll(/(?:^|\n)\s*(?:import|export)\b[^'"\n]*?from\s*['"](\.{1,2}\/[^'"]+)['"]/g)) walkImports(path.normalize(path.join(path.dirname(rel), m[1])), seen)
+    return seen
+  }
+  for (const rel of walkImports('home-web-release.mjs')) {
+    fs.mkdirSync(path.dirname(path.join(mdir, rel)), { recursive: true })
+    fs.copyFileSync(path.join(HERE, rel), path.join(mdir, rel))
+  }
+  const copy = path.join(mdir, 'home-web-release.mjs')
   fs.writeFileSync(copy, src.replace(from, () => 'const id = (p) => realpathSync.native(p)'))
   const mutant = await import(pathToFileURL(copy).href)
   ok(!mutant.within(viaFirmlink, site), 'mutant: compared as real paths, the firmlink spelling is missed (so the row above is what catches it)')
