@@ -14549,12 +14549,15 @@ Two gaps the security re-check found in the tripwire (entries above), the limit 
   never sends one, so the extension records whether the library navigation's
   response carried a `Refresh` header (webRequest, observing only, beside the
   CSP and Cache-Control) and any such header is a mismatch. MEASURED while
-  adding it: with `Refresh: 0` the next navigation's record overwrote this
-  one before the report was read (one record per tab and frame), so the
-  report was judged with no headers at all. The extension now keeps a few
-  records per tab and frame and each report takes its own navigation's (the
-  same URL, nearest its time origin, used once). Chromium acts on the header
-  only after the load event, so it cannot cut a visit short. Other response
+  adding it: Chromium acts on the header at the load event, and with
+  `Refresh: 0` the page often leaves before its full report does, so the
+  visit was settled by its early report, which carried no headers, and
+  judged a quiet 'incomplete'. When the full report did arrive, the next
+  navigation had already replaced the frame's webRequest record. So the
+  first early report, sent at `document_start`, reads the header while the
+  record is still this navigation's, and the full report inherits it. A
+  response held open never reaches the load event, so the header never acts
+  on it (measured: the tab stayed). Other response
   headers (COOP, Link and the rest) are still not checked; that is stated in
   the extension's README.
 - **Under a worker, unread bytes are waived only when webRequest did not see
