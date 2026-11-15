@@ -54,9 +54,12 @@ const SELF = fileURLToPath(import.meta.url)
 // (re: a regular expression, all occurrences, at least one required).
 const MUTANTS = [
   { name: 'sw-cache-first', why: 'the worker answers from its cache before the network', only: 'sw',
-    src: { file: 'sw.ts', from: '  e.respondWith(fetch(e.request).catch(async () => {\n    const hit = await (await caches.open(CACHE)).match(url.pathname)\n    return hit ?? Response.error()\n  }))',
+    src: { file: 'sw.ts', from: '  e.respondWith(net.catch(async () => {\n    const hit = await (await caches.open(CACHE)).match(url.pathname)\n    return hit ?? Response.error()\n  }))',
       to: '  e.respondWith((async () => (await (await caches.open(CACHE)).match(url.pathname)) ?? fetch(e.request))())' },
     expect: 'online, the library comes from the server even with the worker in control' },
+  { name: 'sw-no-preload', why: 'the worker answers navigations with its own fetch, which an observer outside the page cannot see as the tab\'s navigation', only: 'sw',
+    src: { file: 'sw.ts', from: '    try { await self.registration.navigationPreload?.enable() } catch { /* no navigation preload: navigations fetch from here */ }\n', to: '' },
+    expect: 'with the worker in control, an online navigation is the browser\'s navigation preload' },
   { name: 'sw-caches-what-it-sees', why: 'the worker caches whatever passes through it', only: 'sw',
     src: { file: 'sw.ts', from: "  if (e.request.method !== 'GET' || url.origin !== self.location.origin || !PATHS.has(url.pathname)) return\n",
       to: "  if (e.request.method !== 'GET') return\n  if (!PATHS.has(url.pathname)) { e.respondWith(fetch(e.request).then(async (r) => { await (await caches.open(CACHE)).put(e.request, r.clone()); return r })); return }\n" },
@@ -253,7 +256,7 @@ deploy(X)
 const files = new Map()
 const seen = []
 let S = null
-const up = async () => { S = await startServers({ dist: SITE, ports: { library: PL, frame: PF, release: PR }, files, onRequest: (r) => seen.push({ method: r.method, url: `http://${r.headers.host}${r.url}` }) }) }
+const up = async () => { S = await startServers({ dist: SITE, ports: { library: PL, frame: PF, release: PR }, files, onRequest: (r) => seen.push({ method: r.method, url: `http://${r.headers.host}${r.url}`, preload: r.headers['service-worker-navigation-preload'] ?? null }) }) }
 const down = async () => { await S?.close(); S = null }
 await up()
 const STATUS = '/releases/home/status.json'
@@ -379,12 +382,26 @@ try {
 
     // network first: with the worker in control, an online load still comes from the server.
     // (goto, not reload: Playwright Firefox's reload of a worker-controlled page never sees "load", CI-measured)
+    // The server now serves a page that differs from the cached one (same worker script, so no
+    // update): the tab must show the SERVER's copy. A request reaching the server proves nothing on
+    // its own: under navigation preload it is sent whatever the worker then answers with.
     await page.goto(O.library + '/')
+    deploy(X, { tamperPage: true })
     const mark = seen.length
     await page.goto(O.library + '/')
     await settled(page)
     const ctl = await page.evaluate(() => !!navigator.serviceWorker.controller)
-    ok(ctl && served(mark, '/').length >= 1, `online, the library comes from the server even with the worker in control (controlled ${ctl}, GET / seen ${served(mark, '/').length})`)
+    const fromServer = await page.evaluate(() => {
+      const w = document.createTreeWalker(document, NodeFilter.SHOW_COMMENT)
+      for (let n = w.nextNode(); n; n = w.nextNode()) if (n.nodeValue.includes('not the pinned bytes')) return true
+      return false
+    })
+    ok(ctl && fromServer && served(mark, '/').length >= 1, `online, the library comes from the server even with the worker in control (controlled ${ctl}, the server's copy shown ${fromServer}, GET / seen ${served(mark, '/').length})`)
+    // the navigation is the browser's preload, so it reaches the server as the tab's navigation (its
+    // headers visible to webRequest: the tripwire) rather than as a fetch the worker made
+    const pre = served(mark, '/').map((r) => r.preload)
+    ok(ctl && pre.length >= 1 && pre.every((h) => h === 'true'), `with the worker in control, an online navigation is the browser's navigation preload (Service-Worker-Navigation-Preload on each GET /: ${JSON.stringify(pre)})`)
+    deploy(X)
 
     // open a document; afterwards nothing new is in the cache and no document content anywhere in it
     const u = await open(page)

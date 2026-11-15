@@ -181,7 +181,11 @@ controlled by it; the frame's policy and sandbox are unchanged.
   mismatch and nothing is cached. The cache is named for the content hash of
   those files, and activating a new worker deletes every other cache.
 - Network first: online, every listed path comes from the server as if there
-  were no worker; the cache answers only when the network fails. Every other
+  were no worker; the cache answers only when the network fails. Navigation
+  preload is on: a navigation is answered with the browser's preload response
+  (then the network, then the cache), so it reaches the server as the tab's
+  own navigation, with headers an observer outside the page (the tripwire)
+  can see, not as a fetch the worker made. Every other
   request (the release channel, the frame, any other path) is left alone and
   never cached. It has no message listener: nothing a page says can add a URL,
   bytes or code. No `importScripts`, `eval` or dynamic import; it is served
@@ -210,10 +214,10 @@ hash is the same digest in base64. No file opens until the check answers.
 
 | the status | the library |
 |---|---|
-| unreachable, or 404 (offline; nothing published) | carries on: a returning visit must open offline |
+| unreachable, 404, or no answer within 8 s (offline; nothing published; a slow link) | carries on: a returning visit must open offline |
 | signed, for `bento-home-status`, `seq` not below the highest this browser has seen, this build not listed | carries on, registers its worker |
 | lists this build | **stops**: unregisters every worker on its origin, deletes every cache, closes the open document and shows a fixed message |
-| anything else that came back (a bad signature, another payload, an older `seq`) | **fails closed**: the same as withdrawn |
+| anything else that came back (a bad signature, another payload, an older `seq`, any other 200) | **fails closed**: the same as withdrawn |
 
 Beside its worker's cache, the library keeps two small things in
 `localStorage`: the highest `seq` seen, so a replayed older status cannot
@@ -222,6 +226,21 @@ again from any cache (Firefox offline serves the page from its HTTP cache; a
 stale edge could too) stops on load without asking the network. The
 message is fixed text: nothing from the manifest is shown. The next online load
 comes from the server, whatever it serves then.
+
+What it does not cover, stated:
+
+- **Only the tab that loads stops.** A tab already open keeps running the
+  withdrawn build until it is reloaded.
+- **`at` is not checked.** The `seq` floor protects only a browser that has
+  already seen a newer status; a browser that never has takes any older status
+  signed with the release key, including one from before the withdrawal.
+- **A slow answer is no answer.** A status that has not arrived within 8
+  seconds counts as unreachable, exactly like a 404.
+- **Any 200 that is not a valid status stops the library and wipes its worker
+  and caches** (a captive portal's page, a host's HTML fallback). The release
+  host must answer 404 for a file it does not have.
+- **Offline and installed copies run a withdrawn build** until that browser
+  fetches the status (or has fetched it once before).
 
 What it cannot do: stop a build that does not run this check. A hostile deploy
 ships its own code and can register its own worker at a path of its choosing.
@@ -234,13 +253,21 @@ move.
 (`serviceWorkers`), so the signed release list the extension's tripwire checks
 against lists it as the release's worker, with the worker's bytes and every
 file it precaches; a worker or a cached file the list lacks is a mismatch.
-Open: with this worker in control, every navigation is answered by the worker,
-so the tripwire no longer sees the navigation's own headers and does not
-require the page's bytes. Measured in Chromium, it then misses a changed
-library CSP header, a changed page sent `no-store`, and a visit reached by a
-link on another site (whose `Cache-Control` it judges). A changed script is
-still caught, from the parse. Closing this is a decision for the tripwire
-and this worker together; it is not in this stage.
+Navigation preload keeps each navigation the tab's own, so the tripwire still
+sees its headers. Still open:
+
+- **A response kept out of the HTTP cache hides CSP and text changes.** The
+  tripwire reads the page's bytes from the HTTP cache, and with a worker in
+  control it does not require them. A changed page sent with headers that keep
+  it out of the cache (`Vary: *` with `no-cache`, for one) passes unseen until
+  the tripwire requires the bytes whenever the headers came from the
+  navigation (a tripwire follow-up). A changed script is still caught, from the
+  parse.
+- **The tripwire trusts the worker by its URL.** It lists `/sw.js` and checks
+  the bytes it fetches itself, but a server can answer the browser's own
+  worker request (`Service-Worker: script`) differently from the extension's,
+  and the browser installs what it was given. Watching the worker's own
+  requests is a tripwire follow-up; until then a worker is trusted by its URL.
 
 **Install.** `manifest.webmanifest` (name, `start_url` and `scope` `/`,
 standalone, 192 and 512 px icons), linked from the page and allowed by an exact

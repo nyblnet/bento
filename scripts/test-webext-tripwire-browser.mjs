@@ -134,10 +134,11 @@ const honest = { lib: siteFiles(path.join(A, 'library')), frame: siteFiles(path.
 // Since stage 3 the library registers /sw.js itself on every visit. The rows that are not about
 // a worker model a visit with none (a first visit, or a browser that refused the registration),
 // so by default the site serves no /sw.js and that registration fails; a row that wants a worker
-// serves one (withWorker). This default does not settle what stage 3's own network-first worker
-// does to the tripwire: with it in control every navigation is answered by the worker, and
-// library-csp, no-store, cross-site-link and cross-site-no-store all go red (measured
-// 2026-11-15). That is an open question, recorded in home/web/README.md.
+// serves one (withWorker). This default does not settle what stage 3's own worker does to the
+// tripwire. Measured 2026-11-15 with the build's real worker (navigation preload on) in control:
+// library-byte, library-csp and both cross-site rows hold; no-store is still a mismatch, on
+// cache-control rather than bytes-unread. Open (home/web/README.md): a response kept out of the
+// HTTP cache by other headers (Vary: *), and a worker trusted by its URL.
 honest.lib.delete('/sw.js')
 const releaseB = siteFiles(path.join(B, 'library'))
 // a file may carry `status` and `hold` (send the body, keep the response open); `fallback` answers unlisted library paths

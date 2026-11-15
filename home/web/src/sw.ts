@@ -23,14 +23,21 @@
 //     other cache on this origin.
 //   - No importScripts, no eval, no dynamic import (its own CSP header is
 //     default-src 'none' plus connect-src 'self').
+//   - Navigation preload is on, and a navigation is answered with the preload
+//     response (then the network, then the cache). The preload request is the
+//     tab's own navigation, so what the browser fetched (its headers, its
+//     Cache-Control, where it came from) is visible to an observer outside the
+//     page, the bento/home tripwire's webRequest listener among them. A plain
+//     fetch() from the worker is not.
 
 declare const __CACHE__: string
 declare const __PRECACHE__: { path: string; sha256: string }[]
 
 interface ExtendableEvent extends Event { waitUntil(p: Promise<unknown>): void }
-interface FetchEvent extends ExtendableEvent { request: Request; respondWith(r: Promise<Response> | Response): void }
+interface FetchEvent extends ExtendableEvent { request: Request; preloadResponse?: Promise<Response | undefined>; respondWith(r: Promise<Response> | Response): void }
 declare const self: {
   location: Location
+  registration: { navigationPreload?: { enable(): Promise<void> } }
   skipWaiting(): Promise<void>
   clients: { claim(): Promise<void> }
   addEventListener(type: 'install' | 'activate', fn: (e: ExtendableEvent) => void): void
@@ -63,6 +70,7 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil((async () => {
     for (const k of await caches.keys()) if (k !== CACHE) await caches.delete(k)
+    try { await self.registration.navigationPreload?.enable() } catch { /* no navigation preload: navigations fetch from here */ }
     await self.clients.claim()
   })())
 })
@@ -70,7 +78,10 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url)
   if (e.request.method !== 'GET' || url.origin !== self.location.origin || !PATHS.has(url.pathname)) return
-  e.respondWith(fetch(e.request).catch(async () => {
+  // a navigation: the preload response the browser already started, else the network
+  const pre = e.request.mode === 'navigate' ? e.preloadResponse : undefined
+  const net = pre ? pre.then((r) => r ?? fetch(e.request)) : fetch(e.request)
+  e.respondWith(net.catch(async () => {
     const hit = await (await caches.open(CACHE)).match(url.pathname)
     return hit ?? Response.error()
   }))

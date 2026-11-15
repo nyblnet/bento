@@ -14521,7 +14521,13 @@ manifest. What it does not gain matters as much:
   cached. It takes nothing from pages (no message listener), has no
   `importScripts`, `eval` or dynamic import, and is served with its own
   `default-src 'none'` policy and `no-cache`, registered with
-  `updateViaCache: 'none'`. The library's CSP names that one script URL, and its
+  `updateViaCache: 'none'`. Navigation preload is on, and a navigation is
+  answered with the browser's preload response (then the network, then the
+  cache), so it reaches the server as the tab's own navigation, visible to an
+  observer outside the page; a worker fetch would not be. Passing navigations
+  through while `navigator.onLine` was rejected: measured, it loses offline
+  whenever the browser believes it is online and the server is unreachable.
+  The library's CSP names that one script URL, and its
   one Trusted Types policy passes only that URL. The frame site keeps
   `worker-src 'none'`; its policy and sandbox are unchanged.
 - **A worker is not a pin.** Network first means the server's current build
@@ -14536,17 +14542,23 @@ manifest. What it does not gain matters as much:
 - **The kill switch is a signed status, checked on every load.**
   `releases/home/status.json`, signed with the release key
   (`scripts/sign-home-status.mjs`), lists withdrawn builds by the sha256 of the
-  library's script. A listed build stops before any file opens: it unregisters
+  library's script. A listed build stops, in the tab that loads it, before any
+  file opens: it unregisters
   every worker on its origin, deletes every cache and shows a fixed message;
-  the next online load comes from the server. Unreachable or absent is no
-  answer (a returning visit must open offline). Anything else that comes back
-  and cannot be trusted (a bad signature, a payload for another app, a `seq`
-  below the highest this browser has seen) fails closed, exactly as a
-  withdrawal. A browser remembers the builds it has seen withdrawn, so a copy
+  the next online load comes from the server. Unreachable, absent (404) or
+  slower than 8 seconds is no answer (a returning visit must open offline).
+  Anything else that comes back and cannot be trusted (a bad signature, a
+  payload for another app, a `seq` below the highest this browser has seen,
+  any other 200) fails closed, exactly as a withdrawal, wiping the worker and
+  caches; so the release host must answer 404 for a file it does not have. A browser remembers the builds it has seen withdrawn, so a copy
   served again from any cache (Firefox serves the page from its HTTP cache
   offline) stops on load even when the status cannot be fetched. This is the
   one request the library makes on every load, and it goes only to the signed
-  release channel.
+  release channel. Its limits, stated: tabs already open keep running a
+  withdrawn build; `at` is not checked, so the `seq` floor protects only a
+  browser that has seen a newer status (a fresh browser takes any older signed
+  status); and offline or installed copies run a withdrawn build until that
+  browser sees the status.
 - **What the kill switch cannot reach:** a build that does not run the check.
   A hostile deploy can register its own worker at any path; clearing that
   needs the host to answer `Service-Worker: script` requests with a cleaning
@@ -14557,11 +14569,14 @@ manifest. What it does not gain matters as much:
   yet.
 - **The tripwire's release list names the worker.** The build writes
   `serviceWorkers: ["/sw.js"]` to `build.json`, so the list the extension
-  checks against holds the worker and every file it precaches. Left open: under
-  the worker every navigation is the worker's, so the tripwire loses the
-  navigation's headers and the page bytes it otherwise requires (measured: a
-  changed CSP header, a changed page sent `no-store`, and a cross-site visit's
-  `Cache-Control` go unseen; script changes are still caught).
+  checks against holds the worker and every file it precaches. Navigation
+  preload keeps the navigation's headers visible to it. Left open, for
+  tripwire follow-ups: with a worker in control the tripwire does not require
+  the page's bytes, so CSP and text changes go unseen whenever the response is
+  not HTTP-cacheable (`Vary: *` with `no-cache`, for one); script changes are
+  still caught. And the tripwire trusts the worker by its URL: a server can
+  answer the browser's `Service-Worker: script` request differently from the
+  extension's own fetch of `/sw.js`.
 
 Rigs: `scripts/test-home-web-offline.mjs` (Chromium, WebKit, Firefox; offline
 by `context.setOffline`, with the servers closed where an engine's emulation
