@@ -37,7 +37,7 @@ import { fileURLToPath } from 'node:url'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const { freePorts, parseHeaders } = await import(path.join(ROOT, 'home/web/serve.mjs'))
 const { spliceDoc } = await import(path.join(ROOT, 'home/web/src/verify.ts'))
-const { describeBuild, nextServed } = await import(path.join(ROOT, 'scripts/lib/home-web-served.mjs'))
+const { describeBuild, nextServed, buildScriptTexts } = await import(path.join(ROOT, 'scripts/lib/home-web-served.mjs'))
 const pw = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const chromium = pw.chromium ?? pw.default?.chromium
 
@@ -80,8 +80,24 @@ const LEDE = 'Open a Bento document to view or present it.'
 if (libA.split(LEDE).length !== 2) throw new Error('the library page no longer carries the lede this rig edits')
 fs.writeFileSync(path.join(B, 'library/index.html'), libA.replace(LEDE, 'Open a Bento document to view or to present it.'))
 
+// release P: release A with a worker that answers navigations from navigation preload (the shape stage 3
+// takes, security ruling #954 C1), so webRequest sees the navigation even though the worker answers it
+const SW_PRELOAD = SW_HONEST.replace("self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()))",
+  "self.addEventListener('activate', (e) => e.waitUntil(Promise.all([self.clients.claim(), self.registration.navigationPreload.enable()])))")
+  .replace("  e.respondWith(caches.match(e.request, { ignoreSearch: true }).then((r) => r || fetch(e.request)))",
+  `  if (e.request.mode === 'navigate') {
+    e.respondWith((async () => { try { const r = await e.preloadResponse; if (r) return r } catch {} try { return await fetch(e.request) } catch { return (await caches.match('/')) ?? Response.error() } })())
+    return
+  }
+  e.respondWith(caches.match(e.request, { ignoreSearch: true }).then((r) => r || fetch(e.request)))`)
+if (SW_PRELOAD === SW_HONEST || !SW_PRELOAD.includes('navigationPreload.enable') || !SW_PRELOAD.includes('preloadResponse')) throw new Error('the preload worker fixture did not take')
+const P = path.join(work, 'P')
+fs.cpSync(A, P, { recursive: true })
+fs.writeFileSync(path.join(P, 'library/sw.js'), SW_PRELOAD)
+
 const DAY = 86400e3
 const relA = await describeBuild(A, new Date(Date.now() - 10 * DAY).toISOString())
+const relP = await describeBuild(P, new Date(Date.now() - 10 * DAY).toISOString())
 const relB = await describeBuild(B, new Date().toISOString())
 const relBold = await describeBuild(B, new Date(Date.now() - 4 * DAY).toISOString())
 
@@ -101,6 +117,7 @@ const sign = async (payloadObj, k = KEY) => {
 const list1 = nextServed(null, relA)
 const list2 = nextServed(list1, relB)
 const list2old = nextServed(list1, relBold)
+const listP = nextServed(null, relP)
 
 // --- the deck the library opens (to get the frame page loaded) ------------------
 const REAL = path.join(ROOT, 'home/fixtures/gate1/real/slides-1.2.10')
@@ -134,11 +151,14 @@ const honest = { lib: siteFiles(path.join(A, 'library')), frame: siteFiles(path.
 const releaseB = siteFiles(path.join(B, 'library'))
 // a file may carry `status` and `hold` (send the body, keep the response open); `fallback` answers unlisted library paths
 const HELD = []
-const state = { lib: new Map(honest.lib), frame: new Map(honest.frame), list: null, hits: [], fallback: null }
+const state = { lib: new Map(honest.lib), frame: new Map(honest.frame), list: null, hits: [], fallback: null, scripts: new Map([...await buildScriptTexts(A), ...await buildScriptTexts(B)]) }
 const serve = (key) => http.createServer((req, res) => {
   const p = new URL(req.url, 'http://x').pathname
   state.hits.push(`${key} ${p}`)
   if (key === 'chan') {
+    // the inline scripts' text, published beside the list (scripts/<sha256>.js)
+    const sm = /^\/releases\/home-web\/scripts\/([0-9a-f]{64})\.js$/.exec(p)
+    if (sm && state.scripts.has(sm[1])) { res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store', 'access-control-allow-origin': '*' }); res.end(state.scripts.get(sm[1])); return }
     if (p === LIST_PATH && state.list != null) { res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*' }); res.end(state.list); return }
     res.writeHead(404).end(); return
   }
@@ -254,6 +274,9 @@ const page = await ctx.newPage()
 await closeExtras(page)
 async function fresh({ list = list1, held = null, lib = {}, frame = {} } = {}) {
   await closeExtras(page)
+  // the last row's document leaves first (its pagehide report lands now, not in this row's record)
+  await page.goto('about:blank').catch(() => {})
+  await new Promise((r) => setTimeout(r, 400))
   await store.reset()
   for (const r of HELD.splice(0)) r.destroy()
   state.fallback = null
@@ -419,10 +442,11 @@ for (const hold of [false, true]) {
   await sleep(ORPHAN_WAIT)
   const evs = await since(t0)
   const blobEv = evs.find((e) => e.url.startsWith('blob:'))
-  const earlyEv = evs.find((e) => e.early)
+  const earlyEv = evs.find((e) => e.early && !e.url.startsWith('blob:'))
   ok(page.url().startsWith('blob:'), `the hostile document is running at ${page.url().slice(0, 40)}`)
+  note(`events: ${evs.map((e) => `${e.url.slice(-20)}${e.early ? '(early)' : ''}=${e.verdict}/${e.class}[${rules(e)}]{${e.warned}} flags ${e.page?.flags}`).join(' | ')}`)
   ok(blobEv?.verdict === 'mismatch' && blobEv.page.flags.some((f) => f.startsWith('document:blob')), `the blob: document itself is a mismatch (${blobEv?.verdict} ${blobEv?.page.flags})`)
-  ok(earlyEv?.verdict === 'mismatch' && rules(earlyEv) === 'scripts', `the hostile page's EARLY report, never settled, is a mismatch on scripts (${earlyEv?.verdict} ${rules(earlyEv)})`)
+  ok(earlyEv?.verdict === 'mismatch' && rules(earlyEv).split(',').includes('scripts'), `the hostile page's EARLY report, never settled, is a mismatch on its script (${earlyEv?.verdict} ${rules(earlyEv)})`)
   ok(reportTabs().length === 1, `one loud report tab for the origin (${reportTabs().length})`)
 }
 
@@ -450,13 +474,22 @@ if (row('no-store')) {
 }
 
 if (row('held-open')) {
-  section('held-open: the honest library\'s response never ends  (rules: incomplete, size-unread)')
+  section('held-open: the honest library\'s response never ends  (rule: a visit cut short that is the clean start of a release is recorded quietly)')
   const b = libDoc.body.toString('utf8')
   await fresh({ lib: both({ body: Buffer.from(b.slice(0, b.indexOf('</main>'))), hold: true, headers: libDoc.headers }) })
   const t0 = Date.now()
   await page.goto(`${LIB}/`, { waitUntil: 'commit' }).catch(() => {})
   const ev = await until(async () => (await since(t0)).find((e) => !e.early), 75000)
-  ok(ev?.verdict === 'mismatch' && rules(ev).includes('incomplete') && rules(ev).includes('size-unread'), `an unfinished parse is never ok (${ev?.verdict} ${rules(ev)})`)
+  ok(ev?.verdict === 'incomplete' && ev.page.aborted && (ev.warned ?? []).length === 0 && reportTabs().length === 0, `an honest visit cut short: incomplete, recorded quietly (${ev?.verdict} aborted ${ev?.page?.aborted} warned ${ev?.warned})`)
+}
+
+if (row('held-open-hostile')) {
+  section('held-open-hostile: a hostile page whose response never ends  (rules: incomplete, size-unread: never ok)')
+  await fresh({ lib: both(hostileScriptPage('window.__evil=1', { hold: true })) })
+  const t0 = Date.now()
+  await page.goto(`${LIB}/`, { waitUntil: 'commit' }).catch(() => {})
+  const ev = await until(async () => (await since(t0)).find((e) => !e.early), 75000)
+  ok(ev?.verdict === 'mismatch' && rules(ev).includes('incomplete') && rules(ev).includes('size-unread'), `an unfinished hostile parse is never ok (${ev?.verdict} ${rules(ev)})`)
 }
 
 for (const [name, fb] of [
@@ -586,6 +619,97 @@ if (row('about-popup')) {
   ok(ev?.verdict === 'mismatch' && ev.origin === LIB && ev.page.flags.some((f) => f.startsWith('document:about')), `the about: document is on record as a mismatch of the library origin (${ev?.verdict} ${ev?.origin} ${ev?.page?.flags})`)
   if (pop) await pop.close().catch(() => {})
 }
+
+// --- N1: what the parse looks like, as it happens; N4: visits cut short, and warnings by class ----------------
+const CSP_EVIL = "script-src 'unsafe-inline'; connect-src 'self'"
+
+if (row('dsd-leave')) {
+  section('dsd-leave: stage 1, a script in a declarative shadow root (attached after the observer last looked) runs, then leaves for an honest page  (rule: the element sequence, reported as it grows)')
+  const head = '<!doctype html><html><head><meta charset="utf-8"><title>bento/home</title></head><body><div id="h">' + '<p>'.repeat(300)
+  const tail = "<template shadowrootmode=\"open\"><script>fetch('/evil-ran-dsd');location.replace('/index.html')<\/script></template></div>"
+  await fresh({ lib: { '/': { body: Buffer.from(head + tail), headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'content-security-policy': CSP_EVIL }, hold: true, split: [Buffer.byteLength(head), 800] } } })
+  const h0 = state.hits.length
+  const t0 = Date.now()
+  await page.goto(`${LIB}/`, { waitUntil: 'commit' }).catch(() => {})
+  await sleep(3500 + ORPHAN_WAIT)
+  const evs = await since(t0)
+  const hostile = evs.find((e) => e.early && e.url === `${LIB}/`)
+  ok(state.hits.slice(h0).includes('lib /evil-ran-dsd'), 'the hidden script ran and left (the attack is real)')
+  ok(hostile?.verdict === 'mismatch' && rules(hostile).includes('elements') && hostile.warned.includes('tab'), `the visit is on record as a loud mismatch: its parse stopped matching any listed document (${hostile?.verdict} ${rules(hostile)} ${hostile?.warned})`)
+}
+
+if (row('dsd-leave-prefix')) {
+  section('dsd-leave-prefix: the honest library\'s own start, then a declarative shadow root on <main> whose script leaves  (rule: a shadow root is flagged as the parse goes on)')
+  const t = libDoc.body.toString('utf8')
+  const at = t.indexOf('<main>') + '<main>'.length
+  // the meta CSP stays an element (the start must match the honest one), with a policy that lets the script run
+  const head = t.slice(0, at).replace(/(<meta http-equiv="Content-Security-Policy" content=")[^"]*(">)/, (_, a, b) => `${a}script-src 'unsafe-inline'${b}`)
+  const tail = "<template shadowrootmode=\"open\"><script>fetch('/evil-ran-dsdp');location.replace('/index.html')<\/script>"
+  await fresh({ lib: { '/': { body: Buffer.from(head + tail), headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'content-security-policy': CSP_EVIL }, hold: true, split: [Buffer.byteLength(head), 800] } } })
+  const h0 = state.hits.length
+  const t0 = Date.now()
+  await page.goto(`${LIB}/`, { waitUntil: 'commit' }).catch(() => {})
+  await sleep(3500 + ORPHAN_WAIT)
+  const evs = await since(t0)
+  const hostile = evs.find((e) => e.early && e.url === `${LIB}/`)
+  ok(state.hits.slice(h0).includes('lib /evil-ran-dsdp'), 'the hidden script ran and left (the attack is real)')
+  ok(!!hostile, `the visit is on record (${hostile?.verdict} ${rules(hostile)} flags ${hostile?.page?.flags})`)
+  ok(hostile?.verdict === 'mismatch' && hostile.page.flags.includes('shadow-root'), `as a mismatch: the shadow root was flagged (${hostile?.verdict} ${hostile?.page?.flags})`)
+}
+
+if (row('visit-started')) {
+  section('visit-started: a listed page that shows the observer nothing, then is left  (rule: every visit is on record)')
+  // the honest page's own first bytes, up to its first element the observer records (html and head it does not)
+  const lt = libDoc.body.toString('utf8')
+  await fresh({ lib: both({ body: Buffer.from(lt.slice(0, lt.indexOf('<meta'))), hold: true, headers: libDoc.headers }) })
+  const t0 = Date.now()
+  await page.goto(`${LIB}/`, { waitUntil: 'commit' }).catch(() => {})
+  await sleep(1000)
+  await page.goto('about:blank').catch(() => {})
+  await sleep(ORPHAN_WAIT)
+  const ev = (await since(t0)).find((e) => e.url === `${LIB}/`)
+  note(`visit-started events: ${JSON.stringify((await store.log()).slice(0, 4).map((e) => [e.url, e.early, e.verdict, e.at]))}`)
+  ok(ev?.verdict === 'incomplete' && (ev.warned ?? []).length === 0, `the visit is on record, quietly, as incomplete (${ev?.verdict} ${ev?.warned})`)
+}
+
+if (row('popup-decoy')) {
+  section('popup-decoy: a third party opens the honest library and closes it mid-script, then a real hostile deploy follows  (rules: a script cut short is an exact prefix of the published text; the decoy is quiet; the real mismatch is loud)')
+  await fresh()
+  const t = libDoc.body.toString('utf8')
+  const mid = Buffer.byteLength(t.slice(0, t.indexOf('<script>') + 8 + 2000))
+  for (const p of ['/', '/index.html']) state.lib.set(p, { body: libDoc.body, headers: libDoc.headers, split: [mid, 5000] })
+  state.frame.set('/attacker', { body: Buffer.from(`<!doctype html><button id=b style="width:300px;height:100px" onclick="window.__w=window.open('${LIB}/');setTimeout(function(){window.__w.close()},1500)">go</button>`), headers: { 'content-type': 'text/html' } })
+  await page.goto(`${FRM}/attacker`)
+  const t0 = Date.now()
+  const popP = page.waitForEvent('popup', { timeout: 5000 }).catch(() => null)
+  await page.click('#b')
+  await popP
+  await sleep(3000 + ORPHAN_WAIT)
+  const evs = await since(t0)
+  const decoy = evs.find((e) => e.url === `${LIB}/`)
+  note(`decoy: ${JSON.stringify({ early: decoy?.early, size: decoy?.page?.size, aborted: decoy?.page?.aborted, complete: decoy?.page?.complete, elements: decoy?.page?.elements?.length, scripts: decoy?.page?.scripts?.length, errors: decoy?.page?.errors, partial: decoy?.page?.partial, all: evs.map((e) => e.url + (e.early ? '(e)' : '') + '=' + e.verdict) })}`)
+  ok(!!decoy && ['incomplete', 'ok'].includes(decoy.verdict) && (decoy.warned ?? []).length === 0 && reportTabs().length === 0, `the closed honest visit is recorded quietly (${decoy?.verdict} ${rules(decoy)} ${decoy?.warned}; partial ${JSON.stringify(decoy?.page?.partial)})`)
+  await closeExtras(page)
+  for (const p of ['/', '/index.html']) state.lib.set(p, variant(libDoc, 'Choose a file', 'Choose a filf'))
+  const v = await visit(page, `${LIB}/`)
+  ok(v.lib?.verdict === 'mismatch' && v.lib.warned.includes('tab'), `then a real hostile deploy is LOUD (${v.lib?.verdict} ${rules(v.lib)} ${v.lib?.warned})`)
+}
+
+if (row('class-keys')) {
+  section('class-keys: an "unverified" mismatch first, then a "tampered" one, same session  (rule: one loud warning per class, so the first cannot silence the second)')
+  await fresh()
+  // the browser keeps no copy of the honest page this once (as a cleared or full cache would): its bytes cannot be read
+  const cdp = await ctx.newCDPSession(page)
+  await cdp.send('Network.enable'); await cdp.send('Network.setCacheDisabled', { cacheDisabled: true })
+  const a = await visit(page, `${LIB}/`)
+  await cdp.send('Network.setCacheDisabled', { cacheDisabled: false }); await cdp.detach()
+  ok(a.lib?.verdict === 'mismatch' && a.lib.class === 'unverified' && a.lib.warned.includes('tab'), `honest page, bytes unreadable: unverified, loud once (${a.lib?.verdict} ${a.lib?.class} ${rules(a.lib)} ${a.lib?.warned})`)
+  for (const p of ['/', '/index.html']) state.lib.set(p, variant(libDoc, 'Choose a file', 'Choose a filf'))
+  await closeExtras(page)
+  const b = await visit(page, `${LIB}/`)
+  ok(b.lib?.verdict === 'mismatch' && b.lib.class === 'tampered' && b.lib.warned.includes('tab'), `then a changed byte: tampered, loud too (${b.lib?.verdict} ${b.lib?.class} ${b.lib?.warned})`)
+}
+
 for (const [name, bad] of [['cross-site-link', false], ['cross-site-no-store', true]]) {
   if (!row(name)) continue
   section(`${name}: the library reached by a link on another site${bad ? ', one byte changed and sent no-store' : ''}  (rules: a cross-site navigation's bytes are not judged; its Cache-Control header is)`)
@@ -605,8 +729,55 @@ for (const [name, bad] of [['cross-site-link', false], ['cross-site-no-store', t
   else ok(ev?.verdict === 'mismatch' && rules(ev).split(',').includes('cache-control'), `no-store, reached from another site: a mismatch on its Cache-Control header (${ev?.verdict} ${rules(ev)})`)
 }
 
+
+if (row('xsite-markup')) {
+  section('xsite-markup: reached by a link on another site, a same-length MARKUP change (the lede becomes a link elsewhere)  (rule: the element sequence still judges a cross-site visit)')
+  const LEDE = 'Open a Bento document to view or present it.'
+  const link = '<a href="http://x.example/">Open it</a>'.padEnd(LEDE.length, ' ')
+  const body = variant(libDoc, LEDE, link)
+  ok(body.body.length === libDoc.body.length, 'the change keeps the length (size cannot catch it)')
+  await fresh({ lib: both(body) })
+  state.frame.set('/opener', { body: Buffer.from(`<!doctype html><a id=l href="${LIB}/">link</a>`), headers: { 'content-type': 'text/html' } })
+  await page.goto(`${FRM}/opener`)
+  const t0 = Date.now()
+  await page.click('#l')
+  const ev = await until(async () => (await since(t0)).find((e) => e.url === `${LIB}/` && !e.early), 20000)
+  const shown = await page.evaluate(() => !!document.querySelector('a[href="http://x.example/"]')).catch(() => null)
+  ok(shown === true && ev?.page?.crossSite === true && !ev.observed?.bytes, `the injected link is on screen, on a cross-site visit whose bytes are not judged (shown ${shown}, crossSite ${ev?.page?.crossSite})`)
+  ok(ev?.verdict === 'mismatch' && rules(ev).split(',').includes('elements') && (ev.warned ?? []).includes('tab'), `a loud mismatch on the element sequence (${ev?.verdict} ${rules(ev)} ${ev?.warned})`)
+}
+
+for (const [name, secs] of [['refresh-header', 1], ['refresh-header-now', 0]]) {
+  if (!row(name)) continue
+  section(`${name}: the honest bytes, sent with \`Refresh: ${secs}; url=<another site>\` on a direct visit  (rule: a Refresh header is never in a release)`)
+  await fresh({ lib: both({ body: libDoc.body, headers: { ...libDoc.headers, refresh: `${secs}; url=${FRM}/phish` } }) })
+  state.frame.set('/phish', { body: Buffer.from('<!doctype html>phish'), headers: { 'content-type': 'text/html' } })
+  const t0 = Date.now()
+  await page.goto(`${LIB}/`).catch(() => {})
+  await sleep(2500 + (secs ? 0 : ORPHAN_WAIT))
+  const evs = (await since(t0)).filter((e) => e.url === `${LIB}/`)
+  note(`${name} events: ${JSON.stringify(evs.map((e) => [e.early ? 'early' : 'full', e.verdict, rules(e), e.page?.aborted, e.page?.refresh]))}`)
+  ok(page.url().endsWith('/phish'), `the tab left for the other site (the attack is real): ${page.url()}`)
+  // with no delay the page may leave before its full report does: whichever report settles the visit, it is loud
+  const loud = evs.filter((e) => e.verdict === 'mismatch' && rules(e).split(',').includes('refresh-header'))
+  ok(evs.length > 0 && loud.length === evs.length && loud.some((e) => (e.warned ?? []).includes('tab')), `every report of the visit is a mismatch on the Refresh header, loudly (${evs.map((e) => `${e.early ? 'early' : 'full'} ${e.verdict} ${rules(e)} ${e.warned}`).join(' | ')})`)
+}
+
+if (row('cut-mid-script')) {
+  section('cut-mid-script: the honest library, its script still arriving, left before it ends  (rule: a script cut short that is an exact prefix of the published text is clean)')
+  const t = libDoc.body.toString('utf8')
+  const mid = Buffer.byteLength(t.slice(0, t.indexOf('<script>') + 8 + 2000))
+  await fresh({ lib: both({ body: libDoc.body.subarray(0, mid), headers: libDoc.headers, hold: true }) })
+  const t0 = Date.now()
+  await page.goto(`${LIB}/`, { waitUntil: 'commit' }).catch(() => {})
+  await sleep(1500)
+  await page.goto('about:blank').catch(() => {})
+  await sleep(ORPHAN_WAIT)
+  const ev = (await since(t0)).find((e) => e.url === `${LIB}/`)
+  ok(ev?.verdict === 'incomplete' && (ev.warned ?? []).length === 0 && ev.page?.partial?.length > 1000, `recorded quietly as incomplete, with the script cut short (${ev?.verdict} ${rules(ev)} ${ev?.warned} partial ${JSON.stringify(ev?.page?.partial)})`)
+}
 // --- rows with a service worker ---------------------------------------------------
-const SW_ROWS = ['shadow-root', 'shadow-root-removed', 'sw-honest', 'sw-script-bytes', 'sw-custom-path', 'sw-cache-extra', 'sw-cache-poisoned', 'sw-navigation-only', 'sw-markup', 'sw-size', 'script-rewrite']
+const SW_ROWS = ['sw-preload-vary', 'sw-element', 'shadow-root', 'shadow-root-removed', 'sw-honest', 'sw-script-bytes', 'sw-custom-path', 'sw-cache-extra', 'sw-cache-poisoned', 'sw-navigation-only', 'sw-markup', 'sw-size', 'script-rewrite']
 async function withWorker(script, { scope = '/', url = '/sw.js' } = {}) {
   // the stage-1 library's CSP refuses workers; the rig registers through a page with CSP bypassed
   await page.goto('about:blank')
@@ -748,7 +919,7 @@ if (SW_ROWS.some(row)) {
     needWorker(await withWorker(hostileWorker([[from, to]])))
     state.lib.set('/sw.js', { body: Buffer.from(SW_HONEST), headers: { 'content-type': 'text/javascript' } })
     const v = await visit(page, `${LIB}/`)
-    ok(v.lib?.verdict === 'mismatch' && rules(v.lib) === 'markup', `mismatch on markup only (got ${v.lib?.verdict} ${rules(v.lib)})`)
+    ok(v.lib?.verdict === 'mismatch' && rules(v.lib).split(',').includes('markup') && rules(v.lib).replace('elements', '').replace(/^,|,$/g, '') === 'markup', `mismatch on markup (and the element it added) (got ${v.lib?.verdict} ${rules(v.lib)})`)
     await noWorkers()
   }
   if (row('sw-size')) {
@@ -782,7 +953,21 @@ if (SW_ROWS.some(row)) {
     const v = await visit(page, `${LIB}/`)
     const ran = await page.evaluate((h) => document.querySelector('script')?.textContent === h, honestJs)
     ok(ran, 'the hostile script ran and its text now reads exactly as the honest one')
-    ok(v.lib?.verdict === 'mismatch' && rules(v.lib) === 'markup' && v.lib?.page.flags.includes('script-rewritten'), `mismatch: a script rewrote itself (got ${v.lib?.verdict} ${rules(v.lib)} ${v.lib?.page.flags})`)
+    ok(v.lib?.verdict === 'mismatch' && rules(v.lib).split(',').includes('markup') && v.lib?.page.flags.includes('script-rewritten'), `mismatch: a script rewrote itself (got ${v.lib?.verdict} ${rules(v.lib)} ${v.lib?.page.flags})`)
+    await noWorkers()
+  }
+  if (row('sw-preload-vary')) {
+    section('sw-preload-vary: a listed worker that answers navigations by navigation preload; then one text byte, sent `Vary: *` so the HTTP cache keeps no copy  (rule: bytes unread are waived only when the worker answered from somewhere webRequest did not see)')
+    await fresh({ list: listP })
+    ok(await withWorker(SW_PRELOAD) === true, 'the preload worker registered and activated')
+    const h = await visit(page, `${LIB}/`)
+    ok(h.lib?.verdict === 'ok' && h.lib.page.viaWorker === true && h.lib.page.cspFrom === 'navigation', `positive control: honest, answered by the worker, and webRequest saw the navigation (${h.lib?.verdict} ${rules(h.lib)} viaWorker ${h.lib?.page.viaWorker} cspFrom ${h.lib?.page.cspFrom})`)
+    for (const p of ['/', '/index.html']) state.lib.set(p, variant(libDoc, 'Choose a file', 'Choose a filf', { vary: '*' }))
+    await closeExtras(page)
+    const v = await visit(page, `${LIB}/`)
+    const served = await page.evaluate(() => document.body.innerHTML.includes('Choose a filf')).catch(() => null)
+    ok(served === true && v.lib?.page.viaWorker === true && !v.lib?.observed.bytes, `the changed byte reached the page through the worker, and the cache holds no copy to read (served ${served}, bytes read ${v.lib?.observed.bytes})`)
+    ok(v.lib?.verdict === 'mismatch' && rules(v.lib).split(',').includes('bytes-unread') && (v.lib.warned ?? []).includes('tab'), `a loud mismatch: bytes unread (${v.lib?.verdict} ${rules(v.lib)} ${v.lib?.warned})`)
     await noWorkers()
   }
 }
@@ -799,7 +984,7 @@ if (row('shadow-root')) {
   const v = await visit(page, `${LIB}/`)
   const ran = await page.evaluate(() => document.title === 'DSD').catch(() => false)
   ok(ran, 'the hidden handler ran (the attack is real)')
-  ok(v.lib?.verdict === 'mismatch' && rules(v.lib) === 'markup' && v.lib.page.flags.includes('shadow-root'), `a shadow root is markup (${v.lib?.verdict} ${rules(v.lib)} ${v.lib?.page.flags})`)
+  ok(v.lib?.verdict === 'mismatch' && rules(v.lib).split(',').includes('markup') && v.lib.page.flags.includes('shadow-root'), `a shadow root is markup (${v.lib?.verdict} ${rules(v.lib)} ${v.lib?.page.flags})`)
   await noWorkers()
 }
 
@@ -837,6 +1022,16 @@ if (row('shadow-root-removed')) {
   const ran = state.hits.slice(h0).includes('lib /evil-ran-dsdw') || await page.evaluate(() => !!window.__evil).catch(() => false)
   ok(ran && v.lib?.page.viaWorker, 'the hidden script ran under the worker and removed its host (the attack is real)')
   ok(v.lib?.verdict === 'mismatch' && v.lib.page.flags.includes('shadow-root'), `a removed shadow host is still flagged (${v.lib?.verdict} ${rules(v.lib)} ${v.lib?.page.flags})`)
+  await noWorkers()
+}
+
+if (row('sw-element')) {
+  section('sw-element: a hostile worker turns page text into an element, same length, no script, no handler  (rule: the element sequence, in the full report)')
+  await fresh()
+  needWorker(await withWorker(hostileWorker([['Only the code', '<b>Only</b> c']])))
+  state.lib.set('/sw.js', { body: Buffer.from(SW_HONEST), headers: { 'content-type': 'text/javascript' } })
+  const v = await visit(page, `${LIB}/`)
+  ok(v.lib?.verdict === 'mismatch' && rules(v.lib) === 'elements', `mismatch on elements only (got ${v.lib?.verdict} ${rules(v.lib)})`)
   await noWorkers()
 }
 

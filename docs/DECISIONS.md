@@ -14506,3 +14506,70 @@ such a change to them alone. Scripts, handlers and the other flags are still
 caught on them. Guards: rows `cross-site-link` and
 `cross-site-no-store` in `scripts/test-webext-tripwire-browser.mjs`, with a
 mutant each.
+
+## 2026-11-15 — The bento/home tripwire sees the parse as it happens, and a visit cut short is not a tamper warning
+
+Two gaps the security re-check found in the tripwire (entries above), the limit that leaves on links from other sites, a response header nothing checked, and a waiver a service worker could use:
+
+- **The element sequence.** The release list now carries, for each document,
+  the tag names of the elements the parser inserts, in order (without html,
+  head and body, which the parser may imply, and without what a `<template>`
+  holds). The content script sends an early report as the visit starts, and
+  one each time an element or a script is first seen, carrying what is new. A
+  parse that stops being the start of a listed document is a mismatch, whether
+  or not the page goes on to finish: a script hidden in a declarative shadow
+  root runs before the observer can see it, but the elements before it were
+  already reported. The full report's sequence must match a listed document
+  exactly. A report also leaves as the page is left (pagehide), marked so.
+- **A visit cut short.** A report sent after the page was left, after the
+  parse never ended, or with a response that never did, is marked so. If what
+  it shows is the clean start of a listed document, it is 'incomplete',
+  recorded quietly. A script cut short counts as clean only when its text is an
+  exact, strictly shorter prefix of the listed script's: each release publishes
+  its inline scripts' text beside the list (`scripts/<sha256>.js`), fetched
+  only for this check. An honest script cut short is a syntax error if it ever
+  runs, never someone else's code.
+- **Warnings by class.** The one loud warning per origin per session is now
+  one per class: "unverified" (bytes, size or a cache unread, a parse that
+  never ended) and "tampered" (everything else), so a finding of the first
+  kind, which a third party can cause, never silences one of the second.
+- **What a navigation another site started still hides.** The entry above
+  (a link from another site is not a warning) judges those visits on their
+  headers, not their bytes. With the element sequence, an added element on
+  such a visit is a mismatch, so the limit is now: on a navigation another
+  site started (a link or a popup from outside bento.page, including from a
+  `file://` document or a popup a document opens), a same-length change the
+  parse does not flag is not seen, which is text and attribute values. The
+  server can tell these visits apart by their Sec-Fetch-Site, so it can serve
+  such a change to them alone. Scripts, handlers, added elements and the
+  other flags are still caught on them.
+- **A `Refresh` response header is a mismatch.** MEASURED by security: the
+  honest bytes sent with `Refresh: 1; url=<another site>` on a direct visit
+  were judged ok while the tab left for the other site. The honest library
+  never sends one, so the extension records whether the library navigation's
+  response carried a `Refresh` header (webRequest, observing only, beside the
+  CSP and Cache-Control) and any such header is a mismatch. MEASURED while
+  adding it: Chromium acts on the header at the load event, and with
+  `Refresh: 0` the page often leaves before its full report does, so the
+  visit was settled by its early report, which carried no headers, and
+  judged a quiet 'incomplete'. When the full report did arrive, the next
+  navigation had already replaced the frame's webRequest record. So the
+  first early report, sent at `document_start`, reads the header while the
+  record is still this navigation's, and the full report inherits it. A
+  response held open never reaches the load event, so the header never acts
+  on it (measured: the tab stayed). Other response
+  headers (COOP, Link and the rest) are still not checked; that is stated in
+  the extension's README.
+- **Under a worker, unread bytes are waived only when webRequest did not see
+  the navigation.** Security's review of stage 3 (#954) measured that a
+  worker answering navigations hid a text change sent with a header that
+  keeps it out of the HTTP cache (`no-store`, `Vary: *`): the bytes-unread
+  rule was waived for every worker-answered page. With navigation preload
+  (the stage-3 worker's fix), webRequest sees the navigation, which also
+  restores the CSP and Cache-Control checks; the waiver now applies only when
+  it did not (`cspFrom` is not `navigation`). So a preload navigation whose
+  bytes cannot be read is a mismatch, and `Vary: *` no longer hides a change.
+
+Guards: the rows and mutants in `scripts/test-webext-tripwire-browser.mjs`,
+`scripts/test-webext-tripwire-mutants.mjs`, `scripts/test-webext-tripwire.ts`
+and `scripts/test-home-web-build.mjs`.
