@@ -83,7 +83,7 @@ const MUTANTS = [
   { name: 'the full report\'s sequence not judged (N1)', row: 'sw-element', file: J, from: 'if (Array.isArray(obs.elements) && !sameList(obs.elements, e.elements)) f.push', to: 'if (false) f.push' },
   // N4: visits cut short, and warnings by class
   { name: 'nothing is ever cut short (N4)', row: 'held-open', file: O, from: 'const aborted = left || !complete || (nav ? nav.responseEnd === 0 : false)', to: 'const aborted = false' },
-  { name: 'a clean visit cut short is loud (N4)', row: 'held-open', file: J, from: 'if (obs.aborted && cleanPrefix(obs, list, origin, partialOk)) return', to: 'if (false) return' },
+  { name: 'a clean visit cut short is loud (N4)', row: 'held-open', file: J, from: 'if (obs.aborted && !headerFailures(obs).length && cleanPrefix(obs, list, origin, partialOk)) return', to: 'if (false) return' },
   { name: 'a script cut short is never clean (N4)', row: 'cut-mid-script', file: W, from: 'if (t != null && p.text.length < t.length && t.startsWith(p.text)) ok.add(h)', to: 'if (false) ok.add(h)' },
   { name: 'one loud warning per origin, whatever the class (N4)', row: 'class-keys', file: W, from: '`loud:${event.class}:${event.origin}`', to: '`loud:${event.origin}`' },
   // a navigation another site started
