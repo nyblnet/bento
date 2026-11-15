@@ -14506,3 +14506,58 @@ such a change to them alone. Scripts, handlers and the other flags are still
 caught on them. Guards: rows `cross-site-link` and
 `cross-site-no-store` in `scripts/test-webext-tripwire-browser.mjs`, with a
 mutant each.
+
+## 2026-11-15 — The bento/home tripwire sees the parse as it happens, and a visit cut short is not a tamper warning
+
+Two gaps the security re-check found in the tripwire (entries above), the limit that leaves on links from other sites, and a response header nothing checked:
+
+- **The element sequence.** The release list now carries, for each document,
+  the tag names of the elements the parser inserts, in order (without html,
+  head and body, which the parser may imply, and without what a `<template>`
+  holds). The content script sends an early report as the visit starts, and
+  one each time an element or a script is first seen, carrying what is new. A
+  parse that stops being the start of a listed document is a mismatch, whether
+  or not the page goes on to finish: a script hidden in a declarative shadow
+  root runs before the observer can see it, but the elements before it were
+  already reported. The full report's sequence must match a listed document
+  exactly. A report also leaves as the page is left (pagehide), marked so.
+- **A visit cut short.** A report sent after the page was left, after the
+  parse never ended, or with a response that never did, is marked so. If what
+  it shows is the clean start of a listed document, it is 'incomplete',
+  recorded quietly. A script cut short counts as clean only when its text is an
+  exact, strictly shorter prefix of the listed script's: each release publishes
+  its inline scripts' text beside the list (`scripts/<sha256>.js`), fetched
+  only for this check. An honest script cut short is a syntax error if it ever
+  runs, never someone else's code.
+- **Warnings by class.** The one loud warning per origin per session is now
+  one per class: "unverified" (bytes, size or a cache unread, a parse that
+  never ended) and "tampered" (everything else), so a finding of the first
+  kind, which a third party can cause, never silences one of the second.
+- **What a navigation another site started still hides.** The entry above
+  (a link from another site is not a warning) judges those visits on their
+  headers, not their bytes. With the element sequence, an added element on
+  such a visit is a mismatch, so the limit is now: on a navigation another
+  site started (a link or a popup from outside bento.page, including from a
+  `file://` document or a popup a document opens), a same-length change the
+  parse does not flag is not seen, which is text and attribute values. The
+  server can tell these visits apart by their Sec-Fetch-Site, so it can serve
+  such a change to them alone. Scripts, handlers, added elements and the
+  other flags are still caught on them.
+- **A `Refresh` response header is a mismatch.** MEASURED by security: the
+  honest bytes sent with `Refresh: 1; url=<another site>` on a direct visit
+  were judged ok while the tab left for the other site. The honest library
+  never sends one, so the extension records whether the library navigation's
+  response carried a `Refresh` header (webRequest, observing only, beside the
+  CSP and Cache-Control) and any such header is a mismatch. MEASURED while
+  adding it: with `Refresh: 0` the next navigation's record overwrote this
+  one before the report was read (one record per tab and frame), so the
+  report was judged with no headers at all. The extension now keeps a few
+  records per tab and frame and each report takes its own navigation's (the
+  same URL, nearest its time origin, used once). Chromium acts on the header
+  only after the load event, so it cannot cut a visit short. Other response
+  headers (COOP, Link and the rest) are still not checked; that is stated in
+  the extension's README.
+
+Guards: the rows and mutants in `scripts/test-webext-tripwire-browser.mjs`,
+`scripts/test-webext-tripwire-mutants.mjs`, `scripts/test-webext-tripwire.ts`
+and `scripts/test-home-web-build.mjs`.
