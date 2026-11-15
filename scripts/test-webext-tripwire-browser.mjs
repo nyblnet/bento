@@ -80,8 +80,24 @@ const LEDE = 'Open a Bento document to view or present it.'
 if (libA.split(LEDE).length !== 2) throw new Error('the library page no longer carries the lede this rig edits')
 fs.writeFileSync(path.join(B, 'library/index.html'), libA.replace(LEDE, 'Open a Bento document to view or to present it.'))
 
+// release P: release A with a worker that answers navigations from navigation preload (the shape stage 3
+// takes, security ruling #954 C1), so webRequest sees the navigation even though the worker answers it
+const SW_PRELOAD = SW_HONEST.replace("self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()))",
+  "self.addEventListener('activate', (e) => e.waitUntil(Promise.all([self.clients.claim(), self.registration.navigationPreload.enable()])))")
+  .replace("  e.respondWith(caches.match(e.request, { ignoreSearch: true }).then((r) => r || fetch(e.request)))",
+  `  if (e.request.mode === 'navigate') {
+    e.respondWith((async () => { try { const r = await e.preloadResponse; if (r) return r } catch {} try { return await fetch(e.request) } catch { return (await caches.match('/')) ?? Response.error() } })())
+    return
+  }
+  e.respondWith(caches.match(e.request, { ignoreSearch: true }).then((r) => r || fetch(e.request)))`)
+if (SW_PRELOAD === SW_HONEST || !SW_PRELOAD.includes('navigationPreload.enable') || !SW_PRELOAD.includes('preloadResponse')) throw new Error('the preload worker fixture did not take')
+const P = path.join(work, 'P')
+fs.cpSync(A, P, { recursive: true })
+fs.writeFileSync(path.join(P, 'library/sw.js'), SW_PRELOAD)
+
 const DAY = 86400e3
 const relA = await describeBuild(A, new Date(Date.now() - 10 * DAY).toISOString())
+const relP = await describeBuild(P, new Date(Date.now() - 10 * DAY).toISOString())
 const relB = await describeBuild(B, new Date().toISOString())
 const relBold = await describeBuild(B, new Date(Date.now() - 4 * DAY).toISOString())
 
@@ -101,6 +117,7 @@ const sign = async (payloadObj, k = KEY) => {
 const list1 = nextServed(null, relA)
 const list2 = nextServed(list1, relB)
 const list2old = nextServed(list1, relBold)
+const listP = nextServed(null, relP)
 
 // --- the deck the library opens (to get the frame page loaded) ------------------
 const REAL = path.join(ROOT, 'home/fixtures/gate1/real/slides-1.2.10')
@@ -739,10 +756,11 @@ for (const [name, secs] of [['refresh-header', 1], ['refresh-header-now', 0]]) {
   await page.goto(`${LIB}/`).catch(() => {})
   await sleep(2500 + (secs ? 0 : ORPHAN_WAIT))
   const evs = (await since(t0)).filter((e) => e.url === `${LIB}/`)
-  const ev = evs.find((e) => !e.early) ?? evs[0]
-  note(`${name} events: ${JSON.stringify(evs.map((e) => [e.early, e.verdict, rules(e), e.page?.aborted, e.page?.refresh]))}`)
+  note(`${name} events: ${JSON.stringify(evs.map((e) => [e.early ? 'early' : 'full', e.verdict, rules(e), e.page?.aborted, e.page?.refresh]))}`)
   ok(page.url().endsWith('/phish'), `the tab left for the other site (the attack is real): ${page.url()}`)
-  ok(ev?.verdict === 'mismatch' && rules(ev).split(',').includes('refresh-header') && (ev.warned ?? []).includes('tab'), `a loud mismatch on the Refresh header (${ev?.verdict} ${rules(ev)} ${ev?.warned}${ev?.early ? ' early' : ''})`)
+  // with no delay the page may leave before its full report does: whichever report settles the visit, it is loud
+  const loud = evs.filter((e) => e.verdict === 'mismatch' && rules(e).split(',').includes('refresh-header'))
+  ok(evs.length > 0 && loud.length === evs.length && loud.some((e) => (e.warned ?? []).includes('tab')), `every report of the visit is a mismatch on the Refresh header, loudly (${evs.map((e) => `${e.early ? 'early' : 'full'} ${e.verdict} ${rules(e)} ${e.warned}`).join(' | ')})`)
 }
 
 if (row('cut-mid-script')) {
@@ -759,7 +777,7 @@ if (row('cut-mid-script')) {
   ok(ev?.verdict === 'incomplete' && (ev.warned ?? []).length === 0 && ev.page?.partial?.length > 1000, `recorded quietly as incomplete, with the script cut short (${ev?.verdict} ${rules(ev)} ${ev?.warned} partial ${JSON.stringify(ev?.page?.partial)})`)
 }
 // --- rows with a service worker ---------------------------------------------------
-const SW_ROWS = ['sw-element', 'shadow-root', 'shadow-root-removed', 'sw-honest', 'sw-script-bytes', 'sw-custom-path', 'sw-cache-extra', 'sw-cache-poisoned', 'sw-navigation-only', 'sw-markup', 'sw-size', 'script-rewrite']
+const SW_ROWS = ['sw-preload-vary', 'sw-element', 'shadow-root', 'shadow-root-removed', 'sw-honest', 'sw-script-bytes', 'sw-custom-path', 'sw-cache-extra', 'sw-cache-poisoned', 'sw-navigation-only', 'sw-markup', 'sw-size', 'script-rewrite']
 async function withWorker(script, { scope = '/', url = '/sw.js' } = {}) {
   // the stage-1 library's CSP refuses workers; the rig registers through a page with CSP bypassed
   await page.goto('about:blank')
@@ -936,6 +954,20 @@ if (SW_ROWS.some(row)) {
     const ran = await page.evaluate((h) => document.querySelector('script')?.textContent === h, honestJs)
     ok(ran, 'the hostile script ran and its text now reads exactly as the honest one')
     ok(v.lib?.verdict === 'mismatch' && rules(v.lib).split(',').includes('markup') && v.lib?.page.flags.includes('script-rewritten'), `mismatch: a script rewrote itself (got ${v.lib?.verdict} ${rules(v.lib)} ${v.lib?.page.flags})`)
+    await noWorkers()
+  }
+  if (row('sw-preload-vary')) {
+    section('sw-preload-vary: a listed worker that answers navigations by navigation preload; then one text byte, sent `Vary: *` so the HTTP cache keeps no copy  (rule: bytes unread are waived only when the worker answered from somewhere webRequest did not see)')
+    await fresh({ list: listP })
+    ok(await withWorker(SW_PRELOAD) === true, 'the preload worker registered and activated')
+    const h = await visit(page, `${LIB}/`)
+    ok(h.lib?.verdict === 'ok' && h.lib.page.viaWorker === true && h.lib.page.cspFrom === 'navigation', `positive control: honest, answered by the worker, and webRequest saw the navigation (${h.lib?.verdict} ${rules(h.lib)} viaWorker ${h.lib?.page.viaWorker} cspFrom ${h.lib?.page.cspFrom})`)
+    for (const p of ['/', '/index.html']) state.lib.set(p, variant(libDoc, 'Choose a file', 'Choose a filf', { vary: '*' }))
+    await closeExtras(page)
+    const v = await visit(page, `${LIB}/`)
+    const served = await page.evaluate(() => document.body.innerHTML.includes('Choose a filf')).catch(() => null)
+    ok(served === true && v.lib?.page.viaWorker === true && !v.lib?.observed.bytes, `the changed byte reached the page through the worker, and the cache holds no copy to read (served ${served}, bytes read ${v.lib?.observed.bytes})`)
+    ok(v.lib?.verdict === 'mismatch' && rules(v.lib).split(',').includes('bytes-unread') && (v.lib.warned ?? []).includes('tab'), `a loud mismatch: bytes unread (${v.lib?.verdict} ${rules(v.lib)} ${v.lib?.warned})`)
     await noWorkers()
   }
 }

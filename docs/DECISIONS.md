@@ -14509,7 +14509,7 @@ mutant each.
 
 ## 2026-11-15 — The bento/home tripwire sees the parse as it happens, and a visit cut short is not a tamper warning
 
-Two gaps the security re-check found in the tripwire (entries above), the limit that leaves on links from other sites, and a response header nothing checked:
+Two gaps the security re-check found in the tripwire (entries above), the limit that leaves on links from other sites, a response header nothing checked, and a waiver a service worker could use:
 
 - **The element sequence.** The release list now carries, for each document,
   the tag names of the elements the parser inserts, in order (without html,
@@ -14557,6 +14557,15 @@ Two gaps the security re-check found in the tripwire (entries above), the limit 
   only after the load event, so it cannot cut a visit short. Other response
   headers (COOP, Link and the rest) are still not checked; that is stated in
   the extension's README.
+- **Under a worker, unread bytes are waived only when webRequest did not see
+  the navigation.** Security's review of stage 3 (#954) measured that a
+  worker answering navigations hid a text change sent with a header that
+  keeps it out of the HTTP cache (`no-store`, `Vary: *`): the bytes-unread
+  rule was waived for every worker-answered page. With navigation preload
+  (the stage-3 worker's fix), webRequest sees the navigation, which also
+  restores the CSP and Cache-Control checks; the waiver now applies only when
+  it did not (`cspFrom` is not `navigation`). So a preload navigation whose
+  bytes cannot be read is a mismatch, and `Vary: *` no longer hides a change.
 
 Guards: the rows and mutants in `scripts/test-webext-tripwire-browser.mjs`,
 `scripts/test-webext-tripwire-mutants.mjs`, `scripts/test-webext-tripwire.ts`

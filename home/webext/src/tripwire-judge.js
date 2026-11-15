@@ -264,7 +264,9 @@ export function observationFailures(obs) {
   const out = []
   // a navigation another site started is cached where the content script cannot read it (measured):
   // then the bytes are not asked for, and the Cache-Control header the navigation got is (documentFailures)
-  if (obs.role === 'library' && !obs.viaWorker && !obs.bytes && !obs.crossSite) out.push({ rule: 'bytes-unread' })
+  // under a worker, unread bytes are waived only when the worker answered from somewhere webRequest did not see:
+  // a navigation it saw (navigation preload) had a response the HTTP cache could have kept (security ruling #954 C2)
+  if (obs.role === 'library' && (!obs.viaWorker || obs.cspFrom === 'navigation') && !obs.bytes && !obs.crossSite) out.push({ rule: 'bytes-unread' })
   if (!(obs.size > 0)) out.push({ rule: 'size-unread' })
   if (obs.complete === false) out.push({ rule: 'incomplete' })
   // the library's caches and worker registrations are always readable (empty, in stage 1): unread is no pass
@@ -300,7 +302,7 @@ export function judge(obs, list, origin, now = Date.now(), partialOk = () => fal
   }
   // a visit cut short (closed, stopped, or a response that never ended) that is still the clean
   // start of a listed document says nothing either way: recorded quietly (N4)
-  if (obs.aborted && cleanPrefix(obs, list, origin, partialOk)) return { verdict: 'incomplete', release: -1, failures: [], aborted: true }
+  if (obs.aborted && !headerFailures(obs).length && cleanPrefix(obs, list, origin, partialOk)) return { verdict: 'incomplete', release: -1, failures: [], aborted: true }
   const global = [...markupFailures(obs), ...headerFailures(obs), ...observationFailures(obs), ...workerFailures(obs, list, origin), ...cacheFailures(obs, list, origin)]
   const perRelease = list.releases.map((r) => documentFailures(obs, r, origin))
   const index = perRelease.findIndex((f) => f.length === 0)
@@ -320,8 +322,9 @@ export function judge(obs, list, origin, now = Date.now(), partialOk = () => fal
  * anything else is a mismatch.
  */
 export function judgeEarly(obs, list, origin, partialOk = () => false) {
-  if (cleanPrefix(obs, list, origin, partialOk)) return { verdict: 'incomplete', release: -1, failures: [] }
-  const fail = [...markupFailures(obs)]
+  const headers = headerFailures(obs)
+  if (!headers.length && cleanPrefix(obs, list, origin, partialOk)) return { verdict: 'incomplete', release: -1, failures: [] }
+  const fail = [...markupFailures(obs), ...headers]
   const docs = list.releases.filter((r) => !r.withdrawn).flatMap((r) => Object.values(r.origins[origin]?.files ?? {}).filter((d) => d.kind === 'document'))
   if (!docs.some((d) => isPrefix(obs.elements ?? [], d.elements))) fail.push({ rule: 'elements', got: (obs.elements ?? []).length })
   const inline = new Set(docs.flatMap((d) => d.scripts.filter((x) => x.sha256).map((x) => x.sha256)))

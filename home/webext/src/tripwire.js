@@ -122,40 +122,9 @@ function capFlags(list) {
   return out
 }
 
-/**
- * webRequest records, a few per tab and frame. MEASURED (row refresh-header-now):
- * one record per frame was overwritten when the page navigated again before its
- * report was read (a `Refresh: 0` header does exactly that), and the report was
- * then judged without its headers. Each report takes the record of ITS
- * navigation: the same URL, the one nearest its time origin, used once.
- */
-const RECORDS_MAX = 4
+/** This navigation's webRequest record, if it is still the one held for the frame (same URL, in the window). */
 const RECORD_WINDOW = 120000
-let recChain = Promise.resolve()
-const recSerial = (fn) => { const r = recChain.then(fn, fn); recChain = r.then(() => {}, () => {}); return r }
-const recordsIn = (v) => (Array.isArray(v) ? v : v && typeof v === 'object' ? [v] : [])
-function pushRecord(key, rec) {
-  return recSerial(async () => {
-    const list = recordsIn((await chrome.storage.session.get(key))[key]).filter((r) => r.at >= rec.at - RECORD_WINDOW)
-    list.push(rec)
-    await chrome.storage.session.set({ [key]: list.slice(-RECORDS_MAX) })
-  })
-}
-function takeRecord(key, url, timeOrigin) {
-  return recSerial(async () => {
-    const list = recordsIn((await chrome.storage.session.get(key))[key])
-    let best = -1
-    list.forEach((r, i) => {
-      if (r.url !== url || r.at < timeOrigin - 1000 || r.at > timeOrigin + RECORD_WINDOW) return
-      if (best < 0 || Math.abs(r.at - timeOrigin) < Math.abs(list[best].at - timeOrigin)) best = i
-    })
-    if (best < 0) return null
-    const [rec] = list.splice(best, 1)
-    if (list.length) await chrome.storage.session.set({ [key]: list })
-    else await chrome.storage.session.remove(key)
-    return rec
-  })
-}
+const matches = (r, url, timeOrigin) => !!r && r.url === url && r.at >= timeOrigin - 1000 && r.at <= timeOrigin + RECORD_WINDOW
 
 /** Navigation headers, kept for the content script's report. Observing only: no blocking listener. */
 function onHeaders(d) {
@@ -167,7 +136,7 @@ function onHeaders(d) {
   const cacheControl = (d.responseHeaders ?? []).filter((h) => h.name.toLowerCase() === 'cache-control').map((h) => cut(h.value ?? ''))
   // a Refresh header sends the tab elsewhere with no markup to flag; the honest library never sends one (R4)
   const refresh = (d.responseHeaders ?? []).filter((h) => h.name.toLowerCase() === 'refresh').map((h) => cut(h.value ?? ''))
-  void pushRecord(`${HEADERS_PREFIX}${d.tabId}:${d.frameId}`, { url: noHash(d.url), at: d.timeStamp, status: d.statusCode, csp, cacheControl, refresh })
+  void chrome.storage.session.set({ [`${HEADERS_PREFIX}${d.tabId}:${d.frameId}`]: { url: noHash(d.url), at: d.timeStamp, status: d.statusCode, csp, cacheControl, refresh } })
 }
 
 /**
@@ -184,7 +153,7 @@ function onRequest(d) {
   try { origin = new URL(d.url).origin } catch { return }
   if (roleOf(origin) !== 'library') return
   const site = (d.requestHeaders ?? []).find((h) => h.name.toLowerCase() === 'sec-fetch-site')?.value ?? null
-  void pushRecord(`${REQUEST_PREFIX}${d.tabId}:${d.frameId}`, { url: noHash(d.url), at: d.timeStamp, site: site == null ? null : cut(site) })
+  void chrome.storage.session.set({ [`${REQUEST_PREFIX}${d.tabId}:${d.frameId}`]: { url: noHash(d.url), at: d.timeStamp, site: site == null ? null : cut(site) } })
 }
 
 /** The held list (re-verified), or null. */
@@ -354,10 +323,19 @@ export async function tripwireEarly(sender, obs) {
       const base = tail && tail.index === tn.index && tail.text.length === tn.from ? tail.text : (tn.from === 0 ? '' : null)
       tail = base == null || base.length + tn.text.length > MAX_TEXT ? null : { index: tn.index, text: base + tn.text }
     }
+    // a Refresh header can take the page away before its full report leaves (MEASURED, row refresh-header-now),
+    // and the next navigation then overwrites the frame's record: the first early report, sent at
+    // document_start, reads it while it is still this navigation's, and the full report inherits it (R4)
+    let refresh = prev?.obs.refresh ?? null
+    if (!prev) {
+      const hk = `${HEADERS_PREFIX}${sender.tab?.id}:${sender.frameId}`
+      const h = (await chrome.storage.session.get(hk))[hk]
+      if (matches(h, cut(noHash(sender.url)), Number(obs.timeOrigin) || 0) && Array.isArray(h.refresh) && h.refresh.length) refresh = h.refresh
+    }
     const pending = {
       at: Date.now(), url: cut(noHash(sender.url)), origin: who.origin, role: who.role,
       tabId: sender.tab?.id ?? null, tabIndex: sender.tab?.index ?? 0, tail,
-      obs: { role: who.role, url: cut(noHash(sender.url)), timeOrigin: Number(obs.timeOrigin) || 0, scripts: capScripts(obs.scripts, flags), flags: [...new Set([...(prev?.obs.flags ?? []), ...flags])], elements },
+      obs: { role: who.role, url: cut(noHash(sender.url)), timeOrigin: Number(obs.timeOrigin) || 0, scripts: capScripts(obs.scripts, flags), flags: [...new Set([...(prev?.obs.flags ?? []), ...flags])], elements, refresh },
     }
     await chrome.storage.session.set({ [key]: pending })
   })
@@ -375,17 +353,26 @@ export async function tripwireObserve(sender, obs, net = (u, o) => fetch(u, o)) 
   if (!who || !obs || obs.v !== 1) return { ok: false, reason: 'not watched' }
   const { role, origin } = who
   const key = docKey(sender, obs)
-  // settle this document's early report first, in the same chain it was written in
-  await serial(() => chrome.storage.session.remove(key).then(() => chrome.storage.session.set({ [`${key}:done`]: Date.now() })))
+  // settle this document's early report first, in the same chain it was written in (keeping the Refresh it read)
+  const earlyRefresh = await serial(async () => {
+    const p = (await chrome.storage.session.get(key))[key]
+    await chrome.storage.session.remove(key)
+    await chrome.storage.session.set({ [`${key}:done`]: Date.now() })
+    return Array.isArray(p?.obs?.refresh) ? p.obs.refresh : null
+  })
   void sweepOrphans(net).catch(() => {})
   const now = Date.now()
   const url = cut(noHash(sender.url))
 
   // the navigation's headers, if webRequest saw THIS navigation (a worker's answer it does not see)
-  const h = await takeRecord(`${HEADERS_PREFIX}${sender.tab?.id}:${sender.frameId}`, url, obs.timeOrigin)
-  const fresh = !!h
-  const q = await takeRecord(`${REQUEST_PREFIX}${sender.tab?.id}:${sender.frameId}`, url, obs.timeOrigin)
-  const crossSite = q?.site === 'cross-site'
+  const hk = `${HEADERS_PREFIX}${sender.tab?.id}:${sender.frameId}`
+  const h = (await chrome.storage.session.get(hk))[hk]
+  const fresh = matches(h, url, obs.timeOrigin)
+  if (h) await chrome.storage.session.remove(hk)
+  const qk = `${REQUEST_PREFIX}${sender.tab?.id}:${sender.frameId}`
+  const q = (await chrome.storage.session.get(qk))[qk]
+  const crossSite = matches(q, url, obs.timeOrigin) && q.site === 'cross-site'
+  if (q) await chrome.storage.session.remove(qk)
   const flags = capFlags(obs.flags)
   const scripts = capScripts(obs.scripts, flags)
   const cacheIn = role === 'library' && Array.isArray(obs.cache) ? obs.cache : null
@@ -401,7 +388,7 @@ export async function tripwireObserve(sender, obs, net = (u, o) => fetch(u, o)) 
     csp: fresh ? h.csp : role === 'library' && obs.bytes && !crossSite ? (obs.bytes.csp == null ? [] : [cut(obs.bytes.csp)]) : null,
     cspFrom: fresh ? 'navigation' : role === 'library' && obs.bytes && !crossSite ? 'cache' : null,
     cacheControl: fresh && Array.isArray(h.cacheControl) ? h.cacheControl : null, crossSite,
-    refresh: fresh && Array.isArray(h.refresh) ? h.refresh : null,
+    refresh: fresh && Array.isArray(h.refresh) && h.refresh.length ? h.refresh : earlyRefresh,
     workers: workersIn ? [] : null,
     cache: cacheIn ? cacheIn.slice(0, MAX_CACHE).map((c) => ({ url: cut(c.url), sha256: cut(c.sha256) })) : null,
     viaWorker: !!obs.viaWorker, complete: obs.complete === true, errors: Array.isArray(obs.errors) ? obs.errors.slice(0, 10).map(cut) : [],
