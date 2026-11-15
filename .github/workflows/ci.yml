@@ -35,11 +35,17 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  validate:
+  # The required check is `validate` — the LAST job below, which only reads the
+  # results of the two jobs that do the work. The work is split in two so the
+  # halves run in PARALLEL: as one job it reached 18–20 minutes and was being
+  # cancelled at its 20-minute limit. The kernel slice is the half that splits
+  # off cleanly: it is the longest slice (about seven minutes) and it needs no
+  # app's build — only slides' toolchain (tsc, esbuild), jsdom and the browser.
+  validate-builds:
     runs-on: ubuntu-latest
-    # 20, not 15: the dash slice's release rehearsal now boots the release in
-    # Chromium to check its pins (K4), about two minutes on top of a 9–11
-    # minute job.
+    # The four apps' builds and every slice that reads a built shell.
+    # 20, not 15: the dash slice's release rehearsal boots the release in
+    # Chromium to check its pins (K4), about two minutes.
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -83,12 +89,13 @@ jobs:
         # fails its step. Reasoning and allowlist: scripts/lib/ci-skips.mjs.
         run: echo "$GITHUB_WORKSPACE/scripts/ci" >> "$GITHUB_PATH"
 
-      # Everything below is still THIS job — the required `validate` check —
+      # Everything below is THIS job — half of the required `validate` check —
       # run as composite actions, one per zone, each in
       # .github/actions/validate-<zone>/action.yml. They run in this order on
       # this runner, so a slice can use whatever the slices before it installed
       # and built: each app slice builds its own shell, and the slices after
-      # the apps (convert, kernel, home, shared) can rely on all four shells.
+      # the apps (convert, home, shared) can rely on all four shells. The
+      # kernel slice is the other half, in validate-kernel below.
       #
       # A new rig goes at the END of its own zone's slice, never in this file:
       # this file used to hold every step, and every zone appending at the
@@ -112,9 +119,6 @@ jobs:
       - name: validate (convert)
         uses: ./.github/actions/validate-convert
 
-      - name: validate (kernel)
-        uses: ./.github/actions/validate-kernel
-
       - name: validate (home-ios)
         uses: ./.github/actions/validate-home-ios
 
@@ -126,3 +130,71 @@ jobs:
 
       - name: validate (shared)
         uses: ./.github/actions/validate-shared
+
+  validate-kernel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            slides/package-lock.json
+            spaces/package-lock.json
+            dash/package-lock.json
+            type/package-lock.json
+
+      - name: Install
+        # slides' toolchain: the kernel typecheck runs its tsc, and several
+        # kernel rigs are bundled with its esbuild.
+        working-directory: slides
+        run: npm ci
+
+      - name: Install jsdom for the rigs' DOM halves
+        # The same pin as validate-builds: the kernel's encrypted-title rig
+        # imports it from the repo root.
+        run: npm install --prefix "$GITHUB_WORKSPACE" --no-save --no-package-lock --no-audit --no-fund jsdom@25.0.1
+
+      - name: Install browser test runtime
+        # The same pinned runtime as validate-builds: the kernel's disk-change
+        # browser rig reads PLAYWRIGHT_MODULE.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+
+      - name: Rig steps fail on a skip
+        # Puts scripts/ci on PATH, so every slice step below can declare
+        # `shell: bento-step {0}`: a rig that reports a skip CI does not allow
+        # fails its step. Reasoning and allowlist: scripts/lib/ci-skips.mjs.
+        run: echo "$GITHUB_WORKSPACE/scripts/ci" >> "$GITHUB_PATH"
+
+      # The kernel slice runs ALONE on this runner: no app is built here, so a
+      # kernel rig that starts reading a built shell must move to
+      # validate-builds (or build what it reads in its own step).
+      - name: validate (kernel)
+        uses: ./.github/actions/validate-kernel
+
+  # THE REQUIRED CHECK. Branch protection requires a check named `validate`, so
+  # this job keeps that name and passes only when BOTH halves succeeded. It must
+  # run with `always()`: a job skipped because a dependency failed or was
+  # cancelled reports "skipped", and a skipped required check counts as passing
+  # — the hole that made an aggregator the wrong shape before (docs/DECISIONS.md,
+  # 2026-10-18). Here a failed, cancelled or skipped half fails `validate`.
+  validate:
+    runs-on: ubuntu-latest
+    needs: [validate-builds, validate-kernel]
+    if: always()
+    timeout-minutes: 5
+    steps:
+      - name: Both halves passed
+        env:
+          BUILDS: ${{ needs.validate-builds.result }}
+          KERNEL: ${{ needs.validate-kernel.result }}
+        run: |
+          echo "validate-builds: $BUILDS"
+          echo "validate-kernel: $KERNEL"
+          [ "$BUILDS" = success ] && [ "$KERNEL" = success ]

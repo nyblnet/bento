@@ -946,5 +946,68 @@
   "menuOpenWithId": {
     "message": "Bento ID দিয়ে খুলুন",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home কোনো Bento রিলিজ দিচ্ছে না"
+  },
+  "twMismatchBody": {
+    "message": "home.bento.page এই ব্রাউজারে যে কোড পাঠিয়েছে, তা Bento-র স্বাক্ষর করা কোনো রিলিজের সঙ্গে মেলে না। ওই ট্যাবটি বন্ধ করুন এবং সেখানে কোনো ডকুমেন্ট খুলবেন না। বিস্তারিত দেখতে ক্লিক করুন।"
+  },
+  "twOldTitle": {
+    "message": "bento/home একটি পুরোনো রিলিজ দিচ্ছে"
+  },
+  "twOldBody": {
+    "message": "home.bento.page এই ব্রাউজারে যে কোড পাঠিয়েছে, তা আসল Bento রিলিজ, তবে সবচেয়ে নতুনটি নয়।"
+  },
+  "twListTitle": {
+    "message": "bento/home-এর রিলিজ তালিকাটি আসল নয়"
+  },
+  "twListBody": {
+    "message": "bento.page এমন একটি রিলিজ তালিকা পাঠিয়েছে যাতে Bento-র স্বাক্ষর নেই, তাই home.bento.page যাচাই করা যাচ্ছে না। বিস্তারিত দেখতে ক্লিক করুন।"
+  },
+  "twBadgeTitle": {
+    "message": "bento/home কোনো স্বাক্ষরিত রিলিজের সঙ্গে মেলেনি"
+  },
+  "twPageTitle": {
+    "message": "bento/home কোড যাচাই"
+  },
+  "twPageLead": {
+    "message": "এই এক্সটেনশন home.bento.page আপনার ব্রাউজারে যে কোড পাঠায়, তা Bento তার অফলাইন রিলিজ কী দিয়ে যে রিলিজগুলিতে স্বাক্ষর করে সেগুলির সঙ্গে মিলিয়ে দেখে। এটি শুধু জানায়: কিছুই বদলায়নি বা আটকায়নি।"
+  },
+  "twPageDo": {
+    "message": "bento/home ট্যাবটি বন্ধ করুন, এবং কারণ স্পষ্ট না হওয়া পর্যন্ত সেখানে কোনো ডকুমেন্ট খুলবেন, সম্পাদনা করবেন বা সংরক্ষণ করবেন না। এই যাচাই আপনার ডিস্কের কোনো ফাইল বদলায় না।"
+  },
+  "twPageReport": {
+    "message": "নিচের বিবরণসহ গোপনে জানান:"
+  },
+  "twPageReportLink": {
+    "message": "Bento-কে জানান"
+  },
+  "twPageCopy": {
+    "message": "বিবরণ কপি করুন"
+  },
+  "twPageCopied": {
+    "message": "কপি হয়েছে"
+  },
+  "twPageRecent": {
+    "message": "সাম্প্রতিক যাচাই"
+  },
+  "twPageNone": {
+    "message": "এখনও কোনো যাচাই রেকর্ড হয়নি।"
+  },
+  "twPageNotFound": {
+    "message": "ওই যাচাইটি রেকর্ডে নেই।"
+  },
+  "twPageListNone": {
+    "message": "এখনও কোনো স্বাক্ষরিত রিলিজ তালিকা নেই: home.bento.page কখনও যাচাই হয়নি।"
+  },
+  "twPageListHeld": {
+    "message": "রিলিজ তালিকা #$1 দিয়ে যাচাই হচ্ছে, যা $2-এ আনা হয়েছে।"
+  },
+  "twNeverTitle": {
+    "message": "bento/home যাচাই হয়নি"
+  },
+  "twNeverBody": {
+    "message": "এই এক্সটেনশন ৩ দিন ধরে Bento-র স্বাক্ষরিত রিলিজ তালিকা আনতে পারেনি, তাই home.bento.page যে কোড পাঠায় তা যাচাই হয়নি।"
   }
 }

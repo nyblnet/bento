@@ -131,6 +131,9 @@ try {
         send(m) { this.w.postMessage(m, '${S}') }, pair(a, b) { this.w.postMessage(a, '${S}'); this.w.postMessage(b, '${S}') } }
       addEventListener('message', (e) => HM.msgs.push([e.origin, e.data && e.data.t]))</script>`
     for (const o of [HOME, ATTACKER]) await ctx.route(`${o}/**`, (route) => route.fulfill({ contentType: 'text/html', body: opener }))
+    // the account the sign-in host keeps in its own storage (its own pages write it)
+    handler = await site(null)
+    { const a = await ctx.newPage(); await a.goto(S + '/'); await a.evaluate(() => localStorage.setItem('bento-id-account', 'alice@example.com')); await a.close() }
     const page = await ctx.newPage()
     const sleep = (ms) => page.waitForTimeout(ms)
     const state = (p) => p.evaluate(() => [document.body.dataset.state, document.body.dataset.reason || '']).catch(() => ['closed', ''])

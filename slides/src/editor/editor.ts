@@ -56,6 +56,7 @@ import { dryRun, applyCompress, type DryRun } from './compressdeck'
 import { createDialog } from '../../../kernel/src/ui/dialog.ts'
 import '../../../kernel/src/ui/dialog.css'
 import { PresenceToasts } from './presencetoasts'
+import { decoratePeer, vouchAgent as vouchPeopleAgent } from './vouch'
 
 const i18nT = t
 
@@ -1468,6 +1469,8 @@ export class Editor {
         panel.appendChild(me)
       }
     }
+    // bento/id, flag-gated (vouch.ts): null unless bento-people-vouch is on AND the host has an agent
+    const vouchAgent = vouchPeopleAgent()
     if (peers.length) {
       const list = div('ed-share-peers')
       for (const peer of peers) {
@@ -1513,6 +1516,13 @@ export class Editor {
             this.toast(ok ? t('{name} was removed', { name: peer.name }) : t('Couldn’t reach the live session'))
           })
           row.appendChild(kick)
+        }
+        // who vouched for this person: asked only about a key the session
+        // proved. Once the row is whole, so an incident flag painted from the
+        // cache lands beside ✕ and not ahead of the dot.
+        if (vouchAgent) {
+          decoratePeer(who, peer.name, peer.pub, keyOk, vouchAgent,
+            { t, locale: locale(), editing: !!peer.editing, ownerRow: iAmOwner ? row : null })
         }
         list.appendChild(row)
       }

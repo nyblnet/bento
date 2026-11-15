@@ -946,5 +946,68 @@
   "menuOpenWithId": {
     "message": "Открыть с Bento ID",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home отдаёт не выпуск Bento"
+  },
+  "twMismatchBody": {
+    "message": "Код, который home.bento.page отправил этому браузеру, не совпадает ни с одним выпуском, подписанным Bento. Закройте эту вкладку и не открывайте там документы. Нажмите, чтобы узнать подробности."
+  },
+  "twOldTitle": {
+    "message": "bento/home отдаёт более старый выпуск"
+  },
+  "twOldBody": {
+    "message": "Код, который home.bento.page отправил этому браузеру, — подлинный выпуск Bento, но не самый новый."
+  },
+  "twListTitle": {
+    "message": "Список выпусков bento/home не подлинный"
+  },
+  "twListBody": {
+    "message": "bento.page отправил список выпусков, не подписанный Bento, поэтому проверить home.bento.page нельзя. Нажмите, чтобы узнать подробности."
+  },
+  "twBadgeTitle": {
+    "message": "bento/home не совпадает с подписанным выпуском"
+  },
+  "twPageTitle": {
+    "message": "Проверка кода bento/home"
+  },
+  "twPageLead": {
+    "message": "Это расширение сравнивает код, который home.bento.page отправляет вашему браузеру, с выпусками, которые Bento подписывает своим офлайн-ключом выпусков. Оно только сообщает: ничего не изменено и не заблокировано."
+  },
+  "twPageDo": {
+    "message": "Закройте вкладку bento/home и не открывайте, не редактируйте и не сохраняйте там документы, пока ситуация не прояснится. Проверка не меняет файлы на вашем диске."
+  },
+  "twPageReport": {
+    "message": "Сообщите об этом конфиденциально, приложив сведения ниже:"
+  },
+  "twPageReportLink": {
+    "message": "Сообщить Bento"
+  },
+  "twPageCopy": {
+    "message": "Скопировать сведения"
+  },
+  "twPageCopied": {
+    "message": "Скопировано"
+  },
+  "twPageRecent": {
+    "message": "Последние проверки"
+  },
+  "twPageNone": {
+    "message": "Проверок пока нет."
+  },
+  "twPageNotFound": {
+    "message": "Этой проверки нет в журнале."
+  },
+  "twPageListNone": {
+    "message": "Подписанного списка выпусков пока нет: home.bento.page ещё ни разу не проверялся."
+  },
+  "twPageListHeld": {
+    "message": "Проверка по списку выпусков № $1, получен $2."
+  },
+  "twNeverTitle": {
+    "message": "bento/home не проверялся"
+  },
+  "twNeverBody": {
+    "message": "Это расширение уже 3 дня не может получить подписанный список выпусков Bento, поэтому код, который отправляет home.bento.page, не проверялся."
   }
 }

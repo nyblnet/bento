@@ -16,6 +16,12 @@ pre-1.0.
   change, several copies at once, and the server turned most of them away. A
   deck now uploads each picture once, waits a little longer after each failed
   try, and waits until the connection is ready before starting.
+- **On a phone, Share stays on the screen.** With Share folded into the ⋯ menu,
+  its panel floated beside the menu, see-through and overlapping it, and a
+  collaborator with a long name could push it past the left edge of the screen,
+  out of reach along with every share action. It now opens as a section of the
+  ⋯ menu, never wider than the screen, and a long name ends in "…". Language,
+  also folded into ⋯ on a phone, opens the same way.
 
 ## [1.2.13] — 2026-11-09
 

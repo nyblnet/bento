@@ -148,7 +148,10 @@ console.log('\n— the title card from a document with no preview')
 }
 {
   const manifest = JSON.parse(readFileSync(join(SRC, 'manifest.json'), 'utf8'))
-  ok(Array.isArray(manifest.host_permissions) && manifest.host_permissions.includes('file:///*') && manifest.host_permissions.length === 1, 'manifest: file:///* is the only declared host — what reading a local path needs, and nothing on the web')
+  // the one exception is the tripwire's watched origin(s), pinned by scripts/test-webext-tripwire.ts
+  const tripwire = manifest.content_scripts.filter((cs: any) => cs.js.join() === 'src/tripwire-observe.js').flatMap((cs: any) => cs.matches)
+  const web = manifest.host_permissions.filter((h: string) => h !== 'file:///*')
+  ok(Array.isArray(manifest.host_permissions) && manifest.host_permissions.includes('file:///*') && web.every((h: string) => tripwire.includes(h)), 'manifest: file:///* is the only declared host besides the tripwire\'s — what reading a local path needs, and nothing else on the web')
   const home = readFileSync(join(SRC, 'src/home.js'), 'utf8')
   ok(/placeFolders\(\)/.test(home) && /placeFolders\(\{ force: true \}\)/.test(home), 'home.js places on load and again on Find my folders / a click')
   ok(!/card\.disabled = true/.test(home), 'an unplaced card is no longer disabled — it explains and retries')

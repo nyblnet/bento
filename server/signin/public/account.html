@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>bento/id</title>
+<link rel="stylesheet" href="/signin.css">
+<script type="module" src="/account.js"></script>
+</head>
+<body data-state="loading">
+<main>
+  <p class="brand">bento/id</p>
+
+  <section data-for="loading">
+    <p>Loading…</p>
+  </section>
+
+  <div data-for="signed-out" hidden>
+    <section>
+      <h1>Sign in to bento/id</h1>
+      <p>Sign in on this site with your bento/id passkey. Then bento/home can ask this site to sign it in.</p>
+      <div class="actions">
+        <button id="signin" type="button" class="primary">Sign in with passkey</button>
+      </div>
+    </section>
+    <section>
+      <h2>New to bento/id?</h2>
+      <label for="setup-email">Your email address</label>
+      <input id="setup-email" type="email" autocomplete="email" spellcheck="false">
+      <p class="note">We email you a link. Open it on the device where you want your passkey.</p>
+      <div class="actions">
+        <button id="setup-start" type="button">Email me a setup link</button>
+      </div>
+    </section>
+    <section>
+      <h2>Lost every passkey?</h2>
+      <label for="reset-email">Your account’s email address</label>
+      <input id="reset-email" type="email" autocomplete="email" spellcheck="false">
+      <p class="note">We email you a link to make a new passkey. The reset takes effect 72 hours later.</p>
+      <div class="actions">
+        <button id="reset-start" type="button">Email me a reset link</button>
+      </div>
+    </section>
+  </div>
+
+  <section data-for="signed-in" hidden>
+    <h1>Signed in</h1>
+    <p>This site is signed in to bento/id as <strong id="account"></strong>.</p>
+    <div class="actions">
+      <button id="signout-ask" type="button">Sign out every browser…</button>
+      <button id="switch" type="button">Use another passkey</button>
+    </div>
+  </section>
+
+  <section data-for="confirm-signout" hidden>
+    <h1>Sign out every browser?</h1>
+    <p>Every browser signed in to bento/home as <strong data-account></strong> is signed out, this one included. Apps on your devices stay signed in.</p>
+    <p class="note">Each browser can sign in again with your passkey. Your passkeys and documents do not change.</p>
+    <div class="actions">
+      <button id="signout" type="button" class="primary">Sign out every browser</button>
+      <button id="signout-cancel" type="button">Cancel</button>
+    </div>
+  </section>
+
+  <section data-for="working" hidden>
+    <h1>Working…</h1>
+    <p>Follow your browser’s passkey prompt.</p>
+  </section>
+
+  <section data-for="mailed" hidden>
+    <h1>Check your email</h1>
+    <p>If <strong id="mailed-to"></strong> can use it, a link is on its way. Open it on the device where you want your passkey, and never paste it into a page.</p>
+    <button id="mailed-back" type="button">Back</button>
+  </section>
+
+  <section data-for="signed-out-all" hidden>
+    <h1>Every browser is signed out</h1>
+    <p>At <strong id="signout-at"></strong>, every browser signed in to bento/home as <strong data-account></strong> was signed out. An email about it is on its way.</p>
+    <button id="signout-back" type="button">Back</button>
+  </section>
+
+  <section data-for="failed" hidden>
+    <h1>That didn’t work</h1>
+    <p id="failed-text">Nothing changed. Try again.</p>
+    <button id="failed-back" type="button">Back</button>
+  </section>
+</main>
+</body>
+</html>

@@ -10,7 +10,9 @@
  * 1. home/web/build.mjs without --dev refuses every development seam: no
  *    --history (the frozen fixture fallback), --key (a test key),
  *    BENTO_HOME_WEB_MUTANT, and a history the library would refuse (wrong key,
- *    tampered, a second one for the same app). Each refusal differs from the
+ *    tampered, a second one for the same app), and the bento/id agent
+ *    (--identity, --directory-keys: its directory keys are not pinned for
+ *    release). Each refusal differs from the
  *    positive control (the good release build, which succeeds) by that one
  *    input, and writes nothing. With --dev the seams still work.
  * 2. scripts/release.mjs --home-web refuses before building anything: without
@@ -31,14 +33,14 @@
  * and Chromium for the rehearsal's pins gate (derive-pins.mjs).
  */
 import { execFileSync, spawnSync } from 'node:child_process'
-import { createPrivateKey, generateKeyPairSync, sign as nodeSign, webcrypto } from 'node:crypto'
+import { createHash, createPrivateKey, generateKeyPairSync, sign as nodeSign, webcrypto } from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { APPS } from './apps.mjs'
 import { homeWebKey, homeWebOptions, publishedHistories } from './home-web-release.mjs'
-import { releasePublicKey } from './sign-payload.mjs'
+import { releasePublicKey, verifyEnvelope } from './sign-payload.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 let checks = 0, failures = 0
@@ -89,6 +91,12 @@ refusal(build(['--history', TEST_HISTORY]), /would refuse this history/, 'a hist
 refusal(build(['--history', TAMPERED_HISTORY]), /would refuse this history/, 'a history whose payload was changed after signing: refused')
 refusal(build(['--history', REAL_HISTORY, '--history', REAL_HISTORY]), /one per app/, 'two histories for the same app: refused')
 refusal(build(['--history']), /--history needs a file/, '--history without a file: refused')
+// the bento/id agent: a well-formed keys file, so the refusal is the production rule, not the file
+const DIR_KEYS = W('directory-keys.json', JSON.stringify({ 'dir-1': Buffer.from(await webcrypto.subtle.exportKey('raw', kp.publicKey)).toString('base64url') }))
+refusal(build(['--history', REAL_HISTORY, '--identity', '--directory-keys', DIR_KEYS]), /--identity[^\n]*refused in a production build/,
+  '--identity (the bento/id agent, directory keys not pinned for release): refused without --dev')
+refusal(build(['--history', REAL_HISTORY, '--directory-keys', DIR_KEYS]), /--directory-keys[^\n]*refused in a production build/,
+  '--directory-keys alone: refused without --dev')
 
 section('home/web/build.mjs: a development build (--dev)')
 {
@@ -99,6 +107,10 @@ section('home/web/build.mjs: a development build (--dev)')
   ok(k.status === 0 && k.info?.dev === true && k.info?.testKey === true, `--dev --key with a history that key signed builds, marked testKey (exit ${k.status})`)
   refusal(build(['--dev', '--key', TEST_KEY, '--history', REAL_HISTORY]), /would refuse this history/,
     '--dev --key still refuses a history that key cannot verify')
+  const id = build(['--dev', '--identity', '--directory-keys', DIR_KEYS])
+  ok(id.status === 0 && id.info?.dev === true && id.info?.identity === true && /connect-src \S+ https:\/\/id\.bento\.page;/.test(id.info?.libraryPolicy ?? ''),
+    `--dev --identity builds the bento/id agent, and only its policy reaches the directory (exit ${id.status})`)
+  ok(good.info?.identity === false && !/id\.bento\.page/.test(good.info?.libraryPolicy ?? 'x'), 'positive control: the release build has no identity and no directory in its policy')
 }
 
 // --- 2. release.mjs: the options, and which histories ----------------------------------
@@ -281,7 +293,7 @@ else {
   if (!fs.existsSync(shell)) { console.error(`no built slides shell at ${shell}: cd slides && npm run build:single`); process.exit(1) }
   const hw = staleOut('rehearsal.home-web')
   const seed = publishedTree('published-rehearsal', { 'releases/spaces/manifest.json': '{}', 'releases/spaces/history.json': SPACES_HISTORY })
-  const r = release([...REHEARSE, '--home-web-out', hw], 'rehearsal', { published: seed })
+  const r = release([...REHEARSE, '--home-web-first', '--home-web-out', hw], 'rehearsal', { published: seed })
   if (r.status !== 0) console.log(r.stdout.split('\n').slice(-15).join('\n') + '\n' + r.stderr)
   ok(r.status === 0, `the rehearsal release with --home-web succeeds (exit ${r.status})`)
   const info = fs.existsSync(path.join(hw, 'build.json')) ? JSON.parse(fs.readFileSync(path.join(hw, 'build.json'), 'utf8')) : {}
@@ -293,8 +305,50 @@ else {
   ok(fs.existsSync(signed) && library.includes(JSON.parse(fs.readFileSync(signed, 'utf8')).sig) && library.includes(JSON.parse(SPACES_HISTORY).sig) && !library.includes('STALE'),
     'the library page carries both signed histories byte for byte, and nothing of the stale build planted in its output')
   const siteFiles = fs.existsSync(r.site) ? execFileSync('find', [r.site, '-type', 'f'], { encoding: 'utf8' }).trim().split('\n').map((f) => path.relative(r.site, f)) : []
-  ok(siteFiles.length > 10 && !siteFiles.some((f) => /(^|\/)(frame\.html|_headers|build\.json)$/.test(f) || f.includes('home-web') || f.startsWith('library/')),
-    `nothing of home/web is in the site (${siteFiles.length} files): nothing deploys it`)
+  ok(siteFiles.length > 10 && !siteFiles.some((f) => f !== 'releases/home-web/served.json' && (/(^|\/)(frame\.html|_headers|build\.json)$/.test(f) || f.includes('home-web') || f.startsWith('library/'))),
+    `nothing of home/web is in the site but its signed release list (${siteFiles.length} files): nothing deploys it`)
+
+  // the tripwire's release list, signed into the site with the release (sign-home-web-served.mjs)
+  const listFile = path.join(r.site, 'releases/home-web/served.json')
+  const throwPub = JSON.parse(fs.readFileSync(THROWAWAY, 'utf8')).public
+  const listOf = (f) => { try { return verifyEnvelope(fs.readFileSync(f, 'utf8'), throwPub) } catch { return null } }
+  const l1 = listOf(listFile)
+  ok(l1?.type === 'bento/home-web/served' && l1.serial === 1 && l1.releases.length === 1 && l1.releases[0].origins['https://home.bento.page']?.files['/']?.sha256,
+    'the first release list is in the site, signed by the release\'s key: serial 1, the library as built')
+  const built = fs.readFileSync(path.join(hw, 'library/index.html'))
+  ok(l1?.releases[0].origins['https://home.bento.page'].files['/'].sha256 === createHash('sha256').update(built).digest('hex'), 'and it pins the library page this release built')
+  // the next release builds on the published list
+  const seed2 = publishedTree('published-rehearsal-2', { 'releases/spaces/manifest.json': '{}', 'releases/spaces/history.json': SPACES_HISTORY, 'releases/home-web/served.json': fs.readFileSync(listFile, 'utf8') })
+  const r2 = release([...REHEARSE, '--home-web-out', staleOut('rehearsal-2.home-web')], 'rehearsal-2', { published: seed2 })
+  const l2 = listOf(path.join(r2.site, 'releases/home-web/served.json'))
+  ok(r2.status === 0 && l2?.serial === 2 && l2.releases.length === 2, `the next release builds on the published list: serial 2, two releases (exit ${r2.status})`)
+}
+
+section('release.mjs --home-web: the release list, before anything is signed')
+{
+  const seedNoList = publishedTree('published-nolist', { 'releases/spaces/manifest.json': '{}', 'releases/spaces/history.json': SPACES_HISTORY })
+  const a = release([...REHEARSE, '--home-web-out', staleOut('nolist.home-web')], 'site-nolist', { published: seedNoList })
+  ok(a.status !== 0 && /--home-web-first/.test(a.stderr) && !signedIn(a.site).length, `no published list and no --home-web-first: refused, nothing signed (exit ${a.status})`)
+  const seedList = publishedTree('published-haslist', { 'releases/spaces/manifest.json': '{}', 'releases/spaces/history.json': SPACES_HISTORY, 'releases/home-web/served.json': '{}' })
+  // the held list is verified before signing too (security re-check N5): junk, another key, another type
+  const listPayload = (extra = {}) => JSON.stringify({ type: 'bento/home-web/served', v: 1, serial: 3, at: '2026-11-01T00:00:00.000Z', releases: [], ...extra })
+  const otherPriv = generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey
+  const signOther = (payload) => JSON.stringify({ payload, sig: nodeSign('sha256', Buffer.from(payload), { key: otherPriv, dsaEncoding: 'ieee-p1363' }).toString('base64') })
+  for (const [n, [label, list, pattern]] of [
+    ['a published list that is junk ({})', '{}', /does not verify/],
+    ['a published list signed by another key', signOther(listPayload()), /does not verify/],
+    ['a published list of another type', signThrowaway(listPayload({ type: 'bento/other' })), /not a v1 bento\/home list/],
+  ].entries()) {
+    const seed = publishedTree(`published-list-${n}`, { 'releases/spaces/manifest.json': '{}', 'releases/spaces/history.json': SPACES_HISTORY, 'releases/home-web/served.json': list })
+    const r = release([...REHEARSE, '--home-web-out', staleOut(`list-${n}.home-web`)], `site-list-${n}`, { published: seed })
+    ok(r.status !== 0 && pattern.test(r.stderr) && !signedIn(r.site).length, `${label}: refused with a reason, nothing signed (exit ${r.status}: ${r.stderr.trim().split('\n').pop()?.slice(0, 100)})`)
+  }
+  const b = release([...REHEARSE, '--home-web-first', '--home-web-out', staleOut('haslist.home-web')], 'site-haslist', { published: seedList })
+  ok(b.status !== 0 && /already published/.test(b.stderr) && !signedIn(b.site).length, `--home-web-first over a published list: refused, nothing signed (exit ${b.status})`)
+  // a published tree holding no app, so no seeded history stands in the way of the check this row is about
+  const seedEmpty = publishedTree('published-empty', { 'README.txt': 'nothing published yet' })
+  const c = release(['--key', LOOKS_LIKE_RELEASE, '--home-web', '--home-web-dev', '--home-web-first', '--frame-origin', FRAME, '--home-web-out', staleOut('devrel.home-web')], 'site-devrel', { published: seedEmpty })
+  ok(c.status !== 0 && /throwaway key only/.test(c.stderr) && !signedIn(c.site).length, `--home-web-dev with the release key: refused before signing (the list is never signed for a development build with it) (exit ${c.status})`)
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

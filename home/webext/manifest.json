@@ -10,7 +10,8 @@
     "sidePanel",
     "storage",
     "downloads",
-    "downloads.ui"
+    "downloads.ui",
+    "webRequest"
   ],
   "optional_permissions": [
     "history"
@@ -46,6 +47,18 @@
       ],
       "world": "ISOLATED",
       "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://home.bento.page/*"
+      ],
+      "all_frames": false,
+      "js": [
+        "src/tripwire-observe.js"
+      ],
+      "world": "ISOLATED",
+      "run_at": "document_start",
+      "match_origin_as_fallback": true
     }
   ],
   "icons": {
@@ -77,7 +90,8 @@
   },
   "default_locale": "en",
   "host_permissions": [
-    "file:///*"
+    "file:///*",
+    "https://home.bento.page/*"
   ],
   "sandbox": {
     "pages": [

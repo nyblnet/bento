@@ -979,5 +979,68 @@
   "menuOpenWithId": {
     "message": "使用 Bento ID 打开",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home 提供的不是 Bento 发布版本"
+  },
+  "twMismatchBody": {
+    "message": "home.bento.page 发送给此浏览器的代码与 Bento 签名的任何发布版本都不匹配。请关闭该标签页，不要在其中打开文档。点击查看详情。"
+  },
+  "twOldTitle": {
+    "message": "bento/home 正在提供较旧的发布版本"
+  },
+  "twOldBody": {
+    "message": "home.bento.page 发送给此浏览器的代码是真实的 Bento 发布版本，但不是最新版本。"
+  },
+  "twListTitle": {
+    "message": "bento/home 的发布版本列表不是真实的"
+  },
+  "twListBody": {
+    "message": "bento.page 发送的发布版本列表没有 Bento 的签名，因此无法检查 home.bento.page。点击查看详情。"
+  },
+  "twBadgeTitle": {
+    "message": "bento/home 与已签名的发布版本不匹配"
+  },
+  "twPageTitle": {
+    "message": "bento/home 代码检查"
+  },
+  "twPageLead": {
+    "message": "此扩展程序会将 home.bento.page 发送给浏览器的代码与 Bento 用离线发布密钥签名的发布版本进行比对。它只负责报告：没有更改或阻止任何内容。"
+  },
+  "twPageDo": {
+    "message": "请关闭 bento/home 标签页，在查明原因之前不要在其中打开、编辑或保存文档。此检查不会更改你磁盘上的文件。"
+  },
+  "twPageReport": {
+    "message": "请附上以下详情，私下报告："
+  },
+  "twPageReportLink": {
+    "message": "报告给 Bento"
+  },
+  "twPageCopy": {
+    "message": "复制详情"
+  },
+  "twPageCopied": {
+    "message": "已复制"
+  },
+  "twPageRecent": {
+    "message": "最近的检查"
+  },
+  "twPageNone": {
+    "message": "尚无检查记录。"
+  },
+  "twPageNotFound": {
+    "message": "记录中没有这次检查。"
+  },
+  "twPageListNone": {
+    "message": "还没有已签名的发布版本列表：从未检查过 home.bento.page。"
+  },
+  "twPageListHeld": {
+    "message": "正在用发布版本列表 #$1（获取于 $2）进行检查。"
+  },
+  "twNeverTitle": {
+    "message": "bento/home 未经检查"
+  },
+  "twNeverBody": {
+    "message": "此扩展程序已有 3 天无法获取 Bento 签名的发布版本列表，因此 home.bento.page 发送的代码未经检查。"
   }
 }

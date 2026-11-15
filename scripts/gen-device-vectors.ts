@@ -12,7 +12,8 @@
 // Keys are deterministic (scripts/lib/roster-build.ts, the same keys and
 // chains as roster-v2.json); signatures are random, so an unchanged row keeps
 // its committed bytes, and --check writes nothing and fails on a stale file.
-// Every accepted row carries its tier, written by hand below.
+// Every accepted row carries its tier, written by hand below, and the mb its
+// watt. carries (from the spec, never parsed back).
 
 import { writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -124,10 +125,14 @@ async function proof(s: CertSpec): Promise<Proof> {
   return out
 }
 
-type Row = { name: string; about: string; chain: string; now?: number; proof: Proof; expect: 'accept' | 'reject'; reason?: string; tier?: 'passkey' | 'native' }
+type Row = { name: string; about: string; chain: string; now?: number; proof: Proof; expect: 'accept' | 'reject'; reason?: string; tier?: 'passkey' | 'native'; mb?: number }
 const rows: Row[] = []
-const accept = async (name: string, about: string, s: CertSpec, tier: 'passkey' | 'native', now?: number) =>
-  rows.push({ name, about, chain: s.chain, ...(now !== undefined ? { now } : {}), proof: await proof(s), expect: 'accept', tier })
+// every accepted row carries the mb its watt. holds (written from the spec, never parsed back), so a port that
+// drops or misreads mb fails a row instead of passing them all (security-ruling-949, host item 5)
+const accept = async (name: string, about: string, s: CertSpec, tier: 'passkey' | 'native', now?: number) => {
+  if (s.watt?.raw !== undefined) throw new Error(`${name}: an accepted row builds its watt.`)
+  rows.push({ name, about, chain: s.chain, ...(now !== undefined ? { now } : {}), proof: await proof(s), expect: 'accept', tier, mb: s.watt?.mb ?? 0 })
+}
 const reject = async (name: string, about: string, s: CertSpec, reason: string, now?: number) =>
   rows.push({ name, about, chain: s.chain, ...(now !== undefined ? { now } : {}), proof: await proof(s), expect: 'reject', reason })
 
@@ -305,10 +310,10 @@ const wren: WrenRow[] = []
 }
 
 // --- wret. (the directory's check at a new ceremony: the old key retires itself) -----------------
-const wret: WrenRow[] = []
+const wret: Array<WrenRow & { newPub?: string | null }> = []
 {
   const text = buildWret({ oldPub: W.pub, newPub: W2.pub, address: ADDRESS, dirNonce: nonce(92) })
-  wret.push({ name: 'ok/wret', about: 'the old browser key W retires itself in favour of W2 at the new ceremony', text, sig: await signStatement(W.key, text), expect: 'accept' })
+  wret.push({ name: 'ok/wret', about: 'the old browser key W retires itself in favour of W2 at the new ceremony', text, sig: await signStatement(W.key, text), expect: 'accept', newPub: W2.pub })
   wret.push({ name: 'wret/signed-by-new-key', about: 'signed by the NEW key: only the old key can retire itself', text, sig: await signStatement(W2.key, text), expect: 'reject', reason: 'signature' })
   wret.push({ name: 'wret/high-s', about: 'the signature in high-S form', text, sig: highS(await signStatement(W.key, text)), expect: 'reject', reason: 'signature' })
   const same = buildWret({ oldPub: W.pub, newPub: W.pub, address: ADDRESS, dirNonce: nonce(92) })
@@ -317,6 +322,16 @@ const wret: WrenRow[] = []
   wret.push({ name: 'wret/nonce-short', about: 'the directory nonce is 16 to 64 bytes', text: short, sig: await signStatement(W.key, short), expect: 'reject', reason: 'grammar' })
   const addr = buildWret({ oldPub: W.pub, newPub: W2.pub, address: 'Alice@Example.com', dirNonce: nonce(92) })
   wret.push({ name: 'wret/address-not-normal', about: 'the address is in normal form', text: addr, sig: await signStatement(W.key, addr), expect: 'reject', reason: 'address' })
+  // R2: a retirement without a successor (newPub empty), over a challenge the directory issued for it
+  const alone = buildWret({ oldPub: W.pub, newPub: null, address: ADDRESS, dirNonce: nonce(95) })
+  wret.push({ name: 'ok/wret-no-successor', about: 'W retires itself with no new key (the library is dropping it): no ceremony, no passkey', text: alone, sig: await signStatement(W.key, alone), expect: 'accept', newPub: null })
+  wret.push({ name: 'wret/no-successor-other-key', about: 'a retirement without a successor, signed by another key', text: alone, sig: await signStatement(W2.key, alone), expect: 'reject', reason: 'signature' })
+  const aloneShort = buildWret({ oldPub: W.pub, newPub: null, address: ADDRESS, dirNonce: b64uEnc(new Uint8Array(15)) })
+  wret.push({ name: 'wret/no-successor-nonce-short', about: 'without a successor the challenge is still 16 to 64 bytes', text: aloneShort, sig: await signStatement(W.key, aloneShort), expect: 'reject', reason: 'grammar' })
+  const kxNew = buildWret({ oldPub: W.pub, newPub: 'A'.repeat(87), address: ADDRESS, dirNonce: nonce(92) })
+  wret.push({ name: 'wret/new-not-a-key', about: 'a newPub that is not a P-256 point (only EMPTY means no successor)', text: kxNew, sig: await signStatement(W.key, kxNew), expect: 'reject', reason: 'key' })
+  const noOld = `wret..${W2.pub}.${b64uEnc(new TextEncoder().encode(ADDRESS))}.${nonce(92)}`
+  wret.push({ name: 'wret/old-empty', about: 'the OLD key is never empty', text: noOld, sig: await signStatement(W.key, noOld), expect: 'reject', reason: 'key' })
   wret.push({ name: 'wret/as-wren', about: 'a wren. text is not a retirement', text: buildWren({ devicePub: W.pub, address: ADDRESS, challenge: nonce(92) }), sig: await signStatement(W.key, buildWren({ devicePub: W.pub, address: ADDRESS, challenge: nonce(92) })), expect: 'reject', reason: 'grammar' })
 }
 
@@ -347,7 +362,8 @@ const reserved = ['mgd', 'vch', 'ojn', 'dvc'].map((prefix) => ({ prefix, text: `
 
 // --- the link final under option G (link.ts lnkg): H's ripe ck co-signs N's dev2. --------------------
 type FinalRow = { name: string; about: string; t: string; h2n: string; offer: LinkOffer; final: { dev2: string; ck: string; cns: string; cnsSig: string; seal: string } | null
-  edit?: { line: number; value: string }; expect: 'accept' | 'reject'; reason?: string; watt?: string; wattSig?: string; release?: { challenge: string; spent?: boolean; expect: 'accept' | 'reject'; reason?: string } }
+  edit?: { line: number; value: string }; expect: 'accept' | 'reject'; reason?: string; watt?: string; wattSig?: string
+  release?: { challenge: string; spent?: boolean; chain?: string; expect: 'accept' | 'reject'; reason?: string } }
 const linkFinal: FinalRow[] = []
 {
   const NDEV = await ecdsa('device/n1'), NCK = await ecdsa('device/nck'), NKX = await ecdsa('device/nkx')
@@ -365,7 +381,7 @@ const linkFinal: FinalRow[] = []
     devicePub: o.devicePub ?? NDEV.pub, consentPub: o.consentPub === undefined ? NCK.pub : o.consentPub, kx: o.kx ?? NKX.pub, address: ADDRESS, rosHash: o.rosHash ?? head,
     label: 'Pixel', via: o.via ?? 'ck', ceremonyAt: o.ceremonyAt ?? CG, dirNonce: nonce(93) })
   type G = { name: string; about: string; dev2?: string; ck?: string; by?: string; cns?: CnsOpts; keys?: typeof keys; edit?: (lines: string[]) => { line: number; value: string }; reason?: string
-    release?: FinalRow['release']; watt?: boolean }
+    release?: FinalRow['release']; watt?: boolean; offer?: LinkOffer }
   const g = async (x: G) => {
     const dev2 = x.dev2 ?? dev2Of()
     const ckLabel = x.by ?? 'ck1'
@@ -373,7 +389,7 @@ const linkFinal: FinalRow[] = []
     const c = await cosign(ckLabel, dev2, nonce(93), Number(dev2.split('.')[8]), x.cns)
     const text = await buildFinalG({ dev2, ck, cns: c.cns, cnsSig: c.sig }, x.keys ?? keys, t, IV)
     const l = text.split('\n')
-    const row: FinalRow = { name: x.name, about: x.about, t, h2n: b64uEnc(keys.h2n), offer, final: { dev2: l[1], ck: l[2], cns: l[3], cnsSig: l[4], seal: l[5] },
+    const row: FinalRow = { name: x.name, about: x.about, t, h2n: b64uEnc(keys.h2n), offer: x.offer ?? offer, final: { dev2: l[1], ck: l[2], cns: l[3], cnsSig: l[4], seal: l[5] },
       expect: x.reason ? 'reject' : 'accept', ...(x.reason ? { reason: x.reason } : {}) }
     if (x.edit) row.edit = x.edit(l)
     if (x.release) row.release = x.release
@@ -390,6 +406,24 @@ const linkFinal: FinalRow[] = []
   await g({ name: 'final-g/release-old-head', about: 'the dev2. names a head other than the current one', dev2: dev2Of({ rosHash: await sha256b64u(ros.base[2]) }),
     release: { challenge: nonce(93), expect: 'reject', reason: 'roster-head' } })
   await g({ name: 'final-g/release-ck-not-member', about: 'ck2 co-signs; it is not on the roster', by: 'ck2', release: { challenge: nonce(93), expect: 'reject', reason: 'signer' } })
+  // security-ruling-949 C3: the directory's release check, at the rules no other row reaches
+  await g({ name: 'final-g/release-quarantined', about: 'ck1 was quarantined (its own request voided): the directory refuses to release its co-sign',
+    dev2: dev2Of({ rosHash: await sha256b64u(ros['ck-quarantined'][4]) }), release: { challenge: nonce(93), chain: 'ck-quarantined', expect: 'reject', reason: 'signer-quarantined' } })
+  {
+    // pk1 signs the cns. with its own key: N opens it (N does not know the roster), the directory refuses the signer's kind
+    await g({ name: 'final-g/release-by-passkey', about: 'the co-signer named is a passkey (pk1 signed the cns.): N opens it, the directory refuses it',
+      ck: pubOf('pk1'), by: 'pk1', release: { challenge: nonce(93), expect: 'reject', reason: 'signer-kind' } })
+  }
+  await g({ name: 'final-g/release-exactly-72h', about: 'ck1 has been a member exactly 72 h at ceremonyAt: released (72 h inclusive)',
+    dev2: dev2Of({ ceremonyAt: T + 304 * H }), release: { challenge: nonce(93), expect: 'accept' } })
+  await g({ name: 'final-g/release-one-second-short', about: 'ck1 72 h less one second a member at ceremonyAt: refused',
+    dev2: dev2Of({ ceremonyAt: T + 304 * H - 1000 }), release: { challenge: nonce(93), expect: 'reject', reason: 'signer-unripe' } })
+  {
+    // N offered ck1's key as its own consent key: the co-signer IS N's consent key, a roster ck, ripe; only ck-is-n refuses it
+    const nOffer: LinkOffer = { ...offer, consentPub: pubOf('ck1') }
+    await g({ name: 'final-g/release-ck-is-n', about: 'the co-signer is the consent key the dev2. names for N (a ripe ck1): refused at the directory too',
+      dev2: dev2Of({ consentPub: pubOf('ck1') }), offer: nOffer, reason: 'ck-is-n', release: { challenge: nonce(93), expect: 'reject', reason: 'ck-is-n' } })
+  }
   await g({ name: 'final-g/other-keys', about: 'sealed under another h2n (not the SAS-confirmed session)', keys: otherKeys, reason: 'decrypt' })
   await g({ name: 'final-g/line-swapped', about: 'the directory swaps the dev2. line for one naming another device key (seal no longer matches)',
     edit: (l) => ({ line: 1, value: l[1].replace(NDEV.pub, W.pub) }), reason: 'seal' })
@@ -434,7 +468,15 @@ const masked = (v: unknown) => JSON.stringify(v, (k, x) => (SIGS.has(k) ? '' : x
 const before = existsSync(OUT) ? JSON.parse(readFileSync(OUT, 'utf8')) : null
 const keep = <T extends { name: string }>(fresh: T[], committed: T[] | undefined) => {
   const old = new Map((committed ?? []).map((r) => [r.name, r]))
-  return fresh.map((r) => { const o = old.get(r.name); return o && masked(o) === masked(r) ? o : r })
+  return fresh.map((r) => {
+    const o = old.get(r.name)
+    if (!o) return r
+    if (masked(o) === masked(r)) return o
+    // a field added to every row (mb on the accepted rows) keeps the row's committed signatures
+    const added = Object.fromEntries(Object.entries(r).filter(([k]) => !(k in o)))
+    const grown = { ...o, ...added } as T
+    return Object.keys(added).length && masked(grown) === masked(r) ? grown : r
+  })
 }
 for (const [n, c] of Object.entries(chains)) { const o = before?.chains?.[n]; if (o && masked(o) === masked(c)) chains[n] = o }
 out.rows = keep(rows, before?.rows)

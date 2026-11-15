@@ -10,15 +10,18 @@
 // and never puts document markup in its own DOM: the file name and the
 // verdict are the only things from a file it shows, as text.
 //
-// Nothing is kept: no storage, no file handles, no identity. The only
-// network this page uses is the signed release channel: once per load, to ask
-// whether this build has been withdrawn (offline.ts), and otherwise only when
-// a file does not verify against the histories the build carries (or when the
-// person asks to see an unverifiable file read-only). A service worker keeps
-// the library's own files, never a document, so a returning visit opens
-// offline (offline.ts, sw.ts).
+// Nothing is kept past an open (the document's store lives in this page's
+// memory while it is open), no file handles, no identity. The one thing this
+// page remembers is the kill switch's: the highest status seq seen and the
+// builds seen withdrawn (offline.ts). The only network this page uses is the
+// signed release channel: once per load, to ask whether this build has been
+// withdrawn, and otherwise only when a file does not verify against the
+// histories the build carries (or when the person asks to see an unverifiable
+// file read-only). A service worker keeps the library's own files, never a
+// document, so a returning visit opens offline (offline.ts, sw.ts).
 
 import { startOffline } from './offline.ts'
+import { serveDocStore, memoryBackend, type StoreSession } from '../../../kernel/src/docstoreport.ts'
 import { Histories, judge, judgeWithRefresh, decodeExact, extractDoc, spliceDoc, newestShell, APPS, MAX_BYTES, type Jwk, type PlanStep } from './verify.ts'
 
 declare const __FRAME_URL__: string
@@ -74,7 +77,7 @@ export function safeName(name: string): string {
   return n
 }
 
-interface Session { frame: HTMLIFrameElement; port: MessagePort | null; pong: number; onReady: (e: MessageEvent) => void }
+interface Session { frame: HTMLIFrameElement; port: MessagePort | null; pong: number; onReady: (e: MessageEvent) => void; entry: string; store: StoreSession | null }
 /** How long a frame has to answer a ping after a load. */
 const PING_MS = 5000
 /** How long the frame page has to say it is ready, once it has loaded (or at all). */
@@ -82,9 +85,43 @@ const READY_AFTER_LOAD_MS = 2000
 const READY_MS = 20000
 let session: Session | null = null
 
+/**
+ * The document's store: kept in this page's memory for the open, and dropped
+ * when it closes (nothing is kept past it yet; the per-entry recovery cache
+ * cleared on write-back is stage 2's). Each open is a new ENTRY, minted here;
+ * nothing the document sends names one. Counts are on the root element for
+ * the rigs: requests served, refused and dropped.
+ */
+const memory = memoryBackend()
+const storeCount = { served: 0, refused: 0, dropped: 0 }
+const onStoreEvent = (e: { kind: string }) => {
+  if (e.kind === 'served' || e.kind === 'refused' || e.kind === 'dropped') storeCount[e.kind]++
+  document.documentElement.setAttribute('data-bento-store', `${storeCount.served} ${storeCount.refused} ${storeCount.dropped}`)
+}
+const mintEntry = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('')
+
+/**
+ * The docId of a file this page verified, or null. Only a body in a known
+ * PLAINTEXT app format has one: an allowlist of the apps' formats, never "not
+ * bento/enc", because an encrypted envelope may carry any extra field
+ * (the shell's envelope parser ignores them), a docId included, and an
+ * encrypted document never gets a store here.
+ */
+function docIdOf(html: string): string | null {
+  const d = extractDoc(html)
+  if (!('text' in d)) return null
+  if (!APPS.some((a) => a.format === d.format)) return null
+  try {
+    const id = (JSON.parse(d.text) as { docId?: unknown }).docId
+    return typeof id === 'string' && id.length > 0 && id.length <= 200 ? id : null
+  } catch { return null }
+}
+
 function closeDocument() {
   if (!session) return
   removeEventListener('message', session.onReady)
+  session.store?.close()
+  memory.dropEntry(session.entry)
   session.port?.close()
   session.frame.remove()
   session = null
@@ -105,7 +142,7 @@ function serve(html: string, plan: PlanStep[], name: string, label: string, opts
   frame.setAttribute('referrerpolicy', 'no-referrer')
   frame.title = shownName(name)
   frame.className = 'doc'
-  const s: Session = { frame, port: null, pong: 0, onReady: () => {} }
+  const s: Session = { frame, port: null, pong: 0, onReady: () => {}, entry: mintEntry(), store: null }
   s.onReady = (ev: MessageEvent) => {
     if (session !== s || ev.source !== frame.contentWindow || ev.origin !== 'null') return
     if (!ev.data || ev.data.kind !== 'bento-frame-ready') return
@@ -113,7 +150,10 @@ function serve(html: string, plan: PlanStep[], name: string, label: string, opts
     const { port1, port2 } = new MessageChannel()
     s.port = port1
     port1.onmessage = (e) => fromFrame(s, e.data)
-    frame.contentWindow!.postMessage({ kind: 'bento-serve', html, plan, name }, '*', [port2])
+    // the store: its own channel, bound to this open's entry and the docId of the verified bytes
+    const sc = new MessageChannel()
+    s.store = serveDocStore(sc.port1, { entry: s.entry, docId: docIdOf(html), backend: memory, onEvent: onStoreEvent })
+    frame.contentWindow!.postMessage({ kind: 'bento-serve', html, plan, name }, '*', [port2, sc.port2])
   }
   addEventListener('message', s.onReady)
   // After the handshake, every load of the frame is either the document being

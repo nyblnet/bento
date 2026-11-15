@@ -4,14 +4,18 @@
 // Generates kernel/fixtures/recovery-v1.json — the bento/id recovery-code and
 // key-blob conformance vectors (identity-design §2f, security §28).
 //
-//   node scripts/gen-recovery-vectors.ts
+//   node scripts/gen-recovery-vectors.ts [--check]
+//
+// --check writes nothing and exits 1 when the committed file is not byte for
+// byte what this generator writes (every value here is deterministic, so any
+// difference is a stale file or a changed derivation). CI runs it.
 //
 // Unlike the statement vectors, every row here is DETERMINISTIC: fixed codes,
 // salts and IVs, so every host (Swift, Kotlin, Rust, the extension's WASM, and the
 // directory) must reproduce the exact bytes, end to end. The keys are TEST KEYS.
 
 import { argon2 as nodeArgon2 } from 'node:crypto'
-import { writeFileSync } from 'node:fs'
+import { writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -257,5 +261,11 @@ const fixture = {
   scalars,
   rk,
 }
-writeFileSync(OUT, JSON.stringify(fixture, null, 2) + '\n')
+const text = JSON.stringify(fixture, null, 2) + '\n'
+if (process.argv.includes('--check')) {
+  const same = existsSync(OUT) && readFileSync(OUT, 'utf8') === text
+  console.log(same ? `${OUT} is current: ${codes.length} codes, ${parse.length} parse rows, ${scalars.length} scalar rows` : `${OUT} is stale: regenerate with node scripts/gen-recovery-vectors.ts`)
+  process.exit(same ? 0 : 1)
+}
+writeFileSync(OUT, text)
 console.log(`wrote ${OUT}: ${codes.length} codes, ${parse.length} parse rows, ${scalars.length} scalar rows`)
