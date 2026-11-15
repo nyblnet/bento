@@ -14506,3 +14506,81 @@ such a change to them alone. Scripts, handlers and the other flags are still
 caught on them. Guards: rows `cross-site-link` and
 `cross-site-no-store` in `scripts/test-webext-tripwire-browser.mjs`, with a
 mutant each.
+
+## 2026-11-12 — bento/home in your browser, stage 3: an offline worker for the library only, a signed kill switch, install
+
+The library (`home/web/`) gains a service worker, a kill switch and a web app
+manifest. What it does not gain matters as much:
+
+- **The worker is the library's, never the frame's.** It runs on the library
+  origin, precaches exactly the build's own files (the page, the manifest, two
+  icons), each checked against a sha256 compiled into the script, all or
+  nothing, under a cache named for their content hash; activating a new worker
+  deletes every other cache. It answers only those paths, network first, and
+  only when the network fails; everything else passes untouched and is never
+  cached. It takes nothing from pages (no message listener), has no
+  `importScripts`, `eval` or dynamic import, and is served with its own
+  `default-src 'none'` policy and `no-cache`, registered with
+  `updateViaCache: 'none'`. Navigation preload is on, and a navigation is
+  answered with the browser's preload response (then the network, then the
+  cache), so it reaches the server as the tab's own navigation, visible to an
+  observer outside the page; a worker fetch would not be. Passing navigations
+  through while `navigator.onLine` was rejected: measured, it loses offline
+  whenever the browser believes it is online and the server is unreachable.
+  The library's CSP names that one script URL, and its
+  one Trusted Types policy passes only that URL. The frame site keeps
+  `worker-src 'none'`; its policy and sandbox are unchanged.
+- **A worker is not a pin.** Network first means the server's current build
+  always wins online, so the worker adds offline and nothing else: it does not
+  bind the library to a signed hash, and a compromised host can still replace
+  it. The library stays the code-trust root the stage-1 entry names.
+- **Offline is the library's, not yet the document's.** The frame page is on
+  another site, which the library's worker cannot serve, so a document opened
+  offline is told it needs a connection. Opening documents offline needs a
+  decision on delivering the frame offline, which would change how its policy
+  arrives; that is not taken here.
+- **The kill switch is a signed status, checked on every load.**
+  `releases/home/status.json`, signed with the release key
+  (`scripts/sign-home-status.mjs`), lists withdrawn builds by the sha256 of the
+  library's script. A listed build stops, in the tab that loads it, before any
+  file opens: it unregisters
+  every worker on its origin, deletes every cache and shows a fixed message;
+  the next online load comes from the server. Unreachable, absent (404) or
+  slower than 8 seconds is no answer (a returning visit must open offline).
+  Anything else that comes back and cannot be trusted (a bad signature, a
+  payload for another app, a `seq` below the highest this browser has seen,
+  any other 200) fails closed, exactly as a withdrawal, wiping the worker and
+  caches; so the release host must answer 404 for a file it does not have. A browser remembers the builds it has seen withdrawn, so a copy
+  served again from any cache (Firefox serves the page from its HTTP cache
+  offline) stops on load even when the status cannot be fetched. This is the
+  one request the library makes on every load, and it goes only to the signed
+  release channel. Its limits, stated: tabs already open keep running a
+  withdrawn build; `at` is not checked, so the `seq` floor protects only a
+  browser that has seen a newer status (a fresh browser takes any older signed
+  status); and offline or installed copies run a withdrawn build until that
+  browser sees the status.
+- **What the kill switch cannot reach:** a build that does not run the check.
+  A hostile deploy can register its own worker at any path; clearing that
+  needs the host to answer `Service-Worker: script` requests with a cleaning
+  worker and to serve a `Clear-Site-Data` reset page, which static `_headers`
+  cannot do. It waits for the hosting move.
+- **Install** is a manifest (start and scope `/`, standalone, 192 and 512 px
+  icons) allowed by an exact `manifest-src`. No file handlers or share target
+  yet.
+- **The tripwire's release list names the worker.** The build writes
+  `serviceWorkers: ["/sw.js"]` to `build.json`, so the list the extension
+  checks against holds the worker and every file it precaches. Navigation
+  preload keeps the navigation's headers visible to it. Left open, for
+  tripwire follow-ups: with a worker in control the tripwire does not require
+  the page's bytes, so CSP and text changes go unseen whenever the response is
+  not HTTP-cacheable (`Vary: *` with `no-cache`, for one); script changes are
+  still caught. And the tripwire trusts the worker by its URL: a server can
+  answer the browser's `Service-Worker: script` request differently from the
+  extension's own fetch of `/sw.js`.
+
+Rigs: `scripts/test-home-web-offline.mjs` (Chromium, WebKit, Firefox; offline
+by `context.setOffline`, with the servers closed where an engine's emulation
+does not hold: WebKit's for worker-controlled navigations, Chromium's for the
+cross-site frame, both measured), its `--mutants` (each red on its own row, in
+a run that completed), and the drill row: withdraw a build, then the next load
+is clean. Details: `home/web/README.md`.
