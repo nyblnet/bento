@@ -305,7 +305,8 @@ console.log('\n— the relay: bytes in, bytes out, chunked above CHUNK')
   ok(/fileBlockHash: async \(path\) => \{\s*\n\s*const r = await fetch\(`file:\/\//.test(bgSrc), 'the new file\'s hash is read by the extension from disk, not reported by the page')
   ok(/'store'/.test(readFileSync(join(SRC, 'src/page-bridge.js'), 'utf8')), 'page-bridge.js announces the store capability')
   const manifest = JSON.parse(readFileSync(join(SRC, 'manifest.json'), 'utf8'))
-  ok(manifest.content_scripts.every((cs: any) => cs.all_frames === false || cs.all_frames === undefined), 'content scripts stay top-frame only')
+  // the tripwire's observer runs in the frame site's frame too; it carries no store bridge (scripts/test-webext-tripwire.ts)
+  ok(manifest.content_scripts.filter((cs: any) => cs.js.join() !== 'src/tripwire-observe.js').every((cs: any) => cs.all_frames === false || cs.all_frames === undefined), 'content scripts that bridge the store stay top-frame only')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

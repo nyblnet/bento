@@ -979,5 +979,68 @@
   "menuOpenWithId": {
     "message": "Abrir com Bento ID",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home não está servindo uma versão do Bento"
+  },
+  "twMismatchBody": {
+    "message": "O código que home.bento.page enviou a este navegador não corresponde a nenhuma versão assinada pelo Bento. Feche essa aba e não abra documentos nela. Clique para ver os detalhes."
+  },
+  "twOldTitle": {
+    "message": "bento/home está servindo uma versão mais antiga"
+  },
+  "twOldBody": {
+    "message": "O código que home.bento.page enviou a este navegador é uma versão autêntica do Bento, mas não a mais recente."
+  },
+  "twListTitle": {
+    "message": "A lista de versões do bento/home não é autêntica"
+  },
+  "twListBody": {
+    "message": "bento.page enviou uma lista de versões que não foi assinada pelo Bento, então não é possível verificar home.bento.page. Clique para ver os detalhes."
+  },
+  "twBadgeTitle": {
+    "message": "bento/home não corresponde a uma versão assinada"
+  },
+  "twPageTitle": {
+    "message": "Verificação do código do bento/home"
+  },
+  "twPageLead": {
+    "message": "Esta extensão compara o código que home.bento.page envia ao seu navegador com as versões que o Bento assina com sua chave de publicação offline. Ela apenas informa: não alterou nem bloqueou nada."
+  },
+  "twPageDo": {
+    "message": "Feche a aba do bento/home e não abra, edite nem salve documentos nela até que isso seja esclarecido. A verificação não altera arquivos no seu disco."
+  },
+  "twPageReport": {
+    "message": "Informe de forma privada, com os detalhes abaixo:"
+  },
+  "twPageReportLink": {
+    "message": "Informar ao Bento"
+  },
+  "twPageCopy": {
+    "message": "Copiar detalhes"
+  },
+  "twPageCopied": {
+    "message": "Copiado"
+  },
+  "twPageRecent": {
+    "message": "Verificações recentes"
+  },
+  "twPageNone": {
+    "message": "Nenhuma verificação registrada ainda."
+  },
+  "twPageNotFound": {
+    "message": "Essa verificação não está no registro."
+  },
+  "twPageListNone": {
+    "message": "Ainda não há lista de versões assinada: home.bento.page nunca foi verificado."
+  },
+  "twPageListHeld": {
+    "message": "Verificando com a lista de versões nº $1, obtida em $2."
+  },
+  "twNeverTitle": {
+    "message": "bento/home não foi verificado"
+  },
+  "twNeverBody": {
+    "message": "Esta extensão não consegue obter a lista de versões assinada do Bento há 3 dias, então o código que home.bento.page envia não foi verificado."
   }
 }

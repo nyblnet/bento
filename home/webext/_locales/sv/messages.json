@@ -946,5 +946,68 @@
   "menuOpenWithId": {
     "message": "Öppna med Bento ID",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home levererar inte en Bento-version"
+  },
+  "twMismatchBody": {
+    "message": "Koden som home.bento.page skickade till den här webbläsaren stämmer inte med någon version som Bento har signerat. Stäng fliken och öppna inga dokument där. Klicka för detaljer."
+  },
+  "twOldTitle": {
+    "message": "bento/home levererar en äldre version"
+  },
+  "twOldBody": {
+    "message": "Koden som home.bento.page skickade till den här webbläsaren är en äkta Bento-version, men inte den senaste."
+  },
+  "twListTitle": {
+    "message": "Versionslistan för bento/home är inte äkta"
+  },
+  "twListBody": {
+    "message": "bento.page skickade en versionslista som inte är signerad av Bento, så home.bento.page kan inte kontrolleras. Klicka för detaljer."
+  },
+  "twBadgeTitle": {
+    "message": "bento/home stämmer inte med en signerad version"
+  },
+  "twPageTitle": {
+    "message": "Kodkontroll av bento/home"
+  },
+  "twPageLead": {
+    "message": "Det här tillägget jämför koden som home.bento.page skickar till din webbläsare med de versioner som Bento signerar med sin offlinenyckel för versioner. Det rapporterar bara: det har inte ändrat eller blockerat något."
+  },
+  "twPageDo": {
+    "message": "Stäng fliken med bento/home och öppna, redigera eller spara inga dokument där förrän det här har förklarats. Kontrollen ändrar inga filer på din disk."
+  },
+  "twPageReport": {
+    "message": "Rapportera det konfidentiellt, med detaljerna nedan:"
+  },
+  "twPageReportLink": {
+    "message": "Rapportera till Bento"
+  },
+  "twPageCopy": {
+    "message": "Kopiera detaljer"
+  },
+  "twPageCopied": {
+    "message": "Kopierat"
+  },
+  "twPageRecent": {
+    "message": "Senaste kontroller"
+  },
+  "twPageNone": {
+    "message": "Inga kontroller registrerade än."
+  },
+  "twPageNotFound": {
+    "message": "Den kontrollen finns inte i loggen."
+  },
+  "twPageListNone": {
+    "message": "Ingen signerad versionslista än: home.bento.page har aldrig kontrollerats."
+  },
+  "twPageListHeld": {
+    "message": "Kontrolleras mot versionslista nr $1, hämtad $2."
+  },
+  "twNeverTitle": {
+    "message": "bento/home har inte kontrollerats"
+  },
+  "twNeverBody": {
+    "message": "Det här tillägget har inte kunnat hämta Bentos signerade versionslista på 3 dagar, så koden som home.bento.page skickar har inte kontrollerats."
   }
 }

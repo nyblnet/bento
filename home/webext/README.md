@@ -351,6 +351,103 @@ rather than covering every local HTML file.
 Expected: it saves with no dialog. Today, without the extension, that first ⌘S
 asks where to put the file.
 
+## The tripwire: checking the code bento/home serves
+
+bento/home in the browser (`home.bento.page`, and its frame site) runs code a
+server chooses, and no web page can pin its own code. The extension can check
+it from outside. On every visit it compares what the browser received with a
+list of releases signed with Bento's offline **release key** (the key every
+shipped shell trusts), and on a mismatch it warns loudly (a report tab, a
+notification that stays until dismissed, a red badge on the tab) and records
+the check. It never reloads the page, clears a cache or unregisters a worker:
+it reports, nothing else.
+
+**What it observes** (MV3 has no API for a response body in Chrome; only the
+debugger protocol has one, behind a banner):
+
+| what | how | where |
+|---|---|---|
+| the parse | a content script in the isolated world from `document_start` reads each `<script>`'s text as the parser inserts it, before the page's code runs; a script whose text later changes other than by the parser appending is flagged; handlers, `javascript:` URLs, frames, `<base>` and non-CSP `<meta http-equiv>` are flagged; a shadow root (declarative or attached) is flagged when the observer next looks, and at report time on every element it ever walked, even one the page removed. The markup INSIDE a shadow root is not seen | library and frame |
+| an early report | sent from inside the observer callback each time a script is first seen or grows, so it leaves BEFORE that script runs; if no full report follows within 10 s (the page navigated away, or never finished), the early report is judged on its own: a script no release lists, or any flag, is a mismatch. It is sent only when the observer has something to say, so a page that runs code before any script or flag reaches it leaves no early report | library and frame |
+| the bytes | the content script's `fetch(location, {cache: 'only-if-cached'})`: the navigation's own response from the HTTP cache, with no new request a server could answer differently. Measured: a navigation ANOTHER SITE started (a link, a popup) is cached under a key this fetch cannot reach, and it may read an older page instead; for those (Sec-Fetch-Site, from webRequest) the bytes are not judged and the navigation's Cache-Control header is, so `no-store` cannot hide a change. Measured: it does not pass through the page's service worker. The honest library is sent `no-cache`, which Chrome stores, so on the library without a worker, bytes that cannot be read are a mismatch | library (the frame is opaque) |
+| the size | the navigation timing's `decodedBodySize`, whoever served the page; 0 is a mismatch, as is a report sent after 30 s without the parse ending (`complete: false`). `complete: true` means only that the page left the `loading` state in time: a visit cut short also reports it, with a partial size | library and frame |
+| the CSP header | `webRequest.onHeadersReceived` (observing, never blocking) for the navigation; under a service worker, which webRequest does not see, the HTTP cache's copy of the header | library and frame |
+| workers | every registration's script URL must be a worker a release lists; its bytes, fetched now with `no-store`, must be that file | library |
+| the worker's cache | every Cache Storage entry, hashed, must be a file some release lists | library |
+
+The library is judged only as a top-level page (it is never framed), and in a
+`blob:` or `about:` document of its origin, which it never makes (judged by the origin the browser says it runs in, since an `about:` URL carries none); the frame
+page only in a frame. A page with no script and no flag at a path no release
+serves (a host's 404) is recorded quietly. Observations are capped (scripts,
+flags, cache entries, string lengths); going over a cap is a mismatch. Every
+write to the record goes through one chain, so concurrent pages cannot lose
+each other's checks.
+
+**The list** is `https://bento.page/releases/home-web/served.json`, on the
+release channel rather than on the site it describes: a signed envelope like
+the app manifests, typed `bento/home-web/served`, refused if it carries `app`,
+with a `serial` that only goes up, and the newest releases first
+(`src/tripwire-judge.js` documents the payload; `scripts/lib/home-web-served.mjs`
+writes it; `scripts/sign-home-web-served.mjs` signs it, and needs the published
+list, or `--first` for the very first one). Bytes that match an older release
+are recorded as **outdated**, and announced (quietly) only once the newest
+release is more than 72 hours old; a release marked **withdrawn**
+(`--withdraw`) is a loud mismatch. A list with a bad signature, the wrong
+type, or a reused serial is announced loudly; an older list than the one held
+is refused. Before warning about a page the extension fetches the list again,
+so a release deployed after its last fetch does not warn.
+
+Loud warnings (a report tab, a notification that stays) come once per origin
+per browser session; the badge and the record come every time. If no list can
+be fetched for three days, a quiet notification says nothing is being checked,
+and the report page always says which list checks run against, or that
+home.bento.page has never been checked.
+
+**What it cannot see, or says only quietly:**
+
+- a deploy served only to people **without** the extension, or only to
+  requests it can tell apart from a browser's (the worker-bytes fetch is an
+  ordinary request, so a targeting server can answer it honestly);
+- **the code runs first.** The tripwire reports what was parsed; a hostile
+  script has run by then, and nothing is prevented. A page that leaves after
+  a script or flag the observer saw is still on record (the early report);
+- **a script inside a declarative shadow root** runs before the observer can
+  see it (attaching the root changes nothing it watches), so such a script can
+  run and leave the page with nothing recorded;
+- under a **service worker**: response headers the worker changes (the CSP is
+  read from the HTTP cache, not from the worker's answer, and when the network
+  sent `no-store` there is no cached copy and no CSP check at all), and a change to page
+  TEXT only (no script, no handler, the same length) while the network again
+  serves the honest worker script;
+- a navigation **another site started** (a link or a popup from outside
+  bento.page, including from a `file://` document or a popup a document
+  opens): its bytes cannot be read (above), so a same-length change that the
+  parse does not flag is not seen. Until the element sequence lands, that
+  includes ADDED ELEMENTS (a link, an image, a label); after it, text and
+  attribute values. The server can tell these visits apart (Sec-Fetch-Site),
+  so it can serve such a change to them alone; scripts, handlers and the other
+  flags are still caught on them;
+- the **frame page's bytes**: it is an opaque origin, so its scripts, markup,
+  size and CSP header are checked, and a same-length change to its text is not;
+- a **rolled-back** list is refused but only recorded; a fresh install that
+  cannot fetch a list checks nothing, said quietly after three days;
+- after the first loud warning for an origin in a session, a second, different
+  finding there gets the badge and the record, not another tab;
+- an honest visit closed while a script was still arriving can leave a report
+  that looks like a mismatch, and spend that session's one loud warning;
+- `blob:`/`about:` documents are observed from Chrome 119
+  (`match_origin_as_fallback`); before that the early report still records the
+  script that made one;
+- anything on a site it does not watch: until the frame site's domain is
+  chosen and named in `src/tripwire-config.js` and `manifest.json`, the frame
+  page is not checked;
+- Firefox and Safari: the extension is Chromium-only.
+
+The rigs: `scripts/test-webext-tripwire.ts` (no browser),
+`scripts/test-webext-tripwire-browser.mjs` (the unpacked extension in
+Chromium, with a fixture worker) and `scripts/test-webext-tripwire-mutants.mjs`
+(a mutant per rule, each red on its row).
+
 ## What is unverified
 
 Everything below needs the extension actually loaded — none of it is testable

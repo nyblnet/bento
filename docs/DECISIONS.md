@@ -14072,6 +14072,110 @@ that bundles exactly the history it signed and the seeded one) and
 `scripts/test-home-web-build-mutants.mjs` (each refusal removed, red on its
 row), and `scripts/test-home-web-out.mjs` (where the output may go, the
 firmlink row and its mutant on macOS).
+## 2026-11-12 — The bento/home tripwire lives in the extension, checked against a list signed with the release key
+
+bento/home in the browser runs code a server chooses, and a page cannot pin
+its own code. The extension now checks it from outside on every visit to
+`home.bento.page` (and the frame site, once its domain is named): it compares
+what the browser received with a list of releases signed with the **release
+key**, the one key every shipped shell already trusts, and warns loudly on a
+mismatch. It never repairs anything: no reload, no cache cleared, no worker
+unregistered. A tripwire that fixes things also hides them.
+
+- **The list.** `https://bento.page/releases/home-web/served.json`, on the
+  release channel and not on the site it describes. A signed envelope like the
+  app manifests (`{payload, sig}`, ECDSA P-256 over the payload string),
+  typed `bento/home-web/served`, version 1, so no other signed artifact can
+  stand in for it, nor it for them. A `serial` that only goes up (an older
+  list is refused, a different list with the same serial is announced), and
+  the newest releases first, so bytes from an older release are "outdated", not
+  "tampered". Each release lists every file both sites serve at every path,
+  with its sha256, its length, the `<script>` elements of each document in
+  order (inline ones by the hash of their text as the browser parses it), each
+  document's Content-Security-Policy header, and the paths registered as
+  service workers. Written by `scripts/lib/home-web-served.mjs`, signed by
+  `scripts/sign-home-web-served.mjs`, which verifies the held list before
+  building on it and refuses a development or test-key build.
+- **Order of a release:** sign and publish the list with the site, then deploy
+  the library and frame. A deploy the list does not yet hold warns every
+  extension; an older release still served is recorded, and announced quietly
+  only after 72 hours.
+- **What the extension observes.** The parse (each script's text read before
+  the page's code runs, from a `document_start` content script in the isolated
+  world), the bytes from the HTTP cache (the navigation's own response; this
+  fetch does not pass through the page's service worker, measured), the
+  navigation's decoded size, the CSP header (`webRequest`, observing only),
+  and under a worker its registrations and its Cache Storage, hashed.
+- **What it cannot see**, stated where people will read it (the extension's
+  README; corrected after review, entry below): a deploy served only to people
+  without the extension; anything before the report (the hostile code has run
+  by then; the tripwire records, it prevents nothing); response headers a
+  service worker changes; a hostile worker that changes only page text while
+  the network serves the honest worker again; the frame page's bytes; the
+  frame page at all until its domain is named in the extension.
+- **A declared host permission for one origin.** Web access in the extension
+  is otherwise optional and asked per origin; the tripwire's single origin is
+  declared, because a tripwire that has to be switched on is one most people
+  never have. Its one content script carries no bridge and relays nothing.
+
+Guards: `scripts/test-webext-tripwire.ts` (configuration pins, writer against
+reader, the judge, the signing script's refusals),
+`scripts/test-webext-tripwire-browser.mjs` (the unpacked extension in Chromium
+against a local home/web build, with and without a service worker, sockets
+closed) and `scripts/test-webext-tripwire-mutants.mjs` (one mutant per rule,
+each red on the row that guards it).
+
+## 2026-11-12 — The bento/home tripwire, after its security review: early reports, no silent passes, no flood
+
+The review of the tripwire (entry above) broke it by running. What changed:
+
+- **A page that leaves after a script it showed is still on record.** The
+  content script also reports from INSIDE its observer callback, each time a
+  script is first seen, so that message leaves before the script runs. An
+  early report that no full report follows within 10 seconds is judged on its
+  own: a script no release lists, or any flag, is a mismatch. A `blob:` or
+  `about:` document of the library origin (which the library never makes) is
+  observed, judged by the origin the browser says it runs in, and is a
+  mismatch. Not covered: a script inside a declarative shadow root runs before
+  the observer can see it, and can leave with nothing recorded.
+- **Nothing unobserved passes.** On the library without a worker, bytes that
+  cannot be read from the HTTP cache are a mismatch (the honest library is
+  sent `no-cache`, which Chrome stores); a size of 0, or a report sent after
+  30 seconds without the parse ending, is never a pass, on either site
+  (`complete: true` means only that the page left the loading state in time;
+  a visit cut short reports it too). Every wait in the content script is
+  bounded.
+- **No one else can make it shout.** The library is judged only as a
+  top-level page, the frame page only in a frame. A page with no script and no
+  flag at a path no release serves is recorded quietly. Loud warnings come once
+  per origin per browser session; the badge and the record every time.
+- **The record holds every check.** All storage writes go through one chain;
+  observations are capped, going over a cap is a mismatch, and an event too big
+  to store is stored compact. The report page shows the check it was opened
+  for, or says it is not on record.
+- **Shadow roots are markup**, declarative or attached: flagged when the observer next looks, and at report time on every element it ever walked, even one the page removed. What is inside one is not seen.
+- **The format, before its first signing:** a release may be `withdrawn: true`,
+  and serving it is a loud mismatch rather than a quiet "outdated"; a payload
+  carrying `app` is refused. The signer needs the published list (or
+  `--first`) and, for a release, a build for `https://home.bento.page`.
+- **"Never checked" is said:** after three days without a list, a quiet
+  notification, and the report page always names the list in use.
+- **Stated as limits:** the hostile code has run before anything is reported;
+  a worker can change response headers without the tripwire seeing, and with
+  a `no-store` network answer under a worker there is no CSP check at all; the frame
+  page's bytes are never observed; a rolled-back list is only recorded.
+
+- **A release signs the list.** `release.mjs --home-web` signs it into the
+  site (`releases/home-web/served.json`) after building home/web, on top of
+  the published list; `--home-web-first` only for the very first. A missing
+  list without it, `--home-web-first` over a published list, and a development
+  build with the release key are refused before anything is signed, and so is
+  a published list that does not verify against the key the release signs
+  with, or is not a v1 bento/home list.
+
+Guards: the rows and mutants in `scripts/test-webext-tripwire-browser.mjs`,
+`scripts/test-webext-tripwire-mutants.mjs`, `scripts/test-webext-tripwire.ts`,
+`scripts/test-home-web-build.mjs` and `scripts/test-home-web-build-mutants.mjs`.
 
 ## 2026-11-14 — bento/id option G: one source for the tier, retirement without a successor, sign-out and deletion texts, the passkey user handle
 
@@ -14381,3 +14485,24 @@ when a slice is added or moved between the two jobs.
   `scripts/test-slides-people-tiers-browser.mjs` (the packaged editor, real
   key proofs, network and WebSockets closed, positions measured with
   getBoundingClientRect, with owner-flag, proof, cut and layout mutants).
+## 2026-11-14 — The bento/home tripwire: a link from another site is not a warning
+
+MEASURED: a navigation another site started (a link, a popup) is cached under
+a key the tripwire's content-script fetch cannot reach, and that fetch may
+return an older page of the same address instead. With the rule that unread
+bytes on the library are a mismatch (entry above), every link to
+home.bento.page from another site was a loud "unverified" warning, and a stale
+page could be judged in place of the one shown. Now the extension records each
+library navigation's Sec-Fetch-Site (webRequest, observing only). For a
+cross-site navigation the bytes are not judged, and the Cache-Control header it
+got is pinned in the release list like the CSP, so a `no-store` answer cannot
+hide a change. Stated as a limit: on a navigation another site started (a
+link or a popup from outside bento.page, including from a `file://` document
+or a popup a document opens), a same-length change the parse does not flag is
+not seen. Until the element sequence lands (a follow-up, before the first list
+is signed) that includes added elements; after it, text and attribute values.
+The server can tell these visits apart by their Sec-Fetch-Site, so it can serve
+such a change to them alone. Scripts, handlers and the other flags are still
+caught on them. Guards: rows `cross-site-link` and
+`cross-site-no-store` in `scripts/test-webext-tripwire-browser.mjs`, with a
+mutant each.

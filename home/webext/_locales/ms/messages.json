@@ -946,5 +946,68 @@
   "menuOpenWithId": {
     "message": "Buka dengan Bento ID",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home tidak menyajikan keluaran Bento"
+  },
+  "twMismatchBody": {
+    "message": "Kod yang dihantar oleh home.bento.page kepada pelayar ini tidak sepadan dengan mana-mana keluaran yang ditandatangani Bento. Tutup tab itu dan jangan buka dokumen di sana. Klik untuk butiran."
+  },
+  "twOldTitle": {
+    "message": "bento/home menyajikan keluaran yang lebih lama"
+  },
+  "twOldBody": {
+    "message": "Kod yang dihantar oleh home.bento.page kepada pelayar ini ialah keluaran Bento yang tulen, tetapi bukan yang terbaharu."
+  },
+  "twListTitle": {
+    "message": "Senarai keluaran bento/home tidak tulen"
+  },
+  "twListBody": {
+    "message": "bento.page menghantar senarai keluaran yang tidak ditandatangani Bento, jadi home.bento.page tidak dapat disemak. Klik untuk butiran."
+  },
+  "twBadgeTitle": {
+    "message": "bento/home tidak sepadan dengan keluaran yang ditandatangani"
+  },
+  "twPageTitle": {
+    "message": "Semakan kod bento/home"
+  },
+  "twPageLead": {
+    "message": "Sambungan ini membandingkan kod yang dihantar oleh home.bento.page kepada pelayar anda dengan keluaran yang ditandatangani Bento menggunakan kunci keluaran luar taliannya. Ia hanya melaporkan: tiada apa-apa yang diubah atau disekat."
+  },
+  "twPageDo": {
+    "message": "Tutup tab bento/home, dan jangan buka, sunting atau simpan dokumen di sana sehingga perkara ini dijelaskan. Semakan ini tidak mengubah fail pada cakera anda."
+  },
+  "twPageReport": {
+    "message": "Sila laporkan secara peribadi, bersama butiran di bawah:"
+  },
+  "twPageReportLink": {
+    "message": "Laporkan kepada Bento"
+  },
+  "twPageCopy": {
+    "message": "Salin butiran"
+  },
+  "twPageCopied": {
+    "message": "Disalin"
+  },
+  "twPageRecent": {
+    "message": "Semakan terkini"
+  },
+  "twPageNone": {
+    "message": "Belum ada semakan direkodkan."
+  },
+  "twPageNotFound": {
+    "message": "Semakan itu tiada dalam rekod."
+  },
+  "twPageListNone": {
+    "message": "Belum ada senarai keluaran yang ditandatangani: home.bento.page belum pernah disemak."
+  },
+  "twPageListHeld": {
+    "message": "Menyemak dengan senarai keluaran #$1, diambil $2."
+  },
+  "twNeverTitle": {
+    "message": "bento/home belum disemak"
+  },
+  "twNeverBody": {
+    "message": "Sambungan ini tidak dapat mengambil senarai keluaran Bento yang ditandatangani selama 3 hari, jadi kod yang dihantar oleh home.bento.page belum disemak."
   }
 }

@@ -946,5 +946,68 @@
   "menuOpenWithId": {
     "message": "Åbn med Bento ID",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home leverer ikke en Bento-udgivelse"
+  },
+  "twMismatchBody": {
+    "message": "Den kode, home.bento.page sendte til denne browser, passer ikke med nogen udgivelse signeret af Bento. Luk fanen, og åbn ikke dokumenter der. Klik for detaljer."
+  },
+  "twOldTitle": {
+    "message": "bento/home leverer en ældre udgivelse"
+  },
+  "twOldBody": {
+    "message": "Den kode, home.bento.page sendte til denne browser, er en ægte Bento-udgivelse, men ikke den nyeste."
+  },
+  "twListTitle": {
+    "message": "Udgivelseslisten for bento/home er ikke ægte"
+  },
+  "twListBody": {
+    "message": "bento.page sendte en udgivelsesliste, der ikke er signeret af Bento, så home.bento.page kan ikke kontrolleres. Klik for detaljer."
+  },
+  "twBadgeTitle": {
+    "message": "bento/home passer ikke med en signeret udgivelse"
+  },
+  "twPageTitle": {
+    "message": "Kodekontrol af bento/home"
+  },
+  "twPageLead": {
+    "message": "Denne udvidelse sammenligner den kode, home.bento.page sender til din browser, med de udgivelser, Bento signerer med sin offline udgivelsesnøgle. Den melder kun: Den har ikke ændret eller blokeret noget."
+  },
+  "twPageDo": {
+    "message": "Luk fanen med bento/home, og åbn, rediger eller gem ikke dokumenter der, før det er forklaret. Kontrollen ændrer ikke filer på din disk."
+  },
+  "twPageReport": {
+    "message": "Rapportér det fortroligt med detaljerne nedenfor:"
+  },
+  "twPageReportLink": {
+    "message": "Rapportér til Bento"
+  },
+  "twPageCopy": {
+    "message": "Kopiér detaljer"
+  },
+  "twPageCopied": {
+    "message": "Kopieret"
+  },
+  "twPageRecent": {
+    "message": "Seneste kontroller"
+  },
+  "twPageNone": {
+    "message": "Ingen kontroller registreret endnu."
+  },
+  "twPageNotFound": {
+    "message": "Den kontrol findes ikke i oversigten."
+  },
+  "twPageListNone": {
+    "message": "Ingen signeret udgivelsesliste endnu: home.bento.page er aldrig blevet kontrolleret."
+  },
+  "twPageListHeld": {
+    "message": "Kontrolleres mod udgivelsesliste nr. $1, hentet $2."
+  },
+  "twNeverTitle": {
+    "message": "bento/home er ikke blevet kontrolleret"
+  },
+  "twNeverBody": {
+    "message": "Denne udvidelse har ikke kunnet hente Bentos signerede udgivelsesliste i 3 dage, så den kode, home.bento.page sender, er ikke blevet kontrolleret."
   }
 }
