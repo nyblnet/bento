@@ -59,7 +59,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { libraryPolicyParts, writeOffline } from './offline.mjs'
+import { libraryPolicyParts, writeOffline, SW_PATH } from './offline.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(here, '../..')
@@ -318,6 +318,9 @@ const info = {
   },
   libraryPolicy, framePolicy,
   offline: { build: offline.info.build, cache: offline.info.cache, precache: offline.info.precache },
+  // the tripwire's release list (scripts/lib/home-web-served.mjs) lists these as the release's
+  // workers: a registered worker no release lists is a mismatch on every visit
+  serviceWorkers: [SW_PATH],
 }
 fs.writeFileSync(path.join(out, 'build.json'), JSON.stringify(info, null, 2) + '\n')
 console.log(`home/web: ${path.relative(process.cwd(), out) || '.'} (library ${Math.round(info.bytes.libraryWithoutHistories / 1024)}KB + ${Math.round(historyBytes / 1024)}KB histories, frame ${Math.round(info.bytes.frame / 1024)}KB, worker ${Math.round(info.bytes.sw / 1024)}KB)`)

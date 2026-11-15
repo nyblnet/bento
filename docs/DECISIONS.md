@@ -14555,6 +14555,13 @@ manifest. What it does not gain matters as much:
 - **Install** is a manifest (start and scope `/`, standalone, 192 and 512 px
   icons) allowed by an exact `manifest-src`. No file handlers or share target
   yet.
+- **The tripwire's release list names the worker.** The build writes
+  `serviceWorkers: ["/sw.js"]` to `build.json`, so the list the extension
+  checks against holds the worker and every file it precaches. Left open: under
+  the worker every navigation is the worker's, so the tripwire loses the
+  navigation's headers and the page bytes it otherwise requires (measured: a
+  changed CSP header, a changed page sent `no-store`, and a cross-site visit's
+  `Cache-Control` go unseen; script changes are still caught).
 
 Rigs: `scripts/test-home-web-offline.mjs` (Chromium, WebKit, Firefox; offline
 by `context.setOffline`, with the servers closed where an engine's emulation

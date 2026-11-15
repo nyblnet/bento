@@ -111,6 +111,9 @@ const MUTANTS = [
   { name: 'status-replay', why: 'an older status than one already seen is taken', only: 'status',
     src: { file: 'offline.ts', from: '  if (seq < seen) return { status: \'refused\', why: `older than one already seen (${seq} < ${seen})` }\n', to: '' },
     expect: 'an older status than one this browser has seen fails closed' },
+  { name: 'tripwire-no-worker', why: 'the build does not tell the tripwire\'s release list its worker', only: 'build',
+    dist: [{ file: 'build.json', re: '"serviceWorkers": \\[\\s*"/sw\\.js"\\s*\\]', to: '"serviceWorkers": []' }],
+    expect: 'the tripwire\'s release list for this build names /sw.js as its worker' },
   { name: 'manifest-blocked', why: 'the library CSP blocks its own manifest', only: 'install',
     dist: [
       { file: 'library/index.html', re: 'manifest-src [^;]+', to: "manifest-src 'none'" },
@@ -276,6 +279,14 @@ if (runs('build')) {
   const swRule = /^\/sw\.js\n((?:\s+.*\n)+)/m.exec(lh)?.[1] ?? ''
   ok(/Content-Security-Policy: default-src 'none'; connect-src 'self'/.test(swRule) && /Cache-Control: no-cache/.test(swRule), "the worker is served with its own default-src 'none' policy and Cache-Control: no-cache")
   ok(!/sw\.js|webmanifest/.test(fs.readFileSync(path.join(X.out, 'frame/_headers'), 'utf8')) && !fs.existsSync(path.join(X.out, 'frame/sw.js')), 'the frame site serves no worker and no manifest')
+  // the bento/home tripwire (home/webext) judges a visit against the signed release list built
+  // from this directory: a registered worker or a cached file the list lacks is a mismatch
+  const { describeBuild } = await import(path.join(ROOT, 'scripts/lib/home-web-served.mjs'))
+  const rel = await describeBuild(X.out)
+  const listed = rel.origins[O.library]?.files ?? {}
+  const swSha = hex(fs.readFileSync(path.join(X.out, 'library/sw.js')))
+  ok(JSON.stringify(rel.workers) === '["/sw.js"]' && listed['/sw.js']?.sha256 === swSha && X.info.offline.precache.every((p) => listed[p.path]?.sha256 === p.sha256),
+    `the tripwire's release list for this build names /sw.js as its worker and every precached file at its pinned bytes (workers ${JSON.stringify(rel.workers)})`)
 }
 
 // --- browser --------------------------------------------------------------------------------

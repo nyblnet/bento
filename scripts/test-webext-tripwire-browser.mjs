@@ -18,10 +18,10 @@
  * Sockets are closed (context.routeWebSocket); DNS resolves nothing but the
  * two local hosts.
  *
- * A stage-3-style service worker is a FIXTURE here (a precache-and-serve
- * worker, the shape page-as-app S.2/D5 asks for), registered on the library
- * origin through a page with CSP bypassed (the stage-1 library's CSP refuses
- * workers). Hostile workers are fixtures too.
+ * A precache-and-serve service worker is a FIXTURE here, registered on the
+ * library origin through a page with CSP bypassed, and served only in the rows
+ * that want one (the library registers /sw.js itself since stage 3; see
+ * `honest.lib.delete` below). Hostile workers are fixtures too.
  *
  * Every row names the rule it guards; scripts/test-webext-tripwire-mutants.mjs
  * turns each rule off and requires that row to go red.
@@ -131,6 +131,14 @@ function siteFiles(dir) {
   return files
 }
 const honest = { lib: siteFiles(path.join(A, 'library')), frame: siteFiles(path.join(A, 'frame')) }
+// Since stage 3 the library registers /sw.js itself on every visit. The rows that are not about
+// a worker model a visit with none (a first visit, or a browser that refused the registration),
+// so by default the site serves no /sw.js and that registration fails; a row that wants a worker
+// serves one (withWorker). This default does not settle what stage 3's own network-first worker
+// does to the tripwire: with it in control every navigation is answered by the worker, and
+// library-csp, no-store, cross-site-link and cross-site-no-store all go red (measured
+// 2026-11-15). That is an open question, recorded in home/web/README.md.
+honest.lib.delete('/sw.js')
 const releaseB = siteFiles(path.join(B, 'library'))
 // a file may carry `status` and `hold` (send the body, keep the response open); `fallback` answers unlisted library paths
 const HELD = []
@@ -321,7 +329,9 @@ if (row('frame-byte')) {
 if (row('library-csp')) {
   section('library-csp: the library\'s CSP header changed, bytes identical  (rule: csp from the navigation)')
   const h = libDoc.headers['content-security-policy']
-  const bad = { body: libDoc.body, headers: { ...libDoc.headers, 'content-security-policy': h.replace("worker-src 'none'", 'worker-src *') } }
+  const loose = h.replace(/worker-src [^;]+/, 'worker-src *')
+  if (loose === h) throw new Error('the library CSP no longer has the worker-src this row loosens')
+  const bad = { body: libDoc.body, headers: { ...libDoc.headers, 'content-security-policy': loose } }
   await fresh({ lib: both(bad) })
   const v = await visit(page, `${LIB}/`)
   ok(v.lib?.verdict === 'mismatch' && rules(v.lib) === 'csp', `mismatch on csp only (got ${v.lib?.verdict} ${rules(v.lib)})`)
@@ -608,7 +618,7 @@ for (const [name, bad] of [['cross-site-link', false], ['cross-site-no-store', t
 // --- rows with a service worker ---------------------------------------------------
 const SW_ROWS = ['shadow-root', 'shadow-root-removed', 'sw-honest', 'sw-script-bytes', 'sw-custom-path', 'sw-cache-extra', 'sw-cache-poisoned', 'sw-navigation-only', 'sw-markup', 'sw-size', 'script-rewrite']
 async function withWorker(script, { scope = '/', url = '/sw.js' } = {}) {
-  // the stage-1 library's CSP refuses workers; the rig registers through a page with CSP bypassed
+  // the rig registers through a page with CSP bypassed (the library's own worker-src names only its /sw.js)
   await page.goto('about:blank')
   const reg = await ctx.newPage()
   const cdp = await ctx.newCDPSession(reg)

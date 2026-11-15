@@ -230,6 +230,18 @@ with a cleaning worker, and a reset page sending `Clear-Site-Data`: header
 routing that static `_headers` cannot express, so it waits for the hosting
 move.
 
+**The tripwire.** The build names `/sw.js` in `build.json`
+(`serviceWorkers`), so the signed release list the extension's tripwire checks
+against lists it as the release's worker, with the worker's bytes and every
+file it precaches; a worker or a cached file the list lacks is a mismatch.
+Open: with this worker in control, every navigation is answered by the worker,
+so the tripwire no longer sees the navigation's own headers and does not
+require the page's bytes. Measured in Chromium, it then misses a changed
+library CSP header, a changed page sent `no-store`, and a visit reached by a
+link on another site (whose `Cache-Control` it judges). A changed script is
+still caught, from the parse. Closing this is a decision for the tripwire
+and this worker together; it is not in this stage.
+
 **Install.** `manifest.webmanifest` (name, `start_url` and `scope` `/`,
 standalone, 192 and 512 px icons), linked from the page and allowed by an exact
 `manifest-src`. Browsers that offer install (Chromium; Safari's Add to Dock and
