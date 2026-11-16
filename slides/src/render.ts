@@ -951,7 +951,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       inner.className = 'bento-text-inner'
       inner.dir = 'auto'
       inner.style.fontSize = `${el.fontSize}px`
-      inner.style.fontFamily = el.fontFamily || doc.theme.fontFamily
+      inner.style.fontFamily = el.fontFamily || doc.theme.codeFontFamily || doc.theme.fontFamily
       inner.style.textAlign = el.align
       inner.style.lineHeight = String(el.lineHeight)
       inner.style.width = '100%'

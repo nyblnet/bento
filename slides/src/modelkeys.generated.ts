@@ -36,7 +36,7 @@ export const MODEL_KEYS = {
     "imageCrop": ["scale", "x", "y"],
     "size": ["height", "width"],
     "meta": ["author", "company", "event", "keywords", "subject"],
-    "theme": ["accent", "background", "chartPalette", "codePalette", "color", "fontFamily", "headingFamily", "palette", "table"],
+    "theme": ["accent", "background", "chartPalette", "codeFontFamily", "codePalette", "color", "fontFamily", "headingFamily", "palette", "table"],
     "themePalette": ["accent2", "accent3", "accent4", "accent5", "accent6", "bg2", "folHlink", "hlink", "tx2"],
     "themeCodePalette": ["a", "c", "d", "f", "k", "n", "p", "s"],
     "present": ["controls", "morphSeconds", "numberHidden", "progress", "slideNumber", "typeWriterSeconds"],

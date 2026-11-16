@@ -131,6 +131,8 @@ for (const type of Object.keys(MODEL_KEYS.element)) {
 ok(Object.keys(defs.slide.properties as J).sort().join() === [...MODEL_KEYS.slide].filter((k) => CHECKED_KEYS.slide.includes(k)).sort().join(), 'slide: schema keys == gate keys')
 ok(Object.keys(defs.doc.properties as J).sort().join() === [...MODEL_KEYS.doc, '$schema', 'compact'].sort().join(), 'doc: every model key plus $schema and the compact flag')
 ok(Object.keys(defs.theme.properties as J).sort().join() === [...MODEL_KEYS.theme].sort().join(), 'theme: keys from model.ts (via modelkeys.generated.ts)')
+ok(((defs.theme.properties as J).codeFontFamily as J)?.type === 'string' && !(defs.theme.required as string[]).includes('codeFontFamily'),
+  'theme.codeFontFamily is an optional string stack in the schema')
 
 console.log('\nreal decks validate; a typo does not\n')
 const starter = JSON.parse(JSON.stringify(starterDoc()))
@@ -149,6 +151,9 @@ ok(check(typo, file).some((m) => /unknown key fontsize/.test(m)), 'an element wi
 const badEnum = JSON.parse(JSON.stringify(starter))
 badEnum.slides[0].transition = 'wipe'
 ok(check(badEnum, file).some((m) => /transition/.test(m)), 'an unknown transition fails')
+const badCodeFont = JSON.parse(JSON.stringify(starter))
+badCodeFont.theme.codeFontFamily = 42
+ok(check(badCodeFont, file).some((m) => /theme\.codeFontFamily/.test(m)), 'a non-string theme.codeFontFamily fails')
 const noFormat = { slides: [] }
 ok(check(noFormat, file).length > 0, 'no format / no slides fails')
 const withSchema = { ...JSON.parse(JSON.stringify(starter)), $schema: SCHEMA_URL }
