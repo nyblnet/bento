@@ -15,5 +15,13 @@ export * from '../../kernel/src/autosave.ts'
 /** The content that actually matters for "did this change" — excludes volatile
  *  fields (modified timestamp, collab sync state) that churn without a real edit. */
 export function docContentKey(doc: BentoDoc): string {
-  return JSON.stringify([doc.title, doc.size, doc.theme, doc.slides, doc.layouts ?? null, doc.fonts ?? null, doc.assets ?? null])
+  // Restore sanitizes documents and rebuilds element objects, so equivalent
+  // content can arrive with a different property order. Keep array order
+  // meaningful, but make object key order irrelevant to recovery comparison.
+  return JSON.stringify(
+    [doc.title, doc.size, doc.theme, doc.slides, doc.layouts ?? null, doc.fonts ?? null, doc.assets ?? null],
+    (_key, value) => value && typeof value === 'object' && !Array.isArray(value)
+      ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, value[key]]))
+      : value,
+  )
 }

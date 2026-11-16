@@ -28,6 +28,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { gateRestored } from '../slides/src/restoregate.ts'
+import { docContentKey } from '../slides/src/autosave.ts'
 import { starterDoc } from '../slides/src/starterdeck.ts'
 import type { BentoDoc } from '../slides/src/model.ts'
 
@@ -106,6 +107,13 @@ console.log('\nan honest snapshot round-trips\n')
   ok(!!g && g.dropped.length === 0, `nothing is dropped from it (${g?.dropped.map((d) => d.path).join(', ') || 'none'})`)
 }
 
+{
+  const differentlyOrdered = clone(live)
+  const first = differentlyOrdered.slides[0].elements[0] as unknown as Record<string, unknown>
+  differentlyOrdered.slides[0].elements[0] = Object.fromEntries(Object.entries(first).reverse()) as unknown as typeof differentlyOrdered.slides[0]['elements'][number]
+  const g = gateRestored(JSON.stringify(differentlyOrdered), differentlyOrdered)
+  ok(!!g && docContentKey(g.doc) === docContentKey(differentlyOrdered), 'recovery comparison ignores object key order after the gate rebuilds an element')
+}
 console.log('\nnot a document → never offered\n')
 ok(gateRestored('not json', live) === null, 'unparseable text')
 ok(gateRestored('[]', live) === null, 'a JSON array')
