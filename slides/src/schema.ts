@@ -85,6 +85,7 @@ export function buildSchema(version: string): JsonSchema {
   $defs.theme = obj(MODEL_KEYS.theme, {
     background: color('slide background'), color: color('body text colour'), accent: color('accent colour'),
     fontFamily: { type: 'string', maxLength: LIMITS.fontStack, description: 'CSS font-family stack for body text' },
+    codeFontFamily: { type: 'string', maxLength: LIMITS.fontStack, description: 'CSS font-family stack for code blocks; absent = fontFamily' },
     headingFamily: { type: 'string', maxLength: LIMITS.fontStack, description: 'display face for headings; absent = fontFamily' },
     palette: obj(MODEL_KEYS.themePalette, Object.fromEntries(MODEL_KEYS.themePalette.map((k) => [k, color(`brand slot ${k}`)]))),
     chartPalette: { type: 'array', maxItems: 64, items: color('series colour') },
