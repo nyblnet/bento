@@ -154,10 +154,17 @@ try {
 
   console.log('\n7. a language switch does not stack overlays\n')
   ok(await p.evaluate(() => !document.querySelector('.ed-modhint')?.hasAttribute('aria-live')), 'the modifier line is not a live region')
-  for (const lang of ['Deutsch', 'English']) {
-    await p.evaluate((l) => [...document.querySelectorAll('.ed-lang-menu .ed-btn')].find((b) => b.textContent.trim() === l)?.click(), lang)
+  // the language list lives in Preferences (⌘,) — the globe menu is gone
+  const LANG = 'select[aria-labelledby="ed-prefs-lang"]'
+  const switched = []
+  for (const [lang, code] of [['Deutsch', 'de'], ['English', 'en']]) {
+    if (!(await p.$(LANG))) { await p.keyboard.press('Control+,'); await p.waitForSelector(LANG) }
+    await p.selectOption(LANG, { label: lang })
     await p.waitForTimeout(400)
+    switched.push(await p.evaluate((c) => window.bento.i18n.locale() === c, code))
   }
+  ok(switched.every(Boolean), `the language really switched, twice (${switched})`)
+  await p.keyboard.press('Escape'); await p.waitForTimeout(150)
   const counts = await p.evaluate(() => [document.querySelectorAll('body > .ed-hud').length, document.querySelectorAll('.ed-modhint').length])
   ok(counts[0] === 1 && counts[1] === 1, `one transform pill and one modifier line after two switches (${counts})`)
 

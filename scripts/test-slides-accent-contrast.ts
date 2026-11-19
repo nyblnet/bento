@@ -64,7 +64,6 @@ const over = (a: RGB, p: number, b: RGB): RGB => a.map((v, i) => Math.round(v * 
 type Bg = 'surface' | 'chrome-tint-22' | 'chrome-tint-30' | 'over-slide' | 'tab-on'
 const AUDITED: Record<string, Bg> = {
   '.ed-btn-armed': 'chrome-tint-22',           // the armed comment tool, on the topbar
-  '.ed-lang-on::after': 'surface',             // the language menu's ✓
   '.ed-comment-me:hover': 'surface',           // your own name in a comment thread
   '.ed-comment-hl.slide': 'over-slide',        // "SLIDE" label on a whole-slide comment
   '.ed-comment-hl.pin': 'over-slide',          // coordinates beside a point comment

@@ -1178,23 +1178,6 @@ body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize; user-select: n
 .bento-present-overlay.reduce-motion .reveal .slides section { transition: none !important; }
 .bento-present-overlay.reduce-motion .bento-el-svg * { animation: none !important; }
 /* dual-screen: one-click permission grant + transient toast */
-.bento-present-grant {
-  position: fixed;
-  left: 50%;
-  bottom: 28px;
-  transform: translateX(-50%);
-  z-index: 100000;
-  border: 0;
-  border-radius: 999px;
-  padding: 11px 20px;
-  font: 600 14px/1 system-ui, sans-serif;
-  color: #0d1b2e;
-  background: #f2f0ea;
-  box-shadow: 0 6px 24px rgb(0 0 0 / 0.4);
-  cursor: pointer;
-  opacity: 0.94;
-}
-.bento-present-grant:hover { opacity: 1; }
 .bento-present-toast {
   position: fixed;
   left: 50%;
@@ -1227,7 +1210,6 @@ body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize; user-select: n
 .ed-chart-json.ed-invalid { border-color: #c9302c; outline: 1px solid #c9302c; }
 
 /* --- help overlay + help button ------------------------------------------- */
-.ed-btn-help .ed-help-q { font-size: 15px; font-weight: 800; line-height: 1; }
 /* The glyph is narrower and shorter than a 16px icon, so without a floor the
    button came out 28×29 beside 36×30 neighbours. */
 .ed-btn-help { min-width: 36px; min-height: 30px; justify-content: center; }
@@ -1238,31 +1220,8 @@ body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize; user-select: n
    keys right-aligned against what they do (D8); the sheet is wide, so
    descriptions do not wrap into towers, and drops to one column well before
    the two would crowd. */
-.ed-help-box { width: min(980px, 94vw); max-width: none; }
-.ed-help-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 40px; align-items: start; }
-.ed-help-col { min-width: 0; }
-@media (max-width: 760px) { .ed-help-cols { grid-template-columns: 1fr; } }
-.ed-help-sec { margin: 0 0 14px; display: grid; grid-template-columns: fit-content(15em) 1fr; column-gap: 14px; align-items: baseline; }
-.ed-help-sec h3 {
-  grid-column: 1 / -1;
-  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
-  color: var(--muted); margin: 0 0 6px;
-}
-.ed-help-row { display: contents; }
-.ed-help-row > * { margin: 3px 0; }
-.ed-help-row > span { font-size: 13px; }
 /* D8: shortcuts in the interface face, not monospace, right-aligned against
    what they do — the column reads as a list of keys, as a menu's does */
-.ed-help-row kbd {
-  font: inherit; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
-  background: var(--chrome-2); border: 1px solid var(--line);
-  border-radius: 5px; padding: 2px 6px; color: var(--ink); white-space: normal; text-align: end; justify-self: end;
-}
-.ed-help-tips { margin: 4px 0 0; padding-inline-start: 18px; font-size: 13px; line-height: 1.5; color: var(--ink); }
-.ed-help-tips li { margin: 3px 0; }
-.ed-help-more { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line, rgba(30,42,58,0.12)); text-align: center; }
-.ed-help-more a { color: var(--accent); font-weight: 600; font-size: 13px; text-decoration: none; }
-.ed-help-more a:hover { text-decoration: underline; }
 
 /* --- live viewer (read-only collaborator) -------------------------------- */
 .ed-reader .ed-insert { display: none; }        /* no add-content tools */
@@ -2178,8 +2137,6 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 
 /* divider usable in any dropdown menu */
 .ed-menu-sep { height: 1px; background: var(--line); margin: 3px 2px; }
-.ed-lang-on { font-weight: 700; }
-.ed-lang-on::after { content: ' ✓'; color: var(--accent-ink); }
 
 /* Save is a split button: [ Save |▾] one visual unit. The caret button is
    NESTED inside the .ed-dropdown wrapper, so stretch through the wrapper. */
@@ -2726,7 +2683,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 /* menus that hang off a topbar control at the END of the bar open toward the
    bar's start, so they can never overflow the window edge — in either
    direction (the language menu sets the same anchoring from JS). */
-.ed-save-menu, .ed-lang-menu, .ed-help-menu {
+.ed-save-menu, .ed-help-menu {
   inset-inline-end: 0;
   inset-inline-start: auto;
 }
@@ -3213,13 +3170,8 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
   background: none; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .ed-tokens-mode[aria-pressed='true'] { color: var(--ink); background: var(--tab-on); border-color: var(--tab-on-line); }
-.ed-token-top, .ed-token-val { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.ed-token-val:empty { display: none; }
-.ed-token-val > .ed-token-uses { margin-inline-start: auto; }
-.ed-token-val > input[type='number'] { flex: none; width: 52px; }
 .ed-token-swatch { flex: none; width: 24px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; background-clip: padding-box; }
 .ed-token-swatch:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
-.ed-token-badge { flex: none; font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
 .ed-token-builtin .ed-token-name { padding-inline: 2px; }
 .ed-token-why { font-size: 11px; color: var(--danger); line-height: 1.3; }
 .ed-token-name[aria-invalid='true'] { border-color: var(--danger); }
@@ -3228,7 +3180,6 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-tokens-group[data-type="fontFamily"] .ed-token-preview, .ed-tokens-group[data-type="fontSize"] .ed-token-preview { background: none; color: var(--ink); }
 .ed-tokens-group[data-type="shadow"] .ed-token-preview { background: var(--surface); border-color: transparent; margin: 4px; width: 18px; height: 18px; }
 .ed-tokens-group[data-type="shadow"] .ed-token-row > input[type="number"] { width: 38px; }
-.ed-token-font { flex: 1.4; min-width: 0; font-size: 12px; }
 .ed-token-uses { flex: none; min-width: 22px; height: 20px; padding: 0 4px; font: inherit; font-size: 10.5px; color: var(--muted); text-align: end; font-variant-numeric: tabular-nums; background: none; border: 1px solid transparent; border-radius: 4px; cursor: pointer; }
 .ed-token-uses:not(:disabled):hover, .ed-token-uses:focus-visible { color: var(--ink); border-color: var(--line); }
 .ed-token-uses:disabled { cursor: default; }
@@ -3480,8 +3431,6 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-color-detach { margin-inline-start: auto; flex: none; width: 20px; height: 20px; padding: 0; display: grid; place-items: center; color: var(--muted); background: none; border: 0; border-radius: 4px; cursor: pointer; }
 .ed-color-detach:hover { color: var(--ink); background: var(--chrome); }
 .ed-color-detach svg { width: 13px; height: 13px; }
-.ed-palette { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: 6px; background: var(--chrome); border: 1px solid var(--line); border-radius: 6px; }
-.ed-palette[hidden] { display: none; }
 .ed-palette-cap { grid-column: 1 / -1; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; color: var(--muted); padding: 0 2px 2px; }
 .ed-palette-item { display: flex; align-items: center; gap: 6px; min-width: 0; height: 24px; padding: 0 4px; font: inherit; font-size: 11.5px; color: var(--ink-2); background: none; border: 0; border-radius: 4px; cursor: pointer; text-align: start; }
 .ed-palette-item > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -3784,15 +3733,6 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-corners-btn[aria-pressed='true'] { color: var(--ink); background: var(--chrome-2); }
 .ed-props .ed-grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin-bottom: 6px; }
 .ed-props .ed-grid4 > * { min-width: 0; width: 100%; }
-.ed-row-pills { align-items: start; }
-.ed-fx-pills { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
-.ed-fx-pills button {
-  padding: 3px 8px; font: inherit; font-size: 11.5px; color: var(--muted); cursor: pointer;
-  background: var(--field); border: 1px solid var(--line); border-radius: 999px;
-}
-.ed-fx-pills button:hover { color: var(--ink); background: var(--chrome-2); }
-.ed-fx-pills button[aria-checked='true'] { color: var(--ink); border-color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }
-.ed-fx-pills button:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 1px; }
 
 /* Figma's paint row (inspector/paintrow.ts): [field] · 👁 · − — the eye and
    the − in a trailing column of 26px squares, the same right edge in Fill,
@@ -3906,8 +3846,6 @@ body.ed-morph-previewing .ed-morph-ghost { visibility: hidden !important; }
 .ed-toast.has-act { pointer-events: auto; display: flex; align-items: center; gap: 10px; }
 .ed-toast-act { font: inherit; font-weight: 600; color: inherit; background: none; border: 1px solid currentColor; border-radius: 999px; padding: 2px 10px; cursor: pointer; }
 /* Tokens UX pass: the colour menu's adopt actions, the component header, the Theme → Tokens link */
-.ed-palette-acts { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line); }
-.ed-palette-act { font-size: 12px; color: var(--ink); }
 .ed-comp-head { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
 .ed-seg[data-axis='h'] svg { transform: rotate(90deg); }
 /* where a dragged frame child will land: a thick accent bar in the gap, with
