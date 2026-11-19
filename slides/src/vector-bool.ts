@@ -345,39 +345,6 @@ function straighten(c: Pt[]): Pt[] {
   return pts
 }
 
-/**
- * Each piece of A is inside B, outside it, or lies ALONG a piece of B — a
- * shared stretch, where abutting shapes meet. Both operands are wound the same
- * way (orient), so a shared piece running the same direction has both
- * interiors on one side, and one running opposite has them on either side.
- * The classic rule: union and intersect keep a same-direction shared piece
- * once, subtract keeps an opposite one; everything else is decided by the
- * midpoint, which for a non-shared piece never lies on the other's boundary.
- */
-function two(A: Poly, B: Poly, op: Exclude<BoolOp, 'exclude'>): Poly {
-  const ea = edgesOf(A), eb = edgesOf(B)
-  splitAll(ea, eb)
-  const mid = (s: [Pt, Pt]): Pt => ({ x: (s[0].x + s[1].x) / 2, y: (s[0].y + s[1].y) / 2 })
-  const bp = eb.flatMap(pieces), ap = ea.flatMap(pieces)
-  const pk = (s: [Pt, Pt]) => key(s[0]) + '|' + key(s[1])
-  const bSet = new Set(bp.map(pk)), aSet = new Set(ap.map(pk))
-  const keep: Array<[Pt, Pt]> = []
-  for (const s of ap) {
-    const same = bSet.has(pk(s)), opposite = bSet.has(pk([s[1], s[0]]))
-    if (same || opposite) { if (op === 'subtract' ? opposite : same) keep.push(s); continue }
-    const inB = inside(mid(s), B)
-    if (op === 'intersect' ? inB : !inB) keep.push(s)
-  }
-  for (const s of bp) {
-    if (aSet.has(pk(s)) || aSet.has(pk([s[1], s[0]]))) continue // shared: decided on A's side
-    const inA = inside(mid(s), A)
-    if (op === 'union' && !inA) keep.push(s)
-    if (op === 'intersect' && inA) keep.push(s)
-    if (op === 'subtract' && inA) keep.push([s[1], s[0]]) // B's edge, walked the other way, bounds the hole
-  }
-  return orient(chain(keep))
-}
-
 /** Winding number of `poly` around `q` (crossings counted with their direction). */
 function winding(q: Pt, poly: Poly): number {
   let w = 0
@@ -391,42 +358,43 @@ function winding(q: Pt, poly: Poly): number {
 }
 
 /**
- * The region a path FILLS, as simple contours. A path is drawn with the
- * nonzero rule (render.ts, the kernel), so a contour that crosses itself (a
- * pentagram) or subpaths that overlap fill more than evenodd containment would
- * say. Split the outline against itself and keep each piece with filled area
- * on exactly one side of it: that is the boundary of what is drawn, and from
- * there evenodd and nonzero agree.
+ * Combine outlines bottom to top, as Figma does: union and intersect take all
+ * of them, subtract takes every upper shape away from the bottom one, and
+ * exclude keeps what an odd number of them cover.
+ *
+ * ONE PASS FOR EVERY OPERATION. All the outlines are split against each other
+ * (and against themselves: a path may cross itself, and is drawn with the
+ * nonzero rule), then each piece is kept when the result is filled on exactly
+ * one side of it — read a hair to either side of its midpoint, from each
+ * operand's winding number. That is the boundary of the result by definition,
+ * so shared stretches (abutting shapes), self-crossings and overlapping
+ * subpaths need no rule of their own; a stretch two operands share is kept
+ * once.
  */
-function filledRegion(poly: Poly): Poly {
-  const es = edgesOf(poly)
+export function boolPolys(polys: Poly[], op: BoolOp): Poly {
+  const es = polys.flatMap(edgesOf)
   splitAll(es, es)
+  const filled = (x: number, y: number) => {
+    const on = polys.map((p) => winding({ x, y }, p) !== 0)
+    return op === 'union' ? on.some(Boolean)
+      : op === 'intersect' ? on.every(Boolean)
+      : op === 'subtract' ? on[0] && !on.slice(1).some(Boolean)
+      : on.filter(Boolean).length % 2 === 1
+  }
   const keep: Array<[Pt, Pt]> = []
+  const seen = new Set<string>()
   for (const s of es.flatMap(pieces)) {
     const dx = s[1].x - s[0].x, dy = s[1].y - s[0].y, len = Math.hypot(dx, dy)
     if (len < EPS) continue
-    const m = { x: (s[0].x + s[1].x) / 2, y: (s[0].y + s[1].y) / 2 }
+    const mx = (s[0].x + s[1].x) / 2, my = (s[0].y + s[1].y) / 2
     const nx = (-dy / len) * 1e-4, ny = (dx / len) * 1e-4
-    const l = winding({ x: m.x + nx, y: m.y + ny }, poly) !== 0, r = winding({ x: m.x - nx, y: m.y - ny }, poly) !== 0
-    if (l === r) continue // filled on both sides (inside) or neither (a cancelled overlap)
-    keep.push(r ? s : [s[1], s[0]]) // walk with the filled side on the right, as orient expects of an outer edge
+    const l = filled(mx + nx, my + ny), r = filled(mx - nx, my - ny)
+    if (l === r) continue // filled on both sides (inside) or neither
+    const d: [Pt, Pt] = r ? s : [s[1], s[0]] // walk with the filled side on the right, as orient expects of an outer edge
+    const k = key(d[0]) + '|' + key(d[1])
+    if (!seen.has(k)) { seen.add(k); keep.push(d) }
   }
   return orient(chain(keep))
-}
-
-/**
- * Combine outlines bottom to top, as Figma does: union and intersect fold over
- * all of them, subtract takes every upper shape away from the bottom one, and
- * exclude keeps what an odd number of them cover.
- */
-export function boolPolys(polys: Poly[], op: BoolOp): Poly {
-  if (!polys.length) return []
-  let acc = polys[0]
-  for (const p of polys.slice(1)) {
-    if (op === 'exclude') acc = orient([...two(acc, p, 'subtract'), ...two(p, acc, 'subtract')])
-    else acc = two(acc, p, op)
-  }
-  return acc
 }
 
 const r2 = (v: number) => Math.round(v * 100) / 100
@@ -449,8 +417,7 @@ export function polyArea(poly: Poly): number {
 
 /** Operands → the computed outline, in slide coordinates. */
 export function computeBool(shapes: ShapeElement[], op: BoolOp) {
-  // a rect or an ellipse is one simple contour already; a path may cross itself
-  return polyToPath(boolPolys(shapes.map((s) => (s.shape === 'path' ? filledRegion(shapeToPoly(s)) : shapeToPoly(s))), op))
+  return polyToPath(boolPolys(shapes.map(shapeToPoly), op))
 }
 
 // ————————————————————————— operands back where the result stands —————————————————————————

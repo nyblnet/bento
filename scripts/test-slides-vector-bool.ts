@@ -203,5 +203,32 @@ console.log('\nwhat the renderer fills, and nothing left\n')
   ok(pts.every((p, i) => i === 0 || p !== pts[i - 1]), `no point repeats in a row in the emitted path (${r.d})`)
 }
 
+// Grid-aligned rects share edges and corners all the time (abutting cards, a
+// table of tiles), and there the area is exact: count the unit cells. Three
+// operands, every operation, a fixed pseudo-random sequence.
+{
+  let seed = 12345
+  const rnd = (n: number) => { seed = (Math.imul(seed, 1103515245) + 12345) >>> 0; return (seed >>> 8) % n }
+  const G = 6, U = 20
+  const OPS = ['union', 'subtract', 'intersect', 'exclude'] as const
+  const wrong: string[] = []
+  let cases = 0
+  for (let n = 0; n < 250; n++) {
+    const rects = [0, 1, 2].map(() => { const x = rnd(G - 1), y = rnd(G - 1); return { x, y, w: 1 + rnd(G - x - 1), h: 1 + rnd(G - y - 1) } })
+    const polys = rects.map((r) => shapeToPoly(S({ x: r.x * U, y: r.y * U, w: r.w * U, h: r.h * U }) as never))
+    for (const op of OPS) {
+      let cells = 0
+      for (let i = 0; i < G; i++) for (let j = 0; j < G; j++) {
+        const on = rects.map((r) => i >= r.x && i < r.x + r.w && j >= r.y && j < r.y + r.h)
+        if (op === 'union' ? on.some(Boolean) : op === 'intersect' ? on.every(Boolean) : op === 'subtract' ? on[0] && !on[1] && !on[2] : on.filter(Boolean).length % 2 === 1) cells++
+      }
+      cases++
+      const area = polyArea(boolPolys(polys, op))
+      if (Math.abs(area - cells * U * U) > 1) wrong.push(`${op} ${JSON.stringify(rects)}: ${area.toFixed(0)} vs ${cells * U * U}`)
+    }
+  }
+  ok(wrong.length === 0, `grid-aligned rects with shared edges: ${cases - wrong.length}/${cases} exact${wrong.length ? ' — first: ' + wrong[0] : ''}`)
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)
