@@ -6,7 +6,10 @@
 //
 // Reveal's click-to-preview overlay binds to ANY element carrying a
 // data-preview-* attribute, and a deck's svg keeps data-* names. The overlay
-// is cut out of the bundle (slides/vite.config.ts); this rig clicks, with a
+// is ABSENT from the bundle: slides/reveal-lite.ts builds Reveal from its ES
+// sources and swaps controllers/overlay.js for a stand-in that keeps only the
+// `?` help, and edits the background-iframe branch out of slidecontent.js
+// (backgrounds.js, its only caller, is a stand-in too). This rig clicks, with a
 // real mouse, every kind of hostile shape through each way a deck arrives:
 // file boot, window.bento.loadDoc, and pasting a bento clip.
 //   - CONTROL 1: every click reaches a shape (a capture listener counts them).
@@ -14,11 +17,12 @@
 //     STRIPPED from the svg. Asserted, not assumed.
 //   - CONTROL 2 plants the attributes with setAttribute AFTER render (a
 //     simulated sanitizer bypass) and checks they are really in the DOM, so
-//     the overlay's trigger selector would match. Layer 1 (the disarmed
-//     engine) is then proven ALONE: nothing but the bundle stands between
-//     the click and the frame.
-//   - Run it on a shell built WITHOUT the disarm and it fails (script runs,
-//     frame opens, URL fetched), whether or not svgsafe strips.
+//     the overlay's trigger selector would match. Layer 1 (the engine with
+//     no preview overlay in it) is then proven ALONE: nothing but the bundle
+//     stands between the click and the frame.
+//   - Run it on a shell built with Reveal's real overlay.js (drop that entry
+//     from STUBS in reveal-lite.ts) and it fails (script runs, frame opens,
+//     URL fetched), whether or not svgsafe strips.
 import { readFileSync, writeFileSync, mkdtempSync, realpathSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'

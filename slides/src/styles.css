@@ -1771,6 +1771,10 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 /* PDF export: each linear slide is one exact 1600×900 page */
 #bento-print { display: none; }
 @media print {
+  /* The page must be free to grow past one viewport or only the first slide
+     prints. reveal.css's paper stylesheet used to do this for us; the shell no
+     longer ships it (reveal-lite.ts), so it is said here. */
+  html, body { height: auto; overflow: visible; }
   #app, #bento-splash, .bento-present-overlay, .ed-toast { display: none !important; }
   #bento-print { display: block; }
   @page { size: 1600px 900px; margin: 0; }
