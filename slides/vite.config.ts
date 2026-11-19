@@ -32,6 +32,28 @@ const trimMoveableAbles = {
   },
 }
 
+// Identifier names are re-assigned by terser AFTER esbuild has minified the
+// chunk. Nothing else changes: compress is off, so the syntax tree esbuild
+// emitted is kept and only local names move. No property is renamed — a
+// property mangle works by NAME across the whole bundle and one wrong name is
+// a model key, so it stays off. terser gives the same short name to the same
+// slot in every scope (first parameter `e`, second `t`, ...), so
+// `function(e,t){` and friends repeat byte-for-byte and deflate finds them;
+// esbuild's naming does not. Single-file builds only: that is what ships.
+const remangle = {
+  name: 'bento-remangle',
+  enforce: 'post' as const,
+  async generateBundle(_: unknown, bundle: Record<string, { type: string; code?: string }>) {
+    const { minify } = await import('terser')
+    for (const chunk of Object.values(bundle)) {
+      if (chunk.type !== 'chunk' || !chunk.code) continue
+      const out = await minify(chunk.code, { module: true, compress: false, mangle: true, format: { comments: false } })
+      if (!out.code) throw new Error('remangle: terser returned nothing')
+      chunk.code = out.code
+    }
+  },
+}
+
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
 
 // base './' so builds open from file:// or any static host.
@@ -49,7 +71,7 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(pkg.version),
     __BENTO_TEST_SEAL__: JSON.stringify(process.env.BENTO_TEST_SEAL === '1'),
   },
-  plugins: [trimMoveableAbles, revealLite(), ...(process.env.SINGLEFILE ? [viteSingleFile()] : [])],
+  plugins: [trimMoveableAbles, revealLite(), ...(process.env.SINGLEFILE ? [remangle, viteSingleFile()] : [])],
   // Dev-only: allow serving ../kernel (shared TS-source kernel) — without a
   // workspace root, vite's fs allow-list stops at the app dir. Build output
   // is unaffected (rollup has no such restriction).
@@ -60,5 +82,7 @@ export default defineConfig({
     // Keep asset inlining aggressive; a Bento file must have zero external requests.
     assetsInlineLimit: 100_000_000,
     chunkSizeWarningLimit: 4096,
+    // One inlined chunk: there is nothing to preload, so no polyfill for it.
+    modulePreload: false,
   },
 })

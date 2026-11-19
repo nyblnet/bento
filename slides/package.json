@@ -22,6 +22,7 @@
     "@types/reveal.js": "^5.2.1",
     "fake-indexeddb": "^6.2.5",
     "qrcode": "^1.5.4",
+    "terser": "^5.51.2",
     "typescript": "~5.8.3",
     "vite": "^7.1.1",
     "vite-plugin-singlefile": "^2.3.3"
