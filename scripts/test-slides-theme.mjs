@@ -83,7 +83,11 @@ for (const [name, body] of [['light', light], ['dark', dark]]) {
 //   .ed-pwcard       the password gate is a full-screen dark card in both
 //                    themes, like the splash; its input is translucent white
 //                    ON that card, not a chrome surface
-const EXEMPT = /^(\.bento-speaker|\.sv-|\.bento-splash|#bento-print|\.bento-|\.ed-comment-hl|\.ed-pwcard|@|:root|\*)/
+//   .ed-cpop input   the colour popover's slider knobs ride the hue and
+//                    opacity tracks — a colour ramp, not the panel — so a
+//                    white knob ringed in black reads on every hue in both
+//                    themes, as in Figma and Penpot
+const EXEMPT = /^(\.bento-speaker|\.sv-|\.bento-splash|#bento-print|\.bento-|\.ed-comment-hl|\.ed-pwcard|\.ed-cpop input\[type='range'\]|@|:root|\*)/
 const rules = [...css.matchAll(/(^|\n)([^@{}\n][^{}]*)\{([^}]*)\}/g)]
 const whiteSurfaces = []
 for (const [, , sel, body] of rules) {

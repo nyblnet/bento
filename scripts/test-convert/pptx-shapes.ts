@@ -387,6 +387,44 @@ console.log('dropped effects')
   ok(codes(r).includes('connector-detached'), 'an anchored connector reports that it stops following its elements')
 }
 
+// --- the revamp's paint keys -------------------------------------------------
+console.log('radial, dashes, stroke position, corners, stacks')
+{
+  const r = new Report()
+  const sp = emit(shape({ fillGradient: { angle: 90, kind: 'radial', cx: 0.25, cy: 0.75, r: 0.5, stops: [{ at: 0, color: '#ff0000' }, { at: 1, color: '#0000ff' }] } }), r)
+  const g = kid(spPr(sp), NS.a, 'gradFill')!
+  const path = kid(g, NS.a, 'path')
+  const ftr = path && kid(path, NS.a, 'fillToRect')
+  ok(attr(path!, 'path') === 'circle' && !kid(g, NS.a, 'lin'), 'a radial gradient is a:path circle, not a:lin')
+  ok(!!ftr && attr(ftr, 'l') === '25000' && attr(ftr, 't') === '75000' && attr(ftr, 'r') === '75000' && attr(ftr, 'b') === '25000', 'its centre lands in fillToRect')
+  ok(codes(r).includes('radial-gradient-extent'), 'the radius it cannot keep is reported')
+}
+{
+  const r = new Report()
+  const ln = kid(spPr(emit(shape({ stroke: '#000000', strokeWidth: 4, strokeDashes: [12, 8], strokeStyle: 'dashed' }), r)), NS.a, 'ln')!
+  const ds = kid(kid(ln, NS.a, 'custDash')!, NS.a, 'ds')
+  ok(!!ds && attr(ds, 'd') === '300000' && attr(ds, 'sp') === '200000', 'strokeDashes become a:custDash in line-width percent (12/4, 8/4)')
+  ok(!kid(ln, NS.a, 'prstDash'), '…and win over strokeStyle')
+}
+{
+  const ln = (a: ShapeIn['strokeAlign'], r = new Report()) => kid(spPr(emit(shape({ stroke: '#000000', strokeWidth: 4, strokeAlign: a }), r)), NS.a, 'ln')!
+  ok(attr(ln('inside'), 'algn') === 'in' && attr(ln('center'), 'algn') === 'ctr', 'inside and center map to a:ln algn')
+  const r = new Report()
+  ok(!attr(ln('outside', r), 'algn') && codes(r).includes('stroke-outside-centred'), 'outside has no OOXML twin: centred and reported')
+  ok(!attr(ln(undefined), 'algn'), 'NEGATIVE: an unaligned stroke is written exactly as before')
+}
+{
+  const r = new Report()
+  emit(shape({ radius: 40, radii: [0, 10, 20, 40] }), r)
+  ok(codes(r).includes('corner-radii-uniform'), 'per-corner radii are reported as one radius')
+  const r2 = new Report()
+  emit(shape({ radius: 10, radii: [10, 10, 10, 10] }), r2)
+  ok(!codes(r2).includes('corner-radii-uniform'), 'NEGATIVE: four equal corners are exact')
+  const r3 = new Report()
+  emit(shape({ fills: [{}, {}] }), r3)
+  ok(codes(r3).includes('paint-layers-top-only'), 'a fill stack is reported as its top layer')
+}
+
 // -----------------------------------------------------------------------------
 console.log(`\n${checks} checks, ${failures} failures`)
 process.exit(failures ? 1 : 0)

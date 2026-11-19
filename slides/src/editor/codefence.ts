@@ -109,10 +109,10 @@ export function insideOpenFence(before: string): boolean {
 
 /** The fields an element keeps whatever its type. The first part keeps the
  *  box's identity; later parts get fresh ids and drop what must stay unique on
- *  a slide (the morph key) or names one specific box (its role). */
+ *  a slide (the morph key) or names one specific box (its role, its name). */
 const BASE_KEYS = ['morphId', 'rotation', 'opacity', 'shadow', 'blur', 'blend', 'backdropFilter',
-  'fx', 'link', 'group', 'groupId', 'showOnHover', 'role'] as const
-const UNIQUE_KEYS = ['morphId', 'role'] as const
+  'fx', 'link', 'group', 'groupId', 'groupName', 'showOnHover', 'role', 'name'] as const
+const UNIQUE_KEYS = ['morphId', 'role', 'name'] as const
 
 export type PartFrame = { y: number; h: number; html?: string }
 

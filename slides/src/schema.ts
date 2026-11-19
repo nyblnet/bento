@@ -90,6 +90,15 @@ export function buildSchema(version: string): JsonSchema {
     chartPalette: { type: 'array', maxItems: 64, items: color('series colour') },
     table: { $ref: '#/$defs/tableStyle' },
     codePalette: obj(MODEL_KEYS.themeCodePalette, Object.fromEntries(MODEL_KEYS.themeCodePalette.map((k) => [k, color('token colour')]))),
+    tokens: obj(MODEL_KEYS.themeTokens, {
+      modes: { type: 'array', maxItems: 16, items: str(64) },
+      mode: str(64, 'the active mode; absent = the first'),
+      set: { type: 'object', maxProperties: 500, description: 'token name → {type, values: mode → value}; bound with themeRefs "$name"', additionalProperties: {
+        type: 'object', required: ['type', 'values'], additionalProperties: false, properties: {
+          type: { enum: ['color', 'number', 'fontFamily', 'fontSize', 'shadow', 'opacity'] },
+          values: { type: 'object', additionalProperties: { type: ['string', 'number', 'object'], description: 'a shadow token holds {x, y, blur, color}' } },
+        } } },
+    }, ['set']),
   }, ['background', 'color', 'accent', 'fontFamily'])
   $defs.doc = obj(MODEL_KEYS.doc, {
     format: { const: FORMAT },

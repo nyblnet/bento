@@ -18,8 +18,8 @@ try {
   custom.fonts = [{ family: 'Review516', asset: 'review-font' }];
   custom.assets = { ...custom.assets, 'review-font': 'data:font/woff2;base64,' + fontBytes };
   async function replace(doc) {
-    await p.getByRole('button',{name:'Save as… — copy, new deck, password',exact:true}).click();
-    await p.getByText('Replace from JSON…',{exact:true}).click();
+    await p.locator('.ed-logo').click(); // Replace from JSON is the document's: File ▸ Advanced
+    await p.locator('.ed-file-menu [data-cmd="replace-json"]').click();
     await p.locator('.ed-about-json').fill(JSON.stringify(doc));
     await p.locator('.ed-about-overlay').getByRole('button',{name:'Apply',exact:true}).click();
   }

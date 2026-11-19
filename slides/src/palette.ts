@@ -224,6 +224,25 @@ function writePath(obj: unknown, path: string, value: string): boolean {
 
 type RefHolder = { themeRefs?: Record<string, string> }
 
+/**
+ * A reference names the HUE; the field keeps its own opacity. A text colour
+ * linked to accent 1 at 50% stays at 50% when accent 1 changes, so the alpha of
+ * the literal already there is carried onto the re-derived one. Read from the
+ * current literal (never accumulated), so the derivation stays idempotent. A
+ * palette colour with an alpha of its own keeps that one instead.
+ */
+export function keepAlpha(current: unknown, literal: string): string {
+  const c = parseHex(literal)
+  if (!c || c.a || typeof current !== 'string') return literal
+  const cur = current.trim()
+  const aa = /^#[0-9a-f]{6}([0-9a-f]{2})$/i.exec(cur)?.[1]
+  if (aa) return aa.toLowerCase() === 'ff' ? literal : literal + aa
+  const m = /^rgba?\(([^)]+)\)$/i.exec(cur)
+  const a = m ? Number(m[1].split(/[\s,/]+/)[3]) : NaN
+  if (!(a >= 0 && a < 1)) return literal
+  return `rgba(${c.r}, ${c.g}, ${c.b}, ${Math.round(a * 1000) / 1000})`
+}
+
 function applyRefs(holder: RefHolder, palette: Palette): boolean {
   const refs = holder.themeRefs
   if (!refs) return false
@@ -231,7 +250,7 @@ function applyRefs(holder: RefHolder, palette: Palette): boolean {
   for (const [path, token] of Object.entries(refs)) {
     const literal = resolveRef(token, palette)
     if (literal === null) continue // unknown slot / malformed — validate() reports it
-    if (writePath(holder, path, literal)) changed = true
+    if (writePath(holder, path, keepAlpha(readPath(holder, path), literal))) changed = true
   }
   return changed
 }

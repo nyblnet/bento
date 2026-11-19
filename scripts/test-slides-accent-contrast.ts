@@ -61,13 +61,18 @@ const contrast = (a: RGB, b: RGB) => { const [x, y] = [lum(a), lum(b)].sort((p, 
 const over = (a: RGB, p: number, b: RGB): RGB => a.map((v, i) => Math.round(v * p + b[i] * (1 - p))) as RGB
 
 // --- 1. every text use is audited --------------------------------------------
-type Bg = 'surface' | 'chrome-tint-22' | 'chrome-tint-30' | 'over-slide'
+type Bg = 'surface' | 'chrome-tint-22' | 'chrome-tint-30' | 'over-slide' | 'tab-on'
 const AUDITED: Record<string, Bg> = {
   '.ed-btn-armed': 'chrome-tint-22',           // the armed comment tool, on the topbar
   '.ed-lang-on::after': 'surface',             // the language menu's ✓
   '.ed-comment-me:hover': 'surface',           // your own name in a comment thread
   '.ed-comment-hl.slide': 'over-slide',        // "SLIDE" label on a whole-slide comment
   '.ed-comment-hl.pin': 'over-slide',          // coordinates beside a point comment
+  '.ed-pathbar .ed-btn[aria-pressed="true"]': 'tab-on', // the path bar's chosen node kind, a lifted pill
+  '.ed-ratio-lock[aria-pressed="true"]': 'surface',    // the closed padlock between W and H, in the inspector
+  '.ed-a11y-badge.is-pass': 'surface',
+  '.ed-link-btn': 'surface',                          // "Select the frame" under a frame child's hint, in the inspector                 // AA / AAA in the Export section
+  '.ed-keys-foot a': 'surface',                       // "Full guide at bento.page/help →" under the shortcuts dialog
 }
 const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim().split('\n').pop()!.trim(), body: m[2] }))
 const inkText = rules.filter((r) => /(^|;|\s)color:\s*var\(--accent-ink\)/.test(r.body)).map((r) => r.sel)
@@ -80,7 +85,10 @@ for (const [theme, t] of Object.entries(THEMES)) {
   const ink = hex(t['--accent-ink']), accent = hex(t['--accent'])
   // (the topbar paints --surface — measured in Chrome, both themes — so the
   // armed tool's 22%/30% accent tint sits over --surface, not --chrome)
+  // --tab-on is var(--surface) in light and its own grey in dark
+  const tabOn = /^var\(--surface\)$/.test(t['--tab-on']) ? t['--surface'] : t['--tab-on']
   const bgOf = (bg: Bg): RGB => bg === 'surface' || bg === 'over-slide' ? hex(t['--surface'])
+    : bg === 'tab-on' ? hex(tabOn)
     : over(accent, bg === 'chrome-tint-22' ? 0.22 : 0.3, hex(t['--surface']))
   for (const [sel, bg] of Object.entries(AUDITED)) {
     const c = contrast(ink, bgOf(bg))
@@ -93,6 +101,15 @@ for (const [theme, t] of Object.entries(THEMES)) {
   for (const bg of ['--chrome', '--surface']) {
     const c = contrast(ink, hex(t[bg]))
     ok(c >= 3, `${theme}: a focus outline in --accent-ink on ${bg} — ${c.toFixed(2)}:1 (non-text, ≥3)`)
+  }
+  // 6. a form control's edge under the pointer reads against the panel and its
+  // own fill (WCAG 1.4.11 non-text, 3:1). At rest the dark edge is quiet on
+  // purpose (Figma's sunk well) — but never invisible: at least 1.3:1.
+  if (theme === 'dark') for (const bg of ['--surface', '--field']) {
+    const hot = contrast(hex(t['--field-line-hot']), hex(t[bg]))
+    ok(hot >= 3, `${theme}: a field's edge under the pointer (--field-line-hot) on ${bg} — ${hot.toFixed(2)}:1 (non-text, ≥3)`)
+    const rest = contrast(hex(t['--field-line']), hex(t[bg]))
+    ok(rest >= 1.3 && rest < 3, `${theme}: a field's resting edge (--field-line) on ${bg} is quiet but present — ${rest.toFixed(2)}:1`)
   }
   // 4. text on the orange
   const on = contrast(hex(t['--accent-on']), accent)

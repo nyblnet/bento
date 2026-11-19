@@ -15,6 +15,9 @@ export interface ElementBase {
    *  duplicate-a-slide idiom). Never mutate it to re-pair a morph; set
    *  `morphId` instead so identity stays stable. */
   id: string
+  /** The author's name for it in the layer list (renamed there). Unset, the
+   *  list names it by kind or by its text. Display only — never a key. */
+  name?: string
   /** Optional morph-key override. When set, this element morphs with elements
    *  whose effective morph key (`morphId ?? id`) matches — letting two
    *  independently-created elements on different slides be paired without
@@ -110,6 +113,9 @@ export interface ElementBase {
    * Distinct from `group`, which carries presentation semantics.
    */
   groupId?: string
+  /** The group's name in the layer list, carried by every member (a group is
+   *  no object of its own, only a shared groupId). Ungrouping drops it. */
+  groupName?: string
   /**
    * Editor lock (discussion #838): a locked element is skipped by canvas
    * clicks and marquee drags so it cannot be bumped or block the items above
@@ -142,7 +148,125 @@ export interface ElementBase {
    * meaning. See `palette.ts`.
    */
   themeRefs?: Record<string, string>
+  /**
+   * The auto-layout frame this element sits in (a shape carrying `layout`).
+   * Its x/y/w/h are still written in full: layout.ts DERIVES them from the
+   * frame and writes them into the model, as connectors are routed, so a
+   * reader that knows nothing of frames sees an ordinary positioned element.
+   */
+  parentId?: string
+  /** Inside a frame: 'fill' takes the frame's free space on that axis; absent = fixed. */
+  sizing?: ElementSizing
+  /**
+   * Component membership (Penpot's main/copy model, no element type of its
+   * own). Every element of a component shares `id`; `key` pairs an element
+   * of a copy with its counterpart in the main; `main` marks the main's
+   * elements. A copy re-derives every property from the main except its
+   * position offset, identity and the keys listed in `over` (its own local
+   * overrides). An older shell sees ordinary grouped elements. See components.ts.
+   */
+  component?: {
+    id: string; key: string; main?: true; over?: string[]
+    /** a copy's offset from its main, kept so a reload places it as the live session did */
+    off?: [number, number]
+    /** a copy's record of the main state it last followed (a hash): a main
+     *  that no longer matches it has moved, and the copy follows; a copy that
+     *  differs from an unmoved main was edited by hand. In the file, so every
+     *  replica — and the next session — reads the same answer. */
+    sig?: string
+  }
+  /**
+   * Resize keeps the proportions (the padlock between W and H). Any element:
+   * true = locked, absent = free. An IMAGE reads it the other way round —
+   * absent = locked (ImageElement) — so every existing deck resizes as it did.
+   * Shift inverts it for one drag.
+   */
+  keepAspectRatio?: boolean
+  /**
+   * What a screen reader says for a picture, shape, chart or diagram (the
+   * Export section's Accessibility field). Rendered as role="img" with this
+   * aria-label. Absent = decorative to assistive
+   * technology, exactly as before. Text elements are read as their text.
+   */
+  alt?: string
+  /**
+   * Hidden: not drawn anywhere — the canvas, thumbnails, the show, print and
+   * the file preview. Listed in Layers, dimmed, so it can be shown again.
+   * A shell that predates this key DRAWS a hidden element (it ignores the
+   * key); that is the cost of keeping the format additive.
+   */
+  hidden?: true
+  /**
+   * The inspector's eye on a single paint (Figma's): the fill, stroke,
+   * shadow or blur is switched off but KEPT, so a click brings it back.
+   * Paint stacks hide per layer (`fills[i].hidden`); these are for the plain
+   * keys. A shell that predates them draws the paint (it ignores the key) —
+   * nothing is lost, only shown. Absent = shown. Read through visiblePaint.
+   */
+  fillHidden?: true
+  strokeHidden?: true
+  shadowHidden?: true
+  blurHidden?: true
+  /**
+   * Mirrored across the vertical (flipX) or horizontal (flipY) axis through
+   * the box centre — the content is drawn mirrored, the box is unchanged.
+   * Absent = as authored. A shell that predates these keys draws the element
+   * unmirrored.
+   */
+  flipX?: true
+  flipY?: true
 }
+
+export interface ElementSizing {
+  w?: 'fixed' | 'fill'
+  h?: 'fixed' | 'fill'
+  /** In a wrapping frame, the least a 'fill' child takes on that axis — what
+   *  the line breaking counts it as before the line's free space is shared.
+   *  Absent = 0: fills never push a line over, they share what is left. */
+  minW?: number
+  minH?: number
+}
+
+/**
+ * Auto layout (Figma's, Penpot's flex/grid): a frame lays out the elements
+ * whose `parentId` names it. Order along the main axis is the children's
+ * current position, so dragging one past a sibling reorders it.
+ */
+export interface FrameLayout {
+  dir: 'row' | 'col' | 'grid'
+  gap: number
+  /** top, right, bottom, left */
+  pad: [number, number, number, number]
+  /** main axis */
+  justify?: 'start' | 'center' | 'end' | 'space-between'
+  /** cross axis; 'stretch' fills it */
+  align?: 'start' | 'center' | 'end' | 'stretch'
+  /** grid only: columns (default 2) */
+  cols?: number
+  /** children are clipped to the frame */
+  clip?: boolean
+  /** the frame sizes itself to its children */
+  hug?: boolean
+  /** row/col only: children that would pass the frame's edge start a new line */
+  wrap?: boolean
+}
+
+/** Whether a resize of `el` keeps its proportions (Shift inverts it for one drag). */
+export const ratioLocked = (el: SlideElement): boolean =>
+  el.type === 'image' ? el.keepAspectRatio !== false : el.keepAspectRatio === true
+
+/** Design tokens (`theme.tokens`); values are keyed by mode, 'default' when the deck has none. */
+export interface DesignTokens {
+  /** mode names, in order; absent = the single mode 'default' */
+  modes?: string[]
+  /** the active mode; absent = the first */
+  mode?: string
+  set: Record<string, { type: TokenType; values: Record<string, TokenValue> }>
+}
+
+/** 'number' is any dimension (gap, radius, stroke); 'opacity' is stored 0..1 and shown as %. */
+export type TokenType = 'color' | 'number' | 'fontFamily' | 'fontSize' | 'shadow' | 'opacity'
+export type TokenValue = string | number | ShadowSpec
 
 export interface ShadowSpec {
   x?: number
@@ -203,11 +327,44 @@ export interface CodeElement extends ElementBase {
 export type ShapeKind = 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'line' | 'path'
 
 /** Linear gradient fill. Colors are any CSS color, including rgba(). */
+/** One layer of a fill stack: a colour, or a gradient (the colour then is its solid fallback). */
+export interface PaintLayer {
+  color: string
+  gradient?: GradientFill
+  /** the layer's eye in the panel: kept but not drawn */
+  hidden?: true
+  /** how the layer mixes with what lies beneath it (CSS mix-blend-mode); absent = normal */
+  blend?: string
+}
+
+/** One layer of a stroke stack. */
+export interface StrokeLayer {
+  color: string
+  width: number
+  align?: 'inside' | 'center' | 'outside'
+  dashes?: [number, number]
+  hidden?: true
+  /** a gradient along the stroke; `color` stays its solid fallback */
+  gradient?: GradientFill
+  /** as a fill layer's */
+  blend?: string
+}
+
 export interface GradientFill {
   /** degrees, CSS convention: 0 = bottom→top, 90 = left→right */
   angle: number
   /** ordered stops; `at` is 0..1 along the gradient line */
   stops: Array<{ at: number; color: string }>
+  /**
+   * 'radial': the stops run from the centre (cx, cy) out to radius r, all in
+   * fractions of the element box (an ellipse in a non-square box); `angle` is
+   * kept and unused. Absent = linear. A shell that predates radial gradients
+   * draws the same stops as a linear gradient along `angle`.
+   */
+  kind?: 'radial'
+  cx?: number
+  cy?: number
+  r?: number
 }
 
 /** Decoration at a line's tip. Sized relative to the stroke width. The
@@ -224,7 +381,7 @@ export interface ShapeElement extends ElementBase {
   fillGradient?: GradientFill
   stroke: string
   strokeWidth: number
-  /** corner radius, rect only */
+  /** corner radius, rect only (with `radii`, the largest corner — what an older shell draws) */
   radius: number
   /** arrow only (v1.1.1, #304): 2 = a head at both ends. Absent = one head.
    *  A property, not a shape kind, on purpose: a shipped shell's renderer
@@ -236,6 +393,29 @@ export interface ShapeElement extends ElementBase {
   strokeDash?: number
   /** stroke pattern; wins over strokeDash when set */
   strokeStyle?: 'solid' | 'dashed' | 'dotted'
+  /** [dash, gap] in px; wins over strokeStyle. An older shell draws strokeStyle. */
+  strokeDashes?: [number, number]
+  /**
+   * Where the stroke sits on the outline. Absent = as before: inside on rect,
+   * ellipse and triangle (the box is the outer edge), centred on paths and
+   * arrows. An older shell draws it the absent way.
+   */
+  strokeAlign?: 'inside' | 'center' | 'outside'
+  /** A gradient stroke (a line: its one colour); wins over `stroke` (a line's
+   *  `fill`), which stays the solid an older shell draws. */
+  strokeGradient?: GradientFill
+  /** rect only: per-corner radius [top-left, top-right, bottom-right, bottom-left]; wins over `radius` */
+  radii?: [number, number, number, number]
+  /**
+   * Fill layers, bottom first (Figma's and Penpot's fill stack). When set they
+   * are what is drawn, and `fill`/`fillGradient` mirror the TOP visible layer
+   * (stacks.ts) — what an older shell, which knows one fill, draws. Absent =
+   * the single `fill`, as before. Only ever set with two or more layers.
+   */
+  fills?: PaintLayer[]
+  /** Stroke layers, bottom first; `stroke`/`strokeWidth`/`strokeAlign`/
+   *  `strokeDashes` mirror the top visible one, as `fills` does for `fill`. */
+  strokes?: StrokeLayer[]
   /** line and (v1.1.1, #302) open path shapes: tip decorations. On a path
    *  the tip points along the curve's end tangent. */
   lineStart?: LineEnding
@@ -253,6 +433,17 @@ export interface ShapeElement extends ElementBase {
    */
   from?: ConnectorEnd
   to?: ConnectorEnd
+  /** rect only: this shape is a frame and lays out its children (layout.ts) */
+  layout?: FrameLayout
+  /**
+   * A vector boolean (union, subtract, intersect, exclude). The element itself
+   * is an ordinary `path` whose `d`/`pathBox` hold the COMPUTED outline, so a
+   * shell that predates booleans draws it exactly; these operands (in slide
+   * coordinates, bottom first, as they were when combined) ride along only so
+   * the editor can change the operation or give the shapes back. Absent = a
+   * plain path. See vector-bool.ts.
+   */
+  bool?: { op: 'union' | 'subtract' | 'intersect' | 'exclude'; shapes: ShapeElement[] }
 }
 
 /** One anchored end of a connector. `side:'auto'` picks the nearest border. */
@@ -584,6 +775,14 @@ export interface BentoDoc {
       // diff: deletions / removals
       d?: string,
     }
+    /**
+     * Design tokens: named values an element property can be bound to through
+     * `themeRefs` with a `$name` token. Same contract as the palette: the
+     * literal stays on the element, the ref records where it came from, and
+     * editing a token (or switching `mode`) rewrites every bound literal. A
+     * reader that knows nothing of tokens sees ordinary literals. See tokens.ts.
+     */
+    tokens?: DesignTokens
   }
   /** present-mode chrome; decks with built-in chrome can turn Reveal's off */
   present?: {
@@ -1465,4 +1664,26 @@ export function parseDoc(json: string): BentoDoc | null {
     /* fall through */
   }
   return null
+}
+
+/**
+ * The element as it is drawn: paint switched off with the inspector's eye
+ * (`fillHidden` …) taken out, the literals left untouched in the model.
+ * Every renderer and the morph read elements through this, so a hidden
+ * paint is hidden everywhere — canvas, thumbnails, the show, export.
+ */
+export function visiblePaint<E extends SlideElement>(el: E): E {
+  if (!el.fillHidden && !el.strokeHidden && !el.shadowHidden && !el.blurHidden) return el
+  const e = { ...el } as SlideElement & Record<string, unknown>
+  if (e.type === 'shape') {
+    // a line's one colour is its fill, edited under Stroke: its stroke eye hides it
+    if (el.fillHidden || (el.strokeHidden && e.shape === 'line')) { e.fill = 'transparent'; delete e.fillGradient; delete e.fills }
+    if (el.strokeHidden) { e.strokeWidth = 0; delete e.strokes; delete e.strokeGradient }
+  } else if (e.type === 'text') {
+    if (el.fillHidden) { e.color = 'transparent'; delete e.colorGradient }
+    if (el.strokeHidden) delete e.textStroke
+  }
+  if (el.shadowHidden) delete e.shadow
+  if (el.blurHidden) { delete e.blur; delete e.backdropFilter }
+  return e as E
 }
