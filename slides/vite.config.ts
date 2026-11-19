@@ -3,6 +3,35 @@ import { viteSingleFile } from 'vite-plugin-singlefile'
 import { readFileSync } from 'node:fs'
 import { revealLite } from './reveal-lite'
 
+// Moveable with only the "ables" the editor turns on. `moveable`'s default
+// class registers ALL of them — warp, clip, round, scale, pinch, origin-drag,
+// scroll, padding… — whether or not a prop ever enables one, so every saved
+// deck carried ~16 KB of handles nothing could show. The editor passes
+// draggable, resizable, rotatable and snappable (canvas.ts), selects groups and
+// listens for click/clickGroup; KEEP_ABLES is that set plus the always-on
+// internals. An able that is not registered cannot be enabled: add it here
+// BEFORE passing its prop in canvas.ts.
+// Build only — the dev server pre-bundles the published file (every able
+// registered, the same ones enabled). The rewrite must match exactly once or
+// the build fails: an upgrade that moves the code is a loud error, never a
+// silent return of the bytes.
+const KEEP_ABLES = ['BeforeRenderable', 'Default', 'Snappable', 'Draggable', 'Resizable', 'Rotatable', 'Groupable', 'Clickable', 'DragArea', 'Renderable']
+const ABLES_LIST = /var MOVEABLE_ABLES =\s*\[[^\]]*\];/g
+const trimMoveableAbles = {
+  name: 'bento-trim-moveable-ables',
+  enforce: 'pre' as const,
+  apply: 'build' as const,
+  transform(code: string, id: string) {
+    if (!/croact-moveable[\\/]dist[\\/]moveable\.esm\.js/.test(id)) return null
+    if ((code.match(ABLES_LIST) ?? []).length !== 1) throw new Error('moveable changed: cannot narrow MOVEABLE_ABLES')
+    for (const able of KEEP_ABLES) if (!new RegExp(`^var ${able} = `, 'm').test(code)) throw new Error('moveable changed: no able ' + able)
+    code = code.replace(ABLES_LIST, () => `var MOVEABLE_ABLES = /*#__PURE__*/ [${KEEP_ABLES.join(', ')}];`)
+    // makeAble() only builds an object: say so, or the ables dropped above stay in
+    code = code.replace(/^var (\w+) = makeAble\(/gm, 'var $1 = /*#__PURE__*/ makeAble(')
+    return { code, map: null }
+  },
+}
+
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
 
 // base './' so builds open from file:// or any static host.
@@ -20,7 +49,7 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(pkg.version),
     __BENTO_TEST_SEAL__: JSON.stringify(process.env.BENTO_TEST_SEAL === '1'),
   },
-  plugins: [revealLite(), ...(process.env.SINGLEFILE ? [viteSingleFile()] : [])],
+  plugins: [trimMoveableAbles, revealLite(), ...(process.env.SINGLEFILE ? [viteSingleFile()] : [])],
   // Dev-only: allow serving ../kernel (shared TS-source kernel) — without a
   // workspace root, vite's fs allow-list stops at the app dir. Build output
   // is unaffected (rollup has no such restriction).
