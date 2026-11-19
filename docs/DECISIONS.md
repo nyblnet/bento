@@ -15042,3 +15042,71 @@ does not hold: WebKit's for worker-controlled navigations, Chromium's for the
 cross-site frame, both measured), its `--mutants` (each red on its own row, in
 a run that completed), and the drill row: withdraw a build, then the next load
 is clean. Details: `home/web/README.md`.
+
+## 2026-11-19 — The slides shell diet: how the table, Reveal, Moveable and the minifier are packed
+
+The editor revamp (PR #897) merged with main built to 926,960 B. Ten commits
+took 136,054 B back, to 790,906 B, with no feature removed and no format
+change. Each figure is the built shell before and after that commit (local,
+node 22). What is settled, so nobody tidies it away:
+
+- **The packed i18n table ships column-major: -40,540 B.**
+  `scripts/build-i18n.mjs` writes one long string per language group
+  (`de`, `fr`, `it`, `es`+`pt`, the key column, `zh-Hans`+`zh-Hant`, `ja`),
+  rows and cells joined by two separator characters chosen at generation time
+  from ones no string uses. `packed.ts` unpacks it at import into the same
+  key -> row table. Row-major interleaved eight languages in three scripts
+  inside deflate's 32 KB window. The group order is measured; do not sort it.
+- **The key column is a hash, not the English string: -11,694 B.** Every key
+  is already in the bundle at its `t('...')` call site. The table stores a
+  5-character, 30-bit hash; the seed is searched until no two catalog keys
+  collide, so catalog strings resolve exactly. A string in no catalog meets a
+  row by chance about once in 840,000. Kernel change: one optional field,
+  `PackedCatalogs.keyOf`; without it the table is keyed by the English string
+  as before, which is what spaces, dash and type still do. Anything that needs
+  the English key universe reads the catalogs, not `Object.keys(PACKED)`.
+  This is its own commit and can be reverted alone.
+- **Dead catalog keys are gated: -19,160 B for the 108 deleted.**
+  `scripts/test-i18n-dead-keys.mjs` (validate-shared) fails when a core
+  catalog key is not a string literal or property name in `slides/src` or
+  `kernel/src`. A key built at run time goes in its `DYNAMIC` list with the
+  place that builds it; the list is empty and should stay short. The 108
+  were removed from the 22 packs too.
+- **Reveal is built from `reveal.js/js/`, pinned to exactly 5.2.1, with
+  eleven controllers stubbed: -24,022 B.** `slides/reveal-lite.ts` replaces
+  autoanimate, scrollview, printview, touch, notes, location, backgrounds,
+  fragments, plugins, overlay and the playback component (and `fitty`) with
+  inert stand-ins, and drops the reveal.css rules only they reach, Reveal's
+  paper stylesheet included. `present.ts` uses none of them. This supersedes
+  the `REVEAL_EDITS` string edits: the preview overlay is absent rather than
+  disarmed (the overlay stand-in keeps the `?` help), and
+  `test-slides-reveal-preview-browser.mjs` still fails on a shell built with
+  the real overlay. Upgrading Reveal means re-reading its `js/` against the
+  stubs and bumping the pin; the build refuses any other version. Using a
+  stubbed feature in `present.ts` means un-stubbing it first. `styles.css`
+  now sets `html, body { height: auto; overflow: visible }` for print itself.
+- **Moveable registers ten ables: -17,342 B.** BeforeRenderable, Default,
+  Snappable, Draggable, Resizable, Rotatable, Groupable, Clickable, DragArea,
+  Renderable (`KEEP_ABLES` in `slides/vite.config.ts`, build only). An able
+  that is not in the list cannot be switched on by a prop: add it there
+  before passing `scalable`, `warpable`, `clippable`, `roundable`,
+  `pinchable` or `originDraggable` in `canvas.ts`.
+- **terser re-mangles identifiers after esbuild: -17,409 B** (with
+  `build.modulePreload: false`). Compress is off and no property is renamed;
+  only local names move, to terser's per-scope naming, which deflate matches
+  better. Property mangling stays off: it renames by name across the bundle
+  and one wrong name is a model key. terser is a slides devDependency.
+- Smaller: dead CSS rules and four unreferenced icons -734 B; one-pass vector
+  booleans -206 B, which also fixes wrong regions for grid-aligned operands
+  that share edges (70 of 1,000 cases in the rig's new check); three
+  duplicated helpers shared -390 B (kernel exports `parseColor` and `b64u`).
+- **Ops zone, every app: -4,557 B on slides, about -3,400 to -3,800 B on
+  spaces, dash and type.** `postbuild-compress.mjs` strips whole-line
+  comments and indentation from the plaintext loader (line breaks kept; token
+  stream identical before and after) and runs zopfli with unlimited block
+  splitting. The loader hash changes on each app's next build.
+
+Not done: the lossless woff2 repack (about 1.2 KB) has no recorded recipe and
+drops name records, so it was left out. The slides `reference` in
+`scripts/size-budgets.json` is now 790,906 B, a local number to be replaced by
+the CI figure.
