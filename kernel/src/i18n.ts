@@ -33,6 +33,10 @@ export interface LocaleChoice { code: string; label: string }
 export interface PackedCatalogs {
   locales: readonly string[]
   table: Record<string, ReadonlyArray<string | 0>>
+  /** when the table is keyed by something other than the English string
+   *  itself (slides keys it by a short hash so the English is not shipped
+   *  twice), the function that maps an English string to its table key */
+  keyOf?: (en: string) => string
   /** extra locale codes mapping onto a column, e.g. { 'zh-TW': 'zh-Hant' } */
   alias?: Record<string, string>
 }
@@ -150,7 +154,7 @@ function lookup(en: string, loc: string): string | undefined {
   if (PACKED) {
     const col = COLUMN[loc]
     if (col === undefined) return undefined
-    const hit = PACKED.table[en]?.[col]
+    const hit = PACKED.table[PACKED.keyOf ? PACKED.keyOf(en) : en]?.[col]
     return hit === 0 || hit === undefined ? undefined : hit
   }
   return CATALOGS[loc]?.[en]

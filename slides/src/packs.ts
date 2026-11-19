@@ -25,7 +25,7 @@ import { fetchPinned, verifySigned } from '../../kernel/src/update.ts'
 import { netFetch, sharedStorageOrigin } from '../../kernel/src/net.ts'
 // Extension-explicit like the kernel imports above, so this module also loads
 // under plain node — scripts/test-packs.ts exercises the real thing.
-import { PACKED } from './i18n/packed.ts'
+import { PACKED, packedKey } from './i18n/packed.ts'
 import { lsGet } from '../../kernel/src/storage.ts'
 
 const DEFAULT_CHANNEL = 'https://bento.page/releases/slides'
@@ -143,9 +143,12 @@ export function readPacksFromShell(): number {
  * app asks for.
  */
 export function packCoverage(pack: LanguagePack): { missing: number; total: number } {
+  // the table is keyed by packedKey(english), so hash the pack's side
+  const have = new Set<string>()
+  for (const k of Object.keys(pack.strings)) if (pack.strings[k]) have.add(packedKey(k))
   const keys = Object.keys(PACKED)
   let missing = 0
-  for (const k of keys) if (!pack.strings[k]) missing++
+  for (const k of keys) if (!have.has(k)) missing++
   return { missing, total: keys.length }
 }
 

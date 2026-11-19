@@ -95,8 +95,25 @@ const GROUPS = [['de'], ['fr'], ['it'], ['es', 'pt'], ['en'], ['zh-Hans', 'zh-Ha
   }
 }
 let holes = 0
+// THE ENGLISH KEY IS NOT STORED. Every key is already in the bundle once, at
+// its t('…') call site, and the table's copy is too far away for deflate to
+// match against it — so the table carries a 30-bit hash of the key instead
+// (5 characters), and t() hashes what it is asked for. The seed is searched
+// until no two keys collide, so every catalog string resolves exactly; a
+// string that is in NO catalog meets a table entry by chance once in
+// 2^30 / keys.length (about 1 in 840,000).
+const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+const hashKey = (en, seed) => {
+  let h = seed
+  for (let i = 0; i < en.length; i++) h = Math.imul(h ^ en.charCodeAt(i), 16777619)
+  let out = ''
+  for (let i = 0; i < 5; i++) { out += ALPHABET[h & 63]; h >>>= 6 }
+  return out
+}
+let SEED = 0x811c9dc5 | 0
+while (new Set(keys.map((k) => hashKey(k, SEED))).size !== keys.length) SEED = (SEED + 1) | 0
 const cellOf = (k, loc) => {
-  if (loc === 'en') return k
+  if (loc === 'en') return hashKey(k, SEED)
   const c = catalogs[LOCALES.indexOf(loc)]
   if (!Object.prototype.hasOwnProperty.call(c, k) || c[k] === '') { holes++; return '' }
   return c[k]
@@ -129,15 +146,25 @@ const out = `// SPDX-License-Identifier: MIT
 // Key-once, COLUMN-MAJOR packing: each group below is one long string holding
 // one column (or a few interleaved ones) for every key, rows joined by ROW and
 // cells by CELL. It is unpacked once, at import, into the same key -> row
-// table the runtime has always read. An empty cell means "no translation in
-// that locale" and t() falls back to the English key.
+// table shape the runtime has always read, keyed by packedKey(english) rather
+// than the English string. An empty cell means "no translation in that
+// locale" and t() falls back to the English key.
 
 /** Column order for every row in PACKED. */
 export const PACKED_LOCALES = ${JSON.stringify(LOCALES)} as const
 
 const CELL = ${JSON.stringify(CELL)}
 const ROW = ${JSON.stringify(ROW)}
-/** [columns held (0 = the English key, n + 1 = PACKED_LOCALES[n]), packed text] */
+/** The table's key for an English source string (see build-i18n.mjs). */
+export const packedKey = (en: string): string => {
+  let h = ${SEED}
+  for (let i = 0; i < en.length; i++) h = Math.imul(h ^ en.charCodeAt(i), 16777619)
+  let out = ''
+  for (let i = 0; i < 5; i++) { out += ${JSON.stringify(ALPHABET)}[h & 63]; h >>>= 6 }
+  return out
+}
+
+/** [columns held (0 = packedKey(english), n + 1 = PACKED_LOCALES[n]), packed text] */
 const GROUPS: ReadonlyArray<readonly [readonly number[], string]> = [
 ${groupSrc.join('\n')}
 ]
@@ -156,7 +183,7 @@ function unpack(): Record<string, ReadonlyArray<string | 0>> {
   return table
 }
 
-/** English source string -> translations, positional by PACKED_LOCALES. */
+/** packedKey(English source string) -> translations, positional by PACKED_LOCALES. */
 export const PACKED: Record<string, ReadonlyArray<string | 0>> = unpack()
 `
 

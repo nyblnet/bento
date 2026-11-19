@@ -45,13 +45,22 @@ const quiet = process.argv.includes('--quiet')
 // IMPORT the generated table rather than regex it: the shipped shape is
 // column-major text (see build-i18n.mjs), and the decoded table is exactly
 // what the runtime reads.
-const { PACKED, PACKED_LOCALES } = await import(pathToFileURL(join(coreDir, 'packed.ts')).href)
-const KEYS = Object.keys(PACKED)
-if (!KEYS.length) {
-  console.error('test-i18n-coverage: no keys found in packed.ts — has build-i18n.mjs run?')
+const { PACKED, PACKED_LOCALES, packedKey } = await import(pathToFileURL(join(coreDir, 'packed.ts')).href)
+const LOCALES = [...PACKED_LOCALES]
+// The table is keyed by a hash of the English string, so the key universe is
+// read from the authored catalogs and each key is looked up the way t() does.
+const KEYS = []
+{
+  const seen = new Set()
+  for (const l of LOCALES) {
+    const mod = await import(pathToFileURL(join(coreDir, `${l}.ts`)).href)
+    for (const k of Object.keys(Object.values(mod)[0])) if (!seen.has(k)) { seen.add(k); KEYS.push(k) }
+  }
+}
+if (!KEYS.length || Object.keys(PACKED).length !== KEYS.length) {
+  console.error('test-i18n-coverage: packed.ts does not match the catalogs — has build-i18n.mjs run?')
   process.exit(1)
 }
-const LOCALES = [...PACKED_LOCALES]
 
 const pct = (n) => ((n / KEYS.length) * 100).toFixed(1)
 const bar = (n) => '█'.repeat(Math.round((n / KEYS.length) * 20)).padEnd(20, '·')
@@ -64,7 +73,7 @@ let failed = false
 // so this measures what a reader actually gets.
 const coreMissing = Object.fromEntries(LOCALES.map((l) => [l, []]))
 for (const k of KEYS) {
-  const vals = PACKED[k]
+  const vals = PACKED[packedKey(k)] ?? []
   LOCALES.forEach((l, i) => { if (vals.length <= i || !vals[i]) coreMissing[l].push(k) })
 }
 

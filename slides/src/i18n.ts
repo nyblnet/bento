@@ -17,7 +17,7 @@
 //
 //     node scripts/build-i18n.mjs
 //
-import { PACKED, PACKED_LOCALES } from './i18n/packed'
+import { PACKED, PACKED_LOCALES, packedKey } from './i18n/packed'
 import { PACK_BLOCK_TYPE, readPacksFromShell, refreshPacksForVersion, shellBlocksForPacks } from './packs'
 import { registerShellBlocks } from '../../kernel/src/save.ts'
 import { registerUpdatePrepare } from '../../kernel/src/update.ts'
@@ -43,6 +43,7 @@ registerI18n({
   packed: {
     locales: PACKED_LOCALES,
     table: PACKED,
+    keyOf: packedKey,
     alias: {
       zh: 'zh-Hans', // zh, zh-CN, zh-SG → simplified
       'zh-CN': 'zh-Hans',
