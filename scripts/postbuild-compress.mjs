@@ -90,7 +90,9 @@ const deflate = async (buf) => {
   const packed = (!zopfli || process.env.ZOPFLI === '0')
     ? deflateRawSync(buf, { level: 9 })
     : await new Promise((res, rej) =>
-        zopfli.deflate(buf, { numiterations: iterations }, (e, out) => (e ? rej(e) : res(Buffer.from(out)))))
+        // blocksplittingmax 0 = no cap on deflate blocks (the default stops at 15):
+        // a megabyte of mixed code, CSS and translations wants more. Same format.
+        zopfli.deflate(buf, { numiterations: iterations, blocksplittingmax: 0 }, (e, out) => (e ? rej(e) : res(Buffer.from(out)))))
   if (!inflateRawSync(packed).equals(buf)) {
     console.error('postbuild-compress: the packed payload does not inflate back to what went in.\n' +
       '  Refusing to write a shell whose runtime cannot be recovered. This is a bug in the\n' +
@@ -484,7 +486,7 @@ const DIAG = `
   probe('meta csp', function () { var m = document.querySelector('meta[http-equiv=Content-Security-Policy]'); return m ? m.content : 'no meta csp (a header CSP is invisible here)' })
   document.addEventListener('securitypolicyviolation', function (e) { say('CSP violation: ' + e.violatedDirective + ' blocked ' + e.blockedURI + (e.sample ? ' sample ' + e.sample : '')) })
 `
-const loader = `
+const loaderSource = `
 (async () => {${diag ? DIAG : ''}
   var violations = 0
   document.addEventListener('securitypolicyviolation', function () { violations++ })
@@ -677,6 +679,15 @@ const loader = `
   }
 })()
 `
+// The loader ships as PLAINTEXT in every file, so its comments and indentation
+// are shipped bytes (3.4 KB of 11.4). Whole-line comments and leading
+// whitespace are dropped here; statements, names and line breaks are kept, so
+// the text is still readable in a saved file and every line still ends where
+// it did (no ASI change). No loader line starts with // inside a string or a
+// template, and none may: such a line would be dropped. Checked when this
+// landed by tokenizing the loader before and after, plain and --diag: the
+// token streams are identical.
+const loader = '\n' + loaderSource.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('//')).join('\n') + '\n'
 if (loader.includes('</scr' + 'ipt>')) throw new Error('loader contains script-close')
 
 // --- assemble ----------------------------------------------------------------
