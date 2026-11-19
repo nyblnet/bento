@@ -11,7 +11,7 @@
 import type { MNode, Font } from './ast.ts'
 import { styledChar } from './symbols.ts'
 
-const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+export const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
 // operators that TeX spaces as relations/binaries get lspace/rspace from the
 // browser's operator dictionary — we emit plain <mo> and let it work. The one

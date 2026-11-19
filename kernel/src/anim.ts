@@ -41,7 +41,7 @@ const EASES: Record<string, EaseFn> = {
 
 // --- color + number interpolation --------------------------------------------
 
-const parseColor = (v: string): [number, number, number, number] | null => {
+export const parseColor = (v: string): [number, number, number, number] | null => {
   const m = v?.match(/rgba?\(([^)]+)\)/)
   if (m) {
     const p = m[1].split(/[\s,/]+/).map(Number)

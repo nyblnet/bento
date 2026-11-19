@@ -6,7 +6,7 @@
 
 import Reveal from 'reveal.js'
 import 'reveal.js/dist/reveal.css'
-import { anim, ease, resetXform } from './anim'
+import { anim, ease, parseColor, resetXform } from './anim'
 import { chartSnapshotSvg, mountChart } from './charts'
 import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
 import { morphKey, paginates, inLinearFlow, isWebUrl, visiblePaint } from './model'
@@ -2513,22 +2513,7 @@ let morphGradSeq = 0
 
 /** Any solid CSS color we author (#hex / rgb / rgba) → [r, g, b, a]. */
 export function colorParts(v: string): [number, number, number, number] {
-  const m = v?.match(/rgba?\(([^)]+)\)/)
-  if (m) {
-    const p = m[1].split(/[\s,/]+/).map(Number)
-    return [p[0] || 0, p[1] || 0, p[2] || 0, Number.isFinite(p[3]) ? p[3] : 1]
-  }
-  let hex = (v ?? '').trim()
-  if (/^#[0-9a-fA-F]{3}$/.test(hex)) hex = '#' + [...hex.slice(1)].map((c) => c + c).join('')
-  if (/^#[0-9a-fA-F]{6,8}$/.test(hex)) {
-    return [
-      parseInt(hex.slice(1, 3), 16),
-      parseInt(hex.slice(3, 5), 16),
-      parseInt(hex.slice(5, 7), 16),
-      hex.length === 9 ? parseInt(hex.slice(7, 9), 16) / 255 : 1,
-    ]
-  }
-  return [0, 0, 0, v === 'transparent' || v === 'none' ? 0 : 1]
+  return parseColor(v) ?? [0, 0, 0, 1]
 }
 
 export const rgbaStr = (c: [number, number, number, number]) =>
