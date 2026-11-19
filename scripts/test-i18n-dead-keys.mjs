@@ -96,7 +96,8 @@ if (dead.length) {
   console.error(`\n${dead.length} catalog key(s) no bundled source produces (${ROOTS.join(', ')}):`)
   for (const k of dead) console.error('  ' + JSON.stringify(k))
   console.error(
-    '\nDelete them from slides/src/i18n/*.ts and packs/*.ts, then run node scripts/build-i18n.mjs.\n' +
+    '\nDelete them from slides/src/i18n/*.ts (NOT from packs/*.ts: a pack is fetched by shells already\n' +
+    'released, which may still show the string), then run node scripts/build-i18n.mjs.\n' +
     'If a key is built at run time, add it to DYNAMIC in ' + relative(root, fileURLToPath(import.meta.url)) + ' with the place that builds it.',
   )
 }

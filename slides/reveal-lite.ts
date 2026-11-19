@@ -46,14 +46,17 @@ const STUBS: Record<string, string> = {
   // Reveal's speaker window boots a second editor; screens.ts replaces it
   'controllers/notes.js': stub(
     'getSlideNotes(){return null}isSpeakerNotesWindow(){return false}' + noop('configure', 'render', 'update', 'updateVisibility', 'destroy')),
-  // hash: false, history: false — nothing is written to the URL or read back
-  // on hashchange. What stays is index parsing: the first slide() of a show,
-  // and the jump-to-slide box, both go through it.
+  // hash: false, history: false — nothing is written to the URL. What stays
+  // is reading it: index parsing for the first slide() of a show and the
+  // jump-to-slide box, and the hashchange listener.
   'controllers/location.js': stub(
     'getIndicesFromHash(s=window.location.hash,o={}){const b=s.replace(/^#\\/?/,"").split("/");if(!/^[0-9]*$/.test(b[0]))return null;' +
     'const k=o.oneBasedIndex?1:0;return{h:parseInt(b[0],10)-k||0,v:parseInt(b[1],10)-k||0}}' +
     'readURL(){const R=this.Reveal,c=R.getIndices(),n=this.getIndicesFromHash();n?(n.h!==c.h||n.v!==c.v)&&R.slide(n.h,n.v):R.slide(c.h||0,c.v||0)}' +
-    'getHash(){return"/"}' + noop('bind', 'unbind', 'writeURL')),
+    'getHash(){return"/"}' +
+    // a hash typed or navigated to mid-show still moves it, as Reveal's own listener did
+    'bind(){this.h=this.h||(()=>this.readURL());window.addEventListener("hashchange",this.h)}' +
+    'unbind(){window.removeEventListener("hashchange",this.h)}' + noop('writeURL')),
   // no data-background-*: a slide's background is painted by render.ts. The
   // overview still re-parents this element, so it stays a real (empty) node.
   'controllers/backgrounds.js': stub(
@@ -84,7 +87,9 @@ const STUBS: Record<string, string> = {
     'R.getRevealElement().appendChild(d);R.dispatchEvent({type:"showhelp"})}' +
     noop('update', 'setState', 'previewIframe', 'previewImage', 'previewVideo')),
   // autoSlide: 0 — the play/pause ring is never built
-  'components/playback.js': 'export default class{}',
+  // constructed only for ?autoSlide=N, which Reveal reads from the URL; the
+  // ring is not drawn, but the show must still start and advance
+  'components/playback.js': 'export default class{' + noop('on', 'off', 'setPlaying', 'destroy') + '}',
 }
 /** bare imports Reveal's source makes that the stage does not need. */
 const BARE: Record<string, string> = {
