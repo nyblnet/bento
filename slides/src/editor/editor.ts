@@ -1008,8 +1008,13 @@ export class Editor {
     // bar overflowing at all (at 768px it sat on Undo and Redo): two of the
     // bar's own groups overlapping is the same condition.
     // (a group's buttons spill past its own box, so compare the buttons)
+    // The collaborator avatars are a STACK: each overlaps the one before it on
+    // purpose, so they count as one box, their container's. Counted one by
+    // one, two people in a session read as a collision and folded the whole
+    // bar into its phone layout at any width, which also moved the Share
+    // popover into the closed ⋯ menu (test-slides-people-tiers-browser.mjs).
     const collide = () => {
-      const boxes = [...bar.querySelectorAll<HTMLElement>('button')]
+      const boxes = [...bar.querySelectorAll<HTMLElement>('button:not(.ed-avatar), .ed-avatars')]
         .filter((b) => !b.closest('.ed-menu'))
         .map((b) => b.getBoundingClientRect()).filter((r) => r.width > 0).sort((a, b) => a.left - b.left)
       return boxes.some((r, i) => i > 0 && boxes[i - 1].right - r.left > 1)
