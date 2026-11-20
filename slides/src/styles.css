@@ -3999,7 +3999,11 @@ body.ed-row-resizing .ed-notespane-text { transition: none !important; }
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
   min-height: 36px; padding: 5px 8px; margin: 0 -8px; border-radius: 7px;
 }
-.ed-keys-row + .ed-keys-row { box-shadow: 0 -1px 0 var(--line); }
+/* The divider is a straight 1px line inset to the text, drawn as a background.
+   It was a box-shadow, which follows the row's 7px radius: each line ended in
+   a small hook at both ends. Hover and focus set `background`, so the line
+   steps aside for the pill. */
+.ed-keys-row + .ed-keys-row { background: linear-gradient(var(--line), var(--line)) 8px 0 / calc(100% - 16px) 1px no-repeat; }
 .ed-keys-row:hover, .ed-keys-row:focus { background: var(--chrome-2); outline: none; }
 .ed-keys-row:focus-visible { box-shadow: inset 0 0 0 2px var(--accent-ink); }
 .ed-keys-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
