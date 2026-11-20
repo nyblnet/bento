@@ -39,13 +39,16 @@ try {
   await p.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-topbar'))
   await p.waitForTimeout(400)
 
-  const btn = (title) => p.locator(`.ed-topbar .ed-btn[title="${title}"]`).first()
+  // by command, not by tooltip: the tooltip names the platform's modifier
+  // ("Undo (CtrlZ)" off a Mac), and so do the key chips below
+  const MODK = await p.evaluate(() => (navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'))
+  const btn = (cmd) => p.locator(`.ed-topbar .ed-btn[data-cmd="${cmd}"]`).first()
   const tip = () => p.evaluate(() => {
     const t = document.querySelector('.ed-tip')
     return t && !t.hidden ? { text: t.firstChild?.textContent ?? '', keys: [...t.querySelectorAll('kbd')].map((k) => k.textContent) } : null
   })
-  const undo = btn('Undo (⌘Z)')
-  const redo = btn('Redo (⇧⌘Z)')
+  const undo = btn('undo')
+  const redo = btn('redo')
   const ub = await undo.boundingBox(), rb = await redo.boundingBox()
   const undoNode = await undo.elementHandle()
   const attrs = () => undoNode.evaluate((n) => ({ title: n.getAttribute('title'), label: n.getAttribute('aria-label'), hint: n.dataset.hint ?? null }))
@@ -58,7 +61,7 @@ try {
   await p.waitForTimeout(500)
   const t1 = await tip()
   ok(t1?.text.trim() === 'Undo', `after a rest, the words (${JSON.stringify(t1)})`)
-  ok(JSON.stringify(t1?.keys) === '["⌘Z"]', 'and the shortcut as keys')
+  ok(JSON.stringify(t1?.keys) === JSON.stringify([MODK + 'Z']), `and the shortcut as keys (${JSON.stringify(t1?.keys)})`)
 
   // 4. borrowed while hovered
   const during = await attrs()
