@@ -15172,3 +15172,32 @@ shell, which deflate-side work brought back to 790,985 B and no further.
   (measured −5,381 B on a fuller stack), not done here. Firefox and WebKit
   were not run. The slides `reference` in `scripts/size-budgets.json` is a
   local figure.
+
+## 2026-11-20 — The slides translation table is laid out for LZMA; hashed keys are withdrawn
+
+Closes the item the entry above left open, and withdraws one bullet of
+2026-11-19 ("hashed keys") for as long as slides is packed with LZMA.
+
+- **Plain English keys again.** The hash commit is reverted whole: the
+  optional `keyOf` field is gone from kernel `i18n.ts`, `t()` looks a string
+  up by itself, and a string that is in no catalog can no longer meet a row
+  by chance (it was about 1 in 840,000).
+- **One run per language**, in the order en, es, pt, it, fr, de, zh-Hans,
+  zh-Hant, ja. The es/pt and zh-Hans/zh-Hant pairs are no longer interleaved.
+- **Why the reversal.** Both were deflate choices. Deflate looks back 32 KB,
+  so a key in the table could not be matched against its `t('…')` call site
+  and a sibling translation had to be put next to its twin. LZMA's window is
+  the whole payload. Measured on the shell one commit earlier, lzma/base91:
+  paired runs + hashed keys 694,464 B; paired + plain 692,224; separate +
+  hashed 691,321; separate + plain 688,993. Row-major, for reference:
+  700,753 plain, 704,217 hashed — so the column layout itself still pays.
+- **Measured here:** 693,227 → 687,722 B (−5,505), which is 34,644 B under
+  the 722,366 B shell that preceded #897.
+- **Same table.** 1,276 keys × 8 locales compared cell by cell against the
+  hashed table: 0 differences. In the built shells, `t()` for every key in
+  ten browser locales (the eight bundled, en, and unbundled nl): 12,780
+  answers, 0 differences from the previous build.
+- **Tied to the codec.** Under deflate this layout is about 15 KB worse than
+  2026-11-19's. If slides goes back to deflate, the table goes back with it;
+  `scripts/build-i18n.mjs` says so where `GROUPS` is defined.
+

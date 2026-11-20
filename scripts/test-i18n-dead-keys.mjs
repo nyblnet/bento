@@ -66,19 +66,10 @@ const walk = (dir) => {
 }
 for (const r of ROOTS) walk(join(root, r))
 
-// The shipped table is keyed by a hash of the English string, so the key
-// universe is the authored catalogs; the table must agree with them key for key.
-const { PACKED, PACKED_LOCALES, packedKey } = await import(pathToFileURL(join(coreDir, 'packed.ts')).href)
-const KEYS = []
-{
-  const seen = new Set()
-  for (const l of PACKED_LOCALES) {
-    const mod = await import(pathToFileURL(join(coreDir, `${l}.ts`)).href)
-    for (const k of Object.keys(Object.values(mod)[0])) if (!seen.has(k)) { seen.add(k); KEYS.push(k) }
-  }
-}
-if (!KEYS.length || Object.keys(PACKED).length !== KEYS.length || KEYS.some((k) => !PACKED[packedKey(k)])) {
-  console.error('test-i18n-dead-keys: packed.ts does not match the catalogs — has build-i18n.mjs run?')
+const { PACKED } = await import(pathToFileURL(join(coreDir, 'packed.ts')).href)
+const KEYS = Object.keys(PACKED)
+if (!KEYS.length) {
+  console.error('test-i18n-dead-keys: no keys in packed.ts — has build-i18n.mjs run?')
   process.exit(1)
 }
 
