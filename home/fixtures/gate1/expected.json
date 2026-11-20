@@ -75,6 +75,22 @@
       "why": "the data allowlist is exact: another case is executable"
     },
     {
+      "case": "served/lzma-b91-runtime-blocks.html",
+      "verdict": "genuine",
+      "release": "1.0.0",
+      "why": "bento/lzma-b91 is a data type: the runtime blocks of an lzma-packed shell are inert, and the pins hash their text whatever the type"
+    },
+    {
+      "case": "served/lzma-b86-is-not-a-type.html",
+      "verdict": "unknown",
+      "why": "only the pairing that ships is on the allowlist: lzma over base86 is an unknown type, so it is executable"
+    },
+    {
+      "case": "served/deflate-b91-is-not-a-type.html",
+      "verdict": "unknown",
+      "why": "deflate over base91 never shipped either"
+    },
+    {
       "case": "served/uppercase-SCRIPT.html",
       "verdict": "unknown",
       "why": "an uppercase tag is still a script"

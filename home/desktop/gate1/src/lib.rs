@@ -311,7 +311,7 @@ pub fn scan_blocks(html: &str) -> Vec<Block<'_>> {
 
 // --- the grammar (security, 2026-10-21) ------------------------------------------
 
-pub const DATA_TYPES: [&str; 4] = ["application/bento+json", "application/bento+lang", "bento/deflate-b64", "bento/deflate-b86"];
+pub const DATA_TYPES: [&str; 5] = ["application/bento+json", "application/bento+lang", "bento/deflate-b64", "bento/deflate-b86", "bento/lzma-b91"];
 
 /// A <script> is inert ONLY if its type is exactly one of Bento's data types and it has no src.
 pub fn is_data_script(b: &Block) -> bool {
