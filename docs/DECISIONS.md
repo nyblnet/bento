@@ -15201,3 +15201,25 @@ Closes the item the entry above left open, and withdraws one bullet of
   2026-11-19's. If slides goes back to deflate, the table goes back with it;
   `scripts/build-i18n.mjs` says so where `GROUPS` is defined.
 
+## 2026-11-20 — Zone CI runs on a PR only when its paths changed; `validate` still runs on every PR
+
+Every one of the eleven workflows ran on every pull request, whatever it
+touched: a slides-only PR ran the desktop host rigs on three runners, the iOS
+simulator, the directory mutants. None of those is the required check.
+
+- **`pull_request` in each `ci-<zone>.yml`, and in `pr-build-size.yml`, has a
+  `paths:` filter**: the zone's own tree, what it builds from (`kernel/**`,
+  the shared packer and `scripts/lib/**`), the rigs it runs, and the workflow
+  file itself. The native zones list their fixtures instead of kernel source:
+  they run ports, not the TypeScript.
+- **`ci.yml` has no filter.** It holds `validate`, the one required check
+  (2026-10-18), and runs every zone's slice on every PR as before. A skipped
+  zone workflow leaves nothing pending, because nothing requires it.
+- **`push` to main is not filtered.** Every merge still runs everything; that
+  run is the net for a filter that was too narrow.
+- **A filter is a way to skip silently, so `test-ci-registered.ts` holds
+  three things:** `ci.yml` has no filter; a filtered workflow lists itself;
+  every script a filtered workflow runs matches one of its paths.
+- **What it does not buy:** a PR that changes the kernel or the shared packer
+  still runs nearly everything, and should. #897 is one.
+

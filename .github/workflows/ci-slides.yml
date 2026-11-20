@@ -11,6 +11,26 @@ name: CI (slides)
 
 on:
   pull_request:
+    # ONLY WHEN THIS ZONE COULD BE AFFECTED. These jobs are not the required
+    # check (`validate`, ci.yml, runs on every PR and is unfiltered), so a PR
+    # that touches none of these paths skips them and nothing waits on them.
+    # The push to main below is NOT filtered: every merge still runs the lot.
+    # A script this file runs must match a path here; scripts/test-ci-registered.ts
+    # holds that, and that this file is on its own list.
+    paths:
+      - '.github/workflows/ci-slides.yml'
+      - 'slides/**'
+      - 'schema/**'
+      - 'kernel/**'
+      - 'scripts/lib/**'
+      - 'scripts/ci/**'
+      - 'scripts/postbuild-compress.mjs'
+      - 'scripts/shell-gate.mjs'
+      - 'scripts/derive-pins.mjs'
+      - 'scripts/test-slides-*'
+      - 'scripts/test-*-browser.mjs'
+      - 'scripts/test-gate1-oracle.mjs'
+      - 'scripts/test-sealed-boot.mjs'
   push:
     branches: [main]
 

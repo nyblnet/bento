@@ -2,6 +2,21 @@ name: PR build size
 
 on:
   pull_request:
+    # ONLY WHEN THIS ZONE COULD BE AFFECTED. These jobs are not the required
+    # check (`validate`, ci.yml, runs on every PR and is unfiltered), so a PR
+    # that touches none of these paths skips them and nothing waits on them.
+    # This workflow has no push trigger: it only ever comments on a PR.
+    # A script this file runs must match a path here; scripts/test-ci-registered.ts
+    # holds that, and that this file is on its own list.
+    paths:
+      - '.github/workflows/pr-build-size.yml'
+      - 'slides/**'
+      - 'spaces/**'
+      - 'dash/**'
+      - 'type/**'
+      - 'kernel/**'
+      - 'scripts/postbuild-compress.mjs'
+      - 'scripts/lib/**'
     types: [opened, reopened, synchronize, edited]
 
 permissions:
