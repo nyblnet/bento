@@ -36,6 +36,9 @@ import { createServer } from 'node:http'
 import { randomBytes } from 'node:crypto'
 import { deflateRawSync } from 'node:zlib'
 import { encode, decode, ALPHABET, BASE, FORBIDDEN, LOADER_DECODER } from './lib/b86.mjs'
+import * as B91 from './lib/b91.mjs'
+import { unlzma } from './lib/unlzma.js'
+import { pathToFileURL } from 'node:url'
 
 let failures = 0
 let checks = 0
@@ -82,6 +85,109 @@ ok(hits === 0, `${FORBIDDEN.map((f) => JSON.stringify(f)).join(' ')} — zero hi
 // worst case by construction: the bytes that would spell them in base64 or raw
 ok(!FORBIDDEN.some((f) => encode(new Uint8Array(Buffer.from(f.repeat(50)))).includes(f)), 'encoding the sequences themselves does not reproduce them')
 
+console.log('\nbase91 — the carrier of the lzma blocks\n')
+ok(B91.ALPHABET.length === 91 && new Set(B91.ALPHABET).size === 91 && !/[<>{ ]/.test(B91.ALPHABET) && [...B91.ALPHABET].every((c) => c.charCodeAt(0) >= 0x21 && c.charCodeAt(0) <= 0x7e), 'ninety-one distinct printable ASCII symbols, no < > { or space')
+let rt91 = true
+for (let len = 0; len < 80; len++) for (let r = 0; r < 8; r++) { const b = new Uint8Array(randomBytes(len)); const t = B91.encode(b); if (!eq(B91.decode(t), b)) rt91 = false; const bits = len * 8, rem = bits % 13; if (t.length !== Math.floor(bits / 13) * 2 + (rem > 6 ? 2 : rem ? 1 : 0)) rt91 = false }
+ok(rt91, 'every length 0–79 round-trips byte-identical, 13 bits per two characters with a one- or two-character tail')
+ok([[0, 0, 0, 0], [255, 255, 255, 255], [255], [0], [255, 255, 255], [128, 0, 0, 1], new Array(27).fill(255)].every((e) => eq(B91.decode(B91.encode(new Uint8Array(e))), new Uint8Array(e))), 'edge values incl. all-0xFF runs and tails')
+threw = false
+try { B91.decode('ab<d') } catch { threw = true }
+ok(threw, 'a character outside the alphabet is refused')
+const loaderDecode91 = new Function(B91.LOADER_DECODER + '\nreturn ' + B91.LOADER_DECODE_FN)() as (t: string) => Uint8Array
+let agree91 = true
+for (let len = 0; len < 80; len++) { const b = new Uint8Array(randomBytes(len)); if (!eq(loaderDecode91(B91.encode(b)), b)) agree91 = false }
+ok(agree91, "the loader's inline decoder agrees with decode() byte for byte")
+let hits91 = 0, cat91 = ''
+for (let r = 0; r < 10000; r++) {
+  const t = B91.encode(new Uint8Array(randomBytes(1 + (r % 97))))
+  cat91 += t
+  if (cat91.length > 100000) { for (const f of FORBIDDEN) if (cat91.includes(f)) hits91++; cat91 = cat91.slice(-8) }
+}
+for (const f of FORBIDDEN) if (cat91.includes(f)) hits91++
+ok(hits91 === 0 && !FORBIDDEN.some((f) => B91.encode(new Uint8Array(Buffer.from(f.repeat(50)))).includes(f)), `${FORBIDDEN.map((f) => JSON.stringify(f)).join(' ')} — zero hits in 10,000 random buffers, their concatenations, and the sequences themselves`)
+
+console.log('\nlzma — the decoder the loader ships, against an independent one\n')
+// lzma1 is the encoder the packer pins, and it carries its own decoder,
+// written independently of scripts/lib/unlzma.js (a port of XZ for Java).
+// Ours must agree with it on everything it encodes, and must REFUSE what is
+// not a stream: the shell gate and the site scripts run this same decoder on
+// files they did not build.
+const lzmaLibPath = join(root, 'slides/node_modules/lzma1/lib/index.js')
+if (!existsSync(lzmaLibPath)) {
+  ok(false, 'lzma1 is installed in slides/node_modules (run npm ci in slides/)')
+} else {
+  const lib = await import(pathToFileURL(lzmaLibPath).href) as { compress(b: Uint8Array, o: object): Uint8Array; decompressRawLzma1(b: Uint8Array, o: object): Uint8Array }
+  const P = { lc: 3, lp: 0, pb: 0 }
+  const frame = (data: Uint8Array, endMarker = false) => {
+    const alone = lib.compress(data, { level: 9, ...P, niceLen: 273, endMarker })
+    const out = new Uint8Array(4 + alone.length - 13)
+    new DataView(out.buffer).setUint32(0, data.length, true); out.set(alone.subarray(13), 4)
+    return { out, alone }
+  }
+  // inputs that walk the state machine: empty, one byte, long runs (rep
+  // matches), text (literals after matches), noise (all literals), and a
+  // repeat at a distance beyond 64 KiB (the long-distance slots)
+  const text = Buffer.from(readFileSync(join(root, 'scripts/postbuild-compress.mjs')))
+  const far = Buffer.concat([randomBytes(70000), Buffer.from('x'.repeat(300)), randomBytes(70000)]); far.copy(far, 100000, 10, 4000)
+  const samples: Array<[string, Uint8Array]> = [
+    ['empty', new Uint8Array(0)], ['one byte', new Uint8Array([7])], ['a run of zeros', new Uint8Array(50000)],
+    ['source text', new Uint8Array(text)], ['source text twice', new Uint8Array(Buffer.concat([text, text]))],
+    ['noise', new Uint8Array(randomBytes(30000))], ['matches beyond 64 KiB', new Uint8Array(far)],
+    ...Array.from({ length: 24 }, (_, i) => [`mixed ${i}`, new Uint8Array(Buffer.concat([randomBytes(i * 37), text.subarray(i * 500, i * 500 + i * 900), Buffer.alloc(i * 11, i), text.subarray(0, i * 300)]))] as [string, Uint8Array]),
+  ]
+  let allAgree = true, deterministic = true, marker = true
+  for (const [name, data] of samples) {
+    const { out, alone } = frame(data)
+    const dict = (alone[1] | alone[2] << 8 | alone[3] << 16 | alone[4] << 24) >>> 0
+    const ours = unlzma(out), theirs = lib.decompressRawLzma1(out.subarray(4), { ...P, dictSize: dict, uncompressedSize: data.length })
+    if (!eq(ours, data) || !eq(theirs, data)) { allAgree = false; console.log('    differs: ' + name) }
+    if (!eq(frame(data).out, out)) deterministic = false
+    if (!eq(unlzma(frame(data, true).out), data)) marker = false
+  }
+  ok(allAgree, `${samples.length} inputs (empty, runs, text, noise, far matches, mixtures): our decoder and the reference decoder both return the input`)
+  ok(deterministic, 'encoding the same input twice gives the same bytes')
+  ok(marker, 'a stream that carries an end marker decodes too')
+  const good = frame(new Uint8Array(text)).out
+  const refuses = (b: Uint8Array) => { try { unlzma(b); return false } catch { return true } }
+  ok(refuses(good.subarray(0, good.length >> 1)) && refuses(good.subarray(0, good.length - 8)), 'a truncated stream is refused, not decoded to zero-fed bytes of the right length')
+  const huge = good.slice(); new DataView(huge.buffer).setUint32(0, 0xfffffff0, true)
+  ok(refuses(huge), 'a declared length of 4 GiB is refused before anything is allocated')
+  const longer = good.slice(); new DataView(longer.buffer).setUint32(0, text.length + 4096, true)
+  ok(refuses(longer), 'a declared length beyond what the stream holds is refused')
+  // flip bits through the stream: every outcome is a refusal or the WRONG
+  // bytes of the declared length — never a hang, never an out-of-bounds write
+  let bounded = true
+  for (let i = 0; i < 400; i++) {
+    const bad = good.slice(); bad[5 + ((i * 7919) % (bad.length - 5))] ^= 1 << (i % 8)
+    try { const r = unlzma(bad); if (r.length !== text.length) bounded = false } catch { /* refused */ }
+  }
+  ok(bounded, '400 single-bit corruptions: each is refused or yields exactly the declared length')
+}
+
+console.log('\nthe built shell — lzma\n')
+{
+  const d = mkdtempSync(join(tmpdir(), 'shell-loader-lzma-'))
+  const f = join(d, 'shell.html')
+  const pageSrc = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>t</title>
+<script type="module" crossorigin>window.bento = { doc: { format: 'bento/slides' } }; const T = '[data-bento-transient]'; document.getElementById('app').textContent = 'mounted' + T.length</script>
+<style rel="stylesheet" crossorigin>#app{color:red}</style>
+<script type="application/bento+json" id="bento-doc"></script></head>
+<body><style>#bento-splash{opacity:.5}</style><div id="bento-splash"><div>splash</div></div><div id="app"></div></body></html>`
+  const pack = (args: string[]) => { writeFileSync(f, pageSrc); try { execFileSync(process.execPath, [join(root, 'scripts/postbuild-compress.mjs'), f, ...args], { cwd: join(root, 'slides'), encoding: 'utf8', stdio: 'pipe', env: { ...process.env, ZOPFLI: '0' } }); return 'ok' } catch (e) { return String((e as { stderr?: string }).stderr ?? e) } }
+  ok(pack(['--codec', 'lzma', '--encoding', 'b91']) === 'ok', 'packs with --codec lzma --encoding b91')
+  const a = readFileSync(f, 'utf8')
+  ok((a.match(/type="bento\/lzma-b91"/g) ?? []).length === 2 && !/type="bento\/deflate/.test(a), 'two bento/lzma-b91 payload blocks and no deflate block')
+  const gateRun = (file: string) => { try { execFileSync(process.execPath, [join(root, 'scripts/shell-gate.mjs'), file], { encoding: 'utf8', stdio: 'pipe' }); return 'ok' } catch (e) { return String((e as { stderr?: string }).stderr ?? e) } }
+  ok(gateRun(f) === 'ok', 'the splice gate passes on the lzma shell')
+  const blk = /<script id="bento-rt-css" type="bento\/lzma-b91"[^>]*>([^<]*)<\/script>/.exec(a)
+  ok(!!blk && Buffer.from(unlzma(B91.decode(blk[1]))).toString() === '#app{color:red}', 'the css payload is base91 over lzma and decodes to the stylesheet')
+  ok(pack(['--codec', 'lzma', '--encoding', 'b91']) === 'ok' && readFileSync(f, 'utf8') === a, 'packing the same page again gives a byte-identical shell')
+  ok(/go together/.test(pack(['--codec', 'lzma'])) && /go together/.test(pack(['--encoding', 'b91'])), 'lzma without b91, and b91 without lzma, are refused: one new block type, not three')
+  ok(/needs --inflate js/.test(pack(['--codec', 'lzma', '--encoding', 'b91', '--inflate', 'native'])), '--inflate native is refused with lzma: no browser decodes it')
+  rmSync(d, { recursive: true, force: true })
+}
+
 console.log('\nthe built shell\n')
 // a synthetic vite-shaped single file: module script + linked stylesheet + doc block + splash
 const dir = mkdtempSync(join(tmpdir(), 'shell-loader-'))
@@ -93,7 +199,8 @@ const page = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>t</title>
 const shellPath = join(dir, 'shell.html')
 writeFileSync(shellPath, page)
 const run = (args: string[]) => execFileSync(process.execPath, [join(root, 'scripts/postbuild-compress.mjs'), shellPath, ...args], { cwd: join(root, 'slides'), encoding: 'utf8', env: { ...process.env, ZOPFLI: '0' } })
-run(['--loader', 'cascade'])
+const loaderSrcPath = join(dir, 'loader-source.js')
+run(['--loader', 'cascade', '--loader-source', loaderSrcPath])
 const built = readFileSync(shellPath, 'utf8')
 ok((built.match(/type="bento\/deflate-b86"/g) ?? []).length === 2, 'two bento/deflate-b86 payload blocks')
 ok(!/type="bento\/deflate-b64"/.test(built), 'no base64 block')
@@ -110,8 +217,23 @@ ok(eq(decode(payload), new Uint8Array(deflateRawSync(Buffer.from('#app{color:red
 ok(/data-len="\d+"/.test(m[1]) && Number(/data-len="(\d+)"/.exec(m[1])![1]) === payload.length, 'the block carries data-len equal to its text length')
 
 console.log('\nthe loader probes nothing and waits on nothing\n')
-const loader = /<script>\n\(async \(\) => \{([\s\S]*?)\n<\/script>\n\s*<\/body>/.exec(built)?.[1] ?? ''
-ok(loader.length > 0, 'the loader is the last script in the body')
+// TWO TEXTS. `shipped` is the loader as the file carries it: minified, so its
+// names and layout are esbuild's. `loader` is the same loader as authored
+// (--loader-source), where its shape can be read. Shape is asserted on the
+// source; everything that must hold of the bytes a reader runs — where it
+// sits, what it must not contain, what it may wait on — on what shipped.
+const shipped = /<script>\n(\(async\s*\(\)\s*=>\s*\{[\s\S]*?)\n<\/script>\n\s*<\/body>/.exec(built)?.[1] ?? ''
+const loader = existsSync(loaderSrcPath) ? readFileSync(loaderSrcPath, 'utf8') : ''
+ok(shipped.length < loader.length * 0.75, `it is minified: ${shipped.length} B shipped against ${loader.length} B authored`)
+for (const lit of ['data-bento-transient', 'sourceURL=bento-slides.js', 'createPolicy', 'new Function', 'securitypolicyviolation'])
+  ok(loader.includes(lit) && shipped.includes(lit), `authored and shipped both carry ${JSON.stringify(lit)}`)
+ok((shipped.match(/\bawait\b/g) ?? []).length === 1 && /await import\(/.test(shipped), 'shipped: the only await is the blob import')
+ok(!/requestAnimationFrame|setTimeout|setInterval|fonts\.ready|DOMContentLoaded/.test(shipped), 'shipped: no frame, timer, font or load wait')
+ok(!/atob\(/.test(shipped) && !/DecompressionStream/.test(shipped), 'shipped: no atob and no DecompressionStream (the decode is synchronous JavaScript)')
+ok(!/\.type\s*=\s*["']module["']/.test(shipped), 'shipped: the inline script is classic')
+ok((shipped.match(/createPolicy\(/g) ?? []).length === 2, 'shipped: createPolicy appears twice, as authored')
+ok(!/<\/scr\x69pt>/.test(shipped), 'shipped: no script-close')
+ok(loader.length > 0 && shipped.length > 0, 'the loader is the last script in the body')
 ok(!/new Function\(''\)/.test(loader), "no new Function('') eval probe")
 ok(/var installTT = function/.test(loader) && (loader.match(/createPolicy\(/g) ?? []).length === 2 && !/^\s*installTT\(\)/m.test(loader), 'createPolicy appears only inside the lazy install, never called at boot')
 ok(/runNow\('inline', viaInline\)/.test(loader) && /if \(!path\) runNow\('function', viaFunction\)/.test(loader) && /if \(!path\) \{[\s\S]{0,400}await import\(url\)/.test(loader), 'order: inline classic script, then new Function, then blob — each only after the previous was refused, synchronously')

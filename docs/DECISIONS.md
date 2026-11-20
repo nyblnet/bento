@@ -15110,3 +15110,65 @@ Not done: the lossless woff2 repack (about 1.2 KB) has no recorded recipe and
 drops name records, so it was left out. The slides `reference` in
 `scripts/size-budgets.json` is now 790,906 B, a local number to be replaced by
 the CI figure.
+
+## 2026-11-20 — bento/slides packs its runtime with LZMA, in base91
+
+Supersedes, for slides, two lines of earlier entries: 2026-08-19 "the format
+does not move" and its "a JS decoder costs more than it saves", and 2026-09-16
+"carries its runtime in base86". Both were right when written. What changed:
+a JavaScript inflater has shipped in every loader since 2026-09-16, so the
+decoder is no longer an added cost (the LZMA decoder is 1,436 B minified
+against the inflater's 2,455), and the editor revamp (#897) put 181 KB on the
+shell, which deflate-side work brought back to 790,985 B and no further.
+
+- **Block type `bento/lzma-b91`**, one new type, not three. Raw LZMA1 with
+  lc=3, lp=0, pb=0 (pb=2 costs about 1 KB on these payloads), preceded by a
+  4-byte little-endian length, no end marker. Carrier base91: printable ASCII
+  0x21–0x7E minus `<` `>` `{`, 13 bits per two characters. `</script`, `<!--`,
+  `-->`, `]]>` and `${` stay unproducible by construction (10,000-buffer rig,
+  as for base86). It keeps `&` `"` `'` `\` `-`, so unlike base86 it is safe as
+  script text only; nothing puts a payload anywhere else.
+- **Measured, slides:** 790,985 B (deflate, base86) → 693,227 B, 29,139 B
+  under the 722,366 B shell that preceded #897. Codec alone 705,353 B; the
+  carrier is worth about 11 KB more. Other apps stay on deflate until each is
+  built and measured; the codec is a per-app flag (`--codec lzma --encoding
+  b91`), and the packer refuses either half without the other.
+- **The encoder is pinned.** `lzma1` 0.8.0, a dependency-free TypeScript port
+  of XZ for Java, an exact-version devDependency of the app. The prototype
+  shelled out to the system `xz`, whose output varies by liblzma version; a
+  signed shell cannot depend on that. Same payload: lzma1 550,886 B, xz 5.4.5
+  `-9e` 550,937 B. Two builds of the same tree are byte-identical (checked on
+  the full slides shell and in the rig). The packer decodes every payload back
+  with BOTH the loader's decoder and lzma1's own before it writes.
+- **The decoder refuses instead of guessing:** a declared length over 256 MiB,
+  a distance before the start of the output, a stream that ends early, and one
+  that ran out of input (which would otherwise decode to bytes of exactly the
+  right length). `test-shell-loader.ts` holds it to the reference decoder on
+  31 inputs and through 400 single-bit corruptions.
+- **Cost: decode time.** 144 ms cold against 64 ms for inflate on the slides
+  runtime. Mount, Chromium, the loader rig's own measurement: 477 ms visible,
+  567 ms in a hidden document, before DOMContentLoaded in both — the property
+  2026-09-16 exists to protect. Three test decks (deflate/base86 as control,
+  lzma/base91, lzma/base86) went to the maintainer for Microsoft Teams and
+  were reported working; which panes, and how many uploads, is not recorded
+  here, and 2026-09-16 found the preview pane varies between uploads.
+- **Hosts first.** The type is in `DATA_TYPES` (kernel `gate1.ts`), the
+  generated webext copy, and the Swift, Kotlin and Rust verifiers; the corpus
+  has three new rows (lzma-b91 is data; lzma-b86 and deflate-b91 are not). An
+  installed host without the type calls an lzma shell UNKNOWN, so webext,
+  iOS, Android, desktop and home.bento.page must ship BEFORE the first slides
+  release built this way. The Rust port passes the corpus here; Swift and
+  Kotlin were edited and not compiled here.
+- **One reader.** `scripts/lib/payload.mjs` decodes every block type; the
+  gate, the standalone and sandbox rigs, the converter's boundary test and
+  `appHash` go through it. Each used to match the types it knew and skip the
+  rest, which on a new type means passing on nothing.
+- **The loader is minified whole** (all apps): 7,984 → about 6,700 B with
+  deflate, 5,646 B with lzma. Its shape is asserted on the authored source
+  (`--loader-source`), its guarantees on the shipped text.
+- **Left open.** The hashed key column (2026-11-19) costs about 2.2 KB under
+  LZMA instead of saving 12 KB, and one run per language beats the paired
+  runs by about 3 KB: the translation table wants re-laying for this codec
+  (measured −5,381 B on a fuller stack), not done here. Firefox and WebKit
+  were not run. The slides `reference` in `scripts/size-budgets.json` is a
+  local figure.

@@ -707,6 +707,16 @@ anim, charts, i18n, sync), shared by every app.
    `position: static`, as a section of the list. Anything else demoted into a
    menu must do the same.
 
+- **Slides ships LZMA (2026-11-20)**: `build:single` passes `--codec lzma
+  --encoding b91`, so the two payload blocks are `bento/lzma-b91` (raw LZMA1
+  in base91), not deflate. Encoder: `lzma1`, a devDependency pinned to an
+  EXACT version (the bytes are signed; never a range, never the system `xz`).
+  Decoder: `scripts/lib/unlzma.js`, synchronous, inlined into the loader.
+  Anything that looks inside a shell goes through `scripts/lib/payload.mjs`
+  (`unpack`), which reads all three block types. The zopfli notes below still
+  describe the deflate path, which spaces, dash and type use. The loader is
+  minified whole; `--loader-source <path>` writes the authored text, which is
+  what `test-shell-loader.ts` asserts shape on.
 - **Compressed shell (Phase 1)**: `scripts/postbuild-compress.mjs` (runs in
   build:single) deflates runtime JS+CSS into base64 `bento/deflate-b64` script
   blocks with ZOPFLI (same deflate format, packed harder — the loader and every
