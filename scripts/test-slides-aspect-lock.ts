@@ -65,7 +65,11 @@ ok(/b\.title = on \?/.test(lock), 'the padlock says what it does')
 
 console.log('\nthe panel keeps its scroll\n')
 const rebuild = panels.slice(panels.indexOf('rebuild(force = false)'), panels.indexOf('CLOSED_BY_DEFAULT'))
-ok(/const scrollTop = force \? 0 : this\.host\.scrollTop/.test(rebuild), 'a doc edit remembers the scroll; a selection/slide switch (force) starts at the top')
+// the rule moved from "force starts at the top" to the SUBJECT: the same slide
+// and selection keeps its scroll, whoever asked for the rebuild; another
+// subject starts at the top (panels.ts says why: force only means "now")
+ok(/const subject = `\$\{this\.store\.slide\.id\}\|\$\{this\.store\.selection\.join\(\)\}`/.test(rebuild) && /const same = subject === this\.subject/.test(rebuild) && /const scrollTop = same \? this\.host\.scrollTop : 0/.test(rebuild),
+  'the same slide and selection keeps the scroll; another selection or slide starts at the top')
 // The Layers list restores its OWN scroll between the two (#507) — a
 // different value; the panel's must still be the last thing set.
 ok(/this\.applyAccordion\(\)[^]*?this\.host\.scrollTop = scrollTop\s*\n\s*\}/.test(rebuild), 'the panel scroll is restored after the accordion runs (which can change the height)')

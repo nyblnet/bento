@@ -68,7 +68,7 @@ const AUDITED: Record<string, Bg> = {
   '.ed-comment-hl.slide': 'over-slide',        // "SLIDE" label on a whole-slide comment
   '.ed-comment-hl.pin': 'over-slide',          // coordinates beside a point comment
   '.ed-pathbar .ed-btn[aria-pressed="true"]': 'tab-on', // the path bar's chosen node kind, a lifted pill
-  '.ed-ratio-lock[aria-pressed="true"]': 'surface',    // the closed padlock between W and H, in the inspector
+  '.ed-props .ed-has-lock .ed-ratio-lock[aria-pressed="true"]': 'surface', // the closed padlock between W and H, in the inspector
   '.ed-a11y-badge.is-pass': 'surface',
   '.ed-link-btn': 'surface',                          // "Select the frame" under a frame child's hint, in the inspector                 // AA / AAA in the Export section
   '.ed-keys-foot a': 'surface',                       // "Full guide at bento.page/help →" under the shortcuts dialog
