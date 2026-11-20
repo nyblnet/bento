@@ -159,6 +159,17 @@ try {
       await p.waitForTimeout(250)
       const after = await p.locator('.ed-props .ed-section[data-key="Stroke"] + .ed-section-body .ed-color-alpha input').inputValue()
       ok(+after < +before, `the % inside the field scrubs the opacity (${before} → ${after})`)
+      // 0% is still a stroke. It used to read as "no stroke": the row went and
+      // only "+ Add stroke" was left. A scrub reaches 0 easily (on CI's Chromium
+      // this drag does, under pointer lock), which is how this was found: the
+      // read of `after` above timed out on a field that was no longer there.
+      {
+        const alpha = p.locator('.ed-props .ed-section[data-key="Stroke"] + .ed-section-body .ed-color-alpha input')
+        await alpha.fill('0'); await alpha.press('Enter'); await p.waitForTimeout(250)
+        const at0 = await p.evaluate(() => ({ field: document.querySelector('.ed-props .ed-section[data-key="Stroke"] + .ed-section-body .ed-color-alpha input')?.value ?? null, width: window.bento.doc.slides[0].elements[0].strokeWidth }))
+        ok(at0.field === '0' && at0.width > 0, `a stroke at 0% opacity keeps its row and its weight (${JSON.stringify(at0)})`)
+        ok(await strokeHead.locator('.ed-sec-act:not(.ed-sec-cat)').getAttribute('aria-label') !== 'Add stroke', 'and the header does not offer to add a first stroke over it')
+      }
       await p.locator('.ed-props .ed-section[data-key="Stroke"] + .ed-section-body .ed-paint-remove').click(); await p.waitForTimeout(250)
       ok((await p.evaluate(() => window.bento.doc.slides[0].elements[0].strokeWidth)) === 0, 'the row’s − takes the stroke away')
 

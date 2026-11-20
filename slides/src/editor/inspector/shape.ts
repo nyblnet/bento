@@ -294,6 +294,13 @@ function dashFields(dashes: [number, number] | undefined, set: (k: 0 | 1, v: num
   return grid
 }
 
+/** Does this shape have a single stroke to edit? No stroke is what − and the
+ *  defaults write: no width, or the literal 'transparent'. A stroke at 0%
+ *  opacity is still a stroke, as a 0% fill is still a fill: it used to read
+ *  as none, so scrubbing the opacity down to 0 took the row away from under
+ *  the pointer and left only "+ Add stroke", which then replaced the colour. */
+const hasStroke = (s: ShapeElement) => s.strokeWidth > 0 && !!s.stroke && s.stroke !== 'transparent' && s.stroke !== 'none'
+
 /** Stroke — an optional layer for a closed shape; a line IS its stroke, so
  *  a line's cannot be removed. An arrow is a closed polygon (kernel/src/
  *  shape.ts), so its stroke is optional like a rect's. A `line` is drawn in
@@ -301,7 +308,7 @@ function dashFields(dashes: [number, number] | undefined, set: (k: 0 | 1, v: num
  *  shows no Fill section for it; an open path is stroked with `stroke`. */
 export function buildShapeStroke(p: PropsPanel, el: ShapeElement) {
   const isLine = el.shape === 'line' || (el.shape === 'path' && !/z\s*$/i.test(el.d ?? ''))
-  const on = !!el.strokes || (el.strokeWidth > 0 && parseColor(el.stroke).a > 0)
+  const on = !!el.strokes || hasStroke(el)
   // Figma's Stroke: ⠿ and + on the header; + adds the stroke, then layers.
   // A line IS its stroke, so it has no − and no + for a first stroke.
   const addStroke = () => on || isLine
@@ -480,7 +487,7 @@ export function buildSharedPaint(p: PropsPanel, els: SlideElement[]) {
     p.host.appendChild(why)
   }
   if (shapes && closed && shapes.every((s) => !s.strokes && !s.strokeGradient)) {
-    const on = shapes.filter((s) => s.strokeWidth > 0 && parseColor(s.stroke).a > 0)
+    const on = shapes.filter(hasStroke)
     section(p, t('Stroke'), on.length
       ? { add: false, hint: t('Remove stroke'), run: () => each((e) => { (e as ShapeElement).strokeWidth = 0 }, true) }
       : { add: true, hint: t('Add stroke'), run: () => each((e) => {
