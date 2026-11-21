@@ -414,7 +414,8 @@ jobs:
     # earlier one failed (`!cancelled()`): the rigs are independent, and one red
     # rig hiding the forty after it is how a first CI run takes ten pushes.
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # the 48 took 16.5 minutes on their first green run
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
