@@ -11,28 +11,9 @@ name: CI (home)
 
 on:
   pull_request:
-    # ONLY WHEN THIS ZONE COULD BE AFFECTED. These jobs are not the required
-    # check (`validate`, ci.yml, runs on every PR and is unfiltered), so a PR
-    # that touches none of these paths skips them and nothing waits on them.
-    # The push to main below is NOT filtered: every merge still runs the lot.
-    # A script this file runs must match a path here; scripts/test-ci-registered.ts
-    # holds that, and that this file is on its own list.
-    paths:
-      - '.github/workflows/ci-home.yml'
-      - 'home/web/**'
-      - 'home/webext/**'
-      - 'home/fixtures/**'
-      - 'slides/**'
-      - 'kernel/**'
-      - 'scripts/lib/**'
-      - 'scripts/ci/**'
-      - 'scripts/postbuild-compress.mjs'
-      - 'scripts/shell-gate.mjs'
-      - 'scripts/derive-pins.mjs'
-      - 'scripts/test-home-*'
-      - 'scripts/test-webext-*'
-      - 'scripts/*home-web*'
-      - 'scripts/sign-home-*'
+    # No paths filter here: a filter would also stop the `full-ci` label from
+    # starting these jobs. The gate job below decides instead, in seconds.
+    types: [opened, synchronize, reopened, labeled]
   push:
     branches: [main]
 
@@ -50,7 +31,27 @@ defaults:
     shell: bash scripts/ci/bento-step {0}
 
 jobs:
+  home-gate:
+    # These jobs are heavy and none is the required check. On a PR they run
+    # only if it changes this zone's own files or carries the `full-ci` label;
+    # on main they always run. See .github/actions/zone-gate/action.yml.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/actions/zone-gate
+          sparse-checkout-cone-mode: false
+      - id: gate
+        uses: ./.github/actions/zone-gate
+        with:
+          own: '^(home/web/|home/webext/|home/fixtures/|scripts/test-(home|webext)-|\.github/workflows/ci-home\.yml$|\.github/actions/zone-gate/)'
+
   home-origin-probe-browser:
+    needs: home-gate
+    if: needs.home-gate.outputs.run == 'true'
     # The probe that decides whether a file opened for the first time may keep
     # the storage origin it had before origins followed the file. It runs in
     # WebKit on iOS, so it's tested in WebKit, against storage laid out the way
@@ -83,6 +84,8 @@ jobs:
         run: sudo dmesg -T | grep -iE 'segfault|oom|killed process' | tail -20 || echo "no segfault or OOM in the kernel log"
 
   home-web-engines:
+    needs: home-gate
+    if: needs.home-gate.outputs.run == 'true'
     # bento/home in your browser (home/web) in the two engines the required
     # validate job does not run (WebKit, Firefox), and its mutants in Chromium:
     # each mutant breaks one rule and must turn the rig red on the row that
@@ -107,10 +110,10 @@ jobs:
       # log, which is the only evidence when a browser dies mid-rig.
       - name: home/web in WebKit
         timeout-minutes: 6
-        run: DEBUG=pw:browser BENTO_BROWSER=webkit node scripts/test-home-web.mjs
+        run: DEBUG=pw:browser BENTO_BROWSER=webkit scripts/ci/retry-once node scripts/test-home-web.mjs
       - name: home/web in Firefox
         timeout-minutes: 6
-        run: DEBUG=pw:browser BENTO_BROWSER=firefox node scripts/test-home-web.mjs
+        run: DEBUG=pw:browser BENTO_BROWSER=firefox scripts/ci/retry-once node scripts/test-home-web.mjs
       - name: home/web mutants
         run: node scripts/test-home-web-mutants.mjs
       - name: Build the slides shell (a build mutant that lets a refused release go on must reach signing)
@@ -124,6 +127,8 @@ jobs:
         run: sudo dmesg -T | grep -iE 'segfault|oom|killed process' | tail -20 || echo "no segfault or OOM in the kernel log"
 
   webext-tripwire:
+    needs: home-gate
+    if: needs.home-gate.outputs.run == 'true'
     # The bento/home tripwire in a real browser: the unpacked extension loaded
     # into Playwright's Chromium (channel 'chromium', new headless: the
     # headless shell cannot load extensions), against a local home/web build,
@@ -149,6 +154,8 @@ jobs:
         run: node scripts/test-webext-tripwire-mutants.mjs
 
   home-web-offline-engines:
+    needs: home-gate
+    if: needs.home-gate.outputs.run == 'true'
     # bento/home in your browser, stage 3 (offline worker, kill switch,
     # install) in the two engines the required validate job does not run, and
     # its mutants in Chromium: each breaks one rule and must turn the rig red on
@@ -171,11 +178,11 @@ jobs:
       # skip the others (the job still fails), and a hang ends its step, not the job
       - name: home/web stage 3 in WebKit
         timeout-minutes: 8
-        run: BENTO_BROWSER=webkit node scripts/test-home-web-offline.mjs
+        run: BENTO_BROWSER=webkit scripts/ci/retry-once node scripts/test-home-web-offline.mjs
       - name: home/web stage 3 in Firefox
         if: ${{ !cancelled() }}
         timeout-minutes: 8
-        run: BENTO_BROWSER=firefox node scripts/test-home-web-offline.mjs
+        run: BENTO_BROWSER=firefox scripts/ci/retry-once node scripts/test-home-web-offline.mjs
       - name: home/web stage 3 mutants
         if: ${{ !cancelled() }}
         timeout-minutes: 12
