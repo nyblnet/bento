@@ -109,7 +109,9 @@ jobs:
     # each mutant breaks one rule and must turn the rig red on the row that
     # guards it.
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Engines about 4 minutes, mutants about 16, then the production-build
+    # mutants: at 30 the job was cancelled in that last step on two runs.
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
