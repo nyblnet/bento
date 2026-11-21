@@ -100,9 +100,19 @@ if ./gate-binary.sh "$OUT/gate-clean.bin" >/dev/null 2>&1; then echo "clean pass
   if ./gate-binary.sh "$OUT/gate-one.bin" >/dev/null 2>&1; then echo "MISSED ${n:0:24}" >> "$OUT/gate-needles.txt"; else echo "caught ${n:0:24}" >> "$OUT/gate-needles.txt"; fi
 done
 # What the rig build really compiled in (Windows: the rig capabilities too), and capcheck's positive control.
+# The newest capabilities.json a build script wrote. Cargo keeps a build script's output under
+# target/debug/build/<package>-<hash>/out, or, from the build-dir layout CI's toolchain moved to
+# in 2026-11, under target/debug/build/<package>/<hash>/out. Both are looked in: with only the
+# first, the file was not found, cp copied nothing and capcheck's rows failed on every run.
+caps_json() {
+  local f
+  f="$(ls -t target/debug/build/bento-home-desktop-*/out/capabilities.json target/debug/build/bento-home-desktop/*/out/capabilities.json 2>/dev/null | head -1)"
+  [ -n "$f" ] || { echo "rig: no capabilities.json under target/debug/build (looked in both build-dir layouts)" >&2; return 1; }
+  printf '%s\n' "$f"
+}
 needles_in() { $PY -c "import sys;b=open(sys.argv[1],'rb').read();print([n for n in ('rig-embed','allow-rig','127.0.0.1:*') if n.encode() in b])" "$1"; }
 needles_in "$BIN" > "$OUT/rig-binary-needles.txt"
-cp "$(ls -t target/debug/build/bento-home-desktop-*/out/capabilities.json | head -1)" "$OUT/rig-capabilities.json"
+cp "$(caps_json)" "$OUT/rig-capabilities.json"
 $PY capcheck.py "$OUT/rig-capabilities.json" >"$OUT/capcheck-control.txt" 2>&1; echo "$?" >"$OUT/capcheck-control.exit"
 $PY - "$OUT/fix" <<'PY'
 import sys, pathlib
@@ -252,7 +262,7 @@ PY
 if [ "$WIN" = 1 ]; then
   BENTO_RIG_SHIPPED_ACL=1 BENTO_HISTORIES_DIR="$OUT/hist" cargo build -q --features rig || exit 1
   needles_in "$BIN" > "$OUT/acl-binary-needles.txt"
-  cp "$(ls -t target/debug/build/bento-home-desktop-*/out/capabilities.json | head -1)" "$OUT/acl-capabilities.json"
+  cp "$(caps_json)" "$OUT/acl-capabilities.json"
   cp "$OUT/fix/A.bento.html" "$OUT/AC.bento.html"; cp "$OUT/fix/U.bento.html" "$OUT/AU.bento.html"
   BENTO_RIG_MODE=acl BENTO_RIG_LINGER_MS=200 scenario acl 60 "$OUT/AC.bento.html" "$OUT/AU.bento.html"
 fi

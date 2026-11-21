@@ -23,6 +23,18 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+env:
+  # WebKit on these runners draws with Mesa's software rasterizer, llvmpipe,
+  # which compiles its pipeline for the host CPU at run time. On one runner
+  # CPU (Xeon Platinum 8573C) it segfaults in a rasterizer thread, at the same
+  # code offset each time, and takes WebKit's web process with it: the rig
+  # reports "a page the rig still held went away" and the kernel log names
+  # llvmpipe-N. On other hosts it does not. Holding llvmpipe to 128-bit
+  # vectors keeps it off the wide-vector code paths that differ by CPU. It
+  # costs speed nobody here needs. If the crashes stop, this was it; if they
+  # go on, the kernel-log step below still says so.
+  LP_NATIVE_VECTOR_WIDTH: '128'
+
 defaults:
   run:
     # Every step fails if a rig in it reports a skip CI does not allow

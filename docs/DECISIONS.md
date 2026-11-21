@@ -15273,3 +15273,27 @@ Nothing is owed later either. The type is already on the allowlist in every
 host's source on main, so the next build of each accepts it. The ordering
 starts to matter with the NEXT new block type, once any host has users.
 
+## 2026-11-21 — Three CI failures that were not about the code under test
+
+Found while #897 and its follow-up were on CI; none came from either.
+
+- **Desktop host rigs (`home-desktop-agent`, `home-desktop-windows`).** Red
+  on main from about 2026-11-20 with no commit in between. CI's cargo moved a
+  build script's output from `target/debug/build/<package>-<hash>/out` to
+  `target/debug/build/<package>/<hash>/out`. `rig/run.sh` found
+  `capabilities.json` by the first pattern, so it found nothing, copied
+  nothing, and `capcheck.py`'s rows failed. It looks in both now and says so
+  when neither has it. `release-check.sh` asks cargo for `OUT_DIR` and was
+  never affected.
+- **WebKit pages vanishing in the home/web rigs.** The kernel log names
+  `llvmpipe-N` segfaulting at one code offset, on one runner CPU (Xeon
+  Platinum 8573C). `ci-home.yml` sets `LP_NATIVE_VECTOR_WIDTH=128`. This is a
+  mitigation chosen from the evidence, not a proven fix: it can only be
+  confirmed by the crash not recurring on that host. The kernel-log step
+  stays.
+- **`JsonDirectoryTest` on Android, once in five runs.** Its stand-in server
+  was stopped by closing the listening socket, and "nothing listening" was
+  asserted at once. A thread still blocked in `accept()` keeps the socket
+  alive in the kernel, so the next connection could still be answered. Stop
+  now flags, closes, knocks once to wake the accept, and joins the thread.
+
