@@ -24,6 +24,7 @@
 //      every catalog's language.
 import { readFileSync, readdirSync } from 'node:fs'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
+import { refusePointerLock } from './lib/rig-no-pointer-lock.mjs'
 // every catalog's word for Custom, as the tile shows it (no ellipsis)
 const I18N = new URL('../slides/src/i18n/', import.meta.url)
 const CUSTOM_WORDS = [...readdirSync(I18N).filter((f) => f.endsWith('.ts') && f !== 'packed.ts').map((f) => new URL(f, I18N)), ...readdirSync(new URL('packs/', I18N)).map((f) => new URL(`packs/${f}`, I18N))]
@@ -42,14 +43,7 @@ try {
     const tag = `[${locale}]`
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 }, locale })
     await ctx.route(/^https?:/, (r) => r.abort())
-    // No pointer lock in this rig. A scrub asks for it and carries on without
-    // it when refused, so refusing makes every drag here read the pointer's
-    // own position, the same on every machine. With the lock, a driven mouse
-    // reports movement differently from one Chromium to the next: on CI a
-    // 40px drag took the stroke's opacity to 0 and a 2000px drag stopped the
-    // page width at 721, neither of which happens here or to a real hand.
-    // The lock itself is test-slides-inspector-scrub-browser.mjs's subject.
-    await ctx.addInitScript(() => { Element.prototype.requestPointerLock = function () { return Promise.reject(new Error('rig: pointer lock refused')) } })
+    await refusePointerLock(ctx) // see scripts/lib/rig-no-pointer-lock.mjs
     const p = await ctx.newPage()
     const errors = []
     p.on('pageerror', (e) => errors.push(e.message))

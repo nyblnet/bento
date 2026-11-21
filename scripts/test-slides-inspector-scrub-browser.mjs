@@ -19,6 +19,7 @@
 //      same delta from its own value, typed `+10` too, and a plain typed
 //      value sets them all — one undo step each; equal values show the value.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
+import { refusePointerLock } from './lib/rig-no-pointer-lock.mjs'
 
 let checks = 0
 let failures = 0
@@ -35,6 +36,7 @@ const ELS = [
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true })
 try {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
+  await refusePointerLock(ctx) // see scripts/lib/rig-no-pointer-lock.mjs
   await ctx.addInitScript(() => { try { localStorage.setItem('bento-slideshow-started', '1') } catch {} })
   await ctx.route(/^https?:/, (r) => r.abort())
   const p = await ctx.newPage()
