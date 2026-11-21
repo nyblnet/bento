@@ -20,13 +20,29 @@ class JsonDirectoryTest {
     }
 
     /** A bare HTTP/1.1 responder on a socket (the Android SDK on the unit-test classpath has no com.sun.net). */
-    private class Srv(val port: Int, private val sock: java.net.ServerSocket) { fun stop(@Suppress("UNUSED_PARAMETER") n: Int) = sock.close() }
+    private class Srv(val port: Int, private val sock: java.net.ServerSocket) {
+        @Volatile var stopping = false
+        var thread: Thread? = null
+        /** Stops for certain. Closing the socket alone is not enough: while the responder's thread is
+         *  still blocked in accept(), the kernel keeps the listening socket alive, so a connection
+         *  made right after close() could still be accepted and answered. That made "nothing
+         *  listening" fail once in a while on CI. So: flag it, close, knock once to wake a blocked
+         *  accept (refused if it already woke), and wait for the thread to end. */
+        fun stop(@Suppress("UNUSED_PARAMETER") n: Int) {
+            stopping = true
+            sock.close()
+            try { java.net.Socket("127.0.0.1", port).close() } catch (e: java.io.IOException) {}
+            thread?.join(5000)
+        }
+    }
 
     private fun server(handler: (String, String) -> Pair<Int, String>): Pair<Srv, String> {
         val ss = java.net.ServerSocket(0, 5, java.net.InetAddress.getByName("127.0.0.1"))
-        Thread {
+        val srv = Srv(ss.localPort, ss)
+        srv.thread = Thread {
             while (!ss.isClosed) try {
                 ss.accept().use { c ->
+                    if (srv.stopping) return@use // the knock from stop(), or a caller that raced it: no answer
                     val inp = c.getInputStream().buffered()
                     fun line(): String { val sb = StringBuilder(); while (true) { val ch = inp.read(); if (ch < 0 || ch == '\n'.code) break; if (ch != '\r'.code) sb.append(ch.toChar()) }; return sb.toString() }
                     val path = line().split(" ")[1]
@@ -38,8 +54,8 @@ class JsonDirectoryTest {
                     c.getOutputStream().apply { write("HTTP/1.1 $code X\r\ncontent-length: ${b.size}\r\nconnection: close\r\n\r\n".toByteArray()); write(b); flush() }
                 }
             } catch (e: java.io.IOException) {}
-        }.start()
-        return Srv(ss.localPort, ss) to "http://127.0.0.1:${ss.localPort}"
+        }.also { it.start() }
+        return srv to "http://127.0.0.1:${ss.localPort}"
     }
 
     @Test fun `the http client speaks the directory's two calls`() {

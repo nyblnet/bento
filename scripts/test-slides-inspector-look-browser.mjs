@@ -24,6 +24,7 @@
 //      every catalog's language.
 import { readFileSync, readdirSync } from 'node:fs'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
+import { refusePointerLock } from './lib/rig-no-pointer-lock.mjs'
 // every catalog's word for Custom, as the tile shows it (no ellipsis)
 const I18N = new URL('../slides/src/i18n/', import.meta.url)
 const CUSTOM_WORDS = [...readdirSync(I18N).filter((f) => f.endsWith('.ts') && f !== 'packed.ts').map((f) => new URL(f, I18N)), ...readdirSync(new URL('packs/', I18N)).map((f) => new URL(`packs/${f}`, I18N))]
@@ -42,6 +43,7 @@ try {
     const tag = `[${locale}]`
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 }, locale })
     await ctx.route(/^https?:/, (r) => r.abort())
+    await refusePointerLock(ctx) // see scripts/lib/rig-no-pointer-lock.mjs
     const p = await ctx.newPage()
     const errors = []
     p.on('pageerror', (e) => errors.push(e.message))

@@ -135,6 +135,13 @@ const within = (span, line, column) => after({ line, column }, span.from) && aft
 const DENY = /\b(delete|remove|stop sharing|rotate|revoke|discard|reset|sign out|publish|share link|invite|start live|go live|leave|quit|update now|install|download|save|print|export|import|replace from|open file|duplicate as new|encrypt|password)\b/i
 const CONTROLS = 'button, [role="button"], [role="menuitem"], [role="tab"], summary, select, [aria-haspopup]'
 
+/** Would a click at the control's centre reach it (or something inside it)? */
+const reachable = (h) => h.evaluate((el) => {
+  const r = el.getBoundingClientRect()
+  const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+  return !!hit && (el === hit || el.contains(hit))
+}).catch(() => false)
+
 /** Click each visible, enabled, not-denied control under `root` once; Escape after each. */
 export async function clickEverything(page, { root = 'body', max = 400, settle = 120 } = {}) {
   const seen = new Set()
@@ -152,6 +159,13 @@ export async function clickEverything(page, { root = 'body', max = 400, settle =
       }).catch(() => null)
       if (!info || !info.visible || info.disabled || DENY.test(info.label) || seen.has(info.key)) continue
       seen.add(info.key); fresh++
+      // A control something else covers (a collapsed panel's, one under the
+      // stage) can never take the click: left to Playwright it waits out the
+      // whole timeout. On the slides shell alone that was 113 of 149 controls
+      // and about two minutes. Ask the page first, twice in case a menu is
+      // still closing.
+      await h.scrollIntoViewIfNeeded({ timeout: 300 }).catch(() => {})
+      if (!(await reachable(h))) { await page.waitForTimeout(60); if (!(await reachable(h))) continue }
       await h.click({ timeout: 800, force: false }).catch(() => {})
       clicked++
       await page.waitForTimeout(settle)

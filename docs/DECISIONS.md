@@ -15223,3 +15223,77 @@ simulator, the directory mutants. None of those is the required check.
 - **What it does not buy:** a PR that changes the kernel or the shared packer
   still runs nearly everything, and should. #897 is one.
 
+## 2026-11-21 — The heavy zones are gated on a PR; the engine rigs get one retry
+
+Follows the entry above, and replaces its path filter on five workflows.
+A paths filter cannot be overridden by a label, and it had to list `kernel/**`
+to be safe, which meant any kernel change still ran the desktop host on three
+runners, the iOS simulator and the directory mutants.
+
+- **`ci-home-desktop`, `ci-home-ios`, `ci-home-android`, `ci-share` and
+  `ci-home` start with a gate job** (`scripts/ci/zone-gate`). On a pull
+  request the zone's jobs run only if the PR changes the zone's OWN files or
+  carries the **`full-ci`** label; otherwise they are skipped, in seconds. A
+  push to main always runs them. If the changed files cannot be listed, they
+  run.
+- **What is given up:** a kernel or shared-script change no longer runs these
+  zones on the PR. `validate` still runs every zone's node-level slice on the
+  PR, and the merge to main runs the heavy jobs. Label a PR `full-ci` when it
+  should be proven there before merging; a kernel-zone change should be.
+- **The other five workflows keep their path filters** (slides, spaces, dash,
+  type, build size): they are quick and their inputs are easy to list.
+- **`scripts/ci/retry-once`** runs a rig a second time if the first fails,
+  with a warning annotation on the run. It wraps the four home/web engine
+  steps (WebKit and Firefox, stages 1 and 3) and nothing else. Never a mutant
+  run: a mutant that survives once has survived.
+- **Why the retry:** `test-home-web-offline.mjs` timed out on three runs in a
+  row on #897, on a different engine or row each time, and passed on main on
+  both of its runs. #897 changes nothing in it. That is a rig waiting on a
+  real browser under a 10 s limit, and the retry is a stopgap that keeps it
+  visible; the rig's limits are the thing to fix.
+- **Held by `test-ci-registered.ts`:** every job in a gated workflow waits on
+  its gate, the gate's pattern matches the workflow file and the gate script,
+  and `labeled` is among the trigger's types.
+- **Known red on main, not addressed here:** `home-desktop-agent` and
+  `home-desktop-windows` fail at "Desktop host rigs" on main as of
+  2026-11-20 (re-run of the 2026-11-15 commit, which had passed): the rig
+  build leaves no `capabilities.json` for `capcheck.py`.
+
+## 2026-11-21 — "Hosts first" did not bind the first lzma slides release
+
+The 2026-11-20 entry on `bento/lzma-b91` says the hosts must ship before the
+first slides release packed that way, because an installed host without the
+type calls an lzma shell UNKNOWN. That is the rule (PLATFORM §1) and it
+stands. It did not constrain this release: on this date the web extension,
+iOS, Android, desktop and home.bento.page have no users, so there is no
+installed host to misread a file. Slides can be released without waiting for
+them.
+
+Nothing is owed later either. The type is already on the allowlist in every
+host's source on main, so the next build of each accepts it. The ordering
+starts to matter with the NEXT new block type, once any host has users.
+
+## 2026-11-21 — Three CI failures that were not about the code under test
+
+Found while #897 and its follow-up were on CI; none came from either.
+
+- **Desktop host rigs (`home-desktop-agent`, `home-desktop-windows`).** Red
+  on main from about 2026-11-20 with no commit in between. CI's cargo moved a
+  build script's output from `target/debug/build/<package>-<hash>/out` to
+  `target/debug/build/<package>/<hash>/out`. `rig/run.sh` found
+  `capabilities.json` by the first pattern, so it found nothing, copied
+  nothing, and `capcheck.py`'s rows failed. It looks in both now and says so
+  when neither has it. `release-check.sh` asks cargo for `OUT_DIR` and was
+  never affected.
+- **WebKit pages vanishing in the home/web rigs.** The kernel log names
+  `llvmpipe-N` segfaulting at one code offset, on one runner CPU (Xeon
+  Platinum 8573C). `ci-home.yml` sets `LP_NATIVE_VECTOR_WIDTH=128`. This is a
+  mitigation chosen from the evidence, not a proven fix: it can only be
+  confirmed by the crash not recurring on that host. The kernel-log step
+  stays.
+- **`JsonDirectoryTest` on Android, once in five runs.** Its stand-in server
+  was stopped by closing the listening socket, and "nothing listening" was
+  asserted at once. A thread still blocked in `accept()` keeps the socket
+  alive in the kernel, so the next connection could still be answered. Stop
+  now flags, closes, knocks once to wake the accept, and joins the thread.
+
