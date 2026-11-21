@@ -15259,3 +15259,17 @@ runners, the iOS simulator and the directory mutants.
   2026-11-20 (re-run of the 2026-11-15 commit, which had passed): the rig
   build leaves no `capabilities.json` for `capcheck.py`.
 
+## 2026-11-21 — "Hosts first" did not bind the first lzma slides release
+
+The 2026-11-20 entry on `bento/lzma-b91` says the hosts must ship before the
+first slides release packed that way, because an installed host without the
+type calls an lzma shell UNKNOWN. That is the rule (PLATFORM §1) and it
+stands. It did not constrain this release: on this date the web extension,
+iOS, Android, desktop and home.bento.page have no users, so there is no
+installed host to misread a file. Slides can be released without waiting for
+them.
+
+Nothing is owed later either. The type is already on the allowlist in every
+host's source on main, so the next build of each accepts it. The ordering
+starts to matter with the NEXT new block type, once any host has users.
+
