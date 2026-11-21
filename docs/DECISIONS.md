@@ -15231,7 +15231,7 @@ to be safe, which meant any kernel change still ran the desktop host on three
 runners, the iOS simulator and the directory mutants.
 
 - **`ci-home-desktop`, `ci-home-ios`, `ci-home-android`, `ci-share` and
-  `ci-home` start with a gate job** (`.github/actions/zone-gate`). On a pull
+  `ci-home` start with a gate job** (`scripts/ci/zone-gate`). On a pull
   request the zone's jobs run only if the PR changes the zone's OWN files or
   carries the **`full-ci`** label; otherwise they are skipped, in seconds. A
   push to main always runs them. If the changed files cannot be listed, they
@@ -15252,7 +15252,7 @@ runners, the iOS simulator and the directory mutants.
   real browser under a 10 s limit, and the retry is a stopgap that keeps it
   visible; the rig's limits are the thing to fix.
 - **Held by `test-ci-registered.ts`:** every job in a gated workflow waits on
-  its gate, the gate's pattern matches the workflow file and the gate action,
+  its gate, the gate's pattern matches the workflow file and the gate script,
   and `labeled` is among the trigger's types.
 - **Known red on main, not addressed here:** `home-desktop-agent` and
   `home-desktop-windows` fail at "Desktop host rigs" on main as of

@@ -110,23 +110,23 @@ for (const w of files.workflows) {
 
 // ZONE GATES. A workflow whose jobs are heavy may run them on a PR only when
 // it touches the zone's own files or carries the `full-ci` label
-// (.github/actions/zone-gate). The gate skips, so it is held too: every job
+// (scripts/ci/zone-gate). The gate skips, so it is held too: every job
 // in a gated workflow other than the gate waits on it, and the gate's own
 // pattern names the workflow file, so editing the workflow runs its jobs.
 {
   let gated = 0
   for (const w of files.workflows) {
-    if (!/uses:\s*\.\/\.github\/actions\/zone-gate\s*$/m.test(w.text)) continue
+    if (!/^\s+run: scripts\/ci\/zone-gate '/m.test(w.text)) continue
     gated++
     const body = w.text.slice(w.text.indexOf('\njobs:\n'))
     const jobs = [...body.matchAll(/^ {2}([a-z0-9-]+):\n((?: {4}.*\n|\n)*)/gm)].map((m) => ({ id: m[1], text: m[2] }))
-    const gate = jobs.find((j) => /zone-gate/.test(j.text))
+    const gate = jobs.find((j) => /run: scripts\/ci\/zone-gate '/.test(j.text))
     ok(!!gate, `${w.path} has a gate job`)
     if (!gate) continue
     const loose = jobs.filter((j) => j !== gate && !(new RegExp(`^ {4}needs: ${gate.id}$`, 'm').test(j.text) && j.text.includes(`if: needs.${gate.id}.outputs.run == 'true'`)))
     ok(jobs.length > 1 && loose.length === 0, `${w.path}: every job waits on ${gate.id} (${jobs.length - 1} jobs${loose.length ? '; not gated: ' + loose.map((j) => j.id).join(', ') : ''})`)
-    const own = /own: '([^']+)'/.exec(gate.text)?.[1] ?? ''
-    ok(!!own && new RegExp(own).test(w.path) && new RegExp(own).test('.github/actions/zone-gate/action.yml'), `${w.path}: its gate pattern matches the workflow file and the gate action`)
+    const own = /run: scripts\/ci\/zone-gate '([^']+)'/.exec(gate.text)?.[1] ?? ''
+    ok(!!own && new RegExp(own).test(w.path) && new RegExp(own).test('scripts/ci/zone-gate'), `${w.path}: its gate pattern matches the workflow file and the gate script`)
     ok(/^ {4}types: \[opened, synchronize, reopened, labeled\]$/m.test(w.text) && !/^ {4}paths:/m.test(w.text), `${w.path}: a label can start it (types include labeled, and no paths filter stands in the way)`)
   }
   ok(gated > 0, `zone gates are read (${gated} gated workflows; this check is what stops a vacuous green)`)

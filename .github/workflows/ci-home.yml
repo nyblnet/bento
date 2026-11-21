@@ -34,7 +34,7 @@ jobs:
   home-gate:
     # These jobs are heavy and none is the required check. On a PR they run
     # only if it changes this zone's own files or carries the `full-ci` label;
-    # on main they always run. See .github/actions/zone-gate/action.yml.
+    # on main they always run. See scripts/ci/zone-gate.
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -42,12 +42,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: .github/actions/zone-gate
+          sparse-checkout: |
+            scripts/ci
+            scripts/lib/ci-skips.mjs
           sparse-checkout-cone-mode: false
       - id: gate
-        uses: ./.github/actions/zone-gate
-        with:
-          own: '^(home/web/|home/webext/|home/fixtures/|scripts/test-(home|webext)-|\.github/workflows/ci-home\.yml$|\.github/actions/zone-gate/)'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          LABELLED: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: scripts/ci/zone-gate '^(home/web/|home/webext/|home/fixtures/|scripts/test-(home|webext)-|\.github/workflows/ci-home\.yml$|scripts/ci/zone-gate$)'
 
   home-origin-probe-browser:
     needs: home-gate
