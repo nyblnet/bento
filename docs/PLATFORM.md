@@ -19,14 +19,27 @@ dependency to the core document lifecycle is off-platform.
 
 Byte order of a shipped shell (postbuild-compress):
 `chrome → NOTICE → tooling comment → plaintext #bento-doc → splash → compressed payloads`.
-Runtime JS/CSS ship deflated in `bento/deflate-b86` script blocks (base86:
-86 printable ASCII symbols chosen so a payload can never close or comment out
-its own block; 6.25% smaller than the `bento/deflate-b64` blocks of 1.1.0 and
-earlier, which every reader still accepts) with a ~3KB loader
-(a synchronous JavaScript inflate → an inline classic script, then `new
-Function`, then a blob import — whichever the host's policy allows first,
-tried in that order; the app is mounted before DOMContentLoaded, as in the
-uncompressed build, with no timer or frame on the way).
+Runtime JS/CSS ship compressed in two script blocks whose `type` says how.
+There are three such types and every reader accepts all three, forever — a
+file saved by any release stays readable:
+- `bento/deflate-b86` — raw deflate in base86 (86 printable ASCII symbols
+  chosen so a payload can never close or comment out its own block, and safe
+  inside an attribute or a JS string). What spaces, dash and type ship.
+- `bento/lzma-b91` — raw LZMA1 (lc=3, lp=0, pb=0, a 4-byte length first) in
+  base91 (the same guarantee against closing or commenting out its block; it
+  keeps `&` `"` `'` `\` `-`, so it is safe as SCRIPT TEXT only). What slides
+  ships: about 12% off the file for a decode about twice as slow.
+- `bento/deflate-b64` — the blocks of 1.1.0 and earlier.
+The list is `DATA_TYPES` in kernel `gate1.ts`, mirrored by hand in each host's
+verifier (webext, iOS, Android, desktop) and held to the corpus in
+`home/fixtures/gate1/`. **A new type must reach every installed host before
+the first shell that carries it is released**: to a host that does not know
+the type, the block is an executable script and the file is UNKNOWN.
+The loader (~6 KB, minified) decodes synchronously in JavaScript → an inline
+classic script, then `new Function`, then a blob import — whichever the host's
+policy allows first, tried in that order; the app is mounted before
+DOMContentLoaded, as in the uncompressed build, with no timer or frame on the
+way.
 
 ## 2. The splice contract (FROZEN)
 
@@ -75,7 +88,7 @@ checks) before any release.
   the compressed shell's inflated stylesheet, first of all — would otherwise be
   written into the saved file, then re-injected on the next boot and saved
   again: unbounded growth, one copy per save (~100KB each for the CSS, which
-  ships deflated for a reason). `serializeBody` strips the marked nodes from
+  ships compressed for a reason). `serializeBody` strips the marked nodes from
   every serialized shell. Inject before the capture only if you mark it —
   `scripts/shell-gate.mjs` proves both halves on every CI build (the loader
   marks what it injects; the runtime still strips it) and rejects a shell that

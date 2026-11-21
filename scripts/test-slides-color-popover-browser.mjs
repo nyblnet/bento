@@ -1,0 +1,168 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento authors
+// The colour popover: opens from the swatch, previews live, commits once, cancels clean.
+//
+//   npm run build:single --prefix slides && node scripts/test-slides-color-popover-browser.mjs
+//
+// WHAT THIS PROVES, in the built shell, on a shape's Fill:
+//   1. clicking the swatch opens OUR popover (square, hue, opacity, value,
+//      swatches) and never the browser's picker (the click is cancelled);
+//   2. dragging in the square previews the fill live, and closing commits it
+//      as ONE undo step;
+//   3. a hex typed in the popover is the colour; the RGB model reads and takes
+//      `r, g, b`; a CSS name is understood;
+//   4. a theme swatch in the popover LINKS the palette slot, keeping the
+//      field's opacity, exactly as the palette list does;
+//   5. Esc closes the popover and KEEPS what it previewed (focus back on the
+//      swatch); one undo takes the whole pick back;
+//   6. a translucent colour's swatch is marked see-through;
+//   7. after switching to a gradient, Esc puts focus on the gradient chip
+//      that replaced the swatch, and the canvas handle stays;
+//   8. dragging the canvas handle with the popover open keeps it open.
+const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
+
+let checks = 0
+let failures = 0
+function ok(cond, msg) {
+  checks++
+  if (!cond) { failures++; console.log(`  FAIL  ${msg}`) } else console.log(`  ok    ${msg}`)
+}
+
+const ELS = [
+  { id: 'r', type: 'shape', shape: 'rect', x: 100, y: 100, w: 200, h: 100, fill: '#ff0000', stroke: 'transparent', strokeWidth: 0, radius: 0 },
+  { id: 'q', type: 'shape', shape: 'rect', x: 400, y: 100, w: 200, h: 100, fill: '#123456', stroke: 'transparent', strokeWidth: 0, radius: 0 },
+].map((e) => ({ rotation: 0, opacity: 1, ...e }))
+
+const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true })
+try {
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
+  await ctx.addInitScript(() => { try { localStorage.setItem('bento-slideshow-started', '1') } catch {} })
+  await ctx.route(/^https?:/, (r) => r.abort())
+  const p = await ctx.newPage()
+  const errors = []
+  p.on('pageerror', (e) => errors.push(e.message))
+  await p.goto(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url).href)
+  await p.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-props .ed-tabs'))
+  await p.evaluate((els) => {
+    const d = JSON.parse(JSON.stringify(window.bento.doc))
+    d.theme.accent = '#F7A600'
+    d.slides = [{ id: 's1', background: '#ffffff', elements: els }]
+    window.bento.loadDoc(JSON.stringify(d))
+  }, ELS)
+  await p.waitForTimeout(300)
+  const el = (id) => p.evaluate((id) => JSON.parse(JSON.stringify(window.bento.doc.slides[0].elements.find((e) => e.id === id))), id)
+  const select = async (id) => {
+    await p.evaluate((id) => document.querySelector(`.ed-layer[data-id="${id}"]`)?.click(), id)
+    await p.waitForTimeout(200)
+  }
+  const swatch = '.ed-props .ed-section[data-key="Fill"] + .ed-section-body input[type=color]'
+  const openPop = async () => {
+    await p.locator(swatch).first().click(); await p.waitForTimeout(150)
+    return p.locator('.ed-cpop')
+  }
+  const undo = async () => { await p.evaluate(() => window.bento.undo()); await p.waitForTimeout(200) }
+
+  console.log('\n1. opens ours, never the browser\'s\n')
+  await select('r')
+  const native = await p.locator(swatch).first().evaluate((c) => new Promise((res) => {
+    c.addEventListener('click', (e) => setTimeout(() => res(e.defaultPrevented)), { once: true })
+    c.click()
+  }))
+  ok(native === true, 'the swatch click is cancelled: the native picker never opens')
+  const pop = p.locator('.ed-cpop')
+  ok(await pop.count() === 1, 'the popover is open')
+  ok(await pop.locator('.ed-cpop-sv').count() === 1 && await pop.locator('.ed-cpop-hue').count() === 1 && await pop.locator('.ed-cpop-alpha').count() === 1 && await pop.locator('.ed-cpop-text').count() === 1,
+    'it has the square, hue, opacity and value')
+  const pw = await pop.evaluate((x) => x.offsetWidth) // layout width: the opening scale would read short
+  ok(Math.abs(pw - 248) < 0.5, `it is 248px wide (${pw})`)
+  ok(await pop.locator('.ed-cpop-swatch').count() >= 2, 'it offers swatches (theme, and this slide)')
+
+  console.log('\n2. a drag previews, closing commits once\n')
+  const sv = await pop.locator('.ed-cpop-sv').boundingBox()
+  await p.mouse.move(sv.x + sv.width * 0.5, sv.y + sv.height * 0.5); await p.mouse.down()
+  await p.mouse.move(sv.x + sv.width * 0.2, sv.y + sv.height * 0.2, { steps: 5 })
+  const live = (await el('r')).fill
+  await p.mouse.up()
+  ok(live !== '#ff0000', `the fill previews while dragging (${live})`)
+  await p.mouse.click(1300, 900); await p.waitForTimeout(250) // outside: commits
+  ok(await p.locator('.ed-cpop').count() === 0, 'a click outside closes it')
+  const committed = (await el('r')).fill
+  ok(committed === live, `and keeps the colour (${committed})`)
+  await undo()
+  ok((await el('r')).fill === '#ff0000', 'one undo takes the whole pick back')
+
+  console.log('\n3. typed values\n')
+  await select('r')
+  let pp = await openPop()
+  const text = pp.locator('.ed-cpop-text')
+  await text.fill('00ff88'); await text.press('Enter'); await p.waitForTimeout(250)
+  ok((await el('r')).fill === '#00ff88', `a typed hex is the colour (${(await el('r')).fill})`)
+  ok(await p.locator('.ed-cpop').count() === 0, 'Enter closes the popover')
+  pp = await openPop()
+  await pp.locator('select').selectOption('rgb'); await p.waitForTimeout(50)
+  ok(await pp.locator('.ed-cpop-text').inputValue() === '0, 255, 136', `the RGB model reads r, g, b (${await pp.locator('.ed-cpop-text').inputValue()})`)
+  await pp.locator('.ed-cpop-text').fill('10, 20, 30'); await pp.locator('.ed-cpop-text').press('Enter'); await p.waitForTimeout(250)
+  ok((await el('r')).fill === '#0a141e', `and takes it (${(await el('r')).fill})`)
+  pp = await openPop()
+  await pp.locator('select').selectOption('hex')
+  await pp.locator('.ed-cpop-text').fill('rebeccapurple'); await pp.locator('.ed-cpop-text').press('Enter'); await p.waitForTimeout(250)
+  ok((await el('r')).fill === '#663399', `a CSS name is understood (${(await el('r')).fill})`)
+
+  console.log('\n4. a theme swatch links the slot\n')
+  const alpha = p.locator('.ed-props .ed-section[data-key="Fill"] + .ed-section-body .ed-color-alpha input')
+  await alpha.fill('50'); await alpha.press('Enter'); await p.evaluate(() => document.activeElement?.blur()); await p.waitForTimeout(200)
+  pp = await openPop()
+  await pp.locator('.ed-cpop-swatch[title="Accent 1"]').click(); await p.waitForTimeout(250)
+  const linked = await el('r')
+  ok(linked.themeRefs?.fill === 'accent1' && linked.fill === 'rgba(247, 166, 0, 0.5)', `Accent 1 is linked with the 50% kept (${linked.fill}, ${JSON.stringify(linked.themeRefs)})`)
+  ok(await p.locator('.ed-cpop').count() === 0, 'and the popover closed')
+
+  console.log('\n5. Esc closes and keeps what it shows; one undo takes it back\n')
+  await select('q')
+  const stack0 = await p.evaluate(() => JSON.stringify(window.bento.doc))
+  pp = await openPop()
+  await pp.locator('.ed-cpop-hue').fill('200'); await p.waitForTimeout(100)
+  ok((await el('q')).fill !== '#123456', `the hue slider previews (${(await el('q')).fill})`)
+  await p.keyboard.press('Escape'); await p.waitForTimeout(250)
+  const kept = (await el('q')).fill
+  ok(kept !== '#123456' && await p.locator('.ed-cpop').count() === 0, `Esc closes the popover and keeps the previewed colour (${kept})`)
+  ok(await p.evaluate(() => document.activeElement?.matches('.ed-props .ed-section[data-key="Fill"] + .ed-section-body input[type=color]')), 'focus is back on the swatch')
+  await undo()
+  ok((await el('q')).fill === '#123456' && await p.evaluate(() => JSON.stringify(window.bento.doc)) === stack0, 'ONE undo restores the colour and the document exactly')
+  await undo()
+  ok((await el('r')).themeRefs?.fill === undefined, 'the undo after it is the edit before — the pick was one step')
+
+  console.log('\n6. the see-through swatch\n')
+  await p.evaluate(() => window.bento.redo()); await p.waitForTimeout(200)
+  await select('r')
+  ok(await p.locator(swatch).first().evaluate((c) => c.classList.contains('ed-see-through')), 'a 50% fill marks its swatch see-through')
+  await select('q')
+  ok(await p.locator(swatch).first().evaluate((c) => !c.classList.contains('ed-see-through')), 'an opaque one does not')
+
+  console.log('\n7. switched to a gradient, Esc hands focus to what took the swatch\'s place\n')
+  // the swatch the popover would hand focus back to is gone, replaced by the
+  // gradient chip; focus used to fall to <body> and take the canvas handle
+  pp = await openPop()
+  await pp.locator('.ed-cpop-kinds [data-kind="radial"]').click(); await p.waitForTimeout(150)
+  await p.keyboard.press('Escape'); await p.waitForTimeout(250)
+  const on = await p.evaluate(() => document.activeElement?.className ?? '')
+  const handle = await p.locator('.ed-stage-scale .ed-grad-layer').count()
+  ok(on.includes('ed-gradchip') && handle === 1, `focus is on the gradient chip and the canvas handle stays (focus: ${on || 'body'}, handles: ${handle})`)
+
+  console.log('\n8. the canvas handle works with the popover open\n')
+  // a press on the handle used to count as a click outside and close it
+  await p.locator('.ed-props .ed-gradchip').first().click(); await p.waitForTimeout(150)
+  const g0 = JSON.stringify((await el('q')).fillGradient)
+  const k = await p.locator('.ed-stage-scale .ed-grad-knob').first().boundingBox()
+  await p.mouse.move(k.x + k.width / 2, k.y + k.height / 2); await p.mouse.down()
+  await p.mouse.move(k.x + 40, k.y + 30, { steps: 6 }); await p.mouse.up(); await p.waitForTimeout(200)
+  const g1 = JSON.stringify((await el('q')).fillGradient)
+  ok(await p.locator('.ed-cpop').count() === 1 && g1 !== g0, `a handle drag keeps the popover open and moves the gradient (open: ${await p.locator('.ed-cpop').count()}, moved: ${g1 !== g0})`)
+  await p.keyboard.press('Escape'); await p.waitForTimeout(200)
+  ok(errors.length === 0, `no page error${errors.length ? ': ' + errors.join(' | ') : ''}`)
+} finally {
+  await browser.close()
+}
+
+console.log(`\n${checks - failures}/${checks} checks passed`)
+process.exit(failures ? 1 : 0)

@@ -15,8 +15,8 @@
 //      ⌘S, no IndexedDB record carries the deck's content; the saved file is a
 //      sealed envelope with a neutral <title>, no preview and no content;
 //   2. the password items stay keyed to the PASSWORD: a deck sealed by
-//      identity, with no password, offers "Encrypt with password…", never
-//      "Change password…" or "Remove password";
+//      identity, with no password, offers "Save with password…", never
+//      "Change password…" or "Save without password";
 //   3. control, the same shell unsealed: the same edit DOES reach IndexedDB,
 //      so the scan can see a leak.
 //   4. a sealed document never offers or keeps an unsealed snapshot: after an
@@ -102,8 +102,8 @@ try {
     ok(env.format === 'bento/enc' && !file.includes(MARK) && !file.includes('data-bento-preview') && !/<title>[^<]*ZZSEALED/.test(file),
       'the saved file: a sealed envelope, neutral <title>, no preview, no content')
     const menu = await saveMenu(page)
-    ok(/Encrypt with password/.test(menu) && !/Change password|Remove password/.test(menu),
-      'the password items follow the password, not the seal: "Encrypt with password…" is offered, "Change"/"Remove password" are not')
+    ok(/Save with password/.test(menu) && !/Change password|Save without password/.test(menu),
+      'the password items follow the password, not the seal: "Save with password…" is offered, "Change password…"/"Save without password" are not')
     ok(errors.length === 0, `no page error${errors.length ? ' — ' + errors[0] : ''}`)
     await closes(sealed, 'the sealed edit, autosave and ⌘S')
   }
@@ -138,8 +138,8 @@ try {
   }
   const banner = (page) => page.waitForSelector('.ed-recover', { timeout: 2500 }).then(() => true, () => false)
   async function versionRows(page) {
-    await page.locator('.ed-split-caret').click()
-    await page.locator('.ed-save-menu').getByText('Version history…', { exact: true }).click()
+    await page.locator('.ed-logo').click() // Version history is the document's: File
+    await page.locator('.ed-file-menu [data-cmd="version-history"]').click()
     await page.waitForSelector('.ed-version-box', { timeout: 3000 })
     const n = await page.locator('.ed-version-box .ed-version-row').count()
     await page.evaluate(() => document.querySelector('.ed-about-overlay')?.remove())

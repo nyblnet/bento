@@ -42,13 +42,16 @@ const PACKS_MIN = Number(arg('packs-min', '90'))
 const quiet = process.argv.includes('--quiet')
 
 // --- the key universe -------------------------------------------------------
-const packedSrc = readFileSync(join(coreDir, 'packed.ts'), 'utf8')
-const KEYS = [...packedSrc.matchAll(/^ {2}("(?:[^"\\]|\\.)*"):/gm)].map((m) => JSON.parse(m[1]))
+// IMPORT the generated table rather than regex it: the shipped shape is
+// column-major text (see build-i18n.mjs), and the decoded table is exactly
+// what the runtime reads.
+const { PACKED, PACKED_LOCALES } = await import(pathToFileURL(join(coreDir, 'packed.ts')).href)
+const KEYS = Object.keys(PACKED)
 if (!KEYS.length) {
   console.error('test-i18n-coverage: no keys found in packed.ts — has build-i18n.mjs run?')
   process.exit(1)
 }
-const LOCALES = JSON.parse(packedSrc.match(/PACKED_LOCALES[^=]*=\s*(\[[^\]]*\])/)[1].replace(/'/g, '"'))
+const LOCALES = [...PACKED_LOCALES]
 
 const pct = (n) => ((n / KEYS.length) * 100).toFixed(1)
 const bar = (n) => '█'.repeat(Math.round((n / KEYS.length) * 20)).padEnd(20, '·')
@@ -59,12 +62,10 @@ let failed = false
 // Read the packed table rather than the catalogs: a 0 (or a short row) is
 // exactly what the runtime treats as "no translation, fall back to English",
 // so this measures what a reader actually gets.
-const rows = [...packedSrc.matchAll(/^ {2}("(?:[^"\\]|\\.)*"):\s*(\[[\s\S]*?\]),$/gm)]
 const coreMissing = Object.fromEntries(LOCALES.map((l) => [l, []]))
-for (const [, k, arr] of rows) {
-  let vals
-  try { vals = JSON.parse(arr) } catch { continue }
-  LOCALES.forEach((l, i) => { if (vals.length <= i || vals[i] === 0) coreMissing[l].push(JSON.parse(k)) })
+for (const k of KEYS) {
+  const vals = PACKED[k]
+  LOCALES.forEach((l, i) => { if (vals.length <= i || !vals[i]) coreMissing[l].push(k) })
 }
 
 if (!quiet) console.log(`\ncore catalogs — shipped in every saved file (${KEYS.length} strings)`)

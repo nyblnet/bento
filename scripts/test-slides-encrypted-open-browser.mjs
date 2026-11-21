@@ -102,7 +102,7 @@ try {
   await booted(made.p)
   const slides = await made.p.evaluate(() => window.bento.doc.slides.length)
   await made.p.locator('.ed-split-caret').click()
-  await made.p.locator('.ed-save-menu').getByText('Encrypt with password…', { exact: true }).click()
+  await made.p.locator('.ed-save-menu').getByText('Save with password…', { exact: true }).click()
   await made.p.locator('dialog.ed-pwdialog .pw1').fill(PASS)
   await made.p.locator('dialog.ed-pwdialog .pw2').fill(PASS)
   const encFile = await saveDownload(made.p, () => made.p.locator('dialog.ed-pwdialog button').last().click())

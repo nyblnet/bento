@@ -7,7 +7,8 @@
 //   node scripts/postbuild-compress.mjs slides/dist-single/Bento_Slides.bento.html
 //
 // Takes the vite single-file build, extracts the big inline module script and
-// stylesheet, deflates them (raw) into base64 payload blocks, and restructures
+// stylesheet, compresses them (raw deflate by default, raw LZMA1 with --codec
+// lzma) into text payload blocks (base86, or base91 for lzma), and restructures
 // the document into the canonical byte order:
 //
 //   head chrome → NOTICE → tooling comment → #bento-doc (PLAINTEXT, always)
@@ -36,6 +37,72 @@ import { deflateRawSync, inflateRawSync } from 'node:zlib'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { FORBIDDEN, VARIANTS } from './lib/b86.mjs'
+import { unlzma } from './lib/unlzma.js'
+import * as B91 from './lib/b91.mjs'
+import { pathToFileURL } from 'node:url'
+
+/**
+ * THE CODEC. `deflate` (default): raw deflate packed by zopfli, block type
+ * bento/deflate-<carrier>. `lzma`: raw LZMA1, block type bento/lzma-b91 — a
+ * smaller file (slides: 790,985 -> 693 KB) for a slower synchronous decode
+ * (about 2x: 144 ms against 64 on the slides runtime, measured cold).
+ *
+ * An app opts in with `--codec lzma --encoding b91` in its build script. Only
+ * that one pairing is a block type the gate accepts (kernel gate1 DATA_TYPES),
+ * so nothing else can reach a release.
+ *
+ * THE ENCODER IS PINNED, like zopfli and for a stronger reason: the bytes it
+ * emits are signed, so two machines must produce the same shell. `lzma1` is a
+ * dependency-free TypeScript port of XZ for Java; it is a devDependency of the
+ * app, at an EXACT version, resolved from the caller's directory as zopfli is.
+ * The first prototype shelled out to whatever `xz` was on PATH, whose output
+ * differs between liblzma versions. Measured on the slides runtime payload:
+ * lzma1 0.8.0 550,886 B, xz 5.4.5 `-9e` 550,937 B; two runs byte-identical.
+ *
+ * Stream: 4 bytes of little-endian output length, then the raw LZMA1 stream
+ * with lc=3, lp=0, pb=0 (what scripts/lib/unlzma.js hardcodes — measured best
+ * for these payloads: pb=2 costs about 1 KB) and NO end marker: the decoder
+ * stops at the declared length.
+ */
+const CODEC = (() => {
+  const i = process.argv.indexOf('--codec')
+  return i > 0 && process.argv[i + 1] ? process.argv[i + 1] : 'deflate'
+})()
+if (!['deflate', 'lzma'].includes(CODEC)) throw new Error(`--codec must be deflate or lzma, got ${CODEC}`)
+const LZMA_PROPS = { lc: 3, lp: 0, pb: 0 }
+const lzma = async (buf) => {
+  let lib
+  try {
+    lib = await import(pathToFileURL(join(process.cwd(), 'node_modules/lzma1/lib/index.js')).href)
+  } catch {
+    console.error(
+      'postbuild-compress: lzma1 is missing. Run `npm ci` in this app\'s directory\n' +
+      '  (it is a devDependency, pinned to an exact version). There is no fallback:\n' +
+      '  a shell packed by a different encoder is a different, unsigned shell.')
+    process.exit(1)
+  }
+  const alone = lib.compress(buf, { level: 9, ...LZMA_PROPS, niceLen: 273, endMarker: false })
+  // .lzma header: 1 byte of properties, 4 of dictionary size, 8 of length.
+  // The properties byte is checked, because the loader's decoder assumes it.
+  if (alone[0] !== (LZMA_PROPS.pb * 5 + LZMA_PROPS.lp) * 9 + LZMA_PROPS.lc) throw new Error('lzma: the encoder did not honour lc/lp/pb')
+  const body = alone.subarray(13)
+  const out = Buffer.alloc(4 + body.length)
+  out.writeUInt32LE(buf.length, 0); out.set(body, 4)
+  // Decoded back TWICE and compared: with the decoder the loader ships, and
+  // with the encoder library's own, written independently of ours. The first
+  // proves this file opens; the second, that the stream is LZMA and not merely
+  // something our decoder happens to accept.
+  const ours = Buffer.from(unlzma(new Uint8Array(out)))
+  const dictSize = alone[1] | alone[2] << 8 | alone[3] << 16 | alone[4] << 24
+  const theirs = Buffer.from(lib.decompressRawLzma1(body, { ...LZMA_PROPS, dictSize: dictSize >>> 0, uncompressedSize: buf.length }))
+  if (!ours.equals(buf) || !theirs.equals(buf)) {
+    console.error('postbuild-compress: the lzma payload does not decode back to what went in.\n' +
+      '  Refusing to write a shell whose runtime cannot be recovered. Do not sign\n' +
+      '  anything built from this tree.')
+    process.exit(1)
+  }
+  return out
+}
 
 /**
  * ZOPFLI, not zlib.
@@ -87,10 +154,13 @@ try {
  * truncated write, a future iteration-count change that trips a corner.
  */
 const deflate = async (buf) => {
+  if (CODEC === 'lzma') return lzma(buf)
   const packed = (!zopfli || process.env.ZOPFLI === '0')
     ? deflateRawSync(buf, { level: 9 })
     : await new Promise((res, rej) =>
-        zopfli.deflate(buf, { numiterations: iterations }, (e, out) => (e ? rej(e) : res(Buffer.from(out)))))
+        // blocksplittingmax 0 = no cap on deflate blocks (the default stops at 15):
+        // a megabyte of mixed code, CSS and translations wants more. Same format.
+        zopfli.deflate(buf, { numiterations: iterations, blocksplittingmax: 0 }, (e, out) => (e ? rej(e) : res(Buffer.from(out)))))
   if (!inflateRawSync(packed).equals(buf)) {
     console.error('postbuild-compress: the packed payload does not inflate back to what went in.\n' +
       '  Refusing to write a shell whose runtime cannot be recovered. This is a bug in the\n' +
@@ -175,10 +245,13 @@ const diag = process.argv.includes('--diag')
 // in lib/b86.mjs): narrower alphabets built for a Teams preview-pane
 // bisection that proved nondeterministic; block type bento/deflate-<name>,
 // which the gate does not accept, so they cannot reach a release.
+// `b91` (scripts/lib/b91.mjs): 91 symbols, 6.5 bits per character, for the
+// lzma codec only — safe as script text, NOT inside an attribute or a string.
 const encoding = flag('encoding', 'b86')
-if (!['b64', ...Object.keys(VARIANTS)].includes(encoding)) throw new Error(`--encoding must be b64, b86 or one of ${Object.keys(VARIANTS).join('|')}, got ${encoding}`)
-const codec = encoding === 'b64' ? null : VARIANTS[encoding]
-const PAYLOAD_TYPE = `bento/deflate-${encoding}`
+if (!['b64', 'b91', ...Object.keys(VARIANTS)].includes(encoding)) throw new Error(`--encoding must be b64, b86, b91 or one of ${Object.keys(VARIANTS).join('|')}, got ${encoding}`)
+if ((CODEC === 'lzma') !== (encoding === 'b91')) throw new Error('--codec lzma and --encoding b91 go together: bento/lzma-b91 is the only lzma block type the gate accepts')
+const codec = encoding === 'b64' ? null : encoding === 'b91' ? B91 : VARIANTS[encoding]
+const PAYLOAD_TYPE = `bento/${CODEC}-${encoding}`
 // How the two deflated payloads are CARRIED in the file. `script` (shipped):
 // <script type="bento/deflate-b64">. `template`: <template data-bento-payload>
 // (its content is inert DOM, not a script, so a viewer that strips non-JS
@@ -202,9 +275,13 @@ if (!['script', 'template', 'textplain'].includes(carrier)) throw new Error(`--c
 // lands in a later task, after `load`. `auto`: native where present.
 const inflateMode = flag('inflate', 'js')
 if (!['native', 'auto', 'js'].includes(inflateMode)) throw new Error(`--inflate must be native, auto or js, got ${inflateMode}`)
+// DecompressionStream knows deflate, not LZMA: the loader would hand it bytes it cannot read.
+if (CODEC === 'lzma' && inflateMode !== 'js') throw new Error('--codec lzma needs --inflate js: no browser decodes LZMA natively')
 const INFLATE_JS = inflateMode === 'native' ? '' : (() => {
   const { execFileSync } = createRequire(import.meta.url)('node:child_process')
-  const src = readFileSync(new URL('./lib/inflate-raw.js', import.meta.url), 'utf8').replace(/^export function/m, 'function')
+  const src = CODEC === 'lzma'
+    ? readFileSync(new URL('./lib/unlzma.js', import.meta.url), 'utf8').replace(/^export function unlzma/m, 'function inflateRaw')
+    : readFileSync(new URL('./lib/inflate-raw.js', import.meta.url), 'utf8').replace(/^export function/m, 'function')
   const esbuild = join(process.cwd(), 'node_modules/.bin/esbuild')
   const min = execFileSync(esbuild, ['--minify', '--format=esm', '--target=es2017'], { input: src + '\nexport { inflateRaw }', encoding: 'utf8' })
   // esbuild renames the function; the export clause says what it became
@@ -484,7 +561,7 @@ const DIAG = `
   probe('meta csp', function () { var m = document.querySelector('meta[http-equiv=Content-Security-Policy]'); return m ? m.content : 'no meta csp (a header CSP is invisible here)' })
   document.addEventListener('securitypolicyviolation', function (e) { say('CSP violation: ' + e.violatedDirective + ' blocked ' + e.blockedURI + (e.sample ? ' sample ' + e.sample : '')) })
 `
-const loader = `
+const loaderSource = `
 (async () => {${diag ? DIAG : ''}
   var violations = 0
   document.addEventListener('securitypolicyviolation', function () { violations++ })
@@ -514,7 +591,7 @@ const loader = `
     var el = document.getElementById(id)
     var txt = (el.content ? el.content.textContent : el.textContent).trim()
     var bytes
-    try { bytes = ${codec ? 'b86decode(txt)' : "Uint8Array.from(atob(txt), function (c) { return c.charCodeAt(0) })"} }
+    try { bytes = ${codec ? (codec.LOADER_DECODE_FN || 'b86decode') + '(txt)' : "Uint8Array.from(atob(txt), function (c) { return c.charCodeAt(0) })"} }
     catch (e) {${diag ? ` say('DECODE FAILED for #' + id + ': ' + (e && e.name) + ': ' + (e && e.message), true);` : ''} throw e }
     var text
     ${inflateMode === 'js' ? `text = new TextDecoder().decode(inflateRaw(bytes))${diag ? `
@@ -677,7 +754,18 @@ const loader = `
   }
 })()
 `
+// The loader ships as PLAINTEXT in every file, so every byte of it is paid on
+// every send. It is minified whole (esbuild, the bundler's own): 7,984 B with
+// comments and indentation stripped, 6,703 B minified (slides, deflate). The
+// source above stays the readable copy; what a saved file carries is not meant
+// to be read, and the Tooling note already sends agents to #bento-doc.
+const loader = '\n' + createRequire(import.meta.url)('node:child_process').execFileSync(
+  join(process.cwd(), 'node_modules/.bin/esbuild'), ['--minify', '--target=es2017'], { input: loaderSource, encoding: 'utf8' }).trim() + '\n'
 if (loader.includes('</scr' + 'ipt>')) throw new Error('loader contains script-close')
+// --loader-source <path>: also write the loader as authored, for the rig that
+// asserts its shape (test-shell-loader.ts reads both: the shape from the
+// source, what ships from the file).
+if (flag('loader-source', '')) writeFileSync(flag('loader-source', ''), loaderSource)
 
 // --- assemble ----------------------------------------------------------------
 const out = `<!DOCTYPE html>

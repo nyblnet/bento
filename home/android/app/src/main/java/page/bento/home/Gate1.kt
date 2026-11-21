@@ -222,7 +222,7 @@ object Gate1 {
     // ---- the grammar (security, 2026-10-21) ---------------------------------------------
 
     /** The ONLY inert script types, case-sensitive. Everything else is executable. */
-    val DATA_TYPES = setOf("application/bento+json", "application/bento+lang", "bento/deflate-b64", "bento/deflate-b86")
+    val DATA_TYPES = setOf("application/bento+json", "application/bento+lang", "bento/deflate-b64", "bento/deflate-b86", "bento/lzma-b91")
 
     fun isDataScript(b: Block) = b.tag == "script" && b.src == null && b.type != null && b.type in DATA_TYPES
     private fun executable(blocks: List<Block>) = blocks.filter { it.tag == "script" && !isDataScript(it) }

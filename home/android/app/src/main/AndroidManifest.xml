@@ -76,7 +76,11 @@
         <activity
             android:name=".SetupActivity"
             android:exported="${setupExported}"
-            android:theme="@style/Theme.Tray">
+            android:theme="@style/Theme.Tray"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|uiMode|density|smallestScreenSize|navigation">
+            <!-- configChanges, as on the editor, is not an optimisation: a recreate runs onDestroy, whose
+                 abandon() wipes the keys under a worker thread still inside complete/confirmRecovery/
+                 enrolRecovery (an NPE on account!!, a seal over zeroed scalars). -->
             <!-- true only in builds a test drives (debug, releaseCheck): the screen then reads its
                  directory URL, test key and self-check request from the launching intent. -->
             <meta-data android:name="bento.setup.dev" android:value="${setupDev}" />

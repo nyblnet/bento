@@ -38,8 +38,8 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { inflateRawSync } from 'node:zlib'
-import { decode as b86decode, FORBIDDEN } from './lib/b86.mjs'
+import { FORBIDDEN } from './lib/b86.mjs'
+import { PAYLOAD_TYPES, unpack } from './lib/payload.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = dirname(here)
@@ -248,7 +248,6 @@ function checkPackCarryingShell(shell) {
 // --- invariant 4: the runtime stays compressed, and stays out of the save ---
 
 const TRANSIENT_ATTR = 'data-bento-transient'
-const PAYLOAD_TYPES = ['bento/deflate-b64', 'bento/deflate-b86']
 const isPayload = (s) => PAYLOAD_TYPES.includes(s.type)
 
 /** Every `<style>` in the file, with its raw text. */
@@ -265,8 +264,7 @@ function inflatePayloads(html) {
     // characters by construction; a hand-edited payload is caught here.
     for (const f of FORBIDDEN) if (s.text.includes(f)) fail(`payload #${s.id} contains ${JSON.stringify(f)} — a payload must not be able to end its own block`)
     try {
-      const bytes = s.type === 'bento/deflate-b86' ? Buffer.from(b86decode(s.text.trim())) : Buffer.from(s.text.trim(), 'base64')
-      out.set(s.id, inflateRawSync(bytes).toString('utf8'))
+      out.set(s.id, unpack(s.type, s.text).toString('utf8'))
     } catch (e) {
       fail(`payload #${s.id} does not inflate: ${e.message}`)
     }
@@ -480,7 +478,7 @@ export function gateShell(shellPath) {
   checkPreviewRulesAreImplemented()
   console.log(
     'conformance gate: old-updater splice contract OK (incl. pack- and preview-carrying shells); no test-seal hook' +
-      (compressed ? '; runtime ships deflated only' : ''),
+      (compressed ? '; runtime ships compressed only' : ''),
   )
 }
 

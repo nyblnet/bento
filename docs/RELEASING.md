@@ -395,7 +395,8 @@ node scripts/publish-site.mjs --dry "packs: …"   # change set must be ONLY wha
 ```
 
 Check which key the LIVE shell actually uses before assuming a rename is safe —
-inflate the `bento-rt` payload of the published shell and grep for the string.
+decode the `bento-rt` payload of the published shell (`unpack` in
+`scripts/lib/payload.mjs` reads every block type) and grep for the string.
 A pack added this way carries the newer key and lacks the older one, so its own
 first release shows that one string in English until the shell catches up. That
 is the right trade for a NEW language and the wrong one for an existing pack.

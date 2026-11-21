@@ -24,8 +24,9 @@
 // Deliberately DOM-free, so the rig runs it in node.
 
 import { MODEL_KEYS } from './modelkeys.generated'
-import { FORMAT, parseDoc, type BentoDoc, type Slide } from './model'
-import { LIMITS, SLIDE_CHECKS, sanitizeAssets, sanitizeFonts, sanitizeSlide, withDropReport, withPathSegment, type Dropped } from './untrusted'
+import { FORMAT, parseDoc, type BentoDoc, type Slide, type TokenType, type TokenValue } from './model'
+import { LIMITS, SLIDE_CHECKS, checkElementProp, sanitizeAssets, sanitizeFonts, sanitizeSlide, withDropReport, withPathSegment, type Dropped } from './untrusted'
+import { TOKEN_TYPES, protoName, tokenName } from './tokens'
 import { FROM_LIVE } from '../../kernel/src/docfields.ts'
 
 const DOC_KEYS = new Set<string>(MODEL_KEYS.doc)
@@ -61,6 +62,44 @@ function plainObject(v: unknown, path: string, dropped: Dropped[], depth = 0): R
     if (plain(x)) out[k] = x
     else if (depth === 0 && isObj(x)) { const o = plainObject(x, `${path}/${k}`, dropped, 1); if (o) out[k] = o }
     else dropped.push({ path: `${path}/${k}`, reason: 'not a plain value — dropped' })
+  }
+  return out
+}
+
+/**
+ * theme.tokens: deeper than a settings object goes, so it has its own rule.
+ * Names must be token names (tokens.ts), values per mode a finite number or a
+ * colour the element gate would take for a fill — a bound value is written
+ * straight into elements, so a token is a colour at the same trust level.
+ */
+function tokens(v: unknown, dropped: Dropped[]): BentoDoc['theme']['tokens'] {
+  if (!isObj(v) || !isObj(v.set)) { dropped.push({ path: '/theme/tokens', reason: 'not a token set — dropped' }); return undefined }
+  const str = (x: unknown) => typeof x === 'string' && x.length <= 64
+  const out: NonNullable<BentoDoc['theme']['tokens']> = { set: {} }
+  // a mode name is a key of every token's values: never one that reaches into Object.prototype
+  const modeName = (x: unknown) => str(x) && !protoName(x as string)
+  if (Array.isArray(v.modes) && v.modes.length <= 16 && v.modes.every(modeName)) out.modes = v.modes as string[]
+  if (modeName(v.mode)) out.mode = v.mode as string
+  for (const [name, tok] of Object.entries(v.set).slice(0, 500)) {
+    if (name === '__proto__' || !tokenName(`$${name}`) || !isObj(tok) || !TOKEN_TYPES.includes(tok.type as TokenType) || !isObj(tok.values)) {
+      dropped.push({ path: `/theme/tokens/set/${name}`, reason: 'malformed token — dropped' }); continue
+    }
+    const type = tok.type as TokenType
+    const values: Record<string, TokenValue> = {}
+    for (const [m, x] of Object.entries(tok.values)) {
+      if (protoName(m) || m.length > 64) continue
+      const num = typeof x === 'number' && Number.isFinite(x) && Math.abs(x) <= 1e6
+      // each type held to the element rule for the property it is written into
+      const ok = type === 'number' || type === 'fontSize' ? num
+        : type === 'opacity' ? num && (x as number) >= 0 && (x as number) <= 1
+        : type === 'fontFamily' ? checkElementProp('text', 'fontFamily', x)
+        : type === 'shadow' ? (isObj(x) ? checkElementProp('shape', 'shadow', x) : { ok: false })
+        : checkElementProp('shape', 'fill', x)
+      const good = typeof ok === 'boolean' ? ok : ok.ok
+      if (good) values[m] = (typeof ok === 'object' && ok.value !== undefined ? ok.value : x) as TokenValue
+      else dropped.push({ path: `/theme/tokens/set/${name}/values/${m}`, reason: 'invalid value — dropped' })
+    }
+    out.set[name] = { type, values }
   }
   return out
 }
@@ -144,6 +183,16 @@ export function sanitizeDoc(base: Record<string, unknown>, live?: BentoDoc): { d
         case 'blobs': { const b = blobs(v, extra); if (b) out.blobs = b; break }
         case 'title': if (typeof v === 'string' && v.length <= LIMITS.scalar * 5) out.title = v; break
         case 'version': case 'modified': if (typeof v === 'number' || typeof v === 'string') out[key] = v; break
+        case 'theme': {
+          const { tokens: tk, ...rest } = isObj(v) ? v : {} as Record<string, unknown>
+          const o = isObj(v) ? plainObject(rest, '/theme', extra) : plainObject(v, '/theme', extra)
+          if (o) {
+            const g = tk === undefined ? undefined : tokens(tk, extra)
+            // back in the input's key order, so an honest snapshot round-trips byte-identical
+            out.theme = Object.fromEntries(Object.keys(v as object).flatMap((k) => k === 'tokens' ? (g ? [[k, g]] : []) : k in o ? [[k, o[k]]] : []))
+          }
+          break
+        }
         default: { const o = plainObject(v, `/${key}`, extra); if (o) out[key] = o }
       }
     }
@@ -194,6 +243,16 @@ export function guardOpenedDoc(doc: BentoDoc): Dropped[] {
   if (isObj(theme) && 'background' in theme && !okBackground(theme.background)) {
     theme.background = ''
     out.push({ path: '/theme/background', reason: 'not a colour — cleared' })
+  }
+  // theme.tokens under the same rule a restored snapshot gets: values are
+  // written straight into elements, and a set that is missing or malformed
+  // (an older shell's gate, a hand edit) is normalised rather than crashed on
+  if (isObj(theme) && theme.tokens !== undefined) {
+    const before = JSON.stringify(theme.tokens)
+    const g = tokens(theme.tokens, out)
+    if (g && (Object.keys(g.set).length || g.modes?.length)) theme.tokens = g
+    else delete theme.tokens
+    if (JSON.stringify(theme.tokens) !== before && !out.some((d) => d.path.startsWith('/theme/tokens'))) out.push({ path: '/theme/tokens', reason: 'normalised' })
   }
   if (doc.fonts !== undefined) {
     const after = sanitizeFonts(doc.fonts)

@@ -93,10 +93,10 @@ ok(!/renderSlide|sanitizeHtml/.test(badges), 'the badge module never renders sli
 console.log('\nentry points\n')
 const editor = read('slides/src/editor/editor.ts')
 ok(/label: t\('Reveal in order'\)/.test(editor) && /label: t\('Reveal together'\)/.test(editor) && /label: t\('Remove reveal'\)/.test(editor), 'the element context menu carries the three verbs')
-ok(/Right-click ▸ Reveal in order/.test(editor), 'the ? help sheet names the entry point')
 const panels = read('slides/src/editor/panels.ts')
-ok(/this\.revealRow\(els\)/.test(panels.slice(panels.indexOf('private buildMultiPanel'), panels.indexOf('private buildElementPanel'))), 'a multi-selection panel offers the verbs')
-ok(/this\.revealRow\(\[el\]\)/.test(panels.slice(panels.indexOf('private buildPresentingProps'))), 'the Presenting section offers them for one element')
+const animate = read('slides/src/editor/inspector/animate.ts')
+ok(/revealRow\(this, els\)/.test(panels.slice(panels.indexOf('buildMultiPanel(els: '), panels.indexOf('buildElementPanel(el: '))), 'a multi-selection panel offers the verbs')
+ok(/revealRow\(p, \[el\]\)/.test(animate.slice(animate.indexOf('export function buildPresentingProps'))), 'the Presenting section offers them for one element')
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

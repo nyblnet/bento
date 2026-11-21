@@ -108,8 +108,8 @@ A file is a release's only if ONE history entry matches EVERY block:
 1. **Exactly one block per id:** `bento-rt`, `bento-rt-css`, each hash equal to
    its pin.
 2. **The grammar.** A `<script>` is inert ONLY if its `type` is exactly one of
-   `application/bento+json`, `application/bento+lang`, `bento/deflate-b64` or
-   `bento/deflate-b86`. The match is case-sensitive, and the script must have no
+   `application/bento+json`, `application/bento+lang`, `bento/deflate-b64`,
+   `bento/deflate-b86` or `bento/lzma-b91`. The match is case-sensitive, and the script must have no
    `src`. EVERY other script is executable, and each must be exactly the pinned
    loader or remover by hash. That includes no type, any JavaScript type,
    `module` in any case, an unknown type, and any `src=`.

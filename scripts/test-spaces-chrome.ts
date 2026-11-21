@@ -129,7 +129,8 @@ const SLIDES_MENU = {
   rowFrame: decl(edBtn, 'border'),
   rowInk: /var\((--[a-z0-9-]+)\)/.exec(decl(edBtn, 'color') ?? '')?.[1],
   sepMargin: /\.ed-menu-sep \{[^}]*margin:\s*([^;]+);/.exec(slidesCss)?.[1],
-  saveFont: /\.ed-save-menu \.ed-btn \{ font-size:\s*([^;]+);/.exec(slidesCss)?.[1],
+  // (slides' File and Help menus share the rule now, so the selector is a list)
+  saveFont: /\n\.ed-save-menu \.ed-btn[^{]*\{ font-size:\s*([^;]+);/.exec(slidesCss)?.[1],
 }
 SLIDES_MENU.rowInk = SLIDES_MENU.rowInk ? decl(slidesRoot, SLIDES_MENU.rowInk) : undefined
 // The keyboard ring (`.ed-btn:focus-visible` outside, `.ed-menu
@@ -162,6 +163,11 @@ const EQUIV: Record<string, string | null> = {
   'Save a copy…': 'Save a copy…', 'Duplicate as new deck…': 'Duplicate as new space…',
   'Export slides as images…': 'Export as Markdown…', 'Encrypt with password…': 'Encrypt with password…',
   'Change password…': null, 'Remove password': null,
+  // the revamp's Save ▾ (DECISIONS 2026-10-30): the password rows renamed
+  'Save with password…': 'Encrypt with password…', 'Save without password': null,
+  // …and what acts on the document moved to slides' File menu, which this
+  // slice also reads; spaces has no counterpart for these
+  'Print or save as PDF…': null, 'Document properties…': null, 'Compress pictures in this deck…': null, 'About bento/slides': null,
   'Version history…': 'Version history…', 'Copy document JSON': 'Copy document JSON',
   'Copy compact JSON (for agents)': null, 'Replace from JSON…': 'Replace from JSON…', 'Start from scratch…': null,
   // slides' way in from another format, in the slot spaces gives its own
@@ -171,7 +177,16 @@ const EQUIV: Record<string, string | null> = {
 }
 const unmapped = slidesSave.filter((l) => !(l in EQUIV))
 ok(slidesSave.length >= 9 && unmapped.length === 0, `every row of slides' Save menu has an entry in the equivalence table (${slidesSave.length} rows; new: ${unmapped.join(', ') || 'none'})`)
-const wantOrder = slidesSave.map((l) => EQUIV[l]).filter((x): x is string => !!x)
+// Two commands are NOT held to slides' order, and each is named here so the
+// exemption is a decision and not a hole. The revamp split slides' one list
+// into Save ▾ and File (DECISIONS 2026-10-30): the password row now leads the
+// document commands, in Save ▾, and Import sits under File ▸ New, ahead of the
+// exports. Spaces still has one menu, with Encrypt after its exports and
+// Import last, where slides had both before. Everything else keeps slides'
+// order. If spaces gains a File menu, take these out again.
+const PARTED = new Set(['Encrypt with password…', 'Import Markdown…'])
+ok([...PARTED].every((l) => SAVE_ORDER.includes(l) && Object.values(EQUIV).includes(l)), `the two commands exempt from slides' order are still real commands on both sides (${[...PARTED].join(', ')})`)
+const wantOrder = slidesSave.map((l) => EQUIV[l]).filter((x): x is string => !!x && !PARTED.has(x))
 const got = wantOrder.map((l) => SAVE_ORDER.indexOf(l))
 ok(got.every((i) => i >= 0) && got.every((i, k) => k === 0 || i > got[k - 1]),
   `spaces' Save menu holds slides' document commands in slides' order (${wantOrder.join(' · ')} at ${got.join(',')})`)
