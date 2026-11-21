@@ -83,7 +83,8 @@ jobs:
 
   slides-font-browser:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 57 rigs take about 13 minutes here; 15 left no room for a slow runner
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -387,6 +388,48 @@ jobs:
         # leftover lines are hidden for the edit, and a screenshot of the strip
         # beside the caret has no ring-blue in it; the text does not move.
         run: node scripts/test-slides-caret-ring-browser.mjs
+      - name: A formula's symbols stay on their box mid-morph in Chromium
+        # #855: the symbols ride 'spring' while the box rides power2.inOut, so
+        # the symbol translate is divided by the box's OWN eased scale. Sampled
+        # mid-morph on the manual clock, every travelling symbol sits within 2px
+        # of box scale + spring travel; a positive control shows the travel is
+        # on screen and the spring-scale counter-scale would miss.
+        run: node scripts/test-slides-math-morph-browser.mjs
+      - name: A file another program changed, in Chromium
+        # Real file handles, handed in through launchQueue: an outside edit
+        # brings up the banner and is never overwritten (auto-save and Cmd-S);
+        # Load swaps in the disk version as one undoable step with the edits in
+        # Version history and without rewriting the file; Keep mine writes once
+        # and the next outside edit is caught again; a disk version that gained
+        # a password loads only through that password and later saves keep it.
+        run: node scripts/test-slides-disk-change-browser.mjs
+
+  slides-editor-browser:
+    # The editor revamp's browser rigs (#897), in a job of their own. They
+    # were appended to slides-font-browser, whose 15 minutes they then
+    # overran: on that PR the job was cancelled at the limit with 44 of its
+    # 106 steps not started, every run, so none of these had ever run on CI.
+    # Two jobs run side by side and each finishes inside its limit. Add the
+    # editor's new browser rigs HERE, at the end.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        # WebKit too, for the gate-1 oracle: a Chromium-only oracle missed a bypass
+        # that a WebKit oracle found.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium webkit
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the packaged document
+        run: |
+          npm ci --prefix slides
+          npm run build:single --prefix slides
       - name: Shift-click inside a selection in Chromium
         # A Shift-click inside a multi-selection's box adds or removes the
         # element under the pointer (the box used to swallow it), touch too.
@@ -600,18 +643,4 @@ jobs:
         # clipped frame child exports clipped, a hidden selection cannot be
         # exported to an image; alt is role="img" only where it is a picture.
         run: node scripts/test-slides-render-fixes-browser.mjs
-      - name: A formula's symbols stay on their box mid-morph in Chromium
-        # #855: the symbols ride 'spring' while the box rides power2.inOut, so
-        # the symbol translate is divided by the box's OWN eased scale. Sampled
-        # mid-morph on the manual clock, every travelling symbol sits within 2px
-        # of box scale + spring travel; a positive control shows the travel is
-        # on screen and the spring-scale counter-scale would miss.
-        run: node scripts/test-slides-math-morph-browser.mjs
-      - name: A file another program changed, in Chromium
-        # Real file handles, handed in through launchQueue: an outside edit
-        # brings up the banner and is never overwritten (auto-save and Cmd-S);
-        # Load swaps in the disk version as one undoable step with the edits in
-        # Version history and without rewriting the file; Keep mine writes once
-        # and the next outside edit is caught again; a disk version that gained
-        # a password loads only through that password and later saves keep it.
-        run: node scripts/test-slides-disk-change-browser.mjs
+
