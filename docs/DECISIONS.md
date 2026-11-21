@@ -15223,3 +15223,39 @@ simulator, the directory mutants. None of those is the required check.
 - **What it does not buy:** a PR that changes the kernel or the shared packer
   still runs nearly everything, and should. #897 is one.
 
+## 2026-11-21 — The heavy zones are gated on a PR; the engine rigs get one retry
+
+Follows the entry above, and replaces its path filter on five workflows.
+A paths filter cannot be overridden by a label, and it had to list `kernel/**`
+to be safe, which meant any kernel change still ran the desktop host on three
+runners, the iOS simulator and the directory mutants.
+
+- **`ci-home-desktop`, `ci-home-ios`, `ci-home-android`, `ci-share` and
+  `ci-home` start with a gate job** (`.github/actions/zone-gate`). On a pull
+  request the zone's jobs run only if the PR changes the zone's OWN files or
+  carries the **`full-ci`** label; otherwise they are skipped, in seconds. A
+  push to main always runs them. If the changed files cannot be listed, they
+  run.
+- **What is given up:** a kernel or shared-script change no longer runs these
+  zones on the PR. `validate` still runs every zone's node-level slice on the
+  PR, and the merge to main runs the heavy jobs. Label a PR `full-ci` when it
+  should be proven there before merging; a kernel-zone change should be.
+- **The other five workflows keep their path filters** (slides, spaces, dash,
+  type, build size): they are quick and their inputs are easy to list.
+- **`scripts/ci/retry-once`** runs a rig a second time if the first fails,
+  with a warning annotation on the run. It wraps the four home/web engine
+  steps (WebKit and Firefox, stages 1 and 3) and nothing else. Never a mutant
+  run: a mutant that survives once has survived.
+- **Why the retry:** `test-home-web-offline.mjs` timed out on three runs in a
+  row on #897, on a different engine or row each time, and passed on main on
+  both of its runs. #897 changes nothing in it. That is a rig waiting on a
+  real browser under a 10 s limit, and the retry is a stopgap that keeps it
+  visible; the rig's limits are the thing to fix.
+- **Held by `test-ci-registered.ts`:** every job in a gated workflow waits on
+  its gate, the gate's pattern matches the workflow file and the gate action,
+  and `labeled` is among the trigger's types.
+- **Known red on main, not addressed here:** `home-desktop-agent` and
+  `home-desktop-windows` fail at "Desktop host rigs" on main as of
+  2026-11-20 (re-run of the 2026-11-15 commit, which had passed): the rig
+  build leaves no `capabilities.json` for `capcheck.py`.
+

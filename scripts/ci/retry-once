@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 The Bento authors
+# Run a rig; if it fails, run it ONCE more, and say so loudly.
+#
+#   BENTO_BROWSER=firefox scripts/ci/retry-once node scripts/test-home-web-offline.mjs
+#
+# For the browser-engine rigs whose rows wait on a real browser under a time
+# limit (home/web in WebKit and Firefox). One of them timed out on three runs
+# in a row on a pull request that did not touch it, on a different engine or
+# row each time, while passing on main. A second attempt separates "slow this
+# once" from "broken": a real break fails twice.
+#
+# It hides nothing. The first failure prints in full, and a warning
+# annotation on the run says a retry happened, so a rig that needs its second
+# attempt often is visible and can be fixed. Never use it on a mutant run: a
+# mutant that survives once has survived.
+set -uo pipefail
+"$@" && exit 0
+first=$?
+echo "::warning title=Rig retried::'$*' failed (exit $first) and is being run a second time. If this keeps happening the rig is timing-sensitive and wants fixing."
+echo
+echo "=== retry-once: second attempt ==="
+exec "$@"

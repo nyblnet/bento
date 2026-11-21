@@ -8,26 +8,9 @@ name: CI (share)
 
 on:
   pull_request:
-    # ONLY WHEN THIS ZONE COULD BE AFFECTED. These jobs are not the required
-    # check (`validate`, ci.yml, runs on every PR and is unfiltered), so a PR
-    # that touches none of these paths skips them and nothing waits on them.
-    # The push to main below is NOT filtered: every merge still runs the lot.
-    # A script this file runs must match a path here; scripts/test-ci-registered.ts
-    # holds that, and that this file is on its own list.
-    paths:
-      - '.github/workflows/ci-share.yml'
-      - 'server/**'
-      - 'home/web/**'
-      - 'site-src/**'
-      - 'kernel/**'
-      - 'scripts/lib/**'
-      - 'scripts/ci/**'
-      - 'scripts/postbuild-compress.mjs'
-      - 'scripts/shell-gate.mjs'
-      - 'scripts/derive-pins.mjs'
-      - 'scripts/test-signin-*'
-      - 'scripts/test-directory-*'
-      - 'scripts/test-home-web-identity.mjs'
+    # No paths filter here: a filter would also stop the `full-ci` label from
+    # starting these jobs. The gate job below decides instead, in seconds.
+    types: [opened, synchronize, reopened, labeled]
   push:
     branches: [main]
 
@@ -45,7 +28,27 @@ defaults:
     shell: bash scripts/ci/bento-step {0}
 
 jobs:
+  share-gate:
+    # These jobs are heavy and none is the required check. On a PR they run
+    # only if it changes this zone's own files or carries the `full-ci` label;
+    # on main they always run. See .github/actions/zone-gate/action.yml.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/actions/zone-gate
+          sparse-checkout-cone-mode: false
+      - id: gate
+        uses: ./.github/actions/zone-gate
+        with:
+          own: '^(server/|scripts/test-(signin|directory)-|\.github/workflows/ci-share\.yml$|\.github/actions/zone-gate/)'
+
   share-directory-mutants:
+    needs: share-gate
+    if: needs.share-gate.outputs.run == 'true'
     # Each mutant reopens one path (a retired route served again; a loosened
     # roster, passkey, mail or header rule) in a copy of the tree, and the
     # directory rigs must fail a row. A mutant that no longer applies, or a
@@ -70,6 +73,8 @@ jobs:
         run: node scripts/test-directory-mutants.ts --shard ${{ matrix.shard }}/3
 
   share-signin-browser:
+    needs: share-gate
+    if: needs.share-gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -125,6 +130,8 @@ jobs:
         run: node scripts/test-signin-host-pages.mjs --webkit
 
   share-directory-void-page:
+    needs: share-gate
+    if: needs.share-gate.outputs.run == 'true'
     # The void page (server/directory/src/voidpage.js) in a real browser: the
     # REAL worker and Roster object routed in at https://id.bento.page, every
     # WebSocket closed. Opening a link sends nothing and drops the token from
@@ -152,6 +159,8 @@ jobs:
         run: node scripts/test-directory-void-page.mjs --chrome
 
   share-home-identity:
+    needs: share-gate
+    if: needs.share-gate.outputs.run == 'true'
     # bento/home's bento/id agent (home/web/src/identity.ts), in the real
     # library built with --identity and the real sign-in host, routed in
     # process: a CDP virtual authenticator holds the passkey, the directory is
