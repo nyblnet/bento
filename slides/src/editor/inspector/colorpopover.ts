@@ -11,6 +11,7 @@ import { gradientBar } from './gradientbar'
 import { gradientFor } from './color'
 import { combineColor, parseColor } from './controls'
 import { editGradient } from '../gradientoverlay'
+import { cssColor } from '../../render'
 
 export interface Swatch { label: string; color: string; pick: () => void }
 export interface ColorPopoverOpts {
@@ -252,7 +253,9 @@ export function openColorPopover(anchor: HTMLElement, o: ColorPopoverOpts) {
       b.className = 'ed-palette-item'
       const chip = document.createElement('span')
       chip.className = 'ed-swatch'
-      chip.style.background = tk.color
+      // a token's value is a document colour: on open it is gated, but a
+      // collaborator's edit reaches here as written
+      chip.style.background = cssColor(tk.color, 'transparent')
       const name = document.createElement('span')
       name.textContent = tk.name
       b.append(chip, name)
