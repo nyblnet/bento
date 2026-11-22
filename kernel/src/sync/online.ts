@@ -582,6 +582,15 @@ export class OnlineTransport implements Transport {
    * so the loop cannot restart, and tells the user what they just lost.
    */
   private handleRefusal(env: RefusedEnv) {
+    // A refused fork snapshot is not dropped: its contributions live only in
+    // this replica's doc values and registers, so live peers would otherwise
+    // not get them until a reload. Send it again later.
+    const fork = env.k ? this.forkSent.get(env.k) : undefined
+    if (fork) {
+      this.forkSent.delete(env.k!)
+      this.retryFork(fork, env.code ?? '')
+      if (env.code !== 'rate-limited' && env.code !== 'too-large') return
+    }
     if (env.code === 'rate-limited') {
       this.throttle(typeof env.retryInMs === 'number' ? env.retryInMs : 10_000)
       return
@@ -1002,16 +1011,49 @@ export class OnlineTransport implements Transport {
         // REPLACES what every live peer holds — the same authority as an op
         // batch, and it used to travel unsigned. Sign it so the relay can
         // vouch for it; peers now refuse a `snap` it hasn't stamped.
-        env = { ...enc, g: await signFrame(this.signKey, enc.i, enc.d) }
+        // Named (`k`) so a refusal can be matched to it and the fork sent
+        // again later (see retryFork).
+        env = { k: id, ...enc, g: await signFrame(this.signKey, enc.i, enc.d) }
+        this.forkSent.set(id, frame)
+        if (this.forkSent.size > 16) this.forkSent.delete(this.forkSent.keys().next().value!)
       }
       // remember what rode in the frame so a refusal can name it
       this.write({ id, text: JSON.stringify(env), ops, bytes: enc.i.length + enc.d.length, tries: 0 })
     })()
   }
 
+  /** Frames of fork snapshots sent on this transport, by frame id (recent 16). */
+  private forkSent = new Map<string, Frame>()
+  private forkRetryTimer: ReturnType<typeof setTimeout> | null = null
+  private forkRetryMs = 0
+  /** first wait before a refused fork snapshot is sent again; doubles per
+   *  refusal up to FORK_RETRY_MAX_MS */
+  static FORK_RETRY_MS = 60_000
+  static FORK_RETRY_MAX_MS = 3_600_000
+
+  /** Send a refused fork snapshot again after a backoff, as the CURRENT
+   *  snapshot (it may have moved on). Not for `too-large`: the same deck
+   *  would not fit next time either. */
+  private retryFork(frame: Frame, code: string) {
+    if (this.closed) return
+    if (code === 'too-large') {
+      console.warn('[bento-sync] relay refused this copy’s fork snapshot as too large')
+      return
+    }
+    this.forkRetryMs = Math.min(Math.max(OnlineTransport.FORK_RETRY_MS, this.forkRetryMs * 2), OnlineTransport.FORK_RETRY_MAX_MS)
+    if (this.forkRetryTimer) clearTimeout(this.forkRetryTimer)
+    this.forkRetryTimer = setTimeout(() => {
+      this.forkRetryTimer = null
+      if (this.closed) return
+      const s = this.hooks.getSnapshot()
+      this.send({ ...frame, doc: s.doc, state: s.state } as Frame)
+    }, this.forkRetryMs)
+  }
+
   close() {
     this.closed = true
     if (this.pauseTimer) { clearTimeout(this.pauseTimer); this.pauseTimer = null }
+    if (this.forkRetryTimer) { clearTimeout(this.forkRetryTimer); this.forkRetryTimer = null }
     this.stopHeartbeat()
     this.ws?.close()
     this.ws = null
