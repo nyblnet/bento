@@ -29,6 +29,7 @@ export const fr: Catalog = {
   "Paste": "Coller",
   "Bring to front": "Mettre au premier plan",
   "Send to back": "Mettre à l’arrière-plan",
+  "Stacking order": "Ordre de superposition",
   "Ungroup": "Dissocier",
   "Edit text": "Modifier le texte",
   "Nothing to paste — use ⌘V": "Rien à coller — utilisez ⌘V",

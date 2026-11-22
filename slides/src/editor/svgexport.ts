@@ -36,6 +36,12 @@ const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 /** CSS in a CDATA section: a `]]>` inside it (a hostile font family) would end the section and open markup. */
 const cdata = (css: string) => `<![CDATA[${css.replace(/]]>/g, ']]]]><![CDATA[>')}]]>`
 const n = (v: number) => String(Math.round(v * 100) / 100)
+/** CSS's mix-blend-mode keywords ('normal' needs no attribute). An element's
+ *  `blend` is any string a file or a collaborator wrote — only a paste is
+ *  gated — and it lands in a style attribute, where `;` would start a
+ *  declaration of its own: so only a keyword is written, never the string. */
+const BLEND_MODES: ReadonlySet<string> = new Set(['multiply', 'screen', 'overlay', 'darken', 'lighten', 'color-dodge', 'color-burn',
+  'hard-light', 'soft-light', 'difference', 'exclusion', 'hue', 'saturation', 'color', 'luminosity', 'plus-darker', 'plus-lighter'])
 let uid = 0
 const nextId = (p: string) => `${p}${++uid}`
 
@@ -395,7 +401,7 @@ export async function nativeSlideSvg(doc: BentoDoc, slide: Slide, box?: Box): Pr
           `transform="translate(${n(el.x)} ${n(el.y)})${el.rotation ? ` rotate(${n(el.rotation)} ${n(cx)} ${n(cy)})` : ''}"`,
           `data-el-id="${esc(el.id)}"`,
           (el.opacity ?? 1) < 1 ? `opacity="${n(el.opacity)}"` : '',
-          el.blend && el.blend !== 'normal' ? `style="mix-blend-mode:${esc(el.blend)}"` : '',
+          el.blend && BLEND_MODES.has(el.blend) ? `style="mix-blend-mode:${el.blend}"` : '',
           el.alt ? `aria-label="${esc(el.alt)}" role="img"` : '',
         ].filter(Boolean).join(' ')
         const clip = frameClipPath(clipCss, el.w, el.h, defs)

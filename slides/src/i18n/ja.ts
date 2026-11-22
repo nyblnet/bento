@@ -29,6 +29,7 @@ export const ja: Catalog = {
   "Paste": "貼り付け",
   "Bring to front": "最前面へ移動",
   "Send to back": "最背面へ移動",
+  "Stacking order": "重ね順",
   "Ungroup": "グループ解除",
   "Edit text": "テキストを編集",
   "Nothing to paste — use ⌘V": "貼り付けるものがありません — ⌘V を使用してください",

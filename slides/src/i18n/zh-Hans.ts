@@ -29,6 +29,7 @@ export const zhHans: Catalog = {
   "Paste": "粘贴",
   "Bring to front": "置于顶层",
   "Send to back": "置于底层",
+  "Stacking order": "叠放次序",
   "Ungroup": "取消组合",
   "Edit text": "编辑文本",
   "Nothing to paste — use ⌘V": "没有可粘贴的内容 — 请使用 ⌘V",

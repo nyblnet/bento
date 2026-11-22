@@ -22,7 +22,7 @@
 // a DOM (node tooling) the measured checks are skipped and `measured` reports
 // false, rather than guessing.
 
-import type { BentoDoc, Slide, SlideElement, TableElement, TextElement } from './model.ts'
+import type { BentoDoc, CodeElement, Slide, SlideElement, TableElement, TextElement } from './model.ts'
 import { isWebUrl } from './model.ts'
 import { MODEL_KEYS } from './modelkeys.generated.ts'
 import { isRemoteUrl } from '../../kernel/src/net.ts'
@@ -216,6 +216,7 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
       message: `"${stack.split(',')[0].trim()}" is not in doc.fonts, so it renders only for viewers who happen to have it installed — everyone else silently gets the next family in the stack. Embed the woff2 in doc.assets and declare it in doc.fonts.` })
   }
   checkFamily(doc.theme?.fontFamily, { path: 'theme.fontFamily' })
+  checkFamily(doc.theme?.codeFontFamily, { path: 'theme.codeFontFamily' })
   checkFamily(doc.theme?.headingFamily, { path: 'theme.headingFamily' })
 
   // ---- brand palette references --------------------------------------------
@@ -412,7 +413,7 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
         }
       }
 
-      if (el.type === 'text') checkFamily((el as TextElement).fontFamily, at)
+      if (el.type === 'text' || el.type === 'code') checkFamily((el as TextElement | CodeElement).fontFamily, at)
 
       // charts ---------------------------------------------------------------
       if (el.type === 'chart' && el.option) validateChart(el.option as any, at, add)

@@ -75,6 +75,11 @@ jobs:
         # surface (canvas, panels, present, speaker, print, the saved file with
         # JS off) the payload origin is never requested; a raw url() is.
         run: node scripts/test-slides-css-egress-browser.mjs
+      - name: Two editor swatches paint document colours through the colour gate
+        # The Morph with picker's fill swatches and the colour popover's token
+        # chips, with Offline mode on: a url() fill, and a url() token a
+        # collaborator wrote, fetch nothing; plain colours still paint.
+        run: node scripts/test-slides-swatch-egress-browser.mjs
       - name: The shared svg sanitizer's policy options only tighten
         # kernel/src/svgsafe.ts, lifted from slides' renderer: slides' lists are
         # the default, and every option an app adds (type's embed pictures use

@@ -13,7 +13,7 @@ import { resolveMathHtml } from './maths/delimiters.ts'
 import { renderCodeInto } from './code'
 import { formatDate } from './datefmt'
 import { cropImgStyle, isIdentityCrop } from './crop'
-import { SLIDE_CHECKS } from './untrusted'
+import { SLIDE_CHECKS, checkElementProp } from './untrusted'
 // the shared svg sanitizer (kernel/src/svgsafe.ts, lifted from here): names
 // re-exported so callers and rigs keep importing them from the renderer, and
 // cssDecodeIdentEscapes is the SAME decoder the colour gate below reads with
@@ -966,7 +966,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       inner.className = 'bento-text-inner'
       inner.dir = 'auto'
       inner.style.fontSize = `${el.fontSize}px`
-      inner.style.fontFamily = el.fontFamily || doc.theme.fontFamily
+      inner.style.fontFamily = codeFontStack(el.fontFamily, doc)
       inner.style.textAlign = el.align
       inner.style.lineHeight = String(el.lineHeight)
       inner.style.width = '100%'
@@ -1021,6 +1021,19 @@ export function flipContent(node: Element, el: { flipX?: boolean; flipY?: boolea
     const s = (c as HTMLElement | SVGElement).style
     s.transform = s.transform ? `${s.transform} ${flip}` : flip
   }
+}
+
+/**
+ * The font stack a code element is drawn in: its own, else the deck's
+ * theme.codeFontFamily, else the deck's body font. theme.codeFontFamily is held
+ * to the rule an element's fontFamily meets on open, paste and live edit,
+ * applied again here where it is drawn; a value that fails it is skipped.
+ */
+export function codeFontStack(own: unknown, doc: Pick<BentoDoc, 'theme'>): string {
+  if (typeof own === 'string' && own !== '') return own
+  const code = doc.theme?.codeFontFamily
+  if (typeof code === 'string' && code !== '' && checkElementProp('code', 'fontFamily', code).ok) return code
+  return doc.theme?.fontFamily ?? ''
 }
 
 /** A slide background the colour rule accepts (a colour or a gradient), or none. */

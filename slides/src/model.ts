@@ -731,6 +731,8 @@ export interface BentoDoc {
     color: string
     accent: string
     fontFamily: string
+    /** The optional font family for code snippets. */
+    codeFontFamily?: string
     /**
      * Heading face. Body text stays on `fontFamily`; this is the display face,
      * mirroring OOXML's major/minor pair. Absent = headings use `fontFamily`.
@@ -1563,6 +1565,7 @@ export function newDoc(): BentoDoc {
       color: '#1E2A3A',
       accent: '#F7A600',
       fontFamily: FONT_STACK,
+      codeFontFamily: MONOSPACE_FONT_STACK,
     },
     slides: [emptySlide()],
     modified: new Date().toISOString(),

@@ -153,9 +153,9 @@ ok(r.findings.some((f) => f.code === 'overridden-enter-fx' && f.element === 'dup
 // exactly the person with the typeface installed. Two gallery templates shipped
 // naming Instrument Sans and carrying nothing; on this machine they LOOKED
 // right. Only the document can be checked, never the local font list.
-const fontDoc = (fontFamily: string, fonts: unknown = null): BentoDoc => ({
+const fontDoc = (fontFamily: string, fonts: unknown = null, codeFontFamily?: string): BentoDoc => ({
   ...clean, fonts,
-  theme: { accent: '#F7A600', fontFamily },
+  theme: { accent: '#F7A600', fontFamily, ...(codeFontFamily !== undefined ? { codeFontFamily } : {}) },
 } as any)
 const named = (d: BentoDoc) => validateDoc(d, { measure: false })
   .findings.filter((f) => f.code === 'font-not-embedded')
@@ -172,6 +172,29 @@ for (const stack of [
   "ui-monospace, 'SF Mono', Menlo, monospace",
 ]) {
   ok(named(fontDoc(stack)).length === 0, `a system stack is not reported (${stack.split(',')[0]})`)
+}
+{
+  const uncarried = named(fontDoc('system-ui, sans-serif', null, "'JetBrains Mono', monospace"))
+  ok(uncarried.length === 1 && uncarried[0].path === 'theme.codeFontFamily',
+    'a codeFontFamily named in the theme but not carried in doc.fonts is reported at theme.codeFontFamily')
+  ok(named(fontDoc('system-ui, sans-serif',
+    [{ family: 'JetBrains Mono', asset: 'font-jb' }], "'JetBrains Mono', monospace")).length === 0,
+    'the same codeFontFamily carried in doc.fonts produces no finding')
+  ok(named(fontDoc('system-ui, sans-serif', null, "ui-monospace, 'SF Mono', Menlo, monospace")).length === 0,
+    'a system monospace codeFontFamily stack produces no finding')
+  const codeElDoc = (fontFamily: string, fonts: unknown = null): BentoDoc => ({
+    ...clean, fonts,
+    slides: [{
+      id: 's1', name: 'one', background: '#FFF', transition: 'fade', notes: '', elements: [
+        { id: 'c1', type: 'code', x: 96, y: 100, w: 600, h: 200, rotation: 0, opacity: 1,
+          content: 'x = 1', fontSize: 24, fontFamily, color: '#111', align: 'left', valign: 'middle', lineHeight: 1.25 },
+      ],
+    }],
+  } as any)
+  ok(named(codeElDoc("'Fira Code', monospace")).length === 1,
+    'a code element naming an uncarried font is reported')
+  ok(named(codeElDoc("'Fira Code', monospace", [{ family: 'Fira Code', asset: 'font-fira' }])).length === 0,
+    'a code element whose font IS carried produces no finding')
 }
 
 // ------------------------------------------------- chart false-positive guard

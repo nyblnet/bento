@@ -32,6 +32,7 @@ export const pt: Catalog = {
   "Paste": "Colar",
   "Bring to front": "Trazer para a frente",
   "Send to back": "Enviar para trás",
+  "Stacking order": "Ordem de empilhamento",
   "Ungroup": "Desagrupar",
   "Edit text": "Editar texto",
   "Nothing to paste — use ⌘V": "Nada para colar — use ⌘V",
