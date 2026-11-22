@@ -15,6 +15,7 @@
 //   6. A multi-selection exports in the slide's paint order.
 //   7. A selected frame exports with its contents, a frame's child too.
 //   8. Contrast is graded only where something is painted.
+//   9. An element's blend reaches the SVG only as a mix-blend-mode keyword.
 import { readFileSync } from 'node:fs'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
@@ -87,6 +88,21 @@ try {
   const svg = await download('SVG')
   const text = svg.buf.toString('utf8')
   ok(svg.name.endsWith('.svg') && /viewBox="100 100 200 100"/.test(text), `SVG frames the same box (${(text.match(/viewBox="[^"]+"/) ?? ['none'])[0]})`)
+
+  console.log('\na blend mode in the SVG\n')
+  // A blend reaches the export as the model holds it: written by the file or a
+  // collaborator, it is never gated (only a paste is). A keyword is written; a
+  // string carrying a declaration of its own is not. Set on the live model, as
+  // an opened file or a peer's op leaves it (loadDoc would gate it away).
+  const blendSvg = async (blend) => {
+    await p.evaluate((b) => { window.bento.doc.slides[0].elements.find((e) => e.id === 'a').blend = b }, blend)
+    return (await download('SVG')).buf.toString('utf8')
+  }
+  const kept = await blendSvg('multiply')
+  ok(/style="mix-blend-mode:multiply"/.test(kept), 'a blend keyword is written into the SVG (the row can see the attribute)')
+  const hostile = await blendSvg('multiply;mask-image:url(https://example.invalid/x.png)')
+  ok(!/mask-image|example\.invalid/.test(hostile) && !/mix-blend-mode/.test(hostile), `a blend that is not a keyword writes nothing (${(hostile.match(/style="[^"]*"/) ?? ['no style'])[0]})`)
+  await p.evaluate(() => { delete window.bento.doc.slides[0].elements.find((e) => e.id === 'a').blend })
 
   console.log('\na rotated element\n')
   await select('b')
