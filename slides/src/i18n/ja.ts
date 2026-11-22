@@ -929,6 +929,7 @@ export const ja: Catalog = {
   "Remove stroke": "線を削除",
   "Rename": "名前を変更",
   "Show speaker notes": "スピーカーノートを表示",
+  "This slide has notes": "このスライドにはノートがあります",
   "This variant shares no elements with its main slide — nothing to update.": "このバリエーションにはメインスライドと共通の要素がありません — 更新するものはありません。",
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "スライドのレイアウトの中で、これがどの枠かを示します。スライドを別のレイアウトに切り替えると、内容は新しいレイアウトの同じ役割の枠に移動します（PowerPoint のプレースホルダーと同じです）。",
   "Pie": "円",
