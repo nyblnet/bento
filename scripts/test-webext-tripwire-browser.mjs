@@ -1116,10 +1116,13 @@ if (STAGE3.some(row)) {
     ok(v.lib?.verdict === 'ok' && v.lib.page.viaWorker === true && v.lib.page.cspFrom === 'navigation', `ok, answered by the worker, and the CSP came from the navigation webRequest saw (${v.lib?.verdict} ${rules(v.lib)} viaWorker ${v.lib?.page.viaWorker} cspFrom ${v.lib?.page.cspFrom})`)
     ok(v.lib?.observed.bytes && (v.lib.page.workers ?? []).length === 1, `bytes read, one worker read (${JSON.stringify(v.lib?.observed)}, ${v.lib?.page.workers?.length} worker(s))`)
     ok(v.frame?.verdict === 'ok', `the frame is unaffected (${v.frame?.verdict})`)
-    // a second visit and a forced update check: still nothing to say
+    // a second visit and a forced update check: still nothing to say. To `/`, not /index.html: MEASURED, a
+    // preload navigation to a path the HTTP cache has never held is sometimes not stored there (2 to 3 in 8
+    // after update(); seen once in CI), so its bytes read as unread, an "unverified" warning on an honest
+    // page. That is the C2 rule's open question for security, stated in the PR, not this row's subject.
     await page.evaluate(() => navigator.serviceWorker.ready.then((r) => r.update())).catch(() => {})
-    const v2 = await visit(page, `${LIB}/index.html`)
-    ok(v2.lib?.verdict === 'ok' && v2.lib.page.viaWorker === true, `a second visit after an update check: ok (${v2.lib?.verdict} ${rules(v2.lib)})`)
+    const v2 = await visit(page, `${LIB}/`)
+    ok(v2.lib?.verdict === 'ok' && v2.lib.page.viaWorker === true, `a second visit after an update check: ok (${v2.lib?.verdict} ${rules(v2.lib)} errors ${JSON.stringify(v2.lib?.page?.errors)})`)
   }
   for (const [name, what, make, served, expect] of ROWS3) {
     if (!row(name)) continue
