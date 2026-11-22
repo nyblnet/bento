@@ -80,6 +80,9 @@ self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()))
 self.addEventListener('fetch', (e) => {
   const u = new URL(e.request.url)
   if (e.request.method !== 'GET' || u.origin !== self.location.origin) return
+  // only the two pages it precached: anything else (a favicon) is left to the page, as the build's worker
+  // leaves it, so the fixture makes no request of its own the tripwire would flag (ruling #954 C5)
+  if (u.pathname !== '/' && u.pathname !== '/index.html') return
   e.respondWith(caches.match(e.request, { ignoreSearch: true }).then((r) => r || fetch(e.request)))
 })
 `
@@ -186,6 +189,9 @@ const serve = (key) => http.createServer((req, res) => {
     if (p === LIST_PATH && state.list != null) { res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*' }); res.end(state.list); return }
     res.writeHead(404).end(); return
   }
+  // `cloak`: what the BROWSER's worker-script fetch of /sw.js gets (Service-Worker: script), while every
+  // other request, the extension's included, gets the release's bytes (security ruling #954 F-W)
+  if (key === 'lib' && p === '/sw.js' && state.cloak && req.headers['service-worker'] === 'script') { res.writeHead(200, state.cloak.headers); res.end(state.cloak.body); return }
   const f = state[key].get(p) ?? (key === 'lib' ? state.fallback : null)
   if (!f) { res.writeHead(404).end(); return }
   res.writeHead(f.status ?? 200, f.headers)
@@ -312,6 +318,7 @@ async function fresh({ list = list1, held = null, lib = {}, frame = {}, keepWork
   await store.reset()
   for (const r of HELD.splice(0)) r.destroy()
   state.fallback = null
+  state.cloak = null
   state.lib = new Map(honest.lib); state.frame = new Map(honest.frame)
   for (const [k, v] of Object.entries(lib)) state.lib.set(k, v)
   for (const [k, v] of Object.entries(frame)) state.frame.set(k, v)
@@ -1145,6 +1152,84 @@ if (STAGE3.some(row)) {
     const s = await showsFilf(page)
     ok(s === true && ev?.page?.viaWorker === true, `the hostile response reached the page, through the worker (served ${s}, viaWorker ${ev?.page?.viaWorker})`)
     ok(ev?.verdict === 'mismatch' && ev.page.crossSite === true && rules(ev).split(',').includes('cache-control'), `a mismatch, seen as cross-site, on its Cache-Control (${ev?.verdict} [${rules(ev)}] crossSite ${ev?.page?.crossSite})`)
+  }
+  await fresh()
+}
+
+
+// --- C5: the library worker's own requests (security ruling #954, F-W the cloaked worker) -----------
+// The server answers the browser's own fetch of /sw.js (Service-Worker: script) with a different worker
+// than everyone else gets, the extension's fetch included, so the worker-bytes rule sees the release's
+// bytes. What the tripwire can still see is what that worker DOES: its own requests (webRequest, tabId -1,
+// initiator the library origin), held to the honest worker's: GET, no query, a path the release serves,
+// and /sw.js only as the browser's worker-script fetch.
+const C5_ROWS = ['c5-honest-worker', 'sw-cloak', 'sw-cloak-launder', 'worker-query', 'worker-unlisted-path', 'worker-post']
+const workerEvents = async (t0) => (await since(t0)).filter((e) => e.role === 'worker')
+/** The build's worker with `extra` appended: installs (its precache matches its pins) and runs `extra` too. */
+const cloakOf = (extra) => ({ body: Buffer.concat([BUILD_SW, Buffer.from(`\n${extra}\n`)]), headers: { ...honest.lib.get('/sw.js').headers } })
+/** Install a cloaked worker on a first visit, then visit again under it; returns this row's worker events and server hits. */
+async function underCloak(extra) {
+  await fresh()
+  state.cloak = cloakOf(extra)
+  const t0 = Date.now(), h0 = state.hits.length
+  await page.goto(`${LIB}/`)
+  const ctl = await until(async () => page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state === 'activated'), 20000)
+  await page.goto('about:blank')
+  await visit(page, `${LIB}/`)
+  await sleep(2000)
+  return { ctl, evs: await workerEvents(t0), hits: state.hits.slice(h0) }
+}
+const whys = (evs) => evs.flatMap((e) => e.failures.map((f) => f.why ?? f.rule))
+if (C5_ROWS.some(row)) {
+  if (row('c5-honest-worker')) {
+    section('c5-honest-worker: the build\'s own worker installs, answers two visits and an update check  (rule: its own requests are all allowed; positive control)')
+    await fresh()
+    const t0 = Date.now(), h0 = state.hits.length
+    const ctl = await prime()
+    await fresh({ keepWorkers: true })
+    const t1 = Date.now()
+    const v1 = await visit(page, `${LIB}/`)
+    await page.evaluate(() => navigator.serviceWorker.ready.then((r) => r.update())).catch(() => {})
+    await sleep(1500)
+    const v2 = await visit(page, `${LIB}/index.html`)
+    await sleep(1500)
+    const hits = state.hits.slice(h0)
+    const precache = infoA.offline.precache.map((p) => p.path ?? p)
+    ok(ctl === `${LIB}/sw.js` && precache.every((p) => hits.includes(`lib ${p}`)), `the worker installed: the server saw its precache fetches (${precache.join(' ')}) and it controls the page`)
+    ok(hits.filter((h) => h === 'lib /sw.js').length >= 3, `and /sw.js fetched again: the browser's update check and the extension's own read (${hits.filter((h) => h === 'lib /sw.js').length} times)`)
+    ok(v1.lib?.verdict === 'ok' && v2.lib?.verdict === 'ok' && v1.lib.page.viaWorker, `both visits ok (${v1.lib?.verdict} ${v2.lib?.verdict})`)
+    const evs = (await since(t0)).filter((e) => e.role === 'worker')
+    ok(evs.length === 0 && reportTabs().length === 0, `no worker-request finding, no report tab (${JSON.stringify(evs.map((e) => [e.url, whys([e])]))})`)
+    void t1
+  }
+  if (row('sw-cloak')) {
+    section('sw-cloak: the browser\'s worker fetch gets the release\'s worker plus a fetch listener that beacons home  (rule: a worker request to a path no release serves)')
+    const r = await underCloak('self.addEventListener("fetch",()=>{fetch("/sw-evil-beacon",{cache:"no-store"}).catch(()=>{})})')
+    const beacons = r.hits.filter((h) => h === 'lib /sw-evil-beacon').length
+    ok(r.ctl && beacons > 0, `the cloaked worker is installed and ran its own code (beacons at the server: ${beacons})`)
+    const ev = r.evs.find((e) => e.url === `${LIB}/sw-evil-beacon`)
+    ok(ev?.verdict === 'mismatch' && whys([ev]).includes('a path no release serves') && ev.class === 'tampered' && (ev.warned ?? []).includes('tab'), `a loud mismatch on the worker's request (${ev?.verdict} ${JSON.stringify(ev && whys([ev]))} ${ev?.class} ${ev?.warned})`)
+    ok(r.evs.length === 1, `recorded once for its kind, however often it fired (${r.evs.length})`)
+  }
+  if (row('sw-cloak-launder')) {
+    section('sw-cloak-launder: the cloaked worker re-fetches /sw.js itself on activate  (rule: the worker script only as the browser\'s worker-script fetch)')
+    const r = await underCloak('self.addEventListener("activate",(e)=>e.waitUntil(fetch("/sw.js",{cache:"reload"}).catch(()=>{})))')
+    ok(r.ctl, 'the cloaked worker is installed')
+    const ev = r.evs.find((e) => e.url === `${LIB}/sw.js`)
+    ok(ev?.verdict === 'mismatch' && whys([ev]).some((w) => /not fetched as the browser's worker script/.test(w)), `a mismatch on its own /sw.js fetch (${JSON.stringify(r.evs.map((e) => [e.url, whys([e])]))})`)
+  }
+  for (const [name, extra, url, why] of [
+    ['worker-query', 'self.addEventListener("activate",(e)=>e.waitUntil(fetch("/index.html?x=1").catch(()=>{})))', `${LIB}/index.html?x=1`, 'a query'],
+    ['worker-unlisted-path', 'self.addEventListener("activate",(e)=>e.waitUntil(fetch("/not-in-release").catch(()=>{})))', `${LIB}/not-in-release`, 'a path no release serves'],
+    ['worker-post', 'self.addEventListener("activate",(e)=>e.waitUntil(fetch("/",{method:"POST",body:"x"}).catch(()=>{})))', `${LIB}/`, 'not GET'],
+  ]) {
+    if (!row(name)) continue
+    section(`${name}: the cloaked worker fetches ${url.replace(LIB, '')}${name === 'worker-post' ? ' by POST' : ''} on activate  (rule: ${why})`)
+    const r = await underCloak(extra)
+    const seen = r.hits.some((h) => h === `lib ${new URL(url).pathname}`)
+    ok(r.ctl && seen, `the cloaked worker is installed and made the request (server saw it: ${seen})`)
+    const ev = r.evs.find((e) => e.url === url && whys([e]).includes(why))
+    ok(ev?.verdict === 'mismatch' && (ev.warned ?? []).length > 0, `a mismatch: ${why} (${JSON.stringify(r.evs.map((e) => [e.url, whys([e])]))})`)
   }
   await fresh()
 }

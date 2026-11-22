@@ -27,7 +27,7 @@
 // link to or frame must not be able to open tabs at will.
 
 import { t } from './i18n.js'
-import { acceptServed, verifyServed, judge, judgeEarly, observed, classOf, REFRESH_MS } from './tripwire-judge.js'
+import { acceptServed, verifyServed, judge, judgeEarly, observed, classOf, workerRequestFailures, REFRESH_MS } from './tripwire-judge.js'
 import { KEY, LIBRARY_ORIGIN, FRAME_ORIGINS, LIST_URL } from './tripwire-config.js'
 
 export const LOG_KEY = 'tripwireLog'
@@ -154,6 +154,53 @@ function onRequest(d) {
   if (roleOf(origin) !== 'library') return
   const site = (d.requestHeaders ?? []).find((h) => h.name.toLowerCase() === 'sec-fetch-site')?.value ?? null
   void chrome.storage.session.set({ [`${REQUEST_PREFIX}${d.tabId}:${d.frameId}`]: { url: noHash(d.url), at: d.timeStamp, site: site == null ? null : cut(site) } })
+}
+
+/**
+ * The library's own worker's requests (security ruling #954 C5): webRequest
+ * reports them with tabId -1 and the library origin as their initiator.
+ * MEASURED (Chromium 149): the browser's fetch of the worker script, and its
+ * update checks, are type `script` with Service-Worker: script and
+ * Sec-Fetch-Dest: serviceworker; the worker's own fetch() calls are
+ * `xmlhttprequest` with neither; a page's requests carry its tab id. The
+ * extension's own fetches (initiator chrome-extension://) and other sites'
+ * (their own origin as initiator) are not the library's worker. A request to
+ * another origin is not seen at all: the extension has no host permission
+ * there (measured), which is the residual the README states. Observing only.
+ */
+const WREQ_PREFIX = 'twr:'
+function onWorkerRequest(d) {
+  if (d.tabId !== -1) return
+  let origin
+  try { origin = new URL(d.url).origin } catch { return }
+  if (roleOf(origin) !== 'library') return
+  if (d.initiator != null && d.initiator !== LIBRARY_ORIGIN) return
+  const keep = new Set(['service-worker', 'sec-fetch-dest'])
+  const headers = Array.isArray(d.requestHeaders) ? d.requestHeaders.filter((h) => keep.has(String(h.name).toLowerCase())).map((h) => ({ name: cut(h.name), value: cut(h.value ?? '') })) : null
+  void tripwireWorkerRequest({ url: cut(noHash(d.url)), method: cut(d.method ?? ''), type: cut(d.type ?? ''), initiator: d.initiator == null ? null : cut(d.initiator), headers }).catch(() => {})
+}
+
+/** Judge one of the library worker's own requests; a finding is recorded and announced like a page's. */
+export async function tripwireWorkerRequest(req, net = (u, o) => fetch(u, o), now = Date.now()) {
+  const { current, refresh } = await listFor(net, now)
+  // no list, nothing to judge against: the visits that started the worker are on record as unchecked
+  if (!current) return { ok: false, reason: 'no list' }
+  const failures = workerRequestFailures(req, current.list, LIBRARY_ORIGIN)
+  if (!failures.length) return { ok: true, verdict: 'ok' }
+  // once per kind of request per session, so a chatty worker cannot flood the record
+  const u = (() => { try { return new URL(req.url) } catch { return null } })()
+  const shape = `${req.method} ${u ? u.pathname : req.url}${String(req.url).includes('?') ? '?' : ''} ${req.type} ${req.initiator ?? '-'} ${failures.map((f) => f.why ?? f.rule).join('+')}`
+  if (!(await firstTime(`${WREQ_PREFIX}${shape}`))) return { ok: true, verdict: 'mismatch', repeat: true }
+  const event = {
+    id: newId(now), at: new Date(now).toISOString(), url: req.url, origin: LIBRARY_ORIGIN, role: 'worker',
+    verdict: 'mismatch', release: null, failures,
+    serial: current.list.serial ?? null, listAt: current.list.at ?? null,
+    list: refresh ? { status: refresh.status, why: refresh.why } : { status: 'held' },
+    observed: { request: true },
+    page: { role: 'worker', url: req.url, request: { method: req.method, type: req.type, initiator: req.initiator, headers: req.headers } },
+  }
+  await settle(event, null, refresh, { verdict: 'mismatch' }, now)
+  return { ok: true, verdict: 'mismatch', id: event.id }
 }
 
 /** The held list (re-verified), or null. */
@@ -429,6 +476,7 @@ export function installTripwire() {
   if (typeof chrome === 'undefined') return
   chrome.webRequest?.onHeadersReceived.addListener(onHeaders, { urls: patterns(), types: ['main_frame', 'sub_frame'] }, ['responseHeaders', 'extraHeaders'])
   chrome.webRequest?.onSendHeaders.addListener(onRequest, { urls: patterns(), types: ['main_frame'] }, ['requestHeaders', 'extraHeaders'])
+  chrome.webRequest?.onSendHeaders.addListener(onWorkerRequest, { urls: [`${LIBRARY_ORIGIN}/*`], tabId: -1 }, ['requestHeaders', 'extraHeaders'])
   chrome.notifications?.onClicked?.addListener((id) => {
     if (!id.startsWith(NOTE_PREFIX)) return
     void chrome.tabs.create({ url: chrome.runtime.getURL(`src/tripwire.html?id=${encodeURIComponent(id.slice(NOTE_PREFIX.length))}`) })

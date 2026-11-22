@@ -262,11 +262,15 @@ the navigation, worker or not. Measured with this build's own worker in control
 navigation preload those rows pass a hostile page, which is the C1 mutant there.
 Still open:
 
-- **The tripwire trusts the worker by its URL.** It lists `/sw.js` and checks
-  the bytes it fetches itself, but a server can answer the browser's own
-  worker request (`Service-Worker: script`) differently from the extension's,
-  and the browser installs what it was given. Watching the worker's own
-  requests is a tripwire follow-up; until then a worker is trusted by its URL.
+- **The tripwire cannot read the installed worker's bytes.** It lists
+  `/sw.js` and checks the bytes it fetches itself, but a server can answer the
+  browser's own worker request (`Service-Worker: script`) differently from the
+  extension's, and the browser installs what it was given. The tripwire holds
+  that worker to the honest worker's own requests instead (GET, no query, the
+  release's paths, `/sw.js` only as the browser's script fetch; see
+  `home/webext/README.md`). That narrows a hostile worker to covert channels
+  (which of those requests it makes, and when) and to requests to other
+  origins, which the extension cannot see; it does not verify the bytes.
 
 **Install.** `manifest.webmanifest` (name, `start_url` and `scope` `/`,
 standalone, 192 and 512 px icons), linked from the page and allowed by an exact

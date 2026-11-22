@@ -15419,3 +15419,48 @@ Two gaps the security re-check found in the tripwire (entries above), the limit 
 Guards: the rows and mutants in `scripts/test-webext-tripwire-browser.mjs`,
 `scripts/test-webext-tripwire-mutants.mjs`, `scripts/test-webext-tripwire.ts`
 and `scripts/test-home-web-build.mjs`.
+
+## 2026-11-22 — The bento/home tripwire holds the library's worker to the honest worker's own requests
+
+Security's review of stage 3 (#954, its F-W and C5): the release list names
+`/sw.js`, and the tripwire checks the bytes it fetches itself, but a server can
+answer the browser's own worker fetch (`Service-Worker: script`) with a
+different worker, which the browser installs and runs on every visit while the
+extension's check sees the release's bytes. The installed copy cannot be read.
+What can be seen is what that worker does.
+
+- **Measured (Chromium 149):** webRequest reports the library worker's own
+  requests with `tabId` -1 and the library origin as their initiator; the
+  browser's fetch of the worker script and its update checks are type
+  `script` with `Service-Worker: script` and `Sec-Fetch-Dest: serviceworker`
+  (visible to `onSendHeaders` with `extraHeaders`); the worker's own `fetch()`
+  calls are `xmlhttprequest` with neither; the extension's own fetches carry a
+  `chrome-extension://` initiator. A worker's request to another origin is not
+  reported at all: the extension has host permission for home.bento.page only.
+- **The allowlist.** A request from the library's worker must be a GET with no
+  query (not even a bare `?`), to a path some release in the list serves on
+  the library origin (the served files: a superset of the worker's precache,
+  so the list needs no new field), and the worker script only as the
+  browser's worker-script fetch. Anything else is a mismatch (rule
+  `worker-request`, class "tampered"), recorded as an event of its own and
+  announced like a page's (notification and report tab; no tab to badge),
+  once per kind of request per session. A request with no initiator is
+  recorded as `worker-request-unattributed`, class "unverified": it cannot be
+  tied to the worker or ruled out as it, so it is never allowed in silence.
+  With no list held, nothing is judged (the visits are on record as
+  unchecked).
+- **What it does not do**, stated in both READMEs: it does not verify the
+  worker's bytes. A worker that keeps to the honest worker's requests can still
+  pass data out through which of them it makes, and when, and its requests to
+  other origins are unseen; seeing those needs host permissions beyond
+  home.bento.page, a store-listing change for the maintainer.
+
+Guards: rows `c5-honest-worker` (the build's worker, two visits and an update
+check: no finding), `sw-cloak`, `sw-cloak-launder`, `worker-query`,
+`worker-unlisted-path` and `worker-post` in
+`scripts/test-webext-tripwire-browser.mjs`, each with a mutant (the listener
+not registered, the worker-script check off, the query, path and method checks
+off, and the initiator and tab filters dropped, which flags the extension's own
+`/sw.js` read and a page's own requests); unit rows in
+`scripts/test-webext-tripwire.ts`, including an absent initiator and absent
+request headers.

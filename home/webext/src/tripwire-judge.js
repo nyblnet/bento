@@ -145,7 +145,7 @@ const isPrefix = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length <= b
 const sameScript = (seen, want) => (want.sha256 ? !seen.src && seen.sha256 === want.sha256 : seen.src === want.src)
 
 /** The rules that say "could not tell" rather than "this is not a release" (N4: they never share a warning with the others). */
-export const UNVERIFIED_RULES = new Set(['bytes-unread', 'size-unread', 'incomplete', 'cache-unread', 'workers-unread'])
+export const UNVERIFIED_RULES = new Set(['bytes-unread', 'size-unread', 'incomplete', 'cache-unread', 'workers-unread', 'worker-request-unattributed'])
 /** 'unverified' when every failure is one of those, else 'tampered'. Loud warnings are once per class per origin per session. */
 export const classOf = (failures) => (failures.length && failures.every((f) => UNVERIFIED_RULES.has(f.rule)) ? 'unverified' : 'tampered')
 
@@ -276,6 +276,46 @@ export function observationFailures(obs) {
 }
 
 const pathOf = (url) => { try { return new URL(url).pathname || '/' } catch { return null } }
+
+/**
+ * A request the library's own worker made (security ruling #954 C5, the cloaked
+ * worker): webRequest reports it with tabId -1 and the library origin as its
+ * initiator. The honest worker only fetches its precache (GET, no query, the
+ * build's own files) and, once installed, nothing else of its own (navigations
+ * come by navigation preload, which is the tab's request); the browser fetches
+ * the worker's script itself. So the allowlist is:
+ *   - GET, with no query (not even a bare `?`), on the library origin;
+ *   - a path some release in the list serves there (the served files are a
+ *     superset of the precache: the page, /index.html, the worker, the 404
+ *     page, the manifest and icons);
+ *   - a worker path (/sw.js) only as the BROWSER's worker-script fetch: type
+ *     `script`, Sec-Fetch-Dest `serviceworker` (a Sec- header no script can
+ *     set) and Service-Worker `script`. A worker re-fetching its own script
+ *     (to launder a cloaked copy) carries none of them.
+ * A request with no initiator cannot be tied to the library's worker or ruled
+ * out as it: recorded as unverified, never allowed in silence.
+ * `req`: { url, method, type, initiator, headers: [{ name, value }] | null }.
+ * This does not verify bytes: a worker that keeps to these requests can still
+ * pass data out through which of them it makes, and when (a covert channel).
+ */
+export function workerRequestFailures(req, list, origin) {
+  const got = { method: req?.method ?? null, url: req?.url ?? null, type: req?.type ?? null, initiator: req?.initiator ?? null }
+  if (req?.initiator == null) return [{ rule: 'worker-request-unattributed', got }]
+  let u
+  try { u = new URL(req.url) } catch { return [{ rule: 'worker-request', why: 'unreadable URL', got }] }
+  const out = []
+  const why = (w) => out.push({ rule: 'worker-request', why: w, got })
+  if (u.origin !== origin) why('another origin')
+  if (req.method !== 'GET') why('not GET')
+  if (String(req.url).split('#')[0].includes('?')) why('a query')
+  const p = u.pathname || '/'
+  if (!list.releases.some((r) => r.origins[origin]?.files[p] !== undefined)) why('a path no release serves')
+  if (list.releases.some((r) => (r.workers ?? []).includes(p))) {
+    const h = (name) => (Array.isArray(req.headers) ? req.headers.find((x) => String(x?.name).toLowerCase() === name)?.value ?? null : null)
+    if (!(req.type === 'script' && h('sec-fetch-dest') === 'serviceworker' && h('service-worker') === 'script')) why('the worker script, not fetched as the browser\'s worker script')
+  }
+  return out
+}
 
 /** Is this path one some release serves on this origin? */
 export function listedPath(list, origin, url) {

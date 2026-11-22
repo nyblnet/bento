@@ -228,6 +228,37 @@ ok(v(old, { ...listNew, releases: [listNew.releases[0]] }).verdict === 'mismatch
 ok(J.observed({ ...honestObs(), bytes: null }).bytes === false, 'what was not observed is recorded as such')
 
 // --- 5. the signing script ---------------------------------------------------------
+section('the library worker\'s own requests (security ruling #954 C5)')
+{
+  const O = 'https://home.bento.page'
+  const H = (sw: string | null, dest: string | null) => [...(sw == null ? [] : [{ name: 'Service-Worker', value: sw }]), ...(dest == null ? [] : [{ name: 'Sec-Fetch-Dest', value: dest }])]
+  const req = (over: Record<string, unknown> = {}) => ({ url: `${O}/`, method: 'GET', type: 'xmlhttprequest', initiator: O, headers: H(null, 'empty'), ...over })
+  const wr = (r: unknown) => J.workerRequestFailures(r, list1, O).map((f: any) => f.why ?? f.rule).join('+')
+  ok(lib.files['/sw.js'] && list1.releases[0].workers.includes('/sw.js'), 'the fixture release serves /sw.js as its worker (positive control on the list read)')
+  ok(wr(req()) === '' && wr(req({ url: `${O}/index.html` })) === '' && wr(req({ url: `${O}/extra.js` })) === '', 'a precache fetch: GET, no query, a path the release serves: allowed')
+  ok(wr(req({ url: `${O}/sw.js`, type: 'script', headers: H('script', 'serviceworker') })) === '', 'the browser\'s own fetch of the worker script (type script, Service-Worker: script, Sec-Fetch-Dest: serviceworker): allowed')
+  ok(wr(req({ url: `${O}/sw.js` })) === 'the worker script, not fetched as the browser\'s worker script', 'the worker re-fetching its own script: a finding')
+  ok(wr(req({ url: `${O}/sw.js`, type: 'script', headers: H('script', 'empty') })) !== '', 'Service-Worker: script set by a script, without Sec-Fetch-Dest serviceworker: a finding')
+  ok(wr(req({ url: `${O}/sw.js`, type: 'xmlhttprequest', headers: H('script', 'serviceworker') })) !== '', 'the worker-script headers on a fetch() request type: a finding')
+  ok(wr(req({ url: `${O}/sw.js`, type: 'script', headers: null })) !== '', 'requestHeaders ABSENT on a worker-script fetch: a finding, never a pass')
+  ok(wr(req({ url: `${O}/sw.js`, type: 'script', headers: [] })) !== '', 'no headers at all: a finding')
+  ok(wr(req({ headers: undefined })) === '', 'requestHeaders absent on a plain precache path: still allowed (only the worker script needs them)')
+  ok(wr(req({ url: `${O}/?x` })) === 'a query' && wr(req({ url: `${O}/?` })) === 'a query' && wr(req({ url: `${O}/#a?b` })) === '', 'a query, even a bare ?, is a finding; a ? in the fragment is not a query')
+  ok(wr(req({ url: `${O}/not-served` })) === 'a path no release serves', 'a path no release serves: a finding')
+  ok(wr(req({ method: 'POST' })) === 'not GET' && wr(req({ method: 'HEAD' })) === 'not GET', 'POST and HEAD: findings')
+  ok(wr(req({ url: 'https://evil.example/' })) === 'another origin', 'another origin: a finding')
+  ok(wr(req({ url: 'not a url' })) === 'unreadable URL', 'an unreadable URL: a finding')
+  const un = J.workerRequestFailures(req({ initiator: undefined }), list1, O)
+  ok(un.length === 1 && un[0].rule === 'worker-request-unattributed' && J.classOf(un) === 'unverified', 'initiator ABSENT: recorded as unverified, never allowed in silence')
+  ok(J.workerRequestFailures(req({ initiator: null }), list1, O)[0]?.rule === 'worker-request-unattributed', 'initiator null: the same')
+  ok(J.classOf(J.workerRequestFailures(req({ method: 'POST' }), list1, O)) === 'tampered', 'a worker request outside the allowlist is "tampered"')
+  ok(wr(req({ url: `${O}/frame.html` })) === 'a path no release serves', 'the frame site\'s paths are not the library\'s')
+  const noWorkers = { ...list1, releases: list1.releases.map((r: any) => { const { workers, ...rest } = r; return rest }) }
+  ok(J.workerRequestFailures(req({ url: `${O}/sw.js` }), noWorkers, O).length === 0, 'a release with NO workers field: /sw.js is an ordinary served path (absent field read as no workers, not a crash)')
+  const twSrc2 = fs.readFileSync(path.join(EXT, 'src/tripwire.js'), 'utf8')
+  ok(/onSendHeaders\.addListener\(onWorkerRequest, \{ urls: \[`\$\{LIBRARY_ORIGIN\}\/\*`\], tabId: -1 \}, \['requestHeaders', 'extraHeaders'\]\)/.test(twSrc2), 'the listener: the library origin only, tabId -1, with extraHeaders (Service-Worker and Sec-Fetch-Dest are only visible with it)')
+}
+
 section('sign-home-web-served.mjs')
 const keyFile = (pub: any, priv: any) => { const f = path.join(work, `k-${Math.random().toString(36).slice(2)}.json`); fs.writeFileSync(f, JSON.stringify({ public: pub, private: priv })); return f }
 const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' })

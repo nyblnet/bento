@@ -123,6 +123,16 @@ const MUTANTS = [
   { name: 'the worker without navigation preload (C1): text + no-store', row: 'stage3-nostore-text', build: NO_PRELOAD },
   { name: 'bytes rule off, worker in control', row: 'stage3-text', file: J, from: 'if (obs.bytes && obs.bytes.sha256 !== e.sha256)', to: 'if (false)' },
   { name: 'the worker without navigation preload (C1): cross-site + no-store', row: 'stage3-cross-site-no-store', build: NO_PRELOAD },
+  // C5: the library worker's own requests (security ruling #954, F-W)
+  { name: 'the library worker\'s requests not watched (C5)', row: 'sw-cloak', file: W, from: "  chrome.webRequest?.onSendHeaders.addListener(onWorkerRequest, { urls: [`${LIBRARY_ORIGIN}/*`], tabId: -1 }, ['requestHeaders', 'extraHeaders'])\n", to: '' },
+  { name: 'the worker script may be fetched by the worker itself (C5)', row: 'sw-cloak-launder', file: J, from: 'if (list.releases.some((r) => (r.workers ?? []).includes(p))) {', to: 'if (false) {' },
+  { name: 'a query allowed (C5)', row: 'worker-query', file: J, from: "if (String(req.url).split('#')[0].includes('?')) why('a query')", to: '' },
+  { name: 'any path allowed (C5)', row: 'worker-unlisted-path', file: J, from: "if (!list.releases.some((r) => r.origins[origin]?.files[p] !== undefined)) why('a path no release serves')", to: '' },
+  { name: 'any method allowed (C5)', row: 'worker-post', file: J, from: "if (req.method !== 'GET') why('not GET')", to: '' },
+  { name: 'the extension\'s own requests taken for the worker\'s (C5)', row: 'c5-honest-worker', file: W, from: 'if (d.initiator != null && d.initiator !== LIBRARY_ORIGIN) return', to: '' },
+  { name: 'page requests taken for the worker\'s (C5)', row: 'c5-honest-worker', edits: [
+    { file: W, from: '  if (d.tabId !== -1) return\n', to: '' },
+    { file: W, from: "{ urls: [`${LIBRARY_ORIGIN}/*`], tabId: -1 }", to: "{ urls: [`${LIBRARY_ORIGIN}/*`] }" }] },
 ]
 
 // A run that never reached the browser (a local port taken between freePorts and listen) is
