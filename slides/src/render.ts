@@ -555,7 +555,7 @@ export function svgPaint(v: unknown, fallback: string): string {
  * instead of the model's own strings. A copy; the model is untouched.
  */
 type Gradientish = { stops?: Array<{ color?: unknown }> }
-const safeGradient = <G extends Gradientish>(g: G): G =>
+export const safeGradient = <G extends Gradientish>(g: G): G =>
   ({ ...g, stops: g.stops!.map((s) => ({ ...s, color: cssColor(s.color, 'transparent') })) })
 
 export function paintSafeShape<T extends {
@@ -724,7 +724,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       inner.style.fontWeight = String(el.fontWeight)
       const cg = el.colorGradient
       if (cg && cg.stops && cg.stops.length) {
-        inner.style.backgroundImage = cssGradient(cg)
+        inner.style.backgroundImage = cssGradient(safeGradient(cg))
         inner.style.setProperty('-webkit-background-clip', 'text')
         inner.style.setProperty('background-clip', 'text')
         inner.style.color = 'transparent'

@@ -11,25 +11,37 @@ pre-1.0.
 
 ## [Unreleased]
 
-- **Auto layout.** Select some elements and press ⇧A: they sit in a frame that
-  lines them up in a row, a column or a grid, with the gap, padding and
-  alignment you set in the inspector's Auto layout section. Children can fill
-  the free space, rows and columns can wrap, the frame can hug its content and
+## [1.3.0] — 2026-11-22
+
+- **A new editor for people who design in Figma, Keynote or PowerPoint.**
+  Frames with auto layout, design tokens, components, boolean shapes, a pen,
+  one-letter tools, a ⌘K command palette, a colour picker of our own, and
+  fills and strokes in layers. Decks made with it still open in older
+  versions, which draw what they know and keep the rest. Contributed by
+  hugoassisj (#897).
+- **Security: update this file. This release closes issues reported to us and
+  found in our own review.** What they were is described here once people have
+  had time to update.
+- **Auto layout: a frame lines up what is in it as a row, a column or a
+  grid.** Select some elements and press ⇧A, then set the gap, padding and
+  alignment in the inspector's Auto layout section. Children can fill the free
+  space, rows and columns can wrap, the frame can hug its content and
   clip what overflows, and dragging a child past a sibling reorders it.
   Children follow the frame while you drag it, and a selected frame shows its
   padding and gaps on the canvas — drag them to change them.
-- **Design tokens.** A new Tokens view beside Slides and Layers holds named
+- **Design tokens: named colours, sizes, fonts and shadows, with light and
+  dark modes.** A new Tokens view beside Slides and Layers holds named
   colours, numbers, font families, font sizes, opacities and shadows, with
   modes such as light and dark. Bind a colour, a corner radius, a stroke
   width, a gap or padding, a font, a size, an opacity or a shadow to a token,
   and changing the token — or the mode — changes every place that uses it.
-- **Components.** ⌥⌘K makes the selection a main component; insert copies
-  from the Tokens view. Copies follow the main, keep what you change on them,
-  and can be detached.
-- **Union, subtract, intersect, exclude.** Select two or more shapes and
-  combine them from the toolbar, the right-click menu or ⌥⇧U/S/I/E. The result
-  is a real path any version can draw, and it remembers its shapes: change the
-  operation later, or release them.
+- **Components: copies follow their main and keep your changes.** ⌥⌘K makes
+  the selection a main component; insert copies from the Tokens view. Copies
+  follow the main, keep what you change on them, and can be detached.
+- **Union, subtract, intersect and exclude shapes into one.** Select two or
+  more shapes and combine them from the toolbar, the right-click menu or
+  ⌥⇧U/S/I/E. The result is a real path any version can draw, and it remembers
+  its shapes: change the operation later, or release them.
 - **A pen and one-letter tools.** V select, F frame, R rectangle, O ellipse,
   L line, P pen, T text — shown on the topbar's insert buttons and in the
   ? sheet. The pen places corners with a click and curves with a drag. While a
@@ -86,11 +98,6 @@ pre-1.0.
   (`theme.codeFontFamily`), so an embedded code font applies to every code
   block that does not pick its own. New decks use a monospace font; older
   versions draw those blocks in the deck's body font. Thanks to tikurahul.
-- **See-through theme colours stay see-through in older versions.** A colour
-  taken from the deck's theme keeps its own opacity, but a deck opened in
-  1.2.13 or earlier drew those colours solid and saved them solid: the glow,
-  the washes and the hint text of the starter deck among them. Such colours
-  are now saved in a form older versions leave alone.
 
 ## [1.2.13] — 2026-11-09
 

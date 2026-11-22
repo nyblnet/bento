@@ -18,7 +18,7 @@
 
 import type { Store } from '../store'
 import type { GradientFill } from '../model'
-import { gradientLineCoords, radialGeom } from '../render'
+import { cssColor, gradientLineCoords, radialGeom } from '../render'
 import { t } from '../i18n'
 
 /** The gradient being edited: an element and the dotted path of its gradient
@@ -89,7 +89,7 @@ export function drawGradientOverlay(host: HTMLElement, store: Store, scale: () =
     const b = document.createElement('div')
     b.className = stop ? 'ed-grad-knob ed-grad-stop' : 'ed-grad-knob'
     b.title = t(name)
-    if (stop) b.style.background = stop
+    if (stop) b.style.background = cssColor(stop, 'transparent')
     const size = (stop ? 10 : 12) * k
     Object.assign(b.style, { left: `${fx * w - size / 2}px`, top: `${fy * h - size / 2}px`, width: `${size}px`, height: `${size}px`, borderWidth: `${2 * k}px` })
     b.addEventListener('pointerdown', (ev) => {
