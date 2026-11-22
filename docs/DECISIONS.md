@@ -15340,6 +15340,63 @@ serving an older shell.
   starter-deck row is the positive control (87 lost in the old form). Four
   mutants turn rows red.
 
+## 2026-11-22 — slides: the speaker-notes pane starts folded; a toggle beside Slideshow opens it
+
+The maintainer asked for the notes pane under the canvas (#897) to start
+closed for new decks and to take no height when folded, and then for the
+control that reopens it to use space well, be easy to find and use, and look
+right. The first control built was a labelled "Speaker notes" pill in the
+canvas's bottom-start corner; the maintainer did not like it, and it was
+replaced before this shipped.
+
+- **The default is per viewer, not per deck.** With no saved
+  `bento-notes-open` the pane starts folded at every window size (it used to
+  open above 700×600). An explicit open or fold is remembered under that key,
+  as before. "New decks" was read as "anyone who has not chosen yet": a per-deck
+  flag would either enter the format (notes visibility is a viewer
+  preference, like locale and reduced motion, never document state) or need
+  a docId-keyed store that forgets the viewer's choice on every new file.
+- **Folded is zero height.** The header, the rule and the padding fold with
+  the text (a grid row tweened 1fr → 0fr, so the existing .18s ease is kept
+  and reduced motion snaps); the canvas gets the whole column.
+- **One control, in the bottom-end cluster: [notes] [Slideshow] [zoom].** A
+  32px round toggle at the head of the row that already holds Slideshow and
+  zoom, where PowerPoint keeps its Notes button. It does not move or
+  disappear: the same button opens and folds (aria-expanded, aria-controls),
+  and open it wears the armed tool's tint. Three other shapes were built and
+  measured against it in the real shell:
+  - the labelled pill in the opposite corner took a corner of its own, and on
+    a phone a row of its own above the other pills;
+  - a chevron tab docked on the canvas's bottom edge (the side panels' drawer
+    pull) is the smallest, but says nothing about what it opens to someone
+    who has never seen the pane, which now starts folded, and on a phone its
+    44px tap area lands on the Slideshow pill;
+  - a full-width rail with a grabber, opened by a click or a drag, has the
+    same two problems and no label at all.
+  A labelled toggle in the cluster overflows a 390px phone, so it would need
+  the icon-only form anyway; the icon-only form is the one shipped everywhere.
+- **The dot.** Folded, the toggle carries an amber dot when the current
+  slide has notes (blank notes do not count). That is information the pill
+  and the folded pane never gave: which slides still need notes, without
+  opening anything. The tooltip and the button's accessible description say
+  the same in words; open, the notes are on screen and the dot steps aside.
+- **The row stays one row.** Where the canvas is too narrow for it (a 320px
+  phone, a canvas between two open panels, a long localized Slideshow label
+  such as Portuguese at 390px) the Slideshow button drops its visible word
+  and keeps its icon and its accessible name. That is the topbar's rule,
+  hiding text first, and it is measured against the canvas, not a width
+  breakpoint, because the row's width moves with the locale. Only the canvas
+  is observed, so the row changing width cannot re-trigger the check.
+- **Keyboard and touch.** Enter on the toggle opens the pane and puts the
+  caret in the notes; Enter on it again folds, and focus stays on the toggle.
+  On touch the circle stays 32px and a transparent area grows the target to
+  44px inside the 10px gap, so it takes nothing from the Slideshow pill.
+- **Guard.** `scripts/test-slides-notes-pane-browser.mjs` measures the folded
+  height, the canvas gain, the toggle's place, hit-test, tap area and dot at
+  1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
+  default, never tighten the row, widen the tap area onto the Slideshow pill,
+  or never draw the dot each turn rows red.
+
 ## 2026-11-22 — bento/home's library host answers unknown paths with a script-free 404
 
 Security's review of the tripwire (#956, its D1): a host that answers a path
