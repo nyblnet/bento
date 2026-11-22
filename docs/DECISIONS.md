@@ -15339,3 +15339,32 @@ serving an older shell.
   runs the released derivation over what this build would save. The
   starter-deck row is the positive control (87 lost in the old form). Four
   mutants turn rows red.
+
+## 2026-11-22 — slides: the speaker-notes pane starts folded and folds to a tab
+
+The maintainer asked for the notes pane under the canvas (#897) to start
+closed for new decks and to take no height when folded, leaving only a small
+"Speaker notes" tab that reopens it.
+
+- **The default is per viewer, not per deck.** With no saved
+  `bento-notes-open` the pane starts folded at every window size (it used to
+  open above 700×600). An explicit open or fold is remembered under that key,
+  as before. "New decks" was read as "anyone who has not chosen yet": a per-deck
+  flag would either enter the format (notes visibility is a viewer
+  preference, like locale and reduced motion, never document state) or need
+  a docId-keyed store that forgets the viewer's choice on every new file.
+- **Folded is zero height.** The header, the rule and the padding fold with
+  the text (a grid row tweened 1fr → 0fr, so the existing .18s ease is kept
+  and reduced motion snaps); the canvas gets the whole column.
+- **The tab sits in the canvas's bottom-start corner.** Bottom-end holds the
+  Slideshow and zoom pills and toasts rise at bottom-centre. On a canvas too
+  narrow for the tab beside the pills (a phone; a long localized Slideshow
+  label) it rises above them. That is measured from the two boxes' horizontal
+  extents, not a width breakpoint, so lifting cannot flip the result. The tab
+  is mounted in `.ed-centre`, outside the canvas scroller, so no scroll box
+  clips it. Keyboard activation moves the caret into the notes, because the
+  tab disappears under the focus.
+- **Guard.** `scripts/test-slides-notes-pane-browser.mjs` measures the folded
+  height, the canvas gain, the tab's hit-test and its clearance at 1440×900
+  and 390×844. An open-by-default mutant and a never-lift mutant each turn
+  rows red.
