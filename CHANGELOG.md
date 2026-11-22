@@ -95,8 +95,53 @@ pre-1.0.
 ## [1.2.13] — 2026-11-09
 
 - **Security: update this file. This release closes issues reported to us and
-  found in our own review.** What they were is described here once people have
-  had time to update.
+  found in our own review.** Updating is all most people need to do; the first
+  item has one extra step for decks you shared for live editing.
+  - **A chart could run code when you hovered it in the show.** A chart's
+    series colour went into its hover tooltip as written, so a deck could carry
+    a "colour" that was really a piece of page code, and it ran when someone
+    presenting or watching the deck moved the mouse over the chart. A file set
+    to open straight into the show needed nothing more than that. The same
+    colour could also arrive as a live edit from anyone allowed to edit a
+    shared deck, and run on the deck owner's screen, where the page holds the
+    keys that invite and remove people. The tooltip now draws its swatch only
+    for a real colour. Every version with live charts before 1.2.13 is
+    affected; 1.2.10 had already stopped the colour from loading a web
+    address. If you shared a deck for live editing with people you would not
+    give its owner keys to, use *Share → Reset access…* on it once you have
+    updated. Reported by skeletonsec, and the live-edit route by hackchang
+    ([GHSA-953g-9mj9-fwcj](https://github.com/nyblnet/bento/security/advisories/GHSA-953g-9mj9-fwcj)).
+  - **A picture's fit or corner radius, a deck font's settings, or a slide
+    background sent as a live edit could make your browser contact a
+    website.** These values went into the page's styling unchecked: a
+    picture's fit and radius in any deck, and a background or font arriving
+    as a live edit (in a file being opened, those two have been checked since
+    1.2.6). So a deck, or an edit from someone in a live session, could hide a
+    web address in them, and the browser fetched it as the slide was shown. Whoever ran that address learned that you opened the
+    deck, when, and from which IP address, and a font setting could also
+    restyle the whole page. No code ran and nothing in the deck was sent, but
+    offline mode did not stop it. A fit now draws only as one of its keywords
+    and a radius only as a number, and backgrounds and fonts are checked
+    wherever they are drawn, not only when a file is opened. Reported by
+    skeletonsec
+    ([GHSA-pq7f-rx54-wpf6](https://github.com/nyblnet/bento/security/advisories/GHSA-pq7f-rx54-wpf6),
+    [GHSA-74q9-whx3-jm98](https://github.com/nyblnet/bento/security/advisories/GHSA-74q9-whx3-jm98)).
+  - **The People panel could show someone else's key as verified.** In a
+    live session, anyone with a copy of the deck, a read-only copy included,
+    could appear under another collaborator's key. The panel marked that row
+    as a verified identity and offered the owner *Remove* on it, which cut off
+    the real collaborator instead. A key is now shown as verified, and can be
+    removed, only once this session has checked that its holder can sign with
+    it; until then the row reads *Claimed key*. Found in our own review.
+  - **The QR projector page on bento.page could run code from its link.**
+    bento.page/q/ plays a deck carried in its own address and wrote a text
+    box's content into the page as written, so a crafted link or QR code ran
+    code on bento.page, the site that also hosts the editor and the copies it
+    keeps for restoring unsaved changes. The page now draws text and its
+    basic formatting only, and runs no script but its own. This was fixed on
+    bento.page on 8 November 2026, so there is nothing to update. Reported by
+    skeletonsec
+    ([GHSA-89c5-c27j-7c9w](https://github.com/nyblnet/bento/security/advisories/GHSA-89c5-c27j-7c9w)).
 - **Typing `- ` or `* ` starts a real list straight away.** It used to type a
   bullet character that only became a list once you clicked out of the box, so
   Enter could not continue it. Now Enter starts the next bullet at the same
@@ -138,8 +183,16 @@ pre-1.0.
 ## [1.2.12] — 2026-11-02
 
 - **Security: update this file. This release closes an issue found in our own
-  review.** What it was is described here once people have had time to
-  update.
+  review.**
+  - **Clicking a shape in a presented deck could run code from the deck.** A
+    drawing (svg) element could carry a setting that the presentation engine
+    treats as a link to open in a preview window, and a click on it during the
+    show ran whatever the setting held, inside Bento. A deck made for the
+    purpose could read the open deck, including its sharing keys, and change
+    the file. Bento now switches that preview feature off entirely and removes
+    such settings from drawings. If you presented a deck from someone you
+    don't trust before updating and clicked shapes in it, use *Reset access* on
+    any decks you had open in that browser that are shared live.
 
 ## [1.2.11] — 2026-11-02
 
@@ -227,8 +280,28 @@ pre-1.0.
   under the pointer. The list now only scrolls when it needs to bring the
   current slide into view.
 - **Security: update this file. This release closes issues found in our own
-  review.** What they were is described here once people have had time to
-  update.
+  review.** None needs anything from you beyond updating.
+  - **Media from a live session was kept unencrypted in your browser.** Large
+    pictures and video travel through a live session end-to-end encrypted, but
+    Bento kept a decrypted copy in the browser's storage so it would not
+    download them twice. Every file opened from your computer shares that
+    storage, so another HTML file you opened from disk in the same browser
+    could read it. Bento now keeps only the encrypted copy and removes the old
+    one the first time it runs.
+  - **A password-protected deck's title could end up in your browser
+    history.** While such a deck was open, its title was shown in the tab, and
+    browsers save tab titles in their history. The tab now shows the file name,
+    or "Bento Slides", until the password is removed. Titles recorded before
+    you updated stay in your history; delete those entries in your browser if
+    they matter.
+  - **A deck could make Bento contact a web address through a colour
+    setting.** A web address written into a colour setting, such as a shape's
+    fill or outline or a chart's colours, was fetched when the deck was opened
+    or presented, telling whoever ran it when, and from which IP address.
+    Nothing in the deck was sent and no code ran. Bento now takes only real
+    colours in those settings. The chart case
+    was also reported by skeletonsec
+    ([GHSA-953g-9mj9-fwcj](https://github.com/nyblnet/bento/security/advisories/GHSA-953g-9mj9-fwcj)).
 
 ## [1.2.9] — 2026-10-17
 
@@ -247,8 +320,14 @@ pre-1.0.
   (1.2.9 or later).
 - **Security: update this file. This release closes an issue found in our own
   review.** After updating, **open each password-protected deck, unlock it, and
-  save it once.** What the issue was is described here once people have had time to
-  update.
+  save it once.**
+  - **A password-protected file showed its title before it was unlocked.** The
+    file's page title and its suggested file name carried the deck's title,
+    outside the encryption, so a locked file could show its title in a file
+    browser, an email attachment or a search index. The slides themselves
+    stayed encrypted. A locked file now carries a neutral title. Saving each
+    protected deck once with 1.2.9 or later replaces the old title; copies you
+    sent earlier keep the title they were saved with.
 - **A browser too old for Bento now names the right app.** The notice it shows
   said every file was a spreadsheet; a deck now says it is a presentation.
 - **A table written without a style opens.** A deck from another tool or an AI
@@ -374,8 +453,29 @@ pre-1.0.
 - **Security: update this file. This release closes further issues found in
   our own review.** None needs anything from you beyond updating, except one
   step if you share decks live: **open each shared deck after updating and use
-  Reset access once.** What each issue was is described here once people have
-  had time to update.
+  Reset access once.**
+  - **Anyone with a read-only copy of a live deck could recover the keys of
+    the person who shared it.** A live deck stores a snapshot for people who
+    join later, and that snapshot included the sharing keys of the device that
+    wrote it; for the owner, the key that lets someone invite and remove
+    people. It was encrypted, but with the key every viewer has. Snapshots now
+    carry the deck's content only.
+  - **Someone in a live session could change a deck's sharing settings for
+    everyone.** An edit from a collaborator, or from another page open in the
+    same browser, could replace a deck's room and keys, change its identity, or
+    switch it to read-only or template, and your next save kept the change.
+    Bento now never accepts those settings from anyone else.
+  - **An audience copy, or copied slides, could carry the keys of a deck
+    embedded in your deck.** When a deck contains another live deck as an
+    embed, the audience hand-out, the live show, and copying slides to the
+    clipboard included that embedded deck's keys, not just its content. Your
+    own deck's keys were never included. They now carry the embedded deck's
+    content only, however deeply embeds are nested.
+  - **Why Reset access matters:** updating stops new copies carrying keys; it
+    can't take back keys already received. Reset access issues new ones, and
+    also discards any sharing change someone else made to your file. If you
+    presented or handed out a deck that embeds another live deck, reset access
+    on that embedded deck too.
 - **An edit made while the deck is saving is no longer marked saved.** Saving
   takes a moment, and an edit made in that moment — by you, or by someone in a
   live session — used to be shown as saved while the file on disk was still
@@ -449,9 +549,26 @@ pre-1.0.
 - **Save as → Import PowerPoint…** The Save-as menu has an entry next to
   Replace from JSON that opens that importer (bento.page/import) in a new tab.
   It needs an internet connection, and the entry's tooltip says so.
-- **Security: update this file. This release closes further issues found in
-  our own review.** None needs anything from you beyond updating. What each one
-  was is described here once people have had time to update.
+- **Security: update this file. This release closes further issues, one
+  reported to us and one found in our own review.** None needs anything from
+  you beyond updating.
+  - **A deck could make your browser contact a website when you opened it.** A
+    slide's background, or the font settings stored in a deck, could name a web
+    address, and the browser fetched it as the deck was shown. Whoever sent you
+    the deck could learn that you opened it, when, and from which IP address.
+    Nothing in the deck was sent and no code ran. Opening a file, Replace from
+    JSON and `loadDoc` now check those settings: colours and fonts embedded
+    in the deck still work, and an outside address is removed. A deck made in a newer version of Bento still keeps everything
+    that version added. Reported by skeletonsec
+    ([GHSA-pq7f-rx54-wpf6](https://github.com/nyblnet/bento/security/advisories/GHSA-pq7f-rx54-wpf6),
+    [GHSA-74q9-whx3-jm98](https://github.com/nyblnet/bento/security/advisories/GHSA-74q9-whx3-jm98)).
+  - **Replace from JSON could attach your deck to another deck's saved
+    history.** The pasted JSON carried its own document identity, and the open
+    deck took it on. Bento files opened from your computer share one browser
+    storage area, so JSON made for the purpose could point your deck at another
+    deck's "Restore unsaved changes" copy and version history, and your deck
+    lost track of its own. Replace from JSON and `loadDoc` now replace the
+    content only: the open deck keeps its own identity and sharing settings.
 - **Undo can no longer reverse Stop sharing, Reset access or Duplicate as new
   deck.** Undoing an edit made before one of those used to bring back the old
   sharing settings, which could restore access you had just removed from a
