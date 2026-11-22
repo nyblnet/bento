@@ -388,10 +388,11 @@ export class OnlineTransport implements Transport {
   private writeReadyP: Promise<void>
   private resolveWriteReady: () => void = () => {}
   /** THIS connection's possession proof, while it is outstanding. A writer in
-   *  a signed room sends its snapshot only once its key is proven, so the
-   *  snapshot waits on this; every new `ready` challenge replaces it, and it
-   *  settles on `wt` (proven), on a failed signature, on a dropped socket, or
-   *  after PROOF_WAIT_MS. */
+   *  a signed room sends snapshots and op batches only once its key is proven,
+   *  so both wait on this. Opened when the socket opens; settles on `wt`
+   *  (proven), on a `ready` without a challenge (an older relay), on a failed
+   *  signature, on a dropped socket, or after PROOF_WAIT_MS. Op batches parked
+   *  meanwhile go out, in order, when it settles. */
   private proofP: Promise<void> | null = null
   private settleProof: () => void = () => {}
   private roomName = ''
@@ -509,6 +510,7 @@ export class OnlineTransport implements Transport {
       // is the log's job anyway (session.onRelayReady re-sends what the room lacks).
       this.awaitingAck = []
       this.setStatus('open')
+      if (this.signKey && this.signedRoom && !this.audienceMode) this.openProof()
       for (const out of this.queue.splice(0)) this.write(out)
       this.startHeartbeat(ws)
       this.hooks.onOpen()
@@ -663,6 +665,7 @@ export class OnlineTransport implements Transport {
 
   /** write now, or park it (disconnected, or inside a rate-limit backoff) */
   private write(out: Outbound) {
+    if (out.ops && this.proofP) { this.park(out); return }
     if (!this.paused && this.ws && this.ws.readyState === WebSocket.OPEN) {
       try {
         this.ws.send(out.text)
@@ -759,10 +762,11 @@ export class OnlineTransport implements Transport {
         // in both cases uploads take the room token and there is nothing to
         // wait for, so writes are released now.
         if (typeof env.c === 'string' && this.signKey && this.roomName) {
-          this.openProof()
+          if (!this.proofP) this.openProof()
           void this.prove(env.c)
         } else {
           this.resolveWriteReady()
+          this.settleProof()
         }
         this.inReplay = false
         const wantSnap = this.hooks.onReady(this.replaySeen, env.q ?? 0)
@@ -870,6 +874,10 @@ export class OnlineTransport implements Transport {
       if (this.proofP === p) this.proofP = null
       this.settleProof = () => {}
       done()
+      // the op batches parked behind the proof, in the order they were sent
+      if (!this.paused && this.ws && this.ws.readyState === WebSocket.OPEN) {
+        for (const out of this.queue.splice(0)) this.write(out)
+      }
     }
   }
   static PROOF_WAIT_MS = 10_000
