@@ -25,6 +25,12 @@
 //   · a renewal is refused for an unknown key, a revoked one (sign out
 //     everywhere, a removed or suspended passkey) and past the 7 days, and
 //     carries the published incident records; an unreadable list is a 500;
+//   · a browser key retires itself (wret., no successor) over a challenge of
+//     its own audience: only a browser key this address enrolled, the kernel's
+//     signature check before the challenge is spent, single use, logged, never
+//     mailed, never a revocation (status: retired), never a gate at a new
+//     ceremony, and remembered past the certificates' sweep and a suspension
+//     undone;
 //   · the event log carries ob on every entry; the status route reports the
 //     standing; CORS is per route, and a path that is no route gets none.
 
@@ -40,7 +46,7 @@ import { BROWSER_LIMITS } from '../server/directory/src/browsers.js'
 import { HOME_ROUTES, WEB_ROUTES, STATUS_ROUTE } from '../server/directory/src/seam.js'
 import { b64uDec, b64uEnc, sha256b64u, signStatement } from '../kernel/src/statements.ts'
 import { buildRos, parseRos, verifyRosterChain, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, ROSTER_WAIT_MS, type Member, type RosterLink } from '../kernel/src/roster.ts'
-import { buildDeviceCert, buildWren, parseWatt, verifyDevice, CEREMONY_CAP_MS, WATT_MAX_MS } from '../kernel/src/devices.ts'
+import { buildDeviceCert, buildWren, buildWret, parseWatt, verifyDevice, CEREMONY_CAP_MS, WATT_MAX_MS } from '../kernel/src/devices.ts'
 import { AsyncLocalStorage } from 'node:async_hooks'
 const { LIMITS } = workerModule
 
@@ -892,6 +898,171 @@ async function signout(a: Authn, address: string, o: GetOpts & { ch?: { nonce: s
   const r = await signin(R1, ivy)
   ok(r.status === 403 && r.j.error === 'not-member', `the waiting reset's new passkey cannot sign in → 403 not-member (${err(r)})`)
   ok((await signin(I1, ivy)).status === 200, 'control: the current passkey can')
+}
+
+// =====================================================================
+// 4c. retiring a browser key (retire.js; security's R2 on #949, D-W1 on #962, D2/D4/N1 on #957)
+// =====================================================================
+const retireCh = (address: string, o: { ip?: string; origin?: string | null } = {}) => raw('POST', HOME_ROUTES.retireChallenge, JSON.stringify({ address }), o.origin === undefined ? H : o.origin, o.ip)
+/** A wret. signed by `key` (the browser's own W unless given), over a fresh retire challenge unless one is given. */
+async function retire(address: string, b: Browser | null, o: { nonce?: string; key?: CryptoKey; oldPub?: string; newPub?: string | null; wretAddress?: string; origin?: string | null; ip?: string; sig?: (t: string) => Promise<string> } = {}) {
+  const nonce = o.nonce ?? (await retireCh(address)).j.nonce as string
+  const text = buildWret({ oldPub: o.oldPub ?? b!.pub, newPub: o.newPub ?? null, address: o.wretAddress ?? address, dirNonce: nonce ?? '' })
+  const sig = o.sig ? await o.sig(text) : await signStatement(o.key ?? b!.W.privateKey, text)
+  return { ...(await raw('POST', HOME_ROUTES.retire, JSON.stringify({ wret: text, sig }), o.origin === undefined ? H : o.origin, o.ip)), nonce, text }
+}
+/** The same signature with s replaced by n − s (high-S): the kernel refuses it. */
+const P256_N = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551n
+function highS(sig: string) {
+  const b = b64uDec(sig)!
+  const s = BigInt('0x' + [...b.subarray(32)].map((x) => x.toString(16).padStart(2, '0')).join(''))
+  const hs = (P256_N - s).toString(16).padStart(64, '0')
+  const out = new Uint8Array(64); out.set(b.subarray(0, 32)); for (let i = 0; i < 32; i++) out[32 + i] = parseInt(hs.slice(2 * i, 2 * i + 2), 16)
+  return b64uEnc(out)
+}
+/** A sealed challenge's issue time (0 for none: a refused route must never crash the rig). */
+const atOf = (n: string | undefined) => { const b = b64uDec(n ?? ''); return b && b.length === 40 ? Number(new DataView(b.buffer, b.byteOffset, 8).getBigUint64(0)) : 0 }
+const statusOf = async (address: string, text: string) => (await api('GET', `${STATUS_ROUTE}?e=${address}&c=${await sha256b64u(text)}`)).j.state
+{
+  const rita = 'rita@example.com', T1 = await Authn.make(), T2 = await Authn.make()
+  await setup(rita, T1)
+  await request(rita, T1, { add: T2 })
+  now += ROSTER_WAIT_MS
+  const RB = await Browser.make(), RB2 = await Browser.make()
+  const e1 = await enrol(rita, RB, T1), e2 = await enrol(rita, RB2, T1)
+  ok(e1.status === 200 && e2.status === 200, `rita has two passkeys and two browsers (${err(e1)}, ${err(e2)})`)
+
+  // the challenge route
+  const c = await retireCh(rita)
+  ok(c.status === 200 && typeof c.j.nonce === 'string' && Object.keys(c.j).length === 1 && c.h.get('access-control-allow-origin') === H, `retire challenge → 200 {nonce}, CORS to bento/home alone (${err(c)})`)
+  ok((await retireCh('nobody@example.com')).status === 404, 'retire challenge for no account → 404')
+  ok((await retireCh(rita, { origin: S })).j.error === 'origin' && (await retireCh(rita, { origin: null })).j.error === 'origin', 'retire challenge from the sign-in host or no Origin → 403 origin')
+  const ro = await retire(rita, RB, { origin: S }), rn = await retire(rita, RB, { origin: null })
+  ok(ro.j.error === 'origin' && rn.j.error === 'origin' && (await checkin(rita, RB)).status === 200, `a retirement from the sign-in host or no Origin → 403 origin, and nothing retired (${err(ro)}, ${err(rn)})`)
+  {
+    const ip = freshIp()
+    for (let i = 0; i < LIMITS.ip.lookup; i++) await api('GET', `/v1/roster?e=n${i}@example.com`, undefined, { ip })
+    ok((await retireCh(rita, { ip })).status === 429, 'the retire challenge spends the per-IP lookup budget')
+    const ip2 = freshIp(), st: number[] = []
+    for (let i = 0; i <= LIMITS.ip.challengeAddrRetire; i++) st.push((await retireCh(rita, { ip: ip2 })).status)
+    ok(LIMITS.ip.challengeAddrRetire === 20 && st.slice(0, -1).every((x) => x === 200) && st[st.length - 1] === 429, `retire challenge #${LIMITS.ip.challengeAddrRetire + 1} for one address from one IP → 429 (last ${st[st.length - 1]})`)
+    ok((await homeCh(rita, { ip: ip2 })).status === 200, 'and that IP\'s renewals are counted apart')
+    // the retirement itself, counted per IP per address once it verifies
+    const ip3 = freshIp(), nobody = await Browser.make(), rs: string[] = []
+    for (let i = 0; i <= LIMITS.ip.retire; i++) rs.push(err(await retire(rita, nobody, { ip: ip3 })))
+    ok(LIMITS.ip.retire === 20 && rs.slice(0, -1).every((x) => x === '403 unknown') && rs[rs.length - 1] === '429 rate-limited', `retirement #${LIMITS.ip.retire + 1} for one address from one IP → 429 (${rs[0]} … ${rs[rs.length - 1]})`)
+  }
+
+  // R7/R8: the kernel's check, before the challenge is spent
+  ok((await checkin(rita, RB)).status === 200, 'control: RB renews before it is retired')
+  const n1 = (await retireCh(rita)).j.nonce as string
+  const byNew = await retire(rita, RB, { nonce: n1, key: RB2.W.privateKey })
+  ok(byNew.status === 400 && byNew.j.error === 'wret', `a wret. signed by another key → 400 wret (${err(byNew)})`)
+  const hs = await retire(rita, RB, { nonce: n1, sig: async (t) => highS(await signStatement(RB.W.privateKey, t)) })
+  ok(hs.status === 400 && hs.j.error === 'wret', `a high-S signature → 400 wret (${err(hs)})`)
+  const succ = await retire(rita, RB, { nonce: n1, newPub: RB2.pub })
+  ok(succ.status === 400 && succ.j.error === 'successor' && !(await storeOf(rita)).has(`rt:${RB.pub}`), `the form naming a successor → 400 successor, nothing stored (${err(succ)})`)
+  ok((await raw('POST', HOME_ROUTES.retire, JSON.stringify({ wret: 'x' }), H)).j.error === 'bad-request', 'no signature → 400 bad-request')
+
+  // R5/R6: only a browser key this address enrolled
+  const olga = 'olga@example.com', O1 = await Authn.make()
+  await setup(olga, O1)
+  const OB = await Browser.make()
+  await enrol(olga, OB, O1)
+  const other = await retire(rita, OB)
+  ok(other.status === 403 && other.j.error === 'unknown' && !(await storeOf(rita)).has(`rt:${OB.pub}`) && !(await storeOf(olga)).has(`rt:${OB.pub}`),
+    `another account's browser key, at this address → 403 unknown, nothing written (${err(other)})`)
+  ok((await checkin(olga, OB)).status === 200, 'and it still renews at its own account')
+  const never = await Browser.make(), nv = await retire(rita, never)
+  ok(nv.status === 403 && nv.j.error === 'unknown' && !(await storeOf(rita)).has(`rt:${never.pub}`), `a key never enrolled → 403 unknown, nothing written (${err(nv)})`)
+  const pk = await retire(rita, null, { oldPub: T2.pub, key: T2.kp.privateKey })
+  ok(pk.status === 403 && pk.j.error === 'unknown' && !(await storeOf(rita)).has(`rt:${T2.pub}`), `a passkey member's own key (logged for the address, but no browser key) → 403 unknown (${err(pk)})`)
+  ok((await enrol(rita, await Browser.make(), T2)).status === 200, 'and that passkey still signs browsers in')
+
+  // R1: the 948 measurement, inverted: the copy renews, the retirement lands, the copy is refused
+  const mails0 = mailbox.length, log0 = (await logOf(rita)).length
+  const okR = await retire(rita, RB, { nonce: n1 })
+  ok(okR.status === 200 && okR.j.ok === true && okR.j.retiredAt === now && Object.keys(okR.j).length === 2, `the refused signatures left the challenge: the real wret. → 200 {ok, retiredAt} (${err(okR)})`)
+  const after = await checkin(rita, RB)
+  ok(after.status === 403 && after.j.error === 'retired' && Array.isArray(after.j.incidents), `the retired key's renewal → 403 retired, with the incidents (${err(after)})`)
+  ok(await statusOf(rita, e1.text) === 'retired', 'status: retired, never revoked')
+  // R16: logged; R13: not revocation, not mailed
+  const lg = (await logOf(rita)).filter((x) => x.k === 'wret')
+  ok(lg.length === 1 && lg[0].pub === RB.pub && lg[0].at === now && lg[0].successor === '' && lg[0].ob === 0, `logged once as wret: the key, when, no successor (${JSON.stringify(lg[0] ?? null)})`)
+  ok(mailbox.length === mails0, 'nothing is mailed')
+  ok(!(await logOf(rita)).some((x) => x.k === 'signout-all') && !(await storeOf(rita)).has('signoutAt') && ((await storeOf(rita)).get(`wd:${RB.pub}`) as { revokedAt?: unknown } | undefined)?.revokedAt === null,
+    'no sign-out: no cut-off, no signout-all entry, the certificate itself is not marked revoked')
+  ok((await checkin(rita, RB2)).status === 200 && await statusOf(rita, e2.text) === 'ok', 'the other browser still renews; its status is ok')
+  ok((await logOf(rita)).length === log0 + 1, 'exactly one log entry was added')
+  // R9: single use; a repeat is idempotent
+  const replay = await raw('POST', HOME_ROUTES.retire, JSON.stringify({ wret: okR.text, sig: await signStatement(RB.W.privateKey, okR.text) }), H)
+  ok(replay.status === 400 && replay.j.error === 'nonce', `the same wret. again → 400 nonce (${err(replay)})`)
+  const t0 = now
+  now += MIN
+  const again = await retire(rita, RB)
+  ok(again.status === 200 && again.j.retiredAt === t0 && (await logOf(rita)).filter((x) => x.k === 'wret').length === 1, `retiring it again → 200 with the first time, nothing new logged (${err(again)}, ${again.j.retiredAt})`)
+
+  // R10: the audience matrix, each challenge spent at the wrong door
+  {
+    const hn = (await homeCh(rita)).j.nonce as string
+    const a1 = await retire(rita, RB2, { nonce: hn })
+    ok(a1.status === 400 && a1.j.error === 'nonce' && (await checkin(rita, RB2, { nonce: hn })).j.error === 'nonce', `a renewal's challenge in a retirement → 400 nonce, and it is spent (${err(a1)})`)
+    const wc = await chOf(rita)
+    const a2 = await retire(rita, RB2, { nonce: wc.nonce })
+    const a2e = await enrol(rita, await Browser.make(), T1, { ch: wc })
+    ok(a2.status === 400 && a2.j.error === 'nonce' && a2e.j.error === 'nonce', `an enrolment's challenge in a retirement → 400 nonce, and it is spent (${err(a2)}, ${err(a2e)})`)
+    const rn1 = (await retireCh(rita)).j.nonce as string
+    const a3 = await checkin(rita, RB2, { nonce: rn1 })
+    const a3r = await retire(rita, RB2, { nonce: rn1 })
+    ok(a3.j.error === 'nonce' && a3r.j.error === 'nonce' && !(await storeOf(rita)).has(`rt:${RB2.pub}`), `a retirement's challenge in a renewal → 400 nonce, and it is spent (${err(a3)}, ${err(a3r)})`)
+    const rn2 = (await retireCh(rita)).j.nonce as string
+    const head = ((await storeOf(rita)).get('head') ?? { hash: '' }) as { hash: string }
+    const a4 = await enrol(rita, await Browser.make(), T1, { ch: { nonce: rn2 ?? '', at: atOf(rn2), rosHash: head.hash } })
+    const a4r = await retire(rita, RB2, { nonce: rn2 })
+    ok(a4.j.error === 'nonce' && a4r.j.error === 'nonce', `a retirement's challenge in an enrolment → 400 nonce, and it is spent (${err(a4)}, ${err(a4r)})`)
+    const so = await retire(rita, RB2, { nonce: (await mintSignout(rita)).nonce })
+    ok(so.j.error === 'nonce', `a sign-out challenge in a retirement → 400 nonce (${err(so)})`)
+    const oc = await retire(rita, RB2, { nonce: (await retireCh(olga)).j.nonce as string })
+    ok(oc.j.error === 'nonce' && !(await storeOf(rita)).has(`rt:${RB2.pub}`), `another address's retire challenge → 400 nonce (${err(oc)})`)
+    ok((await checkin(rita, RB2)).status === 200, 'control: RB2 was never retired')
+  }
+
+  // R11 (D-W1): a retirement is never a gate at a ceremony
+  const RB3 = await Browser.make()
+  const fresh = await enrol(rita, RB3, T1)
+  ok(fresh.status === 200 && (await checkin(rita, RB3)).status === 200, `with a browser's previous key retired, the same passkey signs a new key in, and it renews (${err(fresh)})`)
+
+  // R14 (957 N1): suspended, then the suspension undone: the retired key stays retired
+  const hd = ((await storeOf(rita)).get('head') ?? { members: [] }) as { members: Member[] }
+  await plant(rita, (st) => { const x = st.get('head') as Record<string, unknown>; st.set('head', { ...x, members: hd.members.map((m) => ({ ...m, quarantined: true })) }) })
+  const sus = await checkin(rita, RB)
+  ok(sus.j.error === 'revoked' && await statusOf(rita, e1.text) === 'revoked', `suspended: the retired key's certificate reads revoked, the stronger fact (${err(sus)})`)
+  await plant(rita, (st) => { const x = st.get('head') as Record<string, unknown>; st.set('head', { ...x, members: hd.members }) })
+  const und = await checkin(rita, RB)
+  ok(und.status === 403 && und.j.error === 'retired' && await statusOf(rita, e1.text) === 'retired', `the suspension undone: still 403 retired (${err(und)})`)
+  ok((await checkin(rita, RB2)).status === 200, 'control: the other browser renews again')
+
+  // R12 (957 D4/P11): past the sweep, the certificate is gone and the retirement is not
+  const ceremonyRB = e1.ch.at ?? now
+  now = ceremonyRB + CEREMONY_CAP_MS + BROWSER_LIMITS.keepAfterCapMs + 1
+  const sweeper = await enrol(rita, await Browser.make(), T1) // each enrolment sweeps
+  const st = await storeOf(rita)
+  ok(sweeper.status === 200 && !st.has(`wd:${RB.pub}`) && st.has(`rt:${RB.pub}`), `a day past the cap: the certificate is swept, the retirement stays (${err(sweeper)})`)
+  const reen = await enrol(rita, RB, T1)
+  ok(reen.status === 409 && reen.j.error === 'device-known' && !(await storeOf(rita)).has(`wd:${RB.pub}`), `the retired key enrols again after its sweep → 409 device-known (${err(reen)})`)
+  const swept = await checkin(rita, RB)
+  ok(swept.status === 403 && swept.j.error === 'retired', `its renewal → 403 retired (${err(swept)})`)
+  ok(['retired', 'unknown'].includes(await statusOf(rita, e1.text) as string), 'status: never ok')
+
+  // positive control for "nothing is mailed": a sign-out everywhere at the same address mails, and a REVOKED retired certificate reads revoked
+  const RB4 = await Browser.make()
+  const e4 = await enrol(rita, RB4, T1)
+  ok((await retire(rita, RB4)).status === 200 && await statusOf(rita, e4.text) === 'retired', `a fresh browser retired: status retired (${err(e4)})`)
+  const m0 = mailbox.length
+  await doOp(rita, 'browserRevokeAll', { by: T1.pub, os: S })
+  ok(mailbox.length === m0 + 1, 'control: a sign-out everywhere at the same address does mail')
+  const r4 = await checkin(rita, RB4)
+  ok(r4.status === 403 && r4.j.error === 'revoked' && await statusOf(rita, e4.text) === 'revoked', `signed out AND retired: renewal and status read revoked (a real revocation is never masked) (${err(r4)})`)
 }
 
 // =====================================================================

@@ -56,7 +56,7 @@ const ok = (c: boolean, m: string) => { checks++; if (!c) { failures++; console.
 
 type Edit = { from: string; to: string }
 /** `also`: further edits in the same file, for a rule held at two doors */
-type Mutant = Edit & { name: string; file: 'worker.js' | 'roster.js' | 'passkey.js' | 'links.js' | 'mail.js' | 'voidpage.js' | 'browsers.js' | 'challenge.js'; also?: Edit[] }
+type Mutant = Edit & { name: string; file: 'worker.js' | 'roster.js' | 'passkey.js' | 'links.js' | 'mail.js' | 'voidpage.js' | 'browsers.js' | 'challenge.js' | 'retire.js'; also?: Edit[] }
 const MUTANTS: Mutant[] = [
   // --- the first design's routes, retired ---
   { name: 'retired routes served again (fall through)', file: 'worker.js',
@@ -303,7 +303,7 @@ const MUTANTS: Mutant[] = [
     from: "!['id', 'authenticatorData', 'clientDataJSON', 'signature'].every((f) => field(as[f]))", to: 'false' },
   { name: 'web: the challenge shares the roster audience', file: 'browsers.js',
     from: "issueChallenge(env.CHALLENGE_KEY, web ? 'web' : 'home', scope, at)", to: "issueChallenge(env.CHALLENGE_KEY, web ? 'roster' : 'home', scope, at)",
-    also: [{ from: "const AUDIENCES = Object.freeze(['web', 'home'])", to: "const AUDIENCES = Object.freeze(['roster', 'home'])" },
+    also: [{ from: "const AUDIENCES = Object.freeze(['web', 'home', 'retire'])", to: "const AUDIENCES = Object.freeze(['roster', 'home', 'retire'])" },
       { from: "    if (a.aud !== 'web') return out(400, { error: 'nonce' }) // a renewal's", to: "    if (a.aud !== 'roster') return out(400, { error: 'nonce' }) // a renewal's" }] },
   // security's C1 (#926 X1, X13, X22, X31)
   { name: 'X1 CBOR: a repeated map key allowed', file: 'passkey.js', from: "        if (out.has(key)) throw new Bad()\n", to: '' },
@@ -497,6 +497,55 @@ const MUTANTS: Mutant[] = [
   { name: 'page: WebAuthn not turned off', file: 'voidpage.js', from: "  'permissions-policy': 'publickey-credentials-get=(), publickey-credentials-create=()',\n", to: '' },
   { name: 'page: cached', file: 'voidpage.js', from: "  'cache-control': 'no-store',\n", to: "  'cache-control': 'max-age=3600',\n" },
   { name: 'page: Trusted Types not required', file: 'voidpage.js', from: `  "require-trusted-types-for 'script'",\n`, to: '' },
+  // --- retiring a browser key (retire.js + its hooks in browsers.js; rows in test-directory-browsers.ts 4c) ---
+  { name: 'wret R1: a renewal never looks at the retirement', file: 'browsers.js',
+    from: "  return st !== 'revoked' && (await retiredAt(s, pub)) !== null ? 'retired' : st", to: '  return st' },
+  { name: 'wret R13: status reports a retirement as revoked', file: 'browsers.js',
+    from: "(await retiredAt(s, pub)) !== null ? 'retired' : st", to: "(await retiredAt(s, pub)) !== null ? 'revoked' : st" },
+  { name: 'wret P1: a retirement masks a revocation', file: 'browsers.js',
+    from: "  return st !== 'revoked' && (await retiredAt(s, pub)) !== null ? 'retired' : st", to: "  return (await retiredAt(s, pub)) !== null ? 'retired' : st" },
+  { name: 'wret R12: enrolment checks only the certificate, not the retirement', file: 'browsers.js',
+    from: "if ((await s.get(`wd:${c.devicePub}`)) || (await retiredAt(s, c.devicePub)) !== null) return", to: 'if (await s.get(`wd:${c.devicePub}`)) return' },
+  { name: 'wret R12: the sweep deletes the retirement too', file: 'browsers.js',
+    from: "dead.push(key, `wh:${rec.certHash}`)", to: "dead.push(key, `wh:${rec.certHash}`, `rt:${key.slice(3)}`)" },
+  { name: 'wret R12: a swept retired key reads unknown', file: 'browsers.js',
+    from: "error: (await retiredAt(s, a.devicePub)) !== null ? 'retired' : 'unknown'", to: "error: 'unknown'" },
+  { name: 'wret R11 (D-W1): any retirement at the address refuses a ceremony', file: 'browsers.js',
+    from: "if ((await s.get(`wd:${c.devicePub}`)) || (await retiredAt(s, c.devicePub)) !== null) return", to: "if ((await s.get(`wd:${c.devicePub}`)) || (await s.list({ prefix: 'rt:' })).size) return" },
+  { name: 'wret R10: a retirement challenge accepted at a renewal', file: 'browsers.js',
+    from: "    if (a.aud !== 'home') return out(400, { error: 'nonce' }) // an enrolment's challenge, used up here", to: "    if (a.aud === 'web') return out(400, { error: 'nonce' })" },
+  { name: 'wret R10: no audience of its own (opened as any)', file: 'retire.js',
+    from: "  if (a.aud !== 'retire') return out(400, { error: 'nonce' })", to: '' },
+  { name: 'wret R10: the challenge sealed for a renewal', file: 'retire.js',
+    from: "issueChallenge(env.CHALLENGE_KEY, 'retire', scope, Date.now())", to: "issueChallenge(env.CHALLENGE_KEY, 'home', scope, Date.now())",
+    also: [{ from: "  if (a.aud !== 'retire') return out(400, { error: 'nonce' })", to: "  if (a.aud !== 'home') return out(400, { error: 'nonce' })" }] },
+  { name: 'wret R7: the signature not checked (a grammar-only split)', file: 'retire.js',
+    from: '  const v = await verifyWret(b.wret, b.sig)',
+    to: "  const [, oldPub, nf, af, dirNonce] = b.wret.split('.'); const v = { ok: b.wret.startsWith('wret.'), value: { oldPub, newPub: nf || null, address: Buffer.from(af ?? '', 'base64url').toString(), dirNonce } }" },
+  { name: 'wret R8: a refused signature spends the challenge', file: 'retire.js',
+    from: "  if (!v.ok) return json(400, { error: 'wret' })",
+    to: "  if (!v.ok) { const [, , , af, n] = b.wret.split('.'); const ad = Buffer.from(af ?? '', 'base64url').toString(); const c = await openBrowser(await addressKey(ad), n); if (c) await roster(ad, 'browserRetire', { oldPub: '', nonce: c.nonce, issued: c.issued, aud: c.aud }); return json(400, { error: 'wret' }) }" },
+  { name: 'wret: the successor form accepted', file: 'retire.js', from: "  if (v.value.newPub !== null) return json(400, { error: 'successor' })\n", to: '' },
+  { name: 'wret R9: the op never spends', file: 'retire.js', from: "  if (!(await spend())) return out(400, { error: 'nonce' })\n", to: '' },
+  { name: 'wret R5/R6: any key retired (no enrolled-browser check)', file: 'retire.js',
+    from: "  if (typeof a.oldPub !== 'string' || !(await s.get(`wd:${a.oldPub}`))) return out(403, { error: 'unknown' })\n", to: '' },
+  { name: 'wret R5: written before the check', file: 'retire.js',
+    from: "  if (typeof a.oldPub !== 'string' || !(await s.get(`wd:${a.oldPub}`))) return out(403, { error: 'unknown' })\n  await s.put(`rt:${a.oldPub}`, { retiredAt: now })\n",
+    to: "  await s.put(`rt:${a.oldPub}`, { retiredAt: now })\n  if (typeof a.oldPub !== 'string' || !(await s.get(`wd:${a.oldPub}`))) return out(403, { error: 'unknown' })\n" },
+  { name: 'wret: a repeat retirement writes again', file: 'retire.js', from: '  if (was !== null) return out(200, { ok: true, retiredAt: was })\n', to: '' },
+  { name: 'wret R16: not logged', file: 'retire.js', from: "  await obj.log({ k: 'wret', at: now, pub: a.oldPub, successor: '', os: h.origin, rq: '' })\n", to: '' },
+  { name: 'wret R13: the certificate marked revoked too', file: 'retire.js',
+    from: '  await s.put(`rt:${a.oldPub}`, { retiredAt: now })\n', to: '  await s.put(`rt:${a.oldPub}`, { retiredAt: now })\n  await s.put(`wd:${a.oldPub}`, { ...(await s.get(`wd:${a.oldPub}`)), revokedAt: now })\n' },
+  { name: 'wret R13: the address is mailed', file: 'retire.js',
+    from: "  return out(200, { ok: true, retiredAt: now })\n}", to: "  await h.notify((await s.get('head')) ? 'x@example.com' : '', 'A browser key was retired', ['x'])\n  return out(200, { ok: true, retiredAt: now })\n}" },
+  { name: 'wret R15: the routes answer CORS to the sign-in host', file: 'browsers.js',
+    from: '  if (path.startsWith(WEB_ROUTES.prefix)) return SIGNIN_ORIGIN', to: "  if (path.startsWith(WEB_ROUTES.prefix) || path.startsWith('/v1/home/retire')) return SIGNIN_ORIGIN" },
+  { name: 'wret R15: the challenge not charged a lookup', file: 'retire.js',
+    from: "    if (!(await ledger(ip, 'lookup'))) return json(429, { error: 'rate-limited' })\n", to: '' },
+  { name: 'wret R15: the challenge not limited per address', file: 'retire.js',
+    from: "    if (!(await ledger(`${ip}\\n${scope}`, 'challengeAddrRetire'))) return json(429, { error: 'rate-limited' })\n", to: '' },
+  { name: 'wret R15: the retirement not limited per address', file: 'retire.js',
+    from: "  if (!(await ledger(`${ip}\\n${scope}`, 'retire'))) return json(429, { error: 'rate-limited' })\n", to: '' },
 ]
 
 function tree(): string {
@@ -545,7 +594,7 @@ const args = process.argv.slice(2)
 const si = args.indexOf('--shard')
 const shard = si >= 0 ? /^([1-9][0-9]*)\/([1-9][0-9]*)$/.exec(args[si + 1] ?? '') : null
 if (si >= 0 && (!shard || Number(shard[1]) > Number(shard[2]))) { console.log(`--shard wants k/n with 1 <= k <= n, not ${args[si + 1]}`); process.exit(1) }
-const only = args.filter((a, i) => i !== si && i !== si + 1)[0]
+const only = args.filter((a, i) => si < 0 || (i !== si && i !== si + 1))[0] // without --shard, si + 1 is 0: never drop the first argument
 const named = only ? MUTANTS.filter((m) => m.name.includes(only)) : MUTANTS
 const chosen = shard ? named.filter((_, i) => i % Number(shard[2]) === Number(shard[1]) - 1) : named
 console.log(`\n${chosen.length} mutants${shard ? ` (shard ${shard[1]} of ${shard[2]}, of ${named.length})` : ''}: every one must fail a row`)

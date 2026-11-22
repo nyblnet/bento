@@ -21,7 +21,9 @@
 //   POST /v1/home/challenge {address} → 200 {nonce}; 404 no account
 //   POST /v1/home/checkin {wren, sig, pin?}
 //     → 200 {watt, wattSig, signer, assertion, roster, incidents}
-//     → 403 {error: unknown | revoked | cap, incidents}
+//     → 403 {error: unknown | revoked | retired | cap, incidents}
+//   POST /v1/home/retire/challenge {address}, POST /v1/home/retire {wret, sig}:
+//     retiring a browser key (retire.js)
 // The sign-in host's own pages (CORS to it alone, its Origin required):
 //   POST /v1/web/signin/challenge {} → 200 {nonce}: audience signin, 5 minutes
 //   POST /v1/web/signin {nonce, assertion} → 200 {address}: the account a
@@ -42,11 +44,11 @@
 //   written, so a stranger's 32 bytes never create storage.
 // Anyone's (CORS *), for a peer holding a certificate:
 //   GET /v1/device/status?e=<address>&c=<sha256 of the certificate text>
-//     → 200 {state: ok | revoked | cap | unknown, incidents}
+//     → 200 {state: ok | revoked | retired | cap | unknown, incidents}
 //
 // The rules, in the order they are applied:
 // - A challenge is sealed (challenge.js) for an AUDIENCE (web: an enrolment;
-//   home: a renewal) and for the address, lives 60 seconds, and is spent in
+//   home: a renewal; retire: a retirement, retire.js) and for the address, lives 60 seconds, and is spent in
 //   the address's object BEFORE any other check, so a failed assertion, a
 //   challenge of the other audience, a wrong ceremony time or an unknown key
 //   each use it up. Nothing is stored when one is issued, so a stranger who
@@ -86,8 +88,9 @@
 //
 // NOT HERE (each its own change): a `dev2.` made by a passkey alone (no native
 // origin is measured yet, so no native assertion verifies); retiring the old
-// key at a new ceremony and the `mb` field (both kernel layouts first); the
-// mail for a new browser; the incident lever itself.
+// key in the same request as a new ceremony (bento/home retires it by its own
+// request instead, retire.js); the mail for a new browser; the incident lever
+// itself.
 
 import { parseDeviceCert, buildWatt, verifyWren, CEREMONY_CAP_MS, WATT_MAX_MS } from '../../../kernel/src/devices.ts'
 import { b64uDec, sha256b64u, signStatement } from '../../../kernel/src/statements.ts'
@@ -97,6 +100,7 @@ import { HOME_ORIGIN, PASSKEY, SIGNIN_ORIGIN } from './passkey.js'
 import { issueChallenge, openChallenge } from './challenge.js'
 import { addressKey, normalize } from './address.js'
 import { HOME_ROUTES, WEB_ROUTES } from './seam.js'
+import { retiredAt, retireOp, retireRoute } from './retire.js'
 
 const DAY = 86_400_000
 
@@ -111,8 +115,8 @@ export const BROWSER_LIMITS = Object.freeze({
   incidentsMax: 256,
 })
 
-/** The two audiences a browser challenge is sealed for. */
-const AUDIENCES = Object.freeze(['web', 'home'])
+/** The audiences a browser challenge is sealed for: an enrolment, a renewal, a retirement (retire.js). */
+const AUDIENCES = Object.freeze(['web', 'home', 'retire'])
 /** The sign-in host's own challenges: a passkey sign-in (no account yet: sealed for everyone) and a sign-out (sealed for the address). 5 minutes, like a roster challenge. */
 const SIGNIN_SCOPE = 'signin'
 /** The sign-out statement is the kernel's to define; until it does, the route refuses at the last step. */
@@ -256,6 +260,10 @@ export async function browserRoute(req, env, ip, p, k) {
     return json(r.status, r.body)
   }
 
+  if (p === HOME_ROUTES.retireChallenge || p === HOME_ROUTES.retire) {
+    return retireRoute(p, b, ip, env, k, (scope, challenge) => openBrowser(env, scope, challenge, Date.now()))
+  }
+
   if (p === HOME_ROUTES.checkin) {
     if (typeof b.wren !== 'string' || typeof b.sig !== 'string' || b.wren.length > TEXT_MAX || b.sig.length > FIELD_MAX ||
       !(b.pin === undefined || (typeof b.pin === 'string' && b.pin.length <= 64))) return json(400, { error: 'bad-request' })
@@ -294,7 +302,7 @@ export async function deviceStatus(env, ip, url, k) {
 
 // --- in the address's object (roster.js hands these ops here) ---------------------
 
-export const BROWSER_OPS = Object.freeze(['browserHead', 'browserEnrol', 'browserCheckin', 'browserStatus', 'browserRevokeAll', 'browserSignin', 'browserSignout'])
+export const BROWSER_OPS = Object.freeze(['browserHead', 'browserEnrol', 'browserCheckin', 'browserStatus', 'browserRevokeAll', 'browserSignin', 'browserSignout', 'browserRetire'])
 
 let signer = null
 /**
@@ -340,6 +348,17 @@ async function standing(s, rec, now) {
   if (!pk || pk.addedAt > rec.ceremonyAt) return 'revoked'
   if (now >= rec.ceremonyAt + CEREMONY_CAP_MS) return 'cap'
   return 'ok'
+}
+
+/**
+ * A certificate's standing with its key's retirement (retire.js) in: a
+ * retired key reads `retired` unless the certificate is REVOKED, which is
+ * the stronger fact for a peer. Nothing that changes `standing` (a suspension
+ * undone, the lever) un-retires a key.
+ */
+async function standingOf(s, pub, rec, now) {
+  const st = await standing(s, rec, now)
+  return st !== 'revoked' && (await retiredAt(s, pub)) !== null ? 'retired' : st
 }
 
 /** The chain as kernel RosterLink objects, from the pinned head (or from setup). */
@@ -450,7 +469,8 @@ export async function browserOp(obj, a, now, h) {
     const pub = as && typeof as.id === 'string' ? await s.get(`cid:${as.id}`) : undefined
     const m = pub ? head.members.find((x) => x.pub === pub) : undefined
     if (!m || m.kind !== 'pk' || m.quarantined) return out(403, { error: 'signer' })
-    if (await s.get(`wd:${c.devicePub}`)) return out(409, { error: 'device-known' }) // a fresh key per ceremony
+    // a fresh key per ceremony; a retired key's certificate may be swept, its retirement never is
+    if ((await s.get(`wd:${c.devicePub}`)) || (await retiredAt(s, c.devicePub)) !== null) return out(409, { error: 'device-known' })
     const rec = await s.get(`pk:${pub}`)
     const assertion = { authenticatorData: as.authenticatorData, clientDataJSON: as.clientDataJSON, signature: as.signature }
     const v = await verifyAssertion(assertion, {
@@ -473,9 +493,9 @@ export async function browserOp(obj, a, now, h) {
     if (!(await spend())) return out(400, { error: 'nonce' })
     if (a.aud !== 'home') return out(400, { error: 'nonce' }) // an enrolment's challenge, used up here
     const rec = typeof a.devicePub === 'string' ? await s.get(`wd:${a.devicePub}`) : undefined
-    if (!rec) return out(403, { error: 'unknown' })
+    if (!rec) return out(403, { error: (await retiredAt(s, a.devicePub)) !== null ? 'retired' : 'unknown' })
     await obj.ripen(now)
-    const st = await standing(s, rec, now)
+    const st = await standingOf(s, a.devicePub, rec, now)
     if (st !== 'ok') return out(403, { error: st })
     const w = await countersign(obj.env, { certHash: rec.certHash, ob: rec.ob, mb: await mailbox(s), ceremonyAt: rec.ceremonyAt, now })
     await s.put(`wd:${a.devicePub}`, { ...rec, renewedAt: now })
@@ -487,7 +507,7 @@ export async function browserOp(obj, a, now, h) {
     const rec = pub ? await s.get(`wd:${pub}`) : undefined
     if (!rec) return out(200, { state: 'unknown' })
     await obj.ripen(now)
-    return out(200, { state: await standing(s, rec, now) })
+    return out(200, { state: await standingOf(s, pub, rec, now) })
   }
 
   if (a.op === 'browserRevokeAll') {
@@ -497,6 +517,8 @@ export async function browserOp(obj, a, now, h) {
     const signedAt = Number.isSafeInteger(a.signedAt) && a.signedAt > 0 ? a.signedAt : now
     return out(200, { at: now, signedAt, revoked: await signOutAll(obj, head, { signedAt, now, by: typeof a.by === 'string' ? a.by : '', origin: h.origin, co: '' }, h) })
   }
+
+  if (a.op === 'browserRetire') return retireOp(obj, a, now, h)
 
   if (a.op === 'browserSignin') {
     // a handle naming no account: refused before anything is written (no storage for a stranger's 32 bytes)

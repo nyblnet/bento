@@ -15339,3 +15339,48 @@ serving an older shell.
   runs the released derivation over what this build would save. The
   starter-deck row is the positive control (87 lost in the old form). Four
   mutants turn rows red.
+
+## 2026-11-22 — bento/id: a browser key retires itself, and a retired key is not a revoked one
+
+The directory now takes the kernel's `wret.` without a successor on
+bento/home's own routes (`POST /v1/home/retire/challenge`,
+`POST /v1/home/retire`, `server/directory/src/retire.js`). bento/home signs
+it with the old key W whenever it stops keeping or trusting W: at a sign-out,
+when a held key fails its check and is dropped, and after a new ceremony
+replaces it. From then on the directory refuses W's renewals, so a copy of W
+taken earlier dies with its last countersign, within 24 hours, instead of
+living to the 7-day cap.
+
+- **Only the empty form.** The form naming a successor is refused (400
+  `successor`). No ceremony carries a retirement: bento/home retires the old
+  key by its own request after the new ceremony has finished. That keeps the
+  enrolment request the sign-in host sends unchanged, never routes a
+  retirement through the sign-in host, and needs no stored ceremony nonce to
+  check a successor against.
+- **Its own challenge audience** (`retire`). A renewal's or an enrolment's
+  challenge used at the retirement route, or the reverse, is spent and
+  refused. The kernel's `verifyWret` runs before the challenge is spent.
+- **Only a browser key this address enrolled.** Anything else (a passkey's
+  key, another account's browser, a key never enrolled) is 403 `unknown`, and
+  nothing is written.
+- **Remembered for the life of the account.** The retirement is its own
+  record (`rt:<key>`), which the certificates' sweep never deletes, so the
+  key can never enrol again after its certificate is swept. Nothing
+  un-retires a key: not a suspension undone, not the incident lever.
+  Retention or account deletion work must leave these records alone (or carry
+  them into whatever the deletion keeps).
+- **Not a revocation.** It touches no other certificate and no sign-out
+  cut-off, and it is not mailed: it happens at every routine sign-out and
+  sign-in. The status route answers a new state, `retired`, never `revoked`,
+  so peers never show a routine renewal as a revoked sign-in. A certificate
+  that is revoked still answers `revoked`: the stronger fact wins. Anything
+  that composes a device's standing for a document must treat `retired` as
+  "not revoked" and must not drop a real `revoked`.
+- **Never a gate at a ceremony.** An enrolment looks only at its own new key,
+  so a browser whose previous key was retired, by its owner or by a thief
+  holding a copy, signs in again with a passkey.
+- **bento/home never waits for it.** The local forget comes first; the
+  retirement is best effort, and a directory that does not answer leaves the
+  sign-out exactly as fast. A check-in answered 403 `retired` ends the
+  sign-in like a revocation, over the record it was made from, so another
+  tab's newer sign-in stands.

@@ -33,10 +33,11 @@ import { PAGE_HEADERS, VOID_CSS, VOID_HTML, VOID_JS, VOID_PATHS } from './voidpa
 
 export const LIMITS = {
   // per IP per hour. challengeAddr (an enrolment's challenge), challengeAddrHome
-  // (a renewal's) and checkin are per IP per hour FOR ONE ADDRESS (browsers.js):
+  // (a renewal's), checkin, challengeAddrRetire and retire (a retirement's,
+  // retire.js) are per IP per hour FOR ONE ADDRESS (browsers.js):
   // never a count shared by every caller, which a stranger could fill to starve
   // the owner's browsers. A check-in is counted only once its signature verifies
-  ip: { complete: 60, lookup: 300, challenge: 120, request: 60, setup: 10, enrol: 60, void: 60, reset: 10, checkin: 120, challengeAddr: 20, challengeAddrHome: 20 },
+  ip: { complete: 60, lookup: 300, challenge: 120, request: 60, setup: 10, enrol: 60, void: 60, reset: 10, checkin: 120, challengeAddr: 20, challengeAddrHome: 20, challengeAddrRetire: 20, retire: 20 },
 }
 const DAY = 86_400_000
 

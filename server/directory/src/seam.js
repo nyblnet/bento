@@ -28,8 +28,12 @@ export const HOME_ROUTES = Object.freeze({
   prefix: '/v1/home/',
   /** POST {address} → 200 {nonce}; 404 for an address with no account */
   challenge: '/v1/home/challenge',
-  /** POST {wren, sig, pin?} → 200 {watt, wattSig, signer, assertion, roster, incidents}; 403 {error: unknown | revoked | cap, incidents} */
+  /** POST {wren, sig, pin?} → 200 {watt, wattSig, signer, assertion, roster, incidents}; 403 {error: unknown | revoked | retired | cap, incidents} */
   checkin: '/v1/home/checkin',
+  /** POST {address} → 200 {nonce}: a retirement's challenge (audience retire); 404 for an address with no account */
+  retireChallenge: '/v1/home/retire/challenge',
+  /** POST {wret, sig} → 200 {ok, retiredAt}: the browser key W retires itself (retire.js); 403 unknown */
+  retire: '/v1/home/retire',
 })
 
 /** GET ?e=<address>&c=<sha256 of the certificate text> → 200 {state, incidents}: CORS *, for any peer */
