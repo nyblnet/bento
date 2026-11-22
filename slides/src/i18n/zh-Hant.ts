@@ -929,6 +929,7 @@ export const zhHant: Catalog = {
   "Remove stroke": "移除筆畫",
   "Rename": "重新命名",
   "Show speaker notes": "顯示簡報者備忘稿",
+  "This slide has notes": "此投影片有備忘稿",
   "This variant shares no elements with its main slide — nothing to update.": "此備選頁與主投影片沒有共同元素 — 沒有可更新的內容。",
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "表示這是投影片版面配置中的哪個方塊。將投影片切換為其他版面配置時，內容會移到新版面配置中角色相同的方塊，就像 PowerPoint 中的版面配置區一樣。",
   "Pie": "圓形圖",
