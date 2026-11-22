@@ -880,7 +880,7 @@ body.ed-scrubbing, body.ed-scrubbing * { cursor: ew-resize; }
   inset-inline-start: max(14px, env(safe-area-inset-left));
   bottom: calc(max(14px, env(safe-area-inset-bottom), var(--tray-safe-bottom, 0px)) + var(--notes-tab-lift, 0px));
   display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 14px 0 10px;
-  font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink-2, var(--ink)); white-space: nowrap;
+  font: inherit; font-size: 13px; font-weight: 600; color: var(--ink-2, var(--ink)); white-space: nowrap;
   background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
   box-shadow: 0 4px 14px rgb(20 30 45 / 0.10); cursor: pointer;
   opacity: 0; visibility: hidden; transform: translateY(6px);
@@ -890,7 +890,11 @@ body.ed-scrubbing, body.ed-scrubbing * { cursor: ew-resize; }
 .ed-notes-tab svg { width: 12px; height: 12px; stroke-width: 2.25; transform: rotate(-90deg); flex: none; }
 .ed-notes-tab:hover { color: var(--ink); border-color: var(--field-line-hot, var(--muted)); }
 .ed-notes-tab:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
-@media (pointer: coarse) { .ed-notes-tab { min-height: 44px; padding-inline: 12px 16px; } }
+/* on touch the pill stays 32px, the height of the Slideshow and zoom pills
+   beside it; only the tap area grows, invisibly, to 44px (6px above and below
+   — the lift above the pills leaves 10px, so it never reaches them) */
+.ed-notes-tab::before { content: ''; position: absolute; inset: 0; }
+@media (pointer: coarse) { .ed-notes-tab::before { inset: -7px -5px; } } /* from the padding box: 1px border + 6px = 44px tall */
 body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize; user-select: none; }
 
 .ed-hint {

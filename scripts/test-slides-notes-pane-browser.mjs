@@ -76,7 +76,22 @@ try {
     ok(g.shown && g.onTop && g.tag === 'BUTTON' && g.label === 'Speaker notes' && g.expanded === 'false', `${w}px: a "Speaker notes" tab button is on top at its own centre (${g.label}, expanded=${g.expanded}, on top ${g.onTop})`)
     ok(g.tab.left - g.centre.left < 40 && g.centre.bottom - g.tab.bottom < (w < 700 ? 80 : 40), `${w}px: in the canvas's bottom-start corner (${Math.round(g.tab.left - g.centre.left)}px in, ${Math.round(g.centre.bottom - g.tab.bottom)}px up)`)
     ok(!g.clash.length, `${w}px: clear of the Slideshow and zoom pills (${g.clash.join(', ') || 'clear'})`)
-    if (w < 700) ok(g.tab.height >= 44, `${w}px: a 44px touch target (${g.tab.height}px)`)
+    const pills = await q.evaluate(() => ['.ed-notes-tab', '.ed-present-pill', '.ed-zoombar'].map((s) => document.querySelector(s).getBoundingClientRect().height))
+    ok(pills.every((h) => Math.abs(h - 32) < 0.5), `${w}px: the tab is as tall as the Slideshow and zoom pills (${pills.join(' / ')}px)`)
+    const fs = await q.evaluate(() => [getComputedStyle(document.querySelector('.ed-notes-tab')).fontSize, getComputedStyle(document.querySelector('.ed-present-pill .ed-pill-main')).fontSize])
+    ok(fs[0] === fs[1], `${w}px: and its label is the Slideshow label's size (${fs.join(' / ')})`)
+    if (w < 700) {
+      // a 44px tap area round the 32px pill, which takes no tap from the Slideshow pill below
+      const taps = await q.evaluate(() => {
+        const t = document.querySelector('.ed-notes-tab'), r = t.getBoundingClientRect(), x = r.left + r.width / 2
+        const pill = document.querySelector('.ed-present-pill'), pr = pill.getBoundingClientRect(), px = pr.left + pr.width / 2
+        const top = (x, y) => document.elementsFromPoint(x, y)[0]
+        return { above: t.contains(top(x, r.top - 5.5)), below: t.contains(top(x, r.bottom + 5.5)), span: Math.round(r.height + 12),
+          pillTop: pill.contains(top(px, pr.top + 1)), pillEdge: pill.contains(top(Math.max(pr.left + 20, r.left + 20), pr.top + 1)) }
+      })
+      ok(taps.above && taps.below, `${w}px: a ${taps.span}px tap area (5.5px above and below the pill still hit it)`)
+      ok(taps.pillTop && taps.pillEdge, `${w}px: and the Slideshow pill under it keeps its own taps`)
+    }
     await q.locator('.ed-notes-tab').click(); await q.waitForTimeout(400)
     const o = await geom(q)
     const ah = (await q.locator('.ed-notespane-text').boundingBox())?.height
