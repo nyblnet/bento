@@ -18,10 +18,16 @@
  * Sockets are closed (context.routeWebSocket); DNS resolves nothing but the
  * two local hosts.
  *
- * A precache-and-serve service worker is a FIXTURE here, registered on the
- * library origin through a page with CSP bypassed, and served only in the rows
- * that want one (the library registers /sw.js itself since stage 3; see
- * `honest.lib.delete` below). Hostile workers are fixtures too.
+ * Release A is the home/web build as it is, its own service worker (/sw.js,
+ * stage 3) included: every row starts as a first visit (no worker), the
+ * library registers that worker on it, and the stage3-* rows run as a
+ * returning visitor with it active and in control. A cache-first precache
+ * worker is a FIXTURE for the older worker rows, listed in its own release (F)
+ * and registered through a page with CSP bypassed; hostile workers are
+ * fixtures too.
+ *
+ *   TW_BUILD_MUTANT='{"file":"sw.ts","from":"…","to":"…"}'   builds release A with a home/web source
+ *   mutant (BENTO_HOME_WEB_MUTANT, --dev only), e.g. the worker without navigation preload
  *
  * Every row names the rule it guards; scripts/test-webext-tripwire-mutants.mjs
  * turns each rule off and requires that row to go red.
@@ -54,8 +60,17 @@ const [pl, pf, pr] = await freePorts(3)
 const LIB = `http://127.0.0.1:${pl}`, FRM = `http://localhost:${pf}`, CHAN = `http://127.0.0.1:${pr}`
 const LIST_PATH = '/releases/home-web/served.json'
 const A = path.join(work, 'A')
+const BUILD_MUTANT = process.env.TW_BUILD_MUTANT || null
 execFileSync(process.execPath, [path.join(ROOT, 'home/web/build.mjs'), '--out', A, '--library-origin', LIB, '--frame-origin', FRM,
-  '--release-base', `${CHAN}/releases/`, '--dev'], { stdio: ['ignore', 'ignore', 'inherit'] })
+  '--release-base', `${CHAN}/releases/`, '--dev'], { stdio: ['ignore', 'ignore', 'inherit'], env: { ...process.env, BENTO_HOME_WEB_MUTANT: BUILD_MUTANT ?? '' } })
+const infoA = JSON.parse(fs.readFileSync(path.join(A, 'build.json'), 'utf8'))
+if (BUILD_MUTANT) {
+  if (!infoA.mutant) throw new Error('TW_BUILD_MUTANT was set but the build says it carries no mutant')
+  console.log(`  mutant applied to the home/web build: ${infoA.mutant.slice(0, 70)}`)
+}
+if (JSON.stringify(infoA.serviceWorkers) !== '["/sw.js"]') throw new Error('the build no longer lists /sw.js as its worker')
+// the build's own worker: release A serves it, and the stage3-* rows run with it in control
+const BUILD_SW = fs.readFileSync(path.join(A, 'library/sw.js'))
 
 // the fixture worker: precache the library page, answer every same-origin GET from the cache
 const SW_HONEST = `// bento/home precache worker (rig fixture)
@@ -68,9 +83,10 @@ self.addEventListener('fetch', (e) => {
   e.respondWith(caches.match(e.request, { ignoreSearch: true }).then((r) => r || fetch(e.request)))
 })
 `
-fs.writeFileSync(path.join(A, 'library/sw.js'), SW_HONEST)
-const infoA = JSON.parse(fs.readFileSync(path.join(A, 'build.json'), 'utf8'))
-fs.writeFileSync(path.join(A, 'build.json'), JSON.stringify({ ...infoA, serviceWorkers: ['/sw.js'] }, null, 2))
+// release F: release A with the fixture worker in place of the build's, for the rows that register it
+const F = path.join(work, 'F')
+fs.cpSync(A, F, { recursive: true })
+fs.writeFileSync(path.join(F, 'library/sw.js'), SW_HONEST)
 
 // release B: the same build with different words on the page (a later release)
 const B = path.join(work, 'B')
@@ -98,6 +114,7 @@ fs.writeFileSync(path.join(P, 'library/sw.js'), SW_PRELOAD)
 const DAY = 86400e3
 const relA = await describeBuild(A, new Date(Date.now() - 10 * DAY).toISOString())
 const relP = await describeBuild(P, new Date(Date.now() - 10 * DAY).toISOString())
+const relF = await describeBuild(F, new Date(Date.now() - 10 * DAY).toISOString())
 const relB = await describeBuild(B, new Date().toISOString())
 const relBold = await describeBuild(B, new Date(Date.now() - 4 * DAY).toISOString())
 
@@ -118,6 +135,7 @@ const list1 = nextServed(null, relA)
 const list2 = nextServed(list1, relB)
 const list2old = nextServed(list1, relBold)
 const listP = nextServed(null, relP)
+const listF = nextServed(null, relF)
 
 // --- the deck the library opens (to get the frame page loaded) ------------------
 const REAL = path.join(ROOT, 'home/fixtures/gate1/real/slides-1.2.10')
@@ -148,15 +166,12 @@ function siteFiles(dir) {
   return files
 }
 const honest = { lib: siteFiles(path.join(A, 'library')), frame: siteFiles(path.join(A, 'frame')) }
-// Since stage 3 the library registers /sw.js itself on every visit. The rows that are not about
-// a worker model a visit with none (a first visit, or a browser that refused the registration),
-// so by default the site serves no /sw.js and that registration fails; a row that wants a worker
-// serves one (withWorker). This default does not settle what stage 3's own worker does to the
-// tripwire. Measured 2026-11-15 with the build's real worker (navigation preload on) in control:
-// library-byte, library-csp and both cross-site rows hold; no-store is still a mismatch, on
-// cache-control rather than bytes-unread. Open (home/web/README.md): a response kept out of the
-// HTTP cache by other headers (Vary: *), and a worker trusted by its URL.
-honest.lib.delete('/sw.js')
+// The site serves the build's own /sw.js, and the library registers it on every visit. Every row
+// starts with no worker on the library origin (fresh() clears them): a first visit, on which the
+// worker registers but does not answer the navigation. The stage3-* rows prime a returning
+// visitor first (the build's worker active and in control, navigation preload on), the shape
+// security's stage-3 review measured (ruling #954); the older worker rows register a fixture.
+if (!honest.lib.get('/sw.js')?.body.equals(BUILD_SW)) throw new Error('the library site does not serve the build\'s own /sw.js')
 const releaseB = siteFiles(path.join(B, 'library'))
 // a file may carry `status` and `hold` (send the body, keep the response open); `fallback` answers unlisted library paths
 const HELD = []
@@ -281,11 +296,19 @@ const section = (m) => console.log(`\n=== ${m}`)
 
 const page = await ctx.newPage()
 await closeExtras(page)
-async function fresh({ list = list1, held = null, lib = {}, frame = {} } = {}) {
+async function fresh({ list = list1, held = null, lib = {}, frame = {}, keepWorkers = false } = {}) {
   await closeExtras(page)
   // the last row's document leaves first (its pagehide report lands now, not in this row's record)
   await page.goto('about:blank').catch(() => {})
   await new Promise((r) => setTimeout(r, 400))
+  // a first visit: no worker and no worker cache on the library origin. Cleared through the
+  // DevTools protocol, never from a library page (which the old worker would answer).
+  if (!keepWorkers) {
+    const cdp = await ctx.newCDPSession(page)
+    await cdp.send('Storage.clearDataForOrigin', { origin: LIB, storageTypes: 'service_workers,cache_storage' })
+    await cdp.detach()
+    await new Promise((r) => setTimeout(r, 300))
+  }
   await store.reset()
   for (const r of HELD.splice(0)) r.destroy()
   state.fallback = null
@@ -835,8 +858,8 @@ const hostileWorker = (pairs, headerEdit = '') => SW_HONEST.replace("e.respondWi
 if (SW_ROWS.some(row)) {
   await page.goto('about:blank')
   if (row('sw-honest')) {
-    section('sw-honest: the precache worker serves release A  (positive control, worker present)')
-    await fresh()
+    section('sw-honest: the fixture precache worker (release F) serves the library  (positive control, a fixture worker present)')
+    await fresh({ list: listF })
     ok(await withWorker(SW_HONEST) === true, 'the fixture worker registered and activated')
     const v = await visit(page, `${LIB}/`, { open: true })
     ok(v.lib?.page.viaWorker === true, 'the navigation was answered by the worker')
@@ -848,7 +871,7 @@ if (SW_ROWS.some(row)) {
   }
   if (row('sw-script-bytes')) {
     section('sw-script-bytes: the network now serves a different /sw.js  (rule: worker-bytes)')
-    await fresh()
+    await fresh({ list: listF })
     needWorker(await withWorker(SW_HONEST))
     state.lib.set('/sw.js', { body: Buffer.from(SW_HONEST + '// changed\n'), headers: { 'content-type': 'text/javascript' } })
     const v = await visit(page, `${LIB}/`)
@@ -857,7 +880,7 @@ if (SW_ROWS.some(row)) {
   }
   if (row('sw-custom-path')) {
     section('sw-custom-path: a second worker registered at a path no release lists  (rule: worker)')
-    await fresh()
+    await fresh({ list: listF })
     needWorker(await withWorker(SW_HONEST))
     needWorker(await withWorker('// a worker at a custom path\n', { url: '/x/sw2.js', scope: '/x/' }))
     // the rig's own setup, checked before the visit: both registrations exist
@@ -871,7 +894,7 @@ if (SW_ROWS.some(row)) {
   }
   if (row('sw-cache-extra')) {
     section('sw-cache-extra: an entry no release lists, waiting in the worker\'s cache  (rule: cache)')
-    await fresh()
+    await fresh({ list: listF })
     needWorker(await withWorker(SW_HONEST))
     const p = await ctx.newPage(); await p.goto(`${LIB}/`)
     await p.evaluate(async () => (await caches.open('bento-home-v1')).put('/later.js', new Response('/* waiting */')))
@@ -882,7 +905,7 @@ if (SW_ROWS.some(row)) {
   }
   if (row('sw-cache-poisoned')) {
     section('sw-cache-poisoned: one byte of the cached library page changed; the worker serves it  (rule: cache; nothing repaired)')
-    await fresh()
+    await fresh({ list: listF })
     needWorker(await withWorker(SW_HONEST))
     const p = await ctx.newPage(); await p.goto(`${LIB}/`)
     const bad = variant(libDoc, 'Choose a file', 'Choose a filf').body.toString('utf8')
@@ -911,7 +934,7 @@ if (SW_ROWS.some(row)) {
   }
   if (row('sw-navigation-only')) {
     section('sw-navigation-only: a hostile worker changes one byte of the script for navigations only; the network /sw.js is honest again  (rule: scripts)')
-    await fresh()
+    await fresh({ list: listF })
     const t = libDoc.body.toString('utf8')
     const at = t.indexOf('<script>') + '<script>'.length + 40
     const from = t.slice(at - 20, at + 20), to = t.slice(at - 20, at) + (t[at] === 'a' ? 'b' : 'a') + t.slice(at + 1, at + 20)
@@ -924,7 +947,7 @@ if (SW_ROWS.some(row)) {
   }
   if (row('sw-markup')) {
     section('sw-markup: a hostile worker swaps page text for an <img onerror> of the same length  (rule: markup)')
-    await fresh()
+    await fresh({ list: listF })
     const from = 'Only the code of signed Bento releases runs here,'
     const to = '<img src=x onerror="1">'.padEnd(from.length, ' ')
     needWorker(await withWorker(hostileWorker([[from, to]])))
@@ -935,7 +958,7 @@ if (SW_ROWS.some(row)) {
   }
   if (row('sw-size')) {
     section('sw-size: a hostile worker adds text to the page (no script, no handler)  (rule: size)')
-    await fresh()
+    await fresh({ list: listF })
     needWorker(await withWorker(hostileWorker([['Choose a file', 'Choose a file to send us']])))
     state.lib.set('/sw.js', { body: Buffer.from(SW_HONEST), headers: { 'content-type': 'text/javascript' } })
     const v = await visit(page, `${LIB}/`)
@@ -944,7 +967,7 @@ if (SW_ROWS.some(row)) {
   }
   if (row('script-rewrite')) {
     section('script-rewrite: a hostile worker serves a script that runs, then rewrites its own text to the honest one  (rule: script-rewritten)')
-    await fresh()
+    await fresh({ list: listF })
     const t = libDoc.body.toString('utf8')
     const s0 = t.indexOf('<script>') + '<script>'.length, s1 = t.indexOf('</script>', s0)
     const honestJs = t.slice(s0, s1)
@@ -985,7 +1008,7 @@ if (SW_ROWS.some(row)) {
 
 if (row('shadow-root')) {
   section('shadow-root: a hostile worker puts a handler and a script inside a declarative shadow root, same length  (rule: shadow-root is markup)')
-  await fresh()
+  await fresh({ list: listF })
   const t = libDoc.body.toString('utf8')
   const LONG = 'Only the code of signed Bento releases runs here, each document in its own sandbox. Saving changes is not available on this page yet: to edit, open the file in your browser directly or in the Bento app.'
   const meta = /<meta http-equiv="Content-Security-Policy" content="[^"]*">/.exec(t)[0]
@@ -1001,7 +1024,7 @@ if (row('shadow-root')) {
 
 if (row('shadow-root-removed')) {
   section('shadow-root-removed: a hostile worker streams a declarative shadow root whose script removes its own host, same length  (rule: every element walked is checked for a shadow root)')
-  await fresh()
+  await fresh({ list: listF })
   const t = libDoc.body.toString('utf8')
   const LONG = 'Only the code of signed Bento releases runs here, each document in its own sandbox. Saving changes is not available on this page yet: to edit, open the file in your browser directly or in the Bento app.'
   const meta = /<meta http-equiv="Content-Security-Policy" content="[^"]*">/.exec(t)[0]
@@ -1038,12 +1061,92 @@ if (row('shadow-root-removed')) {
 
 if (row('sw-element')) {
   section('sw-element: a hostile worker turns page text into an element, same length, no script, no handler  (rule: the element sequence, in the full report)')
-  await fresh()
+  await fresh({ list: listF })
   needWorker(await withWorker(hostileWorker([['Only the code', '<b>Only</b> c']])))
   state.lib.set('/sw.js', { body: Buffer.from(SW_HONEST), headers: { 'content-type': 'text/javascript' } })
   const v = await visit(page, `${LIB}/`)
   ok(v.lib?.verdict === 'mismatch' && rules(v.lib) === 'elements', `mismatch on elements only (got ${v.lib?.verdict} ${rules(v.lib)})`)
   await noWorkers()
+}
+
+
+// --- stage 3: the build's own worker in control (security ruling #954, C1 and C2) -----------------
+// A returning visitor: the library's own /sw.js registered, activated and controlling, with
+// navigation preload on, so webRequest sees each navigation as the tab's own main frame. Then a
+// hostile response, which must reach the page (the positive control in each row) and be a mismatch.
+// The C1 build mutant (TW_BUILD_MUTANT: the worker without navigation preload) turns the rows
+// whose response the HTTP cache keeps no copy of, and the cross-site one, green-for-the-attacker.
+const STAGE3 = ['stage3-honest', 'stage3-csp', 'stage3-csp-nostore', 'stage3-vary-text', 'stage3-nostore-text', 'stage3-text', 'stage3-cross-site-no-store']
+/** Prime a returning visitor; returns the controlling worker's script URL, or null. */
+async function prime() {
+  await fresh()
+  await page.goto(`${LIB}/`)
+  const ctl = await until(async () => {
+    if (await page.evaluate(() => document.documentElement.getAttribute('data-bento-sw')) !== 'registered') return null
+    return page.evaluate(async () => { const r = await navigator.serviceWorker.ready; return r.active?.state === 'activated' ? r.active.scriptURL : null })
+  }, 20000)
+  await page.goto('about:blank')
+  return ctl
+}
+/** The build's own worker is the one in control of the page (its cache is the build's, never the fixture's). */
+const realWorkerInControl = (p) => p.evaluate(async () => ({
+  controller: navigator.serviceWorker.controller?.scriptURL ?? null,
+  caches: await caches.keys(),
+})).then((r) => (r.controller === `${LIB}/sw.js` && r.caches.includes(infoA.offline.cache) && !r.caches.includes('bento-home-v1') ? true : JSON.stringify(r))).catch((e) => String(e))
+const cspWide = () => libDoc.headers['content-security-policy'].replace(/connect-src [^;]+/, 'connect-src *')
+const textByte = (headers = {}) => variant(libDoc, 'Choose a file', 'Choose a filf', headers)
+const showsFilf = (p) => p.evaluate(() => document.body.innerHTML.includes('Choose a filf')).catch(() => null)
+const ROWS3 = [
+  ['stage3-csp', 'the library CSP widened (connect-src *), bytes identical, cacheable', () => ({ body: libDoc.body, headers: { ...libDoc.headers, 'content-security-policy': cspWide() } }),
+    async (p) => (await p.evaluate(() => 1)) === 1, (r) => r === 'csp'],
+  ['stage3-csp-nostore', 'the library CSP widened, bytes identical, Cache-Control: no-store', () => ({ body: libDoc.body, headers: { ...libDoc.headers, 'cache-control': 'no-store', 'content-security-policy': cspWide() } }),
+    async (p) => (await p.evaluate(() => 1)) === 1, (r) => r.split(',').includes('cache-control') && r.split(',').includes('csp')],
+  ['stage3-vary-text', 'one byte of text, no-cache plus Vary: * (the HTTP cache keeps no copy)', () => textByte({ vary: '*' }), showsFilf, (r) => r.split(',').includes('bytes-unread')],
+  ['stage3-nostore-text', 'one byte of text, Cache-Control: no-store', () => textByte({ 'cache-control': 'no-store' }), showsFilf, (r) => r.split(',').includes('cache-control')],
+  ['stage3-text', 'one byte of text, the headers as shipped', () => textByte(), showsFilf, (r) => r === 'bytes'],
+]
+if (STAGE3.some(row)) {
+  if (row('stage3-honest')) {
+    section('stage3-honest: a returning visitor, the build\'s own worker in control, the honest release  (positive control: webRequest sees the preload navigation)')
+    const ctl = await prime()
+    ok(ctl === `${LIB}/sw.js`, `the library's own worker is active: ${ctl}`)
+    await fresh({ keepWorkers: true })
+    const v = await visit(page, `${LIB}/`, { open: true })
+    ok(await realWorkerInControl(page) === true, `the build's own worker controls the page, with the build's cache (${await realWorkerInControl(page)})`)
+    ok(v.lib?.verdict === 'ok' && v.lib.page.viaWorker === true && v.lib.page.cspFrom === 'navigation', `ok, answered by the worker, and the CSP came from the navigation webRequest saw (${v.lib?.verdict} ${rules(v.lib)} viaWorker ${v.lib?.page.viaWorker} cspFrom ${v.lib?.page.cspFrom})`)
+    ok(v.lib?.observed.bytes && (v.lib.page.workers ?? []).length === 1, `bytes read, one worker read (${JSON.stringify(v.lib?.observed)}, ${v.lib?.page.workers?.length} worker(s))`)
+    ok(v.frame?.verdict === 'ok', `the frame is unaffected (${v.frame?.verdict})`)
+    // a second visit and a forced update check: still nothing to say
+    await page.evaluate(() => navigator.serviceWorker.ready.then((r) => r.update())).catch(() => {})
+    const v2 = await visit(page, `${LIB}/index.html`)
+    ok(v2.lib?.verdict === 'ok' && v2.lib.page.viaWorker === true, `a second visit after an update check: ok (${v2.lib?.verdict} ${rules(v2.lib)})`)
+  }
+  for (const [name, what, make, served, expect] of ROWS3) {
+    if (!row(name)) continue
+    section(`${name}: ${what}, the build's own worker in control  (security ruling #954)`)
+    const ctl = await prime()
+    ok(ctl === `${LIB}/sw.js`, `the library's own worker is active before the row (${ctl})`)
+    await fresh({ keepWorkers: true, lib: both(make()) })
+    const v = await visit(page, `${LIB}/`)
+    const s = await served(page)
+    ok(s === true && v.lib?.page.viaWorker === true, `the hostile response reached the page, through the worker (served ${s}, viaWorker ${v.lib?.page.viaWorker}, cspFrom ${v.lib?.page.cspFrom})`)
+    ok(v.lib?.verdict === 'mismatch' && expect(rules(v.lib)) && (v.lib.warned ?? []).includes('tab'), `a loud mismatch (${v.lib?.verdict} [${rules(v.lib)}] ${v.lib?.warned})`)
+  }
+  if (row('stage3-cross-site-no-store')) {
+    section('stage3-cross-site-no-store: reached by a link from another site, one byte changed and sent no-store, the build\'s own worker in control  (security ruling #954)')
+    const ctl = await prime()
+    ok(ctl === `${LIB}/sw.js`, `the library's own worker is active before the row (${ctl})`)
+    await fresh({ keepWorkers: true, lib: both(textByte({ 'cache-control': 'no-store' })) })
+    state.frame.set('/opener', { body: Buffer.from(`<!doctype html><a id=l href="${LIB}/">link</a>`), headers: { 'content-type': 'text/html' } })
+    await page.goto(`${FRM}/opener`)
+    const t0 = Date.now()
+    await Promise.all([page.waitForURL(`${LIB}/`, { timeout: 20000 }).catch(() => {}), page.click('#l')])
+    const ev = await until(async () => (await since(t0)).find((e) => e.url === `${LIB}/` && !e.early), 40000)
+    const s = await showsFilf(page)
+    ok(s === true && ev?.page?.viaWorker === true, `the hostile response reached the page, through the worker (served ${s}, viaWorker ${ev?.page?.viaWorker})`)
+    ok(ev?.verdict === 'mismatch' && ev.page.crossSite === true && rules(ev).split(',').includes('cache-control'), `a mismatch, seen as cross-site, on its Cache-Control (${ev?.verdict} [${rules(ev)}] crossSite ${ev?.page?.crossSite})`)
+  }
+  await fresh()
 }
 
 ok(sockets.length === 0, `no WebSocket was opened (${sockets.length})`)

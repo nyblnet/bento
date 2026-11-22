@@ -254,15 +254,14 @@ move.
 against lists it as the release's worker, with the worker's bytes and every
 file it precaches; a worker or a cached file the list lacks is a mismatch.
 Navigation preload keeps each navigation the tab's own, so the tripwire still
-sees its headers. Still open:
+sees its headers. A response kept out of the HTTP cache (`no-store`, or `Vary:
+*` with `no-cache`) can no longer hide a CSP or text change: the tripwire reads
+the page's bytes from the HTTP cache, and requires them whenever webRequest saw
+the navigation, worker or not. Measured with this build's own worker in control
+(`stage3-*` rows in `scripts/test-webext-tripwire-browser.mjs`); without
+navigation preload those rows pass a hostile page, which is the C1 mutant there.
+Still open:
 
-- **A response kept out of the HTTP cache hides CSP and text changes.** The
-  tripwire reads the page's bytes from the HTTP cache, and with a worker in
-  control it does not require them. A changed page sent with headers that keep
-  it out of the cache (`Vary: *` with `no-cache`, for one) passes unseen until
-  the tripwire requires the bytes whenever the headers came from the
-  navigation (a tripwire follow-up). A changed script is still caught, from the
-  parse.
 - **The tripwire trusts the worker by its URL.** It lists `/sw.js` and checks
   the bytes it fetches itself, but a server can answer the browser's own
   worker request (`Service-Worker: script`) differently from the extension's,

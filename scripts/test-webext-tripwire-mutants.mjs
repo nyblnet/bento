@@ -11,6 +11,11 @@
  *
  * The rows run unmutated first (the control): a mutant run means nothing if
  * its row is already red.
+ *
+ * A mutant with `build` changes the home/web SOURCE instead (the rig rebuilds
+ * release A with it, through build.mjs's --dev mutant seam): the stage-3
+ * worker without navigation preload (security ruling #954 C1), whose rows the
+ * tripwire alone cannot hold.
  */
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -19,6 +24,12 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const RIG = path.join(ROOT, 'scripts/test-webext-tripwire-browser.mjs')
+// the stage-3 worker without navigation preload (security ruling #954 C1): it answers navigations
+// by its own fetch, which webRequest does not see as the tab's main frame
+const NO_PRELOAD = [
+  { file: 'sw.ts', from: '    try { await self.registration.navigationPreload?.enable() } catch { /* no navigation preload: navigations fetch from here */ }\n', to: '' },
+  { file: 'sw.ts', from: "const pre = e.request.mode === 'navigate' ? e.preloadResponse : undefined", to: 'const pre: Promise<Response | undefined> | undefined = undefined' },
+]
 const J = 'src/tripwire-judge.js', W = 'src/tripwire.js', O = 'src/tripwire-observe.js', P = 'src/tripwire-page.js', M = 'manifest.json'
 
 const MUTANTS = [
@@ -99,6 +110,19 @@ const MUTANTS = [
   { name: 'a withdrawn release is quiet (R1)', row: 'withdrawn', file: J, from: 'if (list.releases[index].withdrawn) return', to: 'if (false) return' },
   { name: 'a list carrying app is taken (R2)', row: 'carries-app', file: J, from: "if ('app' in p) return", to: 'if (false) return' },
   { name: 'never checked is never said (R3)', row: 'never-checked', file: W, from: 'if (now - since > NEVER_MS) event.warned.push(', to: 'if (false) event.warned.push(' },
+  // stage 3: the build's own worker in control (security ruling #954 C1, C2)
+  { name: 'navigation headers ignored, worker in control', row: 'stage3-honest', file: W, from: 'const fresh = matches(h, url, obs.timeOrigin)', to: 'const fresh = false' },
+  { name: 'the worker without navigation preload (C1): positive control', row: 'stage3-honest', build: NO_PRELOAD },
+  { name: 'csp rule off, worker in control', row: 'stage3-csp', file: J, from: "if (obs.csp != null && join(obs.csp) !== (e.csp ?? ''))", to: 'if (false)' },
+  { name: 'the worker without navigation preload (C1): CSP + no-store', row: 'stage3-csp-nostore', build: NO_PRELOAD },
+  { name: 'Cache-Control, csp and unread-bytes rules all off, worker in control', row: 'stage3-csp-nostore', edits: [
+    { file: J, from: 'if (obs.cacheControl != null && e.cacheControl !== undefined && join(obs.cacheControl) !== e.cacheControl) f.push', to: 'if (false) f.push' },
+    { file: J, from: "if (obs.csp != null && join(obs.csp) !== (e.csp ?? ''))", to: 'if (false)' },
+    { file: J, from: "if (obs.role === 'library' && (!obs.viaWorker || obs.cspFrom === 'navigation') && !obs.bytes && !obs.crossSite) out.push", to: 'if (false) out.push' }] },
+  { name: 'unread bytes waived under any worker (C2), worker in control', row: 'stage3-vary-text', file: J, from: "(!obs.viaWorker || obs.cspFrom === 'navigation') && !obs.bytes", to: '!obs.viaWorker && !obs.bytes' },
+  { name: 'the worker without navigation preload (C1): text + no-store', row: 'stage3-nostore-text', build: NO_PRELOAD },
+  { name: 'bytes rule off, worker in control', row: 'stage3-text', file: J, from: 'if (obs.bytes && obs.bytes.sha256 !== e.sha256)', to: 'if (false)' },
+  { name: 'the worker without navigation preload (C1): cross-site + no-store', row: 'stage3-cross-site-no-store', build: NO_PRELOAD },
 ]
 
 // A run that never reached the browser (a local port taken between freePorts and listen) is
@@ -119,7 +143,7 @@ let failures = 0, ran = 0
 const PICK = process.env.TW_ONLY_MUTANT // a substring of a mutant's name, to re-run one
 for (const m of MUTANTS.filter((x) => !PICK || x.name.includes(PICK))) {
   ran++
-  const r = run({ TW_ROWS: m.row, TW_MUTANT: JSON.stringify(m.edits ?? { file: m.file, from: m.from, to: m.to }) })
+  const r = run(m.build ? { TW_ROWS: m.row, TW_BUILD_MUTANT: JSON.stringify(m.build) } : { TW_ROWS: m.row, TW_MUTANT: JSON.stringify(m.edits ?? { file: m.file, from: m.from, to: m.to }) })
   const applied = /mutant applied to/.test(r.stdout)
   const red = r.status === 1 && /FAIL/.test(r.stdout)
   const okay = applied && red

@@ -15402,6 +15402,19 @@ Two gaps the security re-check found in the tripwire (entries above), the limit 
   restores the CSP and Cache-Control checks; the waiver now applies only when
   it did not (`cspFrom` is not `navigation`). So a preload navigation whose
   bytes cannot be read is a mismatch, and `Vary: *` no longer hides a change.
+- **The rows run against the build's own worker.** The browser rig used to
+  overwrite the build's `/sw.js` with a cache-first fixture, then serve none
+  by default, so no row ran with the worker that opened the hole. Release A is
+  now the build as it is: every row starts as a first visit (the worker
+  registers), and seven `stage3-*` rows prime a returning visitor (the build's
+  worker active and in control) before a hostile response: a widened CSP,
+  cacheable and `no-store`; one text byte with `Vary: *`, with `no-store`, and
+  with the headers as shipped; and a `no-store` text byte reached from another
+  site. Each asserts the hostile bytes reached the page and ends in a
+  mismatch. Their mutants include the worker built without navigation preload
+  (the rig rebuilds the library with it), which turns the `no-store` rows and
+  the cross-site one into passes. The fixture worker the older rows register
+  is listed in a release of its own.
 
 Guards: the rows and mutants in `scripts/test-webext-tripwire-browser.mjs`,
 `scripts/test-webext-tripwire-mutants.mjs`, `scripts/test-webext-tripwire.ts`
