@@ -820,6 +820,12 @@ async function signout(a: Authn, address: string, o: GetOpts & { ch?: { nonce: s
   ok(r2.status === 400 && r2.j.error === 'nonce', `a text whose time is not the challenge's → 400 nonce (${err(r2)})`)
   const r3 = await signout(H2, hal, { ch: ch2, count: 4 })
   ok(r3.status === 400 && r3.j.error === 'nonce', `then the right text → 400 nonce: the mismatch spent it (${err(r3)})`)
+  // the mirror (roster-v2 m7's other side): a time LATER than the challenge's is refused as well, and spends it
+  const ch2b = await mintSignout(hal)
+  const r2b = await signout(H2, hal, { ch: { ...ch2b, at: ch2b.at + 1 }, count: 4 })
+  ok(r2b.status === 400 && r2b.j.error === 'nonce', `a text whose time is a millisecond after the challenge's → 400 nonce (${err(r2b)})`)
+  const r3b = await signout(H2, hal, { ch: ch2b, count: 4 })
+  ok(r3b.status === 400 && r3b.j.error === 'nonce', `then the right text → 400 nonce: the later time spent it (${err(r3b)})`)
   const anaCh = await mintSignout(ana)
   const r4 = await signout(H2, hal, { ch: anaCh, count: 5 })
   ok(r4.status === 400 && r4.j.error === 'nonce', `another address's challenge → 400 nonce (${err(r4)})`)
@@ -994,6 +1000,23 @@ const statusOf = async (address: string, text: string) => (await api('GET', `${S
     const ip3 = freshIp(), nobody = await Browser.make(), rs: string[] = []
     for (let i = 0; i <= LIMITS.ip.retire; i++) rs.push(err(await retire(rita, nobody, { ip: ip3 })))
     ok(LIMITS.ip.retire === 20 && rs.slice(0, -1).every((x) => x === '403 unknown') && rs[rs.length - 1] === '429 rate-limited', `retirement #${LIMITS.ip.retire + 1} for one address from one IP → 429 (${rs[0]} … ${rs[rs.length - 1]})`)
+  }
+  {
+    // 957 C2 again: the per-IP-per-address count runs only AFTER the challenge opens. A self-signed wret. over a nonce
+    // the directory never issued must not spend the owner's budget at that IP (else anyone can lock an address out).
+    const rhea = 'rhea-m1@example.com', RA = await Authn.make(), RX = await Browser.make()
+    await setup(rhea, RA)
+    const ex = await enrol(rhea, RX, RA)
+    const ip = freshIp(), junk: string[] = []
+    for (let i = 0; i <= LIMITS.ip.retire; i++) {
+      const forged = await Browser.make()
+      junk.push(err(await retire(rhea, forged, { ip, nonce: b64uEnc(crypto.getRandomValues(new Uint8Array(40))) })))
+    }
+    ok(ex.status === 200 && junk.length === LIMITS.ip.retire + 1 && junk.every((x) => x === '400 nonce'), `${junk.length} self-signed retirements over unissued nonces from one IP → 400 nonce each (${junk[0]} … ${junk[junk.length - 1]})`)
+    const own = await retire(rhea, RX, { ip })
+    ok(own.status === 200 && own.j.ok === true, `then the owner's own retirement from that IP → 200, never 429 (${err(own)})`)
+    const after = await checkin(rhea, RX)
+    ok(after.status === 403 && after.j.error === 'retired', `positive control: that retirement took (check-in → ${err(after)})`)
   }
 
   // R7/R8: the kernel's check, before the challenge is spent

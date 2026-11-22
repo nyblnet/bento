@@ -186,6 +186,7 @@ const MUTANTS: Mutant[] = [
   { name: 'signout: the challenge not spent', file: 'browsers.js',
     from: "  if (a.op === 'browserSignout') {\n    if (!(await spend())) return out(400, { error: 'nonce' })\n", to: "  if (a.op === 'browserSignout') {\n" },
   { name: 'signout: any time in the text', file: 'browsers.js', from: "    if (a.at !== a.issued) return out(400, { error: 'nonce' }) // the text's time is the challenge's\n", to: '' },
+  { name: 'signout: a time later than the challenge accepted', file: 'browsers.js', from: "    if (a.at !== a.issued) return out(400, { error: 'nonce' }) // the text's time is the challenge's\n", to: "    if (a.at < a.issued) return out(400, { error: 'nonce' })\n" },
   { name: 'signout: the time checked before the challenge is spent', file: 'browsers.js',
     from: "    if (!(await spend())) return out(400, { error: 'nonce' })\n    if (a.at !== a.issued) return out(400, { error: 'nonce' }) // the text's time is the challenge's\n",
     to: "    if (a.at !== a.issued) return out(400, { error: 'nonce' })\n    if (!(await spend())) return out(400, { error: 'nonce' })\n" },
@@ -555,6 +556,9 @@ const MUTANTS: Mutant[] = [
     from: "    if (!(await ledger(ip, 'lookup'))) return json(429, { error: 'rate-limited' })\n", to: '' },
   { name: 'wret R15: the challenge not limited per address', file: 'retire.js',
     from: "    if (!(await ledger(`${ip}\\n${scope}`, 'challengeAddrRetire'))) return json(429, { error: 'rate-limited' })\n", to: '' },
+  { name: 'wret M1 (957 C2): the retirement counted before the challenge opens', file: 'retire.js',
+    from: "  const ch = await openBrowser(scope, v.value.dirNonce)\n  if (!ch) return json(400, { error: 'nonce' })\n  // counted once the signature verifies and the challenge is ours, per IP per address (as a check-in is)\n  if (!(await ledger(`${ip}\\n${scope}`, 'retire'))) return json(429, { error: 'rate-limited' })\n",
+    to: "  if (!(await ledger(`${ip}\\n${scope}`, 'retire'))) return json(429, { error: 'rate-limited' })\n  const ch = await openBrowser(scope, v.value.dirNonce)\n  if (!ch) return json(400, { error: 'nonce' })\n" },
   { name: 'wret R15: the retirement not limited per address', file: 'retire.js',
     from: "  if (!(await ledger(`${ip}\\n${scope}`, 'retire'))) return json(429, { error: 'rate-limited' })\n", to: '' },
 ]
