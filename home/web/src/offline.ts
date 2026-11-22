@@ -91,15 +91,29 @@ async function cleanUp() {
   try { for (const k of await caches.keys()) await caches.delete(k) } catch { /* no caches API */ }
 }
 
+type SwPolicy = { createScriptURL(u: string): unknown }
+type TT = { createPolicy(n: string, p: { createScriptURL(u: string): string }): SwPolicy }
+
+/**
+ * The Trusted Types policy, made NOW, while this script is the only code the
+ * page has run, before the status check awaits anything. The library's CSP
+ * allows one policy by this name, once: made later, any code that ran during
+ * the (up to 8 s) status check could take the name first and stop the worker
+ * from registering (security ruling 954, C6). It passes only the worker's URL.
+ */
+const SW_POLICY: SwPolicy | null | 'failed' = (() => {
+  const tt = (globalThis as { trustedTypes?: TT }).trustedTypes
+  if (!tt) return null
+  try { return tt.createPolicy('bento-sw', { createScriptURL: (u) => { if (u !== SW_PATH) throw new TypeError('not the library worker'); return u } }) } catch { return 'failed' }
+})()
+
 function register() {
   const sw = navigator.serviceWorker
   if (!sw) { mark('data-bento-sw', 'unsupported'); return }
   // Trusted Types: this page's CSP allows ONE policy, by name, and it passes only the worker's URL.
-  const tt = (globalThis as { trustedTypes?: { createPolicy(n: string, p: { createScriptURL(u: string): string }): { createScriptURL(u: string): unknown } } }).trustedTypes
   let url: unknown = SW_PATH
-  try {
-    if (tt) url = tt.createPolicy('bento-sw', { createScriptURL: (u) => { if (u !== SW_PATH) throw new TypeError('not the library worker'); return u } }).createScriptURL(SW_PATH)
-  } catch { mark('data-bento-sw', 'failed'); return }
+  if (SW_POLICY === 'failed') { mark('data-bento-sw', 'failed'); return }
+  try { if (SW_POLICY) url = SW_POLICY.createScriptURL(SW_PATH) } catch { mark('data-bento-sw', 'failed'); return }
   sw.register(url as string, { scope: '/', updateViaCache: 'none' }).then(
     () => mark('data-bento-sw', 'registered'),
     () => mark('data-bento-sw', 'failed'),
@@ -107,14 +121,42 @@ function register() {
 }
 
 /**
+ * Every tab of this library hears a stop. A tab that finds its build
+ * withdrawn (or its status untrustworthy) tells the others, and each one
+ * running the SAME build stops too, at once: without this, a second tab kept
+ * running the withdrawn build until it was reloaded (security ruling 954, C6),
+ * and with it bento/id's hourly check-ins. A tab of another build ignores it.
+ */
+const STOP_CHANNEL = 'bento-home-stop'
+type Stop = { t: 'stop'; build: string; status: 'withdrawn' | 'refused' }
+function stopChannel(): BroadcastChannel | null {
+  try { return typeof BroadcastChannel === 'function' ? new BroadcastChannel(STOP_CHANNEL) : null } catch { return null }
+}
+
+/**
  * Check the status, then (unless withdrawn) register the worker. Resolves
- * true when documents may open. `onStop` takes over the page when not.
+ * true when documents may open. `onStop` takes over the page when not, and
+ * also when another tab of this build is stopped later (it runs at most once).
  */
 export function startOffline(opts: { releaseBase: string; key: Jwk; onStop: (status: 'withdrawn' | 'refused') => void }): Promise<boolean> {
   mark('data-bento-status', 'checking')
+  const channel = stopChannel()
+  let stopped = false
+  const stop = (status: 'withdrawn' | 'refused') => {
+    if (stopped) return
+    stopped = true
+    opts.onStop(status)
+  }
   return (async () => {
     const build = await buildId()
     mark('data-bento-build', build)
+    if (channel) channel.onmessage = (e: MessageEvent) => {
+      const d = e.data as Partial<Stop> | null
+      if (!d || d.t !== 'stop' || d.build !== build || (d.status !== 'withdrawn' && d.status !== 'refused')) return
+      if (d.status === 'withdrawn') keepGone(build)
+      stop(d.status)
+      mark('data-bento-status', d.status)
+    }
     let status: Status = 'unreachable'
     let raw: string | null = null
     // seen withdrawn before: stop now, whatever served this copy (an HTTP cache offline, a stale edge)
@@ -134,11 +176,14 @@ export function startOffline(opts: { releaseBase: string; key: Jwk; onStop: (sta
     }
     if (status === 'withdrawn' || status === 'refused') {
       if (status === 'withdrawn') keepGone(build)
-      opts.onStop(status)
+      try { channel?.postMessage({ t: 'stop', build, status } satisfies Stop) } catch { /* no other tab to tell */ }
+      stop(status)
       await cleanUp()
       mark('data-bento-status', status)
       return false
     }
+    // a stop from another tab may have arrived while this one was checking
+    if (stopped) return false
     mark('data-bento-status', status)
     register()
     return true

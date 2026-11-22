@@ -15339,3 +15339,43 @@ serving an older shell.
   runs the released derivation over what this build would save. The
   starter-deck row is the positive control (87 lost in the old form). Four
   mutants turn rows red.
+
+## 2026-11-22 — bento/home: production identity needs the kernel's pinned keys; the kill switch comes before bento/id
+
+- **The production identity seam.** `home/web/build.mjs --identity` no longer
+  needs `--dev`. A production identity build takes its directory keys from
+  `kernel/src/directory-keys.ts` (`DIRECTORY_KEYS`) and from nowhere else,
+  and only for the library at `https://home.bento.page`. While the kernel pins
+  no keys (today: the module does not exist yet), it is refused with "no
+  pinned directory keys". `--directory-keys` stays a development seam, refused
+  in production with or without `--identity`. `build.json` records the key
+  source and the kids. The unconditional "`--identity` is development only"
+  line was replaced by those two requirements, not deleted.
+- **A release opts in explicitly.** `release.mjs --home-web-identity` (with
+  `--home-web`) passes `--identity`. Without it a release builds no identity,
+  and with it a tree whose kernel pins no keys is refused before anything is
+  signed.
+- **One set of origins.** `scripts/lib/id-origins.mjs` holds the rp id, the
+  directory, the sign-in host, the library and the apex. bento/home's agent and
+  build import it. The copies that cannot import it (the sign-in host's static
+  files and worker, the directory worker, the kernel's roster rules, the release
+  tooling, the hosting rules, the rigs' stubs) keep their literals, and
+  `scripts/test-id-origins.mjs` pins each one. A missing copy fails, it never
+  skips.
+- **The kill switch gates bento/id.** bento/id starts only after the status
+  check answers `current` or `unreachable`. A withdrawn or untrusted build
+  stops bento/id with the page. The tab that sees the stop tells the other
+  tabs of the same build over a `BroadcastChannel`, and they stop too. The
+  worker's Trusted Types policy is made at startup, before the status await.
+  Keys survive a withdrawal.
+- **Sign-outs show across tabs at once.** Every write to the agent's store is
+  announced to the other tabs, and so is a tab becoming visible again. Each
+  tab then re-reads the store, so a signed-out address no longer stays on
+  screen until the next hourly check-in.
+- **Guards.** New rows in `scripts/test-home-web-build.mjs` cover the
+  production identity build. They run in a scratch copy of the tree whose
+  kernel pins test keys, because the real module waits on the keys being
+  minted. New rows in `scripts/test-home-web-identity.mjs` cover the gating,
+  the cross-tab stop and notice, the hourly check-in and the hosting check.
+  `scripts/test-id-origins.mjs` covers the origins. Each new rule has a mutant
+  that turns its row red.

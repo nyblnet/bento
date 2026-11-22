@@ -55,9 +55,15 @@ const say = (id: string, text: string) => { $(id).textContent = text }
  * The kill switch answers before any file opens. When this build is withdrawn
  * (or the answer cannot be trusted) the page stops, with a fixed message.
  */
-const ready = startOffline({
+/** Whatever else runs in this page and must stop with it (bento/id: main-identity.ts). */
+const stopHooks: (() => void)[] = []
+/** Run `f` when this page stops: its build withdrawn, its status untrusted, here or in another tab. */
+export const onStopped = (f: () => void) => { stopHooks.push(f) }
+
+export const ready = startOffline({
   releaseBase: RELEASE_BASE, key: KEY,
   onStop: (why) => {
+    for (const f of stopHooks) { try { f() } catch { /* one hook never keeps the page from stopping */ } }
     closeDocument()
     say('withdrawn-text', why === 'withdrawn'
       ? 'This version of bento/home has been withdrawn. It has stopped, and removed itself from this browser. Reload to get the current version. Your files were not changed.'

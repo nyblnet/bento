@@ -24,13 +24,18 @@
 //   --key <jwk.json>         TEST SEAM, --dev only: verify with this public key
 //                            instead of the release key. Rigs only.
 //   --check                  run every check below and stop: nothing is written.
-//   --identity               --dev only: add the bento/id agent (src/identity.ts):
-//                            the library then also talks to the directory and
-//                            opens the sign-in host. Refused in a production
-//                            build until the directory's keys are pinned for
-//                            release. It needs
+//   --identity               add the bento/id agent (src/identity.ts): the
+//                            library then also talks to the directory and
+//                            opens the sign-in host. A PRODUCTION identity
+//                            build carries the kernel's pinned directory keys
+//                            (kernel/src/directory-keys.ts) and nothing else,
+//                            and only for the library at https://home.bento.page:
+//                            without pinned keys it is refused ("no pinned
+//                            directory keys"). A --dev build may instead pass
 //   --directory-keys <json>  --dev only: the directory's public keys, {"<kid>":
 //                            "<raw P-256 point, base64url>"}, pinned into the build.
+//                            Refused in a production build, with or without
+//                            --identity: a production key comes from the kernel.
 //
 // Every bundled history must verify against the key the build carries, be for
 // an app the library knows, and be the only one for its app; otherwise the
@@ -60,6 +65,9 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { libraryPolicyParts, writeOffline, SW_PATH } from './offline.mjs'
+// bento/id's origins, written once: the agent (src/identity.ts) bundles the same module
+import { DIRECTORY_ORIGIN, HOME_ORIGIN } from '../../scripts/lib/id-origins.mjs'
+import { pinnedDirectoryKeys, directoryKeysShape, DIRECTORY_KEYS_MODULE } from '../../scripts/lib/directory-keys-pin.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(here, '../..')
@@ -76,7 +84,7 @@ const origin = (u, what) => {
   if (x.origin !== u.replace(/\/$/, '')) die(`${what} must be an origin (scheme, host, port), not ${u}`)
   return x.origin
 }
-const libraryOrigin = origin(opt('library-origin', 'https://home.bento.page'), '--library-origin')
+const libraryOrigin = origin(opt('library-origin', HOME_ORIGIN), '--library-origin')
 const frameArg = opt('frame-origin')
 if (!frameArg) die('--frame-origin is required (the frame site is a separate domain; it is the maintainer\'s to choose)')
 const frameOrigin = origin(frameArg, '--frame-origin')
@@ -131,20 +139,29 @@ if (keyFile) {
   }
 }
 
-// --- identity (bento/id): --dev only until the directory's keys are pinned --------
+// --- identity (bento/id) ------------------------------------------------------------
+// A production identity build pins the KERNEL's directory keys and only those,
+// for the library at its one origin. --directory-keys (a file) stays a
+// development seam: refused in production, with or without --identity.
 const identity = args.includes('--identity')
-const DIRECTORY_ORIGIN = 'https://id.bento.page'
 let directoryKeys = null
-if (identity) devOnly('--identity adds the bento/id agent, whose directory keys are not pinned for release')
+let directoryKeySource = null
 if (opt('directory-keys')) devOnly('--directory-keys pins directory keys that are not the released ones')
+if (identity && !dev && libraryOrigin !== HOME_ORIGIN) die(`--identity: a production identity build is for the library at ${HOME_ORIGIN} only, not ${libraryOrigin}`)
 if (identity) {
   const f = opt('directory-keys')
-  if (!f) die('--identity needs --directory-keys <json> (the directory keys the build pins)')
-  directoryKeys = JSON.parse(fs.readFileSync(f, 'utf8'))
-  const ok = directoryKeys && typeof directoryKeys === 'object' && !Array.isArray(directoryKeys) && Object.keys(directoryKeys).length > 0 &&
-    Object.entries(directoryKeys).every(([k, v]) => /^[a-z0-9][a-z0-9-]{0,62}$/.test(k) && typeof v === 'string' && /^[A-Za-z0-9_-]{87}$/.test(v))
-  if (!ok) die(`${f} is not {"<kid>": "<raw P-256 point, base64url>"}`)
-  console.warn('home/web build: IDENTITY build (bento/id agent, --dev): development only until the directory keys are pinned for release')
+  if (f) {
+    directoryKeys = JSON.parse(fs.readFileSync(f, 'utf8'))
+    if (!directoryKeysShape(directoryKeys)) die(`${f} is not {"<kid>": "<raw P-256 point, base64url>"}`)
+    directoryKeySource = 'file'
+    console.warn('home/web build: IDENTITY build with a --directory-keys file (--dev): development only')
+  } else {
+    let pinned
+    try { pinned = await pinnedDirectoryKeys(root) } catch (e) { die(`--identity: ${e.message}`) }
+    if (!pinned.keys) die(`--identity: no pinned directory keys (${pinned.none}). A production identity build carries only the kernel's pinned keys${dev ? '; a development build may pass --directory-keys <json>' : ''}`)
+    directoryKeys = pinned.keys
+    directoryKeySource = DIRECTORY_KEYS_MODULE
+  }
 } else if (opt('directory-keys')) die('--directory-keys needs --identity')
 
 const esbuild = process.env.ESBUILD || path.join(root, 'slides/node_modules/.bin/esbuild')
@@ -309,6 +326,8 @@ fs.writeFileSync(path.join(out, 'frame/_headers'),
 const historyBytes = historyTexts.reduce((n, t) => n + Buffer.byteLength(JSON.stringify(t)), 0)
 const info = {
   libraryOrigin, frameOrigin, releaseBase, dev, testKey: !!keyFile, mutant: mutant ? [].concat(mutant).map((m) => m.from).join(' + ') : null, identity,
+  // where the pinned directory keys came from (the kernel's module, or a --dev file) and their kids
+  ...(identity ? { directoryKeySource, directoryKids: Object.keys(directoryKeys) } : {}),
   histories: histories.map((h) => path.relative(root, h)),
   bytes: {
     library: Buffer.byteLength(libHtml),

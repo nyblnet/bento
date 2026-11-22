@@ -50,7 +50,7 @@ jobs:
           LABELLED: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
           PR: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
-        run: scripts/ci/zone-gate '^(server/|scripts/test-(signin|directory)-|\.github/workflows/ci-share\.yml$|scripts/ci/zone-gate$)'
+        run: scripts/ci/zone-gate '^(server/|home/web/|scripts/test-(signin|directory)-|scripts/test-home-web-identity|scripts/test-id-origins|scripts/check-home-web-hosting|scripts/lib/(id-|directory-keys-pin)|\.github/workflows/ci-share\.yml$|scripts/ci/zone-gate$)'
 
   share-directory-mutants:
     needs: share-gate
@@ -178,8 +178,11 @@ jobs:
     # by W renews the 24-hour countersign; "Confirm it's you" a day before the
     # 7-day cap; incident records and revocations end the sign-in; only the
     # sign-in host's own window is heard; the policy allows the release channel
-    # and the directory and requires Trusted Types. Each rule has a mutant that
-    # turns its row red.
+    # and the directory and requires Trusted Types. bento/id starts only once
+    # the kill switch has answered, stops with the page (in every tab of the
+    # build), and a sign-out in one tab shows in the others at once. Each rule
+    # has a mutant that turns its row red. Before them: bento/id's origins are
+    # one set (scripts/lib/id-origins.mjs), every copy pinned to it.
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -195,6 +198,8 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
           "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
           echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: bento/id origins are one set (scripts/lib/id-origins.mjs), every copy pinned, with mutants
+        run: node scripts/test-id-origins.mjs --mutants
       - name: bento/id agent in bento/home, Playwright headless shell
         run: node scripts/test-home-web-identity.mjs
       - name: bento/id agent in bento/home, Google Chrome

@@ -32,6 +32,12 @@ export const LIBRARY_ORIGIN = 'https://home.bento.page'
  *                            release key is refused (homeWebKey)
  *   --home-web-first         the very first bento/home release list: there is
  *                            no published one to build on (servedListCheck)
+ *   --home-web-identity      build the library WITH bento/id (build.mjs
+ *                            --identity). Explicit, never a default: without it
+ *                            the build has no identity, as before. It needs
+ *                            the kernel's pinned directory keys, and is refused
+ *                            before anything is signed when there are none
+ *                            (identityCheck)
  */
 export function homeWebOptions({ args, opt, site }) {
   const asked = args.includes('--home-web')
@@ -39,15 +45,16 @@ export function homeWebOptions({ args, opt, site }) {
   const dev = args.includes('--home-web-dev')
   const outArg = opt('home-web-out', null)
   const first = args.includes('--home-web-first')
+  const identity = args.includes('--home-web-identity')
   if (!asked) {
-    if (frameOrigin || dev || outArg || first) throw new Error('--frame-origin, --home-web-dev, --home-web-out and --home-web-first only mean something with --home-web')
+    if (frameOrigin || dev || outArg || first || identity) throw new Error('--frame-origin, --home-web-dev, --home-web-out, --home-web-first and --home-web-identity only mean something with --home-web')
     return null
   }
   if (!frameOrigin || frameOrigin.startsWith('--')) {
     throw new Error('--home-web needs --frame-origin <url>: the frame site is a separate domain, and it is the maintainer\'s to choose (there is no default)')
   }
   if (outArg !== null && outArg.startsWith('--')) throw new Error('--home-web-out needs a folder')
-  return { frameOrigin, libraryOrigin: LIBRARY_ORIGIN, out: resolve(outArg ?? `${site}.home-web`), dev, first, devKey: null }
+  return { frameOrigin, libraryOrigin: LIBRARY_ORIGIN, out: resolve(outArg ?? `${site}.home-web`), dev, first, identity, devKey: null }
 }
 
 /** A folder's identity on disk: device and inode, whatever path text reaches it. */
@@ -161,7 +168,21 @@ export function homeWebBuildArgs({ root, opts, histories, devKeyFile, check = fa
   for (const h of histories) a.push('--history', h.file)
   if (opts.dev) a.push('--dev')
   if (devKeyFile) a.push('--key', devKeyFile)
+  if (opts.identity) a.push('--identity')
   return a
+}
+
+/**
+ * --home-web-identity, before anything is signed: the kernel must pin the
+ * directory keys the build will carry (home/web/build.mjs takes no other key
+ * for a release). Throws with the message to print; answers the kids.
+ */
+export async function identityCheck({ root, opts }) {
+  if (!opts?.identity) return null
+  const { pinnedDirectoryKeys } = await import('./lib/directory-keys-pin.mjs')
+  const pinned = await pinnedDirectoryKeys(root)
+  if (!pinned.keys) throw new Error(`--home-web-identity: no pinned directory keys (${pinned.none}): bento/home cannot carry bento/id until the kernel pins the directory's keys`)
+  return Object.keys(pinned.keys)
 }
 
 // --- the tripwire's release list ----------------------------------------------------

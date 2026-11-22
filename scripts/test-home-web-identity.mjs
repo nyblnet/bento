@@ -29,6 +29,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { siteHandler } from '../server/signin/local.mjs'
 import { parseHeaders } from '../home/web/serve.mjs'
+import { homeWebHostingProblems } from './check-home-web-hosting.mjs'
 import { directoryStub, HOME, SIGNIN as S } from './lib/id-web-directory-stub.mjs'
 import { K, chainOf, ADDRESS, T, H as HOUR, assertion as softAssertion } from './lib/roster-build.ts'
 import { verifyRosterChain, ROSTER_RP_ID, ROSTER_WEB_ORIGINS } from '../kernel/src/roster.ts'
@@ -82,10 +83,10 @@ function build(name, edits) {
   return out
 }
 /** The built page with its policy edited (the meta CSP and the header alike). */
-function distMutant(from, name, edit) {
+function distMutant(from, name, edit, files = ['library/index.html', 'library/_headers']) {
   const out = join(tmp, name)
   cpSync(from, out, { recursive: true })
-  for (const f of ['library/index.html', 'library/_headers']) {
+  for (const f of files) {
     const p = join(out, f), t = readFileSync(p, 'utf8'), e = edit(t)
     if (e === t) throw new Error(`dist mutant ${name}: the edit does not apply to ${f}`)
     writeFileSync(p, e)
@@ -120,9 +121,11 @@ const FORGE = `<!doctype html><meta charset=utf-8><title>forge</title><script>
 </script>`
 
 /** A fresh browser context: every origin routed, the clock at T0, the sign-in host's account set. */
-async function session(dist, { sEdit = null, account = ADDRESS } = {}) {
+async function session(dist, { sEdit = null, account = ADDRESS, status = null, settle = true } = {}) {
   const ctx = await browser.newContext()
-  const st = { ctx, base: T0, setAt: Date.now(), wa: [], attackerHits: [], auth: new Map(), page: null }
+  // status: the kill switch's answer (null: 404, unanswered; 'hold': not answered until st.release(); else a 200 body)
+  const st = { ctx, base: T0, setAt: Date.now(), wa: [], attackerHits: [], auth: new Map(), page: null, status, held: [], dirHits: [] }
+  st.release = () => { for (const r of st.held.splice(0)) r.fulfill({ status: 404, body: '' }).catch(() => {}) }
   await ctx.clock.install({ time: T0 })
   st.now = () => st.base + (Date.now() - st.setAt)
   st.setTime = async (t) => { st.base = t; st.setAt = Date.now(); await ctx.clock.setSystemTime(t) }
@@ -138,7 +141,11 @@ async function session(dist, { sEdit = null, account = ADDRESS } = {}) {
   await ctx.routeWebSocket(/.*/, (ws) => { sockets.push(ws.url()); ws.close() })
   await ctx.route('**/*', (route) => { refused.push(route.request().url()); return route.abort() })
   // the kill switch's one question per load (home/web/src/offline.ts): unanswered, so the library carries on
-  await ctx.route(STATUS_URL, (route) => { statusAsked.push(route.request().url()); return route.fulfill({ status: 404, body: '' }) })
+  await ctx.route(STATUS_URL, (route) => {
+    statusAsked.push(route.request().url())
+    if (st.status === 'hold') { st.held.push(route); return }
+    return st.status === null ? route.fulfill({ status: 404, body: '' }) : route.fulfill({ status: 200, headers: { 'content-type': 'application/json' }, body: st.status })
+  })
   await ctx.route(`${HOME}/**`, (route) => {
     const p = new URL(route.request().url()).pathname
     if (p !== '/' && p !== '/index.html') return route.fulfill({ status: 404, body: '' })
@@ -152,6 +159,7 @@ async function session(dist, { sEdit = null, account = ADDRESS } = {}) {
   })
   await ctx.route(`${DIR}/**`, async (route) => {
     const r = route.request()
+    st.dirHits.push(new URL(r.url()).pathname)
     const a = await st.dir.handle({ method: r.method(), path: new URL(r.url()).pathname, origin: r.headers().origin, body: r.postData() })
     return route.fulfill({ status: a.status, headers: a.headers, body: a.body })
   })
@@ -181,8 +189,8 @@ async function session(dist, { sEdit = null, account = ADDRESS } = {}) {
   })
   await setAccount(st, account)
   st.page = await ctx.newPage()
-  await st.page.goto(HOME + '/')
-  await settled(st)
+  await st.page.goto(HOME + '/', settle ? {} : { waitUntil: 'domcontentloaded' })
+  if (settle) await settled(st)
   return st
 }
 const close = (st) => st.ctx.close()
@@ -765,6 +773,150 @@ const ROWS = {
     return out
   },
 
+  // ---- the kill switch gates bento/id (security ruling 954, C6) ----------------------------------
+  async 'a build the kill switch stops shows no sign-in line and checks in with no one'(dist) {
+    const st = await session(dist)
+    await ceremony(st)
+    const checkins = () => st.dirHits.filter((p) => p === '/v1/home/checkin').length
+    // positive control: under an unanswered status (404) a reload checks in
+    let n = checkins()
+    const live = await reload(st)
+    const control = checkins() - n
+    const build = await st.page.evaluate(() => document.documentElement.getAttribute('data-bento-build'))
+    // while the status has not answered: nothing of bento/id runs
+    st.status = 'hold'
+    n = st.dirHits.length
+    await st.page.reload({ waitUntil: 'domcontentloaded' })
+    await sleep(1500)
+    const pending = await st.page.evaluate(() => ({ status: document.documentElement.getAttribute('data-bento-status'), hidden: document.getElementById('id-box').hidden }))
+    pending.hits = st.dirHits.length - n
+    st.status = null
+    st.release()
+    const resumed = await settled(st)
+    // a status the library cannot trust (a 200 that is not a signed envelope): it stops, fail closed
+    st.status = 'not a signed envelope'
+    n = st.dirHits.length
+    await st.page.reload()
+    const refused = await until(() => st.page.evaluate(() => document.documentElement.getAttribute('data-bento-status') === 'refused' && document.body.classList.contains('stopped')))
+    await sleep(1500)
+    const r1 = { box: await box(st), hits: st.dirHits.length - n }
+    // a build this browser saw withdrawn, served again while the status cannot be fetched: stops without asking
+    st.status = null
+    await st.page.evaluate((b) => localStorage.setItem('bento-home-withdrawn', JSON.stringify([b])), build)
+    n = st.dirHits.length
+    await st.page.reload()
+    const withdrawn = await until(() => st.page.evaluate(() => document.documentElement.getAttribute('data-bento-status') === 'withdrawn'))
+    await sleep(1500)
+    const r2 = { box: await box(st), hits: st.dirHits.length - n }
+    const h = await held(st)
+    await close(st)
+    return [
+      [live.state === 'signed-in' && control === 1, `positive control: with the status unanswered the library runs bento/id and checks in on load (${live.state}, ${control} check-in)`],
+      [pending.status === 'checking' && pending.hidden && pending.hits === 0 && resumed?.state === 'signed-in',
+        `while the status is unanswered, no sign-in line and 0 requests to the directory; once it answers, bento/id runs (${pending.status}, hidden ${pending.hidden}, ${pending.hits} requests, then ${resumed?.state})`],
+      [refused && r1.box.hidden && r1.hits === 0, `an untrusted status: the page stops, the sign-in line stays hidden, 0 requests to the directory (${refused ? 'stopped' : 'NOT stopped'}, hidden ${r1.box.hidden}, ${r1.hits} requests)`],
+      [withdrawn && r2.box.hidden && r2.hits === 0, `a build seen withdrawn: stopped, hidden, 0 requests to the directory (${withdrawn ? 'stopped' : 'NOT stopped'}, hidden ${r2.box.hidden}, ${r2.hits} requests)`],
+      [!!h.held && h.held.address === ADDRESS, "the keys survive a withdrawal (withdrawal is about code; deleting them would be data loss)"],
+    ]
+  },
+
+  async 'a stop in one tab stops bento/id in every other tab of the same build'(dist) {
+    const out = []
+    for (const stop of [false, true]) {
+      const st = await session(dist)
+      await ceremony(st)
+      const checkins = () => st.dirHits.filter((p) => p === '/v1/home/checkin').length
+      // tab 2 opens the same build and (or not) finds it untrusted
+      if (stop) st.status = 'not a signed envelope'
+      const two = await st.ctx.newPage()
+      await two.goto(HOME + '/')
+      const t0 = Date.now()
+      const seen2 = []
+      const twoStopped = await until(() => two.evaluate(() => document.documentElement.getAttribute('data-bento-status')).then((v) => { seen2.push(v); return v === (stop ? 'refused' : 'unreachable') }))
+      if (!twoStopped) console.log('  note  tab 2 status seen:', seen2.slice(0, 3), seen2.length, seen2.at(-1))
+      const oneHidden = await until(() => st.page.evaluate(() => document.getElementById('id-box').hidden), 1000)
+      const ms = Date.now() - t0
+      const oneStatus = await st.page.evaluate(() => [document.documentElement.getAttribute('data-bento-status'), document.body.classList.contains('stopped')])
+      await sleep(300)
+      const n = checkins()
+      await st.ctx.clock.fastForward(HOUR + 60_000)
+      await sleep(1500)
+      const hourly = checkins() - n
+      const twoStatus = await two.evaluate(() => document.documentElement.getAttribute('data-bento-status')).catch((e) => e.message.slice(0, 60))
+      await close(st)
+      if (stop) {
+        out.push([twoStopped && !!oneHidden && oneStatus[0] === 'refused' && oneStatus[1], `tab 2 stops (untrusted status), and tab 1 stops too, its sign-in line hidden within 1 s (${twoStopped}, tab 1 ${oneStatus.join('/')}, ${oneHidden ? ms + ' ms' : 'still shown'})`])
+        out.push([hourly === 0, `tab 1 makes no hourly check-in after the stop (${hourly})`])
+      } else {
+        out.push([twoStopped && !oneHidden && oneStatus[0] !== 'refused' && hourly >= 1, `positive control: when tab 2 does not stop, tab 1 runs on and the tabs check in on the hour (tab 2 ${twoStatus}, tab 1 ${oneStatus.join('/')} hidden ${oneHidden}, ${hourly} check-ins)`])
+      }
+    }
+    return out
+  },
+
+  async "the worker's Trusted Types policy is made at startup, before the status answers"(dist) {
+    const st = await session(dist, { status: 'hold', settle: false })
+    await until(() => st.page.evaluate(() => document.documentElement.getAttribute('data-bento-status') === 'checking'))
+    const r = await st.page.evaluate(() => {
+      const status = document.documentElement.getAttribute('data-bento-status')
+      try { trustedTypes.createPolicy('bento-sw', { createScriptURL: (u) => u }); return { status, take: 'created' } } catch (e) { return { status, take: e.name } }
+    })
+    const boxWhileChecking = await st.page.evaluate(() => document.getElementById('id-box').hidden)
+    st.release()
+    const after = await until(() => st.page.evaluate(() => { const v = document.documentElement.getAttribute('data-bento-status'); return v !== 'checking' && v }), 3000)
+    const shown = await settled(st)
+    await close(st)
+    return [
+      [r.status === 'checking', `positive control: the status had not answered yet (${r.status})`],
+      [r.take === 'TypeError', `code that runs while the status is pending cannot take the name bento-sw (${r.take})`],
+      [boxWhileChecking, 'bento/id shows nothing while the kill switch has not answered'],
+      [after === 'unreachable', `the held status then answers (404: unreachable) (${after})`],
+      [!!shown && shown.state === 'none', `and only then does bento/id start (${shown?.state})`],
+    ]
+  },
+
+  async 'another tab signing out shows here at once, with no check-in'(dist) {
+    const st = await session(dist)
+    await ceremony(st)
+    const b = await st.ctx.newPage()
+    await b.goto(HOME + '/')
+    const bIn = await until(async () => { const x = await b.evaluate(() => [document.getElementById('id-box').dataset.ready, document.getElementById('id-box').dataset.state]); return x[0] === '1' && x[1] })
+    await sleep(300)
+    const n = st.dirHits.length
+    await b.click('#id-out')
+    const t0 = Date.now()
+    const aNone = await until(async () => (await box(st)).state === 'none', 1000)
+    const ms = Date.now() - t0
+    const hits = st.dirHits.length - n
+    const h = await held(st)
+    await close(st)
+    return [
+      [bIn === 'signed-in', `positive control: tab B opens signed in (${bIn})`],
+      [!!aNone, `tab B signs out, and tab A shows signed out within 1 s (${aNone ? ms + ' ms' : 'still ' + (await Promise.resolve('signed in'))})`],
+      [hits === 0, `no request to the directory in between (${hits})`],
+      [!h.held, 'the store is empty'],
+    ]
+  },
+
+  async 'an open page checks in every hour'(dist) {
+    const st = await session(dist)
+    await ceremony(st)
+    const checkins = () => st.dirHits.filter((p) => p === '/v1/home/checkin').length
+    await sleep(300)
+    const n = checkins()
+    await st.ctx.clock.fastForward(HOUR + 60_000)
+    const one = await until(async () => checkins() - n >= 1 && checkins() - n, 3000)
+    await sleep(300)
+    await st.ctx.clock.fastForward(HOUR)
+    const two = await until(async () => checkins() - n >= 2 && checkins() - n, 3000)
+    const s = await box(st)
+    await close(st)
+    return [
+      [one === 1, `an hour later, one check-in (${one || 0})`],
+      [two === 2 && s.state === 'signed-in', `two hours later, two, still signed in (${two || 0}, ${s.state})`],
+    ]
+  },
+
   async 'the policy: the release channel and the directory only, Trusted Types required'(dist) {
     const info = JSON.parse(readFileSync(join(dist, 'build.json'), 'utf8'))
     const hdr = readFileSync(join(dist, 'library/_headers'), 'utf8')
@@ -773,6 +925,15 @@ const ROWS = {
     await sleep(200)
     const tt = await st.page.evaluate(() => { try { document.getElementById('id-text').innerHTML = '<b>x</b>'; return 'assigned' } catch (e) { return e.name } })
     const otherPolicy = await st.page.evaluate(() => { try { trustedTypes.createPolicy('not-the-worker', {}); return 'created' } catch (e) { return e.name } })
+    // an injected inline script never runs; the page's own one did (it set the kill switch's status)
+    const inj = await st.page.evaluate(async () => {
+      const own = document.documentElement.getAttribute('data-bento-status')
+      let how = 'appended'
+      try { const sc = document.createElement('script'); sc.textContent = 'window.__injected = 1'; document.body.append(sc) } catch (e) { how = e.name }
+      await new Promise((r) => setTimeout(r, 100))
+      return { own, how, ran: window.__injected === 1 }
+    })
+    const hosting = homeWebHostingProblems(dist)
     await close(st)
     return [
       [/connect-src https:\/\/bento\.page\/releases\/ https:\/\/id\.bento\.page;/.test(info.libraryPolicy) && hdr.includes('connect-src https://bento.page/releases/ https://id.bento.page;'),
@@ -783,6 +944,8 @@ const ROWS = {
       [sent === 'TypeError' && st.attackerHits.length === 0, `a request to another site is blocked before it leaves (${sent}, ${st.attackerHits.length} seen)`],
       [tt === 'TypeError', `a markup sink throws (${tt})`],
       [otherPolicy === 'TypeError', `no other Trusted Types policy can be made (${otherPolicy})`],
+      [!!inj.own && !inj.ran, `an injected inline script does not run (${inj.how}, ran ${inj.ran}); positive control: the page's own script ran (status ${inj.own})`],
+      [!!hosting && hosting.problems.length === 0 && hosting.paths.includes('/'), `check-home-web-hosting over the build: frame-ancestors 'none', COOP at most same-origin-allow-popups, one CSP, no webauthn file (${hosting ? hosting.problems.join('; ') || 'ok' : 'not a build'})`],
     ]
   },
 }
@@ -809,7 +972,7 @@ const MUTANTS = {
   'no-confirm-ahead': ["a day before the 7-day cap the library asks \"Confirm it's you\"", [
     A('identity.ts', 'export const CONFIRM_BEFORE_MS = 24 * HOUR', 'export const CONFIRM_BEFORE_MS = 0')]],
   'no-check-in-on-load': ['the countersign is renewed by a check-in signed by W', [
-    A('identity-ui.ts', '  render(await agent.load())\n  render(await agent.checkIn())\n', '  render(await agent.load())\n')]],
+    A('identity-ui.ts', '    render(await agent.checkIn())\n    if (stopped) return\n', '    if (stopped) return\n')]],
   'incident-ignored': ['an incident record covering the ceremony ends the sign-in; an earlier one does not', [
     A('identity.ts', "    if (r.incidents.some((i) => covers(i, h.ceremonyAt))) return (await this.end(h.address, 'incident', h.Wpub)) ? this.status() : this.load()\n", '')]],
   'revoked-ignored': ['a key the directory revoked ends the sign-in', [
@@ -843,8 +1006,27 @@ const MUTANTS = {
     A('identity.ts', '        g.onsuccess = () => { if ((g.result as Held | undefined)?.Wpub === expect) write(s); else done = false }\n', '        g.onsuccess = () => { if ((g.result as Held | undefined)?.Wpub === expect) write(s) }\n')]],
   'load-end-no-expect': ["two tabs on the browser's real IndexedDB: only the record a write was made from is replaced", [
     A('identity.ts', "else if (!(await this.end(held.address, 'invalid', held.Wpub))) return this.load()", "else if (!(await this.end(held.address, 'invalid', undefined as any))) return this.load()")]],
+  // the kill switch gates bento/id (954 C6) and the cross-tab notice (948 C5 residual)
+  'identity-before-status': ['a build the kill switch stops shows no sign-in line and checks in with no one', [
+    A('main-identity.ts', 'void ready.then((go) => { if (go) startIdentity() })', 'startIdentity()')]],
+  'identity-ignores-stop': ['a stop in one tab stops bento/id in every other tab of the same build', [
+    A('main-identity.ts', 'onStopped(stopIdentity)\n', 'void onStopped\n')]],
+  'no-stop-broadcast': ['a stop in one tab stops bento/id in every other tab of the same build', [
+    A('offline.ts', "      try { channel?.postMessage({ t: 'stop', build, status } satisfies Stop) } catch { /* no other tab to tell */ }\n", '')]],
+  'tt-policy-late': ["the worker's Trusted Types policy is made at startup, before the status answers", [
+    A('offline.ts', "const SW_POLICY: SwPolicy | null | 'failed' = (() => {", "let SW_POLICY: SwPolicy | null | 'failed' = null\nconst makePolicy = (): SwPolicy | null | 'failed' => {"),
+    A('offline.ts', "return u } }) } catch { return 'failed' }\n})()", "return u } }) } catch { return 'failed' }\n}"),
+    A('offline.ts', "  let url: unknown = SW_PATH\n", '  let url: unknown = SW_PATH\n  SW_POLICY = makePolicy()\n')]],
+  'no-cross-tab-notice': ['another tab signing out shows here at once, with no check-in', [
+    A('identity.ts', "const changed = () => { try { changes?.postMessage({ t: 'changed' }) } catch { /* no other tab to tell */ } }", 'const changed = () => {}')]],
+  'no-hourly-check-in': ['an open page checks in every hour', [
+    A('identity-ui.ts', '    timer = setInterval(async () => { if (!working && !stopped) render(await agent.checkIn()) }, CHECKIN_EVERY_MS)\n', '')]],
   'connect-any': ['the policy: the release channel and the directory only, Trusted Types required', 'dist',
     (t) => t.replace('connect-src https://bento.page/releases/ https://id.bento.page', 'connect-src *')],
+  'coop-same-origin': ['the policy: the release channel and the directory only, Trusted Types required', 'dist',
+    (t) => t.replace(/Cross-Origin-Opener-Policy: same-origin-allow-popups/g, 'Cross-Origin-Opener-Policy: same-origin'), ['library/_headers']],
+  'framing-dropped': ['the policy: the release channel and the directory only, Trusted Types required', 'dist',
+    (t) => t.replace(/; frame-ancestors 'none'/g, ''), ['library/_headers']],
   'tt-any-policy': ['the policy: the release channel and the directory only, Trusted Types required', 'dist',
     (t) => t.replaceAll('trusted-types bento-sw', "trusted-types bento-sw 'allow-duplicates' *")],
 }
@@ -869,9 +1051,9 @@ try {
   } else {
     const names = ONLY && !ONLY.startsWith('--') ? [ONLY] : Object.keys(MUTANTS)
     for (const m of names) {
-      const [row, edits, edit] = MUTANTS[m]
+      const [row, edits, edit, files] = MUTANTS[m]
       if (!ROWS[row]) { ok(false, `MUTANT ${m}: names no row (${row})`); continue }
-      const dist = edits === 'dist' ? distMutant(honest, `m-${m}`, edit) : build(`m-${m}`, edits)
+      const dist = edits === 'dist' ? distMutant(honest, `m-${m}`, edit, files) : build(`m-${m}`, edits)
       const r = await rowHolds(row, dist, edits === 'dist' ? null : edits)
       const red = r.filter(([c]) => !c).map(([, msg]) => msg)
       ok(red.length > 0, `MUTANT ${m}: red on "${row}"${red.length ? ` (${red[0]})` : ''}`)
