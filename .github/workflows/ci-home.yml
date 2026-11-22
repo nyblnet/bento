@@ -152,8 +152,9 @@ jobs:
     # The bento/home tripwire in a real browser: the unpacked extension loaded
     # into Playwright's Chromium (channel 'chromium', new headless: the
     # headless shell cannot load extensions), against a local home/web build,
-    # a fixture service worker and a local release channel. Then a mutant per
-    # rule, each of which must turn the row that guards it red.
+    # the build's own service worker (and fixture workers) and a local release
+    # channel. The mutants run as a job of their own (below): together they
+    # outgrew one 30-minute job once the rows ran with the build's worker.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -170,6 +171,27 @@ jobs:
           echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
       - name: Tripwire in Chromium
         run: node scripts/test-webext-tripwire-browser.mjs
+
+  webext-tripwire-mutants:
+    needs: home-gate
+    if: needs.home-gate.outputs.run == 'true'
+    # A mutant per tripwire rule (and per home/web build seam the stage-3 rows
+    # depend on), each of which must turn the row that guards it red; the rows
+    # run unmutated first as the control.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install esbuild (slides' dev dependencies)
+        run: npm ci --prefix slides
+      - name: Install browser test runtime
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
       - name: Tripwire mutants
         run: node scripts/test-webext-tripwire-mutants.mjs
 
