@@ -29,6 +29,7 @@ export const de: Catalog = {
   "Paste": "Einfügen",
   "Bring to front": "In den Vordergrund",
   "Send to back": "In den Hintergrund",
+  "Stacking order": "Reihenfolge der Ebenen",
   "Ungroup": "Gruppierung aufheben",
   "Edit text": "Text bearbeiten",
   "Nothing to paste — use ⌘V": "Nichts zum Einfügen — ⌘V verwenden",
