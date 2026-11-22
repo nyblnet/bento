@@ -15339,3 +15339,31 @@ serving an older shell.
   runs the released derivation over what this build would save. The
   starter-deck row is the positive control (87 lost in the old form). Four
   mutants turn rows red.
+
+## 2026-11-22 — bento/home: the kill switch's status is signed from the release list, never beside it
+
+Two signed files withdraw a bento/home build, and nothing tied them: the
+release list the tripwire checks (`served.json`) withdraws a release by its
+`at`, the kill switch's status (`status.json`) by build id. Security's review
+of stage 3 (#954, its C3) asked for one source. The build id is derivable
+from the list: it is the sha256 of the library page's one inline script, which
+is `scripts[0].sha256` of the library origin's `/` entry.
+
+- **`scripts/sign-home-status.mjs --served <served.json>`** verifies the
+  list's signature (against the release key, or the signing key's own public
+  half for a rig or rehearsal) and refuses, exit 2 and nothing written, when
+  the status disagrees with it: a release the list withdraws whose build id
+  the status leaves out; a status withdrawing the build the list serves as
+  current; a status withdrawing a build the list carries but does not mark
+  withdrawn. A build the list no longer carries may still be withdrawn.
+  Signing with the release key requires `--served`.
+- **Publish order**, written in `home/web/README.md`: sign and publish the
+  list naming the new release, deploy, then sign and publish the status that
+  withdraws the old build. A status published first fails closed, but stops
+  every tab of a build the host still serves.
+- **Two releases can share a build id** (measured: builds differing only in
+  their library origin do), so withdrawing an older release whose script is
+  the current one's is refused as withdrawing the current build.
+
+Guard: `scripts/test-home-status-sign.mjs` (two real development builds,
+throwaway keys; `--mutants` turns each refusal off and requires its row red).

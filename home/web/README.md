@@ -157,6 +157,31 @@ the very first release passes `--home-web-first`, and a missing list without
 it (or `--home-web-first` over a published one) is refused before anything is
 signed. Publish the site, and so the list, BEFORE deploying the build: a
 deploy the list does not yet hold warns every extension.
+
+**Publish order, every release.** Two signed files withdraw a build, and they
+must agree: the release list (`served.json`, by release `at`) and the kill
+switch's status (`status.json`, by build id, below). The list is the one
+source; the status is signed from it.
+
+1. Sign and publish `served.json` naming the new release (with `--withdraw
+   <at>` for any release being withdrawn).
+2. Deploy the library.
+3. Sign and publish `status.json` withdrawing the old build:
+   `node scripts/sign-home-status.mjs --served <the list from step 1>
+   --from <the published status.json> --withdraw <build>`.
+
+`sign-home-status.mjs` verifies the list's signature and refuses, writing
+nothing, when the two disagree: a release the list withdraws whose build the
+status leaves out, a status withdrawing the build the list serves as current,
+or one withdrawing a build the list carries but does not withdraw. With the
+release key, `--served` is required. A status published before the deploy
+stops every tab of a build the host still serves: that fails closed, but it is
+loud for nothing. Two releases can share a build id: it is the hash of the
+library's script alone, so a release that changes only what is around the
+script keeps it (measured: two builds differing only in their library origin
+have one build id; a different frame origin changes it). Withdrawing an older
+release whose script is the current one's is refused as withdrawing the
+current build.
 The published histories are checked (`build.mjs --check`, which writes
 nothing) before the release signs anything. The output must be outside the
 site and the published tree and contain neither (checked by folder identity,
@@ -202,7 +227,7 @@ controlled by it; the frame's policy and sandbox are unchanged.
 
 **The kill switch.** Every load fetches `<release base>home/status.json`, a
 small manifest signed with the release key (`scripts/sign-home-status.mjs`
-makes it):
+makes it, from the release list: see "Publish order" above):
 
 ```json
 { "app": "bento-home-status", "seq": 7, "at": "…", "withdrawn": ["<build>", …] }
