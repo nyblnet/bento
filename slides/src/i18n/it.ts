@@ -29,6 +29,7 @@ export const it: Catalog = {
   "Paste": "Incolla",
   "Bring to front": "Porta in primo piano",
   "Send to back": "Porta in secondo piano",
+  "Stacking order": "Ordine di sovrapposizione",
   "Ungroup": "Separa",
   "Edit text": "Modifica testo",
   "Nothing to paste — use ⌘V": "Niente da incollare — usa ⌘V",
