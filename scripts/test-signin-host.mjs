@@ -370,6 +370,29 @@ try {
       ok(![...t].some((ch) => /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(ch) && ch !== '\n'), `${f}: no invisible or control characters in the source`)
     }
   }
+
+  // 4. The text a member's passkey signs to sign every browser out: the host's
+  //    copy (it runs in the browser, without the kernel) must be the kernel's
+  //    buildWout byte for byte, on the kernel's own wout. vectors and more.
+  {
+    console.log('\n4   woutText is the kernel\'s buildWout, byte for byte')
+    const { buildWout } = await import('../kernel/src/roster.ts')
+    const V = JSON.parse(readFileSync(new URL('../kernel/fixtures/identity-v1.json', import.meta.url), 'utf8'))
+    const texts = new Set()
+    const walk = (x) => { if (typeof x === 'string' && /^wout\.[A-Za-z0-9_-]+\.[0-9]+\.[A-Za-z0-9_-]+$/.test(x)) texts.add(x); else if (x && typeof x === 'object') for (const v of Object.values(x)) walk(v) }
+    walk(V)
+    const cases = [...texts].map((t) => { const [, a, at, nonce] = t.split('.'); return { address: Buffer.from(a, 'base64url').toString('utf8'), at: Number(at), nonce } })
+    cases.push({ address: 'alice@example.com', at: 1, nonce: 'AAAA' }, { address: 'bjørn@example.com', at: 1_800_000_000_123, nonce: 'Zm9vYmFy_-' }, { address: 'x+tag@sub.example.org', at: 9_007_199_254_740_991, nonce: 'n'.repeat(54) })
+    const same = async (dir) => {
+      const { woutText } = await import(join(dir, 'public/account-client.js') + '?' + ++n)
+      return cases.map((c) => woutText(c) === buildWout({ address: c.address, at: c.at, dirNonce: c.nonce }))
+    }
+    const honest = await same(ROOT)
+    ok(texts.size >= 1 && honest.length === cases.length && honest.every(Boolean), `woutText(…) === kernel buildWout(…) on ${texts.size} kernel vector text(s) and ${cases.length - texts.size} more`)
+    ok([...texts].every((t) => { const [, a, at, nonce] = t.split('.'); const c = { address: Buffer.from(a, 'base64url').toString('utf8'), at: Number(at), nonce }; return buildWout({ ...c, dirNonce: nonce }) === t }), 'control: the kernel rebuilds its own vector texts')
+    const swapped = await same(copyWith([['public/account-client.js', "['wout', b64u(new TextEncoder().encode(address)), String(at), nonce]", "['wout', b64u(new TextEncoder().encode(address)), nonce, String(at)]"]]))
+    ok(!swapped.every(Boolean), 'MUTANT field order swapped in woutText: the cross-check fails')
+  }
 } finally {
   rmSync(tmp, { recursive: true, force: true })
 }

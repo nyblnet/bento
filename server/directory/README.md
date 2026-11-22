@@ -169,7 +169,7 @@ Under option G a bento/id account is a **roster of passkeys** (the kernel's
 | `POST /v1/void` `{email, token, choice}` (60 an hour per IP) | the void token | `choice` `cancel`, `remove` or `undo`, as the token allows: 200 `{done}`; 409 `late` `{at, by?}` (what it was for took effect; `by: 'reset'` when a reset did), 409 `used` `{at}`, 409 `preempted` `{at}` (a reset cancelled the change), 409 `busy` (another press or a reset holds the roster: try again), 400 `invalid` (a token the directory does not know), 400 `choice` (not offered; the token is kept), 503 `mail` (Remove whose notice could not be sent: nothing changed) |
 | `POST /v1/roster/reset/start` `{email}` (10 an hour per IP) | none | **always 202**; mails a reset link if the address has a roster, no reset waits, and no reset link is live |
 | `POST /v1/roster/reset` `{email, token, dirNonce, reg}` | the reset token + a registration over `dirNonce` | 202: the reset waits 72 h, preempting any waiting change |
-| `POST /v1/roster/reset/void` `{email, credId, assertion, dirNonce}` | a member's passkey | 409 `no-reset`, 403 `new-account` (first 14 days), 400 `signer`, 403 `quarantined`; otherwise **501** until the kernel defines what the passkey signs |
+| `POST /v1/roster/reset/void` `{email, text, credId, assertion}` | a member's passkey over `text` = the kernel's `vrs.<b64u(address)>.<sha256(reset ros.)>.<dirNonce>` (the roster challenge is read from it and spent first) | 200 `{done: 'stopped', removesAt?}`: the reset is dropped, a removal it set aside waits again (its undo link still works), the address is mailed and the stop logged (`reset-stop`), and the reset's own link then answers 409 `stopped`. 409 `no-reset`; 403 `new-account` when the reset was FIRST asked in the account's first 14 days (an undo's re-ask keeps that time); 400 `signer`; 403 `quarantined`; 400 `signer-kind` (a recovery or consent key: not wired yet); 409 `busy`; 400 `assertion-sign-count` (the counter, which the directory compares and stores in the same step); otherwise the kernel's reason (`reset-mismatch`, `address`, `assertion-…`) |
 
 **The countersign.** Every link is countersigned (`rip.`, the kernel's
 format) with the online key when it takes effect, never at request: the
@@ -208,11 +208,15 @@ good; a waiting removal of a suspended passkey is only set aside: its undo
 link keeps working (the reset then starts its 72 hours again, since the chain
 takes no link asked for before the one before it took effect), and if the
 reset is stopped the removal waits again at its own time. It can be stopped from its own notice's
-link; by a member's passkey only once the account is 14 days old (from its
-setup; not built past the age rule yet). When it takes effect the roster is
+link; by a member's passkey (the kernel's `vrs.`, checked by `verifyResetStop`
+over the chain the directory holds) only for a reset FIRST asked once the
+account was 14 days old, counted from its setup. An undo that asks a reset
+again keeps that first time (`firstRequestedAt`), so it never makes a young
+reset stoppable; the kernel is given the re-asked time, which its order rule
+needs. When it takes effect the roster is
 that one passkey. `GET /v1/roster` reports `createdAt` and `newAccount`.
 
-**Not built yet**: the passkey signature that stops a reset, the chain route,
+**Not built yet**: the sign-in host's page for a member's reset stop, the chain route,
 consent-key and recovery-key members, account deletion, and the incident
 lever across addresses.
 

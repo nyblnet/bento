@@ -276,13 +276,14 @@ async function route(req, env) {
   }
 
   if (p === '/v1/roster/reset/void') {
-    // a member stopping a reset with its passkey (G5): refused at the last step until the kernel defines what it signs
+    // a member stopping a reset with its passkey (G5): the kernel's vrs.<b64u(address)>.<reset hash>.<dirNonce>
     const email = normalize(b.email ?? '')
-    if (!email || typeof b.dirNonce !== 'string') return json(400, { error: 'invalid' })
+    if (!email || typeof b.text !== 'string' || b.text.length > 4096) return json(400, { error: 'invalid' })
     if (!(await ledger(env, ip, 'request'))) return json(429, { error: 'rate-limited' })
-    const c = await openChallenge(env.CHALLENGE_KEY, 'roster', await addressKey(email), b.dirNonce, Date.now())
+    const dirNonce = b.text.split('.')[3]
+    const c = await openChallenge(env.CHALLENGE_KEY, 'roster', await addressKey(email), dirNonce, Date.now())
     if (!c) return json(400, { error: 'nonce' })
-    const r = await call(await rosterStub(env, email), 'resetVoid', { credId: b.credId, assertion: b.assertion, nonce: c.nonce, issued: c.issued, os: origin })
+    const r = await call(await rosterStub(env, email), 'resetVoid', { text: b.text, dirNonce, credId: b.credId, assertion: b.assertion, nonce: c.nonce, issued: c.issued, os: origin })
     return json(r.status, r.body)
   }
 

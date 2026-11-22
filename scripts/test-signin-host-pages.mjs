@@ -65,6 +65,9 @@ const MUTANTS = {
   'no-tt': [['src/worker.js', `  "require-trusted-types-for 'script'",\n`, '']],
   // the 501 the directory answers until it can sign browsers out, taken for any other refusal (after a passkey prompt for nothing)
   'no-501': [['public/account-client.js', "  if (c.status === 501) throw new Refused('not-implemented')\n", '']],
+  // W1 (security-ruling on #953): the sign-out views drop the 24-hour sentence
+  'no-24h': [['public/account.html', '    <p class="note" data-w1>From now on no browser can renew its sign-in. Anything a browser already signed can still be accepted for up to 24 hours.</p>\n    <p class="note">Each browser', '    <p class="note">Each browser'],
+    ['public/account.html', ' An email about it is on its way.</p>\n    <p class="note" data-w1>From now on no browser can renew its sign-in. Anything a browser already signed can still be accepted for up to 24 hours.</p>\n', ' An email about it is on its way.</p>\n']],
   // framing allowed
   'framed': [['src/worker.js', '  "frame-ancestors \'none\'",\n', ''], ['src/worker.js', "  'x-frame-options': 'DENY',\n", '']],
 }
@@ -505,6 +508,24 @@ try {
       `the directory verified the member's assertion over wout. and revoked every browser key (${s}, ${JSON.stringify(W.stub.log.map((x) => [x.address, x.by.slice(0, 8)]))})`)
     ok(W.stub.log[0].os === S && W.mails.some((x) => x.to === gina && /signed out/i.test(x.subject)), 'the request came from the sign-in host, and the address is mailed')
     ok((await stored(p)) === gina, 'this host stays signed in (it holds no browser key)')
+
+    console.log('\n4   W1: the confirm and done views say a browser\'s last signature can still be accepted for up to 24 hours')
+    const W1 = 'From now on no browser can renew its sign-in. Anything a browser already signed can still be accepted for up to 24 hours.'
+    const w1 = async (mutant) => {
+      await reset(mutant); const p = await fresh(); const e = addr('jo')
+      await setUp(p, e)
+      await p.goto(`${S}/account`); await settled(p)
+      const c = await click(p, '#signout-ask', ['loading', 'signed-in'])
+      const confirm = (await p.locator('[data-for=confirm-signout]').innerText()).replace(/\s+/g, ' ')
+      const d = await click(p, '#signout', ['loading', 'confirm-signout', 'working'])
+      const done = (await p.locator('[data-for=signed-out-all]').innerText()).replace(/\s+/g, ' ')
+      return { c: c[0], d: d[0], confirm, done }
+    }
+    r = await w1()
+    ok(r.c === 'confirm-signout' && r.confirm.includes(W1), `the confirm view says no browser can renew and a signature stays acceptable up to 24 hours (${r.c})`)
+    ok(r.d === 'signed-out-all' && r.done.includes(W1) && r.done.includes('Every browser is signed out'), `the done view says it too (${r.d})`)
+    r = await w1('no-24h')
+    ok(!(r.confirm.includes(W1) && r.done.includes(W1)), 'MUTANT no-24h: the views without the sentence turn the rows red')
 
     console.log('\n4   while the directory cannot sign browsers out yet (501), the page says so before any passkey prompt')
     const notYet = async (mutant) => {

@@ -72,7 +72,7 @@ import { openChallenge } from '../server/directory/src/challenge.js'
 import { existsSync } from 'node:fs'
 import { fingerprint, ROSTER_LIMITS } from '../server/directory/src/roster.js'
 import { b64uDec, b64uEnc, sha256b64u } from '../kernel/src/statements.ts'
-import { buildRos, parseRos, verifyRip, verifyRosterChain, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, ROSTER_WAIT_MS, type Member, type RosterLink } from '../kernel/src/roster.ts'
+import { buildRos, buildVrs, parseRos, verifyRip, verifyRosterChain, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, ROSTER_WAIT_MS, type Member, type RosterLink } from '../kernel/src/roster.ts'
 import { readFileSync, readdirSync } from 'node:fs'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { join, dirname } from 'node:path'
@@ -1673,43 +1673,105 @@ async function reset(email: string, a: Authn, token: string, o: { ch?: string; r
   const hd = await head(jo)
   ok(hd.j.createdAt === setAt, 'the account\'s age still counts from its setup')
 }
+/**
+ * A member's stop of the waiting reset: the kernel's vrs. over that reset's
+ * ros. text and a fresh roster challenge, asserted by `who`'s passkey.
+ */
+async function stopReset(email: string, who: Authn, o: { credId?: string; count?: number; ch?: string; address?: string; resetRos?: string; signText?: string; text?: string } = {}) {
+  const ch = o.ch ?? await challenge(email)
+  const resetRos = o.resetRos ?? String((await pendOf(email))?.ros ?? 'x')
+  const text = o.text ?? buildVrs({ address: o.address ?? email, resetHash: await sha256b64u(resetRos), dirNonce: ch })
+  const assertion = await who.assert(o.signText ?? text, o.count === undefined ? {} : { count: o.count })
+  return { ...(await seen('reset-void', api('POST', '/v1/roster/reset/void', { email, text, credId: o.credId ?? who.cid, assertion }))), text, ch }
+}
 {
-  // --- G5: who may stop a reset, and "new account" ---
+  // --- G5: who may stop a reset, and "new account" (C4: judged at the reset's request time) ---
   now += DAY
   const kai = 'sd2-kai@example.com'
   const [K1, K2] = await twoKeys(kai)
   const setAt = Number((await head(kai)).j.createdAt ?? now) // never NaN into the clock
   ok((await head(kai)).j.newAccount === true, 'a 3-day-old account is a new account')
-  const rvoid = async (who: Authn, credId?: string) => {
-    const ch = await challenge(kai)
-    return seen('reset-void', api('POST', '/v1/roster/reset/void', { email: kai, credId: credId ?? who.cid, assertion: {}, dirNonce: ch }))
-  }
-  ok((await rvoid(K1)).j.error === 'no-reset', 'no reset waiting: refused (no-reset)')
+  ok((await stopReset(kai, K1)).j.error === 'no-reset', 'no reset waiting: refused (no-reset)')
   const t = await resetToken(kai)
   const KR = await Authn.make()
   ok((await reset(kai, KR, (t.token ?? ''))).status === 202, 'a reset of a young account waits')
-  const young = await rvoid(K1)
+  const young = await stopReset(kai, K1)
   ok(young.status === 403 && young.j.error === 'new-account', `a member cannot stop it in the first 14 days (got ${young.status} ${young.j.error})`)
-  // the account turns 14 days old while the reset waits: from then a member may (the passkey's signature is the kernel's next layout)
   const rv = voidIn(lastMail(kai))
   await voidPost(kai, (rv?.token ?? ''), 'cancel')
+  // C4: a reset requested a second before day 14 stays unstoppable by a member after day 14
   now = setAt + ROSTER_LIMITS.newAccountMs - 1000
   ok((await head(kai)).j.newAccount === true, 'a second short of 14 days it is still new')
   const t2 = await resetToken(kai)
-  ok((await reset(kai, await Authn.make(), (t2.token ?? ''))).status === 202, 'another reset')
-  ok((await rvoid(K1)).j.error === 'new-account', 'still refused a second short of 14 days')
-  now = setAt + ROSTER_LIMITS.newAccountMs
+  ok((await reset(kai, await Authn.make(), (t2.token ?? ''))).status === 202, 'another reset, requested at 13 d 23 h 59 m 59 s')
+  ok((await stopReset(kai, K1)).j.error === 'new-account', 'refused a second short of 14 days')
+  now = setAt + ROSTER_LIMITS.newAccountMs + 1000
   ok((await head(kai)).j.newAccount === false, 'at 14 days the account is no longer new')
-  const older = await rvoid(K1)
-  ok(older.status === 501 && older.j.error === 'not-implemented', `at 14 days a member gets past the age rule to the signature step (got ${older.status} ${older.j.error})`)
-  ok((await rvoid(K1, 'bm90LWEtbWVtYmVy')).j.error === 'signer', 'a credential that is not a member: refused (signer)')
+  const c4 = await stopReset(kai, K1)
+  ok(c4.status === 403 && c4.j.error === 'new-account', `C4: that reset, stopped at 14 d + 1 s, is still refused: its age is judged when it was REQUESTED (got ${c4.status} ${JSON.stringify(c4.j)})`)
+  ok((await pendOf(kai))?.kind === 'reset', 'none of those touched the waiting reset')
+  ok(ROSTER_LIMITS.newAccountMs === 14 * DAY && ROSTER_LIMITS.voidCooldownMs === 72 * HOUR && ROSTER_LIMITS.resetTtlMs === DAY, 'pinned: new account 14 days, cooldown 72 h, reset link a day')
+
+  // C5: a reset first asked once the account is 14 days old: a member's vrs. stops it
+  await voidPost(kai, voidIn(mailsTo(kai).filter((m) => m.kind === 'reset' && /waiting/.test(m.subject)).pop())?.token ?? '', 'cancel')
+  now += HOUR
+  const t3 = await resetToken(kai)
+  const rs = await reset(kai, await Authn.make(), (t3.token ?? ''))
+  const rlink = voidIn(lastMail(kai))
+  ok(rs.status === 202 && (await pendOf(kai))?.kind === 'reset', 'a reset asked for after day 14 waits')
+  const before = await current(kai)
+  // every refusal below spends its challenge and leaves the reset waiting
+  const other = await stopReset(kai, K1, { signText: 'vrs.other' })
+  ok(other.status === 400 && /^assertion-/.test(String(other.j.error)), `C5: an assertion over another text: refused (${other.status} ${other.j.error})`)
+  const again = await stopReset(kai, K1, { ch: other.ch })
+  ok(again.status === 400 && again.j.error === 'nonce', `C5: its challenge again: refused (nonce), spent by the failure (${again.status} ${again.j.error})`)
+  const mism = await stopReset(kai, K1, { resetRos: before.text })
+  ok(mism.status === 400 && mism.j.error === 'reset-mismatch', `C5: a vrs. naming another ros. text than the waiting reset: refused (${mism.status} ${mism.j.error})`)
+  const addr = await stopReset(kai, K1, { address: 'sd2-other@example.com' })
+  ok(addr.status === 400 && addr.j.error === 'address', `C5: a vrs. naming another address: refused (${addr.status} ${addr.j.error})`)
+  ok((await stopReset(kai, K1, { credId: 'bm90LWEtbWVtYmVy' })).j.error === 'signer', 'a credential that is not a member: refused (signer)')
   await plant(kai, (st) => {
     const hd = st.get('head') as { members: Member[] } | undefined
     if (hd) st.set('head', { ...hd, members: hd.members.map((m) => (m.pub === K2.pub ? { ...m, quarantined: true } : m)) })
   })
-  ok((await rvoid(K2)).j.error === 'quarantined', 'a suspended member: refused (quarantined)')
-  ok((await pendOf(kai))?.kind === 'reset', 'none of those touched the waiting reset')
-  ok(ROSTER_LIMITS.newAccountMs === 14 * DAY && ROSTER_LIMITS.voidCooldownMs === 72 * HOUR && ROSTER_LIMITS.resetTtlMs === DAY, 'pinned: new account 14 days, cooldown 72 h, reset link a day')
+  ok((await stopReset(kai, K2)).j.error === 'quarantined', 'a suspended member: refused (quarantined)')
+  await plant(kai, (st) => {
+    const hd = st.get('head') as { members: Member[] } | undefined
+    if (hd) st.set('head', { ...hd, members: hd.members.map((m) => ({ ...m, quarantined: false })) })
+  })
+  const junk = await stopReset(kai, K1, { text: 'vrs.x' })
+  ok(junk.status === 400 && junk.j.error === 'nonce', `C5: a text with no challenge in it: refused before the object (${junk.status} ${junk.j.error})`)
+  await plant(kai, (st) => { const r = st.get(`pk:${K1.pub}`) as Record<string, unknown> | undefined; if (r) st.set(`pk:${K1.pub}`, { ...r, signCount: 5 }) })
+  const back = await stopReset(kai, K1, { count: 5 })
+  ok(back.status === 400 && back.j.error === 'assertion-sign-count', `C5 (D6): a signature counter not above the stored one: refused (${back.status} ${back.j.error})`)
+  ok((await pendOf(kai))?.kind === 'reset' && mailsTo(kai).every((m) => !/stopped/.test(m.subject) || m.kind === 'void'), 'C5: after every refusal the reset still waits')
+  mailbox.length = 0
+  const stop = await stopReset(kai, K1, { count: 6 })
+  const after = await current(kai)
+  ok(stop.status === 200 && stop.j.done === 'stopped', `C5: an unsuspended member's vrs. stops the reset (got ${stop.status} ${JSON.stringify(stop.j)})`)
+  ok(after.pending === null && after.text === before.text && ((await rosterObj(kai)).store.get(`pk:${K1.pub}`) as { signCount?: number } | undefined)?.signCount === 6,
+    'C5: the reset is gone, the roster is as it was, and the passkey\'s counter is stored')
+  const sm = lastMail(kai) ?? NOMAIL
+  ok(/stopped/.test(sm.subject) && sm.body.includes(await fingerprint(K1.pub)) && sm.body.includes(await fingerprint(K2.pub)) && sm.body.includes('stopped the reset asked for at'),
+    'C5: the address is told which passkey stopped it, with the whole roster')
+  const lg = [...(await rosterObj(kai)).store.entries()].filter(([k]) => k.startsWith('log:')).map(([, v]) => v as Record<string, unknown>).pop()
+  ok(lg?.k === 'reset-stop' && lg?.by === K1.pub, 'C5: the stop is logged with who stopped it')
+  const rl = await voidPost(kai, rlink?.token ?? '', 'cancel')
+  ok(rl.status === 409 && rl.j.error === 'stopped', `C5: the reset's own link then says it was stopped (got ${rl.status} ${JSON.stringify(rl.j)})`)
+  ok((await stopReset(kai, K1, { count: 7 })).j.error === 'no-reset', 'C5: a second stop finds no reset')
+  ok((await chainOf(kai)).ok, 'C5: the kernel accepts the chain')
+  // a recovery-key or consent-key member: refused by name, never a 500, until their proofs are wired
+  const RK = await Authn.make()
+  await plant(kai, (st) => {
+    const hd = st.get('head') as { members: Member[] } | undefined
+    if (hd) st.set('head', { ...hd, members: [...hd.members, { kind: 'rk', pub: RK.pub, quarantined: false }] })
+    st.set(`cid:${RK.cid}`, RK.pub)
+    st.set(`pk:${RK.pub}`, { credId: RK.cid, signCount: 0, addedAt: now, how: 'setup' })
+  })
+  const t4 = await resetToken(kai)
+  await reset(kai, await Authn.make(), (t4.token ?? ''))
+  const rk = await stopReset(kai, RK)
+  ok(rk.status === 400 && rk.j.error === 'signer-kind', `a non-passkey member's stop: refused by name (signer-kind), not a 500 (got ${rk.status} ${JSON.stringify(rk.j)})`)
 }
 // ---------------------------------------------------------------------
 // F1: the HOLD. A Remove or a reset holds the roster BEFORE its mail goes, so
@@ -2182,6 +2244,65 @@ async function p4reset(e: string) {
   const ev = evaluate(obs as never, { voidPath: VOID_PATH } as never) as { id: string; fails: string[] }[]
   const rows = ev.filter((x) => ['rp-html-csp', 'no-framing', 'rp-permissions', 'rp-nosniff'].includes(x.id))
   ok(rows.length === 4 && rows.every((x) => x.fails.length === 0), `check-id-hosting's rp rows pass on the void page (${rows.map((x) => `${x.id}:${x.fails.length}`).join(' ')})`)
+}
+
+// C5/C4′: a member's stop through the removal set aside and the undo's re-ask (helpers from the F1/C3 rows above)
+{
+  // C3 through a member's stop: a reset over a set-aside removal, stopped by a member: the removal waits again, its undo works
+  now += DAY
+  const e = 'c5-setaside@example.com'
+  const { P1, A, undo, removesAt } = await p4start(e)
+  await p4reset(e)
+  now += HOUR
+  const st = await stopReset(e, A)
+  const p = await pendOf(e)
+  ok(st.status === 200 && st.j.removesAt === removesAt && p?.kind === 'removal' && p?.ripensAt === removesAt,
+    `C5/C3: a member's stop puts the set-aside removal back at its own time (got ${st.status} ${JSON.stringify(st.j)}, ${String(p?.kind)})`)
+  const un = await voidPost(e, undo?.token ?? '', 'undo')
+  const c = await current(e)
+  ok(un.j.done === 'restored' && quarantinedIn(c, P1.pub) === false && c.pending === null, `C5/C3: the removal's undo link still works (got ${JSON.stringify(un.j)})`)
+  ok((await chainOf(e)).ok, 'C5/C3: the kernel accepts the chain')
+}
+{
+  // C4′ (security's P13 on #952): a reset first asked at day 13.9 over a set-aside removal, re-asked by an undo at day 14.1,
+  // stays one a member cannot stop
+  now += DAY
+  const e = 'c4p-young@example.com'
+  const P1 = await Authn.make(), A = await Authn.make()
+  await setup(e, P1)
+  const setAt = Number((await head(e)).j.createdAt ?? now)
+  await request(e, P1, { add: A })
+  now += ROSTER_WAIT_MS
+  await current(e)
+  now = setAt + 13 * DAY
+  await request(e, P1, { add: await Authn.make() })
+  const rm = await voidPost(e, voidIn(lastMail(e))?.token ?? '', 'remove')
+  const undo = voidIn(mailsTo(e).filter((m) => /suspended/.test(m.subject)).pop())
+  now = setAt + 13.9 * DAY
+  const { r } = await p4reset(e)
+  ok(rm.j.done === 'suspended' && r.status === 202, 'C4′: P1 suspended at day 13, a reset at day 13.9 sets the removal aside')
+  now = setAt + 14.1 * DAY
+  const un = await voidPost(e, undo?.token ?? '', 'undo')
+  const p = await pendOf(e)
+  ok(un.j.done === 'restored' && p?.kind === 'reset' && p?.requestedAt === now && p?.firstRequestedAt === setAt + 13.9 * DAY,
+    `C4′: the undo at day 14.1 asks the reset again, and the first request time is kept (requested ${(Number(p?.requestedAt) - setAt) / DAY} d, first ${(Number(p?.firstRequestedAt) - setAt) / DAY} d)`)
+  now = setAt + 15 * DAY
+  const st = await stopReset(e, A)
+  ok(st.status === 403 && st.j.error === 'new-account' && (await pendOf(e))?.kind === 'reset', `C4′: at day 15 a member's stop is refused (new-account): the reset was first asked in the first 14 days (got ${st.status} ${JSON.stringify(st.j)})`)
+}
+{
+  // C4′ positive control, and no regression on the kernel's `order`: an OLD account's reset re-asked by an undo, then a member's stop
+  now += DAY
+  const e = 'c4p-old@example.com'
+  const { A, undo } = await p4start(e)
+  await p4reset(e)
+  now += HOUR
+  ok((await voidPost(e, undo?.token ?? '', 'undo')).j.done === 'restored', 'C4′ control: on an old account the undo re-asks the reset')
+  now += HOUR
+  const st = await stopReset(e, A)
+  ok(st.status === 200 && st.j.done === 'stopped' && (await current(e)).pending === null,
+    `C4′ control: a member's stop of the re-asked reset is accepted (the kernel is given the re-ask's time, so its order rule holds) (got ${st.status} ${JSON.stringify(st.j)})`)
+  ok((await chainOf(e)).ok, 'C4′ control: the kernel accepts the chain')
 }
 
 // =====================================================================

@@ -69,6 +69,28 @@ const MUTANTS: Mutant[] = [
     from: "    try {\n      return await route(req, env)\n    } catch (e) {\n      console.log(`directory error: ${e && e.message}`)\n      let path = ''\n      try { path = new URL(req.url).pathname } catch { /* the base headers */ }\n      return json(500, { error: 'internal' }, headersFor(path))\n    }",
     to: '    return await route(req, env)' },
 
+  // --- a member stops a reset (vrs.; security's C4, C4′ and C5 on #944/#952) ---
+  { name: 'C5: the kernel\'s verdict on the vrs. ignored', file: 'roster.js',
+    from: "      if (!v.ok) return out(v.reason === 'new-account' || v.reason === 'quarantined' ? 403 : 400, { error: v.reason })\n", to: '' },
+  { name: 'C5: a member stop answers 501 again', file: 'roster.js',
+    from: "      if (!(await spend())) return out(400, { error: 'nonce' })\n      await this.ripen(now)\n      const p = await s.get('pend')\n      if (!p || p.kind !== 'reset') return out(409, { error: 'no-reset' })",
+    to: "      if (!(await spend())) return out(400, { error: 'nonce' })\n      return out(501, { error: 'not-implemented' })\n      await this.ripen(now)\n      const p = await s.get('pend')\n      if (!p || p.kind !== 'reset') return out(409, { error: 'no-reset' })" },
+  { name: 'C5: no member-kind check (an rk reaches the kernel)', file: 'roster.js',
+    from: "      if (who.kind !== 'pk') return out(400, { error: 'signer-kind' })\n", to: '' },
+  { name: 'C5 (D6): the stop\'s signature counter not compared', file: 'roster.js',
+    from: "      if ((count !== 0 || rec.signCount !== 0) && count <= rec.signCount) return out(400, { error: 'assertion-sign-count' })\n", to: '' },
+  { name: 'C5: the stop does not store the counter', file: 'roster.js',
+    from: '      await s.put(`pk:${who.pub}`, { ...rec, signCount: count })\n', to: '' },
+  { name: 'C5/C3: a member\'s stop drops the set-aside removal', file: 'roster.js',
+    from: "    if (back) {\n      await s.put('pend', back)\n      await this.schedule(back.ripensAt)\n    }\n", to: '' },
+  { name: 'C5: the stopped reset\'s link does not say so', file: 'roster.js', from: "const back = await this.stopReset(p, now, 'stopped')", to: "const back = await this.stopReset(p, now, null)" },
+  { name: 'C4′: age judged by the re-asked request', file: 'roster.js',
+    from: '      const first = p.firstRequestedAt ?? p.requestedAt\n', to: '      const first = p.requestedAt\n' },
+  { name: 'C4′: the undo\'s re-ask overwrites the first request time', file: 'roster.js',
+    from: 'firstRequestedAt: p.firstRequestedAt ?? p.requestedAt })', to: 'firstRequestedAt: now })' },
+  { name: 'C4′: the kernel is given the first request time (its order rule)', file: 'roster.js',
+    from: 'resetRequestedAt: p.requestedAt, challenge: a.dirNonce,', to: 'resetRequestedAt: first, challenge: a.dirNonce,' },
+
   // --- SD3: browser certificates (browsers.js; rows in test-directory-browsers.ts) ---
   { name: 'SD3 challenge: a browser challenge lives 5 minutes', file: 'browsers.js', from: '  challengeTtlMs: 60_000,', to: '  challengeTtlMs: 5 * 60_000,' },
   { name: 'SD3 challenge: the ttl argument ignored', file: 'challenge.js', from: 'now - issued > ttl) return null', to: 'now - issued > CHALLENGE_TTL_MS) return null' },
@@ -400,8 +422,7 @@ const MUTANTS: Mutant[] = [
   { name: 'G5 reset: does not preempt a waiting change', file: 'roster.js',
     from: "      if (waiting && waiting.kind === 'reset') return out(409, { error: 'pending' })", to: "      if (waiting) return out(409, { error: 'pending' })" },
   { name: 'G5 reset: a member may stop it in the first 14 days', file: 'roster.js',
-    from: "      if (now - (await this.createdAt(cur)) < ROSTER_LIMITS.newAccountMs) return out(403, { error: 'new-account' })\n", to: '' },
-  { name: 'G5 reset: a suspended member may stop it', file: 'roster.js', from: "      if (who.quarantined) return out(403, { error: 'quarantined' })\n", to: '' },
+    from: "      if (first - createdAt < ROSTER_LIMITS.newAccountMs) return out(403, { error: 'new-account' })\n", to: '' },
   { name: 'G5: the new-account window is a day', file: 'roster.js', from: '  newAccountMs: 14 * DAY,', to: '  newAccountMs: DAY,' },
   { name: 'G5: the account\'s age restarts at a reset', file: 'roster.js',
     from: "createdAt: prev?.createdAt ?? now }", to: "createdAt: auth === 'r' ? now : prev?.createdAt ?? now }" },
@@ -545,7 +566,7 @@ const args = process.argv.slice(2)
 const si = args.indexOf('--shard')
 const shard = si >= 0 ? /^([1-9][0-9]*)\/([1-9][0-9]*)$/.exec(args[si + 1] ?? '') : null
 if (si >= 0 && (!shard || Number(shard[1]) > Number(shard[2]))) { console.log(`--shard wants k/n with 1 <= k <= n, not ${args[si + 1]}`); process.exit(1) }
-const only = args.filter((a, i) => i !== si && i !== si + 1)[0]
+const only = args.filter((a, i) => si < 0 || (i !== si && i !== si + 1))[0] // without --shard, si + 1 is 0: never drop the name
 const named = only ? MUTANTS.filter((m) => m.name.includes(only)) : MUTANTS
 const chosen = shard ? named.filter((_, i) => i % Number(shard[2]) === Number(shard[1]) - 1) : named
 console.log(`\n${chosen.length} mutants${shard ? ` (shard ${shard[1]} of ${shard[2]}, of ${named.length})` : ''}: every one must fail a row`)
