@@ -8,7 +8,10 @@
 // it, `frame-ancestors` naming only the library, `worker-src 'none'`, and a
 // script policy of this script's hash plus blob:. The library sends it a file
 // whose code it has verified against the signed release history, with the plan
-// of that file's executable elements, and ONE MessagePort. This script turns
+// of that file's executable elements, and TWO MessagePorts: the session (the
+// library pings over it; only this script holds it) and the document's store
+// (kernel/src/docstoreport.ts), which the document takes once through
+// `window.__bentoDocStore.take()`. This script turns
 // exactly those elements into blob: scripts and writes the document in. Any
 // inline script the plan did not name stays inline and the CSP refuses it.
 //
@@ -20,8 +23,13 @@
 // used after that is captured here first (the extension's sandbox.js does the
 // same, for the reason its header gives). The port lives only in these closures.
 //
-// Stage 1 offers the document no storage, no identity and no file handle.
-// ⌘S reaches showSaveFilePicker below, which tells the library and declines.
+// The store port is the document's only storage: the library answers it per
+// open, bound to the docId of the file it verified, and checks every message
+// (the document owns this realm, so nothing here can). A shell that predates
+// the port never reads `__bentoDocStore` and keeps stage 1's behaviour. There
+// is no identity and no file handle. ⌘S reaches showSaveFilePicker below,
+// which tells the library and declines: saving is the library's, and will
+// re-splice the document's data into the shell it verified.
 // Every other path the shell has to write a file is a download, and the frame
 // has no allow-downloads: downloads go through the library only.
 
@@ -90,7 +98,7 @@ declare const __LIBRARY_ORIGIN__: string
     if (evSource(ev) !== PARENT || evOrigin(ev) !== LIBRARY) return
     const d = evData(ev)
     const ports = evPorts(ev)
-    if (!d || d.kind !== 'bento-serve' || typeof d.html !== 'string' || !isArray(d.plan) || !ports || ports.length !== 1) return
+    if (!d || d.kind !== 'bento-serve' || typeof d.html !== 'string' || !isArray(d.plan) || !ports || ports.length !== 2) return
     done = true
     unlisten(win, 'message', onHandshake)
     port = ports[0]
@@ -120,6 +128,8 @@ declare const __LIBRARY_ORIGIN__: string
     out += strSlice(html, at)
 
     defineProperty(win, 'showSaveFilePicker', { value: showSaveFilePicker, writable: false, configurable: false, enumerable: false })
+    let store: MessagePort | null = ports[1]
+    defineProperty(win, '__bentoDocStore', { value: freeze({ v: 1, take: () => { const p = store; store = null; return p } }), writable: false, configurable: false, enumerable: false })
     tell('booting')
     docOpen(doc)
     docWrite(doc, out)

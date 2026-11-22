@@ -946,5 +946,68 @@
   "menuOpenWithId": {
     "message": "Otwórz z Bento ID",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home nie udostępnia wydania Bento"
+  },
+  "twMismatchBody": {
+    "message": "Kod, który home.bento.page wysłała do tej przeglądarki, nie pasuje do żadnego wydania podpisanego przez Bento. Zamknij tę kartę i nie otwieraj tam dokumentów. Kliknij, aby zobaczyć szczegóły."
+  },
+  "twOldTitle": {
+    "message": "bento/home udostępnia starsze wydanie"
+  },
+  "twOldBody": {
+    "message": "Kod, który home.bento.page wysłała do tej przeglądarki, to autentyczne wydanie Bento, ale nie najnowsze."
+  },
+  "twListTitle": {
+    "message": "Lista wydań bento/home nie jest autentyczna"
+  },
+  "twListBody": {
+    "message": "bento.page wysłała listę wydań, która nie jest podpisana przez Bento, więc nie można sprawdzić home.bento.page. Kliknij, aby zobaczyć szczegóły."
+  },
+  "twBadgeTitle": {
+    "message": "bento/home nie pasuje do podpisanego wydania"
+  },
+  "twPageTitle": {
+    "message": "Sprawdzenie kodu bento/home"
+  },
+  "twPageLead": {
+    "message": "To rozszerzenie porównuje kod, który home.bento.page wysyła do Twojej przeglądarki, z wydaniami podpisanymi przez Bento jego kluczem wydań przechowywanym offline. Tylko zgłasza: niczego nie zmieniło ani nie zablokowało."
+  },
+  "twPageDo": {
+    "message": "Zamknij kartę bento/home i nie otwieraj, nie edytuj ani nie zapisuj tam dokumentów, dopóki sprawa się nie wyjaśni. Sprawdzenie nie zmienia plików na Twoim dysku."
+  },
+  "twPageReport": {
+    "message": "Zgłoś to poufnie, dołączając poniższe szczegóły:"
+  },
+  "twPageReportLink": {
+    "message": "Zgłoś do Bento"
+  },
+  "twPageCopy": {
+    "message": "Kopiuj szczegóły"
+  },
+  "twPageCopied": {
+    "message": "Skopiowano"
+  },
+  "twPageRecent": {
+    "message": "Ostatnie sprawdzenia"
+  },
+  "twPageNone": {
+    "message": "Nie zapisano jeszcze żadnych sprawdzeń."
+  },
+  "twPageNotFound": {
+    "message": "Tego sprawdzenia nie ma w zapisie."
+  },
+  "twPageListNone": {
+    "message": "Brak podpisanej listy wydań: home.bento.page nigdy nie zostało sprawdzone."
+  },
+  "twPageListHeld": {
+    "message": "Sprawdzanie według listy wydań nr $1, pobranej $2."
+  },
+  "twNeverTitle": {
+    "message": "bento/home nie zostało sprawdzone"
+  },
+  "twNeverBody": {
+    "message": "To rozszerzenie od 3 dni nie może pobrać podpisanej listy wydań Bento, więc kod wysyłany przez home.bento.page nie został sprawdzony."
   }
 }

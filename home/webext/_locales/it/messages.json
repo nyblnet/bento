@@ -979,5 +979,68 @@
   "menuOpenWithId": {
     "message": "Apri con Bento ID",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home non sta servendo una versione di Bento"
+  },
+  "twMismatchBody": {
+    "message": "Il codice che home.bento.page ha inviato a questo browser non corrisponde a nessuna versione firmata da Bento. Chiudi quella scheda e non aprirvi documenti. Fai clic per i dettagli."
+  },
+  "twOldTitle": {
+    "message": "bento/home sta servendo una versione precedente"
+  },
+  "twOldBody": {
+    "message": "Il codice che home.bento.page ha inviato a questo browser è una versione autentica di Bento, ma non la più recente."
+  },
+  "twListTitle": {
+    "message": "L'elenco delle versioni di bento/home non è autentico"
+  },
+  "twListBody": {
+    "message": "bento.page ha inviato un elenco delle versioni non firmato da Bento, quindi home.bento.page non può essere verificato. Fai clic per i dettagli."
+  },
+  "twBadgeTitle": {
+    "message": "bento/home non corrisponde a una versione firmata"
+  },
+  "twPageTitle": {
+    "message": "Controllo del codice di bento/home"
+  },
+  "twPageLead": {
+    "message": "Questa estensione confronta il codice che home.bento.page invia al tuo browser con le versioni che Bento firma con la sua chiave di rilascio offline. Si limita a segnalare: non ha modificato né bloccato nulla."
+  },
+  "twPageDo": {
+    "message": "Chiudi la scheda di bento/home e non aprire, modificare o salvare documenti lì finché la cosa non è chiarita. Il controllo non modifica i file sul tuo disco."
+  },
+  "twPageReport": {
+    "message": "Segnalalo in privato, con i dettagli qui sotto:"
+  },
+  "twPageReportLink": {
+    "message": "Segnala a Bento"
+  },
+  "twPageCopy": {
+    "message": "Copia i dettagli"
+  },
+  "twPageCopied": {
+    "message": "Copiato"
+  },
+  "twPageRecent": {
+    "message": "Controlli recenti"
+  },
+  "twPageNone": {
+    "message": "Nessun controllo registrato finora."
+  },
+  "twPageNotFound": {
+    "message": "Quel controllo non è nella cronologia."
+  },
+  "twPageListNone": {
+    "message": "Nessun elenco delle versioni firmato: home.bento.page non è mai stato controllato."
+  },
+  "twPageListHeld": {
+    "message": "Controllo con l'elenco delle versioni n. $1, scaricato il $2."
+  },
+  "twNeverTitle": {
+    "message": "bento/home non è stato controllato"
+  },
+  "twNeverBody": {
+    "message": "Da 3 giorni questa estensione non riesce a scaricare l'elenco delle versioni firmato da Bento, quindi il codice inviato da home.bento.page non è stato controllato."
   }
 }

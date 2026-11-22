@@ -21,15 +21,21 @@ Stage 1 is **open and present, nothing kept**:
   signed release of its app;
 - Download gives back exactly the bytes that verified. Nothing else is written.
 
-There is no storage (the frame is an opaque origin and the page keeps nothing),
-no file handle, no service worker, no identity and no relay.
+There is no storage of the browser's for documents (the frame is an opaque
+origin), no file handle, no identity (unless built with `--identity`, below)
+and no relay. The document gets one store
+for side data (its crash-recovery copy and member key), answered by the page
+over a port, kept in the page's memory while the document is open and dropped
+when it closes: see "The document's store" below. Since stage 3 the library
+has a service worker for its OWN files, so a returning visit opens offline, a
+signed kill switch, and a web app manifest (below).
 
 What "only verified code" and "no network" cover, exactly:
 
-- **The library** talks only to the signed release channel: the histories
-  bundled into the build are used first, and the channel is asked only when a
-  file does not verify against them, or when the person asks for the read-only
-  view.
+- **The library** talks only to the signed release channel: once per load for
+  the kill-switch status, and otherwise only when a file does not verify
+  against the histories bundled into the build, or when the person asks for
+  the read-only view. Its worker fetches only the library's own files.
 - **The document** in the frame runs only its verified release's code, but its
   own content may still load `https:` images, media and embeds, exactly as it
   does opened from disk. Its scripts can reach only the release channel.
@@ -40,7 +46,8 @@ What "only verified code" and "no network" cover, exactly:
 - **A live document is shown as it was last saved.** Its session does not
   connect here, and the page says so.
 
-Editing with saves, recents, offline and identity are later stages.
+Editing with saves, recents and offline are later stages. Identity is built
+(below) but is off in the build unless asked for.
 
 ## Two sites
 
@@ -66,6 +73,56 @@ as `/frame.html`, because some hosts serve a page without its extension. The lib
 `dist/library/_headers`. Both files are Cloudflare's format, one rule per exact
 path, so no header is ever appended to another (two CSP headers are two
 policies, both enforced).
+
+## The document's store
+
+`kernel/src/docstore.ts` keeps a document's crash-recovery copy and member key
+in its host when there is one. Here the host is the library, and the channel is
+a second `MessagePort` in the handshake (`kernel/src/docstoreport.ts`): the
+frame offers it to the document once, as `window.__bentoDocStore.take()`, and
+the library answers `get`, `set`, `list` and `delete` on it.
+
+- **The port is the only channel.** Nothing reads a message's origin (the frame
+  is opaque) and nothing is posted to a window: holding the port is the
+  capability.
+- **The library enforces everything**, because the document owns the frame's
+  realm: a closed op and name list, an exact key set per op, rising request
+  ids, bytes only as a plain `Uint8Array`, a cap per name (and per open, which
+  binds only once there are more names), a cap on requests in flight and on
+  the rate. Anything else is dropped unanswered
+  and counted (the root element's `data-bento-store` is `served refused
+  dropped`, for the rigs); too many drops close the store.
+- **Each open is a new entry**, minted by the library, and the store is bound
+  to the docId of the file it verified: nothing in a message names either. A
+  file claiming another document's docId gets a fresh, empty entry. Only a
+  body in one of the apps' plaintext formats has a docId here (an allowlist):
+  an encrypted file's store answers `unavailable`, even when its envelope
+  carries a docId field.
+- **Closing the document closes its store**: a port the document stashed (in a
+  popup, say) is answered nothing afterwards.
+- **Files are not written on this channel.** Saving stays the library's (and
+  will re-splice the document's data into the shell it verified).
+- **A release that predates the port never reads it** and behaves as in stage
+  1. Only shells built with this kernel use it.
+
+Not yet: keeping the store past the open. Stage 2's per-entry recovery cache in
+the library's own storage, cleared when a write-back succeeds, plugs into the
+same `serveDocStore` through its `StoreBackend`. Before it does, two things the
+in-memory store cannot show must hold, each with a rig row and a mutant:
+
+- **A write in flight at close does not survive the clear (S2-a).** With a
+  backend that awaits (as IndexedDB does), a `set` posted before the document
+  closes can land after the entry was dropped, and the same race hits the clear
+  after a write-back. The host re-checks that the session is open after every
+  backend await, and the drop or clear runs only after in-flight requests have
+  settled.
+- **A session cannot overwrite a record written under another docId (S2-b).**
+  The docId check guards reads today, not writes: a second session on the same
+  entry with a different docId reads `null` but its `set` replaces the record.
+  A persistent per-file entry would make that a way to destroy a device's
+  member key by opening a different file under the same entry. Records are
+  keyed by entry AND docId, or `set` refuses when the held record's docId
+  differs.
 
 ## Build and run locally
 
@@ -93,6 +150,13 @@ A release builds it with `node scripts/release.mjs --home-web --frame-origin
 publishes, into `<site>.home-web/` (outside the site, so nothing deploys it).
 Without `--home-web` a release does not touch home/web. `--frame-origin` has no
 default there either; a rehearsal with a throwaway key adds `--home-web-dev`.
+The same release signs the bento/home release list the browser extension's
+tripwire checks this build against (`scripts/sign-home-web-served.mjs`) into
+the site, at `releases/home-web/served.json`, building on the published one;
+the very first release passes `--home-web-first`, and a missing list without
+it (or `--home-web-first` over a published one) is refused before anything is
+signed. Publish the site, and so the list, BEFORE deploying the build: a
+deploy the list does not yet hold warns every extension.
 The published histories are checked (`build.mjs --check`, which writes
 nothing) before the release signs anything. The output must be outside the
 site and the published tree and contain neither (checked by folder identity,
@@ -103,27 +167,189 @@ it is emptied before the other checks, so a run refused after that point leaves
 no earlier build in it.
 
 Budgets: the library page without the histories it bundles is at most 32 KB,
-the frame page at most 4 KB (`scripts/test-home-web.mjs`).
+the frame page at most 4 KB (`scripts/test-home-web.mjs`), the worker at most
+3 KB (`scripts/test-home-web-offline.mjs`).
+
+## Stage 3: offline, the kill switch, install
+
+**The worker** (`src/sw.ts`, built by `offline.mjs` to `/sw.js`) runs on the
+library origin only. The frame site keeps `worker-src 'none'` and is never
+controlled by it; the frame's policy and sandbox are unchanged.
+
+- It precaches exactly the build's own files (`/`, the manifest, two icons),
+  each checked against the sha256 the build compiled into the script; one
+  mismatch and nothing is cached. The cache is named for the content hash of
+  those files, and activating a new worker deletes every other cache.
+- Network first: online, every listed path comes from the server as if there
+  were no worker; the cache answers only when the network fails. Navigation
+  preload is on: a navigation is answered with the browser's preload response
+  (then the network, then the cache), so it reaches the server as the tab's
+  own navigation, with headers an observer outside the page (the tripwire)
+  can see, not as a fetch the worker made. Every other
+  request (the release channel, the frame, any other path) is left alone and
+  never cached. It has no message listener: nothing a page says can add a URL,
+  bytes or code. No `importScripts`, `eval` or dynamic import; it is served
+  with its own `default-src 'none'; connect-src 'self'` policy and
+  `Cache-Control: no-cache`, and registered with `updateViaCache: 'none'`.
+- The library's CSP names that one script (`worker-src <origin>/sw.js`), and
+  its Trusted Types policy (`bento-sw`, the only one allowed) passes only that
+  URL to `register()`.
+- **Offline, a returning visit opens the library, not yet a document.** The
+  frame page lives on another site, which this worker cannot serve, so a
+  document opened offline gets a message saying it needs a connection, and
+  nothing is left open. Running documents offline needs a decision on how the
+  frame is delivered offline; it is not in this stage.
+
+**The kill switch.** Every load fetches `<release base>home/status.json`, a
+small manifest signed with the release key (`scripts/sign-home-status.mjs`
+makes it):
+
+```json
+{ "app": "bento-home-status", "seq": 7, "at": "…", "withdrawn": ["<build>", …] }
+```
+
+`<build>` is the hex sha256 of the library's one script: `build.mjs` prints it
+and writes it to `build.json` (`offline.build`); the served CSP's `script-src`
+hash is the same digest in base64. No file opens until the check answers.
+
+| the status | the library |
+|---|---|
+| unreachable, 404, or no answer within 8 s (offline; nothing published; a slow link) | carries on: a returning visit must open offline |
+| signed, for `bento-home-status`, `seq` not below the highest this browser has seen, this build not listed | carries on, registers its worker |
+| lists this build | **stops**: unregisters every worker on its origin, deletes every cache, closes the open document and shows a fixed message |
+| anything else that came back (a bad signature, another payload, an older `seq`, any other 200) | **fails closed**: the same as withdrawn |
+
+Beside its worker's cache, the library keeps two small things in
+`localStorage`: the highest `seq` seen, so a replayed older status cannot
+un-withdraw a build, and the builds it has seen withdrawn, so a copy served
+again from any cache (Firefox offline serves the page from its HTTP cache; a
+stale edge could too) stops on load without asking the network. The
+message is fixed text: nothing from the manifest is shown. The next online load
+comes from the server, whatever it serves then.
+
+What it does not cover, stated:
+
+- **Only the tab that loads stops.** A tab already open keeps running the
+  withdrawn build until it is reloaded.
+- **`at` is not checked.** The `seq` floor protects only a browser that has
+  already seen a newer status; a browser that never has takes any older status
+  signed with the release key, including one from before the withdrawal.
+- **A slow answer is no answer.** A status that has not arrived within 8
+  seconds counts as unreachable, exactly like a 404.
+- **Any 200 that is not a valid status stops the library and wipes its worker
+  and caches** (a captive portal's page, a host's HTML fallback). The release
+  host must answer 404 for a file it does not have.
+- **Offline and installed copies run a withdrawn build** until that browser
+  fetches the status (or has fetched it once before).
+
+What it cannot do: stop a build that does not run this check. A hostile deploy
+ships its own code and can register its own worker at a path of its choosing.
+That needs the host to answer any request carrying `Service-Worker: script`
+with a cleaning worker, and a reset page sending `Clear-Site-Data`: header
+routing that static `_headers` cannot express, so it waits for the hosting
+move.
+
+**The tripwire.** The build names `/sw.js` in `build.json`
+(`serviceWorkers`), so the signed release list the extension's tripwire checks
+against lists it as the release's worker, with the worker's bytes and every
+file it precaches; a worker or a cached file the list lacks is a mismatch.
+Navigation preload keeps each navigation the tab's own, so the tripwire still
+sees its headers. Still open:
+
+- **A response kept out of the HTTP cache hides CSP and text changes.** The
+  tripwire reads the page's bytes from the HTTP cache, and with a worker in
+  control it does not require them. A changed page sent with headers that keep
+  it out of the cache (`Vary: *` with `no-cache`, for one) passes unseen until
+  the tripwire requires the bytes whenever the headers came from the
+  navigation (a tripwire follow-up). A changed script is still caught, from the
+  parse.
+- **The tripwire trusts the worker by its URL.** It lists `/sw.js` and checks
+  the bytes it fetches itself, but a server can answer the browser's own
+  worker request (`Service-Worker: script`) differently from the extension's,
+  and the browser installs what it was given. Watching the worker's own
+  requests is a tripwire follow-up; until then a worker is trusted by its URL.
+
+**Install.** `manifest.webmanifest` (name, `start_url` and `scope` `/`,
+standalone, 192 and 512 px icons), linked from the page and allowed by an exact
+`manifest-src`. Browsers that offer install (Chromium; Safari's Add to Dock and
+Home Screen) can install bento/home. File handling and share targets are not
+in it yet.
 
 ## Rigs
 
 | rig | what |
 |---|---|
 | `scripts/test-home-web.mjs` | the library and frame in a real browser (`BENTO_BROWSER=chromium\|webkit\|firefox`): verification, network allow-list, frame-page standalone refusals, downloads, navigation |
-| `scripts/test-home-web-mutants.mjs` | fourteen mutants, each red on the row that guards it |
+| `scripts/test-home-web-mutants.mjs` | nineteen mutants, each red on the row that guards it |
 | `scripts/test-home-web-build.mjs` | production-build refusals, the release's `--home-web` options and history choice, a rehearsal release with `--home-web` |
 | `scripts/test-home-web-build-mutants.mjs` | mutants of those refusals, each red on its row |
 | `scripts/test-home-web-out.mjs` | where a release may put the build: identity containment, the macOS firmlink row and its mutant |
+| `scripts/test-home-web-identity.mjs` | the bento/id agent with the real sign-in host and a CDP virtual authenticator; `--mutants`: one per rule |
+| `scripts/test-home-web-offline.mjs` | stage 3: the worker, offline, updates, the kill-switch drill, the status failing closed, install, the network allow-list; `--mutants` runs its own mutants |
 | `scripts/test-shell-standalone.mjs` | every app shell points to bento.page and never depends on it |
 
 Chromium and the build rig run in the required `validate` check; WebKit,
-Firefox and both mutant rigs in `ci-home.yml` (`home-web-engines`).
+Firefox and the mutant rigs in `ci-home.yml` (`home-web-engines`,
+`home-web-offline-engines`).
+
+## bento/id in the library (`--dev --identity`, development only)
+
+`build.mjs --dev --identity --directory-keys <json>` adds the bento/id agent
+(`src/identity.ts`, `src/identity-ui.ts`, `identity.html`). Without the flag
+nothing of it is in the page, and every file it serves is byte-identical to
+a build without this code. It stays a development build until the directory's keys are pinned
+for release and the directory and the sign-in host are deployed. A production
+build (without `--dev`) refuses `--identity` and `--directory-keys`.
+
+- **No WebAuthn here.** The passkeys belong to rp `id.bento.page`, which this
+  origin cannot use. Every ceremony runs on the sign-in host
+  (`server/signin`): the library opens it in a popup, inside the person's
+  click, and sends exactly `{t:'enrol', W, kx, label}` to its literal origin;
+  it hears only that window at that origin, and the host answers
+  `{t:'enrolled', wdev, watt}`. The library never calls the WebAuthn Signal
+  API, with any list.
+- **Keys.** `W` (ECDSA P-256, sign) and `kx` (ECDH P-256, deriveBits) are
+  made non-extractable, fresh at every ceremony, and kept as `CryptoKey`s in
+  this origin's IndexedDB (`bento-id`). A held key that can be exported is
+  dropped. No account key, no PRF, no key blob, no code.
+- **Verified, never believed.** The certificate must be for exactly the keys
+  and label sent, and "Confirm it's you" never switches accounts. The roster
+  chain (`verifyRosterChain`) and the certificate with its countersign
+  (`verifyDevice`) are checked by the kernel under the directory keys the build
+  pins, never keys the network offers.
+- **Sign out sticks, in every tab.** Tabs share the store, so a check-in
+  writes only over the record it renewed, checked and written in one
+  transaction: after a sign-out or a new sign-in (in this tab or another) it
+  writes nothing back and takes what the store holds. Another tab may still
+  show the old state until its next check-in, but it never writes it back. A
+  store that fails does not stop the hourly check-in.
+- **24 hours, 7 days.** A check-in signed by `W` (`wren.`) renews the 24-hour
+  countersign on load and every hour, until 7 days after the ceremony. A day
+  before that the line asks "Confirm it's you": a new ceremony, new keys.
+- **Incidents and revocations.** An incident record covering this key's
+  ceremony (or one that cannot be read, or still open), or the directory
+  saying the key is revoked, deletes the keys; only a new ceremony signs the
+  browser in again.
+- **Policy.** `connect-src` adds the directory (`https://id.bento.page`) and
+  nothing else; Trusted Types stay required with no policy; the line is text
+  only.
+
+bento/home's routes on the directory (CORS to `https://home.bento.page` alone):
+
+| route | request | answer |
+|---|---|---|
+| `POST /v1/home/challenge` | `{address}` | `{nonce}` |
+| `POST /v1/home/checkin` | `{wren, sig, pin?}` | `{watt, wattSig, signer, assertion, roster, incidents}`, or 403 `{error: 'revoked' \| 'cap' \| 'unknown', incidents}` |
+
+`scripts/lib/id-web-directory-stub.mjs` is the full contract, with every check
+in order. `scripts/test-home-web-identity.mjs` drives the real library and the
+real sign-in host against it (`--chrome`, and `--mutants`: a mutant per rule).
 
 ## Not in stage 1
 
-- Saving. ⌘S in the document is declined and the library says so. Editing with
-  write-back needs a per-document store over the frame's port, a kernel
-  transport.
+- Saving. ⌘S in the document is declined and the library says so. The
+  per-document store over the frame's port exists (above); write-back with a
+  re-splice into the verified shell is next.
 - A security floor in the release history (a signed mark on releases with known
   script bugs): stage 1 runs any release in the history, with no storage, keys
   or handles to reach.

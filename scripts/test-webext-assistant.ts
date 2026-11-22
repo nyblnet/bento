@@ -442,11 +442,19 @@ const CH = '__bento_tray__'
 }
 {
   const manifest = JSON.parse(read('manifest.json'))
-  ok(manifest.content_scripts.every((cs: any) => cs.all_frames === false), 'content scripts state all_frames: false explicitly — the default, but a future edit cannot flip it silently')
-  ok(manifest.content_scripts.every((cs: any) => cs.matches.every((m: string) => m.startsWith('file:///'))), 'and only on file: documents')
+  // The tripwire's observer (src/tripwire-observe.js) is the one content script
+  // on the web, and its origin the one declared web host permission: it must
+  // run without a prompt to be a tripwire at all. It carries no bridge and
+  // relays nothing; scripts/test-webext-tripwire.ts pins it to exactly the
+  // origins in src/tripwire-config.js. Everything else stays as below.
+  const isTripwire = (cs: any) => cs.js.length === 1 && cs.js[0] === 'src/tripwire-observe.js'
+  const bridges = manifest.content_scripts.filter((cs: any) => !isTripwire(cs))
+  const tripwireHosts = manifest.content_scripts.filter(isTripwire).flatMap((cs: any) => cs.matches)
+  ok(bridges.length === 2 && bridges.every((cs: any) => cs.all_frames === false), 'content scripts state all_frames: false explicitly — the default, but a future edit cannot flip it silently')
+  ok(bridges.every((cs: any) => cs.matches.every((m: string) => m.startsWith('file:///'))), 'and only on file: documents')
   ok(/ev\.source !== window/.test(read('src/relay.js')), 'relay.js checks the frame\'s source is its own window')
   ok(/'assistant'/.test(read('src/page-bridge.js')), 'page-bridge.js announces the capability')
-  ok(Array.isArray(manifest.optional_host_permissions) && (manifest.host_permissions ?? []).every((h: string) => h.startsWith('file://')), 'site access on the WEB is optional and asked per origin, never declared up front (file:// is the extension\'s own business)')
+  ok(Array.isArray(manifest.optional_host_permissions) && (manifest.host_permissions ?? []).every((h: string) => h.startsWith('file://') || tripwireHosts.includes(h)), 'site access on the WEB is optional and asked per origin, never declared up front (file:// is the extension\'s own business)')
 }
 
 // ---------------------------------------------------------------------------

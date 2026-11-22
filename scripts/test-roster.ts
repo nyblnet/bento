@@ -17,10 +17,12 @@ import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  verifyRosterChain, verifyResetStop, parseRos, buildRos, buildVrs, ROSTER_PREFIXES, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, ROSTER_WAIT_MS, NEW_ACCOUNT_MS,
+  verifyRosterChain, verifyResetStop, verifyWout, verifyAdel, parseRos, buildRos, buildVrs, buildWout, buildAdel, buildUserHandle, userHandleAccount, accountNameOf,
+  ROSTER_PREFIXES, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, ROSTER_WAIT_MS, NEW_ACCOUNT_MS, DELETE_WAIT_MS, USER_HANDLE_LABEL, USER_HANDLE_BYTES,
   type RosterLink, type RosterHead,
 } from '../kernel/src/roster.ts'
-import { RESERVED_PREFIXES, LINK_PREFIXES, b64uEnc } from '../kernel/src/statements.ts'
+import { RESERVED_PREFIXES, LINK_PREFIXES, b64uEnc, b64uDec } from '../kernel/src/statements.ts'
+import { createHash } from 'node:crypto'
 
 let failures = 0, checks = 0
 function ok(cond: boolean, msg: string) {
@@ -130,6 +132,8 @@ const REQUIRED: Array<[string, string]> = [
   ['cosign/wrong-key', 'cosign-consent-signature'], ['cosign/other-purpose', 'cosign-consent-purpose'], ['cosign/on-reset', 'proof'], ['cosign/on-quarantine', 'proof'],
   ['cosign/pinned-age-lower-bound', 'cosign-unripe'], ['ok/cosign-pinned-ripe', 'accept'], ['cosign/readded-age-restarts', 'cosign-unripe'],
   ['ok/q-voided-by-consent-key', 'accept'], ['ok/q-voided-ck-cns-old', 'accept'], ['q/voided-ck-cns-other-text', 'voided-consent-transcript'],
+  // security-ruling-949 C2: a change ripened later than it was asked is judged at requestedAt
+  ['cosign/unripe-at-request-ripe-at-ripening', 'cosign-unripe'], ['ck/unripe-at-request-ripe-at-ripening', 'unripe'], ['ok/cosign-ripened-late', 'accept'], ['ok/ck-ripened-late', 'accept'],
 ]
 for (const [n, want] of REQUIRED) {
   const r = byName.get(n)
@@ -241,6 +245,112 @@ for (const r of stops) {
   ok(buildVrs({ address: 'alice@example.com', resetHash: ok14.text.split('.')[2], dirNonce: ok14.challenge }) === ok14.text, 'buildVrs writes the one spelling')
 }
 
+console.log('\nC2: the two directory clocks of one link (requestedAt vs ripenedAt)')
+{
+  const rip = (r: Row) => r.links[r.links.length - 1].rip.split('.')
+  for (const n of ['cosign/unripe-at-request-ripe-at-ripening', 'ck/unripe-at-request-ripe-at-ripening', 'ok/cosign-ripened-late', 'ok/ck-ripened-late']) {
+    const p = rip(byName.get(n)!)
+    ok(Number(p[3]) > Number(p[2]), `${n}: ripenedAt is later than requestedAt`)
+  }
+  // in the unripe rows the ck is under 72 h at requestedAt and over it at ripenedAt, and the change waited under 72 h:
+  // only the choice of clock decides them
+  const since = 1_800_000_000_000 + 232 * 3_600_000
+  for (const n of ['cosign/unripe-at-request-ripe-at-ripening', 'ck/unripe-at-request-ripe-at-ripening']) {
+    const p = rip(byName.get(n)!)
+    ok(Number(p[2]) - since < ROSTER_WAIT_MS && Number(p[3]) - since >= ROSTER_WAIT_MS && Number(p[3]) - Number(p[2]) < ROSTER_WAIT_MS,
+      `${n}: unripe at requestedAt, ripe at ripenedAt, waited under 72 h`)
+  }
+  for (const [n, field] of [['ok/cosign-ripened-late', 'cosign'], ['ok/ck-ripened-late', 'cns']] as const) {
+    const r = byName.get(n)!
+    const l = r.links[r.links.length - 1] as RosterLink & { cosign?: { cns: string } }
+    const cns = field === 'cosign' ? l.cosign!.cns : l.cns!
+    const exp = Number(cns.split('.')[5]), p = rip(r)
+    ok(exp > Number(p[2]) && exp <= Number(p[3]), `${n}: the cns. is alive at requestedAt and expired by ripenedAt`)
+  }
+}
+
+console.log('\nwout. and adel.: member acts the directory checks')
+type ActRow = { name: string; links: RosterLink[]; challenge: string; challengeAt?: number; now: number; text: string; signer: string
+  proof: Record<string, unknown>; spent?: boolean; expect: 'accept' | 'reject'; reason?: string }
+async function runAct(kind: 'wout' | 'adel', r: ActRow, extra: Record<string, unknown> = {}) {
+  try {
+    const ro = await verifyRosterChain(r.links, { directoryKeys: F.directoryKeys, rpId: F.rpId, origins: F.origins, consentRp: F.consentRp, now: r.now })
+    if (!ro.ok) return { ok: false as const, reason: `chain: ${ro.reason}` }
+    const o = { roster: ro.value, challenge: r.challenge, spend: () => !r.spent, rpId: F.rpId, origins: F.origins, consentRp: F.consentRp, now: r.now, ...extra }
+    return kind === 'wout' ? await verifyWout(r.text, r.signer, r.proof as never, { ...o, challengeAt: r.challengeAt!, ...extra })
+      : await verifyAdel(r.text, r.signer, r.proof as never, o)
+  } catch (e) { return { ok: false as const, reason: `threw: ${(e as Error).message}` } }
+}
+for (const [kind, list] of [['wout', F.signOuts], ['adel', F.deletions]] as const) {
+  for (const r of list as ActRow[]) {
+    const v = await runAct(kind, r)
+    const got = v.ok ? 'accept' : `reject (${v.reason})`
+    const want = r.expect === 'accept' ? 'accept' : `reject (${r.reason})`
+    ok(got === want, `${kind} ${r.name}: ${got}${got === want ? '' : `, want ${want}`}`)
+  }
+}
+{
+  const so = new Map((F.signOuts as ActRow[]).map((r) => [r.name, r])), de = new Map((F.deletions as ActRow[]).map((r) => [r.name, r]))
+  const REQ_OUT: Array<[string, string]> = [['ok/wout-by-passkey', 'accept'], ['ok/wout-by-recovery-key', 'accept'], ['ok/wout-by-consent-key', 'accept'],
+    ['wout/signer-not-member', 'signer'], ['wout/signer-removed', 'signer'], ['wout/signer-quarantined', 'quarantined'], ['wout/other-address', 'address'],
+    ['wout/address-not-normal', 'grammar'], ['wout/other-challenge', 'challenge'], ['wout/at-not-challenge-time', 'at'], ['wout/spent', 'replay'],
+    ['wout/assertion-other-text', 'assertion-challenge'], ['wout/assertion-over-adel', 'assertion-challenge'], ['wout/rk-wrong-key', 'signature'],
+    ['wout/ck-cns-web-add', 'consent-purpose'], ['wout/ck-cns-expired', 'consent-expired'], ['wout/at-before-challenge-time', 'at'], ['wout/passkey-raw-signature', 'proof'], ['wout/extra-field', 'grammar'], ['wout/at-zero', 'grammar'], ['wout/nonce-short', 'grammar']]
+  const REQ_DEL: Array<[string, string]> = [['ok/adel-by-passkey', 'accept'], ['ok/adel-by-recovery-key', 'accept'], ['ok/adel-by-consent-key', 'accept'],
+    ['adel/old-head', 'roster-head'], ['adel/signer-not-member', 'signer'], ['adel/signer-removed', 'signer'], ['adel/signer-quarantined', 'quarantined'],
+    ['adel/other-address', 'address'], ['adel/address-not-normal', 'grammar'], ['adel/other-challenge', 'challenge'], ['adel/spent', 'replay'],
+    ['adel/assertion-other-text', 'assertion-challenge'], ['adel/assertion-over-wout', 'assertion-challenge'], ['adel/ck-cns-web-add', 'consent-purpose'], ['adel/ck-cns-expired', 'consent-expired'],
+    ['adel/passkey-raw-signature', 'proof'], ['adel/extra-field', 'grammar'], ['adel/head-not-a-hash', 'grammar'], ['adel/vrs-text', 'grammar']]
+  for (const [m, req] of [[so, REQ_OUT], [de, REQ_DEL]] as const)
+    for (const [n, want] of req) { const r = m.get(n); ok(!!r && (want === 'accept' ? r.expect === 'accept' : r.reason === want), `required row ${n} (${want})`) }
+  // positive controls: each refusal flips when only its cause changes
+  const w = so.get('ok/wout-by-passkey')!
+  ok((await runAct('wout', { ...so.get('wout/spent')!, spent: false })).ok, 'positive control: wout/spent is accepted with an unspent challenge')
+  const late = await runAct('wout', so.get('wout/at-not-challenge-time')!, { challengeAt: Number(so.get('wout/at-not-challenge-time')!.text.split('.')[2]) })
+  ok(late.ok, 'positive control: wout/at-not-challenge-time is accepted when the challenge was issued at the time it says')
+  let spent = 0
+  const g = await runAct('wout', so.get('wout/address-not-normal')!, { spend: () => { spent++; return true } })
+  ok(!g.ok && g.reason === 'grammar' && spent === 0, 'a wout. naming a non-normal address never spends the challenge (it is grammar)')
+  const nr = await runAct('wout', so.get('ok/wout-by-consent-key')!, { consentRp: undefined })
+  ok(!nr.ok && nr.reason === 'grammar', 'a consent key\'s sign-out without consentRp is a caller error')
+  ok(buildWout({ address: 'alice@example.com', at: w.challengeAt!, dirNonce: w.challenge }) === w.text, 'buildWout writes the one spelling')
+  const d = de.get('ok/adel-by-passkey')!
+  ok((await runAct('adel', { ...de.get('adel/spent')!, spent: false })).ok, 'positive control: adel/spent is accepted with an unspent challenge')
+  for (const n of ['adel/address-not-normal', 'adel/extra-field', 'adel/head-not-a-hash', 'adel/vrs-text']) {
+    let spentAdel = 0
+    const ga = await runAct('adel', de.get(n)!, { spend: () => { spentAdel++; return true } })
+    ok(!ga.ok && ga.reason === 'grammar' && spentAdel === 0, `${n}: a malformed adel. never spends the challenge (it is grammar)`)
+  }
+  for (const [m, n] of [[so, 'wout/ck-cns-expired'], [de, 'adel/ck-cns-expired']] as const) {
+    const r = m.get(n)!
+    ok(Number(r.proof.cns!.toString().split('.')[5]) <= r.now, `${n}: the co-sign expired at or before now (only its time refuses it)`)
+  }
+  ok(buildAdel({ address: 'alice@example.com', headHash: d.text.split('.')[2], dirNonce: d.challenge }) === d.text, 'buildAdel writes the one spelling')
+  const head = d.links[d.links.length - 1].ros
+  ok(d.text.split('.')[2] === b64uEnc(new Uint8Array(createHash('sha256').update(head).digest())), 'ok/adel-by-passkey names the current head (sha256 of its ros. text)')
+  ok(F.deleteWaitMs === DELETE_WAIT_MS && DELETE_WAIT_MS === ROSTER_WAIT_MS, 'a deletion waits 72 h, like every change (fixture and code)')
+}
+
+console.log('\nthe passkey user handle (recomputed with node:crypto, not the reference)')
+{
+  const U = F.userHandles as { label: string; bytes: number; rows: Array<{ name: string; address: string; tailHex: string; handle: string | null; accountHex?: string }> }
+  ok(U.label === 'bento-dir/1/addr\n' && USER_HANDLE_LABEL === U.label && U.bytes === 48 && USER_HANDLE_BYTES === 48, 'label "bento-dir/1/addr" + LF, 48 bytes, in the fixture and the code')
+  for (const r of U.rows) {
+    const tail = Uint8Array.from(Buffer.from(r.tailHex, 'hex'))
+    const got = await buildUserHandle(r.address, tail)
+    if (r.handle === null) { ok(got === null && (await accountNameOf(r.address)) === null, `${r.name}: refused (not in normal form)`); continue }
+    const want = Buffer.concat([createHash('sha256').update(U.label + r.address, 'utf8').digest(), Buffer.from(tail)])
+    ok(r.handle === want.toString('base64url') && r.accountHex === want.subarray(0, 32).toString('hex'), `${r.name}: independent SHA-256 matches the fixture`)
+    ok(!!got && b64uEnc(got) === r.handle, `${r.name}: buildUserHandle matches the fixture`)
+    const acct = userHandleAccount(b64uDec(r.handle)!)
+    ok(!!acct && Buffer.from(acct).toString('hex') === r.accountHex, `${r.name}: the handle routes to its first 32 bytes`)
+  }
+  const [a, b] = U.rows
+  ok(a.accountHex === b.accountHex && a.handle !== b.handle, 'two passkeys of one account: one account name, two handles (the random tail)')
+  for (const n of [0, 32, 47, 49, 64]) ok(userHandleAccount(new Uint8Array(n)) === null, `a ${n}-byte handle routes nowhere`)
+  ok((await buildUserHandle('alice@example.com', new Uint8Array(15))) === null && (await buildUserHandle('alice@example.com', new Uint8Array(17))) === null, 'the tail is exactly 16 bytes')
+}
+
 console.log('\ncaller parameters are required, never defaulted')
 {
   const r = byName.get('ok/full-chain')!
@@ -277,9 +387,9 @@ console.log('\nthe builder writes the one spelling')
 console.log('\nprefixes')
 {
   const K1K2 = ['bind', 'dev', 'rot', 'att', 'tomb', 'del', 'cmp', 'dreq', 'cns', 'cnst', 'inv', 'rev', 'dlg', 'prove']
-  ok(ROSTER_PREFIXES.length === 3 && ['ros', 'rip', 'vrs'].every((p) => ROSTER_PREFIXES.includes(p)), 'roster.ts defines ros. rip. vrs.')
+  ok(ROSTER_PREFIXES.length === 5 && ['ros', 'rip', 'vrs', 'wout', 'adel'].every((p) => ROSTER_PREFIXES.includes(p)), 'roster.ts defines ros. rip. vrs. wout. adel.')
   ok(ROSTER_PREFIXES.every((p) => !RESERVED_PREFIXES.includes(p) && !LINK_PREFIXES.includes(p) && !K1K2.includes(p)),
-    'ros. rip. vrs. collide with no existing family, reserved prefix or link prefix')
+    'ros. rip. vrs. wout. adel. collide with no existing family, reserved prefix or link prefix')
   ok(['mgd', 'vch', 'ojn', 'dvc'].every((p) => RESERVED_PREFIXES.includes(p)), 'the organisation prefixes mgd. vch. ojn. dvc. are reserved (org-identity §5.4 item 4)')
   ok(['wdev', 'watt', 'wren', 'dev2'].every((p) => RESERVED_PREFIXES.includes(p)), 'wdev. watt. wren. dev2. are reserved for the device certificates')
   ok(RESERVED_PREFIXES.includes('pk') && RESERVED_PREFIXES.includes('drev'), 'pk. and drev. stay reserved')

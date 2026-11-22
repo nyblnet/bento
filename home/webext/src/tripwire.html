@@ -1,0 +1,45 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>bento/home</title>
+<link rel="icon" href="../icons/icon.svg">
+<link rel="stylesheet" href="ui.css">
+<!-- Blocking, and before the body: stamps the theme so the FIRST paint is right. -->
+<script src="theme.js"></script>
+<style>
+  /* The tripwire's report (tripwire.js): what was checked, what did not
+   * match, what to do. Opened next to the page on a mismatch. */
+  main { max-width: 680px; margin: 0 auto; padding: 28px 20px 40px; display: flex; flex-direction: column; gap: 14px }
+  .verdict { padding: 14px 16px; border-radius: var(--r); background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow) }
+  .verdict.bad { border-color: var(--bad) }
+  .verdict h1 { margin-bottom: 6px }
+  .verdict.bad h1 { color: var(--bad) }
+  p { margin: 0 }
+  .meta { font-size: 12.5px; overflow-wrap: anywhere }
+  .rules { display: flex; gap: 6px; flex-wrap: wrap }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
+  pre { margin: 0; padding: 12px; border-radius: var(--r); background: var(--panel); border: 1px solid var(--line);
+    font-size: 12px; max-height: 340px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; direction: ltr; text-align: start }
+  ul { margin: 0; padding-inline-start: 18px; font-size: 12.5px }
+  li { overflow-wrap: anywhere }
+</style>
+<main>
+  <section class="verdict" id="verdict" hidden>
+    <h1 id="title"></h1>
+    <p class="meta dim" id="meta"></p>
+  </section>
+  <p class="warn" id="notfound" data-i18n="twPageNotFound" hidden></p>
+  <p id="lead" data-i18n="twPageLead"></p>
+  <p class="meta dim" id="liststatus"></p>
+  <p id="todo" data-i18n="twPageDo" hidden></p>
+  <div class="rules" id="rules"></div>
+  <div class="actions" id="report" hidden>
+    <span data-i18n="twPageReport"></span>
+    <a class="btn" id="advisory" href="https://github.com/nyblnet/bento/security/advisories/new" target="_blank" rel="noopener" data-i18n="twPageReportLink"></a>
+    <button class="btn" id="copy" type="button" data-i18n="twPageCopy"></button>
+  </div>
+  <pre id="details" hidden></pre>
+  <h2 data-i18n="twPageRecent"></h2>
+  <p class="dim" id="none" data-i18n="twPageNone" hidden></p>
+  <ul id="recent"></ul>
+</main>
+<script type="module" src="tripwire-page.js"></script>

@@ -717,7 +717,8 @@ export async function verifyDreq(text        , sig        , opts
  *   roster   the texts that change who speaks for the account: a roster head
  *            (`ros.`, as the requester or as the co-signer that skips the 72 h
  *            wait), a native device certificate (`dev2.`, which a ripe ck makes
- *            native tier), and a member's stop of a reset (`vrs.`)
+ *            native tier), a member's stop of a reset (`vrs.`), signing every
+ *            browser out (`wout.`) and asking to delete the account (`adel.`)
  *   web-add  a browser device certificate (`wdev.`), approved from a phone
  *            (route D)
  * A signature never moves between them: the transcript hashes the exact
@@ -726,7 +727,7 @@ export async function verifyDreq(text        , sig        , opts
 const CONSENT_FAMILY                                            = {
   invite: ['inv.'], revoke: ['rev.'], link: ['dev.'], rotate: ['bind.'], unbind: ['del.'],
   'cred-add': ['dreq.cred-add.'], 'cred-del': ['dreq.cred-del.'], 'rc-enrol': ['dreq.rc-enrol.'],
-  roster: ['ros.', 'dev2.', 'vrs.'], 'web-add': ['wdev.'],
+  roster: ['ros.', 'dev2.', 'vrs.', 'wout.', 'adel.'], 'web-add': ['wdev.'],
 }
 const ofFamily = (purpose                , payload        ) => CONSENT_FAMILY[purpose].some((f) => payload.startsWith(f))
 const RESERVED_PURPOSES = new Set(['grant', 'role'])
@@ -904,8 +905,9 @@ export const webauthnChallengeFor = (cnsText        )                  => sha256
  *           sign-in vouched for an act, a member's request to join a managed
  *           domain, and a sovereign directory's device statement. Reserved so
  *           a launch-1 verifier refuses them today and no family takes them.
- * (ros. and rip., the option G roster and its ripening countersign, are defined
- * in roster.ts: ROSTER_PREFIXES.)
+ * (ros. and rip., the option G roster and its ripening countersign, and the
+ * member acts the directory checks, vrs. wout. adel., are defined in roster.ts:
+ * ROSTER_PREFIXES.)
  */
 export const RESERVED_PREFIXES                    = Object.freeze(['pk', 'drev', 'wdev', 'watt', 'wren', 'dev2', 'wret', 'inc', 'mgd', 'vch', 'ojn', 'dvc'])
 

@@ -946,5 +946,68 @@
   "menuOpenWithId": {
     "message": "Bento ID로 열기",
     "description": "Library: an item in a document card's menu (only when the preview is on)."
+  },
+  "twMismatchTitle": {
+    "message": "bento/home이 Bento 릴리스를 제공하지 않고 있습니다"
+  },
+  "twMismatchBody": {
+    "message": "home.bento.page가 이 브라우저에 보낸 코드가 Bento가 서명한 어떤 릴리스와도 일치하지 않습니다. 그 탭을 닫고 그곳에서 문서를 열지 마세요. 자세한 내용을 보려면 클릭하세요."
+  },
+  "twOldTitle": {
+    "message": "bento/home이 이전 릴리스를 제공하고 있습니다"
+  },
+  "twOldBody": {
+    "message": "home.bento.page가 이 브라우저에 보낸 코드는 진짜 Bento 릴리스이지만 최신 릴리스는 아닙니다."
+  },
+  "twListTitle": {
+    "message": "bento/home 릴리스 목록이 진짜가 아닙니다"
+  },
+  "twListBody": {
+    "message": "bento.page가 Bento의 서명이 없는 릴리스 목록을 보내서 home.bento.page를 확인할 수 없습니다. 자세한 내용을 보려면 클릭하세요."
+  },
+  "twBadgeTitle": {
+    "message": "bento/home이 서명된 릴리스와 일치하지 않았습니다"
+  },
+  "twPageTitle": {
+    "message": "bento/home 코드 확인"
+  },
+  "twPageLead": {
+    "message": "이 확장 프로그램은 home.bento.page가 브라우저에 보내는 코드를 Bento가 오프라인 릴리스 키로 서명한 릴리스와 비교합니다. 알려 주기만 할 뿐, 아무것도 바꾸거나 차단하지 않았습니다."
+  },
+  "twPageDo": {
+    "message": "bento/home 탭을 닫고, 원인이 밝혀질 때까지 그곳에서 문서를 열거나 편집하거나 저장하지 마세요. 이 확인은 디스크의 파일을 바꾸지 않습니다."
+  },
+  "twPageReport": {
+    "message": "아래 세부 정보와 함께 비공개로 신고해 주세요:"
+  },
+  "twPageReportLink": {
+    "message": "Bento에 신고"
+  },
+  "twPageCopy": {
+    "message": "세부 정보 복사"
+  },
+  "twPageCopied": {
+    "message": "복사됨"
+  },
+  "twPageRecent": {
+    "message": "최근 확인"
+  },
+  "twPageNone": {
+    "message": "아직 기록된 확인이 없습니다."
+  },
+  "twPageNotFound": {
+    "message": "그 확인 기록이 없습니다."
+  },
+  "twPageListNone": {
+    "message": "아직 서명된 릴리스 목록이 없습니다. home.bento.page는 한 번도 확인되지 않았습니다."
+  },
+  "twPageListHeld": {
+    "message": "릴리스 목록 #$1($2에 가져옴)과 비교하고 있습니다."
+  },
+  "twNeverTitle": {
+    "message": "bento/home이 확인되지 않았습니다"
+  },
+  "twNeverBody": {
+    "message": "이 확장 프로그램이 3일 동안 Bento의 서명된 릴리스 목록을 가져오지 못해서 home.bento.page가 보내는 코드를 확인하지 못했습니다."
   }
 }

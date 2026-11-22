@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Set up bento/id</title>
+<link rel="stylesheet" href="/signin.css">
+<script type="module" src="/link.js"></script>
+</head>
+<body data-link="setup" data-state="loading">
+<main>
+  <p class="brand">bento/id</p>
+
+  <section data-for="loading">
+    <p>Loading…</p>
+  </section>
+
+  <section data-for="ready" hidden>
+    <h1>Set up bento/id</h1>
+    <p>You are making a passkey for <strong data-address></strong>. Only continue if that is your email address and you asked for this link just now.</p>
+    <p>Your browser or password manager keeps the passkey, and it is how you sign in to bento/id.</p>
+    <p class="note" id="x3">Documents shared with you are opened by keys kept in this browser. If this browser forgets them, you lose access to those documents, and Safari forgets a site’s data after 7 days without a visit. To keep shared documents through a lost device or a forgetful browser, install the Bento app and make a recovery code.</p>
+    <div class="actions">
+      <button id="make" type="button" class="primary">Make a passkey</button>
+    </div>
+  </section>
+
+  <section data-for="working" hidden>
+    <h1>Working…</h1>
+    <p>Follow your browser’s passkey prompt.</p>
+  </section>
+
+  <section data-for="confirm" hidden>
+    <h1>Your account is set up</h1>
+    <p>Sign in once with the passkey you just made, so this site knows it is yours.</p>
+    <div class="actions">
+      <button id="confirm" data-confirm type="button" class="primary">Sign in with the new passkey</button>
+    </div>
+  </section>
+
+  <section data-for="done" hidden>
+    <h1>You’re signed in</h1>
+    <p>This site is signed in to bento/id as <strong id="done-account"></strong>. You can now sign in to bento/home in this browser.</p>
+    <button type="button" data-close>Close</button>
+  </section>
+
+  <section data-for="unconfirmed" hidden>
+    <h1>Set up, not signed in</h1>
+    <p>Your account is set up, but signing in with the new passkey did not finish.</p>
+    <div class="actions">
+      <button type="button" data-confirm class="primary">Try again</button>
+    </div>
+  </section>
+
+  <section data-for="failed" hidden>
+    <h1>Not set up</h1>
+    <p>Nothing was set up. If this link was used already or is more than 20 minutes old, ask for a new one.</p>
+    <div class="actions">
+      <button id="retry" type="button">Try again</button>
+      <button type="button" data-close>Close</button>
+    </div>
+  </section>
+
+  <section data-for="refused" hidden>
+    <h1>This link doesn’t work</h1>
+    <p>It is not a complete bento/id setup link. Open the link from the email exactly as it came, and never paste it into a page.</p>
+    <button type="button" data-close>Close</button>
+  </section>
+</main>
+</body>
+</html>

@@ -1,31 +1,56 @@
 import { defineConfig } from 'vite'
 import { viteSingleFile } from 'vite-plugin-singlefile'
 import { readFileSync } from 'node:fs'
+import { revealLite } from './reveal-lite'
 
-// Reveal's link-preview overlay and background-iframe builder, switched OFF at
-// the source. No config option disables the overlay (a data-preview-link
-// attribute binds it even with previewLinks:false) and it opens an UNSANDBOXED
-// iframe on a click, so a document-controlled attribute must never reach it.
-// Each edit must match exactly once or the build fails: a Reveal upgrade that
-// moves the code is a loud error, never a silent return of the hole.
-const REVEAL_EDITS: Array<[string, string]> = [
-  ['update(){this.Reveal.getConfig().previewLinks', 'update(){return;this.Reveal.getConfig().previewLinks'],
-  ['onSlidesClicked(e){', 'onSlidesClicked(e){return;'],
-  ['previewIframe(e){this.close()', 'previewIframe(e){return;this.close()'],
-  ['previewImage(e,t){', 'previewImage(e,t){return;'],
-  ['previewVideo(e,t){', 'previewVideo(e,t){return;'],
-  ['else if(a&&!0!==i.excludeIframes){', 'else if(!1){'],
-]
-const disarmReveal = {
-  name: 'bento-disarm-reveal-preview',
+// Moveable with only the "ables" the editor turns on. `moveable`'s default
+// class registers ALL of them — warp, clip, round, scale, pinch, origin-drag,
+// scroll, padding… — whether or not a prop ever enables one, so every saved
+// deck carried ~16 KB of handles nothing could show. The editor passes
+// draggable, resizable, rotatable and snappable (canvas.ts), selects groups and
+// listens for click/clickGroup; KEEP_ABLES is that set plus the always-on
+// internals. An able that is not registered cannot be enabled: add it here
+// BEFORE passing its prop in canvas.ts.
+// Build only — the dev server pre-bundles the published file (every able
+// registered, the same ones enabled). The rewrite must match exactly once or
+// the build fails: an upgrade that moves the code is a loud error, never a
+// silent return of the bytes.
+const KEEP_ABLES = ['BeforeRenderable', 'Default', 'Snappable', 'Draggable', 'Resizable', 'Rotatable', 'Groupable', 'Clickable', 'DragArea', 'Renderable']
+const ABLES_LIST = /var MOVEABLE_ABLES =\s*\[[^\]]*\];/g
+const trimMoveableAbles = {
+  name: 'bento-trim-moveable-ables',
   enforce: 'pre' as const,
+  apply: 'build' as const,
   transform(code: string, id: string) {
-    if (!/reveal\.js[\\/]dist[\\/]reveal\.esm\.js/.test(id)) return null
-    for (const [from, to] of REVEAL_EDITS) {
-      if (code.split(from).length !== 2) throw new Error('reveal.js changed: cannot disarm ' + from)
-      code = code.replace(from, () => to)
-    }
+    if (!/croact-moveable[\\/]dist[\\/]moveable\.esm\.js/.test(id)) return null
+    if ((code.match(ABLES_LIST) ?? []).length !== 1) throw new Error('moveable changed: cannot narrow MOVEABLE_ABLES')
+    for (const able of KEEP_ABLES) if (!new RegExp(`^var ${able} = `, 'm').test(code)) throw new Error('moveable changed: no able ' + able)
+    code = code.replace(ABLES_LIST, () => `var MOVEABLE_ABLES = /*#__PURE__*/ [${KEEP_ABLES.join(', ')}];`)
+    // makeAble() only builds an object: say so, or the ables dropped above stay in
+    code = code.replace(/^var (\w+) = makeAble\(/gm, 'var $1 = /*#__PURE__*/ makeAble(')
     return { code, map: null }
+  },
+}
+
+// Identifier names are re-assigned by terser AFTER esbuild has minified the
+// chunk. Nothing else changes: compress is off, so the syntax tree esbuild
+// emitted is kept and only local names move. No property is renamed — a
+// property mangle works by NAME across the whole bundle and one wrong name is
+// a model key, so it stays off. terser gives the same short name to the same
+// slot in every scope (first parameter `e`, second `t`, ...), so
+// `function(e,t){` and friends repeat byte-for-byte and deflate finds them;
+// esbuild's naming does not. Single-file builds only: that is what ships.
+const remangle = {
+  name: 'bento-remangle',
+  enforce: 'post' as const,
+  async generateBundle(_: unknown, bundle: Record<string, { type: string; code?: string }>) {
+    const { minify } = await import('terser')
+    for (const chunk of Object.values(bundle)) {
+      if (chunk.type !== 'chunk' || !chunk.code) continue
+      const out = await minify(chunk.code, { module: true, compress: false, mangle: true, format: { comments: false } })
+      if (!out.code) throw new Error('remangle: terser returned nothing')
+      chunk.code = out.code
+    }
   },
 }
 
@@ -46,16 +71,18 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(pkg.version),
     __BENTO_TEST_SEAL__: JSON.stringify(process.env.BENTO_TEST_SEAL === '1'),
   },
-  plugins: [disarmReveal,...(process.env.SINGLEFILE ? [viteSingleFile()] : [])],
+  plugins: [trimMoveableAbles, revealLite(), ...(process.env.SINGLEFILE ? [remangle, viteSingleFile()] : [])],
   // Dev-only: allow serving ../kernel (shared TS-source kernel) — without a
   // workspace root, vite's fs allow-list stops at the app dir. Build output
   // is unaffected (rollup has no such restriction).
-  // dev: pre-bundling would skip the transform above
+  // dev: pre-bundling would skip reveal-lite's module swaps
   optimizeDeps: { exclude: ['reveal.js'] },
   server: { fs: { allow: ['..'] } },
   build: {
     // Keep asset inlining aggressive; a Bento file must have zero external requests.
     assetsInlineLimit: 100_000_000,
     chunkSizeWarningLimit: 4096,
+    // One inlined chunk: there is nothing to preload, so no polyfill for it.
+    modulePreload: false,
   },
 })

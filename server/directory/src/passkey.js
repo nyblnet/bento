@@ -48,6 +48,14 @@ export const SIGNIN_ORIGIN = 'https://signin.id.bento.page'
  */
 export const DIRECTORY_ORIGIN = 'https://id.bento.page'
 
+/**
+ * bento/home, the one page that may ask the sign-in host to certify a browser
+ * key (the opener the sign-in host reports, `rq`), and the only origin the
+ * /v1/home/* routes answer CORS to. It is NEVER a ceremony origin: bento/home
+ * runs no WebAuthn for this rp, so it is not in the list below.
+ */
+export const HOME_ORIGIN = 'https://home.bento.page'
+
 export const PASSKEY = Object.freeze({
   rpId: 'id.bento.page',
   origins: Object.freeze({

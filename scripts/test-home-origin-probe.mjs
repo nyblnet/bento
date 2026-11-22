@@ -26,10 +26,14 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const PROBE = readFileSync(process.env.ORIGIN_PROBE || join(ROOT, 'home/ios/OriginProbe.js'), 'utf8')
 const pw = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const engine = pw[process.env.BENTO_BROWSER || 'webkit']
-const browser = await engine.launch()
+// a dead browser or a call that never returns fails loudly, never as a row (scripts/lib/browser-guard.mjs)
+const { guardBrowser, apiLogger } = await import(join(ROOT, 'scripts/lib/browser-guard.mjs'))
+const browser = await engine.launch({ logger: apiLogger })
+const guard = guardBrowser(browser, { rig: `origin probe (${process.env.BENTO_BROWSER || 'webkit'})`, stallMs: 120000 })
+guard.section('origin probe')
 
 let checks = 0, failures = 0
-const ok = (c, m) => { checks++; if (!c) failures++; console.log(`  ${c ? 'ok  ' : 'FAIL'}  ${m}`) }
+const ok = (c, m) => { checks++; if (!c) failures++; console.log(`  ${c ? 'ok  ' : 'FAIL'}  ${m}`); guard.progress(m) }
 
 const A = '7025b63c-1111-4222-8333-944455556666', B = '11111111-2222-4333-8444-555566667777'
 // Storage exactly as the kernel lays it out.
@@ -146,6 +150,6 @@ for (const app of ['bento-slides', 'bento-spaces', 'bento-dash', 'bento-type']) 
   }
 }
 
-await browser.close()
+await guard.close()
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

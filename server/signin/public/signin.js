@@ -118,12 +118,15 @@ async function onMessage(e) {
   const r = await checkRequest(e.data)
   if (voided) return
   if (typeof r === 'string') return show('refused', r)
+  // The certificate names the account, so it must be known before the
+  // passkey is asked: it comes from this site's own storage, never the request.
+  const account = savedAccount()
+  if (!account) return show('no-account')
   const fp = await fingerprint(r.W)
   if (voided) return
-  request = { ...r, rq: e.origin }
+  request = { ...r, rq: e.origin, account }
   $('who').textContent = e.origin
-  const account = savedAccount()
-  $('account').textContent = account || 'the account of the passkey you choose'
+  $('account').textContent = account
   $('label').textContent = r.label
   $('fp').textContent = fp
   show('consent')
@@ -134,8 +137,8 @@ async function approve() {
   busy = true
   show('working')
   try {
-    const nonce = await enrolChallenge()
-    const text = wdevText({ W: request.W, kx: request.kx, label: request.label, nonce })
+    const ch = await enrolChallenge(request.account)
+    const text = wdevText({ W: request.W, kx: request.kx, address: request.account, rosHash: ch.rosHash, label: request.label, at: ch.at, nonce: ch.nonce })
     const challenge = await challengeFor(text)
     const cred = await navigator.credentials.get({
       publicKey: { rpId: RP_ID, challenge, userVerification: 'required', allowCredentials: [], timeout: 120000 },

@@ -16,7 +16,7 @@
 import { spawnSync } from 'node:child_process'
 import zlib from 'node:zlib'
 // @ts-expect-error plain .mjs helper, no types
-import { decode as b86decode } from '../lib/b86.mjs'
+import { PAYLOAD_TYPE_RE, unpack } from '../lib/payload.mjs'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -86,8 +86,8 @@ console.log('no app shell carries the converter')
     // the runtime ships deflated, so look inside the payloads, not the text
     const html = fs.readFileSync(f, 'utf8')
     // (base-86 since 1.1.1, base64 before; scripts/lib/b86.mjs is the codec)
-    const blocks = [...html.matchAll(/<script[^>]*type="bento\/deflate-(b64|b86)"[^>]*>([^<]*)<\/script>/g)]
-    const payloads = blocks.map((m) => zlib.inflateRawSync(m[1] === 'b86' ? Buffer.from(b86decode(m[2].trim())) : Buffer.from(m[2].trim(), 'base64')).toString('utf8')).join('\n')
+    const blocks = [...html.matchAll(new RegExp(`<script[^>]*type="(${PAYLOAD_TYPE_RE})"[^>]*>([^<]*)<\\/script>`, 'g'))]
+    const payloads = blocks.map((m) => unpack(m[1], m[2]).toString('utf8')).join('\n')
     // non-vacuous: the runtime really was found and inflated (an unreadable
     // payload once made this check pass by looking at nothing)
     ok(blocks.length > 0 && payloads.length > 100_000, `${app}: ${blocks.length} runtime payload(s) inflated, ${Math.round(payloads.length / 1024)} KB of code read`)

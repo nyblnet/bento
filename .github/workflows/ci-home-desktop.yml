@@ -11,6 +11,9 @@ name: CI (home-desktop)
 
 on:
   pull_request:
+    # No paths filter here: a filter would also stop the `full-ci` label from
+    # starting these jobs. The gate job below decides instead, in seconds.
+    types: [opened, synchronize, reopened, labeled]
   push:
     branches: [main]
 
@@ -21,7 +24,33 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  home-desktop-gate:
+    # These jobs are heavy and none is the required check. On a PR they run
+    # only if it changes this zone's own files or carries the `full-ci` label;
+    # on main they always run. See scripts/ci/zone-gate.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts/ci
+            scripts/lib/ci-skips.mjs
+          sparse-checkout-cone-mode: false
+      - id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          LABELLED: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: scripts/ci/zone-gate '^(home/desktop/|home/fixtures/|kernel/fixtures/|\.github/workflows/ci-home-desktop\.yml$|scripts/ci/zone-gate$)'
+
   home-desktop-agent:
+    needs: home-desktop-gate
+    if: needs.home-desktop-gate.outputs.run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -146,6 +175,8 @@ jobs:
           ./fido-rig.sh
 
   home-desktop-windows:
+    needs: home-desktop-gate
+    if: needs.home-desktop-gate.outputs.run == 'true'
     # The WebView2 half, on GitHub's HOSTED windows-latest runner (maintainer, 2026-11-03):
     # the same host rigs as the Linux job, run under WebView2. Windows Hello and a real
     # TPM-backed consent key cannot be measured on a hosted runner; they are measured later in
@@ -216,6 +247,8 @@ jobs:
           if-no-files-found: warn
 
   home-desktop-lock:
+    needs: home-desktop-gate
+    if: needs.home-desktop-gate.outputs.run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     steps:

@@ -20,6 +20,7 @@ import { offlineEnabled } from '../update.ts'
 // so the offline switch cannot be forgotten — see GHSA-5c3x-xqp6-g94r.
 import { netWebSocket, SandboxedError, sharedStorageOrigin } from '../net.ts'
 import { appConfig } from '../app.ts'
+import { b64u } from './blobs.ts'
 
 /** the app's store, structurally — see session.ts HostStore */
 type Store = HostStore
@@ -27,19 +28,6 @@ type Store = HostStore
 export const DEFAULT_SYNC_HOST = 'wss://sync.bento.page'
 const SNAP_EVERY = 200 // ops between encrypted snapshot uploads
 
-const b64u = {
-  enc(bytes: Uint8Array): string {
-    let s = ''
-    for (const b of bytes) s += String.fromCharCode(b)
-    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-  },
-  dec(s: string): Uint8Array {
-    const b = atob(s.replace(/-/g, '+').replace(/_/g, '/'))
-    const out = new Uint8Array(b.length)
-    for (let i = 0; i < b.length; i++) out[i] = b.charCodeAt(i)
-    return out
-  },
-}
 
 export function mintRoomKey(): string {
   const bytes = new Uint8Array(32)

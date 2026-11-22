@@ -79,6 +79,7 @@ the string `</script>` can never appear and terminate the block.
 | `fontFamily` | `string` | Default font stack. |
 | `chartPalette?` | `string[]` | Ordered series colors for new charts. Absent = derived from `accent`. |
 | `table?` | `Partial<TableStyle>` | Defaults for newly inserted tables. Omitted properties use the standard table style; existing tables retain their own `style`. |
+| `tokens?` | `DesignTokens` | Design tokens: `{ modes?: string[], mode?: string, set: { [name]: { type, values: { [mode]: value } } } }`, `type` one of `color`, `number` (any dimension), `fontSize`, `opacity` (0..1, shown as %), `fontFamily` (a CSS font stack), `shadow` (`{ x?, y?, blur, color }`). Values are keyed by mode (`'default'` when `modes` is absent); `mode` is the active one. An element binds a property to a token with `themeRefs[path] = '$name'` — the literal stays on the element, exactly as with palette slots, and editing a token or switching `mode` rewrites every bound literal. A literal changed by hand (in any shell) loses its binding and keeps its value. Names match `[A-Za-z][\w.-]*`, at most 64 characters. |
 
 ---
 
@@ -126,8 +127,20 @@ Every element carries the common `ElementBase` fields, plus type-specific ones.
 | `link?` | `string` | While presenting, clicking jumps to this slide id. |
 | `group?` | `string` | Semantic group tag — hover focus + multi-element present behaviours target it. |
 | `groupId?` | `string` | *Editor* grouping (select/move as one). Distinct from `group`. |
+| `groupName?` | `string` | The group's name in the editor's layer list, carried by every member (a group is no object of its own). Display only; ungrouping or regrouping drops it. |
+| `parentId?` | `string` | The auto-layout frame this element sits in (see [Frames](#frames-auto-layout)). Its `x/y/w/h` are still written in full. |
+| `sizing?` | `{w?, h?: 'fixed'\|'fill', minW?, minH?}` | Inside a frame: `fill` takes the frame's free space on that axis. Absent = fixed. In a wrapping row or column a fill child counts as `minW`/`minH` (absent = 0) when the line breaks, then shares that line's free space with the line's other fill children. |
+| `name?` | `string` | The author's name for the element in the editor's layer list. Display only — never a key; unset, the list names it by kind or by its text. |
+| `keepAspectRatio?` | `boolean` | The padlock between W and H: a resize keeps the proportions, and typing W or H carries the other side. Any element: `true` = locked, absent = free. An image reads absent as locked (its long-standing default). Shift inverts it for one drag. An older shell ignores it on non-images (Shift still keeps the ratio there). |
+| `alt?` | `string` | What a screen reader says for a non-text element: rendered as `role="img"` with this `aria-label`. Absent = decorative, as before. Text is read as its text. |
+| `locked?` | `true` | *Editor only.* The canvas will not pick, drag or nudge it — a click passes through to what lies beneath, a marquee leaves it out. Still listed, and selectable, in Layers. Absent = unlocked. |
+| `hidden?` | `true` | Not drawn anywhere: canvas, thumbnails, the show, print, the file preview. Listed (dimmed) in Layers so it can be shown again. **A shell that predates this key draws a hidden element** — it ignores the key; that is the price of keeping the format additive. |
+| `fillHidden?` / `strokeHidden?` / `shadowHidden?` / `blurHidden?` | `true` | The inspector's eye on a single paint (Figma's): that fill, stroke, shadow or blur is not drawn, but its values stay on the element so a click brings it back. Paint stacks hide per layer (`fills[i].hidden`). An older shell draws the paint — nothing is lost, only shown. |
+| `flipX?` / `flipY?` | `true` | The content is drawn mirrored across the box's vertical (`flipX`) or horizontal (`flipY`) centre line; the box itself is unchanged. **A shell that predates these keys draws the element unmirrored.** |
 | `showOnHover?` | `string` | In-slide hover reveal: visible only while an element whose `group` equals this value is hovered (with `slide.hover.type='reveal'`). |
 | `role?` | `string` | Layout role (`title`/`subtitle`/`body`/`kicker` by convention) — drives cross-layout content moves. Free-form. |
+| `themeRefs?` | `Record<string, string>` | Where a literal came from, by property path (`fill`, `shadow.color`, `radius`): a palette slot (`accent1`, `accent1 -20%`) or a design token (`$name`, see `theme.tokens`). The literal always stays in place; the ref only lets the source re-derive it. |
+| `component?` | `{ id, key, main?, over?, off?, sig? }` | Component membership (Penpot's main/copy model, no element type of its own). Elements sharing `id` form one component; the set with `main: true` is the main, every other set (one per `groupId`) is a copy. `key` pairs a copy element with its counterpart in the main. A copy re-derives every property from the main except identity (`id`, `groupId`, `name`, `groupName`, `morphId`), its position offset, and the keys listed in `over` — the properties edited on that copy by hand. `off` (`[dx, dy]`) is a copy's offset from its main, kept so a reopened file places it as the session that saved it did. `sig` is a short hash of the main a copy last followed: a main that no longer matches it has moved since (the copy follows), and a copy that differs from an unmoved main was edited by hand (an override) — read from the file, so every replica and every later session agree. A copy's `parentId` and `sizing` are its own (a copy's children sit in the copy's frame). A copy pasted into a deck without its main is detached (`component` dropped); a main pasted or duplicated into a deck that already has its main becomes a copy. An older shell sees ordinary grouped elements. |
 
 The element `type` discriminant is one of: `text`, `shape`, `image`, `svg`,
 `chart`, `table`, `media`.
@@ -153,13 +166,54 @@ only the rendered output is resolved, so numbering re-flows when slides move.
 plus `fill`, `stroke`, `strokeWidth`, `radius` (rect corner). Options:
 
 - `fillGradient?`: `{ angle, stops: [{ at: 0..1, color }] }` — linear gradient;
-  when set it wins over `fill` (kept as the solid fallback).
+  when set it wins over `fill` (kept as the solid fallback). With
+  `kind: 'radial'` (and optional `cx`, `cy`, `r`, fractions of the box,
+  default 0.5) the stops run from the centre outward — an ellipse in a
+  non-square box. A shell that predates `kind` draws the same stops linearly
+  along `angle`. Text's `colorGradient` takes the same keys.
 - `strokeStyle?`: `solid | dashed | dotted` (wins over legacy `strokeDash?`).
+- `strokeDashes?`: `[dash, gap]` px — a custom pattern; wins over `strokeStyle`
+  (which an older shell draws instead).
+- `strokeAlign?`: `inside | center | outside` — where the stroke sits on the
+  outline. Absent = as always: inside on `rect`, `ellipse` and `triangle`,
+  centred on `arrow` and `path`. Open paths (lines) are always centred. An
+  older shell draws the absent way.
+- `radii?`: `[topLeft, topRight, bottomRight, bottomLeft]` — rect only, a radius
+  per corner; wins over `radius`, which the editor keeps at the largest corner
+  for older shells.
+- `strokeGradient?`: a gradient along the stroke (same keys as `fillGradient`;
+  on a **line**, along its one colour). Wins over `stroke` (a line's `fill`),
+  which stays the solid an older shell draws. Painted across the shape's box,
+  so a flat line shows it too.
+- `fills?`: `[{ color, gradient?, hidden?, blend? }, …]` and `strokes?`:
+  `[{ color, width, align?, dashes?, hidden?, gradient?, blend? }, …]` — fill
+  and stroke STACKS, bottom first. Closed shapes and open paths take both; a
+  **line** takes strokes only (its layers' colours mirror into `fill`, its
+  colour). When set, the layers are what is drawn; fills paint under strokes,
+  and a fill covers the shape's own outline whatever the strokes' positions
+  (Figma's rule). An open path's or a line's tips ride the top visible stroke.
+  `blend` is a CSS mix-blend-mode word (`multiply`, `screen`, `overlay`, …;
+  absent = normal); the gate keeps only words from that closed list.
+  `fill`/`fillGradient` and `stroke`/`strokeWidth`/`strokeAlign`/
+  `strokeDashes`/`strokeGradient` stay in the element and MIRROR the top
+  visible layer (`stacks.ts` derives them on every change), so an older shell
+  draws the paint that matters most (an older shell knows no `blend` on a
+  layer and draws one paint). A stack exists only with two or more layers; one
+  layer folds back into the plain keys. Colour refs live per layer
+  (`fills.1.color`, `fills.0.gradient.stops.2.color`, `strokes.0.color`,
+  `strokes.1.gradient.stops.0.color`).
 - **line** shapes take their color from `fill`, draw horizontally across the
   box (rotate for vertical), and accept tips `lineStart?`/`lineEnd?` =
   `none | arrow | dot | bar`.
 - **path** shapes carry `d?` (SVG path data) authored in the `pathBox?`
   viewBox `[x, y, w, h]`.
+- `bool?`: `{ op: union | subtract | intersect | exclude, shapes: ShapeElement[] }`
+  — a **vector boolean**. The element is an ordinary `path` whose `d`/`pathBox`
+  ARE the computed outline (contours wound by nesting depth, so the default
+  nonzero fill draws the holes), and every reader draws that. `shapes` are the
+  operands, bottom first, in slide coordinates as they stood when combined —
+  kept only so an editor can change the operation or release them. A reader
+  that ignores `bool` loses nothing but re-editing.
 
 ### `image`
 
@@ -268,6 +322,37 @@ A slide with `stateOf: "<parent-id>"` is a hidden variant of its parent:
 State slides live adjacent to their parent in `slides[]` and render nested in
 the editor sidebar. A clickable trigger should be a padded transparent hit
 rect, not the label text itself.
+
+---
+
+## Frames (auto layout)
+
+A **frame** is an ordinary `rect` shape carrying `layout`; the elements whose
+`parentId` names it are laid out inside it — Figma's auto layout, Penpot's
+flex/grid.
+
+| `layout` field | Type | Notes |
+|---|---|---|
+| `dir` | `'row'\|'col'\|'grid'` | Main axis, or a grid of equal cells. |
+| `gap` | `number` | Between children (px). |
+| `pad` | `[top, right, bottom, left]` | Padding inside the frame (px). |
+| `justify?` | `'start'\|'center'\|'end'\|'space-between'` | Main axis. Default `start`. |
+| `align?` | `'start'\|'center'\|'end'\|'stretch'` | Cross axis. Default `start`. |
+| `cols?` | `number` | Grid columns. Default 2. |
+| `clip?` | `boolean` | Children are clipped to the frame. |
+| `hug?` | `boolean` | The frame sizes itself to its children. With `wrap`, it keeps its main-axis size and hugs across its lines. |
+| `wrap?` | `boolean` | Row/column only: a child that would pass the frame's edge starts a new line, `gap` apart. Order reads line by line. |
+
+**The layout is derived and written back.** `slides/src/layout.ts` computes
+each child's `x/y/w/h` (and the frame's size when it hugs) and writes them into
+the model, the way connectors are routed: never an undo step, and every replica
+derives the same boxes. So a renderer, the morph, an export or a shell that
+predates frames reads plain positioned elements and draws the same picture —
+it only misses `clip`, and keeps the frame's last laid-out geometry when a
+child is moved. Order along the main axis is the children's current position,
+so dragging a child past a sibling reorders it. A `parentId` that names no frame
+is dropped. `gap`, `cols` and each `pad` side can follow a number token
+(`themeRefs['layout.gap'] = '$space.md'`, `layout.pad.0` …).
 
 ---
 

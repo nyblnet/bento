@@ -153,13 +153,15 @@ try {
   ok(!afterSer.includes('"sync"'), 'and carries no sync state')
 
   console.log('\nmenu copies (the same strip)')
-  // The Save ▾ menu, opened by its own trigger: clicking other topbar buttons
-  // in search of it would insert elements and change the deck mid-check.
+  // The File menu (the wordmark), opened by its own trigger: clicking other
+  // topbar buttons in search of it would insert elements and change the deck
+  // mid-check. The JSON round-trip lived in Save ▾ until the bar's three kinds
+  // (DECISIONS 2026-10-30) moved what acts on the document to File ▸ Advanced.
   const menuItem = (label) => page.evaluate((label) => {
-    const menu = document.querySelector('.ed-save-menu')
+    const menu = document.querySelector('.ed-file-menu')
     const wrap = menu?.closest('.ed-dropdown')
     if (!wrap) return false
-    if (!wrap.classList.contains('open')) wrap.querySelector('.ed-split-caret')?.click()
+    if (!wrap.classList.contains('open')) wrap.querySelector(':scope > :not(.ed-menu)')?.click()
     const el = [...menu.querySelectorAll('button')].find((n) => n.textContent.trim().startsWith(label))
     if (!el) return false
     el.click()

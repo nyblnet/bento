@@ -507,7 +507,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 0
     },
     {
       "name": "ok/wdev-older-head",
@@ -525,7 +526,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 0
     },
     {
       "name": "ok/wdev-signer-joined-at-head",
@@ -543,7 +545,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 0
     },
     {
       "name": "ok/wdev-no-label",
@@ -561,7 +564,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 0
     },
     {
       "name": "ok/wdev-label-40",
@@ -579,7 +583,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 0
     },
     {
       "name": "ok/watt-24h-exactly",
@@ -597,7 +602,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 0
     },
     {
       "name": "ok/watt-ob-0",
@@ -615,7 +621,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 0
     },
     {
       "name": "ok/watt-second-kid",
@@ -633,7 +640,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 0
     },
     {
       "name": "ok/watt-renewal-at-cap",
@@ -651,7 +659,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 0
     },
     {
       "name": "watt/past-cap",
@@ -705,7 +714,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 0
     },
     {
       "name": "ok/pinned-head",
@@ -723,7 +733,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 0
     },
     {
       "name": "ok/readded-names-readd-head",
@@ -741,7 +752,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 0
     },
     {
       "name": "ok/after-reset",
@@ -759,7 +771,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 0
     },
     {
       "name": "head/signer-removed",
@@ -941,7 +954,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 0
     },
     {
       "name": "head/recovery-key-signer",
@@ -1337,7 +1351,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 1807106400000
     },
     {
       "name": "ok/watt-mb-at-logged",
@@ -1355,7 +1370,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 1807192800000
     },
     {
       "name": "watt/mb-after-logged",
@@ -1643,7 +1659,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 0
     },
     {
       "name": "tier/ck-exact",
@@ -1662,7 +1679,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 0
     },
     {
       "name": "tier/no-consent-key",
@@ -1681,7 +1699,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 0
     },
     {
       "name": "tier/consent-key-not-member",
@@ -1700,7 +1719,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 0
     },
     {
       "name": "tier/consent-key-is-a-passkey",
@@ -1719,7 +1739,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 0
     },
     {
       "name": "tier/wdev-never-native",
@@ -1738,7 +1759,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 0
     },
     {
       "name": "sec/tier-consent-key-not-proven",
@@ -1757,7 +1779,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 0
     },
     {
       "name": "sec/tier-ck-absent-old-ceremony",
@@ -1776,7 +1799,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 0
     },
     {
       "name": "sec/renewal-past-original-cap",
@@ -1886,7 +1910,8 @@
         }
       },
       "expect": "accept",
-      "tier": "native"
+      "tier": "native",
+      "mb": 0
     },
     {
       "name": "tier/ck-signed-exactly-72h",
@@ -1904,7 +1929,8 @@
         }
       },
       "expect": "accept",
-      "tier": "native"
+      "tier": "native",
+      "mb": 0
     },
     {
       "name": "ck/unripe-one-second",
@@ -1994,7 +2020,8 @@
         }
       },
       "expect": "accept",
-      "tier": "native"
+      "tier": "native",
+      "mb": 0
     },
     {
       "name": "ck/not-member",
@@ -2310,7 +2337,8 @@
         }
       },
       "expect": "accept",
-      "tier": "passkey"
+      "tier": "passkey",
+      "mb": 0
     },
     {
       "name": "wdev/route-d-unripe",
@@ -2414,7 +2442,8 @@
       "about": "the old browser key W retires itself in favour of W2 at the new ceremony",
       "text": "wret.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.BLT05LZRJ3GfeSapMvZspSKWUz_-L4aJHf7xoxKyK7JLQsK-OPz7ta5yc92cgNQ4l6LyPL74o-wXT7bqrMdAjR4.YWxpY2VAZXhhbXBsZS5jb20.XV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV0",
       "sig": "3EotlTUda_0uugwMxNjELacTiEcRsVlgN6QSCPI24U4ZhwjoP2kAyW8NVQAoW2UHKPITDxTWzKHP5Qk0xI6-rQ",
-      "expect": "accept"
+      "expect": "accept",
+      "newPub": "BLT05LZRJ3GfeSapMvZspSKWUz_-L4aJHf7xoxKyK7JLQsK-OPz7ta5yc92cgNQ4l6LyPL74o-wXT7bqrMdAjR4"
     },
     {
       "name": "wret/signed-by-new-key",
@@ -2455,6 +2484,46 @@
       "sig": "iU2kqTvz0aKHvwzEgwdhd2lhRV8r8YpkmeJYoJA_0GYwTbyQoroncMjaK2xRAtiScKdtRd3JQo_mNQy9XYYnrg",
       "expect": "reject",
       "reason": "address"
+    },
+    {
+      "name": "ok/wret-no-successor",
+      "about": "W retires itself with no new key (the library is dropping it): no ceremony, no passkey",
+      "text": "wret.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI..YWxpY2VAZXhhbXBsZS5jb20.YGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGA",
+      "sig": "GowQ0voKxYvGmmbDuGG1z4gVnl1vmQlWYtagnmqgC_k6MjXuxSYgCGsWKxuYg_tPgVc60aHNPqTTFOZlUsos4Q",
+      "expect": "accept",
+      "newPub": null
+    },
+    {
+      "name": "wret/no-successor-other-key",
+      "about": "a retirement without a successor, signed by another key",
+      "text": "wret.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI..YWxpY2VAZXhhbXBsZS5jb20.YGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGA",
+      "sig": "gxv7G5-Cqtn7gjGgpQ1blBmymKxhxzFQnXCfR797fBh84FkG_10Mv61Yj6yPXXKYEol5EoJMlwq2PkX2BfORTw",
+      "expect": "reject",
+      "reason": "signature"
+    },
+    {
+      "name": "wret/no-successor-nonce-short",
+      "about": "without a successor the challenge is still 16 to 64 bytes",
+      "text": "wret.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI..YWxpY2VAZXhhbXBsZS5jb20.AAAAAAAAAAAAAAAAAAAA",
+      "sig": "TDwt2ST6jbCqAy6E0Hra86haC8qmVHvZegQWDNy_AkhkKLjWO4EoFJ-QSnUn7Cd22S2mnb7KChELzHeTXfXxgA",
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "wret/new-not-a-key",
+      "about": "a newPub that is not a P-256 point (only EMPTY means no successor)",
+      "text": "wret.BByVhc6FmfsYfjl7MGrKwWcwl0lf8Ot0ZLmTX7maX75LTgOvAuh_RM7yGo8yDH1tsXm6GXPlPZqTAdp00dysYsI.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA.YWxpY2VAZXhhbXBsZS5jb20.XV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV0",
+      "sig": "hfqZibdv7jeC4xjSUvG2LAbyg1tOWsvelV3zfiXDS4dpyjhKLPqNcs8D4bgdvE7zPlFG35jIApVthwraruldLA",
+      "expect": "reject",
+      "reason": "key"
+    },
+    {
+      "name": "wret/old-empty",
+      "about": "the OLD key is never empty",
+      "text": "wret..BLT05LZRJ3GfeSapMvZspSKWUz_-L4aJHf7xoxKyK7JLQsK-OPz7ta5yc92cgNQ4l6LyPL74o-wXT7bqrMdAjR4.YWxpY2VAZXhhbXBsZS5jb20.XV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV0",
+      "sig": "BN7C1Vx58dQpeusinbJcS5BFlO4m-9qPoCimZcy6tlQv2_-KWhpoAPz52wVWKos-oo51TqjnLmoyOPeQIgk4Zg",
+      "expect": "reject",
+      "reason": "key"
     },
     {
       "name": "wret/as-wren",
@@ -2751,6 +2820,137 @@
         "challenge": "Xl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl4",
         "expect": "reject",
         "reason": "signer"
+      }
+    },
+    {
+      "name": "final-g/release-quarantined",
+      "about": "ck1 was quarantined (its own request voided): the directory refuses to release its co-sign",
+      "t": "MsV64QZxYycyjDW1HcR9yF_IL_RtkISAkEtPzixK0DQ",
+      "h2n": "b2M2rpdua0WzNNVWNnRyNGiaZ_iD6bli2xpeCjdGNwU",
+      "offer": {
+        "devicePub": "BCVV0RaVp5b5LHVmBzctzJ2alrbJcnlILYF-TBVT1Z0C7R3upheJnxaaizrCcRH0ohBJtjV-SXHC_a1GrOXRF6s",
+        "consentPub": "BLeneZ95r9Zsnu6KvOMe9qIWQIiDrJeDFi8rLOHlH9_D8rZkKjPH_N6523zgcZ8ASPsfW59l1zfLF8HjQvcC20o",
+        "kx": "BI7kb5ckfVPJOYkyeZZRUuqBNuvXgDVylTsVNBWd8alL3AW6VXd5EkThr8g2AhKI4xGOOgLM7T-vhAf8Tzfupxc",
+        "label": "Pixel",
+        "platform": "android"
+      },
+      "final": {
+        "dev2": "dev2.BCVV0RaVp5b5LHVmBzctzJ2alrbJcnlILYF-TBVT1Z0C7R3upheJnxaaizrCcRH0ohBJtjV-SXHC_a1GrOXRF6s.BLeneZ95r9Zsnu6KvOMe9qIWQIiDrJeDFi8rLOHlH9_D8rZkKjPH_N6523zgcZ8ASPsfW59l1zfLF8HjQvcC20o.BI7kb5ckfVPJOYkyeZZRUuqBNuvXgDVylTsVNBWd8alL3AW6VXd5EkThr8g2AhKI4xGOOgLM7T-vhAf8Tzfupxc.YWxpY2VAZXhhbXBsZS5jb20.nPrwUfdKMZ6eBML39qAAHe9u7jLrIDYV803yp4Wlk9M.UGl4ZWw.ck.1801116000000.Xl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl4",
+        "ck": "BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0",
+        "cns": "cns.bento.roster..mLasBcTLyaJ8xFO7qSX6uqyFegQxLf1lHeC3YJQ-HMA.1801116120000",
+        "cnsSig": "-Pwk0lMo3EVbbb3VdBCp316dNzipJufT5nK1KNioIRpo418bQuZUJ0Pt9YATNFbyM7AaueGQ1NXpCK4HG9UX_A",
+        "seal": "BwcHBwcHBwcHBwcHT-cCYf9debXh-AMn1_y13jkYSxlD7WsI6ePlcQVzfk21dLeAl4NB4EiTkRzsC2id"
+      },
+      "expect": "accept",
+      "release": {
+        "challenge": "Xl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl4",
+        "chain": "ck-quarantined",
+        "expect": "reject",
+        "reason": "signer-quarantined"
+      }
+    },
+    {
+      "name": "final-g/release-by-passkey",
+      "about": "the co-signer named is a passkey (pk1 signed the cns.): N opens it, the directory refuses it",
+      "t": "MsV64QZxYycyjDW1HcR9yF_IL_RtkISAkEtPzixK0DQ",
+      "h2n": "b2M2rpdua0WzNNVWNnRyNGiaZ_iD6bli2xpeCjdGNwU",
+      "offer": {
+        "devicePub": "BCVV0RaVp5b5LHVmBzctzJ2alrbJcnlILYF-TBVT1Z0C7R3upheJnxaaizrCcRH0ohBJtjV-SXHC_a1GrOXRF6s",
+        "consentPub": "BLeneZ95r9Zsnu6KvOMe9qIWQIiDrJeDFi8rLOHlH9_D8rZkKjPH_N6523zgcZ8ASPsfW59l1zfLF8HjQvcC20o",
+        "kx": "BI7kb5ckfVPJOYkyeZZRUuqBNuvXgDVylTsVNBWd8alL3AW6VXd5EkThr8g2AhKI4xGOOgLM7T-vhAf8Tzfupxc",
+        "label": "Pixel",
+        "platform": "android"
+      },
+      "final": {
+        "dev2": "dev2.BCVV0RaVp5b5LHVmBzctzJ2alrbJcnlILYF-TBVT1Z0C7R3upheJnxaaizrCcRH0ohBJtjV-SXHC_a1GrOXRF6s.BLeneZ95r9Zsnu6KvOMe9qIWQIiDrJeDFi8rLOHlH9_D8rZkKjPH_N6523zgcZ8ASPsfW59l1zfLF8HjQvcC20o.BI7kb5ckfVPJOYkyeZZRUuqBNuvXgDVylTsVNBWd8alL3AW6VXd5EkThr8g2AhKI4xGOOgLM7T-vhAf8Tzfupxc.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.UGl4ZWw.ck.1801116000000.Xl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl4",
+        "ck": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+        "cns": "cns.bento.roster..FNyPYi4dvl7_wMSd7wMydJI9PFrhHvnzEDZl0sHVPKQ.1801116120000",
+        "cnsSig": "LgrWEAkdwTLYAlj0sk6jF8sNOFPBg48MBUFPWuKCLE0ZBEbck1EHjlNIRgmDrqo185aJBLwrnSIi8Q0tLxSXow",
+        "seal": "BwcHBwcHBwcHBwcHorU8-HVCtXGAP0lsWD9x9cVrPxgEYSe9lUT4tN2D6BLxR1xWtBRGWzzc9f2pRKPf"
+      },
+      "expect": "accept",
+      "release": {
+        "challenge": "Xl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl4",
+        "expect": "reject",
+        "reason": "signer-kind"
+      }
+    },
+    {
+      "name": "final-g/release-exactly-72h",
+      "about": "ck1 has been a member exactly 72 h at ceremonyAt: released (72 h inclusive)",
+      "t": "MsV64QZxYycyjDW1HcR9yF_IL_RtkISAkEtPzixK0DQ",
+      "h2n": "b2M2rpdua0WzNNVWNnRyNGiaZ_iD6bli2xpeCjdGNwU",
+      "offer": {
+        "devicePub": "BCVV0RaVp5b5LHVmBzctzJ2alrbJcnlILYF-TBVT1Z0C7R3upheJnxaaizrCcRH0ohBJtjV-SXHC_a1GrOXRF6s",
+        "consentPub": "BLeneZ95r9Zsnu6KvOMe9qIWQIiDrJeDFi8rLOHlH9_D8rZkKjPH_N6523zgcZ8ASPsfW59l1zfLF8HjQvcC20o",
+        "kx": "BI7kb5ckfVPJOYkyeZZRUuqBNuvXgDVylTsVNBWd8alL3AW6VXd5EkThr8g2AhKI4xGOOgLM7T-vhAf8Tzfupxc",
+        "label": "Pixel",
+        "platform": "android"
+      },
+      "final": {
+        "dev2": "dev2.BCVV0RaVp5b5LHVmBzctzJ2alrbJcnlILYF-TBVT1Z0C7R3upheJnxaaizrCcRH0ohBJtjV-SXHC_a1GrOXRF6s.BLeneZ95r9Zsnu6KvOMe9qIWQIiDrJeDFi8rLOHlH9_D8rZkKjPH_N6523zgcZ8ASPsfW59l1zfLF8HjQvcC20o.BI7kb5ckfVPJOYkyeZZRUuqBNuvXgDVylTsVNBWd8alL3AW6VXd5EkThr8g2AhKI4xGOOgLM7T-vhAf8Tzfupxc.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.UGl4ZWw.ck.1801094400000.Xl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl4",
+        "ck": "BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0",
+        "cns": "cns.bento.roster..f5ZXQ44d_nXqz3RGnTlG1ws16rJNLBWHzLtsUDiVv_Q.1801094520000",
+        "cnsSig": "1-D8ThAjbNHIwO965KuNBatxEpKh4ILUXJ3OVIaIQ0Yh3keG7SnEUigZ7xE_ztbed1glaOzYxHqYJF1fPvJ1Mg",
+        "seal": "BwcHBwcHBwcHBwcHdrm44GdNRVg7ljEmamF3TGyD7a4drJhnZNch-xl0Rcudf81fFRGMIWJF-8fuNhS4"
+      },
+      "expect": "accept",
+      "release": {
+        "challenge": "Xl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl4",
+        "expect": "accept"
+      }
+    },
+    {
+      "name": "final-g/release-one-second-short",
+      "about": "ck1 72 h less one second a member at ceremonyAt: refused",
+      "t": "MsV64QZxYycyjDW1HcR9yF_IL_RtkISAkEtPzixK0DQ",
+      "h2n": "b2M2rpdua0WzNNVWNnRyNGiaZ_iD6bli2xpeCjdGNwU",
+      "offer": {
+        "devicePub": "BCVV0RaVp5b5LHVmBzctzJ2alrbJcnlILYF-TBVT1Z0C7R3upheJnxaaizrCcRH0ohBJtjV-SXHC_a1GrOXRF6s",
+        "consentPub": "BLeneZ95r9Zsnu6KvOMe9qIWQIiDrJeDFi8rLOHlH9_D8rZkKjPH_N6523zgcZ8ASPsfW59l1zfLF8HjQvcC20o",
+        "kx": "BI7kb5ckfVPJOYkyeZZRUuqBNuvXgDVylTsVNBWd8alL3AW6VXd5EkThr8g2AhKI4xGOOgLM7T-vhAf8Tzfupxc",
+        "label": "Pixel",
+        "platform": "android"
+      },
+      "final": {
+        "dev2": "dev2.BCVV0RaVp5b5LHVmBzctzJ2alrbJcnlILYF-TBVT1Z0C7R3upheJnxaaizrCcRH0ohBJtjV-SXHC_a1GrOXRF6s.BLeneZ95r9Zsnu6KvOMe9qIWQIiDrJeDFi8rLOHlH9_D8rZkKjPH_N6523zgcZ8ASPsfW59l1zfLF8HjQvcC20o.BI7kb5ckfVPJOYkyeZZRUuqBNuvXgDVylTsVNBWd8alL3AW6VXd5EkThr8g2AhKI4xGOOgLM7T-vhAf8Tzfupxc.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.UGl4ZWw.ck.1801094399000.Xl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl4",
+        "ck": "BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0",
+        "cns": "cns.bento.roster..AcRfP11LQ6K2vNtOprTpgtj5GeguOdTT9ns_wQ1vQuU.1801094519000",
+        "cnsSig": "D_0bAIzrVZVq6qrvd0ITKZDJdndz3781EFMeyITpaVMgFJRnzXRsaKD1sNYKrF-kDvZc2tO3-wHrOTUq6HDVqA",
+        "seal": "BwcHBwcHBwcHBwcHf2Vi4tpVrpnUaZmaFsEC3SU29Kjxw6gRA-PcUlLr5MO71uFEXqBflARAW9DHkGwW"
+      },
+      "expect": "accept",
+      "release": {
+        "challenge": "Xl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl4",
+        "expect": "reject",
+        "reason": "signer-unripe"
+      }
+    },
+    {
+      "name": "final-g/release-ck-is-n",
+      "about": "the co-signer is the consent key the dev2. names for N (a ripe ck1): refused at the directory too",
+      "t": "MsV64QZxYycyjDW1HcR9yF_IL_RtkISAkEtPzixK0DQ",
+      "h2n": "b2M2rpdua0WzNNVWNnRyNGiaZ_iD6bli2xpeCjdGNwU",
+      "offer": {
+        "devicePub": "BCVV0RaVp5b5LHVmBzctzJ2alrbJcnlILYF-TBVT1Z0C7R3upheJnxaaizrCcRH0ohBJtjV-SXHC_a1GrOXRF6s",
+        "consentPub": "BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0",
+        "kx": "BI7kb5ckfVPJOYkyeZZRUuqBNuvXgDVylTsVNBWd8alL3AW6VXd5EkThr8g2AhKI4xGOOgLM7T-vhAf8Tzfupxc",
+        "label": "Pixel",
+        "platform": "android"
+      },
+      "final": {
+        "dev2": "dev2.BCVV0RaVp5b5LHVmBzctzJ2alrbJcnlILYF-TBVT1Z0C7R3upheJnxaaizrCcRH0ohBJtjV-SXHC_a1GrOXRF6s.BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0.BI7kb5ckfVPJOYkyeZZRUuqBNuvXgDVylTsVNBWd8alL3AW6VXd5EkThr8g2AhKI4xGOOgLM7T-vhAf8Tzfupxc.YWxpY2VAZXhhbXBsZS5jb20.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.UGl4ZWw.ck.1801116000000.Xl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl4",
+        "ck": "BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0",
+        "cns": "cns.bento.roster..fEBPpMuTYJurOjkofwzQMb_fqg4QZIl33B5iDC3a0xg.1801116120000",
+        "cnsSig": "lyeVN77kF5f47eaB2ft569Pg2pnNgZ5UDNhgt1_XxX9ydWmzZYVkwM1zj2BfKsYrZBBQnA5pzJqjb9KrbPHGZg",
+        "seal": "BwcHBwcHBwcHBwcHWMWxdttSMwQiA_OqYVM-RAnkrcxOG9E65QZvIU7H9a-0gNIeNjEvrlhUZNee3gs1"
+      },
+      "expect": "reject",
+      "reason": "ck-is-n",
+      "release": {
+        "challenge": "Xl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl4",
+        "expect": "reject",
+        "reason": "ck-is-n"
       }
     },
     {

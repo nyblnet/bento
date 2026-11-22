@@ -32,6 +32,20 @@ function ok(cond: boolean, msg: string) {
   else console.log(`  ok    ${msg}`)
 }
 
+// Every timer the bridge arms, so the rig can disarm them when it is done. The
+// bridge's ask() arms a fallback timeout per request and never clears it when
+// the answer arrives — harmless in a page, but a `saveas` ask waits 180 s, and
+// those pending timers held this process open for three minutes after the last
+// check (it was the slowest step in CI's validate job). Disarming them at the
+// end changes no check: every one has already run.
+const bridgeTimers = new Set<ReturnType<typeof setTimeout>>()
+const trackedSetTimeout = (f: (...a: any[]) => void, ms?: number, ...a: any[]) => {
+  const t = setTimeout(() => { bridgeTimers.delete(t); f(...a) }, ms)
+  bridgeTimers.add(t)
+  return t
+}
+const trackedClearTimeout = (t: ReturnType<typeof setTimeout>) => { bridgeTimers.delete(t); clearTimeout(t) }
+
 /** A window just real enough to load the bridge into. */
 function load(opts: { version?: string; pathname?: string; reply?: Record<string, any>; activated?: boolean } = {}) {
   const nativeCalls: any[] = []
@@ -59,7 +73,7 @@ function load(opts: { version?: string; pathname?: string; reply?: Record<string
     // A REAL Blob. It was a bare `class {}`, which was enough for the
     // `instanceof` branch but has no `.text()` — so every close() rejected and
     // the half of the bridge that actually sends bytes was never exercised.
-    window: win, setTimeout, clearTimeout, Date, Math, JSON, Promise, Blob,
+    window: win, setTimeout: trackedSetTimeout, clearTimeout: trackedClearTimeout, Date, Math, JSON, Promise, Blob,
     DOMException: class extends Error { constructor(m: string, n: string) { super(m); this.name = n } },
     FileSystemHandle: class {},
     crypto: { randomUUID: () => 'x' },
@@ -257,5 +271,6 @@ for (const [version, trusted] of [
   ok(nativeCalls.length === 1, 'a pre-1.0.15 deck still gets the browser picker, unchanged')
 }
 
+for (const t of bridgeTimers) clearTimeout(t)
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

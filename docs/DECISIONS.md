@@ -12009,6 +12009,387 @@ couplings below.
   svgUrlRefsAllowed and sanitizeSvgCss, so callers and rigs keep importing them
   from the renderer.
 
+## 2026-10-29 — slides: the inspector in Penpot's order; layers beside slides; notes under the canvas
+
+Proposed in a contributor branch (to be split into issues before upstreaming).
+The inspector had grown section by section; its information architecture was
+checked against Keynote (Format | Animate), Google Slides, PowerPoint's
+Selection Pane and Penpot (Design | Prototype, layers on the left).
+
+- **Three tabs, one home per control.** Format (how it looks), Animate (how it
+  moves — Animation, Morph, the slide's Transition), Interact (what it does
+  when pointed at — links, hover). A tab with nothing for the selection says so.
+- **Format opens with a header-less block**, as Penpot's Design tab: one
+  align/order toolbar, blend mode with opacity, then W H X Y, rotation and
+  radius with their labels inside the fields. Then the element's own section,
+  Fill, Stroke, Shadow, Blur — optional layers added and removed from their
+  header's + / − instead of a 'none' in a dropdown — and Layout, which says
+  what a layout role does.
+- **Layers live in the side column** (Slides | Layers), not in the inspector.
+  Group rows; rows and groups rename in place. Names are new optional element
+  keys, display only: `name`, and `groupName` carried by every member because
+  a group is no object of its own (docs/format.md).
+- **Speaker notes moved under the canvas**, where PowerPoint, Keynote and
+  Google Slides keep them; in the slide panel they were invisible while an
+  element was selected.
+- **Numbers scrub from their label** and are held to the field's limits.
+- **D8's help layout** moved from a fixed 128px key column to a per-section
+  `fit-content` grid: long keys (and their translations) spilled over the
+  other column. chrome-rulings checks the right edge against the section grid.
+
+## 2026-10-29 — slides: the Penpot-grade editor revamp — everything new is additive
+
+Carried out from an architecture brief ("Extending Bento", not in the repo), with one rule
+overriding the brief wherever they disagreed: **no format version bump and no
+new element type or shape kind.** Shipped shells switch on `type`/`shape`
+with no default and fail the slide on a kind they do not know (the reason
+`heads: 2` is a property). So every new capability is an optional key on an
+existing element, and an older shell sees an ordinary deck.
+
+- **The inspector is a package.** `editor/panels.ts` keeps the PropsPanel
+  controller (rebuild, tabs, accordion, dispatch, the public verbs); each
+  section's builders live under `editor/inspector/` as functions taking the
+  panel. A moved body changed only `this.` to `p.`.
+- **Auto-layout frames are derived geometry, not a container type.** A frame
+  is a `rect` with `layout` (row/col/grid, gap, pad, justify, align, cols,
+  clip, hug); children name it by `parentId` and may `fill` an axis.
+  `layout.ts` writes each child's box (and a hugging frame's size) into the
+  model, derived without committing exactly like connector routing, so the
+  morph, exporters, thumbnails and old shells read plain positioned
+  elements and lose only `clip`. Main-axis order is current position, so a
+  drag reorders. Cost: in an old shell, moving a frame leaves its children
+  until a current editor re-lays the slide.
+- **Tokens extend the palette contract.** `theme.tokens` (values per mode, an
+  active mode); an element binds with `themeRefs[path] = '$name'` and the
+  literal always stays in place. Hand edits are detected, not declared: a
+  bound literal that disagrees with an unchanged token was edited, so the
+  binding drops — one rule covering the inspector, scripts, pastes and old
+  shells.
+- **Components are Penpot's main/copy on ordinary grouped elements**
+  (`component {id, key, main?, over?}`), copies re-derived on every change
+  like connectors; overrides are detected the same way tokens' hand edits are.
+- **A vector boolean is a computed path that remembers its operands.**
+  `d`/`pathBox` are the result, `bool {op, shapes}` keeps the operands for
+  re-editing. Render-time masks were rejected because old shells would show
+  the raw operands. Geometry is zero-dependency (`vector-bool.ts`); exactly
+  abutting shapes are nudged 1e-4px apart, a known ceiling.
+- **One command list.** Keyed editor actions are declared once (the
+  `commands` list in editor.ts, typed and dispatched by
+  `editor/commands.ts`); keydown dispatches through it, ⌘K searches it, and
+  tooltips read their keys from it. ⌘C, Delete, the arrows and Esc stay in
+  the keydown handler because they branch on canvas state; Copy and Delete
+  are listed for the palette only. Gestures stay prose in the ? sheet.
+- **Numbers are text spinbuttons** so `/` and `*` can be typed; a hand-written
+  parser (`inspector/numexpr.ts`, never eval) evaluates them. A leading
+  `+ * /` is relative, a leading `−` is a negative number. On a
+  multi-selection a differing field shows Mixed and an edit there is a delta
+  per element. Field height stays 26px: the one-field-look rule wins over the
+  brief's 28px.
+- **The colour popover drives the same hidden colour input** the inline row
+  uses, so preview, undo, palette links and opacity keep one path.
+- **Canvas feedback never writes the model**: the modifier line, transform
+  pill, morph ghost and morph preview are overlays.
+- **`locked` and `hidden` are `true`-or-absent element keys.** `locked` is
+  editor-only. `hidden` is honoured by renderSlide everywhere; an older shell
+  draws a hidden element — accepted over a non-additive encoding.
+- **The brief's size budget did not hold**: the shell was 737KB compressed
+  before this work (not 560KB) and 770KB after this first pass.
+
+## 2026-10-29 — slides: the revamp's second pass — tools, paint, polish
+
+- **Tools are commands.** The one-letter tools (V F R O L P T; C stays
+  Comment) live in the command list; the topbar's insert buttons are built
+  from it, so `data-cmd`, the letter badge and the tooltip key cannot drift
+  from the key that runs it. The ? sheet's one-command rows read the same
+  list. The path bar (Corner / Smooth / Symmetric, Close path) is contextual
+  like the boolean group and acts on the last-pressed anchor, or all of them.
+- **Paint grows by optional keys.** Radial is the linear `GradientFill` plus
+  `kind: 'radial'` and `cx/cy/r`; an older shell draws the same stops
+  linearly. `strokeDashes` (wins over `strokeStyle`), `strokeAlign` (absent =
+  the old placement, so every existing deck is pixel-identical) and per-corner
+  `radii` (with `radius` kept at the largest corner) each fall back to what an
+  older shell already draws. `flipX/flipY` mirror the content node, never the
+  frame; an older shell draws unmirrored. The shape renderer change is in
+  `kernel/src/shape.ts` (kernel zone): additive optional `ShapeSpec` fields,
+  spaces and type typecheck against it.
+- **Frames follow live**: during a drag the canvas lays out a shallow copy of
+  the slide and moves nodes, never the model; release commits and layout.ts
+  derives the same boxes. Wrap breaks greedily; children whose cross-axis
+  spans overlap share a line, so a settled layout is a fixed point.
+- **A component copy's position is an offset per instance**; a member moved
+  alone overrides `x`/`y` like any other hand edit.
+- **Names are typed where they appear**, never in `prompt()`.
+- **Canvas affordances never write the model**: gradient knobs commit one
+  checkpoint per drag; hover previews restyle the live node and restore it.
+
+## 2026-10-29 — slides: the revamp's last pass — stacks and the last mile
+
+- **Fill and stroke stacks; the top layer is what an older shell draws.**
+  `fills`/`strokes` (bottom first) are drawn when set; the single-paint keys
+  mirror the top visible layer, derived on boot and every doc change like
+  connector routing. A stack exists only with two or more layers, so
+  single-paint decks are byte-identical. The kernel draws each layer as the
+  one-paint shape it would be alone and merges the nodes rather than growing
+  a second renderer. Refs live per layer (`fills.N.color`) and follow
+  reorders. A stack morphs layer by layer only when both sides have the same
+  layers.
+- **Token types widen** to fontSize, opacity, fontFamily and shadow on the same
+  contract (literal stays; only colours keep the property's own alpha; a
+  shadow compares ignoring key order).
+- **`keepAspectRatio` is an every-element padlock** read through
+  `ratioLocked()`: images keep absent = locked, everything else needs `true`.
+- **OKLCH** flags out-of-gamut only past what 8-bit rounding hides; clipping is
+  per channel.
+- **One entrance for floating surfaces** (`--ed-pop-in`, 120ms) and one fold
+  (`--ed-fold-ms`); reduced motion turns both off.
+- **`alt`** is additive, rendered as `role="img"` + `aria-label`; absent means
+  decorative. Contrast is graded against what lies behind the element's centre.
+- **Unpairing a morph never mutates `id`**: a self-paired element gets a unique
+  `-solo` morph key.
+
+## 2026-10-29 — slides: one derive pass; stack layers win on opening
+
+- **Every derived value runs as one pass, in dependency order**
+  (`slides/src/derive.ts`): palette → tokens → components → layout →
+  connectors → stack fallbacks. Boot, every `doc` event and a document
+  replaced in a running editor all call it. Layout used to run first, before
+  tokens and components — both of which write layout inputs (a number token on
+  `layout.gap`, a main frame's gap reaching its copies) — so such an edit
+  settled only on the next, unrelated event. One pass is now a fixed point.
+- **A replaced document is read like a cold boot.** `store.replaceDoc` emits
+  `replace`, and the editor re-seeds the derive memory (the token signature)
+  from the arriving document. Without it, the memory of the PREVIOUS deck's
+  tokens read as "the tokens moved" and overwrote a bound literal an older
+  shell had edited. Undo/redo keep the memory: they restore this deck's own past.
+- **"Has the main moved?" is in the file, not in a replica's memory.** Each
+  copy keeps `component.sig`, a short hash of the main it last followed. A
+  main that no longer matches has moved (the copy follows); a copy that
+  differs from an unmoved main was edited by hand (an override). A replica
+  that just joined, or a session opening a file an older shell edited, reads
+  the same answer as the one that wrote it. Ceiling: a main AND its copy both
+  edited before the next pass (two older-shell edits, or one collab merge)
+  read as "the main moved", and the copy's edit is overwritten.
+- **Tokens drive only what they can drive.** A `$token` ref sits only on paint,
+  size and spacing properties (`TOKEN_KEYS`, in untrusted.ts beside the rule
+  that enforces it at intake), every token write must pass the property's own
+  gate rule unchanged, and token and mode names never resolve through
+  Object.prototype. Opened files get the token rule a restored snapshot gets.
+- **Stack layers are the truth, also on opening — accepted cost.** A file
+  whose single-paint fallback disagrees with its top visible layer has it
+  rewritten from the layer. That is what a hand- or agent-written deck needs
+  (placeholder fallback keys); the cost is that a colour changed in a shell
+  that predates stacks (which can only change the fallback) is lost when a
+  current shell opens the file. The two cases are indistinguishable in the
+  file, and the agent round-trip is the documented workflow.
+- **A copy's frame is its own.** `parentId` and `sizing` are not re-derived
+  from the main: `instanceOf` translates them once through the copy's ids,
+  and drops them when the frame lies outside the component. A batch of copies
+  (paste, ⌘D, Duplicate, Alt-drag) keeps its frames among its copies through
+  `freshGroups`; a child copied without its frame stays a sibling in it.
+
+## 2026-10-30 — slides: one truth for "will this morph"
+
+The Morph section, the layer badge and the canvas ghost all read
+`morphPartners`: a partner on the slide the show arrives from, under a Morph
+transition. A pair that would only exist under Morph is stated, with Use
+Morph. A morph name is renamed together with its partners on the neighbouring
+slides, because renaming one side alone silently ended the pair. The pairing
+picker names elements by their Layers names and never shows ids. The Preview
+plays the whole slide, including what leaves. Play transition waits a fixed
+700ms before stepping, because the show has no ready signal — a known ceiling.
+## 2026-10-30 — slides: the inspector after the UX audit — Esc keeps, focus survives, toolbars wrap
+
+From docs/audit/ux-pyramid-2026-10-30.md. Amends the 2026-10-29 entries where noted.
+
+- **Esc in the colour popover closes and KEEPS the colour** (amending "Esc
+  undoes the preview burst"). The popover previews live, so what the canvas
+  shows is already applied; an Esc that silently reverted it lost work the
+  user thought was done. ⌘Z takes the whole pick back in one step. Focus
+  returns to the swatch.
+- **Focus survives a rebuild.** Every action inside the panel rebuilds it;
+  PropsPanel.rebuild now remembers the focused control by its name and
+  position and puts focus back, or — when the action replaced it (a + became
+  a −) — on the first control of the same section. One place, not one per
+  call site. Section headers are the fold's buttons (Tab, Enter/Space).
+- **The arrange toolbars wrap at a kind's edge** (align · spacing · size,
+  then order · group · flip · boolean), fixed 24×26 tools: a kind never
+  splits and no tool can be covered or pushed out of the panel. Align and
+  distribute have Figma's keys (⌥A ⌥H ⌥D ⌥W ⌥V ⌥S, ⌃⌥H ⌃⌥V) and line up the
+  boxes elements cover on the slide (rotated bounds). A frame's child offers
+  no align and read-only X/Y — the frame places it.
+- **One Solid | Linear | Radial**, in the popover; the fill row no longer
+  carries a second copy.
+- **A refused number says why** instead of reverting silently; Esc in a
+  number field puts the value back and leaves the field; ⌘Z there is the
+  document's undo. "1,000" and "1.000" are read by the interface language's
+  decimal mark; anything still ambiguous is refused, never guessed.
+- **A multi-selection shows Fill, Stroke and Shadow** when every element has
+  them in the same plain form; a paint stack or gradient stays the element's
+  own and hides the shared section rather than flattening it.
+
+## 2026-10-30 — slides: one home for colours, one token picker, one tab component
+
+- **The Tokens view is the single home for the deck's colours.** Theme colours
+  are its built-in "Theme" group (Background, Text, Accent 1 always; Accent
+  2–6, Background 2, Text 2, Link added with + and removed with −), then the
+  deck's own colour tokens. They still write the palette — the format's
+  palette contract and themeRefs are unchanged. The slide panel's Theme
+  section lists no colour (two lists made "theme" and "tokens" look like two
+  systems); code colours, which are not the brand, get their own section,
+  shown only in a deck with code, folded.
+- **One picker binds any field** (inspector/tokenpicker.ts, after Figma's
+  variables picker and Penpot's tokens panel): search, the theme colours first
+  for colour fields, then tokens grouped by the dotted prefix of their names,
+  each row preview · name · value · ✓, and the actions — make a token from
+  this value, select all using it, detach — as a list at the foot. A colour
+  that already equals a theme colour or token offers to bind its uses to that
+  one instead of minting a twin. A multi-selection binds every element at
+  once and shows the pill when they all share one. Every colour popover offers
+  the same swatches, applied as a ref where the field can follow one.
+- **Names and values are text that edits in place**, in the Tokens view, for
+  components and for modes (chips): a click (or F2) makes it a field, Enter
+  or leaving commits and it is text again, Esc puts it back.
+- **Both bars' tabs are one icon-tab component.** The chosen tab always shows
+  its name; the others show theirs only when every one fits, otherwise all are
+  glyphs at once — never a word cut in half. A panel's minimum width is
+  measured from its tab bar in the current language (editor.ts panelMin), so
+  the resizer stops before the tabs could break; the chevron still collapses.
+- **A slide drag lights the gap where it will land** — a thick accent line —
+  and none where the drop would change nothing; the end of the list is a gap
+  too.
+- **The speaker view uses the app's hints** (the hint system takes its own
+  document; both ways of opening the window mount it once), and a lone key —
+  "(L)", "(→)" — is a key chip.
+## 2026-10-30 — slides: one arrange toolbar; quiet field edges in dark
+
+- **One toolbar line.** Align, then spacing and size (several selected), flip,
+  one "Stacking order" menu (four buttons cost a line; Figma and Penpot keep
+  order out of the design panel too), group, boolean — each kind set off by a
+  hairline. Kinds never split; the bar wraps at a kind's edge only when the
+  panel is too narrow. A single element's nine tools fit the default 264px
+  panel on one line; tools grow to fill a wider one.
+- **Dark-mode fields are sunk wells with a quiet edge** (1.5:1 at rest), lit to
+  3.3:1 under the pointer, with the accent ring on focus — Figma's and
+  Penpot's treatment. A 3.3:1 edge on every resting control (the WCAG 1.4.11
+  reading) turned the dark inspector into a grid of outlines; the trade-off
+  at rest is deliberate, and the accent-contrast rig holds both values.
+
+## 2026-10-30 — slides: reordering inside a frame; Enter hands the keys back; frames named for what they hold
+
+- **A frame's flow order is set by placing, not by a field.** The solver reads
+  order from position (ties by array order), so an explicit reorder — a drop
+  slot, an arrow key, a Layers drag — reorders the siblings in the array,
+  stacks them at the frame's origin and lays the frame out again
+  (`layout.ts moveInFrame` / `reflowByArray`). No format change; the result is
+  a fixed point. A drag shows an insertion bar in the gap it will take; a drop
+  past the frame's edge takes the child out (Figma's rule). Inside a frame the
+  arrows move the child a slot (a grid's ↑/↓ a row) instead of nudging it,
+  since the layout would undo a nudge. Paint order among siblings follows the
+  flow order.
+- **Enter in a number field commits and returns focus to the canvas** (Figma),
+  so ⌘D/⌘Z right after act on the document; Tab still walks the fields; Esc
+  still restores and leaves.
+- **Frames are labelled from their contents**, not a stored "Frame" name: a
+  frame holding text is "Card · <its first words>", a frame of frames is named
+  by its direction ("Row", "Column", "Grid"), an empty one "Frame" — so nesting
+  levels read apart in Layers and the header. ⇧A gives a gap of 16 when the
+  selection's spacing is ≤ 0 (overlapping ⌘D copies).
+- **A component is named at birth** ("Component 3"), so the toast, the
+  inspector header and the Tokens list say the same thing; the header's name
+  is click-to-edit text.
+- **Toasts dock at the top of the canvas** (the canvas's foot holds Slideshow
+  and zoom); presenting clears any toast, and the morph offer goes the moment
+  the slide uses Morph, wherever that was set.
+- **No caption wraps beside its control**: one that would wrap goes above it
+  (the measure pass now stacks at more than one line, not two).
+
+## 2026-10-30 — slides: Move (V) and Select (S) are two tools; one is always pressed
+
+In Move, a press-drag moves what it starts on — and a full-bleed background
+image or shape is something, so a slide built on one could not be
+box-selected at all. Select (S) only selects: a drag anywhere draws the box
+and moves nothing, a click selects, Shift adds; it stays on across
+selections, and Esc lets go of the selection before returning to Move.
+Moving stays Move's job, as in Figma. The tool bar presses exactly one tool
+at a time (Move at rest), so which mode a drag will act in is always on
+screen.
+
+## 2026-10-30 — slides: drag INTO a frame, in Layers and on the canvas
+
+Frames could be made (⇧A, F) and their children reordered, but nothing could
+be put into one afterwards. Now, as in Figma and Penpot: in Layers, a row
+dropped on the middle of a frame row goes inside it (the top and bottom
+quarters still mean above and below), and a row dropped beside a frame's
+child joins that frame at that slot; dropped beside a top-level row, a child
+comes out. On the canvas, dragging over an auto-layout frame outlines it and
+shows the slot bar, and the drop puts the selection inside at that slot.
+⌘/Ctrl held while dragging moves over a frame without dropping in — the same
+modifier that, held at the press, duplicates; a duplicate-drag never drops
+into a frame either. A frame never goes inside itself or anything it holds,
+and a locked frame takes nothing. The frame's whole subtree is laid back into
+the array as one block (frame, then each child's unit in flow order), so
+children always paint above their frame and the solver reads the slot order
+(layout.ts moveIntoFrame / moveOutBeside / canAccept); one undo step each.
+## 2026-10-30 — slides: the top bar's three kinds — Save saves, File acts on the document, the app cluster is the app
+
+Supersedes, for slides, the 2026-09-26 ruling "the Save menu holds the
+file's commands". In use the Save ▾ list had grown to eleven rows of which
+three were saving; the rest were the document's (import, export, history,
+JSON) — and About mixed the app's settings with the document's properties.
+In the words of this change's author, it put "too much responsibility on the
+save menu that is not related to save at all … some are configuration for the
+application itself, while others are related to the file."
+
+- **Save ▾ — saving only**: Save a copy…, Duplicate as new deck…, Save with
+  password… (or Change password… / Save without password). ⌘S is Save.
+- **File — the wordmark**: what acts on the DOCUMENT, one list under
+  captions (one click deep — no flyouts, no hover timing, and the same list
+  fits the phone's ⋯): Start from scratch…, Import PowerPoint… · Export:
+  Print or save as PDF… ⌘P, Export slides as images…, Export for PowerPoint…
+  · Version history…, Document properties… (its own dialog), Compress
+  pictures in this deck… · Advanced: Copy document JSON, Copy compact JSON,
+  Replace from JSON… · About bento/slides.
+- **The app cluster — the corner**: ⌨ Keyboard shortcuts (?), Help (guide on
+  bento.page, what's new, ask or report), ⚙ Preferences (⌘,): appearance,
+  language, the launch update check, shrink photos on insert, offline mode.
+  No loose globe button: the language is a preference.
+- **Kept in sight**: Present, Share, the Save split button, Print (also in
+  File ▸ Export) and the app cluster. Print folds into ⋯ only with the rest
+  at the phone tier.
+- **About is only about**: version and format, the update check, credits.
+
+Every moved command is in the command list (⌘K finds it) with its key.
+Spaces still follows the 2026-09-26 map; porting it is a follow-up, not part
+of this change.
+## 2026-10-30 — slides: Fill, Stroke, Shadow and Blur read as Figma's
+
+Each paint section heads with Figma's ⠿ catalog (the deck's theme colours
+and tokens for that property, with Manage tokens) and +; each paint is a row
+of the field, 👁 and −, the eye and − in one 26px column under the header's
+⠿ and +. The field's own palette button gave way to the ⠿: one entry point
+per section. Hiding a single paint keeps it: additive `fillHidden`,
+`strokeHidden`, `shadowHidden`, `blurHidden` (true or absent), read through
+model.ts `visiblePaint` by the renderer and the morph, and stripped by the
+PowerPoint writer — so the canvas, thumbnails, the show and export all agree.
+An older shell draws the paint (it ignores the key); the value is never
+lost. Stacks keep their per-layer `hidden`. A stack row's blend and dashes
+open on right-click (or the menu key); Alt+↑/↓ moves a layer, the grip shows
+on hover. Stroke's line style and dashes sit behind its sliders button, under
+a Position | Weight row. Shadow and Blur are one row each — a chip opens the
+settings — so a second shadow is still not offered.
+
+## 2026-10-30 — slides: hover shows what a click picks; a copy-drag leaves its original drawn
+
+Hovering the canvas outlines what a click would select, before the click
+(Figma's hover): with no key the outermost frame or the whole group, with ⌘
+(Ctrl) the exact element under the pointer, with Alt the next one down the
+dig — and it follows the key being pressed or released with the pointer
+still. Nothing is outlined over the selection itself. A ⌘-drag copy moves the
+originals and commits the stationary copies on release, as before; for the
+drag, a still, inert clone of each original (its subtree included) stands
+where it was, so the spot copied from is never empty — the copy used to seem
+to vanish and reappear. Esc during a move or copy-drag cancels it: nothing is
+committed and the originals are drawn back where the model has them.
 ## 2026-11-02 — bento/connect: directory requests (dreq.), the rotation vouch (rot.), and op-specific consent
 
 Three additions to `kernel/src/statements.ts`, with vectors in
@@ -12292,6 +12673,83 @@ Two follow-ups to the link v1 entry above, both from porting it to iOS.
   choose an encoding that no spec pinned, and two hosts choosing differently
   would never link. The `link.wire` rows are byte for byte both ways.
 
+## 2026-11-04 — slides: upstream 1.2.11 and 1.2.12 merged into the revamp; where the two met
+
+Merged as is: the 1.2.12 security fix (Reveal's link-preview overlay and
+background iframe cut from the bundle, svgsafe hardening), the release
+bookkeeping, and every 1.2.11 feature the revamp lacked — Indent/Outdent in
+the formatting bar, typed and pasted web addresses become links, pasted runs
+of spaces kept, a typed backslash kept, `- `/`* ` starting a list at once,
+Copy on text with no fontFamily, links and lists round-tripping through
+PowerPoint, the speaker-view work, the formula spring — and the bento/connect
+kernel commits. slides/CLAUDE.md now holds the slides architecture (#853);
+the revamp's notes moved there with it. schema/slides-1.2.10.json is
+upstream's released snapshot again; build-schema now refuses to rewrite a
+released twin, so the revamp's keys live in schema/slides.json until the
+next version.
+
+Where both had built the same thing, one implementation each:
+
+- **Lock (#838 / #864 vs Layers' padlock).** Same key, `locked`, upstream's
+  declaration (boolean, written only when true). One canvas marker,
+  upstream's `data-locked` (the revamp's `ed-locked` class is gone), with its
+  selected-lock outline. Upstream's semantics win: never deleted from the
+  canvas (a mixed selection deletes its unlocked part and keeps the locked one
+  selected), never ghost-cut, reached by Layers or Alt-click — the dig adds
+  locked elements under the point to the painted stack, since a locked node
+  takes no pointer. ⌘L is a command in the list (⌘K, the ? sheet) that yields
+  the chord to the browser when nothing is selected (`yields`). Layers' padlock
+  button stays the UI; upstream's inspector Lock button is not carried, and
+  its strings were dropped as orphans.
+- **Press-and-drag an unselected element (#867 vs ux-canvas).** Upstream's
+  fix won: two timer hops after waitToChangeTarget, measured against croact's
+  second render; the revamp's two-rAF settle is removed (rAF is not ordered
+  against timers). The revamp's frame-aware drag target stays.
+- **A slide dragged to the end (#859 vs the drop line).** The revamp's drop
+  line and end gap stay (they land at the end); upstream's separate end-drop
+  wiring is not carried. Its rig (sidebar-drop-end) runs against the revamp's
+  handler: the synthetic drags now carry a pointer position, since the drop
+  line places a drop by where the pointer is, and the handler, like
+  upstream's, claims only a drag carrying text/bento-slide.
+
+## 2026-11-04 — slides: ⇧A keeps loose-shape cards whole
+
+⇧A already kept frames whole (a selected child whose frame is selected
+rides along, 2026-10-30). A card drawn without frames — a rounded rect with
+a title and a body lying on it — had no such unit, so a marquee over three
+of them and ⇧A laid all nine elements out in one row. Now a plain rect
+(no layout, not rotated) whose box holds other selected elements that paint
+above it is a card: the rect itself becomes a hugging column frame holding
+them, its padding and gap read from where they sat, so its id, paint and
+morph partners stay and it looks as it did. The cards and every other
+selected element are then wrapped in one row with the spacing they had, as
+before; one card alone is just made a frame, nothing wraps it. One undo
+step. A holder is the outermost such rect, so a rect on a rect is one card.
+Only a rect can hold: an ellipse or an image under texts is not a frame, so
+its elements stay loose as before.
+
+## 2026-11-04 — slides: a hex typed where there was no paint comes in at 100%
+
+An auto-layout frame starts with no fill (absent, or the literal
+`transparent`), and typing a colour into it changed nothing visible until
+Opacity was set too — read as the field being broken. Now a 6-digit hex
+typed into such an unpainted fill comes in at 100%; a typed alpha
+(#rrggbbaa, which the field now takes) wins. A fill the user SET to 0% keeps
+its 0% when a hue is typed — 2026-10-29's rule stands, as in Figma, where
+colour and opacity are separate fields. One place: colorField, told by
+colorAlpha whether the value was unpainted.
+
+## 2026-11-04 — slides: a group is entered by double-click, like a frame
+
+A component copy is a group, and a click grows to whole groups, so the
+only ways into a copy were ⌘-click, Alt-dig and Layers — the card inside a
+copy could not be reached to change its corner radius the way a plain card
+is. Groups now follow the frames' rule (2026-10-30, the UX audit's Figma
+selection model): a click picks the whole group, a double-click goes in to
+the member under the pointer (the outermost one in the group, so a copied
+card comes before its texts), and Esc comes back out a level — frame child →
+frame → whole group → nothing. Esc to the whole group also leaves it, so
+the next click picks the group whole again.
 ## 2026-11-07 — bento/dash: a date is a value, stored as the ISO text it always was
 
 Dates and times on a dash sheet now compute (`=A4+1`, `=B1-A1`,
@@ -13890,6 +14348,66 @@ undo after the removal answer `late`; the undo through a reset, the reset
 taking effect after it, a stopped reset restoring the removal before and
 after its time), `scripts/test-directory-void-page.mjs` (the new views in a
 real browser) and `scripts/test-directory-mutants.ts` (a mutant per rule).
+
+## 2026-11-10 — The DocStore over a sandboxed frame's port: possession of the port is the capability
+
+A document that bento/home in a browser runs in its opaque sandboxed frame
+(home/web) gets its per-document store (docstore.ts: the crash-recovery copy and
+the member key) from the library, over a **second `MessagePort` the library
+transfers in the boot handshake** (`kernel/src/docstoreport.ts`). The frame
+offers it once, as `window.__bentoDocStore.take()`; `docStore()` prefers it to
+the window protocol the extension and native hosts speak.
+
+- **The port is the only channel.** An opaque frame's messages all come from
+  origin `null`, and its WindowProxy survives the frame navigating itself, so
+  neither the origin nor the source window can identify a session. The host
+  created the channel and handed one end to the frame it served: holding that
+  end is the capability. The protocol never reads an origin and never posts to
+  a window (a source check in the rig, with a mutant).
+- **Every rule is the host's**, because after the document is written the
+  frame's realm, the frame's own script included, is the document's: a closed
+  op list (`get`, `set`, `list`, `delete`) and name list (`recovery`,
+  `memberkey`), an exact key set per op, request ids that only rise, bytes only
+  as a plain `Uint8Array` over a buffer about its own size, a cap per name (and
+  per open, which binds only once there are more names; a persistent store
+  still needs a cap across all entries, since browsers evict an origin at
+  once), caps on requests in
+  flight and on the rate. Anything else is dropped unanswered and counted; past
+  a limit of drops the session closes. A value over its cap is a well-formed
+  request and is answered `too-large`, so the document stops retrying.
+- **The partition is an entry the host mints per open**, never the docId: a
+  file can claim any docId. The session is also bound to the docId the host
+  read from the file it verified, and a record is returned only to a session
+  bound to the docId it was written under. Only a body in one of the apps'
+  plaintext formats has a docId for this (an allowlist, never "not
+  `bento/enc`"): an encrypted envelope may carry any extra field, a docId
+  included, and still gets `unavailable`. Nothing in a message can name an entry
+  or a docId: such a field makes the message malformed.
+- **Closing an open closes its port**, so a port the document stashed or handed
+  to a popup is answered nothing afterwards, and the next open is a new channel
+  and a new entry.
+- **The channel never writes files.** Saving stays on the host's save path,
+  where the host re-splices the document's data into the shell it verified.
+- **Backward compatible.** A shell built before this never reads
+  `__bentoDocStore`, so under the library it behaves exactly as in stage 1, and
+  `__bentoHost` is not defined there (a shell that saw `ops` with `store` would
+  speak the window protocol to nobody and wait out its timeouts). The splice
+  contract is untouched: nothing here is in the file.
+
+For now the library keeps the store in its page memory for the open and drops
+it at close. Stage 2's per-entry recovery cache in the library's own storage,
+cleared when a write-back succeeds, is a `StoreBackend` for the same
+`serveDocStore`.
+
+Rigs: scripts/test-docstore-port.ts (the protocol over real channels: schema,
+ids, caps, binding, teardown, flow, the client) with
+scripts/test-docstore-port-mutants.ts (19 mutants, each red on the row that
+guards its rule); scripts/test-home-web.mjs's [S7] rows against the real library
+and frame in Chromium, WebKit and Firefox, including a hostile document that
+tries other docIds, forged ops, oversized values, a second take and its port
+stashed in a popup after close, and an encrypted envelope claiming a docId,
+with five more mutants in
+scripts/test-home-web-mutants.mjs.
 ## 2026-11-12 — bento/id: the privacy notice describes option G, and a text-only deletion page returns
 
 The draft privacy notice (`site-src/id-privacy.html`, built to
@@ -13920,6 +14438,55 @@ after a deletion, and how long setup send times are kept are the
 maintainer's, and the pages are not published. Guard:
 `scripts/test-id-pages.mjs`.
 
+## 2026-11-12 — bento/id: the sign-in host's own pages (setup and reset links, sign in, sign out everywhere)
+
+The sign-in host (`server/signin`) gains the pages where account changes start:
+`/setup` and `/reset` (the mailed links), and `/account`. They are separate
+from the popup bento/home opens, which keeps its one request shape.
+
+- **Only an account the person proved here is remembered.** The host stores
+  which account it is signed in to (`bento-id-account`) in one function, with
+  the address the directory answered after verifying a passkey assertion made
+  on the host. A setup link is completed with a new passkey and then confirmed
+  by one sign-in with that passkey; the directory's answer must be the link's
+  address. Nothing is stored from a URL, a message, a typed address or a link,
+  and a reset stores nothing, because its passkey is not on the account until
+  the reset takes effect.
+- **A link page reads only its fragment**, in the directory's format (exactly
+  `v`, `e`, `t`), takes it out of the address bar and the tab's own history
+  entry first, and sends nothing until the person presses the button. The
+  browser's own history still records the full link (measured in Chrome's
+  History database), so a link that was opened but not used stays usable from
+  there until it is used or expires: 20 minutes for a setup link, a day for a
+  reset link. The account page reads nothing
+  from its URL. None of these pages answers a message.
+- **The passkey's user handle names the account's storage**: SHA-256 of the
+  address under the directory's storage label, then 16 random bytes. A
+  discoverable sign-in finds the account by it; the random tail means a new
+  passkey (a reset) never overwrites an older one on the same authenticator.
+  Native hosts making passkeys for this rp must use the same layout.
+- **A raw challenge is always the directory's sealed 40-byte one**, never 32
+  bytes, so a sign-in assertion can never be taken for a signed statement.
+- **Sign out everywhere** is a member's passkey assertion over a text naming
+  the account, asked on the host's own page after a confirmation; the directory
+  then refuses every browser certificate of that account made before it. It
+  takes power away only, so it has no wait. The directory's sign-in and
+  sign-out routes do not exist yet: their contract is the stub the rigs run,
+  and the signed text is provisional until the kernel defines it.
+- **No recovery code on the web**: no page makes, shows or asks for one. The
+  setup page says what a browser-only account loses.
+- **Trusted Types** with no policy are now part of the host's CSP and of the
+  hosting check.
+- **Phone approves this browser (route D)** runs no ceremony, so it is not a
+  page of this host: bento/home shows a code, the person types it into the
+  app, and the app's consent key approves. It waits for the kernel's consent
+  purposes.
+
+Guards: `scripts/test-signin-host.mjs` (the page rules as lints, each with a
+failing source; the hosting check refusing a CSP without Trusted Types),
+`scripts/test-signin-host-pages.mjs` (the real directory worker and object and
+the contract stub, a virtual authenticator in the headless shell and Chrome,
+the no-passkey rows in WebKit; a mutant per rule).
 ## 2026-11-09 — bento/home in your browser: a production build refuses development seams; a release builds it only when asked
 
 `home/web/build.mjs` used to warn and carry on when no `--history` was given
@@ -13963,3 +14530,770 @@ that bundles exactly the history it signed and the seeded one) and
 `scripts/test-home-web-build-mutants.mjs` (each refusal removed, red on its
 row), and `scripts/test-home-web-out.mjs` (where the output may go, the
 firmlink row and its mutant on macOS).
+## 2026-11-12 — The bento/home tripwire lives in the extension, checked against a list signed with the release key
+
+bento/home in the browser runs code a server chooses, and a page cannot pin
+its own code. The extension now checks it from outside on every visit to
+`home.bento.page` (and the frame site, once its domain is named): it compares
+what the browser received with a list of releases signed with the **release
+key**, the one key every shipped shell already trusts, and warns loudly on a
+mismatch. It never repairs anything: no reload, no cache cleared, no worker
+unregistered. A tripwire that fixes things also hides them.
+
+- **The list.** `https://bento.page/releases/home-web/served.json`, on the
+  release channel and not on the site it describes. A signed envelope like the
+  app manifests (`{payload, sig}`, ECDSA P-256 over the payload string),
+  typed `bento/home-web/served`, version 1, so no other signed artifact can
+  stand in for it, nor it for them. A `serial` that only goes up (an older
+  list is refused, a different list with the same serial is announced), and
+  the newest releases first, so bytes from an older release are "outdated", not
+  "tampered". Each release lists every file both sites serve at every path,
+  with its sha256, its length, the `<script>` elements of each document in
+  order (inline ones by the hash of their text as the browser parses it), each
+  document's Content-Security-Policy header, and the paths registered as
+  service workers. Written by `scripts/lib/home-web-served.mjs`, signed by
+  `scripts/sign-home-web-served.mjs`, which verifies the held list before
+  building on it and refuses a development or test-key build.
+- **Order of a release:** sign and publish the list with the site, then deploy
+  the library and frame. A deploy the list does not yet hold warns every
+  extension; an older release still served is recorded, and announced quietly
+  only after 72 hours.
+- **What the extension observes.** The parse (each script's text read before
+  the page's code runs, from a `document_start` content script in the isolated
+  world), the bytes from the HTTP cache (the navigation's own response; this
+  fetch does not pass through the page's service worker, measured), the
+  navigation's decoded size, the CSP header (`webRequest`, observing only),
+  and under a worker its registrations and its Cache Storage, hashed.
+- **What it cannot see**, stated where people will read it (the extension's
+  README; corrected after review, entry below): a deploy served only to people
+  without the extension; anything before the report (the hostile code has run
+  by then; the tripwire records, it prevents nothing); response headers a
+  service worker changes; a hostile worker that changes only page text while
+  the network serves the honest worker again; the frame page's bytes; the
+  frame page at all until its domain is named in the extension.
+- **A declared host permission for one origin.** Web access in the extension
+  is otherwise optional and asked per origin; the tripwire's single origin is
+  declared, because a tripwire that has to be switched on is one most people
+  never have. Its one content script carries no bridge and relays nothing.
+
+Guards: `scripts/test-webext-tripwire.ts` (configuration pins, writer against
+reader, the judge, the signing script's refusals),
+`scripts/test-webext-tripwire-browser.mjs` (the unpacked extension in Chromium
+against a local home/web build, with and without a service worker, sockets
+closed) and `scripts/test-webext-tripwire-mutants.mjs` (one mutant per rule,
+each red on the row that guards it).
+
+## 2026-11-12 — The bento/home tripwire, after its security review: early reports, no silent passes, no flood
+
+The review of the tripwire (entry above) broke it by running. What changed:
+
+- **A page that leaves after a script it showed is still on record.** The
+  content script also reports from INSIDE its observer callback, each time a
+  script is first seen, so that message leaves before the script runs. An
+  early report that no full report follows within 10 seconds is judged on its
+  own: a script no release lists, or any flag, is a mismatch. A `blob:` or
+  `about:` document of the library origin (which the library never makes) is
+  observed, judged by the origin the browser says it runs in, and is a
+  mismatch. Not covered: a script inside a declarative shadow root runs before
+  the observer can see it, and can leave with nothing recorded.
+- **Nothing unobserved passes.** On the library without a worker, bytes that
+  cannot be read from the HTTP cache are a mismatch (the honest library is
+  sent `no-cache`, which Chrome stores); a size of 0, or a report sent after
+  30 seconds without the parse ending, is never a pass, on either site
+  (`complete: true` means only that the page left the loading state in time;
+  a visit cut short reports it too). Every wait in the content script is
+  bounded.
+- **No one else can make it shout.** The library is judged only as a
+  top-level page, the frame page only in a frame. A page with no script and no
+  flag at a path no release serves is recorded quietly. Loud warnings come once
+  per origin per browser session; the badge and the record every time.
+- **The record holds every check.** All storage writes go through one chain;
+  observations are capped, going over a cap is a mismatch, and an event too big
+  to store is stored compact. The report page shows the check it was opened
+  for, or says it is not on record.
+- **Shadow roots are markup**, declarative or attached: flagged when the observer next looks, and at report time on every element it ever walked, even one the page removed. What is inside one is not seen.
+- **The format, before its first signing:** a release may be `withdrawn: true`,
+  and serving it is a loud mismatch rather than a quiet "outdated"; a payload
+  carrying `app` is refused. The signer needs the published list (or
+  `--first`) and, for a release, a build for `https://home.bento.page`.
+- **"Never checked" is said:** after three days without a list, a quiet
+  notification, and the report page always names the list in use.
+- **Stated as limits:** the hostile code has run before anything is reported;
+  a worker can change response headers without the tripwire seeing, and with
+  a `no-store` network answer under a worker there is no CSP check at all; the frame
+  page's bytes are never observed; a rolled-back list is only recorded.
+
+- **A release signs the list.** `release.mjs --home-web` signs it into the
+  site (`releases/home-web/served.json`) after building home/web, on top of
+  the published list; `--home-web-first` only for the very first. A missing
+  list without it, `--home-web-first` over a published list, and a development
+  build with the release key are refused before anything is signed, and so is
+  a published list that does not verify against the key the release signs
+  with, or is not a v1 bento/home list.
+
+Guards: the rows and mutants in `scripts/test-webext-tripwire-browser.mjs`,
+`scripts/test-webext-tripwire-mutants.mjs`, `scripts/test-webext-tripwire.ts`,
+`scripts/test-home-web-build.mjs` and `scripts/test-home-web-build-mutants.mjs`.
+
+## 2026-11-14 — bento/id option G: one source for the tier, retirement without a successor, sign-out and deletion texts, the passkey user handle
+
+**Decision.** The fourth kernel change of option G. It closes the conditions
+security left on the third (#949) and settles what the directory and the
+sign-in host were waiting on. Contracts: `identity-v1.json`, `roster-v2.json`,
+`device-v1.json` (new rows and sections; no row a host reads today changes
+verdict) and `recovery-v1.json` (unchanged, now checked in CI).
+
+- **The rows ports copy before they port option G's consent keys.** A new
+  `consentG` section in `identity-v1.json` pins the directory's LIVE check of
+  the two purposes: `roster` covers `ros.`, `dev2.`, `vrs.`, `wout.` and
+  `adel.`, `web-add` covers `wdev.` only, and every cross is refused
+  (`payload-family`). It is a section of its own because host statement
+  runners have a closed purpose set. Roster rows where the directory ripened a
+  change later than it was asked pin that a consent key's ripeness and its
+  co-sign's life are both measured at `requestedAt`, never at `ripenedAt`. The
+  link release check gains rows for a quarantined co-signer, a passkey named as
+  the co-signer, exactly 72 hours (inclusive) and the co-signer being N's own
+  key. Every accepted device row states the `mb` its `watt.` carries, so a port
+  that drops the mailbox state fails rows instead of passing them all.
+  `gen-recovery-vectors.ts` and the `consentG` section gain `--check`, run in
+  CI.
+- **`vouchedBy` is the voucher alone.** It names who vouched
+  (`id.bento.page`, an organisation's domain, a vault id) and nothing else
+  (`isVoucher`). The tier, the mailbox lapse and the managing organisation
+  each travel as their own optional field of `ResolvedIdentity` (`tier`,
+  `unconfirmedSince`, `managedBy`), beside `accountSince`, `rosterChangedAt`,
+  `resetAt` and `revoked`, and the document composes the words. Before this,
+  the agent was told to write "(passkey sign-in)" and ", unconfirmed since
+  <date>" into vouchedBy while the People panel drew its own tag from `tier`:
+  two sources for one fact, which disagree the day a certificate is native,
+  and a lapse found by parsing text can be cut or imitated by the text around
+  it. Absence is not always the weaker claim: a missing `tier` or
+  `accountSince` under-claims (passkey tier, a new account), but a missing
+  `revoked`, `resetAt`, `rosterChangedAt` or `unconfirmedSince` over-claims
+  (not revoked, no recent change, address confirmed). So an agent sends every
+  field that applies, and every relay between the agent and the document
+  (home/bridge.js, each native host's bridge, the extension) must pass all of
+  them through with their types checked; a relay that copies only the
+  original six fields turns a revoked sign-in or a lapsed address into a
+  plain ✓. The per-row `mb` in device-v1.json pins how a `watt.` is parsed,
+  not that an agent reports it; an agent-level row is still to come. No
+  released shell renders vouchedBy, so nothing frozen depends on the old form.
+- **A browser key can retire itself without a successor.** `wret.` takes an
+  EMPTY new key: the old key W signs its own retirement over a challenge the
+  directory issued for it, with no passkey prompt and no new ceremony, and the
+  directory refuses every later renewal of W. The alternative was a host rule
+  (keep a suspect W, sign-only, until the next ceremony), and it is worse on
+  every count. The bound security asked for is that a copy of W dies at most
+  24 hours after the honest browser acts. With the rule, the honest browser
+  can only act at its next ceremony, which may be days away, and must keep
+  storing a key it has stopped trusting. A library whose storage was cleared
+  cannot act at all, so the copy lives to the 7-day cap plus 24 hours. With the
+  empty form the library retires W the moment it stops trusting or keeping it
+  (before deleting it, on finding it extractable, at a local sign-out), so
+  the copy dies within 24 hours of that. A thief holding W can retire it
+  too, which only takes away renewals of a key it stole; the honest browser
+  signs in again with a passkey.
+- **Two member texts the directory checks**, each signed by an unquarantined
+  member of the current head (a passkey's assertion, the recovery key's
+  signature, or a consent key's `roster` co-sign) over a single-use directory
+  challenge, which is spent as soon as the text parses (every refusal before
+  that is `grammar`):
+  `wout.<b64u(address)>.<at>.<dirNonce>` signs every browser out, where `at` is
+  the challenge's issue time and the address must already be in normal form;
+  `adel.<b64u(address)>.<headHash>.<dirNonce>` asks to delete the account and
+  names the head it was asked against. A sign-out has no wait (it only takes
+  power away). The directory cuts off every `wdev.` whose ceremony is at or
+  before the moment it ACCEPTS the sign-out, logs that time beside the signed
+  `at`, and leaves `dev2.` alone. A browser key's last `watt.` still holds at
+  peers for up to 24 hours. A deletion is queued for 72 hours like any change,
+  with a void link mailed to the address. It is carried out only if it was not
+  voided and the head is still the one it names. The way to delete without a
+  passkey is the directory's mailed link, which needs no statement. Two rules
+  are OPEN for the directory's deletion route and not settled here
+  (security's review of #962, D-A1 and D-A2). First, what a void does to the
+  signer: if a void only cancels, a stolen member key re-files the moment its
+  request is voided, the one-change queue stays occupied, and the owner can
+  never remove that key. Second, how a reset meets a waiting deletion: only a
+  reset that ripens first changes the head, so the head check alone does not
+  stop a deletion once a reset is merely requested; the reset request must
+  drop the deletion, never set it aside to be revived if the reset is
+  stopped.
+- **The passkey user handle is a kernel layout.** `user.id` =
+  SHA-256(`bento-dir/1/addr` ‖ LF ‖ the address in normal form) ‖ 16 random
+  bytes, 48 bytes. The first 32 bytes are the account's storage name at the
+  directory and route a discoverable sign-in; the random tail keeps a new
+  passkey from overwriting an older one on the same authenticator. Native
+  hosts that make passkeys for `id.bento.page` must use it, or their passkeys
+  cannot sign in on the sign-in host. The handle is not covered by the
+  assertion's signature, so it only routes and never decides membership.
+
+Guards: `scripts/test-statements.ts` (`consentG`), `scripts/test-roster.ts`
+(the two clocks, `wout.`, `adel.`, the user handle recomputed with
+`node:crypto`), `scripts/test-devices.ts` (`mb` on every accepted row,
+retirement without a successor, the release rows),
+`scripts/test-identity.ts` (`isVoucher`, the `ResolvedIdentity` fields), and
+the mutant rigs `test-roster-mutants.ts` and `test-devices-mutants.ts` (the
+latter also mutates the consent families against `test-statements.ts`).
+## 2026-11-12 — bento/id directory: browser certificates, renewals and the event log's `ob`
+
+The directory now countersigns browser certificates (`server/directory/src/browsers.js`):
+the routes the sign-in host and bento/home call, matching the contract the
+bento/home agent was built against.
+
+- **Challenges.** A browser challenge is sealed for its audience (an
+  enrolment or a renewal) and for the address, and lives 60 seconds. It is
+  spent in the address's object before any other check, so reuse, a failed
+  assertion and the other audience all use it up. Nothing is stored when one
+  is issued, so a stranger who asks for many fills nothing and pushes out
+  nobody's. Asking costs a per-IP lookup, the same budget as `GET
+  /v1/roster` (both answer 404 for an address with no account), and one of 20
+  an hour from that IP for that address, enrolments and renewals counted
+  apart. A check-in is counted per IP per address only once its signature
+  verifies and it carries a challenge the directory issued for that address
+  (anyone can sign a `wren.` with a key of their own), so a check-in without
+  one, from the owner's own network, cannot use up its renewals. There is deliberately no count shared
+  by every caller of an address: a stranger could fill it and stop the
+  owner's browsers renewing.
+- **The head is the latest ripened one.** A change still waiting is never a
+  head, and a change that is due takes effect before the challenge is
+  answered, so a queued change never makes sign-ins fail.
+- **A fresh key per ceremony.** A device key enrols once.
+- **The countersign** lives 24 hours and never past 7 days after the
+  ceremony. A renewal is refused for a key that is unknown, revoked (signed
+  out everywhere, or its passkey removed, suspended or added again since), or
+  past the 7 days.
+- **`ob` means "asked for at bento/home's request"**: the opener the sign-in
+  host reports is bento/home. It is never read from the request's Origin
+  (every web enrolment's Origin is the sign-in host). It is in the countersign
+  and on every event-log entry, kept for the life of the account; nothing
+  decides on it, and the incident lever filters by it. Log entries keep the
+  full public key, not a fingerprint, so the lever acts on the exact key.
+- **Signing out everywhere is a time: the moment it is accepted**, not the
+  time in the text the passkey signed (both are logged). Every browser
+  certificate made by then stops renewing and the status route says
+  `revoked`, and a ceremony whose challenge was issued by then cannot finish
+  after it, so a sign-in already under way cannot undo it. A countersign
+  already issued stays valid for up to 24 hours at a peer that does not ask
+  the status route, and the mail says so.
+  Apps' certificates are untouched. The route checks everything and then
+  answers 501 until the kernel defines the statement a passkey signs for it.
+- **A passkey sign-in on the sign-in host** finds the account from the
+  passkey's 48-byte user handle (its first 32 bytes are the account's storage
+  name), but the handle only routes the request: membership is the account's
+  own record. Its challenge is spent in that account's object, once per
+  account rather than once for everyone (an assertion verifies only under its
+  own account); a handle naming no account is refused before anything is
+  written. A signature counter is stored only over the value the assertion
+  was checked against, so two assertions with one counter never both pass.
+  It logs and mails nothing.
+- **`mb`** (the countersign's mailbox state, from #949) is 0 while the
+  address is confirmed. Every account is confirmed today: the address is
+  proved at setup and nothing asks for it again until the mailbox re-proof is
+  built, which will store the time it went unconfirmed.
+- **Incident records** come from a deploy variable and ride on every
+  check-in and status answer. A list that does not read is an error, never a
+  shorter list.
+- **CORS** is per route: the sign-in host's routes answer only it, bento/home's
+  only it, the rest `*`, and a path that is no route answers with none.
+
+Not here yet: the statement a member signs to sign out everywhere (the
+kernel's), a `dev2.` made by a passkey alone,
+retiring the old key at a new ceremony, and mail for a new browser. Guards:
+`scripts/test-directory-browsers.ts` (the kernel's `verifyDevice` over what a
+check-in returns; each challenge rule with its control) and
+`scripts/test-directory-mutants.ts`.
+## 2026-11-10 — bento/id in bento/home: the browser's agent runs no WebAuthn, and keeps only keys it cannot export
+
+bento/home in the browser (`home/web`) gains its bento/id agent
+(`home/web/src/identity.ts`), off in the build unless `--identity` is given,
+and a development build until the directory's keys are pinned for release: a
+production build (without `--dev`) refuses `--identity` and `--directory-keys`.
+
+- **No WebAuthn in bento/home.** The passkeys belong to rp `id.bento.page`,
+  which `home.bento.page` cannot use, so every ceremony runs on the sign-in
+  host. The library opens it inside the person's click, sends exactly
+  `{t:'enrol', W, kx, label}` to its literal origin, and listens only to that
+  window at that origin. It never calls the WebAuthn Signal API, with any list:
+  a partial list can hide or delete a person's passkeys with no prompt.
+- **Keys the page cannot export, fresh at every ceremony.** `W` (ECDSA P-256)
+  and `kx` (ECDH P-256) are generated non-extractable and kept as `CryptoKey`s
+  in IndexedDB. A held key that can be exported is dropped. Non-extractable
+  does not prove a stored key was never copied (a hostile build can import a
+  copy as non-extractable); what bounds a copy is that each ceremony makes new
+  keys and a certificate lives at most 7 days.
+- **Verified, never believed.** The certificate must be for exactly the keys
+  and label the library sent, and "Confirm it's you" never switches accounts.
+  The roster chain and the certificate with its countersign are checked by the
+  kernel's verifiers (`verifyRosterChain`, `verifyDevice`) under directory keys
+  pinned in the build; a key list from the network is never used.
+- **A check-in never writes back what it no longer holds.** Every tab of the
+  library shares one store, so a check-in writes only over the record it
+  renewed, checked and written in one IndexedDB transaction. If the person
+  signs out, or signs in anew, in this tab or another while a check-in runs,
+  the renewal is dropped and the tab takes what the store holds: on a shared
+  computer, Sign out must stick. Another tab may show the old state until its
+  next check-in, but never writes it back.
+- **24 hours, renewed; 7 days, then "Confirm it's you".** A check-in signed by
+  `W` (`wren.`) renews the countersign on load and every hour. A day before the
+  7-day cap the page asks the person to confirm it's them, which is a new
+  ceremony with new keys.
+- **Incident records and revocations end the sign-in here.** A record that
+  covers the key's ceremony, is still open, or cannot be read deletes the keys
+  (failing closed costs one "Confirm it's you"). Until the kernel defines a
+  signed incident statement, the record arrives in the directory's check-in
+  answer, which can only make the agent drop its keys.
+
+The sign-in host's directory seam now writes the kernel's `wdev.` exactly: the
+challenge it asks for names the account (from the host's own storage, never
+the request) and answers the directory's time and the current roster head.
+With no account saved, the host asks for nothing. The directory routes both
+sides call, with every check in order, are stated in
+`scripts/lib/id-web-directory-stub.mjs`, which the rigs run against until the
+directory serves them.
+
+Rigs: scripts/test-home-web-identity.mjs (the real library and sign-in host, a
+CDP virtual authenticator, every WebSocket closed; headless shell and Google
+Chrome; `--mutants`, one per rule).
+
+## 2026-11-14 — `validate` is two parallel jobs and an aggregator (reverses part of 2026-10-18)
+
+The one `validate` job reached 18–20 minutes and was being cancelled at its
+20-minute limit with no failing step, which blocked merges. Its work now runs as
+two jobs in parallel, and the required check is a third job that reads their
+results:
+
+- **`validate-builds`** runs every slice that builds an app or reads a built
+  shell, in the old order: slides, spaces, dash, type, convert, home-ios, home,
+  home-webext, shared.
+- **`validate-kernel`** runs the kernel slice alone. It is the longest slice
+  (about seven minutes) and needs no app build, only slides' toolchain, jsdom
+  and the pinned browser. Nothing is built on its runner, so a kernel rig that
+  starts reading a built shell must move or build it itself.
+- **`validate`** (the name branch protection requires, unchanged) needs both
+  and runs with `if: always()`. It passes only when both results are
+  `success`. The 2026-10-18 entry rejected an aggregator because a job skipped
+  after a failed dependency reports "skipped", which a required check accepts
+  as passing. `always()` closes that hole: the job always runs, and a failed,
+  cancelled or skipped half fails it.
+
+The rest of 2026-10-18 stands: composite actions per zone, a new rig at the end
+of its zone's slice, other jobs in `ci-<zone>.yml`, and `ci.yml` changes only
+when a slice is added or moved between the two jobs.
+## 2026-11-12 — The People panel's identity tiers (bento/id under the roster design; flag off)
+
+- **Built, flag off.** slides' People panel can say who vouched for a
+  collaborator, from the identity agent's `resolve({ pub })`
+  (`kernel/src/identity.ts`). It runs only when localStorage
+  `bento-people-vouch` is `on` AND the host exposes an agent, and it looks a
+  key up only when `session.keyProven(actor, pub)` says the peer proved it (a
+  presence `pub` is a claim; asking about a claimed key would let a reader
+  wear someone else's ✓). This replaces the earlier flag-off "who vouched"
+  draft, which predated both the session's key proof and the roster design.
+- **What a verified row says.** `✓ via <vouchedBy>`, then "(passkey sign-in)"
+  for every certificate a passkey alone made (the kernel's G1 tier, `tierOf`,
+  which deliberately does not promote on a consent key's age), "new account"
+  for 14 days after setup, and "account changed on <date>" for 7 days after a
+  roster change, or for 30 days after a reset by the directory (maintainer,
+  2026-11-12). A revoked sign-in gets no ✓
+  at all ("this sign-in was revoked"); one revoked by the incident lever also
+  puts a flag on the row for the room OWNER, beside the remove control, because
+  what that key did in the deck may not have been its owner. A changed binding
+  stays "⚠ changed" with no ✓.
+- **A missing field is the weaker claim.** The labels come from optional
+  fields on the answer, additions within contract 1 that hosts do not send
+  yet: `tier` ('native' drops "(passkey sign-in)"; anything else keeps it),
+  `accountSince` (missing or malformed reads as a new account),
+  `rosterChangedAt`, `resetAt`, `revoked` (`true` | 'signout' | 'incident';
+  any other value is "couldn't check", never a ✓) and `managedBy`. So until a
+  host supplies them, every verified row reads "(passkey sign-in)" and "new
+  account": an under-claim, never an over-claim.
+- **vouchedBy's 80-character cut keeps "unconfirmed".** The 80 is the kernel's
+  `VOUCHED_BY_MAX`, imported, so the agent's side and the panel's cannot drift;
+  the panel's decision module imports that constant and nothing else from
+  identity.ts. The agent appends its
+  own qualifiers to `vouchedBy` (", unconfirmed since <date>", later
+  ", managed by <domain>") and localises them. When the whole line does not fit
+  in 80 characters, the panel drops the "managed by" segment first (found by
+  its English wording or by the domain in `managedBy`, so a localised segment
+  is found too), then other middle qualifiers, keeps the last qualifier whole
+  while shortening the voucher, and cuts the end only when nothing else fits.
+- **What a name cannot do.** A name, whether typed in this session or the
+  account's own display name, loses every tick-like mark, and every control,
+  format, private-use, unassigned, separator and default-ignorable character
+  (by Unicode category, plus the Hangul fillers and the Braille blank, which
+  render as blank space).
+  The name sits in its own direction-isolated span that alone takes the
+  ellipsis, so a long or right-to-left name, or one that reads like a voucher,
+  cannot push the real mark or the tags out of sight: they wrap below it. An
+  answer whose fields throw when read is "couldn't check". `managedBy` counts
+  only as a whole domain on word boundaries.
+- The People panel is one source for the tier: `tier` on the answer. The agent
+  is to stop writing tier text into `vouchedBy`.
+- `scripts/test-identity.ts` pins that no app calls the identity agent except
+  this panel, behind its flag: comments removed; static, multi-line and dynamic
+  imports of identity in every app, under any of the extensions the bundler
+  resolves to it; no file but identity.ts naming the `__bentoIdentity` global;
+  and the panel's call and flag read pinned by shape, with fourteen widening
+  mutants that must turn it red. It is a pin over our own code, not a parser:
+  its comment strip is not string-aware, so code placed between a `'/*'` and a
+  `'*/'` string literal would escape it. That limit is accepted and stated in
+  the rig.
+- Guarded by `scripts/test-slides-people-tiers.ts` (rows over the decision
+  module, with twenty-one mutants that must each turn a row red) and
+  `scripts/test-slides-people-tiers-browser.mjs` (the packaged editor, real
+  key proofs, network and WebSockets closed, positions measured with
+  getBoundingClientRect, with owner-flag, proof, cut and layout mutants).
+## 2026-11-14 — The bento/home tripwire: a link from another site is not a warning
+
+MEASURED: a navigation another site started (a link, a popup) is cached under
+a key the tripwire's content-script fetch cannot reach, and that fetch may
+return an older page of the same address instead. With the rule that unread
+bytes on the library are a mismatch (entry above), every link to
+home.bento.page from another site was a loud "unverified" warning, and a stale
+page could be judged in place of the one shown. Now the extension records each
+library navigation's Sec-Fetch-Site (webRequest, observing only). For a
+cross-site navigation the bytes are not judged, and the Cache-Control header it
+got is pinned in the release list like the CSP, so a `no-store` answer cannot
+hide a change. Stated as a limit: on a navigation another site started (a
+link or a popup from outside bento.page, including from a `file://` document
+or a popup a document opens), a same-length change the parse does not flag is
+not seen. Until the element sequence lands (a follow-up, before the first list
+is signed) that includes added elements; after it, text and attribute values.
+The server can tell these visits apart by their Sec-Fetch-Site, so it can serve
+such a change to them alone. Scripts, handlers and the other flags are still
+caught on them. Guards: rows `cross-site-link` and
+`cross-site-no-store` in `scripts/test-webext-tripwire-browser.mjs`, with a
+mutant each.
+
+## 2026-11-12 — bento/home in your browser, stage 3: an offline worker for the library only, a signed kill switch, install
+
+The library (`home/web/`) gains a service worker, a kill switch and a web app
+manifest. What it does not gain matters as much:
+
+- **The worker is the library's, never the frame's.** It runs on the library
+  origin, precaches exactly the build's own files (the page, the manifest, two
+  icons), each checked against a sha256 compiled into the script, all or
+  nothing, under a cache named for their content hash; activating a new worker
+  deletes every other cache. It answers only those paths, network first, and
+  only when the network fails; everything else passes untouched and is never
+  cached. It takes nothing from pages (no message listener), has no
+  `importScripts`, `eval` or dynamic import, and is served with its own
+  `default-src 'none'` policy and `no-cache`, registered with
+  `updateViaCache: 'none'`. Navigation preload is on, and a navigation is
+  answered with the browser's preload response (then the network, then the
+  cache), so it reaches the server as the tab's own navigation, visible to an
+  observer outside the page; a worker fetch would not be. Passing navigations
+  through while `navigator.onLine` was rejected: measured, it loses offline
+  whenever the browser believes it is online and the server is unreachable.
+  The library's CSP names that one script URL, and its
+  one Trusted Types policy passes only that URL. The frame site keeps
+  `worker-src 'none'`; its policy and sandbox are unchanged.
+- **A worker is not a pin.** Network first means the server's current build
+  always wins online, so the worker adds offline and nothing else: it does not
+  bind the library to a signed hash, and a compromised host can still replace
+  it. The library stays the code-trust root the stage-1 entry names.
+- **Offline is the library's, not yet the document's.** The frame page is on
+  another site, which the library's worker cannot serve, so a document opened
+  offline is told it needs a connection. Opening documents offline needs a
+  decision on delivering the frame offline, which would change how its policy
+  arrives; that is not taken here.
+- **The kill switch is a signed status, checked on every load.**
+  `releases/home/status.json`, signed with the release key
+  (`scripts/sign-home-status.mjs`), lists withdrawn builds by the sha256 of the
+  library's script. A listed build stops, in the tab that loads it, before any
+  file opens: it unregisters
+  every worker on its origin, deletes every cache and shows a fixed message;
+  the next online load comes from the server. Unreachable, absent (404) or
+  slower than 8 seconds is no answer (a returning visit must open offline).
+  Anything else that comes back and cannot be trusted (a bad signature, a
+  payload for another app, a `seq` below the highest this browser has seen,
+  any other 200) fails closed, exactly as a withdrawal, wiping the worker and
+  caches; so the release host must answer 404 for a file it does not have. A browser remembers the builds it has seen withdrawn, so a copy
+  served again from any cache (Firefox serves the page from its HTTP cache
+  offline) stops on load even when the status cannot be fetched. This is the
+  one request the library makes on every load, and it goes only to the signed
+  release channel. Its limits, stated: tabs already open keep running a
+  withdrawn build; `at` is not checked, so the `seq` floor protects only a
+  browser that has seen a newer status (a fresh browser takes any older signed
+  status); and offline or installed copies run a withdrawn build until that
+  browser sees the status.
+- **What the kill switch cannot reach:** a build that does not run the check.
+  A hostile deploy can register its own worker at any path; clearing that
+  needs the host to answer `Service-Worker: script` requests with a cleaning
+  worker and to serve a `Clear-Site-Data` reset page, which static `_headers`
+  cannot do. It waits for the hosting move.
+- **Install** is a manifest (start and scope `/`, standalone, 192 and 512 px
+  icons) allowed by an exact `manifest-src`. No file handlers or share target
+  yet.
+- **The tripwire's release list names the worker.** The build writes
+  `serviceWorkers: ["/sw.js"]` to `build.json`, so the list the extension
+  checks against holds the worker and every file it precaches. Navigation
+  preload keeps the navigation's headers visible to it. Left open, for
+  tripwire follow-ups: with a worker in control the tripwire does not require
+  the page's bytes, so CSP and text changes go unseen whenever the response is
+  not HTTP-cacheable (`Vary: *` with `no-cache`, for one); script changes are
+  still caught. And the tripwire trusts the worker by its URL: a server can
+  answer the browser's `Service-Worker: script` request differently from the
+  extension's own fetch of `/sw.js`.
+
+Rigs: `scripts/test-home-web-offline.mjs` (Chromium, WebKit, Firefox; offline
+by `context.setOffline`, with the servers closed where an engine's emulation
+does not hold: WebKit's for worker-controlled navigations, Chromium's for the
+cross-site frame, both measured), its `--mutants` (each red on its own row, in
+a run that completed), and the drill row: withdraw a build, then the next load
+is clean. Details: `home/web/README.md`.
+
+## 2026-11-19 — The slides shell diet: how the table, Reveal, Moveable and the minifier are packed
+
+The editor revamp (PR #897) merged with main built to 926,960 B. Ten commits
+took 136,054 B back, to 790,906 B, with no feature removed and no format
+change. Each figure is the built shell before and after that commit (local,
+node 22). What is settled, so nobody tidies it away:
+
+- **The packed i18n table ships column-major: -40,540 B.**
+  `scripts/build-i18n.mjs` writes one long string per language group
+  (`de`, `fr`, `it`, `es`+`pt`, the key column, `zh-Hans`+`zh-Hant`, `ja`),
+  rows and cells joined by two separator characters chosen at generation time
+  from ones no string uses. `packed.ts` unpacks it at import into the same
+  key -> row table. Row-major interleaved eight languages in three scripts
+  inside deflate's 32 KB window. The group order is measured; do not sort it.
+- **The key column is a hash, not the English string: -11,694 B.** Every key
+  is already in the bundle at its `t('...')` call site. The table stores a
+  5-character, 30-bit hash; the seed is searched until no two catalog keys
+  collide, so catalog strings resolve exactly. A string in no catalog meets a
+  row by chance about once in 840,000. Kernel change: one optional field,
+  `PackedCatalogs.keyOf`; without it the table is keyed by the English string
+  as before, which is what spaces, dash and type still do. Anything that needs
+  the English key universe reads the catalogs, not `Object.keys(PACKED)`.
+  This is its own commit and can be reverted alone.
+- **Dead catalog keys are gated: -19,160 B for the 108 deleted.**
+  `scripts/test-i18n-dead-keys.mjs` (validate-shared) fails when a core
+  catalog key is not a string literal or property name in `slides/src` or
+  `kernel/src`. A key built at run time goes in its `DYNAMIC` list with the
+  place that builds it; the list is empty and should stay short. The 108
+  were removed from the 22 packs too.
+- **Reveal is built from `reveal.js/js/`, pinned to exactly 5.2.1, with
+  eleven controllers stubbed: -24,022 B.** `slides/reveal-lite.ts` replaces
+  autoanimate, scrollview, printview, touch, notes, location, backgrounds,
+  fragments, plugins, overlay and the playback component (and `fitty`) with
+  inert stand-ins, and drops the reveal.css rules only they reach, Reveal's
+  paper stylesheet included. `present.ts` uses none of them. This supersedes
+  the `REVEAL_EDITS` string edits: the preview overlay is absent rather than
+  disarmed (the overlay stand-in keeps the `?` help), and
+  `test-slides-reveal-preview-browser.mjs` still fails on a shell built with
+  the real overlay. Upgrading Reveal means re-reading its `js/` against the
+  stubs and bumping the pin; the build refuses any other version. Using a
+  stubbed feature in `present.ts` means un-stubbing it first. `styles.css`
+  now sets `html, body { height: auto; overflow: visible }` for print itself.
+- **Moveable registers ten ables: -17,342 B.** BeforeRenderable, Default,
+  Snappable, Draggable, Resizable, Rotatable, Groupable, Clickable, DragArea,
+  Renderable (`KEEP_ABLES` in `slides/vite.config.ts`, build only). An able
+  that is not in the list cannot be switched on by a prop: add it there
+  before passing `scalable`, `warpable`, `clippable`, `roundable`,
+  `pinchable` or `originDraggable` in `canvas.ts`.
+- **terser re-mangles identifiers after esbuild: -17,409 B** (with
+  `build.modulePreload: false`). Compress is off and no property is renamed;
+  only local names move, to terser's per-scope naming, which deflate matches
+  better. Property mangling stays off: it renames by name across the bundle
+  and one wrong name is a model key. terser is a slides devDependency.
+- Smaller: dead CSS rules and four unreferenced icons -734 B; one-pass vector
+  booleans -206 B, which also fixes wrong regions for grid-aligned operands
+  that share edges (70 of 1,000 cases in the rig's new check); three
+  duplicated helpers shared -390 B (kernel exports `parseColor` and `b64u`).
+- **Ops zone, every app: -4,557 B on slides, about -3,400 to -3,800 B on
+  spaces, dash and type.** `postbuild-compress.mjs` strips whole-line
+  comments and indentation from the plaintext loader (line breaks kept; token
+  stream identical before and after) and runs zopfli with unlimited block
+  splitting. The loader hash changes on each app's next build.
+
+Not done: the lossless woff2 repack (about 1.2 KB) has no recorded recipe and
+drops name records, so it was left out. The slides `reference` in
+`scripts/size-budgets.json` is now 790,906 B, a local number to be replaced by
+the CI figure.
+
+## 2026-11-20 — bento/slides packs its runtime with LZMA, in base91
+
+Supersedes, for slides, two lines of earlier entries: 2026-08-19 "the format
+does not move" and its "a JS decoder costs more than it saves", and 2026-09-16
+"carries its runtime in base86". Both were right when written. What changed:
+a JavaScript inflater has shipped in every loader since 2026-09-16, so the
+decoder is no longer an added cost (the LZMA decoder is 1,436 B minified
+against the inflater's 2,455), and the editor revamp (#897) put 181 KB on the
+shell, which deflate-side work brought back to 790,985 B and no further.
+
+- **Block type `bento/lzma-b91`**, one new type, not three. Raw LZMA1 with
+  lc=3, lp=0, pb=0 (pb=2 costs about 1 KB on these payloads), preceded by a
+  4-byte little-endian length, no end marker. Carrier base91: printable ASCII
+  0x21–0x7E minus `<` `>` `{`, 13 bits per two characters. `</script`, `<!--`,
+  `-->`, `]]>` and `${` stay unproducible by construction (10,000-buffer rig,
+  as for base86). It keeps `&` `"` `'` `\` `-`, so unlike base86 it is safe as
+  script text only; nothing puts a payload anywhere else.
+- **Measured, slides:** 790,985 B (deflate, base86) → 693,227 B, 29,139 B
+  under the 722,366 B shell that preceded #897. Codec alone 705,353 B; the
+  carrier is worth about 11 KB more. Other apps stay on deflate until each is
+  built and measured; the codec is a per-app flag (`--codec lzma --encoding
+  b91`), and the packer refuses either half without the other.
+- **The encoder is pinned.** `lzma1` 0.8.0, a dependency-free TypeScript port
+  of XZ for Java, an exact-version devDependency of the app. The prototype
+  shelled out to the system `xz`, whose output varies by liblzma version; a
+  signed shell cannot depend on that. Same payload: lzma1 550,886 B, xz 5.4.5
+  `-9e` 550,937 B. Two builds of the same tree are byte-identical (checked on
+  the full slides shell and in the rig). The packer decodes every payload back
+  with BOTH the loader's decoder and lzma1's own before it writes.
+- **The decoder refuses instead of guessing:** a declared length over 256 MiB,
+  a distance before the start of the output, a stream that ends early, and one
+  that ran out of input (which would otherwise decode to bytes of exactly the
+  right length). `test-shell-loader.ts` holds it to the reference decoder on
+  31 inputs and through 400 single-bit corruptions.
+- **Cost: decode time.** 144 ms cold against 64 ms for inflate on the slides
+  runtime. Mount, Chromium, the loader rig's own measurement: 477 ms visible,
+  567 ms in a hidden document, before DOMContentLoaded in both — the property
+  2026-09-16 exists to protect. Three test decks (deflate/base86 as control,
+  lzma/base91, lzma/base86) went to the maintainer for Microsoft Teams and
+  were reported working; which panes, and how many uploads, is not recorded
+  here, and 2026-09-16 found the preview pane varies between uploads.
+- **Hosts first.** The type is in `DATA_TYPES` (kernel `gate1.ts`), the
+  generated webext copy, and the Swift, Kotlin and Rust verifiers; the corpus
+  has three new rows (lzma-b91 is data; lzma-b86 and deflate-b91 are not). An
+  installed host without the type calls an lzma shell UNKNOWN, so webext,
+  iOS, Android, desktop and home.bento.page must ship BEFORE the first slides
+  release built this way. The Rust port passes the corpus here; Swift and
+  Kotlin were edited and not compiled here.
+- **One reader.** `scripts/lib/payload.mjs` decodes every block type; the
+  gate, the standalone and sandbox rigs, the converter's boundary test and
+  `appHash` go through it. Each used to match the types it knew and skip the
+  rest, which on a new type means passing on nothing.
+- **The loader is minified whole** (all apps): 7,984 → about 6,700 B with
+  deflate, 5,646 B with lzma. Its shape is asserted on the authored source
+  (`--loader-source`), its guarantees on the shipped text.
+- **Left open.** The hashed key column (2026-11-19) costs about 2.2 KB under
+  LZMA instead of saving 12 KB, and one run per language beats the paired
+  runs by about 3 KB: the translation table wants re-laying for this codec
+  (measured −5,381 B on a fuller stack), not done here. Firefox and WebKit
+  were not run. The slides `reference` in `scripts/size-budgets.json` is a
+  local figure.
+
+## 2026-11-20 — The slides translation table is laid out for LZMA; hashed keys are withdrawn
+
+Closes the item the entry above left open, and withdraws one bullet of
+2026-11-19 ("hashed keys") for as long as slides is packed with LZMA.
+
+- **Plain English keys again.** The hash commit is reverted whole: the
+  optional `keyOf` field is gone from kernel `i18n.ts`, `t()` looks a string
+  up by itself, and a string that is in no catalog can no longer meet a row
+  by chance (it was about 1 in 840,000).
+- **One run per language**, in the order en, es, pt, it, fr, de, zh-Hans,
+  zh-Hant, ja. The es/pt and zh-Hans/zh-Hant pairs are no longer interleaved.
+- **Why the reversal.** Both were deflate choices. Deflate looks back 32 KB,
+  so a key in the table could not be matched against its `t('…')` call site
+  and a sibling translation had to be put next to its twin. LZMA's window is
+  the whole payload. Measured on the shell one commit earlier, lzma/base91:
+  paired runs + hashed keys 694,464 B; paired + plain 692,224; separate +
+  hashed 691,321; separate + plain 688,993. Row-major, for reference:
+  700,753 plain, 704,217 hashed — so the column layout itself still pays.
+- **Measured here:** 693,227 → 687,722 B (−5,505), which is 34,644 B under
+  the 722,366 B shell that preceded #897.
+- **Same table.** 1,276 keys × 8 locales compared cell by cell against the
+  hashed table: 0 differences. In the built shells, `t()` for every key in
+  ten browser locales (the eight bundled, en, and unbundled nl): 12,780
+  answers, 0 differences from the previous build.
+- **Tied to the codec.** Under deflate this layout is about 15 KB worse than
+  2026-11-19's. If slides goes back to deflate, the table goes back with it;
+  `scripts/build-i18n.mjs` says so where `GROUPS` is defined.
+
+## 2026-11-20 — Zone CI runs on a PR only when its paths changed; `validate` still runs on every PR
+
+Every one of the eleven workflows ran on every pull request, whatever it
+touched: a slides-only PR ran the desktop host rigs on three runners, the iOS
+simulator, the directory mutants. None of those is the required check.
+
+- **`pull_request` in each `ci-<zone>.yml`, and in `pr-build-size.yml`, has a
+  `paths:` filter**: the zone's own tree, what it builds from (`kernel/**`,
+  the shared packer and `scripts/lib/**`), the rigs it runs, and the workflow
+  file itself. The native zones list their fixtures instead of kernel source:
+  they run ports, not the TypeScript.
+- **`ci.yml` has no filter.** It holds `validate`, the one required check
+  (2026-10-18), and runs every zone's slice on every PR as before. A skipped
+  zone workflow leaves nothing pending, because nothing requires it.
+- **`push` to main is not filtered.** Every merge still runs everything; that
+  run is the net for a filter that was too narrow.
+- **A filter is a way to skip silently, so `test-ci-registered.ts` holds
+  three things:** `ci.yml` has no filter; a filtered workflow lists itself;
+  every script a filtered workflow runs matches one of its paths.
+- **What it does not buy:** a PR that changes the kernel or the shared packer
+  still runs nearly everything, and should. #897 is one.
+
+## 2026-11-21 — The heavy zones are gated on a PR; the engine rigs get one retry
+
+Follows the entry above, and replaces its path filter on five workflows.
+A paths filter cannot be overridden by a label, and it had to list `kernel/**`
+to be safe, which meant any kernel change still ran the desktop host on three
+runners, the iOS simulator and the directory mutants.
+
+- **`ci-home-desktop`, `ci-home-ios`, `ci-home-android`, `ci-share` and
+  `ci-home` start with a gate job** (`scripts/ci/zone-gate`). On a pull
+  request the zone's jobs run only if the PR changes the zone's OWN files or
+  carries the **`full-ci`** label; otherwise they are skipped, in seconds. A
+  push to main always runs them. If the changed files cannot be listed, they
+  run.
+- **What is given up:** a kernel or shared-script change no longer runs these
+  zones on the PR. `validate` still runs every zone's node-level slice on the
+  PR, and the merge to main runs the heavy jobs. Label a PR `full-ci` when it
+  should be proven there before merging; a kernel-zone change should be.
+- **The other five workflows keep their path filters** (slides, spaces, dash,
+  type, build size): they are quick and their inputs are easy to list.
+- **`scripts/ci/retry-once`** runs a rig a second time if the first fails,
+  with a warning annotation on the run. It wraps the four home/web engine
+  steps (WebKit and Firefox, stages 1 and 3) and nothing else. Never a mutant
+  run: a mutant that survives once has survived.
+- **Why the retry:** `test-home-web-offline.mjs` timed out on three runs in a
+  row on #897, on a different engine or row each time, and passed on main on
+  both of its runs. #897 changes nothing in it. That is a rig waiting on a
+  real browser under a 10 s limit, and the retry is a stopgap that keeps it
+  visible; the rig's limits are the thing to fix.
+- **Held by `test-ci-registered.ts`:** every job in a gated workflow waits on
+  its gate, the gate's pattern matches the workflow file and the gate script,
+  and `labeled` is among the trigger's types.
+- **Known red on main, not addressed here:** `home-desktop-agent` and
+  `home-desktop-windows` fail at "Desktop host rigs" on main as of
+  2026-11-20 (re-run of the 2026-11-15 commit, which had passed): the rig
+  build leaves no `capabilities.json` for `capcheck.py`.
+
+## 2026-11-21 — "Hosts first" did not bind the first lzma slides release
+
+The 2026-11-20 entry on `bento/lzma-b91` says the hosts must ship before the
+first slides release packed that way, because an installed host without the
+type calls an lzma shell UNKNOWN. That is the rule (PLATFORM §1) and it
+stands. It did not constrain this release: on this date the web extension,
+iOS, Android, desktop and home.bento.page have no users, so there is no
+installed host to misread a file. Slides can be released without waiting for
+them.
+
+Nothing is owed later either. The type is already on the allowlist in every
+host's source on main, so the next build of each accepts it. The ordering
+starts to matter with the NEXT new block type, once any host has users.
+
+## 2026-11-21 — Three CI failures that were not about the code under test
+
+Found while #897 and its follow-up were on CI; none came from either.
+
+- **Desktop host rigs (`home-desktop-agent`, `home-desktop-windows`).** Red
+  on main from about 2026-11-20 with no commit in between. CI's cargo moved a
+  build script's output from `target/debug/build/<package>-<hash>/out` to
+  `target/debug/build/<package>/<hash>/out`. `rig/run.sh` found
+  `capabilities.json` by the first pattern, so it found nothing, copied
+  nothing, and `capcheck.py`'s rows failed. It looks in both now and says so
+  when neither has it. `release-check.sh` asks cargo for `OUT_DIR` and was
+  never affected.
+- **WebKit pages vanishing in the home/web rigs.** The kernel log names
+  `llvmpipe-N` segfaulting at one code offset, on one runner CPU (Xeon
+  Platinum 8573C). `ci-home.yml` sets `LP_NATIVE_VECTOR_WIDTH=128`. This is a
+  mitigation chosen from the evidence, not a proven fix: it can only be
+  confirmed by the crash not recurring on that host. The kernel-log step
+  stays.
+- **`JsonDirectoryTest` on Android, once in five runs.** Its stand-in server
+  was stopped by closing the listening socket, and "nothing listening" was
+  asserted at once. A thread still blocked in `accept()` keeps the socket
+  alive in the kernel, so the next connection could still be answered. Stop
+  now flags, closes, knocks once to wake the accept, and joins the thread.
+
