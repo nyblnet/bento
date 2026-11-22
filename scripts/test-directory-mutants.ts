@@ -475,7 +475,7 @@ const MUTANTS: Mutant[] = [
     from: "      if ((await s.get('hold'))?.id !== hold) return out(409, { error: 'busy' })\n", to: '' },
   // F1b: the post-send re-checks and the single-use reset link
   { name: 'F1b: Remove\'s post-send re-check gone', file: 'roster.js',
-    from: "      if (!still || still.voidTok !== p.voidTok || atHead.hash !== cur.hash) { await this.dropHold(hold); return out(409, (await this.endedAnswer(th)) ?? { error: 'superseded' }) }\n", to: '' },
+    from: "      if (!still || still.voidTok !== p.voidTok || atHead.hash !== cur.hash) { await this.dropHold(hold); return out(409, (await this.endedAnswer(th, now)) ?? { error: 'superseded' }) }\n", to: '' },
   { name: 'F1b: the reset\'s post-send re-check gone', file: 'roster.js',
     from: "      if ((there?.voidTok ?? null) !== (waiting?.voidTok ?? null) || atHead.hash !== cur.hash) { await this.dropHold(hold); return out(409, { error: 'superseded' }) }\n", to: '' },
   { name: 'F1b: the reset link kept once its reset is queued', file: 'roster.js',
