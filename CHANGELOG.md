@@ -78,6 +78,10 @@ pre-1.0.
   out of reach along with every share action. It now opens as a section of the
   ⋯ menu, never wider than the screen, and a long name ends in "…". Language,
   also folded into ⋯ on a phone, opens the same way.
+- **No more "Restore unsaved changes?" for a deck you just saved.** In a
+  browser where ⌘S downloads a copy, opening that copy could offer to restore
+  changes it already held. It now opens quietly. Thanks to dannyward630 for the
+  fix (#895).
 
 ## [1.2.13] — 2026-11-09
 
