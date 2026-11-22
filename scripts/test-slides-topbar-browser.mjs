@@ -8,7 +8,8 @@
 // parity pass, #567):
 //   1. every bar control sits on the 30px row at desktop width — the ? button
 //      was 28×29, sized by its glyph — and clears 44×44 on a phone;
-//   2. the wordmark is a BUTTON with a name: focusable, and Enter opens About.
+//   2. the wordmark is a BUTTON with a name: focusable, and Enter opens the
+//      File menu, whose last row is About.
 //      It was a click-only 20×20 div on a phone;
 //   3. Save is primary (maintainer ruling D1): its fill is the theme's --ink
 //      and its text --surface, in both themes, reaching 4.5:1; the unsaved dot
@@ -73,7 +74,7 @@ try {
   const off = btns.filter((b) => Math.abs(b.h - 30) > 0.5)
   ok(btns.length >= 12 && off.length === 0, `${btns.length} buttons, all 30px tall${off.length ? ' — off: ' + off.map((b) => `${b.name} ${b.w}×${b.h}`).join(', ') : ''}`)
   const help = wide.find((b) => b.help)
-  ok(help && Math.abs(help.w - 36) <= 0.5 && Math.abs(help.h - 30) <= 0.5, `? is 36×30 like its icon neighbours (${help?.w}×${help?.h})`)
+  ok(help && Math.abs(help.w - 30) <= 0.5 && Math.abs(help.h - 30) <= 0.5, `the shortcuts button is 30×30 like its app-group neighbours (${help?.w}×${help?.h})`)
 
   console.log('\ngrid: 44px touch targets (390)\n')
   await p.setViewportSize({ width: 390, height: 844 })
@@ -86,14 +87,16 @@ try {
 
   // --- 2. the wordmark is a named button -------------------------------------
   console.log('\nwordmark: a named, keyboard-reachable button\n')
-  const logo = p.getByRole('button', { name: /About bento\/slides/ })
+  const logo = p.getByRole('button', { name: /^File —/ })
   const named = await logo.count() === 1
-  ok(named, 'exactly one button named "About bento/slides…"')
+  ok(named, 'exactly one button named "File — …"')
   ok(await p.evaluate(() => document.querySelector('.ed-logo')?.tagName) === 'BUTTON', 'it is a <button>, not a div with a click handler')
   if (named) await logo.focus()
   ok(await p.evaluate(() => document.activeElement?.classList.contains('ed-logo')), 'it takes focus')
   if (named) await p.keyboard.press('Enter')
-  ok(await p.locator('.ed-about-overlay').count() > 0, 'Enter opens About')
+  ok(await p.locator('.ed-file-menu').isVisible(), 'Enter opens the File menu')
+  await p.click('.ed-file-menu [data-cmd="about"]')
+  ok(await p.locator('.ed-about-overlay').count() > 0, '…whose About row opens About')
   await p.keyboard.press('Escape')
   await p.evaluate(() => document.querySelectorAll('.ed-about-overlay').forEach((o) => o.remove()))
   await p.setViewportSize({ width: 1440, height: 900 })
@@ -194,12 +197,22 @@ try {
     pointerdown: await listeners('document', 'pointerdown'),
     observers: await p.evaluate(() => window.__barObservers()),
   })
+  // the language lives in Preferences now (⚙): pick it there, close the dialog
   const switchTo = (label) => p.evaluate((l) => {
-    const b = [...document.querySelectorAll('.ed-lang-menu .ed-btn')].find((x) => x.textContent.trim() === l)
-    if (!b) throw new Error('no language ' + l)
-    b.click()
+    document.querySelector('.ed-topbar [data-cmd="preferences"]').click()
+    const sel = document.querySelector('.ed-prefs select')
+    const o = [...sel.options].find((x) => x.textContent.trim() === l)
+    if (!o) throw new Error('no language ' + l)
+    sel.value = o.value
+    sel.dispatchEvent(new Event('change'))
+    document.querySelectorAll('.ed-about-overlay').forEach((x) => x.remove())
   }, label)
-  const other = await p.evaluate(() => [...document.querySelectorAll('.ed-lang-menu .ed-btn')].map((x) => x.textContent.trim()).find((l) => l && l !== 'English' && !l.includes('…')))
+  const other = await p.evaluate(() => {
+    document.querySelector('.ed-topbar [data-cmd="preferences"]').click()
+    const l = [...document.querySelectorAll('.ed-prefs select option')].map((x) => x.textContent.trim()).find((x) => x && x !== 'English')
+    document.querySelectorAll('.ed-about-overlay').forEach((x) => x.remove())
+    return l
+  })
   await switchTo('English') // one rebuild, so both samples are post-rebuild
   const one = await snapshot()
   const N = 6

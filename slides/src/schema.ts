@@ -85,11 +85,21 @@ export function buildSchema(version: string): JsonSchema {
   $defs.theme = obj(MODEL_KEYS.theme, {
     background: color('slide background'), color: color('body text colour'), accent: color('accent colour'),
     fontFamily: { type: 'string', maxLength: LIMITS.fontStack, description: 'CSS font-family stack for body text' },
+    codeFontFamily: { type: 'string', maxLength: LIMITS.fontStack, description: 'CSS font-family stack for code blocks; absent = fontFamily' },
     headingFamily: { type: 'string', maxLength: LIMITS.fontStack, description: 'display face for headings; absent = fontFamily' },
     palette: obj(MODEL_KEYS.themePalette, Object.fromEntries(MODEL_KEYS.themePalette.map((k) => [k, color(`brand slot ${k}`)]))),
     chartPalette: { type: 'array', maxItems: 64, items: color('series colour') },
     table: { $ref: '#/$defs/tableStyle' },
     codePalette: obj(MODEL_KEYS.themeCodePalette, Object.fromEntries(MODEL_KEYS.themeCodePalette.map((k) => [k, color('token colour')]))),
+    tokens: obj(MODEL_KEYS.themeTokens, {
+      modes: { type: 'array', maxItems: 16, items: str(64) },
+      mode: str(64, 'the active mode; absent = the first'),
+      set: { type: 'object', maxProperties: 500, description: 'token name → {type, values: mode → value}; bound with themeRefs "$name"', additionalProperties: {
+        type: 'object', required: ['type', 'values'], additionalProperties: false, properties: {
+          type: { enum: ['color', 'number', 'fontFamily', 'fontSize', 'shadow', 'opacity'] },
+          values: { type: 'object', additionalProperties: { type: ['string', 'number', 'object'], description: 'a shadow token holds {x, y, blur, color}' } },
+        } } },
+    }, ['set']),
   }, ['background', 'color', 'accent', 'fontFamily'])
   $defs.doc = obj(MODEL_KEYS.doc, {
     format: { const: FORMAT },

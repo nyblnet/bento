@@ -326,7 +326,7 @@ enum Gate1 {
 
     /// The data types Bento writes, matched exactly (case-sensitive). Anything
     /// else in a <script> is executable.
-    static let dataTypes: Set<String> = ["application/bento+json", "application/bento+lang", "bento/deflate-b64", "bento/deflate-b86"]
+    static let dataTypes: Set<String> = ["application/bento+json", "application/bento+lang", "bento/deflate-b64", "bento/deflate-b86", "bento/lzma-b91"]
     static func isDataScript(_ b: Block) -> Bool { b.tag == "script" && b.src == nil && b.type.map(dataTypes.contains) == true }
     static func executableScripts(_ blocks: [Block]) -> [Block] { blocks.filter { $0.tag == "script" && !isDataScript($0) } }
 

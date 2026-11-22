@@ -46,13 +46,17 @@ function headersFor(rules, p) {
   return out
 }
 
-const TYPES = { '.html': 'text/html; charset=utf-8', '.json': 'application/json', '.js': 'text/javascript' }
+const TYPES = { '.html': 'text/html; charset=utf-8', '.json': 'application/json', '.js': 'text/javascript', '.webmanifest': 'application/manifest+json', '.png': 'image/png' }
 
-/** A static site from `dir` with its _headers. `onRequest(req)` sees every request first. */
+/**
+ * A static site from `dir` with its _headers. `onRequest(req)` sees every
+ * request first. Files and _headers are read per request, so a rig can deploy
+ * a new build into the same directory while the server runs.
+ */
 function site(dir, { index = null, onRequest } = {}) {
-  const rules = fs.existsSync(path.join(dir, '_headers')) ? parseHeaders(fs.readFileSync(path.join(dir, '_headers'), 'utf8')) : []
   return http.createServer((req, res) => {
     onRequest?.(req)
+    const rules = fs.existsSync(path.join(dir, '_headers')) ? parseHeaders(fs.readFileSync(path.join(dir, '_headers'), 'utf8')) : []
     const p = decodeURIComponent(new URL(req.url, 'http://x').pathname)
     const file = p === '/' && index ? index : p.slice(1)
     const full = path.join(dir, file)
@@ -67,13 +71,15 @@ function site(dir, { index = null, onRequest } = {}) {
 
 /**
  * The release channel: `files` maps a path under /releases/ to a body (string
- * or Buffer). A rig changes it between rows; null removes a path.
+ * or Buffer), or to an async function returning one (a slow answer). A rig
+ * changes it between rows; null removes a path.
  */
 function releases(files, onRequest) {
-  return http.createServer((req, res) => {
+  return http.createServer(async (req, res) => {
     onRequest?.(req)
     const p = new URL(req.url, 'http://x').pathname
-    const body = files.get(p)
+    let body = files.get(p)
+    if (typeof body === 'function') body = await body(req)
     const cors = { 'access-control-allow-origin': '*', 'cache-control': 'no-store' }
     if (req.method === 'OPTIONS') { res.writeHead(204, cors).end(); return }
     if (body == null) { res.writeHead(404, cors).end(); return }

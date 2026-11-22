@@ -32,7 +32,7 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const { scanBlocks } = await import(path.join(ROOT, 'kernel/src/gate1.ts'))
-const b86 = await import(path.join(ROOT, 'scripts/lib/b86.mjs'))
+const payload = await import(path.join(ROOT, 'scripts/lib/payload.mjs'))
 
 let checks = 0, failures = 0
 const ok = (c, m) => { checks++; if (!c) failures++; console.log(`  ${c ? 'ok  ' : 'FAIL'}  ${m}`) }
@@ -51,9 +51,8 @@ if (process.env.CI && shells.length < APPS.length + 1) {
 function readAll(html) {
   let all = html
   for (const b of scanBlocks(html)) {
-    if (b.type !== 'bento/deflate-b86' && b.type !== 'bento/deflate-b64') continue
-    const bytes = b.type.endsWith('b86') ? Buffer.from(b86.decode(b.text.trim())) : Buffer.from(b.text.trim(), 'base64')
-    all += '\n' + zlib.inflateRawSync(bytes).toString('utf8')
+    if (!payload.isPayloadType(b.type)) continue
+    all += '\n' + payload.unpack(b.type, b.text).toString('utf8')
   }
   return all
 }
@@ -103,24 +102,22 @@ for (const f of shells) {
 // positive controls on a copy of the first shell: plant inside the runtime payload
 console.log('\n=== positive controls (planted in a copy)')
 const base = fs.readFileSync(shells[0], 'utf8')
-function plant(code) {
+async function plant(code) {
   const rt = scanBlocks(base).find((b) => b.id === 'bento-rt')
-  const isB86 = rt.type === 'bento/deflate-b86'
-  const js = zlib.inflateRawSync(isB86 ? Buffer.from(b86.decode(rt.text.trim())) : Buffer.from(rt.text.trim(), 'base64')).toString('utf8')
-  const packed = zlib.deflateRawSync(Buffer.from(js + '\n' + code))
-  const text = isB86 ? b86.encode(packed) : packed.toString('base64')
+  const js = payload.unpack(rt.type, rt.text).toString('utf8')
+  const text = await payload.pack(rt.type, Buffer.from(js + '\n' + code))
   return base.slice(0, rt.start) + text + base.slice(rt.start + rt.text.length)
 }
 {
-  const r = check('planted', plant(`const LIBRARY = 'https://open.bento.page/x'`))
+  const r = check('planted', await plant(`const LIBRARY = 'https://open.bento.page/x'`))
   ok(r.stray.includes('open.bento.page/x'), 'an address planted inside the compressed runtime is found')
 }
 {
-  const r = check('planted', plant(`if (location.protocol === 'file:') location.href = 'https://home.bento.page/open'`))
+  const r = check('planted', await plant(`if (location.protocol === 'file:') location.href = 'https://home.bento.page/open'`))
   ok(r.stray.length > 0 && r.sinks.length > 0, 'a planted file:// redirect to a library address fails the scan')
 }
 {
-  const r = check('planted', plant(`const live = location.hostname.endsWith('bento.page')`))
+  const r = check('planted', await plant(`const live = location.hostname.endsWith('bento.page')`))
   ok(r.hostTests.length > 0, 'a planted hostname test against bento.page fails the scan')
 }
 

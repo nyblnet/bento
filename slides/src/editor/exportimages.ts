@@ -56,16 +56,9 @@ function runtimeCss(): string {
 
 /** Draw one slide at `scale` and encode it. Rejects (SecurityError) when the
  *  canvas is tainted — see the header for when that happens. */
-export async function rasterizeSlide(doc: BentoDoc, slide: Slide, format: ImageFormat, scale: ImageScale): Promise<Blob> {
-  const { width: w, height: h } = doc.size
-  const { width: pw, height: ph } = pixelSize(doc, scale)
-  const surface = renderSlide(slide, doc, { svgAsImage: true, hidePlaceholders: true })
-  const css = runtimeCss() + '\n' + (document.getElementById('bento-fonts')?.textContent ?? '')
-  const xhtml = new XMLSerializer().serializeToString(surface)
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${pw}" height="${ph}" viewBox="0 0 ${w} ${h}">` +
-    `<foreignObject width="${w}" height="${h}"><div xmlns="http://www.w3.org/1999/xhtml">` +
-    `<style><![CDATA[${css}]]></style>${xhtml}</div></foreignObject></svg>`
+export async function rasterizeSlide(doc: BentoDoc, slide: Slide, format: ImageFormat, scale: ImageScale, box?: Box): Promise<Blob> {
+  const { width: pw, height: ph } = box ? { width: Math.round(box.w * scale), height: Math.round(box.h * scale) } : pixelSize(doc, scale)
+  const svg = slideSvg(doc, slide, pw, ph, box)
   const img = new Image()
   img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
   await img.decode()
@@ -83,9 +76,25 @@ export async function rasterizeSlide(doc: BentoDoc, slide: Slide, format: ImageF
   })
 }
 
+/** A region of the slide, in slide px. */
+export interface Box { x: number; y: number; w: number; h: number }
+
+/** The slide (or the `box` of it) as a standalone SVG of `pw`×`ph`: the
+ *  render inside a foreignObject with the stylesheet and fonts it needs. */
+export function slideSvg(doc: BentoDoc, slide: Slide, pw: number, ph: number, box?: Box): string {
+  const { width: w, height: h } = doc.size
+  const v = box ?? { x: 0, y: 0, w, h }
+  const surface = renderSlide(slide, doc, { svgAsImage: true, hidePlaceholders: true })
+  const css = runtimeCss() + '\n' + (document.getElementById('bento-fonts')?.textContent ?? '')
+  const xhtml = new XMLSerializer().serializeToString(surface)
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${pw}" height="${ph}" viewBox="${v.x} ${v.y} ${v.w} ${v.h}">` +
+    `<foreignObject width="${w}" height="${h}"><div xmlns="http://www.w3.org/1999/xhtml">` +
+    `<style><![CDATA[${css}]]></style>${xhtml}</div></foreignObject></svg>`
+}
+
 /** The anchor-click download the kernel's save fallback uses, for a binary
  *  blob (the kernel's takes HTML text). Never retains a file handle. */
-function downloadBlob(blob: Blob, name: string) {
+export function downloadBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

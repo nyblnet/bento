@@ -6,6 +6,7 @@
 // neither steals the other's activation (the macOS second-screen fix). The
 // window opens on the current display; the presenter drags it to a second
 // screen — we deliberately do NOT request the "window management" permission.
+import { mountHints } from './editor/hints'
 
 /** macOS is the platform whose exclusive fullscreen Space traps a popup opened
  *  after the slides go fullscreen — so notes must be opened first there. */
@@ -62,7 +63,19 @@ export function paintSpeaker(w: Window, title: string, bodyHtml: string): void {
   }
   d.body.className = 'bento-speaker'
   d.body.innerHTML = bodyHtml
+  hintWindow(w)
 }
+
+/** The speaker view's buttons explain themselves like the editor's: the app's
+ *  delayed hint with key chips, not the browser's title tooltip. Once per
+ *  window (both the editor's and present's ways of opening it call this); it
+ *  lives as long as the window does. */
+export function hintWindow(w: Window): void {
+  if (hinted.has(w)) return
+  hinted.add(w)
+  mountHints(w.document.body, new AbortController().signal)
+}
+const hinted = new WeakSet<Window>()
 
 /** A generous default popup size for the current display. */
 function speakerFeatures(): string {

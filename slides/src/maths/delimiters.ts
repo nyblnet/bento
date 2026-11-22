@@ -50,7 +50,7 @@ const holdRe = /(\d+)/g
 /** a line-break tag a display formula may span: <br>, <div>, </div>, <p>, </p> */
 const BREAK = /^<(?:br\s*\/?|\/?(div|p))>$/i
 
-const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+import { esc } from './mathml.ts'
 
 export function resolveMathHtml(html: string, render: RenderFn, hint?: HintFn): string {
   if (html.indexOf('$') < 0 && html.indexOf('\\(') < 0 && html.indexOf('\\[') < 0) return html

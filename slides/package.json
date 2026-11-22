@@ -1,14 +1,14 @@
 {
   "name": "bento-slides",
   "private": true,
-  "version": "1.2.13",
+  "version": "1.3.0",
   "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:single": "tsc -b && SINGLEFILE=1 vite build --outDir dist-single && mv dist-single/index.html dist-single/Bento_Slides.bento.html && node ../scripts/postbuild-compress.mjs dist-single/Bento_Slides.bento.html",
-    "build:sealtest": "rm -rf dist-sealtest && tsc -b && SINGLEFILE=1 BENTO_TEST_SEAL=1 vite build --outDir dist-sealtest && mv dist-sealtest/index.html dist-sealtest/Bento_Slides.bento.html && node ../scripts/postbuild-compress.mjs dist-sealtest/Bento_Slides.bento.html && touch dist-sealtest/.complete",
+    "build:single": "tsc -b && SINGLEFILE=1 vite build --outDir dist-single && mv dist-single/index.html dist-single/Bento_Slides.bento.html && node ../scripts/postbuild-compress.mjs dist-single/Bento_Slides.bento.html --codec lzma --encoding b91",
+    "build:sealtest": "rm -rf dist-sealtest && tsc -b && SINGLEFILE=1 BENTO_TEST_SEAL=1 vite build --outDir dist-sealtest && mv dist-sealtest/index.html dist-sealtest/Bento_Slides.bento.html && node ../scripts/postbuild-compress.mjs dist-sealtest/Bento_Slides.bento.html --codec lzma --encoding b91 && touch dist-sealtest/.complete",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -21,7 +21,9 @@
     "@types/node": "^24.13.2",
     "@types/reveal.js": "^5.2.1",
     "fake-indexeddb": "^6.2.5",
+    "lzma1": "0.8.0",
     "qrcode": "^1.5.4",
+    "terser": "^5.51.2",
     "typescript": "~5.8.3",
     "vite": "^7.1.1",
     "vite-plugin-singlefile": "^2.3.3"

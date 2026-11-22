@@ -11,6 +11,9 @@ name: CI (home)
 
 on:
   pull_request:
+    # No paths filter here: a filter would also stop the `full-ci` label from
+    # starting these jobs. The gate job below decides instead, in seconds.
+    types: [opened, synchronize, reopened, labeled]
   push:
     branches: [main]
 
@@ -20,6 +23,18 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+env:
+  # WebKit on these runners draws with Mesa's software rasterizer, llvmpipe,
+  # which compiles its pipeline for the host CPU at run time. On one runner
+  # CPU (Xeon Platinum 8573C) it segfaults in a rasterizer thread, at the same
+  # code offset each time, and takes WebKit's web process with it: the rig
+  # reports "a page the rig still held went away" and the kernel log names
+  # llvmpipe-N. On other hosts it does not. Holding llvmpipe to 128-bit
+  # vectors keeps it off the wide-vector code paths that differ by CPU. It
+  # costs speed nobody here needs. If the crashes stop, this was it; if they
+  # go on, the kernel-log step below still says so.
+  LP_NATIVE_VECTOR_WIDTH: '128'
+
 defaults:
   run:
     # Every step fails if a rig in it reports a skip CI does not allow
@@ -28,7 +43,33 @@ defaults:
     shell: bash scripts/ci/bento-step {0}
 
 jobs:
+  home-gate:
+    # These jobs are heavy and none is the required check. On a PR they run
+    # only if it changes this zone's own files or carries the `full-ci` label;
+    # on main they always run. See scripts/ci/zone-gate.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts/ci
+            scripts/lib/ci-skips.mjs
+          sparse-checkout-cone-mode: false
+      - id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          LABELLED: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: scripts/ci/zone-gate '^(home/web/|home/webext/|home/fixtures/|scripts/test-(home|webext)-|\.github/workflows/ci-home\.yml$|scripts/ci/zone-gate$)'
+
   home-origin-probe-browser:
+    needs: home-gate
+    if: needs.home-gate.outputs.run == 'true'
     # The probe that decides whether a file opened for the first time may keep
     # the storage origin it had before origins followed the file. It runs in
     # WebKit on iOS, so it's tested in WebKit, against storage laid out the way
@@ -61,12 +102,16 @@ jobs:
         run: sudo dmesg -T | grep -iE 'segfault|oom|killed process' | tail -20 || echo "no segfault or OOM in the kernel log"
 
   home-web-engines:
+    needs: home-gate
+    if: needs.home-gate.outputs.run == 'true'
     # bento/home in your browser (home/web) in the two engines the required
     # validate job does not run (WebKit, Firefox), and its mutants in Chromium:
     # each mutant breaks one rule and must turn the rig red on the row that
     # guards it.
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Engines about 4 minutes, mutants about 16, then the production-build
+    # mutants: at 30 the job was cancelled in that last step on two runs.
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -85,10 +130,10 @@ jobs:
       # log, which is the only evidence when a browser dies mid-rig.
       - name: home/web in WebKit
         timeout-minutes: 6
-        run: DEBUG=pw:browser BENTO_BROWSER=webkit node scripts/test-home-web.mjs
+        run: DEBUG=pw:browser BENTO_BROWSER=webkit scripts/ci/retry-once node scripts/test-home-web.mjs
       - name: home/web in Firefox
         timeout-minutes: 6
-        run: DEBUG=pw:browser BENTO_BROWSER=firefox node scripts/test-home-web.mjs
+        run: DEBUG=pw:browser BENTO_BROWSER=firefox scripts/ci/retry-once node scripts/test-home-web.mjs
       - name: home/web mutants
         run: node scripts/test-home-web-mutants.mjs
       - name: Build the slides shell (a build mutant that lets a refused release go on must reach signing)
@@ -102,6 +147,8 @@ jobs:
         run: sudo dmesg -T | grep -iE 'segfault|oom|killed process' | tail -20 || echo "no segfault or OOM in the kernel log"
 
   webext-tripwire:
+    needs: home-gate
+    if: needs.home-gate.outputs.run == 'true'
     # The bento/home tripwire in a real browser: the unpacked extension loaded
     # into Playwright's Chromium (channel 'chromium', new headless: the
     # headless shell cannot load extensions), against a local home/web build,
@@ -125,3 +172,38 @@ jobs:
         run: node scripts/test-webext-tripwire-browser.mjs
       - name: Tripwire mutants
         run: node scripts/test-webext-tripwire-mutants.mjs
+
+  home-web-offline-engines:
+    needs: home-gate
+    if: needs.home-gate.outputs.run == 'true'
+    # bento/home in your browser, stage 3 (offline worker, kill switch,
+    # install) in the two engines the required validate job does not run, and
+    # its mutants in Chromium: each breaks one rule and must turn the rig red on
+    # the row that guards it, in a run that completed (a crash is not a kill).
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install esbuild (slides' dev dependencies)
+        run: npm ci --prefix slides
+      - name: Install browser test runtime
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium webkit firefox
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      # each engine and the mutants report on their own: one failing does not
+      # skip the others (the job still fails), and a hang ends its step, not the job
+      - name: home/web stage 3 in WebKit
+        timeout-minutes: 8
+        run: BENTO_BROWSER=webkit scripts/ci/retry-once node scripts/test-home-web-offline.mjs
+      - name: home/web stage 3 in Firefox
+        if: ${{ !cancelled() }}
+        timeout-minutes: 8
+        run: BENTO_BROWSER=firefox scripts/ci/retry-once node scripts/test-home-web-offline.mjs
+      - name: home/web stage 3 mutants
+        if: ${{ !cancelled() }}
+        timeout-minutes: 12
+        run: node scripts/test-home-web-offline.mjs --mutants

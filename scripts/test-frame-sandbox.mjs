@@ -38,8 +38,7 @@
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs'
 import { join, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { inflateRawSync } from 'node:zlib'
-import { decode as b86decode } from './lib/b86.mjs'
+import { PAYLOAD_TYPE_RE, unpack } from './lib/payload.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const requireBuilt = process.argv.includes('--require-built')
@@ -121,13 +120,11 @@ function walk(dir, acc = []) {
   return acc
 }
 
-const PAYLOAD = /<script\b[^>]*type="bento\/deflate-(b64|b86)"[^>]*>([\s\S]*?)<\/script>/g
+const PAYLOAD = new RegExp(`<script\\b[^>]*type="(${PAYLOAD_TYPE_RE})"[^>]*>([\\s\\S]*?)<\\/script>`, 'g')
 function shellTexts(html) {
   const parts = [html]
   for (const m of html.matchAll(PAYLOAD)) {
-    const t = m[2].trim()
-    const bytes = m[1] === 'b86' ? Buffer.from(b86decode(t)) : Buffer.from(t, 'base64')
-    parts.push(inflateRawSync(bytes).toString('utf8'))
+    parts.push(unpack(m[1], m[2]).toString('utf8'))
   }
   return parts
 }

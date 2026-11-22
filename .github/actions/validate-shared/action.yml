@@ -23,6 +23,14 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-i18n-coverage.mjs
 
+    - name: No dead catalog keys
+      # The other direction: every core catalog key ships in every saved file
+      # in eight languages, so a key no bundled source can produce any more
+      # is weight nothing else notices. Parses slides/src and kernel/src for
+      # string literals; keys built at run time go in the rig's DYNAMIC list.
+      shell: bento-step {0}
+      run: node scripts/test-i18n-dead-keys.mjs
+
     - name: Language packs build and index cleanly
       # Emits every pack and builds the index payload WITHOUT signing (--dry
       # writes nothing and needs no key — signing stays local, see the header).

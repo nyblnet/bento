@@ -13,6 +13,7 @@
 
 import type { Store } from '../store'
 import type { ShapeElement } from '../model'
+import { isCompoundPath, moveShapeBy } from './lineedit'
 import { type BezNode, type Pt, handleLen, mirrorHandle, nearestT, parseBezier, serializeBezier, splitSegment } from './bezier'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -23,11 +24,48 @@ export function isCurve(el: { type: string; shape?: string; d?: string }): boole
   return el.type === 'shape' && el.shape === 'path' && /[csq]/i.test(el.d ?? '')
 }
 
+/** A node's type, as the topbar's path pills set it (Figma/Penpot): a sharp
+ *  corner with no handles, a smooth node whose handles stay in line, or a
+ *  symmetric one whose handles are also the same length. */
+export type NodeKind = 'corner' | 'smooth' | 'symmetric'
+
+/** Make node `i` of `nodes` (in place) a corner, smooth or symmetric node. A
+ *  node with no handles takes its tangent from its neighbours and handles a
+ *  third of the way to each, so a polyline corner rounds off the way pen
+ *  tools round it. */
+export function setNodeKind(nodes: BezNode[], i: number, closed: boolean, kind: NodeKind) {
+  const n = nodes[i]
+  if (kind === 'corner') { delete n.in; delete n.out; n.corner = true; return }
+  const prev = nodes[i - 1] ?? (closed ? nodes[nodes.length - 1] : undefined)
+  const next = nodes[i + 1] ?? (closed ? nodes[0] : undefined)
+  const a = n.in ?? prev?.p ?? n.p
+  const b = n.out ?? next?.p ?? n.p
+  const len = Math.hypot(b.x - a.x, b.y - a.y)
+  if (!len) return
+  const ux = (b.x - a.x) / len, uy = (b.y - a.y) / len
+  const dist = (q?: BezNode) => (q ? Math.hypot(q.p.x - n.p.x, q.p.y - n.p.y) / 3 : 0)
+  let li = n.in ? handleLen(n.p, n.in) : dist(prev)
+  let lo = n.out ? handleLen(n.p, n.out) : dist(next)
+  // an open path's end has one side only; symmetric evens out a node with two
+  if (kind === 'symmetric' && prev && next) li = lo = (li + lo) / 2
+  if (li) n.in = { x: n.p.x - ux * li, y: n.p.y - uy * li }; else delete n.in
+  if (lo) n.out = { x: n.p.x + ux * lo, y: n.p.y + uy * lo }; else delete n.out
+  n.corner = false
+}
+
+/** What a node is now, for the pills' pressed state. */
+export function nodeKind(n: BezNode): NodeKind {
+  if (n.corner || !n.in || !n.out) return 'corner'
+  return Math.abs(handleLen(n.p, n.in) - handleLen(n.p, n.out)) < 0.5 ? 'symmetric' : 'smooth'
+}
+
 export class BezierEditor {
   private overlay: SVGSVGElement | null = null
   private elId = ''
   private nodes: BezNode[] = [] // slide coords
   private closed = false
+  /** the anchor last pressed — what the path pills act on; null = every node */
+  private selected: number | null = null
   private scale = () => 1
 
   constructor(
@@ -38,6 +76,8 @@ export class BezierEditor {
   get active() {
     return !!this.overlay
   }
+  /** told when the selected anchor changes (the topbar's pills repaint) */
+  onSelect?: () => void
   get elementId() {
     return this.elId
   }
@@ -47,12 +87,8 @@ export class BezierEditor {
 
   attach(elId: string) {
     const el = this.store.element(elId) as ShapeElement | undefined
-    if (!el || !isCurve(el)) return this.detach()
-    this.elId = elId
-    const { nodes, closed } = parseBezier(el.d ?? '')
-    this.closed = closed
-    const map = this.toSlideFn(el)
-    this.nodes = nodes.map((n) => this.mark({ p: map(n.p), in: n.in && map(n.in), out: n.out && map(n.out) }))
+    if (!el || !isCurve(el) || isCompoundPath(el.d)) return this.detach()
+    this.load(el)
     if (!this.overlay) {
       const svg = document.createElementNS(SVG_NS, 'svg')
       svg.classList.add('ed-bezedit')
@@ -70,6 +106,60 @@ export class BezierEditor {
     this.overlay?.remove()
     this.overlay = null
     this.elId = ''
+    this.selected = null
+  }
+
+  private load(el: ShapeElement) {
+    if (el.id !== this.elId) this.selected = null
+    this.elId = el.id
+    const { nodes, closed } = parseBezier(el.d ?? '')
+    // a closed path written as "… C c1 c2 p0 Z" parses the closing segment's
+    // end as a second copy of the first node: fold it back in, so the first
+    // node gets its in-handle and the next commit writes no zero-length segment
+    const first = nodes[0], last = nodes[nodes.length - 1]
+    if (closed && nodes.length > 2 && Math.hypot(last.p.x - first.p.x, last.p.y - first.p.y) < 0.01) {
+      first.in = last.in
+      nodes.pop()
+    }
+    this.closed = closed
+    const map = this.toSlideFn(el)
+    this.nodes = nodes.map((n) => this.mark({ p: map(n.p), in: n.in && map(n.in), out: n.out && map(n.out) }))
+    if (this.selected !== null && this.selected >= this.nodes.length) this.selected = null
+  }
+
+  /** The path pills' state for a path shape: its selected node's kind (or
+   *  null when none is selected) and whether it is closed. */
+  pathState(elId: string): { kind: NodeKind | null; closed: boolean } | null {
+    const el = this.store.element(elId) as ShapeElement | undefined
+    if (el?.type !== 'shape' || el.shape !== 'path') return null
+    if (this.elId !== elId || !this.overlay) {
+      const { closed } = parseBezier(el.d ?? '')
+      return { kind: null, closed }
+    }
+    const n = this.selected === null ? null : this.nodes[this.selected]
+    return { kind: n ? nodeKind(n) : null, closed: this.closed }
+  }
+
+  /** Corner | Smooth | Symmetric on the selected node, or on every node when
+   *  none is selected. Works on any path shape — a straight polygon becomes
+   *  a curve the moment one of its corners is smoothed. One undo step. */
+  setKind(elId: string, kind: NodeKind) {
+    const el = this.store.element(elId) as ShapeElement | undefined
+    if (el?.type !== 'shape' || el.shape !== 'path') return
+    this.load(el)
+    const idxs = this.selected === null ? this.nodes.map((_, i) => i) : [this.selected]
+    for (const i of idxs) setNodeKind(this.nodes, i, this.closed, kind)
+    this.commit(true)
+  }
+
+  /** Close an open path (the last node joins the first) or open a closed one. */
+  toggleClosed(elId: string) {
+    const el = this.store.element(elId) as ShapeElement | undefined
+    if (el?.type !== 'shape' || el.shape !== 'path') return
+    this.load(el)
+    if (!this.closed && this.nodes.length < 3) return
+    this.closed = !this.closed
+    this.commit(true)
   }
 
   // --- coordinate mapping (path-local ⇄ slide) --------------------------------
@@ -83,6 +173,7 @@ export class BezierEditor {
 
   /** Mark a node corner if its two handles aren't (roughly) collinear. */
   private mark(n: BezNode): BezNode {
+    if (!n.in && !n.out) n.corner = true
     if (n.in && n.out) {
       const a = Math.atan2(n.p.y - n.in.y, n.p.x - n.in.x)
       const b = Math.atan2(n.out.y - n.p.y, n.out.x - n.p.x)
@@ -110,7 +201,8 @@ export class BezierEditor {
     hit.setAttribute('stroke', 'transparent')
     hit.setAttribute('stroke-width', String(16 * k))
     hit.classList.add('ed-bz-body')
-    hit.style.cssText = 'cursor:move;pointer-events:stroke'
+    // a closed shape is pressed anywhere inside it, as its own fill is; an open one on its stroke
+    hit.style.cssText = `cursor:move;pointer-events:${this.closed ? 'all' : 'stroke'}`
     hit.addEventListener('mousedown', (ev) => this.dragBody(ev))
     svg.appendChild(hit)
 
@@ -168,6 +260,7 @@ export class BezierEditor {
       dot.setAttribute('stroke', '#2f6df6')
       dot.setAttribute('stroke-width', String(2 * k))
       dot.classList.add('ed-bz-anchor')
+      if (i === this.selected) { dot.classList.add('ed-bz-sel'); dot.setAttribute('fill', '#2f6df6') }
       dot.dataset.idx = String(i)
       dot.style.cssText = 'cursor:grab;pointer-events:all'
       dot.addEventListener('mousedown', (ev) => this.dragAnchor(ev, i))
@@ -189,6 +282,8 @@ export class BezierEditor {
   private dragAnchor(down: MouseEvent, idx: number) {
     down.stopPropagation()
     down.preventDefault()
+    // the pressed anchor is the one the path pills act on
+    if (this.selected !== idx) { this.selected = idx; this.draw(); this.onSelect?.() }
     // Alt-click (no drag) toggles corner/smooth
     const start = this.toSlide(down)
     const n = this.nodes[idx]
@@ -246,7 +341,8 @@ export class BezierEditor {
     window.addEventListener('mouseup', up)
   }
 
-  private dragBody(down: MouseEvent) {
+  /** Move the whole shape with this press — its body, or (canvas.ts) the press that just selected it. */
+  dragBody(down: MouseEvent) {
     down.stopPropagation()
     down.preventDefault()
     const start = this.toSlide(down)
@@ -254,10 +350,11 @@ export class BezierEditor {
     const node = this.elNode()
     if (node) node.style.opacity = '0.4'
     let moved = false
+    let dx = 0, dy = 0
     const move = (ev: MouseEvent) => {
       const p = this.toSlide(ev)
-      const dx = p.x - start.x
-      const dy = p.y - start.y
+      dx = p.x - start.x
+      dy = p.y - start.y
       moved = true
       this.nodes = orig.map((o) => ({
         p: { x: o.p.x + dx, y: o.p.y + dy },
@@ -271,7 +368,7 @@ export class BezierEditor {
       window.removeEventListener('mousemove', move)
       window.removeEventListener('mouseup', up)
       if (node) node.style.opacity = ''
-      if (moved) this.commit(true)
+      if (moved) { moveShapeBy(this.store, this.elId, dx, dy); this.attach(this.elId) }
     }
     window.addEventListener('mousemove', move)
     window.addEventListener('mouseup', up)
@@ -305,6 +402,8 @@ export class BezierEditor {
       const dd = (pt.x - q.x) ** 2 + (pt.y - q.y) ** 2
       if (dd < bestD) { bestD = dd; best = i; bestT = t }
     }
+    // a closed shape's body takes a press anywhere inside it; only a double-click on its edge adds a point
+    if (Math.sqrt(bestD) > 8 / this.scale()) return
     const a = this.nodes[best]
     const b = this.nodes[(best + 1) % this.nodes.length]
     const split = splitSegment(a, b, bestT)

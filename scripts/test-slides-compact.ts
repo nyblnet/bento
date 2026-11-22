@@ -80,7 +80,7 @@ for (const [name, doc] of decks) {
   ok(d.changed.length === 0, `${name}: no value is lost or changed by the round-trip${d.changed.length ? ` (${d.changed.slice(0, 3).join(', ')})` : ''}`)
   const addedKeys = [...new Set(d.added.map((p) => p.replace(/^.*\./, '')))]
   if (name === 'starter deck') ok(canon(back) === canon(doc), 'the starter deck (editor-shaped: every default present) round-trips canonical-JSON byte-identical')
-  else ok(addedKeys.every((k) => ['radius', 'fit', 'autoplay', 'loop', 'muted', 'controls', 'preset', 'rotation', 'opacity', 'fontFamily', 'fontWeight', 'lineHeight', 'align', 'valign', 'stroke', 'strokeWidth', 'header', 'notes', 'transition', 'background', 'style', 'color', 'fontSize'].includes(k)), `${name}: the only additions are editor insert defaults the script left out (${addedKeys.join(', ') || 'none'})`)
+  else ok(addedKeys.every((k) => ['radius', 'fit', 'autoplay', 'loop', 'muted', 'controls', 'preset', 'rotation', 'opacity', 'fontFamily', 'codeFontFamily', 'fontWeight', 'lineHeight', 'align', 'valign', 'stroke', 'strokeWidth', 'header', 'notes', 'transition', 'background', 'style', 'color', 'fontSize'].includes(k)), `${name}: the only additions are editor insert defaults the script left out (${addedKeys.join(', ') || 'none'})`)
   ok(!(COMPACT_FLAG in (back as unknown as Obj)), `${name}: the flag does not survive expansion`)
   ok(JSON.stringify(c).length < JSON.stringify(doc).length, `${name}: the compact form is smaller`)
 }
@@ -213,19 +213,22 @@ console.log('\nwhat the editor dereferences on first render\n')
   const dEq = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
   const bare = expandDoc({ compact: true, slides: [{ elements: [{ type: 'text', x: 0, y: 0, w: 100, h: 20, html: 'x' }] }] }) as unknown as Obj
   ok(dEq(bare.size, { width: 1280, height: 720 }), 'a compact deck without size gets the model default 1280×720')
-  ok(bare.format === 'bento/slides' && typeof bare.version === 'number' && typeof bare.title === 'string' && typeof (bare.theme as Obj).fontFamily === 'string', 'format, version, title and theme.fontFamily are present from newDoc()')
+  ok(bare.format === 'bento/slides' && typeof bare.version === 'number' && typeof bare.title === 'string' && typeof (bare.theme as Obj).fontFamily === 'string' && typeof (bare.theme as Obj).codeFontFamily === 'string', 'format, version, title, theme.fontFamily and theme.codeFontFamily are present from newDoc()')
   const nulls = expandDoc({ compact: true, size: null, theme: null, title: 7, format: 'nope', version: 'x', slides: [] }) as unknown as Obj
-  ok(dEq(nulls.size, { width: 1280, height: 720 }) && typeof (nulls.theme as Obj).fontFamily === 'string' && typeof nulls.title === 'string' && nulls.format === 'bento/slides' && nulls.version === 1, 'null or wrong-shaped size/theme/title/format/version are replaced by the defaults, not passed through')
+  ok(dEq(nulls.size, { width: 1280, height: 720 }) && typeof (nulls.theme as Obj).fontFamily === 'string' && typeof (nulls.theme as Obj).codeFontFamily === 'string' && typeof nulls.title === 'string' && nulls.format === 'bento/slides' && nulls.version === 1, 'null or wrong-shaped size/theme/title/format/version are replaced by the defaults, not passed through')
   const halfSize = expandDoc({ compact: true, size: { width: 1600 }, slides: [] }) as unknown as Obj
   ok(dEq(halfSize.size, { width: 1280, height: 720 }), 'a size missing its height is replaced whole')
   ok(dEq((expandDoc({ compact: true, size: { width: 1600, height: 900 }, slides: [] }) as unknown as Obj).size, { width: 1600, height: 900 }), 'a well-formed size is kept')
-  const nullFont = expandDoc({ compact: true, theme: { fontFamily: null, accent: '#123456' }, slides: [] }) as unknown as Obj
-  ok(typeof (nullFont.theme as Obj).fontFamily === 'string' && (nullFont.theme as Obj).accent === '#123456', 'a null theme slot falls back; a set one is kept')
+  const nullFont = expandDoc({ compact: true, theme: { fontFamily: null, codeFontFamily: null, accent: '#123456' }, slides: [] }) as unknown as Obj
+  ok(typeof (nullFont.theme as Obj).fontFamily === 'string' && typeof (nullFont.theme as Obj).codeFontFamily === 'string' && (nullFont.theme as Obj).accent === '#123456', 'a null theme slot falls back; a set one is kept')
+  const customCodeFont = expandDoc(compactDoc({ ...newDoc(), theme: { ...newDoc().theme, codeFontFamily: "'JetBrains Mono', monospace" } }))
+  ok(customCodeFont.theme.codeFontFamily === "'JetBrains Mono', monospace", 'a custom theme.codeFontFamily survives compactDoc → expandDoc')
 }
 
 console.log('\nthe numbers\n')
-const sj = JSON.stringify(starterDoc()), sc = compactJson(starterDoc())
-ok(sc.length / sj.length < 0.9, `the starter deck compacts to ${(sc.length / sj.length * 100).toFixed(1)}% of full (a designed deck overrides most defaults; measured 86.1%)`)
+// one deck, both ways: two starterDoc() calls differ in their random ids, and that noise alone moved the ratio ±0.7%
+const sd = starterDoc(), sj = JSON.stringify(sd), sc = compactJson(sd)
+ok(sc.length / sj.length < 0.92, `the starter deck compacts to ${(sc.length / sj.length * 100).toFixed(1)}% of full (a designed deck overrides most defaults; measured 90.0% since it names its layers and binds its tokens, 86.1% before)`)
 const agentCompact = JSON.stringify(compact), agentFull = JSON.stringify(ex)
 ok(agentFull.length / agentCompact.length > 2.5, `an agent deck written compact is ${(agentFull.length / agentCompact.length).toFixed(1)}× smaller than its expansion`)
 

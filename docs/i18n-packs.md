@@ -457,8 +457,9 @@ but not yet on `main` — do not describe it as shipped.
       correct as it stands — `tk-TM` is what a Turkmen system reports.
 
       The 21 were complete at 693/693 when they landed. The source has grown
-      since, so today they sit at 703/706, and `tk` — written against the
-      current source — is the only one at **706/706**. See the open item below.
+      since; on 2026-10-29 all 22 were topped up to the editor revamp's
+      source, **1238/1238** each (the 207 new strings are machine-drafted and
+      await native review, like the rest of these packs).
 - [x] Korean completed — 662 → 693 in #129. It was first (#81) and therefore
       predated the Languages dialog, so 22 of its 32 gaps were that dialog
       entire: a Korean user opening "Manage languages…" read it in English.

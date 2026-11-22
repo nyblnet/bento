@@ -45,9 +45,13 @@ try {
     await p.goto(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url).href)
     await p.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-topbar'))
     await p.waitForTimeout(400)
-    // the controls a click can land on, by their tooltip (stable across tiers)
-    const rects = () => p.evaluate(() => Object.fromEntries(['Undo (⌘Z)', 'Redo (⇧⌘Z)'].map((t) => {
-      const b = [...document.querySelectorAll('.ed-topbar .ed-btn')].find((x) => x.title === t && x.getBoundingClientRect().width)
+    // the controls a click can land on, by their command (stable across tiers
+    // AND platforms: the tooltip was the handle until it began to name the
+    // platform's own modifier — "Undo (CtrlZ)" off a Mac — and on Linux, CI
+    // included, both buttons then read as missing, which also made every
+    // "did not move" check below compare missing with missing and pass)
+    const rects = () => p.evaluate(() => Object.fromEntries([['Undo (⌘Z)', 'undo'], ['Redo (⇧⌘Z)', 'redo']].map(([t, cmd]) => {
+      const b = [...document.querySelectorAll('.ed-topbar .ed-btn')].find((x) => x.dataset.cmd === cmd && x.getBoundingClientRect().width)
       const r = b?.getBoundingClientRect()
       return [t, r ? `${r.x.toFixed(1)},${r.y.toFixed(1)},${r.width.toFixed(1)}` : 'missing']
     })))

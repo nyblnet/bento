@@ -267,7 +267,7 @@ export function scanBlocks(html        )          {
  * UNKNOWN. An allowlist, so a type browsers start running tomorrow can't pass as
  * data.
  */
-export const DATA_TYPES                      = new Set(['application/bento+json', 'application/bento+lang', 'bento/deflate-b64', 'bento/deflate-b86'])
+export const DATA_TYPES                      = new Set(['application/bento+json', 'application/bento+lang', 'bento/deflate-b64', 'bento/deflate-b86', 'bento/lzma-b91'])
 export const isDataScript = (b       )          => b.tag === 'script' && b.src === null && b.type !== null && DATA_TYPES.has(b.type)
 
 /** Every script that isn't one of Bento's data blocks: each must be the pinned loader or remover. */

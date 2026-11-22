@@ -6,7 +6,8 @@
 //
 // WHAT THIS PROVES, measured in the packaged document, in light AND dark theme:
 //   1. every visible field — the properties panel for each element kind, the
-//      slide panel, About, Replace from JSON, Export images, Encrypt with
+//      slide panel, Document properties, Preferences, Replace from JSON,
+//      Export images, Save with
 //      password, the Share popover, the comment popover — has a 1px SOLID
 //      border in the computed --line colour, a --field fill, a 6px radius, and
 //      (single-line fields) a 26px height. The browser's own dress is a 2px
@@ -52,7 +53,8 @@ function measure(scope) {
   const probe = document.createElement('div')
   document.body.appendChild(probe)
   const resolve = (v) => { probe.style.color = v; return getComputedStyle(probe).color }
-  const tok = { line: resolve(root.getPropertyValue('--line')), field: resolve(root.getPropertyValue('--field')), ring: resolve(root.getPropertyValue('--accent-ink')) }
+  // a control's edge is its own token (dark mode lifts it to 3:1 against the panel)
+  const tok = { line: resolve(root.getPropertyValue('--field-line')), field: resolve(root.getPropertyValue('--field')), ring: resolve(root.getPropertyValue('--accent-ink')) }
   probe.remove()
   const out = []
   for (const el of document.querySelectorAll('input, textarea, select')) {
@@ -87,7 +89,7 @@ function problems(f, tok) {
   if (f.styles.some((x) => x === 'inset' || x === 'outset')) p.push(`${f.styles[0]} border (browser default)`)
   else if (f.styles.some((x) => x !== 'solid')) p.push(`border ${f.styles.join('/')}`)
   if (f.widths.some((w) => w !== '1px')) p.push(`border ${f.widths.join('/')}`)
-  if (f.colors.some((c) => c !== tok.line)) p.push(`border ${f.colors[0]} ≠ --line ${tok.line}`)
+  if (f.colors.some((c) => c !== tok.line)) p.push(`border ${f.colors[0]} ≠ --field-line ${tok.line}`)
   if (f.bg !== tok.field) p.push(`fill ${f.bg} ≠ --field ${tok.field}`)
   if (f.radius !== '6px') p.push(`radius ${f.radius}`)
   if (f.type !== 'textarea' && Math.abs(f.h - 26) > 0.5) p.push(`height ${f.h}`)
@@ -109,13 +111,19 @@ const SURFACES = [
     await p.mouse.click(box.x, box.y)
     await p.waitForFunction((k) => window.bento.selection.includes(`e-${k}`), k)
   } })),
-  { name: 'About', scope: '.ed-about', min: 5, open: (p) => p.locator('.ed-topbar .ed-logo').click() },
-  { name: 'Replace from JSON', scope: '.ed-about', min: 1, open: (p) => saveAs(p, 'Replace from JSON') },
-  { name: 'Export images', scope: '.bkd-card', min: 3, open: (p) => saveAs(p, 'Export slides as images') },
-  { name: 'Encrypt with password', scope: 'dialog.ed-pwdialog', min: 2, open: (p) => saveAs(p, 'Encrypt with password') },
+  // the document's fields have their own dialog (File ▸ Document properties); the app's in Preferences
+  { name: 'Document properties', scope: '.ed-about', min: 5, open: (p) => fileMenu(p, 'doc-props') },
+  { name: 'Preferences', scope: '.ed-about', min: 1, open: (p) => p.locator('.ed-topbar [data-cmd="preferences"]').click() },
+  { name: 'Replace from JSON', scope: '.ed-about', min: 1, open: (p) => fileMenu(p, 'replace-json') },
+  { name: 'Export images', scope: '.bkd-card', min: 3, open: (p) => fileMenu(p, 'export-images') },
+  { name: 'Save with password', scope: 'dialog.ed-pwdialog', min: 2, open: (p) => saveAs(p, 'Save with password') },
   { name: 'Share popover', scope: '.ed-share-pop', min: 1, open: (p) => p.locator('.ed-btn-share').click() },
   { name: 'comment popover', scope: '.ed-comment-pop', min: 1, open: (p) => p.locator('.ed-stage-scale .ed-comment-marker, .ed-comment-marker').first().click() },
 ]
+async function fileMenu(p, cmd) {
+  await p.locator('.ed-topbar .ed-logo').click()
+  await p.locator(`.ed-file-menu [data-cmd="${cmd}"]`).click()
+}
 async function saveAs(p, label) {
   await p.locator('.ed-split-caret').click()
   // exact: "Replace from JSON" is also a phrase in another item's description

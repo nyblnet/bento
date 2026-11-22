@@ -35,7 +35,7 @@ const HEADER = 16
 const IV_LEN = 12
 const TAG_LEN = 16
 
-const b64u = {
+export const b64u = {
   enc(bytes: Uint8Array): string {
     let s = ''
     for (const b of bytes) s += String.fromCharCode(b)
