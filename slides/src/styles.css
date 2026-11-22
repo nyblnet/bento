@@ -852,8 +852,8 @@ body.ed-scrubbing, body.ed-scrubbing * { cursor: ew-resize; }
 .ed-centre { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .ed-centre > .ed-canvas-wrap { flex: 1; min-height: 0; }
 .ed-notespane { position: relative; flex: none; display: grid; grid-template-rows: 1fr; margin-inline: -5px; padding: 0 17px 10px; background: var(--surface); border-top: 1px solid var(--line); }
-/* folded, the pane takes NO height: the row, the padding and the rule all go,
-   and the tab below (.ed-notes-tab) is what is left of it */
+/* folded, the pane takes NO height: the row, the padding and the rule all go;
+   the toggle in the corner cluster (.ed-notes-btn, below) brings it back */
 .ed-notespane.closed { grid-template-rows: 0fr; padding-bottom: 0; border-top-width: 0; }
 .ed-notespane-body { min-height: 0; }
 .ed-notespane.closed .ed-notespane-body { overflow: hidden; visibility: hidden; }
@@ -867,34 +867,42 @@ body.ed-scrubbing, body.ed-scrubbing * { cursor: ew-resize; }
 .ed-notespane.ed-anim .ed-notespane-body { transition: opacity .18s ease, visibility 0s linear 0s; }
 .ed-notespane.closed .ed-notespane-body { opacity: 0; }
 .ed-notespane.ed-anim.closed .ed-notespane-body { transition: opacity .12s ease, visibility 0s linear .18s; }
-@media (prefers-reduced-motion: reduce) { .ed-notespane.ed-anim, .ed-notespane.ed-anim .ed-notespane-body, .ed-notes-tab { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .ed-notespane.ed-anim, .ed-notespane.ed-anim .ed-notespane-body { transition: none; } }
 .ed-notes-grip { position: absolute; inset-inline: 0; top: -3px; height: 6px; cursor: ns-resize; touch-action: none; z-index: 5; transition: background .12s ease .08s; }
 .ed-notes-grip:hover, body.ed-row-resizing .ed-notes-grip { background: color-mix(in srgb, var(--blue) 45%, transparent); }
 .ed-notespane.closed .ed-notes-grip { display: none; }
-/* the folded pane's tab: the canvas's bottom-START corner — the Slideshow and
-   zoom pills hold bottom-end and toasts rise at bottom-centre. Logical, so it
-   swaps corners with them under RTL. It sits in .ed-centre, outside the
-   canvas's scroller, so nothing clips it. */
-.ed-notes-tab {
-  position: absolute; z-index: 11;
-  inset-inline-start: max(14px, env(safe-area-inset-left));
-  bottom: calc(max(14px, env(safe-area-inset-bottom), var(--tray-safe-bottom, 0px)) + var(--notes-tab-lift, 0px));
-  display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 14px 0 10px;
-  font: inherit; font-size: 13px; font-weight: 600; color: var(--ink-2, var(--ink)); white-space: nowrap;
-  background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
-  box-shadow: 0 4px 14px rgb(20 30 45 / 0.10); cursor: pointer;
-  opacity: 0; visibility: hidden; transform: translateY(6px);
-  transition: opacity .12s ease, transform .18s ease, visibility 0s linear .18s;
+/* The pane's one control (notespane.ts): a round toggle at the head of the
+   bottom-end cluster, [notes] [Slideshow] [zoom], wearing the pills' surface,
+   hairline and shadow at their height. It stays put whether the pane is open
+   or folded; open, it wears the armed tool's tint. */
+.ed-notes-btn {
+  position: relative; flex: none; justify-content: center; width: 32px; height: 32px; padding: 0;
+  background: var(--surface); border-color: var(--line); border-radius: 999px;
+  box-shadow: 0 4px 14px rgb(20 30 45 / 0.10);
 }
-.ed-notes-tab.ed-shown { opacity: 1; visibility: visible; transform: none; transition: opacity .18s ease .08s, transform .18s ease .08s, visibility 0s; }
-.ed-notes-tab svg { width: 12px; height: 12px; stroke-width: 2.25; transform: rotate(-90deg); flex: none; }
-.ed-notes-tab:hover { color: var(--ink); border-color: var(--field-line-hot, var(--muted)); }
-.ed-notes-tab:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
-/* on touch the pill stays 32px, the height of the Slideshow and zoom pills
-   beside it; only the tap area grows, invisibly, to 44px (6px above and below
-   — the lift above the pills leaves 10px, so it never reaches them) */
-.ed-notes-tab::before { content: ''; position: absolute; inset: 0; }
-@media (pointer: coarse) { .ed-notes-tab::before { inset: -7px -5px; } } /* from the padding box: 1px border + 6px = 44px tall */
+.ed-notes-btn:hover { background: var(--chrome); }
+.ed-notes-btn[aria-expanded='true'] {
+  color: var(--accent-ink);
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+.ed-notes-btn[aria-expanded='true']:hover { background: color-mix(in srgb, var(--accent) 30%, var(--surface)); }
+/* this slide has notes: the unsaved dot's amber, ringed in the canvas's own
+   colour so it reads as sitting ON the rim. Folded only — open, the notes
+   themselves are on screen. */
+.ed-notes-btn.ed-has-notes[aria-expanded='false']::after {
+  content: ''; position: absolute; top: -2px; inset-inline-end: -2px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 2px var(--chrome); pointer-events: none;
+}
+/* on touch the circle stays 32px, the pills' height; only the tap area grows,
+   invisibly, to 44px — 6px each way, inside the 10px gap to the Slideshow pill */
+@media (pointer: coarse) { .ed-notes-btn::before { content: ''; position: absolute; inset: -7px; border-radius: 50%; } } /* from the padding box: 1px border + 6px */
+/* a canvas too narrow for the row (editor.ts fitCorner): Slideshow keeps its
+   icon and its name, and drops the visible word */
+.ed-corner-tight .ed-pill-main > span {
+  position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+.ed-corner-tight .ed-pill-main { padding-inline: 12px 9px; }
 body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize; user-select: none; }
 
 .ed-hint {
