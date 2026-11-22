@@ -15297,3 +15297,45 @@ Found while #897 and its follow-up were on CI; none came from either.
   alive in the kernel, so the next connection could still be answered. Stop
   now flags, closes, knocks once to wake the accept, and joins the thread.
 
+
+## 2026-11-22 — slides: a translucent palette link is saved in a form older shells leave alone
+
+**Ruling (maintainer): fix before 1.2.14.** The revamp made a field linked to
+a palette slot keep its own opacity when the slot changes (`palette.ts
+keepAlpha`). Every released shell with palette links (1.0.19 to 1.2.13)
+re-derives a linked literal at BOOT as the bare slot colour, so a translucent
+linked field opened there came back solid and was saved solid. Measured on
+main's starter deck in 1.2.13 and 1.2.10: 87 fields, and through two
+component mains their copies as well. Live sync did not carry it (derive is
+never an operation), so the exposure was an older shell opening the
+document: a spliced or rolled-back file, Replace from JSON, a paste, a host
+serving an older shell.
+
+- **The encoding.** A palette ref whose field keeps an opacity of its own gets
+  a trailing ` /a` (`tx2 +70% /a`). The suffix carries no value, the literal
+  holds the alpha. What it does is make the token one that the released
+  parser rejects: all sixteen released palette.ts files share one regex, and
+  it allows nothing after the shift. A shell that cannot parse a ref skips it,
+  so it leaves the translucent literal in place and writes the ref back as it
+  found it (measured in 1.2.13 and 1.2.10). In those shells such a field no
+  longer follows palette edits. That is the degradation chosen over losing
+  its opacity.
+- **Written in one place, only where needed.** `canonicalAlphaRefs` runs in
+  every derive pass, before components and again inside the
+  components/layout settle loop. It marks a ref exactly when this shell's
+  derivation (keepAlpha) differs from the bare slot colour an older shell
+  would write, and unmarks it when they agree again. Only the suffix is
+  touched, so an opaque link keeps its token byte for byte, and a file saved
+  before this fix is marked on opening without a literal changing. The answer
+  is a function of the literal and the palette, so every replica derives the
+  same token. It also runs on opacity edits, which move no palette signature.
+- **Components.** A main's mark reaches its copies with the rest of the main.
+  A copy whose own colour is translucent marks its own ref, which then reads
+  as a copy override like any other.
+- **Intake.** parseThemeRef accepts the suffix, so file open, Replace from
+  JSON and `loadDoc` (full and compact), restored snapshots, paste and live
+  sync all keep it. The colour gate still judges the literal beside it.
+- **Guard.** `scripts/test-slides-alpha-refs.ts` pins the released regex and
+  runs the released derivation over what this build would save. The
+  starter-deck row is the positive control (87 lost in the old form). Four
+  mutants turn rows red.

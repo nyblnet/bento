@@ -14,13 +14,17 @@
 //   layout     → frame children's boxes (layout.ts) — after tokens and
 //                components, which can write gap, padding or a copy's frame;
 //                components and layout settle together
+//   own alpha  → the ` /a` mark on a palette ref whose field keeps its own
+//                opacity (palette.ts canonicalAlphaRefs), settled with them:
+//                a main's mark reaches its copies, a copy's own colour marks
+//                its own ref
 //   connectors → endpoints on the laid-out boxes (connectors.ts)
 //   stacks     → the single-paint fallback an older shell draws (stacks.ts)
 //
 // One pass is a fixed point: running it again changes nothing.
 
 import type { BentoDoc } from './model'
-import { paletteSignature, resolveThemeRefs } from './palette.ts'
+import { canonicalAlphaRefs, paletteSignature, resolveThemeRefs } from './palette.ts'
 import { syncTokenRefs, tokenSignature } from './tokens.ts'
 import { syncComponents } from './components.ts'
 import { layoutAll } from './layout.ts'
@@ -54,9 +58,10 @@ export function derive(doc: BentoDoc, mem: DeriveMemory): boolean {
   // the main a copy follows. Settle the pair; two rounds is the most real
   // input needs. ponytail: capped at 4, a deeper cycle would show as a second
   // pass reporting a change (the rig asserts it does not)
+  if (canonicalAlphaRefs(doc)) changed = true // mains marked before copies follow them
   for (let i = 0; i < 4; i++) {
-    const c = syncComponents(doc), l = layoutAll(doc)
-    if (!c && !l) break
+    const c = syncComponents(doc), l = layoutAll(doc), a = canonicalAlphaRefs(doc)
+    if (!c && !l && !a) break
     changed = true
   }
   if (routeAllConnectors(doc)) changed = true

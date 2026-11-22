@@ -65,23 +65,39 @@ export interface ThemeRef {
   slot: PaletteSlot
   /** -100..100; 0 when omitted */
   shift: number
+  /**
+   * The ` /a` suffix: the field keeps an opacity of its own (keepAlpha). It
+   * carries no value, the literal holds the alpha; what it does is make the
+   * token one that every released shell's parser REJECTS. Those shells
+   * re-derive a palette-linked literal at boot and know nothing of keepAlpha,
+   * so a plain ref on a translucent field came back opaque from any of them.
+   * A ref they cannot parse is one they leave alone, literal and all. Written
+   * by canonicalAlphaRefs only, and only where it is needed.
+   */
+  ownAlpha?: true
 }
+
+/** The suffix that marks a ref whose field keeps its own alpha (see ThemeRef.ownAlpha). */
+export const OWN_ALPHA = ' /a'
 
 const SLOT_SET = new Set<string>(PALETTE_SLOTS)
 
 /** Parse a token. Returns null for anything malformed — callers keep the literal. */
 export function parseThemeRef(token: string): ThemeRef | null {
-  const m = /^\s*([A-Za-z][A-Za-z0-9]*)\s*(?:([+-])\s*(\d{1,3})\s*%)?\s*$/.exec(token)
+  // every released shell's parser is this pattern WITHOUT the `/a` group, and
+  // must keep rejecting a token that carries it (ThemeRef.ownAlpha)
+  const m = /^\s*([A-Za-z][A-Za-z0-9]*)\s*(?:([+-])\s*(\d{1,3})\s*%)?\s*(\/a)?\s*$/.exec(token)
   if (!m) return null
   const slot = m[1]
   if (!SLOT_SET.has(slot)) return null
-  if (!m[2]) return { slot: slot as PaletteSlot, shift: 0 }
+  const own = m[4] ? { ownAlpha: true as const } : {}
+  if (!m[2]) return { slot: slot as PaletteSlot, shift: 0, ...own }
   const n = Math.min(100, Number(m[3]))
-  return { slot: slot as PaletteSlot, shift: m[2] === '-' ? -n : n }
+  return { slot: slot as PaletteSlot, shift: m[2] === '-' ? -n : n, ...own }
 }
 
 export const formatThemeRef = (ref: ThemeRef): string =>
-  ref.shift === 0 ? ref.slot : `${ref.slot} ${ref.shift > 0 ? '+' : '-'}${Math.abs(ref.shift)}%`
+  (ref.shift === 0 ? ref.slot : `${ref.slot} ${ref.shift > 0 ? '+' : '-'}${Math.abs(ref.shift)}%`) + (ref.ownAlpha ? OWN_ALPHA : '')
 
 // --- colour maths ------------------------------------------------------------
 // Hex in, hex out. Alpha is preserved verbatim: a palette shift changes
@@ -251,6 +267,42 @@ function applyRefs(holder: RefHolder, palette: Palette): boolean {
     const literal = resolveRef(token, palette)
     if (literal === null) continue // unknown slot / malformed — validate() reports it
     if (writePath(holder, path, keepAlpha(readPath(holder, path), literal))) changed = true
+  }
+  return changed
+}
+
+/**
+ * Mark (or unmark) the refs whose field keeps its own alpha. A released shell
+ * re-derives a linked literal as the bare palette colour; where this shell's
+ * derivation (keepAlpha) would give something else, an older one would lose
+ * the field's opacity, so the ref gets the ` /a` suffix its parser rejects.
+ * Where both agree the suffix comes off again. Only that suffix is ever
+ * touched, so an opaque link keeps its token byte for byte, and the answer is
+ * a function of the literal and the palette alone: every replica, and every
+ * pass, writes the same thing. Runs on every derive pass (an opacity edit on
+ * a linked field moves no palette signature). True if a token changed.
+ */
+export function canonicalAlphaRefs(doc: BentoDoc): boolean {
+  const palette = paletteOf(doc)
+  let changed = false
+  const visit = (holder: RefHolder) => {
+    const refs = holder.themeRefs
+    if (!refs) return
+    for (const [path, token] of Object.entries(refs)) {
+      const ref = parseThemeRef(token)
+      if (!ref) continue
+      const base = resolveRef(token, palette)
+      if (base === null) continue // an empty slot: no shell re-derives it
+      const have = readPath(holder, path)
+      const own = typeof have === 'string' && keepAlpha(have, base).toLowerCase() !== base.toLowerCase()
+      if (own === !!ref.ownAlpha) continue
+      refs[path] = own ? token.trimEnd() + OWN_ALPHA : token.replace(/\s*\/a\s*$/, '')
+      changed = true
+    }
+  }
+  for (const s of [...doc.slides, ...(doc.layouts ?? [])]) {
+    visit(s as unknown as RefHolder)
+    for (const el of s.elements) visit(el as unknown as RefHolder)
   }
   return changed
 }
