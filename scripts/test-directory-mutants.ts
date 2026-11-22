@@ -50,7 +50,8 @@ function scriptImports(entries: string[]): string[] {
   return [...seen].filter((f) => !entries.includes(f))
 }
 const RIG_IMPORTS = scriptImports(RIGS)
-const TREE = ['kernel/src', 'kernel/fixtures', 'server/directory/src', 'server/directory/fixtures', 'server/directory/wrangler.toml']
+// server/signin/public: the roster rig cross-checks the sign-in host's seam and FAILS without it (security's seam-row note on #952)
+const TREE = ['kernel/src', 'kernel/fixtures', 'server/directory/src', 'server/directory/fixtures', 'server/directory/wrangler.toml', 'server/signin/public']
 let failures = 0, checks = 0
 const ok = (c: boolean, m: string) => { checks++; if (!c) { failures++; console.log(`  FAIL  ${m}`) } else console.log(`  ok    ${m}`) }
 
@@ -491,6 +492,19 @@ const MUTANTS: Mutant[] = [
   { name: 'C6: the k=o notice says "lock you out"', file: 'roster.js',
     from: "so removing it would leave the account with no usable passkey (only a reset gets back in).'", to: "so removing it would lock you out.'" },
 
+  // --- C7 (security's re-run on #952): the post-send re-checks past the hold, and the stopped reset's alarm ---
+  { name: 'C7-X13: Remove\'s post-send re-check without its voidTok half', file: 'roster.js',
+    from: 'if (!still || still.voidTok !== p.voidTok || atHead.hash !== cur.hash)', to: 'if (!still || atHead.hash !== cur.hash)' },
+  { name: 'C7-X3: the reset\'s post-send re-check reverted to its first form', file: 'roster.js',
+    from: 'if ((there?.voidTok ?? null) !== (waiting?.voidTok ?? null) || atHead.hash !== cur.hash)', to: "if ((there && there.kind === 'reset') || atHead.hash !== cur.hash)" },
+  { name: 'C7-X12: a stopped reset does not bring the restored removal\'s alarm forward', file: 'roster.js',
+    from: "          await s.put('pend', back)\n          await this.schedule(back.ripensAt)\n", to: "          await s.put('pend', back)\n" },
+  // --- C8: a mailer timeout is not a refusal ---
+  { name: 'C8: Remove reports a timed-out send as refused', file: 'roster.js',
+    from: "return out(503, { error: sent === 'timeout' ? 'mail-timeout' : 'mail' })", to: "return out(503, { error: 'mail' })" },
+  { name: 'C8: the mailer\'s timeout carries no code', file: 'mail.js',
+    from: "reject(Object.assign(new Error('mailer timed out'), { code: 'timeout' }))", to: "reject(new Error('mailer timed out'))" },
+
   // --- SD2: the void page (its own headers; the browser rig has the rest) ---
   { name: 'page: inline script allowed', file: 'voidpage.js', from: `  "script-src 'self'",`, to: `  "script-src 'self' 'unsafe-inline'",` },
   { name: 'page: framing allowed', file: 'voidpage.js', from: `  "frame-ancestors 'none'",\n`, to: '', also: [{ from: "  'x-frame-options': 'DENY',\n", to: '' }] },
@@ -545,7 +559,7 @@ const args = process.argv.slice(2)
 const si = args.indexOf('--shard')
 const shard = si >= 0 ? /^([1-9][0-9]*)\/([1-9][0-9]*)$/.exec(args[si + 1] ?? '') : null
 if (si >= 0 && (!shard || Number(shard[1]) > Number(shard[2]))) { console.log(`--shard wants k/n with 1 <= k <= n, not ${args[si + 1]}`); process.exit(1) }
-const only = args.filter((a, i) => i !== si && i !== si + 1)[0]
+const only = args.filter((a, i) => si < 0 || (i !== si && i !== si + 1))[0] // without --shard, si + 1 is 0: never drop the name
 const named = only ? MUTANTS.filter((m) => m.name.includes(only)) : MUTANTS
 const chosen = shard ? named.filter((_, i) => i % Number(shard[2]) === Number(shard[1]) - 1) : named
 console.log(`\n${chosen.length} mutants${shard ? ` (shard ${shard[1]} of ${shard[2]}, of ${named.length})` : ''}: every one must fail a row`)
