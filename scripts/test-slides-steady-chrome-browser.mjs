@@ -24,7 +24,7 @@ function ok(cond, msg) {
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true })
 try {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
-  await ctx.addInitScript(() => { try { localStorage.setItem('bento-slideshow-started', '1'); localStorage.setItem('bento-side-view', 'layers') } catch {} })
+  await ctx.addInitScript(() => { try { localStorage.setItem('bento-slideshow-started', '1'); localStorage.setItem('bento-side-view', 'layers'); localStorage.setItem('bento-notes-open', '1') } catch {} }) // notes open: their handle is checked below
   await ctx.route(/^https?:/, (r) => r.abort())
   const p = await ctx.newPage()
   const errors = []
