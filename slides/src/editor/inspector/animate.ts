@@ -12,6 +12,7 @@ import type { StepPatch } from '../reveal'
 import { stepOf } from '../../steps'
 import { morphPartners, morphSource, walkSource, wouldPair } from '../morph'
 import { labelIn } from '../layerrows'
+import { cssColor } from '../../render'
 
 /**
  * Morph section. The morph key is `morphId ?? id`: by default an element
@@ -251,7 +252,8 @@ function hintOf(e: SlideElement): HTMLElement {
   h.className = 'ed-morph-hint'
   h.setAttribute('aria-hidden', 'true')
   const fill = e.type === 'shape' ? e.fill : e.type === 'text' ? e.color : ''
-  if (fill) h.style.background = fill
+  // a document colour, so it passes the colour gate (render.ts cssColor)
+  if (fill) h.style.background = cssColor(fill, 'transparent')
   return h
 }
 
