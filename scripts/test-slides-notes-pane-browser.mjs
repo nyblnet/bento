@@ -13,6 +13,14 @@
 //   4. a slide switch while the field holds the caret does not carry the text
 //      onto the next slide, and the pane catches up once the caret leaves;
 //   5. folding the pane holds across a reload;
+//   0. with no saved choice the pane starts FOLDED, at every window size, and
+//      folded it takes no height at all: the canvas gets it. What is left is
+//      a "Speaker notes" tab (a real button, aria-expanded) in the canvas's
+//      bottom-start corner, on top at its own centre, clear of the Slideshow
+//      and zoom pills (desktop and phone — on a phone it rises above them);
+//      clicking it opens the pane at the saved height; keyboard activation
+//      puts the caret in the notes; the fold animates, except under reduced
+//      motion;
 //   6. the pane meets both side panels, edge to edge; its text box keeps THE
 //      FIELD's look and has no resize corner of its own; the PANE resizes from
 //      its top edge (the height holds across a reload, a double-click resets
@@ -46,6 +54,67 @@ try {
     window.bento.loadDoc(JSON.stringify(d))
   })
   await p.waitForTimeout(400)
+  // 0. Folded by default; the corner tab.
+  const geom = (pg) => pg.evaluate(() => {
+    const r = (s) => document.querySelector(s)?.getBoundingClientRect()
+    const tab = document.querySelector('.ed-notes-tab'), t = r('.ed-notes-tab')
+    const hit = document.elementsFromPoint(t.left + t.width / 2, t.top + t.height / 2)[0]
+    const clash = ['.ed-present-pill', '.ed-zoombar'].map((s) => [s, r(s)]).filter(([, q]) => q && t.left < q.right && q.left < t.right && t.top < q.bottom && q.top < t.bottom).map(([s]) => s)
+    return { pane: r('.ed-notespane').height, canvas: r('.ed-centre > .ed-canvas-wrap').height, centre: r('.ed-centre'), tab: t, onTop: tab.contains(hit), clash,
+      shown: getComputedStyle(tab).visibility === 'visible', expanded: tab.getAttribute('aria-expanded'), tag: tab.tagName, label: tab.textContent.trim() }
+  })
+  for (const [w, h] of [[1440, 900], [390, 844]]) {
+    const c = await browser.newContext({ viewport: { width: w, height: h }, hasTouch: w < 700, isMobile: w < 700 })
+    await c.route(/^https?:/, (r) => r.abort())
+    const q = await c.newPage()
+    q.on('pageerror', (e) => errors.push(e.message))
+    await q.goto(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url).href)
+    await q.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-notespane')); await q.waitForTimeout(500)
+    const g = await geom(q)
+    ok(g.pane === 0, `${w}px: with no saved choice the pane starts folded, at zero height (${g.pane}px)`)
+    ok(Math.abs(g.canvas - g.centre.height) < 1, `${w}px: and the canvas takes all of it (${g.canvas} of ${g.centre.height}px)`)
+    ok(g.shown && g.onTop && g.tag === 'BUTTON' && g.label === 'Speaker notes' && g.expanded === 'false', `${w}px: a "Speaker notes" tab button is on top at its own centre (${g.label}, expanded=${g.expanded}, on top ${g.onTop})`)
+    ok(g.tab.left - g.centre.left < 40 && g.centre.bottom - g.tab.bottom < (w < 700 ? 80 : 40), `${w}px: in the canvas's bottom-start corner (${Math.round(g.tab.left - g.centre.left)}px in, ${Math.round(g.centre.bottom - g.tab.bottom)}px up)`)
+    ok(!g.clash.length, `${w}px: clear of the Slideshow and zoom pills (${g.clash.join(', ') || 'clear'})`)
+    if (w < 700) ok(g.tab.height >= 44, `${w}px: a 44px touch target (${g.tab.height}px)`)
+    await q.locator('.ed-notes-tab').click(); await q.waitForTimeout(400)
+    const o = await geom(q)
+    const ah = (await q.locator('.ed-notespane-text').boundingBox())?.height
+    ok(Math.abs(ah - 84) < 2 && o.pane > 84 && Math.abs(g.canvas - o.canvas - o.pane) < 1, `${w}px: the tab opens the pane at the saved height (text ${ah}px, pane ${o.pane}px, canvas ${g.canvas} → ${o.canvas})`)
+    ok(!o.shown && o.expanded === 'true', `${w}px: and steps aside (expanded=${o.expanded})`)
+    await q.reload(); await q.waitForFunction(() => document.querySelector('.ed-notespane')); await q.waitForTimeout(300)
+    ok((await geom(q)).pane > 84, `${w}px: open holds across a reload`)
+    await c.close()
+  }
+  {
+    // the fold animates mid-way; reduced motion snaps; the keyboard lands in the notes
+    const c = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    await c.route(/^https?:/, (r) => r.abort())
+    const q = await c.newPage()
+    q.on('pageerror', (e) => errors.push(e.message))
+    await q.goto(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url).href)
+    await q.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-notespane')); await q.waitForTimeout(500)
+    const mid = await q.evaluate(() => new Promise((res) => {
+      document.querySelector('.ed-notes-tab').click()
+      setTimeout(() => res(document.querySelector('.ed-notespane').getBoundingClientRect().height), 80)
+    }))
+    ok(mid > 2 && mid < 120, `the fold animates (pane ${mid.toFixed(1)}px at 80ms)`)
+    await q.waitForTimeout(400)
+    await q.locator('.ed-notespane-head').click(); await q.waitForTimeout(400)
+    ok(await q.evaluate(() => document.querySelector('.ed-notespane').getBoundingClientRect().height) === 0, 'the header folds it back to nothing')
+    await q.emulateMedia({ reducedMotion: 'reduce' })
+    const snap = await q.evaluate(() => new Promise((res) => {
+      document.querySelector('.ed-notes-tab').click()
+      requestAnimationFrame(() => res(document.querySelector('.ed-notespane').getBoundingClientRect().height))
+    }))
+    ok(snap > 100, `under reduced motion it opens at once (${snap}px on the next frame)`)
+    await q.locator('.ed-notes-toggle').click(); await q.waitForTimeout(100)
+    await q.locator('.ed-notes-tab').focus(); await q.keyboard.press('Enter'); await q.waitForTimeout(100)
+    ok(await q.evaluate(() => document.activeElement?.classList.contains('ed-notespane-text')), 'Enter on the tab opens the notes with the caret in them')
+    await c.close()
+  }
+  await p.locator('.ed-notes-tab').click(); await p.waitForTimeout(400)
+
   const notes = (i) => p.evaluate((i) => window.bento.doc.slides[i].notes, i)
   const area = p.locator('.ed-notespane-text')
   const thumb = (i) => p.locator('.ed-sidebar .ed-thumb').nth(i)
@@ -99,8 +168,9 @@ try {
   ok(Math.abs((await p.locator('.ed-notespane-text').boundingBox()).height - h0) < 2, 'a double-click on the edge resets it')
   await p.locator('.ed-notes-toggle').click(); await p.waitForTimeout(350) // the fold animates (.18s)
   ok(!(await p.locator('.ed-notespane-text').isVisible()), 'the chevron folds the pane')
-  await p.locator('.ed-notes-toggle').click(); await p.waitForTimeout(350) // the fold animates (.18s)
-  ok(await p.locator('.ed-notespane-text').isVisible(), 'and opens it again')
+  ok(!(await p.locator('.ed-notes-toggle').isVisible()), 'and goes with it, folded (the tab reopens)')
+  await p.locator('.ed-notes-tab').click(); await p.waitForTimeout(350) // the fold animates (.18s)
+  ok(await p.locator('.ed-notespane-text').isVisible(), 'and the tab opens it again')
   const area2 = p.locator('.ed-notespane-text')
 
   // 5. Fold, reload.
@@ -109,6 +179,7 @@ try {
   await p.reload()
   await p.waitForFunction(() => document.querySelector('.ed-notespane'))
   ok(!(await p.locator('.ed-notespane-text').isVisible()), 'folded holds across a reload')
+  ok(await p.evaluate(() => document.querySelector('.ed-notespane').getBoundingClientRect().height) === 0, 'at zero height')
   ok(await p.locator('.ed-notespane-head').getAttribute('aria-expanded') === 'false', 'and says so to a screen reader')
 
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)

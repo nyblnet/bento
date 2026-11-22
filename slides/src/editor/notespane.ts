@@ -5,7 +5,10 @@
 // which only shows when NOTHING is selected: while you worked on an element,
 // the notes for the slide you were looking at were nowhere on screen.
 //
-// The pane follows the current slide, and folds to its header (remembered).
+// The pane follows the current slide, and folds away entirely (remembered):
+// folded, it takes no height at all and a small "Speaker notes" tab in the
+// canvas's bottom-start corner brings it back. It starts folded until the
+// viewer opens it — the canvas comes first.
 // Editing matches the field it replaced: typing is one undo burst, closed by
 // `change`; the slide is the one that was current when typing began, so a
 // slide switch mid-edit cannot write the text onto the next slide.
@@ -18,6 +21,10 @@ import { isMacOS } from '../screens'
 export function mountNotesPane(store: Store, into: HTMLElement, signal: AbortSignal) {
   const pane = document.createElement('section')
   pane.className = 'ed-notespane'
+  pane.id = 'ed-notespane'
+  // head + text, in one row the fold collapses to nothing
+  const body = document.createElement('div')
+  body.className = 'ed-notespane-body'
   const head = document.createElement('button')
   head.type = 'button'
   head.className = 'ed-section ed-sec-toggle ed-notespane-head' // the inspector's own section header
@@ -64,8 +71,31 @@ export function mountNotesPane(store: Store, into: HTMLElement, signal: AbortSig
   // the cap is half the window, so a window made shorter must not leave the
   // canvas squeezed to nothing under a pane sized for a taller one
   window.addEventListener('resize', () => setH(Number(lsGet('bento-notes-h')) || DEFAULT_H), { signal })
-  pane.append(grip, head, area)
-  into.appendChild(pane)
+  body.append(head, area)
+  pane.append(grip, body)
+  // what is left of the pane once it is folded: a tab in the canvas's corner
+  const tab = document.createElement('button')
+  tab.type = 'button'
+  tab.className = 'ed-notes-tab'
+  tab.setAttribute('aria-controls', pane.id)
+  tab.innerHTML = ICONS.chevron
+  tab.append(t('Speaker notes'))
+  into.append(pane, tab)
+  // Where the canvas is too narrow for the tab beside the Slideshow and zoom
+  // pills (a phone; a long localized label), it rises above them. Measured,
+  // not a width breakpoint: the pills' width moves with the locale. Only the
+  // horizontal extents are compared, and lifting changes neither, so the
+  // check cannot flip-flop.
+  const place = () => {
+    const cluster = into.querySelector<HTMLElement>('.ed-corner-br')
+    const a = tab.getBoundingClientRect(), b = cluster?.getBoundingClientRect()
+    const clash = !!b && b.width > 0 && a.left < b.right + 8 && b.left < a.right + 8
+    tab.style.setProperty('--notes-tab-lift', clash ? `${Math.round(b!.height) + 10}px` : '0px')
+  }
+  const ro = new ResizeObserver(place)
+  ro.observe(into)
+  requestAnimationFrame(() => { const c = into.querySelector('.ed-corner-br'); if (c) ro.observe(c); place() })
+  signal.addEventListener('abort', () => ro.disconnect(), { once: true })
   // the fold animates only once the pane has painted at its saved height —
   // otherwise every load would grow the notes up from nothing
   requestAnimationFrame(() => requestAnimationFrame(() => pane.classList.add('ed-anim')))
@@ -74,20 +104,26 @@ export function mountNotesPane(store: Store, into: HTMLElement, signal: AbortSig
     pane.classList.toggle('closed', !open)
     head.classList.toggle('closed', !open)
     head.setAttribute('aria-expanded', String(open))
+    tab.setAttribute('aria-expanded', String(open))
+    tab.classList.toggle('ed-shown', !open)
     if (!toggle.firstElementChild) toggle.innerHTML = ICONS.chevron
     toggle.dataset.dir = open ? 'down' : 'up' // down folds, up opens
     toggle.title = open ? t('Hide speaker notes') : t('Show speaker notes')
   }
-  // Open by default where there is room; on a phone or a short window the
-  // canvas comes first (the 700px drawer breakpoint), until the author opens it.
-  const saved = lsGet('bento-notes-open')
-  setOpen(saved ? saved !== '0' : window.innerWidth > 700 && window.innerHeight > 600)
+  // Folded until the viewer opens it, at every window size; their choice is
+  // then remembered per viewer (never in the document).
+  setOpen(lsGet('bento-notes-open') === '1')
   const flip = () => {
     const open = pane.classList.contains('closed')
     setOpen(open)
     lsSet('bento-notes-open', open ? '1' : '0')
   }
   head.addEventListener('click', flip)
+  tab.addEventListener('click', () => {
+    flip()
+    // the tab goes away under the pointer: keep a keyboard user's place
+    if (tab.matches(':focus-visible')) area.focus({ preventScroll: true })
+  })
   // the side panels' chevron, laid on its side: one click folds the pane
   toggle.addEventListener('click', (ev) => { ev.stopPropagation(); flip() })
   toggle.addEventListener('pointerdown', (ev) => ev.stopPropagation()) // a click, not a drag
