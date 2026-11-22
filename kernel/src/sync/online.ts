@@ -387,6 +387,13 @@ export class OnlineTransport implements Transport {
   }
   private writeReadyP: Promise<void>
   private resolveWriteReady: () => void = () => {}
+  /** THIS connection's possession proof, while it is outstanding. A writer in
+   *  a signed room sends its snapshot only once its key is proven, so the
+   *  snapshot waits on this; every new `ready` challenge replaces it, and it
+   *  settles on `wt` (proven), on a failed signature, on a dropped socket, or
+   *  after PROOF_WAIT_MS. */
+  private proofP: Promise<void> | null = null
+  private settleProof: () => void = () => {}
   private roomName = ''
   private tokValue = ''
   private originValue = ''
@@ -515,6 +522,8 @@ export class OnlineTransport implements Transport {
       if (this.ws !== ws) return
       this.stopHeartbeat()
       this.ws = null
+      // a proof that can no longer arrive; the waiting snapshot sees no socket
+      this.settleProof()
       this.setStatus('closed')
       // Broadcast close codes carry meaning: the relay closed an audience
       // socket deliberately. 4001 end/grace and 1008 revoked are TERMINAL —
@@ -715,6 +724,7 @@ export class OnlineTransport implements Transport {
     if (env.ctl === 'wt') {
       if (typeof env.wt === 'string') this.writeTicket = env.wt
       this.resolveWriteReady()
+      this.settleProof()
       return
     }
     // the relay would not take a frame and said so (v1.0.9 relay and later;
@@ -749,6 +759,7 @@ export class OnlineTransport implements Transport {
         // in both cases uploads take the room token and there is nothing to
         // wait for, so writes are released now.
         if (typeof env.c === 'string' && this.signKey && this.roomName) {
+          this.openProof()
           void this.prove(env.c)
         } else {
           this.resolveWriteReady()
@@ -843,8 +854,25 @@ export class OnlineTransport implements Transport {
     } catch {
       // cannot sign → we are effectively a reader; do not hold writes forever
       this.resolveWriteReady()
+      this.settleProof()
     }
   }
+
+  /** Start waiting on this connection's proof (see `proofP`). */
+  private openProof() {
+    this.settleProof()
+    let done!: () => void
+    const p = new Promise<void>((r) => { done = r })
+    const timer = setTimeout(() => this.settleProof(), OnlineTransport.PROOF_WAIT_MS)
+    this.proofP = p
+    this.settleProof = () => {
+      clearTimeout(timer)
+      if (this.proofP === p) this.proofP = null
+      this.settleProof = () => {}
+      done()
+    }
+  }
+  static PROOF_WAIT_MS = 10_000
 
   private snapInFlight = false
 
@@ -859,6 +887,9 @@ export class OnlineTransport implements Transport {
     if (this.snapInFlight) return
     this.snapInFlight = true
     try {
+      // The snapshot goes after this socket's proof, not alongside it. Taken
+      // after the wait, so it covers at least `q`.
+      if (this.proofP) await this.proofP
       const snap = this.hooks.getSnapshot()
       const text = await this.encrypt(JSON.stringify(snap))
       if (text && this.ws && this.ws.readyState === WebSocket.OPEN) {
