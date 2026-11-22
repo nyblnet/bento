@@ -8,7 +8,7 @@ import type { PropsPanel } from '../panels'
 import { ICONS } from '../../icons'
 import type { BentoDoc, GradientFill, Slide } from '../../model'
 import { setColor, refAt, keepAlpha, PALETTE_SLOTS } from '../../palette'
-import { cssColor, cssGradient, radialGeom } from '../../render'
+import { cssColor, cssGradient, radialGeom, safeGradient } from '../../render'
 import { adoptColor, bindToken, colorUses, freeTokenName, tokenName, tokenValue } from '../../tokens'
 import { choices, openTokenPicker, slotOf, type Choice } from './tokenpicker'
 import { bindUses, madeToken, usesFollow } from './tokenbind'
@@ -108,7 +108,7 @@ export function gradientChip(p: PropsPanel, host: PaintHost): HTMLElement {
   b.className = 'ed-gradchip'
   b.dataset.gradEdit = host.target
   b.dataset.paint = host.target // the swatch's place: settle() finds it by this
-  b.style.setProperty('--grad', host.grad ? cssGradient(host.grad) : 'none')
+  b.style.setProperty('--grad', host.grad ? cssGradient(safeGradient(host.grad)) : 'none')
   b.textContent = host.kind === 'radial' ? t('Radial') : t('Linear')
   b.title = t('Edit the gradient')
   b.addEventListener('click', () => {

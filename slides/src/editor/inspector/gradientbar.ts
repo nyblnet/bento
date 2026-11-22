@@ -34,7 +34,7 @@ export function gradientBar(live: GradientFill, edit: (fn: (g: GradientFill) => 
   bar.className = 'ed-gradbar'
   bar.setAttribute('role', 'group')
   bar.setAttribute('aria-label', t('Gradient stops'))
-  const paint = () => { bar.style.setProperty('--grad', cssLinearGradient({ angle: 90, stops: grad.stops })) }
+  const paint = () => { bar.style.setProperty('--grad', cssLinearGradient({ angle: 90, stops: grad.stops.map((st) => ({ ...st, color: cssColor(st.color, 'transparent') })) })) }
   paint()
   const at = (clientX: number) => {
     const r = bar.getBoundingClientRect()
