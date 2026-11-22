@@ -344,8 +344,8 @@ const raceDir = directoryStub({ accounts, credentials, key: { kid: 'dir-1', key:
 const call = async (path, origin, body) => { const r = await raceDir.handle({ method: 'POST', path, origin, body: JSON.stringify(body) }); return { status: r.status, body: JSON.parse(r.body) } }
 const rawPub = async (k) => b64uEnc(new Uint8Array(await crypto.subtle.exportKey('raw', k)))
 /** A held record as a finished ceremony leaves it: enrolled through the stub's sign-in routes, its proof fetched by a check-in. */
-async function heldRecord() {
-  const W = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign'])
+async function heldRecord({ extractable = false } = {}) {
+  const W = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, extractable, ['sign'])
   const kx = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits'])
   const Wpub = await rawPub(W.publicKey), kxPub = await rawPub(kx.publicKey)
   const ch = (await call('/v1/web/challenge', S, { address: ADDRESS })).body
@@ -360,6 +360,38 @@ async function heldRecord() {
   for (let i = 0; i < p.roster.length; i++) if ((await sha256b64u(p.roster[i].ros)) === ch.rosHash) from = i
   return { v: 1, address: ADDRESS, label: 'Chrome on macOS', W, kx, Wpub, kxPub, cert: text, signer: p.signer, assertion: p.assertion,
     watt: p.watt, wattSig: p.wattSig, ceremonyAt: ch.at, expires: raceClock + 24 * HOUR, roster: p.roster.slice(from), pin: ch.rosHash }
+}
+/** A check-in by a held record's W straight to the stub, as a copy of the key would make it. */
+async function checkinBy(h) {
+  const nonce = (await call('/v1/home/challenge', HOME, { address: h.address })).body.nonce
+  const wren = buildWren({ devicePub: h.Wpub, address: h.address, challenge: nonce ?? '' })
+  return call('/v1/home/checkin', HOME, { wren, sig: await signStatement(h.W.privateKey, wren) })
+}
+/**
+ * The sign-in host's window, for the agent in node: it says ready, takes the
+ * one request, and answers as the host would (`enrolled`: enrolled through the
+ * stub's web routes with the person's passkey), or `cancelled` / `failed`.
+ * The agent listens on the global scope, as the page does on window.
+ */
+const messageBus = new EventTarget()
+globalThis.addEventListener ??= messageBus.addEventListener.bind(messageBus)
+globalThis.removeEventListener ??= messageBus.removeEventListener.bind(messageBus)
+function fakeHost(answer) {
+  const posted = []
+  const emit = (win, data) => setImmediate(() => { const e = new Event('message'); Object.assign(e, { source: win, origin: S, data }); messageBus.dispatchEvent(e) })
+  const win = {
+    closed: false,
+    postMessage: async (m, origin) => {
+      posted.push({ m, origin })
+      if (answer !== 'enrolled') return emit(win, { t: answer })
+      const ch = (await call('/v1/web/challenge', S, { address: ADDRESS })).body
+      const text = buildDeviceCert({ kind: 'wdev', devicePub: m.W, consentPub: null, kx: m.kx, address: ADDRESS, rosHash: ch.rosHash, label: m.label, via: 'passkey', ceremonyAt: ch.at, dirNonce: ch.nonce })
+      const a = await softAssertion('pk1', text, { origin: S })
+      const e = await call('/v1/web/enrol', S, { text, rq: HOME, assertion: { id: CRED.toString('base64url'), ...a } })
+      emit(win, { t: 'enrolled', wdev: e.body.wdev, watt: e.body.watt })
+    },
+  }
+  return { win, posted, ready: () => emit(win, { t: 'ready' }) }
 }
 /** An agent holding a fresh record, an in-memory store, and a network that fires `fire.hook` as the check-in answer is handed back. */
 async function raceSetup(Agent) {
@@ -765,6 +797,111 @@ const ROWS = {
     return out
   },
 
+  async 'sign-out retires the key at the directory, after the store forgets it'(dist, edits) {
+    // node: the agent from home/web/src against the stub (the directory's contract)
+    const { Agent } = await agentModule(edits)
+    const out = []
+    {
+      const { agent, store, h0 } = await raceSetup(Agent)
+      const pre = await checkinBy(h0)
+      const n0 = raceDir.log.filter((x) => x.k === 'retire').length
+      await agent.signOut()
+      const forgot = !store.rec().held && agent.status().kind === 'none'
+      await sleep(50)
+      const rs = raceDir.log.filter((x) => x.k === 'retire').slice(n0)
+      const post = await checkinBy(h0)
+      out.push([pre.status === 200, `positive control: the key renews before the sign-out (${pre.status})`],
+        [forgot, 'the store is empty and the agent shows signed out when signOut returns'],
+        [rs.length === 1 && rs[0].ok && rs[0].W === h0.Wpub && rs[0].successor === null && raceDir.retired.has(h0.Wpub),
+          `exactly one wret., without a successor, signed by the held W, verified by the kernel (${JSON.stringify(rs.map((x) => [x.ok, x.W === h0.Wpub, x.successor]))})`],
+        [post.status === 403 && post.body.error === 'retired', `a copy of W then renews → 403 retired (${post.status} ${post.body.error})`])
+    }
+    {
+      // the directory never answers: the forget does not wait for it
+      const { agent, store, h0 } = await raceSetup(Agent)
+      const hang = async (url, init) => {
+        if (new URL(url).pathname.startsWith('/v1/home/retire')) return new Promise(() => {})
+        const r = await raceDir.handle({ method: 'POST', path: new URL(url).pathname, origin: HOME, body: init.body })
+        return new Response(r.body, { status: r.status })
+      }
+      agent['net'] = hang
+      const done = await Promise.race([agent.signOut().then(() => true), sleep(1000).then(() => false)])
+      out.push([done && !store.rec().held && agent.status().kind === 'none' && !raceDir.retired.has(h0.Wpub),
+        `a directory that never answers: signOut returns at once, the store is empty, the state is none (${done}, ${agent.status().kind})`])
+    }
+    return out
+  },
+
+  async 'a held key dropped on load is retired'(dist, edits) {
+    const { Agent } = await agentModule(edits)
+    raceClock = T0 + HOUR
+    const store = memoryStore({})
+    const h0 = await heldRecord({ extractable: true })
+    await store.put(h0)
+    const pre = await checkinBy(h0)
+    const net = async (url, init) => { const r = await raceDir.handle({ method: 'POST', path: new URL(url).pathname, origin: HOME, body: init.body }); return new Response(r.body, { status: r.status }) }
+    const agent = new Agent(store, net, () => raceClock)
+    const s = await agent.load()
+    await sleep(50)
+    const post = await checkinBy(h0)
+    return [
+      [pre.status === 200, `positive control: the exportable key was enrolled and renews (${pre.status})`],
+      [s.kind === 'ended' && s.why === 'invalid' && !store.rec().held, `load drops it (${s.kind} ${s.why})`],
+      [raceDir.retired.has(h0.Wpub) && post.status === 403 && post.body.error === 'retired', `and retires it: a copy then renews → ${post.status} ${post.body.error}`],
+    ]
+  },
+
+  async 'a new ceremony retires the old key; a failed one retires nothing'(dist, edits) {
+    const { Agent } = await agentModule(edits)
+    const out = []
+    for (const variant of ['enrolled', 'cancelled', 'failed']) {
+      const { agent, store, h0 } = await raceSetup(Agent)
+      const host = fakeHost(variant)
+      const p = agent.signIn(host.win, false)
+      host.ready()
+      const r = await p
+      await sleep(50)
+      const post = await checkinBy(h0)
+      const h1 = store.rec().held
+      if (variant === 'enrolled') {
+        const mine = h1 && h1.Wpub !== h0.Wpub ? await checkinBy(h1) : { status: 0, body: {} }
+        out.push([r.ok === true && h1 && h1.Wpub !== h0.Wpub, `positive control: the ceremony signs in a fresh key (${JSON.stringify(r)})`],
+          [raceDir.retired.has(h0.Wpub) && post.status === 403 && post.body.error === 'retired', `the old key is retired: a copy of it renews → ${post.status} ${post.body.error}`],
+          [mine.status === 200 && !raceDir.retired.has(h1?.Wpub), `the new key renews (${mine.status})`],
+          [host.posted.length === 1 && Object.keys(host.posted[0].m).sort().join() === 'W,kx,label,t' && host.posted[0].m.t === 'enrol' && host.posted[0].origin === S,
+            `the sign-in host's window got exactly one message, { t: 'enrol', W, kx, label }: the retirement never goes through it (${JSON.stringify(host.posted.map((x) => x.m.t))})`])
+      } else {
+        out.push([r.ok === false && store.rec().held?.Wpub === h0.Wpub && !raceDir.retired.has(h0.Wpub) && post.status === 200,
+          `a ${variant} ceremony: the old key is kept and still renews (${JSON.stringify(r)}, ${post.status})`])
+      }
+    }
+    return out
+  },
+
+  async 'a key the directory says is retired ends the sign-in; another tab\'s newer record stays'(dist, edits) {
+    const { Agent } = await agentModule(edits)
+    const out = []
+    {
+      const { agent, store, h0 } = await raceSetup(Agent)
+      raceDir.retired.set(h0.Wpub, raceClock)
+      const s = await agent.checkIn()
+      out.push([s.kind === 'ended' && s.why === 'revoked' && !store.rec().held, `this tab's key retired: the sign-in ends and the keys are deleted (${s.kind} ${s.why})`])
+    }
+    {
+      const { agent: A, store, h0, net } = await raceSetup(Agent)
+      const B = new Agent(store, net, () => raceClock)
+      await B.load()
+      const h1 = await heldRecord()
+      await store.put(h1)                     // what a ceremony in tab B writes
+      await B.load()
+      raceDir.retired.set(h0.Wpub, raceClock) // and B's library retired A's old key
+      const s = await A.checkIn()
+      const rec = store.rec().held
+      out.push([rec?.Wpub === h1.Wpub && A['held']?.Wpub === h1.Wpub && s.kind === 'signed-in', `B signed in anew and retired the old key: B's record stays and A takes it (${s.kind})`])
+    }
+    return out
+  },
+
   async 'the policy: the release channel and the directory only, Trusted Types required'(dist) {
     const info = JSON.parse(readFileSync(join(dist, 'build.json'), 'utf8'))
     const hdr = readFileSync(join(dist, 'library/_headers'), 'utf8')
@@ -798,8 +935,8 @@ const MUTANTS = {
   'webauthn-in-home': ['the library runs no WebAuthn and never calls the Signal API', [
     A('identity.ts', '      const label = browserLabel()\n', "      const label = browserLabel()\n      await navigator.credentials.get({ publicKey: { rpId: 'id.bento.page', challenge: new Uint8Array(32), allowCredentials: [] } }).catch(() => null)\n")]],
   'signal-on-sign-out': ['the library runs no WebAuthn and never calls the Signal API', [
-    A('identity.ts', '    this.last = null\n    await this.store.end(null)\n',
-      "    this.last = null\n    await (PublicKeyCredential as any).signalAllAcceptedCredentials({ rpId: 'id.bento.page', userId: 'AA', allAcceptedCredentialIds: [] }).catch(() => null)\n    await this.store.end(null)\n")]],
+    A('identity.ts', '    await this.store.end(null)\n    for (const k',
+      "    await (PublicKeyCredential as any).signalAllAcceptedCredentials({ rpId: 'id.bento.page', userId: 'AA', allAcceptedCredentialIds: [] }).catch(() => null)\n    await this.store.end(null)\n    for (const k")]],
   'keys-from-answer': ['a roster countersigned by a key the build does not pin is refused, whatever the answer offers', [
     A('identity.ts', '  return { watt: b.watt, wattSig: b.wattSig,', '  return { ...(b as any), watt: b.watt, wattSig: b.wattSig,'),
     A('identity.ts', '    const opts = { directoryKeys: DIR_KEYS,', '    const opts = { directoryKeys: { ...DIR_KEYS, ...((a as any).keys ?? {}) },')]],
@@ -813,7 +950,7 @@ const MUTANTS = {
   'incident-ignored': ['an incident record covering the ceremony ends the sign-in; an earlier one does not', [
     A('identity.ts', "    if (r.incidents.some((i) => covers(i, h.ceremonyAt))) return (await this.end(h.address, 'incident', h.Wpub)) ? this.status() : this.load()\n", '')]],
   'revoked-ignored': ['a key the directory revoked ends the sign-in', [
-    A('identity.ts', "      if (r.refused === 'revoked' || r.refused === 'unknown') return (await this.end(h.address, 'revoked', h.Wpub)) ? this.status() : this.load()\n", '')]],
+    A('identity.ts', "      if (r.refused === 'revoked' || r.refused === 'retired' || r.refused === 'unknown') return (await this.end(h.address, 'revoked', h.Wpub)) ? this.status() : this.load()\n", '')]],
   'reply-any-origin': ['only the sign-in host, in the window the library opened, is heard', [
     A('identity.ts', '      if (e.source !== win || e.origin !== SIGNIN_ORIGIN) return', '      if (e.source !== win) return')]],
   'account-switch': ["\"Confirm it's you\" never switches accounts", [
@@ -845,6 +982,23 @@ const MUTANTS = {
     A('identity.ts', "else if (!(await this.end(held.address, 'invalid', held.Wpub))) return this.load()", "else if (!(await this.end(held.address, 'invalid', undefined as any))) return this.load()")]],
   'connect-any': ['the policy: the release channel and the directory only, Trusted Types required', 'dist',
     (t) => t.replace('connect-src https://bento.page/releases/ https://id.bento.page', 'connect-src *')],
+  // old-key retirement (security's R2 on #949, gap 1 on #948, D2 on #957)
+  'no-retire-on-signout': ['sign-out retires the key at the directory, after the store forgets it', [
+    A('identity.ts', '    for (const k of new Set([h, stored])) if (k) void this.retire(k)\n', '')]],
+  'retire-before-forget': ['sign-out retires the key at the directory, after the store forgets it', [
+    A('identity.ts', '    await this.store.end(null)\n    for (const k of new Set([h, stored])) if (k) void this.retire(k)\n', '    for (const k of new Set([h, stored])) if (k) await this.retire(k)\n    await this.store.end(null)\n')]],
+  'no-retire-on-extractable': ['a held key dropped on load is retired', [
+    A('identity.ts', '      else void this.retire(held)   // a key we no longer trust: a copy of it dies within a day\n', '')]],
+  'no-retire-after-ceremony': ['a new ceremony retires the old key; a failed one retires nothing', [
+    A('identity.ts', '      if (prev && prev.Wpub !== held.Wpub) void this.retire(prev)\n', '')]],
+  'retire-before-verify': ['a new ceremony retires the old key; a failed one retires nothing', [
+    A('identity.ts', "      const reply = await talk({ t: 'enrol', W: k.Wpub, kx: k.kxPub, label })\n",
+      "      const old = (await this.store.get()).held\n      if (old) void this.retire(old)\n      const reply = await talk({ t: 'enrol', W: k.Wpub, kx: k.kxPub, label })\n")]],
+  'retire-through-host': ['a new ceremony retires the old key; a failed one retires nothing', [
+    A('identity.ts', '      if (prev && prev.Wpub !== held.Wpub) void this.retire(prev)\n',
+      "      if (prev && prev.Wpub !== held.Wpub) win.postMessage({ t: 'retire', W: prev.Wpub }, SIGNIN_ORIGIN)\n")]],
+  'retired-soft': ['a key the directory says is retired ends the sign-in; another tab\'s newer record stays', [
+    A('identity.ts', "r.refused === 'revoked' || r.refused === 'retired' || r.refused === 'unknown'", "r.refused === 'revoked' || r.refused === 'unknown'")]],
   'tt-any-policy': ['the policy: the release channel and the directory only, Trusted Types required', 'dist',
     (t) => t.replaceAll('trusted-types bento-sw', "trusted-types bento-sw 'allow-duplicates' *")],
 }
