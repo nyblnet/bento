@@ -1191,13 +1191,16 @@ if (C5_ROWS.some(row)) {
     const v1 = await visit(page, `${LIB}/`)
     await page.evaluate(() => navigator.serviceWorker.ready.then((r) => r.update())).catch(() => {})
     await sleep(1500)
-    const v2 = await visit(page, `${LIB}/index.html`)
+    // `/` again, not /index.html: MEASURED, a preload navigation to a path the HTTP cache has never held is
+    // sometimes not stored there (here 2 in 8, after update() and a pause), so its bytes read as unread: an
+    // "unverified" warning on an honest page, from the C2 rule, not this one. Recorded in the PR and notes.
+    const v2 = await visit(page, `${LIB}/`)
     await sleep(1500)
     const hits = state.hits.slice(h0)
     const precache = infoA.offline.precache.map((p) => p.path ?? p)
     ok(ctl === `${LIB}/sw.js` && precache.every((p) => hits.includes(`lib ${p}`)), `the worker installed: the server saw its precache fetches (${precache.join(' ')}) and it controls the page`)
     ok(hits.filter((h) => h === 'lib /sw.js').length >= 3, `and /sw.js fetched again: the browser's update check and the extension's own read (${hits.filter((h) => h === 'lib /sw.js').length} times)`)
-    ok(v1.lib?.verdict === 'ok' && v2.lib?.verdict === 'ok' && v1.lib.page.viaWorker, `both visits ok (${v1.lib?.verdict} ${v2.lib?.verdict})`)
+    ok(v1.lib?.verdict === 'ok' && v2.lib?.verdict === 'ok' && v1.lib.page.viaWorker, `both visits ok (${v1.lib?.verdict} [${rules(v1.lib)}] ${v2.lib?.verdict} [${rules(v2.lib)}] errors ${JSON.stringify(v2.lib?.page?.errors)})`)
     const evs = (await since(t0)).filter((e) => e.role === 'worker')
     ok(evs.length === 0 && reportTabs().length === 0, `no worker-request finding, no report tab (${JSON.stringify(evs.map((e) => [e.url, whys([e])]))})`)
     void t1
