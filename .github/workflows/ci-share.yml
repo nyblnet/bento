@@ -8,6 +8,9 @@ name: CI (share)
 
 on:
   pull_request:
+    # No paths filter here: a filter would also stop the `full-ci` label from
+    # starting these jobs. The gate job below decides instead, in seconds.
+    types: [opened, synchronize, reopened, labeled]
   push:
     branches: [main]
 
@@ -25,7 +28,33 @@ defaults:
     shell: bash scripts/ci/bento-step {0}
 
 jobs:
+  share-gate:
+    # These jobs are heavy and none is the required check. On a PR they run
+    # only if it changes this zone's own files or carries the `full-ci` label;
+    # on main they always run. See scripts/ci/zone-gate.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts/ci
+            scripts/lib/ci-skips.mjs
+          sparse-checkout-cone-mode: false
+      - id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          LABELLED: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: scripts/ci/zone-gate '^(server/|scripts/test-(signin|directory)-|\.github/workflows/ci-share\.yml$|scripts/ci/zone-gate$)'
+
   share-directory-mutants:
+    needs: share-gate
+    if: needs.share-gate.outputs.run == 'true'
     # Each mutant reopens one path (a retired route served again; a loosened
     # roster, passkey, mail or header rule) in a copy of the tree, and the
     # directory rigs must fail a row. A mutant that no longer applies, or a
@@ -50,6 +79,8 @@ jobs:
         run: node scripts/test-directory-mutants.ts --shard ${{ matrix.shard }}/3
 
   share-signin-browser:
+    needs: share-gate
+    if: needs.share-gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -105,6 +136,8 @@ jobs:
         run: node scripts/test-signin-host-pages.mjs --webkit
 
   share-directory-void-page:
+    needs: share-gate
+    if: needs.share-gate.outputs.run == 'true'
     # The void page (server/directory/src/voidpage.js) in a real browser: the
     # REAL worker and Roster object routed in at https://id.bento.page, every
     # WebSocket closed. Opening a link sends nothing and drops the token from
@@ -132,6 +165,8 @@ jobs:
         run: node scripts/test-directory-void-page.mjs --chrome
 
   share-home-identity:
+    needs: share-gate
+    if: needs.share-gate.outputs.run == 'true'
     # bento/home's bento/id agent (home/web/src/identity.ts), in the real
     # library built with --identity and the real sign-in host, routed in
     # process: a CDP virtual authenticator holds the passkey, the directory is

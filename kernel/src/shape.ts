@@ -19,10 +19,15 @@ import { shortenPathEnds, tipInsetPx, tipSpec, type TipKind } from './tips.ts'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
-/** A linear gradient fill (CSS angle convention: 0deg = bottom→top). */
+/** A gradient fill (CSS angle convention: 0deg = bottom→top). `kind:'radial'`
+ *  runs the stops from (cx, cy) out to r, fractions of the box; else linear. */
 export interface GradientSpec {
   angle: number
   stops: Array<{ at: number; color: string }>
+  kind?: 'radial'
+  cx?: number
+  cy?: number
+  r?: number
 }
 
 /** The shape fields the renderer reads — a slides ShapeElement satisfies this.
@@ -37,8 +42,16 @@ export interface ShapeSpec {
   strokeWidth: number
   /** corner radius, rect only */
   radius?: number
+  /** rect only: per-corner radius (tl, tr, br, bl); wins over `radius` */
+  radii?: [number, number, number, number]
+  /** where the stroke sits; absent = inside on rect/ellipse/triangle, centred otherwise */
+  strokeAlign?: 'inside' | 'center' | 'outside'
+  /** [dash, gap] px; wins over strokeStyle */
+  strokeDashes?: [number, number]
   /** when set, wins over `fill` */
   fillGradient?: GradientSpec
+  /** when set, wins over `stroke` (a line: over `fill`, its colour) */
+  strokeGradient?: GradientSpec
   /** legacy numeric dash length (px) */
   strokeDash?: number
   /** stroke pattern; wins over strokeDash */
@@ -52,6 +65,10 @@ export interface ShapeSpec {
   d?: string
   /** path only: [x, y, w, h] viewBox the path was authored in */
   pathBox?: [number, number, number, number]
+  /** fill layers, bottom first; when set they are drawn instead of fill/fillGradient */
+  fills?: Array<{ color: string; gradient?: GradientSpec; hidden?: boolean; blend?: string }>
+  /** stroke layers, bottom first; when set they are drawn instead of stroke/strokeWidth */
+  strokes?: Array<{ color: string; width: number; align?: 'inside' | 'center' | 'outside'; dashes?: [number, number]; hidden?: boolean; gradient?: GradientSpec; blend?: string }>
 }
 
 // Module-global id counters: svg url(#…) references resolve DOCUMENT-WIDE (the
@@ -78,17 +95,43 @@ export function cssLinearGradient(g: GradientSpec): string {
   return `linear-gradient(${g.angle}deg, ${stops})`
 }
 
-/** Materialize a GradientFill as a <defs> gradient; returns its url() ref. */
-function gradientRef(svg: SVGSVGElement, g: GradientSpec): string {
+/** A radial gradient's centre and radius, box fractions, defaults filled in. */
+export function radialGeom(g: GradientSpec) {
+  return { cx: g.cx ?? 0.5, cy: g.cy ?? 0.5, r: g.r ?? 0.5 }
+}
+
+/** CSS for any gradient fill: linear-gradient(), or radial-gradient() sized as
+ *  the SVG one is (an ellipse whose radii are r of the box's width and height). */
+export function cssGradient(g: GradientSpec): string {
+  if (g.kind !== 'radial') return cssLinearGradient(g)
+  const { cx, cy, r } = radialGeom(g)
+  const stops = g.stops
+    .map((s) => `${s.color} ${Math.round(Math.min(Math.max(s.at, 0), 1) * 100)}%`)
+    .join(', ')
+  return `radial-gradient(${r * 100}% ${r * 100}% at ${cx * 100}% ${cy * 100}%, ${stops})`
+}
+
+/**
+ * Materialize a GradientFill as a <defs> gradient; returns its url() ref.
+ * `onBox` paints it across the svg's viewBox instead of the node's bounding
+ * box — what a stroke needs: a straight line's bounding box has no height,
+ * and SVG paints nothing with a gradient over a degenerate box. The unit-box
+ * coordinates stay as they are (the morph tweens them) and a transform maps
+ * them onto the viewBox, which is exactly objectBoundingBox for every other node.
+ */
+function gradientRef(svg: SVGSVGElement, g: GradientSpec, onBox = false): string {
   const id = `bento-grad-${gradSeq++}`
   const defs = document.createElementNS(SVG_NS, 'defs')
-  const lin = document.createElementNS(SVG_NS, 'linearGradient')
+  const radial = g.kind === 'radial'
+  const lin = document.createElementNS(SVG_NS, radial ? 'radialGradient' : 'linearGradient')
   lin.setAttribute('id', id)
-  const { x1, y1, x2, y2 } = gradientLineCoords(g.angle)
-  lin.setAttribute('x1', String(x1))
-  lin.setAttribute('y1', String(y1))
-  lin.setAttribute('x2', String(x2))
-  lin.setAttribute('y2', String(y2))
+  const coords: Record<string, number> = radial ? radialGeom(g) : gradientLineCoords(g.angle)
+  for (const [k, v] of Object.entries(coords)) lin.setAttribute(k, String(v))
+  if (onBox) {
+    const [vx, vy, vw, vh] = (svg.getAttribute('viewBox') ?? '0 0 1 1').split(' ').map(Number)
+    lin.setAttribute('gradientUnits', 'userSpaceOnUse')
+    lin.setAttribute('gradientTransform', `matrix(${vw} 0 0 ${vh} ${vx} ${vy})`)
+  }
   for (const s of g.stops) {
     const stop = document.createElementNS(SVG_NS, 'stop')
     stop.setAttribute('offset', String(Math.min(Math.max(s.at, 0), 1)))
@@ -102,6 +145,7 @@ function gradientRef(svg: SVGSVGElement, g: GradientSpec): string {
 
 /** stroke-dasharray for the element's line style (undefined = solid). */
 function dashArray(el: ShapeSpec, w: number): string | undefined {
+  if (el.strokeDashes) return `${el.strokeDashes[0]} ${el.strokeDashes[1]}`
   if (el.strokeStyle === 'dashed') return `${Math.max(w * 2.4, 7)} ${Math.max(w * 1.8, 5)}`
   if (el.strokeStyle === 'dotted') return `0.1 ${Math.max(w * 2.2, 5)}`
   if (el.strokeStyle === 'solid') return undefined
@@ -161,11 +205,79 @@ function markerRef(svg: SVGSVGElement, kind: TipKind, color: string, start: bool
   return `url(#${id})`
 }
 
+/** A rounded rect with its own radius per corner (tl, tr, br, bl), as path data. */
+function roundedRectPath(x: number, y: number, w: number, h: number, radii: [number, number, number, number]): string {
+  const [tl, tr, br, bl] = radii.map((r) => Math.max(0, Math.min(r, w / 2, h / 2)))
+  return `M${x + tl},${y}H${x + w - tr}A${tr},${tr} 0 0 1 ${x + w},${y + tr}V${y + h - br}A${br},${br} 0 0 1 ${x + w - br},${y + h}`
+    + `H${x + bl}A${bl},${bl} 0 0 1 ${x},${y + h - bl}V${y + tl}A${tl},${tl} 0 0 1 ${x + tl},${y}Z`
+}
+
+/**
+ * Model → <svg>. A shape with fill or stroke STACKS draws each visible layer,
+ * bottom first, as the one-paint shape it would be with only that layer —
+ * fills under strokes, as Figma and Penpot paint them — and merges the
+ * layers' nodes into one <svg>. Every layer keeps the geometry of the
+ * shape's own (top) stroke width, so fills sit where they always sat.
+ * Each layer's paint node carries `data-layer` ('fill'/'stroke' + index) so
+ * the morph can find it.
+ */
 export function shapeSvg(el: ShapeSpec): SVGSVGElement {
+  if (!el.fills && !el.strokes) return paintSvg(el)
+  const line = el.shape === 'line'
+  const base: ShapeSpec = { ...el, fills: undefined, strokes: undefined }
+  const parts: Array<[ShapeSpec, string, string | undefined]> = []
+  // a fill covers the shape's own outline, wherever a stroke sits (Figma's
+  // rule): no stroke width, so no inset — and no tips, which belong to strokes
+  const bare: ShapeSpec = { ...base, strokeWidth: 0, stroke: 'transparent', strokeGradient: undefined, lineStart: undefined, lineEnd: undefined }
+  const fills = line ? [] : el.fills ?? [{ color: el.fill, gradient: el.fillGradient }]
+  fills.forEach((f, i) => {
+    if (!f.hidden) parts.push([{ ...bare, fill: f.color, fillGradient: f.gradient }, `fill${i}`, 'blend' in f ? f.blend : undefined])
+  })
+  const strokes = el.strokes ?? (el.strokeWidth > 0 || line ? [{ color: line ? el.fill : el.stroke, width: el.strokeWidth, align: el.strokeAlign, dashes: el.strokeDashes, gradient: el.strokeGradient }] : [])
+  // an open path's or a line's tips ride the top visible stroke only — one head, not one per layer
+  const top = strokes.map((s) => !s.hidden).lastIndexOf(true)
+  strokes.forEach((s, i) => {
+    if (s.hidden) return
+    const tips = i === top ? {} : { lineStart: undefined, lineEnd: undefined }
+    // a line is drawn in its `fill`; everything else strokes with `stroke`
+    const paint = line ? { fill: s.color, stroke: 'transparent' } : { fill: 'none', stroke: s.color }
+    parts.push([{ ...base, ...paint, ...tips, fillGradient: undefined, strokeWidth: s.width, strokeAlign: s.align, strokeDashes: s.dashes, strokeGradient: s.gradient }, `stroke${i}`, s.blend])
+  })
+  const svg = paintSvg({ ...bare, fill: 'none', fillGradient: undefined })
+  svg.replaceChildren()
+  for (const [spec, tag, blend] of parts) {
+    const one = paintSvg(spec)
+    for (const node of one.querySelectorAll<SVGElement>(':scope > :not(defs)')) {
+      node.setAttribute('data-layer', tag)
+      if (blend) node.style.mixBlendMode = blend
+    }
+    svg.append(...one.childNodes)
+  }
+  return svg
+}
+
+function paintSvg(el: ShapeSpec): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, 'svg')
   const { w, h } = el
   const sw = el.strokeWidth
-  const inset = sw / 2
+  // A rect or ellipse moves its outline to put the stroke where it is asked
+  // for; triangle, arrow and path keep their outline and clip (inside) or
+  // mask (outside) a doubled stroke instead — see `aligned` below.
+  const boxed = el.shape === 'rect' || el.shape === 'ellipse'
+  const align = el.strokeAlign
+  const inset = !boxed || !align || align === 'inside' ? sw / 2 : align === 'center' ? 0 : -sw / 2
+  // A triangle's legacy outline is inset (= inside) and 'center' puts it on
+  // the box; arrows and closed paths sit on the box (= center). Only the
+  // remaining alignments need the doubled, clipped/masked stroke.
+  const aligned = !boxed && sw > 0 && !!align && align !== 'center' && (el.shape !== 'path' || /z\s*$/i.test(el.d ?? '')) && !(el.shape === 'triangle' && align === 'inside')
+  // An outside stroke on a rect/ellipse moves its outline OUT, so the fill
+  // must not ride it: the fill stays on the box and the stroke is its own node
+  // (a dashed or translucent stroke would otherwise show fill beyond the box).
+  if (boxed && align === 'outside' && sw > 0 && el.stroke && el.stroke !== 'transparent' && (el.fill !== 'none' || el.fillGradient)) {
+    const fill = paintSvg({ ...el, stroke: 'transparent', strokeWidth: 0, strokeGradient: undefined, strokeAlign: undefined })
+    fill.append(...paintSvg({ ...el, fill: 'none', fillGradient: undefined }).childNodes)
+    return fill
+  }
   svg.setAttribute('viewBox', `0 0 ${Math.max(w, 1)} ${Math.max(h, 1)}`)
   svg.setAttribute('preserveAspectRatio', 'none')
   svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;overflow:visible'
@@ -200,11 +312,17 @@ export function shapeSvg(el: ShapeSpec): SVGSVGElement {
       break
     }
     case 'rect': {
+      const rw = Math.max(w - 2 * inset, 0), rh = Math.max(h - 2 * inset, 0)
+      if (el.radii) {
+        node = document.createElementNS(SVG_NS, 'path')
+        node.setAttribute('d', roundedRectPath(inset, inset, rw, rh, el.radii))
+        break
+      }
       node = document.createElementNS(SVG_NS, 'rect')
       node.setAttribute('x', String(inset))
       node.setAttribute('y', String(inset))
-      node.setAttribute('width', String(Math.max(w - sw, 0)))
-      node.setAttribute('height', String(Math.max(h - sw, 0)))
+      node.setAttribute('width', String(rw))
+      node.setAttribute('height', String(rh))
       if (el.radius) node.setAttribute('rx', String(el.radius))
       break
     }
@@ -218,7 +336,8 @@ export function shapeSvg(el: ShapeSpec): SVGSVGElement {
     }
     case 'triangle': {
       node = document.createElementNS(SVG_NS, 'polygon')
-      node.setAttribute('points', `${w / 2},${inset} ${w - inset},${h - inset} ${inset},${h - inset}`)
+      const ti = aligned || align === 'center' ? 0 : inset // aligned: the outline is the box, the stroke is clipped/masked
+      node.setAttribute('points', `${w / 2},${ti} ${w - ti},${h - ti} ${ti},${h - ti}`)
       break
     }
     case 'arrow': {
@@ -255,7 +374,7 @@ export function shapeSvg(el: ShapeSpec): SVGSVGElement {
       node.setAttribute('y1', String(h / 2))
       node.setAttribute('x2', String(w - tipInsetPx(el.lineEnd, lw)))
       node.setAttribute('y2', String(h / 2))
-      node.setAttribute('stroke', el.fill)
+      node.setAttribute('stroke', el.strokeGradient?.stops.length ? gradientRef(svg, el.strokeGradient, true) : el.fill)
       node.setAttribute('stroke-width', String(lw))
       const hollow = tipSpec(el.lineStart)?.hollow || tipSpec(el.lineEnd)?.hollow
       node.setAttribute('stroke-linecap', el.strokeStyle === 'dashed' || hollow ? 'butt' : 'round')
@@ -271,11 +390,45 @@ export function shapeSvg(el: ShapeSpec): SVGSVGElement {
   }
   node.setAttribute('fill', el.fillGradient?.stops.length ? gradientRef(svg, el.fillGradient) : el.fill)
   if (el.stroke && el.stroke !== 'transparent' && sw > 0) {
-    node.setAttribute('stroke', el.stroke)
-    node.setAttribute('stroke-width', String(sw))
+    // aligned off the outline: the stroke is its own node, twice as wide,
+    // half of it clipped away (inside) or masked away (outside)
+    const target = aligned ? node.cloneNode() as SVGElement : node
+    target.setAttribute('stroke', el.strokeGradient?.stops.length ? gradientRef(svg, el.strokeGradient, true) : el.stroke)
+    target.setAttribute('stroke-width', String(aligned ? sw * 2 : sw))
     const dash = dashArray(el, sw)
-    if (dash) node.setAttribute('stroke-dasharray', dash)
-    if (el.strokeStyle === 'dotted') node.setAttribute('stroke-linecap', 'round')
+    if (dash) target.setAttribute('stroke-dasharray', dash)
+    if (el.strokeStyle === 'dotted') target.setAttribute('stroke-linecap', 'round')
+    if (aligned) {
+      target.setAttribute('fill', 'none')
+      target.removeAttribute('marker-start')
+      target.removeAttribute('marker-end')
+      const id = `bento-salign-${gradSeq++}`
+      const holder = document.createElementNS(SVG_NS, align === 'inside' ? 'clipPath' : 'mask')
+      holder.setAttribute('id', id)
+      const shapeCopy = node.cloneNode() as SVGElement
+      if (align === 'inside') {
+        holder.appendChild(shapeCopy)
+      } else {
+        holder.setAttribute('maskUnits', 'userSpaceOnUse')
+        const vb = (svg.getAttribute('viewBox') ?? '0 0 1 1').split(' ').map(Number)
+        const pad = Math.max(vb[2], vb[3]) + sw * 4
+        const all = document.createElementNS(SVG_NS, 'rect')
+        for (const [k, v] of Object.entries({ x: vb[0] - pad, y: vb[1] - pad, width: vb[2] + pad * 2, height: vb[3] + pad * 2 })) {
+          holder.setAttribute(k, String(v))
+          all.setAttribute(k, String(v))
+        }
+        all.setAttribute('fill', 'white')
+        shapeCopy.setAttribute('fill', 'black')
+        holder.append(all, shapeCopy)
+      }
+      let defs = svg.querySelector('defs')
+      if (!defs) { defs = document.createElementNS(SVG_NS, 'defs'); svg.appendChild(defs) }
+      defs.appendChild(holder)
+      target.setAttribute(align === 'inside' ? 'clip-path' : 'mask', `url(#${id})`)
+      svg.appendChild(node)
+      svg.appendChild(target)
+      return svg
+    }
   }
   svg.appendChild(node)
   return svg

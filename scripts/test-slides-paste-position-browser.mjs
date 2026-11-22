@@ -10,7 +10,10 @@
 // browser is not dependable, the editor's code paths are.
 //   1. onto ANOTHER slide the copy keeps its position;
 //   2. onto the source slide it steps +20/+20 off the original;
-//   3. pasted there again it cascades another +20.
+//   3. pasted there again it cascades another +20;
+//   4. a group duplicated with ⌘D, or copied and pasted, comes out as a group
+//      of its OWN — one fresh group id for the copies — instead of joining the
+//      original group (four members where there were two).
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -74,6 +77,27 @@ try {
   await paste()
   const s1 = await pos(0)
   ok(s1.join(' ') === '200,160 220,180 240,200', `onto the source slide it steps +20, then cascades (${s1.join(' ')})`)
+
+  // 4. groups duplicate and paste as groups of their own
+  await p.evaluate(() => {
+    const d = JSON.parse(JSON.stringify(window.bento.doc))
+    const box = (id, x) => ({ id, type: 'shape', shape: 'rect', x, y: 300, w: 160, h: 100, rotation: 0, opacity: 1, fill: '#5E7699', groupId: 'g' })
+    d.slides = [{ id: 's1', background: '#ffffff', elements: [box('m1', 200), box('m2', 500)] }]
+    window.bento.loadDoc(JSON.stringify(d))
+  })
+  await p.waitForTimeout(400)
+  const groupsOf = () => p.evaluate(() => window.bento.doc.slides[0].elements.map((e) => e.groupId))
+  const fresh = (gs) => { const c = gs.slice(2); return c.length === 2 && c[0] === c[1] && c[0] !== 'g' && gs[0] === 'g' && gs[1] === 'g' }
+  const m = await p.locator('.ed-stage-scale [data-el-id="m1"]').boundingBox()
+  await p.mouse.click(m.x + m.width / 2, m.y + m.height / 2); await p.waitForTimeout(200)
+  ok((await p.evaluate(() => window.bento.selection.length)) === 2, 'precondition: a click selects the whole pair')
+  await p.keyboard.press(`${MOD}+d`); await p.waitForTimeout(250)
+  ok(fresh(await groupsOf()), `⌘D: the copies form one new group of their own (${(await groupsOf()).join(' ')})`)
+  await p.keyboard.press(`${MOD}+z`); await p.waitForTimeout(250)
+  await p.mouse.click(m.x + m.width / 2, m.y + m.height / 2); await p.waitForTimeout(200)
+  await p.keyboard.press(`${MOD}+c`); await p.waitForTimeout(150)
+  await paste()
+  ok(fresh(await groupsOf()), `paste: the copies form one new group of their own (${(await groupsOf()).join(' ')})`)
 
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join('; ') : ''}`)
 } finally { await browser.close() }

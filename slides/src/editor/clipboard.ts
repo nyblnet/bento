@@ -16,6 +16,7 @@
 
 import type { BentoDoc, Slide, SlideElement, TextElement } from '../model'
 import { uid } from '../model'
+import { adoptComponents } from '../components'
 import { firstFamily } from '../fonts'
 import { stripEmbeddedEnvelopes } from '../envelope'
 import { LIMITS, sanitizeAssets, sanitizeElement, sanitizeFonts, sanitizeSlide } from '../untrusted'
@@ -201,18 +202,37 @@ function pasteOffset(els: SlideElement[], slide: Slide): number {
   return d
 }
 
+/** Copies made together keep their structure among themselves. Grouped
+ *  elements form groups of their own: one fresh group id per original group in
+ *  the batch, so a duplicated group does not join the one it came from (the
+ *  group's name travels with the copy). A frame child whose frame was copied
+ *  with it moves into the copy; one copied without its frame keeps the link —
+ *  a sibling in the same frame on the same slide, and a dangling link layout.ts
+ *  drops anywhere else. `from[i]` is the element `els[i]` was copied from. */
+export function freshGroups<T extends SlideElement>(els: T[], from: readonly SlideElement[]): T[] {
+  const ids = new Map<string, string>()
+  const copyOf = new Map(from.map((o, i) => [o.id, els[i].id]))
+  for (const el of els) {
+    if (el.groupId) el.groupId = ids.get(el.groupId) ?? ids.set(el.groupId, `grp-${uid()}`).get(el.groupId)!
+    if (el.parentId && copyOf.has(el.parentId)) el.parentId = copyOf.get(el.parentId)
+  }
+  return els
+}
+
 /** Insert pasted elements onto a slide with fresh ids — at their copied
  *  position, nudged only where they would cover what they duplicate. */
 export function insertElements(payload: ClipPayload, doc: BentoDoc, slide: Slide): SlideElement[] {
   const remap = mergeAssets(payload, doc)
   mergeFonts(payload, doc, remap)
   const d = pasteOffset(payload.elements ?? [], slide)
-  const els: SlideElement[] = (payload.elements ?? []).map((e) => ({
+  const src = payload.elements ?? []
+  const els: SlideElement[] = freshGroups(src.map((e) => ({
     ...(JSON.parse(JSON.stringify(e)) as SlideElement),
     id: uid(e.type[0]),
     x: (e.x ?? 0) + d, y: (e.y ?? 0) + d,
-  }))
+  })), src)
   rewriteRefs(els, remap)
+  adoptComponents(els, doc)
   slide.elements.push(...els)
   return els
 }
@@ -228,6 +248,7 @@ export function insertSlides(payload: ClipPayload, doc: BentoDoc, at: number): S
     rewriteRefs(copy.elements, remap)
     return copy
   })
+  adoptComponents(slides.flatMap((s) => s.elements), doc)
   doc.slides.splice(at, 0, ...slides)
   return slides
 }

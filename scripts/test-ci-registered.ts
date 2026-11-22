@@ -75,6 +75,63 @@ for (const w of files.workflows) {
     `${w.path} runs on pull_request`)
 }
 
+// PATH FILTERS. A zone workflow may limit its pull_request trigger to the
+// paths that can affect it (none of them is the required check). A filter is
+// a way to skip silently, so three things are held:
+//   - ci.yml, which holds the required `validate`, has none: it runs on every PR;
+//   - a filtered workflow lists ITSELF, so editing it runs it;
+//   - every script it runs matches one of its paths, so changing a rig runs
+//     the workflow that runs the rig.
+{
+  const glob = (g: string) => new RegExp('^' + g.split('**').map((part) => part.split('*').map((x) => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('[^/]*')).join('.*') + '$')
+  const pathsOf = (text: string): string[] | null => {
+    const m = /^on:\n  pull_request:\n((?: {4}.*\n)*)/m.exec(text)
+    const body = m?.[1] ?? ''
+    const start = body.indexOf('    paths:\n')
+    if (start < 0) return null
+    return [...body.slice(start).matchAll(/^ {6}- '([^']+)'$/gm)].map((x) => x[1])
+  }
+  let filtered = 0
+  for (const w of files.workflows) {
+    const paths = pathsOf(w.text)
+    if (w.path.endsWith('/ci.yml')) { ok(paths === null && !/^\s+paths(-ignore)?:/m.test(w.text), `${w.path} (the required check) has no path filter`); continue }
+    if (!paths) continue
+    filtered++
+    const res = paths.map(glob)
+    ok(paths.includes(w.path), `${w.path} lists itself in its path filter`)
+    // what the workflow RUNS: its comment lines name files it does not run
+    const live = w.text.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n')
+    const scripts = [...new Set([...live.matchAll(/\bscripts\/[A-Za-z0-9_./-]+\.(?:mjs|ts|js|py|sh)\b|\bscripts\/ci\/[A-Za-z0-9_-]+/g)].map((x) => x[0]))]
+    const missed = scripts.filter((sc) => !res.some((re) => re.test(sc)))
+    ok(missed.length === 0, `${w.path}: every script it runs matches its path filter (${scripts.length} scripts${missed.length ? '; not matched: ' + missed.join(', ') : ''})`)
+  }
+  ok(filtered > 0, `path filters are read (${filtered} filtered workflows; this check is what stops a vacuous green)`)
+}
+
+// ZONE GATES. A workflow whose jobs are heavy may run them on a PR only when
+// it touches the zone's own files or carries the `full-ci` label
+// (scripts/ci/zone-gate). The gate skips, so it is held too: every job
+// in a gated workflow other than the gate waits on it, and the gate's own
+// pattern names the workflow file, so editing the workflow runs its jobs.
+{
+  let gated = 0
+  for (const w of files.workflows) {
+    if (!/^\s+run: scripts\/ci\/zone-gate '/m.test(w.text)) continue
+    gated++
+    const body = w.text.slice(w.text.indexOf('\njobs:\n'))
+    const jobs = [...body.matchAll(/^ {2}([a-z0-9-]+):\n((?: {4}.*\n|\n)*)/gm)].map((m) => ({ id: m[1], text: m[2] }))
+    const gate = jobs.find((j) => /run: scripts\/ci\/zone-gate '/.test(j.text))
+    ok(!!gate, `${w.path} has a gate job`)
+    if (!gate) continue
+    const loose = jobs.filter((j) => j !== gate && !(new RegExp(`^ {4}needs: ${gate.id}$`, 'm').test(j.text) && j.text.includes(`if: needs.${gate.id}.outputs.run == 'true'`)))
+    ok(jobs.length > 1 && loose.length === 0, `${w.path}: every job waits on ${gate.id} (${jobs.length - 1} jobs${loose.length ? '; not gated: ' + loose.map((j) => j.id).join(', ') : ''})`)
+    const own = /run: scripts\/ci\/zone-gate '([^']+)'/.exec(gate.text)?.[1] ?? ''
+    ok(!!own && new RegExp(own).test(w.path) && new RegExp(own).test('scripts/ci/zone-gate'), `${w.path}: its gate pattern matches the workflow file and the gate script`)
+    ok(/^ {4}types: \[opened, synchronize, reopened, labeled\]$/m.test(w.text) && !/^ {4}paths:/m.test(w.text), `${w.path}: a label can start it (types include labeled, and no paths filter stands in the way)`)
+  }
+  ok(gated > 0, `zone gates are read (${gated} gated workflows; this check is what stops a vacuous green)`)
+}
+
 // A rig is a `scripts/test-*.ts|mjs`. Library code under scripts/lib/ is not a
 // rig and is exercised by the rigs that import it.
 const rigs = readdirSync(join(root, 'scripts'))

@@ -199,7 +199,12 @@ try {
     ok((await ids()) === 'bg,b', `Delete on a mixed selection removes only the unlocked one (got ${await ids()})`)
     ok(JSON.stringify(await selected()) === '["bg"]', 'the locked element stays selected')
     // the panel Delete button follows the same rule
-    await p.evaluate(() => [...document.querySelectorAll('.ed-ops button')].find((b) => b.title === 'Delete')?.click())
+    const clicked = await p.evaluate(() => {
+      const b = [...document.querySelectorAll('.ed-context button')].find((b) => b.getAttribute('aria-label')?.startsWith('Delete'))
+      b?.click()
+      return !!b
+    })
+    ok(clicked, 'the panel has a Delete button to press')
     await p.waitForTimeout(250)
     ok((await ids()) === 'bg,b', 'the panel Delete button leaves a locked element too')
     // once unlocked it can go

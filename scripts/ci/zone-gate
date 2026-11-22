@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 The Bento authors
+# Should this zone's heavy jobs run on this event?   zone-gate '<own pattern>'
+#
+# Run by the gate job of the zone workflows whose jobs are slow or need special
+# runners (desktop, iOS, Android, share, the home browser engines). None of
+# them is the required check: `validate` (ci.yml) runs every zone's slice on
+# every PR.
+#
+#   - a push to main ............ yes, always: every merge runs everything
+#   - a PR labelled `full-ci` .... yes
+#   - a PR that changes one of this zone's OWN files (the pattern, an extended
+#     regular expression matched against each changed path) ... yes
+#   - any other PR ............... no: the jobs do not run, and say why
+#
+# Reads EVENT, LABELLED, PR, REPO and GH_TOKEN from the environment and writes
+# `run=true|false` to $GITHUB_OUTPUT. A job that depends on the gate carries
+#   needs: <zone>-gate
+#   if: needs.<zone>-gate.outputs.run == 'true'
+# and scripts/test-ci-registered.ts holds every job in a gated workflow to that.
+set -euo pipefail
+own="$1"
+decide() { echo "run=$1" >> "$GITHUB_OUTPUT"; echo "zone gate: run=$1 ($2)"; }
+if [ "${EVENT:-}" != "pull_request" ]; then decide true "event ${EVENT:-unknown}"; exit 0; fi
+if [ "${LABELLED:-}" = "true" ]; then decide true "the PR carries the full-ci label"; exit 0; fi
+# The list could not be read: run, never decide on a guess.
+if ! files="$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[].filename')"; then
+  decide true "the changed files could not be listed"; exit 0
+fi
+hit="$(printf '%s\n' "$files" | grep -E -m1 -- "$own" || true)"
+if [ -n "$hit" ]; then decide true "the PR changes $hit"; else decide false "no changed path matches this zone, and no full-ci label"; fi

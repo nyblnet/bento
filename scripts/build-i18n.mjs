@@ -75,15 +75,58 @@ for (const cat of catalogs) {
   }
 }
 
-const rows = []
-let holes = 0
-for (const k of keys) {
-  const vals = catalogs.map((c) => (Object.prototype.hasOwnProperty.call(c, k) ? c[k] : 0))
-  // Drop trailing holes — the reader treats a short row as "no translation".
-  while (vals.length && vals[vals.length - 1] === 0) vals.pop()
-  holes += vals.filter((v) => v === 0).length
-  rows.push(`  ${JSON.stringify(k)}: ${JSON.stringify(vals)},`)
+// --- column-major emission ---------------------------------------------------
+// The table SHIPS as a handful of long strings, one per column group, not as
+// one object literal row per key. Measured on the built shell (the only number
+// that counts — the payload is deflated): row-major `"key":["ja","zh",…]`
+// interleaves eight languages in three scripts, so deflate's Huffman tables
+// and its 32KB window are shared between Japanese, Chinese and Latin text and
+// serve none of them well. Column-major puts each language in one run.
+//
+// THE LAYOUT FOLLOWS THE CODEC, and slides is packed with LZMA (DECISIONS
+// 2026-11-20). Every language is its own run and the keys are the English
+// strings themselves. Under deflate two other choices won and were shipped
+// for a day: interleaving the pairs that share text row by row (es/pt,
+// zh-Hans/zh-Hant: -3.3 KB) and a 30-bit hash in place of each English key
+// (-12 KB). Both lose under LZMA, whose window is the whole payload: it finds
+// a sibling string or a key's `t('…')` call site at any distance, so the
+// interleaving only breaks each language's run (+3.1 KB) and a hash is five
+// characters it cannot predict (+2.2 KB). Measured on the built shell with
+// this layout against that one: see the DECISIONS entry. The run order barely
+// matters (160 B across the four tried). If slides ever returns to deflate,
+// this table goes back with it: this layout is about 15 KB worse there.
+const GROUPS = [['en'], ['es'], ['pt'], ['it'], ['fr'], ['de'], ['zh-Hans'], ['zh-Hant'], ['ja']]
+{
+  const flat = GROUPS.flat()
+  const want = ['en', ...LOCALES]
+  if (flat.length !== want.length || want.some((l) => !flat.includes(l))) {
+    console.error('GROUPS must list en and every locale in LOCALES exactly once')
+    process.exit(1)
+  }
 }
+let holes = 0
+const cellOf = (k, loc) => {
+  if (loc === 'en') return k
+  const c = catalogs[LOCALES.indexOf(loc)]
+  if (!Object.prototype.hasOwnProperty.call(c, k) || c[k] === '') { holes++; return '' }
+  return c[k]
+}
+// Two separator characters no key or translation uses. Chosen per build and
+// written into the file, so a future string containing one can never split a
+// row silently — the generator moves to the next candidate, or fails.
+const everything = keys.join('') + catalogs.map((c) => Object.values(c).join('')).join('')
+const free = ['|', '^', '~', '¦', '§', '\u0001', '\u0002'].filter((c) => !everything.includes(c))
+if (free.length < 2) {
+  console.error('no free separator characters left for the packed table — extend the candidate list')
+  process.exit(1)
+}
+const [CELL, ROW] = free
+const groupSrc = GROUPS.map((g) => {
+  const body = keys.map((k) => g.map((loc) => cellOf(k, loc)).join(CELL)).join(ROW)
+  // column index into a decoded row: 0 = the key, n+1 = LOCALES[n]
+  const cols = g.map((loc) => (loc === 'en' ? 0 : LOCALES.indexOf(loc) + 1))
+  return `  [${JSON.stringify(cols)}, ${JSON.stringify(body)}],`
+})
 
 const out = `// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
@@ -93,17 +136,38 @@ const out = `// SPDX-License-Identifier: MIT
 //
 //     node scripts/build-i18n.mjs
 //
-// Key-once packing: the English key appears ONCE and translations are
-// positional, in PACKED_LOCALES order. A 0 (or a short row) means "no
-// translation in that locale" and t() falls back to the English key.
+// Key-once, COLUMN-MAJOR packing: each group below is one long string holding
+// one column (or a few interleaved ones) for every key, rows joined by ROW and
+// cells by CELL. It is unpacked once, at import, into the same key -> row
+// table the runtime has always read. An empty cell means "no translation in
+// that locale" and t() falls back to the English key.
 
 /** Column order for every row in PACKED. */
 export const PACKED_LOCALES = ${JSON.stringify(LOCALES)} as const
 
-/** English source string -> translations, positional by PACKED_LOCALES. */
-export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
-${rows.join('\n')}
+const CELL = ${JSON.stringify(CELL)}
+const ROW = ${JSON.stringify(ROW)}
+/** [columns held (0 = the English key, n + 1 = PACKED_LOCALES[n]), packed text] */
+const GROUPS: ReadonlyArray<readonly [readonly number[], string]> = [
+${groupSrc.join('\n')}
+]
+
+function unpack(): Record<string, ReadonlyArray<string | 0>> {
+  const rows: Array<Array<string | 0>> = []
+  for (const [cols, text] of GROUPS) {
+    text.split(ROW).forEach((line, n) => {
+      const cells = line.split(CELL)
+      const row = (rows[n] ??= [])
+      cols.forEach((col, j) => { row[col] = cells[j] || 0 })
+    })
+  }
+  const table: Record<string, ReadonlyArray<string | 0>> = {}
+  for (const row of rows) table[row[0] as string] = row.slice(1)
+  return table
 }
+
+/** English source string -> translations, positional by PACKED_LOCALES. */
+export const PACKED: Record<string, ReadonlyArray<string | 0>> = unpack()
 `
 
 // --- pack emission ----------------------------------------------------------

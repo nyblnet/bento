@@ -115,8 +115,8 @@ try {
     // 3. Replace from JSON, through the dialog
     {
       const { p, errors } = await page(deck(table({ style: GIVEN })))
-      await p.locator('.ed-split-caret').click()
-      await p.locator('.ed-save-menu').getByText('Replace from JSON…', { exact: true }).click()
+      await p.locator('.ed-logo').click() // Replace from JSON is the document's: File ▸ Advanced
+      await p.locator('.ed-file-menu [data-cmd="replace-json"]').click()
       await p.locator('.ed-about-json').fill(JSON.stringify(deck(el)))
       await p.locator('.ed-about .ed-btn-primary').click()
       await p.waitForFunction(() => window.bento.doc.slides[0].elements[0]?.style !== undefined || !document.querySelector('.ed-about-json'), null, { timeout: 4000 }).catch(() => {})
