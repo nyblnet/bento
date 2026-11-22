@@ -11,6 +11,11 @@
 # row each time, while passing on main. A second attempt separates "slow this
 # once" from "broken": a real break fails twice.
 #
+# What those were (docs/DECISIONS.md, 2026-11-22): in Firefox, a page
+# Playwright could not talk to, which test-home-web-offline.mjs now reopens
+# itself; in WebKit, the browser's network process crashing, which no rig can
+# recover from inside a run. The retry is for the second.
+#
 # It hides nothing. The first failure prints in full, and a warning
 # annotation on the run says a retry happened, so a rig that needs its second
 # attempt often is visible and can be fixed. Never use it on a mutant run: a

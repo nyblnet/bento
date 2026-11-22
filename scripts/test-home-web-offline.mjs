@@ -308,6 +308,27 @@ async function context() {
   })
   return ctx
 }
+/**
+ * A new page on `url`, in `ctx` or in a context of its own. Playwright's
+ * Firefox sometimes hands back a page that is deaf: the library's script runs
+ * in it (its status request reaches the server) but it takes no evaluate and
+ * reports no console message, so the next read of it timed out. Measured on
+ * 1.61.1 with Firefox 151: 4 of 16 runs, always a new page's first navigation,
+ * and a new page or context in the same browser answers. So a page that does
+ * not answer is closed and opened again, and the run says so.
+ */
+const answers = (page) => limit(page.evaluate(() => true), 5000, 'a first evaluate').then(() => true, () => false)
+async function arrive(ctx, { url = O.library + '/', before } = {}) {
+  for (let i = 1; ; i++) {
+    const c = ctx ?? await context()
+    const page = await c.newPage()
+    before?.()
+    await page.goto(url)
+    if (i === 3 || await answers(page)) return { ctx: c, page }
+    note(`${ENGINE}: a new page took no evaluate after its first navigation; closed and opened again (attempt ${i})`)
+    await limit(ctx ? page.close() : c.close(), 15000, 'closing a deaf page').catch(() => {})
+  }
+}
 /** The library's state, once its status check has answered. */
 async function settled(page, ms = 20000) {
   await until(() => page.evaluate(() => {
@@ -327,11 +348,16 @@ const lib = (page) => limit(page.evaluate(async () => {
     picker: !!document.getElementById('file')?.offsetParent,
   }
 }), 10000, 'reading the library state')
-/** Wait until the worker has activated and holds `cache`. */
-const cached = (page, cache, ms = 15000) => until(() => page.evaluate(async (c) => {
+/**
+ * Wait until `cache` is the one cache and holds every file of the build. The
+ * worker opens the cache and then writes its files one by one, so the name
+ * alone is there before the files are (Firefox: a read of the entries right
+ * after the name appeared came back short).
+ */
+const cached = (page, cache, ms = 15000) => until(() => page.evaluate(async ([c, n]) => {
   const k = await caches.keys()
-  return k.length === 1 && k[0] === c ? k : null
-}, cache), ms)
+  return k.length === 1 && k[0] === c && (await (await caches.open(c)).keys()).length >= n ? k : null
+}, [cache, X.info.offline.precache.length]), ms)
 const docFrame = (page) => page.frames().find((f) => f.parentFrame() === page.mainFrame())
 const ui = (page) => page.evaluate(() => {
   const vis = (id) => { const e = document.getElementById(id); return !!e && !e.hidden && e.offsetParent !== null }
@@ -360,9 +386,7 @@ try {
   if (runs('sw')) {
     section('[sw] first visit: one worker, one cache keyed on the build, network first, nothing else kept')
     files.delete(STATUS)
-    const ctx = await context()
-    const page = await ctx.newPage()
-    await page.goto(O.library + '/')
+    const { ctx, page } = await arrive()
     let s = await settled(page)
     ok(s.status === 'unreachable' && s.sw === 'registered', `with no status published (404) the library carries on and registers its worker (${s.status}, ${s.sw})`)
     ok(s.build === X.info.offline.build, 'the page knows its own build id (the sha256 of its script, as the build printed it)')
@@ -408,8 +432,7 @@ try {
     const fr = await booted(page)
     ok(!!fr && u?.viewing, 'positive control: online, the deck opens and boots')
     // also pass a page the list does not name through the worker
-    const probe = await ctx.newPage()
-    await probe.goto(O.library + '/probe.html')
+    const { page: probe } = await arrive(ctx, { url: O.library + '/probe.html' })
     await probe.evaluate(() => fetch('/probe-sw.js').then((r) => r.text()).catch(() => ''))
     await sleep(1000)
     const after = await lib(page)
@@ -430,9 +453,7 @@ try {
   if (runs('offline')) {
     section(`[offline] a returning visit with no network (${ENGINE === 'webkit' ? 'servers closed' : 'context.setOffline'})`)
     files.delete(STATUS)
-    const ctx = await context()
-    const page = await ctx.newPage()
-    await page.goto(O.library + '/')
+    const { ctx, page } = await arrive()
     await settled(page)
     ok(!!(await cached(page, X.info.offline.cache)), 'precondition: the worker is installed and holds the build')
     await page.evaluate(() => { window.__before = 1 })
@@ -483,9 +504,7 @@ try {
     section('[update] a new deploy replaces the old cache; bytes that are not the build\'s install nothing')
     files.delete(STATUS)
     deploy(X)
-    let ctx = await context()
-    let page = await ctx.newPage()
-    await page.goto(O.library + '/')
+    let { ctx, page } = await arrive()
     await settled(page)
     ok(!!(await cached(page, X.info.offline.cache)), 'precondition: build X\'s worker holds X\'s cache')
     deploy(Y)
@@ -497,9 +516,7 @@ try {
     await limit(ctx.close(), 15000, 'closing a context')
 
     deploy(Y, { tamperPage: true })
-    ctx = await context()
-    page = await ctx.newPage()
-    await page.goto(O.library + '/')
+    ;({ ctx, page } = await arrive())
     await settled(page)
     await sleep(3000)
     const t = await lib(page).catch((e) => ({ caches: [String(e)] }))
@@ -514,9 +531,7 @@ try {
     section('[kill] the drill: withdraw build X; the next load is clean')
     files.delete(STATUS)
     deploy(X)
-    const ctx = await context()
-    const page = await ctx.newPage()
-    await page.goto(O.library + '/')
+    const { ctx, page } = await arrive()
     let s = await settled(page)
     ok(s.status === 'unreachable' && !!(await cached(page, X.info.offline.cache)), 'precondition: build X runs, its worker installed and holding its cache')
     files.set(STATUS, status(['--seq', '5', '--withdraw', X.info.offline.build]))
@@ -564,10 +579,7 @@ try {
     deploy(X)
     const slow = status(['--seq', '6', '--withdraw', X.info.offline.build])
     files.set(STATUS, async () => { await sleep(3000); return slow })
-    const ctx2 = await context()
-    const p2 = await ctx2.newPage()
-    mark = seen.length
-    await p2.goto(O.library + '/')
+    const { ctx: ctx2, page: p2 } = await arrive(null, { before: () => { mark = seen.length } })
     await p2.setInputFiles('#file', DECK)
     const s2 = await settled(p2, 20000)
     await sleep(1500)
@@ -582,20 +594,17 @@ try {
     section('[status] the status fails closed')
     deploy(X)
     // installed: visit once with no status first, so the worker and cache exist to be removed
-    const visit = async (body, ctx, { installed = false } = {}) => {
-      const own = !ctx
-      ctx = ctx ?? await context()
-      const page = await ctx.newPage()
+    const visit = async (body, shared, { installed = false } = {}) => {
+      if (installed) files.delete(STATUS); else files.set(STATUS, body)
+      const { ctx, page } = await arrive(shared)
       if (installed) {
-        files.delete(STATUS)
-        await page.goto(O.library + '/')
         await settled(page)
         if (!(await cached(page, X.info.offline.cache))) ok(false, 'precondition: the worker installed before the status row')
+        files.set(STATUS, body)
+        await page.goto(O.library + '/')
       }
-      files.set(STATUS, body)
-      await page.goto(O.library + '/')
       const s = await settled(page)
-      if (own) await limit(ctx.close(), 15000, 'closing a context'); else await page.close()
+      if (shared) await page.close(); else await limit(ctx.close(), 15000, 'closing a context')
       return s
     }
     const signed = JSON.parse(status(['--seq', '20']))
@@ -630,9 +639,7 @@ try {
     section('[install] the web app manifest')
     deploy(X)
     files.delete(STATUS)
-    const ctx = await context()
-    const page = await ctx.newPage()
-    await page.goto(O.library + '/')
+    const { ctx, page } = await arrive()
     await settled(page)
     const link = await page.evaluate(() => document.querySelector('link[rel=manifest]')?.getAttribute('href'))
     ok(link === '/manifest.webmanifest', `the library links its manifest (${link})`)
@@ -661,9 +668,7 @@ try {
   if (runs('network')) {
     section('[network] every request in this run [T2]')
     if (!S) await up()
-    const ctx = await context()
-    const page = await ctx.newPage()
-    await page.goto(O.library + '/')
+    const { ctx, page } = await arrive()
     await settled(page)
     const probe = `${O.releaseBase}probe/library`
     await page.evaluate((u) => fetch(u).catch(() => {}), probe)

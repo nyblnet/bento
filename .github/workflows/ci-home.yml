@@ -207,3 +207,9 @@ jobs:
         if: ${{ !cancelled() }}
         timeout-minutes: 12
         run: node scripts/test-home-web-offline.mjs --mutants
+      - name: On failure, the kernel's word on crashed browser threads
+        # WebKit's network process segfaults now and then (measured locally:
+        # 4 of 58 runs, always around the probe page of the sw section), and
+        # its worker registrations and caches go with it. Diagnostic only.
+        if: failure()
+        run: sudo dmesg -T | grep -iE 'segfault|oom|killed process' | tail -20 || echo "no segfault or OOM in the kernel log"

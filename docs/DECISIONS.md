@@ -15297,3 +15297,35 @@ Found while #897 and its follow-up were on CI; none came from either.
   alive in the kernel, so the next connection could still be answered. Stop
   now flags, closes, knocks once to wake the accept, and joins the thread.
 
+
+## 2026-11-22 — The home/web offline rig's timeouts: two browser faults and one rig race
+
+`test-home-web-offline.mjs` kept failing on CI with "timed out after 10000
+ms: reading the library state", in WebKit or Firefox, on a different row each
+time. Reproduced locally with CI's Playwright (1.61.1; Firefox 151, WebKit
+2311). None of the three causes is in home/web itself.
+
+- **Firefox: a page Playwright cannot talk to.** About one run in four, a new
+  page's first navigation gives a page whose script runs (its status request
+  reaches the server) but which takes no evaluate and reports no console
+  message. Always a new page; a new page or a new context in the same browser
+  answers. The rig now opens pages through `arrive()`, which asks the page
+  for one evaluate and, if it does not answer in 5 s, closes it and opens it
+  again (up to three times) with a note in the output. 14 of 14 runs passed
+  with it, one of them through a reopen.
+- **WebKit: the network process segfaults** (`WPENetworkProcess`, in
+  libgobject; the kernel log names it). Its worker registrations and caches
+  go with it, so the page reads "0 caches", a navigation gets "WebKit
+  encountered an internal error", or, on CI, the read hangs. 4 of 58 local
+  runs, each time around the sw section's probe page. Nothing in a run can
+  recover from that, and a rig that carried on would be testing a browser
+  with no worker, so it stays a failure and `scripts/ci/retry-once` stays on
+  the WebKit step. The offline job now prints the kernel log on failure, so
+  the next one is named.
+- **The rig read a cache before the worker had filled it.** `cached()`
+  waited for the cache's NAME; the worker opens the cache and then writes its
+  files one by one. It now waits for every file of the build.
+
+Not established: what in the probe page's load brings the network process
+down (25 runs without its fetch had no crash, 25 with it had one: too few to
+say), and whether a newer Playwright has either fault.
