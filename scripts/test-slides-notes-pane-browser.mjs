@@ -87,10 +87,15 @@ try {
         const pill = document.querySelector('.ed-present-pill'), pr = pill.getBoundingClientRect(), px = pr.left + pr.width / 2
         const top = (x, y) => document.elementsFromPoint(x, y)[0]
         return { above: t.contains(top(x, r.top - 5.5)), below: t.contains(top(x, r.bottom + 5.5)), span: Math.round(r.height + 12),
-          pillTop: pill.contains(top(px, pr.top + 1)), pillEdge: pill.contains(top(Math.max(pr.left + 20, r.left + 20), pr.top + 1)) }
+          pillTop: pill.contains(top(px, pr.top + 1)), pillEdge: pill.contains(top(Math.max(pr.left + 20, r.left + 20), pr.top + 1)),
+          // the zoombar: its top edge, and its start edge at the tab's height, are its own
+          zoom: (() => { const z = document.querySelector('.ed-zoombar'), zr = z.getBoundingClientRect()
+            return [[zr.left + 2, zr.top + 1], [zr.left + 2, zr.top + zr.height / 2], [zr.left + 2, r.top + r.height / 2]]
+              .every(([zx, zy]) => !t.contains(top(zx, zy))) })() }
       })
       ok(taps.above && taps.below, `${w}px: a ${taps.span}px tap area (5.5px above and below the pill still hit it)`)
       ok(taps.pillTop && taps.pillEdge, `${w}px: and the Slideshow pill under it keeps its own taps`)
+      ok(taps.zoom, `${w}px: and the tab takes no tap from the zoombar's edges`)
     }
     await q.locator('.ed-notes-tab').click(); await q.waitForTimeout(400)
     const o = await geom(q)
