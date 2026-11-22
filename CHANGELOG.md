@@ -86,6 +86,11 @@ pre-1.0.
   (`theme.codeFontFamily`), so an embedded code font applies to every code
   block that does not pick its own. New decks use a monospace font; older
   versions draw those blocks in the deck's body font. Thanks to tikurahul.
+- **See-through theme colours stay see-through in older versions.** A colour
+  taken from the deck's theme keeps its own opacity, but a deck opened in
+  1.2.13 or earlier drew those colours solid and saved them solid: the glow,
+  the washes and the hint text of the starter deck among them. Such colours
+  are now saved in a form older versions leave alone.
 
 ## [1.2.13] — 2026-11-09
 

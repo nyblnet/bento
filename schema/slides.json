@@ -258,7 +258,7 @@
         "type": "string"
       },
       "maxProperties": 64,
-      "description": "property path → palette slot, or $token name"
+      "description": "property path → palette slot (accent1, accent1 -20%; a trailing \" /a\" marks a field that keeps its own opacity), or $token name"
     },
     "prop-textStroke": {
       "type": "object",
@@ -3465,7 +3465,7 @@
             "type": "string"
           },
           "maxProperties": 64,
-          "description": "property path → palette slot, or $token name"
+          "description": "property path → palette slot (accent1, accent1 -20%; a trailing \" /a\" marks a field that keeps its own opacity), or $token name"
         },
         "transition": {
           "type": "string",

@@ -489,7 +489,7 @@ const themeRefsFor = (tokenKeys: ReadonlySet<string>): Check => tag((v) => {
     out[key] = token
   }
   return Object.keys(out).length ? out : DROP
-}, { type: 'object', additionalProperties: { type: 'string' }, maxProperties: LIMITS.themeRefs, description: 'property path → palette slot, or $token name' })
+}, { type: 'object', additionalProperties: { type: 'string' }, maxProperties: LIMITS.themeRefs, description: 'property path → palette slot (accent1, accent1 -20%; a trailing " /a" marks a field that keeps its own opacity), or $token name' })
 const themeRefs = themeRefsFor(TOKEN_KEYS)
 
 export const ELEMENT_CHECKS: Record<string, Check> = {
