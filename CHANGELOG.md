@@ -11,6 +11,12 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Speaker notes start folded, and fold out of the way.** A new editor
+  opens with the whole canvas; folded, the notes take no room at all. A notes
+  button beside Slideshow shows and hides them, and carries a dot when the
+  slide in front of you has notes. Once you open or fold them, the editor
+  remembers your choice.
+
 ## [1.3.0] — 2026-11-22
 
 - **A new editor for people who design in Figma, Keynote or PowerPoint.**

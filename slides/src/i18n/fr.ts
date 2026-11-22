@@ -929,6 +929,7 @@ export const fr: Catalog = {
   "Remove stroke": "Supprimer le contour",
   "Rename": "Renommer",
   "Show speaker notes": "Afficher les notes de l'orateur",
+  "This slide has notes": "Cette diapositive a des notes",
   "This variant shares no elements with its main slide — nothing to update.": "Cette variante ne partage aucun élément avec sa diapositive principale — rien à mettre à jour.",
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "Le cadre de la disposition de la diapositive auquel correspond cet élément. Si vous passez la diapositive à une autre disposition, le contenu va dans le cadre de même rôle de la nouvelle disposition, comme un espace réservé dans PowerPoint.",
   "Pie": "Secteurs",
