@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const RIGS = ['test-directory.ts', 'test-directory-roster.ts', 'test-directory-browsers.ts']
+const RIGS = ['test-directory.ts', 'test-directory-roster.ts', 'test-directory-browsers.ts', 'test-directory-lever.ts']
 /**
  * Every file under scripts/ the rigs reach through relative imports (the roster
  * rig runs the hosting check, which imports scripts/lib/), found by walking the
@@ -50,13 +50,14 @@ function scriptImports(entries: string[]): string[] {
   return [...seen].filter((f) => !entries.includes(f))
 }
 const RIG_IMPORTS = scriptImports(RIGS)
-const TREE = ['kernel/src', 'kernel/fixtures', 'server/directory/src', 'server/directory/fixtures', 'server/directory/wrangler.toml']
+// the lever rig also runs the maintainer's script (server/directory/lever.mjs) and reads home/web's covers()
+const TREE = ['kernel/src', 'kernel/fixtures', 'server/directory/src', 'server/directory/fixtures', 'server/directory/wrangler.toml', 'server/directory/lever.mjs', 'home/web/src/identity.ts']
 let failures = 0, checks = 0
 const ok = (c: boolean, m: string) => { checks++; if (!c) { failures++; console.log(`  FAIL  ${m}`) } else console.log(`  ok    ${m}`) }
 
 type Edit = { from: string; to: string }
 /** `also`: further edits in the same file, for a rule held at two doors */
-type Mutant = Edit & { name: string; file: 'worker.js' | 'roster.js' | 'passkey.js' | 'links.js' | 'mail.js' | 'voidpage.js' | 'browsers.js' | 'challenge.js'; also?: Edit[] }
+type Mutant = Edit & { name: string; file: 'worker.js' | 'roster.js' | 'passkey.js' | 'links.js' | 'mail.js' | 'voidpage.js' | 'browsers.js' | 'challenge.js' | 'lever.js' | 'obindex.js' | '../lever.mjs'; also?: Edit[] }
 const MUTANTS: Mutant[] = [
   // --- the first design's routes, retired ---
   { name: 'retired routes served again (fall through)', file: 'worker.js',
@@ -81,14 +82,14 @@ const MUTANTS: Mutant[] = [
   { name: 'D3 (#957): enrolment and renewal challenges share one count', file: 'browsers.js', from: "web ? 'challengeAddr' : 'challengeAddrHome')", to: "'challengeAddr')" },
   { name: 'D3 (#957): check-ins not counted', file: 'browsers.js', from: "    if (!(await ledger(`${ip}\\n${scope}`, 'checkin'))) return json(429, { error: 'rate-limited' })\n", to: '' },
   { name: 'D3 (#957): check-ins counted per IP before the signature', file: 'browsers.js',
-    from: "    const incidents = incidentsOf(env) // first: an unreadable list countersigns nothing\n", to: "    if (!(await ledger(ip, 'checkin'))) return json(429, { error: 'rate-limited' })\n    const incidents = incidentsOf(env)\n",
+    from: "    const incidents = await incidentsOf(env) // first: an unreadable list countersigns nothing\n", to: "    if (!(await ledger(ip, 'checkin'))) return json(429, { error: 'rate-limited' })\n    const incidents = await incidentsOf(env)\n",
     also: [{ from: "    if (!(await ledger(`${ip}\\n${scope}`, 'checkin'))) return json(429, { error: 'rate-limited' })\n", to: '' }] },
   { name: 'C2 (#957): check-ins counted before the challenge is opened', file: 'browsers.js',
     from: "    const ch = await openBrowser(env, scope, v.value.challenge, Date.now())\n    if (!ch) return json(400, { error: 'nonce' })\n    if (!(await ledger(`${ip}\\n${scope}`, 'checkin'))) return json(429, { error: 'rate-limited' })\n",
     to: "    if (!(await ledger(`${ip}\\n${scope}`, 'checkin'))) return json(429, { error: 'rate-limited' })\n    const ch = await openBrowser(env, scope, v.value.challenge, Date.now())\n    if (!ch) return json(400, { error: 'nonce' })\n" },
   { name: 'mb: the countersign always says confirmed', file: 'browsers.js', from: '  return Number.isSafeInteger(since) && since > 0 ? since : 0', to: '  return 0' },
   { name: 'mb: the countersign always says unconfirmed', file: 'browsers.js', from: 'mb: Math.min(mb, now), loggedAt: now', to: 'mb: now, loggedAt: now' },
-  { name: 'C1 (#957): enrolment never reads the incident list', file: 'browsers.js', from: "    incidentsOf(env) // before the challenge is opened", to: "    // before the challenge is opened" },
+  { name: 'C1 (#957): enrolment never reads the incident list', file: 'browsers.js', from: "    const incidents = await incidentsOf(env) // before the challenge is opened", to: "    const incidents = [] // before the challenge is opened" },
   { name: 'N3 (#957): the status route not charged per IP', file: 'browsers.js',
     from: "  if (!email || !/^[A-Za-z0-9_-]{43}$/.test(c)) return json(400, { error: 'invalid' })\n  if (!(await ledger(ip, 'lookup'))) return json(429, { error: 'rate-limited' })\n",
     to: "  if (!email || !/^[A-Za-z0-9_-]{43}$/.test(c)) return json(400, { error: 'invalid' })\n" },
@@ -142,14 +143,14 @@ const MUTANTS: Mutant[] = [
   { name: 'SD3 checkin: no incident records', file: 'browsers.js', from: "r.status === 200 || r.status === 403 ? { ...r.body, incidents } : r.body)", to: "r.status === 200 || r.status === 403 ? { ...r.body, incidents: [] } : r.body)" },
   { name: 'SD3 incidents: a record that does not read is skipped', file: 'browsers.js', from: "    if (!ok) throw new Error('INCIDENTS holds a record that does not read')\n", to: '' },
   { name: 'SD3 incidents: read after the challenge is spent', file: 'browsers.js',
-    from: "    const incidents = incidentsOf(env) // first: an unreadable list countersigns nothing\n", to: '',
-    also: [{ from: "    return json(r.status, r.status === 200 || r.status === 403 ? { ...r.body, incidents } : r.body)\n  }\n\n  return json(404", to: "    const incidents = incidentsOf(env)\n    return json(r.status, r.status === 200 || r.status === 403 ? { ...r.body, incidents } : r.body)\n  }\n\n  return json(404" }] },
-  { name: 'SD3 revoke: sign out everywhere marks nothing', file: 'browsers.js', from: '    await s.put(key, { ...rec, revokedAt: now })\n', to: '',
+    from: "    const incidents = await incidentsOf(env) // first: an unreadable list countersigns nothing\n", to: '',
+    also: [{ from: "    return json(r.status, r.status === 200 || r.status === 403 ? { ...r.body, incidents } : r.body)\n  }\n\n  return json(404", to: "    const incidents = await incidentsOf(env)\n    return json(r.status, r.status === 200 || r.status === 403 ? { ...r.body, incidents } : r.body)\n  }\n\n  return json(404" }] },
+  { name: 'SD3 revoke: sign out everywhere marks nothing', file: 'browsers.js', from: "    await s.put(key, { ...rec, revokedAt: now, revokedBy: 'signout' })\n", to: '',
     also: [{ from: "  await s.put('signoutAt', Math.max(at, (await s.get('signoutAt')) ?? 0))\n", to: '' }] },
   { name: 'SD3 revoke: a ceremony begun before the sign-out finishes after it', file: 'browsers.js',
     from: "    if (so !== undefined && a.issued <= so) return out(403, { error: 'revoked' })\n", to: '' },
   { name: 'SD3 sweep: certificates never deleted', file: 'browsers.js', from: '  if (dead.length) await s.delete(dead)\n}', to: '}' },
-  { name: 'SD3 status: always ok', file: 'browsers.js', from: "    return out(200, { state: await standing(s, rec, now) })", to: "    return out(200, { state: 'ok' })" },
+  { name: 'SD3 status: always ok', file: 'browsers.js', from: "    const st = await standing(s, rec, now)\n    return out(200, st === 'revoked'", to: "    const st = 'ok'\n    return out(200, st === 'revoked'" },
   { name: 'SD3 CORS: home routes answer *', file: 'browsers.js', from: '  if (path.startsWith(HOME_ROUTES.prefix)) return HOME_ORIGIN\n', to: '' },
   { name: 'SD3 CORS: a path that is no route answers *', file: 'worker.js', from: "PUBLIC.includes(path) ? ANY : BASE", to: 'ANY' },
   { name: 'SD3 CORS: a preflight on no route answers 204', file: 'worker.js', from: "    if (h === BASE) return json(404, { error: 'not-found' }, BASE) // no route, no CORS\n", to: '' },
@@ -490,6 +491,51 @@ const MUTANTS: Mutant[] = [
     from: "waiting ? [] : ['Stopping it changes nothing else: your passkeys stay as they are.']", to: "['Stopping it changes nothing else: your passkeys stay as they are.']" },
   { name: 'C6: the k=o notice says "lock you out"', file: 'roster.js',
     from: "so removing it would leave the account with no usable passkey (only a reset gets back in).'", to: "so removing it would lock you out.'" },
+
+  // --- SD5: the incident lever (lever.js, obindex.js, lever.mjs; rows in test-directory-lever.ts) ---
+  { name: 'SD5 L1: the window exclusive at t0', file: 'lever.js', from: 'const inWin = (t) => Number.isSafeInteger(t) && t >= a.t0 && t <= a.t1', to: 'const inWin = (t) => Number.isSafeInteger(t) && t > a.t0 && t <= a.t1' },
+  { name: 'SD5 L1: the loggedAt filter dropped', file: 'lever.js', from: 'if (rec.ob === 1 && inWin(rec.loggedAt) && !rec.revokedAt)', to: 'if (rec.ob === 1 && !rec.revokedAt)' },
+  { name: 'SD5 L2: an absent ob revoked (ob !== 0)', file: 'lever.js', from: 'if (rec.ob === 1 && inWin(rec.loggedAt)', to: 'if (rec.ob !== 0 && inWin(rec.loggedAt)' },
+  { name: 'SD5 L3 (957 N1): standing reads membership only', file: 'browsers.js', from: "  if (rec.revokedAt) return 'revoked'\n", to: '' },
+  { name: 'SD5 L4: the lever void suspends the requester (the q path)', file: 'lever.js',
+    from: "    await obj.ended(voidable.voidTok, 'incident', now)\n",
+    to: "    await obj.ended(voidable.voidTok, 'incident', now)\n    await s.put('head', { ...head, members: head.members.map((m) => (m.pub === voidable.signer ? { ...m, quarantined: true } : m)) })\n" },
+  { name: 'SD5 L4: the lever void sets the G4b cooldown', file: 'lever.js',
+    from: "    await obj.ended(voidable.voidTok, 'incident', now)\n", to: "    await obj.ended(voidable.voidTok, 'incident', now)\n    await s.put(`cool:${voidable.signer}`, now + 72 * 3_600_000)\n" },
+  { name: 'SD5 L4: the rq filter dropped (a reset or an ordinary change voided)', file: 'lever.js', from: "p.rq === HOME_ORIGIN && inWin(p.requestedAt)", to: 'inWin(p.requestedAt)' },
+  { name: 'SD5 L5: the revert targets the requester', file: 'lever.js', from: 'target: o.pub, exp:', to: 'target: o.signer, exp:' },
+  { name: 'SD5 L5: the cited change left out of the l link', file: 'lever.js',
+    from: 'extra: { cited: { prevRos: before.ros, ros: cited.ros, rip: cited.rip, ripSig: cited.ripSig }, incident: rv.id } })', to: 'extra: { incident: rv.id } })' },
+  { name: 'SD5 L6: a wrong revert guess burns the real token', file: 'lever.js',
+    from: "  const rv = await s.get(`rv:${th}`)\n  if (!rv) {\n", to: "  const rv = await s.get(`rv:${th}`)\n  if (!rv) {\n    for (const k of (await s.list({ prefix: 'rv:' })).keys()) await s.delete(k)\n" },
+  { name: 'SD5 L7 (944 F1): the lever void ignores the hold', file: 'lever.js', from: 'const held = voidable ? await obj.held(now) : null', to: 'const held = null' },
+  { name: 'SD5 L8: the enrolment indexed after it is stored', file: 'browsers.js',
+    from: '    if (ak) await indexOb(obj.env, now, ak)\n', to: '',
+    also: [{ from: '    await s.put(`wh:${certHash}`, c.devicePub)\n', to: '    await s.put(`wh:${certHash}`, c.devicePub)\n    if (ak) await indexOb(obj.env, now, ak)\n' }] },
+  { name: 'SD5 L8: a failed index write swallowed', file: 'obindex.js', from: "  if (!r.ok) throw new Error(`obindex ${op}: ${r.status}`)\n", to: '' },
+  { name: 'SD5 L9: the cursor ignored', file: 'lever.js', from: "let day = m ? m[1] : dayOf(c.t0), after = m?.[2] ?? ''", to: "let day = dayOf(c.t0), after = ''" },
+  { name: 'SD5 L9: no done marker (a re-run mails again)', file: 'lever.js', from: '  await s.put(`lever:${a.id}`, { done: true, at: now, mailed: true })\n', to: '' },
+  { name: 'SD5 L10: the nonce not stored', file: 'lever.js',
+    from: "  if (c.op !== 'plan' && !(await spendLeverNonce(env, c.nonce, now + LEVER_LIMITS.nonceKeepMs))) return json(403, { error: 'replay' })\n", to: '' },
+  { name: 'SD5 L10: an empty LEVER_PUBKEY accepts', file: 'lever.js',
+    from: "  if (typeof pub !== 'string' || pub.length === 0) return json(403, { error: 'lever-off' })\n", to: '',
+    also: [{ from: 'if (!(await verifyStatementSig(pub, b.sig, b.cmd)))', to: 'if (pub && !(await verifyStatementSig(pub, b.sig, b.cmd)))' }] },
+  { name: 'SD5 L10: the Roster takes op lever from the generic call', file: 'roster.js',
+    from: "if (new URL(req.url).pathname === '/lever') return", to: "if (new URL(req.url).pathname === '/lever' || a.op === 'lever') return" },
+  { name: 'SD5 L11: inc. signed over another from', file: 'obindex.js', from: 'const inc = buildInc({ id, from, to, issuedAt, kid: env.DIR_KID })', to: 'const inc = buildInc({ id, from: from + 1, to, issuedAt, kid: env.DIR_KID })' },
+  { name: 'SD5 L11: a closed record issued before its end', file: 'lever.js', from: 'to: c.t1, issuedAt: now })', to: 'to: c.t1, issuedAt: c.t1 - 1 })' },
+  { name: 'SD5 L12 (957 C1): an unreadable store read as none', file: 'browsers.js', from: '  const all = await storedIncidents(env)\n', to: '  const all = await storedIncidents(env).catch(() => [])\n' },
+  { name: 'SD5 D1: the INCIDENT_ENROL refusal removed', file: 'browsers.js', from: "    if (INCIDENT_ENROL === 'refuse' && anyOpen(incidents)) return json(503, { error: 'incident' })\n", to: '' },
+  { name: 'SD5 D1: refused on any record, closed ones too', file: 'browsers.js', from: 'const anyOpen = (incidents) => incidents.some((i) => i.to === null)', to: 'const anyOpen = (incidents) => incidents.some(() => true)' },
+  { name: "SD5 D1: 'allow' still refuses", file: 'browsers.js', from: "if (INCIDENT_ENROL === 'refuse' && anyOpen(incidents))", to: 'if (anyOpen(incidents))' },
+  { name: 'SD5 D1: the challenge not refused', file: 'browsers.js', from: "    if (web && INCIDENT_ENROL === 'refuse' && anyOpen(await incidentsOf(env))) return json(503, { error: 'incident' })\n", to: '' },
+  { name: 'SD5 S1: the status gives no reason', file: 'browsers.js', from: "return out(200, st === 'revoked' ? { state: st, ...revokedWhy(rec) } : { state: st })", to: 'return out(200, { state: st })' },
+  { name: "SD5 S1: the reason is always 'revoked'", file: 'browsers.js',
+    from: "  if (!rec.revokedAt) return { by: 'member' }\n", to: "  return { by: 'revoked' }\n" },
+  { name: 'SD5 M1: the incident mail spends the stranger-fillable budget', file: 'lever.js',
+    from: "  const sent = await notify(obj.env, address, 'Security incident", to: "  const sent = (await obj.spendSetupBudget(now)) && await notify(obj.env, address, 'Security incident" },
+  { name: 'SD5 DR1: the drill touches any host', file: '../lever.mjs', from: '  if (o.drill && !loopback(o.directory)) {', to: '  if (false) {' },
+  { name: 'SD5 DR2: apply by default', file: '../lever.mjs', from: '    if (!o.apply) { say(', to: '    if (false) { say(' },
 
   // --- SD2: the void page (its own headers; the browser rig has the rest) ---
   { name: 'page: inline script allowed', file: 'voidpage.js', from: `  "script-src 'self'",`, to: `  "script-src 'self' 'unsafe-inline'",` },

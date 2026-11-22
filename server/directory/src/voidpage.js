@@ -85,6 +85,24 @@ export const VOID_HTML = `<!doctype html>
 <p>A passkey on the bento/id account for <strong data-address></strong> was suspended, and will be removed. If it was the wrong passkey, put it back: it works again at once.</p>
 <p class="buttons"><button id="undo-btn" type="button">Put the passkey back</button></p>
 </section>
+<section id="revert" data-view hidden>
+<h1>Revert this change?</h1>
+<p>During a security incident, a change through bento/home added a passkey to the bento/id account for <strong data-address></strong>. The email that brought you here names it.</p>
+<p>If you did not ask for it, revert the change: that passkey is suspended at once and removed 72 hours later. The passkey that asked for the change is not affected.</p>
+<p class="buttons"><button id="revert-btn" type="button" class="danger">Revert this change</button></p>
+</section>
+<section id="reverted" data-view hidden>
+<h1>Reverted</h1>
+<p>The passkey the change added can no longer be used. It will be removed at <span id="revert-removes"></span>. We sent an email with a link that puts it back, in case it was the wrong one.</p>
+</section>
+<section id="gone" data-view hidden>
+<h1>Nothing to revert</h1>
+<p>The passkey this change added is no longer on the account, or is already suspended. Nothing changed.</p>
+</section>
+<section id="incident" data-view hidden>
+<h1>Stopped during a security incident</h1>
+<p>This change was stopped at <span id="incident-at"></span>, during a security incident. Nothing changed. The email “Security incident: what bento/id did on your account” says more.</p>
+</section>
 <section id="cancelled" data-view hidden>
 <h1>Cancelled</h1>
 <p>Nothing changed. <span id="cool"></span></p>
@@ -146,13 +164,14 @@ export const VOID_JS = `(() => {
   if (location.hash) history.replaceState(null, '', location.pathname)
   const keys = [...f.keys()]
   const valid = keys.length === 4 && new Set(keys).size === 4 && ['v', 'e', 't', 'k'].every((k) => f.has(k)) &&
-    f.get('v') === '1' && /^[A-Za-z0-9_-]{43}$/.test(f.get('t')) && ['c', 'o', 'r', 'u'].includes(f.get('k')) &&
+    f.get('v') === '1' && /^[A-Za-z0-9_-]{43}$/.test(f.get('t')) && ['c', 'o', 'r', 'u', 'v'].includes(f.get('k')) &&
     f.get('e').length > 0 && f.get('e').length <= 254
   if (!valid) return show('bad')
   const email = f.get('e'), token = f.get('t'), kind = f.get('k')
   for (const el of document.querySelectorAll('[data-address]')) el.textContent = email
   if (kind === 'r') show('reset')
   else if (kind === 'u') show('undo')
+  else if (kind === 'v') show('revert')
   else {
     show('change')
     $(kind === 'c' ? 'hint-c' : 'hint-o').hidden = false
@@ -164,6 +183,7 @@ export const VOID_JS = `(() => {
     ? 'This account was reset at ' + at(j.at) + '. The email “Your bento/id account was reset” lists its passkeys now.'
     : kind === 'r' ? 'The reset took effect at ' + at(j.at) + '. The email “Your bento/id account was reset” lists its passkeys now.'
       : kind === 'u' ? 'The passkey was removed at ' + at(j.at) + '. The email “Your bento/id passkeys changed” lists the passkeys now.'
+        : kind === 'v' ? 'This link expired at ' + at(j.at) + '. Nothing changed.'
         : 'This change took effect at ' + at(j.at) + '. The email “Your bento/id passkeys changed” lists the passkeys now.'
   let busy = false
   async function send(choice) {
@@ -182,6 +202,7 @@ export const VOID_JS = `(() => {
       if (typeof j.removesAt === 'number') { $('back-at').textContent = at(j.removesAt); $('back').hidden = false }
       return show('cancelled')
     }
+    if (r && r.ok && j.done === 'reverted') { $('revert-removes').textContent = at(j.removesAt); return show('reverted') }
     if (r && r.ok && j.done === 'suspended') { $('removes').textContent = at(j.removesAt); return show('suspended') }
     if (r && r.ok && j.done === 'restored') {
       if (typeof j.resetAt === 'number') { $('reset-at').textContent = at(j.resetAt); $('reset-again').hidden = false }
@@ -193,6 +214,10 @@ export const VOID_JS = `(() => {
     if (r.status === 503) return again('We could not send the email that confirms this, so nothing changed. Try again in a few minutes, or choose Cancel.')
     if (r.status === 429) return again('Too many tries from this network. Try again later. Nothing changed.')
     if (j.error === 'choice') return again('That choice is not offered for this link. Nothing changed.')
+    if (j.error === 'pending') return again('Another change to this account is waiting. Try again once it has taken effect or been stopped. Nothing changed.')
+    if (j.error === 'last-live') return again('That passkey is the only usable one on this account, so it cannot be removed from here. If you do not recognise it, reset the account. Nothing changed.')
+    if (j.error === 'gone') return show('gone')
+    if (j.error === 'incident' && typeof j.at === 'number') { $('incident-at').textContent = at(j.at); return show('incident') }
     // a link whose life has ended: the directory says how, and the page says it plainly
     if (j.error === 'late' && typeof j.at === 'number') { $('late-text').textContent = late(j); return show('late') }
     if (j.error === 'used' && typeof j.at === 'number') { $('used-at').textContent = at(j.at); return show('used') }
@@ -203,5 +228,6 @@ export const VOID_JS = `(() => {
   $('remove').addEventListener('click', () => send('remove'))
   $('cancel-reset').addEventListener('click', () => send('cancel'))
   $('undo-btn').addEventListener('click', () => send('undo'))
+  $('revert-btn').addEventListener('click', () => send('revert'))
 })()
 `

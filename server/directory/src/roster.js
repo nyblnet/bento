@@ -34,7 +34,11 @@
 //   directory's online key when it takes effect, never before (G2), under the
 //   authority word for the act (kernel/src/roster.ts): `m` a member's change
 //   and the setup head, `r` a reset, `q` a void that suspends the passkey that
-//   asked, `x` that passkey's removal 72 hours later, `u` its undo.
+//   asked, `l` the incident lever's revert that suspends the passkey a change
+//   ADDED (lever.js), `x` that passkey's removal 72 hours later, `u` its undo.
+// - Every member change asked for at bento/home's request (rq) is written to
+//   the incident lever's day index (obindex.js) before anything is checked or
+//   stored for it, and its link keeps that rq, so the lever can find it.
 //
 // THE VOID (G3, G4 with G4a-G4c). Every waiting change's notice carries a void
 // link: a 256-bit token in the fragment of a link to the void page
@@ -78,6 +82,9 @@ import { HOME_ORIGIN, PASSKEY, verifyMemberAssertion, verifyRegistration } from 
 import { BROWSER_OPS, browserOp } from './browsers.js'
 import { deliver, MAIL_TIMEOUT_MS } from './mail.js'
 import { resetLink, setupLink, voidLink } from './links.js'
+import { addressKey } from './address.js'
+import { indexOb } from './obindex.js'
+import { leverOp, leverRevert } from './lever.js'
 
 const MIN = 60_000, DAY = 86_400_000
 
@@ -153,13 +160,13 @@ function same(a, b) {
 }
 
 /** A fresh 256-bit token (base64url) and the hash that is stored instead of it. */
-async function mintToken(label) {
+export async function mintToken(label) {
   const token = b64uEnc(crypto.getRandomValues(new Uint8Array(32)))
   return { token, h: await sha256hex(`bento-dir/1/${label}\n${token}`) }
 }
 const tokenHash = (label, token) => sha256hex(`bento-dir/1/${label}\n${token}`)
 /** A dirNonce for a link the directory makes on its own authority (no request challenge exists). */
-const ownNonce = () => b64uEnc(crypto.getRandomValues(new Uint8Array(16)))
+export const ownNonce = () => b64uEnc(crypto.getRandomValues(new Uint8Array(16)))
 
 let signer = null
 /**
@@ -181,14 +188,14 @@ async function countersign(env, r) {
 /** When a `spent:<issued16>:<nonce>` key may go. */
 const spentUntil = (k) => Number(k.slice(6, 22)) + ROSTER_LIMITS.spentKeepMs
 
-const when = (t) => new Date(t).toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC')
-const HOW = { setup: 'at setup', browser: 'from a browser', app: 'from an app' }
+export const when = (t) => new Date(t).toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC')
+export const HOW = { setup: 'at setup', browser: 'from a browser', app: 'from an app' }
 const hostClass = (origin) => PASSKEY.origins[origin] ?? 'browser'
 
 // --- mail ------------------------------------------------------------------------
 
 /** The roster as a list of lines: every member, its fingerprint, when and how it came. */
-async function rosterLines(members, records, pendingAdd) {
+export async function rosterLines(members, records, pendingAdd) {
   const out = []
   for (const m of members) {
     const fp = await fingerprint(m.pub)
@@ -205,13 +212,13 @@ async function rosterLines(members, records, pendingAdd) {
  * it is the person's way to stop the change, so a change whose notice was not
  * sent never waits to take effect (security's D1).
  */
-async function notify(env, to, subject, lines, kind = 'roster') {
+export async function notify(env, to, subject, lines, kind = 'roster') {
   const body = [...lines, '', 'Bento will never ask you to type or paste anything from this email.'].join('\n')
   try { await deliver(env, { to, subject, body, kind }); return true } catch (e) { console.log(`${kind} mail failed: ${e.message}`); return false }
 }
 
 /** "the passkey 1a2b3c4d, added 2026-11-03 09:00:00 UTC at setup": a member by its short name and age (G4c). */
-async function named(pub, rec) {
+export async function named(pub, rec) {
   const fp = await fingerprint(pub)
   return rec ? `the passkey ${fp}, added ${when(rec.addedAt)} ${HOW[rec.how] ?? ''}`.trimEnd() : `the passkey ${fp}`
 }
@@ -220,7 +227,7 @@ async function named(pub, rec) {
  * The void link's lines in a waiting notice. `kind` is the link's (links.js
  * VOID_KINDS); the wording says which choice to pick (G4c).
  */
-function voidLines(to, token, kind, exp, rNote) {
+export function voidLines(to, token, kind, exp, rNote) {
   const link = voidLink(to, token, kind)
   if (kind === 'u') {
     return ['If you removed the wrong passkey, open this link to put it back:', '', link, '',
@@ -403,6 +410,12 @@ export class Roster {
     return true
   }
 
+  /** This account's storage name (address.js addressKey), from its head; null with no account. */
+  async addressKey() {
+    const head = await this.state.storage.get('head')
+    return head ? addressKey((await parseRos(head.ros)).value.address) : null
+  }
+
   async records(members) {
     const out = {}
     for (const m of members) { const r = await this.state.storage.get(`pk:${m.pub}`); if (r) out[m.pub] = r }
@@ -468,7 +481,7 @@ export class Roster {
       await s.delete([`pk:${p.change.pub}`, `cool:${p.change.pub}`, ...(r ? [`cid:${r.credId}`] : [])])
     } else {
       head = await this.link(p.ros, { auth: 'm', requestedAt: p.requestedAt, now, kind: 'member',
-        extra: { signer: p.signer, credId: p.credId, assertion: p.assertion } })
+        extra: { signer: p.signer, credId: p.credId, assertion: p.assertion, rq: p.rq ?? '', how: p.how } })
       if (p.change.op === 'add') {
         await s.put(`pk:${p.change.pub}`, { credId: p.reg.credId, signCount: p.reg.signCount, addedAt: now, how: p.how })
         await s.put(`cid:${p.reg.credId}`, p.change.pub)
@@ -528,6 +541,8 @@ export class Roster {
       await this.schedule(spentUntil(key)) // and the alarm sweeps whatever later spends leave behind
       return true
     }
+    // the incident lever (lever.js) reaches this object on its own path, which the worker's generic call never uses
+    if (new URL(req.url).pathname === '/lever') return a.op === 'lever' || a.op === 'leverPlan' ? leverOp(this, a, now) : out(400, { error: 'bad-op' })
     const origin = typeof a.os === 'string' ? a.os.slice(0, ROSTER_LIMITS.originMax) : ''
     // the browser certificates (browsers.js): the same object, its own ops
     if (BROWSER_OPS.includes(a.op)) return browserOp(this, a, now, { spend, out, origin, fingerprint, notify: (to, subject, lines) => notify(this.env, to, subject, lines) })
@@ -615,6 +630,10 @@ export class Roster {
     if (a.op === 'request') {
       if (!(await spend())) return out(400, { error: 'nonce' })
       await this.ripen(now)
+      // ob = 1: indexed for the incident lever before anything is checked against or stored for the change, so
+      // a failed index write fails the request (over-include, never under-include); everything below reads afresh
+      const ak = a.rq === HOME_ORIGIN ? await this.addressKey() : null
+      if (ak) await indexOb(this.env, now, ak)
       const cur = await s.get('head')
       if (!cur) return out(404, { error: 'not-found' })
       const h = await parseRos(a.ros)
@@ -736,10 +755,12 @@ export class Roster {
       // account, no passkey. A wrong one is refused and spends nothing, and no
       // count of wrong ones is kept anywhere (a stranger who knows the address
       // must never be able to burn the owner's link).
-      if (typeof a.token !== 'string' || !['cancel', 'remove', 'undo'].includes(a.choice)) return out(400, { error: 'invalid' })
+      if (typeof a.token !== 'string' || !['cancel', 'remove', 'undo', 'revert'].includes(a.choice)) return out(400, { error: 'invalid' })
       await this.ripen(now) // a change already in effect can no longer be stopped
       const p = await s.get('pend')
       const th = await tokenHash('void', a.token)
+      // the incident mail's "Revert this change" (lever.js): its own tokens, never a waiting change's
+      if (a.choice === 'revert') return leverRevert(this, th, now, origin, out)
       // C3: while a reset waits, the removal it set aside keeps its undo link
       const parked = p && p.kind === 'reset' && p.parked && typeof p.parked.voidTok === 'string' && same(p.parked.voidTok, th) ? p.parked : null
       if (!parked && (!p || typeof p.voidTok !== 'string' || !same(p.voidTok, th))) {

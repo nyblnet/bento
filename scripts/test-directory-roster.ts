@@ -58,7 +58,7 @@
 //     reset puts the removal back at its own time.
 
 import worker, { Roster } from '../server/directory/src/worker.js'
-import { Ledger } from '../server/directory/src/worker.js'
+import { Ledger, ObIndex } from '../server/directory/src/worker.js'
 import { addressKey } from '../server/directory/src/address.js'
 import { DIRECTORY_ORIGIN, PASSKEY, SIGNIN_ORIGIN, passkeyOrigins, readCbor, verifyRegistration, verifyMemberAssertion } from '../server/directory/src/passkey.js'
 import { parseResetLink, parseSetupLink, parseVoidLink, setupLink, SIGNIN_PATHS, VOID_PATH } from '../server/directory/src/links.js'
@@ -165,6 +165,7 @@ const env: Record<string, unknown> = {
 const ROSTER = namespace(Roster as never)
 env.ROSTER = ROSTER
 env.LEDGER = namespace(Ledger as never)
+env.OBINDEX = namespace(ObIndex as never) // the incident lever's day index and records (obindex.js)
 /** Did the request reach the hung send? Bounded, so a request that never gets there fails a row instead of hanging the rig. */
 async function reached(h: { called: Promise<void> }) {
   let t: ReturnType<typeof setTimeout> | undefined
@@ -1263,7 +1264,7 @@ let addAt = 0
 // 10g. S2: reset, void, freeze and roster mail never read a stranger-fillable budget
 // =====================================================================
 {
-  ok(JSON.stringify(MAIL_KINDS) === JSON.stringify({ setup: 'budget', roster: 'never', reset: 'never', void: 'never', freeze: 'never' }),
+  ok(JSON.stringify(MAIL_KINDS) === JSON.stringify({ setup: 'budget', roster: 'never', reset: 'never', void: 'never', freeze: 'never', incident: 'never' }),
     'the mail kinds and their budget classes are exactly as ruled (setup alone budgeted; the removal code is gone)')
   let threw = false
   try { await deliver(env, { to: 'x@example.com', subject: 's', body: 'b', kind: 'notice' }) } catch { threw = true }

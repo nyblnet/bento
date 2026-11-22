@@ -15339,3 +15339,47 @@ serving an older shell.
   runs the released derivation over what this build would save. The
   starter-deck row is the positive control (87 lost in the old form). Four
   mutants turn rows red.
+
+## 2026-11-22 — bento/id directory: the incident lever (SD5)
+
+- **What it does.** A maintainer-run command over a window [t0, t1] revokes
+  every browser certificate enrolled at bento/home's request in the window
+  (`ob` exactly 1, `loggedAt` in [t0, t1] inclusive), voids a waiting member
+  change asked for at bento/home's request in the window (as a Cancel: nobody
+  suspended, no cooldown, a hold respected), mails each affected address once
+  with a "Revert this change" link for each change in the window that took
+  effect and added a passkey, and publishes a signed incident record.
+- **The revert never suspends the requester.** It uses the kernel's authority
+  `l`, whose target is the member the cited change ADDED; the removal follows
+  72 hours later under `x`, with the usual undo `u`. The requester may have
+  done nothing wrong: the page that asked did. A change that REMOVED a passkey
+  cannot be reverted this way (no directory word adds a member); the mail says
+  so in words, and a kernel word for it is a separate question.
+- **The window is only as good as `rq`.** `ob` = 1 means the sign-in host
+  reported bento/home as the opener. It selects the lever's window and nothing
+  else decides on it; a hostile sign-in host could report another opener, so
+  the lever is trustworthy only while the sign-in host is honest.
+- **Revocations are sticky.** A lever revocation is stamped on the record
+  (`revokedBy: 'incident'`) and `standing()` reads it before membership: no
+  undo, re-add or new head revives it. A peer that is offline keeps accepting
+  the last countersign until it expires (24 hours at most).
+- **Finding the accounts.** Per-address objects cannot be listed, so a new
+  `ObIndex` object keeps, per UTC day, the storage name (a hash) of every
+  account with an `ob` = 1 event. It is written before anything is stored for
+  the event; a failed write fails the request (over-include, never miss).
+- **Authority.** `POST /v1/lever` takes only a command signed by an OFFLINE
+  lever key (`LEVER_PUBKEY`; never the release key or the directory key),
+  issued within 5 minutes, with a single-use nonce. Empty `LEVER_PUBKEY` turns
+  the route off. No CORS; no public route reaches the Roster's lever op.
+- **Incident records are signed.** Every record a check-in or status answer
+  carries is `{id, from, to, inc, sig}`, `inc` being the kernel's `inc.` text
+  under the directory's online key, never issued with `to` after `issuedAt`.
+  The `INCIDENTS` variable stays as a break-glass beside the stored records;
+  an id in both, or anything that does not read, answers 500.
+- **D1 awaits the maintainer.** While any record is open, a new browser
+  enrolment and its challenge answer 503 `incident`. This is one constant,
+  `INCIDENT_ENROL` in `server/directory/src/browsers.js`, built as `'refuse'`
+  (the recommendation); `'allow'` restores the earlier behaviour. The rig runs
+  both values.
+- **Detection is separate.** The tripwire is one way the maintainer learns to
+  pull the lever; nothing pulls it automatically.

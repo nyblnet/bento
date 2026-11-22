@@ -72,6 +72,11 @@ const MUTANTS = {
   // C6: the old advice
   'hint-benign': [['your passkey was used for something you did not intend. Choose Cancel: it is always safe.', 'the usual cause is a page that used your own passkey: choose Cancel.']],
   // C3: the restored removal not mentioned
+  // SD5: the incident lever's views shown as "no longer works"
+  'gone-as-unknown': [["    if (j.error === 'gone') return show('gone')\n", '']],
+  'incident-as-unknown': [["    if (j.error === 'incident' && typeof j.at === 'number') { $('incident-at').textContent = at(j.at); return show('incident') }\n", '']],
+  // SD5: the revert link shows no button
+  'no-revert-view': [["  else if (kind === 'v') show('revert')\n", '']],
   'no-back': [["      if (typeof j.removesAt === 'number') { $('back-at').textContent = at(j.removesAt); $('back').hidden = false }\n", '']],
 }
 const tmp = mkdtempSync(join(tmpdir(), 'void-page-'))
@@ -126,6 +131,7 @@ async function world(mod) {
   const env = { DIR_KID: 'dir-1', DIR_KEY_JWK, CHALLENGE_KEY: 'k'.repeat(48), MAILER: { send: (m) => { mails.push(m) } } }
   env.ROSTER = namespace(mod.Roster, env)
   env.LEDGER = namespace(mod.Ledger, env)
+  env.OBINDEX = namespace(mod.ObIndex, env)
   return { env, mails, handler: (req) => mod.default.fetch(req, env) }
 }
 
@@ -404,6 +410,26 @@ async function rows(mod, loud) {
     const pv = await press({ ...rp2, token: rp2.undo }, 'u', '#undo-btn')
     say(await visible(pv, '#restored') && await visible(pv, '#reset-again') && rp2.store.get('pend')?.kind === 'reset',
       'the set-aside removal\'s undo while the reset waits: the passkey is back, and the page says when the reset now takes effect')
+    await c.close()
+  })
+  // 8. SD5: the incident lever's links: the revert view, a revert with nothing left to revert, a change the lever stopped
+  await block('block 8', async () => {
+    const { c } = await ctx(w)
+    const settleOn = (pg) => pg.waitForFunction(() => document.querySelector('[data-view]:not([hidden])')?.id !== 'revert' || document.getElementById('msg').textContent !== '', null, { timeout: 3000 }).catch(() => {})
+    const v = await plant(w, 'c')
+    v.store.delete('pend')
+    v.store.set(`rv:${await sha256hex(`bento-dir/1/void\n${v.token}`)}`, { id: 'inc-x', seq: 0, target: 'not-a-member', exp: Date.now() + 86_400_000 })
+    const pv = await fresh(c, linkOf(v, 'v'))
+    const txt = await pv.locator('#revert').textContent().catch(() => '')
+    say(await visible(pv, '#revert') && await visible(pv, '#revert-btn') && txt.includes(v.email) && /passkey that asked for the change is not affected/.test(txt),
+      'a k=v link shows "Revert this change?" for its address, and says the passkey that asked is not affected')
+    await pv.click('#revert-btn'); await settleOn(pv)
+    say(await visible(pv, '#gone') && !v.store.has(`rv:${await sha256hex(`bento-dir/1/void\n${v.token}`)}`), 'the passkey it added is no longer on the account: "Nothing to revert", and the link has ended')
+    const inc = await plantEnded(w, 'incident')
+    const pi = await fresh(c, linkOf(inc, 'c'))
+    await pi.click('#cancel'); await settleOn(pi)
+    await pi.waitForFunction(() => document.querySelector('[data-view]:not([hidden])')?.id !== 'change', null, { timeout: 3000 }).catch(() => {})
+    say(await visible(pi, '#incident') && (await pi.locator('#incident-at').textContent()).length > 0, 'a change the incident lever stopped: the page says so, and when')
     await c.close()
   })
   return failures - before

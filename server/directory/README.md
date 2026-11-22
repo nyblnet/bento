@@ -70,12 +70,24 @@ npx wrangler deploy
 Without `DIR_KEY_JWK` nothing can be set up or take effect: every link is
 countersigned before it is stored, so a missing key stores nothing.
 
+The incident lever stays off until `LEVER_PUBKEY` (a `[vars]` value in
+`wrangler.toml`) holds the public half of a lever key minted offline:
+
+```sh
+node server/directory/lever.mjs keygen --out <offline path>/lever-key.jwk   # prints the LEVER_PUBKEY value
+```
+
+The deploy that adds the `ObIndex` class (migration `v3`) must come before
+anything is enrolled or requested at bento/home's request, or those events
+are missing from the lever's index.
+
 ## Testing
 
 ```sh
 node scripts/test-directory.ts          # the retired routes, the address normal form, limits
 node scripts/test-directory-roster.ts   # the passkey roster, setup links, the void, the reset, mail, headers
 node scripts/test-directory-browsers.ts # browser certificates: challenges, enrolment, renewal, the 7-day cap, revocation
+node scripts/test-directory-lever.ts    # the incident lever, its records, D1 both ways, and lever.mjs's drill and dry run
 node scripts/test-directory-mutants.ts  # each rule loosened in turn must turn a rig red
 node scripts/test-directory-void-page.mjs [--chrome]  # the void page in a real browser (Playwright; PLAYWRIGHT_MODULE)
 ```
@@ -324,3 +336,72 @@ policy. It is fixed text, sends nothing until a button is pressed, takes the
 token out of the address bar first, and calls no WebAuthn or Signal API.
 
 Rigs: see Testing above.
+
+## The incident lever (`src/lever.js`, `src/obindex.js`, `lever.mjs`)
+
+If bento/home's served code may have been hostile over a window [t0, t1], the
+maintainer pulls the lever. Over that window, for every account with an event
+asked for at bento/home's request (`ob` = 1, `rq` = bento/home as the sign-in
+host reported it), it:
+
+1. revokes each browser certificate enrolled at bento/home's request in the
+   window (`loggedAt` in [t0, t1], both ends included; `ob` exactly 1, so a
+   record with `ob` 0 or none is untouched). The mark is sticky
+   (`revokedBy: 'incident'`): no undo, re-add or new head brings it back. A
+   peer that is offline still accepts it until its countersign expires, 24
+   hours at most;
+2. voids a waiting member change asked for at bento/home's request in the
+   window, as a Cancel: nobody is suspended and no cooldown is set. A reset, a
+   change asked for elsewhere, and an account under a hold are left alone (a
+   held account is finished by a later run);
+3. for each member change in the window that has taken effect and added one
+   passkey, mails a **Revert this change** link (the void page, kind `v`,
+   single use, 30 days, no attempt counter). Pressing it suspends the passkey
+   the change ADDED (kernel authority `l`, carrying the cited change) and
+   queues its removal 72 hours later (`x`), with an undo link (`u`). The
+   passkey that asked is never touched. A change that removed a passkey cannot
+   be reverted by the directory (no directory word adds a member): the mail
+   says so in words;
+4. mails each affected address once (kind `incident`, never held back by a
+   budget): the revoked browser keys by full fingerprint, the voided change,
+   the changes with their revert links, and the whole roster;
+5. publishes the incident record, open and then closed. Every browser
+   check-in and status answer carries `{id, from, to, inc, sig}`: `inc` is the
+   kernel's `inc.` text signed by the directory's online key, never issued
+   with a `to` after its `issuedAt`. Records in the `INCIDENTS` variable are
+   served the same way. A store that does not read answers 500.
+
+While any record is open, a new browser enrolment and its challenge answer
+**503** `{error: "incident"}` (`INCIDENT_ENROL` in `src/browsers.js`; the
+maintainer's ruling on D1 is still to come, and `'allow'` restores the earlier
+behaviour). A revoked certificate's status says why: `by: 'incident'` (with
+the incident's id), `'signout'` or `'member'`.
+
+How it finds the accounts: per-address objects cannot be listed, so the
+`ObIndex` object keeps, per UTC day, the storage name (a hash, never the
+address) of every account with an `ob` = 1 event that day. The Roster object
+writes it before it stores, logs or countersigns anything for the event, and a
+failed write fails the request: the index can over-include, never miss one.
+It is kept for the life of the account, like the log.
+
+The route, `POST /v1/lever {cmd, sig}`, has no CORS and is in no public list.
+The command is the directory's own text,
+`lvr.<op>.<id>.<t0>.<t1|empty>.<cursor|empty>.<n>.<issuedAt>.<nonce>`, signed
+by the offline lever key; it must be issued within 5 minutes and its nonce is
+single use. `plan` is a dry run of `run`: it changes nothing and spends no
+nonce. Every answer is counts only.
+
+```sh
+node server/directory/lever.mjs --directory https://id.bento.page --key <jwk> --id <id> open  --t0 <time>            # dry run
+node server/directory/lever.mjs --directory https://id.bento.page --key <jwk> --id <id> open  --t0 <time> --apply
+node server/directory/lever.mjs --directory https://id.bento.page --key <jwk> --id <id> run   --t0 <time> --t1 <time> --apply
+node server/directory/lever.mjs --directory https://id.bento.page --key <jwk> --id <id> close --t0 <time> --t1 <time> --apply
+node server/directory/lever.mjs --drill --directory http://127.0.0.1:8787 --key <drill jwk>   # a local directory only
+```
+
+Running it against id.bento.page, and choosing the window and the id, are the
+maintainer's. The drill refuses any host but a loopback one before it sends
+anything; against `npx wrangler dev --port 8787 --var DEV:1 --var MAILER:log
+--var LEVER_PUBKEY:<drill key>` it runs open, plan, run, a second run and close
+and reads the record back. The rig runs the same drill in process with
+seeded accounts.

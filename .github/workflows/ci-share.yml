@@ -201,3 +201,31 @@ jobs:
         run: node scripts/test-home-web-identity.mjs --chrome
       - name: bento/id agent mutants, each red on its row
         run: node scripts/test-home-web-identity.mjs --mutants
+
+  share-directory-lever:
+    needs: share-gate
+    if: needs.share-gate.outputs.run == 'true'
+    # The incident lever (SD5): the real worker, Roster and ObIndex objects on
+    # a hand clock with a throwaway lever key. Certificates enrolled at
+    # bento/home's request inside [t0, t1] are revoked (sticky, by 'incident'),
+    # nothing outside it and no ob 0 or absent ob; a waiting ob=1 change is
+    # voided with nobody suspended and no cooldown, a hold respected; "Revert
+    # this change" suspends the passkey a change ADDED (an l link the kernel
+    # verifies), never the one that asked; the day index is written first;
+    # paging and re-runs; the route's key, freshness, nonce and no CORS; the
+    # signed incident records; the maintainer's script's drill and dry run.
+    # D1 (refuse browser enrolment while an incident is open) is one constant
+    # awaiting the maintainer: the rig runs this tree's value and a copy with
+    # it flipped, and this job fails unless both ran.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: bento/id directory incident lever (SD5), both values of INCIDENT_ENROL
+        run: |
+          node scripts/test-directory-lever.ts | tee "$RUNNER_TEMP/lever.log"
+          grep -E '^D1 INCIDENT_ENROL=refuse: [1-9][0-9]* rows ran' "$RUNNER_TEMP/lever.log"
+          grep -E '^D1 INCIDENT_ENROL=allow: [1-9][0-9]* rows ran' "$RUNNER_TEMP/lever.log"

@@ -19,7 +19,7 @@
 //   · per-IP limits hold on the roster read; nothing raw is stored.
 
 import worker, * as workerModule from '../server/directory/src/worker.js'
-import { Ledger, LIMITS, RETIRED, Roster } from '../server/directory/src/worker.js'
+import { Ledger, LIMITS, ObIndex, RETIRED, Roster } from '../server/directory/src/worker.js'
 import { addressKey, normalize } from '../server/directory/src/address.js'
 import { MAIL_KINDS } from '../server/directory/src/mail.js'
 import { readFileSync, readdirSync } from 'node:fs'
@@ -76,6 +76,7 @@ const env: Record<string, unknown> = {
 }
 env.ROSTER = namespace(Roster as never)
 env.LEDGER = namespace(Ledger as never)
+env.OBINDEX = namespace(ObIndex as never) // the incident lever's day index and records (obindex.js)
 
 let ipN = 0
 const freshIp = () => `10.0.${Math.floor(++ipN / 250)}.${ipN % 250}`

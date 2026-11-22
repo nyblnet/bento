@@ -24,6 +24,7 @@ export const MAIL_KINDS = Object.freeze({
   reset: 'never', // a reset link, and a reset's own notices (roster.js)
   void: 'never', // what the void page did: cancelled, suspended and queued for removal, put back (roster.js)
   freeze: 'never', // a freeze (not built)
+  incident: 'never', // what the incident lever did on the account, with its revert links (lever.js)
 })
 
 /**
