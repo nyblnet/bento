@@ -40,7 +40,7 @@ export const MODEL_KEYS = {
     "sizing": ["h", "minH", "minW", "w"],
     "size": ["height", "width"],
     "meta": ["author", "company", "event", "keywords", "subject"],
-    "theme": ["accent", "background", "chartPalette", "codePalette", "color", "fontFamily", "headingFamily", "palette", "table", "tokens"],
+    "theme": ["accent", "background", "chartPalette", "codeFontFamily", "codePalette", "color", "fontFamily", "headingFamily", "palette", "table", "tokens"],
     "themePalette": ["accent2", "accent3", "accent4", "accent5", "accent6", "bg2", "folHlink", "hlink", "tx2"],
     "themeCodePalette": ["a", "c", "d", "f", "k", "n", "p", "s"],
     "themeTokens": ["mode", "modes", "set"],

@@ -735,3 +735,11 @@ runs:
       # fails on any key missing from a core catalog.
       shell: bento-step {0}
       run: node scripts/test-slides-i18n-literals.mjs
+    - name: Code font rig
+      # theme.codeFontFamily: a code element draws in its own font, else the
+      # deck's code font, else the body font; the code font meets the element
+      # font rule where it is drawn.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-slides-code-font.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-code-font.mjs"
+        node "$RUNNER_TEMP/test-slides-code-font.mjs"

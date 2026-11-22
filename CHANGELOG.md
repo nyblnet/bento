@@ -82,6 +82,10 @@ pre-1.0.
   browser where ⌘S downloads a copy, opening that copy could offer to restore
   changes it already held. It now opens quietly. Thanks to dannyward630 for the
   fix (#895).
+- **A deck-wide font for code.** A deck can name the font its code blocks use
+  (`theme.codeFontFamily`), so an embedded code font applies to every code
+  block that does not pick its own. New decks use a monospace font; older
+  versions draw those blocks in the deck's body font. Thanks to tikurahul.
 
 ## [1.2.13] — 2026-11-09
 

@@ -3569,6 +3569,11 @@
             "description": "series colour"
           }
         },
+        "codeFontFamily": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "CSS font-family stack for code blocks; absent = fontFamily"
+        },
         "codePalette": {
           "type": "object",
           "properties": {
