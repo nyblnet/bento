@@ -929,6 +929,7 @@ export const it: Catalog = {
   "Remove stroke": "Rimuovi tratto",
   "Rename": "Rinomina",
   "Show speaker notes": "Mostra note del relatore",
+  "This slide has notes": "Questa diapositiva ha delle note",
   "This variant shares no elements with its main slide — nothing to update.": "Questa variante non condivide elementi con la sua diapositiva principale — niente da aggiornare.",
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "Quale riquadro del layout della diapositiva è questo. Se passi la diapositiva a un altro layout, il contenuto si sposta nel riquadro del nuovo layout con lo stesso ruolo, come un segnaposto in PowerPoint.",
   "Pie": "Torta",

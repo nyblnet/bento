@@ -41,6 +41,8 @@ export const ICONS = {
   pdf: svg('<polyline points="6 9 6 3 18 3 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>'),
   sync: svg('<path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/>'),
   window: svg('<rect x="3" y="5" width="18" height="14" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/>'),
+  /** speaker notes: a note with its corner turned up and two lines written on it */
+  notes: svg('<path d="M5 3h14a2 2 0 0 1 2 2v9l-7 7H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M21 14h-5a2 2 0 0 0-2 2v5"/><line x1="7.5" y1="8" x2="16.5" y2="8"/><line x1="7.5" y1="12" x2="12" y2="12"/>'),
   presenter: svg('<rect x="3" y="4" width="18" height="14" rx="2"/><line x1="14" y1="4" x2="14" y2="18"/><line x1="16.5" y1="8" x2="18.5" y2="8"/><line x1="16.5" y1="11" x2="18.5" y2="11"/><line x1="16.5" y1="14" x2="18" y2="14"/><line x1="9" y1="21" x2="15" y2="21"/>'),
   curve: svg('<path d="M3 18 C 7 6, 17 6, 21 18"/>'),
   connector: svg('<circle cx="5" cy="19" r="2.4"/><circle cx="19" cy="5" r="2.4"/><path d="M7 17 L 17 7"/>'),

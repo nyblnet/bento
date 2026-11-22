@@ -45,6 +45,8 @@ try {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
   await ctx.addInitScript(() => {
     try { localStorage.setItem('bento-slideshow-started', '1') } catch {}
+    // the notes pane starts folded; open, so the toast check below has a pane to clear
+    try { localStorage.setItem('bento-notes-open', '1') } catch {}
     // the editor's copies, observed without clipboard permissions
     window.__clips = []
     const clip = navigator.clipboard ?? {}
