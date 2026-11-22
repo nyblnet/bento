@@ -97,7 +97,7 @@ const MUTANTS = [
     expect: 'esbuild missing: refused, nothing signed' },
   { name: 'any-key-production', file: R, from: '  if (!same && !dev) {', to: '  if (false) {',
     expect: 'not the release key, without --home-web-dev' },
-  { name: 'stray-flags-ignored', file: R, from: "    if (frameOrigin || dev || outArg || first) throw", to: '    if (false) throw',
+  { name: 'stray-flags-ignored', file: R, from: "    if (frameOrigin || dev || outArg || first || identity) throw", to: '    if (false) throw',
     expect: '--frame-origin without --home-web' },
   { name: 'unpublished-skipped', file: R, from: '    if (!existsSync(history)) throw new Error(', to: '    if (!existsSync(history)) continue; (',
     expect: 'a published app without a history: refused' },
