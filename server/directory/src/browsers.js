@@ -31,12 +31,12 @@
 //     48-byte user handle (the account's storage name). Nothing is logged,
 //     mailed or changed but the passkey's signature counter.
 //   POST /v1/web/signout/challenge {address} → 200 {nonce, at}; 404 no account
-//   POST /v1/web/signout {text, assertion}: text = wout.<b64u(address)>.<at>.<nonce>
-//     → 200 {ok, at, signedAt}. Both answer 501 until the kernel defines that
-//     statement (the layout here is the sign-in host's provisional one); the
-//     sign-out route still runs every check first. It signs every browser out
-//     as of the moment it is ACCEPTED (`at`), not the time in the signed text
-//     (`signedAt`), so a sign-in that finished between the two is caught too.
+//   POST /v1/web/signout {text, assertion}: text = the kernel's
+//     wout.<b64u(address)>.<at>.<nonce> (kernel/src/roster.ts buildWout)
+//     → 200 {ok, at, signedAt}; 429 past the account's sign-outs for the day.
+//     It signs every browser out as of the moment it is ACCEPTED (`at`), not
+//     the time in the signed text (`signedAt`), so a sign-in that finished
+//     between the two is caught too.
 //   A sign-in challenge has no account when it is issued, so it is spent in
 //   the object of the account the passkey's user handle names: once per
 //   account, not once for everyone (an assertion verifies only under its own
@@ -80,8 +80,11 @@
 // - Revoking (sign out everywhere in browsers; the incident lever) marks
 //   every certificate the address holds: its renewals are refused at once, and
 //   a peer stops accepting its last countersign when that expires (24 hours at
-//   most). The request a member signs for it is a kernel layout, not defined
-//   yet, so no route reaches it today.
+//   most). A member's sign-out (wout.) is mailed to the address naming that
+//   member's passkey, and at most `signoutsPerDay` are accepted per account in
+//   any `signoutWindowMs`, whoever signs them and from wherever (security's
+//   D-W2 on #962): a stolen member key cannot keep every browser signed out
+//   until it is removed. The incident lever is not counted.
 // - `incidents` is every published incident record [{id, from, to}] (the
 //   directory's clock, ms; `to` null while open), from the INCIDENTS variable.
 //   A list that does not read is an error: nothing is countersigned under it.
@@ -113,14 +116,15 @@ export const BROWSER_LIMITS = Object.freeze({
   sweep: 128,
   /** the most incident records the directory publishes */
   incidentsMax: 256,
+  /** a member's sign-outs accepted per account in any window, across every member and IP (security's D-W2 on #962) */
+  signoutsPerDay: 3,
+  signoutWindowMs: DAY,
 })
 
 /** The audiences a browser challenge is sealed for: an enrolment, a renewal, a retirement (retire.js). */
 const AUDIENCES = Object.freeze(['web', 'home', 'retire'])
 /** The sign-in host's own challenges: a passkey sign-in (no account yet: sealed for everyone) and a sign-out (sealed for the address). 5 minutes, like a roster challenge. */
 const SIGNIN_SCOPE = 'signin'
-/** The sign-out statement is the kernel's to define; until it does, the route refuses at the last step. */
-const WOUT_DEFINED = false
 
 /** The origin a browser route answers CORS to, or null for a route of anyone's. */
 export function browserOrigin(path) {
@@ -220,8 +224,6 @@ export async function browserRoute(req, env, ip, p, k) {
     if (!(await ledger(ip, 'lookup'))) return json(429, { error: 'rate-limited' })
     const r = await roster(email, 'browserHead', {})
     if (r.status !== 200) return json(r.status, r.body)
-    // until the statement exists, refuse here, before the sign-in host asks for a passkey for nothing (security's W3 on #953)
-    if (!WOUT_DEFINED) return json(501, { error: 'not-implemented', reason: 'the kernel sign-out statement is not defined yet' })
     const at = Date.now()
     return json(200, { nonce: await issueChallenge(env.CHALLENGE_KEY, 'signout', await addressKey(email), at), at })
   }
@@ -554,7 +556,10 @@ export async function browserOp(obj, a, now, h) {
     })
     if (!v.ok) return out(400, { error: `assertion-${v.reason}` })
     if (!(await storeCount(s, who.pub, who.rec.signCount, v.value.signCount))) return out(400, { error: 'assertion-sign-count' })
-    if (!WOUT_DEFINED) return out(501, { error: 'not-implemented', reason: 'the kernel sign-out statement is not defined yet' })
+    // a few per account a day, whoever signs and from wherever: counted only once a member's assertion verified
+    const recent = ((await s.get('signouts')) ?? []).filter((t) => Number.isSafeInteger(t) && t > now - BROWSER_LIMITS.signoutWindowMs)
+    if (recent.length >= BROWSER_LIMITS.signoutsPerDay) return out(429, { error: 'rate-limited' })
+    await s.put('signouts', [...recent, now])
     await signOutAll(obj, head, { signedAt: a.at, now, by: who.pub, origin: h.origin, co: SIGNIN_ORIGIN }, h)
     return out(200, { ok: true, at: now, signedAt: a.at })
   }

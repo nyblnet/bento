@@ -97,9 +97,9 @@ The rules (`public/account-client.js`; each has a rig row and a mutant):
 
 `public/account-client.js` is the pages' seam. The routes the directory has
 are used as they are: `/v1/roster/setup/start`, `/v1/roster/reset/start`,
-`/v1/roster/challenge`, `/v1/roster/setup` and `/v1/roster/reset`. Four
-routes do **not exist yet**, and `scripts/lib/id-signin-directory-stub.mjs`
-is their contract, check by check, which the rigs run against:
+`/v1/roster/challenge`, `/v1/roster/setup` and `/v1/roster/reset`, and the
+four below, whose contract, check by check, is
+`scripts/lib/id-signin-directory-stub.mjs`, which the rigs run against:
 
 | route | request | answer |
 |---|---|---|
@@ -108,10 +108,13 @@ is their contract, check by check, which the rigs run against:
 | `POST /v1/web/signout/challenge` | `{address}` | `{nonce, at}`, audience `signout`, bound to that account |
 | `POST /v1/web/signout` | `{text, assertion}` | `{ok: true, at}`; every browser certificate of the account is revoked |
 
-The `wout.` text (`wout.<b64u(address)>.<at>.<nonce>`) is **provisional**:
-the kernel defines the layout, and until it does the directory answers 501 at
-`/v1/web/signout/challenge`, before any passkey prompt; the page then says
-signing every browser out is not available yet.
+The `wout.` text (`wout.<b64u(address)>.<at>.<nonce>`) is the kernel's
+layout (`kernel/src/roster.ts` `buildWout`). The directory accepts at most a
+few sign-outs per account a day, across every member and IP (security's D-W2
+on #962), and answers 429 `rate-limited` past that. A directory that cannot
+sign browsers out answers 501 at `/v1/web/signout/challenge`, before any
+passkey prompt; the page then says signing every browser out is not
+available yet.
 
 ## Phone approves this browser (route D): designed, not built
 

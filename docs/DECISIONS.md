@@ -15384,3 +15384,29 @@ living to the 7-day cap.
   sign-out exactly as fast. A check-in answered 403 `retired` ends the
   sign-in like a revocation, over the record it was made from, so another
   tab's newer sign-in stands.
+
+## 2026-11-22 — bento/id: sign out everywhere is accepted, at most three a day per account
+
+The directory's `/v1/web/signout` routes no longer answer 501: the kernel's
+`wout.` (`kernel/src/roster.ts` `buildWout`) is the text a member's passkey
+signs, and the directory's own checks (spent first, `at` equal to the
+challenge's, an unquarantined passkey member, the assertion over the exact
+text with its stored counter swapped in one step) match the kernel's
+`verifyWout` row for row. The directory keeps its own pk path rather than
+calling `verifyWout`, because it needs the assertion's counter for that
+swap and spends the challenge earlier, in the address's object.
+
+Security's D-W2 on #962, both halves:
+- **The mail names the signer.** The notice to the address carries the
+  fingerprint of the passkey that signed, so the owner can tell which member
+  key to remove.
+- **Three accepted sign-outs per account in any 24 hours**, whoever signs
+  them and from whichever IP, counted in the account's own object once a
+  member's assertion has verified. Past that, 429 `rate-limited`, and nothing
+  is revoked, logged or mailed. Without it, a stolen member key could keep
+  every browser signed out on a loop until it is removed, which takes at
+  least 72 hours. Removing the key is the cure; the roster change is not
+  held up by the limit. The incident lever is not counted.
+
+The sign-in host's `wout.` text was always these bytes; only its
+"provisional" wording goes.

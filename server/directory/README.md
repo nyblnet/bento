@@ -260,8 +260,8 @@ Bodies are JSON, sent as text/plain.
 | `POST /v1/home/retire` `{wret, sig}` (20 an hour per IP per address, once the signature verifies and the challenge is the directory's) | the kernel's `wret.` WITHOUT a successor, signed by the browser key it retires. 200 `{ok, retiredAt}` (a key already retired: the first time, nothing new written); 400 `wret`, `successor`, `nonce`; 403 `unknown` |
 | `POST /v1/web/signin/challenge` `{}` (120 an hour per IP) | 200 `{nonce}`: a sign-in challenge, 5 minutes |
 | `POST /v1/web/signin` `{nonce, assertion}` (60 an hour per IP) | 200 `{address}`: the account a discoverable passkey belongs to, named by the first 32 bytes of its 48-byte user handle; 400 `nonce`, `assertion`, `assertion-<reason>`; 403 `not-member`, `quarantined`. Nothing is logged or mailed; the passkey's counter is stored |
-| `POST /v1/web/signout/challenge` `{address}` | 404 for an address with no account (a per-IP lookup); otherwise **501** until the kernel defines the statement, so the sign-in host never asks for a passkey for nothing. Then 200 `{nonce, at}` |
-| `POST /v1/web/signout` `{text, assertion}` (60 an hour per IP) | `text` is `wout.<b64u(address)>.<at>.<nonce>` (the sign-in host's provisional layout). 400 `text`, `nonce` (spent first; `at` must be the challenge's), `assertion`, `assertion-<reason>`; 403 `not-member`, `quarantined`; then **501** until the kernel defines the statement; then 200 `{ok, at, signedAt}` |
+| `POST /v1/web/signout/challenge` `{address}` | 200 `{nonce, at}`; 404 for an address with no account (a per-IP lookup) |
+| `POST /v1/web/signout` `{text, assertion}` (60 an hour per IP; 3 accepted a day per account) | `text` is the kernel's `wout.<b64u(address)>.<at>.<nonce>`. 400 `text`, `nonce` (spent first; `at` must be the challenge's), `assertion`, `assertion-<reason>`; 403 `not-member`, `quarantined`; 429 `rate-limited` past the account's sign-outs for the day; 200 `{ok, at, signedAt}` |
 | `GET /v1/device/status?e=<address>&c=<sha256 of the certificate>` (CORS `*`) | 200 `{state: ok \| revoked \| retired \| cap \| unknown, incidents}` |
 
 - A browser challenge is sealed for its audience (enrolment, renewal or
@@ -320,14 +320,17 @@ Bodies are JSON, sent as text/plain.
   `revoked` at once), and a ceremony whose challenge was issued by then
   cannot finish. A countersign already issued stays valid at peers that do
   not check the status route, for up to 24 hours. It is logged
-  (`signout-all`) and mailed to the address (roster mail, never held back).
-  The route runs every check and then answers 501 until the kernel defines
-  what the passkey signs.
+  (`signout-all`) and mailed to the address naming the passkey that signed
+  (roster mail, never held back). At most 3 are accepted per account in any
+  24 hours, whoever signs them and from whichever IP (security's D-W2 on
+  #962): a stolen member key could otherwise keep every browser signed out
+  until it is removed. A refused one revokes and logs nothing; the incident
+  lever is not counted.
 - A sign-in challenge is spent in the object of the account the passkey's
   user handle names (once per account); a handle naming no account is
   refused before anything is written. A passkey's signature counter is
   stored only over the value its assertion was checked against.
-- Not here yet: the sign-out statement itself (a kernel layout), a `dev2.`
+- Not here yet: a `dev2.`
   made by a passkey alone, a retirement inside a new ceremony's own request
   (bento/home retires the old key by its own request instead), and mail for
   a new browser.

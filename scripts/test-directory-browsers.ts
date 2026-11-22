@@ -45,7 +45,7 @@ import { REQUESTERS } from '../server/directory/src/roster.js'
 import { BROWSER_LIMITS } from '../server/directory/src/browsers.js'
 import { HOME_ROUTES, WEB_ROUTES, STATUS_ROUTE } from '../server/directory/src/seam.js'
 import { b64uDec, b64uEnc, sha256b64u, signStatement } from '../kernel/src/statements.ts'
-import { buildRos, parseRos, verifyRosterChain, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, ROSTER_WAIT_MS, type Member, type RosterLink } from '../kernel/src/roster.ts'
+import { buildRos, buildWout, parseRos, verifyRosterChain, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, ROSTER_WAIT_MS, type Member, type RosterLink } from '../kernel/src/roster.ts'
 import { buildDeviceCert, buildWren, buildWret, parseWatt, verifyDevice, CEREMONY_CAP_MS, WATT_MAX_MS } from '../kernel/src/devices.ts'
 import { AsyncLocalStorage } from 'node:async_hooks'
 const { LIMITS } = workerModule
@@ -726,9 +726,10 @@ async function signin(a: Authn, address: string, o: GetOpts & { nonce?: string; 
   const as = await assertRaw(a, o.over ?? b64uDec(nonce ?? '') ?? new Uint8Array(16), { ...o, handle: o.handle === undefined ? await handleFor(address) : o.handle })
   return { ...(await raw('POST', WEB_ROUTES.signin, JSON.stringify({ nonce, assertion: as }), S)), nonce }
 }
-/** The route answers 501 until the kernel's statement exists, so the rows mint the challenge it would issue. */
+/** A sign-out challenge as the route issues it, minted directly (no per-IP lookup spent): the rows that need many. */
 const mintSignout = async (address: string) => ({ nonce: await issueChallenge(env.CHALLENGE_KEY as string, 'signout', await addressKey(address), now), at: now })
-const woutText = (address: string, at: number, nonce: string) => ['wout', b64uEnc(te.encode(address)), String(at), nonce].join('.')
+/** The kernel's own builder: the directory must take its bytes exactly. */
+const woutText = (address: string, at: number, nonce: string) => buildWout({ address, at, dirNonce: nonce })
 async function signout(a: Authn, address: string, o: GetOpts & { ch?: { nonce: string; at: number }; text?: string; signText?: string } = {}) {
   const ch = o.ch ?? await mintSignout(address)
   const text = o.text ?? woutText(address, ch.at, ch.nonce)
@@ -789,9 +790,9 @@ async function signout(a: Authn, address: string, o: GetOpts & { ch?: { nonce: s
   ok(uv.status === 400 && uv.j.error === 'assertion-uv', `no user verification → 400 assertion-uv (${err(uv)})`)
   ok(mailbox.length === m0 && (await logOf(hal)).length === l0, 'signing in logged and mailed nothing')
 
-  // sign out everywhere: every check runs, then 501 until the kernel defines the statement
+  // sign out everywhere (the kernel's wout.)
   const sc = await raw('POST', WEB_ROUTES.signoutChallenge, JSON.stringify({ address: hal }), S)
-  ok(sc.status === 501 && sc.j.error === 'not-implemented', `sign-out challenge → 501 until the kernel defines the statement, before any passkey prompt (${err(sc)})`)
+  ok(sc.status === 200 && typeof sc.j.nonce === 'string' && sc.j.at === now && Object.keys(sc.j).length === 2, `sign-out challenge → 200 {nonce, at} (${err(sc)})`)
   ok((await raw('POST', WEB_ROUTES.signoutChallenge, JSON.stringify({ address: 'nobody@example.com' }), S)).status === 404, 'sign-out challenge for no account → 404')
   {
     const ip = freshIp()
@@ -799,9 +800,18 @@ async function signout(a: Authn, address: string, o: GetOpts & { ch?: { nonce: s
     ok((await raw('POST', WEB_ROUTES.signoutChallenge, JSON.stringify({ address: hal }), S, ip)).status === 429, 'the sign-out challenge spends the per-IP lookup budget')
   }
   H2.count = 1
-  const s1 = await signout(H2, hal, { count: 1 })
-  ok(s1.status === 501 && s1.j.error === 'not-implemented', `a sign-out that passes every check → 501 until the kernel defines its statement (${err(s1)})`)
-  ok((await checkin(hal, HB)).status === 200 && !(await storeOf(hal)).has('signoutAt'), 'and nothing was revoked')
+  ok((await checkin(hal, HB)).status === 200, 'control: the browser renews before the sign-out')
+  const hm0 = mailbox.length
+  now += 1000
+  const s1 = await signout(H2, hal, { ch: { nonce: sc.j.nonce as string, at: sc.j.at as number }, count: 1 })
+  ok(s1.status === 200 && s1.j.ok === true && s1.j.at === now && s1.j.signedAt === sc.j.at, `a member's wout. over the route's challenge → 200 {ok, at: accepted now, signedAt: the text's} (${err(s1)})`)
+  const hc = await checkin(hal, HB)
+  ok(hc.status === 403 && hc.j.error === 'revoked' && (await storeOf(hal)).get('signoutAt') === now, `every browser is then signed out: its renewal → 403 revoked (${err(hc)})`)
+  const hmail = mailbox.slice(hm0).filter((m) => m.to === hal)
+  ok(hmail.length === 1 && hmail[0].body.includes(await fingerprintOf(H2.pub)) && !hmail[0].body.includes(await fingerprintOf(H1.pub)),
+    `the address is mailed once, naming the passkey that signed (security's D-W2 on #962) (${hmail.length})`)
+  const hlog = (await logOf(hal)).filter((x) => x.k === 'signout-all').pop()
+  ok(hlog?.by === H2.pub && hlog.signedAt === sc.j.at && hlog.at === now, 'logged: by that passkey, signed at, accepted at')
   ok(((await storeOf(hal)).get(`pk:${H2.pub}`) as { signCount?: number } | undefined)?.signCount === 1, 'its passkey\'s counter is stored')
   const r1 = await signout(H2, hal, { ch: s1.ch, count: 2 })
   ok(r1.status === 400 && r1.j.error === 'nonce', `the same challenge again → 400 nonce (${err(r1)})`)
@@ -817,7 +827,8 @@ async function signout(a: Authn, address: string, o: GetOpts & { ch?: { nonce: s
   const r5 = await signout(H2, hal, { ch: { nonce: sn, at: now }, count: 6 })
   ok(r5.status === 400 && r5.j.error === 'nonce', `a sign-in challenge in a sign-out → 400 nonce (${err(r5)})`)
   for (const [what, t] of [['three fields', `wout.${b64uEnc(te.encode(hal))}.${now}`], ['a time with a leading zero', `wout.${b64uEnc(te.encode(hal))}.0${now}.x`],
-    ['an address not in normal form', woutText('Hal@Example.com', now, 'x')], ['another prefix', `wdev.${b64uEnc(te.encode(hal))}.${now}.x`]] as const) {
+    ['an address not in normal form', ['wout', b64uEnc(te.encode('Hal@Example.com')), now, 'x'].join('.')], ['another prefix', `wdev.${b64uEnc(te.encode(hal))}.${now}.x`],
+    ['five fields', `${woutText(hal, now, 'x')}.y`]] as const) {
     const r = await raw('POST', WEB_ROUTES.signout, JSON.stringify({ text: t, assertion: {} }), S)
     ok(r.status === 400 && r.j.error === 'text', `a sign-out text with ${what} → 400 text (${err(r)})`)
   }
@@ -831,7 +842,7 @@ async function signout(a: Authn, address: string, o: GetOpts & { ch?: { nonce: s
   const q2 = await signin(H2, hal, { count: 9 })
   await plant(hal, (st) => { const x = st.get('head') as Record<string, unknown>; st.set('head', { ...x, members: hd.members }) })
   ok(q1.status === 403 && q1.j.error === 'quarantined' && q2.status === 403 && q2.j.error === 'quarantined', `a suspended passkey: sign-out and sign-in → 403 quarantined (${err(q1)}, ${err(q2)})`)
-  ok((await signout(H2, hal, { count: 10 })).status === 501, 'control: put back, it reaches the last step again')
+  ok((await signout(H2, hal, { count: 10 })).status === 200, 'control: put back, it signs out again')
   ok((await raw('POST', WEB_ROUTES.signout, JSON.stringify({ text: woutText(hal, now, 'x'), assertion: {} }), H)).j.error === 'origin', 'a sign-out from bento/home → 403 origin')
 
   // D1: each purpose's challenge is refused at every other door
@@ -882,6 +893,38 @@ async function signout(a: Authn, address: string, o: GetOpts & { ch?: { nonce: s
     ok(race.status === 400 && race.j.error === 'assertion-sign-count', `another assertion with the same counter landing while this one is checked → 400 assertion-sign-count (${err(race)})`)
     ok((await signin(H1, hal, { count: 31 })).status === 200, 'control: the next counter signs in')
   }
+}
+
+// D-W2 on #962: a few sign-outs per account a day, whoever signs and from wherever
+{
+  const sam = 'sam@example.com', M1 = await Authn.make(), M2 = await Authn.make()
+  await setup(sam, M1)
+  await request(sam, M1, { add: M2 })
+  now += ROSTER_WAIT_MS
+  await chOf(sam) // ripen
+  const by = [M1, M2, M1, M2]
+  const st: string[] = []
+  for (let i = 0; i < by.length; i++) {
+    const c = await raw('POST', WEB_ROUTES.signoutChallenge, JSON.stringify({ address: sam }), S) // a fresh IP each time
+    st.push(err(await signout(by[i], sam, { ch: { nonce: c.j.nonce as string, at: c.j.at as number }, count: 100 + i })))
+    now += MIN
+  }
+  ok(BROWSER_LIMITS.signoutsPerDay === 3 && st.slice(0, 3).every((x) => x === '200 ') && st[3] === '429 rate-limited',
+    `sign-out #4 for one account in a day, by another member from another IP → 429 (${st.join(', ')})`)
+  ok((await logOf(sam)).filter((x) => x.k === 'signout-all').length === 3, 'the refused one revoked and logged nothing')
+  const SB = await Browser.make()
+  ok((await enrol(sam, SB, M1, { get: { count: 150 } })).status === 200 && (await checkin(sam, SB)).status === 200, 'a browser signed in after the last accepted sign-out renews')
+  const rm = await request(sam, M1, { remove: M2.pub, get: { count: 151 } })
+  ok(rm.status === 200 || rm.status === 202, `the owner's roster change in that window is accepted (${rm.status})`)
+  // another account is not affected
+  const una = 'una@example.com', U1 = await Authn.make()
+  await setup(una, U1)
+  const uc = await raw('POST', WEB_ROUTES.signoutChallenge, JSON.stringify({ address: una }), S)
+  ok((await signout(U1, una, { ch: { nonce: uc.j.nonce as string, at: uc.j.at as number }, count: 1 })).status === 200, 'another account signs out as usual')
+  // the window rolls
+  now += BROWSER_LIMITS.signoutWindowMs
+  const c5 = await raw('POST', WEB_ROUTES.signoutChallenge, JSON.stringify({ address: sam }), S)
+  ok((await signout(M1, sam, { ch: { nonce: c5.j.nonce as string, at: c5.j.at as number }, count: 160 })).status === 200, 'a day later a sign-out is accepted again')
 }
 
 // D7: a passkey that a waiting reset would add cannot sign in
@@ -1059,7 +1102,7 @@ const statusOf = async (address: string, text: string) => (await api('GET', `${S
   const e4 = await enrol(rita, RB4, T1)
   ok((await retire(rita, RB4)).status === 200 && await statusOf(rita, e4.text) === 'retired', `a fresh browser retired: status retired (${err(e4)})`)
   const m0 = mailbox.length
-  await doOp(rita, 'browserRevokeAll', { by: T1.pub, os: S })
+  try { await doOp(rita, 'browserRevokeAll', { by: T1.pub, os: S }) } catch { /* the object threw: the rows below say so, the rig never crashes */ }
   ok(mailbox.length === m0 + 1, 'control: a sign-out everywhere at the same address does mail')
   const r4 = await checkin(rita, RB4)
   ok(r4.status === 403 && r4.j.error === 'revoked' && await statusOf(rita, e4.text) === 'revoked', `signed out AND retired: renewal and status read revoked (a real revocation is never masked) (${err(r4)})`)

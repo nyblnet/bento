@@ -20,11 +20,10 @@
 //   by the person, never because another page asked.
 // - No WebAuthn Signal API call, and no recovery code: the web never makes one.
 //
-// The routes the directory has today (`/v1/roster/*`, server/directory) are
-// used as they are. The `/v1/web/signin*` and `/v1/web/signout*` routes do not
-// exist in the directory yet; their contract is in
-// scripts/lib/id-signin-directory-stub.mjs, which the rigs run against, and the
-// `wout.` text below is PROVISIONAL until the kernel defines it.
+// The directory's routes (`/v1/roster/*`, `/v1/web/signin*`, `/v1/web/signout*`,
+// server/directory) are used as they are; their contract is in
+// scripts/lib/id-signin-directory-stub.mjs, which the rigs run against. The
+// `wout.` text below is the kernel's layout (kernel/src/roster.ts buildWout).
 
 import { DIRECTORY, b64u, challengeFor } from './directory-client.js'
 
@@ -47,7 +46,7 @@ export const ROUTES = Object.freeze({
   signinChallenge: '/v1/web/signin/challenge',
   /** POST {nonce, assertion} → 200 {address}: the account whose live passkey made the assertion. */
   signin: '/v1/web/signin',
-  /** POST {address} → 200 {nonce, at}: a challenge bound to that account; 501 until the directory can sign browsers out. */
+  /** POST {address} → 200 {nonce, at}: a challenge bound to that account (501 from a directory that cannot sign browsers out yet). */
   signoutChallenge: '/v1/web/signout/challenge',
   /** POST {text, assertion} → 200 {ok: true, at}: every browser key of the account is revoked. */
   signout: '/v1/web/signout',
@@ -186,9 +185,8 @@ export async function signInHere({ allow, expect } = {}) {
 }
 
 /**
- * The text a member's passkey signs to sign every browser out of the account.
- * PROVISIONAL layout, to be replaced by the kernel's: `wout.` is not reserved
- * in kernel/src/statements.ts yet, and the directory answers 501 until it is.
+ * The text a member's passkey signs to sign every browser out of the account:
+ * the kernel's `wout.` (kernel/src/roster.ts buildWout), byte for byte.
  */
 export function woutText({ address, at, nonce }) {
   return ['wout', b64u(new TextEncoder().encode(address)), String(at), nonce].join('.')
@@ -197,7 +195,7 @@ export function woutText({ address, at, nonce }) {
 /** Sign out everywhere: a member's assertion over `wout.` for the account this host is signed in to. */
 export async function signOutEverywhere(address) {
   const c = await post(ROUTES.signoutChallenge, { address })
-  // the directory answers 501 here, before any passkey prompt, until it can sign browsers out
+  // a directory that cannot sign browsers out yet answers 501 here, before any passkey prompt
   if (c.status === 501) throw new Refused('not-implemented')
   const { nonce, at } = c.body
   if (c.status !== 200 || typeof nonce !== 'string' || !SEALED.test(nonce) || !Number.isSafeInteger(at) || at <= 0) {
