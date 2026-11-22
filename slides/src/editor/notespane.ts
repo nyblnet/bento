@@ -5,7 +5,15 @@
 // which only shows when NOTHING is selected: while you worked on an element,
 // the notes for the slide you were looking at were nowhere on screen.
 //
-// The pane follows the current slide, and folds to its header (remembered).
+// The pane follows the current slide, and folds away entirely (remembered):
+// folded, it takes no height at all. It starts folded until the viewer opens
+// it — the canvas comes first.
+//
+// One control shows and hides it, and it never moves: a round toggle at the
+// head of the canvas's bottom-end cluster, beside Slideshow and zoom — where
+// PowerPoint keeps its Notes button. It costs one 32px circle in a row that
+// already exists, on a phone as on a desktop. A dot on it says the slide in
+// front of you HAS notes, which the folded pane could not.
 // Editing matches the field it replaced: typing is one undo burst, closed by
 // `change`; the slide is the one that was current when typing began, so a
 // slide switch mid-edit cannot write the text onto the next slide.
@@ -15,9 +23,13 @@ import { t } from '../i18n'
 import { lsGet, lsSet } from '../../../kernel/src/storage.ts'
 import { isMacOS } from '../screens'
 
-export function mountNotesPane(store: Store, into: HTMLElement, signal: AbortSignal) {
+export function mountNotesPane(store: Store, into: HTMLElement, cluster: HTMLElement, signal: AbortSignal) {
   const pane = document.createElement('section')
   pane.className = 'ed-notespane'
+  pane.id = 'ed-notespane'
+  // head + text, in one row the fold collapses to nothing
+  const body = document.createElement('div')
+  body.className = 'ed-notespane-body'
   const head = document.createElement('button')
   head.type = 'button'
   head.className = 'ed-section ed-sec-toggle ed-notespane-head' // the inspector's own section header
@@ -64,8 +76,22 @@ export function mountNotesPane(store: Store, into: HTMLElement, signal: AbortSig
   // the cap is half the window, so a window made shorter must not leave the
   // canvas squeezed to nothing under a pane sized for a taller one
   window.addEventListener('resize', () => setH(Number(lsGet('bento-notes-h')) || DEFAULT_H), { signal })
-  pane.append(grip, head, area)
-  into.appendChild(pane)
+  body.append(head, area)
+  pane.append(grip, body)
+  into.append(pane)
+  // the toggle, first in the cluster. Its name is the pane's; what a press
+  // does is the tooltip; that the slide has notes is its description.
+  const btn = document.createElement('button')
+  btn.type = 'button'
+  btn.className = 'ed-btn ed-notes-btn'
+  btn.innerHTML = ICONS.notes
+  btn.setAttribute('aria-label', t('Speaker notes'))
+  btn.setAttribute('aria-controls', pane.id)
+  const has = document.createElement('span')
+  has.className = 'ed-sr-only'
+  has.id = 'ed-notes-has'
+  btn.setAttribute('aria-describedby', has.id)
+  cluster.prepend(btn, has)
   // the fold animates only once the pane has painted at its saved height —
   // otherwise every load would grow the notes up from nothing
   requestAnimationFrame(() => requestAnimationFrame(() => pane.classList.add('ed-anim')))
@@ -74,20 +100,31 @@ export function mountNotesPane(store: Store, into: HTMLElement, signal: AbortSig
     pane.classList.toggle('closed', !open)
     head.classList.toggle('closed', !open)
     head.setAttribute('aria-expanded', String(open))
+    btn.setAttribute('aria-expanded', String(open))
     if (!toggle.firstElementChild) toggle.innerHTML = ICONS.chevron
     toggle.dataset.dir = open ? 'down' : 'up' // down folds, up opens
     toggle.title = open ? t('Hide speaker notes') : t('Show speaker notes')
+    hint()
   }
-  // Open by default where there is room; on a phone or a short window the
-  // canvas comes first (the 700px drawer breakpoint), until the author opens it.
-  const saved = lsGet('bento-notes-open')
-  setOpen(saved ? saved !== '0' : window.innerWidth > 700 && window.innerHeight > 600)
+  // the dot's meaning rides in the tooltip, for whoever wonders what it is
+  const hint = () => {
+    const open = !pane.classList.contains('closed')
+    btn.title = (open ? t('Hide speaker notes') : t('Show speaker notes')) + (has.textContent ? ' · ' + has.textContent : '')
+  }
+  // Folded until the viewer opens it, at every window size; their choice is
+  // then remembered per viewer (never in the document).
+  setOpen(lsGet('bento-notes-open') === '1')
   const flip = () => {
     const open = pane.classList.contains('closed')
     setOpen(open)
     lsSet('bento-notes-open', open ? '1' : '0')
   }
   head.addEventListener('click', flip)
+  btn.addEventListener('click', () => {
+    flip()
+    // opened from the keyboard, the caret goes where the typing will
+    if (!pane.classList.contains('closed') && btn.matches(':focus-visible')) area.focus({ preventScroll: true })
+  })
   // the side panels' chevron, laid on its side: one click folds the pane
   toggle.addEventListener('click', (ev) => { ev.stopPropagation(); flip() })
   toggle.addEventListener('pointerdown', (ev) => ev.stopPropagation()) // a click, not a drag
@@ -107,6 +144,12 @@ export function mountNotesPane(store: Store, into: HTMLElement, signal: AbortSig
   // Follow the slide, and remote edits — but never under a caret.
   const sync = () => {
     area.readOnly = store.readOnly
+    const noted = !!(store.slide?.notes ?? '').trim()
+    if (noted !== btn.classList.contains('ed-has-notes')) {
+      btn.classList.toggle('ed-has-notes', noted)
+      has.textContent = noted ? t('This slide has notes') : ''
+      hint()
+    }
     if (document.activeElement === area) return
     const v = store.slide?.notes ?? ''
     if (area.value !== v) area.value = v
