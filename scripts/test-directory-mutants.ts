@@ -498,7 +498,7 @@ const MUTANTS: Mutant[] = [
     from: "      const parked = p && p.kind === 'reset' && p.parked && typeof p.parked.voidTok === 'string' && same(p.parked.voidTok, th) ? p.parked : null",
     to: '      const parked = null' },
   { name: 'C3: the reset not asked again after an undo', file: 'roster.js',
-    from: "          await s.put('pend', { ...reset, ros, hash: await sha256b64u(ros), requestedAt: now, ripensAt: resetAt })",
+    from: "          await s.put('pend', { ...reset, ros, hash: await sha256b64u(ros), requestedAt: now, ripensAt: resetAt, firstRequestedAt: p.firstRequestedAt ?? p.requestedAt })",
     to: "          await s.put('pend', reset)" },
   { name: 'C3: a stopped reset drops the set-aside removal', file: 'roster.js',
     from: "        if (back) {\n          await s.put('pend', back)\n          await this.schedule(back.ripensAt)\n        }\n", to: '' },
