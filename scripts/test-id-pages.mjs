@@ -85,7 +85,7 @@ for (const [what, re] of [
   ['the list is public', /This list is public/], ['setup by emailed link', /Setting up, by emailed link/], ['no typed codes', /never type or paste a code/],
   ['setup link lives 20 min / 24 h', /20 minutes, or for 24 hours/], ['tokens kept only as a hash', /only a one-way hash/],
   ['the roster in every mail', /Each of these emails lists every passkey/], ['the 72-hour wait', /72 hours after it is asked for/],
-  ['the void link\'s hash only while waiting', /keep only its hash, and keep it only while the change is waiting/],
+  ['the void link\'s hash: 31 days after the change ends', /keep its hash for 31 more days only so that a late click is told what happened/],
   ['the reset', /If you lose every passkey: the reset/], ['the reset link lives 24 h', /A reset link works for 24 hours/],
   ['the record of changes', /The record of changes/], ['the opener (ob) in the record', /which page asked the sign-in page to act/],
   ['the record kept for the life of the account', /How long:<\/b> for the life of the account/],
@@ -93,10 +93,15 @@ for (const [what, re] of [
   ['the sign-in host\'s storage', /<code>bento-id-account<\/code>/], ['no cookies on the sign-in host', /sets no cookies/],
   ['the yearly one-click', /once a year we will email you one link/], ['the admin flag', /administrators can ask us to check an address/],
   ['a lapse is only the label', /A lapse changes only the label/], ['"unconfirmed since"', /unconfirmed since/],
-  ['IP fingerprints gone a day and a minute after the day, at worst', /at the latest a day and a minute after it ends/], ['deletion is planned', /Planned<\/span> Deleting an account is not running yet/],
+  ['IP fingerprints gone a minute after the day', /and that day's secret are deleted a minute after the day ends \(UTC\)\. IP addresses/],
+  ['an expired setup link\'s hash goes at expiry', /The hash of a link that expired unused is deleted when it expires/],
+  ['an expired reset link\'s hash goes at expiry', /It is deleted when a reset starts, or when the link expires/],
+  ['the undo link\'s hash: the same keep', /kept the same way: while the removal waits, and for 31 days after/], ['deletion is planned', /Planned<\/span> Deleting an account is not running yet/],
   ['the notice links the deletion page', /href="\/id\/delete"/],
 ]) ok(re.test(P), `notice says: ${what}`)
 for (const [what, re] of [
+  ['an expired link kept until the next is asked for', /can stay until the next/], ['a purge a day late', /at the latest a day and a minute/],
+  ['the void link\'s hash only while waiting', /keep it only while the change is waiting/],
   ['lookups', /[Ll]ookups? match/], ['one-time codes', /one-time code/], ['the 13-month expiry', /13 months/],
   ['the recovery blob', /[Rr]ecovery data/], ['a tombstone', /tombstone/i], ['the `ever` key-hash', /\bever:/],
   ['a retained recovery verifier', /verifier/i], ['an account key', /account key/i], ['a code sent to the address', /code sent to/],
@@ -106,6 +111,22 @@ for (const [what, re] of [
   ['72 hours', /<b>72 hours<\/b>/], ['the stop link', /carries a link that stops it/], ['the notice', /href="\/id\/privacy"/],
 ]) ok(re.test(D), `deletion page says: ${what}`)
 ok(!/\/v1\//.test(D) && !/one-time code/.test(D), 'the deletion page names no directory route and no one-time code')
+
+// --- retention: every sentence matches the code it describes (a constant changed without the notice turns a row red) ---
+{
+  const { ROSTER_LIMITS } = await import('../server/directory/src/roster.js')
+  const workerSrc = readFileSync(join(root, 'server/directory/src/worker.js'), 'utf8')
+  const DAY = 86_400_000, MIN = 60_000
+  const days = (ms) => ms / DAY
+  ok(days(ROSTER_LIMITS.endedKeepMs) === 31 && /keep its hash for 31 more days/.test(P) && /for 31 days after/.test(P),
+    `the ended void link keep is the notice's 31 days (roster.js endedKeepMs = ${days(ROSTER_LIMITS.endedKeepMs)} d)`)
+  ok(days(ROSTER_LIMITS.setupTimesKeepMs) === 31 && /ten in 31 days/.test(P), `the setup send times are kept for the budget's window, the notice's 31 days (setupTimesKeepMs = ${days(ROSTER_LIMITS.setupTimesKeepMs)} d)`)
+  ok(ROSTER_LIMITS.setupTtlMs === 20 * MIN && ROSTER_LIMITS.setupBeyondTtlMs === DAY && /works for 20 minutes, or for 24 hours/.test(P), 'the setup link lives are the notice\'s 20 minutes and 24 hours')
+  ok(ROSTER_LIMITS.resetTtlMs === DAY && /A reset link works for 24 hours/.test(P), 'the reset link life is the notice\'s 24 hours')
+  ok(/const purgeAt = \(day\) => Date\.parse\(day\) \+ DAY \+ 60_000/.test(workerSrc) && /deleted a minute after the day ends/.test(P), 'the ledger purge is the notice\'s "a minute after the day ends" (worker.js purgeAt)')
+  ok(/await this\.schedule\(purgeAt\(day\)\)\n    \}/.test(workerSrc) && !/setAlarm\(Date\.parse\(day\)/.test(workerSrc), 'the ledger never pushes a pending purge later (schedule, not setAlarm), which the notice\'s single minute relies on')
+  ok(SRC.privacy.includes('__SETUP_TIMES_RETENTION__'), 'the setup-times sentence stays the maintainer\'s placeholder')
+}
 
 // --- the command line writes both pages, and never a preview into site/ ---
 const tmp = mkdtempSync(join(tmpdir(), 'id-pages-'))

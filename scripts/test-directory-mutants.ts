@@ -69,6 +69,29 @@ const MUTANTS: Mutant[] = [
     from: "    try {\n      return await route(req, env)\n    } catch (e) {\n      console.log(`directory error: ${e && e.message}`)\n      let path = ''\n      try { path = new URL(req.url).pathname } catch { /* the base headers */ }\n      return json(500, { error: 'internal' }, headersFor(path))\n    }",
     to: '    return await route(req, env)' },
 
+  // --- retention (the privacy notice's keeps): the Roster's purge, the Ledger's day salt ---
+  { name: 'R1: the alarm purges nothing', file: 'roster.js', from: '    const kept = await this.purge(now)\n    if (kept !== null) next.push(kept)\n', to: '' },
+  { name: 'R1: setup send times purged only by the budget (main before)', file: 'roster.js',
+    from: '    const oldest = await this.pruneSetupTimes(now)\n    if (oldest !== null) due.push(oldest + ROSTER_LIMITS.setupTimesKeepMs)\n', to: '' },
+  { name: 'R1: the send-time purge keeps twice the window', file: 'roster.js',
+    from: '    const left = times.filter((t) => now - t < ROSTER_LIMITS.setupTimesKeepMs)', to: '    const left = times.filter((t) => now - t < 2 * ROSTER_LIMITS.setupTimesKeepMs)' },
+  { name: 'R1: expired setup link hashes kept', file: 'roster.js', from: "    await keep('setupTok', (t) => t.exp > now, (t) => t.exp)\n", to: '' },
+  { name: 'R1: expired reset link hashes kept', file: 'roster.js', from: "    await keep('resetTok', (t) => t.exp > now, (t) => t.exp)\n", to: '' },
+  { name: 'R1: ended void links kept forever', file: 'roster.js',
+    from: "    await keep('ended', (e) => now - e.at < ROSTER_LIMITS.endedKeepMs, (e) => e.at + ROSTER_LIMITS.endedKeepMs)\n", to: '' },
+  { name: 'R1: an ended link still answers past its keep', file: 'roster.js',
+    from: 'same(x.h, th) && now - x.at < ROSTER_LIMITS.endedKeepMs', to: 'same(x.h, th)' },
+  { name: 'R1: a setup link\'s write does not bring its purge forward', file: 'roster.js',
+    from: "      await this.schedule(exp) // retention: an unused link's hash goes at its expiry\n", to: '' },
+  { name: 'R1: a reset link\'s write does not bring its purge forward', file: 'roster.js',
+    from: "      await this.schedule(rexp) // retention: an unused link's hash goes at its expiry\n", to: '' },
+  { name: 'R1: the budget\'s write pushes the alarm back (setAlarm for schedule)', file: 'roster.js',
+    from: '    await this.schedule((times[0] ?? now) + ROSTER_LIMITS.setupTimesKeepMs)', to: '    await this.state.storage.setAlarm((times[0] ?? now) + ROSTER_LIMITS.setupTimesKeepMs)' },
+  { name: 'R2: the Ledger\'s new salt pushes the purge back (main before)', file: 'worker.js',
+    from: '      await this.schedule(purgeAt(day))\n    }', to: '      await this.state.storage.setAlarm(purgeAt(day))\n    }' },
+  { name: 'R2: the Ledger\'s purge does not re-arm for the day it keeps', file: 'worker.js',
+    from: '    for (const day of held) await this.schedule(purgeAt(day))\n', to: '' },
+
   // --- SD3: browser certificates (browsers.js; rows in test-directory-browsers.ts) ---
   { name: 'SD3 challenge: a browser challenge lives 5 minutes', file: 'browsers.js', from: '  challengeTtlMs: 60_000,', to: '  challengeTtlMs: 5 * 60_000,' },
   { name: 'SD3 challenge: the ttl argument ignored', file: 'challenge.js', from: 'now - issued > ttl) return null', to: 'now - issued > CHALLENGE_TTL_MS) return null' },
@@ -545,7 +568,7 @@ const args = process.argv.slice(2)
 const si = args.indexOf('--shard')
 const shard = si >= 0 ? /^([1-9][0-9]*)\/([1-9][0-9]*)$/.exec(args[si + 1] ?? '') : null
 if (si >= 0 && (!shard || Number(shard[1]) > Number(shard[2]))) { console.log(`--shard wants k/n with 1 <= k <= n, not ${args[si + 1]}`); process.exit(1) }
-const only = args.filter((a, i) => i !== si && i !== si + 1)[0]
+const only = args.filter((a, i) => si < 0 || (i !== si && i !== si + 1))[0] // without --shard, si + 1 is 0: never drop the name
 const named = only ? MUTANTS.filter((m) => m.name.includes(only)) : MUTANTS
 const chosen = shard ? named.filter((_, i) => i % Number(shard[2]) === Number(shard[1]) - 1) : named
 console.log(`\n${chosen.length} mutants${shard ? ` (shard ${shard[1]} of ${shard[2]}, of ${named.length})` : ''}: every one must fail a row`)

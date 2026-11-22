@@ -90,9 +90,9 @@ usual limit (below). It stops working once it is used. The hashes go when
 the account is set up.</li>
 <li>Anyone can ask for a setup link for any address, but it always goes to
 that address, and only up to one a minute, three a day and ten in 31 days.
-To apply these limits we keep the times the last setup links were sent to
-an address, and the hashes of links that expired unused, even when no
-account was ever made: __SETUP_TIMES_RETENTION__</li>
+To apply these limits we keep the times setup links were sent to an
+address, even when no account was ever made: __SETUP_TIMES_RETENTION__
+The hash of a link that expired unused is deleted when it expires.</li>
 </ul>
 
 <h2>The email we send you</h2>
@@ -114,14 +114,16 @@ with two choices. <b>Cancel this change</b> is always available. The second,
 when another passkey would remain. A passkey removing itself takes effect at
 once, as long as another passkey remains.</p>
 <ul>
-<li>The secret in that link is like the setup link's. We keep only its hash,
-and keep it only while the change is waiting. It is deleted when the change
-takes effect or is stopped.</li>
+<li>The secret in that link is like the setup link's. We keep only its hash.
+Once the change takes effect or is stopped, the link no longer works, and we
+keep its hash for 31 more days only so that a late click is told what
+happened (too late, or already used). Then the hash is deleted.</li>
 <li>If you cancel, the passkey that asked cannot ask for another change for
 72 hours. We keep that end time with the passkey.</li>
 <li>If you remove the passkey that asked, it is suspended at once. It is
 removed 72 hours later. The email that tells you so carries a link that puts
-it back. That link's hash is kept only until the removal takes effect.</li>
+it back. That link's hash is kept the same way: while the removal waits,
+and for 31 days after.</li>
 </ul>
 
 <h2>If you lose every passkey: the reset</h2>
@@ -135,8 +137,8 @@ the account's passkeys will also be able to stop it.
 <span class="planned">Planned</span> Stopping a reset with a passkey is not
 running yet.</p>
 <p>A reset link works for 24 hours, and one is sent at most while no other
-is live. We keep only its hash. It is deleted when a reset starts. An
-expired one can stay until the next reset link is asked for.</p>
+is live. We keep only its hash. It is deleted when a reset starts, or when
+the link expires.</p>
 
 <h2>The record of changes</h2>
 <p>The directory keeps a record of every setup, every passkey added, and
@@ -206,9 +208,8 @@ account.</p>
 anything. It keeps, per hour, a counter under a one-way fingerprint of the
 IP address. The fingerprint is made with a secret that changes every day,
 so one day's fingerprints cannot be matched to the next day's. The counters
-and that day's secret are deleted a minute after the day ends (UTC), or at
-the latest a day and a minute after it ends. IP addresses themselves are not
-stored.</p>
+and that day's secret are deleted a minute after the day ends (UTC). IP
+addresses themselves are not stored.</p>
 <p>Each request to change an account carries a one-time challenge from the
 directory. Challenges are not stored. A used one is remembered for 10
 minutes, so it cannot be used again.</p>
