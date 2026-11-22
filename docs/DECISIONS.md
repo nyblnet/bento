@@ -15316,8 +15316,11 @@ time. Reproduced locally with CI's Playwright (1.61.1; Firefox 151, WebKit
 - **WebKit: the network process segfaults** (`WPENetworkProcess`, in
   libgobject; the kernel log names it). Its worker registrations and caches
   go with it, so the page reads "0 caches", a navigation gets "WebKit
-  encountered an internal error", or, on CI, the read hangs. 4 of 58 local
-  runs, each time around the sw section's probe page. Nothing in a run can
+  encountered an internal error", or, on CI, the read hangs. 5 of 58 local
+  WebKit runs failed, each time around the sw section's probe page: the
+  kernel log has that segfault for 3 of them and a `SkiaGPUWorker` segfault
+  (the llvmpipe crash of 2026-11-21) beside a fourth; the fifth, an "internal
+  error" on the probe page's navigation, left nothing in the kernel log. Nothing in a run can
   recover from that, and a rig that carried on would be testing a browser
   with no worker, so it stays a failure and `scripts/ci/retry-once` stays on
   the WebKit step. The offline job now prints the kernel log on failure, so
