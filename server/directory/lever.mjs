@@ -102,6 +102,8 @@ export async function main(argv, io = {}) {
       if (r.status !== 200) { say(`${op}: ${r.status} ${r.body.error ?? ''}${cursor ? ` (resume with --cursor ${cursor})` : ''}`); return { ok: false, totals } }
       for (const k of COUNTS) totals[k] += Number(r.body.counts?.[k]) || 0
       if (r.body.next === null) return { ok: true, totals }
+      // a cursor that does not move would page forever: stop, and say where
+      if (typeof r.body.next !== 'string' || r.body.next === cursor) { say(`${op}: the directory's cursor did not move (${cursor || 'start'}); stopped`); return { ok: false, totals } }
       cursor = r.body.next
       if (op === 'run') say(`cursor ${cursor}`)
     }
