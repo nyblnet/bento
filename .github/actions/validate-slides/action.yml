@@ -728,6 +728,13 @@ runs:
       # Twenty-one mutants of the decision module must each turn a row red.
       shell: bento-step {0}
       run: node scripts/test-slides-people-tiers.ts
+    - name: Every literal t() key is in all eight core catalogs
+      # The coverage and dead-key gates look from the catalogs outwards; a
+      # string the code asks for that NO catalog has falls back to English in
+      # every language and passes both. This scans slides/src for t('…') and
+      # fails on any key missing from a core catalog.
+      shell: bento-step {0}
+      run: node scripts/test-slides-i18n-literals.mjs
     - name: Code font rig
       # theme.codeFontFamily: a code element draws in its own font, else the
       # deck's code font, else the body font; the code font meets the element

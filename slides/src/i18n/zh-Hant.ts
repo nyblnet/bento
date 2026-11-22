@@ -29,6 +29,7 @@ export const zhHant: Catalog = {
   "Paste": "貼上",
   "Bring to front": "移至最上層",
   "Send to back": "移至最下層",
+  "Stacking order": "疊放順序",
   "Ungroup": "取消群組",
   "Edit text": "編輯文字",
   "Nothing to paste — use ⌘V": "沒有可貼上的內容 — 請使用 ⌘V",
