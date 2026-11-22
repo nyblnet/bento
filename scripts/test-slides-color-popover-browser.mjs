@@ -114,7 +114,8 @@ try {
   pp = await openPop()
   await pp.locator('.ed-cpop-swatch[title="Accent 1"]').click(); await p.waitForTimeout(250)
   const linked = await el('r')
-  ok(linked.themeRefs?.fill === 'accent1' && linked.fill === 'rgba(247, 166, 0, 0.5)', `Accent 1 is linked with the 50% kept (${linked.fill}, ${JSON.stringify(linked.themeRefs)})`)
+  // a translucent linked field carries the ' /a' mark (palette.ts canonicalAlphaRefs)
+  ok(linked.themeRefs?.fill === 'accent1 /a' && linked.fill === 'rgba(247, 166, 0, 0.5)', `Accent 1 is linked with the 50% kept (${linked.fill}, ${JSON.stringify(linked.themeRefs)})`)
   ok(await p.locator('.ed-cpop').count() === 0, 'and the popover closed')
 
   console.log('\n5. Esc closes and keeps what it shows; one undo takes it back\n')
