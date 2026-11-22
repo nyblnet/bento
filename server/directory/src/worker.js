@@ -236,6 +236,8 @@ async function route(req, env) {
     if (!c) return json(400, { error: 'nonce' })
     const r = await call(await rosterStub(env, email), 'request', {
       ros: b.ros, credId: b.credId, assertion: b.assertion, reg: b.reg, rq: b.rq, nonce: c.nonce, issued: c.issued, os: origin,
+      // a consent key's request (consent.js): its key, its cns. and signature; any member's co-sign; an added consent key's own proof
+      signer: b.signer, cns: b.cns, sig: b.sig, cosign: b.cosign, newKey: b.newKey,
     })
     return json(r.status, r.body)
   }

@@ -185,6 +185,18 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-directory-browsers.ts
 
+    - name: bento/id directory consent route (SD4a)
+      # The real worker and Roster object with software consent keys: a
+      # consent key asks by its cns. (purpose roster, recomputed transcript);
+      # a ripe key (72 h at the request, from the stored chain through the
+      # kernel's verifier) or a ripe key's co-sign skips the wait under m;
+      # every co-sign that does not count is refused; quarantine, cooldown and
+      # one change at a time hold for consent keys; an immediate change mails
+      # first under the hold; X5's 7-day wait; a consent key joins with its own
+      # proof; the served chain reproduces every skipped wait.
+      shell: bento-step {0}
+      run: node scripts/test-directory-consent.ts
+
     - name: No frame is both scripted and same-origin
       # Fails on any frame a document can cause that has allow-same-origin AND
       # allow-scripts (or no sandbox at all), across every app's source and

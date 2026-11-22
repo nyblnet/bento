@@ -96,6 +96,7 @@ import { verifyAssertion, statementChallenge } from '../../../kernel/src/webauth
 import { HOME_ORIGIN, PASSKEY, SIGNIN_ORIGIN } from './passkey.js'
 import { issueChallenge, openChallenge } from './challenge.js'
 import { addressKey, normalize } from './address.js'
+import { linkOut } from './consent.js'
 import { HOME_ROUTES, WEB_ROUTES } from './seam.js'
 
 const DAY = 86_400_000
@@ -344,12 +345,8 @@ async function standing(s, rec, now) {
 
 /** The chain as kernel RosterLink objects, from the pinned head (or from setup). */
 async function chainFrom(s, pin) {
-  const links = [...(await s.list({ prefix: 'link:' })).values()].map((l) => {
-    const out = { ros: l.ros, rip: l.rip, ripSig: l.ripSig }
-    if (l.kind === 'member') { out.signer = l.signer; out.assertion = l.assertion }
-    if (l.voided) out.voided = l.voided
-    return out
-  })
+  // a consent key's proof and a co-sign travel too (consent.js linkOut), so a peer reproduces the wait they skipped
+  const links = [...(await s.list({ prefix: 'link:' })).values()].map(linkOut)
   let from = 0
   if (typeof pin === 'string') for (let i = 0; i < links.length; i++) if ((await sha256b64u(links[i].ros)) === pin) from = i
   return links.slice(from)

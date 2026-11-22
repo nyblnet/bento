@@ -15396,3 +15396,48 @@ replaced before this shipped.
   1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
+
+## 2026-11-22 — bento/id directory: a native app's consent key asks and co-signs roster changes
+
+The directory (`server/directory/src/consent.js` and the Roster request op)
+now takes the roster changes the kernel already defines for a consent key
+(`ck`), the `roster` purpose of `cns.`:
+
+- **A consent key asks** with its `cns.` over the exact `ros.` text instead of
+  an assertion. The directory checks it live with the kernel's
+  `verifyConsent`, recomputing the transcript from its own audience (`dir`),
+  the challenge the `ros.` names and the text it is about to apply, with the
+  purpose fixed in code (never read from the request); then it runs the same
+  check a peer will (`memberProof`, timed at the request). Quarantine, the
+  72-hour cooldown after a Cancel, one change at a time and the hold apply
+  exactly as to a passkey.
+- **Ripeness has one source.** A key is ripe once it has been a member for
+  72 hours (inclusive) at the request, by its `since` in the directory's own
+  stored chain run through the kernel's `verifyRosterChain`. Never at
+  ripening, never from the `ros.`'s `created`, and never from a separate
+  table. A co-sign is checked with the request, so a late one cannot shorten
+  a running wait.
+- **A ripe key's request, or any member's request co-signed by another ripe
+  key of the current head, takes effect at once**, countersigned under `m`
+  (no new authority word). The `cns.` and the co-sign are stored in the link
+  and served with it, so every peer's verifier reproduces the skipped wait. A
+  co-sign that does not count (the requester itself, a passkey, a suspended
+  key, a key only in the new head, unripe, expired, malformed, `null`) is
+  refused; nothing falls back to the 72-hour wait.
+- **Notice before act, for immediate changes too.** An immediate change takes
+  the hold, mails its "in effect" notice (the whole roster, the change in
+  words, who asked, the co-signer, the host class) and acts only once the
+  mailer accepted it. Mailer down: nothing changes.
+- **X5.** On an account with a ripe consent key, a passkey added from a
+  browser waits 7 days unless that key co-signs it. Without one (no consent
+  key at all, or none ripe yet) it waits 72 hours as before.
+- **Adding a consent key** needs the key's own `cns.` over the `ros.` that
+  adds it, so nobody can put a key they do not hold on an account. This is
+  the directory's rule; peers see only the chain. It is open for security to
+  confirm or replace.
+- The log records the asker's kind, the co-signer and the wait taken on every
+  change a consent key asked for or co-signed, or that X5 held (the incident
+  lever's query). A passkey's plain request logs as before.
+
+Route D (a phone approving a browser, `web-add`) is not part of this: it waits
+on a kernel layout for its final message and on security's own review.

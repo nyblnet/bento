@@ -165,6 +165,7 @@ Under option G a bento/id account is a **roster of passkeys** (the kernel's
 | `GET /v1/roster?e=` | none | the head `ros.` text and any waiting change, or 404 |
 | `POST /v1/roster/setup` `{email, token, dirNonce, reg}` | the setup token + a registration over `dirNonce` | 200 with `ros.0` |
 | `POST /v1/roster/request` `{email, ros, credId, assertion, reg?, rq?}` | a member's assertion over `ros` (+ the new passkey's registration for an add) | 202 queued, or 200 for an immediate self-removal; 403 `cooldown` for 72 h after its last change was cancelled |
+| `POST /v1/roster/request` `{email, ros, signer, cns, sig, …}` | a consent key's request: its key, its `cns.` (purpose `roster`) over `ros` and the signature; for any member's request, `cosign: {signer, cns, sig}` from another ripe consent key; for adding a consent key, `newKey: {cns, sig}` from that key (consent.js) | 200 in force at once when the asker or the co-signer is ripe (72 h at the request), once the notice was accepted; else 202 queued (7 days for a browser's passkey add on an account with a ripe consent key); a co-sign that does not count is a 400 |
 | `GET /void`, `/void.js`, `/void.css` | none | the void page (below): fixed bytes, nothing read or changed |
 | `POST /v1/void` `{email, token, choice}` (60 an hour per IP) | the void token | `choice` `cancel`, `remove` or `undo`, as the token allows: 200 `{done}`; 409 `late` `{at, by?}` (what it was for took effect; `by: 'reset'` when a reset did), 409 `used` `{at}`, 409 `preempted` `{at}` (a reset cancelled the change), 409 `busy` (another press or a reset holds the roster: try again), 400 `invalid` (a token the directory does not know), 400 `choice` (not offered; the token is kept), 503 `mail` (Remove whose notice could not be sent: nothing changed) |
 | `POST /v1/roster/reset/start` `{email}` (10 an hour per IP) | none | **always 202**; mails a reset link if the address has a roster, no reset waits, and no reset link is live |
@@ -213,8 +214,8 @@ setup; not built past the age rule yet). When it takes effect the roster is
 that one passkey. `GET /v1/roster` reports `createdAt` and `newAccount`.
 
 **Not built yet**: the passkey signature that stops a reset, the chain route,
-consent-key and recovery-key members, account deletion, and the incident
-lever across addresses.
+recovery-key members, route D (a phone approving a browser), account
+deletion, and the incident lever across addresses.
 
 ### Mailed links: the contract with the sign-in host
 
