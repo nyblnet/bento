@@ -30,7 +30,7 @@ import { join } from 'node:path'
 import { gateRestored } from '../slides/src/restoregate.ts'
 import { docContentKey } from '../slides/src/autosave.ts'
 import { starterDoc } from '../slides/src/starterdeck.ts'
-import type { BentoDoc } from '../slides/src/model.ts'
+import { defaultChart, defaultCode, defaultImage, defaultMedia, defaultShape, defaultTable, defaultText, newDoc, type BentoDoc } from '../slides/src/model.ts'
 
 let failures = 0
 let checks = 0
@@ -113,6 +113,20 @@ console.log('\nan honest snapshot round-trips\n')
   differentlyOrdered.slides[0].elements[0] = Object.fromEntries(Object.entries(first).reverse()) as unknown as typeof differentlyOrdered.slides[0]['elements'][number]
   const g = gateRestored(JSON.stringify(differentlyOrdered), differentlyOrdered)
   ok(!!g && docContentKey(g.doc) === docContentKey(differentlyOrdered), 'recovery comparison ignores object key order after the gate rebuilds an element')
+}
+{
+  // The case the user hit (#895): elements made the way the editor makes them
+  // (id first), saved, reopened. The gate rebuilds each one type first, so a
+  // key that minds property order offered Restore for an unchanged deck.
+  const made = newDoc()
+  made.slides[0].elements.push(
+    defaultText(), defaultShape('rect'), defaultTable(), defaultCode(),
+    defaultChart({ xAxis: { type: 'category', data: ['a', 'b'] }, yAxis: { type: 'value' }, series: [{ type: 'bar', data: [1, 2] }] }),
+    defaultImage('data:image/png;base64,iVBORw0KGgo='), defaultMedia('video', 'https://example.com/v.mp4'),
+  )
+  const g = gateRestored(JSON.stringify(made), made)
+  ok(!!g && g.dropped.length === 0, `an editor-made element of every kind passes the gate whole (${g?.dropped.map((d) => d.path).join(', ') || 'none dropped'})`)
+  ok(!!g && docContentKey(g.doc) === docContentKey(made), 'and the unchanged deck does not offer Restore')
 }
 console.log('\nnot a document → never offered\n')
 ok(gateRestored('not json', live) === null, 'unparseable text')
