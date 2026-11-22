@@ -512,7 +512,9 @@ jobs:
       - name: Speaker notes pane in Chromium
         if: ${{ !cancelled() }}
         # Under the canvas, following the slide, one undo per burst; meets both
-        # side panels; resized from its top edge; folds.
+        # side panels; resized from its top edge; starts folded at zero height,
+        # shown and hidden by one toggle at the head of the Slideshow and zoom
+        # row, which carries a dot when the slide has notes and fits at 320px.
         run: node scripts/test-slides-notes-pane-browser.mjs
       - name: Shortcuts dialog fits in Chromium
         if: ${{ !cancelled() }}
