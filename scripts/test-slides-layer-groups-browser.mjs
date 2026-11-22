@@ -46,6 +46,7 @@ try {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
   await ctx.route(/^https?:/, (r) => r.abort())
   await ctx.addInitScript(() => localStorage.setItem('bento-side-view', 'layers'))
+  await ctx.addInitScript(() => localStorage.setItem('bento-notes-open', '1')) // §9 types into the notes; they start folded
   const p = await ctx.newPage()
   const errors = []
   p.on('pageerror', (e) => errors.push(e.message))

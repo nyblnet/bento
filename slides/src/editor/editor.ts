@@ -642,11 +642,28 @@ export class Editor {
       const zb = canvasWrap.querySelector('.ed-zoombar')
       if (zb) corner.appendChild(zb)
     })
+    // The cluster is one row, and stays one. Where the canvas is too narrow
+    // for it (a 320px phone; a canvas squeezed between two open panels; a long
+    // localized label) the Slideshow button gives up its WORD and keeps its
+    // icon — the topbar's rule, hiding text before anything else, and measured
+    // like the topbar's, not a width breakpoint: the row's width moves with
+    // the locale. Only the canvas is observed, so the row's own change of
+    // width cannot call this again.
+    const fitCorner = () => {
+      corner.classList.remove('ed-corner-tight')
+      const room = canvasWrap.getBoundingClientRect(), row = corner.getBoundingClientRect()
+      // its inline-end inset (14px, or a safe area), which the start side should match
+      const inset = getComputedStyle(corner).direction === 'rtl' ? row.left - room.left : room.right - row.right
+      corner.classList.toggle('ed-corner-tight', row.width > 0 && row.width + 2 * Math.max(inset, 8) > room.width)
+    }
+    const cornerFit = new ResizeObserver(fitCorner)
+    cornerFit.observe(canvasWrap)
+    this.buildObservers.push(cornerFit)
     this.props = div('ed-props')
     // the canvas over its speaker notes, as in every slide editor
     const centre = div('ed-centre')
     centre.appendChild(canvasWrap)
-    mountNotesPane(this.store, centre, this.buildScope.signal)
+    mountNotesPane(this.store, centre, corner, this.buildScope.signal)
     main.append(this.sidebar, this.makeResizer('left'), centre, this.makeResizer('right'), this.props)
 
     this.root.append(bar, main)

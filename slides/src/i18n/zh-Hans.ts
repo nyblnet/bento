@@ -929,6 +929,7 @@ export const zhHans: Catalog = {
   "Remove stroke": "移除描边",
   "Rename": "重命名",
   "Show speaker notes": "显示演讲者备注",
+  "This slide has notes": "此幻灯片有备注",
   "This variant shares no elements with its main slide — nothing to update.": "此备选页与主幻灯片没有共同元素 — 无可更新的内容。",
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "表示这是幻灯片版式中的哪个框。将幻灯片切换到其他版式时，内容会移入新版式中角色相同的框，就像 PowerPoint 中的占位符一样。",
   "Pie": "饼图",
