@@ -106,7 +106,7 @@ console.log('control: a conforming world')
     ok(r && r.checked > 0, `${id} looked at something (${r?.checked})`)
   }
   ok(seen.length >= 14 && seen.every((s) => s.redirect === 'manual'), `gatherer: ${seen.length} fetches, every one with redirect "manual" (a followed redirect would hide a 3xx)`)
-  for (const u of [`https://${H.rp}/.well-known/webauthn`, `https://${H.signin}/.well-known/webauthn`, `https://${H.apex}/.well-known/apple-app-site-association`, `https://${H.apex}/.well-known/assetlinks.json`, `https://${H.home}/`, `https://${H.rp}/void`, `https://${H.rp}/bento-probe-abc123`, `https://${H.rp}/v1/bento-probe-abc123`, `https://${H.rp}/v1/keys`])
+  for (const u of [`https://${H.home}/bento-probe-abc123`, `https://${H.rp}/.well-known/webauthn`, `https://${H.signin}/.well-known/webauthn`, `https://${H.apex}/.well-known/apple-app-site-association`, `https://${H.apex}/.well-known/assetlinks.json`, `https://${H.home}/`, `https://${H.rp}/void`, `https://${H.rp}/bento-probe-abc123`, `https://${H.rp}/v1/bento-probe-abc123`, `https://${H.rp}/v1/keys`])
     ok(seen.some((s) => s.url === u), `gatherer asked ${u}`)
   const labels = obs.filter((o) => o.role === 'label').map((o) => o.host)
   ok(labels.includes(`xabc123.${H.rp}`) && labels.includes(`www.${H.rp}`) && labels.includes(`xabc123.${H.signin}`), `gatherer resolved ${labels.join(', ')}`)
@@ -184,7 +184,10 @@ const MUTANTS = [
   ['apex serves a webauthn origins list', 'apex-no-association', (g) => g.w.set(`https://${H.apex}/.well-known/webauthn`, { status: 200, headers: { 'content-type': 'application/json' }, body: '{"origins": ["https://x.example"]}' })],
   ['apex redirects the AASA to the rp', 'apex-no-association', (g) => g.w.set(`https://${H.apex}/.well-known/apple-app-site-association`, { status: 301, headers: { location: `https://${H.rp}/.well-known/apple-app-site-association` }, body: '' })],
   ['the sign-in host never answers (its COOP row refuses to pass on nothing)', ['reachable', 'signin-no-coop'], (g) => g.down.add(H.signin)],
-  ['bento/home never answers', ['reachable', 'home-coop'], (g) => g.down.add(H.home)],
+  ['bento/home never answers', ['reachable', 'home-coop', 'home-404'], (g) => g.down.add(H.home)],
+  ['bento/home falls back to its library page (an SPA host with no 404.html)', 'home-404', (g) => { const f = g.fallback; g.fallback = (url) => (new URL(url).host === H.home ? { status: 200, headers: HOME_H, body: '<!doctype html><script>library()</script>' } : f(url)) }],
+  ['bento/home answers a path it does not serve with 200 (a soft 404, no script)', 'home-404', (g) => { const f = g.fallback; g.fallback = (url) => (new URL(url).host === H.home ? { status: 200, headers: HOME_H, body: '<!doctype html><title>Not found</title>' } : f(url)) }],
+  ['bento/home 404s with its library page', 'home-404', (g) => { const f = g.fallback; g.fallback = (url) => (new URL(url).host === H.home ? { status: 404, headers: { 'content-type': 'text/html' }, body: '<!doctype html><SCRIPT>library()</SCRIPT>' } : f(url)) }],
 ]
 for (const [name, row, plant] of MUTANTS) {
   const g = goodWorld()

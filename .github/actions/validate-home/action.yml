@@ -150,3 +150,14 @@ runs:
       # WebKit, Firefox and the mutants run in ci-home.yml (home-web-offline-engines).
       shell: bento-step {0}
       run: node scripts/test-home-web-offline.mjs
+
+    - name: bento/home 404 page rig
+      # The library host answers every path it does not serve with the build's
+      # script-free 404.html and status 404, never index.html (which would run
+      # the library's code at any path a link names). What the build emits, how
+      # home/web/serve.mjs answers an unknown path, how the release list
+      # describes the page; then a mutant per rule.
+      shell: bento-step {0}
+      run: |
+        node scripts/test-home-web-404.mjs
+        node scripts/test-home-web-404.mjs --mutants

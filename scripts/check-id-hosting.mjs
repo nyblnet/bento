@@ -40,6 +40,10 @@
 //                        or unsafe-none (same-origin-allow-popups ON THE POPUP
 //                        cuts its opener too, measured in Chromium)
 //   home-coop            bento/home sends at most same-origin-allow-popups
+//   home-404             bento/home answers a path it does not serve with 404
+//                        and a page with no <script> (security ruling #956
+//                        D1: never index.html, which carries the library's
+//                        script, so any link to another path would run it)
 //   no-wildcard-under-rp no wildcard name under id.bento.page or the sign-in
 //                        host, and no www (a random label and www are resolved;
 //                        a name that resolves fails even if nothing answers).
@@ -96,6 +100,7 @@ export function probes(hosts, { extraPaths = [], voidPath = VOID_PATH, label = r
     ...(voidPath ? [{ role: 'rp', path: voidPath }] : []),
     ...['/', '/.well-known/webauthn', miss].map((p) => ({ role: 'signin', path: p })),
     { role: 'home', path: '/' },
+    { role: 'home', path: miss },
     ...['/.well-known/apple-app-site-association', '/.well-known/assetlinks.json', '/.well-known/webauthn'].map((p) => ({ role: 'apex', path: p })),
     ...extraPaths,
   ].map(({ role, path }) => ({ role, path, url: `https://${hosts[role]}${path}` }))
@@ -182,7 +187,9 @@ export function rows({ voidPath = VOID_PATH } = {}) {
     },
     {
       id: 'no-framing', title: "HTML from id.bento.page, the sign-in host and bento/home: frame-ancestors 'none' (and X-Frame-Options DENY on the first two)", vacuousOk: true,
-      pick: (o) => ['rp', 'signin', 'home'].includes(o.role) && answered(o) && isHtml(o),
+      // bento/home's 404 page is exempt: a host applies header rules by the path asked, so a
+      // script-free 404 page carries none (home-404 below holds it to no script instead)
+      pick: (o) => ['rp', 'signin', 'home'].includes(o.role) && answered(o) && isHtml(o) && !(o.role === 'home' && o.path !== '/'),
       bad: (o) => at(framingProblem(o.headers['content-security-policy'], o.headers['x-frame-options'], { requireXfo: o.role !== 'home' }), o),
     },
     {
@@ -194,6 +201,12 @@ export function rows({ voidPath = VOID_PATH } = {}) {
       id: 'home-coop', roles: ['home'], title: 'bento/home sends COOP at most same-origin-allow-popups',
       pick: (o) => o.role === 'home' && answered(o),
       bad: (o) => at(coopProblem('home', o.headers['cross-origin-opener-policy']), o),
+    },
+    {
+      id: 'home-404', roles: ['home'], title: 'bento/home answers a path it does not serve with a script-free 404, never its library page',
+      pick: (o) => o.role === 'home' && answered(o) && o.path !== '/',
+      bad: (o) => (o.status !== 404 ? `answers ${o.status} (the host must not fall back to index.html) on ${where(o)}`
+        : /<script/i.test(o.body || '') && `the 404 page carries a <script> on ${where(o)}`),
     },
     {
       id: 'no-wildcard-under-rp', title: NO_WILDCARD,

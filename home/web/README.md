@@ -74,6 +74,21 @@ as `/frame.html`, because some hosts serve a page without its extension. The lib
 path, so no header is ever appended to another (two CSP headers are two
 policies, both enforced).
 
+**Unknown paths answer 404, never the library page.** The build writes
+`dist/library/404.html`: no script, no handler, no shadow root, nothing it
+loads, and its own meta CSP of `default-src 'none'`. The library host must
+answer every path it does not serve with that page and status 404 (Cloudflare Pages does so for a
+top-level `404.html`; Workers static assets need `not_found_handling =
+"404-page"`). Without it a host may fall back to `index.html` (Pages does, for
+a site with no `404.html`), which runs the library's code at whatever path a
+link names. The frame site has no `404.html` and answers unknown paths with an
+empty 404 (on Workers static assets, `not_found_handling = "none"`). Its header rule names `/404.html`
+only: there is no `/*` rule, which would be appended to every path's headers,
+the pinned CSP and Cache-Control of `/` included. The tripwire records this
+page at an unlisted path quietly. `home/web/serve.mjs` serves it the same way,
+so the rigs see what production sends, and `scripts/check-id-hosting.mjs --live`
+checks the deployed host (row `home-404`).
+
 ## The document's store
 
 `kernel/src/docstore.ts` keeps a document's crash-recovery copy and member key
@@ -285,6 +300,7 @@ in it yet.
 | `scripts/test-home-web-build-mutants.mjs` | mutants of those refusals, each red on its row |
 | `scripts/test-home-web-out.mjs` | where a release may put the build: identity containment, the macOS firmlink row and its mutant |
 | `scripts/test-home-web-identity.mjs` | the bento/id agent with the real sign-in host and a CDP virtual authenticator; `--mutants`: one per rule |
+| `scripts/test-home-web-404.mjs` | the 404 page: what the build emits, how `serve.mjs` answers an unknown path, how the release list describes it; `--mutants` runs its own mutants |
 | `scripts/test-home-web-offline.mjs` | stage 3: the worker, offline, updates, the kill-switch drill, the status failing closed, install, the network allow-list; `--mutants` runs its own mutants |
 | `scripts/test-shell-standalone.mjs` | every app shell points to bento.page and never depends on it |
 

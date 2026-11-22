@@ -15339,3 +15339,32 @@ serving an older shell.
   runs the released derivation over what this build would save. The
   starter-deck row is the positive control (87 lost in the old form). Four
   mutants turn rows red.
+
+## 2026-11-22 — bento/home's library host answers unknown paths with a script-free 404
+
+Security's review of the tripwire (#956, its D1): a host that answers a path
+it does not serve with `index.html` (Cloudflare Pages does, for a site with no
+`404.html`) runs the library's code at any path a link names, and hands a
+third party a free decoy for the tripwire. So:
+
+- `home/web/build.mjs` writes `library/404.html`: no script, no handler, no
+  shadow root, nothing it loads, and a meta CSP of `default-src 'none'` (a
+  host's 404 response carries no header rule of its own). It is never a copy
+  of `index.html`. Its header rule names `/404.html` only: a `/*` rule would be
+  appended to every path's headers, including the pinned CSP and
+  Cache-Control of `/`.
+- The library host serves it with status 404 for every unknown path; the
+  frame site has none and answers an empty 404. `home/web/README.md` says how
+  (Pages: a top-level `404.html`; Workers static assets: `not_found_handling`).
+  `home/web/serve.mjs` does the same, so the rigs see what production sends.
+- The tripwire records the page quietly at an unlisted path (`unlisted`), and
+  the same page with a script added is a loud mismatch.
+- `scripts/check-id-hosting.mjs --live` gains row `home-404`: a random path on
+  home.bento.page must answer 404 with no `<script>`. bento/home's no-framing
+  row skips that response (header rules apply by path, so the host's 404
+  carries none; the page has nothing to frame).
+
+Guards: `scripts/test-home-web-404.mjs` (with `--mutants`), rows
+`unlisted-404-build` and `unlisted-404-build-script` in
+`scripts/test-webext-tripwire-browser.mjs` (a mutant each), and the
+`home-404` fixtures in `scripts/test-check-id-hosting.mjs`.
