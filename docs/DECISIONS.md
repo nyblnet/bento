@@ -15440,3 +15440,22 @@ replaced before this shipped.
   both values.
 - **Detection is separate.** The tripwire is one way the maintainer learns to
   pull the lever; nothing pulls it automatically.
+- **Idempotent by item, not by window.** An account remembers, per incident,
+  which certificates and changes a mail already named, never just "done": a
+  run while the incident is open, then a run over a wider window, must still
+  void a change the hostile page asked for in between and revoke a
+  certificate the first window missed. A void whose mail failed is kept until
+  a mail names it.
+- **An earlier revocation becomes the incident's.** A certificate in the
+  window that was already signed out is re-marked `revokedBy: 'incident'`
+  (keeping its earlier time) and named in the mail: whoever judges a
+  statement it signed must see the incident, and signing out first must not
+  erase that.
+- **The global record store sits behind every limit.** A browser check-in
+  reads the incident records only after its signature, challenge and per-IP
+  charge pass, and before the Roster countersigns or spends anything, so an
+  unreadable store still countersigns nothing.
+- **Asked alongside D1.** Roster changes asked for at bento/home's request
+  are still accepted while an incident is open (the next run voids them).
+  Whether to refuse them under the same constant is part of the maintainer's
+  D1 ruling.

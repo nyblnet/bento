@@ -346,8 +346,10 @@ host reported it), it:
 
 1. revokes each browser certificate enrolled at bento/home's request in the
    window (`loggedAt` in [t0, t1], both ends included; `ob` exactly 1, so a
-   record with `ob` 0 or none is untouched). The mark is sticky
-   (`revokedBy: 'incident'`): no undo, re-add or new head brings it back. A
+   record with `ob` 0 or none is untouched). One already signed out is
+   included: its mark becomes the incident's and keeps its earlier time. The
+   mark is sticky (`revokedBy: 'incident'`): no undo, re-add or new head
+   brings it back. A
    peer that is offline still accepts it until its countersign expires, 24
    hours at most;
 2. voids a waiting member change asked for at bento/home's request in the
@@ -405,3 +407,16 @@ anything; against `npx wrangler dev --port 8787 --var DEV:1 --var MAILER:log
 --var LEVER_PUBKEY:<drill key>` it runs open, plan, run, a second run and close
 and reads the record back. The rig runs the same drill in process with
 seeded accounts.
+
+Runs may be repeated, and a later run may cover a wider window (a later `t1`,
+or an earlier `t0` no earlier than the record's `from`). Each account keeps,
+per incident, which certificates and changes a mail already named
+(`lever:<id>`), so a later run acts on and mails only what is new, and a run
+over the same window mails nobody twice. A void whose mail failed is kept
+(`leverOwe:<id>`) until a mail names it. A run that leaves an account
+unfinished (a hold, or a failed mail) says so and exits 3: run the same
+command again later.
+
+A browser check-in reads the incident records only after its signature, its
+challenge and its per-IP charge pass: the records are one global object,
+which a junk request must never reach.

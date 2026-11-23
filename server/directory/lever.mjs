@@ -63,7 +63,7 @@ async function keyFrom(path, io) {
 
 /**
  * The command line. `io` = { fetch, log, now, readFile, writeFile }, for the
- * rig. Returns { code, totals, steps } (code 0 = success).
+ * rig. Returns { code, totals, steps } (code 0 = success; 3 = a run left accounts to finish, so run it again).
  */
 export async function main(argv, io = {}) {
   io = { fetch: globalThis.fetch, log: console.log, now: Date.now, readFile, writeFile, ...io }
@@ -132,7 +132,10 @@ export async function main(argv, io = {}) {
   }
   const run = await sweep('run', id, t0, t1, o.cursor ?? '')
   show(`run ${id}`, run.totals)
-  return { code: run.ok ? 0 : 1, totals: run.totals }
+  // an account a hold stopped, or whose mail failed, is not finished: say so, and do not exit 0
+  const left = run.totals.held + run.totals.mailFailed
+  if (run.ok && left > 0) say(`${left} account(s) not finished (another mail was going out, or the incident mail failed): run the same command again later; it acts only on what is left.`)
+  return { code: run.ok ? (left > 0 ? 3 : 0) : 1, totals: run.totals }
 }
 
 /** The drill: open, plan, run, run again, close, and read the record back, each checked. */

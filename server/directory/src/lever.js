@@ -58,6 +58,7 @@
 import { b64uDec, verifyStatementSig, sha256b64u } from '../../../kernel/src/statements.ts'
 import { buildRos, parseRos, ROSTER_WAIT_MS } from '../../../kernel/src/roster.ts'
 import { HOME_ORIGIN } from './passkey.js'
+import { INCIDENT_ENROL } from './browsers.js'
 import { voidLink } from './links.js'
 import { dayOf, putIncident, shardPage, signIncident, spendLeverNonce, storedIncidents } from './obindex.js'
 import { HOW, fingerprint, mintToken, named, notify, ownNonce, rosterLines, voidLines, when } from './roster.js'
@@ -155,7 +156,7 @@ export async function leverRoute(req, env, json) {
     const page = await shardPage(env, day, after, budget)
     for (const key of page.keys) {
       const r = await env.ROSTER.get(env.ROSTER.idFromName(key)).fetch('https://roster/lever', {
-        method: 'POST', body: JSON.stringify({ id: c.id, t0: c.t0, t1: c.t1, op: c.op === 'plan' ? 'leverPlan' : 'lever' }),
+        method: 'POST', body: JSON.stringify({ id: c.id, t0: c.t0, t1: c.t1, open: rec.to === null, op: c.op === 'plan' ? 'leverPlan' : 'lever' }),
       })
       if (!r.ok) throw new Error(`lever: an account answered ${r.status}`) // the cursor does not move: a re-run resumes here
       const got = await r.json()
@@ -191,43 +192,58 @@ async function diffLink(prevRos, ros) {
 
 /**
  * The lever's op for one account: `lever` acts, `leverPlan` only counts
- * (reads, never ripens, stores nothing). Idempotent per incident id: once an
- * account's mail went, `lever:<id>` marks it done and a re-run does nothing.
+ * (reads, never ripens, stores nothing). Idempotent per incident BY ITEM, never
+ * by window (security's M1 on #984): `lever:<id>` lists the certificates and
+ * the changes an earlier run of this incident already mailed, so a later run,
+ * or one over a wider window, acts on and mails exactly what is new, and a
+ * re-run over the same window mails nobody twice. A void whose mail did not go
+ * is kept in `leverOwe:<id>` until a mail carries it.
  */
 export async function leverOp(obj, a, now) {
   const s = obj.state.storage
   const out = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
-  if (typeof a.id !== 'string' || !ID.test(a.id) || !Number.isSafeInteger(a.t0) || !Number.isSafeInteger(a.t1) || a.t1 < a.t0) return out(400, { error: 'invalid' })
+  if (typeof a.id !== 'string' || !ID.test(a.id) || !Number.isSafeInteger(a.t0) || !Number.isSafeInteger(a.t1) || a.t1 < a.t0 ||
+    !(a.open === undefined || typeof a.open === 'boolean')) return out(400, { error: 'invalid' })
   const dry = a.op === 'leverPlan'
   const counts = { ...ZERO, visited: 1 }
   const inWin = (t) => Number.isSafeInteger(t) && t >= a.t0 && t <= a.t1
   if (!dry) await obj.ripen(now)
   const head = await s.get('head')
   if (!head) return out(200, { ...counts, skipped: 1 }) // no account (or a deleted one): nothing to do, never an error
-  if ((await s.get(`lever:${a.id}`))?.done) return out(200, { ...counts, already: 1 })
+  const markKey = `lever:${a.id}`, oweKey = `leverOwe:${a.id}`
+  const mark = (await s.get(markKey)) ?? null
+  const mailedCerts = new Set(Array.isArray(mark?.certs) ? mark.certs : []), mailedSeqs = new Set(Array.isArray(mark?.seqs) ? mark.seqs : [])
+  const owe = (await s.get(oweKey)) ?? { voids: [] }
   const address = (await parseRos(head.ros)).value.address
 
-  // 1. the browser certificates enrolled at bento/home's request in the window
+  // 1. every browser certificate enrolled at bento/home's request in the window,
+  // one signed out (or otherwise revoked) before the lever included: its mark
+  // becomes the incident's, so whoever judges a statement it signed sees the
+  // incident (security's M2 on #984). A certificate another incident marked keeps that mark.
+  const wds = await s.list({ prefix: 'wd:' })
   const hits = []
-  for (const [key, rec] of await s.list({ prefix: 'wd:' })) {
-    if (rec.ob === 1 && inWin(rec.loggedAt) && !rec.revokedAt) hits.push([key, rec])
+  for (const [key, rec] of wds) {
+    if (rec.ob === 1 && inWin(rec.loggedAt) && rec.revokedBy !== 'incident') hits.push([key, rec])
   }
   counts.certificates = hits.length
+  // marked by an earlier run of this incident whose mail did not go (a hold, or the mailer): still this incident's to mail
+  const unmailed = [...wds].filter(([k, r]) => r.revokedBy === 'incident' && r.incident === a.id && !mailedCerts.has(k))
 
   // 2. a waiting member change asked for at bento/home's request in the window
   const p = await s.get('pend')
   const voidable = p && (p.kind ?? 'member') === 'member' && p.rq === HOME_ORIGIN && inWin(p.requestedAt) ? p : null
   const held = voidable ? await obj.held(now) : null
 
-  // 2b. member changes that took effect, asked for at bento/home's request in the window
+  // 2b. member changes that took effect, asked for at bento/home's request in the window, not yet mailed
   const offers = [], words = []
   for (const [, l] of await s.list({ prefix: 'link:' })) {
     if (l.kind !== 'member' || l.rq !== HOME_ORIGIN || !inWin(l.requestedAt)) continue
     const seq = (await parseRos(l.ros)).value?.seq ?? 0
+    if (mailedSeqs.has(seq)) continue
     const prev = await s.get(`link:${pad(seq - 1)}`)
     const d = prev ? await diffLink(prev.ros, l.ros) : { op: 'other' }
     const entry = { seq, requestedAt: l.requestedAt, ripenedAt: l.ripenedAt, how: l.how, signer: l.signer, ...d }
-    if (d.op !== 'add') { words.push({ ...entry, why: 'remove' }); continue }
+    if (d.op !== 'add') { words.push({ ...entry, why: d.op }); continue }
     const m = head.members.find((x) => x.pub === d.pub)
     if (!m || m.quarantined) words.push({ ...entry, why: 'gone' })
     else if (!head.members.some((x) => !x.quarantined && x.pub !== d.pub)) words.push({ ...entry, why: 'only' })
@@ -235,41 +251,46 @@ export async function leverOp(obj, a, now) {
   }
   counts.reverts = offers.length
   counts.words = words.length
-  // a run whose mail failed (or that a hold stopped) revoked these already: they are still this run's to mail
-  const revokedEarlier = [...(await s.list({ prefix: 'wd:' })).values()].filter((r) => r.incident === a.id)
-  const affected = hits.length + revokedEarlier.length > 0 || !!voidable || offers.length > 0 || words.length > 0
+  const affected = hits.length + unmailed.length > 0 || !!voidable || owe.voids.length > 0 || offers.length > 0 || words.length > 0
   counts.voids = voidable && !held ? 1 : 0
   counts.held = held ? 1 : 0
   counts.accounts = affected ? 1 : 0
   counts.mails = affected && !held ? 1 : 0
+  counts.already = !affected && mark ? 1 : 0
   if (dry) return out(200, counts)
 
-  // 1: sticky marks (security's N1 on #957): standing() reads revokedAt before membership
-  for (const [key, rec] of hits) await s.put(key, { ...rec, revokedAt: now, revokedBy: 'incident', incident: a.id })
+  // 1: sticky marks (security's N1 on #957): standing() reads revokedAt before
+  // membership. An earlier revocation keeps its time; the reason becomes the incident's.
+  for (const [key, rec] of hits) {
+    await s.put(key, { ...rec, revokedAt: rec.revokedAt || now, revokedBy: 'incident', incident: a.id, incidentAt: now, ...(rec.revokedAt ? { before: rec.revokedBy ?? 'signout' } : {}) })
+  }
   if (!affected) {
-    await s.put(`lever:${a.id}`, { done: true, at: now, mailed: false })
+    if (!mark) await s.put(markKey, { certs: [], seqs: [], at: now })
     return out(200, counts)
   }
   // F1: a Remove's or a reset's mail is going out; what it says must stay true. Come back on a later run.
   if (held) return out(200, counts)
 
   if (voidable) {
-    // cancel semantics: nobody suspended, no cooldown, and the link answers how it ended (F2)
+    // cancel semantics: nobody suspended, no cooldown, and the link answers how it ended (F2).
+    // Owed to the mail first, so a run whose mail fails still says so on the next run.
+    owe.voids.push({ op: voidable.change.op, pub: voidable.change.pub, requestedAt: voidable.requestedAt, signer: voidable.signer ?? '' })
+    await s.put(oweKey, owe)
     await s.delete('pend')
     await obj.ended(voidable.voidTok, 'incident', now)
     await obj.log({ k: 'void', at: now, seq: head.seq + 1, op: voidable.change.op, pub: voidable.change.pub, by: voidable.signer ?? '', choice: 'incident', incident: a.id, os: '', rq: '' })
   }
 
-  // revert links: minted afresh on every run that mails (a run whose mail failed leaves none behind)
-  for (const [k, v] of await s.list({ prefix: 'rv:' })) if (v.id === a.id) await s.delete(k)
-  const links = []
+  // revert links for the changes no earlier mail offered (a mail that fails takes its links with it)
+  const links = [], minted = []
   for (const o of offers) {
     const t = await mintToken('void')
     await s.put(`rv:${t.h}`, { id: a.id, seq: o.seq, target: o.pub, exp: now + LEVER_LIMITS.revertTtlMs })
+    minted.push(`rv:${t.h}`)
     links.push({ ...o, link: voidLink(address, t.token, 'v'), exp: now + LEVER_LIMITS.revertTtlMs })
   }
 
-  const revoked = [...(await s.list({ prefix: 'wd:' })).entries()].filter(([, r]) => r.incident === a.id)
+  const revoked = [...(await s.list({ prefix: 'wd:' })).entries()].filter(([k, r]) => r.revokedBy === 'incident' && r.incident === a.id && !mailedCerts.has(k))
   const records = await obj.records(head.members)
   const lines = [
     `bento/id found a security problem that may have affected what bento/home did in browsers between ${when(a.t0)} and ${when(a.t1)} (incident ${a.id}).`,
@@ -277,12 +298,15 @@ export async function leverOp(obj, a, now) {
   ]
   if (revoked.length) {
     lines.push('', `At ${when(now)} we signed out these browsers, which were signed in through bento/home during that time:`)
-    for (const [key, r] of revoked) lines.push(`  - browser key ${await fullPrint(key.slice(3))}, signed in ${when(r.loggedAt)} with the passkey ${await fingerprint(r.signer)}`)
+    for (const [key, r] of revoked) {
+      const was = r.before ? ` It had already been signed out at ${when(r.revokedAt)}.` : ''
+      lines.push(`  - browser key ${await fullPrint(key.slice(3))}, signed in ${when(r.loggedAt)} with the passkey ${await fingerprint(r.signer)}.${was}`)
+    }
     lines.push('Apps and other browsers keep working. Anything those browsers signed can still be accepted for up to 24 hours.')
   }
-  if (voidable) {
-    const what = voidable.change.op === 'add' ? `add the passkey ${await fingerprint(voidable.change.pub)}` : `remove the passkey ${await fingerprint(voidable.change.pub)}`
-    lines.push('', `We stopped a change that was waiting: ${what}, asked for at ${when(voidable.requestedAt)} through bento/home by ${await named(voidable.signer, records[voidable.signer])}. Nothing changed.`,
+  for (const v of owe.voids) {
+    const what = v.op === 'add' ? `add the passkey ${await fingerprint(v.pub)}` : `remove the passkey ${await fingerprint(v.pub)}`
+    lines.push('', `We stopped a change that was waiting: ${what}, asked for at ${when(v.requestedAt)} through bento/home by ${await named(v.signer, records[v.signer])}. Nothing changed.`,
       'That passkey is not suspended and can ask for the change again at once, if you want it.')
   }
   if (links.length || words.length) lines.push('', 'These changes were asked for through bento/home during that time and are now in effect:')
@@ -296,15 +320,23 @@ export async function leverOp(obj, a, now) {
     if (w.why === 'remove') lines.push(`  - at ${when(w.ripenedAt)}: the passkey ${fp} was removed. If you did not ask for that, add it again from a device you trust.`)
     else if (w.why === 'gone') lines.push(`  - at ${when(w.ripenedAt)}: the passkey ${fp} was added. It is no longer on this account, or is suspended, so there is nothing to revert.`)
     else if (w.why === 'only') lines.push(`  - at ${when(w.ripenedAt)}: the passkey ${fp} was added. It is the only usable passkey on this account, so it cannot be removed from here. If you do not recognise it, reset the account.`)
-    else lines.push(`  - at ${when(w.ripenedAt)}: a change was made to this account's passkeys.`)
+    else lines.push(`  - at ${when(w.ripenedAt)}: a change was made to this account's passkeys. If you did not ask for it, check the list below and reset the account if you do not recognise a passkey.`)
   }
-  lines.push('', 'To sign in again, use bento/home or your app: each browser asks for one of your passkeys.',
-    '', 'The passkeys on this account now:', ...(await rosterLines(head.members, records, null)))
+  // N3: while the incident is open and D1 refuses, a browser cannot sign in again yet
+  if (a.open === true && INCIDENT_ENROL === 'refuse') {
+    lines.push('', 'Signing in through bento/home in a browser is paused until this incident is over. After that, use bento/home or your app: each browser asks for one of your passkeys.')
+  } else lines.push('', 'To sign in again, use bento/home or your app: each browser asks for one of your passkeys.')
+  lines.push('', 'The passkeys on this account now:', ...(await rosterLines(head.members, records, null)))
   // never budgeted (mail.js MAIL_KINDS incident: 'never')
   const sent = await notify(obj.env, address, 'Security incident: what bento/id did on your account', lines, 'incident')
-  if (!sent) { counts.mails = 0; counts.mailFailed = 1; return out(200, counts) } // not marked done: a re-run mails again
-  await s.put(`lever:${a.id}`, { done: true, at: now, mailed: true })
-  await obj.log({ k: 'lever', at: now, seq: head.seq, incident: a.id, n: revoked.length, voided: voidable ? 1 : 0, offers: links.length, os: '', rq: '' })
+  if (!sent) {
+    if (minted.length) await s.delete(minted)
+    counts.mails = 0; counts.mailFailed = 1
+    return out(200, counts) // nothing recorded as mailed: a re-run mails all of it
+  }
+  await s.put(markKey, { certs: [...mailedCerts, ...revoked.map(([k]) => k)], seqs: [...mailedSeqs, ...offers.map((o) => o.seq), ...words.map((w) => w.seq)], at: now })
+  await s.delete(oweKey)
+  await obj.log({ k: 'lever', at: now, seq: head.seq, incident: a.id, n: revoked.length, voided: owe.voids.length, offers: links.length, os: '', rq: '' })
   return out(200, counts)
 }
 

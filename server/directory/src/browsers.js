@@ -312,7 +312,6 @@ export async function browserRoute(req, env, ip, p, k) {
   if (p === HOME_ROUTES.checkin) {
     if (typeof b.wren !== 'string' || typeof b.sig !== 'string' || b.wren.length > TEXT_MAX || b.sig.length > FIELD_MAX ||
       !(b.pin === undefined || (typeof b.pin === 'string' && b.pin.length <= 64))) return json(400, { error: 'bad-request' })
-    const incidents = await incidentsOf(env) // first: an unreadable list countersigns nothing
     // signed by the device key it names; checked before the challenge is spent
     // (only the browser that asked knows it, so a refused signature leaves it)
     const v = await verifyWren(b.wren, b.sig)
@@ -326,6 +325,11 @@ export async function browserRoute(req, env, ip, p, k) {
     const ch = await openBrowser(env, scope, v.value.challenge, Date.now())
     if (!ch) return json(400, { error: 'nonce' })
     if (!(await ledger(`${ip}\n${scope}`, 'checkin'))) return json(429, { error: 'rate-limited' })
+    // after the signature, the challenge and the charge: the records are one
+    // global object, which a junk check-in must never reach (security's M3 on
+    // #984); before the Roster, where the countersign and the spend are, so an
+    // unreadable list still countersigns nothing and leaves the challenge
+    const incidents = await incidentsOf(env)
     const r = await roster(v.value.address, 'browserCheckin', { devicePub: v.value.devicePub, pin: b.pin, nonce: ch.nonce, issued: ch.issued, aud: ch.aud })
     return json(r.status, r.status === 200 || r.status === 403 ? { ...r.body, incidents } : r.body)
   }

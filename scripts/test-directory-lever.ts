@@ -34,6 +34,13 @@
 //   M1  one incident mail per account, never held back by a budget
 //   DR1 the drill refuses any non-loopback directory before any request, and
 //       passes in process; DR2 a dry run changes nothing and prints no address
+//   L13 (security on #984, M1) a later or wider run acts on what is new: a change
+//       asked for after an open-incident run is voided, a missed certificate revoked
+//   L14 (M2) a certificate signed out before the lever becomes the incident's
+//   L15 (M3) a junk check-in never reads the global incident records
+//   L16 (M4) the revert's guards (last-live, hold, pending, 30 days), the void's
+//       F2 end, an id in both stores, a future t0, an early run, signIncident's
+//       to <= issuedAt; N4 a void owed to a failed mail; N5 the script's exit
 
 import worker, { Roster, Ledger, ObIndex } from '../server/directory/src/worker.js'
 import * as workerModule from '../server/directory/src/worker.js'
@@ -41,6 +48,7 @@ import { addressKey } from '../server/directory/src/address.js'
 import { parseSetupLink, parseVoidLink } from '../server/directory/src/links.js'
 import { HOME_ORIGIN, SIGNIN_ORIGIN } from '../server/directory/src/passkey.js'
 import { INCIDENT_ENROL } from '../server/directory/src/browsers.js'
+import { signIncident } from '../server/directory/src/obindex.js'
 import { LEVER_ROUTE, buildLever } from '../server/directory/src/lever.js'
 import { HOME_ROUTES, WEB_ROUTES, STATUS_ROUTE } from '../server/directory/src/seam.js'
 import { main as leverMain } from '../server/directory/lever.mjs'
@@ -154,9 +162,13 @@ env.ROSTER = ROSTER
 env.LEDGER = namespace(Ledger as never)
 /** L8: when set, every index write answers 500 (the store is unreachable) */
 let obFail = false
+/** M3 (security on #984): how many times the incident records were read */
+let incReads = 0
 class FlakyObIndex extends (ObIndex as unknown as new (s: unknown, e: unknown) => Obj) {
   async fetch(r: Request) {
-    if (obFail && (await r.clone().json()).op === 'add') return new Response('{"error":"down"}', { status: 500 })
+    const op = (await r.clone().json()).op
+    if (op === 'records') incReads++
+    if (obFail && op === 'add') return new Response('{"error":"down"}', { status: 500 })
     return super.fetch(r)
   }
 }
@@ -692,6 +704,192 @@ row('L9', run3.done && run3.totals.mails === 0 && run3.totals.certificates === 0
   await doOp(sam, 'browserRevokeAll', { by: S1a.pub })
   const st = await statusOf(sam, e.text), c = await checkin(sam, SB)
   row('S1', st.j.state === 'revoked' && st.j.by === 'signout' && !('incident' in st.j) && c.j.by === 'signout', `sign out everywhere reports by: 'signout' (${JSON.stringify(st.j.by)}, ${c.j.by})`)
+}
+
+// =====================================================================
+// E. security round 1 on #984: the rows the first rig left open
+// =====================================================================
+
+// L13 (M1): a run while the incident is open, then a later run over a wider window. The done
+// marker is kept by item, so the second run acts on (and mails) exactly what is new.
+{
+  const bob = 'sd5-bob@example.com', B1 = await Authn.make()
+  const dan = 'sd5-dan@example.com', DN = await Authn.make()
+  ok((await setup(bob, B1)).status === 200 && (await setup(dan, DN)).status === 200, 'sd5-bob and sd5-dan are set up')
+  const t0 = now
+  now += 10 * MIN
+  const BB = await Browser.make(), DB1 = await Browser.make(), DB2 = await Browser.make()
+  const be = await enrol(bob, BB, B1), d1 = await enrol(dan, DB1, DN)
+  now += 50 * MIN
+  const d2 = await enrol(dan, DB2, DN)
+  ok(be.status === 200 && d1.status === 200 && d2.status === 200, 'bob enrols one browser, dan two an hour apart')
+  now += 10 * MIN
+  ok((await lever({ op: 'open', id: 'inc-wide', t0 })).status === 200, 'open inc-wide')
+  now += MIN
+  const n1 = await sweep('inc-wide', t0, t0 + 30 * MIN, 50) // the maintainer's first estimate of the window
+  row('L13', n1.done && (await statusOf(dan, d1.text)).j.state === 'revoked' && (await statusOf(dan, d2.text)).j.state === 'ok',
+    `control: a first run over the first half hour revokes dan's first certificate only (${JSON.stringify(n1.totals)})`)
+  // the hostile page, still served while the incident is open, asks for an add after that run (accepted: N1, the maintainer's D1 question)
+  now += 10 * MIN
+  const EVIL = await Authn.make()
+  const hb = await request(bob, B1, { add: EVIL, rq: H })
+  ok(hb.status === 202, `an ob=1 request while the incident is open waits (${err(hb)})`)
+  now += MIN
+  const t1 = now
+  const n2 = await sweep('inc-wide', t0, t1, 50) // the window widened once the logs are read
+  row('L13', n2.done && !(await current(bob)).pending, `a later run over a wider window voids the change bob's page asked for after the first run (${JSON.stringify(n2.totals)})`)
+  const s2 = await statusOf(dan, d2.text)
+  row('L13', s2.j.state === 'revoked' && s2.j.by === 'incident' && s2.j.incident === 'inc-wide', `and revokes dan's second certificate (${JSON.stringify([s2.j.state, s2.j.by])})`)
+  const dm = mailsTo(dan).filter((m) => m.kind === 'incident'), bm = mailsTo(bob).filter((m) => m.kind === 'incident')
+  row('L13', dm.length === 2 && dm[1].body.includes(await fp64(DB2.pub)) && !dm[1].body.includes(await fp64(DB1.pub)), `dan's second mail names only the new certificate (${dm.length} mails)`)
+  row('L13', bm.length === 2 && /We stopped a change that was waiting/.test(bm[1].body) && !/We stopped a change/.test(bm[0].body), `bob's second mail says the change was stopped (${bm.length} mails)`)
+  const n3 = await sweep('inc-wide', t0, t1, 50)
+  row('L13', n3.done && n3.totals.mails === 0 && n3.totals.certificates === 0 && n3.totals.already === n3.totals.visited, `a third run over the same window mails nobody (${JSON.stringify(n3.totals)})`)
+  if (INCIDENT_ENROL === 'refuse') row('L13', /paused until this incident is over/.test(dm[0]?.body ?? '') && !/^To sign in again/m.test(dm[0]?.body ?? ''), 'N3: a mail sent while the incident is open says browser sign-in is paused, not "sign in again"')
+  ok((await lever({ op: 'close', id: 'inc-wide', t0, t1 })).status === 200, 'close inc-wide')
+  now = t1 + ROSTER_WAIT_MS + HOUR
+  await head(bob)
+  row('L13', !(await current(bob)).head?.members.some((m) => m.pub === EVIL.pub), 'the hostile passkey asked for inside the window never joins bob\'s roster')
+}
+
+// L14 (M2): a certificate revoked before the lever (sign out everywhere, or a mark with no revokedBy) is the incident's after it
+{
+  const cat = 'sd5-cat@example.com', C1 = await Authn.make()
+  ok((await setup(cat, C1)).status === 200, 'sd5-cat is set up')
+  const t0 = now
+  now += 10 * MIN
+  const CB = await Browser.make(), CB2 = await Browser.make()
+  const ce = await enrol(cat, CB, C1), ce2 = await enrol(cat, CB2, C1)
+  ok(ce.status === 200 && ce2.status === 200, 'sd5-cat enrols two browsers in the window')
+  now += 10 * MIN
+  await doOp(cat, 'browserRevokeAll', { by: C1.pub })
+  const out1 = (await storeOf(cat)).get(`wd:${CB.pub}`) as Record<string, unknown> | undefined
+  await plant(cat, (st) => { const r = st.get(`wd:${CB2.pub}`) as Record<string, unknown> | undefined; if (!r) return; const { revokedBy: _b, ...old } = r; st.set(`wd:${CB2.pub}`, old) })
+  const b1 = await statusOf(cat, ce.text), b2 = await statusOf(cat, ce2.text)
+  ok(b1.j.by === 'signout' && b2.j.by === 'signout' && !('revokedBy' in (((await storeOf(cat)).get(`wd:${CB2.pub}`) ?? { revokedBy: 'absent' }) as object)), `control: signed out → by signout, and the planted mark has no revokedBy (${b1.j.by}, ${b2.j.by})`)
+  now += 10 * MIN
+  ok((await lever({ op: 'open', id: 'inc-out', t0 })).status === 200, 'open inc-out')
+  now += MIN
+  const t1 = now
+  ok((await lever({ op: 'close', id: 'inc-out', t0, t1 })).status === 200, 'close inc-out (the run comes after)')
+  now += MIN
+  const r = await sweep('inc-out', t0, t1, 50)
+  const a1 = await statusOf(cat, ce.text), a2 = await statusOf(cat, ce2.text)
+  row('L14', r.done && a1.j.state === 'revoked' && a1.j.by === 'incident' && a1.j.incident === 'inc-out', `a certificate signed out before the lever reports by: 'incident' after it (${JSON.stringify([a1.j.by, a1.j.incident])})`)
+  row('L14', a2.j.state === 'revoked' && a2.j.by === 'incident' && a2.j.incident === 'inc-out', `so does one marked revoked with no revokedBy (${JSON.stringify([a2.j.by, a2.j.incident])})`)
+  row('L14', ((await storeOf(cat)).get(`wd:${CB.pub}`) as Record<string, unknown>)?.revokedAt === out1?.revokedAt, 'its revocation keeps its earlier time')
+  const cm = mailsTo(cat).filter((m) => m.kind === 'incident')
+  row('L14', cm.length === 1 && cm[0].body.includes(await fp64(CB.pub)) && cm[0].body.includes(await fp64(CB2.pub)) && /had already been signed out/.test(cm[0].body),
+    `the incident mail names both, and says they had already been signed out (${cm.length} mails)`)
+  row('L14', /^To sign in again, use bento\/home or your app/m.test(cm[0]?.body ?? '') && !/paused/.test(cm[0]?.body ?? ''), 'N3: a mail sent after the incident closed says "sign in again", not paused')
+}
+
+// L15 (M3): a junk check-in never reaches the incident records (one global object); a real one reads them once
+{
+  const eve = 'sd5-eve@example.com', E1 = await Authn.make(), EB = await Browser.make()
+  ok((await setup(eve, E1)).status === 200 && (await enrol(eve, EB, E1)).status === 200, 'sd5-eve has a browser')
+  const before = incReads, ip = '10.9.9.9', st = new Set<number>()
+  for (let i = 0; i < 40; i++) st.add((await raw('POST', HOME_ROUTES.checkin, JSON.stringify({ wren: 'x', sig: 'y' }), H, ip)).status)
+  const junkNonce = await checkin(eve, EB, { nonce: b64uEnc(crypto.getRandomValues(new Uint8Array(32))), ip })
+  row('L15', incReads === before && [...st].join() === '400' && junkNonce.status === 400, `40 junk check-ins and one with a nonce the directory never issued, from one IP → ${incReads - before} reads of the incident records (${[...st]}, ${junkNonce.status})`)
+  const b2 = incReads
+  const real = await checkin(eve, EB)
+  row('L15', real.status === 200 && incReads - b2 === 1 && Array.isArray(real.j.incidents), `positive control: a real check-in reads them once and carries them (${err(real)}, ${incReads - b2} reads)`)
+}
+
+// L16 (M4): the revert link's guards, the lever void's F2 end, and a void owed to a mail that failed
+{
+  const acc = (n: string) => `sd5-${n}@example.com`
+  const names = ['last', 'exp', 'hold', 'pend'] as const
+  const A: Record<string, Authn> = {}, X: Record<string, Authn> = {}
+  for (const n of names) { A[n] = await Authn.make(); X[n] = await Authn.make(); ok((await setup(acc(n), A[n])).status === 200, `${acc(n)} is set up`) }
+  const vo = acc('vo'), VO1 = await Authn.make()
+  ok((await setup(vo, VO1)).status === 200, `${vo} is set up`)
+  now += HOUR
+  const t0 = now
+  now += 10 * MIN
+  for (const n of names) ok((await request(acc(n), A[n], { add: X[n], rq: H })).status === 202, `${acc(n)}: an ob=1 add in the window`)
+  now += ROSTER_WAIT_MS + MIN
+  for (const n of names) await head(acc(n))
+  ok((await Promise.all(names.map(async (n) => (await current(acc(n))).head?.members.some((m) => m.pub === X[n].pub)))).every(Boolean), 'the four adds took effect')
+  const vr = await request(vo, VO1, { add: await Authn.make(), rq: H })
+  const voLink = voidLinksIn(lastMail(vo))[0]
+  ok(vr.status === 202 && !!voLink, `${vo}: an ob=1 change waits, its notice carries a void link (${err(vr)})`)
+  const t1 = now
+  now += MIN
+  ok((await lever({ op: 'open', id: 'inc-rv', t0 })).status === 200, 'open inc-rv')
+  // S9 / S8: a future t0, and a run starting before the record's from
+  const fut = await lever({ op: 'open', id: 'inc-future', t0: now + MIN })
+  row('L16', fut.status === 400 && fut.j.error === 'future' && !incStore().has('inc:inc-future'), `open with a t0 in the future → 400 future, nothing stored (${err(fut)})`)
+  const early = await lever({ op: 'run', id: 'inc-rv', t0: t0 - 1, t1, cursor: '', n: 50 })
+  row('L16', early.status === 400 && early.j.error === 'window' && !!(await current(vo)).pending, `a run whose t0 is before the record's from → 400 window, nothing done (${err(early)})`)
+  // N4 + N5: the mailer is down for the first run, through the maintainer's script with --apply
+  mailDown = true
+  const out: string[] = []
+  const lr = await leverMain(['--directory', 'http://127.0.0.1:8787', '--key', keyPath, '--id', 'inc-rv', 'run', '--t0', String(t0), '--t1', String(t1), '--apply'], { fetch: routed([]), log: (x: string) => out.push(x) })
+  mailDown = false
+  row('L16', lr.code !== 0 && (lr.totals?.mailFailed ?? 0) >= 5 && /run the same command again/.test(out.join('\n')) && !(await current(vo)).pending,
+    `N5: a run whose mail failed exits non-zero and says to run again (exit ${lr.code}, ${JSON.stringify(lr.totals)}); N4: the void happened`)
+  const again = await sweep('inc-rv', t0, t1, 50)
+  const vm = mailsTo(vo).filter((m) => m.kind === 'incident')
+  row('L16', again.done && vm.length === 1 && /We stopped a change that was waiting/.test(vm[0].body), `N4: the re-run's mail still says the change was stopped (${vm.length} mails, ${JSON.stringify(again.totals)})`)
+  // S7: the waiting change's own link now answers how it ended
+  const vp = await press(vo, voLink?.token ?? '', 'cancel')
+  row('L16', vp.status === 409 && vp.j.error === 'incident' && typeof vp.j.at === 'number', `the voided change's link answers 409 incident (F2) (${err(vp)})`)
+  const tok = async (n: string) => voidLinksIn(mailsTo(acc(n)).find((m) => m.kind === 'incident')).find((l) => l.kind === 'v')?.token ?? ''
+  const quiet = async (n: string) => ({ links: await linkCount(acc(n)), q: (await current(acc(n))).head?.members.find((m) => m.pub === X[n].pub)?.quarantined })
+  // S1: the passkey that asked removed itself after the mail: the added one is the last usable passkey
+  {
+    const n = 'last', gone = await request(acc(n), A[n], { remove: A[n].pub })
+    const b = await quiet(n)
+    const r = await press(acc(n), await tok(n), 'revert')
+    const a = await quiet(n)
+    row('L16', gone.status === 200 && r.status === 409 && r.j.error === 'last-live' && a.links === b.links && a.q === false, `G4c: a revert that would leave no usable passkey → 409 last-live, nothing written (${err(gone)}, ${err(r)})`)
+  }
+  // S3: another press's hold (F1); the link still works once it is gone
+  {
+    const n = 'hold', b = await quiet(n), t = await tok(n)
+    await plant(acc(n), (st) => st.set('hold', { id: 'held-by-rig', what: 'remove', until: now + 30_000 }))
+    const r = await press(acc(n), t, 'revert')
+    const a = await quiet(n)
+    await plant(acc(n), (st) => st.delete('hold'))
+    const r2 = await press(acc(n), t, 'revert')
+    row('L16', r.status === 409 && r.j.error === 'busy' && a.links === b.links && a.q === false && r2.status === 200, `F1: a revert while another press's mail goes → 409 busy, nothing written; afterwards it works (${err(r)}, ${err(r2)})`)
+  }
+  // S2: another change waiting
+  {
+    const n = 'pend'
+    const w = await request(acc(n), A[n], { add: await Authn.make() })
+    const b = await quiet(n)
+    const r = await press(acc(n), await tok(n), 'revert')
+    const a = await quiet(n)
+    row('L16', w.status === 202 && r.status === 409 && r.j.error === 'pending' && a.links === b.links && a.q === false, `a revert while another change waits → 409 pending, nothing written (${err(w)}, ${err(r)})`)
+  }
+  ok((await lever({ op: 'close', id: 'inc-rv', t0, t1 })).status === 200, 'close inc-rv')
+  // S6: an id published both by the lever and in INCIDENTS
+  {
+    env.INCIDENTS = JSON.stringify([{ id: 'var-only', from: t0, to: t1 }])
+    const v1 = await statusOf(acc('exp'), 'x')
+    env.INCIDENTS = JSON.stringify([{ id: 'inc-rv', from: t0, to: t1 }])
+    const v2 = await statusOf(acc('exp'), 'x')
+    delete env.INCIDENTS
+    row('L16', v1.status === 200 && ((v1.j.incidents ?? []) as { id: string }[]).some((x) => x.id === 'var-only') && v2.status === 500,
+      `control: an INCIDENTS record beside the stored ones is served (${v1.status}); an id in both → 500 (${v2.status})`)
+  }
+  // S17: the directory never signs a record whose end follows its issue
+  {
+    const late = await signIncident(env, { id: 'x-late', from: 1000, to: 3000, issuedAt: 2999 }).then(() => 'signed', (e: Error) => e.message)
+    const fine = await signIncident(env, { id: 'x-fine', from: 1000, to: 3000, issuedAt: 3000 }).then((r) => r.inc, () => 'threw')
+    row('L16', late !== 'signed' && /^inc\.x-fine\./.test(fine), `signIncident refuses to > issuedAt (${late}), and signs to = issuedAt (positive control)`)
+  }
+  // S4: the 30-day life (last: it moves the clock)
+  {
+    const n = 'exp', t = await tok(n), b = await quiet(n)
+    now += 30 * DAY + MIN
+    const r = await press(acc(n), t, 'revert')
+    const a = await quiet(n)
+    row('L16', r.status === 409 && r.j.error === 'late' && a.links === b.links && a.q === false, `a revert link past its 30 days → 409 late, nothing written (${err(r)})`)
+  }
 }
 
 // L12: a stored record that does not read
