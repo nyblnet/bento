@@ -15417,10 +15417,19 @@ replaced before this shipped.
   older host fails closed whatever its version, with no version check. A
   host-level capability flag was the alternative and fails open in exactly
   that case: the host says it is new while one hop behind it is old.
-- **A later field set gets a new value**, so a relay that only knows `g1`
-  cannot vouch for an answer whose fields it has never seen.
+- **'g1' never changes; a later field set adds its own marker.** An agent
+  that carries every g1 field keeps sending `fields: 'g1'`, for good. Slides
+  shells are frozen inside every saved file and accept exactly `'g1'`, so an
+  agent that replaced it with `'g2'` would turn every row of every file saved
+  before then into "couldn't check", with no fix but breaking the rule back. A
+  later set announces itself with a NEW optional field of its own beside
+  `fields`, never a new value of it. A relay that only knows `g1` forwards
+  `'g1'` with the g1 fields and drops the new marker, so it still cannot vouch
+  for fields it has never seen, and a reader of the later set fails closed
+  through the same relay.
 - Guarded by `scripts/test-identity.ts`: the marker is the last field of
   `ResolvedIdentity`, `RESOLVED_G1_FIELDS` is exactly the optional fields
   before it, in order, and the six required fields are unchanged. Mutants that
   drop a field from the list, add one to the interface only, move the marker,
-  change its value or unfreeze the list each turn a row red.
+  change its value or unfreeze the list each turn a row red, and a row pins the
+  never-changes rule in both identity.ts and this entry.
