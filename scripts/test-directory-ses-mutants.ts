@@ -60,9 +60,7 @@ const MUTANTS: Mutant[] = [
   m('R9 a failure logs the response, the request and its Authorization', { file: SES, from: "    if (res.status !== 200) throw refused(`${res.status} ${errorType(res)}`)",
     to: "    if (res.status !== 200) console.log(`ses failed: ${await res.clone().text()} ${body} ${authorization}`)\n    if (res.status !== 200) throw refused(`${res.status} ${errorType(res)}`)" }),
   // --- D1 (R10) ---
-  m('R10 notify reports a refused SES send as sent', { file: ROSTER,
-    from: '  try { await deliver(env, { to, subject, body, kind }); return true } catch (e) { console.log(`${kind} mail failed: ${e.message}`); return false }',
-    to: '  try { await deliver(env, { to, subject, body, kind }); return true } catch (e) { console.log(`${kind} mail failed: ${e.message}`); return true }' }),
+  m('R10 a refused SES send reported as sent', { file: MAIL, from: "  if (env.MAILER === 'ses') return sesSend(env, msg, MAIL_TIMEOUT_MS)", to: "  if (env.MAILER === 'ses') return sesSend(env, msg, MAIL_TIMEOUT_MS).catch(() => {})" }),
   // --- SNS authenticity (R11-R13) ---
   m('R11 the signature is not verified', { file: SNS, from: "  if (!(await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, sig, te.encode(canonical(m))))) return k.json(403, { error: 'signature' })\n", to: '' }),
   m('R11 SignatureVersion not pinned to 2', { file: SNS, from: "  if (m.SignatureVersion !== '2') return k.json(403, { error: 'signature' })\n", to: '' }),
