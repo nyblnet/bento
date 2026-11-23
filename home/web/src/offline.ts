@@ -134,6 +134,58 @@ function stopChannel(): BroadcastChannel | null {
 }
 
 /**
+ * Ask the release channel once. `answered` is false when no HTTP answer came
+ * back at all (offline, a timeout, or a network path that blocks the release
+ * channel and lets the directory through); a 404 (nothing published yet) is
+ * an answer.
+ */
+async function askStatus(releaseBase: string, key: Jwk, build: string): Promise<{ status: Status; answered: boolean }> {
+  // seen withdrawn before: stop now, whatever served this copy (an HTTP cache offline, a stale edge)
+  if (goneList().includes(build)) return { status: 'withdrawn', answered: true }
+  let raw: string | null = null
+  let answered = false
+  try {
+    const ac = new AbortController()
+    const t = setTimeout(() => ac.abort(), STATUS_MS)
+    const r = await fetch(`${releaseBase}home/status.json`, { cache: 'no-store', credentials: 'omit', redirect: 'error', signal: ac.signal })
+    if (r.ok) raw = await r.text()
+    answered = true
+    clearTimeout(t)
+  } catch { raw = null; answered = false }
+  if (raw === null) return { status: 'unreachable', answered }
+  const v = await judgeStatus(raw, key, build, seenSeq())
+  if (v.seq && v.status !== 'refused') keepSeq(v.seq)
+  if (v.why) console.warn('[bento/home] status refused:', v.why)
+  return { status: v.status, answered: true }
+}
+
+/** The running page's kill switch, once startOffline has its build id: what recheckStatus() asks with. */
+let live: { ask: () => Promise<{ status: Status; answered: boolean }>; halt: (s: 'withdrawn' | 'refused') => Promise<void>; stopped: () => boolean; answered: boolean } | null = null
+
+/**
+ * Ask the status AGAIN, for code that keeps running in an open page: bento/id
+ * calls it before every hourly check-in, so a build withdrawn while its tabs
+ * are open stops at the next hour, not at the next load (security ruling 985,
+ * M2). 'stop': withdrawn or untrusted, and the page has now stopped (and told
+ * the other tabs). 'skip': the release channel gave no answer at all, so this
+ * hour runs nothing that talks to the network. 'run': it answered, and this
+ * build may run. Before startOffline knows its build, or once stopped: 'stop'
+ * / 'skip' as fits, never 'run'.
+ */
+export async function recheckStatus(): Promise<'run' | 'skip' | 'stop'> {
+  const k = live
+  if (!k) return 'skip'
+  if (k.stopped()) return 'stop'
+  const { status, answered } = await k.ask()
+  if (k.stopped()) return 'stop'
+  if (status === 'withdrawn' || status === 'refused') { await k.halt(status); return 'stop' }
+  return answered ? 'run' : 'skip'
+}
+
+/** Whether the load's own status check got an HTTP answer (false before it has, and when it did not). */
+export function statusAnswered(): boolean { return !!live?.answered }
+
+/**
  * Check the status, then (unless withdrawn) register the worker. Resolves
  * true when documents may open. `onStop` takes over the page when not, and
  * also when another tab of this build is stopped later (it runs at most once).
@@ -157,29 +209,20 @@ export function startOffline(opts: { releaseBase: string; key: Jwk; onStop: (sta
       stop(d.status)
       mark('data-bento-status', d.status)
     }
-    let status: Status = 'unreachable'
-    let raw: string | null = null
-    // seen withdrawn before: stop now, whatever served this copy (an HTTP cache offline, a stale edge)
-    if (goneList().includes(build)) status = 'withdrawn'
-    else try {
-      const ac = new AbortController()
-      const t = setTimeout(() => ac.abort(), STATUS_MS)
-      const r = await fetch(`${opts.releaseBase}home/status.json`, { cache: 'no-store', credentials: 'omit', redirect: 'error', signal: ac.signal })
-      if (r.ok) raw = await r.text()
-      clearTimeout(t)
-    } catch { raw = null }
-    if (raw !== null && status !== 'withdrawn') {
-      const v = await judgeStatus(raw, opts.key, build, seenSeq())
-      status = v.status
-      if (v.seq && status !== 'refused') keepSeq(v.seq)
-      if (v.why) console.warn('[bento/home] status refused:', v.why)
-    }
-    if (status === 'withdrawn' || status === 'refused') {
+    /** Stop this page for a withdrawn or untrusted build, and tell the other tabs of this build. */
+    const halt = async (status: 'withdrawn' | 'refused') => {
       if (status === 'withdrawn') keepGone(build)
       try { channel?.postMessage({ t: 'stop', build, status } satisfies Stop) } catch { /* no other tab to tell */ }
       stop(status)
       await cleanUp()
       mark('data-bento-status', status)
+    }
+    const k = { ask: () => askStatus(opts.releaseBase, opts.key, build), halt, stopped: () => stopped, answered: false }
+    const { status, answered } = await k.ask()
+    k.answered = answered
+    live = k
+    if (status === 'withdrawn' || status === 'refused') {
+      await halt(status)
       return false
     }
     // a stop from another tab may have arrived while this one was checking

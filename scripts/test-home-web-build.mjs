@@ -165,6 +165,15 @@ section('home/web/build.mjs: a production IDENTITY build, in a scratch copy whos
       const r = hosting(d)
       ok(r.status === 1 && r.stdout.includes(`FAIL  ${rule}:`), `check-home-web-hosting: a build that breaks ${rule} fails on it (exit ${r.status})`)
     }
+    // a page in the tree that _headers does not name (a 404 page added later, say) is served with no policy at all
+    {
+      const d = path.join(work, 'hosting-unruled-html')
+      fs.cpSync(p.out, d, { recursive: true })
+      fs.writeFileSync(path.join(d, 'library/404.html'), '<!doctype html><title>404</title>')
+      const r = hosting(d)
+      ok(r.status === 1 && r.stdout.includes('FAIL  home-framing: /404.html (404.html) is served with no _headers rule'),
+        `check-home-web-hosting: an .html file in the tree with no _headers rule fails home-framing (exit ${r.status})`)
+    }
   }
   refusal(pbuild(['--history', REAL_HISTORY, '--identity', '--library-origin', 'https://other.example']), /production identity build is for the library at https:\/\/home\.bento\.page only/,
     'production --identity for another library origin: refused')

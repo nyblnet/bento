@@ -75,10 +75,22 @@ const EVIL_KX = b64uEnc(new Uint8Array(await crypto.subtle.exportKey('raw', (awa
 const tmp = mkdtempSync(join(tmpdir(), 'home-web-identity-'))
 const keysFile = join(tmp, 'directory-keys.json')
 writeFileSync(keysFile, JSON.stringify(PINNED))
+// A throwaway release key (--dev --key), so the rig can sign the kill switch's status and withdraw a
+// build for real; the frozen history is re-signed with it, as test-home-web-offline.mjs does.
+const relKp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])
+const relPub = (({ kty, crv, x, y }) => ({ kty, crv, x, y }))(await crypto.subtle.exportKey('jwk', relKp.publicKey))
+const relKeyFile = join(tmp, 'release-pub.json')
+writeFileSync(relKeyFile, JSON.stringify(relPub))
+const signEnvelope = async (payload) => JSON.stringify({ payload, sig: Buffer.from(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, relKp.privateKey, new TextEncoder().encode(payload))).toString('base64') })
+const historyFile = join(tmp, 'history.json')
+writeFileSync(historyFile, await signEnvelope(JSON.parse(readFileSync(join(ROOT, 'home/fixtures/gate1/real/slides-1.2.10/history.json'), 'utf8')).payload))
+let statusSeq = 0
+/** A status signed with the rig's release key: `withdrawn` lists build ids (offline.ts). */
+const signedStatus = (withdrawn) => signEnvelope(JSON.stringify({ app: 'bento-home-status', seq: ++statusSeq, at: new Date(T0).toISOString(), withdrawn }))
 function build(name, edits) {
   const out = join(tmp, name)
   const r = spawnSync(process.execPath, [join(ROOT, 'home/web/build.mjs'), '--dev', '--identity', '--directory-keys', keysFile,
-    '--frame-origin', 'https://frame.example', '--out', out], { encoding: 'utf8', env: { ...process.env, ...(edits ? { BENTO_HOME_WEB_MUTANT: JSON.stringify(edits) } : {}) } })
+    '--key', relKeyFile, '--history', historyFile, '--frame-origin', 'https://frame.example', '--out', out], { encoding: 'utf8', env: { ...process.env, ...(edits ? { BENTO_HOME_WEB_MUTANT: JSON.stringify(edits) } : {}) } })
   if (r.status !== 0) throw new Error(`build ${name} failed: ${r.stderr}`)
   return out
 }
@@ -123,7 +135,8 @@ const FORGE = `<!doctype html><meta charset=utf-8><title>forge</title><script>
 /** A fresh browser context: every origin routed, the clock at T0, the sign-in host's account set. */
 async function session(dist, { sEdit = null, account = ADDRESS, status = null, settle = true } = {}) {
   const ctx = await browser.newContext()
-  // status: the kill switch's answer (null: 404, unanswered; 'hold': not answered until st.release(); else a 200 body)
+  // status: the kill switch's answer (null: 404, unanswered; 'hold': not answered until st.release(); 'abort': no HTTP
+  // answer at all, as on a network that blocks the release channel; else a 200 body)
   const st = { ctx, base: T0, setAt: Date.now(), wa: [], attackerHits: [], auth: new Map(), page: null, status, held: [], dirHits: [] }
   st.release = () => { for (const r of st.held.splice(0)) r.fulfill({ status: 404, body: '' }).catch(() => {}) }
   await ctx.clock.install({ time: T0 })
@@ -144,6 +157,7 @@ async function session(dist, { sEdit = null, account = ADDRESS, status = null, s
   await ctx.route(STATUS_URL, (route) => {
     statusAsked.push(route.request().url())
     if (st.status === 'hold') { st.held.push(route); return }
+    if (st.status === 'abort') return route.abort()
     return st.status === null ? route.fulfill({ status: 404, body: '' }) : route.fulfill({ status: 200, headers: { 'content-type': 'application/json' }, body: st.status })
   })
   await ctx.route(`${HOME}/**`, (route) => {
@@ -822,17 +836,19 @@ const ROWS = {
 
   async 'a stop in one tab stops bento/id in every other tab of the same build'(dist) {
     const out = []
-    for (const stop of [false, true]) {
+    for (const stop of [false, 'refused', 'withdrawn']) {
       const st = await session(dist)
       await ceremony(st)
       const checkins = () => st.dirHits.filter((p) => p === '/v1/home/checkin').length
-      // tab 2 opens the same build and (or not) finds it untrusted
-      if (stop) st.status = 'not a signed envelope'
+      const build = await st.page.evaluate(() => document.documentElement.getAttribute('data-bento-build'))
+      // tab 2 opens the same build and (or not) finds it untrusted, or withdrawn by a signed status
+      if (stop === 'refused') st.status = 'not a signed envelope'
+      if (stop === 'withdrawn') st.status = await signedStatus([build])
       const two = await st.ctx.newPage()
       await two.goto(HOME + '/')
       const t0 = Date.now()
       const seen2 = []
-      const twoStopped = await until(() => two.evaluate(() => document.documentElement.getAttribute('data-bento-status')).then((v) => { seen2.push(v); return v === (stop ? 'refused' : 'unreachable') }))
+      const twoStopped = await until(() => two.evaluate(() => document.documentElement.getAttribute('data-bento-status')).then((v) => { seen2.push(v); return v === (stop || 'unreachable') }))
       if (!twoStopped) console.log('  note  tab 2 status seen:', seen2.slice(0, 3), seen2.length, seen2.at(-1))
       const oneHidden = await until(() => st.page.evaluate(() => document.getElementById('id-box').hidden), 1000)
       const ms = Date.now() - t0
@@ -845,13 +861,128 @@ const ROWS = {
       const twoStatus = await two.evaluate(() => document.documentElement.getAttribute('data-bento-status')).catch((e) => e.message.slice(0, 60))
       await close(st)
       if (stop) {
-        out.push([twoStopped && !!oneHidden && oneStatus[0] === 'refused' && oneStatus[1], `tab 2 stops (untrusted status), and tab 1 stops too, its sign-in line hidden within 1 s (${twoStopped}, tab 1 ${oneStatus.join('/')}, ${oneHidden ? ms + ' ms' : 'still shown'})`])
-        out.push([hourly === 0, `tab 1 makes no hourly check-in after the stop (${hourly})`])
+        out.push([twoStopped && !!oneHidden && oneStatus[0] === stop && oneStatus[1], `tab 2 stops (${stop === 'refused' ? 'untrusted status' : 'its build withdrawn by a signed status'}), and tab 1 stops too, its sign-in line hidden within 1 s (${twoStopped}, tab 1 ${oneStatus.join('/')}, ${oneHidden ? ms + ' ms' : 'still shown'})`])
+        out.push([hourly === 0, `${stop}: tab 1 makes no hourly check-in after the stop (${hourly})`])
       } else {
         out.push([twoStopped && !oneHidden && oneStatus[0] !== 'refused' && hourly >= 1, `positive control: when tab 2 does not stop, tab 1 runs on and the tabs check in on the hour (tab 2 ${twoStatus}, tab 1 ${oneStatus.join('/')} hidden ${oneHidden}, ${hourly} check-ins)`])
       }
     }
     return out
+  },
+
+  async 'a stop names its build: another build\'s stop is ignored, and a stop during the check holds'(dist) {
+    const st = await session(dist)
+    await ceremony(st)
+    const checkins = () => st.dirHits.filter((p) => p === '/v1/home/checkin').length
+    const build = await st.page.evaluate(() => document.documentElement.getAttribute('data-bento-build'))
+    const other = build.replace(/^./, (c) => (c === '0' ? '1' : '0'))
+    // the stop message exactly as offline.ts posts it, from another page of this origin
+    const post = (msg) => st.page.evaluate((m) => { const c = new BroadcastChannel('bento-home-stop'); c.postMessage(m); c.close() }, msg)
+    // a stop for ANOTHER build: ignored, and this build is not recorded as withdrawn
+    await post({ t: 'stop', build: other, status: 'withdrawn' })
+    await sleep(500)
+    const after = await st.page.evaluate(() => ({ status: document.documentElement.getAttribute('data-bento-status'), stopped: document.body.classList.contains('stopped'), hidden: document.getElementById('id-box').hidden, gone: localStorage.getItem('bento-home-withdrawn') }))
+    const n = checkins()
+    await st.ctx.clock.fastForward(HOUR + 60_000)
+    const hourly = await until(async () => checkins() - n >= 1 && checkins() - n, 3000)
+    // positive control: the same message naming THIS build stops it, and records it withdrawn
+    await post({ t: 'stop', build, status: 'withdrawn' })
+    const own = await until(() => st.page.evaluate(() => document.documentElement.getAttribute('data-bento-status') === 'withdrawn' && document.getElementById('id-box').hidden && localStorage.getItem('bento-home-withdrawn')), 2000)
+    await close(st)
+    // a stop that arrives while a tab is still checking its status: the tab stays stopped when the status then answers
+    const s2 = await session(dist)
+    const b2 = await s2.page.evaluate(() => document.documentElement.getAttribute('data-bento-build'))
+    s2.status = 'hold'
+    const two = await s2.ctx.newPage()
+    await two.goto(HOME + '/', { waitUntil: 'domcontentloaded' })
+    const checking = await until(() => two.evaluate(() => document.documentElement.getAttribute('data-bento-status') === 'checking'), 3000)
+    await s2.page.evaluate((m) => { const c = new BroadcastChannel('bento-home-stop'); c.postMessage(m); c.close() }, { t: 'stop', build: b2, status: 'refused' })
+    await until(() => two.evaluate(() => document.body.classList.contains('stopped')), 2000)
+    const hits = s2.dirHits.length
+    s2.status = null
+    s2.release()
+    await sleep(1500)
+    const late = await two.evaluate(() => ({ status: document.documentElement.getAttribute('data-bento-status'), sw: document.documentElement.getAttribute('data-bento-sw'), stopped: document.body.classList.contains('stopped'), hidden: document.getElementById('id-box').hidden }))
+    const lateHits = s2.dirHits.length - hits
+    await close(s2)
+    return [
+      [after.status === 'unreachable' && !after.stopped && !after.hidden && after.gone === null, `a stop naming another build is ignored: still running, line shown, nothing recorded withdrawn (${after.status}, stopped ${after.stopped}, hidden ${after.hidden}, recorded ${after.gone})`],
+      [hourly === 1, `and the tab still checks in on the hour (${hourly || 0})`],
+      [!!own && JSON.parse(own).includes(build), `positive control: the same stop naming this build stops it and records it withdrawn (${own ? 'stopped' : 'NOT stopped'})`],
+      [!!checking && late.stopped && late.status === 'refused' && late.sw === null && late.hidden && lateHits === 0,
+        `a stop that arrives while the tab is checking holds once the status answers: no worker registered, no bento/id (${checking ? 'was checking' : 'never checking'}, ${late.status}, worker ${late.sw}, stopped ${late.stopped}, ${lateHits} requests)`],
+    ]
+  },
+
+  async 'an open tab asks the status again before every hourly check-in'(dist) {
+    const out = []
+    for (const turn of ['withdrawn', 'refused', 'blocked']) {
+      const st = await session(dist)
+      await ceremony(st)
+      const checkins = () => st.dirHits.filter((p) => p === '/v1/home/checkin').length
+      const asked = () => statusAsked.length
+      const build = await st.page.evaluate(() => document.documentElement.getAttribute('data-bento-build'))
+      const two = await st.ctx.newPage()
+      await two.goto(HOME + '/')
+      await until(() => two.evaluate(() => document.getElementById('id-box').dataset.ready === '1'))
+      await sleep(300)
+      // positive control: an hour with the status answering as at load, both tabs check in, each asking the status first
+      let n = checkins(), a = asked()
+      await st.ctx.clock.fastForward(HOUR + 60_000)
+      const control = await until(async () => checkins() - n >= 2 && checkins() - n, 3000)
+      const controlAsked = asked() - a
+      // the status turns while both tabs stay open (no reload, no new tab)
+      st.status = turn === 'withdrawn' ? await signedStatus([build]) : turn === 'refused' ? 'not a signed envelope' : 'abort'
+      await sleep(300)
+      n = checkins(); a = asked()
+      await st.ctx.clock.fastForward(HOUR)
+      await sleep(1500)
+      const hourly = checkins() - n
+      const turnAsked = asked() - a
+      const tabs = await Promise.all([st.page, two].map((p) => p.evaluate(() => [document.documentElement.getAttribute('data-bento-status'), document.getElementById('id-box').hidden]).catch((e) => [e.message.slice(0, 40), null])))
+      if (turn === 'blocked') {
+        // the release channel answers again: the next hour checks in again (the block skips, it never ends the sign-in)
+        st.status = null
+        n = checkins()
+        await st.ctx.clock.fastForward(HOUR)
+        const back = await until(async () => checkins() - n >= 1 && checkins() - n, 3000)
+        // a load while the release channel gives no answer: bento/id shows what it holds but checks in with no one
+        st.status = 'abort'
+        n = checkins()
+        await st.page.reload()
+        const shown = await settled(st)
+        await sleep(500)
+        const onLoad = checkins() - n
+        await close(st)
+        out.push([control === 2 && controlAsked >= 2, `blocked: positive control, an hour with the status answering: both tabs ask it and check in (${control || 0} check-ins, ${controlAsked} status requests)`])
+        out.push([hourly === 0 && turnAsked >= 1 && tabs.every(([s, h]) => s === 'unreachable' && h === false), `blocked: the release channel gives no answer, so that hour neither tab checks in; both stay signed in (${hourly} check-ins, ${turnAsked} status requests, ${tabs.map((x) => x.join('/')).join(', ')})`])
+        out.push([back >= 1, `blocked: once it answers again, the next hour checks in (${back || 0})`])
+        out.push([shown?.state === 'signed-in' && onLoad === 0, `blocked: a load with no answer from the release channel shows the sign-in and makes no check-in (${shown?.state}, ${onLoad})`])
+      } else {
+        await close(st)
+        out.push([control === 2 && controlAsked >= 2, `${turn}: positive control, an hour before the status turns: both tabs ask it and check in (${control || 0} check-ins, ${controlAsked} status requests)`])
+        out.push([hourly === 0 && turnAsked >= 1 && tabs.every(([s, h]) => s === turn && h === true),
+          `${turn} while both tabs are open: the next hour asks the status, both tabs stop, 0 check-ins (${hourly} check-ins, ${turnAsked} status requests, ${tabs.map((x) => x.join('/')).join(', ')})`])
+      }
+    }
+    return out
+  },
+
+  async 'a new sign-in in another tab shows here at once'(dist) {
+    const st = await session(dist)
+    const before = await box(st)
+    const b = await st.ctx.newPage()
+    await b.goto(HOME + '/')
+    await until(() => b.evaluate(() => document.getElementById('id-box').dataset.ready === '1'))
+    const got = await ceremony({ ...st, page: b })
+    const t0 = Date.now()
+    const aIn = await until(async () => { const x = await box(st); return x.state === 'signed-in' && x }, 1000)
+    const ms = Date.now() - t0
+    await close(st)
+    return [
+      [before.state === 'none' && got.box?.state === 'signed-in', `positive control: tab A starts signed out and tab B signs in (${before.state}, B ${got.box?.state})`],
+      [!!aIn && aIn.text.includes(ADDRESS), `tab A shows the new sign-in within 1 s, without a reload or a check-in of its own (${aIn ? ms + ' ms' : 'still ' + (await Promise.resolve('signed out'))})`],
+    ]
   },
 
   async "the worker's Trusted Types policy is made at startup, before the status answers"(dist) {
@@ -972,7 +1103,7 @@ const MUTANTS = {
   'no-confirm-ahead': ["a day before the 7-day cap the library asks \"Confirm it's you\"", [
     A('identity.ts', 'export const CONFIRM_BEFORE_MS = 24 * HOUR', 'export const CONFIRM_BEFORE_MS = 0')]],
   'no-check-in-on-load': ['the countersign is renewed by a check-in signed by W', [
-    A('identity-ui.ts', '    render(await agent.checkIn())\n    if (stopped) return\n', '    if (stopped) return\n')]],
+    A('identity-ui.ts', '    if (gate.onLoad()) render(await agent.checkIn())\n', '')]],
   'incident-ignored': ['an incident record covering the ceremony ends the sign-in; an earlier one does not', [
     A('identity.ts', "    if (r.incidents.some((i) => covers(i, h.ceremonyAt))) return (await this.end(h.address, 'incident', h.Wpub)) ? this.status() : this.load()\n", '')]],
   'revoked-ignored': ['a key the directory revoked ends the sign-in', [
@@ -1008,7 +1139,7 @@ const MUTANTS = {
     A('identity.ts', "else if (!(await this.end(held.address, 'invalid', held.Wpub))) return this.load()", "else if (!(await this.end(held.address, 'invalid', undefined as any))) return this.load()")]],
   // the kill switch gates bento/id (954 C6) and the cross-tab notice (948 C5 residual)
   'identity-before-status': ['a build the kill switch stops shows no sign-in line and checks in with no one', [
-    A('main-identity.ts', 'void ready.then((go) => { if (go) startIdentity() })', 'startIdentity()')]],
+    A('main-identity.ts', "void ready.then((go) => { if (go) startIdentity({ onLoad: statusAnswered, hourly: async () => (await recheckStatus()) === 'run' }) })", 'startIdentity({ onLoad: () => true, hourly: async () => true })')]],
   'identity-ignores-stop': ['a stop in one tab stops bento/id in every other tab of the same build', [
     A('main-identity.ts', 'onStopped(stopIdentity)\n', 'void onStopped\n')]],
   'no-stop-broadcast': ['a stop in one tab stops bento/id in every other tab of the same build', [
@@ -1020,7 +1151,22 @@ const MUTANTS = {
   'no-cross-tab-notice': ['another tab signing out shows here at once, with no check-in', [
     A('identity.ts', "const changed = () => { try { changes?.postMessage({ t: 'changed' }) } catch { /* no other tab to tell */ } }", 'const changed = () => {}')]],
   'no-hourly-check-in': ['an open page checks in every hour', [
-    A('identity-ui.ts', '    timer = setInterval(async () => { if (!working && !stopped) render(await agent.checkIn()) }, CHECKIN_EVERY_MS)\n', '')]],
+    A('identity-ui.ts', '    timer = setInterval(() => void tick(gate), CHECKIN_EVERY_MS)\n', '')]],
+  // security ruling 985: M1 (a withdrawn stop), M2 (the hourly re-check), M3 (build filter, put notice), N1 (stop during the check)
+  'withdrawn-stop-ignored': ['a stop in one tab stops bento/id in every other tab of the same build', [
+    A('offline.ts', "(d.status !== 'withdrawn' && d.status !== 'refused')", "(d.status !== 'refused')")]],
+  'stop-any-build': ["a stop names its build: another build's stop is ignored, and a stop during the check holds", [
+    A('offline.ts', "d.t !== 'stop' || d.build !== build ||", "d.t !== 'stop' ||")]],
+  'stop-during-check-lost': ["a stop names its build: another build's stop is ignored, and a stop during the check holds", [
+    A('offline.ts', '    if (stopped) return false\n', '')]],
+  'no-hourly-recheck': ['an open tab asks the status again before every hourly check-in', [
+    A('main-identity.ts', "hourly: async () => (await recheckStatus()) === 'run'", 'hourly: async () => true')]],
+  'recheck-unanswered-runs': ['an open tab asks the status again before every hourly check-in', [
+    A('offline.ts', "  return answered ? 'run' : 'skip'\n", "  return 'run'\n")]],
+  'check-in-unanswered-load': ['an open tab asks the status again before every hourly check-in', [
+    A('main-identity.ts', 'startIdentity({ onLoad: statusAnswered,', 'startIdentity({ onLoad: () => true,')]],
+  'no-put-notice': ['a new sign-in in another tab shows here at once', [
+    A('identity.ts', "    const wrote = await swap(expect, (s) => { s.put(held, 'held'); s.delete('last') })\n    if (wrote) changed()\n", "    const wrote = await swap(expect, (s) => { s.put(held, 'held'); s.delete('last') })\n")]],
   'connect-any': ['the policy: the release channel and the directory only, Trusted Types required', 'dist',
     (t) => t.replace('connect-src https://bento.page/releases/ https://id.bento.page', 'connect-src *')],
   'coop-same-origin': ['the policy: the release channel and the directory only, Trusted Types required', 'dist',
@@ -1047,7 +1193,7 @@ try {
     console.log('\nisolation')
     ok(sockets.length === 0, `no WebSocket was opened (${sockets.length})`)
     ok(refused.length === 0, `nothing was fetched outside the routed origins (${JSON.stringify(refused.slice(0, 5))})`)
-    ok(statusAsked.length > 0, `the library asked the release channel for its kill-switch status, the one request it makes on load (${statusAsked.length} times)`)
+    ok(statusAsked.length > 0, `the library asked the release channel for its kill-switch status, on load and before each hourly check-in (${statusAsked.length} times)`)
   } else {
     const names = ONLY && !ONLY.startsWith('--') ? [ONLY] : Object.keys(MUTANTS)
     for (const m of names) {
@@ -1056,7 +1202,8 @@ try {
       const dist = edits === 'dist' ? distMutant(honest, `m-${m}`, edit, files) : build(`m-${m}`, edits)
       const r = await rowHolds(row, dist, edits === 'dist' ? null : edits)
       const red = r.filter(([c]) => !c).map(([, msg]) => msg)
-      ok(red.length > 0, `MUTANT ${m}: red on "${row}"${red.length ? ` (${red[0]})` : ''}`)
+      ok(red.length > 0, `MUTANT ${m}: red on "${row}"${red.length ? ` (${red.length} red; first: ${red[0]})` : ''}`)
+      for (const r of red.slice(1)) console.log(`          also red: ${r}`)
     }
   }
 } finally {

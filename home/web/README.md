@@ -322,12 +322,23 @@ code.
   nothing of bento/id shows or reaches the directory. A withdrawn or untrusted
   build stops bento/id with the page, and tells the library's other tabs of the
   same build (a `BroadcastChannel`), which stop too: no tab of a withdrawn
-  build checks in again. The keys stay: withdrawal is about code. The worker's
-  Trusted Types policy is made at startup, before the status check awaits
-  anything, so no code running during the check can take its name.
+  build checks in again. A stop naming another build is ignored. An untrusted
+  status in one tab therefore stops every tab of that build: a denial of
+  service only, which anyone on the network path can already cause one tab at
+  a time. The keys stay: withdrawal is about code. The worker's Trusted Types
+  policy is made at startup, before the status check awaits anything, so no
+  code running during the check can take its name.
+- **The status is asked again every hour.** Before each hourly check-in the
+  library fetches the status again (`recheckStatus` in `offline.ts`): a build
+  withdrawn while its tabs stay open stops at the next hour, without a reload.
+  A check-in, on load or hourly, runs only when the release channel gave an
+  HTTP answer (a 404 counts). With no answer at all (offline, or a network that
+  blocks `bento.page` and lets `id.bento.page` through) the line keeps showing
+  what it holds and checks in with no one that hour.
 - **Hosting, offline.** `scripts/check-home-web-hosting.mjs <out>` checks a
   built tree against bento/id's hosting rules for bento/home (frame-ancestors
-  `'none'`, COOP at most `same-origin-allow-popups`, one CSP per path, no
+  `'none'`, COOP at most `same-origin-allow-popups`, one CSP per path, every
+  `.html` file in the tree named by a rule of its own, no
   `/.well-known/webauthn`), from the same rules `scripts/check-id-hosting.mjs`
   applies to the live host.
 

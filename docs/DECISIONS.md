@@ -15422,9 +15422,19 @@ replaced before this shipped.
 - **The kill switch gates bento/id.** bento/id starts only after the status
   check answers `current` or `unreachable`. A withdrawn or untrusted build
   stops bento/id with the page. The tab that sees the stop tells the other
-  tabs of the same build over a `BroadcastChannel`, and they stop too. The
-  worker's Trusted Types policy is made at startup, before the status await.
-  Keys survive a withdrawal.
+  tabs of the same build over a `BroadcastChannel`, and they stop too; a stop
+  naming another build is ignored. The worker's Trusted Types policy is made
+  at startup, before the status await. Keys survive a withdrawal.
+- **The status is asked again before every hourly check-in**, not only at
+  load, so a build withdrawn while its tabs stay open stops at the next hour.
+  A check-in, on load or hourly, runs only when the release channel gave an
+  HTTP answer (a 404 counts): a network that blocks `bento.page` but lets
+  `id.bento.page` through gets no check-ins that hour, and the 24-hour
+  countersign lapses if it keeps that up. The sign-in already held still
+  shows; only a new answer lets the next check-in run.
+- **An untrusted status in one tab stops every tab of that build.** That is
+  a denial of service only, and anyone on the network path can already stop
+  each tab separately by serving it a bad status, so it is accepted.
 - **Sign-outs show across tabs at once.** Every write to the agent's store is
   announced to the other tabs, and so is a tab becoming visible again. Each
   tab then re-reads the store, so a signed-out address no longer stays on
@@ -15435,4 +15445,8 @@ replaced before this shipped.
   minted. New rows in `scripts/test-home-web-identity.mjs` cover the gating,
   the cross-tab stop and notice, the hourly check-in and the hosting check.
   `scripts/test-id-origins.mjs` covers the origins. Each new rule has a mutant
-  that turns its row red.
+  that turns its row red, including the withdrawn and the untrusted cross-tab
+  stop, the build filter on a stop, a stop that arrives during the status
+  check, the hourly re-check, the notice on a new sign-in as well as a
+  sign-out, and `check-home-web-hosting.mjs` finding an `.html` file that
+  `_headers` does not name.

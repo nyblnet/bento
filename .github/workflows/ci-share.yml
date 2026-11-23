@@ -180,7 +180,9 @@ jobs:
     # sign-in host's own window is heard; the policy allows the release channel
     # and the directory and requires Trusted Types. bento/id starts only once
     # the kill switch has answered, stops with the page (in every tab of the
-    # build), and a sign-out in one tab shows in the others at once. Each rule
+    # build; a stop for another build is ignored), asks the status again before
+    # every hourly check-in, checks in only when the release channel answered,
+    # and a sign-in or sign-out in one tab shows in the others at once. Each rule
     # has a mutant that turns its row red. Before them: bento/id's origins are
     # one set (scripts/lib/id-origins.mjs), every copy pinned to it.
     runs-on: ubuntu-latest

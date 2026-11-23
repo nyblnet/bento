@@ -103,8 +103,28 @@ async function reread() {
 }
 const onVisible = () => { if (document.visibilityState === 'visible') void reread() }
 
+/**
+ * What the kill switch says before a check-in (main-identity.ts wires it to
+ * offline.ts). `onLoad`: the load's own status check got an answer, so the
+ * check-in on load may run. `hourly`: ask the status again, now; true only
+ * when it answered and this build may still run. A withdrawn or untrusted
+ * answer stops the page (and with it stopIdentity) before it returns.
+ */
+export type Gate = { onLoad: () => boolean; hourly: () => Promise<boolean> }
+
+let ticking = false
+/** The hourly check-in: the kill switch first, every time (security ruling 985, M2). */
+async function tick(gate: Gate) {
+  if (working || stopped || ticking) return
+  ticking = true
+  try {
+    if (!(await gate.hourly()) || stopped || working) return
+    render(await agent.checkIn())
+  } finally { ticking = false }
+}
+
 /** Start bento/id in this page: only after the kill switch has said this build may run. */
-export function startIdentity() {
+export function startIdentity(gate: Gate) {
   if (started || stopped) return
   started = true
   wire()
@@ -113,10 +133,10 @@ export function startIdentity() {
   void (async () => {
     render(await agent.load())
     if (stopped) return
-    render(await agent.checkIn())
+    if (gate.onLoad()) render(await agent.checkIn())
     if (stopped) return
     $('id-box').dataset.ready = '1'   // the first check-in is done (rigs wait for it)
-    timer = setInterval(async () => { if (!working && !stopped) render(await agent.checkIn()) }, CHECKIN_EVERY_MS)
+    timer = setInterval(() => void tick(gate), CHECKIN_EVERY_MS)
   })()
 }
 

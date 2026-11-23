@@ -48,6 +48,8 @@ const MUTANTS = [
     expect: 'a build that breaks home-coop' },
   { name: 'hosting-webauthn-unchecked', file: 'scripts/check-home-web-hosting.mjs', from: "  if (fs.existsSync(path.join(lib, '.well-known/webauthn'))) problems.push(", to: '  if (false) problems.push(',
     expect: 'a build that breaks home-no-webauthn' },
+  { name: 'hosting-html-unwalked', file: 'scripts/check-home-web-hosting.mjs', from: '  for (const rel of htmlFiles(lib)) {\n', to: '  for (const rel of [].slice(htmlFiles(lib).length)) {\n',
+    expect: 'an .html file in the tree with no _headers rule' },
   { name: 'release-identity-ignored', file: R, from: "  if (opts.identity) a.push('--identity')\n", to: '',
     expect: '--home-web-identity adds --identity' },
   { name: 'release-identity-default', file: R, from: "  const identity = args.includes('--home-web-identity')\n", to: '  const identity = true\n',

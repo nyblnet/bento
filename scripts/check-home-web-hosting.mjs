@@ -11,7 +11,9 @@
 //
 //   home-framing   every HTML path the library's _headers lists sends
 //                  frame-ancestors 'none' (no X-Frame-Options needed: the
-//                  CSP is what browsers enforce)
+//                  CSP is what browsers enforce), and every .html file in the
+//                  built tree has a rule of its own (a page served with no
+//                  rule is served with no frame-ancestors at all)
 //   home-coop      every path sends COOP at most same-origin-allow-popups
 //                  (stricter would cut the sign-in popup off from its opener)
 //   home-one-csp   each path has exactly one CSP header (two are two policies)
@@ -25,14 +27,31 @@ import path from 'node:path'
 import { parseHeaders } from '../home/web/serve.mjs'
 import { coopProblem, framingProblem } from './lib/id-hosting-rules.mjs'
 
+/** Every .html file under `dir`, as a forward-slash path relative to it. */
+function htmlFiles(dir, rel = '') {
+  const out = []
+  for (const e of fs.readdirSync(path.join(dir, rel), { withFileTypes: true })) {
+    const r = rel ? `${rel}/${e.name}` : e.name
+    if (e.isDirectory()) out.push(...htmlFiles(dir, r))
+    else if (/\.html$/i.test(e.name)) out.push(r)
+  }
+  return out
+}
+
 export function homeWebHostingProblems(dir) {
   const lib = path.join(dir, 'library')
   const hfile = path.join(lib, '_headers')
   if (!fs.existsSync(hfile) || !fs.existsSync(path.join(lib, 'index.html'))) return null
   const rules = parseHeaders(fs.readFileSync(hfile, 'utf8'))
   const problems = []
-  const html = rules.filter((r) => r.pattern === '/' || /\.html$/.test(r.pattern))
+  const html = rules.filter((r) => r.pattern.endsWith('/') || /\.html$/.test(r.pattern))
   if (!html.some((r) => r.pattern === '/')) problems.push('home-framing: _headers has no rule for /')
+  // every page in the tree, not only the paths _headers happens to name
+  for (const rel of htmlFiles(lib)) {
+    const served = ['/' + rel]
+    if (path.posix.basename(rel) === 'index.html') served.push('/' + rel.slice(0, -'index.html'.length))
+    for (const s of served) if (!html.some((r) => r.pattern === s)) problems.push(`home-framing: ${s} (${rel}) is served with no _headers rule, so with no frame-ancestors`)
+  }
   for (const r of rules) {
     const csp = r.headers.filter(([k]) => k.toLowerCase() === 'content-security-policy').map(([, v]) => v)
     const coop = r.headers.filter(([k]) => k.toLowerCase() === 'cross-origin-opener-policy').map(([, v]) => v)
