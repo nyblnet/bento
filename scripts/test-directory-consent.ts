@@ -160,9 +160,15 @@ const freshIp = () => `10.1.${Math.floor(++ipN / 250)}.${ipN % 250}`
 async function api(method: string, path: string, body?: unknown, o: { ip?: string; origin?: string | null } = {}) {
   const headers: Record<string, string> = { 'content-type': 'application/json', 'cf-connecting-ip': o.ip ?? freshIp() }
   if (o.origin !== null) headers.origin = o.origin ?? S
-  const r = await worker.fetch(new Request('https://id.bento.page' + path, {
-    method, body: body === undefined ? undefined : JSON.stringify(body), headers,
-  }), env as never)
+  let r: Response
+  try {
+    r = await worker.fetch(new Request('https://id.bento.page' + path, {
+      method, body: body === undefined ? undefined : JSON.stringify(body), headers,
+    }), env as never)
+  } catch (e) {
+    // the worker answers every error itself (security's D3); one that escapes is a failed row, never a crashed rig
+    return { status: -2, j: { error: 'threw', message: String((e as Error)?.message ?? e) } as Record<string, unknown>, h: new Headers(), text: '' }
+  }
   const text = await r.text()
   let j: Record<string, unknown> = {}
   try { j = JSON.parse(text) } catch { /* empty */ }
@@ -686,6 +692,9 @@ const HOUR_MS = 3_600_000
   ok(ch.ok, `the chain verifies (${ch.ok ? '' : ch.reason})`)
 }
 
+/** A refused request has no ripensAt: never let NaN (or a step backwards) into the clock; a mutant must fail rows, not crash the rig. */
+const until = (t: unknown) => (typeof t === 'number' && Number.isFinite(t) && t >= now ? t : now + X5_WAIT_MS)
+
 // =====================================================================
 // 9. X5 covers a consent key added from a browser (security 987 M1)
 // =====================================================================
@@ -701,7 +710,7 @@ const HOUR_MS = 3_600_000
   now += ROSTER_WAIT_MS + 60_000
   await current(email)
   ok(!(await headOf(email))?.members.some((m) => m.pub === K.pub), 'x5/browser-adds-ck-waits-7d: at 72 h the consent key has NOT joined')
-  now = Number(r.j.ripensAt)
+  now = until(r.j.ripensAt)
   await current(email)
   ok(!!(await headOf(email))?.members.some((m) => m.pub === K.pub), 'at 7 days it has')
   const ch = await chainOf(email)
@@ -794,7 +803,7 @@ const HOLD_PAST = 36_000 // past the hold (the mailer's timeout + 5 s)
   const f = await first
   ok(f.status === 409 && f.j.error === 'superseded', `consent/post-mail-pending: a change queued meanwhile stops the first (${f.status} ${f.j.error ?? f.j.inForce})`)
   ok((await headOf(email))?.hash === before?.hash && (await pendOf(email))?.ros === q.ros, 'the head is unchanged and the queued change still waits')
-  now = Number(q.j.ripensAt)
+  now = until(q.j.ripensAt)
   await current(email)
   const ch = await chainOf(email)
   ok(ch.ok && !!(await headOf(email))?.members.some((m) => m.pub === Y.pub), `the queued change ripens on a chain that verifies (${ch.ok ? '' : ch.reason})`)
@@ -809,7 +818,7 @@ const HOLD_PAST = 36_000 // past the hold (the mailer's timeout + 5 s)
   const got = await reached(h)
   now += HOLD_PAST
   const q = got ? await ask(email, { by: A, add: Y }) : { status: -1, j: {} as Record<string, unknown> }
-  now = Number(q.j.ripensAt ?? now)
+  now = until(q.j.ripensAt)
   await current(email) // it ripens
   const moved = await headOf(email)
   ok(q.status === 202 && !!moved?.members.some((m) => m.pub === Y.pub) && !(await pendOf(email)), `a queued change ripened while the first's notice was out (${q.status})`)
@@ -839,7 +848,7 @@ const HOLD_PAST = 36_000 // past the hold (the mailer's timeout + 5 s)
   now += ROSTER_WAIT_MS + 60_000 // past A's cooldown
   const rm = await ask(email, { by: A, remove: C0.pub })
   ok(rm.status === 202, `the passkey asks to remove the consent key (${rm.status} ${rm.j.error ?? ''})`)
-  now = Number(rm.j.ripensAt)
+  now = until(rm.j.ripensAt)
   await current(email)
   ok(!(await headOf(email))?.members.some((m) => m.pub === C0.pub) && !(await store(email)).has(`pk:${C0.pub}`), 'once removed, its record is gone')
 }
