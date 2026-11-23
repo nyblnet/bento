@@ -425,23 +425,29 @@ const SERVERS_UP_OFFLINE = ENGINE === 'chromium'
 async function offline(ctx) { if (ENGINE !== 'webkit') await ctx.setOffline(true); if (!SERVERS_UP_OFFLINE) await down() }
 async function online(ctx) { if (!SERVERS_UP_OFFLINE) await up(); if (ENGINE !== 'webkit') await ctx.setOffline(false) }
 /**
- * A new page. In Firefox it first loads /probe.html (on the library origin, outside the build: no
- * worker registers there and no row reads it) and must answer one evaluate before it is used.
- * Playwright's Firefox (1.61.1, Juggler) sometimes loses a new page's MAIN-world execution
- * context on its first navigation off about:blank: it logs "FrameTree.js:545 TypeError: can't
- * access property "windowGlobalChild", this.domWindow() is undefined", reports only the utility
- * world after navigationCommitted, and every page.evaluate then waits forever (CI, protocol log;
- * every Firefox hang in this rig was the first library visit of a new page). That loss is the
- * harness's, not the library's, so it is taken on the probe: a page that does not answer is
- * replaced and said in a note, and the navigations under test start from a page that answers.
+ * A new page. In Firefox it first loads /probe.html (on the library origin, outside the build, sent
+ * with no headers of its own: no worker registers there and no row reads it).
+ *
+ * Playwright's Firefox (1.61.1, Juggler) loses a new page's MAIN-world execution context when the
+ * page's initial about:blank navigates straight to a document sent with Cross-Origin-Opener-Policy,
+ * as the library is (same-origin-allow-popups). Juggler logs "FrameTree.js:545 TypeError: can't
+ * access property "windowGlobalChild", this.domWindow() is undefined", reports only its utility
+ * world, and every page.evaluate then waits forever. Measured on CI with no bento code at all:
+ * about:blank -> a COOP page hung 34 of 300 evaluates; the same with a plain same-origin page
+ * first hung 0 of 300; without COOP, 0 of 1200. In this rig, 10 of 30 runs hung before (each on a
+ * new page's first visit), 0 of 50 after. The loss is the harness's: the library's page works.
+ * So the navigations under test start from the probe. A page that still does not answer is
+ * replaced, and said in a note; that branch has not run on CI. The run's last notes count both.
  * Chromium and WebKit pages are used as they come.
  */
+let warmed = 0, replaced = 0
 async function newPage(ctx) {
   if (ENGINE !== 'firefox') return ctx.newPage()
   for (let i = 1; i <= 3; i++) {
     const p = await ctx.newPage()
     await limit(p.goto(O.library + '/probe.html'), 15000, 'the warm-up navigation').catch(() => {})
-    if (await limit(p.evaluate(() => document.readyState), 5000, 'the warm-up evaluate').then(() => true, () => false)) return p
+    if (await limit(p.evaluate(() => document.readyState), 5000, 'the warm-up evaluate').then(() => true, () => false)) { warmed++; return p }
+    replaced++
     note(`firefox: a new page never answered an evaluate after its first navigation (Juggler lost its main world); page replaced (${i} of 3)`)
     await limit(p.close(), 10000, 'closing a page').catch(() => {})
   }
@@ -792,6 +798,7 @@ try {
   ok(false, `the run threw: ${String(e?.stack ?? e).split('\n').slice(0, 3).join(' | ')}`)
 }
 
+if (ENGINE === 'firefox') note(`firefox: ${warmed} new page(s) loaded /probe.html before the library (the Juggler COOP workaround); ${replaced} replaced`)
 ok(!crashed, `the browser stayed up for the whole run (${ENGINE})`)
 closing = true
 for (const c of profiles) await c.close().catch(() => {})
