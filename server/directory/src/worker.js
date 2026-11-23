@@ -20,8 +20,8 @@
 // mailed confirmation is a link that completes only on the sign-in host (G13).
 // A typed code on the same host contradicts that, and nothing could make a
 // binding for the others to serve, so every one of those routes answers 410
-// and the object that held bindings is gone. Account deletion comes back as a
-// mailed link to the sign-in host or a member's assertion.
+// and the object that held bindings is gone. Account deletion is back as a
+// member's request at /v1/roster/delete (deletion.js), on new paths.
 
 import { addressKey, normalize } from './address.js'
 import { issueChallenge, openChallenge } from './challenge.js'
@@ -115,7 +115,7 @@ export const RETIRED = Object.freeze([
 /** Every route anyone's page may call (CORS `*`): the ones below, and the retired ones' 410. */
 const PUBLIC = Object.freeze([
   '/v1/keys', '/v1/roster', '/v1/roster/challenge', '/v1/roster/setup/start', '/v1/roster/setup', '/v1/roster/request', '/v1/void',
-  '/v1/roster/reset/start', '/v1/roster/reset', '/v1/roster/reset/void', STATUS_ROUTE, ...RETIRED,
+  '/v1/roster/reset/start', '/v1/roster/reset', '/v1/roster/reset/void', '/v1/roster/delete/challenge', '/v1/roster/delete', STATUS_ROUTE, ...RETIRED,
 ])
 
 export default {
@@ -286,8 +286,34 @@ async function route(req, env) {
     return json(r.status, r.body)
   }
 
+  if (p === '/v1/roster/delete/challenge') {
+    // a deletion request's challenge: its own audience, so no other request's challenge can carry one
+    const email = normalize(b.email ?? '')
+    if (!email) return json(400, { error: 'bad-address' })
+    if (!(await ledger(env, ip, 'challenge'))) return json(429, { error: 'rate-limited' })
+    return json(200, { challenge: await issueChallenge(env.CHALLENGE_KEY, DELETE_AUDIENCE, await addressKey(email), Date.now()) })
+  }
+
+  if (p === '/v1/roster/delete') {
+    // a member asks to delete the account (deletion.js): queued 72 hours, with a void link mailed to the address
+    const email = normalize(b.email ?? '')
+    if (!email || typeof b.text !== 'string') return json(400, { error: 'invalid' })
+    if (!(await ledger(env, ip, 'request'))) return json(429, { error: 'rate-limited' })
+    const dirNonce = b.text.split('.')[3]
+    const c = await openChallenge(env.CHALLENGE_KEY, DELETE_AUDIENCE, await addressKey(email), dirNonce, Date.now())
+    if (!c) return json(400, { error: 'nonce' })
+    const r = await call(await rosterStub(env, email), 'deleteRequest', {
+      text: b.text, credId: b.credId, assertion: b.assertion, signer: b.signer, sig: b.sig, cns: b.cns, rq: b.rq,
+      challenge: dirNonce, nonce: c.nonce, issued: c.issued, os: origin,
+    })
+    return json(r.status, r.body)
+  }
+
   return json(404, { error: 'not-found' }, headersFor(p))
 }
+
+/** The sealed audience of a deletion request's challenge (challenge.js). */
+const DELETE_AUDIENCE = 'adel'
 
 export { Roster }
 

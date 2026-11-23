@@ -51,6 +51,12 @@ export const ROUTES = Object.freeze({
   signoutChallenge: '/v1/web/signout/challenge',
   /** POST {text, assertion} → 200 {ok: true, at}: every browser key of the account is revoked. */
   signout: '/v1/web/signout',
+  /** GET ?e=<address> → 200 {ros, pending}: the account's current head (404 none, 410 deleted). */
+  roster: '/v1/roster',
+  /** POST {email} → 200 {challenge}: a sealed challenge of the deletion audience. */
+  deleteChallenge: '/v1/roster/delete/challenge',
+  /** POST {email, text, credId, assertion} → 202 {requestedAt, ripensAt}: the deletion waits 72 hours. */
+  deleteRequest: '/v1/roster/delete',
 })
 
 /** A sealed directory challenge: 40 bytes, base64url. Never 32: a statement's challenge is a 32-byte hash. */
@@ -212,6 +218,53 @@ export async function signOutEverywhere(address) {
     throw new Refused(typeof r.body.error === 'string' && /^[a-z-]{1,40}$/.test(r.body.error) ? r.body.error : 'refused')
   }
   return r.body.at
+}
+
+/**
+ * The text a member signs to ask for the account's deletion: the kernel's
+ * `adel.<b64u(address)>.<headHash>.<dirNonce>` (kernel/src/roster.ts
+ * buildAdel). This page is static and cannot import the kernel, so this is a
+ * copy, and the directory rig checks it writes exactly what buildAdel writes.
+ */
+export function adelText({ address, headHash, nonce }) {
+  return ['adel', b64u(new TextEncoder().encode(address)), headHash, nonce].join('.')
+}
+
+/**
+ * Ask for the account's deletion: the current head, a deletion challenge, one
+ * passkey assertion over `adel.`, then the request. Every refusal the
+ * directory can give before the passkey prompt is given before it: no account,
+ * already deleted, a change already waiting, or the route not live (404/501:
+ * no ceremony for a request that cannot be taken). The deletion then waits 72
+ * hours, and the mail it sends can stop it. Answers {requestedAt, ripensAt}.
+ */
+export async function askDeletion(address) {
+  let h
+  try {
+    const r = await fetch(`${DIRECTORY}${ROUTES.roster}?e=${encodeURIComponent(address)}`, { credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer' })
+    h = { status: r.status, body: await r.json().catch(() => ({})) }
+  } catch {
+    throw new Refused('network')
+  }
+  if (h.status === 404) throw new Refused('no-account')
+  if (h.status === 410) throw new Refused('deleted')
+  if (h.status !== 200 || typeof h.body.ros !== 'string') throw new Refused('directory')
+  if (h.body.pending) throw new Refused('pending')
+  const headHash = b64u(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(h.body.ros))))
+  const c = await post(ROUTES.deleteChallenge, { email: address })
+  if (c.status === 404 || c.status === 501) throw new Refused('deletion-not-live')
+  const nonce = c.body.challenge
+  if (c.status !== 200 || typeof nonce !== 'string' || !SEALED.test(nonce)) throw new Refused('directory')
+  const text = adelText({ address, headHash, nonce })
+  const cred = await navigator.credentials.get({
+    publicKey: { rpId: RP_ID, challenge: await challengeFor(text), userVerification: 'required', allowCredentials: [], timeout: TIMEOUT },
+  })
+  const a = assertionOf(cred)
+  const r = await post(ROUTES.deleteRequest, { email: address, text, credId: a.id, assertion: a })
+  if (r.status !== 202 || !Number.isSafeInteger(r.body.ripensAt)) {
+    throw new Refused(typeof r.body.error === 'string' && /^[a-z-]{1,40}$/.test(r.body.error) ? r.body.error : 'refused')
+  }
+  return { requestedAt: r.body.requestedAt, ripensAt: r.body.ripensAt }
 }
 
 /** A directory time as the mails write it: "2026-11-12 14:03 UTC". */

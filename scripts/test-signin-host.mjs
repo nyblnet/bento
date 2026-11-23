@@ -323,8 +323,8 @@ try {
         const u = fnBody(f.client, 'userHandle') || ''
         return /'bento-dir\/1\/addr\\n' \+ address/.test(u) && /new Uint8Array\(48\)/.test(u) && /crypto\.getRandomValues\(new Uint8Array\(16\)\), 32\)/.test(u)
       },
-      'every get and create asks for user verification': (f) => (all(f).match(/userVerification: 'required'/g) || []).length === 3 && !/userVerification: '(preferred|discouraged)'/.test(all(f)),
-      'a raw challenge is a 40-byte sealed one, never 32 (a statement hash)': (f) => /const SEALED = \/\^\[A-Za-z0-9_-\]\{54\}\$\/\n/.test(f.client) && (f.client.match(/!SEALED\.test\(/g) || []).length === 3,
+      'every get and create asks for user verification': (f) => (all(f).match(/userVerification: 'required'/g) || []).length === 4 && !/userVerification: '(preferred|discouraged)'/.test(all(f)),
+      'a raw challenge is a 40-byte sealed one, never 32 (a statement hash)': (f) => /const SEALED = \/\^\[A-Za-z0-9_-\]\{54\}\$\/\n/.test(f.client) && (f.client.match(/!SEALED\.test\(/g) || []).length === 4,
     }
     const XL = {
       'X7: no page makes, shows or asks for a code (the X3 sentence alone mentions one)': (h, f) => {

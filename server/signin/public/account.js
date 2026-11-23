@@ -2,11 +2,12 @@
 // Copyright (c) 2026 The Bento authors
 //
 // The sign-in host's account page (/account): sign in on this host, ask for a
-// setup or reset link, and sign out every browser. It reads nothing from its
+// setup or reset link, sign out every browser, and ask for the account's
+// deletion. It reads nothing from its
 // URL and answers no message: everything here starts with the person's own
 // button press on this page (account-client.js has the rules).
 
-import { Refused, isAddress, savedAccount, signInHere, signOutEverywhere, startLink, when } from './account-client.js'
+import { Refused, askDeletion, isAddress, savedAccount, signInHere, signOutEverywhere, startLink, when } from './account-client.js'
 
 const $ = (id) => document.getElementById(id)
 let busy = false
@@ -28,6 +29,10 @@ const FAILED = {
   'network': 'bento/id could not be reached. Nothing changed. Try again.',
   'busy': 'Too many tries from here. Wait a while, then try again.',
   'not-implemented': 'Signing every browser out is not available yet. Nothing changed.',
+  'deletion-not-live': 'Deleting an account is not available yet. Nothing changed.',
+  'pending': 'Another change to this account is waiting. Nothing changed. Try again once it has taken effect or was stopped.',
+  'cooldown': 'That passkey cannot ask for anything right now: a request it made was cancelled from the link in an email. Nothing changed.',
+  'deleted': 'This account was already deleted.',
 }
 
 function fail(e) {
@@ -75,6 +80,15 @@ const signOutAll = () => run(async () => {
   show('signed-out-all')
 })
 
+const deleteAccount = () => run(async () => {
+  const account = savedAccount()
+  if (!account) return home()
+  show('working')
+  const { ripensAt } = await askDeletion(account)
+  $('delete-at').textContent = when(ripensAt)
+  show('deletion-waiting')
+})
+
 function start() {
   $('signin').addEventListener('click', signIn)
   $('switch').addEventListener('click', signIn)
@@ -82,7 +96,9 @@ function start() {
   $('reset-start').addEventListener('click', () => ask('reset'))
   $('signout-ask').addEventListener('click', () => { if (!busy && savedAccount()) show('confirm-signout') })
   $('signout').addEventListener('click', signOutAll)
-  for (const id of ['signout-cancel', 'mailed-back', 'signout-back', 'failed-back']) $(id).addEventListener('click', () => { if (!busy) home() })
+  $('delete-ask').addEventListener('click', () => { if (!busy && savedAccount()) show('confirm-delete') })
+  $('delete').addEventListener('click', deleteAccount)
+  for (const id of ['signout-cancel', 'mailed-back', 'signout-back', 'failed-back', 'delete-cancel', 'delete-back']) $(id).addEventListener('click', () => { if (!busy) home() })
   home()
 }
 

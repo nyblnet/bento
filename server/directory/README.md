@@ -12,8 +12,8 @@ confirmation is a link that completes only on the sign-in host (G13), so a
 typed code on this host contradicts it, and with no way to make a binding the
 lookup and deletions had nothing to serve. Every one of those routes answers
 **410**, and the object that held bindings is gone. The directory was never
-deployed, so nothing was migrated. Account deletion returns as a mailed link
-to the sign-in host or a member's assertion.
+deployed, so nothing was migrated. Account deletion is back as a member's
+request on new paths (below); deletion without a passkey is not built.
 
 ## What it never holds
 
@@ -27,7 +27,7 @@ linked to the next.
 
 | route | answer |
 |---|---|
-| `/v1/bind/start`, `/v1/bind/complete`, `/v1/lookup`, `/v1/delete`, `/v1/delete/start`, `/v1/delete/complete` | retired: **410** `{error: "gone"}` for any method (a preflight included) and body; nothing is read, mailed or stored |
+| `/v1/bind/start`, `/v1/bind/complete`, `/v1/lookup`, `/v1/delete`, `/v1/delete/start`, `/v1/delete/complete` | retired: **410** `{error: "gone"}` for any method (a preflight included) and body; nothing is read, mailed or stored (account deletion uses new paths, `/v1/roster/delete*`) |
 | `GET /v1/keys` | the directory's public keys, for diagnosis (clients trust the list in the signed release) |
 
 The roster's routes and the sign-in host's are below.
@@ -213,8 +213,51 @@ setup; not built past the age rule yet). When it takes effect the roster is
 that one passkey. `GET /v1/roster` reports `createdAt` and `newAccount`.
 
 **Not built yet**: the passkey signature that stops a reset, the chain route,
-consent-key and recovery-key members, account deletion, and the incident
-lever across addresses.
+consent-key and recovery-key members, deletion without a passkey, and the
+incident lever across addresses.
+
+### Account deletion (`src/deletion.js`)
+
+| route | body | answer |
+|---|---|---|
+| `POST /v1/roster/delete/challenge` | `{email}` | `{challenge}`, sealed for its own audience (`adel`): no other request's challenge carries a deletion |
+| `POST /v1/roster/delete` | `{email, text, credId, assertion}` (a passkey); `{email, text, signer, sig}` (the recovery key); `{email, text, signer, cns, sig}` (a consent key) | **202** `{requestedAt, ripensAt}` queued; 400 `grammar` (the text is not an `adel.`; the challenge is NOT spent), `nonce`, `rq`, `signer`, `proof`, a kernel reason; 403 `cooldown`, `quarantined`; 409 `pending`, `roster-head`; 410 `deleted`; 503 `mail` |
+
+`text` is the kernel's `adel.<b64u(address)>.<headHash>.<dirNonce>` over the
+current head, signed by an unquarantined member (the kernel's `verifyAdel`
+is the one verifier; the object spends the challenge first and checks a
+passkey's counter). The rules:
+- It is QUEUED like a change: one at a time (409 `pending` while anything
+  waits, a removal's undo window included), 72 hours on the directory's
+  clock, and only once its waiting notice was accepted by the mailer. The
+  notice says DELETE in words, the second, the host class, the key that asked
+  by name and age, the whole roster and the void link. No budget holds it back.
+- An opener can never cause a deletion: a request naming one (`rq`) is refused.
+- The void link is kind `d` (Cancel or Remove) or `e` (Cancel only, when the
+  asker is the only live member). **Cancel bars the asker 72 hours whatever its
+  kind**, so a stolen key cannot re-file the moment it is voided and keep the
+  owner's removal of it out of the queue. **Remove** suspends the asker at once
+  with a `q` link that carries the `adel.` and its proof (the kernel verifies
+  it), and queues its removal with an undo link, as for a member change.
+- **A reset request drops a waiting deletion**: logged `preempted`, never set
+  aside, and stopping the reset does not bring it back.
+- When the wait ends it is carried out only if it is still the waiting change,
+  the hold is off, the head is still the one it named and its times say 72
+  hours passed. The directory first signs the deletion record (the kernel's
+  `rdel.`: storage name, last head hash and seq, requested and deleted times):
+  without the key nothing is removed. Then every other key the object holds
+  goes (chain, passkeys, browser certificates, cooldowns, tokens, challenges,
+  the event log) and the address is told.
+- Afterwards `GET /v1/roster` and the browser head answer **410**
+  `{error: "deleted", deleted: {text, sig}}`, a certificate's status answers
+  `{state: "deleted", deleted}`, a check-in 403 `deleted`, the deletion's void
+  link `deleted`: never a bare 404 or `unknown`. A new setup at the address
+  works; its head carries the earlier record (`deleted`), so a peer with the old
+  pin reads it as a new account that changed.
+
+Not decided here (the maintainer's): deletion without a passkey (a mailed link,
+which would need a member's stop statement to be no faster or less stoppable
+than a reset, or "reset, then delete"), and how long the record is kept.
 
 ### Mailed links: the contract with the sign-in host
 

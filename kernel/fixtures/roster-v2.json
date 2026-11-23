@@ -5952,6 +5952,849 @@
       "reason": "proof"
     },
     {
+      "name": "ok/q-voided-adel",
+      "about": "a void of a deletion request quarantines the member that asked, at once; it carries the adel. text",
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.0..pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk.AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE.1800000000000",
+          "rip": "rip.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.1800000000000.1800000000000.m..dir-1",
+          "ripSig": "YJpj8Ogj6X0cA_K2DM2P4SitRzp1CmT9os6KswvABVtPbC7rhB4P2CA0vMytQTm_eyZRfsW2-CJZw7Rdt-4Yug"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.1.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ.AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI.1800003600000",
+          "rip": "rip.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.1800003600000.1800262800000.m..dir-1",
+          "ripSig": "x8SArwO065R8J7IV-E8SBsa5HnpxtvzafnYZO4dovmNUz1-D7qTzGD7af00CXu6KOftalT7eCTlUMgqWvT1pnQ",
+          "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSy1ncm5nVEFtN0pqUGRrVlNvTEpRdlVqSWZ3dEZKOExISDFPLTFBOEJnMCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCIBNK67i4b3slUJnYhSX5K-DLokLdccxalqFaO8DbdYFkAiEA-ru7UajMqtxmgI2EuhOgMFLZjVRL9y3DaG3vhfwM_e0"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.2.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM.1800288000000",
+          "rip": "rip.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.1800288000000.1800547200000.m..dir-1",
+          "ripSig": "0_zNY4aAy7iG6Tz2jL3E1HmA_pG88c2wcPpEdjYqHTgI5YLX-VHeNw-JvyVZk2_NfSNMT5UmiddRvX1M8h8iZQ",
+          "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicmJEYTBSNjhLWncxS0VFOHFlUWQ0VEFxYVJ0MUVEbEpqYmVSSEdnaEtQVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCIQDvR4IPECwr55RMCcCHQK0MO81QGt8tk6VbbVDNx_MBQgIgQeYSHqkQgQjZDWtQJjgRH9d2EFR4G8lFhxncxlLUz54"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.3.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ.1800576000000",
+          "rip": "rip.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.1800576000000.1800576000000.q.zMlS6Ja1YpK0HURynkaeAxYHwAAuQxk5DQnIa23nntU.dir-1",
+          "ripSig": "qMoJuv6dc7fNPRUA1x340H5mo4DVzs7FA2yh4yuMMbVmF7VOQHkZGKoMN5XQc4cKxy0SNYMCNGzQugU1X5jHgg",
+          "voided": {
+            "ros": "adel.YWxpY2VAZXhhbXBsZS5jb20.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY",
+            "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+            "assertion": {
+              "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+              "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiek1sUzZKYTFZcEswSFVSeW5rYWVBeFlId0FBdVF4azVEUW5JYTIzbm50VSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+              "signature": "MEYCIQDmYMTJHCWnWpWxO9oSgpg1vZ-zwK1kl0EZIc9zOcdmoQIhAPYc0rKVtqIjFMb_ugJARc9DFCQXqvDu-Pxu3-8CAf6W"
+            }
+          }
+        }
+      ],
+      "expect": "accept",
+      "state": {
+        "seq": 3,
+        "ripenedAt": 1800576000000,
+        "members": [
+          {
+            "kind": "pk",
+            "key": "pk1",
+            "quarantined": false,
+            "since": 1800000000000
+          },
+          {
+            "kind": "pk",
+            "key": "pk2",
+            "quarantined": true,
+            "since": 1800262800000
+          },
+          {
+            "kind": "rk",
+            "key": "rk1",
+            "quarantined": false,
+            "since": 1800547200000
+          }
+        ],
+        "createdAt": 1800000000000,
+        "lastResetAt": null,
+        "sinceExact": true
+      }
+    },
+    {
+      "name": "ok/q-voided-adel-by-recovery-key",
+      "about": "the voided deletion request was signed by the recovery key (a raw signature)",
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.0..pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk.AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE.1800000000000",
+          "rip": "rip.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.1800000000000.1800000000000.m..dir-1",
+          "ripSig": "rL9-k7iKbQJLiiP9lKUCJ9xwiTWxRqJxCHFfFODCIeJkZau73ZoqsfJohCOiJXPJthJJxfw0mflAHrh9cA85pw"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.1.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ.AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI.1800003600000",
+          "rip": "rip.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.1800003600000.1800262800000.m..dir-1",
+          "ripSig": "79yHcaBxDo6vCdpd5kWuGfIm1zKjZUnU3hhfGsqhwNh75hhOezIQQoh0DrvK__qJttbDRBptDsEZ5vz9Ky2v3Q",
+          "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSy1ncm5nVEFtN0pqUGRrVlNvTEpRdlVqSWZ3dEZKOExISDFPLTFBOEJnMCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEYCIQCdWVnhHWQcFNyRBYAHmZbBtBmZQqImhrDSpDA-fsv_WAIhAItcBw1sqsxqiI4Fsl135EVBRl6s2hJF4_Col-wnGbe0"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.2.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM.1800288000000",
+          "rip": "rip.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.1800288000000.1800547200000.m..dir-1",
+          "ripSig": "gD2coEiVSunUB37IgI7O2o4xTlyv8ep2-N5E8mo0EKlSZXg4W-kCdhZAP1D9fvB6MOVn5tYdvA91I3f8xuS1AA",
+          "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicmJEYTBSNjhLWncxS0VFOHFlUWQ0VEFxYVJ0MUVEbEpqYmVSSEdnaEtQVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEQCIHHYknwIAm4LuqOuMTWYKZHy4WGbZDH3t61nrUWnQSawAiB3S616fmE_ZvupUQ9dArTEfh2DvbXwTvLaTrZMhexJRg"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.3.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4~q.BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ.1800576000000",
+          "rip": "rip.FLqJidHhWWZ1BBZn3D7mBjvrqjdKmeNzeM1b6n46wv0.1800576000000.1800576000000.q.zMlS6Ja1YpK0HURynkaeAxYHwAAuQxk5DQnIa23nntU.dir-1",
+          "ripSig": "nOM4Qvore0_PlifE_bxGbIbR20t8ODe5xMGoHLhqYCpm9ZWljJwbCHReMU9Gm5YuUst4fdDjUJk_YKoptLJ7zw",
+          "voided": {
+            "ros": "adel.YWxpY2VAZXhhbXBsZS5jb20.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY",
+            "signer": "BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4",
+            "sig": "3ud-izSN7mvwtcVx8WfAwIrN0f-Ey5rHIkzUdm8exEQqNUhVgQGkAcNKuEi14u2FVyFIjBSgP2jAcs6EGUr3fQ"
+          }
+        }
+      ],
+      "expect": "accept",
+      "state": {
+        "seq": 3,
+        "ripenedAt": 1800576000000,
+        "members": [
+          {
+            "kind": "pk",
+            "key": "pk1",
+            "quarantined": false,
+            "since": 1800000000000
+          },
+          {
+            "kind": "pk",
+            "key": "pk2",
+            "quarantined": false,
+            "since": 1800262800000
+          },
+          {
+            "kind": "rk",
+            "key": "rk1",
+            "quarantined": true,
+            "since": 1800547200000
+          }
+        ],
+        "createdAt": 1800000000000,
+        "lastResetAt": null,
+        "sinceExact": true
+      }
+    },
+    {
+      "name": "ok/q-voided-adel-then-x",
+      "about": "the asker of the voided deletion is removed 72 h later",
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.0..pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk.AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE.1800000000000",
+          "rip": "rip.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.1800000000000.1800000000000.m..dir-1",
+          "ripSig": "g8JfpQzExCotPidb-c4zHJu01uHxUtTLGm39jvrwwGAieFbfmmPGkxMOUX1ZqQgBA-f_9DDhxxxemmuFnIA8NA"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.1.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ.AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI.1800003600000",
+          "rip": "rip.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.1800003600000.1800262800000.m..dir-1",
+          "ripSig": "Y75f4uTaKO_wyy1oivkHPggVr99rqU_WvXW4s0jYH04AhtvQDVnsiPa-btPoUGjWqDDdjSzk3OLZ1gPmQUFw3Q",
+          "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSy1ncm5nVEFtN0pqUGRrVlNvTEpRdlVqSWZ3dEZKOExISDFPLTFBOEJnMCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEQCIDMiN-sKF9O9MBaFtmUM1ymcz8pzdXKpGzB5nJ_VmMU8AiAYc9lUuK4KbYLIcqRIXKEzjJYldKUmTJYmpGlSfovkpA"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.2.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM.1800288000000",
+          "rip": "rip.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.1800288000000.1800547200000.m..dir-1",
+          "ripSig": "hBhqSLpA7jcwHEbpeao--0uayn8hFTsDwDJHtRkw3gATXjtoaYmZRZ7gyguvb8m1PnCQ7KlfiGpLsPh04Tiz5w",
+          "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicmJEYTBSNjhLWncxS0VFOHFlUWQ0VEFxYVJ0MUVEbEpqYmVSSEdnaEtQVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCIQCnOjsBxK_LE_LpyyNLs5yJarPOYbtXaTjxCkRkFF3ioAIgL7rVXpVymPnxi0f_D1eQf7IPzgxTitLB6O08tkQJTpQ"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.3.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ.1800576000000",
+          "rip": "rip.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.1800576000000.1800576000000.q.zMlS6Ja1YpK0HURynkaeAxYHwAAuQxk5DQnIa23nntU.dir-1",
+          "ripSig": "I3s_WDPAVYGipwP_ZXQIRN_LqKzhdIyimpmsfdHkuWwwzIS3zhdMKFe2siJt7Nwidf2QhyR5H7V1miGPro9okA",
+          "voided": {
+            "ros": "adel.YWxpY2VAZXhhbXBsZS5jb20.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY",
+            "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+            "assertion": {
+              "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+              "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiek1sUzZKYTFZcEswSFVSeW5rYWVBeFlId0FBdVF4azVEUW5JYTIzbm50VSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+              "signature": "MEQCIDN7rBCn_sW-ojUtnUTxnEa0IdneWZKdFpj3nJvbc2TSAiBRlKyRJMnXqXKXuEGH6rwlhmRRygodrzSji6CkVJGx3g"
+            }
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800576000000",
+          "rip": "rip.PUN2HWMS_-J9vbSlWbkadr7g_PZC-3STspm30ESP_QI.1800576000000.1800835200000.x.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.dir-1",
+          "ripSig": "LP3oK__RyS0a4NPIQrq9V9lNndXFKbn-Of3Xvq3x23JbWBOjIKjNMv28j65BxOhMlRsdlwm0IxXTH9RGBZEnlg"
+        }
+      ],
+      "expect": "accept",
+      "state": {
+        "seq": 4,
+        "ripenedAt": 1800835200000,
+        "members": [
+          {
+            "kind": "pk",
+            "key": "pk1",
+            "quarantined": false,
+            "since": 1800000000000
+          },
+          {
+            "kind": "rk",
+            "key": "rk1",
+            "quarantined": false,
+            "since": 1800547200000
+          }
+        ],
+        "createdAt": 1800000000000,
+        "lastResetAt": null,
+        "sinceExact": true
+      }
+    },
+    {
+      "name": "ok/q-voided-adel-then-u",
+      "about": "or the removal is undone",
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.0..pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk.AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE.1800000000000",
+          "rip": "rip.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.1800000000000.1800000000000.m..dir-1",
+          "ripSig": "EzNpGvyHWXRrs2vN9BFRwqlBo7F9afur3ibheOEP_lUgASc3xIMiImhL8-FmV-wChuzR0tuqdvIbTeuUSKmt7g"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.1.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ.AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI.1800003600000",
+          "rip": "rip.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.1800003600000.1800262800000.m..dir-1",
+          "ripSig": "6wJ7BPpl-P9umuskyHuPmDQuOtKrl2zCfY4xlX17ygUkuTGwA0JgjiK8Gi3W3J6b-WbcjfG3kxC7mVAWwzTE6A",
+          "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSy1ncm5nVEFtN0pqUGRrVlNvTEpRdlVqSWZ3dEZKOExISDFPLTFBOEJnMCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEYCIQCLlKcRL8wuiC_kEgsGOmOpCDQmNoluNTyphl4DWzL3HAIhAPiHD_uANw3lIVaBC3sQ5Hjw-ny9-lgGE7ynINDHLPPl"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.2.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM.1800288000000",
+          "rip": "rip.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.1800288000000.1800547200000.m..dir-1",
+          "ripSig": "FC-r03ghpgBkxEkH69ymP4FwBgG7W-rTtyHsbQS4L-NndHsqIiYhUeWYj-slJpdf4UKhD_HlpZtGapJQnBpmrg",
+          "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicmJEYTBSNjhLWncxS0VFOHFlUWQ0VEFxYVJ0MUVEbEpqYmVSSEdnaEtQVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCIQDAXZDojSSW5KDGlxurQJiVfuVaZrC0uAv7QYnpr-Q9CQIgJDHAVIX9zDyAfas7Yvlk56C_alHmD6oSM947lvOhxwQ"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.3.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ.1800576000000",
+          "rip": "rip.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.1800576000000.1800576000000.q.zMlS6Ja1YpK0HURynkaeAxYHwAAuQxk5DQnIa23nntU.dir-1",
+          "ripSig": "SYzmjjqJhhs7Rx3pEXKnFzBZBQ7neigRsL9SxXtG9_wG_ea71muWNZyJFtluPmJdX96iyFAMg2OS0cSpcVQ4tQ",
+          "voided": {
+            "ros": "adel.YWxpY2VAZXhhbXBsZS5jb20.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY",
+            "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+            "assertion": {
+              "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+              "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiek1sUzZKYTFZcEswSFVSeW5rYWVBeFlId0FBdVF4azVEUW5JYTIzbm50VSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+              "signature": "MEUCIC6VTpMbuHoCGEBQQTRn0M_GJqjG4j1D0nCsWtS1iTy7AiEAjIsuWmNsYgK9ioAe8XqZ7Q_1lZve-yZKPDzN8lDx7t0"
+            }
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800612000000",
+          "rip": "rip.rOqtR9ciNJS50HBcXCzOvzDQz4eGsBqADxDjx3_tKPY.1800612000000.1800612000000.u.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.dir-1",
+          "ripSig": "MgZ6ybpJBxmQPrbVQ7BjG2l6Wi30BqFjwILsl_63xS5UFTCyg_RspyIqacP_3iGd2ILwwn-JUxQ11vxZ83ysYA"
+        }
+      ],
+      "expect": "accept",
+      "state": {
+        "seq": 4,
+        "ripenedAt": 1800612000000,
+        "members": [
+          {
+            "kind": "pk",
+            "key": "pk1",
+            "quarantined": false,
+            "since": 1800000000000
+          },
+          {
+            "kind": "pk",
+            "key": "pk2",
+            "quarantined": false,
+            "since": 1800262800000
+          },
+          {
+            "kind": "rk",
+            "key": "rk1",
+            "quarantined": false,
+            "since": 1800547200000
+          }
+        ],
+        "createdAt": 1800000000000,
+        "lastResetAt": null,
+        "sinceExact": true
+      }
+    },
+    {
+      "name": "ok/pinned-q-voided-adel-then-x",
+      "about": "from a pin of the q link that voided a deletion: its evidence names pk2, so the removal follows",
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.3.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ.1800576000000",
+          "rip": "rip.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.1800576000000.1800576000000.q.zMlS6Ja1YpK0HURynkaeAxYHwAAuQxk5DQnIa23nntU.dir-1",
+          "ripSig": "_MBKNg42-EuQX9EoSbii5HsSgqwT2ejjsU1xba3E_1x11DU9JFNtUzWrtYv51Ltm2SUyRyBpDgP7mnDEL-fLgw",
+          "voided": {
+            "ros": "adel.YWxpY2VAZXhhbXBsZS5jb20.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY",
+            "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+            "assertion": {
+              "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+              "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiek1sUzZKYTFZcEswSFVSeW5rYWVBeFlId0FBdVF4azVEUW5JYTIzbm50VSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+              "signature": "MEYCIQC-HVVNhz8GGez8RP2KSyzSCPGXwEPmglEKdPQOh-coMQIhAM2MBQtQSdaSf4hRtU-PALU8UxDS4kxuVIVu-NJL3UaF"
+            }
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800576000000",
+          "rip": "rip.PUN2HWMS_-J9vbSlWbkadr7g_PZC-3STspm30ESP_QI.1800576000000.1800835200000.x.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.dir-1",
+          "ripSig": "pP9eBJGL6-rSZpv9G8VDNncQUmRPs22JM-V0ozwGP7gMTyHaIjAyuxIsGOKJpDWRbfSkcIdLRJRTSdI5UOBy3g"
+        }
+      ],
+      "pinned": "6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY",
+      "expect": "accept",
+      "state": {
+        "seq": 4,
+        "ripenedAt": 1800835200000,
+        "members": [
+          {
+            "kind": "pk",
+            "key": "pk1",
+            "quarantined": false,
+            "since": 1800576000000
+          },
+          {
+            "kind": "rk",
+            "key": "rk1",
+            "quarantined": false,
+            "since": 1800576000000
+          }
+        ],
+        "createdAt": null,
+        "lastResetAt": null,
+        "sinceExact": false
+      }
+    },
+    {
+      "name": "q/voided-adel-other-head",
+      "about": "the voided deletion request named another head than this link's previous one",
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.0..pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk.AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE.1800000000000",
+          "rip": "rip.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.1800000000000.1800000000000.m..dir-1",
+          "ripSig": "6gzKbmLUu0NTuxAId3INnWNRU_-xjHEzHvvz0uP7b-ofbMEJze2Rj8DVtd8U916TpGuhOho9CuHLt2SGbWQ7Rg"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.1.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ.AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI.1800003600000",
+          "rip": "rip.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.1800003600000.1800262800000.m..dir-1",
+          "ripSig": "iIZDZsG_EtT-H5p5jIMUK-TdM4AncmlkPaG_b13QdHcifg0DHb-zTeVzB18aGFUZzCNh9NnRmiWKriPCtMErPw",
+          "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSy1ncm5nVEFtN0pqUGRrVlNvTEpRdlVqSWZ3dEZKOExISDFPLTFBOEJnMCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEYCIQCysKKquK45pI96uKpK4cxHTdGaX-nQLmwErrYLZ1O4EAIhAMDZjmWrELUSiP75omUFfmilU0ZMYrPDPxE3-UpEExmZ"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.2.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM.1800288000000",
+          "rip": "rip.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.1800288000000.1800547200000.m..dir-1",
+          "ripSig": "EWyVem6uOECwjrt-1f6EzG0INYodz5pDZg3VQ-PjCsI1BpGh41jOfUyzCGOJK1hW0G3ENlIhC0_RxgPGgFWX8g",
+          "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicmJEYTBSNjhLWncxS0VFOHFlUWQ0VEFxYVJ0MUVEbEpqYmVSSEdnaEtQVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCIQDoOSNpPuV9Xpsi8AQygjiIe7BLD2jzOg8o2LVVMkukdwIgTQ5CfKpkuTrlSTbE6--_H8b7zFRXLiCNpU8yKlQefWQ"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.3.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ.1800576000000",
+          "rip": "rip.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.1800576000000.1800576000000.q.yMI3vC2aA6KdYvFVDY0i0zz-8eDnqJzt4LRxMiXKcFc.dir-1",
+          "ripSig": "vvsa0Yqc4tNk3EYVmcrb4AMsFSTxroCkwYwbmguUhBUzeuw1G9Px9va7-Dtg5jKGRcm_UhwUul64iQGqcabxAA",
+          "voided": {
+            "ros": "adel.YWxpY2VAZXhhbXBsZS5jb20.z-PXm0Zj5aF443IKD0TFUDp5x_5cIjAZL8O9rbjok5M.NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY",
+            "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+            "assertion": {
+              "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+              "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoieU1JM3ZDMmFBNktkWXZGVkRZMGkwenotOGVEbnFKenQ0TFJ4TWlYS2NGYyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+              "signature": "MEYCIQDn2sCS2bB41nN3oftTtS4c0mtGganK6hUE-IO4bapNxgIhAJ7H1hnACIIydo4Za3eFItRJvetFkcAlqd_NqugeVr65"
+            }
+          }
+        }
+      ],
+      "expect": "reject",
+      "reason": "voided-prev"
+    },
+    {
+      "name": "q/voided-adel-other-address",
+      "about": "the voided deletion request is for another account",
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.0..pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk.AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE.1800000000000",
+          "rip": "rip.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.1800000000000.1800000000000.m..dir-1",
+          "ripSig": "eSl8vZyxq4pCZvtYL-H-fihZkbEC-OKWEPxIM_CQwh5mcdpoq1ABN4Nu9E301eUH1M1jWvyPju4W55LEvbnaqA"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.1.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ.AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI.1800003600000",
+          "rip": "rip.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.1800003600000.1800262800000.m..dir-1",
+          "ripSig": "NDchgHz6XlA1fJBFikb0WaZz0gH97EzsfjgUcorFkSNGwyXkoTca6KUanZLGISII1A1yohaqhPC5iuPW-Cvt5w",
+          "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSy1ncm5nVEFtN0pqUGRrVlNvTEpRdlVqSWZ3dEZKOExISDFPLTFBOEJnMCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEYCIQDw0J-8tN6LGzIZ78Ke9TkGkm6TzVL98w_71__GCIf50QIhAIMXe0KKLo-HhszCy3j3CBI8xq-5sG8Tqh8c8Pl1xPoW"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.2.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM.1800288000000",
+          "rip": "rip.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.1800288000000.1800547200000.m..dir-1",
+          "ripSig": "_9AM1jCgxJvyj39m7xZgZM5cV41ggjDNmy1cBGKIhdErTu_Rjdug6V5ZG6rMrBEKkmjRtyYn2rMB8CTcqb_5Pw",
+          "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicmJEYTBSNjhLWncxS0VFOHFlUWQ0VEFxYVJ0MUVEbEpqYmVSSEdnaEtQVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCIQD2IWMzNLsQpa-FkA3F-2EbtiVACQfsX91ie3jHZWjjDgIgU_scTRhTivw9ezPVDtrNBNeYh-eEJKf9UuL8Jqv-eds"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.3.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ.1800576000000",
+          "rip": "rip.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.1800576000000.1800576000000.q.DseY9eBS-tL-zBHO3OdPR1a9npImgGmir3dLu4ZRDug.dir-1",
+          "ripSig": "PNgIpou-gztLfwPvd-DB3i94Zp1tKS7MZ_Ny2K18Uf5Yi3cDkF9eTHNQ7cazlYexmxwo4mkIX2ZIctsyGixIxw",
+          "voided": {
+            "ros": "adel.Ym9iQGV4YW1wbGUuY29t.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY",
+            "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+            "assertion": {
+              "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+              "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiRHNlWTllQlMtdEwtekJITzNPZFBSMWE5bnBJbWdHbWlyM2RMdTRaUkR1ZyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+              "signature": "MEUCIQCRIdxLI5zNjGLoBVbfb9PRlt-NcT5z2SM436WLQgFMYgIgf72jggNxdDwSV5JCkF6834QafizCBTEIP2kzoUKoAm0"
+            }
+          }
+        }
+      ],
+      "expect": "reject",
+      "reason": "voided-address"
+    },
+    {
+      "name": "q/voided-adel-signer-not-member",
+      "about": "the voided deletion request is signed by a key outside the previous roster",
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.0..pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk.AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE.1800000000000",
+          "rip": "rip.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.1800000000000.1800000000000.m..dir-1",
+          "ripSig": "5PJX_LEQehaP2l_nTGRS8TOhqCp2RDGgdTwFrxN8hWhFQ_t2iOeCiEpHR_FgsM_N0wJpixCfLeliynv3fWmBeg"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.1.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ.AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI.1800003600000",
+          "rip": "rip.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.1800003600000.1800262800000.m..dir-1",
+          "ripSig": "51BQyn4O2QMBFzBrp5BsFQdIYhw8n3keEKU3XyWJAuoM0A424Eaj8o3PekO53zEYu_CejIp2Yxm32Jd4bfWXMA",
+          "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSy1ncm5nVEFtN0pqUGRrVlNvTEpRdlVqSWZ3dEZKOExISDFPLTFBOEJnMCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCIQCKlfE2NYrmwiHstucTbo6y76-B8slvRLUzeEBqGZwPSwIgO1FDXtb2stMRh4Wf9NplckD9LmZ-PyViLvDoVe9kByo"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.2.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM.1800288000000",
+          "rip": "rip.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.1800288000000.1800547200000.m..dir-1",
+          "ripSig": "5iBgCSAYNWaDqz6uC0Ie_DhSy4sx1LuMAvp8sUXfs5QEZQGy3pt_8saSMVzs-dVN7oULwV9WrtyNU9OB5_lxQw",
+          "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicmJEYTBSNjhLWncxS0VFOHFlUWQ0VEFxYVJ0MUVEbEpqYmVSSEdnaEtQVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEQCIF8Ls_2cPqmlaD3gj7px-n9ytEapnznRSWZfR2lDnVDGAiBGxlUUdcKyFC6Pjyb66zDcBNM01jQA52wQLQStewbMCg"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.3.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ.1800576000000",
+          "rip": "rip.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.1800576000000.1800576000000.q.zMlS6Ja1YpK0HURynkaeAxYHwAAuQxk5DQnIa23nntU.dir-1",
+          "ripSig": "R_XVZ0AulINrGjAuy8X7oPYdPjCOi7ShDX_CMdfnBXR5IoWDP3gG_Vvwk3OtM5Uv5nbA_4r7u6YlWo34kunJTA",
+          "voided": {
+            "ros": "adel.YWxpY2VAZXhhbXBsZS5jb20.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY",
+            "signer": "BNww6PpA6fWHG7mI3eB0l2nICkO5ma8mGBJT88ecQqCRlNiH93AA6uhWo-HbfW3nMGX8XhVfsIPCA-F4Mt_zUnM",
+            "assertion": {
+              "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+              "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiek1sUzZKYTFZcEswSFVSeW5rYWVBeFlId0FBdVF4azVEUW5JYTIzbm50VSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+              "signature": "MEUCIFBxNpMi4tuBiFGu2XxwJkGXogid5pdvcK2P5FXnnQGXAiEAsPtrGhg-V7QyAscOR117TvyhOS01sFuzDGYNzd5OpMM"
+            }
+          }
+        }
+      ],
+      "expect": "reject",
+      "reason": "voided-signer"
+    },
+    {
+      "name": "q/voided-adel-bad-proof",
+      "about": "the voided deletion request carries an assertion by another key",
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.0..pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk.AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE.1800000000000",
+          "rip": "rip.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.1800000000000.1800000000000.m..dir-1",
+          "ripSig": "jyk6txvo8dH1w0Hq-mrVjrmRPLXPAkrOeFv4jof6t1UpgvbCGF8pRNfFFRvs6WZaPOl0ChP4HfJGMMU0Gva6Vg"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.1.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ.AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI.1800003600000",
+          "rip": "rip.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.1800003600000.1800262800000.m..dir-1",
+          "ripSig": "XD94kiSxI3JepOn64jQ8mQ-CR4l9jPSY9Awh-62LbtxcCSZtcATGgsEq279mGDKn0ZcU6mj9H5SP_xORSJiREA",
+          "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSy1ncm5nVEFtN0pqUGRrVlNvTEpRdlVqSWZ3dEZKOExISDFPLTFBOEJnMCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEQCID2Bm2CnSnjW1ov8SDAA4WvaY4d6bjbM3hjuue58ftxkAiBiR7h3J-yrnSoE0NZvaL9qyjSJyNhv7dr3yBuDI-x90A"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.2.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM.1800288000000",
+          "rip": "rip.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.1800288000000.1800547200000.m..dir-1",
+          "ripSig": "WzWEzeZrfjN6cuecDud_uaJkqANhKXjZjfBCOGEJKzwpyLXieHMoDHWSc3IeM5-08CArfPL1UQDG43x1tWtlNQ",
+          "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicmJEYTBSNjhLWncxS0VFOHFlUWQ0VEFxYVJ0MUVEbEpqYmVSSEdnaEtQVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEYCIQCbp8pP28-iPoIHbWiqWSHs6dXrk6vomgLYfuNJ75zuGQIhANyyrEDZzhrE0hwOrzsV3lm3GJx5ZTX8px5afOGzn0Gb"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.3.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ.1800576000000",
+          "rip": "rip.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.1800576000000.1800576000000.q.zMlS6Ja1YpK0HURynkaeAxYHwAAuQxk5DQnIa23nntU.dir-1",
+          "ripSig": "n3t4fhwMSKwqiWtVp7-wTownJmMwEBS1JqCVTQknOVg_KNryOXlNS2pZrjSULkj4TdphpLFjZNNw7apYDfEDnw",
+          "voided": {
+            "ros": "adel.YWxpY2VAZXhhbXBsZS5jb20.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY",
+            "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+            "assertion": {
+              "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+              "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiek1sUzZKYTFZcEswSFVSeW5rYWVBeFlId0FBdVF4azVEUW5JYTIzbm50VSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+              "signature": "MEUCIQDCc3UEKGvnLJ8Q3ZRaEyFOVrNoO7nyLvrV1pw7tmUEmQIgOV4hteDtvRaKzyZRx07OWAH4yt3NoCq3CeX9tkGio00"
+            }
+          }
+        }
+      ],
+      "expect": "reject",
+      "reason": "voided-assertion-signature"
+    },
+    {
+      "name": "q/voided-adel-assertion-over-ros",
+      "about": "the assertion was made over a member change, not over the adel. text the link carries",
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.0..pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk.AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE.1800000000000",
+          "rip": "rip.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.1800000000000.1800000000000.m..dir-1",
+          "ripSig": "bwLdVnqS9bnQRQ6AujzSF0xhp9IMUU3NzEaBZUSa0pIBtfvSSmqhwEtbO5hcV5zxOkaK6CoW6X9GRy_xM5ET3A"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.1.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ.AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI.1800003600000",
+          "rip": "rip.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.1800003600000.1800262800000.m..dir-1",
+          "ripSig": "LBXIy2qP36Hg9gsqDJYoTjg0h8o0VkPdEIPc3Z1xG29z45zalHBuIUOX_mO8QDFHfRXjSDg11i16SUOSLPBLbQ",
+          "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSy1ncm5nVEFtN0pqUGRrVlNvTEpRdlVqSWZ3dEZKOExISDFPLTFBOEJnMCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEQCIHwSQz_yIPtdajJokYx2n7_uxf2v8TB9REIXcGt0RDkbAiAwtfJPrD4ApdLgAAfMipU_4_GMMrd3BqMncFJRHcqJzA"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.2.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM.1800288000000",
+          "rip": "rip.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.1800288000000.1800547200000.m..dir-1",
+          "ripSig": "oRiYWYTLmUZwhzaJ02G5WcParIoGYCp0RDTkrZG67x07prQUPlwJ6GHZf1RnxPsQZWQ96je_edVnHQy8jF7uIg",
+          "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicmJEYTBSNjhLWncxS0VFOHFlUWQ0VEFxYVJ0MUVEbEpqYmVSSEdnaEtQVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCIQDhysqWZDw47RNZc2hsOBcdZjWqwZnOCBhGSMs3Sn0YvwIgGVbJIke7nRJ4Ecz8FvWJC88L2JpEhisW1sRGrz9V-gw"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.3.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ.1800576000000",
+          "rip": "rip.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.1800576000000.1800576000000.q.zMlS6Ja1YpK0HURynkaeAxYHwAAuQxk5DQnIa23nntU.dir-1",
+          "ripSig": "tZIrhUbygrbJ8hk1H1tbcOaa0P3RYkXMQQenZ4jY_QN40Z7-6B4kOGWhu3t6cMwEG9B09w9PcxsEtxX2OZyw3A",
+          "voided": {
+            "ros": "adel.YWxpY2VAZXhhbXBsZS5jb20.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY",
+            "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+            "assertion": {
+              "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+              "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiREFqWWhNU1oteXRzc1RDUEZ4aEpaQUhxWU5JTS1GOURUQVBzM2JQSlhZSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+              "signature": "MEYCIQCFvsMl4LhPWNkWb7Cy3-y6vKKVgY_lqf5rpdYST6eBJgIhAO_eiZexFbOB5Qwll4Mx_3JShxUgvBkvmNrR7Lch0NCf"
+            }
+          }
+        }
+      ],
+      "expect": "reject",
+      "reason": "voided-assertion-challenge"
+    },
+    {
+      "name": "q/voided-adel-grammar",
+      "about": "the voided text is an adel. with an extra field: not a request at all",
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.0..pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk.AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE.1800000000000",
+          "rip": "rip.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.1800000000000.1800000000000.m..dir-1",
+          "ripSig": "OWRQG1CHN2Ns0Y6L9y3FXsDmFn-MndDfbz7F-27VExI_kwnxoLqJbBonCbJcx4ROt_-jjhcXTISt-zkpeVTiuw"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.1.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ.AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI.1800003600000",
+          "rip": "rip.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.1800003600000.1800262800000.m..dir-1",
+          "ripSig": "nqv7MBywLxGf-mgohSLiT7V_KdJ8qhglIoLw4d5kQ14NVSyXOB80zjbRCwQz8bYtchtSRh-k037xRAprjq_vxw",
+          "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSy1ncm5nVEFtN0pqUGRrVlNvTEpRdlVqSWZ3dEZKOExISDFPLTFBOEJnMCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCIH81rLKvxzigMQgVbTGdu9udH4_-XqA8TZi1J9GT_8VuAiEA60gLo-OLwCXmIgqVhsuq5zJgIxBG81MfuPMIKEPvhlI"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.2.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM.1800288000000",
+          "rip": "rip.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.1800288000000.1800547200000.m..dir-1",
+          "ripSig": "Sjd0muqaK748egySGmHBVGD1RiLehwGHfCebHQ3iR5BraLJuhi7OhrSy7aMU8Axe3VWPMPcw8tjBeAea1iXdgQ",
+          "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicmJEYTBSNjhLWncxS0VFOHFlUWQ0VEFxYVJ0MUVEbEpqYmVSSEdnaEtQVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEQCIGmATig3oPklaO9yAXcmdlE0fw4KmRIrmPTlQhfUSAmZAiAktswHycsFOQ4zBJTn22gjQM-ZCf8XgZ0SvC-UxD16cg"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.3.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ.1800576000000",
+          "rip": "rip.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.1800576000000.1800576000000.q.MBFYzIPbk5ucFzszOrNgbE2G61jUEGIKiLHuaw6fIYk.dir-1",
+          "ripSig": "NsWYRu-rpxE41Waecl097gL6bcNbFVnZqwqsCni99rc8fZqqDMCNjJOoNFoBnzQkFvScl4HXhKW0yu9G0XJwKQ",
+          "voided": {
+            "ros": "adel.YWxpY2VAZXhhbXBsZS5jb20.LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE.NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY.x",
+            "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+            "assertion": {
+              "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+              "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiTUJGWXpJUGJrNXVjRnpzek9yTmdiRTJHNjFqVUVHSUtpTEh1YXc2ZklZayIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+              "signature": "MEYCIQChIwshiWpoSGwO7aKjyLxO-KnmN7iixYkoOrHqd0XspgIhANKKTqmkNElnE7NWzf7rCycKPVMVp7BiCDVfsCiatCpk"
+            }
+          }
+        }
+      ],
+      "expect": "reject",
+      "reason": "voided"
+    },
+    {
+      "name": "q/voided-adel-wrong-target",
+      "about": "pk2 asked to delete, but the link quarantines pk1",
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.0..pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk.AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE.1800000000000",
+          "rip": "rip.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.1800000000000.1800000000000.m..dir-1",
+          "ripSig": "OZJKAATm1gOkiekyE8f_oADqOHMQZtDrXMq-2jDOOYxGDLtA5CdHknGH9ZhOpc3glVsTn4N4PH-UErgxLaNKgA"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.1.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ.AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI.1800003600000",
+          "rip": "rip.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.1800003600000.1800262800000.m..dir-1",
+          "ripSig": "zVTTBwub_omrzJPWwOR7XRX8Yw8zme12M1M9kd6sx0QuD3jpxYMZGGSs2GTYO59SMe2LBQrkUm8h8QIwzOPx7w",
+          "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSy1ncm5nVEFtN0pqUGRrVlNvTEpRdlVqSWZ3dEZKOExISDFPLTFBOEJnMCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCID4eWSyfsdf3roqloJiRE0uqrysVYGbE06wwCUbXKY97AiEAgX96cJtApnRbUt3gmkvkXRRBYvPfjwBr5afQvVpRRQk"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.2.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM.1800288000000",
+          "rip": "rip.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.1800288000000.1800547200000.m..dir-1",
+          "ripSig": "5iu7ij_B8_etYC3mKPphTM3v0_bI72kJlMCNsuDltQ8_IZ1asBtC79J6GizPfXKnf63cwCJ7fT0rVGaV9QrEyA",
+          "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicmJEYTBSNjhLWncxS0VFOHFlUWQ0VEFxYVJ0MUVEbEpqYmVSSEdnaEtQVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCIFMMX03WoSVvTbdfsXnertB1iLluSyHwPvxpwqQmYvDyAiEA1uvxVhwfGXQVeRpMLjiDjd5HrhSVlpDQm9S5uknT4-o"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.3.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk~q,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ.1800576000000",
+          "rip": "rip.R-W-Tzm1n9joDdp8QkW3MUVG2gl3UErg4Qcj2B9po9Q.1800576000000.1800576000000.q.zMlS6Ja1YpK0HURynkaeAxYHwAAuQxk5DQnIa23nntU.dir-1",
+          "ripSig": "3uCR2WyGWoTbGxonqjlsEDlNEldkBrQxKbkVQODcqKpiGgUmJNtSpjb3uvZlxAdx_4Rlh8AQRf-pbrjLjTn1qw",
+          "voided": {
+            "ros": "adel.YWxpY2VAZXhhbXBsZS5jb20.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY",
+            "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+            "assertion": {
+              "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+              "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiek1sUzZKYTFZcEswSFVSeW5rYWVBeFlId0FBdVF4azVEUW5JYTIzbm50VSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+              "signature": "MEQCIDH7oKt8fBW6IPieUNysGs4fitwSCvqYf6Sk8DxVfieOAiB9zLOzLTbo8BR9OzRpoKUNPq5P8Js3wYWb6sRv2EMGCw"
+            }
+          }
+        }
+      ],
+      "expect": "reject",
+      "reason": "target"
+    },
+    {
+      "name": "q/voided-adel-quarantined-signer",
+      "about": "the voided deletion request is by a member already quarantined",
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.5.MuepBHhandei8Q0SUdWhsFjClcWwBS-DT_SR_XDZjfg.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q.AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE.1801080000000",
+          "rip": "rip.2VMO-qTTa9U5wpFXw5GC2oq8revdNKls2Gv94GBNW8g.1801080000000.1801080000000.m..dir-1",
+          "ripSig": "RF1LrXrn3myjU0-ZUpqBT_2YJNPsIjcIb5n_U3WH0xMLNyKA68fJcnCMv-HZ2VzSlg6VvMXNoQEl_QvZ_56pUA"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.6.2VMO-qTTa9U5wpFXw5GC2oq8revdNKls2Gv94GBNW8g.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q.AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI.1801116000000",
+          "rip": "rip.B4b5NJrqRKAoBXz6ba5wghg37_7LFDK0IjMNbkXPAJY.1801116000000.1801116000000.q.FNAelJMWMep1TB7Edxaq33q7-Ig-jziMUr3g3MD9DL8.dir-1",
+          "ripSig": "7X7ic6Si1Xm9zztQEOlAZaGFBSfrV93IdTIuEtOWviZly_g8vm43oCGBOk0y9BExH2NBxRjDpUvzUb4RpTDOag",
+          "voided": {
+            "ros": "adel.YWxpY2VAZXhhbXBsZS5jb20.2VMO-qTTa9U5wpFXw5GC2oq8revdNKls2Gv94GBNW8g.NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ",
+            "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+            "assertion": {
+              "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+              "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiRk5BZWxKTVdNZXAxVEI3RWR4YXEzM3E3LUlnLWp6aU1VcjNnM01EOURMOCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+              "signature": "MEYCIQDBC_lhUEETb7ykweBNDdoKEgtZ3eQ7hqhItYt_8jFDMQIhANsfLZNtDqNeB7ijKbYopX8MTgvVtMqEFCUeRNhbpZjd"
+            }
+          }
+        }
+      ],
+      "pinned": "2VMO-qTTa9U5wpFXw5GC2oq8revdNKls2Gv94GBNW8g",
+      "expect": "reject",
+      "reason": "voided-quarantined"
+    },
+    {
+      "name": "q/voided-adel-last-live",
+      "about": "quarantining the only unquarantined member for its deletion request (the void page hides Remove)",
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.5.MuepBHhandei8Q0SUdWhsFjClcWwBS-DT_SR_XDZjfg.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q.AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE.1801080000000",
+          "rip": "rip.2VMO-qTTa9U5wpFXw5GC2oq8revdNKls2Gv94GBNW8g.1801080000000.1801080000000.m..dir-1",
+          "ripSig": "6NsXuVr4g3wW6LXVNjeQ3E-Xs5R3h6fV0LK_1u_tAk0795VC1Cr2uIwhLCQqwvbiA_YRhcghTK4Os4HsZDeknw"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.6.2VMO-qTTa9U5wpFXw5GC2oq8revdNKls2Gv94GBNW8g.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk~q,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q.AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI.1801116000000",
+          "rip": "rip.Yd4WtTHrfputEVGxjuVlRTdWjkZk4B7sOhTszTcwkrY.1801116000000.1801116000000.q.FNAelJMWMep1TB7Edxaq33q7-Ig-jziMUr3g3MD9DL8.dir-1",
+          "ripSig": "3sgZnj_w5Gz3z8VDNcfktbGf4S5IZdd4wMm7hRppvMdjbDGUH-D39D_4A2VQEneo6JKyrxaLuL6BDzL6rZ3GVQ",
+          "voided": {
+            "ros": "adel.YWxpY2VAZXhhbXBsZS5jb20.2VMO-qTTa9U5wpFXw5GC2oq8revdNKls2Gv94GBNW8g.NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ",
+            "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+            "assertion": {
+              "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+              "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiRk5BZWxKTVdNZXAxVEI3RWR4YXEzM3E3LUlnLWp6aU1VcjNnM01EOURMOCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+              "signature": "MEUCIH_mmpQg2ItZVLHtRXMqmuXeXztld2xyEOoTDBFgNtcsAiEArwt6KzC63fA7n4XXJahz0SXvEXryG0tJkO4xfMfMs28"
+            }
+          }
+        }
+      ],
+      "pinned": "2VMO-qTTa9U5wpFXw5GC2oq8revdNKls2Gv94GBNW8g",
+      "expect": "reject",
+      "reason": "last-live"
+    },
+    {
+      "name": "x/pinned-q-adel-signer-swapped",
+      "about": "the pinned q link voided rk1's deletion request; its voided.signer (not covered by the cause) rewritten to pk2 and the removal takes pk2: the proof does not verify, so no target",
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4~q.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800594000000",
+          "rip": "rip.7QffnDwoE_uQSlIWbTTyOZY78hJRANL-E5CjpHEEcSE.1800594000000.1800594000000.q.ywUCLTsnxUZa-wroMg_4y6mQtQYjCaLRlpS8XXq_B0E.dir-1",
+          "ripSig": "K8elrClJrb7R2NkOiCG1npDF2zaOwj6a2TvN1dSEc6Uk_tTq0WxRMNZQ3Py6Kg5EpZrG5Ql4yyfYqppkBMmxYA",
+          "voided": {
+            "ros": "adel.YWxpY2VAZXhhbXBsZS5jb20.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc",
+            "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+            "sig": "vexgzUFqWys-efdPypt8oxVy00St_os5AothniTHAMJ9VxaUOkvXk4hiCNyVm7cLYeP6ZPM1h53BK16OqnNUjg"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.5.7QffnDwoE_uQSlIWbTTyOZY78hJRANL-E5CjpHEEcSE.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4~q.BgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgY.1800594000000",
+          "rip": "rip.V5IfyQetsokg8A1TU4DMMWdnJRsK_OajhQMydXTilZ8.1800594000000.1800853200000.x.7QffnDwoE_uQSlIWbTTyOZY78hJRANL-E5CjpHEEcSE.dir-1",
+          "ripSig": "wGmnm-3J8Xg3fVhGgYgDemCYBUlhPVu3zxNOtOHtx2VMhZZYQCy0aL9byIDxm_eXTqBamFXY7fXAUyOiapRu0Q"
+        }
+      ],
+      "pinned": "7QffnDwoE_uQSlIWbTTyOZY78hJRANL-E5CjpHEEcSE",
+      "expect": "reject",
+      "reason": "evidence"
+    },
+    {
+      "name": "ok/pinned-q-adel-then-x-target",
+      "about": "from a pin of the q link that voided rk1's deletion request: the removal of rk1, the target its evidence names",
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4~q.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800594000000",
+          "rip": "rip.7QffnDwoE_uQSlIWbTTyOZY78hJRANL-E5CjpHEEcSE.1800594000000.1800594000000.q.ywUCLTsnxUZa-wroMg_4y6mQtQYjCaLRlpS8XXq_B0E.dir-1",
+          "ripSig": "ifTZIeRrf8YaEnW4wLkOaS0Xymxug1XOWL8wvq511plOeUODcAC_19BghWLsHGQdzieaHebkNYcuSLn8dOugCw",
+          "voided": {
+            "ros": "adel.YWxpY2VAZXhhbXBsZS5jb20.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc",
+            "signer": "BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4",
+            "sig": "WkB60tjAFQ9ICcxatsX4OgYB6A4SisMDJwGLs9pEB5MwW-60w-2pUqQ1ctxnGFFVPC4Sv_AjdyHUTTsNiqtJVA"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.5.7QffnDwoE_uQSlIWbTTyOZY78hJRANL-E5CjpHEEcSE.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q.BgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgY.1800594000000",
+          "rip": "rip.of_T1dXW1pxOI1zGX9XscU02VTleHadFxrIvKJKyfoc.1800594000000.1800853200000.x.7QffnDwoE_uQSlIWbTTyOZY78hJRANL-E5CjpHEEcSE.dir-1",
+          "ripSig": "9qKs4uOCGrpS194NEcCKywrMbZlyJRn0r_EQvQPVer0ncC13kN5fOPsi8K32Ya6bp1q32krH0uu1sHHmGHV-Qg"
+        }
+      ],
+      "pinned": "7QffnDwoE_uQSlIWbTTyOZY78hJRANL-E5CjpHEEcSE",
+      "expect": "accept",
+      "state": {
+        "seq": 5,
+        "ripenedAt": 1800853200000,
+        "members": [
+          {
+            "kind": "pk",
+            "key": "pk1",
+            "quarantined": false,
+            "since": 1800594000000
+          },
+          {
+            "kind": "pk",
+            "key": "pk2",
+            "quarantined": true,
+            "since": 1800594000000
+          }
+        ],
+        "createdAt": null,
+        "lastResetAt": null,
+        "sinceExact": false
+      }
+    },
+    {
+      "name": "x/pinned-q-adel-other-head",
+      "about": "the pinned q link carries an adel. naming another head than the one it replaced: no target, so no removal",
+      "links": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.3.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ~q,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ.1800576000000",
+          "rip": "rip.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.1800576000000.1800576000000.q.yMI3vC2aA6KdYvFVDY0i0zz-8eDnqJzt4LRxMiXKcFc.dir-1",
+          "ripSig": "hWXet1MlTYOfqThFWRWflY0F-rzr76gd0N_-K55RHzpW0N9o5dueb_FpUgbbVfHPZyWLb6zr9lk98vR-unZliw",
+          "voided": {
+            "ros": "adel.YWxpY2VAZXhhbXBsZS5jb20.z-PXm0Zj5aF443IKD0TFUDp5x_5cIjAZL8O9rbjok5M.NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY",
+            "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+            "assertion": {
+              "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+              "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoieU1JM3ZDMmFBNktkWXZGVkRZMGkwenotOGVEbnFKenQ0TFJ4TWlYS2NGYyIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+              "signature": "MEQCIDNeiia8qrsiqEeIIrHBXRbPeFR95QVHKClvLOW1PhezAiAGrfRp4kRuzEd1dYVYDHioZ8TSWiOJiS9z6ypl4bQyEw"
+            }
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800576000000",
+          "rip": "rip.PUN2HWMS_-J9vbSlWbkadr7g_PZC-3STspm30ESP_QI.1800576000000.1800835200000.x.6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY.dir-1",
+          "ripSig": "FFn5pnf2RzyhKr53cYrVhtHlYzaAI6J5d3xRY6sFG0Q4GRInqKiiIwkTPscQ4ncpBIaub6nwfbGKvWP1cU-R-A"
+        }
+      ],
+      "pinned": "6xMvGc6_droo_xEfMfeSX89XVR3jrxYc8rn3Z3GLQgY",
+      "expect": "reject",
+      "reason": "evidence"
+    },
+    {
       "name": "l/cited-unknown-kid",
       "about": "the cited change is countersigned under a kid nobody pinned",
       "links": [
@@ -13921,6 +14764,762 @@
       },
       "expect": "reject",
       "reason": "grammar"
+    }
+  ],
+  "deletionRecords": [
+    {
+      "name": "ok/rdel-at-pin",
+      "about": "a member's deletion of the pinned head, 72 h after the request",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4.1801080000000.1801339200000.m.dir-1",
+      "sig": "jgdoRJtqG7ki2yYnnxR9VwoEbIAqccOUf1wNtqOtJzRakXeHaGD9o2NfEzK-oFUl8iAAdEv9AOL2q3-_1ECZPg",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "accept",
+      "atPin": true
+    },
+    {
+      "name": "ok/rdel-after-pin",
+      "about": "the peer pinned L2; the record names L4, a later head of the same account, asked for after the pin",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4.1801080000000.1801339200000.m.dir-1",
+      "sig": "jHpAPghsRj5eOeoSeHNQlVN-vjM79h6PWapjoit4Sl5_8SFx0Xrbil-4ZjX754Rzw8QNCfs4ah6nIN5wyMIwyw",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.2.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM.1800288000000",
+        "rip": "rip.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.1800288000000.1800547200000.m..dir-1",
+        "ripSig": "hb7wn467JskZY4557tktr7uFexuTlu2dvsXLlfDSdD5jddxSBGtA_dl7qGa1lE1HRKMV3sL9A0R3GfQIHVNoCg",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicmJEYTBSNjhLWncxS0VFOHFlUWQ0VEFxYVJ0MUVEbEpqYmVSSEdnaEtQVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEYCIQCsoLmmjxRtb15lokg_aq3cSHV3rcL3DU9ElL_vYBsuHgIhAIFLUCjSGhfpoB9brLAi6sEZSq8q6yf8KpqVxP94FG1k"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "accept",
+      "atPin": false
+    },
+    {
+      "name": "ok/rdel-by-mailbox",
+      "about": "the mailbox's emailed link: the same 72 h",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4.1801080000000.1801339200000.e.dir-1",
+      "sig": "s7oo-emb_5xAN6toLZdlXHW5A82vyN_exkfjYit1tkRziP2zE-AcnFVNnmG84LEI_XXFouP-uSNaji6YdVjfgA",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "accept",
+      "atPin": true
+    },
+    {
+      "name": "ok/rdel-by-operator",
+      "about": "the operator's removal: no wait",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4.1801080000000.1801080000000.o.dir-1",
+      "sig": "3FQA_jjSAeq4xJhwyKfiQEURjIEFE6F9I7CFMmyklw80eQ0ZUZXhBxfcS65vQfyu027dZaUp06yvgj86aYBmKg",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "accept",
+      "atPin": true
+    },
+    {
+      "name": "ok/rdel-second-key",
+      "about": "signed by the second pinned directory key",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4.1801080000000.1801339200000.m.dir-2",
+      "sig": "a555b9-CgR5Bu9XhlZWvwzZEIfmBFZ4i5CbU1bDWUuwcdtMqUO9PraBfzX9ElqpS4OSNim_PUBz6rGIJmTU46g",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir2",
+      "expect": "accept",
+      "atPin": true
+    },
+    {
+      "name": "rdel/unpinned-kid",
+      "about": "signed (validly) by a directory key the peer never pinned",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4.1801080000000.1801339200000.m.dir-9",
+      "sig": "vAGeoRGoxrEkCi9e1wOgvJPZ2Hgbwoq6_jhDRtu0-VIPPB3_fyW_sbK3xU_YVJLO5yZQPxF0rARwwDOJXPatNw",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dirOther",
+      "expect": "reject",
+      "reason": "unknown-kid"
+    },
+    {
+      "name": "rdel/kid-names-other-key",
+      "about": "the kid says dir-1, the signature is dir-2's",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4.1801080000000.1801339200000.m.dir-1",
+      "sig": "NjmiMLF8vxaqEHH-CL9lZbXNjlXDhcvxEbPyYYpsJ9FxDYmIM2RCdgSSQnBm7sl5ugPeb0tslTOz4LhGkRHhxw",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir2",
+      "expect": "reject",
+      "reason": "signature"
+    },
+    {
+      "name": "rdel/future",
+      "about": "carried out after now (beyond the clock skew)",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4.1802160000000.1802419200000.m.dir-1",
+      "sig": "RmbLaUIX4O8y1yMTPURLXrueUvsrAcZ_gcX6_prl4lBxxhNAsxFoneUuCcyq9nvBkpWQwmY3ZVby0kC2YNY5iQ",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "reject",
+      "reason": "not-yet-valid"
+    },
+    {
+      "name": "rdel/unripe",
+      "about": "a member's deletion carried out one second before the 72 h",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4.1801080000000.1801339199000.m.dir-1",
+      "sig": "grmSc5tY2eJCFxdvOFNNBFUtaxaiDAJDBDW51Pc1EFFHGz1WDHwKH1o-xy_lPho72fuztHQuoH1IXgBN3lxg3g",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "reject",
+      "reason": "unripe"
+    },
+    {
+      "name": "rdel/mailbox-unripe",
+      "about": "the mailbox path waits too",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4.1801080000000.1801083600000.e.dir-1",
+      "sig": "QGjjoZ256EgvkdgXVAtEyDb6mGRBhJeV6PMoin0HYJUoH2zx6RUETsHougUlqTN2Qv4fZVl9WOqdFTm-Ze90Kw",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "reject",
+      "reason": "unripe"
+    },
+    {
+      "name": "rdel/other-account",
+      "about": "the record is for bob's storage name",
+      "text": "rdel.WsBESy4PFNb1SYCORpDk-lycOe5iTNUY1qvLXnuxhDw.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4.1801080000000.1801339200000.m.dir-1",
+      "sig": "nLd-UnzOdaIlwCW_nrmSzJBbOo0cZ__WU6-z6hSY5v4d9sO8j4pweP1Igu3H-FE6qFrU7YO-N-zAslD-fmTRbg",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "reject",
+      "reason": "address"
+    },
+    {
+      "name": "rdel/head-not-on-pin",
+      "about": "a head at the pin's seq that is not the pin (a tampered or foreign last head)",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.z-PXm0Zj5aF443IKD0TFUDp5x_5cIjAZL8O9rbjok5M.4.1801080000000.1801339200000.m.dir-1",
+      "sig": "HfU4KqJvddQU11FHBx1h3NwpPcXzVdW5yWqTB6S9M_xc5uhm5RMjG005K5_vRfkOUBEfQumYi166c0rEruE6Yw",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "reject",
+      "reason": "unchained"
+    },
+    {
+      "name": "rdel/at-pin-seq-wrong",
+      "about": "the record names the pin but another seq",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.3.1801080000000.1801339200000.m.dir-1",
+      "sig": "1AZCSoK3VkY1gZRKpAA_mQuSpMHHjTMwzOCqtegHz9ZID8u4Qk_VCswgyKTA1DuyoeyHTqJ5UxSqB2fNtYzHDQ",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "reject",
+      "reason": "unchained"
+    },
+    {
+      "name": "rdel/earlier-account",
+      "about": "an EARLIER account at the address: deleted before the pinned one was set up, replayed against it",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.nOQfHBNHcSpbmTtHgOk-HXhAmdsjjSsPPAnb3WAG2g8.9.1799280000000.1799539200000.m.dir-1",
+      "sig": "C4fmO0xdwQ9nOye5V1rWAN5WWXUKsH0ONxkFBdkFlr5lPAo75XMKT2UP_ApUpX5grVv1kyOSZ2bbHSWRrPpwng",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "reject",
+      "reason": "unchained"
+    },
+    {
+      "name": "rdel/before-later-pin",
+      "about": "the record names L4, but the peer pinned L4 and the request is dated before L4 ripened",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4.1800863999000.1801123199000.m.dir-1",
+      "sig": "U1_sQTPZ1LRGwOlLG3ImbKrUdW4z-yqTeZiwxlVbyGJqfBW3U2EgOQRK3DM_kGn-nUoIWB3roqgA_mC2o_s2tQ",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "reject",
+      "reason": "unchained"
+    },
+    {
+      "name": "rdel/pin-forged",
+      "about": "the pinned link handed in carries a countersign no pinned key made",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4.1801080000000.1801339200000.m.dir-1",
+      "sig": "B7cSihmVBzJwVWg4phkcvLlTVevz32of_anCnjo5wyAN57T2BqmRaQwXMtJRBVMf8hj2loSZC_IpImP54iA3qw",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "DiFF6R4lEz3SZXTBrsdRh-dMgkXVPeqxWwyW5PnGlPQLDH_feVdSUlXdMXrJP7_h6KFuWQRPAYql4QwXFTyQDA",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEQCIBy07H-C8j0MuFtYCGIRX2EE2rPh4VEh5lIDuTEz_NcEAiAt-TKcNHJgfxcb4j4QKuShaocbI8D3jX-ueonhB28Sqw"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "reject",
+      "reason": "pin"
+    },
+    {
+      "name": "rdel/pin-other-account",
+      "about": "the pinned link is bob's while the peer asks about alice",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4.1801080000000.1801339200000.m.dir-1",
+      "sig": "keX0K3g5huP717WbOoyiFECnvQGKogPTfB_U1wjwSg0Rx-Ioc1QmtAiP4sDvJk5DANHlxrHuKTSnmiNZJxg1lw",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.Ym9iQGV4YW1wbGUuY29t.0..pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk.AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE.1800000000000",
+        "rip": "rip.JU6K9nMJhVjidiB_Ti0j_e2sDAwNBUqUhEymMlbKI_E.1800000000000.1800000000000.m..dir-1",
+        "ripSig": "HxoP166Wq_-1fsErC4hQTuZGWymmWCc7cylTMpxI2go2DUYQlsrjzrrVCLrwrMUj_qm69aVi2SlBIFBhzcScmQ"
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "reject",
+      "reason": "pin"
+    },
+    {
+      "name": "rdel/absent-accountName",
+      "about": "the accountName field is empty",
+      "text": "rdel..tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4.1801080000000.1801339200000.m.dir-1",
+      "sig": "z0kZ1CDItzSSoP5Ye5zMWsuUZ79yjvBcbWsQn0dTjQss07YCWCwKiqbxz7LA3wQX2T6Y67nhAswPnIpJEi7eWQ",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "rdel/absent-lastHeadHash",
+      "about": "the lastHeadHash field is empty",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ..4.1801080000000.1801339200000.m.dir-1",
+      "sig": "kazJxidhdMCf1BuZEb1a3EPwc9p-ayxKbwNV3Oso7G1Cem71aoug_6bhrjj8XkGx0sTnEt-2Qrvw-2H1de7h2g",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "rdel/absent-lastSeq",
+      "about": "the lastSeq field is empty",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I..1801080000000.1801339200000.m.dir-1",
+      "sig": "Ywg8vT2nzd9Wgr4KCG2UBy36Jo5SRAoeB4TGlk37wXcLr7yHrFHlj9wsmJC0sBo09_3AX4u4nYNCKiYFB4--rA",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "rdel/absent-requestedAt",
+      "about": "the requestedAt field is empty",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4..1801339200000.m.dir-1",
+      "sig": "cFfCzSmKtNsaRocgTFPKugo7FA5IrkOxYtNhr0lO3UIbK2DA_FziqQQEFeyDFXnGSjhR2wFuIPky6wksVF9GMg",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "rdel/absent-deletedAt",
+      "about": "the deletedAt field is empty",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4.1801080000000..m.dir-1",
+      "sig": "9n26a4HggKnbLWytX-p5NKmDsWNUI2kcDQF-oCL6S6JGm5IScC6lfZPzEiS-ofTnAfSoN46DBaFeC4I10g-nXQ",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "rdel/absent-by",
+      "about": "the by field is empty",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4.1801080000000.1801339200000..dir-1",
+      "sig": "LcS6l9SlkB4U8Mun8JEWeLrdEdqf7tyZW-a2U1O6rvRonXBsq4YEArlMjLGlLlkcDMIX5fxFW7CP9v0KxOTCQA",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "rdel/absent-kid",
+      "about": "the kid field is empty",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4.1801080000000.1801339200000.m.",
+      "sig": "Q347aCBXysv2m0CnsjYJZkLM9IAukr7zQwSrq-qD7wop5cfhg39Xk55uvAn6sq2zf4xpYwueBKmQcUWyATqMPQ",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "rdel/missing-field",
+      "about": "seven fields, not eight",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4.1801080000000.1801339200000.m",
+      "sig": "zCS8na2RCAjWpDS7FfeDH8tDZMt0XVvpxujlz1aIH8Vje0-pCK-ZWGDVeNvMgc6IJIJFd1MqjYaw7OCWFrILYg",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "rdel/extra-field",
+      "about": "an extra field",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4.1801080000000.1801339200000.m.dir-1.x",
+      "sig": "ad_Tuij35r674dqs4tXXKg9BVvVia9afH1DNcAvgwOhs8ZQDeQOTUHZPxyJGRwpsfIPgXJJJkTuwzT7fHv6Ihw",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "rdel/by-unknown",
+      "about": "the cause word is m, e or o",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4.1801080000000.1801339200000.x.dir-1",
+      "sig": "YIJu0bDVvvw_KvT6-bFwD-oVXLCeGOoOJwL-b7dEcL48Ta6M-DtseiLq1kGXnOkvdFLNQf2-2HOtuadIrCz38w",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "rdel/deleted-before-requested",
+      "about": "carried out before it was asked for",
+      "text": "rdel.EjwZyWMUmVIvk6_SXa8TGpjV50g726mWyds_yXNGhJQ.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4.1801080000000.1801079999000.o.dir-1",
+      "sig": "ID7GjNxGMUdPPGbyreAT-DrxIyjS9e9_M0K0VqmfwpQdiyT-kJtRHWN7nWfGZgtG5qytGJ5oSiVd9FH1zGc0xQ",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "rdel/name-not-a-hash",
+      "about": "the storage name is 32 bytes, base64url",
+      "text": "rdel.YWxpY2VAZXhhbXBsZS5jb20.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4.1801080000000.1801339200000.m.dir-1",
+      "sig": "LWKpYs0edoxjz-Jlax2boBJzfrZmkjR8U5iYpwCnglEsQlFMnsn59uav-4B5RP_4WBokMiM2jZ0zTyPGHPMCfA",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "reject",
+      "reason": "grammar"
+    },
+    {
+      "name": "rdel/tomb-text",
+      "about": "the retired binding era's tomb. is not a deletion record",
+      "text": "tomb.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.4.1801339200000.holder.dir-1",
+      "sig": "SW-z_BculZ6CmlnCPOxamdWZpgC4K1cBiPOxrH-awqQanwHCD4llDDFRGzZdUMNQlS-NTsMAf7kMKo4BJnO_ng",
+      "address": "alice@example.com",
+      "pinnedLink": {
+        "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+        "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+        "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+        "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+        "assertion": {
+          "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+        }
+      },
+      "now": 1802160000000,
+      "signedBy": "dir1",
+      "expect": "reject",
+      "reason": "grammar"
+    }
+  ],
+  "afterDeletion": [
+    {
+      "name": "ok/after-nothing",
+      "about": "no account at the address any more: deleted (no ✓)",
+      "record": "ok/rdel-at-pin",
+      "next": null,
+      "expect": "accept",
+      "state": "deleted"
+    },
+    {
+      "name": "ok/after-new-setup",
+      "about": "a new setup after the deletion: a NEW account that CHANGED, never the pinned one continuing",
+      "record": "ok/rdel-at-pin",
+      "next": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.0..pk~BNww6PpA6fWHG7mI3eB0l2nICkO5ma8mGBJT88ecQqCRlNiH93AA6uhWo-HbfW3nMGX8XhVfsIPCA-F4Mt_zUnM.R0dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHR0c.1801425600000",
+          "rip": "rip.JcIEfc_26Jy-o6mQSCZnkPWIAVFH3hJIVULaPNye-nE.1801425600000.1801425600000.m..dir-1",
+          "ripSig": "QU72Gl-DMtkY0qyU2iCLyobEmfei4i15owJCVhXNK2Ik28P0i65Pc466jYRkBp2TMS_Qwk5pyJLzXhSfb4o-VQ"
+        }
+      ],
+      "expect": "accept",
+      "state": "new-account",
+      "createdAt": 1801425600000
+    },
+    {
+      "name": "after/older-chain",
+      "about": "a chain created before the deletion cannot be what came after it",
+      "record": "ok/rdel-at-pin",
+      "next": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.0..pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk.AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE.1800000000000",
+          "rip": "rip.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.1800000000000.1800000000000.m..dir-1",
+          "ripSig": "O4ELtbZ4DFVFLb_t1vUDiWNOe7ZSPfbZLsqynSJlCAgAnjbF0-5s274jyqcAkUhnK6kavT1cnrSJvK3q4M6X3Q"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.1.7DwoCuziYuut_TKjOSsZ_tLLRjLs8rt64ZtSxQim55M.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ.AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI.1800003600000",
+          "rip": "rip.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.1800003600000.1800262800000.m..dir-1",
+          "ripSig": "9qvIJ-MF0InN2xRDlCzFiOCZ5TQ_qrBxy5ur1lPlSoZg5gosXfhnMGLQbZny1OvEgENyhzaEIesy70s1hVccUA",
+          "signer": "BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSy1ncm5nVEFtN0pqUGRrVlNvTEpRdlVqSWZ3dEZKOExISDFPLTFBOEJnMCIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEQCIHnX3q1CIuLdmWDdOEu9C0OsA0MvzwgIATCx0H8SRSvoAiANeN0XGoam5CPk0Z3wdC-Q5cLjaqqMBh_N5zvRozM9Kg"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.2.K-grngTAm7JjPdkVSoLJQvUjIfwtFJ8LHH1O-1A8Bg0.pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM.1800288000000",
+          "rip": "rip.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.1800288000000.1800547200000.m..dir-1",
+          "ripSig": "hb7wn467JskZY4557tktr7uFexuTlu2dvsXLlfDSdD5jddxSBGtA_dl7qGa1lE1HRKMV3sL9A0R3GfQIHVNoCg",
+          "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicmJEYTBSNjhLWncxS0VFOHFlUWQ0VEFxYVJ0MUVEbEpqYmVSSEdnaEtQVSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEYCIQCsoLmmjxRtb15lokg_aq3cSHV3rcL3DU9ElL_vYBsuHgIhAIFLUCjSGhfpoB9brLAi6sEZSq8q6yf8KpqVxP94FG1k"
+          }
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.3.rbDa0R68KZw1KEE8qeQd4TAqaRt1EDlJjbeRHGghKPU.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,pk~BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ.1800576000000",
+          "rip": "rip.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.1800576000000.1800835200000.m..dir-1",
+          "ripSig": "EJ6htNNLm1MdXxRwQ1LmzWHKpd2cnvJPNgmkXcmulNlOz1IEyPeqGheygCi5wlCFZSsJOxFDtWJWT9h2IZYVIQ",
+          "signer": "BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4",
+          "sig": "AnyB2kq50Bmuclt5fPc_zYNS2cjaUNNAbiLEiEbyS8NC0EvY73QntwOED8FdNWeE361wkrjzQEKZCgRDd6YsHw"
+        },
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.4.SyC6UnEX-o11YxImUoF3sdbeTBq0ugCxtg9HWwmNMr4.ck~BDS0_jQ-7KqQr84KLEHHbusnRjNCWqqzXWB-e9ov4-3OkEz-eWZe7gw6VdzGplnJJ2owY4MFMiaU76Afp7U6HA0,pk~BBx2_QOpLsgwTAJaDk-x_cVOnbqVDOqKXJB3-TB3EjVN-e2GDm4-QKS_R0SWlPG548BMmFOUDSM0_5mQWTgy_gk,rk~BP4j9KTHjcQQLUJZexopuAf8GB-LpS2Fk_7OibzN6t27Tv3gakG-QnfyahqkOORRz1J3QUD7F3VAI4BE1Ps2-x4.BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU.1800864000000",
+          "rip": "rip.tToBBusrm1cF3I8EvMFOst6r14PpLdTQ46PAm5QBH-I.1800864000000.1800864000000.m..dir-1",
+          "ripSig": "lJr4Lhk6yuwm4iZRQuqAUSEFVb9KFSertOTEiZa_x_oQJMRxjKmEEb9HmP8JRQs1wbI6jbrIcQCdsm4rpKJxQw",
+          "signer": "BLQeFu0REoqztMcsDP0vKbDKWrSaBq-HMqi4_RKc9wyRthkLwKaeMBSrLMjVZsry_HqtKFEO7q80kgrsVvFj5MQ",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoidFRvQkJ1c3JtMWNGM0k4RXZNRk9zdDZyMTRQcExkVFE0NlBBbTVRQkgtSSIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCIFRQFKLFxAIe0gbBpxSL6llOuC0AwdNHDPh_vQTS-ZykAiEA3e5epU92IrnAnZUaPH_oEyGjrBbY797zMNSojD0s1yE"
+          }
+        }
+      ],
+      "expect": "reject",
+      "reason": "order"
+    },
+    {
+      "name": "after/from-a-pin",
+      "about": "the next chain must be read from its setup head: a chain read from a pin has no creation time",
+      "record": "ok/rdel-at-pin",
+      "next": [
+        {
+          "ros": "ros.YWxpY2VAZXhhbXBsZS5jb20.1.JcIEfc_26Jy-o6mQSCZnkPWIAVFH3hJIVULaPNye-nE.pk~BKLEQm07MRWeDe6feMrtDDG1WtH8cbw4wpa5JoT58G0i_1Z5BZK21qLaPwvq1wib1HSWA6QlHO87p05IYUvr-TE,pk~BNww6PpA6fWHG7mI3eB0l2nICkO5ma8mGBJT88ecQqCRlNiH93AA6uhWo-HbfW3nMGX8XhVfsIPCA-F4Mt_zUnM.SEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEg.1801429200000",
+          "rip": "rip.OfOHD4_vMFaBrkx2Ckzl8ECo6e224RSi2Bw83fOul7Q.1801429200000.1801688400000.m..dir-1",
+          "ripSig": "FGyAVnRNVB1SyhZ8LLqxOIKCY6v5Ih5XLyCvx-N5jfQVwM6SFIsMUbP4etSLQ7soQ3Od05anDTB59LXat3FAQg",
+          "signer": "BNww6PpA6fWHG7mI3eB0l2nICkO5ma8mGBJT88ecQqCRlNiH93AA6uhWo-HbfW3nMGX8XhVfsIPCA-F4Mt_zUnM",
+          "assertion": {
+            "authenticatorData": "4gimY7JHKM4VW4immVkqfsgJG_OmSKrWHs0dUt-SZYYFAAAAAA",
+            "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiT2ZPSEQ0X3ZNRmFCcmt4MkNremw4RUNvNmUyMjRSU2kyQnc4M2ZPdWw3USIsIm9yaWdpbiI6Imh0dHBzOi8vc2lnbmluLmlkLmJlbnRvLnBhZ2UiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+            "signature": "MEUCIQCzHq65W5tniBMlsJn7cwf1k4pSX5M0kyRL77TdZlkIrgIgDbnyw3sAXestjae9zJ3Xsn7zrzpHuL9dn2tuvC5-K7Y"
+          }
+        }
+      ],
+      "pinned": "OfOHD4_vMFaBrkx2Ckzl8ECo6e224RSi2Bw83fOul7Q",
+      "expect": "reject",
+      "reason": "anchor"
     }
   ],
   "userHandles": {
