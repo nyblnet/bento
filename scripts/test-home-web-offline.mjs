@@ -313,8 +313,11 @@ browser.on('disconnected', () => { if (!closing) crashed = true })
 const recorded = []
 const sockets = []
 // BENTO_HW3_PERSISTENT=1: every context is a profile on disk (launchPersistentContext, a fresh
-// directory each), as a real browser's is, instead of Playwright's ephemeral context. The control
-// for whether an engine's CacheStorage survives in one and not the other (WebKit's "0 cache(s)").
+// directory each), as a real browser's is, instead of Playwright's ephemeral context. An
+// instrument, not a CI mode. Measured (Playwright 1.61.1, macOS and ubuntu): Firefox and Chromium
+// pass in it; Playwright's WebKit keeps the cache NAMES in a persistent profile but stores no
+// entries at all, even for a page's own cache.put of a constructed Response, so in WebKit this
+// mode cannot stand in for a real Safari profile and the [sw] cache rows fail by design.
 const PERSISTENT = process.env.BENTO_HW3_PERSISTENT === '1'
 const profiles = []
 if (PERSISTENT) note(`${ENGINE}: every context is a persistent profile on disk (BENTO_HW3_PERSISTENT=1)`)
