@@ -49,18 +49,21 @@ const RELEASE_LOOKALIKE = path.join(work, 'release-lookalike.json')
 const pubOf = (f) => JSON.parse(fs.readFileSync(f, 'utf8')).public
 
 // --- two real builds --------------------------------------------------------------
-function build(name, frameOrigin) {
+function build(name, frameOrigin, libraryOrigin = 'http://127.0.0.1:1') {
   const out = path.join(work, name)
-  execFileSync(process.execPath, [path.join(ROOT, 'home/web/build.mjs'), '--out', out, '--library-origin', 'http://127.0.0.1:1',
+  execFileSync(process.execPath, [path.join(ROOT, 'home/web/build.mjs'), '--out', out, '--library-origin', libraryOrigin,
     '--frame-origin', frameOrigin, '--release-base', 'http://127.0.0.1:9/releases/', '--dev'], { stdio: ['ignore', 'ignore', 'inherit'] })
   return out
 }
 const dirA = build('A', 'http://localhost:1'), dirB = build('B', 'http://localhost:2')
+// A2: A's code on another library origin; the script does not name it, so A2 shares A's build id
+const dirA2 = build('A2', 'http://localhost:1', 'http://127.0.0.1:2')
 const DAY = 86400e3
 const relA = await describeBuild(dirA, new Date(Date.now() - 10 * DAY).toISOString())
-const relB = await describeBuild(dirB, new Date().toISOString())
+const relB = await describeBuild(dirB, new Date(Date.now() - 5 * DAY).toISOString())
+const relA2 = await describeBuild(dirA2, new Date().toISOString())
 const idOf = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'build.json'), 'utf8')).offline.build
-const idA = idOf(dirA), idB = idOf(dirB)
+const idA = idOf(dirA), idB = idOf(dirB), idA2 = idOf(dirA2)
 
 const writeList = (name, list, key = KEY) => { const f = path.join(work, `${name}.json`); fs.writeFileSync(f, envelopeJson(signPayload(JSON.stringify(list), key))); return f }
 const list1 = nextServed(null, relA) // [A]
@@ -68,6 +71,9 @@ const list2 = nextServed(list1, relB) // [B, A]
 const list2w = nextServed(list1, relB, undefined, { withdraw: [relA.at] }) // [B, A withdrawn]
 const L1 = writeList('list1', list1), L2 = writeList('list2', list2), L2W = writeList('list2w', list2w)
 const L2W_EVIL = writeList('list2w-evil', list2w, EVIL)
+// [A2 current, B withdrawn, A withdrawn]: A shares A2's build id, B is unrelated
+const list3 = nextServed(list2, relA2, undefined, { withdraw: [relA.at, relB.at] })
+const L3 = writeList('list3-shared', list3)
 const twoScripts = structuredClone(list2w)
 twoScripts.releases[1].origins[Object.keys(twoScripts.releases[1].origins).find((o) => twoScripts.releases[1].origins[o].role === 'library')].files['/'].scripts.push({ sha256: 'e'.repeat(64) })
 const L2W_TWO = writeList('list2w-two-scripts', twoScripts)
@@ -134,10 +140,37 @@ const ROWS = {
     ok(r.status === 0 && payloadOf(r)?.withdrawn.includes(old), `a build the list no longer carries may still be withdrawn (exit ${r.status}) ${r.err}`)
   },
   'release-key-needs-list': () => {
-    const r = sign(['--withdraw', idA], RELEASE_LOOKALIKE)
+    const r = sign(['--first', '--withdraw', idA], RELEASE_LOOKALIKE)
     ok(refused(r) && /--served .* is required with the release key/.test(r.err), `the release key without --served: refused (exit ${r.status}: ${r.err.slice(0, 90)})`)
-    const s = sign(['--served', L2W, '--withdraw', idA], RELEASE_LOOKALIKE)
+    const s = sign(['--first', '--served', L2W, '--withdraw', idA], RELEASE_LOOKALIKE)
     ok(refused(s) && /INVALID/.test(s.err), `the release key with a list signed by another key: refused (exit ${s.status}: ${s.err.slice(0, 90)})`)
+  },
+  'shared-id': () => {
+    // positive control on the fixture: A and A2 really share a build id, B does not
+    ok(idA2 === idA && idB !== idA && list3.releases.map((r) => r.withdrawn === true).join() === 'false,true,true', `the fixture: A2 (current) shares A's build id (${idA.slice(0, 12)}…), B unrelated; the list withdraws A and B`)
+    const r = sign(['--served', L3, '--withdraw', idB])
+    const p = payloadOf(r)
+    ok(r.status === 0 && p?.withdrawn.join() === idB && /cannot withdraw it/.test(r.err) && r.err.includes(idA), `a shared id does not block an unrelated withdrawal: B withdrawn, signed, A named in a warning (exit ${r.status}: ${r.err.slice(0, 110)})`)
+    const s = sign(['--served', L3])
+    ok(refused(s) && s.err.includes(idB) && !/withdraws releases/.test(s.err), `B left out is still refused, and A is not counted with it (exit ${s.status}: ${s.err.slice(0, 110)})`)
+    const t = sign(['--served', L3, '--withdraw', idB, '--withdraw', idA])
+    ok(refused(t) && /serves as current/.test(t.err), `withdrawing the shared id itself is still refused: it would stop the current release (exit ${t.status})`)
+  },
+  'release-key-needs-from': () => {
+    const r = sign(['--served', L2W, '--withdraw', idA], RELEASE_LOOKALIKE)
+    ok(refused(r) && /--from .* is required with the release key/.test(r.err), `the release key with neither --from nor --first: refused before anything else (exit ${r.status}: ${r.err.slice(0, 90)})`)
+    const s = sign(['--first', '--served', L2W, '--withdraw', idA], RELEASE_LOOKALIKE)
+    ok(refused(s) && !/--from .* is required/.test(s.err) && /INVALID/.test(s.err), `--first passes that rule (and stops later, at the list's signature) (exit ${s.status}: ${s.err.slice(0, 90)})`)
+    const t = sign(['--first', '--from', path.join(work, 'prev.json'), '--served', L2W, '--withdraw', idA])
+    ok(refused(t) && /contradict/.test(t.err), `--from and --first together: refused (exit ${t.status})`)
+    const u = sign(['--served', L2W, '--withdraw', idA])
+    ok(u.status === 0 && payloadOf(u)?.seq === 1, `a rig's own key may still start from nothing (seq 1), as the offline rig does (exit ${u.status})`)
+  },
+  'from-other-key': () => {
+    const forged = path.join(work, 'prev-evil.json')
+    fs.writeFileSync(forged, envelopeJson(signPayload(JSON.stringify({ app: 'bento-home-status', seq: 900, at: new Date().toISOString(), withdrawn: [] }), EVIL)))
+    const r = sign(['--served', L2W, '--withdraw', idA, '--from', forged])
+    ok(refused(r) && /INVALID/.test(r.err), `--from a status signed by another key: refused, nothing taken from it (exit ${r.status}: ${r.err.slice(0, 90)})`)
   },
   'not-a-list': () => {
     const r = sign(['--served', NOT_A_LIST])
@@ -160,11 +193,14 @@ const MUTANTS = [
   { name: 'the cross-check skipped', row: 'disagree', from: 'if (missing.length) die(', to: 'if (false) die(' },
   { name: 'the build id read from the wrong script', row: 'agree', from: 'scripts[0]?.sha256', to: 'scripts[1]?.sha256' },
   { name: 'the build id read from the wrong file', row: 'agree', from: "lib[0].files?.['/']?.scripts", to: "lib[0].files?.['/sw.js']?.scripts" },
-  { name: 'the list\'s signature not verified', row: 'list-other-key', from: "verifyEnvelope(readFileSync(servedPath, 'utf8'), isRelease ? rk : keyFile.public)", to: "JSON.parse(JSON.parse(readFileSync(servedPath, 'utf8')).payload)" },
+  { name: 'the list\'s signature not verified', row: 'list-other-key', from: "verifyEnvelope(readFileSync(servedPath, 'utf8'), verifyKey)", to: "JSON.parse(JSON.parse(readFileSync(servedPath, 'utf8')).payload)" },
   { name: 'the current build may be withdrawn', row: 'withdraws-current', from: 'if (current.length) die(', to: 'if (false) die(' },
   { name: 'a build the list does not withdraw may be', row: 'withdraws-unmarked', from: 'if (unmarked.length) die(', to: 'if (false) die(' },
   { name: 'the release key signs without a list', row: 'release-key-needs-list', from: 'if (isRelease && !servedPath) die(', to: 'if (false) die(' },
-  { name: 'withdrawn read as present, not true', row: 'none-withdrawn', from: "if (r.withdrawn === true && !withdrawn.has(id))", to: "if (r.withdrawn !== false && !withdrawn.has(id))" },
+  { name: 'a shared build id counted as missing', row: 'shared-id', from: '(served.has(id) ? shared : missing).push(', to: '(false ? shared : missing).push(' },
+  { name: 'the release key starts from nothing', row: 'release-key-needs-from', from: "if (isRelease && !from && !args.includes('--first')) die(", to: 'if (false) die(' },
+  { name: 'the earlier status\'s signature not verified', row: 'from-other-key', from: "try { prev = verifyEnvelope(readFileSync(from, 'utf8'), verifyKey) }", to: "try { prev = JSON.parse(JSON.parse(readFileSync(from, 'utf8')).payload) }" },
+  { name: 'withdrawn read as present, not true', row: 'none-withdrawn', from: 'const isWithdrawn = (r) => r.withdrawn === true', to: 'const isWithdrawn = (r) => r.withdrawn !== false' },
 ]
 const src = fs.readFileSync(SIGNER, 'utf8')
 // control: every row green unmutated

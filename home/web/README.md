@@ -174,14 +174,18 @@ source; the status is signed from it.
 nothing, when the two disagree: a release the list withdraws whose build the
 status leaves out, a status withdrawing the build the list serves as current,
 or one withdrawing a build the list carries but does not withdraw. With the
-release key, `--served` is required. A status published before the deploy
+release key, `--served` is required, and so is `--from` (the status published
+now, signature-verified; `--first` instead only when none has ever been
+published): a status signed from nothing starts at seq 1, which every browser
+that has seen a later one ignores. A status published before the deploy
 stops every tab of a build the host still serves: that fails closed, but it is
 loud for nothing. Two releases can share a build id: it is the hash of the
 library's script alone, so a release that changes only what is around the
 script keeps it (measured: two builds differing only in their library origin
 have one build id; a different frame origin changes it). Withdrawing an older
 release whose script is the current one's is refused as withdrawing the
-current build.
+current build; the list may still withdraw it, and the signer then warns that
+the kill switch cannot, instead of refusing every status.
 The published histories are checked (`build.mjs --check`, which writes
 nothing) before the release signs anything. The output must be outside the
 site and the published tree and contain neither (checked by folder identity,

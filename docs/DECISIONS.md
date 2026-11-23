@@ -15420,7 +15420,17 @@ is `scripts[0].sha256` of the library origin's `/` entry.
   every tab of a build the host still serves.
 - **Two releases can share a build id** (measured: builds differing only in
   their library origin do), so withdrawing an older release whose script is
-  the current one's is refused as withdrawing the current build.
+  the current one's is refused as withdrawing the current build. Such a
+  release is also never counted as one the status leaves out: the signer warns
+  and goes on. Counting it deadlocked the kill switch (security's review of
+  #977, measured): with the list `[A2 current, A withdrawn, C]`, A sharing
+  A2's id, every status was refused, an emergency withdrawal of the unrelated
+  C included. The tripwire's list still flags a page served from A.
+- **A status never starts from nothing with the release key**: `--from <the
+  published status.json>` (signature-verified, against the same key rule as
+  the list) or an explicit `--first` is required. Without it the signer wrote
+  seq 1 and dropped the earlier status's withdrawals; a browser that has seen
+  a later seq ignores a smaller one, so that withdrawal failed open, quietly.
 
 Guard: `scripts/test-home-status-sign.mjs` (two real development builds,
 throwaway keys; `--mutants` turns each refusal off and requires its row red).
