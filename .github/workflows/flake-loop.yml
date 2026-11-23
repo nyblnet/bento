@@ -12,7 +12,7 @@ jobs:
       fail-fast: false
       matrix:
         leg: [firefox]
-        shard: [1, 2, 3, 4]
+        shard: [1, 2]
     env:
       LP_NATIVE_VECTOR_WIDTH: '128'
     steps:
@@ -28,15 +28,8 @@ jobs:
           echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
       - name: juggler repro (no bento code)
         run: |
-          V=plain N=100 node .github/flake-loop/juggler-repro.mjs || true
-          V=sw N=100 node .github/flake-loop/juggler-repro.mjs || true
-          V=csp N=100 node .github/flake-loop/juggler-repro.mjs || true
-      - name: loop
-        run: |
-          engine=${{ matrix.leg }}; engine=${engine%-persistent}
-          persistent=0; case "${{ matrix.leg }}" in *-persistent) persistent=1;; esac
-          dbg=pw:browser; [ "$engine" = firefox ] && dbg=pw:browser,pw:protocol
-          KEEP_ALL=1 BENTO_HW3_PERSISTENT=$persistent BENTO_BROWSER=$engine DEBUG=$dbg .github/flake-loop/loop.sh 5 "${{ matrix.leg }}-${{ matrix.shard }}" node scripts/test-home-web-offline.mjs
+          V=coop N=150 node .github/flake-loop/juggler-repro.mjs || true
+          V=coop-warm N=150 node .github/flake-loop/juggler-repro.mjs || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
