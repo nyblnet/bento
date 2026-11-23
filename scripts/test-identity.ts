@@ -204,7 +204,7 @@ console.log('\ncontract only: nothing calls it yet, except the People panel (age
   const CONST_ONLY = 'slides/src/editor/vouchstate.ts'
   const CONST_IMPORT = "import { RESOLVED_FIELDS, isVoucher } from '../../../kernel/src/identity.ts'"
   const MARKER_CHECK = "if (!ownMarker(a)) return { kind: 'failed', why: 'incomplete' }"
-  // the marker counts only as the answer's own data property (security-ruling-991 N1)
+  // the marker counts only as the answer's own data property, never inherited or a getter
   const OWN_MARKER = "const ownMarker = (a: object) => { const d = Object.getOwnPropertyDescriptor(a, 'fields'); return d !== undefined && 'value' in d && d.value === RESOLVED_FIELDS }"
   // a changed binding only takes the ✓ away, so it may be shown without the marker, but only for changed: true
   const CHANGED_LINE = "if (a.changed === true) return name && isVoucher(via) ? { kind: 'changed', name, via } : { kind: 'failed' }"

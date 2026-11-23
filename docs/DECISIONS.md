@@ -15460,7 +15460,8 @@ Supersedes two bullets of 2026-11-12 "The People panel's identity tiers":
   carries it) or an accessor is "couldn't check", since this is the one gate
   meant to fail closed. A revocation and a changed binding (`changed: true`,
   "⚠ changed") are shown with or without the marker; both only ever remove
-  the ✓.
+  the ✓. A changed row says nothing about revocation: an answer that lost
+  `revoked` on the way still reads "⚠ changed", never a ✓.
 - **vouchedBy is never parsed.** The panel accepts it only in the kernel's
   `isVoucher` shape; anything else, such as a voucher with a qualifier
   written into it, is "couldn't check". The 80-character cut and its
@@ -15473,10 +15474,13 @@ Supersedes two bullets of 2026-11-12 "The People panel's identity tiers":
   three fields whose absence is the stronger claim (`resetAt`,
   `rosterChangedAt`, `unconfirmedSince`) must be absent or a time: any other
   value present, `null` included, is "couldn't check", never read as absent.
+  A time is a positive integer a `Date` can hold (at most 8.64e15).
   The display windows run on the viewer's clock, and a reset or roster change
   dated in its future keeps "account changed on <date>" (the safe direction).
   A `revoked` value outside the contract (`'deleted'` before that state
-  exists) is "couldn't check".
+  exists) is "couldn't check", and so is `null`, `0`, `''` or `NaN`: the
+  kernel passes the host's answer through, so the panel is the only place
+  `revoked` is typed, and only absent or `false` means not revoked.
 - **What a production ✓ still waits on.** No row can reach a ✓ in production
   until a host exposes an agent to documents and forwards every G field plus
   the marker, the presence carries what the agent needs to map a room key to a
@@ -15491,7 +15495,7 @@ Supersedes two bullets of 2026-11-12 "The People panel's identity tiers":
   move the marker check after the verified result, read the marker through
   the prototype, or return a changed result from anything but changed: true
   each turn it red, beside the fourteen earlier widening mutants. Guarded behaviourally by
-  `scripts/test-slides-people-tiers.ts` (35 mutants) and
+  `scripts/test-slides-people-tiers.ts` (39 mutants) and
   `scripts/test-slides-people-tiers-browser.mjs`, which measures every mark
   and tag at 1440, 1000, 760, 390 and 320px. Its ten build mutants include
   a missing marker check, the agent asked despite the kill switch, a stand-in

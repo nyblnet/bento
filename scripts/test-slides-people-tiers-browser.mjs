@@ -268,7 +268,7 @@ async function seat(s, peers) {
 }
 const byText = (rs, t) => rs.find((r) => r.text.includes(t))
 
-// C2 / C10: measured, not read. A piece that must be seen is laid out inside
+// Measured, not read. A piece that must be seen is laid out inside
 // each clipping ancestor (.who, the scrolling list, the popover, the menu it
 // hangs from) AND the viewport, is not ellipsised, and the point at its centre
 // hits it. A text fragment is measured with a Range.

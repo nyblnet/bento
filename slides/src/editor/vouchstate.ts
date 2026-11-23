@@ -40,9 +40,10 @@
 //   managedBy        not shown (organisation identity is later); never parsed
 //
 // The three time fields above that are stronger when missing must be ABSENT or
-// a time: any other value present (null, a string, 0, a fraction) is "couldn't
-// check", never read as absent. vouchedBy is the voucher alone (isVoucher); any
-// other text in it is "couldn't check": no qualifier is ever parsed out of it.
+// a time (a positive integer a Date can hold): any other value present (null, a
+// string, 0, a fraction, past 8.64e15) is "couldn't check", never read as
+// absent. vouchedBy is the voucher alone (isVoucher); any other text in it is
+// "couldn't check": no qualifier is ever parsed out of it.
 
 import { RESOLVED_FIELDS, isVoucher } from '../../../kernel/src/identity.ts'
 
@@ -105,7 +106,9 @@ export function claimedName(s: unknown): string {
   return typeof s === 'string' ? cleanText(s.replace(TICKS, ''), NAME_MAX) : ''
 }
 
-const isTime = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v > 0
+/** the latest instant a Date can hold; a larger number would render "Invalid Date" */
+const MAX_TIME = 8.64e15
+const isTime = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v > 0 && v <= MAX_TIME
 /** present and not a time: a field whose absence is the stronger claim cannot
  *  be read as absent when it holds something else */
 const malformed = (v: unknown) => v !== undefined && !isTime(v)
@@ -131,6 +134,9 @@ function decide(r: unknown, now: number): VouchState {
   if (!r || typeof r !== 'object') return { kind: 'failed' }
   const a = r as Record<string, unknown>
   // revocation outranks everything: a revoked sign-in never shows a ✓
+  // `revoked` is typed here and nowhere else (the kernel passes the host's
+  // answer through), so anything but absent or false, null and 0 included, is
+  // read as present: a known value is a revocation, anything else couldn't check
   const rv = a.revoked
   if (rv !== undefined && rv !== false) {
     if (rv === true || rv === 'signout') return { kind: 'revoked', incident: false }
