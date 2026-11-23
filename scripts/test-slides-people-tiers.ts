@@ -9,7 +9,10 @@
 // since <date>", "(passkey sign-in)", "new account" (14 days), "account changed
 // on <date>" (7 days; 30 after a reset), "this sign-in was revoked" (no ✓; an
 // incident flags the row), vouchedBy as a bare voucher (never parsed), and the
-// name's tick and invisible-character strip. A field missing from a MARKED
+// name's tick and invisible-character strip. The marker counts only as the
+// answer's own data property; a changed binding, like a revocation, is shown
+// with or without it; and a reset or roster change dated in the viewer's
+// future keeps its tag (C8, the safe direction). A field missing from a MARKED
 // answer reads as what it means: tier and accountSince the weaker claim; the
 // fields whose absence is the stronger claim must be absent or a time.
 //
@@ -69,6 +72,11 @@ const ROWS: Row[] = [
     (m) => st(m, bind({ accountSince: NOW - 999 * DAY, resetAt: NOW - 30 * DAY })).changedOn === null],
   ['a reset 20 days ago is shown (30, not 7)',
     (m) => st(m, bind({ accountSince: NOW - 999 * DAY, resetAt: NOW - 20 * DAY })).changedOn === NOW - 20 * DAY],
+  // C8: the windows run on the viewer's clock; a date in its future keeps the tag (the safe direction)
+  ['a reset dated a day in the viewer\'s future -> "account changed on" that day',
+    (m) => st(m, bind({ accountSince: NOW - 999 * DAY, resetAt: NOW + DAY })).changedOn === NOW + DAY],
+  ['a roster change dated a day in the viewer\'s future -> "account changed on" that day',
+    (m) => st(m, bind({ accountSince: NOW - 999 * DAY, rosterChangedAt: NOW + DAY })).changedOn === NOW + DAY],
   ['a recent change after an old reset shows the recent date',
     (m) => st(m, bind({ resetAt: NOW - 400 * DAY, rosterChangedAt: NOW - 2 * DAY })).changedOn === NOW - 2 * DAY],
 
@@ -86,7 +94,22 @@ const ROWS: Row[] = [
   ['no marker with every G field present -> still couldn\'t check', (m) => st(m, six({ tier: 'native', accountSince: 1, unconfirmedSince: UNCONF_AT })).kind === 'failed'],
   ['a marker of another value (g2, G1, true, [g1]) -> couldn\'t check',
     (m) => ['g2', 'G1', true, ['g1'], ' g1', null].every((f) => failed(m, bind({ fields: f })))],
-  ['no marker, changed binding -> couldn\'t check (no verified name shown)', (m) => st(m, six({ changed: true })).kind === 'failed'],
+  // a changed binding only takes the ✓ away, so it is shown with or without the marker, like a revocation
+  ['no marker, changed binding -> "⚠ changed" all the same (the safe direction)', (m) => st(m, six({ changed: true })).kind === 'changed'],
+  ['no marker, changed binding with a bad voucher or no name -> couldn\'t check',
+    (m) => failed(m, six({ changed: true, vouchedBy: 'a b' })) && failed(m, six({ changed: true, name: '' }))],
+  // the marker is the answer's OWN data property: never inherited, never an accessor
+  ['a marker inherited from Object.prototype -> couldn\'t check, never ✓', (m) => {
+    const P = Object.prototype as Record<string, unknown>
+    P.fields = 'g1'
+    try { const s = st(m, six()); return s.kind === 'failed' && s.why === 'incomplete' } finally { delete P.fields }
+  }],
+  ['a marker on the answer\'s prototype -> couldn\'t check, never ✓',
+    (m) => { const s = st(m, Object.assign(Object.create({ fields: 'g1' }), six())); return s.kind === 'failed' && s.why === 'incomplete' }],
+  ['a marker as a getter returning g1 -> couldn\'t check, never ✓',
+    (m) => { const s = st(m, Object.defineProperty(six(), 'fields', { get: () => 'g1', enumerable: true })); return s.kind === 'failed' && s.why === 'incomplete' }],
+  ['positive control: an own data marker defined the same way -> verified',
+    (m) => verified(m, Object.defineProperty(six(), 'fields', { value: 'g1', enumerable: true }))],
   ['no marker, revoked -> revoked all the same (the safe direction)',
     (m) => st(m, six({ revoked: 'signout' })).kind === 'revoked' && (st(m, six({ revoked: 'incident' })) as { incident?: boolean }).incident === true],
   ['marker, revoked absent -> verified', (m) => verified(m, bind())],
@@ -165,7 +188,7 @@ const MUTANTS: [string, string, string][] = [
   ['reset ignored', 'if (isTime(a.resetAt) && now - a.resetAt', 'if (false && now - a.resetAt'],
   ['reset shown at any age', 'now - a.resetAt < RESET_SHOWN_MS', 'now - a.resetAt < Infinity'],
   ['reset window 7 days', 'now - a.resetAt < RESET_SHOWN_MS', 'now - a.resetAt < CHANGED_SHOWN_MS'],
-  ['changed binding ticked', "if (a.changed) return { kind: 'changed', name, via }", "if (false) return { kind: 'changed', name, via }"],
+  ['changed binding ticked', 'if (a.changed === true) return name', 'if (false) return name'],
   ['invisible characters kept', "s.replace(INVISIBLE, '')", 's'],
   ['ticks kept in verified names', 'const name = claimedName(a.name)', 'const name = cleanText(a.name, NAME_MAX)'],
   ['a throwing answer escapes', "try { return decide(r, now) } catch { return { kind: 'failed' } }", 'return decide(r, now)'],
@@ -174,18 +197,24 @@ const MUTANTS: [string, string, string][] = [
   ['new tick marks kept', '\\u221A\\u237B\\u{1F5F8}\\u{1F5F9}\\u{10102}\\u{1FBB1}]', '\\u{1F5F8}]'],
   ['ticks kept in typed names', "cleanText(s.replace(TICKS, ''), NAME_MAX)", 'cleanText(s, NAME_MAX)'],
   // the completeness marker and the KG4 fields
-  ['the marker check removed', "if (a.fields !== RESOLVED_FIELDS) return { kind: 'failed', why: 'incomplete' }", ''],
-  ['the marker treated as optional', 'if (a.fields !== RESOLVED_FIELDS) return', 'if (a.fields !== undefined && a.fields !== RESOLVED_FIELDS) return'],
-  ['any truthy marker accepted', 'if (a.fields !== RESOLVED_FIELDS) return', 'if (!a.fields) return'],
-  ['revoked read only when the marker is absent', 'if (rv !== undefined && rv !== false) {', 'if (a.fields !== RESOLVED_FIELDS && rv !== undefined && rv !== false) {'],
-  ['the marker checked before revocation', "  // revocation outranks everything: a revoked sign-in never shows a ✓\n", "  if (a.fields !== RESOLVED_FIELDS) return { kind: 'failed' }\n"],
+  ['the marker check removed', "if (!ownMarker(a)) return { kind: 'failed', why: 'incomplete' }", ''],
+  ['the marker treated as optional', 'if (!ownMarker(a)) return', 'if (a.fields !== undefined && !ownMarker(a)) return'],
+  ['any truthy marker accepted', 'if (!ownMarker(a)) return', 'if (!a.fields) return'],
+  ['revoked read only when the marker is absent', 'if (rv !== undefined && rv !== false) {', 'if (!ownMarker(a) && rv !== undefined && rv !== false) {'],
+  ['the marker checked before revocation', "  // revocation outranks everything: a revoked sign-in never shows a ✓\n", "  if (!ownMarker(a)) return { kind: 'failed' }\n"],
+  ['the marker read through the prototype', "const d = Object.getOwnPropertyDescriptor(a, 'fields'); return d !== undefined && 'value' in d && d.value === RESOLVED_FIELDS", "return (a as Record<string, unknown>).fields === RESOLVED_FIELDS"],
+  ['an accessor marker accepted', "d !== undefined && 'value' in d && d.value === RESOLVED_FIELDS", "d !== undefined && (a as Record<string, unknown>).fields === RESOLVED_FIELDS"],
+  ['a changed binding hidden without the marker', 'if (a.changed === true) return', 'if (a.changed === true && ownMarker(a)) return'],
+  ['a changed binding shown with any voucher', 'name && isVoucher(via) ? { kind: \'changed\'', 'name ? { kind: \'changed\''],
+  ['a reset dated in the viewer\'s future dropped', 'if (isTime(a.resetAt) && now - a.resetAt', 'if (isTime(a.resetAt) && now >= a.resetAt && now - a.resetAt'],
+  ['a roster change dated in the viewer\'s future dropped', 'isTime(a.rosterChangedAt) && now - a.rosterChangedAt', 'isTime(a.rosterChangedAt) && now >= a.rosterChangedAt && now - a.rosterChangedAt'],
   ['unconfirmedSince never read', 'const unconfirmedOn = isTime(a.unconfirmedSince) ? a.unconfirmedSince : null', 'const unconfirmedOn = null'],
   ['a malformed unconfirmedSince read as absent', ' || malformed(a.unconfirmedSince)) return', ') return'],
   ['a malformed resetAt read as absent', 'if (malformed(a.resetAt) || ', 'if ('],
   ['a malformed rosterChangedAt read as absent', ' || malformed(a.rosterChangedAt)', ''],
   ['0 counts as a time', '&& Number.isSafeInteger(v) && v > 0', '&& Number.isSafeInteger(v) && v >= 0'],
   ['any non-empty vouchedBy accepted (the old cutVia path)', '!isVoucher(via)', "!(typeof via === 'string' && via.length > 0)"],
-  ['revoked deleted read as not revoked', '    return { kind: \'failed\' }\n  }\n  // a ✓ needs', '  }\n  // a ✓ needs'],
+  ['revoked deleted read as not revoked', '    return { kind: \'failed\' }\n  }\n  const name', '  }\n  const name'],
 ]
 
 let failures = 0

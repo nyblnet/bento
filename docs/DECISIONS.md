@@ -15454,8 +15454,13 @@ Supersedes two bullets of 2026-11-12 "The People panel's identity tiers":
   pass everything on. That is what makes the switch safe to ship before the
   directory and the host relays are ready. A relay that copies the original
   six fields, as home/bridge.js does today, drops the marker with them, so
-  that host shows "couldn't check" and never a ✓ it cannot back. A
-  revocation is shown with or without the marker; it only ever removes the ✓.
+  that host shows "couldn't check" and never a ✓ it cannot back. The marker
+  counts only as the answer's OWN data property: one inherited through a
+  prototype (a polluted `Object.prototype`, an answer built on an object that
+  carries it) or an accessor is "couldn't check", since this is the one gate
+  meant to fail closed. A revocation and a changed binding (`changed: true`,
+  "⚠ changed") are shown with or without the marker; both only ever remove
+  the ✓.
 - **vouchedBy is never parsed.** The panel accepts it only in the kernel's
   `isVoucher` shape; anything else, such as a voucher with a qualifier
   written into it, is "couldn't check". The 80-character cut and its
@@ -15468,6 +15473,8 @@ Supersedes two bullets of 2026-11-12 "The People panel's identity tiers":
   three fields whose absence is the stronger claim (`resetAt`,
   `rosterChangedAt`, `unconfirmedSince`) must be absent or a time: any other
   value present, `null` included, is "couldn't check", never read as absent.
+  The display windows run on the viewer's clock, and a reset or roster change
+  dated in its future keeps "account changed on <date>" (the safe direction).
   A `revoked` value outside the contract (`'deleted'` before that state
   exists) is "couldn't check".
 - **What a production ✓ still waits on.** No row can reach a ✓ in production
@@ -15478,12 +15485,16 @@ Supersedes two bullets of 2026-11-12 "The People panel's identity tiers":
   "couldn't check" or "not verified". So a slides release can carry this
   before any of them.
 - `scripts/test-identity.ts`'s pin now states the invariant as "an agent
-  present and the kill switch unset gate the call; the marker gates any ✓".
-  Mutants that ignore the kill switch, fail it open, or remove, comment out or
-  move the marker check after the changed result each turn it red, beside the
-  fourteen earlier widening mutants. Guarded behaviourally by
-  `scripts/test-slides-people-tiers.ts` (29 mutants) and
+  present and the kill switch unset gate the call; the marker, read as an own
+  data property, gates any ✓; a changed result comes only from changed: true".
+  Mutants that ignore the kill switch, fail it open, remove, comment out or
+  move the marker check after the verified result, read the marker through
+  the prototype, or return a changed result from anything but changed: true
+  each turn it red, beside the fourteen earlier widening mutants. Guarded behaviourally by
+  `scripts/test-slides-people-tiers.ts` (35 mutants) and
   `scripts/test-slides-people-tiers-browser.mjs`, which measures every mark
-  and tag at 1440, 1000, 760, 390 and 320px. Its eight build mutants include
+  and tag at 1440, 1000, 760, 390 and 320px. Its ten build mutants include
   a missing marker check, the agent asked despite the kill switch, a stand-in
-  agent where there is none, and the phone popover's viewport cap removed.
+  agent where there is none, the phone popover's viewport cap removed, the
+  unconfirmed tag painted grey, and a changed binding hidden without the
+  marker.

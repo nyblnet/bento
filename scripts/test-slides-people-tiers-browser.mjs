@@ -19,12 +19,17 @@
 //      hostile 78-character name; revoked (incident flag for the owner, none
 //      for signout); an answer with only the six original fields (what
 //      home/bridge.js relays today) and one whose vouchedBy carries a
-//      qualifier -> "couldn't check", no \u2713; an unproven peer is never looked
-//      up. Every mark and tag is measured visible (getBoundingClientRect inside
-//      each clipping ancestor, no ellipsis) at 1440, 1000 and 760.
+//      qualifier -> "couldn't check", no \u2713; six fields with changed: true ->
+//      "\u26A0 changed" all the same (it only takes the \u2713 away); the
+//      unconfirmed tag painted in the warning colour, not the tier tags' grey;
+//      a right-to-left 80-character name (Hebrew, RLO, Braille blanks, U+FDFD);
+//      an unproven peer is never looked up. Every mark and tag is measured
+//      visible (getBoundingClientRect inside each clipping ancestor, no
+//      ellipsis) at 1440, 1000 and 760.
 //   2. phone widths 390x844 and 320x568 (ed-bar-fold, Share inside ⋯): every
-//      mark and tag inside the viewport and hit by elementFromPoint, beside a
-//      name of 30 U+FDFD.
+//      mark and tag ("unconfirmed since", "(passkey sign-in)", "new account",
+//      "account changed on", "couldn't check", revoked) inside the viewport and
+//      hit by elementFromPoint, beside a name of 30 U+FDFD.
 //   3. kill switch 'off' with an agent: rows unchanged, 0 resolve calls, 0 reads
 //      of the agent's global. The old QA value 'on' still shows the tiers.
 //   4. kill switch unset, NO agent (file://, bento.page): rows unchanged and
@@ -39,6 +44,8 @@
 //   fallback     a stand-in agent where the host has none (no-agent inertness)
 //   unconflayout the unconfirmed tag squeezed to one clipped line
 //   phonepop     #958's phone CSS removed (the folded popover floats again, uncapped)
+//   unconfgrey   the unconfirmed tag painted grey like the tier tags
+//   changedmarker a changed binding hidden unless the answer carries the marker
 // Each must go red.
 import { readFileSync, writeFileSync, mkdtempSync, realpathSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
@@ -58,7 +65,12 @@ const MUTANTS = {
   owner: ['editor/editor.ts', 'ownerRow: iAmOwner ? row : null', 'ownerRow: null'],
   proof: ['editor/editor.ts', 'decoratePeer(who, peer.name, peer.pub, keyOk, vouchAgent,', 'decoratePeer(who, peer.name, peer.pub, true, vouchAgent,'],
   layout: ['editor/vouch.ts', "who.classList.add('vouched')", "who.classList.add('vouched-off')"],
-  nomarker: ['editor/vouchstate.ts', 'if (a.fields !== RESOLVED_FIELDS) return', "if (a.fields !== RESOLVED_FIELDS && a.fields === 'never') return"],
+  nomarker: ['editor/vouchstate.ts', 'if (!ownMarker(a)) return', "if (!ownMarker(a) && a.fields === 'never') return"],
+  // the unconfirmed tag painted in the muted grey of the other tags, not the warning amber
+  unconfgrey: ['styles.css', ".ed-share-peer .vouch[data-vouch='revoked'],\n.ed-share-peer .vouch-tag[data-tag='unconfirmed'] { color: #b26a00; }",
+    ".ed-share-peer .vouch[data-vouch='revoked'] { color: #b26a00; }"],
+  // a changed binding hidden unless the answer carries the marker
+  changedmarker: ['editor/vouchstate.ts', 'if (a.changed === true) return', 'if (a.changed === true && ownMarker(a)) return'],
   'probe-always': ['editor/vouch.ts', 'return vouchEnabled() ? identityAgent() : null', 'return identityAgent()'],
   fallback: ['editor/vouch.ts', 'return vouchEnabled() ? identityAgent() : null',
     "return vouchEnabled() ? (identityAgent() ?? { contract: 1, whoami: async () => null, sign: async () => ({ ok: false, reason: 'unavailable' }), resolve: async () => null }) : null"],
@@ -188,9 +200,9 @@ async function open({ flag, agent, viewport = { width: 1440, height: 900 } }) {
   const rows = () => p.evaluate(() => [...document.querySelectorAll('.ed-share-peers .ed-share-peer')].map((r) => {
     const who = r.querySelector('.who'); const v = who.querySelector('.vouch')
     return {
-      text: who.textContent, state: v?.dataset.vouch ?? null, mark: v?.textContent ?? null, tip: v?.title ?? '',
+      text: who.textContent, state: v?.dataset.vouch ?? null, mark: v?.textContent ?? null, tip: v?.title ?? '', color: v ? getComputedStyle(v).color : null,
       vouched: who.classList.contains('vouched'),
-      tags: [...who.querySelectorAll('.vouch-tag')].map((s) => ({ tag: s.dataset.tag, text: s.textContent, tip: s.title })),
+      tags: [...who.querySelectorAll('.vouch-tag')].map((s) => ({ tag: s.dataset.tag, text: s.textContent, tip: s.title, color: getComputedStyle(s).color })),
       flag: r.querySelector(':scope > .vouch-flag')?.title ?? null,
       flagBeforeKick: !!r.querySelector(':scope > .vouch-flag + .kick'),
     }
@@ -200,6 +212,10 @@ async function open({ flag, agent, viewport = { width: 1440, height: 900 } }) {
 
 const HOSTILE78 = 'Ulla ' + 'Unconfirmed-'.repeat(6).slice(0, 73)
 const FDFD = '\uFDFD'.repeat(30)
+// right-to-left, at the 80-character name limit once cleaned: Hebrew, then an RLO, Braille blanks
+// and U+FDFD (the RLO and the blanks are stripped; the rest must not push the
+// mark or the tags out of sight)
+const RTL80 = ('\u05E8\u05D7\u05DC ' + '\u202E\u2800\uFDFD\u05E9\u05DC\u05D5\u05DD '.repeat(20)).slice(0, 110)
 
 /** Make the peers (proven or not), set the agent's answers, open the panel. */
 async function seat(s, peers) {
@@ -207,7 +223,7 @@ async function seat(s, peers) {
     window.__k = {}
     for (const [actor] of peers) window.__k[actor] = await window.__peer.key()
   }, peers)
-  await s.p.evaluate(async ({ peers, DAY, HOSTILE78, FDFD }) => {
+  await s.p.evaluate(async ({ peers, DAY, HOSTILE78, FDFD, RTL80 }) => {
     const now = Date.now()
     const six = (name, extra = {}) => ({ name, email: 'x@example.com', vouchedBy: 'id.bento.page', accountPub: name.slice(0, 1), firstSeen: 1, changed: false, ...extra })
     const g1 = (name, extra = {}) => six(name, { fields: 'g1', ...extra })
@@ -219,6 +235,8 @@ async function seat(s, peers) {
       unconf: g1(HOSTILE78, { accountSince: now - 90 * DAY, unconfirmedSince: now - 40 * DAY }),
       fdfd: g1(FDFD, { unconfirmedSince: now - 40 * DAY }),
       legacy: six('Leo Legacy'),
+      legchanged: six('Lena Legacy', { changed: true }),
+      rtl: g1(RTL80, { accountSince: now - 90 * DAY, unconfirmedSince: now - 40 * DAY }),
       qualvia: g1('Quinn Qualified', { vouchedBy: 'id.bento.page, unconfirmed since 3 Mar 2027' }),
       longname: g1('Bartholomew ' + 'Featherstonehaugh-'.repeat(4)),
       tickname: g1('Vic \u2713 via bigcorp.com'),
@@ -234,7 +252,7 @@ async function seat(s, peers) {
       for (const [actor, name, , proven] of peers) { const k = window.__k[actor]; await window.__peer.beat(actor, name, k.pub, proven ? k.key : null) }
     }
     await window.__rebeat()
-  }, { peers, DAY, HOSTILE78, FDFD })
+  }, { peers, DAY, HOSTILE78, FDFD, RTL80 })
   await s.p.waitForTimeout(600)
   await s.ensureOpen()
   // presence, not Playwright's visibility check: the panel rebuilds its rows on
@@ -298,6 +316,7 @@ try {
       ['rig-qualvia', 'Quinn', 'qualvia', true], ['rig-borrow', 'Eve', 'borrowed', false],
       ['rig-longname', 'Bart', 'longname', true], ['rig-tickname', 'Vic', 'tickname', true],
       ['rig-sqrt', 'Mal \u221A via id.bento.page', 'none', false],
+      ['rig-legchanged', 'Lena', 'legchanged', true], ['rig-rtl', 'Rhea', 'rtl', true],
     ])
     let rs = await s.rows()
 
@@ -324,6 +343,17 @@ try {
       'six fields only (what a relay that copies the original six delivers): "couldn’t check", no \u2713')
     ok(/app this file is open in/.test(leo?.tip ?? ''), 'its tooltip says the app did not pass everything on')
     ok(leo?.text.startsWith('Leo') && !leo.text.includes('Legacy'), 'six fields only: the typed name stays; the agent\'s name is not shown')
+    // a changed binding only takes the ✓ away, so it is shown without the marker too
+    const lena = byText(rs, 'Lena Legacy')
+    ok(lena?.state === 'changed' && lena.mark === '\u26A0 changed' && !lena.text.includes('\u2713'),
+      'six fields only, changed: true: "\u26A0 changed" all the same, no \u2713')
+    // the unconfirmed tag is a warning: the amber of the revoked mark, not the muted grey of the tier tags
+    const ivyMark = rs.find((r) => r.text.startsWith('Ivy'))?.color
+    ok(!!u?.tags[0]?.color && u.tags[0].color === ivyMark && u.tags[0].color !== u.tags[1]?.color,
+      `the unconfirmed tag is painted in the warning colour (${u?.tags[0]?.color}; warning ${ivyMark}, passkey tag ${u?.tags[1]?.color})`)
+    const rhea = rs.find((r) => r.text.startsWith('\u05E8\u05D7\u05DC'))
+    ok(rhea?.state === 'verified' && rhea.tags.map((x) => x.tag).join() === 'unconfirmed,passkey' && !/[\u202E\u2800]/.test(rhea.text),
+      'a right-to-left 80-character name: verified, its tags in order, the RLO and Braille blanks stripped')
     const quinn = rs.find((r) => r.text.startsWith('Quinn'))
     ok(quinn?.state === 'failed' && !quinn.text.includes('\u2713'), 'a qualifier inside vouchedBy: "couldn’t check", no \u2713')
 
@@ -372,6 +402,9 @@ try {
       await mustSee(s, 'Mal', '.vouch', `${w}px, a typed name reading "\u221A via id.bento.page": "not verified" is fully visible`)
       await mustSee(s, 'Ivy', '.vouch', `${w}px, revoked: "this sign-in was revoked" is fully visible`)
       await mustSee(s, 'Vic', '.vouch', `${w}px, that account's real "\u2713 via id.bento.page" is fully visible`)
+      await mustSee(s, '\u05E8\u05D7\u05DC', '.vouch', `${w}px, a right-to-left 80-character name: its \u2713 is fully visible`)
+      await mustSee(s, '\u05E8\u05D7\u05DC', '.vouch-tag[data-tag="unconfirmed"]', `${w}px, a right-to-left 80-character name: "unconfirmed since <date>" is fully visible`)
+      await mustSee(s, 'Lena', '.vouch', `${w}px, "\u26A0 changed" without the marker is fully visible`)
     }
     await s.p.setViewportSize({ width: 1440, height: 900 })
 
@@ -401,6 +434,7 @@ try {
     await seat(s, [
       ['rig-fdfd', 'Fay', 'fdfd', true], ['rig-unconf', 'Ulla', 'unconf', true],
       ['rig-incident', 'Ivy', 'incident', true], ['rig-plain', 'Alice', 'plain', true],
+      ['rig-native', 'Nate', 'native', true], ['rig-legacy', 'Leo', 'legacy', true],
     ])
     const where = await s.p.evaluate(() => {
       const sb = document.querySelector('.ed-btn-share')
@@ -421,6 +455,9 @@ try {
     await mustSee(s, 'Ulla', '.vouch', `${vp.width}px, a 78-character name: its \u2713 is on screen and hit`)
     await mustSee(s, 'Ulla', '.vouch-tag[data-tag="unconfirmed"]', `${vp.width}px, a 78-character name: "unconfirmed since <date>" is on screen and hit`)
     await mustSee(s, 'Ivy', '.vouch', `${vp.width}px, revoked: "this sign-in was revoked" is on screen and hit`)
+    await mustSee(s, 'Alice Real', '.vouch-tag[data-tag="new"]', `${vp.width}px: "new account" is on screen and hit`)
+    await mustSee(s, 'Nate Native', '.vouch-tag[data-tag="changed"]', `${vp.width}px: "account changed on <date>" is on screen and hit`)
+    await mustSee(s, 'Leo', '.vouch', `${vp.width}px: "couldn’t check" is on screen and hit`)
     ok(s.errors.length === 0, `${vp.width}px: no page errors${s.errors.length ? ': ' + s.errors[0] : ''}`)
     await s.ctx.close()
   }

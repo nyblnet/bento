@@ -188,11 +188,13 @@ console.log('\nonce found, the agent cannot be reassigned')
 // voucher shape) and nothing else; `identityAgent` is named exactly twice in
 // vouch.ts (the import and the one gated call); vouchAgent and vouchEnabled are
 // exactly the gated call and the kill-switch read; lsGet is the kernel's
-// storage read, not redefined; vouchstate.ts checks the marker before any
-// verified or changed result. Then the pin is run on in-memory copies with
+// storage read, not redefined; vouchstate.ts checks the marker, as the
+// answer's own data property, before any verified result, and returns a
+// changed result (which only takes the ✓ away) only for changed === true. Then the pin is run on in-memory copies with
 // widening mutants (a re-export, an alias, a second call site, the kill switch
 // ignored or read in a comment, a shadowed lsGet, a multi-line or dynamic
-// import elsewhere, the marker check removed or moved), each of which must
+// import elsewhere, the marker check removed, moved or read through the
+// prototype, a changed result from a truthy changed), each of which must
 // turn it red.
 console.log('\ncontract only: nothing calls it yet, except the People panel (agent-gated, kill switch, marker)')
 {
@@ -201,7 +203,11 @@ console.log('\ncontract only: nothing calls it yet, except the People panel (age
   // the panel's decision module takes the marker value and the voucher shape, two pure bindings, and nothing else
   const CONST_ONLY = 'slides/src/editor/vouchstate.ts'
   const CONST_IMPORT = "import { RESOLVED_FIELDS, isVoucher } from '../../../kernel/src/identity.ts'"
-  const MARKER_CHECK = "if (a.fields !== RESOLVED_FIELDS) return { kind: 'failed', why: 'incomplete' }"
+  const MARKER_CHECK = "if (!ownMarker(a)) return { kind: 'failed', why: 'incomplete' }"
+  // the marker counts only as the answer's own data property (security-ruling-991 N1)
+  const OWN_MARKER = "const ownMarker = (a: object) => { const d = Object.getOwnPropertyDescriptor(a, 'fields'); return d !== undefined && 'value' in d && d.value === RESOLVED_FIELDS }"
+  // a changed binding only takes the ✓ away, so it may be shown without the marker, but only for changed: true
+  const CHANGED_LINE = "if (a.changed === true) return name && isVoucher(via) ? { kind: 'changed', name, via } : { kind: 'failed' }"
   const root = join(dirname(fileURLToPath(import.meta.url)), '..')
   const files = new Map<string, string>()
   const walk = (dir: string) => {
@@ -240,15 +246,17 @@ console.log('\ncontract only: nothing calls it yet, except the People panel (age
     need(/export function vouchEnabled\(\): boolean \{\s*try \{ return lsGet\('bento-people-vouch'\) !== 'off' \} catch \{ return false \}\s*\}/.test(g), 'vouchEnabled is exactly the kill-switch read')
     need((g.match(/\bvouchEnabled\b/g) || []).length === 2 && (g.match(/\blsGet\b/g) || []).length === 2, 'vouchEnabled and lsGet are not redefined or reused')
     need(g.includes("import { lsGet } from '../../../kernel/src/storage.ts'"), 'lsGet is the kernel storage read')
-    // the marker gates every ✓: checked once, before the first verified or changed result
+    // the marker gates every ✓: checked once, before the first verified result,
+    // read as an own data property; a changed result comes only from changed: true
     const d = strip(fs.get(CONST_ONLY) ?? '')
     const at = d.indexOf(MARKER_CHECK)
-    const firstClaim = Math.min(...["kind: 'verified'", "kind: 'changed'"].map((k) => {
-      const i = d.indexOf(k, d.indexOf('function decide('))
-      return i < 0 ? Infinity : i
-    }))
-    if (!(d.split(MARKER_CHECK).length === 2 && at > d.indexOf('function decide(') && at < firstClaim))
-      bad.push(`${CONST_ONLY}: the marker check comes once, in decide(), before any verified or changed result`)
+    const firstClaim = d.indexOf("kind: 'verified'", d.indexOf('function decide('))
+    if (!(d.split(MARKER_CHECK).length === 2 && at > d.indexOf('function decide(') && firstClaim > at))
+      bad.push(`${CONST_ONLY}: the marker check comes once, in decide(), before any verified result`)
+    if (!(d.split(OWN_MARKER).length === 2 && (d.match(/\bownMarker\b/g) || []).length === 2))
+      bad.push(`${CONST_ONLY}: the marker is read once, as the answer's own data property`)
+    if (!(d.split(CHANGED_LINE).length === 2 && d.split("{ kind: 'changed', ").length === 2))
+      bad.push(`${CONST_ONLY}: a changed result comes only from changed === true`)
     return bad
   }
   const base = pin(files)
@@ -266,7 +274,11 @@ console.log('\ncontract only: nothing calls it yet, except the People panel (age
     ['the kill switch failing open', [[V, "} catch { return false }", "} catch { return true }"]]],
     ['the marker check removed', [[C, MARKER_CHECK, '']]],
     ['the marker check commented out', [[C, MARKER_CHECK, '// ' + MARKER_CHECK]]],
-    ['the marker check moved after the changed result', [[C, MARKER_CHECK, ''], [C, "if (a.changed) return { kind: 'changed', name, via }", "if (a.changed) return { kind: 'changed', name, via }\n  " + MARKER_CHECK]]],
+    ['the marker check moved after the verified result', [[C, MARKER_CHECK, ''], [C, "return { kind: 'verified', name, via, tier, newAccount, changedOn, unconfirmedOn }", "return { kind: 'verified', name, via, tier, newAccount, changedOn, unconfirmedOn }\n  " + MARKER_CHECK]]],
+    ['the marker read through the prototype', [[C, OWN_MARKER, "const ownMarker = (a: object) => (a as Record<string, unknown>).fields === RESOLVED_FIELDS"]]],
+    ['the marker read beside ownMarker', [[C, MARKER_CHECK, "if (!ownMarker(a) && (a as Record<string, unknown>).fields !== RESOLVED_FIELDS) return { kind: 'failed', why: 'incomplete' }"]]],
+    ['a changed result from a truthy changed', [[C, CHANGED_LINE, CHANGED_LINE.replace('a.changed === true', 'a.changed')]]],
+    ['a second changed result', [[C, "if (!name || !isVoucher(via) || a.changed !== false) return { kind: 'failed' }", "if (a.changed) return { kind: 'changed', name, via }\n  if (!name || !isVoucher(via) || a.changed !== false) return { kind: 'failed' }"]]],
     ['a second call with a space', [[V, 'const cache = new Map', 'export const anyAgent = () => identityAgent ()\nconst cache = new Map']]],
     ['the test detector called directly', [[V, 'import { identityAgent, type IdentityAgent }', 'import { identityAgent, detectIdentityAgentForTest, type IdentityAgent }'],
       [V, 'const cache = new Map', 'export const anyAgent = () => detectIdentityAgentForTest(globalThis)\nconst cache = new Map']]],

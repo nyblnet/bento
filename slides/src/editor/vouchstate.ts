@@ -18,10 +18,11 @@
 // NO ✓ WITHOUT THE MARKER. Four fields are the STRONGER claim when missing
 // (revoked, resetAt, rosterChangedAt, unconfirmedSince), and a missing one may
 // be one a relay dropped on the way. So an answer earns a ✓ only when it says
-// it carries every field that applies: `fields === RESOLVED_FIELDS`. Without it
+// it carries every field that applies: its own `fields === RESOLVED_FIELDS`. Without it
 // the row reads "couldn't check" (failed, why 'incomplete'), never ✓; a relay
 // that copies a fixed list of the original six fields drops the marker too, so
-// every older host fails closed. A revocation is shown with or without it.
+// every older host fails closed. A revocation and a changed binding, which
+// only ever take the ✓ away, are shown with or without it.
 //
 // With the marker, each field below reads like this:
 //
@@ -109,6 +110,11 @@ const isTime = (v: unknown): v is number => typeof v === 'number' && Number.isSa
  *  be read as absent when it holds something else */
 const malformed = (v: unknown) => v !== undefined && !isTime(v)
 
+/** the marker, read as the answer's own data property: an inherited one (a
+ *  polluted Object.prototype, an answer built on a prototype that carries it)
+ *  or an accessor never counts, since this is the one gate meant to fail closed */
+const ownMarker = (a: object) => { const d = Object.getOwnPropertyDescriptor(a, 'fields'); return d !== undefined && 'value' in d && d.value === RESOLVED_FIELDS }
+
 /**
  * Validate an agent answer: anything malformed is a failure, never a ✓.
  * `now` is this device's clock (the windows are display windows; the agent
@@ -131,12 +137,15 @@ function decide(r: unknown, now: number): VouchState {
     if (rv === 'incident') return { kind: 'revoked', incident: true }
     return { kind: 'failed' }
   }
-  // a ✓ needs an answer that says it carries every field that applies
-  if (a.fields !== RESOLVED_FIELDS) return { kind: 'failed', why: 'incomplete' }
   const name = claimedName(a.name)
   const via = a.vouchedBy
-  if (!name || !isVoucher(via) || typeof a.changed !== 'boolean') return { kind: 'failed' }
-  if (a.changed) return { kind: 'changed', name, via }
+  // a changed binding is one of the original six fields and only ever takes
+  // the ✓ away, so like a revocation it is shown with or without the marker
+  if (a.changed === true) return name && isVoucher(via) ? { kind: 'changed', name, via } : { kind: 'failed' }
+  // a ✓ needs an answer that says it carries every field that applies, as its
+  // OWN data property: never inherited, never a getter
+  if (!ownMarker(a)) return { kind: 'failed', why: 'incomplete' }
+  if (!name || !isVoucher(via) || a.changed !== false) return { kind: 'failed' }
   if (malformed(a.resetAt) || malformed(a.rosterChangedAt) || malformed(a.unconfirmedSince)) return { kind: 'failed' }
   const tier: Tier = a.tier === 'native' ? 'native' : 'passkey'
   const since = a.accountSince
