@@ -36,6 +36,8 @@ import { buildAdel, buildRos, parseRos, verifyDeletion, readAfterDeletion, parse
 import { AsyncLocalStorage } from 'node:async_hooks'
 
 let fails = 0, passes = 0
+/** when set, the delFail-th storage delete from now throws (a storage error part way through a purge) */
+let delFail = 0
 const ok = (c: unknown, n: string) => { if (c) { passes++; if (process.env.ROWS) console.log('ok   ' + n) } else { fails++; console.log('FAIL ' + n) } }
 
 // ---------- clock ----------
@@ -82,13 +84,14 @@ function namespace(Klass: new (state: unknown, env: unknown) => Obj) {
           storage: {
             async get(k: string) { return structuredClone(store.get(k)) },
             async put(k: string, v: unknown) { store.set(k, structuredClone(v)) },
-            async delete(k: string | string[]) { for (const x of [].concat(k as never)) store.delete(x) },
+            async delete(k: string | string[]) { if (delFail && --delFail === 0) throw new Error('storage overloaded'); for (const x of [].concat(k as never)) store.delete(x) },
             async list(o?: { prefix?: string; limit?: number }) {
               const all = [...store].filter(([k]) => !o?.prefix || k.startsWith(o.prefix)).sort(([a], [b]) => (a < b ? -1 : 1))
               return new Map(all.slice(0, o?.limit ?? all.length).map(([k, v]) => [k, structuredClone(v)]))
             },
             async setAlarm(t: number) { rec.alarm = t },
             async getAlarm() { return rec.alarm },
+            async deleteAlarm() { rec.alarm = null },
           },
         }
         const inner = new Klass(state, env)
@@ -711,6 +714,128 @@ const [A1, A2] = await twoKeys(ann)
     const k = buildAdel({ address: c.address, headHash: c.headHash, dirNonce: c.nonce })
     ok(adelText(c) === k, `the sign-in host's adelText writes exactly the kernel's buildAdel (${c.address})`)
   }
+}
+
+// =====================================================================
+// 11. security's round 1 on the route (M1, M2, N1-N3)
+// =====================================================================
+{
+  // M1: the purge fails part way (a storage error on its 2nd delete batch). The
+  // record is stored BEFORE anything goes, and the waiting change and the head go
+  // LAST, so the address never answers a bare 404 and the next alarm finishes it.
+  now += DAY
+  const pu = 'del-pu@example.com'
+  const [P1] = await twoKeys(pu)
+  await plant(pu, (st) => { for (let i = 0; i < 200; i++) st.set(`zfill:${String(i).padStart(4, '0')}`, 1) })
+  const r = await askDelete(pu, P1)
+  ok(r.status === 202, `M1 positive control: the deletion is queued (got ${r.status})`)
+  now += DELETE_WAIT_MS
+  delFail = 2
+  let threw = false
+  try { await fire(await rosterObj(pu)) } catch { threw = true }
+  delFail = 0
+  const st = await storeOf(pu)
+  ok(threw && st.size > 3 && st.size < 200, `M1 positive control: the purge failed part way (threw ${threw}, ${st.size} keys left)`)
+  ok(!!st.get('rdel'), 'M1 the deletion record is already stored when the purge fails part way')
+  ok(!!st.get('head') && (st.get('pend') as { kind?: string } | undefined)?.kind === 'deletion', 'M1 the head and the waiting deletion are still there, so it is retried')
+  const o = await rosterObj(pu)
+  ok(o.alarm !== null && o.alarm <= now + 60_000, `M1 an alarm is set to retry (at ${o.alarm === null ? 'none' : `+${(o.alarm - now) / 1000} s`})`)
+  now += 60_000
+  await fire(o)
+  const keys = [...(await storeOf(pu)).keys()].sort()
+  ok(JSON.stringify(keys) === JSON.stringify(['ended', 'rdel']), `M1 the next alarm finishes the purge, and nothing else is kept: ${keys.join(', ')}`)
+  const done = await head(pu)
+  ok(done.status === 410 && done.j.error === 'deleted' && !!done.j.deleted, `M1 the address answers 410 deleted with the record, never a bare 404 (got ${done.status})`)
+}
+{
+  // M2: a deletion asked under a hold is refused (a planted hold)
+  now += DAY
+  const ho = 'del-ho@example.com'
+  const [H1] = await twoKeys(ho)
+  await plant(ho, (st) => st.set('hold', { id: 'x', what: 'reset', until: now + 60_000 }))
+  const r = await askDelete(ho, H1)
+  ok(r.status === 409 && !(await pendOf(ho)), `M2 a deletion asked while the roster is held: 409, nothing queued (got ${r.status} ${JSON.stringify(r.j)})`)
+  await plant(ho, (st) => st.delete('hold'))
+  const r2 = await askDelete(ho, H1)
+  ok(r2.status === 202, `M2 positive control: once the hold is off it is accepted (got ${r2.status})`)
+}
+{
+  // M2 (D-A2): the owner completes a reset with nothing waiting; while its notice
+  // is going out, a stolen key asks for a deletion. The deletion is refused and the
+  // reset stands (without the hold check the deletion would be queued and the
+  // reset, whose mail already said it waits, would end 409 superseded)
+  now += DAY
+  const ra = 'del-ra@example.com'
+  const [R1] = await twoKeys(ra)
+  const tok = await resetToken(ra)
+  const N = await Authn.make()
+  const hg = hangNext()
+  const rp = reset(ra, N, tok!)
+  const got = await reached(hg)
+  const d = await askDelete(ra, R1)
+  hg.release(true)
+  const rr = await rp
+  const pk = (await pendOf(ra))?.kind
+  ok(got, 'M2 positive control: the reset reached its notice')
+  ok(d.status === 409 && rr.status === 202 && pk === 'reset', `M2 a deletion asked while the reset notice is out: 409; the reset stands (deletion ${d.status}, reset ${rr.status} ${JSON.stringify(rr.j)}, waiting ${pk})`)
+}
+{
+  // N2: a second deletion while the first one's notice is still going out (unsent pend): 409
+  now += DAY
+  const tw = 'del-tw@example.com'
+  const [T1, T2] = await twoKeys(tw)
+  const hg = hangNext()
+  const first = askDelete(tw, T1)
+  const got = await reached(hg)
+  const second = await askDelete(tw, T2)
+  hg.release(true)
+  const f = await first
+  const p = await pendOf(tw)
+  ok(got && f.status === 202, `N2 positive control: the first deletion went through once its notice was accepted (got ${f.status})`)
+  ok(second.status === 409 && p?.signer === T1.pub, `N2 a second deletion while the first notice is out: 409, the first stands (got ${second.status} ${second.j.error})`)
+}
+{
+  // N1: a recovery-key asker pressed Remove: the q link carries its raw signature
+  // (not a passkey assertion), and the notice calls it a key
+  now += DAY
+  const rk1 = 'del-rk@example.com'
+  await twoKeys(rk1)
+  const rk = (await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])) as CryptoKeyPair
+  const rkPub = b64uEnc(new Uint8Array(await crypto.subtle.exportKey('raw', rk.publicKey)))
+  await plant(rk1, (st) => { const h = st.get('head') as { members: Member[] }; st.set('head', { ...h, members: [...h.members, { kind: 'rk', pub: rkPub, quarantined: false }] }) })
+  const ch = await delChallenge(rk1)
+  const text = await adelOf(rk1, ch)
+  const sig = await signStatement(rk.privateKey, text)
+  mailbox.length = 0
+  const r = await askDelete(rk1, null, { ch, text, credId: null, extra: { signer: rkPub, sig } })
+  const vl = voidIn(lastMail(rk1))
+  ok(r.status === 202 && vl?.kind === 'd', `N1 positive control: the recovery key asks, its link offers Remove (got ${r.status})`)
+  const rm = vl ? await voidPost(rk1, vl.token, 'remove') : null
+  const q = [...(await storeOf(rk1)).entries()].filter(([k]) => k.startsWith('link:')).map(([, v]) => v as { voided?: Record<string, unknown> }).find((l) => l.voided)
+  ok(rm?.status === 200 && q?.voided?.signer === rkPub && q?.voided?.sig === sig && q?.voided?.assertion === undefined && q?.voided?.ros === text,
+    `N1 Remove for a recovery-key asker: the q link carries its raw signature as the evidence (got ${rm?.status}, ${q ? Object.keys(q.voided!).join(',') : 'no q link'})`)
+  const body = lastMail(rk1)?.body ?? ''
+  ok(/That key can no longer be used/.test(body) && !/That passkey can no longer be used/.test(body), 'N1 the suspension notice calls the recovery key a key, not a passkey')
+}
+{
+  // N3: an equal passkey counter is refused; a check-in for a deleted account spends its nonce
+  now += DAY
+  const eq = 'del-eq@example.com'
+  const [Q1] = await twoKeys(eq)
+  await plant(eq, (st) => { const r = st.get(`pk:${Q1.pub}`) as Record<string, unknown>; st.set(`pk:${Q1.pub}`, { ...r, signCount: 10 }) })
+  const ch = await delChallenge(eq)
+  const t = await adelOf(eq, ch)
+  const same = await askDelete(eq, Q1, { ch, text: t, assertion: await Q1.assert(t, { count: 10 }) })
+  ok(same.status === 400 && same.j.error === 'assertion-sign-count' && !(await pendOf(eq)), `N3 a counter equal to the stored one: refused (got ${same.status} ${same.j.error})`)
+  const fwd = await askDelete(eq, Q1, { assertion: undefined, ...(await (async () => { const c2 = await delChallenge(eq); const t2 = await adelOf(eq, c2); return { ch: c2, text: t2, assertion: await Q1.assert(t2, { count: 11 }) } })()) })
+  ok(fwd.status === 202, `N3 positive control: one more is accepted (got ${fwd.status})`)
+  now += DELETE_WAIT_MS
+  await fire(await rosterObj(eq))
+  const args = { devicePub: Q1.pub, nonce: 'n' + now, issued: now, aud: 'home' }
+  const c1 = await doOp(eq, 'browserCheckin', args)
+  const c2 = await doOp(eq, 'browserCheckin', args)
+  ok(c1.status === 403 && c1.j.error === 'deleted', `N3 positive control: a check-in after the deletion answers deleted (got ${c1.status} ${c1.j.error})`)
+  ok(c2.status === 400 && c2.j.error === 'nonce', `N3 the same check-in again: its nonce was spent (got ${c2.status} ${c2.j.error})`)
 }
 
 console.log(`\n${passes} passed, ${fails} failed`)

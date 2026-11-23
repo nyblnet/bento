@@ -872,7 +872,7 @@ export class Roster {
       const hold = await this.takeHold(now, 'remove')
       const sent = await notify(this.env, address, 'A passkey on your bento/id account was suspended', [
         `At ${when(now)} the link in an email cancelled the ${kind === 'deletion' ? 'DELETION of this account' : 'change'} asked for at ${when(p.requestedAt)}, and suspended ${await named(target, records[target])}, which asked for it.`,
-        `That passkey can no longer be used. It will be removed from this account at ${when(removesAt)}.`,
+        `That ${kind === 'deletion' && p.signerKind && p.signerKind !== 'pk' ? 'key' : 'passkey'} can no longer be used. It will be removed from this account at ${when(removesAt)}.`,
         '',
         'The passkeys on this account once it is removed:',
         ...(await rosterLines(left, records, null)),

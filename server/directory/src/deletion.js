@@ -23,17 +23,19 @@
 //   brought back by a stopped reset (roster.js's reset op; only a waiting
 //   removal is set aside).
 // - D-A3. No deletion while anything else waits, an undo window included
-//   (the single-pend rule). The way without a passkey is NOT built: whether it
+//   (the single-pend rule), nor while the roster is held (a Remove or a
+//   reset's notice is going out). The way without a passkey is NOT built: whether it
 //   is a mailed-link deletion (which would need a member's stop statement so it
 //   is no faster or less stoppable than a reset) or "reset, then delete" is the
 //   maintainer's call. Until then only a member can ask.
 // - D-A4. When the wait ends the deletion is carried out only if it is still
 //   the waiting change, the hold is off, and the head is still the one the
-//   adel. named. The directory then signs the deletion record (`rdel.`, kernel)
-//   FIRST: without the key nothing is removed. It then removes everything the
-//   object holds for the account (the chain, the passkeys, the browser
-//   certificates, the challenges, the tokens and the event log) and keeps only
-//   the record, which it serves where peers fetch the chain: GET /v1/roster,
+//   adel. named. The directory then signs and STORES the deletion record
+//   (`rdel.`, kernel) FIRST: without the key nothing is removed. It then
+//   removes everything the object holds for the account (the chain, the
+//   passkeys, the browser certificates, the challenges, the tokens and the
+//   event log; the waiting deletion and the head last, so a purge that fails
+//   part way is finished by the next alarm) and keeps only the record, which it serves where peers fetch the chain: GET /v1/roster,
 //   the browser head and check-in, and the certificate status all answer
 //   "deleted" with it, never "unknown". A later setup at the address works; the
 //   record stays beside the new chain.
@@ -240,14 +242,20 @@ export async function executeDeletion(obj, p, now, h) {
   const rec = await signRecord(obj.env, {
     accountName: b64uEnc(name), lastHeadHash: cur.hash, lastSeq: cur.seq, requestedAt: p.requestedAt, deletedAt: now, by: 'm',
   })
-  // everything else the object holds for the account goes
-  const keep = new Set(['rdel'])
+  // ... and STORED first: a purge that fails part way must never leave the
+  // address with neither its head nor its record (a bare 404)
+  await s.put('rdel', { ...rec, deletedAt: now })
+  await obj.schedule(now + 60_000) // the retry, if the purge below fails part way (cleared once it is done)
+  // everything else the object holds for the account goes; the waiting change
+  // and the head go LAST, in one batch, so a purge that fails part way leaves
+  // the deletion waiting and the next alarm (or request) finishes it
+  const keep = new Set(['rdel', 'pend', 'head'])
   for (;;) {
     const keys = [...(await s.list({ limit: 128 })).keys()].filter((k) => !keep.has(k))
     if (!keys.length) break
     await s.delete(keys)
   }
-  await s.put('rdel', { ...rec, deletedAt: now })
+  await s.delete(['pend', 'head'])
   // the deletion's own void link answers "deleted", not "unknown" (F2)
   await s.put('ended', [{ h: p.voidTok, why: 'deleted', at: now }])
   if (typeof s.deleteAlarm === 'function') await s.deleteAlarm()

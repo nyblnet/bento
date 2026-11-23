@@ -234,8 +234,11 @@ link that stops it. A reset asked for while it waits cancels it.</p>
 passkeys and every change to it, its browser sign-ins and its record of
 events. We keep one signed record that it was deleted, so that people who
 knew the account see “account deleted” rather than nothing: a hash of your
-address (not the address itself), a hash of the account's last list of
-passkeys, and when the deletion was asked for and carried out. We keep that
+address, a hash of the account's last list of passkeys, and when the
+deletion was asked for and carried out. Anyone who asks us about your
+address can see that record, so someone who knows or guesses your address
+can learn that it had an account and when it was deleted. The hash does not
+hide the address from someone who already has it in mind. We keep that
 record __DELETION_RECORD_RETENTION__. __DELETION_RETENTION__</p>
 <p data-planned><span class="planned">Planned</span> Deleting an account
 when you no longer have any of its passkeys, by an emailed link. Until it is
