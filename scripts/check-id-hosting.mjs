@@ -207,7 +207,7 @@ export function rows({ voidPath = VOID_PATH } = {}) {
       pick: (o) => o.role === 'home' && answered(o) && o.path !== '/',
       bad: (o) => (o.status !== 404 ? `answers ${o.status} (the host must not fall back to index.html) on ${where(o)}`
         : /<script/i.test(o.body || '') ? `the 404 page carries a <script> on ${where(o)}`
-          : /\son[a-z]+\s*=/i.test(o.body || '') ? `the 404 page carries an on* handler attribute on ${where(o)}`
+          : /[\s/"']on[a-z]+\s*=/i.test(o.body || '') ? `the 404 page carries an on* handler attribute on ${where(o)}`
             : /shadowroot/i.test(o.body || '') && `the 404 page carries a declarative shadow root on ${where(o)}`),
     },
     {

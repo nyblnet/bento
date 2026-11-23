@@ -58,7 +58,7 @@ const ROWS = {
     ok(/<h1>Not found<\/h1>/.test(page), 'it says what it is (positive control on the file read)')
     ok(page !== index, 'it is not index.html')
     ok(!/<script/i.test(page), 'no <script>')
-    ok(!/\son[a-z]+\s*=/i.test(page), 'no on* handler attribute')
+    ok(!/[\s/"']on[a-z]+\s*=/i.test(page), 'no on* handler attribute')
     ok(!/shadowroot/i.test(page), 'no declarative shadow root')
     ok(!/\ssrc\s*=|<link|<iframe|<object|<embed|<style|url\(|@import/i.test(page), 'nothing it loads (no src, link, frame, object, embed, style)')
     ok(/<meta http-equiv="Content-Security-Policy" content="default-src 'none';/.test(page), "its own meta CSP: default-src 'none' (the host's 404 carries no header rule)")
@@ -115,6 +115,8 @@ const MUTANTS = [
   { name: 'the 404 page is a copy of index.html', row: 'build', file: B, from: "fs.writeFileSync(path.join(out, 'library/404.html'), NOT_FOUND_HTML)", to: "fs.writeFileSync(path.join(out, 'library/404.html'), libHtml)" },
   { name: 'a /* header rule', row: 'build', file: B, from: "['/404.html', notFoundHeaders]]", to: "['/404.html', notFoundHeaders], ['/*', notFoundHeaders]]" },
   { name: 'the 404 page carries a handler', row: 'build', file: B, from: '<p>There is no page at this address.</p>', to: '<p onclick="1">There is no page at this address.</p>' },
+  { name: 'the 404 page carries a handler after a slash (<svg/onload>)', row: 'build', file: B, from: '<p>There is no page at this address.</p>', to: '<svg/onload=1></svg><p>There is no page at this address.</p>' },
+  { name: 'the 404 page carries a handler after a quote', row: 'build', file: B, from: '<p>There is no page at this address.</p>', to: '<p title="x"onclick=1>There is no page at this address.</p>' },
   { name: 'the local server falls back to index.html', row: 'serve', file: S, from: "const notFound = path.join(dir, '404.html')", to: "const notFound = path.join(dir, 'index.html')" },
   { name: 'the local server answers 200', row: 'serve', file: S, from: "if (fs.existsSync(notFound)) { res.writeHead(404,", to: "if (fs.existsSync(notFound)) { res.writeHead(200," },
   { name: 'the local server sends an empty 404', row: 'serve', file: S, from: "if (fs.existsSync(notFound)) {", to: 'if (false) {' },
