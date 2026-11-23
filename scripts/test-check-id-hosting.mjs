@@ -188,6 +188,8 @@ const MUTANTS = [
   ['bento/home falls back to its library page (an SPA host with no 404.html)', 'home-404', (g) => { const f = g.fallback; g.fallback = (url) => (new URL(url).host === H.home ? { status: 200, headers: HOME_H, body: '<!doctype html><script>library()</script>' } : f(url)) }],
   ['bento/home answers a path it does not serve with 200 (a soft 404, no script)', 'home-404', (g) => { const f = g.fallback; g.fallback = (url) => (new URL(url).host === H.home ? { status: 200, headers: HOME_H, body: '<!doctype html><title>Not found</title>' } : f(url)) }],
   ['bento/home 404s with its library page', 'home-404', (g) => { const f = g.fallback; g.fallback = (url) => (new URL(url).host === H.home ? { status: 404, headers: { 'content-type': 'text/html' }, body: '<!doctype html><SCRIPT>library()</SCRIPT>' } : f(url)) }],
+  ['bento/home 404s with an on* handler (no <script>)', 'home-404', (g) => { const f = g.fallback; g.fallback = (url) => (new URL(url).host === H.home ? { status: 404, headers: { 'content-type': 'text/html' }, body: '<!doctype html><img src=x ONERROR="library()">' } : f(url)) }],
+  ['bento/home 404s with a declarative shadow root (no <script>)', 'home-404', (g) => { const f = g.fallback; g.fallback = (url) => (new URL(url).host === H.home ? { status: 404, headers: { 'content-type': 'text/html' }, body: '<!doctype html><div><template shadowrootmode="open"><slot></slot></template></div>' } : f(url)) }],
 ]
 for (const [name, row, plant] of MUTANTS) {
   const g = goodWorld()

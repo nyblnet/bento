@@ -206,7 +206,9 @@ export function rows({ voidPath = VOID_PATH } = {}) {
       id: 'home-404', roles: ['home'], title: 'bento/home answers a path it does not serve with a script-free 404, never its library page',
       pick: (o) => o.role === 'home' && answered(o) && o.path !== '/',
       bad: (o) => (o.status !== 404 ? `answers ${o.status} (the host must not fall back to index.html) on ${where(o)}`
-        : /<script/i.test(o.body || '') && `the 404 page carries a <script> on ${where(o)}`),
+        : /<script/i.test(o.body || '') ? `the 404 page carries a <script> on ${where(o)}`
+          : /\son[a-z]+\s*=/i.test(o.body || '') ? `the 404 page carries an on* handler attribute on ${where(o)}`
+            : /shadowroot/i.test(o.body || '') && `the 404 page carries a declarative shadow root on ${where(o)}`),
     },
     {
       id: 'no-wildcard-under-rp', title: NO_WILDCARD,
