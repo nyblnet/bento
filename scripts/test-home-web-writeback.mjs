@@ -31,8 +31,12 @@
  *        is refused by the re-judge after the splice: the file unchanged, the
  *        reason shown. [T1-i] the posted preview is never carried (an
  *        entity-encoded meta refresh in it). [T1-j] a posted envelope's
- *        plaintext title and preview never reach the file.
- *   [T1 N3] a file changed on disk since the open is not written over.
+ *        plaintext title and preview never reach the file. [T1-k] a file the
+ *        1.3.0 shell saved (its title, a page-one preview) that becomes
+ *        encrypted while open: the served title and preview are not on disk
+ *        beside the ciphertext (positive control: a plaintext save of it).
+ *   [T1 N3] a file changed on disk since the open is not written over;
+ *        [N3-b] nor one that cannot be read back (the check fails closed).
  *   [947-7] the member key goes at close; a same-bytes reopen gets the entry's
  *        recovery copy back and no member key.
  *   [T1 S.1a] positive control: a document closed after an edit and before a
@@ -172,6 +176,16 @@ const MUTANTS = [
   { name: 'ondisk-stale', why: '[T1] n3: the on-disk hash is not moved by a write, so the second save in an open is refused',
     src: { file: 'library.ts', from: '      s.onDisk = await hashOf(r.html)\n', to: '' },
     only: 't1a', expect: '[T4-2] a second save in the same open' },
+  // fix round 2 (security ruling on #998, round 2)
+  { name: 'keep-served-preview', why: '[T1] M4: a shell-saved file that becomes encrypted keeps its served page-one preview',
+    src: { file: 'writeback.ts', from: "  if (S.preview) edits.push({ ...S.preview, text: '' })\n", to: '' },
+    only: 't1k', expect: '[T1-k] the served page-one preview' },
+  { name: 'served-title-kept', why: '[T1] M4: a shell-saved file that becomes encrypted keeps its served title',
+    src: { file: 'writeback.ts', from: "if (S.title && encrypted) edits.push({ ...S.title, text: genericTitle(release.appId) })", to: 'if (S.title && encrypted) {}' },
+    only: 't1k', expect: '[T1-k] the served title' },
+  { name: 'disk-check-fails-open', why: '[T1] n6: a file that cannot be read back is treated as unchanged and written over',
+    src: { file: 'library.ts', from: '.then(hashOf, () => null)', to: '.then(hashOf, () => s.onDisk)' },
+    only: 'n3', expect: '[T1 N3-b]' },
 ]
 
 if (process.argv.includes('--mutants')) {
@@ -1011,6 +1025,96 @@ if (want('n1')) {
   await ctx.close()
 }
 
+// ===== [T1-k] a file a shell saved becomes encrypted while open (Chromium) ====================================
+// (ruling 998 M4) The served file is the common one: saved by a shell, so it carries the deck's title and a
+// first-page preview of its text. The person sets a password and saves: the SERVED title and preview must go too,
+// or page one and the title sit on disk beside the ciphertext. Fresh shell builds have neither, so they cannot
+// show this: the fixture is made by the 1.3.0 shell itself, from file://, with every request aborted.
+if (want('t1k') && CHROMIUM) {
+  section('[T1-k] a shell-saved file (title, page-one preview) that becomes encrypted while open')
+  const STITLE = 'BENTO-STITLE-' + rnd(), PVT = 'BENTO-PAGEONE-' + rnd()
+  const src = docOf({ title: STITLE })
+  src.slides[0].elements[0].html = PVT
+  const srcPath = keep('t1k-src.bento.html', spliceDoc(shell130, json(src)))
+  // the shell's own save of it: window.bento.serialize, in a fresh profile, every request aborted
+  const savedByShell = await (async () => {
+    const dir = fs.mkdtempSync(path.join(work, 'profile-'))
+    const c = await pw[ENGINE].launchPersistentContext(dir, { logger: apiLogger, ...(process.env.BENTO_CHANNEL ? { channel: process.env.BENTO_CHANNEL } : {}) })
+    try {
+      await c.route(/^(https?|wss?):/, (r) => r.abort())
+      await c.routeWebSocket(/.*/, (ws) => ws.close())
+      const p = c.pages()[0] ?? await c.newPage()
+      await p.goto('file://' + srcPath)
+      if (!await until(() => p.evaluate(() => !!(window.bento && window.bento.doc && window.bento.serialize)), 30000)) return null
+      return await p.evaluate(() => window.bento.serialize())
+    } finally { await c.close() }
+  })()
+  const pvAt = savedByShell?.indexOf('data-bento-preview') ?? -1
+  const pvEnd = pvAt >= 0 ? savedByShell.indexOf('</' + 'script>', savedByShell.indexOf('<script data-bento-preview', pvAt)) : -1
+  const previewText = pvEnd > 0 ? savedByShell.slice(pvAt, pvEnd) : ''
+  ok(!!savedByShell && previewText.includes(PVT) && (titleOf(savedByShell) ?? '').includes(STITLE) && titleOf(savedByShell) !== 'bento/slides' && (await versionOf(savedByShell)) === '1.3.0',
+    `[T1-k] fixture: the 1.3.0 shell's own save carries a page-one preview holding the slide's text and the deck's title "${titleOf(savedByShell ?? '')?.slice(0, 60)}", and is the release 1.3.0 (${savedByShell ? await versionOf(savedByShell) : 'no save'})`)
+  if (savedByShell) {
+    files.savedByShell = savedByShell
+    const ctx = await context()
+    const page = await ctx.newPage()
+    // positive control: a plaintext save of the same file writes, carries the posted title, and still drops the served preview
+    await page.goto(A.library + '/')
+    let o = await openByHandle(page, 'savedByShell')
+    let fr = await booted(page)
+    if (fr) {
+      const mark = await edit(fr)
+      MARKS.push(mark)
+      await cmdS(fr)
+      await until(async () => (await ui(page)).writes > 0, 20000)
+      await new Promise((r) => setTimeout(r, 500))
+      const disk = await opfsText(page, o.name)
+      const posted = await page.evaluate(() => (window.__posted ?? []).at(-1) ?? null)
+      ok(disk.includes(mark) && !!posted && titleOf(disk) === titleOf(posted) && (titleOf(disk) ?? '').includes(STITLE) && !disk.includes('data-bento-preview') && (await versionOf(disk)) === '1.3.0',
+        `[T1-k] positive control: a plaintext save of the shell-saved file is written with the edit and the posted title "${titleOf(disk)?.slice(0, 40)}", and the served preview is gone (preview on disk: ${disk.includes('data-bento-preview')})`)
+    } else ok(false, '[T1-k] positive control: the shell-saved file booted in the frame')
+    // the document becomes encrypted while open: the shell's own "Save with password…", then ⌘S
+    await page.goto(A.library + '/')
+    o = await openByHandle(page, 'savedByShell')
+    fr = await booted(page)
+    let set = 'not booted'
+    if (fr) {
+      set = await (async () => {
+        await fr.click('.ed-split-caret', { timeout: 10000 })
+        await fr.getByText('Save with password', { exact: false }).first().click({ timeout: 10000 })
+        await fr.fill('.ed-pwdialog .pw1', PASSWORD, { timeout: 10000 })
+        await fr.fill('.ed-pwdialog .pw2', PASSWORD)
+        await fr.click('.ed-pwdialog .ok')
+        return 'set'
+      })().catch((e) => String(e).split('\n')[0])
+      // the shell saves a copy as it sets the password; let it be answered before ⌘S (a save in flight drops the next)
+      await until(async () => (await ui(page)).posted > 0, 20000)
+      await new Promise((r) => setTimeout(r, 1000))
+      const writes0 = (await ui(page)).writes
+      const mark = await edit(fr)
+      MARKS.push(mark)
+      await cmdS(fr)
+      await until(async () => (await ui(page)).writes > writes0, 30000)
+      await new Promise((r) => setTimeout(r, 800))
+      const disk = await opfsText(page, o.name)
+      const posted = await page.evaluate(() => (window.__posted ?? []).at(-1) ?? null)
+      const p = keep('t1k-sealed.bento.html', disk)
+      const sealed = /"format":"bento\/enc"/.test(docTextOf(disk) ?? '')
+      ok(set === 'set' && sealed && !!posted && /"format":"bento\/enc"/.test(docTextOf(posted) ?? '') && !disk.includes(mark),
+        `[T1-k] the person sets a password in the shell and saves: the shell posts an envelope and the file is written sealed (${set}, sealed: ${sealed})`)
+      ok(sealed && !disk.includes('data-bento-preview') && !disk.includes(PVT),
+        `[T1-k] the served page-one preview is not on disk beside the ciphertext (preview attribute: ${disk.includes('data-bento-preview')}, page-one text: ${disk.includes(PVT)})`)
+      ok(sealed && titleOf(disk) === 'bento/slides' && !disk.includes(STITLE),
+        `[T1-k] the served title is not on disk beside the ciphertext: the file is titled "${titleOf(disk)}" (the app's name), and the deck's title appears nowhere (${disk.includes(STITLE)})`)
+      const g = gate(p)
+      const back = sealed ? await fromDisk(p, PASSWORD) : { booted: false }
+      ok(g.ok && back.booted && back.gated && back.title === STITLE && back.text?.includes(mark),
+        `[T1-k] the sealed file passes scripts/shell-gate.mjs and, from file://, opens behind its password with the deck's title and the edit ${g.out}${JSON.stringify({ b: back.booted })}`)
+    } else ok(false, '[T1-k] the shell-saved file booted in the frame')
+    await ctx.close()
+  }
+}
+
 // ===== [N3] never over a file that changed on disk (Chromium) ===============================================
 if (want('n3') && CHROMIUM) {
   section('[T1 N3] a file changed on disk since the open is not written over')
@@ -1034,6 +1138,25 @@ if (want('n3') && CHROMIUM) {
     ok(!!u && u.writes === 0 && disk.includes(OTHER) && !disk.includes(mark) && /changed on disk/.test(u.notice) && u.saveCopy === 'Save a copy',
       `[T1 N3] ⌘S after the file changed on disk: not written over (${u?.writes ?? 0} writes), the other save kept, the reason shown, "Save a copy" offered`)
   }
+  // [T1 N3-b] (ruling 998 n6) the file cannot be read back at save time: the check fails closed (held, not written)
+  await page.goto(A.library + '/')
+  const o2 = await openByHandle(page, 'deck130')
+  const fr2 = await booted(page)
+  if (fr2) {
+    const mark = await edit(fr2)
+    MARKS.push(mark)
+    const reads = await page.evaluate(() => {
+      window.__getFileCalls = 0
+      window.__rigHandle.getFile = () => { window.__getFileCalls++; return Promise.reject(new DOMException('the rig refuses the read', 'NotReadableError')) }
+      return window.__getFileCalls
+    })
+    await cmdS(fr2)
+    const u = await until(async () => { const v = await ui(page); return v.saveCopy ? v : null }, 20000)
+    const calls = await page.evaluate(() => window.__getFileCalls)
+    const disk = await opfsText(page, o2.name)
+    ok(reads === 0 && calls > 0 && !!u && u.writes === 0 && disk === files.deck130 && !disk.includes(mark) && u.chip && u.saveCopy === 'Save a copy',
+      `[T1 N3-b] ⌘S when the file cannot be read back: the read was tried (${calls}), nothing is written (${u?.writes ?? 0} writes, file unchanged: ${disk === files.deck130}), the changes are held with "Save a copy" offered`)
+  } else ok(false, '[T1 N3-b] the deck booted in the frame')
   await ctx.close()
 }
 
