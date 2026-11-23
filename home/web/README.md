@@ -156,9 +156,13 @@ and a shell's save clones its live page. Instead the library:
 1. takes only the DATA out of the posted html, with gate 1's scanner: the
    `#bento-doc` text, every other `application/bento+json` and
    `application/bento+lang` block (language packs, extension data) element for
-   element, the `<title>` text, and the first-page preview only in the exact
-   form a release writes (no script, handler or `javascript:`, then the
-   remover) and only where its place in the served bytes is unambiguous;
+   element, and the `<title>` text. When the document is an encrypted
+   envelope the title is the app's generic name (what the kernel writes for a
+   sealed body), never the posted text. The first-page preview is never taken:
+   it is markup, and gate 1 reads attribute values as written, so an
+   entity-encoded meta refresh in it would pass the re-judge below and still
+   navigate before the remover runs. A file saved here has no preview until a
+   shell saves it elsewhere, which every release reads as a file without one;
 2. puts that data back into the bytes it verified and served for this open, in
    place of theirs (the served preview always goes: replace, never append);
 3. judges the result with gate 1 against the held histories: it must be the
@@ -173,7 +177,9 @@ Then, for ⌘S, the file is written **in place only** when:
   when the person asks), and
 - it was opened through this browser's file picker (`showOpenFilePicker`,
   Chromium), whose handle the library holds in memory for that open only. No
-  handle is ever stored.
+  handle is ever stored. Before each write the library reads the file behind
+  the handle: if it is not what this open read or last wrote (another program
+  saved it), nothing is written over it and the save is held as below.
 
 Every other save (no handle: Safari, Firefox, a dropped file; a copy; a
 read-only file) is held by the library, which offers "Save a copy" (or "Save
@@ -196,7 +202,11 @@ The port is the only channel: a save posted to the library's window is
 ignored. The library checks every save message (the exact key set, a purpose
 from the list, bounded strings, rising numbers), takes one at a time, answers
 saves past a rate with a refusal, and closes a document that keeps sending what
-it does not accept.
+it does not accept. A save it does not accept gets no answer and no write.
+
+In-place writes and a relay: the production frame has no relay today. Before a
+production build gives the frame one, either the release floor for live rooms
+ships or in-place handle writes are turned off for live opens (export only).
 
 ## Build and run locally
 

@@ -16,11 +16,15 @@
 //   - every other Bento data block (language packs, extension data: the
 //     application/bento+json and application/bento+lang blocks a shell
 //     re-declares on save), element for element,
-//   - the <title> text,
-//   - the first-page preview, only in the exact form the release writes
-//     (host markup with no script, handler or javascript:, then the pinned
-//     remover), and only where its place in the served bytes is unambiguous;
-//     otherwise it is left out, which every release reads the same.
+//   - the <title> text, unless the document is an encrypted envelope: then
+//     the app's generic name (what the kernel writes for a sealed body), never
+//     the posted text, which a hostile frame could fill with the plaintext.
+//
+// The first-page preview is NEVER carried (security ruling on #998, M2): it is
+// markup, and gate 1 reads attribute values raw, so an entity-encoded meta
+// refresh in it passes the judge and still navigates before the remover runs.
+// A file saved here has no preview until a shell saves it elsewhere, which
+// every release reads the same as a file without one.
 //
 // Everything else, every byte of code and every other byte of markup, is the
 // served file's. Then the result is judged again with gate 1 against the held
@@ -30,8 +34,8 @@
 //
 // Pure: the histories come in as an argument, so node rigs run it unchanged.
 
-import { scanBlocks, isDataScript, sha256hex, type Block, type History } from '../../../kernel/src/gate1.ts'
-import { judge } from './verify.ts'
+import { scanBlocks, isDataScript, markupProblems, type Block, type History } from '../../../kernel/src/gate1.ts'
+import { judge, APPS } from './verify.ts'
 
 /** What a save is for, by the picker id the kernel passes (kernel/src/save.ts pickerIdFor). */
 export const PURPOSES = ['bento-doc', 'bento-copy', 'bento-share', 'bento-backup'] as const
@@ -73,21 +77,6 @@ function parts(html: string): Parts | { refuse: string } {
   return { doc, extras, title, preview }
 }
 
-/** The preview span's body, if it is in the form a release writes. */
-function previewOk(html: string, p: Span, remover: string | null): boolean {
-  if (!remover) return false
-  const remAt = html.lastIndexOf('<script', p.end - 1)
-  const body = html.slice(p.start, remAt)
-  return !/<script/i.test(body) && !/\son[a-z]+\s*=/i.test(body) && !/javascript:/i.test(body)
-}
-
-/** The remover's text a release pins, found in the SERVED bytes (or null when it carries none). */
-async function removerText(served: string, pinned: string | null): Promise<string | null> {
-  if (!pinned) return null
-  for (const b of scanBlocks(served)) if (b.preview && b.tag === 'script' && (await sha256hex(b.text)) === pinned) return b.text
-  return null
-}
-
 export type Resplice =
   | { html: string; docText: string; encrypted: boolean; previewDropped: boolean }
   | { refuse: string }
@@ -105,7 +94,10 @@ export async function resplice(served: string, posted: string, held: History[], 
 
   // 1. the served bytes with their variable spans replaced or taken out
   const edits: Array<Span & { text: string }> = [{ start: S.doc.start, end: S.doc.start + S.doc.text.length, text: P.doc.text }]
-  if (S.title && P.title) edits.push({ ...S.title, text: posted.slice(P.title.start, P.title.end) })
+  const encrypted = isEnvelope(P.doc.text)
+  // a sealed body gets the generic title even when the served one was the plaintext's (it became encrypted)
+  if (S.title && encrypted) edits.push({ ...S.title, text: genericTitle(release.appId) })
+  else if (S.title && P.title) edits.push({ ...S.title, text: posted.slice(P.title.start, P.title.end) })
   // replace, never append: the served preview always goes (a document that
   // became encrypted must LOSE it), and so does every carried block
   if (S.preview) edits.push({ ...S.preview, text: '' })
@@ -132,24 +124,22 @@ export async function resplice(served: string, posted: string, held: History[], 
       out = out.slice(0, d.end) + el + out.slice(d.end)
     }
   }
-  const entry = held.find((h) => h.app === release.appId)?.releases.find((r) => r.version === release.version)
-  let previewDropped = false
-  if (P.preview) {
-    const remover = await removerText(posted, entry?.pins.blocks.remover ?? null)
-    previewDropped = !previewOk(posted, P.preview, remover) ||
-      !place(posted.slice(P.preview.start, P.preview.end), posted.slice(Math.max(0, P.preview.start - ANCHOR), P.preview.start))
-  }
+  // the posted preview stays out (see the head of this file)
+  const previewDropped = P.preview !== null
 
   // 3. judged again: the same app and release this open was served as
   const v = await judge(out, held)
-  if (v.verdict !== 'genuine') return { refuse: `the result is not a release (${v.reason})` }
+  if (v.verdict !== 'genuine') return { refuse: `the result is not a release (${markupProblems(out)[0] ?? v.reason})` }
   if (v.appId !== release.appId || v.release.version !== release.version) return { refuse: `the result is ${v.appId} ${v.release.version}, not the release served` }
   const O = parts(out)
   if ('refuse' in O || O.doc.text !== P.doc.text || O.extras.length !== P.extras.length || O.extras.some((b, i) => b.text !== P.extras[i].text)) {
     return { refuse: 'the data did not survive the splice' }
   }
-  return { html: out, docText: P.doc.text, encrypted: isEnvelope(P.doc.text), previewDropped }
+  return { html: out, docText: P.doc.text, encrypted, previewDropped }
 }
+
+/** The title a sealed body carries: the app's name, as the kernel writes it (kernel/src/save.ts). */
+export const genericTitle = (appId: string): string => APPS.find((a) => a.appId === appId)?.name ?? 'Bento'
 
 /** A password or identity envelope: the document is ciphertext. */
 export function isEnvelope(docText: string): boolean {

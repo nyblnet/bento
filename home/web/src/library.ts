@@ -41,6 +41,8 @@ import { resplice, parseSave, hashOf, type Purpose } from './writeback.ts'
 declare const __FRAME_URL__: string
 declare const __RELEASE_BASE__: string
 declare const __SIGNED_BASE__: string
+/** The largest save taken, if a development build lowered it (0 = MAX_BYTES; never above it). */
+declare const __SAVE_CAP__: number
 declare const __RELEASE_KEY__: Jwk
 declare const __HISTORIES__: string[]
 
@@ -100,6 +102,8 @@ interface Serving { release: { appId: string; version: string }; writable: boole
 interface Session extends Serving {
   frame: HTMLIFrameElement; port: MessagePort | null; pong: number; onReady: (e: MessageEvent) => void; entry: string; store: StoreSession | null
   served: string; name: string; lastN: number; busy: boolean; window: number; inWindow: number; drops: number
+  /** The hash of what the handle's file holds as far as this open knows: the opened bytes, then each write. */
+  onDisk: string
   held: { html: string; name: string; purpose: Purpose } | null
 }
 /** How long a frame has to answer a ping after a load. */
@@ -193,7 +197,8 @@ function serve(html: string, plan: PlanStep[], name: string, label: string, opts
   frame.className = 'doc'
   const { release, writable, handle, kept: k } = opts
   const s: Session = { frame, port: null, pong: 0, onReady: () => {}, entry: k.entry, store: null, release, writable, handle, kept: k,
-    served: html, name, lastN: 0, busy: false, window: 0, inWindow: 0, drops: 0, held: null }
+    served: html, name, lastN: 0, busy: false, window: 0, inWindow: 0, drops: 0, held: null, onDisk: k.opened }
+  document.documentElement.setAttribute('data-bento-save-drops', '0')
   s.onReady = (ev: MessageEvent) => {
     if (session !== s || ev.source !== frame.contentWindow || ev.origin !== 'null') return
     if (!ev.data || ev.data.kind !== 'bento-frame-ready') return
@@ -276,8 +281,12 @@ const tellSave = (text: string) => { say('notice', text); show('notice', true) }
 async function onSave(s: Session, d: unknown) {
   const now = Date.now()
   if (now - s.window >= SAVE_WINDOW_MS) { s.window = now; s.inWindow = 0 }
-  const m = parseSave(d, s.lastN, MAX_BYTES)
-  const drop = () => { if (++s.drops >= MAX_SAVE_DROPS) fail('The document sent saves this page does not accept, so it was closed.') }
+  const m = parseSave(d, s.lastN, __SAVE_CAP__ > 0 ? Math.min(__SAVE_CAP__, MAX_BYTES) : MAX_BYTES)
+  const drop = () => {
+    // for the rigs: how many saves this open refused unanswered (a count, never content)
+    document.documentElement.setAttribute('data-bento-save-drops', String(s.drops + 1))
+    if (++s.drops >= MAX_SAVE_DROPS) fail('The document sent saves this page does not accept, so it was closed.')
+  }
   // not the frame's shape, or a second save while one is in flight (the frame never sends one): no answer
   if (!m || s.busy) return drop()
   s.lastN = m.n
@@ -297,6 +306,16 @@ async function onSave(s: Session, d: unknown) {
     // the document became encrypted: no plaintext copy of it stays in this tab (ruling 947, condition 4)
     if (r.encrypted) { s.kept.noRetain = true; settle(s.kept) }
     if (m.purpose === 'bento-doc' && s.writable && s.handle) {
+      // never over a file something else changed since this open read or wrote it
+      const now = await s.handle.getFile().then((f) => f.arrayBuffer()).then(hashOf, () => null)
+      if (session !== s) return
+      if (now !== s.onDisk) {
+        s.held = { html: r.html, name: m.name || s.name, purpose: m.purpose }
+        s.kept.dirty = true
+        reply(s, m.n)
+        chip()
+        return tellSave('Your file changed on disk since it was opened here, so it was not written over. Use Save a copy to keep your changes.')
+      }
       try {
         const w = await s.handle.createWritable()
         await w.write(new Blob([r.html], { type: 'text/html' }))
@@ -309,6 +328,7 @@ async function onSave(s: Session, d: unknown) {
         return tellSave(`Your file could not be written (${String((e as Error)?.name ?? e)}). Use Save a copy to keep your changes.`)
       }
       s.held = null
+      s.onDisk = await hashOf(r.html)
       settle(s.kept)
       return reply(s, m.n)
     }

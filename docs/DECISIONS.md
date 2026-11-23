@@ -15405,12 +15405,21 @@ does not loosen one by accident:
 - **The library never writes the html the frame sends.** The frame is the
   document's realm. It takes only the data out of a save (the `#bento-doc`
   text, the other `application/bento+json` and `application/bento+lang`
-  blocks, the title text, and the preview only in the exact shape a release
-  writes), puts it back into the bytes it verified and served for that open,
+  blocks, and the title text), puts it back into the bytes it verified and served for that open,
   and judges the result with gate 1: it must be the same release the open was
   served as. Measured while building it: a shell's own save inside the frame
   is not even a working file, because the frame turned the release's scripts
   into `blob:` URLs and the shell clones its live page.
+- **The frame's preview markup is never carried, and a sealed body gets a
+  generic title.** Gate 1 compares attribute values as written, so a preview
+  host holding `<meta http-equiv="&#114;efresh">` passes it and still
+  navigates (measured in Chromium and WebKit, scripting on and off). Carrying
+  it would let a briefly compromised frame plant that in the person's own
+  file. And a posted envelope with a plaintext title would leave the title
+  beside the ciphertext. The preview may come back once gate 1 decodes
+  character references in the attributes it inspects.
+- **A save never overwrites a file that changed on disk** since the open read
+  or last wrote it: the library compares the file behind the handle first.
 - **The save transport is the kernel's existing host contract.** The frame
   polyfills `showSaveFilePicker` (the picker id says what the save is for)
   and posts the file on the session port. Released shells reach it unchanged;

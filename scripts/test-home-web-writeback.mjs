@@ -27,6 +27,14 @@
  *        storage on the library origin holds the canary, the marker or the
  *        pack; the member key survives; a document that became encrypted loses
  *        its recovery copy; a file with no docId saves and keeps nothing.
+ *   [T1-h] a release-shaped save whose data block carries markup gate 1 refuses
+ *        is refused by the re-judge after the splice: the file unchanged, the
+ *        reason shown. [T1-i] the posted preview is never carried (an
+ *        entity-encoded meta refresh in it). [T1-j] a posted envelope's
+ *        plaintext title and preview never reach the file.
+ *   [T1 N3] a file changed on disk since the open is not written over.
+ *   [947-7] the member key goes at close; a same-bytes reopen gets the entry's
+ *        recovery copy back and no member key.
  *   [T1 S.1a] positive control: a document closed after an edit and before a
  *        save keeps its recovery copy in the tab, and the SAME bytes reopened
  *        offer it; the same docId in different bytes is not offered it.
@@ -48,6 +56,10 @@
  *   [T8] saves come only from this open's session port: a save posted to the
  *        library's window is ignored, a page that opens the library cannot post
  *        one, a flood closes the document, and the store port never takes one.
+ *   [T8-m] a frame script posting straight on the session port: an extra key,
+ *        purpose 'x', html one byte over a lowered cap (--save-cap), an n that
+ *        does not rise, a second save while one is in flight: each gets no
+ *        write, no answer, and one more drop (positive control first).
  *   [T2] every request is on the allow-list and none carries the canary or a
  *        marker (plain, base64, URI-encoded); positive control: planted requests
  *        from the library and the frame are seen.
@@ -79,7 +91,7 @@ const MUTANTS = [
     src: { file: 'writeback.ts', from: '  for (const b of P.extras) {\n', to: '  for (const b of P.extras.slice(P.extras.length)) {\n' },
     only: 't1c', expect: '[T1-c]' },
   { name: 'keep-recovery-after-write', why: '[T1] a handle write leaves the recovery copy in place',
-    src: { file: 'library.ts', from: '      s.held = null\n      settle(s.kept)\n', to: '      s.held = null\n' },
+    src: { file: 'library.ts', from: '      settle(s.kept)\n      return reply(s, m.n)', to: '      return reply(s, m.n)' },
     only: 't1e', expect: '[T1-e] after the write' },
   { name: 'cache-the-pack', why: '[T1] the library keeps the saved file in Cache Storage',
     src: { file: 'library.ts', from: '    if (session !== s) return\n    if (\'refuse\' in r) {', to: "    if (session !== s) return\n    void caches.open('saved').then((c) => c.put('/last', new Response(m.html)))\n    if ('refuse' in r) {" },
@@ -125,6 +137,41 @@ const MUTANTS = [
   { name: 'post-on-save', why: '[T2] the library posts the document somewhere the CSP allows when it saves',
     src: { file: 'library.ts', from: '  s.lastN = m.n\n', to: "  s.lastN = m.n\n  void fetch(__RELEASE_BASE__ + 'log', { method: 'POST', body: m.html.slice(0, 30000) }).catch(() => {})\n" },
     only: 't1e', expect: '[T2] every request' },
+  // fix round 1 (security ruling on #998)
+  { name: 'no-final-judge', why: '[T1] M1: the result is not judged again after the splice',
+    src: { file: 'writeback.ts', from: "  const v = await judge(out, held)\n", to: "  const v = { verdict: 'genuine', appId: release.appId, release: { version: release.version } } as any\n" },
+    only: 't1b', expect: '[T1-h]' },
+  { name: 'carry-preview', why: '[T1] M2a: the posted preview is carried into the file',
+    src: { file: 'writeback.ts', from: '  const previewDropped = P.preview !== null\n',
+      to: '  const previewDropped = P.preview !== null && !place(posted.slice(P.preview.start, P.preview.end), posted.slice(Math.max(0, P.preview.start - ANCHOR), P.preview.start))\n' },
+    only: 't1b', expect: '[T1-i]' },
+  { name: 'envelope-title', why: '[T1] M2b: an envelope save keeps the title the frame posted',
+    src: { file: 'writeback.ts', from: 'if (S.title && encrypted) edits.push(', to: 'if (S.title && encrypted && false) edits.push(' },
+    only: 't1b', expect: '[T1-j]' },
+  { name: 'no-exact-keys', why: '[T8] M3: a save with an extra key is taken',
+    src: { file: 'writeback.ts', from: "if (keys !== 'html,kind,n,name,purpose') return null", to: 'if (false) return null' },
+    only: 't8m', expect: '[T8-m] an extra key' },
+  { name: 'purpose-any', why: '[T8] M3: a purpose outside the list is taken',
+    src: { file: 'writeback.ts', from: "if (typeof purpose !== 'string' || !(PURPOSES as readonly string[]).includes(purpose)) return null", to: "if (typeof purpose !== 'string') return null" },
+    only: 't8m', expect: '[T8-m] purpose "x"' },
+  { name: 'html-uncapped', why: '[T8] M3: html over the cap is taken',
+    src: { file: 'writeback.ts', from: 'html.length > maxBytes', to: 'html.length > 1e12' },
+    only: 't8m', expect: '[T8-m] html one byte over the cap' },
+  { name: 'n-not-monotonic', why: '[T8] M3: a save number that does not rise is taken',
+    src: { file: 'writeback.ts', from: ' || (n as number) <= lastN', to: '' },
+    only: 't8m', expect: '[T8-m] an n that does not rise' },
+  { name: 'no-busy', why: '[T8] M3: a second save while one is in flight is taken',
+    src: { file: 'library.ts', from: 'if (!m || s.busy) return drop()', to: 'if (!m) return drop()' },
+    only: 't8m', expect: '[T8-m] a second save while one is in flight' },
+  { name: 'memberkey-outlives-close', why: '[947-7] n1: the member key stays past the close',
+    src: { file: 'library.ts', from: "  mem.delete(entryKey(session.entry, 'memberkey'))\n", to: '' },
+    only: 'n1', expect: '[947-7] the same bytes reopened' },
+  { name: 'no-disk-check', why: '[T1] n3: a file changed on disk is written over',
+    src: { file: 'library.ts', from: '      if (now !== s.onDisk) {', to: '      if (false) {' },
+    only: 'n3', expect: '[T1 N3]' },
+  { name: 'ondisk-stale', why: '[T1] n3: the on-disk hash is not moved by a write, so the second save in an open is refused',
+    src: { file: 'library.ts', from: '      s.onDisk = await hashOf(r.html)\n', to: '' },
+    only: 't1a', expect: '[T4-2] a second save in the same open' },
 ]
 
 if (process.argv.includes('--mutants')) {
@@ -288,6 +335,10 @@ async function build(name, extra) {
 section(`builds (${ENGINE})`)
 const A = await build('a', ['--history', path.join(work, 'history-130.json')])
 const B = await build('b', ['--key', path.join(work, 'test-key.json'), '--history', path.join(work, 'history-test.json')])
+// [T8-m] a build whose save cap is lowered (the --save-cap seam), so "one byte over" is a size a rig can post
+const SAVE_CAP = 3_000_000
+const C = want('t8m') ? await build('c', ['--history', path.join(work, 'history-130.json'), '--save-cap', String(SAVE_CAP)]) : null
+if (C) ok(C.info.saveCap === SAVE_CAP && A.info.saveCap === 0, `[T8-m] build c lowers the save cap to ${C.info.saveCap} B; build a keeps the default (${A.info.saveCap})`)
 // [T7] the library's budget, set by this PR (stage 1 set 32 KB; saving adds the write-back)
 const BUDGET = { library: 40 * 1024, frame: 4 * 1024 }
 ok(A.info.bytes.libraryWithoutHistories <= BUDGET.library, `[T7] library page ${A.info.bytes.libraryWithoutHistories} B (without bundled histories) is within ${BUDGET.library} B`)
@@ -299,7 +350,7 @@ const browser = await pw[ENGINE].launch({ logger: apiLogger, ...(process.env.BEN
 guard = guardBrowser(browser, { rig: `home/web writeback (${ENGINE})` })
 const recorded = []
 const sockets = []
-async function context() {
+async function context(opts = {}) {
   const ctx = await browser.newContext({ acceptDownloads: true })
   await ctx.routeWebSocket(/.*/, (ws) => { sockets.push(ws.url()); ws.close() })
   ctx.on('request', async (r) => {
@@ -316,6 +367,24 @@ async function context() {
       configurable: true, get() { return d.get.call(this) },
       set(fn) { d.set.call(this, typeof fn !== 'function' ? fn : function (e) { if (e.data && e.data.kind === 'save') (window.__posted ||= []).push(e.data.html); return fn.call(this, e) }) },
     })
+  })
+  // [T8-m] the frame's session port in a frame script's hands, and the answers that come back on it.
+  // Installed before frame.ts runs, so the frame caches these wrappers: rig instrumentation only.
+  if (opts.tapFrame) await ctx.addInitScript(() => {
+    if (!/^localhost:\d+$/.test(location.host)) return
+    const post = MessagePort.prototype.postMessage
+    MessagePort.prototype.postMessage = function (m, ...r) {
+      if (m && (m.kind === 'booting' || m.kind === 'pong' || m.kind === 'save')) self.__rigPort = this
+      return post.call(this, m, ...r)
+    }
+    const add = EventTarget.prototype.addEventListener
+    EventTarget.prototype.addEventListener = function (t, fn, ...r) {
+      if (this instanceof MessagePort && t === 'message' && typeof fn === 'function') {
+        const f = fn
+        fn = function (e) { if (e.data && e.data.kind === 'saved') (self.__answers ||= []).push({ n: e.data.n, ok: e.data.ok === true }); return f.call(this, e) }
+      }
+      return add.call(this, t, fn, ...r)
+    }
   })
   return ctx
 }
@@ -335,7 +404,7 @@ const ui = (page) => page.evaluate(() => {
     notice: vis('notice') ? document.getElementById('notice').textContent : '', chip: vis('unsaved'), saveCopy: vis('save-copy') ? document.getElementById('save-copy').textContent : '',
     savedIt: vis('saved-it'), away: vis('away') ? document.getElementById('away').textContent : '',
     recovery: Number(document.documentElement.getAttribute('data-bento-recovery') ?? 0), posted: (window.__posted ?? []).length,
-    writes: window.__writes ?? 0,
+    writes: window.__writes ?? 0, drops: Number(document.documentElement.getAttribute('data-bento-save-drops') ?? -1),
   }
 })
 const settled = (page) => until(async () => { const u = await ui(page); return u.viewing || u.problem ? u : null }, 30000)
@@ -373,6 +442,12 @@ async function cmdS(fr) {
   await fr.evaluate(() => { document.activeElement?.blur?.(); window.focus() }).catch(() => {})
   await fr.page().keyboard.press('ControlOrMeta+s').catch(() => {})
 }
+/** A save the document makes itself, through the frame's picker: what a script in the frame can post. */
+const postSave = (fr, html, id = 'bento-doc') => fr.evaluate(async ({ html, id }) => {
+  const h = await window.showSaveFilePicker({ id })
+  const w = await h.createWritable(); await w.write(new Blob([html])); return w.close().then(() => 'saved', (e) => e.name)
+}, { html, id }).catch((e) => String(e))
+const titleOf = (html) => /<title>([^<]*)<\/title>/.exec(html)?.[1] ?? null
 const MARKS = []
 const keep = (name, text) => { const p = path.join(work, name); fs.writeFileSync(p, text); return p }
 const gate = (p) => { const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts/shell-gate.mjs'), p], { encoding: 'utf8' }); return { ok: r.status === 0, out: (r.stdout + r.stderr).split('\n').filter((l) => /FAIL|fail|error/i.test(l)).slice(0, 2).join(' | ') } }
@@ -518,6 +593,50 @@ if (T1 && CHROMIUM) {
       }).catch((e) => String(e))
       await new Promise((res) => setTimeout(res, 500))
       ok(junk === 'AbortError' && (await ui(page)).writes === before, `[T1-b] a posted file with no document block is refused and nothing is written (${junk})`)
+
+      // [T1-h] (ruling 998 M1) a release-shaped save whose carried data block carries markup gate 1 refuses (an
+      // on*= attribute on the block's own tag). Only the re-judge after the splice stops it.
+      const base = await fr.evaluate(() => window.bento.serialize())
+      {
+        const writes0 = (await ui(page)).writes, disk0 = await opfsText(page, o.name)
+        const planted = base.replace('</head>', () => '<script type="application/bento+json" id="rig-extra" onerror="1">{}</' + 'script></head>')
+        const r = await postSave(fr, planted)
+        await new Promise((res) => setTimeout(res, 500))
+        const u = await ui(page)
+        ok(planted !== base && r === 'AbortError' && u.writes === writes0 && (await opfsText(page, o.name)) === disk0 && /not written/.test(u.notice) && /not a release/.test(u.notice),
+          `[T1-h] the hostile frame posts a data block carrying an on*= attribute: refused, the file unchanged, the reason shown (${r}, ${u.writes - writes0} writes, "${u.notice.slice(0, 90)}")`)
+      }
+      // [T1-i] (ruling 998 M2a) the posted preview is never carried: a transient script in the frame plants an
+      // entity-encoded meta refresh in it, which gate 1's markup grammar passes today
+      const PV = 'BENTO-PREVIEW-' + rnd()
+      const plantPreview = (html, pv) => {
+        const at = html.indexOf('data-bento-preview')
+        if (at < 0) return null
+        const end = html.indexOf('>', at) + 1
+        return html.slice(0, end) + `<meta http-equiv="&#114;efresh" content="86400;url=about:blank"><b>${pv}</b>` + html.slice(end)
+      }
+      {
+        const mark = 'EDIT-' + rnd()
+        const planted = plantPreview(base.replace(CANARY, () => mark), PV)
+        const r = planted ? await postSave(fr, planted) : 'no preview in the save'
+        await new Promise((res) => setTimeout(res, 500))
+        const disk = await opfsText(page, o.name)
+        ok(!!planted && r === 'saved' && disk.includes(mark) && !disk.includes(PV) && !disk.includes('&#114;efresh'),
+          `[T1-i] a save whose preview carries an entity-encoded meta refresh: written (positive control: the edit is on disk), and neither the refresh nor the preview's text is (${r}, preview in the posted save: ${!!planted})`)
+      }
+      // [T1-j] (ruling 998 M2b) an envelope document: no title or preview taken from the posted file
+      {
+        const TT = 'BENTO-TITLE-' + rnd()
+        const env = await envelopeOf(json(docOf()))
+        const d = scanBlocks(base).find((b) => b.id === 'bento-doc')
+        let planted = plantPreview(base.slice(0, d.start) + '\n' + env + '\n' + base.slice(d.start + d.text.length), PV)
+        planted = planted && titleOf(planted) !== null ? planted.replace(/<title>[^<]*<\/title>/, () => `<title>${TT}</title>`) : null
+        const r = planted ? await postSave(fr, planted) : 'no title or preview in the save'
+        await new Promise((res) => setTimeout(res, 500))
+        const disk = await opfsText(page, o.name)
+        ok(!!planted && r === 'saved' && docTextOf(disk)?.includes('"bento/enc"') && !disk.includes(TT) && !disk.includes(PV) && titleOf(disk) === 'bento/slides',
+          `[T1-j] the hostile frame posts an envelope with a plaintext title and preview: the file is sealed, titled "${titleOf(disk)}", and holds neither (${r})`)
+      }
     }
 
   }
@@ -816,6 +935,108 @@ if (want('t8')) {
   await ctx.close()
 }
 
+// ===== [T8-m] the save message itself (security condition B4) ==============================================
+if (want('t8m') && C) {
+  section('[T8-m] a malformed save on the session port: no write, no answer, counted toward the drop limit')
+  const ctx = await context({ tapFrame: true })
+  const page = await ctx.newPage()
+  await page.goto(C.library + '/')
+  if (CHROMIUM) await openByHandle(page, 'deck130'); else await openByInput(page, 'deck130')
+  const fr = await booted(page)
+  const port = fr ? await until(() => fr.evaluate(() => !!self.__rigPort), 10000) : null
+  if (!fr || !port) ok(false, `[T8-m] the frame's session port is in the rig's hands (booted: ${!!fr})`)
+  else {
+    const base = await fr.evaluate(() => window.bento.serialize())
+    const msg = (n, extra = {}) => ({ kind: 'save', n, purpose: 'bento-doc', name: 'x.bento.html', html: base, ...extra })
+    const post = (msgs) => fr.evaluate((msgs) => { for (const m of msgs) self.__rigPort.postMessage(m) }, msgs)
+    const state = async () => ({ ...(await ui(page)), answers: await fr.evaluate(() => (self.__answers ?? []).map((a) => a.n)) })
+    const wait = () => new Promise((r) => setTimeout(r, 2500))
+    // positive control: a well-formed save posted the same way is taken and answered
+    let s0 = await state()
+    await post([msg(1)])
+    const pc = await until(async () => { const v = await state(); return v.answers.includes(1) ? v : null }, 20000)
+    ok(!!pc && pc.drops === 0 && (!CHROMIUM || pc.writes === s0.writes + 1), `[T8-m] positive control: a well-formed save posted straight on the port is taken, answered and ${CHROMIUM ? 'written' : 'held'} (${pc?.writes ?? 0} writes, drops ${pc?.drops})`)
+    const bad = [
+      ['an extra key', [msg(2, { extra: 1 })], [2]],
+      ['purpose "x"', [msg(3, { purpose: 'x' })], [3]],
+      [`html one byte over the cap (${SAVE_CAP} B)`, [msg(4, { html: base + ' '.repeat(Math.max(1, SAVE_CAP + 1 - base.length)) })], [4]],
+      ['an n that does not rise (1 again)', [msg(1)], [1]],
+    ]
+    for (const [what, msgs, ns] of bad) {
+      s0 = await state()
+      await post(msgs)
+      await wait()
+      const s1 = await state()
+      const answered = ns.some((n) => s1.answers.filter((x) => x === n).length > s0.answers.filter((x) => x === n).length)
+      ok(!answered && s1.writes === s0.writes && s1.saveCopy === s0.saveCopy && s1.drops === s0.drops + 1,
+        `[T8-m] ${what}: no write, no 'saved' answer, one more drop (${s1.writes - s0.writes} writes, answered ${answered}, drops ${s0.drops} -> ${s1.drops})`)
+    }
+    // two saves back to back: the second arrives while the first is in flight
+    s0 = await state()
+    await post([msg(5), msg(6)])
+    await until(async () => (await state()).answers.includes(5), 20000)
+    await wait()
+    const s1 = await state()
+    ok(s1.answers.includes(5) && !s1.answers.includes(6) && (!CHROMIUM || s1.writes === s0.writes + 1) && s1.drops === s0.drops + 1,
+      `[T8-m] a second save while one is in flight: the first is written and answered, the second gets no write, no answer, one more drop (${s1.writes - s0.writes} writes, answers ${JSON.stringify(s1.answers)}, drops ${s0.drops} -> ${s1.drops})`)
+  }
+  await ctx.close()
+}
+
+// ===== [N1] the member key does not outlive the open ==========================================================
+if (want('n1')) {
+  section('[947-7] the member key goes at close, and a same-bytes reopen does not bring it back')
+  const ctx = await context()
+  const page = await ctx.newPage()
+  await page.goto(A.library + '/')
+  await openByInput(page, 'deck1210')
+  let fr = await booted(page)
+  if (fr) {
+    await loadKernel(fr).catch(() => {})
+    const set = await fr.evaluate(async () => {
+      const ds = window.__bentoKernelStore.docStore()
+      return [await window.__bentoKernelStore.setJSON(ds, 'recovery', { docId: window.bento.doc.docId, at: Date.now() }), await ds.set('memberkey', new TextEncoder().encode('member-key'))]
+    }).catch((e) => [String(e)])
+    ok(set[0] === 'stored' && set[1] === 'stored', `[947-7] positive control: a recovery copy and a member key are stored for the open (${JSON.stringify(set)})`)
+  }
+  await page.click('#close', { timeout: 8000 }).catch(() => {})
+  await until(async () => !(await ui(page)).viewing, 10000)
+  await openByInput(page, 'deck1210')
+  fr = await booted(page)
+  const back = fr ? await loadKernel(fr).then(() => fr.evaluate(async () => {
+    const ds = window.__bentoKernelStore.docStore()
+    return { recovery: !!(await ds.get('recovery')), memberkey: !!(await ds.get('memberkey')) }
+  })).catch((e) => ({ error: String(e) })) : null
+  ok(back?.recovery === true && back?.memberkey === false, `[947-7] the same bytes reopened get their entry back (recovery held: ${back?.recovery}) and no member key (${back?.memberkey}${back?.error ? ', ' + back.error : ''})`)
+  await ctx.close()
+}
+
+// ===== [N3] never over a file that changed on disk (Chromium) ===============================================
+if (want('n3') && CHROMIUM) {
+  section('[T1 N3] a file changed on disk since the open is not written over')
+  const ctx = await context()
+  const page = await ctx.newPage()
+  await page.goto(A.library + '/')
+  const o = await openByHandle(page, 'deck1210')
+  const fr = await booted(page)
+  if (fr) {
+    const mark = await edit(fr)
+    MARKS.push(mark)
+    const OTHER = 'BENTO-ELSEWHERE-' + rnd()
+    // another program saves the file (a second handle to it, so the rig's write counter does not see it)
+    await page.evaluate(async ({ name, text }) => {
+      const h = await (await navigator.storage.getDirectory()).getFileHandle(name)
+      const w = await h.createWritable(); await w.write(text); await w.close()
+    }, { name: o.name, text: files.deck1210 + `<!-- ${OTHER} -->` })
+    await cmdS(fr)
+    const u = await until(async () => { const v = await ui(page); return v.saveCopy ? v : null }, 20000)
+    const disk = await opfsText(page, o.name)
+    ok(!!u && u.writes === 0 && disk.includes(OTHER) && !disk.includes(mark) && /changed on disk/.test(u.notice) && u.saveCopy === 'Save a copy',
+      `[T1 N3] ⌘S after the file changed on disk: not written over (${u?.writes ?? 0} writes), the other save kept, the reason shown, "Save a copy" offered`)
+  }
+  await ctx.close()
+}
+
 // ===== [T2] the network over open, edit, save and export =====================================================
 section('[T2] every request is on the allow-list; none carries the canary or a marker')
 {
@@ -835,7 +1056,7 @@ section('[T2] every request is on the allow-list; none carries the canary or a m
   await until(() => sockets.includes(SOCKET_PROBE), 5000)
   await ctx.close()
   const libFiles = ['/', '/sw.js', ...(A.info.offline?.precache ?? []).map((p) => p.path)]
-  const allowed = (r) => (r.method === 'GET' && [A, B].some((X) => libFiles.map((p) => X.library + p).includes(r.url) || r.url === X.frame + '/frame.html' || r.url.startsWith(X.releaseBase))) ||
+  const allowed = (r) => (r.method === 'GET' && [A, B, C].filter(Boolean).some((X) => libFiles.map((p) => X.library + p).includes(r.url) || r.url === X.frame + '/frame.html' || r.url.startsWith(X.releaseBase))) ||
     r.url.startsWith('blob:') || r.url.startsWith('data:') || r.url === 'about:blank' || r.url.startsWith('file:')
   const stray = recorded.filter((r) => !allowed(r))
   ok(stray.length === 0, `[T2] every request in this run (open, edit, save, export) is on the allow-list (${recorded.length} recorded${stray.length ? '; stray: ' + stray.slice(0, 3).map((r) => r.method + ' ' + r.url).join(', ') : ''})`)
@@ -846,6 +1067,6 @@ section('[T2] every request is on the allow-list; none carries the canary or a m
 }
 
 await guard.close()
-await A.s.close(); await B.s.close()
+await A.s.close(); await B.s.close(); await C?.s.close()
 console.log(`\n${checks - failures}/${checks} checks passed (${ENGINE})`)
 process.exit(failures ? 1 : 0)

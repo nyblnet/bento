@@ -23,6 +23,9 @@
 //                            it each of those REFUSES the build.
 //   --key <jwk.json>         TEST SEAM, --dev only: verify with this public key
 //                            instead of the release key. Rigs only.
+//   --save-cap <bytes>       TEST SEAM, --dev only: the largest save the library
+//                            takes from a document (default and ceiling: the
+//                            largest file it opens). Rigs only, so the cap has a row.
 //   --check                  run every check below and stop: nothing is written.
 //   --identity               --dev only: add the bento/id agent (src/identity.ts):
 //                            the library then also talks to the directory and
@@ -90,6 +93,11 @@ const dev = args.includes('--dev')
 const devOnly = (what) => { if (!dev) die(`${what}: refused in a production build (a development build passes --dev)`) }
 if (process.env.BENTO_HOME_WEB_MUTANT) devOnly('BENTO_HOME_WEB_MUTANT is set')
 if (opt('key')) devOnly('--key replaces the release key')
+const saveCap = opt('save-cap') === undefined ? 0 : Number(opt('save-cap'))
+if (opt('save-cap') !== undefined) {
+  devOnly('--save-cap lowers the largest save the library takes')
+  if (!Number.isInteger(saveCap) || saveCap < 1) die('--save-cap needs a positive whole number of bytes')
+}
 const histories = many('history')
 if (!histories.length) {
   devOnly('no --history: a production build bundles the published history of every published app')
@@ -184,6 +192,7 @@ const defines = {
   __FRAME_URL__: `${frameOrigin}/frame.html`,
   __RELEASE_BASE__: releaseBase,
   __SIGNED_BASE__: SIGNED_BASE,
+  __SAVE_CAP__: saveCap,
 }
 function bundle(entry, extra = {}) {
   const outfile = path.join(tmp, path.basename(entry) + '.js')
@@ -308,7 +317,7 @@ fs.writeFileSync(path.join(out, 'frame/_headers'),
 
 const historyBytes = historyTexts.reduce((n, t) => n + Buffer.byteLength(JSON.stringify(t)), 0)
 const info = {
-  libraryOrigin, frameOrigin, releaseBase, dev, testKey: !!keyFile, mutant: mutant ? [].concat(mutant).map((m) => m.from).join(' + ') : null, identity,
+  libraryOrigin, frameOrigin, releaseBase, dev, testKey: !!keyFile, saveCap, mutant: mutant ? [].concat(mutant).map((m) => m.from).join(' + ') : null, identity,
   histories: histories.map((h) => path.relative(root, h)),
   bytes: {
     library: Buffer.byteLength(libHtml),
