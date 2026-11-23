@@ -150,7 +150,10 @@ const MUTANTS = [
   { name: 'a library page\'s own requests not watched (M6)', row: 'page-manifest-query', file: W, from: "  chrome.webRequest?.onSendHeaders.addListener(onPageRequest, { urls: [`${LIBRARY_ORIGIN}/*`] }, ['requestHeaders', 'extraHeaders'])\n", to: '' },
   { name: 'a query allowed on a page\'s request (M6)', row: 'page-manifest-query', file: J, from: "if (!own && String(req.url).split('#')[0].includes('?')) why('a query')", to: '' },
   { name: 'a page\'s requests never routed to the judge (M6)', row: 'page-manifest-query', file: W, from: "  if (typeof d?.tabId !== 'number' || d.tabId < 0) return null\n", to: '  return null\n' },
-  { name: 'a page\'s requests held to the documents\' paths (M6, the honest control)', row: 'c5-honest-manifest', file: J, from: "if (!own && !list.releases.some((r) => r.origins[origin]?.files[p] !== undefined)) why(", to: "if (!own && !list.releases.some((r) => r.origins[origin]?.files[p]?.kind === 'document')) why(" },
+  { name: 'a page\'s requests held to the documents\' paths (M6, the honest control)', row: 'c5-honest-manifest', file: J, from: "if (!own && !browserIcon && !list.releases.some((r) => r.origins[origin]?.files[p] !== undefined)) why(", to: "if (!own && !browserIcon && !list.releases.some((r) => r.origins[origin]?.files[p]?.kind === 'document')) why(" },
+  { name: 'the browser\'s default icon fetch and the page\'s own Referer not excused (M6, a host\'s 404)', row: 'unlisted-404', edits: [
+    { file: J, from: 'const browserIcon = p === BROWSER_ICON', to: 'const browserIcon = false' },
+    { file: J, from: "      if (n === 'referer' && ownReferer(String(x?.value ?? ''))) continue\n", to: '' }] },
   { name: 'the tab\'s own URL not excused (M6)', row: 'c5-honest-own-url', file: J, from: "const own = typeof ctx.ownUrl === 'string' && String(req.url).split('#')[0] === ctx.ownUrl", to: 'const own = false' },
   // /index.html answered as '/' (security ruling on #964, M1): without it an honest visit reads "unverified"
   // Not registered: the build mutant that drops sw.ts's /index.html line. MEASURED red on macOS Chromium 149

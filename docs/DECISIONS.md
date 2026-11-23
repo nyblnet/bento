@@ -15571,7 +15571,13 @@ What can be seen is what that worker does.
   cache, which webRequest shows as a tab `xmlhttprequest`, so a request to
   exactly the URL that tab's navigation asked for is not judged on its query
   or path (without this, an honest visit to `/?from=link` was a loud
-  mismatch). A request the worker answers itself never reaches webRequest,
+  mismatch). The navigation record is read before anything is awaited
+  (webRequest's `documentUrl` is absent on these requests, measured), since
+  the tab may navigate on while the list is fetched. Two more measured
+  exceptions, both from an honest host's 404 page: Chrome's default
+  `/favicon.ico` fetch (a fixed path; with a query it is still a finding), and
+  a Referer that is the origin or the tab's own document URL (a 404 page has no
+  `no-referrer` policy), values no worker chooses. A request the worker answers itself never reaches webRequest,
   and its bytes go only to the worker, whose own requests are held.
 
 Guards: rows `c5-honest-worker` (the build's worker, two visits and an update
@@ -15607,5 +15613,6 @@ webRequest shows it as a tab request; no finding) and `c5-honest-own-url` (an
 honest visit to `/?from=link`; webRequest shows the content script's re-read;
 no finding), each with a mutant (the listener not registered, the query check
 off, tab requests never routed; manifests held to document paths; the own-URL
-exemption off), and unit rows for `pageRequestOf` and `pageRequestFailures`
+exemption off); `unlisted-404` now also guards the favicon and own-Referer
+exceptions (its mutant drops both: a loud tab on an honest 404); and unit rows for `pageRequestOf` and `pageRequestFailures`
 with an absent initiator, absent headers and an absent navigation record.

@@ -443,7 +443,8 @@ home.bento.page has never been checked.
   Chrome's own manifest fetch, type `other`, with verdict ok before this rule).
   The one request to the tab's own document URL is the tripwire's content
   script re-reading the navigation, so its query and path are the
-  navigation's and are not judged. A page request the worker answers itself
+  navigation's and are not judged; Chrome's default `/favicon.ico` fetch and a
+  Referer naming the page itself (a host's 404 page) are the browser's too. A page request the worker answers itself
   never reaches webRequest, and its bytes reach only the worker. The worker
   can still pass data out through which of the allowed requests it, or the
   page, makes, and when (a covert channel). Its requests, and the page's, to

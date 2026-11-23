@@ -379,11 +379,25 @@ export function pageRequestFailures(req, list, origin, ctx = {}) {
   const own = typeof ctx.ownUrl === 'string' && String(req.url).split('#')[0] === ctx.ownUrl
   if (!own && String(req.url).split('#')[0].includes('?')) why('a query')
   const p = u.pathname || '/'
-  if (!own && !list.releases.some((r) => r.origins[origin]?.files[p] !== undefined)) why('a path no release serves')
+  // the browser's own default icon fetch for a page that names none (MEASURED, Chromium 149: a host's 404
+  // page, type image): a fixed path; a query on it is still a query
+  const browserIcon = p === BROWSER_ICON
+  if (!own && !browserIcon && !list.releases.some((r) => r.origins[origin]?.files[p] !== undefined)) why('a path no release serves')
+  // a Referer that is the page's own URL (as its navigation asked for it) or its origin is the browser's, not
+  // the worker's (MEASURED: a host's 404 page has no no-referrer policy, and its requests name it)
+  const ownReferer = (v) => v === `${origin}/` || (typeof ctx.ownUrl === 'string' && v === ctx.ownUrl)
   if (!Array.isArray(req.headers)) why('its request headers were not read')
-  else for (const n of ABSENT_REQUEST) if (req.headers.some((x) => String(x?.name ?? '').toLowerCase() === n)) why(`a header the honest page does not send: ${n}`)
+  else {
+    for (const x of req.headers) {
+      const n = String(x?.name ?? '').toLowerCase()
+      if (!ABSENT_REQUEST.has(n)) continue
+      if (n === 'referer' && ownReferer(String(x?.value ?? ''))) continue
+      why(`a header the honest page does not send: ${n}`)
+    }
+  }
   return out
 }
+const BROWSER_ICON = '/favicon.ico'
 
 // forbidden names whose values a script still chooses (cookieStore, fetch's referrer): never on the honest
 // worker's requests (security ruling on #983, M4)

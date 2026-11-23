@@ -252,17 +252,21 @@ export function pageRequestOf(d) {
 }
 function onPageRequest(d) {
   const req = pageRequestOf(d)
-  if (req) void tripwirePageRequest(req).catch(() => {})
+  if (!req) return
+  // the tab's navigation record is read NOW, before anything is awaited: by the time the list is in hand
+  // the tab may have navigated on (measured: the rig's own-URL row, once, when it was read after the list)
+  const key = `${REQUEST_PREFIX}${req.tabId}:${req.frameId}`
+  void chrome.storage.session.get(key).then((r) => tripwirePageRequest(req, undefined, undefined, typeof r[key]?.url === 'string' ? cut(r[key].url) : null)).catch(() => {})
 }
 
 /** Judge one of a library page's own requests; a finding is recorded and announced on that page's tab. */
-export async function tripwirePageRequest(req, net = (u, o) => fetch(u, o), now = Date.now()) {
+export async function tripwirePageRequest(req, net = (u, o) => fetch(u, o), now = Date.now(), navUrl = null) {
   const { current, refresh } = await listFor(net, now)
   if (!current) return { ok: false, reason: 'no list' }
-  // the URL this tab's library document was navigated to (onRequest's record), so the content script's
-  // re-read of it is not taken for a request the page named
-  const nav = (await chrome.storage.session.get(`${REQUEST_PREFIX}${req.tabId}:${req.frameId ?? 0}`))[`${REQUEST_PREFIX}${req.tabId}:${req.frameId ?? 0}`] ?? null
-  const failures = pageRequestFailures(req, current.list, LIBRARY_ORIGIN, { ownUrl: typeof nav?.url === 'string' ? cut(nav.url) : null })
+  // the URL this tab's library document was navigated to (onRequest's record, read before the first await):
+  // the content script's re-read of it is not a request the page named. (webRequest's documentUrl would say
+  // this directly, but MEASURED, Chromium 149: it is absent on these requests.)
+  const failures = pageRequestFailures(req, current.list, LIBRARY_ORIGIN, { ownUrl: navUrl })
   if (!failures.length) return { ok: true, verdict: 'ok' }
   const u = (() => { try { return new URL(req.url) } catch { return null } })()
   const shape = `${req.method} ${u ? u.pathname : req.url}${String(req.url).includes('?') ? '?' : ''} ${req.type} ${req.initiator ?? '-'} ${failures.map((f) => f.why ?? f.rule).join('+')}`

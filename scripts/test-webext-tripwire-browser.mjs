@@ -567,7 +567,7 @@ for (const [name, fb] of [
   await sleep(1000)
   if (name === 'unlisted-404') {
     ok(vs.every((e) => e?.verdict === 'unlisted' && e.warned.length === 0), `a host's 404 page is recorded quietly (${vs.map((e) => e?.verdict)})`)
-    ok(reportTabs().length === 0, 'no report tab')
+    ok(reportTabs().length === 0, `no report tab (${JSON.stringify((await store.log()).filter((e) => e.role === 'page-request').map((e) => [e.url, e.failures.map((f) => f.why ?? f.rule), e.page?.request?.type]))})`)
   } else {
     ok(vs.every((e) => e?.verdict === 'mismatch'), `the library's scripts at an unlisted path, without its CSP header, are a mismatch (${vs.map((e) => `${e?.verdict}[${rules(e)}]`)})`)
     ok(reportTabs().length === 1, `but ONE loud report tab for the origin, not three (${reportTabs().length})`)
@@ -697,7 +697,9 @@ if (row('dsd-leave')) {
   const evs = await since(t0)
   const hostile = evs.find((e) => e.early && e.url === `${LIB}/`)
   ok(state.hits.slice(h0).includes('lib /evil-ran-dsd'), 'the hidden script ran and left (the attack is real)')
-  ok(hostile?.verdict === 'mismatch' && rules(hostile).includes('elements') && hostile.warned.includes('tab'), `the visit is on record as a loud mismatch: its parse stopped matching any listed document (${hostile?.verdict} ${rules(hostile)} ${hostile?.warned})`)
+  // the hidden script's own fetch is a page-request finding too (M6), and may take the origin's one loud tab first
+  const pageReq = evs.find((e) => e.role === 'page-request' && e.url === `${LIB}/evil-ran-dsd`)
+  ok(hostile?.verdict === 'mismatch' && rules(hostile).includes('elements') && (hostile.warned.includes('tab') || (pageReq?.warned ?? []).includes('tab')), `the visit is on record as a loud mismatch: its parse stopped matching any listed document (${hostile?.verdict} ${rules(hostile)} ${hostile?.warned}; its fetch: ${pageReq?.warned})`)
 }
 
 if (row('dsd-leave-prefix')) {
@@ -1384,7 +1386,7 @@ if (C5_ROWS.some(row)) {
     for (const x of [...new Set(seen)]) note(`extension saw (a tab, not a document) ${x}`)
     const mf = state.heads.slice(k0).filter((q) => q.key === 'lib' && q.p === '/manifest.webmanifest' && q.h['sec-fetch-dest'] === 'manifest')
     // positive control: the request this rule judges happened, and the extension saw it as a tab request
-    ok(mf.length > 0 && seen.some((x) => x === 'other GET /manifest.webmanifest'), `the browser's own manifest fetch reached the server (${mf.length}) and webRequest showed it as a tab request (${seen.filter((x) => /manifest/.test(x)).join(' | ')})`)
+    ok(mf.length > 0 && seen.some((x) => x.startsWith('other GET /manifest.webmanifest')), `the browser's own manifest fetch reached the server (${mf.length}) and webRequest showed it as a tab request (${seen.filter((x) => /manifest/.test(x)).join(' | ')})`)
     ok(ctl && v1.lib?.verdict === 'ok' && v2.lib?.verdict === 'ok' && v2.lib.page.viaWorker === true, `the worker installed; both visits ok, the second through it (${v1.lib?.verdict} [${rules(v1.lib)}] ${v2.lib?.verdict} [${rules(v2.lib)}] viaWorker ${v2.lib?.page?.viaWorker})`)
     const evs = await pageEvents(t0)
     ok(evs.length === 0 && reportTabs().length === 0, `no page-request finding, no report tab (${JSON.stringify(evs.map((e) => [e.url, whys([e])]))})`)
@@ -1400,7 +1402,7 @@ if (C5_ROWS.some(row)) {
     const seen = await tabRequestsSeen()
     for (const x of [...new Set(seen)]) note(`extension saw (a tab, not a document) ${x}`)
     // MEASURED (Chromium 149): the re-read of a 404 shows no tab request at all; the query visit's does
-    note(`the 404's re-read reached webRequest: ${seen.includes('xmlhttprequest GET /no-such-page')}`)
+    note(`the 404's re-read reached webRequest: ${seen.some((x) => x.startsWith('xmlhttprequest GET /no-such-page'))}`)
     ok(seen.includes('xmlhttprequest GET /?from=link'), 'positive control: webRequest showed the content script\'s re-read of /?from=link as a tab request')
     const evs = await pageEvents(t0)
     ok(evs.length === 0 && reportTabs().length === 0, `no page-request finding, no report tab (${v.lib?.verdict} [${rules(v.lib)}]; ${JSON.stringify(evs.map((e) => [e.url, whys([e])]))})`)
