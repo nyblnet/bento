@@ -15396,3 +15396,46 @@ replaced before this shipped.
   1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
+
+## 2026-11-23 — bento/home in a browser saves by re-splicing data into the bytes it verified
+
+Stage 2 of home/web (the library page) saves. The rules, so a later change
+does not loosen one by accident:
+
+- **The library never writes the html the frame sends.** The frame is the
+  document's realm. It takes only the data out of a save (the `#bento-doc`
+  text, the other `application/bento+json` and `application/bento+lang`
+  blocks, and the title text), puts it back into the bytes it verified and served for that open,
+  and judges the result with gate 1: it must be the same release the open was
+  served as. Measured while building it: a shell's own save inside the frame
+  is not even a working file, because the frame turned the release's scripts
+  into `blob:` URLs and the shell clones its live page.
+- **The frame's preview markup is never carried, and a sealed body gets a
+  generic title.** Gate 1 compares attribute values as written, so a preview
+  host holding `<meta http-equiv="&#114;efresh">` passes it and still
+  navigates (measured in Chromium and WebKit, scripting on and off). Carrying
+  it would let a briefly compromised frame plant that in the person's own
+  file. And a posted envelope with a plaintext title would leave the title
+  beside the ciphertext. The preview may come back once gate 1 decodes
+  character references in the attributes it inspects.
+- **A save never overwrites a file that changed on disk** since the open read
+  or last wrote it: the library compares the file behind the handle first.
+- **The save transport is the kernel's existing host contract.** The frame
+  polyfills `showSaveFilePicker` (the picker id says what the save is for)
+  and posts the file on the session port. Released shells reach it unchanged;
+  no kernel bytes changed.
+- **Handles live in memory, for one open.** A file opened through the
+  browser's picker (Chromium) is written in place on ⌘S when its own release
+  runs. Persisting handles waits on the maintainer. A file shown read-only in
+  the newest release is never written; its saves become a new file in that
+  release, only when the person asks.
+- **Recovery is per tab until the security floor exists.** The document's
+  store stays in the library's memory past the open, keyed by the hash of the
+  opened bytes (never by docId), and is cleared when a handle write lands, when
+  the exported bytes are opened again, or when the person says they saved.
+  A store that outlives the tab waits on the floor and the persistent-store
+  conditions of its security ruling.
+- **The library budget is 40 KB** (stage 1's was 32 KB): the write-back is
+  about 8 KB of it. Set in the PR that added it, as the budget rule requires.
+- **Guard.** `scripts/test-home-web-writeback.mjs`, in Chromium in `validate`
+  and in WebKit, Firefox and its mutants in `ci-home.yml`.

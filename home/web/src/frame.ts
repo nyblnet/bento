@@ -27,11 +27,16 @@
 // open, bound to the docId of the file it verified, and checks every message
 // (the document owns this realm, so nothing here can). A shell that predates
 // the port never reads `__bentoDocStore` and keeps stage 1's behaviour. There
-// is no identity and no file handle. ⌘S reaches showSaveFilePicker below,
-// which tells the library and declines: saving is the library's, and will
-// re-splice the document's data into the shell it verified.
-// Every other path the shell has to write a file is a download, and the frame
-// has no allow-downloads: downloads go through the library only.
+// is no identity and no file handle. Saving (stage 2): every release saves
+// through showSaveFilePicker (kernel/src/save.ts), so the one below hands back
+// a handle whose writable, on close(), posts {kind:'save', n, purpose, name,
+// html} on the session port and settles on the library's answer. The purpose
+// is the picker id the kernel passes (bento-doc is ⌘S; anything unknown is a
+// copy, never the open file). The library never writes that html: it re-splices
+// the document's DATA into the bytes it verified (writeback.ts). There is no
+// getFile, so the kernel takes no disk stamp. Every other path the shell has
+// to write a file is a download, and the frame has no allow-downloads:
+// downloads go through the library only.
 
 declare const __LIBRARY_ORIGIN__: string
 
@@ -44,7 +49,10 @@ declare const __LIBRARY_ORIGIN__: string
   const defineProperty = Object.defineProperty
   const freeze = Object.freeze
   const isArray = Array.isArray
-  const promiseReject = Promise.reject.bind(Promise)
+  const promiseResolve = Promise.resolve.bind(Promise)
+  const PromiseCtor = Promise
+  const then = uncurry(Promise.prototype.then)
+  const blobText = uncurry(Blob.prototype.text)
   const portPost = uncurry(MessagePort.prototype.postMessage)
   const portStart = uncurry(MessagePort.prototype.start)
   const listen = uncurry(EventTarget.prototype.addEventListener)
@@ -88,9 +96,27 @@ declare const __LIBRARY_ORIGIN__: string
   let port: MessagePort | null = null
   const tell = (kind: string, reason?: string) => { if (port) portPost(port, reason === undefined ? { kind } : { kind, reason: strSlice(String(reason), 0, 200) }) }
 
-  const showSaveFilePicker = () => {
-    tell('save-declined')
-    return promiseReject(new DOMExceptionCtor('Saving is not available here yet', 'AbortError'))
+  // one save in flight: its number and how to settle it
+  let n = 0
+  let waiting: { n: number; ok: (v?: unknown) => void; no: (e: unknown) => void } | null = null
+  const showSaveFilePicker = (o?: { id?: unknown; suggestedName?: unknown }) => {
+    let purpose = 'bento-copy', name = ''
+    try {
+      const id = o && o.id
+      if (id === 'bento-doc' || id === 'bento-share' || id === 'bento-backup') purpose = id
+      if (o && typeof o.suggestedName === 'string') name = strSlice(o.suggestedName, 0, 255)
+    } catch { /* a getter that throws: a copy, unnamed */ }
+    return promiseResolve(freeze({ kind: 'file', name, createWritable: () => {
+      let html = '', chain: Promise<unknown> = promiseResolve()
+      return promiseResolve(freeze({
+        write: (d: unknown) => (chain = then(chain, () => then(typeof d === 'string' ? promiseResolve(d) : blobText(d), (t: string) => { html += t }))),
+        close: () => then(chain, () => new PromiseCtor((ok, no) => {
+          if (!port || waiting) return no(new DOMExceptionCtor('Another save is in progress', 'InvalidStateError'))
+          waiting = { n: ++n, ok, no }
+          portPost(port, { kind: 'save', n, purpose, name, html })
+        })),
+      }))
+    } }))
   }
 
   const onHandshake = (ev: MessageEvent) => {
@@ -107,6 +133,12 @@ declare const __LIBRARY_ORIGIN__: string
     listen(port, 'message', (e: MessageEvent) => {
       const m = evData(e)
       if (m && m.kind === 'ping' && typeof m.n === 'number') portPost(port!, { kind: 'pong', n: m.n })
+      if (m && m.kind === 'saved' && waiting && m.n === waiting.n) {
+        const w = waiting
+        waiting = null
+        if (m.ok === true) w.ok()
+        else w.no(new DOMExceptionCtor(strSlice(String(m.why), 0, 200), 'AbortError'))
+      }
     })
     portStart(port)
 

@@ -1,4 +1,4 @@
-# home/web: bento/home in your browser (stage 1)
+# home/web: bento/home in your browser
 
 A web page that opens a Bento document from your device, checks that its code
 is a signed Bento release, and runs it in a sandbox to view and present. It is
@@ -19,14 +19,16 @@ Stage 1 is **open and present, nothing kept**:
 - a file whose code matches none (tampered, a fork, a release newer than the
   history) never runs. On request, its document opens read-only in the newest
   signed release of its app;
-- Download gives back exactly the bytes that verified. Nothing else is written.
+- Download gives back exactly the bytes that verified.
+- Since stage 2, the document's own ⌘S saves: the library writes the file
+  from the bytes it verified, never from what the document sends (below).
 
 There is no storage of the browser's for documents (the frame is an opaque
-origin), no file handle, no identity (unless built with `--identity`, below)
-and no relay. The document gets one store
+origin), no file handle kept past an open, no identity (unless built with
+`--identity`, below) and no relay. The document gets one store
 for side data (its crash-recovery copy and member key), answered by the page
-over a port, kept in the page's memory while the document is open and dropped
-when it closes: see "The document's store" below. Since stage 3 the library
+over a port and kept in the page's memory, per tab: see "The document's store"
+below. Since stage 3 the library
 has a service worker for its OWN files, so a returning visit opens offline, a
 signed kill switch, and a web app manifest (below).
 
@@ -42,12 +44,14 @@ What "only verified code" and "no network" cover, exactly:
 - **There is no security floor yet.** A file whose release has a known script
   bug runs that release, bug included, inside the opaque frame, where it has no
   storage, keys or handles to reach. A signed mark for such releases is a
-  stage-2 gate.
+  stage-2 gate. Since stage 2 such a file can also be saved in place: its saves
+  carry only data into its own verified code, so the code on disk never
+  changes, but the data that release wrote does.
 - **A live document is shown as it was last saved.** Its session does not
   connect here, and the page says so.
 
-Editing with saves, recents and offline are later stages. Identity is built
-(below) but is off in the build unless asked for.
+Recents are a later stage. Identity is built (below) but is off in the build
+unless asked for.
 
 ## Two sites
 
@@ -100,15 +104,23 @@ the library answers `get`, `set`, `list` and `delete` on it.
   carries a docId field.
 - **Closing the document closes its store**: a port the document stashed (in a
   popup, say) is answered nothing afterwards.
-- **Files are not written on this channel.** Saving stays the library's (and
-  will re-splice the document's data into the shell it verified).
+- **Files are not written on this channel.** Saving is the session port's
+  (stage 2, below).
 - **A release that predates the port never reads it** and behaves as in stage
   1. Only shells built with this kernel use it.
 
-Not yet: keeping the store past the open. Stage 2's per-entry recovery cache in
-the library's own storage, cleared when a write-back succeeds, plugs into the
-same `serveDocStore` through its `StoreBackend`. Before it does, two things the
-in-memory store cannot show must hold, each with a rig row and a mutant:
+Since stage 2 the store lives in the library's memory for the whole tab, not
+only the open: at close the member key goes, and a recovery copy stays under
+the hash of the bytes it was taken against (see "Stage 2: saving"). Nothing is
+written to the browser's storage.
+
+Not yet: a recovery cache in the library's own storage (IndexedDB), which
+would survive the tab. It plugs into the same `serveDocStore` through its
+`StoreBackend`, and waits on the security floor and the persistent-store
+conditions of its security ruling (an entry partition, an origin-wide quota and
+an eviction rule that never drops unexported edits, the member key's handling).
+Two of them the in-memory store cannot show, each needing a rig row and a
+mutant:
 
 - **A write in flight at close does not survive the clear (S2-a).** With a
   backend that awaits (as IndexedDB does), a `set` posted before the document
@@ -123,6 +135,78 @@ in-memory store cannot show must hold, each with a rig row and a mutant:
   member key by opening a different file under the same entry. Records are
   keyed by entry AND docId, or `set` refuses when the held record's docId
   differs.
+
+## Stage 2: saving
+
+Every Bento release saves through `showSaveFilePicker` (`kernel/src/save.ts`):
+⌘S, the autosave write-back and "Save a copy…" all end in a handle's
+`createWritable()`. Inside the frame that picker is the frame script's
+(`src/frame.ts`): it hands back a handle with no `getFile`, whose writable's
+`close()` posts `{kind: 'save', n, purpose, name, html}` on the session port
+and settles on the library's answer. The purpose is the picker id the kernel
+passes (`bento-doc` for ⌘S; `bento-copy`, `bento-share`, `bento-backup`;
+anything else is a copy, never the open file). Released shells reach it
+unchanged: their bytes do not change.
+
+The library (`src/writeback.ts`) **never writes the html the frame sends.** The
+frame is the document's realm, and what a document serializes inside it is not
+even a working file: the frame turned the release's scripts into `blob:` URLs,
+and a shell's save clones its live page. Instead the library:
+
+1. takes only the DATA out of the posted html, with gate 1's scanner: the
+   `#bento-doc` text, every other `application/bento+json` and
+   `application/bento+lang` block (language packs, extension data) element for
+   element, and the `<title>` text. When the document is an encrypted
+   envelope the title is the app's generic name (what the kernel writes for a
+   sealed body), never the posted text. The first-page preview is never taken:
+   it is markup, and gate 1 reads attribute values as written, so an
+   entity-encoded meta refresh in it would pass the re-judge below and still
+   navigate before the remover runs. A file saved here has no preview until a
+   shell saves it elsewhere, which every release reads as a file without one;
+2. puts that data back into the bytes it verified and served for this open, in
+   place of theirs (the served preview always goes: replace, never append);
+3. judges the result with gate 1 against the held histories: it must be the
+   same app and release the open was served as, with the data intact. A
+   document that posts a file with other code, another release's included,
+   still writes the code that was verified.
+
+Then, for ⌘S, the file is written **in place only** when:
+
+- its own release runs (a file shown read-only in the newest release is never
+  changed: its saves are kept as a new file, in that newest signed release, only
+  when the person asks), and
+- it was opened through this browser's file picker (`showOpenFilePicker`,
+  Chromium), whose handle the library holds in memory for that open only. No
+  handle is ever stored. Before each write the library reads the file behind
+  the handle: if it is not what this open read or last wrote (another program
+  saved it), nothing is written over it and the save is held as below.
+
+Every other save (no handle: Safari, Firefox, a dropped file; a copy; a
+read-only file) is held by the library, which offers "Save a copy" (or "Save
+as a new file") as a download from its own page, after a click. A chip says
+**"Changes only in this tab"** from the document's first recovery copy or held
+save until the changes are known to be in a file: a write through the handle,
+the exported bytes opened again here (their hash matches), or the person's
+"I've saved it". A started download clears nothing. Closing a document with
+changes only in this tab asks first, and so does leaving the page.
+
+The recovery copy (from releases whose document speaks the store port, slides
+1.3.0 on) is the crash cache for all of that. It stays in this tab's memory past
+the open, keyed by the hash of the bytes it was taken against: the SAME bytes
+reopened get it back (the shell offers Restore), never another file with the
+same docId. It goes when a handle write lands (`recovery` only; the member key
+stays for the open), when the person settles it as above, or when a save shows
+the document became encrypted. An encrypted document never has a store.
+
+The port is the only channel: a save posted to the library's window is
+ignored. The library checks every save message (the exact key set, a purpose
+from the list, bounded strings, rising numbers), takes one at a time, answers
+saves past a rate with a refusal, and closes a document that keeps sending what
+it does not accept. A save it does not accept gets no answer and no write.
+
+In-place writes and a relay: the production frame has no relay today. Before a
+production build gives the frame one, either the release floor for live rooms
+ships or in-place handle writes are turned off for live opens (export only).
 
 ## Build and run locally
 
@@ -281,6 +365,7 @@ in it yet.
 |---|---|
 | `scripts/test-home-web.mjs` | the library and frame in a real browser (`BENTO_BROWSER=chromium\|webkit\|firefox`): verification, network allow-list, frame-page standalone refusals, downloads, navigation |
 | `scripts/test-home-web-mutants.mjs` | nineteen mutants, each red on the row that guards it |
+| `scripts/test-home-web-writeback.mjs` | stage 2: saving through the handle (Chromium) and by export (every engine), the hostile frame, packs, encryption, recovery past the open (S.1a), read-only verdicts, the chip, saves only from the port; `--mutants [--shard k/n]` runs its own mutants |
 | `scripts/test-home-web-build.mjs` | production-build refusals, the release's `--home-web` options and history choice, a rehearsal release with `--home-web` |
 | `scripts/test-home-web-build-mutants.mjs` | mutants of those refusals, each red on its row |
 | `scripts/test-home-web-out.mjs` | where a release may put the build: identity containment, the macOS firmlink row and its mutant |
@@ -290,7 +375,7 @@ in it yet.
 
 Chromium and the build rig run in the required `validate` check; WebKit,
 Firefox and the mutant rigs in `ci-home.yml` (`home-web-engines`,
-`home-web-offline-engines`).
+`home-web-offline-engines`, `home-web-writeback-engines`).
 
 ## bento/id in the library (`--dev --identity`, development only)
 
@@ -345,11 +430,13 @@ bento/home's routes on the directory (CORS to `https://home.bento.page` alone):
 in order. `scripts/test-home-web-identity.mjs` drives the real library and the
 real sign-in host against it (`--chrome`, and `--mutants`: a mutant per rule).
 
-## Not in stage 1
+## Not built yet
 
-- Saving. ⌘S in the document is declined and the library says so. The
-  per-document store over the frame's port exists (above); write-back with a
-  re-splice into the verified shell is next.
+- Update on request: re-splicing an old file's document into the newest
+  release, keeping the original bytes as a sibling. A file runs and saves in its
+  own release.
+- A recovery cache that outlives the tab (see "The document's store").
+- Persisted file handles: a handle lives for one open.
 - A security floor in the release history (a signed mark on releases with known
   script bugs): stage 1 runs any release in the history, with no storage, keys
   or handles to reach.

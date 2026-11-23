@@ -150,3 +150,29 @@ runs:
       # WebKit, Firefox and the mutants run in ci-home.yml (home-web-offline-engines).
       shell: bento-step {0}
       run: node scripts/test-home-web-offline.mjs
+
+    - name: bento/home in your browser (stage 2) saving, Chromium
+      # The document's own save, through the frame's showSaveFilePicker and the
+      # session port, written by the library from the bytes it verified: the
+      # document's data put back into the served release, judged again by gate 1.
+      # Real slides 1.2.10 and 1.3.0 files through an OPFS handle: the written
+      # file passes shell-gate and opens from file:// in a fresh profile with
+      # every request aborted; a frame posting another release's file still
+      # writes the served code; a language pack survives byte for byte; an
+      # encrypted deck stays encrypted; no recovery copy and nothing on the
+      # library origin's storage survives a write; a read-only verdict makes zero
+      # writes; the chip; saves only from the session port. WebKit, Firefox and
+      # the mutants run in ci-home.yml (home-web-writeback-engines).
+      shell: bento-step {0}
+      run: node scripts/test-home-web-writeback.mjs
+
+    - name: bento/home is opt-in, the apex crawl
+      # Page-as-app T7's crawl: nothing under site-src (a meta refresh, a script
+      # redirect, a form, a Refresh or Location header, a redirect rule) moves a
+      # person into home.bento.page without a click. Planted controls prove the
+      # crawl finds each kind; --mutants plants a /slides auto-redirect, a meta
+      # refresh and a Refresh header in a copy, each of which must turn it red.
+      shell: bento-step {0}
+      run: |
+        node scripts/test-home-web-apex-crawl.mjs
+        node scripts/test-home-web-apex-crawl.mjs --mutants

@@ -169,7 +169,8 @@ const B = await build('b', ['--key', path.join(work, 'test-key.json'), '--histor
 ok(!A.info.testKey && B.info.testKey, 'build A carries the release key, build B the throwaway test key')
 
 // [T7] budgets: the library page without the histories it bundles, and the frame page
-const BUDGET = { library: 32 * 1024, frame: 4 * 1024 }
+// the library's budget: 32 KB for stage 1, 40 KB from stage 2 (the write-back; set in the PR that added it)
+const BUDGET = { library: 40 * 1024, frame: 4 * 1024 }
 ok(A.info.bytes.libraryWithoutHistories <= BUDGET.library, `library page ${A.info.bytes.libraryWithoutHistories} B (without bundled histories) is within ${BUDGET.library} B`)
 ok(A.info.bytes.frame <= BUDGET.frame, `frame page ${A.info.bytes.frame} B is within ${BUDGET.frame} B`)
 const refused = (args) => { try { execFileSync(process.execPath, [path.join(ROOT, 'home/web/build.mjs'), '--out', path.join(work, 'x'), ...args], { stdio: 'pipe' }); return false } catch { return true } }
@@ -184,6 +185,8 @@ const sockets = []
 async function context() {
   const ctx = await browser.newContext({ acceptDownloads: true })
   await ctx.routeWebSocket(/.*/, (ws) => { sockets.push(ws.url()); ws.close() })
+  // closing a document with changes only in this tab asks first (stage 2): the person says yes
+  ctx.on('page', (p) => p.on('dialog', (d) => d.accept().catch(() => {})))
   ctx.on('request', async (r) => {
     const e = { method: r.method(), url: r.url(), body: r.postData() ?? '', headers: '' }
     recorded.push(e)
@@ -356,11 +359,12 @@ section('[T2] nothing goes anywhere but the library, the frame page and the rele
   }
   await fr?.locator('body').press('Escape').catch(() => {})
 
-  // ⌘S: declined, said so, nothing written
+  // ⌘S with no file handle (opened by <input type=file>): kept for the person to save from the library, nothing written yet
+  // (stage 2's rows are scripts/test-home-web-writeback.mjs)
   const before = downloads.length
   await fr?.locator('body').press('ControlOrMeta+s').catch(() => {})
-  const saved = await until(async () => (await ui(page)).notice, 6000)
-  ok(/Saving is not available here yet/.test(saved ?? ''), '⌘S inside the document tells the person saving is not available, and writes nothing')
+  const saved = await until(() => page.evaluate(() => { const b = document.getElementById('save-copy'); return b && !b.hidden ? b.textContent : null }), 8000)
+  ok(saved === 'Save a copy', `⌘S inside the document is kept by the library, which offers to save a copy (${saved})`)
   await new Promise((r) => setTimeout(r, 1000))
   ok(downloads.length === before, '⌘S produced no download')
   // [B3] the library's Download gives the verified bytes (positive control)...

@@ -110,9 +110,10 @@ const MUTANTS = [
     expect: '[S7] port reuse: after the library closed that open, the stashed port is answered nothing',
   },
   {
-    name: 'store-entry-by-docid', why: '[S7] the library keys the entry by the docId and keeps it past close',
-    src: [{ file: 'library.ts', from: "entry: mintEntry(), store: null }", to: "entry: String(docIdOf(html)), store: null }" },
-      { file: 'library.ts', from: '  memory.dropEntry(session.entry)\n', to: '' }],
+    name: 'store-entry-by-docid', why: '[S7] the library hands the same file the same entry, member key and all, past close',
+    src: [{ file: 'library.ts', from: "  mem.delete(entryKey(session.entry, 'memberkey'))\n", to: '' },
+      { file: 'library.ts', from: '  if (!mem.has(entryKey(session.entry, RECOVERY)) || session.kept.noRetain) memory.dropEntry(session.entry)\n', to: '' },
+      { file: 'library.ts', from: 'k.opened === opened && mem.has(entryKey(k.entry, RECOVERY))', to: 'k.opened === opened' }],
     expect: '[S7] the same file, so the same docId, opened again: a new entry that holds nothing of the last open',
   },
   {

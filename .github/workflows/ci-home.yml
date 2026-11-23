@@ -173,6 +173,53 @@ jobs:
       - name: Tripwire mutants
         run: node scripts/test-webext-tripwire-mutants.mjs
 
+  home-web-writeback-engines:
+    needs: home-gate
+    if: needs.home-gate.outputs.run == 'true'
+    # bento/home in your browser, stage 2 (saving) in the two engines the
+    # required validate job does not run, and its mutants in Chromium, in three
+    # shards: each breaks one rule and must turn the rig red on the row that
+    # guards it, in a run that completed (a crash is not a kill). WebKit and
+    # Firefox have no file handle, so they run the export path, the chip, the
+    # read-only verdicts and the port rows; the handle rows are Chromium's.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install esbuild (slides' dev dependencies)
+        run: npm ci --prefix slides
+      - name: Install browser test runtime
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium webkit firefox
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: home/web stage 2 in WebKit
+        timeout-minutes: 10
+        run: DEBUG=pw:browser BENTO_BROWSER=webkit scripts/ci/retry-once node scripts/test-home-web-writeback.mjs
+      - name: home/web stage 2 in Firefox
+        if: ${{ !cancelled() }}
+        timeout-minutes: 10
+        run: DEBUG=pw:browser BENTO_BROWSER=firefox scripts/ci/retry-once node scripts/test-home-web-writeback.mjs
+      - name: home/web stage 2 mutants (1/3)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 15
+        run: node scripts/test-home-web-writeback.mjs --mutants --shard 1/3
+      - name: home/web stage 2 mutants (2/3)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 15
+        run: node scripts/test-home-web-writeback.mjs --mutants --shard 2/3
+      - name: home/web stage 2 mutants (3/3)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 15
+        run: node scripts/test-home-web-writeback.mjs --mutants --shard 3/3
+      - name: On failure, the kernel's word on crashed browser threads
+        # Diagnostic only, never a verdict (as home-web-engines).
+        if: failure()
+        run: sudo dmesg -T | grep -iE 'segfault|oom|killed process' | tail -20 || echo "no segfault or OOM in the kernel log"
+
   home-web-offline-engines:
     needs: home-gate
     if: needs.home-gate.outputs.run == 'true'
