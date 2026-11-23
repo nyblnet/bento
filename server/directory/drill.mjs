@@ -14,15 +14,16 @@
 // The passkeys and the browser key are software ones, made fresh per drill and
 // never saved. The only route here that is not public is the local mail
 // read-back (src/devdrill.js): a local directory logs its mail instead of
-// sending it, and the setup link is in the mail.
+// sending it, and the setup link is in the mail. Each read-back is signed by
+// the drill key (the one LEVER_PUBKEY holds), over the address it reads.
 
-import { b64uEnc, sha256b64u } from '../../kernel/src/statements.ts'
+import { b64uEnc, sha256b64u, signStatement } from '../../kernel/src/statements.ts'
 import { buildRos, parseRos } from '../../kernel/src/roster.ts'
 import { buildDeviceCert } from '../../kernel/src/devices.ts'
 import { parseSetupLink } from './src/links.js'
 import { HOME_ORIGIN, SIGNIN_ORIGIN } from './src/passkey.js'
 import { STATUS_ROUTE, WEB_ROUTES } from './src/seam.js'
-import { DEV_ROUTE } from './src/devdrill.js'
+import { DEV_ROUTE, buildDevMail } from './src/devdrill.js'
 
 const RP_ID = 'id.bento.page'
 const te = new TextEncoder()
@@ -61,11 +62,23 @@ async function passkey() {
 }
 
 /**
- * Make the victim. `io.fetch`, `base` (the local directory), `now()`. Returns
+ * The logged mails to `address`, through the signed local read-back:
+ * { status, mails } (mails null unless the directory answered 200 with a list).
+ */
+export async function devMail({ fetch, base, key, now }, address) {
+  const cmd = buildDevMail({ address, issuedAt: now(), nonce: b64uEnc(crypto.getRandomValues(new Uint8Array(18))) })
+  const r = await fetch(base + DEV_ROUTE, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cmd, sig: await signStatement(key, cmd) }) })
+  let j = {}
+  try { j = await r.json() } catch { /* the status says it */ }
+  return { status: r.status, mails: r.status === 200 && Array.isArray(j.mails) ? j.mails : null }
+}
+
+/**
+ * Make the victim. `io.fetch`, `base` (the local directory), `now()`, `key` (the drill key). Returns
  * { ok: true, victim } or { ok: false, step, status }: the step that failed,
  * never an address. `victim` stays in memory, for readBack.
  */
-export async function seedVictim({ fetch, base, now }) {
+export async function seedVictim({ fetch, base, now, key }) {
   const address = `drill-${b64uEnc(crypto.getRandomValues(new Uint8Array(9))).toLowerCase().replace(/[^a-z0-9]/g, '0')}@example.invalid`
   const call = async (method, path, body, type = 'application/json') => {
     const r = await fetch(base + path, { method, headers: { 'content-type': type, origin: SIGNIN_ORIGIN }, body: body === undefined ? undefined : JSON.stringify(body) })
@@ -79,9 +92,9 @@ export async function seedVictim({ fetch, base, now }) {
   // 1. a setup, from the link in the (logged) setup mail
   let r = await call('POST', '/v1/roster/setup/start', { email: address })
   if (r.status !== 202) return fail('setup/start', r)
-  r = await call('POST', DEV_ROUTE, { email: address })
-  if (r.status !== 200) return fail('the local mail read-back (is the directory running with DEV=1 and MAILER=log?)', r)
-  const links = (r.j.mails ?? []).filter((m) => m.kind === 'setup').flatMap((m) => String(m.body).match(/https?:\/\/\S+/g) ?? []).map((u) => parseSetupLink(u)).filter((l) => l && l.address === address)
+  const dm = await devMail({ fetch, base, key, now }, address)
+  if (!dm.mails) return fail('the local mail read-back (is the directory running with DEV=1, MAILER=log and LEVER_PUBKEY for this drill key?)', { status: dm.status, j: {} })
+  const links = dm.mails.filter((m) => m.kind === 'setup').flatMap((m) => String(m.body).match(/https?:\/\/\S+/g) ?? []).map((u) => parseSetupLink(u)).filter((l) => l && l.address === address)
   if (links.length !== 1) return fail('the setup mail', { status: links.length, j: { error: 'no single setup link' } })
   const first = await passkey()
   let ch = await challenge()
@@ -122,18 +135,20 @@ export async function seedVictim({ fetch, base, now }) {
 
 /**
  * What the lever did to the victim, read through the public routes and the
- * local mail read-back: { cert: {state, by, incident}, pending, incidentMails }.
+ * signed local mail read-back: { cert: {state, by, incident}, pending, incidentMails }.
+ * A read that fails, or an answer without the field, never reads as the lever's
+ * work: it comes back as a string naming what went wrong (and incidentMails -1).
  */
-export async function readBack({ fetch, base }, victim) {
+export async function readBack({ fetch, base, key, now }, victim) {
   const get = async (path) => { const r = await fetch(base + path); try { return { status: r.status, j: await r.json() } } catch { return { status: r.status, j: {} } } }
   const e = encodeURIComponent(victim.address)
   const st = await get(`${STATUS_ROUTE}?e=${e}&c=${victim.certHash}`)
   const h = await get(`/v1/roster?e=${e}`)
-  const m = await fetch(base + DEV_ROUTE, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: victim.address }) })
-  const mails = m.status === 200 ? ((await m.json().catch(() => ({}))).mails ?? []) : []
+  const m = await devMail({ fetch, base, key, now }, victim.address)
+  const has = (j, k) => j !== null && typeof j === 'object' && Object.hasOwn(j, k)
   return {
-    cert: st.status === 200 ? { state: st.j.state, by: st.j.by, incident: st.j.incident } : { state: `status ${st.status}` },
-    pending: h.status === 200 ? h.j.pending ?? null : `status ${h.status}`,
-    incidentMails: mails.filter((x) => x.kind === 'incident').length,
+    cert: st.status === 200 ? { state: st.j.state, by: st.j.by, incident: st.j.incident } : { state: `unread (status ${st.status})` },
+    pending: h.status === 200 && has(h.j, 'pending') ? h.j.pending : `unread (status ${h.status})`,
+    incidentMails: m.mails ? m.mails.filter((x) => x && x.kind === 'incident').length : -1,
   }
 }

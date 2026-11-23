@@ -58,13 +58,13 @@ import { signIncident } from '../server/directory/src/obindex.js'
 import { LEVER_ROUTE, buildLever } from '../server/directory/src/lever.js'
 import { HOME_ROUTES, WEB_ROUTES, STATUS_ROUTE } from '../server/directory/src/seam.js'
 import { main as leverMain } from '../server/directory/lever.mjs'
-import { DEV_ROUTE } from '../server/directory/src/devdrill.js'
+import { DEV_ROUTE, buildDevMail } from '../server/directory/src/devdrill.js'
 import { DEV_MAILS } from '../server/directory/src/mail.js'
 import { b64uDec, b64uEnc, sha256b64u, signStatement } from '../kernel/src/statements.ts'
 import { buildRos, parseRos, verifyRosterChain, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, ROSTER_WAIT_MS, type Member, type RosterLink } from '../kernel/src/roster.ts'
 import { buildDeviceCert, buildWren, verifyInc } from '../kernel/src/devices.ts'
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -555,6 +555,44 @@ const routed = (fetched: string[]) => async (url: string, init?: RequestInit) =>
   row('DR2', r.totals?.visited === 9 && r.totals?.certificates === 5 && r.totals?.voids === 1 && r.totals?.held === 1 && r.totals?.reverts === 3, `and counts what a run would do (${JSON.stringify(r.totals)})`)
 }
 
+// DV (security round 5 on #984, n2): devvars writes a local directory's test configuration and never writes over a file,
+// checking both paths before it writes either, so a refusal leaves no orphan drill key behind
+{
+  const dir = mkdtempSync(join(tmpdir(), 'lever-devvars-'))
+  try {
+    const run = async (out: string, key: string, io: Record<string, unknown> = {}) => {
+      const said: string[] = []
+      let r: { code: number }
+      try { r = await leverMain(['devvars', '--out', out, '--key', key], { log: (x: string) => said.push(x), ...io }) } catch (e) { return { code: -1, said: [`threw ${(e as Error).message}`] } }
+      return { code: r.code, said }
+    }
+    const vars = join(dir, '.dev.vars'), key = join(dir, 'drill-key.jwk')
+    const first = await run(vars, key)
+    const varsText = existsSync(vars) ? readFileSync(vars, 'utf8') : '', keyText = existsSync(key) ? readFileSync(key, 'utf8') : ''
+    const kpub = keyText ? (() => { const j = JSON.parse(keyText); return b64uEnc(new Uint8Array([4, ...b64uDec(j.x)!, ...b64uDec(j.y)!])) })() : '?'
+    row('DV', first.code === 0 && /^DEV=1$/m.test(varsText) && /^MAILER=log$/m.test(varsText) && varsText.includes(`LEVER_PUBKEY=${kpub}`) && (statSync(vars).mode & 0o777) === 0o600 && (statSync(key).mode & 0o777) === 0o600,
+      `positive control: devvars writes .dev.vars (DEV=1, MAILER=log, LEVER_PUBKEY of the key it writes) and the drill key, both mode 600 (${first.code})`)
+    const again = await run(vars, key)
+    row('DV', again.code === 2 && again.said.some((l) => l.includes(`refuses to write over ${key} and ${vars}`)) && readFileSync(vars, 'utf8') === varsText && readFileSync(key, 'utf8') === keyText,
+      `a second run refuses with a message, and both files are byte for byte the same (${again.code}: ${again.said.join(' | ')})`)
+    const key2 = join(dir, 'other-key.jwk')
+    const varsOnly = await run(vars, key2)
+    row('DV', varsOnly.code === 2 && !existsSync(key2), `.dev.vars already there: refused, and no orphan drill key is written (${varsOnly.code}, key written: ${existsSync(key2)})`)
+    const vars2 = join(dir, 'other.vars')
+    const keyOnly = await run(vars2, key)
+    row('DV', keyOnly.code === 2 && !existsSync(vars2) && readFileSync(key, 'utf8') === keyText, `the drill key already there: refused, nothing written (${keyOnly.code})`)
+    const one = await run(join(dir, 'one'), join(dir, 'one'))
+    row('DV', one.code === 2 && !existsSync(join(dir, 'one')), `--out and --key the same path: refused (${one.code})`)
+    // a file that appears after the check: 'wx' still refuses it, as a message, never an uncaught EEXIST
+    const raced = await run(vars, join(dir, 'raced-key.jwk'), { exists: async () => false })
+    row('DV', raced.code === 2 && raced.said.some((l) => /refuses to write over/.test(l)) && readFileSync(vars, 'utf8') === varsText && !existsSync(join(dir, 'raced-key.jwk')),
+      `a file that appears between the check and the write is still refused, with a message, and the key it had written is removed (${raced.code}: ${raced.said.join(' | ')})`)
+    const racedKey = await run(join(dir, 'raced.vars'), key, { exists: async () => false })
+    row('DV', racedKey.code === 2 && readFileSync(key, 'utf8') === keyText && !existsSync(join(dir, 'raced.vars')),
+      `a drill key that appears between the check and the write is never overwritten (${racedKey.code}: ${racedKey.said.join(' | ')})`)
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+}
+
 // D1 (this tree's value) on the challenge taken before the incident opened
 {
   const B = await Browser.make()
@@ -1022,30 +1060,87 @@ await d1World(INCIDENT_ENROL)
     const r = await leverMain(['--drill', '--directory', bad, '--key', keyPath], { fetch: routed(fetched), log: (s: string) => out.push(s) })
     row('DR1', r.code !== 0 && fetched.length === 0, `--drill against ${bad}: refused before any request (exit ${r.code}, ${fetched.length} fetches)`)
   }
-  // DR3 (security round 4 on #984, N6a): the drill's mail read-back (devdrill.js) answers as an unknown route unless
-  // DEV is '1', MAILER is 'log' and the caller is on this machine; with all three, it answers
+  // DR3 (security round 4 on #984, N6a; round 5, M1 and n3): the drill's mail read-back (devdrill.js) answers as the
+  // unknown route does for the same body unless DEV is '1', MAILER is 'log', LEVER_PUBKEY is set, the caller reports a
+  // loopback address AND the request is signed by the drill key, fresh and not replayed. wrangler dev takes
+  // cf-connecting-ip from the client, so the signature is the gate; the address is a second one.
   {
-    const unknown = await raw('POST', '/v1/dev/nothing-here', '{}', null)
-    const dev = async (vars: Record<string, unknown>, ip: string) => {
-      const was = { DEV: env.DEV, MAILER: env.MAILER }
+    const PROBE = 'dr3-probe@example.com'
+    const otherKp = (await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])) as CryptoKeyPair
+    const signed = async (o: { key?: CryptoKey; address?: string; issuedAt?: number; nonce?: string } = {}) => {
+      const cmd = buildDevMail({ address: o.address ?? PROBE, issuedAt: o.issuedAt ?? now, nonce: o.nonce ?? freshNonce() })
+      return { cmd, sig: await signStatement(o.key ?? leverKp.privateKey, cmd) }
+    }
+    /** POST the read-back; `ip` null sends no cf-connecting-ip at all */
+    const post = async (path: string, body: string | undefined, ip: string | null) => {
+      const headers: Record<string, string> = { 'content-type': 'application/json' }
+      if (ip !== null) headers['cf-connecting-ip'] = ip
+      try {
+        const r = await W.fetch(new Request('https://id.bento.page' + path, { method: 'POST', body, headers }), E as never)
+        const text = await r.text()
+        let j: Record<string, unknown> = {}
+        try { j = JSON.parse(text) } catch { /* the status says it */ }
+        return { status: r.status, j, h: r.headers, text }
+      } catch { return { status: -1, j: {} as Record<string, unknown>, h: new Headers(), text: '' } }
+    }
+    type P = Awaited<ReturnType<typeof post>>
+    const dev = async (vars: Record<string, unknown>, ip: string | null, body: string | undefined) => {
+      const was = { DEV: env.DEV, MAILER: env.MAILER, LEVER_PUBKEY: env.LEVER_PUBKEY }
       Object.assign(env, vars)
-      try { return await raw('POST', DEV_ROUTE, JSON.stringify({ email: 'dora@example.com' }), null, ip) } finally { Object.assign(env, was); if (was.DEV === undefined) delete env.DEV }
+      try { return { got: await post(DEV_ROUTE, body, ip), unknown: await post('/v1/dev/nothing-here', body, ip) } } finally { Object.assign(env, was); if (was.DEV === undefined) delete env.DEV }
     }
-    const same = (r: R) => r.status === 404 && r.text === unknown.text && [...r.h].join() === [...unknown.h].join()
-    const off = await dev({}, '127.0.0.1')
-    row('DR3', same(off), `DEV unset: 404, the same bytes and headers as an unknown route (${err(off)})`)
-    const zero = await dev({ DEV: '0', MAILER: 'log' }, '127.0.0.1')
-    row('DR3', same(zero), `DEV '0': 404 (${err(zero)})`)
-    const real = await dev({ DEV: '1' }, '127.0.0.1')
-    row('DR3', same(real), `DEV '1' with a real mailer (not 'log'): 404 (${err(real)})`)
-    for (const ip of ['10.1.2.3', '127.0.0.2', '0.0.0.0', '']) {
-      const far = await dev({ DEV: '1', MAILER: 'log' }, ip)
-      row('DR3', same(far), `DEV '1', MAILER 'log', a caller at '${ip}': 404 (${err(far)})`)
-    }
-    const on = await dev({ DEV: '1', MAILER: 'log' }, '127.0.0.1')
-    row('DR3', on.status === 200 && Array.isArray(on.j.mails), `positive control: DEV '1', MAILER 'log', a loopback caller: 200 (${err(on)})`)
-    const v6 = await dev({ DEV: '1', MAILER: 'log' }, '::1')
-    row('DR3', v6.status === 200, `and from ::1 (${err(v6)})`)
+    const same = (x: { got: P; unknown: P }, status = 404) => x.got.status === status && x.got.text === x.unknown.text && [...x.got.h].join() === [...x.unknown.h].join()
+    const ON = { DEV: '1', MAILER: 'log' }
+    const show = (x: { got: P }) => `${x.got.status} ${x.got.j.error ?? ''}`
+    // a logged mail to the probe address: what a 200 must carry back (positive control that the read-back ran)
+    DEV_MAILS.push({ to: PROBE, kind: 'probe', body: 'dr3' })
+    try {
+      const off = await dev({}, '127.0.0.1', JSON.stringify(await signed()))
+      row('DR3', same(off), `DEV unset, signed: 404, the same bytes and headers as an unknown route (${show(off)})`)
+      const zero = await dev({ DEV: '0', MAILER: 'log' }, '127.0.0.1', JSON.stringify(await signed()))
+      row('DR3', same(zero), `DEV '0', signed: 404 (${show(zero)})`)
+      const real = await dev({ DEV: '1' }, '127.0.0.1', JSON.stringify(await signed()))
+      row('DR3', same(real), `DEV '1' with a real mailer (not 'log'), signed: 404 (${show(real)})`)
+      const noLever = await dev({ ...ON, LEVER_PUBKEY: '' }, '127.0.0.1', JSON.stringify(await signed()))
+      row('DR3', same(noLever), `LEVER_PUBKEY empty, signed: 404 (${show(noLever)})`)
+      for (const ip of ['10.1.2.3', '127.0.0.2', '0.0.0.0', '']) {
+        const far = await dev(ON, ip, JSON.stringify(await signed()))
+        row('DR3', same(far), `DEV '1', MAILER 'log', signed, a caller at '${ip}': 404 (${show(far)})`)
+      }
+      const absent = await dev(ON, null, JSON.stringify(await signed()))
+      row('DR3', same(absent), `signed, but no cf-connecting-ip header at all: 404, never read as loopback (${show(absent)})`)
+      // M1: from loopback, nothing but a good signature by the drill key opens it
+      const bare = await dev(ON, '127.0.0.1', JSON.stringify({ email: PROBE }))
+      row('DR3', same(bare), `a loopback caller with no signature (the round-4 body): 404, the unknown route's bytes (${show(bare)})`)
+      const good = await signed()
+      const noSig = await dev(ON, '127.0.0.1', JSON.stringify({ cmd: good.cmd }))
+      row('DR3', same(noSig), `a signed text without its signature: 404 (${show(noSig)})`)
+      const other = await dev(ON, '127.0.0.1', JSON.stringify(await signed({ key: otherKp.privateKey })))
+      row('DR3', same(other), `a loopback caller signing with another key: 404 (${show(other)})`)
+      const moved = await signed({ address: 'someone-else@example.com' })
+      const swapped = await dev(ON, '127.0.0.1', JSON.stringify({ cmd: buildDevMail({ address: PROBE, issuedAt: now, nonce: moved.cmd.split('.')[3] }), sig: moved.sig }))
+      row('DR3', same(swapped), `a signature over another address, its text re-pointed at the probe: 404 (${show(swapped)})`)
+      const stale = await dev(ON, '127.0.0.1', JSON.stringify(await signed({ issuedAt: now - 6 * MIN })))
+      row('DR3', same(stale), `signed 6 minutes ago: 404 (${show(stale)})`)
+      const lvr = buildLever({ op: 'plan', id: 'dr3', t0: now - HOUR, t1: now, cursor: '', n: 1, issuedAt: now, nonce: freshNonce() })
+      const asLever = await dev(ON, '127.0.0.1', JSON.stringify({ cmd: lvr, sig: await signStatement(leverKp.privateKey, lvr) }))
+      row('DR3', same(asLever), `a lever command signed by the same key is not a read-back: 404 (${show(asLever)})`)
+      // n3: no body, or one that does not read, gets the unknown route's 400
+      for (const [what, b] of [['no body', undefined], ['a body that is not JSON', 'not json'], ['a JSON string', '"x"']] as const) {
+        const nb = await dev(ON, '127.0.0.1', b)
+        row('DR3', same(nb, 400), `${what}: 400, the same bytes and headers as an unknown route (${show(nb)})`)
+      }
+      // the positive controls: signed by the drill key, from loopback, it answers with the probe's mail
+      const okBody = JSON.stringify(good)
+      const on = await dev(ON, '127.0.0.1', okBody)
+      const mails = on.got.j.mails as { kind: string; body: string }[] | undefined
+      row('DR3', on.got.status === 200 && Array.isArray(mails) && mails.length === 1 && mails[0].kind === 'probe' && mails[0].body === 'dr3',
+        `positive control: DEV '1', MAILER 'log', a loopback caller, signed by the drill key: 200 with the probe's one mail (${show(on)}, ${JSON.stringify(mails)})`)
+      const replay = await dev(ON, '127.0.0.1', okBody)
+      row('DR3', same(replay), `the same signed request again (its nonce spent): 404 (${show(replay)})`)
+      const v6 = await dev(ON, '::1', JSON.stringify(await signed()))
+      row('DR3', v6.got.status === 200 && (v6.got.j.mails as unknown[] | undefined)?.length === 1, `and from ::1 (${show(v6)})`)
+    } finally { DEV_MAILS.splice(DEV_MAILS.findIndex((m) => m.to === PROBE), 1) }
   }
 
   // From here the drill runs as a local directory does: its mail logged (MAILER=log with DEV=1), read back through
@@ -1104,6 +1199,65 @@ await d1World(INCIDENT_ENROL)
     })
     row('DR4', stillWaiting.r.code === 1 && stillWaiting.out.filter((l) => l.startsWith('FAIL')).length === 1 && stillWaiting.out.some((l) => l.startsWith("FAIL the victim's waiting change is gone")),
       `a victim whose change still waits fails the drill on that check alone (${stillWaiting.said})`)
+    // round 5 (n1): each read-back check stands on its own. A wrapper that rewrites one answer once the lever has run;
+    // the victim's status read is the one whose c is not the closing probe's
+    const only = (x: Awaited<ReturnType<typeof drillRun>>, what: string) => x.r.code === 1 && x.out.filter((l) => l.startsWith('FAIL')).length === 1 && x.out.some((l) => l.startsWith(`FAIL ${what}`))
+    const after = (edit: (u: URL, init: RequestInit | undefined, res: () => Promise<Response>) => Promise<Response | null>) => {
+      let lev = false
+      return async (url: string, init?: RequestInit) => {
+        const u = new URL(url)
+        if (u.pathname === LEVER_ROUTE) lev = true
+        const res = () => routed([])(url, init)
+        return (lev && (await edit(u, init, res))) || res()
+      }
+    }
+    const victimStatus = (u: URL, init?: RequestInit) => u.pathname === STATUS_ROUTE && (init?.method ?? 'GET') === 'GET' && u.searchParams.get('c') !== 'A'.repeat(43)
+    const rewriteStatus = (f: (j: Record<string, unknown>) => Record<string, unknown>) => after(async (u, init, res) => {
+      if (!victimStatus(u, init)) return null
+      const r = await res()
+      return new Response(JSON.stringify(f(await r.json() as Record<string, unknown>)), { status: r.status, headers: r.headers })
+    })
+    const otherInc = await drillRun(rewriteStatus((j) => ({ ...j, incident: 'some-other-incident' })))
+    row('DR4', only(otherInc, "the victim's browser is revoked"), `a victim revoked by ANOTHER incident fails the drill on that check alone (${otherInc.said})`)
+    // the real answer's body, revoked by this incident, but under a failed status: the status, not the body, decides
+    const statusDown = await drillRun(after(async (u, init, res) => {
+      if (!victimStatus(u, init)) return null
+      return new Response(await (await res()).text(), { status: 500 })
+    }))
+    row('DR4', only(statusDown, "the victim's browser is revoked"), `a status read that fails is never read as revoked, whatever its body says (${statusDown.said})`)
+    const noState = await drillRun(rewriteStatus(({ state: _s, ...j }) => j))
+    row('DR4', only(noState, "the victim's browser is revoked"), `a status answer without its state field fails that check (${noState.said})`)
+    const rosterGet = (u: URL, init?: RequestInit) => u.pathname === '/v1/roster' && (init?.method ?? 'GET') === 'GET'
+    const rosterDown = await drillRun(after(async (u, init) => rosterGet(u, init) ? new Response('{"error":"boom"}', { status: 500 }) : null))
+    row('DR4', only(rosterDown, "the victim's waiting change is gone"), `a roster read that fails is never read as "no waiting change" (${rosterDown.said})`)
+    const noPending = await drillRun(after(async (u, init, res) => {
+      if (!rosterGet(u, init)) return null
+      const r = await res()
+      const { pending: _p, ...j } = await r.json() as Record<string, unknown>
+      return new Response(JSON.stringify(j), { status: r.status, headers: r.headers })
+    }))
+    row('DR4', only(noPending, "the victim's waiting change is gone"), `a roster answer without its pending field fails that check (${noPending.said})`)
+    const mailDown = await drillRun(after(async (u) => u.pathname === DEV_ROUTE ? new Response('{"error":"not-found"}', { status: 404 }) : null))
+    row('DR4', only(mailDown, 'the victim was mailed once'), `a mail read-back that fails after the run fails that check (${mailDown.said})`)
+    const twice = await drillRun(after(async (u, init, res) => {
+      if (u.pathname !== DEV_ROUTE) return null
+      const r = await res()
+      const j = await r.json() as { mails?: { kind: string }[] }
+      const m = j.mails ?? []
+      return new Response(JSON.stringify({ mails: [...m, ...m.filter((x) => x.kind === 'incident')] }), { status: r.status })
+    }))
+    row('DR4', only(twice, 'the victim was mailed once'), `a victim mailed twice about the incident fails that check (${twice.said})`)
+    // the second run: its answers are the ones after the read-back's mail request
+    let readBackDone = false
+    const voidAgain = await drillRun(after(async (u, init, res) => {
+      if (u.pathname === DEV_ROUTE) { readBackDone = true; return null }
+      if (!readBackDone || u.pathname !== LEVER_ROUTE || !String(init?.body ?? '').includes('lvr.run.')) return null
+      const r = await res()
+      const j = await r.json() as Record<string, unknown>
+      if (j.counts) j.counts = { ...(j.counts as Record<string, number>), voids: 1 }
+      return new Response(JSON.stringify(j), { status: r.status, headers: r.headers })
+    }))
+    row('DR4', only(voidAgain, 'a second run changes nothing'), `a second run that voids again fails the drill on that check alone (${voidAgain.said})`)
     const devOff = await (async () => { env.DEV = '0'; try { return await drillRun() } finally { env.DEV = '1' } })()
     row('DR4', devOff.r.code === 1 && /seeding the victim failed/.test(devOff.out.join('\n')) && !devOff.out.some((l) => /^(ok|FAIL) +open/.test(l)),
       `without DEV the drill cannot seed, fails, and opens no incident (${devOff.said})`)

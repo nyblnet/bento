@@ -15459,3 +15459,13 @@ replaced before this shipped.
   are still accepted while an incident is open (the next run voids them).
   Whether to refuse them under the same constant is part of the maintainer's
   D1 ruling.
+- **The local drill's mail read-back is gated by a signature, not by the
+  caller's address** (2026-11-23). A local directory logs its mail, so the
+  lever's drill reads the setup link and the incident mail back through a
+  development-only route. `wrangler dev` takes `cf-connecting-ip` from the
+  client, so on a dev directory bound to a LAN address anyone could claim to
+  be 127.0.0.1 and read setup links. Each read-back is therefore signed by the
+  drill key over the address it reads (its own `ldm.` text, never a lever
+  command), fresh and single use, and verified against `LEVER_PUBKEY`; the
+  loopback test stays as a second gate. Every refusal answers as an unknown
+  route given the same body.

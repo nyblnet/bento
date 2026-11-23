@@ -427,11 +427,16 @@ victim reads back revoked by that incident (its id in the status answer),
 with no waiting change and one incident mail; a second run must change
 nothing, and the closed record must verify. A local directory logs its mail
 rather than sending it, so the setup link and the incident mail are read back
-through `POST /v1/dev/mail` (`src/devdrill.js`). That route answers exactly
-as an unknown route unless `DEV` is `1`, `MAILER` is `log` and the caller is
-on the same machine (`cf-connecting-ip` 127.0.0.1 or ::1; `wrangler dev`
-rewrites the request's host to id.bento.page, so the host cannot be the
-test). A deployed directory has `MAILER = "ses"` and no `DEV`. While an
+through `POST /v1/dev/mail` (`src/devdrill.js`). Each read-back is signed
+by the drill key, over the address it reads, and the route verifies it
+against `LEVER_PUBKEY`; it answers as an unknown route given the same body
+(404) unless `DEV` is `1`, `MAILER` is `log`, `LEVER_PUBKEY` is set, the
+caller reports a loopback address and the signature is good, fresh and not
+replayed. The signature is the gate, not the address: `wrangler dev` takes
+`cf-connecting-ip` from the client, so on a dev directory bound to a LAN
+address anyone can claim 127.0.0.1 (and it rewrites the request's host to
+id.bento.page, so the host cannot be the test either). A deployed directory
+has `MAILER = "ses"` and no `DEV`. While an
 incident is open a new browser is refused (D1), so the drill seeds before it
 opens; a local directory left with an open incident by an interrupted drill
 must have it closed first. The rig runs the same drill in process.
