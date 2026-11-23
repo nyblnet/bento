@@ -25,6 +25,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   identityAgent, detectIdentityAgentForTest as detect, IDENTITY_CONTRACT, IDENTITY_GLOBAL, VOUCHED_BY_MAX, isVoucher,
+  RESOLVED_FIELDS, RESOLVED_G1_FIELDS,
 } from '../kernel/src/identity.ts'
 
 let failures = 0
@@ -306,6 +307,34 @@ console.log('\nvouchedBy is the voucher alone: every qualifier is its own field 
     ['revoked', "false | 'signout' | 'incident'"], ['managedBy', 'string'], ['unconfirmedSince', 'number']] as const)
     ok(body.includes(`\n  ${f}?: ${t}\n`), `ResolvedIdentity.${f}?: ${t}`)
   ok(!/passkey sign-in\)", ", unconfirmed/.test(src), 'identity.ts no longer tells agents to write qualifiers into vouchedBy')
+}
+
+// A document cannot tell a field that does not apply from one a relay dropped,
+// and four of them (revoked, resetAt, rosterChangedAt, unconfirmedSince) are the
+// STRONGER claim when missing. So a complete answer says so: `fields` is the
+// LAST field of ResolvedIdentity, and RESOLVED_G1_FIELDS names exactly the
+// optional fields before it, in order, so a field added to the interface but
+// not to the list (or the reverse) turns this red, and a relay porting the list
+// forwards every one (security-ruling-962 C1, P1).
+console.log('\nthe completeness marker: an answer says it carries every G field')
+{
+  ok(RESOLVED_FIELDS === 'g1', "RESOLVED_FIELDS is 'g1'")
+  const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'kernel/src/identity.ts'), 'utf8')
+  const start = src.indexOf('export interface ResolvedIdentity {')
+  const body = src.slice(start, src.indexOf('\n}', start))
+  // field lines only (two-space indent, a name, a type): doc comments start with /** or *
+  const names = [...body.matchAll(/\n  (\w+)(\??):/g)].map((m) => [m[1], m[2] === '?'] as const)
+  ok(names.length > 0 && names[names.length - 1][0] === 'fields' && names[names.length - 1][1], 'fields? is the last field of ResolvedIdentity')
+  ok(body.includes("\n  fields?: 'g1'\n") || body.endsWith("\n  fields?: 'g1'"), "ResolvedIdentity.fields?: 'g1'")
+  const opt = names.filter(([n, o]) => o && n !== 'fields').map(([n]) => n)
+  ok(JSON.stringify(opt) === JSON.stringify([...RESOLVED_G1_FIELDS]),
+    `RESOLVED_G1_FIELDS is exactly the optional fields before the marker (${opt.join(',')} vs ${RESOLVED_G1_FIELDS.join(',')})`)
+  const required = names.filter(([, o]) => !o).map(([n]) => n)
+  ok(JSON.stringify(required) === JSON.stringify(['name', 'email', 'vouchedBy', 'accountPub', 'firstSeen', 'changed']),
+    `the six required fields are unchanged (${required.join(',')})`)
+  for (const f of ['revoked', 'resetAt', 'rosterChangedAt', 'unconfirmedSince'])
+    ok((RESOLVED_G1_FIELDS as readonly string[]).includes(f), `a relay must forward ${f} (missing reads stronger)`)
+  ok(Object.isFrozen(RESOLVED_G1_FIELDS), 'RESOLVED_G1_FIELDS is frozen')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
