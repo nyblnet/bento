@@ -433,6 +433,29 @@ const afterQ = { pk1: mem('pk', 'pk1', T), pk2q: mem('pk', 'pk2', T + 73 * H, tr
   }
   reject('x/pinned-q-adel-other-head', 'the pinned q link carries an adel. naming another head than the one it replaced: no target, so no removal',
     bad.slice(3), 'evidence', await sha256b64u(bad[3].ros))
+  // security's review of the layout (#988 N1, N2): the address rule from a pin, and a consent key's voided deletion
+  const badAddr = await fromB3({ ...QA, voided: { ...VA, address: 'bob@example.com' } }, XS)
+  reject('x/pinned-q-adel-other-address', 'the pinned q link carries an adel. for another account: no target, so no removal',
+    badAddr.slice(3), 'evidence', await sha256b64u(badAddr[3].ros))
+  {
+    // from L3 ({ck1, pk1, pk2, rk1}): ck1 asks to delete the account from its app (a roster cns.); the person removes it
+    const QC: Spec = { members: [['ck', 'ck1', 'q'], ['pk', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1']], req: T + 240 * H, rip: T + 240 * H, auth: 'q',
+      voided: { ...VA, signer: 'ck1', proof: 'cns' } }
+    const XC: Spec = { members: [['pk', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1']], req: T + 240 * H, rip: T + 312 * H, auth: 'x' }
+    const atL3 = { pk1: mem('pk', 'pk1', T), pk2: mem('pk', 'pk2', T + 73 * H), rk1: mem('rk', 'rk1', T + 152 * H) }
+    const ckq = await chainOf([...BASE.slice(0, 4), QC])
+    accept('ok/q-voided-adel-by-consent-key', 'the voided deletion request was made by a consent key (a roster cns. and its signature)',
+      ckq, { seq: 4, ripenedAt: T + 240 * H, members: [mem('ck', 'ck1', T + 232 * H, true), atL3.pk1, atL3.pk2, atL3.rk1], createdAt: T, lastResetAt: null, sinceExact: true })
+    reject('q/voided-adel-consent-other-challenge', "the consent key's cns. for the voided deletion is bound to another challenge than the adel.'s own nonce",
+      await chainOf([...BASE.slice(0, 4), { ...QC, voided: { ...VA, signer: 'ck1', proof: 'cns', cns: { challenge: nonce(78) } } }]), 'voided-consent-transcript')
+    const ckx = await chainOf([...BASE.slice(0, 4), QC, XC])
+    accept('ok/pinned-q-adel-by-consent-key-then-x', "from a pin of the q link that voided ck1's deletion request: the removal of ck1, the target its evidence names",
+      ckx.slice(4), { seq: 5, ripenedAt: T + 312 * H, members: [mem('pk', 'pk1', T + 240 * H), mem('pk', 'pk2', T + 240 * H), mem('rk', 'rk1', T + 240 * H)], createdAt: null, lastResetAt: null, sinceExact: false },
+      await sha256b64u(ckx[4].ros))
+    const ckxBad = await chainOf([...BASE.slice(0, 4), { ...QC, voided: { ...VA, signer: 'ck1', proof: 'cns', cns: { challenge: nonce(78) } } }, XC])
+    reject('x/pinned-q-adel-consent-other-challenge', "from a pin of a q link whose consent-key evidence is bound to another challenge: no target, so no removal",
+      ckxBad.slice(4), 'evidence', await sha256b64u(ckxBad[4].ros))
+  }
 }
 
 // --- security's rows from the review of the authority word (#925): C1′, the x/u target rule (C4), nits -------
@@ -840,6 +863,7 @@ const afterDeletion: AfterRow[] = []
   await rec({ name: 'rdel/by-unknown', about: 'the cause word is m, e or o', fields: { by: 'x' }, reason: 'grammar' })
   await rec({ name: 'rdel/deleted-before-requested', about: 'carried out before it was asked for', fields: { by: 'o', deletedAt: REQ - 1000 }, reason: 'grammar' })
   await rec({ name: 'rdel/name-not-a-hash', about: 'the storage name is 32 bytes, base64url', fields: { accountName: b64uEnc(te.encode(ADDRESS)) }, reason: 'grammar' })
+  await rec({ name: 'rdel/kid-grammar', about: 'the kid is not a key id (capital letters): a grammar error, before any pin is read', fields: { kid: 'Dir-1' }, reason: 'grammar' })
   await rec({ name: 'rdel/tomb-text', about: 'the retired binding era\'s tomb. is not a deletion record', text: `tomb.${HEAD}.4.${DEL}.holder.dir-1`, reason: 'grammar' })
 
   // after the record: what the peer shows, given the chain the directory serves now at the address (seq 0 up)
