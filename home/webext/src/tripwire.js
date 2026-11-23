@@ -158,13 +158,15 @@ function onRequest(d) {
   // headers the library worker's own requests are held to (security ruling on #983, M1)
   const preload = hv('service-worker-navigation-preload')
   const lang = hv('accept-language'), ua = hv('user-agent')
+  // a Cookie on a library navigation: whether one was sent, never its value (security ruling on #983, M4)
+  const cookie = hv('cookie') != null
   // the browser-filled values come from any library document request, a framed one included: a library
   // page in a frame registers the worker too, and its install must not read as "no navigation" (measured:
   // the rig's framed row, five false findings before sub_frame counted here)
   const nav = { [NAV_KEY]: { acceptLanguage: lang == null ? null : cut(lang), userAgent: ua == null ? null : cut(ua) } }
   if (d.type !== 'main_frame') { void chrome.storage.session.set(nav); return }
   void chrome.storage.session.set({
-    [`${REQUEST_PREFIX}${d.tabId}:${d.frameId}`]: { url: noHash(d.url), at: d.timeStamp, site: site == null ? null : cut(site), preload: preload == null ? null : cut(preload) },
+    [`${REQUEST_PREFIX}${d.tabId}:${d.frameId}`]: { url: noHash(d.url), at: d.timeStamp, site: site == null ? null : cut(site), preload: preload == null ? null : cut(preload), cookie },
     ...nav,
   })
 }
@@ -193,7 +195,8 @@ export function workerRequestOf(d) {
   // cannot be ruled out as it, so it goes on to be judged (worker-request-unattributed), never dropped
   if (d.initiator != null && d.initiator !== LIBRARY_ORIGIN) return null
   // every header: their names and values are held to the honest worker's (security ruling on #983, M1)
-  const headers = Array.isArray(d.requestHeaders) ? d.requestHeaders.slice(0, 64).map((h) => ({ name: cut(String(h.name ?? '')), value: cut(h.value ?? '') })) : null
+  // a Cookie's value is never recorded: its presence is the finding (security ruling on #983, M4)
+  const headers = Array.isArray(d.requestHeaders) ? d.requestHeaders.slice(0, 64).map((h) => ({ name: cut(String(h.name ?? '')), value: String(h.name ?? '').toLowerCase() === 'cookie' ? '(not recorded)' : cut(h.value ?? '') })) : null
   return { url: cut(noHash(d.url)), method: cut(d.method ?? ''), type: cut(d.type ?? ''), initiator: d.initiator == null ? null : cut(d.initiator), headers }
 }
 function onWorkerRequest(d) {
@@ -458,6 +461,7 @@ export async function tripwireObserve(sender, obs, net = (u, o) => fetch(u, o)) 
     cspFrom: fresh ? 'navigation' : role === 'library' && obs.bytes && !crossSite ? 'cache' : null,
     cacheControl: fresh && Array.isArray(h.cacheControl) ? h.cacheControl : null, crossSite,
     preload: matches(q, url, obs.timeOrigin) && typeof q.preload === 'string' ? q.preload : null,
+    cookie: matches(q, url, obs.timeOrigin) && q.cookie === true,
     refresh: fresh && Array.isArray(h.refresh) && h.refresh.length ? h.refresh : earlyRefresh,
     workers: workersIn ? [] : null,
     cache: cacheIn ? cacheIn.slice(0, MAX_CACHE).map((c) => ({ url: cut(c.url), sha256: cut(c.sha256) })) : null,

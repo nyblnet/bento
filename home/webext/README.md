@@ -417,7 +417,14 @@ home.bento.page has never been checked.
   copy cannot be read. What the tripwire holds that worker to is its own
   requests (above), with their headers held to the honest worker's and the
   navigation preload header to the browser's `true` (a worker's
-  `setHeaderValue` is a mismatch on the page, rule `preload-header`). That
+  `setHeaderValue` is a mismatch on the page, rule `preload-header`). `Cookie`
+  and `Referer` are held to absent: a worker chooses their values
+  (`cookieStore.set`, fetch's `referrer`) although no script may set them by
+  name, and the honest worker sends neither (the browser's own update check
+  names the script's URL as its Referer, and only that is allowed); a
+  `Cookie` on a library
+  navigation is a mismatch on the page too (rule `request-cookie`), so
+  home.bento.page must set no cookie of its own, a CDN's included. That
   does not verify its bytes, and it sees only what the worker fetches. Without
   making any request, a cloaked worker can change the text and attribute
   values of every page it answers (same length, no new element; measured:

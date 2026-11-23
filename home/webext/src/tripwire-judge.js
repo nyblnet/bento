@@ -228,10 +228,14 @@ export function markupFailures(obs) {
  * unless a worker set another value (navigationPreload.setHeaderValue): the honest worker never does,
  * and a value is bytes the worker sends out on every later navigation (security ruling on #983, M1).
  * Absent (no worker, or no preload): nothing to judge.
+ * A Cookie on the library's navigation: the library sets none, so one is a value something on its
+ * origin chose (a worker's cookieStore.set), sent out on every later request (security ruling on
+ * #983, M4). Only its presence is recorded, never its value. Absent or unread: nothing to judge.
  */
 export function headerFailures(obs) {
   const out = (obs.refresh ?? []).length ? [{ rule: 'refresh-header', got: obs.refresh }] : []
   if (obs.preload != null && obs.preload !== 'true') out.push({ rule: 'preload-header', got: obs.preload })
+  if (obs.cookie === true) out.push({ rule: 'request-cookie' })
   return out
 }
 
@@ -302,12 +306,21 @@ const pathOf = (url) => { try { return new URL(url).pathname || '/' } catch { re
  *     set) and Service-Worker `script`. A worker re-fetching its own script
  *     (to launder a cloaked copy) carries none of them.
  *   - its request headers held to the honest worker's (security ruling on
- *     #983, M1: a header is bytes the worker chooses). A header no script can
- *     set (the fetch spec's forbidden names, Sec-* and Proxy-*) is the
- *     browser's. Every other one must be one the honest worker's requests
- *     carry, with the value they carry (measured, Chromium 149: the install's
- *     precache fetches and the browser's script fetch and update check):
- *     Accept `*\/*`, Service-Worker `script`, and Accept-Language and
+ *     #983, M1: a header is bytes the worker chooses). Cookie and Referer are
+ *     forbidden NAMES whose VALUES a worker still chooses (cookieStore.set,
+ *     fetch's `referrer` with an unsafe-url policy; security ruling on #983,
+ *     M4), and the honest worker's requests carry neither (measured, Chromium
+ *     149: its precache fetches omit credentials, and the library's
+ *     Referrer-Policy is no-referrer), so either one is a finding, but for
+ *     the browser's own update check of the worker script, whose Referer is
+ *     the script's own URL (measured: a soft update after a navigation). The other
+ *     forbidden names, Sec-* and Proxy-* are the browser's: their values are
+ *     its settings, or one of the few the fetch spec derives from the
+ *     request's mode and destination (which requests it makes: the covert
+ *     channel below). Every other header must be one the honest worker's
+ *     requests carry, with the value they carry (measured, Chromium 149: the
+ *     install's precache fetches and the browser's script fetch and update
+ *     check): Accept `*\/*`, Service-Worker `script`, and Accept-Language and
  *     User-Agent equal to what the library's latest navigation sent
  *     (`ctx.nav`). Any other name, or another value, is a finding; so are
  *     headers that were not read, and a navigation record that is absent.
@@ -331,29 +344,39 @@ export function workerRequestFailures(req, list, origin, ctx = {}) {
   if (String(req.url).split('#')[0].includes('?')) why('a query')
   const p = u.pathname || '/'
   if (!list.releases.some((r) => r.origins[origin]?.files[p] !== undefined)) why('a path no release serves')
-  if (list.releases.some((r) => (r.workers ?? []).includes(p))) {
-    const h = (name) => (Array.isArray(req.headers) ? req.headers.find((x) => String(x?.name).toLowerCase() === name)?.value ?? null : null)
-    if (!(req.type === 'script' && h('sec-fetch-dest') === 'serviceworker' && h('service-worker') === 'script')) why('the worker script, not fetched as the browser\'s worker script')
-  }
-  for (const w of requestHeaderProblems(req.headers, ctx.nav)) why(w)
+  const h = (name) => (Array.isArray(req.headers) ? req.headers.find((x) => String(x?.name).toLowerCase() === name)?.value ?? null : null)
+  const browserScript = req.type === 'script' && h('sec-fetch-dest') === 'serviceworker' && h('service-worker') === 'script'
+  if (list.releases.some((r) => (r.workers ?? []).includes(p)) && !browserScript) why('the worker script, not fetched as the browser\'s worker script')
+  // the browser's own update check names the script itself as its Referer (MEASURED, Chromium 149: a soft
+  // update after a navigation; the install's fetch and update() carry none): its value, not the worker's
+  const ownReferer = browserScript ? `${u.origin}${p}` : null
+  for (const w of requestHeaderProblems(req.headers, ctx.nav, ownReferer)) why(w)
   return out
 }
 
-// request header names no script can set (the fetch spec's forbidden request-header names): the browser's
+// forbidden names whose values a script still chooses (cookieStore, fetch's referrer): never on the honest
+// worker's requests (security ruling on #983, M4)
+const ABSENT_REQUEST = new Set(['cookie', 'referer'])
+// request header names no script can set (the fetch spec's other forbidden request-header names): the browser's
 const FORBIDDEN_REQUEST = new Set(['accept-charset', 'accept-encoding', 'access-control-request-headers', 'access-control-request-method',
-  'connection', 'content-length', 'cookie', 'cookie2', 'date', 'dnt', 'expect', 'host', 'keep-alive', 'origin', 'referer',
+  'connection', 'content-length', 'cookie2', 'date', 'dnt', 'expect', 'host', 'keep-alive', 'origin',
   'set-cookie', 'te', 'trailer', 'transfer-encoding', 'upgrade', 'via'])
 // the script-settable headers the honest worker's requests carry, each held to the value it carries (measured)
 const HELD_REQUEST = new Map([['accept', ['*/*']], ['service-worker', ['script']]])
 // the two the browser fills from its own settings: held to what the library's latest navigation sent
 const HELD_FROM_NAV = new Map([['accept-language', 'acceptLanguage'], ['user-agent', 'userAgent']])
-/** Why a worker request's headers are not the honest worker's (empty when they are). */
-export function requestHeaderProblems(headers, nav) {
+/**
+ * Why a worker request's headers are not the honest worker's (empty when they are). `ownReferer`: on
+ * the browser's own worker-script fetch, the one Referer it may carry (the script's own URL), else null.
+ */
+export function requestHeaderProblems(headers, nav, ownReferer = null) {
   if (!Array.isArray(headers)) return ['its request headers were not read']
   const out = []
   for (const x of headers) {
     const n = String(x?.name ?? '').toLowerCase()
     const v = String(x?.value ?? '')
+    if (n === 'referer' && ownReferer != null && v === ownReferer) continue
+    if (ABSENT_REQUEST.has(n)) { out.push(`a header the honest worker does not send: ${n}`); continue }
     if (FORBIDDEN_REQUEST.has(n) || n.startsWith('sec-') || n.startsWith('proxy-')) continue
     if (HELD_REQUEST.has(n)) { if (!HELD_REQUEST.get(n).includes(v)) out.push(`a header the honest worker does not send: ${n} with another value`); continue }
     if (HELD_FROM_NAV.has(n)) {

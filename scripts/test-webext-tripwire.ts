@@ -260,7 +260,7 @@ section('the library worker\'s own requests (security ruling #954 C5)')
   // (Chromium 149: the install's precache fetches, the browser's script fetch and update check)
   const nav = { acceptLanguage: 'en-GB,en;q=0.9', userAgent: 'Mozilla/5.0 (test) Chrome/149' }
   const honestH = [{ name: 'Accept', value: '*/*' }, { name: 'Accept-Encoding', value: 'gzip, deflate, br, zstd' }, { name: 'Accept-Language', value: nav.acceptLanguage },
-    { name: 'Referer', value: `${O}/sw.js` }, { name: 'sec-ch-ua', value: '"Chromium";v="149"' }, { name: 'sec-ch-ua-mobile', value: '?0' }, { name: 'sec-ch-ua-platform', value: '"macOS"' },
+    { name: 'sec-ch-ua', value: '"Chromium";v="149"' }, { name: 'sec-ch-ua-mobile', value: '?0' }, { name: 'sec-ch-ua-platform', value: '"macOS"' },
     { name: 'Sec-Fetch-Dest', value: 'empty' }, { name: 'Sec-Fetch-Mode', value: 'cors' }, { name: 'Sec-Fetch-Site', value: 'same-origin' }, { name: 'User-Agent', value: nav.userAgent }]
   const wh = (headers: unknown, n: unknown = nav) => J.workerRequestFailures(req({ headers }), list1, O, { nav: n }).map((f: any) => f.why ?? f.rule).join('+')
   ok(wh(honestH) === '', `the honest worker's request headers: allowed (positive control on the header read; ${wh(honestH)})`)
@@ -271,7 +271,17 @@ section('the library worker\'s own requests (security ruling #954 C5)')
   ok(wh(honestH, null) === 'a header with no navigation to hold it to: accept-language+a header with no navigation to hold it to: user-agent', 'navigation record ABSENT: the browser-filled headers cannot be held, a finding, never a pass')
   ok(wh(honestH, {}) !== '', 'a navigation record with its fields ABSENT: the same')
   ok(wh([{ name: 'Cache-Control', value: 'no-cache' }]) !== '' && wh([{ name: 'Content-Type', value: 'text/plain' }]) !== '', 'Cache-Control and Content-Type, which the honest worker never sends: findings')
-  ok(wh([{ name: 'Cookie', value: 'a=b' }, { name: 'Sec-Anything', value: 'x' }, { name: 'Proxy-Thing', value: 'x' }, { name: 'Origin', value: O }]) === '', 'headers no script can set (forbidden names, Sec-*, Proxy-*) are the browser\'s: allowed')
+  ok(wh([{ name: 'Sec-Anything', value: 'x' }, { name: 'Proxy-Thing', value: 'x' }, { name: 'Origin', value: O }, { name: 'Connection', value: 'keep-alive' }]) === '', 'headers no script can set or choose (the other forbidden names, Sec-*, Proxy-*) are the browser\'s: allowed')
+  // security ruling on #983, M4: forbidden NAMES whose VALUES a worker chooses (cookieStore, fetch's referrer)
+  ok(wh([...honestH, { name: 'Cookie', value: 'x=secret' }]) === 'a header the honest worker does not send: cookie', 'a Cookie (a worker\'s cookieStore.set): a finding, though no script may set it by name')
+  ok(wh([...honestH, { name: 'Referer', value: `${O}/secret?x=1` }]) === 'a header the honest worker does not send: referer', 'a Referer (fetch\'s referrer, unsafe-url): a finding')
+  ok(wh([...honestH, { name: 'REFERER', value: `${O}/` }]) !== '' && wh([...honestH, { name: 'cookie', value: '' }]) !== '', 'any Referer, any Cookie, even an empty one, in any case: a finding (the honest worker sends neither)')
+  // the browser's own update check names the script as its Referer (MEASURED, Chromium 149: a soft update)
+  const scriptH = (ref: string | null) => [...honestH.filter((x) => x.name !== 'Sec-Fetch-Dest'), ...H('script', 'serviceworker'), ...(ref == null ? [] : [{ name: 'Referer', value: ref }])]
+  const ws = (headers: unknown, url = `${O}/sw.js`, type = 'script') => J.workerRequestFailures(req({ url, type, headers }), list1, O, { nav }).map((f: any) => f.why ?? f.rule).join('+')
+  ok(ws(scriptH(`${O}/sw.js`)) === '' && ws(scriptH(null)) === '', 'the browser\'s worker-script fetch with Referer = the script\'s own URL, or none: allowed (positive control)')
+  ok(ws(scriptH(`${O}/sw.js?x`)) === 'a header the honest worker does not send: referer' && ws(scriptH(`${O}/`)) !== '' && ws(scriptH('https://evil.example/sw.js')) !== '', 'that fetch with any other Referer (a query, another path, another origin): a finding')
+  ok(ws([...honestH, { name: 'Referer', value: `${O}/` }], `${O}/`, 'script') === 'a header the honest worker does not send: referer', 'a request\'s own URL as its Referer, without the browser\'s worker-script headers: a finding (only the browser\'s script fetch may carry it)')
   ok(wh([{ name: 'SERVICE-WORKER', value: 'script' }]) === '' && wh([{ name: 'Service-Worker', value: 'x' }]) !== '', 'header names are read case-blind; Service-Worker only as script')
 
   // the routing in front of the judge (security ruling on #983, M3): tripwire.js's workerRequestOf
@@ -287,11 +297,15 @@ section('the library worker\'s own requests (security ruling #954 C5)')
   ok(routed(d({ url: 'https://evil.example/x' })) === 'ignored', 'another origin: ignored (the listener never sees one)')
   ok(routed(d({ requestHeaders: undefined })) === 'worker-request', 'requestHeaders ABSENT: judged, a finding')
   ok(routed(d({ requestHeaders: [...honestH, { name: 'x-exfil', value: 's' }] })) === 'worker-request', 'a header of its own, through the routing: a finding')
+  ok(routed(d({ requestHeaders: [...honestH, { name: 'Cookie', value: 'x=s' }] })) === 'worker-request' && routed(d({ requestHeaders: [...honestH, { name: 'Referer', value: `${O}/s` }] })) === 'worker-request', 'a Cookie or a Referer, through the routing: a finding (the routing keeps them)')
 
   // the navigation preload header value (security ruling on #983, M1)
   const pf = (o: unknown) => J.headerFailures(o).map((f: any) => f.rule).join('+')
   ok(pf({ preload: 'true' }) === '' && pf({}) === '' && pf({ preload: null }) === '', 'Service-Worker-Navigation-Preload: true, or absent: nothing to say')
   ok(pf({ preload: 'secret' }) === 'preload-header' && pf({ preload: '' }) === 'preload-header', 'any other value (a worker\'s setHeaderValue): preload-header')
+  // a Cookie on the library's navigation (security ruling on #983, M4): recorded as present, never its value
+  ok(pf({ cookie: true }) === 'request-cookie' && J.classOf(J.headerFailures({ cookie: true })) === 'tampered', 'a Cookie on the navigation: request-cookie, class tampered')
+  ok(pf({ cookie: false }) === '' && pf({ cookie: null }) === '' && pf({}) === '' && pf({ cookie: 'x=1' }) === '', 'no Cookie, an unread record, or the field ABSENT: nothing to say (only a recorded true counts)')
   const twSrc2 = fs.readFileSync(path.join(EXT, 'src/tripwire.js'), 'utf8')
   ok(/onSendHeaders\.addListener\(onWorkerRequest, \{ urls: \[`\$\{LIBRARY_ORIGIN\}\/\*`\], tabId: -1 \}, \['requestHeaders', 'extraHeaders'\]\)/.test(twSrc2), 'the listener: the library origin only, tabId -1, with extraHeaders (Service-Worker and Sec-Fetch-Dest are only visible with it)')
 }

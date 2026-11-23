@@ -29,13 +29,20 @@
  *   TW_BUILD_MUTANT='{"file":"sw.ts","from":"…","to":"…"}'   builds release A with a home/web source
  *   mutant (BENTO_HOME_WEB_MUTANT, --dev only), e.g. the worker without navigation preload
  *
+ *   TW_H2=1 TW_ROWS=c5-honest-worker,c5-honest-soft-update   serves the library over HTTPS and
+ *   HTTP/2 (a throwaway certificate made with openssl, trusted by its SPKI hash only), the shape
+ *   home.bento.page has: the honest worker's request headers there are the ones the C5 hold is
+ *   measured against (security's second review of #983, M5). Rows that open a deck need the
+ *   http frame site, which an https library cannot frame: run the C5 rows only.
+ *
  * Every row names the rule it guards; scripts/test-webext-tripwire-mutants.mjs
  * turns each rule off and requires that row to go red.
  */
 import { execFileSync } from 'node:child_process'
-import { createHash, webcrypto } from 'node:crypto'
+import { createHash, createPublicKey, webcrypto } from 'node:crypto'
 import fs from 'node:fs'
 import http from 'node:http'
+import http2 from 'node:http2'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -57,7 +64,8 @@ process.on('exit', () => fs.rmSync(work, { recursive: true, force: true }))
 
 // --- origins and builds -------------------------------------------------------
 const [pl, pf, pr] = await freePorts(3)
-const LIB = `http://127.0.0.1:${pl}`, FRM = `http://localhost:${pf}`, CHAN = `http://127.0.0.1:${pr}`
+const H2 = !!process.env.TW_H2
+const LIB = `${H2 ? 'https' : 'http'}://127.0.0.1:${pl}`, FRM = `http://localhost:${pf}`, CHAN = `http://127.0.0.1:${pr}`
 const LIST_PATH = '/releases/home-web/served.json'
 const A = path.join(work, 'A')
 const BUILD_MUTANT = process.env.TW_BUILD_MUTANT || null
@@ -179,10 +187,19 @@ const releaseB = siteFiles(path.join(B, 'library'))
 // a file may carry `status` and `hold` (send the body, keep the response open); `fallback` answers unlisted library paths
 const HELD = []
 const state = { lib: new Map(honest.lib), frame: new Map(honest.frame), list: null, hits: [], heads: [], fallback: null, scripts: new Map([...await buildScriptTexts(A), ...await buildScriptTexts(B)]) }
-const serve = (key) => http.createServer((req, res) => {
+// TW_H2: a throwaway certificate for 127.0.0.1, which the browser trusts by its SPKI hash alone
+const TLS = H2 ? (() => {
+  const key = path.join(work, 'tls-key.pem'), cert = path.join(work, 'tls-cert.pem')
+  execFileSync('openssl', ['req', '-x509', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:prime256v1', '-nodes', '-days', '2', '-subj', '/CN=127.0.0.1',
+    '-addext', 'subjectAltName=IP:127.0.0.1', '-keyout', key, '-out', cert], { stdio: 'ignore' })
+  const pem = fs.readFileSync(cert, 'utf8')
+  const spki = createHash('sha256').update(createPublicKey(pem).export({ type: 'spki', format: 'der' })).digest('base64')
+  return { key: fs.readFileSync(key), cert: pem, spki }
+})() : null
+const serve = (key) => ((H2 && key === 'lib') ? (h) => http2.createSecureServer({ key: TLS.key, cert: TLS.cert, allowHTTP1: true }, h) : (h) => http.createServer(h))((req, res) => {
   const p = new URL(req.url, 'http://x').pathname
   state.hits.push(`${key} ${p}`)
-  state.heads.push({ key, p, h: req.headers })
+  state.heads.push({ key, p, h: req.headers, v: req.httpVersion })
   if (key === 'chan') {
     // the inline scripts' text, published beside the list (scripts/<sha256>.js)
     const sm = /^\/releases\/home-web\/scripts\/([0-9a-f]{64})\.js$/.exec(p)
@@ -234,10 +251,10 @@ fs.writeFileSync(configPath, [
 const man = JSON.parse(fs.readFileSync(path.join(EXT, 'manifest.json'), 'utf8'))
 const twScript = man.content_scripts.find((c) => c.js.includes('src/tripwire-observe.js'))
 if (!twScript || JSON.stringify(twScript.matches) !== JSON.stringify(['https://home.bento.page/*']) || twScript.all_frames !== false) throw new Error('manifest.json no longer has the tripwire content script this rig re-points')
-twScript.matches = ['http://127.0.0.1/*']
+twScript.matches = [H2 ? 'https://127.0.0.1/*' : 'http://127.0.0.1/*']
 // the frame site, as the shipped manifest will name it once its domain is chosen: in frames
 man.content_scripts.push({ ...twScript, matches: ['http://localhost/*'], all_frames: true, match_origin_as_fallback: undefined })
-man.host_permissions = man.host_permissions.filter((h) => h !== 'https://home.bento.page/*').concat(['http://127.0.0.1/*', 'http://localhost/*'])
+man.host_permissions = man.host_permissions.filter((h) => h !== 'https://home.bento.page/*').concat(['http://127.0.0.1/*', 'http://localhost/*', ...(H2 ? ['https://127.0.0.1/*'] : [])])
 fs.writeFileSync(path.join(EXT, 'manifest.json'), JSON.stringify(man, null, 2))
 for (const m of MUTANT ?? []) {
   const f = path.join(EXT, m.file)
@@ -251,7 +268,8 @@ for (const m of MUTANT ?? []) {
 // --- the browser ----------------------------------------------------------------
 const ctx = await chromium.launchPersistentContext(path.join(work, 'profile'), {
   channel: 'chromium', headless: !process.env.HEADED,
-  args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`, '--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1'],
+  args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`, '--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1',
+    ...(H2 ? [`--ignore-certificate-errors-spki-list=${TLS.spki}`] : [])],
 })
 const sockets = []
 await ctx.routeWebSocket(/.*/, (ws) => { sockets.push(ws.url()); ws.close() })
@@ -316,6 +334,8 @@ async function fresh({ list = list1, held = null, lib = {}, frame = {}, keepWork
     await cdp.detach()
     await new Promise((r) => setTimeout(r, 300))
   }
+  // a cookie a row's worker set (worker-cookie) must not ride into the next row's requests
+  await ctx.clearCookies()
   await store.reset()
   for (const r of HELD.splice(0)) r.destroy()
   state.fallback = null
@@ -1190,7 +1210,7 @@ if (STAGE3.some(row)) {
 // bytes. What the tripwire can still see is what that worker DOES: its own requests (webRequest, tabId -1,
 // initiator the library origin), held to the honest worker's: GET, no query, a path the release serves,
 // and /sw.js only as the browser's worker-script fetch.
-const C5_ROWS = ['c5-honest-worker', 'sw-cloak', 'sw-cloak-launder', 'worker-query', 'worker-unlisted-path', 'worker-post', 'worker-header', 'worker-header-held', 'preload-header']
+const C5_ROWS = ['c5-honest-worker', 'sw-cloak', 'sw-cloak-launder', 'worker-query', 'worker-unlisted-path', 'worker-post', 'worker-header', 'worker-header-held', 'preload-header', 'worker-cookie', 'worker-referer', 'c5-honest-soft-update']
 const workerEvents = async (t0) => (await since(t0)).filter((e) => e.role === 'worker')
 /** The build's worker with `extra` appended: installs (its precache matches its pins) and runs `extra` too. */
 const cloakOf = (extra) => ({ body: Buffer.concat([BUILD_SW, Buffer.from(`\n${extra}\n`)]), headers: { ...honest.lib.get('/sw.js').headers } })
@@ -1212,7 +1232,14 @@ if (C5_ROWS.some(row)) {
   if (row('c5-honest-worker')) {
     section('c5-honest-worker: the build\'s own worker installs, answers two visits and an update check  (rule: its own requests are all allowed; positive control)')
     await fresh()
-    const t0 = Date.now(), h0 = state.hits.length
+    // MEASURED, and printed: the header names the extension sees on the worker's requests (tabId -1),
+    // the set the C5 hold is held to; under TW_H2 over HTTPS and HTTP/2 (security's review of #983, M5)
+    await sw.evaluate((lib) => {
+      globalThis.__twSeen = []
+      globalThis.__twSeenFn ??= (d) => { if (d.tabId === -1) globalThis.__twSeen.push(`${new URL(d.url).pathname} ${d.type}: ${(d.requestHeaders ?? []).map((x) => x.name.toLowerCase()).sort().join(',')}`) }
+      chrome.webRequest.onSendHeaders.addListener(globalThis.__twSeenFn, { urls: [`${lib}/*`], tabId: -1 }, ['requestHeaders', 'extraHeaders'])
+    }, LIB)
+    const t0 = Date.now(), h0 = state.hits.length, k0 = state.heads.length
     const ctl = await prime()
     await fresh({ keepWorkers: true })
     const t1 = Date.now()
@@ -1232,6 +1259,27 @@ if (C5_ROWS.some(row)) {
     const evs = (await since(t0)).filter((e) => e.role === 'worker')
     ok(evs.length === 0 && reportTabs().length === 0, `no worker-request finding, no report tab (${JSON.stringify(evs.map((e) => [e.url, whys([e])]))})`)
     void t1
+    const seen = await sw.evaluate(() => { chrome.webRequest.onSendHeaders.removeListener(globalThis.__twSeenFn); return globalThis.__twSeen })
+    for (const x of [...new Set(seen)]) note(`extension saw (tabId -1) ${x}`)
+    const libHeads = state.heads.slice(k0).filter((q) => q.key === 'lib')
+    note(`the library server saw HTTP ${[...new Set(libHeads.map((q) => q.v))].join(', ')}; header names on the worker's /sw.js and precache requests: ${[...new Set(libHeads.filter((q) => q.h['sec-fetch-dest'] !== 'document').map((q) => Object.keys(q.h).filter((k) => !k.startsWith(':')).sort().join(',')))].join(' | ')}`)
+    ok(seen.length >= precache.length, `positive control on the measurement: the extension saw the worker's requests (${seen.length})`)
+    if (H2) ok(libHeads.length > 0 && libHeads.every((q) => q.v === '2.0'), `TW_H2: every library request came over HTTP/2 (${[...new Set(libHeads.map((q) => q.v))].join(', ')})`)
+  }
+  if (row('c5-honest-soft-update')) {
+    section('c5-honest-soft-update: the build\'s worker installs on a first visit; the next navigation brings the browser\'s soft update  (rule: its Referer, the script\'s own URL, is the browser\'s)')
+    await fresh()
+    const t0 = Date.now(), k0 = state.heads.length
+    await page.goto(`${LIB}/`)
+    const ctl = await until(async () => page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state === 'activated'), 20000)
+    await page.goto('about:blank')
+    const v = await visit(page, `${LIB}/`)
+    await sleep(2000)
+    // MEASURED (Chromium 149): this sequence's second /sw.js script fetch carries Referer: <the script's URL>
+    const soft = state.heads.slice(k0).filter((q) => q.key === 'lib' && q.p === '/sw.js' && q.h['service-worker'] === 'script' && q.h.referer === `${LIB}/sw.js`).length
+    ok(ctl && soft > 0, `the worker installed, and the browser's update check named the script as its Referer (${soft} time(s))`)
+    const evs = await workerEvents(t0)
+    ok(v.lib?.verdict === 'ok' && evs.length === 0 && reportTabs().length === 0, `the visit ok, no worker-request finding, no report tab (${v.lib?.verdict} [${rules(v.lib)}] ${JSON.stringify(evs.map((e) => [e.url, whys([e])]))})`)
   }
   if (row('sw-cloak')) {
     section('sw-cloak: the browser\'s worker fetch gets the release\'s worker plus a fetch listener that beacons home  (rule: a worker request to a path no release serves)')
@@ -1290,6 +1338,26 @@ if (C5_ROWS.some(row)) {
     const sent = r.visitHeads.filter((q) => q.p === '/' && q.h['service-worker-navigation-preload'] === 'secret-pre-2').length
     ok(r.ctl && sent > 0, `the cloaked worker is installed and the tab's navigation carried its value to the server (${sent} time(s))`)
     ok(r.v.lib?.verdict === 'mismatch' && rules(r.v.lib).split(',').includes('preload-header') && (r.v.lib.warned ?? []).includes('tab'), `the page: a loud mismatch on preload-header (${r.v.lib?.verdict} [${rules(r.v.lib)}] ${r.v.lib?.warned})`)
+  }
+  // security's second review of #983 (M4): forbidden header NAMES whose VALUES a worker chooses
+  if (row('worker-cookie')) {
+    section('worker-cookie: the cloaked worker sets a cookie (cookieStore) and GETs a listed path with it  (rule: no Cookie on the worker\'s requests, nor on the library\'s navigation)')
+    const r = await underCloak('self.addEventListener("activate",(e)=>e.waitUntil(self.cookieStore.set({name:"x",value:"secret-ck-1"}).then(()=>fetch("/manifest.webmanifest",{cache:"no-store",credentials:"include"})).catch(()=>{})))')
+    const sent = r.heads.filter((q) => String(q.h.cookie ?? '').includes('secret-ck-1'))
+    const onVisit = r.visitHeads.filter((q) => q.p === '/' && String(q.h.cookie ?? '').includes('secret-ck-1')).length
+    ok(r.ctl && sent.some((q) => q.p === '/manifest.webmanifest') && onVisit > 0, `the cloaked worker is installed and its cookie reached the server (${sent.map((q) => q.p).join(' ')}; on the judged navigation ${onVisit})`)
+    const ev = r.evs.find((e) => e.url === `${LIB}/manifest.webmanifest`)
+    ok(ev?.verdict === 'mismatch' && whys([ev]).includes('a header the honest worker does not send: cookie') && ev.class === 'tampered' && (ev.warned ?? []).includes('tab'), `the worker's request: a loud mismatch on its Cookie (${JSON.stringify(r.evs.map((e) => [e.url, whys([e])]))})`)
+    ok(r.v.lib?.verdict === 'mismatch' && rules(r.v.lib).split(',').includes('request-cookie'), `the next visit: a mismatch on the navigation's Cookie (${r.v.lib?.verdict} [${rules(r.v.lib)}])`)
+    ok(!JSON.stringify(await store.log()).includes('secret-ck-1'), 'the record names no cookie value')
+  }
+  if (row('worker-referer')) {
+    section('worker-referer: the cloaked worker GETs a listed path with a Referer of its own (fetch referrer, unsafe-url)  (rule: no Referer on the worker\'s requests)')
+    const r = await underCloak('self.addEventListener("activate",(e)=>e.waitUntil(fetch("/manifest.webmanifest",{cache:"no-store",referrer:"/secret-ref-2?x=secret-ref-q",referrerPolicy:"unsafe-url"}).catch(()=>{})))')
+    const sent = r.heads.filter((q) => q.p === '/manifest.webmanifest' && String(q.h.referer ?? '').includes('secret-ref')).length
+    ok(r.ctl && sent > 0, `the cloaked worker is installed and its Referer reached the server (${sent} time(s))`)
+    const ev = r.evs.find((e) => e.url === `${LIB}/manifest.webmanifest`)
+    ok(ev?.verdict === 'mismatch' && whys([ev]).includes('a header the honest worker does not send: referer') && ev.class === 'tampered' && (ev.warned ?? []).includes('tab'), `a loud mismatch on its Referer (${JSON.stringify(r.evs.map((e) => [e.url, whys([e])]))})`)
   }
   await fresh()
 }

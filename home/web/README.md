@@ -268,8 +268,10 @@ Still open:
   extension's, and the browser installs what it was given. The tripwire holds
   that worker to the honest worker's own requests instead (GET, no query, the
   release's paths, `/sw.js` only as the browser's script fetch, the honest
-  worker's request headers, and the navigation preload header left at the
-  browser's `true`; see `home/webext/README.md`). It does not verify the
+  worker's request headers, no `Cookie` or `Referer` on them, and the
+  navigation preload header left at the browser's `true`; see
+  `home/webext/README.md`). A `Cookie` on a library navigation is a mismatch
+  too, so this host must set no cookie, a CDN's included. It does not verify the
   bytes, and it sees only what such a worker fetches. A cloaked worker can
   still change the text and attribute values of every page it answers (same
   length, no new element) without making any request at all (measured: one

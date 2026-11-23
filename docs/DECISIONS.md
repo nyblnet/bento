@@ -15506,9 +15506,25 @@ What can be seen is what that worker does.
   tied to the worker or ruled out as it, so it is never allowed in silence.
   Its request headers are held too (security's review of #983, measured: a
   worker GET to a listed path carried a header of its own, `x-exfil`, to the
-  server with verdict ok). A header no script can set (the fetch spec's
-  forbidden names, `Sec-*`, `Proxy-*`) is the browser's; every other must be
-  one the honest worker's requests carry, with its value: `Accept: */*`,
+  server with verdict ok). `Cookie` and `Referer` are forbidden header
+  NAMES whose VALUES a worker still chooses (security's second review of
+  #983, measured: `cookieStore.set` then a GET to a listed path sent the
+  worker's cookie, and `fetch(..., { referrer, referrerPolicy: 'unsafe-url' })`
+  sent the worker's Referer, both with verdict ok), and the honest worker's
+  requests carry neither (its precache fetches omit credentials, and the
+  library's `Referrer-Policy` is `no-referrer`), so either one on a worker
+  request is a finding. The one exception is measured too: the browser's own
+  update check of the worker script (a soft update after a navigation) names
+  the script's own URL as its Referer, a value no worker chooses, and that
+  value is allowed on that request only. A `Cookie` on a library navigation
+  is a mismatch on the page too (rule `request-cookie`; only its presence is
+  recorded, never its value), since a worker-set cookie rides every later
+  request. So
+  home.bento.page must set no cookie of its own, a CDN's included. The other
+  forbidden names, `Sec-*` and `Proxy-*` are the browser's: their values are
+  its settings, or one of the few the fetch spec derives from the request's
+  mode and destination, which is the covert channel below. Every other header
+  must be one the honest worker's requests carry, with its value: `Accept: */*`,
   `Service-Worker: script`, and `Accept-Language` and `User-Agent` equal to
   what the library's latest document request sent (top-level or framed: a
   framed library page registers the worker too) (measured: a worker can set
@@ -15543,4 +15559,16 @@ request headers. Added after security's review of #983: rows
 (the header hold off, the held values off, the preload value not judged or not
 recorded), and unit rows that route requests through tripwire.js's
 `workerRequestOf` (an absent initiator must come out as
-`worker-request-unattributed`; dropping it is a red mutant).
+`worker-request-unattributed`; dropping it is a red mutant). Added after
+security's second review: rows `worker-cookie` and `worker-referer` (the
+cloaked worker's cookie and Referer reach the server; each is a worker-request
+finding, and the cookie also a `request-cookie` mismatch on the next visit)
+and `c5-honest-soft-update` (the honest worker's soft update: no finding),
+each with a mutant (Cookie and Referer back among the browser's names; the
+navigation's cookie not recorded); the browser's update-check Referer not allowed).
+The header set was measured over HTTPS and HTTP/2 too (`TW_H2=1`, a
+throwaway certificate trusted by its SPKI hash; a CI step re-runs the C5 rows
+that way): on the wire Chromium adds `priority` (and `cache-control` and
+`pragma` on some requests), but webRequest with `extraHeaders` does not show
+them, so the extension sees the same names as over HTTP/1.1 and the honest
+worker raises no finding. HTTP/3 was not measured.

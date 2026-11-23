@@ -125,7 +125,7 @@ const MUTANTS = [
   { name: 'the worker without navigation preload (C1): cross-site + no-store', row: 'stage3-cross-site-no-store', build: NO_PRELOAD },
   // C5: the library worker's own requests (security ruling #954, F-W)
   { name: 'the library worker\'s requests not watched (C5)', row: 'sw-cloak', file: W, from: "  chrome.webRequest?.onSendHeaders.addListener(onWorkerRequest, { urls: [`${LIBRARY_ORIGIN}/*`], tabId: -1 }, ['requestHeaders', 'extraHeaders'])\n", to: '' },
-  { name: 'the worker script may be fetched by the worker itself (C5)', row: 'sw-cloak-launder', file: J, from: 'if (list.releases.some((r) => (r.workers ?? []).includes(p))) {', to: 'if (false) {' },
+  { name: 'the worker script may be fetched by the worker itself (C5)', row: 'sw-cloak-launder', file: J, from: "if (list.releases.some((r) => (r.workers ?? []).includes(p)) && !browserScript) why(", to: 'if (false) why(' },
   { name: 'a query allowed (C5)', row: 'worker-query', file: J, from: "if (String(req.url).split('#')[0].includes('?')) why('a query')", to: '' },
   { name: 'any path allowed (C5)', row: 'worker-unlisted-path', file: J, from: "if (!list.releases.some((r) => r.origins[origin]?.files[p] !== undefined)) why('a path no release serves')", to: '' },
   { name: 'any method allowed (C5)', row: 'worker-post', file: J, from: "if (req.method !== 'GET') why('not GET')", to: '' },
@@ -134,13 +134,18 @@ const MUTANTS = [
     { file: W, from: '  if (d?.tabId !== -1) return null\n', to: '' },
     { file: W, from: "{ urls: [`${LIBRARY_ORIGIN}/*`], tabId: -1 }", to: "{ urls: [`${LIBRARY_ORIGIN}/*`] }" }] },
   // the worker's request headers and the navigation preload value (security ruling on #983, M1)
-  { name: 'worker request headers not held (C5)', row: 'worker-header', file: J, from: '  for (const w of requestHeaderProblems(req.headers, ctx.nav)) why(w)\n', to: '' },
+  { name: 'worker request headers not held (C5)', row: 'worker-header', file: J, from: '  for (const w of requestHeaderProblems(req.headers, ctx.nav, ownReferer)) why(w)\n', to: '' },
   { name: 'header values not held (C5)', row: 'worker-header-held', edits: [
     { file: J, from: "if (!HELD_REQUEST.get(n).includes(v)) out.push(", to: 'if (false) out.push(' },
     { file: J, from: "      else if (v !== want) out.push(", to: '      else if (false) out.push(' }] },
   { name: 'the preload header value not judged (C5)', row: 'preload-header', file: J, from: "  if (obs.preload != null && obs.preload !== 'true') out.push", to: '  if (false) out.push' },
   { name: 'browser-filled header values read from top-level navigations only (C5)', row: 'framed', file: W, from: "addListener(onRequest, { urls: patterns(), types: ['main_frame', 'sub_frame'] }", to: "addListener(onRequest, { urls: patterns(), types: ['main_frame'] }" },
-  { name: 'the preload header value not recorded (C5)', row: 'preload-header', file: W, from: 'preload: preload == null ? null : cut(preload) },', to: 'preload: null },' },
+  // Cookie and Referer: forbidden names whose values a worker chooses (security's second review of #983, M4)
+  { name: 'Cookie and Referer exempt as the browser\'s (C5)', row: 'worker-cookie', file: J, from: '    if (ABSENT_REQUEST.has(n)) { out.push(`a header the honest worker does not send: ${n}`); continue }', to: '    if (ABSENT_REQUEST.has(n)) continue' },
+  { name: 'Referer exempt as the browser\'s (C5)', row: 'worker-referer', file: J, from: '    if (ABSENT_REQUEST.has(n)) { out.push(', to: "    if (n === 'referer') continue\n    if (ABSENT_REQUEST.has(n)) { out.push(" },
+  { name: 'the navigation\'s Cookie not recorded (C5)', row: 'worker-cookie', file: W, from: "  const cookie = hv('cookie') != null", to: '  const cookie = false' },
+  { name: 'the browser\'s update-check Referer not allowed (C5)', row: 'c5-honest-soft-update', file: J, from: "    if (n === 'referer' && ownReferer != null && v === ownReferer) continue\n", to: '' },
+  { name: 'the preload header value not recorded (C5)', row: 'preload-header', file: W, from: 'preload: preload == null ? null : cut(preload), cookie },', to: 'preload: null, cookie },' },
   // /index.html answered as '/' (security ruling on #964, M1): without it an honest visit reads "unverified"
   // Not registered: the build mutant that drops sw.ts's /index.html line. MEASURED red on macOS Chromium 149
   // (stage3-index: 3 and 2 of 8 honest visits warned without the line, 0 of 8 with it), but CI's Linux
