@@ -27,7 +27,7 @@
 // link to or frame must not be able to open tabs at will.
 
 import { t } from './i18n.js'
-import { acceptServed, verifyServed, judge, judgeEarly, observed, REFRESH_MS } from './tripwire-judge.js'
+import { acceptServed, verifyServed, judge, judgeEarly, observed, classOf, workerRequestFailures, pageRequestFailures, navigationFailures, REFRESH_MS } from './tripwire-judge.js'
 import { KEY, LIBRARY_ORIGIN, FRAME_ORIGINS, LIST_URL } from './tripwire-config.js'
 
 export const LOG_KEY = 'tripwireLog'
@@ -42,7 +42,7 @@ export const ORPHAN_MS = 10000
 /** How long the list may be unreachable before the person is told nothing is being checked. */
 export const NEVER_MS = 3 * 24 * 3600 * 1000
 // caps, again here: the content script is ours, but its numbers are the page's doing
-const MAX_SCRIPTS = 64, MAX_FLAGS = 64, MAX_CACHE = 200, MAX_WORKERS = 16, MAX_STR = 512
+const MAX_SCRIPTS = 64, MAX_FLAGS = 64, MAX_CACHE = 200, MAX_WORKERS = 16, MAX_STR = 512, MAX_ELEMENTS = 4096, MAX_TEXT = 4 * 1024 * 1024
 
 const roleOf = (origin) => (origin === LIBRARY_ORIGIN ? 'library' : FRAME_ORIGINS.includes(origin) ? 'frame' : null)
 const patterns = () => [LIBRARY_ORIGIN, ...FRAME_ORIGINS].map((o) => `${o}/*`)
@@ -51,6 +51,40 @@ const sha = async (buf) => hex(await crypto.subtle.digest('SHA-256', buf))
 const noHash = (u) => String(u).split('#')[0]
 const cut = (x) => String(x).slice(0, MAX_STR)
 const HEX = /^[0-9a-f]{64}$/
+
+/** Element tag names, bounded; going over the bound is a flag. */
+function capElements(list, flags) {
+  const src = Array.isArray(list) ? list : []
+  if (src.length > MAX_ELEMENTS) flags.push('over-cap:elements')
+  return src.slice(0, MAX_ELEMENTS).map((x) => String(x).slice(0, 64))
+}
+
+/**
+ * The published text of a listed inline script, fetched only to check a script
+ * cut short (N4). Pinned by its name: a text whose sha256 is not its name is
+ * not used. Kept for the worker's lifetime.
+ */
+const scriptTexts = new Map()
+async function listedScriptText(net, sha256) {
+  if (scriptTexts.has(sha256)) return scriptTexts.get(sha256)
+  let text = null
+  try {
+    const r = await net(new URL(`scripts/${sha256}.js`, LIST_URL).href, { cache: 'no-store', credentials: 'omit' })
+    if (r.ok) { const t = await r.text(); if (await sha(new TextEncoder().encode(t)) === sha256) text = t }
+  } catch { /* unread: no partial passes */ }
+  if (text != null) scriptTexts.set(sha256, text)
+  return text
+}
+/** partialOk for the judge: is `partial` an exact, strictly shorter prefix of a listed script it could be? */
+async function partialChecker(net, obs, list, origin) {
+  const ok = new Set()
+  const p = obs.partial
+  if (!p || typeof p.text !== 'string' || !Number.isSafeInteger(p.index)) return () => false
+  const shas = new Set()
+  for (const r of list.releases) for (const d of Object.values(r.origins[origin]?.files ?? {})) { const x = d.scripts?.[p.index]; if (x?.sha256) shas.add(x.sha256) }
+  for (const h of shas) { const t = await listedScriptText(net, h); if (t != null && p.text.length < t.length && t.startsWith(p.text)) ok.add(h) }
+  return (h, text) => ok.has(h) && text === p.text
+}
 
 /** One chain for every storage read-modify-write. */
 let chain = Promise.resolve()
@@ -88,6 +122,10 @@ function capFlags(list) {
   return out
 }
 
+/** This navigation's webRequest record, if it is still the one held for the frame (same URL, in the window). */
+const RECORD_WINDOW = 120000
+const matches = (r, url, timeOrigin) => !!r && r.url === url && r.at >= timeOrigin - 1000 && r.at <= timeOrigin + RECORD_WINDOW
+
 /** Navigation headers, kept for the content script's report. Observing only: no blocking listener. */
 function onHeaders(d) {
   if (d.type !== 'main_frame' && d.type !== 'sub_frame') return
@@ -96,7 +134,9 @@ function onHeaders(d) {
   if (!roleOf(origin)) return
   const csp = (d.responseHeaders ?? []).filter((h) => h.name.toLowerCase() === 'content-security-policy').map((h) => cut(h.value ?? ''))
   const cacheControl = (d.responseHeaders ?? []).filter((h) => h.name.toLowerCase() === 'cache-control').map((h) => cut(h.value ?? ''))
-  void chrome.storage.session.set({ [`${HEADERS_PREFIX}${d.tabId}:${d.frameId}`]: { url: noHash(d.url), at: d.timeStamp, status: d.statusCode, csp, cacheControl } })
+  // a Refresh header sends the tab elsewhere with no markup to flag; the honest library never sends one (R4)
+  const refresh = (d.responseHeaders ?? []).filter((h) => h.name.toLowerCase() === 'refresh').map((h) => cut(h.value ?? ''))
+  void chrome.storage.session.set({ [`${HEADERS_PREFIX}${d.tabId}:${d.frameId}`]: { url: noHash(d.url), at: d.timeStamp, status: d.statusCode, csp, cacheControl, refresh } })
 }
 
 /**
@@ -108,12 +148,249 @@ function onHeaders(d) {
  */
 const REQUEST_PREFIX = 'twq:'
 function onRequest(d) {
-  if (d.type !== 'main_frame') return
+  if (d.type !== 'main_frame' && d.type !== 'sub_frame') return
   let origin
   try { origin = new URL(d.url).origin } catch { return }
   if (roleOf(origin) !== 'library') return
-  const site = (d.requestHeaders ?? []).find((h) => h.name.toLowerCase() === 'sec-fetch-site')?.value ?? null
-  void chrome.storage.session.set({ [`${REQUEST_PREFIX}${d.tabId}:${d.frameId}`]: { url: noHash(d.url), at: d.timeStamp, site: site == null ? null : cut(site) } })
+  const hv = (name) => (d.requestHeaders ?? []).find((h) => h.name.toLowerCase() === name)?.value ?? null
+  const site = hv('sec-fetch-site')
+  // the navigation preload header a worker may have set (judged on the page), and the two browser-filled
+  // headers the library worker's own requests are held to (security ruling on #983, M1)
+  const preload = hv('service-worker-navigation-preload')
+  const lang = hv('accept-language'), ua = hv('user-agent')
+  // a Cookie on a library navigation: whether one was sent, never its value (security ruling on #983, M4)
+  const cookie = hv('cookie') != null
+  // the browser-filled values come from any library document request, a framed one included: a library
+  // page in a frame registers the worker too, and its install must not read as "no navigation" (measured:
+  // the rig's framed row, five false findings before sub_frame counted here)
+  const nav = { [NAV_KEY]: { acceptLanguage: lang == null ? null : cut(lang), userAgent: ua == null ? null : cut(ua) } }
+  noteNavigation(d)
+  if (d.type !== 'main_frame') { void chrome.storage.session.set(nav); return }
+  void chrome.storage.session.set({
+    [`${REQUEST_PREFIX}${d.tabId}:${d.frameId}`]: { url: noHash(d.url), at: d.timeStamp, site: site == null ? null : cut(site), preload: preload == null ? null : cut(preload), cookie },
+    ...nav,
+  })
+}
+const NAV_KEY = 'twnav'
+
+/**
+ * Navigations a library document started (security ruling on #983, M7): a meta refresh or Refresh header
+ * on a page the worker rewrote, or the worker's WindowClient.navigate(), sends the tab to a URL of the
+ * worker's choosing, and the navigation preload carries that URL to the server. MEASURED (Chromium 149):
+ * all three are main_frame requests with initiator = the library origin, as is the honest Reload button's
+ * location.reload(); typed, reload, back and forward navigations carry none. So a library-initiated
+ * navigation is held to the page-request URL rules, except one to the URL the tab or frame is on now.
+ * "Is on now" is the last library navigation webRequest showed for that tab and frame, any initiator.
+ * Back and forward made a request every time (measured, headless and headed): a back that restored a
+ * page with no request would leave the record stale, and a Reload there would be a finding (loud), never
+ * a silent pass.
+ */
+// its own prefix: 'twh:' is the headers record's (HEADERS_PREFIX), and sharing it let onHeaders overwrite
+// this record and tripwireObserve remove it, so after the extension's worker slept an honest Reload read
+// as a navigation from nowhere (security ruling on #983, M9). PREFIXES below are checked distinct by the rig.
+const HERE_PREFIX = 'twl:'
+const HERE = new Map()
+/** The navigation to judge, or null when no library document started it (pure: no chrome, so a rig calls it). */
+export function navigationOf(d) {
+  if (d?.type !== 'main_frame' && d?.type !== 'sub_frame') return null
+  if (typeof d.tabId !== 'number' || d.tabId < 0) return null
+  let origin
+  try { origin = new URL(d.url).origin } catch { return null }
+  if (roleOf(origin) !== 'library') return null
+  // typed, reload, back and forward carry no initiator; another site's link carries its own; an opaque
+  // ("null") document is the page judge's (a sandboxed library page reads loud there, measured): none is judged
+  if (d.initiator !== LIBRARY_ORIGIN) return null
+  // the WHOLE URL, uncut: the reload test compares it exactly (a cut URL would let a navigation that shares
+  // the first MAX_STR characters of the one the tab is on pass as that one); the record keeps a cut copy
+  return { url: noHash(d.url), method: cut(d.method ?? ''), type: d.type, initiator: d.initiator, tabId: d.tabId, frameId: typeof d.frameId === 'number' ? d.frameId : 0 }
+}
+// a URL longer than this is not remembered as the one a tab is on: a reload of it is judged, never excused
+const MAX_HERE = 8192
+const hereOf = (u) => { const x = noHash(u); return x.length <= MAX_HERE ? x : '' }
+function noteNavigation(d) {
+  const key = `${HERE_PREFIX}${d.tabId}:${d.frameId}`
+  const req = navigationOf(d)
+  // the URL the tab or frame is on BEFORE this navigation: memory first; after the worker slept, the session
+  // record, read before it is overwritten (the get is issued ahead of the set, and storage keeps that order)
+  const mem = HERE.get(key)
+  const before = req && mem === undefined ? chrome.storage.session.get(key) : null
+  HERE.delete(key)
+  HERE.set(key, hereOf(d.url))
+  if (HERE.size > 256) HERE.delete(HERE.keys().next().value)
+  void chrome.storage.session.set({ [key]: hereOf(d.url) })
+  if (!req) return
+  void Promise.resolve(before)
+    .then((r) => tripwireNavigation(req, undefined, undefined, mem !== undefined ? mem : (typeof r?.[key] === 'string' ? r[key] : null)))
+    .catch(() => {})
+}
+
+/** Judge a navigation a library document started; a finding is recorded and announced on that tab. */
+export async function tripwireNavigation(req, net = (u, o) => fetch(u, o), now = Date.now(), hereUrl = null) {
+  const { current, refresh } = await listFor(net, now)
+  if (!current) return { ok: false, reason: 'no list' }
+  // a redirect is never "a reload of the URL the tab is on": the worker chose where it lands (M8)
+  const failures = navigationFailures(req, current.list, LIBRARY_ORIGIN, { hereUrl: req.arrived === 'redirect' ? null : hereUrl })
+  if (!failures.length) return { ok: true, verdict: 'ok' }
+  const u = (() => { try { return new URL(req.url) } catch { return null } })()
+  const shape = `${req.method} ${cut(u ? u.pathname : req.url)}${String(req.url).includes('?') ? '?' : ''} ${req.type}${req.arrived ? ` ${req.arrived}` : ''} ${failures.map((f) => f.why ?? f.rule).join('+')}`
+  if (!(await firstTime(`${NREQ_PREFIX}${shape}`))) return { ok: true, verdict: 'mismatch', repeat: true }
+  let tab = null
+  try { tab = await chrome.tabs.get(req.tabId) } catch { tab = { id: req.tabId, index: 0 } }
+  const event = {
+    id: newId(now), at: new Date(now).toISOString(), url: cut(req.url), origin: LIBRARY_ORIGIN, role: 'navigation',
+    verdict: 'mismatch', release: null, failures,
+    serial: current.list.serial ?? null, listAt: current.list.at ?? null,
+    list: refresh ? { status: refresh.status, why: refresh.why } : { status: 'held' },
+    observed: { request: true },
+    page: { role: 'navigation', url: cut(req.url), request: { method: req.method, type: req.type, initiator: req.initiator, ...(req.arrived ? { arrived: req.arrived } : {}), from: hereUrl == null || req.arrived ? null : cut(hereUrl) } },
+  }
+  await settle(event, tab, refresh, { verdict: 'mismatch' }, now)
+  return { ok: true, verdict: 'mismatch', id: event.id }
+}
+const NREQ_PREFIX = 'twn:'
+
+/**
+ * A library document that arrived by a same-origin REDIRECT (security ruling on #983, M8). A worker can
+ * answer a typed (no-initiator) navigation with Response.redirect() to a URL of its choosing; MEASURED
+ * (Chromium 149): the redirected leg keeps the absent initiator, so navigationOf does not take it, and the
+ * navigation preload carries its URL to the server. webRequest shows only an aborted first leg (no
+ * onBeforeRedirect). The document that lands knows: its navigation entry's redirectCount, read by the
+ * content script (tripwire-observe.js, isolated world: the page cannot change it). So a library document
+ * whose redirectCount is above 0 is held to the navigation URL rules on its FINAL URL (sender.url, the
+ * browser's): GET (a redirect the honest server makes is GET), no query, a path a release serves; never
+ * excused as a reload. A real server redirect to a served path with no query stays quiet. Not covered: a
+ * redirected leg that commits no document (a 204, a download), and a hop through another origin (the
+ * browser then reports redirectCount 0, and the bytes reach that origin first): both stated in the README.
+ * Pure (no chrome), so a rig calls it.
+ */
+export function redirectedOf(sender, obs) {
+  if (!Number.isSafeInteger(obs?.redirects) || obs.redirects <= 0) return null
+  if (typeof sender?.tab?.id !== 'number' || sender.tab.id < 0) return null
+  let origin
+  try { origin = new URL(sender.url).origin } catch { return null }
+  if (roleOf(origin) !== 'library' || sender.frameId !== 0) return null
+  return { url: noHash(sender.url), method: 'GET', type: 'main_frame', initiator: null, arrived: 'redirect', redirects: obs.redirects, tabId: sender.tab.id, frameId: 0 }
+}
+function noteRedirected(sender, obs) {
+  const req = redirectedOf(sender, obs)
+  if (req) void tripwireNavigation(req).catch(() => {})
+}
+
+/**
+ * The library's own worker's requests (security ruling #954 C5): webRequest
+ * reports them with tabId -1 and the library origin as their initiator.
+ * MEASURED (Chromium 149): the browser's fetch of the worker script, and its
+ * update checks, are type `script` with Service-Worker: script and
+ * Sec-Fetch-Dest: serviceworker; the worker's own fetch() calls are
+ * `xmlhttprequest` with neither; a page's requests carry its tab id. The
+ * extension's own fetches (initiator chrome-extension://) and other sites'
+ * (their own origin as initiator) are not the library's worker. A request to
+ * another origin is not seen at all: the extension has no host permission
+ * there (measured), which is the residual the README states. Observing only.
+ */
+const WREQ_PREFIX = 'twr:'
+/** The request to judge, or null when it is not the library worker's (pure: no chrome, so a rig calls it). */
+export function workerRequestOf(d) {
+  if (d?.tabId !== -1) return null
+  let origin
+  try { origin = new URL(d.url).origin } catch { return null }
+  if (roleOf(origin) !== 'library') return null
+  // another initiator (the extension's own fetch, another site) is not the library's worker; an ABSENT one
+  // cannot be ruled out as it, so it goes on to be judged (worker-request-unattributed), never dropped
+  if (d.initiator != null && d.initiator !== LIBRARY_ORIGIN) return null
+  // every header: their names and values are held to the honest worker's (security ruling on #983, M1)
+  // a Cookie's value is never recorded: its presence is the finding (security ruling on #983, M4)
+  const headers = Array.isArray(d.requestHeaders) ? d.requestHeaders.slice(0, 64).map((h) => ({ name: cut(String(h.name ?? '')), value: String(h.name ?? '').toLowerCase() === 'cookie' ? '(not recorded)' : cut(h.value ?? '') })) : null
+  return { url: cut(noHash(d.url)), method: cut(d.method ?? ''), type: cut(d.type ?? ''), initiator: d.initiator == null ? null : cut(d.initiator), headers }
+}
+function onWorkerRequest(d) {
+  const req = workerRequestOf(d)
+  if (req) void tripwireWorkerRequest(req).catch(() => {})
+}
+
+/** Judge one of the library worker's own requests; a finding is recorded and announced like a page's. */
+export async function tripwireWorkerRequest(req, net = (u, o) => fetch(u, o), now = Date.now()) {
+  const { current, refresh } = await listFor(net, now)
+  // no list, nothing to judge against: the visits that started the worker are on record as unchecked
+  if (!current) return { ok: false, reason: 'no list' }
+  const nav = (await chrome.storage.session.get(NAV_KEY))[NAV_KEY] ?? null
+  const failures = workerRequestFailures(req, current.list, LIBRARY_ORIGIN, { nav })
+  if (!failures.length) return { ok: true, verdict: 'ok' }
+  // once per kind of request per session, so a chatty worker cannot flood the record
+  const u = (() => { try { return new URL(req.url) } catch { return null } })()
+  const shape = `${req.method} ${cut(u ? u.pathname : req.url)}${String(req.url).includes('?') ? '?' : ''} ${req.type} ${req.initiator ?? '-'} ${failures.map((f) => f.why ?? f.rule).join('+')}`
+  if (!(await firstTime(`${WREQ_PREFIX}${shape}`))) return { ok: true, verdict: 'mismatch', repeat: true }
+  const event = {
+    id: newId(now), at: new Date(now).toISOString(), url: req.url, origin: LIBRARY_ORIGIN, role: 'worker',
+    verdict: 'mismatch', release: null, failures,
+    serial: current.list.serial ?? null, listAt: current.list.at ?? null,
+    list: refresh ? { status: refresh.status, why: refresh.why } : { status: 'held' },
+    observed: { request: true },
+    page: { role: 'worker', url: req.url, request: { method: req.method, type: req.type, initiator: req.initiator, headers: req.headers } },
+  }
+  await settle(event, null, refresh, { verdict: 'mismatch' }, now)
+  return { ok: true, verdict: 'mismatch', id: event.id }
+}
+
+/**
+ * A library PAGE's own non-document requests (security ruling on #983, M6): the requests a tab makes to
+ * the library origin that are not a navigation. A cloaked worker can change an attribute value of a page it
+ * answers with no request of its own; the browser then fetches what the page names (MEASURED, Chromium 149:
+ * its manifest fetch, tabId = the tab, type `other`, initiator the library origin, the rewritten query
+ * included). onRequest takes only documents and onWorkerRequest only tabId -1, so this one takes the rest.
+ * A page request the worker answers itself never reaches webRequest (measured); one it lets through does.
+ */
+// not 'twp:', the pending reports' prefix: sweepOrphans would take these markers for settled reports
+const PREQ_PREFIX = 'twe:'
+/** The request to judge, or null when it is not a library page's own (pure: no chrome, so a rig calls it). */
+export function pageRequestOf(d) {
+  if (typeof d?.tabId !== 'number' || d.tabId < 0) return null
+  if (d.type === 'main_frame' || d.type === 'sub_frame') return null
+  let origin
+  try { origin = new URL(d.url).origin } catch { return null }
+  if (roleOf(origin) !== 'library') return null
+  // another site's page asking for a library file is that site's request, not the library page's; an
+  // ABSENT initiator cannot be ruled out as the library page, so it is judged (page-request-unattributed)
+  if (d.initiator !== undefined && d.initiator !== null && d.initiator !== LIBRARY_ORIGIN) return null
+  const headers = Array.isArray(d.requestHeaders) ? d.requestHeaders.slice(0, 64).map((h) => ({ name: cut(String(h.name ?? '')), value: String(h.name ?? '').toLowerCase() === 'cookie' ? '(not recorded)' : cut(h.value ?? '') })) : null
+  // the WHOLE URL: the own-URL test compares it exactly, as navigationOf's reload test does (a cut URL let a
+  // request sharing the first MAX_STR characters of a long tab URL pass as the tab's own; nit n4); the
+  // record keeps a cut copy
+  return { url: noHash(d.url), method: cut(d.method ?? ''), type: cut(d.type ?? ''), initiator: d.initiator == null ? null : cut(d.initiator), tabId: d.tabId, frameId: typeof d.frameId === 'number' ? d.frameId : 0, headers }
+}
+function onPageRequest(d) {
+  const req = pageRequestOf(d)
+  if (!req) return
+  // the tab's navigation record is read NOW, before anything is awaited: by the time the list is in hand
+  // the tab may have navigated on (measured: the rig's own-URL row, once, when it was read after the list)
+  const key = `${REQUEST_PREFIX}${req.tabId}:${req.frameId}`
+  void chrome.storage.session.get(key).then((r) => tripwirePageRequest(req, undefined, undefined, typeof r[key]?.url === 'string' ? r[key].url : null)).catch(() => {})
+}
+
+/** Judge one of a library page's own requests; a finding is recorded and announced on that page's tab. */
+export async function tripwirePageRequest(req, net = (u, o) => fetch(u, o), now = Date.now(), navUrl = null) {
+  const { current, refresh } = await listFor(net, now)
+  if (!current) return { ok: false, reason: 'no list' }
+  // the URL this tab's library document was navigated to (onRequest's record, read before the first await):
+  // the content script's re-read of it is not a request the page named. (webRequest's documentUrl would say
+  // this directly, but MEASURED, Chromium 149: it is absent on these requests.)
+  const failures = pageRequestFailures(req, current.list, LIBRARY_ORIGIN, { ownUrl: navUrl })
+  if (!failures.length) return { ok: true, verdict: 'ok' }
+  const u = (() => { try { return new URL(req.url) } catch { return null } })()
+  const shape = `${req.method} ${cut(u ? u.pathname : req.url)}${String(req.url).includes('?') ? '?' : ''} ${req.type} ${req.initiator ?? '-'} ${failures.map((f) => f.why ?? f.rule).join('+')}`
+  if (!(await firstTime(`${PREQ_PREFIX}${shape}`))) return { ok: true, verdict: 'mismatch', repeat: true }
+  let tab = null
+  try { tab = await chrome.tabs.get(req.tabId) } catch { tab = { id: req.tabId, index: 0 } }
+  const event = {
+    id: newId(now), at: new Date(now).toISOString(), url: cut(req.url), origin: LIBRARY_ORIGIN, role: 'page-request',
+    verdict: 'mismatch', release: null, failures,
+    serial: current.list.serial ?? null, listAt: current.list.at ?? null,
+    list: refresh ? { status: refresh.status, why: refresh.why } : { status: 'held' },
+    observed: { request: true },
+    page: { role: 'page-request', url: cut(req.url), request: { method: req.method, type: req.type, initiator: req.initiator, headers: req.headers } },
+  }
+  await settle(event, tab, refresh, { verdict: 'mismatch' }, now)
+  return { ok: true, verdict: 'mismatch', id: event.id }
 }
 
 /** The held list (re-verified), or null. */
@@ -213,7 +490,10 @@ async function settle(event, tab, refresh, v, now) {
   if (refresh?.status === 'invalid' || refresh?.status === 'conflict') {
     event.warned.push(...await warn({ ...event, failures: [{ rule: `list-${refresh.status}` }] }, tab, 'invalid', 'list'))
   }
-  if (v?.verdict === 'mismatch') event.warned.push(...await warn(event, tab, 'mismatch', `loud:${event.origin}`))
+  // once per CLASS per origin per session (N4): a finding that only says "could not tell" never
+  // silences one that says "this is not a release"
+  event.class = v?.verdict === 'mismatch' ? classOf(event.failures) : null
+  if (v?.verdict === 'mismatch') event.warned.push(...await warn(event, tab, 'mismatch', `loud:${event.class}:${event.origin}`))
   else if (v?.verdict === 'outdated' && v.notify) event.warned.push(...await warn(event, tab, 'outdated', `old:${event.origin}`))
   if (!v) await noteUnchecked(event, tab, now)
   else await serial(() => chrome.storage.local.remove(UNCHECKED_KEY))
@@ -242,13 +522,15 @@ export async function sweepOrphans(net = (u, o) => fetch(u, o), now = Date.now()
   })
   for (const p of due) {
     const { current, refresh } = await listFor(net, now)
-    const v = current ? judgeEarly(p.obs, current.list, p.origin) : null
+    const obsE = { ...p.obs, partial: p.tail ? { index: p.tail.index, text: p.tail.text } : null }
+    const v = current ? judgeEarly(obsE, current.list, p.origin, await partialChecker(net, obsE, current.list, p.origin)) : null
     const event = {
       id: newId(now), at: new Date(now).toISOString(), url: p.url, origin: p.origin, role: p.role, early: true,
       verdict: v ? v.verdict : 'unchecked', release: null, failures: v?.failures ?? [],
       serial: current?.list.serial ?? null, listAt: current?.list.at ?? null,
       list: refresh ? { status: refresh.status, why: refresh.why } : { status: 'held' },
-      observed: { scripts: true, flags: true, bytes: false, size: false, csp: false, workers: false, cache: false }, page: p.obs,
+      observed: { scripts: true, flags: true, elements: true, bytes: false, size: false, csp: false, workers: false, cache: false },
+      page: { ...p.obs, partial: obsE.partial ? { index: obsE.partial.index, length: obsE.partial.text.length } : null },
     }
     let tab = null
     try { tab = p.tabId != null ? await chrome.tabs.get(p.tabId) : null } catch { /* closed */ }
@@ -261,16 +543,41 @@ export async function sweepOrphans(net = (u, o) => fetch(u, o), now = Date.now()
 export async function tripwireEarly(sender, obs) {
   const who = senderRole(sender)
   if (!who || !obs || obs.v !== 1) return { ok: false, reason: 'not watched' }
-  const flags = capFlags(obs.flags)
-  const pending = {
-    at: Date.now(), url: cut(noHash(sender.url)), origin: who.origin, role: who.role,
-    tabId: sender.tab?.id ?? null, tabIndex: sender.tab?.index ?? 0,
-    obs: { role: who.role, url: cut(noHash(sender.url)), timeOrigin: Number(obs.timeOrigin) || 0, scripts: capScripts(obs.scripts, flags), flags },
-  }
   const key = docKey(sender, obs)
   await serial(async () => {
     if ((await chrome.storage.session.get(`${key}:done`))[`${key}:done`]) return // the full report came first
+    const prev = (await chrome.storage.session.get(key))[key]
+    const flags = capFlags(obs.flags)
+    // the element sequence arrives in pieces, in order: each report carries what is new
+    let elements = prev?.obs.elements ?? []
+    const delta = Array.isArray(obs.elements) ? obs.elements : []
+    if (Number(obs.elementsFrom) !== elements.length) flags.push('early-gap')
+    elements = capElements([...elements, ...delta], flags)
+    // and the last script's text, while it may still be arriving
+    let tail = prev?.tail ?? null
+    const tn = obs.tail
+    if (tn && Number.isSafeInteger(tn.index) && typeof tn.text === 'string') {
+      const base = tail && tail.index === tn.index && tail.text.length === tn.from ? tail.text : (tn.from === 0 ? '' : null)
+      tail = base == null || base.length + tn.text.length > MAX_TEXT ? null : { index: tn.index, text: base + tn.text }
+    }
+    // a Refresh header can take the page away before its full report leaves (MEASURED, row refresh-header-now),
+    // and the next navigation then overwrites the frame's record: the first early report, sent at
+    // document_start, reads it while it is still this navigation's, and the full report inherits it (R4)
+    let refresh = prev?.obs.refresh ?? null
+    if (!prev) {
+      const hk = `${HEADERS_PREFIX}${sender.tab?.id}:${sender.frameId}`
+      const h = (await chrome.storage.session.get(hk))[hk]
+      if (matches(h, cut(noHash(sender.url)), Number(obs.timeOrigin) || 0) && Array.isArray(h.refresh) && h.refresh.length) refresh = h.refresh
+    }
+    const pending = {
+      at: Date.now(), url: cut(noHash(sender.url)), origin: who.origin, role: who.role,
+      tabId: sender.tab?.id ?? null, tabIndex: sender.tab?.index ?? 0, tail,
+      obs: { role: who.role, url: cut(noHash(sender.url)), timeOrigin: Number(obs.timeOrigin) || 0, scripts: capScripts(obs.scripts, flags), flags: [...new Set([...(prev?.obs.flags ?? []), ...flags])], elements, refresh },
+    }
     await chrome.storage.session.set({ [key]: pending })
+    // the first report of this document: did it arrive by a redirect? (M8; the full report covers a page
+    // whose early report never came)
+    if (!prev) noteRedirected(sender, obs)
   })
   setTimeout(() => { void sweepOrphans().catch(() => {}) }, ORPHAN_MS + 500)
   return { ok: true }
@@ -286,8 +593,15 @@ export async function tripwireObserve(sender, obs, net = (u, o) => fetch(u, o)) 
   if (!who || !obs || obs.v !== 1) return { ok: false, reason: 'not watched' }
   const { role, origin } = who
   const key = docKey(sender, obs)
-  // settle this document's early report first, in the same chain it was written in
-  await serial(() => chrome.storage.session.remove(key).then(() => chrome.storage.session.set({ [`${key}:done`]: Date.now() })))
+  // settle this document's early report first, in the same chain it was written in (keeping the Refresh it read)
+  const { earlyRefresh, hadEarly } = await serial(async () => {
+    const p = (await chrome.storage.session.get(key))[key]
+    await chrome.storage.session.remove(key)
+    await chrome.storage.session.set({ [`${key}:done`]: Date.now() })
+    return { earlyRefresh: Array.isArray(p?.obs?.refresh) ? p.obs.refresh : null, hadEarly: !!p }
+  })
+  // a document that arrived by a redirect, when no early report judged it (M8)
+  if (!hadEarly) noteRedirected(sender, obs)
   void sweepOrphans(net).catch(() => {})
   const now = Date.now()
   const url = cut(noHash(sender.url))
@@ -295,11 +609,11 @@ export async function tripwireObserve(sender, obs, net = (u, o) => fetch(u, o)) 
   // the navigation's headers, if webRequest saw THIS navigation (a worker's answer it does not see)
   const hk = `${HEADERS_PREFIX}${sender.tab?.id}:${sender.frameId}`
   const h = (await chrome.storage.session.get(hk))[hk]
-  const fresh = h && h.url === url && h.at >= obs.timeOrigin - 1000 && h.at <= obs.timeOrigin + 120000
+  const fresh = matches(h, url, obs.timeOrigin)
   if (h) await chrome.storage.session.remove(hk)
   const qk = `${REQUEST_PREFIX}${sender.tab?.id}:${sender.frameId}`
   const q = (await chrome.storage.session.get(qk))[qk]
-  const crossSite = !!q && q.url === url && q.at >= obs.timeOrigin - 1000 && q.at <= obs.timeOrigin + 120000 && q.site === 'cross-site'
+  const crossSite = matches(q, url, obs.timeOrigin) && q.site === 'cross-site'
   if (q) await chrome.storage.session.remove(qk)
   const flags = capFlags(obs.flags)
   const scripts = capScripts(obs.scripts, flags)
@@ -309,11 +623,16 @@ export async function tripwireObserve(sender, obs, net = (u, o) => fetch(u, o)) 
   if (workersIn && workersIn.length > MAX_WORKERS) flags.push('over-cap:workers')
   const page = {
     role, url, timeOrigin: Number(obs.timeOrigin) || 0, size: Number(obs.size) || 0, scripts, flags,
+    elements: capElements(obs.elements, flags), aborted: obs.aborted === true,
+    partial: obs.partial && Number.isSafeInteger(obs.partial.index) && typeof obs.partial.text === 'string' && obs.partial.text.length <= MAX_TEXT ? { index: obs.partial.index, text: obs.partial.text } : null,
     // a cross-site navigation's own response is not what the content script read (an older one may be)
     bytes: role === 'library' && !crossSite && HEX.test(obs.bytes?.sha256 ?? '') ? { sha256: obs.bytes.sha256 } : null,
     csp: fresh ? h.csp : role === 'library' && obs.bytes && !crossSite ? (obs.bytes.csp == null ? [] : [cut(obs.bytes.csp)]) : null,
     cspFrom: fresh ? 'navigation' : role === 'library' && obs.bytes && !crossSite ? 'cache' : null,
     cacheControl: fresh && Array.isArray(h.cacheControl) ? h.cacheControl : null, crossSite,
+    preload: matches(q, url, obs.timeOrigin) && typeof q.preload === 'string' ? q.preload : null,
+    cookie: matches(q, url, obs.timeOrigin) && q.cookie === true,
+    refresh: fresh && Array.isArray(h.refresh) && h.refresh.length ? h.refresh : earlyRefresh,
     workers: workersIn ? [] : null,
     cache: cacheIn ? cacheIn.slice(0, MAX_CACHE).map((c) => ({ url: cut(c.url), sha256: cut(c.sha256) })) : null,
     viaWorker: !!obs.viaWorker, complete: obs.complete === true, errors: Array.isArray(obs.errors) ? obs.errors.slice(0, 10).map(cut) : [],
@@ -331,11 +650,11 @@ export async function tripwireObserve(sender, obs, net = (u, o) => fetch(u, o)) 
   }
 
   let { current, refresh } = await listFor(net, now)
-  let v = current ? judge(page, current.list, origin, now) : null
+  let v = current ? judge(page, current.list, origin, now, await partialChecker(net, page, current.list, origin)) : null
   // a mismatch, or an older release, is checked against a fresh list before anyone is told
   if (current && v.verdict !== 'ok' && v.verdict !== 'unlisted' && !refresh) {
     refresh = await refreshList(net, current)
-    if (refresh.status === 'ok') { current = await heldList(); v = judge(page, current.list, origin, now) }
+    if (refresh.status === 'ok') { current = await heldList(); v = judge(page, current.list, origin, now, await partialChecker(net, page, current.list, origin)) }
   }
 
   const event = {
@@ -343,17 +662,23 @@ export async function tripwireObserve(sender, obs, net = (u, o) => fetch(u, o)) 
     url, origin, role, verdict: v ? v.verdict : 'unchecked', release: v?.release ?? null, failures: v?.failures ?? [],
     serial: current?.list.serial ?? null, listAt: current?.list.at ?? null,
     list: refresh ? { status: refresh.status, why: refresh.why } : { status: 'held' },
-    observed: observed(page), page,
+    observed: observed(page), page: { ...page, partial: page.partial ? { index: page.partial.index, length: page.partial.text.length } : null },
   }
   await settle(event, sender.tab, refresh, v, now)
   return { ok: true, verdict: event.verdict, id: event.id }
 }
 
+/** Every storage key prefix the tripwire uses: each names its own records (the rig checks no two overlap, M9). */
+export const PREFIXES = [HEADERS_PREFIX, PENDING_PREFIX, WARNED_PREFIX, REQUEST_PREFIX, HERE_PREFIX, NREQ_PREFIX, WREQ_PREFIX, PREQ_PREFIX, NAV_KEY]
+
 /** Listeners that must be registered at the top level of the worker. */
 export function installTripwire() {
   if (typeof chrome === 'undefined') return
   chrome.webRequest?.onHeadersReceived.addListener(onHeaders, { urls: patterns(), types: ['main_frame', 'sub_frame'] }, ['responseHeaders', 'extraHeaders'])
-  chrome.webRequest?.onSendHeaders.addListener(onRequest, { urls: patterns(), types: ['main_frame'] }, ['requestHeaders', 'extraHeaders'])
+  chrome.webRequest?.onSendHeaders.addListener(onRequest, { urls: patterns(), types: ['main_frame', 'sub_frame'] }, ['requestHeaders', 'extraHeaders'])
+  chrome.webRequest?.onSendHeaders.addListener(onWorkerRequest, { urls: [`${LIBRARY_ORIGIN}/*`], tabId: -1 }, ['requestHeaders', 'extraHeaders'])
+  // every other request to the library origin; pageRequestOf keeps a tab's non-document ones (M6)
+  chrome.webRequest?.onSendHeaders.addListener(onPageRequest, { urls: [`${LIBRARY_ORIGIN}/*`] }, ['requestHeaders', 'extraHeaders'])
   chrome.notifications?.onClicked?.addListener((id) => {
     if (!id.startsWith(NOTE_PREFIX)) return
     void chrome.tabs.create({ url: chrome.runtime.getURL(`src/tripwire.html?id=${encodeURIComponent(id.slice(NOTE_PREFIX.length))}`) })

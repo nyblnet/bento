@@ -368,12 +368,15 @@ debugger protocol has one, behind a banner):
 | what | how | where |
 |---|---|---|
 | the parse | a content script in the isolated world from `document_start` reads each `<script>`'s text as the parser inserts it, before the page's code runs; a script whose text later changes other than by the parser appending is flagged; handlers, `javascript:` URLs, frames, `<base>` and non-CSP `<meta http-equiv>` are flagged; a shadow root (declarative or attached) is flagged when the observer next looks, and at report time on every element it ever walked, even one the page removed. The markup INSIDE a shadow root is not seen | library and frame |
-| an early report | sent from inside the observer callback each time a script is first seen or grows, so it leaves BEFORE that script runs; if no full report follows within 10 s (the page navigated away, or never finished), the early report is judged on its own: a script no release lists, or any flag, is a mismatch. It is sent only when the observer has something to say, so a page that runs code before any script or flag reaches it leaves no early report | library and frame |
-| the bytes | the content script's `fetch(location, {cache: 'only-if-cached'})`: the navigation's own response from the HTTP cache, with no new request a server could answer differently. Measured: a navigation ANOTHER SITE started (a link, a popup) is cached under a key this fetch cannot reach, and it may read an older page instead; for those (Sec-Fetch-Site, from webRequest) the bytes are not judged and the navigation's Cache-Control header is, so `no-store` cannot hide a change. Measured: it does not pass through the page's service worker. The honest library is sent `no-cache`, which Chrome stores, so on the library without a worker, bytes that cannot be read are a mismatch | library (the frame is opaque) |
+| the element sequence | the tag names of the elements the parser inserts, in order (without html, head and body), which the release list carries for each document: the full report must match one exactly, and every early report carries what is new, so a parse that stops being the start of a listed document is on record as it happens | library and frame |
+| an early report | one as the visit starts, then from inside the observer callback each time an element or script is first seen or a script grows, so it leaves BEFORE that script runs; if no full report follows within 10 s (the page navigated away, or never finished), the early report is judged on its own: a script no release lists, or any flag, is a mismatch. A clean start of a listed document left that way (a visit closed mid-load) is 'incomplete', recorded quietly | library and frame |
+| the bytes | the content script's `fetch(location, {cache: 'only-if-cached'})`: the navigation's own response from the HTTP cache, with no new request a server could answer differently. Measured: a navigation ANOTHER SITE started (a link, a popup) is cached under a key this fetch cannot reach, and it may read an older page instead; for those (Sec-Fetch-Site, from webRequest) the bytes are not judged and the navigation's Cache-Control header is, so `no-store` cannot hide a change. Measured: it does not pass through the page's service worker. The honest library is sent `no-cache`, which Chrome stores, so on the library without a worker, bytes that cannot be read are a mismatch. Under a worker they are waived only when the worker answered from somewhere webRequest did not see: a worker that answers navigations by navigation preload is seen by webRequest, its response could have been cached, and unread bytes there are a mismatch too (so `Vary: *` cannot hide a change) | library (the frame is opaque) |
 | the size | the navigation timing's `decodedBodySize`, whoever served the page; 0 is a mismatch, as is a report sent after 30 s without the parse ending (`complete: false`). `complete: true` means only that the page left the `loading` state in time: a visit cut short also reports it, with a partial size | library and frame |
 | the CSP header | `webRequest.onHeadersReceived` (observing, never blocking) for the navigation; under a service worker, which webRequest does not see, the HTTP cache's copy of the header | library and frame |
+| a `Refresh` header | the same webRequest record: the honest library and frame never send one, so any `Refresh` header is a mismatch (it sends the tab elsewhere with no markup to flag). Measured: Chromium acts on the header at the load event, before the full report has always left (`Refresh: 0`), and the next navigation then replaces the frame's record. So the first early report, sent at `document_start`, reads the header while the record is still this navigation's; the early report and the full report both carry it | library and frame |
 | workers | every registration's script URL must be a worker a release lists; its bytes, fetched now with `no-store`, must be that file | library |
 | the worker's cache | every Cache Storage entry, hashed, must be a file some release lists | library |
+| the worker's own requests | `webRequest.onSendHeaders` for requests with no tab (`tabId` -1) whose initiator is the library origin: the library's worker. Each must be a GET with no query, to a path some release serves on the library origin, and the worker script (`/sw.js`) only as the browser's own worker-script fetch (type `script`, `Sec-Fetch-Dest: serviceworker`, `Service-Worker: script`); its headers must be ones the honest worker's requests carry, with their values (`Accept: */*`, `Service-Worker: script`, and `Accept-Language` and `User-Agent` as the library's latest navigation sent them; headers no script can set are the browser's). Anything else is a mismatch, recorded and announced on its own (no tab to badge), once per kind of request per session. A request with no initiator is recorded as unverified. The extension's own requests (initiator `chrome-extension://`) and pages' (a tab id) are not the worker's | library |
 
 The library is judged only as a top-level page (it is never framed), and in a
 `blob:` or `about:` document of its origin, which it never makes (judged by the origin the browser says it runs in, since an `about:` URL carries none); the frame
@@ -408,12 +411,75 @@ home.bento.page has never been checked.
 - a deploy served only to people **without** the extension, or only to
   requests it can tell apart from a browser's (the worker-bytes fetch is an
   ordinary request, so a targeting server can answer it honestly);
+- **a cloaked worker's bytes.** A server can answer the browser's own fetch of
+  `/sw.js` (`Service-Worker: script`) with a different worker than the one the
+  extension fetches, and the browser installs what it was given; the installed
+  copy cannot be read. What the tripwire holds that worker to is its own
+  requests (above), with their headers held to the honest worker's and the
+  navigation preload header to the browser's `true` (a worker's
+  `setHeaderValue` is a mismatch on the page, rule `preload-header`). `Cookie`
+  and `Referer` are held to absent: a worker chooses their values
+  (`cookieStore.set`, fetch's `referrer`) although no script may set them by
+  name, and the honest worker sends neither (the browser's own update check
+  names the script's URL as its Referer, and only that is allowed); a
+  `Cookie` on a top-level library
+  navigation is a mismatch on the page too (rule `request-cookie`; one on a
+  framed library document is not flagged), so home.bento.page must set no
+  cookie of its own, a CDN's included, and no host under bento.page may set a
+  `Domain=bento.page` cookie (it would ride every home.bento.page visit and
+  make each one loud). That
+  does not verify its bytes, and it sees only what the worker fetches. Without
+  making any request, a cloaked worker can change the text and attribute
+  values of every page it answers (same length, no new element; measured:
+  one text byte changed from the preload response, verdict ok). The CSP and
+  Cache-Control the tripwire reads for such a page are the navigation
+  preload's, as webRequest saw them, not the worker's answer, so they say
+  nothing about what the worker handed the page. What the BROWSER then
+  fetches because of such a change is held as well: a library page's own
+  requests to its origin (a tab's, not a navigation) are held to the same
+  rules as the worker's: GET, no query, a path a release serves, no `Cookie`
+  or `Referer` (rule `page-request`; measured: a rewritten
+  `<link rel=manifest href="/manifest.webmanifest?s=…">` sent its query in
+  Chrome's own manifest fetch, type `other`, with verdict ok before this rule).
+  The one request to the tab's own document URL is the tripwire's content
+  script re-reading the navigation, so its query and path are the
+  navigation's and are not judged; Chrome's default `/favicon.ico` fetch and a
+  Referer naming the page itself (a host's 404 page) are the browser's too.
+  A NAVIGATION the page starts is held too: a `main_frame` or `sub_frame`
+  navigation to the library origin whose initiator is the library origin must
+  be GET, with no query, to a path a release serves (rule `navigation`;
+  measured: a meta refresh made of two rewritten attribute values, a `Refresh`
+  header, and the worker's `WindowClient.navigate()` each sent a query to the
+  server in the navigation preload, verdict ok before this rule). The one
+  exception is a reload of exactly the URL the tab or frame is on (the
+  library's Reload button); typed, reload, back and forward navigations carry
+  no initiator and are not judged on that rule. A navigation that ARRIVED by a
+  same-origin redirect is held to the same URL rules on the URL it landed on
+  (measured: a worker answering a typed navigation with
+  `Response.redirect("/?s=…")` sent the query in the navigation preload, and
+  the redirected leg keeps the absent initiator); the tripwire reads the
+  document's own `redirectCount`, so a server redirect to a served path with no
+  query stays quiet. Not covered: a redirected navigation that commits no
+  document (the worker answers it with a 204 or a download; measured: the
+  query reached the server, no finding), and a redirect through another origin
+  (the browser then reports no redirect, and the bytes reach that origin
+  first). A page request the worker answers itself
+  never reaches webRequest, and its bytes reach only the worker. The worker
+  can still pass data out through which of the allowed requests it, or the
+  page, makes, and when (a covert channel). Its requests, and the page's, to
+  **other origins** are
+  not seen at all: the extension has no host permission there (measured), and
+  asking for one is a store-listing change;
 - **the code runs first.** The tripwire reports what was parsed; a hostile
   script has run by then, and nothing is prevented. A page that leaves after
   a script or flag the observer saw is still on record (the early report);
 - **a script inside a declarative shadow root** runs before the observer can
-  see it (attaching the root changes nothing it watches), so such a script can
-  run and leave the page with nothing recorded;
+  see it (attaching the root changes nothing it watches). The visit is still on
+  record: a parse that stopped being a listed document's start is a mismatch,
+  and a shadow root is flagged by the next look the parse gives the observer
+  (measured in every shape the rig tries) and again by the full report;
+- a visit cut short that is the clean start of a listed document is recorded
+  quietly, so a change to page TEXT only, in a visit cut short, is not seen;
 - under a **service worker**: response headers the worker changes (the CSP is
   read from the HTTP cache, not from the worker's answer, and when the network
   sent `no-store` there is no cached copy and no CSP check at all), and a change to page
@@ -422,19 +488,24 @@ home.bento.page has never been checked.
 - a navigation **another site started** (a link or a popup from outside
   bento.page, including from a `file://` document or a popup a document
   opens): its bytes cannot be read (above), so a same-length change that the
-  parse does not flag is not seen. Until the element sequence lands, that
-  includes ADDED ELEMENTS (a link, an image, a label); after it, text and
-  attribute values. The server can tell these visits apart (Sec-Fetch-Site),
-  so it can serve such a change to them alone; scripts, handlers and the other
-  flags are still caught on them;
+  parse does not flag is not seen: text and attribute values. Added
+  elements are not in that set, because the element sequence catches them.
+  The server can tell these visits apart (Sec-Fetch-Site), so it can serve
+  such a change to them alone; scripts, handlers and the other flags are still
+  caught on them;
+- **response headers other than the CSP, Cache-Control and `Refresh`**
+  (COOP, `Link` and the rest) are not checked, and under a service worker the
+  `Refresh` header is not seen either (webRequest does not see the worker's
+  answer);
 - the **frame page's bytes**: it is an opaque origin, so its scripts, markup,
   size and CSP header are checked, and a same-length change to its text is not;
 - a **rolled-back** list is refused but only recorded; a fresh install that
   cannot fetch a list checks nothing, said quietly after three days;
-- after the first loud warning for an origin in a session, a second, different
-  finding there gets the badge and the record, not another tab;
-- an honest visit closed while a script was still arriving can leave a report
-  that looks like a mismatch, and spend that session's one loud warning;
+- loud warnings come once per CLASS per origin per session: "unverified" (the
+  bytes, the size or a cache could not be read, the parse never ended) and
+  "tampered" (anything else), so a finding of the first kind never silences
+  one of the second; a second finding of the same class gets the badge and the
+  record, not another tab;
 - `blob:`/`about:` documents are observed from Chrome 119
   (`match_origin_as_fallback`); before that the early report still records the
   script that made one;
@@ -445,7 +516,7 @@ home.bento.page has never been checked.
 
 The rigs: `scripts/test-webext-tripwire.ts` (no browser),
 `scripts/test-webext-tripwire-browser.mjs` (the unpacked extension in
-Chromium, with a fixture worker) and `scripts/test-webext-tripwire-mutants.mjs`
+Chromium, with the build's own worker and fixture workers) and `scripts/test-webext-tripwire-mutants.mjs`
 (a mutant per rule, each red on its row).
 
 ## What is unverified

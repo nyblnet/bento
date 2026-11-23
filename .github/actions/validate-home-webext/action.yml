@@ -183,7 +183,7 @@ runs:
       # the release list a release writes (scripts/lib/home-web-served.mjs,
       # sign-home-web-served.mjs) against the list the extension reads; the
       # judge's rules on hand-made observations. Throwaway keys only. The
-      # browser half, with a mutant per rule, is the webext-tripwire job in
-      # ci-home.yml.
+      # browser half is the webext-tripwire job in ci-home.yml, and its
+      # mutant per rule the webext-tripwire-mutants job.
       shell: bento-step {0}
       run: node scripts/test-webext-tripwire.ts

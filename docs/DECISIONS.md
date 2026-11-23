@@ -15396,3 +15396,308 @@ replaced before this shipped.
   1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
+
+## 2026-11-22 — The bento/home tripwire sees the parse as it happens, and a visit cut short is not a tamper warning
+
+Two gaps the security re-check found in the tripwire (entries above), the limit that leaves on links from other sites, a response header nothing checked, and a waiver a service worker could use:
+
+- **The element sequence.** The release list now carries, for each document,
+  the tag names of the elements the parser inserts, in order (without html,
+  head and body, which the parser may imply, and without what a `<template>`
+  holds). The content script sends an early report as the visit starts, and
+  one each time an element or a script is first seen, carrying what is new. A
+  parse that stops being the start of a listed document is a mismatch, whether
+  or not the page goes on to finish: a script hidden in a declarative shadow
+  root runs before the observer can see it, but the elements before it were
+  already reported. The full report's sequence must match a listed document
+  exactly. A report also leaves as the page is left (pagehide), marked so.
+- **A visit cut short.** A report sent after the page was left, after the
+  parse never ended, or with a response that never did, is marked so. If what
+  it shows is the clean start of a listed document, it is 'incomplete',
+  recorded quietly. A script cut short counts as clean only when its text is an
+  exact, strictly shorter prefix of the listed script's: each release publishes
+  its inline scripts' text beside the list (`scripts/<sha256>.js`), fetched
+  only for this check. An honest script cut short is a syntax error if it ever
+  runs, never someone else's code.
+- **Warnings by class.** The one loud warning per origin per session is now
+  one per class: "unverified" (bytes, size or a cache unread, a parse that
+  never ended) and "tampered" (everything else), so a finding of the first
+  kind, which a third party can cause, never silences one of the second.
+- **What a navigation another site started still hides.** The entry above
+  (a link from another site is not a warning) judges those visits on their
+  headers, not their bytes. With the element sequence, an added element on
+  such a visit is a mismatch, so the limit is now: on a navigation another
+  site started (a link or a popup from outside bento.page, including from a
+  `file://` document or a popup a document opens), a same-length change the
+  parse does not flag is not seen, which is text and attribute values. The
+  server can tell these visits apart by their Sec-Fetch-Site, so it can serve
+  such a change to them alone. Scripts, handlers, added elements and the
+  other flags are still caught on them.
+- **A `Refresh` response header is a mismatch.** MEASURED by security: the
+  honest bytes sent with `Refresh: 1; url=<another site>` on a direct visit
+  were judged ok while the tab left for the other site. The honest library
+  never sends one, so the extension records whether the library navigation's
+  response carried a `Refresh` header (webRequest, observing only, beside the
+  CSP and Cache-Control) and any such header is a mismatch. MEASURED while
+  adding it: Chromium acts on the header at the load event, and with
+  `Refresh: 0` the page often leaves before its full report does, so the
+  visit was settled by its early report, which carried no headers, and
+  judged a quiet 'incomplete'. When the full report did arrive, the next
+  navigation had already replaced the frame's webRequest record. So the
+  first early report, sent at `document_start`, reads the header while the
+  record is still this navigation's, and the full report inherits it. A
+  response held open never reaches the load event, so the header never acts
+  on it (measured: the tab stayed). Other response
+  headers (COOP, Link and the rest) are still not checked; that is stated in
+  the extension's README.
+- **Under a worker, unread bytes are waived only when webRequest did not see
+  the navigation.** Security's review of stage 3 (#954) measured that a
+  worker answering navigations hid a text change sent with a header that
+  keeps it out of the HTTP cache (`no-store`, `Vary: *`): the bytes-unread
+  rule was waived for every worker-answered page. With navigation preload
+  (the stage-3 worker's fix), webRequest sees the navigation, which also
+  restores the CSP and Cache-Control checks; the waiver now applies only when
+  it did not (`cspFrom` is not `navigation`). So a preload navigation whose
+  bytes cannot be read is a mismatch, and `Vary: *` no longer hides a change.
+- **The rows run against the build's own worker.** The browser rig used to
+  overwrite the build's `/sw.js` with a cache-first fixture, then serve none
+  by default, so no row ran with the worker that opened the hole. Release A is
+  now the build as it is: every row starts as a first visit (the worker
+  registers), and seven `stage3-*` rows prime a returning visitor (the build's
+  worker active and in control) before a hostile response: a widened CSP,
+  cacheable and `no-store`; one text byte with `Vary: *`, with `no-store`, and
+  with the headers as shipped; and a `no-store` text byte reached from another
+  site. Each asserts the hostile bytes reached the page and ends in a
+  mismatch. Their mutants include the worker built without navigation preload
+  (the rig rebuilds the library with it), which turns the `no-store` rows and
+  the cross-site one into passes. The fixture worker the older rows register
+  is listed in a release of its own.
+
+Guards: the rows and mutants in `scripts/test-webext-tripwire-browser.mjs`,
+`scripts/test-webext-tripwire-mutants.mjs`, `scripts/test-webext-tripwire.ts`
+and `scripts/test-home-web-build.mjs`.
+
+## 2026-11-22 — The bento/home tripwire holds the library's worker to the honest worker's own requests
+
+Security's review of stage 3 (#954, its F-W and C5): the release list names
+`/sw.js`, and the tripwire checks the bytes it fetches itself, but a server can
+answer the browser's own worker fetch (`Service-Worker: script`) with a
+different worker, which the browser installs and runs on every visit while the
+extension's check sees the release's bytes. The installed copy cannot be read.
+What can be seen is what that worker does.
+
+- **Measured (Chromium 149):** webRequest reports the library worker's own
+  requests with `tabId` -1 and the library origin as their initiator; the
+  browser's fetch of the worker script and its update checks are type
+  `script` with `Service-Worker: script` and `Sec-Fetch-Dest: serviceworker`
+  (visible to `onSendHeaders` with `extraHeaders`); the worker's own `fetch()`
+  calls are `xmlhttprequest` with neither; the extension's own fetches carry a
+  `chrome-extension://` initiator. A worker's request to another origin is not
+  reported at all: the extension has host permission for home.bento.page only.
+- **The allowlist.** A request from the library's worker must be a GET with no
+  query (not even a bare `?`), to a path some release in the list serves on
+  the library origin (the served files: a superset of the worker's precache,
+  so the list needs no new field), and the worker script only as the
+  browser's worker-script fetch. Anything else is a mismatch (rule
+  `worker-request`, class "tampered"), recorded as an event of its own and
+  announced like a page's (notification and report tab; no tab to badge),
+  once per kind of request per session. A request with no initiator is
+  recorded as `worker-request-unattributed`, class "unverified": it cannot be
+  tied to the worker or ruled out as it, so it is never allowed in silence.
+  Its request headers are held too (security's review of #983, measured: a
+  worker GET to a listed path carried a header of its own, `x-exfil`, to the
+  server with verdict ok). `Cookie` and `Referer` are forbidden header
+  NAMES whose VALUES a worker still chooses (security's second review of
+  #983, measured: `cookieStore.set` then a GET to a listed path sent the
+  worker's cookie, and `fetch(..., { referrer, referrerPolicy: 'unsafe-url' })`
+  sent the worker's Referer, both with verdict ok), and the honest worker's
+  requests carry neither (its precache fetches omit credentials, and the
+  library's `Referrer-Policy` is `no-referrer`), so either one on a worker
+  request is a finding. The one exception is measured too: the browser's own
+  update check of the worker script (a soft update after a navigation) names
+  the script's own URL as its Referer, a value no worker chooses, and that
+  value is allowed on that request only. A `Cookie` on a library navigation
+  is a mismatch on the page too (rule `request-cookie`; only its presence is
+  recorded, never its value), since a worker-set cookie rides every later
+  request. So
+  home.bento.page must set no cookie of its own, a CDN's included, and no host
+  under bento.page may set a `Domain=bento.page` cookie, which would ride every
+  home.bento.page navigation and make each visit loud (standard cookie
+  scoping, not measured here). A `Cookie` on a FRAMED library document is not
+  flagged. The other
+  forbidden names, `Sec-*` and `Proxy-*` are the browser's: their values are
+  its settings, or one of the few the fetch spec derives from the request's
+  mode and destination, which is the covert channel below. Every other header
+  must be one the honest worker's requests carry, with its value: `Accept: */*`,
+  `Service-Worker: script`, and `Accept-Language` and `User-Agent` equal to
+  what the library's latest document request sent (top-level or framed: a
+  framed library page registers the worker too) (measured: a worker can set
+  Accept and Accept-Language, not User-Agent). Headers not read, or no
+  navigation to hold them to, are findings. And the navigation preload header
+  must be the browser's `true`: a worker's `navigationPreload.setHeaderValue`
+  sends bytes on every later navigation (measured), so any other value is a
+  mismatch on the page, rule `preload-header`.
+  With no list held, nothing is judged (the visits are on record as
+  unchecked).
+- **What it does not do**, stated in both READMEs: it does not verify the
+  worker's bytes, and it sees only what the worker fetches. Without making any
+  request, a cloaked worker can change the text and attribute values of every
+  page it answers (same length, no new element; security measured one text
+  byte changed from the preload response, verdict ok): the CSP and
+  Cache-Control the tripwire reads are the navigation preload's, not the
+  worker's answer. A worker that keeps to the honest worker's requests can
+  still pass data out through which of them it, or the page, makes, and when,
+  and requests to other origins are unseen; seeing those needs host permissions beyond
+  home.bento.page, a store-listing change for the maintainer.
+- **The page's own requests** (security's third review of #983, M6). An
+  attribute value the worker changes can make the BROWSER fetch something:
+  measured (Chromium 149, no DevTools attached, 4 of 4 runs), a cloaked worker
+  answered the navigation from its preload with
+  `href="/manifest.webmanifest?s=…"` (and the viewport attribute shortened to
+  keep the size), let the manifest fetch through, and Chrome's own manifest
+  fetch carried the query to the server, verdict ok. The exact-path
+  `manifest-src` does not stop it: CSP source matching ignores the query.
+  webRequest does see that request, with the tab's id, type `other`, and the
+  library origin as initiator, but neither listener took it (documents only;
+  tabId -1 only). A third listener now takes every other request to the
+  library origin and judges a tab's non-document requests whose initiator is
+  the library origin (or absent: `page-request-unattributed`, class
+  "unverified") by the worker's rules: GET, no query, a path a release
+  serves, and no `Cookie` or `Referer` (the page is `no-referrer`, the
+  manifest fetch omits credentials). The rule is `page-request`, class
+  "tampered", announced on that tab. Its other headers are the browser's: a
+  page with no script of its own cannot set one. One measured exception: the
+  tripwire's own content script re-reads the tab's document URL from the HTTP
+  cache, which webRequest shows as a tab `xmlhttprequest`, so a request to
+  exactly the URL that tab's navigation asked for is not judged on its query
+  or path (without this, an honest visit to `/?from=link` was a loud
+  mismatch). The navigation record is read before anything is awaited
+  (webRequest's `documentUrl` is absent on these requests, measured), since
+  the tab may navigate on while the list is fetched. Two more measured
+  exceptions, both from an honest host's 404 page: Chrome's default
+  `/favicon.ico` fetch (a fixed path; with a query it is still a finding), and
+  a Referer that is the origin or the tab's own document URL (a 404 page has no
+  `no-referrer` policy), values no worker chooses. A request the worker answers itself never reaches webRequest,
+  and its bytes go only to the worker, whose own requests are held.
+
+Guards: rows `c5-honest-worker` (the build's worker, two visits and an update
+check: no finding), `sw-cloak`, `sw-cloak-launder`, `worker-query`,
+`worker-unlisted-path` and `worker-post` in
+`scripts/test-webext-tripwire-browser.mjs`, each with a mutant (the listener
+not registered, the worker-script check off, the query, path and method checks
+off, and the initiator and tab filters dropped, which flags the extension's own
+`/sw.js` read and a page's own requests); unit rows in
+`scripts/test-webext-tripwire.ts`, including an absent initiator and absent
+request headers. Added after security's review of #983: rows
+`worker-header`, `worker-header-held` and `preload-header`, each with a mutant
+(the header hold off, the held values off, the preload value not judged or not
+recorded), and unit rows that route requests through tripwire.js's
+`workerRequestOf` (an absent initiator must come out as
+`worker-request-unattributed`; dropping it is a red mutant). Added after
+security's second review: rows `worker-cookie` and `worker-referer` (the
+cloaked worker's cookie and Referer reach the server; each is a worker-request
+finding, and the cookie also a `request-cookie` mismatch on the next visit)
+and `c5-honest-soft-update` (the honest worker's soft update: no finding),
+each with a mutant (Cookie and Referer back among the browser's names; the
+navigation's cookie not recorded); the browser's update-check Referer not allowed).
+The header set was measured over HTTPS and HTTP/2 too (`TW_H2=1`, a
+throwaway certificate trusted by its SPKI hash; a CI step re-runs the C5 rows
+that way): on the wire Chromium adds `priority` (and `cache-control` and
+`pragma` on some requests), but webRequest with `extraHeaders` does not show
+them, so the extension sees the same names as over HTTP/1.1 and the honest
+worker raises no finding. HTTP/3 was not measured.
+Added after security's third review: rows `page-manifest-query` (the
+rewritten manifest href: a loud `page-request` mismatch), `c5-honest-manifest`
+(two honest visits; the browser's own manifest fetch reaches the server and
+webRequest shows it as a tab request; no finding) and `c5-honest-own-url` (an
+honest visit to `/?from=link`; webRequest shows the content script's re-read;
+no finding), each with a mutant (the listener not registered, the query check
+off, tab requests never routed; manifests held to document paths; the own-URL
+exemption off); `unlisted-404` now also guards the favicon and own-Referer
+exceptions (its mutant drops both: a loud tab on an honest 404); and unit rows for `pageRequestOf` and `pageRequestFailures`
+with an absent initiator, absent headers and an absent navigation record.
+
+**Navigations a library page starts** (security's fourth review of #983, M7).
+Holding the page's fetches left its navigations. A page the worker rewrites can
+make the browser navigate with no request of the page's own and no script:
+measured (Chromium 149), the worker turned the CSP `<meta>` into
+`http-equiv="refresh" content="0;url=/?s=…"` (two attribute values, padded to
+the same length) and a 469-character URL reached the server in the navigation
+preload, verdict ok, no tab; a `Refresh` header the worker added to its answer
+and the worker's own `WindowClient.navigate()` did the same. webRequest shows
+each as a `main_frame` request whose initiator is the library origin, as it
+does the honest Reload button's `location.reload()`; typed, reload, back and
+forward navigations carry no initiator (measured), and the honest library has
+no same-origin links and its worker navigates no client. So a `main_frame` or
+`sub_frame` navigation to the library origin whose initiator IS the library
+origin is held to the page-request URL rules: GET, no query, a path a release
+serves (rule `navigation`, class "tampered", announced on that tab). The one
+exception is a navigation to exactly the URL that tab or frame is on now,
+which is the last library navigation webRequest showed for it (any
+initiator), compared whole, never by a cut prefix; a URL over 8192 characters
+is not remembered, so a reload of it is judged. Navigations with no initiator,
+another site's, or an opaque one are not judged on their URL. Measured, in
+headless and headed Chromium 149: back and forward to a library page made a
+request every time. A back that restored a page from the back/forward cache
+with no request would leave the record stale, and pressing Reload there would
+be a loud finding, never a silent pass.
+
+An opaque-origin library page (a worker-added `sandbox` CSP) is held by the
+page judge's "could not tell" rules (`bytes-unread`, `cache-unread`,
+`workers-unread`; security measured it loud), not by `page-request` or
+`navigation`, which ignore an initiator of `"null"`. Chrome made no manifest
+fetch from such a page; no later change should rely on the request rules for
+this case.
+
+Guards, added after security's fourth review: rows `nav-meta-refresh`,
+`nav-refresh-header` and `nav-client-navigate` (each with a positive control
+that the query reached the server in the navigation, and a loud `navigation`
+mismatch from the URL the tab was on) and `c5-honest-reload` (honest visits to
+`/?from=link` and `/`, each reloaded by the library's own Reload button, whose
+navigations webRequest shows with the library origin as initiator: no
+finding), each with a mutant (the navigation hook not called, the query check
+off, library-initiated navigations never routed, the reload exemption off);
+and unit rows for `navigationOf` and `navigationFailures`, with an absent
+initiator, method, URL and record, and a URL longer than the record cut.
+
+**Navigations that arrive by a redirect; the tripwire's storage keys** (security's
+fifth review of #983, M8 and M9). A worker can send a typed navigation, which
+carries no initiator and so is not judged as one the page started, to a URL of
+its choosing: it answers with `Response.redirect("/?s=…")`. Measured (Chromium
+149): the browser follows it, the redirected leg keeps the absent initiator, the
+navigation preload carries the query to the server, and webRequest shows only an
+aborted first leg (no `onBeforeRedirect`). The document that lands knows: its
+navigation entry's `redirectCount` is 1 (0 on an honest typed visit). The
+content script reads it in its isolated world (the page cannot change it) and
+sends it in both reports, and a library document whose count is above 0 is held
+to the `navigation` rules on the URL it landed on: GET, no query, a path a
+release serves, and never excused as a reload of where the tab was. A server
+redirect to a served path with no query stays quiet (measured: a 301 from
+`/index.html` to `/`). Two cases stay open and are stated in the README: a
+redirected navigation that commits no document (the worker answers the second
+leg with a 204; measured, the query reached the server with no finding), and a
+hop through another origin (`redirectCount` then reads 0, and the bytes reach
+that origin first). Catching the first from webRequest alone would also flag a
+site that opens the library and navigates it away twice in quick succession, so
+it waits for a ruling rather than shipping a warning any site can trigger.
+
+The record of the URL a tab is on, which the Reload exception reads, shared its
+storage prefix (`twh:`) with the navigation-headers record: the headers listener
+overwrote it and the full report removed it, so once the extension's own worker
+had stopped (Chrome stops an idle one after about 30 seconds) an honest Reload
+of `/?from=link` was a loud finding. It now has its own prefix, and so does the
+page-request marker, which had shared `twp:` with the pending reports. Every
+prefix is exported and a unit row checks that none is a prefix of another. The
+page-request own-URL test now compares whole URLs, as the navigation test does
+(nit n4).
+
+Guards: rows `nav-sw-redirect`, `nav-sw-redirect-net` and
+`nav-sw-redirect-bounce` (the redirect, with the second leg answered from the
+preload, left to the network, and bounced back to `/` by a meta refresh; each
+with a positive control that the query reached the server with no initiator
+and the page counted the redirect), `c5-honest-server-redirect` (a 301 to `/`,
+counted and quiet), `c5-reload-after-stop` (an honest `/?from=link`, the
+extension's worker stopped through the DevTools protocol, then the Reload
+button: quiet, with a control that the worker came back with empty memory and
+the session held the record), and `nav-sub-frame` (a frame the page adds,
+navigated to `/?s=…`: a `sub_frame` finding; nit n5). Each has a mutant.
