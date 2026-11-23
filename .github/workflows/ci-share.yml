@@ -201,3 +201,25 @@ jobs:
         run: node scripts/test-home-web-identity.mjs --chrome
       - name: bento/id agent mutants, each red on its row
         run: node scripts/test-home-web-identity.mjs --mutants
+
+  share-directory-ses:
+    needs: share-gate
+    if: needs.share-gate.outputs.run == 'true'
+    # The directory's real mail (server/directory/src/ses.js) and SES's bounce
+    # and complaint events (sns.js), against a FAKE AWS reached through a
+    # function-typed seam: no AWS account, credential or network. The fake
+    # re-derives every SigV4 signature with node:crypto and the signer is held
+    # to AWS's published example vectors; SNS events are signed with a TEST
+    # key served at the pinned certificate URL. Its own job, so these mutants
+    # never lengthen share-directory-mutants. Neither step may skip.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: bento/id directory mail through SES, and SNS bounce events
+        run: node scripts/test-directory-ses.ts
+      - name: bento/id directory mail mutants, each red on its row
+        run: node scripts/test-directory-ses-mutants.ts

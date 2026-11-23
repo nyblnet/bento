@@ -15396,3 +15396,46 @@ replaced before this shipped.
   1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
+
+## 2026-11-23 — bento/id directory: real mail through Amazon SES, and a stop list fed by signed SNS events
+
+The directory's mailer was a stub that refused every send under `MAILER =
+"ses"`. It now signs an SES v2 `SendEmail` with Signature Version 4 on
+WebCrypto (`server/directory/src/ses.js`), and SES's bounce and complaint
+events arrive at `POST /v1/mail/events` (`sns.js`). What was settled:
+
+- **"Accepted" is a 200 with a MessageId, nothing else.** A change waits only
+  once its notice was accepted (security's D1), so a 202, a 200 without an id,
+  or any other 4xx is a refusal. A throttle (429) is a refusal too, with no
+  retry inside the sender: retrying is a caller's decision.
+- **Unknown outcomes are never "not sent".** Our own timer aborting the
+  request, a broken connection and a 5xx all carry `code: 'timeout'`, the
+  class callers already treat as "may still arrive" (security's C8). The
+  maintainer's final pick on C8 is still open; this only keeps the ambiguous
+  cases out of the "refused" class, which C8 already forbids.
+- **The topic is pinned, not just the signature.** Anyone can create an SNS
+  topic in the region and subscribe our URL to it, and AWS signs that topic's
+  messages too. So `TopicArn` must equal `SES_EVENTS_TOPIC_ARN` exactly, before
+  the certificate is fetched; the certificate URL is pinned to
+  `sns.<SES_REGION>.amazonaws.com` and its `.pem` path; only SignatureVersion 2.
+- **A stop is a refusal.** A stopped address's refused kinds throw (`code:
+  'suppressed'`) before anything is sent: never a silent drop reported as
+  success. The record lives in the address's own Roster object (named by the
+  address's hash; the record holds no address), so there is no new object
+  class or migration, and the one check is in `deliver()`.
+- **Which kinds a stop refuses is open** (`MAIL_STOP_APPLIES`). Until security
+  rules, only setup links: a stranger's setup requests could provoke a
+  Permanent bounce on a real mailbox, and no stranger-fillable thing may hold
+  back a roster, reset or void mail (G10). How an address leaves the list and
+  how long a record is kept are the maintainer's; neither is built.
+- **SES's own suppression must be off** in the configuration set. Otherwise SES
+  answers 200 and silently drops mail to an address on its list, and
+  "accepted" would stop meaning sent. Only the account can be checked for this,
+  so it is a deploy step, not a rig.
+- **No endpoint override.** The region is regex-pinned because it becomes a
+  hostname; the only way to point the sender elsewhere is a function-typed env
+  seam, which a wrangler var or secret can never be.
+
+Guard: `scripts/test-directory-ses.ts` (a fake AWS that re-derives every
+signature with node:crypto, AWS's published SigV4 example vectors, a TEST SNS
+certificate) and `scripts/test-directory-ses-mutants.ts`, in their own CI job.

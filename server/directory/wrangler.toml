@@ -3,6 +3,9 @@
 # Deploy is the MAINTAINER's (needs the id.bento.page DNS and the SES account first):
 #   npx wrangler secret put DIR_KEY_JWK   # the directory's ONLINE P-256 signing key (JWK, private), for the countersign once it lands — never the release key
 #   npx wrangler secret put CHALLENGE_KEY # 32+ random characters: seals the single-use roster challenges
+#   npx wrangler secret put SES_ACCESS_KEY_ID     # an IAM key allowed ses:SendEmail on the sending identity and configuration set only
+#   npx wrangler secret put SES_SECRET_ACCESS_KEY # its secret
+#   (and set SES_REGION, MAIL_FROM, SES_CONFIGURATION_SET, SES_EVENTS_TOPIC_ARN below; README "Mail")
 #   npx wrangler deploy
 # Local:
 #   npx wrangler dev --var DEV:1 --var MAILER:log --var DIR_KID:dev-1 --var DIR_KEY_JWK:"$(cat dev-key.jwk)" --var CHALLENGE_KEY:"$(openssl rand -hex 32)"
@@ -18,6 +21,13 @@ DIR_KID = "dir-1"
 # (diagnosis only: clients trust the list shipped in the signed release).
 DIR_PUBKEYS = "[]"
 MAILER = "ses"
+# Amazon SES (ses.js) and its bounce/complaint events (sns.js). Empty = every
+# send refused and every event answered 503: they fail closed until the
+# maintainer fills them in. The region is an AWS region name (e.g. eu-west-1).
+SES_REGION = ""
+MAIL_FROM = ""
+SES_CONFIGURATION_SET = ""
+SES_EVENTS_TOPIC_ARN = ""
 # The published incident records, [{"id","from","to"}] (ms; "to" null while
 # open): every browser check-in and status answer carries them, and bento/home
 # drops a key made inside one. A list that does not read answers 500.

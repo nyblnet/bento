@@ -1,0 +1,17 @@
+{
+  "about": "AWS Signature Version 4: AWS's own published examples (the aws-sig-v4-test-suite get-vanilla and post-vanilla cases, the IAM ListUsers walkthrough, and the IAM signing-key example), under AWS's public EXAMPLE credentials. They are documentation values, not anyone's keys. The SES rig checks ses.js's signer reproduces every value here, so the signer and the rig's own fake cannot share one mistake.",
+  "keyId": "AKIDEXAMPLE",
+  "secret": "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
+  "signingKeys": [
+    { "name": "iam signing-key example", "date": "20120215", "region": "us-east-1", "service": "iam", "hex": "f4780e2d9f65fa895f9c67b32ce1baf0b0d8a43505a000a1a9e090d414db404d" }
+  ],
+  "requests": [
+    { "name": "get-vanilla", "method": "GET", "path": "/", "query": "", "headers": { "host": "example.amazonaws.com", "x-amz-date": "20150830T123600Z" }, "body": "", "amzDate": "20150830T123600Z", "region": "us-east-1", "service": "service",
+      "signature": "5fa00fa31553b73ebf1942676e86291e8372ff2a2260956d9b8aae1d763fbf31" },
+    { "name": "post-vanilla", "method": "POST", "path": "/", "query": "", "headers": { "host": "example.amazonaws.com", "x-amz-date": "20150830T123600Z" }, "body": "", "amzDate": "20150830T123600Z", "region": "us-east-1", "service": "service",
+      "signature": "5da7c1a2acd57cee7505fc6676e4e544621c30862966e37dddb68e92efbe5d6b" },
+    { "name": "iam ListUsers walkthrough", "method": "GET", "path": "/", "query": "Action=ListUsers&Version=2010-05-08", "headers": { "content-type": "application/x-www-form-urlencoded; charset=utf-8", "host": "iam.amazonaws.com", "x-amz-date": "20150830T123600Z" }, "body": "", "amzDate": "20150830T123600Z", "region": "us-east-1", "service": "iam",
+      "canonicalRequestSha256": "f536975d06c0309214f805bb90ccff089219ecd68b2577efef23edd43b7e1a59",
+      "signature": "5d672d79c15b13162d9279b0855cfba6789a8edb4c82c400e06b5924a6f2b5d7" }
+  ]
+}
