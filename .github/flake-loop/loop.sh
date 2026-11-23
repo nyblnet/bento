@@ -17,6 +17,7 @@ for i in $(seq 1 "$n"); do
     echo "    --- stderr tail"; tail -n 60 err.txt | cut -c1-400 | sed 's/^/    /'
   else
     pass=$((pass+1))
+    [ -n "${KEEP_ALL:-}" ] && grep -v "pw:protocol" err.txt > "failures/$label-$i.pass.err"
     grep -E "SKIP" out.txt | sed 's/^/    /'
   fi
 done
