@@ -180,13 +180,19 @@ export interface ResolvedIdentity {
    *  agent that verified a watt. sends it whenever mb ≠ 0. */
   unconfirmedSince?: number
   /** RESOLVED_FIELDS: every field above that applies is present. Missing = the
-   *  answer may have lost fields on the way, so no ✓ (see above) */
+   *  answer may have lost fields on the way, so no ✓ (see above). Always 'g1':
+   *  a later field set adds its own marker, never replaces this value. */
   fields?: 'g1'
 }
 
-/** The value of ResolvedIdentity.fields on a complete answer. A later set of
- *  fields gets a new value, so a relay that knows only this set cannot vouch
- *  for one it has never seen. */
+/** The value of ResolvedIdentity.fields on a complete answer.
+ *  'g1' NEVER CHANGES: an answer that carries every g1 field keeps sending
+ *  fields: 'g1', for good. Slides shells are frozen inside every saved file and
+ *  accept exactly 'g1', so replacing it would turn every row of every file saved
+ *  before then into "couldn't check". A later field set announces itself with a
+ *  marker of its own, a NEW optional field beside this one, never a new value
+ *  here; a relay that knows only g1 forwards 'g1' with the g1 fields and drops
+ *  the new marker, so it still cannot vouch for fields it has never seen. */
 export const RESOLVED_FIELDS = 'g1'
 
 /** The fields a relay must forward, type-checked, for RESOLVED_FIELDS to

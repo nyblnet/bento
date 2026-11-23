@@ -357,6 +357,26 @@ console.log('\nthe completeness marker: an answer says it carries every G field'
   for (const f of ['revoked', 'resetAt', 'rosterChangedAt', 'unconfirmedSince'])
     ok((RESOLVED_G1_FIELDS as readonly string[]).includes(f), `a relay must forward ${f} (missing reads stronger)`)
   ok(Object.isFrozen(RESOLVED_G1_FIELDS), 'RESOLVED_G1_FIELDS is frozen')
+  // The marker's value is part of every saved file's contract: slides shells are
+  // frozen in the file and accept exactly 'g1', so a later field set must ADD a
+  // marker of its own, never replace this value (security-ruling-990 M1). The
+  // rule is pinned where an agent author reads it: the RESOLVED_FIELDS comment,
+  // the fields? comment, and the DECISIONS entry; the old "new value" rule is gone.
+  const cAt = src.indexOf('export const RESOLVED_FIELDS')
+  const constDoc = src.slice(src.lastIndexOf('/**', cAt), cAt)
+  ok(/'g1' NEVER CHANGES/.test(constDoc) && /keeps sending\s+\*?\s*fields: 'g1'/.test(constDoc),
+    "RESOLVED_FIELDS comment: 'g1' never changes, an agent keeps sending fields: 'g1'")
+  ok(/marker of its own, a NEW optional field beside this one, never a new value/.test(constDoc.replace(/\s*\n\s*\*\s*/g, ' ')),
+    'RESOLVED_FIELDS comment: a later set adds its own marker field, never a new value')
+  ok(/a later field set adds its own marker, never replaces this value/.test(body.replace(/\s*\n\s*\*\s*/g, ' ')),
+    'fields? comment: a later set adds its own marker, never replaces the value')
+  ok(!/later (set of fields|field set) gets a new value/i.test(src.replace(/\s*\n\s*\*\s*/g, ' ')), "identity.ts no longer says a later set gets a new value")
+  const dec = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'docs/DECISIONS.md'), 'utf8')
+  const dAt = dec.indexOf('An identity answer says when it is complete (`ResolvedIdentity.fields`)')
+  const entry = dAt < 0 ? '' : dec.slice(dAt, dec.indexOf('\n## ', dAt + 1) < 0 ? undefined : dec.indexOf('\n## ', dAt + 1)).replace(/\s+/g, ' ')
+  ok(entry.includes("'g1' never changes; a later field set adds its own marker.") && entry.includes("keeps sending `fields: 'g1'`, for good"),
+    "DECISIONS: 'g1' never changes, an agent keeps sending it")
+  ok(entry !== '' && !/gets a new value/.test(entry), 'DECISIONS: the old "a later field set gets a new value" rule is gone')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
