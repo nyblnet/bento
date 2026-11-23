@@ -446,7 +446,8 @@ joined (`since`), `createdAt`, `lastResetAt` and `sinceExact`.
   which no statement carries. Voiding it bars its signer for 72 h whatever its
   kind, and a reset REQUEST drops it (never set aside, never revived).
 - **Voided deletions, in `rows`** (`ok/q-voided-adel*`, `q/voided-adel-*`,
-  `x/pinned-q-adel-other-head`): a q link's `voided` may be an `adel.` text
+  `x/pinned-q-adel-other-head`, `x/pinned-q-adel-other-address`,
+  `*-consent-*` for a consent key's cns. proof): a q link's `voided` may be an `adel.` text
   instead of a `ros.`. Then the cause is sha256 of the adel. text, its address
   is this account's, its `headHash` is this link's previous head (from a pin:
   the pinned link's own previous hash), its signer an unquarantined member of
