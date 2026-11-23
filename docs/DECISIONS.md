@@ -15659,3 +15659,45 @@ finding), each with a mutant (the navigation hook not called, the query check
 off, library-initiated navigations never routed, the reload exemption off);
 and unit rows for `navigationOf` and `navigationFailures`, with an absent
 initiator, method, URL and record, and a URL longer than the record cut.
+
+**Navigations that arrive by a redirect; the tripwire's storage keys** (security's
+fifth review of #983, M8 and M9). A worker can send a typed navigation, which
+carries no initiator and so is not judged as one the page started, to a URL of
+its choosing: it answers with `Response.redirect("/?s=…")`. Measured (Chromium
+149): the browser follows it, the redirected leg keeps the absent initiator, the
+navigation preload carries the query to the server, and webRequest shows only an
+aborted first leg (no `onBeforeRedirect`). The document that lands knows: its
+navigation entry's `redirectCount` is 1 (0 on an honest typed visit). The
+content script reads it in its isolated world (the page cannot change it) and
+sends it in both reports, and a library document whose count is above 0 is held
+to the `navigation` rules on the URL it landed on: GET, no query, a path a
+release serves, and never excused as a reload of where the tab was. A server
+redirect to a served path with no query stays quiet (measured: a 301 from
+`/index.html` to `/`). Two cases stay open and are stated in the README: a
+redirected navigation that commits no document (the worker answers the second
+leg with a 204; measured, the query reached the server with no finding), and a
+hop through another origin (`redirectCount` then reads 0, and the bytes reach
+that origin first). Catching the first from webRequest alone would also flag a
+site that opens the library and navigates it away twice in quick succession, so
+it waits for a ruling rather than shipping a warning any site can trigger.
+
+The record of the URL a tab is on, which the Reload exception reads, shared its
+storage prefix (`twh:`) with the navigation-headers record: the headers listener
+overwrote it and the full report removed it, so once the extension's own worker
+had stopped (Chrome stops an idle one after about 30 seconds) an honest Reload
+of `/?from=link` was a loud finding. It now has its own prefix, and so does the
+page-request marker, which had shared `twp:` with the pending reports. Every
+prefix is exported and a unit row checks that none is a prefix of another. The
+page-request own-URL test now compares whole URLs, as the navigation test does
+(nit n4).
+
+Guards: rows `nav-sw-redirect`, `nav-sw-redirect-net` and
+`nav-sw-redirect-bounce` (the redirect, with the second leg answered from the
+preload, left to the network, and bounced back to `/` by a meta refresh; each
+with a positive control that the query reached the server with no initiator
+and the page counted the redirect), `c5-honest-server-redirect` (a 301 to `/`,
+counted and quiet), `c5-reload-after-stop` (an honest `/?from=link`, the
+extension's worker stopped through the DevTools protocol, then the Reload
+button: quiet, with a control that the worker came back with empty memory and
+the session held the record), and `nav-sub-frame` (a frame the page adds,
+navigated to `/?s=…`: a `sub_frame` finding; nit n5). Each has a mutant.

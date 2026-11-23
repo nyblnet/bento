@@ -71,6 +71,10 @@
   const FRAMEY = new Set(['iframe', 'frame', 'object', 'embed', 'applet', 'portal', 'fencedframe', 'base'])
   const URL_ATTRS = ['href', 'src', 'action', 'formaction', 'data', 'xlink:href', 'srcdoc']
   const cut = (x) => String(x).slice(0, MAX_STR)
+  // how many same-origin redirects brought this document here: the browser's own count, read from this
+  // isolated world (the page cannot change it). A worker's Response.redirect() takes the tab to a URL of its
+  // choosing with no initiator of its own, so the extension holds such a navigation to its URL rules (M8)
+  const redirectsIn = () => { try { const n = performance.getEntriesByType('navigation')[0]?.redirectCount; return Number.isSafeInteger(n) && n > 0 ? n : 0 } catch { return 0 } }
   const flag = (f) => { if (flags.size < MAX_FLAGS) flags.add(cut(f)); else flags.add('over-cap:flags') }
 
   // SHA-256, synchronous: the early report must leave inside the observer
@@ -180,7 +184,7 @@
   let lastEarly = ''
   function early() {
     // leaves now, inside the observer callback, before the script just seen can run
-    const payload = { v: 1, url: location.href.split('#')[0], timeOrigin: performance.timeOrigin, scripts: scriptList(), flags: [...flags], elements: elements.slice(elementsSent), elementsFrom: elementsSent, tail: tail() }
+    const payload = { v: 1, url: location.href.split('#')[0], timeOrigin: performance.timeOrigin, scripts: scriptList(), flags: [...flags], elements: elements.slice(elementsSent), elementsFrom: elementsSent, tail: tail(), redirects: redirectsIn() }
     const key = JSON.stringify(payload)
     if (key === lastEarly) return
     lastEarly = key
@@ -253,6 +257,7 @@
     const out = {
       v: 1, complete, aborted, partial, elements: elements.slice(), url: location.href.split('#')[0], timeOrigin: performance.timeOrigin,
       size: nav?.decodedBodySize ?? 0, status: nav?.responseStatus ?? 0, viaWorker: (nav?.workerStart ?? 0) > 0,
+      redirects: redirectsIn(),
       scripts, flags: [...flags], bytes: null, workers: null, cache: null, errors,
     }
     if (!opaque && /^https?:$/.test(location.protocol)) {

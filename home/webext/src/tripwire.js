@@ -185,7 +185,10 @@ const NAV_KEY = 'twnav'
  * page with no request would leave the record stale, and a Reload there would be a finding (loud), never
  * a silent pass.
  */
-const HERE_PREFIX = 'twh:'
+// its own prefix: 'twh:' is the headers record's (HEADERS_PREFIX), and sharing it let onHeaders overwrite
+// this record and tripwireObserve remove it, so after the extension's worker slept an honest Reload read
+// as a navigation from nowhere (security ruling on #983, M9). PREFIXES below are checked distinct by the rig.
+const HERE_PREFIX = 'twl:'
 const HERE = new Map()
 /** The navigation to judge, or null when no library document started it (pure: no chrome, so a rig calls it). */
 export function navigationOf(d) {
@@ -225,10 +228,11 @@ function noteNavigation(d) {
 export async function tripwireNavigation(req, net = (u, o) => fetch(u, o), now = Date.now(), hereUrl = null) {
   const { current, refresh } = await listFor(net, now)
   if (!current) return { ok: false, reason: 'no list' }
-  const failures = navigationFailures(req, current.list, LIBRARY_ORIGIN, { hereUrl })
+  // a redirect is never "a reload of the URL the tab is on": the worker chose where it lands (M8)
+  const failures = navigationFailures(req, current.list, LIBRARY_ORIGIN, { hereUrl: req.arrived === 'redirect' ? null : hereUrl })
   if (!failures.length) return { ok: true, verdict: 'ok' }
   const u = (() => { try { return new URL(req.url) } catch { return null } })()
-  const shape = `${req.method} ${u ? u.pathname : req.url}${String(req.url).includes('?') ? '?' : ''} ${req.type} ${failures.map((f) => f.why ?? f.rule).join('+')}`
+  const shape = `${req.method} ${cut(u ? u.pathname : req.url)}${String(req.url).includes('?') ? '?' : ''} ${req.type}${req.arrived ? ` ${req.arrived}` : ''} ${failures.map((f) => f.why ?? f.rule).join('+')}`
   if (!(await firstTime(`${NREQ_PREFIX}${shape}`))) return { ok: true, verdict: 'mismatch', repeat: true }
   let tab = null
   try { tab = await chrome.tabs.get(req.tabId) } catch { tab = { id: req.tabId, index: 0 } }
@@ -238,12 +242,39 @@ export async function tripwireNavigation(req, net = (u, o) => fetch(u, o), now =
     serial: current.list.serial ?? null, listAt: current.list.at ?? null,
     list: refresh ? { status: refresh.status, why: refresh.why } : { status: 'held' },
     observed: { request: true },
-    page: { role: 'navigation', url: cut(req.url), request: { method: req.method, type: req.type, initiator: req.initiator, from: hereUrl == null ? null : cut(hereUrl) } },
+    page: { role: 'navigation', url: cut(req.url), request: { method: req.method, type: req.type, initiator: req.initiator, ...(req.arrived ? { arrived: req.arrived } : {}), from: hereUrl == null || req.arrived ? null : cut(hereUrl) } },
   }
   await settle(event, tab, refresh, { verdict: 'mismatch' }, now)
   return { ok: true, verdict: 'mismatch', id: event.id }
 }
 const NREQ_PREFIX = 'twn:'
+
+/**
+ * A library document that arrived by a same-origin REDIRECT (security ruling on #983, M8). A worker can
+ * answer a typed (no-initiator) navigation with Response.redirect() to a URL of its choosing; MEASURED
+ * (Chromium 149): the redirected leg keeps the absent initiator, so navigationOf does not take it, and the
+ * navigation preload carries its URL to the server. webRequest shows only an aborted first leg (no
+ * onBeforeRedirect). The document that lands knows: its navigation entry's redirectCount, read by the
+ * content script (tripwire-observe.js, isolated world: the page cannot change it). So a library document
+ * whose redirectCount is above 0 is held to the navigation URL rules on its FINAL URL (sender.url, the
+ * browser's): GET (a redirect the honest server makes is GET), no query, a path a release serves; never
+ * excused as a reload. A real server redirect to a served path with no query stays quiet. Not covered: a
+ * redirected leg that commits no document (a 204, a download), and a hop through another origin (the
+ * browser then reports redirectCount 0, and the bytes reach that origin first): both stated in the README.
+ * Pure (no chrome), so a rig calls it.
+ */
+export function redirectedOf(sender, obs) {
+  if (!Number.isSafeInteger(obs?.redirects) || obs.redirects <= 0) return null
+  if (typeof sender?.tab?.id !== 'number' || sender.tab.id < 0) return null
+  let origin
+  try { origin = new URL(sender.url).origin } catch { return null }
+  if (roleOf(origin) !== 'library' || sender.frameId !== 0) return null
+  return { url: noHash(sender.url), method: 'GET', type: 'main_frame', initiator: null, arrived: 'redirect', redirects: obs.redirects, tabId: sender.tab.id, frameId: 0 }
+}
+function noteRedirected(sender, obs) {
+  const req = redirectedOf(sender, obs)
+  if (req) void tripwireNavigation(req).catch(() => {})
+}
 
 /**
  * The library's own worker's requests (security ruling #954 C5): webRequest
@@ -287,7 +318,7 @@ export async function tripwireWorkerRequest(req, net = (u, o) => fetch(u, o), no
   if (!failures.length) return { ok: true, verdict: 'ok' }
   // once per kind of request per session, so a chatty worker cannot flood the record
   const u = (() => { try { return new URL(req.url) } catch { return null } })()
-  const shape = `${req.method} ${u ? u.pathname : req.url}${String(req.url).includes('?') ? '?' : ''} ${req.type} ${req.initiator ?? '-'} ${failures.map((f) => f.why ?? f.rule).join('+')}`
+  const shape = `${req.method} ${cut(u ? u.pathname : req.url)}${String(req.url).includes('?') ? '?' : ''} ${req.type} ${req.initiator ?? '-'} ${failures.map((f) => f.why ?? f.rule).join('+')}`
   if (!(await firstTime(`${WREQ_PREFIX}${shape}`))) return { ok: true, verdict: 'mismatch', repeat: true }
   const event = {
     id: newId(now), at: new Date(now).toISOString(), url: req.url, origin: LIBRARY_ORIGIN, role: 'worker',
@@ -309,7 +340,8 @@ export async function tripwireWorkerRequest(req, net = (u, o) => fetch(u, o), no
  * included). onRequest takes only documents and onWorkerRequest only tabId -1, so this one takes the rest.
  * A page request the worker answers itself never reaches webRequest (measured); one it lets through does.
  */
-const PREQ_PREFIX = 'twp:'
+// not 'twp:', the pending reports' prefix: sweepOrphans would take these markers for settled reports
+const PREQ_PREFIX = 'twe:'
 /** The request to judge, or null when it is not a library page's own (pure: no chrome, so a rig calls it). */
 export function pageRequestOf(d) {
   if (typeof d?.tabId !== 'number' || d.tabId < 0) return null
@@ -321,7 +353,10 @@ export function pageRequestOf(d) {
   // ABSENT initiator cannot be ruled out as the library page, so it is judged (page-request-unattributed)
   if (d.initiator !== undefined && d.initiator !== null && d.initiator !== LIBRARY_ORIGIN) return null
   const headers = Array.isArray(d.requestHeaders) ? d.requestHeaders.slice(0, 64).map((h) => ({ name: cut(String(h.name ?? '')), value: String(h.name ?? '').toLowerCase() === 'cookie' ? '(not recorded)' : cut(h.value ?? '') })) : null
-  return { url: cut(noHash(d.url)), method: cut(d.method ?? ''), type: cut(d.type ?? ''), initiator: d.initiator == null ? null : cut(d.initiator), tabId: d.tabId, frameId: typeof d.frameId === 'number' ? d.frameId : 0, headers }
+  // the WHOLE URL: the own-URL test compares it exactly, as navigationOf's reload test does (a cut URL let a
+  // request sharing the first MAX_STR characters of a long tab URL pass as the tab's own; nit n4); the
+  // record keeps a cut copy
+  return { url: noHash(d.url), method: cut(d.method ?? ''), type: cut(d.type ?? ''), initiator: d.initiator == null ? null : cut(d.initiator), tabId: d.tabId, frameId: typeof d.frameId === 'number' ? d.frameId : 0, headers }
 }
 function onPageRequest(d) {
   const req = pageRequestOf(d)
@@ -329,7 +364,7 @@ function onPageRequest(d) {
   // the tab's navigation record is read NOW, before anything is awaited: by the time the list is in hand
   // the tab may have navigated on (measured: the rig's own-URL row, once, when it was read after the list)
   const key = `${REQUEST_PREFIX}${req.tabId}:${req.frameId}`
-  void chrome.storage.session.get(key).then((r) => tripwirePageRequest(req, undefined, undefined, typeof r[key]?.url === 'string' ? cut(r[key].url) : null)).catch(() => {})
+  void chrome.storage.session.get(key).then((r) => tripwirePageRequest(req, undefined, undefined, typeof r[key]?.url === 'string' ? r[key].url : null)).catch(() => {})
 }
 
 /** Judge one of a library page's own requests; a finding is recorded and announced on that page's tab. */
@@ -342,17 +377,17 @@ export async function tripwirePageRequest(req, net = (u, o) => fetch(u, o), now 
   const failures = pageRequestFailures(req, current.list, LIBRARY_ORIGIN, { ownUrl: navUrl })
   if (!failures.length) return { ok: true, verdict: 'ok' }
   const u = (() => { try { return new URL(req.url) } catch { return null } })()
-  const shape = `${req.method} ${u ? u.pathname : req.url}${String(req.url).includes('?') ? '?' : ''} ${req.type} ${req.initiator ?? '-'} ${failures.map((f) => f.why ?? f.rule).join('+')}`
+  const shape = `${req.method} ${cut(u ? u.pathname : req.url)}${String(req.url).includes('?') ? '?' : ''} ${req.type} ${req.initiator ?? '-'} ${failures.map((f) => f.why ?? f.rule).join('+')}`
   if (!(await firstTime(`${PREQ_PREFIX}${shape}`))) return { ok: true, verdict: 'mismatch', repeat: true }
   let tab = null
   try { tab = await chrome.tabs.get(req.tabId) } catch { tab = { id: req.tabId, index: 0 } }
   const event = {
-    id: newId(now), at: new Date(now).toISOString(), url: req.url, origin: LIBRARY_ORIGIN, role: 'page-request',
+    id: newId(now), at: new Date(now).toISOString(), url: cut(req.url), origin: LIBRARY_ORIGIN, role: 'page-request',
     verdict: 'mismatch', release: null, failures,
     serial: current.list.serial ?? null, listAt: current.list.at ?? null,
     list: refresh ? { status: refresh.status, why: refresh.why } : { status: 'held' },
     observed: { request: true },
-    page: { role: 'page-request', url: req.url, request: { method: req.method, type: req.type, initiator: req.initiator, headers: req.headers } },
+    page: { role: 'page-request', url: cut(req.url), request: { method: req.method, type: req.type, initiator: req.initiator, headers: req.headers } },
   }
   await settle(event, tab, refresh, { verdict: 'mismatch' }, now)
   return { ok: true, verdict: 'mismatch', id: event.id }
@@ -540,6 +575,9 @@ export async function tripwireEarly(sender, obs) {
       obs: { role: who.role, url: cut(noHash(sender.url)), timeOrigin: Number(obs.timeOrigin) || 0, scripts: capScripts(obs.scripts, flags), flags: [...new Set([...(prev?.obs.flags ?? []), ...flags])], elements, refresh },
     }
     await chrome.storage.session.set({ [key]: pending })
+    // the first report of this document: did it arrive by a redirect? (M8; the full report covers a page
+    // whose early report never came)
+    if (!prev) noteRedirected(sender, obs)
   })
   setTimeout(() => { void sweepOrphans().catch(() => {}) }, ORPHAN_MS + 500)
   return { ok: true }
@@ -556,12 +594,14 @@ export async function tripwireObserve(sender, obs, net = (u, o) => fetch(u, o)) 
   const { role, origin } = who
   const key = docKey(sender, obs)
   // settle this document's early report first, in the same chain it was written in (keeping the Refresh it read)
-  const earlyRefresh = await serial(async () => {
+  const { earlyRefresh, hadEarly } = await serial(async () => {
     const p = (await chrome.storage.session.get(key))[key]
     await chrome.storage.session.remove(key)
     await chrome.storage.session.set({ [`${key}:done`]: Date.now() })
-    return Array.isArray(p?.obs?.refresh) ? p.obs.refresh : null
+    return { earlyRefresh: Array.isArray(p?.obs?.refresh) ? p.obs.refresh : null, hadEarly: !!p }
   })
+  // a document that arrived by a redirect, when no early report judged it (M8)
+  if (!hadEarly) noteRedirected(sender, obs)
   void sweepOrphans(net).catch(() => {})
   const now = Date.now()
   const url = cut(noHash(sender.url))
@@ -627,6 +667,9 @@ export async function tripwireObserve(sender, obs, net = (u, o) => fetch(u, o)) 
   await settle(event, sender.tab, refresh, v, now)
   return { ok: true, verdict: event.verdict, id: event.id }
 }
+
+/** Every storage key prefix the tripwire uses: each names its own records (the rig checks no two overlap, M9). */
+export const PREFIXES = [HEADERS_PREFIX, PENDING_PREFIX, WARNED_PREFIX, REQUEST_PREFIX, HERE_PREFIX, NREQ_PREFIX, WREQ_PREFIX, PREQ_PREFIX, NAV_KEY]
 
 /** Listeners that must be registered at the top level of the worker. */
 export function installTripwire() {

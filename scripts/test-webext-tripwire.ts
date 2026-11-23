@@ -395,6 +395,53 @@ section('navigations a library document starts (security ruling on #983, M7)')
   ok(/function onRequest\(d\) \{\n  if \(d\.type !== 'main_frame' && d\.type !== 'sub_frame'\) return[\s\S]*?\n  noteNavigation\(d\)\n  if \(d\.type !== 'main_frame'\)/.test(twSrc4), 'every library navigation (main_frame and sub_frame, any initiator) passes through noteNavigation before onRequest returns')
 }
 
+section('a library document that arrived by a same-origin redirect (security ruling on #983, M8)')
+{
+  const O = 'https://home.bento.page'
+  const T = await import(path.join(EXT, 'src/tripwire.js'))
+  const snd = (over: Record<string, unknown> = {}) => ({ url: `${O}/?s=secret-redir`, frameId: 0, tab: { id: 7, index: 0 }, id: 'ext', ...over })
+  const nj = (r: unknown) => J.navigationFailures(r, list1, O, {}).map((f: any) => f.why ?? f.rule).join('+')
+  const routed = (sender: unknown, obs: unknown) => { const r = T.redirectedOf(sender, obs); return r ? nj(r) || 'allowed' : 'ignored' }
+  ok(routed(snd(), { redirects: 1 }) === 'a query', 'the attack: a worker\'s Response.redirect() to /?s=… (redirectCount 1), judged on its final URL: a finding')
+  ok(routed(snd({ url: `${O}/` }), { redirects: 1 }) === 'allowed' && routed(snd({ url: `${O}/extra.js` }), { redirects: 2 }) === 'allowed', 'a redirect to a path the release serves, no query (a real server redirect): judged, allowed (positive control on the routing)')
+  ok(routed(snd({ url: `${O}/not-served` }), { redirects: 1 }) === 'a path no release serves', 'a redirect to a path no release serves: a finding (bytes in the path)')
+  ok(routed(snd(), {}) === 'ignored' && routed(snd(), { redirects: 0 }) === 'ignored' && routed(snd(), undefined) === 'ignored', 'redirects ABSENT, 0, or no report: not a redirect, not judged here (an honest /?from=link visit stays quiet)')
+  ok(routed(snd(), { redirects: '1' }) === 'ignored' && routed(snd(), { redirects: 1.5 }) === 'ignored' && routed(snd(), { redirects: -1 }) === 'ignored', 'a count that is not a positive integer: not taken')
+  ok(routed(snd({ frameId: 2 }), { redirects: 1 }) === 'ignored' && routed(snd({ tab: undefined }), { redirects: 1 }) === 'ignored' && routed(snd({ url: 'https://evil.example/?s=1' }), { redirects: 1 }) === 'ignored', 'a framed document, no tab, another origin: not the library page\'s')
+  const r = T.redirectedOf(snd({ url: `${O}/?from=${'a'.repeat(600)}#frag` }), { redirects: 1 })
+  ok(r?.url === `${O}/?from=${'a'.repeat(600)}` && r.method === 'GET' && r.type === 'main_frame' && r.arrived === 'redirect' && r.initiator === null && r.tabId === 7 && r.frameId === 0, 'the request judged: the WHOLE final URL (no fragment), GET, main_frame, marked as arrived by redirect')
+  const twSrc5 = fs.readFileSync(path.join(EXT, 'src/tripwire.js'), 'utf8')
+  ok(/hereUrl: req\.arrived === 'redirect' \? null : hereUrl/.test(twSrc5), 'a redirect is never excused as a reload of the URL the tab is on')
+  ok(/if \(!prev\) noteRedirected\(sender, obs\)/.test(twSrc5) && /if \(!hadEarly\) noteRedirected\(sender, obs\)/.test(twSrc5), 'judged on the first early report, and on the full report when no early report came')
+  const obsSrc = fs.readFileSync(path.join(EXT, 'src/tripwire-observe.js'), 'utf8')
+  ok((obsSrc.match(/redirects: redirectsIn\(\)/g) ?? []).length === 2 && /getEntriesByType\('navigation'\)\[0\]\?\.redirectCount/.test(obsSrc), 'both reports carry the browser\'s redirectCount')
+}
+
+section('the tripwire\'s storage keys (security ruling on #983, M9)')
+{
+  const T = await import(path.join(EXT, 'src/tripwire.js'))
+  const P: string[] = T.PREFIXES
+  ok(P.length >= 9 && P.every((x) => typeof x === 'string' && x.length > 0), `every prefix is named (${P.join(' ')})`)
+  const clash = P.flatMap((a, i) => P.filter((b, j) => i !== j && (a.startsWith(b) || b.startsWith(a))).map((b) => `${a}/${b}`))
+  ok(clash.length === 0, `no prefix is another's prefix: each record is its own (${clash.join(' ') || 'none'})`)
+  const twSrc6 = fs.readFileSync(path.join(EXT, 'src/tripwire.js'), 'utf8')
+  const decl = [...twSrc6.matchAll(/^const ([A-Z_]+_(?:PREFIX|KEY)) = '([^']+)'/gm)].filter(([, n]) => n !== 'LOG_KEY' && n !== 'LIST_KEY' && n !== 'UNCHECKED_KEY')
+  ok(decl.length === P.length && decl.every(([, , v]) => P.includes(v)), `every session prefix declared in tripwire.js is in PREFIXES (${decl.map(([, n, v]) => `${n}=${v}`).join(' ')})`)
+}
+
+section('a library page\'s request is compared to the tab\'s URL whole (nit n4)')
+{
+  const O = 'https://home.bento.page'
+  const T = await import(path.join(EXT, 'src/tripwire.js'))
+  const long = `${O}/?from=${'a'.repeat(600)}`
+  const pageH = [{ name: 'Accept', value: '*/*' }, { name: 'User-Agent', value: 'Mozilla/5.0 (test)' }]
+  const d = (over: Record<string, unknown> = {}) => ({ tabId: 7, frameId: 0, url: long, method: 'GET', type: 'xmlhttprequest', initiator: O, requestHeaders: pageH, ...over })
+  const po = (x: unknown, ownUrl: unknown) => J.pageRequestFailures(T.pageRequestOf(x), list1, O, { ownUrl }).map((f: any) => f.why ?? f.rule).join('+')
+  ok(T.pageRequestOf(d())?.url === long, 'the request URL is kept whole')
+  ok(po(d(), long) === '', 'the tab\'s own long URL: allowed (positive control)')
+  ok(po(d({ url: `${long}&s=secret` }), long) === 'a query' && po(d(), `${long}&s=other`) === 'a query', 'a request sharing the first 512 characters of the tab\'s long URL: judged, not excused as the tab\'s own')
+}
+
 section('sign-home-web-served.mjs')
 const keyFile = (pub: any, priv: any) => { const f = path.join(work, `k-${Math.random().toString(36).slice(2)}.json`); fs.writeFileSync(f, JSON.stringify({ public: pub, private: priv })); return f }
 const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' })

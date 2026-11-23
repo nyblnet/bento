@@ -160,6 +160,26 @@ const MUTANTS = [
   { name: 'a query allowed on a navigation the library starts (M7)', row: 'nav-refresh-header', file: J, from: "  if (target.indexOf('?') !== -1) flag('a query')\n", to: '' },
   { name: 'library-initiated navigations never routed to the judge (M7)', row: 'nav-client-navigate', file: W, from: '  if (d.initiator !== LIBRARY_ORIGIN) return null\n', to: '  return null\n' },
   { name: 'a reload of the URL the tab is on not excused (M7, the honest control)', row: 'c5-honest-reload', file: J, from: "  if (typeof ctx.hereUrl === 'string' && ctx.hereUrl !== '' && target === ctx.hereUrl && req?.method === 'GET') return []\n", to: '' },
+  // a sub_frame navigation the library page starts (security's fifth review of #983, n5)
+  { name: 'sub_frame navigations not judged (n5)', row: 'nav-sub-frame', file: W, from: "  if (d?.type !== 'main_frame' && d?.type !== 'sub_frame') return null\n  if (typeof d.tabId", to: "  if (d?.type !== 'main_frame') return null\n  if (typeof d.tabId" },
+  // the page-request URL is kept whole (n4): its once-per-session key must still be bounded (measured: 700
+  // 16 KB script paths filled session storage and the report page lost its check)
+  { name: 'the page-request key not bounded (n4)', row: 'oversized', file: W, from: "const shape = `${req.method} ${cut(u ? u.pathname : req.url)}${String(req.url).includes('?') ? '?' : ''} ${req.type} ${req.initiator ?? '-'} ${failures.map((f) => f.why ?? f.rule).join('+')}`\n  if (!(await firstTime(`${PREQ_PREFIX}", to: "const shape = `${req.method} ${u ? u.pathname : req.url}${String(req.url).includes('?') ? '?' : ''} ${req.type} ${req.initiator ?? '-'} ${failures.map((f) => f.why ?? f.rule).join('+')}`\n  if (!(await firstTime(`${PREQ_PREFIX}" },
+  // navigations that arrived by a same-origin redirect (security's fifth review of #983, M8)
+  { name: 'a redirected navigation not judged (M8)', row: 'nav-sw-redirect', edits: [
+    { file: W, from: '    if (!prev) noteRedirected(sender, obs)\n', to: '' },
+    { file: W, from: '  if (!hadEarly) noteRedirected(sender, obs)\n', to: '' }] },
+  { name: 'the redirect count not reported (M8)', row: 'nav-sw-redirect-net', edits: [
+    { file: O, from: 'tail: tail(), redirects: redirectsIn() }', to: 'tail: tail() }' },
+    { file: O, from: '      redirects: redirectsIn(),\n', to: '' }] },
+  { name: 'a redirect judged only on the full report (M8, a page that leaves)', row: 'nav-sw-redirect-bounce', file: W, from: '    if (!prev) noteRedirected(sender, obs)\n', to: '' },
+  { name: 'a redirect taken for a POST (M8, the honest control)', row: 'c5-honest-server-redirect', file: W, from: "method: 'GET', type: 'main_frame', initiator: null, arrived: 'redirect'", to: "method: 'POST', type: 'main_frame', initiator: null, arrived: 'redirect'" },
+  // the record of where the tab is, after the extension's worker stopped (security's fifth review of #983, M9)
+  { name: 'where the tab is shares the headers record\'s prefix (M9)', row: 'c5-reload-after-stop', file: W, from: "const HERE_PREFIX = 'twl:'", to: "const HERE_PREFIX = 'twh:'" },
+  { name: 'where the tab is never read from the session (M9)', row: 'c5-reload-after-stop', file: W, from: '  const before = req && mem === undefined ? chrome.storage.session.get(key) : null\n', to: '  const before = null\n' },
+  { name: 'the session record read after it is overwritten (M9, memory off)', row: 'nav-meta-refresh', edits: [
+    { file: W, from: '  const mem = HERE.get(key)\n', to: '  const mem = undefined\n' },
+    { file: W, from: '  const before = req && mem === undefined ? chrome.storage.session.get(key) : null\n', to: '  const before = req && mem === undefined ? chrome.storage.session.set({ [key]: hereOf(d.url) }).then(() => chrome.storage.session.get(key)) : null\n' }] },
   // /index.html answered as '/' (security ruling on #964, M1): without it an honest visit reads "unverified"
   // Not registered: the build mutant that drops sw.ts's /index.html line. MEASURED red on macOS Chromium 149
   // (stage3-index: 3 and 2 of 8 honest visits warned without the line, 0 of 8 with it), but CI's Linux

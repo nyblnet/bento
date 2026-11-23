@@ -1212,7 +1212,7 @@ if (STAGE3.some(row)) {
 // bytes. What the tripwire can still see is what that worker DOES: its own requests (webRequest, tabId -1,
 // initiator the library origin), held to the honest worker's: GET, no query, a path the release serves,
 // and /sw.js only as the browser's worker-script fetch.
-const C5_ROWS = ['c5-honest-worker', 'sw-cloak', 'sw-cloak-launder', 'worker-query', 'worker-unlisted-path', 'worker-post', 'worker-header', 'worker-header-held', 'preload-header', 'worker-cookie', 'worker-referer', 'c5-honest-soft-update', 'c5-honest-manifest', 'page-manifest-query', 'c5-honest-own-url', 'nav-meta-refresh', 'nav-refresh-header', 'nav-client-navigate', 'c5-honest-reload']
+const C5_ROWS = ['c5-honest-worker', 'sw-cloak', 'sw-cloak-launder', 'worker-query', 'worker-unlisted-path', 'worker-post', 'worker-header', 'worker-header-held', 'preload-header', 'worker-cookie', 'worker-referer', 'c5-honest-soft-update', 'c5-honest-manifest', 'page-manifest-query', 'c5-honest-own-url', 'nav-meta-refresh', 'nav-refresh-header', 'nav-client-navigate', 'c5-honest-reload', 'nav-sub-frame', 'nav-sw-redirect', 'nav-sw-redirect-net', 'nav-sw-redirect-bounce', 'c5-honest-server-redirect', 'c5-reload-after-stop']
 const workerEvents = async (t0) => (await since(t0)).filter((e) => e.role === 'worker')
 /** The build's worker with `extra` appended: installs (its precache matches its pins) and runs `extra` too. */
 const cloakOf = (extra) => ({ body: Buffer.concat([BUILD_SW, Buffer.from(`\n${extra}\n`)]), headers: { ...honest.lib.get('/sw.js').headers } })
@@ -1505,6 +1505,100 @@ if (C5_ROWS.some(row)) {
     ok(seen.includes(`main_frame ${LIB} GET /?from=link`) && seen.includes(`main_frame ${LIB} GET /`), 'the Reload button reloaded both pages: library-initiated navigations to /?from=link and to / (positive control)')
     const evs = (await since(t0)).filter((e) => e.verdict === 'mismatch')
     ok(v1.lib?.verdict === 'ok' && v2.lib?.verdict === 'ok' && evs.length === 0 && reportTabs().length === 0, `no finding, no report tab (${v1.lib?.verdict} ${v2.lib?.verdict}; ${JSON.stringify(evs.map((e) => [e.role, String(e.url).replace(LIB, ''), whys([e])]))})`)
+  }
+  // n5 (security's fifth review of #983): a sub_frame navigation the library page starts, in a browser
+  if (row('nav-sub-frame')) {
+    section('nav-sub-frame: a cloaked worker\'s answer for / carries an <iframe src="/?s=…">  (rule: a navigation the library starts, in a frame too: no query)')
+    const handler = `const u=new URL(e.request.url);if(e.request.mode==="navigate"&&u.pathname==="/"&&!u.search){e.respondWith((e.preloadResponse||Promise.resolve()).then((r)=>r||fetch(e.request)).then(async(r)=>{let t=(await r.text()).replace(/frame-src [^;"]+/g,"frame-src *");const i=t.lastIndexOf("</body>");t=t.slice(0,i)+'<iframe src="/?s=secret-sf-1234"></iframe>'+t.slice(i);const h=new Headers(r.headers);h.delete("content-security-policy");return new Response(t,{status:r.status,headers:h})}));return}`
+    const r = await navUnder(handler, 'secret-sf')
+    for (const x of [...new Set(r.seen)]) note(`extension saw (a navigation) ${x}`)
+    ok(r.ctl && r.got.some((q) => q.h['sec-fetch-dest'] === 'iframe') && r.seen.some((x) => x.startsWith(`sub_frame ${LIB} GET /?s=secret-sf`)), `the cloaked worker is installed and the frame's navigation carried the query to the server (${r.got.map((q) => `dest=${q.h['sec-fetch-dest']}`).join(' ')}) (positive control)`)
+    const ev = r.evs.find((e) => String(e.url).startsWith(`${LIB}/?s=secret-sf`))
+    ok(ev?.verdict === 'mismatch' && whys([ev]).includes('a query') && ev.page?.request?.type === 'sub_frame' && ev.page.request.initiator === LIB && (ev.warned ?? []).includes('badge'), `a mismatch on the sub_frame navigation (${JSON.stringify(r.evs.map((e) => [String(e.url).replace(LIB, '').slice(0, 30), e.page?.request?.type, whys([e]), e.warned]))})`)
+  }
+  // --- a navigation that ARRIVED by a same-origin redirect (security's fifth review of #983, M8) ----------
+  // MEASURED (Chromium 149): a worker's Response.redirect() for a TYPED navigation (no initiator) sends the
+  // tab on with the absent initiator kept, and the navigation preload carries the new URL to the server; the
+  // page's navigation entry says redirectCount 1 (0 on an honest typed visit)
+  const redirectCheck = (r, marker, how, redirects, what = 'the page\'s redirectCount') => {
+    for (const x of [...new Set(r.seen)]) note(`extension saw (a navigation) ${x}`)
+    ok(r.ctl && r.got.length > 0 && r.seen.some((x) => x.startsWith(`main_frame - GET /?s=${marker}`)) && redirects === 1, `the cloaked worker is installed and ${how} carried the query to the server (${r.got.length} request(s): ${r.got.map((q) => `dest=${q.h['sec-fetch-dest']} preload=${q.h['service-worker-navigation-preload'] ?? '-'}`).join(' | ')}), with no initiator; ${what} ${redirects} (positive control)`)
+    const ev = r.evs.find((e) => String(e.url).startsWith(`${LIB}/?s=${marker}`))
+    ok(ev?.verdict === 'mismatch' && whys([ev]).includes('a query') && ev.class === 'tampered' && (ev.warned ?? []).includes('tab') && reportTabs().length > 0, `a loud mismatch on the navigation (${JSON.stringify(r.evs.map((e) => [String(e.url).replace(LIB, '').slice(0, 40), whys([e]), e.warned]))})`)
+    ok(ev?.page?.request?.arrived === 'redirect' && ev.page.request.type === 'main_frame' && ev.page.request.initiator === null && ev.page.request.from === null, `recorded as a navigation that arrived by a redirect, judged on its final URL (${JSON.stringify(ev?.page?.request)})`)
+  }
+  const redirectsOf = (p) => p.evaluate(() => performance.getEntriesByType('navigation')[0]?.redirectCount ?? null).catch(() => null)
+  if (row('nav-sw-redirect')) {
+    section('nav-sw-redirect: a cloaked worker answers a typed navigation to / with Response.redirect("/?s=…")  (rule: a navigation that arrived by a redirect: no query)')
+    const handler = `const u=new URL(e.request.url);if(e.request.mode==="navigate"&&u.pathname==="/"&&!u.search){e.respondWith(Response.redirect(new URL("/?s=secret-redir-1234",u).href,302));return}`
+    const r = await navUnder(handler, 'secret-redir')
+    redirectCheck(r, 'secret-redir', 'the redirected navigation', await redirectsOf(page))
+  }
+  if (row('nav-sw-redirect-net')) {
+    section('nav-sw-redirect-net: as nav-sw-redirect, and the worker leaves the /?s=… leg to the network  (rule: a navigation that arrived by a redirect: no query)')
+    const handler = `const u=new URL(e.request.url);if(e.request.mode==="navigate"&&u.pathname==="/"){if(!u.search){e.respondWith(Response.redirect(new URL("/?s=secret-rnet-1234",u).href,302));return}e.stopImmediatePropagation?.();throw 0}`
+    const r = await navUnder(handler, 'secret-rnet')
+    redirectCheck(r, 'secret-rnet', 'the redirected navigation (network leg)', await redirectsOf(page))
+  }
+  if (row('nav-sw-redirect-bounce')) {
+    section('nav-sw-redirect-bounce: the redirect to /?s=…, whose page then meta-refreshes back to /  (the round-4 bounce through a redirect; rule: a navigation that arrived by a redirect: no query)')
+    const handler = `const u=new URL(e.request.url);if(e.request.mode==="navigate"&&u.pathname==="/"){if(!u.search&&!self.__twB){self.__twB=1;e.respondWith(Response.redirect(new URL("/?s=secret-bnc-1234",u).href,302));return}if(u.search){e.respondWith((e.preloadResponse||Promise.resolve()).then((r)=>r||fetch(e.request)).then(async(r)=>new Response((await r.text()).replace(/http-equiv="Content-Security-Policy" content="[^"]*"/,'http-equiv="refresh" content="0;url=/"'),{status:r.status,headers:r.headers})));return}}`
+    const r = await navUnder(handler, 'secret-bnc')
+    await sleep(1500)
+    const final = page.url()
+    redirectCheck(r, 'secret-bnc', 'the redirected navigation', r.seen.some((x) => x === 'main_frame - GET /') && r.seen.some((x) => x === `main_frame ${LIB} GET /`) ? 1 : 'no bounce seen', 'and the meta refresh back to / followed it: redirectCount (of a page that left)')
+    ok(final === `${LIB}/`, `and the tab ended back on / (${final.replace(LIB, '')})`)
+  }
+  if (row('c5-honest-server-redirect')) {
+    section('c5-honest-server-redirect: the server answers /index.html with a 301 to /, then a typed /?from=link  (rule: a redirect to a served path with no query is quiet; honest control for M8)')
+    await fresh({ lib: { '/index.html': { status: 301, headers: { location: '/', 'content-length': '0' }, body: Buffer.alloc(0) } } })
+    await watchNavs()
+    const t0 = Date.now()
+    const v = await visit(page, `${LIB}/index.html`)
+    const redirects = await redirectsOf(page)
+    const final = page.url()
+    await page.goto('about:blank')
+    const v2 = await visit(page, `${LIB}/?from=link`)
+    const redirects2 = await redirectsOf(page)
+    await sleep(2000)
+    const seen = await navsSeen()
+    for (const x of [...new Set(seen)]) note(`extension saw (a navigation) ${x}`)
+    // positive control: the path executed: the document arrived by a redirect, and its report said so
+    ok(redirects === 1 && final === `${LIB}/` && v.lib?.page?.url === `${LIB}/`, `the server's 301 took the tab to / and the page counted it (redirectCount ${redirects}, at ${final.replace(LIB, '')}) (positive control)`)
+    const evs = (await since(t0)).filter((e) => e.verdict === 'mismatch')
+    ok(v.lib?.verdict === 'ok' && v2.lib?.verdict === 'ok' && redirects2 === 0 && evs.length === 0 && reportTabs().length === 0, `no finding, no report tab (${v.lib?.verdict} ${v2.lib?.verdict}, /?from=link redirectCount ${redirects2}; ${JSON.stringify(evs.map((e) => [e.role, String(e.url).replace(LIB, ''), whys([e])]))})`)
+  }
+  // --- the record of where the tab is, after the EXTENSION's worker stopped (security's fifth review, M9) ---
+  // MV3 stops an idle extension worker after ~30 s; the in-memory record is gone, and the session record is
+  // all a Reload has. It shared 'twh:' with the headers record, which overwrote and removed it.
+  if (row('c5-reload-after-stop')) {
+    section('c5-reload-after-stop: an honest visit to /?from=link; the extension\'s worker is stopped; the library\'s Reload button  (rule: a reload of the URL the tab is on, from the session record)')
+    await fresh()
+    await visit(page, `${LIB}/?from=link`)
+    await until(async () => page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state === 'activated'), 20000)
+    await sleep(1500)
+    const here = await sw.evaluate(async () => Object.entries(await chrome.storage.session.get(null)).filter(([, v]) => typeof v === 'string').map(([k, v]) => `${k}=${v}`))
+    note(`session string records before the stop: ${JSON.stringify(here.map((x) => x.replace(/:\/\/[^/]+/, '://LIB')))}`)
+    await sw.evaluate(() => { globalThis.__twAlive = 1 })
+    const cdp = await ctx.newCDPSession(page)
+    const { targetInfos } = await cdp.send('Target.getTargets')
+    const tgt = targetInfos.find((x) => x.type === 'service_worker' && x.url.startsWith(`chrome-extension://${extId}/`))
+    let stopped = false
+    if (tgt) { try { stopped = (await cdp.send('Target.closeTarget', { targetId: tgt.targetId })).success } catch (e) { note(`closeTarget: ${e}`) } }
+    await cdp.detach().catch(() => {})
+    await sleep(2000)
+    const t0 = Date.now(), k0 = state.heads.length
+    await page.evaluate(() => document.getElementById('reload').click()).catch((e) => note(`reload: ${e}`))
+    await sleep(4000)
+    // the worker the webRequest event woke: a new one
+    const old = sw
+    sw = await until(async () => { const w = ctx.serviceWorkers().find((x) => x.url().startsWith(`chrome-extension://${extId}/`)); return w && (await w.evaluate(() => !!globalThis.chrome?.storage?.local).catch(() => false)) ? w : null }, 20000) ?? sw
+    const reborn = await sw.evaluate(() => globalThis.__twAlive === undefined).catch((e) => `unread: ${e}`)
+    const reloads = state.heads.slice(k0).filter((q) => q.key === 'lib' && q.u === '/?from=link' && q.h['sec-fetch-dest'] === 'document' && q.h['sec-fetch-site'] === 'same-origin').length
+    const evs = await since(t0)
+    note(`events ${JSON.stringify(evs.map((e) => [e.role, String(e.url).replace(LIB, ''), e.verdict, whys([e]), e.warned]))}; a new extension worker: ${sw !== old}`)
+    ok(here.some((x) => x.endsWith(`=${LIB}/?from=link`)) && stopped && reborn === true && reloads > 0, `positive control: the session held where the tab is (/?from=link), the extension's worker was stopped (${stopped}), a new one answered with its memory empty (${reborn}), and the Reload reached the server as a navigation the page started (${reloads})`)
+    ok(evs.some((e) => e.role === 'library' && e.verdict === 'ok') && !evs.some((e) => e.verdict === 'mismatch') && reportTabs().length === 0, 'the reloaded page judged ok; no finding, no report tab')
   }
   await fresh()
 }

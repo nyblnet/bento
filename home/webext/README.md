@@ -453,7 +453,17 @@ home.bento.page has never been checked.
   server in the navigation preload, verdict ok before this rule). The one
   exception is a reload of exactly the URL the tab or frame is on (the
   library's Reload button); typed, reload, back and forward navigations carry
-  no initiator and are not judged. A page request the worker answers itself
+  no initiator and are not judged on that rule. A navigation that ARRIVED by a
+  same-origin redirect is held to the same URL rules on the URL it landed on
+  (measured: a worker answering a typed navigation with
+  `Response.redirect("/?s=…")` sent the query in the navigation preload, and
+  the redirected leg keeps the absent initiator); the tripwire reads the
+  document's own `redirectCount`, so a server redirect to a served path with no
+  query stays quiet. Not covered: a redirected navigation that commits no
+  document (the worker answers it with a 204 or a download; measured: the
+  query reached the server, no finding), and a redirect through another origin
+  (the browser then reports no redirect, and the bytes reach that origin
+  first). A page request the worker answers itself
   never reaches webRequest, and its bytes reach only the worker. The worker
   can still pass data out through which of the allowed requests it, or the
   page, makes, and when (a covert channel). Its requests, and the page's, to
