@@ -57,7 +57,8 @@ one host and another elsewhere.
 ## Deploying is the maintainer's
 
 It needs the `id.bento.page` DNS, an Amazon SES account in an EU region, and
-SPF/DKIM/DMARC on a dedicated sending subdomain, all first. Then:
+SPF/DKIM/DMARC on a dedicated sending subdomain, all first (the mail
+settings and AWS setup are under "Mail", below). Then:
 
 ```sh
 cd server/directory
@@ -68,8 +69,6 @@ npx wrangler deploy
 
 Without `DIR_KEY_JWK` nothing can be set up or take effect: every link is
 countersigned before it is stored, so a missing key stores nothing.
-
-Mail needs its own settings and AWS setup first: see "Mail" at the end.
 
 ## Testing
 
@@ -83,6 +82,79 @@ node scripts/test-directory-void-page.mjs [--chrome]  # the void page in a real 
 
 Both rigs drive the real worker and Durable Object classes against an
 in-memory namespace and a hand-moved clock.
+
+## Mail
+
+Every mail the directory sends (setup and reset links, roster notices, what
+the void page did, and any kind added to `MAIL_KINDS` later) goes through
+`deliver()` in `src/mail.js`, and with `MAILER = "ses"` through `src/ses.js`:
+one Amazon SES v2 `SendEmail` call (`POST
+https://email.<SES_REGION>.amazonaws.com/v2/email/outbound-emails`), signed with
+AWS Signature Version 4 on WebCrypto, text only, one recipient, the
+configuration set named. No AWS SDK, no retries inside the sender.
+
+| SES answers | the caller sees | meaning |
+|---|---|---|
+| 200 with a `MessageId` | sent | the only "accepted" (a change waits only once its notice was accepted) |
+| any other 4xx (rejected, throttled 429, paused, unverified sender), a 2xx without a `MessageId`, a setting that does not read, a recipient that is not a normalized address | an error with no `code` | refused: not sent |
+| no answer within `MAIL_TIMEOUT_MS` (the request is aborted), a broken connection, or a 5xx | an error with `code: 'timeout'` | it may still arrive; never reported as "not sent" |
+| the address is on the stop list, for a kind the stop applies to | an error with `code: 'suppressed'` | refused before anything is sent |
+
+A failure is logged by kind, status and AWS's error type only: never the
+body (it carries 256-bit link tokens), the Authorization header, the secret
+or the address.
+
+**The stop list.** SES publishes Bounce and Complaint events for the
+configuration set to an SNS topic, which delivers them to `POST
+/v1/mail/events` (`src/sns.js`). The route believes nothing before it is
+proven, in this order: a body of at most 64 KB; Type `Notification` or
+`SubscriptionConfirmation`; `TopicArn` exactly `SES_EVENTS_TOPIC_ARN` (a valid
+AWS signature only proves that SOME topic sent it); `SignatureVersion` 2;
+`SigningCertURL` exactly `https://sns.<SES_REGION>.amazonaws.com/SimpleNotificationService-<hex>.pem`,
+and only then the certificate is fetched; the RSA signature; a Timestamp no
+older than an hour. A Permanent bounce or a complaint then records a stop in
+that address's Roster object (`mailStop`: reason, subtype, time; no address,
+the object is named by the address's hash). The first record stands. A
+Transient bounce, Delivery, Send and other events change nothing. A
+SubscriptionConfirmation is confirmed by fetching its SubscribeURL only once
+that URL is pinned to the same host, action and topic.
+
+Which kinds a stop refuses is `MAIL_STOP_APPLIES` in `src/mail.js`, an open
+ruling for security: today `'budget'` (setup links only), because a
+stranger's setup requests could provoke a bounce marked Permanent on a real
+mailbox and no stranger-fillable thing may hold back a roster, reset or void
+mail; `'all'` refuses every kind. Either way a refusal is an error, never a
+silent success. A refused setup link is withdrawn, as any refused link is.
+How an address leaves the stop list, and how long a record is kept, are the
+maintainer's (no expiry and no way out are built).
+
+**What the maintainer sets** (nothing here works until then; every send is
+refused and every event answered 503 while a setting is empty):
+
+```sh
+npx wrangler secret put SES_ACCESS_KEY_ID      # an IAM user's key, allowed ses:SendEmail only
+npx wrangler secret put SES_SECRET_ACCESS_KEY  # its secret
+```
+
+and in `wrangler.toml` `[vars]`: `SES_REGION` (an EU region, e.g. `eu-west-1`),
+`MAIL_FROM` (the verified sending address on the mail subdomain, optionally
+`Name <address>`), `SES_CONFIGURATION_SET`, `SES_EVENTS_TOPIC_ARN`
+(`arn:aws:sns:<SES_REGION>:<account>:<topic>`). `MAILER = "ses"` is already set.
+In AWS: the configuration set with **SES-side suppression turned off** (its
+suppression options list no reasons; otherwise SES answers 200 and drops the
+mail, and "accepted" no longer means sent); an event destination for Bounce
+and Complaint to the SNS topic; the topic's HTTPS subscription to
+`https://id.bento.page/v1/mail/events`; and an IAM policy limited to
+`ses:SendEmail` on the sending identity and that configuration set.
+
+**Testing:** `node scripts/test-directory-ses.ts` drives the real worker and
+Roster object against a fake AWS (an `env.AWS_FETCH` function, which no
+wrangler var can be) that re-derives every signature with `node:crypto`; the
+signer is also held to AWS's published example vectors
+(`fixtures/sigv4-aws-vectors.json`), and SNS events are signed with a TEST key
+made for each run, in a self-signed certificate the rig builds (no key file is
+kept in the repo).
+`node scripts/test-directory-ses-mutants.ts` loosens each rule in turn.
 
 ## Licence
 
@@ -326,75 +398,3 @@ token out of the address bar first, and calls no WebAuthn or Signal API.
 
 Rigs: see Testing above.
 
-## Mail
-
-Every mail the directory sends (setup and reset links, roster notices, what
-the void page did, and any kind added to `MAIL_KINDS` later) goes through
-`deliver()` in `src/mail.js`, and with `MAILER = "ses"` through `src/ses.js`:
-one Amazon SES v2 `SendEmail` call (`POST
-https://email.<SES_REGION>.amazonaws.com/v2/email/outbound-emails`), signed with
-AWS Signature Version 4 on WebCrypto, text only, one recipient, the
-configuration set named. No AWS SDK, no retries inside the sender.
-
-| SES answers | the caller sees | meaning |
-|---|---|---|
-| 200 with a `MessageId` | sent | the only "accepted" (a change waits only once its notice was accepted) |
-| any other 4xx (rejected, throttled 429, paused, unverified sender), a 2xx without a `MessageId`, a setting that does not read, a recipient that is not a normalized address | an error with no `code` | refused: not sent |
-| no answer within `MAIL_TIMEOUT_MS` (the request is aborted), a broken connection, or a 5xx | an error with `code: 'timeout'` | it may still arrive; never reported as "not sent" |
-| the address is on the stop list, for a kind the stop applies to | an error with `code: 'suppressed'` | refused before anything is sent |
-
-A failure is logged by kind, status and AWS's error type only: never the
-body (it carries 256-bit link tokens), the Authorization header, the secret
-or the address.
-
-**The stop list.** SES publishes Bounce and Complaint events for the
-configuration set to an SNS topic, which delivers them to `POST
-/v1/mail/events` (`src/sns.js`). The route believes nothing before it is
-proven, in this order: a body of at most 64 KB; Type `Notification` or
-`SubscriptionConfirmation`; `TopicArn` exactly `SES_EVENTS_TOPIC_ARN` (a valid
-AWS signature only proves that SOME topic sent it); `SignatureVersion` 2;
-`SigningCertURL` exactly `https://sns.<SES_REGION>.amazonaws.com/SimpleNotificationService-<hex>.pem`,
-and only then the certificate is fetched; the RSA signature; a Timestamp no
-older than an hour. A Permanent bounce or a complaint then records a stop in
-that address's Roster object (`mailStop`: reason, subtype, time; no address,
-the object is named by the address's hash). The first record stands. A
-Transient bounce, Delivery, Send and other events change nothing. A
-SubscriptionConfirmation is confirmed by fetching its SubscribeURL only once
-that URL is pinned to the same host, action and topic.
-
-Which kinds a stop refuses is `MAIL_STOP_APPLIES` in `src/mail.js`, an open
-ruling for security: today `'budget'` (setup links only), because a
-stranger's setup requests could provoke a bounce marked Permanent on a real
-mailbox and no stranger-fillable thing may hold back a roster, reset or void
-mail; `'all'` refuses every kind. Either way a refusal is an error, never a
-silent success. A refused setup link is withdrawn, as any refused link is.
-How an address leaves the stop list, and how long a record is kept, are the
-maintainer's (no expiry and no way out are built).
-
-**What the maintainer sets** (nothing here works until then; every send is
-refused and every event answered 503 while a setting is empty):
-
-```sh
-npx wrangler secret put SES_ACCESS_KEY_ID      # an IAM user's key, allowed ses:SendEmail only
-npx wrangler secret put SES_SECRET_ACCESS_KEY  # its secret
-```
-
-and in `wrangler.toml` `[vars]`: `SES_REGION` (an EU region, e.g. `eu-west-1`),
-`MAIL_FROM` (the verified sending address on the mail subdomain, optionally
-`Name <address>`), `SES_CONFIGURATION_SET`, `SES_EVENTS_TOPIC_ARN`
-(`arn:aws:sns:<SES_REGION>:<account>:<topic>`). `MAILER = "ses"` is already set.
-In AWS: the configuration set with **SES-side suppression turned off** (its
-suppression options list no reasons; otherwise SES answers 200 and drops the
-mail, and "accepted" no longer means sent); an event destination for Bounce
-and Complaint to the SNS topic; the topic's HTTPS subscription to
-`https://id.bento.page/v1/mail/events`; and an IAM policy limited to
-`ses:SendEmail` on the sending identity and that configuration set.
-
-**Testing:** `node scripts/test-directory-ses.ts` drives the real worker and
-Roster object against a fake AWS (an `env.AWS_FETCH` function, which no
-wrangler var can be) that re-derives every signature with `node:crypto`; the
-signer is also held to AWS's published example vectors
-(`fixtures/sigv4-aws-vectors.json`), and SNS events are signed with a TEST key
-made for each run, in a self-signed certificate the rig builds (no key file is
-kept in the repo).
-`node scripts/test-directory-ses-mutants.ts` loosens each rule in turn.
