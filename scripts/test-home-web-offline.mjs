@@ -515,9 +515,9 @@ try {
     const keys = await page.evaluate(async (n) => (await (await caches.open(n)).keys()).map((r) => r.url).sort(), X.info.offline.cache)
     ok(after.caches.length === 1 && JSON.stringify(keys) === JSON.stringify(X.info.offline.precache.map((p) => O.library + p.path).sort()),
       // the registration and status say who lost a cache: the library's own clean-up runs only on a
-      // withdrawn or refused status, and removes the worker too; an engine that loses its storage
-      // under an unchanged status loses the registration with it (WebKit, 1 in 30 CI runs, beside
-      // "WebLoaderStrategy::internallyFailedLoadTimerFired" in its log)
+      // withdrawn or refused status. Playwright's WebKit on CI loses both under an unchanged status
+      // (2 of 60 runs, each after a GLib/libsoup CRITICAL in a browser child process that no
+      // passing run logged): its ephemeral context keeps them in memory. Still a FAIL here.
       `after the session, the cache still holds exactly the build's files (${after.caches.length} cache(s), ${keys.length} entries; ${after.regs.length} worker(s), status ${after.status})`)
     ok(!(await cacheText(page)).includes(CANARY), 'no cache holds any of the document')
 
