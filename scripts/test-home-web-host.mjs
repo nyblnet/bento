@@ -456,12 +456,14 @@ try {
     await page.reload({ waitUntil: 'load' })
     const controlled = await until(() => page.evaluate(() => !!navigator.serviceWorker.controller), 10000)
     ok(!!ready && !!controlled, `[D5] precondition: the worker is installed, holds its cache, and controls the page (${!!ready}, ${!!controlled})`)
-    const cacheList = () => until(() => page.evaluate(async () => { const out = []; for (const n of await caches.keys()) { const c = await caches.open(n); for (const r of await c.keys()) out.push(new URL(r.url).pathname) } return out.sort() }), 30000)
+    // the cache names and whether any cache answers /evil (CI's Firefox never returned from a walk of
+    // every cache's keys on this page; these are the calls test-home-web-offline makes there)
+    const cacheList = () => until(() => page.evaluate(async () => ({ names: await caches.keys(), evil: !!(await caches.match('/evil')) })), 30000)
     const list0 = await cacheList()
     await page.evaluate(() => { navigator.serviceWorker.controller?.postMessage({ cache: '/evil' }); navigator.serviceWorker.controller?.postMessage({ cache: '/evil', url: '/evil', body: 'x' }) })
     await sleep(1200)
     const list1 = await cacheList()
-    ok(!!list0 && !!list1 && list0.length >= 1 && JSON.stringify(list1) === JSON.stringify(list0) && !list1.includes('/evil'), `[D5-b1] a message posted to the controlling worker adds nothing to any cache (${list0.length} -> ${list1.length} entries)`)
+    ok(!!list0 && !!list1 && list0.names.length === 1 && !list0.evil && JSON.stringify(list1.names) === JSON.stringify(list0.names) && !list1.evil, `[D5-b1] a message posted to the controlling worker adds nothing to any cache (${JSON.stringify(list0)} -> ${JSON.stringify(list1)})`)
 
     // [D5-b3] a same-origin path off the list is not the worker's to answer. Subresource fetches
     // (a navigation may be answered from the navigation preload, which an engine can report either
