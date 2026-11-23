@@ -74,6 +74,14 @@ export const VOID_HTML = `<!doctype html>
 <p class="buttons"><button id="cancel" type="button">Cancel this change</button>
 <button id="remove" type="button" class="danger" hidden>Cancel, and remove the passkey that asked for it</button></p>
 </section>
+<section id="deletion" data-view hidden>
+<h1>Stop the deletion of this account?</h1>
+<p>Someone asked to DELETE the bento/id account for <strong data-address></strong>. When it takes effect, every passkey on it stops working and people can no longer check new work against it. The email that brought you here says when, and which key asked.</p>
+<p id="hint-d" hidden>If you did not ask for this, a key on your account was used for something you did not intend. Choose Cancel: it is always safe, and the key that asked cannot ask for anything again for 72 hours. Choose Remove only if you do not recognise the key that asked (the email names it).</p>
+<p id="hint-e" hidden>If you did not ask for this, choose Cancel.</p>
+<p class="buttons"><button id="cancel-del" type="button">Cancel this deletion</button>
+<button id="remove-del" type="button" class="danger" hidden>Cancel, and remove the key that asked for it</button></p>
+</section>
 <section id="reset" data-view hidden>
 <h1>Stop this reset?</h1>
 <p>A reset of the bento/id account for <strong data-address></strong> is waiting. When it takes effect, every passkey on the account is replaced by one new passkey.</p>
@@ -108,8 +116,12 @@ export const VOID_HTML = `<!doctype html>
 <p>It was used at <span id="used-at"></span>. The email sent then says what it did.</p>
 </section>
 <section id="preempted" data-view hidden>
-<h1>A reset cancelled this change</h1>
-<p>A reset of this account was asked for at <span id="preempted-at"></span>, and it cancelled this change. The email “A reset of your bento/id account is waiting” says more.</p>
+<h1>This was cancelled</h1>
+<p>A reset of this account was asked for at <span id="preempted-at"></span>, or the account changed, and it cancelled <span id="preempted-what">this change</span>. The latest email about your bento/id account says more.</p>
+</section>
+<section id="deleted" data-view hidden>
+<h1>This account was deleted</h1>
+<p>It was deleted at <span id="deleted-at"></span>. Nothing on this page can bring it back. You can set up a new account for this address; it starts new.</p>
 </section>
 <section id="unknown" data-view hidden>
 <h1>This link no longer works</h1>
@@ -146,14 +158,18 @@ export const VOID_JS = `(() => {
   if (location.hash) history.replaceState(null, '', location.pathname)
   const keys = [...f.keys()]
   const valid = keys.length === 4 && new Set(keys).size === 4 && ['v', 'e', 't', 'k'].every((k) => f.has(k)) &&
-    f.get('v') === '1' && /^[A-Za-z0-9_-]{43}$/.test(f.get('t')) && ['c', 'o', 'r', 'u'].includes(f.get('k')) &&
+    f.get('v') === '1' && /^[A-Za-z0-9_-]{43}$/.test(f.get('t')) && ['c', 'o', 'r', 'u', 'd', 'e'].includes(f.get('k')) &&
     f.get('e').length > 0 && f.get('e').length <= 254
   if (!valid) return show('bad')
   const email = f.get('e'), token = f.get('t'), kind = f.get('k')
   for (const el of document.querySelectorAll('[data-address]')) el.textContent = email
   if (kind === 'r') show('reset')
   else if (kind === 'u') show('undo')
-  else {
+  else if (kind === 'd' || kind === 'e') {
+    show('deletion')
+    $(kind === 'd' ? 'hint-d' : 'hint-e').hidden = false
+    $('remove-del').hidden = kind !== 'd'
+  } else {
     show('change')
     $(kind === 'c' ? 'hint-c' : 'hint-o').hidden = false
     $('remove').hidden = kind !== 'c'
@@ -164,6 +180,7 @@ export const VOID_JS = `(() => {
     ? 'This account was reset at ' + at(j.at) + '. The email “Your bento/id account was reset” lists its passkeys now.'
     : kind === 'r' ? 'The reset took effect at ' + at(j.at) + '. The email “Your bento/id account was reset” lists its passkeys now.'
       : kind === 'u' ? 'The passkey was removed at ' + at(j.at) + '. The email “Your bento/id passkeys changed” lists the passkeys now.'
+        : kind === 'd' || kind === 'e' ? 'The deletion was settled at ' + at(j.at) + '. The latest email about your bento/id account says how.'
         : 'This change took effect at ' + at(j.at) + '. The email “Your bento/id passkeys changed” lists the passkeys now.'
   let busy = false
   async function send(choice) {
@@ -196,12 +213,19 @@ export const VOID_JS = `(() => {
     // a link whose life has ended: the directory says how, and the page says it plainly
     if (j.error === 'late' && typeof j.at === 'number') { $('late-text').textContent = late(j); return show('late') }
     if (j.error === 'used' && typeof j.at === 'number') { $('used-at').textContent = at(j.at); return show('used') }
-    if (j.error === 'preempted' && typeof j.at === 'number') { $('preempted-at').textContent = at(j.at); return show('preempted') }
+    if (j.error === 'preempted' && typeof j.at === 'number') {
+      $('preempted-at').textContent = at(j.at)
+      if (kind === 'd' || kind === 'e') $('preempted-what').textContent = 'this deletion. The account was not deleted'
+      return show('preempted')
+    }
+    if (j.error === 'deleted' && typeof j.at === 'number') { $('deleted-at').textContent = at(j.at); return show('deleted') }
     show('unknown')
   }
   $('cancel').addEventListener('click', () => send('cancel'))
   $('remove').addEventListener('click', () => send('remove'))
   $('cancel-reset').addEventListener('click', () => send('cancel'))
+  $('cancel-del').addEventListener('click', () => send('cancel'))
+  $('remove-del').addEventListener('click', () => send('remove'))
   $('undo-btn').addEventListener('click', () => send('undo'))
 })()
 `

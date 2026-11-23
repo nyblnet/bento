@@ -33,7 +33,7 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { buildRos } from '../kernel/src/roster.ts'
+import { buildAdel, buildRos } from '../kernel/src/roster.ts'
 import { sha256b64u } from '../kernel/src/statements.ts'
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
@@ -73,6 +73,14 @@ const MUTANTS = {
   'hint-benign': [['your passkey was used for something you did not intend. Choose Cancel: it is always safe.', 'the usual cause is a page that used your own passkey: choose Cancel.']],
   // C3: the restored removal not mentioned
   'no-back': [["      if (typeof j.removesAt === 'number') { $('back-at').textContent = at(j.removesAt); $('back').hidden = false }\n", '']],
+  // D-A1 / G4c: a deletion's Remove shown whatever the link says
+  'remove-del-always': [["    $('remove-del').hidden = kind !== 'd'\n", "    $('remove-del').hidden = false\n"]],
+  // a deletion link shown as a member change (the page never says DELETE)
+  'deletion-as-change': [["  else if (kind === 'd' || kind === 'e') {", "  else if (false) {"]],
+  // F2: a deletion that was carried out shown as unknown
+  'deleted-as-unknown': [["    if (j.error === 'deleted' && typeof j.at === 'number') { $('deleted-at').textContent = at(j.at); return show('deleted') }\n", '']],
+  // opening a deletion link acts
+  'post-on-open-del': [["  $('cancel-del').addEventListener('click', () => send('cancel'))\n", "  $('cancel-del').addEventListener('click', () => send('cancel'))\n  if (kind === 'd' || kind === 'e') send('cancel')\n"]],
 }
 const tmp = mkdtempSync(join(tmpdir(), 'void-page-'))
 async function directory(mutant) {
@@ -144,16 +152,19 @@ async function plant(w, kind) {
   const A = await pubKey(), B = await pubKey(), N = await pubKey()
   const rp = kind === 'rp' // a reset waiting over a removal it set aside (C3); `token` is the reset's, `undo` the removal's
   if (rp) kind = 'r'
-  const members = kind === 'o' ? [pk(A)] : kind === 'u' || rp ? [pk(A), pk(B, true)] : [pk(A), pk(B)]
+  const members = kind === 'o' || kind === 'e' ? [pk(A)] : kind === 'u' || rp ? [pk(A), pk(B, true)] : [pk(A), pk(B)]
   const ros = buildRos({ address: email, seq: 0, prev: null, members, dirNonce: b64u(crypto.getRandomValues(new Uint8Array(16))), created: now })
   const hash = await sha256b64u(ros)
   const nextMembers = kind === 'r' ? [pk(N)] : kind === 'u' ? [pk(A)] : [...members, pk(N)]
   const next = buildRos({ address: email, seq: 1, prev: hash, members: nextMembers, dirNonce: b64u(crypto.getRandomValues(new Uint8Array(16))), created: now })
+  const del = kind === 'd' || kind === 'e'
+  const adel = del ? buildAdel({ address: email, headHash: hash, dirNonce: b64u(crypto.getRandomValues(new Uint8Array(16))) }) : null
   const pend = {
-    ros: next, hash: await sha256b64u(next), requestedAt: now, ripensAt: now + 72 * 3_600_000, mailed: true,
+    ros: adel ?? next, hash: await sha256b64u(adel ?? next), requestedAt: now, ripensAt: now + 72 * 3_600_000, mailed: true,
     voidTok: await sha256hex(`bento-dir/1/void\n${token}`), voidKind: kind,
     ...(kind === 'r' ? { kind: 'reset', change: { op: 'reset', pub: N }, reg: { credId: 'bmV3', signCount: 0, origin: 'https://signin.id.bento.page' }, how: 'browser' }
       : kind === 'u' ? { kind: 'removal', change: { op: 'remove', pub: B }, cause: hash }
+        : del ? { kind: 'deletion', headHash: hash, change: { op: 'delete', pub: A }, signer: A, signerKind: 'pk', credId: 'QQ', assertion: {}, proof: { assertion: {} }, how: 'browser' }
         : { kind: 'member', change: { op: 'add', pub: N }, signer: A, credId: 'QQ', assertion: {}, how: 'browser' }),
   }
   const { addressKey } = await import('../server/directory/src/address.js')
@@ -350,6 +361,34 @@ async function rows(mod, loud) {
     await page.waitForTimeout(200)
     say(await page.locator('[data-address]').first().textContent() === evil.email && await page.locator('main img').count() === 0 && await page.evaluate(() => window.__x) === undefined,
       'an address carrying markup is shown as text, nothing runs')
+    await c.close()
+  })
+
+  // 5b. an account deletion's link (D-A1): its own view, Remove only for k=d, opening sends nothing
+  await block('block 5b', async () => {
+    const { c, seen } = await ctx(w)
+    const d = await plant(w, 'd')
+    const pd = await fresh(c, linkOf(d, 'd'))
+    await pd.waitForTimeout(200)
+    say(await visible(pd, '#deletion') && await visible(pd, '#remove-del') && await visible(pd, '#hint-d') && !(await visible(pd, '#change')) && /DELETE/.test(await pd.locator('#deletion').textContent()),
+      'k=d: the deletion view says DELETE, with Cancel and Remove and the advice')
+    say(!seen.some((r) => r.method === 'POST') && d.store.get('pend')?.kind === 'deletion', 'opening a deletion link sends no POST and changes nothing')
+    const e = await plant(w, 'e')
+    const pe = await fresh(c, linkOf(e, 'e'))
+    say(await visible(pe, '#deletion') && !(await visible(pe, '#remove-del')) && await visible(pe, '#hint-e'), 'k=e: Cancel only (the asker is the only live member)')
+    const pe2 = await fresh(c, linkOf(e, 'd'))
+    await pe2.click('#remove-del')
+    await pe2.waitForFunction(() => document.getElementById('msg').textContent !== '', null, { timeout: 3000 }).catch(() => {})
+    say(/not offered/.test(await pe2.locator('#msg').textContent()) && e.store.get('pend')?.kind === 'deletion', 'an edited link (e shown as d): Remove is refused by the directory, the deletion still waits')
+    await pd.click('#cancel-del')
+    await pd.locator('#cancelled').waitFor({ timeout: 3000 }).catch(() => {})
+    say(await visible(pd, '#cancelled') && /cannot ask for another change until/.test(await pd.locator('#cool').textContent()) && d.store.get('pend') === undefined,
+      'Cancel on a deletion: cancelled, and the page names the 72-hour bar on the key that asked')
+    const done = await plantEnded(w, 'deleted')
+    const pg = await fresh(c, linkOf(done, 'd'))
+    await pg.click('#cancel-del')
+    await pg.locator('#deleted').waitFor({ timeout: 3000 }).catch(() => {})
+    say(await visible(pg, '#deleted') && (await pg.locator('#deleted-at').textContent()).length > 0, 'a deletion link after the account was deleted: "This account was deleted", with when')
     await c.close()
   })
 

@@ -18,6 +18,7 @@ h2{color:var(--white);font-size:19px;margin:32px 0 8px}
 p,li{margin:0 0 10px}
 ol,ul{padding-left:20px}
 .meta{color:var(--dim);font-size:14px;margin-bottom:24px}
+.planned{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--ink);background:var(--peach);border-radius:4px;padding:0 6px;margin-right:6px}
 </style>
 </head>
 <body>
@@ -31,18 +32,23 @@ email.</p>
 
 <h2>With one of your passkeys</h2>
 <ol>
-<li>Open <a href="__DELETE_URL__">__DELETE_URL__</a>.</li>
-<li>Enter your email address, and confirm with one of the account's
-passkeys.</li>
-<li>We email your address to say the deletion is waiting.</li>
+<li>Open <a href="__DELETE_URL__">__DELETE_URL__</a> and sign in with one
+of the account's passkeys.</li>
+<li>Press “Delete this account”, read what it does, and confirm with your
+passkey.</li>
+<li>We email your address to say the deletion is waiting. The email names
+the passkey that asked and lists all of them.</li>
 </ol>
 
-<h2>If you no longer have any of your passkeys</h2>
-<ol>
+<h2 data-planned><span class="planned">Planned</span> If you no longer have any of your passkeys</h2>
+<ol data-planned><span class="planned">Planned</span>
 <li>Open the same page and enter your email address.</li>
 <li>We email that address a link. Open it, and press the button on the
 page it opens.</li>
 </ol>
+<p>Until this is running, ask for a reset on the same page instead. It gives
+the account one new passkey after 72 hours, and that passkey can then delete
+it.</p>
 
 <h2>What happens next</h2>
 <ul>
@@ -50,9 +56,16 @@ page it opens.</li>
 to a bento/id account waits this long, so that someone who has your
 passkey, or your mailbox, can't delete your account before you notice.</li>
 <li>The email that says it is waiting carries a link that stops it. If you
-didn't ask, press it, and nothing is deleted.</li>
+didn't ask, press Cancel, and nothing is deleted. The passkey that asked then
+can't ask for anything for 72 hours. If you don't recognise that passkey, the
+same link can suspend it instead, and it is removed 72 hours later.</li>
+<li>A reset asked for while the deletion waits cancels the deletion for
+good: stopping the reset doesn't bring it back.</li>
 <li>Once it takes effect, your passkeys stop working for this account, and
-people can no longer check new work against it. __DELETION_RETENTION__</li>
+people can no longer check new work against it. Work signed before then
+shows “account deleted”. __DELETION_RETENTION__</li>
+<li>You can set up a new account for the same address at any time. It
+starts new: people who knew the old one see that it changed.</li>
 <li>Your documents are files you keep. Deleting the account doesn't touch
 them.</li>
 </ul>

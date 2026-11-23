@@ -67,16 +67,24 @@
 // cannot keep the address); after that a member may. When it takes effect the
 // roster is that one new passkey, under the word `r`.
 //
+// ACCOUNT DELETION (deletion.js): a member's adel. is queued like a change,
+// with its own void link kinds. Cancel bars its asker for 72 hours whatever
+// its kind; Remove suspends it with a q link that carries the adel.; a reset
+// request DROPS a waiting deletion (only a removal is set aside); at the end of
+// the wait the directory signs the deletion record before it removes anything.
+//
 // NOT HERE YET (each a later change): a member stopping a reset with a
 // passkey (the route and its rules are here and refuse at the last step:
 // what the passkey signs is a kernel layout, not defined yet); consent-key and
-// recovery-key members; account deletion; the chain route peers read.
+// recovery-key members; deletion without a passkey (the maintainer's call);
+// the chain route peers read.
 
 import { b64uDec, b64uEnc, sha256b64u, signStatement } from '../../../kernel/src/statements.ts'
 import { buildRip, buildRos, parseRos, ROSTER_WAIT_MS } from '../../../kernel/src/roster.ts'
 import { HOME_ORIGIN, PASSKEY, verifyMemberAssertion, verifyRegistration } from './passkey.js'
 import { BROWSER_OPS, browserOp } from './browsers.js'
 import { deliver, MAIL_TIMEOUT_MS } from './mail.js'
+import { DELETION_OPS, DELETION_VOID_KINDS, deletedAnswer, deletionOp, deletionRecord, executeDeletion } from './deletion.js'
 import { resetLink, setupLink, voidLink } from './links.js'
 
 const MIN = 60_000, DAY = 86_400_000
@@ -229,6 +237,13 @@ function voidLines(to, token, kind, exp, rNote) {
   if (kind === 'r') {
     return ['If you did not ask for this reset, open this link to stop it:', '', link, '',
       `It works once, until ${when(exp)}.`, ...(rNote ?? [])]
+  }
+  if (kind === DELETION_VOID_KINDS.remove || kind === DELETION_VOID_KINDS.cancelOnly) {
+    return ['If you did not ask for this, open this link to stop the deletion:', '', link, '',
+      ...(kind === DELETION_VOID_KINDS.remove
+        ? ['The page offers two choices. Choose Cancel: it is always safe, and the key that asked cannot ask for anything again for 72 hours. Choose Remove only if you do not recognise the key that asked (named above): it is suspended at once and removed 72 hours later.']
+        : ['The page offers one choice, Cancel: the key that asked is the only one on this account that can still be used, so it cannot be removed (only a reset replaces it).']),
+      `It works once, until ${when(exp)}.`]
   }
   return ['If you did not ask for this, open this link to stop it:', '', link, '',
     ...(kind === 'c'
@@ -450,6 +465,8 @@ export class Roster {
   async apply(p, now, k) {
     const s = this.state.storage
     const kind = p.kind ?? 'member'
+    // a deletion is carried out by deletion.js (only from ripen: it always waits)
+    if (kind === 'deletion') return executeDeletion(this, p, now, { notify: (to, subject, lines) => notify(this.env, to, subject, lines) })
     const address = (await parseRos(p.ros)).value.address
     const was = await s.get('head')
     let head
@@ -530,17 +547,30 @@ export class Roster {
     }
     const origin = typeof a.os === 'string' ? a.os.slice(0, ROSTER_LIMITS.originMax) : ''
     // the browser certificates (browsers.js): the same object, its own ops
-    if (BROWSER_OPS.includes(a.op)) return browserOp(this, a, now, { spend, out, origin, fingerprint, notify: (to, subject, lines) => notify(this.env, to, subject, lines) })
+    if (BROWSER_OPS.includes(a.op)) {
+      // a deleted account (or certificate) answers "deleted" with the record, never "unknown" (D-A4)
+      const gone = await deletedAnswer(this, a, { spend, out })
+      if (gone) return gone
+      return browserOp(this, a, now, { spend, out, origin, fingerprint, notify: (to, subject, lines) => notify(this.env, to, subject, lines) })
+    }
+    if (DELETION_OPS.includes(a.op)) {
+      return deletionOp(this, a, now, { spend, out, origin, fingerprint, named, rosterLines, voidLines, mintToken,
+        notify: (to, subject, lines, kind) => notify(this.env, to, subject, lines, kind) })
+    }
 
     if (a.op === 'head') {
       await this.ripen(now)
       const head = await s.get('head')
-      if (!head) return out(404, { error: 'not-found' })
+      // D-A4: a deleted account answers with its record, never a bare 404; a new
+      // account at the address carries the earlier one's record beside its chain
+      const deleted = await deletionRecord(s)
+      if (!head) return deleted ? out(410, { error: 'deleted', deleted }) : out(404, { error: 'not-found' })
       const p = await s.get('pend')
       const createdAt = await this.createdAt(head)
       return out(200, {
         ros: head.ros, seq: head.seq, createdAt, newAccount: now - createdAt < ROSTER_LIMITS.newAccountMs,
         pending: p && p.mailed === true ? { kind: p.kind ?? 'member', ros: p.ros, requestedAt: p.requestedAt, ripensAt: p.ripensAt } : null,
+        ...(deleted ? { deleted } : {}),
       })
     }
 
@@ -749,7 +779,7 @@ export class Roster {
         return e ? out(409, e) : out(400, { error: 'invalid' })
       }
       const kind = parked ? 'removal' : p.kind ?? 'member'
-      const choices = kind === 'reset' ? ['cancel'] : kind === 'removal' ? ['undo'] : p.voidKind === 'c' ? ['cancel', 'remove'] : ['cancel']
+      const choices = kind === 'reset' ? ['cancel'] : kind === 'removal' ? ['undo'] : p.voidKind === 'c' || p.voidKind === DELETION_VOID_KINDS.remove ? ['cancel', 'remove'] : ['cancel']
       // a choice the link does not offer is refused WITHOUT spending the token
       if (!choices.includes(a.choice)) return out(400, { error: 'choice' })
       // F1: another press's mail is going out, and what it says must stay true
@@ -769,14 +799,17 @@ export class Roster {
           await this.schedule(back.ripensAt)
         }
         await this.ended(p.voidTok, 'used', now)
-        const until = kind === 'member' ? now + ROSTER_LIMITS.voidCooldownMs : null
+        // G4b; for a deletion whatever the asker's kind (D-A1)
+        const until = kind === 'member' || kind === 'deletion' ? now + ROSTER_LIMITS.voidCooldownMs : null
         if (until) await s.put(`cool:${p.signer}`, until)
         await this.log({ k: 'void', at: now, seq: cur.seq + 1, op: kind === 'reset' ? 'reset' : p.change.op, pub: p.change.pub, by: p.signer ?? '', choice: 'cancel', os: origin })
-        await notify(this.env, address, kind === 'reset' ? 'The reset of your bento/id account was stopped' : 'A change to your bento/id passkeys was cancelled', [
+        await notify(this.env, address, kind === 'reset' ? 'The reset of your bento/id account was stopped' : kind === 'deletion' ? 'The deletion of your bento/id account was cancelled' : 'A change to your bento/id passkeys was cancelled', [
           kind === 'reset'
             ? `At ${when(now)} the link in an email stopped the reset asked for at ${when(p.requestedAt)}. Nothing changed.`
-            : `At ${when(now)} the link in an email cancelled the change asked for at ${when(p.requestedAt)} by ${await named(p.signer, records[p.signer])}. Nothing changed.`,
-          ...(until ? [`That passkey can still be used to sign in, but it cannot ask for another change to this account until ${when(until)}.`] : []),
+            : kind === 'deletion'
+              ? `At ${when(now)} the link in an email cancelled the DELETION of this account asked for at ${when(p.requestedAt)} by ${await named(p.signer, records[p.signer])}. Nothing changed.`
+              : `At ${when(now)} the link in an email cancelled the change asked for at ${when(p.requestedAt)} by ${await named(p.signer, records[p.signer])}. Nothing changed.`,
+          ...(until ? [`That ${kind === 'deletion' && p.signerKind && p.signerKind !== 'pk' ? 'key' : 'passkey'} can still be used to sign in, but it cannot ask for another change to this account until ${when(until)}.`] : []),
           ...(kind === 'reset' && p.preempted ? [`The change that was waiting when the reset was asked for, asked for at ${when(p.preempted.requestedAt)}, stays cancelled. Ask for it again if you still want it.`] : []),
           ...(back ? [`The removal of the suspended ${await named(back.change.pub, records[back.change.pub])}, which the reset had set aside, is waiting again: it takes effect at ${when(Math.max(back.ripensAt, now))}. The link in the email that said it was suspended can still put it back until then.`] : []),
           '',
@@ -838,7 +871,7 @@ export class Roster {
       const ut = await mintToken('void')
       const hold = await this.takeHold(now, 'remove')
       const sent = await notify(this.env, address, 'A passkey on your bento/id account was suspended', [
-        `At ${when(now)} the link in an email cancelled the change asked for at ${when(p.requestedAt)}, and suspended ${await named(target, records[target])}, which asked for it.`,
+        `At ${when(now)} the link in an email cancelled the ${kind === 'deletion' ? 'DELETION of this account' : 'change'} asked for at ${when(p.requestedAt)}, and suspended ${await named(target, records[target])}, which asked for it.`,
         `That passkey can no longer be used. It will be removed from this account at ${when(removesAt)}.`,
         '',
         'The passkeys on this account once it is removed:',
@@ -859,7 +892,7 @@ export class Roster {
       if (!still || still.voidTok !== p.voidTok || atHead.hash !== cur.hash) { await this.dropHold(hold); return out(409, (await this.endedAnswer(th)) ?? { error: 'superseded' }) }
       if (!mine) return out(409, { error: 'busy' })
       await this.link(qRos, { auth: 'q', cause: p.hash, requestedAt: now, now, kind: 'quarantine',
-        extra: { voided: { ros: p.ros, signer: target, assertion: p.assertion } } })
+        extra: { voided: { ros: p.ros, signer: target, ...(p.proof ?? { assertion: p.assertion }) } } })
       // the removal is requested at the moment the suspension takes effect (the kernel's x rule)
       await s.put('pend', {
         kind: 'removal', ros: xRos, hash: await sha256b64u(xRos), change: { op: 'remove', pub: target }, cause: qHash,
@@ -936,7 +969,8 @@ export class Roster {
         `It takes effect at ${when(resetAt)}, 72 hours after it was asked for. Then every passkey on this account is removed, and its only passkey is the new one, ${await fingerprint(reg.value.pub)}, made at the reset.`,
         ...(setAside
           ? [`The removal of the suspended ${await named(setAside.change.pub, records[setAside.change.pub])}, which was waiting, is set aside while this reset waits. The link that puts that passkey back still works, and if this reset is stopped, the removal waits again.`]
-          : waiting ? ['A change that was waiting is cancelled by this reset. Stopping the reset does not bring it back.'] : []),
+          : waiting && waiting.kind === 'deletion' ? ['The deletion of this account that was waiting is cancelled by this reset. Stopping the reset does not bring it back.']
+            : waiting ? ['A change that was waiting is cancelled by this reset. Stopping the reset does not bring it back.'] : []),
         ...(young ? [`This account was set up less than 14 days ago, at ${when(createdAt)}, so its passkeys cannot stop this reset: only the link below can.`] : []),
         '',
         'The passkeys on this account now, which the reset removes:',

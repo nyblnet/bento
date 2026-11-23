@@ -227,11 +227,20 @@ minutes, so it cannot be used again.</p>
 <p>__PROCESSORS__</p>
 
 <h2>Deleting your account</h2>
-<p><span class="planned">Planned</span> Deleting an account is not running
-yet. It will work like any other change: you ask on the sign-in page with
-one of your passkeys, or by an emailed link if you have lost them. The
-deletion then waits 72 hours, and its email carries a link that stops it.
-Once it takes effect: __DELETION_RETENTION__</p>
+<p>It works like any other change: you ask on the sign-in page with one of
+your passkeys. The deletion then waits 72 hours, and its email carries a
+link that stops it. A reset asked for while it waits cancels it.</p>
+<p>Once it takes effect we delete the account's passkeys, its list of
+passkeys and every change to it, its browser sign-ins and its record of
+events. We keep one signed record that it was deleted, so that people who
+knew the account see “account deleted” rather than nothing: a hash of your
+address (not the address itself), a hash of the account's last list of
+passkeys, and when the deletion was asked for and carried out. We keep that
+record __DELETION_RECORD_RETENTION__. __DELETION_RETENTION__</p>
+<p data-planned><span class="planned">Planned</span> Deleting an account
+when you no longer have any of its passkeys, by an emailed link. Until it is
+running, a reset gives the account a new passkey after 72 hours, and that
+passkey can then delete it.</p>
 <p>You can also read how to delete your account, without any app, at
 <a href="/id/delete">bento.page/id/delete</a>, or write to
 <a href="mailto:__CONTACT_EMAIL__">__CONTACT_EMAIL__</a>.</p>

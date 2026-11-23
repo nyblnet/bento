@@ -67,7 +67,9 @@ export const SIGNIN_PATHS = Object.freeze({ setup: '/setup', reset: '/reset' })
 export const VOID_PATH = '/void'
 
 /** The void link kinds (the `k` key) and the one choice each offers first. */
-export const VOID_KINDS = Object.freeze(['c', 'o', 'r', 'u'])
+// c, o: a member's change (with Remove, or Cancel only); r: a reset; u: undo a
+// suspension; d, e: an account DELETION (with Remove, or Cancel only)
+export const VOID_KINDS = Object.freeze(['c', 'o', 'r', 'u', 'd', 'e'])
 
 /** The setup link for `address` (normalised) and its `token`. */
 export function setupLink(address, token) {

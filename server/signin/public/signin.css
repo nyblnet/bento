@@ -9,6 +9,7 @@
   --accent-fg: #ffffff;
   --warn-bg: #fff6e0;
   --warn-fg: #5c4100;
+  --danger: #b3261e;
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -22,6 +23,7 @@
     --accent-fg: #0d1520;
     --warn-bg: #3a2f12;
     --warn-fg: #f5dfa6;
+    --danger: #ff8a80;
   }
 }
 * { box-sizing: border-box; }
@@ -62,3 +64,4 @@ button {
 }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
 [hidden] { display: none !important; }
+button.danger { border-color: var(--danger); color: var(--danger); }

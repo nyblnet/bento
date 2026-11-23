@@ -61,7 +61,7 @@ press, never from a message. These pages answer no message and post none.
 |---|---|
 | `/setup#v=1&e=<address>&t=<token>` | a mailed setup link (G13): make a passkey for the address, then sign in with it once |
 | `/reset#v=1&e=<address>&t=<token>` | a mailed reset link: make a new passkey; the reset waits 72 hours at the directory |
-| `/account` | sign in on this host; ask for a setup or reset link; sign out every browser |
+| `/account` | sign in on this host; ask for a setup or reset link; sign out every browser; ask for the account's deletion |
 
 The rules (`public/account-client.js`; each has a rig row and a mutant):
 
@@ -92,12 +92,22 @@ The rules (`public/account-client.js`; each has a rig row and a mutant):
    it.
 6. **No recovery code on the web** (X7): no page makes, shows or asks for one.
    The setup page says what a browser-only account loses (X3).
+7. **Delete this account** is a member's assertion over the kernel's `adel.`
+   (`adelText`, which the directory rig checks writes exactly what the
+   kernel's `buildAdel` writes) for the account this host is signed in to,
+   after a confirmation screen that names it and says it waits 72 hours.
+   Every refusal the directory can give before the passkey prompt comes before
+   it (no account, deleted, a change already waiting, the route not live), so
+   no ceremony runs for a request that cannot be taken. An opener's message
+   never starts one (rule 5 above). Deleting without a passkey is not built.
 
 ## Directory routes for the pages
 
 `public/account-client.js` is the pages' seam. The routes the directory has
 are used as they are: `/v1/roster/setup/start`, `/v1/roster/reset/start`,
-`/v1/roster/challenge`, `/v1/roster/setup` and `/v1/roster/reset`. Four
+`/v1/roster/challenge`, `/v1/roster/setup`, `/v1/roster/reset`, and for a
+deletion `GET /v1/roster`, `/v1/roster/delete/challenge` and
+`/v1/roster/delete`. Four
 routes do **not exist yet**, and `scripts/lib/id-signin-directory-stub.mjs`
 is their contract, check by check, which the rigs run against:
 

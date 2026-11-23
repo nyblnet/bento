@@ -32,7 +32,7 @@ import { fileURLToPath } from 'node:url'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 export const FACT_KEYS = [
   'CONTROLLER', 'CONTACT_EMAIL', 'EFFECTIVE_DATE', 'LEGAL_BASIS', 'RIGHTS_JURISDICTION', 'CHILDREN',
-  'PROCESSORS', 'DELETION_RETENTION', 'DELETE_URL', 'SETUP_TIMES_RETENTION',
+  'PROCESSORS', 'DELETION_RETENTION', 'DELETE_URL', 'SETUP_TIMES_RETENTION', 'DELETION_RECORD_RETENTION',
 ]
 /** page name → source in site-src/ and the path it is published at */
 export const PAGES = Object.freeze({

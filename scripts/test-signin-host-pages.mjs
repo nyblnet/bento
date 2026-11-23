@@ -65,6 +65,14 @@ const MUTANTS = {
   'no-tt': [['src/worker.js', `  "require-trusted-types-for 'script'",\n`, '']],
   // the 501 the directory answers until it can sign browsers out, taken for any other refusal (after a passkey prompt for nothing)
   'no-501': [['public/account-client.js', "  if (c.status === 501) throw new Refused('not-implemented')\n", '']],
+  // account deletion: asked for the moment the page opens
+  'delete-on-open': [['public/account.js', '  home()\n}\n\nstart()', '  home()\n  if (savedAccount()) deleteAccount()\n}\n\nstart()']],
+  // account deletion with no confirmation screen
+  'delete-no-confirm': [['public/account.js', "  $('delete-ask').addEventListener('click', () => { if (!busy && savedAccount()) show('confirm-delete') })\n", "  $('delete-ask').addEventListener('click', deleteAccount)\n"]],
+  // the account page deleting because its opener asked
+  'listen-delete': [['public/account.js', 'function start() {\n', "function start() {\n  addEventListener('message', (e) => { if (e.data && e.data.t === 'delete-account') deleteAccount() })\n"]],
+  // a deletion route that is not live taken for any other refusal (W3: no prompt for a request that cannot be taken)
+  'del-no-501': [['public/account-client.js', "  if (c.status === 404 || c.status === 501) throw new Refused('deletion-not-live')\n", '']],
   // framing allowed
   'framed': [['src/worker.js', '  "frame-ancestors \'none\'",\n', ''], ['src/worker.js', "  'x-frame-options': 'DENY',\n", '']],
 }
@@ -189,6 +197,9 @@ await ctx.route(`${DIR}/**`, async (route) => {
     if (twist === 'other-address' && u.pathname === '/v1/web/signin' && status === 200) out = { address: 'mallory@example.com' }
     if (twist === 'not-yet' && u.pathname === '/v1/web/signout/challenge') { status = 501; out = { error: 'not-implemented' } }
     return route.fulfill({ status, headers: cors, body: JSON.stringify(out) })
+  }
+  if (twist === 'del-not-yet' && u.pathname === '/v1/roster/delete/challenge' && r.method() === 'POST') {
+    return route.fulfill({ status: 501, headers: { 'access-control-allow-origin': '*', 'content-type': 'application/json' }, body: JSON.stringify({ error: 'not-implemented' }) })
   }
   const res = await W.handler(new Request(r.url(), { method: r.method(), headers: { ...(origin ? { origin } : {}), 'content-type': 'text/plain' }, body: ['GET', 'HEAD'].includes(r.method()) ? undefined : r.postData() || '' }))
   return route.fulfill({ status: res.status, headers: Object.fromEntries(res.headers), body: Buffer.from(await res.arrayBuffer()) })
@@ -363,14 +374,16 @@ try {
     await home.evaluate((u) => HM.open(u), `${S}/account`)
     const pop = await popP; await authenticator(pop); await pop.waitForLoadState(); await settled(pop)
     const before = await state(pop)
-    for (const m of [{ t: 'sign-out-everywhere' }, { t: 'signout', address: 'alice@example.com' }, 'sign-out-everywhere']) await home.evaluate((x) => HM.send(x), m)
+    for (const m of [{ t: 'sign-out-everywhere' }, { t: 'signout', address: 'alice@example.com' }, 'sign-out-everywhere', { t: 'delete-account' }, { t: 'delete', address: 'alice@example.com' }]) await home.evaluate((x) => HM.send(x), m)
     await sleep(600)
-    return { before, after: await state(pop), reqs: dirReqs.filter((d) => d.path.startsWith('/v1/web/signout')).length, c: await calls(pop) }
+    return { before, after: await state(pop), reqs: dirReqs.filter((d) => d.path.startsWith('/v1/web/signout') || d.path.startsWith('/v1/roster/delete') || d.path === '/v1/roster').length, c: await calls(pop) }
   }
   r = await asked()
   ok(r.before[0] === 'signed-in' && r.after[0] === 'signed-in' && r.reqs === 0 && r.c?.get === 0, `nothing happens: no request, no passkey prompt (${r.after}, ${r.reqs} requests)`)
   r = await asked('listen')
   ok(r.reqs > 0 || r.c?.get > 0 || r.after[0] !== 'signed-in', `MUTANT listen: the opener's message starts a sign-out (${r.reqs} requests, get ${r.c?.get}, ${r.after})`)
+  r = await asked('listen-delete')
+  ok(r.reqs > 0 || r.c?.get > 0 || r.after[0] !== 'signed-in', `MUTANT listen-delete: the opener's message starts a deletion (${r.reqs} requests, get ${r.c?.get}, ${r.after})`)
 
   if (PASSKEYS) {
     // ---- 1. setup, through the real directory ----------------------------------------
@@ -532,6 +545,50 @@ try {
     await click(q, '#signout-ask', ['loading', 'signed-in'])
     s = await click(q, '#signout', ['loading', 'confirm-signout', 'working'])
     ok(s[0] === 'failed' && s[1] === 'not-member' && W.stub.log.length === 0 && !W.stub.revoked.has(hal), `refused not-member, nothing revoked (${s})`)
+
+    // ---- 5. account deletion -------------------------------------------------------------
+    console.log('\n5   account deletion, by a member\'s passkey on this host, after a confirmation that names the account')
+    const delReqs = () => dirReqs.filter((d) => d.path.startsWith('/v1/roster/delete'))
+    const delRun = async (mutant) => {
+      await reset(mutant); const p = await fresh(); const e = addr('dora')
+      await setUp(p, e)
+      await p.goto(`${S}/account`); await settled(p); await sleep(400)
+      const opened = delReqs().length
+      // a mutant can leave no button to press: that is a red row, never a crash
+      const tryClick = async (sel, not) => { try { return await click(p, sel, not) } catch { return await state(p) } }
+      let s = await tryClick('#delete-ask', ['loading', 'signed-in'])
+      const confirm = s[0], before = delReqs().length
+      const named = await p.locator('[data-for=confirm-delete] [data-account]').textContent().catch(() => '')
+      if (s[0] === 'confirm-delete') s = await tryClick('#delete', ['loading', 'confirm-delete', 'working'])
+      const st = await W.store(e)
+      return { e, opened, confirm, before, named, s, pend: st?.get('pend'), at: await p.locator('#delete-at').textContent().catch(() => ''), mail: W.mails.filter((m) => m.to === e).pop(), reqs: delReqs() }
+    }
+    r = await delRun()
+    ok(r.opened === 0 && r.confirm === 'confirm-delete' && r.before === 0 && r.named === r.e, `opening the page and pressing Delete sends nothing; the confirmation names the account (${r.opened}, ${r.confirm}, ${r.before})`)
+    ok(r.s[0] === 'deletion-waiting' && r.pend?.kind === 'deletion' && r.pend?.mailed === true, `confirmed with the passkey: the real directory queued the deletion (${r.s}, ${r.pend?.kind})`)
+    ok(/^\d{4}-\d\d-\d\d \d\d:\d\d UTC$/.test(r.at) && Math.abs(Date.parse(r.at.replace(' UTC', 'Z').replace(' ', 'T')) - (r.pend?.ripensAt ?? 0)) < 60_000, `the page says when, the directory's time (${r.at})`)
+    ok(/DELETE/.test(String(r.mail?.body ?? '')) && /\/void#/.test(String(r.mail?.body ?? '')), 'the address is mailed a notice that says DELETE, with the link that stops it')
+    ok(r.reqs.length === 2 && r.reqs.every((d) => d.method === 'POST' && d.origin === S), `one challenge and one request, both from the sign-in host (${r.reqs.map((d) => d.path).join(', ')})`)
+    let dm = await delRun('delete-no-confirm')
+    ok(dm.confirm !== 'confirm-delete' || dm.before > 0, `MUTANT delete-no-confirm: the deletion goes without the confirmation (${dm.confirm}, ${dm.before})`)
+    dm = await delRun('delete-on-open')
+    ok(dm.opened > 0, `MUTANT delete-on-open: opening the page asks for the deletion (${dm.opened} requests)`)
+
+    console.log('\n5   while the deletion route is not live (501), the page says so before any passkey prompt')
+    const delNotYet = async (mutant) => {
+      await reset(mutant); const p = await fresh(); const e = addr('dov')
+      await setUp(p, e)
+      await p.goto(`${S}/account`); await settled(p)
+      await click(p, '#delete-ask', ['loading', 'signed-in'])
+      twist = 'del-not-yet'
+      const before = (await calls(p))?.get ?? 0
+      const s = await click(p, '#delete', ['loading', 'confirm-delete', 'working']).catch(() => state(p))
+      return { s, gets: ((await calls(p))?.get ?? 0) - before, pend: (await W.store(e))?.get('pend') }
+    }
+    r = await delNotYet()
+    ok(r.s[0] === 'failed' && r.s[1] === 'deletion-not-live' && r.gets === 0 && !r.pend, `"not available yet", no passkey prompt, nothing queued (${r.s}, ${r.gets} get)`)
+    r = await delNotYet('del-no-501')
+    ok(r.s[1] !== 'deletion-not-live', `MUTANT del-no-501: the page answers another refusal (${r.s})`)
 
     const sig = signals.reduce((x, y) => x + y, 0)
     ok(sig === 0, `no page called the WebAuthn Signal API (${sig})`)

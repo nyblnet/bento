@@ -50,7 +50,24 @@
     <div class="actions">
       <button id="signout-ask" type="button">Sign out every browser…</button>
       <button id="switch" type="button">Use another passkey</button>
+      <button id="delete-ask" type="button">Delete this account…</button>
     </div>
+  </section>
+
+  <section data-for="confirm-delete" hidden>
+    <h1>Delete this account?</h1>
+    <p>This asks to delete the bento/id account for <strong data-account></strong>. It is deleted 72 hours after you confirm with your passkey. Until then, the link in the email we send stops it.</p>
+    <p>Once it is deleted, every passkey on it stops working, and people can no longer check new work against it. Work signed before then shows “account deleted”.</p>
+    <div class="actions">
+      <button id="delete" type="button" class="danger">Delete this account</button>
+      <button id="delete-cancel" type="button">Cancel</button>
+    </div>
+  </section>
+
+  <section data-for="deletion-waiting" hidden>
+    <h1>The deletion is waiting</h1>
+    <p>The account for <strong data-account></strong> will be deleted at <strong id="delete-at"></strong>. An email about it is on its way, with a link that stops it.</p>
+    <button id="delete-back" type="button">Back</button>
   </section>
 
   <section data-for="confirm-signout" hidden>

@@ -80,6 +80,7 @@ ok(threw === '', `the real sources meet every page rule ${threw}`)
 // --- content: option G's records ---
 const P = pages.privacy.replace(/\s+/g, ' ')
 const D = pages.delete.replace(/\s+/g, ' ')
+ok(SRC.privacy.includes('We keep that\nrecord __DELETION_RECORD_RETENTION__.'), 'the deletion record\'s retention is its own placeholder, the maintainer\'s (DELETION_RECORD_RETENTION)')
 for (const [what, re] of [
   ['the passkey list', /list of <b>passkeys<\/b>/], ['every version is kept', /every version of the list/], ['the countersignature', /countersignature/],
   ['the list is public', /This list is public/], ['setup by emailed link', /Setting up, by emailed link/], ['no typed codes', /never type or paste a code/],
@@ -93,7 +94,11 @@ for (const [what, re] of [
   ['the sign-in host\'s storage', /<code>bento-id-account<\/code>/], ['no cookies on the sign-in host', /sets no cookies/],
   ['the yearly one-click', /once a year we will email you one link/], ['the admin flag', /administrators can ask us to check an address/],
   ['a lapse is only the label', /A lapse changes only the label/], ['"unconfirmed since"', /unconfirmed since/],
-  ['IP fingerprints gone a day and a minute after the day, at worst', /at the latest a day and a minute after it ends/], ['deletion is planned', /Planned<\/span> Deleting an account is not running yet/],
+  ['IP fingerprints gone a day and a minute after the day, at worst', /at the latest a day and a minute after it ends/], ['deletion asks with a passkey', /you ask on the sign-in page with one of\s+your passkeys/],
+  ['deletion without a passkey is planned', /Planned<\/span> Deleting an account\s+when you no longer have any of its passkeys/],
+  ['a reset cancels a waiting deletion', /A reset asked for while it waits cancels it/],
+  ['the deletion record keeps no address', /a hash of your\s+address \(not the address itself\)/],
+  ['the deletion record\'s retention is filled in', /We keep that record (?!__)\S/],
   ['the notice links the deletion page', /href="\/id\/delete"/],
 ]) ok(re.test(P), `notice says: ${what}`)
 for (const [what, re] of [

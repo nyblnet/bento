@@ -15448,3 +15448,53 @@ record that D-A4 asked the kernel to reserve before the route is built.
 Guards: `scripts/test-roster.ts` (the voided-adel chain rows, `deletionRecords`
 with every signature checked valid, `afterDeletion`), `test-roster-mutants.ts`,
 and `scripts/test-identity.ts`.
+
+## 2026-11-23 — bento/id directory: account deletion by a member, queued like any change
+
+The directory now takes a member's `adel.` at `POST /v1/roster/delete` (its
+challenge from `POST /v1/roster/delete/challenge`, sealed for its own
+audience). The retired `/v1/delete*` paths stay 410. The sign-in host's
+account page asks for it after a confirmation screen. It keeps the rules
+settled for the kernel's layout:
+
+- **Queued like a change.** One at a time: refused while anything else
+  waits, including a removal's undo window. It waits 72 hours on the
+  directory's clock, and only once the mailer accepted its waiting notice.
+  The notice says DELETE in words, gives the time to the second and the host
+  class, names the key that asked by name and age, and lists the whole
+  roster. No budget holds it back. A request that names an opener is refused.
+- **The void link** offers Cancel, which bars the asker for 72 hours whatever
+  its kind. It also offers Remove, which suspends the asker with a `q` link
+  carrying the `adel.` and queues its removal with an undo link. Remove is
+  never offered when the asker is the only live member.
+- **A reset request drops a waiting deletion.** It is logged as preempted,
+  never set aside, and stopping the reset does not bring it back.
+- **When the wait ends** the deletion is carried out only if:
+  - it is still the waiting change;
+  - the hold is off;
+  - the head is still the one it named;
+  - its own times say 72 hours passed. A deletion with a missing time never
+    runs.
+
+  The directory signs the `rdel.` record first, so without the key nothing
+  is removed. Then it removes everything else the account's object holds,
+  the event log included, and keeps only the record.
+- **Afterwards**, peers get "deleted" with the record, never a bare 404 or
+  `unknown`:
+  - `GET /v1/roster` and the browser head answer 410 `deleted`;
+  - a certificate's status answers `deleted`;
+  - a check-in is refused as `deleted`.
+
+  A new setup at the address works, and its head carries the earlier record.
+- **A text that is not an `adel.` never spends its challenge**, which matches
+  the kernel's grammar rule. Every other check comes after the spend.
+- **Not built, the maintainer's call:** deletion without a passkey (a mailed
+  link would need a member's stop statement to be no faster or less
+  stoppable than a reset), how long the record is kept, and whether the event
+  log should outlive the account. The privacy notice carries both retention
+  facts as placeholders.
+
+Guards: `scripts/test-directory-deletion.ts` and its mutants
+(`test-directory-deletion-mutants.ts`, own CI job), the deletion rows in
+`test-directory-void-page.mjs` and `test-signin-host-pages.mjs`, and
+`test-id-pages.mjs`.

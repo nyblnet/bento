@@ -201,3 +201,27 @@ jobs:
         run: node scripts/test-home-web-identity.mjs --chrome
       - name: bento/id agent mutants, each red on its row
         run: node scripts/test-home-web-identity.mjs --mutants
+
+  share-directory-deletion:
+    needs: share-gate
+    if: needs.share-gate.outputs.run == 'true'
+    # Account deletion in the directory (deletion.js and its hooks in roster.js
+    # and worker.js), against the real worker and Roster object: a member's
+    # adel. queued 72 hours behind a notice the mailer accepted; Cancel bars
+    # the asker 72 hours whatever its kind; Remove suspends it with a q link
+    # the kernel verifies; a reset request drops a waiting deletion for good;
+    # execution only on the head it named, the record signed before anything
+    # is removed, and every place peers read answering "deleted". Its own job
+    # (not the shared directory mutants, near its time limit): the rig, then
+    # its mutants, each of which must turn a row red.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: bento/id directory account deletion
+        run: node scripts/test-directory-deletion.ts
+      - name: bento/id directory account deletion mutants
+        run: node scripts/test-directory-deletion-mutants.ts
