@@ -216,7 +216,7 @@ reset stoppable; the kernel is given the re-asked time, which its order rule
 needs. When it takes effect the roster is
 that one passkey. `GET /v1/roster` reports `createdAt` and `newAccount`.
 
-**Not built yet**: the sign-in host's page for a member's reset stop, the chain route,
+**Not built yet**: the chain route,
 consent-key and recovery-key members, account deletion, and the incident
 lever across addresses.
 

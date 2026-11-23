@@ -1773,6 +1773,28 @@ async function stopReset(email: string, who: Authn, o: { credId?: string; count?
   const rk = await stopReset(kai, RK)
   ok(rk.status === 400 && rk.j.error === 'signer-kind', `a non-passkey member's stop: refused by name (signer-kind), not a 500 (got ${rk.status} ${JSON.stringify(rk.j)})`)
 }
+{
+  // C5 (D6), security's M1 on #986: a stop the kernel REFUSES never moves the stored
+  // signature counter. The stop reads the counter from authenticator data the kernel
+  // has not verified yet, so only the order (compare and store after the verdict)
+  // keeps a forged counter of 2^31 from locking the member's real next stop out.
+  now += DAY
+  const e = 'sd2-cnt@example.com'
+  const [A] = await twoKeys(e)
+  now += ROSTER_LIMITS.newAccountMs + HOUR
+  const t = await resetToken(e)
+  ok((await reset(e, await Authn.make(), t.token ?? '')).status === 202, 'M1: a reset of an old account waits')
+  const cnt = async () => ((await rosterObj(e)).store.get(`pk:${A.pub}`) as { signCount?: number } | undefined)?.signCount
+  const c0 = await cnt()
+  ok(typeof c0 === 'number' && c0 < 2 ** 31, `M1: the member's counter is stored and small before (${c0})`)
+  const forged = await stopReset(e, A, { signText: 'vrs.other', count: 2 ** 31 })
+  ok(forged.status === 400 && /^assertion-/.test(String(forged.j.error)), `M1: an assertion over another text carrying counter 2^31: refused by the kernel (${forged.status} ${forged.j.error})`)
+  const c1 = await cnt()
+  ok(c1 === c0, `M1: the refused stop left the stored counter (${c0} -> ${c1})`)
+  const good = await stopReset(e, A, { count: Number(c0 ?? 0) + 1 })
+  ok(good.status === 200 && good.j.done === 'stopped', `M1: the member's real next stop is then accepted (${good.status} ${JSON.stringify(good.j)})`)
+  ok((await cnt()) === Number(c0 ?? 0) + 1, 'M1: and its counter is the one stored')
+}
 // ---------------------------------------------------------------------
 // F1: the HOLD. A Remove or a reset holds the roster BEFORE its mail goes, so
 // the mail never states an act that then fails to happen (security's P1-P8).

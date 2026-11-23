@@ -18,6 +18,9 @@
 //   reset takes effect, 72 hours later.
 // - These pages answer no message and post none. Account changes start here,
 //   by the person, never because another page asked.
+// - A member stops a waiting reset only after a confirmation screen that says
+//   when the reset was asked for, over the kernel's `vrs.` text for the reset
+//   the directory showed (vrsText is the kernel's buildVrs, byte for byte).
 // - No WebAuthn Signal API call, and no recovery code: the web never makes one.
 //
 // The routes the directory has today (`/v1/roster/*`, server/directory) are
@@ -47,6 +50,10 @@ export const ROUTES = Object.freeze({
   signinChallenge: '/v1/web/signin/challenge',
   /** POST {nonce, assertion} → 200 {address}: the account whose live passkey made the assertion. */
   signin: '/v1/web/signin',
+  /** GET ?e=<address> → 200 {…, pending: null | {kind, ros, requestedAt, ripensAt}}: the head and any waiting change. */
+  roster: '/v1/roster',
+  /** POST {email, text, credId, assertion} → 200 {done: 'stopped', removesAt?}: a member's passkey stops the waiting reset. */
+  resetStop: '/v1/roster/reset/void',
   /** POST {address} → 200 {nonce, at}: a challenge bound to that account; 501 until the directory can sign browsers out. */
   signoutChallenge: '/v1/web/signout/challenge',
   /** POST {text, assertion} → 200 {ok: true, at}: every browser key of the account is revoked. */
@@ -212,6 +219,63 @@ export async function signOutEverywhere(address) {
     throw new Refused(typeof r.body.error === 'string' && /^[a-z-]{1,40}$/.test(r.body.error) ? r.body.error : 'refused')
   }
   return r.body.at
+}
+
+/**
+ * The text a member's passkey signs to stop a waiting reset: the kernel's
+ * `vrs.` layout (kernel/src/roster.ts buildVrs), the address, the SHA-256 of
+ * the reset's `ros.` text, and a fresh roster challenge.
+ */
+export function vrsText({ address, resetHash, nonce }) {
+  return ['vrs', b64u(new TextEncoder().encode(address)), resetHash, nonce].join('.')
+}
+
+const named = (r, fallback) => (typeof r.body.error === 'string' && /^[a-z-]{1,40}$/.test(r.body.error) ? r.body.error : fallback)
+
+/**
+ * The reset waiting on `address`, as the directory shows it, or null when
+ * none waits. Reading it changes nothing (the lookup's per-network limit).
+ */
+export async function waitingReset(address) {
+  let r
+  try {
+    r = await fetch(DIRECTORY + ROUTES.roster + '?e=' + encodeURIComponent(address), { credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer' })
+  } catch {
+    throw new Refused('network')
+  }
+  let j = null
+  try { j = await r.json() } catch { j = null }
+  if (r.status === 404) throw new Refused('no-account')
+  if (r.status === 429) throw new Refused('busy')
+  if (r.status !== 200 || !j || typeof j !== 'object') throw new Refused('directory')
+  const p = j.pending
+  if (!p || p.kind !== 'reset') return null
+  if (typeof p.ros !== 'string' || !Number.isSafeInteger(p.requestedAt) || !Number.isSafeInteger(p.ripensAt)) throw new Refused('directory')
+  return { ros: p.ros, requestedAt: p.requestedAt, ripensAt: p.ripensAt }
+}
+
+/**
+ * Stop `reset` (from waitingReset) with a member's passkey: a fresh roster
+ * challenge, the `vrs.` text over that reset's `ros.` text, one `get`, then
+ * the directory, which judges everything (the account's age when the reset
+ * was first asked for, the signer, the kernel's verifier). Answers
+ * {removesAt} (a removal the reset had set aside, waiting again) or {}.
+ */
+export async function stopReset(address, reset) {
+  const c = await post(ROUTES.rosterChallenge, { email: address })
+  const nonce = c.body.challenge
+  if (c.status !== 200 || typeof nonce !== 'string' || !SEALED.test(nonce)) throw new Refused(c.status === 429 ? 'busy' : 'directory')
+  const resetHash = b64u(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(reset.ros))))
+  const text = vrsText({ address, resetHash, nonce })
+  const cred = await navigator.credentials.get({
+    publicKey: { rpId: RP_ID, allowCredentials: [], challenge: await challengeFor(text), userVerification: 'required', timeout: TIMEOUT },
+  })
+  const assertion = assertionOf(cred)
+  const r = await post(ROUTES.resetStop, { email: address, text, credId: assertion.id, assertion })
+  if (r.status === 429) throw new Refused('busy')
+  if (r.status === 409 && r.body.error === 'busy') throw new Refused('held')
+  if (r.status !== 200 || r.body.done !== 'stopped') throw new Refused(named(r, 'refused'))
+  return Number.isSafeInteger(r.body.removesAt) ? { removesAt: r.body.removesAt } : {}
 }
 
 /** A directory time as the mails write it: "2026-11-12 14:03 UTC". */

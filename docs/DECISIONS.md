@@ -15423,7 +15423,19 @@ the 2026 entry on who may stop a reset.
 - **Passkeys only, for now.** A recovery-key or consent-key member is refused
   by name (`signer-kind`) until their proofs are wired. The signature counter
   is compared and stored by the directory in the same step, because the
-  kernel's member proof does not compare counters.
-- The sign-in host has no page for it yet, so a person cannot reach it from a
-  browser. Until it does, the privacy notice keeps "Planned" on stopping a
-  reset with a passkey.
+  kernel's member proof does not compare counters. It is compared and stored
+  only AFTER the kernel accepts: the stop reads the counter from
+  authenticator data nothing has verified yet, so storing it first would let
+  an assertion the kernel refuses (no valid signature needed) set the counter
+  to 2^31 and lock the member's real stops out. A row and a mutant pin that
+  order.
+- The sign-in host's /account page is how a person reaches it: "Stop a
+  waiting reset…" reads the waiting reset from `GET /v1/roster`, shows when it
+  was asked for and when it would take effect, and only on a second press
+  asks for a passkey over the `vrs.` text for that reset. The page's
+  `vrsText` is checked byte for byte against the kernel's `buildVrs`. The
+  directory still judges everything (age, signer, kernel verifier); the page
+  only names the refusal.
+- After a member's stop, the reset's own mailed link opens a "stopped" view
+  on the void page (a passkey stopped it, when, and which email names the
+  passkey), not the neutral "no longer works".

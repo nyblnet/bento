@@ -61,7 +61,7 @@ press, never from a message. These pages answer no message and post none.
 |---|---|
 | `/setup#v=1&e=<address>&t=<token>` | a mailed setup link (G13): make a passkey for the address, then sign in with it once |
 | `/reset#v=1&e=<address>&t=<token>` | a mailed reset link: make a new passkey; the reset waits 72 hours at the directory |
-| `/account` | sign in on this host; ask for a setup or reset link; sign out every browser |
+| `/account` | sign in on this host; ask for a setup or reset link; sign out every browser; stop a waiting reset |
 
 The rules (`public/account-client.js`; each has a rig row and a mutant):
 
@@ -90,14 +90,20 @@ The rules (`public/account-client.js`; each has a rig row and a mutant):
 5. **Sign out everywhere** is a member's assertion over `wout.` for the
    account this host is signed in to, after a confirmation screen that names
    it.
-6. **No recovery code on the web** (X7): no page makes, shows or asks for one.
+6. **Stop a waiting reset** is a member's assertion over the kernel's `vrs.`
+   text for the reset the directory showed, after a confirmation screen that
+   says when it was asked for and when it would take effect. `vrsText` is the
+   kernel's `buildVrs`, byte for byte (rig row). The directory judges the
+   account's age, the signer and the proof; the page only names the refusal.
+7. **No recovery code on the web** (X7): no page makes, shows or asks for one.
    The setup page says what a browser-only account loses (X3).
 
 ## Directory routes for the pages
 
 `public/account-client.js` is the pages' seam. The routes the directory has
 are used as they are: `/v1/roster/setup/start`, `/v1/roster/reset/start`,
-`/v1/roster/challenge`, `/v1/roster/setup` and `/v1/roster/reset`. Four
+`/v1/roster/challenge`, `/v1/roster/setup`, `/v1/roster/reset`, the roster
+read `GET /v1/roster?e=` and `/v1/roster/reset/void`. Four
 routes do **not exist yet**, and `scripts/lib/id-signin-directory-stub.mjs`
 is their contract, check by check, which the rigs run against:
 

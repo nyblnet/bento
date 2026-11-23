@@ -2,7 +2,8 @@
 // Copyright (c) 2026 The Bento authors
 // The sign-in host's OWN pages (server/signin/public: /setup, /reset, /account)
 // in a real browser: a mailed setup link completed with a new passkey, sign-in
-// on the host, a reset link completed, and sign out everywhere.
+// on the host, a reset link completed, sign out everywhere, and a member's
+// passkey stopping a waiting reset.
 //
 //   node scripts/test-signin-host-pages.mjs            # Playwright's headless shell, a CDP virtual authenticator
 //   node scripts/test-signin-host-pages.mjs --chrome   # the installed Google Chrome, the same rows
@@ -11,7 +12,7 @@
 // https://signin.id.bento.page is the REAL worker and files; https://id.bento.page
 // is the REAL directory worker and Roster object (server/directory/src) in this
 // process, against an in-memory store, for every route it has (challenge,
-// setup/start, setup, reset/start, reset), plus the contract stub
+// setup/start, setup, reset/start, reset, the roster read and reset/void), plus the contract stub
 // scripts/lib/id-signin-directory-stub.mjs for the routes it does not have yet
 // (/v1/web/signin*, /v1/web/signout*), which reads the real object's storage.
 // Mailed links are taken from the directory's own mail. https://home.bento.page
@@ -68,6 +69,10 @@ const MUTANTS = {
   // W1 (security-ruling on #953): the sign-out views drop the 24-hour sentence
   'no-24h': [['public/account.html', '    <p class="note" data-w1>From now on no browser can renew its sign-in. Anything a browser already signed can still be accepted for up to 24 hours.</p>\n    <p class="note">Each browser', '    <p class="note">Each browser'],
     ['public/account.html', ' An email about it is on its way.</p>\n    <p class="note" data-w1>From now on no browser can renew its sign-in. Anything a browser already signed can still be accepted for up to 24 hours.</p>\n', ' An email about it is on its way.</p>\n']],
+  // the reset stop's text with two fields swapped: not the kernel's vrs.
+  'vrs-swapped': [['public/account-client.js', "['vrs', b64u(new TextEncoder().encode(address)), resetHash, nonce]", "['vrs', b64u(new TextEncoder().encode(address)), nonce, resetHash]"]],
+  // the reset stopped on the first press, with no confirmation naming the reset
+  'stop-unconfirmed': [['public/account.js', "  show('confirm-stop')\n})", "  show('working')\n  await stopReset(account, reset)\n  show('reset-stopped')\n})"]],
   // framing allowed
   'framed': [['src/worker.js', '  "frame-ancestors \'none\'",\n', ''], ['src/worker.js', "  'x-frame-options': 'DENY',\n", '']],
 }
@@ -87,6 +92,12 @@ async function site(mutant) {
 }
 
 // ---- the directory: the real worker and object, and the stub beside them ---------------
+// The directory's clock (Date.now, in this process) runs `skew` ahead, so a row
+// can age an account past 14 days. Every row starts at 0 (reset()).
+const DAY = 86_400_000
+let skew = 0
+const realNow = Date.now
+Date.now = () => realNow() + skew
 const dirMod = await import('../server/directory/src/worker.js')
 function namespace(Klass, env) {
   const objs = new Map()
@@ -240,7 +251,7 @@ const plant = (p, v) => p.evaluate((x) => { if (x === null) localStorage.removeI
 const calls = async (p) => { const c = await p.evaluate(() => window.__calls).catch(() => null); if (c) signals.push(c.signal); return c }
 const click = async (p, sel, not) => { await p.click(sel, { timeout: 4000 }); return settled(p, not) }
 const reset = async (mutant = null) => {
-  handler = await site(mutant); W = world(); twist = null; dirReqs.length = 0
+  handler = await site(mutant); W = world(); twist = null; dirReqs.length = 0; skew = 0
   for (const x of ctx.pages()) await x.close().catch(() => {})
   auths.clear()
 }
@@ -553,6 +564,58 @@ try {
     await click(q, '#signout-ask', ['loading', 'signed-in'])
     s = await click(q, '#signout', ['loading', 'confirm-signout', 'working'])
     ok(s[0] === 'failed' && s[1] === 'not-member' && W.stub.log.length === 0 && !W.stub.revoked.has(hal), `refused not-member, nothing revoked (${s})`)
+
+    // ---- 5. a member's passkey stops a waiting reset (G5; security's C5 on #944) ----------
+    console.log('\n5   a member stops a waiting reset, by a passkey on this host, through the real directory')
+    const stopRun = async (mutant, { old = true, noReset = false } = {}) => {
+      await reset(mutant); const p = await fresh(); const e = addr('kim')
+      await setUp(p, e) // p's authenticator holds the member's passkey
+      if (old) skew = 15 * DAY // the reset is asked for once the account is 15 days old
+      let pend = null
+      if (!noReset) {
+        const q = await fresh() // another authenticator makes the reset's passkey (fresh() empties this host's storage)
+        await q.goto(await mailedLink('reset', e)); await settled(q)
+        await click(q, '#make', ['loading', 'ready', 'working'])
+        await q.close()
+        pend = (await W.store(e)).get('pend')
+      }
+      await plant(p, e)
+      await p.goto(`${S}/account`); await settled(p)
+      const voids = () => dirReqs.filter((d) => d.path === '/v1/roster/reset/void').length
+      const before = (await calls(p)).get
+      const a = await click(p, '#stop-ask', ['loading', 'signed-in'])
+      const atAsk = { sent: voids(), gets: (await calls(p)).get - before }
+      const confirm = a[0] === 'confirm-stop' ? (await p.locator('[data-for=confirm-stop]').innerText()).replace(/\s+/g, ' ') : ''
+      const s = a[0] === 'confirm-stop' ? await click(p, '#stop', ['loading', 'confirm-stop', 'working']) : a
+      const st = await W.store(e)
+      const lg = [...st.entries()].filter(([k]) => k.startsWith('log:')).map(([, v]) => v).pop()
+      return { a, s, confirm, atAsk, gets: (await calls(p)).get - before, sent: voids(), pend, after: st.get('pend'), member: st.get('head').members[0].pub,
+        mails: W.mails.filter((m) => m.to === e), lg, text: await p.locator('#failed-text').textContent(), done: (await p.locator('[data-for=reset-stopped]').innerText()).replace(/\s+/g, ' ') }
+    }
+    const when = (t) => new Date(t).toISOString().slice(0, 16).replace('T', ' ') + ' UTC'
+    r = await stopRun()
+    ok(r.pend?.kind === 'reset', `control: a reset of a 15-day-old account waits at the directory (${r.pend?.kind})`)
+    ok(r.a[0] === 'confirm-stop' && r.atAsk.sent === 0 && r.atAsk.gets === 0 && r.confirm.includes(when(r.pend?.requestedAt ?? 0)) && r.confirm.includes(when(r.pend?.ripensAt ?? 0)) && r.confirm.includes('first 14 days'),
+      `asked first: the reset's times from the directory, no passkey prompt and nothing sent yet (${r.a}, ${r.atAsk.sent} sent, ${r.atAsk.gets} get)`)
+    ok(r.s[0] === 'reset-stopped' && r.gets === 1 && r.sent === 1 && r.after === undefined && r.done.includes('will not take effect'),
+      `stopped: one passkey prompt, one request, and no change waits at the directory (${r.s}, ${r.gets} get, pend ${r.after?.kind})`)
+    ok(r.lg?.k === 'reset-stop' && r.lg?.by === r.member && r.lg?.os === S && r.mails.some((m) => /reset .*was stopped/i.test(m.subject || '')),
+      `the directory logged which member stopped it, from this host, and mailed the address (${r.lg?.k}, ${String(r.lg?.os)})`)
+    m = await stopRun('vrs-swapped')
+    ok(!(m.s[0] === 'reset-stopped' && m.after === undefined), `MUTANT vrs-swapped: the directory refuses the stop and the reset still waits (${m.s}, ${m.after?.kind})`)
+    m = await stopRun('stop-unconfirmed')
+    ok(!(m.a[0] === 'confirm-stop' && m.atAsk.sent === 0 && m.atAsk.gets === 0), `MUTANT stop-unconfirmed: the first press sends the stop (${m.a}, ${m.atAsk.sent} sent)`)
+
+    console.log('\n5   a reset asked for in the account\'s first 14 days: the page says only its email\'s link can stop it')
+    r = await stopRun(null, { old: false })
+    ok(r.a[0] === 'confirm-stop' && r.s[0] === 'failed' && r.s[1] === 'new-account' && r.after?.kind === 'reset' &&
+      r.text === 'This reset was asked for in the account’s first 14 days, so a passkey cannot stop it. The link in the email about the reset can. Nothing changed.',
+      `refused new-account, the reset still waits (${r.s}, ${r.after?.kind}, "${r.text}")`)
+
+    console.log('\n5   no reset waiting: nothing to stop, no passkey prompt')
+    r = await stopRun(null, { noReset: true })
+    ok(r.a[0] === 'failed' && r.a[1] === 'no-reset' && r.gets === 0 && r.sent === 0 && r.text === 'No reset is waiting on this account. Nothing changed.',
+      `"No reset is waiting", no prompt, nothing sent (${r.a}, ${r.gets} get, ${r.sent} sent)`)
 
     const sig = signals.reduce((x, y) => x + y, 0)
     ok(sig === 0, `no page called the WebAuthn Signal API (${sig})`)

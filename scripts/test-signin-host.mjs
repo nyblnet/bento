@@ -323,8 +323,8 @@ try {
         const u = fnBody(f.client, 'userHandle') || ''
         return /'bento-dir\/1\/addr\\n' \+ address/.test(u) && /new Uint8Array\(48\)/.test(u) && /crypto\.getRandomValues\(new Uint8Array\(16\)\), 32\)/.test(u)
       },
-      'every get and create asks for user verification': (f) => (all(f).match(/userVerification: 'required'/g) || []).length === 3 && !/userVerification: '(preferred|discouraged)'/.test(all(f)),
-      'a raw challenge is a 40-byte sealed one, never 32 (a statement hash)': (f) => /const SEALED = \/\^\[A-Za-z0-9_-\]\{54\}\$\/\n/.test(f.client) && (f.client.match(/!SEALED\.test\(/g) || []).length === 3,
+      'every get and create asks for user verification': (f) => (all(f).match(/userVerification: 'required'/g) || []).length === 4 && !/userVerification: '(preferred|discouraged)'/.test(all(f)),
+      'a raw challenge is a 40-byte sealed one, never 32 (a statement hash)': (f) => /const SEALED = \/\^\[A-Za-z0-9_-\]\{54\}\$\/\n/.test(f.client) && (f.client.match(/!SEALED\.test\(/g) || []).length === 4,
     }
     const XL = {
       'X7: no page makes, shows or asks for a code (the X3 sentence alone mentions one)': (h, f) => {
@@ -392,6 +392,29 @@ try {
     ok([...texts].every((t) => { const [, a, at, nonce] = t.split('.'); const c = { address: Buffer.from(a, 'base64url').toString('utf8'), at: Number(at), nonce }; return buildWout({ ...c, dirNonce: nonce }) === t }), 'control: the kernel rebuilds its own vector texts')
     const swapped = await same(copyWith([['public/account-client.js', "['wout', b64u(new TextEncoder().encode(address)), String(at), nonce]", "['wout', b64u(new TextEncoder().encode(address)), nonce, String(at)]"]]))
     ok(!swapped.every(Boolean), 'MUTANT field order swapped in woutText: the cross-check fails')
+  }
+
+  // 5. The text a member's passkey signs to stop a waiting reset: the host's
+  //    copy must be the kernel's buildVrs byte for byte, on the kernel's own
+  //    vrs. vectors and more.
+  {
+    console.log('\n5   vrsText is the kernel\'s buildVrs, byte for byte')
+    const { buildVrs } = await import('../kernel/src/roster.ts')
+    const texts = new Set()
+    const walk = (x) => { if (typeof x === 'string' && /^vrs\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}\.[A-Za-z0-9_-]+$/.test(x)) texts.add(x); else if (x && typeof x === 'object') for (const v of Object.values(x)) walk(v) }
+    for (const f of ['identity-v1.json', 'roster-v2.json']) walk(JSON.parse(readFileSync(new URL(`../kernel/fixtures/${f}`, import.meta.url), 'utf8')))
+    const cases = [...texts].map((t) => { const [, a, resetHash, nonce] = t.split('.'); return { address: Buffer.from(a, 'base64url').toString('utf8'), resetHash, nonce } })
+    const h = (c) => Buffer.alloc(32, c).toString('base64url')
+    cases.push({ address: 'alice@example.com', resetHash: h(1), nonce: 'AAAA' }, { address: 'bjørn@example.com', resetHash: h(7), nonce: 'Zm9vYmFy_-' }, { address: 'x+tag@sub.example.org', resetHash: h(255), nonce: 'n'.repeat(54) })
+    const same = async (dir) => {
+      const { vrsText } = await import(join(dir, 'public/account-client.js') + '?' + ++n)
+      return cases.map((c) => vrsText(c) === buildVrs({ address: c.address, resetHash: c.resetHash, dirNonce: c.nonce }))
+    }
+    const honest = await same(ROOT)
+    ok(texts.size >= 2 && honest.length === cases.length && honest.every(Boolean), `vrsText(…) === kernel buildVrs(…) on ${texts.size} kernel vector text(s) and ${cases.length - texts.size} more`)
+    ok([...texts].every((t) => { const [, a, resetHash, nonce] = t.split('.'); return buildVrs({ address: Buffer.from(a, 'base64url').toString('utf8'), resetHash, dirNonce: nonce }) === t }), 'control: the kernel rebuilds its own vector texts')
+    const swapped = await same(copyWith([['public/account-client.js', "['vrs', b64u(new TextEncoder().encode(address)), resetHash, nonce]", "['vrs', b64u(new TextEncoder().encode(address)), nonce, resetHash]"]]))
+    ok(!swapped.every(Boolean), 'MUTANT field order swapped in vrsText: the cross-check fails')
   }
 } finally {
   rmSync(tmp, { recursive: true, force: true })

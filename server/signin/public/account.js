@@ -2,11 +2,11 @@
 // Copyright (c) 2026 The Bento authors
 //
 // The sign-in host's account page (/account): sign in on this host, ask for a
-// setup or reset link, and sign out every browser. It reads nothing from its
+// setup or reset link, sign out every browser, and stop a waiting reset. It reads nothing from its
 // URL and answers no message: everything here starts with the person's own
 // button press on this page (account-client.js has the rules).
 
-import { Refused, isAddress, savedAccount, signInHere, signOutEverywhere, startLink, when } from './account-client.js'
+import { Refused, isAddress, savedAccount, signInHere, signOutEverywhere, startLink, stopReset, waitingReset, when } from './account-client.js'
 
 const $ = (id) => document.getElementById(id)
 let busy = false
@@ -28,6 +28,12 @@ const FAILED = {
   'network': 'bento/id could not be reached. Nothing changed. Try again.',
   'busy': 'Too many tries from here. Wait a while, then try again.',
   'not-implemented': 'Signing every browser out is not available yet. Nothing changed.',
+  'no-reset': 'No reset is waiting on this account. Nothing changed.',
+  'new-account': 'This reset was asked for in the account’s first 14 days, so a passkey cannot stop it. The link in the email about the reset can. Nothing changed.',
+  'signer': 'That passkey is not on this account. Nothing changed.',
+  'signer-kind': 'Only a passkey can stop a reset here. Nothing changed.',
+  'held': 'Another change to this account is being confirmed right now. Wait a moment, then try again. Nothing changed.',
+  'reset-mismatch': 'The waiting reset changed while you were confirming. Nothing changed. Try again.',
 }
 
 function fail(e) {
@@ -75,6 +81,33 @@ const signOutAll = () => run(async () => {
   show('signed-out-all')
 })
 
+/** The reset this page showed and the person confirmed: what the passkey signs over. */
+let shownReset = null
+
+const askStop = () => run(async () => {
+  const account = savedAccount()
+  if (!account) return home()
+  shownReset = null
+  const reset = await waitingReset(account)
+  if (!reset) throw new Refused('no-reset')
+  shownReset = reset
+  $('stop-asked').textContent = when(reset.requestedAt)
+  $('stop-ripens').textContent = when(reset.ripensAt)
+  show('confirm-stop')
+})
+
+const stopIt = () => run(async () => {
+  const account = savedAccount()
+  const reset = shownReset
+  if (!account || !reset) return home()
+  show('working')
+  const r = await stopReset(account, reset)
+  shownReset = null
+  $('stop-back').hidden = r.removesAt === undefined
+  if (r.removesAt !== undefined) $('stop-removes').textContent = when(r.removesAt)
+  show('reset-stopped')
+})
+
 function start() {
   $('signin').addEventListener('click', signIn)
   $('switch').addEventListener('click', signIn)
@@ -82,7 +115,9 @@ function start() {
   $('reset-start').addEventListener('click', () => ask('reset'))
   $('signout-ask').addEventListener('click', () => { if (!busy && savedAccount()) show('confirm-signout') })
   $('signout').addEventListener('click', signOutAll)
-  for (const id of ['signout-cancel', 'mailed-back', 'signout-back', 'failed-back']) $(id).addEventListener('click', () => { if (!busy) home() })
+  $('stop-ask').addEventListener('click', askStop)
+  $('stop').addEventListener('click', stopIt)
+  for (const id of ['signout-cancel', 'mailed-back', 'signout-back', 'failed-back', 'stop-cancel', 'stopped-back']) $(id).addEventListener('click', () => { if (!busy) home() })
   home()
 }
 

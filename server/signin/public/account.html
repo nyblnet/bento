@@ -49,6 +49,7 @@
     <p>This site is signed in to bento/id as <strong id="account"></strong>.</p>
     <div class="actions">
       <button id="signout-ask" type="button">Sign out every browser…</button>
+      <button id="stop-ask" type="button">Stop a waiting reset…</button>
       <button id="switch" type="button">Use another passkey</button>
     </div>
   </section>
@@ -62,6 +63,23 @@
       <button id="signout" type="button" class="primary">Sign out every browser</button>
       <button id="signout-cancel" type="button">Cancel</button>
     </div>
+  </section>
+
+  <section data-for="confirm-stop" hidden>
+    <h1>Stop this reset?</h1>
+    <p>A reset of <strong data-account></strong> was asked for at <strong id="stop-asked"></strong>. At <strong id="stop-ripens"></strong> it would replace every passkey on the account with the new one it made.</p>
+    <p class="note">If you did not ask for it, stop it with one of this account’s passkeys. Your passkeys stay as they are, and an email says which passkey stopped it. A reset asked for in an account’s first 14 days can be stopped only by the link in its email.</p>
+    <div class="actions">
+      <button id="stop" type="button" class="primary">Stop the reset</button>
+      <button id="stop-cancel" type="button">Cancel</button>
+    </div>
+  </section>
+
+  <section data-for="reset-stopped" hidden>
+    <h1>The reset is stopped</h1>
+    <p>The reset of <strong data-account></strong> will not take effect, and its new passkey is not added. An email about it is on its way.</p>
+    <p class="note" id="stop-back" hidden>A removal that was waiting before the reset is waiting again: it takes effect at <strong id="stop-removes"></strong>.</p>
+    <button id="stopped-back" type="button">Back</button>
   </section>
 
   <section data-for="working" hidden>

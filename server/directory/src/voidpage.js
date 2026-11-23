@@ -111,6 +111,10 @@ export const VOID_HTML = `<!doctype html>
 <h1>A reset cancelled this change</h1>
 <p>A reset of this account was asked for at <span id="preempted-at"></span>, and it cancelled this change. The email “A reset of your bento/id account is waiting” says more.</p>
 </section>
+<section id="stopped" data-view hidden>
+<h1>A passkey stopped this reset</h1>
+<p>A passkey on this account stopped the reset at <span id="stopped-at"></span>. Its new passkey was not added. The email “The reset of your bento/id account was stopped” names the passkey that stopped it.</p>
+</section>
 <section id="unknown" data-view hidden>
 <h1>This link no longer works</h1>
 <p>It may have been used already, or the change it was for may have been stopped or replaced. The latest email about your bento/id passkeys lists them as they are now.</p>
@@ -197,6 +201,7 @@ export const VOID_JS = `(() => {
     if (j.error === 'late' && typeof j.at === 'number') { $('late-text').textContent = late(j); return show('late') }
     if (j.error === 'used' && typeof j.at === 'number') { $('used-at').textContent = at(j.at); return show('used') }
     if (j.error === 'preempted' && typeof j.at === 'number') { $('preempted-at').textContent = at(j.at); return show('preempted') }
+    if (j.error === 'stopped' && typeof j.at === 'number') { $('stopped-at').textContent = at(j.at); return show('stopped') }
     show('unknown')
   }
   $('cancel').addEventListener('click', () => send('cancel'))
