@@ -142,7 +142,11 @@ const MUTANTS = [
   { name: 'browser-filled header values read from top-level navigations only (C5)', row: 'framed', file: W, from: "addListener(onRequest, { urls: patterns(), types: ['main_frame', 'sub_frame'] }", to: "addListener(onRequest, { urls: patterns(), types: ['main_frame'] }" },
   { name: 'the preload header value not recorded (C5)', row: 'preload-header', file: W, from: 'preload: preload == null ? null : cut(preload) },', to: 'preload: null },' },
   // /index.html answered as '/' (security ruling on #964, M1): without it an honest visit reads "unverified"
-  { name: 'the worker leaves /index.html to the network', row: 'stage3-index', build: [{ file: 'sw.ts', from: "  if (url.pathname === '/index.html') url.pathname = '/'\n", to: '' }] },
+  // Not registered: the build mutant that drops sw.ts's /index.html line. MEASURED red on macOS Chromium 149
+  // (stage3-index: 3 and 2 of 8 honest visits warned without the line, 0 of 8 with it), but CI's Linux
+  // Chromium did not reproduce the false warning (8 of 8 quiet without the line), so in CI it would be a
+  // survivor that proves nothing either way. Run it by hand with
+  //   TW_ROWS=stage3-index TW_BUILD_MUTANT='{"file":"sw.ts","from":"  if (url.pathname === \'/index.html\') url.pathname = \'/\'\n","to":""}'
   { name: 'unread bytes waived under any worker (C2), at /index.html', row: 'stage3-vary-text-index', file: J, from: "(!obs.viaWorker || obs.cspFrom === 'navigation') && !obs.bytes", to: '!obs.viaWorker && !obs.bytes' },
   { name: 'bytes rule off, at /index.html', row: 'stage3-text-index', file: J, from: 'if (obs.bytes && obs.bytes.sha256 !== e.sha256)', to: 'if (false)' },
 ]
