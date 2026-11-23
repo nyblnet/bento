@@ -22,10 +22,16 @@
  *               2 and 3 navigations. Recorded, not judged: it is the baseline
  *               that shows the route is needed (or, in an engine that drops a
  *               worker whose script 404s, that it is not the only defence).
+ *   [D5c-spec]  the route as a function and over HTTP: a worker-script request is
+ *               answered with the cleaning worker at ANY path shape (no extension,
+ *               .mjs, deep, a query string, a name the build serves as a file);
+ *               the build's own /sw.js is served as built.
  *   [D5c-route] WITH the route: the hostile worker is gone (no registration),
  *               every cache is deleted, and / is the real library, within 3
  *               navigations; the number of navigations and the seconds taken
- *               are printed.
+ *               are printed. [D5c-route-shape] the same for a worker registered
+ *               at /x/agent?v=1 (no .js, a query string). Every page call is
+ *               bounded, so a row that cannot finish reports red itself.
  *   [D5c-reset] the reset page: after a worker that passes navigations through
  *               (a stale worker, not a hostile one), /reset leaves no
  *               registration and no cache. A hostile worker answers /reset
@@ -48,6 +54,8 @@ const args = process.argv.slice(2)
 const MUTANTS = [
   { name: 'route-404', why: 'the host answers a worker-script request at an unknown path with 404, as a static host does', expect: ['[D5c-route]'] },
   { name: 'no-cache-delete', why: 'the cleaning worker unregisters but leaves the caches', expect: ['[D5c-route] every cache'] },
+  { name: 'path-shape', why: 'the route answers a worker-script request only at a path ending -sw.js, not at ANY path', expect: ['[D5c-spec] any path shape', '[D5c-spec] over HTTP', '[D5c-route-shape]'] },
+  { name: 'no-unregister', why: 'the cleaning worker deletes the caches but keeps its own registration', expect: ['[D5c-route] the hostile worker is gone'] },
   { name: 'reset-bare', why: 'the reset page is sent without Clear-Site-Data and without its script', expect: ['[D5c-reset] /reset leaves'] },
 ]
 if (args.includes('--mutants')) {
@@ -96,6 +104,12 @@ section('[D5c-spec] the route, as the host must answer')
   ok(own === null && plain === null, '[D5c-spec] the build\'s own /sw.js, and a request without Service-Worker: script, are served as usual')
   ok(reset?.headers?.['clear-site-data'] === '"cache", "storage"' && /<script>[^<]*unregister[^<]*caches\.delete/.test(reset.body ?? ''),
     `[D5c-reset] spec: the reset page sends Clear-Site-Data "cache", "storage" and carries its unregister script (${reset?.headers?.['clear-site-data']})`)
+  // the route's claim is ANY path: the shapes an attacker can register a worker at (no extension,
+  // another extension, deep, a name the build also serves). A query string never reaches this
+  // function (the server passes it the pathname): the HTTP rows below carry one.
+  const SHAPES = ['/x/evil', '/x/evil.mjs', '/a/b/c/d/worker', '/x/evil.js', '/icon-192.png', '/index.html', '/reset.js']
+  const shapes = SHAPES.map((p) => [p, H(p, true)?.status ?? null])
+  ok(shapes.every(([, s]) => s === 200), `[D5c-spec] any path shape: a worker-script request is answered with the cleaning worker at every path (${shapes.map(([p, s]) => p + ' ' + s).join(', ')})`)
   if (MUTANT) console.log(`  mutant applied: ${MUTANT}`)
 }
 
@@ -109,45 +123,66 @@ if (r.status !== 0) { console.log(r.stderr); process.exit(2) }
 // library page's policy is not what these rows are about: they read the worker registrations and
 // caches of the ORIGIN, and what / answers.
 
+// the same shapes over HTTP, through the kill host's own server, with query strings: what the
+// browser rows reach (a path the build serves as a file is still answered as a worker script)
+{
+  const host = await startKillHost({ dir: path.join(out, 'library'), route: true, mutant: HOST_MUTANT })
+  const got = []
+  for (const p of ['/x/agent?v=1', '/x/evil-sw.js?x=1', '/a/b/worker.mjs?y', '/icon-192.png?z']) {
+    const res = await fetch(host.origin + p, { headers: { 'service-worker': 'script' } })
+    const body = await res.text()
+    got.push([p, res.status, res.headers.get('service-worker-allowed'), body.includes('registration.unregister')])
+  }
+  const own = await fetch(host.origin + '/sw.js', { headers: { 'service-worker': 'script' } })
+  const ownBody = await own.text()
+  await host.close()
+  ok(got.every(([, s, swa, clean]) => s === 200 && swa === '/' && clean), `[D5c-spec] over HTTP, with query strings: every worker-script request is answered with the cleaning worker (${got.map(([p, s, swa, c]) => `${p} ${s} ${swa} ${c ? 'clean' : 'NOT clean'}`).join('; ')})`)
+  ok(own.status === 200 && !ownBody.includes('registration.unregister'), `[D5c-spec] over HTTP: the build's own /sw.js is served as built (${own.status})`)
+}
+
 // --- the attacker's deploy -------------------------------------------------------------------------
 const EVIL_SW = `self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (e) => e.waitUntil((async () => { const c = await caches.open('evil'); await c.put('/evil-canary', new Response('kept by the attacker')); await self.clients.claim() })()))
 self.addEventListener('fetch', (e) => { if (e.request.mode === 'navigate' && MODE === 'hostile') e.respondWith(new Response('<!doctype html><title>evil</title><p id="evil">the attacker answers this page</p>', { headers: { 'content-type': 'text/html' } })) })
 `
-const REGISTER = '<!doctype html><title>register</title><script>navigator.serviceWorker.register("/x/evil-sw.js", { scope: "/" }).then(() => { document.title = "registered" }, (e) => { document.title = "refused " + e.name })</script>'
-function plant(host, mode) {
-  host.extra.set('/x/evil-sw.js', { headers: { 'content-type': 'text/javascript', 'service-worker-allowed': '/', 'cache-control': 'no-cache' }, body: `const MODE = ${JSON.stringify(mode)}\n` + EVIL_SW })
-  host.extra.set('/x/evil.html', { headers: { 'content-type': 'text/html' }, body: REGISTER })
+const REGISTER = (url) => '<!doctype html><title>register</title><script>navigator.serviceWorker.register(' + JSON.stringify(url) + ', { scope: "/" }).then(() => { document.title = "registered" }, (e) => { document.title = "refused " + e.name })</script>'
+/** The attacker's deploy: the worker script at `sw` (a URL path, query allowed) and a page that registers it. */
+function plant(host, mode, sw) {
+  host.extra.set(new URL(sw, 'http://x').pathname, { headers: { 'content-type': 'text/javascript', 'service-worker-allowed': '/', 'cache-control': 'no-cache' }, body: `const MODE = ${JSON.stringify(mode)}\n` + EVIL_SW })
+  host.extra.set('/x/evil.html', { headers: { 'content-type': 'text/html' }, body: REGISTER(sw) })
 }
-const unplant = (host) => { host.extra.delete('/x/evil-sw.js'); host.extra.delete('/x/evil.html') }
+const unplant = (host, sw) => { host.extra.delete(new URL(sw, 'http://x').pathname); host.extra.delete('/x/evil.html') }
 
 // --- browser --------------------------------------------------------------------------------------
 const browser = ENGINE === 'chrome' ? await pw.chromium.launch({ channel: 'chrome', logger: apiLogger }) : await pw[ENGINE].launch({ logger: apiLogger })
 guard = guardBrowser(browser, { rig: `home/web kill drill (${ENGINE})` })
 const sockets = []
-const state = (page) => page.evaluate(async () => {
+// every page call is bounded, so a page caught in a navigation loop reports red on its own row
+// rather than through the browser guard's timeout
+const bounded = (p, ms, what) => Promise.race([p, new Promise((r) => setTimeout(() => r({ error: `${what} did not answer within ${ms} ms` }), ms))])
+const state = (page) => bounded(page.evaluate(async () => {
   const regs = await navigator.serviceWorker.getRegistrations()
   return {
     evil: !!document.getElementById('evil'), library: !!document.getElementById('file'),
     regs: regs.map((g) => (g.active || g.waiting || g.installing)?.scriptURL ?? 'none'), caches: await caches.keys(),
   }
-}).catch((e) => ({ error: String(e.message).split('\n')[0] }))
+}).catch((e) => ({ error: String(e.message).split('\n')[0] })), 5000, 'the page').then((s) => (s.error ? { evil: false, library: false, regs: ['unknown'], caches: ['unknown'], ...s } : s))
 async function until(fn, ms) { const end = Date.now() + ms; for (;;) { const v = await fn().catch(() => null); if (v || Date.now() > end) return v; await sleep(200) } }
-const go = (page, url) => page.goto(url, { waitUntil: 'load' }).catch(() => null)
+const go = (page, url) => page.goto(url, { waitUntil: 'load', timeout: 10000 }).catch(() => null)
 
-/** A fresh context and kill host; the attacker's worker registered and in control of /. */
-async function infected(mode, routeOn) {
+/** A fresh context and kill host; the attacker's worker registered at `sw` and in control of /. */
+async function infected(mode, routeOn, sw = '/x/evil-sw.js') {
   const host = await startKillHost({ dir: path.join(out, 'library'), route: false, mutant: HOST_MUTANT })
   const ctx = await browser.newContext()
   await ctx.routeWebSocket(/.*/, (ws) => { sockets.push(ws.url()); ws.close() })
   const page = await ctx.newPage()
-  plant(host, mode)
+  plant(host, mode, sw)
   await go(page, host.origin + '/x/evil.html')
-  const reg = await until(() => page.evaluate(async () => document.title === 'registered' && !!(await navigator.serviceWorker.getRegistration('/'))?.active), 10000)
+  const reg = await until(() => bounded(page.evaluate(async () => document.title === 'registered' && !!(await navigator.serviceWorker.getRegistration('/'))?.active), 5000, 'the page').then((v) => v === true), 10000)
   await go(page, host.origin + '/')
   const s = await state(page)
   // the fixed deploy: the planted paths are gone; the route is on or off
-  unplant(host)
+  unplant(host, sw)
   host.set({ route: routeOn })
   return { host, ctx, page, reg: !!reg, s }
 }
@@ -170,10 +205,11 @@ try {
     await ctx.close(); await host.close()
   }
 
-  section('[D5c-route] the fixed deploy WITH the route: the hostile worker is replaced by the cleaning worker')
-  {
-    const { host, ctx, page, reg, s } = await infected('hostile', true)
-    ok(reg && s.evil, `[D5c-route] positive control: the hostile worker answered / before the fixed deploy (${JSON.stringify(s)})`)
+  /** The fixed deploy with the route, against a hostile worker registered at `sw`: gone within 3 navigations. */
+  const routeRow = async (tag, sw) => {
+    const { host, ctx, page, reg, s } = await infected('hostile', true, sw)
+    const p = new URL(sw, 'http://x').pathname
+    ok(reg && s.evil, `[${tag}] positive control: the hostile worker, registered at ${sw}, answered / before the fixed deploy (${JSON.stringify(s)})`)
     const t0 = Date.now()
     let navs = 0, t = null
     for (navs = 1; navs <= 3; navs++) {
@@ -182,13 +218,18 @@ try {
       if (t.regs.length === 0 && !t.evil) break
     }
     const secs = ((Date.now() - t0) / 1000).toFixed(1)
-    const served = host.seen.filter((q) => q.path === '/x/evil-sw.js' && q.sw === 'script').length
-    ok(t.regs.length === 0 && !t.evil && t.library, `[D5c-route] the hostile worker is gone and / is the real library within 3 navigations (${navs <= 3 ? navs : 'not within 3'} navigation(s), ${secs} s; ${served} cleaning-worker fetches; ${JSON.stringify(t)})`)
+    const served = host.seen.filter((q) => q.path === p && q.sw === 'script').length
+    ok(t.regs.length === 0 && !t.evil && t.library, `[${tag}] the hostile worker is gone and / is the real library within 3 navigations (${sw}; ${navs <= 3 ? navs : 'not within 3'} navigation(s), ${secs} s; ${served} worker-script fetches at that path; ${JSON.stringify(t)})`)
     // the library page registers its own worker again on that load: the ATTACKER's cache is what must be gone
-    ok(!t.caches.includes('evil'), `[D5c-route] every cache the hostile worker kept is deleted (${JSON.stringify(t.caches)})`)
-    note(`[D5c-route] ${ENGINE}: time to clean ${secs} s, ${navs <= 3 ? navs : '>3'} navigation(s)`)
+    ok(!t.caches.includes('evil'), `[${tag}] every cache the hostile worker kept is deleted (${JSON.stringify(t.caches)})`)
+    note(`[${tag}] ${ENGINE}: time to clean ${secs} s, ${navs <= 3 ? navs : '>3'} navigation(s)`)
     await ctx.close(); await host.close()
   }
+  section('[D5c-route] the fixed deploy WITH the route: the hostile worker is replaced by the cleaning worker')
+  await routeRow('D5c-route', '/x/evil-sw.js')
+  // the route's claim is ANY path: a worker registered at a path with no extension and a query
+  section('[D5c-route-shape] the same, the hostile worker registered at a path with no .js and a query string')
+  await routeRow('D5c-route-shape', '/x/agent?v=1')
 
   section('[D5c-reset] the reset page and Clear-Site-Data')
   {

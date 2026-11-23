@@ -62,14 +62,17 @@ const matches = (pattern, p) => pattern.endsWith('*') ? p.startsWith(pattern.sli
  * as the specification: { status, headers, body } or null (serve normally).
  * `ownWorkers` are the build's own worker paths (/sw.js), never answered here.
  * `mutant` (rigs only): one or a list of 'route-404' | 'no-cache-delete' |
- * 'reset-no-header' | 'reset-no-script' (both together: a reset page that does nothing).
+ * 'no-unregister' | 'path-shape' (the route answers only paths ending -sw.js, not ANY
+ * path) | 'reset-no-header' | 'reset-no-script' (both together: a reset page that does nothing).
  */
 export function killRoute({ method, path: p, headers }, { ownWorkers = ['/sw.js'], mutant = null } = {}) {
   const has = (m) => [].concat(mutant ?? []).includes(m)
   if (method !== 'GET' && method !== 'HEAD') return null
-  if (String(headers['service-worker'] ?? '').toLowerCase() === 'script' && !ownWorkers.includes(p)) {
+  if (String(headers['service-worker'] ?? '').toLowerCase() === 'script' && !ownWorkers.includes(p) && (!has('path-shape') || p.endsWith('-sw.js'))) {
     if (has('route-404')) return { status: 404, headers: {}, body: '' }
-    const body = has('no-cache-delete') ? CLEANING_WORKER.replace('  for (const k of await caches.keys()) await caches.delete(k)\n', '') : CLEANING_WORKER
+    let body = CLEANING_WORKER
+    if (has('no-cache-delete')) body = body.replace('  for (const k of await caches.keys()) await caches.delete(k)\n', '')
+    if (has('no-unregister')) body = body.replace('  await self.registration.unregister()\n', '')
     return { status: 200, headers: { 'content-type': 'text/javascript', 'cache-control': 'no-store', 'service-worker-allowed': '/', 'content-security-policy': "default-src 'none'" }, body }
   }
   if (p === RESET_PATH) {
