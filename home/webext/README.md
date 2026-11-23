@@ -422,18 +422,32 @@ home.bento.page has never been checked.
   (`cookieStore.set`, fetch's `referrer`) although no script may set them by
   name, and the honest worker sends neither (the browser's own update check
   names the script's URL as its Referer, and only that is allowed); a
-  `Cookie` on a library
-  navigation is a mismatch on the page too (rule `request-cookie`), so
-  home.bento.page must set no cookie of its own, a CDN's included. That
+  `Cookie` on a top-level library
+  navigation is a mismatch on the page too (rule `request-cookie`; one on a
+  framed library document is not flagged), so home.bento.page must set no
+  cookie of its own, a CDN's included, and no host under bento.page may set a
+  `Domain=bento.page` cookie (it would ride every home.bento.page visit and
+  make each one loud). That
   does not verify its bytes, and it sees only what the worker fetches. Without
   making any request, a cloaked worker can change the text and attribute
   values of every page it answers (same length, no new element; measured:
   one text byte changed from the preload response, verdict ok). The CSP and
   Cache-Control the tripwire reads for such a page are the navigation
   preload's, as webRequest saw them, not the worker's answer, so they say
-  nothing about what the worker handed the page. It can also pass data out
-  through which of the allowed requests it makes, and when (a covert
-  channel). Its requests to **other origins** are
+  nothing about what the worker handed the page. What the BROWSER then
+  fetches because of such a change is held as well: a library page's own
+  requests to its origin (a tab's, not a navigation) are held to the same
+  rules as the worker's: GET, no query, a path a release serves, no `Cookie`
+  or `Referer` (rule `page-request`; measured: a rewritten
+  `<link rel=manifest href="/manifest.webmanifest?s=…">` sent its query in
+  Chrome's own manifest fetch, type `other`, with verdict ok before this rule).
+  The one request to the tab's own document URL is the tripwire's content
+  script re-reading the navigation, so its query and path are the
+  navigation's and are not judged. A page request the worker answers itself
+  never reaches webRequest, and its bytes reach only the worker. The worker
+  can still pass data out through which of the allowed requests it, or the
+  page, makes, and when (a covert channel). Its requests, and the page's, to
+  **other origins** are
   not seen at all: the extension has no host permission there (measured), and
   asking for one is a store-listing change;
 - **the code runs first.** The tripwire reports what was parsed; a hostile

@@ -27,7 +27,7 @@
 // link to or frame must not be able to open tabs at will.
 
 import { t } from './i18n.js'
-import { acceptServed, verifyServed, judge, judgeEarly, observed, classOf, workerRequestFailures, REFRESH_MS } from './tripwire-judge.js'
+import { acceptServed, verifyServed, judge, judgeEarly, observed, classOf, workerRequestFailures, pageRequestFailures, REFRESH_MS } from './tripwire-judge.js'
 import { KEY, LIBRARY_ORIGIN, FRAME_ORIGINS, LIST_URL } from './tripwire-config.js'
 
 export const LOG_KEY = 'tripwireLog'
@@ -225,6 +225,59 @@ export async function tripwireWorkerRequest(req, net = (u, o) => fetch(u, o), no
     page: { role: 'worker', url: req.url, request: { method: req.method, type: req.type, initiator: req.initiator, headers: req.headers } },
   }
   await settle(event, null, refresh, { verdict: 'mismatch' }, now)
+  return { ok: true, verdict: 'mismatch', id: event.id }
+}
+
+/**
+ * A library PAGE's own non-document requests (security ruling on #983, M6): the requests a tab makes to
+ * the library origin that are not a navigation. A cloaked worker can change an attribute value of a page it
+ * answers with no request of its own; the browser then fetches what the page names (MEASURED, Chromium 149:
+ * its manifest fetch, tabId = the tab, type `other`, initiator the library origin, the rewritten query
+ * included). onRequest takes only documents and onWorkerRequest only tabId -1, so this one takes the rest.
+ * A page request the worker answers itself never reaches webRequest (measured); one it lets through does.
+ */
+const PREQ_PREFIX = 'twp:'
+/** The request to judge, or null when it is not a library page's own (pure: no chrome, so a rig calls it). */
+export function pageRequestOf(d) {
+  if (typeof d?.tabId !== 'number' || d.tabId < 0) return null
+  if (d.type === 'main_frame' || d.type === 'sub_frame') return null
+  let origin
+  try { origin = new URL(d.url).origin } catch { return null }
+  if (roleOf(origin) !== 'library') return null
+  // another site's page asking for a library file is that site's request, not the library page's; an
+  // ABSENT initiator cannot be ruled out as the library page, so it is judged (page-request-unattributed)
+  if (d.initiator !== undefined && d.initiator !== null && d.initiator !== LIBRARY_ORIGIN) return null
+  const headers = Array.isArray(d.requestHeaders) ? d.requestHeaders.slice(0, 64).map((h) => ({ name: cut(String(h.name ?? '')), value: String(h.name ?? '').toLowerCase() === 'cookie' ? '(not recorded)' : cut(h.value ?? '') })) : null
+  return { url: cut(noHash(d.url)), method: cut(d.method ?? ''), type: cut(d.type ?? ''), initiator: d.initiator == null ? null : cut(d.initiator), tabId: d.tabId, frameId: typeof d.frameId === 'number' ? d.frameId : 0, headers }
+}
+function onPageRequest(d) {
+  const req = pageRequestOf(d)
+  if (req) void tripwirePageRequest(req).catch(() => {})
+}
+
+/** Judge one of a library page's own requests; a finding is recorded and announced on that page's tab. */
+export async function tripwirePageRequest(req, net = (u, o) => fetch(u, o), now = Date.now()) {
+  const { current, refresh } = await listFor(net, now)
+  if (!current) return { ok: false, reason: 'no list' }
+  // the URL this tab's library document was navigated to (onRequest's record), so the content script's
+  // re-read of it is not taken for a request the page named
+  const nav = (await chrome.storage.session.get(`${REQUEST_PREFIX}${req.tabId}:${req.frameId ?? 0}`))[`${REQUEST_PREFIX}${req.tabId}:${req.frameId ?? 0}`] ?? null
+  const failures = pageRequestFailures(req, current.list, LIBRARY_ORIGIN, { ownUrl: typeof nav?.url === 'string' ? cut(nav.url) : null })
+  if (!failures.length) return { ok: true, verdict: 'ok' }
+  const u = (() => { try { return new URL(req.url) } catch { return null } })()
+  const shape = `${req.method} ${u ? u.pathname : req.url}${String(req.url).includes('?') ? '?' : ''} ${req.type} ${req.initiator ?? '-'} ${failures.map((f) => f.why ?? f.rule).join('+')}`
+  if (!(await firstTime(`${PREQ_PREFIX}${shape}`))) return { ok: true, verdict: 'mismatch', repeat: true }
+  let tab = null
+  try { tab = await chrome.tabs.get(req.tabId) } catch { tab = { id: req.tabId, index: 0 } }
+  const event = {
+    id: newId(now), at: new Date(now).toISOString(), url: req.url, origin: LIBRARY_ORIGIN, role: 'page-request',
+    verdict: 'mismatch', release: null, failures,
+    serial: current.list.serial ?? null, listAt: current.list.at ?? null,
+    list: refresh ? { status: refresh.status, why: refresh.why } : { status: 'held' },
+    observed: { request: true },
+    page: { role: 'page-request', url: req.url, request: { method: req.method, type: req.type, initiator: req.initiator, headers: req.headers } },
+  }
+  await settle(event, tab, refresh, { verdict: 'mismatch' }, now)
   return { ok: true, verdict: 'mismatch', id: event.id }
 }
 
@@ -504,6 +557,8 @@ export function installTripwire() {
   chrome.webRequest?.onHeadersReceived.addListener(onHeaders, { urls: patterns(), types: ['main_frame', 'sub_frame'] }, ['responseHeaders', 'extraHeaders'])
   chrome.webRequest?.onSendHeaders.addListener(onRequest, { urls: patterns(), types: ['main_frame', 'sub_frame'] }, ['requestHeaders', 'extraHeaders'])
   chrome.webRequest?.onSendHeaders.addListener(onWorkerRequest, { urls: [`${LIBRARY_ORIGIN}/*`], tabId: -1 }, ['requestHeaders', 'extraHeaders'])
+  // every other request to the library origin; pageRequestOf keeps a tab's non-document ones (M6)
+  chrome.webRequest?.onSendHeaders.addListener(onPageRequest, { urls: [`${LIBRARY_ORIGIN}/*`] }, ['requestHeaders', 'extraHeaders'])
   chrome.notifications?.onClicked?.addListener((id) => {
     if (!id.startsWith(NOTE_PREFIX)) return
     void chrome.tabs.create({ url: chrome.runtime.getURL(`src/tripwire.html?id=${encodeURIComponent(id.slice(NOTE_PREFIX.length))}`) })

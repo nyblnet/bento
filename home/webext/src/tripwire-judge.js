@@ -145,7 +145,7 @@ const isPrefix = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length <= b
 const sameScript = (seen, want) => (want.sha256 ? !seen.src && seen.sha256 === want.sha256 : seen.src === want.src)
 
 /** The rules that say "could not tell" rather than "this is not a release" (N4: they never share a warning with the others). */
-export const UNVERIFIED_RULES = new Set(['bytes-unread', 'size-unread', 'incomplete', 'cache-unread', 'workers-unread', 'worker-request-unattributed'])
+export const UNVERIFIED_RULES = new Set(['bytes-unread', 'size-unread', 'incomplete', 'cache-unread', 'workers-unread', 'worker-request-unattributed', 'page-request-unattributed'])
 /** 'unverified' when every failure is one of those, else 'tampered'. Loud warnings are once per class per origin per session. */
 export const classOf = (failures) => (failures.length && failures.every((f) => UNVERIFIED_RULES.has(f.rule)) ? 'unverified' : 'tampered')
 
@@ -351,6 +351,37 @@ export function workerRequestFailures(req, list, origin, ctx = {}) {
   // update after a navigation; the install's fetch and update() carry none): its value, not the worker's
   const ownReferer = browserScript ? `${u.origin}${p}` : null
   for (const w of requestHeaderProblems(req.headers, ctx.nav, ownReferer)) why(w)
+  return out
+}
+
+/**
+ * Why a library PAGE's own non-document request (a tab's, not a navigation) is not the honest library's
+ * (empty when it is). Security ruling on #983, M6: a cloaked worker may change an attribute value of a
+ * page it answers, with no request of its own, and the BROWSER then fetches what the page names (MEASURED,
+ * Chromium 149: `<link rel=manifest href="/manifest.webmanifest?s=…">` reached the server in Chrome's own
+ * manifest fetch, tabId = the tab, type `other`, initiator the library origin). So the page's requests to
+ * its own origin are held to the same rules as the worker's: GET, no query, a path a release serves, and
+ * no Cookie or Referer (the honest page is no-referrer, and the browser's manifest fetch omits credentials).
+ * Their other headers are the browser's: a page with no script of its own cannot set one.
+ */
+export function pageRequestFailures(req, list, origin, ctx = {}) {
+  const got = { method: req?.method ?? null, url: req?.url ?? null, type: req?.type ?? null, initiator: req?.initiator ?? null }
+  if (req?.initiator == null) return [{ rule: 'page-request-unattributed', got }]
+  let u
+  try { u = new URL(req.url) } catch { return [{ rule: 'page-request', why: 'unreadable URL', got }] }
+  const out = []
+  const why = (w) => out.push({ rule: 'page-request', why: w, got })
+  if (u.origin !== origin) why('another origin')
+  if (String(req.method) !== 'GET') why('not GET')
+  // the tab's own document URL, as its navigation asked for it (`ctx.ownUrl`, from webRequest): the
+  // tripwire's content script re-reads it from the HTTP cache (MEASURED: a tab `xmlhttprequest` GET of the
+  // page's URL). Its query and path are the navigation's, which the worker did not choose; judged on the rest
+  const own = typeof ctx.ownUrl === 'string' && String(req.url).split('#')[0] === ctx.ownUrl
+  if (!own && String(req.url).split('#')[0].includes('?')) why('a query')
+  const p = u.pathname || '/'
+  if (!own && !list.releases.some((r) => r.origins[origin]?.files[p] !== undefined)) why('a path no release serves')
+  if (!Array.isArray(req.headers)) why('its request headers were not read')
+  else for (const n of ABSENT_REQUEST) if (req.headers.some((x) => String(x?.name ?? '').toLowerCase() === n)) why(`a header the honest page does not send: ${n}`)
   return out
 }
 

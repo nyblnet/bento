@@ -15520,7 +15520,11 @@ What can be seen is what that worker does.
   is a mismatch on the page too (rule `request-cookie`; only its presence is
   recorded, never its value), since a worker-set cookie rides every later
   request. So
-  home.bento.page must set no cookie of its own, a CDN's included. The other
+  home.bento.page must set no cookie of its own, a CDN's included, and no host
+  under bento.page may set a `Domain=bento.page` cookie, which would ride every
+  home.bento.page navigation and make each visit loud (standard cookie
+  scoping, not measured here). A `Cookie` on a FRAMED library document is not
+  flagged. The other
   forbidden names, `Sec-*` and `Proxy-*` are the browser's: their values are
   its settings, or one of the few the fetch spec derives from the request's
   mode and destination, which is the covert channel below. Every other header
@@ -15542,9 +15546,33 @@ What can be seen is what that worker does.
   byte changed from the preload response, verdict ok): the CSP and
   Cache-Control the tripwire reads are the navigation preload's, not the
   worker's answer. A worker that keeps to the honest worker's requests can
-  still pass data out through which of them it makes, and when, and its
-  requests to other origins are unseen; seeing those needs host permissions beyond
+  still pass data out through which of them it, or the page, makes, and when,
+  and requests to other origins are unseen; seeing those needs host permissions beyond
   home.bento.page, a store-listing change for the maintainer.
+- **The page's own requests** (security's third review of #983, M6). An
+  attribute value the worker changes can make the BROWSER fetch something:
+  measured (Chromium 149, no DevTools attached, 4 of 4 runs), a cloaked worker
+  answered the navigation from its preload with
+  `href="/manifest.webmanifest?s=…"` (and the viewport attribute shortened to
+  keep the size), let the manifest fetch through, and Chrome's own manifest
+  fetch carried the query to the server, verdict ok. The exact-path
+  `manifest-src` does not stop it: CSP source matching ignores the query.
+  webRequest does see that request, with the tab's id, type `other`, and the
+  library origin as initiator, but neither listener took it (documents only;
+  tabId -1 only). A third listener now takes every other request to the
+  library origin and judges a tab's non-document requests whose initiator is
+  the library origin (or absent: `page-request-unattributed`, class
+  "unverified") by the worker's rules: GET, no query, a path a release
+  serves, and no `Cookie` or `Referer` (the page is `no-referrer`, the
+  manifest fetch omits credentials). The rule is `page-request`, class
+  "tampered", announced on that tab. Its other headers are the browser's: a
+  page with no script of its own cannot set one. One measured exception: the
+  tripwire's own content script re-reads the tab's document URL from the HTTP
+  cache, which webRequest shows as a tab `xmlhttprequest`, so a request to
+  exactly the URL that tab's navigation asked for is not judged on its query
+  or path (without this, an honest visit to `/?from=link` was a loud
+  mismatch). A request the worker answers itself never reaches webRequest,
+  and its bytes go only to the worker, whose own requests are held.
 
 Guards: rows `c5-honest-worker` (the build's worker, two visits and an update
 check: no finding), `sw-cloak`, `sw-cloak-launder`, `worker-query`,
@@ -15572,3 +15600,12 @@ that way): on the wire Chromium adds `priority` (and `cache-control` and
 `pragma` on some requests), but webRequest with `extraHeaders` does not show
 them, so the extension sees the same names as over HTTP/1.1 and the honest
 worker raises no finding. HTTP/3 was not measured.
+Added after security's third review: rows `page-manifest-query` (the
+rewritten manifest href: a loud `page-request` mismatch), `c5-honest-manifest`
+(two honest visits; the browser's own manifest fetch reaches the server and
+webRequest shows it as a tab request; no finding) and `c5-honest-own-url` (an
+honest visit to `/?from=link`; webRequest shows the content script's re-read;
+no finding), each with a mutant (the listener not registered, the query check
+off, tab requests never routed; manifests held to document paths; the own-URL
+exemption off), and unit rows for `pageRequestOf` and `pageRequestFailures`
+with an absent initiator, absent headers and an absent navigation record.

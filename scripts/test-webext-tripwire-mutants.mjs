@@ -146,6 +146,12 @@ const MUTANTS = [
   { name: 'the navigation\'s Cookie not recorded (C5)', row: 'worker-cookie', file: W, from: "  const cookie = hv('cookie') != null", to: '  const cookie = false' },
   { name: 'the browser\'s update-check Referer not allowed (C5)', row: 'c5-honest-soft-update', file: J, from: "    if (n === 'referer' && ownReferer != null && v === ownReferer) continue\n", to: '' },
   { name: 'the preload header value not recorded (C5)', row: 'preload-header', file: W, from: 'preload: preload == null ? null : cut(preload), cookie },', to: 'preload: null, cookie },' },
+  // a library page's own requests: the browser's manifest fetch of a rewritten href (security's third review of #983, M6)
+  { name: 'a library page\'s own requests not watched (M6)', row: 'page-manifest-query', file: W, from: "  chrome.webRequest?.onSendHeaders.addListener(onPageRequest, { urls: [`${LIBRARY_ORIGIN}/*`] }, ['requestHeaders', 'extraHeaders'])\n", to: '' },
+  { name: 'a query allowed on a page\'s request (M6)', row: 'page-manifest-query', file: J, from: "if (!own && String(req.url).split('#')[0].includes('?')) why('a query')", to: '' },
+  { name: 'a page\'s requests never routed to the judge (M6)', row: 'page-manifest-query', file: W, from: "  if (typeof d?.tabId !== 'number' || d.tabId < 0) return null\n", to: '  return null\n' },
+  { name: 'a page\'s requests held to the documents\' paths (M6, the honest control)', row: 'c5-honest-manifest', file: J, from: "if (!own && !list.releases.some((r) => r.origins[origin]?.files[p] !== undefined)) why(", to: "if (!own && !list.releases.some((r) => r.origins[origin]?.files[p]?.kind === 'document')) why(" },
+  { name: 'the tab\'s own URL not excused (M6)', row: 'c5-honest-own-url', file: J, from: "const own = typeof ctx.ownUrl === 'string' && String(req.url).split('#')[0] === ctx.ownUrl", to: 'const own = false' },
   // /index.html answered as '/' (security ruling on #964, M1): without it an honest visit reads "unverified"
   // Not registered: the build mutant that drops sw.ts's /index.html line. MEASURED red on macOS Chromium 149
   // (stage3-index: 3 and 2 of 8 honest visits warned without the line, 0 of 8 with it), but CI's Linux

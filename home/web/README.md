@@ -270,15 +270,20 @@ Still open:
   release's paths, `/sw.js` only as the browser's script fetch, the honest
   worker's request headers, no `Cookie` or `Referer` on them, and the
   navigation preload header left at the browser's `true`; see
-  `home/webext/README.md`). A `Cookie` on a library navigation is a mismatch
-  too, so this host must set no cookie, a CDN's included. It does not verify the
+  `home/webext/README.md`). A `Cookie` on a top-level library navigation is a
+  mismatch too (on a framed one it is not flagged), so this host must set no
+  cookie, a CDN's included, and no host under bento.page may set a
+  `Domain=bento.page` cookie. It does not verify the
   bytes, and it sees only what such a worker fetches. A cloaked worker can
   still change the text and attribute values of every page it answers (same
   length, no new element) without making any request at all (measured: one
-  byte of text changed from the preload response, verdict ok); it can pass
-  data out through which allowed requests it makes, and when; and its
-  requests to other origins are not seen, since the extension has no host
-  permission there.
+  byte of text changed from the preload response, verdict ok). What the
+  browser then fetches from this origin because of such a change (measured: a
+  rewritten manifest `href` carried a query in Chrome's own manifest fetch) is
+  held to the same rules as the worker's requests, so its bytes cannot ride
+  in a URL or a header there. The worker can still pass data out through which
+  allowed requests it, or the page, makes, and when; and requests to other
+  origins are not seen, since the extension has no host permission there.
 
 **Install.** `manifest.webmanifest` (name, `start_url` and `scope` `/`,
 standalone, 192 and 512 px icons), linked from the page and allowed by an exact

@@ -310,6 +310,51 @@ section('the library worker\'s own requests (security ruling #954 C5)')
   ok(/onSendHeaders\.addListener\(onWorkerRequest, \{ urls: \[`\$\{LIBRARY_ORIGIN\}\/\*`\], tabId: -1 \}, \['requestHeaders', 'extraHeaders'\]\)/.test(twSrc2), 'the listener: the library origin only, tabId -1, with extraHeaders (Service-Worker and Sec-Fetch-Dest are only visible with it)')
 }
 
+section('a library page\'s own non-document requests (security ruling on #983, M6)')
+{
+  const O = 'https://home.bento.page'
+  const T = await import(path.join(EXT, 'src/tripwire.js'))
+  // MEASURED, Chromium 149: the honest page's manifest fetch (no credentials, the page is no-referrer)
+  const pageH = [{ name: 'Accept', value: '*/*' }, { name: 'Sec-Fetch-Dest', value: 'manifest' }, { name: 'Sec-Fetch-Mode', value: 'cors' }, { name: 'Sec-Fetch-Site', value: 'same-origin' }, { name: 'User-Agent', value: 'Mozilla/5.0 (test)' }]
+  const pr = (over: Record<string, unknown> = {}) => ({ url: `${O}/`, method: 'GET', type: 'other', initiator: O, headers: pageH, ...over })
+  const pj = (r: unknown) => J.pageRequestFailures(r, list1, O).map((f: any) => f.why ?? f.rule).join('+')
+  ok(pj(pr()) === '' && pj(pr({ url: `${O}/index.html` })) === '' && pj(pr({ url: `${O}/extra.js`, type: 'script' })) === '', 'the honest page\'s request: GET, no query, a path the release serves, no Cookie or Referer: allowed (positive control)')
+  ok(pj(pr({ url: `${O}/?s=secret-mf` })) === 'a query' && pj(pr({ url: `${O}/?` })) === 'a query' && pj(pr({ url: `${O}/#a?b` })) === '', 'a query (the rewritten manifest href), even a bare ?: a finding; a ? in the fragment is not a query')
+  ok(pj(pr({ url: `${O}/not-served` })) === 'a path no release serves', 'a path no release serves: a finding')
+  ok(pj(pr({ method: 'POST' })) === 'not GET', 'POST (a ping, a form): a finding')
+  ok(pj(pr({ url: 'https://evil.example/' })) === 'another origin' && pj(pr({ url: 'not a url' })) === 'unreadable URL', 'another origin, an unreadable URL: findings')
+  ok(pj(pr({ headers: [...pageH, { name: 'Cookie', value: 'x=s' }] })) === 'a header the honest page does not send: cookie', 'a Cookie: a finding')
+  ok(pj(pr({ headers: [...pageH, { name: 'REFERER', value: `${O}/` }] })) === 'a header the honest page does not send: referer', 'a Referer, in any case: a finding (the honest page is no-referrer)')
+  ok(pj(pr({ headers: undefined })) === 'its request headers were not read' && pj(pr({ headers: null })) !== '', 'requestHeaders ABSENT: a finding, never a pass')
+  ok(pj(pr({ headers: [...pageH, { name: 'Priority', value: 'u=4' }] })) === '', 'any other header is the browser\'s (a page with no script of its own sets none): allowed')
+  const pu = J.pageRequestFailures(pr({ initiator: undefined }), list1, O)
+  ok(pu.length === 1 && pu[0].rule === 'page-request-unattributed' && J.classOf(pu) === 'unverified', 'initiator ABSENT: page-request-unattributed, class unverified, never allowed in silence')
+  ok(J.classOf(J.pageRequestFailures(pr({ url: `${O}/?x` }), list1, O)) === 'tampered', 'a page request outside the rules is "tampered"')
+
+  // the tab's own document URL (the content script's re-read of the navigation): its query and path are the navigation's
+  const po = (r: unknown, ownUrl: unknown) => J.pageRequestFailures(r, list1, O, { ownUrl }).map((f: any) => f.why ?? f.rule).join('+')
+  ok(po(pr({ url: `${O}/?from=link`, type: 'xmlhttprequest' }), `${O}/?from=link`) === '' && po(pr({ url: `${O}/not-served`, type: 'xmlhttprequest' }), `${O}/not-served`) === '', 'the tab\'s own document URL, with a query or at an unlisted path (a 404): allowed (positive control)')
+  ok(po(pr({ url: `${O}/?from=link` }), `${O}/?other`) === 'a query' && po(pr({ url: `${O}/?from=link` }), null) === 'a query' && po(pr({ url: `${O}/?from=link` }), undefined) === 'a query', 'another URL than the document\'s, or no navigation record (null, ABSENT): the query is a finding')
+  ok(po(pr({ url: `${O}/?s=1` }), `${O}/`) === 'a query' && po(pr({ url: `${O}/not-served` }), `${O}/`) === 'a path no release serves', 'the document at / does not excuse a query or another path')
+  ok(po(pr({ url: `${O}/?x`, method: 'POST' }), `${O}/?x`) === 'not GET' && po(pr({ url: `${O}/?x`, headers: [...pageH, { name: 'Cookie', value: 'c' }] }), `${O}/?x`) === 'a header the honest page does not send: cookie', 'the own URL is still held to GET and no Cookie')
+  const d = (over: Record<string, unknown> = {}) => ({ tabId: 7, frameId: 0, url: `${O}/extra.js`, method: 'GET', type: 'other', initiator: O, requestHeaders: pageH, ...over })
+  const routed = (x: unknown) => { const r = T.pageRequestOf(x); return r ? J.pageRequestFailures(r, list1, O).map((f: any) => f.why ?? f.rule).join('+') || 'allowed' : 'ignored' }
+  ok(lib.files['/extra.js'] !== undefined, 'the fixture release serves /extra.js, standing in for the manifest (positive control on the list read)')
+  ok(routed(d()) === 'allowed', 'the honest page\'s manifest fetch: judged, allowed (positive control on the routing)')
+  ok(routed(d({ url: `${O}/extra.js?s=secret-mf-1234` })) === 'a query', 'the attack: that fetch with a query, judged: a finding')
+  ok(routed(d({ tabId: 0 })) === 'allowed', 'tab id 0 is a tab: judged')
+  ok(routed(d({ tabId: -1 })) === 'ignored' && routed(d({ tabId: undefined })) === 'ignored', 'tabId -1 (the worker\'s, onWorkerRequest\'s) or no tab id: not this listener\'s')
+  ok(routed(d({ type: 'main_frame' })) === 'ignored' && routed(d({ type: 'sub_frame' })) === 'ignored', 'a navigation (main_frame, sub_frame): onRequest\'s, not this one\'s')
+  ok(routed(d({ initiator: 'https://evil.example' })) === 'ignored' && routed(d({ initiator: 'chrome-extension://abcdefghijklmnop' })) === 'ignored', 'another site\'s page, or the extension, asking for a library file: ignored')
+  ok(routed(d({ initiator: undefined })) === 'page-request-unattributed' && routed(d({ initiator: null })) === 'page-request-unattributed', 'initiator ABSENT or null: judged as page-request-unattributed, never dropped')
+  ok(routed(d({ url: 'https://evil.example/x' })) === 'ignored', 'another origin: ignored (the listener never sees one)')
+  ok(routed(d({ requestHeaders: undefined })) === 'its request headers were not read', 'requestHeaders ABSENT through the routing: a finding')
+  ok(routed(d({ requestHeaders: [...pageH, { name: 'Cookie', value: 'x=s' }] })) === 'a header the honest page does not send: cookie', 'a Cookie through the routing: a finding (the routing keeps it)')
+  ok(T.pageRequestOf(d({ requestHeaders: [{ name: 'Cookie', value: 'x=secret-ck' }] }))?.headers?.[0]?.value === '(not recorded)', 'the Cookie value is never recorded')
+  const twSrc3 = fs.readFileSync(path.join(EXT, 'src/tripwire.js'), 'utf8')
+  ok(/onSendHeaders\.addListener\(onPageRequest, \{ urls: \[`\$\{LIBRARY_ORIGIN\}\/\*`\] \}, \['requestHeaders', 'extraHeaders'\]\)/.test(twSrc3), 'the listener: the library origin, every type and tab (pageRequestOf picks), with extraHeaders (Cookie is only visible with it)')
+}
+
 section('sign-home-web-served.mjs')
 const keyFile = (pub: any, priv: any) => { const f = path.join(work, `k-${Math.random().toString(36).slice(2)}.json`); fs.writeFileSync(f, JSON.stringify({ public: pub, private: priv })); return f }
 const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' })
