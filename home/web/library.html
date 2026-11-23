@@ -33,6 +33,7 @@
   .bar { display: none; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--card); min-height: 52px }
   .bar .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0 }
   .bar .label { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; min-width: 0 }
+  .chip { white-space: nowrap; font-size: 13px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #FFF1D6; color: #16273E }
   .notice { margin: 0; padding: 8px 12px; font-size: 14px; background: #FFF1D6; color: #16273E; border-bottom: 1px solid var(--line) }
   #stage { display: none; flex: 1 1 auto; min-height: 0 }
   iframe.doc { border: 0; width: 100%; height: 100%; display: block; background: #fff }
@@ -49,14 +50,18 @@
 <header class="bar">
   <span class="name" id="doc-name"></span>
   <span class="label" id="doc-label"></span>
+  <span class="chip" id="unsaved" hidden title="Save a copy, or reopen the file you saved, before you close this tab">Changes only in this tab</span>
+  <button id="save-copy" type="button" hidden>Save a copy</button>
+  <button id="saved-it" type="button" hidden>I've saved it</button>
   <button id="download" type="button" hidden>Download</button>
   <button id="close" type="button">Close</button>
 </header>
 <p class="notice" id="notice" hidden></p>
+<p class="notice" id="away" hidden></p>
 <div id="stage"></div>
 <main>
   <h1>bento<b>/home</b></h1>
-  <p class="lede">Open a Bento document to view or present it. The file stays on your device: nothing is uploaded and nothing is kept.</p>
+  <p class="lede">Open a Bento document to view or present it. You can edit it here too. The file stays on your device: nothing is uploaded, and nothing is kept once you close this tab.</p>
   <label class="drop">
     <input id="file" type="file" accept=".html,.htm,text/html">
     <strong>Choose a file</strong>
@@ -68,7 +73,7 @@
     <button id="readonly" type="button" hidden></button>
   </div>
 <!--IDENTITY-->
-  <p class="fine">Only the code of signed Bento releases runs here, each document in its own sandbox. Saving changes is not available on this page yet: to edit, open the file in your browser directly or in the Bento app.</p>
+  <p class="fine">Only the code of signed Bento releases runs here, each document in its own sandbox. Where this browser allows it, saving writes back to the file you chose; anywhere else your changes stay in this tab until you save a copy.</p>
 </main>
 <section class="stopped-box" id="withdrawn">
   <h1>bento<b>/home</b></h1>

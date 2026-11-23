@@ -802,7 +802,7 @@ if (row('shadow-root')) {
   section('shadow-root: a hostile worker puts a handler and a script inside a declarative shadow root, same length  (rule: shadow-root is markup)')
   await fresh()
   const t = libDoc.body.toString('utf8')
-  const LONG = 'Only the code of signed Bento releases runs here, each document in its own sandbox. Saving changes is not available on this page yet: to edit, open the file in your browser directly or in the Bento app.'
+  const LONG = 'Only the code of signed Bento releases runs here, each document in its own sandbox. Where this browser allows it, saving writes back to the file you chose; anywhere else your changes stay in this tab until you save a copy.'
   const meta = /<meta http-equiv="Content-Security-Policy" content="[^"]*">/.exec(t)[0]
   const inj = '<div><template shadowrootmode="open"><img src=x onerror="document.title=\'DSD\'"><script>window.__dsd=1<\/script></template></div>'
   needWorker(await withWorker(hostileWorker([[LONG, inj.padEnd(LONG.length, ' ')], [meta, ' '.repeat(meta.length)]], `h.set('content-security-policy', "script-src 'unsafe-inline'")`)))
@@ -818,7 +818,7 @@ if (row('shadow-root-removed')) {
   section('shadow-root-removed: a hostile worker streams a declarative shadow root whose script removes its own host, same length  (rule: every element walked is checked for a shadow root)')
   await fresh()
   const t = libDoc.body.toString('utf8')
-  const LONG = 'Only the code of signed Bento releases runs here, each document in its own sandbox. Saving changes is not available on this page yet: to edit, open the file in your browser directly or in the Bento app.'
+  const LONG = 'Only the code of signed Bento releases runs here, each document in its own sandbox. Where this browser allows it, saving writes back to the file you chose; anywhere else your changes stay in this tab until you save a copy.'
   const meta = /<meta http-equiv="Content-Security-Policy" content="[^"]*">/.exec(t)[0]
   const style = /<style>([\s\S]*?)<\/style>/.exec(t)[1]
   const SPLIT = '<template shadowrootmode'

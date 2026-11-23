@@ -267,7 +267,8 @@ if (runs('build')) {
   section('[build] the built files [T7]')
   const sw = fs.readFileSync(path.join(X.out, 'library/sw.js'), 'utf8')
   ok(!/importScripts|\beval\b|\bFunction\s*\(|\bimport\s*\(/.test(sw), 'the worker has no importScripts, eval, Function or dynamic import')
-  const BUDGET = { library: 32 * 1024, sw: 3 * 1024 }
+  // the library: 40 KB from stage 2 (the write-back), as scripts/test-home-web.mjs
+  const BUDGET = { library: 40 * 1024, sw: 3 * 1024 }
   ok(X.info.bytes.libraryWithoutHistories <= BUDGET.library, `library page ${X.info.bytes.libraryWithoutHistories} B (without bundled histories) is within ${BUDGET.library} B`)
   ok(X.info.bytes.sw <= BUDGET.sw, `worker ${X.info.bytes.sw} B is within ${BUDGET.sw} B`)
   ok(X.info.offline.precache.map((p) => p.path).join(' ') === '/ /manifest.webmanifest /icon-192.png /icon-512.png',
