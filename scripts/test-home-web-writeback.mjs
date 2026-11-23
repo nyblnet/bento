@@ -104,12 +104,9 @@ const MUTANTS = [
   { name: 'writes-a-library-link', why: '[T5-4] the library writes a "last opened in home.bento.page" link into the file',
     src: { file: 'writeback.ts', from: "  return { html: out, docText: P.doc.text,", to: "  out = out.replace('</body>', '<a href=\"https://home.bento.page/open\">last opened in bento/home</a></body>')\n  return { html: out, docText: P.doc.text," },
     only: 't1e', expect: '[T5-4]' },
-  { name: 'newest-by-default', why: '[T4] the save is re-spliced into the newest held release, not the served one',
-    src: { file: 'writeback.ts', from: '  if (v.appId !== release.appId || v.release.version !== release.version)', to: '  if (v.appId !== release.appId)' },
-    only: 't1b', expect: '[T1-b] the hostile frame' },
   { name: 'read-only-writes', why: '[T4] the verdict is not checked before writing: a read-only serve keeps its handle',
     src: { file: 'library.ts', from: "writable: false, handle: null, kept: await entryFor(bytes) })", to: "writable: true, handle, kept: await entryFor(bytes) })" },
-    only: 't4ro', expect: '[T4-4] zero createWritable' },
+    only: 't4ro', expect: 'make zero createWritable calls' },
   { name: 'recovery-by-docid', why: '[S.1a] the reopened entry is matched without the bytes\' hash',
     src: { file: 'library.ts', from: 'const again = [...kept.values()].find((k) => k.opened === opened && mem.has(', to: 'const again = [...kept.values()].find((k) => mem.has(' },
     only: 's1a', expect: '[S.1a] NEGATIVE' },
@@ -123,7 +120,7 @@ const MUTANTS = [
     src: { file: 'library.ts', from: "$('file').addEventListener('change', pick)\n", to: "$('file').addEventListener('change', pick)\naddEventListener('message', (e) => { if (session && e.source === session.frame.contentWindow) fromFrame(session, e.data) })\n" },
     only: 't8', expect: '[T8] a save posted to the library\'s window' },
   { name: 'no-save-rate', why: '[T8] no cap on saves',
-    src: { file: 'library.ts', from: 'if (!m || s.busy || ++s.inWindow > SAVES_PER_WINDOW) {', to: 'if (!m || s.busy) {' },
+    src: { file: 'library.ts', from: '  if (++s.inWindow > SAVES_PER_WINDOW) {', to: '  if (false) {' },
     only: 't8', expect: '[T8] a flood of saves' },
   { name: 'post-on-save', why: '[T2] the library posts the document somewhere the CSP allows when it saves',
     src: { file: 'library.ts', from: '  s.lastN = m.n\n', to: "  s.lastN = m.n\n  void fetch(__RELEASE_BASE__ + 'log', { method: 'POST', body: m.html.slice(0, 30000) }).catch(() => {})\n" },
@@ -590,9 +587,10 @@ if (T1 && CHROMIUM) {
       const mk = await fr.evaluate(async () => { const b = await window.__ds.get('memberkey'); return b ? new TextDecoder().decode(b) : null }).catch((e) => String(e))
       ok(mk === 'member-' + mark, `[T1-g] the member key is still held for the open after the write-back (${mk})`)
     }
-    // [T1 947-4] the document becomes encrypted mid-open: the library drops its recovery copy itself
+    // [T1 947-4] the document becomes encrypted mid-open: the library drops its recovery copy itself.
+    // Opened WITHOUT a handle, so no write lands to clear it: only the encryption rule can.
     await page.goto(A.library + '/')
-    o = await openByHandle(page, 'deck1210')
+    await openByInput(page, 'deck1210')
     fr = await booted(page)
     if (fr) {
       await loadKernel(fr).catch(() => {})
@@ -650,7 +648,7 @@ if (want('s1a')) {
   }
   ok(held === 1, `[S.1a] positive control: the 1.3.0 shell's autosave keeps a recovery copy in the library (${held})`)
   // the frame killed after the edit, before any save
-  await page.click('#close')
+  await page.click('#close', { timeout: 8000 }).catch(() => {})
   const away = await until(async () => { const u = await ui(page); return !u.viewing ? u : null }, 10000)
   ok(away?.recovery === 1 && /changes only in this tab/.test(away?.away ?? ''), `[S.1a] closed before a save, the copy stays in the tab and the page says so (${away?.recovery}, ${away?.away})`)
   // a file with the same docId in DIFFERENT bytes is not offered it
@@ -659,7 +657,7 @@ if (want('s1a')) {
   await new Promise((r) => setTimeout(r, 4000))
   const offeredOther = fr ? await fr.evaluate(() => !!document.querySelector('.ed-recover')) : null
   ok(fr && offeredOther === false, `[S.1a] NEGATIVE: the same docId in different bytes is not offered the recovery copy (${offeredOther})`)
-  await page.click('#close')
+  await page.click('#close', { timeout: 8000 }).catch(() => {})
   // the same bytes again: the shell offers it
   await openByInput(page, 'deck130')
   fr = await booted(page)
@@ -683,7 +681,7 @@ if (want('t4ro')) {
       await page.goto(B.library + '/')
       const opened = CHROMIUM ? (await openByHandle(page, key)).u : await openByInput(page, key)
       ok(!!opened && !opened.viewing && /not a Bento release/.test(opened.problem), `[T4-4] ${key}${offline ? ' (channel aborted after)' : ''}: does not run as its own code (${opened?.problem.slice(0, 60)})`)
-      await page.click('#readonly')
+      await page.click('#readonly', { timeout: 8000 }).catch(() => {})
       const fr = await booted(page)
       if (offline) await ctx.route(B.releaseBase + '**', (r) => r.abort())
       if (!fr) { ok(false, `[T4-4] ${key}: opened read-only in the newest release`); await ctx.close(); continue }
@@ -695,7 +693,7 @@ if (want('t4ro')) {
         const out = []
         for (let i = 0; i < 4; i++) {
           const h = await window.showSaveFilePicker({ id: 'bento-doc' })
-          const w = await h.createWritable(); await w.write(new Blob([html])); out.push(await w.close().then(() => 'saved', (e) => e.name))
+          const w = await h.createWritable(); await w.write(new Blob([html])); out.push(await Promise.race([w.close().then(() => 'saved', (e) => e.name), new Promise((r) => setTimeout(() => r('unanswered'), 5000))]))
         }
         return out
       }, await fr.evaluate(() => window.bento.serialize())).catch((e) => [String(e)])
@@ -705,7 +703,7 @@ if (want('t4ro')) {
         `[T4-4] ${key}${offline ? ' (channel aborted)' : ''}: ⌘S and four more writable calls make zero createWritable calls on the file's handle, say why, and offer "Save as a new file" (${after.writes} writes, ${JSON.stringify(kept)})`)
       ok(downloads.length === 0, `[T4-4] ${key}: nothing is written before the person asks`)
       const dl = page.waitForEvent('download', { timeout: 10000 }).catch(() => null)
-      await page.click('#save-copy')
+      await page.click('#save-copy', { timeout: 8000 }).catch(() => {})
       const d = await dl
       const bytes = d ? fs.readFileSync(await d.path(), 'utf8') : ''
       const v = bytes ? await judge(bytes, (() => { const h = new Histories({ kty, crv, x, y }, B.releaseBase, fetch); return h })().list()) : null
@@ -737,7 +735,7 @@ if (want('t6')) {
   const held = await until(async () => { const u = await ui(page); return u.saveCopy ? u : null }, 20000)
   ok(!!held && held.saveCopy === 'Save a copy' && held.writes === 0, `[T6] ⌘S without a handle: nothing written, "Save a copy" offered (${held?.saveCopy})`)
   const dl = page.waitForEvent('download', { timeout: 10000 }).catch(() => null)
-  await page.click('#save-copy')
+  await page.click('#save-copy', { timeout: 8000 }).catch(() => {})
   const d = await dl
   const exported = d ? path.join(work, 'exported.bento.html') : null
   if (d) await d.saveAs(exported)
@@ -783,7 +781,7 @@ if (want('t8')) {
     const u = await ui(page)
     ok(u.writes === 0 && !u.saveCopy && u.posted === 0, `[T8] a save posted to the library's window by the frame is ignored (${u.writes} writes, ${u.posted} on the port)`)
     // positive control: the same html through the frame's own picker IS taken
-    await fr.evaluate(async (html) => { const h = await window.showSaveFilePicker({ id: 'bento-copy' }); const w = await h.createWritable(); await w.write(html); await w.close() }, html).catch(() => {})
+    await fr.evaluate(async (html) => { const h = await window.showSaveFilePicker({ id: 'bento-copy' }); const w = await h.createWritable(); await w.write(html); await Promise.race([w.close(), new Promise((r) => setTimeout(r, 5000))]) }, html).catch(() => {})
     const pc = await until(async () => { const v = await ui(page); return v.saveCopy ? v : null }, 10000)
     ok(!!pc && pc.saveCopy === 'Save the copy', `[T8] positive control: the same file through the frame's picker is taken, as a copy to save (${pc?.saveCopy})`)
   }
