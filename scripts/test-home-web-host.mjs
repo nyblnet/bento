@@ -238,6 +238,7 @@ async function until(fn, ms = 20000) {
 const booted = (page) => until(async () => { const f = docFrame(page); return f && (await f.evaluate(() => !!(window.bento && window.bento.doc))) ? f : null })
 const viewing = (page) => page.evaluate(() => ({ viewing: document.body.classList.contains('viewing'), problem: document.getElementById('problem-box')?.hidden === false ? document.getElementById('problem').textContent : '' }))
 async function open(page, key) {
+  await page.bringToFront()
   await page.setInputFiles('#file', F(key))
   const u = await until(async () => { const v = await viewing(page); return v.viewing || v.problem ? v : null })
   return u?.viewing ? booted(page) : null
@@ -446,15 +447,15 @@ try {
     const page = await ctx.newPage()
     await page.goto(A.library + '/')
     const ready = await until(() => page.evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(); return !!r?.active && (await caches.keys()).length === 1 }), 20000)
-    await page.reload()
+    await page.reload({ waitUntil: 'load' })
     const controlled = await until(() => page.evaluate(() => !!navigator.serviceWorker.controller), 10000)
     ok(!!ready && !!controlled, `[D5] precondition: the worker is installed, holds its cache, and controls the page (${!!ready}, ${!!controlled})`)
-    const cacheList = () => page.evaluate(async () => { const out = []; for (const n of await caches.keys()) { const c = await caches.open(n); for (const r of await c.keys()) out.push(new URL(r.url).pathname) } return out.sort() })
+    const cacheList = () => until(() => page.evaluate(async () => { const out = []; for (const n of await caches.keys()) { const c = await caches.open(n); for (const r of await c.keys()) out.push(new URL(r.url).pathname) } return out.sort() }), 30000)
     const list0 = await cacheList()
     await page.evaluate(() => { navigator.serviceWorker.controller?.postMessage({ cache: '/evil' }); navigator.serviceWorker.controller?.postMessage({ cache: '/evil', url: '/evil', body: 'x' }) })
     await sleep(1200)
     const list1 = await cacheList()
-    ok(list0.length >= 1 && JSON.stringify(list1) === JSON.stringify(list0) && !list1.includes('/evil'), `[D5-b1] a message posted to the controlling worker adds nothing to any cache (${list0.length} -> ${list1.length} entries)`)
+    ok(!!list0 && !!list1 && list0.length >= 1 && JSON.stringify(list1) === JSON.stringify(list0) && !list1.includes('/evil'), `[D5-b1] a message posted to the controlling worker adds nothing to any cache (${list0.length} -> ${list1.length} entries)`)
 
     // [D5-b3] a same-origin path off the list is not the worker's to answer. Navigations (the
     // library's own policy keeps its fetch() to the release channel): a listed path is the control.
@@ -477,6 +478,7 @@ try {
     if (HAS.swSource) ok(ru?.status() === 404 && atServer >= 1 && unlistedBySw === false, `[D5-b3] a same-origin path off the list goes to the server as if there were no worker (status ${ru?.status()}, ${atServer} at the server, from the worker ${unlistedBySw})`)
 
     // [D5-b2] open the canary deck, then look everywhere the library origin can keep anything
+    await page.bringToFront()
     const fr = await open(page, 'x1')
     ok(!!fr, '[D5-b2] positive control: the canary deck (its title is the canary) opens and boots')
     const where = await page.evaluate(async (canary) => {
