@@ -1,0 +1,108 @@
+# SCRATCH, never to merge: loops the engine rigs with no retry to measure
+# their flake rates. Lives only on a throwaway branch.
+name: flake loop
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        leg: [webkit, firefox]
+        shard: [1, 2, 3, 4, 5, 6]
+        include:
+          - { leg: webkit-persistent, shard: 1 }
+          - { leg: webkit-persistent, shard: 2 }
+          - { leg: firefox-persistent, shard: 1 }
+          - { leg: firefox-persistent, shard: 2 }
+    env:
+      LP_NATIVE_VECTOR_WIDTH: '128'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --prefix slides
+      - name: Install browser test runtime
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium webkit firefox
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: cache probe (ephemeral vs persistent)
+        if: ${{ matrix.shard == 1 }}
+        run: |
+          E=webkit node .github/flake-loop/cache-probe.mjs || true
+          E=firefox node .github/flake-loop/cache-probe.mjs || true
+          E=chromium node .github/flake-loop/cache-probe.mjs || true
+      - name: loop
+        run: |
+          engine=${{ matrix.leg }}; engine=${engine%-persistent}
+          persistent=0; case "${{ matrix.leg }}" in *-persistent) persistent=1;; esac
+          dbg=pw:browser; [ "$engine" = firefox ] && dbg=pw:browser,pw:protocol
+          BENTO_HW3_PERSISTENT=$persistent BENTO_BROWSER=$engine DEBUG=$dbg .github/flake-loop/loop.sh 5 "${{ matrix.leg }}-${{ matrix.shard }}" node scripts/test-home-web-offline.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: offline-${{ matrix.leg }}-${{ matrix.shard }}
+          path: failures/
+          if-no-files-found: ignore
+  slides:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - run: |
+          npm ci --prefix slides
+          npm run build:single --prefix slides
+      - name: ux-morph loop
+        run: .github/flake-loop/loop.sh 30 ux-morph node scripts/test-slides-ux-morph-browser.mjs
+      - name: bento-check loop (layouts-and-roles, the CLI alone)
+        if: ${{ !cancelled() }}
+        run: .github/flake-loop/loop.sh 50 bento-check-layouts bash -c 'node scripts/bento-check.mjs scripts/fixtures/agent-decks/layouts-and-roles.json --json > cli.json; c=$?; node -e "const j=JSON.parse(require(\"fs\").readFileSync(\"cli.json\",\"utf8\")); console.log(j.ok&&j.dropped.length===0&&j.expanded>0?\"1/1 checks passed\":\"0/1 checks passed\")" || { echo "not JSON, exit $c"; exit 1; }; exit $c'
+      - name: bento-check rig loop
+        if: ${{ !cancelled() }}
+        run: .github/flake-loop/loop.sh 5 bento-check-rig node scripts/test-bento-check.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: slides-failures
+          path: failures/
+          if-no-files-found: ignore
+  type:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - run: |
+          npm ci --prefix type
+          npm run build:single --prefix type
+      - name: type-fuzz loop
+        run: .github/flake-loop/loop.sh 10 type-fuzz node scripts/test-type-fuzz-browser.mjs
+      - name: seed-10 replay loop
+        if: ${{ !cancelled() }}
+        run: FUZZ_REPLAY='[{"op":"xtype","r":[0.9175,0.6913,0.8021,0.4574]},{"op":"xdelete","r":[0.2023,0.0836,0.0341,0.9967]}]' .github/flake-loop/loop.sh 20 seed10 node scripts/test-type-fuzz-browser.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: type-failures
+          path: failures/
+          if-no-files-found: ignore
