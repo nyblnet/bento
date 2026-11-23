@@ -1,0 +1,113 @@
+# CI, home security: the library-host security rigs of bento/home in your
+# browser, run in every engine with their mutants. Validate, never release.
+#
+# These jobs are NOT the required check. Only `validate` (ci.yml) gates a
+# merge; a job here reports beside it. Keep each job's id unchanged: the id IS
+# the check name. Its own file so it never collides with edits to ci-home.yml.
+
+name: CI (home security)
+
+on:
+  pull_request:
+    # No paths filter: the gate job below decides, so the `full-ci` label can
+    # still start these jobs.
+    types: [opened, synchronize, reopened, labeled]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  # WebKit's software rasterizer on some runner CPUs: see ci-home.yml.
+  LP_NATIVE_VECTOR_WIDTH: '128'
+
+defaults:
+  run:
+    # Every step fails if a rig in it reports a skip CI does not allow
+    # (scripts/lib/ci-skips.mjs).
+    shell: bash scripts/ci/bento-step {0}
+
+jobs:
+  home-security-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts/ci
+            scripts/lib/ci-skips.mjs
+          sparse-checkout-cone-mode: false
+      - id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          LABELLED: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: scripts/ci/zone-gate '^(home/web/|kernel/src/docstoreport\.ts$|scripts/test-home-web-(host|kill-drill)\.mjs$|scripts/lib/home-web-kill-host\.mjs$|scripts/fixtures/webext-embed/|\.github/workflows/ci-home-security\.yml$|scripts/ci/zone-gate$)'
+
+  home-web-host-security:
+    needs: home-security-gate
+    if: needs.home-security-gate.outputs.run == 'true'
+    # The library-host rows (T8 isolation, the embed gate, D5 a/b/g, D7b) and
+    # the D5(c) kill-switch drill, in Chromium, WebKit and Firefox, then each
+    # rig's mutants: every mutant breaks one rule and must turn the row that
+    # guards it red.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install esbuild (slides' dev dependencies)
+        run: npm ci --prefix slides
+      - name: Install browser test runtime
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium webkit firefox
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      # each engine and each mutant run reports on its own: one failing does not
+      # skip the others (the job still fails), and a hang ends its step
+      - name: host rows in Chromium
+        timeout-minutes: 8
+        run: DEBUG=pw:browser node scripts/test-home-web-host.mjs
+      - name: host rows in WebKit
+        if: ${{ !cancelled() }}
+        timeout-minutes: 8
+        run: DEBUG=pw:browser BENTO_BROWSER=webkit scripts/ci/retry-once node scripts/test-home-web-host.mjs
+      - name: host rows in Firefox
+        if: ${{ !cancelled() }}
+        timeout-minutes: 8
+        run: DEBUG=pw:browser BENTO_BROWSER=firefox scripts/ci/retry-once node scripts/test-home-web-host.mjs
+      - name: host mutants (Chromium)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 15
+        run: node scripts/test-home-web-host.mjs --mutants
+      - name: kill drill in Chromium
+        if: ${{ !cancelled() }}
+        timeout-minutes: 6
+        run: node scripts/test-home-web-kill-drill.mjs
+      - name: kill drill in WebKit
+        if: ${{ !cancelled() }}
+        timeout-minutes: 6
+        run: BENTO_BROWSER=webkit scripts/ci/retry-once node scripts/test-home-web-kill-drill.mjs
+      - name: kill drill in Firefox
+        if: ${{ !cancelled() }}
+        timeout-minutes: 6
+        run: BENTO_BROWSER=firefox scripts/ci/retry-once node scripts/test-home-web-kill-drill.mjs
+      - name: kill drill mutants in every engine
+        if: ${{ !cancelled() }}
+        timeout-minutes: 12
+        run: |
+          node scripts/test-home-web-kill-drill.mjs --mutants
+          BENTO_BROWSER=webkit node scripts/test-home-web-kill-drill.mjs --mutants
+          BENTO_BROWSER=firefox node scripts/test-home-web-kill-drill.mjs --mutants
+      - name: On failure, the kernel's word on crashed browser threads
+        if: failure()
+        run: sudo dmesg -T | grep -iE 'segfault|oom|killed process' | tail -20 || echo "no segfault or OOM in the kernel log"
