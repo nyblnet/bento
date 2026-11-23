@@ -957,7 +957,8 @@ async function signout(a: Authn, address: string, o: GetOpts & { ch?: { nonce: s
 /** The op exactly as the route hands it on, with whatever the row plants past the route's own parse. */
 async function signoutOp(address: string, o: { text: string; assertion?: unknown; ch: { nonce: string; at: number } }) {
   const sealed = b64uDec(o.ch.nonce) ?? new Uint8Array(40)
-  return doOp(address, 'browserSignout', { text: o.text, assertion: o.assertion, nonce: b64uEnc(sealed.slice(8, 24)), issued: o.ch.at, challenge: o.ch.nonce })
+  // an exception that escapes the object (a stored chain that does not verify) is a refused row, never a crashed rig
+  try { return await doOp(address, 'browserSignout', { text: o.text, assertion: o.assertion, nonce: b64uEnc(sealed.slice(8, 24)), issued: o.ch.at, challenge: o.ch.nonce }) } catch { return { status: -1, j: {} as Record<string, unknown> } }
 }
 const pkCount = async (address: string, a: Authn) => ((await storeOf(address)).get(`pk:${a.pub}`) as { signCount?: number } | undefined)?.signCount
 const signoutsOf = async (address: string) => JSON.stringify((await storeOf(address)).get('signouts') ?? [])
