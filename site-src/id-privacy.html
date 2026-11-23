@@ -138,7 +138,9 @@ the account's passkeys will also be able to stop it.
 running yet.</p>
 <p>A reset link works for 24 hours, and one is sent at most while no other
 is live. We keep only its hash. It is deleted when a reset starts, or when
-the link expires.</p>
+the link expires. The link in the email that says a reset is waiting is
+kept the same way as a change's: only its hash, while the reset waits, and
+for 31 days after it takes effect or is stopped.</p>
 
 <h2>The record of changes</h2>
 <p>The directory keeps a record of every setup, every passkey added, and

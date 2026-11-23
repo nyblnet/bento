@@ -96,6 +96,7 @@ for (const [what, re] of [
   ['IP fingerprints gone a minute after the day', /and that day's secret are deleted a minute after the day ends \(UTC\)\. IP addresses/],
   ['an expired setup link\'s hash goes at expiry', /The hash of a link that expired unused is deleted when it expires/],
   ['an expired reset link\'s hash goes at expiry', /It is deleted when a reset starts, or when the link expires/],
+  ['the reset\'s stop link\'s hash: the same keep', /The link in the email that says a reset is waiting is kept the same way as a change's: only its hash, while the reset waits, and for 31 days after it takes effect or is stopped/],
   ['the undo link\'s hash: the same keep', /kept the same way: while the removal waits, and for 31 days after/], ['deletion is planned', /Planned<\/span> Deleting an account is not running yet/],
   ['the notice links the deletion page', /href="\/id\/delete"/],
 ]) ok(re.test(P), `notice says: ${what}`)
@@ -118,7 +119,7 @@ ok(!/\/v1\//.test(D) && !/one-time code/.test(D), 'the deletion page names no di
   const workerSrc = readFileSync(join(root, 'server/directory/src/worker.js'), 'utf8')
   const DAY = 86_400_000, MIN = 60_000
   const days = (ms) => ms / DAY
-  ok(days(ROSTER_LIMITS.endedKeepMs) === 31 && /keep its hash for 31 more days/.test(P) && /for 31 days after/.test(P),
+  ok(days(ROSTER_LIMITS.endedKeepMs) === 31 && /keep its hash for 31 more days/.test(P) && /for 31 days after/.test(P) && /for 31 days after it takes effect or is stopped/.test(P),
     `the ended void link keep is the notice's 31 days (roster.js endedKeepMs = ${days(ROSTER_LIMITS.endedKeepMs)} d)`)
   ok(days(ROSTER_LIMITS.setupTimesKeepMs) === 31 && /ten in 31 days/.test(P), `the setup send times are kept for the budget's window, the notice's 31 days (setupTimesKeepMs = ${days(ROSTER_LIMITS.setupTimesKeepMs)} d)`)
   ok(ROSTER_LIMITS.setupTtlMs === 20 * MIN && ROSTER_LIMITS.setupBeyondTtlMs === DAY && /works for 20 minutes, or for 24 hours/.test(P), 'the setup link lives are the notice\'s 20 minutes and 24 hours')
