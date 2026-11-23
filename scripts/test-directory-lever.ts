@@ -1026,6 +1026,128 @@ await d1World(INCIDENT_ENROL)
 }
 rmSync(keyDir, { recursive: true, force: true })
 
+// L9 (security round 2 on #984, M1): an account whose only in-window item is a change mailed in WORDS (a ripened ob=1 remove)
+// is mailed once: the marker carries the words' seqs too, so a re-run over the same window does not mail it again
+{
+  now += 200 * HOUR
+  const wes = 'wes@example.com', W1 = await Authn.make(), W2 = await Authn.make()
+  ok((await setup(wes, W1)).status === 200, 'wes is set up')
+  const add = await request(wes, W1, { add: W2, rq: '' })
+  ok(add.status === 202, `wes asks for a second passkey, not through bento/home (${err(add)})`)
+  now += 73 * HOUR; await head(wes)
+  ok((await current(wes)).head?.members.length === 2, 'wes has two passkeys')
+  const tw0 = now
+  ok((await lever({ op: 'open', id: 'inc-w', t0: tw0 })).status === 200, 'open inc-w')
+  now += 10 * MIN
+  const rm = await request(wes, W1, { remove: W2.pub, rq: H })
+  ok(rm.status === 202, `wes: an ob=1 remove in the window (${err(rm)})`)
+  now += 73 * HOUR; await head(wes)
+  ok((await current(wes)).head?.members.length === 1, 'the remove took effect')
+  const inc = () => mailsTo(wes).filter((m) => m.kind === 'incident')
+  const m0 = inc().length
+  const w1 = await sweep('inc-w', tw0, now, 50)
+  row('L9', w1.done && w1.totals.words === 1 && w1.totals.certificates === 0 && w1.totals.reverts === 0 && inc().length === m0 + 1 && /was removed/.test(inc().at(-1)?.body ?? ''),
+    `positive control: the first run mails wes the remove in words, and nothing else is in the window (${JSON.stringify(w1.totals)})`)
+  now += MIN
+  const w2 = await sweep('inc-w', tw0, now - MIN, 50)
+  row('L9', w2.done && inc().length === m0 + 1 && w2.totals.mails === 0 && w2.totals.words === 0, `a re-run over the same window does not mail a words-only account again (${inc().length - m0} mails, ${JSON.stringify(w2.totals)})`)
+  ok((await lever({ op: 'close', id: 'inc-w', t0: tw0, t1: now })).status === 200, 'close inc-w')
+}
+
+// L16 (security round 2 on #984, nits b and c): a mail that fails takes the revert tokens it minted with it;
+// the revert's re-checks once its own mail has gone (its link used meanwhile, or its hold taken)
+{
+  now += 100 * HOUR
+  const acc = (n: string) => `sd5r2-${n}@example.com`
+  const names = ['tk', 'r11', 'r12'] as const
+  const A: Record<string, Authn> = {}, X: Record<string, Authn> = {}
+  for (const n of names) { A[n] = await Authn.make(); X[n] = await Authn.make(); ok((await setup(acc(n), A[n])).status === 200, `${acc(n)} is set up`) }
+  const t0 = now
+  now += 10 * MIN
+  for (const n of names) ok((await request(acc(n), A[n], { add: X[n], rq: H })).status === 202, `${acc(n)}: an ob=1 add in the window`)
+  now += ROSTER_WAIT_MS + MIN
+  for (const n of names) await head(acc(n))
+  ok((await Promise.all(names.map(async (n) => (await current(acc(n))).head?.members.some((m) => m.pub === X[n].pub)))).every(Boolean), 'the three adds took effect')
+  const t1 = now
+  now += MIN
+  ok((await lever({ op: 'open', id: 'inc-r2', t0 })).status === 200, 'open inc-r2')
+  const rvKeys = async (n: string) => [...(await storeOf(acc(n))).keys()].filter((k) => k.startsWith('rv:')).length
+  mailDown = true
+  const f = await sweep('inc-r2', t0, t1, 50)
+  mailDown = false
+  const kept = await Promise.all(names.map(rvKeys))
+  row('L16', f.done && f.totals.reverts === 3 && f.totals.mailFailed === 3 && kept.every((x) => x === 0),
+    `a run whose mail fails keeps none of the revert tokens it minted (${JSON.stringify(f.totals)}, rv: ${kept})`)
+  const g = await sweep('inc-r2', t0, t1, 50)
+  const minted = await Promise.all(names.map(rvKeys))
+  row('L16', g.done && g.totals.mails === 3 && minted.every((x) => x === 1), `positive control: the re-run mints one per account and mails it (${JSON.stringify(g.totals)}, rv: ${minted})`)
+  const tok = (n: string) => voidLinksIn(mailsTo(acc(n)).filter((m) => m.kind === 'incident').at(-1)).find((l) => l.kind === 'v')?.token ?? ''
+  const quiet = async (n: string) => ({ links: await linkCount(acc(n)), q: (await current(acc(n))).head?.members.find((m) => m.pub === X[n].pub)?.quarantined })
+  let ran = 0
+  const during = (mutate?: (st: Map<string, unknown>) => void, email = '') => {
+    mailHook = async (m) => { mailHook = null; ran++; if (mutate) await plant(email, mutate); mailbox.push(m) }
+  }
+  // S11: another press used the link while this press's undo mail went
+  {
+    const n = 'r11', t = tok(n), b = await quiet(n), r0 = ran
+    during((st) => { for (const k of [...st.keys()]) if (k.startsWith('rv:')) st.delete(k) }, acc(n))
+    const r = await press(acc(n), t, 'revert')
+    mailHook = null
+    const a = await quiet(n), st = await storeOf(acc(n))
+    row('L16', ran === r0 + 1 && r.status === 409 && a.links === b.links && a.q === false && !st.get('pend') && !st.get('hold'),
+      `the revert link used up while its own mail went → 409, nothing written, its hold dropped (${err(r)})`)
+  }
+  // S12: the hold was taken from it while its undo mail went
+  {
+    const n = 'r12', t = tok(n), b = await quiet(n), r0 = ran
+    during((st) => st.set('hold', { id: 'stolen-by-rig', what: 'remove', until: now + 30_000 }), acc(n))
+    const r = await press(acc(n), t, 'revert')
+    mailHook = null
+    const a = await quiet(n)
+    await plant(acc(n), (st) => st.delete('hold'))
+    const r2 = await press(acc(n), t, 'revert')
+    row('L16', ran === r0 + 1 && r.status === 409 && r.j.error === 'busy' && a.links === b.links && a.q === false && r2.status === 200,
+      `its hold taken while its own mail went → 409 busy, nothing written; afterwards the link works (${err(r)}, ${err(r2)})`)
+  }
+  // positive control: the same press with nothing happening during the mail reverts
+  {
+    const n = 'tk', t = tok(n), b = await quiet(n), r0 = ran
+    during()
+    const r = await press(acc(n), t, 'revert')
+    mailHook = null
+    const a = await quiet(n)
+    row('L16', ran === r0 + 1 && r.status === 200 && a.links === b.links + 1 && a.q === true, `positive control: a press whose mail goes quietly reverts (${err(r)})`)
+  }
+  ok((await lever({ op: 'close', id: 'inc-r2', t0, t1 })).status === 200, 'close inc-r2')
+}
+
+// L17 (security round 2 on #984, nit a): two overlapping incidents; a certificate the first marked keeps its mark and is not mailed again
+{
+  now += 300 * HOUR
+  const xia = 'xia@example.com', X1 = await Authn.make()
+  ok((await setup(xia, X1)).status === 200, 'xia is set up')
+  const ta = now
+  now += 10 * MIN
+  const XB = await Browser.make()
+  const xe = await enrol(xia, XB, X1); ok(xe.status === 200, `xia enrols a browser (${err(xe)})`)
+  now += 10 * MIN
+  ok((await lever({ op: 'open', id: 'inc-xa', t0: ta })).status === 200, 'open inc-xa')
+  ok((await lever({ op: 'open', id: 'inc-xb', t0: ta })).status === 200, 'open inc-xb')
+  now += 10 * MIN
+  const inc = () => mailsTo(xia).filter((m) => m.kind === 'incident')
+  const a = await sweep('inc-xa', ta, now, 50)
+  const ma = inc().length
+  row('L17', a.done && a.totals.certificates === 1 && ma === 1, `positive control: inc-xa revokes xia's browser and mails her (${JSON.stringify(a.totals)}, ${ma} mails)`)
+  const b = await sweep('inc-xb', ta, now, 50)
+  const rec = (await storeOf(xia)).get(`wd:${XB.pub}`) as Record<string, unknown>
+  row('L17', b.done && rec?.incident === 'inc-xa' && rec?.revokedBy === 'incident' && b.totals.certificates === 0 && inc().length === 1,
+    `inc-xb over the same window leaves it inc-xa's and mails nothing (incident ${rec?.incident}, ${inc().length} mails, ${JSON.stringify(b.totals)})`)
+  const s = await statusOf(xia, xe.text)
+  row('L17', s.j.state === 'revoked' && s.j.by === 'incident' && s.j.incident === 'inc-xa', `its status names the first incident (${JSON.stringify([s.j.state, s.j.by, s.j.incident])})`)
+  now += MIN
+  for (const id of ['inc-xa', 'inc-xb']) ok((await lever({ op: 'close', id, t0: ta, t1: now })).status === 200, `close ${id}`)
+}
+
 // nothing raw at rest in the lever's stores
 {
   const dump = JSON.stringify([...OBX.objs.values()].map((o) => [...o.store.entries()]))

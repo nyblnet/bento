@@ -417,6 +417,13 @@ over the same window mails nobody twice. A void whose mail failed is kept
 unfinished (a hold, or a failed mail) says so and exits 3: run the same
 command again later.
 
+`close` runs nothing. While an incident is open, a member change asked for
+through bento/home is still accepted (whether it should be refused, like a
+browser enrolment, waits on the maintainer with D1). A change asked for after
+the last run and before `close` is voided only by another run, and only while
+it is still waiting (72 hours). So after `close`, run once more over the
+closed window, with the same `--t0` and `--t1`.
+
 A browser check-in reads the incident records only after its signature, its
 challenge and its per-IP charge pass: the records are one global object,
 which a junk request must never reach.

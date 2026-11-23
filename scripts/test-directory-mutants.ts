@@ -558,6 +558,12 @@ const MUTANTS: Mutant[] = [
   { name: 'SD5 984-N3: the mail while open says nothing of the pause', file: 'lever.js', from: "if (a.open === true && INCIDENT_ENROL === 'refuse') {", to: 'if (false) {' },
   { name: 'SD5 984-N4: a void owed to a failed mail forgotten', file: 'lever.js', from: 'const owe = (await s.get(oweKey)) ?? { voids: [] }', to: 'const owe = { voids: [] }' },
   { name: 'SD5 984-N5: the script exits 0 with accounts left', file: '../lever.mjs', from: '(left > 0 ? 3 : 0)', to: '0' },
+  // security round 2 on #984: the rows that now hold these lines
+  { name: 'SD5 984r2-T10: the mark omits the changes mailed in words', file: 'lever.js', from: ', ...words.map((w) => w.seq)]', to: ']' },
+  { name: "SD5 984r2-T8: another incident's mark taken over", file: 'lever.js', from: "inWin(rec.loggedAt) && rec.revokedBy !== 'incident') hits", to: "inWin(rec.loggedAt) && !(rec.revokedBy === 'incident' && rec.incident === a.id)) hits" },
+  { name: 'SD5 984r2-T9: a failed mail keeps the revert tokens it minted', file: 'lever.js', from: '    if (minted.length) await s.delete(minted)\n', to: '' },
+  { name: 'SD5 984r2-S11: the revert does not re-check after its mail', file: 'lever.js', from: "if (atHead.hash !== cur.hash || (await s.get('pend')) || !(await s.get(`rv:${th}`))) { await obj.dropHold(hold); return out(409, (await obj.endedAnswer(th)) ?? { error: 'superseded' }) }", to: '' },
+  { name: 'SD5 984r2-S12: the revert does not check its own hold after its mail', file: 'lever.js', from: "if ((await s.get('hold'))?.id !== hold) return out(409, { error: 'busy' })", to: '' },
 
   // --- SD2: the void page (its own headers; the browser rig has the rest) ---
   { name: 'page: inline script allowed', file: 'voidpage.js', from: `  "script-src 'self'",`, to: `  "script-src 'self' 'unsafe-inline'",` },
