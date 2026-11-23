@@ -173,26 +173,35 @@ console.log('\nonce found, the agent cannot be reassigned')
 // import (`import type`) brings no code, so it does not count: statements.ts
 // uses the SignPurpose type to check payloads.
 //
-// The one exception is slides' People panel (bento/id P1), whose only call is
-// behind the localStorage flag bento-people-vouch, off by default. It is pinned
-// by STRUCTURE, not by a text match, after comments are removed: every static
-// import/export-from (multi-line too) and every dynamic import() of identity in
-// every app is found (any of .ts .js .mjs .cjs .mts .cts, or none), and no file
-// but identity.ts names the __bentoIdentity global; vouch.ts's import line is exact,
-// and so is vouchstate.ts's, which takes the VOUCHED_BY_MAX constant and nothing else; `identityAgent` is named
-// exactly twice there (the import and the one gated call); vouchAgent and
-// vouchEnabled are exactly the gated call and the flag read; lsGet is the
-// kernel's storage read, not redefined. Then the pin is run on in-memory copies
-// with widening mutants (a re-export, an alias, a second call site, the flag
-// forced on or read in a comment, a shadowed lsGet, a multi-line or dynamic
-// import elsewhere), each of which must turn it red.
-console.log('\ncontract only: nothing calls it yet, except the flag-gated People panel')
+// The one exception is slides' People panel (bento/id P1). Its only call runs
+// where the host exposes an agent (identityAgent() is null everywhere else),
+// unless the viewer's kill switch, localStorage bento-people-vouch = 'off', is
+// set; and an answer earns a ✓ only when it carries the completeness marker
+// (ResolvedIdentity.fields), so a host whose relay drops fields fails closed.
+// So the invariant is: agent present AND kill switch not set gates the call,
+// and the marker gates any ✓. It is pinned by STRUCTURE, not by a text match,
+// after comments are removed: every static import/export-from (multi-line too)
+// and every dynamic import() of identity in every app is found (any of .ts .js
+// .mjs .cjs .mts .cts, or none), and no file but identity.ts names the
+// __bentoIdentity global; vouch.ts's import line is exact, and so is
+// vouchstate.ts's, which takes two pure bindings (the marker value and the
+// voucher shape) and nothing else; `identityAgent` is named exactly twice in
+// vouch.ts (the import and the one gated call); vouchAgent and vouchEnabled are
+// exactly the gated call and the kill-switch read; lsGet is the kernel's
+// storage read, not redefined; vouchstate.ts checks the marker before any
+// verified or changed result. Then the pin is run on in-memory copies with
+// widening mutants (a re-export, an alias, a second call site, the kill switch
+// ignored or read in a comment, a shadowed lsGet, a multi-line or dynamic
+// import elsewhere, the marker check removed or moved), each of which must
+// turn it red.
+console.log('\ncontract only: nothing calls it yet, except the People panel (agent-gated, kill switch, marker)')
 {
   const GATED = 'slides/src/editor/vouch.ts'
   const GATED_IMPORT = "import { identityAgent, type IdentityAgent } from '../../../kernel/src/identity.ts'"
-  // the panel's decision module takes the shared 80-character cut, a constant, and nothing else
+  // the panel's decision module takes the marker value and the voucher shape, two pure bindings, and nothing else
   const CONST_ONLY = 'slides/src/editor/vouchstate.ts'
-  const CONST_IMPORT = "import { VOUCHED_BY_MAX } from '../../../kernel/src/identity.ts'"
+  const CONST_IMPORT = "import { RESOLVED_FIELDS, isVoucher } from '../../../kernel/src/identity.ts'"
+  const MARKER_CHECK = "if (a.fields !== RESOLVED_FIELDS) return { kind: 'failed', why: 'incomplete' }"
   const root = join(dirname(fileURLToPath(import.meta.url)), '..')
   const files = new Map<string, string>()
   const walk = (dir: string) => {
@@ -228,13 +237,22 @@ console.log('\ncontract only: nothing calls it yet, except the flag-gated People
     const need = (c: boolean, why: string) => { if (!c) bad.push(`${GATED}: ${why}`) }
     need((g.match(/\bidentityAgent\b/g) || []).length === 2, 'identityAgent named exactly twice (the import and the one gated call)')
     need(/export function vouchAgent\(\): IdentityAgent \| null \{\s*return vouchEnabled\(\) \? identityAgent\(\) : null\s*\}/.test(g), 'vouchAgent is exactly the gated call')
-    need(/export function vouchEnabled\(\): boolean \{\s*try \{ return lsGet\('bento-people-vouch'\) === 'on' \} catch \{ return false \}\s*\}/.test(g), 'vouchEnabled is exactly the flag read')
+    need(/export function vouchEnabled\(\): boolean \{\s*try \{ return lsGet\('bento-people-vouch'\) !== 'off' \} catch \{ return false \}\s*\}/.test(g), 'vouchEnabled is exactly the kill-switch read')
     need((g.match(/\bvouchEnabled\b/g) || []).length === 2 && (g.match(/\blsGet\b/g) || []).length === 2, 'vouchEnabled and lsGet are not redefined or reused')
     need(g.includes("import { lsGet } from '../../../kernel/src/storage.ts'"), 'lsGet is the kernel storage read')
+    // the marker gates every ✓: checked once, before the first verified or changed result
+    const d = strip(fs.get(CONST_ONLY) ?? '')
+    const at = d.indexOf(MARKER_CHECK)
+    const firstClaim = Math.min(...["kind: 'verified'", "kind: 'changed'"].map((k) => {
+      const i = d.indexOf(k, d.indexOf('function decide('))
+      return i < 0 ? Infinity : i
+    }))
+    if (!(d.split(MARKER_CHECK).length === 2 && at > d.indexOf('function decide(') && at < firstClaim))
+      bad.push(`${CONST_ONLY}: the marker check comes once, in decide(), before any verified or changed result`)
     return bad
   }
   const base = pin(files)
-  ok(base.length === 0, `no runtime module imports identity.ts except the flag-gated ${GATED} and ${CONST_ONLY}'s VOUCHED_BY_MAX (${base.join('; ') || 'none'})`)
+  ok(base.length === 0, `no runtime module imports identity.ts except the gated ${GATED} and ${CONST_ONLY}'s two pure bindings (${base.join('; ') || 'none'})`)
 
   const V = GATED, E = 'slides/src/editor/editor.ts', C = CONST_ONLY
   const EDIT_ANCHOR = "import { decoratePeer, vouchAgent as vouchPeopleAgent } from './vouch'"
@@ -243,8 +261,12 @@ console.log('\ncontract only: nothing calls it yet, except the flag-gated People
     ['a re-export used from editor.ts', [[V, "export type { VouchState } from './vouchstate'", "export type { VouchState } from './vouchstate'\nexport { identityAgent }"],
       [E, EDIT_ANCHOR, "import { decoratePeer, vouchAgent as vouchPeopleAgent, identityAgent as rawAgent } from './vouch'\nexport const __leak = () => rawAgent()"]]],
     ['an aliased second call', [[V, 'const cache = new Map', 'const ia = identityAgent\nexport const anyAgent = () => ia()\nconst cache = new Map']]],
-    ['the flag read moved into a comment', [[V, "try { return lsGet('bento-people-vouch') === 'on' } catch { return false }", "return true // was: lsGet('bento-people-vouch') === 'on'"]]],
-    ['the flag forced on', [[V, "lsGet('bento-people-vouch') === 'on' }", "lsGet('bento-people-vouch') === 'on' || true }"]]],
+    ['the kill switch read moved into a comment', [[V, "try { return lsGet('bento-people-vouch') !== 'off' } catch { return false }", "return true // was: lsGet('bento-people-vouch') !== 'off'"]]],
+    ['the kill switch ignored', [[V, "lsGet('bento-people-vouch') !== 'off' }", "lsGet('bento-people-vouch') !== 'off' || true }"]]],
+    ['the kill switch failing open', [[V, "} catch { return false }", "} catch { return true }"]]],
+    ['the marker check removed', [[C, MARKER_CHECK, '']]],
+    ['the marker check commented out', [[C, MARKER_CHECK, '// ' + MARKER_CHECK]]],
+    ['the marker check moved after the changed result', [[C, MARKER_CHECK, ''], [C, "if (a.changed) return { kind: 'changed', name, via }", "if (a.changed) return { kind: 'changed', name, via }\n  " + MARKER_CHECK]]],
     ['a second call with a space', [[V, 'const cache = new Map', 'export const anyAgent = () => identityAgent ()\nconst cache = new Map']]],
     ['the test detector called directly', [[V, 'import { identityAgent, type IdentityAgent }', 'import { identityAgent, detectIdentityAgentForTest, type IdentityAgent }'],
       [V, 'const cache = new Map', 'export const anyAgent = () => detectIdentityAgentForTest(globalThis)\nconst cache = new Map']]],
@@ -254,7 +276,7 @@ console.log('\ncontract only: nothing calls it yet, except the flag-gated People
     ['a shadowed lsGet', [[V, "import { lsGet } from '../../../kernel/src/storage.ts'", "const lsGet = (_k: string) => 'on'"]]],
     ['an import of identity.js (resolved to identity.ts)', [[E, EDIT_ANCHOR, "import { identityAgent as rawId } from '../../../kernel/src/identity.js'\nexport const __leak = () => rawId()\n" + EDIT_ANCHOR]]],
     ['the global called directly', [[E, EDIT_ANCHOR, "export const __leak = () => (globalThis as any).__bentoIdentity?.resolve({ pub: 'x' })\n" + EDIT_ANCHOR]]],
-    ['the decision module importing the agent beside the constant', [[C, CONST_IMPORT, "import { VOUCHED_BY_MAX, identityAgent } from '../../../kernel/src/identity.ts'\nexport const __leak = () => identityAgent()"]]],
+    ['the decision module importing the agent beside its bindings', [[C, CONST_IMPORT, "import { RESOLVED_FIELDS, isVoucher, identityAgent } from '../../../kernel/src/identity.ts'\nexport const __leak = () => identityAgent()"]]],
     ['the decision module importing a second binding', [[C, CONST_IMPORT, CONST_IMPORT + "\nimport { detectIdentityAgentForTest } from '../../../kernel/src/identity.ts'"]]],
     ['an export * of identity', [[V, "export type { VouchState } from './vouchstate'", "export type { VouchState } from './vouchstate'\nexport * from '../../../kernel/src/identity.ts'"]]],
   ]

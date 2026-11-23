@@ -5,10 +5,13 @@
 //   node scripts/test-slides-people-tiers.ts
 //
 // Rows over slides/src/editor/vouchstate.ts, the decision behind every label:
-// "(passkey sign-in)", "new account" (14 days), "account changed on <date>"
-// (7 days; 30 after a reset), "this sign-in was revoked" (no ✓; an incident flags the
-// row), the name's tick and invisible-character strip, and vouchedBy's 80-character cut, which drops "managed by" before it
-// drops "unconfirmed since". A MISSING field always reads as the weaker claim.
+// no ✓ without the completeness marker (ResolvedIdentity.fields), "unconfirmed
+// since <date>", "(passkey sign-in)", "new account" (14 days), "account changed
+// on <date>" (7 days; 30 after a reset), "this sign-in was revoked" (no ✓; an
+// incident flags the row), vouchedBy as a bare voucher (never parsed), and the
+// name's tick and invisible-character strip. A field missing from a MARKED
+// answer reads as what it means: tier and accountSince the weaker claim; the
+// fields whose absence is the stronger claim must be absent or a time.
 //
 // Then MUTANTS: each is one source edit to a copy of vouchstate.ts (asserted to
 // match exactly once), imported fresh; the rows must go red on every one. The
@@ -26,12 +29,16 @@ const NOW = Date.UTC(2026, 10, 12, 12)
 type Mod = typeof import('../slides/src/editor/vouchstate.ts')
 type Row = [string, (m: Mod) => boolean]
 
-const bind = (extra: Record<string, unknown> = {}) => ({
+// the six fields every host sends (what home/bridge.js relays today) ...
+const six = (extra: Record<string, unknown> = {}) => ({
   name: 'Alice Real', email: 'alice@example.com', vouchedBy: 'id.bento.page', accountPub: 'A', firstSeen: 1, changed: false, ...extra,
 })
+// ... and a complete answer: the marker says every G field that applies is here
+const bind = (extra: Record<string, unknown> = {}) => six({ fields: 'g1', ...extra })
 const st = (m: Mod, a: unknown) => m.stateFromAnswer(a, NOW) as Record<string, unknown>
-const LONG_DOM = 'engineering-and-operations.subsidiary.example-corporation.co.uk'
-const UNCONF = 'unconfirmed since 3 Mar 2027'
+const UNCONF_AT = NOW - 40 * DAY
+const verified = (m: Mod, a: unknown) => st(m, a).kind === 'verified'
+const failed = (m: Mod, a: unknown) => st(m, a).kind === 'failed'
 
 const ROWS: Row[] = [
   ['null answer -> not verified', (m) => st(m, null).kind === 'unverified'],
@@ -71,27 +78,48 @@ const ROWS: Row[] = [
   ['revoked outranks a full verified binding', (m) => st(m, bind({ revoked: 'incident', tier: 'native', accountSince: 1 })).kind === 'revoked'],
   ['revoked with an unknown value -> failed, never a ✓', (m) => st(m, bind({ revoked: 'maybe' })).kind === 'failed'],
   ['revoked false -> verified as normal', (m) => st(m, bind({ revoked: false })).kind === 'verified'],
+  ['revoked deleted (not in this contract) -> couldn\'t check, never a ✓', (m) => failed(m, bind({ revoked: 'deleted' }))],
 
-  // vouchedBy and the 80-character cut
-  ['the cut is the kernel\'s VOUCHED_BY_MAX, 80', (m) => m.VIA_MAX === 80],
-  ['a short vouchedBy is kept whole', (m) => st(m, bind({ vouchedBy: `id.bento.page, ${UNCONF}` })).via === `id.bento.page, ${UNCONF}`],
-  ['over 80: "managed by" goes, "unconfirmed" stays',
-    (m) => m.cutVia(`id.bento.page, managed by ${LONG_DOM}, ${UNCONF}`) === `id.bento.page, ${UNCONF}`],
-  ['over 80: "managed by" goes even when the agent put it last',
-    (m) => m.cutVia(`id.bento.page, ${UNCONF}, managed by ${LONG_DOM}`) === `id.bento.page, ${UNCONF}`],
-  ['over 80: a localised "managed by" goes when managedBy names its domain',
-    (m) => m.cutVia(`id.bento.page, verwaltet von ${LONG_DOM}, unbestätigt seit 3. März 2027`, LONG_DOM) === 'id.bento.page, unbestätigt seit 3. März 2027'],
-  ['over 80 with no managed segment: a middle qualifier goes, the last stays',
-    (m) => { const v = m.cutVia(`id.bento.page, ${'x'.repeat(60)}, ${UNCONF}`); return v === `id.bento.page, ${UNCONF}` }],
-  ['a long voucher is shortened, the last qualifier kept whole, within 80',
-    (m) => { const v = m.cutVia(`${LONG_DOM}.voucher.example.org, ${UNCONF}`); return v.length <= 80 && v.endsWith(`…, ${UNCONF}`) }],
-  ['the cut never exceeds 80, whatever the input',
-    (m) => [`id.bento.page, managed by ${LONG_DOM}, ${UNCONF}`, 'x'.repeat(300), `a, ${'y'.repeat(200)}`, `${'z'.repeat(90)}, ${UNCONF}`]
-      .every((s) => m.cutVia(s).length <= 80)],
-  ['a qualifier too long to keep whole is cut at the end', (m) => { const v = m.cutVia(`a, ${'y'.repeat(200)}`); return v.length === 80 && v.endsWith('…') }],
+  // the completeness marker: no ✓ for an answer that may have lost fields on the way
+  ['six fields, no marker (a relay that copies the original six) -> couldn\'t check, never ✓',
+    (m) => { const s = st(m, six()); return s.kind === 'failed' && s.why === 'incomplete' }],
+  ['no marker with every G field present -> still couldn\'t check', (m) => st(m, six({ tier: 'native', accountSince: 1, unconfirmedSince: UNCONF_AT })).kind === 'failed'],
+  ['a marker of another value (g2, G1, true, [g1]) -> couldn\'t check',
+    (m) => ['g2', 'G1', true, ['g1'], ' g1', null].every((f) => failed(m, bind({ fields: f })))],
+  ['no marker, changed binding -> couldn\'t check (no verified name shown)', (m) => st(m, six({ changed: true })).kind === 'failed'],
+  ['no marker, revoked -> revoked all the same (the safe direction)',
+    (m) => st(m, six({ revoked: 'signout' })).kind === 'revoked' && (st(m, six({ revoked: 'incident' })) as { incident?: boolean }).incident === true],
+  ['marker, revoked absent -> verified', (m) => verified(m, bind())],
+  ['marker, revoked signout -> revoked, no flag', (m) => { const s = st(m, bind({ revoked: 'signout' })); return s.kind === 'revoked' && s.incident === false }],
+  ['marker, revoked incident -> revoked and flagged', (m) => { const s = st(m, bind({ revoked: 'incident' })); return s.kind === 'revoked' && s.incident === true }],
+  ['a full marked answer with every optional field ABSENT -> verified, passkey, new, nothing changed, confirmed',
+    (m) => { const s = st(m, bind()); return s.kind === 'verified' && s.tier === 'passkey' && s.newAccount === true && s.changedOn === null && s.unconfirmedOn === null }],
 
-  ['bidi and zero-width characters leave the name and the voucher',
-    (m) => { const s = st(m, bind({ name: '‮evil​ name', vouchedBy: 'id.bento⁦.page' })); return s.name === 'evil name' && s.via === 'id.bento.page' }],
+  // unconfirmedSince: the address part of the ✓ is qualified while the agent says so
+  ['unconfirmedSince a time -> verified, qualified with that date',
+    (m) => { const s = st(m, bind({ accountSince: NOW - 99 * DAY, unconfirmedSince: UNCONF_AT })); return s.kind === 'verified' && s.unconfirmedOn === UNCONF_AT }],
+  ['unconfirmedSince a year ago still shows (no window: it is a current state)',
+    (m) => st(m, bind({ unconfirmedSince: NOW - 400 * DAY })).unconfirmedOn === NOW - 400 * DAY],
+  ['unconfirmedSince in the future still shows', (m) => st(m, bind({ unconfirmedSince: NOW + DAY })).unconfirmedOn === NOW + DAY],
+  ['unconfirmedSince malformed (string, 0, -1, NaN, 2^60, 1.5, null, {}) -> couldn\'t check',
+    (m) => [String(UNCONF_AT), 0, -1, NaN, 2 ** 60, 1.5, null, {}, true].every((v) => failed(m, bind({ unconfirmedSince: v })))],
+  ['resetAt malformed -> couldn\'t check (missing reads stronger, so present must be a time)',
+    (m) => [String(NOW), 0, -5, null, NaN].every((v) => failed(m, bind({ resetAt: v })))],
+  ['rosterChangedAt malformed -> couldn\'t check',
+    (m) => [String(NOW), 0, -5, null, 1.25].every((v) => failed(m, bind({ rosterChangedAt: v })))],
+  ['managedBy is ignored, whatever it holds', (m) => [undefined, 'example.com', '.', 42, null].every((v) => verified(m, bind({ managedBy: v })))],
+
+  // vouchedBy is the voucher alone (kernel isVoucher): nothing is parsed out of it
+  ['vouchedBy a voucher -> shown as is', (m) => st(m, bind({ vouchedBy: 'example.com' })).via === 'example.com'],
+  ['vouchedBy with a qualifier in it -> couldn\'t check',
+    (m) => ['id.bento.page, unconfirmed since 3 Mar 2027', 'id.bento.page (passkey sign-in)', 'id.bento.page, managed by example.com',
+      'a b', 'Id.Bento.Page', 'id.bento.page ✓', ''].every((v) => failed(m, bind({ vouchedBy: v })))],
+  ['vouchedBy of 81 characters -> couldn\'t check; of 80 -> verified',
+    (m) => failed(m, bind({ vouchedBy: 'a'.repeat(81) })) && verified(m, bind({ vouchedBy: 'a'.repeat(80) }))],
+  ['vouchedBy not a string -> couldn\'t check', (m) => [undefined, null, 7, ['id.bento.page']].every((v) => failed(m, bind({ vouchedBy: v })))],
+
+  ['bidi and zero-width characters leave the name; in the voucher they fail it',
+    (m) => st(m, bind({ name: '\u202Eevil\u200B name' })).name === 'evil name' && failed(m, bind({ vouchedBy: 'id.bento\u2066.page' }))],
   // C3: the account's own display name cannot draw a tick either; the wider list
   ['a verified name cannot carry a tick',
     (m) => { const s = st(m, bind({ name: 'Alice \u2713 via bigcorp.com' })); return s.kind === 'verified' && s.name === 'Alice via bigcorp.com' }],
@@ -99,15 +127,12 @@ const ROWS: Row[] = [
     (m) => m.claimedName('A\u221A B\u{1F5F9} C\u237B D\u{10102} E\u{1FBB1}') === 'A B C D E'],
   // C4: a throwing answer is a failure, not "checking…" for ever
   ['an answer whose field read throws -> failed',
-    (m) => st(m, { get name() { throw new Error('boom') }, vouchedBy: 'id.bento.page', changed: false }).kind === 'failed' &&
+    (m) => st(m, { get name() { throw new Error('boom') }, vouchedBy: 'id.bento.page', changed: false, fields: 'g1' }).kind === 'failed' &&
       st(m, new Proxy({}, { get() { throw new Error('trap') } })).kind === 'failed'],
-  // C5: managedBy only as a whole domain
-  ['managedBy "." never drops a German "unbestätigt seit" lapse',
-    (m) => m.cutVia(`id.bento.page, ${'x'.repeat(40)}, unbestätigt seit 3. März 2027`, '.') === 'id.bento.page, unbestätigt seit 3. März 2027'],
-  ['managedBy that is not a domain ("seit") matches nothing',
-    (m) => m.cutVia(`id.bento.page, ${'y'.repeat(50)}, unbestätigt seit 3. März 2027`, 'seit') === 'id.bento.page, unbestätigt seit 3. März 2027'],
-  ['managedBy matches only on word boundaries',
-    (m) => { const v = m.cutVia(`id.bento.page, notexample.com and more text here, verwaltet von example.com ${'z'.repeat(20)}`, 'example.com'); return v.includes('notexample.com') && !v.includes('verwaltet') }],
+  ['a throwing marker or unconfirmedSince -> failed',
+    (m) => failed(m, Object.defineProperty(six(), 'fields', { get() { throw new Error('m') }, enumerable: true })) &&
+      failed(m, Object.defineProperty(bind(), 'unconfirmedSince', { get() { throw new Error('u') }, enumerable: true })) &&
+      failed(m, new Proxy(bind(), { get(t, k) { if (k === 'unconfirmedSince') throw new Error('p'); return Reflect.get(t, k) } }))],
   // C6: invisible by category
   ['ALM, soft hyphen, CGJ, tag characters, private use, unassigned, separators leave',
     (m) => m.cleanText('a\u061Cb\u00ADc\u034Fd\u{E0041}e\uE000f\u0378g\u2028h\u2029i', 80) === 'abcdefghi'],
@@ -141,17 +166,26 @@ const MUTANTS: [string, string, string][] = [
   ['reset shown at any age', 'now - a.resetAt < RESET_SHOWN_MS', 'now - a.resetAt < Infinity'],
   ['reset window 7 days', 'now - a.resetAt < RESET_SHOWN_MS', 'now - a.resetAt < CHANGED_SHOWN_MS'],
   ['changed binding ticked', "if (a.changed) return { kind: 'changed', name, via }", "if (false) return { kind: 'changed', name, via }"],
-  ['managed-by not dropped first', 'if (quals.length && !fits(head, quals)) quals = quals.filter', 'if (false) quals = quals.filter'],
-  ['last qualifier dropped', 'quals.splice(quals.length - 2, 1)', 'quals.splice(quals.length - 1, 1)'],
-  ['plain prefix cut', 'if (full.length <= max) return full', 'return cleanText(full, max)'],
   ['invisible characters kept', "s.replace(INVISIBLE, '')", 's'],
   ['ticks kept in verified names', 'const name = claimedName(a.name)', 'const name = cleanText(a.name, NAME_MAX)'],
   ['a throwing answer escapes', "try { return decide(r, now) } catch { return { kind: 'failed' } }", 'return decide(r, now)'],
-  ['managedBy matched as a substring', 'domRe !== null && domRe.test(q)', "dom.length > 0 && q.toLowerCase().includes(dom)"],
   ['invisible list down to controls', '[\\p{Cc}\\p{Cf}\\p{Co}\\p{Cn}\\p{Zl}\\p{Zp}\\p{Default_Ignorable_Code_Point}\\u115F\\u1160\\u3164\\uFFA0\\u2800]', '[\\p{Cc}]'],
   ['default-ignorables and Hangul fillers kept', '\\p{Default_Ignorable_Code_Point}\\u115F\\u1160\\u3164\\uFFA0\\u2800]', ']'],
   ['new tick marks kept', '\\u221A\\u237B\\u{1F5F8}\\u{1F5F9}\\u{10102}\\u{1FBB1}]', '\\u{1F5F8}]'],
   ['ticks kept in typed names', "cleanText(s.replace(TICKS, ''), NAME_MAX)", 'cleanText(s, NAME_MAX)'],
+  // the completeness marker and the KG4 fields
+  ['the marker check removed', "if (a.fields !== RESOLVED_FIELDS) return { kind: 'failed', why: 'incomplete' }", ''],
+  ['the marker treated as optional', 'if (a.fields !== RESOLVED_FIELDS) return', 'if (a.fields !== undefined && a.fields !== RESOLVED_FIELDS) return'],
+  ['any truthy marker accepted', 'if (a.fields !== RESOLVED_FIELDS) return', 'if (!a.fields) return'],
+  ['revoked read only when the marker is absent', 'if (rv !== undefined && rv !== false) {', 'if (a.fields !== RESOLVED_FIELDS && rv !== undefined && rv !== false) {'],
+  ['the marker checked before revocation', "  // revocation outranks everything: a revoked sign-in never shows a ✓\n", "  if (a.fields !== RESOLVED_FIELDS) return { kind: 'failed' }\n"],
+  ['unconfirmedSince never read', 'const unconfirmedOn = isTime(a.unconfirmedSince) ? a.unconfirmedSince : null', 'const unconfirmedOn = null'],
+  ['a malformed unconfirmedSince read as absent', ' || malformed(a.unconfirmedSince)) return', ') return'],
+  ['a malformed resetAt read as absent', 'if (malformed(a.resetAt) || ', 'if ('],
+  ['a malformed rosterChangedAt read as absent', ' || malformed(a.rosterChangedAt)', ''],
+  ['0 counts as a time', '&& Number.isSafeInteger(v) && v > 0', '&& Number.isSafeInteger(v) && v >= 0'],
+  ['any non-empty vouchedBy accepted (the old cutVia path)', '!isVoucher(via)', "!(typeof via === 'string' && via.length > 0)"],
+  ['revoked deleted read as not revoked', '    return { kind: \'failed\' }\n  }\n  // a ✓ needs', '  }\n  // a ✓ needs'],
 ]
 
 let failures = 0
@@ -159,8 +193,8 @@ const dir = realpathSync(mkdtempSync(join(tmpdir(), 'people-tiers-')))
 try {
   const orig = readFileSync(SRC, 'utf8')
   let n = 0
-  // the copy lives in a scratch dir, so its one import (the kernel's
-  // VOUCHED_BY_MAX) is pointed back at the real file
+  // the copy lives in a scratch dir, so its one import (the kernel's marker
+  // value and voucher shape) is pointed back at the real file
   const KERNEL_ID = new URL('../kernel/src/identity.ts', import.meta.url).href
   const load = async (text: string): Promise<Mod> => {
     const f = join(dir, `vouchstate-${n++}.ts`)

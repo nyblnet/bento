@@ -2,9 +2,10 @@
 // Copyright (c) 2026 The Bento authors
 //
 // "Who vouched" for a collaborator, as data: what the People panel may say
-// about a person, decided from the identity agent's answer. No DOM; its one
-// import is the kernel's VOUCHED_BY_MAX constant (never the agent: the identity
-// import pin in scripts/test-identity.ts allows exactly that line here), so
+// about a person, decided from the identity agent's answer. No DOM; it imports
+// two pure things from the kernel, the marker value RESOLVED_FIELDS and the
+// voucher shape isVoucher, and never the agent (the identity import pin in
+// scripts/test-identity.ts allows exactly that line here), so
 // scripts/test-slides-people-tiers.ts runs it under plain node. The painting is
 // vouch.ts.
 //
@@ -12,24 +13,37 @@
 // the roster chain (roster.ts verifyRosterChain), the device certificate and
 // its countersign (devices.ts verifyDevice), and the directory's status. This
 // file only turns that report into labels, and it never claims more than the
-// report says. Every field below that is MISSING reads as the weaker claim:
+// report says.
 //
-//   tier            'native' drops "(passkey sign-in)"; anything else keeps it
-//                   (G1: every certificate a passkey made is shown that way)
-//   accountSince    "new account" until 14 days after it; missing = new
-//   rosterChangedAt "account changed on <date>" for 7 days after it
-//   resetAt         a reset by the directory: "account changed on <date>" for
-//                   30 days after it
-//   revoked         no ✓ at all: "this sign-in was revoked"; 'incident' (the
-//                   post-compromise lever) also flags the row for the owner
-//   managedBy       which part of vouchedBy the 80-character cut drops first
+// NO ✓ WITHOUT THE MARKER. Four fields are the STRONGER claim when missing
+// (revoked, resetAt, rosterChangedAt, unconfirmedSince), and a missing one may
+// be one a relay dropped on the way. So an answer earns a ✓ only when it says
+// it carries every field that applies: `fields === RESOLVED_FIELDS`. Without it
+// the row reads "couldn't check" (failed, why 'incomplete'), never ✓; a relay
+// that copies a fixed list of the original six fields drops the marker too, so
+// every older host fails closed. A revocation is shown with or without it.
 //
-// These fields are OPTIONAL ADDITIONS within contract 1. The contract as it
-// stands carries none of them, so until a host supplies them a verified row
-// reads "(passkey sign-in)" and "new account": an under-claim, never an
-// over-claim.
+// With the marker, each field below reads like this:
+//
+//   tier             'native' drops "(passkey sign-in)"; anything else keeps it
+//                    (G1: every certificate a passkey made is shown that way)
+//   accountSince     "new account" until 14 days after it; missing or
+//                    malformed = new (the weaker claim)
+//   rosterChangedAt  "account changed on <date>" for 7 days after it
+//   resetAt          a reset by the directory: "account changed on <date>" for
+//                    30 days after it
+//   unconfirmedSince the ✓ is qualified "unconfirmed since <date>" for as long
+//                    as the agent sends it (the address, not the account)
+//   revoked          no ✓ at all: "this sign-in was revoked"; 'incident' (the
+//                    post-compromise lever) also flags the row for the owner
+//   managedBy        not shown (organisation identity is later); never parsed
+//
+// The three time fields above that are stronger when missing must be ABSENT or
+// a time: any other value present (null, a string, 0, a fraction) is "couldn't
+// check", never read as absent. vouchedBy is the voucher alone (isVoucher); any
+// other text in it is "couldn't check": no qualifier is ever parsed out of it.
 
-import { VOUCHED_BY_MAX } from '../../../kernel/src/identity.ts'
+import { RESOLVED_FIELDS, isVoucher } from '../../../kernel/src/identity.ts'
 
 export type Tier = 'passkey' | 'native'
 
@@ -38,18 +52,21 @@ export type VouchState =
   | {
       kind: 'verified'
       name: string
-      /** vouchedBy, cleaned and cut to VIA_MAX */
+      /** vouchedBy, a bare voucher (isVoucher) */
       via: string
       tier: Tier
       newAccount: boolean
       /** when the account last changed, if the panel should say so */
       changedOn: number | null
+      /** since when the address is unconfirmed, while the agent says so */
+      unconfirmedOn: number | null
     }
   | { kind: 'changed'; name: string; via: string }
   | { kind: 'revoked'; incident: boolean }
   | { kind: 'unverified' }
   | { kind: 'unproven' }
-  | { kind: 'failed' }
+  /** 'incomplete': the answer lacks the marker, so it may have lost fields */
+  | { kind: 'failed'; why?: 'incomplete' }
 
 const DAY = 86_400_000
 /** "new account" is shown for this long after setup (G5). */
@@ -58,10 +75,8 @@ export const NEW_ACCOUNT_MS = 14 * DAY
 export const CHANGED_SHOWN_MS = 7 * DAY
 /** ... and this long after a reset by the directory (maintainer, 2026-11-12). */
 export const RESET_SHOWN_MS = 30 * DAY
-/** The longest name and vouchedBy the panel shows. */
+/** The longest name the panel shows. */
 export const NAME_MAX = 80
-// the agent's side of the same cut is the kernel's: one number, so the two cannot drift
-export const VIA_MAX = VOUCHED_BY_MAX
 
 // Nothing shown may reorder, hide or blank out text: by Unicode category, not a
 // list of known characters. Controls (Cc), format characters (Cf: bidi marks,
@@ -89,40 +104,10 @@ export function claimedName(s: unknown): string {
   return typeof s === 'string' ? cleanText(s.replace(TICKS, ''), NAME_MAX) : ''
 }
 
-/**
- * vouchedBy within `max` characters. The agent writes the voucher first and
- * then its qualifiers, comma-separated: "id.bento.page, managed by example.com,
- * unconfirmed since 3 Mar 2027". When that does not fit, "managed by" goes
- * first (it says who can take the account away; "unconfirmed" says the address
- * may no longer be theirs, which matters more), then any other middle
- * qualifier, and the LAST qualifier is kept whole while the voucher is
- * shortened. Only when even that cannot fit is the end cut.
- */
-export function cutVia(raw: unknown, managedBy?: unknown, max = VIA_MAX): string {
-  if (typeof raw !== 'string') return ''
-  const full = tidy(raw)
-  if (full.length <= max) return full
-  const parts = full.split(', ')
-  const head = parts[0]
-  let quals = parts.slice(1)
-  // managedBy counts only as a whole domain, found on word boundaries: '.' or a
-  // fragment must never match (and drop) the "unconfirmed since" qualifier
-  const dom = typeof managedBy === 'string' ? tidy(managedBy).toLowerCase() : ''
-  const domRe = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(dom)
-    ? new RegExp(`(^|[^a-z0-9.-])${dom.replace(/\./g, '\\.')}($|[^a-z0-9.-])`, 'i') : null
-  const isManaged = (q: string) => /^managed by\b/i.test(q) || (domRe !== null && domRe.test(q))
-  const fits = (h: string, qs: string[]) => [h, ...qs].join(', ').length <= max
-  if (quals.length && !fits(head, quals)) quals = quals.filter((q) => !isManaged(q))
-  while (quals.length > 1 && !fits(head, quals)) quals.splice(quals.length - 2, 1)
-  if (fits(head, quals)) return [head, ...quals].join(', ')
-  if (quals.length === 1) {
-    const room = max - quals[0].length - 2 // ", "
-    if (room >= 8) return `${head.slice(0, room - 1)}…, ${quals[0]}`
-  }
-  return cleanText([head, ...quals].join(', '), max)
-}
-
 const isTime = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v > 0
+/** present and not a time: a field whose absence is the stronger claim cannot
+ *  be read as absent when it holds something else */
+const malformed = (v: unknown) => v !== undefined && !isTime(v)
 
 /**
  * Validate an agent answer: anything malformed is a failure, never a ✓.
@@ -146,10 +131,13 @@ function decide(r: unknown, now: number): VouchState {
     if (rv === 'incident') return { kind: 'revoked', incident: true }
     return { kind: 'failed' }
   }
+  // a ✓ needs an answer that says it carries every field that applies
+  if (a.fields !== RESOLVED_FIELDS) return { kind: 'failed', why: 'incomplete' }
   const name = claimedName(a.name)
-  const via = cutVia(a.vouchedBy, a.managedBy)
-  if (!name || !via || typeof a.changed !== 'boolean') return { kind: 'failed' }
+  const via = a.vouchedBy
+  if (!name || !isVoucher(via) || typeof a.changed !== 'boolean') return { kind: 'failed' }
   if (a.changed) return { kind: 'changed', name, via }
+  if (malformed(a.resetAt) || malformed(a.rosterChangedAt) || malformed(a.unconfirmedSince)) return { kind: 'failed' }
   const tier: Tier = a.tier === 'native' ? 'native' : 'passkey'
   const since = a.accountSince
   const newAccount = !isTime(since) || now - since < NEW_ACCOUNT_MS
@@ -157,5 +145,6 @@ function decide(r: unknown, now: number): VouchState {
   if (isTime(a.resetAt) && now - a.resetAt < RESET_SHOWN_MS) changedOn = a.resetAt
   if (isTime(a.rosterChangedAt) && now - a.rosterChangedAt < CHANGED_SHOWN_MS &&
     (changedOn === null || a.rosterChangedAt > changedOn)) changedOn = a.rosterChangedAt
-  return { kind: 'verified', name, via, tier, newAccount, changedOn }
+  const unconfirmedOn = isTime(a.unconfirmedSince) ? a.unconfirmedSince : null
+  return { kind: 'verified', name, via, tier, newAccount, changedOn, unconfirmedOn }
 }

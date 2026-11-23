@@ -15424,3 +15424,57 @@ replaced before this shipped.
   before it, in order, and the six required fields are unchanged. Mutants that
   drop a field from the list, add one to the interface only, move the marker,
   change its value or unfreeze the list each turn a row red.
+
+## 2026-11-23 — The People panel's identity tiers are on wherever there is an agent
+
+Supersedes two bullets of 2026-11-12 "The People panel's identity tiers":
+"Built, flag off" and "vouchedBy's 80-character cut keeps 'unconfirmed'".
+
+- **On by default; the agent is the gate.** slides' People panel asks the
+  identity agent whenever the host exposes one. `identityAgent()` is null on
+  `file://`, on bento.page and in any host without an agent, so there the
+  panel is unchanged: no resolve call and no `.vouch` node, with the People
+  list's HTML identical to the kill-switch run. localStorage
+  `bento-people-vouch` = `off` is a viewer's and QA's kill switch; any other
+  value, or none, leaves the tiers on. Under the kill switch the agent's global
+  is never even read.
+- **No ✓ without the completeness marker.** An answer earns a ✓, or any verified
+  name, only when it carries `fields: 'g1'` (`RESOLVED_FIELDS`, entry above),
+  which says it holds every G field that applies. Without it the row reads
+  "couldn't check", with a tooltip saying the app the file is open in did not
+  pass everything on. That is what makes the switch safe to ship before the
+  directory and the host relays are ready. A relay that copies the original
+  six fields, as home/bridge.js does today, drops the marker with them, so
+  that host shows "couldn't check" and never a ✓ it cannot back. A
+  revocation is shown with or without the marker; it only ever removes the ✓.
+- **vouchedBy is never parsed.** The panel accepts it only in the kernel's
+  `isVoucher` shape; anything else, such as a voucher with a qualifier
+  written into it, is "couldn't check". The 80-character cut and its
+  qualifier-keeping rules are gone: the lapse travels as `unconfirmedSince`,
+  and the tier as `tier`. `managedBy` is not shown until organisation
+  identity exists.
+- **"unconfirmed since <date>".** A marked answer with `unconfirmedSince`
+  keeps its ✓ (the sign-in is verified) and gains that tag first, before the
+  tier tags, for as long as the agent sends it; it has no display window. The
+  three fields whose absence is the stronger claim (`resetAt`,
+  `rosterChangedAt`, `unconfirmedSince`) must be absent or a time: any other
+  value present, `null` included, is "couldn't check", never read as absent.
+  A `revoked` value outside the contract (`'deleted'` before that state
+  exists) is "couldn't check".
+- **What a production ✓ still waits on.** No row can reach a ✓ in production
+  until a host exposes an agent to documents and forwards every G field plus
+  the marker, the presence carries what the agent needs to map a room key to a
+  bento/id device, and the directory is live. Each of those fails closed
+  here: no agent means no change, and a missing marker or binding means
+  "couldn't check" or "not verified". So a slides release can carry this
+  before any of them.
+- `scripts/test-identity.ts`'s pin now states the invariant as "an agent
+  present and the kill switch unset gate the call; the marker gates any ✓".
+  Mutants that ignore the kill switch, fail it open, or remove, comment out or
+  move the marker check after the changed result each turn it red, beside the
+  fourteen earlier widening mutants. Guarded behaviourally by
+  `scripts/test-slides-people-tiers.ts` (29 mutants) and
+  `scripts/test-slides-people-tiers-browser.mjs`, which measures every mark
+  and tag at 1440, 1000, 760, 390 and 320px. Its eight build mutants include
+  a missing marker check, the agent asked despite the kill switch, a stand-in
+  agent where there is none, and the phone popover's viewport cap removed.
