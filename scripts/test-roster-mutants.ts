@@ -260,6 +260,11 @@ const MUTANTS: Mutant[] = [
   { name: 'after a deletion, a new setup reads as the pinned account continuing', from: "  return { ok: true, value: { state: 'new-account', changed: true, createdAt: next.createdAt } }\n", to: "  return { ok: true, value: { state: 'new-account', changed: false as true, createdAt: next.createdAt } }\n" },
   del('after a deletion, a chain created before it may follow it', "  if (next.createdAt < rec.deletedAt) return no('order')\n"),
   { name: 'after a deletion, a chain read from a pin is accepted', from: "  if (!next || next.createdAt === null || !Number.isSafeInteger(next.createdAt)) return no('anchor')\n", to: "  if (!next) return no('anchor')\n" },
+  // security's review of the layout (#988 N1-N3)
+  { name: "a pinned q link's voided adel. may be for another account (#988 N1)", from: "    if (!vh.ok || vh.value.address !== head.address) return null\n", to: "    if (!vh.ok || (vh.value.seq !== null && vh.value.address !== head.address)) return null\n" },
+  { name: "a pinned q link's adel. proof is not bound to the adel.'s nonce (#988 N2)", from: "    if (!asker || !(await memberProof(asker, v, v.ros, vh.value.dirNonce, null, opts)).ok) return null\n",
+    to: "    if (!asker || !(await memberProof(asker, v, v.ros, v.ros.startsWith('adel.') ? null : vh.value.dirNonce, null, opts)).ok) return null\n" },
+  { name: 'rdel.: any kid word is grammatical (#988 N3)', from: "!DELETED_BY.includes(by) || !KID_RE.test(kid)) return no('grammar')", to: "!DELETED_BY.includes(by) || !kid) return no('grammar')" },
   { name: 'the rdel. prefix is the retired tomb.', from: "Object.freeze(['ros', 'rip', 'vrs', 'wout', 'adel', 'rdel'])", to: "Object.freeze(['ros', 'rip', 'vrs', 'wout', 'adel', 'tomb'])" },
   { name: 'a deletion waits 24 h', from: 'export const DELETE_WAIT_MS = ROSTER_WAIT_MS\n', to: 'export const DELETE_WAIT_MS = 24 * 3_600_000\n' },
   { name: 'the roster consent purpose no longer covers wout. and adel.', file: 'statements.ts', from: "roster: ['ros.', 'dev2.', 'vrs.', 'wout.', 'adel.'],", to: "roster: ['ros.', 'dev2.', 'vrs.']," },

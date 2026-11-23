@@ -15431,7 +15431,13 @@ record that D-A4 asked the kernel to reserve before the route is built.
   need not. The directory signs and stores it BEFORE it removes anything, and
   serves it where peers fetch the chain. A peer accepts it only for its own
   pinned head, or for a later head of the same account (a higher seq,
-  requested after the pin ripened). A record requested before the pin ripened
+  requested after the pin ripened), WITHOUT the links in between. That is
+  deliberate, not an oversight: the record can only make a peer show the
+  weaker claim ("deleted", no ✓); whoever holds the directory's online key
+  can already sign an operator record at the pinned head with no wait, so
+  asking for the links adds nothing against that key; and the stronger
+  direction (a new account read as the pinned one continuing) is closed by
+  how a later chain is read after a record. A record requested before the pin ripened
   belongs to an earlier account at that address and is refused, so an old
   deletion can never be replayed against a new account. The peer shows
   "account deleted" with no ✓; a later setup at the address reads as a new
