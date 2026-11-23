@@ -62,6 +62,8 @@ const MUTANTS = {
   'framed': [['src/worker.js', '  "frame-ancestors \'none\'",\n', ''], ['src/worker.js', "  'x-frame-options': 'DENY',\n", '']],
   // noopener: the page carries on without an opener.
   'noopener': [['public/signin.js', "  if (!window.opener) return show('refused', 'no-opener')\n", '']],
+  // SD5 / D1: the directory's 503 incident shown as the generic failure.
+  'incident-generic': [['public/signin.js', "    if (err && err.code === 'incident') return show('paused', 'incident')\n", '']],
   // G12d: COOP same-origin on the sign-in host.
   'coop': [['src/worker.js', "  'x-frame-options': 'DENY',\n", "  'x-frame-options': 'DENY',\n  'cross-origin-opener-policy': 'same-origin',\n"]],
 }
@@ -119,6 +121,8 @@ window.probe = async () => {
 const sockets = [], refused = []
 let handler = null, homeHeaders = {}, probeOrigins = new Set()
 const dirLog = [], challenged = []
+// SD5 / D1: which directory route answers 503 {error: 'incident'} (an open incident pauses browser sign-ins)
+let dirIncident = null
 // The account the sign-in host keeps in its own storage (its setup and sign-in
 // pages write it): the certificate names it, so without one nothing is asked.
 const ACCOUNT = 'alice@example.com'
@@ -145,6 +149,7 @@ await ctx.route(`${DIR}/**`, async (route) => {
   const r = route.request(), u = new URL(r.url())
   const cors = { 'access-control-allow-origin': S, 'content-type': 'application/json' }
   if (r.method() !== 'POST') return route.fulfill({ status: 404, body: '' })
+  if (dirIncident && u.pathname === dirIncident) return route.fulfill({ status: 503, headers: cors, body: JSON.stringify({ error: 'incident' }) })
   if (u.pathname === '/v1/web/challenge') {
     challenged.push(JSON.parse(r.postData() || 'null')?.address)
     return route.fulfill({ headers: cors, body: JSON.stringify({ nonce: b64u(crypto.getRandomValues(new Uint8Array(24))), at: Date.now(), rosHash: b64u(crypto.getRandomValues(new Uint8Array(32))) }) })
@@ -263,6 +268,27 @@ try {
   ok(s0[0] === 'no-account' && !(await pop.locator('#approve').isVisible()) && challenged.length === 0 && dirLog.length === 0,
     `nothing is shown to approve and nothing is asked of the directory (${s0})`)
   await setAccount(ACCOUNT)
+
+  // ---- SD5 / D1: an open incident pauses browser sign-ins ----------------------
+  console.log('\nD1  the directory answers 503 incident (sign-ins paused during a security incident)')
+  const paused = async (mutant, path) => {
+    await reset(mutant); dirIncident = path
+    try {
+      const p = await openFrom(HOME)
+      await send(p, enrolMsg(await keys()))
+      await approve(p)
+      const s = await state(p)
+      const text = s[0] === 'closed' ? '' : await p.locator(`[data-for=${s[0]}]`).innerText().catch(() => '')
+      return { s, text, got: (await msgs()).filter((m) => m.data?.t === 'failed').length }
+    } finally { dirIncident = null }
+  }
+  for (const path of ['/v1/web/challenge', '/v1/web/enrol']) {
+    const r = await paused(null, path)
+    ok(r.s[0] === 'paused' && r.s[1] === 'incident' && r.text.includes('Sign-in in browsers is paused while we deal with a security incident. Try again later.') && r.got >= 1,
+      `${path} → 503 incident: the page says sign-in is paused for a security incident, and bento/home is told it failed (${r.s}, ${JSON.stringify(r.text.slice(0, 60))})`)
+  }
+  const rm = await paused('incident-generic', '/v1/web/enrol')
+  ok(!(rm.s[0] === 'paused' && rm.text.includes('security incident')), `MUTANT incident-generic: the incident refusal shows the generic failure, and the row goes red (${rm.s})`)
 
   // ---- P2: a foreign opener ---------------------------------------------------
   const foreign = async (mutant) => {

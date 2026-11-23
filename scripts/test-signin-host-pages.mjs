@@ -121,6 +121,7 @@ function world() {
   const env = { DIR_KID: 'dir-1', DIR_KEY_JWK, CHALLENGE_KEY: 'k'.repeat(48), MAILER: { send: (m) => { mails.push(m) } } }
   env.ROSTER = namespace(dirMod.Roster, env)
   env.LEDGER = namespace(dirMod.Ledger, env)
+  env.OBINDEX = namespace(dirMod.ObIndex, env)
   const raw = (key) => env.ROSTER.objs.get(key)?.store
   const stub = signinDirectory({
     mail: (m) => mails.push(m),

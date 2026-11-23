@@ -33,6 +33,11 @@
 //       is confirmed, else the time it went unconfirmed (≤ loggedAt). Read
 //       from the account, never defaulted: here `mailbox` (address → mb),
 //       where an account not listed is confirmed.
+//     → 503 { error: 'incident' } (the real directory, SD5) while any incident
+//       record is open: browser sign-ins are paused, and the challenge route
+//       above answers the same. Nothing is stored and the challenge is left.
+//       (INCIDENT_ENROL in server/directory/src/browsers.js; the maintainer's
+//       call, D1.) This stub does not model it.
 //
 // bento/home's routes (CORS to https://home.bento.page alone; Origin must be it):
 //
@@ -51,6 +56,11 @@
 //       with a pin that is not a head of this account).
 //   `incidents` is every published incident record, [{ id, from, to }]
 //   (directory clock, ms; `to` null while open). bento/home honours them.
+//   The real directory (SD5) adds `inc` and `sig` to each: the kernel's inc.
+//   text (kernel/src/devices.ts verifyInc) under a directory key, for judging
+//   other people's statements; {id, from, to} keep their meaning. A 403
+//   'revoked' also carries `by` ('incident' with `incident`: the id, 'signout'
+//   or 'member'), as does the status route's 'revoked'.
 //
 // Every body is JSON sent as text/plain (a simple request, no preflight).
 //

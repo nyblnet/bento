@@ -28,7 +28,7 @@
 //   · the event log carries ob on every entry; the status route reports the
 //     standing; CORS is per route, and a path that is no route gets none.
 
-import worker, { Roster, Ledger } from '../server/directory/src/worker.js'
+import worker, { Roster, Ledger, ObIndex } from '../server/directory/src/worker.js'
 import * as workerModule from '../server/directory/src/worker.js'
 import { addressKey } from '../server/directory/src/address.js'
 import { issueChallenge } from '../server/directory/src/challenge.js'
@@ -40,7 +40,7 @@ import { BROWSER_LIMITS } from '../server/directory/src/browsers.js'
 import { HOME_ROUTES, WEB_ROUTES, STATUS_ROUTE } from '../server/directory/src/seam.js'
 import { b64uDec, b64uEnc, sha256b64u, signStatement } from '../kernel/src/statements.ts'
 import { buildRos, parseRos, verifyRosterChain, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, ROSTER_WAIT_MS, type Member, type RosterLink } from '../kernel/src/roster.ts'
-import { buildDeviceCert, buildWren, parseWatt, verifyDevice, CEREMONY_CAP_MS, WATT_MAX_MS } from '../kernel/src/devices.ts'
+import { buildDeviceCert, buildWren, parseWatt, verifyDevice, verifyInc, CEREMONY_CAP_MS, WATT_MAX_MS } from '../kernel/src/devices.ts'
 import { AsyncLocalStorage } from 'node:async_hooks'
 const { LIMITS } = workerModule
 
@@ -130,6 +130,7 @@ const env: Record<string, unknown> = {
 const ROSTER = namespace(Roster as never)
 env.ROSTER = ROSTER
 env.LEDGER = namespace(Ledger as never)
+env.OBINDEX = namespace(ObIndex as never) // the incident lever's day index and records (obindex.js)
 /** Did the request reach the hung send? Bounded, so a request that never gets there fails a row instead of hanging the rig. */
 async function reached(h: { called: Promise<void> }) {
   let t: ReturnType<typeof setTimeout> | undefined
@@ -904,12 +905,17 @@ async function signout(a: Authn, address: string, o: GetOpts & { ch?: { nonce: s
   const inc = [{ id: 'inc-1', from: now - DAY, to: null }, { id: 'inc-0', from: now - 9 * DAY, to: now - 8 * DAY }]
   env.INCIDENTS = JSON.stringify(inc)
   const r = await checkin(fay, FB)
-  ok(r.status === 200 && JSON.stringify(r.j.incidents) === JSON.stringify(inc), `a check-in carries every published record (${JSON.stringify(r.j.incidents)})`)
+  const plain = (l: unknown) => JSON.stringify(((l ?? []) as Record<string, unknown>[]).map((x) => ({ id: x.id, from: x.from, to: x.to })))
+  ok(r.status === 200 && plain(r.j.incidents) === JSON.stringify(inc), `a check-in carries every published record (${plain(r.j.incidents)})`)
+  // SD5 (security's 948 item 2): each record carries the kernel's inc. text, signed by the directory key, never issued before its end
+  const vs = await Promise.all(((r.j.incidents ?? []) as Record<string, string>[]).map((x) => verifyInc(x.inc, x.sig, { directoryKeys: DIR_KEYS, now })))
+  ok(vs.length === 2 && vs.every((v, i) => v.ok && v.value.id === inc[i].id && v.value.from === inc[i].from && v.value.to === inc[i].to && (v.value.to === null || v.value.to <= v.value.issuedAt)),
+    `each variable record is served signed (inc. verifies under dir-1 and names the same window) (${vs.map((v) => v.ok ? 'ok' : v.reason).join(', ')})`)
   const st = await api('GET', `${STATUS_ROUTE}?e=${fay}&c=x`)
   ok(st.status === 400, 'status with no certificate hash → 400')
   const st2 = await api('GET', `${STATUS_ROUTE}?e=nobody@example.com&c=${await sha256b64u('x')}`)
-  ok(st2.status === 200 && st2.j.state === 'unknown' && JSON.stringify(st2.j.incidents) === JSON.stringify(inc), 'status for no account: unknown, with the records (no existence oracle)')
-  for (const bad of ['nope', '{}', '[{"id":"x","from":1}]', '[{"id":"X!","from":1,"to":null}]', '[{"id":"x","from":5,"to":4}]', '[{"id":"x","from":1,"to":null,"more":1}]', '[{"id":"x","from":"1","to":null}]']) {
+  ok(st2.status === 200 && st2.j.state === 'unknown' && plain(st2.j.incidents) === JSON.stringify(inc), 'status for no account: unknown, with the records (no existence oracle)')
+  for (const bad of ['nope', '{}', '[{"id":"x","from":1}]', '[{"id":"X!","from":1,"to":null}]', '[{"id":"x","from":5,"to":4}]', '[{"id":"x","from":5,"to":5}]', '[{"id":"x","from":1,"to":null,"more":1}]', '[{"id":"x","from":"1","to":null}]']) {
     env.INCIDENTS = bad
     const hn = (await homeCh(fay)).j.nonce as string
     const b = await checkin(fay, FB, { nonce: hn })

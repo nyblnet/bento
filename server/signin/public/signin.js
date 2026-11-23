@@ -159,6 +159,7 @@ async function approve() {
   } catch (err) {
     request = null
     reply({ t: 'failed' })
+    if (err && err.code === 'incident') return show('paused', 'incident')
     show('failed', err && err.name === 'NotAllowedError' ? 'cancelled-by-browser' : 'error')
   }
 }

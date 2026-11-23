@@ -18,10 +18,18 @@ DIR_KID = "dir-1"
 # (diagnosis only: clients trust the list shipped in the signed release).
 DIR_PUBKEYS = "[]"
 MAILER = "ses"
-# The published incident records, [{"id","from","to"}] (ms; "to" null while
-# open): every browser check-in and status answer carries them, and bento/home
-# drops a key made inside one. A list that does not read answers 500.
+# Incident records published by hand, [{"id","from","to"}] (ms; "to" null while
+# open): a break-glass beside the ones the incident lever stores. Every browser
+# check-in and status answer carries both, each signed as the kernel's inc.
+# text, and bento/home drops a key made inside one. A list that does not read
+# answers 500, and an id published in both places does too.
 INCIDENTS = "[]"
+# The incident lever's public key (src/lever.js): a raw P-256 point, base64url.
+# Its private half is the MAINTAINER's, minted OFFLINE (`node lever.mjs keygen
+# --out <path>`), never the release key and never DIR_KEY_JWK. Empty: the lever
+# route answers 403 and nothing can pull it. Setting it, and deploying the
+# ObIndex migration below, are the maintainer's.
+LEVER_PUBKEY = ""
 
 [[durable_objects.bindings]]
 name = "LEDGER"
@@ -30,6 +38,11 @@ class_name = "Ledger"
 [[durable_objects.bindings]]
 name = "ROSTER"
 class_name = "Roster"
+
+# The incident lever's day index of ob=1 accounts and its incident records (src/obindex.js)
+[[durable_objects.bindings]]
+name = "OBINDEX"
+class_name = "ObIndex"
 
 # Never deployed, so the migrations were rewritten rather than extended: the
 # first design's Address object (typed-code bindings) is gone, and v1 no longer
@@ -41,3 +54,7 @@ new_sqlite_classes = ["Ledger"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["Roster"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["ObIndex"]

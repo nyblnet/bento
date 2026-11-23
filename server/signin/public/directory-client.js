@@ -28,7 +28,8 @@ export const ROUTES = Object.freeze({
   challenge: '/v1/web/challenge',
   /**
    * POST `{ text, rq, assertion }` → 200 `{ ok: true, wdev, watt }`, or an
-   * error status. `wdev` is `text` as the directory logged it; `watt` is its
+   * error status. Both routes answer 503 `{ error: 'incident' }` while a
+   * security incident is open and browser sign-ins are paused. `wdev` is `text` as the directory logged it; `watt` is its
    * countersign. bento/home fetches the signed countersign, the passkey's
    * assertion and the roster itself, and verifies all of it. `rq` is the
    * origin of the page that asked (taken from the
@@ -56,7 +57,12 @@ const post = async (route, body) => {
     cache: 'no-store',
     referrerPolicy: 'no-referrer',
   })
-  if (!r.ok) throw new Error('directory ' + r.status)
+  if (!r.ok) {
+    const e = new Error('directory ' + r.status)
+    // 503 {error: 'incident'}: browser sign-ins are paused while a security incident is open (the directory's D1)
+    if (r.status === 503) { try { if ((await r.json())?.error === 'incident') e.code = 'incident' } catch { /* the generic failure */ } }
+    throw e
+  }
   return r.json()
 }
 

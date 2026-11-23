@@ -15396,3 +15396,76 @@ replaced before this shipped.
   1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
+
+## 2026-11-22 — bento/id directory: the incident lever (SD5)
+
+- **What it does.** A maintainer-run command over a window [t0, t1] revokes
+  every browser certificate enrolled at bento/home's request in the window
+  (`ob` exactly 1, `loggedAt` in [t0, t1] inclusive), voids a waiting member
+  change asked for at bento/home's request in the window (as a Cancel: nobody
+  suspended, no cooldown, a hold respected), mails each affected address once
+  with a "Revert this change" link for each change in the window that took
+  effect and added a passkey, and publishes a signed incident record.
+- **The revert never suspends the requester.** It uses the kernel's authority
+  `l`, whose target is the member the cited change ADDED; the removal follows
+  72 hours later under `x`, with the usual undo `u`. The requester may have
+  done nothing wrong: the page that asked did. A change that REMOVED a passkey
+  cannot be reverted this way (no directory word adds a member); the mail says
+  so in words, and a kernel word for it is a separate question.
+- **The window is only as good as `rq`.** `ob` = 1 means the sign-in host
+  reported bento/home as the opener. It selects the lever's window and nothing
+  else decides on it; a hostile sign-in host could report another opener, so
+  the lever is trustworthy only while the sign-in host is honest.
+- **Revocations are sticky.** A lever revocation is stamped on the record
+  (`revokedBy: 'incident'`) and `standing()` reads it before membership: no
+  undo, re-add or new head revives it. A peer that is offline keeps accepting
+  the last countersign until it expires (24 hours at most).
+- **Finding the accounts.** Per-address objects cannot be listed, so a new
+  `ObIndex` object keeps, per UTC day, the storage name (a hash) of every
+  account with an `ob` = 1 event. It is written before anything is stored for
+  the event; a failed write fails the request (over-include, never miss).
+- **Authority.** `POST /v1/lever` takes only a command signed by an OFFLINE
+  lever key (`LEVER_PUBKEY`; never the release key or the directory key),
+  issued within 5 minutes, with a single-use nonce. Empty `LEVER_PUBKEY` turns
+  the route off. No CORS; no public route reaches the Roster's lever op.
+- **Incident records are signed.** Every record a check-in or status answer
+  carries is `{id, from, to, inc, sig}`, `inc` being the kernel's `inc.` text
+  under the directory's online key, never issued with `to` after `issuedAt`.
+  The `INCIDENTS` variable stays as a break-glass beside the stored records;
+  an id in both, or anything that does not read, answers 500.
+- **D1 awaits the maintainer.** While any record is open, a new browser
+  enrolment and its challenge answer 503 `incident`. This is one constant,
+  `INCIDENT_ENROL` in `server/directory/src/browsers.js`, built as `'refuse'`
+  (the recommendation); `'allow'` restores the earlier behaviour. The rig runs
+  both values.
+- **Detection is separate.** The tripwire is one way the maintainer learns to
+  pull the lever; nothing pulls it automatically.
+- **Idempotent by item, not by window.** An account remembers, per incident,
+  which certificates and changes a mail already named, never just "done": a
+  run while the incident is open, then a run over a wider window, must still
+  void a change the hostile page asked for in between and revoke a
+  certificate the first window missed. A void whose mail failed is kept until
+  a mail names it.
+- **An earlier revocation becomes the incident's.** A certificate in the
+  window that was already signed out is re-marked `revokedBy: 'incident'`
+  (keeping its earlier time) and named in the mail: whoever judges a
+  statement it signed must see the incident, and signing out first must not
+  erase that.
+- **The global record store sits behind every limit.** A browser check-in
+  reads the incident records only after its signature, challenge and per-IP
+  charge pass, and before the Roster countersigns or spends anything, so an
+  unreadable store still countersigns nothing.
+- **Asked alongside D1.** Roster changes asked for at bento/home's request
+  are still accepted while an incident is open (the next run voids them).
+  Whether to refuse them under the same constant is part of the maintainer's
+  D1 ruling.
+- **The local drill's mail read-back is gated by a signature, not by the
+  caller's address** (2026-11-23). A local directory logs its mail, so the
+  lever's drill reads the setup link and the incident mail back through a
+  development-only route. `wrangler dev` takes `cf-connecting-ip` from the
+  client, so on a dev directory bound to a LAN address anyone could claim to
+  be 127.0.0.1 and read setup links. Each read-back is therefore signed by the
+  drill key over the address it reads (its own `ldm.` text, never a lever
+  command), fresh and single use, and verified against `LEVER_PUBKEY`; the
+  loopback test stays as a second gate. Every refusal answers as an unknown
+  route given the same body.

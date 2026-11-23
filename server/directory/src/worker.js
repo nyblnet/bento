@@ -30,6 +30,9 @@ import { HOME_ORIGIN, SIGNIN_ORIGIN } from './passkey.js'
 import { STATUS_ROUTE } from './seam.js'
 import { browserOrigin, browserRoute, deviceStatus } from './browsers.js'
 import { PAGE_HEADERS, VOID_CSS, VOID_HTML, VOID_JS, VOID_PATHS } from './voidpage.js'
+import { ObIndex } from './obindex.js'
+import { LEVER_ROUTE, leverRoute } from './lever.js'
+import { DEV_ROUTE, devRoute } from './devdrill.js'
 
 export const LIMITS = {
   // per IP per hour. challengeAddr (an enrolment's challenge), challengeAddrHome
@@ -189,8 +192,13 @@ async function route(req, env) {
   if (req.method !== 'POST') return json(404, { error: 'not-found' }, headersFor(p))
 
   if (browserOrigin(p) !== null) return browserRoute(req, env, ip, p, k)
+  // the incident lever (lever.js): a command signed by the maintainer's offline key; no CORS, in no public list
+  if (p === LEVER_ROUTE) return leverRoute(req, env, (status, b) => json(status, b, BASE))
   const b = await body(req)
   if (!b) return json(400, { error: 'bad-request' }, headersFor(p))
+  // local development only (devdrill.js): the lever drill's mail read-back, signed by the drill key; after the body is
+  // read, so every refusal is the unknown route's answer to the same body
+  if (p === DEV_ROUTE) return devRoute(b, req, env, (status, j) => json(status, j, headersFor(p)))
 
   // --- the passkey roster (option G) ---
   const origin = req.headers.get('origin') || ''
@@ -289,7 +297,7 @@ async function route(req, env) {
   return json(404, { error: 'not-found' }, headersFor(p))
 }
 
-export { Roster }
+export { Roster, ObIndex }
 
 // --- the per-IP ledger ----------------------------------------------------------------
 // Keys on HMAC(daySalt, ip); the salt is minted in storage per UTC day and

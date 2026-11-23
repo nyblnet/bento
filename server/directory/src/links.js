@@ -44,6 +44,9 @@
 //           Cancel only (that Remove could only lock the person out, G4c)
 //        r  a reset: Cancel only (a reset has no requesting member)
 //        u  the queued removal of a suspended passkey: undo only (G4a)
+//        v  the incident lever's "Revert this change" for a change that took
+//           effect and added a passkey: revert only (lever.js). Its token
+//           lives 30 days.
 //      The page draws from it and nothing else; the directory decides from
 //      its own record what the token may do, so an edited `k` shows a button
 //      that is then refused, never one that works.
@@ -67,7 +70,7 @@ export const SIGNIN_PATHS = Object.freeze({ setup: '/setup', reset: '/reset' })
 export const VOID_PATH = '/void'
 
 /** The void link kinds (the `k` key) and the one choice each offers first. */
-export const VOID_KINDS = Object.freeze(['c', 'o', 'r', 'u'])
+export const VOID_KINDS = Object.freeze(['c', 'o', 'r', 'u', 'v'])
 
 /** The setup link for `address` (normalised) and its `token`. */
 export function setupLink(address, token) {

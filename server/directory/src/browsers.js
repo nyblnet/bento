@@ -80,14 +80,24 @@
 //   a peer stops accepting its last countersign when that expires (24 hours at
 //   most). The request a member signs for it is a kernel layout, not defined
 //   yet, so no route reaches it today.
-// - `incidents` is every published incident record [{id, from, to}] (the
-//   directory's clock, ms; `to` null while open), from the INCIDENTS variable.
-//   A list that does not read is an error: nothing is countersigned under it.
+// - `incidents` is every published incident record [{id, from, to, inc, sig}]
+//   (the directory's clock, ms; `to` null while open): the ones the incident
+//   lever stored (lever.js, obindex.js) and any in the INCIDENTS variable (a
+//   break-glass for when the lever is off). `inc` is the kernel's signed
+//   `inc.` text for the record under the directory's online key, `sig` its
+//   signature: apps judge other people's statements by it. A list or a store
+//   that does not read is an error: nothing is countersigned under it.
+// - While an incident record is OPEN, a new browser enrolment is refused
+//   (503 incident), and so is the challenge for one, so nobody is asked for a
+//   passkey that cannot work: INCIDENT_ENROL below, the maintainer's call (D1).
+// - A revoked certificate's status says why (`by`): `incident` (the lever,
+//   with the incident's id), `signout` (sign out everywhere) or `member` (its
+//   passkey was removed, suspended or re-added since the ceremony).
 //
 // NOT HERE (each its own change): a `dev2.` made by a passkey alone (no native
 // origin is measured yet, so no native assertion verifies); retiring the old
 // key at a new ceremony and the `mb` field (both kernel layouts first); the
-// mail for a new browser; the incident lever itself.
+// mail for a new browser.
 
 import { parseDeviceCert, buildWatt, verifyWren, CEREMONY_CAP_MS, WATT_MAX_MS } from '../../../kernel/src/devices.ts'
 import { b64uDec, sha256b64u, signStatement } from '../../../kernel/src/statements.ts'
@@ -97,6 +107,17 @@ import { HOME_ORIGIN, PASSKEY, SIGNIN_ORIGIN } from './passkey.js'
 import { issueChallenge, openChallenge } from './challenge.js'
 import { addressKey, normalize } from './address.js'
 import { HOME_ROUTES, WEB_ROUTES } from './seam.js'
+import { indexOb, signIncident, storedIncidents } from './obindex.js'
+
+/**
+ * D1, THE MAINTAINER'S CALL (security's ruling on #957): while any incident
+ * record is open, is a new browser enrolment refused? 'refuse' (the lead's
+ * recommendation, built and the default until the maintainer rules) answers
+ * 503 {error: 'incident'} to the enrolment and to its challenge, before the
+ * challenge is opened, so nothing is stored or countersigned and the
+ * challenge is left. 'allow' enrols as before the lever existed.
+ */
+export const INCIDENT_ENROL = 'refuse' // 'refuse' | 'allow': D1 awaits the maintainer's ruling
 
 const DAY = 86_400_000
 
@@ -139,17 +160,45 @@ async function openBrowser(env, scope, challenge, now) {
 }
 
 const ID = /^[a-z0-9][a-z0-9-]{0,62}$/
-/** The published incident records. Throws on anything that does not read: an answer is never built on half a list. */
-export function incidentsOf(env) {
+/** The INCIDENTS variable's records. Throws on anything that does not read. */
+function varIncidents(env) {
   const list = JSON.parse(env.INCIDENTS ?? '[]')
   if (!Array.isArray(list) || list.length > BROWSER_LIMITS.incidentsMax) throw new Error('INCIDENTS is not a list')
   return list.map((x) => {
     const ok = x && typeof x === 'object' && Object.keys(x).length === 3 && typeof x.id === 'string' && ID.test(x.id) &&
-      Number.isSafeInteger(x.from) && x.from > 0 && (x.to === null || (Number.isSafeInteger(x.to) && x.to >= x.from))
+      Number.isSafeInteger(x.from) && x.from > 0 && (x.to === null || (Number.isSafeInteger(x.to) && x.to > x.from))
     if (!ok) throw new Error('INCIDENTS holds a record that does not read')
     return { id: x.id, from: x.from, to: x.to }
   })
 }
+/** A variable record signed once per text: issued at its end, or at its start while open (never `to` after issuedAt). */
+const varSigned = new Map()
+async function signVar(env, x) {
+  const k = `${env.DIR_KID}\n${x.id}.${x.from}.${x.to}`
+  if (!varSigned.has(k)) {
+    if (varSigned.size > 4 * BROWSER_LIMITS.incidentsMax) varSigned.clear()
+    varSigned.set(k, await signIncident(env, { ...x, issuedAt: x.to ?? x.from }))
+  }
+  return varSigned.get(k)
+}
+/**
+ * The published incident records: the lever's stored ones and the
+ * variable's, each with its signed inc. text. Throws on anything that does not
+ * read (the store unreachable included, and an id in both): an answer is never
+ * built on half a list.
+ */
+export async function incidentsOf(env) {
+  const vars = varIncidents(env)
+  const all = await storedIncidents(env)
+  for (const v of vars) {
+    if (all.some((r) => r.id === v.id)) throw new Error('an incident id is published twice')
+    all.push(await signVar(env, v))
+  }
+  if (all.length > BROWSER_LIMITS.incidentsMax) throw new Error('too many incident records')
+  return all.map((r) => ({ id: r.id, from: r.from, to: r.to, inc: r.inc, sig: r.sig }))
+}
+/** Is any record still open? (D1) */
+const anyOpen = (incidents) => incidents.some((i) => i.to === null)
 
 const B64U = /^[A-Za-z0-9_-]+$/
 const TEXT_MAX = 2048
@@ -188,6 +237,8 @@ export async function browserRoute(req, env, ip, p, k) {
     if (!(await ledger(`${ip}\n${scope}`, web ? 'challengeAddr' : 'challengeAddrHome'))) return json(429, { error: 'rate-limited' })
     const r = await roster(email, 'browserHead', {})
     if (r.status !== 200) return json(r.status, r.body)
+    // D1: no passkey is asked for an enrolment that would be refused
+    if (web && INCIDENT_ENROL === 'refuse' && anyOpen(await incidentsOf(env))) return json(503, { error: 'incident' })
     const at = Date.now()
     const nonce = await issueChallenge(env.CHALLENGE_KEY, web ? 'web' : 'home', scope, at)
     return json(200, web ? { nonce, at, rosHash: r.body.rosHash } : { nonce })
@@ -246,7 +297,9 @@ export async function browserRoute(req, env, ip, p, k) {
     if (!(await ledger(ip, 'enrol'))) return json(429, { error: 'rate-limited' })
     const c = await parseDeviceCert(b.text)
     if (!c.ok || c.value.kind !== 'wdev' || c.value.via !== 'passkey') return json(400, { error: 'text' })
-    incidentsOf(env) // before the challenge is opened: an unreadable list countersigns nothing, and leaves the challenge
+    const incidents = await incidentsOf(env) // before the challenge is opened: an unreadable list countersigns nothing, and leaves the challenge
+    // D1: while an incident is open, no new browser enrolment (before the challenge is opened: nothing stored, the challenge left)
+    if (INCIDENT_ENROL === 'refuse' && anyOpen(incidents)) return json(503, { error: 'incident' })
     const ch = await openBrowser(env, await addressKey(c.value.address), c.value.dirNonce, Date.now())
     if (!ch) return json(400, { error: 'nonce' })
     const r = await roster(c.value.address, 'browserEnrol', {
@@ -259,7 +312,6 @@ export async function browserRoute(req, env, ip, p, k) {
   if (p === HOME_ROUTES.checkin) {
     if (typeof b.wren !== 'string' || typeof b.sig !== 'string' || b.wren.length > TEXT_MAX || b.sig.length > FIELD_MAX ||
       !(b.pin === undefined || (typeof b.pin === 'string' && b.pin.length <= 64))) return json(400, { error: 'bad-request' })
-    const incidents = incidentsOf(env) // first: an unreadable list countersigns nothing
     // signed by the device key it names; checked before the challenge is spent
     // (only the browser that asked knows it, so a refused signature leaves it)
     const v = await verifyWren(b.wren, b.sig)
@@ -273,6 +325,11 @@ export async function browserRoute(req, env, ip, p, k) {
     const ch = await openBrowser(env, scope, v.value.challenge, Date.now())
     if (!ch) return json(400, { error: 'nonce' })
     if (!(await ledger(`${ip}\n${scope}`, 'checkin'))) return json(429, { error: 'rate-limited' })
+    // after the signature, the challenge and the charge: the records are one
+    // global object, which a junk check-in must never reach (security's M3 on
+    // #984); before the Roster, where the countersign and the spend are, so an
+    // unreadable list still countersigns nothing and leaves the challenge
+    const incidents = await incidentsOf(env)
     const r = await roster(v.value.address, 'browserCheckin', { devicePub: v.value.devicePub, pin: b.pin, nonce: ch.nonce, issued: ch.issued, aud: ch.aud })
     return json(r.status, r.status === 200 || r.status === 403 ? { ...r.body, incidents } : r.body)
   }
@@ -287,7 +344,7 @@ export async function deviceStatus(env, ip, url, k) {
   const c = url.searchParams.get('c') ?? ''
   if (!email || !/^[A-Za-z0-9_-]{43}$/.test(c)) return json(400, { error: 'invalid' })
   if (!(await ledger(ip, 'lookup'))) return json(429, { error: 'rate-limited' })
-  const incidents = incidentsOf(env)
+  const incidents = await incidentsOf(env)
   const r = await roster(email, 'browserStatus', { certHash: c })
   return json(r.status, r.status === 200 ? { ...r.body, incidents } : r.body)
 }
@@ -342,12 +399,23 @@ async function standing(s, rec, now) {
   return 'ok'
 }
 
+/**
+ * Why a revoked certificate is revoked, for status and check-in: the lever
+ * (with the incident's id), a sign-out everywhere, or its passkey's standing.
+ * A mark made before revokedBy existed was a sign-out (nothing else marked).
+ */
+function revokedWhy(rec) {
+  if (!rec.revokedAt) return { by: 'member' }
+  return rec.revokedBy === 'incident' ? { by: 'incident', incident: rec.incident } : { by: 'signout' }
+}
+
 /** The chain as kernel RosterLink objects, from the pinned head (or from setup). */
 async function chainFrom(s, pin) {
   const links = [...(await s.list({ prefix: 'link:' })).values()].map((l) => {
     const out = { ros: l.ros, rip: l.rip, ripSig: l.ripSig }
     if (l.kind === 'member') { out.signer = l.signer; out.assertion = l.assertion }
     if (l.voided) out.voided = l.voided
+    if (l.cited) out.cited = l.cited
     return out
   })
   let from = 0
@@ -392,7 +460,7 @@ async function signOutAll(obj, head, { signedAt, now, by, origin, co }, h) {
   let n = 0
   for (const [key, rec] of await s.list({ prefix: 'wd:' })) {
     if (rec.revokedAt) continue // the cut-off is now: every certificate the address holds was made by then
-    await s.put(key, { ...rec, revokedAt: now })
+    await s.put(key, { ...rec, revokedAt: now, revokedBy: 'signout' })
     n++
   }
   await obj.log({ k: 'signout-all', at: now, signedAt: signedAt ?? now, seq: head.seq, pub: by, by, os: origin, rq: '', co, n })
@@ -434,6 +502,11 @@ export async function browserOp(obj, a, now, h) {
   if (a.op === 'browserEnrol') {
     if (!(await spend())) return out(400, { error: 'nonce' })
     if (a.aud !== 'web') return out(400, { error: 'nonce' }) // a renewal's challenge, used up here
+    // ob = 1 (every web enrolment is asked for at bento/home's request, checked below): indexed for the incident
+    // lever before anything is read for it, stored or countersigned, so a failed write fails the enrolment
+    // (over-include, never under-include), and every check below reads afresh
+    const ak = a.rq === HOME_ORIGIN ? await obj.addressKey() : null
+    if (ak) await indexOb(obj.env, now, ak)
     // a ceremony begun before a sign-out everywhere cannot finish after it
     const so = await s.get('signoutAt')
     if (so !== undefined && a.issued <= so) return out(403, { error: 'revoked' })
@@ -476,7 +549,7 @@ export async function browserOp(obj, a, now, h) {
     if (!rec) return out(403, { error: 'unknown' })
     await obj.ripen(now)
     const st = await standing(s, rec, now)
-    if (st !== 'ok') return out(403, { error: st })
+    if (st !== 'ok') return out(403, { error: st, ...(st === 'revoked' ? revokedWhy(rec) : {}) })
     const w = await countersign(obj.env, { certHash: rec.certHash, ob: rec.ob, mb: await mailbox(s), ceremonyAt: rec.ceremonyAt, now })
     await s.put(`wd:${a.devicePub}`, { ...rec, renewedAt: now })
     return out(200, { watt: w.text, wattSig: w.sig, signer: rec.signer, assertion: rec.assertion, roster: await chainFrom(s, a.pin) })
@@ -487,7 +560,8 @@ export async function browserOp(obj, a, now, h) {
     const rec = pub ? await s.get(`wd:${pub}`) : undefined
     if (!rec) return out(200, { state: 'unknown' })
     await obj.ripen(now)
-    return out(200, { state: await standing(s, rec, now) })
+    const st = await standing(s, rec, now)
+    return out(200, st === 'revoked' ? { state: st, ...revokedWhy(rec) } : { state: st })
   }
 
   if (a.op === 'browserRevokeAll') {
