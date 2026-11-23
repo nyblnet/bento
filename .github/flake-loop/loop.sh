@@ -18,7 +18,7 @@ for i in $(seq 1 "$n"); do
   else
     pass=$((pass+1))
     [ -n "${KEEP_ALL:-}" ] && grep -v "pw:protocol" err.txt > "failures/$label-$i.pass.err"
-    grep -E "SKIP" out.txt | sed 's/^/    /'
+    grep -E "SKIP|note  firefox: a new page" out.txt | sed 's/^/    /'
   fi
 done
 echo "LOOP $label total: $pass passed, $fail failed of $n"

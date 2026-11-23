@@ -11,8 +11,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        leg: [webkit, firefox]
-        shard: [1, 2, 3, 4, 5, 6]
+        leg: [firefox]
+        shard: [1, 2, 3, 4]
     env:
       LP_NATIVE_VECTOR_WIDTH: '128'
     steps:
@@ -26,12 +26,11 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
           "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium webkit firefox
           echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
-      - name: cache probe (ephemeral vs persistent)
-        if: ${{ matrix.shard == 1 }}
+      - name: juggler repro (no bento code)
         run: |
-          E=webkit node .github/flake-loop/cache-probe.mjs || true
-          E=firefox node .github/flake-loop/cache-probe.mjs || true
-          E=chromium node .github/flake-loop/cache-probe.mjs || true
+          V=plain N=100 node .github/flake-loop/juggler-repro.mjs || true
+          V=sw N=100 node .github/flake-loop/juggler-repro.mjs || true
+          V=csp N=100 node .github/flake-loop/juggler-repro.mjs || true
       - name: loop
         run: |
           engine=${{ matrix.leg }}; engine=${engine%-persistent}
