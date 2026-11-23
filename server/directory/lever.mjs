@@ -13,6 +13,8 @@
 //   node server/directory/lever.mjs --directory https://id.bento.page --key lever-key.jwk --id <id> open  --t0 <time> [--apply]
 //   node server/directory/lever.mjs --directory https://id.bento.page --key lever-key.jwk --id <id> run   --t0 <time> --t1 <time> [--page 25] [--cursor c] [--apply]
 //   node server/directory/lever.mjs --directory https://id.bento.page --key lever-key.jwk --id <id> close --t0 <time> --t1 <time> [--apply]
+//   node server/directory/lever.mjs devvars --out server/directory/.dev.vars --key drill-key.jwk
+//       a local directory's test configuration, with fresh TEST keys (see --drill)
 //   node server/directory/lever.mjs --drill --directory http://127.0.0.1:8787 --key drill-key.jwk
 //
 // <time> is epoch milliseconds or an ISO time (2026-11-20T09:00:00Z), the
@@ -20,18 +22,30 @@
 // interrupted run is resumed with the last printed --cursor (or simply run
 // again: every account is done once per incident id).
 //
-// --drill runs open, plan, run and close on a LOCAL directory only (loopback:
-// 127.0.0.1, localhost or [::1]; `npx wrangler dev --port 8787 --var DEV:1
-// --var MAILER:log --var LEVER_PUBKEY:<the drill key's value>`) and checks
-// each answer. It refuses any other host before it sends anything. CI runs
-// the same drill in process against the in-memory directory
-// (scripts/test-directory-lever.ts), with seeded accounts.
+// --drill runs on a LOCAL directory only (loopback: 127.0.0.1, localhost or
+// [::1]) and refuses any other host before it sends anything. Start one with
+// test keys, from server/directory:
+//
+//   node lever.mjs devvars --out .dev.vars --key drill-key.jwk
+//   npx wrangler dev --port 8787 --ip 127.0.0.1
+//
+// (`devvars` writes DEV=1, MAILER=log, a fresh test DIR_KEY_JWK with its
+// DIR_KID and DIR_PUBKEYS, a CHALLENGE_KEY, and LEVER_PUBKEY for the drill key
+// it writes beside it; wrangler dev reads .dev.vars, which git ignores.) The
+// drill first seeds a VICTIM through the public routes (drill.mjs): a browser
+// enrolled at bento/home's request and a waiting change asked for there. It
+// then opens an incident, plans, runs, runs again and closes, and fails unless
+// the run revoked at least one certificate and voided at least one change, and
+// the victim reads back revoked by the incident (naming its id), with no
+// waiting change and an incident mail. CI runs the same drill in process
+// against the in-memory directory (scripts/test-directory-lever.ts).
 
 import { readFile, writeFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 import { b64uEnc, signStatement } from '../../kernel/src/statements.ts'
 import { verifyInc } from '../../kernel/src/devices.ts'
 import { buildLever, LEVER_ROUTE, LEVER_LIMITS } from './src/lever.js'
+import { seedVictim, readBack } from './drill.mjs'
 
 const COUNTS = ['visited', 'accounts', 'certificates', 'voids', 'reverts', 'words', 'mails', 'held', 'already', 'skipped', 'mailFailed']
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]'])
@@ -75,6 +89,26 @@ export async function main(argv, io = {}) {
     const kp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])
     await io.writeFile(o.out, JSON.stringify(await crypto.subtle.exportKey('jwk', kp.privateKey)), { mode: 0o600 })
     say(`wrote ${o.out}; LEVER_PUBKEY = ${b64uEnc(new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey)))}`)
+    return { code: 0 }
+  }
+
+  if (o._[0] === 'devvars') {
+    // a LOCAL directory's configuration: every key in it is a fresh test key, never a real one
+    if (!o.out || !o.key) { say('devvars needs --out <path for .dev.vars> --key <path for the drill key>'); return { code: 2 } }
+    const p256 = () => crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])
+    const raw = async (kp) => b64uEnc(new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey)))
+    const dir = await p256(), lev = await p256()
+    const vars = {
+      DEV: '1', MAILER: 'log', DIR_KID: 'dev-1',
+      DIR_KEY_JWK: JSON.stringify(await crypto.subtle.exportKey('jwk', dir.privateKey)),
+      DIR_PUBKEYS: JSON.stringify([{ kid: 'dev-1', pub: await raw(dir) }]),
+      CHALLENGE_KEY: b64uEnc(crypto.getRandomValues(new Uint8Array(32))),
+      LEVER_PUBKEY: await raw(lev),
+    }
+    // never over an existing file: it may be someone's real local configuration
+    await io.writeFile(o.key, JSON.stringify(await crypto.subtle.exportKey('jwk', lev.privateKey)), { mode: 0o600, flag: 'wx' })
+    await io.writeFile(o.out, Object.entries(vars).map(([k, v]) => `${k}=${/^[A-Za-z0-9_-]*$/.test(v) ? v : `'${v}'`}\n`).join(''), { mode: 0o600, flag: 'wx' })
+    say(`wrote ${o.out} (test keys, local only) and the drill key ${o.key}`)
     return { code: 0 }
   }
 
@@ -138,11 +172,15 @@ export async function main(argv, io = {}) {
   return { code: run.ok ? (left > 0 ? 3 : 0) : 1, totals: run.totals }
 }
 
-/** The drill: open, plan, run, run again, close, and read the record back, each checked. */
+/** The drill: seed a victim, open, plan, run, run again, close, and read the victim and the record back, each checked. */
 async function drill({ send, sweep, show, say, io, base }) {
   const fails = []
   const check = (c, what) => { say(`${c ? 'ok  ' : 'FAIL'} ${what}`); if (!c) fails.push(what) }
   const id = `drill-${b64uEnc(crypto.getRandomValues(new Uint8Array(6))).toLowerCase().replace(/[^a-z0-9]/g, '0')}`
+  // the victim first, before the incident opens (an open incident may refuse a new browser, INCIDENT_ENROL)
+  const seed = await seedVictim({ fetch: io.fetch, base, now: io.now })
+  check(seed.ok, seed.ok ? 'seeded a victim: an ob=1 browser and a waiting ob=1 change' : `seeding the victim failed at ${seed.step} (${seed.status} ${seed.error ?? ''})`)
+  if (!seed.ok) { say(`drill FAILED: ${fails.length}`); return { code: 1, id } }
   const now = io.now(), t0 = now - 60 * 60_000
   const o = await send({ op: 'open', id, t0, t1: null })
   check(o.status === 200 && o.body.record?.to === null, `open ${id} (${o.status})`)
@@ -152,6 +190,13 @@ async function drill({ send, sweep, show, say, io, base }) {
   const run = await sweep('run', id, t0, io.now(), '')
   check(run.ok && run.totals.accounts === plan.totals.accounts && run.totals.certificates === plan.totals.certificates, 'run did what the plan counted')
   show('run', run.totals)
+  // a sweep that does nothing satisfies every equality above: the run must have acted
+  check(run.totals.accounts >= 1 && run.totals.certificates >= 1 && run.totals.mails >= 1, 'the run revoked a certificate and mailed')
+  check(run.totals.voids >= 1, 'the run voided a waiting change')
+  const back = await readBack({ fetch: io.fetch, base }, seed.victim)
+  check(back.cert.state === 'revoked' && back.cert.by === 'incident' && back.cert.incident === id, `the victim's browser is revoked by ${id} (${back.cert.state}, ${back.cert.by ?? '-'}, ${back.cert.incident ?? '-'})`)
+  check(back.pending === null, "the victim's waiting change is gone")
+  check(back.incidentMails === 1, `the victim was mailed once about the incident (${back.incidentMails})`)
   const again = await sweep('run', id, t0, io.now(), '')
   check(again.ok && again.totals.mails === 0 && again.totals.certificates === 0 && again.totals.voids === 0, 'a second run changes nothing and mails nobody')
   const t1 = io.now()
@@ -167,7 +212,7 @@ async function drill({ send, sweep, show, say, io, base }) {
     check(v.ok && v.value.to === t1 && v.value.to <= v.value.issuedAt, 'its inc. verifies under the published directory keys')
   } else say('note: /v1/keys lists no key, so the record\'s signature was not checked here')
   say(fails.length ? `drill FAILED: ${fails.length}` : 'drill passed')
-  return { code: fails.length ? 1 : 0, totals: run.totals, plan: plan.totals }
+  return { code: fails.length ? 1 : 0, totals: run.totals, plan: plan.totals, id, victim: seed.victim }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

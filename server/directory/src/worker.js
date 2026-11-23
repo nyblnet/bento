@@ -32,6 +32,7 @@ import { browserOrigin, browserRoute, deviceStatus } from './browsers.js'
 import { PAGE_HEADERS, VOID_CSS, VOID_HTML, VOID_JS, VOID_PATHS } from './voidpage.js'
 import { ObIndex } from './obindex.js'
 import { LEVER_ROUTE, leverRoute } from './lever.js'
+import { DEV_ROUTE, devRoute } from './devdrill.js'
 
 export const LIMITS = {
   // per IP per hour. challengeAddr (an enrolment's challenge), challengeAddrHome
@@ -193,6 +194,8 @@ async function route(req, env) {
   if (browserOrigin(p) !== null) return browserRoute(req, env, ip, p, k)
   // the incident lever (lever.js): a command signed by the maintainer's offline key; no CORS, in no public list
   if (p === LEVER_ROUTE) return leverRoute(req, env, (status, b) => json(status, b, BASE))
+  // local development only (devdrill.js): the lever drill's mail read-back; an unknown route unless DEV, MAILER=log and a loopback caller
+  if (p === DEV_ROUTE) return devRoute(req, env, (status, b) => json(status, b, BASE))
   const b = await body(req)
   if (!b) return json(400, { error: 'bad-request' }, headersFor(p))
 

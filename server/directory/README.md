@@ -403,16 +403,49 @@ node server/directory/lever.mjs --drill --directory http://127.0.0.1:8787 --key 
 
 Running it against id.bento.page, and choosing the window and the id, are the
 maintainer's. The drill refuses any host but a loopback one before it sends
-anything; against `npx wrangler dev --port 8787 --var DEV:1 --var MAILER:log
---var LEVER_PUBKEY:<drill key>` it runs open, plan, run, a second run and close
-and reads the record back. The rig runs the same drill in process with
-seeded accounts.
+anything. Start a local directory with TEST keys first (from
+`server/directory`):
+
+```sh
+node lever.mjs devvars --out .dev.vars --key <scratch path>/drill-key.jwk   # fresh test keys; refuses to overwrite either file
+npx wrangler dev --port 8787 --ip 127.0.0.1                                  # reads .dev.vars (git ignores it)
+node lever.mjs --drill --directory http://127.0.0.1:8787 --key <scratch path>/drill-key.jwk
+```
+
+`.dev.vars` holds `DEV=1`, `MAILER=log`, a test `DIR_KEY_JWK` with its
+`DIR_KID` (`dev-1`) and `DIR_PUBKEYS`, a `CHALLENGE_KEY`, and the drill key's
+`LEVER_PUBKEY`. Without `DIR_KEY_JWK` and `DIR_KID` nothing can be enrolled or
+countersigned, and without `DIR_PUBKEYS` the drill cannot check the record's
+signature. None of these are real keys; never reuse them.
+
+The drill first seeds a victim through the public routes (`drill.mjs`): an
+account with a software passkey, a browser enrolled at bento/home's request
+and a second passkey asked for there, still waiting. Then it opens an
+incident, plans, runs, runs again and closes. It fails unless the run revoked
+at least one certificate, voided at least one change and mailed, and the
+victim reads back revoked by that incident (its id in the status answer),
+with no waiting change and one incident mail; a second run must change
+nothing, and the closed record must verify. A local directory logs its mail
+rather than sending it, so the setup link and the incident mail are read back
+through `POST /v1/dev/mail` (`src/devdrill.js`). That route answers exactly
+as an unknown route unless `DEV` is `1`, `MAILER` is `log` and the caller is
+on the same machine (`cf-connecting-ip` 127.0.0.1 or ::1; `wrangler dev`
+rewrites the request's host to id.bento.page, so the host cannot be the
+test). A deployed directory has `MAILER = "ses"` and no `DEV`. While an
+incident is open a new browser is refused (D1), so the drill seeds before it
+opens; a local directory left with an open incident by an interrupted drill
+must have it closed first. The rig runs the same drill in process.
 
 Runs may be repeated, and a later run may cover a wider window (a later `t1`,
 or an earlier `t0` no earlier than the record's `from`). Each account keeps,
 per incident, which certificates and changes a mail already named
 (`lever:<id>`), so a later run acts on and mails only what is new, and a run
-over the same window mails nobody twice. A void whose mail failed is kept
+over the same window mails nobody twice. That includes a change the mail
+could only name in words (one that removed a passkey, or one whose added
+passkey was the only usable one, or is no longer on the account or suspended): it is marked by
+its seq once mailed, so a later run never turns it into a revert offer, even
+if the account has since gained another live passkey. The mail has already
+told the owner about it. A void whose mail failed is kept
 (`leverOwe:<id>`) until a mail names it. A run that leaves an account
 unfinished (a hold, or a failed mail) says so and exits 3: run the same
 command again later.

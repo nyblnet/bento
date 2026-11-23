@@ -229,3 +229,6 @@ jobs:
           node scripts/test-directory-lever.ts | tee "$RUNNER_TEMP/lever.log"
           grep -E '^D1 INCIDENT_ENROL=refuse: [1-9][0-9]* rows ran' "$RUNNER_TEMP/lever.log"
           grep -E '^D1 INCIDENT_ENROL=allow: [1-9][0-9]* rows ran' "$RUNNER_TEMP/lever.log"
+          # the drill seeds a victim and is refused without the lever acting on it (DR3 the read-back's gate, DR4 the failures)
+          grep -E '^rows: .*\bDR3 [1-9]' "$RUNNER_TEMP/lever.log"
+          grep -E '^rows: .*\bDR4 [1-9]' "$RUNNER_TEMP/lever.log"

@@ -48,10 +48,19 @@ export async function deliver(env, msg) {
   return timed(send(env, msg)) // every mailer, the real one when it is wired included, runs under the timeout
 }
 
+/**
+ * LOCAL DEVELOPMENT ONLY: the mails a local directory logged (MAILER=log with
+ * DEV=1), newest last, at most 200, for the lever drill's read-back
+ * (devdrill.js). Nothing else ever fills it.
+ */
+export const DEV_MAILS = []
+
 async function send(env, msg) {
   if (env.MAILER && typeof env.MAILER.send === 'function') return env.MAILER.send(msg) // the rig's seam
   if (env.MAILER === 'log' && env.DEV === '1') {
     console.log(JSON.stringify({ devmail: { to: msg.to, subject: msg.subject, body: msg.body } })) // local development only
+    DEV_MAILS.push({ to: msg.to, kind: msg.kind, body: msg.body })
+    if (DEV_MAILS.length > 200) DEV_MAILS.shift()
     return
   }
   if (env.MAILER === 'ses') throw new Error('SES sending is not wired yet (needs the maintainer\'s SES account, M4)')

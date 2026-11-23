@@ -51,13 +51,13 @@ function scriptImports(entries: string[]): string[] {
 }
 const RIG_IMPORTS = scriptImports(RIGS)
 // the lever rig also runs the maintainer's script (server/directory/lever.mjs) and reads home/web's covers()
-const TREE = ['kernel/src', 'kernel/fixtures', 'server/directory/src', 'server/directory/fixtures', 'server/directory/wrangler.toml', 'server/directory/lever.mjs', 'home/web/src/identity.ts']
+const TREE = ['kernel/src', 'kernel/fixtures', 'server/directory/src', 'server/directory/fixtures', 'server/directory/wrangler.toml', 'server/directory/lever.mjs', 'server/directory/drill.mjs', 'home/web/src/identity.ts']
 let failures = 0, checks = 0
 const ok = (c: boolean, m: string) => { checks++; if (!c) { failures++; console.log(`  FAIL  ${m}`) } else console.log(`  ok    ${m}`) }
 
 type Edit = { from: string; to: string }
 /** `also`: further edits in the same file, for a rule held at two doors */
-type Mutant = Edit & { name: string; file: 'worker.js' | 'roster.js' | 'passkey.js' | 'links.js' | 'mail.js' | 'voidpage.js' | 'browsers.js' | 'challenge.js' | 'lever.js' | 'obindex.js' | '../lever.mjs'; also?: Edit[] }
+type Mutant = Edit & { name: string; file: 'worker.js' | 'roster.js' | 'passkey.js' | 'links.js' | 'mail.js' | 'voidpage.js' | 'browsers.js' | 'challenge.js' | 'lever.js' | 'obindex.js' | 'devdrill.js' | '../lever.mjs' | '../drill.mjs'; also?: Edit[] }
 const MUTANTS: Mutant[] = [
   // --- the first design's routes, retired ---
   { name: 'retired routes served again (fall through)', file: 'worker.js',
@@ -564,6 +564,20 @@ const MUTANTS: Mutant[] = [
   { name: 'SD5 984r2-T9: a failed mail keeps the revert tokens it minted', file: 'lever.js', from: '    if (minted.length) await s.delete(minted)\n', to: '' },
   { name: 'SD5 984r2-S11: the revert does not re-check after its mail', file: 'lever.js', from: "if (atHead.hash !== cur.hash || (await s.get('pend')) || !(await s.get(`rv:${th}`))) { await obj.dropHold(hold); return out(409, (await obj.endedAnswer(th)) ?? { error: 'superseded' }) }", to: '' },
   { name: 'SD5 984r2-S12: the revert does not check its own hold after its mail', file: 'lever.js', from: "if ((await s.get('hold'))?.id !== hold) return out(409, { error: 'busy' })", to: '' },
+  // security round 4 on #984 (N6a): the loopback drill seeds a victim and fails unless the lever acted on it
+  { name: 'SD5 984r4-N6a: the drill seeds nothing', file: '../lever.mjs', from: '  const seed = await seedVictim({ fetch: io.fetch, base, now: io.now })', to: "  const seed = { ok: true, victim: { address: 'nobody@example.invalid', certHash: 'A'.repeat(43) } }" },
+  { name: 'SD5 984r4-N6a: no check that the run revoked and mailed', file: '../lever.mjs', from: '  check(run.totals.accounts >= 1 && run.totals.certificates >= 1 && run.totals.mails >= 1,', to: '  check(true,' },
+  { name: 'SD5 984r4-N6a: no voids >= 1 check', file: '../lever.mjs', from: '  check(run.totals.voids >= 1,', to: '  check(true,' },
+  { name: "SD5 984r4-N6a: the victim's browser not read back", file: '../lever.mjs', from: "  check(back.cert.state === 'revoked' && back.cert.by === 'incident' && back.cert.incident === id,", to: '  check(true,' },
+  { name: "SD5 984r4-N6a: the victim's waiting change not read back", file: '../lever.mjs', from: '  check(back.pending === null,', to: '  check(true,' },
+  { name: "SD5 984r4-N6a: the victim's incident mail not read back", file: '../lever.mjs', from: '  check(back.incidentMails === 1,', to: '  check(true,' },
+  { name: 'SD5 984r4-N6a: the seeded browser not at bento/home (ob 0)', file: '../drill.mjs', from: '{ text, rq: HOME_ORIGIN, assertion:', to: "{ text, rq: '', assertion:" },
+  { name: 'SD5 984r4-N6a: the seeded change not at bento/home (ob 0)', file: '../drill.mjs', from: 'reg: second.register(ch.j.challenge), rq: HOME_ORIGIN }', to: "reg: second.register(ch.j.challenge), rq: '' }" },
+  { name: 'SD5 984r4-N6a: the read-back on without DEV', file: 'devdrill.js', from: "  return env.DEV === '1' && env.MAILER === 'log' &&", to: "  return env.MAILER === 'log' &&" },
+  { name: 'SD5 984r4-N6a: the read-back on with a real mailer', file: 'devdrill.js', from: "  return env.DEV === '1' && env.MAILER === 'log' &&", to: "  return env.DEV === '1' &&" },
+  { name: 'SD5 984r4-N6a: the read-back on for any caller', file: 'devdrill.js', from: " && LOOPBACK_IP.has(req.headers.get('cf-connecting-ip') ?? '')", to: '' },
+  { name: 'SD5 984r4-N6a: a logged mail not kept for the read-back', file: 'mail.js', from: '    DEV_MAILS.push({ to: msg.to, kind: msg.kind, body: msg.body })\n', to: '' },
+  { name: 'SD5 984r4-N6a: the read-back route not wired', file: 'worker.js', from: '  if (p === DEV_ROUTE) return devRoute(', to: '  if (false) return devRoute(' },
 
   // --- SD2: the void page (its own headers; the browser rig has the rest) ---
   { name: 'page: inline script allowed', file: 'voidpage.js', from: `  "script-src 'self'",`, to: `  "script-src 'self' 'unsafe-inline'",` },

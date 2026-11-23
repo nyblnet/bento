@@ -33,7 +33,13 @@
 //   S1  the status reason (by: incident | signout; none while ok)
 //   M1  one incident mail per account, never held back by a budget
 //   DR1 the drill refuses any non-loopback directory before any request, and
-//       passes in process; DR2 a dry run changes nothing and prints no address
+//       passes in process, having acted on its own seeded victim and on dora (her
+//       own records: browser revoked by the drill's incident, waiting change gone,
+//       one incident mail); DR2 a dry run changes nothing and prints no address
+//   DR3 (security round 4 on #984, N6a) the drill's local mail read-back answers as
+//       an unknown route unless DEV '1', MAILER 'log' and a loopback caller
+//   DR4 (N6a) a run that counts nothing, voids nothing, leaves the victim's browser
+//       ok or mails it nothing fails the drill, and so does a directory without DEV
 //   L13 (security on #984, M1) a later or wider run acts on what is new: a change
 //       asked for after an open-incident run is voided, a missed certificate revoked
 //   L14 (M2) a certificate signed out before the lever becomes the incident's
@@ -52,6 +58,8 @@ import { signIncident } from '../server/directory/src/obindex.js'
 import { LEVER_ROUTE, buildLever } from '../server/directory/src/lever.js'
 import { HOME_ROUTES, WEB_ROUTES, STATUS_ROUTE } from '../server/directory/src/seam.js'
 import { main as leverMain } from '../server/directory/lever.mjs'
+import { DEV_ROUTE } from '../server/directory/src/devdrill.js'
+import { DEV_MAILS } from '../server/directory/src/mail.js'
 import { b64uDec, b64uEnc, sha256b64u, signStatement } from '../kernel/src/statements.ts'
 import { buildRos, parseRos, verifyRosterChain, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, ROSTER_WAIT_MS, type Member, type RosterLink } from '../kernel/src/roster.ts'
 import { buildDeviceCert, buildWren, verifyInc } from '../kernel/src/devices.ts'
@@ -531,7 +539,9 @@ const routed = (fetched: string[]) => async (url: string, init?: RequestInit) =>
   fetched.push(url)
   const u = new URL(url)
   try {
-    return await W.fetch(new Request('https://id.bento.page' + u.pathname + u.search, { ...init, headers: { ...(init?.headers as Record<string, string> ?? {}), 'cf-connecting-ip': freshIp() } }), E as never)
+    // the drill's mail read-back is on only for a caller on the same machine (devdrill.js), as wrangler dev reports one
+    const ip = u.pathname === DEV_ROUTE ? '127.0.0.1' : freshIp()
+    return await W.fetch(new Request('https://id.bento.page' + u.pathname + u.search, { ...init, headers: { ...(init?.headers as Record<string, string> ?? {}), 'cf-connecting-ip': ip } }), E as never)
   } catch { return new Response('{"error":"escaped"}', { status: 599 }) }
 }
 {
@@ -1012,17 +1022,123 @@ await d1World(INCIDENT_ENROL)
     const r = await leverMain(['--drill', '--directory', bad, '--key', keyPath], { fetch: routed(fetched), log: (s: string) => out.push(s) })
     row('DR1', r.code !== 0 && fetched.length === 0, `--drill against ${bad}: refused before any request (exit ${r.code}, ${fetched.length} fetches)`)
   }
-  // seed the drill's window: an ob=1 enrolment and an ob=1 change half an hour before
-  const dora = 'dora@example.com', D1a = await Authn.make()
-  await setup(dora, D1a)
-  ok((await enrol(dora, await Browser.make(), D1a)).status === 200, 'dora has a browser for the drill')
-  now += 30 * MIN
+  // DR3 (security round 4 on #984, N6a): the drill's mail read-back (devdrill.js) answers as an unknown route unless
+  // DEV is '1', MAILER is 'log' and the caller is on this machine; with all three, it answers
+  {
+    const unknown = await raw('POST', '/v1/dev/nothing-here', '{}', null)
+    const dev = async (vars: Record<string, unknown>, ip: string) => {
+      const was = { DEV: env.DEV, MAILER: env.MAILER }
+      Object.assign(env, vars)
+      try { return await raw('POST', DEV_ROUTE, JSON.stringify({ email: 'dora@example.com' }), null, ip) } finally { Object.assign(env, was); if (was.DEV === undefined) delete env.DEV }
+    }
+    const same = (r: R) => r.status === 404 && r.text === unknown.text && [...r.h].join() === [...unknown.h].join()
+    const off = await dev({}, '127.0.0.1')
+    row('DR3', same(off), `DEV unset: 404, the same bytes and headers as an unknown route (${err(off)})`)
+    const zero = await dev({ DEV: '0', MAILER: 'log' }, '127.0.0.1')
+    row('DR3', same(zero), `DEV '0': 404 (${err(zero)})`)
+    const real = await dev({ DEV: '1' }, '127.0.0.1')
+    row('DR3', same(real), `DEV '1' with a real mailer (not 'log'): 404 (${err(real)})`)
+    for (const ip of ['10.1.2.3', '127.0.0.2', '0.0.0.0', '']) {
+      const far = await dev({ DEV: '1', MAILER: 'log' }, ip)
+      row('DR3', same(far), `DEV '1', MAILER 'log', a caller at '${ip}': 404 (${err(far)})`)
+    }
+    const on = await dev({ DEV: '1', MAILER: 'log' }, '127.0.0.1')
+    row('DR3', on.status === 200 && Array.isArray(on.j.mails), `positive control: DEV '1', MAILER 'log', a loopback caller: 200 (${err(on)})`)
+    const v6 = await dev({ DEV: '1', MAILER: 'log' }, '::1')
+    row('DR3', v6.status === 200, `and from ::1 (${err(v6)})`)
+  }
+
+  // From here the drill runs as a local directory does: its mail logged (MAILER=log with DEV=1), read back through
+  // devdrill.js. Two hours on, so the drill's one-hour window holds nothing from the rows above.
+  const mailerWas = env.MAILER, logWas = console.log
+  env.DEV = '1'; env.MAILER = 'log'
+  console.log = (...a: unknown[]) => { if (!String(a[0]).startsWith('{"devmail"')) logWas(...a) }
+  const drillRun = async (fetch = routed([])) => {
+    now += 2 * HOUR
+    const out: string[] = []
+    const r = await leverMain(['--drill', '--directory', 'http://127.0.0.1:8787', '--key', keyPath], { fetch, log: (x: string) => out.push(x) }) as { code: number; totals?: Totals; id?: string; victim?: { address: string } }
+    return { r, out, said: out.filter((l) => /FAIL|passed|note/.test(l)).join(' | ') }
+  }
   env.DIR_PUBKEYS = JSON.stringify([{ kid: 'dir-1', pub: DIR_PUB }])
-  const fetched: string[] = [], out: string[] = []
-  const r = await leverMain(['--drill', '--directory', 'http://127.0.0.1:8787', '--key', keyPath], { fetch: routed(fetched), log: (s: string) => out.push(s) })
-  row('DR1', r.code === 0 && /drill passed/.test(out.join('\n')) && !out.some((l) => l.startsWith('FAIL')), `the drill on the in-process directory: open, plan, run, run again, close, record read back (${out.filter((l) => /FAIL|passed|note/.test(l)).join(' | ')})`)
-  row('DR1', (r.totals?.accounts ?? 0) >= 1 && (r.totals?.certificates ?? 0) >= 1 && (r.totals?.mails ?? 0) >= 1, `positive control: the drill acted (${JSON.stringify(r.totals)})`)
-  row('DR1', !out.join('\n').includes('@'), 'the drill prints no address')
+  try {
+    // DR4 (N6a): a directory that acts on nothing fails the drill. The lever's answers are rewritten to count nothing,
+    // which is what the drill saw on an empty directory, where every check was an equality and it passed.
+    const zeroed = (keep: (k: string) => boolean) => async (url: string, init?: RequestInit) => {
+      const res = await routed([])(url, init)
+      if (new URL(url).pathname !== LEVER_ROUTE) return res
+      const j = await res.json() as Record<string, unknown>
+      if (j.counts) j.counts = Object.fromEntries(Object.entries(j.counts as Record<string, number>).map(([k, v]) => [k, keep(k) ? v : 0]))
+      return new Response(JSON.stringify(j), { status: res.status, headers: res.headers })
+    }
+    const none = await drillRun(zeroed(() => false))
+    row('DR4', none.r.code === 1 && /drill FAILED/.test(none.out.join('\n')) && none.out.some((l) => l.startsWith('FAIL the run revoked a certificate')) && none.out.some((l) => l.startsWith('FAIL the run voided')),
+      `a run that counts nothing fails the drill (${none.said})`)
+    const noVoid = await drillRun(zeroed((k) => k !== 'voids'))
+    row('DR4', noVoid.r.code === 1 && noVoid.out.filter((l) => l.startsWith('FAIL')).length === 1 && noVoid.out.some((l) => l.startsWith('FAIL the run voided')),
+      `a run that voids nothing fails the drill on that check alone (${noVoid.said})`)
+    // the victim's read-back: a run that counted right but left the victim alone fails too (its lever answers pass through,
+    // its read-back is answered as if nothing had happened)
+    const untouched = await drillRun(async (url: string, init?: RequestInit) => {
+      const u = new URL(url)
+      if (u.pathname === STATUS_ROUTE && (init?.method ?? 'GET') === 'GET') return new Response(JSON.stringify({ state: 'ok', incidents: [] }), { status: 200 })
+      return routed([])(url, init)
+    })
+    row('DR4', untouched.r.code === 1 && untouched.out.some((l) => l.startsWith("FAIL the victim's browser is revoked")), `a victim whose browser still reads ok fails the drill (${untouched.said})`)
+    const noMail = await drillRun(async (url: string, init?: RequestInit) => {
+      const res = await routed([])(url, init)
+      if (new URL(url).pathname !== DEV_ROUTE) return res
+      const j = await res.json() as { mails?: { kind: string }[] }
+      // the setup mail still reaches the seed; the incident mail never arrives
+      return new Response(JSON.stringify({ mails: (j.mails ?? []).filter((m) => m.kind !== 'incident') }), { status: 200 })
+    })
+    row('DR4', noMail.r.code === 1 && noMail.out.some((l) => l.startsWith('FAIL the victim was mailed once')), `a victim with no incident mail fails the drill (${noMail.said})`)
+    // and a victim whose change still reads as waiting once the lever has run
+    let pulled = false
+    const stillWaiting = await drillRun(async (url: string, init?: RequestInit) => {
+      const u = new URL(url)
+      if (u.pathname === LEVER_ROUTE) pulled = true
+      const res = await routed([])(url, init)
+      if (!pulled || u.pathname !== '/v1/roster' || (init?.method ?? 'GET') !== 'GET') return res
+      const j = await res.json() as Record<string, unknown>
+      return new Response(JSON.stringify({ ...j, pending: { seq: 2 } }), { status: res.status, headers: res.headers })
+    })
+    row('DR4', stillWaiting.r.code === 1 && stillWaiting.out.filter((l) => l.startsWith('FAIL')).length === 1 && stillWaiting.out.some((l) => l.startsWith("FAIL the victim's waiting change is gone")),
+      `a victim whose change still waits fails the drill on that check alone (${stillWaiting.said})`)
+    const devOff = await (async () => { env.DEV = '0'; try { return await drillRun() } finally { env.DEV = '1' } })()
+    row('DR4', devOff.r.code === 1 && /seeding the victim failed/.test(devOff.out.join('\n')) && !devOff.out.some((l) => /^(ok|FAIL) +open/.test(l)),
+      `without DEV the drill cannot seed, fails, and opens no incident (${devOff.said})`)
+
+    // DR1 (N6c): dora, seeded by the rig with an ob=1 browser AND a waiting ob=1 change half an hour before the drill,
+    // is acted on by it: her own records say so, not a total that leftovers could fill
+    now += 2 * HOUR
+    const dora = 'dora@example.com', D1a = await Authn.make(), D1b = await Authn.make(), DB = await Browser.make()
+    // her setup link comes through the rig's mailer
+    env.MAILER = mailerWas; delete env.DEV
+    ok((await setup(dora, D1a)).status === 200, 'dora is set up')
+    ok((await enrol(dora, DB, D1a)).status === 200, 'dora has a browser for the drill')
+    const dc = await request(dora, D1a, { add: D1b, rq: H })
+    ok(dc.status === 202 && !!(await current(dora)).pending, `dora asks for a second passkey through bento/home, waiting (${err(dc)})`)
+    env.DEV = '1'; env.MAILER = 'log'
+    now += 30 * MIN
+    now -= 2 * HOUR // drillRun moves two hours on; dora's half hour stays inside its window
+    const fetched: string[] = []
+    const { r, out, said } = await drillRun(routed(fetched))
+    row('DR1', r.code === 0 && /drill passed/.test(out.join('\n')) && !out.some((l) => l.startsWith('FAIL')), `the drill on the in-process directory: seed, open, plan, run, run again, close, victim and record read back (${said})`)
+    row('DR1', (r.totals?.accounts ?? 0) === 2 && (r.totals?.certificates ?? 0) === 2 && (r.totals?.voids ?? 0) === 2 && (r.totals?.mails ?? 0) === 2,
+      `positive control: the drill acted on exactly its own victim and dora (${JSON.stringify(r.totals)})`)
+    const wd = (await storeOf(dora)).get(`wd:${DB.pub}`) as Record<string, unknown> | undefined
+    row('DR1', wd?.revokedBy === 'incident' && typeof r.id === 'string' && wd?.incident === r.id, `dora's browser is revoked by the drill's incident (${wd?.revokedBy}, ${wd?.incident} vs ${r.id})`)
+    const dp = await current(dora)
+    row('DR1', dp.pending === null && !(await storeOf(dora)).get('pend') && dp.head?.members.length === 1, `dora's waiting change is gone, and nothing was added (${JSON.stringify(dp.pending)})`)
+    const dv = (await logOf(dora)).filter((e) => e.k === 'void' && e.choice === 'incident' && e.incident === r.id)
+    row('DR1', dv.length === 1 && dv[0].pub === D1b.pub, `dora's log holds the void of her change by the drill's incident (${dv.length})`)
+    row('DR1', DEV_MAILS.filter((m) => m.to === dora && m.kind === 'incident').length === 1, 'dora was mailed once about the incident')
+    const vw = r.victim ? ((await storeOf(r.victim.address)).get('pend')) : 'none'
+    row('DR1', !!r.victim && vw === undefined, `the drill's own victim has no waiting change in its object (${JSON.stringify(vw)})`)
+    row('DR1', !out.join('\n').includes('@'), 'the drill prints no address')
+  } finally {
+    env.MAILER = mailerWas; delete env.DEV; console.log = logWas
+  }
 }
 rmSync(keyDir, { recursive: true, force: true })
 
