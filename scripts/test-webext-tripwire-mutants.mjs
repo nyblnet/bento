@@ -133,6 +133,10 @@ const MUTANTS = [
   { name: 'page requests taken for the worker\'s (C5)', row: 'c5-honest-worker', edits: [
     { file: W, from: '  if (d.tabId !== -1) return\n', to: '' },
     { file: W, from: "{ urls: [`${LIBRARY_ORIGIN}/*`], tabId: -1 }", to: "{ urls: [`${LIBRARY_ORIGIN}/*`] }" }] },
+  // /index.html answered as '/' (security ruling on #964, M1): without it an honest visit reads "unverified"
+  { name: 'the worker leaves /index.html to the network', row: 'stage3-index', build: [{ file: 'sw.ts', from: "  if (url.pathname === '/index.html') url.pathname = '/'\n", to: '' }] },
+  { name: 'unread bytes waived under any worker (C2), at /index.html', row: 'stage3-vary-text-index', file: J, from: "(!obs.viaWorker || obs.cspFrom === 'navigation') && !obs.bytes", to: '!obs.viaWorker && !obs.bytes' },
+  { name: 'bytes rule off, at /index.html', row: 'stage3-text-index', file: J, from: 'if (obs.bytes && obs.bytes.sha256 !== e.sha256)', to: 'if (false)' },
 ]
 
 // A run that never reached the browser (a local port taken between freePorts and listen) is
