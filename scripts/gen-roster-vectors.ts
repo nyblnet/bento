@@ -25,7 +25,7 @@ import { writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { b64uEnc, sha256b64u } from '../kernel/src/statements.ts'
-import { buildRos, buildVrs, buildWout, buildAdel, buildUserHandle, ROSTER_WEB_ORIGINS, NEW_ACCOUNT_MS, DELETE_WAIT_MS, USER_HANDLE_LABEL, type MemberKind } from '../kernel/src/roster.ts'
+import { buildRos, buildVrs, buildWout, buildAdel, buildRdel, buildUserHandle, accountNameOf, ROSTER_WEB_ORIGINS, NEW_ACCOUNT_MS, DELETE_WAIT_MS, USER_HANDLE_LABEL, type MemberKind } from '../kernel/src/roster.ts'
 import { signStatement } from '../kernel/src/statements.ts'
 import {
   ADDRESS, CONSENT_RP, DIRECTORY_KEYS, H, K, LABELS, N, NOW, OFF_CURVE, ORIGIN, RP, T, assertion, be32, big, chainOf, cosign, ecdsa, highS, link, minInt, nonce, pubOf, rawToDer, sha, te, unb,
@@ -379,6 +379,62 @@ const afterQ = { pk1: mem('pk', 'pk1', T), pk2q: mem('pk', 'pk2', T + 73 * H, tr
   reject('l/carries-voided', 'a revert carries the cited change only', await fromB3({ ...LS, voided: VOIDED }), 'proof')
 }
 
+// --- a void of a DELETION request (adel.) quarantines its asker too (security-ruling-962 D-A1) ---------------
+//
+// From L2 ({pk1, pk2, rk1}): pk2 asks to delete the account; the person picks "Cancel, and remove the passkey
+// that asked". The q link carries the adel. text, its signer and proof; its cause is sha256 of the adel. text,
+// and the adel. names this link's previous head. x and u follow exactly as for a member change.
+{
+  const VA = { members: [] as M[], signer: 'pk2', adel: {} }
+  const QA: Spec = { ...QS, voided: VA }
+  accept('ok/q-voided-adel', 'a void of a deletion request quarantines the member that asked, at once; it carries the adel. text',
+    await fromB3(QA), { seq: 3, ripenedAt: T + 160 * H, members: [afterQ.pk1, afterQ.pk2q, afterQ.rk1], createdAt: T, lastResetAt: null, sinceExact: true })
+  accept('ok/q-voided-adel-by-recovery-key', 'the voided deletion request was signed by the recovery key (a raw signature)',
+    await fromB3({ ...QA, members: [['pk', 'pk1'], ['pk', 'pk2'], ['rk', 'rk1', 'q']], voided: { ...VA, signer: 'rk1' } }),
+    { seq: 3, ripenedAt: T + 160 * H, members: [afterQ.pk1, mem('pk', 'pk2', T + 73 * H), mem('rk', 'rk1', T + 152 * H, true)], createdAt: T, lastResetAt: null, sinceExact: true })
+  accept('ok/q-voided-adel-then-x', 'the asker of the voided deletion is removed 72 h later', await fromB3(QA, XS),
+    { seq: 4, ripenedAt: T + 232 * H, members: [afterQ.pk1, afterQ.rk1], createdAt: T, lastResetAt: null, sinceExact: true })
+  accept('ok/q-voided-adel-then-u', 'or the removal is undone', await fromB3(QA, US),
+    { seq: 4, ripenedAt: T + 170 * H, members: [afterQ.pk1, mem('pk', 'pk2', T + 73 * H), afterQ.rk1], createdAt: T, lastResetAt: null, sinceExact: true })
+  const qx = await fromB3(QA, XS)
+  accept('ok/pinned-q-voided-adel-then-x', 'from a pin of the q link that voided a deletion: its evidence names pk2, so the removal follows',
+    qx.slice(3), { seq: 4, ripenedAt: T + 232 * H, members: [mem('pk', 'pk1', T + 160 * H), mem('rk', 'rk1', T + 160 * H)], createdAt: null, lastResetAt: null, sinceExact: false },
+    await sha256b64u(qx[3].ros))
+  reject('q/voided-adel-other-head', 'the voided deletion request named another head than this link\'s previous one',
+    await fromB3({ ...QA, voided: { ...VA, adel: { head: await sha256b64u('another head') } } }), 'voided-prev')
+  reject('q/voided-adel-other-address', 'the voided deletion request is for another account',
+    await fromB3({ ...QA, voided: { ...VA, address: 'bob@example.com' } }), 'voided-address')
+  reject('q/voided-adel-signer-not-member', 'the voided deletion request is signed by a key outside the previous roster',
+    await fromB3({ ...QA, voided: { ...VA, signer: 'pk4' } }), 'voided-signer')
+  reject('q/voided-adel-bad-proof', 'the voided deletion request carries an assertion by another key',
+    await fromB3({ ...QA, voided: { ...VA, assert: { by: 'pk3' } } }), 'voided-assertion-signature')
+  reject('q/voided-adel-assertion-over-ros', 'the assertion was made over a member change, not over the adel. text the link carries',
+    await fromB3({ ...QA, voided: { ...VA, assert: { over: 'ros.another' } } }), 'voided-assertion-challenge')
+  reject('q/voided-adel-grammar', 'the voided text is an adel. with an extra field: not a request at all',
+    await fromB3({ ...QA, voided: { ...VA, adel: { text: buildAdel({ address: ADDRESS, headHash: await sha256b64u('x'), dirNonce: nonce(53) }) + '.x' } } }), 'voided')
+  reject('q/voided-adel-wrong-target', 'pk2 asked to delete, but the link quarantines pk1',
+    await fromB3({ ...QA, members: [['pk', 'pk1', 'q'], ['pk', 'pk2'], ['rk', 'rk1']] }), 'target')
+  const a = await qChain({ members: [['pk', 'pk1'], ['pk', 'pk2', 'q']], req: T + 310 * H, rip: T + 310 * H, auth: 'q', voided: { ...VA, signer: 'pk2' } })
+  reject('q/voided-adel-quarantined-signer', 'the voided deletion request is by a member already quarantined', a.links, 'voided-quarantined', a.pin)
+  const b = await qChain({ members: [['pk', 'pk1', 'q'], ['pk', 'pk2', 'q']], req: T + 310 * H, rip: T + 310 * H, auth: 'q', voided: { ...VA, signer: 'pk1' } })
+  reject('q/voided-adel-last-live', 'quarantining the only unquarantined member for its deletion request (the void page hides Remove)', b.links, 'last-live', b.pin)
+  // from a pin, the adel.'s head is re-bound to the pinned link's previous head (its cause covers the text, not that binding)
+  const bad = await fromB3({ ...QA, voided: { ...VA, adel: { head: await sha256b64u('another head') } } }, XS)
+  {
+    // q(pk2's change), then q(rk1's DELETION request); pin the second; its voided.signer rewritten to pk2, and the removal takes pk2
+    const Q2A: Spec = { members: [['pk', 'pk1'], ['pk', 'pk2', 'q'], ['rk', 'rk1', 'q']], req: T + 165 * H, rip: T + 165 * H, auth: 'q', voided: { ...VA, signer: 'rk1' } }
+    const c = await fromB3(QS, Q2A, { members: [['pk', 'pk1'], ['rk', 'rk1', 'q']], req: T + 165 * H, rip: T + 237 * H, auth: 'x' })
+    reject('x/pinned-q-adel-signer-swapped', "the pinned q link voided rk1's deletion request; its voided.signer (not covered by the cause) rewritten to pk2 and the removal takes pk2: the proof does not verify, so no target",
+      [{ ...c[4], voided: { ...c[4].voided!, signer: pubOf('pk2') } }, c[5]], 'evidence', await sha256b64u(c[4].ros))
+    const okc = await fromB3(QS, Q2A, { members: [['pk', 'pk1'], ['pk', 'pk2', 'q']], req: T + 165 * H, rip: T + 237 * H, auth: 'x' })
+    accept('ok/pinned-q-adel-then-x-target', "from a pin of the q link that voided rk1's deletion request: the removal of rk1, the target its evidence names",
+      okc.slice(4), { seq: 5, ripenedAt: T + 237 * H, members: [mem('pk', 'pk1', T + 165 * H), mem('pk', 'pk2', T + 165 * H, true)], createdAt: null, lastResetAt: null, sinceExact: false },
+      await sha256b64u(okc[4].ros))
+  }
+  reject('x/pinned-q-adel-other-head', 'the pinned q link carries an adel. naming another head than the one it replaced: no target, so no removal',
+    bad.slice(3), 'evidence', await sha256b64u(bad[3].ros))
+}
+
 // --- security's rows from the review of the authority word (#925): C1′, the x/u target rule (C4), nits -------
 {
   const base = await upTo(3)
@@ -728,6 +784,76 @@ const signOuts: ActRow[] = [], deletions: ActRow[] = []
   await de({ name: 'adel/vrs-text', about: 'a vrs. text is not a deletion request', text: buildVrs({ address: ADDRESS, resetHash: HEAD, dirNonce: CD }), reason: 'grammar' })
 }
 
+// --- rdel.: the directory's record that an account was deleted, read by a peer against its pin (D-A4) -----------
+//
+// The account is L0..L4 (head L4, seq 4, ripened T+240h). pk1 asked to delete it at T+300h; it was carried out
+// 72 h later. A peer pinned either L4 itself (the record names the pin) or L2 (the record names a later head).
+// EVERY row's signature is valid under the key its kid names (dir-9: the unpinned key), so a reject row is refused
+// for its stated reason, never for a broken signature (the consentG lesson, security-ruling-962).
+type RecRow = { name: string; about: string; text: string; sig: string; address: string; pinnedLink: Link; now: number; signedBy: string
+  expect: 'accept' | 'reject'; reason?: string; atPin?: boolean }
+const deletionRecords: RecRow[] = []
+type AfterRow = { name: string; about: string; record: string; next: Link[] | null; pinned?: string; expect: 'accept' | 'reject'; reason?: string; state?: string; createdAt?: number }
+const afterDeletion: AfterRow[] = []
+{
+  const L = await chainOf(BASE.slice(0, 5))
+  const NOW_REC = T + 600 * H, REQ = T + 300 * H, DEL = REQ + DELETE_WAIT_MS
+  const NAME = b64uEnc((await accountNameOf(ADDRESS))!)
+  const HEAD = await sha256b64u(L[4].ros)
+  type RecSpec = { name: string; about: string; fields?: Partial<Record<'accountName' | 'lastHeadHash' | 'lastSeq' | 'requestedAt' | 'deletedAt' | 'by' | 'kid', string | number>>
+    text?: string; signedBy?: string; pin?: Link; address?: string; reason?: string; atPin?: boolean }
+  const rec = async (x: RecSpec) => {
+    const f = { accountName: NAME, lastHeadHash: HEAD, lastSeq: 4, requestedAt: REQ, deletedAt: DEL, by: 'm', kid: 'dir-1', ...x.fields }
+    const text = x.text ?? ['rdel', f.accountName, f.lastHeadHash, f.lastSeq, f.requestedAt, f.deletedAt, f.by, f.kid].join('.')
+    const signedBy = x.signedBy ?? (f.kid === 'dir-9' ? 'dirOther' : f.kid === 'dir-2' ? 'dir2' : 'dir1')
+    deletionRecords.push({ name: x.name, about: x.about, text, sig: await signStatement(K[signedBy].key, text), address: x.address ?? ADDRESS, pinnedLink: x.pin ?? L[4],
+      now: NOW_REC, signedBy, expect: x.reason ? 'reject' : 'accept', ...(x.reason ? { reason: x.reason } : { atPin: x.atPin ?? true }) })
+  }
+  await rec({ name: 'ok/rdel-at-pin', about: 'a member\'s deletion of the pinned head, 72 h after the request' })
+  if (buildRdel({ accountName: NAME, lastHeadHash: HEAD, lastSeq: 4, requestedAt: REQ, deletedAt: DEL, by: 'm', kid: 'dir-1' }) !== deletionRecords[0].text) throw new Error('buildRdel')
+  await rec({ name: 'ok/rdel-after-pin', about: 'the peer pinned L2; the record names L4, a later head of the same account, asked for after the pin', pin: L[2], atPin: false })
+  await rec({ name: 'ok/rdel-by-mailbox', about: 'the mailbox\'s emailed link: the same 72 h', fields: { by: 'e' } })
+  await rec({ name: 'ok/rdel-by-operator', about: 'the operator\'s removal: no wait', fields: { by: 'o', deletedAt: REQ } })
+  await rec({ name: 'ok/rdel-second-key', about: 'signed by the second pinned directory key', fields: { kid: 'dir-2' } })
+  await rec({ name: 'rdel/unpinned-kid', about: 'signed (validly) by a directory key the peer never pinned', fields: { kid: 'dir-9' }, reason: 'unknown-kid' })
+  await rec({ name: 'rdel/kid-names-other-key', about: 'the kid says dir-1, the signature is dir-2\'s', signedBy: 'dir2', reason: 'signature' })
+  await rec({ name: 'rdel/future', about: 'carried out after now (beyond the clock skew)', fields: { requestedAt: NOW_REC, deletedAt: NOW_REC + DELETE_WAIT_MS }, reason: 'not-yet-valid' })
+  await rec({ name: 'rdel/unripe', about: 'a member\'s deletion carried out one second before the 72 h', fields: { deletedAt: DEL - 1000 }, reason: 'unripe' })
+  await rec({ name: 'rdel/mailbox-unripe', about: 'the mailbox path waits too', fields: { by: 'e', deletedAt: REQ + H }, reason: 'unripe' })
+  await rec({ name: 'rdel/other-account', about: 'the record is for bob\'s storage name', fields: { accountName: b64uEnc((await accountNameOf('bob@example.com'))!) }, reason: 'address' })
+  await rec({ name: 'rdel/head-not-on-pin', about: 'a head at the pin\'s seq that is not the pin (a tampered or foreign last head)', fields: { lastHeadHash: await sha256b64u('another head') }, reason: 'unchained' })
+  await rec({ name: 'rdel/at-pin-seq-wrong', about: 'the record names the pin but another seq', fields: { lastSeq: 3 }, reason: 'unchained' })
+  await rec({ name: 'rdel/earlier-account', about: 'an EARLIER account at the address: deleted before the pinned one was set up, replayed against it', pin: L[4],
+    fields: { lastHeadHash: await sha256b64u('the old account head'), lastSeq: 9, requestedAt: T - 200 * H, deletedAt: T - 128 * H }, reason: 'unchained' })
+  await rec({ name: 'rdel/before-later-pin', about: 'the record names L4, but the peer pinned L4 and the request is dated before L4 ripened', fields: { requestedAt: T + 240 * H - 1000, deletedAt: T + 240 * H - 1000 + DELETE_WAIT_MS }, reason: 'unchained' })
+  {
+    const forged = await chainOf([...BASE.slice(0, 4), { ...BASE[4], ripBy: 'dirOther' }])
+    await rec({ name: 'rdel/pin-forged', about: 'the pinned link handed in carries a countersign no pinned key made', pin: forged[4], reason: 'pin' })
+    const bob = await chainOf([{ ...S0, address: 'bob@example.com' }])
+    await rec({ name: 'rdel/pin-other-account', about: 'the pinned link is bob\'s while the peer asks about alice', pin: bob[0], reason: 'pin' })
+  }
+  // grammar: each field absent (empty), an unknown word, the order of times, a retired tomb. text
+  for (const k of ['accountName', 'lastHeadHash', 'lastSeq', 'requestedAt', 'deletedAt', 'by', 'kid'] as const)
+    await rec({ name: `rdel/absent-${k}`, about: `the ${k} field is empty`, fields: { [k]: '' }, reason: 'grammar' })
+  await rec({ name: 'rdel/missing-field', about: 'seven fields, not eight', text: ['rdel', NAME, HEAD, 4, REQ, DEL, 'm'].join('.'), reason: 'grammar' })
+  await rec({ name: 'rdel/extra-field', about: 'an extra field', text: ['rdel', NAME, HEAD, 4, REQ, DEL, 'm', 'dir-1', 'x'].join('.'), reason: 'grammar' })
+  await rec({ name: 'rdel/by-unknown', about: 'the cause word is m, e or o', fields: { by: 'x' }, reason: 'grammar' })
+  await rec({ name: 'rdel/deleted-before-requested', about: 'carried out before it was asked for', fields: { by: 'o', deletedAt: REQ - 1000 }, reason: 'grammar' })
+  await rec({ name: 'rdel/name-not-a-hash', about: 'the storage name is 32 bytes, base64url', fields: { accountName: b64uEnc(te.encode(ADDRESS)) }, reason: 'grammar' })
+  await rec({ name: 'rdel/tomb-text', about: 'the retired binding era\'s tomb. is not a deletion record', text: `tomb.${HEAD}.4.${DEL}.holder.dir-1`, reason: 'grammar' })
+
+  // after the record: what the peer shows, given the chain the directory serves now at the address (seq 0 up)
+  const fresh = await chainOf([{ members: [['pk', 'pk4']], req: DEL + 24 * H, rip: DEL + 24 * H, dirNonce: nonce(70) }])
+  const fresh2 = await chainOf([{ members: [['pk', 'pk4']], req: DEL + 24 * H, rip: DEL + 24 * H, dirNonce: nonce(70) },
+    { members: [['pk', 'pk3'], ['pk', 'pk4']], req: DEL + 25 * H, rip: DEL + 97 * H, signer: 'pk4', dirNonce: nonce(71) }])
+  afterDeletion.push({ name: 'ok/after-nothing', about: 'no account at the address any more: deleted (no ✓)', record: 'ok/rdel-at-pin', next: null, expect: 'accept', state: 'deleted' })
+  afterDeletion.push({ name: 'ok/after-new-setup', about: 'a new setup after the deletion: a NEW account that CHANGED, never the pinned one continuing', record: 'ok/rdel-at-pin', next: fresh,
+    expect: 'accept', state: 'new-account', createdAt: DEL + 24 * H })
+  afterDeletion.push({ name: 'after/older-chain', about: 'a chain created before the deletion cannot be what came after it', record: 'ok/rdel-at-pin', next: L, expect: 'reject', reason: 'order' })
+  afterDeletion.push({ name: 'after/from-a-pin', about: 'the next chain must be read from its setup head: a chain read from a pin has no creation time', record: 'ok/rdel-at-pin',
+    next: fresh2.slice(1), pinned: await sha256b64u(fresh2[1].ros), expect: 'reject', reason: 'anchor' })
+}
+
 // --- the passkey user handle: SHA-256(label ‖ address in normal form) ‖ 16 random bytes -------------------------
 //
 // The sign-in host makes every passkey with this user.id, and a native host making a passkey for the same rp id
@@ -772,6 +898,11 @@ const out = {
   // for deleteWaitMs on the directory's clock, carried out only if not voided and the head is still the one it names
   deleteWaitMs: DELETE_WAIT_MS,
   deletions,
+  // rdel.: verifyDeletion(text, sig, { directoryKeys, address, pinnedLink, now }); an accepted row also says whether the record names the pin itself (atPin).
+  // signedBy is the label of the key that made sig (dir-9's is unpinnedDirectoryKey): every row's sig verifies under it
+  deletionRecords,
+  // then readAfterDeletion(record, next): next = verifyRosterChain(next, { ..., pinned }) when not null; state 'deleted' or 'new-account' (changed: true, createdAt)
+  afterDeletion,
   // the passkey user handle: label, then for each row SHA-256(label ‖ address) ‖ tail = handle (null: refuse to hash a non-normal address);
   // a returned handle routes by its first 32 bytes (accountHex) and is exactly 48 bytes
   userHandles,
@@ -784,7 +915,7 @@ const old = new Map<string, Row>((before?.rows ?? []).map((r: Row) => [r.name, r
 out.rows = rows.map((r) => { const o = old.get(r.name); return o && masked(o) === masked(r) ? o : r })
 const oldStops = new Map<string, StopRow>((before?.resetStops ?? []).map((r: StopRow) => [r.name, r]))
 out.resetStops = resetStops.map((r) => { const o = oldStops.get(r.name); return o && masked(o) === masked(r) ? o : r })
-for (const k of ['signOuts', 'deletions'] as const) {
+for (const k of ['signOuts', 'deletions', 'deletionRecords', 'afterDeletion'] as const) {
   const was = new Map<string, ActRow>((before?.[k] ?? []).map((r: ActRow) => [r.name, r]))
   out[k] = out[k].map((r) => { const o = was.get(r.name); return o && masked(o) === masked(r) ? o : r })
 }
