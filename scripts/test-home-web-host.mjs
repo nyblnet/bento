@@ -22,18 +22,24 @@
  *        a  two tabs, the same file: the second tab's open holds nothing of the
  *           first's; a store message naming the other tab's entry or docId is
  *           dropped.
- *        b  a child frame and a popup of the document post store and handshake
- *           messages to the library window: nothing answers, the store counts
- *           do not move. Control: the document's own port call is served.
+ *        b  a child frame of the document, the document itself and a popup it
+ *           opened each post store and handshake messages to the library window
+ *           FROM THEIR OWN WINDOW: nothing comes back from the library (no reply,
+ *           no reply on a forged port, no second bento-serve), the store counts
+ *           do not move. Controls: the document's own port call is served; the
+ *           library-answers-window mutant reddens each leg's row on its own.
  *        d  two files with the SAME docId and different bytes (S.1a), opened one
  *           after the other: the second open is a new, empty entry.
+ *        f  a popup left by an earlier document keeps the library window as its
+ *           opener's top and posts bento-frame-ready in a loop while the next deck
+ *           opens: the next deck still boots, and the popup is sent nothing.
  *   [EMB] a cross-origin https: page embedded by a genuine served document posts
  *        every store, save and identity-shaped request, plus a forged handshake,
  *        to parent and top. Controls: the messages are delivered (listeners in
  *        the document and the library see them), and the document's own port
  *        call is served. Pass: the embed receives nothing, and the store port's
- *        counters do not move while it posts. Plus a message missing its id, its
- *        op or its name on the port is dropped, never answered.
+ *        counters do not move while it posts. Plus a message missing its id, op,
+ *        name, t or v, or of another version, is dropped on the port, never answered.
  *   [D5] the service worker rows test-home-web-offline.mjs lacks:
  *        a  the served /sw.js answers Cache-Control: no-cache (read off the wire);
  *        b1 a message posted to the controlling worker adds nothing to any cache;
@@ -73,7 +79,18 @@ const MUTANTS = [
     name: 'library-answers-window', only: 't8,emb', why: 'the library answers store requests that arrive as window messages',
     src: { file: 'library.ts', from: '  addEventListener(\'message\', s.onReady)\n',
       to: "  addEventListener('message', s.onReady)\n  addEventListener('message', (ev) => { const d = ev.data; if (session === s && d && typeof d === 'object' && ev.source) (ev.source as Window).postMessage({ t: 'bento-store', v: 1, id: d.id ?? 0, ok: true }, '*') })\n" },
-    expect: ['[T8-b]', '[EMB-a] the embed received nothing'],
+    // one row per leg: each leg's posts reach the library from its own realm (the positive control)
+    expect: ['[T8-b] the child frame', '[T8-b] the document,', '[T8-b] a popup', '[EMB-a] the embed received nothing'],
+  },
+  {
+    name: 'one-handshake-dropped', only: 't8', why: 'the library keeps listening for bento-frame-ready after serving the frame (one handshake per frame, ever)',
+    src: { file: 'library.ts', from: "    removeEventListener('message', s.onReady) // one handshake per frame, ever\n", to: '' },
+    expect: ['[T8-b] the document,'],
+  },
+  {
+    name: 'handshake-origin-only', only: 't8', why: 'the library accepts the handshake by event.origin alone, not from the frame it made',
+    src: { file: 'library.ts', from: "ev.source !== frame.contentWindow || ev.origin !== 'null'", to: "ev.origin !== 'null'" },
+    expect: ['[T8-f] a popup left by an earlier document'],
   },
   {
     name: 'frame-relays-window', only: 'emb', why: 'the frame relays window messages onto the store port',
@@ -302,13 +319,21 @@ try {
     ok(own.length === 2 && own.every((a) => a.ok) && JSON.stringify(own[0].names) === '[]' && own[1].bytes === null, `[T8-a] two tabs, the same file: the second tab's open holds nothing of the first's (${JSON.stringify(own)})`)
     ok(t2r?.answered === 0 && c1.dropped - c0.dropped === 3, `[T8-a] a store message naming the other open's docId or an entry is dropped, never answered (${t2r?.answered} answered, dropped +${c1.dropped - c0.dropped})`)
 
-    // [T8-b] a child frame and a popup of the document, at the library window
+    // [T8-b] a child frame of the document, the document itself, and a popup it opens, each
+    // posting FROM ITS OWN REALM (the code runs in that window, so the library sees that window
+    // as event.source) at the library window. An answer is ANY message that arrives from the
+    // library window afterwards: a store reply, a reply on a forged port, or a second
+    // bento-serve (the library serves a frame once, ever). The library-answers-window mutant
+    // turns each leg red on its own row: the positive control that each leg's posts arrive.
     await t2.click('#close')
     const fb = await open(t2, 'y')
     const before = await counts(t2)
-    const probe = fb ? await fb.evaluate(async () => {
+    /** Runs in one leg's window: post every store and handshake shape at the library twice, then count what the library sent back. */
+    const LEG = async (via) => {
+      const lib = via === 'opener' ? (window.opener && window.opener.top) : window.top
+      if (!lib || lib === window) return { error: 'no library window from this realm' }
       const got = []
-      const listen = (w, who) => { try { w.addEventListener('message', (e) => got.push({ who, kind: e.data && (e.data.kind || e.data.t || e.data.op) })) } catch {} }
+      addEventListener('message', (e) => { if (e.source === lib) got.push(String((e.data && (e.data.kind || e.data.t || e.data.op)) ?? typeof e.data)) })
       const msgs = [
         { t: 'bento-store', v: 1, id: 1, op: 'list' },
         { t: 'bento-store', v: 1, id: 2, op: 'get', name: 'memberkey' },
@@ -316,46 +341,39 @@ try {
         { kind: 'save-declined' },
         { id: 'w1', op: 'identity.whoami' },
       ]
-      const fire = (src, target) => { for (const m of msgs) { try { target.postMessage(m, '*') } catch {} } const { port1, port2 } = new MessageChannel(); port1.onmessage = (e) => got.push({ who: 'forged-port', kind: JSON.stringify(e.data).slice(0, 40) }); try { target.postMessage({ kind: 'bento-frame-ready' }, '*', [port2]) } catch {} }
-      // a child frame of the document (same opaque origin, so this script can drive it)
-      const child = document.createElement('iframe')
-      document.body.appendChild(child)
-      const cw = child.contentWindow
-      listen(cw, 'child')
-      fire('child', cw.top); fire('child', cw.parent.parent)
-      // the document itself, at its parent
-      listen(window, 'doc')
-      fire('doc', window.parent); fire('doc', window.top)
-      await new Promise((r) => setTimeout(r, 800))
-      return { got, childTopIsParent: cw.top === window.parent }
-    }) : null
-    // a popup the document opens (from a click: a popup needs activation)
-    const popP = ctx.waitForEvent('page', { timeout: 8000 }).catch(() => null)
+      const fire = () => {
+        for (const m of msgs) { try { lib.postMessage(m, '*') } catch {} }
+        const { port1, port2 } = new MessageChannel()
+        port1.onmessage = (e) => got.push('forged-port ' + JSON.stringify(e.data).slice(0, 40))
+        try { lib.postMessage({ kind: 'bento-frame-ready' }, '*', [port2]) } catch {}
+      }
+      fire(); await new Promise((r) => setTimeout(r, 300)); fire()
+      await new Promise((r) => setTimeout(r, 900))
+      return { got, origin: self.origin }
+    }
+    // the child frame: an iframe the document adds, driven in its own realm
+    await fb?.evaluate(() => { const c = document.createElement('iframe'); c.name = 'rig-child'; document.body.appendChild(c) })
+    const childFrame = fb ? await until(async () => t2.frames().find((f) => f.name() === 'rig-child') ?? null, 5000) : null
+    const legChild = childFrame ? await childFrame.evaluate(LEG, 'top').catch((e) => ({ error: String(e.message).slice(0, 120) })) : null
+    const legDoc = fb ? await fb.evaluate(LEG, 'top').catch((e) => ({ error: String(e.message).slice(0, 120) })) : null
+    // the popup: opened from a click in the document (a popup needs activation), driven in its own realm
+    const popP = t2.context().waitForEvent('page', { timeout: 8000 }).catch(() => null)
     await fb?.evaluate(() => {
       const b = document.createElement('button')
       b.id = 'rig-pop'; b.textContent = 'pop'
       b.style.cssText = 'position:fixed;left:0;top:0;z-index:2147483647;width:80px;height:40px'
-      b.addEventListener('click', () => {
-        const w = window.open('about:blank')
-        window.__pop = w
-        if (w) {
-          window.__popGot = []
-          w.addEventListener('message', (e) => window.__popGot.push(e.data))
-          for (const target of [w.opener && w.opener.parent, w.opener && w.opener.top]) {
-            if (!target) continue
-            for (const m of [{ t: 'bento-store', v: 1, id: 3, op: 'list' }, { kind: 'bento-frame-ready' }]) { try { target.postMessage(m, '*') } catch {} }
-          }
-        }
-      })
+      b.addEventListener('click', () => { window.open('about:blank') })
       document.body.appendChild(b)
     })
     await fb?.click('#rig-pop', { timeout: 5000 }).catch(() => {})
     const pop = await popP
-    await sleep(1000)
-    const popGot = fb ? await fb.evaluate(() => (window.__popGot ?? []).length).catch(() => -1) : -1
+    const legPop = pop ? await pop.evaluate(LEG, 'opener').catch((e) => ({ error: String(e.message).slice(0, 120) })) : null
     const after = await counts(t2)
-    const answers = (probe?.got ?? []).filter((g) => g.who === 'forged-port' || g.kind === 'bento-store' || (typeof g.kind === 'number'))
-    ok(!!probe && answers.length === 0 && popGot === 0, `[T8-b] a child frame, the document and a popup posting store and handshake messages at the library window get no answer (${answers.length} to the frames, ${popGot} to the popup${pop ? '' : '; no popup opened in ' + ENGINE})`)
+    const legOk = (l) => !!l && !l.error && l.got.length === 0
+    const show = (l) => (l ? (l.error ? l.error : `${l.got.length} from the library${l.got.length ? ': ' + l.got.slice(0, 4).join(', ') : ''}, origin ${l.origin}`) : 'did not run')
+    ok(legOk(legChild), `[T8-b] the child frame, posting from its own window, gets nothing from the library (${show(legChild)})`)
+    ok(legOk(legDoc), `[T8-b] the document, posting from its own window, gets nothing more from the library: no reply and no second bento-serve (${show(legDoc)})`)
+    ok(legOk(legPop), `[T8-b] a popup the document opened, posting from its own window through its opener, gets nothing from the library (${show(legPop)})`)
     ok(total(after) === total(before), `[T8-b] the library's store counters did not move (${JSON.stringify(before)} -> ${JSON.stringify(after)})`)
     await pop?.close().catch(() => {})
     const ctl = fb ? await withStore(fb, async () => (await window.__bentoKernelStore.docStore().list()).length) : null
@@ -368,6 +386,43 @@ try {
     const readx2 = fx2 ? await withStore(fx2, STORE_READ) : null
     ok(!!readx2 && JSON.stringify(readx2.list) === '[]' && readx2.key === null, `[T8-d] a file with the same docId and other bytes, opened after the first closed, is a new empty entry (${JSON.stringify(readx2)})`)
     await ctx.close()
+
+    // [T8-f] a popup left behind by an earlier document keeps its opener's top (the library
+    // window) after that document is closed, and races the next open's handshake: it posts
+    // bento-frame-ready every 2 ms while the next deck is opened. The library takes the handshake
+    // only from the frame it made (event.source), so the next deck boots and the popup is sent
+    // nothing. Accepting by origin alone hands the stale popup the handshake.
+    {
+      const ctxf = await context()
+      const pf = await ctxf.newPage()
+      await pf.goto(A.library + '/')
+      const fy = await open(pf, 'y')
+      ok(!!fy, '[T8-f] precondition: a first deck boots')
+      const popF = ctxf.waitForEvent('page', { timeout: 8000 }).catch(() => null)
+      await fy?.evaluate(() => {
+        const b = document.createElement('button'); b.id = 'rig-pop2'; b.textContent = 'p'
+        b.style.cssText = 'position:fixed;left:0;top:0;z-index:2147483647;width:80px;height:40px'
+        b.addEventListener('click', () => { window.open('about:blank') })
+        document.body.appendChild(b)
+      })
+      await fy?.click('#rig-pop2', { timeout: 5000 }).catch(() => {})
+      const stale = await popF
+      const armed = stale ? await stale.evaluate(() => {
+        window.__lib = window.opener && window.opener.top
+        window.__got = []
+        addEventListener('message', (e) => { const d = e.data || {}; window.__got.push({ kind: d.kind, html: typeof d.html === 'string' ? d.html : '', ports: e.ports.length }) })
+        setInterval(() => { try { window.__lib.postMessage({ kind: 'bento-frame-ready' }, '*') } catch {} }, 2)
+        return { origin: self.origin, hasLib: !!window.__lib }
+      }).catch((e) => ({ error: String(e.message).slice(0, 120) })) : null
+      ok(armed?.hasLib === true, `[T8-f] precondition: the first document's popup holds the library window and posts the handshake in a loop (${JSON.stringify(armed)})`)
+      await pf.click('#close')
+      const fx = await open(pf, 'x1')
+      await sleep(1500)
+      const got = stale ? await stale.evaluate((c) => window.__got.map((g) => ({ kind: g.kind, canary: g.html.includes(c), ports: g.ports })), CANARY).catch(() => null) : null
+      ok(!!fx, `[T8-f] a popup left by an earlier document, posting bento-frame-ready in a loop, does not take the next open's handshake: the next deck boots in its own frame (${fx ? 'booted' : 'never booted'})`)
+      ok(Array.isArray(got) && got.length === 0, `[T8-f] the stale popup is sent nothing by the next open (${JSON.stringify(got)?.slice(0, 160)})`)
+      await ctxf.close()
+    }
   }
 
   // ===== [EMB] ================================================================================
@@ -425,15 +480,16 @@ try {
       port.postMessage({ t: 'bento-store', v: 1, id: 2, op: 'get' })                    // no name
       port.postMessage({ v: 1, id: 3, op: 'list' })                                     // no t
       port.postMessage({ t: 'bento-store', id: 4, op: 'list' })                         // no v
+      port.postMessage({ t: 'bento-store', v: 2, id: 6, op: 'list' })                   // another version
       await new Promise((r) => setTimeout(r, 600))
       const before = got.length
-      port.postMessage({ t: 'bento-store', v: 1, id: 5, op: 'list' })                   // control
+      port.postMessage({ t: 'bento-store', v: 1, id: 7, op: 'list' })                   // control
       await new Promise((r) => setTimeout(r, 600))
       return { answered: before, control: got.slice(before).map((a) => a.id) }
     }) : null
     const cb1 = await counts(page)
-    ok(absent?.answered === 0 && cb1.dropped - cb0.dropped === 5, `[EMB-b] a store message missing its id, op, name, t or v is dropped, never answered (${absent?.answered} answered, dropped +${cb1.dropped - cb0.dropped})`)
-    ok(JSON.stringify(absent?.control) === '[5]', `[EMB-b] control: the same port answers a whole message (${JSON.stringify(absent?.control)})`)
+    ok(absent?.answered === 0 && cb1.dropped - cb0.dropped === 6, `[EMB-b] a store message missing its id, op, name, t or v, or of another version (v 2), is dropped, never answered (${absent?.answered} answered, dropped +${cb1.dropped - cb0.dropped})`)
+    ok(JSON.stringify(absent?.control) === '[7]', `[EMB-b] control: the same port answers a whole message (${JSON.stringify(absent?.control)})`)
     await ctx.close()
   }
 
