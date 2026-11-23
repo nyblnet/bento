@@ -49,7 +49,9 @@ jobs:
           LABELLED: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
           PR: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
-        run: scripts/ci/zone-gate '^(home/web/|kernel/src/docstoreport\.ts$|scripts/test-home-web-(host|kill-drill)\.mjs$|scripts/lib/home-web-kill-host\.mjs$|scripts/fixtures/webext-embed/|\.github/workflows/ci-home-security\.yml$|scripts/ci/zone-gate$)'
+        # every input the rigs read: home/web and the kernel files it imports, the kernel client the
+        # host rig bundles into the frame, the frozen 1.2.10 fixtures, the browser guard
+        run: scripts/ci/zone-gate '^(home/web/|kernel/src/(docstoreport|docstore|gate1|webauthn|roster|statements|devices|address|display-table|identity)\.ts$|home/fixtures/gate1/real/|scripts/test-home-web-(host|kill-drill)\.mjs$|scripts/lib/(home-web-kill-host|browser-guard)\.mjs$|scripts/fixtures/webext-embed/|\.github/workflows/ci-home-security\.yml$|scripts/ci/(zone-gate|retry-once|bento-step)$)'
 
   home-web-host-security:
     needs: home-security-gate
