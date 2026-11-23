@@ -171,7 +171,15 @@ const syncOrigins = (() => {
   let x
   try { x = new URL(u) } catch { die(`--sync-origin is not a URL: ${u}`) }
   if (x.protocol !== 'wss:' && x.protocol !== 'ws:') die(`--sync-origin must be wss:// (or ws:// for a local relay), not ${u}`)
-  if (`${x.protocol}//${x.host}` !== u.replace(/\/$/, '') || !x.hostname) die(`--sync-origin must be an origin (scheme, host, port), not ${u}`)
+  if (x.username || x.password) die(`--sync-origin must not carry userinfo (user@), not ${u}`)
+  // The host goes into a CSP source expression verbatim, and a WHATWG URL host
+  // keeps '*', ';' and ',' (a wildcard source, or a new directive). Only a plain
+  // lowercase DNS name or an IPv4 / bracketed IPv6 literal is a relay host.
+  const dnsName = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$/
+  const ipv4 = /^(?:\d{1,3}\.){3}\d{1,3}$/
+  const ipv6 = /^\[[0-9a-f:.]+\]$/
+  if (!(dnsName.test(x.hostname) || ipv4.test(x.hostname) || ipv6.test(x.hostname))) die(`--sync-origin host must be a plain DNS name or an IP literal (no '*', ';', ','), not ${u}`)
+  if (`${x.protocol}//${x.host}`!== u.replace(/\/$/, '') || !x.hostname) die(`--sync-origin must be an origin (scheme, host, port), not ${u}`)
   const http = (x.protocol === 'wss:' ? 'https://' : 'http://') + x.host
   return { ws: `${x.protocol}//${x.host}`, http }
 })()

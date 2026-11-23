@@ -15423,7 +15423,13 @@ byte-identical with and without the flag; only the frame's header changes.
   carrying it; until then the flag only opens the door.
 - **A read-only open carries no session.** An unverifiable file shown in the
   newest release has `collab` removed before the splice: its credentials would
-  let code the file never chose write to the room.
+  let code the file never chose write to the room. The removal does not look
+  inside a `bento/enc` envelope, and needs not: an encrypted fork's format is
+  `bento/enc`, no app's, so it is never offered read-only (a rig row holds it).
+- **The relay host is checked, not just parsed.** A WHATWG URL host keeps `*`,
+  `;` and `,`, and `--sync-origin` lands in the frame's CSP verbatim: a
+  wildcard source, or a new directive. The build accepts only a lowercase DNS
+  name or an IPv4 / bracketed IPv6 literal, and refuses userinfo.
 - **Rig lesson:** Playwright's `routeWebSocket` replaces `WebSocket` inside the
   page, so a routed socket never meets the page's CSP (the plain build's frame
   "reached" the relay with routing on). Policy rows use real sockets against a

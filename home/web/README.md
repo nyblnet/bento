@@ -351,7 +351,9 @@ real sign-in host against it (`--chrome`, and `--mutants`: a mutant per rule).
 `--live` adds exactly one relay origin to the FRAME's `connect-src`, as `wss:`
 for the session and `https:` for its encrypted blobs (`--sync-origin` picks the
 relay; the default is the shipped `wss://sync.bento.page`, and a local `ws://`
-relay is accepted for development). Nothing else changes: the library's page
+relay is accepted for development; its host must be a plain DNS name or an IP
+literal, since it lands in a CSP source verbatim, so `*`, `;`, `,` and userinfo
+are refused). Nothing else changes: the library's page
 and headers, and the frame page's bytes, are identical to a build without it.
 The relay is fixed at build time. A document names its relay inside its own
 `collab.room`, so the frame's policy is what holds it to this one: any other

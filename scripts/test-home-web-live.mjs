@@ -20,7 +20,9 @@
  *   [L3]  the frame's connect-src is EXACTLY the release channel plus the relay
  *         (wss: and https:); the library page and its headers are byte-identical
  *         to the plain build's; the build refuses --live without --dev, a
- *         --sync-origin without --live, and anything but a ws(s) origin.
+ *         --sync-origin without --live, and anything but a ws(s) origin whose
+ *         host is a plain DNS name or an IP literal (no '*', ';', ',' and no
+ *         userinfo: the host lands in a CSP source verbatim).
  *   [L1]  the policy, with REAL sockets: a third build (LOCAL) names a local
  *         relay, ws://127.0.0.1:<port>, served by a raw WebSocket server here.
  *         A socket from the frame reaches it; the PLAIN build refuses the same
@@ -41,7 +43,9 @@
  *         document is not live here, which is the truth.
  *   [L5]  read-only in the newest release: the document is given NO session
  *         (its collab is removed before it is spliced), so no shell can join
- *         with credentials the file never chose that code for.
+ *         with credentials the file never chose that code for. An ENCRYPTED
+ *         fork (a bento/enc envelope over a live document) is never offered
+ *         read-only at all, which is why the removal need not look inside one.
  *   [L7]  teardown: closing the document closes a socket its frame holds.
  *   [L8]  two documents in two frames share no BroadcastChannel (opaque origins);
  *         control: two file:// pages do.
@@ -78,6 +82,14 @@ const MUTANTS = [
     src: { file: 'library.ts', from: 'const spliced = spliceDoc(shell.html, withoutSession(doc.text))', to: 'const spliced = spliceDoc(shell.html, doc.text)' } },
   { name: 'frame-kept-on-close', row: '[L7] closing the document closes the socket its frame held',
     src: { file: 'library.ts', from: '  session.frame.remove()\n', to: '  session.frame.hidden = true\n' } },
+  { name: 'sync-host-any', row: '[L3] the build refuses a wildcard sync host',
+    buildMjs: { from: 'if (!(dnsName.test(x.hostname) ||', to: 'if (false && !(dnsName.test(x.hostname) ||' } },
+  { name: 'sync-host-semicolon', row: '[L3] the build refuses a sync host carrying ";"',
+    buildMjs: { from: '(?:\\.[a-z0-9](?:[a-z0-9-]*', to: '(?:\\.[a-z0-9](?:[a-z0-9;-]*' } },
+  { name: 'sync-userinfo-kept', row: '[L3] the build refuses a sync origin with userinfo',
+    buildMjs: { from: 'if (x.username || x.password) die(', to: 'if (false) die(' } },
+  { name: 'enc-fork-offered', row: '[L5] an encrypted fork carrying a live session is never offered read-only',
+    src: { file: 'library.ts', from: "const app = 'text' in doc ? APPS.find((a) => a.format === doc.format) : undefined", to: "const app = 'text' in doc ? APPS.find((a) => a.format === doc.format || doc.format === 'bento/enc') : undefined" } },
   { name: 'live-in-production', row: '[L3] the build refuses --live in a production build',
     buildMjs: { from: "if (live) devOnly('--live", to: "if (false) devOnly('--live" } },
   { name: 'notice-claims-live', row: '[Lk] the library says it is not live here',
@@ -256,9 +268,15 @@ execFileSync(process.execPath, [BUILD, '--out', twin, '--library-origin', LIVE.l
     [[...dev, '--live', '--sync-origin', 'https://relay.example', '--check'], 'an https:// sync origin', /must be wss/],
     [[...dev, '--live', '--sync-origin', 'wss://relay.example/d', '--check'], 'a sync origin with a path', /must be an origin/],
     [[...dev, '--live', '--sync-origin', 'wss:', '--check'], 'a scheme-only sync origin', /not a URL|must be an origin/],
+    // the host lands in a CSP source verbatim: a wildcard, or a ';' / ',' that starts a new directive or policy
+    [[...dev, '--live', '--sync-origin', 'wss://*.example.com', '--check'], 'a wildcard sync host', /host must be a plain DNS name/],
+    [[...dev, '--live', '--sync-origin', 'wss://x.example;script-src', '--check'], 'a sync host carrying ";" (a new CSP directive)', /host must be a plain DNS name/],
+    [[...dev, '--live', '--sync-origin', 'wss://x,y', '--check'], 'a sync host carrying "," (a second CSP policy)', /host must be a plain DNS name/],
+    [[...dev, '--live', '--sync-origin', 'wss://user@x.example', '--check'], 'a sync origin with userinfo', /must not carry userinfo/],
   ]) { const e = refused(args); ok(why.test(e), `[L3] the build refuses ${what} (${e.slice(0, 90)})`) }
-  const good = spawnSync(process.execPath, [BUILD, '--out', path.join(work, 'y'), '--frame-origin', 'http://localhost:1', '--library-origin', 'http://127.0.0.1:2', '--dev', '--live', '--sync-origin', 'ws://127.0.0.1:8787', '--check'], { encoding: 'utf8', env: { ...process.env, BENTO_HOME_WEB_MUTANT: '' } })
-  ok(good.status === 0, `[L3] control: --live with a local ws:// relay passes the checks (${good.status})`)
+  const passes = (u) => spawnSync(process.execPath, [BUILD, '--out', path.join(work, 'y'), '--frame-origin', 'http://localhost:1', '--library-origin', 'http://127.0.0.1:2', '--dev', '--live', '--sync-origin', u, '--check'], { encoding: 'utf8', env: { ...process.env, BENTO_HOME_WEB_MUTANT: '' } }).status
+  for (const u of ['ws://127.0.0.1:8787', 'ws://[::1]:8787', 'wss://relay-2.example.com'])
+    ok(passes(u) === 0, `[L3] control: --live with ${u} passes the checks`)
 }
 
 // ---- browser ----------------------------------------------------------------------------
@@ -440,6 +458,33 @@ if (liveFile && want('[L5]')) {
   ok(!!inside && inside.room !== liveRoom && !(inside.room ?? '').includes(liveRoom ?? '\0'),
     `[L5] read-only: the document is given no live session (room in the frame: ${inside?.room?.slice(0, 50) ?? 'none'})`)
   ok(/it is not live here/.test(u.notice), '[L5] the notice still names it a live document shown as last saved')
+
+  // An ENCRYPTED fork: withoutSession cannot see inside a bento/enc envelope, and
+  // needs not, because the library never offers such a fork read-only (its
+  // format is bento/enc, no app's). A real envelope (kernel save.ts encryptBody:
+  // PBKDF2-SHA-256 + AES-GCM) over the live document, collab and all.
+  const plainFork = fs.readFileSync(F('liveFork'), 'utf8')
+  const fd = extractDoc(plainFork)
+  const subtle = webcrypto.subtle
+  const salt = webcrypto.getRandomValues(new Uint8Array(16)), iv = webcrypto.getRandomValues(new Uint8Array(12))
+  const pk = await subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 1000 },
+    await subtle.importKey('raw', new TextEncoder().encode('rig-password'), 'PBKDF2', false, ['deriveKey']),
+    { name: 'AES-GCM', length: 256 }, false, ['encrypt'])
+  const ct = new Uint8Array(await subtle.encrypt({ name: 'AES-GCM', iv }, pk, new TextEncoder().encode(fd.text)))
+  const b64 = (u8) => Buffer.from(u8).toString('base64')
+  const envelope = JSON.stringify({ format: 'bento/enc', v: 1, it: 1000, salt: b64(salt), iv: b64(iv), data: b64(ct) })
+  ok('text' in fd && (JSON.parse(fd.text).collab?.room ?? '').startsWith(RELAY + '/d/') && plainFork.split(fd.text).length === 2,
+    'control: the fork\'s plaintext document carries the live session the envelope will hide')
+  fs.writeFileSync(F('encFork'), plainFork.replace(fd.text, () => envelope))
+  const ed = extractDoc(fs.readFileSync(F('encFork'), 'utf8'))
+  ok(ed.format === 'bento/enc', `control: the encrypted fork's document block is a bento/enc envelope (${ed.format})`)
+  const page2 = await ctx.newPage()
+  await page2.goto(LIVE.library + '/')
+  const u2 = await open(page2, F('encFork'))
+  const offered = await page2.evaluate(() => { const e = document.getElementById('readonly'); return !!e && !e.hidden && e.offsetParent !== null })
+  ok(/will not run here/.test(u2?.problem ?? ''), `control: the encrypted fork is unverifiable, so its code never runs (${(u2?.problem ?? '').slice(0, 60)})`)
+  ok(!offered && (await ui(page2)).frames === 0,
+    '[L5] an encrypted fork carrying a live session is never offered read-only (so no envelope with a session reaches a frame)')
   await ctx.close()
 }
 
