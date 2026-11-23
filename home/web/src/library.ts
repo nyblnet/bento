@@ -227,15 +227,36 @@ function fail(text: string) {
   show('readonly', false)
 }
 
-/** A document that carries a live session is shown as it was last saved: this page joins no session (stage 1). */
-function liveNotice(html: string) {
-  const d = extractDoc(html)
-  if (!('text' in d)) return
+/**
+ * A document that carries a live session is shown as it was last saved. A
+ * --live build's frame policy lets the relay through (build.mjs), but every
+ * released shell so far keeps itself off the network inside an opaque,
+ * storage-less frame (kernel/src/net.ts sandboxed()), so none joins here yet.
+ * This line changes only with a release that does, and a way to tell.
+ */
+function liveNotice(docText: string | null) {
+  if (docText === null) return
   let collab: unknown
-  try { collab = (JSON.parse(d.text) as { collab?: unknown }).collab } catch { return }
+  try { collab = (JSON.parse(docText) as { collab?: unknown }).collab } catch { return }
   if (!collab || typeof collab !== 'object' || (collab as { on?: unknown }).on === false) return
   say('notice', 'This is a live document. You are seeing it as it was last saved: it is not live here.')
   show('notice', true)
+}
+
+/**
+ * A read-only open runs a document in a release that is not its own (the
+ * newest), and must never join the live session: its credentials would let it
+ * write there, from code the file did not choose. The
+ * session is removed from the document it is given; nothing else changes, and
+ * the shell, finding none, mints dormant ones that never connect.
+ */
+function withoutSession(text: string): string {
+  let d: Record<string, unknown>
+  try { d = JSON.parse(text) } catch { return text }
+  if (!d || typeof d !== 'object' || Array.isArray(d) || !('collab' in d)) return text
+  delete d.collab
+  // the data block's own escaping (kernel save.ts): no '<' in the JSON
+  return JSON.stringify(d).replace(/</g, '\\' + 'u003c')
 }
 
 const appName = (appId: string) => APPS.find((a) => a.appId === appId)?.name ?? appId
@@ -253,7 +274,8 @@ async function openFile(file: File) {
   say('status', '')
   if (v.verdict === 'genuine') {
     serve(html, v.plan, file.name, `${appName(v.appId)} ${v.release.version}`, { download: true })
-    liveNotice(html)
+    const d = extractDoc(html)
+    liveNotice('text' in d ? d.text : null)
     return
   }
   // Unverifiable: its code never runs. Offer the document read-only in the
@@ -272,12 +294,12 @@ async function openFile(file: File) {
     btn.disabled = false
     say('status', '')
     if ('refuse' in shell) return fail(`The newest release could not be verified, so nothing was opened (${shell.refuse}).`)
-    const spliced = spliceDoc(shell.html, doc.text)
+    const spliced = spliceDoc(shell.html, withoutSession(doc.text))
     const v2 = spliced === null ? null : await judge(spliced, histories.list())
     if (!spliced || !v2 || v2.verdict !== 'genuine') return fail('The document could not be placed in the newest release.')
     show('problem-box', false)
     serve(spliced, v2.plan, file.name, `Read-only in ${app.name} ${shell.version}`, { download: false })
-    liveNotice(spliced)
+    liveNotice(doc.text)
   }
 }
 

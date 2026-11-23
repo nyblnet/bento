@@ -31,6 +31,16 @@
 //                            release. It needs
 //   --directory-keys <json>  --dev only: the directory's public keys, {"<kid>":
 //                            "<raw P-256 point, base64url>"}, pinned into the build.
+//   --live                   --dev only: the frame's connect-src gains exactly one
+//                            relay origin (as wss: and https:, the second for its
+//                            encrypted blobs), so a document can join its live
+//                            session from the frame. The library's policy and
+//                            both pages' bytes are unchanged. Off by default:
+//                            whether a production build turns it on is the
+//                            maintainer's. NOTE: no released shell connects from
+//                            the frame yet (kernel/src/net.ts sandboxed()).
+//   --sync-origin <origin>   --live only: that relay (default wss://sync.bento.page,
+//                            the shipped one). wss:// or ws:// and an origin only.
 //
 // Every bundled history must verify against the key the build carries, be for
 // an app the library knows, and be the only one for its app; otherwise the
@@ -147,6 +157,26 @@ if (identity) {
   console.warn('home/web build: IDENTITY build (bento/id agent, --dev): development only until the directory keys are pinned for release')
 } else if (opt('directory-keys')) die('--directory-keys needs --identity')
 
+// --- live sessions: --dev only until the maintainer rules on a production default ----
+// A document names its relay in its own collab.room (kernel/src/sync/online.ts),
+// so the frame's connect-src is what holds it to this one: a document naming any
+// other host is refused by the browser. Nothing a document or the library posts
+// reaches this setting, and the kernel's localStorage override is unreachable
+// from the opaque frame.
+const live = args.includes('--live')
+if (live) devOnly('--live lets documents join their live session from the frame; a production default is the maintainer\'s ruling')
+const syncOrigins = (() => {
+  if (!live) { if (opt('sync-origin')) die('--sync-origin needs --live'); return null }
+  const u = opt('sync-origin', 'wss://sync.bento.page')
+  let x
+  try { x = new URL(u) } catch { die(`--sync-origin is not a URL: ${u}`) }
+  if (x.protocol !== 'wss:' && x.protocol !== 'ws:') die(`--sync-origin must be wss:// (or ws:// for a local relay), not ${u}`)
+  if (`${x.protocol}//${x.host}` !== u.replace(/\/$/, '') || !x.hostname) die(`--sync-origin must be an origin (scheme, host, port), not ${u}`)
+  const http = (x.protocol === 'wss:' ? 'https://' : 'http://') + x.host
+  return { ws: `${x.protocol}//${x.host}`, http }
+})()
+if (live) console.warn(`home/web build: LIVE build (--dev): documents join their live session through ${syncOrigins.ws}`)
+
 const esbuild = process.env.ESBUILD || path.join(root, 'slides/node_modules/.bin/esbuild')
 if (!fs.existsSync(esbuild)) die(`esbuild not found at ${esbuild} (npm ci --prefix slides, or set ESBUILD)`)
 
@@ -258,7 +288,9 @@ oneScript(frameHtml, frameJs, 'frame page')
 // one script is this page's own, and blob: for the verified blocks it writes.
 // Document resources follow the served-path policy every host uses
 // (kernel/src/gate1.ts hostPolicy), with connect-src narrowed to the release
-// channel: no relay, no directory in stage 1.
+// channel, plus, in a --live build, the one relay origin (wss: for the session,
+// https: for its encrypted blobs; CSP3's https-to-wss matching is not relied on).
+// Never the directory.
 const framePolicy = [
   'sandbox allow-scripts allow-popups allow-modals',
   "default-src 'none'",
@@ -267,7 +299,7 @@ const framePolicy = [
   'img-src data: blob: https:',
   'media-src data: blob: https:',
   'font-src data: blob:',
-  `connect-src ${releaseBase}`,
+  `connect-src ${releaseBase}${live ? ` ${syncOrigins.ws} ${syncOrigins.http}` : ''}`,
   'frame-src https:',
   "object-src 'none'",
   "base-uri 'none'",
@@ -309,6 +341,7 @@ fs.writeFileSync(path.join(out, 'frame/_headers'),
 const historyBytes = historyTexts.reduce((n, t) => n + Buffer.byteLength(JSON.stringify(t)), 0)
 const info = {
   libraryOrigin, frameOrigin, releaseBase, dev, testKey: !!keyFile, mutant: mutant ? [].concat(mutant).map((m) => m.from).join(' + ') : null, identity,
+  live, syncOrigin: live ? syncOrigins.ws : null,
   histories: histories.map((h) => path.relative(root, h)),
   bytes: {
     library: Buffer.byteLength(libHtml),

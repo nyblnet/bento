@@ -286,6 +286,7 @@ in it yet.
 | `scripts/test-home-web-out.mjs` | where a release may put the build: identity containment, the macOS firmlink row and its mutant |
 | `scripts/test-home-web-identity.mjs` | the bento/id agent with the real sign-in host and a CDP virtual authenticator; `--mutants`: one per rule |
 | `scripts/test-home-web-offline.mjs` | stage 3: the worker, offline, updates, the kill-switch drill, the status failing closed, install, the network allow-list; `--mutants` runs its own mutants |
+| `scripts/test-home-web-live.mjs` | the `--live` build: the frame's connect-src measured with real sockets, steering refused, the routing control, released shells staying off the relay in the frame, read-only opens carrying no session, teardown; `--mutants`: one per rule |
 | `scripts/test-shell-standalone.mjs` | every app shell points to bento.page and never depends on it |
 
 Chromium and the build rig run in the required `validate` check; WebKit,
@@ -345,6 +346,38 @@ bento/home's routes on the directory (CORS to `https://home.bento.page` alone):
 in order. `scripts/test-home-web-identity.mjs` drives the real library and the
 real sign-in host against it (`--chrome`, and `--mutants`: a mutant per rule).
 
+## Live sessions (`--dev --live`, development only)
+
+`--live` adds exactly one relay origin to the FRAME's `connect-src`, as `wss:`
+for the session and `https:` for its encrypted blobs (`--sync-origin` picks the
+relay; the default is the shipped `wss://sync.bento.page`, and a local `ws://`
+relay is accepted for development). Nothing else changes: the library's page
+and headers, and the frame page's bytes, are identical to a build without it.
+The relay is fixed at build time. A document names its relay inside its own
+`collab.room`, so the frame's policy is what holds it to this one: any other
+host is refused by the browser, and the kernel's `bento-sync-url` override is
+unreachable from the opaque frame.
+
+A production build refuses `--live`: whether bento/home ships with live
+sessions on is the maintainer's decision.
+
+**No released shell joins from the frame yet.** The kernel keeps a document
+off the network when it is framed, opaque and storage-less (`sandboxed()` in
+kernel/src/net.ts: that is how Microsoft Teams previews an attachment, and the
+rule is what keeps a Teams pane quiet). The library's frame is all three, so
+slides 1.2.10 opens a live document there and opens no socket; the rig
+measures exactly that, and the page still says the document is not live here.
+Joining from the frame needs a kernel change that tells a host frame from an
+embedded preview, and a release that carries it.
+
+A read-only open (an unverifiable file shown in the newest release) is given no
+session: its `collab` is removed before the splice, because its credentials
+would let code the file never chose write to the room.
+
+Each open is a new frame, and closing the document removes it, which closes any
+socket it held. Until stage 2 there is no persistent store, so a document that
+joins as an invited member mints a new member key on every open.
+
 ## Not in stage 1
 
 - Saving. ⌘S in the document is declined and the library says so. The
@@ -353,5 +386,6 @@ real sign-in host against it (`--chrome`, and `--mutants`: a mutant per rule).
 - A security floor in the release history (a signed mark on releases with known
   script bugs): stage 1 runs any release in the history, with no storage, keys
   or handles to reach.
-- The relay: a live document opens as it was last saved, and the page says it
-  is not live here.
+- The relay, in a production build: a live document opens as it was last
+  saved, and the page says it is not live here (see "Live sessions" above for
+  the development build).

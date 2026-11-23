@@ -15396,3 +15396,36 @@ replaced before this shipped.
   1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
+
+## 2026-11-23 — bento/home web: a `--live` build lets the frame reach one relay; no released shell uses it yet
+
+A live slides session inside bento/home needs the frame (the opaque, sandboxed
+page that runs a verified document) to reach the relay. `home/web/build.mjs`
+gains `--live` (development builds only) and `--sync-origin` (default the
+shipped `wss://sync.bento.page`). With it, the FRAME's `connect-src` gains that
+one origin twice, as `wss:` for the session and `https:` for the encrypted blob
+routes; CSP3's matching of `https:` sources against `wss:` is not relied on, so
+both are listed. The library's policy, the library page and the frame page are
+byte-identical with and without the flag; only the frame's header changes.
+
+- **The relay is fixed at build time.** A document names its relay in its own
+  `collab.room`; the frame's policy is what refuses any other host. Measured
+  with real sockets: another port or host is a `connect-src` violation with no
+  handshake at the server, in Chromium, Chrome and WebKit.
+- **A production build refuses `--live`.** Whether bento/home ships with live
+  sessions on is the maintainer's decision; nothing here presumes it.
+- **No released shell joins from the frame.** Kernel `sandboxed()` (framed AND
+  opaque AND storage-less, the Teams-preview rule) keeps a document off the
+  network there, and the library's frame is all three: slides 1.2.10 opens a
+  live document in a `--live` build and opens no socket. The library's notice
+  therefore still says the document is not live here. Joining needs a kernel
+  change that tells a host's frame from an embedded preview, and a release
+  carrying it; until then the flag only opens the door.
+- **A read-only open carries no session.** An unverifiable file shown in the
+  newest release has `collab` removed before the splice: its credentials would
+  let code the file never chose write to the room.
+- **Rig lesson:** Playwright's `routeWebSocket` replaces `WebSocket` inside the
+  page, so a routed socket never meets the page's CSP (the plain build's frame
+  "reached" the relay with routing on). Policy rows use real sockets against a
+  local server; routed rows (the real Room from the relay harness) only count
+  what a shell attempted.

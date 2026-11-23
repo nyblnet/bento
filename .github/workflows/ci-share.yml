@@ -50,7 +50,7 @@ jobs:
           LABELLED: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
           PR: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
-        run: scripts/ci/zone-gate '^(server/|scripts/test-(signin|directory)-|\.github/workflows/ci-share\.yml$|scripts/ci/zone-gate$)'
+        run: scripts/ci/zone-gate '^(server/|scripts/test-(signin|directory)-|scripts/test-home-web-live\.mjs$|scripts/lib/relay-(route\.mjs|harness\.ts)$|home/web/|\.github/workflows/ci-share\.yml$|scripts/ci/zone-gate$)'
 
   share-directory-mutants:
     needs: share-gate
@@ -201,3 +201,38 @@ jobs:
         run: node scripts/test-home-web-identity.mjs --chrome
       - name: bento/id agent mutants, each red on its row
         run: node scripts/test-home-web-identity.mjs --mutants
+
+  share-home-web-live:
+    needs: share-gate
+    if: needs.share-gate.outputs.run == 'true'
+    # bento/home's --live build (home/web/build.mjs): the frame's connect-src
+    # gains exactly one relay origin. Policy rows use REAL sockets against a
+    # local server (Playwright's routeWebSocket replaces WebSocket in the page,
+    # so a routed socket never meets the CSP); routed rows serve the REAL relay
+    # Room (scripts/lib/relay-route.mjs over scripts/lib/relay-harness.ts) and
+    # count what a shell attempts, with a positive control that routing sees a
+    # socket from the sandboxed frame. Headless shell, Google Chrome and WebKit,
+    # then Firefox, then every mutant red on its row.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install the bundler and the browser test runtime
+        run: |
+          npm ci --prefix slides
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium webkit firefox
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: live sessions in bento/home, Playwright headless shell
+        run: node scripts/test-home-web-live.mjs
+      - name: live sessions in bento/home, Google Chrome
+        run: node scripts/test-home-web-live.mjs --chrome
+      - name: live sessions in bento/home, WebKit
+        run: BENTO_BROWSER=webkit node scripts/test-home-web-live.mjs
+      - name: live sessions in bento/home, Firefox
+        run: BENTO_BROWSER=firefox node scripts/test-home-web-live.mjs
+      - name: live-session mutants, each red on its row
+        run: node scripts/test-home-web-live.mjs --mutants
