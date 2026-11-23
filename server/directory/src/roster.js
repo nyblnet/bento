@@ -76,8 +76,9 @@ import { b64uDec, b64uEnc, sha256b64u, signStatement } from '../../../kernel/src
 import { buildRip, buildRos, parseRos, ROSTER_WAIT_MS } from '../../../kernel/src/roster.ts'
 import { HOME_ORIGIN, PASSKEY, verifyMemberAssertion, verifyRegistration } from './passkey.js'
 import { BROWSER_OPS, browserOp } from './browsers.js'
-import { deliver, MAIL_TIMEOUT_MS, mailEnv, putMailStop } from './mail.js'
+import { deliver, MAIL_TIMEOUT_MS } from './mail.js'
 import { resetLink, setupLink, voidLink } from './links.js'
+import { mailEnv, putMailStop } from './mail.js' // the address's stop list (SES bounces and complaints)
 
 const MIN = 60_000, DAY = 86_400_000
 

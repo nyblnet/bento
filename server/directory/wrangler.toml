@@ -16,11 +16,6 @@ compatibility_date = "2026-07-01"
 routes = [{ pattern = "id.bento.page", custom_domain = true }]
 
 [vars]
-DIR_KID = "dir-1"
-# The public halves of the current and next directory keys, for /v1/keys
-# (diagnosis only: clients trust the list shipped in the signed release).
-DIR_PUBKEYS = "[]"
-MAILER = "ses"
 # Amazon SES (ses.js) and its bounce/complaint events (sns.js). Empty = every
 # send refused and every event answered 503: they fail closed until the
 # maintainer fills them in. The region is an AWS region name (e.g. eu-west-1).
@@ -28,6 +23,11 @@ SES_REGION = ""
 MAIL_FROM = ""
 SES_CONFIGURATION_SET = ""
 SES_EVENTS_TOPIC_ARN = ""
+DIR_KID = "dir-1"
+# The public halves of the current and next directory keys, for /v1/keys
+# (diagnosis only: clients trust the list shipped in the signed release).
+DIR_PUBKEYS = "[]"
+MAILER = "ses"
 # The published incident records, [{"id","from","to"}] (ms; "to" null while
 # open): every browser check-in and status answer carries them, and bento/home
 # drops a key made inside one. A list that does not read answers 500.

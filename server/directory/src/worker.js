@@ -24,13 +24,13 @@
 // mailed link to the sign-in host or a member's assertion.
 
 import { addressKey, normalize } from './address.js'
+import { SNS_PATH, snsRoute } from './sns.js'
 import { issueChallenge, openChallenge } from './challenge.js'
 import { Roster } from './roster.js'
 import { HOME_ORIGIN, SIGNIN_ORIGIN } from './passkey.js'
 import { STATUS_ROUTE } from './seam.js'
 import { browserOrigin, browserRoute, deviceStatus } from './browsers.js'
 import { PAGE_HEADERS, VOID_CSS, VOID_HTML, VOID_JS, VOID_PATHS } from './voidpage.js'
-import { SNS_PATH, snsRoute } from './sns.js'
 
 export const LIMITS = {
   // per IP per hour. challengeAddr (an enrolment's challenge), challengeAddrHome
