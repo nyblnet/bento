@@ -104,7 +104,7 @@ const MUTANTS = [
   // the cross-site limit, after the element sequence: an added element is still caught
   { name: 'the full report\'s sequence not judged, cross-site (N1)', row: 'xsite-markup', file: J, from: 'if (Array.isArray(obs.elements) && !sameList(obs.elements, e.elements)) f.push', to: 'if (false) f.push' },
   // R4: a Refresh response header
-  { name: 'a Refresh header passes (R4)', row: 'refresh-header', file: J, from: "return (obs.refresh ?? []).length ? [{ rule: 'refresh-header', got: obs.refresh }] : []", to: 'return []' },
+  { name: 'a Refresh header passes (R4)', row: 'refresh-header', file: J, from: "const out = (obs.refresh ?? []).length ? [{ rule: 'refresh-header', got: obs.refresh }] : []", to: 'const out = []' },
   { name: 'the Refresh header is not recorded (R4)', row: 'refresh-header', file: W, from: ".filter((h) => h.name.toLowerCase() === 'refresh')", to: '.filter(() => false)' },
   { name: 'the first early report does not read the Refresh header (R4)', row: 'refresh-header-now', file: W, from: 'if (matches(h, cut(noHash(sender.url)), Number(obs.timeOrigin) || 0) && Array.isArray(h.refresh) && h.refresh.length) refresh = h.refresh', to: '' },
   { name: 'a withdrawn release is quiet (R1)', row: 'withdrawn', file: J, from: 'if (list.releases[index].withdrawn) return', to: 'if (false) return' },
