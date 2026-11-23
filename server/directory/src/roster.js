@@ -78,8 +78,9 @@
 // a member for 72 hours at the request, on the stored chain run through the
 // kernel's verifier. A co-sign that does not count is refused, never ignored.
 // An immediate change still mails its notice first and acts only once the
-// mailer accepted it, under the hold. X5: on an account with a ripe ck, a
-// passkey added from a browser waits 7 days unless that ck co-signs it.
+// mailer accepted it, under the hold. X5: on an account with a ripe ck, any
+// key added from a browser (a passkey or a ck) waits 7 days unless that ck
+// co-signs it.
 //
 // NOT HERE YET (each a later change): a member stopping a reset with a
 // passkey (the route and its rules are here and refuse at the last step:
@@ -728,8 +729,9 @@ export class Roster {
       }
       const waived = !!cosign || (ckAsk && ripeAt(since, signer.pub, now))
       const how = ckAsk ? 'app' : hostClass(v.value.origin)
-      // X5: a passkey added from a browser, on an account with a ripe consent key, waits 7 days unless that key co-signs it
-      const x5 = !waived && change.op === 'add' && change.kind !== 'ck' && how === 'browser' &&
+      // X5: ANY key added from a browser (a passkey or a consent key), on an account with a ripe consent key,
+      // waits 7 days unless that key co-signs it; a consent key is the more dangerous add, never the shorter wait
+      const x5 = !waived && change.op === 'add' && how === 'browser' &&
         cur.members.some((m) => m.kind === 'ck' && !m.quarantined && ripeAt(since, m.pub, now))
       const p = {
         ros: a.ros, hash: await sha256b64u(a.ros), change, signer: signer.pub,
@@ -811,7 +813,7 @@ export class Roster {
       const sent = await notify(this.env, next.address, 'A change to your bento/id passkeys is waiting', [
         `At ${when(now)} a change to this bento/id account was asked for ${HOW[p.how]}: ${what}.`,
         `It was asked for by the ${noun(signer.pub)} ${by}${rec2 ? `, added ${when(rec2.addedAt)} ${HOW[rec2.how] ?? ''}`.trimEnd() : ''}.`,
-        x5 ? `It takes effect at ${when(p.ripensAt)}, 7 days after it was asked for: a passkey added from a browser waits that long on an account with an app key, unless the app approves it when it is asked for.`
+        x5 ? `It takes effect at ${when(p.ripensAt)}, 7 days after it was asked for: a key added from a browser waits that long on an account with an app key, unless the app approves it when it is asked for.`
           : `It takes effect at ${when(p.ripensAt)}, 72 hours after it was asked for.`,
         '',
         'The passkeys on this account once it takes effect:',

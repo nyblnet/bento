@@ -15428,13 +15428,21 @@ now takes the roster changes the kernel already defines for a consent key
   the hold, mails its "in effect" notice (the whole roster, the change in
   words, who asked, the co-signer, the host class) and acts only once the
   mailer accepted it. Mailer down: nothing changes.
-- **X5.** On an account with a ripe consent key, a passkey added from a
-  browser waits 7 days unless that key co-signs it. Without one (no consent
-  key at all, or none ripe yet) it waits 72 hours as before.
+- **X5.** On an account with a ripe consent key, ANY key added from a
+  browser waits 7 days unless that key co-signs it: a passkey, and a consent
+  key too. A consent key is the more dangerous add (once ripe it acts without
+  a wait), so a browser adding one never waits less than for a passkey; at
+  72 hours it could have joined, ripened and removed every other member
+  inside the 7 days X5 promises. Without a ripe consent key (none at all, or
+  none ripe yet) a browser's add waits 72 hours as before.
 - **Adding a consent key** needs the key's own `cns.` over the `ros.` that
-  adds it, so nobody can put a key they do not hold on an account. This is
-  the directory's rule; peers see only the chain. It is open for security to
-  confirm or replace.
+  adds it, whoever asks (a passkey or another consent key), so nobody can put
+  a key they do not hold on an account. This is the directory's rule (peers
+  see only the chain), confirmed by security's review.
+- **Ripeness survives a key rotation.** The directory reads its own chain
+  with every countersign key it has used: the current one, and the retired
+  ones listed in `DIR_RETIRED_KEYS`. Otherwise a rotation would leave every
+  account holding a consent key unable to change at all.
 - The log records the asker's kind, the co-signer and the wait taken on every
   change a consent key asked for or co-signed, or that X5 held (the incident
   lever's query). A passkey's plain request logs as before.

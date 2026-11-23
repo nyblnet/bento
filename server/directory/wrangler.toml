@@ -4,6 +4,7 @@
 #   npx wrangler secret put DIR_KEY_JWK   # the directory's ONLINE P-256 signing key (JWK, private), for the countersign once it lands — never the release key
 #   npx wrangler secret put CHALLENGE_KEY # 32+ random characters: seals the single-use roster challenges
 #   npx wrangler deploy
+# Rotating DIR_KEY_JWK: first add the old key's public point to DIR_RETIRED_KEYS ({"<old kid>": "<raw point b64u>"}, README).
 # Local:
 #   npx wrangler dev --var DEV:1 --var MAILER:log --var DIR_KID:dev-1 --var DIR_KEY_JWK:"$(cat dev-key.jwk)" --var CHALLENGE_KEY:"$(openssl rand -hex 32)"
 name = "bento-id-directory"

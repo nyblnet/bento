@@ -531,6 +531,28 @@ const MUTANTS: Mutant[] = [
   { name: 'SD4a: a consent key asks with no proof checked', file: 'roster.js', from: "const c = await ckConsent(signer, { cns: a.cns, sig: a.sig }, a.ros, next.dirNonce, 'roster', now)", to: 'const c = { ok: true }' },
   { name: 'SD4a: both kinds of proof at once', file: 'roster.js', from: "      if (ckAsk ? a.assertion !== undefined : a.signer !== undefined || a.cns !== undefined || a.sig !== undefined) return out(400, { error: 'proof' })\n", to: '' },
   { name: 'SD4a: ripeness not read from the chain (every member ripe)', file: 'consent.js', from: '  return new Map(v.value.members.map((m) => [m.pub, m.since]))', to: '  return new Map(v.value.members.map((m) => [m.pub, 0]))' },
+  // --- SD4a fix round (security 987): X5 for consent keys, the asker's newKey, the post-mail rechecks, the ck record, key rotation ---
+  { name: 'SD4a 987-M1 X5: a consent key added from a browser waits only 72 h', file: 'roster.js',
+    from: "const x5 = !waived && change.op === 'add' && how === 'browser' &&", to: "const x5 = !waived && change.op === 'add' && change.kind !== 'ck' && how === 'browser' &&" },
+  { name: 'SD4a 987-M2: the added key\'s proof checked against the asking consent key', file: 'roster.js',
+    from: 'const c = await ckConsent(added[0], a.newKey,', to: 'const c = await ckConsent(ckAsk ? signer : added[0], a.newKey,' },
+  { name: 'SD4a 987-M3: after the notice, neither the hold nor the head rechecked', file: 'roster.js',
+    from: "if (!sent || !mine || atHead.hash !== cur.hash || (await s.get('pend'))) {", to: "if (!sent || (await s.get('pend'))) {" },
+  { name: 'SD4a 987-M3: after the notice, the head not rechecked', file: 'roster.js',
+    from: "if (!sent || !mine || atHead.hash !== cur.hash || (await s.get('pend'))) {", to: "if (!sent || !mine || (await s.get('pend'))) {" },
+  { name: 'SD4a 987-M3: after the notice, the hold not rechecked', file: 'roster.js',
+    from: "if (!sent || !mine || atHead.hash !== cur.hash || (await s.get('pend'))) {", to: "if (!sent || atHead.hash !== cur.hash || (await s.get('pend'))) {" },
+  { name: 'SD4a 987-M3: after the notice, a change queued meanwhile not rechecked', file: 'roster.js',
+    from: "if (!sent || !mine || atHead.hash !== cur.hash || (await s.get('pend'))) {", to: "if (!sent || !mine || atHead.hash !== cur.hash) {" },
+  { name: 'SD4a 987-N1: a consent key added keeps no record', file: 'roster.js',
+    from: "await s.put(`pk:${p.change.pub}`, { kind: 'ck', addedAt: now, how: p.how })", to: 'void 0' },
+  { name: 'SD4a 987-M4: the retired directory keys ignored', file: 'consent.js', from: '      keys[kid] = v\n', to: '' },
+  { name: 'SD4a 987-M4: the retired keys may name the current kid', file: 'consent.js',
+    from: "      if (kid === env.DIR_KID) throw new Error('DIR_RETIRED_KEYS names the current DIR_KID')\n", to: '' },
+  { name: 'SD4a 987-M4: a retired key need not be a point', file: 'consent.js',
+    from: "      if (!point(v)) throw new Error(`DIR_RETIRED_KEYS ${kid} is not a P-256 point`)\n", to: '' },
+  { name: 'SD4a 987-M4: the retired keys need not be an object', file: 'consent.js',
+    from: "    if (!all || typeof all !== 'object' || Array.isArray(all)) throw new Error('DIR_RETIRED_KEYS is not a { kid: key } object')\n", to: '' },
 ]
 
 function tree(): string {

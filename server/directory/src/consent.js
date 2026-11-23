@@ -33,9 +33,11 @@ import { PASSKEY, passkeyOrigins } from './passkey.js'
 export const CONSENT_RP = 'bento'
 
 /**
- * X5: a passkey added from a browser, on an account that has a ripe consent
- * key, waits this long unless that key co-signs it (then it takes effect at
- * once). Without a ripe consent key it waits the usual 72 hours.
+ * X5: any key added from a browser (a passkey or a consent key), on an account
+ * that has a ripe consent key, waits this long unless that key co-signs it
+ * (then it takes effect at once). Without a ripe consent key it waits the
+ * usual 72 hours. A consent key is the MORE dangerous add (once ripe it acts
+ * without a wait), so it never waits less than a passkey would.
  */
 export const X5_WAIT_MS = 7 * 24 * 3_600_000
 
@@ -60,15 +62,39 @@ export function linkOut(l) {
 }
 
 let own = null
-/** The directory's own countersign key, as a peer pins it: { [DIR_KID]: raw P-256 point }. */
+/** A raw P-256 point (65 bytes, b64u) or null. */
+const point = (v) => { const b = typeof v === 'string' ? b64uDec(v) : null; return b && b.length === 65 && b[0] === 4 ? v : null }
+/**
+ * The directory's own countersign keys, as a peer pins them: { [kid]: raw P-256
+ * point }. The CURRENT key comes from DIR_KEY_JWK under DIR_KID; every key it
+ * countersigned with before a rotation comes from DIR_RETIRED_KEYS (optional,
+ * JSON, { kid: point }, the same points peers keep pinning). Without the
+ * retired keys a chain countersigned before a rotation would not verify here,
+ * so no ripeness could be read and every request on an account holding a
+ * consent key would fail, a passkey's removal of a stolen key included.
+ * DIR_RETIRED_KEYS never names DIR_KID, and holds nothing but points; anything
+ * else refuses (no request is decided on a key set nobody meant).
+ */
 function ownKeys(env) {
-  if (own && own.jwk === env.DIR_KEY_JWK && own.kid === env.DIR_KID) return own.keys
+  const retired = env.DIR_RETIRED_KEYS ?? ''
+  if (own && own.jwk === env.DIR_KEY_JWK && own.kid === env.DIR_KID && own.retired === retired) return own.keys
   const j = JSON.parse(env.DIR_KEY_JWK)
   const x = b64uDec(j.x), y = b64uDec(j.y)
   if (!x || !y || x.length !== 32 || y.length !== 32) throw new Error('DIR_KEY_JWK is not a P-256 key')
   const raw = new Uint8Array(65)
   raw[0] = 4; raw.set(x, 1); raw.set(y, 33)
-  own = { jwk: env.DIR_KEY_JWK, kid: env.DIR_KID, keys: { [env.DIR_KID]: b64uEnc(raw) } }
+  const keys = Object.create(null)
+  if (retired !== '') {
+    const all = JSON.parse(retired)
+    if (!all || typeof all !== 'object' || Array.isArray(all)) throw new Error('DIR_RETIRED_KEYS is not a { kid: key } object')
+    for (const [kid, v] of Object.entries(all)) {
+      if (kid === env.DIR_KID) throw new Error('DIR_RETIRED_KEYS names the current DIR_KID')
+      if (!point(v)) throw new Error(`DIR_RETIRED_KEYS ${kid} is not a P-256 point`)
+      keys[kid] = v
+    }
+  }
+  keys[env.DIR_KID] = b64uEnc(raw)
+  own = { jwk: env.DIR_KEY_JWK, kid: env.DIR_KID, retired, keys: Object.freeze(keys) }
   return own.keys
 }
 

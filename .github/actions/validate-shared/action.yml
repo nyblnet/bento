@@ -192,8 +192,10 @@ runs:
       # kernel's verifier) or a ripe key's co-sign skips the wait under m;
       # every co-sign that does not count is refused; quarantine, cooldown and
       # one change at a time hold for consent keys; an immediate change mails
-      # first under the hold; X5's 7-day wait; a consent key joins with its own
-      # proof; the served chain reproduces every skipped wait.
+      # first under the hold, and acts only if the hold, the head and the queue
+      # are unchanged after it; X5's 7-day wait for any key a browser adds; a
+      # consent key joins with its own proof; ripeness survives a rotation of
+      # the directory's key; the served chain reproduces every skipped wait.
       shell: bento-step {0}
       run: node scripts/test-directory-consent.ts
 

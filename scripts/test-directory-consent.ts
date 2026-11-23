@@ -28,9 +28,15 @@
 //   · an immediate change mails first and acts only once the mailer accepted
 //     the notice (mailer down: nothing changes); that mail lists the whole
 //     roster, the co-signer and the host class;
-//   · X5: on an account with a ripe ck, a passkey added from a browser waits 7
-//     days unless that ck co-signs; on an account with no ck at all, 72 h;
-//   · a ck joins only with its own cns. over the ros. that adds it;
+//   · X5: on an account with a ripe ck, ANY key added from a browser (a passkey
+//     or a ck) waits 7 days unless that ck co-signs; with no ck at all, 72 h;
+//   · a ck joins only with its own cns. over the ros. that adds it, whoever
+//     asks (a passkey or another ck);
+//   · an immediate change whose notice outlived the hold acts only if the hold
+//     is still its own, the head is the one it was built on, and nothing has
+//     queued meanwhile (each of the three has its own row);
+//   · ripeness survives a rotation of the directory's countersign key (the
+//     retired keys in DIR_RETIRED_KEYS), and a bad DIR_RETIRED_KEYS refuses;
 //   · the stored chain, as a peer receives it (consent.js linkOut, which the
 //     browser routes serve), verifies through the kernel and reproduces every
 //     skipped wait; the log names the asker's kind, the co-signer and the wait.
@@ -42,7 +48,7 @@ import { CONSENT_RP, X5_WAIT_MS, linkOut } from '../server/directory/src/consent
 import { fingerprint } from '../server/directory/src/roster.js'
 import { issueChallenge } from '../server/directory/src/challenge.js'
 import { b64uDec, b64uEnc, buildConsent, consentTranscript, sha256b64u, signStatement } from '../kernel/src/statements.ts'
-import { buildRos, parseRos, verifyRosterChain, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, ROSTER_WAIT_MS, type Member, type RosterLink } from '../kernel/src/roster.ts'
+import { buildRos, parseRip, parseRos, verifyRosterChain, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, ROSTER_WAIT_MS, type Member, type RosterLink } from '../kernel/src/roster.ts'
 import { AsyncLocalStorage } from 'node:async_hooks'
 
 let fails = 0, passes = 0
@@ -678,6 +684,216 @@ const HOUR_MS = 3_600_000
   ok(back.status === 400 && back.j.error === 'cosign-unripe', `the other way round the co-sign does not count, and is refused (${back.status} ${back.j.error})`)
   const ch = await chainOf(email)
   ok(ch.ok, `the chain verifies (${ch.ok ? '' : ch.reason})`)
+}
+
+// =====================================================================
+// 9. X5 covers a consent key added from a browser (security 987 M1)
+// =====================================================================
+{
+  const { email, A, C: [C0] } = await account(1)
+  now += ROSTER_WAIT_MS // C0 ripe
+  const K = await CK.make()
+  const r = await ask(email, { by: A, add: K })
+  ok(r.status === 202 && r.j.ripensAt === now + X5_WAIT_MS, `x5/browser-adds-ck-waits-7d: a browser adding a consent key on an account with a ripe one waits 7 days (${r.status} ${r.j.error ?? ''} ${(Number(r.j.ripensAt) - now) / HOUR_MS} h)`)
+  ok(!!lastMail(email)?.body.includes('a key added from a browser waits that long'), 'its waiting notice says any key added from a browser waits 7 days')
+  const lg = (await logOf(email)).at(-1)
+  ok(lg?.k === 'request' && lg?.wt === 'x5', `the log marks the X5 wait (${JSON.stringify(lg)})`)
+  now += ROSTER_WAIT_MS + 60_000
+  await current(email)
+  ok(!(await headOf(email))?.members.some((m) => m.pub === K.pub), 'x5/browser-adds-ck-waits-7d: at 72 h the consent key has NOT joined')
+  now = Number(r.j.ripensAt)
+  await current(email)
+  ok(!!(await headOf(email))?.members.some((m) => m.pub === K.pub), 'at 7 days it has')
+  const ch = await chainOf(email)
+  ok(ch.ok, `and the chain verifies (${ch.ok ? '' : ch.reason})`)
+}
+{
+  const { email, A, C: [C0] } = await account(1)
+  now += ROSTER_WAIT_MS
+  const r = await ask(email, { by: A, add: await CK.make(), coBy: C0 })
+  ok(r.status === 200 && r.j.inForce === true, `x5/cosign-ends-wait for a consent key: the ripe key co-signs, in force at once (${r.status} ${r.j.error ?? ''})`)
+}
+
+// =====================================================================
+// 10. a consent key adding a consent key: the ADDED key's proof (security 987 M2)
+// =====================================================================
+{
+  const { email, C: [C0] } = await account(1) // C0 a member, not yet ripe
+  const K = await CK.make()
+  const c = await current(email)
+  const ch = await challenge(email)
+  const ros = buildRos({ address: email, seq: (c.head?.seq ?? 0) + 1, prev: await sha256b64u(c.text), members: [...(c.head?.members ?? []), { kind: 'ck', pub: K.pub, quarantined: false }], dirNonce: ch, created: now })
+  const mine = await C0.cns(ros, ch)
+  const r = await api('POST', '/v1/roster/request', { email, ros, signer: C0.pub, ...mine, newKey: await C0.cns(ros, ch) })
+  ok(r.status === 400 && r.j.error === 'new-key-consent-signature', `ck-add/ck-asker-not-its-key: a consent key adding a key with its OWN signature as the new key's proof: refused (${r.status} ${r.j.error})`)
+  ok(!(await pendOf(email)), 'nothing queued')
+  const good = await ask(email, { by: C0, add: K })
+  ok(good.status === 202, `positive control: the same request with the added key's own proof queues (${good.status} ${good.j.error ?? ''})`)
+}
+
+// =====================================================================
+// 11. an immediate change whose notice outlived the hold (security 987 M3)
+// =====================================================================
+const HOLD_PAST = 36_000 // past the hold (the mailer's timeout + 5 s)
+{
+  // a second immediate change lands while the first's notice is out: the hold is no longer the first's, and the head moved
+  const { email, C: [C0, C1] } = await account(2)
+  now += ROSTER_WAIT_MS // both ripe
+  const X = await Authn.make(), Y = await Authn.make()
+  const h = hangNext()
+  const first = ask(email, { by: C0, add: X })
+  const got = await reached(h)
+  ok(got, 'the first immediate change\'s notice is out (the send hangs)')
+  now += HOLD_PAST
+  const second = got ? await ask(email, { by: C1, add: Y }) : { status: -1, j: {} as Record<string, unknown> }
+  ok(second.status === 200 && second.j.inForce === true, `after the hold ran out a second ripe key's change lands (${second.status} ${second.j.error ?? ''})`)
+  const seq = (await headOf(email))?.seq
+  h.release(true)
+  const f = await first
+  ok(f.status === 409 && f.j.error === 'superseded', `consent/post-mail-superseded: the first answers 409 superseded once its notice is accepted (${f.status} ${f.j.error ?? f.j.inForce})`)
+  const hd = await headOf(email)
+  ok(hd?.seq === seq && hd?.members.some((m) => m.pub === Y.pub) && !hd?.members.some((m) => m.pub === X.pub), 'the second change stands; the first never overwrote it')
+  const ch = await chainOf(email)
+  ok(ch.ok && ch.value.seq === seq, `the chain verifies (${ch.ok ? '' : ch.reason})`)
+}
+{
+  // only the hold changed hands: a second immediate change is mid-notice when the first's is accepted
+  const { email, C: [C0, C1] } = await account(2)
+  now += ROSTER_WAIT_MS
+  const X = await Authn.make(), Y = await Authn.make()
+  const h1 = hangNext()
+  const first = ask(email, { by: C0, add: X })
+  const got1 = await reached(h1)
+  now += HOLD_PAST
+  const h2 = hangNext()
+  const second = got1 ? ask(email, { by: C1, add: Y }) : Promise.resolve({ status: -1, j: {} as Record<string, unknown> })
+  const got2 = got1 && await reached(h2)
+  ok(got1 && got2, 'both immediate changes have their notices out')
+  const before = await headOf(email)
+  h1.release(true)
+  const f = await first
+  ok(f.status === 409 && f.j.error === 'superseded', `consent/post-mail-hold-not-mine: the hold is the second's now, so the first does not act (${f.status} ${f.j.error ?? f.j.inForce})`)
+  ok((await headOf(email))?.hash === before?.hash, 'and the head did not move under the second\'s hold')
+  if (got2) h2.release(true)
+  const sc = await second
+  ok(sc.status === 200 && (await headOf(email))?.members.some((m) => m.pub === Y.pub), `the second, holding the hold, lands (${sc.status} ${sc.j.error ?? ''})`)
+}
+{
+  // nothing changed hands but a change queued meanwhile (pend), on the same head
+  const { email, A, C: [C0] } = await account(1)
+  now += ROSTER_WAIT_MS
+  const X = await Authn.make(), Y = await Authn.make()
+  const h = hangNext()
+  const first = ask(email, { by: C0, add: X })
+  const got = await reached(h)
+  now += HOLD_PAST
+  const q = got ? await ask(email, { by: A, add: Y }) : { status: -1, j: {} as Record<string, unknown> }
+  ok(q.status === 202, `after the hold ran out a passkey's add queues (X5, 7 days) (${q.status} ${q.j.error ?? ''})`)
+  const before = await headOf(email)
+  h.release(true)
+  const f = await first
+  ok(f.status === 409 && f.j.error === 'superseded', `consent/post-mail-pending: a change queued meanwhile stops the first (${f.status} ${f.j.error ?? f.j.inForce})`)
+  ok((await headOf(email))?.hash === before?.hash && (await pendOf(email))?.ros === q.ros, 'the head is unchanged and the queued change still waits')
+  now = Number(q.j.ripensAt)
+  await current(email)
+  const ch = await chainOf(email)
+  ok(ch.ok && !!(await headOf(email))?.members.some((m) => m.pub === Y.pub), `the queued change ripens on a chain that verifies (${ch.ok ? '' : ch.reason})`)
+}
+{
+  // nothing changed hands, nothing waits, but the head moved: a queued change ripened while the notice was out
+  const { email, A, C: [C0] } = await account(1)
+  now += ROSTER_WAIT_MS
+  const X = await Authn.make(), Y = await Authn.make()
+  const h = hangNext()
+  const first = ask(email, { by: C0, add: X })
+  const got = await reached(h)
+  now += HOLD_PAST
+  const q = got ? await ask(email, { by: A, add: Y }) : { status: -1, j: {} as Record<string, unknown> }
+  now = Number(q.j.ripensAt ?? now)
+  await current(email) // it ripens
+  const moved = await headOf(email)
+  ok(q.status === 202 && !!moved?.members.some((m) => m.pub === Y.pub) && !(await pendOf(email)), `a queued change ripened while the first's notice was out (${q.status})`)
+  h.release(true)
+  const f = await first
+  ok(f.status === 409 && f.j.error === 'superseded', `consent/post-mail-head-moved: the first does not act on a head it was not built on (${f.status} ${f.j.error ?? f.j.inForce})`)
+  ok((await headOf(email))?.hash === moved?.hash, 'and the head stays the ripened one')
+  const ch = await chainOf(email)
+  ok(ch.ok, `the chain verifies (${ch.ok ? '' : ch.reason})`)
+}
+
+// =====================================================================
+// 12. a consent key's own record (security 987 N1)
+// =====================================================================
+{
+  const { email, A, C: [C0] } = await account(1)
+  const added = now // account() ends at the moment C0 took effect
+  const stamp = (t: number) => new Date(t).toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC')
+  const rec = (await store(email)).get(`pk:${C0.pub}`) as Record<string, unknown> | undefined
+  ok(rec?.kind === 'ck' && rec?.addedAt === added && rec?.how === 'browser', `ck-record: the consent key's record keeps when and how it joined (${JSON.stringify(rec)})`)
+  const r = await ask(email, { by: A, add: await Authn.make() })
+  const fp0 = await fingerprint(C0.pub)
+  const line = lastMail(email)?.body.split('\n').find((x) => x.includes(`app key ${fp0}`))
+  ok(r.status === 202 && line === `  - app key ${fp0}, added ${stamp(added)} from a browser`, `a later notice lists it with that time and host (${line})`)
+  const v = voidIn(lastMail(email))
+  await api('POST', '/v1/void', { email, token: v?.token, choice: 'cancel' })
+  now += ROSTER_WAIT_MS + 60_000 // past A's cooldown
+  const rm = await ask(email, { by: A, remove: C0.pub })
+  ok(rm.status === 202, `the passkey asks to remove the consent key (${rm.status} ${rm.j.error ?? ''})`)
+  now = Number(rm.j.ripensAt)
+  await current(email)
+  ok(!(await headOf(email))?.members.some((m) => m.pub === C0.pub) && !(await store(email)).has(`pk:${C0.pub}`), 'once removed, its record is gone')
+}
+
+// =====================================================================
+// 13. ripeness survives a rotation of the directory's key (security 987 M4)
+// =====================================================================
+{
+  const logged: string[] = []
+  const log0 = console.log
+  const quiet = async <T>(f: () => Promise<T>) => { console.log = (...a: unknown[]) => { logged.push(a.join(' ')) }; try { return await f() } finally { console.log = log0 } }
+  const saved = { jwk: env.DIR_KEY_JWK, kid: env.DIR_KID, retired: env.DIR_RETIRED_KEYS }
+  const kp2 = (await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])) as CryptoKeyPair
+  const PUB2 = b64uEnc(new Uint8Array(await crypto.subtle.exportKey('raw', kp2.publicKey)))
+  const { email, A, C: [C0] } = await account(1) // its links are countersigned by dir-1
+  const { email: plainEmail, A: P } = await account(0)
+  env.DIR_KEY_JWK = JSON.stringify(await crypto.subtle.exportKey('jwk', kp2.privateKey)); env.DIR_KID = 'dir-2'
+  delete env.DIR_RETIRED_KEYS
+  try {
+    const bare = await quiet(async () => ask(email, { by: A, add: await Authn.make() }))
+    ok(bare.status === 500 && logged.some((l) => l.includes('unknown-kid')), `rotation/without-retired-keys: a ck account cannot be read without dir-1 (positive control that ripeness is read) (${bare.status} ${logged.at(-1) ?? ''})`)
+    const plain = await ask(plainEmail, { by: P, add: await Authn.make() })
+    ok(plain.status === 202, `rotation: an account with no consent key is unaffected (${plain.status} ${plain.j.error ?? ''})`)
+
+    env.DIR_RETIRED_KEYS = JSON.stringify({ 'dir-1': DIR_PUB })
+    now += ROSTER_WAIT_MS // C0 ripe
+    const r = await ask(email, { by: C0, add: await Authn.make() })
+    ok(r.status === 200 && r.j.inForce === true, `rotation/retired-key-pinned: with dir-1 retired, the ripe consent key's change is in force at once (${r.status} ${r.j.error ?? ''})`)
+    const hd = await headOf(email)
+    const rp = parseRip(String((await linkAt(email, hd?.seq ?? -1))?.rip ?? ''))
+    const rp1 = parseRip(String((await linkAt(email, 1))?.rip ?? ''))
+    ok(rp.ok && rp.value.kid === 'dir-2' && rp1.ok && rp1.value.kid === 'dir-1', 'the chain now holds links countersigned by dir-1 and by dir-2')
+    const links = [...(await store(email)).entries()].filter(([k]) => k.startsWith('link:')).sort(([x], [y]) => (x < y ? -1 : 1)).map(([, v]) => linkOut(v) as RosterLink)
+    const peer = await verifyRosterChain(links, { ...CHAIN(), directoryKeys: { 'dir-1': DIR_PUB, 'dir-2': PUB2 } })
+    ok(peer.ok && peer.value.seq === hd?.seq, `a peer pinning both keys verifies the chain across the rotation (${peer.ok ? '' : peer.reason})`)
+    for (const [label, val, why] of [
+      ['names the current kid', JSON.stringify({ 'dir-1': DIR_PUB, 'dir-2': DIR_PUB }), 'names the current DIR_KID'],
+      ['holds something that is not a point', JSON.stringify({ 'dir-1': DIR_PUB, 'dir-0': 'x' }), 'is not a P-256 point'],
+      ['is an array', JSON.stringify([DIR_PUB]), 'is not a { kid: key } object'],
+    ] as const) {
+      env.DIR_RETIRED_KEYS = val
+      logged.length = 0
+      const b = await quiet(async () => ask(email, { by: C0, add: await Authn.make() }))
+      ok(b.status === 500 && logged.some((l) => l.includes(why)), `rotation/bad-retired-keys: DIR_RETIRED_KEYS that ${label} refuses (${b.status} ${logged.at(-1) ?? ''})`)
+    }
+    env.DIR_RETIRED_KEYS = JSON.stringify({ 'dir-1': DIR_PUB })
+    // ripeness read again across the mixed chain: A's passkey add waits X5's 7 days (C0 still ripe)
+    const x5 = await ask(email, { by: A, add: await Authn.make() })
+    ok(x5.status === 202 && x5.j.ripensAt === now + X5_WAIT_MS, `rotation: ripeness is read across both keys (X5 still holds) (${x5.status} ${(Number(x5.j.ripensAt) - now) / HOUR_MS} h)`)
+
+  } finally {
+    env.DIR_KEY_JWK = saved.jwk; env.DIR_KID = saved.kid
+    if (saved.retired === undefined) delete env.DIR_RETIRED_KEYS; else env.DIR_RETIRED_KEYS = saved.retired
+  }
 }
 
 console.log(`${passes} passed, ${fails} failed`)
