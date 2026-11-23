@@ -156,10 +156,12 @@ const section = (m) => { console.log(`\n=== ${m}`); guard?.section(m) }
 const note = (m) => { console.log(`  note  ${m}`); guard?.progress(m) }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 // Two instruments not every engine has, decided by engine and never by probing (a probe that
-// failed in Chromium would quietly turn its rows off): Playwright reports which responses a
-// service worker answered in Chromium and Firefox, not WebKit; and the Fullscreen API works in
-// headless Chromium, not in headless WebKit or Firefox. Chromium runs every row.
-const HAS = { swSource: ENGINE !== 'webkit', fullscreen: ENGINE === 'chromium' || ENGINE === 'chrome' }
+// failed in Chromium would quietly turn its rows off). D5-b3 needs Playwright to say which
+// responses a worker answered: WebKit never reports it, and in Firefox the rig's probe page is
+// never controlled by the worker (measured), so its positive control cannot pass there. The
+// Fullscreen API works in headless Chromium, not in headless WebKit or Firefox. Chromium runs
+// every row.
+const HAS = { swSource: ENGINE === 'chromium' || ENGINE === 'chrome', fullscreen: ENGINE === 'chromium' || ENGINE === 'chrome' }
 
 const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bento-home-host-'))
 process.on('exit', () => fs.rmSync(work, { recursive: true, force: true }))
@@ -266,11 +268,15 @@ try {
   if (runs('t8')) {
     section('[T8] isolation between opens of the library (stage 1)')
     const ctx = await context()
-    const t1 = await ctx.newPage(), t2 = await ctx.newPage()
-    await t1.goto(A.library + '/'); await t2.goto(A.library + '/')
+    const t1 = await ctx.newPage()
+    await t1.goto(A.library + '/')
     const f1 = await open(t1, 'x1')
     const set1 = f1 ? await withStore(f1, STORE_SET, 'tab-one-secret') : null
     const read1 = f1 ? await withStore(f1, STORE_READ) : null
+    // the second tab opens only now, with the first still holding its open (CI's Firefox never
+    // answered a call into a tab that had loaded in the background meanwhile)
+    const t2 = await ctx.newPage()
+    await t2.goto(A.library + '/')
     ok(set1 === 'stored' && read1?.key === 'tab-one-secret', `[T8-a] positive control: the first tab's document stores and reads back through its port (${set1}, ${JSON.stringify(read1)})`)
     const f2 = await open(t2, 'x1')
     // the second tab's document speaks on its port by hand: what it holds, then the first tab's docId and an entry
@@ -457,25 +463,31 @@ try {
     const list1 = await cacheList()
     ok(!!list0 && !!list1 && list0.length >= 1 && JSON.stringify(list1) === JSON.stringify(list0) && !list1.includes('/evil'), `[D5-b1] a message posted to the controlling worker adds nothing to any cache (${list0.length} -> ${list1.length} entries)`)
 
-    // [D5-b3] a same-origin path off the list is not the worker's to answer. Navigations (the
-    // library's own policy keeps its fetch() to the release channel): a listed path is the control.
+    // [D5-b3] a same-origin path off the list is not the worker's to answer. Subresource fetches
+    // (a navigation may be answered from the navigation preload, which an engine can report either
+    // way), from a probe page the rig plants on the library origin: off the list itself, so it has
+    // no policy of its own and the worker leaves it to the server, but it is in the worker's scope,
+    // so the worker sees its fetches. A listed path is the control.
+    fs.writeFileSync(path.join(A.out, 'library', 'rig-probe.html'), '<!doctype html><title>probe</title>')
+    const bySw = new Map()
+    const onResp = (r) => { try { const u = new URL(r.url()); if (u.origin === A.library) bySw.set(u.pathname, r.fromServiceWorker()) } catch {} }
+    ctx.on('response', onResp)
     const nav = await ctx.newPage()
+    await nav.goto(A.library + '/rig-probe.html').catch(() => {})
+    const navCtl = await until(() => nav.evaluate(() => !!navigator.serviceWorker.controller), 10000)
     const mark = A.seen.length
-    // the answers as the context saw them (Chrome refuses to load an empty 404 page, so goto may throw)
-    const answers = new Map()
-    ctx.on('response', (r) => { try { answers.set(new URL(r.url()).pathname, r) } catch {} })
-    await nav.goto(A.library + '/icon-192.png').catch(() => {})
-    await nav.goto(A.library + '/rig-unlisted-path').catch(() => {})
+    const st = await nav.evaluate(async () => ({
+      listed: await fetch('/icon-192.png', { cache: 'no-store' }).then((r) => r.status, () => 'error'),
+      unlisted: await fetch('/rig-unlisted-path', { cache: 'no-store' }).then((r) => r.status, () => 'error'),
+    })).catch((e) => ({ error: String(e.message) }))
     await sleep(300)
+    ctx.off('response', onResp)
     await nav.close()
-    const rl = answers.get('/icon-192.png'), ru = answers.get('/rig-unlisted-path')
     const atServer = A.seen.slice(mark).filter((r) => r.url === A.library + '/rig-unlisted-path').length
-    const listedBySw = rl?.fromServiceWorker() ?? null, unlistedBySw = ru?.fromServiceWorker() ?? null
-    if (!HAS.swSource) note(`[D5-b3] not measured in ${ENGINE}: Playwright's ${ENGINE} does not report which responses a service worker answered (Chromium and Firefox measure it)`)
-    else ok(listedBySw === true, `[D5-b3] positive control: a listed path navigated to is answered by the worker (fromServiceWorker ${listedBySw})`)
-    // (with navigation preload on, an engine may send the preload AND its own request when the
-    // worker does not answer: one or two at the server, never none)
-    if (HAS.swSource) ok(ru?.status() === 404 && atServer >= 1 && unlistedBySw === false, `[D5-b3] a same-origin path off the list goes to the server as if there were no worker (status ${ru?.status()}, ${atServer} at the server, from the worker ${unlistedBySw})`)
+    const listedBySw = bySw.get('/icon-192.png') ?? null, unlistedBySw = bySw.get('/rig-unlisted-path') ?? null
+    if (!HAS.swSource) note(`[D5-b3] not measured in ${ENGINE}: ${ENGINE === 'webkit' ? "Playwright's WebKit does not report which responses a service worker answered" : "the rig's probe page is not controlled by the worker here, so the positive control cannot pass"} (Chromium measures it)`)
+    else ok(!!navCtl && st.listed === 200 && listedBySw === true, `[D5-b3] positive control: on a page the worker controls, a listed path is answered by the worker (controlled ${!!navCtl}, ${st.listed}, fromServiceWorker ${listedBySw})`)
+    if (HAS.swSource) ok(st.unlisted === 404 && atServer === 1 && unlistedBySw === false, `[D5-b3] a same-origin path off the list goes to the server as if there were no worker (status ${st.unlisted}, ${atServer} at the server, from the worker ${unlistedBySw})`)
 
     // [D5-b2] open the canary deck, then look everywhere the library origin can keep anything
     await page.bringToFront()
