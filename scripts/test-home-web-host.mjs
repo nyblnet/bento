@@ -450,10 +450,14 @@ try {
     ok(libCsp.includes("require-trusted-types-for 'script'"), "[D5-g] the library's served policy still requires Trusted Types")
 
     const ctx = await context()
+    const first = await ctx.newPage()
+    await first.goto(A.library + '/')
+    const ready = await until(() => first.evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(); return !!r?.active && (await caches.keys()).length === 1 }), 20000)
+    // a controlled page: a NEW tab, not a reload (CI's Firefox never answered a call into a page
+    // reloaded under its worker)
     const page = await ctx.newPage()
     await page.goto(A.library + '/')
-    const ready = await until(() => page.evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(); return !!r?.active && (await caches.keys()).length === 1 }), 20000)
-    await page.reload({ waitUntil: 'load' })
+    await first.close()
     const controlled = await until(() => page.evaluate(() => !!navigator.serviceWorker.controller), 10000)
     ok(!!ready && !!controlled, `[D5] precondition: the worker is installed, holds its cache, and controls the page (${!!ready}, ${!!controlled})`)
     // the cache names and whether any cache answers /evil (CI's Firefox never returned from a walk of
