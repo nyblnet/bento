@@ -123,6 +123,11 @@ const MUTANTS = [
   { name: 'the worker without navigation preload (C1): text + no-store', row: 'stage3-nostore-text', build: NO_PRELOAD },
   { name: 'bytes rule off, worker in control', row: 'stage3-text', file: J, from: 'if (obs.bytes && obs.bytes.sha256 !== e.sha256)', to: 'if (false)' },
   { name: 'the worker without navigation preload (C1): cross-site + no-store', row: 'stage3-cross-site-no-store', build: NO_PRELOAD },
+  // /index.html answered as '/' (security ruling on #964, M1): without it an honest visit reads "unverified"
+  // (the mutant that drops the worker's /index.html line rides with C5, where it is red: on this tree alone the
+  // false warning did not reproduce, 8 of 8 quiet without the line; with C5's tabId -1 listener it is 3 in 8)
+  { name: 'unread bytes waived under any worker (C2), at /index.html', row: 'stage3-vary-text-index', file: J, from: "(!obs.viaWorker || obs.cspFrom === 'navigation') && !obs.bytes", to: '!obs.viaWorker && !obs.bytes' },
+  { name: 'bytes rule off, at /index.html', row: 'stage3-text-index', file: J, from: 'if (obs.bytes && obs.bytes.sha256 !== e.sha256)', to: 'if (false)' },
 ]
 
 // A run that never reached the browser (a local port taken between freePorts and listen) is

@@ -1076,7 +1076,7 @@ if (row('sw-element')) {
 // hostile response, which must reach the page (the positive control in each row) and be a mismatch.
 // The C1 build mutant (TW_BUILD_MUTANT: the worker without navigation preload) turns the rows
 // whose response the HTTP cache keeps no copy of, and the cross-site one, green-for-the-attacker.
-const STAGE3 = ['stage3-honest', 'stage3-csp', 'stage3-csp-nostore', 'stage3-vary-text', 'stage3-nostore-text', 'stage3-text', 'stage3-cross-site-no-store']
+const STAGE3 = ['stage3-honest', 'stage3-index', 'stage3-csp', 'stage3-csp-nostore', 'stage3-vary-text', 'stage3-nostore-text', 'stage3-text', 'stage3-vary-text-index', 'stage3-text-index', 'stage3-cross-site-no-store']
 /** Prime a returning visitor; returns the controlling worker's script URL, or null. */
 async function prime() {
   await fresh()
@@ -1104,6 +1104,9 @@ const ROWS3 = [
   ['stage3-vary-text', 'one byte of text, no-cache plus Vary: * (the HTTP cache keeps no copy)', () => textByte({ vary: '*' }), showsFilf, (r) => r.split(',').includes('bytes-unread')],
   ['stage3-nostore-text', 'one byte of text, Cache-Control: no-store', () => textByte({ 'cache-control': 'no-store' }), showsFilf, (r) => r.split(',').includes('cache-control')],
   ['stage3-text', 'one byte of text, the headers as shipped', () => textByte(), showsFilf, (r) => r === 'bytes'],
+  // the same two at /index.html, the page's other name, which the worker answers as '/' (security ruling on #964, M1)
+  ['stage3-vary-text-index', 'at /index.html, one byte of text, no-cache plus Vary: *', () => textByte({ vary: '*' }), showsFilf, (r) => r.split(',').includes('bytes-unread'), '/index.html'],
+  ['stage3-text-index', 'at /index.html, one byte of text, the headers as shipped', () => textByte(), showsFilf, (r) => r === 'bytes', '/index.html'],
 ]
 if (STAGE3.some(row)) {
   if (row('stage3-honest')) {
@@ -1116,21 +1119,41 @@ if (STAGE3.some(row)) {
     ok(v.lib?.verdict === 'ok' && v.lib.page.viaWorker === true && v.lib.page.cspFrom === 'navigation', `ok, answered by the worker, and the CSP came from the navigation webRequest saw (${v.lib?.verdict} ${rules(v.lib)} viaWorker ${v.lib?.page.viaWorker} cspFrom ${v.lib?.page.cspFrom})`)
     ok(v.lib?.observed.bytes && (v.lib.page.workers ?? []).length === 1, `bytes read, one worker read (${JSON.stringify(v.lib?.observed)}, ${v.lib?.page.workers?.length} worker(s))`)
     ok(v.frame?.verdict === 'ok', `the frame is unaffected (${v.frame?.verdict})`)
-    // a second visit and a forced update check: still nothing to say. To `/`, not /index.html: MEASURED, a
-    // preload navigation to a path the HTTP cache has never held is sometimes not stored there (2 to 3 in 8
-    // after update(); seen once in CI), so its bytes read as unread, an "unverified" warning on an honest
-    // page. That is the C2 rule's open question for security, stated in the PR, not this row's subject.
+    // a second visit and a forced update check: still nothing to say (/index.html is stage3-index's)
     await page.evaluate(() => navigator.serviceWorker.ready.then((r) => r.update())).catch(() => {})
     const v2 = await visit(page, `${LIB}/`)
     ok(v2.lib?.verdict === 'ok' && v2.lib.page.viaWorker === true, `a second visit after an update check: ok (${v2.lib?.verdict} ${rules(v2.lib)} errors ${JSON.stringify(v2.lib?.page?.errors)})`)
   }
-  for (const [name, what, make, served, expect] of ROWS3) {
+  if (row('stage3-index')) {
+    // An honest returning visitor opening /index.html, the library page by its other name, eight times,
+    // each a fresh returning visitor that has never fetched /index.html. Before the worker answered
+    // /index.html as '/', its navigation fell through the worker and the preload response was often not
+    // kept in the HTTP cache: bytes unread, a loud "unverified" tab on an honest page (security measured
+    // 4 in 8). The build mutant that drops that line must turn this row red.
+    section('stage3-index: an honest returning visitor opens /index.html, eight times  (security ruling on #964, M1: no false "unverified")')
+    const tally = {}
+    let read = 0, via = 0
+    for (let i = 0; i < 8; i++) {
+      const ctl = await prime()
+      if (ctl !== `${LIB}/sw.js`) { tally[`no worker (${ctl})`] = (tally[`no worker (${ctl})`] ?? 0) + 1; continue }
+      await fresh({ keepWorkers: true })
+      const v = await visit(page, `${LIB}/index.html`)
+      const k = `${v.lib?.verdict}[${rules(v.lib)}]${(v.lib?.warned ?? []).includes('tab') ? '+tab' : ''}`
+      tally[k] = (tally[k] ?? 0) + 1
+      if (v.lib?.observed?.bytes) read++
+      if (v.lib?.page?.viaWorker === true) via++
+    }
+    ok(via === 8, `every visit was a page the build's own worker controls, so the row ran what it names (${via}/8)`)
+    ok(tally['ok[]'] === 8, `eight honest visits, eight quiet ok verdicts, no tab (${JSON.stringify(tally)})`)
+    ok(read === 8, `the page's bytes were read on every visit (${read}/8)`)
+  }
+  for (const [name, what, make, served, expect, at = '/'] of ROWS3) {
     if (!row(name)) continue
     section(`${name}: ${what}, the build's own worker in control  (security ruling #954)`)
     const ctl = await prime()
     ok(ctl === `${LIB}/sw.js`, `the library's own worker is active before the row (${ctl})`)
     await fresh({ keepWorkers: true, lib: both(make()) })
-    const v = await visit(page, `${LIB}/`)
+    const v = await visit(page, `${LIB}${at}`)
     const s = await served(page)
     ok(s === true && v.lib?.page.viaWorker === true, `the hostile response reached the page, through the worker (served ${s}, viaWorker ${v.lib?.page.viaWorker}, cspFrom ${v.lib?.page.cspFrom})`)
     ok(v.lib?.verdict === 'mismatch' && expect(rules(v.lib)) && (v.lib.warned ?? []).includes('tab'), `a loud mismatch (${v.lib?.verdict} [${rules(v.lib)}] ${v.lib?.warned})`)
