@@ -313,8 +313,11 @@ browser.on('disconnected', () => { if (!closing) crashed = true })
 const recorded = []
 const sockets = []
 // BENTO_HW3_PERSISTENT=1: every context is a profile on disk (launchPersistentContext, a fresh
-// directory each), as a real browser's is, instead of Playwright's ephemeral context. The control
-// for whether an engine's CacheStorage survives in one and not the other (WebKit's "0 cache(s)").
+// directory each), as a real browser's is, instead of Playwright's ephemeral context. An
+// instrument, not a CI mode. Measured (Playwright 1.61.1, macOS and ubuntu): Firefox and Chromium
+// pass in it; Playwright's WebKit keeps the cache NAMES in a persistent profile but stores no
+// entries at all, even for a page's own cache.put of a constructed Response, so in WebKit this
+// mode cannot stand in for a real Safari profile and the [sw] cache rows fail by design.
 const PERSISTENT = process.env.BENTO_HW3_PERSISTENT === '1'
 const profiles = []
 if (PERSISTENT) note(`${ENGINE}: every context is a persistent profile on disk (BENTO_HW3_PERSISTENT=1)`)
@@ -512,9 +515,9 @@ try {
     const keys = await page.evaluate(async (n) => (await (await caches.open(n)).keys()).map((r) => r.url).sort(), X.info.offline.cache)
     ok(after.caches.length === 1 && JSON.stringify(keys) === JSON.stringify(X.info.offline.precache.map((p) => O.library + p.path).sort()),
       // the registration and status say who lost a cache: the library's own clean-up runs only on a
-      // withdrawn or refused status, and removes the worker too; an engine that loses its storage
-      // under an unchanged status loses the registration with it (WebKit, 1 in 30 CI runs, beside
-      // "WebLoaderStrategy::internallyFailedLoadTimerFired" in its log)
+      // withdrawn or refused status. Playwright's WebKit on CI loses both under an unchanged status
+      // (2 of 60 runs, each after a GLib/libsoup CRITICAL in a browser child process that no
+      // passing run logged): its ephemeral context keeps them in memory. Still a FAIL here.
       `after the session, the cache still holds exactly the build's files (${after.caches.length} cache(s), ${keys.length} entries; ${after.regs.length} worker(s), status ${after.status})`)
     ok(!(await cacheText(page)).includes(CANARY), 'no cache holds any of the document')
 
