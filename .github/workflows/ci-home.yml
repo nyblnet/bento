@@ -201,6 +201,7 @@ jobs:
       # cache mid-run, under an unchanged status, after a GLib/libsoup
       # CRITICAL in a browser child process (pw:browser below logs it). The
       # row still fails on that run; the retry is what lets the job pass.
+      # Tracked in issue #999.
       # Firefox runs once: its hang (Juggler losing a new page's main world)
       # is handled in the rig, which notes each page it had to replace.
       - name: home/web stage 3 in WebKit
