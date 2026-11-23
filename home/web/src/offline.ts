@@ -91,15 +91,29 @@ async function cleanUp() {
   try { for (const k of await caches.keys()) await caches.delete(k) } catch { /* no caches API */ }
 }
 
+type SwPolicy = { createScriptURL(u: string): unknown }
+type TT = { createPolicy(n: string, p: { createScriptURL(u: string): string }): SwPolicy }
+
+/**
+ * The Trusted Types policy, made NOW, while this script is the only code the
+ * page has run, before the status check awaits anything. The library's CSP
+ * allows one policy by this name, once: made later, any code that ran during
+ * the (up to 8 s) status check could take the name first and stop the worker
+ * from registering (security ruling 954, C6). It passes only the worker's URL.
+ */
+const SW_POLICY: SwPolicy | null | 'failed' = (() => {
+  const tt = (globalThis as { trustedTypes?: TT }).trustedTypes
+  if (!tt) return null
+  try { return tt.createPolicy('bento-sw', { createScriptURL: (u) => { if (u !== SW_PATH) throw new TypeError('not the library worker'); return u } }) } catch { return 'failed' }
+})()
+
 function register() {
   const sw = navigator.serviceWorker
   if (!sw) { mark('data-bento-sw', 'unsupported'); return }
   // Trusted Types: this page's CSP allows ONE policy, by name, and it passes only the worker's URL.
-  const tt = (globalThis as { trustedTypes?: { createPolicy(n: string, p: { createScriptURL(u: string): string }): { createScriptURL(u: string): unknown } } }).trustedTypes
   let url: unknown = SW_PATH
-  try {
-    if (tt) url = tt.createPolicy('bento-sw', { createScriptURL: (u) => { if (u !== SW_PATH) throw new TypeError('not the library worker'); return u } }).createScriptURL(SW_PATH)
-  } catch { mark('data-bento-sw', 'failed'); return }
+  if (SW_POLICY === 'failed') { mark('data-bento-sw', 'failed'); return }
+  try { if (SW_POLICY) url = SW_POLICY.createScriptURL(SW_PATH) } catch { mark('data-bento-sw', 'failed'); return }
   sw.register(url as string, { scope: '/', updateViaCache: 'none' }).then(
     () => mark('data-bento-sw', 'registered'),
     () => mark('data-bento-sw', 'failed'),
@@ -107,38 +121,112 @@ function register() {
 }
 
 /**
+ * Every tab of this library hears a stop. A tab that finds its build
+ * withdrawn (or its status untrustworthy) tells the others, and each one
+ * running the SAME build stops too, at once: without this, a second tab kept
+ * running the withdrawn build until it was reloaded (security ruling 954, C6),
+ * and with it bento/id's hourly check-ins. A tab of another build ignores it.
+ */
+const STOP_CHANNEL = 'bento-home-stop'
+type Stop = { t: 'stop'; build: string; status: 'withdrawn' | 'refused' }
+function stopChannel(): BroadcastChannel | null {
+  try { return typeof BroadcastChannel === 'function' ? new BroadcastChannel(STOP_CHANNEL) : null } catch { return null }
+}
+
+/**
+ * Ask the release channel once. `answered` is false when no HTTP answer came
+ * back at all (offline, a timeout, or a network path that blocks the release
+ * channel and lets the directory through); a 404 (nothing published yet) is
+ * an answer.
+ */
+async function askStatus(releaseBase: string, key: Jwk, build: string): Promise<{ status: Status; answered: boolean }> {
+  // seen withdrawn before: stop now, whatever served this copy (an HTTP cache offline, a stale edge)
+  if (goneList().includes(build)) return { status: 'withdrawn', answered: true }
+  let raw: string | null = null
+  let answered = false
+  try {
+    const ac = new AbortController()
+    const t = setTimeout(() => ac.abort(), STATUS_MS)
+    const r = await fetch(`${releaseBase}home/status.json`, { cache: 'no-store', credentials: 'omit', redirect: 'error', signal: ac.signal })
+    if (r.ok) raw = await r.text()
+    answered = true
+    clearTimeout(t)
+  } catch { raw = null; answered = false }
+  if (raw === null) return { status: 'unreachable', answered }
+  const v = await judgeStatus(raw, key, build, seenSeq())
+  if (v.seq && v.status !== 'refused') keepSeq(v.seq)
+  if (v.why) console.warn('[bento/home] status refused:', v.why)
+  return { status: v.status, answered: true }
+}
+
+/** The running page's kill switch, once startOffline has its build id: what recheckStatus() asks with. */
+let live: { ask: () => Promise<{ status: Status; answered: boolean }>; halt: (s: 'withdrawn' | 'refused') => Promise<void>; stopped: () => boolean; answered: boolean } | null = null
+
+/**
+ * Ask the status AGAIN, for code that keeps running in an open page: bento/id
+ * calls it before every hourly check-in, so a build withdrawn while its tabs
+ * are open stops at the next hour, not at the next load (security ruling 985,
+ * M2). 'stop': withdrawn or untrusted, and the page has now stopped (and told
+ * the other tabs). 'skip': the release channel gave no answer at all, so this
+ * hour runs nothing that talks to the network. 'run': it answered, and this
+ * build may run. Before startOffline knows its build, or once stopped: 'stop'
+ * / 'skip' as fits, never 'run'.
+ */
+export async function recheckStatus(): Promise<'run' | 'skip' | 'stop'> {
+  const k = live
+  if (!k) return 'skip'
+  if (k.stopped()) return 'stop'
+  const { status, answered } = await k.ask()
+  if (k.stopped()) return 'stop'
+  if (status === 'withdrawn' || status === 'refused') { await k.halt(status); return 'stop' }
+  return answered ? 'run' : 'skip'
+}
+
+/** Whether the load's own status check got an HTTP answer (false before it has, and when it did not). */
+export function statusAnswered(): boolean { return !!live?.answered }
+
+/**
  * Check the status, then (unless withdrawn) register the worker. Resolves
- * true when documents may open. `onStop` takes over the page when not.
+ * true when documents may open. `onStop` takes over the page when not, and
+ * also when another tab of this build is stopped later (it runs at most once).
  */
 export function startOffline(opts: { releaseBase: string; key: Jwk; onStop: (status: 'withdrawn' | 'refused') => void }): Promise<boolean> {
   mark('data-bento-status', 'checking')
+  const channel = stopChannel()
+  let stopped = false
+  const stop = (status: 'withdrawn' | 'refused') => {
+    if (stopped) return
+    stopped = true
+    opts.onStop(status)
+  }
   return (async () => {
     const build = await buildId()
     mark('data-bento-build', build)
-    let status: Status = 'unreachable'
-    let raw: string | null = null
-    // seen withdrawn before: stop now, whatever served this copy (an HTTP cache offline, a stale edge)
-    if (goneList().includes(build)) status = 'withdrawn'
-    else try {
-      const ac = new AbortController()
-      const t = setTimeout(() => ac.abort(), STATUS_MS)
-      const r = await fetch(`${opts.releaseBase}home/status.json`, { cache: 'no-store', credentials: 'omit', redirect: 'error', signal: ac.signal })
-      if (r.ok) raw = await r.text()
-      clearTimeout(t)
-    } catch { raw = null }
-    if (raw !== null && status !== 'withdrawn') {
-      const v = await judgeStatus(raw, opts.key, build, seenSeq())
-      status = v.status
-      if (v.seq && status !== 'refused') keepSeq(v.seq)
-      if (v.why) console.warn('[bento/home] status refused:', v.why)
+    if (channel) channel.onmessage = (e: MessageEvent) => {
+      const d = e.data as Partial<Stop> | null
+      if (!d || d.t !== 'stop' || d.build !== build || (d.status !== 'withdrawn' && d.status !== 'refused')) return
+      if (d.status === 'withdrawn') keepGone(build)
+      stop(d.status)
+      mark('data-bento-status', d.status)
     }
-    if (status === 'withdrawn' || status === 'refused') {
+    /** Stop this page for a withdrawn or untrusted build, and tell the other tabs of this build. */
+    const halt = async (status: 'withdrawn' | 'refused') => {
       if (status === 'withdrawn') keepGone(build)
-      opts.onStop(status)
+      try { channel?.postMessage({ t: 'stop', build, status } satisfies Stop) } catch { /* no other tab to tell */ }
+      stop(status)
       await cleanUp()
       mark('data-bento-status', status)
+    }
+    const k = { ask: () => askStatus(opts.releaseBase, opts.key, build), halt, stopped: () => stopped, answered: false }
+    const { status, answered } = await k.ask()
+    k.answered = answered
+    live = k
+    if (status === 'withdrawn' || status === 'refused') {
+      await halt(status)
       return false
     }
+    // a stop from another tab may have arrived while this one was checking
+    if (stopped) return false
     mark('data-bento-status', status)
     register()
     return true

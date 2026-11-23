@@ -37,13 +37,15 @@ import { verifyRosterChain, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, type RosterLink } 
 import { verifyDevice, parseDeviceCert, parseWatt, buildWren, CEREMONY_CAP_MS, type DeviceProof } from '../../../kernel/src/devices.ts'
 import { b64uEnc, sha256b64u, signStatement } from '../../../kernel/src/statements.ts'
 import type { Assertion } from '../../../kernel/src/webauthn.ts'
+// bento/id's origins, written once (scripts/test-id-origins.mjs pins every other copy to them)
+import * as ID_ORIGINS from '../../../scripts/lib/id-origins.mjs'
 
 declare const __DIRECTORY_KEYS__: Record<string, string>
 
-/** The sign-in host: the only web origin that runs ceremonies (a literal, never from a message or the URL). */
-export const SIGNIN_ORIGIN = 'https://signin.id.bento.page'
+/** The sign-in host: the only web origin that runs ceremonies (a constant, never from a message or the URL). */
+export const SIGNIN_ORIGIN: string = ID_ORIGINS.SIGNIN_ORIGIN
 /** The directory. */
-export const DIRECTORY = 'https://id.bento.page'
+export const DIRECTORY: string = ID_ORIGINS.DIRECTORY_ORIGIN
 /** The directory's signing keys, by kid, pinned in this build. */
 const DIR_KEYS: Readonly<Record<string, string>> = Object.freeze({ ...__DIRECTORY_KEYS__ })
 
@@ -468,6 +470,30 @@ async function swap(expect: string | undefined, write: (s: IDBObjectStore) => vo
   } finally { db.close() }
 }
 
+/**
+ * Every tab of the library is told when this store changes, so a sign-out or
+ * a new sign-in in one tab shows in the others at once (identity-ui.ts
+ * re-reads the store). The message carries nothing: each tab reads the store
+ * itself. One channel object per page, so a tab never hears its own writes.
+ */
+const CHANGED = 'bento-id-changed'
+const changes: BroadcastChannel | null = (() => {
+  try {
+    if (typeof BroadcastChannel !== 'function') return null
+    const c = new BroadcastChannel(CHANGED)
+    ;(c as { unref?: () => void }).unref?.()   // node rigs bundle this file: an open channel must not keep them alive
+    return c
+  } catch { return null }
+})()
+const changed = () => { try { changes?.postMessage({ t: 'changed' }) } catch { /* no other tab to tell */ } }
+/** Call `f` when another tab changes the store. Answers the unsubscribe. */
+export function onStoreChanged(f: () => void): () => void {
+  if (!changes) return () => {}
+  const h = (e: MessageEvent) => { if (isObj(e.data) && e.data.t === 'changed') f() }
+  changes.addEventListener('message', h)
+  return () => changes.removeEventListener('message', h)
+}
+
 /** The agent's store: one record for the sign-in held, one for the sign-in that ended. CryptoKeys are stored as keys, never as bytes. */
 export const indexedStore: Store = {
   async get() {
@@ -479,10 +505,14 @@ export const indexedStore: Store = {
       return { held: held && held.v === 1 ? held : null, last: last && last.v === 1 && str(last.address) ? last : null }
     } catch { return { held: null, last: null } }
   },
-  put(held, expect) {
-    return swap(expect, (s) => { s.put(held, 'held'); s.delete('last') })
+  async put(held, expect) {
+    const wrote = await swap(expect, (s) => { s.put(held, 'held'); s.delete('last') })
+    if (wrote) changed()
+    return wrote
   },
-  end(last, expect) {
-    return swap(expect, (s) => { s.delete('held'); if (last) s.put(last, 'last'); else s.delete('last') })
+  async end(last, expect) {
+    const wrote = await swap(expect, (s) => { s.delete('held'); if (last) s.put(last, 'last'); else s.delete('last') })
+    if (wrote) changed()
+    return wrote
   },
 }

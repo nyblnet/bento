@@ -8,8 +8,13 @@
 // The full pages (setup, add this browser, sign out everywhere, the setup
 // text about this browser's storage) are a later change; this line is what
 // the agent needs to be driven and to ask "Confirm it's you" each week.
+//
+// Nothing here runs until main-identity.ts calls startIdentity(), which it
+// does only once the kill switch has answered that this build may run
+// (offline.ts: 'current' or 'unreachable'). stopIdentity() ends it for good
+// when the page stops: a withdrawn build checks in with no one.
 
-import { Agent, indexedStore, SIGNIN_ORIGIN, CHECKIN_EVERY_MS, type Status } from './identity.ts'
+import { Agent, indexedStore, onStoreChanged, SIGNIN_ORIGIN, CHECKIN_EVERY_MS, type Status } from './identity.ts'
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T
 
@@ -37,9 +42,14 @@ const failed = (reason: string) =>
 
 let note = ''
 let working = false
+let started = false
+let stopped = false
+let timer: ReturnType<typeof setInterval> | null = null
+let unlisten: (() => void) | null = null
 
 function render(s: Status) {
   const box = $('id-box'), text = $('id-text'), act = $<HTMLButtonElement>('id-act'), out = $<HTMLButtonElement>('id-out')
+  if (stopped) { box.hidden = true; return }
   box.hidden = false
   box.dataset.state = working ? 'working' : s.kind === 'signed-in' && s.confirm ? 'confirm' : s.kind
   if (s.kind === 'ended') box.dataset.why = s.why
@@ -58,10 +68,9 @@ function render(s: Status) {
   out.hidden = s.kind === 'none' || working
 }
 
-wire()
 function wire() {
   $('id-act').addEventListener('click', () => {
-    if (working) return
+    if (working || stopped) return
     const s = agent.status()
     // opened here, synchronously inside the click: a browser blocks a popup opened after an await
     const win = window.open(SIGNIN_ORIGIN + '/', `bento-id-${crypto.getRandomValues(new Uint32Array(1))[0]}`, 'popup,width=480,height=640')
@@ -76,15 +85,69 @@ function wire() {
     })
   })
   $('id-out').addEventListener('click', () => {
-    if (working) return
+    if (working || stopped) return
     note = ''
     void agent.signOut().then(() => render(agent.status()))
   })
 }
 
-void (async () => {
+/**
+ * Another tab signed in, signed out or ended its sign-in: take what the store
+ * now holds at once, rather than showing the old address until the next
+ * hourly check-in (security ruling 948, C5 residual). The same when this tab
+ * becomes visible again, for a browser that has no BroadcastChannel.
+ */
+async function reread() {
+  if (working || stopped) return
   render(await agent.load())
-  render(await agent.checkIn())
-  $('id-box').dataset.ready = '1'   // the first check-in is done (rigs wait for it)
-  setInterval(async () => { if (!working) render(await agent.checkIn()) }, CHECKIN_EVERY_MS)
-})()
+}
+const onVisible = () => { if (document.visibilityState === 'visible') void reread() }
+
+/**
+ * What the kill switch says before a check-in (main-identity.ts wires it to
+ * offline.ts). `onLoad`: the load's own status check got an answer, so the
+ * check-in on load may run. `hourly`: ask the status again, now; true only
+ * when it answered and this build may still run. A withdrawn or untrusted
+ * answer stops the page (and with it stopIdentity) before it returns.
+ */
+export type Gate = { onLoad: () => boolean; hourly: () => Promise<boolean> }
+
+let ticking = false
+/** The hourly check-in: the kill switch first, every time (security ruling 985, M2). */
+async function tick(gate: Gate) {
+  if (working || stopped || ticking) return
+  ticking = true
+  try {
+    if (!(await gate.hourly()) || stopped || working) return
+    render(await agent.checkIn())
+  } finally { ticking = false }
+}
+
+/** Start bento/id in this page: only after the kill switch has said this build may run. */
+export function startIdentity(gate: Gate) {
+  if (started || stopped) return
+  started = true
+  wire()
+  unlisten = onStoreChanged(() => void reread())
+  document.addEventListener('visibilitychange', onVisible)
+  void (async () => {
+    render(await agent.load())
+    if (stopped) return
+    if (gate.onLoad()) render(await agent.checkIn())
+    if (stopped) return
+    $('id-box').dataset.ready = '1'   // the first check-in is done (rigs wait for it)
+    timer = setInterval(() => void tick(gate), CHECKIN_EVERY_MS)
+  })()
+}
+
+/** Stop bento/id in this page for good: no check-in, no line, no button (the page has stopped). */
+export function stopIdentity() {
+  stopped = true
+  if (timer !== null) clearInterval(timer)
+  timer = null
+  unlisten?.()
+  unlisten = null
+  document.removeEventListener('visibilitychange', onVisible)
+  const box = document.getElementById('id-box')
+  if (box) { box.hidden = true; box.dataset.state = 'stopped' }
+}

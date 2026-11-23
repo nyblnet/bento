@@ -10,9 +10,14 @@
  * 1. home/web/build.mjs without --dev refuses every development seam: no
  *    --history (the frozen fixture fallback), --key (a test key),
  *    BENTO_HOME_WEB_MUTANT, and a history the library would refuse (wrong key,
- *    tampered, a second one for the same app), and the bento/id agent
- *    (--identity, --directory-keys: its directory keys are not pinned for
- *    release). Each refusal differs from the
+ *    tampered, a second one for the same app), and a --directory-keys file.
+ *    The bento/id agent (--identity) builds in production ONLY with the
+ *    kernel's pinned directory keys (kernel/src/directory-keys.ts) and only
+ *    for https://home.bento.page: without pinned keys it is refused, and every
+ *    seam above is still refused with --identity added. The positive
+ *    production identity build runs in a scratch copy of the tree that carries
+ *    a test kernel/src/directory-keys.ts (the real one waits on the
+ *    directory's keys being minted). Each refusal differs from the
  *    positive control (the good release build, which succeeds) by that one
  *    input, and writes nothing. With --dev the seams still work.
  * 2. scripts/release.mjs --home-web refuses before building anything: without
@@ -39,7 +44,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { APPS } from './apps.mjs'
-import { homeWebKey, homeWebOptions, publishedHistories } from './home-web-release.mjs'
+import { homeWebBuildArgs, homeWebKey, homeWebOptions, publishedHistories } from './home-web-release.mjs'
 import { releasePublicKey, verifyEnvelope } from './sign-payload.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -93,10 +98,103 @@ refusal(build(['--history', REAL_HISTORY, '--history', REAL_HISTORY]), /one per 
 refusal(build(['--history']), /--history needs a file/, '--history without a file: refused')
 // the bento/id agent: a well-formed keys file, so the refusal is the production rule, not the file
 const DIR_KEYS = W('directory-keys.json', JSON.stringify({ 'dir-1': Buffer.from(await webcrypto.subtle.exportKey('raw', kp.publicKey)).toString('base64url') }))
-refusal(build(['--history', REAL_HISTORY, '--identity', '--directory-keys', DIR_KEYS]), /--identity[^\n]*refused in a production build/,
-  '--identity (the bento/id agent, directory keys not pinned for release): refused without --dev')
+refusal(build(['--history', REAL_HISTORY, '--identity', '--directory-keys', DIR_KEYS]), /--directory-keys[^\n]*refused in a production build/,
+  '--identity with --directory-keys (a key file, not the kernel\'s pinned keys): refused without --dev')
 refusal(build(['--history', REAL_HISTORY, '--directory-keys', DIR_KEYS]), /--directory-keys[^\n]*refused in a production build/,
   '--directory-keys alone: refused without --dev')
+// absent field: this tree's kernel pins no directory keys yet (kernel/src/directory-keys.ts does not exist)
+const kernelPins = fs.existsSync(path.join(ROOT, 'kernel/src/directory-keys.ts'))
+if (!kernelPins) {
+  refusal(build(['--history', REAL_HISTORY, '--identity']), /--identity: no pinned directory keys/,
+    '--identity with no pinned directory keys in the kernel: refused "no pinned directory keys"')
+} else console.log('  note  kernel/src/directory-keys.ts exists in this tree: the scratch-copy rows below cover its absence')
+// every development seam, with --identity added: still refused, nothing written
+refusal(build(['--identity']), /--history/, '--identity, no --history: refused')
+refusal(build(['--history', REAL_HISTORY, '--identity', '--key', TEST_KEY]), /--key/, '--identity, --key (a test key): refused without --dev')
+refusal(build(['--history', REAL_HISTORY, '--identity'], { BENTO_HOME_WEB_MUTANT: JSON.stringify({ file: 'verify.ts', from: 'x', to: 'y' }) }), /MUTANT/,
+  '--identity, BENTO_HOME_WEB_MUTANT set: refused without --dev')
+
+section('home/web/build.mjs: a production IDENTITY build, in a scratch copy whose kernel pins directory keys')
+{
+  // The tree build.mjs reads, copied, plus a kernel/src/directory-keys.ts of TEST keys
+  // (two kids, as the real one will carry dir-1 and dir-2). Only the copy has it.
+  const copy = path.join(work, 'pinned-tree')
+  for (const d of ['home/web', 'home/webext/src', 'kernel/src', 'scripts/lib']) {
+    fs.cpSync(path.join(ROOT, d), path.join(copy, d), { recursive: true, filter: (s) => !s.includes('node_modules') && !/[/\\](dist|\.mutant-src-|\.identity-node-)/.test(s.slice(path.join(ROOT, d).length)) })
+  }
+  const pub = async () => Buffer.from(await webcrypto.subtle.exportKey('raw', (await webcrypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign'])).publicKey)).toString('base64url')
+  const PINS = { 'dir-1': await pub(), 'dir-2': await pub() }
+  const pinsFile = path.join(copy, 'kernel/src/directory-keys.ts')
+  const writePins = (text) => fs.writeFileSync(pinsFile, text)
+  writePins(`// TEST keys for test-home-web-build.mjs's scratch copy only\nexport const DIRECTORY_KEYS: Readonly<Record<string, string>> = Object.freeze(${JSON.stringify(PINS)})\n`)
+  const ESB = process.env.ESBUILD || path.join(ROOT, 'slides/node_modules/.bin/esbuild')
+  const pbuild = (extra, env = {}) => {
+    const out = path.join(work, `pbuild-${++n}`)
+    const r = spawnSync(process.execPath, [path.join(copy, 'home/web/build.mjs'), '--out', out, '--frame-origin', FRAME, ...extra],
+      { encoding: 'utf8', env: { ...process.env, BENTO_HOME_WEB_MUTANT: '', ESBUILD: ESB, ...env } })
+    const info = fs.existsSync(path.join(out, 'build.json')) ? JSON.parse(fs.readFileSync(path.join(out, 'build.json'), 'utf8')) : null
+    const read = (f) => fs.existsSync(path.join(out, f)) ? fs.readFileSync(path.join(out, f), 'utf8') : ''
+    return { status: r.status, err: r.stderr, out, wrote: fs.existsSync(out), info, library: read('library/index.html'), headers: read('library/_headers') }
+  }
+  const p = pbuild(['--history', REAL_HISTORY, '--identity'])
+  ok(p.status === 0 && p.info?.dev === false && p.info?.testKey === false && p.info?.identity === true,
+    `production --identity with the kernel's pinned keys builds: dev:false, testKey:false, identity:true (exit ${p.status}${p.status ? ': ' + p.err.trim().split('\n').pop() : ''})`)
+  ok(p.info?.directoryKeySource === 'kernel/src/directory-keys.ts' && JSON.stringify(p.info?.directoryKids) === JSON.stringify(Object.keys(PINS)),
+    `build.json records the kernel's module as the key source and its kids (${p.info?.directoryKeySource}: ${p.info?.directoryKids})`)
+  ok(p.library.includes(JSON.stringify(PINS)) && Object.values(PINS).every((k) => p.library.split(k).length === 2),
+    "the library carries the kernel's pinned keys, byte for byte, each once")
+  ok(/connect-src https:\/\/bento\.page\/releases\/ https:\/\/id\.bento\.page;/.test(p.info?.libraryPolicy ?? '') && p.headers.includes('connect-src https://bento.page/releases/ https://id.bento.page;'),
+    'connect-src is exactly the release channel and the directory, in the meta policy and the header')
+  ok(/frame-ancestors 'none'/.test(p.headers) && /Cross-Origin-Opener-Policy: same-origin-allow-popups/.test(p.headers) && /require-trusted-types-for 'script'; trusted-types bento-sw/.test(p.headers),
+    "frame-ancestors 'none', COOP same-origin-allow-popups, Trusted Types required with the one policy")
+  ok(p.library.includes('https://signin.id.bento.page') && !p.library.includes('BENTO_HOME_WEB_MUTANT'), 'the agent opens the sign-in host at its one origin')
+  // bento/id's hosting rules for bento/home, offline over this build (scripts/check-home-web-hosting.mjs),
+  // and each rule red on a copy of the build that breaks it
+  {
+    const hosting = (dir) => spawnSync(process.execPath, [path.join(ROOT, 'scripts/check-home-web-hosting.mjs'), dir], { encoding: 'utf8' })
+    const h = hosting(p.out)
+    ok(h.status === 0 && /over 6 paths/.test(h.stdout), `check-home-web-hosting passes over the production identity build (exit ${h.status}: ${h.stdout.trim().split('\n').pop()})`)
+    for (const [rule, edit] of [
+      ['home-coop', (d) => { const f = path.join(d, 'library/_headers'); fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replaceAll('same-origin-allow-popups', 'same-origin')) }],
+      ['home-framing', (d) => { const f = path.join(d, 'library/_headers'); fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replaceAll("; frame-ancestors 'none'", '')) }],
+      ['home-no-webauthn', (d) => { fs.mkdirSync(path.join(d, 'library/.well-known'), { recursive: true }); fs.writeFileSync(path.join(d, 'library/.well-known/webauthn'), '{}') }],
+    ]) {
+      const d = path.join(work, `hosting-${rule}`)
+      fs.cpSync(p.out, d, { recursive: true })
+      edit(d)
+      const r = hosting(d)
+      ok(r.status === 1 && r.stdout.includes(`FAIL  ${rule}:`), `check-home-web-hosting: a build that breaks ${rule} fails on it (exit ${r.status})`)
+    }
+    // a page in the tree that _headers does not name (a 404 page added later, say) is served with no policy at all
+    {
+      const d = path.join(work, 'hosting-unruled-html')
+      fs.cpSync(p.out, d, { recursive: true })
+      fs.writeFileSync(path.join(d, 'library/404.html'), '<!doctype html><title>404</title>')
+      const r = hosting(d)
+      ok(r.status === 1 && r.stdout.includes('FAIL  home-framing: /404.html (404.html) is served with no _headers rule'),
+        `check-home-web-hosting: an .html file in the tree with no _headers rule fails home-framing (exit ${r.status})`)
+    }
+  }
+  refusal(pbuild(['--history', REAL_HISTORY, '--identity', '--library-origin', 'https://other.example']), /production identity build is for the library at https:\/\/home\.bento\.page only/,
+    'production --identity for another library origin: refused')
+  refusal(pbuild(['--history', REAL_HISTORY, '--identity', '--directory-keys', DIR_KEYS]), /--directory-keys[^\n]*refused in a production build/,
+    'production --identity with --directory-keys, even where the kernel pins keys: refused')
+  refusal(pbuild(['--history', REAL_HISTORY, '--identity', '--key', TEST_KEY]), /--key/, 'production --identity with --key, where the kernel pins keys: refused')
+  refusal(pbuild(['--identity']), /--history/, 'production --identity without --history, where the kernel pins keys: refused')
+  refusal(pbuild(['--history', REAL_HISTORY, '--identity'], { BENTO_HOME_WEB_MUTANT: JSON.stringify({ file: 'verify.ts', from: 'x', to: 'y' }) }), /MUTANT/,
+    'production --identity with BENTO_HOME_WEB_MUTANT, where the kernel pins keys: refused')
+  // absent fields: a module that exports nothing, an empty set, no module
+  writePins('export const SOMETHING_ELSE = 1\n')
+  refusal(pbuild(['--history', REAL_HISTORY, '--identity']), /no pinned directory keys \(kernel\/src\/directory-keys\.ts exports no DIRECTORY_KEYS\)/, 'a kernel module without DIRECTORY_KEYS: refused "no pinned directory keys"')
+  writePins('export const DIRECTORY_KEYS = {}\n')
+  refusal(pbuild(['--history', REAL_HISTORY, '--identity']), /no pinned directory keys \(kernel\/src\/directory-keys\.ts pins no key\)/, 'a kernel module pinning no key: refused "no pinned directory keys"')
+  writePins('export const DIRECTORY_KEYS = { "dir-1": "not-a-point" }\n')
+  refusal(pbuild(['--history', REAL_HISTORY, '--identity']), /DIRECTORY_KEYS is not/, 'a kernel module pinning a malformed key: refused')
+  fs.rmSync(pinsFile)
+  refusal(pbuild(['--history', REAL_HISTORY, '--identity']), /no pinned directory keys \(kernel\/src\/directory-keys\.ts does not exist yet\)/, 'no kernel module: refused "no pinned directory keys"')
+  const d = pbuild(['--dev', '--history', REAL_HISTORY, '--identity', '--directory-keys', DIR_KEYS])
+  ok(d.status === 0 && d.info?.identity === true && d.info?.directoryKeySource === 'file', `positive control: --dev --identity --directory-keys still builds, marked as a file's keys (exit ${d.status})`)
+}
 
 section('home/web/build.mjs: a development build (--dev)')
 {
@@ -217,7 +315,9 @@ section('release.mjs --home-web: refusals before signing that empty the output f
     const o = homeWebOptions({ args, opt: opt(args), site: path.join(work, 'site') })
     return o && { ...o, devKey: homeWebKey({ keyPath, releaseKey: releasePublicKey, dev: o.dev }) }
   }
-  ok(call(['--app', 'slides']) === null, 'without --home-web, no home/web build (the release is unchanged)')
+  // a mutant may make a call throw: the row goes red, the rig never crashes
+  const safe = (f) => { try { return f() } catch (e) { return { thrown: e.message } } }
+  ok(safe(() => call(['--app', 'slides'])) === null, 'without --home-web, no home/web build (the release is unchanged)')
   const prod = call(['--home-web', '--frame-origin', FRAME], LOOKS_LIKE_RELEASE)
   ok(prod && prod.dev === false && prod.devKey === null && prod.out === path.join(work, 'site.home-web'),
     'positive control: the release key with --home-web gives a production build outside the site (<site>.home-web)')
@@ -226,6 +326,14 @@ section('release.mjs --home-web: refusals before signing that empty the output f
   const reh = call(['--home-web', '--home-web-dev', '--frame-origin', FRAME], THROWAWAY)
   ok(reh && reh.dev === true && reh.devKey?.x === JSON.parse(fs.readFileSync(THROWAWAY, 'utf8')).public.x && !('d' in reh.devKey),
     'a rehearsal key with --home-web-dev: a development build carrying only the PUBLIC half')
+  // bento/id: an explicit opt-in, never a default (absent flag: no identity)
+  const hasIdentity = (o) => homeWebBuildArgs({ root: ROOT, opts: o, histories: [] }).includes('--identity')
+  ok(noKey && noKey.identity === false && !hasIdentity(noKey), 'without --home-web-identity, the home/web build has no --identity (absent flag)')
+  const idp = call(['--home-web', '--frame-origin', FRAME, '--home-web-identity'], null)
+  ok(idp && idp.identity === true && hasIdentity(idp) && idp.libraryOrigin === 'https://home.bento.page', '--home-web-identity adds --identity to the home/web build, for https://home.bento.page')
+  let stray = ''
+  try { call(['--app', 'slides', '--home-web-identity']) } catch (e) { stray = e.message }
+  ok(/only mean something with --home-web/.test(stray), '--home-web-identity without --home-web: refused')
 }
 
 section('release.mjs --home-web: refusals after seeding, before anything is signed')
@@ -235,7 +343,7 @@ const throwPriv = createPrivateKey({ key: JSON.parse(fs.readFileSync(THROWAWAY, 
 const signThrowaway = (payload) => JSON.stringify({ payload, sig: nodeSign('sha256', Buffer.from(payload), { key: throwPriv, dsaEncoding: 'ieee-p1363' }).toString('base64') })
 const SPACES_HISTORY = signThrowaway(JSON.stringify({ ...JSON.parse(realHistory.payload), app: 'bento-spaces' }))
 const REHEARSE = ['--key', THROWAWAY, '--home-web', '--home-web-dev', '--frame-origin', FRAME]
-for (const [name, published, env, pattern, msg] of [
+for (const [name, published, env, pattern, msg, extraArgs = []] of [
   ['seed-no-history', { 'releases/spaces/manifest.json': '{}' }, {}, /bento-spaces is published .* no releases\/spaces\/history\.json/,
     'a published app (spaces) with a manifest and no history'],
   ['seed-bad-history', { 'releases/spaces/manifest.json': '{}', 'releases/spaces/history.json': JSON.stringify(realHistory) }, {}, /published history would be refused/,
@@ -243,9 +351,11 @@ for (const [name, published, env, pattern, msg] of [
   ['mutant-env', null, { BENTO_HOME_WEB_MUTANT: JSON.stringify({ file: 'verify.ts', from: 'x', to: 'y' }) }, /BENTO_HOME_WEB_MUTANT/,
     'BENTO_HOME_WEB_MUTANT in the environment (even for a development build)'],
   ['no-esbuild', null, { ESBUILD: path.join(work, 'no-such-esbuild') }, /esbuild/, 'esbuild missing'],
+  ...(fs.existsSync(path.join(ROOT, 'kernel/src/directory-keys.ts')) ? [] : [['identity-unpinned', null, {}, /--home-web-identity: no pinned directory keys/,
+    '--home-web-identity while the kernel pins no directory keys', ['--home-web-identity']]]),
 ]) {
   const out = staleOut(`${name}.home-web`)
-  const r = release([...REHEARSE, '--home-web-out', out], `site-${name}`, { published: published && publishedTree(`published-${name}`, published), env })
+  const r = release([...REHEARSE, ...extraArgs, '--home-web-out', out], `site-${name}`, { published: published && publishedTree(`published-${name}`, published), env })
   const signed = signedIn(r.site)
   ok(r.status !== 0 && pattern.test(r.stderr) && signed.length === 0,
     `${msg}: refused, nothing signed (exit ${r.status}; signed: ${signed.join(', ') || 'none'}: ${r.stderr.trim().split('\n').pop()?.slice(0, 110)})`)

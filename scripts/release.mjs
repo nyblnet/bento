@@ -5,7 +5,7 @@
 // the complete static site for bento.page into ./site/.
 //
 //   node scripts/release.mjs [--app slides|spaces|dash] [--no-build] [--key path] [--out dir]
-//                            [--home-web --frame-origin <url> [--home-web-out dir] [--home-web-dev] [--home-web-first]]
+//                            [--home-web --frame-origin <url> [--home-web-out dir] [--home-web-dev] [--home-web-first] [--home-web-identity]]
 //
 // ONE RELEASE BUILDS ONE APP, and `site/` is mirrored authoritatively — so the
 // site is SEEDED from the published tree first and this build overwrites only
@@ -43,7 +43,7 @@ import { fileURLToPath } from 'node:url'
 import { spliceDoc } from './guestbook-deck.mjs'
 import { gateShell } from './shell-gate.mjs'
 import { APPS, RELEASE_MARKER, tagFor } from './apps.mjs'
-import { homeWebOptions, homeWebKey, prepareHomeWebOut, publishedHistories, homeWebBuildArgs, servedListCheck, servedListArgs } from './home-web-release.mjs'
+import { homeWebOptions, homeWebKey, prepareHomeWebOut, publishedHistories, homeWebBuildArgs, servedListCheck, servedListArgs, identityCheck } from './home-web-release.mjs'
 import { releasePublicKey } from './sign-payload.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
@@ -113,6 +113,8 @@ try {
     if (process.env.BENTO_HOME_WEB_MUTANT) throw new Error('BENTO_HOME_WEB_MUTANT is set: a release never builds a home/web mutant')
     const esbuild = process.env.ESBUILD || join(root, 'slides/node_modules/.bin/esbuild')
     if (!existsSync(esbuild)) throw new Error(`home/web needs esbuild, not found at ${esbuild} (npm ci --prefix slides, or set ESBUILD)`)
+    // --home-web-identity: the kernel's pinned directory keys, or nothing is signed
+    await identityCheck({ root, opts: homeWeb })
   }
 } catch (e) {
   console.error(`✗ ${e.message}`)

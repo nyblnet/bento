@@ -292,14 +292,55 @@ Chromium and the build rig run in the required `validate` check; WebKit,
 Firefox and the mutant rigs in `ci-home.yml` (`home-web-engines`,
 `home-web-offline-engines`).
 
-## bento/id in the library (`--dev --identity`, development only)
+## bento/id in the library (`--identity`)
 
-`build.mjs --dev --identity --directory-keys <json>` adds the bento/id agent
-(`src/identity.ts`, `src/identity-ui.ts`, `identity.html`). Without the flag
-nothing of it is in the page, and every file it serves is byte-identical to
-a build without this code. It stays a development build until the directory's keys are pinned
-for release and the directory and the sign-in host are deployed. A production
-build (without `--dev`) refuses `--identity` and `--directory-keys`.
+`build.mjs --identity` adds the bento/id agent (`src/identity.ts`,
+`src/identity-ui.ts`, `identity.html`). Without the flag nothing of it is in
+the page, and every file it serves is byte-identical to a build without this
+code.
+
+- **Production identity carries the kernel's pinned keys, and only those.** A
+  production `--identity` build (no `--dev`) reads the directory keys from
+  `kernel/src/directory-keys.ts` (`DIRECTORY_KEYS`), records the source and
+  the kids in `build.json`, and builds only for the library at
+  `https://home.bento.page`. Until the kernel pins keys it is refused: "no
+  pinned directory keys". `--directory-keys <json>` stays a development seam,
+  refused in production with or without `--identity`, and every other seam
+  (`--key`, `BENTO_HOME_WEB_MUTANT`, no `--history`) is still refused with
+  `--identity` added.
+- **A release opts in.** `release.mjs --home-web --home-web-identity` passes
+  `--identity`; without the flag a release builds no identity, as before. With
+  it, a tree whose kernel pins no keys is refused before anything is signed.
+- **One set of origins.** The directory, the sign-in host and the library are
+  `scripts/lib/id-origins.mjs`: the agent and `build.mjs` import it (the
+  `connect-src` directory is the agent's own constant), and
+  `scripts/test-id-origins.mjs` pins every other copy (the sign-in host, the
+  directory, the kernel's roster rules, the release tooling, the hosting rules,
+  the rigs' stubs) to it. A copy that drifts or goes missing fails.
+- **The kill switch comes first.** bento/id starts only once the status check
+  (`offline.ts`) has answered `current` or `unreachable`: while it is pending
+  nothing of bento/id shows or reaches the directory. A withdrawn or untrusted
+  build stops bento/id with the page, and tells the library's other tabs of the
+  same build (a `BroadcastChannel`), which stop too: no tab of a withdrawn
+  build checks in again. A stop naming another build is ignored. An untrusted
+  status in one tab therefore stops every tab of that build: a denial of
+  service only, which anyone on the network path can already cause one tab at
+  a time. The keys stay: withdrawal is about code. The worker's Trusted Types
+  policy is made at startup, before the status check awaits anything, so no
+  code running during the check can take its name.
+- **The status is asked again every hour.** Before each hourly check-in the
+  library fetches the status again (`recheckStatus` in `offline.ts`): a build
+  withdrawn while its tabs stay open stops at the next hour, without a reload.
+  A check-in, on load or hourly, runs only when the release channel gave an
+  HTTP answer (a 404 counts). With no answer at all (offline, or a network that
+  blocks `bento.page` and lets `id.bento.page` through) the line keeps showing
+  what it holds and checks in with no one that hour.
+- **Hosting, offline.** `scripts/check-home-web-hosting.mjs <out>` checks a
+  built tree against bento/id's hosting rules for bento/home (frame-ancestors
+  `'none'`, COOP at most `same-origin-allow-popups`, one CSP per path, every
+  `.html` file in the tree named by a rule of its own, no
+  `/.well-known/webauthn`), from the same rules `scripts/check-id-hosting.mjs`
+  applies to the live host.
 
 - **No WebAuthn here.** The passkeys belong to rp `id.bento.page`, which this
   origin cannot use. Every ceremony runs on the sign-in host
@@ -320,9 +361,11 @@ build (without `--dev`) refuses `--identity` and `--directory-keys`.
 - **Sign out sticks, in every tab.** Tabs share the store, so a check-in
   writes only over the record it renewed, checked and written in one
   transaction: after a sign-out or a new sign-in (in this tab or another) it
-  writes nothing back and takes what the store holds. Another tab may still
-  show the old state until its next check-in, but it never writes it back. A
-  store that fails does not stop the hourly check-in.
+  writes nothing back and takes what the store holds. Every write is announced
+  to the other tabs (a `BroadcastChannel` carrying nothing; each re-reads the
+  store), and a tab that becomes visible re-reads it too, so another tab shows
+  a sign-out at once rather than at its next check-in. A store that fails does
+  not stop the hourly check-in.
 - **24 hours, 7 days.** A check-in signed by `W` (`wren.`) renews the 24-hour
   countersign on load and every hour, until 7 days after the ceremony. A day
   before that the line asks "Confirm it's you": a new ceremony, new keys.
@@ -331,8 +374,15 @@ build (without `--dev`) refuses `--identity` and `--directory-keys`.
   saying the key is revoked, deletes the keys; only a new ceremony signs the
   browser in again.
 - **Policy.** `connect-src` adds the directory (`https://id.bento.page`) and
-  nothing else; Trusted Types stay required with no policy; the line is text
-  only.
+  nothing else; Trusted Types stay required with the worker's one policy; the
+  line is text only.
+
+Still to come before production identity can deploy: the kernel's pinned
+directory keys; the security floor (no identity below it); signed incident
+records verified under the pinned keys; the bridge identity ops that give a
+document `__bentoIdentity`; retiring the old `W` at a new ceremony; and the
+device runs (iOS popups, a backgrounded tab, a Safari restart, the installed
+app).
 
 bento/home's routes on the directory (CORS to `https://home.bento.page` alone):
 
