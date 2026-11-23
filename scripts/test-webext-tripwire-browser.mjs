@@ -178,10 +178,11 @@ if (!honest.lib.get('/sw.js')?.body.equals(BUILD_SW)) throw new Error('the libra
 const releaseB = siteFiles(path.join(B, 'library'))
 // a file may carry `status` and `hold` (send the body, keep the response open); `fallback` answers unlisted library paths
 const HELD = []
-const state = { lib: new Map(honest.lib), frame: new Map(honest.frame), list: null, hits: [], fallback: null, scripts: new Map([...await buildScriptTexts(A), ...await buildScriptTexts(B)]) }
+const state = { lib: new Map(honest.lib), frame: new Map(honest.frame), list: null, hits: [], heads: [], fallback: null, scripts: new Map([...await buildScriptTexts(A), ...await buildScriptTexts(B)]) }
 const serve = (key) => http.createServer((req, res) => {
   const p = new URL(req.url, 'http://x').pathname
   state.hits.push(`${key} ${p}`)
+  state.heads.push({ key, p, h: req.headers })
   if (key === 'chan') {
     // the inline scripts' text, published beside the list (scripts/<sha256>.js)
     const sm = /^\/releases\/home-web\/scripts\/([0-9a-f]{64})\.js$/.exec(p)
@@ -1189,7 +1190,7 @@ if (STAGE3.some(row)) {
 // bytes. What the tripwire can still see is what that worker DOES: its own requests (webRequest, tabId -1,
 // initiator the library origin), held to the honest worker's: GET, no query, a path the release serves,
 // and /sw.js only as the browser's worker-script fetch.
-const C5_ROWS = ['c5-honest-worker', 'sw-cloak', 'sw-cloak-launder', 'worker-query', 'worker-unlisted-path', 'worker-post']
+const C5_ROWS = ['c5-honest-worker', 'sw-cloak', 'sw-cloak-launder', 'worker-query', 'worker-unlisted-path', 'worker-post', 'worker-header', 'worker-header-held', 'preload-header']
 const workerEvents = async (t0) => (await since(t0)).filter((e) => e.role === 'worker')
 /** The build's worker with `extra` appended: installs (its precache matches its pins) and runs `extra` too. */
 const cloakOf = (extra) => ({ body: Buffer.concat([BUILD_SW, Buffer.from(`\n${extra}\n`)]), headers: { ...honest.lib.get('/sw.js').headers } })
@@ -1197,13 +1198,14 @@ const cloakOf = (extra) => ({ body: Buffer.concat([BUILD_SW, Buffer.from(`\n${ex
 async function underCloak(extra) {
   await fresh()
   state.cloak = cloakOf(extra)
-  const t0 = Date.now(), h0 = state.hits.length
+  const t0 = Date.now(), h0 = state.hits.length, k0 = state.heads.length
   await page.goto(`${LIB}/`)
   const ctl = await until(async () => page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state === 'activated'), 20000)
   await page.goto('about:blank')
-  await visit(page, `${LIB}/`)
+  const k1 = state.heads.length
+  const v = await visit(page, `${LIB}/`)
   await sleep(2000)
-  return { ctl, evs: await workerEvents(t0), hits: state.hits.slice(h0) }
+  return { ctl, v, evs: await workerEvents(t0), hits: state.hits.slice(h0), heads: state.heads.slice(k0), visitHeads: state.heads.slice(k1) }
 }
 const whys = (evs) => evs.flatMap((e) => e.failures.map((f) => f.why ?? f.rule))
 if (C5_ROWS.some(row)) {
@@ -1259,6 +1261,35 @@ if (C5_ROWS.some(row)) {
     ok(r.ctl && seen, `the cloaked worker is installed and made the request (server saw it: ${seen})`)
     const ev = r.evs.find((e) => e.url === url && whys([e]).includes(why))
     ok(ev?.verdict === 'mismatch' && (ev.warned ?? []).length > 0, `a mismatch: ${why} (${JSON.stringify(r.evs.map((e) => [e.url, whys([e])]))})`)
+  }
+  // security ruling on #983, M1: bytes in the request HEADERS of a request the allowlist permits
+  if (row('worker-header')) {
+    section('worker-header: the cloaked worker GETs /index.html (allowed: listed, no query) with a header of its own  (rule: its headers held to the honest worker\'s)')
+    const r = await underCloak('self.addEventListener("activate",(e)=>e.waitUntil(fetch("/index.html",{cache:"no-store",headers:{"x-exfil":"secret-hdr-1"}}).catch(()=>{})))')
+    const sent = r.heads.filter((q) => q.p === '/index.html' && q.h['x-exfil'] === 'secret-hdr-1').length
+    ok(r.ctl && sent > 0, `the cloaked worker is installed and the header reached the server (${sent} time(s))`)
+    const ev = r.evs.find((e) => e.url === `${LIB}/index.html`)
+    ok(ev?.verdict === 'mismatch' && whys([ev]).includes('a header the honest worker does not send: x-exfil') && ev.class === 'tampered' && (ev.warned ?? []).includes('tab'), `a loud mismatch on the header (${JSON.stringify(r.evs.map((e) => [e.url, whys([e])]))})`)
+  }
+  if (row('worker-header-held')) {
+    section('worker-header-held: the cloaked worker puts its bytes in headers the honest one does send (Accept, Accept-Language, User-Agent)  (rule: held to their honest values)')
+    const r = await underCloak('self.addEventListener("activate",(e)=>e.waitUntil(Promise.all([["accept","secret-a","/manifest.webmanifest"],["accept-language","secret-l","/icon-192.png"],["user-agent","secret-u","/icon-512.png"]].map(([k,v,u])=>fetch(u,{cache:"no-store",headers:{[k]:v}}).catch(()=>{})))))')
+    const at = { accept: '/manifest.webmanifest', 'accept-language': '/icon-192.png', 'user-agent': '/icon-512.png' }
+    // MEASURED here: which of the three the browser lets a worker set (the rest it overrides)
+    const reached = Object.keys(at).filter((k) => r.heads.some((q) => q.p === at[k] && String(q.h[k] ?? '').startsWith('secret-')))
+    note(`the server saw the worker's own value for: ${reached.join(', ') || 'none'}`)
+    ok(r.ctl && reached.includes('accept') && reached.includes('accept-language'), `the cloaked worker is installed and its Accept and Accept-Language values reached the server (${reached.join(', ')})`)
+    for (const k of reached) {
+      const ev = r.evs.find((e) => e.url === `${LIB}${at[k]}`)
+      ok(ev?.verdict === 'mismatch' && whys([ev]).includes(`a header the honest worker does not send: ${k} with another value`), `${k}: a mismatch on its value (${JSON.stringify(ev && whys([ev]))})`)
+    }
+  }
+  if (row('preload-header')) {
+    section('preload-header: the cloaked worker sets the navigation preload header value  (rule: Service-Worker-Navigation-Preload is the browser\'s true)')
+    const r = await underCloak('self.addEventListener("activate",(e)=>e.waitUntil(self.registration.navigationPreload.enable().then(()=>self.registration.navigationPreload.setHeaderValue("secret-pre-2"))))')
+    const sent = r.visitHeads.filter((q) => q.p === '/' && q.h['service-worker-navigation-preload'] === 'secret-pre-2').length
+    ok(r.ctl && sent > 0, `the cloaked worker is installed and the tab's navigation carried its value to the server (${sent} time(s))`)
+    ok(r.v.lib?.verdict === 'mismatch' && rules(r.v.lib).split(',').includes('preload-header') && (r.v.lib.warned ?? []).includes('tab'), `the page: a loud mismatch on preload-header (${r.v.lib?.verdict} [${rules(r.v.lib)}] ${r.v.lib?.warned})`)
   }
   await fresh()
 }

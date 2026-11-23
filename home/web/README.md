@@ -267,10 +267,16 @@ Still open:
   browser's own worker request (`Service-Worker: script`) differently from the
   extension's, and the browser installs what it was given. The tripwire holds
   that worker to the honest worker's own requests instead (GET, no query, the
-  release's paths, `/sw.js` only as the browser's script fetch; see
-  `home/webext/README.md`). That narrows a hostile worker to covert channels
-  (which of those requests it makes, and when) and to requests to other
-  origins, which the extension cannot see; it does not verify the bytes.
+  release's paths, `/sw.js` only as the browser's script fetch, the honest
+  worker's request headers, and the navigation preload header left at the
+  browser's `true`; see `home/webext/README.md`). It does not verify the
+  bytes, and it sees only what such a worker fetches. A cloaked worker can
+  still change the text and attribute values of every page it answers (same
+  length, no new element) without making any request at all (measured: one
+  byte of text changed from the preload response, verdict ok); it can pass
+  data out through which allowed requests it makes, and when; and its
+  requests to other origins are not seen, since the extension has no host
+  permission there.
 
 **Install.** `manifest.webmanifest` (name, `start_url` and `scope` `/`,
 standalone, 192 and 512 px icons), linked from the page and allowed by an exact

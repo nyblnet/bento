@@ -15504,12 +15504,29 @@ What can be seen is what that worker does.
   once per kind of request per session. A request with no initiator is
   recorded as `worker-request-unattributed`, class "unverified": it cannot be
   tied to the worker or ruled out as it, so it is never allowed in silence.
+  Its request headers are held too (security's review of #983, measured: a
+  worker GET to a listed path carried a header of its own, `x-exfil`, to the
+  server with verdict ok). A header no script can set (the fetch spec's
+  forbidden names, `Sec-*`, `Proxy-*`) is the browser's; every other must be
+  one the honest worker's requests carry, with its value: `Accept: */*`,
+  `Service-Worker: script`, and `Accept-Language` and `User-Agent` equal to
+  what the library's latest navigation sent (measured: a worker can set
+  Accept and Accept-Language, not User-Agent). Headers not read, or no
+  navigation to hold them to, are findings. And the navigation preload header
+  must be the browser's `true`: a worker's `navigationPreload.setHeaderValue`
+  sends bytes on every later navigation (measured), so any other value is a
+  mismatch on the page, rule `preload-header`.
   With no list held, nothing is judged (the visits are on record as
   unchecked).
 - **What it does not do**, stated in both READMEs: it does not verify the
-  worker's bytes. A worker that keeps to the honest worker's requests can still
-  pass data out through which of them it makes, and when, and its requests to
-  other origins are unseen; seeing those needs host permissions beyond
+  worker's bytes, and it sees only what the worker fetches. Without making any
+  request, a cloaked worker can change the text and attribute values of every
+  page it answers (same length, no new element; security measured one text
+  byte changed from the preload response, verdict ok): the CSP and
+  Cache-Control the tripwire reads are the navigation preload's, not the
+  worker's answer. A worker that keeps to the honest worker's requests can
+  still pass data out through which of them it makes, and when, and its
+  requests to other origins are unseen; seeing those needs host permissions beyond
   home.bento.page, a store-listing change for the maintainer.
 
 Guards: rows `c5-honest-worker` (the build's worker, two visits and an update
@@ -15520,4 +15537,9 @@ not registered, the worker-script check off, the query, path and method checks
 off, and the initiator and tab filters dropped, which flags the extension's own
 `/sw.js` read and a page's own requests); unit rows in
 `scripts/test-webext-tripwire.ts`, including an absent initiator and absent
-request headers.
+request headers. Added after security's review of #983: rows
+`worker-header`, `worker-header-held` and `preload-header`, each with a mutant
+(the header hold off, the held values off, the preload value not judged or not
+recorded), and unit rows that route requests through tripwire.js's
+`workerRequestOf` (an absent initiator must come out as
+`worker-request-unattributed`; dropping it is a red mutant).

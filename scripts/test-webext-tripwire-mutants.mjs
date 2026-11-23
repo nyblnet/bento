@@ -129,10 +129,17 @@ const MUTANTS = [
   { name: 'a query allowed (C5)', row: 'worker-query', file: J, from: "if (String(req.url).split('#')[0].includes('?')) why('a query')", to: '' },
   { name: 'any path allowed (C5)', row: 'worker-unlisted-path', file: J, from: "if (!list.releases.some((r) => r.origins[origin]?.files[p] !== undefined)) why('a path no release serves')", to: '' },
   { name: 'any method allowed (C5)', row: 'worker-post', file: J, from: "if (req.method !== 'GET') why('not GET')", to: '' },
-  { name: 'the extension\'s own requests taken for the worker\'s (C5)', row: 'c5-honest-worker', file: W, from: 'if (d.initiator != null && d.initiator !== LIBRARY_ORIGIN) return', to: '' },
+  { name: 'the extension\'s own requests taken for the worker\'s (C5)', row: 'c5-honest-worker', file: W, from: 'if (d.initiator != null && d.initiator !== LIBRARY_ORIGIN) return null', to: '' },
   { name: 'page requests taken for the worker\'s (C5)', row: 'c5-honest-worker', edits: [
-    { file: W, from: '  if (d.tabId !== -1) return\n', to: '' },
+    { file: W, from: '  if (d?.tabId !== -1) return null\n', to: '' },
     { file: W, from: "{ urls: [`${LIBRARY_ORIGIN}/*`], tabId: -1 }", to: "{ urls: [`${LIBRARY_ORIGIN}/*`] }" }] },
+  // the worker's request headers and the navigation preload value (security ruling on #983, M1)
+  { name: 'worker request headers not held (C5)', row: 'worker-header', file: J, from: '  for (const w of requestHeaderProblems(req.headers, ctx.nav)) why(w)\n', to: '' },
+  { name: 'header values not held (C5)', row: 'worker-header-held', edits: [
+    { file: J, from: "if (!HELD_REQUEST.get(n).includes(v)) out.push(", to: 'if (false) out.push(' },
+    { file: J, from: "      else if (v !== want) out.push(", to: '      else if (false) out.push(' }] },
+  { name: 'the preload header value not judged (C5)', row: 'preload-header', file: J, from: "  if (obs.preload != null && obs.preload !== 'true') out.push", to: '  if (false) out.push' },
+  { name: 'the preload header value not recorded (C5)', row: 'preload-header', file: W, from: 'preload: preload == null ? null : cut(preload) },', to: 'preload: null },' },
   // /index.html answered as '/' (security ruling on #964, M1): without it an honest visit reads "unverified"
   { name: 'the worker leaves /index.html to the network', row: 'stage3-index', build: [{ file: 'sw.ts', from: "  if (url.pathname === '/index.html') url.pathname = '/'\n", to: '' }] },
   { name: 'unread bytes waived under any worker (C2), at /index.html', row: 'stage3-vary-text-index', file: J, from: "(!obs.viaWorker || obs.cspFrom === 'navigation') && !obs.bytes", to: '!obs.viaWorker && !obs.bytes' },

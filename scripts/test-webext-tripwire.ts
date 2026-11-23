@@ -242,7 +242,7 @@ section('the library worker\'s own requests (security ruling #954 C5)')
   ok(wr(req({ url: `${O}/sw.js`, type: 'xmlhttprequest', headers: H('script', 'serviceworker') })) !== '', 'the worker-script headers on a fetch() request type: a finding')
   ok(wr(req({ url: `${O}/sw.js`, type: 'script', headers: null })) !== '', 'requestHeaders ABSENT on a worker-script fetch: a finding, never a pass')
   ok(wr(req({ url: `${O}/sw.js`, type: 'script', headers: [] })) !== '', 'no headers at all: a finding')
-  ok(wr(req({ headers: undefined })) === '', 'requestHeaders absent on a plain precache path: still allowed (only the worker script needs them)')
+  ok(wr(req({ headers: undefined })) === 'its request headers were not read', 'requestHeaders ABSENT on a plain precache path: a finding (its headers are held too, security ruling on #983 M1)')
   ok(wr(req({ url: `${O}/?x` })) === 'a query' && wr(req({ url: `${O}/?` })) === 'a query' && wr(req({ url: `${O}/#a?b` })) === '', 'a query, even a bare ?, is a finding; a ? in the fragment is not a query')
   ok(wr(req({ url: `${O}/not-served` })) === 'a path no release serves', 'a path no release serves: a finding')
   ok(wr(req({ method: 'POST' })) === 'not GET' && wr(req({ method: 'HEAD' })) === 'not GET', 'POST and HEAD: findings')
@@ -255,6 +255,43 @@ section('the library worker\'s own requests (security ruling #954 C5)')
   ok(wr(req({ url: `${O}/frame.html` })) === 'a path no release serves', 'the frame site\'s paths are not the library\'s')
   const noWorkers = { ...list1, releases: list1.releases.map((r: any) => { const { workers, ...rest } = r; return rest }) }
   ok(J.workerRequestFailures(req({ url: `${O}/sw.js` }), noWorkers, O).length === 0, 'a release with NO workers field: /sw.js is an ordinary served path (absent field read as no workers, not a crash)')
+
+  // the header hold (security ruling on #983, M1): the headers MEASURED on the honest worker's requests
+  // (Chromium 149: the install's precache fetches, the browser's script fetch and update check)
+  const nav = { acceptLanguage: 'en-GB,en;q=0.9', userAgent: 'Mozilla/5.0 (test) Chrome/149' }
+  const honestH = [{ name: 'Accept', value: '*/*' }, { name: 'Accept-Encoding', value: 'gzip, deflate, br, zstd' }, { name: 'Accept-Language', value: nav.acceptLanguage },
+    { name: 'Referer', value: `${O}/sw.js` }, { name: 'sec-ch-ua', value: '"Chromium";v="149"' }, { name: 'sec-ch-ua-mobile', value: '?0' }, { name: 'sec-ch-ua-platform', value: '"macOS"' },
+    { name: 'Sec-Fetch-Dest', value: 'empty' }, { name: 'Sec-Fetch-Mode', value: 'cors' }, { name: 'Sec-Fetch-Site', value: 'same-origin' }, { name: 'User-Agent', value: nav.userAgent }]
+  const wh = (headers: unknown, n: unknown = nav) => J.workerRequestFailures(req({ headers }), list1, O, { nav: n }).map((f: any) => f.why ?? f.rule).join('+')
+  ok(wh(honestH) === '', `the honest worker's request headers: allowed (positive control on the header read; ${wh(honestH)})`)
+  ok(wh([...honestH, { name: 'x-exfil', value: 'secret' }]) === 'a header the honest worker does not send: x-exfil', 'a header of the worker\'s own (x-exfil): a finding')
+  ok(wh(honestH.map((h) => (h.name === 'Accept' ? { ...h, value: 'secret' } : h))) === 'a header the honest worker does not send: accept with another value', 'Accept with another value: a finding')
+  ok(wh(honestH.map((h) => (h.name === 'Accept-Language' ? { ...h, value: 'secret' } : h))) === 'a header the honest worker does not send: accept-language with another value', 'Accept-Language unlike the navigation\'s: a finding')
+  ok(wh(honestH.map((h) => (h.name === 'User-Agent' ? { ...h, value: 'secret' } : h))) !== '', 'User-Agent unlike the navigation\'s: a finding')
+  ok(wh(honestH, null) === 'a header with no navigation to hold it to: accept-language+a header with no navigation to hold it to: user-agent', 'navigation record ABSENT: the browser-filled headers cannot be held, a finding, never a pass')
+  ok(wh(honestH, {}) !== '', 'a navigation record with its fields ABSENT: the same')
+  ok(wh([{ name: 'Cache-Control', value: 'no-cache' }]) !== '' && wh([{ name: 'Content-Type', value: 'text/plain' }]) !== '', 'Cache-Control and Content-Type, which the honest worker never sends: findings')
+  ok(wh([{ name: 'Cookie', value: 'a=b' }, { name: 'Sec-Anything', value: 'x' }, { name: 'Proxy-Thing', value: 'x' }, { name: 'Origin', value: O }]) === '', 'headers no script can set (forbidden names, Sec-*, Proxy-*) are the browser\'s: allowed')
+  ok(wh([{ name: 'SERVICE-WORKER', value: 'script' }]) === '' && wh([{ name: 'Service-Worker', value: 'x' }]) !== '', 'header names are read case-blind; Service-Worker only as script')
+
+  // the routing in front of the judge (security ruling on #983, M3): tripwire.js's workerRequestOf
+  const T = await import(path.join(EXT, 'src/tripwire.js'))
+  const d = (over: Record<string, unknown> = {}) => ({ tabId: -1, url: `${O}/`, method: 'GET', type: 'xmlhttprequest', initiator: O, requestHeaders: honestH, ...over })
+  const routed = (x: unknown) => { const r = T.workerRequestOf(x); return r ? J.workerRequestFailures(r, list1, O, { nav }).map((f: any) => f.rule).join('+') || 'allowed' : 'ignored' }
+  ok(routed(d()) === 'allowed', 'the library worker\'s honest request: judged, allowed (positive control on the routing)')
+  ok(routed(d({ initiator: undefined })) === 'worker-request-unattributed', 'initiator ABSENT: judged as worker-request-unattributed, never dropped')
+  ok(routed(d({ initiator: null })) === 'worker-request-unattributed', 'initiator null: the same')
+  ok(routed(d({ initiator: 'chrome-extension://abcdefghijklmnop' })) === 'ignored', 'the extension\'s own fetch: not the worker\'s, ignored')
+  ok(routed(d({ initiator: 'https://evil.example' })) === 'ignored', 'another site\'s initiator: ignored')
+  ok(routed(d({ tabId: 3 })) === 'ignored' && routed(d({ tabId: undefined })) === 'ignored', 'a page\'s request (a tab id), or no tab id: ignored')
+  ok(routed(d({ url: 'https://evil.example/x' })) === 'ignored', 'another origin: ignored (the listener never sees one)')
+  ok(routed(d({ requestHeaders: undefined })) === 'worker-request', 'requestHeaders ABSENT: judged, a finding')
+  ok(routed(d({ requestHeaders: [...honestH, { name: 'x-exfil', value: 's' }] })) === 'worker-request', 'a header of its own, through the routing: a finding')
+
+  // the navigation preload header value (security ruling on #983, M1)
+  const pf = (o: unknown) => J.headerFailures(o).map((f: any) => f.rule).join('+')
+  ok(pf({ preload: 'true' }) === '' && pf({}) === '' && pf({ preload: null }) === '', 'Service-Worker-Navigation-Preload: true, or absent: nothing to say')
+  ok(pf({ preload: 'secret' }) === 'preload-header' && pf({ preload: '' }) === 'preload-header', 'any other value (a worker\'s setHeaderValue): preload-header')
   const twSrc2 = fs.readFileSync(path.join(EXT, 'src/tripwire.js'), 'utf8')
   ok(/onSendHeaders\.addListener\(onWorkerRequest, \{ urls: \[`\$\{LIBRARY_ORIGIN\}\/\*`\], tabId: -1 \}, \['requestHeaders', 'extraHeaders'\]\)/.test(twSrc2), 'the listener: the library origin only, tabId -1, with extraHeaders (Service-Worker and Sec-Fetch-Dest are only visible with it)')
 }

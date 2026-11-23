@@ -152,9 +152,18 @@ function onRequest(d) {
   let origin
   try { origin = new URL(d.url).origin } catch { return }
   if (roleOf(origin) !== 'library') return
-  const site = (d.requestHeaders ?? []).find((h) => h.name.toLowerCase() === 'sec-fetch-site')?.value ?? null
-  void chrome.storage.session.set({ [`${REQUEST_PREFIX}${d.tabId}:${d.frameId}`]: { url: noHash(d.url), at: d.timeStamp, site: site == null ? null : cut(site) } })
+  const hv = (name) => (d.requestHeaders ?? []).find((h) => h.name.toLowerCase() === name)?.value ?? null
+  const site = hv('sec-fetch-site')
+  // the navigation preload header a worker may have set (judged on the page), and the two browser-filled
+  // headers the library worker's own requests are held to (security ruling on #983, M1)
+  const preload = hv('service-worker-navigation-preload')
+  const lang = hv('accept-language'), ua = hv('user-agent')
+  void chrome.storage.session.set({
+    [`${REQUEST_PREFIX}${d.tabId}:${d.frameId}`]: { url: noHash(d.url), at: d.timeStamp, site: site == null ? null : cut(site), preload: preload == null ? null : cut(preload) },
+    [NAV_KEY]: { acceptLanguage: lang == null ? null : cut(lang), userAgent: ua == null ? null : cut(ua) },
+  })
 }
+const NAV_KEY = 'twnav'
 
 /**
  * The library's own worker's requests (security ruling #954 C5): webRequest
@@ -169,15 +178,22 @@ function onRequest(d) {
  * there (measured), which is the residual the README states. Observing only.
  */
 const WREQ_PREFIX = 'twr:'
-function onWorkerRequest(d) {
-  if (d.tabId !== -1) return
+/** The request to judge, or null when it is not the library worker's (pure: no chrome, so a rig calls it). */
+export function workerRequestOf(d) {
+  if (d?.tabId !== -1) return null
   let origin
-  try { origin = new URL(d.url).origin } catch { return }
-  if (roleOf(origin) !== 'library') return
-  if (d.initiator != null && d.initiator !== LIBRARY_ORIGIN) return
-  const keep = new Set(['service-worker', 'sec-fetch-dest'])
-  const headers = Array.isArray(d.requestHeaders) ? d.requestHeaders.filter((h) => keep.has(String(h.name).toLowerCase())).map((h) => ({ name: cut(h.name), value: cut(h.value ?? '') })) : null
-  void tripwireWorkerRequest({ url: cut(noHash(d.url)), method: cut(d.method ?? ''), type: cut(d.type ?? ''), initiator: d.initiator == null ? null : cut(d.initiator), headers }).catch(() => {})
+  try { origin = new URL(d.url).origin } catch { return null }
+  if (roleOf(origin) !== 'library') return null
+  // another initiator (the extension's own fetch, another site) is not the library's worker; an ABSENT one
+  // cannot be ruled out as it, so it goes on to be judged (worker-request-unattributed), never dropped
+  if (d.initiator != null && d.initiator !== LIBRARY_ORIGIN) return null
+  // every header: their names and values are held to the honest worker's (security ruling on #983, M1)
+  const headers = Array.isArray(d.requestHeaders) ? d.requestHeaders.slice(0, 64).map((h) => ({ name: cut(String(h.name ?? '')), value: cut(h.value ?? '') })) : null
+  return { url: cut(noHash(d.url)), method: cut(d.method ?? ''), type: cut(d.type ?? ''), initiator: d.initiator == null ? null : cut(d.initiator), headers }
+}
+function onWorkerRequest(d) {
+  const req = workerRequestOf(d)
+  if (req) void tripwireWorkerRequest(req).catch(() => {})
 }
 
 /** Judge one of the library worker's own requests; a finding is recorded and announced like a page's. */
@@ -185,7 +201,8 @@ export async function tripwireWorkerRequest(req, net = (u, o) => fetch(u, o), no
   const { current, refresh } = await listFor(net, now)
   // no list, nothing to judge against: the visits that started the worker are on record as unchecked
   if (!current) return { ok: false, reason: 'no list' }
-  const failures = workerRequestFailures(req, current.list, LIBRARY_ORIGIN)
+  const nav = (await chrome.storage.session.get(NAV_KEY))[NAV_KEY] ?? null
+  const failures = workerRequestFailures(req, current.list, LIBRARY_ORIGIN, { nav })
   if (!failures.length) return { ok: true, verdict: 'ok' }
   // once per kind of request per session, so a chatty worker cannot flood the record
   const u = (() => { try { return new URL(req.url) } catch { return null } })()
@@ -435,6 +452,7 @@ export async function tripwireObserve(sender, obs, net = (u, o) => fetch(u, o)) 
     csp: fresh ? h.csp : role === 'library' && obs.bytes && !crossSite ? (obs.bytes.csp == null ? [] : [cut(obs.bytes.csp)]) : null,
     cspFrom: fresh ? 'navigation' : role === 'library' && obs.bytes && !crossSite ? 'cache' : null,
     cacheControl: fresh && Array.isArray(h.cacheControl) ? h.cacheControl : null, crossSite,
+    preload: matches(q, url, obs.timeOrigin) && typeof q.preload === 'string' ? q.preload : null,
     refresh: fresh && Array.isArray(h.refresh) && h.refresh.length ? h.refresh : earlyRefresh,
     workers: workersIn ? [] : null,
     cache: cacheIn ? cacheIn.slice(0, MAX_CACHE).map((c) => ({ url: cut(c.url), sha256: cut(c.sha256) })) : null,

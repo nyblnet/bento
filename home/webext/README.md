@@ -376,7 +376,7 @@ debugger protocol has one, behind a banner):
 | a `Refresh` header | the same webRequest record: the honest library and frame never send one, so any `Refresh` header is a mismatch (it sends the tab elsewhere with no markup to flag). Measured: Chromium acts on the header at the load event, before the full report has always left (`Refresh: 0`), and the next navigation then replaces the frame's record. So the first early report, sent at `document_start`, reads the header while the record is still this navigation's; the early report and the full report both carry it | library and frame |
 | workers | every registration's script URL must be a worker a release lists; its bytes, fetched now with `no-store`, must be that file | library |
 | the worker's cache | every Cache Storage entry, hashed, must be a file some release lists | library |
-| the worker's own requests | `webRequest.onSendHeaders` for requests with no tab (`tabId` -1) whose initiator is the library origin: the library's worker. Each must be a GET with no query, to a path some release serves on the library origin, and the worker script (`/sw.js`) only as the browser's own worker-script fetch (type `script`, `Sec-Fetch-Dest: serviceworker`, `Service-Worker: script`). Anything else is a mismatch, recorded and announced on its own (no tab to badge), once per kind of request per session. A request with no initiator is recorded as unverified. The extension's own requests (initiator `chrome-extension://`) and pages' (a tab id) are not the worker's | library |
+| the worker's own requests | `webRequest.onSendHeaders` for requests with no tab (`tabId` -1) whose initiator is the library origin: the library's worker. Each must be a GET with no query, to a path some release serves on the library origin, and the worker script (`/sw.js`) only as the browser's own worker-script fetch (type `script`, `Sec-Fetch-Dest: serviceworker`, `Service-Worker: script`); its headers must be ones the honest worker's requests carry, with their values (`Accept: */*`, `Service-Worker: script`, and `Accept-Language` and `User-Agent` as the library's latest navigation sent them; headers no script can set are the browser's). Anything else is a mismatch, recorded and announced on its own (no tab to badge), once per kind of request per session. A request with no initiator is recorded as unverified. The extension's own requests (initiator `chrome-extension://`) and pages' (a tab id) are not the worker's | library |
 
 The library is judged only as a top-level page (it is never framed), and in a
 `blob:` or `about:` document of its origin, which it never makes (judged by the origin the browser says it runs in, since an `about:` URL carries none); the frame
@@ -415,10 +415,18 @@ home.bento.page has never been checked.
   `/sw.js` (`Service-Worker: script`) with a different worker than the one the
   extension fetches, and the browser installs what it was given; the installed
   copy cannot be read. What the tripwire holds that worker to is its own
-  requests (above). That does not verify its bytes: a worker that keeps to the
-  honest worker's requests can still pass data out through which of them it
-  makes, and when (a covert channel), and it can answer pages with anything
-  the CSP and the parse do not catch. Its requests to **other origins** are
+  requests (above), with their headers held to the honest worker's and the
+  navigation preload header to the browser's `true` (a worker's
+  `setHeaderValue` is a mismatch on the page, rule `preload-header`). That
+  does not verify its bytes, and it sees only what the worker fetches. Without
+  making any request, a cloaked worker can change the text and attribute
+  values of every page it answers (same length, no new element; measured:
+  one text byte changed from the preload response, verdict ok). The CSP and
+  Cache-Control the tripwire reads for such a page are the navigation
+  preload's, as webRequest saw them, not the worker's answer, so they say
+  nothing about what the worker handed the page. It can also pass data out
+  through which of the allowed requests it makes, and when (a covert
+  channel). Its requests to **other origins** are
   not seen at all: the extension has no host permission there (measured), and
   asking for one is a store-listing change;
 - **the code runs first.** The tripwire reports what was parsed; a hostile

@@ -221,9 +221,18 @@ export function markupFailures(obs) {
   return (obs.flags ?? []).length ? [{ rule: 'markup', got: obs.flags }] : []
 }
 
-/** A Refresh response header navigates with no markup to flag: never in a release (R4). Other headers but CSP and Cache-Control are not checked. */
+/**
+ * A Refresh response header navigates with no markup to flag: never in a release (R4). Other response
+ * headers but CSP and Cache-Control are not checked.
+ * The navigation preload request header (Service-Worker-Navigation-Preload) is the browser's `true`
+ * unless a worker set another value (navigationPreload.setHeaderValue): the honest worker never does,
+ * and a value is bytes the worker sends out on every later navigation (security ruling on #983, M1).
+ * Absent (no worker, or no preload): nothing to judge.
+ */
 export function headerFailures(obs) {
-  return (obs.refresh ?? []).length ? [{ rule: 'refresh-header', got: obs.refresh }] : []
+  const out = (obs.refresh ?? []).length ? [{ rule: 'refresh-header', got: obs.refresh }] : []
+  if (obs.preload != null && obs.preload !== 'true') out.push({ rule: 'preload-header', got: obs.preload })
+  return out
 }
 
 /** Every registered worker is one some release lists, and its bytes (when fetched) are that release's. */
@@ -292,13 +301,25 @@ const pathOf = (url) => { try { return new URL(url).pathname || '/' } catch { re
  *     `script`, Sec-Fetch-Dest `serviceworker` (a Sec- header no script can
  *     set) and Service-Worker `script`. A worker re-fetching its own script
  *     (to launder a cloaked copy) carries none of them.
+ *   - its request headers held to the honest worker's (security ruling on
+ *     #983, M1: a header is bytes the worker chooses). A header no script can
+ *     set (the fetch spec's forbidden names, Sec-* and Proxy-*) is the
+ *     browser's. Every other one must be one the honest worker's requests
+ *     carry, with the value they carry (measured, Chromium 149: the install's
+ *     precache fetches and the browser's script fetch and update check):
+ *     Accept `*\/*`, Service-Worker `script`, and Accept-Language and
+ *     User-Agent equal to what the library's latest navigation sent
+ *     (`ctx.nav`). Any other name, or another value, is a finding; so are
+ *     headers that were not read, and a navigation record that is absent.
  * A request with no initiator cannot be tied to the library's worker or ruled
  * out as it: recorded as unverified, never allowed in silence.
  * `req`: { url, method, type, initiator, headers: [{ name, value }] | null }.
+ * `ctx.nav`: { acceptLanguage, userAgent } from the latest library navigation, or null.
  * This does not verify bytes: a worker that keeps to these requests can still
- * pass data out through which of them it makes, and when (a covert channel).
+ * pass data out through which of them it makes, and when (a covert channel),
+ * and it can answer pages with what it likes without making any request.
  */
-export function workerRequestFailures(req, list, origin) {
+export function workerRequestFailures(req, list, origin, ctx = {}) {
   const got = { method: req?.method ?? null, url: req?.url ?? null, type: req?.type ?? null, initiator: req?.initiator ?? null }
   if (req?.initiator == null) return [{ rule: 'worker-request-unattributed', got }]
   let u
@@ -313,6 +334,35 @@ export function workerRequestFailures(req, list, origin) {
   if (list.releases.some((r) => (r.workers ?? []).includes(p))) {
     const h = (name) => (Array.isArray(req.headers) ? req.headers.find((x) => String(x?.name).toLowerCase() === name)?.value ?? null : null)
     if (!(req.type === 'script' && h('sec-fetch-dest') === 'serviceworker' && h('service-worker') === 'script')) why('the worker script, not fetched as the browser\'s worker script')
+  }
+  for (const w of requestHeaderProblems(req.headers, ctx.nav)) why(w)
+  return out
+}
+
+// request header names no script can set (the fetch spec's forbidden request-header names): the browser's
+const FORBIDDEN_REQUEST = new Set(['accept-charset', 'accept-encoding', 'access-control-request-headers', 'access-control-request-method',
+  'connection', 'content-length', 'cookie', 'cookie2', 'date', 'dnt', 'expect', 'host', 'keep-alive', 'origin', 'referer',
+  'set-cookie', 'te', 'trailer', 'transfer-encoding', 'upgrade', 'via'])
+// the script-settable headers the honest worker's requests carry, each held to the value it carries (measured)
+const HELD_REQUEST = new Map([['accept', ['*/*']], ['service-worker', ['script']]])
+// the two the browser fills from its own settings: held to what the library's latest navigation sent
+const HELD_FROM_NAV = new Map([['accept-language', 'acceptLanguage'], ['user-agent', 'userAgent']])
+/** Why a worker request's headers are not the honest worker's (empty when they are). */
+export function requestHeaderProblems(headers, nav) {
+  if (!Array.isArray(headers)) return ['its request headers were not read']
+  const out = []
+  for (const x of headers) {
+    const n = String(x?.name ?? '').toLowerCase()
+    const v = String(x?.value ?? '')
+    if (FORBIDDEN_REQUEST.has(n) || n.startsWith('sec-') || n.startsWith('proxy-')) continue
+    if (HELD_REQUEST.has(n)) { if (!HELD_REQUEST.get(n).includes(v)) out.push(`a header the honest worker does not send: ${n} with another value`); continue }
+    if (HELD_FROM_NAV.has(n)) {
+      const want = nav?.[HELD_FROM_NAV.get(n)]
+      if (typeof want !== 'string') out.push(`a header with no navigation to hold it to: ${n}`)
+      else if (v !== want) out.push(`a header the honest worker does not send: ${n} with another value`)
+      continue
+    }
+    out.push(`a header the honest worker does not send: ${n}`)
   }
   return out
 }
