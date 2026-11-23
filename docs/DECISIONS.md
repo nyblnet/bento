@@ -15616,3 +15616,46 @@ off, tab requests never routed; manifests held to document paths; the own-URL
 exemption off); `unlisted-404` now also guards the favicon and own-Referer
 exceptions (its mutant drops both: a loud tab on an honest 404); and unit rows for `pageRequestOf` and `pageRequestFailures`
 with an absent initiator, absent headers and an absent navigation record.
+
+**Navigations a library page starts** (security's fourth review of #983, M7).
+Holding the page's fetches left its navigations. A page the worker rewrites can
+make the browser navigate with no request of the page's own and no script:
+measured (Chromium 149), the worker turned the CSP `<meta>` into
+`http-equiv="refresh" content="0;url=/?s=…"` (two attribute values, padded to
+the same length) and a 469-character URL reached the server in the navigation
+preload, verdict ok, no tab; a `Refresh` header the worker added to its answer
+and the worker's own `WindowClient.navigate()` did the same. webRequest shows
+each as a `main_frame` request whose initiator is the library origin, as it
+does the honest Reload button's `location.reload()`; typed, reload, back and
+forward navigations carry no initiator (measured), and the honest library has
+no same-origin links and its worker navigates no client. So a `main_frame` or
+`sub_frame` navigation to the library origin whose initiator IS the library
+origin is held to the page-request URL rules: GET, no query, a path a release
+serves (rule `navigation`, class "tampered", announced on that tab). The one
+exception is a navigation to exactly the URL that tab or frame is on now,
+which is the last library navigation webRequest showed for it (any
+initiator), compared whole, never by a cut prefix; a URL over 8192 characters
+is not remembered, so a reload of it is judged. Navigations with no initiator,
+another site's, or an opaque one are not judged on their URL. Measured, in
+headless and headed Chromium 149: back and forward to a library page made a
+request every time. A back that restored a page from the back/forward cache
+with no request would leave the record stale, and pressing Reload there would
+be a loud finding, never a silent pass.
+
+An opaque-origin library page (a worker-added `sandbox` CSP) is held by the
+page judge's "could not tell" rules (`bytes-unread`, `cache-unread`,
+`workers-unread`; security measured it loud), not by `page-request` or
+`navigation`, which ignore an initiator of `"null"`. Chrome made no manifest
+fetch from such a page; no later change should rely on the request rules for
+this case.
+
+Guards, added after security's fourth review: rows `nav-meta-refresh`,
+`nav-refresh-header` and `nav-client-navigate` (each with a positive control
+that the query reached the server in the navigation, and a loud `navigation`
+mismatch from the URL the tab was on) and `c5-honest-reload` (honest visits to
+`/?from=link` and `/`, each reloaded by the library's own Reload button, whose
+navigations webRequest shows with the library origin as initiator: no
+finding), each with a mutant (the navigation hook not called, the query check
+off, library-initiated navigations never routed, the reload exemption off);
+and unit rows for `navigationOf` and `navigationFailures`, with an absent
+initiator, method, URL and record, and a URL longer than the record cut.

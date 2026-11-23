@@ -444,7 +444,16 @@ home.bento.page has never been checked.
   The one request to the tab's own document URL is the tripwire's content
   script re-reading the navigation, so its query and path are the
   navigation's and are not judged; Chrome's default `/favicon.ico` fetch and a
-  Referer naming the page itself (a host's 404 page) are the browser's too. A page request the worker answers itself
+  Referer naming the page itself (a host's 404 page) are the browser's too.
+  A NAVIGATION the page starts is held too: a `main_frame` or `sub_frame`
+  navigation to the library origin whose initiator is the library origin must
+  be GET, with no query, to a path a release serves (rule `navigation`;
+  measured: a meta refresh made of two rewritten attribute values, a `Refresh`
+  header, and the worker's `WindowClient.navigate()` each sent a query to the
+  server in the navigation preload, verdict ok before this rule). The one
+  exception is a reload of exactly the URL the tab or frame is on (the
+  library's Reload button); typed, reload, back and forward navigations carry
+  no initiator and are not judged. A page request the worker answers itself
   never reaches webRequest, and its bytes reach only the worker. The worker
   can still pass data out through which of the allowed requests it, or the
   page, makes, and when (a covert channel). Its requests, and the page's, to

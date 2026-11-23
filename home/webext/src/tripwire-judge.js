@@ -399,6 +399,35 @@ export function pageRequestFailures(req, list, origin, ctx = {}) {
 }
 const BROWSER_ICON = '/favicon.ico'
 
+/**
+ * Why a NAVIGATION a library document started (a tab's or a frame's, initiator the library origin) is not
+ * the honest library's (empty when it is). Security ruling on #983, M7: a page the worker rewrites can make
+ * the browser navigate with no request of the page's own and no script: a meta refresh made of two changed
+ * attribute VALUES, a Refresh header on the worker's answer, or the worker's own WindowClient.navigate().
+ * MEASURED (Chromium 149): each is a main_frame request with initiator = the library origin, and its URL,
+ * query included, reaches the server in the navigation preload. The honest library starts one navigation
+ * to its own origin, its Reload button's location.reload(), to the URL the tab is already on (measured:
+ * initiator the library origin); it has no same-origin links and its worker navigates no client. Typed,
+ * reload, back and forward navigations carry NO initiator (measured) and are not judged here.
+ * `ctx.hereUrl`: the URL this tab or frame was last navigated to (webRequest's record), or null.
+ */
+export function navigationFailures(req, list, origin, ctx = {}) {
+  const got = { method: req?.method ?? null, url: req?.url ?? null, type: req?.type ?? null, initiator: req?.initiator ?? null }
+  const target = String(req?.url ?? '').split('#')[0]
+  // a reload of the document the tab or frame is on names nothing the worker chose
+  if (typeof ctx.hereUrl === 'string' && ctx.hereUrl !== '' && target === ctx.hereUrl && req?.method === 'GET') return []
+  let nu
+  try { nu = new URL(target) } catch { return [{ rule: 'navigation', why: 'unreadable URL', got }] }
+  const out = []
+  const flag = (w) => out.push({ rule: 'navigation', why: w, got })
+  if (nu.origin !== origin) flag('another origin')
+  if (req?.method !== 'GET') flag('not GET')
+  if (target.indexOf('?') !== -1) flag('a query')
+  const where = nu.pathname || '/'
+  if (!list.releases.some((r) => (r.origins[origin]?.files ?? {})[where] !== undefined)) flag('a path no release serves')
+  return out
+}
+
 // forbidden names whose values a script still chooses (cookieStore, fetch's referrer): never on the honest
 // worker's requests (security ruling on #983, M4)
 const ABSENT_REQUEST = new Set(['cookie', 'referer'])

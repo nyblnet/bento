@@ -174,7 +174,7 @@ jobs:
       # The C5 header hold over HTTPS and HTTP/2, the shape home.bento.page has: Chromium adds
       # headers there (priority) that must not read as the worker's (security's review of #983, M5)
       - name: Tripwire C5 rows over HTTPS and HTTP/2
-        run: TW_H2=1 TW_ROWS=c5-honest-worker,c5-honest-soft-update,worker-cookie,worker-referer,worker-header,worker-header-held,preload-header,sw-cloak,c5-honest-manifest,c5-honest-own-url,page-manifest-query node scripts/test-webext-tripwire-browser.mjs
+        run: TW_H2=1 TW_ROWS=c5-honest-worker,c5-honest-soft-update,worker-cookie,worker-referer,worker-header,worker-header-held,preload-header,sw-cloak,c5-honest-manifest,c5-honest-own-url,page-manifest-query,nav-meta-refresh,c5-honest-reload node scripts/test-webext-tripwire-browser.mjs
 
   webext-tripwire-mutants:
     needs: home-gate

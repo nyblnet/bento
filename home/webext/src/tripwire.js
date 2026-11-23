@@ -27,7 +27,7 @@
 // link to or frame must not be able to open tabs at will.
 
 import { t } from './i18n.js'
-import { acceptServed, verifyServed, judge, judgeEarly, observed, classOf, workerRequestFailures, pageRequestFailures, REFRESH_MS } from './tripwire-judge.js'
+import { acceptServed, verifyServed, judge, judgeEarly, observed, classOf, workerRequestFailures, pageRequestFailures, navigationFailures, REFRESH_MS } from './tripwire-judge.js'
 import { KEY, LIBRARY_ORIGIN, FRAME_ORIGINS, LIST_URL } from './tripwire-config.js'
 
 export const LOG_KEY = 'tripwireLog'
@@ -164,6 +164,7 @@ function onRequest(d) {
   // page in a frame registers the worker too, and its install must not read as "no navigation" (measured:
   // the rig's framed row, five false findings before sub_frame counted here)
   const nav = { [NAV_KEY]: { acceptLanguage: lang == null ? null : cut(lang), userAgent: ua == null ? null : cut(ua) } }
+  noteNavigation(d)
   if (d.type !== 'main_frame') { void chrome.storage.session.set(nav); return }
   void chrome.storage.session.set({
     [`${REQUEST_PREFIX}${d.tabId}:${d.frameId}`]: { url: noHash(d.url), at: d.timeStamp, site: site == null ? null : cut(site), preload: preload == null ? null : cut(preload), cookie },
@@ -171,6 +172,78 @@ function onRequest(d) {
   })
 }
 const NAV_KEY = 'twnav'
+
+/**
+ * Navigations a library document started (security ruling on #983, M7): a meta refresh or Refresh header
+ * on a page the worker rewrote, or the worker's WindowClient.navigate(), sends the tab to a URL of the
+ * worker's choosing, and the navigation preload carries that URL to the server. MEASURED (Chromium 149):
+ * all three are main_frame requests with initiator = the library origin, as is the honest Reload button's
+ * location.reload(); typed, reload, back and forward navigations carry none. So a library-initiated
+ * navigation is held to the page-request URL rules, except one to the URL the tab or frame is on now.
+ * "Is on now" is the last library navigation webRequest showed for that tab and frame, any initiator.
+ * Back and forward made a request every time (measured, headless and headed): a back that restored a
+ * page with no request would leave the record stale, and a Reload there would be a finding (loud), never
+ * a silent pass.
+ */
+const HERE_PREFIX = 'twh:'
+const HERE = new Map()
+/** The navigation to judge, or null when no library document started it (pure: no chrome, so a rig calls it). */
+export function navigationOf(d) {
+  if (d?.type !== 'main_frame' && d?.type !== 'sub_frame') return null
+  if (typeof d.tabId !== 'number' || d.tabId < 0) return null
+  let origin
+  try { origin = new URL(d.url).origin } catch { return null }
+  if (roleOf(origin) !== 'library') return null
+  // typed, reload, back and forward carry no initiator; another site's link carries its own; an opaque
+  // ("null") document is the page judge's (a sandboxed library page reads loud there, measured): none is judged
+  if (d.initiator !== LIBRARY_ORIGIN) return null
+  // the WHOLE URL, uncut: the reload test compares it exactly (a cut URL would let a navigation that shares
+  // the first MAX_STR characters of the one the tab is on pass as that one); the record keeps a cut copy
+  return { url: noHash(d.url), method: cut(d.method ?? ''), type: d.type, initiator: d.initiator, tabId: d.tabId, frameId: typeof d.frameId === 'number' ? d.frameId : 0 }
+}
+// a URL longer than this is not remembered as the one a tab is on: a reload of it is judged, never excused
+const MAX_HERE = 8192
+const hereOf = (u) => { const x = noHash(u); return x.length <= MAX_HERE ? x : '' }
+function noteNavigation(d) {
+  const key = `${HERE_PREFIX}${d.tabId}:${d.frameId}`
+  const req = navigationOf(d)
+  // the URL the tab or frame is on BEFORE this navigation: memory first; after the worker slept, the session
+  // record, read before it is overwritten (the get is issued ahead of the set, and storage keeps that order)
+  const mem = HERE.get(key)
+  const before = req && mem === undefined ? chrome.storage.session.get(key) : null
+  HERE.delete(key)
+  HERE.set(key, hereOf(d.url))
+  if (HERE.size > 256) HERE.delete(HERE.keys().next().value)
+  void chrome.storage.session.set({ [key]: hereOf(d.url) })
+  if (!req) return
+  void Promise.resolve(before)
+    .then((r) => tripwireNavigation(req, undefined, undefined, mem !== undefined ? mem : (typeof r?.[key] === 'string' ? r[key] : null)))
+    .catch(() => {})
+}
+
+/** Judge a navigation a library document started; a finding is recorded and announced on that tab. */
+export async function tripwireNavigation(req, net = (u, o) => fetch(u, o), now = Date.now(), hereUrl = null) {
+  const { current, refresh } = await listFor(net, now)
+  if (!current) return { ok: false, reason: 'no list' }
+  const failures = navigationFailures(req, current.list, LIBRARY_ORIGIN, { hereUrl })
+  if (!failures.length) return { ok: true, verdict: 'ok' }
+  const u = (() => { try { return new URL(req.url) } catch { return null } })()
+  const shape = `${req.method} ${u ? u.pathname : req.url}${String(req.url).includes('?') ? '?' : ''} ${req.type} ${failures.map((f) => f.why ?? f.rule).join('+')}`
+  if (!(await firstTime(`${NREQ_PREFIX}${shape}`))) return { ok: true, verdict: 'mismatch', repeat: true }
+  let tab = null
+  try { tab = await chrome.tabs.get(req.tabId) } catch { tab = { id: req.tabId, index: 0 } }
+  const event = {
+    id: newId(now), at: new Date(now).toISOString(), url: cut(req.url), origin: LIBRARY_ORIGIN, role: 'navigation',
+    verdict: 'mismatch', release: null, failures,
+    serial: current.list.serial ?? null, listAt: current.list.at ?? null,
+    list: refresh ? { status: refresh.status, why: refresh.why } : { status: 'held' },
+    observed: { request: true },
+    page: { role: 'navigation', url: cut(req.url), request: { method: req.method, type: req.type, initiator: req.initiator, from: hereUrl == null ? null : cut(hereUrl) } },
+  }
+  await settle(event, tab, refresh, { verdict: 'mismatch' }, now)
+  return { ok: true, verdict: 'mismatch', id: event.id }
+}
+const NREQ_PREFIX = 'twn:'
 
 /**
  * The library's own worker's requests (security ruling #954 C5): webRequest

@@ -1212,7 +1212,7 @@ if (STAGE3.some(row)) {
 // bytes. What the tripwire can still see is what that worker DOES: its own requests (webRequest, tabId -1,
 // initiator the library origin), held to the honest worker's: GET, no query, a path the release serves,
 // and /sw.js only as the browser's worker-script fetch.
-const C5_ROWS = ['c5-honest-worker', 'sw-cloak', 'sw-cloak-launder', 'worker-query', 'worker-unlisted-path', 'worker-post', 'worker-header', 'worker-header-held', 'preload-header', 'worker-cookie', 'worker-referer', 'c5-honest-soft-update', 'c5-honest-manifest', 'page-manifest-query', 'c5-honest-own-url']
+const C5_ROWS = ['c5-honest-worker', 'sw-cloak', 'sw-cloak-launder', 'worker-query', 'worker-unlisted-path', 'worker-post', 'worker-header', 'worker-header-held', 'preload-header', 'worker-cookie', 'worker-referer', 'c5-honest-soft-update', 'c5-honest-manifest', 'page-manifest-query', 'c5-honest-own-url', 'nav-meta-refresh', 'nav-refresh-header', 'nav-client-navigate', 'c5-honest-reload']
 const workerEvents = async (t0) => (await since(t0)).filter((e) => e.role === 'worker')
 /** The build's worker with `extra` appended: installs (its precache matches its pins) and runs `extra` too. */
 const cloakOf = (extra) => ({ body: Buffer.concat([BUILD_SW, Buffer.from(`\n${extra}\n`)]), headers: { ...honest.lib.get('/sw.js').headers } })
@@ -1432,6 +1432,79 @@ if (C5_ROWS.some(row)) {
     const ev = evs.find((e) => e.url === `${LIB}/manifest.webmanifest?s=secret-mf-1234`)
     ok(ev?.verdict === 'mismatch' && whys([ev]).includes('a query') && ev.class === 'tampered' && (ev.warned ?? []).includes('tab'), `a loud mismatch on the page's request (${JSON.stringify(evs.map((e) => [e.url, whys([e]), e.warned]))})`)
     ok(ev?.page?.request?.type === 'other' && ev.page.request.initiator === LIB, `seen as the tab's request: type other, initiator the library origin (${ev?.page?.request?.type} ${ev?.page?.request?.initiator})`)
+  }
+
+  // --- navigations a library document starts (security's fourth review of #983, M7) -------------------
+  // MEASURED (Chromium 149): a meta refresh, a Refresh header and the worker's WindowClient.navigate() are
+  // each a main_frame request with initiator = the library origin, and the navigation preload carries the
+  // URL to the server; so is the honest Reload button's location.reload(), to the URL the tab is on.
+  const navEvents = async (t0) => (await since(t0)).filter((e) => e.role === 'navigation')
+  const watchNavs = () => sw.evaluate((lib) => {
+    globalThis.__twNav = []
+    globalThis.__twNavFn ??= (d) => { globalThis.__twNav.push(`${d.type} ${d.initiator ?? '-'} ${d.method} ${d.url.replace(lib, '')}`) }
+    chrome.webRequest.onSendHeaders.addListener(globalThis.__twNavFn, { urls: [`${lib}/*`], types: ['main_frame', 'sub_frame'] }, ['requestHeaders', 'extraHeaders'])
+  }, LIB)
+  const navsSeen = () => sw.evaluate(() => { chrome.webRequest.onSendHeaders.removeListener(globalThis.__twNavFn); return globalThis.__twNav })
+  const navWrap = (handler) => `{const _ael=self.addEventListener.bind(self);self.addEventListener=(t,f,o)=>t==="fetch"?_ael(t,(e)=>{${handler};f(e)},o):_ael(t,f,o)}\n`
+  /** Install a worker whose fetch handler runs `handler` first, then visit / under it; returns what the row needs. */
+  async function navUnder(handler, marker) {
+    await fresh()
+    state.cloak = { body: Buffer.concat([Buffer.from(navWrap(handler)), BUILD_SW]), headers: { ...honest.lib.get('/sw.js').headers } }
+    await page.goto(`${LIB}/`)
+    const ctl = await until(async () => page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state === 'activated'), 20000)
+    await page.goto('about:blank')
+    await sleep(300)
+    await watchNavs()
+    const t0 = Date.now(), k1 = state.heads.length
+    await page.goto(`${LIB}/`).catch((e) => note(`goto: ${e}`))
+    await until(async () => (await navEvents(t0)).length > 0, 8000)
+    await sleep(1500)
+    const seen = await navsSeen()
+    const got = state.heads.slice(k1).filter((q) => q.key === 'lib' && String(q.u).includes(marker))
+    return { ctl, t0, seen, got, evs: await navEvents(t0), final: page.url() }
+  }
+  const navCheck = (r, marker, how) => {
+    for (const x of [...new Set(r.seen)]) note(`extension saw (a navigation) ${x.replace(/x{20,}/g, 'x…')}`)
+    // positive control: the bytes did leave, in a navigation the library origin started
+    ok(r.ctl && r.got.length > 0 && r.seen.some((x) => x.startsWith(`main_frame ${LIB} GET /?s=${marker}`)), `the cloaked worker is installed and ${how} carried the query to the server (${r.got.length} request(s), ${r.got.map((q) => `${String(q.u).length}-char URL dest=${q.h['sec-fetch-dest']}`).join(' | ')})`)
+    const ev = r.evs.find((e) => String(e.url).startsWith(`${LIB}/?s=${marker}`))
+    ok(ev?.verdict === 'mismatch' && whys([ev]).includes('a query') && ev.class === 'tampered' && (ev.warned ?? []).includes('tab') && reportTabs().length > 0, `a loud mismatch on the navigation (${JSON.stringify(r.evs.map((e) => [String(e.url).replace(LIB, '').slice(0, 40), whys([e]), e.warned]))})`)
+    ok(ev?.page?.request?.type === 'main_frame' && ev.page.request.initiator === LIB && ev.page.request.from === `${LIB}/`, `seen as a navigation the library page started, from the URL it was on (${ev?.page?.request?.type} ${ev?.page?.request?.initiator} from ${ev?.page?.request?.from})`)
+  }
+  if (row('nav-meta-refresh')) {
+    section('nav-meta-refresh: a cloaked worker changes two attribute VALUES of the page it answers: the CSP <meta> becomes a meta refresh to /?s=… (same length)  (rule: a navigation the library starts: no query)')
+    const handler = `const u=new URL(e.request.url);if(e.request.mode==="navigate"&&u.pathname==="/"&&!u.search){e.respondWith((e.preloadResponse||Promise.resolve()).then((r)=>r||fetch(e.request)).then(async(r)=>{const t=await r.text();return new Response(t.replace(/http-equiv="Content-Security-Policy" content="([^"]*)"/,(m,c)=>'http-equiv="refresh" content="'+'0;url=/?s=secret-meta-'.padEnd(c.length+16,'x')+'"'),{status:r.status,headers:r.headers})}));return}`
+    navCheck(await navUnder(handler, 'secret-meta'), 'secret-meta', 'the browser\'s meta-refresh navigation')
+  }
+  if (row('nav-refresh-header')) {
+    section('nav-refresh-header: a cloaked worker adds Refresh: 0;url=/?s=… to its answer for /  (rule: a navigation the library starts: no query)')
+    const handler = `const u=new URL(e.request.url);if(e.request.mode==="navigate"&&u.pathname==="/"&&!u.search){e.respondWith((e.preloadResponse||Promise.resolve()).then((r)=>r||fetch(e.request)).then(async(r)=>{const h=new Headers(r.headers);h.set("refresh","0;url=/?s=secret-hdr-1234");return new Response(await r.text(),{status:r.status,headers:h})}));return}`
+    navCheck(await navUnder(handler, 'secret-hdr'), 'secret-hdr', 'the browser\'s Refresh-header navigation')
+  }
+  if (row('nav-client-navigate')) {
+    section('nav-client-navigate: a cloaked worker calls WindowClient.navigate("/?s=…") on the page it answered  (rule: a navigation the library starts: no query)')
+    const handler = `const u=new URL(e.request.url);if(e.request.mode==="navigate"&&u.pathname==="/"&&!u.search&&!self.__twNavDone){self.__twNavDone=1;const id=e.resultingClientId;setTimeout(()=>clients.get(id).then((c)=>c&&c.navigate("/?s=secret-cn-1234")).catch(()=>{}),1000)}`
+    navCheck(await navUnder(handler, 'secret-cn'), 'secret-cn', 'WindowClient.navigate()')
+  }
+  if (row('c5-honest-reload')) {
+    section('c5-honest-reload: honest visits to /?from=link and to /, each reloaded by the library\'s own Reload button (location.reload())  (rule: a navigation to the URL the tab is on is not judged)')
+    await fresh()
+    await watchNavs()
+    const t0 = Date.now()
+    const v1 = await visit(page, `${LIB}/?from=link`)
+    await page.evaluate(() => document.getElementById('reload').click()).catch((e) => note(`reload: ${e}`))
+    await sleep(2500)
+    await page.goto('about:blank')
+    const v2 = await visit(page, `${LIB}/`)
+    await until(async () => page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state === 'activated'), 20000)
+    await page.evaluate(() => document.getElementById('reload').click()).catch((e) => note(`reload: ${e}`))
+    await sleep(2500)
+    const seen = await navsSeen()
+    for (const x of [...new Set(seen)]) note(`extension saw (a navigation) ${x}`)
+    // positive control: the Reload button's navigations happened, and the library origin started them
+    ok(seen.includes(`main_frame ${LIB} GET /?from=link`) && seen.includes(`main_frame ${LIB} GET /`), 'the Reload button reloaded both pages: library-initiated navigations to /?from=link and to / (positive control)')
+    const evs = (await since(t0)).filter((e) => e.verdict === 'mismatch')
+    ok(v1.lib?.verdict === 'ok' && v2.lib?.verdict === 'ok' && evs.length === 0 && reportTabs().length === 0, `no finding, no report tab (${v1.lib?.verdict} ${v2.lib?.verdict}; ${JSON.stringify(evs.map((e) => [e.role, String(e.url).replace(LIB, ''), whys([e])]))})`)
   }
   await fresh()
 }

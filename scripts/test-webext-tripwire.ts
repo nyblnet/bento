@@ -360,6 +360,41 @@ section('a library page\'s own non-document requests (security ruling on #983, M
   ok(/onSendHeaders\.addListener\(onPageRequest, \{ urls: \[`\$\{LIBRARY_ORIGIN\}\/\*`\] \}, \['requestHeaders', 'extraHeaders'\]\)/.test(twSrc3), 'the listener: the library origin, every type and tab (pageRequestOf picks), with extraHeaders (Cookie is only visible with it)')
 }
 
+section('navigations a library document starts (security ruling on #983, M7)')
+{
+  const O = 'https://home.bento.page'
+  const T = await import(path.join(EXT, 'src/tripwire.js'))
+  const nr = (over: Record<string, unknown> = {}) => ({ url: `${O}/`, method: 'GET', type: 'main_frame', initiator: O, ...over })
+  const nj = (r: unknown, hereUrl?: unknown) => J.navigationFailures(r, list1, O, hereUrl === undefined ? {} : { hereUrl }).map((f: any) => f.why ?? f.rule).join('+')
+  ok(lib.files['/'] !== undefined && nj(nr()) === '' && nj(nr({ url: `${O}/extra.js` })) === '', 'a navigation to a path the release serves, no query: allowed (positive control on the list read)')
+  ok(nj(nr({ url: `${O}/?s=secret-meta` })) === 'a query' && nj(nr({ url: `${O}/?` })) === 'a query' && nj(nr({ url: `${O}/#a?b` })) === '', 'the meta refresh / Refresh header / navigate() target with a query, even a bare ?: a finding; a ? in the fragment is not a query')
+  ok(nj(nr({ url: `${O}/not-served` })) === 'a path no release serves' && nj(nr({ method: 'POST' })) === 'not GET', 'a path no release serves, a POST (a form): findings')
+  ok(nj(nr({ url: 'https://evil.example/' })) === 'another origin' && nj(nr({ url: 'not a url' })) === 'unreadable URL' && nj(nr({ url: undefined })) === 'unreadable URL', 'another origin, an unreadable or ABSENT URL: findings')
+  ok(nj(nr({ url: undefined }), '') === 'unreadable URL' && nj(nr({ url: '' }), '') === 'unreadable URL', 'an ABSENT or empty URL with no record of where the tab is (empty): a finding, never "the same URL"')
+  ok(nj(nr({ method: undefined })) === 'not GET', 'method ABSENT: a finding, never a pass')
+  // the Reload button: location.reload() of the URL the tab is on (measured: initiator the library origin)
+  ok(nj(nr({ url: `${O}/?from=link` }), `${O}/?from=link`) === '' && nj(nr({ url: `${O}/not-served` }), `${O}/not-served`) === '' && nj(nr({ url: `${O}/?from=link#x` }), `${O}/?from=link`) === '', 'a reload of the URL the tab is on, with a query or at an unlisted path: allowed (positive control)')
+  ok(nj(nr({ url: `${O}/?s=1` }), `${O}/`) === 'a query' && nj(nr({ url: `${O}/?from=link` }), `${O}/?from=linkX`) === 'a query', 'another URL than the one the tab is on: judged')
+  ok(nj(nr({ url: `${O}/?x` }), null) === 'a query' && nj(nr({ url: `${O}/?x` }), '') === 'a query' && nj(nr({ url: `${O}/?x` })) === 'a query', 'no record of where the tab is (null, empty: a URL too long to remember, ABSENT): judged')
+  ok(nj(nr({ url: `${O}/?x`, method: 'POST' }), `${O}/?x`) === 'not GET+a query', 'a POST to the URL the tab is on is not a reload: judged')
+  ok(J.classOf(J.navigationFailures(nr({ url: `${O}/?x` }), list1, O)) === 'tampered', 'a navigation outside the rules is "tampered"')
+  // a URL longer than MAX_STR: compared WHOLE, never by a cut prefix
+  const long = `${O}/?from=${'a'.repeat(600)}`
+  const d = (over: Record<string, unknown> = {}) => ({ tabId: 7, frameId: 0, url: `${O}/?s=secret`, method: 'GET', type: 'main_frame', initiator: O, ...over })
+  ok(T.navigationOf(d({ url: long }))?.url === long && nj(T.navigationOf(d({ url: `${long}&s=secret` })), long) === 'a query', 'the URL is kept whole: a navigation sharing the first 512 characters of the one the tab is on is judged')
+  const routed = (x: unknown, here?: string) => { const r = T.navigationOf(x); return r ? nj(r, here) || 'allowed' : 'ignored' }
+  ok(routed(d()) === 'a query' && routed(d({ type: 'sub_frame', frameId: 3 })) === 'a query', 'a main_frame or sub_frame navigation the library origin started: judged (the attack)')
+  ok(routed(d({ url: `${O}/` })) === 'allowed' && routed(d({ url: `${O}/?from=link` }), `${O}/?from=link`) === 'allowed', 'an honest one: judged, allowed (positive control on the routing)')
+  ok(routed(d({ initiator: undefined })) === 'ignored' && routed(d({ initiator: null })) === 'ignored', 'initiator ABSENT (typed, reload, back, forward; measured): not judged')
+  ok(routed(d({ initiator: 'null' })) === 'ignored' && routed(d({ initiator: 'https://evil.example' })) === 'ignored' && routed(d({ initiator: 'chrome-extension://abcdefghijklmnop' })) === 'ignored', 'an opaque initiator (the page judge\'s), another site\'s link, the extension: not judged here')
+  ok(routed(d({ type: 'other' })) === 'ignored' && routed(d({ type: undefined })) === 'ignored', 'not a navigation (onPageRequest\'s), or type ABSENT: not this one\'s')
+  ok(routed(d({ tabId: -1 })) === 'ignored' && routed(d({ tabId: undefined })) === 'ignored', 'no tab: not this one\'s')
+  ok(routed(d({ url: 'https://evil.example/?s=1', initiator: O })) === 'ignored', 'a navigation to another origin: not the library\'s (the listener never sees one)')
+  ok(T.navigationOf(d({ frameId: undefined }))?.frameId === 0, 'frameId ABSENT: the top frame')
+  const twSrc4 = fs.readFileSync(path.join(EXT, 'src/tripwire.js'), 'utf8')
+  ok(/function onRequest\(d\) \{\n  if \(d\.type !== 'main_frame' && d\.type !== 'sub_frame'\) return[\s\S]*?\n  noteNavigation\(d\)\n  if \(d\.type !== 'main_frame'\)/.test(twSrc4), 'every library navigation (main_frame and sub_frame, any initiator) passes through noteNavigation before onRequest returns')
+}
+
 section('sign-home-web-served.mjs')
 const keyFile = (pub: any, priv: any) => { const f = path.join(work, `k-${Math.random().toString(36).slice(2)}.json`); fs.writeFileSync(f, JSON.stringify({ public: pub, private: priv })); return f }
 const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' })

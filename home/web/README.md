@@ -280,10 +280,16 @@ Still open:
   byte of text changed from the preload response, verdict ok). What the
   browser then fetches from this origin because of such a change (measured: a
   rewritten manifest `href` carried a query in Chrome's own manifest fetch) is
-  held to the same rules as the worker's requests, so its bytes cannot ride
-  in a URL or a header there. The worker can still pass data out through which
-  allowed requests it, or the page, makes, and when; and requests to other
-  origins are not seen, since the extension has no host permission there.
+  held to the same rules as the worker's requests, and so is a navigation the
+  page starts (measured: a meta refresh made of two rewritten attribute
+  values, a `Refresh` header on the worker's answer, and the worker's
+  `WindowClient.navigate()` each sent a query to the server in the navigation
+  preload): one the library origin starts must have no query and a path a
+  release serves, unless it reloads the URL the tab is already on. So such a
+  change's bytes cannot ride in a URL or a header to this origin. The worker
+  can still pass data out through which allowed requests it, or the page,
+  makes, and when (a reload included); and requests to other origins are not
+  seen, since the extension has no host permission there.
 
 **Install.** `manifest.webmanifest` (name, `start_url` and `scope` `/`,
 standalone, 192 and 512 px icons), linked from the page and allowed by an exact

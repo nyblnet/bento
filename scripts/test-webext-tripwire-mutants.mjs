@@ -155,6 +155,11 @@ const MUTANTS = [
     { file: J, from: 'const browserIcon = p === BROWSER_ICON', to: 'const browserIcon = false' },
     { file: J, from: "      if (n === 'referer' && ownReferer(String(x?.value ?? ''))) continue\n", to: '' }] },
   { name: 'the tab\'s own URL not excused (M6)', row: 'c5-honest-own-url', file: J, from: "const own = typeof ctx.ownUrl === 'string' && String(req.url).split('#')[0] === ctx.ownUrl", to: 'const own = false' },
+  // navigations a library document starts: a meta refresh, a Refresh header, WindowClient.navigate() (security's fourth review of #983, M7)
+  { name: 'navigations a library page starts not watched (M7)', row: 'nav-meta-refresh', file: W, from: '  noteNavigation(d)\n', to: '' },
+  { name: 'a query allowed on a navigation the library starts (M7)', row: 'nav-refresh-header', file: J, from: "  if (target.indexOf('?') !== -1) flag('a query')\n", to: '' },
+  { name: 'library-initiated navigations never routed to the judge (M7)', row: 'nav-client-navigate', file: W, from: '  if (d.initiator !== LIBRARY_ORIGIN) return null\n', to: '  return null\n' },
+  { name: 'a reload of the URL the tab is on not excused (M7, the honest control)', row: 'c5-honest-reload', file: J, from: "  if (typeof ctx.hereUrl === 'string' && ctx.hereUrl !== '' && target === ctx.hereUrl && req?.method === 'GET') return []\n", to: '' },
   // /index.html answered as '/' (security ruling on #964, M1): without it an honest visit reads "unverified"
   // Not registered: the build mutant that drops sw.ts's /index.html line. MEASURED red on macOS Chromium 149
   // (stage3-index: 3 and 2 of 8 honest visits warned without the line, 0 of 8 with it), but CI's Linux
