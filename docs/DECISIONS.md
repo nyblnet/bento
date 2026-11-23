@@ -15467,3 +15467,33 @@ Security's D-W2 on #962, both halves:
 
 The sign-in host's `wout.` text was always these bytes; only its
 "provisional" wording goes.
+
+## 2026-11-23 — bento/id: the directory checks a sign-out with the kernel's verifyWout
+
+The directory's `/v1/web/signout` no longer carries its own copy of the
+`wout.` checks. The address's object spends the challenge, ripens the head,
+reads the account's stored chain (verified with `verifyRosterChain` under the
+directory's own keys) and hands the text and the member's assertion to the
+kernel's `verifyWout`, with the sign-in host as the only origin and
+`spend: () => true`, because the challenge is already spent. Nothing it
+checks is checked again beside it.
+
+Two things stay with the directory, because the kernel's member proof does
+not do them:
+- **The signature counter.** A kernel member proof never compares counters
+  (a peer sees links out of order), so the directory reads the assertion's
+  counter, refuses one that does not move forward (0 over 0 is allowed, for
+  an authenticator that keeps none), and stores it compare-and-set in the same
+  step (security's D6 on #953).
+- **The per-account limit** (D-W2 on #962), counted only after the kernel
+  accepted the assertion and before anything is signed out. The number is a
+  named constant, `BROWSER_LIMITS.signoutsPerDay`.
+
+The answers keep their words: a kernel refusal of the challenge or its time
+is 400 `nonce`, of the text or its address 400 `text`, of the signer 403
+`not-member`, of a suspended one 403 `quarantined`, and an assertion keeps
+its own `assertion-<reason>`. One ordering moves: the text's time is now
+checked after membership, so a wrong time from a passkey that is not a member
+answers 403 `not-member` where it answered 400 `nonce`; the challenge is
+spent either way. Only passkey members can sign out; a recovery key's or a
+consent key's sign-out stays refused until its proof is wired.

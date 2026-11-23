@@ -326,6 +326,13 @@ Bodies are JSON, sent as text/plain.
   #962): a stolen member key could otherwise keep every browser signed out
   until it is removed. A refused one revokes and logs nothing; the incident
   lever is not counted.
+- A sign-out's `wout.` and its assertion are checked by the kernel's
+  `verifyWout`, the one verifier, over the account's stored chain (verified
+  with the directory's own keys) and with the sign-in host as the only origin.
+  The directory spends the challenge before it and keeps what the kernel does
+  not: the passkey's signature counter (it must move forward, and is stored
+  compare-and-set) and the per-account limit (`src/dirkeys.js` reads the
+  counter and lists the directory's keys).
 - A sign-in challenge is spent in the object of the account the passkey's
   user handle names (once per account); a handle naming no account is
   refused before anything is written. A passkey's signature counter is
