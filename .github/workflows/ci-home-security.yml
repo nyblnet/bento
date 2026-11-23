@@ -50,8 +50,9 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
         # every input the rigs read: home/web and the kernel files it imports, the kernel client the
-        # host rig bundles into the frame, the frozen 1.2.10 fixtures, the browser guard
-        run: scripts/ci/zone-gate '^(home/web/|kernel/src/(docstoreport|docstore|gate1|webauthn|roster|statements|devices|address|display-table|identity)\.ts$|home/fixtures/gate1/real/|scripts/test-home-web-(host|kill-drill)\.mjs$|scripts/lib/(home-web-kill-host|browser-guard)\.mjs$|scripts/fixtures/webext-embed/|\.github/workflows/ci-home-security\.yml$|scripts/ci/(zone-gate|retry-once|bento-step)$)'
+        # host rig bundles into the frame, the frozen 1.2.10 fixtures, the browser guard, the release
+        # key every build reads (home/webext/src/release.js) and the esbuild the rigs run (slides' lock)
+        run: scripts/ci/zone-gate '^(home/web/|kernel/src/(docstoreport|docstore|gate1|webauthn|roster|statements|devices|address|display-table|identity)\.ts$|home/fixtures/gate1/real/|scripts/test-home-web-(host|kill-drill)\.mjs$|scripts/lib/(home-web-kill-host|browser-guard)\.mjs$|scripts/fixtures/webext-embed/|home/webext/src/release\.js$|slides/package-lock\.json$|\.github/workflows/ci-home-security\.yml$|scripts/ci/(zone-gate|retry-once|bento-step)$)'
 
   home-web-host-security:
     needs: home-security-gate
@@ -105,7 +106,7 @@ jobs:
         run: BENTO_BROWSER=firefox scripts/ci/retry-once node scripts/test-home-web-kill-drill.mjs
       - name: kill drill mutants in every engine
         if: ${{ !cancelled() }}
-        timeout-minutes: 12
+        timeout-minutes: 20
         run: |
           node scripts/test-home-web-kill-drill.mjs --mutants
           BENTO_BROWSER=webkit node scripts/test-home-web-kill-drill.mjs --mutants

@@ -11,7 +11,7 @@
 // If that script's path now answers 404 the update fails and the worker stays
 // (the drill measures, per engine, whether and how long). A static host cannot
 // say anything else about a path it does not know. So the host itself needs a
-// route the attacker cannot choose away:
+// route the attacker cannot choose away (it can still delay it: see the bound):
 //
 //   1. ANY request carrying `Service-Worker: script` (the header every engine
 //      sends when it fetches a worker script, to register or to update) gets a
@@ -28,6 +28,21 @@
 //      "storage" for caches but leaves the worker registered (measured by the
 //      drill). Neither helps against a HOSTILE worker, which answers /reset
 //      itself: only route 1 reaches past one.
+//
+// The bound. Route 1 answers only a request that reaches the host. When the
+// engine's update check reaches it, the hostile worker is gone within 1
+// navigation (every engine, measured by [D5c-route]). But the attacker's deploy
+// also chose how its worker is updated: registered with updateViaCache 'all'
+// and its script served with a long max-age (a year), the update check is
+// answered from the HTTP cache and never reaches the host. Measured by
+// [D5c-cached]: Chromium and Firefox keep the hostile worker through 5
+// navigations with 0 worker-script requests at the host; WebKit still asks and
+// is cleaned in 1. The specification's update algorithm skips the HTTP cache
+// once the last update check is more than 24 hours old, so the bound there is
+// about a day (not measured). So: 1 navigation when the update check reaches
+// the host, up to about 24 h when the attacker set updateViaCache 'all' and a
+// long max-age. This route does not shorten the second; nothing on the host
+// can, since the browser does not ask.
 //
 // Everything else is served as home/web/serve.mjs serves a build: files from
 // the build directory with its _headers. The rig can plant files (the

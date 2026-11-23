@@ -32,6 +32,18 @@
  *               are printed. [D5c-route-shape] the same for a worker registered
  *               at /x/agent?v=1 (no .js, a query string). Every page call is
  *               bounded, so a row that cannot finish reports red itself.
+ *   [D5c-cached] WITH the route, against a hostile worker that chose its own
+ *               caching: registered with updateViaCache 'all' and its script
+ *               served with Cache-Control max-age of a year (the attacker's
+ *               deploy chooses both). Recorded, not judged: whether it still
+ *               controls / after each of 5 navigations, and how many
+ *               worker-script requests reached the host. An engine that honours
+ *               the HTTP cache for the update check never asks the host, so the
+ *               route cannot answer until the specification's 24-hour bypass
+ *               (the update check skips the HTTP cache once the last check is
+ *               more than 86400 s old; not measured here). Positive control:
+ *               the hostile worker answers /, its registration reads
+ *               updateViaCache 'all' and the page read the max-age off the wire.
  *   [D5c-reset] the reset page: after a worker that passes navigations through
  *               (a stale worker, not a hostile one), /reset leaves no
  *               registration and no cache. A hostile worker answers /reset
@@ -57,6 +69,10 @@ const MUTANTS = [
   { name: 'path-shape', why: 'the route answers a worker-script request only at a path ending -sw.js, not at ANY path', expect: ['[D5c-spec] any path shape', '[D5c-spec] over HTTP', '[D5c-route-shape]'] },
   { name: 'no-unregister', why: 'the cleaning worker deletes the caches but keeps its own registration', expect: ['[D5c-route] the hostile worker is gone'] },
   { name: 'reset-bare', why: 'the reset page is sent without Clear-Site-Data and without its script', expect: ['[D5c-reset] /reset leaves'] },
+  // the cached row records, never judges: its mutants break the attacker's plant, so a row that
+  // quietly measured the uncached case (the one the route handles) cannot pass as the cached one
+  { name: 'cached-uvc-imports', why: 'the cached row\'s attacker registers with updateViaCache "imports", not "all"', expect: ['[D5c-cached] positive control'] },
+  { name: 'cached-no-maxage', why: 'the cached row\'s attacker serves its script with no-cache, not a year\'s max-age', expect: ['[D5c-cached] positive control'] },
 ]
 if (args.includes('--mutants')) {
   const names = args.slice(args.indexOf('--mutants') + 1)
@@ -145,11 +161,12 @@ const EVIL_SW = `self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (e) => e.waitUntil((async () => { const c = await caches.open('evil'); await c.put('/evil-canary', new Response('kept by the attacker')); await self.clients.claim() })()))
 self.addEventListener('fetch', (e) => { if (e.request.mode === 'navigate' && MODE === 'hostile') e.respondWith(new Response('<!doctype html><title>evil</title><p id="evil">the attacker answers this page</p>', { headers: { 'content-type': 'text/html' } })) })
 `
-const REGISTER = (url) => '<!doctype html><title>register</title><script>navigator.serviceWorker.register(' + JSON.stringify(url) + ', { scope: "/" }).then(() => { document.title = "registered" }, (e) => { document.title = "refused " + e.name })</script>'
+const REGISTER = (url, uvc = 'imports') => '<!doctype html><title>register</title><script>navigator.serviceWorker.register(' + JSON.stringify(url) + ', { scope: "/", updateViaCache: ' + JSON.stringify(uvc) + ' }).then(() => { document.title = "registered" }, (e) => { document.title = "refused " + e.name })</script>'
 /** The attacker's deploy: the worker script at `sw` (a URL path, query allowed) and a page that registers it. */
-function plant(host, mode, sw) {
-  host.extra.set(new URL(sw, 'http://x').pathname, { headers: { 'content-type': 'text/javascript', 'service-worker-allowed': '/', 'cache-control': 'no-cache' }, body: `const MODE = ${JSON.stringify(mode)}\n` + EVIL_SW })
-  host.extra.set('/x/evil.html', { headers: { 'content-type': 'text/html' }, body: REGISTER(sw) })
+/** `uvc` and `cc` are the attacker's own choices: the registration's updateViaCache and the script's Cache-Control. */
+function plant(host, mode, sw, { uvc = 'imports', cc = 'no-cache' } = {}) {
+  host.extra.set(new URL(sw, 'http://x').pathname, { headers: { 'content-type': 'text/javascript', 'service-worker-allowed': '/', 'cache-control': cc }, body: `const MODE = ${JSON.stringify(mode)}\n` + EVIL_SW })
+  host.extra.set('/x/evil.html', { headers: { 'content-type': 'text/html' }, body: REGISTER(sw, uvc) })
 }
 const unplant = (host, sw) => { host.extra.delete(new URL(sw, 'http://x').pathname); host.extra.delete('/x/evil.html') }
 
@@ -171,20 +188,26 @@ async function until(fn, ms) { const end = Date.now() + ms; for (;;) { const v =
 const go = (page, url) => page.goto(url, { waitUntil: 'load', timeout: 10000 }).catch(() => null)
 
 /** A fresh context and kill host; the attacker's worker registered at `sw` and in control of /. */
-async function infected(mode, routeOn, sw = '/x/evil-sw.js') {
+async function infected(mode, routeOn, sw = '/x/evil-sw.js', choices = {}) {
   const host = await startKillHost({ dir: path.join(out, 'library'), route: false, mutant: HOST_MUTANT })
   const ctx = await browser.newContext()
   await ctx.routeWebSocket(/.*/, (ws) => { sockets.push(ws.url()); ws.close() })
   const page = await ctx.newPage()
-  plant(host, mode, sw)
+  plant(host, mode, sw, choices)
   await go(page, host.origin + '/x/evil.html')
   const reg = await until(() => bounded(page.evaluate(async () => document.title === 'registered' && !!(await navigator.serviceWorker.getRegistration('/'))?.active), 5000, 'the page').then((v) => v === true), 10000)
+  // what the attacker's choices became in this engine: the registration's updateViaCache, and the
+  // Cache-Control the page reads off the wire for the planted script (before the fixed deploy)
+  const chose = await bounded(page.evaluate(async (u) => ({
+    uvc: (await navigator.serviceWorker.getRegistration('/'))?.updateViaCache ?? null,
+    cc: (await fetch(u, { cache: 'no-store' })).headers.get('cache-control'),
+  }), sw).catch((e) => ({ error: String(e.message).split('\n')[0] })), 5000, 'the page')
   await go(page, host.origin + '/')
   const s = await state(page)
   // the fixed deploy: the planted paths are gone; the route is on or off
   unplant(host, sw)
   host.set({ route: routeOn })
-  return { host, ctx, page, reg: !!reg, s }
+  return { host, ctx, page, reg: !!reg, s, chose }
 }
 
 try {
@@ -230,6 +253,31 @@ try {
   // the route's claim is ANY path: a worker registered at a path with no extension and a query
   section('[D5c-route-shape] the same, the hostile worker registered at a path with no .js and a query string')
   await routeRow('D5c-route-shape', '/x/agent?v=1')
+
+  section("[D5c-cached] WITH the route, a hostile worker that chose updateViaCache 'all' and a year's max-age (recorded)")
+  {
+    const M = MUTANT
+    const choices = { uvc: M === 'cached-uvc-imports' ? 'imports' : 'all', cc: M === 'cached-no-maxage' ? 'no-cache' : 'max-age=31536000, immutable' }
+    const sw = '/x/evil-sw.js'
+    const { host, ctx, page, reg, s, chose } = await infected('hostile', true, sw, choices)
+    ok(reg && s.evil && s.regs.length === 1 && chose.uvc === 'all' && /max-age=31536000/.test(chose.cc ?? ''),
+      `[D5c-cached] positive control: the hostile worker answers / and the attacker's choices reached the engine (updateViaCache ${chose.uvc}, Cache-Control ${chose.cc}; ${JSON.stringify(s)})`)
+    const mark = host.seen.length
+    const per = []
+    let survived = 0
+    for (let i = 1; i <= 5; i++) {
+      await go(page, host.origin + '/')
+      await sleep(2000) // the update check runs after the navigation
+      const t = await state(page)
+      if (t.evil) survived = i
+      per.push(`${i}: ${t.evil ? 'hostile' : t.library ? 'library' : 'other'}, ${t.regs.length} worker(s)`)
+    }
+    const after = host.seen.slice(mark)
+    const atPlanted = after.filter((q) => q.path === sw && q.sw === 'script').length
+    const anyScript = after.filter((q) => q.sw === 'script').length
+    note(`[D5c-cached] ${ENGINE}: ${survived === 5 ? 'the hostile worker SURVIVES 5 navigations' : survived ? `the hostile worker answered up to navigation ${survived}, then not` : 'the hostile worker is gone from navigation 1'} (${per.join('; ')}); worker-script requests that reached the host: ${atPlanted} at ${sw}, ${anyScript} in all. Bound: 1 navigation when the update check reaches the host; up to about 24 h (the specification's HTTP-cache bypass, not measured) when it does not.`)
+    await ctx.close(); await host.close()
+  }
 
   section('[D5c-reset] the reset page and Clear-Site-Data')
   {
