@@ -15510,7 +15510,8 @@ What can be seen is what that worker does.
   forbidden names, `Sec-*`, `Proxy-*`) is the browser's; every other must be
   one the honest worker's requests carry, with its value: `Accept: */*`,
   `Service-Worker: script`, and `Accept-Language` and `User-Agent` equal to
-  what the library's latest navigation sent (measured: a worker can set
+  what the library's latest document request sent (top-level or framed: a
+  framed library page registers the worker too) (measured: a worker can set
   Accept and Accept-Language, not User-Agent). Headers not read, or no
   navigation to hold them to, are findings. And the navigation preload header
   must be the browser's `true`: a worker's `navigationPreload.setHeaderValue`

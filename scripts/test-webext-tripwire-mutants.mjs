@@ -139,6 +139,7 @@ const MUTANTS = [
     { file: J, from: "if (!HELD_REQUEST.get(n).includes(v)) out.push(", to: 'if (false) out.push(' },
     { file: J, from: "      else if (v !== want) out.push(", to: '      else if (false) out.push(' }] },
   { name: 'the preload header value not judged (C5)', row: 'preload-header', file: J, from: "  if (obs.preload != null && obs.preload !== 'true') out.push", to: '  if (false) out.push' },
+  { name: 'browser-filled header values read from top-level navigations only (C5)', row: 'framed', file: W, from: "addListener(onRequest, { urls: patterns(), types: ['main_frame', 'sub_frame'] }", to: "addListener(onRequest, { urls: patterns(), types: ['main_frame'] }" },
   { name: 'the preload header value not recorded (C5)', row: 'preload-header', file: W, from: 'preload: preload == null ? null : cut(preload) },', to: 'preload: null },' },
   // /index.html answered as '/' (security ruling on #964, M1): without it an honest visit reads "unverified"
   { name: 'the worker leaves /index.html to the network', row: 'stage3-index', build: [{ file: 'sw.ts', from: "  if (url.pathname === '/index.html') url.pathname = '/'\n", to: '' }] },

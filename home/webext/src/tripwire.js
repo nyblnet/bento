@@ -148,7 +148,7 @@ function onHeaders(d) {
  */
 const REQUEST_PREFIX = 'twq:'
 function onRequest(d) {
-  if (d.type !== 'main_frame') return
+  if (d.type !== 'main_frame' && d.type !== 'sub_frame') return
   let origin
   try { origin = new URL(d.url).origin } catch { return }
   if (roleOf(origin) !== 'library') return
@@ -158,9 +158,14 @@ function onRequest(d) {
   // headers the library worker's own requests are held to (security ruling on #983, M1)
   const preload = hv('service-worker-navigation-preload')
   const lang = hv('accept-language'), ua = hv('user-agent')
+  // the browser-filled values come from any library document request, a framed one included: a library
+  // page in a frame registers the worker too, and its install must not read as "no navigation" (measured:
+  // the rig's framed row, five false findings before sub_frame counted here)
+  const nav = { [NAV_KEY]: { acceptLanguage: lang == null ? null : cut(lang), userAgent: ua == null ? null : cut(ua) } }
+  if (d.type !== 'main_frame') { void chrome.storage.session.set(nav); return }
   void chrome.storage.session.set({
     [`${REQUEST_PREFIX}${d.tabId}:${d.frameId}`]: { url: noHash(d.url), at: d.timeStamp, site: site == null ? null : cut(site), preload: preload == null ? null : cut(preload) },
-    [NAV_KEY]: { acceptLanguage: lang == null ? null : cut(lang), userAgent: ua == null ? null : cut(ua) },
+    ...nav,
   })
 }
 const NAV_KEY = 'twnav'
@@ -493,7 +498,7 @@ export async function tripwireObserve(sender, obs, net = (u, o) => fetch(u, o)) 
 export function installTripwire() {
   if (typeof chrome === 'undefined') return
   chrome.webRequest?.onHeadersReceived.addListener(onHeaders, { urls: patterns(), types: ['main_frame', 'sub_frame'] }, ['responseHeaders', 'extraHeaders'])
-  chrome.webRequest?.onSendHeaders.addListener(onRequest, { urls: patterns(), types: ['main_frame'] }, ['requestHeaders', 'extraHeaders'])
+  chrome.webRequest?.onSendHeaders.addListener(onRequest, { urls: patterns(), types: ['main_frame', 'sub_frame'] }, ['requestHeaders', 'extraHeaders'])
   chrome.webRequest?.onSendHeaders.addListener(onWorkerRequest, { urls: [`${LIBRARY_ORIGIN}/*`], tabId: -1 }, ['requestHeaders', 'extraHeaders'])
   chrome.notifications?.onClicked?.addListener((id) => {
     if (!id.startsWith(NOTE_PREFIX)) return
