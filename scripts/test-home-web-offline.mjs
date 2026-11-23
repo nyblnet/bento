@@ -421,6 +421,29 @@ const frameFetches = (from) => seen.slice(from).filter((r) => r.url.startsWith(O
 const SERVERS_UP_OFFLINE = ENGINE === 'chromium'
 async function offline(ctx) { if (ENGINE !== 'webkit') await ctx.setOffline(true); if (!SERVERS_UP_OFFLINE) await down() }
 async function online(ctx) { if (!SERVERS_UP_OFFLINE) await up(); if (ENGINE !== 'webkit') await ctx.setOffline(false) }
+/**
+ * A new page. In Firefox it first loads /probe.html (on the library origin, outside the build: no
+ * worker registers there and no row reads it) and must answer one evaluate before it is used.
+ * Playwright's Firefox (1.61.1, Juggler) sometimes loses a new page's MAIN-world execution
+ * context on its first navigation off about:blank: it logs "FrameTree.js:545 TypeError: can't
+ * access property "windowGlobalChild", this.domWindow() is undefined", reports only the utility
+ * world after navigationCommitted, and every page.evaluate then waits forever (CI, protocol log;
+ * every Firefox hang in this rig was the first library visit of a new page). That loss is the
+ * harness's, not the library's, so it is taken on the probe: a page that does not answer is
+ * replaced and said in a note, and the navigations under test start from a page that answers.
+ * Chromium and WebKit pages are used as they come.
+ */
+async function newPage(ctx) {
+  if (ENGINE !== 'firefox') return ctx.newPage()
+  for (let i = 1; i <= 3; i++) {
+    const p = await ctx.newPage()
+    await limit(p.goto(O.library + '/probe.html'), 15000, 'the warm-up navigation').catch(() => {})
+    if (await limit(p.evaluate(() => document.readyState), 5000, 'the warm-up evaluate').then(() => true, () => false)) return p
+    note(`firefox: a new page never answered an evaluate after its first navigation (Juggler lost its main world); page replaced (${i} of 3)`)
+    await limit(p.close(), 10000, 'closing a page').catch(() => {})
+  }
+  throw new Error('three new pages in a row never answered an evaluate after their first navigation')
+}
 /** Every cached entry's text, to look for document content. */
 const cacheText = (page) => page.evaluate(async () => {
   let t = ''
@@ -434,7 +457,7 @@ try {
     section('[sw] first visit: one worker, one cache keyed on the build, network first, nothing else kept')
     files.delete(STATUS)
     const ctx = await context()
-    const page = await ctx.newPage()
+    const page = await newPage(ctx)
     await page.goto(O.library + '/')
     let s = await settled(page)
     ok(s.status === 'unreachable' && s.sw === 'registered', `with no status published (404) the library carries on and registers its worker (${s.status}, ${s.sw})`)
@@ -481,14 +504,18 @@ try {
     const fr = await booted(page)
     ok(!!fr && u?.viewing, 'positive control: online, the deck opens and boots')
     // also pass a page the list does not name through the worker
-    const probe = await ctx.newPage()
+    const probe = await newPage(ctx)
     await probe.goto(O.library + '/probe.html')
     await probe.evaluate(() => fetch('/probe-sw.js').then((r) => r.text()).catch(() => ''))
     await sleep(1000)
     const after = await lib(page)
     const keys = await page.evaluate(async (n) => (await (await caches.open(n)).keys()).map((r) => r.url).sort(), X.info.offline.cache)
     ok(after.caches.length === 1 && JSON.stringify(keys) === JSON.stringify(X.info.offline.precache.map((p) => O.library + p.path).sort()),
-      `after the session, the cache still holds exactly the build's files (${after.caches.length} cache(s), ${keys.length} entries)`)
+      // the registration and status say who lost a cache: the library's own clean-up runs only on a
+      // withdrawn or refused status, and removes the worker too; an engine that loses its storage
+      // under an unchanged status loses the registration with it (WebKit, 1 in 30 CI runs, beside
+      // "WebLoaderStrategy::internallyFailedLoadTimerFired" in its log)
+      `after the session, the cache still holds exactly the build's files (${after.caches.length} cache(s), ${keys.length} entries; ${after.regs.length} worker(s), status ${after.status})`)
     ok(!(await cacheText(page)).includes(CANARY), 'no cache holds any of the document')
 
     // no other worker: the library's policy (CSP worker-src, and Trusted Types where the engine has it) refuses any other script
@@ -504,7 +531,7 @@ try {
     section(`[offline] a returning visit with no network (${ENGINE === 'webkit' ? 'servers closed' : 'context.setOffline'})`)
     files.delete(STATUS)
     const ctx = await context()
-    const page = await ctx.newPage()
+    const page = await newPage(ctx)
     await page.goto(O.library + '/')
     await settled(page)
     ok(!!(await cached(page, X.info.offline.cache)), 'precondition: the worker is installed and holds the build')
@@ -557,7 +584,7 @@ try {
     files.delete(STATUS)
     deploy(X)
     let ctx = await context()
-    let page = await ctx.newPage()
+    let page = await newPage(ctx)
     await page.goto(O.library + '/')
     await settled(page)
     ok(!!(await cached(page, X.info.offline.cache)), 'precondition: build X\'s worker holds X\'s cache')
@@ -571,7 +598,7 @@ try {
 
     deploy(Y, { tamperPage: true })
     ctx = await context()
-    page = await ctx.newPage()
+    page = await newPage(ctx)
     await page.goto(O.library + '/')
     await settled(page)
     await sleep(3000)
@@ -588,7 +615,7 @@ try {
     files.delete(STATUS)
     deploy(X)
     const ctx = await context()
-    const page = await ctx.newPage()
+    const page = await newPage(ctx)
     await page.goto(O.library + '/')
     let s = await settled(page)
     ok(s.status === 'unreachable' && !!(await cached(page, X.info.offline.cache)), 'precondition: build X runs, its worker installed and holding its cache')
@@ -638,7 +665,7 @@ try {
     const slow = status(['--seq', '6', '--withdraw', X.info.offline.build])
     files.set(STATUS, async () => { await sleep(3000); return slow })
     const ctx2 = await context()
-    const p2 = await ctx2.newPage()
+    const p2 = await newPage(ctx2)
     mark = seen.length
     await p2.goto(O.library + '/')
     await p2.setInputFiles('#file', DECK)
@@ -658,7 +685,7 @@ try {
     const visit = async (body, ctx, { installed = false } = {}) => {
       const own = !ctx
       ctx = ctx ?? await context()
-      const page = await ctx.newPage()
+      const page = await newPage(ctx)
       if (installed) {
         files.delete(STATUS)
         await page.goto(O.library + '/')
@@ -704,7 +731,7 @@ try {
     deploy(X)
     files.delete(STATUS)
     const ctx = await context()
-    const page = await ctx.newPage()
+    const page = await newPage(ctx)
     await page.goto(O.library + '/')
     await settled(page)
     const link = await page.evaluate(() => document.querySelector('link[rel=manifest]')?.getAttribute('href'))
@@ -735,14 +762,14 @@ try {
     section('[network] every request in this run [T2]')
     if (!S) await up()
     const ctx = await context()
-    const page = await ctx.newPage()
+    const page = await newPage(ctx)
     await page.goto(O.library + '/')
     await settled(page)
     const probe = `${O.releaseBase}probe/library`
     await page.evaluate((u) => fetch(u).catch(() => {}), probe)
     await sleep(1000)
     ok(recorded.some((r) => r.url === probe) && seen.some((r) => r.url === probe), 'positive control: a request planted in the library is seen in the browser and at the server')
-    const sock = await ctx.newPage()
+    const sock = await newPage(ctx)
     await sock.evaluate(() => { try { new WebSocket('ws://127.0.0.1:9/bento-hw3-probe') } catch {} })
     await until(() => sockets.includes('ws://127.0.0.1:9/bento-hw3-probe'), 5000)
     ok(sockets.includes('ws://127.0.0.1:9/bento-hw3-probe'), 'positive control: a socket opened by a page in this context is recorded')
