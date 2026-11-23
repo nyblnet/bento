@@ -397,4 +397,3 @@ policy. It is fixed text, sends nothing until a button is pressed, takes the
 token out of the address bar first, and calls no WebAuthn or Signal API.
 
 Rigs: see Testing above.
-
