@@ -15454,6 +15454,48 @@ record that D-A4 asked the kernel to reserve before the route is built.
 Guards: `scripts/test-roster.ts` (the voided-adel chain rows, `deletionRecords`
 with every signature checked valid, `afterDeletion`), `test-roster-mutants.ts`,
 and `scripts/test-identity.ts`.
+## 2026-11-22 — bento/id directory: a mailer timeout is not a refusal
+
+A Remove on the void page sends its "suspended" notice before it acts, and
+answers 503 when the send fails. The mailer is raced against a 30-second
+timeout, and a send that loses that race can still be accepted and delivered
+afterwards: the person then holds a "suspended" mail for a passkey that was
+not suspended, while the page said the mail was not sent. So the directory
+now tells the two apart. `deliver` rejects a timeout with `code: 'timeout'`;
+Remove answers 503 `mail-timeout` for it and 503 `mail` only for a refusal.
+The void page says, on a timeout, that the email may still arrive and that if
+it says a passkey was suspended, it was not: this page is right. Nothing
+changes in either case. Keeping the timed-out mail's undo link alive was the
+other option; it was not taken because the roster is right and only the
+mail's wording is at stake. Guards: the roster rig's P19 row (a mailer that
+delivers after the timer) and the void-page row, each with a mutant.
+## 2026-11-22 — bento/id directory: what it keeps only for a while, and when each goes
+
+The privacy notice's retention sentences were written around two gaps: a
+setup link's send times and an expired setup or reset link's hash were
+deleted only when the same address was asked about again (so, for an address
+asked about once, never), and the per-IP ledger could keep a day's salt and
+counters until a minute after the NEXT day (a request in the first minute of
+a day replaced the pending purge). Now:
+
+- **The Roster object's alarm purges** what is kept only for a while: setup
+  send times 31 days after each (the budget's own window, so nothing the
+  budget reads is lost), an unused setup or reset link's hash at its expiry,
+  and an ended void link's hash 31 days after it ended. Every write of these
+  keys brings the alarm forward with `schedule`, never later. The purge of
+  send times only deletes, so it never changes what the budget allows.
+- **The ended-link keep is 31 days.** The #952 ruling accepted the last-16
+  list as no oracle but set no lifetime. 31 days is longer than any link's
+  life (a removal's undo is 72 hours), so a late click is told what happened
+  for weeks; after it the link answers like one never known, the neutral
+  wording the page already has.
+- **The ledger never pushes its purge later.** Minting a day's salt schedules
+  that day's purge only if it is earlier than the pending one, and each purge
+  re-arms for the day still held. So a day's salt and counters go a minute
+  after the day ends, and the notice says exactly that.
+
+The setup-times sentence in the notice stays the maintainer's placeholder.
+The code now supports "deleted 31 days after it was sent".
 ## 2026-11-23 — An identity answer says when it is complete (`ResolvedIdentity.fields`)
 
 - **The problem.** Four of the option-G fields on `ResolvedIdentity`

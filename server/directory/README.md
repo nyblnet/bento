@@ -23,6 +23,22 @@ address**, and nothing lists or iterates them. Per-IP limits key on a
 daily-salted HMAC, so no raw IP is stored and one day's hashes can't be
 linked to the next.
 
+**What it keeps only for a while** (the privacy notice states each; the
+rigs pin the code to it). Each is deleted by the object's own alarm, so an
+address nobody asks about again still ends up holding none of it:
+
+- a setup link's send time: 31 days, the budget's window (`setupTimesKeepMs`),
+  whether or not an account was then set up;
+- an unused setup or reset link's hash: until the link expires;
+- an ended void link's hash (to answer "too late" or "already used"): 31 days
+  after it ended (`endedKeepMs`); past that the link answers like one never known;
+- a spent challenge: 10 minutes;
+- the per-IP ledger's day salt and counters: until a minute after that day
+  ends (UTC). Minting a new day's salt never pushes the pending purge later.
+
+Every write of one of these brings the alarm forward to its time
+(`schedule`), never later.
+
 ## Routes
 
 | route | answer |
@@ -166,7 +182,7 @@ Under option G a bento/id account is a **roster of passkeys** (the kernel's
 | `POST /v1/roster/setup` `{email, token, dirNonce, reg}` | the setup token + a registration over `dirNonce` | 200 with `ros.0` |
 | `POST /v1/roster/request` `{email, ros, credId, assertion, reg?, rq?}` | a member's assertion over `ros` (+ the new passkey's registration for an add) | 202 queued, or 200 for an immediate self-removal; 403 `cooldown` for 72 h after its last change was cancelled |
 | `GET /void`, `/void.js`, `/void.css` | none | the void page (below): fixed bytes, nothing read or changed |
-| `POST /v1/void` `{email, token, choice}` (60 an hour per IP) | the void token | `choice` `cancel`, `remove` or `undo`, as the token allows: 200 `{done}`; 409 `late` `{at, by?}` (what it was for took effect; `by: 'reset'` when a reset did), 409 `used` `{at}`, 409 `preempted` `{at}` (a reset cancelled the change), 409 `busy` (another press or a reset holds the roster: try again), 400 `invalid` (a token the directory does not know), 400 `choice` (not offered; the token is kept), 503 `mail` (Remove whose notice could not be sent: nothing changed) |
+| `POST /v1/void` `{email, token, choice}` (60 an hour per IP) | the void token | `choice` `cancel`, `remove` or `undo`, as the token allows: 200 `{done}`; 409 `late` `{at, by?}` (what it was for took effect; `by: 'reset'` when a reset did), 409 `used` `{at}`, 409 `preempted` `{at}` (a reset cancelled the change), 409 `busy` (another press or a reset holds the roster: try again), 400 `invalid` (a token the directory does not know), 400 `choice` (not offered; the token is kept), 503 `mail` (Remove whose notice the mailer refused: nothing changed), 503 `mail-timeout` (the mailer did not answer in 30 s: nothing changed, but the notice may still arrive, so the page says it may and that the page is right) |
 | `POST /v1/roster/reset/start` `{email}` (10 an hour per IP) | none | **always 202**; mails a reset link if the address has a roster, no reset waits, and no reset link is live |
 | `POST /v1/roster/reset` `{email, token, dirNonce, reg}` | the reset token + a registration over `dirNonce` | 202: the reset waits 72 h, preempting any waiting change |
 | `POST /v1/roster/reset/void` `{email, credId, assertion, dirNonce}` | a member's passkey | 409 `no-reset`, 403 `new-account` (first 14 days), 400 `signer`, 403 `quarantined`; otherwise **501** until the kernel defines what the passkey signs |

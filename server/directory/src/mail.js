@@ -34,14 +34,20 @@ export const MAIL_KINDS = Object.freeze({
  */
 export const MAIL_TIMEOUT_MS = 30_000
 
-/** Settles like `p`, or rejects once MAIL_TIMEOUT_MS has passed. */
+/**
+ * Settles like `p`, or rejects once MAIL_TIMEOUT_MS has passed, with an error
+ * whose `code` is 'timeout'. A timed-out send is NOT a refused one: the mailer
+ * may still accept and deliver it, so a caller that reports the outcome must
+ * never say the mail was not sent (security's C8 on #952). Every other failure
+ * has no code.
+ */
 function timed(p) {
   let timer
-  const late = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('mailer timed out')), MAIL_TIMEOUT_MS) })
+  const late = new Promise((_, reject) => { timer = setTimeout(() => reject(Object.assign(new Error('mailer timed out'), { code: 'timeout' })), MAIL_TIMEOUT_MS) })
   return Promise.race([Promise.resolve(p), late]).finally(() => clearTimeout(timer))
 }
 
-/** `msg`: { to, subject, body, kind }. Throws when no mailer is configured, for an undeclared kind, or when the mailer fails or times out. */
+/** `msg`: { to, subject, body, kind }. Throws when no mailer is configured, for an undeclared kind, or when the mailer fails or times out (a timeout's error has `code: 'timeout'`). */
 export async function deliver(env, msg) {
   if (!msg || !Object.hasOwn(MAIL_KINDS, msg.kind)) throw new Error(`undeclared mail kind: ${msg && msg.kind}`)
   return timed(send(env, msg)) // every mailer, the real one when it is wired included, runs under the timeout

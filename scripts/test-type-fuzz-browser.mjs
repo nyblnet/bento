@@ -499,8 +499,28 @@ async function compare(p) {
 }
 
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true })
-const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, permissions: ['clipboard-read', 'clipboard-write'] })
-await ctx.route(/^(https?|wss?):/, (r) => r.abort())
+/**
+ * Every page gets a context of its own: its own IndexedDB. One shared context
+ * leaked bento/type's crash-recovery snapshot (written 2.5 s after an edit,
+ * keyed by the docId, which every boot of the seed file shares) into the next
+ * boot, whose recovery banner then appeared mid-fuzz and took a click or a
+ * keystroke meant for the paper (CI, seed 10). Requests off the page are
+ * refused; sockets are refused with routeWebSocket (page.route never sees a
+ * socket) and recorded, and a row asserts none was opened.
+ */
+const sockets = []
+async function newPage() {
+  const c = await browser.newContext({ viewport: { width: 1440, height: 900 }, permissions: ['clipboard-read', 'clipboard-write'] })
+  await c.route(/^https?:/, (r) => r.abort())
+  await c.routeWebSocket(/.*/, (ws) => { sockets.push(ws.url()); ws.close() })
+  const p = await c.newPage()
+  const closePage = p.close.bind(p)
+  p.close = async () => { await closePage(); await c.close() }
+  return p
+}
+/** A recovery banner on screen (the "too large to back up" notice is not one). */
+const banner = (p) => p.evaluate(() => !!document.querySelector('.t-recover:not(.t-recover-off)'))
+let boots = 0, banners = 0
 
 /**
  * The seed document as a FILE: the shell with the seed spliced into its
@@ -510,7 +530,7 @@ await ctx.route(/^(https?|wss?):/, (r) => r.abort())
  */
 const tmp = mkdtempSync(join(tmpdir(), 'bento-type-fuzz-'))
 async function seedFile(seed = seedDoc(), name = 'seed') {
-  const p = await ctx.newPage()
+  const p = await newPage()
   await p.goto(SHELL)
   await p.waitForFunction(() => window.bento?.editor && window.bento?.doc)
   const doc = await p.evaluate((d) => {
@@ -531,7 +551,8 @@ let SEEDED
 
 /** A booted page holding the seed document, with no undo history behind it. */
 async function boot(url = SEEDED) {
-  const p = await ctx.newPage()
+  const p = await newPage()
+  boots++
   const errors = []
   p.on('pageerror', (e) => errors.push(e.message))
   await p.goto(url)
@@ -578,6 +599,7 @@ async function run(ops, { log = false, count = false } = {}) {
     }
     return null
   } finally {
+    if (await banner(p).catch(() => false)) banners++
     await p.close()
   }
 }
@@ -623,6 +645,34 @@ try {
     const clip = await p.evaluate(() => navigator.clipboard.writeText('probe').then(() => true, (e) => String(e)))
     ok(clip === true, `the system clipboard is writable for real paste (${clip})`)
     await p.close()
+  }
+  // Isolation. An edit, then longer than the autosave debounce, so a recovery
+  // snapshot is written; then two boots of the same file. In the SAME context
+  // the snapshot is offered (positive control: it was written, and the banner
+  // check sees it); in a fresh context, as every run gets, it is not.
+  {
+    const { p } = await boot()
+    await p.evaluate(() => window.__fz.select(['p1', 0]))
+    await p.keyboard.type('zq'); await frame(p)
+    await p.waitForTimeout(3500)
+    await p.goto(SEEDED)                                   // the same context: its IndexedDB holds the snapshot
+    await p.waitForFunction(() => window.bento?.editor && window.bento?.doc)
+    const same = await p.waitForSelector('.t-recover:not(.t-recover-off)', { timeout: 5000 }).then(() => true, () => false)
+    await p.close()
+    ok(same, `positive control: in the same context, a boot after an edit offers the recovery snapshot (${same ? 'banner shown' : 'no banner'})`)
+    const { p: q } = await boot()
+    await q.waitForTimeout(500)
+    const leaked = await banner(q)
+    await q.close()
+    ok(!leaked, `no recovery banner at boot: a run's snapshot never reaches the next run (${leaked ? 'a banner showed' : 'none, 500 ms after boot'})`)
+  }
+  // positive control for the socket row at the end: a page's socket is recorded (and refused)
+  {
+    const { p } = await boot()
+    await p.evaluate(() => { try { new WebSocket('ws://127.0.0.1:9/bento-fuzz-probe') } catch {} })
+    for (let i = 0; i < 50 && !sockets.includes('ws://127.0.0.1:9/bento-fuzz-probe'); i++) await p.waitForTimeout(100)
+    await p.close()
+    ok(sockets.includes('ws://127.0.0.1:9/bento-fuzz-probe'), 'positive control: a socket a page opens is recorded and refused')
   }
 
   if (process.env.FUZZ_REPLAY) {
@@ -718,6 +768,9 @@ try {
         : `${cls} no longer diverges — ${why}. Fixed? Move '${cls}' from BROKEN to HOLDS in this rig, in the same PR`)
     }
   }
+  ok(banners === 0, `no run ended with a recovery banner on screen (${banners} of ${boots} boots)`)
+  const stray = sockets.filter((u) => !u.includes('bento-fuzz-probe'))
+  ok(stray.length === 0, `no page opened a socket (${stray.length}${stray.length ? ': ' + stray.slice(0, 3).join(', ') : ''})`)
 } finally {
   await browser.close()
   rmSync(tmp, { recursive: true, force: true })
