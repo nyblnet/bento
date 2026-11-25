@@ -1377,12 +1377,13 @@ let addAt = 0
   ok(responses.filter(noRoute).length === 2 && responses.filter(noRoute).every((x) => x.h.get('access-control-allow-origin') === null), 'a path that is no route answers with no CORS')
   const notStar = responses.filter((x) => !x.what.startsWith('web ') && !x.what.includes('/v1/web/') && !noRoute(x) && x.h.get('access-control-allow-origin') !== '*')
   ok(notStar.length === 0, `every other answer keeps CORS * (not: ${notStar.map((x) => x.what).join(', ') || 'none'})`)
-  // the sign-in host's copy of the seam, when it is in this tree
+  // the sign-in host's copy of the seam. server/signin is on main, so a tree
+  // without it is a broken copy: the row FAILS, never skips quietly (security's
+  // seam-row note on #952; the mutants rig copies server/signin/public)
   const seam = join(root, 'server/signin/public/directory-client.js')
-  if (existsSync(seam)) {
-    const t = readFileSync(seam, 'utf8')
-    ok(t.includes("challenge: '/v1/web/challenge'") && t.includes("enrol: '/v1/web/enrol'"), 'the sign-in host\'s seam names the same two routes')
-  } else console.log('note: server/signin is not in this tree; the seam cross-check runs once it is')
+  ok(existsSync(seam), `the sign-in host's seam is in this tree (${existsSync(seam) ? 'present' : 'MISSING: server/signin/public/directory-client.js'})`)
+  const t = existsSync(seam) ? readFileSync(seam, 'utf8') : ''
+  ok(t.includes("challenge: '/v1/web/challenge'") && t.includes("enrol: '/v1/web/enrol'"), 'the sign-in host\'s seam names the same two routes')
 }
 
 // =====================================================================
@@ -2007,6 +2008,71 @@ const quarantinedIn = (c: Awaited<ReturnType<typeof current>>, pub: string) => c
 }
 
 // ---------------------------------------------------------------------
+// C7 (security's re-run on #952): the post-send re-checks of a press whose
+// send outlived its hold. Reachable only past the hold, so only rows pin them.
+// ---------------------------------------------------------------------
+/** twoKeys, then a third passkey (asked for by the first, ripened). */
+async function threeKeys(email: string) {
+  const [a, b] = await twoKeys(email)
+  const c = await Authn.make()
+  const r = await request(email, a, { add: c })
+  if (r.status !== 202) console.log(`threeKeys(${email}): add ${r.status} ${JSON.stringify(r.j)}`)
+  now += ROSTER_WAIT_MS
+  await current(email)
+  return [a, b, c] as const
+}
+{
+  // P17: a Remove stalls past its hold; the person presses Cancel on the same link; another member queues Z
+  now += DAY
+  const e = 'c7-p17@example.com'
+  const [K1, K2] = await threeKeys(e)
+  const X = await Authn.make(), Z = await Authn.make()
+  ok((await request(e, K2, { add: X })).status === 202, 'P17: K2 asks to add X')
+  const v = voidIn(lastMail(e))
+  const h = hangNext()
+  const pr = voidPost(e, v?.token ?? '', 'remove')
+  ok(await reached(h), 'P17: the Remove is in its send')
+  now += ROSTER_LIMITS.holdMs + 1 // the object stalled: the hold has lapsed
+  const cx = await voidPost(e, v?.token ?? '', 'cancel')
+  ok(cx.status === 200 && cx.j.done === 'cancelled', `P17: Cancel on the same link, after the hold lapsed, acts (got ${cx.status} ${JSON.stringify(cx.j)})`)
+  const qz = await request(e, K1, { add: Z })
+  ok(qz.status === 202, `P17: another member then queues Z (got ${qz.status} ${JSON.stringify(qz.j)})`)
+  h.release(true)
+  const r = await pr
+  const c = await current(e)
+  const p = await pendOf(e) as { kind?: string; change?: { pub?: string } } | undefined
+  ok(r.status === 409 && r.j.error === 'used', `P17: the stalled Remove answers 409 used (got ${r.status} ${JSON.stringify(r.j)})`)
+  ok(quarantinedIn(c, K2.pub) === false && !c.head?.members.some((m) => m.quarantined), 'P17: K2 is not suspended after the person\'s Cancel')
+  ok(p?.kind === 'member' && p?.change?.pub === Z.pub, `P17: Z still waits, not overwritten by a removal (pend ${String(p?.kind)})`)
+  ok((await rosterObj(e)).store.get('hold') === undefined, 'P17: the stalled Remove let go of its own hold')
+  const ch = await chainOf(e)
+  ok(ch.ok, `P17: the kernel accepts the chain (${ch.ok ? 'ok' : ch.reason})`)
+}
+{
+  // P18: a reset stalls past its hold; a member queues Z after the lapse
+  now += DAY
+  const e = 'c7-p18@example.com'
+  const [F1] = await twoKeys(e)
+  const Z = await Authn.make()
+  const t = await resetToken(e)
+  const h = hangNext()
+  const pr = reset(e, await Authn.make(), t.token ?? '')
+  ok(await reached(h), 'P18: the reset is in its send, with nothing waiting')
+  now += ROSTER_LIMITS.holdMs + 1
+  const qz = await request(e, F1, { add: Z })
+  ok(qz.status === 202, `P18: after the lapse a member queues Z (got ${qz.status} ${JSON.stringify(qz.j)})`)
+  const zv = voidIn(lastMail(e))
+  h.release(true)
+  const r = await pr
+  const p = await pendOf(e) as { kind?: string; change?: { pub?: string } } | undefined
+  ok(r.status === 409 && r.j.error === 'superseded', `P18: the stalled reset answers 409 superseded (got ${r.status} ${JSON.stringify(r.j).slice(0, 80)})`)
+  ok(p?.kind === 'member' && p?.change?.pub === Z.pub, `P18: Z still waits, never silently cancelled by the reset (pend ${String(p?.kind)})`)
+  const zc = await voidPost(e, zv?.token ?? '', 'cancel')
+  ok(zc.status === 200 && zc.j.done === 'cancelled', `P18: Z's own void link still works (got ${zc.status} ${JSON.stringify(zc.j)})`)
+  ok((await reset(e, await Authn.make(), t.token ?? '')).status === 202, 'P18: the reset that did not happen did not spend its link')
+}
+
+// ---------------------------------------------------------------------
 // F2: a link whose life ended says how: too late, used, or cancelled by a reset
 // ---------------------------------------------------------------------
 for (const d of [-1, 0]) {
@@ -2150,6 +2216,71 @@ async function p4reset(e: string) {
   ok(!c.head?.members.some((m) => m.pub === P1.pub) && c.pending === null, 'P4c: the alarm removes P1')
   const ch = await chainOf(e)
   ok(ch.ok, `P4c: the kernel accepts the chain through q and x (${ch.ok ? 'ok' : ch.reason})`)
+}
+{
+  // C7 (X12): a reset stopped after the set-aside removal's time, once the alarm
+  // has re-armed to the reset's own time (as the platform's sweep run leaves it):
+  // the removal's alarm is due within a second, not at the reset's time
+  now += DAY
+  const e = 'c7-x12@example.com'
+  const { P1, removesAt } = await p4start(e)
+  now += 2 * HOUR
+  const { mail } = await p4reset(e)
+  const ra = await ripensOf(e)
+  const o = await rosterObj(e)
+  now += ROSTER_LIMITS.spentKeepMs + MIN
+  await fire(o) // the spent-challenge sweep runs; the alarm re-arms
+  ok(o.alarm === ra, `X12: before the stop the alarm is set for the reset's time (got ${o.alarm === null ? 'none' : `${(o.alarm - ra) / 1000} s from it`})`)
+  now = removesAt + HOUR
+  const rc = await voidPost(e, voidIn(mail)?.token ?? '', 'cancel')
+  ok(rc.j.done === 'cancelled' && rc.j.removesAt === now, `X12: the reset is stopped after the removal's time (got ${JSON.stringify(rc.j)})`)
+  ok(o.alarm !== null && o.alarm <= now + 1000, `X12: the restored removal's alarm is due within a second (got ${o.alarm === null ? 'none' : `${Math.round((o.alarm - now) / 1000)} s on`})`)
+  if (o.alarm !== null && o.alarm <= now + 1000) await fire(o)
+  const c = await current(e)
+  ok(!c.head?.members.some((m) => m.pub === P1.pub) && c.pending === null, 'X12: the alarm then removes P1')
+  ok((await chainOf(e)).ok, 'X12: the kernel accepts the chain')
+}
+{
+  // C8 (security's P19 on #952): the mailer answers after the directory stopped
+  // waiting, and DELIVERS. The page must not be told the mail was not sent.
+  now += DAY
+  const e = 'c8-timeout@example.com'
+  const [, B2] = await twoKeys(e)
+  await request(e, B2, { add: await Authn.make() })
+  const v = voidIn(lastMail(e))
+  const before = await current(e)
+  const realSet = globalThis.setTimeout, realClear = globalThis.clearTimeout
+  const timers: { fn: () => void; ms: number }[] = []
+  globalThis.setTimeout = ((fn: () => void, ms: number) => { timers.push({ fn, ms }); return timers.length }) as never
+  globalThis.clearTimeout = (() => {}) as never
+  const late = { deliver: null as (() => void) | null }
+  const n0 = mailbox.length
+  // the mail is delivered late; the send's promise is left pending (the directory stopped waiting on it; settling it
+  // would re-enter this harness's object gate from a request that has already ended)
+  mailHook = (m) => { mailHook = null; return new Promise<void>(() => { late.deliver = () => { mailbox.push(m) } }) }
+  const got = { r: null as Awaited<ReturnType<typeof voidPost>> | null }
+  const pR = voidPost(e, v?.token ?? '', 'remove').then((r) => { got.r = r })
+  const tick = () => new Promise((r) => realSet(r, 0))
+  for (let i = 0; i < 200 && !(late.deliver && timers.some((t) => t.ms === MAIL_TIMEOUT_MS)); i++) await tick()
+  const timer = timers.find((t) => t.ms === MAIL_TIMEOUT_MS)
+  ok(!!late.deliver && !!timer, `C8: the Remove's mail is in its send, under the ${MAIL_TIMEOUT_MS} ms timer`)
+  if (timer) { timer.fn(); for (let i = 0; i < 200 && !got.r; i++) await tick() }
+  late.deliver?.() // the mailer answers after all, and the mail goes out
+  for (let i = 0; i < 20; i++) await tick()
+  globalThis.setTimeout = realSet; globalThis.clearTimeout = realClear
+  mailHook = null
+  void pR
+  const r = got.r
+  ok(r?.status === 503 && r?.j.error === 'mail-timeout', `C8: a timed-out send answers 503 mail-timeout, never the refusal's 'mail' (got ${r ? `${r.status} ${JSON.stringify(r.j)}` : 'still hung'})`)
+  const c = await current(e)
+  ok(c.head?.seq === before.head?.seq && quarantinedIn(c, B2.pub) === false && (await pendOf(e))?.kind === 'member' && (await rosterObj(e)).store.get('hold') === undefined,
+    'C8: nothing changed: nobody suspended, the change still waits, the hold is off')
+  ok(mailbox.slice(n0).filter((m) => /suspended/.test(m.subject)).length === 1, 'C8: and yet the "suspended" mail arrived (why the page must not say it was not sent)')
+  mailDown = true
+  const rf = await voidPost(e, v?.token ?? '', 'remove')
+  mailDown = false
+  ok(rf.status === 503 && rf.j.error === 'mail', `C8 control: a mailer that refuses answers 503 mail (got ${rf.status} ${JSON.stringify(rf.j)})`)
+  ok((await voidPost(e, v?.token ?? '', 'remove')).j.done === 'suspended', 'C8 control: with the mailer answering, the same link\'s Remove acts')
 }
 {
   // the reset takes effect while a removal is set aside: the undo link says too late, by the reset

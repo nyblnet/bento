@@ -15397,6 +15397,21 @@ replaced before this shipped.
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
 
+## 2026-11-22 — bento/id directory: a mailer timeout is not a refusal
+
+A Remove on the void page sends its "suspended" notice before it acts, and
+answers 503 when the send fails. The mailer is raced against a 30-second
+timeout, and a send that loses that race can still be accepted and delivered
+afterwards: the person then holds a "suspended" mail for a passkey that was
+not suspended, while the page said the mail was not sent. So the directory
+now tells the two apart. `deliver` rejects a timeout with `code: 'timeout'`;
+Remove answers 503 `mail-timeout` for it and 503 `mail` only for a refusal.
+The void page says, on a timeout, that the email may still arrive and that if
+it says a passkey was suspended, it was not: this page is right. Nothing
+changes in either case. Keeping the timed-out mail's undo link alive was the
+other option; it was not taken because the roster is right and only the
+mail's wording is at stake. Guards: the roster rig's P19 row (a mailer that
+delivers after the timer) and the void-page row, each with a mutant.
 ## 2026-11-22 — bento/id directory: what it keeps only for a while, and when each goes
 
 The privacy notice's retention sentences were written around two gaps: a

@@ -214,8 +214,17 @@ async function rosterLines(members, records, pendingAdd) {
  * sent never waits to take effect (security's D1).
  */
 async function notify(env, to, subject, lines, kind = 'roster') {
+  return (await notifyHow(env, to, subject, lines, kind)) === 'sent'
+}
+/**
+ * As notify, but says how a send ended: 'sent', 'refused', or 'timeout'. A
+ * timeout is not a refusal: the mailer may still deliver the mail after the
+ * directory stopped waiting, so whoever reports it must not say it was not
+ * sent (security's C8 on #952).
+ */
+async function notifyHow(env, to, subject, lines, kind = 'roster') {
   const body = [...lines, '', 'Bento will never ask you to type or paste anything from this email.'].join('\n')
-  try { await deliver(env, { to, subject, body, kind }); return true } catch (e) { console.log(`${kind} mail failed: ${e.message}`); return false }
+  try { await deliver(env, { to, subject, body, kind }); return 'sent' } catch (e) { console.log(`${kind} mail failed: ${e.message}`); return e && e.code === 'timeout' ? 'timeout' : 'refused' }
 }
 
 /** "the passkey 1a2b3c4d, added 2026-11-03 09:00:00 UTC at setup": a member by its short name and age (G4c). */
@@ -891,7 +900,7 @@ export class Roster {
       const removesAt = now + ROSTER_WAIT_MS
       const ut = await mintToken('void')
       const hold = await this.takeHold(now, 'remove')
-      const sent = await notify(this.env, address, 'A passkey on your bento/id account was suspended', [
+      const sent = await notifyHow(this.env, address, 'A passkey on your bento/id account was suspended', [
         `At ${when(now)} the link in an email cancelled the change asked for at ${when(p.requestedAt)}, and suspended ${await named(target, records[target])}, which asked for it.`,
         `That passkey can no longer be used. It will be removed from this account at ${when(removesAt)}.`,
         '',
@@ -900,9 +909,10 @@ export class Roster {
         '',
         ...voidLines(address, ut.token, 'u', removesAt),
       ], 'void')
-      if (!sent) {
+      if (sent !== 'sent') {
         await this.dropHold(hold)
-        return out(503, { error: 'mail' })
+        // C8: a send that timed out may still arrive, so the page must not say it was not sent
+        return out(503, { error: sent === 'timeout' ? 'mail-timeout' : 'mail' })
       }
       // the hold covers a send the mailer's timeout ends; past it (the object
       // stalled), act only if the change the page stopped is still the one
