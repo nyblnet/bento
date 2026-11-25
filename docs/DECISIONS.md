@@ -15424,3 +15424,39 @@ a day replaced the pending purge). Now:
 
 The setup-times sentence in the notice stays the maintainer's placeholder.
 The code now supports "deleted 31 days after it was sent".
+## 2026-11-23 — An identity answer says when it is complete (`ResolvedIdentity.fields`)
+
+- **The problem.** Four of the option-G fields on `ResolvedIdentity`
+  (`revoked`, `resetAt`, `rosterChangedAt`, `unconfirmedSince`) are the
+  STRONGER claim when missing: not revoked, no recent change, address
+  confirmed. A document cannot tell "this does not apply" from "a relay on the
+  way dropped it", and relays that drop them exist today: a host bridge that
+  copies a fixed list of the original six fields turns a revoked sign-in or a
+  lapsed address into a plain ✓. Rules that every relay must forward the
+  fields (2026-11-14 above) bind the relays someone remembers to update; they
+  do nothing for one already built.
+- **The marker.** An answer carries `fields: 'g1'` (`RESOLVED_FIELDS`) only
+  when it holds every G field that applies (`RESOLVED_G1_FIELDS`). The agent
+  sets it when it has filled them; a relay forwards it only together with all
+  of them, type-checked, and never adds one itself. A document draws no ✓ for
+  an answer without it. Because it is a field of the answer, a relay that
+  copies a fixed field list drops it along with everything else, so every
+  older host fails closed whatever its version, with no version check. A
+  host-level capability flag was the alternative and fails open in exactly
+  that case: the host says it is new while one hop behind it is old.
+- **'g1' never changes; a later field set adds its own marker.** An agent
+  that carries every g1 field keeps sending `fields: 'g1'`, for good. Slides
+  shells are frozen inside every saved file and accept exactly `'g1'`, so an
+  agent that replaced it with `'g2'` would turn every row of every file saved
+  before then into "couldn't check", with no fix but breaking the rule back. A
+  later set announces itself with a NEW optional field of its own beside
+  `fields`, never a new value of it. A relay that only knows `g1` forwards
+  `'g1'` with the g1 fields and drops the new marker, so it still cannot vouch
+  for fields it has never seen, and a reader of the later set fails closed
+  through the same relay.
+- Guarded by `scripts/test-identity.ts`: the marker is the last field of
+  `ResolvedIdentity`, `RESOLVED_G1_FIELDS` is exactly the optional fields
+  before it, in order, and the six required fields are unchanged. Mutants that
+  drop a field from the list, add one to the interface only, move the marker,
+  change its value or unfreeze the list each turn a row red, and a row pins the
+  never-changes rule in both identity.ts and this entry.
