@@ -54,7 +54,7 @@ const VOUCHER_RE = /^[a-z0-9](?:[a-z0-9.:-]*[a-z0-9])?$/
 
 /** Is `v` a bare voucher: lower-case letters, digits, `.`, `-` and `:`, at most
  *  VOUCHED_BY_MAX characters, no spaces, commas or parentheses (so no
- *  qualifier text can ride in it)? A document shows "not verified" otherwise. */
+ *  qualifier text can ride in it)? A document shows no ✓ otherwise. */
 export function isVoucher(v: unknown): v is string {
   return typeof v === 'string' && v.length <= VOUCHED_BY_MAX && VOUCHER_RE.test(v)
 }
@@ -136,7 +136,16 @@ export type ResolveQuery = { pub: string } | { email: string }
  *     their types checked. A relay that copies only the original six fields
  *     turns a revoked sign-in or a lapsed address into a plain ✓.
  * device-v1.json's per-row `mb` pins how a watt.'s mb is PARSED; that the
- * agent turns it into `unconfirmedSince` is the agent's rule, not yet a row. */
+ * agent turns it into `unconfirmedSince` is the agent's rule, not yet a row.
+ *
+ * A document cannot tell "this field does not apply" from "a relay dropped
+ * it", so the answer says which it is: `fields` (RESOLVED_FIELDS, below) is
+ * set ONLY on an answer that carries every G field that applies. An agent sets
+ * it when it has filled them; a relay forwards it ONLY together with all of
+ * them, type-checked, and never adds it. A document draws no ✓ for an answer
+ * without it (slides' People panel says "couldn't check"). A relay that copies
+ * a fixed list of the original six fields drops the marker along with the
+ * fields, so every older host fails closed instead of over-claiming. */
 export interface ResolvedIdentity {
   name: string
   email: string
@@ -170,7 +179,27 @@ export interface ResolvedIdentity {
    *  account is not. Missing = confirmed (a stronger claim, see above): an
    *  agent that verified a watt. sends it whenever mb ≠ 0. */
   unconfirmedSince?: number
+  /** RESOLVED_FIELDS: every field above that applies is present. Missing = the
+   *  answer may have lost fields on the way, so no ✓ (see above). Always 'g1':
+   *  a later field set adds its own marker, never replaces this value. */
+  fields?: 'g1'
 }
+
+/** The value of ResolvedIdentity.fields on a complete answer.
+ *  'g1' NEVER CHANGES: an answer that carries every g1 field keeps sending
+ *  fields: 'g1', for good. Slides shells are frozen inside every saved file and
+ *  accept exactly 'g1', so replacing it would turn every row of every file saved
+ *  before then into "couldn't check". A later field set announces itself with a
+ *  marker of its own, a NEW optional field beside this one, never a new value
+ *  here; a relay that knows only g1 forwards 'g1' with the g1 fields and drops
+ *  the new marker, so it still cannot vouch for fields it has never seen. */
+export const RESOLVED_FIELDS = 'g1'
+
+/** The fields a relay must forward, type-checked, for RESOLVED_FIELDS to
+ *  stand: every optional field of ResolvedIdentity before the marker. */
+export const RESOLVED_G1_FIELDS = Object.freeze([
+  'tier', 'accountSince', 'rosterChangedAt', 'resetAt', 'revoked', 'managedBy', 'unconfirmedSince',
+] as const)
 
 /** Roles a person can be given in a document (phase 2). */
 export type ShareRole = 'reader' | 'editor' | 'owner'
