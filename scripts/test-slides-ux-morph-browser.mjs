@@ -189,10 +189,25 @@ try {
   ok(/Play transition/.test(offered), 'Play transition is a command')
   await p.keyboard.press('Enter')
   await p.waitForSelector('.bento-present-overlay', { timeout: 3000 }).catch(() => {})
-  const startAt = await p.evaluate(() => [...document.querySelectorAll('.bento-present-overlay .slides > section')].findIndex((s) => s.classList.contains('present')))
-  await p.waitForTimeout(1500)
-  const endAt = await p.evaluate(() => [...document.querySelectorAll('.bento-present-overlay .slides > section')].findIndex((s) => s.classList.contains('present')))
-  ok(startAt === 1 && endAt === 2, `it presents from the slide before and steps into this one (${startAt} → ${endAt})`)
+  // The present section, sampled every ~20 ms from the moment the overlay exists. One read
+  // at that moment raced the show's start: present.ts applies the start index only once
+  // Reveal's initialize() resolves, and until then section 0 is "present" (CI: "0 → 2" on
+  // PRs that never touched slides). The show must reach the slide before inside 600 ms,
+  // under playTransition's 700 ms beat, and then this one; the raw sequence is printed.
+  const seq = []
+  const t0 = Date.now()
+  while (Date.now() - t0 < 2200) {
+    const i = await p.evaluate(() => [...document.querySelectorAll('.bento-present-overlay .slides > section')].findIndex((s) => s.classList.contains('present')))
+    if (!seq.length || seq[seq.length - 1].i !== i) seq.push({ i, ms: Date.now() - t0 })
+    await p.waitForTimeout(20)
+  }
+  const shown = seq.filter((e) => e.i >= 0)
+  const endAt = shown[shown.length - 1]
+  const prior = shown.slice(0, -1)                                 // where it was before its last step
+  const startAt = prior.filter((e) => e.i !== 0).pop() ?? prior[0] // a section 0 before the start index lands is Reveal's default
+  const sampled = seq.map((e) => `${e.i}@${e.ms}ms`).join(' ')
+  ok(startAt?.i === 1 && startAt.ms < 600 && endAt?.i === 2 && shown.filter((e) => e.i !== 0).map((e) => e.i).join() === '1,2',
+    `it presents from the slide before and steps into this one (${startAt?.i} → ${endAt?.i}; sections present: ${sampled})`)
   await p.keyboard.press('Escape'); await p.waitForTimeout(400)
 
   console.log('\n6. New slide at the bottom adds at the end\n')
