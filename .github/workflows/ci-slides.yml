@@ -152,6 +152,25 @@ jobs:
         # runs no script and opens no frame or overlay, including with the
         # trigger attributes planted before the show binds its listeners.
         run: node scripts/test-slides-reveal-preview-browser.mjs
+      - name: A chart's hover tooltip in the show in Chromium
+        # One row per series: a colour swatch, the name and the value. The
+        # swatch shows a colour or nothing, and the tooltip holds only its rows;
+        # a plain colour is the control.
+        run: node scripts/test-chart-tooltip-browser.mjs
+      - name: A picture's fit and corner radius in Chromium
+        # Opened as a file and shown: a fit draws as its keyword, a radius as
+        # pixels, and anything else as the default with nothing added.
+        run: node scripts/test-image-style-browser.mjs
+      - name: The QR page plays its deck in Chromium
+        # bento.page/q/ draws a deck carried in its URL: text with its bold,
+        # italic and line breaks, flat shapes, nothing loaded, and only its
+        # own script run. The built-in deck and a formatted box are controls.
+        run: node scripts/test-qr-page-browser.mjs
+      - name: An edit from another tab draws like the file in Chromium
+        # Two tabs of one deck share edits; a slide background and a deck font
+        # that arrive this way are drawn under the rules the file is opened
+        # under. A colour, a gradient and a plain font weight are the controls.
+        run: node scripts/test-live-edit-styles-browser.mjs
       - name: Exercise the packaged documents in Chromium
         # Real UI and serialization, offline; delayed mock writes expose save races.
         run: |
@@ -493,7 +512,9 @@ jobs:
       - name: Speaker notes pane in Chromium
         if: ${{ !cancelled() }}
         # Under the canvas, following the slide, one undo per burst; meets both
-        # side panels; resized from its top edge; folds.
+        # side panels; resized from its top edge; starts folded at zero height,
+        # shown and hidden by one toggle at the head of the Slideshow and zoom
+        # row, which carries a dot when the slide has notes and fits at 320px.
         run: node scripts/test-slides-notes-pane-browser.mjs
       - name: Shortcuts dialog fits in Chromium
         if: ${{ !cancelled() }}

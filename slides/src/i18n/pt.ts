@@ -927,6 +927,7 @@ export const pt: Catalog = {
   "Remove stroke": "Remover contorno",
   "Rename": "Renomear",
   "Show speaker notes": "Mostrar notas do apresentador",
+  "This slide has notes": "Este slide tem notas",
   "This variant shares no elements with its main slide — nothing to update.": "Esta variante não compartilha elementos com o slide principal — nada para atualizar.",
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "Qual caixa do layout do slide é esta. Ao trocar o slide para outro layout, o conteúdo vai para a caixa do novo layout com a mesma função — como um espaço reservado no PowerPoint.",
   "Pie": "Pizza",

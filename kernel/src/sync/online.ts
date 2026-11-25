@@ -387,6 +387,14 @@ export class OnlineTransport implements Transport {
   }
   private writeReadyP: Promise<void>
   private resolveWriteReady: () => void = () => {}
+  /** THIS connection's possession proof, while it is outstanding. A writer in
+   *  a signed room sends snapshots and op batches only once its key is proven,
+   *  so both wait on this. Opened when the socket opens; settles on `wt`
+   *  (proven), on a `ready` without a challenge (an older relay), on a failed
+   *  signature, on a dropped socket, or after PROOF_WAIT_MS. Op batches parked
+   *  meanwhile go out, in order, when it settles. */
+  private proofP: Promise<void> | null = null
+  private settleProof: () => void = () => {}
   private roomName = ''
   private tokValue = ''
   private originValue = ''
@@ -502,6 +510,7 @@ export class OnlineTransport implements Transport {
       // is the log's job anyway (session.onRelayReady re-sends what the room lacks).
       this.awaitingAck = []
       this.setStatus('open')
+      if (this.signKey && this.signedRoom && !this.audienceMode) this.openProof()
       for (const out of this.queue.splice(0)) this.write(out)
       this.startHeartbeat(ws)
       this.hooks.onOpen()
@@ -515,6 +524,8 @@ export class OnlineTransport implements Transport {
       if (this.ws !== ws) return
       this.stopHeartbeat()
       this.ws = null
+      // a proof that can no longer arrive; the waiting snapshot sees no socket
+      this.settleProof()
       this.setStatus('closed')
       // Broadcast close codes carry meaning: the relay closed an audience
       // socket deliberately. 4001 end/grace and 1008 revoked are TERMINAL —
@@ -571,6 +582,15 @@ export class OnlineTransport implements Transport {
    * so the loop cannot restart, and tells the user what they just lost.
    */
   private handleRefusal(env: RefusedEnv) {
+    // A refused fork snapshot is not dropped: its contributions live only in
+    // this replica's doc values and registers, so live peers would otherwise
+    // not get them until a reload. Send it again later.
+    const fork = env.k ? this.forkSent.get(env.k) : undefined
+    if (fork) {
+      this.forkSent.delete(env.k!)
+      this.retryFork(fork, env.code ?? '')
+      if (env.code !== 'rate-limited' && env.code !== 'too-large') return
+    }
     if (env.code === 'rate-limited') {
       this.throttle(typeof env.retryInMs === 'number' ? env.retryInMs : 10_000)
       return
@@ -654,6 +674,7 @@ export class OnlineTransport implements Transport {
 
   /** write now, or park it (disconnected, or inside a rate-limit backoff) */
   private write(out: Outbound) {
+    if (out.ops && this.proofP) { this.park(out); return }
     if (!this.paused && this.ws && this.ws.readyState === WebSocket.OPEN) {
       try {
         this.ws.send(out.text)
@@ -715,6 +736,7 @@ export class OnlineTransport implements Transport {
     if (env.ctl === 'wt') {
       if (typeof env.wt === 'string') this.writeTicket = env.wt
       this.resolveWriteReady()
+      this.settleProof()
       return
     }
     // the relay would not take a frame and said so (v1.0.9 relay and later;
@@ -749,9 +771,11 @@ export class OnlineTransport implements Transport {
         // in both cases uploads take the room token and there is nothing to
         // wait for, so writes are released now.
         if (typeof env.c === 'string' && this.signKey && this.roomName) {
+          if (!this.proofP) this.openProof()
           void this.prove(env.c)
         } else {
           this.resolveWriteReady()
+          this.settleProof()
         }
         this.inReplay = false
         const wantSnap = this.hooks.onReady(this.replaySeen, env.q ?? 0)
@@ -843,8 +867,29 @@ export class OnlineTransport implements Transport {
     } catch {
       // cannot sign → we are effectively a reader; do not hold writes forever
       this.resolveWriteReady()
+      this.settleProof()
     }
   }
+
+  /** Start waiting on this connection's proof (see `proofP`). */
+  private openProof() {
+    this.settleProof()
+    let done!: () => void
+    const p = new Promise<void>((r) => { done = r })
+    const timer = setTimeout(() => this.settleProof(), OnlineTransport.PROOF_WAIT_MS)
+    this.proofP = p
+    this.settleProof = () => {
+      clearTimeout(timer)
+      if (this.proofP === p) this.proofP = null
+      this.settleProof = () => {}
+      done()
+      // the op batches parked behind the proof, in the order they were sent
+      if (!this.paused && this.ws && this.ws.readyState === WebSocket.OPEN) {
+        for (const out of this.queue.splice(0)) this.write(out)
+      }
+    }
+  }
+  static PROOF_WAIT_MS = 10_000
 
   private snapInFlight = false
 
@@ -859,6 +904,9 @@ export class OnlineTransport implements Transport {
     if (this.snapInFlight) return
     this.snapInFlight = true
     try {
+      // The snapshot goes after this socket's proof, not alongside it. Taken
+      // after the wait, so it covers at least `q`.
+      if (this.proofP) await this.proofP
       const snap = this.hooks.getSnapshot()
       const text = await this.encrypt(JSON.stringify(snap))
       if (text && this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -963,16 +1011,49 @@ export class OnlineTransport implements Transport {
         // REPLACES what every live peer holds — the same authority as an op
         // batch, and it used to travel unsigned. Sign it so the relay can
         // vouch for it; peers now refuse a `snap` it hasn't stamped.
-        env = { ...enc, g: await signFrame(this.signKey, enc.i, enc.d) }
+        // Named (`k`) so a refusal can be matched to it and the fork sent
+        // again later (see retryFork).
+        env = { k: id, ...enc, g: await signFrame(this.signKey, enc.i, enc.d) }
+        this.forkSent.set(id, frame)
+        if (this.forkSent.size > 16) this.forkSent.delete(this.forkSent.keys().next().value!)
       }
       // remember what rode in the frame so a refusal can name it
       this.write({ id, text: JSON.stringify(env), ops, bytes: enc.i.length + enc.d.length, tries: 0 })
     })()
   }
 
+  /** Frames of fork snapshots sent on this transport, by frame id (recent 16). */
+  private forkSent = new Map<string, Frame>()
+  private forkRetryTimer: ReturnType<typeof setTimeout> | null = null
+  private forkRetryMs = 0
+  /** first wait before a refused fork snapshot is sent again; doubles per
+   *  refusal up to FORK_RETRY_MAX_MS */
+  static FORK_RETRY_MS = 60_000
+  static FORK_RETRY_MAX_MS = 3_600_000
+
+  /** Send a refused fork snapshot again after a backoff, as the CURRENT
+   *  snapshot (it may have moved on). Not for `too-large`: the same deck
+   *  would not fit next time either. */
+  private retryFork(frame: Frame, code: string) {
+    if (this.closed) return
+    if (code === 'too-large') {
+      console.warn('[bento-sync] relay refused this copy’s fork snapshot as too large')
+      return
+    }
+    this.forkRetryMs = Math.min(Math.max(OnlineTransport.FORK_RETRY_MS, this.forkRetryMs * 2), OnlineTransport.FORK_RETRY_MAX_MS)
+    if (this.forkRetryTimer) clearTimeout(this.forkRetryTimer)
+    this.forkRetryTimer = setTimeout(() => {
+      this.forkRetryTimer = null
+      if (this.closed) return
+      const s = this.hooks.getSnapshot()
+      this.send({ ...frame, doc: s.doc, state: s.state } as Frame)
+    }, this.forkRetryMs)
+  }
+
   close() {
     this.closed = true
     if (this.pauseTimer) { clearTimeout(this.pauseTimer); this.pauseTimer = null }
+    if (this.forkRetryTimer) { clearTimeout(this.forkRetryTimer); this.forkRetryTimer = null }
     this.stopHeartbeat()
     this.ws?.close()
     this.ws = null

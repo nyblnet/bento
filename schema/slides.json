@@ -3,7 +3,7 @@
   "$id": "https://bento.page/schema/slides.json",
   "title": "bento/slides document",
   "description": "The #bento-doc JSON of a Bento Slides file, generated from the app's validation tables. Guide: https://bento.page/agents.md",
-  "x-bento-version": "1.2.13",
+  "x-bento-version": "1.3.0",
   "$ref": "#/$defs/doc",
   "$defs": {
     "prop-fx": {
@@ -258,7 +258,7 @@
         "type": "string"
       },
       "maxProperties": 64,
-      "description": "property path → palette slot, or $token name"
+      "description": "property path → palette slot (accent1, accent1 -20%; a trailing \" /a\" marks a field that keeps its own opacity), or $token name"
     },
     "prop-textStroke": {
       "type": "object",
@@ -3465,7 +3465,7 @@
             "type": "string"
           },
           "maxProperties": 64,
-          "description": "property path → palette slot, or $token name"
+          "description": "property path → palette slot (accent1, accent1 -20%; a trailing \" /a\" marks a field that keeps its own opacity), or $token name"
         },
         "transition": {
           "type": "string",

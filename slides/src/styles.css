@@ -851,26 +851,58 @@ body.ed-scrubbing, body.ed-scrubbing * { cursor: ew-resize; }
    look and fills the pane. */
 .ed-centre { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .ed-centre > .ed-canvas-wrap { flex: 1; min-height: 0; }
-.ed-notespane { position: relative; flex: none; margin-inline: -5px; padding: 0 17px 10px; background: var(--surface); border-top: 1px solid var(--line); }
-.ed-notespane.closed { padding-bottom: 0; }
+.ed-notespane { position: relative; flex: none; display: grid; grid-template-rows: 1fr; margin-inline: -5px; padding: 0 17px 10px; background: var(--surface); border-top: 1px solid var(--line); }
+/* folded, the pane takes NO height: the row, the padding and the rule all go;
+   the toggle in the corner cluster (.ed-notes-btn, below) brings it back */
+.ed-notespane.closed { grid-template-rows: 0fr; padding-bottom: 0; border-top-width: 0; }
+.ed-notespane-body { min-height: 0; }
+.ed-notespane.closed .ed-notespane-body { overflow: hidden; visibility: hidden; }
 .ed-notespane-head { display: block; width: 100%; margin: 0; padding-block: 8px 6px; padding-inline: 14px 0; font-family: inherit; text-align: start; background: none; border: 0; }
 .ed-notespane-head.ed-sec-toggle::before { inset-inline-start: 1px; }
 .ed-notespane-text { display: block; width: 100%; height: 84px; margin: 0; resize: none; }
 /* the side panes' reveal contract, on the vertical: the notes fold and open
-   over the same .18s ease (height, padding, fade) instead of snapping; once
+   over the same .18s ease (row, padding, fade) instead of snapping; once
    folded the field is out of the tab order (visibility, after the fold) */
-.ed-notespane.ed-anim { transition: padding .18s ease; }
-.ed-notespane.ed-anim .ed-notespane-text { transition: height .18s ease, padding .18s ease, opacity .18s ease, border-width .18s ease, visibility 0s linear 0s; }
-.ed-notespane.closed .ed-notespane-text {
-  height: 0 !important; padding-block: 0; border-width: 0; opacity: 0; visibility: hidden;
-}
-.ed-notespane.ed-anim.closed .ed-notespane-text {
-  transition: height .18s ease, padding .18s ease, opacity .12s ease, border-width .18s ease, visibility 0s linear .18s;
-}
-@media (prefers-reduced-motion: reduce) { .ed-notespane, .ed-notespane-text, .ed-notespane.closed .ed-notespane-text { transition: none; } }
+.ed-notespane.ed-anim { transition: grid-template-rows .18s ease, padding .18s ease, border-top-width .18s ease; }
+.ed-notespane.ed-anim .ed-notespane-body { transition: opacity .18s ease, visibility 0s linear 0s; }
+.ed-notespane.closed .ed-notespane-body { opacity: 0; }
+.ed-notespane.ed-anim.closed .ed-notespane-body { transition: opacity .12s ease, visibility 0s linear .18s; }
+@media (prefers-reduced-motion: reduce) { .ed-notespane.ed-anim, .ed-notespane.ed-anim .ed-notespane-body { transition: none; } }
 .ed-notes-grip { position: absolute; inset-inline: 0; top: -3px; height: 6px; cursor: ns-resize; touch-action: none; z-index: 5; transition: background .12s ease .08s; }
 .ed-notes-grip:hover, body.ed-row-resizing .ed-notes-grip { background: color-mix(in srgb, var(--blue) 45%, transparent); }
-.ed-notespane.closed .ed-notes-grip { cursor: default; background: none; }
+.ed-notespane.closed .ed-notes-grip { display: none; }
+/* The pane's one control (notespane.ts): a round toggle at the head of the
+   bottom-end cluster, [notes] [Slideshow] [zoom], wearing the pills' surface,
+   hairline and shadow at their height. It stays put whether the pane is open
+   or folded; open, it wears the armed tool's tint. */
+.ed-notes-btn {
+  position: relative; flex: none; justify-content: center; width: 32px; height: 32px; padding: 0;
+  background: var(--surface); border-color: var(--line); border-radius: 999px;
+  box-shadow: 0 4px 14px rgb(20 30 45 / 0.10);
+}
+.ed-notes-btn:hover { background: var(--chrome); }
+.ed-notes-btn[aria-expanded='true'] {
+  color: var(--accent-ink);
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+.ed-notes-btn[aria-expanded='true']:hover { background: color-mix(in srgb, var(--accent) 30%, var(--surface)); }
+/* this slide has notes: the unsaved dot's amber, ringed in the canvas's own
+   colour so it reads as sitting ON the rim. Folded only — open, the notes
+   themselves are on screen. */
+.ed-notes-btn.ed-has-notes[aria-expanded='false']::after {
+  content: ''; position: absolute; top: -2px; inset-inline-end: -2px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 2px var(--chrome); pointer-events: none;
+}
+/* on touch the circle stays 32px, the pills' height; only the tap area grows,
+   invisibly, to 44px — 6px each way, inside the 10px gap to the Slideshow pill */
+@media (pointer: coarse) { .ed-notes-btn::before { content: ''; position: absolute; inset: -7px; border-radius: 50%; } } /* from the padding box: 1px border + 6px */
+/* a canvas too narrow for the row (editor.ts fitCorner): Slideshow keeps its
+   icon and its name, and drops the visible word */
+.ed-corner-tight .ed-pill-main > span {
+  position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+.ed-corner-tight .ed-pill-main { padding-inline: 12px 9px; }
 body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize; user-select: none; }
 
 .ed-hint {
@@ -3957,7 +3989,7 @@ body.ed-morph-previewing .ed-morph-ghost { visibility: hidden !important; }
 [dir='rtl'] .ed-props { padding: 0 12px 16px 6px; }
 /* dragging the pane's edge is direct manipulation: no easing, or the height
    lags the pointer and the size saved on release is a frame of the tween */
-body.ed-row-resizing .ed-notespane-text { transition: none !important; }
+body.ed-row-resizing .ed-notespane-text, body.ed-row-resizing .ed-notespane { transition: none !important; }
 
 /* what a click would select, outlined before the click (canvas.ts drawHover) */
 .ed-hover-layer { position: absolute; inset: 0; pointer-events: none; z-index: 40; overflow: clip; }

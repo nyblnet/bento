@@ -8,7 +8,7 @@ import type { PropsPanel } from '../panels'
 import { ICONS } from '../../icons'
 import type { BentoDoc, GradientFill, Slide } from '../../model'
 import { setColor, refAt, keepAlpha, PALETTE_SLOTS } from '../../palette'
-import { cssColor, cssGradient, radialGeom } from '../../render'
+import { cssColor, cssGradient, radialGeom, safeGradient } from '../../render'
 import { adoptColor, bindToken, colorUses, freeTokenName, tokenName, tokenValue } from '../../tokens'
 import { choices, openTokenPicker, slotOf, type Choice } from './tokenpicker'
 import { bindUses, madeToken, usesFollow } from './tokenbind'
@@ -108,7 +108,7 @@ export function gradientChip(p: PropsPanel, host: PaintHost): HTMLElement {
   b.className = 'ed-gradchip'
   b.dataset.gradEdit = host.target
   b.dataset.paint = host.target // the swatch's place: settle() finds it by this
-  b.style.setProperty('--grad', host.grad ? cssGradient(host.grad) : 'none')
+  b.style.setProperty('--grad', host.grad ? cssGradient(safeGradient(host.grad)) : 'none')
   b.textContent = host.kind === 'radial' ? t('Radial') : t('Linear')
   b.title = t('Edit the gradient')
   b.addEventListener('click', () => {
@@ -414,7 +414,9 @@ function sameAs(doc: BentoDoc, hex: string): Choice | undefined {
 export function sharedLink(p: PropsPanel, ids: string[], path: string, field: HTMLElement): HTMLElement {
   const holders = () => ids.map((id) => p.store.element(id)).filter(Boolean) as unknown as Array<Record<string, unknown> & { themeRefs?: Record<string, string> }>
   const refs = holders().map((h) => h.themeRefs?.[path])
-  const common = refs.every((r) => r && r === refs[0]) ? refs[0] : undefined
+  // the ` /a` mark is about each field's own opacity, not which colour it follows
+  const plain = (r: string | undefined) => r?.replace(/\s*\/a\s*$/, '')
+  const common = refs.every((r) => r && plain(r) === plain(refs[0])) ? plain(refs[0]) : undefined
   const tok = tokenName(common)
   const bound = tok ?? slotOf(common)
   const detach = () => p.edit(() => { for (const h of holders()) setColor(h as never, path, String(readAt(h, path) ?? ''), null) }, true)

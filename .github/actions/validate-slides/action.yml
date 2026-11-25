@@ -743,3 +743,11 @@ runs:
       run: |
         slides/node_modules/.bin/esbuild scripts/test-slides-code-font.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-code-font.mjs"
         node "$RUNNER_TEMP/test-slides-code-font.mjs"
+    - name: A palette-linked colour keeps its opacity in every released shell
+      # Released shells re-derive a palette-linked colour at boot as the bare
+      # slot colour; a translucent one came back opaque (87 starter fields).
+      # Such refs carry a " /a" the released parser (pinned in the rig) rejects.
+      # Rows: nothing lost, opaque links untouched, old-form files, components,
+      # and every intake from file open to live sync. Four mutants turn it red.
+      shell: bento-step {0}
+      run: node scripts/test-slides-alpha-refs.ts

@@ -90,7 +90,8 @@ try {
   const alpha = p.locator(`${body('Fill')} .ed-color-alpha input`)
   await alpha.fill('50'); await alpha.press('Enter'); await p.evaluate(() => document.activeElement?.blur()); await p.waitForTimeout(250)
   t = await el('t')
-  ok(t.color === 'rgba(247, 166, 0, 0.5)' && t.themeRefs?.color === 'accent1', `50% keeps the link (${t.color}, ${JSON.stringify(t.themeRefs)})`)
+  // translucent and linked: the ref carries the ' /a' mark (palette.ts canonicalAlphaRefs)
+  ok(t.color === 'rgba(247, 166, 0, 0.5)' && t.themeRefs?.color === 'accent1 /a', `50% keeps the link (${t.color}, ${JSON.stringify(t.themeRefs)})`)
   await p.keyboard.press('Escape'); await p.evaluate(() => document.activeElement?.blur()); await p.waitForTimeout(200)
   // Accent 1 lives in the Tokens view's Theme group (one home for the deck's colours)
   await p.locator('.ed-side-tabs [data-view="tokens"]').click(); await p.waitForTimeout(200)
@@ -107,7 +108,7 @@ try {
   await select('r')
   await pickTheme(body('Fill'), 'Accent 1')
   const r = await el('r')
-  ok(r.fill === 'rgba(18, 52, 86, 0.5)' && r.themeRefs?.fill === 'accent1', `picking a theme colour keeps the field's 50% (${r.fill})`)
+  ok(r.fill === 'rgba(18, 52, 86, 0.5)' && r.themeRefs?.fill === 'accent1 /a', `picking a theme colour keeps the field's 50% (${r.fill})`)
 
   // 5. one undo step per typed colour, linked or not; 0% stays 0%
   // a linked field shows the theme colour's name, not a hex: pick from the
@@ -119,7 +120,7 @@ try {
   ok((await el('r')).fill === 'rgba(0, 255, 0, 0.5)' && !(await el('r')).themeRefs, 'picking a colour on a linked fill writes it and detaches')
   await undo()
   const ru = await el('r')
-  ok(ru.fill === 'rgba(18, 52, 86, 0.5)' && ru.themeRefs?.fill === 'accent1', `ONE undo restores colour and link together (${ru.fill}, ${JSON.stringify(ru.themeRefs)})`)
+  ok(ru.fill === 'rgba(18, 52, 86, 0.5)' && ru.themeRefs?.fill === 'accent1 /a', `ONE undo restores colour and link together (${ru.fill}, ${JSON.stringify(ru.themeRefs)})`)
   await select('z')
   await typeHex(body('Fill'), '00ff00')
   ok((await el('z')).fill === 'rgba(0, 255, 0, 0)', `a 0% fill stays 0% when its hue is typed (${(await el('z')).fill})`)

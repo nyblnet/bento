@@ -15298,6 +15298,142 @@ Found while #897 and its follow-up were on CI; none came from either.
   now flags, closes, knocks once to wake the accept, and joins the thread.
 
 
+## 2026-11-22 — slides: a translucent palette link is saved in a form older shells leave alone
+
+**Ruling (maintainer): fix before 1.2.14.** The revamp made a field linked to
+a palette slot keep its own opacity when the slot changes (`palette.ts
+keepAlpha`). Every released shell with palette links (1.0.19 to 1.2.13)
+re-derives a linked literal at BOOT as the bare slot colour, so a translucent
+linked field opened there came back solid and was saved solid. Measured on
+main's starter deck in 1.2.13 and 1.2.10: 87 fields, and through two
+component mains their copies as well. Live sync did not carry it (derive is
+never an operation), so the exposure was an older shell opening the
+document: a spliced or rolled-back file, Replace from JSON, a paste, a host
+serving an older shell.
+
+- **The encoding.** A palette ref whose field keeps an opacity of its own gets
+  a trailing ` /a` (`tx2 +70% /a`). The suffix carries no value, the literal
+  holds the alpha. What it does is make the token one that the released
+  parser rejects: all sixteen released palette.ts files share one regex, and
+  it allows nothing after the shift. A shell that cannot parse a ref skips it,
+  so it leaves the translucent literal in place and writes the ref back as it
+  found it (measured in 1.2.13 and 1.2.10). In those shells such a field no
+  longer follows palette edits. That is the degradation chosen over losing
+  its opacity.
+- **Written in one place, only where needed.** `canonicalAlphaRefs` runs in
+  every derive pass, before components and again inside the
+  components/layout settle loop. It marks a ref exactly when this shell's
+  derivation (keepAlpha) differs from the bare slot colour an older shell
+  would write, and unmarks it when they agree again. Only the suffix is
+  touched, so an opaque link keeps its token byte for byte, and a file saved
+  before this fix is marked on opening without a literal changing. The answer
+  is a function of the literal and the palette, so every replica derives the
+  same token. It also runs on opacity edits, which move no palette signature.
+- **Components.** A main's mark reaches its copies with the rest of the main.
+  A copy whose own colour is translucent marks its own ref, which then reads
+  as a copy override like any other.
+- **Intake.** parseThemeRef accepts the suffix, so file open, Replace from
+  JSON and `loadDoc` (full and compact), restored snapshots, paste and live
+  sync all keep it. The colour gate still judges the literal beside it.
+- **Guard.** `scripts/test-slides-alpha-refs.ts` pins the released regex and
+  runs the released derivation over what this build would save. The
+  starter-deck row is the positive control (87 lost in the old form). Four
+  mutants turn rows red.
+
+## 2026-11-22 — slides: the speaker-notes pane starts folded; a toggle beside Slideshow opens it
+
+The maintainer asked for the notes pane under the canvas (#897) to start
+closed for new decks and to take no height when folded, and then for the
+control that reopens it to use space well, be easy to find and use, and look
+right. The first control built was a labelled "Speaker notes" pill in the
+canvas's bottom-start corner; the maintainer did not like it, and it was
+replaced before this shipped.
+
+- **The default is per viewer, not per deck.** With no saved
+  `bento-notes-open` the pane starts folded at every window size (it used to
+  open above 700×600). An explicit open or fold is remembered under that key,
+  as before. "New decks" was read as "anyone who has not chosen yet": a per-deck
+  flag would either enter the format (notes visibility is a viewer
+  preference, like locale and reduced motion, never document state) or need
+  a docId-keyed store that forgets the viewer's choice on every new file.
+- **Folded is zero height.** The header, the rule and the padding fold with
+  the text (a grid row tweened 1fr → 0fr, so the existing .18s ease is kept
+  and reduced motion snaps); the canvas gets the whole column.
+- **One control, in the bottom-end cluster: [notes] [Slideshow] [zoom].** A
+  32px round toggle at the head of the row that already holds Slideshow and
+  zoom, where PowerPoint keeps its Notes button. It does not move or
+  disappear: the same button opens and folds (aria-expanded, aria-controls),
+  and open it wears the armed tool's tint. Three other shapes were built and
+  measured against it in the real shell:
+  - the labelled pill in the opposite corner took a corner of its own, and on
+    a phone a row of its own above the other pills;
+  - a chevron tab docked on the canvas's bottom edge (the side panels' drawer
+    pull) is the smallest, but says nothing about what it opens to someone
+    who has never seen the pane, which now starts folded, and on a phone its
+    44px tap area lands on the Slideshow pill;
+  - a full-width rail with a grabber, opened by a click or a drag, has the
+    same two problems and no label at all.
+  A labelled toggle in the cluster overflows a 390px phone, so it would need
+  the icon-only form anyway; the icon-only form is the one shipped everywhere.
+- **The dot.** Folded, the toggle carries an amber dot when the current
+  slide has notes (blank notes do not count). That is information the pill
+  and the folded pane never gave: which slides still need notes, without
+  opening anything. The tooltip and the button's accessible description say
+  the same in words; open, the notes are on screen and the dot steps aside.
+- **The row stays one row.** Where the canvas is too narrow for it (a 320px
+  phone, a canvas between two open panels, a long localized Slideshow label
+  such as Portuguese at 390px) the Slideshow button drops its visible word
+  and keeps its icon and its accessible name. That is the topbar's rule,
+  hiding text first, and it is measured against the canvas, not a width
+  breakpoint, because the row's width moves with the locale. Only the canvas
+  is observed, so the row changing width cannot re-trigger the check.
+- **Keyboard and touch.** Enter on the toggle opens the pane and puts the
+  caret in the notes; Enter on it again folds, and focus stays on the toggle.
+  On touch the circle stays 32px and a transparent area grows the target to
+  44px inside the 10px gap, so it takes nothing from the Slideshow pill.
+- **Guard.** `scripts/test-slides-notes-pane-browser.mjs` measures the folded
+  height, the canvas gain, the toggle's place, hit-test, tap area and dot at
+  1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
+  default, never tighten the row, widen the tap area onto the Slideshow pill,
+  or never draw the dot each turn rows red.
+
+## 2026-11-23 — An identity answer says when it is complete (`ResolvedIdentity.fields`)
+
+- **The problem.** Four of the option-G fields on `ResolvedIdentity`
+  (`revoked`, `resetAt`, `rosterChangedAt`, `unconfirmedSince`) are the
+  STRONGER claim when missing: not revoked, no recent change, address
+  confirmed. A document cannot tell "this does not apply" from "a relay on the
+  way dropped it", and relays that drop them exist today: a host bridge that
+  copies a fixed list of the original six fields turns a revoked sign-in or a
+  lapsed address into a plain ✓. Rules that every relay must forward the
+  fields (2026-11-14 above) bind the relays someone remembers to update; they
+  do nothing for one already built.
+- **The marker.** An answer carries `fields: 'g1'` (`RESOLVED_FIELDS`) only
+  when it holds every G field that applies (`RESOLVED_G1_FIELDS`). The agent
+  sets it when it has filled them; a relay forwards it only together with all
+  of them, type-checked, and never adds one itself. A document draws no ✓ for
+  an answer without it. Because it is a field of the answer, a relay that
+  copies a fixed field list drops it along with everything else, so every
+  older host fails closed whatever its version, with no version check. A
+  host-level capability flag was the alternative and fails open in exactly
+  that case: the host says it is new while one hop behind it is old.
+- **'g1' never changes; a later field set adds its own marker.** An agent
+  that carries every g1 field keeps sending `fields: 'g1'`, for good. Slides
+  shells are frozen inside every saved file and accept exactly `'g1'`, so an
+  agent that replaced it with `'g2'` would turn every row of every file saved
+  before then into "couldn't check", with no fix but breaking the rule back. A
+  later set announces itself with a NEW optional field of its own beside
+  `fields`, never a new value of it. A relay that only knows `g1` forwards
+  `'g1'` with the g1 fields and drops the new marker, so it still cannot vouch
+  for fields it has never seen, and a reader of the later set fails closed
+  through the same relay.
+- Guarded by `scripts/test-identity.ts`: the marker is the last field of
+  `ResolvedIdentity`, `RESOLVED_G1_FIELDS` is exactly the optional fields
+  before it, in order, and the six required fields are unchanged. Mutants that
+  drop a field from the list, add one to the interface only, move the marker,
+  change its value or unfreeze the list each turn a row red, and a row pins the
+  never-changes rule in both identity.ts and this entry.
+
 ## 2026-11-22 — The home/web offline rig's timeouts: two browser faults and one rig race
 
 `test-home-web-offline.mjs` kept failing on CI with "timed out after 10000

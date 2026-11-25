@@ -929,6 +929,7 @@ export const de: Catalog = {
   "Remove stroke": "Kontur entfernen",
   "Rename": "Umbenennen",
   "Show speaker notes": "Referentennotizen einblenden",
+  "This slide has notes": "Diese Folie hat Notizen",
   "This variant shares no elements with its main slide — nothing to update.": "Diese Variante hat keine gemeinsamen Elemente mit ihrer Hauptfolie — nichts zu aktualisieren.",
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "Welcher Bereich des Folienlayouts dies ist. Wenn Sie der Folie ein anderes Layout zuweisen, wandert der Inhalt in den Bereich des neuen Layouts mit derselben Rolle — wie ein Platzhalter in PowerPoint.",
   "Pie": "Kreis",
