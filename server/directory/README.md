@@ -23,6 +23,22 @@ address**, and nothing lists or iterates them. Per-IP limits key on a
 daily-salted HMAC, so no raw IP is stored and one day's hashes can't be
 linked to the next.
 
+**What it keeps only for a while** (the privacy notice states each; the
+rigs pin the code to it). Each is deleted by the object's own alarm, so an
+address nobody asks about again still ends up holding none of it:
+
+- a setup link's send time: 31 days, the budget's window (`setupTimesKeepMs`),
+  whether or not an account was then set up;
+- an unused setup or reset link's hash: until the link expires;
+- an ended void link's hash (to answer "too late" or "already used"): 31 days
+  after it ended (`endedKeepMs`); past that the link answers like one never known;
+- a spent challenge: 10 minutes;
+- the per-IP ledger's day salt and counters: until a minute after that day
+  ends (UTC). Minting a new day's salt never pushes the pending purge later.
+
+Every write of one of these brings the alarm forward to its time
+(`schedule`), never later.
+
 ## Routes
 
 | route | answer |
