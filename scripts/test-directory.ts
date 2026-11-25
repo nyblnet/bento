@@ -162,6 +162,38 @@ for (const [i, want] of N) ok(normalize(i) === want, `normalize(${JSON.stringify
 }
 
 // =====================================================================
+// RETENTION: the per-IP ledger's day salt and counters go a minute after
+// the day ends (UTC), never a day later (the privacy notice's sentence)
+// =====================================================================
+{
+  const store = new Map<string, unknown>()
+  let alarm: number | null = null
+  const lg = new Ledger({ storage: {
+    async get(k: string) { return structuredClone(store.get(k)) },
+    async put(k: string, v: unknown) { store.set(k, structuredClone(v)) },
+    async delete(k: string | string[]) { for (const x of [].concat(k as never)) store.delete(x) },
+    async list() { return new Map([...store].sort(([a], [b]) => (a < b ? -1 : 1))) },
+    async setAlarm(t: number) { alarm = t },
+    async getAlarm() { return alarm },
+  } } as never)
+  const ask = async () => (await (await lg.fetch(new Request('https://ledger/check', { method: 'POST', body: JSON.stringify({ ip: '10.9.9.9', kind: 'lookup' }) }))).json()) as { ok: boolean }
+  /** the platform: run the alarm (cleared first) whenever it is due by `t` */
+  const until = async (t: number) => { for (let i = 0; i < 10 && alarm !== null && alarm <= t; i++) { now = Math.max(now, alarm); alarm = null; await lg.alarm() } now = t }
+  const D = Date.parse('2026-11-20T00:00:00Z'), MINUTE = 60_000
+  const keys = (day: string) => [...store.keys()].filter((k) => k === `salt:${day}` || k.split(':')[1]?.startsWith(day))
+  await until(D + 23 * 3_600_000 + 59 * MINUTE)
+  ok((await ask()).ok && keys('2026-11-20').length === 2, `control: at 23:59 on day D its salt and a counter are kept (${keys('2026-11-20').join(', ')})`)
+  await until(D + 86_400_000 + 30_000)
+  ok((await ask()).ok && keys('2026-11-21').length === 2, 'a request at 00:00:30 on D+1 mints D+1\'s salt')
+  ok(alarm === D + 86_400_000 + MINUTE, `minting D+1's salt leaves the alarm at D's purge, never later (${alarm === null ? 'none' : new Date(alarm).toISOString()})`)
+  await until(D + 86_400_000 + MINUTE)
+  ok(keys('2026-11-20').length === 0, `at D+1 00:01 nothing of day D is left (${keys('2026-11-20').join(', ') || 'none'})`)
+  ok(keys('2026-11-21').length === 2 && alarm === D + 2 * 86_400_000 + MINUTE, 'D+1\'s salt stays, and the alarm is re-armed for its own purge at D+2 00:01')
+  await until(D + 2 * 86_400_000 + MINUTE)
+  ok(store.size === 0 && alarm === null, `with no request on D+2, D+1's salt and counters go at D+2 00:01 and no alarm is left (${[...store.keys()].join(', ') || 'empty'})`)
+}
+
+// =====================================================================
 // nothing identifying at rest
 // =====================================================================
 {

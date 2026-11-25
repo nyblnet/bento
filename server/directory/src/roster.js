@@ -130,6 +130,14 @@ export const ROSTER_LIMITS = {
   holdMs: MAIL_TIMEOUT_MS + 5_000,
   /** F2: how many ended void links the directory remembers, to answer "too late" or "already used" for them */
   endedKeep: 16,
+  /**
+   * RETENTION (the privacy notice states each one). How long an ended void
+   * link's hash is kept to answer "too late" or "already used"; past it the
+   * link answers like one the directory never knew
+   */
+  endedKeepMs: 31 * DAY,
+  /** how long a setup link's send time is kept for the budget: its window (ten in 31 days), never longer */
+  setupTimesKeepMs: 31 * DAY,
 }
 
 /** The openers the sign-in host may report (it reads them from the message event). */
@@ -286,10 +294,13 @@ export class Roster {
   constructor(state, env) { this.state = state; this.env = env }
 
   /**
-   * One alarm, two users: a waiting change's ripening, and sweeping spent
+   * One alarm, three users: a waiting change's ripening, sweeping spent
    * challenges once nobody is spending (a stranger's spends on an address that
-   * then goes quiet would otherwise stay stored for good). Each run does what is
-   * due and sets the alarm for the earliest thing still to come.
+   * then goes quiet would otherwise stay stored for good), and RETENTION: the
+   * setup send times, the setup and reset link hashes and the ended void
+   * links each go when their time is up (purge), on an address nobody asks
+   * about again too. Each run does what is due and sets the alarm for the
+   * earliest thing still to come.
    */
   async alarm() {
     const s = this.state.storage
@@ -297,6 +308,8 @@ export class Roster {
     await this.ripen(now)
     await this.sweepSpent(now)
     const next = []
+    const kept = await this.purge(now)
+    if (kept !== null) next.push(kept)
     const p = await s.get('pend')
     // a held change comes due again once the hold is off (released early, a later run of ripen does it)
     const h = await this.held(now)
@@ -310,6 +323,31 @@ export class Roster {
     const s = this.state.storage
     const at = await s.getAlarm()
     if (at === null || at === undefined || at > t) await s.setAlarm(t)
+  }
+
+  /**
+   * RETENTION: delete what is kept only for a while, once its time is up, and
+   * answer when the next thing kept becomes due (null: nothing). An expired
+   * setup or reset link's hash goes at its expiry; an ended void link's hash
+   * endedKeepMs after it ended; a setup send time setupTimesKeepMs after it
+   * (pruneSetupTimes). Every write of these keys brings the alarm forward to
+   * its own time (schedule), never later.
+   */
+  async purge(now) {
+    const s = this.state.storage
+    const due = []
+    const keep = async (key, alive, at) => {
+      const list = (await s.get(key)) || []
+      const left = list.filter(alive)
+      if (left.length !== list.length) { if (left.length) await s.put(key, left); else await s.delete(key) }
+      for (const x of left) due.push(at(x))
+    }
+    await keep('setupTok', (t) => t.exp > now, (t) => t.exp)
+    await keep('resetTok', (t) => t.exp > now, (t) => t.exp)
+    await keep('ended', (e) => now - e.at < ROSTER_LIMITS.endedKeepMs, (e) => e.at + ROSTER_LIMITS.endedKeepMs)
+    const oldest = await this.pruneSetupTimes(now)
+    if (oldest !== null) due.push(oldest + ROSTER_LIMITS.setupTimesKeepMs)
+    return due.length ? Math.min(...due) : null
   }
 
   /** Delete every spent challenge past its keep, oldest first (the keys sort by issue time). */
@@ -380,10 +418,11 @@ export class Roster {
     const list = ((await s.get('ended')) || []).filter((e) => e.h !== h)
     list.push({ h, why, at, ...(by ? { by } : {}) })
     await s.put('ended', list.slice(-ROSTER_LIMITS.endedKeep))
+    await this.schedule(at + ROSTER_LIMITS.endedKeepMs) // retention: purge deletes it then
   }
-  /** The answer for a token whose link has ended, or null when the directory does not know it. */
-  async endedAnswer(th) {
-    const e = ((await this.state.storage.get('ended')) || []).find((x) => same(x.h, th))
+  /** The answer for a token whose link has ended, or null when the directory does not know it (or ended it longer ago than the keep). */
+  async endedAnswer(th, now) {
+    const e = ((await this.state.storage.get('ended')) || []).find((x) => same(x.h, th) && now - x.at < ROSTER_LIMITS.endedKeepMs)
     return e ? { error: e.why, at: e.at, ...(e.by ? { by: e.by } : {}) } : null
   }
 
@@ -395,12 +434,26 @@ export class Roster {
    */
   async spendSetupBudget(now) {
     const s = this.state.storage
-    const times = ((await s.get('mail')) || []).filter((t) => now - t < 31 * DAY)
+    const times = ((await s.get('mail')) || []).filter((t) => now - t < ROSTER_LIMITS.setupTimesKeepMs)
     if (times.length && now - times[times.length - 1] < ROSTER_LIMITS.mailCooldownMs) return false
     if (times.filter((t) => now - t < DAY).length >= ROSTER_LIMITS.mailPerDay) return false
     if (times.length >= ROSTER_LIMITS.mailPerMonth) return false
     await s.put('mail', [...times, now])
+    await this.schedule((times[0] ?? now) + ROSTER_LIMITS.setupTimesKeepMs) // retention: the oldest kept time goes then
     return true
+  }
+  /**
+   * RETENTION for the budget's send times (only purge calls it): drop every
+   * time the budget no longer reads (older than its 31-day window), deleting
+   * the key when none is left, setup or not. It only deletes, so it never
+   * changes what the budget allows. Answers the oldest time kept, or null.
+   */
+  async pruneSetupTimes(now) {
+    const s = this.state.storage
+    const times = (await s.get('mail')) || []
+    const left = times.filter((t) => now - t < ROSTER_LIMITS.setupTimesKeepMs)
+    if (left.length !== times.length) { if (left.length) await s.put('mail', left); else await s.delete('mail') }
+    return left.length ? Math.min(...left) : null
   }
 
   async records(members) {
@@ -573,6 +626,7 @@ export class Roster {
       const exp = now + (spent ? ROSTER_LIMITS.setupTtlMs : ROSTER_LIMITS.setupBeyondTtlMs)
       // a new token never replaces an older live one: a stranger's start must not kill the owner's link
       await s.put('setupTok', [...live, { h, exp, at: now, mailed: false }])
+      await this.schedule(exp) // retention: an unused link's hash goes at its expiry
       const sent = await mailSetupLink(this.env, a.address, token, now, exp)
       const after = ((await s.get('setupTok')) || []).filter((t) => t.exp > now)
       // a link that never went out is withdrawn, so it can never hold a later mail back
@@ -745,7 +799,7 @@ export class Roster {
       if (!parked && (!p || typeof p.voidTok !== 'string' || !same(p.voidTok, th))) {
         // F2: a link whose life has ended says how (too late, already used, or
         // cancelled by a reset), so the page never has to guess
-        const e = await this.endedAnswer(th)
+        const e = await this.endedAnswer(th, now)
         return e ? out(409, e) : out(400, { error: 'invalid' })
       }
       const kind = parked ? 'removal' : p.kind ?? 'member'
@@ -856,7 +910,7 @@ export class Roster {
       const still = await s.get('pend')
       const atHead = await s.get('head')
       const mine = (await s.get('hold'))?.id === hold
-      if (!still || still.voidTok !== p.voidTok || atHead.hash !== cur.hash) { await this.dropHold(hold); return out(409, (await this.endedAnswer(th)) ?? { error: 'superseded' }) }
+      if (!still || still.voidTok !== p.voidTok || atHead.hash !== cur.hash) { await this.dropHold(hold); return out(409, (await this.endedAnswer(th, now)) ?? { error: 'superseded' }) }
       if (!mine) return out(409, { error: 'busy' })
       await this.link(qRos, { auth: 'q', cause: p.hash, requestedAt: now, now, kind: 'quarantine',
         extra: { voided: { ros: p.ros, signer: target, assertion: p.assertion } } })
@@ -888,6 +942,7 @@ export class Roster {
       const rt = await mintToken('reset')
       const rexp = now + ROSTER_LIMITS.resetTtlMs
       await s.put('resetTok', [...rlive, { h: rt.h, exp: rexp, at: now, mailed: false }])
+      await this.schedule(rexp) // retention: an unused link's hash goes at its expiry
       const sent = await mailResetLink(this.env, a.address, rt.token, now, rexp)
       const rafter = ((await s.get('resetTok')) || []).filter((t) => t.exp > now)
       await s.put('resetTok', sent ? rafter.map((t) => (t.h === rt.h ? { ...t, mailed: true } : t)) : rafter.filter((t) => t.h !== rt.h))
