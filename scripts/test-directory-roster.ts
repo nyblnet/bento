@@ -553,7 +553,8 @@ let addAt = 0
   const o = await rosterObj(alice)
   // the platform has run every alarm that came due before now (this harness runs them by hand)
   for (let i = 0; i < 10 && o.alarm !== null && o.alarm <= now; i++) await fire(o)
-  ok(o.alarm === null, 'nothing is left to come before the request')
+  const kept = (o.store.get('mail') as number[] | undefined) ?? []
+  ok(kept.length > 0 && o.alarm === Math.min(...kept) + ROSTER_LIMITS.setupTimesKeepMs, 'nothing is left to come before the request but the setup send times\' purge, 31 days after the oldest')
   const r = await request(alice, A2, { add: A3 })
   ok(r.status === 202, 'A2 (a member now) asks to add A3')
   const asked = now
@@ -1275,18 +1276,30 @@ let addAt = 0
   // where budgets are read: one function per object, called from one place each
   const src = (f: string) => readFileSync(join(root, 'server/directory/src', f), 'utf8')
   const io = /\b(?:get|put|delete)\(\s*\[?\s*'mail'/g
-  const only = (file: string, fn: string, op: string, nextOp: string) => {
+  const only = (file: string, fn: string, op: string, nextOp: string, purge?: string) => {
     const t = src(file)
     const indent = fn.match(/^ */)![0]
     const a = t.indexOf(fn), z = a < 0 ? -1 : t.indexOf(`\n${indent}}\n`, a)
+    const pa = purge ? t.indexOf(purge) : -1, pz = pa < 0 ? -1 : t.indexOf(`\n${indent}}\n`, pa)
     const hits = [...t.matchAll(io)].map((x) => x.index ?? 0)
-    ok(a >= 0 && hits.length > 0 && hits.every((i) => i > a && i < z), `${file}: the budget is read and written only inside ${fn.trim().split('(')[0]} (${hits.length} places)`)
+    ok(a >= 0 && (!purge || pa >= 0) && hits.length > 0 && hits.every((i) => (i > a && i < z) || (i > pa && i < pz)),
+      `${file}: the budget is read and written only inside ${fn.trim().split('(')[0]}${purge ? ` and its retention purge` : ''} (${hits.length} places)`)
     const name = fn.trim().replace(/^async /, '').replace(/^const /, '').split(/[ (=]/)[0]
     const calls = [...t.matchAll(new RegExp(`\\b${name}\\(`, 'g'))].map((x) => x.index ?? 0).filter((i) => i < a || i > z)
     const o = t.indexOf(op), e = t.indexOf(nextOp, o + 1)
     ok(calls.length === 1 && calls[0] > o && calls[0] < e, `${file}: ${name} is called once, from ${op.trim()} (${calls.length} calls)`)
   }
-  only('roster.js', '  async spendSetupBudget(now) {', "if (a.op === 'setupStart')", "if (a.op === 'setup')")
+  only('roster.js', '  async spendSetupBudget(now) {', "if (a.op === 'setupStart')", "if (a.op === 'setup')", '  async pruneSetupTimes(now) {')
+  {
+    // retention: the alarm's purge may only DELETE send times the budget no longer reads (its own 31-day window)
+    const t = src('roster.js')
+    const a = t.indexOf('  async pruneSetupTimes(now) {'), z = t.indexOf('\n  }\n', a)
+    const body = a < 0 ? '' : t.slice(a, z)
+    ok(/filter\(\(t\) => now - t < ROSTER_LIMITS\.setupTimesKeepMs\)/.test(body) && !/\.\.\.times|push\(|, now\]/.test(body) && /filter\(\(t\) => now - t < ROSTER_LIMITS\.setupTimesKeepMs\)/.test(t.slice(t.indexOf('  async spendSetupBudget(now) {'), t.indexOf('  async pruneSetupTimes(now) {'))),
+      'roster.js: the send-time purge keeps exactly the budget\'s window and adds nothing')
+    const calls = [...t.matchAll(/\bpruneSetupTimes\(/g)].length
+    ok(calls === 2 && t.indexOf('this.pruneSetupTimes(now)') > t.indexOf('  async purge(now) {') && t.indexOf('this.pruneSetupTimes(now)') < t.indexOf('  async pruneSetupTimes(now)'), `roster.js: pruneSetupTimes is called only from the alarm's purge (${calls - 1} calls)`)
+  }
   for (const f of readdirSync(join(root, 'server/directory/src')).filter((x) => x !== 'roster.js'))
     ok(![...src(f).matchAll(io)].length, `${f}: reads no mail budget`)
   // every kind the sources send is declared
@@ -1364,12 +1377,13 @@ let addAt = 0
   ok(responses.filter(noRoute).length === 2 && responses.filter(noRoute).every((x) => x.h.get('access-control-allow-origin') === null), 'a path that is no route answers with no CORS')
   const notStar = responses.filter((x) => !x.what.startsWith('web ') && !x.what.includes('/v1/web/') && !noRoute(x) && x.h.get('access-control-allow-origin') !== '*')
   ok(notStar.length === 0, `every other answer keeps CORS * (not: ${notStar.map((x) => x.what).join(', ') || 'none'})`)
-  // the sign-in host's copy of the seam, when it is in this tree
+  // the sign-in host's copy of the seam. server/signin is on main, so a tree
+  // without it is a broken copy: the row FAILS, never skips quietly (security's
+  // seam-row note on #952; the mutants rig copies server/signin/public)
   const seam = join(root, 'server/signin/public/directory-client.js')
-  if (existsSync(seam)) {
-    const t = readFileSync(seam, 'utf8')
-    ok(t.includes("challenge: '/v1/web/challenge'") && t.includes("enrol: '/v1/web/enrol'"), 'the sign-in host\'s seam names the same two routes')
-  } else console.log('note: server/signin is not in this tree; the seam cross-check runs once it is')
+  ok(existsSync(seam), `the sign-in host's seam is in this tree (${existsSync(seam) ? 'present' : 'MISSING: server/signin/public/directory-client.js'})`)
+  const t = existsSync(seam) ? readFileSync(seam, 'utf8') : ''
+  ok(t.includes("challenge: '/v1/web/challenge'") && t.includes("enrol: '/v1/web/enrol'"), 'the sign-in host\'s seam names the same two routes')
 }
 
 // =====================================================================
@@ -1994,6 +2008,71 @@ const quarantinedIn = (c: Awaited<ReturnType<typeof current>>, pub: string) => c
 }
 
 // ---------------------------------------------------------------------
+// C7 (security's re-run on #952): the post-send re-checks of a press whose
+// send outlived its hold. Reachable only past the hold, so only rows pin them.
+// ---------------------------------------------------------------------
+/** twoKeys, then a third passkey (asked for by the first, ripened). */
+async function threeKeys(email: string) {
+  const [a, b] = await twoKeys(email)
+  const c = await Authn.make()
+  const r = await request(email, a, { add: c })
+  if (r.status !== 202) console.log(`threeKeys(${email}): add ${r.status} ${JSON.stringify(r.j)}`)
+  now += ROSTER_WAIT_MS
+  await current(email)
+  return [a, b, c] as const
+}
+{
+  // P17: a Remove stalls past its hold; the person presses Cancel on the same link; another member queues Z
+  now += DAY
+  const e = 'c7-p17@example.com'
+  const [K1, K2] = await threeKeys(e)
+  const X = await Authn.make(), Z = await Authn.make()
+  ok((await request(e, K2, { add: X })).status === 202, 'P17: K2 asks to add X')
+  const v = voidIn(lastMail(e))
+  const h = hangNext()
+  const pr = voidPost(e, v?.token ?? '', 'remove')
+  ok(await reached(h), 'P17: the Remove is in its send')
+  now += ROSTER_LIMITS.holdMs + 1 // the object stalled: the hold has lapsed
+  const cx = await voidPost(e, v?.token ?? '', 'cancel')
+  ok(cx.status === 200 && cx.j.done === 'cancelled', `P17: Cancel on the same link, after the hold lapsed, acts (got ${cx.status} ${JSON.stringify(cx.j)})`)
+  const qz = await request(e, K1, { add: Z })
+  ok(qz.status === 202, `P17: another member then queues Z (got ${qz.status} ${JSON.stringify(qz.j)})`)
+  h.release(true)
+  const r = await pr
+  const c = await current(e)
+  const p = await pendOf(e) as { kind?: string; change?: { pub?: string } } | undefined
+  ok(r.status === 409 && r.j.error === 'used', `P17: the stalled Remove answers 409 used (got ${r.status} ${JSON.stringify(r.j)})`)
+  ok(quarantinedIn(c, K2.pub) === false && !c.head?.members.some((m) => m.quarantined), 'P17: K2 is not suspended after the person\'s Cancel')
+  ok(p?.kind === 'member' && p?.change?.pub === Z.pub, `P17: Z still waits, not overwritten by a removal (pend ${String(p?.kind)})`)
+  ok((await rosterObj(e)).store.get('hold') === undefined, 'P17: the stalled Remove let go of its own hold')
+  const ch = await chainOf(e)
+  ok(ch.ok, `P17: the kernel accepts the chain (${ch.ok ? 'ok' : ch.reason})`)
+}
+{
+  // P18: a reset stalls past its hold; a member queues Z after the lapse
+  now += DAY
+  const e = 'c7-p18@example.com'
+  const [F1] = await twoKeys(e)
+  const Z = await Authn.make()
+  const t = await resetToken(e)
+  const h = hangNext()
+  const pr = reset(e, await Authn.make(), t.token ?? '')
+  ok(await reached(h), 'P18: the reset is in its send, with nothing waiting')
+  now += ROSTER_LIMITS.holdMs + 1
+  const qz = await request(e, F1, { add: Z })
+  ok(qz.status === 202, `P18: after the lapse a member queues Z (got ${qz.status} ${JSON.stringify(qz.j)})`)
+  const zv = voidIn(lastMail(e))
+  h.release(true)
+  const r = await pr
+  const p = await pendOf(e) as { kind?: string; change?: { pub?: string } } | undefined
+  ok(r.status === 409 && r.j.error === 'superseded', `P18: the stalled reset answers 409 superseded (got ${r.status} ${JSON.stringify(r.j).slice(0, 80)})`)
+  ok(p?.kind === 'member' && p?.change?.pub === Z.pub, `P18: Z still waits, never silently cancelled by the reset (pend ${String(p?.kind)})`)
+  const zc = await voidPost(e, zv?.token ?? '', 'cancel')
+  ok(zc.status === 200 && zc.j.done === 'cancelled', `P18: Z's own void link still works (got ${zc.status} ${JSON.stringify(zc.j)})`)
+  ok((await reset(e, await Authn.make(), t.token ?? '')).status === 202, 'P18: the reset that did not happen did not spend its link')
+}
+
+// ---------------------------------------------------------------------
 // F2: a link whose life ended says how: too late, used, or cancelled by a reset
 // ---------------------------------------------------------------------
 for (const d of [-1, 0]) {
@@ -2139,6 +2218,71 @@ async function p4reset(e: string) {
   ok(ch.ok, `P4c: the kernel accepts the chain through q and x (${ch.ok ? 'ok' : ch.reason})`)
 }
 {
+  // C7 (X12): a reset stopped after the set-aside removal's time, once the alarm
+  // has re-armed to the reset's own time (as the platform's sweep run leaves it):
+  // the removal's alarm is due within a second, not at the reset's time
+  now += DAY
+  const e = 'c7-x12@example.com'
+  const { P1, removesAt } = await p4start(e)
+  now += 2 * HOUR
+  const { mail } = await p4reset(e)
+  const ra = await ripensOf(e)
+  const o = await rosterObj(e)
+  now += ROSTER_LIMITS.spentKeepMs + MIN
+  await fire(o) // the spent-challenge sweep runs; the alarm re-arms
+  ok(o.alarm === ra, `X12: before the stop the alarm is set for the reset's time (got ${o.alarm === null ? 'none' : `${(o.alarm - ra) / 1000} s from it`})`)
+  now = removesAt + HOUR
+  const rc = await voidPost(e, voidIn(mail)?.token ?? '', 'cancel')
+  ok(rc.j.done === 'cancelled' && rc.j.removesAt === now, `X12: the reset is stopped after the removal's time (got ${JSON.stringify(rc.j)})`)
+  ok(o.alarm !== null && o.alarm <= now + 1000, `X12: the restored removal's alarm is due within a second (got ${o.alarm === null ? 'none' : `${Math.round((o.alarm - now) / 1000)} s on`})`)
+  if (o.alarm !== null && o.alarm <= now + 1000) await fire(o)
+  const c = await current(e)
+  ok(!c.head?.members.some((m) => m.pub === P1.pub) && c.pending === null, 'X12: the alarm then removes P1')
+  ok((await chainOf(e)).ok, 'X12: the kernel accepts the chain')
+}
+{
+  // C8 (security's P19 on #952): the mailer answers after the directory stopped
+  // waiting, and DELIVERS. The page must not be told the mail was not sent.
+  now += DAY
+  const e = 'c8-timeout@example.com'
+  const [, B2] = await twoKeys(e)
+  await request(e, B2, { add: await Authn.make() })
+  const v = voidIn(lastMail(e))
+  const before = await current(e)
+  const realSet = globalThis.setTimeout, realClear = globalThis.clearTimeout
+  const timers: { fn: () => void; ms: number }[] = []
+  globalThis.setTimeout = ((fn: () => void, ms: number) => { timers.push({ fn, ms }); return timers.length }) as never
+  globalThis.clearTimeout = (() => {}) as never
+  const late = { deliver: null as (() => void) | null }
+  const n0 = mailbox.length
+  // the mail is delivered late; the send's promise is left pending (the directory stopped waiting on it; settling it
+  // would re-enter this harness's object gate from a request that has already ended)
+  mailHook = (m) => { mailHook = null; return new Promise<void>(() => { late.deliver = () => { mailbox.push(m) } }) }
+  const got = { r: null as Awaited<ReturnType<typeof voidPost>> | null }
+  const pR = voidPost(e, v?.token ?? '', 'remove').then((r) => { got.r = r })
+  const tick = () => new Promise((r) => realSet(r, 0))
+  for (let i = 0; i < 200 && !(late.deliver && timers.some((t) => t.ms === MAIL_TIMEOUT_MS)); i++) await tick()
+  const timer = timers.find((t) => t.ms === MAIL_TIMEOUT_MS)
+  ok(!!late.deliver && !!timer, `C8: the Remove's mail is in its send, under the ${MAIL_TIMEOUT_MS} ms timer`)
+  if (timer) { timer.fn(); for (let i = 0; i < 200 && !got.r; i++) await tick() }
+  late.deliver?.() // the mailer answers after all, and the mail goes out
+  for (let i = 0; i < 20; i++) await tick()
+  globalThis.setTimeout = realSet; globalThis.clearTimeout = realClear
+  mailHook = null
+  void pR
+  const r = got.r
+  ok(r?.status === 503 && r?.j.error === 'mail-timeout', `C8: a timed-out send answers 503 mail-timeout, never the refusal's 'mail' (got ${r ? `${r.status} ${JSON.stringify(r.j)}` : 'still hung'})`)
+  const c = await current(e)
+  ok(c.head?.seq === before.head?.seq && quarantinedIn(c, B2.pub) === false && (await pendOf(e))?.kind === 'member' && (await rosterObj(e)).store.get('hold') === undefined,
+    'C8: nothing changed: nobody suspended, the change still waits, the hold is off')
+  ok(mailbox.slice(n0).filter((m) => /suspended/.test(m.subject)).length === 1, 'C8: and yet the "suspended" mail arrived (why the page must not say it was not sent)')
+  mailDown = true
+  const rf = await voidPost(e, v?.token ?? '', 'remove')
+  mailDown = false
+  ok(rf.status === 503 && rf.j.error === 'mail', `C8 control: a mailer that refuses answers 503 mail (got ${rf.status} ${JSON.stringify(rf.j)})`)
+  ok((await voidPost(e, v?.token ?? '', 'remove')).j.done === 'suspended', 'C8 control: with the mailer answering, the same link\'s Remove acts')
+}
+{
   // the reset takes effect while a removal is set aside: the undo link says too late, by the reset
   now += DAY
   const e = 'sd2c-p4l@example.com'
@@ -2182,6 +2326,100 @@ async function p4reset(e: string) {
   const ev = evaluate(obs as never, { voidPath: VOID_PATH } as never) as { id: string; fails: string[] }[]
   const rows = ev.filter((x) => ['rp-html-csp', 'no-framing', 'rp-permissions', 'rp-nosniff'].includes(x.id))
   ok(rows.length === 4 && rows.every((x) => x.fails.length === 0), `check-id-hosting's rp rows pass on the void page (${rows.map((x) => `${x.id}:${x.fails.length}`).join(' ')})`)
+}
+
+// =====================================================================
+// 10r. RETENTION (the privacy notice's sentences): what the object keeps only
+// for a while goes from its own alarm, on an address nobody asks about again
+// =====================================================================
+/** Run every alarm that comes due up to `t`, as the platform would, then set the clock to `t`. */
+async function runUntil(email: string, t: number) {
+  const o = await rosterObj(email)
+  for (let i = 0; i < 50 && o.alarm !== null && o.alarm <= t; i++) { now = Math.max(now, o.alarm); await fire(o) }
+  now = t
+  return o
+}
+{
+  ok(ROSTER_LIMITS.setupTimesKeepMs === 31 * DAY && ROSTER_LIMITS.endedKeepMs === 31 * DAY && ROSTER_LIMITS.setupTtlMs === 20 * MIN && ROSTER_LIMITS.resetTtlMs === DAY,
+    'pinned for the notice: setup send times and ended void links 31 days; setup link 20 minutes, reset link a day')
+  // an address asked once and never again, with no account: nothing is kept past its time
+  now += DAY
+  const e = 'ret-once@example.com'
+  const t0 = now
+  ok((await setupToken(e)) !== null, 'retention: one setup link is mailed to an address with no account')
+  const o = await rosterObj(e)
+  const tok = () => (o.store.get('setupTok') as unknown[] | undefined)
+  ok(tok()?.length === 1 && (o.store.get('mail') as number[] | undefined)?.length === 1, 'control: its hash and its send time are kept')
+  ok(o.alarm === t0 + ROSTER_LIMITS.setupTtlMs, `the alarm is set for the link's expiry (${o.alarm === null ? 'none' : `${(o.alarm - t0) / MIN} min`})`)
+  await runUntil(e, t0 + ROSTER_LIMITS.setupTtlMs - 1)
+  ok(tok()?.length === 1, 'control: a millisecond before it expires, the hash is still there')
+  await runUntil(e, t0 + ROSTER_LIMITS.setupTtlMs)
+  ok(tok() === undefined, 'an expired setup link\'s hash is deleted at its expiry, with nothing new asked')
+  await runUntil(e, t0 + 30 * DAY)
+  ok((o.store.get('mail') as number[] | undefined)?.[0] === t0, 'control: at 30 days the send time is still kept (the budget\'s window)')
+  await runUntil(e, t0 + 32 * DAY)
+  ok(o.store.get('mail') === undefined, 'setup send times older than 31 days are gone after the alarm, with no new setup asked')
+  ok(o.store.size === 0 && o.alarm === null, `the address keeps nothing at all, and no alarm is left (${[...o.store.keys()].join(', ') || 'empty'})`)
+}
+{
+  // a second setup start must not push the first link's purge later (schedule, never setAlarm)
+  now += DAY
+  const e = 'ret-twice@example.com'
+  const t1 = now
+  await setupToken(e)
+  now += 2 * MIN
+  await setupToken(e)
+  const o = await rosterObj(e)
+  ok(o.alarm === t1 + ROSTER_LIMITS.setupTtlMs, `after a second start the alarm is still the FIRST link's expiry (${o.alarm === null ? 'none' : `${(o.alarm - t1) / MIN} min`})`)
+  await runUntil(e, t1 + ROSTER_LIMITS.setupTtlMs)
+  ok((o.store.get('setupTok') as unknown[] | undefined)?.length === 1, 'at the first link\'s expiry its hash goes; the second\'s stays')
+  await runUntil(e, t1 + 2 * MIN + ROSTER_LIMITS.setupTtlMs)
+  ok(o.store.get('setupTok') === undefined, 'and the second\'s goes at its own expiry')
+}
+{
+  // after setup: the send times still go at 31 days
+  now += DAY
+  const e = 'ret-setup@example.com'
+  const t0 = now
+  ok((await setup(e, await Authn.make())).status === 200, 'retention: an account set up from a mailed link')
+  const o = await runUntil(e, t0 + 31 * DAY + MIN)
+  ok(o.store.get('mail') === undefined && o.store.get('setupTok') === undefined && !!o.store.get('head'), 'the setup send time is gone after 31 days; the account stays')
+}
+{
+  // an expired reset link's hash goes at its expiry, with no new reset asked
+  now += DAY
+  const e = 'ret-reset@example.com'
+  await setup(e, await Authn.make())
+  // every alarm the setup left (its spent challenge) has run: what is left is the send times' purge, weeks away
+  const o = await runUntil(e, now + HOUR)
+  ok(o.alarm !== null && o.alarm > now + 7 * DAY, `control: before the reset start the next alarm is weeks away (${o.alarm === null ? 'none' : `${((o.alarm - now) / DAY).toFixed(1)} d`})`)
+  const t0 = now
+  const r = await resetToken(e)
+  ok(r.token !== null && (o.store.get('resetTok') as unknown[] | undefined)?.length === 1, 'retention: a reset link is mailed and its hash kept')
+  await runUntil(e, t0 + ROSTER_LIMITS.resetTtlMs - 1)
+  ok((o.store.get('resetTok') as unknown[] | undefined)?.length === 1, 'control: a millisecond before it expires the hash is still there')
+  await runUntil(e, t0 + ROSTER_LIMITS.resetTtlMs)
+  ok(o.store.get('resetTok') === undefined, 'an expired reset link\'s hash is deleted at its expiry, with no new reset asked')
+}
+{
+  // an ended void link answers how it ended for 31 days, then like a link never known, and its hash goes
+  now += DAY
+  const e = 'ret-ended@example.com'
+  const [R1] = await twoKeys(e)
+  await request(e, R1, { add: await Authn.make() })
+  const v = voidIn(lastMail(e))
+  const tc = now
+  ok((await voidPost(e, v?.token ?? '', 'cancel')).j.done === 'cancelled', 'retention: a change is cancelled from its link')
+  const o = await rosterObj(e)
+  ok(o.alarm !== null && o.alarm <= tc + ROSTER_LIMITS.endedKeepMs, `the alarm will come for the ended link by its keep (${o.alarm === null ? 'none' : `${((o.alarm - tc) / DAY).toFixed(2)} d`})`)
+  await runUntil(e, tc + ROSTER_LIMITS.endedKeepMs - MIN)
+  const young = await voidPost(e, v?.token ?? '', 'cancel')
+  ok(young.status === 409 && young.j.error === 'used', `a minute inside the keep the link still says it was used (got ${young.status} ${JSON.stringify(young.j)})`)
+  now = tc + ROSTER_LIMITS.endedKeepMs // the keep is up; the alarm has not run yet
+  const old = await voidPost(e, v?.token ?? '', 'cancel')
+  ok(old.status === 400 && old.j.error === 'invalid', `at the end of the keep it answers like a link never known, even before the purge (got ${old.status} ${JSON.stringify(old.j)})`)
+  await runUntil(e, tc + ROSTER_LIMITS.endedKeepMs)
+  ok(o.store.get('ended') === undefined, 'the alarm deletes the ended link\'s hash')
 }
 
 // =====================================================================

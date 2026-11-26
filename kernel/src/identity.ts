@@ -128,7 +128,7 @@ export type ResolveQuery = { pub: string } | { email: string }
  *
  * Absence is NOT always the weaker claim. `tier` and `accountSince` read
  * weaker when missing (passkey tier, a new account). `revoked` (missing = not
- * revoked), `resetAt` and `rosterChangedAt` (missing = no recent change) and
+ * revoked, which includes not deleted), `resetAt` and `rosterChangedAt` (missing = no recent change) and
  * `unconfirmedSince` (missing = confirmed) read STRONGER when missing. So:
  *   - an agent sends every one of them that applies, every time;
  *   - EVERY relay between the agent and the document (home/bridge.js, each
@@ -169,9 +169,12 @@ export interface ResolvedIdentity {
   /** ripenedAt of the latest reset (RosterState.lastResetAt) */
   resetAt?: number
   /** this sign-in no longer stands: 'signout' a member signed every browser out
-   *  (wout., roster.ts), 'incident' the directory's lever. Present and not false
-   *  = no ✓ at all. Missing or false = not revoked */
-  revoked?: false | 'signout' | 'incident'
+   *  (wout., roster.ts), 'incident' the directory's lever, 'deleted' the account
+   *  was deleted (the directory's rdel. record, verified against the pin with
+   *  roster.ts verifyDeletion: the document shows "account deleted"). Present
+   *  and not false = no ✓ at all. Missing or false = not revoked: a STRONGER
+   *  claim, so a relay that drops 'deleted' shows a deleted account as ✓ */
+  revoked?: false | 'signout' | 'incident' | 'deleted'
   /** the organisation's domain that manages the account (org identity, later) */
   managedBy?: string
   /** the watt.'s `mb` when it is not 0: since when the address is unconfirmed.

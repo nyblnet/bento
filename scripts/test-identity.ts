@@ -338,7 +338,7 @@ console.log('\nvouchedBy is the voucher alone: every qualifier is its own field 
   const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'kernel/src/identity.ts'), 'utf8')
   const body = src.slice(src.indexOf('export interface ResolvedIdentity {'), src.indexOf('}', src.indexOf('export interface ResolvedIdentity {')))
   for (const [f, t] of [['tier', "'passkey' | 'native'"], ['accountSince', 'number'], ['rosterChangedAt', 'number'], ['resetAt', 'number'],
-    ['revoked', "false | 'signout' | 'incident'"], ['managedBy', 'string'], ['unconfirmedSince', 'number']] as const)
+    ['revoked', "false | 'signout' | 'incident' | 'deleted'"], ['managedBy', 'string'], ['unconfirmedSince', 'number']] as const)
     ok(body.includes(`\n  ${f}?: ${t}\n`), `ResolvedIdentity.${f}?: ${t}`)
   ok(!/passkey sign-in\)", ", unconfirmed/.test(src), 'identity.ts no longer tells agents to write qualifiers into vouchedBy')
 }
