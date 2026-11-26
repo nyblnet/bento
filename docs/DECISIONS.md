@@ -15601,3 +15601,83 @@ Supersedes two bullets of 2026-11-12 "The People panel's identity tiers":
   agent where there is none, the phone popover's viewport cap removed, the
   unconfirmed tag painted grey, and a changed binding hidden without the
   marker.
+
+## 2026-11-26 — bento/id: a peer's identity is checked from the certificates it carries (the account anchor, the frame's identity port)
+
+A document in bento/home's sandboxed frame reaches the identity agent over a
+port, and a person's agent answers `resolve` for someone else in the room
+from public certificates that person's document carries. Kernel half; the
+frame client and the library's consent dialog are home/web's.
+
+- **`accountPub` is the account ANCHOR under option G:** `'g:' +
+  base64url(sha256(the exact ros. text at seq 0))` (`roster.ts accountAnchor`),
+  null unless the verified chain starts at seq 0. The name is kept, so no
+  contract bump; no document read `accountPub` as a key.
+- **The anchor is not continuity of the person.** A reset continues the roster
+  chain, so the anchor is the same after every reset, including one by someone
+  who took the mailbox. The continuity signals are `resetAt`, `rosterChangedAt`
+  and `accountSince`, which the document already shows. No host and no
+  document may read "same accountPub" as "same person, nothing changed". A
+  deletion and a new setup at the same address give a new anchor, even with the
+  same passkey, because ros.0 carries the directory's nonce and time.
+- **Peer-carried proofs, verified offline.** `IdentityProof = {device, chain}`
+  (the device certificate with its passkey or consent-key proof and current
+  watt., and the roster chain from seq 0); `PublicIdentity.proof?` and
+  `ResolveQuery {pub, proof?}` are additions within contract 1. There is no
+  directory lookup route for a device key, now or later without a new ruling:
+  it would tell the directory who meets whom, be an enumeration oracle, and add
+  an online dependency.
+- **One verify order** (`identityport.ts createProofResolver`, one per open):
+  the chain from seq 0 under the PINNED directory keys only; the longest
+  chain the open holds for that anchor; the device against that chain, with
+  `cert.devicePub` equal to the queried key and a current watt. under a pinned
+  kid; the lever's predicate; own-account status; `composeResolved`. Every
+  failure answers null and nothing throws across the port.
+- **A peer's revocation reaches others within one watt. lifetime, at most
+  24 hours,** as "not verified": sign out everywhere, account deletion, removal
+  or quarantine of the certifying passkey, and the lever for a resolver that
+  holds no incident record. That holds only while the directory refuses to
+  renew a watt. in each of those cases. Only the agent's own account reports
+  `revoked: 'signout'` or `'deleted'` by name; peers are never polled, since
+  polling is the lookup route under another name.
+- **Residual: a lone peer can hide later links for up to one watt.
+  lifetime.** The presenter chooses the proof, and watt. binds only the
+  certificate, not the current head. So a peer can send a chain that ends at
+  its certificate's head and omit a later removal or quarantine. The resolver
+  judges each device against the longest chain it holds for the anchor, so
+  the omission is caught whenever another member of the same account in the
+  room carries a fresher chain. Two chains for one anchor where neither is a
+  prefix of the other are a fork: null for both, counted. A head hash in
+  watt. would close the residual; it is a format change for later.
+- **`name` and `email` are both the address** from the verified chain, and
+  `vouchedBy` is `id.bento.page`. No signed statement carries a display name
+  under G, and a certificate's label is chosen by the page that asked, so a
+  label of "Mallory" can never become a name shown with ✓.
+- **`revoked: 'incident'` only on the lever's own predicate** (`devices.ts
+  leverCovers`): a wdev., or a dev2. via passkey, with watt. ob = 1, whose
+  ceremonyAt or loggedAt falls inside the window, both ends included (an open
+  window has no end). A native dev2. that a consent key co-signed is never
+  covered, which matches the lever. The directory's lever should import this
+  one function instead of keeping its own copy.
+- **`composeResolved` is the only setter of `fields: 'g1'`.**
+  `checkResolved` (the one type-checked relay) keeps the marker only when
+  every G field present passes its type and `accountPub` matches
+  `^g:[A-Za-z0-9_-]{43}$`; it never adds the marker. A K2-era 87-character
+  point still passes as a plain field but never with g1. Both are keyed by
+  `RESOLVED_G1_FIELDS`, so a field added to the list without a rule does not
+  typecheck.
+- **The 64 KiB proof cap is one constant** (`PROOF_MAX_BYTES`, UTF-8 JSON),
+  about 75 roster links. Over it, whoami answers without the proof and resolve
+  answers null, both counted. A checkpoint design is later work and needs its
+  own ruling.
+- **The port (`serveIdentity`) is docstoreport's twin:** closed ops (whoami,
+  sign, resolve), exact key sets, symbol keys and non-plain prototypes
+  refused, rising ids, rate and in-flight caps, drops counted and the session
+  closed at the limit, the entry and docId from the host only, `event.origin`
+  never read. Sign and resolve answer only after whoami returned an identity in
+  that session; before that, sign is 'declined' and resolve null, without
+  asking the agent. A whoami that answered null is final for the session.
+  Invite and revoke are 'unavailable' in phase 1.
+- Guarded by `scripts/test-identityport.ts` (real signatures from the
+  deterministic test keys) and `scripts/test-identityport-mutants.ts`, where
+  each mutant must turn its own row red.

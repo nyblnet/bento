@@ -486,3 +486,23 @@ export async function verifyInc(text: string, sig: string, opts: { directoryKeys
 
 /** Was something signed at `at` inside the incident's window? from inclusive, to exclusive; an open window has no end. */
 export const insideIncident = (at: number, i: Incident): boolean => at >= i.from && (i.to === null || at < i.to)
+
+/**
+ * THE LEVER'S PREDICATE (web-identity-tier §3.7 step 1; ID3 A6): does incident
+ * `i` cover this certificate? Only when all three hold:
+ *   - the certificate is one a passkey made through a page: a wdev., or a
+ *     dev2. via passkey. A dev2. a consent key co-signed (via ck) is native
+ *     and the lever does not touch it;
+ *   - its watt. says the ceremony (or renewal) was logged for bento/home: ob 1;
+ *   - its ceremonyAt or the watt.'s loggedAt is inside [from, to], BOTH ends
+ *     inclusive as the directory's lever counts them (to null = still open).
+ * A peer reports revoked:'incident' only on this, under a record verifyInc
+ * accepted (pinned kids). One function, for every peer and the directory's
+ * lever alike, so the two can never disagree on which keys an incident took.
+ */
+export function leverCovers(cert: Pick<DeviceCert, 'kind' | 'via' | 'ceremonyAt'>, watt: Pick<Watt, 'ob' | 'loggedAt'>, i: Incident): boolean {
+  if (!(cert.kind === 'wdev' || (cert.kind === 'dev2' && cert.via === 'passkey'))) return false
+  if (watt.ob !== 1) return false
+  const inWindow = (t: number) => t >= i.from && (i.to === null || t <= i.to)
+  return inWindow(cert.ceremonyAt) || inWindow(watt.loggedAt)
+}

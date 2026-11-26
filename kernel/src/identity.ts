@@ -28,6 +28,9 @@
 //     agent — a bare file:// tab, an older host, a doctored file — and every
 //     caller then does exactly what it did before identity existed.
 
+import type { DeviceProof } from './devices.ts'
+import type { RosterLink } from './roster.ts'
+
 /** The contract version a host's agent object must carry. Members marked
  *  optional are additions within this version; a breaking change bumps it, and
  *  a document then sees no agent rather than one it would misread. */
@@ -59,6 +62,53 @@ export function isVoucher(v: unknown): v is string {
   return typeof v === 'string' && v.length <= VOUCHED_BY_MAX && VOUCHER_RE.test(v)
 }
 
+/**
+ * The public certificates that let a PEER check a device key offline (ID3,
+ * security-ruling R1b). A person's agent hands its own proof to the document
+ * (PublicIdentity.proof), the document carries it to the room, and another
+ * person's agent verifies it under its OWN pinned directory keys: no lookup
+ * route, no network, nothing from the proof but signed texts.
+ *   device  the device certificate (wdev. or dev2.), the member's proof over
+ *           it, and the directory's current watt. (devices.ts)
+ *   chain   the roster chain FROM SEQ 0 (roster.ts): the anchor is the hash of
+ *           its first head, so a chain that starts at a pin anchors nothing
+ * At most PROOF_MAX_BYTES as JSON. Public certificates only: the proof exposes
+ * the address and the account's member history (passkey pubs, reset and change
+ * times) to everyone it is shown to.
+ */
+export interface IdentityProof {
+  device: DeviceProof
+  chain: RosterLink[]
+}
+
+/**
+ * The largest proof, as UTF-8 JSON, any side carries (R1d). roster-v2 links
+ * average about 850 bytes, so this holds about 75 links, well below MAX_CHAIN.
+ * Over it: whoami answers WITHOUT the proof and resolve answers null, both
+ * counted. Fail closed; a checkpoint design is later work under its own ruling.
+ * ONE constant: identityport.ts's proof parser is the only reader.
+ */
+export const PROOF_MAX_BYTES = 64 * 1024
+
+/**
+ * The ACCOUNT ANCHOR (security-ruling ID3, R1a): `'g:' + base64url(sha256(the
+ * exact ros. text at seq 0))`, roster.ts accountAnchor. It is what accountPub
+ * carries under option G, for every answer marked `fields: 'g1'`.
+ *
+ * THE ANCHOR IS NOT CONTINUITY OF THE PERSON. It names a roster chain, and a
+ * reset CONTINUES the chain, so the anchor is the same across every reset,
+ * including one made by someone who took the mailbox. What changes is the
+ * chain-derived fields: `resetAt`, `rosterChangedAt`, `accountSince`. No host
+ * and no document may read "same accountPub" as "same person, nothing
+ * changed"; it reads those fields. A deletion and a fresh setup at the same
+ * address give a NEW anchor even with the same passkey (ros.0 carries the
+ * directory's nonce and its own time).
+ */
+export const ACCOUNT_ANCHOR_RE = /^g:[A-Za-z0-9_-]{43}$/
+
+/** The voucher of every answer composeResolved builds. */
+export const G_VOUCHER = 'id.bento.page'
+
 /** Who is using this document, as vouched for. Public fields only. */
 export interface PublicIdentity {
   /** display name, as the binding states it */
@@ -71,6 +121,10 @@ export interface PublicIdentity {
   accountPub: string
   /** this device's key, the one `sign` uses: raw P-256 point, base64url */
   devicePub: string
+  /** OPTIONAL within contract 1: the public certificates for devicePub, for
+   *  the document to carry to peers (IdentityProof). Absent when the agent has
+   *  none or it is over PROOF_MAX_BYTES. */
+  proof?: IdentityProof
 }
 
 /**
@@ -116,8 +170,11 @@ export type SignResult =
   | { ok: true; sig: string; pub: string }
   | { ok: false; reason: SignRefusal }
 
-/** Look up a person by a key already in the room, or (phase 2) by address. */
-export type ResolveQuery = { pub: string } | { email: string }
+/** Look up a person by a key already in the room, or (phase 2) by address.
+ *  `proof` (optional within contract 1) is the IdentityProof that key's holder
+ *  presented; an agent under option G resolves a pub ONLY through one, and the
+ *  proof must certify exactly that pub. */
+export type ResolveQuery = { pub: string; proof?: IdentityProof } | { email: string }
 
 /** A public binding the agent found and checked.
  *
@@ -203,6 +260,119 @@ export const RESOLVED_FIELDS = 'g1'
 export const RESOLVED_G1_FIELDS = Object.freeze([
   'tier', 'accountSince', 'rosterChangedAt', 'resetAt', 'revoked', 'managedBy', 'unconfirmedSince',
 ] as const)
+
+// --- composing and checking an answer ---------------------------------------------
+
+/** the latest instant a Date can hold */
+const MAX_TIME = 8.64e15
+const isTime = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v > 0 && v <= MAX_TIME
+
+type G1Field = typeof RESOLVED_G1_FIELDS[number]
+/** The type rule for each G field. Keyed by RESOLVED_G1_FIELDS itself, so a
+ *  field added to the list without a rule here does not typecheck. */
+const G1_RULES: Readonly<Record<G1Field, (v: unknown) => boolean>> = Object.freeze({
+  tier: (v: unknown) => v === 'passkey' || v === 'native',
+  accountSince: isTime,
+  rosterChangedAt: isTime,
+  resetAt: isTime,
+  revoked: (v: unknown) => v === false || v === 'signout' || v === 'incident' || v === 'deleted',
+  managedBy: isVoucher,
+  unconfirmedSince: isTime,
+})
+
+/** An own data property's value, or undefined (never a getter, never inherited). */
+function own(o: object, k: string): unknown {
+  const d = Object.getOwnPropertyDescriptor(o, k)
+  return d && 'value' in d ? d.value : undefined
+}
+
+/**
+ * The type-checked relay (security-ruling-962 P1; ID3 A2). Every answer a
+ * kernel relay forwards to a document goes through this: the six required
+ * fields must hold (else null), each G field in RESOLVED_G1_FIELDS is kept
+ * only when it passes its rule, and `fields: 'g1'` is kept only when EVERY G
+ * field that is present passed and accountPub has the anchor shape. Anything
+ * else (unknown keys, getters, inherited values) is dropped. It never ADDS the
+ * marker: composeResolved is the only place that sets it.
+ */
+export function checkResolved(r: unknown): ResolvedIdentity | null {
+  try {
+    if (!r || typeof r !== 'object' || Array.isArray(r)) return null
+    const name = own(r, 'name'), email = own(r, 'email'), vouchedBy = own(r, 'vouchedBy'), accountPub = own(r, 'accountPub')
+    const firstSeen = own(r, 'firstSeen'), changed = own(r, 'changed')
+    if (typeof name !== 'string' || name === '' || name.length > 320 || typeof email !== 'string' || email.length > 320 ||
+      !isVoucher(vouchedBy) || typeof accountPub !== 'string' || accountPub === '' || accountPub.length > 200 ||
+      !isTime(firstSeen) || typeof changed !== 'boolean') return null
+    const out: ResolvedIdentity = { name, email, vouchedBy, accountPub, firstSeen, changed }
+    let whole = true
+    for (const f of RESOLVED_G1_FIELDS) {
+      const v = own(r, f)
+      if (v === undefined) continue
+      if (G1_RULES[f](v)) (out as unknown as Record<string, unknown>)[f] = v
+      else whole = false
+    }
+    const marker = own(r, 'fields')
+    if (marker === RESOLVED_FIELDS && whole && ACCOUNT_ANCHOR_RE.test(accountPub)) out.fields = marker
+    return out
+  } catch {
+    // a hostile getter, a revoked proxy: no answer, never a throw into the caller
+    return null
+  }
+}
+
+/** What an agent VERIFIED, for composeResolved. Every value comes from the
+ *  roster chain, the device certificate and its watt., the incident records,
+ *  and the agent's own-account status: nothing from presence or the request. */
+export interface VerifiedFacts {
+  /** the roster's address, in normal form */
+  address: string
+  /** accountAnchor of the chain */
+  anchor: string
+  tier: 'passkey' | 'native'
+  /** RosterState.createdAt (the chain starts at seq 0) */
+  accountSince: number
+  /** the latest member or quarantine change, a reset excepted; null = none */
+  rosterChangedAt: number | null
+  /** RosterState.lastResetAt */
+  resetAt: number | null
+  revoked: false | 'signout' | 'incident' | 'deleted'
+  /** the watt.'s mb: 0 = confirmed */
+  mb: number
+  firstSeen: number
+  changed: boolean
+}
+
+/**
+ * Build a ResolvedIdentity from verified facts. THE ONLY SETTER of `fields:
+ * 'g1'` (ID3 A2): it fills every G field that applies and marks the answer,
+ * then passes it through checkResolved, so a fact that fails its type drops
+ * the marker here too. null when the facts cannot make an answer at all.
+ *
+ * `name` and `email` are both the ADDRESS (A5): under option G no signed
+ * statement carries a display name. A device certificate's label is chosen by
+ * the page that asked, so it is never a name; a host may show it only as a
+ * device description in its own chrome, marked as chosen by the page.
+ */
+export function composeResolved(f: VerifiedFacts): ResolvedIdentity | null {
+  if (!f || typeof f.address !== 'string' || !ACCOUNT_ANCHOR_RE.test(f.anchor)) return null
+  const a: ResolvedIdentity = {
+    name: f.address,
+    email: f.address,
+    vouchedBy: G_VOUCHER,
+    accountPub: f.anchor,
+    firstSeen: f.firstSeen,
+    changed: f.changed,
+    tier: f.tier,
+    accountSince: f.accountSince,
+  }
+  if (f.rosterChangedAt !== null) a.rosterChangedAt = f.rosterChangedAt
+  if (f.resetAt !== null) a.resetAt = f.resetAt
+  if (f.revoked !== false) a.revoked = f.revoked
+  if (f.mb !== 0) a.unconfirmedSince = f.mb
+  a.fields = RESOLVED_FIELDS
+  const c = checkResolved(a)
+  return c && c.fields === RESOLVED_FIELDS ? c : null
+}
 
 /** Roles a person can be given in a document (phase 2). */
 export type ShareRole = 'reader' | 'editor' | 'owner'
