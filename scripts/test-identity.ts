@@ -25,6 +25,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   identityAgent, detectIdentityAgentForTest as detect, IDENTITY_CONTRACT, IDENTITY_GLOBAL, VOUCHED_BY_MAX, isVoucher,
+  RESOLVED_FIELDS, RESOLVED_G1_FIELDS,
 } from '../kernel/src/identity.ts'
 
 let failures = 0
@@ -172,26 +173,41 @@ console.log('\nonce found, the agent cannot be reassigned')
 // import (`import type`) brings no code, so it does not count: statements.ts
 // uses the SignPurpose type to check payloads.
 //
-// The one exception is slides' People panel (bento/id P1), whose only call is
-// behind the localStorage flag bento-people-vouch, off by default. It is pinned
-// by STRUCTURE, not by a text match, after comments are removed: every static
-// import/export-from (multi-line too) and every dynamic import() of identity in
-// every app is found (any of .ts .js .mjs .cjs .mts .cts, or none), and no file
-// but identity.ts names the __bentoIdentity global; vouch.ts's import line is exact,
-// and so is vouchstate.ts's, which takes the VOUCHED_BY_MAX constant and nothing else; `identityAgent` is named
-// exactly twice there (the import and the one gated call); vouchAgent and
-// vouchEnabled are exactly the gated call and the flag read; lsGet is the
-// kernel's storage read, not redefined. Then the pin is run on in-memory copies
-// with widening mutants (a re-export, an alias, a second call site, the flag
-// forced on or read in a comment, a shadowed lsGet, a multi-line or dynamic
-// import elsewhere), each of which must turn it red.
-console.log('\ncontract only: nothing calls it yet, except the flag-gated People panel')
+// The one exception is slides' People panel (bento/id P1). Its only call runs
+// where the host exposes an agent (identityAgent() is null everywhere else),
+// unless the viewer's kill switch, localStorage bento-people-vouch = 'off', is
+// set; and an answer earns a ✓ only when it carries the completeness marker
+// (ResolvedIdentity.fields), so a host whose relay drops fields fails closed.
+// So the invariant is: agent present AND kill switch not set gates the call,
+// and the marker gates any ✓. It is pinned by STRUCTURE, not by a text match,
+// after comments are removed: every static import/export-from (multi-line too)
+// and every dynamic import() of identity in every app is found (any of .ts .js
+// .mjs .cjs .mts .cts, or none), and no file but identity.ts names the
+// __bentoIdentity global; vouch.ts's import line is exact, and so is
+// vouchstate.ts's, which takes two pure bindings (the marker value and the
+// voucher shape) and nothing else; `identityAgent` is named exactly twice in
+// vouch.ts (the import and the one gated call); vouchAgent and vouchEnabled are
+// exactly the gated call and the kill-switch read; lsGet is the kernel's
+// storage read, not redefined; vouchstate.ts checks the marker, as the
+// answer's own data property, before any verified result, and returns a
+// changed result (which only takes the ✓ away) only for changed === true. Then the pin is run on in-memory copies with
+// widening mutants (a re-export, an alias, a second call site, the kill switch
+// ignored or read in a comment, a shadowed lsGet, a multi-line or dynamic
+// import elsewhere, the marker check removed, moved or read through the
+// prototype, a changed result from a truthy changed), each of which must
+// turn it red.
+console.log('\ncontract only: nothing calls it yet, except the People panel (agent-gated, kill switch, marker)')
 {
   const GATED = 'slides/src/editor/vouch.ts'
   const GATED_IMPORT = "import { identityAgent, type IdentityAgent } from '../../../kernel/src/identity.ts'"
-  // the panel's decision module takes the shared 80-character cut, a constant, and nothing else
+  // the panel's decision module takes the marker value and the voucher shape, two pure bindings, and nothing else
   const CONST_ONLY = 'slides/src/editor/vouchstate.ts'
-  const CONST_IMPORT = "import { VOUCHED_BY_MAX } from '../../../kernel/src/identity.ts'"
+  const CONST_IMPORT = "import { RESOLVED_FIELDS, isVoucher } from '../../../kernel/src/identity.ts'"
+  const MARKER_CHECK = "if (!ownMarker(a)) return { kind: 'failed', why: 'incomplete' }"
+  // the marker counts only as the answer's own data property, never inherited or a getter
+  const OWN_MARKER = "const ownMarker = (a: object) => { const d = Object.getOwnPropertyDescriptor(a, 'fields'); return d !== undefined && 'value' in d && d.value === RESOLVED_FIELDS }"
+  // a changed binding only takes the ✓ away, so it may be shown without the marker, but only for changed: true
+  const CHANGED_LINE = "if (a.changed === true) return name && isVoucher(via) ? { kind: 'changed', name, via } : { kind: 'failed' }"
   const root = join(dirname(fileURLToPath(import.meta.url)), '..')
   const files = new Map<string, string>()
   const walk = (dir: string) => {
@@ -227,13 +243,24 @@ console.log('\ncontract only: nothing calls it yet, except the flag-gated People
     const need = (c: boolean, why: string) => { if (!c) bad.push(`${GATED}: ${why}`) }
     need((g.match(/\bidentityAgent\b/g) || []).length === 2, 'identityAgent named exactly twice (the import and the one gated call)')
     need(/export function vouchAgent\(\): IdentityAgent \| null \{\s*return vouchEnabled\(\) \? identityAgent\(\) : null\s*\}/.test(g), 'vouchAgent is exactly the gated call')
-    need(/export function vouchEnabled\(\): boolean \{\s*try \{ return lsGet\('bento-people-vouch'\) === 'on' \} catch \{ return false \}\s*\}/.test(g), 'vouchEnabled is exactly the flag read')
+    need(/export function vouchEnabled\(\): boolean \{\s*try \{ return lsGet\('bento-people-vouch'\) !== 'off' \} catch \{ return false \}\s*\}/.test(g), 'vouchEnabled is exactly the kill-switch read')
     need((g.match(/\bvouchEnabled\b/g) || []).length === 2 && (g.match(/\blsGet\b/g) || []).length === 2, 'vouchEnabled and lsGet are not redefined or reused')
     need(g.includes("import { lsGet } from '../../../kernel/src/storage.ts'"), 'lsGet is the kernel storage read')
+    // the marker gates every ✓: checked once, before the first verified result,
+    // read as an own data property; a changed result comes only from changed: true
+    const d = strip(fs.get(CONST_ONLY) ?? '')
+    const at = d.indexOf(MARKER_CHECK)
+    const firstClaim = d.indexOf("kind: 'verified'", d.indexOf('function decide('))
+    if (!(d.split(MARKER_CHECK).length === 2 && at > d.indexOf('function decide(') && firstClaim > at))
+      bad.push(`${CONST_ONLY}: the marker check comes once, in decide(), before any verified result`)
+    if (!(d.split(OWN_MARKER).length === 2 && (d.match(/\bownMarker\b/g) || []).length === 2))
+      bad.push(`${CONST_ONLY}: the marker is read once, as the answer's own data property`)
+    if (!(d.split(CHANGED_LINE).length === 2 && d.split("{ kind: 'changed', ").length === 2))
+      bad.push(`${CONST_ONLY}: a changed result comes only from changed === true`)
     return bad
   }
   const base = pin(files)
-  ok(base.length === 0, `no runtime module imports identity.ts except the flag-gated ${GATED} and ${CONST_ONLY}'s VOUCHED_BY_MAX (${base.join('; ') || 'none'})`)
+  ok(base.length === 0, `no runtime module imports identity.ts except the gated ${GATED} and ${CONST_ONLY}'s two pure bindings (${base.join('; ') || 'none'})`)
 
   const V = GATED, E = 'slides/src/editor/editor.ts', C = CONST_ONLY
   const EDIT_ANCHOR = "import { decoratePeer, vouchAgent as vouchPeopleAgent } from './vouch'"
@@ -242,8 +269,16 @@ console.log('\ncontract only: nothing calls it yet, except the flag-gated People
     ['a re-export used from editor.ts', [[V, "export type { VouchState } from './vouchstate'", "export type { VouchState } from './vouchstate'\nexport { identityAgent }"],
       [E, EDIT_ANCHOR, "import { decoratePeer, vouchAgent as vouchPeopleAgent, identityAgent as rawAgent } from './vouch'\nexport const __leak = () => rawAgent()"]]],
     ['an aliased second call', [[V, 'const cache = new Map', 'const ia = identityAgent\nexport const anyAgent = () => ia()\nconst cache = new Map']]],
-    ['the flag read moved into a comment', [[V, "try { return lsGet('bento-people-vouch') === 'on' } catch { return false }", "return true // was: lsGet('bento-people-vouch') === 'on'"]]],
-    ['the flag forced on', [[V, "lsGet('bento-people-vouch') === 'on' }", "lsGet('bento-people-vouch') === 'on' || true }"]]],
+    ['the kill switch read moved into a comment', [[V, "try { return lsGet('bento-people-vouch') !== 'off' } catch { return false }", "return true // was: lsGet('bento-people-vouch') !== 'off'"]]],
+    ['the kill switch ignored', [[V, "lsGet('bento-people-vouch') !== 'off' }", "lsGet('bento-people-vouch') !== 'off' || true }"]]],
+    ['the kill switch failing open', [[V, "} catch { return false }", "} catch { return true }"]]],
+    ['the marker check removed', [[C, MARKER_CHECK, '']]],
+    ['the marker check commented out', [[C, MARKER_CHECK, '// ' + MARKER_CHECK]]],
+    ['the marker check moved after the verified result', [[C, MARKER_CHECK, ''], [C, "return { kind: 'verified', name, via, tier, newAccount, changedOn, unconfirmedOn }", "return { kind: 'verified', name, via, tier, newAccount, changedOn, unconfirmedOn }\n  " + MARKER_CHECK]]],
+    ['the marker read through the prototype', [[C, OWN_MARKER, "const ownMarker = (a: object) => (a as Record<string, unknown>).fields === RESOLVED_FIELDS"]]],
+    ['the marker read beside ownMarker', [[C, MARKER_CHECK, "if (!ownMarker(a) && (a as Record<string, unknown>).fields !== RESOLVED_FIELDS) return { kind: 'failed', why: 'incomplete' }"]]],
+    ['a changed result from a truthy changed', [[C, CHANGED_LINE, CHANGED_LINE.replace('a.changed === true', 'a.changed')]]],
+    ['a second changed result', [[C, "if (!name || !isVoucher(via) || a.changed !== false) return { kind: 'failed' }", "if (a.changed) return { kind: 'changed', name, via }\n  if (!name || !isVoucher(via) || a.changed !== false) return { kind: 'failed' }"]]],
     ['a second call with a space', [[V, 'const cache = new Map', 'export const anyAgent = () => identityAgent ()\nconst cache = new Map']]],
     ['the test detector called directly', [[V, 'import { identityAgent, type IdentityAgent }', 'import { identityAgent, detectIdentityAgentForTest, type IdentityAgent }'],
       [V, 'const cache = new Map', 'export const anyAgent = () => detectIdentityAgentForTest(globalThis)\nconst cache = new Map']]],
@@ -253,7 +288,7 @@ console.log('\ncontract only: nothing calls it yet, except the flag-gated People
     ['a shadowed lsGet', [[V, "import { lsGet } from '../../../kernel/src/storage.ts'", "const lsGet = (_k: string) => 'on'"]]],
     ['an import of identity.js (resolved to identity.ts)', [[E, EDIT_ANCHOR, "import { identityAgent as rawId } from '../../../kernel/src/identity.js'\nexport const __leak = () => rawId()\n" + EDIT_ANCHOR]]],
     ['the global called directly', [[E, EDIT_ANCHOR, "export const __leak = () => (globalThis as any).__bentoIdentity?.resolve({ pub: 'x' })\n" + EDIT_ANCHOR]]],
-    ['the decision module importing the agent beside the constant', [[C, CONST_IMPORT, "import { VOUCHED_BY_MAX, identityAgent } from '../../../kernel/src/identity.ts'\nexport const __leak = () => identityAgent()"]]],
+    ['the decision module importing the agent beside its bindings', [[C, CONST_IMPORT, "import { RESOLVED_FIELDS, isVoucher, identityAgent } from '../../../kernel/src/identity.ts'\nexport const __leak = () => identityAgent()"]]],
     ['the decision module importing a second binding', [[C, CONST_IMPORT, CONST_IMPORT + "\nimport { detectIdentityAgentForTest } from '../../../kernel/src/identity.ts'"]]],
     ['an export * of identity', [[V, "export type { VouchState } from './vouchstate'", "export type { VouchState } from './vouchstate'\nexport * from '../../../kernel/src/identity.ts'"]]],
   ]
@@ -303,9 +338,57 @@ console.log('\nvouchedBy is the voucher alone: every qualifier is its own field 
   const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'kernel/src/identity.ts'), 'utf8')
   const body = src.slice(src.indexOf('export interface ResolvedIdentity {'), src.indexOf('}', src.indexOf('export interface ResolvedIdentity {')))
   for (const [f, t] of [['tier', "'passkey' | 'native'"], ['accountSince', 'number'], ['rosterChangedAt', 'number'], ['resetAt', 'number'],
-    ['revoked', "false | 'signout' | 'incident'"], ['managedBy', 'string'], ['unconfirmedSince', 'number']] as const)
+    ['revoked', "false | 'signout' | 'incident' | 'deleted'"], ['managedBy', 'string'], ['unconfirmedSince', 'number']] as const)
     ok(body.includes(`\n  ${f}?: ${t}\n`), `ResolvedIdentity.${f}?: ${t}`)
   ok(!/passkey sign-in\)", ", unconfirmed/.test(src), 'identity.ts no longer tells agents to write qualifiers into vouchedBy')
+}
+
+// A document cannot tell a field that does not apply from one a relay dropped,
+// and four of them (revoked, resetAt, rosterChangedAt, unconfirmedSince) are the
+// STRONGER claim when missing. So a complete answer says so: `fields` is the
+// LAST field of ResolvedIdentity, and RESOLVED_G1_FIELDS names exactly the
+// optional fields before it, in order, so a field added to the interface but
+// not to the list (or the reverse) turns this red, and a relay porting the list
+// forwards every one (security-ruling-962 C1, P1).
+console.log('\nthe completeness marker: an answer says it carries every G field')
+{
+  ok(RESOLVED_FIELDS === 'g1', "RESOLVED_FIELDS is 'g1'")
+  const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'kernel/src/identity.ts'), 'utf8')
+  const start = src.indexOf('export interface ResolvedIdentity {')
+  const body = src.slice(start, src.indexOf('\n}', start))
+  // field lines only (two-space indent, a name, a type): doc comments start with /** or *
+  const names = [...body.matchAll(/\n  (\w+)(\??):/g)].map((m) => [m[1], m[2] === '?'] as const)
+  ok(names.length > 0 && names[names.length - 1][0] === 'fields' && names[names.length - 1][1], 'fields? is the last field of ResolvedIdentity')
+  ok(body.includes("\n  fields?: 'g1'\n") || body.endsWith("\n  fields?: 'g1'"), "ResolvedIdentity.fields?: 'g1'")
+  const opt = names.filter(([n, o]) => o && n !== 'fields').map(([n]) => n)
+  ok(JSON.stringify(opt) === JSON.stringify([...RESOLVED_G1_FIELDS]),
+    `RESOLVED_G1_FIELDS is exactly the optional fields before the marker (${opt.join(',')} vs ${RESOLVED_G1_FIELDS.join(',')})`)
+  const required = names.filter(([, o]) => !o).map(([n]) => n)
+  ok(JSON.stringify(required) === JSON.stringify(['name', 'email', 'vouchedBy', 'accountPub', 'firstSeen', 'changed']),
+    `the six required fields are unchanged (${required.join(',')})`)
+  for (const f of ['revoked', 'resetAt', 'rosterChangedAt', 'unconfirmedSince'])
+    ok((RESOLVED_G1_FIELDS as readonly string[]).includes(f), `a relay must forward ${f} (missing reads stronger)`)
+  ok(Object.isFrozen(RESOLVED_G1_FIELDS), 'RESOLVED_G1_FIELDS is frozen')
+  // The marker's value is part of every saved file's contract: slides shells are
+  // frozen in the file and accept exactly 'g1', so a later field set must ADD a
+  // marker of its own, never replace this value (security-ruling-990 M1). The
+  // rule is pinned where an agent author reads it: the RESOLVED_FIELDS comment,
+  // the fields? comment, and the DECISIONS entry; the old "new value" rule is gone.
+  const cAt = src.indexOf('export const RESOLVED_FIELDS')
+  const constDoc = src.slice(src.lastIndexOf('/**', cAt), cAt)
+  ok(/'g1' NEVER CHANGES/.test(constDoc) && /keeps sending\s+\*?\s*fields: 'g1'/.test(constDoc),
+    "RESOLVED_FIELDS comment: 'g1' never changes, an agent keeps sending fields: 'g1'")
+  ok(/marker of its own, a NEW optional field beside this one, never a new value/.test(constDoc.replace(/\s*\n\s*\*\s*/g, ' ')),
+    'RESOLVED_FIELDS comment: a later set adds its own marker field, never a new value')
+  ok(/a later field set adds its own marker, never replaces this value/.test(body.replace(/\s*\n\s*\*\s*/g, ' ')),
+    'fields? comment: a later set adds its own marker, never replaces the value')
+  ok(!/later (set of fields|field set) gets a new value/i.test(src.replace(/\s*\n\s*\*\s*/g, ' ')), "identity.ts no longer says a later set gets a new value")
+  const dec = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'docs/DECISIONS.md'), 'utf8')
+  const dAt = dec.indexOf('An identity answer says when it is complete (`ResolvedIdentity.fields`)')
+  const entry = dAt < 0 ? '' : dec.slice(dAt, dec.indexOf('\n## ', dAt + 1) < 0 ? undefined : dec.indexOf('\n## ', dAt + 1)).replace(/\s+/g, ' ')
+  ok(entry.includes("'g1' never changes; a later field set adds its own marker.") && entry.includes("keeps sending `fields: 'g1'`, for good"),
+    "DECISIONS: 'g1' never changes, an agent keeps sending it")
+  ok(entry !== '' && !/gets a new value/.test(entry), 'DECISIONS: the old "a later field set gets a new value" rule is gone')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

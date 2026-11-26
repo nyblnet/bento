@@ -50,7 +50,8 @@ function scriptImports(entries: string[]): string[] {
   return [...seen].filter((f) => !entries.includes(f))
 }
 const RIG_IMPORTS = scriptImports(RIGS)
-const TREE = ['kernel/src', 'kernel/fixtures', 'server/directory/src', 'server/directory/fixtures', 'server/directory/wrangler.toml']
+// server/signin/public: the roster rig cross-checks the sign-in host's seam and FAILS without it (security's seam-row note on #952)
+const TREE = ['kernel/src', 'kernel/fixtures', 'server/directory/src', 'server/directory/fixtures', 'server/directory/wrangler.toml', 'server/signin/public']
 let failures = 0, checks = 0
 const ok = (c: boolean, m: string) => { checks++; if (!c) { failures++; console.log(`  FAIL  ${m}`) } else console.log(`  ok    ${m}`) }
 
@@ -93,6 +94,29 @@ const MUTANTS: Mutant[] = [
     from: 'firstRequestedAt: p.firstRequestedAt ?? p.requestedAt })', to: 'firstRequestedAt: now })' },
   { name: 'C4′: the kernel is given the first request time (its order rule)', file: 'roster.js',
     from: 'resetRequestedAt: p.requestedAt, challenge: a.dirNonce,', to: 'resetRequestedAt: first, challenge: a.dirNonce,' },
+
+  // --- retention (the privacy notice's keeps): the Roster's purge, the Ledger's day salt ---
+  { name: 'R1: the alarm purges nothing', file: 'roster.js', from: '    const kept = await this.purge(now)\n    if (kept !== null) next.push(kept)\n', to: '' },
+  { name: 'R1: setup send times purged only by the budget (main before)', file: 'roster.js',
+    from: '    const oldest = await this.pruneSetupTimes(now)\n    if (oldest !== null) due.push(oldest + ROSTER_LIMITS.setupTimesKeepMs)\n', to: '' },
+  { name: 'R1: the send-time purge keeps twice the window', file: 'roster.js',
+    from: '    const left = times.filter((t) => now - t < ROSTER_LIMITS.setupTimesKeepMs)', to: '    const left = times.filter((t) => now - t < 2 * ROSTER_LIMITS.setupTimesKeepMs)' },
+  { name: 'R1: expired setup link hashes kept', file: 'roster.js', from: "    await keep('setupTok', (t) => t.exp > now, (t) => t.exp)\n", to: '' },
+  { name: 'R1: expired reset link hashes kept', file: 'roster.js', from: "    await keep('resetTok', (t) => t.exp > now, (t) => t.exp)\n", to: '' },
+  { name: 'R1: ended void links kept forever', file: 'roster.js',
+    from: "    await keep('ended', (e) => now - e.at < ROSTER_LIMITS.endedKeepMs, (e) => e.at + ROSTER_LIMITS.endedKeepMs)\n", to: '' },
+  { name: 'R1: an ended link still answers past its keep', file: 'roster.js',
+    from: 'same(x.h, th) && now - x.at < ROSTER_LIMITS.endedKeepMs', to: 'same(x.h, th)' },
+  { name: 'R1: a setup link\'s write does not bring its purge forward', file: 'roster.js',
+    from: "      await this.schedule(exp) // retention: an unused link's hash goes at its expiry\n", to: '' },
+  { name: 'R1: a reset link\'s write does not bring its purge forward', file: 'roster.js',
+    from: "      await this.schedule(rexp) // retention: an unused link's hash goes at its expiry\n", to: '' },
+  { name: 'R1: the budget\'s write pushes the alarm back (setAlarm for schedule)', file: 'roster.js',
+    from: '    await this.schedule((times[0] ?? now) + ROSTER_LIMITS.setupTimesKeepMs)', to: '    await this.state.storage.setAlarm((times[0] ?? now) + ROSTER_LIMITS.setupTimesKeepMs)' },
+  { name: 'R2: the Ledger\'s new salt pushes the purge back (main before)', file: 'worker.js',
+    from: '      await this.schedule(purgeAt(day))\n    }', to: '      await this.state.storage.setAlarm(purgeAt(day))\n    }' },
+  { name: 'R2: the Ledger\'s purge does not re-arm for the day it keeps', file: 'worker.js',
+    from: '    for (const day of held) await this.schedule(purgeAt(day))\n', to: '' },
 
   // --- SD3: browser certificates (browsers.js; rows in test-directory-browsers.ts) ---
   { name: 'SD3 challenge: a browser challenge lives 5 minutes', file: 'browsers.js', from: '  challengeTtlMs: 60_000,', to: '  challengeTtlMs: 5 * 60_000,' },
@@ -401,7 +425,7 @@ const MUTANTS: Mutant[] = [
   { name: 'G4 remove: the voided request left out of the link', file: 'roster.js',
     from: "        extra: { voided: { ros: p.ros, signer: target, assertion: p.assertion } } })", to: '        })' },
   { name: 'G4 remove: acts though its notice was not sent', file: 'roster.js',
-    from: "      if (!sent) {\n        await this.dropHold(hold)\n        return out(503, { error: 'mail' })\n      }\n", to: '' },
+    from: "      if (sent !== 'sent') {\n        await this.dropHold(hold)\n        // C8: a send that timed out may still arrive, so the page must not say it was not sent\n        return out(503, { error: sent === 'timeout' ? 'mail-timeout' : 'mail' })\n      }\n", to: '' },
   { name: 'G4 remove: the removal requested at ripening, not at the suspension', file: 'roster.js',
     from: "      head = await this.link(p.ros, { auth: 'x', cause: p.cause, requestedAt: p.requestedAt, now, kind: 'removal' })",
     to: "      head = await this.link(p.ros, { auth: 'x', cause: p.cause, requestedAt: now, now, kind: 'removal' })" },
@@ -464,7 +488,7 @@ const MUTANTS: Mutant[] = [
     from: "      if (await this.held(now)) return out(409, { error: 'pending' })\n", to: '' },
   { name: 'F1 hold: lapses after a second', file: 'roster.js', from: '  holdMs: MAIL_TIMEOUT_MS + 5_000,', to: '  holdMs: 1_000,' },
   { name: 'F1 hold: kept after the Remove\'s mail fails', file: 'roster.js',
-    from: "        await this.dropHold(hold)\n        return out(503, { error: 'mail' })\n      }", to: "        return out(503, { error: 'mail' })\n      }" },
+    from: "        await this.dropHold(hold)\n        // C8: a send that timed out may still arrive, so the page must not say it was not sent\n        return out(503, { error: sent === 'timeout' ? 'mail-timeout' : 'mail' })\n      }", to: "        // C8: a send that timed out may still arrive, so the page must not say it was not sent\n        return out(503, { error: sent === 'timeout' ? 'mail-timeout' : 'mail' })\n      }" },
   { name: 'F1 hold: kept after the reset\'s mail fails', file: 'roster.js',
     from: "        await this.dropHold(hold)\n        return out(503, { error: 'mail' }) // no notice", to: "        return out(503, { error: 'mail' }) // no notice" },
   { name: 'F1 hold: the alarm does not wait out a hold', file: 'roster.js',
@@ -476,7 +500,7 @@ const MUTANTS: Mutant[] = [
     from: "      if ((await s.get('hold'))?.id !== hold) return out(409, { error: 'busy' })\n", to: '' },
   // F1b: the post-send re-checks and the single-use reset link
   { name: 'F1b: Remove\'s post-send re-check gone', file: 'roster.js',
-    from: "      if (!still || still.voidTok !== p.voidTok || atHead.hash !== cur.hash) { await this.dropHold(hold); return out(409, (await this.endedAnswer(th)) ?? { error: 'superseded' }) }\n", to: '' },
+    from: "      if (!still || still.voidTok !== p.voidTok || atHead.hash !== cur.hash) { await this.dropHold(hold); return out(409, (await this.endedAnswer(th, now)) ?? { error: 'superseded' }) }\n", to: '' },
   { name: 'F1b: the reset\'s post-send re-check gone', file: 'roster.js',
     from: "      if ((there?.voidTok ?? null) !== (waiting?.voidTok ?? null) || atHead.hash !== cur.hash) { await this.dropHold(hold); return out(409, { error: 'superseded' }) }\n", to: '' },
   { name: 'F1b: the reset link kept once its reset is queued', file: 'roster.js',
@@ -514,6 +538,19 @@ const MUTANTS: Mutant[] = [
     from: "waiting ? [] : ['Stopping it changes nothing else: your passkeys stay as they are.']", to: "['Stopping it changes nothing else: your passkeys stay as they are.']" },
   { name: 'C6: the k=o notice says "lock you out"', file: 'roster.js',
     from: "so removing it would leave the account with no usable passkey (only a reset gets back in).'", to: "so removing it would lock you out.'" },
+
+  // --- C7 (security's re-run on #952): the post-send re-checks past the hold, and the stopped reset's alarm ---
+  { name: 'C7-X13: Remove\'s post-send re-check without its voidTok half', file: 'roster.js',
+    from: 'if (!still || still.voidTok !== p.voidTok || atHead.hash !== cur.hash)', to: 'if (!still || atHead.hash !== cur.hash)' },
+  { name: 'C7-X3: the reset\'s post-send re-check reverted to its first form', file: 'roster.js',
+    from: 'if ((there?.voidTok ?? null) !== (waiting?.voidTok ?? null) || atHead.hash !== cur.hash)', to: "if ((there && there.kind === 'reset') || atHead.hash !== cur.hash)" },
+  { name: 'C7-X12: a stopped reset does not bring the restored removal\'s alarm forward', file: 'roster.js',
+    from: "          await s.put('pend', back)\n          await this.schedule(back.ripensAt)\n", to: "          await s.put('pend', back)\n" },
+  // --- C8: a mailer timeout is not a refusal ---
+  { name: 'C8: Remove reports a timed-out send as refused', file: 'roster.js',
+    from: "return out(503, { error: sent === 'timeout' ? 'mail-timeout' : 'mail' })", to: "return out(503, { error: 'mail' })" },
+  { name: 'C8: the mailer\'s timeout carries no code', file: 'mail.js',
+    from: "reject(Object.assign(new Error('mailer timed out'), { code: 'timeout' }))", to: "reject(new Error('mailer timed out'))" },
 
   // --- SD2: the void page (its own headers; the browser rig has the rest) ---
   { name: 'page: inline script allowed', file: 'voidpage.js', from: `  "script-src 'self'",`, to: `  "script-src 'self' 'unsafe-inline'",` },

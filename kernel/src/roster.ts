@@ -75,9 +75,10 @@
 //                    except a member removing ITSELF while another unquarantined
 //                    member remains.
 //   quarantine (q)   immediate. The link carries the VOIDED request (its ros.
-//                    text, signer and proof). That request is for this address,
-//                    one seq on from the previous head, names this link's
-//                    previous head as its own previous, its signer is an
+//                    or adel. text, signer and proof). That request is for this
+//                    address, (a ros.) one seq on from the previous head, names
+//                    this link's previous head as its own previous (an adel.:
+//                    as its headHash), its signer is an
 //                    unquarantined member of that head, and its proof verifies;
 //                    the only change is that signer gaining ~q, and another
 //                    unquarantined member remains. So the directory can only
@@ -167,14 +168,47 @@
 // while it waits), mails the address a link that voids it, and carries it out
 // DELETE_WAIT_MS (72 h) later, and only if it was not voided and the account's
 // head is still `headHash`. The way without a passkey is the directory's
-// emailed link alone, which no statement carries. OPEN for the directory's
-// deletion route, not settled here (security's review of this layout, D-A1 to
-// D-A3): what a void does to the signer (a stolen member key must not be able
-// to re-file the moment its request is voided, which would hold the queue and
-// block the owner's removal of that key), and how a reset interacts with a
-// waiting deletion (only a reset that RIPENS first changes the head; a reset
-// request must drop the deletion, never set it aside to be revived).
+// emailed link, which no statement carries (its design is the maintainer's,
+// open: it may be no faster and no less stoppable than a reset, D-A3).
+// Settled for the directory's deletion route (security-ruling-962 D-A1, D-A2):
+//   - voiding a deletion bars its signer from asking for anything for 72 h,
+//     whatever its kind (G4b), so a stolen key cannot re-file the moment it is
+//     voided and hold the queue against the owner's removal of that key;
+//   - the void page may also offer Remove: a q link whose `voided` is the adel.
+//     text with its signer and proof (below, under q), so the asker is
+//     quarantined at once and removed 72 h later, as for a member change;
+//   - a reset REQUEST drops a waiting deletion. It is never set aside, and a
+//     stopped reset never brings it back;
+//   - at the end of the wait the directory re-checks: still the waiting change,
+//     not voided, the head still `headHash`, no reset waiting. Then it signs a
+//     deletion record (rdel., below) BEFORE it removes anything.
 //
+// --- rdel. — the directory's record that an account was deleted
+//
+//   rdel.<accountName>.<lastHeadHash>.<lastSeq>.<requestedAt>.<deletedAt>.<by>.<kid>
+//
+//   accountName   base64url of accountNameOf(address) (32 bytes): the storage
+//                 name, never the address, so the record the directory keeps
+//                 after a deletion does not hold the address itself
+//   lastHeadHash  sha256 of the last ros. text, the head the deletion named
+//   lastSeq       that head's seq
+//   requestedAt   when the directory took the request (its clock)
+//   deletedAt     when it carried it out (its clock)
+//   by            m  a member's adel. (deletedAt − requestedAt ≥ DELETE_WAIT_MS)
+//                 e  the mailbox's emailed link (the same wait)
+//                 o  the operator (a legal or abuse removal; no wait)
+//   kid           the directory key that signed it (raw r‖s, low-S)
+//
+// Served where peers fetch the chain, in place of it. A peer holding a pin reads
+// it with verifyDeletion: the record must be for the pinned head, or for a later
+// one of the same account (requested after the pin ripened, at a higher seq).
+// A record requested before the pin ripened belongs to an EARLIER account at the
+// address and is refused, so an old deletion can never be replayed against a new
+// account. The peer then shows "account deleted" (no ✓). A setup at the same
+// address after the deletion reads as a NEW account that CHANGED (readAfterDeletion),
+// never as continuity with the pin and never as a bare unknown. The old tomb.
+// (statements.ts) is the retired binding era's and is not reused.
+
 // --- the passkey user handle (sign-in host and native hosts alike)
 //
 //   user.id = SHA-256("bento-dir/1/addr\n" ‖ address in normal form) ‖ 16 random bytes
@@ -192,7 +226,7 @@ import { b64uDec, b64uEnc, sha256b64u, isSigningKey, verifyStatementSig, verifyC
 import { verifyAssertion, statementChallenge, type Assertion } from './webauthn.ts'
 
 /** Prefixes this module defines. */
-export const ROSTER_PREFIXES: readonly string[] = Object.freeze(['ros', 'rip', 'vrs', 'wout', 'adel'])
+export const ROSTER_PREFIXES: readonly string[] = Object.freeze(['ros', 'rip', 'vrs', 'wout', 'adel', 'rdel'])
 
 /** The wait between a member's request and its ripening, on the directory's clock. */
 export const ROSTER_WAIT_MS = 72 * 3_600_000
@@ -368,7 +402,8 @@ export interface RosterLink {
   cns?: string
   /** a ripe consent key's co-sign of a member change: skips the 72 h wait */
   cosign?: { signer: string; cns: string; sig: string }
-  /** auth q only: the request the void cancelled, with its member proof */
+  /** auth q only: the request the void cancelled (a ros. change or an adel.
+   *  deletion request), with its member proof */
   voided?: { ros: string; signer: string; assertion?: Assertion; sig?: string; cns?: string }
   /** auth l only: the ripened change whose added member is quarantined */
   cited?: { prevRos: string; ros: string; rip: string; ripSig: string }
@@ -478,6 +513,18 @@ function diffOf(before: Member[], after: Member[]) {
 const onlyMarked = (d: ReturnType<typeof diffOf>, pub: string) =>
   d.added.length === 0 && d.removed.length === 0 && d.cleared.length === 0 && d.marked.length === 1 && d.marked[0].pub === pub
 
+/** What a q link's voided request says: a member change (ros.: seq and prev
+ *  from its head) or a deletion request (adel.: no seq, prev = the head it
+ *  named). Either is bound to its signer by memberProof over the exact text. */
+async function parseVoided(text: string): Promise<Verdict<{ address: string; seq: number | null; prev: string | null; dirNonce: string }>> {
+  if (typeof text === 'string' && text.startsWith('adel.')) {
+    const d = parseAdel(text)
+    return d ? { ok: true, value: { address: d.address, seq: null, prev: d.headHash, dirNonce: d.dirNonce } } : no('voided')
+  }
+  const h = await parseRos(text)
+  return h.ok ? { ok: true, value: { address: h.value.address, seq: h.value.seq, prev: h.value.prev, dirNonce: h.value.dirNonce } } : h
+}
+
 /** The member a q or l link marked, read from the evidence it carries; null
  *  when that evidence does not prove it. For a PINNED head. The countersign
  *  covers only the cause hash, and the evidence may have been refetched from
@@ -489,8 +536,10 @@ async function pinnedTarget(l: RosterLink, rip: Ripening, head: RosterHead, opts
     const v = l.voided
     if (!v || typeof v !== 'object' || !str(v.ros) || !str(v.signer)) return null
     if (rip.cause !== (await sha256b64u(v.ros))) return null
-    const vh = await parseRos(v.ros)
-    if (!vh.ok || vh.value.address !== head.address || vh.value.seq !== head.seq) return null
+    const vh = await parseVoided(v.ros)
+    if (!vh.ok || vh.value.address !== head.address) return null
+    // a ros. one seq on; an adel. naming the head this link replaced
+    if (vh.value.seq !== null ? vh.value.seq !== head.seq : vh.value.prev !== head.prev) return null
     // the signer is not covered by the cause: bind it by its proof over the voided text
     const asker = head.members.find((m) => m.pub === v.signer)
     if (!asker || !(await memberProof(asker, v, v.ros, vh.value.dirNonce, null, opts)).ok) return null
@@ -595,10 +644,10 @@ async function chain(links: readonly RosterLink[], opts: ChainOpts): Promise<Ver
         const v = l.voided
         if (!v || typeof v !== 'object' || !str(v.ros) || !str(v.signer)) return no('voided')
         if (rip.cause !== (await sha256b64u(v.ros))) return no('cause')
-        const vh = await parseRos(v.ros)
+        const vh = await parseVoided(v.ros)
         if (!vh.ok) return no('voided')
         if (vh.value.address !== head.address) return no('voided-address')
-        if (vh.value.seq !== prev.head.seq + 1) return no('voided-seq')
+        if (vh.value.seq !== null && vh.value.seq !== prev.head.seq + 1) return no('voided-seq')
         if (vh.value.prev !== prev.hash) return no('voided-prev')   // asked against this link's previous head
         const asker = prev.head.members.find((m) => m.pub === v.signer)
         if (!asker) return no('voided-signer')
@@ -862,13 +911,21 @@ export async function verifyAdel(text: string, signer: string, proof: Proof, opt
   try { return await deletion(text, signer, proof, opts) } catch { return no('grammar') }
 }
 
-async function deletion(text: string, signerPub: string, proof: Proof, opts: DeletionOpts): Promise<Verdict<DeletionRequest>> {
+/** The grammar of an adel. text (no proof, no roster): null when it is not one. */
+export function parseAdel(text: string): DeletionRequest | null {
   const p = fields(text, 'adel', 4)
-  if (!p) return no('grammar')
+  if (!p) return null
   const [, addressF, headHash, dirNonce] = p
   const address = freeText(addressF)
-  if (address === null || !isNormalAddress(address)) return no('grammar')
-  if (!isHash(headHash) || !isNonce(dirNonce)) return no('grammar')
+  if (address === null || !isNormalAddress(address)) return null
+  if (!isHash(headHash) || !isNonce(dirNonce)) return null
+  return { address, headHash, dirNonce }
+}
+
+async function deletion(text: string, signerPub: string, proof: Proof, opts: DeletionOpts): Promise<Verdict<DeletionRequest>> {
+  const d = parseAdel(text)
+  if (!d) return no('grammar')
+  const { address, headHash, dirNonce } = d
   const ro = opts.roster
   if (!ro || !Array.isArray(ro.members) || !str(signerPub) || !proof || typeof proof !== 'object' || !str(opts.challenge) ||
     !Number.isSafeInteger(opts.now) || typeof opts.spend !== 'function') return no('grammar')
@@ -882,6 +939,106 @@ async function deletion(text: string, signerPub: string, proof: Proof, opts: Del
   const pr = await memberProof(m, proof, text, dirNonce, opts.now, opts)
   if (!pr.ok) return pr
   return { ok: true, value: { address, headHash, dirNonce } }
+}
+
+// --- rdel. — the directory's record that an account was deleted -------------------------
+
+/** Who caused a deletion: a member's adel., the mailbox's emailed link, the operator. */
+export type DeletedBy = 'm' | 'e' | 'o'
+const DELETED_BY: readonly string[] = ['m', 'e', 'o']
+
+export interface DeletionRecord {
+  /** base64url of accountNameOf(address): the storage name, never the address */
+  accountName: string
+  /** sha256 of the last ros. text, and that head's seq */
+  lastHeadHash: string
+  lastSeq: number
+  /** the directory's clock: when it took the request, and when it carried it out */
+  requestedAt: number
+  deletedAt: number
+  by: DeletedBy
+  kid: string
+}
+
+export function buildRdel(r: DeletionRecord): string {
+  return ['rdel', r.accountName, r.lastHeadHash, r.lastSeq, r.requestedAt, r.deletedAt, r.by, r.kid].join('.')
+}
+
+/** The grammar of an rdel. text (no signature): a member or mailbox deletion
+ *  waited DELETE_WAIT_MS; an operator's need not. */
+export function parseRdel(text: string): Verdict<DeletionRecord> {
+  const p = fields(text, 'rdel', 8)
+  if (!p) return no('grammar')
+  const [, accountName, lastHeadHash, seqF, reqF, delF, by, kid] = p
+  if (!isHash(accountName) || !isHash(lastHeadHash) || !DELETED_BY.includes(by) || !KID_RE.test(kid)) return no('grammar')
+  const lastSeq = int(seqF), requestedAt = ms(reqF), deletedAt = ms(delF)
+  if (lastSeq === null || requestedAt === null || deletedAt === null || deletedAt < requestedAt) return no('grammar')
+  if (by !== 'o' && deletedAt - requestedAt < DELETE_WAIT_MS) return no('unripe')
+  return { ok: true, value: { accountName, lastHeadHash, lastSeq, requestedAt, deletedAt, by: by as DeletedBy, kid } }
+}
+
+export interface DeletionReadOpts {
+  /** pinned directory keys by kid */
+  directoryKeys: Readonly<Record<string, string>>
+  /** the address the peer pinned (normal form) */
+  address: string
+  /** the pinned head's link, stored whole: its rip. gives the pin's seq and time */
+  pinnedLink: RosterLink
+  now: number
+}
+
+/**
+ * For a PEER holding a pin: is this record the deletion of the pinned account?
+ * The record must be signed by a pinned directory key, not from the future, for
+ * this address's storage name, and either name the pinned head itself or a
+ * later head of the same account: requested after the pin ripened, at a higher
+ * seq. A record requested before the pin ripened is an earlier account's
+ * (`unchained`): a new account at the address can never be shown as deleted by
+ * an old record. Never throws.
+ */
+export async function verifyDeletion(text: string, sig: string, opts: DeletionReadOpts): Promise<Verdict<DeletionRecord & { atPin: boolean }>> {
+  try { return await readDeletion(text, sig, opts) } catch { return no('grammar') }
+}
+
+async function readDeletion(text: string, sig: string, opts: DeletionReadOpts): Promise<Verdict<DeletionRecord & { atPin: boolean }>> {
+  const r = parseRdel(text)
+  if (!r.ok) return r
+  const rec = r.value
+  if (!opts || typeof sig !== 'string' || !Number.isSafeInteger(opts.now) || !opts.directoryKeys) return no('grammar')
+  if (rec.deletedAt > opts.now + SKEW_MS) return no('not-yet-valid')
+  if (!Object.hasOwn(opts.directoryKeys, rec.kid)) return no('unknown-kid')
+  if (!(await verifyStatementSig(opts.directoryKeys[rec.kid], sig, text))) return no('signature')
+  const name = await accountNameOf(opts.address)
+  if (!name || b64uEnc(name) !== rec.accountName) return no('address')
+  // the pin: its ros. names the address, its rip. (re-checked) gives seq and time
+  const pl = opts.pinnedLink
+  if (!pl || typeof pl !== 'object' || !str(pl.ros) || !str(pl.rip) || !str(pl.ripSig)) return no('pin')
+  const ph = await parseRos(pl.ros)
+  if (!ph.ok || ph.value.address !== opts.address) return no('pin')
+  const pr = await verifyRip(pl.rip, pl.ripSig, { rosText: pl.ros, directoryKeys: opts.directoryKeys, now: opts.now })
+  if (!pr.ok) return no('pin')
+  const pinHash = await sha256b64u(pl.ros)
+  if (rec.lastHeadHash === pinHash) {
+    if (rec.lastSeq !== ph.value.seq || rec.requestedAt < pr.value.ripenedAt) return no('unchained')
+    return { ok: true, value: { ...rec, atPin: true } }
+  }
+  // a later head of the pinned account: asked for after the pin was in force
+  if (rec.lastSeq <= ph.value.seq || rec.requestedAt < pr.value.ripenedAt) return no('unchained')
+  return { ok: true, value: { ...rec, atPin: false } }
+}
+
+/**
+ * What a peer shows once it has verified a deletion record against its pin:
+ * `next` is the chain the directory serves now at the same address, verified
+ * from its setup head (seq 0), or null when none exists. A setup after the
+ * deletion is a NEW account that CHANGED, never a continuation of the pin; a
+ * chain created before the deletion cannot follow it (`order`).
+ */
+export function readAfterDeletion(rec: DeletionRecord, next: RosterState | null): Verdict<{ state: 'deleted' } | { state: 'new-account'; changed: true; createdAt: number }> {
+  if (next === null) return { ok: true, value: { state: 'deleted' } }
+  if (!next || next.createdAt === null || !Number.isSafeInteger(next.createdAt)) return no('anchor')
+  if (next.createdAt < rec.deletedAt) return no('order')
+  return { ok: true, value: { state: 'new-account', changed: true, createdAt: next.createdAt } }
 }
 
 // --- the passkey user handle -------------------------------------------------------------

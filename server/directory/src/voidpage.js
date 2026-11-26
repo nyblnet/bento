@@ -194,6 +194,8 @@ export const VOID_JS = `(() => {
     // the request may have arrived, so the page cannot say nothing changed
     if (!r) return again('Could not reach bento/id, or its answer was lost. Press the button again: if it already worked, this page will say so.')
     if (j.error === 'busy') return again('This link is being used in another tab or window right now. Wait a moment, then press the button again.')
+    // C8: the mailer did not answer in time, so its mail may still arrive and say something that did not happen
+    if (r.status === 503 && j.error === 'mail-timeout') return again('Sending the email that confirms this took too long, so nothing changed. The email may still arrive. If it says a passkey was suspended, it was not: this page is right. Try again in a few minutes, or choose Cancel.')
     if (r.status === 503) return again('We could not send the email that confirms this, so nothing changed. Try again in a few minutes, or choose Cancel.')
     if (r.status === 429) return again('Too many tries from this network. Try again later. Nothing changed.')
     if (j.error === 'choice') return again('That choice is not offered for this link. Nothing changed.')
