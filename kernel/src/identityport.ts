@@ -470,7 +470,7 @@ export function createProofResolver(o: ResolverOptions): ProofResolver {
 
     // 6. compose
     const out = composeResolved({
-      address, anchor, tier: dv.value.tier, accountSince: b.state.createdAt!,
+      address, anchor, tier: dv.value.tier, accountSince: b.state.createdAt,
       rosterChangedAt: rosterChangedAt(b.links, b.state), resetAt: b.state.lastResetAt,
       revoked, mb: dv.value.watt.mb, firstSeen, changed,
     })

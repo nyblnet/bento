@@ -16,7 +16,7 @@
 //                   rate and in-flight caps, no origin read, no window posted
 //   [K2 binding]    the agent's context is the host's entry and docId, never
 //                   the request's
-//   [K3 consent]    sign and resolve only after whoami consent in this session;
+//   [R3 consent]    sign and resolve only after whoami consent in this session;
 //                   a null whoami is final; invite/revoke unavailable; a payload
 //                   that does not match its purpose never reaches the agent
 //   [K4 filter]     every answer type-checked on the way out (checkResolved,
@@ -25,9 +25,9 @@
 //   [K5 anchor]     accountAnchor = 'g:'+sha256(ros.0), null from a pin; same
 //                   across a reset (and resetAt set); a re-setup with the same
 //                   passkey is a new anchor
-//   [K6 g1]         composeResolved is the only setter of fields:'g1'; the
+//   [K6 compose]         composeResolved is the only setter of fields:'g1'; the
 //                   marker needs every present G field typed and the anchor shape
-//   [K7 resolve]    the verify order: chain from seq 0 under pinned keys, the
+//   [R1b resolve]    the verify order: chain from seq 0 under pinned keys, the
 //                   device for exactly the queried pub, a current watt.; every
 //                   failure null, never a throw; the 64 KiB cap
 //   [A3 longest]    a device is judged against the longest chain in the open
@@ -36,7 +36,6 @@
 //   [A6 incident]   revoked:'incident' only on the lever's predicate
 //   [A7 own]        own-account status for the own anchor only; the peer path
 //                   makes no network request and lapses with the watt.
-//   [absent]        answers and inputs with fields MISSING
 //   [tofu]          firstSeen and changed are per open
 
 import { readFileSync } from 'node:fs'
@@ -143,7 +142,7 @@ section('[K5 anchor]', 'accountAnchor: the hash of the exact ros. text at seq 0,
 }
 
 // ======================================================================================
-section('[K7 resolve]', 'the verify order: chain from seq 0, pinned keys, the device for exactly this pub')
+section('[R1b resolve]', 'the verify order: chain from seq 0, pinned keys, the device for exactly this pub')
 {
   clock = NOW
   const good = await proofOf(base)
@@ -237,7 +236,7 @@ section('[A5 name]', 'name and email are the address; the certificate\'s label n
   ok(r !== null && r.name === ADDRESS && r.email === ADDRESS, `a wdev. labelled "Mallory" resolves with name = the address (${r?.name})`)
   ok(r?.vouchedBy === 'id.bento.page' && I.G_VOUCHER === 'id.bento.page', 'vouchedBy is the constant id.bento.page')
   const n = await resolver().resolve({ pub: W.pub, proof: await proofOf(base, { label: null }) })
-  ok(n?.name === ADDRESS, '[absent] no label: name is still the address')
+  ok(n?.name === ADDRESS, '[K7 absent] no label: name is still the address')
 }
 
 // ======================================================================================
@@ -280,8 +279,8 @@ section('[A6 incident]', 'revoked:\'incident\' only on the lever\'s predicate')
   const devSrc = readFileSync(join(KS, 'devices.ts'), 'utf8')
   ok((devSrc.match(/export function leverCovers/g) ?? []).length === 1 && /leverCovers\(dv\.value\.cert, dv\.value\.watt/.test(readFileSync(join(KS, 'identityport.ts'), 'utf8')),
     'one predicate: devices.ts leverCovers, the one the resolver calls')
-  ok((await res(await proofOf(base), []))?.revoked === undefined, '[absent] no records: not revoked')
-  ok((await resolver().resolve({ pub: W.pub, proof: await proofOf(base) }))?.revoked === undefined, '[absent] no incidents option at all: not revoked')
+  ok((await res(await proofOf(base), []))?.revoked === undefined, '[K7 absent] no records: not revoked')
+  ok((await resolver().resolve({ pub: W.pub, proof: await proofOf(base) }))?.revoked === undefined, '[K7 absent] no incidents option at all: not revoked')
 }
 
 // ======================================================================================
@@ -305,7 +304,7 @@ section('[A7 own]', 'own-account status for the own anchor only; the peer path n
   ok((await peer.resolve({ pub: W.pub, proof: clone(proof) })) === null, 'at its expiry: null')
   ok(fetches === 0, `the resolver made no network request (counted ${fetches})`)
   clock = NOW
-  ok((await resolver({ own: () => ({ anchor, revoked: false }) }).resolve({ pub: W.pub, proof: clone(proof) }))?.revoked === undefined, '[absent] own account standing: not revoked')
+  ok((await resolver({ own: () => ({ anchor, revoked: false }) }).resolve({ pub: W.pub, proof: clone(proof) }))?.revoked === undefined, '[K7 absent] own account standing: not revoked')
 }
 
 // ======================================================================================
@@ -336,14 +335,18 @@ section('[tofu]', 'firstSeen and changed are per open')
 }
 
 // ======================================================================================
-section('[K6 g1]', 'composeResolved is the only setter of the marker; checkResolved keeps it only when every present G field is typed')
+section('[K6 compose]', 'composeResolved is the only setter of the marker; checkResolved keeps it only when every present G field is typed')
 {
   const facts = { address: ADDRESS, anchor: await anchorOf(base), tier: 'passkey', accountSince: T, rosterChangedAt: T + 73 * H, resetAt: null,
     revoked: false, mb: 0, firstSeen: NOW, changed: false }
   const c = I.composeResolved(facts)
   ok(c?.fields === 'g1' && c.name === ADDRESS && c.email === ADDRESS && c.vouchedBy === 'id.bento.page', 'composeResolved marks a complete answer')
-  ok(c && !('resetAt' in c) && !('revoked' in c) && !('unconfirmedSince' in c) && !('managedBy' in c), '[absent] fields that do not apply are absent, not null')
+  ok(c && !('resetAt' in c) && !('revoked' in c) && !('unconfirmedSince' in c) && !('managedBy' in c), '[K7 absent] fields that do not apply are absent, not null')
   ok(I.composeResolved({ ...facts, mb: T + 5 })?.unconfirmedSince === T + 5, 'mb ≠ 0 becomes unconfirmedSince')
+  ok(I.composeResolved({ ...facts, accountSince: null }) === null, '[K7 absent] an unknown account age (no seq 0): no answer, never a marker without accountSince')
+  clock = NOW
+  const mbr = await resolver().resolve({ pub: W.pub, proof: await proofOf(base, { mb: C - 5 * H }) })
+  ok(mbr?.unconfirmedSince === C - 5 * H && mbr?.fields === 'g1', 'a watt. with mb ≠ 0 resolves with unconfirmedSince = mb (962 P2)')
   ok(I.composeResolved({ ...facts, anchor: pubOf('pk1') }) === null, 'a K2-era point is no anchor: composeResolved refuses')
   ok(I.composeResolved({ ...facts, accountSince: 0 }) === null, 'a fact that fails its type: no answer at all')
   // the marker's only setter
@@ -358,10 +361,10 @@ section('[K6 g1]', 'composeResolved is the only setter of the marker; checkResol
 
   const anchor = await anchorOf(base)
   const g = (x: Record<string, unknown> = {}) => ({ name: ADDRESS, email: ADDRESS, vouchedBy: 'id.bento.page', accountPub: anchor, firstSeen: NOW, changed: false, fields: 'g1', ...x })
-  ok(I.checkResolved(g())?.fields === 'g1', '[absent] the six fields and the marker, no G field: the marker stays (absent = does not apply)')
-  ok(I.checkResolved(g({ fields: undefined }))?.fields === undefined, '[absent] an answer without the marker never gains it')
+  ok(I.checkResolved(g())?.fields === 'g1', '[K7 absent] the six fields and the marker, no G field: the marker stays (absent = does not apply)')
+  ok(I.checkResolved(g({ fields: undefined }))?.fields === undefined, '[K7 absent] an answer without the marker never gains it')
   const { fields: _f, ...noMarker } = g()
-  ok(!('fields' in I.checkResolved(noMarker)!), '[absent] marker key missing: none added')
+  ok(!('fields' in I.checkResolved(noMarker)!), '[K7 absent] marker key missing: none added')
   for (const [f, bad] of [['tier', 'gold'], ['accountSince', 0], ['rosterChangedAt', -5], ['resetAt', 1.5], ['revoked', null], ['revoked', true], ['revoked', 'bogus'],
     ['managedBy', 'Example Corp'], ['unconfirmedSince', '1800000000000'], ['resetAt', 8.64e15 + 1]] as const) {
     const out = I.checkResolved(g({ [f]: bad }))
@@ -457,11 +460,11 @@ section('[K1 wire]', 'the schema: closed ops, exact keys, plain objects, ids tha
   ok(P.parseProof(getterDev) === null, 'a getter inside the proof: not a proof')
   const sparse = structuredClone(identity.proof); (sparse.chain as unknown[]).length = 3
   ok(P.parseProof(sparse) === null, 'a sparse chain array: not a proof')
-  ok(P.parseIdentityRequest(M(43, 'resolve', { pub: W.pub }), 0) !== 'keys', '[absent] resolve without a proof is well-formed')
+  ok(P.parseIdentityRequest(M(43, 'resolve', { pub: W.pub }), 0) !== 'keys', '[K7 absent] resolve without a proof is well-formed')
   h.close()
 }
 
-section('[K1 wire]', 'flow: in-flight and rate caps, close at maxDrops, teardown')
+section('[K3 limits]', 'flow: in-flight and rate caps, close at maxDrops, teardown')
 {
   let release: () => void = () => {}
   const gate = new Promise<void>((r) => { release = r })
@@ -484,7 +487,8 @@ section('[K1 wire]', 'flow: in-flight and rate caps, close at maxDrops, teardown
   const hc = open()
   hc.s.close()
   ok((await raw(hc.port, [M(1, 'whoami')])).length === 0 && hc.calls.length === 0, 'close(): nothing answered, the agent never asked')
-  // the protocol source never reads an origin or posts to a window
+  // the protocol source never reads an origin or posts to a window (a wire rule, tagged as one)
+  current = '[K1 wire]'
   const src = readFileSync(join(KS, 'identityport.ts'), 'utf8').replace(/^\s*\/\/.*$/gm, '')
   ok(!/\.origin\b/.test(src) && !/\bsource\b\s*[.(]/.test(src) && !/window\.|parent\.|top\./.test(src), 'no origin read, no window posted to')
 }
@@ -499,14 +503,14 @@ section('[K2 binding]', 'the agent\'s context is the host\'s entry and docId, ne
   h.close()
   const hn = open({ docId: null })
   await raw(hn.port, [M(1, 'whoami')])
-  ok(JSON.stringify(hn.calls[0]?.ctx) === JSON.stringify({ entry: 'entry-1', docId: null }), '[absent] no verified docId: the agent is told null')
+  ok(JSON.stringify(hn.calls[0]?.ctx) === JSON.stringify({ entry: 'entry-1', docId: null }), '[K7 absent] no verified docId: the agent is told null')
   hn.close()
   let threw = 0
   for (const e of ['', undefined, 7]) { try { P.serveIdentity(new MessageChannel().port1, { entry: e as never, docId: 'd', agent: open().s as never }) } catch { threw++ } }
   ok(threw === 3, 'serveIdentity refuses to start without a host-minted entry')
 }
 
-section('[K3 consent]', 'sign and resolve only after whoami consent in this session')
+section('[R3 consent]', 'sign and resolve only after whoami consent in this session')
 {
   const h = open()
   const r = await raw(h.port, [M(1, 'sign', { purpose: 'prove', payload: goodPayload }), M(2, 'resolve', { pub: W.pub, proof: identity.proof })])
@@ -535,6 +539,20 @@ section('[K3 consent]', 'sign and resolve only after whoami consent in this sess
 
 section('[K4 filter]', 'every answer is type-checked on the way out')
 {
+  const full = { ...resolved, revoked: 'signout', unconfirmedSince: T + 9, resetAt: T + 8, rosterChangedAt: T + 7, tier: 'native', fields: 'g1' }
+  const hf = open({ agent: { resolve: () => full } })
+  await raw(hf.port, [M(1, 'whoami')])
+  const rf = (await raw(hf.port, [M(2, 'resolve', { pub: W.pub })]))[0]?.identity as Record<string, unknown>
+  const same = (a: Record<string, unknown>, b: Record<string, unknown>) => Object.keys(a).length === Object.keys(b).length && Object.keys(b).every((k) => a[k] === b[k])
+  ok(rf && same(rf, full), `revoked signout, unconfirmedSince and every G field survive the port hop with fields g1 (${JSON.stringify(rf)?.slice(0, 60)}…)`)
+  for (const rv of ['incident', 'deleted']) {
+    const hr = open({ agent: { resolve: () => ({ ...resolved, revoked: rv }) } })
+    await raw(hr.port, [M(1, 'whoami')])
+    const got = (await raw(hr.port, [M(2, 'resolve', { pub: W.pub })]))[0]?.identity as Record<string, unknown>
+    ok(got?.revoked === rv && got?.fields === 'g1', `revoked ${rv} survives the port hop with the marker`)
+    hr.close()
+  }
+  hf.close()
   const leaky = { ...resolved, fields: 'g1', revoked: null, extra: 'x', devicePub: W.pub }
   const h = open({ agent: { resolve: () => leaky } })
   await raw(h.port, [M(1, 'whoami')])
@@ -546,7 +564,7 @@ section('[K4 filter]', 'every answer is type-checked on the way out')
   await raw(hb.port, [M(1, 'whoami')])
   const rb = (await raw(hb.port, [M(2, 'resolve', { pub: W.pub })]))[0]?.identity as Record<string, unknown>
   ok(rb && rb.fields === undefined, 'a g1 answer whose accountPub is no anchor: forwarded without the marker')
-  ok(JSON.stringify(hb.calls[1]?.args[0]) === JSON.stringify({ pub: W.pub }), '[absent] a resolve without a proof reaches the agent as {pub} alone')
+  ok(JSON.stringify(hb.calls[1]?.args[0]) === JSON.stringify({ pub: W.pub }), '[K7 absent] a resolve without a proof reaches the agent as {pub} alone')
   hb.close()
   const hx = open({ agent: { resolve: () => ({ name: 5 }), sign: () => ({ ok: true, sig: 'short', pub: W.pub }), whoami: () => identity } })
   await raw(hx.port, [M(1, 'whoami')])
@@ -571,7 +589,7 @@ section('[K4 filter]', 'every answer is type-checked on the way out')
   hp.close()
   const hn = open({ agent: { whoami: () => { const { proof: _p, ...rest } = identity; return rest } } })
   const rn = (await raw(hn.port, [M(1, 'whoami')]))[0]?.identity as Record<string, unknown>
-  ok(rn && !('proof' in rn) && hn.s.stats.proofCapped === 0, '[absent] a whoami without a proof: no proof, nothing counted')
+  ok(rn && !('proof' in rn) && hn.s.stats.proofCapped === 0, '[K7 absent] a whoami without a proof: no proof, nothing counted')
   hn.close()
   const hm = open({ agent: { whoami: () => ({ ...identity, devicePub: 'x' }) } })
   ok((await raw(hm.port, [M(1, 'whoami')]))[0]?.identity === null && hm.s.stats.malformed === 1, 'a malformed whoami answer is null, counted')
@@ -584,7 +602,7 @@ section('[K4 filter]', 'every answer is type-checked on the way out')
   hc.close()
 }
 
-section('[K7 resolve]', 'end to end: the port serving the real resolver')
+section('[R1b resolve]', 'end to end: the port serving the real resolver')
 {
   clock = NOW
   const rv = resolver()

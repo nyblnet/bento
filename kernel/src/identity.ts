@@ -329,8 +329,9 @@ export interface VerifiedFacts {
   /** accountAnchor of the chain */
   anchor: string
   tier: 'passkey' | 'native'
-  /** RosterState.createdAt (the chain starts at seq 0) */
-  accountSince: number
+  /** RosterState.createdAt; null when the chain did not start at seq 0, which
+   *  makes no answer at all (an unknown age must never carry the marker) */
+  accountSince: number | null
   /** the latest member or quarantine change, a reset excepted; null = none */
   rosterChangedAt: number | null
   /** RosterState.lastResetAt */
@@ -355,6 +356,8 @@ export interface VerifiedFacts {
  */
 export function composeResolved(f: VerifiedFacts): ResolvedIdentity | null {
   if (!f || typeof f.address !== 'string' || !ACCOUNT_ANCHOR_RE.test(f.anchor)) return null
+  // fail closed: an account whose age is unknown is not a complete answer
+  if (f.accountSince === null) return null
   const a: ResolvedIdentity = {
     name: f.address,
     email: f.address,
