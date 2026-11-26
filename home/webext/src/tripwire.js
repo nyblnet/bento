@@ -166,6 +166,7 @@ function onRequest(d) {
   const nav = { [NAV_KEY]: { acceptLanguage: lang == null ? null : cut(lang), userAgent: ua == null ? null : cut(ua) } }
   noteNavigation(d)
   if (d.type !== 'main_frame') { void chrome.storage.session.set(nav); return }
+  noteLeg(d)
   void chrome.storage.session.set({
     [`${REQUEST_PREFIX}${d.tabId}:${d.frameId}`]: { url: noHash(d.url), at: d.timeStamp, site: site == null ? null : cut(site), preload: preload == null ? null : cut(preload), cookie },
     ...nav,
@@ -257,10 +258,11 @@ const NREQ_PREFIX = 'twn:'
  * onBeforeRedirect). The document that lands knows: its navigation entry's redirectCount, read by the
  * content script (tripwire-observe.js, isolated world: the page cannot change it). So a library document
  * whose redirectCount is above 0 is held to the navigation URL rules on its FINAL URL (sender.url, the
- * browser's): GET (a redirect the honest server makes is GET), no query, a path a release serves; never
- * excused as a reload. A real server redirect to a served path with no query stays quiet. Not covered: a
- * redirected leg that commits no document (a 204, a download), and a hop through another origin (the
- * browser then reports redirectCount 0, and the bytes reach that origin first): both stated in the README.
+ * browser's) and on every redirect target before it (redirectTargetsOf, M10): GET (a redirect the honest
+ * server makes is GET), no query, a path a release serves; never excused as a reload. A real server
+ * redirect to a served path with no query stays quiet. Not covered: a redirected leg that commits no
+ * document (a 204, a download, a network error page), and a hop through another origin (the browser then
+ * reports redirectCount 0, and the bytes reach that origin first): both stated in the README.
  * Pure (no chrome), so a rig calls it.
  */
 export function redirectedOf(sender, obs) {
@@ -271,9 +273,63 @@ export function redirectedOf(sender, obs) {
   if (roleOf(origin) !== 'library' || sender.frameId !== 0) return null
   return { url: noHash(sender.url), method: 'GET', type: 'main_frame', initiator: null, arrived: 'redirect', redirects: obs.redirects, tabId: sender.tab.id, frameId: 0 }
 }
+
+/**
+ * Every leg of a redirect CHAIN (security ruling on #983, M10). A worker can redirect a typed navigation
+ * out to `/?s=…` and straight back to `/`: the bytes reach the server on the middle leg, and the page lands
+ * on a clean URL with redirectCount 2. MEASURED (Chromium 149): webRequest sees each leg the network
+ * serves (the navigation preload, or the leg itself) as a main_frame request with no initiator. So every
+ * library main_frame leg is recorded per tab and frame (bounded, memory first, the session record after
+ * the extension's worker slept), and a document that reports N redirects has its last N legs judged by the
+ * navigation URL rules: every redirect TARGET, never the first, user-chosen leg. A leg the network never
+ * served (the worker answered it) carried nothing to the server. Only legs inside this document's
+ * navigation window count. A server 301 /index.html to / has [/] as its only target, and stays quiet.
+ */
+const LEGS_PREFIX = 'twg:'
+const LEGS = new Map()
+const MAX_LEGS = 16
+let legChain = Promise.resolve()
+function noteLeg(d) {
+  if (typeof d.tabId !== 'number' || d.tabId < 0) return
+  const key = `${LEGS_PREFIX}${d.tabId}:${typeof d.frameId === 'number' ? d.frameId : 0}`
+  // cut only what is recorded: a cut URL is never served (paths are short), so it can only fail loud
+  const leg = { url: noHash(d.url).slice(0, MAX_HERE), at: d.timeStamp }
+  legChain = legChain.then(async () => {
+    let list = LEGS.get(key)
+    if (list === undefined) { const r = await chrome.storage.session.get(key); list = Array.isArray(r?.[key]) ? r[key] : [] }
+    list = [...list, leg].slice(-MAX_LEGS)
+    LEGS.delete(key)
+    LEGS.set(key, list)
+    if (LEGS.size > 256) LEGS.delete(LEGS.keys().next().value)
+    await chrome.storage.session.set({ [key]: list })
+  }).catch(() => {})
+}
+async function legsOf(tabId) {
+  await legChain
+  const key = `${LEGS_PREFIX}${tabId}:0`
+  const mem = LEGS.get(key)
+  if (mem !== undefined) return mem
+  const r = await chrome.storage.session.get(key)
+  return Array.isArray(r?.[key]) ? r[key] : []
+}
+/** The navigations to judge for a document that arrived by redirect: its last N legs (pure, so a rig calls it). */
+export function redirectTargetsOf(sender, obs, legs) {
+  const last = redirectedOf(sender, obs)
+  if (!last) return []
+  const t0 = Number(obs.timeOrigin) || 0
+  const urls = (Array.isArray(legs) ? legs : [])
+    .filter((l) => typeof l?.url === 'string' && typeof l.at === 'number' && l.at >= t0 - 1000 && l.at <= t0 + RECORD_WINDOW)
+    .map((l) => l.url)
+  // the landing leg itself, if webRequest never showed it (the worker answered it): it is a target too
+  if (urls[urls.length - 1] !== last.url.slice(0, MAX_HERE)) urls.push(last.url)
+  const targets = urls.slice(-last.redirects)
+  return [...new Set(targets)].map((url) => ({ ...last, url }))
+}
 function noteRedirected(sender, obs) {
-  const req = redirectedOf(sender, obs)
-  if (req) void tripwireNavigation(req).catch(() => {})
+  if (!redirectedOf(sender, obs)) return
+  void legsOf(sender.tab.id)
+    .then((legs) => Promise.all(redirectTargetsOf(sender, obs, legs).map((req) => tripwireNavigation(req))))
+    .catch(() => {})
 }
 
 /**
@@ -669,7 +725,7 @@ export async function tripwireObserve(sender, obs, net = (u, o) => fetch(u, o)) 
 }
 
 /** Every storage key prefix the tripwire uses: each names its own records (the rig checks no two overlap, M9). */
-export const PREFIXES = [HEADERS_PREFIX, PENDING_PREFIX, WARNED_PREFIX, REQUEST_PREFIX, HERE_PREFIX, NREQ_PREFIX, WREQ_PREFIX, PREQ_PREFIX, NAV_KEY]
+export const PREFIXES = [HEADERS_PREFIX, PENDING_PREFIX, WARNED_PREFIX, REQUEST_PREFIX, HERE_PREFIX, NREQ_PREFIX, WREQ_PREFIX, PREQ_PREFIX, LEGS_PREFIX, NAV_KEY]
 
 /** Listeners that must be registered at the top level of the worker. */
 export function installTripwire() {

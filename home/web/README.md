@@ -285,8 +285,17 @@ Still open:
   values, a `Refresh` header on the worker's answer, and the worker's
   `WindowClient.navigate()` each sent a query to the server in the navigation
   preload): one the library origin starts must have no query and a path a
-  release serves, unless it reloads the URL the tab is already on. So such a
-  change's bytes cannot ride in a URL or a header to this origin. The worker
+  release serves, unless it reloads the URL the tab is already on. A
+  navigation that arrives by a same-origin redirect is held to the same
+  rules on every redirect target, not only where it lands (measured: a
+  worker sent a typed visit out to `/?s=…` and straight back to `/`). So on a
+  page that opens, such a change's bytes cannot ride in a URL or a header to
+  this origin. One case is accepted for launch 1: a worker that redirects a
+  navigation to a URL carrying bytes and then answers that leg with no
+  document (a 204, or `Response.error()`, which shows a network error page)
+  sends the bytes with no finding (measured). Every use visibly breaks the
+  navigation, since the library does not open, so it is not a silent
+  per-visit channel. The worker
   can still pass data out through which allowed requests it, or the page,
   makes, and when (a reload included); and requests to other origins are not
   seen, since the extension has no host permission there.

@@ -455,15 +455,18 @@ home.bento.page has never been checked.
   library's Reload button); typed, reload, back and forward navigations carry
   no initiator and are not judged on that rule. A navigation that ARRIVED by a
   same-origin redirect is held to the same URL rules on the URL it landed on
-  (measured: a worker answering a typed navigation with
-  `Response.redirect("/?s=…")` sent the query in the navigation preload, and
-  the redirected leg keeps the absent initiator); the tripwire reads the
-  document's own `redirectCount`, so a server redirect to a served path with no
-  query stays quiet. Not covered: a redirected navigation that commits no
-  document (the worker answers it with a 204 or a download; measured: the
-  query reached the server, no finding), and a redirect through another origin
-  (the browser then reports no redirect, and the bytes reach that origin
-  first). A page request the worker answers itself
+  and on every redirect target before it (measured: a worker answering a typed
+  navigation with `Response.redirect("/?s=…")` sent the query in the
+  navigation preload, and the redirected leg keeps the absent initiator; a
+  second redirect straight back to `/` landed the page on a clean URL with
+  `redirectCount` 2). The tripwire reads the document's own `redirectCount`
+  and judges that many of the tab's last navigation legs, never the first one
+  the person chose, so a server redirect to a served path with no query stays
+  quiet. Not covered: a redirected navigation that commits no document (the
+  worker answers it with a 204, a download or a network error page; measured:
+  the query reached the server, no finding; accepted for launch 1, since the
+  library visibly fails to open), and a redirect through another origin (the
+  browser then reports no redirect, and the bytes reach that origin first). A page request the worker answers itself
   never reaches webRequest, and its bytes reach only the worker. The worker
   can still pass data out through which of the allowed requests it, or the
   page, makes, and when (a covert channel). Its requests, and the page's, to

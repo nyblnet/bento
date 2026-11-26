@@ -180,6 +180,12 @@ const MUTANTS = [
   { name: 'the session record read after it is overwritten (M9, memory off)', row: 'nav-meta-refresh', edits: [
     { file: W, from: '  const mem = HERE.get(key)\n', to: '  const mem = undefined\n' },
     { file: W, from: '  const before = req && mem === undefined ? chrome.storage.session.get(key) : null\n', to: '  const before = req && mem === undefined ? chrome.storage.session.set({ [key]: hereOf(d.url) }).then(() => chrome.storage.session.get(key)) : null\n' }] },
+  // every target of a redirect chain (security's sixth review of #983, M10)
+  { name: 'only the final URL of a redirect chain judged (M10)', row: 'nav-sw-redirect-chain', file: W, from: '  const targets = urls.slice(-last.redirects)\n', to: '  const targets = urls.slice(-1)\n' },
+  { name: 'only a redirect count of 1 taken (M10, obs-eq1)', row: 'nav-sw-redirect-chain', file: O, from: 'n > 0 ? n : 0', to: 'n === 1 ? n : 0' },
+  { name: 'library navigation legs not recorded (M10)', row: 'nav-sw-redirect-chain-net', file: W, from: '  noteLeg(d)\n', to: '' },
+  { name: 'the legs never read from the session (M10, the extension worker stopped)', row: 'nav-sw-redirect-chain-stop', file: W, from: 'if (list === undefined) { const r = await chrome.storage.session.get(key);', to: 'if (list === undefined) { const r = {};' },
+  { name: 'the first, user-chosen leg judged as a target (M10, the honest control)', row: 'c5-honest-server-redirect', file: W, from: 'urls.slice(-last.redirects)', to: 'urls.slice(-last.redirects - 1)' },
   // /index.html answered as '/' (security ruling on #964, M1): without it an honest visit reads "unverified"
   // Not registered: the build mutant that drops sw.ts's /index.html line. MEASURED red on macOS Chromium 149
   // (stage3-index: 3 and 2 of 8 honest visits warned without the line, 0 of 8 with it), but CI's Linux

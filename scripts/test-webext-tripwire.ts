@@ -417,6 +417,31 @@ section('a library document that arrived by a same-origin redirect (security rul
   ok((obsSrc.match(/redirects: redirectsIn\(\)/g) ?? []).length === 2 && /getEntriesByType\('navigation'\)\[0\]\?\.redirectCount/.test(obsSrc), 'both reports carry the browser\'s redirectCount')
 }
 
+section('every target of a redirect chain (security ruling on #983, M10)')
+{
+  const O = 'https://home.bento.page'
+  const T = await import(path.join(EXT, 'src/tripwire.js'))
+  const t0 = 1_700_000_000_000
+  const snd = (over: Record<string, unknown> = {}) => ({ url: `${O}/`, frameId: 0, tab: { id: 7, index: 0 }, id: 'ext', ...over })
+  const leg = (u: string, dt = 50) => ({ url: `${O}${u}`, at: t0 + dt })
+  const nj = (r: unknown) => J.navigationFailures(r, list1, O, {}).map((f: any) => f.why ?? f.rule).join('+')
+  const judged = (sender: unknown, obs: unknown, legs: unknown) => T.redirectTargetsOf(sender, obs, legs).map((r: any) => `${String(r.url).replace(O, '')}=${nj(r) || 'allowed'}`).join(' ')
+  const chain = [leg('/', 10), leg('/?s=secret-chain', 20), leg('/', 30)]
+  ok(judged(snd(), { redirects: 2, timeOrigin: t0 }, chain) === '/?s=secret-chain=a query /=allowed', `the attack: out to /?s=… and back to / (redirectCount 2): the middle leg is judged, a finding (${judged(snd(), { redirects: 2, timeOrigin: t0 }, chain)})`)
+  ok(judged(snd(), { redirects: 1, timeOrigin: t0 }, chain) === '/=allowed', 'one redirect: only the last leg is its target (positive control on the count)')
+  ok(judged(snd(), { redirects: 2, timeOrigin: t0 }, []) === '/=allowed' && judged(snd(), { redirects: 2, timeOrigin: t0 }, undefined) === '/=allowed', 'no legs recorded (the worker answered each one, so the network saw none): the final URL alone')
+  ok(judged(snd(), { redirects: 1, timeOrigin: t0 }, [leg('/index.html?from=link', 10), leg('/', 20)]) === '/=allowed', 'the first, user-chosen leg is never a target: a typed /index.html?from=link a server sends to / is quiet')
+  ok(judged(snd(), { redirects: 2, timeOrigin: t0 }, [leg('/?s=old', -5000), leg('/', 10), leg('/?s=secret-chain', 20), leg('/', 30)]) === '/?s=secret-chain=a query /=allowed' && judged(snd(), { redirects: 2, timeOrigin: t0 }, [leg('/?s=old', -5000), leg('/', 30)]) === '/=allowed', 'a leg before this navigation began (another visit) is not one of its legs')
+  ok(judged(snd(), { redirects: 2, timeOrigin: t0 }, [leg('/', 10), leg('/?s=secret-chain', 20)]) === '/?s=secret-chain=a query /=allowed', 'the landing leg not yet shown by webRequest: it is added, and the middle leg is still a target')
+  ok(judged(snd(), { redirects: 3, timeOrigin: t0 }, [leg('/', 10), leg('/?s=a', 20), leg('/?s=a', 25), leg('/', 30)]) === '/?s=a=a query /=allowed', 'a leg the network served twice (preload and network): judged once')
+  ok(judged(snd(), { redirects: 2 }, chain) === '/=allowed', 'timeOrigin ABSENT: no leg is in the window, the final URL alone (fails to the M8 rule, never wider)')
+  ok(judged(snd(), { redirects: 0, timeOrigin: t0 }, chain) === '' && judged(snd({ frameId: 2 }), { redirects: 2, timeOrigin: t0 }, chain) === '', 'no redirect, or a framed document: nothing judged here')
+  ok(T.redirectTargetsOf(snd(), { redirects: 2, timeOrigin: t0 }, chain).every((r: any) => r.arrived === 'redirect' && r.method === 'GET' && r.type === 'main_frame' && r.initiator === null && r.tabId === 7), 'each target is judged as a navigation that arrived by a redirect')
+  const twSrc7 = fs.readFileSync(path.join(EXT, 'src/tripwire.js'), 'utf8')
+  ok(/  if \(d\.type !== 'main_frame'\) \{ void chrome\.storage\.session\.set\(nav\); return \}\n  noteLeg\(d\)\n/.test(twSrc7), 'every library main_frame leg (any initiator) is recorded')
+  ok(/if \(list === undefined\) \{ const r = await chrome\.storage\.session\.get\(key\)/.test(twSrc7) && /if \(mem !== undefined\) return mem\n  const r = await chrome\.storage\.session\.get\(key\)/.test(twSrc7), 'the legs survive the extension\'s worker stopping (session record, read before it is extended)')
+}
+
 section('the tripwire\'s storage keys (security ruling on #983, M9)')
 {
   const T = await import(path.join(EXT, 'src/tripwire.js'))

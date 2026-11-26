@@ -15675,11 +15675,12 @@ release serves, and never excused as a reload of where the tab was. A server
 redirect to a served path with no query stays quiet (measured: a 301 from
 `/index.html` to `/`). Two cases stay open and are stated in the README: a
 redirected navigation that commits no document (the worker answers the second
-leg with a 204; measured, the query reached the server with no finding), and a
-hop through another origin (`redirectCount` then reads 0, and the bytes reach
-that origin first). Catching the first from webRequest alone would also flag a
-site that opens the library and navigates it away twice in quick succession, so
-it waits for a ruling rather than shipping a warning any site can trigger.
+leg with a 204 or a network error page; measured, the query reached the server
+with no finding), and a hop through another origin (`redirectCount` then reads
+0, and the bytes reach that origin first). Catching the first from webRequest
+alone would also flag a site that opens the library and navigates it away twice
+in quick succession, so it waits for a ruling rather than shipping a warning any
+site can trigger.
 
 The record of the URL a tab is on, which the Reload exception reads, shared its
 storage prefix (`twh:`) with the navigation-headers record: the headers listener
@@ -15701,3 +15702,36 @@ extension's worker stopped through the DevTools protocol, then the Reload
 button: quiet, with a control that the worker came back with empty memory and
 the session held the record), and `nav-sub-frame` (a frame the page adds,
 navigated to `/?s=…`: a `sub_frame` finding; nit n5). Each has a mutant.
+
+**Every target of a redirect chain** (security's sixth review of #983, M10).
+Judging the URL a redirected document landed on left every hop before it: a
+worker answered a typed `/` with `Response.redirect("/?s=…")`, then answered that
+leg with a redirect straight back to `/`. Measured (Chromium 149): the server
+received the query in the navigation preload, webRequest showed that leg as a
+`main_frame` request with no initiator, and the page landed on `/` with
+`redirectCount` 2 and a clean verdict. The tripwire now records every library
+`main_frame` leg per tab and frame (bounded, in memory and in the session record
+so it survives the extension's worker stopping), and a document that reports N
+redirects has its last N legs inside its own navigation window judged by the
+`navigation` rules: every redirect target, never the first leg, which the person
+chose. A typed `/index.html?from=link` that the server sends to `/` stays quiet
+(its only target is `/`). A leg the worker answered itself never reached the
+network and carried nothing to the server.
+
+The redirect that commits no document is ruled (same review): accepted for
+launch 1. The worker answers the redirected leg with a 204, or with
+`Response.error()` (a network error page); the bytes reach the server with no
+finding, but every use visibly breaks the navigation, since the library does not
+open, so it is not a silent channel. The `home/web` and extension READMEs name it.
+
+Guards: rows `nav-sw-redirect-chain` and `nav-sw-redirect-chain-net` (the chain,
+the second redirect immediate or after the preload; each with a positive control
+that the query reached the server and that the page landed on `/` with
+`redirectCount` 2), `nav-sw-redirect-chain-stop` (the extension's worker stopped
+mid-chain: the middle leg is read from the session record), and a typed
+`/index.html?from=link` added to `c5-honest-server-redirect` (quiet). Mutants:
+only the final URL judged, only a redirect count of 1 taken, legs not recorded,
+legs never read from the session, and the first leg judged as a target; each
+turns its row red. Unit rows cover `redirectTargetsOf` with an absent
+`timeOrigin`, a leg from an earlier visit, a landing leg webRequest had not yet
+shown, and a leg served twice.
