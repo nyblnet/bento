@@ -36,7 +36,11 @@
 //     → 200 {ok, at, signedAt}; 429 past the account's sign-outs for the day.
 //     It signs every browser out as of the moment it is ACCEPTED (`at`), not
 //     the time in the signed text (`signedAt`), so a sign-in that finished
-//     between the two is caught too.
+//     between the two is caught too. The text and its assertion are the
+//     kernel's verifyWout's to check (over the latest ripened head's stored
+//     chain, the sign-in host the only origin); the directory spends the
+//     challenge before it, and keeps the passkey's signature counter and the
+//     per-account limit itself.
 //   A sign-in challenge has no account when it is issued, so it is spent in
 //   the object of the account the passkey's user handle names: once per
 //   account, not once for everyone (an assertion verifies only under its own
@@ -97,9 +101,10 @@
 
 import { parseDeviceCert, buildWatt, verifyWren, CEREMONY_CAP_MS, WATT_MAX_MS } from '../../../kernel/src/devices.ts'
 import { b64uDec, sha256b64u, signStatement } from '../../../kernel/src/statements.ts'
-import { parseRos } from '../../../kernel/src/roster.ts'
+import { parseRos, verifyRosterChain, verifyWout } from '../../../kernel/src/roster.ts'
 import { verifyAssertion, statementChallenge } from '../../../kernel/src/webauthn.ts'
-import { HOME_ORIGIN, PASSKEY, SIGNIN_ORIGIN } from './passkey.js'
+import { HOME_ORIGIN, PASSKEY, SIGNIN_ORIGIN, passkeyOrigins } from './passkey.js'
+import { directoryKeys, signCountOf } from './dirkeys.js'
 import { issueChallenge, openChallenge } from './challenge.js'
 import { addressKey, normalize } from './address.js'
 import { HOME_ROUTES, WEB_ROUTES } from './seam.js'
@@ -116,7 +121,8 @@ export const BROWSER_LIMITS = Object.freeze({
   sweep: 128,
   /** the most incident records the directory publishes */
   incidentsMax: 256,
-  /** a member's sign-outs accepted per account in any window, across every member and IP (security's D-W2 on #962) */
+  /** a member's sign-outs accepted per account in any window, across every member and IP (security's D-W2 on #962).
+   *  The final number is the maintainer's call: the rig reads this constant, so a ruling changes only this line. */
   signoutsPerDay: 3,
   signoutWindowMs: DAY,
 })
@@ -237,7 +243,7 @@ export async function browserRoute(req, env, ip, p, k) {
     if (!(await ledger(ip, 'request'))) return json(429, { error: 'rate-limited' })
     const c = await openChallenge(env.CHALLENGE_KEY, 'signout', await addressKey(address), parts[3], Date.now())
     if (!c) return json(400, { error: 'nonce' })
-    const r = await roster(address, 'browserSignout', { text: b.text, at: Number(parts[2]), assertion: b.assertion, nonce: c.nonce, issued: c.issued, os: req.headers.get('origin') })
+    const r = await roster(address, 'browserSignout', { text: b.text, assertion: b.assertion, nonce: c.nonce, issued: c.issued, challenge: parts[3], os: req.headers.get('origin') })
     return json(r.status, r.body)
   }
 
@@ -436,6 +442,22 @@ async function sweep(s, now) {
 }
 
 /**
+ * The answer for a wout. the kernel refused (verifyWout), in the words the
+ * sign-in host already reads: a challenge or time that is not this one's is
+ * `nonce`; a text that does not read or names another account is `text`; a
+ * signer that is not a member, or is suspended, is 403 as liveMember answers
+ * it; an assertion's own reason keeps its name; any other proof is `assertion`.
+ */
+function woutRefusal(reason) {
+  if (reason === 'replay' || reason === 'challenge' || reason === 'at') return [400, { error: 'nonce' }]
+  if (reason === 'grammar' || reason === 'address') return [400, { error: 'text' }]
+  if (reason === 'signer') return [403, { error: 'not-member' }]
+  if (reason === 'quarantined') return [403, { error: 'quarantined' }]
+  if (typeof reason === 'string' && reason.startsWith('assertion-')) return [400, { error: reason }]
+  return [400, { error: 'assertion' }]
+}
+
+/**
  * One browser op on the Roster object `obj`. `h.spend` is the object's own
  * spend (roster.js), `h.out` its answer, `h.origin` the request's Origin as
  * logged, `h.notify` its roster mail.
@@ -542,8 +564,8 @@ export async function browserOp(obj, a, now, h) {
   }
 
   if (a.op === 'browserSignout') {
+    // spent here, first: the kernel is then told it spends (one verifier, no second check beside it)
     if (!(await spend())) return out(400, { error: 'nonce' })
-    if (a.at !== a.issued) return out(400, { error: 'nonce' }) // the text's time is the challenge's
     await obj.ripen(now)
     const head = await s.get('head')
     if (!head) return out(404, { error: 'not-found' })
@@ -551,17 +573,23 @@ export async function browserOp(obj, a, now, h) {
     if (!assertionShape(as)) return out(400, { error: 'assertion' })
     const who = await liveMember(s, head, as.id)
     if (who.error) return out(403, { error: who.error })
-    const v = await verifyAssertion({ authenticatorData: as.authenticatorData, clientDataJSON: as.clientDataJSON, signature: as.signature }, {
-      publicKey: who.pub, challenge: await statementChallenge(a.text), rpId: PASSKEY.rpId, origins: [SIGNIN_ORIGIN], storedSignCount: who.rec.signCount,
+    const count = signCountOf(as)
+    if (count === null) return out(400, { error: 'assertion' })
+    const chain = await verifyRosterChain(await chainFrom(s), { directoryKeys: await directoryKeys(obj.env), rpId: PASSKEY.rpId, origins: passkeyOrigins(), now })
+    if (!chain.ok) throw new Error(`the stored chain does not verify: ${chain.reason}`) // never: the directory countersigned every link
+    const v = await verifyWout(a.text, who.pub, { assertion: { authenticatorData: as.authenticatorData, clientDataJSON: as.clientDataJSON, signature: as.signature } }, {
+      roster: chain.value, challenge: a.challenge, challengeAt: a.issued, spend: () => true, rpId: PASSKEY.rpId, origins: [SIGNIN_ORIGIN], now,
     })
-    if (!v.ok) return out(400, { error: `assertion-${v.reason}` })
-    if (!(await storeCount(s, who.pub, who.rec.signCount, v.value.signCount))) return out(400, { error: 'assertion-sign-count' })
+    if (!v.ok) return out(...woutRefusal(v.reason))
+    // D6: the kernel's proof does not compare signature counters; the directory does, and stores it over the one it read
+    if ((count !== 0 || who.rec.signCount !== 0) && count <= who.rec.signCount) return out(400, { error: 'assertion-sign-count' })
+    if (!(await storeCount(s, who.pub, who.rec.signCount, count))) return out(400, { error: 'assertion-sign-count' })
     // a few per account a day, whoever signs and from wherever: counted only once a member's assertion verified
     const recent = ((await s.get('signouts')) ?? []).filter((t) => Number.isSafeInteger(t) && t > now - BROWSER_LIMITS.signoutWindowMs)
     if (recent.length >= BROWSER_LIMITS.signoutsPerDay) return out(429, { error: 'rate-limited' })
     await s.put('signouts', [...recent, now])
-    await signOutAll(obj, head, { signedAt: a.at, now, by: who.pub, origin: h.origin, co: SIGNIN_ORIGIN }, h)
-    return out(200, { ok: true, at: now, signedAt: a.at })
+    await signOutAll(obj, head, { signedAt: v.value.at, now, by: who.pub, origin: h.origin, co: SIGNIN_ORIGIN }, h)
+    return out(200, { ok: true, at: now, signedAt: v.value.at })
   }
 
   return out(400, { error: 'bad-op' })
