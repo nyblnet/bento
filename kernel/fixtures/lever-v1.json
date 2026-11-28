@@ -1,0 +1,320 @@
+{
+  "about": "The lever's predicate (kernel/src/devices.ts leverCovers): does an incident cover this browser certificate? Shared by every peer's resolver and the directory's lever so the two never disagree. Hand-written, deterministic: no keys, no signatures.",
+  "rule": "covered iff (cert.kind is wdev, or dev2 via passkey) AND watt.ob === 1 AND incident.from <= cert.ceremonyAt AND (incident.to === null OR cert.ceremonyAt <= incident.to). Nothing else: not the watt.'s loggedAt (a renewal), not the directory record's enrolment loggedAt.",
+  "kernel": "leverCovers(row.cert, row.watt, row.incident) === row.covered",
+  "directory": "for a row with a record (the directory's wd: record for that certificate: ob, ceremonyAt, loggedAt = enrolment, renewedAt = the latest watt.), the lever over t0 = incident.from, t1 = incident.to (to null = an open window) must mark it exactly when row.covered. record null: the directory holds no wd: record for that certificate.",
+  "rows": [
+    {
+      "about": "a wdev. via passkey, ob 1, ceremony inside the window",
+      "cert": {
+        "kind": "wdev",
+        "via": "passkey",
+        "ceremonyAt": 1790540000000
+      },
+      "watt": {
+        "ob": 1,
+        "loggedAt": 1790540000000
+      },
+      "incident": {
+        "from": 1790360000000,
+        "to": 1790720000000
+      },
+      "covered": true,
+      "record": {
+        "ob": 1,
+        "ceremonyAt": 1790540000000,
+        "loggedAt": 1790540000000,
+        "renewedAt": 1790540000000
+      }
+    },
+    {
+      "about": "a wdev. via a consent key's page (cns), ob 1, ceremony inside",
+      "cert": {
+        "kind": "wdev",
+        "via": "cns",
+        "ceremonyAt": 1790540000000
+      },
+      "watt": {
+        "ob": 1,
+        "loggedAt": 1790540000000
+      },
+      "incident": {
+        "from": 1790360000000,
+        "to": 1790720000000
+      },
+      "covered": true,
+      "record": {
+        "ob": 1,
+        "ceremonyAt": 1790540000000,
+        "loggedAt": 1790540000000,
+        "renewedAt": 1790540000000
+      }
+    },
+    {
+      "about": "a dev2. via passkey, ob 1, ceremony inside (the directory issues none yet: no record)",
+      "cert": {
+        "kind": "dev2",
+        "via": "passkey",
+        "ceremonyAt": 1790540000000
+      },
+      "watt": {
+        "ob": 1,
+        "loggedAt": 1790540000000
+      },
+      "incident": {
+        "from": 1790360000000,
+        "to": 1790720000000
+      },
+      "covered": true,
+      "record": null
+    },
+    {
+      "about": "a dev2. a consent key co-signed (ck), ob 1, inside: native, never covered (no directory record)",
+      "cert": {
+        "kind": "dev2",
+        "via": "ck",
+        "ceremonyAt": 1790540000000
+      },
+      "watt": {
+        "ob": 1,
+        "loggedAt": 1790540000000
+      },
+      "incident": {
+        "from": 1790360000000,
+        "to": 1790720000000
+      },
+      "covered": false,
+      "record": null
+    },
+    {
+      "about": "a wdev. with ob 0, ceremony inside: not logged for bento/home, not covered",
+      "cert": {
+        "kind": "wdev",
+        "via": "passkey",
+        "ceremonyAt": 1790540000000
+      },
+      "watt": {
+        "ob": 0,
+        "loggedAt": 1790540000000
+      },
+      "incident": {
+        "from": 1790360000000,
+        "to": 1790720000000
+      },
+      "covered": false,
+      "record": {
+        "ob": 0,
+        "ceremonyAt": 1790540000000,
+        "loggedAt": 1790540000000,
+        "renewedAt": 1790540000000
+      }
+    },
+    {
+      "about": "ceremonyAt exactly at the window's start: covered (both ends inclusive)",
+      "cert": {
+        "kind": "wdev",
+        "via": "passkey",
+        "ceremonyAt": 1790360000000
+      },
+      "watt": {
+        "ob": 1,
+        "loggedAt": 1790360000000
+      },
+      "incident": {
+        "from": 1790360000000,
+        "to": 1790720000000
+      },
+      "covered": true,
+      "record": {
+        "ob": 1,
+        "ceremonyAt": 1790360000000,
+        "loggedAt": 1790360000000,
+        "renewedAt": 1790360000000
+      }
+    },
+    {
+      "about": "ceremonyAt exactly at the window's end: covered (both ends inclusive)",
+      "cert": {
+        "kind": "wdev",
+        "via": "passkey",
+        "ceremonyAt": 1790720000000
+      },
+      "watt": {
+        "ob": 1,
+        "loggedAt": 1790720000000
+      },
+      "incident": {
+        "from": 1790360000000,
+        "to": 1790720000000
+      },
+      "covered": true,
+      "record": {
+        "ob": 1,
+        "ceremonyAt": 1790720000000,
+        "loggedAt": 1790720000000,
+        "renewedAt": 1790720000000
+      }
+    },
+    {
+      "about": "ceremonyAt 1 ms before the window: not covered",
+      "cert": {
+        "kind": "wdev",
+        "via": "passkey",
+        "ceremonyAt": 1790359999999
+      },
+      "watt": {
+        "ob": 1,
+        "loggedAt": 1790359999999
+      },
+      "incident": {
+        "from": 1790360000000,
+        "to": 1790720000000
+      },
+      "covered": false,
+      "record": {
+        "ob": 1,
+        "ceremonyAt": 1790359999999,
+        "loggedAt": 1790359999999,
+        "renewedAt": 1790359999999
+      }
+    },
+    {
+      "about": "ceremonyAt 1 ms after the window: not covered",
+      "cert": {
+        "kind": "wdev",
+        "via": "passkey",
+        "ceremonyAt": 1790720000001
+      },
+      "watt": {
+        "ob": 1,
+        "loggedAt": 1790720000001
+      },
+      "incident": {
+        "from": 1790360000000,
+        "to": 1790720000000
+      },
+      "covered": false,
+      "record": {
+        "ob": 1,
+        "ceremonyAt": 1790720000001,
+        "loggedAt": 1790720000001,
+        "renewedAt": 1790720000001
+      }
+    },
+    {
+      "about": "ceremony before the window, a renewal logged inside it: NOT covered (a renewal never brings a key into an incident)",
+      "cert": {
+        "kind": "wdev",
+        "via": "passkey",
+        "ceremonyAt": 1790180000000
+      },
+      "watt": {
+        "ob": 1,
+        "loggedAt": 1790540000000
+      },
+      "incident": {
+        "from": 1790360000000,
+        "to": 1790720000000
+      },
+      "covered": false,
+      "record": {
+        "ob": 1,
+        "ceremonyAt": 1790180000000,
+        "loggedAt": 1790180000000,
+        "renewedAt": 1790540000000
+      }
+    },
+    {
+      "about": "ceremony inside the window, renewed after it closed: covered (the ceremony decides, the renewal does not take it out)",
+      "cert": {
+        "kind": "wdev",
+        "via": "passkey",
+        "ceremonyAt": 1790540000000
+      },
+      "watt": {
+        "ob": 1,
+        "loggedAt": 1790900000000
+      },
+      "incident": {
+        "from": 1790360000000,
+        "to": 1790720000000
+      },
+      "covered": true,
+      "record": {
+        "ob": 1,
+        "ceremonyAt": 1790540000000,
+        "loggedAt": 1790540000000,
+        "renewedAt": 1790900000000
+      }
+    },
+    {
+      "about": "ceremony 1 s before the window, the enrolment logged 1 s inside it: NOT covered (key on ceremonyAt, never the record's enrolment loggedAt)",
+      "cert": {
+        "kind": "wdev",
+        "via": "passkey",
+        "ceremonyAt": 1790359999000
+      },
+      "watt": {
+        "ob": 1,
+        "loggedAt": 1790360001000
+      },
+      "incident": {
+        "from": 1790360000000,
+        "to": 1790720000000
+      },
+      "covered": false,
+      "record": {
+        "ob": 1,
+        "ceremonyAt": 1790359999000,
+        "loggedAt": 1790360001000,
+        "renewedAt": 1790360001000
+      }
+    },
+    {
+      "about": "an open window (to null): every later ceremony is covered",
+      "cert": {
+        "kind": "wdev",
+        "via": "passkey",
+        "ceremonyAt": 1808000000000
+      },
+      "watt": {
+        "ob": 1,
+        "loggedAt": 1808000000000
+      },
+      "incident": {
+        "from": 1790360000000,
+        "to": null
+      },
+      "covered": true,
+      "record": {
+        "ob": 1,
+        "ceremonyAt": 1808000000000,
+        "loggedAt": 1808000000000,
+        "renewedAt": 1808000000000
+      }
+    },
+    {
+      "about": "an open window (to null): a ceremony before it is not",
+      "cert": {
+        "kind": "wdev",
+        "via": "passkey",
+        "ceremonyAt": 1790356400000
+      },
+      "watt": {
+        "ob": 1,
+        "loggedAt": 1808360000000
+      },
+      "incident": {
+        "from": 1790360000000,
+        "to": null
+      },
+      "covered": false,
+      "record": {
+        "ob": 1,
+        "ceremonyAt": 1790356400000,
+        "loggedAt": 1790356400000,
+        "renewedAt": 1808360000000
+      }
+    }
+  ]
+}

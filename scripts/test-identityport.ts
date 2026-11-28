@@ -260,7 +260,8 @@ section('[A6 incident]', 'revoked:\'incident\' only on the lever\'s predicate')
   const renewedAfter = await proofOf(base, { ceremonyAt: C0, loggedAt: NOW - 2 * H, expires: NOW + 22 * H })
   ok((await res(renewedAfter, [await inc(C0 - H, C0 + H)]))?.revoked === 'incident', 'ceremony inside, renewed (loggedAt) after the window closed: incident')
   const renewedInside = await proofOf(base, { ceremonyAt: C0, loggedAt: NOW - 2 * H, expires: NOW + 22 * H })
-  ok((await res(renewedInside, [await inc(NOW - 3 * H, NOW - H)]))?.revoked === 'incident', 'ceremony before the window, a renewal logged inside it: incident')
+  const rin = await res(renewedInside, [await inc(NOW - 3 * H, NOW - H)])
+  ok(rin !== null && rin.revoked === undefined, 'ceremony before the window, a renewal logged inside it: NOT incident (the lever keys on the ceremony only)')
   ok((await res(await proofOf(base), [await inc(C - 5 * H, C - H)]))?.revoked === undefined, 'a window that ended before the ceremony: NOT incident')
   ok((await res(await proofOf(base), [await inc(C - 5 * H, C)]))?.revoked === 'incident', 'ceremonyAt exactly at the window\'s end: incident (both ends inclusive)')
   ok((await res(await proofOf(base), [await inc(C, C + H)]))?.revoked === 'incident', 'ceremonyAt exactly at the window\'s start: incident')
@@ -273,9 +274,18 @@ section('[A6 incident]', 'revoked:\'incident\' only on the lever\'s predicate')
   const lc = (kind: string, via: string, ob: number, ceremonyAt: number, loggedAt: number, i = I0) => D.leverCovers({ kind, via, ceremonyAt }, { ob, loggedAt }, i)
   ok(lc('wdev', 'passkey', 1, 150, 150) && lc('wdev', 'cns', 1, 150, 150) && lc('dev2', 'passkey', 1, 150, 150), 'leverCovers: wdev. (either via) and dev2. via passkey')
   ok(!lc('dev2', 'ck', 1, 150, 150) && !lc('wdev', 'passkey', 0, 150, 150), 'leverCovers: not a ck dev2., not ob 0')
-  ok(lc('wdev', 'passkey', 1, 200, 300) && lc('wdev', 'passkey', 1, 100, 100) && !lc('wdev', 'passkey', 1, 99, 201) && lc('wdev', 'passkey', 1, 50, 200),
-    'leverCovers: [from, to] inclusive, ceremonyAt or loggedAt')
+  ok(lc('wdev', 'passkey', 1, 200, 300) && lc('wdev', 'passkey', 1, 100, 100) && !lc('wdev', 'passkey', 1, 99, 150) && !lc('wdev', 'passkey', 1, 201, 150) && !lc('wdev', 'passkey', 1, 50, 200),
+    'leverCovers: ceremonyAt in [from, to] inclusive; the watt.\'s loggedAt never counts')
   ok(lc('wdev', 'passkey', 1, 5000, 5000, { ...I0, to: null }), 'leverCovers: an open window has no end')
+  // the shared fixture (kernel/fixtures/lever-v1.json): the directory's lever runs the same rows, so the two agree
+  const LV = JSON.parse(readFileSync(join(ROOT, 'kernel/fixtures/lever-v1.json'), 'utf8')) as { rows: Array<{ about: string; cert: { kind: string; via: string; ceremonyAt: number }; watt: { ob: number; loggedAt: number }; incident: { from: number; to: number | null }; covered: boolean; record: { ob: number; ceremonyAt: number; loggedAt: number; renewedAt: number } | null }> }
+  for (const r of LV.rows) ok(D.leverCovers(r.cert, r.watt, { id: 'i', issuedAt: 0, kid: 'dir-1', ...r.incident }) === r.covered, `lever-v1: ${r.about}`)
+  ok(LV.rows.every((r) => r.record === null || (r.record.ob === r.watt.ob && r.record.ceremonyAt === r.cert.ceremonyAt && r.record.renewedAt === r.watt.loggedAt && r.cert.kind === 'wdev')),
+    'lever-v1: every directory record is the same certificate (ob, ceremonyAt, renewedAt = the watt.\'s loggedAt), a wdev.')
+  ok(LV.rows.some((r) => !r.covered && r.record && r.watt.loggedAt >= r.incident.from && r.watt.loggedAt <= (r.incident.to ?? Infinity)) &&
+    LV.rows.some((r) => !r.covered && r.record && r.record.loggedAt >= r.incident.from && r.record.loggedAt <= (r.incident.to ?? Infinity)) &&
+    LV.rows.some((r) => r.covered && r.record) && LV.rows.some((r) => !r.covered && r.cert.kind === 'dev2' && r.cert.via === 'ck'),
+    'lever-v1 keeps its deciding rows: a renewal inside, an enrolment logged inside, a covered record, a ck dev2.')
   const devSrc = readFileSync(join(KS, 'devices.ts'), 'utf8')
   ok((devSrc.match(/export function leverCovers/g) ?? []).length === 1 && /leverCovers\(dv\.value\.cert, dv\.value\.watt/.test(readFileSync(join(KS, 'identityport.ts'), 'utf8')),
     'one predicate: devices.ts leverCovers, the one the resolver calls')
@@ -535,6 +545,18 @@ section('[R3 consent]', 'sign and resolve only after whoami consent in this sess
   const rt = await raw(ht.port, [M(1, 'whoami'), M(2, 'sign', { purpose: 'prove', payload: goodPayload })])
   ok(rt[0]?.identity === null && (rt[1]?.result as Record<string, unknown>)?.reason === 'declined', 'a whoami that throws is a null whoami, not a consent')
   ht.close()
+  // a null whoami AFTER a consent withdraws it: the document was just told "no identity"
+  let wn = 0
+  const hw = open({ agent: { whoami: () => (++wn === 1 ? identity : null) } })
+  const rw1 = await raw(hw.port, [M(1, 'whoami'), M(2, 'sign', { purpose: 'prove', payload: goodPayload })])
+  ok((rw1[0]?.identity as Record<string, unknown>)?.devicePub === W.pub && (rw1[1]?.result as Record<string, unknown>)?.ok === true, 'consented: whoami answered, sign signed')
+  const before = hw.calls.length
+  const rw2 = await raw(hw.port, [M(3, 'whoami'), M(4, 'sign', { purpose: 'prove', payload: goodPayload }), M(5, 'resolve', { pub: W.pub, proof: identity.proof }), M(6, 'whoami')])
+  const byId = (a: Array<Record<string, unknown>>, id: number) => a.find((m) => m.id === id)
+  ok(byId(rw2, 3)?.identity === null && (byId(rw2, 4)?.result as Record<string, unknown>)?.reason === 'declined' && byId(rw2, 5)?.identity === null && byId(rw2, 6)?.identity === null,
+    'whoami ✓ then whoami null: sign declined, resolve null, and the null is final')
+  ok(hw.calls.length === before + 1 && hw.calls.slice(before).every((c) => c.op === 'whoami'), `after the withdrawal the agent was asked nothing but that whoami (${hw.calls.slice(before).map((c) => c.op)})`)
+  hw.close()
 }
 
 section('[K4 filter]', 'every answer is type-checked on the way out')
@@ -571,6 +593,17 @@ section('[K4 filter]', 'every answer is type-checked on the way out')
   const rx = await raw(hx.port, [M(2, 'resolve', { pub: W.pub }), M(3, 'sign', { purpose: 'prove', payload: goodPayload })])
   ok(rx[0]?.identity === null && (rx[1]?.result as Record<string, unknown>)?.reason === 'unavailable' && hx.s.stats.malformed === 2, 'a malformed resolve is null, a malformed sign is unavailable, both counted')
   hx.close()
+  // an agent that THROWS: every request still gets its answer, and a failure is never an earlier good one
+  let resolves = 0
+  const ht = open({ agent: { resolve: () => { if (++resolves === 1) return resolved; throw new Error('agent broke') }, sign: () => { throw new Error('agent broke') } } })
+  await raw(ht.port, [M(1, 'whoami')])
+  const rt = await raw(ht.port, [M(2, 'resolve', { pub: W.pub }), M(3, 'resolve', { pub: W.pub }), M(4, 'sign', { purpose: 'prove', payload: goodPayload })])
+  const tid = (id: number) => rt.find((m) => m.id === id)
+  ok((tid(2)?.identity as Record<string, unknown>)?.fields === 'g1', 'the agent resolves once: answered')
+  ok(tid(3) !== undefined && tid(3)!.identity === null, `the agent's resolve throws after a good answer: null, answered (${JSON.stringify(tid(3))?.slice(0, 60)})`)
+  ok(tid(4) !== undefined && (tid(4)!.result as Record<string, unknown>)?.reason === 'unavailable' && (tid(4)!.result as Record<string, unknown>)?.ok === false,
+    `the agent's sign throws: unavailable, answered (${JSON.stringify(tid(4))?.slice(0, 60)})`)
+  ht.close()
   const hs = open({ agent: { sign: () => ({ ok: false, reason: 'reauth', extra: 1 }) } })
   await raw(hs.port, [M(1, 'whoami')])
   const rs = (await raw(hs.port, [M(2, 'sign', { purpose: 'prove', payload: goodPayload })]))[0]?.result as Record<string, unknown>

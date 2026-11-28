@@ -278,7 +278,7 @@ export function serveIdentity(port: PortLike, o: ServeIdentityOptions): Identity
   let inFlight = 0
   let windowStart = now()
   let inWindow = 0
-  /** whoami returned an identity in this session */
+  /** whoami returned an identity in this session, and no null since */
   let consented = false
   /** whoami returned null in this session: final */
   let declined = false
@@ -304,7 +304,8 @@ export function serveIdentity(port: PortLike, o: ServeIdentityOptions): Identity
       if (a !== null && c.identity === null) bad()
       if (c.capped) { stats.proofCapped++; gate('proof-cap') }
       if (c.identity) consented = true
-      else declined = true
+      // a null after a consent withdraws it: the document was just told "no identity", so nothing signs or resolves after
+      else { declined = true; consented = false }
       return served({ id: r.id, identity: c.identity })
     }
     if (r.op === 'sign') {

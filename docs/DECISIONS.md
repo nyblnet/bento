@@ -15655,10 +15655,16 @@ frame client and the library's consent dialog are home/web's.
   label of "Mallory" can never become a name shown with ✓.
 - **`revoked: 'incident'` only on the lever's own predicate** (`devices.ts
   leverCovers`): a wdev., or a dev2. via passkey, with watt. ob = 1, whose
-  ceremonyAt or loggedAt falls inside the window, both ends included (an open
-  window has no end). A native dev2. that a consent key co-signed is never
-  covered, which matches the lever. The directory's lever should import this
-  one function instead of keeping its own copy.
+  ceremonyAt falls inside the window, both ends included (an open window has
+  no end). Only the ceremony: a renewal logged inside the window does not
+  bring a key made before it into the incident, because the lever revokes
+  enrolments made in the window, and the watt.'s loggedAt moves on at the
+  next renewal, so keying on it would revoke a certificate the directory never
+  marked and un-revoke it a day later. A native dev2. that a consent key
+  co-signed is never covered, which matches the lever. The directory's lever
+  keys on the same ceremonyAt (never its record's enrolment time) and should
+  import this one function instead of keeping its own copy; until it does,
+  `kernel/fixtures/lever-v1.json` holds rows both sides must agree on.
 - **`composeResolved` is the only setter of `fields: 'g1'`.**
   `checkResolved` (the one type-checked relay) keeps the marker only when
   every G field present passes its type and `accountPub` matches
