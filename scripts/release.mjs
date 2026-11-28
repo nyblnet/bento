@@ -137,29 +137,32 @@ if (args.includes('--print-notes')) {
   process.exit(0)
 }
 
-// SWEEP GATE. Pull requests merge on the quick check (scripts/check.mjs
-// --affected), which runs only what each diff reaches; the sweep
-// (scripts/sweep.mjs) runs every step of the full tier on one commit and keeps
-// the result by sha. A release ships files nobody can recall, so it waits for
-// the sweep: the commit being released must have a green one, and the tree
-// must BE that commit (a tracked change since would release something the
-// sweep never checked). A rehearsal (--out, scripts/test-release-channel.mjs)
+// RELEASE CHECK GATE. Pull requests merge on the quick check (scripts/check.mjs
+// --affected), which runs only what each diff reaches, fast tier. A release
+// ships files nobody can recall, so it waits for the release check, run here on
+// this machine: every step, in every tier, that the diff since this app's
+// previous release tag reaches (node scripts/sweep.mjs --release <app>), or a
+// whole full-tier run of the commit. The commit being released must have a
+// green one, and the tree must BE that commit (a tracked change since would
+// release something nothing checked). The conformance gate below runs on
+// every release regardless. A rehearsal (--out, scripts/test-release-channel.mjs)
 // signs with a throwaway key and publishes nothing, so it is not held.
 if (!args.includes('--out')) {
   const head = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
   const dirty = execFileSync('git', ['-C', root, 'status', '--porcelain', '--untracked-files=no'], { encoding: 'utf8' }).trim()
   if (dirty) {
-    console.error(`✗ tracked files differ from HEAD (${head.slice(0, 9)}):\n${dirty}\n  The sweep checked a commit; release that commit, from a clean checkout of its tag.`)
+    console.error(`✗ tracked files differ from HEAD (${head.slice(0, 9)}):\n${dirty}\n  The release check checked a commit; release that commit, from a clean checkout of its tag.`)
     process.exit(1)
   }
-  const { isGreen, readResult, summaryLine } = await import('./sweep.mjs')
-  if (!isGreen(head)) {
-    console.error(`✗ ${head.slice(0, 9)} has no green full check (${summaryLine(readResult(head)).replace(/^sweep: /, '')}).\n` +
-      `  Run the full check first, on this machine:  node scripts/sweep.mjs ${head}\n` +
-      '  A release waits for the full check because a shipped file cannot be recalled.')
+  const { isGreen, readResult, summaryLine, SWEEPS } = await import('./sweep.mjs')
+  const scoped = readResult(head, SWEEPS, `release-${appKey}`)
+  if (!isGreen(head, SWEEPS, appKey)) {
+    console.error(`✗ ${head.slice(0, 9)} has no green release check for ${appKey} (${summaryLine(scoped ?? readResult(head)).replace(/^sweep: /, '')}).\n` +
+      `  Run it first, on this machine:  node scripts/sweep.mjs --release ${appKey} ${head}\n` +
+      '  A release waits for it because a shipped file cannot be recalled.')
     process.exit(1)
   }
-  console.log(`• ${summaryLine(readResult(head))}`)
+  console.log(`• ${summaryLine(scoped?.ok ? scoped : readResult(head))}`)
 }
 
 if (!args.includes('--no-build')) {

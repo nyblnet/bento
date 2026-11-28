@@ -38,10 +38,12 @@ names provisional.
   are cached by content in a cache folder outside the repo (`BENTO_CHECK_CACHE`).
   GitHub's only workflow, the required `validate`, runs the same command.
   Agents run `--affected` only.
-- **The full check runs only at release, on the release machine.** `node
-  scripts/sweep.mjs <commit>` runs the full tier in its own worktree, keeps the
-  result by sha, and lists every step it did not run as NOT RUN. `release.mjs`
-  refuses to sign without a green one for the release commit.
+- **The release check runs only at release, on the release machine.** `node
+  scripts/sweep.mjs --release <app> <commit>` runs, in its own worktree, every
+  step in every tier that the diff since the app's previous release tag
+  reaches (unreached steps do not run), keeps the result by sha, and lists
+  every step it could not run here as NOT RUN. `release.mjs` refuses to sign
+  without a green one for the release commit; its conformance gate always runs.
 - **Tiers** live in `scripts/lib/test-tiers.mjs`, each entry with a reason.
   Never skip, weaken or delete a test to get green: re-tier it.
   `scripts/test-ci-registered.ts` holds every rig to a step and a tier.

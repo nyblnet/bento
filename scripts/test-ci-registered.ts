@@ -223,6 +223,22 @@ for (const ref of [...new Set(referenced)].sort()) {
     ok(!!e.why && e.why.length > 8, `tier entry ${what} says why`)
     ok(steps.some((st: any) => tiersLib.entryMatches(e, st)), `tier entry ${what} names a step (an entry for nothing is stale)`)
   }
+  // A SHARDED SUITE RUNS WHOLE. Each `--shard k/n` step runs a k-th of a
+  // mutant suite; together one rig's steps must be exactly shards 1..n, or a
+  // dropped shard is mutants that silently never run.
+  const shards = new Map<string, number[]>()
+  for (const st of steps) {
+    const m = /\s--shard (\d+)\/(\d+)\b/.exec(st.run)
+    if (!m) continue
+    const k = `${st.scripts.find((x: string) => /test-/.test(x)) ?? st.run} /${m[2]}`
+    shards.set(k, [...(shards.get(k) ?? []), Number(m[1])])
+  }
+  for (const [k, got] of shards) {
+    const n = Number(k.split('/').pop())
+    const want = Array.from({ length: n }, (_, i) => i + 1)
+    ok(JSON.stringify([...got].sort((x, y) => x - y)) === JSON.stringify(want), `${k.replace(/ \/\d+$/, '')} runs every shard of ${n} once (${got.join(', ')})`)
+  }
+  ok(shards.size >= 1, `sharded suites are read (${shards.size}; this check is what stops a vacuous green)`)
   const stepCounts: Record<string, number> = { fast: 0, full: 0, deep: 0 }
   for (const st of steps) stepCounts[st.tier.tier]++
   console.log(`\ntiers: rigs ${counts.fast} fast, ${counts.full} full, ${counts.deep} deep; steps ${stepCounts.fast} fast, ${stepCounts.full} full, ${stepCounts.deep} deep`)
