@@ -54,7 +54,12 @@ jobs:
         if: steps.deps.outputs.cache-hit != 'true'
         run: |
           pids=(); for app in slides spaces dash type; do npm ci --prefix "$app" --no-audit --no-fund & pids+=($!); done; for p in "${pids[@]}"; do wait "$p"; done
-      - name: quick check, cold
+      - name: quick check, cold (no caches but node_modules)
         run: /usr/bin/time -p node scripts/check.mjs --affected "$B" --logs "$RUNNER_TEMP/cold"
-      - name: quick check, warm (same job, same cache)
+      - name: quick check, typical (browser installed, as main's cache gives; no passes, no builds)
+        run: |
+          mv "$BENTO_CHECK_CACHE/browser" "$RUNNER_TEMP/browser" 2>/dev/null || true
+          rm -rf "$BENTO_CHECK_CACHE"; mkdir -p "$BENTO_CHECK_CACHE"; mv "$RUNNER_TEMP/browser" "$BENTO_CHECK_CACHE/browser" 2>/dev/null || true
+          /usr/bin/time -p node scripts/check.mjs --affected "$B" --logs "$RUNNER_TEMP/typical"
+      - name: quick check, rerun (everything cached)
         run: /usr/bin/time -p node scripts/check.mjs --affected "$B" --logs "$RUNNER_TEMP/warm"
