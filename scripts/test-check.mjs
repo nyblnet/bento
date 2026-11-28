@@ -229,6 +229,52 @@ jobs:
     rmSync(dir, { recursive: true, force: true })
   }
 
+  console.log('\nmutant scope: a mutant is rerun unless its kill is cached or nothing it depends on changed')
+  {
+    const { mutantScope } = await import('./lib/mutant-scope.mjs')
+    const { isSkipLine } = await import('./lib/ci-skips.mjs')
+    const keep = { c: process.env.BENTO_MUTANT_CACHE, s: process.env.BENTO_MUTANT_SINCE }
+    const cache = mkdtempSync(join(tmpdir(), 'bento-mutant-cache-'))
+    const probe = join(root, 'scripts', `.mutant-scope-probe-${process.pid}.txt`) // an untracked file: "changed"
+    const suite = { suite: 'scripts/test-rk-mutants.ts', rigs: ['scripts/test-recovery.ts'] }
+    const quiet = console.log
+    try {
+      delete process.env.BENTO_MUTANT_CACHE; delete process.env.BENTO_MUTANT_SINCE
+      const off = await mutantScope(suite)
+      ok(!off.on && !off.decide({ name: 'm' }, ['kernel/src/recovery.ts']).skip, 'off by default: run by hand, every mutant runs')
+      process.env.BENTO_MUTANT_CACHE = cache
+      const on = await mutantScope(suite)
+      const m1 = { name: 'a mutant', file: 'recovery.ts', from: 'x', to: 'y' }
+      const d1 = on.decide(m1, ['kernel/src/recovery.ts'])
+      ok(!d1.skip, 'a mutant never killed before runs')
+      on.record(d1, true)
+      const again = on.decide(m1, ['kernel/src/recovery.ts'])
+      ok(again.skip && /cached red/.test(again.why), 'killed once under the same content: not rerun, as "cached red"')
+      const m2 = { ...m1, name: 'a survivor', to: 'z' }
+      const d2 = on.decide(m2, ['kernel/src/recovery.ts']); on.record(d2, false)
+      ok(!on.decide(m2, ['kernel/src/recovery.ts']).skip, 'a mutant that survived is never cached: it runs again')
+      ok(!on.decide({ ...m1, to: 'w' }, ['kernel/src/recovery.ts']).skip, 'a changed mutation is a new mutant: it runs')
+      writeFileSync(probe, 'changed\n')
+      process.env.BENTO_MUTANT_SINCE = 'HEAD'
+      const since = await mutantScope(suite)
+      const u = since.decide({ name: 'fresh', from: 'p', to: 'q' }, ['kernel/src/recovery.ts'])
+      ok(u.skip && /unchanged since/.test(u.why), `targets and the rig's reads unchanged since the base: not rerun, as "unchanged since" (${u.why.slice(0, 40)})`)
+      const c = since.decide({ name: 'fresh', from: 'p', to: 'q' }, [`scripts/.mutant-scope-probe-${process.pid}.txt`])
+      ok(!c.skip, 'a target changed since the base: it runs')
+      const lines = []
+      console.log = (l) => lines.push(String(l))
+      since.notRerun('fresh', u.why)
+      console.log = quiet
+      ok(lines.length === 1 && /^\s+NOT RERUN /.test(lines[0]) && !isSkipLine(lines[0]) && !/^\s*ok\b/.test(lines[0]), 'a mutant not rerun prints NOT RERUN: never a pass, and not a rig skip either')
+      ok(/NOT RERUN 1: 1 unchanged/.test(since.summary()), 'and the summary counts it apart from kills')
+    } finally {
+      console.log = quiet
+      rmSync(probe, { force: true }); rmSync(cache, { recursive: true, force: true })
+      if (keep.c === undefined) delete process.env.BENTO_MUTANT_CACHE; else process.env.BENTO_MUTANT_CACHE = keep.c
+      if (keep.s === undefined) delete process.env.BENTO_MUTANT_SINCE; else process.env.BENTO_MUTANT_SINCE = keep.s
+    }
+  }
+
   console.log('\nrelease.mjs waits for a green sweep')
   {
     const rel = readFileSync(join(root, 'scripts/release.mjs'), 'utf8')

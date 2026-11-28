@@ -103,6 +103,9 @@ export const ENTRIES = [
   // measured in the quick check itself, four steps at once on the runner (2026-11-28)
   { rig: 'test-tray-index.mjs', tier: 'full', why: '31 to 43 s in the quick check on the runner (4 s alone): builds and indexes a tray of real shells' },
   { rig: 'test-tray-releases.mjs', tier: 'full', why: '20 to 29 s in the quick check on the runner (5 s alone)' },
+  // measured in #1007's quick check on the runner (2026-11-28)
+  { rig: 'test-identity.ts', tier: 'full', why: '7.3 s in a kernel change\'s quick check on the runner (4 s alone): the identity agent contract over every host shape' },
+  { rig: 'test-sync-vouch.ts', tier: 'full', alone: true, why: '5.0 s in the quick check, and its row "a q-stamped op batch is applied" failed once under parallel load (7 of 7 alone): full, and alone in the release check' },
   // A released-surface invariant the quick check could not keep (2026-11-28): its hidden-tab
   // timing row ("the splash is gone within 50 ms of the mount") measured 5 to 12 ms in every
   // sequential CI run and when run first on the runner, but 51 to 164 ms inside the quick

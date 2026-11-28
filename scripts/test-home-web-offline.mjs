@@ -138,8 +138,13 @@ const MUTANTS = [
 
 if (process.argv.includes('--mutants')) {
   const only = process.argv.slice(process.argv.indexOf('--mutants') + 1)
+  // the release check reruns only what changed (scripts/lib/mutant-scope.mjs; off by hand)
+  const { mutantScope } = await import('./lib/mutant-scope.mjs')
+  const scope = await mutantScope({ suite: 'scripts/test-home-web-offline.mjs' })
   let n = 0, bad = 0
   for (const m of MUTANTS.filter((x) => !only.length || only.includes(x.name))) {
+    const d = scope.decide(m, m.src ? [`home/web/src/${m.src.file}`] : [])
+    if (d.skip) { scope.notRerun(m.name, d.why); continue }
     const env = { ...process.env, BENTO_BROWSER: 'chromium', NODE_NO_WARNINGS: '1', BENTO_HW3_ONLY: m.only }
     delete env.BENTO_HOME_WEB_MUTANT; delete env.BENTO_HW3_DIST_MUTANT
     if (m.src) env.BENTO_HOME_WEB_MUTANT = JSON.stringify(m.src)
@@ -154,6 +159,7 @@ if (process.argv.includes('--mutants')) {
     n++
     // a green mutant is one the rig must TOLERATE: applied, completed, and every row passed
     const killed = m.green ? applied && completed && r.status === 0 && out.includes(`ok    ${m.expect}`) : applied && completed && r.status !== 0 && caught
+    scope.record(d, killed)
     if (!killed) bad++
     const verdict = m.green ? (!applied ? 'NOT APPLIED' : !completed ? 'the run did not complete' : killed ? 'stays green, its row passing' : 'went RED (the rig is racing it)')
       : !applied ? 'NOT APPLIED' : !completed ? 'the run did not complete (a crash is not a kill)' : caught ? 'red on its row' : r.status === 0 ? 'SURVIVED' : 'red, but not on its row'
@@ -161,6 +167,7 @@ if (process.argv.includes('--mutants')) {
     if (!killed) console.log(out.split('\n').filter((l) => /FAIL|Error|mutant/.test(l)).slice(0, 8).map((l) => '        ' + l).join('\n'))
   }
   console.log(`\n${n - bad}/${n} mutants killed (a green mutant counts when the rig tolerated it)`)
+  if (scope.summary()) console.log(scope.summary())
   process.exit(bad ? 1 : 0)
 }
 
