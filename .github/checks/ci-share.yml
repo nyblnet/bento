@@ -1,3 +1,10 @@
+# NOT A GITHUB WORKFLOW (2026-11-28). GitHub runs only .github/workflows/ci.yml,
+# the quick check. This file is a list of check steps: scripts/check.mjs
+# reads it (with the validate-<zone> actions) and runs its steps locally,
+# the fast tier per change and the full check before a release
+# (scripts/sweep.mjs, which release.mjs requires). A new rig still goes in
+# its zone's validate action or here, and needs a tier (scripts/lib/test-tiers.mjs).
+#
 # CI, share: this zone's own jobs — validate, never release (see ci.yml's header).
 #
 # These jobs are NOT the required check. Only `validate` (ci.yml) gates a
@@ -5,20 +12,6 @@
 # IS the check name. Add this zone's new jobs here, at the end; never in ci.yml.
 
 name: CI (share)
-
-on:
-  pull_request:
-    # No paths filter here: a filter would also stop the `full-ci` label from
-    # starting these jobs. The gate job below decides instead, in seconds.
-    types: [opened, synchronize, reopened, labeled]
-  push:
-    branches: [main]
-
-concurrency:
-  # The same rule as ci.yml, whose comment explains it: PR runs collapse onto
-  # the tip, every commit on main keeps its own run.
-  group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 defaults:
   run:
@@ -50,7 +43,7 @@ jobs:
           LABELLED: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
           PR: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
-        run: scripts/ci/zone-gate '^(server/|scripts/test-(signin|directory)-|\.github/workflows/ci-share\.yml$|scripts/ci/zone-gate$)'
+        run: scripts/ci/zone-gate '^(server/|scripts/test-(signin|directory)-|\.github/checks/ci-share\.yml$|scripts/ci/zone-gate$)'
 
   share-directory-mutants:
     needs: share-gate

@@ -17,11 +17,11 @@ import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  verifyRosterChain, verifyResetStop, verifyWout, verifyAdel, parseRos, buildRos, buildVrs, buildWout, buildAdel, buildUserHandle, userHandleAccount, accountNameOf,
+  verifyRosterChain, verifyResetStop, verifyWout, verifyAdel, verifyDeletion, readAfterDeletion, parseRdel, buildRdel, parseAdel, parseRos, buildRos, buildVrs, buildWout, buildAdel, buildUserHandle, userHandleAccount, accountNameOf,
   ROSTER_PREFIXES, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, ROSTER_WAIT_MS, NEW_ACCOUNT_MS, DELETE_WAIT_MS, USER_HANDLE_LABEL, USER_HANDLE_BYTES,
   type RosterLink, type RosterHead,
 } from '../kernel/src/roster.ts'
-import { RESERVED_PREFIXES, LINK_PREFIXES, b64uEnc, b64uDec } from '../kernel/src/statements.ts'
+import { RESERVED_PREFIXES, LINK_PREFIXES, b64uEnc, b64uDec, verifyStatementSig } from '../kernel/src/statements.ts'
 import { createHash } from 'node:crypto'
 
 let failures = 0, checks = 0
@@ -127,6 +127,12 @@ const REQUIRED: Array<[string, string]> = [
   ['ck/cns-doc-scoped', 'consent-grammar'], ['ck/cns-wrong-key', 'consent-signature'], ['ck/cns-high-s', 'consent-signature'],
   ['ok/cosign-skips-wait', 'accept'], ['ok/cosign-exactly-72h', 'accept'], ['ok/cosign-rk-requester', 'accept'], ['cosign/unripe', 'cosign-unripe'],
   ['cosign/one-second-short', 'cosign-unripe'], ['cosign/age-from-requester-clock', 'cosign-unripe'], ['cosign/by-passkey', 'cosign-kind'],
+  // a void of a DELETION request (adel.) quarantines its asker too (security-ruling-962 D-A1)
+  ['ok/q-voided-adel', 'accept'], ['ok/q-voided-adel-by-recovery-key', 'accept'], ['ok/q-voided-adel-then-x', 'accept'], ['ok/q-voided-adel-then-u', 'accept'],
+  ['ok/pinned-q-voided-adel-then-x', 'accept'], ['q/voided-adel-other-head', 'voided-prev'], ['q/voided-adel-other-address', 'voided-address'],
+  ['q/voided-adel-signer-not-member', 'voided-signer'], ['q/voided-adel-bad-proof', 'voided-assertion-signature'], ['q/voided-adel-assertion-over-ros', 'voided-assertion-challenge'],
+  ['q/voided-adel-grammar', 'voided'], ['q/voided-adel-wrong-target', 'target'], ['q/voided-adel-quarantined-signer', 'voided-quarantined'],
+  ['q/voided-adel-last-live', 'last-live'], ['x/pinned-q-adel-other-head', 'evidence'], ['x/pinned-q-adel-signer-swapped', 'evidence'], ['ok/pinned-q-adel-then-x-target', 'accept'],
   ['cosign/by-recovery-key', 'cosign-kind'], ['cosign/by-requester', 'cosign'], ['cosign/not-member', 'cosign-signer'], ['cosign/adds-itself', 'cosign-signer'],
   ['cosign/quarantined', 'cosign-quarantined'], ['cosign/other-text', 'cosign-consent-transcript'], ['cosign/expired', 'cosign-consent-expired'],
   ['cosign/wrong-key', 'cosign-consent-signature'], ['cosign/other-purpose', 'cosign-consent-purpose'], ['cosign/on-reset', 'proof'], ['cosign/on-quarantine', 'proof'],
@@ -331,6 +337,79 @@ for (const [kind, list] of [['wout', F.signOuts], ['adel', F.deletions]] as cons
   ok(F.deleteWaitMs === DELETE_WAIT_MS && DELETE_WAIT_MS === ROSTER_WAIT_MS, 'a deletion waits 72 h, like every change (fixture and code)')
 }
 
+console.log('\nrdel.: the deletion record, read against a pin (security-ruling-962 D-A4)')
+type RecRow = { name: string; text: string; sig: string; address: string; pinnedLink: RosterLink; now: number; signedBy: string; expect: 'accept' | 'reject'; reason?: string; atPin?: boolean }
+const recs = new Map<string, RecRow>((F.deletionRecords as RecRow[]).map((r) => [r.name, r]))
+{
+  const keyFor = (l: string) => (l === 'dirOther' ? F.unpinnedDirectoryKey : l === 'dir2' ? F.directoryKeys['dir-2'] : l === 'dir1' ? F.directoryKeys['dir-1'] : null)
+  const read = (r: RecRow, extra: Record<string, unknown> = {}) => verifyDeletion(r.text, r.sig, { directoryKeys: F.directoryKeys, address: r.address, pinnedLink: r.pinnedLink, now: r.now, ...extra })
+  for (const r of recs.values()) {
+    const v = await read(r)
+    const got = v.ok ? 'accept' : `reject (${v.reason})`
+    const want = r.expect === 'accept' ? 'accept' : `reject (${r.reason})`
+    ok(got === want, `rdel ${r.name}: ${got}${got === want ? '' : `, want ${want}`}`)
+    if (v.ok) ok(v.value.atPin === r.atPin, `rdel ${r.name}: names the pin itself: ${r.atPin}`)
+    // every row, accepted or not, carries a VALID signature by the key it says made it
+    const k = keyFor(r.signedBy)
+    ok(!!k && (await verifyStatementSig(k, r.sig, r.text)), `rdel ${r.name}: its signature is valid (it is refused, if at all, for its stated reason)`)
+  }
+  const REQ_REC: Array<[string, string]> = [['ok/rdel-at-pin', 'accept'], ['ok/rdel-after-pin', 'accept'], ['ok/rdel-by-mailbox', 'accept'], ['ok/rdel-by-operator', 'accept'],
+    ['ok/rdel-second-key', 'accept'], ['rdel/unpinned-kid', 'unknown-kid'], ['rdel/kid-names-other-key', 'signature'], ['rdel/future', 'not-yet-valid'], ['rdel/unripe', 'unripe'],
+    ['rdel/mailbox-unripe', 'unripe'], ['rdel/other-account', 'address'], ['rdel/head-not-on-pin', 'unchained'], ['rdel/at-pin-seq-wrong', 'unchained'],
+    ['rdel/earlier-account', 'unchained'], ['rdel/before-later-pin', 'unchained'], ['rdel/pin-forged', 'pin'], ['rdel/pin-other-account', 'pin'],
+    ['rdel/absent-accountName', 'grammar'], ['rdel/absent-lastHeadHash', 'grammar'], ['rdel/absent-lastSeq', 'grammar'], ['rdel/absent-requestedAt', 'grammar'],
+    ['rdel/absent-deletedAt', 'grammar'], ['rdel/absent-by', 'grammar'], ['rdel/absent-kid', 'grammar'], ['rdel/missing-field', 'grammar'], ['rdel/extra-field', 'grammar'],
+    ['rdel/by-unknown', 'grammar'], ['rdel/deleted-before-requested', 'grammar'], ['rdel/name-not-a-hash', 'grammar'], ['rdel/tomb-text', 'grammar']]
+  for (const [n, want] of REQ_REC) { const r = recs.get(n); ok(!!r && (want === 'accept' ? r.expect === 'accept' : r.reason === want), `required row ${n} (${want})`) }
+  // positive controls: a refusal flips when only its cause changes
+  const okRow = recs.get('ok/rdel-at-pin')!
+  const p = parseRdel(okRow.text)
+  ok(p.ok && buildRdel(p.value) === okRow.text, 'parse → build round-trips the one spelling')
+  const un = recs.get('rdel/unpinned-kid')!
+  ok((await read(un, { directoryKeys: { ...F.directoryKeys, 'dir-9': F.unpinnedDirectoryKey } })).ok, 'positive control: rdel/unpinned-kid is accepted once dir-9 is pinned')
+  const fu = recs.get('rdel/future')!
+  ok((await read(fu, { now: fu.now + 200 * 3_600_000 })).ok, 'positive control: rdel/future is accepted once now passes deletedAt')
+  const name = b64uEnc((await accountNameOf('alice@example.com'))!)
+  ok(okRow.text.split('.')[1] === name && !okRow.text.includes(b64uEnc(new TextEncoder().encode('alice@example.com'))), 'the record carries the storage name, never the address')
+  const junk = await verifyDeletion(okRow.text, okRow.sig, null as never)
+  ok(!junk.ok && junk.reason === 'grammar', 'missing options are grammar, not a throw')
+  const tampered = okRow.text.replace('.m.dir-1', '.o.dir-1')
+  const tv = await verifyDeletion(tampered, okRow.sig, { directoryKeys: F.directoryKeys, address: okRow.address, pinnedLink: okRow.pinnedLink, now: okRow.now })
+  ok(!tv.ok && tv.reason === 'signature', 'a record whose cause word was changed after signing: signature')
+}
+
+console.log('\nafter a deletion: deleted, or a NEW account that changed (never continuity)')
+{
+  type AfterRow = { name: string; record: string; next: RosterLink[] | null; pinned?: string; expect: 'accept' | 'reject'; reason?: string; state?: string; createdAt?: number }
+  for (const r of F.afterDeletion as AfterRow[]) {
+    const rec = parseRdel(recs.get(r.record)!.text)
+    if (!rec.ok) { ok(false, `${r.name}: its record parses`); continue }
+    let next = null
+    if (r.next) {
+      const c = await verifyRosterChain(r.next, { directoryKeys: F.directoryKeys, rpId: F.rpId, origins: F.origins, now: F.now, consentRp: F.consentRp, ...(r.pinned ? { pinned: r.pinned } : {}) })
+      ok(c.ok, `${r.name}: the next chain itself verifies (positive control)`)
+      if (!c.ok) continue
+      next = c.value
+    }
+    const v = readAfterDeletion(rec.value, next)
+    const got = v.ok ? `accept ${v.value.state}` : `reject (${v.reason})`
+    const want = r.expect === 'accept' ? `accept ${r.state}` : `reject (${r.reason})`
+    ok(got === want, `after ${r.name}: ${got}${got === want ? '' : `, want ${want}`}`)
+    if (v.ok && v.value.state === 'new-account') ok(v.value.changed === true && v.value.createdAt === r.createdAt, `after ${r.name}: changed, created ${r.createdAt}`)
+  }
+  const names = (F.afterDeletion as AfterRow[]).map((r) => r.name)
+  for (const n of ['ok/after-nothing', 'ok/after-new-setup', 'after/older-chain', 'after/from-a-pin']) ok(names.includes(n), `required row ${n}`)
+}
+
+console.log('\nadel. grammar is shared by the q link and verifyAdel')
+{
+  const d = (F.deletions as Array<{ name: string; text: string }>).find((r) => r.name === 'ok/adel-by-passkey')!
+  const pa = parseAdel(d.text)
+  ok(!!pa && buildAdel(pa) === d.text, 'parseAdel → buildAdel round-trips')
+  for (const n of ['adel/address-not-normal', 'adel/extra-field', 'adel/head-not-a-hash', 'adel/vrs-text'])
+    ok(parseAdel((F.deletions as Array<{ name: string; text: string }>).find((r) => r.name === n)!.text) === null, `${n}: parseAdel refuses it`)
+}
+
 console.log('\nthe passkey user handle (recomputed with node:crypto, not the reference)')
 {
   const U = F.userHandles as { label: string; bytes: number; rows: Array<{ name: string; address: string; tailHex: string; handle: string | null; accountHex?: string }> }
@@ -387,9 +466,9 @@ console.log('\nthe builder writes the one spelling')
 console.log('\nprefixes')
 {
   const K1K2 = ['bind', 'dev', 'rot', 'att', 'tomb', 'del', 'cmp', 'dreq', 'cns', 'cnst', 'inv', 'rev', 'dlg', 'prove']
-  ok(ROSTER_PREFIXES.length === 5 && ['ros', 'rip', 'vrs', 'wout', 'adel'].every((p) => ROSTER_PREFIXES.includes(p)), 'roster.ts defines ros. rip. vrs. wout. adel.')
+  ok(ROSTER_PREFIXES.length === 6 && ['ros', 'rip', 'vrs', 'wout', 'adel', 'rdel'].every((p) => ROSTER_PREFIXES.includes(p)), 'roster.ts defines ros. rip. vrs. wout. adel. rdel.')
   ok(ROSTER_PREFIXES.every((p) => !RESERVED_PREFIXES.includes(p) && !LINK_PREFIXES.includes(p) && !K1K2.includes(p)),
-    'ros. rip. vrs. wout. adel. collide with no existing family, reserved prefix or link prefix')
+    'ros. rip. vrs. wout. adel. rdel. collide with no existing family, reserved prefix or link prefix (rdel. is not the retired tomb.)')
   ok(['mgd', 'vch', 'ojn', 'dvc'].every((p) => RESERVED_PREFIXES.includes(p)), 'the organisation prefixes mgd. vch. ojn. dvc. are reserved (org-identity §5.4 item 4)')
   ok(['wdev', 'watt', 'wren', 'dev2'].every((p) => RESERVED_PREFIXES.includes(p)), 'wdev. watt. wren. dev2. are reserved for the device certificates')
   ok(RESERVED_PREFIXES.includes('pk') && RESERVED_PREFIXES.includes('drev'), 'pk. and drev. stay reserved')

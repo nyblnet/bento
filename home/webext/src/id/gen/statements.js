@@ -906,7 +906,8 @@ export const webauthnChallengeFor = (cnsText        )                  => sha256
  *           domain, and a sovereign directory's device statement. Reserved so
  *           a launch-1 verifier refuses them today and no family takes them.
  * (ros. and rip., the option G roster and its ripening countersign, and the
- * member acts the directory checks, vrs. wout. adel., are defined in roster.ts:
+ * member acts the directory checks, vrs. wout. adel., and its deletion record
+ * rdel., are defined in roster.ts:
  * ROSTER_PREFIXES.)
  */
 export const RESERVED_PREFIXES                    = Object.freeze(['pk', 'drev', 'wdev', 'watt', 'wren', 'dev2', 'wret', 'inc', 'mgd', 'vch', 'ojn', 'dvc'])
