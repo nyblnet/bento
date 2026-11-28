@@ -15638,3 +15638,60 @@ Supersedes two bullets of 2026-11-12 "The People panel's identity tiers":
   agent where there is none, the phone popover's viewport cap removed, the
   unconfirmed tag painted grey, and a changed binding hidden without the
   marker.
+
+## 2026-11-28 — Per-change checks are the quick check; a release waits for the sweep
+
+The maintainer's rule: a change's tests take no more than a minute. Before
+this, one kernel pull request cost about 127 job-minutes over 68 jobs in 12
+workflows, and the required check alone took 9 to 11 minutes.
+
+- **`validate` runs the quick check.** `ci.yml` has one job, `validate` (the
+  name branch protection requires), which runs `node scripts/check.mjs
+  --affected HEAD^1` on GitHub's merge commit: only what the pull request's
+  diff reaches. Every other workflow is dispatch-only: `ci-full.yml` holds the
+  two halves the required check used to run, and each `ci-<zone>.yml` and
+  `pr-build-size.yml` runs by hand.
+- **The steps are CI's own.** The check reads every step of every validate
+  action and zone workflow (scripts/lib/check-plan.mjs) and runs it as CI did:
+  its text, env and working directory, under the skip rule of
+  scripts/lib/ci-skips.mjs. So a rig is still registered the one way it was,
+  at the end of its zone's slice, and nothing else has to be told about it.
+  Setup steps (installs, builds, the pinned browser and jsdom) become shared
+  providers, made once.
+- **What a diff reaches** is decided by static imports, literal dynamic
+  imports, string literals that name repo files (including `join()` of
+  literals), the scripts a step names (an esbuild-bundled rig too), a step
+  whose CI definition changed, and a built shell (`<app>/dist-single`), which
+  reads everything its app's build reads. Steps at distance 0 or 1 run; further
+  ones run nearest first within a time budget. A build runs for each app whose
+  own source changed, else for slides when shared code its build reads
+  changed; a step reading another app's shell is left to the sweep. A step the
+  plan cannot see is a miss the sweep catches, so a rig that reads what the
+  scan cannot see is tiered full or mapped by hand, never assumed reached.
+- **Tiers, in one file** (scripts/lib/test-tiers.mjs), each entry with its
+  reason: fast (the quick check; the default), full (the sweep), deep (other
+  runners: Linux desktop packages, Windows, the Android SDK). Mutant suites,
+  second browser engines, and anything over 5 s on the runner are full; a
+  browser rig is full unless it is one app's headless load. Tests are
+  re-tiered, never deleted: test-ci-registered.ts fails if a rig is in no
+  tier or a tier entry names no step.
+- **Released-surface invariants are pinned**: when the diff reaches them they
+  run whatever the distance or budget: the splice gate (shell-gate.mjs, the
+  same gate release.mjs runs before signing), the shell loader, CRDT
+  convergence (300 seeds per change, 3000 in the sweep), the preview, save
+  and seal escapes, the gate-1 verifier and the signed release history.
+- **The sweep** (`node scripts/sweep.mjs [commit]`) runs the full tier on one
+  commit in its own worktree, keeps the result by sha, and on a failure
+  bisects the first-parent commits since the last green sweep. **Unlike the
+  model this copies, where the sweep gates nothing, a Bento release waits for
+  it**: `release.mjs` refuses unless the commit it releases has a green sweep
+  and the tree is that commit. A shipped Bento file carries its own shell and
+  cannot be recalled, so the one step that ships one waits for the whole
+  check. Merges do not. release.mjs's own conformance gate is unchanged.
+- **Security's named rows and mutants.** Security rulings name rows and mutant
+  suites as approval conditions. Those conditions are met at review, where
+  security runs the named suites on the pull request's head by running them
+  (`node scripts/check.mjs --only <rig>` runs one as CI would), and by the
+  sweep a release requires. They are not met per push: most mutant suites are
+  in the full tier, so a green `validate` says nothing about them, and a
+  review that cites CI for one has not run it.

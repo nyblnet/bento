@@ -353,6 +353,7 @@ async function runStep(c) {
   const serial = !!s.tier.serial
   await (serial ? exclusive() : shared())
   if (serial) await Promise.all(providers.values())
+  if (s.tier.warmChrome) await warmChrome()
   let r
   try {
     r = await run('bash', ['--noprofile', '--norc', '-eo', 'pipefail', script], { cwd: join(ROOT, s.wd), env: stepEnv, log, timeout: RUN_TIER === 'fast' ? 180_000 : 45 * 60_000 })
@@ -369,6 +370,19 @@ async function runStep(c) {
   }
   timesUpdate[s.signature] = r.ms
   return report(c, { status, ms: r.ms, note, out: r.out, log })
+}
+
+/** Launch the system Chrome once (the same one the rigs find), so a timing rig never meets a cold first launch. */
+let warmed = null
+function warmChrome() {
+  if (!warmed) {
+    const chrome = [process.env.BENTO_CHROME, '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find((p) => p && existsSync(p))
+    const profile = mkdtempSync(join(tmpdir(), 'bento-warm-'))
+    warmed = chrome
+      ? run(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', `--user-data-dir=${profile}`, '--dump-dom', 'about:blank'], { timeout: 60_000 }).then(() => rmSync(profile, { recursive: true, force: true, maxRetries: 10 }))
+      : Promise.resolve()
+  }
+  return warmed
 }
 
 const deadline = () => Number(process.env.BENTO_QUICK_DEADLINE || (opts.affected ? 45 : 1e9)) * 1000
