@@ -15397,6 +15397,49 @@ replaced before this shipped.
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
 
+## 2026-11-22 — bento/id directory: a member's passkey stops a reset
+
+The reset-stop route (`/v1/roster/reset/void`) no longer refuses at its last
+step. A member stops a waiting reset with its passkey over the kernel's `vrs.`
+text, which the directory checks with `verifyResetStop` over the chain it
+holds (security's C5 on #944). This supersedes "refuses at the last step" in
+the 2026 entry on who may stop a reset.
+
+- **The age is judged at the reset's FIRST request** (C4, C4′). A reset
+  carries `firstRequestedAt`. When an undo of a set-aside removal asks the
+  reset again (C3), the re-ask keeps that time. The directory refuses
+  `new-account` when the first request came in the account's first 14 days,
+  before it calls the kernel. The kernel is given the RE-ASKED time, because
+  its `order` rule needs a link asked after the head before it. So a reset
+  begun on day 13.9 stays unstoppable by a member even after a day-14.1 undo,
+  and an old account's re-asked reset can still be stopped. This avoids a
+  kernel change (an optional first-request time in `ResetStopOpts`); if
+  security wants the kernel itself to carry it, that is a separate kernel
+  change.
+- **A stop does what the reset's own Cancel does.** The reset is dropped. A
+  removal it set aside waits again at its own time, with its undo link. The
+  reset's link then answers `stopped`. The address is mailed, naming the
+  passkey that stopped it, and the stop is logged (`reset-stop`, with who).
+- **Passkeys only, for now.** A recovery-key or consent-key member is refused
+  by name (`signer-kind`) until their proofs are wired. The signature counter
+  is compared and stored by the directory in the same step, because the
+  kernel's member proof does not compare counters. It is compared and stored
+  only AFTER the kernel accepts: the stop reads the counter from
+  authenticator data nothing has verified yet, so storing it first would let
+  an assertion the kernel refuses (no valid signature needed) set the counter
+  to 2^31 and lock the member's real stops out. A row and a mutant pin that
+  order.
+- The sign-in host's /account page is how a person reaches it: "Stop a
+  waiting reset…" reads the waiting reset from `GET /v1/roster`, shows when it
+  was asked for and when it would take effect, and only on a second press
+  asks for a passkey over the `vrs.` text for that reset. The page's
+  `vrsText` is checked byte for byte against the kernel's `buildVrs`. The
+  directory still judges everything (age, signer, kernel verifier); the page
+  only names the refusal.
+- After a member's stop, the reset's own mailed link opens a "stopped" view
+  on the void page (a passkey stopped it, when, and which email names the
+  passkey), not the neutral "no longer works".
+
 ## 2026-11-22 — bento/home: the kill switch's status is signed from the release list, never beside it
 
 Two signed files withdraw a bento/home build, and nothing tied them: the
@@ -15639,6 +15682,76 @@ Supersedes two bullets of 2026-11-12 "The People panel's identity tiers":
   unconfirmed tag painted grey, and a changed binding hidden without the
   marker.
 
+## 2026-11-22 — bento/id: a browser key retires itself, and a retired key is not a revoked one
+
+The directory now takes the kernel's `wret.` without a successor on
+bento/home's own routes (`POST /v1/home/retire/challenge`,
+`POST /v1/home/retire`, `server/directory/src/retire.js`). bento/home signs
+it with the old key W whenever it stops keeping or trusting W: at a sign-out,
+when a held key fails its check and is dropped, and after a new ceremony
+replaces it. From then on the directory refuses W's renewals, so a copy of W
+taken earlier dies with its last countersign, within 24 hours, instead of
+living to the 7-day cap.
+
+- **Only the empty form.** The form naming a successor is refused (400
+  `successor`). No ceremony carries a retirement: bento/home retires the old
+  key by its own request after the new ceremony has finished. That keeps the
+  enrolment request the sign-in host sends unchanged, never routes a
+  retirement through the sign-in host, and needs no stored ceremony nonce to
+  check a successor against.
+- **Its own challenge audience** (`retire`). A renewal's or an enrolment's
+  challenge used at the retirement route, or the reverse, is spent and
+  refused. The kernel's `verifyWret` runs before the challenge is spent.
+- **Only a browser key this address enrolled.** Anything else (a passkey's
+  key, another account's browser, a key never enrolled) is 403 `unknown`, and
+  nothing is written.
+- **Remembered for the life of the account.** The retirement is its own
+  record (`rt:<key>`), which the certificates' sweep never deletes, so the
+  key can never enrol again after its certificate is swept. Nothing
+  un-retires a key: not a suspension undone, not the incident lever.
+  Retention or account deletion work must leave these records alone (or carry
+  them into whatever the deletion keeps).
+- **Not a revocation.** It touches no other certificate and no sign-out
+  cut-off, and it is not mailed: it happens at every routine sign-out and
+  sign-in. The status route answers a new state, `retired`, never `revoked`,
+  so peers never show a routine renewal as a revoked sign-in. A certificate
+  that is revoked still answers `revoked`: the stronger fact wins. Anything
+  that composes a device's standing for a document must treat `retired` as
+  "not revoked" and must not drop a real `revoked`.
+- **Never a gate at a ceremony.** An enrolment looks only at its own new key,
+  so a browser whose previous key was retired, by its owner or by a thief
+  holding a copy, signs in again with a passkey.
+- **bento/home never waits for it.** The local forget comes first; the
+  retirement is best effort, and a directory that does not answer leaves the
+  sign-out exactly as fast. A check-in answered 403 `retired` ends the
+  sign-in like a revocation, over the record it was made from, so another
+  tab's newer sign-in stands.
+
+## 2026-11-22 — bento/id: sign out everywhere is accepted, at most three a day per account
+
+The directory's `/v1/web/signout` routes no longer answer 501: the kernel's
+`wout.` (`kernel/src/roster.ts` `buildWout`) is the text a member's passkey
+signs, and the directory's own checks (spent first, `at` equal to the
+challenge's, an unquarantined passkey member, the assertion over the exact
+text with its stored counter swapped in one step) match the kernel's
+`verifyWout` row for row. The directory keeps its own pk path rather than
+calling `verifyWout`, because it needs the assertion's counter for that
+swap and spends the challenge earlier, in the address's object.
+
+Security's D-W2 on #962, both halves:
+- **The mail names the signer.** The notice to the address carries the
+  fingerprint of the passkey that signed, so the owner can tell which member
+  key to remove.
+- **Three accepted sign-outs per account in any 24 hours**, whoever signs
+  them and from whichever IP, counted in the account's own object once a
+  member's assertion has verified. Past that, 429 `rate-limited`, and nothing
+  is revoked, logged or mailed. Without it, a stolen member key could keep
+  every browser signed out on a loop until it is removed, which takes at
+  least 72 hours. Removing the key is the cure; the roster change is not
+  held up by the limit. The incident lever is not counted.
+
+The sign-in host's `wout.` text was always these bytes; only its
+"provisional" wording goes.
 ## 2026-11-28 — Per-change checks are the quick check; a release waits for the sweep
 
 The maintainer's rule: a change's tests take no more than a minute. Before

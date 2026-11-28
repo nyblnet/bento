@@ -131,11 +131,10 @@ and for 31 days after.</li>
 sign-in page you make a new passkey. The reset then waits 72 hours, and its
 email carries a link that stops it. It replaces any change that was waiting.
 When it takes effect, the new passkey is the only one on the account, and
-the earlier versions of the list stay in the chain (above). In an account's
-first 14 days only that emailed link can stop a reset. After that, one of
-the account's passkeys will also be able to stop it.
-<span class="planned">Planned</span> Stopping a reset with a passkey is not
-running yet.</p>
+the earlier versions of the list stay in the chain (above). A reset asked
+for in an account's first 14 days can be stopped only by that emailed link.
+A later one can also be stopped on the sign-in page with one of the
+account's passkeys; the email that says so names the passkey.</p>
 <p>A reset link works for 24 hours, and one is sent at most while no other
 is live. We keep only its hash. It is deleted when a reset starts, or when
 the link expires. The link in the email that says a reset is waiting is
