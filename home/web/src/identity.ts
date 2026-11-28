@@ -28,13 +28,20 @@
 //     on load and every hour, inside the 7-day cap. A day before the cap the
 //     page asks the person to confirm it's them: a fresh ceremony, fresh keys.
 //   - An incident record that covers this key's ceremony, or the directory
-//     saying the key is revoked, ends the sign-in here: the keys are deleted,
-//     and only a new ceremony signs this browser in again.
+//     saying the key is revoked or retired, ends the sign-in here: the keys are
+//     deleted, and only a new ceremony signs this browser in again.
+//   - A key this page stops keeping is RETIRED at the directory (the kernel's
+//     `wret.` without a successor, signed by W itself, on a /v1/home route,
+//     never through the sign-in host): at a sign-out, when a held key turns
+//     out unsound and is dropped, and after a new ceremony replaces it. A copy
+//     of W taken earlier then dies with its last countersign (24 hours at
+//     most). It is best effort and never waited for: the local forget comes
+//     first, and a network failure changes nothing here.
 //   - Replies count only from the window this page opened, at the sign-in
 //     host's origin; the request goes only to that literal origin.
 
 import { verifyRosterChain, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, type RosterLink } from '../../../kernel/src/roster.ts'
-import { verifyDevice, parseDeviceCert, parseWatt, buildWren, CEREMONY_CAP_MS, type DeviceProof } from '../../../kernel/src/devices.ts'
+import { verifyDevice, parseDeviceCert, parseWatt, buildWren, buildWret, CEREMONY_CAP_MS, type DeviceProof } from '../../../kernel/src/devices.ts'
 import { b64uEnc, sha256b64u, signStatement } from '../../../kernel/src/statements.ts'
 import type { Assertion } from '../../../kernel/src/webauthn.ts'
 
@@ -60,9 +67,13 @@ export const ROUTES = Object.freeze({
   challenge: '/v1/home/challenge',
   /**
    * POST { wren, sig, pin? } → 200 { watt, wattSig, signer, assertion, roster, incidents },
-   * or 403 { error: 'revoked' | 'cap' | 'unknown', incidents }.
+   * or 403 { error: 'revoked' | 'retired' | 'cap' | 'unknown', incidents }.
    */
   checkin: '/v1/home/checkin',
+  /** POST { address } → 200 { nonce }: a single-use challenge for a wret. */
+  retireChallenge: '/v1/home/retire/challenge',
+  /** POST { wret, sig } → 200 { ok, retiredAt }: W retires itself; its renewals are refused from then on. */
+  retire: '/v1/home/retire',
 })
 
 // --- what this page holds -----------------------------------------------------------
@@ -224,15 +235,38 @@ export class Agent {
       const v = (await keysSound(held)) ? await this.verify(held.cert, held, held.roster, held.pin) : no('keys')
       if (v.ok || v.reason === 'device-expired') this.held = held      // expired: a check-in may still renew it
       else if (!(await this.end(held.address, 'invalid', held.Wpub))) return this.load()   // another tab replaced it meanwhile
+      else void this.retire(held)   // a key we no longer trust: a copy of it dies within a day
     }
     return this.status()
   }
 
-  /** Forget this browser's sign-in. Nothing else: no Signal API, no directory call. */
+  /**
+   * Forget this browser's sign-in, then retire its key at the directory (best
+   * effort, not waited for: the forget never waits on the network). No Signal
+   * API, no WebAuthn.
+   */
   async signOut(): Promise<void> {
+    const h = this.held
     this.held = null
     this.last = null
+    const stored = await this.store.get().then((s) => s.held, () => null)
     await this.store.end(null)
+    for (const k of new Set([h, stored])) if (k) void this.retire(k)
+  }
+
+  /**
+   * Retire a key this page stops keeping: the kernel's wret. WITHOUT a
+   * successor, signed by that key, over a retirement challenge. The directory
+   * refuses the key's renewals from then on. Never throws, and no caller
+   * waits for it.
+   */
+  private async retire(h: Pick<Held, 'address' | 'W' | 'Wpub'>): Promise<void> {
+    try {
+      const ch = await post(this.net, ROUTES.retireChallenge, { address: h.address })
+      if (!ch || ch.status !== 200 || !isObj(ch.body) || !str(ch.body.nonce)) return
+      const wret = buildWret({ oldPub: h.Wpub, newPub: null, address: h.address, dirNonce: ch.body.nonce })
+      await post(this.net, ROUTES.retire, { wret, sig: await signStatement(h.W.privateKey, wret) })
+    } catch { /* best effort */ }
   }
 
   /** End the sign-in whose key is `expect`. False when the stored record is no longer that one: nothing written. */
@@ -293,7 +327,7 @@ export class Agent {
     if ('net' in r) return this.status()
     if (r.incidents.some((i) => covers(i, h.ceremonyAt))) return (await this.end(h.address, 'incident', h.Wpub)) ? this.status() : this.load()
     if ('refused' in r) {
-      if (r.refused === 'revoked' || r.refused === 'unknown') return (await this.end(h.address, 'revoked', h.Wpub)) ? this.status() : this.load()
+      if (r.refused === 'revoked' || r.refused === 'retired' || r.refused === 'unknown') return (await this.end(h.address, 'revoked', h.Wpub)) ? this.status() : this.load()
       // 'cap' and anything else: the countersign held runs out on its own
       return this.status()
     }
@@ -359,9 +393,12 @@ export class Agent {
         roster: a.roster.slice(await indexOfHead(a.roster, cert.rosHash)),
         pin: cert.rosHash,
       }
+      const prev = await this.store.get().then((s) => s.held, () => null)
       await this.store.put(held)          // replaces the old record: the old keys are gone with it
       this.held = held
       this.last = null
+      // and the old key is retired, so a copy of it dies within a day (never before this point: a failed ceremony retires nothing)
+      if (prev && prev.Wpub !== held.Wpub) void this.retire(prev)
       return { ok: true }
     } finally {
       this.busy = false

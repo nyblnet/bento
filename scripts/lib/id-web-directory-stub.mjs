@@ -43,12 +43,21 @@
 //     → 403 { error: 'unknown', incidents } no certificate for that key;
 //     → 403 { error: 'revoked', incidents } the key was revoked (the lever,
 //       or "sign out everywhere");
+//     → 403 { error: 'retired', incidents } the key retired itself (below);
 //     → 403 { error: 'cap', incidents } at or past ceremonyAt + 7 days;
 //     → 200 { watt, wattSig, signer, assertion, roster, incidents }: a fresh
 //       watt. (as above) and the directory's signature over it, the certificate's
 //       signer and assertion as stored, and the roster as kernel RosterLink
 //       objects starting AT the pinned head (or at setup without a pin, or
 //       with a pin that is not a head of this account).
+//   POST /v1/home/retire/challenge { address } → 200 { nonce }: single use, retire audience.
+//   POST /v1/home/retire { wret, sig }
+//     wret. WITHOUT a successor, verified by the kernel (verifyWret) under the
+//     OLD key it names, before its challenge is spent (retire audience, the
+//     same address); a successor form → 400 successor. Then:
+//     → 403 { error: 'unknown' } not a browser key enrolled for that address;
+//     → 200 { ok: true, retiredAt }: every later check-in by that key is
+//       403 retired (a key already retired: the first time).
 //   `incidents` is every published incident record, [{ id, from, to }]
 //   (directory clock, ms; `to` null while open). bento/home honours them.
 //
@@ -56,7 +65,7 @@
 //
 // `hostile` switches make it misbehave the ways a rig row must catch.
 
-import { parseDeviceCert, buildWatt, verifyWren, CEREMONY_CAP_MS, WATT_MAX_MS } from '../../kernel/src/devices.ts'
+import { parseDeviceCert, buildWatt, verifyWren, verifyWret, CEREMONY_CAP_MS, WATT_MAX_MS } from '../../kernel/src/devices.ts'
 import { b64uEnc, sha256b64u, signStatement } from '../../kernel/src/statements.ts'
 import { parseRos } from '../../kernel/src/roster.ts'
 import { verifyAssertion, statementChallenge } from '../../kernel/src/webauthn.ts'
@@ -74,6 +83,7 @@ export function directoryStub({ accounts, credentials, key, now }) {
   const nonces = new Map()
   const certs = new Map()          // devicePub → { cert, signer, assertion, ceremonyAt, address }
   const revoked = new Set()
+  const retired = new Map()        // devicePub → retiredAt
   const mailbox = new Map()        // address → mb: absent = confirmed (0), else when it went unconfirmed
   const incidents = []
   const log = []
@@ -111,12 +121,13 @@ export function directoryStub({ accounts, credentials, key, now }) {
     try { b = JSON.parse(body || '{}') } catch { return out(400, { error: 'bad-request' }) }
     if (!b || typeof b !== 'object') return out(400, { error: 'bad-request' })
 
-    if (path === '/v1/web/challenge' || path === '/v1/home/challenge') {
+    if (path === '/v1/web/challenge' || path === '/v1/home/challenge' || path === '/v1/home/retire/challenge') {
       const h = await head(b.address)
       if (!h) return out(404, { error: 'not-found' })
       const nonce = fresh(), at = now()
-      nonces.set(nonce, { aud: web ? 'web' : 'home', address: b.address, at, spent: false })
-      log.push({ k: web ? 'web-challenge' : 'home-challenge', address: b.address, origin })
+      const aud = web ? 'web' : path === '/v1/home/challenge' ? 'home' : 'retire'
+      nonces.set(nonce, { aud, address: b.address, at, spent: false })
+      log.push({ k: `${aud}-challenge`, address: b.address, origin })
       return out(200, web ? { nonce, at, rosHash: h.hash } : { nonce })
     }
 
@@ -150,6 +161,7 @@ export function directoryStub({ accounts, credentials, key, now }) {
       log.push({ k: 'checkin', W: v.value.devicePub, pin: b.pin ?? null, at: now(), known: !!rec })
       if (!rec || rec.address !== v.value.address) return out(403, { error: 'unknown', incidents })
       if (revoked.has(v.value.devicePub)) return out(403, { error: 'revoked', incidents })
+      if (retired.has(v.value.devicePub)) return out(403, { error: 'retired', incidents })
       if (now() >= rec.ceremonyAt + CEREMONY_CAP_MS) return out(403, { error: 'cap', incidents })
       const r = hostile.rogue
       const links = r ? r.links : accounts.get(rec.address)
@@ -159,8 +171,19 @@ export function directoryStub({ accounts, credentials, key, now }) {
       return out(200, { watt: w.text, wattSig: w.sig, signer: rec.signer, assertion: rec.assertion, roster: links.slice(from), incidents,
         ...(r ? { keys: { [r.kid]: r.pub } } : {}) })
     }
+    if (path === '/v1/home/retire') {
+      const v = await verifyWret(b.wret, b.sig)
+      log.push({ k: 'retire', W: v.ok ? v.value.oldPub : null, ok: v.ok, successor: v.ok ? v.value.newPub : null, at: now() })
+      if (!v.ok) return out(400, { error: 'wret' })
+      if (v.value.newPub !== null) return out(400, { error: 'successor' })
+      if (!spend(v.value.dirNonce, 'retire', v.value.address)) return out(400, { error: 'nonce' })
+      const rec = certs.get(v.value.oldPub)
+      if (!rec || rec.address !== v.value.address) return out(403, { error: 'unknown' })
+      if (!retired.has(v.value.oldPub)) retired.set(v.value.oldPub, now())
+      return out(200, { ok: true, retiredAt: retired.get(v.value.oldPub) })
+    }
     return out(404, { error: 'not-found' })
   }
 
-  return { handle, certs, revoked, incidents, log, hostile, nonces, mailbox }
+  return { handle, certs, revoked, retired, incidents, log, hostile, nonces, mailbox }
 }

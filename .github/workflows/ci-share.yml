@@ -50,7 +50,8 @@ jobs:
           LABELLED: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
           PR: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
-        run: scripts/ci/zone-gate '^(server/|scripts/test-(signin|directory)-|\.github/workflows/ci-share\.yml$|scripts/ci/zone-gate$)'
+        # home/web's bento/id agent and the stubs its rigs run against are this zone's too (share-home-identity)
+        run: scripts/ci/zone-gate '^(server/|scripts/test-(signin|directory)-|home/web/src/identity|scripts/test-home-web-identity\.mjs$|scripts/lib/id-(web|signin)-directory-stub\.mjs$|\.github/workflows/ci-share\.yml$|scripts/ci/zone-gate$)'
 
   share-directory-mutants:
     needs: share-gate

@@ -328,8 +328,17 @@ build (without `--dev`) refuses `--identity` and `--directory-keys`.
   before that the line asks "Confirm it's you": a new ceremony, new keys.
 - **Incidents and revocations.** An incident record covering this key's
   ceremony (or one that cannot be read, or still open), or the directory
-  saying the key is revoked, deletes the keys; only a new ceremony signs the
-  browser in again.
+  saying the key is revoked or retired, deletes the keys; only a new ceremony
+  signs the browser in again.
+- **Old keys are retired.** A key the library stops keeping is retired at the
+  directory: the kernel's `wret.` without a successor, signed by `W` itself,
+  on bento/home's own route (never through the sign-in host). That happens at
+  Sign out (after the store has forgotten the key), when a held key fails its
+  check on load and is dropped, and after a new ceremony replaces it (a
+  cancelled or failed ceremony retires nothing). From then on the directory
+  refuses the key's renewals, so a copy of `W` taken earlier dies with its
+  last countersign, within 24 hours. It is best effort and never waited for:
+  a directory that does not answer leaves the sign-out exactly as fast.
 - **Policy.** `connect-src` adds the directory (`https://id.bento.page`) and
   nothing else; Trusted Types stay required with no policy; the line is text
   only.
@@ -339,7 +348,9 @@ bento/home's routes on the directory (CORS to `https://home.bento.page` alone):
 | route | request | answer |
 |---|---|---|
 | `POST /v1/home/challenge` | `{address}` | `{nonce}` |
-| `POST /v1/home/checkin` | `{wren, sig, pin?}` | `{watt, wattSig, signer, assertion, roster, incidents}`, or 403 `{error: 'revoked' \| 'cap' \| 'unknown', incidents}` |
+| `POST /v1/home/checkin` | `{wren, sig, pin?}` | `{watt, wattSig, signer, assertion, roster, incidents}`, or 403 `{error: 'revoked' \| 'retired' \| 'cap' \| 'unknown', incidents}` |
+| `POST /v1/home/retire/challenge` | `{address}` | `{nonce}` |
+| `POST /v1/home/retire` | `{wret, sig}` | `{ok, retiredAt}` |
 
 `scripts/lib/id-web-directory-stub.mjs` is the full contract, with every check
 in order. `scripts/test-home-web-identity.mjs` drives the real library and the
