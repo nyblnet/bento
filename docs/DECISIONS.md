@@ -15440,6 +15440,43 @@ the 2026 entry on who may stop a reset.
   on the void page (a passkey stopped it, when, and which email names the
   passkey), not the neutral "no longer works".
 
+## 2026-11-22 — bento/home: the kill switch's status is signed from the release list, never beside it
+
+Two signed files withdraw a bento/home build, and nothing tied them: the
+release list the tripwire checks (`served.json`) withdraws a release by its
+`at`, the kill switch's status (`status.json`) by build id. Security's review
+of stage 3 (#954, its C3) asked for one source. The build id is derivable
+from the list: it is the sha256 of the library page's one inline script, which
+is `scripts[0].sha256` of the library origin's `/` entry.
+
+- **`scripts/sign-home-status.mjs --served <served.json>`** verifies the
+  list's signature (against the release key, or the signing key's own public
+  half for a rig or rehearsal) and refuses, exit 2 and nothing written, when
+  the status disagrees with it: a release the list withdraws whose build id
+  the status leaves out; a status withdrawing the build the list serves as
+  current; a status withdrawing a build the list carries but does not mark
+  withdrawn. A build the list no longer carries may still be withdrawn.
+  Signing with the release key requires `--served`.
+- **Publish order**, written in `home/web/README.md`: sign and publish the
+  list naming the new release, deploy, then sign and publish the status that
+  withdraws the old build. A status published first fails closed, but stops
+  every tab of a build the host still serves.
+- **Two releases can share a build id** (measured: builds differing only in
+  their library origin do), so withdrawing an older release whose script is
+  the current one's is refused as withdrawing the current build. Such a
+  release is also never counted as one the status leaves out: the signer warns
+  and goes on. Counting it deadlocked the kill switch (security's review of
+  #977, measured): with the list `[A2 current, A withdrawn, C]`, A sharing
+  A2's id, every status was refused, an emergency withdrawal of the unrelated
+  C included. The tripwire's list still flags a page served from A.
+- **A status never starts from nothing with the release key**: `--from <the
+  published status.json>` (signature-verified, against the same key rule as
+  the list) or an explicit `--first` is required. Without it the signer wrote
+  seq 1 and dropped the earlier status's withdrawals; a browser that has seen
+  a later seq ignores a smaller one, so that withdrawal failed open, quietly.
+
+Guard: `scripts/test-home-status-sign.mjs` (two real development builds,
+throwaway keys; `--mutants` turns each refusal off and requires its row red).
 ## 2026-11-23 — bento/id: the deletion rules the directory keeps, a void of a deletion can remove its asker, and a deletion record
 
 Settles the two rules the 2026-11-14 entry left open for the directory's
