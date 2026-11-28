@@ -1,23 +1,17 @@
+# NOT A GITHUB WORKFLOW (2026-11-28). GitHub runs only .github/workflows/ci.yml,
+# the quick check. This file is a list of check steps: scripts/check.mjs
+# reads it (with the validate-<zone> actions) and runs its steps locally,
+# the fast tier per change and the full check before a release
+# (scripts/sweep.mjs, which release.mjs requires). A new rig still goes in
+# its zone's validate action or here, and needs a tier (scripts/lib/test-tiers.mjs).
+#
 # CI, home security: the library-host security rigs of bento/home in your
 # browser, run in every engine with their mutants. Validate, never release.
 #
-# These jobs are NOT the required check. Only `validate` (ci.yml) gates a
-# merge; a job here reports beside it. Keep each job's id unchanged: the id IS
-# the check name. Its own file so it never collides with edits to ci-home.yml.
+# Keep each job's id unchanged: the id IS the check name. Its own file so it
+# never collides with edits to ci-home.yml.
 
 name: CI (home security)
-
-on:
-  pull_request:
-    # No paths filter: the gate job below decides, so the `full-ci` label can
-    # still start these jobs.
-    types: [opened, synchronize, reopened, labeled]
-  push:
-    branches: [main]
-
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   # WebKit's software rasterizer on some runner CPUs: see ci-home.yml.
@@ -52,7 +46,7 @@ jobs:
         # every input the rigs read: home/web and the kernel files it imports, the kernel client the
         # host rig bundles into the frame, the frozen 1.2.10 fixtures, the browser guard, the release
         # key every build reads (home/webext/src/release.js) and the esbuild the rigs run (slides' lock)
-        run: scripts/ci/zone-gate '^(home/web/|kernel/src/(docstoreport|docstore|gate1|webauthn|roster|statements|devices|address|display-table|identity)\.ts$|home/fixtures/gate1/real/|scripts/test-home-web-(host|kill-drill)\.mjs$|scripts/lib/(home-web-kill-host|browser-guard)\.mjs$|scripts/fixtures/webext-embed/|home/webext/src/release\.js$|slides/package-lock\.json$|\.github/workflows/ci-home-security\.yml$|scripts/ci/(zone-gate|retry-once|bento-step)$)'
+        run: scripts/ci/zone-gate '^(home/web/|kernel/src/(docstoreport|docstore|gate1|webauthn|roster|statements|devices|address|display-table|identity)\.ts$|home/fixtures/gate1/real/|scripts/test-home-web-(host|kill-drill)\.mjs$|scripts/lib/(home-web-kill-host|browser-guard)\.mjs$|scripts/fixtures/webext-embed/|home/webext/src/release\.js$|slides/package-lock\.json$|\.github/checks/ci-home-security\.yml$|scripts/ci/(zone-gate|retry-once|bento-step)$)'
 
   home-web-host-security:
     needs: home-security-gate
@@ -104,13 +98,20 @@ jobs:
         if: ${{ !cancelled() }}
         timeout-minutes: 6
         run: BENTO_BROWSER=firefox scripts/ci/retry-once node scripts/test-home-web-kill-drill.mjs
-      - name: kill drill mutants in every engine
+      # one step per engine, so each engine's mutants keep their own tier
+      # (Firefox is deep: it does not launch on the sweep's Mac)
+      - name: kill drill mutants in Chromium
         if: ${{ !cancelled() }}
         timeout-minutes: 20
-        run: |
-          node scripts/test-home-web-kill-drill.mjs --mutants
-          BENTO_BROWSER=webkit node scripts/test-home-web-kill-drill.mjs --mutants
-          BENTO_BROWSER=firefox node scripts/test-home-web-kill-drill.mjs --mutants
+        run: node scripts/test-home-web-kill-drill.mjs --mutants
+      - name: kill drill mutants in WebKit
+        if: ${{ !cancelled() }}
+        timeout-minutes: 20
+        run: BENTO_BROWSER=webkit node scripts/test-home-web-kill-drill.mjs --mutants
+      - name: kill drill mutants in Firefox
+        if: ${{ !cancelled() }}
+        timeout-minutes: 20
+        run: BENTO_BROWSER=firefox node scripts/test-home-web-kill-drill.mjs --mutants
       - name: On failure, the kernel's word on crashed browser threads
         if: failure()
         run: sudo dmesg -T | grep -iE 'segfault|oom|killed process' | tail -20 || echo "no segfault or OOM in the kernel log"
