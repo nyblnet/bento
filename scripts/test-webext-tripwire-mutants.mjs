@@ -78,6 +78,9 @@ const MUTANTS = [
   { name: 'a withdrawn release is quiet (R1)', row: 'withdrawn', file: J, from: 'if (list.releases[index].withdrawn) return', to: 'if (false) return' },
   { name: 'a list carrying app is taken (R2)', row: 'carries-app', file: J, from: "if ('app' in p) return", to: 'if (false) return' },
   { name: 'never checked is never said (R3)', row: 'never-checked', file: W, from: 'if (now - since > NEVER_MS) event.warned.push(', to: 'if (false) event.warned.push(' },
+  // the build's own 404 page (security ruling #956 D1)
+  { name: 'a script-free unlisted page is loud (the build\'s 404 page)', row: 'unlisted-404-build', file: J, from: 'if (!obs.scripts?.length && !obs.flags?.length && !listedPath(list, origin, obs.url)) {', to: 'if (false) {' },
+  { name: 'an unlisted page is quiet even with a script', row: 'unlisted-404-build-script', file: J, from: 'if (!obs.scripts?.length && !obs.flags?.length && !listedPath(list, origin, obs.url)) {', to: 'if (!obs.flags?.length && !listedPath(list, origin, obs.url)) {' },
 ]
 
 // A run that never reached the browser (a local port taken between freePorts and listen) is
