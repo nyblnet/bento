@@ -1,6 +1,6 @@
 # validate, kernel slice: kernel/ and the sync relay: the shared machinery every app depends on (anim, field classes, restore, identity, UI primitives, storage, save, offline, the CRDT and the sync session).
 #
-# Part of the REQUIRED `validate` check. .github/workflows/ci.yml runs this
+# Read by scripts/check.mjs (2026-11-28): `validate` runs the steps a diff reaches, the release full check runs them all. Until then, .github/workflows/ci.yml runs this
 # action ALONE in its own job, validate-kernel, in parallel with the job that
 # runs every other slice — so NO app is built on this runner: only slides'
 # npm install, jsdom and the pinned browser are on disk here. A rig that needs

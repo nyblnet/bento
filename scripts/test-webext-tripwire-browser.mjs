@@ -490,6 +490,29 @@ for (const [name, fb] of [
   }
 }
 
+// the BUILD's own 404 page (home/web/build.mjs, security ruling #956 D1), as the library host serves it at
+// every path it does not have; and the same page with a script added, which must not pass as a 404
+for (const [name, withScript] of [['unlisted-404-build', false], ['unlisted-404-build-script', true]]) {
+  if (!row(name)) continue
+  section(`${name}: the build's 404.html${withScript ? ' with an inline script added' : ''} at three unlisted paths  (rule: a script-free unlisted page is quiet${withScript ? '; one with a script is not' : ''})`)
+  const notFound = fs.readFileSync(path.join(A, 'library/404.html'), 'utf8')
+  if (!notFound.includes('<h1>Not found</h1>')) throw new Error('the build\'s 404.html no longer has the heading this row looks for')
+  await fresh()
+  state.fallback = { status: 404, body: Buffer.from(withScript ? notFound.replace('<h1>Not found</h1>', '<h1>Not found</h1><script>window.__nf=1</script>') : notFound), headers: { 'content-type': 'text/html; charset=utf-8' } }
+  const vs = []
+  for (const q of ['/nope?a', '/nope?b', '/nope?c']) vs.push((await visit(page, `${LIB}${q}`)).lib)
+  const shown = await page.evaluate(() => document.querySelector('h1')?.textContent).catch(() => null)
+  await sleep(1000)
+  ok(shown === 'Not found', `the page shown is the build's 404 page (${shown})`)
+  if (!withScript) {
+    ok(vs.every((e) => e?.verdict === 'unlisted' && e.warned.length === 0), `recorded quietly, each (${vs.map((e) => e?.verdict)})`)
+    ok(reportTabs().length === 0, 'no report tab')
+  } else {
+    ok(vs.every((e) => e?.verdict === 'mismatch'), `a script at an unlisted path is a mismatch, each (${vs.map((e) => `${e?.verdict}[${rules(e)}]`)})`)
+    ok(reportTabs().length === 1, `one loud report tab (${reportTabs().length})`)
+  }
+}
+
 if (row('framed')) {
   section('framed: a third-party page frames ten library paths  (rule: the library is judged only as a top-level page)')
   await fresh()

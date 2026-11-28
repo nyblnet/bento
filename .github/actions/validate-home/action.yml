@@ -1,6 +1,6 @@
 # validate, home slice: home/: rigs shared by every native host and the extension (launch handle, per-document store, legacy-origin inspector, tray mark, document-index corpus).
 #
-# Part of the REQUIRED `validate` check. .github/workflows/ci.yml runs this
+# Read by scripts/check.mjs (2026-11-28): `validate` runs the steps a diff reaches, the release full check runs them all. Until then, .github/workflows/ci.yml runs this
 # action as steps INSIDE that one job, on the same runner, after the slices
 # listed before it there — so what earlier slices installed and built is on
 # disk here. A failing step here fails `validate` and blocks the merge.
@@ -150,3 +150,27 @@ runs:
       # WebKit, Firefox and the mutants run in ci-home.yml (home-web-offline-engines).
       shell: bento-step {0}
       run: node scripts/test-home-web-offline.mjs
+
+    - name: bento/home 404 page rig
+      # The library host answers every path it does not serve with the build's
+      # script-free 404.html and status 404, never index.html (which would run
+      # the library's code at any path a link names). What the build emits, how
+      # home/web/serve.mjs answers an unknown path, how the release list
+      # describes the page; then a mutant per rule.
+      shell: bento-step {0}
+      run: |
+        node scripts/test-home-web-404.mjs
+        node scripts/test-home-web-404.mjs --mutants
+
+    - name: home status signer rig
+      # The kill switch's status (sign-home-status.mjs) is signed from the
+      # tripwire's release list (served.json), the one source of what is
+      # withdrawn: a status that disagrees with the list is refused, nothing
+      # written. Two real development builds, throwaway keys.
+      shell: bento-step {0}
+      run: node scripts/test-home-status-sign.mjs
+
+    - name: home status signer mutants
+      # Each refusal turned off in a copy of the signer must turn its row red.
+      shell: bento-step {0}
+      run: node scripts/test-home-status-sign.mjs --mutants

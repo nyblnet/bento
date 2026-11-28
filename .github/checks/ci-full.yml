@@ -1,0 +1,158 @@
+# NOT A GITHUB WORKFLOW (2026-11-28). GitHub runs only .github/workflows/ci.yml,
+# the quick check. This file is a list of check steps: scripts/check.mjs
+# reads it (with the validate-<zone> actions) and runs its steps locally,
+# the fast tier per change and the full check before a release
+# (scripts/sweep.mjs, which release.mjs requires). A new rig still goes in
+# its zone's validate action or here, and needs a tier (scripts/lib/test-tiers.mjs).
+#
+# The two halves the required check ran until 2026-11-28 (validate-builds: the
+# four apps' builds and every slice that reads a built shell; validate-kernel:
+# the kernel slice alone), kept as the check's job context for those slices.
+# A new rig still goes at the END of its zone's slice,
+# .github/actions/validate-<zone>/action.yml.
+
+name: CI (full)
+
+jobs:
+  # The required check is `validate` — the LAST job below, which only reads the
+  # results of the two jobs that do the work. The work is split in two so the
+  # halves run in PARALLEL: as one job it reached 18–20 minutes and was being
+  # cancelled at its 20-minute limit. The kernel slice is the half that splits
+  # off cleanly: it is the longest slice (about seven minutes) and it needs no
+  # app's build — only slides' toolchain (tsc, esbuild), jsdom and the browser.
+  validate-builds:
+    runs-on: ubuntu-latest
+    # The four apps' builds and every slice that reads a built shell.
+    # 20, not 15: the dash slice's release rehearsal boots the release in
+    # Chromium to check its pins (K4), about two minutes.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # ≥23.6 required: the sync rig runs TypeScript via native type
+          # stripping (node scripts/test-sync.ts).
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            slides/package-lock.json
+            spaces/package-lock.json
+            dash/package-lock.json
+            type/package-lock.json
+
+      - name: Install
+        working-directory: slides
+        run: npm ci
+
+      - name: Install jsdom for the rigs' DOM halves
+        # Pinned outside the app packages, like the browser runtime in the
+        # ci-<zone>.yml jobs: jsdom is test tooling, never shipped in a document.
+        # The encrypted-title, type preview and type font rigs import it from
+        # the repo root. Until this step existed they skipped in every run.
+        run: npm install --prefix "$GITHUB_WORKSPACE" --no-save --no-package-lock --no-audit --no-fund jsdom@25.0.1
+
+      - name: Install browser test runtime (the release rehearsal checks pins)
+        # release.mjs refuses to sign without checking the release's pins in a
+        # real browser (scripts/derive-pins.mjs, K4), and the dash slice runs
+        # that real pipeline as its release rehearsal. Pinned outside the app
+        # packages, as in the ci-<zone>.yml browser jobs.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+
+      - name: Rig steps fail on a skip
+        # Puts scripts/ci on PATH, so every slice step below can declare
+        # `shell: bento-step {0}`: a rig that reports a skip CI does not allow
+        # fails its step. Reasoning and allowlist: scripts/lib/ci-skips.mjs.
+        run: echo "$GITHUB_WORKSPACE/scripts/ci" >> "$GITHUB_PATH"
+
+      # Everything below is THIS job — half of the required `validate` check —
+      # run as composite actions, one per zone, each in
+      # .github/actions/validate-<zone>/action.yml. They run in this order on
+      # this runner, so a slice can use whatever the slices before it installed
+      # and built: each app slice builds its own shell, and the slices after
+      # the apps (convert, home, shared) can rely on all four shells. The
+      # kernel slice is the other half, in validate-kernel below.
+      #
+      # A new rig goes at the END of its own zone's slice, never in this file:
+      # this file used to hold every step, and every zone appending at the
+      # same few anchors made nearly every open PR conflict with the next
+      # merge. This list changes only when a slice is added.
+      #
+      # A zone's jobs that are NOT part of the required check live in
+      # .github/checks/ci-<zone>.yml, each job id unchanged.
+      - name: validate (slides)
+        uses: ./.github/actions/validate-slides
+
+      - name: validate (spaces)
+        uses: ./.github/actions/validate-spaces
+
+      - name: validate (dash)
+        uses: ./.github/actions/validate-dash
+
+      - name: validate (type)
+        uses: ./.github/actions/validate-type
+
+      - name: validate (convert)
+        uses: ./.github/actions/validate-convert
+
+      - name: validate (home-ios)
+        uses: ./.github/actions/validate-home-ios
+
+      - name: validate (home)
+        uses: ./.github/actions/validate-home
+
+      - name: validate (home-webext)
+        uses: ./.github/actions/validate-home-webext
+
+      - name: validate (shared)
+        uses: ./.github/actions/validate-shared
+
+  validate-kernel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            slides/package-lock.json
+            spaces/package-lock.json
+            dash/package-lock.json
+            type/package-lock.json
+
+      - name: Install
+        # slides' toolchain: the kernel typecheck runs its tsc, and several
+        # kernel rigs are bundled with its esbuild.
+        working-directory: slides
+        run: npm ci
+
+      - name: Install jsdom for the rigs' DOM halves
+        # The same pin as validate-builds: the kernel's encrypted-title rig
+        # imports it from the repo root.
+        run: npm install --prefix "$GITHUB_WORKSPACE" --no-save --no-package-lock --no-audit --no-fund jsdom@25.0.1
+
+      - name: Install browser test runtime
+        # The same pinned runtime as validate-builds: the kernel's disk-change
+        # browser rig reads PLAYWRIGHT_MODULE.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+
+      - name: Rig steps fail on a skip
+        # Puts scripts/ci on PATH, so every slice step below can declare
+        # `shell: bento-step {0}`: a rig that reports a skip CI does not allow
+        # fails its step. Reasoning and allowlist: scripts/lib/ci-skips.mjs.
+        run: echo "$GITHUB_WORKSPACE/scripts/ci" >> "$GITHUB_PATH"
+
+      # The kernel slice runs ALONE on this runner: no app is built here, so a
+      # kernel rig that starts reading a built shell must move to
+      # validate-builds (or build what it reads in its own step).
+      - name: validate (kernel)
+        uses: ./.github/actions/validate-kernel

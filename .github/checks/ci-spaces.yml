@@ -1,3 +1,10 @@
+# NOT A GITHUB WORKFLOW (2026-11-28). GitHub runs only .github/workflows/ci.yml,
+# the quick check. This file is a list of check steps: scripts/check.mjs
+# reads it (with the validate-<zone> actions) and runs its steps locally,
+# the fast tier per change and the full check before a release
+# (scripts/sweep.mjs, which release.mjs requires). A new rig still goes in
+# its zone's validate action or here, and needs a tier (scripts/lib/test-tiers.mjs).
+#
 # CI, spaces: this zone's own jobs — validate, never release (see ci.yml's header).
 #
 # These jobs are NOT the required check. Only `validate` (ci.yml) gates a
@@ -8,35 +15,6 @@
 # new jobs here, at the end; never in ci.yml.
 
 name: CI (spaces)
-
-on:
-  pull_request:
-    # ONLY WHEN THIS ZONE COULD BE AFFECTED. These jobs are not the required
-    # check (`validate`, ci.yml, runs on every PR and is unfiltered), so a PR
-    # that touches none of these paths skips them and nothing waits on them.
-    # The push to main below is NOT filtered: every merge still runs the lot.
-    # A script this file runs must match a path here; scripts/test-ci-registered.ts
-    # holds that, and that this file is on its own list.
-    paths:
-      - '.github/workflows/ci-spaces.yml'
-      - 'spaces/**'
-      - 'kernel/**'
-      - 'scripts/lib/**'
-      - 'scripts/ci/**'
-      - 'scripts/postbuild-compress.mjs'
-      - 'scripts/shell-gate.mjs'
-      - 'scripts/derive-pins.mjs'
-      - 'scripts/test-spaces-*'
-      - 'scripts/well-known.mjs'
-      - 'scripts/test-well-known.ts'
-  push:
-    branches: [main]
-
-concurrency:
-  # The same rule as ci.yml, whose comment explains it: PR runs collapse onto
-  # the tip, every commit on main keeps its own run.
-  group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 defaults:
   run:
