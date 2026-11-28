@@ -276,3 +276,12 @@ runs:
       # exits 124 within the stall budget; a clean close stays quiet.
       shell: bento-step {0}
       run: node scripts/test-browser-guard.mjs
+
+    - name: The quick check's plan, tiers, cache and sweep gate
+      # scripts/check.mjs decides what every pull request runs. Each way a step
+      # can be reached (an import, a text read, a joined path, a bundled rig, a
+      # built shell, a changed CI step) is held against a small repository,
+      # each with a control that must not be reached; and release.mjs's
+      # refusal without a green sweep is held in place.
+      shell: bento-step {0}
+      run: node scripts/test-check.mjs

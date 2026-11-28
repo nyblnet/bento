@@ -7,12 +7,12 @@
 name: CI (share)
 
 on:
-  pull_request:
-    # No paths filter here: a filter would also stop the `full-ci` label from
-    # starting these jobs. The gate job below decides instead, in seconds.
-    types: [opened, synchronize, reopened, labeled]
-  push:
-    branches: [main]
+  # By hand only (2026-11-28): pull requests run the quick check (ci.yml,
+  # scripts/check.mjs --affected), which runs the steps below that a diff
+  # reaches and that its tier allows; the sweep (scripts/sweep.mjs) runs the
+  # rest. Dispatch this file to run all of it on GitHub's runners:
+  #   gh workflow run ci-share.yml --ref <branch>
+  workflow_dispatch:
 
 concurrency:
   # The same rule as ci.yml, whose comment explains it: PR runs collapse onto

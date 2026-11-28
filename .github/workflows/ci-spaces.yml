@@ -10,27 +10,12 @@
 name: CI (spaces)
 
 on:
-  pull_request:
-    # ONLY WHEN THIS ZONE COULD BE AFFECTED. These jobs are not the required
-    # check (`validate`, ci.yml, runs on every PR and is unfiltered), so a PR
-    # that touches none of these paths skips them and nothing waits on them.
-    # The push to main below is NOT filtered: every merge still runs the lot.
-    # A script this file runs must match a path here; scripts/test-ci-registered.ts
-    # holds that, and that this file is on its own list.
-    paths:
-      - '.github/workflows/ci-spaces.yml'
-      - 'spaces/**'
-      - 'kernel/**'
-      - 'scripts/lib/**'
-      - 'scripts/ci/**'
-      - 'scripts/postbuild-compress.mjs'
-      - 'scripts/shell-gate.mjs'
-      - 'scripts/derive-pins.mjs'
-      - 'scripts/test-spaces-*'
-      - 'scripts/well-known.mjs'
-      - 'scripts/test-well-known.ts'
-  push:
-    branches: [main]
+  # By hand only (2026-11-28): pull requests run the quick check (ci.yml,
+  # scripts/check.mjs --affected), which runs the steps below that a diff
+  # reaches and that its tier allows; the sweep (scripts/sweep.mjs) runs the
+  # rest. Dispatch this file to run all of it on GitHub's runners:
+  #   gh workflow run ci-spaces.yml --ref <branch>
+  workflow_dispatch:
 
 concurrency:
   # The same rule as ci.yml, whose comment explains it: PR runs collapse onto

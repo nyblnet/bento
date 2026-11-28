@@ -1,33 +1,35 @@
 name: PR build size
 
 on:
-  pull_request:
-    # ONLY WHEN THIS ZONE COULD BE AFFECTED. These jobs are not the required
-    # check (`validate`, ci.yml, runs on every PR and is unfiltered), so a PR
-    # that touches none of these paths skips them and nothing waits on them.
-    # This workflow has no push trigger: it only ever comments on a PR.
-    # A script this file runs must match a path here; scripts/test-ci-registered.ts
-    # holds that, and that this file is on its own list.
-    paths:
-      - '.github/workflows/pr-build-size.yml'
-      - 'slides/**'
-      - 'spaces/**'
-      - 'dash/**'
-      - 'type/**'
-      - 'kernel/**'
-      - 'scripts/postbuild-compress.mjs'
-      - 'scripts/lib/**'
-    types: [opened, reopened, synchronize, edited]
+  # By hand only (2026-11-28): four builds of each side are well over the
+  # quick check's minute, so this no longer runs on every PR push. Dispatch it
+  # for a PR whose size matters; the table lands in the run's summary:
+  #   gh workflow run pr-build-size.yml -f pr=<n> -f base_sha=<sha> -f head_sha=<sha>
+  # (pr-build-size-comment.yml comments only after a pull_request run, so a
+  # dispatched run does not comment.)
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: the pull request number (for the report)
+        required: true
+      base_sha:
+        description: the base commit
+        required: true
+      head_sha:
+        description: the head commit
+        required: true
+      head_repo:
+        description: the head repository (owner/name), when not this one
+        required: false
+        default: ''
 
 permissions:
   contents: read
 
 jobs:
   measure:
-    if: github.event.action != 'edited' || github.event.changes.base != null
     concurrency:
-      # Keep unrelated title/body edits from cancelling a real measurement.
-      group: pr-build-size-${{ github.event.pull_request.number }}
+      group: pr-build-size-${{ inputs.pr }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -37,8 +39,8 @@ jobs:
       - name: Check out base commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: ${{ github.event.pull_request.base.repo.full_name }}
-          ref: ${{ github.event.pull_request.base.sha }}
+          repository: ${{ github.repository }}
+          ref: ${{ inputs.base_sha }}
           path: base
           persist-credentials: false
 
@@ -94,8 +96,8 @@ jobs:
       - name: Check out PR head commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ github.event.pull_request.head.sha }}
+          repository: ${{ inputs.head_repo || github.repository }}
+          ref: ${{ inputs.head_sha }}
           path: head
           persist-credentials: false
 
@@ -119,15 +121,15 @@ jobs:
 
       - name: Create report
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ inputs.base_sha }}
           BASE_SIZES_PATH: ${{ runner.temp }}/bento-base-sizes.json
           HEAD_ROOT: ${{ github.workspace }}/head
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+          PR_NUMBER: ${{ inputs.pr }}
           REPORT_DIRECTORY: ${{ runner.temp }}/bento-pr-build-size
         run: |
           node --input-type=module <<'NODE'
-          import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+          import { appendFileSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
           import { join } from 'node:path';
 
           const files = {
@@ -153,6 +155,9 @@ jobs:
             JSON.stringify(report),
             { mode: 0o600 },
           );
+          const kb = (n) => `${(n / 1024).toFixed(1)} KB`;
+          const rows = report.apps.map((a) => `| ${a.app} | ${kb(a.baseBytes)} | ${kb(a.headBytes)} | ${a.headBytes - a.baseBytes >= 0 ? '+' : ''}${a.headBytes - a.baseBytes} B |`);
+          if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `| app | base | head | change |\n|---|---|---|---|\n${rows.join('\n')}\n`);
           NODE
 
       - name: Upload report

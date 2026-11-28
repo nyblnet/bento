@@ -134,13 +134,22 @@ for (const a of files.usedActions) {
   ok(steps.length > 0 && bare.length === 0,
     `${a.path}: all ${steps.length} run steps use shell: bento-step {0}${bare.length ? ` (not: ${bare.map((s) => (s.match(/name: (.*)/) || [])[1]).join(', ')})` : ''}`)
 }
-const ci = files.workflows.find((w) => w.path.endsWith('/ci.yml'))
+// ci-full.yml runs the slices on GitHub by hand, as the required check did
+// until 2026-11-28; the quick check (ci.yml) runs the same steps through
+// scripts/check.mjs, which applies this same rule in-process.
+const ci = files.workflows.find((w) => w.path.endsWith('/ci-full.yml'))
 ok(!!ci && /echo "\$GITHUB_WORKSPACE\/scripts\/ci" >> "\$GITHUB_PATH"/.test(ci.text) &&
   ci.text.indexOf('scripts/ci" >> "$GITHUB_PATH"') < ci.text.indexOf('uses: ./.github/actions/validate-'),
-  'ci.yml puts scripts/ci on PATH before the first validate slice')
-ok(!!ci && /jsdom@\d+\.\d+\.\d+/.test(ci.text), 'ci.yml installs a pinned jsdom for the DOM halves')
+  'ci-full.yml puts scripts/ci on PATH before the first validate slice')
+ok(!!ci && /jsdom@\d+\.\d+\.\d+/.test(ci.text), 'ci-full.yml installs a pinned jsdom for the DOM halves')
+{
+  const check = readFileSync(join(root, 'scripts/check.mjs'), 'utf8')
+  ok(/import \{ check as skipCheck \} from '\.\/lib\/ci-skips\.mjs'/.test(check) && /skipCheck\(s\.run, r\.out\)/.test(check) && /ON_CI \? 'FAIL'/.test(check),
+    'the quick check (scripts/check.mjs) fails a step whose rig skipped under CI, through this same allowlist')
+}
 for (const w of files.workflows) {
   if (!/^name: CI \(/m.test(w.text) || !/node scripts\//.test(w.text)) continue
+  if (w.path.endsWith('ci-full.yml')) continue // composite slices, each step on bento-step (above)
   if (w.path.endsWith('ci-home-android.yml')) continue // Gradle prints SKIPPED as a task outcome; see that file
   if (w.path.endsWith('ci-home-ios.yml')) continue // macOS jobs with their own skip check (#777), where nothing may skip
   ok(/^defaults:\n  run:\n(?:    #.*\n)*    shell: bash scripts\/ci\/bento-step \{0\}$/m.test(w.text) && !/^\s+shell: bash\s*$/m.test(w.text),
