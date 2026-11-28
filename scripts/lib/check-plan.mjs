@@ -75,6 +75,22 @@ export function defaultRef(root) {
   throw new Error('no merge-base with main (fetch origin main, or pass a ref)')
 }
 
+/**
+ * The app's previous release tag below `head`: the newest `<prefix>vX.Y.Z` tag
+ * (scripts/apps.mjs tagPrefix) whose commit is an ancestor of `head` and not
+ * `head` itself (a release commit is tagged before release.mjs runs). Null
+ * when there is none.
+ */
+export function previousTag(root, app, head = 'HEAD') {
+  const prefix = { slides: '', spaces: 'spaces-', dash: 'dash-', type: 'type-' }[app] ?? `${app}-`
+  const at = git(root, ['rev-parse', `${head}^{commit}`]).trim()
+  const tags = git(root, ['tag', '--merged', at, '--list', `${prefix}v[0-9]*`]).split('\n').filter((t) => new RegExp(`^${prefix}v\\d+\\.\\d+\\.\\d+$`).test(t))
+  const ver = (t) => t.slice(prefix.length + 1).split('.').map(Number)
+  tags.sort((a, b) => { const x = ver(a); const y = ver(b); return y[0] - x[0] || y[1] - x[1] || y[2] - x[2] })
+  for (const t of tags) if (git(root, ['rev-parse', `${t}^{commit}`]).trim() !== at) return t
+  return null
+}
+
 /** Files changed since `ref`: committed ref...HEAD (or ref...head), plus, with no head, the working tree. */
 export function changedFiles(root, ref, head = null) {
   const out = new Set(git(root, ['diff', '--name-only', '--no-renames', ref, head ?? 'HEAD']).split('\n').filter(Boolean))

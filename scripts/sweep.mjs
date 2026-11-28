@@ -36,6 +36,10 @@
 //   --summary       print only the last line; the full output goes to the logs
 //   --status        print the commit's sweep line and exit (0 green, 1 red, 3 none)
 //   --jobs N        steps at once (passed to check.mjs)
+//   --release APP   the release check: only the steps the diff since APP's previous
+//                   release tag reaches, in every tier (check.mjs --release); its
+//                   result is <sha>.release-<APP>.json, and release.mjs accepts it
+//   --since TAG     with --release: the base, when it is not the previous tag
 
 import { execFileSync, spawn } from 'node:child_process'
 import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
@@ -52,13 +56,14 @@ const APPS = ['slides', 'spaces', 'dash', 'type']
 
 const git = (args, cwd = ROOT) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'pipe'] }).trim()
 
-export const resultFile = (sha, dir = SWEEPS) => join(dir, `${sha}.json`)
-export const readResult = (sha, dir = SWEEPS) => readJson(resultFile(sha, dir))
+/** A result's file: <sha>.json for the whole full tier, <sha>.release-<app>.json for a release's scope. */
+export const resultFile = (sha, dir = SWEEPS, scope = 'all') => join(dir, scope === 'all' ? `${sha}.json` : `${sha}.${scope}.json`)
+export const readResult = (sha, dir = SWEEPS, scope = 'all') => readJson(resultFile(sha, dir, scope))
 
 /** One line for a result. */
 export function summaryLine(r) {
   if (!r) return 'sweep: none'
-  const head = `sweep ${r.sha.slice(0, 9)}`
+  const head = `${r.scope && r.scope !== 'all' ? `release check (${r.scope.slice(8)} since ${r.base})` : 'sweep'} ${r.sha.slice(0, 9)}`
   const took = r.seconds != null ? `, ${Math.round(r.seconds / 60)} min` : ''
   const c = r.counts ?? {}
   const counts = ` (${c.ok ?? 0} passed, ${c.cached ?? 0} cached${c.SKIP ? `, ${c.SKIP} skipped` : ''}${c['not here'] ? `, ${c['not here']} not here` : ''}${r.notRun?.length ? `; NOT RUN ${r.notRun.length} deep-tier steps (another runner's toolchain)` : ''})`
@@ -68,10 +73,10 @@ export function summaryLine(r) {
   return `${head}: RED: ${fails || 'see the log'}${bad}${counts}${took}${r.logs ? `; logs ${r.logs}` : ''}`
 }
 
-/** Is the sweep of `sha` green? (release.mjs asks.) */
-export function isGreen(sha, dir = SWEEPS) {
-  const r = readResult(sha, dir)
-  return !!r && r.ok === true && r.sha === sha
+/** Is the full check of `sha` green for a release of `app`: its release scope, or the whole full tier? (release.mjs asks.) */
+export function isGreen(sha, dir = SWEEPS, app = null) {
+  const ok = (r) => !!r && r.ok === true && r.sha === sha
+  return ok(readResult(sha, dir)) || (!!app && ok(readResult(sha, dir, `release-${app}`)))
 }
 
 /** First-parent commits after the last green sweep up to `sha` (oldest first), and that green one. */
@@ -189,7 +194,7 @@ const countOf = (results) => {
 }
 
 async function main(argv) {
-  const opts = { commit: '', name: 'main', bisect: true, summary: false, status: false, jobs: '' }
+  const opts = { commit: '', name: 'main', bisect: true, summary: false, status: false, jobs: '', release: '', since: '' }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (a === '--name') opts.name = argv[++i]
@@ -197,6 +202,8 @@ async function main(argv) {
     else if (a === '--summary') opts.summary = true
     else if (a === '--status') opts.status = true
     else if (a === '--jobs') opts.jobs = argv[++i]
+    else if (a === '--release') opts.release = argv[++i]
+    else if (a === '--since') opts.since = argv[++i]
     else if (a === '-h' || a === '--help') {
       console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(3).filter((l) => l.startsWith('//')).map((l) => l.slice(3)).join('\n'))
       return 0
@@ -206,8 +213,15 @@ async function main(argv) {
   quiet = opts.summary
   const sha = git(['rev-parse', '--verify', `${opts.commit || 'origin/main'}^{commit}`])
   const subject = git(['log', '-1', '--pretty=%s', sha]).slice(0, 120)
+  const scope = opts.release ? `release-${opts.release}` : 'all'
+  let base = null
+  if (opts.release) {
+    const { previousTag } = await import('./lib/check-plan.mjs')
+    base = opts.since || previousTag(ROOT, opts.release, sha)
+    if (!base) { console.error(`sweep: no earlier ${opts.release} release tag below ${sha.slice(0, 9)}; pass --since <tag> (a shallow clone hides older tags: git fetch --unshallow)`); return 2 }
+  }
   if (opts.status) {
-    const r = readResult(sha)
+    const r = readResult(sha, SWEEPS, scope)
     console.log(r ? summaryLine(r) : `sweep ${sha.slice(0, 9)}: none yet`)
     return r ? (r.ok ? 0 : 1) : 3
   }
@@ -216,8 +230,11 @@ async function main(argv) {
     return 2
   }
 
-  const since = sinceGreen(sha)
-  const cover = since.green ? `${since.commits.length} commit${since.commits.length === 1 ? '' : 's'} since the last green sweep (${since.green.slice(0, 9)})` : `${since.commits.length}${since.commits.length >= 200 ? '+' : ''} commits: no green sweep before it`
+  // a release's scope bisects across the release's own commits
+  const since = opts.release
+    ? { commits: git(['rev-list', '--first-parent', '--reverse', `${base}..${sha}`]).split('\n').filter(Boolean), green: base }
+    : sinceGreen(sha)
+  const cover = opts.release ? `the ${opts.release} release diff since ${base} (${since.commits.length} commits)` : since.green ? `${since.commits.length} commit${since.commits.length === 1 ? '' : 's'} since the last green sweep (${since.green.slice(0, 9)})` : `${since.commits.length}${since.commits.length >= 200 ? '+' : ''} commits: no green sweep before it`
   console.log(`sweep ${sha.slice(0, 9)} "${subject}": covers ${cover}`)
 
   const release = lock(opts.name)
@@ -227,7 +244,8 @@ async function main(argv) {
   const dir = worktreeAt(opts.name, sha)
   const jobs = opts.jobs ? ['--jobs', opts.jobs] : []
   if (!quiet) console.log(`in ${dir}; logs ${logs}`)
-  const r = await check(dir, ['--rerun-failed', ...jobs], logs)
+  const scopeArgs = opts.release ? ['--release', opts.release, '--since', base] : []
+  const r = await check(dir, [...scopeArgs, '--rerun-failed', ...jobs], logs)
   const results = r.result?.results ?? []
   const failures = results.filter((x) => x.status === 'FAIL').map((x) => ({ id: x.id, label: x.label, note: x.note, log: x.log, flaky: !!x.flaky }))
   if (r.code !== 0 && !failures.length) failures.push({ id: 'check', label: `check.mjs exit ${r.code}`, note: 'see sweep.log' })
@@ -237,12 +255,13 @@ async function main(argv) {
   const notRun = (r.result?.left ?? []).map((x) => ({ id: x.id, note: x.reason }))
   // green: nothing failed, nothing skipped, nothing of the full tier left for another machine
   const result = {
-    sha, ok: r.code === 0 && !failures.length && !skipped.length && !notHere.length, finished: new Date().toISOString(), subject,
+    sha, scope, base, ok: r.code === 0 && !failures.length && !skipped.length && !notHere.length, finished: new Date().toISOString(), subject,
     seconds: Math.round((Date.now() - t0) / 1000), counts: countOf(results), failures, skipped, notHere, notRun, logs, firstBad: null,
   }
-  writeJson(resultFile(sha), result)
+  writeJson(resultFile(sha, SWEEPS, scope), result)
 
-  if (!result.ok && failures.length && opts.bisect) {
+  // (only flaky failures, each passed alone: nothing to bisect)
+  if (!result.ok && failures.some((f) => !f.flaky) && opts.bisect) {
     const { commits, green } = since
     if (!green) result.firstBad = { why: 'no green sweep before it to bisect from' }
     else if (commits.length === 1) result.firstBad = { sha, subject, failing: failures.map((f) => f.label) }
@@ -260,7 +279,7 @@ async function main(argv) {
       result.firstBad = { sha: found.sha, subject: git(['log', '-1', '--pretty=%s', found.sha]).slice(0, 120), checked: found.checked }
       worktreeAt(opts.name, sha)
     }
-    writeJson(resultFile(sha), result)
+    writeJson(resultFile(sha, SWEEPS, scope), result)
   }
   release()
   console.log(opts.summary ? summaryLine(result) : `\n${summaryLine(result)}`)

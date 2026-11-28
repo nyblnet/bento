@@ -16002,6 +16002,50 @@ and the required check alone took 9 to 11 minutes.
   in the full tier, so a green `validate` says nothing about them, and a
   review that cites CI for one has not run it.
 
+## 2026-11-28 — The release check covers what the release changed, and runs side by side
+
+The maintainer's clarification of the entry above: the full check at release
+tests what changed in that release, and must itself be fast.
+
+- **Scope: the diff since the app's previous release tag.** `node
+  scripts/sweep.mjs --release <app> <commit>` (check.mjs `--release`) runs
+  every step, in every tier, that the diff since the newest earlier tag of
+  that app (`<tagPrefix>vX.Y.Z` from scripts/apps.mjs; the release commit's own
+  tag is skipped) reaches, through the same reach map as the quick check.
+  Unreached steps do not run. Steps this machine cannot run are listed NOT RUN.
+  No earlier tag, or a clone too shallow to see it: it refuses rather than
+  guess. `release.mjs` accepts a green release check of that app for the
+  commit (or a whole full-tier run); its conformance gate runs regardless.
+- **Speed.** Every reached step is scheduled at once, longest first (times
+  from earlier runs), at most 8 side by side, instead of job by job, except
+  jobs whose steps share a device (the iOS simulator), which run in order. Each
+  shell is built once and shared, guarded as a read/write lock so an inline
+  rebuild never deletes a shell another step is reading. A step two jobs both
+  run (same content key) runs once. Passes are cached by content, so a rerun
+  after a fix runs only what the fix touched.
+- **Steps that time things run alone**, after the rest (tiers `alone: true`):
+  test-shell-loader's 50 ms splash row failed side by side and passed alone.
+- **Measured**, cold, on the release Mac. The last slides release (v1.2.13 to
+  v1.3.0: 596 files, 500 steps reached): 27.1 min with the job-by-job full
+  check, 25.8 min scoped and side by side; a release that touches everything
+  gains little, because the machine is the bound (the summed step time
+  doubled when twice as many ran at once). The next slides release (main
+  since v1.3.0, 234 steps): 31.8 min at first, its critical path the directory
+  mutant suite, which had doubled to 320 mutants (three shards of 27 min);
+  in eight shards (the rig's own `--shard`), 19.2 min, green. The critical
+  path is now four browser mutant suites, each one rig run per mutant:
+  test-home-web-mutants 14.8 min, test-home-web-build-mutants 11.6,
+  test-webext-tripwire-mutants 9.3, test-home-web-offline --mutants 8.0. The
+  target is 10 min; reaching it means making those suites faster (sharding
+  them, a small change to each rig, or one browser shared across a suite's
+  mutants). Sharding them was measured on the v1.3.0 diff at 14 side by side
+  and bought nothing there, so it is not in this change.
+- **Not done, and why:** one browser launch shared across rigs, and mutants
+  that reuse one browser, need each rig to accept a browser it did not launch;
+  the rigs own their launches (and their crash handling,
+  scripts/lib/browser-guard.mjs), so that is a change to each rig, not to the
+  check.
+
 ## 2026-11-28 — bento/id: a person's identity proof travels in presence, and only a proven key is resolved
 
 The second kernel half of ID3. Once whoami answers an identity in an open, the
