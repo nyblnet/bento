@@ -4,7 +4,9 @@
 // (scripts/test-ci-registered.ts, scripts/test-spaces.mjs --manifest).
 //
 // CI used to be one file, .github/workflows/ci.yml. It is now:
-//   .github/workflows/*.yml                  every workflow (ci.yml holds the
+//   .github/workflows/ci.yml                 the one GitHub workflow (the quick check)
+//   .github/checks/*.yml                     the step lists the check runs (not workflows)
+//   (until 2026-11-28 every .github/workflows/*.yml was a workflow: ci.yml held the
 //                                            required `validate` job; ci-<zone>.yml
 //                                            hold each zone's other jobs)
 //   .github/actions/validate-<zone>/action.yml
@@ -21,14 +23,19 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 export const WORKFLOWS_DIR = '.github/workflows'
+/** Step lists that are not GitHub workflows: the check reads them (2026-11-28). */
+export const CHECKS_DIR = '.github/checks'
 export const ACTIONS_DIR = '.github/actions'
 
 export function ciFiles(root) {
-  const wdir = join(root, WORKFLOWS_DIR)
-  const workflows = existsSync(wdir)
-    ? readdirSync(wdir).filter((f) => /\.ya?ml$/.test(f)).sort()
-      .map((f) => ({ path: `${WORKFLOWS_DIR}/${f}`, text: readFileSync(join(wdir, f), 'utf8') }))
-    : []
+  // the GitHub workflow(s) and the check files: both define steps that run
+  const workflows = [WORKFLOWS_DIR, CHECKS_DIR].flatMap((dir) => {
+    const d = join(root, dir)
+    return existsSync(d)
+      ? readdirSync(d).filter((f) => /\.ya?ml$/.test(f)).sort()
+        .map((f) => ({ path: `${dir}/${f}`, text: readFileSync(join(d, f), 'utf8') }))
+      : []
+  })
   const adir = join(root, ACTIONS_DIR)
   const actions = existsSync(adir)
     ? readdirSync(adir).sort()

@@ -15752,3 +15752,67 @@ Security's D-W2 on #962, both halves:
 
 The sign-in host's `wout.` text was always these bytes; only its
 "provisional" wording goes.
+## 2026-11-28 — Per change, the quick check on GitHub; in full, only at release, locally
+
+The maintainer's rule: a change's tests take no more than a minute, and the
+full check runs only at release, on the machine that deploys. Before this, one
+kernel pull request cost about 127 job-minutes over 68 jobs in 12 workflows,
+and the required check alone took 9 to 11 minutes.
+
+- **GitHub runs one workflow.** `.github/workflows/ci.yml` has one job,
+  `validate` (the name branch protection requires), which runs `node
+  scripts/check.mjs --affected HEAD^1` on GitHub's merge commit: only what the
+  pull request's diff reaches. Every other workflow is gone from GitHub. Their
+  steps moved to `.github/checks/*.yml`, step lists GitHub never runs, which
+  the check reads; `pr-build-size` (six builds, far over a minute) and its
+  comment were deleted.
+- **The steps are the check files and the validate actions.** The check
+  (scripts/lib/check-plan.mjs) reads every step of every validate action and
+  check file and runs it as CI did: its text, env and working directory, under
+  the skip rule of scripts/lib/ci-skips.mjs. A rig is registered the one way it
+  was, at the end of its zone's slice (or as a job in a check file). Setup
+  steps (installs, builds, the pinned browser and jsdom) become shared
+  providers, made once.
+- **What a diff reaches** is decided by static imports, literal dynamic
+  imports, string literals naming repo files in node tooling (rigs, scripts,
+  configs; never comments, never bundled app source), the scripts a step names
+  (an esbuild-bundled rig too), a step whose definition changed, and a built
+  shell (`<app>/dist-single`), which reads everything its app's build imports.
+  Steps at distance 0 or 1 run; further ones run nearest first within a time
+  budget. A build runs for each app whose own source changed, else for slides
+  when shared code its build reads changed. What the scan cannot see is tiered
+  full or mapped by hand, never assumed reached.
+- **Tiers, in one file** (scripts/lib/test-tiers.mjs), each entry with its
+  reason: fast (the quick check; the default), full (the release check), deep
+  (a toolchain the release machine lacks: Linux desktop packages, Windows, the
+  Android SDK, Playwright's Firefox on macOS 27). Mutant suites, second browser
+  engines, anything over 5 s on the runner, and browser rigs other than one
+  headless load per app are full. Tests are re-tiered, never deleted:
+  test-ci-registered.ts fails if a rig is in no tier or an entry names no step.
+- **Released-surface invariants are pinned**: when the diff reaches them they
+  run whatever the distance or budget: the splice gate (shell-gate.mjs, the
+  same gate release.mjs runs before signing), CRDT convergence (300 seeds per
+  change, 3000 in the full check), the preview, save and seal escapes, the
+  gate-1 verifier and the signed release history. One invariant rig could not
+  stay: `test-shell-loader.ts` times a hidden tab's splash against a 50 ms
+  bound, and inside the quick check on the runner it measured 51 to 164 ms (5
+  to 12 ms in every sequential run, and when run first), however it was
+  scheduled. It is in the full tier.
+- **The full check runs at release, on the release machine** (`node
+  scripts/sweep.mjs <commit>`): every step of the full tier, in a worktree of
+  its own, the result kept by sha, a failure rerun once alone (marked flaky,
+  still red) and bisected since the last green result. Every step it does not
+  run (the deep tier; a step for another platform) is listed as NOT RUN, never
+  passed over. `release.mjs` refuses to build or sign unless the commit it
+  releases has a green full check and the tree is that commit; its own
+  conformance gate is unchanged. Nothing runs it on a schedule. This is where
+  the model this copies differs (there the full run gates nothing): a shipped
+  Bento file carries its shell and cannot be recalled, so the step that ships
+  waits for the whole check. Merges do not.
+- **Security's named rows and mutants.** Security rulings name rows and mutant
+  suites as approval conditions. Those conditions are met at review, where
+  security runs the named suites on the pull request's head by running them
+  (`node scripts/check.mjs --only <rig>` runs one as CI would), and by the full
+  check a release requires. They are not met per push: most mutant suites are
+  in the full tier, so a green `validate` says nothing about them, and a
+  review that cites CI for one has not run it.
