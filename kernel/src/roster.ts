@@ -753,6 +753,41 @@ async function chain(links: readonly RosterLink[], opts: ChainOpts): Promise<Ver
   } }
 }
 
+// --- what a peer reads from a verified chain (ID3) ------------------------------------
+
+/**
+ * The ACCOUNT ANCHOR of a verified chain: `'g:' + sha256(the exact ros. text at
+ * seq 0)`, base64url (identity.ts ACCOUNT_ANCHOR_RE). null unless the chain
+ * verifyRosterChain accepted starts at seq 0: a chain from a later pin cannot
+ * name its setup head. A reset continues the chain, so the anchor survives it;
+ * it is NOT continuity of the person (identity.ts says what is).
+ */
+export function accountAnchor(state: RosterState): string | null {
+  const h = state && Array.isArray(state.heads) ? state.heads[0] : undefined
+  if (!h || h.seq !== 0 || state.createdAt === null || typeof h.hash !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(h.hash)) return null
+  return 'g:' + h.hash
+}
+
+/**
+ * ResolvedIdentity.rosterChangedAt: the ripenedAt of the latest link that
+ * changed the members or their quarantine marks, a reset excepted (resetAt
+ * reports those). null when no link did. `links` are the ones verifyRosterChain
+ * accepted for `state`, one per head; anything else throws (never a quiet
+ * null, which would read as "no recent change").
+ */
+export function rosterChangedAt(links: readonly RosterLink[], state: RosterState): number | null {
+  if (!Array.isArray(links) || links.length !== state.heads.length) throw new Error('rosterChangedAt: links and heads differ')
+  let at: number | null = null
+  for (let i = 1; i < state.heads.length; i++) {
+    const r = parseRip(links[i].rip)
+    if (!r.ok || r.value.ripenedAt !== state.heads[i].ripenedAt) throw new Error('rosterChangedAt: not the verified links')
+    if (r.value.auth === 'r') continue
+    const before = state.heads[i - 1].members.map(memberToken).join(','), after = state.heads[i].members.map(memberToken).join(',')
+    if (before !== after) at = state.heads[i].ripenedAt
+  }
+  return at
+}
+
 // --- vrs. — a member stops a reset ---------------------------------------------------
 
 export interface ResetStop { address: string; resetHash: string; dirNonce: string }
