@@ -16123,3 +16123,35 @@ createProofResolver`). `kernel/src/sync/idproof.ts`, wired in
   from the deterministic test keys, the real peer resolver, one per open) and
   their mutants in `scripts/test-sync-keyproof-mutants.ts`. The rig moves to
   the full tier: about 11 seconds, mostly waiting for frames to settle.
+## 2026-11-28 — The release check reruns a mutant only when something it depends on changed
+
+The mutant suites are about half the release check's work, and each mutant
+reruns a whole rig. In a release (or full) run, the six slowest suites
+(home-web, home-web-build, webext-tripwire, home-web-offline `--mutants`,
+directory, roster) now decide per mutant, through scripts/lib/mutant-scope.mjs:
+
+- **Cached red:** a mutant killed before under the same content of the
+  mutation, its target files and every file its rig reads (the rig's whole
+  read closure, through the same reach map as the quick check) is not rerun.
+  Only a kill is recorded; a survivor always runs again.
+- **Unchanged since the base:** in a release run, a mutant whose targets and
+  rig closure are all unchanged since the app's previous release tag is not
+  rerun: it was red when that tag was cut.
+- Neither counts as a pass. Each prints `NOT RERUN <name>: <why>`, the suite's
+  summary counts them apart from kills, and a run by hand (or by the quick
+  check) runs every mutant, as before. `--no-cache` reruns them all.
+- **The rule is the rig's closure, not the target file alone.** A narrower
+  rule (rerun only when the edited file changed) was considered and refused:
+  the home/web mutants are applied by home/web/build.mjs, and a release that
+  changed build.mjs but no mutant's target would have skipped every one of
+  them while the code applying them had changed.
+- **One browser per suite was measured and not built.** A Chromium launch takes
+  170 ms against 46 to 57 s for one run of test-home-web.mjs, so sharing it
+  would save under 1%. The run's time is its 78 rows, several waiting 5 to 8 s
+  for a negative. Running only the rows a mutant is judged on (as
+  test-home-web-offline already does) is the lever left; it is a change inside
+  each rig.
+- The quick check's budget for steps beyond distance 1 is 15 s (was 25), and
+  test-identity (7.3 s in a kernel change's quick check) and test-sync-vouch
+  (5.0 s, and one row flaky under parallel load, 7 of 7 alone) are full; the
+  vouch rig runs alone in the release check.
