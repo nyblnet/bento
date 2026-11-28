@@ -1,6 +1,6 @@
 # validate, spaces slice: bento/spaces: install, typecheck, shell + splice gate, and the spaces rigs.
 #
-# Part of the REQUIRED `validate` check. .github/workflows/ci.yml runs this
+# Read by scripts/check.mjs (2026-11-28): `validate` runs the steps a diff reaches, the release full check runs them all. Until then, .github/workflows/ci.yml runs this
 # action as steps INSIDE that one job, on the same runner, after the slices
 # listed before it there — so what earlier slices installed and built is on
 # disk here. A failing step here fails `validate` and blocks the merge.

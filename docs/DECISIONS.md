@@ -15425,6 +15425,48 @@ Guards: `scripts/test-home-web-404.mjs` (with `--mutants`), rows
 `unlisted-404-build` and `unlisted-404-build-script` in
 `scripts/test-webext-tripwire-browser.mjs` (a mutant each), and the
 `home-404` fixtures in `scripts/test-check-id-hosting.mjs`.
+## 2026-11-22 — bento/id directory: a member's passkey stops a reset
+
+The reset-stop route (`/v1/roster/reset/void`) no longer refuses at its last
+step. A member stops a waiting reset with its passkey over the kernel's `vrs.`
+text, which the directory checks with `verifyResetStop` over the chain it
+holds (security's C5 on #944). This supersedes "refuses at the last step" in
+the 2026 entry on who may stop a reset.
+
+- **The age is judged at the reset's FIRST request** (C4, C4′). A reset
+  carries `firstRequestedAt`. When an undo of a set-aside removal asks the
+  reset again (C3), the re-ask keeps that time. The directory refuses
+  `new-account` when the first request came in the account's first 14 days,
+  before it calls the kernel. The kernel is given the RE-ASKED time, because
+  its `order` rule needs a link asked after the head before it. So a reset
+  begun on day 13.9 stays unstoppable by a member even after a day-14.1 undo,
+  and an old account's re-asked reset can still be stopped. This avoids a
+  kernel change (an optional first-request time in `ResetStopOpts`); if
+  security wants the kernel itself to carry it, that is a separate kernel
+  change.
+- **A stop does what the reset's own Cancel does.** The reset is dropped. A
+  removal it set aside waits again at its own time, with its undo link. The
+  reset's link then answers `stopped`. The address is mailed, naming the
+  passkey that stopped it, and the stop is logged (`reset-stop`, with who).
+- **Passkeys only, for now.** A recovery-key or consent-key member is refused
+  by name (`signer-kind`) until their proofs are wired. The signature counter
+  is compared and stored by the directory in the same step, because the
+  kernel's member proof does not compare counters. It is compared and stored
+  only AFTER the kernel accepts: the stop reads the counter from
+  authenticator data nothing has verified yet, so storing it first would let
+  an assertion the kernel refuses (no valid signature needed) set the counter
+  to 2^31 and lock the member's real stops out. A row and a mutant pin that
+  order.
+- The sign-in host's /account page is how a person reaches it: "Stop a
+  waiting reset…" reads the waiting reset from `GET /v1/roster`, shows when it
+  was asked for and when it would take effect, and only on a second press
+  asks for a passkey over the `vrs.` text for that reset. The page's
+  `vrsText` is checked byte for byte against the kernel's `buildVrs`. The
+  directory still judges everything (age, signer, kernel verifier); the page
+  only names the refusal.
+- After a member's stop, the reset's own mailed link opens a "stopped" view
+  on the void page (a passkey stopped it, when, and which email names the
+  passkey), not the neutral "no longer works".
 
 ## 2026-11-22 — bento/home: the kill switch's status is signed from the release list, never beside it
 
@@ -15667,3 +15709,138 @@ Supersedes two bullets of 2026-11-12 "The People panel's identity tiers":
   agent where there is none, the phone popover's viewport cap removed, the
   unconfirmed tag painted grey, and a changed binding hidden without the
   marker.
+
+## 2026-11-22 — bento/id: a browser key retires itself, and a retired key is not a revoked one
+
+The directory now takes the kernel's `wret.` without a successor on
+bento/home's own routes (`POST /v1/home/retire/challenge`,
+`POST /v1/home/retire`, `server/directory/src/retire.js`). bento/home signs
+it with the old key W whenever it stops keeping or trusting W: at a sign-out,
+when a held key fails its check and is dropped, and after a new ceremony
+replaces it. From then on the directory refuses W's renewals, so a copy of W
+taken earlier dies with its last countersign, within 24 hours, instead of
+living to the 7-day cap.
+
+- **Only the empty form.** The form naming a successor is refused (400
+  `successor`). No ceremony carries a retirement: bento/home retires the old
+  key by its own request after the new ceremony has finished. That keeps the
+  enrolment request the sign-in host sends unchanged, never routes a
+  retirement through the sign-in host, and needs no stored ceremony nonce to
+  check a successor against.
+- **Its own challenge audience** (`retire`). A renewal's or an enrolment's
+  challenge used at the retirement route, or the reverse, is spent and
+  refused. The kernel's `verifyWret` runs before the challenge is spent.
+- **Only a browser key this address enrolled.** Anything else (a passkey's
+  key, another account's browser, a key never enrolled) is 403 `unknown`, and
+  nothing is written.
+- **Remembered for the life of the account.** The retirement is its own
+  record (`rt:<key>`), which the certificates' sweep never deletes, so the
+  key can never enrol again after its certificate is swept. Nothing
+  un-retires a key: not a suspension undone, not the incident lever.
+  Retention or account deletion work must leave these records alone (or carry
+  them into whatever the deletion keeps).
+- **Not a revocation.** It touches no other certificate and no sign-out
+  cut-off, and it is not mailed: it happens at every routine sign-out and
+  sign-in. The status route answers a new state, `retired`, never `revoked`,
+  so peers never show a routine renewal as a revoked sign-in. A certificate
+  that is revoked still answers `revoked`: the stronger fact wins. Anything
+  that composes a device's standing for a document must treat `retired` as
+  "not revoked" and must not drop a real `revoked`.
+- **Never a gate at a ceremony.** An enrolment looks only at its own new key,
+  so a browser whose previous key was retired, by its owner or by a thief
+  holding a copy, signs in again with a passkey.
+- **bento/home never waits for it.** The local forget comes first; the
+  retirement is best effort, and a directory that does not answer leaves the
+  sign-out exactly as fast. A check-in answered 403 `retired` ends the
+  sign-in like a revocation, over the record it was made from, so another
+  tab's newer sign-in stands.
+
+## 2026-11-22 — bento/id: sign out everywhere is accepted, at most three a day per account
+
+The directory's `/v1/web/signout` routes no longer answer 501: the kernel's
+`wout.` (`kernel/src/roster.ts` `buildWout`) is the text a member's passkey
+signs, and the directory's own checks (spent first, `at` equal to the
+challenge's, an unquarantined passkey member, the assertion over the exact
+text with its stored counter swapped in one step) match the kernel's
+`verifyWout` row for row. The directory keeps its own pk path rather than
+calling `verifyWout`, because it needs the assertion's counter for that
+swap and spends the challenge earlier, in the address's object.
+
+Security's D-W2 on #962, both halves:
+- **The mail names the signer.** The notice to the address carries the
+  fingerprint of the passkey that signed, so the owner can tell which member
+  key to remove.
+- **Three accepted sign-outs per account in any 24 hours**, whoever signs
+  them and from whichever IP, counted in the account's own object once a
+  member's assertion has verified. Past that, 429 `rate-limited`, and nothing
+  is revoked, logged or mailed. Without it, a stolen member key could keep
+  every browser signed out on a loop until it is removed, which takes at
+  least 72 hours. Removing the key is the cure; the roster change is not
+  held up by the limit. The incident lever is not counted.
+
+The sign-in host's `wout.` text was always these bytes; only its
+"provisional" wording goes.
+## 2026-11-28 — Per change, the quick check on GitHub; in full, only at release, locally
+
+The maintainer's rule: a change's tests take no more than a minute, and the
+full check runs only at release, on the machine that deploys. Before this, one
+kernel pull request cost about 127 job-minutes over 68 jobs in 12 workflows,
+and the required check alone took 9 to 11 minutes.
+
+- **GitHub runs one workflow.** `.github/workflows/ci.yml` has one job,
+  `validate` (the name branch protection requires), which runs `node
+  scripts/check.mjs --affected HEAD^1` on GitHub's merge commit: only what the
+  pull request's diff reaches. Every other workflow is gone from GitHub. Their
+  steps moved to `.github/checks/*.yml`, step lists GitHub never runs, which
+  the check reads; `pr-build-size` (six builds, far over a minute) and its
+  comment were deleted.
+- **The steps are the check files and the validate actions.** The check
+  (scripts/lib/check-plan.mjs) reads every step of every validate action and
+  check file and runs it as CI did: its text, env and working directory, under
+  the skip rule of scripts/lib/ci-skips.mjs. A rig is registered the one way it
+  was, at the end of its zone's slice (or as a job in a check file). Setup
+  steps (installs, builds, the pinned browser and jsdom) become shared
+  providers, made once.
+- **What a diff reaches** is decided by static imports, literal dynamic
+  imports, string literals naming repo files in node tooling (rigs, scripts,
+  configs; never comments, never bundled app source), the scripts a step names
+  (an esbuild-bundled rig too), a step whose definition changed, and a built
+  shell (`<app>/dist-single`), which reads everything its app's build imports.
+  Steps at distance 0 or 1 run; further ones run nearest first within a time
+  budget. A build runs for each app whose own source changed, else for slides
+  when shared code its build reads changed. What the scan cannot see is tiered
+  full or mapped by hand, never assumed reached.
+- **Tiers, in one file** (scripts/lib/test-tiers.mjs), each entry with its
+  reason: fast (the quick check; the default), full (the release check), deep
+  (a toolchain the release machine lacks: Linux desktop packages, Windows, the
+  Android SDK, Playwright's Firefox on macOS 27). Mutant suites, second browser
+  engines, anything over 5 s on the runner, and browser rigs other than one
+  headless load per app are full. Tests are re-tiered, never deleted:
+  test-ci-registered.ts fails if a rig is in no tier or an entry names no step.
+- **Released-surface invariants are pinned**: when the diff reaches them they
+  run whatever the distance or budget: the splice gate (shell-gate.mjs, the
+  same gate release.mjs runs before signing), CRDT convergence (300 seeds per
+  change, 3000 in the full check), the preview, save and seal escapes, the
+  gate-1 verifier and the signed release history. One invariant rig could not
+  stay: `test-shell-loader.ts` times a hidden tab's splash against a 50 ms
+  bound, and inside the quick check on the runner it measured 51 to 164 ms (5
+  to 12 ms in every sequential run, and when run first), however it was
+  scheduled. It is in the full tier.
+- **The full check runs at release, on the release machine** (`node
+  scripts/sweep.mjs <commit>`): every step of the full tier, in a worktree of
+  its own, the result kept by sha, a failure rerun once alone (marked flaky,
+  still red) and bisected since the last green result. Every step it does not
+  run (the deep tier; a step for another platform) is listed as NOT RUN, never
+  passed over. `release.mjs` refuses to build or sign unless the commit it
+  releases has a green full check and the tree is that commit; its own
+  conformance gate is unchanged. Nothing runs it on a schedule. This is where
+  the model this copies differs (there the full run gates nothing): a shipped
+  Bento file carries its shell and cannot be recalled, so the step that ships
+  waits for the whole check. Merges do not.
+- **Security's named rows and mutants.** Security rulings name rows and mutant
+  suites as approval conditions. Those conditions are met at review, where
+  security runs the named suites on the pull request's head by running them
+  (`node scripts/check.mjs --only <rig>` runs one as CI would), and by the full
+  check a release requires. They are not met per push: most mutant suites are
+  in the full tier, so a green `validate` says nothing about them, and a
+  review that cites CI for one has not run it.
