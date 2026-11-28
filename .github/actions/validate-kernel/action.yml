@@ -729,3 +729,20 @@ runs:
       # 503 with retry-after and CORS, so the client can back off.
       shell: bento-step {0}
       run: node scripts/test-relay-blob-errors.ts
+
+    - name: bento/id over the frame's port, and the peer resolver
+      # kernel/src/identityport.ts: the identity agent a document in a host's
+      # sandboxed frame reaches over a transferred port (closed ops, exact
+      # keys, rising ids, caps, consent first, every answer type-checked),
+      # and the offline resolver that answers resolve({pub, proof}): a chain
+      # from seq 0 under pinned keys, the longest chain per anchor, forks
+      # null, the lever's predicate, own-account status only for the own
+      # anchor, name = the address. Real signatures, no network.
+      shell: bento-step {0}
+      run: node scripts/test-identityport.ts
+
+    - name: bento/id port and resolver mutants
+      # Each mutant loosens one rule in a copy of kernel/src; the rig must go
+      # red on the row that guards it, after the unmutated copy passes.
+      shell: bento-step {0}
+      run: node scripts/test-identityport-mutants.ts
