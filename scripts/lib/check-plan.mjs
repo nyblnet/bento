@@ -460,6 +460,9 @@ export function annotate(catalog, graph) {
     if (/PLAYWRIGHT_MODULE|\bplaywright\b|CHROME_PATH/.test(text) || bares.has('playwright')) needs.add('browser')
     if (bares.has('jsdom') || /\bjsdom\b/.test(text)) needs.add('jsdom')
     for (const d of mapped?.drop ?? []) needs.delete(d)
+    // what the step reads itself, apart from the sources of the shells it reads
+    // (check.mjs keys such a step on the built shell's bytes, not its sources)
+    step.ownReads = new Map(reads)
     // a built shell is two edges away: from the rig to the shell, from the shell to its sources
     for (const a of shellApps) for (const [f, d] of builds.get(a)) if (!reads.has(f) || reads.get(f) > d + 2) reads.set(f, d + 2)
     step.reads = reads

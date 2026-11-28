@@ -14,7 +14,7 @@
 // way a step can be reached is held here against a small repository built in a
 // temporary folder, with a control beside it that must NOT be reached.
 
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -273,6 +273,25 @@ jobs:
       if (keep.c === undefined) delete process.env.BENTO_MUTANT_CACHE; else process.env.BENTO_MUTANT_CACHE = keep.c
       if (keep.s === undefined) delete process.env.BENTO_MUTANT_SINCE; else process.env.BENTO_MUTANT_SINCE = keep.s
     }
+  }
+
+  console.log('\nmutants judged in their own section: the map is derived and a wrong one goes red')
+  {
+    const { rowsOf, sectionsFor, parseOnly } = await import('./lib/row-map.mjs')
+    const run = ['=== builds (chromium) {builds}', '  ok    the build refuses a bad origin', '=== [T2] the network {t2}', '  ok    nothing goes anywhere (0)', '  ok    a planted request is seen',
+      '=== [S7] the store {s7}', '  ok    the port answers once', '  FAIL  a row red unmutated', '=== an unkeyed tail', '  ok    a row outside every section'].join('\n')
+    const rows = rowsOf(run)
+    ok(rows.length === 6 && rows[1].key === 't2' && rows[3].key === 's7' && rows[5].key === null, `the rows of a run, each with its section's key (${rows.map((r) => r.key).join(',')})`)
+    ok(JSON.stringify(sectionsFor('nothing goes anywhere', rows)) === '["t2"]', 'a judged row maps to the section that printed it')
+    const throws = (f) => { try { f(); return '' } catch (e) { return e.message } }
+    ok(/no row of the unmutated run matches/.test(throws(() => sectionsFor('a row that does not exist', rows))), 'a judged row the unmutated run never printed is an error (the suite goes red)')
+    ok(/red unmutated/.test(throws(() => sectionsFor('a row red unmutated', rows))), 'a judged row that is red unmutated is an error: a mutant turning it red would prove nothing')
+    ok(/outside every keyed section/.test(throws(() => sectionsFor('outside every section', rows))), 'a judged row outside every keyed section is an error')
+    ok(JSON.stringify(parseOnly('t2, nope', ['builds', 't2']).unknown) === '["nope"]', 'a section key the rig does not have is reported')
+    const r = spawnSync(process.execPath, [join(root, 'scripts/test-home-web.mjs')], { env: { ...process.env, BENTO_HW_ONLY: 'no-such-section' }, encoding: 'utf8', timeout: 60_000 })
+    ok(r.status === 1 && /BENTO_HW_ONLY names no section of this rig: no-such-section/.test(r.stdout), `the rig refuses a section it does not have, before building anything (exit ${r.status})`)
+    const suite = readFileSync(join(root, 'scripts/test-home-web-mutants.mjs'), 'utf8')
+    ok(/sectionsFor\(m\.expect, rows\)/.test(suite) && /rows = rowsOf\(c\.stdout/.test(suite) && /the unmutated rig passes every row/.test(suite), 'the home/web mutant suite derives each mutant\'s sections from its unmutated run of every row')
   }
 
   console.log('\nrelease.mjs waits for a green sweep')
