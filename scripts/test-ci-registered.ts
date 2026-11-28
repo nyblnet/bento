@@ -67,52 +67,35 @@ ok(files.workflows.length > 0 && files.usedActions.length > 0,
 // a split opens, so it is closed here rather than trusted.
 for (const a of files.unusedActions) ok(false, `${a.path} is run by a workflow (nothing uses ./.github/actions/${a.name})`)
 for (const n of files.missingActions) ok(false, `./.github/actions/${n} exists (a workflow uses it)`)
-// A workflow file with no pull_request trigger never runs on a PR, so its
-// rigs never gate one. Every workflow that runs a rig must be triggered by one.
-for (const w of files.workflows) {
-  if (!/node scripts\//.test(w.text)) continue
-  ok(/^on:\s*$[\s\S]*?^\s{2}pull_request:/m.test(w.text) || /^on:.*pull_request/m.test(w.text),
-    `${w.path} runs on pull_request`)
-}
-
-// PATH FILTERS. A zone workflow may limit its pull_request trigger to the
-// paths that can affect it (none of them is the required check). A filter is
-// a way to skip silently, so three things are held:
-//   - ci.yml, which holds the required `validate`, has none: it runs on every PR;
-//   - a filtered workflow lists ITSELF, so editing it runs it;
-//   - every script it runs matches one of its paths, so changing a rig runs
-//     the workflow that runs the rig.
+// WHAT RUNS ON GITHUB (2026-11-28): one workflow. .github/workflows/ci.yml,
+// whose `validate` job (the required check) runs the quick check,
+// scripts/check.mjs --affected. Everything else that defines steps lives in
+// .github/checks/, which GitHub never runs: the check reads those files and
+// runs their steps locally, per change by tier and in full before a release.
+// A second workflow is a second per-change bill nobody chose, and a check
+// file with a trigger is one somebody meant to run on GitHub.
 {
-  const glob = (g: string) => new RegExp('^' + g.split('**').map((part) => part.split('*').map((x) => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('[^/]*')).join('.*') + '$')
-  const pathsOf = (text: string): string[] | null => {
-    const m = /^on:\n  pull_request:\n((?: {4}.*\n)*)/m.exec(text)
-    const body = m?.[1] ?? ''
-    const start = body.indexOf('    paths:\n')
-    if (start < 0) return null
-    return [...body.slice(start).matchAll(/^ {6}- '([^']+)'$/gm)].map((x) => x[1])
+  const triggers = (text: string): string[] => {
+    const m = /^on:\s*\n((?:(?:\s{2}.*)?\n)*)/m.exec(text) ?? /^on:\s*(.+)$/m.exec(text)
+    if (!m) return []
+    if (!m[1].includes('\n')) return m[1].replace(/[[\]]/g, '').split(',').map((x) => x.trim()).filter(Boolean)
+    return [...m[1].matchAll(/^ {2}([a-z_]+):/gm)].map((x) => x[1])
   }
-  let filtered = 0
+  const main = files.workflows.find((w) => w.path === '.github/workflows/ci.yml')
+  ok(!!main && triggers(main.text).includes('pull_request') && triggers(main.text).includes('push'), '.github/workflows/ci.yml runs on pull_request and on push')
+  ok(!!main && !/^\s+paths(-ignore)?:/m.test(main.text), '.github/workflows/ci.yml (the required check) has no path filter')
+  ok(!!main && /^ {2}validate:\n/m.test(main.text) && /run: node scripts\/check\.mjs --affected\b/.test(main.text), 'the required `validate` job runs the quick check (node scripts/check.mjs --affected)')
   for (const w of files.workflows) {
-    const paths = pathsOf(w.text)
-    if (w.path.endsWith('/ci.yml')) { ok(paths === null && !/^\s+paths(-ignore)?:/m.test(w.text), `${w.path} (the required check) has no path filter`); continue }
-    if (!paths) continue
-    filtered++
-    const res = paths.map(glob)
-    ok(paths.includes(w.path), `${w.path} lists itself in its path filter`)
-    // what the workflow RUNS: its comment lines name files it does not run
-    const live = w.text.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n')
-    const scripts = [...new Set([...live.matchAll(/\bscripts\/[A-Za-z0-9_./-]+\.(?:mjs|ts|js|py|sh)\b|\bscripts\/ci\/[A-Za-z0-9_-]+/g)].map((x) => x[0]))]
-    const missed = scripts.filter((sc) => !res.some((re) => re.test(sc)))
-    ok(missed.length === 0, `${w.path}: every script it runs matches its path filter (${scripts.length} scripts${missed.length ? '; not matched: ' + missed.join(', ') : ''})`)
+    if (w === main) continue
+    if (w.path.startsWith('.github/workflows/')) ok(false, `${w.path}: GitHub runs one workflow, ci.yml (move a step list to .github/checks/)`)
+    else ok(!/^on:/m.test(w.text), `${w.path} has no trigger: GitHub never runs it, the check does`)
   }
-  ok(filtered > 0, `path filters are read (${filtered} filtered workflows; this check is what stops a vacuous green)`)
 }
 
-// ZONE GATES. A workflow whose jobs are heavy may run them on a PR only when
-// it touches the zone's own files or carries the `full-ci` label
-// (scripts/ci/zone-gate). The gate skips, so it is held too: every job
-// in a gated workflow other than the gate waits on it, and the gate's own
-// pattern names the workflow file, so editing the workflow runs its jobs.
+// ZONE GATES. Some check files keep the gate job their workflow had
+// (scripts/ci/zone-gate); the check treats it as setup. The gate skips,
+// so it is held: every job in a gated workflow other than the gate waits on
+// it, and the gate's own pattern names the workflow file.
 {
   let gated = 0
   for (const w of files.workflows) {
@@ -127,7 +110,6 @@ for (const w of files.workflows) {
     ok(jobs.length > 1 && loose.length === 0, `${w.path}: every job waits on ${gate.id} (${jobs.length - 1} jobs${loose.length ? '; not gated: ' + loose.map((j) => j.id).join(', ') : ''})`)
     const own = /run: scripts\/ci\/zone-gate '([^']+)'/.exec(gate.text)?.[1] ?? ''
     ok(!!own && new RegExp(own).test(w.path) && new RegExp(own).test('scripts/ci/zone-gate'), `${w.path}: its gate pattern matches the workflow file and the gate script`)
-    ok(/^ {4}types: \[opened, synchronize, reopened, labeled\]$/m.test(w.text) && !/^ {4}paths:/m.test(w.text), `${w.path}: a label can start it (types include labeled, and no paths filter stands in the way)`)
   }
   ok(gated > 0, `zone gates are read (${gated} gated workflows; this check is what stops a vacuous green)`)
 }
@@ -201,6 +183,66 @@ const referenced = [...ci.matchAll(/node (scripts\/[A-Za-z0-9._/-]+)/g)].map((m)
 ok(referenced.length > 20, 'CI actually references rigs (guard is live in this direction too)')
 for (const ref of [...new Set(referenced)].sort()) {
   ok(existsSync(join(root, ref)), `${ref} exists`)
+}
+
+// EVERY RIG IS IN EXACTLY ONE TIER. The quick check and the sweep read CI's
+// own steps (scripts/lib/check-plan.mjs) and give each step one tier from
+// scripts/lib/test-tiers.mjs: fast (the quick check), full (the sweep), deep
+// (--deep). A rig whose steps differ (an engine or mutant variant) is in the
+// tier of its fastest step, where it runs per change; every variant still
+// runs in some tier. Re-tiering is how a slow rig leaves the quick check;
+// deleting it is not, and an entry that names no step is a decision about
+// nothing, so it fails here.
+{
+  const plan = await import('./lib/check-plan.mjs')
+  const tiersLib = await import('./lib/test-tiers.mjs')
+  const view = plan.treeView(root)
+  const graph = plan.buildGraph(view)
+  const catalog = plan.loadCatalog(view)
+  plan.annotate(catalog, graph)
+  const steps = catalog.steps.filter((x: any) => !x.setup && !x.uses)
+  ok(steps.length > 100, `the check's catalog reads CI's steps (${steps.length}; this check is what stops a vacuous green)`)
+  const byRig = new Map<string, Set<string>>()
+  for (const st of steps) {
+    ok(tiersLib.TIERS.includes(st.tier.tier), `${st.id} has one tier (${st.tier.tier})`)
+    for (const sc of st.scripts) {
+      const b = sc.split('/').pop()!
+      if (!/^test-.*\.(ts|mjs)$/.test(b) || !sc.startsWith('scripts/')) continue
+      if (!byRig.has(b)) byRig.set(b, new Set())
+      byRig.get(b)!.add(st.tier.tier)
+    }
+  }
+  const counts: Record<string, number> = { fast: 0, full: 0, deep: 0 }
+  for (const rig of rigs) {
+    const t = byRig.get(rig)
+    ok(!!t && t.size > 0, `${rig} is in a tier (a step the check reads runs it)`)
+    if (t) counts[tiersLib.TIERS.find((x: string) => t.has(x))!]++
+  }
+  for (const e of tiersLib.ENTRIES) {
+    const what = e.rig ?? e.args?.source ?? e.job?.source
+    ok(!!e.why && e.why.length > 8, `tier entry ${what} says why`)
+    ok(steps.some((st: any) => tiersLib.entryMatches(e, st)), `tier entry ${what} names a step (an entry for nothing is stale)`)
+  }
+  // A SHARDED SUITE RUNS WHOLE. Each `--shard k/n` step runs a k-th of a
+  // mutant suite; together one rig's steps must be exactly shards 1..n, or a
+  // dropped shard is mutants that silently never run.
+  const shards = new Map<string, number[]>()
+  for (const st of steps) {
+    const m = /\s--shard (\d+)\/(\d+)\b/.exec(st.run)
+    if (!m) continue
+    const k = `${st.scripts.find((x: string) => /test-/.test(x)) ?? st.run} /${m[2]}`
+    shards.set(k, [...(shards.get(k) ?? []), Number(m[1])])
+  }
+  for (const [k, got] of shards) {
+    const n = Number(k.split('/').pop())
+    const want = Array.from({ length: n }, (_, i) => i + 1)
+    ok(JSON.stringify([...got].sort((x, y) => x - y)) === JSON.stringify(want), `${k.replace(/ \/\d+$/, '')} runs every shard of ${n} once (${got.join(', ')})`)
+  }
+  ok(shards.size >= 1, `sharded suites are read (${shards.size}; this check is what stops a vacuous green)`)
+  const stepCounts: Record<string, number> = { fast: 0, full: 0, deep: 0 }
+  for (const st of steps) stepCounts[st.tier.tier]++
+  console.log(`\ntiers: rigs ${counts.fast} fast, ${counts.full} full, ${counts.deep} deep; steps ${stepCounts.fast} fast, ${stepCounts.full} full, ${stepCounts.deep} deep`)
+  ok(counts.fast + counts.full + counts.deep === rigs.length, `every rig is counted in exactly one tier (${counts.fast} + ${counts.full} + ${counts.deep} = ${rigs.length})`)
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

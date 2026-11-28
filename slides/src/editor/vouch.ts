@@ -9,14 +9,16 @@
 // (kernel/src/identity.ts `resolve`) and shows the answer in one of these
 // states, all honest about what is and is not known:
 //
-//   verified    "✓ via <voucher>", plus "(passkey sign-in)", "new account" and
-//               "account changed on <date>" where they apply
+//   verified    "✓ via <voucher>", plus "unconfirmed since <date>",
+//               "(passkey sign-in)", "new account" and "account changed on
+//               <date>" where they apply
 //   changed     the binding differs from the one this device saw before: no ✓
 //   revoked     "this sign-in was revoked": no ✓; after an incident the room
 //               owner also sees a flag on the row
 //   unverified  the agent knows nobody by that key
 //   unproven    the person's key is only CLAIMED in presence
-//   failed      the agent errored, was malformed, or did not answer in time
+//   failed      the agent errored, was malformed, did not answer in time, or
+//               its answer lacks the marker saying it carries every field
 //   checking    waiting for the agent
 //
 // THE PROOF RULE. A presence `pub` is a claim: anyone holding the room's read
@@ -25,8 +27,13 @@
 // session, never a field of the peer, because a peer's presence is whatever
 // that peer sent.
 //
-// OFF BY DEFAULT: nothing here runs unless localStorage `bento-people-vouch` is
-// 'on' AND the host exposes an agent. Otherwise the People panel is unchanged.
+// ON WHERE THERE IS AN AGENT: nothing here runs unless the host exposes one
+// (identityAgent() is null on file://, on bento.page and in every host that has
+// none), so there the People panel is unchanged. localStorage
+// `bento-people-vouch` = 'off' turns it off even then: a viewer's and QA's
+// kill switch. Where an agent IS present, a ✓ still needs an answer carrying
+// the completeness marker (vouchstate.ts), so a host whose relay drops fields
+// shows "couldn't check", never a ✓ it cannot back.
 import { identityAgent, type IdentityAgent } from '../../../kernel/src/identity.ts'
 import { lsGet } from '../../../kernel/src/storage.ts'
 import { claimedName, stateFromAnswer, type VouchState } from './vouchstate'
@@ -40,10 +47,10 @@ const TTL_OK_MS = 30_000
 const TTL_FAIL_MS = 5_000
 
 export function vouchEnabled(): boolean {
-  try { return lsGet('bento-people-vouch') === 'on' } catch { return false }
+  try { return lsGet('bento-people-vouch') !== 'off' } catch { return false }
 }
 
-/** The agent to ask, or null when the flag is off or the host has none. */
+/** The agent to ask, or null when the kill switch is on or the host has none. */
 export function vouchAgent(): IdentityAgent | null {
   return vouchEnabled() ? identityAgent() : null
 }
@@ -134,6 +141,12 @@ export function paintVouch(who: HTMLElement, claimed: string, state: VouchState,
       label(t('✓ via {via}', { via: state.via }))
       tips.push(state.name === claimed ? t('Verified by {via}', { via: state.via })
         : t('Verified by {via} — they call themselves “{claimed}” in this session', { via: state.via, claimed }))
+      // the address part of the ✓ is qualified, first: it may no longer reach them
+      if (state.unconfirmedOn !== null) {
+        const date = day(state.unconfirmedOn, o.locale)
+        tips.push(tag('unconfirmed', t('unconfirmed since {date}', { date }),
+          t('Their email address hasn’t been confirmed since {date}, so it may no longer reach them. The sign-in itself is verified.', { date })))
+      }
       if (state.tier === 'passkey') {
         tips.push(tag('passkey', t('(passkey sign-in)'),
           t('Signed in with a passkey only, in a browser or on a new device. This kind of sign-in lasts up to a week.')))
@@ -163,7 +176,9 @@ export function paintVouch(who: HTMLElement, claimed: string, state: VouchState,
       break
     case 'failed':
       label(t('couldn’t check'))
-      tips.push(t('The identity service didn’t answer. Try again in a minute.'))
+      tips.push(state.why === 'incomplete'
+        ? t('The app this file is open in didn’t pass on everything the identity service said, so nothing here is vouched for. Updating that app may fix it.')
+        : t('The identity service didn’t answer. Try again in a minute.'))
       break
   }
   mark.title = tips.join('\n')

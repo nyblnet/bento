@@ -16,6 +16,18 @@ pre-1.0.
   button beside Slideshow shows and hides them, and carries a dot when the
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
+- **The People panel says who vouched for someone, where the app you opened
+  the file in can tell.** In an app that vouches for people (bento/home and
+  the native apps, as they gain bento/id), a collaborator whose key is
+  proven shows "✓ via id.bento.page", with "(passkey sign-in)", "new
+  account", "account changed on <date>" or "unconfirmed since <date>" where
+  they apply, and no ✓ at all for a sign-in that was revoked. If that app
+  cannot pass on everything it was told, the row says "couldn’t check"
+  instead of a ✓. Opened as a plain file or on bento.page, nothing changes.
+- **A show started partway through no longer flashes the first slide.**
+  Presenting from the current slide, or playing a slide's transition, showed
+  the deck's first slide for a moment before the right one. The show now opens
+  on the slide it starts from.
 
 ## [1.3.0] — 2026-11-22
 

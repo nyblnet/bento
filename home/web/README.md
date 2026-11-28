@@ -74,6 +74,21 @@ as `/frame.html`, because some hosts serve a page without its extension. The lib
 path, so no header is ever appended to another (two CSP headers are two
 policies, both enforced).
 
+**Unknown paths answer 404, never the library page.** The build writes
+`dist/library/404.html`: no script, no handler, no shadow root, nothing it
+loads, and its own meta CSP of `default-src 'none'`. The library host must
+answer every path it does not serve with that page and status 404 (Cloudflare Pages does so for a
+top-level `404.html`; Workers static assets need `not_found_handling =
+"404-page"`). Without it a host may fall back to `index.html` (Pages does, for
+a site with no `404.html`), which runs the library's code at whatever path a
+link names. The frame site has no `404.html` and answers unknown paths with an
+empty 404 (on Workers static assets, `not_found_handling = "none"`). Its header rule names `/404.html`
+only: there is no `/*` rule, which would be appended to every path's headers,
+the pinned CSP and Cache-Control of `/` included. The tripwire records this
+page at an unlisted path quietly. `home/web/serve.mjs` serves it the same way,
+so the rigs see what production sends, and `scripts/check-id-hosting.mjs --live`
+checks the deployed host (row `home-404`).
+
 ## The document's store
 
 `kernel/src/docstore.ts` keeps a document's crash-recovery copy and member key
@@ -157,6 +172,35 @@ the very first release passes `--home-web-first`, and a missing list without
 it (or `--home-web-first` over a published one) is refused before anything is
 signed. Publish the site, and so the list, BEFORE deploying the build: a
 deploy the list does not yet hold warns every extension.
+
+**Publish order, every release.** Two signed files withdraw a build, and they
+must agree: the release list (`served.json`, by release `at`) and the kill
+switch's status (`status.json`, by build id, below). The list is the one
+source; the status is signed from it.
+
+1. Sign and publish `served.json` naming the new release (with `--withdraw
+   <at>` for any release being withdrawn).
+2. Deploy the library.
+3. Sign and publish `status.json` withdrawing the old build:
+   `node scripts/sign-home-status.mjs --served <the list from step 1>
+   --from <the published status.json> --withdraw <build>`.
+
+`sign-home-status.mjs` verifies the list's signature and refuses, writing
+nothing, when the two disagree: a release the list withdraws whose build the
+status leaves out, a status withdrawing the build the list serves as current,
+or one withdrawing a build the list carries but does not withdraw. With the
+release key, `--served` is required, and so is `--from` (the status published
+now, signature-verified; `--first` instead only when none has ever been
+published): a status signed from nothing starts at seq 1, which every browser
+that has seen a later one ignores. A status published before the deploy
+stops every tab of a build the host still serves: that fails closed, but it is
+loud for nothing. Two releases can share a build id: it is the hash of the
+library's script alone, so a release that changes only what is around the
+script keeps it (measured: two builds differing only in their library origin
+have one build id; a different frame origin changes it). Withdrawing an older
+release whose script is the current one's is refused as withdrawing the
+current build; the list may still withdraw it, and the signer then warns that
+the kill switch cannot, instead of refusing every status.
 The published histories are checked (`build.mjs --check`, which writes
 nothing) before the release signs anything. The output must be outside the
 site and the published tree and contain neither (checked by folder identity,
@@ -202,7 +246,7 @@ controlled by it; the frame's policy and sandbox are unchanged.
 
 **The kill switch.** Every load fetches `<release base>home/status.json`, a
 small manifest signed with the release key (`scripts/sign-home-status.mjs`
-makes it):
+makes it, from the release list: see "Publish order" above):
 
 ```json
 { "app": "bento-home-status", "seq": 7, "at": "…", "withdrawn": ["<build>", …] }
@@ -254,15 +298,14 @@ move.
 against lists it as the release's worker, with the worker's bytes and every
 file it precaches; a worker or a cached file the list lacks is a mismatch.
 Navigation preload keeps each navigation the tab's own, so the tripwire still
-sees its headers. Still open:
+sees its headers. A response kept out of the HTTP cache (`no-store`, or `Vary:
+*` with `no-cache`) can no longer hide a CSP or text change: the tripwire reads
+the page's bytes from the HTTP cache, and requires them whenever webRequest saw
+the navigation, worker or not. Measured with this build's own worker in control
+(`stage3-*` rows in `scripts/test-webext-tripwire-browser.mjs`); without
+navigation preload those rows pass a hostile page, which is the C1 mutant there.
+Still open:
 
-- **A response kept out of the HTTP cache hides CSP and text changes.** The
-  tripwire reads the page's bytes from the HTTP cache, and with a worker in
-  control it does not require them. A changed page sent with headers that keep
-  it out of the cache (`Vary: *` with `no-cache`, for one) passes unseen until
-  the tripwire requires the bytes whenever the headers came from the
-  navigation (a tripwire follow-up). A changed script is still caught, from the
-  parse.
 - **The tripwire trusts the worker by its URL.** It lists `/sw.js` and checks
   the bytes it fetches itself, but a server can answer the browser's own
   worker request (`Service-Worker: script`) differently from the extension's,
@@ -285,6 +328,7 @@ in it yet.
 | `scripts/test-home-web-build-mutants.mjs` | mutants of those refusals, each red on its row |
 | `scripts/test-home-web-out.mjs` | where a release may put the build: identity containment, the macOS firmlink row and its mutant |
 | `scripts/test-home-web-identity.mjs` | the bento/id agent with the real sign-in host and a CDP virtual authenticator; `--mutants`: one per rule |
+| `scripts/test-home-web-404.mjs` | the 404 page: what the build emits, how `serve.mjs` answers an unknown path, how the release list describes it; `--mutants` runs its own mutants |
 | `scripts/test-home-web-offline.mjs` | stage 3: the worker, offline, updates, the kill-switch drill, the status failing closed, install, the network allow-list; `--mutants` runs its own mutants |
 | `scripts/test-home-web-live.mjs` | the `--live` build: the frame's connect-src measured with real sockets, steering refused, the routing control, released shells staying off the relay in the frame, read-only opens carrying no session, teardown; `--mutants`: one per rule |
 | `scripts/test-shell-standalone.mjs` | every app shell points to bento.page and never depends on it |

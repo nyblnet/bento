@@ -15397,6 +15397,903 @@ replaced before this shipped.
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
 
+## 2026-11-22 — The bento/home tripwire sees the parse as it happens, and a visit cut short is not a tamper warning
+
+Two gaps the security re-check found in the tripwire (entries above), the limit that leaves on links from other sites, a response header nothing checked, and a waiver a service worker could use:
+
+- **The element sequence.** The release list now carries, for each document,
+  the tag names of the elements the parser inserts, in order (without html,
+  head and body, which the parser may imply, and without what a `<template>`
+  holds). The content script sends an early report as the visit starts, and
+  one each time an element or a script is first seen, carrying what is new. A
+  parse that stops being the start of a listed document is a mismatch, whether
+  or not the page goes on to finish: a script hidden in a declarative shadow
+  root runs before the observer can see it, but the elements before it were
+  already reported. The full report's sequence must match a listed document
+  exactly. A report also leaves as the page is left (pagehide), marked so.
+- **A visit cut short.** A report sent after the page was left, after the
+  parse never ended, or with a response that never did, is marked so. If what
+  it shows is the clean start of a listed document, it is 'incomplete',
+  recorded quietly. A script cut short counts as clean only when its text is an
+  exact, strictly shorter prefix of the listed script's: each release publishes
+  its inline scripts' text beside the list (`scripts/<sha256>.js`), fetched
+  only for this check. An honest script cut short is a syntax error if it ever
+  runs, never someone else's code.
+- **Warnings by class.** The one loud warning per origin per session is now
+  one per class: "unverified" (bytes, size or a cache unread, a parse that
+  never ended) and "tampered" (everything else), so a finding of the first
+  kind, which a third party can cause, never silences one of the second.
+- **What a navigation another site started still hides.** The entry above
+  (a link from another site is not a warning) judges those visits on their
+  headers, not their bytes. With the element sequence, an added element on
+  such a visit is a mismatch, so the limit is now: on a navigation another
+  site started (a link or a popup from outside bento.page, including from a
+  `file://` document or a popup a document opens), a same-length change the
+  parse does not flag is not seen, which is text and attribute values. The
+  server can tell these visits apart by their Sec-Fetch-Site, so it can serve
+  such a change to them alone. Scripts, handlers, added elements and the
+  other flags are still caught on them.
+- **A `Refresh` response header is a mismatch.** MEASURED by security: the
+  honest bytes sent with `Refresh: 1; url=<another site>` on a direct visit
+  were judged ok while the tab left for the other site. The honest library
+  never sends one, so the extension records whether the library navigation's
+  response carried a `Refresh` header (webRequest, observing only, beside the
+  CSP and Cache-Control) and any such header is a mismatch. MEASURED while
+  adding it: Chromium acts on the header at the load event, and with
+  `Refresh: 0` the page often leaves before its full report does, so the
+  visit was settled by its early report, which carried no headers, and
+  judged a quiet 'incomplete'. When the full report did arrive, the next
+  navigation had already replaced the frame's webRequest record. So the
+  first early report, sent at `document_start`, reads the header while the
+  record is still this navigation's, and the full report inherits it. A
+  response held open never reaches the load event, so the header never acts
+  on it (measured: the tab stayed). Other response
+  headers (COOP, Link and the rest) are still not checked; that is stated in
+  the extension's README.
+- **Under a worker, unread bytes are waived only when webRequest did not see
+  the navigation.** Security's review of stage 3 (#954) measured that a
+  worker answering navigations hid a text change sent with a header that
+  keeps it out of the HTTP cache (`no-store`, `Vary: *`): the bytes-unread
+  rule was waived for every worker-answered page. With navigation preload
+  (the stage-3 worker's fix), webRequest sees the navigation, which also
+  restores the CSP and Cache-Control checks; the waiver now applies only when
+  it did not (`cspFrom` is not `navigation`). So a preload navigation whose
+  bytes cannot be read is a mismatch, and `Vary: *` no longer hides a change.
+- **The rows run against the build's own worker.** The browser rig used to
+  overwrite the build's `/sw.js` with a cache-first fixture, then serve none
+  by default, so no row ran with the worker that opened the hole. Release A is
+  now the build as it is: every row starts as a first visit (the worker
+  registers), and seven `stage3-*` rows prime a returning visitor (the build's
+  worker active and in control) before a hostile response: a widened CSP,
+  cacheable and `no-store`; one text byte with `Vary: *`, with `no-store`, and
+  with the headers as shipped; and a `no-store` text byte reached from another
+  site. Each asserts the hostile bytes reached the page and ends in a
+  mismatch. Their mutants include the worker built without navigation preload
+  (the rig rebuilds the library with it), which turns the `no-store` rows and
+  the cross-site one into passes. The fixture worker the older rows register
+  is listed in a release of its own.
+
+Guards: the rows and mutants in `scripts/test-webext-tripwire-browser.mjs`,
+`scripts/test-webext-tripwire-mutants.mjs`, `scripts/test-webext-tripwire.ts`
+and `scripts/test-home-web-build.mjs`.
+
+## 2026-11-23 — bento/id directory: real mail through Amazon SES, and a stop list fed by signed SNS events
+
+The directory's mailer was a stub that refused every send under `MAILER =
+"ses"`. It now signs an SES v2 `SendEmail` with Signature Version 4 on
+WebCrypto (`server/directory/src/ses.js`), and SES's bounce and complaint
+events arrive at `POST /v1/mail/events` (`sns.js`). What was settled:
+
+- **"Accepted" is a 200 with a MessageId, nothing else.** A change waits only
+  once its notice was accepted (security's D1), so a 202, a 200 without an id,
+  or any other 4xx is a refusal. A throttle (429) is a refusal too, with no
+  retry inside the sender: retrying is a caller's decision.
+- **Unknown outcomes are never "not sent".** Our own timer aborting the
+  request, a broken connection and a 5xx all carry `code: 'timeout'`, the
+  class callers already treat as "may still arrive" (security's C8). The
+  maintainer's final pick on C8 is still open; this only keeps the ambiguous
+  cases out of the "refused" class, which C8 already forbids.
+- **The topic is pinned, not just the signature.** Anyone can create an SNS
+  topic in the region and subscribe our URL to it, and AWS signs that topic's
+  messages too. So `TopicArn` must equal `SES_EVENTS_TOPIC_ARN` exactly, before
+  the certificate is fetched; the certificate URL is pinned to
+  `sns.<SES_REGION>.amazonaws.com` and its `.pem` path; only SignatureVersion 2.
+- **A stop is a refusal.** A stopped address's refused kinds throw (`code:
+  'suppressed'`) before anything is sent: never a silent drop reported as
+  success. The record lives in the address's own Roster object (named by the
+  address's hash; the record holds no address), so there is no new object
+  class or migration, and the one check is in `deliver()`.
+- **Which kinds a stop refuses is open** (`MAIL_STOP_APPLIES`). Until security
+  rules, only setup links: a stranger's setup requests could provoke a
+  Permanent bounce on a real mailbox, and no stranger-fillable thing may hold
+  back a roster, reset or void mail (G10). How an address leaves the list and
+  how long a record is kept are the maintainer's; neither is built.
+- **SES's own suppression must be off** in the configuration set. Otherwise SES
+  answers 200 and silently drops mail to an address on its list, and
+  "accepted" would stop meaning sent. Only the account can be checked for this,
+  so it is a deploy step, not a rig.
+- **No endpoint override.** The region is regex-pinned because it becomes a
+  hostname; the only way to point the sender elsewhere is a function-typed env
+  seam, which a wrangler var or secret can never be.
+
+Guard: `scripts/test-directory-ses.ts` (a fake AWS that re-derives every
+signature with node:crypto, AWS's published SigV4 example vectors, a TEST SNS
+certificate) and `scripts/test-directory-ses-mutants.ts`, in their own CI job.
+## 2026-11-22 — bento/home's library host answers unknown paths with a script-free 404
+
+Security's review of the tripwire (#956, its D1): a host that answers a path
+it does not serve with `index.html` (Cloudflare Pages does, for a site with no
+`404.html`) runs the library's code at any path a link names, and hands a
+third party a free decoy for the tripwire. So:
+
+- `home/web/build.mjs` writes `library/404.html`: no script, no handler, no
+  shadow root, nothing it loads, and a meta CSP of `default-src 'none'` (a
+  host's 404 response carries no header rule of its own). It is never a copy
+  of `index.html`. Its header rule names `/404.html` only: a `/*` rule would be
+  appended to every path's headers, including the pinned CSP and
+  Cache-Control of `/`.
+- The library host serves it with status 404 for every unknown path; the
+  frame site has none and answers an empty 404. `home/web/README.md` says how
+  (Pages: a top-level `404.html`; Workers static assets: `not_found_handling`).
+  `home/web/serve.mjs` does the same, so the rigs see what production sends.
+- The tripwire records the page quietly at an unlisted path (`unlisted`), and
+  the same page with a script added is a loud mismatch.
+- `scripts/check-id-hosting.mjs --live` gains row `home-404`: a random path on
+  home.bento.page must answer 404 with no `<script>`. bento/home's no-framing
+  row skips that response (header rules apply by path, so the host's 404
+  carries none; the page has nothing to frame).
+
+Guards: `scripts/test-home-web-404.mjs` (with `--mutants`), rows
+`unlisted-404-build` and `unlisted-404-build-script` in
+`scripts/test-webext-tripwire-browser.mjs` (a mutant each), and the
+`home-404` fixtures in `scripts/test-check-id-hosting.mjs`.
+## 2026-11-22 — bento/id directory: a member's passkey stops a reset
+
+The reset-stop route (`/v1/roster/reset/void`) no longer refuses at its last
+step. A member stops a waiting reset with its passkey over the kernel's `vrs.`
+text, which the directory checks with `verifyResetStop` over the chain it
+holds (security's C5 on #944). This supersedes "refuses at the last step" in
+the 2026 entry on who may stop a reset.
+
+- **The age is judged at the reset's FIRST request** (C4, C4′). A reset
+  carries `firstRequestedAt`. When an undo of a set-aside removal asks the
+  reset again (C3), the re-ask keeps that time. The directory refuses
+  `new-account` when the first request came in the account's first 14 days,
+  before it calls the kernel. The kernel is given the RE-ASKED time, because
+  its `order` rule needs a link asked after the head before it. So a reset
+  begun on day 13.9 stays unstoppable by a member even after a day-14.1 undo,
+  and an old account's re-asked reset can still be stopped. This avoids a
+  kernel change (an optional first-request time in `ResetStopOpts`); if
+  security wants the kernel itself to carry it, that is a separate kernel
+  change.
+- **A stop does what the reset's own Cancel does.** The reset is dropped. A
+  removal it set aside waits again at its own time, with its undo link. The
+  reset's link then answers `stopped`. The address is mailed, naming the
+  passkey that stopped it, and the stop is logged (`reset-stop`, with who).
+- **Passkeys only, for now.** A recovery-key or consent-key member is refused
+  by name (`signer-kind`) until their proofs are wired. The signature counter
+  is compared and stored by the directory in the same step, because the
+  kernel's member proof does not compare counters. It is compared and stored
+  only AFTER the kernel accepts: the stop reads the counter from
+  authenticator data nothing has verified yet, so storing it first would let
+  an assertion the kernel refuses (no valid signature needed) set the counter
+  to 2^31 and lock the member's real stops out. A row and a mutant pin that
+  order.
+- The sign-in host's /account page is how a person reaches it: "Stop a
+  waiting reset…" reads the waiting reset from `GET /v1/roster`, shows when it
+  was asked for and when it would take effect, and only on a second press
+  asks for a passkey over the `vrs.` text for that reset. The page's
+  `vrsText` is checked byte for byte against the kernel's `buildVrs`. The
+  directory still judges everything (age, signer, kernel verifier); the page
+  only names the refusal.
+- After a member's stop, the reset's own mailed link opens a "stopped" view
+  on the void page (a passkey stopped it, when, and which email names the
+  passkey), not the neutral "no longer works".
+
+## 2026-11-22 — bento/home: the kill switch's status is signed from the release list, never beside it
+
+Two signed files withdraw a bento/home build, and nothing tied them: the
+release list the tripwire checks (`served.json`) withdraws a release by its
+`at`, the kill switch's status (`status.json`) by build id. Security's review
+of stage 3 (#954, its C3) asked for one source. The build id is derivable
+from the list: it is the sha256 of the library page's one inline script, which
+is `scripts[0].sha256` of the library origin's `/` entry.
+
+- **`scripts/sign-home-status.mjs --served <served.json>`** verifies the
+  list's signature (against the release key, or the signing key's own public
+  half for a rig or rehearsal) and refuses, exit 2 and nothing written, when
+  the status disagrees with it: a release the list withdraws whose build id
+  the status leaves out; a status withdrawing the build the list serves as
+  current; a status withdrawing a build the list carries but does not mark
+  withdrawn. A build the list no longer carries may still be withdrawn.
+  Signing with the release key requires `--served`.
+- **Publish order**, written in `home/web/README.md`: sign and publish the
+  list naming the new release, deploy, then sign and publish the status that
+  withdraws the old build. A status published first fails closed, but stops
+  every tab of a build the host still serves.
+- **Two releases can share a build id** (measured: builds differing only in
+  their library origin do), so withdrawing an older release whose script is
+  the current one's is refused as withdrawing the current build. Such a
+  release is also never counted as one the status leaves out: the signer warns
+  and goes on. Counting it deadlocked the kill switch (security's review of
+  #977, measured): with the list `[A2 current, A withdrawn, C]`, A sharing
+  A2's id, every status was refused, an emergency withdrawal of the unrelated
+  C included. The tripwire's list still flags a page served from A.
+- **A status never starts from nothing with the release key**: `--from <the
+  published status.json>` (signature-verified, against the same key rule as
+  the list) or an explicit `--first` is required. Without it the signer wrote
+  seq 1 and dropped the earlier status's withdrawals; a browser that has seen
+  a later seq ignores a smaller one, so that withdrawal failed open, quietly.
+
+Guard: `scripts/test-home-status-sign.mjs` (two real development builds,
+throwaway keys; `--mutants` turns each refusal off and requires its row red).
+## 2026-11-23 — bento/id: the deletion rules the directory keeps, a void of a deletion can remove its asker, and a deletion record
+
+Settles the two rules the 2026-11-14 entry left open for the directory's
+deletion route (security's review of #962, D-A1 and D-A2), and adds the
+record that D-A4 asked the kernel to reserve before the route is built.
+
+- **Voiding a deletion bars its signer for 72 hours, whatever its kind** (a
+  passkey, the recovery key or a consent key). Without it a stolen member key
+  re-files `adel.` the moment the owner voids it, the one-change-at-a-time
+  queue stays full, and the owner's change removing that key is refused for
+  as long as the thief keeps filing.
+- **The void can also remove the asker.** A `q` link's `voided` may now carry
+  the `adel.` text, its signer and the signer's proof, not only a `ros.`
+  change. The cause is SHA-256 of the adel. text; its address is the
+  account's; its `headHash` must be the link's previous head (read from a
+  pin: the pinned link's own previous hash); the signer is an unquarantined
+  member of that head; its proof covers the exact adel. text. There is no seq
+  to compare, since an adel. is not a head. The rest is a `q` link as before:
+  the asker gains `~q`, another live member remains, and the `x` removal or the
+  `u` undo follows. A peer verifies all of it offline.
+- **A reset request drops a waiting deletion.** It is never set aside to be
+  put back, so stopping the reset does not bring the deletion back. When the
+  wait ends the directory re-checks that the deletion is still the waiting
+  change, was not voided, the head is still the one it names, and no reset is
+  waiting.
+- **`rdel.` is the deletion record**:
+  `rdel.<accountName>.<lastHeadHash>.<lastSeq>.<requestedAt>.<deletedAt>.<m|e|o>.<kid>`,
+  signed by a directory key like `rip.`. It names the account by its storage
+  name (the SHA-256 that starts every passkey user handle), not by the
+  address, so the record kept after a deletion does not hold the address. A
+  member (`m`) or mailbox (`e`) deletion waited 72 hours; an operator's (`o`)
+  need not. The directory signs and stores it BEFORE it removes anything, and
+  serves it where peers fetch the chain. A peer accepts it only for its own
+  pinned head, or for a later head of the same account (a higher seq,
+  requested after the pin ripened), WITHOUT the links in between. That is
+  deliberate, not an oversight: the record can only make a peer show the
+  weaker claim ("deleted", no ✓); whoever holds the directory's online key
+  can already sign an operator record at the pinned head with no wait, so
+  asking for the links adds nothing against that key; and the stronger
+  direction (a new account read as the pinned one continuing) is closed by
+  how a later chain is read after a record. A record requested before the pin ripened
+  belongs to an earlier account at that address and is refused, so an old
+  deletion can never be replayed against a new account. The peer shows
+  "account deleted" with no ✓; a later setup at the address reads as a new
+  account that changed, never as the pinned one continuing and never as a
+  bare "unknown". The retired binding era's `tomb.` is not reused.
+- **`ResolvedIdentity.revoked` gains `'deleted'`.** It is one of the fields
+  whose absence is the stronger claim: a relay that drops it shows a deleted
+  account with a ✓, so every relay between agent and document must forward it.
+- **Still open, the maintainer's**: the no-passkey way to delete (a direct
+  mailed-link deletion, which would need a member's stop statement so it is no
+  faster or less stoppable than a reset, or "reset, then delete"), and how long
+  the directory keeps the record.
+
+Guards: `scripts/test-roster.ts` (the voided-adel chain rows, `deletionRecords`
+with every signature checked valid, `afterDeletion`), `test-roster-mutants.ts`,
+and `scripts/test-identity.ts`.
+## 2026-11-22 — bento/id directory: a mailer timeout is not a refusal
+
+A Remove on the void page sends its "suspended" notice before it acts, and
+answers 503 when the send fails. The mailer is raced against a 30-second
+timeout, and a send that loses that race can still be accepted and delivered
+afterwards: the person then holds a "suspended" mail for a passkey that was
+not suspended, while the page said the mail was not sent. So the directory
+now tells the two apart. `deliver` rejects a timeout with `code: 'timeout'`;
+Remove answers 503 `mail-timeout` for it and 503 `mail` only for a refusal.
+The void page says, on a timeout, that the email may still arrive and that if
+it says a passkey was suspended, it was not: this page is right. Nothing
+changes in either case. Keeping the timed-out mail's undo link alive was the
+other option; it was not taken because the roster is right and only the
+mail's wording is at stake. Guards: the roster rig's P19 row (a mailer that
+delivers after the timer) and the void-page row, each with a mutant.
+## 2026-11-22 — bento/id directory: what it keeps only for a while, and when each goes
+
+The privacy notice's retention sentences were written around two gaps: a
+setup link's send times and an expired setup or reset link's hash were
+deleted only when the same address was asked about again (so, for an address
+asked about once, never), and the per-IP ledger could keep a day's salt and
+counters until a minute after the NEXT day (a request in the first minute of
+a day replaced the pending purge). Now:
+
+- **The Roster object's alarm purges** what is kept only for a while: setup
+  send times 31 days after each (the budget's own window, so nothing the
+  budget reads is lost), an unused setup or reset link's hash at its expiry,
+  and an ended void link's hash 31 days after it ended. Every write of these
+  keys brings the alarm forward with `schedule`, never later. The purge of
+  send times only deletes, so it never changes what the budget allows.
+- **The ended-link keep is 31 days.** The #952 ruling accepted the last-16
+  list as no oracle but set no lifetime. 31 days is longer than any link's
+  life (a removal's undo is 72 hours), so a late click is told what happened
+  for weeks; after it the link answers like one never known, the neutral
+  wording the page already has.
+- **The ledger never pushes its purge later.** Minting a day's salt schedules
+  that day's purge only if it is earlier than the pending one, and each purge
+  re-arms for the day still held. So a day's salt and counters go a minute
+  after the day ends, and the notice says exactly that.
+
+The setup-times sentence in the notice stays the maintainer's placeholder.
+The code now supports "deleted 31 days after it was sent".
+## 2026-11-23 — An identity answer says when it is complete (`ResolvedIdentity.fields`)
+
+- **The problem.** Four of the option-G fields on `ResolvedIdentity`
+  (`revoked`, `resetAt`, `rosterChangedAt`, `unconfirmedSince`) are the
+  STRONGER claim when missing: not revoked, no recent change, address
+  confirmed. A document cannot tell "this does not apply" from "a relay on the
+  way dropped it", and relays that drop them exist today: a host bridge that
+  copies a fixed list of the original six fields turns a revoked sign-in or a
+  lapsed address into a plain ✓. Rules that every relay must forward the
+  fields (2026-11-14 above) bind the relays someone remembers to update; they
+  do nothing for one already built.
+- **The marker.** An answer carries `fields: 'g1'` (`RESOLVED_FIELDS`) only
+  when it holds every G field that applies (`RESOLVED_G1_FIELDS`). The agent
+  sets it when it has filled them; a relay forwards it only together with all
+  of them, type-checked, and never adds one itself. A document draws no ✓ for
+  an answer without it. Because it is a field of the answer, a relay that
+  copies a fixed field list drops it along with everything else, so every
+  older host fails closed whatever its version, with no version check. A
+  host-level capability flag was the alternative and fails open in exactly
+  that case: the host says it is new while one hop behind it is old.
+- **'g1' never changes; a later field set adds its own marker.** An agent
+  that carries every g1 field keeps sending `fields: 'g1'`, for good. Slides
+  shells are frozen inside every saved file and accept exactly `'g1'`, so an
+  agent that replaced it with `'g2'` would turn every row of every file saved
+  before then into "couldn't check", with no fix but breaking the rule back. A
+  later set announces itself with a NEW optional field of its own beside
+  `fields`, never a new value of it. A relay that only knows `g1` forwards
+  `'g1'` with the g1 fields and drops the new marker, so it still cannot vouch
+  for fields it has never seen, and a reader of the later set fails closed
+  through the same relay.
+- Guarded by `scripts/test-identity.ts`: the marker is the last field of
+  `ResolvedIdentity`, `RESOLVED_G1_FIELDS` is exactly the optional fields
+  before it, in order, and the six required fields are unchanged. Mutants that
+  drop a field from the list, add one to the interface only, move the marker,
+  change its value or unfreeze the list each turn a row red, and a row pins the
+  never-changes rule in both identity.ts and this entry.
+
+## 2026-11-23 — The People panel's identity tiers are on wherever there is an agent
+
+Supersedes two bullets of 2026-11-12 "The People panel's identity tiers":
+"Built, flag off" and "vouchedBy's 80-character cut keeps 'unconfirmed'".
+
+- **On by default; the agent is the gate.** slides' People panel asks the
+  identity agent whenever the host exposes one. `identityAgent()` is null on
+  `file://`, on bento.page and in any host without an agent, so there the
+  panel is unchanged: no resolve call and no `.vouch` node, with the People
+  list's HTML identical to the kill-switch run. localStorage
+  `bento-people-vouch` = `off` is a viewer's and QA's kill switch; any other
+  value, or none, leaves the tiers on. Under the kill switch the agent's global
+  is never even read.
+- **No ✓ without the completeness marker.** An answer earns a ✓, or any verified
+  name, only when it carries `fields: 'g1'` (`RESOLVED_FIELDS`, entry above),
+  which says it holds every G field that applies. Without it the row reads
+  "couldn't check", with a tooltip saying the app the file is open in did not
+  pass everything on. That is what makes the switch safe to ship before the
+  directory and the host relays are ready. A relay that copies the original
+  six fields, as home/bridge.js does today, drops the marker with them, so
+  that host shows "couldn't check" and never a ✓ it cannot back. The marker
+  counts only as the answer's OWN data property: one inherited through a
+  prototype (a polluted `Object.prototype`, an answer built on an object that
+  carries it) or an accessor is "couldn't check", since this is the one gate
+  meant to fail closed. A revocation and a changed binding (`changed: true`,
+  "⚠ changed") are shown with or without the marker; both only ever remove
+  the ✓. A changed row says nothing about revocation: an answer that lost
+  `revoked` on the way still reads "⚠ changed", never a ✓.
+- **vouchedBy is never parsed.** The panel accepts it only in the kernel's
+  `isVoucher` shape; anything else, such as a voucher with a qualifier
+  written into it, is "couldn't check". The 80-character cut and its
+  qualifier-keeping rules are gone: the lapse travels as `unconfirmedSince`,
+  and the tier as `tier`. `managedBy` is not shown until organisation
+  identity exists.
+- **"unconfirmed since <date>".** A marked answer with `unconfirmedSince`
+  keeps its ✓ (the sign-in is verified) and gains that tag first, before the
+  tier tags, for as long as the agent sends it; it has no display window. The
+  three fields whose absence is the stronger claim (`resetAt`,
+  `rosterChangedAt`, `unconfirmedSince`) must be absent or a time: any other
+  value present, `null` included, is "couldn't check", never read as absent.
+  A time is a positive integer a `Date` can hold (at most 8.64e15).
+  The display windows run on the viewer's clock, and a reset or roster change
+  dated in its future keeps "account changed on <date>" (the safe direction).
+  A `revoked` value outside the contract (`'deleted'` before that state
+  exists) is "couldn't check", and so is `null`, `0`, `''` or `NaN`: the
+  kernel passes the host's answer through, so the panel is the only place
+  `revoked` is typed, and only absent or `false` means not revoked.
+- **What a production ✓ still waits on.** No row can reach a ✓ in production
+  until a host exposes an agent to documents and forwards every G field plus
+  the marker, the presence carries what the agent needs to map a room key to a
+  bento/id device, and the directory is live. Each of those fails closed
+  here: no agent means no change, and a missing marker or binding means
+  "couldn't check" or "not verified". So a slides release can carry this
+  before any of them.
+- `scripts/test-identity.ts`'s pin now states the invariant as "an agent
+  present and the kill switch unset gate the call; the marker, read as an own
+  data property, gates any ✓; a changed result comes only from changed: true".
+  Mutants that ignore the kill switch, fail it open, remove, comment out or
+  move the marker check after the verified result, read the marker through
+  the prototype, or return a changed result from anything but changed: true
+  each turn it red, beside the fourteen earlier widening mutants. Guarded behaviourally by
+  `scripts/test-slides-people-tiers.ts` (39 mutants) and
+  `scripts/test-slides-people-tiers-browser.mjs`, which measures every mark
+  and tag at 1440, 1000, 760, 390 and 320px. Its ten build mutants include
+  a missing marker check, the agent asked despite the kill switch, a stand-in
+  agent where there is none, the phone popover's viewport cap removed, the
+  unconfirmed tag painted grey, and a changed binding hidden without the
+  marker.
+
+## 2026-11-26 — bento/id: a peer's identity is checked from the certificates it carries (the account anchor, the frame's identity port)
+
+A document in bento/home's sandboxed frame reaches the identity agent over a
+port, and a person's agent answers `resolve` for someone else in the room
+from public certificates that person's document carries. Kernel half; the
+frame client and the library's consent dialog are home/web's.
+
+- **`accountPub` is the account ANCHOR under option G:** `'g:' +
+  base64url(sha256(the exact ros. text at seq 0))` (`roster.ts accountAnchor`),
+  null unless the verified chain starts at seq 0. The name is kept, so no
+  contract bump; no document read `accountPub` as a key.
+- **The anchor is not continuity of the person.** A reset continues the roster
+  chain, so the anchor is the same after every reset, including one by someone
+  who took the mailbox. The continuity signals are `resetAt`, `rosterChangedAt`
+  and `accountSince`, which the document already shows. No host and no
+  document may read "same accountPub" as "same person, nothing changed". A
+  deletion and a new setup at the same address give a new anchor, even with the
+  same passkey, because ros.0 carries the directory's nonce and time.
+- **Peer-carried proofs, verified offline.** `IdentityProof = {device, chain}`
+  (the device certificate with its passkey or consent-key proof and current
+  watt., and the roster chain from seq 0); `PublicIdentity.proof?` and
+  `ResolveQuery {pub, proof?}` are additions within contract 1. There is no
+  directory lookup route for a device key, now or later without a new ruling:
+  it would tell the directory who meets whom, be an enumeration oracle, and add
+  an online dependency.
+- **One verify order** (`identityport.ts createProofResolver`, one per open):
+  the chain from seq 0 under the PINNED directory keys only; the longest
+  chain the open holds for that anchor; the device against that chain, with
+  `cert.devicePub` equal to the queried key and a current watt. under a pinned
+  kid; the lever's predicate; own-account status; `composeResolved`. Every
+  failure answers null and nothing throws across the port.
+- **A peer's revocation reaches others within one watt. lifetime, at most
+  24 hours,** as "not verified": sign out everywhere, account deletion, removal
+  or quarantine of the certifying passkey, and the lever for a resolver that
+  holds no incident record. That holds only while the directory refuses to
+  renew a watt. in each of those cases. Only the agent's own account reports
+  `revoked: 'signout'` or `'deleted'` by name; peers are never polled, since
+  polling is the lookup route under another name.
+- **Residual: a lone peer can hide later links for up to one watt.
+  lifetime.** The presenter chooses the proof, and watt. binds only the
+  certificate, not the current head. So a peer can send a chain that ends at
+  its certificate's head and omit a later removal or quarantine. The resolver
+  judges each device against the longest chain it holds for the anchor, so
+  the omission is caught whenever another member of the same account in the
+  room carries a fresher chain. Two chains for one anchor where neither is a
+  prefix of the other are a fork: null for both, counted. A head hash in
+  watt. would close the residual; it is a format change for later.
+- **`name` and `email` are both the address** from the verified chain, and
+  `vouchedBy` is `id.bento.page`. No signed statement carries a display name
+  under G, and a certificate's label is chosen by the page that asked, so a
+  label of "Mallory" can never become a name shown with ✓.
+- **`revoked: 'incident'` only on the lever's own predicate** (`devices.ts
+  leverCovers`): a wdev., or a dev2. via passkey, with watt. ob = 1, whose
+  ceremonyAt falls inside the window, both ends included (an open window has
+  no end). Only the ceremony: a renewal logged inside the window does not
+  bring a key made before it into the incident, because the lever revokes
+  enrolments made in the window, and the watt.'s loggedAt moves on at the
+  next renewal, so keying on it would revoke a certificate the directory never
+  marked and un-revoke it a day later. A native dev2. that a consent key
+  co-signed is never covered, which matches the lever. The directory's lever
+  keys on the same ceremonyAt (never its record's enrolment time) and should
+  import this one function instead of keeping its own copy; until it does,
+  `kernel/fixtures/lever-v1.json` holds rows both sides must agree on.
+- **`composeResolved` is the only setter of `fields: 'g1'`.**
+  `checkResolved` (the one type-checked relay) keeps the marker only when
+  every G field present passes its type and `accountPub` matches
+  `^g:[A-Za-z0-9_-]{43}$`; it never adds the marker. A K2-era 87-character
+  point still passes as a plain field but never with g1. Both are keyed by
+  `RESOLVED_G1_FIELDS`, so a field added to the list without a rule does not
+  typecheck.
+- **The 64 KiB proof cap is one constant** (`PROOF_MAX_BYTES`, UTF-8 JSON),
+  about 75 roster links. Over it, whoami answers without the proof and resolve
+  answers null, both counted. A checkpoint design is later work and needs its
+  own ruling.
+- **The port (`serveIdentity`) is docstoreport's twin:** closed ops (whoami,
+  sign, resolve), exact key sets, symbol keys and non-plain prototypes
+  refused, rising ids, rate and in-flight caps, drops counted and the session
+  closed at the limit, the entry and docId from the host only, `event.origin`
+  never read. Sign and resolve answer only after whoami returned an identity in
+  that session; before that, sign is 'declined' and resolve null, without
+  asking the agent. A whoami that answered null is final for the session.
+  Invite and revoke are 'unavailable' in phase 1.
+- Guarded by `scripts/test-identityport.ts` (real signatures from the
+  deterministic test keys) and `scripts/test-identityport-mutants.ts`, where
+  each mutant must turn its own row red.
+## 2026-11-22 — bento/id: a browser key retires itself, and a retired key is not a revoked one
+
+The directory now takes the kernel's `wret.` without a successor on
+bento/home's own routes (`POST /v1/home/retire/challenge`,
+`POST /v1/home/retire`, `server/directory/src/retire.js`). bento/home signs
+it with the old key W whenever it stops keeping or trusting W: at a sign-out,
+when a held key fails its check and is dropped, and after a new ceremony
+replaces it. From then on the directory refuses W's renewals, so a copy of W
+taken earlier dies with its last countersign, within 24 hours, instead of
+living to the 7-day cap.
+
+- **Only the empty form.** The form naming a successor is refused (400
+  `successor`). No ceremony carries a retirement: bento/home retires the old
+  key by its own request after the new ceremony has finished. That keeps the
+  enrolment request the sign-in host sends unchanged, never routes a
+  retirement through the sign-in host, and needs no stored ceremony nonce to
+  check a successor against.
+- **Its own challenge audience** (`retire`). A renewal's or an enrolment's
+  challenge used at the retirement route, or the reverse, is spent and
+  refused. The kernel's `verifyWret` runs before the challenge is spent.
+- **Only a browser key this address enrolled.** Anything else (a passkey's
+  key, another account's browser, a key never enrolled) is 403 `unknown`, and
+  nothing is written.
+- **Remembered for the life of the account.** The retirement is its own
+  record (`rt:<key>`), which the certificates' sweep never deletes, so the
+  key can never enrol again after its certificate is swept. Nothing
+  un-retires a key: not a suspension undone, not the incident lever.
+  Retention or account deletion work must leave these records alone (or carry
+  them into whatever the deletion keeps).
+- **Not a revocation.** It touches no other certificate and no sign-out
+  cut-off, and it is not mailed: it happens at every routine sign-out and
+  sign-in. The status route answers a new state, `retired`, never `revoked`,
+  so peers never show a routine renewal as a revoked sign-in. A certificate
+  that is revoked still answers `revoked`: the stronger fact wins. Anything
+  that composes a device's standing for a document must treat `retired` as
+  "not revoked" and must not drop a real `revoked`.
+- **Never a gate at a ceremony.** An enrolment looks only at its own new key,
+  so a browser whose previous key was retired, by its owner or by a thief
+  holding a copy, signs in again with a passkey.
+- **bento/home never waits for it.** The local forget comes first; the
+  retirement is best effort, and a directory that does not answer leaves the
+  sign-out exactly as fast. A check-in answered 403 `retired` ends the
+  sign-in like a revocation, over the record it was made from, so another
+  tab's newer sign-in stands.
+
+## 2026-11-22 — bento/id: sign out everywhere is accepted, at most three a day per account
+
+The directory's `/v1/web/signout` routes no longer answer 501: the kernel's
+`wout.` (`kernel/src/roster.ts` `buildWout`) is the text a member's passkey
+signs, and the directory's own checks (spent first, `at` equal to the
+challenge's, an unquarantined passkey member, the assertion over the exact
+text with its stored counter swapped in one step) match the kernel's
+`verifyWout` row for row. The directory keeps its own pk path rather than
+calling `verifyWout`, because it needs the assertion's counter for that
+swap and spends the challenge earlier, in the address's object.
+
+Security's D-W2 on #962, both halves:
+- **The mail names the signer.** The notice to the address carries the
+  fingerprint of the passkey that signed, so the owner can tell which member
+  key to remove.
+- **Three accepted sign-outs per account in any 24 hours**, whoever signs
+  them and from whichever IP, counted in the account's own object once a
+  member's assertion has verified. Past that, 429 `rate-limited`, and nothing
+  is revoked, logged or mailed. Without it, a stolen member key could keep
+  every browser signed out on a loop until it is removed, which takes at
+  least 72 hours. Removing the key is the cure; the roster change is not
+  held up by the limit. The incident lever is not counted.
+
+The sign-in host's `wout.` text was always these bytes; only its
+"provisional" wording goes.
+
+## 2026-11-23 — bento/id: the directory checks a sign-out with the kernel's verifyWout
+
+The directory's `/v1/web/signout` no longer carries its own copy of the
+`wout.` checks. The address's object spends the challenge, ripens the head,
+reads the account's stored chain (verified with `verifyRosterChain` under the
+directory's own keys) and hands the text and the member's assertion to the
+kernel's `verifyWout`, with the sign-in host as the only origin and
+`spend: () => true`, because the challenge is already spent. Nothing it
+checks is checked again beside it.
+
+Two things stay with the directory, because the kernel's member proof does
+not do them:
+- **The signature counter.** A kernel member proof never compares counters
+  (a peer sees links out of order), so the directory reads the assertion's
+  counter, refuses one that does not move forward (0 over 0 is allowed, for
+  an authenticator that keeps none), and stores it compare-and-set in the same
+  step (security's D6 on #953).
+- **The per-account limit** (D-W2 on #962), counted only after the kernel
+  accepted the assertion and before anything is signed out. The number is a
+  named constant, `BROWSER_LIMITS.signoutsPerDay`.
+
+The answers keep their words: a kernel refusal of the challenge or its time
+is 400 `nonce`, of the text or its address 400 `text`, of the signer 403
+`not-member`, of a suspended one 403 `quarantined`, and an assertion keeps
+its own `assertion-<reason>`. One ordering moves: the text's time is now
+checked after membership, so a wrong time from a passkey that is not a member
+answers 403 `not-member` where it answered 400 `nonce`; the challenge is
+spent either way. Only passkey members can sign out; a recovery key's or a
+consent key's sign-out stays refused until its proof is wired.
+## 2026-11-28 — Per change, the quick check on GitHub; in full, only at release, locally
+
+The maintainer's rule: a change's tests take no more than a minute, and the
+full check runs only at release, on the machine that deploys. Before this, one
+kernel pull request cost about 127 job-minutes over 68 jobs in 12 workflows,
+and the required check alone took 9 to 11 minutes.
+
+- **GitHub runs one workflow.** `.github/workflows/ci.yml` has one job,
+  `validate` (the name branch protection requires), which runs `node
+  scripts/check.mjs --affected HEAD^1` on GitHub's merge commit: only what the
+  pull request's diff reaches. Every other workflow is gone from GitHub. Their
+  steps moved to `.github/checks/*.yml`, step lists GitHub never runs, which
+  the check reads; `pr-build-size` (six builds, far over a minute) and its
+  comment were deleted.
+- **The steps are the check files and the validate actions.** The check
+  (scripts/lib/check-plan.mjs) reads every step of every validate action and
+  check file and runs it as CI did: its text, env and working directory, under
+  the skip rule of scripts/lib/ci-skips.mjs. A rig is registered the one way it
+  was, at the end of its zone's slice (or as a job in a check file). Setup
+  steps (installs, builds, the pinned browser and jsdom) become shared
+  providers, made once.
+- **What a diff reaches** is decided by static imports, literal dynamic
+  imports, string literals naming repo files in node tooling (rigs, scripts,
+  configs; never comments, never bundled app source), the scripts a step names
+  (an esbuild-bundled rig too), a step whose definition changed, and a built
+  shell (`<app>/dist-single`), which reads everything its app's build imports.
+  Steps at distance 0 or 1 run; further ones run nearest first within a time
+  budget. A build runs for each app whose own source changed, else for slides
+  when shared code its build reads changed. What the scan cannot see is tiered
+  full or mapped by hand, never assumed reached.
+- **Tiers, in one file** (scripts/lib/test-tiers.mjs), each entry with its
+  reason: fast (the quick check; the default), full (the release check), deep
+  (a toolchain the release machine lacks: Linux desktop packages, Windows, the
+  Android SDK, Playwright's Firefox on macOS 27). Mutant suites, second browser
+  engines, anything over 5 s on the runner, and browser rigs other than one
+  headless load per app are full. Tests are re-tiered, never deleted:
+  test-ci-registered.ts fails if a rig is in no tier or an entry names no step.
+- **Released-surface invariants are pinned**: when the diff reaches them they
+  run whatever the distance or budget: the splice gate (shell-gate.mjs, the
+  same gate release.mjs runs before signing), CRDT convergence (300 seeds per
+  change, 3000 in the full check), the preview, save and seal escapes, the
+  gate-1 verifier and the signed release history. One invariant rig could not
+  stay: `test-shell-loader.ts` times a hidden tab's splash against a 50 ms
+  bound, and inside the quick check on the runner it measured 51 to 164 ms (5
+  to 12 ms in every sequential run, and when run first), however it was
+  scheduled. It is in the full tier.
+- **The full check runs at release, on the release machine** (`node
+  scripts/sweep.mjs <commit>`): every step of the full tier, in a worktree of
+  its own, the result kept by sha, a failure rerun once alone (marked flaky,
+  still red) and bisected since the last green result. Every step it does not
+  run (the deep tier; a step for another platform) is listed as NOT RUN, never
+  passed over. `release.mjs` refuses to build or sign unless the commit it
+  releases has a green full check and the tree is that commit; its own
+  conformance gate is unchanged. Nothing runs it on a schedule. This is where
+  the model this copies differs (there the full run gates nothing): a shipped
+  Bento file carries its shell and cannot be recalled, so the step that ships
+  waits for the whole check. Merges do not.
+- **Security's named rows and mutants.** Security rulings name rows and mutant
+  suites as approval conditions. Those conditions are met at review, where
+  security runs the named suites on the pull request's head by running them
+  (`node scripts/check.mjs --only <rig>` runs one as CI would), and by the full
+  check a release requires. They are not met per push: most mutant suites are
+  in the full tier, so a green `validate` says nothing about them, and a
+  review that cites CI for one has not run it.
+
+## 2026-11-22 — bento/id directory: a native app's consent key asks and co-signs roster changes
+
+The directory (`server/directory/src/consent.js` and the Roster request op)
+now takes the roster changes the kernel already defines for a consent key
+(`ck`), the `roster` purpose of `cns.`:
+
+- **A consent key asks** with its `cns.` over the exact `ros.` text instead of
+  an assertion. The directory checks it live with the kernel's
+  `verifyConsent`, recomputing the transcript from its own audience (`dir`),
+  the challenge the `ros.` names and the text it is about to apply, with the
+  purpose fixed in code (never read from the request); then it runs the same
+  check a peer will (`memberProof`, timed at the request). Quarantine, the
+  72-hour cooldown after a Cancel, one change at a time and the hold apply
+  exactly as to a passkey.
+- **Ripeness has one source.** A key is ripe once it has been a member for
+  72 hours (inclusive) at the request, by its `since` in the directory's own
+  stored chain run through the kernel's `verifyRosterChain`. Never at
+  ripening, never from the `ros.`'s `created`, and never from a separate
+  table. A co-sign is checked with the request, so a late one cannot shorten
+  a running wait.
+- **A ripe key's request, or any member's request co-signed by another ripe
+  key of the current head, takes effect at once**, countersigned under `m`
+  (no new authority word). The `cns.` and the co-sign are stored in the link
+  and served with it, so every peer's verifier reproduces the skipped wait. A
+  co-sign that does not count (the requester itself, a passkey, a suspended
+  key, a key only in the new head, unripe, expired, malformed, `null`) is
+  refused; nothing falls back to the 72-hour wait.
+- **Notice before act, for immediate changes too.** An immediate change takes
+  the hold, mails its "in effect" notice (the whole roster, the change in
+  words, who asked, the co-signer, the host class) and acts only once the
+  mailer accepted it. Mailer down: nothing changes.
+- **X5.** On an account with a ripe consent key, ANY key added from a
+  browser waits 7 days unless that key co-signs it: a passkey, and a consent
+  key too. A consent key is the more dangerous add (once ripe it acts without
+  a wait), so a browser adding one never waits less than for a passkey; at
+  72 hours it could have joined, ripened and removed every other member
+  inside the 7 days X5 promises. Without a ripe consent key (none at all, or
+  none ripe yet) a browser's add waits 72 hours as before.
+- **Adding a consent key** needs the key's own `cns.` over the `ros.` that
+  adds it, whoever asks (a passkey or another consent key), so nobody can put
+  a key they do not hold on an account. This is the directory's rule (peers
+  see only the chain), confirmed by security's review.
+- **Ripeness survives a key rotation.** The directory reads its own chain
+  with every countersign key it has used: the current one, and the retired
+  ones listed in `DIR_RETIRED_KEYS`. Otherwise a rotation would leave every
+  account holding a consent key unable to change at all.
+- **Every chain check reads the chain the same way.** The sign-out
+  (`verifyWout`) and a member's reset stop (`verifyResetStop`) verify the
+  stored chain with the same options as ripeness (`consent.js` `chainOpts`:
+  these keys and the consent rp), and the stored links carry a consent key's
+  proof and co-sign (`linkOut`). Without that, an account holding a consent
+  key could neither sign out nor stop a reset: its chain would not verify.
+- The log records the asker's kind, the co-signer and the wait taken on every
+  change a consent key asked for or co-signed, or that X5 held (the incident
+  lever's query). A passkey's plain request logs as before.
+
+Route D (a phone approving a browser, `web-add`) is not part of this: it waits
+on a kernel layout for its final message and on security's own review.
+## 2026-11-28 — The release check covers what the release changed, and runs side by side
+
+The maintainer's clarification of the entry above: the full check at release
+tests what changed in that release, and must itself be fast.
+
+- **Scope: the diff since the app's previous release tag.** `node
+  scripts/sweep.mjs --release <app> <commit>` (check.mjs `--release`) runs
+  every step, in every tier, that the diff since the newest earlier tag of
+  that app (`<tagPrefix>vX.Y.Z` from scripts/apps.mjs; the release commit's own
+  tag is skipped) reaches, through the same reach map as the quick check.
+  Unreached steps do not run. Steps this machine cannot run are listed NOT RUN.
+  No earlier tag, or a clone too shallow to see it: it refuses rather than
+  guess. `release.mjs` accepts a green release check of that app for the
+  commit (or a whole full-tier run); its conformance gate runs regardless.
+- **Speed.** Every reached step is scheduled at once, longest first (times
+  from earlier runs), at most 8 side by side, instead of job by job, except
+  jobs whose steps share a device (the iOS simulator), which run in order. Each
+  shell is built once and shared, guarded as a read/write lock so an inline
+  rebuild never deletes a shell another step is reading. A step two jobs both
+  run (same content key) runs once. Passes are cached by content, so a rerun
+  after a fix runs only what the fix touched.
+- **Steps that time things run alone**, after the rest (tiers `alone: true`):
+  test-shell-loader's 50 ms splash row failed side by side and passed alone.
+- **Measured**, cold, on the release Mac. The last slides release (v1.2.13 to
+  v1.3.0: 596 files, 500 steps reached): 27.1 min with the job-by-job full
+  check, 25.8 min scoped and side by side; a release that touches everything
+  gains little, because the machine is the bound (the summed step time
+  doubled when twice as many ran at once). The next slides release (main
+  since v1.3.0, 234 steps): 31.8 min at first, its critical path the directory
+  mutant suite, which had doubled to 320 mutants (three shards of 27 min);
+  in eight shards (the rig's own `--shard`), 19.2 min, green. The critical
+  path is now four browser mutant suites, each one rig run per mutant:
+  test-home-web-mutants 14.8 min, test-home-web-build-mutants 11.6,
+  test-webext-tripwire-mutants 9.3, test-home-web-offline --mutants 8.0. The
+  target is 10 min; reaching it means making those suites faster (sharding
+  them, a small change to each rig, or one browser shared across a suite's
+  mutants). Sharding them was measured on the v1.3.0 diff at 14 side by side
+  and bought nothing there, so it is not in this change.
+- **Not done, and why:** one browser launch shared across rigs, and mutants
+  that reuse one browser, need each rig to accept a browser it did not launch;
+  the rigs own their launches (and their crash handling,
+  scripts/lib/browser-guard.mjs), so that is a change to each rig, not to the
+  check.
+
+## 2026-11-28 — bento/id: a person's identity proof travels in presence, and only a proven key is resolved
+
+The second kernel half of ID3. Once whoami answers an identity in an open, the
+sync session carries that person's public certificates to the room, so another
+person's agent can resolve them offline (`identityport.ts
+createProofResolver`). `kernel/src/sync/idproof.ts`, wired in
+`kernel/src/sync/session.ts`.
+
+- **What travels.** Four optional fields on hello and presence frames, beside
+  the frame's key proof and never inside `p` (the peer record an app reads):
+  `idk` (the identity device key whoami named), `idh` (base64url sha256 of the
+  proof's JSON, on every beat), `idp` (the proof itself: on hello, on the first
+  beat after it changes, and in answer to an ask; never on an ordinary beat),
+  and `ik`, a possession proof. One new frame, `{t:'idq', a, to, h}`, asks a
+  peer for the proof with hash `h`; a receiver asks once per (actor, hash),
+  again only after 30 seconds, and a sender answers at most once every 5
+  seconds (asks inside that share the one answer). Older clients ignore all of
+  it. No crdt.ts change and no relay change: the relay sees ciphertext.
+- **Nothing before consent.** `SyncSession.useIdentity(agent)` asks whoami
+  itself; nothing is carried before it answers, after it answers null, for an
+  identity without a proof, after `useIdentity(null)`, or once the session
+  moves to another document (consent and every peer's identity are per open).
+- **The possession proof is the agent's routine `prove` signature** with the
+  identity key over `prove.<nonce>.<roomId>`, where the nonce is the first 16
+  bytes of sha256 of `idpres.v1.<roomId>.<actor>.<idk>.<idh>.<t>`. It binds the
+  room, the actor, the key, the proof and the time, and the receiver recomputes
+  it. The relay's own `prove.` challenge uses a nonce the relay draws at random
+  per socket, so a presence signature cannot answer it. Freshness is the
+  presence key proof's: within 90 seconds of the receiver's clock and never
+  older than the last accepted one. A sender re-signs every 30 seconds rather
+  than per beat, so a beat may re-send the same `ik`; a receiver takes the same
+  one again only within 45 seconds of first accepting it, on its own clock.
+  A signature the agent refuses,
+  makes with another key, or does not give within 3 seconds leaves that beat
+  without identity fields; presence carries on.
+- **The replay bound, stated.** An `ik` never proves another actor, but actor
+  ids are self-declared, so anyone in the room (readers included) can re-send
+  a beat it saw under the same actor. An `ik` the receiver never accepted is
+  good until 90 seconds past its own time; one it already accepted, for 45
+  seconds after it first did. Once the actor has left (bye, or the presence
+  sweep), only an `ik` strictly newer than the last accepted one proves it
+  again: that state is never evicted (only held proofs are capped, at 64), and
+  the drop is queued behind any beat still being verified for that actor. So
+  after a silent drop, a replayer can keep someone shown present and proven
+  for at most those bounds after their last real beat. While they are present,
+  a replay gains nothing over the presence spoofing `p` already allows. The ask
+  bound sits beside it: a holder re-sends its proof at most once per 5 seconds
+  in all, whoever and however many ask (asks inside that share the one answer),
+  so at most once per 5 seconds per asker too. Any member, readers included,
+  can make it send that one.
+- **What a receiver keeps and asks.** Per-actor state only for actors that
+  proved a key (an unproven frame creates none), and a proof only for a
+  proven (actor, idh) whose own hash matches. Asks go out only after a proven
+  beat (the ask bound is above), and one proven beat for a new (actor, hash)
+  makes each receiver send one ask. The 64-proof cap can be used for denial,
+  never impersonation: a member with an identity key can prove 64 fresh actors
+  and push a present peer's proof out, and that peer shows no identity until
+  it is asked again (within 30 seconds) and answers.
+- **Only a proven key is resolved (A4).** `peerIdentity(actor)` answers only
+  while the actor is present, its latest beat proved the key it names for that
+  proof, and the session holds a proof whose own hash is that `idh`.
+  `resolvePeer(actor, agent)` answers 'unproven' without asking the agent
+  otherwise. A proof copied with someone else's key is never handed out; a
+  proof presented with the presenter's own key resolves to null because the
+  resolver binds the certificate to the queried key.
+- **Privacy.** The proof exposes the address and the account's member history
+  (passkey keys, reset and change times) to every room member, readers
+  included. That is the design; it is sent only after whoami consent in that
+  open. The session sends whoami's proof as the agent gave it (never over
+  64 KiB): every host's agent must type-check it first, as the web port does.
+- **An identity ✓ never implies membership or a role.** Role and write
+  capability stay with the collaboration key and its own proof; a removed
+  member reconnecting as a reader still proves its own identity.
+- Guarded by new rows in `scripts/test-sync-keyproof.ts` (real certificates
+  from the deterministic test keys, the real peer resolver, one per open) and
+  their mutants in `scripts/test-sync-keyproof-mutants.ts`. The rig moves to
+  the full tier: about 11 seconds, mostly waiting for frames to settle.
+## 2026-11-28 — The release check reruns a mutant only when something it depends on changed
+
+The mutant suites are about half the release check's work, and each mutant
+reruns a whole rig. In a release (or full) run, the six slowest suites
+(home-web, home-web-build, webext-tripwire, home-web-offline `--mutants`,
+directory, roster) now decide per mutant, through scripts/lib/mutant-scope.mjs:
+
+- **Cached red:** a mutant killed before under the same content of the
+  mutation, its target files and every file its rig reads (the rig's whole
+  read closure, through the same reach map as the quick check) is not rerun.
+  Only a kill is recorded; a survivor always runs again.
+- **Unchanged since the base:** in a release run, a mutant whose targets and
+  rig closure are all unchanged since the app's previous release tag is not
+  rerun: it was red when that tag was cut.
+- Neither counts as a pass. Each prints `NOT RERUN <name>: <why>`, the suite's
+  summary counts them apart from kills, and a run by hand (or by the quick
+  check) runs every mutant, as before. `--no-cache` reruns them all.
+- **The rule is the rig's closure, not the target file alone.** A narrower
+  rule (rerun only when the edited file changed) was considered and refused:
+  the home/web mutants are applied by home/web/build.mjs, and a release that
+  changed build.mjs but no mutant's target would have skipped every one of
+  them while the code applying them had changed.
+- **One browser per suite was measured and not built.** A Chromium launch takes
+  170 ms against 46 to 57 s for one run of test-home-web.mjs, so sharing it
+  would save under 1%. The run's time is its 78 rows, several waiting 5 to 8 s
+  for a negative. Running only the rows a mutant is judged on (as
+  test-home-web-offline already does) is the lever left; it is a change inside
+  each rig.
+- The quick check's budget for steps beyond distance 1 is 15 s (was 25), and
+  test-identity (7.3 s in a kernel change's quick check) and test-sync-vouch
+  (5.0 s, and one row flaky under parallel load, 7 of 7 alone) are full; the
+  vouch rig runs alone in the release check.
+
 ## 2026-11-23 — bento/home web: a `--live` build lets the frame reach one relay; no released shell uses it yet
 
 A live slides session inside bento/home needs the frame (the opaque, sandboxed

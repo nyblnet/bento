@@ -3,7 +3,11 @@
 # Deploy is the MAINTAINER's (needs the id.bento.page DNS and the SES account first):
 #   npx wrangler secret put DIR_KEY_JWK   # the directory's ONLINE P-256 signing key (JWK, private), for the countersign once it lands — never the release key
 #   npx wrangler secret put CHALLENGE_KEY # 32+ random characters: seals the single-use roster challenges
+#   npx wrangler secret put SES_ACCESS_KEY_ID     # an IAM key allowed ses:SendEmail on the sending identity and configuration set only
+#   npx wrangler secret put SES_SECRET_ACCESS_KEY # its secret
+#   (and set SES_REGION, MAIL_FROM, SES_CONFIGURATION_SET, SES_EVENTS_TOPIC_ARN below; README "Mail")
 #   npx wrangler deploy
+# Rotating DIR_KEY_JWK: first add the old key's public point to DIR_RETIRED_KEYS ({"<old kid>": "<raw point b64u>"}, README).
 # Local:
 #   npx wrangler dev --var DEV:1 --var MAILER:log --var DIR_KID:dev-1 --var DIR_KEY_JWK:"$(cat dev-key.jwk)" --var CHALLENGE_KEY:"$(openssl rand -hex 32)"
 name = "bento-id-directory"
@@ -13,6 +17,13 @@ compatibility_date = "2026-07-01"
 routes = [{ pattern = "id.bento.page", custom_domain = true }]
 
 [vars]
+# Amazon SES (ses.js) and its bounce/complaint events (sns.js). Empty = every
+# send refused and every event answered 503: they fail closed until the
+# maintainer fills them in. The region is an AWS region name (e.g. eu-west-1).
+SES_REGION = ""
+MAIL_FROM = ""
+SES_CONFIGURATION_SET = ""
+SES_EVENTS_TOPIC_ARN = ""
 DIR_KID = "dir-1"
 # The public halves of the current and next directory keys, for /v1/keys
 # (diagnosis only: clients trust the list shipped in the signed release).

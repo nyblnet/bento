@@ -111,6 +111,10 @@ export const VOID_HTML = `<!doctype html>
 <h1>A reset cancelled this change</h1>
 <p>A reset of this account was asked for at <span id="preempted-at"></span>, and it cancelled this change. The email “A reset of your bento/id account is waiting” says more.</p>
 </section>
+<section id="stopped" data-view hidden>
+<h1>A passkey stopped this reset</h1>
+<p>A passkey on this account stopped the reset at <span id="stopped-at"></span>. Its new passkey was not added. The email “The reset of your bento/id account was stopped” names the passkey that stopped it.</p>
+</section>
 <section id="unknown" data-view hidden>
 <h1>This link no longer works</h1>
 <p>It may have been used already, or the change it was for may have been stopped or replaced. The latest email about your bento/id passkeys lists them as they are now.</p>
@@ -190,6 +194,8 @@ export const VOID_JS = `(() => {
     // the request may have arrived, so the page cannot say nothing changed
     if (!r) return again('Could not reach bento/id, or its answer was lost. Press the button again: if it already worked, this page will say so.')
     if (j.error === 'busy') return again('This link is being used in another tab or window right now. Wait a moment, then press the button again.')
+    // C8: the mailer did not answer in time, so its mail may still arrive and say something that did not happen
+    if (r.status === 503 && j.error === 'mail-timeout') return again('Sending the email that confirms this took too long, so nothing changed. The email may still arrive. If it says a passkey was suspended, it was not: this page is right. Try again in a few minutes, or choose Cancel.')
     if (r.status === 503) return again('We could not send the email that confirms this, so nothing changed. Try again in a few minutes, or choose Cancel.')
     if (r.status === 429) return again('Too many tries from this network. Try again later. Nothing changed.')
     if (j.error === 'choice') return again('That choice is not offered for this link. Nothing changed.')
@@ -197,6 +203,7 @@ export const VOID_JS = `(() => {
     if (j.error === 'late' && typeof j.at === 'number') { $('late-text').textContent = late(j); return show('late') }
     if (j.error === 'used' && typeof j.at === 'number') { $('used-at').textContent = at(j.at); return show('used') }
     if (j.error === 'preempted' && typeof j.at === 'number') { $('preempted-at').textContent = at(j.at); return show('preempted') }
+    if (j.error === 'stopped' && typeof j.at === 'number') { $('stopped-at').textContent = at(j.at); return show('stopped') }
     show('unknown')
   }
   $('cancel').addEventListener('click', () => send('cancel'))

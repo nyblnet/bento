@@ -11,14 +11,26 @@
  *
  * The rows run unmutated first (the control): a mutant run means nothing if
  * its row is already red.
+ *
+ * A mutant with `build` changes the home/web SOURCE instead (the rig rebuilds
+ * release A with it, through build.mjs's --dev mutant seam): the stage-3
+ * worker without navigation preload (security ruling #954 C1), whose rows the
+ * tripwire alone cannot hold.
  */
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { mutantScope } from './lib/mutant-scope.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const RIG = path.join(ROOT, 'scripts/test-webext-tripwire-browser.mjs')
+// the stage-3 worker without navigation preload (security ruling #954 C1): it answers navigations
+// by its own fetch, which webRequest does not see as the tab's main frame
+const NO_PRELOAD = [
+  { file: 'sw.ts', from: '    try { await self.registration.navigationPreload?.enable() } catch { /* no navigation preload: navigations fetch from here */ }\n', to: '' },
+  { file: 'sw.ts', from: "const pre = e.request.mode === 'navigate' ? e.preloadResponse : undefined", to: 'const pre: Promise<Response | undefined> | undefined = undefined' },
+]
 const J = 'src/tripwire-judge.js', W = 'src/tripwire.js', O = 'src/tripwire-observe.js', P = 'src/tripwire-page.js', M = 'manifest.json'
 
 const MUTANTS = [
@@ -27,7 +39,7 @@ const MUTANTS = [
   { name: 'scripts rule off', row: 'sw-navigation-only', file: J, from: 'if (!scriptsMatch(obs.scripts, e.scripts, site.files))', to: 'if (false)' },
   { name: 'scripts rule off (frame)', row: 'frame-byte', file: J, from: 'if (!scriptsMatch(obs.scripts, e.scripts, site.files))', to: 'if (false)' },
   { name: 'csp rule off', row: 'library-csp', file: J, from: "if (obs.csp != null && join(obs.csp) !== (e.csp ?? ''))", to: 'if (false)' },
-  { name: 'navigation headers ignored (webRequest)', row: 'frame-csp', file: W, from: 'const fresh = h && h.url === url', to: 'const fresh = false && h.url === url' },
+  { name: 'navigation headers ignored (webRequest)', row: 'frame-csp', file: W, from: 'const fresh = matches(h, url, obs.timeOrigin)', to: 'const fresh = false' },
   { name: 'markup rule off', row: 'sw-markup', file: J, from: "return (obs.flags ?? []).length ? [{ rule: 'markup', got: obs.flags }] : []", to: 'return []' },
   { name: 'self-rewriting script not flagged', row: 'script-rewrite', file: O, from: "if (!text.startsWith(e.text)) flag('script-rewritten')", to: '' },
   { name: 'worker URL rule off', row: 'sw-custom-path', file: J, from: 'if (!listed.length) {', to: 'if (listed.length < 0) {' },
@@ -48,11 +60,12 @@ const MUTANTS = [
   { name: 'no early report (C1)', row: 'held-then-leave', file: O, from: "chrome.runtime.sendMessage({ op: 'tripwire.early', payload })", to: "chrome.runtime.sendMessage({ op: 'tripwire.none', payload })" },
   { name: 'unsettled early reports never judged (C1)', row: 'held-then-leave', file: W, from: 'for (const p of due) {', to: 'for (const p of []) {' },
   { name: 'a blob: document of the library origin not flagged (C1)', row: 'blob-escape', file: O, from: "if (!/^https?:$/.test(location.protocol)) { flag(", to: 'if (false) { flag(' },
-  { name: 'unread bytes pass (C2)', row: 'no-store', file: J, from: "if (obs.role === 'library' && !obs.viaWorker && !obs.bytes && !obs.crossSite) out.push", to: 'if (false) out.push' },
-  { name: 'an unfinished parse passes (C2)', row: 'held-open', file: J, from: "if (obs.complete === false) out.push", to: 'if (false) out.push' },
-  { name: 'size 0 passes (C2)', row: 'held-open', file: J, from: "if (!(obs.size > 0)) out.push", to: 'if (false) out.push' },
+  { name: 'unread bytes pass (C2)', row: 'no-store', file: J, from: "if (obs.role === 'library' && (!obs.viaWorker || obs.cspFrom === 'navigation') && !obs.bytes && !obs.crossSite) out.push", to: 'if (false) out.push' },
+  { name: 'unread bytes waived under any worker, preload or not (#954 C2)', row: 'sw-preload-vary', file: J, from: "(!obs.viaWorker || obs.cspFrom === 'navigation') && !obs.bytes", to: '!obs.viaWorker && !obs.bytes' },
+  { name: 'an unfinished parse passes (C2)', row: 'held-open-hostile', file: J, from: "if (obs.complete === false) out.push", to: 'if (false) out.push' },
+  { name: 'size 0 passes (C2)', row: 'held-open-hostile', file: J, from: "if (!(obs.size > 0)) out.push", to: 'if (false) out.push' },
   { name: 'a script-free unlisted page is loud (C3)', row: 'unlisted-404', file: J, from: 'if (!obs.scripts?.length && !obs.flags?.length && !listedPath(list, origin, obs.url)) {', to: 'if (false) {' },
-  { name: 'loud once per URL, not per origin (C3)', row: 'unlisted-spa', file: W, from: '`loud:${event.origin}`', to: '`loud:${event.url}`' },
+  { name: 'loud once per URL, not per origin (C3)', row: 'unlisted-spa', file: W, from: '`loud:${event.class}:${event.origin}`', to: '`loud:${event.class}:${event.url}`' },
   { name: 'the library judged in frames (C3)', row: 'framed', edits: [
     { file: M, from: '"http://127.0.0.1/*"\n      ],\n      "all_frames": false', to: '"http://127.0.0.1/*"\n      ],\n      "all_frames": true' },
     { file: O, from: 'if (!opaque && window !== window.top) return', to: '' },
@@ -67,17 +80,58 @@ const MUTANTS = [
     { file: O, from: "if (name === 'template' && (el.hasAttribute('shadowrootmode') || el.hasAttribute('shadowroot'))) flag('shadow-root')", to: '' },
     { file: O, from: "    if (shadowOf(el)) flag('shadow-root')\n", to: '\n' },
     { file: O, from: "for (const el of recent) if (shadowOf(el)) flag('shadow-root')", to: '' },
-    { file: O, from: "if (shadowOf(el)) { flag('shadow-root'); break }", to: 'if (false) break' }] },
+    { file: O, from: "for (const el of [...document.querySelectorAll('*'), ...walked]) if (shadowOf(el)) { flag('shadow-root'); break }", to: '' }] },
   // security re-check, N2 and N3
   { name: 'about: senders judged by their URL (N2)', row: 'about-popup', file: W, from: "if (scheme === 'about:' || scheme === 'blob:') origin = sender.origin", to: '' },
   { name: 'only the live document checked for shadow roots (N3)', row: 'shadow-root-removed', file: O, from: "for (const el of [...document.querySelectorAll('*'), ...walked]) if (shadowOf(el))", to: "for (const el of document.querySelectorAll('*')) if (shadowOf(el))" },
+  // N1: the element sequence, as it happens
+  { name: 'an early parse off the listed sequence is clean (N1)', row: 'dsd-leave', file: J, from: "if (d.kind !== 'document' || !isPrefix(obs.elements, d.elements) ||", to: "if (d.kind !== 'document' ||" },
+  { name: 'early reports carry no elements (N1)', row: 'dsd-leave', file: O, from: 'elements: elements.slice(elementsSent), elementsFrom: elementsSent', to: 'elements: [], elementsFrom: 0' },
+  { name: 'no "visit started" report (N1)', row: 'visit-started', file: O, from: '  early()\n  // A visit that ends early', to: '  // A visit that ends early' },
+  { name: 'a shadow root not flagged as the parse goes on (N1)', row: 'dsd-leave-prefix', edits: [
+    { file: O, from: "if (name === 'template' && (el.hasAttribute('shadowrootmode') || el.hasAttribute('shadowroot'))) flag('shadow-root')", to: '' },
+    { file: O, from: "    if (shadowOf(el)) flag('shadow-root')\n", to: '\n' },
+    { file: O, from: "for (const el of recent) if (shadowOf(el)) flag('shadow-root')", to: '' }] },
+  { name: 'the full report\'s sequence not judged (N1)', row: 'sw-element', file: J, from: 'if (Array.isArray(obs.elements) && !sameList(obs.elements, e.elements)) f.push', to: 'if (false) f.push' },
+  // N4: visits cut short, and warnings by class
+  { name: 'nothing is ever cut short (N4)', row: 'held-open', file: O, from: 'const aborted = left || !complete || (nav ? nav.responseEnd === 0 : false)', to: 'const aborted = false' },
+  { name: 'a clean visit cut short is loud (N4)', row: 'held-open', file: J, from: 'if (obs.aborted && !headerFailures(obs).length && cleanPrefix(obs, list, origin, partialOk)) return', to: 'if (false) return' },
+  { name: 'a script cut short is never clean (N4)', row: 'cut-mid-script', file: W, from: 'if (t != null && p.text.length < t.length && t.startsWith(p.text)) ok.add(h)', to: 'if (false) ok.add(h)' },
+  { name: 'one loud warning per origin, whatever the class (N4)', row: 'class-keys', file: W, from: '`loud:${event.class}:${event.origin}`', to: '`loud:${event.origin}`' },
   // a navigation another site started
-  { name: 'a cross-site navigation must have readable bytes', row: 'cross-site-link', file: J, from: "&& !obs.crossSite) out.push({ rule: 'bytes-unread' })", to: ") out.push({ rule: 'bytes-unread' })" },
+  { name: 'a cross-site navigation must have readable bytes', row: 'cross-site-link', file: J, from: '&& !obs.crossSite) out.push({ rule: \'bytes-unread\' })', to: ') out.push({ rule: \'bytes-unread\' })' },
   { name: 'a cross-site navigation judged on stale cached bytes', row: 'cross-site-link', file: W, from: "role === 'library' && !crossSite && HEX.test(obs.bytes?.sha256 ?? '')", to: "role === 'library' && HEX.test(obs.bytes?.sha256 ?? '')" },
   { name: 'Cache-Control not pinned', row: 'cross-site-no-store', file: J, from: 'if (obs.cacheControl != null && e.cacheControl !== undefined && join(obs.cacheControl) !== e.cacheControl) f.push', to: 'if (false) f.push' },
+  // the cross-site limit, after the element sequence: an added element is still caught
+  { name: 'the full report\'s sequence not judged, cross-site (N1)', row: 'xsite-markup', file: J, from: 'if (Array.isArray(obs.elements) && !sameList(obs.elements, e.elements)) f.push', to: 'if (false) f.push' },
+  // R4: a Refresh response header
+  { name: 'a Refresh header passes (R4)', row: 'refresh-header', file: J, from: "return (obs.refresh ?? []).length ? [{ rule: 'refresh-header', got: obs.refresh }] : []", to: 'return []' },
+  { name: 'the Refresh header is not recorded (R4)', row: 'refresh-header', file: W, from: ".filter((h) => h.name.toLowerCase() === 'refresh')", to: '.filter(() => false)' },
+  { name: 'the first early report does not read the Refresh header (R4)', row: 'refresh-header-now', file: W, from: 'if (matches(h, cut(noHash(sender.url)), Number(obs.timeOrigin) || 0) && Array.isArray(h.refresh) && h.refresh.length) refresh = h.refresh', to: '' },
   { name: 'a withdrawn release is quiet (R1)', row: 'withdrawn', file: J, from: 'if (list.releases[index].withdrawn) return', to: 'if (false) return' },
   { name: 'a list carrying app is taken (R2)', row: 'carries-app', file: J, from: "if ('app' in p) return", to: 'if (false) return' },
   { name: 'never checked is never said (R3)', row: 'never-checked', file: W, from: 'if (now - since > NEVER_MS) event.warned.push(', to: 'if (false) event.warned.push(' },
+  // stage 3: the build's own worker in control (security ruling #954 C1, C2)
+  { name: 'navigation headers ignored, worker in control', row: 'stage3-honest', file: W, from: 'const fresh = matches(h, url, obs.timeOrigin)', to: 'const fresh = false' },
+  { name: 'the worker without navigation preload (C1): positive control', row: 'stage3-honest', build: NO_PRELOAD },
+  { name: 'csp rule off, worker in control', row: 'stage3-csp', file: J, from: "if (obs.csp != null && join(obs.csp) !== (e.csp ?? ''))", to: 'if (false)' },
+  { name: 'the worker without navigation preload (C1): CSP + no-store', row: 'stage3-csp-nostore', build: NO_PRELOAD },
+  { name: 'Cache-Control, csp and unread-bytes rules all off, worker in control', row: 'stage3-csp-nostore', edits: [
+    { file: J, from: 'if (obs.cacheControl != null && e.cacheControl !== undefined && join(obs.cacheControl) !== e.cacheControl) f.push', to: 'if (false) f.push' },
+    { file: J, from: "if (obs.csp != null && join(obs.csp) !== (e.csp ?? ''))", to: 'if (false)' },
+    { file: J, from: "if (obs.role === 'library' && (!obs.viaWorker || obs.cspFrom === 'navigation') && !obs.bytes && !obs.crossSite) out.push", to: 'if (false) out.push' }] },
+  { name: 'unread bytes waived under any worker (C2), worker in control', row: 'stage3-vary-text', file: J, from: "(!obs.viaWorker || obs.cspFrom === 'navigation') && !obs.bytes", to: '!obs.viaWorker && !obs.bytes' },
+  { name: 'the worker without navigation preload (C1): text + no-store', row: 'stage3-nostore-text', build: NO_PRELOAD },
+  { name: 'bytes rule off, worker in control', row: 'stage3-text', file: J, from: 'if (obs.bytes && obs.bytes.sha256 !== e.sha256)', to: 'if (false)' },
+  { name: 'the worker without navigation preload (C1): cross-site + no-store', row: 'stage3-cross-site-no-store', build: NO_PRELOAD },
+  // /index.html answered as '/' (security ruling on #964, M1): without it an honest visit reads "unverified"
+  // (the mutant that drops the worker's /index.html line rides with C5, where it is red: on this tree alone the
+  // false warning did not reproduce, 8 of 8 quiet without the line; with C5's tabId -1 listener it is 3 in 8)
+  { name: 'unread bytes waived under any worker (C2), at /index.html', row: 'stage3-vary-text-index', file: J, from: "(!obs.viaWorker || obs.cspFrom === 'navigation') && !obs.bytes", to: '!obs.viaWorker && !obs.bytes' },
+  { name: 'bytes rule off, at /index.html', row: 'stage3-text-index', file: J, from: 'if (obs.bytes && obs.bytes.sha256 !== e.sha256)', to: 'if (false)' },
+  // the build's own 404 page (security ruling #956 D1)
+  { name: 'a script-free unlisted page is loud (the build\'s 404 page)', row: 'unlisted-404-build', file: J, from: 'if (!obs.scripts?.length && !obs.flags?.length && !listedPath(list, origin, obs.url)) {', to: 'if (false) {' },
+  { name: 'an unlisted page is quiet even with a script', row: 'unlisted-404-build-script', file: J, from: 'if (!obs.scripts?.length && !obs.flags?.length && !listedPath(list, origin, obs.url)) {', to: 'if (!obs.flags?.length && !listedPath(list, origin, obs.url)) {' },
 ]
 
 // A run that never reached the browser (a local port taken between freePorts and listen) is
@@ -85,7 +139,13 @@ const MUTANTS = [
 const run1 = (env) => spawnSync(process.execPath, [RIG], { env: { ...process.env, ...env }, encoding: 'utf8', timeout: 600000 })
 const started = (r) => /^extension \S+ v/m.test(r.stdout)
 const run = (env) => { let r = run1(env); for (let i = 0; i < 2 && !started(r); i++) { console.log('  note  the rig did not start (retrying): ' + (r.stdout + r.stderr).trim().split('\n').slice(-2).join(' | ').slice(0, 160)); r = run1(env) } return r }
-const rows = [...new Set(MUTANTS.map((m) => m.row))]
+const PICK = process.env.TW_ONLY_MUTANT // a substring of a mutant's name, to re-run one
+// the release check reruns only what changed (scripts/lib/mutant-scope.mjs; off by hand)
+const scope = await mutantScope({ suite: 'scripts/test-webext-tripwire-mutants.mjs', rigs: ['scripts/test-webext-tripwire-browser.mjs'] })
+const plan = MUTANTS.filter((x) => !PICK || x.name.includes(PICK)).map((m) => ({ m, d: scope.decide(m, [m.edits ?? { file: m.file }].flat().map((e) => `home/webext/${e.file}`)) }))
+for (const { m, d } of plan) if (d.skip) scope.notRerun(m.name, d.why)
+if (plan.every((p) => p.d.skip)) { console.log(scope.summary()); process.exit(0) }
+const rows = [...new Set(plan.filter((p) => !p.d.skip).map((p) => p.m.row))]
 console.log(`control: rows ${rows.join(', ')} unmutated`)
 const control = run({ TW_ROWS: rows.join(',') })
 if (control.status !== 0) {
@@ -95,13 +155,14 @@ if (control.status !== 0) {
 }
 console.log(`  ok    ${control.stdout.trim().split('\n').at(-1)}`)
 let failures = 0, ran = 0
-const PICK = process.env.TW_ONLY_MUTANT // a substring of a mutant's name, to re-run one
-for (const m of MUTANTS.filter((x) => !PICK || x.name.includes(PICK))) {
+for (const { m, d } of plan) {
+  if (d.skip) continue
   ran++
-  const r = run({ TW_ROWS: m.row, TW_MUTANT: JSON.stringify(m.edits ?? { file: m.file, from: m.from, to: m.to }) })
+  const r = run(m.build ? { TW_ROWS: m.row, TW_BUILD_MUTANT: JSON.stringify(m.build) } : { TW_ROWS: m.row, TW_MUTANT: JSON.stringify(m.edits ?? { file: m.file, from: m.from, to: m.to }) })
   const applied = /mutant applied to/.test(r.stdout)
   const red = r.status === 1 && /FAIL/.test(r.stdout)
   const okay = applied && red
+  scope.record(d, okay)
   if (!okay) failures++
   const fail = r.stdout.split('\n').find((l) => /FAIL/.test(l))?.trim() ?? ''
   console.log(`  ${okay ? 'ok  ' : 'FAIL'}  ${m.name} → row ${m.row} ${!applied ? 'NOT APPLIED' : red ? 'red' : 'GREEN'}${fail ? `: ${fail.slice(5, 120)}` : ''}`)
@@ -109,4 +170,5 @@ for (const m of MUTANTS.filter((x) => !PICK || x.name.includes(PICK))) {
   if (!okay) console.log(`        exit ${r.status} ${r.signal ?? ''} ${r.error?.message ?? ''} | ${(r.stdout + r.stderr).trim().split('\n').slice(-4).join(' | ').slice(0, 400)}`)
 }
 console.log(`\n${ran - failures}/${ran} mutants red on their row`)
+if (scope.summary()) console.log(scope.summary())
 process.exit(failures ? 1 : 0)

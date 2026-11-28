@@ -71,7 +71,11 @@ const MUTANTS = {
   'busy-as-unknown': [["    if (j.error === 'busy') return again(", "    if (false) return again("]],
   // C6: the old advice
   'hint-benign': [['your passkey was used for something you did not intend. Choose Cancel: it is always safe.', 'the usual cause is a page that used your own passkey: choose Cancel.']],
+  // C8: a timed-out send shown as "could not send"
+  'timeout-as-refusal': [["    if (r.status === 503 && j.error === 'mail-timeout') return again(", '    if (false) return again(']],
   // C3: the restored removal not mentioned
+  // 986-N1: a member-stopped reset shown as unknown
+  'stopped-as-unknown': [["    if (j.error === 'stopped' && typeof j.at === 'number') { $('stopped-at').textContent = at(j.at); return show('stopped') }\n", '']],
   'no-back': [["      if (typeof j.removesAt === 'number') { $('back-at').textContent = at(j.removesAt); $('back').hidden = false }\n", '']],
 }
 const tmp = mkdtempSync(join(tmpdir(), 'void-page-'))
@@ -385,6 +389,12 @@ async function rows(mod, loud) {
     const pre = await plantEnded(w, 'preempted')
     const pp = await press(pre, 'c', '#cancel')
     say(await visible(pp, '#preempted') && (await pp.locator('#preempted-at').textContent()).length > 0, 'a change a reset cancelled: the page says a reset cancelled it')
+    // 986-N1: a reset a member's passkey stopped: its own link says so, with when
+    const stp = await plantEnded(w, 'stopped')
+    const ps = await press(stp, 'r', '#cancel-reset')
+    const stt = await ps.locator('#stopped').textContent()
+    say(await visible(ps, '#stopped') && (await ps.locator('#stopped-at').textContent()).length > 0 && stt.includes('The reset of your bento/id account was stopped') && !/Nothing changed/.test(stt),
+      'a reset a member stopped: its link says a passkey stopped it, when, and which email names the passkey')
     const gone = await plant(w, 'c')
     gone.store.delete('pend')
     const pg = await press(gone, 'c', '#cancel')
@@ -395,6 +405,28 @@ async function rows(mod, loud) {
     const pb = await press(busy, 'c', '#cancel')
     say(/another tab or window/.test(await pb.locator('#msg').textContent()) && !(await pb.locator('#cancel').isDisabled()) && busy.store.get('pend')?.voidTok !== undefined,
       'while another press holds the roster: the page says wait and try again, the buttons come back, nothing was spent')
+    // C8 (security's P19 on #952): Remove's mail TIMED OUT, so it may still arrive: never "could not send"
+    {
+      const realSend = w.env.MAILER.send, realSet = globalThis.setTimeout
+      // only the mailer's own 30 s timer is shortened (Playwright's timers are left alone)
+      const shortMail = (fn, ms, ...a) => realSet(fn, ms === 30_000 && /mail\.js/.test(new Error().stack ?? '') ? 20 : ms, ...a)
+      const t8 = await plant(w, 'c')
+      w.env.MAILER.send = () => new Promise(() => {}) // never answers (it may yet deliver)
+      globalThis.setTimeout = shortMail
+      let pt
+      try { pt = await press(t8, 'c', '#remove') } finally { globalThis.setTimeout = realSet; w.env.MAILER.send = realSend }
+      const tt = await pt.locator('#msg').textContent()
+      say(/The email may still arrive\. If it says a passkey was suspended, it was not: this page is right\./.test(tt) && !/could not send/.test(tt) &&
+        t8.store.get('pend')?.kind === 'member' && !t8.store.get('hold') && !(await pt.locator('#remove').isDisabled()),
+        `a Remove whose mail timed out: the page says the email may still arrive and this page is right, never "could not send"; nothing changed (${tt.trim().slice(0, 70)})`)
+      const r8 = await plant(w, 'c')
+      w.env.MAILER.send = () => { throw new Error('refused') }
+      let pr8
+      try { pr8 = await press(r8, 'c', '#remove') } finally { w.env.MAILER.send = realSend }
+      const rt = await pr8.locator('#msg').textContent()
+      say(/could not send the email that confirms this, so nothing changed/.test(rt) && !/may still arrive/.test(rt) && r8.store.get('pend')?.kind === 'member',
+        `control: a Remove whose mail the mailer REFUSED says it could not send it (${rt.trim().slice(0, 60)})`)
+    }
     // C3: stopping a reset puts the removal it set aside back; undoing that removal re-times the reset
     const rp1 = await plant(w, 'rp')
     const pr = await press(rp1, 'r', '#cancel-reset')

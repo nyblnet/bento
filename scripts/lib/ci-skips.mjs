@@ -118,7 +118,7 @@ export const ALLOWED_SKIPS = [
 ]
 
 /** The rigs allowed to skip off macOS must run, unskipped, on the macOS job. */
-export const MAC_JOB = '.github/workflows/ci-home-ios.yml'
+export const MAC_JOB = '.github/checks/ci-home-ios.yml'
 
 /**
  * Check one step's output. `script` is the step's script text (which rigs it

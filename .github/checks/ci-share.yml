@@ -1,3 +1,10 @@
+# NOT A GITHUB WORKFLOW (2026-11-28). GitHub runs only .github/workflows/ci.yml,
+# the quick check. This file is a list of check steps: scripts/check.mjs
+# reads it (with the validate-<zone> actions) and runs its steps locally,
+# the fast tier per change and the full check before a release
+# (scripts/sweep.mjs, which release.mjs requires). A new rig still goes in
+# its zone's validate action or here, and needs a tier (scripts/lib/test-tiers.mjs).
+#
 # CI, share: this zone's own jobs — validate, never release (see ci.yml's header).
 #
 # These jobs are NOT the required check. Only `validate` (ci.yml) gates a
@@ -5,20 +12,6 @@
 # IS the check name. Add this zone's new jobs here, at the end; never in ci.yml.
 
 name: CI (share)
-
-on:
-  pull_request:
-    # No paths filter here: a filter would also stop the `full-ci` label from
-    # starting these jobs. The gate job below decides instead, in seconds.
-    types: [opened, synchronize, reopened, labeled]
-  push:
-    branches: [main]
-
-concurrency:
-  # The same rule as ci.yml, whose comment explains it: PR runs collapse onto
-  # the tip, every commit on main keeps its own run.
-  group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 defaults:
   run:
@@ -50,7 +43,7 @@ jobs:
           LABELLED: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
           PR: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
-        run: scripts/ci/zone-gate '^(server/|scripts/test-(signin|directory)-|scripts/test-home-web-live\.mjs$|scripts/lib/relay-(route\.mjs|harness\.ts)$|home/web/|\.github/workflows/ci-share\.yml$|scripts/ci/zone-gate$)'
+        run: scripts/ci/zone-gate '^(server/|scripts/test-(signin|directory)-|scripts/test-home-web-live\.mjs$|scripts/lib/relay-(route\.mjs|harness\.ts)$|home/web/|\.github/checks/ci-share\.yml$|scripts/ci/zone-gate$)'
 
   share-directory-mutants:
     needs: share-gate
@@ -59,24 +52,26 @@ jobs:
     # roster, passkey, mail or header rule) in a copy of the tree, and the
     # directory rigs must fail a row. A mutant that no longer applies, or a
     # rig that crashes instead of counting, fails this job. Its own job: at
-    # ~7 s a mutant on a runner it outgrew validate's 20 minutes. Three
-    # shards side by side: at 160 mutants and ~11 s each (the kernel's
-    # option-G verifiers made each rig run slower) one job no longer fits
-    # 30 minutes; each shard runs every third mutant and its own positive control,
-    # and within a shard one mutant's three rigs run side by side.
+    # ~7 s a mutant on a runner it outgrew validate's 20 minutes; at 160
+    # mutants and ~11 s each (the kernel's option-G verifiers made each rig run
+    # slower) one job no longer fit 30 minutes, so three shards ran side by
+    # side. Eight since 2026-11-28: at 320 mutants, three shards took 27 min
+    # each in the release check and were its critical path; eight take 4 to 7.
+    # Each shard runs every eighth mutant and its own positive control, and
+    # within a shard one mutant's three rigs run side by side.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
       - name: bento/connect directory mutants
-        run: node scripts/test-directory-mutants.ts --shard ${{ matrix.shard }}/3
+        run: node scripts/test-directory-mutants.ts --shard ${{ matrix.shard }}/8
 
   share-signin-browser:
     needs: share-gate
@@ -201,6 +196,28 @@ jobs:
         run: node scripts/test-home-web-identity.mjs --chrome
       - name: bento/id agent mutants, each red on its row
         run: node scripts/test-home-web-identity.mjs --mutants
+
+  share-directory-ses:
+    needs: share-gate
+    if: needs.share-gate.outputs.run == 'true'
+    # The directory's real mail (server/directory/src/ses.js) and SES's bounce
+    # and complaint events (sns.js), against a FAKE AWS reached through a
+    # function-typed seam: no AWS account, credential or network. The fake
+    # re-derives every SigV4 signature with node:crypto and the signer is held
+    # to AWS's published example vectors; SNS events are signed with a TEST
+    # key served at the pinned certificate URL. Its own job, so these mutants
+    # never lengthen share-directory-mutants. Neither step may skip.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: bento/id directory mail through SES, and SNS bounce events
+        run: node scripts/test-directory-ses.ts
+      - name: bento/id directory mail mutants, each red on its row
+        run: node scripts/test-directory-ses-mutants.ts
 
   share-home-web-live:
     needs: share-gate

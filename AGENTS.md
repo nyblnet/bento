@@ -196,6 +196,17 @@ node ../scripts/test-preview.ts     # first-page preview rig (encryption veto, o
 node ../scripts/shell-gate.mjs dist-single/Bento_Slides.bento.html   # splice conformance
 ```
 
+Checks, from the repo root:
+
+```sh
+node scripts/check.mjs --affected            # the quick check: what your diff reaches, ~1 min (what CI's `validate` runs)
+node scripts/check.mjs --affected --dry-run  # its plan: what runs, and what it leaves to the sweep
+node scripts/sweep.mjs --release slides <commit>  # the release check (what changed since the last slides tag, every tier); release.mjs needs it green
+```
+
+Test tiers are in `scripts/lib/test-tiers.mjs`, each with a reason. A slow rig
+moves to the full tier there; it is never skipped, weakened or deleted.
+
 ## Check your deck
 
 You wrote a deck; now look at it. `bento check` loads it in headless Chrome —

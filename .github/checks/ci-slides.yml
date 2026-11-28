@@ -1,3 +1,10 @@
+# NOT A GITHUB WORKFLOW (2026-11-28). GitHub runs only .github/workflows/ci.yml,
+# the quick check. This file is a list of check steps: scripts/check.mjs
+# reads it (with the validate-<zone> actions) and runs its steps locally,
+# the fast tier per change and the full check before a release
+# (scripts/sweep.mjs, which release.mjs requires). A new rig still goes in
+# its zone's validate action or here, and needs a tier (scripts/lib/test-tiers.mjs).
+#
 # CI, slides: this zone's own jobs — validate, never release (see ci.yml's header).
 #
 # These jobs are NOT the required check. Only `validate` (ci.yml) gates a
@@ -8,37 +15,6 @@
 # new jobs here, at the end; never in ci.yml.
 
 name: CI (slides)
-
-on:
-  pull_request:
-    # ONLY WHEN THIS ZONE COULD BE AFFECTED. These jobs are not the required
-    # check (`validate`, ci.yml, runs on every PR and is unfiltered), so a PR
-    # that touches none of these paths skips them and nothing waits on them.
-    # The push to main below is NOT filtered: every merge still runs the lot.
-    # A script this file runs must match a path here; scripts/test-ci-registered.ts
-    # holds that, and that this file is on its own list.
-    paths:
-      - '.github/workflows/ci-slides.yml'
-      - 'slides/**'
-      - 'schema/**'
-      - 'kernel/**'
-      - 'scripts/lib/**'
-      - 'scripts/ci/**'
-      - 'scripts/postbuild-compress.mjs'
-      - 'scripts/shell-gate.mjs'
-      - 'scripts/derive-pins.mjs'
-      - 'scripts/test-slides-*'
-      - 'scripts/test-*-browser.mjs'
-      - 'scripts/test-gate1-oracle.mjs'
-      - 'scripts/test-sealed-boot.mjs'
-  push:
-    branches: [main]
-
-concurrency:
-  # The same rule as ci.yml, whose comment explains it: PR runs collapse onto
-  # the tip, every commit on main keeps its own run.
-  group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 defaults:
   run:
@@ -325,15 +301,17 @@ jobs:
         # "Claimed key" and points at Reset access; a legacy room shows neither.
         run: node scripts/test-slides-people-keyproof-browser.mjs
       - name: People panel identity tiers in Chromium
-        # bento/id P1, flag off by default. With the flag on and a test agent,
+        # bento/id P1, on wherever the host has an agent. With a test agent,
         # peers that prove their keys get "✓ via ...", "(passkey sign-in)",
-        # "new account" and "account changed on <date>" as the answer says; a
-        # revoked sign-in is never ticked and, after an incident, the owner's
-        # row is flagged beside the remove control; an unproven key is never
-        # looked up; flag off or no agent leaves the row unchanged. The mark,
-        # the tags and ", unconfirmed since" are measured on screen (not read
-        # from text) beside a long name or one that reads like a voucher.
-        # Network closed, WebSockets included.
+        # "new account", "account changed on <date>" and "unconfirmed since
+        # <date>" as a COMPLETE answer (the fields marker) says; an answer
+        # with only the six original fields, or a qualifier inside vouchedBy,
+        # reads "couldn't check" and is never ticked; a revoked sign-in is
+        # never ticked and, after an incident, the owner's row is flagged
+        # beside the remove control; an unproven key is never looked up; the
+        # kill switch ('off') or no agent leaves the row unchanged. The mark
+        # and tags are measured on screen at 1440, 1000, 760, 390 and 320px
+        # beside hostile names. Network closed, WebSockets included.
         run: node scripts/test-slides-people-tiers-browser.mjs
       - name: Share on a phone in Chromium
         # At 390 and 320px, with Share folded into ⋯ and a collaborator whose
