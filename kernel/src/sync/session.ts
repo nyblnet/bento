@@ -873,7 +873,7 @@ export class SyncSession {
         void this.proofs.queue(f.a, () => {
           if (gen !== this.proofGen) return
           this.proofs.drop(f.a)
-          this.ids.drop(f.a)
+          void this.ids.drop(f.a)
           this.peersMap.delete(f.a)
           this.emitPeers()
         })
@@ -1197,7 +1197,7 @@ export class SyncSession {
       if (p.at < cut) {
         this.peersMap.delete(a)
         this.proofs.drop(a)
-        this.ids.drop(a)
+        void this.ids.drop(a)
         changed = true
       }
     }

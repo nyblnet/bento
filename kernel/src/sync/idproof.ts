@@ -42,6 +42,33 @@
 // The resolver then binds the proof to idk (cert.devicePub === pub), so a
 // proof presented with another key resolves to null.
 //
+// REPLAY BOUND, stated. An ik names its actor, so it never proves another
+// actor. Actor ids are self-declared, though, so anyone in the room (readers
+// included) can re-send a beat it saw UNDER THE SAME ACTOR:
+//   - an ik this session never accepted is good until PROOF_SKEW_MS (90 s)
+//     past its own t, like the presence key proof;
+//   - an ik this session already accepted is taken again only within
+//     ID_RESEND_WINDOW_MS (45 s) of first accepting it, on this clock;
+//   - once the actor has left (bye, or the presence sweep), only an ik strictly
+//     newer than the last accepted one proves it again. Departed actors' state
+//     is never evicted (only proofs are capped), and the drop is queued behind
+//     any beat still being verified for that actor.
+// So after a silent drop a replayer can keep the person shown present and
+// proven for at most those bounds after their last real beat. While they are
+// present a replay gains nothing over the presence spoofing `p` already allows.
+//
+// What a session keeps: per-actor state only for actors that PROVED a key
+// (an unproven frame never creates state), and a proof only for a proven
+// (actor, idh) whose own hash matches, at most ID_MAX_PROOFS in all. Asks go
+// out only after a proven beat. A holder answers asks at most once per the
+// session's cooldown, so any member (readers included) can make it broadcast
+// one proof per cooldown; one proven beat for a new (actor, hash) makes each
+// receiver send one ask.
+//
+// The proof sent is whoami's, verbatim, and is never sent over
+// PROOF_MAX_BYTES. A host's agent must type-check it before handing it over
+// (identityport.ts checkPublic does, on the web); a native host's must too.
+//
 // PRIVACY. The proof exposes the address and the account's member history
 // (passkey pubs, reset and change times) to every room member, readers
 // included. That is the design (web-identity-tier §3.4): it is sent only after
@@ -63,8 +90,12 @@ export interface IdKeyProof {
 export const ID_PROOF_REFRESH_MS = 30_000
 /** An unanswered ask for one (actor, hash) is repeated no sooner than this. */
 export const ID_ASK_RETRY_MS = 30_000
-/** Most actors whose identity state one session keeps. */
-export const ID_MAX_ACTORS = 256
+/** A receiver takes the SAME ik again (a sender re-sends it between re-signs)
+ *  only this long after it first accepted it: the refresh plus a margin, on the
+ *  receiver's own clock, so no clock skew widens it. */
+export const ID_RESEND_WINDOW_MS = ID_PROOF_REFRESH_MS + 15_000
+/** Most proofs one session holds, across every actor (each at most PROOF_MAX_BYTES). */
+export const ID_MAX_PROOFS = 64
 
 /** A raw P-256 point in base64url (65 bytes). */
 const PUB_RE = /^[A-Za-z0-9_-]{87}$/
@@ -152,31 +183,46 @@ interface ActorId {
   proven: boolean
   /** the last ACCEPTED ik: its t never moves back */
   lastT: number
-  /** the exact (t, g, idk, idh) last verified, so a re-sent ik is not verified again */
+  /** the exact (t, g, idk, idh) last verified, and when this clock first accepted it */
   lastKey?: string
+  lastKeyAt: number
   /** after the actor left, the next ik must be strictly newer than lastT */
   strict: boolean
-  /** proofs held for this actor, by their own hash (at most two) */
+  /** proofs held for this actor, by their own hash */
   proofs: Map<string, IdentityProof>
   /** when an ask for a hash was last sent */
   asked: Map<string, number>
 }
 
+const fresh = (): ActorId => ({ proven: false, lastT: 0, lastKeyAt: 0, strict: false, proofs: new Map(), asked: new Map() })
+const view = (st: ActorId | undefined) => st ? `${st.proven}.${st.idk}.${st.idh}.${st.proofs.size}` : '-'
+
 /** Per-actor identity state for one session (one open of one document). */
 export class IdProofs {
   private actors = new Map<string, ActorId>()
   private queues = new Map<string, Promise<void>>()
+  /** proofs held, oldest first, across actors */
+  private held: Array<[string, string]> = []
+  /** bumped by reset(): a verdict begun for an earlier open is discarded */
+  private epoch = 0
 
   constructor(private now: () => number = () => Date.now()) {}
 
-  private state(actor: string): ActorId {
-    let st = this.actors.get(actor)
-    if (!st) {
-      if (this.actors.size >= ID_MAX_ACTORS) this.actors.delete(this.actors.keys().next().value!)
-      st = { proven: false, lastT: 0, strict: false, proofs: new Map(), asked: new Map() }
-      this.actors.set(actor, st)
-    }
-    return st
+  private keep(actor: string, st: ActorId, h: string, p: unknown) {
+    st.proofs.set(h, structuredClone(p) as IdentityProof)
+    this.held = this.held.filter(([a, x]) => !(a === actor && x === h))
+    this.held.push([actor, h])
+    while (st.proofs.size > 2) { const old = st.proofs.keys().next().value!; st.proofs.delete(old); this.held = this.held.filter(([a, x]) => !(a === actor && x === old)) }
+    while (this.held.length > ID_MAX_PROOFS) { const [a, x] = this.held.shift()!; this.actors.get(a)?.proofs.delete(x) }
+  }
+
+  /** Run `fn` after every verdict already queued for `actor`, unless the open changed meanwhile. */
+  private enqueue(actor: string, fn: () => Promise<void> | void): Promise<void> {
+    const ep = this.epoch
+    const next = (this.queues.get(actor) ?? Promise.resolve()).then(() => (ep === this.epoch ? fn() : undefined)).catch(() => { /* simply unproven */ })
+    this.queues.set(actor, next)
+    void next.then(() => { if (this.queues.get(actor) === next) this.queues.delete(actor) })
+    return next
   }
 
   /**
@@ -186,8 +232,7 @@ export class IdProofs {
    * and not asked within ID_ASK_RETRY_MS), if any.
    */
   accept(actor: string, roomId: string | null, f: IdFields, after?: (changed: boolean, ask: string | null) => void): Promise<void> {
-    const pending = this.queues.get(actor)
-    if (!pending && f.idk === undefined && f.idp === undefined) {
+    if (!this.queues.has(actor) && f.idk === undefined && f.idp === undefined) {
       // nothing to verify and nothing ahead of it: judged at once
       const st = this.actors.get(actor)
       const changed = !!st && (st.proven || st.idk !== undefined)
@@ -195,56 +240,53 @@ export class IdProofs {
       after?.(changed, null)
       return Promise.resolve()
     }
-    const prev = pending ?? Promise.resolve()
+    const ep = this.epoch
     let changed = false
     let ask: string | null = null
-    const next = prev.then(async () => {
-      const st = this.state(actor)
-      const before = `${st.proven}.${st.idk}.${st.idh}.${st.proofs.size}`
+    return this.enqueue(actor, async () => {
+      const before = view(this.actors.get(actor))
       try {
-        // the proof, kept under its OWN hash; a frame's idh that disagrees voids it
-        if (f.idp !== undefined) {
-          const h = await proofHash(f.idp)
-          if (h && (f.idh === undefined || f.idh === h)) {
-            st.proofs.delete(h)
-            st.proofs.set(h, structuredClone(f.idp) as IdentityProof)
-            while (st.proofs.size > 2) st.proofs.delete(st.proofs.keys().next().value!)
-          }
-        }
-        st.proven = false // until THIS beat proves it
+        const st0 = this.actors.get(actor)
+        if (st0) st0.proven = false // until THIS beat proves it
         const idk = f.idk, idh = f.idh
         if (typeof idk !== 'string' || !PUB_RE.test(idk) || typeof idh !== 'string' || !HASH_RE.test(idh)) {
-          st.idk = undefined; st.idh = undefined
+          if (st0) { st0.idk = undefined; st0.idh = undefined }
           return
         }
-        st.idk = idk; st.idh = idh
+        if (st0) { st0.idk = idk; st0.idh = idh }
         if (!roomId || !f.ik || typeof f.ik !== 'object') return
         const { t, g } = f.ik as { t?: unknown; g?: unknown }
-        if (typeof t !== 'number' || Math.abs(this.now() - t) > PROOF_SKEW_MS) return
-        if (t < st.lastT || (st.strict && t === st.lastT)) return
+        const now = this.now()
+        if (typeof t !== 'number' || Math.abs(now - t) > PROOF_SKEW_MS) return
+        const lastT = st0?.lastT ?? 0
+        if (t < lastT || (st0?.strict && t === lastT)) return
         const key = `${t}.${String(g)}.${idk}.${idh}`
-        if (t === st.lastT && key !== st.lastKey) return
-        if (key !== st.lastKey && !(await verifyIdKey(f.ik, roomId, actor, idk, idh))) return
-        // a newer beat for another key or proof may have been judged meanwhile: it is queued behind us, so not
-        if (st.idk !== idk || st.idh !== idh) return
+        const resent = !!st0 && key === st0.lastKey
+        if (t === lastT && !resent) return
+        if (resent && now - st0!.lastKeyAt > ID_RESEND_WINDOW_MS) return
+        if (!resent && !(await verifyIdKey(f.ik, roomId, actor, idk, idh))) return
+        const h = f.idp === undefined ? null : await proofHash(f.idp)
+        if (ep !== this.epoch) return
+        let st = this.actors.get(actor)
+        if (!st) this.actors.set(actor, st = fresh())
+        st.idk = idk; st.idh = idh
         st.lastT = t
-        st.lastKey = key
+        if (!resent) { st.lastKey = key; st.lastKeyAt = now }
         st.strict = false
         st.proven = true
+        // the proof, kept under its OWN hash, and only the one this proven beat names
+        if (h !== null && h === idh) this.keep(actor, st, h, f.idp)
         if (!st.proofs.has(idh)) {
           const at = st.asked.get(idh)
-          if (at === undefined || this.now() - at >= ID_ASK_RETRY_MS) {
-            st.asked.set(idh, this.now())
+          if (at === undefined || now - at >= ID_ASK_RETRY_MS) {
+            st.asked.set(idh, now)
             ask = idh
           }
         }
       } finally {
-        changed = before !== `${st.proven}.${st.idk}.${st.idh}.${st.proofs.size}`
+        changed = before !== view(this.actors.get(actor))
       }
-    }).catch(() => { /* a verdict that throws is simply unproven */ }).then(() => { after?.(changed, ask) })
-    this.queues.set(actor, next)
-    void next.then(() => { if (this.queues.get(actor) === next) this.queues.delete(actor) })
-    return next
+    }).then(() => { after?.(changed, ask) })
   }
 
   /** The identity `actor` has proven in this session, with the proof for it, or null. */
@@ -261,15 +303,20 @@ export class IdProofs {
     return !!st && st.proven && typeof pub === 'string' && st.idk === pub
   }
 
-  /** The actor left: unproven, and only a strictly newer ik proves it again. */
-  drop(actor: string) {
-    const st = this.actors.get(actor)
-    if (st) { st.proven = false; st.strict = true }
+  /** The actor left: unproven, and only a strictly newer ik proves it again.
+   *  Queued behind any beat of that actor still being verified. */
+  drop(actor: string): Promise<void> {
+    return this.enqueue(actor, () => {
+      const st = this.actors.get(actor)
+      if (st) { st.proven = false; st.strict = true }
+    })
   }
 
-  /** A different document (another open): forget everything. */
+  /** A different document (another open): forget everything, including verdicts in flight. */
   reset() {
+    this.epoch++
     this.actors.clear()
     this.queues.clear()
+    this.held = []
   }
 }

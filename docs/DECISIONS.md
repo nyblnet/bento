@@ -16032,10 +16032,27 @@ createProofResolver`). `kernel/src/sync/idproof.ts`, wired in
   per socket, so a presence signature cannot answer it. Freshness is the
   presence key proof's: within 90 seconds of the receiver's clock and never
   older than the last accepted one. A sender re-signs every 30 seconds rather
-  than per beat, so a beat may re-send the same `ik`; once the actor has left,
-  only a strictly newer one proves it again. A signature the agent refuses,
+  than per beat, so a beat may re-send the same `ik`; a receiver takes the same
+  one again only within 45 seconds of first accepting it, on its own clock.
+  A signature the agent refuses,
   makes with another key, or does not give within 3 seconds leaves that beat
   without identity fields; presence carries on.
+- **The replay bound, stated.** An `ik` never proves another actor, but actor
+  ids are self-declared, so anyone in the room (readers included) can re-send
+  a beat it saw under the same actor. An `ik` the receiver never accepted is
+  good until 90 seconds past its own time; one it already accepted, for 45
+  seconds after it first did. Once the actor has left (bye, or the presence
+  sweep), only an `ik` strictly newer than the last accepted one proves it
+  again: that state is never evicted (only held proofs are capped, at 64), and
+  the drop is queued behind any beat still being verified for that actor. So
+  after a silent drop, a replayer can keep someone shown present and proven
+  for at most those bounds after their last real beat. While they are present,
+  a replay gains nothing over the presence spoofing `p` already allows.
+- **What a receiver keeps and asks.** Per-actor state only for actors that
+  proved a key (an unproven frame creates none), and a proof only for a
+  proven (actor, idh) whose own hash matches. Asks go out only after a proven
+  beat. Any member can make a holder broadcast its proof once per 5 seconds,
+  and one proven beat for a new (actor, hash) makes each receiver send one ask.
 - **Only a proven key is resolved (A4).** `peerIdentity(actor)` answers only
   while the actor is present, its latest beat proved the key it names for that
   proof, and the session holds a proof whose own hash is that `idh`.
@@ -16046,8 +16063,12 @@ createProofResolver`). `kernel/src/sync/idproof.ts`, wired in
 - **Privacy.** The proof exposes the address and the account's member history
   (passkey keys, reset and change times) to every room member, readers
   included. That is the design; it is sent only after whoami consent in that
-  open.
+  open. The session sends whoami's proof as the agent gave it (never over
+  64 KiB): every host's agent must type-check it first, as the web port does.
+- **An identity ✓ never implies membership or a role.** Role and write
+  capability stay with the collaboration key and its own proof; a removed
+  member reconnecting as a reader still proves its own identity.
 - Guarded by new rows in `scripts/test-sync-keyproof.ts` (real certificates
   from the deterministic test keys, the real peer resolver, one per open) and
   their mutants in `scripts/test-sync-keyproof-mutants.ts`. The rig moves to
-  the full tier: about 7 seconds, mostly waiting for frames to settle.
+  the full tier: about 11 seconds, mostly waiting for frames to settle.

@@ -82,7 +82,7 @@ export const ENTRIES = [
   { rig: 'test-home-bridge.ts', tier: 'full', why: '31 s: the host bridge end to end' },
   { rig: 'test-home-web-offline.mjs', tier: 'full', why: '25 s: home/web offline in a browser' },
   { rig: 'test-sync-session.ts', tier: 'full', why: '20 s: the sync session over many seeded schedules' },
-  { rig: 'test-sync-keyproof.ts', tier: 'full', why: '7 s: presence key and identity proofs over real sessions; mostly waits for frames to settle' },
+  { rig: 'test-sync-keyproof.ts', tier: 'full', why: '11 s: presence key and identity proofs over real sessions; mostly waits for frames to settle' },
   { rig: 'test-bento-check.ts', tier: 'full', why: '18 s: the bento-check CLI against built shells' },
   { rig: 'test-seal-gate.mjs', tier: 'full', why: '16 s: builds the sealed test shell first' },
   { rig: 'test-webext-id.ts', tier: 'full', why: '15 s: the extension\'s identity agent end to end' },

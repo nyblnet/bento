@@ -475,6 +475,113 @@ H('[K-ID3b rules] what a possession proof binds');
   ok((await proofHash(big)) === null, 'a proof over PROOF_MAX_BYTES has no hash');
 }
 
+H('[K-ID3b review] departed actors, races and consent latches (security-review-1007)');
+{
+  const { IdProofs, ID_RESEND_WINDOW_MS, ID_MAX_PROOFS } = await import('../kernel/src/sync/idproof.ts');
+  // F1: a flood of new actor ids cannot evict a departed actor's state
+  const tv = Date.now();
+  const vBeat = { t: 'p', a: 'f1-victim', p: pres(), idk: WB.pub, idh: hashB, idp: proofB, ik: await ikFor(WB, 'f1-victim', WB.pub, hashB, tv) };
+  post(vBeat); await settle(40);
+  ok(R.peerIdentity('f1-victim') !== null, 'F1 control: the victim is proven');
+  post({ t: 'bye', a: 'f1-victim' }); await settle(40);
+  post({ ...vBeat, p: pres(undefined, { name: 'Mallory' }) }); await settle(40);
+  ok(!R.identityProven('f1-victim', WB.pub), 'F1 control: its last beat replayed after bye is unproven');
+  for (let i = 0; i < 300; i++) post({ t: 'p', a: `f1-junk${i}`, p: pres(), idk: i % 2 ? 'x' : WA.pub, idh: hashA });
+  await settle(150);
+  post({ ...vBeat, p: pres(undefined, { name: 'Mallory' }) }); await settle(40);
+  ok(R.peers().some((p) => p.actor === 'f1-victim') && !R.identityProven('f1-victim', WB.pub) && R.peerIdentity('f1-victim') === null,
+    'F1: after 300 junk actors, the replayed beat still does not re-prove the departed actor (it is present, not proven)');
+  // F2: a bye in the same tick as the beat, while its ik is still being verified
+  const t2 = Date.now();
+  const b2 = { t: 'p', a: 'f2-victim', p: pres(), idk: WB.pub, idh: hashB, idp: proofB, ik: await ikFor(WB, 'f2-victim', WB.pub, hashB, t2) };
+  post(b2); post({ t: 'bye', a: 'f2-victim' }); await settle(60);
+  ok(!R.peers().some((p) => p.actor === 'f2-victim'), 'F2: beat and bye in one tick: gone');
+  post(b2); await settle(60);
+  ok(R.peers().some((p) => p.actor === 'f2-victim'), 'F2: the replay makes it present again (so presence hides nothing below)');
+  ok(!R.identityProven('f2-victim', WB.pub) && R.peerIdentity('f2-victim') === null, 'F2: the captured beat replayed after a same-tick bye: unproven');
+  post({ ...b2, ik: await ikFor(WB, 'f2-victim', WB.pub, hashB, t2 + 5) }); await settle(60);
+  ok(R.identityProven('f2-victim', WB.pub), 'F2 control: a strictly newer ik proves it again');
+  // the moment a bye is announced, an app listening for peers sees no identity for that actor
+  {
+    const t3 = Date.now();
+    post({ t: 'p', a: 'f2-listen', p: pres(), idk: WB.pub, idh: hashB, idp: proofB, ik: await ikFor(WB, 'f2-listen', WB.pub, hashB, t3) });
+    await settle(60);
+    ok(R.peerIdentity('f2-listen') !== null, 'control: proven before the bye');
+    let atLeave: unknown = 'not seen';
+    const off = R.onPeers(() => { if (atLeave === 'not seen' && !R.peers().some((p) => p.actor === 'f2-listen')) atLeave = R.peerIdentity('f2-listen'); });
+    post({ t: 'bye', a: 'f2-listen' }); await settle(60);
+    off();
+    ok(atLeave === null, 'inside the peers event that announces the bye, peerIdentity is already null');
+  }
+  // F4: only a proven beat makes the receiver ask
+  const n4 = seen.length;
+  post({ t: 'p', a: 'f4-unproven', p: pres(), idk: WB.pub, idh: hashA });
+  post({ t: 'p', a: 'f4-badsig', p: pres(), idk: WB.pub, idh: hashA, ik: { t: Date.now(), g: 'A'.repeat(86) } });
+  await settle(60);
+  ok(seen.slice(n4).filter((f) => f.t === 'idq' && (f.to === 'f4-unproven' || f.to === 'f4-badsig')).length === 0, 'F4: an unproven beat naming an unheld proof makes no ask');
+  // n2: a proof that arrives on an unproven beat is not kept
+  post({ t: 'p', a: 'n2', p: pres(), idk: WB.pub, idh: hashB, idp: proofB }); await settle(40);
+  post({ t: 'p', a: 'n2', p: pres(), idk: WB.pub, idh: hashB, ik: await ikFor(WB, 'n2', WB.pub, hashB) }); await settle(40);
+  ok(R.identityProven('n2', WB.pub) && R.peerIdentity('n2') === null, 'n2: a proof sent with no possession proof was not kept');
+  // the re-sent identical ik is taken only within ID_RESEND_WINDOW_MS of first accepting it
+  {
+    let clock = Date.now();
+    const ids = new IdProofs(() => clock);
+    const ik = await ikFor(WB, 'rs', WB.pub, hashB, clock);
+    const f = { idk: WB.pub, idh: hashB, ik, idp: proofB };
+    await ids.accept('rs', room, f);
+    ok(ids.proven('rs', WB.pub), 'resend control: proven');
+    clock += ID_RESEND_WINDOW_MS - 1000; await ids.accept('rs', room, { idk: WB.pub, idh: hashB, ik });
+    ok(ids.proven('rs', WB.pub), 'the same ik re-sent inside the resend window: proven');
+    clock += 2000; await ids.accept('rs', room, { idk: WB.pub, idh: hashB, ik });
+    ok(!ids.proven('rs', WB.pub), 'the same ik re-sent past the resend window (still inside the skew): unproven');
+  }
+  // n1: a verdict in flight when the open changes lands nowhere
+  {
+    const judge = async (resetMid: boolean) => {
+      const t = Date.now();
+      const ik = await ikFor(WB, 'n1', WB.pub, hashB, t);
+      let ids: InstanceType<typeof IdProofs>;
+      ids = new IdProofs(() => { if (resetMid) queueMicrotask(() => ids.reset()); return t; });
+      await ids.accept('n1', room, { idk: WB.pub, idh: hashB, ik, idp: proofB });
+      return ids.proven('n1', WB.pub);
+    };
+    ok(await judge(false), 'n1 control: proven');
+    ok(!(await judge(true)), 'n1: reset while the ik was verifying: not proven in the new open');
+  }
+  // n2: proofs held are capped across actors
+  {
+    const ids = new IdProofs();
+    for (let i = 0; i < ID_MAX_PROOFS + 6; i++) await ids.accept(`cap${i}`, room, { idk: WB.pub, idh: hashB, idp: proofB, ik: await ikFor(WB, `cap${i}`, WB.pub, hashB) });
+    ok(ids.peer('cap0') === null && ids.proven('cap0', WB.pub), `the oldest proofs are dropped past ${ID_MAX_PROOFS} (the actor stays proven)`);
+    ok(ids.peer(`cap${ID_MAX_PROOFS + 5}`) !== null, 'control: the newest proof is held');
+  }
+  // F3: withdrawing while whoami or a signature is still pending
+  const slowAgent = (slow: 'whoami' | 'sign') => Object.freeze({
+    contract: 1 as const,
+    whoami: async () => { if (slow === 'whoami') await settle(120); return { name: 'bob', email: 'bob@example.com', vouchedBy: 'id.bento.page', accountPub: 'g:' + 'A'.repeat(43), devicePub: WB.pub, proof: proofB }; },
+    sign: async (_p: string, payload: string) => {
+      if (slow === 'sign') await settle(120);
+      return { ok: true, sig: b64u(new Uint8Array(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, WB.key, new TextEncoder().encode(payload)))), pub: WB.pub };
+    },
+    resolve: async () => null,
+  });
+  const carried = (n: number) => seen.slice(n).filter((f) => f.a === M.actor && hasId(f)).length;
+  for (const slow of ['whoami', 'sign'] as const) {
+    let n = seen.length;
+    await M.useIdentity(slowAgent(slow)); await settle(200);
+    ok(carried(n) >= 1, `F3 control (${slow}): without withdrawal the identity is carried`);
+    await M.useIdentity(null); await settle(60);
+    n = seen.length;
+    const pending = M.useIdentity(slowAgent(slow));
+    if (slow === 'whoami') { await settle(20); await M.useIdentity(null); }
+    else { await pending; await settle(20); await M.useIdentity(null); }
+    await settle(250);
+    M.setEditing('f3'); M.setEditing(undefined); await settle(60);
+    ok(carried(n) === 0, `F3 (${slow}): withdrawn while ${slow} was pending: no frame carries the identity`);
+  }
+}
+
 H('[K-ID3b signing] the agent refusing, hanging or signing with another key');
 {
   const { SyncSession: SS } = await import('../kernel/src/sync/session.ts');
