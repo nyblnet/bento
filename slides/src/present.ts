@@ -106,6 +106,13 @@ export function startPresentation(
   slidesEl.className = 'slides'
   revealEl.appendChild(slidesEl)
   overlay.appendChild(revealEl)
+  // Reveal makes the deck's first slide present as soon as it starts, and the
+  // jump to startIndex waits for initialize() to resolve, so a show opened
+  // further in (Play transition, present from the current slide) painted the
+  // first slide for a frame or more. The deck stays transparent over the black
+  // overlay until it is on its opening slide. Opacity, not visibility: a
+  // descendant cannot override it.
+  if (startIndex > 0) revealEl.style.opacity = '0'
 
   // Extracted from the forEach so the broadcast viewer can rebuild one
   // section when the presenter's document changes underneath it. The index
@@ -1565,6 +1572,7 @@ export function startPresentation(
   deck.initialize().then(() => {
     deckReady = true
     if (startIndex > 0) deck.slide(startIndex, 0)
+    revealEl.style.opacity = ''
     if (pendingIndex !== null) {
       deck.slide(pendingIndex, 0)
       pendingIndex = null

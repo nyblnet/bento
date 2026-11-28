@@ -290,16 +290,25 @@ function run(d: string) {
   return { status: r.status, tail, fails: (r.stdout.match(/^ {2}FAIL/gm) ?? []).length }
 }
 
-console.log('positive control: the unmutated copy passes the rig')
-{
-  const d = tree()
-  const r = run(d)
-  ok(r.status === 0 && r.fails === 0, `test-roster.ts: ${r.tail}`)
-  rmSync(d, { recursive: true, force: true })
+// the release check reruns only what changed (scripts/lib/mutant-scope.mjs; off by hand)
+// @ts-ignore: a .mjs helper
+const { mutantScope } = await import('./lib/mutant-scope.mjs')
+const scope = await mutantScope({ suite: 'scripts/test-roster-mutants.ts', rigs: ['scripts/test-roster.ts'] })
+const plan = MUTANTS.map((m) => ({ m, d: scope.decide(m, [`kernel/src/${m.file ?? 'roster.ts'}`]) }))
+for (const { m, d } of plan) if (d.skip) scope.notRerun(m.name, d.why)
+if (plan.some((p) => !p.d.skip)) {
+  console.log('positive control: the unmutated copy passes the rig')
+  {
+    const d = tree()
+    const r = run(d)
+    ok(r.status === 0 && r.fails === 0, `test-roster.ts: ${r.tail}`)
+    rmSync(d, { recursive: true, force: true })
+  }
 }
 
 console.log(`\n${MUTANTS.length} mutants, each one loosened rule: every one must turn the rig red`)
-for (const m of MUTANTS) {
+for (const { m, d: dec } of plan) {
+  if (dec.skip) continue
   const d = tree()
   const p = join(d, 'kernel/src', m.file ?? 'roster.ts')
   const src = readFileSync(p, 'utf8')
@@ -314,10 +323,12 @@ for (const m of MUTANTS) {
     }
     writeFileSync(p, out)
     const r = run(d)
+    scope.record(dec, r.status !== 0 && r.fails > 0)
     ok(r.status !== 0 && r.fails > 0, `killed: ${m.name} — ${r.status === 0 ? 'green' : `${r.fails} FAIL`}`)
   }
   rmSync(d, { recursive: true, force: true })
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
+if (scope.summary()) console.log(scope.summary())
 process.exit(failures ? 1 : 0)

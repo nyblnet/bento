@@ -187,27 +187,36 @@ try {
   await p.keyboard.type('play transition'); await p.waitForTimeout(150)
   const offered = await p.evaluate(() => document.querySelector('.ed-cmdk')?.innerText ?? '')
   ok(/Play transition/.test(offered), 'Play transition is a command')
+  // What the show DRAWS: before every paint (a rAF callback), the present section, but only
+  // while the deck is visible at all. Reading the DOM once when the overlay appeared raced
+  // the show's start (CI: "0 → 2" on PRs that never touched slides), and polling the DOM
+  // could only tolerate that section 0, never tell whether it was painted. It was: present.ts
+  // jumps to the start index once Reveal's initialize() resolves, and every run drew the
+  // first slide for a frame first. Now the deck stays transparent until it is on the slide
+  // before. It must draw that slide inside 600 ms, under playTransition's 700 ms beat, then
+  // this one, and nothing else.
+  await p.evaluate(() => {
+    const drawn = window.__drawn = []
+    const t0 = performance.now()
+    const tick = () => {
+      const deck = document.querySelector('.bento-present-overlay .reveal')
+      let shown = !!deck
+      for (let n = deck; shown && n && n !== document.documentElement; n = n.parentElement) shown = Number(getComputedStyle(n).opacity) > 0
+      if (shown) {
+        const i = [...deck.querySelectorAll('.slides > section')].findIndex((s) => s.classList.contains('present'))
+        if (i >= 0 && drawn[drawn.length - 1]?.i !== i) drawn.push({ i, ms: Math.round(performance.now() - t0) })
+      }
+      if (performance.now() - t0 < 2500) requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  })
   await p.keyboard.press('Enter')
-  await p.waitForSelector('.bento-present-overlay', { timeout: 3000 }).catch(() => {})
-  // The present section, sampled every ~20 ms from the moment the overlay exists. One read
-  // at that moment raced the show's start: present.ts applies the start index only once
-  // Reveal's initialize() resolves, and until then section 0 is "present" (CI: "0 → 2" on
-  // PRs that never touched slides). The show must reach the slide before inside 600 ms,
-  // under playTransition's 700 ms beat, and then this one; the raw sequence is printed.
-  const seq = []
-  const t0 = Date.now()
-  while (Date.now() - t0 < 2200) {
-    const i = await p.evaluate(() => [...document.querySelectorAll('.bento-present-overlay .slides > section')].findIndex((s) => s.classList.contains('present')))
-    if (!seq.length || seq[seq.length - 1].i !== i) seq.push({ i, ms: Date.now() - t0 })
-    await p.waitForTimeout(20)
-  }
-  const shown = seq.filter((e) => e.i >= 0)
-  const endAt = shown[shown.length - 1]
-  const prior = shown.slice(0, -1)                                 // where it was before its last step
-  const startAt = prior.filter((e) => e.i !== 0).pop() ?? prior[0] // a section 0 before the start index lands is Reveal's default
-  const sampled = seq.map((e) => `${e.i}@${e.ms}ms`).join(' ')
-  ok(startAt?.i === 1 && startAt.ms < 600 && endAt?.i === 2 && shown.filter((e) => e.i !== 0).map((e) => e.i).join() === '1,2',
-    `it presents from the slide before and steps into this one (${startAt?.i} → ${endAt?.i}; sections present: ${sampled})`)
+  await p.waitForFunction(() => window.__drawn.some((e) => e.i === 2), null, { timeout: 2400 }).catch(() => {})
+  await p.waitForTimeout(800) // let the morph finish, as the show would
+  const drawn = await p.evaluate(() => window.__drawn)
+  const seq = drawn.map((e) => `${e.i}@${e.ms}ms`).join(' ') || 'nothing'
+  ok(drawn.map((e) => e.i).join() === '1,2' && drawn[0].ms < 600,
+    `it presents from the slide before and steps into this one, drawing nothing else (${seq})`)
   await p.keyboard.press('Escape'); await p.waitForTimeout(400)
 
   console.log('\n6. New slide at the bottom adds at the end\n')

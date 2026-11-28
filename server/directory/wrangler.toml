@@ -7,6 +7,7 @@
 #   npx wrangler secret put SES_SECRET_ACCESS_KEY # its secret
 #   (and set SES_REGION, MAIL_FROM, SES_CONFIGURATION_SET, SES_EVENTS_TOPIC_ARN below; README "Mail")
 #   npx wrangler deploy
+# Rotating DIR_KEY_JWK: first add the old key's public point to DIR_RETIRED_KEYS ({"<old kid>": "<raw point b64u>"}, README).
 # Local:
 #   npx wrangler dev --var DEV:1 --var MAILER:log --var DIR_KID:dev-1 --var DIR_KEY_JWK:"$(cat dev-key.jwk)" --var CHALLENGE_KEY:"$(openssl rand -hex 32)"
 name = "bento-id-directory"

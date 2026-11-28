@@ -18,6 +18,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { mutantScope } from './lib/mutant-scope.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const B = 'home/web/build.mjs', R = 'scripts/home-web-release.mjs', REL = 'scripts/release.mjs'
@@ -97,8 +98,12 @@ const only = process.argv.slice(2)
 const esbuild = path.join(ROOT, 'slides/node_modules/.bin/esbuild')
 const shell = path.join(ROOT, 'slides/dist-single/Bento_Slides.bento.html')
 if (!fs.existsSync(shell)) { console.error(`no built slides shell at ${shell}: cd slides && npm run build:single`); process.exit(1) }
+// the release check reruns only what changed (scripts/lib/mutant-scope.mjs; off by hand)
+const scope = await mutantScope({ suite: 'scripts/test-home-web-build-mutants.mjs', rigs: ['scripts/test-home-web-build.mjs'] })
 let killed = 0, ran = 0
 for (const m of MUTANTS.filter((x) => !only.length || only.includes(x.name))) {
+  const d = scope.decide(m, [m.file])
+  if (d.skip) { scope.notRerun(m.name, d.why); continue }
   ran++
   const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'bento-hwb-mutant-'))
   try {
@@ -119,9 +124,12 @@ for (const m of MUTANTS.filter((x) => !only.length || only.includes(x.name))) {
       { encoding: 'utf8', env: { ...process.env, ESBUILD: process.env.ESBUILD || esbuild, BENTO_HWB_NO_REHEARSAL: '1' } })
     const fails = r.stdout.split('\n').filter((l) => l.startsWith('  FAIL'))
     const onRow = fails.some((l) => l.includes(m.expect))
+    scope.record(d, r.status !== 0 && onRow)
     if (r.status !== 0 && onRow) { killed++; console.log(`  ok    ${m.name}: red on its row ("${m.expect}"; ${fails.length} red)`) }
     else console.log(`  FAIL  ${m.name}: SURVIVED or red elsewhere (exit ${r.status}; red rows: ${fails.map((l) => l.slice(8, 70)).join(' | ') || 'none'})${r.status && !fails.length ? '\n' + r.stderr.slice(-600) : ''}`)
   } finally { fs.rmSync(copy, { recursive: true, force: true }) }
 }
 console.log(`\n${killed}/${ran} mutants killed`)
-process.exit(killed === ran && ran > 0 ? 0 : 1)
+if (scope.summary()) console.log(scope.summary())
+// (none run is a pass only when every one was accounted for as not rerun)
+process.exit(killed === ran && (ran > 0 || scope.counts.cached + scope.counts.unchanged > 0) ? 0 : 1)

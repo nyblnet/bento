@@ -103,10 +103,11 @@ import { parseDeviceCert, buildWatt, verifyWren, CEREMONY_CAP_MS, WATT_MAX_MS } 
 import { b64uDec, sha256b64u, signStatement } from '../../../kernel/src/statements.ts'
 import { parseRos, verifyRosterChain, verifyWout } from '../../../kernel/src/roster.ts'
 import { verifyAssertion, statementChallenge } from '../../../kernel/src/webauthn.ts'
-import { HOME_ORIGIN, PASSKEY, SIGNIN_ORIGIN, passkeyOrigins } from './passkey.js'
-import { directoryKeys, signCountOf } from './dirkeys.js'
+import { HOME_ORIGIN, PASSKEY, SIGNIN_ORIGIN } from './passkey.js'
+import { signCountOf } from './dirkeys.js'
 import { issueChallenge, openChallenge } from './challenge.js'
 import { addressKey, normalize } from './address.js'
+import { chainOpts, linkOut } from './consent.js'
 import { HOME_ROUTES, WEB_ROUTES } from './seam.js'
 import { retiredAt, retireOp, retireRoute } from './retire.js'
 
@@ -371,12 +372,8 @@ async function standingOf(s, pub, rec, now) {
 
 /** The chain as kernel RosterLink objects, from the pinned head (or from setup). */
 async function chainFrom(s, pin) {
-  const links = [...(await s.list({ prefix: 'link:' })).values()].map((l) => {
-    const out = { ros: l.ros, rip: l.rip, ripSig: l.ripSig }
-    if (l.kind === 'member') { out.signer = l.signer; out.assertion = l.assertion }
-    if (l.voided) out.voided = l.voided
-    return out
-  })
+  // a consent key's proof and a co-sign travel too (consent.js linkOut), so a peer reproduces the wait they skipped
+  const links = [...(await s.list({ prefix: 'link:' })).values()].map(linkOut)
   let from = 0
   if (typeof pin === 'string') for (let i = 0; i < links.length; i++) if ((await sha256b64u(links[i].ros)) === pin) from = i
   return links.slice(from)
@@ -575,7 +572,7 @@ export async function browserOp(obj, a, now, h) {
     if (who.error) return out(403, { error: who.error })
     const count = signCountOf(as)
     if (count === null) return out(400, { error: 'assertion' })
-    const chain = await verifyRosterChain(await chainFrom(s), { directoryKeys: await directoryKeys(obj.env), rpId: PASSKEY.rpId, origins: passkeyOrigins(), now })
+    const chain = await verifyRosterChain(await chainFrom(s), chainOpts(obj.env, now)) // the chain as a peer verifies it, consent keys included
     if (!chain.ok) throw new Error(`the stored chain does not verify: ${chain.reason}`) // never: the directory countersigned every link
     const v = await verifyWout(a.text, who.pub, { assertion: { authenticatorData: as.authenticatorData, clientDataJSON: as.clientDataJSON, signature: as.signature } }, {
       roster: chain.value, challenge: a.challenge, challengeAt: a.issued, spend: () => true, rpId: PASSKEY.rpId, origins: [SIGNIN_ORIGIN], now,

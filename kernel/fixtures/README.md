@@ -566,3 +566,12 @@ accepted row.
   (`ck-is-n`). N opens a passkey's or a quarantined ck's co-sign (it does not
   hold the roster); only the directory can refuse those. A row with `watt` also
   verifies as a device proof at native tier.
+
+`lever-v1.json` holds the lever's predicate (`kernel/src/devices.ts
+leverCovers`): which browser certificates an incident covers. Peers report
+`revoked: 'incident'` on it and the directory's lever marks certificates on it,
+so both run these rows and must reach `covered` on each. Hand-written and
+deterministic (no keys, no signatures). The rule: a wdev., or a dev2. via
+passkey, with watt. ob 1, whose `ceremonyAt` is inside [from, to], both ends
+inclusive (to null = open). Never a renewal's time, never the directory
+record's enrolment time. Rig: `scripts/test-identityport.ts` ([A6 incident]).

@@ -6,6 +6,8 @@
 //   node scripts/check.mjs --affected        the quick check, about a minute (every change)
 //   node scripts/check.mjs                   the full tier: every step this machine can run
 //   node scripts/check.mjs --deep            the deep tier too
+//   node scripts/check.mjs --release slides  the release check: every tier, for what the
+//                                            diff since slides' previous tag reaches
 //
 // --affected [REF]   only what the diff since REF reaches (default REF: the
 //                    merge-base with main; committed REF...HEAD plus staged,
@@ -18,17 +20,31 @@
 //                      the released-surface invariants (splice gate, CRDT
 //                      convergence, save and preview escapes)
 //                    - then steps further out, nearest first, while their times
-//                      from earlier runs fit BENTO_QUICK_SECONDS (default 25: wall
+//                      from earlier runs fit BENTO_QUICK_SECONDS (default 15: wall
 //                      seconds over this machine's workers; a step never timed
 //                      counts 2 s); none is started after BENTO_QUICK_DEADLINE
 //                      (default 45) seconds, and those left are named
 //                    - builds: each app whose own source changed, else, when
 //                      shared code its build reads changed, the representative
 //                      (slides); a step that reads another app's shell is left
-//                      to the sweep. One headless load per built app.
+//                      to the release check. One headless load per built app.
 //                    Each step prints its time; a step over 5 s is named for
-//                    the full tier. Everything else is the sweep's.
-// --dry-run          with --affected: print the plan, run nothing
+//                    the full tier. Everything else is the release check's.
+// --release APP      the release check (scripts/sweep.mjs --release runs it in a
+//                    worktree of its own): every step, in EVERY tier, that the
+//                    diff since APP's previous release tag reaches (tags from
+//                    scripts/apps.mjs's tagPrefix: v1.3.0, spaces-v0.2.0), with
+//                    every shell they read built once and shared; no budget, no
+//                    deadline; longest steps first, at most 8 at once; a step
+//                    two jobs both run (same content key) runs once. A step this
+//                    machine cannot run is listed NOT RUN; an unreached one does
+//                    not run. Release.mjs's own conformance gate always runs.
+// --since REF        with --release: the base, instead of the previous tag
+//                    In a release run a mutant suite reruns only the mutants
+//                    whose targets or rig changed since that base, or that were
+//                    never killed under the same content (scripts/lib/mutant-scope.mjs);
+//                    the rest print NOT RERUN, never as a pass. --no-cache reruns all.
+// --dry-run          with --affected or --release: print the plan, run nothing
 // --head REV         with --dry-run: plan REF...REV on REV's tree (no working tree)
 // --no-cache         run every step (passes are still remembered)
 // --jobs N           steps at once (default: the cores for --affected, half for a full run, at most 8)
@@ -58,9 +74,9 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, 
 import { availableParallelism, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { APPS, defaultRef, planFor, unread } from './lib/check-plan.mjs'
+import { APPS, defaultRef, planFor, previousTag, unread } from './lib/check-plan.mjs'
 import { cacheRoot, cached, commitLabel, keyOf, readTimes, remember, toolchain, workBlobs, writeJson, writeTimes } from './lib/check-cache.mjs'
-import { inTier } from './lib/test-tiers.mjs'
+import { SEQUENTIAL_JOBS, inTier } from './lib/test-tiers.mjs'
 import { check as skipCheck } from './lib/ci-skips.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -71,7 +87,7 @@ const HERE = process.platform === 'darwin' ? 'macos' : process.platform === 'win
 // ---------------------------------------------------------------- options
 
 const argv = process.argv.slice(2)
-const opts = { affected: false, ref: '', dryRun: false, head: '', deep: false, cache: true, jobs: 0, only: '', logs: '', json: '', rerun: false }
+const opts = { affected: false, ref: '', dryRun: false, head: '', deep: false, cache: true, jobs: 0, only: '', logs: '', json: '', rerun: false, release: '', since: '' }
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
   if (a === '--affected') {
@@ -86,6 +102,8 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--logs') opts.logs = resolve(argv[++i] ?? usage('--logs needs a folder'))
   else if (a === '--json') opts.json = resolve(argv[++i] ?? usage('--json needs a file'))
   else if (a === '--rerun-failed') opts.rerun = true
+  else if (a === '--release') { opts.release = argv[++i] ?? usage('--release needs an app'); opts.affected = true }
+  else if (a === '--since') opts.since = argv[++i] ?? usage('--since needs a tag or commit')
   else if (a === '-h' || a === '--help') usage()
   else usage(`unknown option ${a}`)
 }
@@ -99,7 +117,7 @@ function usage(msg) {
   process.exit(msg ? 2 : 0)
 }
 
-const RUN_TIER = opts.deep ? 'deep' : opts.affected ? 'fast' : 'full'
+const RUN_TIER = opts.deep || opts.release ? 'deep' : opts.affected ? 'fast' : 'full'
 const T0 = Date.now()
 const secs = (ms) => `${(ms / 1000).toFixed(1)}s`
 const since = () => secs(Date.now() - T0)
@@ -108,6 +126,10 @@ const since = () => secs(Date.now() - T0)
 
 let ref
 try {
+  if (opts.release) {
+    if (!APPS.includes(opts.release)) usage(`--release: no app ${opts.release} (${APPS.join(', ')})`)
+    opts.ref = opts.since || previousTag(ROOT, opts.release, opts.head || 'HEAD') || usage(`--release ${opts.release}: no earlier release tag of it below HEAD (pass --since <tag>; a shallow clone hides older tags: git fetch --unshallow)`)
+  }
   ref = opts.affected ? (opts.ref ? execFileSync('git', ['-C', ROOT, 'rev-parse', '--verify', `${opts.ref}^{commit}`], { encoding: 'utf8' }).trim() : defaultRef(ROOT)) : 'HEAD'
 } catch (e) {
   usage(`--affected: no commit ${opts.ref} (${e.message.split('\n')[0]})`)
@@ -126,7 +148,19 @@ const chosen = []
 const left = []
 let builds = new Set()
 
-if (opts.affected) {
+if (opts.release) {
+  // THE RELEASE CHECK: every step the release's diff reaches, in every tier,
+  // with every shell those steps read built; no budget, no deadline. A step
+  // this machine cannot run is listed NOT RUN; an unreached one is not run.
+  for (const s of plan.rigs) {
+    if (s.distance === Infinity) continue
+    if (!runnableHere(s)) { left.push({ step: s, reason: `needs a ${s.platform} runner (${s.tier.tier} tier)` }); continue }
+    // the deep tier is what this machine lacks the toolchain for: NOT RUN, unless asked
+    if (s.tier.tier === 'deep' && !opts.deep) { left.push({ step: s, reason: `deep tier: ${s.tier.why}` }); continue }
+    chosen.push({ step: s, why: `distance ${s.distance} (${s.via})`, always: true })
+  }
+  for (const c of chosen) for (const a of [...c.step.builds, ...c.step.jobProviders.filter((p) => p.startsWith('build:')).map((p) => p.slice(6))]) builds.add(a)
+} else if (opts.affected) {
   const reached = plan.rigs.filter((s) => s.distance !== Infinity)
   // the builds this diff wants: an app whose own source changed, else the
   // representative; and the shell a changed step or rig reads
@@ -146,7 +180,7 @@ if (opts.affected) {
     else candidates.push(s)
   }
   // further out: nearest first, then quickest, while the estimate fits the budget
-  const budget = Number(process.env.BENTO_QUICK_SECONDS || 25)
+  const budget = Number(process.env.BENTO_QUICK_SECONDS || 15)
   const workers = opts.jobs || CORES
   let spent = chosen.reduce((n, c) => n + estimate(c.step), 0) / workers
   candidates.sort((a, b) => a.distance - b.distance || estimate(a) - estimate(b))
@@ -170,18 +204,21 @@ if (opts.affected) {
 // providers each chosen step needs (a full run also gives it what its CI job set up)
 const needsOf = (s) => {
   const n = new Set(s.needs)
-  if (!opts.affected) for (const p of s.jobProviders) if (!p.startsWith('build:') || builds.has(p.slice(6))) n.add(p)
+  // (a full or release run also gives it what its CI job set up)
+  if (!opts.affected || opts.release) for (const p of s.jobProviders) if (!p.startsWith('build:') || builds.has(p.slice(6))) n.add(p)
   for (const a of s.builds) { n.add(`build:${a}`); n.add(`install:${a}`) }
   for (const p of [...n]) if (p.startsWith('build:') || p.startsWith('sealtest:')) n.add(`install:${p.split(':')[1]}`)
   return [...n].filter((p) => !p.startsWith('build:') || builds.has(p.slice(6))).sort()
 }
 
-const header = opts.affected
+const header = opts.release
+  ? `check --release ${opts.release}: ${plan.changed.length} files changed since ${opts.ref} (${ref.slice(0, 10)}); planned in ${since()}`
+  : opts.affected
   ? `check --affected: ${plan.changed.length} file${plan.changed.length === 1 ? '' : 's'} changed since ${ref.slice(0, 10)}${opts.head ? ` (to ${opts.head})` : ' (with the working tree)'}; planned in ${since()}`
   : `check (${RUN_TIER} tier): ${chosen.length} steps; planned in ${since()}`
 console.log(header)
 if (opts.affected) {
-  console.log(`  runs ${chosen.length} step${chosen.length === 1 ? '' : 's'}${builds.size ? `, builds ${[...builds].join(', ')}` : ''}; leaves ${left.length} to the sweep`)
+  console.log(`  runs ${chosen.length} step${chosen.length === 1 ? '' : 's'}${builds.size ? `, builds ${[...builds].join(', ')}` : ''}; ${opts.release ? `NOT RUN ${left.length} (another platform's toolchain)` : `leaves ${left.length} to the release check`}`)
   const ignored = unread(plan)
   if (ignored.length) console.log(`  read by no step: ${ignored.slice(0, 12).join(', ')}${ignored.length > 12 ? ` (+${ignored.length - 12})` : ''}`)
 }
@@ -190,7 +227,7 @@ if (opts.dryRun) {
   console.log('\nruns:')
   for (const c of chosen.sort((a, b) => a.step.distance - b.step.distance)) console.log(`  ${c.step.id.padEnd(34)} ${label(c.step).padEnd(46)} ${c.why}`)
   if (left.length) {
-    console.log('\nleft to the sweep:')
+    console.log(opts.release ? '\nNOT RUN:' : '\nleft to the release check:')
     const byReason = new Map()
     for (const l of left) byReason.set(l.reason, [...(byReason.get(l.reason) ?? []), l.step])
     for (const [reason, ss] of [...byReason].sort((a, b) => b[1].length - a[1].length)) {
@@ -224,6 +261,8 @@ const stepKey = (s) => {
     sig: s.signature,
     tier: RUN_TIER === 'fast' ? 'fast' : 'full',
     env: RUN_TIER === 'fast' ? {} : s.tier.sweepEnv,
+    // (a release run's mutant suites skip by its base: its passes are its own)
+    since: opts.release ? ref : null,
     builds: ns.filter((p) => p.startsWith('build:')).map((p) => buildKey(p.slice(6))),
     tools: { node: TOOLS.node, locks: ns.filter((p) => p.startsWith('install:')).map((p) => TOOLS.locks[p.slice(8)]), browser: ns.includes('browser') ? browserVersion : null, jsdom: ns.includes('jsdom') ? jsdomVersion : null },
   })
@@ -343,9 +382,21 @@ const results = []
 let failed = 0
 const stamp = (s) => s.id.replace(/[^\w#.-]+/g, '_').replace(/#/g, '-')
 
+/** Steps with the same key are the same check (one rig in two jobs): run it once, report both. */
+const inFlight = new Map()
 async function runStep(c) {
+  const key = stepKey(c.step)
+  if (!c.rerun && inFlight.has(key)) {
+    const first = await inFlight.get(key)
+    return report(c, { status: first.status === 'ok' ? 'cached' : first.status, ms: 0, note: `same step as ${first.id}` })
+  }
+  const p = runStepOnce(c, key)
+  if (!c.rerun) inFlight.set(key, p)
+  return p
+}
+
+async function runStepOnce(c, key) {
   const s = c.step
-  const key = stepKey(s)
   const hit = opts.cache && !c.rerun ? cached(CACHE, key) : null
   if (hit) return report(c, { status: 'cached', ms: 0, note: `cached, ${hit.commit}` })
   if (!runnableHere(s)) {
@@ -364,6 +415,10 @@ async function runStep(c) {
   const log = join(LOGS, `${stamp(s)}.log`)
   const stepEnv = {
     ...env, ...s.env, ...(RUN_TIER === 'fast' ? {} : s.tier.sweepEnv),
+    // mutant suites rerun only what changed (scripts/lib/mutant-scope.mjs): the
+    // kill cache in a release or full run, the since-tag rule in a release run
+    ...(opts.affected && !opts.release || !opts.cache ? {} : { BENTO_MUTANT_CACHE: join(CACHE, 'mutants') }),
+    ...(opts.release && opts.cache ? { BENTO_MUTANT_SINCE: ref, BENTO_MUTANT_SINCE_LABEL: opts.ref } : {}),
     GITHUB_WORKSPACE: ROOT, RUNNER_TEMP: tmp,
     PATH: `${join(ROOT, 'scripts', 'ci')}:${process.env.PATH}`,
   }
@@ -388,7 +443,7 @@ async function runStep(c) {
   return report(c, { status, ms: r.ms, note, out: r.out, log })
 }
 
-const deadline = () => Number(process.env.BENTO_QUICK_DEADLINE || (opts.affected ? 45 : 1e9)) * 1000
+const deadline = () => Number(process.env.BENTO_QUICK_DEADLINE || (opts.affected && !opts.release ? 45 : 1e9)) * 1000
 const timesUpdate = {}
 const leftovers = []
 
@@ -472,10 +527,28 @@ async function pool(items, n, fn) {
 if (!chosen.length) {
   console.log(`\nnothing to run${opts.affected ? ': the diff reaches no fast step' : ''} (${since()})`)
 } else {
-  const workers = opts.jobs || (opts.affected ? CORES : Math.max(2, Math.min(8, Math.floor(CORES / 2))))
+  const workers = opts.jobs || (opts.affected && !opts.release ? CORES : Math.max(2, Math.min(8, Math.floor(CORES / 2))))
   // builds first, in parallel with everything that needs none
   for (const a of builds) provide(`build:${a}`)
-  if (opts.affected) {
+  if (opts.release) {
+    // longest first (times from earlier runs; a step never timed counts 2 s),
+    // so the slowest suites start at once and the short ones fill around them
+    // (a job whose steps share a device runs as one item, its steps in order)
+    const seq = new Map()
+    const items = []
+    for (const c of chosen) {
+      if (SEQUENTIAL_JOBS.some((j) => j.job.test(c.step.job))) {
+        if (!seq.has(c.step.job)) { seq.set(c.step.job, []); items.push({ list: seq.get(c.step.job) }) }
+        seq.get(c.step.job).push(c)
+      } else items.push({ list: [c] })
+    }
+    const cost = (it) => it.list.reduce((n, c) => n + estimate(c.step), 0)
+    const alone = items.filter((it) => it.list.some((c) => c.step.tier.alone))
+    await pool(items.filter((it) => !alone.includes(it)).sort((a, b) => cost(b) - cost(a)), workers, async (it) => { for (const c of it.list) await runStep(c) })
+    // then the timing rigs, one at a time, with nothing else running
+    await Promise.all(providers.values())
+    for (const it of alone) for (const c of it.list) await runStep(c)
+  } else if (opts.affected) {
     // pinned and nearest first; the rest in the order the budget chose
     await pool(chosen, workers, runStep)
   } else {
@@ -483,7 +556,9 @@ if (!chosen.length) {
     const byJob = new Map()
     for (const c of chosen) byJob.set(c.step.job, [...(byJob.get(c.step.job) ?? []), c])
     const jobs = [...byJob.values()].sort((a, b) => b.length - a.length)
-    await pool(jobs, workers, async (list) => { for (const c of list) await runStep(c) })
+    await pool(jobs, workers, async (list) => { for (const c of list) if (!c.step.tier.alone) await runStep(c) })
+    await Promise.all(providers.values())
+    for (const c of chosen) if (c.step.tier.alone) await runStep(c)
   }
   if (opts.rerun) {
     const failedSteps = chosen.filter((c) => results.some((r) => r.id === c.step.id && r.status === 'FAIL'))
@@ -513,7 +588,7 @@ if (!chosen.length) {
   if (slow.length) console.log(`over 5 s (move to full in scripts/lib/test-tiers.mjs, with a reason): ${slow.map((r) => `${r.label} ${secs(r.ms)}`).join(', ')}`)
   const flaky = results.filter((r) => r.flaky).map((r) => r.label)
   if (flaky.length) console.log(`flaky (failed in the run, passed alone; still failures): ${flaky.join(', ')}`)
-  if (!opts.affected) {
+  if (!opts.affected || opts.release) {
     const notRun = [...left, ...results.filter((r) => r.status === 'not here').map((r) => ({ step: { id: r.id, scripts: [], name: r.label }, reason: r.note }))]
     if (notRun.length) {
       console.log(`NOT RUN: ${notRun.length} step${notRun.length === 1 ? '' : 's'} this full check did not run (here, or in this tier):`)
@@ -522,7 +597,7 @@ if (!chosen.length) {
       for (const [why, ids] of byReason) console.log(`  NOT RUN ${ids.length} × ${why}: ${ids.join(', ')}`)
     }
   }
-  console.log(`${failed ? 'FAIL' : 'ok'}: ${count('ok')} passed, ${count('cached')} cached, ${count('FAIL')} failed, ${count('SKIP')} skipped, ${count('not here')} not here, ${count('left')} past the deadline${opts.affected ? `, ${left.length} left to the sweep` : ''}; ${since()}${ON_CI ? '' : `; logs ${LOGS}`}`)
+  console.log(`${failed ? 'FAIL' : 'ok'}: ${count('ok')} passed, ${count('cached')} cached, ${count('FAIL')} failed, ${count('SKIP')} skipped, ${count('not here')} not here, ${count('left')} past the deadline${opts.affected && !opts.release ? `, ${left.length} left to the release check` : ''}; ${since()}${ON_CI ? '' : `; logs ${LOGS}`}`)
 }
 
 if (opts.json) {

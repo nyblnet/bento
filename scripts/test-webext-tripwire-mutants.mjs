@@ -21,6 +21,7 @@ import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { mutantScope } from './lib/mutant-scope.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const RIG = path.join(ROOT, 'scripts/test-webext-tripwire-browser.mjs')
@@ -138,7 +139,13 @@ const MUTANTS = [
 const run1 = (env) => spawnSync(process.execPath, [RIG], { env: { ...process.env, ...env }, encoding: 'utf8', timeout: 600000 })
 const started = (r) => /^extension \S+ v/m.test(r.stdout)
 const run = (env) => { let r = run1(env); for (let i = 0; i < 2 && !started(r); i++) { console.log('  note  the rig did not start (retrying): ' + (r.stdout + r.stderr).trim().split('\n').slice(-2).join(' | ').slice(0, 160)); r = run1(env) } return r }
-const rows = [...new Set(MUTANTS.map((m) => m.row))]
+const PICK = process.env.TW_ONLY_MUTANT // a substring of a mutant's name, to re-run one
+// the release check reruns only what changed (scripts/lib/mutant-scope.mjs; off by hand)
+const scope = await mutantScope({ suite: 'scripts/test-webext-tripwire-mutants.mjs', rigs: ['scripts/test-webext-tripwire-browser.mjs'] })
+const plan = MUTANTS.filter((x) => !PICK || x.name.includes(PICK)).map((m) => ({ m, d: scope.decide(m, [m.edits ?? { file: m.file }].flat().map((e) => `home/webext/${e.file}`)) }))
+for (const { m, d } of plan) if (d.skip) scope.notRerun(m.name, d.why)
+if (plan.every((p) => p.d.skip)) { console.log(scope.summary()); process.exit(0) }
+const rows = [...new Set(plan.filter((p) => !p.d.skip).map((p) => p.m.row))]
 console.log(`control: rows ${rows.join(', ')} unmutated`)
 const control = run({ TW_ROWS: rows.join(',') })
 if (control.status !== 0) {
@@ -148,13 +155,14 @@ if (control.status !== 0) {
 }
 console.log(`  ok    ${control.stdout.trim().split('\n').at(-1)}`)
 let failures = 0, ran = 0
-const PICK = process.env.TW_ONLY_MUTANT // a substring of a mutant's name, to re-run one
-for (const m of MUTANTS.filter((x) => !PICK || x.name.includes(PICK))) {
+for (const { m, d } of plan) {
+  if (d.skip) continue
   ran++
   const r = run(m.build ? { TW_ROWS: m.row, TW_BUILD_MUTANT: JSON.stringify(m.build) } : { TW_ROWS: m.row, TW_MUTANT: JSON.stringify(m.edits ?? { file: m.file, from: m.from, to: m.to }) })
   const applied = /mutant applied to/.test(r.stdout)
   const red = r.status === 1 && /FAIL/.test(r.stdout)
   const okay = applied && red
+  scope.record(d, okay)
   if (!okay) failures++
   const fail = r.stdout.split('\n').find((l) => /FAIL/.test(l))?.trim() ?? ''
   console.log(`  ${okay ? 'ok  ' : 'FAIL'}  ${m.name} → row ${m.row} ${!applied ? 'NOT APPLIED' : red ? 'red' : 'GREEN'}${fail ? `: ${fail.slice(5, 120)}` : ''}`)
@@ -162,4 +170,5 @@ for (const m of MUTANTS.filter((x) => !PICK || x.name.includes(PICK))) {
   if (!okay) console.log(`        exit ${r.status} ${r.signal ?? ''} ${r.error?.message ?? ''} | ${(r.stdout + r.stderr).trim().split('\n').slice(-4).join(' | ').slice(0, 400)}`)
 }
 console.log(`\n${ran - failures}/${ran} mutants red on their row`)
+if (scope.summary()) console.log(scope.summary())
 process.exit(failures ? 1 : 0)

@@ -24,6 +24,9 @@
 // quick check runs it whatever its distance and whatever the budget says. These
 // are why shipped files do not brick (docs/PLATFORM.md).
 //
+// `alone: true` (release and full checks): the step runs by itself after every
+// other step, because it times something a busy machine slows down.
+//
 // `sweepEnv` raises a step's depth in the sweep only (more seeds, more steps);
 // the quick check runs it as CI's step text says.
 //
@@ -81,7 +84,10 @@ export const ENTRIES = [
   { rig: 'test-home-web.mjs', tier: 'full', why: '50 s: home/web in a browser' },
   { rig: 'test-home-bridge.ts', tier: 'full', why: '31 s: the host bridge end to end' },
   { rig: 'test-home-web-offline.mjs', tier: 'full', why: '25 s: home/web offline in a browser' },
+  { rig: 'test-home-web-host.mjs', tier: 'full', why: '25 s (Chromium; WebKit 51 s, mutants 134 s): the library-host security rows in a browser' },
+  { rig: 'test-home-web-kill-drill.mjs', tier: 'full', why: '26 s (Chromium; WebKit 25 s, mutants in three engines 12 min): the D5(c) kill-switch drill, infecting a browser on purpose' },
   { rig: 'test-sync-session.ts', tier: 'full', why: '20 s: the sync session over many seeded schedules' },
+  { rig: 'test-sync-keyproof.ts', tier: 'full', why: '11 s: presence key and identity proofs over real sessions; mostly waits for frames to settle' },
   { rig: 'test-bento-check.ts', tier: 'full', why: '18 s: the bento-check CLI against built shells' },
   { rig: 'test-seal-gate.mjs', tier: 'full', why: '16 s: builds the sealed test shell first' },
   { rig: 'test-webext-id.ts', tier: 'full', why: '15 s: the extension\'s identity agent end to end' },
@@ -98,13 +104,27 @@ export const ENTRIES = [
   // measured in the quick check itself, four steps at once on the runner (2026-11-28)
   { rig: 'test-tray-index.mjs', tier: 'full', why: '31 to 43 s in the quick check on the runner (4 s alone): builds and indexes a tray of real shells' },
   { rig: 'test-tray-releases.mjs', tier: 'full', why: '20 to 29 s in the quick check on the runner (5 s alone)' },
+  // measured in #1007's quick check on the runner (2026-11-28)
+  { rig: 'test-identity.ts', tier: 'full', why: '7.3 s in a kernel change\'s quick check on the runner (4 s alone): the identity agent contract over every host shape' },
+  { rig: 'test-sync-vouch.ts', tier: 'full', alone: true, why: '5.0 s in the quick check, and its row "a q-stamped op batch is applied" failed once under parallel load (7 of 7 alone): full, and alone in the release check' },
   // A released-surface invariant the quick check could not keep (2026-11-28): its hidden-tab
   // timing row ("the splash is gone within 50 ms of the mount") measured 5 to 12 ms in every
   // sequential CI run and when run first on the runner, but 51 to 164 ms inside the quick
   // check (hidden mount 0.8 to 1.2 s against 0.4 s), whether run last and alone, first and
   // alone, or after a Chrome warm-up. Cause not found. The splice gate (pinned) still checks
   // every built shell per change; this rig runs in the sweep a release requires.
-  { rig: 'test-shell-loader.ts', tier: 'full', why: 'its 50 ms hidden-tab splash timing fails inside the quick check on the runner (51 to 164 ms; 5 to 12 ms run alone); the sweep runs it' },
+  { rig: 'test-shell-loader.ts', tier: 'full', alone: true, why: 'its 50 ms hidden-tab splash timing fails inside the quick check on the runner (51 to 164 ms; 5 to 12 ms run alone); the release check runs it, alone' },
+]
+
+/**
+ * Jobs whose steps share one device or one build folder, so even the release
+ * check (which otherwise runs every step side by side) runs them in CI's order,
+ * one at a time: the iOS simulator rigs drive one booted simulator, and run
+ * side by side test-home-snapshot-cover lost its cover check (measured
+ * 2026-11-28; it passes run in order).
+ */
+export const SEQUENTIAL_JOBS = [
+  { job: /^home-ios-/, why: 'one simulator and one Xcode derived-data folder' },
 ]
 
 /** Rules, for steps no entry names. */
@@ -128,7 +148,7 @@ export function matchTier(s, entries = ENTRIES, rules = RULES) {
   const hits = entries.filter((e) => entryMatches(e, s))
   if (hits.length) {
     const top = hits.reduce((a, b) => (rank(b.tier) > rank(a.tier) ? b : a))
-    return { tier: top.tier, why: top.why, pin: hits.some((e) => e.pin) && top.tier === 'fast', sweepEnv: Object.assign({}, ...hits.map((e) => e.sweepEnv ?? {})), entries: hits }
+    return { tier: top.tier, why: top.why, pin: hits.some((e) => e.pin) && top.tier === 'fast', alone: hits.some((e) => e.alone), sweepEnv: Object.assign({}, ...hits.map((e) => e.sweepEnv ?? {})), entries: hits }
   }
   const rule = rules.find((r) => (s.needs ?? []).includes(r.needs))
   if (rule) return { tier: rule.tier, why: rule.why, pin: false, sweepEnv: {}, entries: [], rule: true }
