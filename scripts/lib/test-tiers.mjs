@@ -74,6 +74,7 @@ export const ENTRIES = [
   { job: /^home-desktop-/, tier: 'deep', why: 'needs a Linux runner with WebKitGTK, TPM and keyring packages (apt), or a Windows runner: dispatch ci-home-desktop.yml' },
   { job: /^home-android-/, tier: 'deep', why: 'needs Java and the Android SDK (Gradle): dispatch ci-home-android.yml' },
   { job: /^home-ios-/, tier: 'full', why: 'Xcode, Swift and the iOS simulator: macOS only, 8 to 19 min a job' },
+  { args: /BENTO_BROWSER=firefox|\s--firefox\b/, tier: 'deep', why: 'Playwright\'s Firefox does not launch on the sweep\'s Mac (macOS 27: launch timeout after sandbox_extension_issue_file_to_process, Operation not permitted; measured 2026-11-28, with and without the agent sandbox); Linux runs it: dispatch ci-home.yml' },
 
   // ---- mutant suites: each mutant reruns a whole rig
   { rig: '*-mutants.{ts,mjs}', tier: 'full', why: 'a mutant suite: every mutant reruns its rig (7 s to 15 min on CI)' },
