@@ -43,12 +43,12 @@
 //
 //   POST /v1/web/signout/challenge {address}             → 200 {nonce, at}
 //     no account → 404 (the roster lookup already says this; same per-IP limit)
-//     UNTIL the kernel defines the signed text, this route answers 501
+//     a directory that cannot sign browsers out answers 501
 //     {error: 'not-implemented'}, so the page stops before any passkey prompt
 //     (the stub's `notYet` option)
 //   POST /v1/web/signout           {text, assertion}     → 200 {ok: true, at}
-//     text = wout.<b64u(address)>.<at>.<nonce>   (PROVISIONAL: the kernel's layout replaces it;
-//                                                  until then the challenge route answers 501)
+//     text = wout.<b64u(address)>.<at>.<nonce>   (the kernel's layout, kernel/src/roster.ts buildWout)
+//     past a few accepted sign-outs per account a day (every member, every IP) → 429 rate-limited
 //     1. parse the text (exactly four fields) → else 400 text
 //     2. spend the nonce: audience 'signout', the text's account, at equal to
 //        the challenge's → else 400 nonce
