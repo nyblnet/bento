@@ -43,6 +43,7 @@ jobs:
     timeout-minutes: 15
     env:
       BENTO_CHECK_CACHE: ${{ github.workspace }}/../bento-check-cache
+      BENTO_BROWSER_DIR: ${{ github.workspace }}/../bento-browser
     steps:
       - uses: actions/checkout@v4
         with:
@@ -75,15 +76,23 @@ jobs:
           for app in slides spaces dash type; do npm ci --prefix "$app" --no-audit --no-fund & pids+=($!); done
           for p in "${pids[@]}"; do wait "$p"; done
 
-      - name: Restore the check's result cache and browser
-        # Content-keyed passes (scripts/lib/check-cache.mjs), built shells and
-        # the pinned Playwright: a rerun skips what did not change. Saved under
-        # a new key every run; restored from the newest of this branch or main.
+      - name: Restore the pinned browser
+        # Playwright and its Chromium, installed by the check only when a step
+        # it runs drives a browser; keyed by the file that pins the version.
         uses: actions/cache@v4
         with:
           path: |
-            ${{ github.workspace }}/../bento-check-cache
             ~/.cache/ms-playwright
+            ${{ github.workspace }}/../bento-browser
+          key: browser-${{ runner.os }}-${{ hashFiles('.github/workflows/ci-full.yml') }}
+
+      - name: Restore the check's result cache
+        # Content-keyed passes (scripts/lib/check-cache.mjs) and built shells:
+        # a rerun skips what did not change. Saved under a new key every run;
+        # restored from the newest of this branch or main.
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/../bento-check-cache
           key: check-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             check-${{ runner.os }}-
