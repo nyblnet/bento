@@ -580,6 +580,38 @@ H('[K-ID3b review] departed actors, races and consent latches (security-review-1
     M.setEditing('f3'); M.setEditing(undefined); await settle(60);
     ok(carried(n) === 0, `F3 (${slow}): withdrawn while ${slow} was pending: no frame carries the identity`);
   }
+  // R1: withdrawn after whoami answered, while the proof is still being hashed
+  // (security's probe-hashwin gate: whoami waits on a promise the rig releases,
+  // and the withdrawal runs on the next macrotask, after the first check)
+  const bigProof = { device: { cert: 'x'.repeat(60_000) }, chain: [] };
+  const gatedAgent = () => {
+    let release!: (v: unknown) => void;
+    const gate = new Promise((r) => { release = r; });
+    const agent = Object.freeze({
+      contract: 1 as const,
+      whoami: () => gate,
+      sign: async (_p: string, payload: string) => ({ ok: true, pub: WB.pub,
+        sig: b64u(new Uint8Array(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, WB.key, new TextEncoder().encode(payload)))) }),
+      resolve: async () => null,
+    });
+    const me = { name: 'bob', email: 'bob@example.com', vouchedBy: 'id.bento.page', accountPub: 'g:' + 'A'.repeat(43), devicePub: WB.pub, proof: bigProof };
+    return { agent, open: () => release(me) };
+  };
+  for (const withdraw of [false, true, true]) {
+    await M.useIdentity(null); await settle(60);
+    const n = seen.length;
+    const g = gatedAgent();
+    const u = M.useIdentity(g.agent);
+    g.open();
+    let landed = 'never';
+    if (withdraw) setImmediate(() => { landed = 'during'; void M.useIdentity(null); });
+    await u; await settle(150);
+    M.setEditing('r1'); M.setEditing(undefined); await settle(100);
+    const c = seen.slice(n).filter((f) => f.a === M.actor && 'idk' in f).length;
+    if (withdraw) ok(c === 0 && landed === 'during', `R1: withdrawn while the proof was being hashed: no frame carries idk (${c})`);
+    else ok(c >= 1, `R1 control: the same gated agent, not withdrawn, is carried (${c})`);
+  }
+  await M.useIdentity(null); await settle(60);
 }
 
 H('[K-ID3b signing] the agent refusing, hanging or signing with another key');

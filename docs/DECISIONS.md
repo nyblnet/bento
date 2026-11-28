@@ -16056,7 +16056,10 @@ createProofResolver`). `kernel/src/sync/idproof.ts`, wired in
   proved a key (an unproven frame creates none), and a proof only for a
   proven (actor, idh) whose own hash matches. Asks go out only after a proven
   beat (the ask bound is above), and one proven beat for a new (actor, hash)
-  makes each receiver send one ask.
+  makes each receiver send one ask. The 64-proof cap can be used for denial,
+  never impersonation: a member with an identity key can prove 64 fresh actors
+  and push a present peer's proof out, and that peer shows no identity until
+  it is asked again (within 30 seconds) and answers.
 - **Only a proven key is resolved (A4).** `peerIdentity(actor)` answers only
   while the actor is present, its latest beat proved the key it names for that
   proof, and the session holds a proof whose own hash is that `idh`.

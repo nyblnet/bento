@@ -65,7 +65,11 @@
 // (an unproven frame never creates state), and a proof only for a proven
 // (actor, idh) whose own hash matches, at most ID_MAX_PROOFS in all. Asks go
 // out only after a proven beat (the ask bound is above); one proven beat for a
-// new (actor, hash) makes each receiver send one ask.
+// new (actor, hash) makes each receiver send one ask. The proof cap is a
+// denial with recovery, never an impersonation: a member holding an identity
+// key can prove ID_MAX_PROOFS fresh actors and push a present peer's proof
+// out, and that peer then shows no identity until its next proven beat asks
+// again (ID_ASK_RETRY_MS) and the answer comes (the cooldown).
 //
 // The proof sent is whoami's, verbatim, and is never sent over
 // PROOF_MAX_BYTES. A host's agent must type-check it before handing it over
