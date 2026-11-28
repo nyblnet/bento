@@ -2,7 +2,7 @@
 name: scratch quick-check timing
 on:
   pull_request:
-    paths: ['.github/workflows/scratch-timing.yml']
+    paths: ['.github/workflows/scratch-timing.yml', 'scripts/**']
 jobs:
   time:
     runs-on: ubuntu-latest
