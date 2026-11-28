@@ -26,6 +26,27 @@ names provisional.
 - `kernel/CLAUDE.md` points kernel work at the sections of it that describe
   shared machinery.
 
+## Checks
+
+- **Every change: the quick check, about a minute.** `node scripts/check.mjs
+  --affected` runs only what the diff since the merge-base with main reaches:
+  CI's own steps (from `.github/`), nearest first by import distance, the
+  fast tier only, within a time budget; the released-surface invariants
+  (splice gate, CRDT convergence, save and preview escapes) whenever reached;
+  one build and headless load per app whose source changed (else slides, for
+  shared code). It prints each step's time and what it left to the sweep;
+  `--dry-run` shows the plan. Passes are cached by content outside the repo
+  (`~/personal/bento-check-cache`). The required `validate` check runs the same
+  command. Agents run `--affected` only.
+- **The sweep: the full tier on one commit.** `node scripts/sweep.mjs
+  [commit]` runs every step this machine can run in its own worktree, keeps the
+  result by sha and bisects a failure since the last green sweep. A release
+  refuses without a green sweep of its commit (`scripts/release.mjs`); merges
+  do not wait on it.
+- **Tiers** live in `scripts/lib/test-tiers.mjs`, each entry with a reason.
+  Never skip, weaken or delete a test to get green: re-tier it.
+  `scripts/test-ci-registered.ts` holds every rig to a CI step and a tier.
+
 ## Testing gotcha
 
 **Reading back a style property you just wrote is not a measurement.** A CSS

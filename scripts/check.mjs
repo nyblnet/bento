@@ -43,7 +43,8 @@
 // here it is reported as SKIP and never remembered. Setup steps are providers
 // made once: npm ci when an app's node_modules is missing, build:single (kept
 // in the cache by the content of what it reads), build:sealtest, jsdom and the
-// pinned Playwright (PLAYWRIGHT_MODULE, else installed into the cache).
+// pinned Playwright (PLAYWRIGHT_MODULE, else installed into BENTO_BROWSER_DIR,
+// default <cache>/browser).
 //
 // A full run takes CI's steps job by job, in order within each job (jobs in
 // parallel); a step for another platform (Linux desktop, Windows, Android) is
@@ -246,6 +247,12 @@ function run(cmd, args, { cwd = ROOT, env = {}, log, timeout = 0 } = {}) {
 }
 
 const tail = (text, n = 40) => text.trimEnd().split('\n').slice(-n).map((l) => `      ${l}`).join('\n')
+/** A failed step's output: its failing lines first (a rig prints hundreds of oks), then its last lines. */
+function failText(text) {
+  const lines = text.trimEnd().split('\n')
+  const bad = lines.filter((l) => /\bFAIL\b|✗|\bnot ok\b|\bError\b|\berror:|timed out/.test(l)).slice(0, 30)
+  return `${bad.length ? `${bad.map((l) => `      ${l}`).join('\n')}\n      …\n` : ''}${tail(text, 25)}`
+}
 
 // ---------------------------------------------------------------- providers
 
@@ -295,7 +302,7 @@ async function makeProvider(p) {
   }
   if (kind === 'browser') {
     if (process.env.PLAYWRIGHT_MODULE && existsSync(process.env.PLAYWRIGHT_MODULE)) return { ok: true, note: 'PLAYWRIGHT_MODULE', env: { PLAYWRIGHT_MODULE: process.env.PLAYWRIGHT_MODULE } }
-    const dir = join(CACHE, 'browser', `playwright-${browserVersion}`)
+    const dir = join(process.env.BENTO_BROWSER_DIR || join(CACHE, 'browser'), `playwright-${browserVersion}`)
     const mod = join(dir, 'node_modules', 'playwright', 'index.mjs')
     let ms = 0
     if (!existsSync(mod)) {
@@ -342,7 +349,12 @@ async function runStep(c) {
     GITHUB_WORKSPACE: ROOT, RUNNER_TEMP: tmp,
     PATH: `${join(ROOT, 'scripts', 'ci')}:${process.env.PATH}`,
   }
-  const r = await run('bash', ['--noprofile', '--norc', '-eo', 'pipefail', script], { cwd: join(ROOT, s.wd), env: stepEnv, log, timeout: RUN_TIER === 'fast' ? 180_000 : 45 * 60_000 })
+  const serial = !!s.tier.serial
+  await (serial ? exclusive() : shared())
+  let r
+  try {
+    r = await run('bash', ['--noprofile', '--norc', '-eo', 'pipefail', script], { cwd: join(ROOT, s.wd), env: stepEnv, log, timeout: RUN_TIER === 'fast' ? 180_000 : 45 * 60_000 })
+  } finally { release(serial) }
   rmSync(tmp, { recursive: true, force: true })
   let status = r.code === 0 ? 'ok' : 'FAIL'
   let note = ''
@@ -369,8 +381,8 @@ function report(c, r) {
   const mark = { ok: 'ok  ', cached: 'ok  ', FAIL: 'FAIL', SKIP: 'SKIP', 'not here': 'HERE', left: 'LEFT' }[r.status]
   console.log(`${mark} ${t.padStart(6)}  ${label(s).padEnd(44)} ${s.id}${r.note ? `  (${r.note})` : ''}`)
   if (r.status === 'FAIL' && r.out) {
-    if (ON_CI) console.log(`::group::${s.id} output (last 60 lines)`)
-    console.log(tail(r.out, 60))
+    if (ON_CI) console.log(`::group::${s.id} output (its failing lines, then its last 25)`)
+    console.log(failText(r.out))
     if (ON_CI) console.log('::endgroup::')
   }
   return res
@@ -391,6 +403,29 @@ function prune() {
       } catch { /* raced with another run */ }
     }
   }
+}
+
+/**
+ * Steps whose rig measures time (a splash within 50 ms of a mount) fail when
+ * the machine is busy, so a step whose tier says `serial` runs with nothing
+ * else running: it waits for the steps in flight, and holds new ones back.
+ */
+const gate = { running: 0, exclusive: false, waiting: 0, wake: [] }
+const settle = () => { const w = gate.wake.splice(0); for (const f of w) f() }
+async function shared() {
+  while (gate.exclusive || gate.waiting) await new Promise((r) => gate.wake.push(r))
+  gate.running++
+}
+async function exclusive() {
+  gate.waiting++
+  while (gate.exclusive || gate.running) await new Promise((r) => gate.wake.push(r))
+  gate.waiting--
+  gate.exclusive = true
+}
+function release(serial) {
+  if (serial) gate.exclusive = false
+  else gate.running--
+  settle()
 }
 
 async function pool(items, n, fn) {
