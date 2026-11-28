@@ -74,6 +74,8 @@ const MUTANTS = {
   // C8: a timed-out send shown as "could not send"
   'timeout-as-refusal': [["    if (r.status === 503 && j.error === 'mail-timeout') return again(", '    if (false) return again(']],
   // C3: the restored removal not mentioned
+  // 986-N1: a member-stopped reset shown as unknown
+  'stopped-as-unknown': [["    if (j.error === 'stopped' && typeof j.at === 'number') { $('stopped-at').textContent = at(j.at); return show('stopped') }\n", '']],
   'no-back': [["      if (typeof j.removesAt === 'number') { $('back-at').textContent = at(j.removesAt); $('back').hidden = false }\n", '']],
 }
 const tmp = mkdtempSync(join(tmpdir(), 'void-page-'))
@@ -387,6 +389,12 @@ async function rows(mod, loud) {
     const pre = await plantEnded(w, 'preempted')
     const pp = await press(pre, 'c', '#cancel')
     say(await visible(pp, '#preempted') && (await pp.locator('#preempted-at').textContent()).length > 0, 'a change a reset cancelled: the page says a reset cancelled it')
+    // 986-N1: a reset a member's passkey stopped: its own link says so, with when
+    const stp = await plantEnded(w, 'stopped')
+    const ps = await press(stp, 'r', '#cancel-reset')
+    const stt = await ps.locator('#stopped').textContent()
+    say(await visible(ps, '#stopped') && (await ps.locator('#stopped-at').textContent()).length > 0 && stt.includes('The reset of your bento/id account was stopped') && !/Nothing changed/.test(stt),
+      'a reset a member stopped: its link says a passkey stopped it, when, and which email names the passkey')
     const gone = await plant(w, 'c')
     gone.store.delete('pend')
     const pg = await press(gone, 'c', '#cancel')

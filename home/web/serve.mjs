@@ -13,8 +13,9 @@
 //        --frame-origin http://localhost:5311 --release-base http://127.0.0.1:5312/releases/
 //   node home/web/serve.mjs --dist home/web/dist --library 5310 --frame 5311 [--releases <dir> --release-port 5312]
 //
-// Any path not in the build answers 404 with no body: the frame site serves
-// exactly one page.
+// Any path not in the build answers 404: with the build's 404.html where the
+// site has one (the library), else with no body (the frame site serves
+// exactly one page).
 
 import http from 'node:http'
 import fs from 'node:fs'
@@ -62,6 +63,10 @@ function site(dir, { index = null, onRequest } = {}) {
     const full = path.join(dir, file)
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405).end(); return }
     if (!file || file.startsWith('_') || file.includes('..') || !full.startsWith(dir + path.sep) || !fs.existsSync(full) || !fs.statSync(full).isFile()) {
+      // the build's 404 page with status 404, as the production host serves it (security ruling #956 D1);
+      // with none (the frame site) an empty 404. Headers: only rules matching the asked path, as Cloudflare applies them.
+      const notFound = path.join(dir, '404.html')
+      if (fs.existsSync(notFound)) { res.writeHead(404, { 'content-type': TYPES['.html'], ...headersFor(rules, p) }); res.end(req.method === 'HEAD' ? undefined : fs.readFileSync(notFound)); return }
       res.writeHead(404).end(); return
     }
     res.writeHead(200, { 'content-type': TYPES[path.extname(full)] ?? 'application/octet-stream', ...headersFor(rules, p) })

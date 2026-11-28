@@ -185,7 +185,7 @@ Under option G a bento/id account is a **roster of passkeys** (the kernel's
 | `POST /v1/void` `{email, token, choice}` (60 an hour per IP) | the void token | `choice` `cancel`, `remove` or `undo`, as the token allows: 200 `{done}`; 409 `late` `{at, by?}` (what it was for took effect; `by: 'reset'` when a reset did), 409 `used` `{at}`, 409 `preempted` `{at}` (a reset cancelled the change), 409 `busy` (another press or a reset holds the roster: try again), 400 `invalid` (a token the directory does not know), 400 `choice` (not offered; the token is kept), 503 `mail` (Remove whose notice the mailer refused: nothing changed), 503 `mail-timeout` (the mailer did not answer in 30 s: nothing changed, but the notice may still arrive, so the page says it may and that the page is right) |
 | `POST /v1/roster/reset/start` `{email}` (10 an hour per IP) | none | **always 202**; mails a reset link if the address has a roster, no reset waits, and no reset link is live |
 | `POST /v1/roster/reset` `{email, token, dirNonce, reg}` | the reset token + a registration over `dirNonce` | 202: the reset waits 72 h, preempting any waiting change |
-| `POST /v1/roster/reset/void` `{email, credId, assertion, dirNonce}` | a member's passkey | 409 `no-reset`, 403 `new-account` (first 14 days), 400 `signer`, 403 `quarantined`; otherwise **501** until the kernel defines what the passkey signs |
+| `POST /v1/roster/reset/void` `{email, text, credId, assertion}` | a member's passkey over `text` = the kernel's `vrs.<b64u(address)>.<sha256(reset ros.)>.<dirNonce>` (the roster challenge is read from it and spent first) | 200 `{done: 'stopped', removesAt?}`: the reset is dropped, a removal it set aside waits again (its undo link still works), the address is mailed and the stop logged (`reset-stop`), and the reset's own link then answers 409 `stopped`. 409 `no-reset`; 403 `new-account` when the reset was FIRST asked in the account's first 14 days (an undo's re-ask keeps that time); 400 `signer`; 403 `quarantined`; 400 `signer-kind` (a recovery or consent key: not wired yet); 409 `busy`; 400 `assertion-sign-count` (the counter, which the directory compares and stores in the same step); otherwise the kernel's reason (`reset-mismatch`, `address`, `assertion-…`) |
 
 **The countersign.** Every link is countersigned (`rip.`, the kernel's
 format) with the online key when it takes effect, never at request: the
@@ -224,11 +224,15 @@ good; a waiting removal of a suspended passkey is only set aside: its undo
 link keeps working (the reset then starts its 72 hours again, since the chain
 takes no link asked for before the one before it took effect), and if the
 reset is stopped the removal waits again at its own time. It can be stopped from its own notice's
-link; by a member's passkey only once the account is 14 days old (from its
-setup; not built past the age rule yet). When it takes effect the roster is
+link; by a member's passkey (the kernel's `vrs.`, checked by `verifyResetStop`
+over the chain the directory holds) only for a reset FIRST asked once the
+account was 14 days old, counted from its setup. An undo that asks a reset
+again keeps that first time (`firstRequestedAt`), so it never makes a young
+reset stoppable; the kernel is given the re-asked time, which its order rule
+needs. When it takes effect the roster is
 that one passkey. `GET /v1/roster` reports `createdAt` and `newAccount`.
 
-**Not built yet**: the passkey signature that stops a reset, the chain route,
+**Not built yet**: the chain route,
 consent-key and recovery-key members, account deletion, and the incident
 lever across addresses.
 
@@ -271,20 +275,23 @@ Bodies are JSON, sent as text/plain.
 | `POST /v1/web/challenge` `{address}` | 200 `{nonce, at, rosHash}`: a challenge for an enrolment, the directory's time for it (the ceremony time), and the hash of the latest ripened roster head; 404 for an address with no account |
 | `POST /v1/web/enrol` `{text, rq, assertion}` (60 an hour per IP) | 200 `{ok, wdev, watt}`; 400 `text`, `rq`, `assertion`, `nonce`, `ceremony`, `head`; 403 `signer`, `assertion`; 409 `device-known` |
 | `POST /v1/home/challenge` `{address}` | 200 `{nonce}`: a challenge for a renewal; 404 for an address with no account |
-| `POST /v1/home/checkin` `{wren, sig, pin?}` (120 an hour per IP per address, once the signature verifies and the challenge is the directory's) | 200 `{watt, wattSig, signer, assertion, roster, incidents}` (the roster as kernel RosterLink objects from the pinned head, or from setup); 403 `{error: unknown \| revoked \| cap, incidents}`; 400 `wren`, `nonce` |
+| `POST /v1/home/checkin` `{wren, sig, pin?}` (120 an hour per IP per address, once the signature verifies and the challenge is the directory's) | 200 `{watt, wattSig, signer, assertion, roster, incidents}` (the roster as kernel RosterLink objects from the pinned head, or from setup); 403 `{error: unknown \| revoked \| retired \| cap, incidents}`; 400 `wren`, `nonce` |
+| `POST /v1/home/retire/challenge` `{address}` | 200 `{nonce}`: a challenge for a retirement (its own audience); 404 for an address with no account |
+| `POST /v1/home/retire` `{wret, sig}` (20 an hour per IP per address, once the signature verifies and the challenge is the directory's) | the kernel's `wret.` WITHOUT a successor, signed by the browser key it retires. 200 `{ok, retiredAt}` (a key already retired: the first time, nothing new written); 400 `wret`, `successor`, `nonce`; 403 `unknown` |
 | `POST /v1/web/signin/challenge` `{}` (120 an hour per IP) | 200 `{nonce}`: a sign-in challenge, 5 minutes |
 | `POST /v1/web/signin` `{nonce, assertion}` (60 an hour per IP) | 200 `{address}`: the account a discoverable passkey belongs to, named by the first 32 bytes of its 48-byte user handle; 400 `nonce`, `assertion`, `assertion-<reason>`; 403 `not-member`, `quarantined`. Nothing is logged or mailed; the passkey's counter is stored |
-| `POST /v1/web/signout/challenge` `{address}` | 404 for an address with no account (a per-IP lookup); otherwise **501** until the kernel defines the statement, so the sign-in host never asks for a passkey for nothing. Then 200 `{nonce, at}` |
-| `POST /v1/web/signout` `{text, assertion}` (60 an hour per IP) | `text` is `wout.<b64u(address)>.<at>.<nonce>` (the sign-in host's provisional layout). 400 `text`, `nonce` (spent first; `at` must be the challenge's), `assertion`, `assertion-<reason>`; 403 `not-member`, `quarantined`; then **501** until the kernel defines the statement; then 200 `{ok, at, signedAt}` |
-| `GET /v1/device/status?e=<address>&c=<sha256 of the certificate>` (CORS `*`) | 200 `{state: ok \| revoked \| cap \| unknown, incidents}` |
+| `POST /v1/web/signout/challenge` `{address}` | 200 `{nonce, at}`; 404 for an address with no account (a per-IP lookup) |
+| `POST /v1/web/signout` `{text, assertion}` (60 an hour per IP; 3 accepted a day per account) | `text` is the kernel's `wout.<b64u(address)>.<at>.<nonce>`. 400 `text`, `nonce` (spent first; `at` must be the challenge's), `assertion`, `assertion-<reason>`; 403 `not-member`, `quarantined`; 429 `rate-limited` past the account's sign-outs for the day; 200 `{ok, at, signedAt}` |
+| `GET /v1/device/status?e=<address>&c=<sha256 of the certificate>` (CORS `*`) | 200 `{state: ok \| revoked \| retired \| cap \| unknown, incidents}` |
 
-- A browser challenge is sealed for its audience (enrolment or renewal) and
+- A browser challenge is sealed for its audience (enrolment, renewal or
+  retirement) and
   its address and lives 60 seconds. The address's object spends it before any
   other check, so reuse, a failed assertion and a challenge used at the other
   route each use it up. Nothing is stored when one is issued.
 - Asking for one costs a per-IP lookup (the budget `GET /v1/roster` uses; both
   answer 404 for an address with no account) and one of 20 an hour from that
-  IP for that address, enrolments and renewals counted apart. No count is
+  IP for that address, enrolments, renewals and retirements counted apart. No count is
   shared by every caller.
 - A check-in is counted (120 an hour per IP per address) only once its
   signature verifies and it carries a challenge the directory issued for that
@@ -302,6 +309,24 @@ Bodies are JSON, sent as text/plain.
   the browser that asked knows it). It is refused for an unknown key, a revoked
   one (signed out everywhere, or its passkey removed, suspended or added again
   since the ceremony), and from 7 days after the ceremony.
+- A browser key RETIRES itself (`src/retire.js`): bento/home signs the
+  kernel's `wret.` with the key, without a successor, over a retirement
+  challenge, whenever it stops keeping or trusting the key (a local sign-out,
+  a key found extractable, a new ceremony that replaced it). The signature is
+  checked before the challenge is spent. Only a browser key this address
+  enrolled can be retired (anything else is 403 `unknown`, nothing written).
+  From then on its renewals are refused (403 `retired`), so a copy taken
+  earlier dies with its last countersign, within 24 hours. The retirement is
+  kept for the life of the account (`rt:<key>`, which the certificates' sweep
+  never deletes), so the key can never enrol again (409 `device-known`) and
+  nothing un-retires it: not a suspension undone, not the lever. It is logged
+  (`wret`) and not mailed, because it happens at every routine sign-out and
+  sign-in. It is not a revocation: it touches no other certificate and no
+  sign-out cut-off, and the status route reads `retired`, never `revoked`, so
+  peers never show a routine renewal as a revoked sign-in (a certificate
+  that IS revoked still reads `revoked`). It is never a gate at a ceremony:
+  an enrolment looks only at its own new key. The form naming a successor
+  is refused (400 `successor`).
 - `ob` is 1 when bento/home asked (the `rq` the sign-in host reports), in the
   countersign and on every event-log entry; nothing decides on it.
 - `mb` in the countersign is the account's mailbox state: 0 while the address
@@ -315,16 +340,27 @@ Bodies are JSON, sent as text/plain.
   `revoked` at once), and a ceremony whose challenge was issued by then
   cannot finish. A countersign already issued stays valid at peers that do
   not check the status route, for up to 24 hours. It is logged
-  (`signout-all`) and mailed to the address (roster mail, never held back).
-  The route runs every check and then answers 501 until the kernel defines
-  what the passkey signs.
+  (`signout-all`) and mailed to the address naming the passkey that signed
+  (roster mail, never held back). At most 3 are accepted per account in any
+  24 hours, whoever signs them and from whichever IP (security's D-W2 on
+  #962): a stolen member key could otherwise keep every browser signed out
+  until it is removed. A refused one revokes and logs nothing; the incident
+  lever is not counted.
+- A sign-out's `wout.` and its assertion are checked by the kernel's
+  `verifyWout`, the one verifier, over the account's stored chain (verified
+  with the directory's own keys) and with the sign-in host as the only origin.
+  The directory spends the challenge before it and keeps what the kernel does
+  not: the passkey's signature counter (it must move forward, and is stored
+  compare-and-set) and the per-account limit (`src/dirkeys.js` reads the
+  counter and lists the directory's keys).
 - A sign-in challenge is spent in the object of the account the passkey's
   user handle names (once per account); a handle naming no account is
   refused before anything is written. A passkey's signature counter is
   stored only over the value its assertion was checked against.
-- Not here yet: the sign-out statement itself (a kernel layout), a `dev2.`
-  made by a passkey alone, retiring the old key at a new ceremony, and mail
-  for a new browser.
+- Not here yet: a `dev2.`
+  made by a passkey alone, a retirement inside a new ceremony's own request
+  (bento/home retires the old key by its own request instead), and mail for
+  a new browser.
 
 A path that is no route answers 404 with no CORS at all.
 

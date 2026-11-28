@@ -33,10 +33,11 @@ import { PAGE_HEADERS, VOID_CSS, VOID_HTML, VOID_JS, VOID_PATHS } from './voidpa
 
 export const LIMITS = {
   // per IP per hour. challengeAddr (an enrolment's challenge), challengeAddrHome
-  // (a renewal's) and checkin are per IP per hour FOR ONE ADDRESS (browsers.js):
+  // (a renewal's), checkin, challengeAddrRetire and retire (a retirement's,
+  // retire.js) are per IP per hour FOR ONE ADDRESS (browsers.js):
   // never a count shared by every caller, which a stranger could fill to starve
   // the owner's browsers. A check-in is counted only once its signature verifies
-  ip: { complete: 60, lookup: 300, challenge: 120, request: 60, setup: 10, enrol: 60, void: 60, reset: 10, checkin: 120, challengeAddr: 20, challengeAddrHome: 20 },
+  ip: { complete: 60, lookup: 300, challenge: 120, request: 60, setup: 10, enrol: 60, void: 60, reset: 10, checkin: 120, challengeAddr: 20, challengeAddrHome: 20, challengeAddrRetire: 20, retire: 20 },
 }
 const DAY = 86_400_000
 
@@ -276,13 +277,14 @@ async function route(req, env) {
   }
 
   if (p === '/v1/roster/reset/void') {
-    // a member stopping a reset with its passkey (G5): refused at the last step until the kernel defines what it signs
+    // a member stopping a reset with its passkey (G5): the kernel's vrs.<b64u(address)>.<reset hash>.<dirNonce>
     const email = normalize(b.email ?? '')
-    if (!email || typeof b.dirNonce !== 'string') return json(400, { error: 'invalid' })
+    if (!email || typeof b.text !== 'string' || b.text.length > 4096) return json(400, { error: 'invalid' })
     if (!(await ledger(env, ip, 'request'))) return json(429, { error: 'rate-limited' })
-    const c = await openChallenge(env.CHALLENGE_KEY, 'roster', await addressKey(email), b.dirNonce, Date.now())
+    const dirNonce = b.text.split('.')[3]
+    const c = await openChallenge(env.CHALLENGE_KEY, 'roster', await addressKey(email), dirNonce, Date.now())
     if (!c) return json(400, { error: 'nonce' })
-    const r = await call(await rosterStub(env, email), 'resetVoid', { credId: b.credId, assertion: b.assertion, nonce: c.nonce, issued: c.issued, os: origin })
+    const r = await call(await rosterStub(env, email), 'resetVoid', { text: b.text, dirNonce, credId: b.credId, assertion: b.assertion, nonce: c.nonce, issued: c.issued, os: origin })
     return json(r.status, r.body)
   }
 
