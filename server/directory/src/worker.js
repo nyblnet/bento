@@ -24,6 +24,7 @@
 // mailed link to the sign-in host or a member's assertion.
 
 import { addressKey, normalize } from './address.js'
+import { SNS_PATH, snsRoute } from './sns.js'
 import { issueChallenge, openChallenge } from './challenge.js'
 import { Roster } from './roster.js'
 import { HOME_ORIGIN, SIGNIN_ORIGIN } from './passkey.js'
@@ -160,6 +161,14 @@ async function route(req, env) {
     // by address, or (the passkey sign-in) by the storage name a user handle carries
     roster: async (email, op, args, key) => call(key ? env.ROSTER.get(env.ROSTER.idFromName(key)) : await rosterStub(env, email), op, args),
     body,
+  }
+
+  // SES's bounce and complaint events, from Amazon SNS (sns.js): no CORS, any method answered
+  if (p === SNS_PATH) {
+    return snsRoute(req, env, {
+      json: (status, b) => json(status, b, BASE),
+      stop: async (email, rec) => { const r = await call(await rosterStub(env, email), 'mailStop', rec); if (r.status !== 200) throw new Error('mail stop not stored') },
+    })
   }
 
   if (p === STATUS_ROUTE && req.method === 'GET') return deviceStatus(env, ip, url, k)

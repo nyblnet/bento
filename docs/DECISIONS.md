@@ -15397,6 +15397,48 @@ replaced before this shipped.
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
 
+## 2026-11-23 — bento/id directory: real mail through Amazon SES, and a stop list fed by signed SNS events
+
+The directory's mailer was a stub that refused every send under `MAILER =
+"ses"`. It now signs an SES v2 `SendEmail` with Signature Version 4 on
+WebCrypto (`server/directory/src/ses.js`), and SES's bounce and complaint
+events arrive at `POST /v1/mail/events` (`sns.js`). What was settled:
+
+- **"Accepted" is a 200 with a MessageId, nothing else.** A change waits only
+  once its notice was accepted (security's D1), so a 202, a 200 without an id,
+  or any other 4xx is a refusal. A throttle (429) is a refusal too, with no
+  retry inside the sender: retrying is a caller's decision.
+- **Unknown outcomes are never "not sent".** Our own timer aborting the
+  request, a broken connection and a 5xx all carry `code: 'timeout'`, the
+  class callers already treat as "may still arrive" (security's C8). The
+  maintainer's final pick on C8 is still open; this only keeps the ambiguous
+  cases out of the "refused" class, which C8 already forbids.
+- **The topic is pinned, not just the signature.** Anyone can create an SNS
+  topic in the region and subscribe our URL to it, and AWS signs that topic's
+  messages too. So `TopicArn` must equal `SES_EVENTS_TOPIC_ARN` exactly, before
+  the certificate is fetched; the certificate URL is pinned to
+  `sns.<SES_REGION>.amazonaws.com` and its `.pem` path; only SignatureVersion 2.
+- **A stop is a refusal.** A stopped address's refused kinds throw (`code:
+  'suppressed'`) before anything is sent: never a silent drop reported as
+  success. The record lives in the address's own Roster object (named by the
+  address's hash; the record holds no address), so there is no new object
+  class or migration, and the one check is in `deliver()`.
+- **Which kinds a stop refuses is open** (`MAIL_STOP_APPLIES`). Until security
+  rules, only setup links: a stranger's setup requests could provoke a
+  Permanent bounce on a real mailbox, and no stranger-fillable thing may hold
+  back a roster, reset or void mail (G10). How an address leaves the list and
+  how long a record is kept are the maintainer's; neither is built.
+- **SES's own suppression must be off** in the configuration set. Otherwise SES
+  answers 200 and silently drops mail to an address on its list, and
+  "accepted" would stop meaning sent. Only the account can be checked for this,
+  so it is a deploy step, not a rig.
+- **No endpoint override.** The region is regex-pinned because it becomes a
+  hostname; the only way to point the sender elsewhere is a function-typed env
+  seam, which a wrangler var or secret can never be.
+
+Guard: `scripts/test-directory-ses.ts` (a fake AWS that re-derives every
+signature with node:crypto, AWS's published SigV4 example vectors, a TEST SNS
+certificate) and `scripts/test-directory-ses-mutants.ts`, in their own CI job.
 ## 2026-11-22 — bento/home's library host answers unknown paths with a script-free 404
 
 Security's review of the tripwire (#956, its D1): a host that answers a path
@@ -15710,6 +15752,91 @@ Supersedes two bullets of 2026-11-12 "The People panel's identity tiers":
   unconfirmed tag painted grey, and a changed binding hidden without the
   marker.
 
+## 2026-11-26 — bento/id: a peer's identity is checked from the certificates it carries (the account anchor, the frame's identity port)
+
+A document in bento/home's sandboxed frame reaches the identity agent over a
+port, and a person's agent answers `resolve` for someone else in the room
+from public certificates that person's document carries. Kernel half; the
+frame client and the library's consent dialog are home/web's.
+
+- **`accountPub` is the account ANCHOR under option G:** `'g:' +
+  base64url(sha256(the exact ros. text at seq 0))` (`roster.ts accountAnchor`),
+  null unless the verified chain starts at seq 0. The name is kept, so no
+  contract bump; no document read `accountPub` as a key.
+- **The anchor is not continuity of the person.** A reset continues the roster
+  chain, so the anchor is the same after every reset, including one by someone
+  who took the mailbox. The continuity signals are `resetAt`, `rosterChangedAt`
+  and `accountSince`, which the document already shows. No host and no
+  document may read "same accountPub" as "same person, nothing changed". A
+  deletion and a new setup at the same address give a new anchor, even with the
+  same passkey, because ros.0 carries the directory's nonce and time.
+- **Peer-carried proofs, verified offline.** `IdentityProof = {device, chain}`
+  (the device certificate with its passkey or consent-key proof and current
+  watt., and the roster chain from seq 0); `PublicIdentity.proof?` and
+  `ResolveQuery {pub, proof?}` are additions within contract 1. There is no
+  directory lookup route for a device key, now or later without a new ruling:
+  it would tell the directory who meets whom, be an enumeration oracle, and add
+  an online dependency.
+- **One verify order** (`identityport.ts createProofResolver`, one per open):
+  the chain from seq 0 under the PINNED directory keys only; the longest
+  chain the open holds for that anchor; the device against that chain, with
+  `cert.devicePub` equal to the queried key and a current watt. under a pinned
+  kid; the lever's predicate; own-account status; `composeResolved`. Every
+  failure answers null and nothing throws across the port.
+- **A peer's revocation reaches others within one watt. lifetime, at most
+  24 hours,** as "not verified": sign out everywhere, account deletion, removal
+  or quarantine of the certifying passkey, and the lever for a resolver that
+  holds no incident record. That holds only while the directory refuses to
+  renew a watt. in each of those cases. Only the agent's own account reports
+  `revoked: 'signout'` or `'deleted'` by name; peers are never polled, since
+  polling is the lookup route under another name.
+- **Residual: a lone peer can hide later links for up to one watt.
+  lifetime.** The presenter chooses the proof, and watt. binds only the
+  certificate, not the current head. So a peer can send a chain that ends at
+  its certificate's head and omit a later removal or quarantine. The resolver
+  judges each device against the longest chain it holds for the anchor, so
+  the omission is caught whenever another member of the same account in the
+  room carries a fresher chain. Two chains for one anchor where neither is a
+  prefix of the other are a fork: null for both, counted. A head hash in
+  watt. would close the residual; it is a format change for later.
+- **`name` and `email` are both the address** from the verified chain, and
+  `vouchedBy` is `id.bento.page`. No signed statement carries a display name
+  under G, and a certificate's label is chosen by the page that asked, so a
+  label of "Mallory" can never become a name shown with ✓.
+- **`revoked: 'incident'` only on the lever's own predicate** (`devices.ts
+  leverCovers`): a wdev., or a dev2. via passkey, with watt. ob = 1, whose
+  ceremonyAt falls inside the window, both ends included (an open window has
+  no end). Only the ceremony: a renewal logged inside the window does not
+  bring a key made before it into the incident, because the lever revokes
+  enrolments made in the window, and the watt.'s loggedAt moves on at the
+  next renewal, so keying on it would revoke a certificate the directory never
+  marked and un-revoke it a day later. A native dev2. that a consent key
+  co-signed is never covered, which matches the lever. The directory's lever
+  keys on the same ceremonyAt (never its record's enrolment time) and should
+  import this one function instead of keeping its own copy; until it does,
+  `kernel/fixtures/lever-v1.json` holds rows both sides must agree on.
+- **`composeResolved` is the only setter of `fields: 'g1'`.**
+  `checkResolved` (the one type-checked relay) keeps the marker only when
+  every G field present passes its type and `accountPub` matches
+  `^g:[A-Za-z0-9_-]{43}$`; it never adds the marker. A K2-era 87-character
+  point still passes as a plain field but never with g1. Both are keyed by
+  `RESOLVED_G1_FIELDS`, so a field added to the list without a rule does not
+  typecheck.
+- **The 64 KiB proof cap is one constant** (`PROOF_MAX_BYTES`, UTF-8 JSON),
+  about 75 roster links. Over it, whoami answers without the proof and resolve
+  answers null, both counted. A checkpoint design is later work and needs its
+  own ruling.
+- **The port (`serveIdentity`) is docstoreport's twin:** closed ops (whoami,
+  sign, resolve), exact key sets, symbol keys and non-plain prototypes
+  refused, rising ids, rate and in-flight caps, drops counted and the session
+  closed at the limit, the entry and docId from the host only, `event.origin`
+  never read. Sign and resolve answer only after whoami returned an identity in
+  that session; before that, sign is 'declined' and resolve null, without
+  asking the agent. A whoami that answered null is final for the session.
+  Invite and revoke are 'unavailable' in phase 1.
+- Guarded by `scripts/test-identityport.ts` (real signatures from the
+  deterministic test keys) and `scripts/test-identityport-mutants.ts`, where
+  each mutant must turn its own row red.
 ## 2026-11-22 — bento/id: a browser key retires itself, and a retired key is not a revoked one
 
 The directory now takes the kernel's `wret.` without a successor on

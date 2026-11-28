@@ -74,6 +74,7 @@
 // (a reset stop by one is refused by name until their proofs are wired);
 // account deletion; the chain route peers read.
 
+import { mailEnv, putMailStop } from './mail.js' // the address's stop list (SES bounces and complaints)
 import { b64uDec, b64uEnc, sha256b64u, signStatement } from '../../../kernel/src/statements.ts'
 import { buildRip, buildRos, parseRos, verifyResetStop, verifyRosterChain, ROSTER_WAIT_MS } from '../../../kernel/src/roster.ts'
 import { HOME_ORIGIN, PASSKEY, passkeyOrigins, verifyMemberAssertion, verifyRegistration } from './passkey.js'
@@ -323,7 +324,7 @@ async function mailResetLink(env, to, token, now, until) {
 // --- the object ------------------------------------------------------------------
 
 export class Roster {
-  constructor(state, env) { this.state = state; this.env = env }
+  constructor(state, env) { this.state = state; this.env = mailEnv(env, state.storage) } // mail.js reads this address's stop record through it
 
   /**
    * One alarm, three users: a waiting change's ripening, sweeping spent
@@ -618,6 +619,8 @@ export class Roster {
     const now = Date.now()
     const s = this.state.storage
     const out = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+    // SES said this address bounces for good or complained (sns.js, signature-verified): mail.js refuses it from now on
+    if (a.op === 'mailStop') { const r = await putMailStop(s, a, now); return out(r.status, r.body) }
 
     /**
      * Spend a directory challenge: FIRST, before any other check, so every
