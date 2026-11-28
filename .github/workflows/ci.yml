@@ -9,12 +9,12 @@
 # tier, nearest first, within a time budget) and prints why each step ran and
 # what it left to the sweep. The target is about a minute for a typical PR.
 #
-# Everything it leaves still runs: in the sweep (scripts/sweep.mjs, the full
-# tier on one commit, kept by sha; a release refuses without a green one), and
-# on GitHub's runners by hand (ci-full.yml and each ci-<zone>.yml, dispatch
-# only). A new rig still goes at the END of its zone's slice,
-# .github/actions/validate-<zone>/action.yml, never in this file: the check
-# reads it from there.
+# This is the ONLY GitHub workflow. Everything it leaves runs locally, in the
+# full check before a release (scripts/sweep.mjs, on the release machine; a
+# release refuses without a green one for its commit). A new rig still goes at
+# the END of its zone's slice, .github/actions/validate-<zone>/action.yml, or in
+# a step list under .github/checks/, never in this file: the check reads it
+# from there.
 #
 # Deliberately absent: signing, publishing, deploying. Releases are cut
 # locally so the signing key never leaves the maintainer's machine and the
@@ -81,7 +81,7 @@ jobs:
           path: |
             ~/.cache/ms-playwright
             ${{ runner.temp }}/bento-browser
-          key: browser-${{ runner.os }}-${{ hashFiles('.github/workflows/ci-full.yml') }}
+          key: browser-${{ runner.os }}-${{ hashFiles('.github/checks/ci-full.yml') }}
 
       - name: Restore the check's result cache
         # Content-keyed passes (scripts/lib/check-cache.mjs) and built shells:

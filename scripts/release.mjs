@@ -154,8 +154,8 @@ if (!args.includes('--out')) {
   }
   const { isGreen, readResult, summaryLine } = await import('./sweep.mjs')
   if (!isGreen(head)) {
-    console.error(`✗ ${head.slice(0, 9)} has no green sweep (${summaryLine(readResult(head)).replace(/^sweep: /, '')}).\n` +
-      `  Run it first, here:  node scripts/sweep.mjs ${head}\n` +
+    console.error(`✗ ${head.slice(0, 9)} has no green full check (${summaryLine(readResult(head)).replace(/^sweep: /, '')}).\n` +
+      `  Run the full check first, on this machine:  node scripts/sweep.mjs ${head}\n` +
       '  A release waits for the full check because a shipped file cannot be recalled.')
     process.exit(1)
   }

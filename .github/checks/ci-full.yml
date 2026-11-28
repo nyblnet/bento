@@ -1,30 +1,17 @@
-# The full CI run on GitHub's runners, by hand: every zone slice, in the two
-# halves the required check used to run on every PR (validate-builds: the four
-# apps' builds and every slice that reads a built shell; validate-kernel: the
-# kernel slice alone).
+# NOT A GITHUB WORKFLOW (2026-11-28). GitHub runs only .github/workflows/ci.yml,
+# the quick check. This file is a list of check steps: scripts/check.mjs
+# reads it (with the validate-<zone> actions) and runs its steps locally,
+# the fast tier per change and the full check before a release
+# (scripts/sweep.mjs, which release.mjs requires). A new rig still goes in
+# its zone's validate action or here, and needs a tier (scripts/lib/test-tiers.mjs).
 #
-# Not triggered by pull requests or pushes any more (2026-11-28). The required
-# check is `validate` in ci.yml, which runs the quick check
-# (scripts/check.mjs --affected): the steps below that a diff reaches, nearest
-# first, in about a minute. Everything here still runs, in the sweep
-# (scripts/sweep.mjs), which reads these files as its list of steps, and
-# here when dispatched:
-#
-#   gh workflow run ci-full.yml --ref <branch>
-#
+# The two halves the required check ran until 2026-11-28 (validate-builds: the
+# four apps' builds and every slice that reads a built shell; validate-kernel:
+# the kernel slice alone), kept as the check's job context for those slices.
 # A new rig still goes at the END of its zone's slice,
-# .github/actions/validate-<zone>/action.yml: the quick check and the sweep both
-# read it from there. Deliberately absent: signing, publishing, deploying
-# (docs/RELEASING.md).
+# .github/actions/validate-<zone>/action.yml.
 
 name: CI (full)
-
-on:
-  workflow_dispatch:
-
-concurrency:
-  group: ci-full-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   # The required check is `validate` — the LAST job below, which only reads the
@@ -95,7 +82,7 @@ jobs:
       # merge. This list changes only when a slice is added.
       #
       # A zone's jobs that are NOT part of the required check live in
-      # .github/workflows/ci-<zone>.yml, each job id unchanged.
+      # .github/checks/ci-<zone>.yml, each job id unchanged.
       - name: validate (slides)
         uses: ./.github/actions/validate-slides
 

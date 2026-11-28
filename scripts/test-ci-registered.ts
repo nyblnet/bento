@@ -67,14 +67,13 @@ ok(files.workflows.length > 0 && files.usedActions.length > 0,
 // a split opens, so it is closed here rather than trusted.
 for (const a of files.unusedActions) ok(false, `${a.path} is run by a workflow (nothing uses ./.github/actions/${a.name})`)
 for (const n of files.missingActions) ok(false, `./.github/actions/${n} exists (a workflow uses it)`)
-// WHAT RUNS PER CHANGE (2026-11-28). One workflow runs on pull requests and
-// pushes: ci.yml, whose `validate` job (the required check) runs the quick
-// check, scripts/check.mjs --affected, over the steps every other file here
-// defines. Every other workflow is dispatch-only: its steps run in the quick
-// check when a diff reaches them and their tier allows, in the sweep
-// (scripts/sweep.mjs), and on GitHub by hand. So a workflow that grows a
-// pull_request trigger again is a second per-change bill nobody chose, and a
-// rig-running workflow that cannot be dispatched cannot be run on GitHub at all.
+// WHAT RUNS ON GITHUB (2026-11-28): one workflow. .github/workflows/ci.yml,
+// whose `validate` job (the required check) runs the quick check,
+// scripts/check.mjs --affected. Everything else that defines steps lives in
+// .github/checks/, which GitHub never runs: the check reads those files and
+// runs their steps locally, per change by tier and in full before a release.
+// A second workflow is a second per-change bill nobody chose, and a check
+// file with a trigger is one somebody meant to run on GitHub.
 {
   const triggers = (text: string): string[] => {
     const m = /^on:\s*\n((?:(?:\s{2}.*)?\n)*)/m.exec(text) ?? /^on:\s*(.+)$/m.exec(text)
@@ -82,20 +81,19 @@ for (const n of files.missingActions) ok(false, `./.github/actions/${n} exists (
     if (!m[1].includes('\n')) return m[1].replace(/[[\]]/g, '').split(',').map((x) => x.trim()).filter(Boolean)
     return [...m[1].matchAll(/^ {2}([a-z_]+):/gm)].map((x) => x[1])
   }
-  const main = files.workflows.find((w) => w.path.endsWith('/ci.yml'))
+  const main = files.workflows.find((w) => w.path === '.github/workflows/ci.yml')
   ok(!!main && triggers(main.text).includes('pull_request') && triggers(main.text).includes('push'), '.github/workflows/ci.yml runs on pull_request and on push')
   ok(!!main && !/^\s+paths(-ignore)?:/m.test(main.text), '.github/workflows/ci.yml (the required check) has no path filter')
   ok(!!main && /^ {2}validate:\n/m.test(main.text) && /run: node scripts\/check\.mjs --affected\b/.test(main.text), 'the required `validate` job runs the quick check (node scripts/check.mjs --affected)')
   for (const w of files.workflows) {
     if (w === main) continue
-    const t = triggers(w.text)
-    ok(!t.includes('pull_request') && !t.includes('pull_request_target') && !t.includes('push'), `${w.path} does not run per change (triggers: ${t.join(', ') || 'none'}); the quick check does`)
-    if (/node scripts\//.test(w.text) && !t.includes('workflow_run')) ok(t.includes('workflow_dispatch'), `${w.path} can be dispatched by hand`)
+    if (w.path.startsWith('.github/workflows/')) ok(false, `${w.path}: GitHub runs one workflow, ci.yml (move a step list to .github/checks/)`)
+    else ok(!/^on:/m.test(w.text), `${w.path} has no trigger: GitHub never runs it, the check does`)
   }
 }
 
-// ZONE GATES. A workflow whose jobs are heavy runs them only when its gate
-// job says so (scripts/ci/zone-gate: always, on a dispatch). The gate skips,
+// ZONE GATES. Some check files keep the gate job their workflow had
+// (scripts/ci/zone-gate); the check treats it as setup. The gate skips,
 // so it is held: every job in a gated workflow other than the gate waits on
 // it, and the gate's own pattern names the workflow file.
 {

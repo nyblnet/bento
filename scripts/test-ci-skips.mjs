@@ -134,7 +134,7 @@ for (const a of files.usedActions) {
   ok(steps.length > 0 && bare.length === 0,
     `${a.path}: all ${steps.length} run steps use shell: bento-step {0}${bare.length ? ` (not: ${bare.map((s) => (s.match(/name: (.*)/) || [])[1]).join(', ')})` : ''}`)
 }
-// ci-full.yml runs the slices on GitHub by hand, as the required check did
+// .github/checks/ci-full.yml lists the slices the required check ran
 // until 2026-11-28; the quick check (ci.yml) runs the same steps through
 // scripts/check.mjs, which applies this same rule in-process.
 const ci = files.workflows.find((w) => w.path.endsWith('/ci-full.yml'))

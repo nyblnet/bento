@@ -201,7 +201,7 @@ Checks, from the repo root:
 ```sh
 node scripts/check.mjs --affected            # the quick check: what your diff reaches, ~1 min (what CI's `validate` runs)
 node scripts/check.mjs --affected --dry-run  # its plan: what runs, and what it leaves to the sweep
-node scripts/sweep.mjs                       # the full tier on one commit; a release needs it green
+node scripts/sweep.mjs <commit>              # the full check, at release on the release machine; release.mjs needs it green
 ```
 
 Test tiers are in `scripts/lib/test-tiers.mjs`, each with a reason. A slow rig

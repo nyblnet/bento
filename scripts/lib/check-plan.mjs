@@ -3,7 +3,7 @@
 // The quick check's plan: which CI steps a diff reaches, and what each needs.
 // Read by scripts/check.mjs (which runs the plan) and scripts/sweep.mjs.
 //
-// THE CATALOG IS CI ITSELF. Every step of every job in .github/workflows/ and
+// THE CATALOG IS THE CHECK FILES. Every step of every job in .github/checks/ and
 // of every validate-<zone> action is a step here, run with the same text, env
 // and working directory CI gives it. A new rig is still registered the one way
 // it always was: a step at the end of its zone's validate action, or a job in
@@ -38,7 +38,7 @@ export const APPS = ['slides', 'spaces', 'dash', 'type']
 /** The app built when shared code changed and no app's own source did. */
 export const REPRESENTATIVE = 'slides'
 const CODE = /\.(?:ts|mts|cts|mjs|js|cjs|tsx)$/
-const CI_FILE = /^\.github\/(?:workflows\/[^/]+\.ya?ml|actions\/[^/]+\/action\.ya?ml)$/
+const CI_FILE = /^\.github\/(?:workflows\/[^/]+\.ya?ml|checks\/[^/]+\.ya?ml|actions\/[^/]+\/action\.ya?ml)$/
 
 // ---------------------------------------------------------------- the tree
 
@@ -253,8 +253,8 @@ const SETUP_LINES = [
   [/^scripts\/ci\/zone-gate '.*'$/, () => []],
 ]
 
-/** CI files that hold no rig: the quick check itself, and the build-size report. */
-const NOT_A_CATALOG = new Set(['.github/workflows/ci.yml', '.github/workflows/pr-build-size.yml', '.github/workflows/pr-build-size-comment.yml'])
+/** The one GitHub workflow, which runs the quick check itself and holds no rig. */
+const NOT_A_CATALOG = new Set(['.github/workflows/ci.yml'])
 
 /** The providers a step's run text consists of, or null when it is not purely setup. */
 export function setupOf(run, wd = '.') {
@@ -325,7 +325,7 @@ export function loadCatalog(view, { all = false } = {}) {
     return step
   }
   for (const [file, { doc }] of byPath) {
-    if (!file.startsWith('.github/workflows/') || (!all && NOT_A_CATALOG.has(file))) continue
+    if (!/^\.github\/(?:workflows|checks)\//.test(file) || (!all && NOT_A_CATALOG.has(file))) continue
     for (const [jid, j] of Object.entries(doc.jobs ?? {})) {
       const matrices = expandMatrix(j.strategy?.matrix)
       for (const matrix of matrices) {

@@ -1,21 +1,20 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
-// The sweep: the full check (scripts/check.mjs with no --affected: every CI
-// step of the full tier this machine can run) on one commit, in a worktree of
-// its own, with the result kept per commit.
+// The full check (the sweep): every check step of the full tier this machine
+// can run (scripts/check.mjs with no --affected) on one commit, in a worktree
+// of its own, with the result kept per commit.
 //
-//   node scripts/sweep.mjs [commit]     default: origin/main's head
+//   node scripts/sweep.mjs <commit>     default: origin/main's head
 //
-// The quick check (check.mjs --affected) runs per change in about a minute;
-// the sweep runs the rest, by hand, now and then: before a release, and after
-// a run of merges. It finds what slipped through, and the fix goes in as a
-// normal change.
-//
-// UNLIKE THE MODEL IT COPIES, ONE THING DOES WAIT ON IT: a release.
-// scripts/release.mjs refuses unless the commit it releases has a green sweep,
-// because a shipped Bento file cannot be recalled: it carries its shell, and
-// every copy anyone saved keeps it. Merges do not wait on it.
+// It runs at release, on the machine that deploys, and nowhere else: GitHub
+// runs only the quick check (check.mjs --affected), per change.
+// scripts/release.mjs refuses to build or sign unless the commit it releases
+// has a green result here, because a shipped Bento file cannot be recalled: it
+// carries its shell, and every copy anyone saved keeps it. Merges do not wait
+// on it. Every step it does not run (the deep tier: a toolchain this machine
+// lacks; a step for another platform) is listed as NOT RUN in its output and
+// its result, never passed over.
 //
 // - Where: a detached worktree, BENTO_SWEEP_WORKTREES/<name> (default
 //   ~/personal/bento-wt/sweep/main), reused from sweep to sweep and cleaned
@@ -62,7 +61,7 @@ export function summaryLine(r) {
   const head = `sweep ${r.sha.slice(0, 9)}`
   const took = r.seconds != null ? `, ${Math.round(r.seconds / 60)} min` : ''
   const c = r.counts ?? {}
-  const counts = ` (${c.ok ?? 0} passed, ${c.cached ?? 0} cached${c.SKIP ? `, ${c.SKIP} skipped` : ''}${c['not here'] ? `, ${c['not here']} not here` : ''})`
+  const counts = ` (${c.ok ?? 0} passed, ${c.cached ?? 0} cached${c.SKIP ? `, ${c.SKIP} skipped` : ''}${c['not here'] ? `, ${c['not here']} not here` : ''}${r.notRun?.length ? `; NOT RUN ${r.notRun.length} deep-tier steps (another runner's toolchain)` : ''})`
   if (r.ok) return `${head}: green${counts}${took}`
   const fails = r.failures.map((f) => `${f.label}${f.flaky ? ' (flaky: passed alone)' : ''}`).join('; ')
   const bad = r.firstBad?.sha ? `; first bad ${r.firstBad.sha.slice(0, 9)} "${r.firstBad.subject}"` : r.firstBad?.why ? `; ${r.firstBad.why}` : ''
@@ -234,10 +233,12 @@ async function main(argv) {
   if (r.code !== 0 && !failures.length) failures.push({ id: 'check', label: `check.mjs exit ${r.code}`, note: 'see sweep.log' })
   const skipped = results.filter((x) => x.status === 'SKIP').map((x) => ({ id: x.id, label: x.label, note: x.note }))
   const notHere = results.filter((x) => x.status === 'not here').map((x) => ({ id: x.id, label: x.label, note: x.note }))
+  // the deep tier (another runner's toolchain): NOT RUN, listed in every result and line
+  const notRun = (r.result?.left ?? []).map((x) => ({ id: x.id, note: x.reason }))
   // green: nothing failed, nothing skipped, nothing of the full tier left for another machine
   const result = {
     sha, ok: r.code === 0 && !failures.length && !skipped.length && !notHere.length, finished: new Date().toISOString(), subject,
-    seconds: Math.round((Date.now() - t0) / 1000), counts: countOf(results), failures, skipped, notHere, logs, firstBad: null,
+    seconds: Math.round((Date.now() - t0) / 1000), counts: countOf(results), failures, skipped, notHere, notRun, logs, firstBad: null,
   }
   writeJson(resultFile(sha), result)
 
@@ -265,6 +266,7 @@ async function main(argv) {
   console.log(opts.summary ? summaryLine(result) : `\n${summaryLine(result)}`)
   for (const s of skipped) console.log(`  skipped: ${s.label} ${s.id} (${s.note})`)
   for (const s of notHere) console.log(`  not here: ${s.label} ${s.id} (${s.note})`)
+  for (const s of result.notRun) console.log(`  NOT RUN: ${s.id} (${s.note})`)
   return result.ok ? 0 : 1
 }
 

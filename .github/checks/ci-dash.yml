@@ -1,3 +1,10 @@
+# NOT A GITHUB WORKFLOW (2026-11-28). GitHub runs only .github/workflows/ci.yml,
+# the quick check. This file is a list of check steps: scripts/check.mjs
+# reads it (with the validate-<zone> actions) and runs its steps locally,
+# the fast tier per change and the full check before a release
+# (scripts/sweep.mjs, which release.mjs requires). A new rig still goes in
+# its zone's validate action or here, and needs a tier (scripts/lib/test-tiers.mjs).
+#
 # CI, dash: this zone's own jobs — validate, never release (see ci.yml's header).
 #
 # These jobs are NOT the required check. Only `validate` (ci.yml) gates a
@@ -8,20 +15,6 @@
 # new jobs here, at the end; never in ci.yml.
 
 name: CI (dash)
-
-on:
-  # By hand only (2026-11-28): pull requests run the quick check (ci.yml,
-  # scripts/check.mjs --affected), which runs the steps below that a diff
-  # reaches and that its tier allows; the sweep (scripts/sweep.mjs) runs the
-  # rest. Dispatch this file to run all of it on GitHub's runners:
-  #   gh workflow run ci-dash.yml --ref <branch>
-  workflow_dispatch:
-
-concurrency:
-  # The same rule as ci.yml, whose comment explains it: PR runs collapse onto
-  # the tip, every commit on main keeps its own run.
-  group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 defaults:
   run:

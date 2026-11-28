@@ -7,8 +7,9 @@
 //          first, inside the time budget. The default for every step.
 //   full   node scripts/sweep.mjs (and check.mjs with no --affected): fast plus
 //          every entry below marked full.
-//   deep   check.mjs --deep: everything, including what needs a runner this
-//          machine is not (Linux desktop packages, Windows, an Android SDK).
+//   deep   check.mjs --deep: everything, including what needs a toolchain the
+//          release machine lacks (Linux desktop packages, Windows, an Android
+//          SDK). A full check lists every deep step it did not run as NOT RUN.
 //
 // The tiers nest (deep ⊃ full ⊃ fast). A step is in the slowest tier any
 // explicit entry gives it; with no explicit entry, a rule applies (below); with
@@ -64,10 +65,10 @@ export const ENTRIES = [
   { rig: 'test-type-boot-browser.mjs', tier: 'fast', why: 'the quick check\'s headless load for type (3 s)' },
 
   // ---- platforms: what only a GitHub runner of another kind can run
-  { job: /^home-desktop-/, tier: 'deep', why: 'needs a Linux runner with WebKitGTK, TPM and keyring packages (apt), or a Windows runner: dispatch ci-home-desktop.yml' },
-  { job: /^home-android-/, tier: 'deep', why: 'needs Java and the Android SDK (Gradle): dispatch ci-home-android.yml' },
+  { job: /^home-desktop-/, tier: 'deep', why: 'needs Linux with WebKitGTK, TPM and keyring packages (apt), or Windows: the release Mac has neither, so the full check lists it NOT RUN' },
+  { job: /^home-android-/, tier: 'deep', why: 'needs Java and the Android SDK (Gradle), absent on the release Mac today: listed NOT RUN until it has them' },
   { job: /^home-ios-/, tier: 'full', why: 'Xcode, Swift and the iOS simulator: macOS only, 8 to 19 min a job' },
-  { args: /BENTO_BROWSER=firefox|\s--firefox\b/, tier: 'deep', why: 'Playwright\'s Firefox does not launch on the sweep\'s Mac (macOS 27: launch timeout after sandbox_extension_issue_file_to_process, Operation not permitted; measured 2026-11-28, with and without the agent sandbox); Linux runs it: dispatch ci-home.yml' },
+  { args: /BENTO_BROWSER=firefox|\s--firefox\b/, tier: 'deep', why: 'Playwright\'s Firefox does not launch on the sweep\'s Mac (macOS 27: launch timeout after sandbox_extension_issue_file_to_process, Operation not permitted; measured 2026-11-28, with and without the agent sandbox); listed NOT RUN; the WebKit and Chromium runs of the same rigs are full' },
 
   // ---- mutant suites: each mutant reruns a whole rig
   { rig: '*-mutants.{ts,mjs}', tier: 'full', why: 'a mutant suite: every mutant reruns its rig (7 s to 15 min on CI)' },

@@ -159,7 +159,8 @@ if (opts.affected) {
   builds = new Set(chosen.flatMap((c) => c.step.builds))
 } else {
   for (const s of plan.rigs) {
-    if (!inTier(s.tier.tier, RUN_TIER)) continue
+    // never silently: a step this run does not take is listed as NOT RUN
+    if (!inTier(s.tier.tier, RUN_TIER)) { left.push({ step: s, reason: `${s.tier.tier} tier: ${s.tier.why}` }); continue }
     if (opts.only && !opts.only.split(',').some((o) => [s.id, s.name, ...s.scripts].some((x) => x.includes(o)))) continue
     chosen.push({ step: s, why: s.tier.tier })
   }
@@ -512,6 +513,15 @@ if (!chosen.length) {
   if (slow.length) console.log(`over 5 s (move to full in scripts/lib/test-tiers.mjs, with a reason): ${slow.map((r) => `${r.label} ${secs(r.ms)}`).join(', ')}`)
   const flaky = results.filter((r) => r.flaky).map((r) => r.label)
   if (flaky.length) console.log(`flaky (failed in the run, passed alone; still failures): ${flaky.join(', ')}`)
+  if (!opts.affected) {
+    const notRun = [...left, ...results.filter((r) => r.status === 'not here').map((r) => ({ step: { id: r.id, scripts: [], name: r.label }, reason: r.note }))]
+    if (notRun.length) {
+      console.log(`NOT RUN: ${notRun.length} step${notRun.length === 1 ? '' : 's'} this full check did not run (here, or in this tier):`)
+      const byReason = new Map()
+      for (const l of notRun) byReason.set(l.reason, [...(byReason.get(l.reason) ?? []), l.step.id])
+      for (const [why, ids] of byReason) console.log(`  NOT RUN ${ids.length} × ${why}: ${ids.join(', ')}`)
+    }
+  }
   console.log(`${failed ? 'FAIL' : 'ok'}: ${count('ok')} passed, ${count('cached')} cached, ${count('FAIL')} failed, ${count('SKIP')} skipped, ${count('not here')} not here, ${count('left')} past the deadline${opts.affected ? `, ${left.length} left to the sweep` : ''}; ${since()}${ON_CI ? '' : `; logs ${LOGS}`}`)
 }
 
