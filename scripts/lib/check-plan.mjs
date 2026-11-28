@@ -322,7 +322,8 @@ export function loadCatalog(view, { all = false } = {}) {
     for (const [jid, j] of Object.entries(doc.jobs ?? {})) {
       const matrices = expandMatrix(j.strategy?.matrix)
       for (const matrix of matrices) {
-        const suffix = Object.keys(matrix).length ? ` (${Object.values(matrix).join(', ')})` : ''
+        const show = (v) => (v && typeof v === 'object' ? Object.values(v).join(' ') : String(v))
+        const suffix = Object.keys(matrix).length ? ` (${Object.values(matrix).map(show).join(', ')})` : ''
         const job = { id: `${jid}${suffix}`, file, platform: platformOf(j['runs-on']), steps: [], needs: [].concat(j.needs ?? []), env: j.env ?? {} }
         jobs.push(job)
         let i = 0

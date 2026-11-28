@@ -15790,9 +15790,13 @@ workflows, and the required check alone took 9 to 11 minutes.
   tier or a tier entry names no step.
 - **Released-surface invariants are pinned**: when the diff reaches them they
   run whatever the distance or budget: the splice gate (shell-gate.mjs, the
-  same gate release.mjs runs before signing), the shell loader, CRDT
-  convergence (300 seeds per change, 3000 in the sweep), the preview, save
-  and seal escapes, the gate-1 verifier and the signed release history.
+  same gate release.mjs runs before signing), CRDT convergence (300 seeds per
+  change, 3000 in the sweep), the preview, save and seal escapes, the gate-1
+  verifier and the signed release history. One invariant rig could not stay:
+  `test-shell-loader.ts` times a hidden tab's splash against a 50 ms bound,
+  and inside the quick check on the runner it measured 51 to 164 ms (5 to 12 ms
+  in every sequential run, and when run first), however it was scheduled. It
+  is in the full tier, so the sweep a release requires runs it.
 - **The sweep** (`node scripts/sweep.mjs [commit]`) runs the full tier on one
   commit in its own worktree, keeps the result by sha, and on a failure
   bisects the first-parent commits since the last green sweep. **Unlike the
