@@ -16,6 +16,7 @@ import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { mutantScope } from './lib/mutant-scope.mjs'
+import { rowsOf, sectionsFor } from './lib/row-map.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -128,20 +129,40 @@ const only = process.argv.slice(2)
 const scope = await mutantScope({ suite: 'scripts/test-home-web-mutants.mjs', rigs: ['scripts/test-home-web.mjs'] })
 let checks = 0, failures = 0
 const ok = (c, m) => { checks++; if (!c) failures++; console.log(`  ${c ? 'ok  ' : 'FAIL'}  ${m}`) }
-for (const m of MUTANTS.filter((x) => !only.length || only.includes(x.name))) {
-  const d = scope.decide(m, m.src ? [`home/web/src/${m.src.file}`] : [])
-  if (d.skip) { scope.notRerun(m.name, d.why); continue }
-  const env = { ...process.env, BENTO_BROWSER: 'chromium', NODE_NO_WARNINGS: '1' }
-  delete env.BENTO_HOME_WEB_MUTANT; delete env.BENTO_HOME_WEB_DIST_MUTANT
+const RIG = path.join(ROOT, 'scripts/test-home-web.mjs')
+const base = { ...process.env, BENTO_BROWSER: 'chromium', NODE_NO_WARNINGS: '1' }
+delete base.BENTO_HOME_WEB_MUTANT; delete base.BENTO_HOME_WEB_DIST_MUTANT; delete base.BENTO_HW_ONLY
+
+const plan = MUTANTS.filter((x) => !only.length || only.includes(x.name)).map((m) => ({ m, d: scope.decide(m, m.src ? [`home/web/src/${m.src.file}`] : []) }))
+for (const { m, d } of plan) if (d.skip) scope.notRerun(m.name, d.why)
+
+// THE CONTROL: the rig unmutated, every section. It must pass, and it is where
+// each mutant's judged row is found: a mutant runs only the section(s) that
+// printed its row (scripts/lib/row-map.mjs), so the map is derived, not written.
+// HW_MUTANTS_FORCE_ONLY overrides it (every mutant runs those sections): the
+// negative control for the map, which must turn this suite red.
+let rows = []
+if (plan.some((p) => !p.d.skip)) {
+  console.log('control: the rig unmutated, every section')
+  const c = spawnSync(process.execPath, [RIG], { env: base, encoding: 'utf8', timeout: 600_000 })
+  rows = rowsOf(c.stdout ?? '')
+  ok(c.status === 0 && rows.length > 0 && rows.every((r) => r.ok), `the unmutated rig passes every row (${rows.filter((r) => r.ok).length}/${rows.length}${c.status ? `; exit ${c.status}` : ''})`)
+}
+const force = process.env.HW_MUTANTS_FORCE_ONLY
+for (const { m, d } of plan) {
+  if (d.skip) continue
+  let sections
+  try { sections = force ? force.split(',') : sectionsFor(m.expect, rows) } catch (e) { ok(false, `${m.name}: its judged row is not in the unmutated run: ${e.message}`); continue }
+  const env = { ...base, BENTO_HW_ONLY: sections.join(',') }
   if (m.src) env.BENTO_HOME_WEB_MUTANT = JSON.stringify(m.src)
   if (m.dist) env.BENTO_HOME_WEB_DIST_MUTANT = JSON.stringify(m.dist)
-  const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts/test-home-web.mjs')], { env, encoding: 'utf8', timeout: 600_000 })
+  const r = spawnSync(process.execPath, [RIG], { env, encoding: 'utf8', timeout: 600_000 })
   const out = (r.stdout ?? '') + (r.stderr ?? '')
   const applied = (m.src ? /mutant applied to a source/.test(out) && /mutant applied to b source/.test(out) : true) &&
     (m.dist ? m.dist.every((d) => out.includes(`mutant applied to a/${d.file}`) && out.includes(`mutant applied to b/${d.file}`)) : true)
   const caught = out.split('\n').some((l) => l.includes('FAIL') && l.includes(m.expect))
   scope.record(d, applied && r.status !== 0 && caught)
-  ok(applied && r.status !== 0 && caught, `${m.name}: ${m.why} — ${!applied ? 'NOT APPLIED' : caught ? 'red on its row' : r.status === 0 ? 'SURVIVED' : 'red, but not on its row'}`)
+  ok(applied && r.status !== 0 && caught, `${m.name}: ${m.why} — ${!applied ? 'NOT APPLIED' : caught ? `red on its row (sections ${sections.join(', ')})` : r.status === 0 ? `SURVIVED (sections ${sections.join(', ')})` : 'red, but not on its row'}`)
   if (!(applied && caught)) console.log(out.split('\n').filter((l) => /FAIL|Error|mutant/.test(l)).slice(0, 8).map((l) => '        ' + l).join('\n'))
 }
 console.log(`\n${checks - failures}/${checks} mutants killed`)

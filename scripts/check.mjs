@@ -70,6 +70,7 @@
 // reported as "not here" with the workflow to dispatch.
 
 import { execFileSync, spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { availableParallelism, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -255,15 +256,41 @@ const LABEL = commitLabel(ROOT)
 const browserVersion = /playwright@([\d.]+)/.exec(plan.catalog.steps.map((s) => s.run).join('\n'))?.[1] ?? null
 const jsdomVersion = /jsdom@([\d.]+)/.exec(plan.catalog.steps.map((s) => s.run).join('\n'))?.[1] ?? null
 const buildKey = (a) => keyOf(plan.builds.get(a).keys(), blobs, { build: a, tools: TOOLS })
-const stepKey = (s) => {
+/**
+ * A step that reads a built shell (and no sealed test shell) is keyed on the
+ * shell's BYTES and its own reads, not on every source the build reads: an
+ * edit that builds to the same shell (a comment, a type) leaves every rig that
+ * only boots the shell cached. Its build is made (or restored) first.
+ */
+async function shellKeys(s, ns) {
+  const apps = ns.filter((p) => p.startsWith('build:')).map((p) => p.slice(6))
+  if (!apps.length || ns.some((p) => p.startsWith('sealtest:'))) return null
+  const out = []
+  for (const a of apps) {
+    const r = await provide(`build:${a}`)
+    if (!r.ok) return null
+    out.push(`${a}:${distHash(a)}`)
+  }
+  return out
+}
+function distHash(app) {
+  const dir = join(ROOT, app, 'dist-single')
+  const h = createHash('sha256')
+  const walk = (d) => { for (const n of readdirSync(d, { withFileTypes: true }).sort((x, y) => x.name.localeCompare(y.name))) { const f = join(d, n.name); if (n.isDirectory()) walk(f); else h.update(`${f.slice(dir.length)}\0`).update(readFileSync(f)) } }
+  try { walk(dir) } catch { return 'absent' }
+  return h.digest('hex').slice(0, 32)
+}
+const stepKey = async (s) => {
   const ns = needsOf(s)
-  return keyOf(s.reads.keys(), blobs, {
+  const shells = await shellKeys(s, ns)
+  return keyOf((shells ? s.ownReads : s.reads).keys(), blobs, {
+    shells,
     sig: s.signature,
     tier: RUN_TIER === 'fast' ? 'fast' : 'full',
     env: RUN_TIER === 'fast' ? {} : s.tier.sweepEnv,
     // (a release run's mutant suites skip by its base: its passes are its own)
     since: opts.release ? ref : null,
-    builds: ns.filter((p) => p.startsWith('build:')).map((p) => buildKey(p.slice(6))),
+    builds: shells ? [] : ns.filter((p) => p.startsWith('build:')).map((p) => buildKey(p.slice(6))),
     tools: { node: TOOLS.node, locks: ns.filter((p) => p.startsWith('install:')).map((p) => TOOLS.locks[p.slice(8)]), browser: ns.includes('browser') ? browserVersion : null, jsdom: ns.includes('jsdom') ? jsdomVersion : null },
   })
 }
@@ -385,7 +412,7 @@ const stamp = (s) => s.id.replace(/[^\w#.-]+/g, '_').replace(/#/g, '-')
 /** Steps with the same key are the same check (one rig in two jobs): run it once, report both. */
 const inFlight = new Map()
 async function runStep(c) {
-  const key = stepKey(c.step)
+  const key = await stepKey(c.step)
   if (!c.rerun && inFlight.has(key)) {
     const first = await inFlight.get(key)
     return report(c, { status: first.status === 'ok' ? 'cached' : first.status, ms: 0, note: `same step as ${first.id}` })

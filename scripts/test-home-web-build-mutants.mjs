@@ -13,7 +13,7 @@
  *
  *   node scripts/test-home-web-build-mutants.mjs [name…]
  */
-import { spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -101,14 +101,23 @@ if (!fs.existsSync(shell)) { console.error(`no built slides shell at ${shell}: c
 // the release check reruns only what changed (scripts/lib/mutant-scope.mjs; off by hand)
 const scope = await mutantScope({ suite: 'scripts/test-home-web-build-mutants.mjs', rigs: ['scripts/test-home-web-build.mjs'] })
 let killed = 0, ran = 0
-for (const m of MUTANTS.filter((x) => !only.length || only.includes(x.name))) {
-  const d = scope.decide(m, [m.file])
-  if (d.skip) { scope.notRerun(m.name, d.why); continue }
-  ran++
+// Mutants run side by side, each in its own copy of the tree (this rig starts no
+// browser and times nothing; a kill is still only a FAIL on the mutant's own
+// row). One after another they were the release check's longest wait: 33
+// mutants of about 5 s each, 12 min under load. BENTO_HWB_MUTANT_JOBS=1 runs them in turn.
+const JOBS = Math.max(1, Number(process.env.BENTO_HWB_MUTANT_JOBS) || 4)
+const runRig = (copy) => new Promise((resolve) => {
+  const c = spawn(process.execPath, [path.join(copy, 'scripts/test-home-web-build.mjs')],
+    { env: { ...process.env, ESBUILD: process.env.ESBUILD || esbuild, BENTO_HWB_NO_REHEARSAL: '1' } })
+  let stdout = '', stderr = ''
+  c.stdout.on('data', (x) => { stdout += x }); c.stderr.on('data', (x) => { stderr += x })
+  c.on('close', (status) => resolve({ status, stdout, stderr }))
+})
+async function one(m, d) {
   const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'bento-hwb-mutant-'))
   try {
-    for (const d of ['scripts', 'home/web', 'home/webext/src', 'home/fixtures/gate1', 'kernel/src', 'convert/src']) {
-      fs.cpSync(path.join(ROOT, d), path.join(copy, d), { recursive: true, filter: (s) => !s.includes('node_modules') && !s.includes(`${path.sep}dist`) })
+    for (const dir of ['scripts', 'home/web', 'home/webext/src', 'home/fixtures/gate1', 'kernel/src', 'convert/src']) {
+      fs.cpSync(path.join(ROOT, dir), path.join(copy, dir), { recursive: true, filter: (s) => !s.includes('node_modules') && !s.includes(`${path.sep}dist`) })
     }
     fs.mkdirSync(path.join(copy, 'slides'), { recursive: true })
     fs.cpSync(path.join(ROOT, 'slides/package.json'), path.join(copy, 'slides/package.json'))
@@ -118,17 +127,30 @@ for (const m of MUTANTS.filter((x) => !only.length || only.includes(x.name))) {
     const f = path.join(copy, m.file)
     const text = fs.readFileSync(f, 'utf8')
     const n = text.split(m.from).length - 1
-    if (n !== 1) { console.log(`  FAIL  ${m.name}: "${m.from.trim()}" occurs ${n} times in ${m.file} (exactly one required)`); continue }
+    if (n !== 1) return { killed: false, line: `  FAIL  ${m.name}: "${m.from.trim()}" occurs ${n} times in ${m.file} (exactly one required)` }
     fs.writeFileSync(f, text.replace(m.from, () => m.to))
-    const r = spawnSync(process.execPath, [path.join(copy, 'scripts/test-home-web-build.mjs')],
-      { encoding: 'utf8', env: { ...process.env, ESBUILD: process.env.ESBUILD || esbuild, BENTO_HWB_NO_REHEARSAL: '1' } })
+    const r = await runRig(copy)
     const fails = r.stdout.split('\n').filter((l) => l.startsWith('  FAIL'))
     const onRow = fails.some((l) => l.includes(m.expect))
     scope.record(d, r.status !== 0 && onRow)
-    if (r.status !== 0 && onRow) { killed++; console.log(`  ok    ${m.name}: red on its row ("${m.expect}"; ${fails.length} red)`) }
-    else console.log(`  FAIL  ${m.name}: SURVIVED or red elsewhere (exit ${r.status}; red rows: ${fails.map((l) => l.slice(8, 70)).join(' | ') || 'none'})${r.status && !fails.length ? '\n' + r.stderr.slice(-600) : ''}`)
+    if (r.status !== 0 && onRow) return { killed: true, line: `  ok    ${m.name}: red on its row ("${m.expect}"; ${fails.length} red)` }
+    return { killed: false, line: `  FAIL  ${m.name}: SURVIVED or red elsewhere (exit ${r.status}; red rows: ${fails.map((l) => l.slice(8, 70)).join(' | ') || 'none'})${r.status && !fails.length ? '\n' + r.stderr.slice(-600) : ''}` }
   } finally { fs.rmSync(copy, { recursive: true, force: true }) }
 }
+const todo = []
+for (const m of MUTANTS.filter((x) => !only.length || only.includes(x.name))) {
+  const d = scope.decide(m, [m.file])
+  if (d.skip) { scope.notRerun(m.name, d.why); continue }
+  todo.push({ m, d })
+}
+ran = todo.length
+const results = new Array(todo.length)
+let next = 0
+await Promise.all(Array.from({ length: Math.min(JOBS, todo.length) }, async () => {
+  while (next < todo.length) { const i = next++; results[i] = await one(todo[i].m, todo[i].d) }
+}))
+// (printed in the suite's order, whatever order they finished in)
+for (const r of results) { console.log(r.line); if (r.killed) killed++ }
 console.log(`\n${killed}/${ran} mutants killed`)
 if (scope.summary()) console.log(scope.summary())
 // (none run is a pass only when every one was accounted for as not rerun)

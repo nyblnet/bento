@@ -54,6 +54,17 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const ENGINE = process.env.BENTO_BROWSER || 'chromium'
+// BENTO_HW_ONLY=t2,s7 runs only those sections (the builds always run): the
+// mutant runner judges each mutant in the section of its row
+// (scripts/lib/row-map.mjs). A key this rig does not have is refused here,
+// before anything is built, and a requested section that did not run fails the
+// run at the end: a wrong map can never pass quietly.
+const SECTIONS = ['builds', 't4a', 't4b', 't2', 'b2t9', 'b2header', 'framesrc', 's7']
+const { parseOnly } = await import(path.join(ROOT, 'scripts/lib/row-map.mjs'))
+const { only: ONLY, unknown } = parseOnly(process.env.BENTO_HW_ONLY, SECTIONS)
+if (unknown.length) { console.log(`  FAIL  BENTO_HW_ONLY names no section of this rig: ${unknown.join(', ')} (it has ${SECTIONS.join(', ')})`); process.exit(1) }
+const runs = (k) => !ONLY.length || ONLY.includes(k)
+const ran = new Set()
 const { startServers, freePorts } = await import(path.join(ROOT, 'home/web/serve.mjs'))
 const { spliceDoc } = await import(path.join(ROOT, 'home/web/src/verify.ts'))
 const { scanBlocks, executableScripts } = await import(path.join(ROOT, 'kernel/src/gate1.ts'))
@@ -65,7 +76,7 @@ let checks = 0, failures = 0
 let guard = null // set once the browser is up: a dead browser or a stalled row fails loudly
 const ok = (c, m) => { checks++; if (!c) failures++; console.log(`  ${c ? 'ok  ' : 'FAIL'}  ${m}`); guard?.progress(m) }
 const note = (m) => { console.log(`  note  ${m}`); guard?.progress(m) }
-const section = (m) => { console.log(`\n=== ${m}`); guard?.section(m) }
+const section = (m, key) => { if (key) ran.add(key); console.log(`\n=== ${m}${key ? ` {${key}}` : ''}`); guard?.section(m) }
 
 const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bento-home-web-'))
 process.on('exit', () => fs.rmSync(work, { recursive: true, force: true }))
@@ -153,7 +164,7 @@ async function build(name, extra) {
   return { ...o, info, s, seen, out }
 }
 
-section(`builds (${ENGINE})`)
+section(`builds (${ENGINE})`, 'builds')
 const A = await build('a', [])
 const HANDLER_URL = `${A.releaseBase}${HANDLER_PROBE}`
 fs.writeFileSync(F('hostile'), hostile(HANDLER_URL))
@@ -219,8 +230,8 @@ const frameRequests = (X, from) => X.seen.slice(from).filter((r) => r.url.starts
 const releaseRequests = (X, from) => X.seen.slice(from).filter((r) => r.url.startsWith(X.releaseBase.replace(/\/releases\/$/, '')) && r.url !== X.releaseBase + 'home/status.json')
 
 // ===== [T4] build A: the release key =====================================================
-section('[T4] a file runs only in its own verified release (build A, release key)')
-{
+if (runs('t4a')) section('[T4] a file runs only in its own verified release (build A, release key)', 't4a')
+if (runs('t4a')) {
   const ctx = await context()
   const page = await ctx.newPage()
   await page.goto(A.library + '/')
@@ -280,8 +291,8 @@ section('[T4] a file runs only in its own verified release (build A, release key
 }
 
 // ===== [T4] build B: the channel ================================================================
-section('[T4] the channel refresh, and read-only in the newest release (build B, test key)')
-{
+if (runs('t4b')) section('[T4] the channel refresh, and read-only in the newest release (build B, test key)', 't4b')
+if (runs('t4b')) {
   B.s.files.set('/releases/slides/history.json', await sign(historyPlus))
   B.s.files.set('/releases/slides/manifest.json', manifestFuture)
   B.s.files.set('/releases/slides/Bento_Slides.bento.html', futureShell)
@@ -320,8 +331,8 @@ section('[T4] the channel refresh, and read-only in the newest release (build B,
 }
 
 // ===== [T2] the network ============================================================================
-section('[T2] nothing goes anywhere but the library, the frame page and the release channel')
-{
+if (runs('t2')) section('[T2] nothing goes anywhere but the library, the frame page and the release channel', 't2')
+if (runs('t2')) {
   const ctx = await context()
   const page = await ctx.newPage()
   const downloads = []
@@ -420,8 +431,8 @@ section('[T2] nothing goes anywhere but the library, the frame page and the rele
 }
 
 // ===== [B2/T9] the frame page on its own ==============================================================
-section('[B2/T9] the frame page only boots inside the library')
-{
+if (runs('b2t9')) section('[B2/T9] the frame page only boots inside the library', 'b2t9')
+if (runs('b2t9')) {
   const ctx = await context()
   const page = await ctx.newPage()
   await page.goto(A.frame + '/frame.html')
@@ -458,8 +469,8 @@ section('[B2/T9] the frame page only boots inside the library')
 }
 
 // ===== [B2] the frame header lost, under the REAL library =========================================
-section('[B2] a frame page that lost its header boots nothing, even framed by the library')
-{
+if (runs('b2header')) section('[B2] a frame page that lost its header boots nothing, even framed by the library', 'b2header')
+if (runs('b2header')) {
   // the deck with a markup handler in an svg <title> is refused by gate 1: never framed, handler never runs
   let ctx = await context()
   let page = await ctx.newPage()
@@ -496,8 +507,8 @@ section('[B2] a frame page that lost its header boots nothing, even framed by th
 }
 
 // ===== [C4] the library's frame-src, and a byte-exact BOM ===============================================
-section("the library's frame-src keeps a document's navigation off the network; a BOM survives Download")
-{
+if (runs('framesrc')) section("the library's frame-src keeps a document's navigation off the network; a BOM survives Download", 'framesrc')
+if (runs('framesrc')) {
   const ctx = await context()
   const evil = []
   await ctx.route('https://evil.example/**', (r) => { evil.push(r.request().url()); r.fulfill({ contentType: 'text/html', body: '<p>evil</p>' }) })
@@ -521,8 +532,8 @@ section("the library's frame-src keeps a document's navigation off the network; 
 }
 
 // ===== [S7] the document's store, over its port ======================================================
-section("[S7] the document's store: the port the library hands the frame, and nothing else")
-{
+if (runs('s7')) section("[S7] the document's store: the port the library hands the frame, and nothing else", 's7')
+if (runs('s7')) {
   // the kernel's client as a shell built from this tree carries it, loaded into the
   // booted frame the way the shell loads its own code (a blob: script, which the CSP allows)
   const esbuild = process.env.ESBUILD || path.join(ROOT, 'slides/node_modules/.bin/esbuild')
@@ -692,5 +703,9 @@ section("[S7] the document's store: the port the library hands the frame, and no
 
 await guard.close()
 await A.s.close(); await B.s.close()
+if (ONLY.length) {
+  console.log(`  note  sections run: ${[...ran].join(', ')} (BENTO_HW_ONLY=${ONLY.join(',')})`)
+  for (const k of ONLY) ok(ran.has(k), `the requested section ${k} ran`)
+}
 console.log(`\n${checks - failures}/${checks} checks passed (${ENGINE})`)
 process.exit(failures ? 1 : 0)
