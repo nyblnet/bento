@@ -24,6 +24,10 @@ pre-1.0.
   they apply, and no ✓ at all for a sign-in that was revoked. If that app
   cannot pass on everything it was told, the row says "couldn’t check"
   instead of a ✓. Opened as a plain file or on bento.page, nothing changes.
+- **A show started partway through no longer flashes the first slide.**
+  Presenting from the current slide, or playing a slide's transition, showed
+  the deck's first slide for a moment before the right one. The show now opens
+  on the slide it starts from.
 
 ## [1.3.0] — 2026-11-22
 

@@ -768,14 +768,6 @@ async function run(d: string) {
   })
 }
 
-console.log('positive control: the unmutated copy passes the rig')
-ok(RIG_IMPORTS.includes('check-id-hosting.mjs') && RIG_IMPORTS.includes(join('lib', 'id-hosting-rules.mjs')), `the copy carries the rigs' script imports, found by walking them (${RIG_IMPORTS.join(', ')})`)
-{
-  const d = tree()
-  for (const r of await run(d)) ok(r.failed === 0 && (r.passed ?? 0) > 0, `${r.f}: ${r.passed} passed, ${r.failed} failed`)
-  rmSync(d, { recursive: true, force: true })
-}
-
 // --shard k/n runs the mutants whose index is k-1 modulo n, so n shards together run every one exactly once
 const args = process.argv.slice(2)
 const si = args.indexOf('--shard')
@@ -785,7 +777,23 @@ const only = args.filter((a, i) => si < 0 || (i !== si && i !== si + 1))[0] // w
 const named = only ? MUTANTS.filter((m) => m.name.includes(only)) : MUTANTS
 const chosen = shard ? named.filter((_, i) => i % Number(shard[2]) === Number(shard[1]) - 1) : named
 console.log(`\n${chosen.length} mutants${shard ? ` (shard ${shard[1]} of ${shard[2]}, of ${named.length})` : ''}: every one must fail a row`)
-for (const m of chosen) {
+// the release check reruns only what changed (scripts/lib/mutant-scope.mjs; off by hand)
+// @ts-ignore: a .mjs helper
+const { mutantScope } = await import('./lib/mutant-scope.mjs')
+const scope = await mutantScope({ suite: 'scripts/test-directory-mutants.ts', rigs: RIGS.map((f) => `scripts/${f}`) })
+const plan = chosen.map((m) => ({ m, d: scope.decide(m, [`server/directory/src/${m.file}`]) }))
+for (const { m, d } of plan) if (d.skip) scope.notRerun(m.name, d.why)
+if (plan.some((p) => !p.d.skip)) {
+  console.log('positive control: the unmutated copy passes the rig')
+  ok(RIG_IMPORTS.includes('check-id-hosting.mjs') && RIG_IMPORTS.includes(join('lib', 'id-hosting-rules.mjs')), `the copy carries the rigs' script imports, found by walking them (${RIG_IMPORTS.join(', ')})`)
+  {
+    const d = tree()
+    for (const r of await run(d)) ok(r.failed === 0 && (r.passed ?? 0) > 0, `${r.f}: ${r.passed} passed, ${r.failed} failed`)
+    rmSync(d, { recursive: true, force: true })
+  }
+}
+for (const { m, d: dec } of plan) {
+  if (dec.skip) continue
   const d = tree()
   const p = join(d, 'server/directory/src', m.file)
   const src = readFileSync(p, 'utf8')
@@ -796,10 +804,12 @@ for (const m of chosen) {
   if (n === 1) {
     writeFileSync(p, edits.reduce((t, e) => t.replace(e.from, () => e.to), src))
     const rs = await run(d)
+    scope.record(dec, rs.every((r) => r.failed !== null) && rs.some((r) => r.failed! > 0))
     ok(rs.every((r) => r.failed !== null) && rs.some((r) => r.failed! > 0), `killed: ${m.name} (${rs.map((r) => `${r.f} ${r.failed === null ? 'CRASHED' : `${r.failed} failed`}`).join(', ')})`)
   }
   rmSync(d, { recursive: true, force: true })
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
+if (scope.summary()) console.log(scope.summary())
 process.exit(failures ? 1 : 0)

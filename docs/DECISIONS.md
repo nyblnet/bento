@@ -15752,6 +15752,91 @@ Supersedes two bullets of 2026-11-12 "The People panel's identity tiers":
   unconfirmed tag painted grey, and a changed binding hidden without the
   marker.
 
+## 2026-11-26 — bento/id: a peer's identity is checked from the certificates it carries (the account anchor, the frame's identity port)
+
+A document in bento/home's sandboxed frame reaches the identity agent over a
+port, and a person's agent answers `resolve` for someone else in the room
+from public certificates that person's document carries. Kernel half; the
+frame client and the library's consent dialog are home/web's.
+
+- **`accountPub` is the account ANCHOR under option G:** `'g:' +
+  base64url(sha256(the exact ros. text at seq 0))` (`roster.ts accountAnchor`),
+  null unless the verified chain starts at seq 0. The name is kept, so no
+  contract bump; no document read `accountPub` as a key.
+- **The anchor is not continuity of the person.** A reset continues the roster
+  chain, so the anchor is the same after every reset, including one by someone
+  who took the mailbox. The continuity signals are `resetAt`, `rosterChangedAt`
+  and `accountSince`, which the document already shows. No host and no
+  document may read "same accountPub" as "same person, nothing changed". A
+  deletion and a new setup at the same address give a new anchor, even with the
+  same passkey, because ros.0 carries the directory's nonce and time.
+- **Peer-carried proofs, verified offline.** `IdentityProof = {device, chain}`
+  (the device certificate with its passkey or consent-key proof and current
+  watt., and the roster chain from seq 0); `PublicIdentity.proof?` and
+  `ResolveQuery {pub, proof?}` are additions within contract 1. There is no
+  directory lookup route for a device key, now or later without a new ruling:
+  it would tell the directory who meets whom, be an enumeration oracle, and add
+  an online dependency.
+- **One verify order** (`identityport.ts createProofResolver`, one per open):
+  the chain from seq 0 under the PINNED directory keys only; the longest
+  chain the open holds for that anchor; the device against that chain, with
+  `cert.devicePub` equal to the queried key and a current watt. under a pinned
+  kid; the lever's predicate; own-account status; `composeResolved`. Every
+  failure answers null and nothing throws across the port.
+- **A peer's revocation reaches others within one watt. lifetime, at most
+  24 hours,** as "not verified": sign out everywhere, account deletion, removal
+  or quarantine of the certifying passkey, and the lever for a resolver that
+  holds no incident record. That holds only while the directory refuses to
+  renew a watt. in each of those cases. Only the agent's own account reports
+  `revoked: 'signout'` or `'deleted'` by name; peers are never polled, since
+  polling is the lookup route under another name.
+- **Residual: a lone peer can hide later links for up to one watt.
+  lifetime.** The presenter chooses the proof, and watt. binds only the
+  certificate, not the current head. So a peer can send a chain that ends at
+  its certificate's head and omit a later removal or quarantine. The resolver
+  judges each device against the longest chain it holds for the anchor, so
+  the omission is caught whenever another member of the same account in the
+  room carries a fresher chain. Two chains for one anchor where neither is a
+  prefix of the other are a fork: null for both, counted. A head hash in
+  watt. would close the residual; it is a format change for later.
+- **`name` and `email` are both the address** from the verified chain, and
+  `vouchedBy` is `id.bento.page`. No signed statement carries a display name
+  under G, and a certificate's label is chosen by the page that asked, so a
+  label of "Mallory" can never become a name shown with ✓.
+- **`revoked: 'incident'` only on the lever's own predicate** (`devices.ts
+  leverCovers`): a wdev., or a dev2. via passkey, with watt. ob = 1, whose
+  ceremonyAt falls inside the window, both ends included (an open window has
+  no end). Only the ceremony: a renewal logged inside the window does not
+  bring a key made before it into the incident, because the lever revokes
+  enrolments made in the window, and the watt.'s loggedAt moves on at the
+  next renewal, so keying on it would revoke a certificate the directory never
+  marked and un-revoke it a day later. A native dev2. that a consent key
+  co-signed is never covered, which matches the lever. The directory's lever
+  keys on the same ceremonyAt (never its record's enrolment time) and should
+  import this one function instead of keeping its own copy; until it does,
+  `kernel/fixtures/lever-v1.json` holds rows both sides must agree on.
+- **`composeResolved` is the only setter of `fields: 'g1'`.**
+  `checkResolved` (the one type-checked relay) keeps the marker only when
+  every G field present passes its type and `accountPub` matches
+  `^g:[A-Za-z0-9_-]{43}$`; it never adds the marker. A K2-era 87-character
+  point still passes as a plain field but never with g1. Both are keyed by
+  `RESOLVED_G1_FIELDS`, so a field added to the list without a rule does not
+  typecheck.
+- **The 64 KiB proof cap is one constant** (`PROOF_MAX_BYTES`, UTF-8 JSON),
+  about 75 roster links. Over it, whoami answers without the proof and resolve
+  answers null, both counted. A checkpoint design is later work and needs its
+  own ruling.
+- **The port (`serveIdentity`) is docstoreport's twin:** closed ops (whoami,
+  sign, resolve), exact key sets, symbol keys and non-plain prototypes
+  refused, rising ids, rate and in-flight caps, drops counted and the session
+  closed at the limit, the entry and docId from the host only, `event.origin`
+  never read. Sign and resolve answer only after whoami returned an identity in
+  that session; before that, sign is 'declined' and resolve null, without
+  asking the agent. A whoami that answered null is final for the session.
+  Invite and revoke are 'unavailable' in phase 1.
+- Guarded by `scripts/test-identityport.ts` (real signatures from the
+  deterministic test keys) and `scripts/test-identityport-mutants.ts`, where
+  each mutant must turn its own row red.
 ## 2026-11-22 — bento/id: a browser key retires itself, and a retired key is not a revoked one
 
 The directory now takes the kernel's `wret.` without a successor on
@@ -15975,3 +16060,156 @@ now takes the roster changes the kernel already defines for a consent key
 
 Route D (a phone approving a browser, `web-add`) is not part of this: it waits
 on a kernel layout for its final message and on security's own review.
+## 2026-11-28 — The release check covers what the release changed, and runs side by side
+
+The maintainer's clarification of the entry above: the full check at release
+tests what changed in that release, and must itself be fast.
+
+- **Scope: the diff since the app's previous release tag.** `node
+  scripts/sweep.mjs --release <app> <commit>` (check.mjs `--release`) runs
+  every step, in every tier, that the diff since the newest earlier tag of
+  that app (`<tagPrefix>vX.Y.Z` from scripts/apps.mjs; the release commit's own
+  tag is skipped) reaches, through the same reach map as the quick check.
+  Unreached steps do not run. Steps this machine cannot run are listed NOT RUN.
+  No earlier tag, or a clone too shallow to see it: it refuses rather than
+  guess. `release.mjs` accepts a green release check of that app for the
+  commit (or a whole full-tier run); its conformance gate runs regardless.
+- **Speed.** Every reached step is scheduled at once, longest first (times
+  from earlier runs), at most 8 side by side, instead of job by job, except
+  jobs whose steps share a device (the iOS simulator), which run in order. Each
+  shell is built once and shared, guarded as a read/write lock so an inline
+  rebuild never deletes a shell another step is reading. A step two jobs both
+  run (same content key) runs once. Passes are cached by content, so a rerun
+  after a fix runs only what the fix touched.
+- **Steps that time things run alone**, after the rest (tiers `alone: true`):
+  test-shell-loader's 50 ms splash row failed side by side and passed alone.
+- **Measured**, cold, on the release Mac. The last slides release (v1.2.13 to
+  v1.3.0: 596 files, 500 steps reached): 27.1 min with the job-by-job full
+  check, 25.8 min scoped and side by side; a release that touches everything
+  gains little, because the machine is the bound (the summed step time
+  doubled when twice as many ran at once). The next slides release (main
+  since v1.3.0, 234 steps): 31.8 min at first, its critical path the directory
+  mutant suite, which had doubled to 320 mutants (three shards of 27 min);
+  in eight shards (the rig's own `--shard`), 19.2 min, green. The critical
+  path is now four browser mutant suites, each one rig run per mutant:
+  test-home-web-mutants 14.8 min, test-home-web-build-mutants 11.6,
+  test-webext-tripwire-mutants 9.3, test-home-web-offline --mutants 8.0. The
+  target is 10 min; reaching it means making those suites faster (sharding
+  them, a small change to each rig, or one browser shared across a suite's
+  mutants). Sharding them was measured on the v1.3.0 diff at 14 side by side
+  and bought nothing there, so it is not in this change.
+- **Not done, and why:** one browser launch shared across rigs, and mutants
+  that reuse one browser, need each rig to accept a browser it did not launch;
+  the rigs own their launches (and their crash handling,
+  scripts/lib/browser-guard.mjs), so that is a change to each rig, not to the
+  check.
+
+## 2026-11-28 — bento/id: a person's identity proof travels in presence, and only a proven key is resolved
+
+The second kernel half of ID3. Once whoami answers an identity in an open, the
+sync session carries that person's public certificates to the room, so another
+person's agent can resolve them offline (`identityport.ts
+createProofResolver`). `kernel/src/sync/idproof.ts`, wired in
+`kernel/src/sync/session.ts`.
+
+- **What travels.** Four optional fields on hello and presence frames, beside
+  the frame's key proof and never inside `p` (the peer record an app reads):
+  `idk` (the identity device key whoami named), `idh` (base64url sha256 of the
+  proof's JSON, on every beat), `idp` (the proof itself: on hello, on the first
+  beat after it changes, and in answer to an ask; never on an ordinary beat),
+  and `ik`, a possession proof. One new frame, `{t:'idq', a, to, h}`, asks a
+  peer for the proof with hash `h`; a receiver asks once per (actor, hash),
+  again only after 30 seconds, and a sender answers at most once every 5
+  seconds (asks inside that share the one answer). Older clients ignore all of
+  it. No crdt.ts change and no relay change: the relay sees ciphertext.
+- **Nothing before consent.** `SyncSession.useIdentity(agent)` asks whoami
+  itself; nothing is carried before it answers, after it answers null, for an
+  identity without a proof, after `useIdentity(null)`, or once the session
+  moves to another document (consent and every peer's identity are per open).
+- **The possession proof is the agent's routine `prove` signature** with the
+  identity key over `prove.<nonce>.<roomId>`, where the nonce is the first 16
+  bytes of sha256 of `idpres.v1.<roomId>.<actor>.<idk>.<idh>.<t>`. It binds the
+  room, the actor, the key, the proof and the time, and the receiver recomputes
+  it. The relay's own `prove.` challenge uses a nonce the relay draws at random
+  per socket, so a presence signature cannot answer it. Freshness is the
+  presence key proof's: within 90 seconds of the receiver's clock and never
+  older than the last accepted one. A sender re-signs every 30 seconds rather
+  than per beat, so a beat may re-send the same `ik`; a receiver takes the same
+  one again only within 45 seconds of first accepting it, on its own clock.
+  A signature the agent refuses,
+  makes with another key, or does not give within 3 seconds leaves that beat
+  without identity fields; presence carries on.
+- **The replay bound, stated.** An `ik` never proves another actor, but actor
+  ids are self-declared, so anyone in the room (readers included) can re-send
+  a beat it saw under the same actor. An `ik` the receiver never accepted is
+  good until 90 seconds past its own time; one it already accepted, for 45
+  seconds after it first did. Once the actor has left (bye, or the presence
+  sweep), only an `ik` strictly newer than the last accepted one proves it
+  again: that state is never evicted (only held proofs are capped, at 64), and
+  the drop is queued behind any beat still being verified for that actor. So
+  after a silent drop, a replayer can keep someone shown present and proven
+  for at most those bounds after their last real beat. While they are present,
+  a replay gains nothing over the presence spoofing `p` already allows. The ask
+  bound sits beside it: a holder re-sends its proof at most once per 5 seconds
+  in all, whoever and however many ask (asks inside that share the one answer),
+  so at most once per 5 seconds per asker too. Any member, readers included,
+  can make it send that one.
+- **What a receiver keeps and asks.** Per-actor state only for actors that
+  proved a key (an unproven frame creates none), and a proof only for a
+  proven (actor, idh) whose own hash matches. Asks go out only after a proven
+  beat (the ask bound is above), and one proven beat for a new (actor, hash)
+  makes each receiver send one ask. The 64-proof cap can be used for denial,
+  never impersonation: a member with an identity key can prove 64 fresh actors
+  and push a present peer's proof out, and that peer shows no identity until
+  it is asked again (within 30 seconds) and answers.
+- **Only a proven key is resolved (A4).** `peerIdentity(actor)` answers only
+  while the actor is present, its latest beat proved the key it names for that
+  proof, and the session holds a proof whose own hash is that `idh`.
+  `resolvePeer(actor, agent)` answers 'unproven' without asking the agent
+  otherwise. A proof copied with someone else's key is never handed out; a
+  proof presented with the presenter's own key resolves to null because the
+  resolver binds the certificate to the queried key.
+- **Privacy.** The proof exposes the address and the account's member history
+  (passkey keys, reset and change times) to every room member, readers
+  included. That is the design; it is sent only after whoami consent in that
+  open. The session sends whoami's proof as the agent gave it (never over
+  64 KiB): every host's agent must type-check it first, as the web port does.
+- **An identity ✓ never implies membership or a role.** Role and write
+  capability stay with the collaboration key and its own proof; a removed
+  member reconnecting as a reader still proves its own identity.
+- Guarded by new rows in `scripts/test-sync-keyproof.ts` (real certificates
+  from the deterministic test keys, the real peer resolver, one per open) and
+  their mutants in `scripts/test-sync-keyproof-mutants.ts`. The rig moves to
+  the full tier: about 11 seconds, mostly waiting for frames to settle.
+## 2026-11-28 — The release check reruns a mutant only when something it depends on changed
+
+The mutant suites are about half the release check's work, and each mutant
+reruns a whole rig. In a release (or full) run, the six slowest suites
+(home-web, home-web-build, webext-tripwire, home-web-offline `--mutants`,
+directory, roster) now decide per mutant, through scripts/lib/mutant-scope.mjs:
+
+- **Cached red:** a mutant killed before under the same content of the
+  mutation, its target files and every file its rig reads (the rig's whole
+  read closure, through the same reach map as the quick check) is not rerun.
+  Only a kill is recorded; a survivor always runs again.
+- **Unchanged since the base:** in a release run, a mutant whose targets and
+  rig closure are all unchanged since the app's previous release tag is not
+  rerun: it was red when that tag was cut.
+- Neither counts as a pass. Each prints `NOT RERUN <name>: <why>`, the suite's
+  summary counts them apart from kills, and a run by hand (or by the quick
+  check) runs every mutant, as before. `--no-cache` reruns them all.
+- **The rule is the rig's closure, not the target file alone.** A narrower
+  rule (rerun only when the edited file changed) was considered and refused:
+  the home/web mutants are applied by home/web/build.mjs, and a release that
+  changed build.mjs but no mutant's target would have skipped every one of
+  them while the code applying them had changed.
+- **One browser per suite was measured and not built.** A Chromium launch takes
+  170 ms against 46 to 57 s for one run of test-home-web.mjs, so sharing it
+  would save under 1%. The run's time is its 78 rows, several waiting 5 to 8 s
+  for a negative. Running only the rows a mutant is judged on (as
+  test-home-web-offline already does) is the lever left; it is a change inside
+  each rig.
+- The quick check's budget for steps beyond distance 1 is 15 s (was 25), and
+  test-identity (7.3 s in a kernel change's quick check) and test-sync-vouch
+  (5.0 s, and one row flaky under parallel load, 7 of 7 alone) are full; the
+  vouch rig runs alone in the release check.
