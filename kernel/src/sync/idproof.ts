@@ -56,14 +56,16 @@
 // So after a silent drop a replayer can keep the person shown present and
 // proven for at most those bounds after their last real beat. While they are
 // present a replay gains nothing over the presence spoofing `p` already allows.
+// The ask bound sits beside it: a holder re-sends its proof at most once per
+// SyncSession.ID_ANSWER_COOLDOWN_MS (5 s) IN ALL, whoever and however many ask
+// (asks inside the cooldown share one answer), so at most once per 5 s per
+// asker too; any member, readers included, can make it send that one.
 //
 // What a session keeps: per-actor state only for actors that PROVED a key
 // (an unproven frame never creates state), and a proof only for a proven
 // (actor, idh) whose own hash matches, at most ID_MAX_PROOFS in all. Asks go
-// out only after a proven beat. A holder answers asks at most once per the
-// session's cooldown, so any member (readers included) can make it broadcast
-// one proof per cooldown; one proven beat for a new (actor, hash) makes each
-// receiver send one ask.
+// out only after a proven beat (the ask bound is above); one proven beat for a
+// new (actor, hash) makes each receiver send one ask.
 //
 // The proof sent is whoami's, verbatim, and is never sent over
 // PROOF_MAX_BYTES. A host's agent must type-check it before handing it over

@@ -16047,12 +16047,16 @@ createProofResolver`). `kernel/src/sync/idproof.ts`, wired in
   the drop is queued behind any beat still being verified for that actor. So
   after a silent drop, a replayer can keep someone shown present and proven
   for at most those bounds after their last real beat. While they are present,
-  a replay gains nothing over the presence spoofing `p` already allows.
+  a replay gains nothing over the presence spoofing `p` already allows. The ask
+  bound sits beside it: a holder re-sends its proof at most once per 5 seconds
+  in all, whoever and however many ask (asks inside that share the one answer),
+  so at most once per 5 seconds per asker too. Any member, readers included,
+  can make it send that one.
 - **What a receiver keeps and asks.** Per-actor state only for actors that
   proved a key (an unproven frame creates none), and a proof only for a
   proven (actor, idh) whose own hash matches. Asks go out only after a proven
-  beat. Any member can make a holder broadcast its proof once per 5 seconds,
-  and one proven beat for a new (actor, hash) makes each receiver send one ask.
+  beat (the ask bound is above), and one proven beat for a new (actor, hash)
+  makes each receiver send one ask.
 - **Only a proven key is resolved (A4).** `peerIdentity(actor)` answers only
   while the actor is present, its latest beat proved the key it names for that
   proof, and the session holds a proof whose own hash is that `idh`.
