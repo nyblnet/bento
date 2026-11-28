@@ -17,10 +17,10 @@
 // its result, never passed over.
 //
 // - Where: a detached worktree, BENTO_SWEEP_WORKTREES/<name> (default
-//   ~/personal/bento-wt/sweep/main), reused from sweep to sweep and cleaned
+//   ~/.cache/bento-check/wt/main), reused from sweep to sweep and cleaned
 //   (git clean -fdx, node_modules kept) before each; one sweep at a time per
 //   worktree. node_modules: its own, npm ci'd, kept while the lockfile holds.
-// - Results: <BENTO_CHECK_CACHE, default ~/personal/bento-check-cache>/sweeps/<sha>.json
+// - Results: <BENTO_CHECK_CACHE, default ~/.cache/bento-check>/sweeps/<sha>.json
 //     { sha, ok, finished, subject, seconds, counts, failures: [{ id, label, note }],
 //       skipped, notHere, logs, firstBad }
 //   Passes are remembered by content (scripts/lib/check-cache.mjs), so a
@@ -47,7 +47,7 @@ import { cacheRoot, readJson, writeJson } from './lib/check-cache.mjs'
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const CACHE = cacheRoot()
 export const SWEEPS = join(CACHE, 'sweeps')
-const WT_ROOT = process.env.BENTO_SWEEP_WORKTREES || join(homedir(), 'personal', 'bento-wt', 'sweep')
+const WT_ROOT = process.env.BENTO_SWEEP_WORKTREES || join(CACHE, 'wt')
 const APPS = ['slides', 'spaces', 'dash', 'type']
 
 const git = (args, cwd = ROOT) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'pipe'] }).trim()

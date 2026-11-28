@@ -13,7 +13,7 @@
 //
 // Only passes are remembered, never failures or skips. A cached step prints
 // "ok (cached, <commit>)". The store is a folder OUTSIDE the repo,
-// ~/personal/bento-check-cache (BENTO_CHECK_CACHE), safe for several runs at
+// ~/.cache/bento-check (BENTO_CHECK_CACHE overrides it), safe for several runs at
 // once (every write is a rename). On GitHub, ci.yml keeps it with actions/cache.
 //
 //   steps/<key>.json     a remembered pass: { id, ms, commit, at }
@@ -27,7 +27,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
-export const cacheRoot = () => process.env.BENTO_CHECK_CACHE || join(homedir(), 'personal', 'bento-check-cache')
+export const cacheRoot = () => process.env.BENTO_CHECK_CACHE || join(homedir(), '.cache', 'bento-check')
 
 const sha = (s) => createHash('sha256').update(s).digest('hex')
 
