@@ -361,14 +361,18 @@ export const hash = (s) => createHash('sha256').update(s).digest('hex').slice(0,
 // ---------------------------------------------------------------- what a step needs and reads
 
 /**
- * Built shells the text scan gets wrong, by rig, each with why. The scan reads
- * `<app>/dist-single/` in a rig and the scripts/ code it imports; these say
- * otherwise. When unsure, a rig goes to `full` (test-tiers.mjs), not here.
+ * What the text scan gets wrong, by rig, each with why: the built shells it
+ * reads (`builds`) and providers it does not need (`drop`). The scan reads
+ * `<app>/dist-single/` and Playwright in a rig and in the scripts/ code it
+ * imports; these say otherwise. When unsure, a rig goes to `full`
+ * (test-tiers.mjs), not here.
  */
 export const ARTIFACTS = [
   { rig: 'test-ci-skips.mjs', builds: () => [], why: 'names spaces/dist-single only inside skip-line fixtures it matches; reads no shell' },
   { rig: 'test-release-channel.mjs', builds: (s) => [/--app[= ](\w+)/.exec(s.run)?.[1] ?? 'slides'], why: 'rehearses release.mjs for the one app its --app names' },
   { rig: 'test-shell-standalone.mjs', builds: () => APPS, why: 'checks every app\'s built shell (the list comes from apps.mjs, not a path the scan can read)' },
+  { rig: 'test-ci-registered.ts', builds: () => [], drop: ['browser', 'jsdom'], why: 'imports this planner, whose patterns name shells and Playwright as data' },
+  { rig: 'test-check.mjs', builds: () => [], drop: ['browser', 'jsdom'], why: 'its scratch repository names a shell and Playwright as fixture text' },
 ]
 
 /** Every app's build inputs: the app's folder (not its outputs) and everything its code imports. */
@@ -426,11 +430,12 @@ export function annotate(catalog, graph) {
       for (const a of named.length ? named : APPS) shellApps.add(a)
     }
     const mapped = ARTIFACTS.find((x) => step.scripts.some((p) => p.endsWith(`/${x.rig}`)))
-    if (mapped) { shellApps.clear(); for (const a of mapped.builds(step)) shellApps.add(a) }
+    if (mapped?.builds) { shellApps.clear(); for (const a of mapped.builds(step)) shellApps.add(a) }
     for (const a of shellApps) { needs.add(`build:${a}`); needs.add(`install:${a}`) }
     const bares = new Set([...importClosure(graph, step.scripts)].flatMap((f) => [...(graph.bare.get(f) ?? [])]))
     if (/PLAYWRIGHT_MODULE|\bplaywright\b|CHROME_PATH/.test(text) || bares.has('playwright')) needs.add('browser')
     if (bares.has('jsdom') || /\bjsdom\b/.test(text)) needs.add('jsdom')
+    for (const d of mapped?.drop ?? []) needs.delete(d)
     // a built shell is two edges away: from the rig to the shell, from the shell to its sources
     for (const a of shellApps) for (const [f, d] of builds.get(a)) if (!reads.has(f) || reads.get(f) > d + 2) reads.set(f, d + 2)
     step.reads = reads

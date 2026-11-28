@@ -123,9 +123,11 @@ let builds = new Set()
 
 if (opts.affected) {
   const reached = plan.rigs.filter((s) => s.distance !== Infinity)
-  builds = new Set(plan.wantBuilds)
-  // a changed step or rig that reads a shell gets that shell built
-  for (const s of reached) if (s.distance === 0 && s.tier.tier === 'fast') for (const a of s.builds) builds.add(a)
+  // the builds this diff wants: an app whose own source changed, else the
+  // representative; and the shell a changed step or rig reads
+  const wanted = new Set(plan.wantBuilds)
+  for (const s of reached) if (s.distance === 0 && s.tier.tier === 'fast') for (const a of s.builds) wanted.add(a)
+  builds = wanted
   const candidates = []
   for (const s of reached) {
     if (!inTier(s.tier.tier, RUN_TIER)) { left.push({ step: s, reason: `${s.tier.tier} tier: ${s.tier.why}` }); continue }
@@ -148,6 +150,8 @@ if (opts.affected) {
     if (spent + cost <= budget) { chosen.push({ step: s, why: `distance ${s.distance} (${s.via}), within the budget` }); spent += cost }
     else left.push({ step: s, reason: `distance ${s.distance}: over the ${budget} s budget` })
   }
+  // build only what a chosen step reads
+  builds = new Set(chosen.flatMap((c) => c.step.builds))
 } else {
   for (const s of plan.rigs) {
     if (!inTier(s.tier.tier, RUN_TIER)) continue
