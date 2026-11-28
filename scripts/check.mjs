@@ -288,11 +288,15 @@ async function makeProvider(p) {
     const store = join(CACHE, 'builds', `${app}-${key}`)
     const dist = join(ROOT, app, 'dist-single')
     if (opts.cache && existsSync(join(store, '.complete'))) {
-      rmSync(dist, { recursive: true, force: true })
-      cpSync(store, dist, { recursive: true, filter: (f) => !f.endsWith('.complete') })
+      const unlock = await acquire([], [`dist:${app}`])
+      try {
+        rmSync(dist, { recursive: true, force: true })
+        cpSync(store, dist, { recursive: true, filter: (f) => !f.endsWith('.complete') })
+      } finally { unlock() }
       return { ok: true, note: 'restored from the cache', ms: 0 }
     }
-    const r = await run('npm', ['run', 'build:single'], { cwd: join(ROOT, app), log })
+    const unlock = await acquire([], [`dist:${app}`])
+    const r = await run('npm', ['run', 'build:single'], { cwd: join(ROOT, app), log }).finally(unlock)
     if (r.code === 0) {
       try {
         rmSync(store, { recursive: true, force: true })
@@ -304,7 +308,8 @@ async function makeProvider(p) {
   }
   if (kind === 'sealtest') {
     await provide(`install:${app}`)
-    const r = await run('npm', ['run', 'build:sealtest'], { cwd: join(ROOT, app), log })
+    const unlock = await acquire([], [`sealtest:${app}`])
+    const r = await run('npm', ['run', 'build:sealtest'], { cwd: join(ROOT, app), log }).finally(unlock)
     return { ok: r.code === 0, ms: r.ms, log, out: r.out }
   }
   if (kind === 'jsdom') {
@@ -361,7 +366,12 @@ async function runStep(c) {
     GITHUB_WORKSPACE: ROOT, RUNNER_TEMP: tmp,
     PATH: `${join(ROOT, 'scripts', 'ci')}:${process.env.PATH}`,
   }
-  const r = await run('bash', ['--noprofile', '--norc', '-eo', 'pipefail', script], { cwd: join(ROOT, s.wd), env: stepEnv, log, timeout: RUN_TIER === 'fast' ? 180_000 : 45 * 60_000, group: true })
+  const reads = needsOf(s).filter((p) => /^(?:build|sealtest):/.test(p)).map((p) => p.replace(/^build:/, 'dist:'))
+  const release = await acquire(reads, writesOf(s))
+  let r
+  try {
+    r = await run('bash', ['--noprofile', '--norc', '-eo', 'pipefail', script], { cwd: join(ROOT, s.wd), env: stepEnv, log, timeout: RUN_TIER === 'fast' ? 180_000 : 45 * 60_000, group: true })
+  } finally { release() }
   if (r.leftover) leftovers.push(label(s))
   rmSync(tmp, { recursive: true, force: true })
   let status = r.code === 0 ? 'ok' : 'FAIL'
@@ -412,6 +422,43 @@ function prune() {
       } catch { /* raced with another run */ }
     }
   }
+}
+
+/**
+ * Built outputs as read/write locks. A step that builds a shell inline
+ * (`npm run build:sealtest`, which starts by deleting dist-sealtest) must not
+ * run while a step of another job reads that shell, as they never could on
+ * CI, where each job had its own checkout. Writers wait for readers and the
+ * reverse; keys are taken in order, so two steps never deadlock.
+ */
+const locks = new Map()
+const lockOf = (k) => { if (!locks.has(k)) locks.set(k, { r: 0, w: false, wake: [] }); return locks.get(k) }
+async function acquire(reads, writes) {
+  const all = [...new Set([...reads, ...writes])].sort()
+  for (const k of all) {
+    const l = lockOf(k)
+    const write = writes.includes(k)
+    while (l.w || (write && l.r)) await new Promise((r) => l.wake.push(r))
+    if (write) l.w = true
+    else l.r++
+  }
+  return () => {
+    for (const k of all) {
+      const l = lockOf(k)
+      if (writes.includes(k)) l.w = false
+      else l.r--
+      for (const f of l.wake.splice(0)) f()
+    }
+  }
+}
+/** The built outputs a step writes inline: dist:<app> or sealtest:<app>. */
+function writesOf(s) {
+  const out = []
+  for (const m of s.run.matchAll(/npm run build:(single|sealtest)(?: --prefix (\w+))?/g)) {
+    const app = m[2] ?? s.wd.split('/')[0]
+    if (APPS.includes(app)) out.push(`${m[1] === 'single' ? 'dist' : 'sealtest'}:${app}`)
+  }
+  return out
 }
 
 async function pool(items, n, fn) {
