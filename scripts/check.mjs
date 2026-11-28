@@ -26,9 +26,8 @@
 //                      shared code its build reads changed, the representative
 //                      (slides); a step that reads another app's shell is left
 //                      to the sweep. One headless load per built app.
-//                    Steps whose tier says `serial` (they time things) run
-//                    first, alone, as soon as their build is ready. Each step prints its time; a step over 5 s
-//                    is named for the full tier. Everything else is the sweep's.
+//                    Each step prints its time; a step over 5 s is named for
+//                    the full tier. Everything else is the sweep's.
 // --dry-run          with --affected: print the plan, run nothing
 // --head REV         with --dry-run: plan REF...REV on REV's tree (no working tree)
 // --no-cache         run every step (passes are still remembered)
@@ -358,15 +357,8 @@ async function runStep(c) {
     GITHUB_WORKSPACE: ROOT, RUNNER_TEMP: tmp,
     PATH: `${join(ROOT, 'scripts', 'ci')}:${process.env.PATH}`,
   }
-  const serial = !!s.tier.serial
-  await (serial ? exclusive() : shared())
-  if (serial) await Promise.all(providers.values())
-  if (s.tier.warmChrome) await warmChrome()
-  let r
-  try {
-    r = await run('bash', ['--noprofile', '--norc', '-eo', 'pipefail', script], { cwd: join(ROOT, s.wd), env: stepEnv, log, timeout: RUN_TIER === 'fast' ? 180_000 : 45 * 60_000, group: true })
-    if (r.leftover) leftovers.push(label(s))
-  } finally { release(serial) }
+  const r = await run('bash', ['--noprofile', '--norc', '-eo', 'pipefail', script], { cwd: join(ROOT, s.wd), env: stepEnv, log, timeout: RUN_TIER === 'fast' ? 180_000 : 45 * 60_000, group: true })
+  if (r.leftover) leftovers.push(label(s))
   rmSync(tmp, { recursive: true, force: true })
   let status = r.code === 0 ? 'ok' : 'FAIL'
   let note = ''
@@ -379,22 +371,6 @@ async function runStep(c) {
   }
   timesUpdate[s.signature] = r.ms
   return report(c, { status, ms: r.ms, note, out: r.out, log })
-}
-
-/**
- * Launch the system Chrome once (the same one the rigs find) on a page with
- * text, so a timing rig never meets a cold first launch or a cold font cache.
- */
-let warmed = null
-function warmChrome() {
-  if (!warmed) {
-    const chrome = [process.env.BENTO_CHROME, '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find((p) => p && existsSync(p))
-    const profile = mkdtempSync(join(tmpdir(), 'bento-warm-'))
-    warmed = chrome
-      ? run(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', `--user-data-dir=${profile}`, '--dump-dom', `data:text/html,${encodeURIComponent('<!doctype html><meta charset=utf-8><body style="font-family:system-ui,sans-serif">Warm <b>up</b> <i>text</i> <code>code</code> 日本語 한국어 العربية</body>')}`], { timeout: 60_000 }).then(() => rmSync(profile, { recursive: true, force: true, maxRetries: 10 }))
-      : Promise.resolve()
-  }
-  return warmed
 }
 
 const deadline = () => Number(process.env.BENTO_QUICK_DEADLINE || (opts.affected ? 45 : 1e9)) * 1000
@@ -434,29 +410,6 @@ function prune() {
   }
 }
 
-/**
- * Steps whose rig measures time (a splash within 50 ms of a mount) fail when
- * the machine is busy, so a step whose tier says `serial` runs with nothing
- * else running: it waits for the steps in flight, and holds new ones back.
- */
-const gate = { running: 0, exclusive: false, waiting: 0, wake: [] }
-const settle = () => { const w = gate.wake.splice(0); for (const f of w) f() }
-async function shared() {
-  while (gate.exclusive || gate.waiting) await new Promise((r) => gate.wake.push(r))
-  gate.running++
-}
-async function exclusive() {
-  gate.waiting++
-  while (gate.exclusive || gate.running) await new Promise((r) => gate.wake.push(r))
-  gate.waiting--
-  gate.exclusive = true
-}
-function release(serial) {
-  if (serial) gate.exclusive = false
-  else gate.running--
-  settle()
-}
-
 async function pool(items, n, fn) {
   const q = [...items]
   await Promise.all(Array.from({ length: Math.max(1, Math.min(n, q.length)) }, async () => {
@@ -471,12 +424,8 @@ if (!chosen.length) {
   // builds first, in parallel with everything that needs none
   for (const a of builds) provide(`build:${a}`)
   if (opts.affected) {
-    // Serial steps first: each takes its turn as soon as its build is ready
-    // (steps in flight finish, new ones wait, it runs alone), because a timing
-    // rig measured on a runner that has been busy for half a minute fails
-    // (test-shell-loader: 400 ms to mount first, 950 ms after the pool).
-    // Then the rest: pinned and nearest first, in the order the budget chose.
-    await pool([...chosen.filter((c) => c.step.tier.serial), ...chosen.filter((c) => !c.step.tier.serial)], workers, runStep)
+    // pinned and nearest first; the rest in the order the budget chose
+    await pool(chosen, workers, runStep)
   } else {
     // job by job, in CI's order within a job
     const byJob = new Map()
