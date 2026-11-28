@@ -43,12 +43,13 @@
 
 import worker, { Roster, Ledger } from '../server/directory/src/worker.js'
 import { addressKey } from '../server/directory/src/address.js'
-import { parseSetupLink, parseVoidLink } from '../server/directory/src/links.js'
+import { parseResetLink, parseSetupLink, parseVoidLink } from '../server/directory/src/links.js'
+import { WEB_ROUTES } from '../server/directory/src/seam.js'
 import { CONSENT_RP, X5_WAIT_MS, linkOut } from '../server/directory/src/consent.js'
 import { fingerprint } from '../server/directory/src/roster.js'
 import { issueChallenge } from '../server/directory/src/challenge.js'
 import { b64uDec, b64uEnc, buildConsent, consentTranscript, sha256b64u, signStatement } from '../kernel/src/statements.ts'
-import { buildRos, parseRip, parseRos, verifyRosterChain, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, ROSTER_WAIT_MS, type Member, type RosterLink } from '../kernel/src/roster.ts'
+import { buildRos, buildVrs, buildWout, parseRip, parseRos, verifyRosterChain, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, ROSTER_WAIT_MS, type Member, type RosterLink } from '../kernel/src/roster.ts'
 import { AsyncLocalStorage } from 'node:async_hooks'
 
 let fails = 0, passes = 0
@@ -903,6 +904,45 @@ const HOLD_PAST = 36_000 // past the hold (the mailer's timeout + 5 s)
     env.DIR_KEY_JWK = saved.jwk; env.DIR_KID = saved.kid
     if (saved.retired === undefined) delete env.DIR_RETIRED_KEYS; else env.DIR_RETIRED_KEYS = saved.retired
   }
+}
+
+// =====================================================================
+// 14. an account holding a consent key still signs out everywhere and still
+//     stops a reset: both read the stored chain as a peer does (consent.js
+//     chainOpts, with the consent rp; linkOut keeps a cns. proof in the link)
+// =====================================================================
+{
+  const { email, A, C: [C0] } = await account(1)
+  const setAt = now - ROSTER_WAIT_MS
+  now += ROSTER_WAIT_MS // C0 ripe
+  const byCk = await ask(email, { by: C0, add: await Authn.make() })
+  ok(byCk.status === 200 && byCk.j.inForce === true, `chain-reads: the chain now holds a link a consent key asked for (${byCk.status} ${byCk.j.error ?? ''})`)
+  const links = [...(await store(email)).entries()].filter(([k]) => k.startsWith('link:')).sort(([x], [y]) => (x < y ? -1 : 1)).map(([, v]) => linkOut(v) as RosterLink)
+  const noRp = await verifyRosterChain(links, { ...CHAIN(), consentRp: undefined })
+  ok(!noRp.ok && (await chainOf(email)).ok, `chain-reads: positive control: that chain verifies with the consent rp and not without it (${noRp.ok ? 'verified' : noRp.reason})`)
+
+  // sign out everywhere (#1004's verifyWout over the stored chain)
+  const nonce = await issueChallenge(env.CHALLENGE_KEY as string, 'signout', await addressKey(email), now)
+  const text = buildWout({ address: email, at: now, dirNonce: nonce })
+  const so = await api('POST', WEB_ROUTES.signout, { text, assertion: { id: A.cid, ...(await A.assert(text)) } })
+  ok(so.status === 200 && so.j.ok === true, `chain-reads/signout: a passkey on an account with a consent key signs out everywhere (${so.status} ${so.j.error ?? so.j.message ?? ''})`)
+
+  // a member's passkey stops a reset (G5, verifyResetStop over the stored chain), the account past 14 days
+  now = setAt + 15 * DAY
+  const n = mailbox.length
+  await api('POST', '/v1/roster/reset/start', { email })
+  const rm = mailbox.slice(n).find((x) => x.to === email && x.kind === 'reset')
+  const rl = parseResetLink((rm?.body.match(/https?:\/\/\S+/g) ?? [])[0] ?? '')
+  const rch = await challenge(email)
+  const R = await Authn.make()
+  const rs = await api('POST', '/v1/roster/reset', { email, token: rl?.token, dirNonce: rch, reg: await R.register(b64uDec(rch)!) })
+  const resetRos = String((await pendOf(email))?.ros ?? 'x')
+  ok(rs.status === 202 && (await pendOf(email))?.kind === 'reset', `chain-reads/reset: a reset waits on the consent-key account (${rs.status} ${rs.j.error ?? ''})`)
+  const vch = await challenge(email)
+  const vrs = buildVrs({ address: email, resetHash: await sha256b64u(resetRos), dirNonce: vch })
+  const stop = await api('POST', '/v1/roster/reset/void', { email, text: vrs, credId: A.cid, assertion: await A.assert(vrs, { count: 1 }) })
+  ok(stop.status === 200 && stop.j.done === 'stopped' && (await pendOf(email)) === undefined,
+    `chain-reads/reset-stop: a member's passkey stops it on an account with a consent key (${stop.status} ${stop.j.error ?? stop.j.message ?? ''})`)
 }
 
 console.log(`${passes} passed, ${fails} failed`)

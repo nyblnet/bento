@@ -443,8 +443,33 @@ joined (`since`), `createdAt`, `lastResetAt` and `sinceExact`.
   for `deleteWaitMs` (72 h) on the directory's clock, mails the address a link
   that voids it, and carries it out only if it was not voided and the head is
   still `headHash`. The way without a passkey is the directory's emailed link,
-  which no statement carries. What a void does to the signer, and how a reset
-  request treats a waiting deletion, are the directory's and still open.
+  which no statement carries. Voiding it bars its signer for 72 h whatever its
+  kind, and a reset REQUEST drops it (never set aside, never revived).
+- **Voided deletions, in `rows`** (`ok/q-voided-adel*`, `q/voided-adel-*`,
+  `x/pinned-q-adel-other-head`, `x/pinned-q-adel-other-address`,
+  `*-consent-*` for a consent key's cns. proof): a q link's `voided` may be an `adel.` text
+  instead of a `ros.`. Then the cause is sha256 of the adel. text, its address
+  is this account's, its `headHash` is this link's previous head (from a pin:
+  the pinned link's own previous hash), its signer an unquarantined member of
+  that head whose proof covers the adel. text (no `seq` to compare). The rest
+  is a q link's: one mark, another live member remains, then `x` or `u`.
+- **`deletionRecords`: `rdel.<accountName>.<lastHeadHash>.<lastSeq>.<requestedAt>.<deletedAt>.<by>.<kid>`**,
+  the directory's countersigned record that an account was deleted, read by a
+  peer against its pin (`verifyDeletion(text, sig, { directoryKeys, address,
+  pinnedLink, now })`). `accountName` is base64url of the storage name (the
+  first 32 bytes of the user handle below), never the address. `by` is `m`
+  (member), `e` (mailbox) or `o` (operator); `m` and `e` waited
+  `deleteWaitMs`. Accepted when it names the pinned head itself (`atPin`), or
+  a later head of the same account: a higher seq, requested after the pin
+  ripened. A record requested before the pin ripened is an earlier account's:
+  `unchained`. `signedBy` names the key that made `sig` (`dirOther` is
+  `unpinnedDirectoryKey`): EVERY row's signature is valid, so a refusal is for
+  its stated reason. A row with an empty field is `grammar`.
+- **`afterDeletion`**: `readAfterDeletion(record, next)`, where `next` is the
+  chain served now at the address verified from its setup head (or `null`):
+  `deleted`, or `new-account` with `changed: true` (never continuity with the
+  pin). A chain created before the deletion is `order`; one read from a pin
+  (no creation time) is `anchor`.
 - **`userHandles`: the passkey user handle.** `user.id` = SHA-256(`label` ‖
   the address in normal form) ‖ 16 random bytes, 48 bytes; `label` is
   `bento-dir/1/addr` and a line feed. Every host that makes a passkey for
