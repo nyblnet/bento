@@ -84,6 +84,8 @@ export const ENTRIES = [
   { rig: 'test-home-web.mjs', tier: 'full', why: '50 s: home/web in a browser' },
   { rig: 'test-home-bridge.ts', tier: 'full', why: '31 s: the host bridge end to end' },
   { rig: 'test-home-web-offline.mjs', tier: 'full', why: '25 s: home/web offline in a browser' },
+  { rig: 'test-home-web-host.mjs', tier: 'full', why: '25 s (Chromium; WebKit 51 s, mutants 134 s): the library-host security rows in a browser' },
+  { rig: 'test-home-web-kill-drill.mjs', tier: 'full', why: '26 s (Chromium; WebKit 25 s, mutants in three engines 12 min): the D5(c) kill-switch drill, infecting a browser on purpose' },
   { rig: 'test-sync-session.ts', tier: 'full', why: '20 s: the sync session over many seeded schedules' },
   { rig: 'test-bento-check.ts', tier: 'full', why: '18 s: the bento-check CLI against built shells' },
   { rig: 'test-seal-gate.mjs', tier: 'full', why: '16 s: builds the sealed test shell first' },
