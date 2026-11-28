@@ -27,7 +27,7 @@
 //                      (slides); a step that reads another app's shell is left
 //                      to the sweep. One headless load per built app.
 //                    Steps whose tier says `serial` (they time things) run
-//                    last, alone. Each step prints its time; a step over 5 s
+//                    first, alone, as soon as their build is ready. Each step prints its time; a step over 5 s
 //                    is named for the full tier. Everything else is the sweep's.
 // --dry-run          with --affected: print the plan, run nothing
 // --head REV         with --dry-run: plan REF...REV on REV's tree (no working tree)
@@ -471,12 +471,12 @@ if (!chosen.length) {
   // builds first, in parallel with everything that needs none
   for (const a of builds) provide(`build:${a}`)
   if (opts.affected) {
-    // pinned and nearest first; the rest in the order the budget chose; then
-    // the serial steps, one at a time, once every other step and every build
-    // and install has finished (a busy machine fails their timings)
-    await pool(chosen.filter((c) => !c.step.tier.serial), workers, runStep)
-    await Promise.all(providers.values())
-    for (const c of chosen.filter((c) => c.step.tier.serial)) await runStep(c)
+    // Serial steps first: each takes its turn as soon as its build is ready
+    // (steps in flight finish, new ones wait, it runs alone), because a timing
+    // rig measured on a runner that has been busy for half a minute fails
+    // (test-shell-loader: 400 ms to mount first, 950 ms after the pool).
+    // Then the rest: pinned and nearest first, in the order the budget chose.
+    await pool([...chosen.filter((c) => c.step.tier.serial), ...chosen.filter((c) => !c.step.tier.serial)], workers, runStep)
   } else {
     // job by job, in CI's order within a job
     const byJob = new Map()
