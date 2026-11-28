@@ -35,7 +35,7 @@ names provisional.
   released-surface invariants (splice gate, CRDT convergence, save and preview
   escapes) whenever reached; one build and headless load per app whose source
   changed (else slides, for shared code). `--dry-run` shows the plan. Passes
-  are cached by content outside the repo (`~/personal/bento-check-cache`).
+  are cached by content in a cache folder outside the repo (`BENTO_CHECK_CACHE`).
   GitHub's only workflow, the required `validate`, runs the same command.
   Agents run `--affected` only.
 - **The full check runs only at release, on the release machine.** `node
