@@ -16,7 +16,6 @@ import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { shard } from './lib/shard.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const RIG = path.join(ROOT, 'scripts/test-webext-tripwire-browser.mjs')
@@ -97,7 +96,7 @@ if (control.status !== 0) {
 console.log(`  ok    ${control.stdout.trim().split('\n').at(-1)}`)
 let failures = 0, ran = 0
 const PICK = process.env.TW_ONLY_MUTANT // a substring of a mutant's name, to re-run one
-for (const m of shard(process.argv.slice(2), 'test-webext-tripwire-mutants').pick(MUTANTS.filter((x) => !PICK || x.name.includes(PICK)))) {
+for (const m of MUTANTS.filter((x) => !PICK || x.name.includes(PICK))) {
   ran++
   const r = run({ TW_ROWS: m.row, TW_MUTANT: JSON.stringify(m.edits ?? { file: m.file, from: m.from, to: m.to }) })
   const applied = /mutant applied to/.test(r.stdout)

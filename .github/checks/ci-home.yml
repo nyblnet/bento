@@ -127,22 +127,12 @@ jobs:
       - name: home/web in Firefox
         timeout-minutes: 6
         run: DEBUG=pw:browser BENTO_BROWSER=firefox scripts/ci/retry-once node scripts/test-home-web.mjs
-      - name: home/web mutants (shard 1 of 4)
-        run: node scripts/test-home-web-mutants.mjs --shard 1/4
-      - name: home/web mutants (shard 2 of 4)
-        run: node scripts/test-home-web-mutants.mjs --shard 2/4
-      - name: home/web mutants (shard 3 of 4)
-        run: node scripts/test-home-web-mutants.mjs --shard 3/4
-      - name: home/web mutants (shard 4 of 4)
-        run: node scripts/test-home-web-mutants.mjs --shard 4/4
+      - name: home/web mutants
+        run: node scripts/test-home-web-mutants.mjs
       - name: Build the slides shell (a build mutant that lets a refused release go on must reach signing)
         run: npm run build:single --prefix slides
-      - name: home/web production-build mutants (shard 1 of 3)
-        run: node scripts/test-home-web-build-mutants.mjs --shard 1/3
-      - name: home/web production-build mutants (shard 2 of 3)
-        run: node scripts/test-home-web-build-mutants.mjs --shard 2/3
-      - name: home/web production-build mutants (shard 3 of 3)
-        run: node scripts/test-home-web-build-mutants.mjs --shard 3/3
+      - name: home/web production-build mutants
+        run: node scripts/test-home-web-build-mutants.mjs
       - name: On failure, the kernel's word on crashed browser threads
         # WebKit's Mesa llvmpipe segfaulted on a few runner hosts (2026-11);
         # only the kernel log names the thread. Diagnostic only, never a verdict.
@@ -173,12 +163,8 @@ jobs:
           echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
       - name: Tripwire in Chromium
         run: node scripts/test-webext-tripwire-browser.mjs
-      - name: Tripwire mutants (shard 1 of 3)
-        run: node scripts/test-webext-tripwire-mutants.mjs --shard 1/3
-      - name: Tripwire mutants (shard 2 of 3)
-        run: node scripts/test-webext-tripwire-mutants.mjs --shard 2/3
-      - name: Tripwire mutants (shard 3 of 3)
-        run: node scripts/test-webext-tripwire-mutants.mjs --shard 3/3
+      - name: Tripwire mutants
+        run: node scripts/test-webext-tripwire-mutants.mjs
 
   home-web-offline-engines:
     needs: home-gate
@@ -218,15 +204,7 @@ jobs:
         if: ${{ !cancelled() }}
         timeout-minutes: 8
         run: BENTO_BROWSER=firefox node scripts/test-home-web-offline.mjs
-      - name: home/web stage 3 mutants (shard 1 of 3)
+      - name: home/web stage 3 mutants
         if: ${{ !cancelled() }}
         timeout-minutes: 12
-        run: node scripts/test-home-web-offline.mjs --mutants --shard 1/3
-      - name: home/web stage 3 mutants (shard 2 of 3)
-        if: ${{ !cancelled() }}
-        timeout-minutes: 12
-        run: node scripts/test-home-web-offline.mjs --mutants --shard 2/3
-      - name: home/web stage 3 mutants (shard 3 of 3)
-        if: ${{ !cancelled() }}
-        timeout-minutes: 12
-        run: node scripts/test-home-web-offline.mjs --mutants --shard 3/3
+        run: node scripts/test-home-web-offline.mjs --mutants

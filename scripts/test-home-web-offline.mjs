@@ -44,7 +44,6 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { shard } from './lib/shard.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const SELF = fileURLToPath(import.meta.url)
@@ -138,9 +137,9 @@ const MUTANTS = [
 ]
 
 if (process.argv.includes('--mutants')) {
-  const { args: only, pick } = shard(process.argv.slice(process.argv.indexOf('--mutants') + 1), 'test-home-web-offline --mutants')
+  const only = process.argv.slice(process.argv.indexOf('--mutants') + 1)
   let n = 0, bad = 0
-  for (const m of pick(MUTANTS.filter((x) => !only.length || only.includes(x.name)))) {
+  for (const m of MUTANTS.filter((x) => !only.length || only.includes(x.name))) {
     const env = { ...process.env, BENTO_BROWSER: 'chromium', NODE_NO_WARNINGS: '1', BENTO_HW3_ONLY: m.only }
     delete env.BENTO_HOME_WEB_MUTANT; delete env.BENTO_HW3_DIST_MUTANT
     if (m.src) env.BENTO_HOME_WEB_MUTANT = JSON.stringify(m.src)

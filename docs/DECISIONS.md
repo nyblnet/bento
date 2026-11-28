@@ -15831,17 +15831,23 @@ tests what changed in that release, and must itself be fast.
   No earlier tag, or a clone too shallow to see it: it refuses rather than
   guess. `release.mjs` accepts a green release check of that app for the
   commit (or a whole full-tier run); its conformance gate runs regardless.
-- **Speed.** Every reached step is scheduled at once, longest first (times from
-  earlier runs), at most 8 side by side, instead of job by job. Each shell is
-  built once and shared, guarded as a read/write lock so an inline rebuild
-  never deletes a shell another step is reading. A step two jobs both run
-  (same content key) runs once. Passes are cached by content, so a rerun
-  after a fix runs only what the fix touched. The five slowest mutant suites
-  run as shards side by side (`--shard k/n`, scripts/lib/shard.mjs): every
-  mutant runs exactly once across a suite's shards, an empty shard fails, and
-  test-ci-registered.ts fails if a suite's shard steps are not exactly 1..n.
-  No test was removed or loosened.
-- **Not done, and why:** one browser launch shared across rigs needs each
-  rig to accept a browser it did not launch; the rigs own their launches
-  (and their crash handling, scripts/lib/browser-guard.mjs), so that is a
-  change to each rig, not to the check.
+- **Speed.** Every reached step is scheduled at once, longest first (times
+  from earlier runs), at most 8 side by side, instead of job by job, except
+  jobs whose steps share a device (the iOS simulator), which run in order. Each
+  shell is built once and shared, guarded as a read/write lock so an inline
+  rebuild never deletes a shell another step is reading. A step two jobs both
+  run (same content key) runs once. Passes are cached by content, so a rerun
+  after a fix runs only what the fix touched.
+- **Measured** on the last slides release (v1.2.13 to v1.3.0: 596 files, 500
+  of the steps reached), cold, on the release Mac: 27.1 min with the
+  job-by-job full check, 25.8 min scoped and side by side. Little to gain on a
+  release that touches everything: the machine is the bound (the summed step
+  time doubled when twice as many ran at once, at about 5 of 18 cores). Five
+  mutant suites run as shards were measured too and bought nothing here, so
+  they were not kept. The lever left is the mutant suites themselves (about
+  half the work: each mutant reruns a whole browser rig).
+- **Not done, and why:** one browser launch shared across rigs, and mutants
+  that reuse one browser, need each rig to accept a browser it did not launch;
+  the rigs own their launches (and their crash handling,
+  scripts/lib/browser-guard.mjs), so that is a change to each rig, not to the
+  check.

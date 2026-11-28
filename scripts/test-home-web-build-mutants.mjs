@@ -18,7 +18,6 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { shard } from './lib/shard.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const B = 'home/web/build.mjs', R = 'scripts/home-web-release.mjs', REL = 'scripts/release.mjs'
@@ -94,12 +93,12 @@ const MUTANTS = [
     expect: 'no published list and no --home-web-first' },
 ]
 
-const { args: only, pick } = shard(process.argv.slice(2), 'test-home-web-build-mutants')
+const only = process.argv.slice(2)
 const esbuild = path.join(ROOT, 'slides/node_modules/.bin/esbuild')
 const shell = path.join(ROOT, 'slides/dist-single/Bento_Slides.bento.html')
 if (!fs.existsSync(shell)) { console.error(`no built slides shell at ${shell}: cd slides && npm run build:single`); process.exit(1) }
 let killed = 0, ran = 0
-for (const m of pick(MUTANTS.filter((x) => !only.length || only.includes(x.name)))) {
+for (const m of MUTANTS.filter((x) => !only.length || only.includes(x.name))) {
   ran++
   const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'bento-hwb-mutant-'))
   try {
