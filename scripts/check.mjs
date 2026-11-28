@@ -26,8 +26,9 @@
 //                      shared code its build reads changed, the representative
 //                      (slides); a step that reads another app's shell is left
 //                      to the sweep. One headless load per built app.
-//                    Each step prints its time; a step over 5 s is named for
-//                    the full tier. Everything else is the sweep's.
+//                    Steps whose tier says `serial` (they time things) run
+//                    last, alone. Each step prints its time; a step over 5 s
+//                    is named for the full tier. Everything else is the sweep's.
 // --dry-run          with --affected: print the plan, run nothing
 // --head REV         with --dry-run: plan REF...REV on REV's tree (no working tree)
 // --no-cache         run every step (passes are still remembered)
@@ -351,6 +352,7 @@ async function runStep(c) {
   }
   const serial = !!s.tier.serial
   await (serial ? exclusive() : shared())
+  if (serial) await Promise.all(providers.values())
   let r
   try {
     r = await run('bash', ['--noprofile', '--norc', '-eo', 'pipefail', script], { cwd: join(ROOT, s.wd), env: stepEnv, log, timeout: RUN_TIER === 'fast' ? 180_000 : 45 * 60_000 })
@@ -442,8 +444,12 @@ if (!chosen.length) {
   // builds first, in parallel with everything that needs none
   for (const a of builds) provide(`build:${a}`)
   if (opts.affected) {
-    // pinned and nearest first; the rest in the order the budget chose
-    await pool(chosen, workers, runStep)
+    // pinned and nearest first; the rest in the order the budget chose; then
+    // the serial steps, one at a time, once every other step and every build
+    // and install has finished (a busy machine fails their timings)
+    await pool(chosen.filter((c) => !c.step.tier.serial), workers, runStep)
+    await Promise.all(providers.values())
+    for (const c of chosen.filter((c) => c.step.tier.serial)) await runStep(c)
   } else {
     // job by job, in CI's order within a job
     const byJob = new Map()
