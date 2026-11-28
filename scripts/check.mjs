@@ -228,21 +228,29 @@ const stepKey = (s) => {
 // ---------------------------------------------------------------- processes
 
 /** Run a command; resolves { code, ms, out } with the output in `log`. */
-function run(cmd, args, { cwd = ROOT, env = {}, log, timeout = 0 } = {}) {
+function run(cmd, args, { cwd = ROOT, env = {}, log, timeout = 0, group = false } = {}) {
   return new Promise((done) => {
     const t = Date.now()
-    const child = spawn(cmd, args, { cwd, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] })
+    // a step runs in a process group of its own, so what it leaves running can be stopped after it
+    const child = spawn(cmd, args, { cwd, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'], detached: group })
     const chunks = []
     child.stdout.on('data', (d) => chunks.push(d))
     child.stderr.on('data', (d) => chunks.push(d))
     let timer = null
-    if (timeout) timer = setTimeout(() => { chunks.push(Buffer.from(`\n[check] timed out after ${timeout / 1000} s; stopped\n`)); child.kill('SIGTERM') }, timeout)
+    if (timeout) timer = setTimeout(() => { chunks.push(Buffer.from(`\n[check] timed out after ${timeout / 1000} s; stopped\n`)); try { group ? process.kill(-child.pid, 'SIGTERM') : child.kill('SIGTERM') } catch { /* gone */ } }, timeout)
     child.on('error', (e) => chunks.push(Buffer.from(`\n[check] ${e.message}\n`)))
     child.on('close', (code) => {
       if (timer) clearTimeout(timer)
+      // Anything of the step's still running (a server, a browser it never
+      // closed) is stopped: it would load the machine for every later step.
+      // Only this step's own group, by its id: never a process by pattern.
+      let leftover = false
+      if (group) {
+        try { process.kill(-child.pid, 0); leftover = true; process.kill(-child.pid, 'SIGKILL') } catch { /* nothing left */ }
+      }
       const out = Buffer.concat(chunks).toString()
       if (log) writeFileSync(log, out)
-      done({ code: code ?? 1, ms: Date.now() - t, out })
+      done({ code: code ?? 1, ms: Date.now() - t, out, leftover })
     })
   })
 }
@@ -356,7 +364,8 @@ async function runStep(c) {
   if (s.tier.warmChrome) await warmChrome()
   let r
   try {
-    r = await run('bash', ['--noprofile', '--norc', '-eo', 'pipefail', script], { cwd: join(ROOT, s.wd), env: stepEnv, log, timeout: RUN_TIER === 'fast' ? 180_000 : 45 * 60_000 })
+    r = await run('bash', ['--noprofile', '--norc', '-eo', 'pipefail', script], { cwd: join(ROOT, s.wd), env: stepEnv, log, timeout: RUN_TIER === 'fast' ? 180_000 : 45 * 60_000, group: true })
+    if (r.leftover) leftovers.push(label(s))
   } finally { release(serial) }
   rmSync(tmp, { recursive: true, force: true })
   let status = r.code === 0 ? 'ok' : 'FAIL'
@@ -390,6 +399,7 @@ function warmChrome() {
 
 const deadline = () => Number(process.env.BENTO_QUICK_DEADLINE || (opts.affected ? 45 : 1e9)) * 1000
 const timesUpdate = {}
+const leftovers = []
 
 function report(c, r) {
   const s = c.step
@@ -488,6 +498,7 @@ if (!chosen.length) {
   console.log('')
   if (provLines.length) console.log(`providers: ${provLines.join('; ')}`)
   const slow = ran.filter((r) => r.tier === 'fast' && r.ms > 5000 && opts.affected && !r.typecheck)
+  if (leftovers.length) console.log(`left processes running when they ended (stopped): ${leftovers.join(', ')}`)
   if (slow.length) console.log(`over 5 s (move to full in scripts/lib/test-tiers.mjs, with a reason): ${slow.map((r) => `${r.label} ${secs(r.ms)}`).join(', ')}`)
   console.log(`${failed ? 'FAIL' : 'ok'}: ${count('ok')} passed, ${count('cached')} cached, ${count('FAIL')} failed, ${count('SKIP')} skipped, ${count('not here')} not here, ${count('left')} past the deadline${opts.affected ? `, ${left.length} left to the sweep` : ''}; ${since()}${ON_CI ? '' : `; logs ${LOGS}`}`)
 }
