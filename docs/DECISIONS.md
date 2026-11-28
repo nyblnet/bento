@@ -16078,3 +16078,35 @@ directory, roster) now decide per mutant, through scripts/lib/mutant-scope.mjs:
   test-identity (7.3 s in a kernel change's quick check) and test-sync-vouch
   (5.0 s, and one row flaky under parallel load, 7 of 7 alone) are full; the
   vouch rig runs alone in the release check.
+
+## 2026-11-28 — A mutant runs only the section it is judged in
+
+A mutant is killed when the row it names goes red. The home/web suite reran the
+whole 78-row browser rig for each of its 19 mutants, about 45 s each, though
+every verdict comes from one row. Following test-home-web-offline.mjs
+(`BENTO_HW3_ONLY`):
+
+- **test-home-web.mjs runs named sections** (`BENTO_HW_ONLY=t2,s7`; the
+  builds always run). Each section prints its key in its header. A key the rig
+  does not have is refused before anything is built, and a requested section
+  that did not run fails the run.
+- **The map is derived, never written.** test-home-web-mutants.mjs first runs
+  the rig unmutated, every section: the positive control, which must pass
+  every row. Each mutant then runs only the section(s) where that run printed
+  its judged row (scripts/lib/row-map.mjs). A judged row the control never
+  printed, or printed red, or printed outside every section, turns the suite
+  red. A mutant run without its row's section cannot show that row red, so it
+  reads SURVIVED and the suite goes red. Both were shown with a deliberately
+  wrong map (a mutant forced into another section; a judged row no run
+  prints).
+- test-webext-tripwire-browser.mjs already ran only a mutant's rows
+  (`TW_ROWS`). test-home-web-build.mjs is not split: the whole rig takes 4.6 s
+  and its sections share setup. Its 33 mutants, each in its own copy of the
+  tree with no browser and nothing timed, now run four at a time.
+- **Steps that boot a built shell are keyed on the shell's bytes**, with their
+  own reads, rather than on every source its build reads: an edit that builds
+  to the same shell (a comment, a type) no longer reruns every browser rig of
+  that app. An edit that changes the shell reruns them all, as it must.
+- Measured at a load of about 5 to 7: test-home-web-mutants 844 s to 219 s
+  (19/19 killed both ways, control 78/78); test-home-web-build-mutants 166 s
+  to 53 s (33/33).
