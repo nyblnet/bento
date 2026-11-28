@@ -20,7 +20,7 @@
 //                      the released-surface invariants (splice gate, CRDT
 //                      convergence, save and preview escapes)
 //                    - then steps further out, nearest first, while their times
-//                      from earlier runs fit BENTO_QUICK_SECONDS (default 25: wall
+//                      from earlier runs fit BENTO_QUICK_SECONDS (default 15: wall
 //                      seconds over this machine's workers; a step never timed
 //                      counts 2 s); none is started after BENTO_QUICK_DEADLINE
 //                      (default 45) seconds, and those left are named
@@ -40,6 +40,10 @@
 //                    machine cannot run is listed NOT RUN; an unreached one does
 //                    not run. Release.mjs's own conformance gate always runs.
 // --since REF        with --release: the base, instead of the previous tag
+//                    In a release run a mutant suite reruns only the mutants
+//                    whose targets or rig changed since that base, or that were
+//                    never killed under the same content (scripts/lib/mutant-scope.mjs);
+//                    the rest print NOT RERUN, never as a pass. --no-cache reruns all.
 // --dry-run          with --affected or --release: print the plan, run nothing
 // --head REV         with --dry-run: plan REF...REV on REV's tree (no working tree)
 // --no-cache         run every step (passes are still remembered)
@@ -176,7 +180,7 @@ if (opts.release) {
     else candidates.push(s)
   }
   // further out: nearest first, then quickest, while the estimate fits the budget
-  const budget = Number(process.env.BENTO_QUICK_SECONDS || 25)
+  const budget = Number(process.env.BENTO_QUICK_SECONDS || 15)
   const workers = opts.jobs || CORES
   let spent = chosen.reduce((n, c) => n + estimate(c.step), 0) / workers
   candidates.sort((a, b) => a.distance - b.distance || estimate(a) - estimate(b))
@@ -257,6 +261,8 @@ const stepKey = (s) => {
     sig: s.signature,
     tier: RUN_TIER === 'fast' ? 'fast' : 'full',
     env: RUN_TIER === 'fast' ? {} : s.tier.sweepEnv,
+    // (a release run's mutant suites skip by its base: its passes are its own)
+    since: opts.release ? ref : null,
     builds: ns.filter((p) => p.startsWith('build:')).map((p) => buildKey(p.slice(6))),
     tools: { node: TOOLS.node, locks: ns.filter((p) => p.startsWith('install:')).map((p) => TOOLS.locks[p.slice(8)]), browser: ns.includes('browser') ? browserVersion : null, jsdom: ns.includes('jsdom') ? jsdomVersion : null },
   })
@@ -409,6 +415,10 @@ async function runStepOnce(c, key) {
   const log = join(LOGS, `${stamp(s)}.log`)
   const stepEnv = {
     ...env, ...s.env, ...(RUN_TIER === 'fast' ? {} : s.tier.sweepEnv),
+    // mutant suites rerun only what changed (scripts/lib/mutant-scope.mjs): the
+    // kill cache in a release or full run, the since-tag rule in a release run
+    ...(opts.affected && !opts.release || !opts.cache ? {} : { BENTO_MUTANT_CACHE: join(CACHE, 'mutants') }),
+    ...(opts.release && opts.cache ? { BENTO_MUTANT_SINCE: ref, BENTO_MUTANT_SINCE_LABEL: opts.ref } : {}),
     GITHUB_WORKSPACE: ROOT, RUNNER_TEMP: tmp,
     PATH: `${join(ROOT, 'scripts', 'ci')}:${process.env.PATH}`,
   }
