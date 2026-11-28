@@ -16293,3 +16293,42 @@ directory, roster) now decide per mutant, through scripts/lib/mutant-scope.mjs:
   test-identity (7.3 s in a kernel change's quick check) and test-sync-vouch
   (5.0 s, and one row flaky under parallel load, 7 of 7 alone) are full; the
   vouch rig runs alone in the release check.
+
+## 2026-11-23 — bento/home web: a `--live` build lets the frame reach one relay; no released shell uses it yet
+
+A live slides session inside bento/home needs the frame (the opaque, sandboxed
+page that runs a verified document) to reach the relay. `home/web/build.mjs`
+gains `--live` (development builds only) and `--sync-origin` (default the
+shipped `wss://sync.bento.page`). With it, the FRAME's `connect-src` gains that
+one origin twice, as `wss:` for the session and `https:` for the encrypted blob
+routes; CSP3's matching of `https:` sources against `wss:` is not relied on, so
+both are listed. The library's policy, the library page and the frame page are
+byte-identical with and without the flag; only the frame's header changes.
+
+- **The relay is fixed at build time.** A document names its relay in its own
+  `collab.room`; the frame's policy is what refuses any other host. Measured
+  with real sockets: another port or host is a `connect-src` violation with no
+  handshake at the server, in Chromium, Chrome and WebKit.
+- **A production build refuses `--live`.** Whether bento/home ships with live
+  sessions on is the maintainer's decision; nothing here presumes it.
+- **No released shell joins from the frame.** Kernel `sandboxed()` (framed AND
+  opaque AND storage-less, the Teams-preview rule) keeps a document off the
+  network there, and the library's frame is all three: slides 1.2.10 opens a
+  live document in a `--live` build and opens no socket. The library's notice
+  therefore still says the document is not live here. Joining needs a kernel
+  change that tells a host's frame from an embedded preview, and a release
+  carrying it; until then the flag only opens the door.
+- **A read-only open carries no session.** An unverifiable file shown in the
+  newest release has `collab` removed before the splice: its credentials would
+  let code the file never chose write to the room. The removal does not look
+  inside a `bento/enc` envelope, and needs not: an encrypted fork's format is
+  `bento/enc`, no app's, so it is never offered read-only (a rig row holds it).
+- **The relay host is checked, not just parsed.** A WHATWG URL host keeps `*`,
+  `;` and `,`, and `--sync-origin` lands in the frame's CSP verbatim: a
+  wildcard source, or a new directive. The build accepts only a lowercase DNS
+  name or an IPv4 / bracketed IPv6 literal, and refuses userinfo.
+- **Rig lesson:** Playwright's `routeWebSocket` replaces `WebSocket` inside the
+  page, so a routed socket never meets the page's CSP (the plain build's frame
+  "reached" the relay with routing on). Policy rows use real sockets against a
+  local server; routed rows (the real Room from the relay harness) only count
+  what a shell attempted.
