@@ -1707,7 +1707,7 @@ export class Editor {
         panel.appendChild(me)
       }
     }
-    // bento/id, flag-gated (vouch.ts): null unless bento-people-vouch is on AND the host has an agent
+    // bento/id (vouch.ts): null unless the host has an agent and bento-people-vouch is not 'off'
     const vouchAgent = vouchPeopleAgent()
     if (peers.length) {
       const list = div('ed-share-peers')
