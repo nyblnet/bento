@@ -16046,6 +16046,83 @@ tests what changed in that release, and must itself be fast.
   scripts/lib/browser-guard.mjs), so that is a change to each rig, not to the
   check.
 
+## 2026-11-28 — bento/id: a person's identity proof travels in presence, and only a proven key is resolved
+
+The second kernel half of ID3. Once whoami answers an identity in an open, the
+sync session carries that person's public certificates to the room, so another
+person's agent can resolve them offline (`identityport.ts
+createProofResolver`). `kernel/src/sync/idproof.ts`, wired in
+`kernel/src/sync/session.ts`.
+
+- **What travels.** Four optional fields on hello and presence frames, beside
+  the frame's key proof and never inside `p` (the peer record an app reads):
+  `idk` (the identity device key whoami named), `idh` (base64url sha256 of the
+  proof's JSON, on every beat), `idp` (the proof itself: on hello, on the first
+  beat after it changes, and in answer to an ask; never on an ordinary beat),
+  and `ik`, a possession proof. One new frame, `{t:'idq', a, to, h}`, asks a
+  peer for the proof with hash `h`; a receiver asks once per (actor, hash),
+  again only after 30 seconds, and a sender answers at most once every 5
+  seconds (asks inside that share the one answer). Older clients ignore all of
+  it. No crdt.ts change and no relay change: the relay sees ciphertext.
+- **Nothing before consent.** `SyncSession.useIdentity(agent)` asks whoami
+  itself; nothing is carried before it answers, after it answers null, for an
+  identity without a proof, after `useIdentity(null)`, or once the session
+  moves to another document (consent and every peer's identity are per open).
+- **The possession proof is the agent's routine `prove` signature** with the
+  identity key over `prove.<nonce>.<roomId>`, where the nonce is the first 16
+  bytes of sha256 of `idpres.v1.<roomId>.<actor>.<idk>.<idh>.<t>`. It binds the
+  room, the actor, the key, the proof and the time, and the receiver recomputes
+  it. The relay's own `prove.` challenge uses a nonce the relay draws at random
+  per socket, so a presence signature cannot answer it. Freshness is the
+  presence key proof's: within 90 seconds of the receiver's clock and never
+  older than the last accepted one. A sender re-signs every 30 seconds rather
+  than per beat, so a beat may re-send the same `ik`; a receiver takes the same
+  one again only within 45 seconds of first accepting it, on its own clock.
+  A signature the agent refuses,
+  makes with another key, or does not give within 3 seconds leaves that beat
+  without identity fields; presence carries on.
+- **The replay bound, stated.** An `ik` never proves another actor, but actor
+  ids are self-declared, so anyone in the room (readers included) can re-send
+  a beat it saw under the same actor. An `ik` the receiver never accepted is
+  good until 90 seconds past its own time; one it already accepted, for 45
+  seconds after it first did. Once the actor has left (bye, or the presence
+  sweep), only an `ik` strictly newer than the last accepted one proves it
+  again: that state is never evicted (only held proofs are capped, at 64), and
+  the drop is queued behind any beat still being verified for that actor. So
+  after a silent drop, a replayer can keep someone shown present and proven
+  for at most those bounds after their last real beat. While they are present,
+  a replay gains nothing over the presence spoofing `p` already allows. The ask
+  bound sits beside it: a holder re-sends its proof at most once per 5 seconds
+  in all, whoever and however many ask (asks inside that share the one answer),
+  so at most once per 5 seconds per asker too. Any member, readers included,
+  can make it send that one.
+- **What a receiver keeps and asks.** Per-actor state only for actors that
+  proved a key (an unproven frame creates none), and a proof only for a
+  proven (actor, idh) whose own hash matches. Asks go out only after a proven
+  beat (the ask bound is above), and one proven beat for a new (actor, hash)
+  makes each receiver send one ask. The 64-proof cap can be used for denial,
+  never impersonation: a member with an identity key can prove 64 fresh actors
+  and push a present peer's proof out, and that peer shows no identity until
+  it is asked again (within 30 seconds) and answers.
+- **Only a proven key is resolved (A4).** `peerIdentity(actor)` answers only
+  while the actor is present, its latest beat proved the key it names for that
+  proof, and the session holds a proof whose own hash is that `idh`.
+  `resolvePeer(actor, agent)` answers 'unproven' without asking the agent
+  otherwise. A proof copied with someone else's key is never handed out; a
+  proof presented with the presenter's own key resolves to null because the
+  resolver binds the certificate to the queried key.
+- **Privacy.** The proof exposes the address and the account's member history
+  (passkey keys, reset and change times) to every room member, readers
+  included. That is the design; it is sent only after whoami consent in that
+  open. The session sends whoami's proof as the agent gave it (never over
+  64 KiB): every host's agent must type-check it first, as the web port does.
+- **An identity ✓ never implies membership or a role.** Role and write
+  capability stay with the collaboration key and its own proof; a removed
+  member reconnecting as a reader still proves its own identity.
+- Guarded by new rows in `scripts/test-sync-keyproof.ts` (real certificates
+  from the deterministic test keys, the real peer resolver, one per open) and
+  their mutants in `scripts/test-sync-keyproof-mutants.ts`. The rig moves to
+  the full tier: about 11 seconds, mostly waiting for frames to settle.
 ## 2026-11-28 — The release check reruns a mutant only when something it depends on changed
 
 The mutant suites are about half the release check's work, and each mutant
