@@ -15397,6 +15397,49 @@ replaced before this shipped.
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
 
+## 2026-11-22 — bento/id directory: a member's passkey stops a reset
+
+The reset-stop route (`/v1/roster/reset/void`) no longer refuses at its last
+step. A member stops a waiting reset with its passkey over the kernel's `vrs.`
+text, which the directory checks with `verifyResetStop` over the chain it
+holds (security's C5 on #944). This supersedes "refuses at the last step" in
+the 2026 entry on who may stop a reset.
+
+- **The age is judged at the reset's FIRST request** (C4, C4′). A reset
+  carries `firstRequestedAt`. When an undo of a set-aside removal asks the
+  reset again (C3), the re-ask keeps that time. The directory refuses
+  `new-account` when the first request came in the account's first 14 days,
+  before it calls the kernel. The kernel is given the RE-ASKED time, because
+  its `order` rule needs a link asked after the head before it. So a reset
+  begun on day 13.9 stays unstoppable by a member even after a day-14.1 undo,
+  and an old account's re-asked reset can still be stopped. This avoids a
+  kernel change (an optional first-request time in `ResetStopOpts`); if
+  security wants the kernel itself to carry it, that is a separate kernel
+  change.
+- **A stop does what the reset's own Cancel does.** The reset is dropped. A
+  removal it set aside waits again at its own time, with its undo link. The
+  reset's link then answers `stopped`. The address is mailed, naming the
+  passkey that stopped it, and the stop is logged (`reset-stop`, with who).
+- **Passkeys only, for now.** A recovery-key or consent-key member is refused
+  by name (`signer-kind`) until their proofs are wired. The signature counter
+  is compared and stored by the directory in the same step, because the
+  kernel's member proof does not compare counters. It is compared and stored
+  only AFTER the kernel accepts: the stop reads the counter from
+  authenticator data nothing has verified yet, so storing it first would let
+  an assertion the kernel refuses (no valid signature needed) set the counter
+  to 2^31 and lock the member's real stops out. A row and a mutant pin that
+  order.
+- The sign-in host's /account page is how a person reaches it: "Stop a
+  waiting reset…" reads the waiting reset from `GET /v1/roster`, shows when it
+  was asked for and when it would take effect, and only on a second press
+  asks for a passkey over the `vrs.` text for that reset. The page's
+  `vrsText` is checked byte for byte against the kernel's `buildVrs`. The
+  directory still judges everything (age, signer, kernel verifier); the page
+  only names the refusal.
+- After a member's stop, the reset's own mailed link opens a "stopped" view
+  on the void page (a passkey stopped it, when, and which email names the
+  passkey), not the neutral "no longer works".
+
 ## 2026-11-22 — bento/home: the kill switch's status is signed from the release list, never beside it
 
 Two signed files withdraw a bento/home build, and nothing tied them: the
