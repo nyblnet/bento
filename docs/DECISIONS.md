@@ -16023,14 +16023,23 @@ tests what changed in that release, and must itself be fast.
   rebuild never deletes a shell another step is reading. A step two jobs both
   run (same content key) runs once. Passes are cached by content, so a rerun
   after a fix runs only what the fix touched.
-- **Measured** on the last slides release (v1.2.13 to v1.3.0: 596 files, 500
-  of the steps reached), cold, on the release Mac: 27.1 min with the
-  job-by-job full check, 25.8 min scoped and side by side. Little to gain on a
-  release that touches everything: the machine is the bound (the summed step
-  time doubled when twice as many ran at once, at about 5 of 18 cores). Five
-  mutant suites run as shards were measured too and bought nothing here, so
-  they were not kept. The lever left is the mutant suites themselves (about
-  half the work: each mutant reruns a whole browser rig).
+- **Steps that time things run alone**, after the rest (tiers `alone: true`):
+  test-shell-loader's 50 ms splash row failed side by side and passed alone.
+- **Measured**, cold, on the release Mac. The last slides release (v1.2.13 to
+  v1.3.0: 596 files, 500 steps reached): 27.1 min with the job-by-job full
+  check, 25.8 min scoped and side by side; a release that touches everything
+  gains little, because the machine is the bound (the summed step time
+  doubled when twice as many ran at once). The next slides release (main
+  since v1.3.0, 234 steps): 31.8 min at first, its critical path the directory
+  mutant suite, which had doubled to 320 mutants (three shards of 27 min);
+  in eight shards (the rig's own `--shard`), 19.2 min, green. The critical
+  path is now four browser mutant suites, each one rig run per mutant:
+  test-home-web-mutants 14.8 min, test-home-web-build-mutants 11.6,
+  test-webext-tripwire-mutants 9.3, test-home-web-offline --mutants 8.0. The
+  target is 10 min; reaching it means making those suites faster (sharding
+  them, a small change to each rig, or one browser shared across a suite's
+  mutants). Sharding them was measured on the v1.3.0 diff at 14 side by side
+  and bought nothing there, so it is not in this change.
 - **Not done, and why:** one browser launch shared across rigs, and mutants
   that reuse one browser, need each rig to accept a browser it did not launch;
   the rigs own their launches (and their crash handling,
