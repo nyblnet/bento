@@ -7,7 +7,7 @@
  *
  *   PLAYWRIGHT_MODULE=…/playwright/index.mjs node scripts/test-home-web-offline.mjs
  *   BENTO_BROWSER=webkit|firefox …     another engine (default chromium)
- *   … --mutants [name…]                 each mutant must turn ITS row red (Chromium)
+ *   … --mutants [name…]                 each mutant must turn ITS row red (Chromium); a `green` one must leave the rig green
  *
  * Builds home/web twice with a throwaway key against the same local origins
  * (build X, and build Y: the same code with a differently spelled history, so a
@@ -114,6 +114,17 @@ const MUTANTS = [
   { name: 'status-replay', why: 'an older status than one already seen is taken', only: 'status',
     src: { file: 'offline.ts', from: '  if (seq < seen) return { status: \'refused\', why: `older than one already seen (${seq} < ${seen})` }\n', to: '' },
     expect: 'an older status than one this browser has seen fails closed' },
+  { name: 'sw-register-hangs', why: 'the library page\'s register() never settles (the diagnosis must name it, not time out generically)', only: 'sw',
+    src: { file: 'offline.ts', from: "  sw.register(url as string, { scope: '/', updateViaCache: 'none' }).then(", to: "  new Promise<unknown>(() => { void url }).then(" },
+    expect: 'register never settled (status unreachable, sw null' },
+  { name: 'sw-drops-cache', why: 'the worker loses its cache mid-session (what WebKit\'s "0 cache(s)" failure looked like): the row must see a real loss', only: 'sw',
+    src: { file: 'sw.ts', from: "  const url = new URL(e.request.url)\n", to: "  const url = new URL(e.request.url)\n  if (url.pathname === '/probe-sw.js') e.waitUntil(caches.delete(CACHE))\n" },
+    expect: 'after the session, the cache still holds exactly the build\'s files' },
+  // must STAY GREEN: a slow install is not a broken one. The rig waits for the worker to
+  // activate, not for the cache's name (which install creates before it puts a file).
+  { name: 'sw-slow-put', green: true, why: 'install puts its files slowly (300 ms apart): the rig must wait for a full cache, not read a half-filled one', only: 'sw',
+    src: { file: 'sw.ts', from: '    for (const [path, r] of got) await c.put(path, r)\n', to: '    for (const [path, r] of got) { await c.put(path, r); await new Promise((d) => setTimeout(d, 300)) }\n' },
+    expect: 'the cache holds the build\'s files, each byte for byte its pin' },
   { name: 'tripwire-no-worker', why: 'the build does not tell the tripwire\'s release list its worker', only: 'build',
     dist: [{ file: 'build.json', re: '"serviceWorkers": \\[\\s*"/sw\\.js"\\s*\\]', to: '"serviceWorkers": []' }],
     expect: 'the tripwire\'s release list for this build names /sw.js as its worker' },
@@ -141,12 +152,15 @@ if (process.argv.includes('--mutants')) {
     const completed = /^\d+\/\d+ checks passed \(chromium\)/m.test(out) && !/the browser crashed/.test(out)
     const caught = out.split('\n').some((l) => l.includes('FAIL') && l.includes(m.expect))
     n++
-    const killed = applied && completed && r.status !== 0 && caught
+    // a green mutant is one the rig must TOLERATE: applied, completed, and every row passed
+    const killed = m.green ? applied && completed && r.status === 0 && out.includes(`ok    ${m.expect}`) : applied && completed && r.status !== 0 && caught
     if (!killed) bad++
-    console.log(`  ${killed ? 'ok  ' : 'FAIL'}  ${m.name}: ${m.why} — ${!applied ? 'NOT APPLIED' : !completed ? 'the run did not complete (a crash is not a kill)' : caught ? 'red on its row' : r.status === 0 ? 'SURVIVED' : 'red, but not on its row'}`)
+    const verdict = m.green ? (!applied ? 'NOT APPLIED' : !completed ? 'the run did not complete' : killed ? 'stays green, its row passing' : 'went RED (the rig is racing it)')
+      : !applied ? 'NOT APPLIED' : !completed ? 'the run did not complete (a crash is not a kill)' : caught ? 'red on its row' : r.status === 0 ? 'SURVIVED' : 'red, but not on its row'
+    console.log(`  ${killed ? 'ok  ' : 'FAIL'}  ${m.name}: ${m.why} — ${verdict}`)
     if (!killed) console.log(out.split('\n').filter((l) => /FAIL|Error|mutant/.test(l)).slice(0, 8).map((l) => '        ' + l).join('\n'))
   }
-  console.log(`\n${n - bad}/${n} mutants killed`)
+  console.log(`\n${n - bad}/${n} mutants killed (a green mutant counts when the rig tolerated it)`)
   process.exit(bad ? 1 : 0)
 }
 
@@ -298,8 +312,25 @@ let closing = false, crashed = false
 browser.on('disconnected', () => { if (!closing) crashed = true })
 const recorded = []
 const sockets = []
+// BENTO_HW3_PERSISTENT=1: every context is a profile on disk (launchPersistentContext, a fresh
+// directory each), as a real browser's is, instead of Playwright's ephemeral context. An
+// instrument, not a CI mode. Measured (Playwright 1.61.1, macOS and ubuntu): Firefox and Chromium
+// pass in it; Playwright's WebKit keeps the cache NAMES in a persistent profile but stores no
+// entries at all, even for a page's own cache.put of a constructed Response, so in WebKit this
+// mode cannot stand in for a real Safari profile and the [sw] cache rows fail by design.
+const PERSISTENT = process.env.BENTO_HW3_PERSISTENT === '1'
+const profiles = []
+if (PERSISTENT) note(`${ENGINE}: every context is a persistent profile on disk (BENTO_HW3_PERSISTENT=1)`)
 async function context() {
-  const ctx = await browser.newContext({ acceptDownloads: true })
+  let ctx
+  if (PERSISTENT) {
+    ctx = await pw[ENGINE].launchPersistentContext(fs.mkdtempSync(path.join(work, 'profile-')), { acceptDownloads: true })
+    const close = ctx.close.bind(ctx)
+    let mine = false
+    ctx.close = () => { mine = true; return close() }
+    ctx.on('close', () => { if (!mine && !closing) crashed = true })
+    profiles.push(ctx)
+  } else ctx = await browser.newContext({ acceptDownloads: true })
   await ctx.routeWebSocket(/.*/, (ws) => { sockets.push(ws.url()); ws.close() })
   ctx.on('request', async (r) => {
     const e = { method: r.method(), url: r.url(), body: r.postData() ?? '', headers: '' }
@@ -308,29 +339,74 @@ async function context() {
   })
   return ctx
 }
-/** The library's state, once its status check has answered. */
-async function settled(page, ms = 20000) {
-  await until(() => page.evaluate(() => {
-    const s = document.documentElement.getAttribute('data-bento-status')
-    return s && s !== 'checking' && (s === 'withdrawn' || s === 'refused' || document.documentElement.getAttribute('data-bento-sw'))
-  }), ms)
-  return lib(page)
-}
-const lib = (page) => limit(page.evaluate(async () => {
-  const regs = await navigator.serviceWorker.getRegistrations()
+// Every call into the library page is its own evaluate with its own limit, so a
+// hang names the call: the page's attributes (synchronous, never waits on a
+// worker or storage API), getRegistrations(), caches.keys(). One lumped
+// evaluate could not tell "register() never settled" from "no call into the
+// page returns at all" (CI, Firefox: 12 of 40 first attempts hung after a goto).
+const ATTRS = () => {
+  const d = document.documentElement
   return {
-    status: document.documentElement.getAttribute('data-bento-status'), sw: document.documentElement.getAttribute('data-bento-sw'),
-    build: document.documentElement.getAttribute('data-bento-build'),
-    regs: regs.map((r) => ({ scope: r.scope, script: (r.active || r.waiting || r.installing)?.scriptURL ?? null, updateViaCache: r.updateViaCache })),
-    caches: await caches.keys(), stopped: document.body.classList.contains('stopped'),
+    status: d.getAttribute('data-bento-status'), sw: d.getAttribute('data-bento-sw'), build: d.getAttribute('data-bento-build'),
+    readyState: document.readyState, href: location.href, stopped: document.body?.classList.contains('stopped') ?? false,
     stopText: document.getElementById('withdrawn')?.offsetParent ? document.getElementById('withdrawn-text').textContent : '',
     picker: !!document.getElementById('file')?.offsetParent,
   }
-}), 10000, 'reading the library state')
-/** Wait until the worker has activated and holds `cache`. */
+}
+const CALLS = {
+  'attr-read': ATTRS,
+  getRegistrations: async () => (await navigator.serviceWorker.getRegistrations()).map((r) => ({ scope: r.scope, script: (r.active || r.waiting || r.installing)?.scriptURL ?? null, updateViaCache: r.updateViaCache })),
+  'caches.keys': () => caches.keys(),
+  // never waits: whether navigator.serviceWorker.ready has resolved within 2 s
+  'sw-ready': () => Promise.race([navigator.serviceWorker.ready.then(() => 'ready'), new Promise((r) => setTimeout(() => r('pending'), 2000))]),
+}
+const call = (page, name, ms = 10000) => limit(page.evaluate(CALLS[name]), ms, `${name} (in the library page)`)
+const isSettled = (a) => !!a?.status && a.status !== 'checking' && (a.status === 'withdrawn' || a.status === 'refused' || !!a.sw)
+/** Which calls answer, for a page that did not settle; and what that says. Attribute values and URLs only. */
+async function diagnose(page, last) {
+  const got = {}
+  for (const name of Object.keys(CALLS)) got[name] = await call(page, name, 5000).then((v) => ({ v }), () => null)
+  const a = got['attr-read']?.v ?? last
+  const said = Object.entries(got).map(([k, r]) => `${k} ${r ? 'answered' + (Array.isArray(r.v) ? ` (${r.v.length})` : typeof r.v === 'string' ? ` (${r.v})` : '') : 'HUNG'}`).join(', ')
+  const at = `status ${a?.status ?? 'unread'}, sw ${a?.sw ?? 'null'}, readyState ${a?.readyState ?? 'unread'}, ${a?.href ?? 'no url read'}`
+  const why = !got['attr-read'] ? 'the page stopped answering: no call into it returns'
+    : !a?.status || a.status === 'checking' ? 'the status check never answered'
+      : !a.sw ? 'register never settled' : 'the page never reached a settled state'
+  return `${why} (${at}); calls: ${said}`
+}
+let watchedLate = false
+/** The library's state, once its status check has answered. A page that never settles fails a row naming why. */
+async function settled(page, ms = 20000) {
+  let last = null
+  const done = await until(async () => { last = await call(page, 'attr-read'); return isSettled(last) }, ms)
+  if (!done) {
+    const t0 = Date.now()
+    const why = await diagnose(page, last)
+    // how long it stays stuck, for triage (the first time in a run only): a wait that ends is a
+    // different bug from one that never does
+    const watch = !watchedLate
+    watchedLate = true
+    const late = watch ? await until(async () => isSettled(await call(page, 'attr-read', 5000)), 60000) : null
+    ok(false, `the library settles within ${ms / 1000} s of loading: ${why}${!watch ? '' : late ? `; it settled ${Math.round((Date.now() - t0) / 1000)} s after the limit` : '; still unsettled 60 s after the limit'}`)
+  }
+  return lib(page)
+}
+async function lib(page) {
+  const a = await call(page, 'attr-read')
+  return { ...a, regs: await call(page, 'getRegistrations'), caches: await call(page, 'caches.keys') }
+}
+/**
+ * Wait until the worker has ACTIVATED and `cache` is the origin's only cache.
+ * The name alone is not enough: install opens the cache, then puts the files
+ * one at a time, so the name is listed before the entries are in it (CI,
+ * Firefox: the byte-for-byte row read a half-filled cache in 2 of 40 jobs).
+ * Install's waitUntil covers every put, so an activated worker means a full
+ * cache. The sw-slow-put mutant holds this.
+ */
 const cached = (page, cache, ms = 15000) => until(() => page.evaluate(async (c) => {
   const k = await caches.keys()
-  return k.length === 1 && k[0] === c ? k : null
+  if (k.length !== 1 || k[0] !== c) return null
+  return (await navigator.serviceWorker.getRegistration())?.active?.state === 'activated' ? k : null
 }, cache), ms)
 const docFrame = (page) => page.frames().find((f) => f.parentFrame() === page.mainFrame())
 const ui = (page) => page.evaluate(() => {
@@ -348,6 +424,35 @@ const frameFetches = (from) => seen.slice(from).filter((r) => r.url.startsWith(O
 const SERVERS_UP_OFFLINE = ENGINE === 'chromium'
 async function offline(ctx) { if (ENGINE !== 'webkit') await ctx.setOffline(true); if (!SERVERS_UP_OFFLINE) await down() }
 async function online(ctx) { if (!SERVERS_UP_OFFLINE) await up(); if (ENGINE !== 'webkit') await ctx.setOffline(false) }
+/**
+ * A new page. In Firefox it first loads /probe.html (on the library origin, outside the build, sent
+ * with no headers of its own: no worker registers there and no row reads it).
+ *
+ * Playwright's Firefox (1.61.1, Juggler) loses a new page's MAIN-world execution context when the
+ * page's initial about:blank navigates straight to a document sent with Cross-Origin-Opener-Policy,
+ * as the library is (same-origin-allow-popups). Juggler logs "FrameTree.js:545 TypeError: can't
+ * access property "windowGlobalChild", this.domWindow() is undefined", reports only its utility
+ * world, and every page.evaluate then waits forever. Measured on CI with no bento code at all:
+ * about:blank -> a COOP page hung 34 of 300 evaluates; the same with a plain same-origin page
+ * first hung 0 of 300; without COOP, 0 of 1200. In this rig, 10 of 30 runs hung before (each on a
+ * new page's first visit), 0 of 50 after. The loss is the harness's: the library's page works.
+ * So the navigations under test start from the probe. A page that still does not answer is
+ * replaced, and said in a note; that branch has not run on CI. The run's last notes count both.
+ * Chromium and WebKit pages are used as they come.
+ */
+let warmed = 0, replaced = 0
+async function newPage(ctx) {
+  if (ENGINE !== 'firefox') return ctx.newPage()
+  for (let i = 1; i <= 3; i++) {
+    const p = await ctx.newPage()
+    await limit(p.goto(O.library + '/probe.html'), 15000, 'the warm-up navigation').catch(() => {})
+    if (await limit(p.evaluate(() => document.readyState), 5000, 'the warm-up evaluate').then(() => true, () => false)) { warmed++; return p }
+    replaced++
+    note(`firefox: a new page never answered an evaluate after its first navigation (Juggler lost its main world); page replaced (${i} of 3)`)
+    await limit(p.close(), 10000, 'closing a page').catch(() => {})
+  }
+  throw new Error('three new pages in a row never answered an evaluate after their first navigation')
+}
 /** Every cached entry's text, to look for document content. */
 const cacheText = (page) => page.evaluate(async () => {
   let t = ''
@@ -361,7 +466,7 @@ try {
     section('[sw] first visit: one worker, one cache keyed on the build, network first, nothing else kept')
     files.delete(STATUS)
     const ctx = await context()
-    const page = await ctx.newPage()
+    const page = await newPage(ctx)
     await page.goto(O.library + '/')
     let s = await settled(page)
     ok(s.status === 'unreachable' && s.sw === 'registered', `with no status published (404) the library carries on and registers its worker (${s.status}, ${s.sw})`)
@@ -408,14 +513,18 @@ try {
     const fr = await booted(page)
     ok(!!fr && u?.viewing, 'positive control: online, the deck opens and boots')
     // also pass a page the list does not name through the worker
-    const probe = await ctx.newPage()
+    const probe = await newPage(ctx)
     await probe.goto(O.library + '/probe.html')
     await probe.evaluate(() => fetch('/probe-sw.js').then((r) => r.text()).catch(() => ''))
     await sleep(1000)
     const after = await lib(page)
     const keys = await page.evaluate(async (n) => (await (await caches.open(n)).keys()).map((r) => r.url).sort(), X.info.offline.cache)
     ok(after.caches.length === 1 && JSON.stringify(keys) === JSON.stringify(X.info.offline.precache.map((p) => O.library + p.path).sort()),
-      `after the session, the cache still holds exactly the build's files (${after.caches.length} cache(s), ${keys.length} entries)`)
+      // the registration and status say who lost a cache: the library's own clean-up runs only on a
+      // withdrawn or refused status. Playwright's WebKit on CI loses both under an unchanged status
+      // (2 of 60 runs, each after a GLib/libsoup CRITICAL in a browser child process that no
+      // passing run logged): its ephemeral context keeps them in memory. Still a FAIL here.
+      `after the session, the cache still holds exactly the build's files (${after.caches.length} cache(s), ${keys.length} entries; ${after.regs.length} worker(s), status ${after.status})`)
     ok(!(await cacheText(page)).includes(CANARY), 'no cache holds any of the document')
 
     // no other worker: the library's policy (CSP worker-src, and Trusted Types where the engine has it) refuses any other script
@@ -431,7 +540,7 @@ try {
     section(`[offline] a returning visit with no network (${ENGINE === 'webkit' ? 'servers closed' : 'context.setOffline'})`)
     files.delete(STATUS)
     const ctx = await context()
-    const page = await ctx.newPage()
+    const page = await newPage(ctx)
     await page.goto(O.library + '/')
     await settled(page)
     ok(!!(await cached(page, X.info.offline.cache)), 'precondition: the worker is installed and holds the build')
@@ -484,7 +593,7 @@ try {
     files.delete(STATUS)
     deploy(X)
     let ctx = await context()
-    let page = await ctx.newPage()
+    let page = await newPage(ctx)
     await page.goto(O.library + '/')
     await settled(page)
     ok(!!(await cached(page, X.info.offline.cache)), 'precondition: build X\'s worker holds X\'s cache')
@@ -498,7 +607,7 @@ try {
 
     deploy(Y, { tamperPage: true })
     ctx = await context()
-    page = await ctx.newPage()
+    page = await newPage(ctx)
     await page.goto(O.library + '/')
     await settled(page)
     await sleep(3000)
@@ -515,7 +624,7 @@ try {
     files.delete(STATUS)
     deploy(X)
     const ctx = await context()
-    const page = await ctx.newPage()
+    const page = await newPage(ctx)
     await page.goto(O.library + '/')
     let s = await settled(page)
     ok(s.status === 'unreachable' && !!(await cached(page, X.info.offline.cache)), 'precondition: build X runs, its worker installed and holding its cache')
@@ -565,7 +674,7 @@ try {
     const slow = status(['--seq', '6', '--withdraw', X.info.offline.build])
     files.set(STATUS, async () => { await sleep(3000); return slow })
     const ctx2 = await context()
-    const p2 = await ctx2.newPage()
+    const p2 = await newPage(ctx2)
     mark = seen.length
     await p2.goto(O.library + '/')
     await p2.setInputFiles('#file', DECK)
@@ -585,7 +694,7 @@ try {
     const visit = async (body, ctx, { installed = false } = {}) => {
       const own = !ctx
       ctx = ctx ?? await context()
-      const page = await ctx.newPage()
+      const page = await newPage(ctx)
       if (installed) {
         files.delete(STATUS)
         await page.goto(O.library + '/')
@@ -631,7 +740,7 @@ try {
     deploy(X)
     files.delete(STATUS)
     const ctx = await context()
-    const page = await ctx.newPage()
+    const page = await newPage(ctx)
     await page.goto(O.library + '/')
     await settled(page)
     const link = await page.evaluate(() => document.querySelector('link[rel=manifest]')?.getAttribute('href'))
@@ -662,14 +771,14 @@ try {
     section('[network] every request in this run [T2]')
     if (!S) await up()
     const ctx = await context()
-    const page = await ctx.newPage()
+    const page = await newPage(ctx)
     await page.goto(O.library + '/')
     await settled(page)
     const probe = `${O.releaseBase}probe/library`
     await page.evaluate((u) => fetch(u).catch(() => {}), probe)
     await sleep(1000)
     ok(recorded.some((r) => r.url === probe) && seen.some((r) => r.url === probe), 'positive control: a request planted in the library is seen in the browser and at the server')
-    const sock = await ctx.newPage()
+    const sock = await newPage(ctx)
     await sock.evaluate(() => { try { new WebSocket('ws://127.0.0.1:9/bento-hw3-probe') } catch {} })
     await until(() => sockets.includes('ws://127.0.0.1:9/bento-hw3-probe'), 5000)
     ok(sockets.includes('ws://127.0.0.1:9/bento-hw3-probe'), 'positive control: a socket opened by a page in this context is recorded')
@@ -689,8 +798,10 @@ try {
   ok(false, `the run threw: ${String(e?.stack ?? e).split('\n').slice(0, 3).join(' | ')}`)
 }
 
+if (ENGINE === 'firefox') note(`firefox: ${warmed} new page(s) loaded /probe.html before the library (the Juggler COOP workaround); ${replaced} replaced`)
 ok(!crashed, `the browser stayed up for the whole run (${ENGINE})`)
 closing = true
+for (const c of profiles) await c.close().catch(() => {})
 await browser.close().catch(() => {})
 await down()
 if (crashed || failures) console.log(`\n${checks - failures}/${checks} checks passed (${ENGINE}) — ${crashed ? 'the browser crashed: this run is not a pass' : 'FAILED'}`)

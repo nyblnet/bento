@@ -294,10 +294,16 @@ export { Roster }
 // --- the per-IP ledger ----------------------------------------------------------------
 // Keys on HMAC(daySalt, ip); the salt is minted in storage per UTC day and
 // yesterday's is deleted with its counters, so no raw IP is ever stored and
-// one day's hashes cannot be linked to the next.
+// one day's hashes cannot be linked to the next. RETENTION: a day's salt and
+// counters are deleted a minute after that day ends (UTC). Minting a day's
+// salt only ever brings the alarm FORWARD (a later setAlarm would replace the
+// pending purge of the day before, and keep it a whole day longer), and each
+// purge re-arms for the newest day still held.
 
 const dayOf = (t) => new Date(t).toISOString().slice(0, 10)
 const hourOf = (t) => new Date(t).toISOString().slice(0, 13)
+/** When a day's salt and counters are deleted: a minute after the day ends (UTC). */
+const purgeAt = (day) => Date.parse(day) + DAY + 60_000
 
 export class Ledger {
   constructor(state) { this.state = state }
@@ -311,7 +317,7 @@ export class Ledger {
     if (!salt) {
       salt = [...crypto.getRandomValues(new Uint8Array(32))].map((b) => b.toString(16).padStart(2, '0')).join('')
       await s.put(`salt:${day}`, salt)
-      await s.setAlarm(Date.parse(day) + DAY + 60_000)
+      await this.schedule(purgeAt(day))
     }
     const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(salt), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
     const h = [...new Uint8Array(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(String(ip))))].slice(0, 16).map((b) => b.toString(16).padStart(2, '0')).join('')
@@ -323,13 +329,22 @@ export class Ledger {
     return Response.json({ ok: true })
   }
 
+  /** Bring the alarm forward to `t` if it is set later or not at all; never push it back. */
+  async schedule(t) {
+    const at = await this.state.storage.getAlarm()
+    if (at === null || at === undefined || at > t) await this.state.storage.setAlarm(t)
+  }
+
   async alarm() {
     const today = dayOf(Date.now())
-    const dead = []
+    const dead = [], held = []
     for (const k of (await this.state.storage.list()).keys()) {
       const stamp = k.startsWith('salt:') ? k.slice(5) : k.split(':')[1]?.slice(0, 10)
       if (stamp && stamp < today) dead.push(k)
+      else if (k.startsWith('salt:')) held.push(stamp)
     }
     for (let i = 0; i < dead.length; i += 128) await this.state.storage.delete(dead.slice(i, i + 128))
+    // the days still held (today's): their purge, a minute after each ends
+    for (const day of held) await this.schedule(purgeAt(day))
   }
 }

@@ -56,8 +56,12 @@ if (!CHROME || !fs.existsSync(shell)) {
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bento-check-rig-'))
 const run = (args: string[]) => {
   const r = spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8', timeout: 120_000 })
-  return { code: r.status, out: r.stdout, err: r.stderr }
+  return { code: r.status, out: r.stdout, err: r.stderr, signal: r.signal }
 }
+/** For a failing row: how the CLI ended, so a crash is never just "exit 1" (CI once printed "? fields filled, exit 1" and nothing else). */
+const tail = (t: string | null | undefined, n = 600) => { const x = (t ?? '').trim(); return x.length > n ? '…' + x.slice(-n) : x }
+const why = (r: { code: number | null; out: string; err: string; signal?: string | null }) =>
+  `\n        exit ${r.code}${r.signal ? ` (signal ${r.signal})` : ''}\n        stderr: ${tail(r.err) || '(empty)'}\n        stdout: ${tail(r.out, 300) || '(empty)'}`
 const write = (name: string, obj: unknown) => { const p = path.join(tmp, name); fs.writeFileSync(p, JSON.stringify(obj)); return p }
 
 // a full document with the two mistakes an agent makes most
@@ -159,7 +163,7 @@ try { j4 = JSON.parse(r4.out) } catch {}
 // marker — which the deflated shell never carries — and went stale the day
 // #484 landed. The plain-words refusal on an older shell stays in the CLI but
 // is not rigged: building a pre-#484 shell here is not cheap.)
-ok(r4.code === 0 && j4?.ok === true && j4.slides === 1, `a compact document loads and checks clean (exit ${r4.code})`)
+ok(r4.code === 0 && j4?.ok === true && j4.slides === 1, `a compact document loads and checks clean (exit ${r4.code})${r4.code === 0 && j4?.ok === true ? '' : why(r4)}`)
 ok(typeof j4?.expanded === 'number' && j4.expanded > 0, `compact expansion filled fields (${j4?.expanded})`)
 ok(Array.isArray(j4?.dropped) && j4.dropped.length === 0, 'nothing was dropped by the gate')
 // the checked-in agent decks (#490) go through the same path
@@ -168,10 +172,17 @@ for (const f of fs.readdirSync(agentDir).filter((f) => f.endsWith('.json')).sort
   const r = run([path.join(agentDir, f), '--json'])
   let j: any = null
   try { j = JSON.parse(r.out) } catch {}
-  ok(r.code === 0 && j?.ok === true && j.dropped?.length === 0 && j.expanded > 0, `agent deck ${f}: loads, ${j?.expanded ?? '?'} fields filled, zero drops (exit ${r.code})`)
+  const good = r.code === 0 && j?.ok === true && j.dropped?.length === 0 && j.expanded > 0
+  ok(good, `agent deck ${f}: loads, ${j?.expanded ?? '?'} fields filled, zero drops (exit ${r.code})${good ? '' : why(r)}`)
 }
 
 console.log('\nerrors are exits, not traces\n')
+// positive control for the failure printout above: a CLI that dies shows its stderr
+{
+  const r = run([c, '--json', '--shell', path.join(tmp, 'no-such-shell.html')])
+  const said = why(r)
+  ok(r.code !== 0 && said.includes('no-such-shell.html'), `a failing run's printout carries the CLI's own words (exit ${r.code}: ${tail(r.err, 120).replace(/\s+/g, ' ')})`)
+}
 ok(run(['/nonexistent.json']).code === 2, 'a missing file exits 2')
 const bad = write('bad.json', { hello: 'world' })
 const r5 = run([bad, '--json'])
