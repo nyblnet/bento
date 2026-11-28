@@ -260,7 +260,8 @@ async function main(argv) {
   }
   writeJson(resultFile(sha, SWEEPS, scope), result)
 
-  if (!result.ok && failures.length && opts.bisect) {
+  // (only flaky failures, each passed alone: nothing to bisect)
+  if (!result.ok && failures.some((f) => !f.flaky) && opts.bisect) {
     const { commits, green } = since
     if (!green) result.firstBad = { why: 'no green sweep before it to bisect from' }
     else if (commits.length === 1) result.firstBad = { sha, subject, failing: failures.map((f) => f.label) }

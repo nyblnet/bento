@@ -533,7 +533,11 @@ if (!chosen.length) {
       } else items.push({ list: [c] })
     }
     const cost = (it) => it.list.reduce((n, c) => n + estimate(c.step), 0)
-    await pool(items.sort((a, b) => cost(b) - cost(a)), workers, async (it) => { for (const c of it.list) await runStep(c) })
+    const alone = items.filter((it) => it.list.some((c) => c.step.tier.alone))
+    await pool(items.filter((it) => !alone.includes(it)).sort((a, b) => cost(b) - cost(a)), workers, async (it) => { for (const c of it.list) await runStep(c) })
+    // then the timing rigs, one at a time, with nothing else running
+    await Promise.all(providers.values())
+    for (const it of alone) for (const c of it.list) await runStep(c)
   } else if (opts.affected) {
     // pinned and nearest first; the rest in the order the budget chose
     await pool(chosen, workers, runStep)
@@ -542,7 +546,9 @@ if (!chosen.length) {
     const byJob = new Map()
     for (const c of chosen) byJob.set(c.step.job, [...(byJob.get(c.step.job) ?? []), c])
     const jobs = [...byJob.values()].sort((a, b) => b.length - a.length)
-    await pool(jobs, workers, async (list) => { for (const c of list) await runStep(c) })
+    await pool(jobs, workers, async (list) => { for (const c of list) if (!c.step.tier.alone) await runStep(c) })
+    await Promise.all(providers.values())
+    for (const c of chosen) if (c.step.tier.alone) await runStep(c)
   }
   if (opts.rerun) {
     const failedSteps = chosen.filter((c) => results.some((r) => r.id === c.step.id && r.status === 'FAIL'))

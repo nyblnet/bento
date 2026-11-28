@@ -24,6 +24,9 @@
 // quick check runs it whatever its distance and whatever the budget says. These
 // are why shipped files do not brick (docs/PLATFORM.md).
 //
+// `alone: true` (release and full checks): the step runs by itself after every
+// other step, because it times something a busy machine slows down.
+//
 // `sweepEnv` raises a step's depth in the sweep only (more seeds, more steps);
 // the quick check runs it as CI's step text says.
 //
@@ -104,7 +107,7 @@ export const ENTRIES = [
   // check (hidden mount 0.8 to 1.2 s against 0.4 s), whether run last and alone, first and
   // alone, or after a Chrome warm-up. Cause not found. The splice gate (pinned) still checks
   // every built shell per change; this rig runs in the sweep a release requires.
-  { rig: 'test-shell-loader.ts', tier: 'full', why: 'its 50 ms hidden-tab splash timing fails inside the quick check on the runner (51 to 164 ms; 5 to 12 ms run alone); the sweep runs it' },
+  { rig: 'test-shell-loader.ts', tier: 'full', alone: true, why: 'its 50 ms hidden-tab splash timing fails inside the quick check on the runner (51 to 164 ms; 5 to 12 ms run alone); the release check runs it, alone' },
 ]
 
 /**
@@ -139,7 +142,7 @@ export function matchTier(s, entries = ENTRIES, rules = RULES) {
   const hits = entries.filter((e) => entryMatches(e, s))
   if (hits.length) {
     const top = hits.reduce((a, b) => (rank(b.tier) > rank(a.tier) ? b : a))
-    return { tier: top.tier, why: top.why, pin: hits.some((e) => e.pin) && top.tier === 'fast', sweepEnv: Object.assign({}, ...hits.map((e) => e.sweepEnv ?? {})), entries: hits }
+    return { tier: top.tier, why: top.why, pin: hits.some((e) => e.pin) && top.tier === 'fast', alone: hits.some((e) => e.alone), sweepEnv: Object.assign({}, ...hits.map((e) => e.sweepEnv ?? {})), entries: hits }
   }
   const rule = rules.find((r) => (s.needs ?? []).includes(r.needs))
   if (rule) return { tier: rule.tier, why: rule.why, pin: false, sweepEnv: {}, entries: [], rule: true }
